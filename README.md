@@ -157,6 +157,20 @@ PARTS = [frame, rotor, pins]            # build123d objects to tessellate
 NAMES = ["housing", "impeller", "pins"] # optional, names in the tree
 ```
 
+### The left column
+
+Hovering a row shows what can be done with it: a model has **&rarr;** (move)
+and **↻** (rebuild), a folder has **+M**, **+K** and **&times;**.
+
+Moving is two clicks rather than a drag — press **&rarr;** on the model, then
+click the folder, or *to root* in the strip that appears. A folder deletes
+only when it holds nothing; the server refuses otherwise and says so.
+
+A model's id carries its folder, so moving one renames it and its revisions
+follow. Assemblies keep working: during a build every model is also written
+under its bare name while that name is unambiguous, so `import stand` still
+resolves after `stand` moves into `parts/`.
+
 ### Bringing in a CAD file
 
 **+ CAD** in the left column takes a STEP, IGES, BREP, STL or 3MF. The file

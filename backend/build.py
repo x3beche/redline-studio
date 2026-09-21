@@ -4,6 +4,7 @@ directory, output goes back to the database. Nothing persists on disk."""
 from __future__ import annotations
 
 import asyncio
+import collections
 import shutil
 import sys
 import tempfile
@@ -29,10 +30,19 @@ async def build(db, model_id: str, script: Path) -> dict:
         flat = model_id.replace("/", "__")
         # Every model is written, not just the target: an assembly imports the
         # parts it is made of, and it can only do that if they are on the path.
-        async for other in db.models.find({}, {"source": 1}):
-            name = str(other["_id"]).replace("/", "__")
-            if other.get("source"):
-                (models_dir / f"{name}.py").write_text(other["source"])
+        others = [m async for m in db.models.find({}, {"source": 1, "name": 1})]
+        bare = collections.Counter(m.get("name") or str(m["_id"]) for m in others)
+        for other in others:
+            if not other.get("source"):
+                continue
+            (models_dir / f"{str(other['_id']).replace('/', '__')}.py").write_text(
+                other["source"])
+            # Also under the bare name while it is unambiguous: an assembly says
+            # `import stand`, and moving that model into a folder must not break
+            # the import just because the id gained a path.
+            short = other.get("name") or str(other["_id"])
+            if bare[short] == 1 and "/" in str(other["_id"]):
+                (models_dir / f"{short}.py").write_text(other["source"])
         (models_dir / f"{flat}.py").write_text(doc["source"])
         assets_dir = tmp / "assets"
         # Models tend to write STEP/STL under <root>/exports; we create the

@@ -229,6 +229,17 @@ async def put_model(model_id: str, body: ModelIn):
     return {k: doc[k] for k in ("_id", "title", "ready", "stale", "sha256", "error")}
 
 
+@app.post("/api/models/{model_id:path}/move")
+async def move_model(model_id: str, folder: str = ""):
+    try:
+        new_id = await store.move_model(db(), model_id, folder)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except (ValueError, FileExistsError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"from": model_id, "to": new_id}
+
+
 @app.delete("/api/models/{model_id:path}")
 async def drop_model(model_id: str):
     try:

@@ -363,6 +363,42 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  model that imports it, so it is on screen without a second step. */
   pickCad() { this.cadInput()?.nativeElement.click(); }
 
+  // ---- left column: move and delete ----
+  // Two clicks rather than drag and drop: pick the model, then pick the
+  // folder. Works the same on a trackpad and is testable.
+  moving = signal<ModelEntry | null>(null);
+
+  armMove(m: ModelEntry, ev: Event) {
+    ev.stopPropagation();
+    this.moving.set(this.moving()?.id === m.id ? null : m);
+  }
+
+  cancelMove() { this.moving.set(null); }
+
+  moveTo(folder: string, ev?: Event) {
+    ev?.stopPropagation();
+    const m = this.moving();
+    if (!m) return;
+    this.moving.set(null);
+    this.cat.move(m.id, folder).subscribe({
+      next: r => {
+        this.flash(`${m.title} -> ${folder || 'root'}`);
+        // The id carries the path, so the open model is now under a new one.
+        if (this.activeModel() === m.id) this.activeModel.set(r.to);
+        this.loadCatalog();
+      },
+      error: e => this.flash(e.error?.detail ?? 'move failed'),
+    });
+  }
+
+  dropFolder(path: string, ev: Event) {
+    ev.stopPropagation();
+    this.cat.dropFolder(path).subscribe({
+      next: () => { this.flash(path + ' deleted'); this.loadCatalog(); },
+      error: e => this.flash(e.error?.detail ?? 'could not delete folder'),
+    });
+  }
+
   uploadCad(ev: Event) {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -771,8 +807,13 @@ export class Editor implements AfterViewInit, OnDestroy {
       : s === 'rejected' ? 'rejected' : 'draft';
   }
 
+  private toastTimer: ReturnType<typeof setTimeout> | undefined;
+
   private flash(msg: string) {
+    // Cancel the previous timer: without this an older message's timeout
+    // wipes a newer one, and the second of two quick messages barely shows.
+    clearTimeout(this.toastTimer);
     this.toast.set(msg);
-    setTimeout(() => this.toast.set(''), 2600);
+    this.toastTimer = setTimeout(() => this.toast.set(''), 2600);
   }
 }

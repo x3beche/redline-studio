@@ -165,6 +165,27 @@ async def save_model(db, model_id: str, source: str) -> dict:
     return doc
 
 
+async def move_model(db, model_id: str, folder: str) -> str:
+    """Move a model to another folder. The id carries the path, so this is a
+    rename; revisions point at the model by id and are carried along."""
+    doc = await db.models.find_one({"_id": model_id})
+    if not doc:
+        raise KeyError(model_id)
+    if folder and not await db.folders.find_one({"_id": folder}):
+        raise ValueError(f"no such folder: {folder}")
+    new_id = f"{folder}/{doc['name']}" if folder else doc["name"]
+    if new_id == model_id:
+        return new_id
+    if await db.models.find_one({"_id": new_id}):
+        raise FileExistsError(f"{new_id} already exists")
+    doc["_id"], doc["folder"] = new_id, folder
+    await db.models.insert_one(doc)
+    await db.models.delete_one({"_id": model_id})
+    await db.revisions.update_many({"model": model_id},
+                                   {"$set": {"model": new_id}})
+    return new_id
+
+
 async def delete_model(db, model_id: str) -> None:
     doc = await db.models.find_one({"_id": model_id})
     if not doc:

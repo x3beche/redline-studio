@@ -130,6 +130,15 @@ export class Catalog {
     return this.http.delete(`/api/uploads/${encodeURIComponent(name)}`);
   }
 
+  move(id: string, folder: string): Observable<{ from: string; to: string }> {
+    return this.http.post<{ from: string; to: string }>(
+      `/api/models/${id}/move?folder=${encodeURIComponent(folder)}`, {});
+  }
+
+  dropFolder(path: string): Observable<unknown> {
+    return this.http.delete(`/api/catalog/folders/${path}`);
+  }
+
   createModel(id: string, source: string): Observable<unknown> {
     return this.http.put(`/api/models/${id}`, { source });
   }

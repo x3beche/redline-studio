@@ -52,6 +52,17 @@
 
     @if (!collapsed()) {
       <div class="tcv-scroll min-h-0 flex-1 overflow-y-auto p-2 pb-4">
+        @if (moving(); as mv) {
+          <div class="mb-1.5 rounded px-2 py-1.5 text-[11px]"
+               style="background: var(--surface); border: 1px solid var(--accent)">
+            <div style="color: var(--ink)">moving <b>{{ mv.title }}</b></div>
+            <div class="mt-1 flex gap-1">
+              <button (click)="moveTo('', $event)" class="tcv-chip flex-1">to root</button>
+              <button (click)="cancelMove()" class="tcv-chip flex-1">cancel</button>
+            </div>
+            <div class="mt-1" style="color: var(--ink-dim)">or click a folder</div>
+          </div>
+        }
         @if (catalog(); as root) {
           <ng-container *ngTemplateOutlet="node; context: { $implicit: root, depth: 0 }" />
         } @else {
@@ -506,13 +517,22 @@
 <!-- folder tree, recursing into itself -->
 <ng-template #node let-n let-depth="depth">
   @if (depth > 0) {
-    <div class="flex items-center justify-between rounded px-1 py-0.5"
-         [style.margin-left.px]="(depth - 1) * 10">
+    <div class="group flex items-center justify-between rounded px-1 py-0.5"
+         [style.margin-left.px]="(depth - 1) * 10"
+         [class.cursor-pointer]="!!moving()"
+         [style.outline]="moving() ? '1px dashed var(--accent)' : 'none'"
+         (click)="moving() && moveTo(n.path, $event)">
       <span class="text-[12px]" style="color: var(--ink-dim)">{{ n.name }}/</span>
-      <span class="flex gap-1.5 text-[11px]">
-        <button (click)="newModel(n.path)" style="color: var(--ink-dim)" title="new model">+M</button>
-        <button (click)="newFolder(n.path)" style="color: var(--ink-dim)" title="new folder">+K</button>
-      </span>
+      @if (moving()) {
+        <span class="text-[11px]" style="color: var(--accent)">move here</span>
+      } @else {
+        <span class="flex gap-1.5 text-[11px] opacity-0 group-hover:opacity-100">
+          <button (click)="newModel(n.path)" style="color: var(--ink-dim)" title="new model">+M</button>
+          <button (click)="newFolder(n.path)" style="color: var(--ink-dim)" title="new folder">+K</button>
+          <button (click)="dropFolder(n.path, $event)" style="color: var(--danger)"
+                  title="delete - only works when the folder is empty">&times;</button>
+        </span>
+      }
     </div>
   }
   @for (m of n.models; track m.id) {
@@ -525,8 +545,15 @@
         @if (!m.data) { <span style="color: var(--warn)" title="not built yet"> ·</span> }
         @else if (m.stale) { <span style="color: var(--warn)" title="source changed, rebuild"> *</span> }
       </span>
-      <button (click)="rebuild(m, $event)" class="ml-1 shrink-0 text-[11px] opacity-0 group-hover:opacity-100"
-              style="color: var(--accent)" title="rebuild">↻</button>
+      <span class="ml-1 flex shrink-0 gap-1.5 text-[11px]"
+            [class.opacity-0]="moving()?.id !== m.id"
+            [class.group-hover:opacity-100]="true">
+        <button (click)="armMove(m, $event)"
+                [style.color]="moving()?.id === m.id ? 'var(--warn)' : 'var(--ink-dim)'"
+                title="move to another folder">&#8594;</button>
+        <button (click)="rebuild(m, $event)" style="color: var(--accent)"
+                title="rebuild">↻</button>
+      </span>
     </div>
   }
   @for (f of n.folders; track f.path) {
