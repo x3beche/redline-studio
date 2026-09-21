@@ -103,13 +103,36 @@ async def delete_folder(db, path: str) -> None:
 # build machine has no project directory to read from.
 UPLOAD_SUFFIXES = (".step", ".stp", ".iges", ".igs", ".brep", ".stl", ".3mf")
 
+# Native CAD formats are each vendor's own database; no open reader exists for
+# them, so say what to export instead of a generic "wrong extension".
+NATIVE_HINT = {
+    ".f3d": "a Fusion archive holds Autodesk's own BREP, which nothing outside "
+            "Fusion reads - in Fusion use File > Export and pick STEP",
+    ".sldprt": "SolidWorks part: export STEP (File > Save As > STEP)",
+    ".sldasm": "SolidWorks assembly: export STEP (File > Save As > STEP)",
+    ".ipt": "Inventor part: export STEP",
+    ".iam": "Inventor assembly: export STEP",
+    ".catpart": "CATIA part: export STEP",
+    ".prt": "native part file: export STEP",
+    ".3dm": "Rhino file: export STEP",
+    ".blend": "Blender file: export STL or 3MF (it is mesh, not solid)",
+    ".scad": "OpenSCAD source: render and export STL",
+}
+
 
 async def put_upload(db, name: str, data: bytes) -> dict:
     name = Path(name).name                       # dizin bilesenlerini at
-    if not SAFE.match(Path(name).stem):
-        raise ValueError("file name may only contain letters, digits, - and _")
-    if Path(name).suffix.lower() not in UPLOAD_SUFFIXES:
+    suffix = Path(name).suffix.lower()
+    # Format once: an unreadable native file deserves a better answer than
+    # a complaint about its name.
+    if suffix in NATIVE_HINT:
+        raise ValueError(NATIVE_HINT[suffix])
+    if suffix not in UPLOAD_SUFFIXES:
         raise ValueError("expected one of " + ", ".join(UPLOAD_SUFFIXES))
+    # Real files have spaces and dots in them; the stem also becomes a module
+    # name, so clean it rather than refuse it.
+    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem).strip("_-") or "part"
+    name = stem + suffix
     old = await db.uploads.find_one({"_id": name})
     if old:
         await bucket(db, "cad_files").delete(old["gridfs_id"])

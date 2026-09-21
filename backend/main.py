@@ -124,15 +124,50 @@ async def drop_folder(path: str):
 # A STEP the user brings in is not a model; a model imports it. On upload we
 # also write that model, so the file is visible in the viewer straight away
 # and there is something to edit.
-READERS = {".stl": "import_stl", ".3mf": "import_3mf", ".brep": "import_brep"}
+IGES_LOADER = """# IGES yuzey tabanli: kati gelmiyor. Yuzeyleri dikip kabuklari katiya
+# cevirmek gerekiyor, yoksa hacim de boolean da yapilamiyor.
+from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
+from OCP.IFSelect import IFSelect_ReturnStatus
+from OCP.IGESControl import IGESControl_Reader
+from build123d.topology import Shape
+
+reader = IGESControl_Reader()
+if reader.ReadFile(str(SRC)) != IFSelect_ReturnStatus.IFSelect_RetDone:
+    raise RuntimeError(f"IGES okunamadi: {SRC}")
+reader.TransferRoots()
+sewing = BRepBuilderAPI_Sewing(1e-3)
+for face in Shape.cast(reader.OneShape()).faces():
+    sewing.Add(face.wrapped)
+sewing.Perform()
+sewn = Shape.cast(sewing.SewedShape())
+solids = []
+for shell in sewn.shells():
+    try:
+        solids.append(Solid(shell))
+    except Exception:
+        pass                      # kapanmayan kabuk kati olamaz
+part = Compound(children=solids) if solids else sewn"""
+
+LOADERS = {
+    ".brep": "part = import_brep(SRC)",
+    ".stl": "part = import_stl(SRC)",
+    ".3mf": "part = Compound(children=Mesher().read(SRC))",
+    ".iges": IGES_LOADER,
+    ".igs": IGES_LOADER,
+}
 
 
 def starter_source(filename: str) -> str:
     stem = Path(filename).stem
-    reader = READERS.get(Path(filename).suffix.lower(), "import_step")
+    suffix = Path(filename).suffix.lower()
+    loader = LOADERS.get(suffix, "part = import_step(SRC)")
+    # A mesh written back as STEP becomes one face per triangle: a 660 kB 3MF
+    # came out as a 131 MB STEP. Mesh in, mesh out.
+    fmt = "stl" if suffix in (".stl", ".3mf") else "step"
+    writer = "export_stl" if fmt == "stl" else "export_step"
     return f'''"""{stem} - imported CAD file, not parametric.
 
-The geometry came in as a solid: it can be cut, joined, filleted, measured
+The geometry came in as geometry: it can be cut, joined, filleted, measured
 and placed in an assembly, but it carries no feature history, so a dimension
 cannot be dialled in - it has to be cut and rebuilt.
 """
@@ -144,8 +179,10 @@ from build123d import *
 
 STANDALONE = os.environ.get("X3_IMPORT_ONLY") != "1"
 ROOT = Path(__file__).resolve().parent.parent   # uploads land here
+SRC = ROOT / "{filename}"
 
-part = {reader}(ROOT / "{filename}")
+{loader}
+
 part.label, part.color = "{stem}", Color("steelblue")
 
 box = part.bounding_box()
@@ -159,8 +196,8 @@ PARTS = [part]
 NAMES = ["{stem}"]
 
 if STANDALONE:
-    export_step(part, ROOT / "exports" / "{stem}.step")
-    print("exports/{stem}.step yazildi")
+    {writer}(part, ROOT / "exports" / "{stem}.{fmt}")
+    print("exports/{stem}.{fmt} yazildi")
 '''
 
 

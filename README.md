@@ -173,7 +173,7 @@ resolves after `stand` moves into `parts/`.
 
 ### Bringing in a CAD file
 
-**+ CAD** in the left column takes a STEP, IGES, BREP, STL or 3MF. The file
+**+ CAD** in the left column takes STEP, IGES, BREP, STL or 3MF. The file
 goes to GridFS and the server writes a model that imports it, so it is in the
 viewer without a second step:
 
@@ -181,6 +181,16 @@ viewer without a second step:
 part = import_step(ROOT / "bracket.step")   # uploads land in the build root
 PARTS = [part]
 ```
+
+| Format | How it comes in |
+|---|---|
+| STEP / BREP | solids, exactly |
+| IGES | surfaces — the generated module sews them and makes solids where the shells close |
+| STL / 3MF | mesh; written back as STL, because a mesh saved as STEP is one face per triangle (a 660 kB 3MF became a 131 MB STEP) |
+
+**Native CAD files cannot be read.** `.f3d`, `.sldprt`, `.ipt`, `.catpart` and
+friends are each vendor's own database; no open reader exists. The upload says
+so and names the export to use instead.
 
 An imported solid **is not parametric**. It carries no feature history, so a
 dimension cannot be dialled in — it can be cut, joined, filleted, measured and
