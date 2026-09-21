@@ -43,6 +43,10 @@ export class Api {
     return this.http.post<Revision>('/api/revisions', body);
   }
 
+  remove(id: string): Observable<unknown> {
+    return this.http.delete(`/api/revisions/${id}`);
+  }
+
   setStatus(id: string, status: RevisionStatus): Observable<unknown> {
     return this.http.patch(`/api/revisions/${id}?status=${status}`, {});
   }

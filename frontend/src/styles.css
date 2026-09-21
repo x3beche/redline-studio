@@ -69,6 +69,37 @@ body {
   letter-spacing: .04em;
 }
 
+/* Kart icindeki kucuk eylemler: gercek dugme gibi davransin. */
+.tcv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  font-size: 11px;
+  line-height: 1.3;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-dim);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, transform .06s;
+  user-select: none;
+}
+.tcv-chip:hover { background: var(--hover); color: var(--ink); }
+.tcv-chip:active {
+  background: var(--pressed);
+  transform: translateY(1px);       /* basilma hissi */
+  border-color: var(--ink-dim);
+}
+.tcv-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tcv-chip-accent { color: var(--accent); border-color: var(--accent-deep); }
+.tcv-chip-ok     { color: var(--ok); }
+.tcv-chip-danger { color: var(--danger); }
+
+/* Ust duzey dugmelere de ayni basilma hissi */
+.tcv-btn { transition: background .12s, transform .06s; }
+.tcv-btn:active:not(:disabled) { transform: translateY(1px); }
+
 /* ince kaydirma cubugu, panel icinde kalsin */
 .tcv-scroll { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 

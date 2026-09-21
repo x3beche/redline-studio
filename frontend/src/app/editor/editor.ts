@@ -368,6 +368,14 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (r.camera && this.viewer) { this.resume(); this.viewer.applyCamera(r.camera); }
   }
 
+  remove(r: Revision) {
+    if (!confirm(`Revizyon silinsin mi?\n\n"${r.comment}"`)) return;
+    this.api.remove(r.id).subscribe({
+      next: () => { this.flash('revizyon silindi'); this.refresh(); this.pollHealth(); },
+      error: () => this.flash('silinemedi'),
+    });
+  }
+
   mark(r: Revision, status: RevisionStatus) {
     this.api.setStatus(r.id, status).subscribe(() => this.refresh());
   }

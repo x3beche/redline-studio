@@ -26,7 +26,7 @@ EXPORT_SCRIPT = ROOT / "export_model.py"
 
 load_dotenv(ROOT / ".env")
 MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
-MONGODB_DB = os.getenv("MONGODB_DB", "x3_assets")
+MONGODB_DB = os.getenv("MONGODB_DB", "assets_3d")
 QUOTA_MB = float(os.getenv("STORAGE_QUOTA_MB", "512"))
 
 # draft  : kullanici yaziyor, LLM gormez
@@ -72,7 +72,10 @@ async def stats():
     d = db()
     ds = await d.command("dbStats")
     by_status = {s: await d.revisions.count_documents({"status": s}) for s in STATUSES}
-    used = int(ds.get("storageSize", 0)) + int(ds.get("indexSize", 0))
+    # Yeni olusturulmus bir veritabaninda storageSize bir sure 0 raporlanir;
+    # mantiksal boyut her zaman dolu oldugu icin buyugunu aliyoruz.
+    used = max(int(ds.get("storageSize", 0)),
+               int(ds.get("dataSize", 0))) + int(ds.get("indexSize", 0))
     quota = int(QUOTA_MB * 1024 * 1024)
     return {
         "db": ds.get("db"),

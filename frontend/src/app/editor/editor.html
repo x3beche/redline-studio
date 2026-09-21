@@ -61,7 +61,8 @@
                 <code style="color: var(--accent)">{{ v.short }}</code>
                 <span style="color: var(--ink-dim)"> {{ v.note || v._id }}</span>
               </span>
-              <button (click)="restore(v)" class="shrink-0" style="color: var(--warn)">don</button>
+              <button (click)="restore(v)" class="tcv-chip shrink-0"
+                      style="color: var(--warn)">don</button>
             </li>
           } @empty {
             <li class="text-[11px]" style="color: var(--ink-dim)">surum yok</li>
@@ -149,8 +150,8 @@
   <!-- revizyon cizimi buyutulmus -->
   @if (preview(); as pv) {
     <div (click)="closeShot()"
-         class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 p-8"
-         style="background: rgba(0,0,0,.82)">
+         class="fixed inset-0 flex flex-col items-center justify-center gap-3 p-8"
+         style="background: rgba(0,0,0,.88); z-index: 1000">
       <img [src]="imageUrl(pv)" alt="revizyon cizimi"
            class="max-h-[80vh] max-w-[90vw] rounded bg-white object-contain"
            style="border: 1px solid var(--line)">
@@ -288,15 +289,17 @@
             @if (r.part) { · {{ r.part }} }
             @if (r.model) { · {{ r.model }} }
           </div>
-          <div class="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px]">
-            <button (click)="goTo(r)" style="color: var(--ink-dim)">aciya git</button>
+          <div class="mt-1.5 flex flex-wrap gap-1">
+            <button (click)="goTo(r)" class="tcv-chip">aciya git</button>
             @if (r.status !== 'queued') {
-              <button (click)="mark(r, 'queued')" style="color: var(--accent)">sıraya al</button>
+              <button (click)="mark(r, 'queued')" class="tcv-chip tcv-chip-accent">sıraya al</button>
             } @else {
-              <button (click)="mark(r, 'draft')" style="color: var(--accent)">siradan cikar</button>
+              <button (click)="mark(r, 'draft')" class="tcv-chip tcv-chip-accent">siradan cikar</button>
             }
-            <button (click)="mark(r, 'applied')" style="color: var(--ok)">uygulandi</button>
-            <button (click)="mark(r, 'rejected')" style="color: var(--ink-dim)">iptal</button>
+            <button (click)="mark(r, 'applied')" class="tcv-chip tcv-chip-ok">uygulandi</button>
+            <button (click)="mark(r, 'rejected')" class="tcv-chip">iptal</button>
+            <button (click)="remove(r)" class="tcv-chip tcv-chip-danger ml-auto"
+                    title="revizyonu sil">sil</button>
           </div>
         </li>
       } @empty {
