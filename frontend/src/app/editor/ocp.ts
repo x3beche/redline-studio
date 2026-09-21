@@ -29,6 +29,10 @@ export class OcpViewer {
     this.display = new Display(this.container, opts);
     // render() lives on Viewer, not Display; the docs' display.render is wrong.
     this.viewer = new Viewer(this.display, opts, null);
+    // Handle for tooling: the headless render and UI tests drive clipping
+    // and the camera through this, and there is no other way in from outside
+    // the component.
+    (window as unknown as Record<string, unknown>)['tcv'] = this.viewer;
   }
 
   async load(url: string) {
