@@ -54,6 +54,28 @@ def read_meta(source: str) -> dict:
 
 
 # ---------------- folders ----------------
+# The archive rule lives here rather than in the route, because the CLI marks
+# revisions applied too and used to write straight to Mongo, so a task closed
+# from the terminal was never filed away.
+SETTINGS_ID = "app"
+DEFAULT_SETTINGS = {"auto_archive": False}
+
+
+async def settings(db) -> dict:
+    doc = await db.settings.find_one({"_id": SETTINGS_ID}) or {}
+    return {**DEFAULT_SETTINGS, **{k: v for k, v in doc.items() if k != "_id"}}
+
+
+async def set_status(db, rev_id: str, status: str) -> dict | None:
+    """Move a revision to `status`; returns the patch, or None if unknown."""
+    patch = {"status": status,
+             "queued_at": now() if status == "queued" else None}
+    if status == "applied" and (await settings(db))["auto_archive"]:
+        patch["archived"] = True
+    res = await db.revisions.update_one({"_id": rev_id}, {"$set": patch})
+    return patch if res.matched_count else None
+
+
 async def create_folder(db, parent: str, name: str) -> str:
     if not SAFE.match(name):
         raise ValueError("folder name may only contain letters, digits, - and _")

@@ -90,12 +90,15 @@ async def cmd_show(args):
 
 
 async def cmd_done(args):
+    # Through store.set_status, not a raw update: that is where auto-archive
+    # lives, and a raw write left every task closed here sitting in the list.
+    from backend import store
+
     db = connect()
-    res = await db.revisions.update_one({"_id": args.id},
-                                        {"$set": {"status": "applied"}})
-    if res.matched_count == 0:
+    patch = await store.set_status(db, args.id, "applied")
+    if patch is None:
         sys.exit(f"{args.id} not found")
-    print(f"{args.id} -> applied")
+    print(f"{args.id} -> applied" + ("  (archived)" if patch.get("archived") else ""))
 
 
 async def cmd_start(args):

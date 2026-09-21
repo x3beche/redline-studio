@@ -404,8 +404,8 @@ async def edit_revision(rid: str, body: RevisionEdit):
 
 # ---------------- settings ----------------
 # Kept server-side so the CLI honours it too, not just the browser.
-SETTINGS_ID = "app"
-DEFAULT_SETTINGS = {"auto_archive": False}
+SETTINGS_ID = store.SETTINGS_ID
+DEFAULT_SETTINGS = store.DEFAULT_SETTINGS
 
 
 @app.get("/api/settings")
@@ -432,18 +432,10 @@ async def archive_revision(rid: str, value: bool = True):
 
 @app.patch("/api/revisions/{rid}")
 async def set_status(rid: str, status: str):
-    from datetime import datetime, timezone
-
     if status not in STATUSES:
         raise HTTPException(400, "status: " + " | ".join(STATUSES))
-    patch = {"status": status,
-             "queued_at": datetime.now(timezone.utc).isoformat()
-             if status == "queued" else None}
-    # With auto-archive on, finishing a task also files the card away.
-    if status == "applied" and (await get_settings())["auto_archive"]:
-        patch["archived"] = True
-    res = await db().revisions.update_one({"_id": rid}, {"$set": patch})
-    if res.matched_count == 0:
+    patch = await store.set_status(db(), rid, status)
+    if patch is None:
         raise HTTPException(404, rid)
     return {"id": rid, **patch}
 
