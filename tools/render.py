@@ -38,7 +38,7 @@ def render(revision: str, out: Path, width: int, height: int, wait: int) -> Path
     chrome = subprocess.Popen(
         ["google-chrome", *FLAGS, f"--remote-debugging-port={PORT}",
          f"--window-size={width},{height}", f"--user-data-dir={profile}",
-         f"{WEB}/?rev={revision}"],
+         f"{WEB}/?{'model=' + revision.split(':', 1)[1] if revision.startswith('model:') else 'rev=' + revision}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         page = None
@@ -46,7 +46,8 @@ def render(revision: str, out: Path, width: int, height: int, wait: int) -> Path
             try:
                 tabs = json.load(urllib.request.urlopen(
                     f"http://127.0.0.1:{PORT}/json"))
-                page = next(t for t in tabs if t["type"] == "page" and "rev=" in t["url"])
+                page = next(t for t in tabs if t["type"] == "page"
+                            and ("rev=" in t["url"] or "model=" in t["url"]))
                 break
             except Exception:
                 time.sleep(0.5)
@@ -99,13 +100,14 @@ def render(revision: str, out: Path, width: int, height: int, wait: int) -> Path
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("revision")
+    ap.add_argument("revision", help="revision id, or model:<name> for a "
+                                     "plain shot of one model")
     ap.add_argument("-o", "--out")
     ap.add_argument("--width", type=int, default=1500)
     ap.add_argument("--height", type=int, default=950)
     ap.add_argument("--wait", type=int, default=40)
     args = ap.parse_args()
-    out = Path(args.out or f"/tmp/after-{args.revision}.png")
+    out = Path(args.out or f"/tmp/after-{args.revision.replace(':', '-')}.png")
     render(args.revision, out, args.width, args.height, args.wait)
     print(f"{out}   ({out.stat().st_size} bytes)")
     print("Open it with the Read tool and compare against the revision drawing.")

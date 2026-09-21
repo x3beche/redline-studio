@@ -250,10 +250,16 @@ export class Editor implements AfterViewInit, OnDestroy {
     return pct > 85 ? 'var(--danger)' : pct > 60 ? 'var(--warn)' : 'var(--accent)';
   }
 
-  /** ?rev=<id> opens the model at that revision's camera. */
+  /** ?rev=<id> opens the model at that revision's camera; ?model=<id>
+   *  opens a named model, which is how a shot of one is taken. */
   private applyUrlCamera() {
-    const rev = new URLSearchParams(location.search).get('rev');
+    const q = new URLSearchParams(location.search);
+    const rev = q.get('rev');
     if (rev) this.focusRevision(rev);
+  }
+
+  private urlModel(): string | null {
+    return new URLSearchParams(location.search).get('model');
   }
 
   /** Move to the camera a revision was drawn from. If no model is loaded
@@ -276,8 +282,9 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.cat.tree().subscribe(t => {
       this.catalog.set(t);
       if (!this.activeModel()) {
-        const first = this.firstReady(t);
-        if (first) this.openModel(first);
+        const wanted = this.urlModel();
+        const pick = (wanted && this.findModel(t, wanted)) || this.firstReady(t);
+        if (pick) this.openModel(pick);
         return;
       }
       // A rebuild replaces the stored viewer payload. Without this the open
@@ -291,8 +298,9 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
+  /** By id, or by bare name so ?model=stand works without the folder. */
   private findModel(n: FolderNode, id: string): ModelEntry | null {
-    return n.models.find(m => m.id === id)
+    return n.models.find(m => m.id === id || m.name === id)
       ?? n.folders.reduce<ModelEntry | null>(
         (hit, f) => hit ?? this.findModel(f, id), null);
   }

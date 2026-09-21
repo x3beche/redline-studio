@@ -27,6 +27,12 @@ async def build(db, model_id: str, script: Path) -> dict:
         models_dir.mkdir()
         # A model id may contain folders; a flat name is enough in the temp dir.
         flat = model_id.replace("/", "__")
+        # Every model is written, not just the target: an assembly imports the
+        # parts it is made of, and it can only do that if they are on the path.
+        async for other in db.models.find({}, {"source": 1}):
+            name = str(other["_id"]).replace("/", "__")
+            if other.get("source"):
+                (models_dir / f"{name}.py").write_text(other["source"])
         (models_dir / f"{flat}.py").write_text(doc["source"])
         assets_dir = tmp / "assets"
         # Models tend to write STEP/STL under <root>/exports; we create the

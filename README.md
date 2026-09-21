@@ -9,6 +9,12 @@ leave a revision note.** All project data lives in MongoDB.
 
 ![user interface](docs/screenshot.png)
 
+Models can be built from other models, so an assembly is just a module that
+imports its parts and positions them — the fit is then checked in code rather
+than by eye:
+
+![fan plugged into its stand](docs/assembly.png)
+
 ## What it solves
 
 Talking about a CAD revision is awkward: "chamfer that corner" — which corner,
@@ -115,10 +121,22 @@ a log at the bottom:
 1. Create a model with **+M** in the left column. A skeleton is generated.
 2. Write the model, build it with **↻** (build123d runs, the result goes to the
    database).
-3. Click the model to open it in the viewer. **Double-click a part** and the
-   form on the right fills itself in.
+3. Click the model to open it in the viewer, or open one directly with
+   `?model=<name>`. **Double-click a part** and the form on the right fills
+   itself in.
 4. **Freeze and draw** &rarr; mark it up &rarr; write the comment and save.
+   Seven tools: freehand, line, arrow, rectangle, ellipse, triangle and text.
+   Text is typed where you click, not in a dialog, so you can see what you are
+   labelling. Saving releases the freeze.
 5. Press **queue** when it is ready. Click the card thumbnail to enlarge it.
+
+A comment about a part is a revision on its own — freeze and draw is optional.
+When a run finishes, a notice appears in the top-right corner and the camera
+swings to the angle the revision was drawn from; the notice stays until it is
+dismissed.
+
+The viewer's **Clip** tab cuts the model on three planes, which is how the
+inside gets inspected without exporting anything.
 
 A single button on the card cycles the status: draft &rarr; queued &rarr;
 applied &rarr; draft. So "applied" can be undone. **edit** changes the comment
@@ -138,6 +156,24 @@ TITLE = "Fan 120 mm"                    # optional, shown in the UI
 PARTS = [frame, rotor, pins]            # build123d objects to tessellate
 NAMES = ["housing", "impeller", "pins"] # optional, names in the tree
 ```
+
+### Assemblies
+
+Every model's source is written into the build directory, not just the one
+being built, so a module can import the parts it is made of:
+
+```python
+import os
+os.environ["X3_IMPORT_ONLY"] = "1"      # parts must not run their own exports
+import fan_pro as F
+import stand as D
+
+PARTS = place(F.PARTS, ...) + place(D.PARTS, ...)
+```
+
+Guard exports and the `show()` call in each part with
+`if STANDALONE:` (`STANDALONE = os.environ.get("X3_IMPORT_ONLY") != "1"`),
+or importing one will drop its STEP and STL into the assembly's output.
 
 ## API
 

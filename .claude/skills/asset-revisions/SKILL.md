@@ -10,6 +10,24 @@ build123d model in the browser, freezes an angle, marks it with a red pen and
 writes a note. The request lands in MongoDB. **There are no model files on
 disk**; both source code and generated artifacts live in the database.
 
+## Two rules before anything else
+
+1. **Only `queued` items are your work** (see below).
+2. **Open a run the moment you pick one up, and keep the bar moving.** The
+   user follows the work on screen, not in your terminal. A revision worked
+   on without a run looks like nothing is happening.
+
+   ```bash
+   .venv/bin/python tools/revisions.py start <id> "what you are doing"
+   .venv/bin/python tools/revisions.py log "reading the drawing" -p 10
+   ...                                    # a line at every step, -p rising
+   .venv/bin/python tools/revisions.py finish
+   ```
+
+   This is not optional and not something to do at the end: `start` comes
+   before the first edit, and every step that takes more than a moment gets
+   its own `log` line with a percentage.
+
 ## Important: only "queued" items are your work
 
 Revisions have four states:
@@ -106,7 +124,8 @@ them while you work so the user can follow along without reading a terminal:
 
 `-p` moves the bar, `-l` colours the line (`info`, `work`, `done`, `warn`,
 `error`). Start a run when you pick up a revision and finish it when you are
-done; the bar stays live in between.
+done; the bar stays live in between. Report bad news too: a `warn` line when
+a measurement comes out wrong is more useful than a silent correction.
 
 ## When changing a model
 
