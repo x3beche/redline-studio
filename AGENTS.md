@@ -37,6 +37,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py save <model> <file>  # update source
 .venv/bin/python tools/revisions.py build <model>        # rebuild (~15 s)
 .venv/bin/python tools/revisions.py done <id>            # mark as applied
+.venv/bin/python tools/render.py <id>                    # render from that camera
 ```
 
 Without `build` the user cannot see your change.
@@ -56,6 +57,19 @@ them while you work so the user can follow along without reading a terminal:
 `-p` moves the bar, `-l` colours the line (`info`, `work`, `done`, `warn`,
 `error`). Start a run when you pick up a revision and finish it when you are
 done; the bar stays live in between.
+
+### Always finish by rendering from the user's angle
+
+Every revision stores the camera it was drawn from. After rebuilding, take the
+picture from that same angle and look at it before you call the work done:
+
+```bash
+python tools/render.py <revision_id>          # writes /tmp/after-<id>.png
+```
+
+Open that file with the Read tool and compare it against the revision drawing.
+Same viewpoint, so the before and after line up and a mistake is obvious. The
+app also accepts `?rev=<id>` in the URL, which opens the model at that camera.
 
 ## Model contract
 

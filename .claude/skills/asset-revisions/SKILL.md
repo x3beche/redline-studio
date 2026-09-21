@@ -71,6 +71,19 @@ You may want a snapshot before a large change:
 curl -s -X POST "http://127.0.0.1:8000/api/versions?note=before%20change"
 ```
 
+### Always finish by rendering from the user's angle
+
+Every revision stores the camera it was drawn from. After rebuilding, take the
+picture from that same angle and look at it before you call the work done:
+
+```bash
+python tools/render.py <revision_id>          # writes /tmp/after-<id>.png
+```
+
+Open that file with the Read tool and compare it against the revision drawing.
+Same viewpoint, so the before and after line up and a mistake is obvious. The
+app also accepts `?rev=<id>` in the URL, which opens the model at that camera.
+
 ### 4. Mark it
 
 ```bash

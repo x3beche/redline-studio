@@ -91,7 +91,12 @@ moment it opens the project:
 .venv/bin/python tools/revisions.py save fan_pro /tmp/m.py
 .venv/bin/python tools/revisions.py build fan_pro
 .venv/bin/python tools/revisions.py done ID
+.venv/bin/python tools/render.py ID          # render from the drawing's camera
 ```
+
+Every revision stores the camera it was drawn from, so the result can be
+photographed from the same viewpoint. `?rev=<id>` in the URL opens the model
+at that camera too.
 
 The tool talks to MongoDB directly, so it works with the server stopped. Only
 **queued** revisions count as work; drafts stay invisible.

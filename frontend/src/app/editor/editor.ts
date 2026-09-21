@@ -90,6 +90,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
     this.loadCatalog();
     this.loadVersions();
+    this.applyUrlCamera();
     this.pollHealth();
     this.healthTimer = setInterval(() => this.pollHealth(), 2000);
     setTimeout(() => this.sizeOverlay());     // after the viewer DOM settles
@@ -177,6 +178,29 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   gaugeColor(pct: number): string {
     return pct > 85 ? 'var(--danger)' : pct > 60 ? 'var(--warn)' : 'var(--accent)';
+  }
+
+  /** ?rev=<id> opens the model at that revision's camera, so a before/after
+   *  render can be taken from exactly the angle the user drew on. */
+  private applyUrlCamera() {
+    const rev = new URLSearchParams(location.search).get('rev');
+    if (!rev) return;
+    this.api.one(rev).subscribe({
+      next: r => {
+        if (!r.camera) return;
+        // Wait for the model to finish loading before moving the camera.
+        const tryApply = (left: number) => {
+          if (this.activeModel() && this.viewer) {
+            this.viewer.applyCamera(r.camera!);
+            this.flash('camera from revision ' + rev.slice(-6));
+          } else if (left > 0) {
+            setTimeout(() => tryApply(left - 1), 400);
+          }
+        };
+        tryApply(40);
+      },
+      error: () => {},
+    });
   }
 
   // ---- catalog ----

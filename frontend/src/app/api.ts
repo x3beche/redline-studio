@@ -49,6 +49,10 @@ export class Api {
     return this.http.put<Revision>(`/api/revisions/${id}`, body);
   }
 
+  one(id: string): Observable<Revision> {
+    return this.http.get<Revision>(`/api/revisions/${id}`);
+  }
+
   remove(id: string): Observable<unknown> {
     return this.http.delete(`/api/revisions/${id}`);
   }

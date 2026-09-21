@@ -352,6 +352,14 @@ async def queue():
     return await list_revisions(status="queued")
 
 
+@app.get("/api/revisions/{rid}")
+async def one_revision(rid: str):
+    doc = await db().revisions.find_one({"_id": rid})
+    if not doc:
+        raise HTTPException(404, rid)
+    return _out(doc)
+
+
 @app.get("/api/revisions/{rid}/image")
 async def revision_image(rid: str):
     d = db()
