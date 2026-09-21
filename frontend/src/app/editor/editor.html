@@ -289,17 +289,14 @@
             @if (r.part) { · {{ r.part }} }
             @if (r.model) { · {{ r.model }} }
           </div>
-          <div class="mt-1.5 flex flex-wrap gap-1">
-            <button (click)="goTo(r)" class="tcv-chip">aciya git</button>
-            @if (r.status !== 'queued') {
-              <button (click)="mark(r, 'queued')" class="tcv-chip tcv-chip-accent">sıraya al</button>
-            } @else {
-              <button (click)="mark(r, 'draft')" class="tcv-chip tcv-chip-accent">siradan cikar</button>
-            }
-            <button (click)="mark(r, 'applied')" class="tcv-chip tcv-chip-ok">uygulandi</button>
-            <button (click)="mark(r, 'rejected')" class="tcv-chip">iptal</button>
+          <!-- Tek dugme durumu dondurur: taslak -> sirada -> uygulandi -> taslak -->
+          <div class="mt-1.5 flex flex-nowrap items-center gap-1">
+            <button (click)="cycle(r)" [class]="nextClass(r.status)"
+                    title="taslak -> sirada -> uygulandi -> taslak">
+              {{ nextLabel(r.status) }}
+            </button>
             <button (click)="remove(r)" class="tcv-chip tcv-chip-danger ml-auto"
-                    title="revizyonu sil">sil</button>
+                    title="revizyonu kalici olarak sil">sil</button>
           </div>
         </li>
       } @empty {

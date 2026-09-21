@@ -364,10 +364,6 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.api.list().subscribe({ next: r => this.revisions.set(r), error: () => {} });
   }
 
-  goTo(r: Revision) {
-    if (r.camera && this.viewer) { this.resume(); this.viewer.applyCamera(r.camera); }
-  }
-
   remove(r: Revision) {
     if (!confirm(`Revizyon silinsin mi?\n\n"${r.comment}"`)) return;
     this.api.remove(r.id).subscribe({
@@ -377,7 +373,28 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   mark(r: Revision, status: RevisionStatus) {
-    this.api.setStatus(r.id, status).subscribe(() => this.refresh());
+    this.api.setStatus(r.id, status).subscribe(() => { this.refresh(); this.pollHealth(); });
+  }
+
+  /** Tek dugme, uc durumlu dongu: taslak -> sirada -> uygulandi -> taslak.
+   *  Boylece "uygulandi" geri de alinabiliyor. */
+  private static NEXT: Record<string, RevisionStatus> = {
+    draft: 'queued', queued: 'applied', applied: 'draft', rejected: 'draft',
+  };
+
+  cycle(r: Revision) { this.mark(r, Editor.NEXT[r.status] ?? 'draft'); }
+
+  /** Dugmenin uzerinde tiklayinca ne olacagi yazar. */
+  nextLabel(s: RevisionStatus): string {
+    return s === 'draft' ? 'sıraya al'
+      : s === 'queued' ? 'uygulandı'
+      : 'taslağa dön';
+  }
+
+  nextClass(s: RevisionStatus): string {
+    return s === 'draft' ? 'tcv-chip tcv-chip-accent'
+      : s === 'queued' ? 'tcv-chip tcv-chip-ok'
+      : 'tcv-chip';
   }
 
   /** Sirada kacinci oldugu; liste zaten queued_at'e gore sirali geliyor. */

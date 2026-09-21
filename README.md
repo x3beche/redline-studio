@@ -73,6 +73,29 @@ Tek sunucuda derlenmis surum: `./start.sh --build` &rarr; yalnizca `:8000`.
 Baglanti dizesi yalnizca backend'de okunur, arayuze hicbir sekilde gecmez.
 `.env` dosyasi `.gitignore` icindedir.
 
+## Yapay zeka ile calisma
+
+Depoda modeller icin iki dosya var:
+
+- **`AGENTS.md`** — bu depoda ise baslayan bir modelin ilk okumasi gereken ozet
+- **`.claude/skills/asset-revisions/SKILL.md`** — Claude Code skill'i; "sirada
+  ne var", "cizdigimi uygula" gibi isteklerde kendiliginden devreye girer
+
+Revizyonlar veritabaninda durdugu icin bir model, projeyi actigi anda bekleyen
+talepleri gorebilir:
+
+```bash
+.venv/bin/python tools/revisions.py queue    # siradaki talepler
+.venv/bin/python tools/revisions.py show ID  # isaretli cizimi diske yaz
+.venv/bin/python tools/revisions.py source fan_pro > /tmp/m.py
+.venv/bin/python tools/revisions.py save fan_pro /tmp/m.py
+.venv/bin/python tools/revisions.py build fan_pro
+.venv/bin/python tools/revisions.py done ID
+```
+
+Arac sunucu calismasa da dogrudan MongoDB'ye baglanir. Yalnizca **siraya
+alinmis** revizyonlar is sayilir; taslaklar gorunmez.
+
 ## Kullanim
 
 1. Sol sutunda **+M** ile model olusturun. Iskelet kod hazir gelir.
@@ -81,6 +104,9 @@ Baglanti dizesi yalnizca backend'de okunur, arayuze hicbir sekilde gecmez.
    form kendiliginden dolar.
 4. **Dondur ve ciz** &rarr; isaretleyin &rarr; yorumu yazip kaydedin.
 5. Hazir oldugunda **siraya al**. Kart uzerinden cizimi buyutup gorebilirsiniz.
+
+Kart uzerindeki tek dugme durumu dondurur: taslak &rarr; sirada &rarr;
+uygulandi &rarr; taslak. Yani "uygulandi" geri de alinabilir.
 
 ### Model sozlesmesi
 
@@ -103,6 +129,7 @@ NAMES = ["govde", "pervane", "pinler"]  # istege bagli, agactaki adlar
 | `GET /api/models/{id}/file/{step\|stl}` | uretilen dosya |
 | `GET /api/queue` | **yalnizca siraya alinmis revizyonlar** |
 | `GET /api/revisions/{id}/image` | isaretli goruntu |
+| `DELETE /api/revisions/{id}` | revizyonu ve goruntusunu sil |
 | `POST /api/versions` · `POST /api/versions/{id}/restore` | surum al / geri don |
 | `GET /api/stats` · `GET /api/system` | veritabani doluluğu, CPU/RAM/GPU |
 
@@ -117,6 +144,12 @@ NAMES = ["govde", "pervane", "pinler"]  # istege bagli, agactaki adlar
 - `three-cad-viewer` dokumanindaki `display.render(...)` ornegi yaniltici;
   `render()` `Viewer` uzerindedir ve `resizeCadView` ilk `render()` oncesinde
   hata firlatir.
+- `Plane.rotated()` **global** aci alir, yerel degil — yerel sandiginizda
+  geometri sessizce yanlis cikar.
+- Loft kesitleri poligon olmali; elips telleriyle OCCT kesitleri
+  eslestiremeyip `NCollection_DataMap::Find` atar.
+- `Compound(children=[...])` parcalari **yeniden ebeveynler**; yardimci bir
+  compound kurmak onlari oncekinden koparir ve gabariyi bozar.
 
 ## Lisans
 
