@@ -41,6 +41,22 @@ Nothing counts as work until the user presses *queue*.
 
 Without `build` the user cannot see your change.
 
+## Show your progress on screen
+
+The app has a progress bar at the top and an IDE-style log at the bottom. Use
+them while you work so the user can follow along without reading a terminal:
+
+```bash
+.venv/bin/python tools/revisions.py start <id> "what you are doing"
+.venv/bin/python tools/revisions.py log "reading source" -p 20 -l work
+.venv/bin/python tools/revisions.py log "tessellating"  -p 80 -l work
+.venv/bin/python tools/revisions.py finish            # or --failed
+```
+
+`-p` moves the bar, `-l` colours the line (`info`, `work`, `done`, `warn`,
+`error`). Start a run when you pick up a revision and finish it when you are
+done; the bar stays live in between.
+
 ## Model contract
 
 ```python

@@ -96,6 +96,15 @@ moment it opens the project:
 The tool talks to MongoDB directly, so it works with the server stopped. Only
 **queued** revisions count as work; drafts stay invisible.
 
+While working, a model can report progress to the screen — a bar at the top and
+a log at the bottom:
+
+```bash
+.venv/bin/python tools/revisions.py start ID "what you are doing"
+.venv/bin/python tools/revisions.py log "reading source" -p 20 -l work
+.venv/bin/python tools/revisions.py finish
+```
+
 ## Usage
 
 1. Create a model with **+M** in the left column. A skeleton is generated.
@@ -135,6 +144,8 @@ NAMES = ["housing", "impeller", "pins"] # optional, names in the tree
 | `DELETE /api/revisions/{id}` | delete a revision and its image |
 | `POST /api/versions` · `POST /api/versions/{id}/restore` | snapshot / roll back |
 | `GET /api/stats` · `GET /api/system` | database usage, CPU/RAM/GPU |
+| `POST /api/activity` · `GET /api/activity` | the log shown at the bottom |
+| `POST /api/run/start` · `POST /api/run/finish` · `GET /api/run` | the progress bar at the top |
 
 ## Gotchas
 

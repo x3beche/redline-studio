@@ -207,6 +207,89 @@ async def restore_version(version_id: str):
         raise HTTPException(404, str(exc)) from exc
 
 
+# ---------------- activity log and run progress ----------------
+# Two separate things on screen: a scrolling IDE-style log at the bottom, and
+# one progress bar at the top that lives from the moment work on a revision
+# starts until it finishes.
+ACTIVITY_KEEP = 300
+RUN_ID = "current"
+
+
+class ActivityIn(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+    level: str = "info"                    # info | work | done | warn | error
+    percent: float | None = Field(default=None, ge=0, le=100)
+
+
+class RunStart(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    revision: str | None = None
+    model: str | None = None
+
+
+@app.post("/api/activity")
+async def push_activity(body: ActivityIn):
+    from datetime import datetime, timezone
+    import uuid
+
+    d = db()
+    doc = {"_id": uuid.uuid4().hex[:12],
+           "at": datetime.now(timezone.utc).isoformat(),
+           "text": body.text.strip(), "level": body.level}
+    await d.activity.insert_one(doc)
+
+    # A percent on a log line also advances the bar, so one call does both.
+    if body.percent is not None:
+        await d.runs.update_one({"_id": RUN_ID},
+                                {"$set": {"percent": body.percent}})
+
+    # Keep the feed bounded without a capped collection, so it stays clearable.
+    total = await d.activity.count_documents({})
+    if total > ACTIVITY_KEEP:
+        old = [x["_id"] async for x in
+               d.activity.find({}, {"_id": 1}).sort("at", 1).limit(total - ACTIVITY_KEEP)]
+        await d.activity.delete_many({"_id": {"$in": old}})
+    return doc
+
+
+@app.get("/api/activity")
+async def list_activity(limit: int = 120):
+    rows = [x async for x in db().activity.find({}).sort("at", -1).limit(limit)]
+    return list(reversed(rows))            # oldest first, log order
+
+
+@app.delete("/api/activity")
+async def clear_activity():
+    return {"deleted": (await db().activity.delete_many({})).deleted_count}
+
+
+@app.get("/api/run")
+async def get_run():
+    return await db().runs.find_one({"_id": RUN_ID})
+
+
+@app.post("/api/run/start")
+async def start_run(body: RunStart):
+    from datetime import datetime, timezone
+
+    doc = {"_id": RUN_ID, "title": body.title, "revision": body.revision,
+           "model": body.model, "percent": 0.0, "status": "running",
+           "started_at": datetime.now(timezone.utc).isoformat(),
+           "finished_at": None}
+    await db().runs.replace_one({"_id": RUN_ID}, doc, upsert=True)
+    return doc
+
+
+@app.post("/api/run/finish")
+async def finish_run(status: str = "done"):
+    from datetime import datetime, timezone
+
+    patch = {"status": status, "percent": 100.0,
+             "finished_at": datetime.now(timezone.utc).isoformat()}
+    await db().runs.update_one({"_id": RUN_ID}, {"$set": patch}, upsert=True)
+    return await db().runs.find_one({"_id": RUN_ID})
+
+
 # ---------------- revisions ----------------
 class RevisionIn(BaseModel):
     comment: str = Field(min_length=1, max_length=4000)

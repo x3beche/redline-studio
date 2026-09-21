@@ -133,3 +133,24 @@ export class Health {
   stats(): Observable<Stats> { return this.http.get<Stats>('/api/stats'); }
   system(): Observable<SystemInfo> { return this.http.get<SystemInfo>('/api/system'); }
 }
+
+// ---------------- activity log and run progress ----------------
+export interface LogLine {
+  _id: string; at: string; text: string;
+  level: 'info' | 'work' | 'done' | 'warn' | 'error';
+}
+export interface Run {
+  _id: string; title: string; revision: string | null; model: string | null;
+  percent: number; status: 'running' | 'done' | 'failed';
+  started_at: string; finished_at: string | null;
+}
+
+@Injectable({ providedIn: 'root' })
+export class Activity {
+  private http = inject(HttpClient);
+  lines(limit = 120): Observable<LogLine[]> {
+    return this.http.get<LogLine[]>(`/api/activity?limit=${limit}`);
+  }
+  run(): Observable<Run | null> { return this.http.get<Run | null>('/api/run'); }
+  clear(): Observable<unknown> { return this.http.delete('/api/activity'); }
+}

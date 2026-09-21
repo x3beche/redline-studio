@@ -11,6 +11,12 @@ and MONGODB_DB are read from .env.
     python tools/revisions.py source <model>        print source code
     python tools/revisions.py save <model> <file>   update source code
     python tools/revisions.py build <model>         rebuild (viewer/STEP/STL)
+
+Progress shown on screen while you work:
+
+    python tools/revisions.py start <id> "title"    begin the top progress bar
+    python tools/revisions.py log "text" [-p 40]    append a line to the log
+    python tools/revisions.py finish [--failed]     complete the bar
 """
 
 from __future__ import annotations
@@ -24,6 +30,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+
+def _now() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _line(text: str, level: str = "info") -> dict:
+    import uuid
+    return {"_id": uuid.uuid4().hex[:12], "at": _now(),
+            "text": text.strip(), "level": level}
 
 
 def connect():
@@ -81,6 +98,37 @@ async def cmd_done(args):
     print(f"{args.id} -> applied")
 
 
+async def cmd_start(args):
+    db = connect()
+    doc = {"_id": "current", "title": args.title, "revision": args.id,
+           "model": None, "percent": 0.0, "status": "running",
+           "started_at": _now(), "finished_at": None}
+    await db.runs.replace_one({"_id": "current"}, doc, upsert=True)
+    await db.activity.insert_one(_line(f"started: {args.title}", "work"))
+    print(f"run started: {args.title}")
+
+
+async def cmd_log(args):
+    db = connect()
+    await db.activity.insert_one(_line(args.text, args.level))
+    if args.percent is not None:
+        await db.runs.update_one({"_id": "current"},
+                                 {"$set": {"percent": args.percent}})
+    pct = "" if args.percent is None else f"  [{args.percent:.0f}%]"
+    print(f"{args.text}{pct}")
+
+
+async def cmd_finish(args):
+    db = connect()
+    status = "failed" if args.failed else "done"
+    await db.runs.update_one(
+        {"_id": "current"},
+        {"$set": {"status": status, "percent": 100.0, "finished_at": _now()}},
+        upsert=True)
+    await db.activity.insert_one(_line(f"finished: {status}", status))
+    print(f"run {status}")
+
+
 async def cmd_models(_):
     db = connect()
     async for m in db.models.find({}, {"source": 0}):
@@ -123,6 +171,15 @@ def main() -> None:
     s = sub.add_parser("show"); s.add_argument("id"); s.add_argument("-o", "--out")
     s.set_defaults(fn=cmd_show)
     s = sub.add_parser("done"); s.add_argument("id"); s.set_defaults(fn=cmd_done)
+    s = sub.add_parser("start"); s.add_argument("id"); s.add_argument("title")
+    s.set_defaults(fn=cmd_start)
+    s = sub.add_parser("log"); s.add_argument("text")
+    s.add_argument("-p", "--percent", type=float)
+    s.add_argument("-l", "--level", default="info",
+                   choices=["info", "work", "done", "warn", "error"])
+    s.set_defaults(fn=cmd_log)
+    s = sub.add_parser("finish"); s.add_argument("--failed", action="store_true")
+    s.set_defaults(fn=cmd_finish)
     sub.add_parser("models").set_defaults(fn=cmd_models)
     s = sub.add_parser("source"); s.add_argument("model"); s.set_defaults(fn=cmd_source)
     s = sub.add_parser("save"); s.add_argument("model"); s.add_argument("file")

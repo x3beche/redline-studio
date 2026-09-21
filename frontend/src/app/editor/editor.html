@@ -172,7 +172,34 @@
     </div>
   }
 
-  <!-- CENTRE: viewer -->
+  <!-- CENTRE: viewer, with the run bar above and the log below -->
+  <div class="flex min-w-0 flex-1 flex-col gap-2">
+
+    <!-- Run progress: alive from the start of a revision until it finishes. -->
+    @if (run(); as rn) {
+      <div class="tcv-panel shrink-0 rounded px-3 py-1.5"
+           style="border: 1px solid var(--line)">
+        <div class="flex items-center gap-2 text-[11px]">
+          <span class="h-2 w-2 shrink-0 rounded-full"
+                [style.background]="rn.status === 'running' ? 'var(--accent)'
+                                  : rn.status === 'failed' ? 'var(--danger)' : 'var(--ok)'"></span>
+          <span class="truncate">{{ rn.title }}</span>
+          @if (rn.revision) {
+            <span class="mono shrink-0" style="color: var(--ink-dim)">{{ rn.revision }}</span>
+          }
+          <span class="mono ml-auto shrink-0" style="color: var(--ink-dim)">
+            {{ rn.status === 'running' ? (rn.percent | number:'1.0-0') + '%' : rn.status }}
+          </span>
+        </div>
+        <div class="mt-1 h-1 w-full overflow-hidden rounded" style="background: var(--surface-2)">
+          <div class="h-full transition-[width] duration-300"
+               [style.width.%]="rn.percent"
+               [style.background]="rn.status === 'failed' ? 'var(--danger)'
+                                 : rn.status === 'done' ? 'var(--ok)' : 'var(--accent)'"></div>
+        </div>
+      </div>
+    }
+
   <div #stage class="relative min-w-0 flex-1 overflow-hidden rounded"
        style="border: 1px solid var(--line)">
     <div #host class="absolute inset-0"></div>
@@ -207,6 +234,36 @@
       <div class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded px-3 py-1.5 text-[12px]"
            style="background: rgba(0,0,0,.8)">{{ toast() }}</div>
     }
+  </div>
+
+    <!-- Log: IDE-style, newest line at the bottom. -->
+    <div class="tcv-panel shrink-0 rounded" style="border: 1px solid var(--line)">
+      <div class="flex items-center gap-2 px-2.5 py-1">
+        <button (click)="toggleLog()" class="tcv-chip">
+          {{ logOpen() ? '▾' : '▸' }} log
+        </button>
+        <span class="mono text-[10px]" style="color: var(--ink-dim)">
+          {{ log().length }} lines
+        </span>
+        @if (runActive()) {
+          <span class="text-[10px]" style="color: var(--accent)">running…</span>
+        }
+        <button (click)="clearLog()" class="tcv-chip ml-auto">clear</button>
+      </div>
+      @if (logOpen()) {
+        <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
+             style="height: 132px; border-top: 1px solid var(--line)">
+          @for (l of log(); track l._id) {
+            <div class="flex gap-2 leading-snug">
+              <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
+              <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
+            </div>
+          } @empty {
+            <div style="color: var(--ink-dim)">no activity yet</div>
+          }
+        </div>
+      }
+    </div>
   </div>
 
   <!-- RIGHT: freeze/draw + revisions -->

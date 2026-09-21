@@ -1,7 +1,7 @@
 import {
   AfterViewInit, Component, ElementRef, OnDestroy, inject, signal, viewChild,
 } from '@angular/core';
-import { NgTemplateOutlet } from '@angular/common';
+import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 const SEED = `"""__NAME__ - a build123d model."""
 
 from build123d import *
@@ -17,7 +17,7 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Api, Catalog, Health, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
+import { Activity, Api, Catalog, Health, LogLine, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer } from './ocp';
 
@@ -25,16 +25,18 @@ type Stroke = { color: string; width: number; pts: [number, number][] };
 
 @Component({
   selector: 'app-editor',
-  imports: [NgTemplateOutlet],
+  imports: [DecimalPipe, NgTemplateOutlet],
   templateUrl: './editor.html',
 })
 export class Editor implements AfterViewInit, OnDestroy {
   private api = inject(Api);
   private cat = inject(Catalog);
   private health = inject(Health);
+  private activity = inject(Activity);
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private overlay = viewChild.required<ElementRef<HTMLCanvasElement>>('overlay');
   private stage = viewChild.required<ElementRef<HTMLDivElement>>('stage');
+  private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   frozen = signal(false);
   saving = signal(false);
@@ -50,6 +52,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   busy = signal('');
   collapsed = signal(false);
   stats = signal<Stats | null>(null);
+  log = signal<LogLine[]>([]);
+  run = signal<Run | null>(null);
+  logOpen = signal(true);
   preview = signal<Revision | null>(null);
   editing = signal<string | null>(null);
   editText = signal('');
@@ -86,7 +91,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.loadCatalog();
     this.loadVersions();
     this.pollHealth();
-    this.healthTimer = setInterval(() => this.pollHealth(), 5000);
+    this.healthTimer = setInterval(() => this.pollHealth(), 2000);
     setTimeout(() => this.sizeOverlay());     // after the viewer DOM settles
     this.ro = new ResizeObserver(() => this.sizeOverlay());
     this.ro.observe(box);
@@ -104,6 +109,38 @@ export class Editor implements AfterViewInit, OnDestroy {
   pollHealth() {
     this.health.stats().subscribe({ next: v => this.stats.set(v), error: () => {} });
     this.health.system().subscribe({ next: v => this.sys.set(v), error: () => {} });
+    this.activity.run().subscribe({ next: v => this.run.set(v), error: () => {} });
+    this.activity.lines().subscribe({
+      next: v => {
+        const grew = v.length !== this.log().length;
+        this.log.set(v);
+        if (grew) setTimeout(() => this.scrollLog());
+      },
+      error: () => {},
+    });
+  }
+
+  /** Keep the newest line in view, the way a terminal does. */
+  private scrollLog() {
+    const el = this.logBox()?.nativeElement;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  clearLog() { this.activity.clear().subscribe(() => this.pollHealth()); }
+
+  toggleLog() {
+    this.logOpen.update(v => !v);
+    setTimeout(() => this.sizeOverlay(), 60);
+  }
+
+  /** A run is live from the moment work starts until it reports finished. */
+  runActive(): boolean { return this.run()?.status === 'running'; }
+
+  levelColor(l: LogLine['level']): string {
+    return l === 'error' ? 'var(--danger)'
+      : l === 'warn' ? 'var(--warn)'
+      : l === 'done' ? 'var(--ok)'
+      : l === 'work' ? 'var(--accent)' : 'var(--ink-dim)';
   }
 
   toggleSidebar() {
