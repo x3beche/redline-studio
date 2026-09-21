@@ -124,6 +124,11 @@ A single button on the card cycles the status: draft &rarr; queued &rarr;
 applied &rarr; draft. So "applied" can be undone. **edit** changes the comment
 and the part; the drawing itself is the record and stays as it was.
 
+Clicking a card's thumbnail opens the drawing full size, with the comment,
+part, model and status underneath:
+
+![a revision opened from its card](docs/revision-modal.png)
+
 ### Model contract
 
 A module must define the following to appear in the catalog:

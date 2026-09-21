@@ -154,10 +154,12 @@
   <!-- enlarged revision drawing -->
   @if (preview(); as pv) {
     <div (click)="closeShot()"
-         class="fixed inset-0 flex flex-col items-center justify-center gap-3 p-8"
+         class="fixed inset-0 flex flex-col items-center justify-center gap-4 p-10"
          style="background: rgba(0,0,0,.88); z-index: 1000">
+      <!-- Pulled in from the edges: the drawing reads better with room
+           around it than filling the viewport. -->
       <img [src]="imageUrl(pv)" alt="revision drawing"
-           class="max-h-[80vh] max-w-[90vw] rounded bg-white object-contain"
+           class="max-h-[68vh] max-w-[72vw] rounded bg-white object-contain"
            style="border: 1px solid var(--line)">
       <div class="tcv-card max-w-2xl p-3 text-[12px]">
         <p class="mb-1">{{ pv.comment }}</p>
