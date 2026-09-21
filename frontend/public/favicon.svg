@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#2b2f36"/>
+  <!-- acili X3 monogrami -->
+  <path d="M14 16 L24 32 L14 48 M24 16 L34 32 L24 48" fill="none" stroke="#53a0e3"
+        stroke-width="5" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M39 17 H52 L44 30 Q53 30 53 39 Q53 48 43 48 Q37 48 35 43"
+        fill="none" stroke="#ddd" stroke-width="5"
+        stroke-linecap="square" stroke-linejoin="miter"/>
+</svg>

@@ -1,18 +1,25 @@
+<div align="center">
+
 # X3 Studios Asset Manager
 
-Parametrik CAD modellerini tarayicida inceleyip **uzerine cizerek revizyon notu
-birakmaya** yarayan bir arac. Model Python'da (build123d) tanimlanir, tarayicida
-VS Code'daki **OCP CAD Viewer**'in birebir ayni goruntuleyicisiyle acilir; bir
-aci secip donduruyor, kirmizi kalemle isaretliyor, yorumunu yaziyorsunuz.
-Kayitlar MongoDB'ye, isaretli goruntu diske dusuyor.
+**Parametrik CAD modellerini tarayicida ac, bir aciyi dondur, uzerine ciz,
+revizyon notunu birak.** Proje verisinin tamami MongoDB'de durur.
 
-![tek ekran arayuz](docs/screenshot.png)
+</div>
 
-## Neden
+![arayuz](docs/screenshot.png)
 
-CAD revizyonu konusurken "su kose pahli olsun" demek zor; hangi kose, ne kadar?
-Bu arac o konusmayi somutlastiriyor: donmus bir goruntu, uzerinde isaret, yaninda
-kamera acisi ve parca adi. Kayit acildiginda tam o aciya geri donulebiliyor.
+## Ne ise yarar
+
+CAD revizyonu konusurken "su kose pahli olsun" demek zordur: hangi kose, ne
+kadar? Bu arac o konusmayi somutlastirir. Modeli cevirirsiniz, begendiginiz
+aciyi dondurursunuz, kirmizi kalemle isaretlersiniz, yorumunuzu yazarsiniz.
+Kayit; isaretli goruntu, kamera acisi, secili parca ve model adiyla birlikte
+saklanir. Sonradan "aciya git" ile tam o kameraya donulur.
+
+Revizyonlar once **taslak** olarak durur. Siz "siraya al" diyene kadar
+`GET /api/queue` bos doner; yani bir modelin ya da ekip arkadasinin gordugu
+liste yalnizca sizin onayladiklarinizdir.
 
 ## Yigin
 
@@ -20,97 +27,96 @@ kamera acisi ve parca adi. Kayit acildiginda tam o aciya geri donulebiliyor.
 |---|---|
 | Model | Python 3.12 + [build123d](https://github.com/gumyr/build123d) (OpenCascade) |
 | Tessellation | `ocp_vscode` / `ocp-viewer-core` |
-| Goruntuleyici | [three-cad-viewer](https://github.com/bernhard-42/three-cad-viewer) 5.0.6 |
+| Goruntuleyici | [three-cad-viewer](https://github.com/bernhard-42/three-cad-viewer) 5.0.6 — VS Code eklentisindeki goruntuleyicinin ta kendisi |
 | Arayuz | Angular 20 + Tailwind CSS 4 |
 | Servis | FastAPI + Uvicorn |
-| Veri | MongoDB (Atlas ya da yerel); URI yoksa yerel JSON'a duser |
+| Veri | MongoDB + GridFS |
+
+## Veri nerede duruyor
+
+Diskte proje verisi **yok**. Model uretimi sirasinda gecici bir dizin acilir,
+is biter bitmez silinir.
+
+| Koleksiyon | Icerik |
+|---|---|
+| `models` | model kaynak kodu, baslik, sha256, uretilen dosya referanslari |
+| `folders` | katalog klasorleri |
+| `revisions` | yorum, kamera, parca, durum, sira zamani |
+| `model_versions` | surum gecmisi (son surum + 10 kayit), yalnizca kaynak metni |
+| `model_files` (GridFS) | uretilen viewer JSON / STEP / STL, gzip'li |
+| `shots` (GridFS) | isaretli revizyon goruntuleri |
+
+Surum gecmisi bilincli olarak yalnizca **kaynak kodu** tutar: viewer/STEP/STL
+kaynaktan tureyen ciktilardir, geri donduktan sonra yeniden uretilir. Boylece
+gecmis kilobaytlarla olculur, megabaytlarla degil.
 
 ## Kurulum
 
-Gereksinimler: **Python >= 3.10**, **Node >= 20.19**, ImageMagick (yalnizca
-`tools/views.py` icin).
+Gereksinimler: **Python >= 3.10**, **Node >= 20.19**, bir MongoDB baglantisi
+(Atlas ya da yerel).
 
 ```bash
 git clone https://github.com/x3beche/x3-studios-asset-manager.git
 cd x3-studios-asset-manager
+cp .env.example .env          # MONGODB_URI satirini doldurun
 ./start.sh
 ```
 
-`start.sh` ilk calistirmada sanal ortami kurar, npm bagimliliklarini indirir,
-modeli tessellate edip `assets/model.json` uretir ve iki sunucuyu da canli
-yeniden yukleme ile baslatir:
+`start.sh` ilk calistirmada sanal ortami kurar, npm bagimliliklarini indirir ve
+iki sunucuyu da canli yeniden yukleme ile baslatir:
 
-- arayuz  <http://127.0.0.1:4200>  (Angular, hot reload)
-- API     <http://127.0.0.1:8000>  (FastAPI, `--reload`)
+- arayuz <http://127.0.0.1:4200>
+- API <http://127.0.0.1:8000>
 
-Tek sunucuda derlenmis surum icin:
+Tek sunucuda derlenmis surum: `./start.sh --build` &rarr; yalnizca `:8000`.
 
-```bash
-./start.sh --build      # yalnizca http://127.0.0.1:8000
-```
-
-## Veritabani
-
-Varsayilan olarak kayitlar `revisions/_index.json` dosyasina yazilir; hicbir
-ayar gerekmez. MongoDB kullanmak icin `.env.example` dosyasini `.env` olarak
-kopyalayin:
-
-```bash
-cp .env.example .env
-# MONGODB_URI=... satirini doldurun
-```
-
-Baglanti dizesi **yalnizca backend'de** okunur, arayuze hicbir sekilde
-gecmez. `.env` dosyasi `.gitignore` icindedir.
+Baglanti dizesi yalnizca backend'de okunur, arayuze hicbir sekilde gecmez.
+`.env` dosyasi `.gitignore` icindedir.
 
 ## Kullanim
 
-1. Modeli fareyle cevirin, istediginiz aciyi bulun.
-2. **Dondur ve ciz** &rarr; goruntu kilitlenir.
-3. Kalem rengini secip isaretleyin (geri al / temizle var).
-4. Sag panelde parcayi secin, yorumu yazin, **Revizyonu kaydet**.
-5. Liste uzerinden *aciya git* ile o kameraya donun, *uygulandi* / *iptal* ile
-   durumu isaretleyin.
+1. Sol sutunda **+M** ile model olusturun. Iskelet kod hazir gelir.
+2. Modeli yazin, **↻** ile uretin (build123d calisir, sonuc veritabanina gider).
+3. Modele tiklayip goruntuleyicide acin. Parcaya **cift tiklayinca** sagdaki
+   form kendiliginden dolar.
+4. **Dondur ve ciz** &rarr; isaretleyin &rarr; yorumu yazip kaydedin.
+5. Hazir oldugunda **siraya al**. Kart uzerinden cizimi buyutup gorebilirsiniz.
 
-Kaydedilen her revizyon:
+### Model sozlesmesi
 
-- `revisions/<id>.png` &mdash; isaretlenmis goruntu
-- veritabaninda &mdash; yorum, kamera durumu, parca adi, zaman damgasi, durum
-
-## Kendi modelinizi koymak
-
-`models/` altina build123d ile yazilmis bir modul koyun ve `export_model.py`
-icindeki parca listesini guncelleyin:
+Bir modul katalogda gorunmek icin sunlari tanimlar:
 
 ```python
-parts = [F.frame, F.rotor, ...]        # build123d Part/Compound nesneleri
-NAMES = ["govde", "pervane", ...]      # agacta gorunecek adlar
+TITLE = "Fan 120 mm"                  # istege bagli, arayuzde gorunen ad
+PARTS = [frame, rotor, pins]          # tessellate edilecek build123d nesneleri
+NAMES = ["govde", "pervane", "pinler"]  # istege bagli, agactaki adlar
 ```
 
-Sonra `./start.sh --build`.
+## API
 
-Depodaki ornek `models/fan_pro.py`, 120x120x25 mm parametrik bir PC kasa fani:
-govde, 9 kanatli pervane, 4 pinli konnektor ve 4 kutuplu BLDC motor (stator,
-sargilar, surucu karti, miknatis, mil).
-
-## Dizin duzeni
-
-```
-backend/main.py      FastAPI: revizyon CRUD, statik dosyalar
-frontend/            Angular arayuz (three-cad-viewer sarmalayicisi)
-models/fan_pro.py    ornek parametrik model
-tools/views.py       olcekli ortografik gorunum ureteci (PNG, mm izgarali)
-export_model.py      model -> assets/model.json
-start.sh             gelistirme sunucusu
-```
+| Uc | Is |
+|---|---|
+| `GET /api/catalog` | klasor + model agaci |
+| `PUT /api/models/{id}` | kaynak kodu yaz |
+| `POST /api/models/{id}/build` | tessellate et, ciktiyi veritabanina koy |
+| `GET /api/models/{id}/viewer.json` | goruntuleyici verisi |
+| `GET /api/models/{id}/file/{step\|stl}` | uretilen dosya |
+| `GET /api/queue` | **yalnizca siraya alinmis revizyonlar** |
+| `GET /api/revisions/{id}/image` | isaretli goruntu |
+| `POST /api/versions` · `POST /api/versions/{id}/restore` | surum al / geri don |
+| `GET /api/stats` · `GET /api/system` | veritabani doluluğu, CPU/RAM/GPU |
 
 ## Bilinen tuzaklar
 
 - **Chrome'da WebGL acilmiyorsa** goruntuleyici baslamaz. Chrome 137+ otomatik
   yazilim yedegini kaldirdi. Melez Intel + NVIDIA makinelerde
-  `chrome://flags/#use-angle` &rarr; **OpenGL** secmek cozuyor.
-- `export_gltf` / tessellation cagrilarinda sekilde onceden triangulation
-  varsa `linear_deflection` sessizce yok sayilir; once `BRepTools.Clean_s`.
+  `chrome://flags/#use-angle` &rarr; **OpenGL** secmek cozuyor; test ettigimiz
+  makinede varsayilan ANGLE arka ucu GPU komut tamponu olusturamiyordu.
+- `export_gltf` ve tessellation cagrilarinda sekilde onceden triangulation
+  varsa `linear_deflection` **sessizce yok sayilir**; once `BRepTools.Clean_s`.
+- `three-cad-viewer` dokumanindaki `display.render(...)` ornegi yaniltici;
+  `render()` `Viewer` uzerindedir ve `resizeCadView` ilk `render()` oncesinde
+  hata firlatir.
 
 ## Lisans
 

@@ -34,11 +34,7 @@ fi
 # --- Node ortami ---
 [ -d frontend/node_modules ] || { say "npm bagimliliklari kuruluyor"; (cd frontend && npm install); }
 
-# --- Model verisi ---
-if [ ! -f assets/model.json ] || [ "${1:-}" = "--build" ]; then
-  say "model -> assets/model.json"
-  "$PY" export_model.py
-fi
+# Model verisi veritabanindan gelir; diske bir sey yazilmaz.
 
 # --- Calisan sunuculari kapat ---
 for port in "$API_PORT" "$WEB_PORT"; do

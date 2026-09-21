@@ -1,5 +1,85 @@
 @import "tailwindcss";
+@import "./fonts.css";
+
+/* Renkler ve olculer three-cad-viewer'in kendi CSS'inden alindi; arayuzun
+   geri kalani goruntuleyiciyle ayni dili konussun diye tahmin edilmedi. */
+:root {
+  --surface:      #444;                 /* --tcv-bg-color (dark) */
+  --surface-2:    #333;                 /* --tcv-dropdown-bg */
+  --hover:        rgb(104, 104, 104);   /* --tcv-bg-highlight-color */
+  --pressed:      rgb(94, 94, 94);      /* --tcv-bg-pressed-color */
+  --ink:          #ddd;                 /* --tcv-font-color */
+  --ink-dim:      #a0a0a0;
+  --line:         #5a5a5a;
+  --accent:       #53a0e3;
+  --accent-deep:  #48627a;
+  --warn:         #e8a735;
+  --danger:       #cc3333;
+  --ok:           #5c8a5c;
+}
 
 /* Tek ekran uygulama: sayfa asla kaymaz, kaydirma yalnizca panel icinde. */
 html, body { height: 100%; overflow: hidden; }
-body { margin: 0; background: #1e1e1e; color: #e8ecf2; overscroll-behavior: none; }
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: 13px/1.45 'Rajdhani', sans-serif;
+  overscroll-behavior: none;
+}
+
+/* Goruntuleyicinin dugme dilini taklit eden ortak stil */
+.tcv-btn {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tcv-btn:hover { background: var(--hover); }
+.tcv-btn:active { background: var(--pressed); }
+.tcv-btn:disabled { opacity: .45; cursor: not-allowed; }
+.tcv-btn-accent { background: var(--accent-deep); border-color: var(--accent); }
+.tcv-btn-accent:hover { background: var(--accent); }
+.tcv-btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.tcv-btn-danger:hover { filter: brightness(1.12); }
+
+.tcv-field {
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+}
+.tcv-field:focus { border-color: var(--accent); }
+
+.tcv-panel { background: var(--surface); }
+.tcv-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.tcv-label {
+  font-size: 11px;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+/* ince kaydirma cubugu, panel icinde kalsin */
+.tcv-scroll { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+
+/* Destiny tarzi genis harf araligi olan marka kilidi */
+.brand {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.brand-word { letter-spacing: .38em; font-size: 12px; color: var(--ink); }
+.brand-sub  { letter-spacing: .30em; font-size: 9px;  color: var(--ink-dim);
+              font-weight: 600; }
+.brand-num  { font-size: 19px; line-height: 1; color: var(--accent); font-weight: 700; }
+.brand-rule { width: 1px; height: 18px; background: var(--line); }

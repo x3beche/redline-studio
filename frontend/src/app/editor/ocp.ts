@@ -9,10 +9,13 @@ export class OcpViewer {
   display!: Display;
   viewer!: Viewer;
   parts: string[] = [];
+  /** resizeCadView, render() cagrilmadan once hata firlatiyor. */
+  private rendered = false;
 
   constructor(private container: HTMLElement) {}
 
-  async init(url: string, size: { w: number; h: number }) {
+  /** Display/Viewer bir kez kurulur; model degisince sadece load() cagrilir. */
+  init(size: { w: number; h: number }) {
     // DisplayOptions alanlarinin cogu zorunlu; eksik birakmak derlemede patliyor.
     const opts = {
       cadWidth: Math.max(size.w - TREE_W, 320), height: Math.max(size.h - 48, 320),
@@ -26,7 +29,10 @@ export class OcpViewer {
     this.display = new Display(this.container, opts);
     // render() Display'de degil Viewer'da; dokumandaki display.render ornegi yanlis.
     this.viewer = new Viewer(this.display, opts, null);
+  }
 
+  async load(url: string) {
+    if (this.rendered) this.viewer.clear();
     const envelope = await fetch(url).then(r => r.json());
     const raw = envelope.data ?? envelope;
     // Python zarfi "instanced" formatta gelir; viewer once cozmemizi bekler.
@@ -52,24 +58,48 @@ export class OcpViewer {
       control: 'orbit',
       transparent: false,
       blackEdges: false,
-      axes: true,
-      axes0: true,
+      axes: false,
+      axes0: false,
       grid: [false, false, false],
       ortho: false,
       ticks: 10,
       centerGrid: false,
     } as any);
+    this.rendered = true;
   }
 
   /** Pencereyle birlikte buyusun; sabit olcu tasma ve kaydirma yaratiyordu.
    *  Viewer kendi arac cubugunu canvas'in ustune koyuyor, onun yuksekligini
    *  dusmezsek sahne pencereden tasip eksen gostergesini kirpiyor. */
   resize(w: number, h: number) {
+    if (!this.viewer || !this.rendered) return;
     const host = this.container.getBoundingClientRect();
     const c = this.container.querySelector('canvas');
     const chromeH = c ? Math.max(c.getBoundingClientRect().top - host.top, 0) : 48;
-    this.viewer?.resizeCadView(Math.max(w - TREE_W, 320), TREE_W,
-                               Math.max(h - chromeH, 320), false);
+    const ch = Math.max(h - chromeH, 320);
+
+    this.viewer.resizeCadView(Math.max(w - TREE_W, 320), TREE_W, ch, false);
+
+    // Viewer kendi kenarliklarini ekliyor; hesapla verilen genislik gercekte
+    // tasabiliyor ve sagdaki acilir liste panelin altinda kaliyordu.
+    // Olculen tasmayi bir kez geri al.
+    const over = this.container.scrollWidth - w;
+    if (over > 1) {
+      this.viewer.resizeCadView(Math.max(w - TREE_W - over, 320), TREE_W, ch, false);
+    }
+  }
+
+  /** Modelde bir parca secilince haber verir.
+
+   *  Viewer secim icin disa acik bir olay yayinlamiyor; handlePick'i sarmalayip
+   *  orijinali cagirdiktan sonra adi iletiyoruz. */
+  onPick(cb: (name: string | null) => void) {
+    const viewer = this.viewer as any;
+    const original = viewer.handlePick.bind(viewer);
+    viewer.handlePick = (path: string, name: string, ...rest: unknown[]) => {
+      original(path, name, ...rest);
+      cb(name ?? viewer.lastSelection?.name ?? null);
+    };
   }
 
   /** Cizim katmanini hizalamak icin canvas'in sahne icindeki konumu. */

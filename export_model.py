@@ -1,30 +1,57 @@
-"""Guncel fan_pro modelini OCP CAD Viewer formatinda assets/model.json'a yazar.
+"""Bir build123d modelini OCP CAD Viewer formatina cevirir.
 
-VS Code eklentisinin kullandigi ayni tessellation zinciri (ocp_viewer_core)
-kullaniliyor; tarayicidaki three-cad-viewer bu zarfi oldugu gibi okuyor.
+    python export_model.py --models-dir DIR --assets-dir DIR <model_adi>
+
+Kaynak dosyalar ve ciktilar disaridan verilir; boylece backend bu scripti
+gecici bir dizinde calistirip sonucu veritabanina koyabiliyor. Modul sozlesmesi:
+    TITLE (istege bagli), PARTS (zorunlu), NAMES (istege bagli)
 """
 
+from __future__ import annotations
+
+import argparse
+import importlib.util
 import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT / "models"))
-from ocp_viewer_core.offline import _convert            # noqa: E402
-import fan_pro as F                                     # noqa: E402
 
-NAMES = ["govde", "pervane", "pinler", "stator", "sargilar",
-         "surucu_karti", "miknatis", "mil"]
-OUT = ROOT / "assets" / "model.json"
+def load(models_dir: Path, name: str):
+    path = models_dir / f"{name}.py"
+    if not path.exists():
+        raise FileNotFoundError(path)
+    spec = importlib.util.spec_from_file_location("model_" + name.replace("/", "_"), path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def export(models_dir: Path, assets_dir: Path, name: str) -> Path:
+    from ocp_viewer_core.offline import _convert
+
+    module = load(models_dir, name)
+    parts = getattr(module, "PARTS", None)
+    if not parts:
+        raise AttributeError(f"{name}: PARTS tanimli degil")
+    names = getattr(module, "NAMES", None) or [f"parca_{i}" for i in range(len(parts))]
+
+    envelope, _ = _convert(*parts, names=names)
+    out = assets_dir / f"{name}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(envelope))
+    return out
 
 
 def main() -> None:
-    parts = [F.frame, F.rotor, F.pins, F.stator, F.coils, F.pcb, F.magnet, F.shaft]
-    envelope, _mapping = _convert(*parts, names=NAMES)
-    OUT.write_text(json.dumps(envelope))
-    mb = OUT.stat().st_size / 1e6
-    tree = envelope["data"]["shapes"]["parts"]
-    print(f"{OUT}  {mb:.2f} MB  parca: {', '.join(p['name'] for p in tree)}")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("model")
+    ap.add_argument("--models-dir", required=True, type=Path)
+    ap.add_argument("--assets-dir", required=True, type=Path)
+    args = ap.parse_args()
+    sys.path.insert(0, str(args.models_dir))
+    out = export(args.models_dir, args.assets_dir, args.model)
+    print(f"{out}  {out.stat().st_size}")
 
 
 if __name__ == "__main__":
