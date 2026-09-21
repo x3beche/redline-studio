@@ -122,3 +122,19 @@ body {
 }
 /* Hashes, ids and figures read as data, not prose. */
 .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+
+/* The viewer outlines 52 of its panels, tabs and inputs in #d3d3d3, which
+   reads as a white frame against our surfaces. Every one of them uses that
+   same grey, and the accent borders use other colours, so pulling just these
+   to our line colour is safe. */
+.tcv_cad_animation, .tcv_cad_help, .tcv_cad_info, .tcv_cad_toolbar,
+.tcv_cad_tree, .tcv_cad_zscale, .tcv_clip_input,
+.tcv_distance_measurement_panel, .tcv_dropdown-content, .tcv_filter_content,
+.tcv_filter_dropdown, .tcv_grid-content, .tcv_mat_editor,
+.tcv_mat_editor_path, .tcv_mat_editor_titlebar, .tcv_measure_header,
+.tcv_measure_subheader, .tcv_panel, .tcv_properties_measurement_panel,
+.tcv_round, .tcv_separator, .tcv_studio_background, .tcv_studio_environment,
+.tcv_studio_select, .tcv_studio_texture_mapping, .tcv_studio_tone_mapping,
+[class*="tcv_inp_value_"], [class*="tcv_tab"] {
+  border-color: var(--line) !important;
+}

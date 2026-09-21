@@ -172,33 +172,8 @@
     </div>
   }
 
-  <!-- CENTRE: viewer, with the run bar above and the log below -->
+  <!-- CENTRE: viewer with the log below -->
   <div class="flex min-w-0 flex-1 flex-col gap-2">
-
-    <!-- Run progress: alive from the start of a revision until it finishes. -->
-    @if (run(); as rn) {
-      <div class="tcv-panel shrink-0 rounded px-3 py-1.5"
-           style="border: 1px solid var(--line)">
-        <div class="flex items-center gap-2 text-[11px]">
-          <span class="h-2 w-2 shrink-0 rounded-full"
-                [style.background]="rn.status === 'running' ? 'var(--accent)'
-                                  : rn.status === 'failed' ? 'var(--danger)' : 'var(--ok)'"></span>
-          <span class="truncate">{{ rn.title }}</span>
-          @if (rn.revision) {
-            <span class="mono shrink-0" style="color: var(--ink-dim)">{{ rn.revision }}</span>
-          }
-          <span class="mono ml-auto shrink-0" style="color: var(--ink-dim)">
-            {{ rn.status === 'running' ? (rn.percent | number:'1.0-0') + '%' : rn.status }}
-          </span>
-        </div>
-        <div class="mt-1 h-1 w-full overflow-hidden rounded" style="background: var(--surface-2)">
-          <div class="h-full transition-[width] duration-300"
-               [style.width.%]="rn.percent"
-               [style.background]="rn.status === 'failed' ? 'var(--danger)'
-                                 : rn.status === 'done' ? 'var(--ok)' : 'var(--accent)'"></div>
-        </div>
-      </div>
-    }
 
   <div #stage class="relative min-w-0 flex-1 overflow-hidden rounded"
        style="border: 1px solid var(--line)">
@@ -359,6 +334,30 @@
             <img [src]="imageUrl(r)" alt="revision drawing"
                  class="block h-20 w-full bg-white object-contain" loading="lazy">
           </button>
+          <!-- Progress belongs to the revision being worked on, so it lives
+               in that card rather than in a bar detached from it. -->
+          @if (run(); as rn) {
+            @if (rn.revision === r.id) {
+              <div class="mt-1.5">
+                <div class="flex items-center gap-1.5 text-[10px]">
+                  <span class="h-1.5 w-1.5 shrink-0 rounded-full"
+                        [style.background]="rn.status === 'running' ? 'var(--accent)'
+                                          : rn.status === 'failed' ? 'var(--danger)' : 'var(--ok)'"></span>
+                  <span class="truncate" style="color: var(--ink-dim)">{{ rn.title }}</span>
+                  <span class="mono ml-auto shrink-0" style="color: var(--ink-dim)">
+                    {{ rn.status === 'running' ? (rn.percent | number:'1.0-0') + '%' : rn.status }}
+                  </span>
+                </div>
+                <div class="mt-1 h-1 w-full overflow-hidden rounded"
+                     style="background: var(--surface)">
+                  <div class="h-full transition-[width] duration-300"
+                       [style.width.%]="rn.percent"
+                       [style.background]="rn.status === 'failed' ? 'var(--danger)'
+                                         : rn.status === 'done' ? 'var(--ok)' : 'var(--accent)'"></div>
+                </div>
+              </div>
+            }
+          }
           <div class="mt-1 text-[10px]" style="color: var(--ink-dim)">
             {{ r.created_at.slice(0, 16).replace('T', ' ') }}
             @if (r.part) { · {{ r.part }} }
