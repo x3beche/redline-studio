@@ -1,0 +1,6 @@
+build123d>=0.12
+fastapi[standard]>=0.115
+motor>=3.6
+pymongo>=4.9
+python-dotenv>=1.0
+ocp_vscode>=4.1

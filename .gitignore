@@ -1,0 +1,21 @@
+# --- gizli ---
+.env
+
+# --- uretilen veri (start.sh yeniden olusturur) ---
+assets/
+exports/
+views/
+revisions/
+
+# --- ortamlar ---
+.venv
+venv
+__pycache__/
+*.py[cod]
+node_modules/
+frontend/dist/
+frontend/.angular/
+
+# --- editor / isletim sistemi ---
+.DS_Store
+*.swp

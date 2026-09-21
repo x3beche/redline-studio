@@ -1,0 +1,5 @@
+@import "tailwindcss";
+
+/* Tek ekran uygulama: sayfa asla kaymaz, kaydirma yalnizca panel icinde. */
+html, body { height: 100%; overflow: hidden; }
+body { margin: 0; background: #1e1e1e; color: #e8ecf2; overscroll-behavior: none; }
