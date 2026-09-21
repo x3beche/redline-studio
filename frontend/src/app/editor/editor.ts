@@ -417,6 +417,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   resume() {
     this.viewer?.setEnabled(true);
     this.frozen.set(false);
+    this.typing.set(null);
     this.marks = []; this.active = null; this.repaint();
   }
 
@@ -564,7 +565,9 @@ export class Editor implements AfterViewInit, OnDestroy {
       next: () => {
         this.saving.set(false);
         this.comment.set('');
-        this.clear();
+        // The revision is filed, so let go of the view: staying frozen just
+        // means the next orbit is a click on Unfreeze first.
+        if (this.frozen()) this.resume(); else this.clear();
         this.flash('revision saved');
         this.refresh();
       },
