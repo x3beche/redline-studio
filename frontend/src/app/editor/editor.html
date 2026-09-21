@@ -210,8 +210,28 @@
 
     <!-- While the scene is held at a revision's camera, show what was asked
          for right there. It disappears as soon as the view is moved. -->
+    <!-- A finished run announces itself here; the camera move alone is easy
+         to miss when the reader is looking at another panel. -->
+    @if (notice(); as nt) {
+      <div class="tcv-card absolute right-3 top-3 z-30 w-72 overflow-hidden p-0"
+           style="box-shadow: 0 8px 24px rgba(0,0,0,.45)">
+        <div class="flex items-center gap-2 px-2 py-1"
+             [style.background]="nt.ok ? 'var(--ok)' : 'var(--danger)'"
+             style="color: #fff">
+          <span class="text-[11px] font-semibold tracking-wider">
+            {{ nt.ok ? 'REVISION APPLIED' : 'RUN FAILED' }}
+          </span>
+          <span class="ml-auto text-[11px] opacity-90">{{ elapsed(nt.secs) }}</span>
+          <button (click)="dismissNotice()" class="tcv-chip px-1.5 py-0"
+                  title="dismiss">×</button>
+        </div>
+        <p class="px-2 py-1.5 text-[12px]" style="color: var(--ink)">{{ nt.title }}</p>
+      </div>
+    }
+
     @if (focused(); as fv) {
-      <div class="tcv-card absolute right-3 top-3 w-64 overflow-hidden p-0"
+      <div class="tcv-card absolute right-3 w-64 overflow-hidden p-0"
+           [style.top.px]="notice() ? 84 : 12"
            style="box-shadow: 0 6px 20px rgba(0,0,0,.35)">
         <div class="flex items-center justify-between px-2 py-1"
              style="background: var(--surface); border-bottom: 1px solid var(--line)">

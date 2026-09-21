@@ -72,6 +72,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   private heldCamera: CameraState | null = null;
   /** The revision whose view is being held, shown over the scene. */
   focused = signal<Revision | null>(null);
+  notice = signal<{ id: string | null; title: string;
+                    secs: number; ok: boolean } | null>(null);
   preview = signal<Revision | null>(null);
   editing = signal<string | null>(null);
   showArchived = signal(false);
@@ -143,8 +145,9 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.lastRunStatus = v?.status ?? '';
         // When a run completes, swing to the angle the revision was drawn
         // from, so the result is judged from the same viewpoint.
-        if (v && was === 'running' && v.status !== 'running' && v.revision) {
-          this.focusRevision(v.revision);
+        if (v && was === 'running' && v.status !== 'running') {
+          this.showNotice(v);
+          if (v.revision) this.focusRevision(v.revision);
         }
       },
       error: () => {},
@@ -165,6 +168,26 @@ export class Editor implements AfterViewInit, OnDestroy {
       },
       error: () => {},
     });
+  }
+
+  /** Work finishes while the user is looking somewhere else, so say so in
+   *  the corner rather than only moving the camera. */
+  private showNotice(r: Run) {
+    const t1 = r.finished_at ? Date.parse(r.finished_at) : Date.now();
+    this.notice.set({
+      id: r.revision, title: r.title, ok: r.status === 'done',
+      secs: Math.max(0, Math.round((t1 - Date.parse(r.started_at)) / 1000)),
+    });
+  }
+
+  // Stays until it is dismissed: a notice that vanishes on its own is one
+  // the reader misses exactly when they were away from the screen.
+  dismissNotice() { this.notice.set(null); }
+
+  /** Run duration, short form. */
+  elapsed(s: number): string {
+    return s < 60 ? `${s}s`
+                  : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
   }
 
   /** Keep the newest line in view, the way a terminal does. */

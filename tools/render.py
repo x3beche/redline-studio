@@ -76,6 +76,13 @@ def render(revision: str, out: Path, width: int, height: int, wait: int) -> Path
             time.sleep(0.5)
         time.sleep(6)                       # let the camera settle on the model
 
+        # ?rev= also pops the revision card over the top-right corner, which
+        # is exactly where the model usually sits. It is not part of the model.
+        # Dismissing it would release the held camera too, so only hide it.
+        js("document.querySelectorAll('.tcv-card.absolute')"
+           ".forEach(e => e.style.visibility = 'hidden')")
+        time.sleep(0.5)
+
         box = js("(()=>{const c=document.querySelector('canvas');"
                  "const r=c.getBoundingClientRect();"
                  "return JSON.stringify([r.left|0,r.top|0,r.width|0,r.height|0])})()")
