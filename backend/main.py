@@ -292,7 +292,7 @@ async def build_model(model_id: str):
         return await build.build(db(), model_id, EXPORT_SCRIPT)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
-    except (ValueError, RuntimeError, TimeoutError) as exc:
+    except (ValueError, RuntimeError, TimeoutError, MemoryError) as exc:
         raise HTTPException(500, str(exc)) from exc
 
 

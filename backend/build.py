@@ -4,6 +4,7 @@ directory, output goes back to the database. Nothing persists on disk."""
 from __future__ import annotations
 
 import asyncio
+import os
 import collections
 import shutil
 import sys
@@ -56,10 +57,17 @@ async def build(db, model_id: str, script: Path) -> dict:
         async for up in db.uploads.find({}):
             (tmp / str(up["_id"])).write_bytes(await store.get_upload(db, up["_id"]))
 
+        # Under a memory ceiling: a model that imports a large STEP and
+        # booleans against it can grow until the machine swaps and the desktop
+        # freezes. With the ceiling the kernel kills the build instead.
+        capped = Path(__file__).resolve().parent.parent / "tools" / "capped.sh"
+        argv = [sys.executable, str(script), flat,
+                "--models-dir", str(models_dir), "--assets-dir", str(assets_dir)]
+        if capped.exists():
+            argv = [str(capped), *argv]
+
         proc = await asyncio.create_subprocess_exec(
-            sys.executable, str(script), flat,
-            "--models-dir", str(models_dir), "--assets-dir", str(assets_dir),
-            cwd=str(tmp),
+            *argv, cwd=str(tmp),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
         try:
             out, _ = await asyncio.wait_for(proc.communicate(), TIMEOUT)
@@ -68,6 +76,11 @@ async def build(db, model_id: str, script: Path) -> dict:
             raise TimeoutError(f"{model_id}: build did not finish within {TIMEOUT}s")
 
         log = out.decode(errors="replace").strip().splitlines()
+        if proc.returncode in (-9, 137):
+            raise MemoryError(
+                f"{model_id}: build exceeded the memory ceiling "
+                f"({os.environ.get('X3_BUILD_MEM', '6G')}) and was killed. "
+                "Simplify the model, or raise X3_BUILD_MEM for this server.")
         if proc.returncode != 0:
             raise RuntimeError("\n".join(log[-8:]) or "build failed")
 
