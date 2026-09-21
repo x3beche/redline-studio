@@ -193,6 +193,21 @@
            style="background: var(--danger); color: #fff">FROZEN</div>
     }
 
+    <!-- Typing a label: the caret sits where the click landed, so the text
+         is placed against the model rather than in a dialog. -->
+    @if (typing(); as tp) {
+      <input #caret class="absolute rounded px-1 py-0.5 text-sm outline-none"
+             [style.left.px]="tp.left" [style.top.px]="tp.top - 12"
+             [style.color]="color()"
+             [style.font-size.px]="fontSize()"
+             style="background: rgba(255,255,255,.9); border: 1px dashed currentColor;
+                    min-width: 120px; transform: translateY(-2px)"
+             placeholder="label…"
+             (keydown.enter)="commitText($any($event.target).value)"
+             (keydown.escape)="cancelText()"
+             (blur)="commitText($any($event.target).value)">
+    }
+
     <!-- While the scene is held at a revision's camera, show what was asked
          for right there. It disappears as soon as the view is moved. -->
     @if (focused(); as fv) {
@@ -278,6 +293,14 @@
         <button (click)="freeze()" class="tcv-btn tcv-btn-danger w-full">Freeze &amp; draw</button>
       } @else {
         <button (click)="resume()" class="tcv-btn w-full">Unfreeze</button>
+        <div class="mt-2 grid grid-cols-7 gap-1">
+          @for (t of tools; track t.id) {
+            <button (click)="tool.set(t.id)" [title]="t.label"
+                    class="tcv-btn px-0 text-center leading-none"
+                    [style.background]="tool() === t.id ? 'var(--accent)' : null"
+                    [style.color]="tool() === t.id ? '#fff' : null">{{ t.glyph }}</button>
+          }
+        </div>
         <div class="mt-2 flex items-center gap-1.5">
           @for (c of ['#cc3333', '#5c8a5c', '#53a0e3', '#e8a735']; track c) {
             <button (click)="color.set(c)" [style.background]="c"
@@ -285,9 +308,19 @@
                     [style.outline]="color() === c ? '2px solid var(--ink)' : 'none'"
                     [style.outline-offset]="'1px'"></button>
           }
-          <input type="range" min="1" max="16" [value]="penWidth()"
-                 (input)="penWidth.set($any($event.target).valueAsNumber)"
-                 class="ml-1 flex-1" style="accent-color: var(--accent)">
+          @if (tool() === 'text') {
+            <input type="range" min="10" max="48" [value]="fontSize()"
+                   (input)="fontSize.set($any($event.target).valueAsNumber)"
+                   class="ml-1 flex-1" style="accent-color: var(--accent)"
+                   title="Text size">
+            <span class="tcv-label w-8 text-right">{{ fontSize() }}</span>
+          } @else {
+            <input type="range" min="1" max="16" [value]="penWidth()"
+                   (input)="penWidth.set($any($event.target).valueAsNumber)"
+                   class="ml-1 flex-1" style="accent-color: var(--accent)"
+                   title="Stroke width">
+            <span class="tcv-label w-8 text-right">{{ penWidth() }}</span>
+          }
         </div>
         <div class="mt-2 flex gap-1.5">
           <button (click)="undo()" class="tcv-btn flex-1">Undo</button>

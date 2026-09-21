@@ -32,8 +32,13 @@ export class OcpViewer {
   }
 
   async load(url: string) {
+    // Fetch before clearing: a rebuild replaces the stored payload, and
+    // clearing first left the scene blank for the whole download - or for
+    // good, if the request failed.
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`viewer payload ${res.status}`);
+    const envelope = await res.json();
     if (this.rendered) this.viewer.clear();
-    const envelope = await fetch(url).then(r => r.json());
     const raw = envelope.data ?? envelope;
     // The Python envelope arrives instanced; the viewer expects it decoded.
     const shapes = isInstancedFormat(raw) ? decodeInstancedFormat(raw) : raw.shapes ?? raw;

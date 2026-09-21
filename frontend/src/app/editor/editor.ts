@@ -21,7 +21,15 @@ import { Activity, Api, CameraState, Catalog, Health, LogLine, Run, Stats, Syste
          Revision, RevisionStatus } from '../api';
 import { OcpViewer } from './ocp';
 
-type Stroke = { color: string; width: number; pts: [number, number][] };
+export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'text';
+type Pt = [number, number];
+
+/** One mark on the overlay. Freehand keeps a point list; the rest are
+ *  defined by the drag start and end; text by a point and a string. */
+type Mark =
+  | { kind: 'pen'; color: string; width: number; pts: Pt[] }
+  | { kind: Exclude<Tool, 'pen' | 'text'>; color: string; width: number; a: Pt; b: Pt }
+  | { kind: 'text'; color: string; size: number; at: Pt; text: string };
 
 @Component({
   selector: 'app-editor',
@@ -36,6 +44,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private overlay = viewChild.required<ElementRef<HTMLCanvasElement>>('overlay');
   private stage = viewChild.required<ElementRef<HTMLDivElement>>('stage');
+  private caret = viewChild<ElementRef<HTMLInputElement>>('caret');
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   frozen = signal(false);
@@ -73,11 +82,16 @@ export class Editor implements AfterViewInit, OnDestroy {
   sys = signal<SystemInfo | null>(null);
   color = signal('#ff2d3f');
   penWidth = signal(4);
+  tool = signal<Tool>('pen');
+  fontSize = signal(18);
+  /** Where the text caret sits, in CSS pixels of the stage, while typing. */
+  typing = signal<{ left: number; top: number } | null>(null);
+  private typeAt: Pt = [0, 0];
 
   private viewer?: OcpViewer;
   private frozenShot = '';
-  private strokes: Stroke[] = [];
-  private active: Stroke | null = null;
+  private marks: Mark[] = [];
+  private active: Mark | null = null;
   private drawing = false;
   private ro?: ResizeObserver;
 
@@ -138,9 +152,16 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.loadCatalog();
     this.activity.lines().subscribe({
       next: v => {
-        const grew = v.length !== this.log().length;
+        // Only follow the tail while the user is already at the bottom, so
+        // scrolling back to read something is not yanked away.
+        const el = this.logBox()?.nativeElement;
+        const atBottom = !el
+          || el.scrollHeight - el.scrollTop - el.clientHeight < 40;
         this.log.set(v);
-        if (grew) setTimeout(() => this.scrollLog());
+        if (atBottom) {
+          setTimeout(() => this.scrollLog());
+          setTimeout(() => this.scrollLog(), 120);   // after layout settles
+        }
       },
       error: () => {},
     });
@@ -157,6 +178,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   toggleLog() {
     this.logOpen.update(v => !v);
     setTimeout(() => this.sizeOverlay(), 60);
+    setTimeout(() => this.scrollLog(), 80);
   }
 
   /** A run is live from the moment work starts until it reports finished. */
@@ -239,6 +261,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       // page keeps showing the geometry it loaded the first time.
       const live = this.findModel(t, this.activeModel());
       if (live?.built_at && live.built_at !== this.builtAt) {
+        this.builtAt = live.built_at;      // claim it so the poll fires once
         this.flash('model rebuilt, reloading');
         this.openModel(live);
       }
@@ -394,7 +417,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   resume() {
     this.viewer?.setEnabled(true);
     this.frozen.set(false);
-    this.strokes = []; this.active = null; this.repaint();
+    this.marks = []; this.active = null; this.repaint();
   }
 
   // ---- drawing ----
@@ -407,22 +430,49 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   down(ev: PointerEvent) {
     if (!this.frozen()) return;
+    const at = this.pos(ev);
+    const t = this.tool();
+
+    if (t === 'text') {
+      // An inline caret rather than prompt(): a modal dialog freezes the
+      // whole page, and the label has to be placed while the model is visible.
+      const stage = this.stage().nativeElement.getBoundingClientRect();
+      this.typeAt = at;
+      this.typing.set({ left: ev.clientX - stage.left, top: ev.clientY - stage.top });
+      setTimeout(() => this.caret()?.nativeElement.focus());
+      return;
+    }
+
     this.drawing = true;
     (ev.target as HTMLElement).setPointerCapture(ev.pointerId);
-    this.active = { color: this.color(), width: this.penWidth(), pts: [this.pos(ev)] };
-    this.strokes.push(this.active);
+    this.active = t === 'pen'
+      ? { kind: 'pen', color: this.color(), width: this.penWidth(), pts: [at] }
+      : { kind: t, color: this.color(), width: this.penWidth(), a: at, b: at };
+    this.marks.push(this.active);
     this.repaint();
   }
 
   move(ev: PointerEvent) {
     if (!this.drawing || !this.active) return;
-    this.active.pts.push(this.pos(ev));
+    const at = this.pos(ev);
+    if (this.active.kind === 'pen') this.active.pts.push(at);
+    else if (this.active.kind !== 'text') this.active.b = at;
     this.repaint();
   }
 
-  up() { this.drawing = false; this.active = null; }
-  undo() { this.strokes.pop(); this.repaint(); }
-  clear() { this.strokes = []; this.repaint(); }
+  up() {
+    // A click with a shape tool leaves a zero-size mark; drop it.
+    if (this.active && this.active.kind !== 'pen' && this.active.kind !== 'text') {
+      const [ax, ay] = this.active.a, [bx, by] = this.active.b;
+      if (Math.hypot(bx - ax, by - ay) < 3) this.marks.pop();
+    }
+    this.drawing = false;
+    this.active = null;
+    this.repaint();
+  }
+
+  undo() { this.marks.pop(); this.repaint(); }
+  clear() { this.marks = []; this.repaint(); }
 
   private repaint() {
     const c = this.overlay().nativeElement;
@@ -431,14 +481,73 @@ export class Editor implements AfterViewInit, OnDestroy {
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.lineCap = ctx.lineJoin = 'round';
     const scale = Math.min(devicePixelRatio, 2);
-    for (const s of this.strokes) {
-      ctx.strokeStyle = s.color;
-      ctx.lineWidth = s.width * scale;
+
+    for (const m of this.marks) {
+      ctx.strokeStyle = m.color;
+      ctx.fillStyle = m.color;
+
+      if (m.kind === 'text') {
+        ctx.font = `600 ${m.size}px 'IBM Plex Sans', sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.fillText(m.text, m.at[0], m.at[1]);
+        continue;
+      }
+
+      ctx.lineWidth = m.width * scale;
       ctx.beginPath();
-      s.pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+
+      if (m.kind === 'pen') {
+        m.pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+      } else {
+        const [ax, ay] = m.a, [bx, by] = m.b;
+        if (m.kind === 'line') {
+          ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+        } else if (m.kind === 'rect') {
+          ctx.rect(ax, ay, bx - ax, by - ay);
+        } else if (m.kind === 'ellipse') {
+          ctx.ellipse((ax + bx) / 2, (ay + by) / 2,
+                      Math.abs(bx - ax) / 2, Math.abs(by - ay) / 2, 0, 0, Math.PI * 2);
+        } else if (m.kind === 'triangle') {
+          ctx.moveTo((ax + bx) / 2, ay);
+          ctx.lineTo(bx, by); ctx.lineTo(ax, by); ctx.closePath();
+        } else if (m.kind === 'arrow') {
+          const head = Math.max(10, m.width * scale * 3);
+          const ang = Math.atan2(by - ay, bx - ax);
+          ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+          ctx.moveTo(bx, by);
+          ctx.lineTo(bx - head * Math.cos(ang - 0.4), by - head * Math.sin(ang - 0.4));
+          ctx.moveTo(bx, by);
+          ctx.lineTo(bx - head * Math.cos(ang + 0.4), by - head * Math.sin(ang + 0.4));
+        }
+      }
       ctx.stroke();
     }
   }
+
+  commitText(value: string) {
+    // Enter closes the caret, which then blurs: without this guard the label
+    // is committed twice, one copy exactly on top of the other.
+    if (!this.typing()) return;
+    const text = value.trim();
+    this.typing.set(null);
+    if (!text) return;
+    const scale = Math.min(devicePixelRatio, 2);
+    this.marks.push({ kind: 'text', color: this.color(),
+                      size: this.fontSize() * scale, at: this.typeAt, text });
+    this.repaint();
+  }
+
+  cancelText() { this.typing.set(null); }
+
+  readonly tools: { id: Tool; glyph: string; label: string }[] = [
+    { id: 'pen', glyph: '✎', label: 'freehand' },
+    { id: 'line', glyph: '╱', label: 'line' },
+    { id: 'arrow', glyph: '→', label: 'arrow' },
+    { id: 'rect', glyph: '▭', label: 'rectangle' },
+    { id: 'ellipse', glyph: '◯', label: 'ellipse' },
+    { id: 'triangle', glyph: '△', label: 'triangle' },
+    { id: 'text', glyph: 'T', label: 'text' },
+  ];
 
   // ---- save ----
   async save() {
