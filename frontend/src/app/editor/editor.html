@@ -426,6 +426,10 @@
                   <option value="">(no part)</option>
                   @for (p of parts(); track p) { <option [value]="p">{{ p }}</option> }
                 </select>
+                <input [value]="editSummary()"
+                       (input)="editSummary.set($any($event.target).value)"
+                       class="tcv-field mt-1 w-full px-1.5 py-1 text-[12px]"
+                       placeholder="one-line summary (leave empty to regenerate)">
               </div>
             } @else {
               <p class="min-w-0 flex-1 cursor-pointer text-[12px] leading-snug"
@@ -438,7 +442,9 @@
                   <span class="mr-1 rounded px-1.5 py-0.5 text-[10px] font-bold"
                         style="background: var(--accent); color: #12222e">{{ queueIndex(r) }}</span>
                 }
-                {{ r.comment }}
+                <!-- Folded, the card says one sentence and nothing else; the
+                     wall of text is exactly what folding is for. -->
+                {{ isFolded(r.id) ? cardLine(r) : r.comment }}
               </p>
             }
             @if (r.archived) {
@@ -473,6 +479,12 @@
             }
           }
           @if (!isFolded(r.id)) {
+          @if (r.summary && editing() !== r.id) {
+            <p class="mt-1 text-[11px] italic" style="color: var(--ink-dim)"
+               [title]="r.summary_manual ? 'written by hand' : 'generated'">
+              {{ r.summary_manual ? '✎' : '◆' }} {{ r.summary }}
+            </p>
+          }
           @if (r.image_bytes) {
             <button (click)="openShot(r)" class="mt-1.5 block w-full overflow-hidden rounded"
                     style="border: 1px solid var(--line)" title="enlarge">

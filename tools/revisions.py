@@ -171,6 +171,56 @@ async def cmd_build(args):
     print(f"{res['model']} built: {sizes}")
 
 
+async def cmd_summaries(args):
+    """One-off backfill: write the short sentence onto cards that lack one.
+
+    Hand-written summaries are left alone unless --force says otherwise.
+    """
+    from backend import store, summarise
+
+    db = connect()
+    query = {} if args.all else {"$or": [{"summary": None},
+                                         {"summary": {"$exists": False}}]}
+    rows = [d async for d in db.revisions.find(query)]
+    if args.limit:
+        rows = rows[:args.limit]
+    if not rows:
+        print("nothing to summarise")
+        return
+
+    done = skipped = failed = 0
+    spend = 0.0
+    for doc in rows:
+        rid = doc["_id"]
+        if doc.get("summary_manual") and not args.force:
+            skipped += 1
+            continue
+        png = None
+        gid = (doc.get("image") or {}).get("gridfs_id")
+        if gid:
+            try:
+                png = await store.get_shot(db, gid)
+            except Exception:
+                png = None
+        try:
+            text, usage = await summarise.summarise(doc["comment"], png)
+        except Exception as exc:
+            print(f"  {rid}  FAILED: {exc}")
+            failed += 1
+            continue
+        if not text:
+            failed += 1
+            continue
+        cost = usage.get("cost") or 0.0
+        spend += cost if isinstance(cost, (int, float)) else 0.0
+        await db.revisions.update_one({"_id": rid}, {"$set": {
+            "summary": text, "summary_at": store.now(), "summary_manual": False}})
+        done += 1
+        print(f"  {rid}  {text}")
+    print(f"\n{done} written, {skipped} hand-written left alone, {failed} failed"
+          f"   total {spend:.5f} USD")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -193,6 +243,11 @@ def main() -> None:
     s = sub.add_parser("save"); s.add_argument("model"); s.add_argument("file")
     s.set_defaults(fn=cmd_save)
     s = sub.add_parser("build"); s.add_argument("model"); s.set_defaults(fn=cmd_build)
+    s = sub.add_parser("summaries", help="backfill the one-line card summaries")
+    s.add_argument("--all", action="store_true", help="redo cards that have one")
+    s.add_argument("--force", action="store_true", help="replace hand-written ones")
+    s.add_argument("--limit", type=int, default=0)
+    s.set_defaults(fn=cmd_summaries)
     args = ap.parse_args()
     asyncio.run(args.fn(args))
 

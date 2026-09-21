@@ -82,6 +82,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   collapsed_ = signal<Set<string>>(new Set());
   editText = signal('');
   editPart = signal('');
+  editSummary = signal('');
   sys = signal<SystemInfo | null>(null);
   color = signal('#ff2d3f');
   penWidth = signal(4);
@@ -433,6 +434,17 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
+  /** What a folded card says. The generated sentence when there is one,
+   *  otherwise the first line cut short - the full text is what folding is
+   *  meant to get rid of. */
+  cardLine(r: Revision): string {
+    if (r.summary) return r.summary;
+    const text = (r.comment ?? '').trim();
+    const first = text.split('\n')[0].trim();
+    if (first.length > 64) return first.slice(0, 64).trimEnd() + '…';
+    return first === text ? first : first + '…';
+  }
+
   imageUrl(r: Revision): string { return this.api.imageUrl(r.id); }
 
   openShot(r: Revision) { this.preview.set(r); }
@@ -740,6 +752,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.editing.set(r.id);
     this.editText.set(r.comment);
     this.editPart.set(r.part ?? '');
+    this.editSummary.set(r.summary ?? '');
   }
 
   cancelEdit() { this.editing.set(null); }
@@ -747,7 +760,13 @@ export class Editor implements AfterViewInit, OnDestroy {
   saveEdit(r: Revision) {
     const text = this.editText().trim();
     if (!text) { this.flash('comment cannot be empty'); return; }
-    this.api.edit(r.id, { comment: text, part: this.editPart() || null }).subscribe({
+    // An unchanged summary is not sent: sending it back would mark a
+    // generated sentence as hand-written and freeze it.
+    const summary = this.editSummary().trim();
+    const body: { comment: string; part: string | null; summary?: string } =
+      { comment: text, part: this.editPart() || null };
+    if (summary !== (r.summary ?? '')) body.summary = summary;
+    this.api.edit(r.id, body).subscribe({
       next: () => { this.editing.set(null); this.flash('revision updated'); this.refresh(); },
       error: e => this.flash(e.error?.detail ?? 'update failed'),
     });

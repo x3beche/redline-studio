@@ -15,6 +15,11 @@ export interface Revision {
   edited_at: string | null;
   archived: boolean;
   image_bytes: number;
+  /** One short sentence, generated from the text and the drawing. */
+  summary: string | null;
+  /** True once someone has written it by hand; the generator then
+   *  leaves it alone. */
+  summary_manual: boolean;
 }
 
 /** draft = invisible to models; queued = in the apply queue (models read these). */
@@ -59,7 +64,8 @@ export class Api {
   }
 
   /** Only the text is editable; the drawing is the record and stays fixed. */
-  edit(id: string, body: { comment?: string; part?: string | null }): Observable<Revision> {
+  edit(id: string, body: { comment?: string; part?: string | null;
+                           summary?: string }): Observable<Revision> {
     return this.http.put<Revision>(`/api/revisions/${id}`, body);
   }
 

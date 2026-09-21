@@ -10,6 +10,7 @@ The connection string is read here alone; it never reaches the frontend.
 from __future__ import annotations
 
 import base64
+import logging
 import os
 from pathlib import Path
 
@@ -19,7 +20,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import build, store, sysinfo, versions
+from . import build, store, summarise, sysinfo, versions
+
+LOG = logging.getLogger("x3.api")
 
 ROOT = Path(__file__).resolve().parent.parent
 EXPORT_SCRIPT = ROOT / "export_model.py"
@@ -439,7 +442,55 @@ def _out(d: dict) -> dict:
             "camera": d.get("camera"), "part": d.get("part"), "model": d.get("model"),
             "status": d.get("status", "draft"), "queued_at": d.get("queued_at"),
             "edited_at": d.get("edited_at"), "archived": bool(d.get("archived")),
-            "image_bytes": (d.get("image") or {}).get("bytes", 0)}
+            "image_bytes": (d.get("image") or {}).get("bytes", 0),
+            "summary": d.get("summary"),
+            "summary_manual": bool(d.get("summary_manual"))}
+
+
+# ---------------- card summaries ----------------
+# A collapsed card shows one sentence instead of a wall of text. Generated
+# off the request: a failed or slow call must never hold up saving a card,
+# and it must never overwrite a sentence the user wrote by hand.
+async def _make_summary(rid: str) -> None:
+    d = db()
+    doc = await d.revisions.find_one({"_id": rid})
+    if not doc or doc.get("summary_manual"):
+        return
+    png = None
+    gid = (doc.get("image") or {}).get("gridfs_id")
+    if gid:
+        try:
+            png = await store.get_shot(d, gid)
+        except Exception:                            # noqa: BLE001
+            png = None
+    try:
+        text, _usage = await summarise.summarise(doc["comment"], png)
+    except Exception as exc:                         # noqa: BLE001
+        LOG.warning("summary for %s failed: %s", rid, exc)
+        return
+    if not text:
+        return
+    await d.revisions.update_one({"_id": rid}, {"$set": {
+        "summary": text, "summary_at": store.now(), "summary_manual": False}})
+
+
+def schedule_summary(rid: str) -> None:
+    import asyncio
+    asyncio.create_task(_make_summary(rid))
+
+
+@app.post("/api/revisions/{rid}/summary")
+async def regenerate_summary(rid: str, force: bool = False):
+    """Ask for the sentence again. force=true also replaces a hand-written one."""
+    d = db()
+    doc = await d.revisions.find_one({"_id": rid})
+    if not doc:
+        raise HTTPException(404, rid)
+    if force:
+        await d.revisions.update_one({"_id": rid},
+                                     {"$set": {"summary_manual": False}})
+    await _make_summary(rid)
+    return _out(await d.revisions.find_one({"_id": rid}))
 
 
 @app.post("/api/revisions")
@@ -466,6 +517,7 @@ async def create_revision(body: RevisionIn):
         "image": image,
     }
     await d.revisions.insert_one(doc)
+    schedule_summary(rid)
     return _out(doc)
 
 
@@ -514,6 +566,8 @@ class RevisionEdit(BaseModel):
     """Only the text is editable; the drawing is the record and stays fixed."""
     comment: str | None = Field(default=None, min_length=1, max_length=4000)
     part: str | None = None
+    # Empty string clears it and hands the card back to the generator.
+    summary: str | None = Field(default=None, max_length=200)
 
 
 @app.put("/api/revisions/{rid}")
@@ -525,6 +579,10 @@ async def edit_revision(rid: str, body: RevisionEdit):
         patch["comment"] = body.comment.strip()
     if body.part is not None:
         patch["part"] = body.part or None
+    if body.summary is not None:
+        # Written by hand: keep it, and stop the generator replacing it.
+        patch["summary"] = body.summary.strip() or None
+        patch["summary_manual"] = bool(patch["summary"])
     if not patch:
         raise HTTPException(400, "nothing to change")
     patch["edited_at"] = datetime.now(timezone.utc).isoformat()
@@ -533,6 +591,10 @@ async def edit_revision(rid: str, body: RevisionEdit):
     if res.matched_count == 0:
         raise HTTPException(404, rid)
     doc = await db().revisions.find_one({"_id": rid})
+    # The text changed, so the old sentence describes the old card.
+    if body.comment is not None and body.summary is None \
+            and not doc.get("summary_manual"):
+        schedule_summary(rid)
     return _out(doc)
 
 

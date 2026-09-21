@@ -157,6 +157,49 @@ PARTS = [frame, rotor, pins]            # build123d objects to tessellate
 NAMES = ["housing", "impeller", "pins"] # optional, names in the tree
 ```
 
+### Card summaries
+
+A card holds whatever the person typed while looking at the model, which is
+usually long. Folded, it shows one sentence instead:
+
+```
+▸ 1  Fanın iki yüzündeki yuva derinliklerini yarıya indir        QUEUED
+```
+
+Nothing else — no drawing, no date, no buttons. Opened, the sentence sits
+above the full text marked **◆** when generated and **✎** when written by
+hand.
+
+The sentence comes from an LLM that is given the text *and* the drawing,
+because the text leans on the drawing: "bu kısım", "bu yazı" only mean
+something next to the red marks. The call is made by the server; the key
+never reaches the browser.
+
+| | |
+|---|---|
+| Service | OpenRouter, `deepseek/deepseek-v4.1-flash` |
+| Key | `OPENROUTER_API_KEY` in `.env` (gitignored) |
+| Request | `max_tokens` 60, `temperature` 0.2, reasoning off, 15 s timeout, 2 retries with backoff |
+| Image | long edge scaled to 512 px, sent as a JPEG data URL |
+| Cost | ~0.00018 USD per card measured over 15 cards; warns above 0.005 |
+
+The system prompt is byte-identical on every request so the provider can
+cache the prefix. A reply is trimmed to one line and stripped of quotes and
+an "Özet:" prefix; over 12 words it asks once more and then keeps whatever
+came back rather than cutting a sentence in half.
+
+Generated when a card is created and when its text changes. It runs off the
+request, so a slow or failed call never holds up saving, and it never
+replaces a sentence someone wrote by hand — clearing the field in **edit**
+hands the card back to the generator.
+
+```bash
+.venv/bin/python tools/revisions.py summaries            # backfill
+.venv/bin/python tools/revisions.py summaries --all      # redo every card
+.venv/bin/python tools/revisions.py summaries --force    # replace hand-written
+.venv/bin/python -m pytest tests -q --asyncio-mode=auto  # 26 tests, no network
+```
+
 ### The left column
 
 Hovering a row shows what can be done with it: a model has **&rarr;** (move)
