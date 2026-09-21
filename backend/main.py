@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -118,6 +118,92 @@ async def drop_folder(path: str):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"deleted": path}
+
+
+# ---------------- uploads ----------------
+# A STEP the user brings in is not a model; a model imports it. On upload we
+# also write that model, so the file is visible in the viewer straight away
+# and there is something to edit.
+READERS = {".stl": "import_stl", ".3mf": "import_3mf", ".brep": "import_brep"}
+
+
+def starter_source(filename: str) -> str:
+    stem = Path(filename).stem
+    reader = READERS.get(Path(filename).suffix.lower(), "import_step")
+    return f'''"""{stem} - imported CAD file, not parametric.
+
+The geometry came in as a solid: it can be cut, joined, filleted, measured
+and placed in an assembly, but it carries no feature history, so a dimension
+cannot be dialled in - it has to be cut and rebuilt.
+"""
+
+import os
+from pathlib import Path
+
+from build123d import *
+
+STANDALONE = os.environ.get("X3_IMPORT_ONLY") != "1"
+ROOT = Path(__file__).resolve().parent.parent   # uploads land here
+
+part = {reader}(ROOT / "{filename}")
+part.label, part.color = "{stem}", Color("steelblue")
+
+box = part.bounding_box()
+print(f"gabari : {{box.size.X:.1f}} x {{box.size.Y:.1f}} x {{box.size.Z:.1f}} mm")
+print(f"katilar: {{len(part.solids())}}  yuz: {{len(part.faces())}}  "
+      f"kenar: {{len(part.edges())}}")
+print(f"hacim  : {{part.volume:.0f}} mm^3")
+
+TITLE = "{stem}"
+PARTS = [part]
+NAMES = ["{stem}"]
+
+if STANDALONE:
+    export_step(part, ROOT / "exports" / "{stem}.step")
+    print("exports/{stem}.step yazildi")
+'''
+
+
+@app.get("/api/uploads")
+async def get_uploads():
+    return await store.list_uploads(db())
+
+
+@app.post("/api/uploads")
+async def post_upload(file: UploadFile = File(...), make_model: bool = True):
+    data = await file.read()
+    try:
+        info = await store.put_upload(db(), file.filename or "part.step", data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    info["model"] = None
+    if make_model:
+        model_id = Path(info["name"]).stem
+        doc = await store.save_model(db(), model_id, starter_source(info["name"]))
+        info["model"] = doc["_id"]
+    await push_activity(ActivityIn(
+        text=f"uploaded {info['name']} ({info['bytes'] // 1024} kB)"
+             + (f" -> model {info['model']}" if info["model"] else ""),
+        level="done"))
+    return info
+
+
+@app.get("/api/uploads/{name}")
+async def fetch_upload(name: str):
+    try:
+        data = await store.get_upload(db(), name)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return Response(data, media_type="application/octet-stream")
+
+
+@app.delete("/api/uploads/{name}")
+async def drop_upload(name: str):
+    try:
+        await store.delete_upload(db(), name)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"deleted": name}
 
 
 # ---------------- models ----------------

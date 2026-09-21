@@ -95,6 +95,9 @@ export interface ModelVersion {
   models?: { id: string; title: string; short: string; chars: number }[];
 }
 
+export interface UploadInfo { name: string; bytes: number; at: string; }
+export interface UploadResult extends UploadInfo { model: string | null; }
+
 @Injectable({ providedIn: 'root' })
 export class Catalog {
   private http = inject(HttpClient);
@@ -109,6 +112,22 @@ export class Catalog {
   build(id: string): Observable<{ model: string; artifacts: Record<string, number> }> {
     return this.http.post<{ model: string; artifacts: Record<string, number> }>(
       `/api/models/${id}/build`, {});
+  }
+
+  /** A brought-in CAD file. The server also writes a model that imports it,
+   *  so it shows up in the viewer without another step. */
+  upload(file: File): Observable<UploadResult> {
+    const body = new FormData();
+    body.append('file', file);
+    return this.http.post<UploadResult>('/api/uploads', body);
+  }
+
+  uploads(): Observable<UploadInfo[]> {
+    return this.http.get<UploadInfo[]>('/api/uploads');
+  }
+
+  dropUpload(name: string): Observable<unknown> {
+    return this.http.delete(`/api/uploads/${encodeURIComponent(name)}`);
   }
 
   createModel(id: string, source: string): Observable<unknown> {

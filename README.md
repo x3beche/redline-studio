@@ -157,6 +157,28 @@ PARTS = [frame, rotor, pins]            # build123d objects to tessellate
 NAMES = ["housing", "impeller", "pins"] # optional, names in the tree
 ```
 
+### Bringing in a CAD file
+
+**+ CAD** in the left column takes a STEP, IGES, BREP, STL or 3MF. The file
+goes to GridFS and the server writes a model that imports it, so it is in the
+viewer without a second step:
+
+```python
+part = import_step(ROOT / "bracket.step")   # uploads land in the build root
+PARTS = [part]
+```
+
+An imported solid **is not parametric**. It carries no feature history, so a
+dimension cannot be dialled in — it can be cut, joined, filleted, measured and
+placed in an assembly, and that is all. Colours survive the import.
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/uploads` | multipart; `make_model=false` to skip the generated model |
+| `GET /api/uploads` | what has been brought in |
+| `GET /api/uploads/{name}` | the file back |
+| `DELETE /api/uploads/{name}` | remove it |
+
 ### Assemblies
 
 Every model's source is written into the build directory, not just the one

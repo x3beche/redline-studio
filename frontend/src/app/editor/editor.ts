@@ -45,6 +45,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private overlay = viewChild.required<ElementRef<HTMLCanvasElement>>('overlay');
   private stage = viewChild.required<ElementRef<HTMLDivElement>>('stage');
   private caret = viewChild<ElementRef<HTMLInputElement>>('caret');
+  private cadInput = viewChild<ElementRef<HTMLInputElement>>('cadInput');
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   frozen = signal(false);
@@ -355,6 +356,33 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.cat.newFolder(name, parent).subscribe({
       next: () => this.loadCatalog(),
       error: e => this.flash(e.error?.detail ?? 'could not create folder'),
+    });
+  }
+
+  /** Bring in a STEP (or IGES/BREP/STL). The server stores it and writes a
+   *  model that imports it, so it is on screen without a second step. */
+  pickCad() { this.cadInput()?.nativeElement.click(); }
+
+  uploadCad(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';                       // same file twice must still fire
+    if (!file) return;
+    this.busy.set('uploading ' + file.name);
+    this.cat.upload(file).subscribe({
+      next: r => {
+        this.busy.set('');
+        this.flash(`${r.name} imported (${Math.round(r.bytes / 1024)} kB)`);
+        this.loadCatalog();
+        if (r.model) this.cat.build(r.model).subscribe({
+          next: () => { this.flash(r.model + ' built'); this.loadCatalog(); },
+          error: e => this.flash('build failed: ' + (e.error?.detail ?? e.status)),
+        });
+      },
+      error: e => {
+        this.busy.set('');
+        this.flash(e.error?.detail ?? 'upload failed');
+      },
     });
   }
 

@@ -40,6 +40,13 @@
         <button (click)="newFolder('')" class="tcv-btn flex-1" title="create a folder">
           + Folder
         </button>
+        <button (click)="pickCad()" class="tcv-btn flex-1"
+                title="bring in a STEP / IGES / BREP / STL file">
+          + CAD
+        </button>
+        <input #cadInput type="file" class="hidden"
+               accept=".step,.stp,.iges,.igs,.brep,.stl,.3mf"
+               (change)="uploadCad($event)">
       </div>
     }
 

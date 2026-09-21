@@ -18,6 +18,7 @@ import ast
 import gzip
 import hashlib
 import re
+from pathlib import Path
 from datetime import datetime, timezone
 
 SAFE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -94,6 +95,49 @@ async def delete_folder(db, path: str) -> None:
     if await db.folders.count_documents({"parent": path}):
         raise ValueError("folder is not empty")
     await db.folders.delete_one({"_id": path})
+
+
+# ---------------- uploads ----------------
+# CAD files the user brings in (STEP/IGES/BREP/STL). They are not models; a
+# model imports one by name. Kept in GridFS like everything else, because the
+# build machine has no project directory to read from.
+UPLOAD_SUFFIXES = (".step", ".stp", ".iges", ".igs", ".brep", ".stl", ".3mf")
+
+
+async def put_upload(db, name: str, data: bytes) -> dict:
+    name = Path(name).name                       # dizin bilesenlerini at
+    if not SAFE.match(Path(name).stem):
+        raise ValueError("file name may only contain letters, digits, - and _")
+    if Path(name).suffix.lower() not in UPLOAD_SUFFIXES:
+        raise ValueError("expected one of " + ", ".join(UPLOAD_SUFFIXES))
+    old = await db.uploads.find_one({"_id": name})
+    if old:
+        await bucket(db, "cad_files").delete(old["gridfs_id"])
+    fid = await bucket(db, "cad_files").upload_from_stream(name, data)
+    doc = {"_id": name, "gridfs_id": fid, "bytes": len(data), "at": now()}
+    await db.uploads.replace_one({"_id": name}, doc, upsert=True)
+    return {"name": name, "bytes": len(data), "at": doc["at"]}
+
+
+async def list_uploads(db) -> list[dict]:
+    return [{"name": d["_id"], "bytes": d["bytes"], "at": d["at"]}
+            async for d in db.uploads.find().sort("_id", 1)]
+
+
+async def get_upload(db, name: str) -> bytes:
+    doc = await db.uploads.find_one({"_id": name})
+    if not doc:
+        raise KeyError(name)
+    stream = await bucket(db, "cad_files").open_download_stream(doc["gridfs_id"])
+    return await stream.read()
+
+
+async def delete_upload(db, name: str) -> None:
+    doc = await db.uploads.find_one({"_id": name})
+    if not doc:
+        raise KeyError(name)
+    await bucket(db, "cad_files").delete(doc["gridfs_id"])
+    await db.uploads.delete_one({"_id": name})
 
 
 # ---------------- models ----------------

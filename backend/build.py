@@ -40,6 +40,12 @@ async def build(db, model_id: str, script: Path) -> dict:
         (tmp / "exports").mkdir()
         assets_dir.mkdir()
 
+        # Uploaded CAD files land in the build root, which is what a model
+        # module calls ROOT - so `import_step(ROOT / "bracket.step")` resolves
+        # the same way `ROOT / "exports"` does on the way out.
+        async for up in db.uploads.find({}):
+            (tmp / str(up["_id"])).write_bytes(await store.get_upload(db, up["_id"]))
+
         proc = await asyncio.create_subprocess_exec(
             sys.executable, str(script), flat,
             "--models-dir", str(models_dir), "--assets-dir", str(assets_dir),
