@@ -79,12 +79,17 @@ async def cmd_show(args):
     doc = await db.revisions.find_one({"_id": args.id})
     if not doc:
         sys.exit(f"{args.id} not found")
-    png = await store.get_shot(db, doc["image"]["gridfs_id"])
-    out = Path(args.out or tempfile.gettempdir()) / f"{args.id}.png"
-    out.write_bytes(png)
     print(f"note    : {doc['comment']}")
     print(f"model   : {doc.get('model') or '-'}   part: {doc.get('part') or '-'}")
     print(f"status  : {doc.get('status')}")
+    # A note about a part is a valid revision on its own - freeze and draw is
+    # optional - so say so instead of dying on the missing image.
+    if not (doc.get("image") or {}).get("gridfs_id"):
+        print("image   : none - this revision is a written note, no drawing")
+        return
+    png = await store.get_shot(db, doc["image"]["gridfs_id"])
+    out = Path(args.out or tempfile.gettempdir()) / f"{args.id}.png"
+    out.write_bytes(png)
     print(f"image   : {out}   ({len(png)} bytes)")
     print("\nOpen this file with the Read tool and look at the red marks.")
 
