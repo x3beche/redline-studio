@@ -2,7 +2,7 @@ import {
   AfterViewInit, Component, ElementRef, OnDestroy, inject, signal, viewChild,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-const SEED = `"""__NAME__ - build123d modeli."""
+const SEED = `"""__NAME__ - a build123d model."""
 
 from build123d import *
 
@@ -12,9 +12,9 @@ with BuildPart() as part:
     Box(40, 30, 10)
     fillet(part.edges().filter_by(Axis.Z), radius=4)
 
-# Asset Manager bu iki degiskeni okur:
+# Asset Manager reads these two names:
 PARTS = [part.part]
-NAMES = ["govde"]
+NAMES = ["body"]
 `;
 
 import { Api, Catalog, Health, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
@@ -51,6 +51,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   collapsed = signal(false);
   stats = signal<Stats | null>(null);
   preview = signal<Revision | null>(null);
+  editing = signal<string | null>(null);
+  editText = signal('');
+  editPart = signal('');
   sys = signal<SystemInfo | null>(null);
   color = signal('#ff2d3f');
   penWidth = signal(4);
@@ -72,19 +75,19 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.glError.set(String((e as Error)?.message ?? e));
       return;
     }
-    // Modelde parcaya tiklayinca sagdaki formun Parca alanini doldur.
+    // Clicking a part in the model fills the Part field on the right.
     this.viewer.onPick(name => {
       if (!name) return;
       const known = this.parts().find(p => p === name)
         ?? this.parts().find(p => name.endsWith(p));
       this.part.set(known ?? name);
-      this.flash('parca: ' + (known ?? name));
+      this.flash('part: ' + (known ?? name));
     });
     this.loadCatalog();
     this.loadVersions();
     this.pollHealth();
     this.healthTimer = setInterval(() => this.pollHealth(), 5000);
-    setTimeout(() => this.sizeOverlay());     // viewer DOM'u yerlestikten sonra
+    setTimeout(() => this.sizeOverlay());     // after the viewer DOM settles
     this.ro = new ResizeObserver(() => this.sizeOverlay());
     this.ro.observe(box);
     this.refresh();
@@ -105,20 +108,20 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   toggleSidebar() {
     this.collapsed.update(v => !v);
-    setTimeout(() => this.sizeOverlay(), 60);   // gecis bitince sahneyi olcekle
+    setTimeout(() => this.sizeOverlay(), 60);   // rescale once the transition ends
   }
 
   gb(n: number): string { return (n / 1e9).toFixed(1) + ' GB'; }
 
-  /** Daraltilmis panelde gosterilen kompakt olculer. */
+  /** Compact gauges shown while the panel is collapsed. */
   gauges(): { key: string; pct: number; tip: string }[] {
     const st = this.stats(), m = this.sys();
     const out: { key: string; pct: number; tip: string }[] = [];
     if (st?.quota_bytes) {
       out.push({ key: 'DB', pct: st.percent ?? 0,
                  tip: `MongoDB ${this.mb(st.used_bytes)} / ${this.mb(st.quota_bytes)}`
-                    + ` · ${st.objects} kayit · ${st.versions} surum`
-                    + ` · sirada ${st.revisions['queued'] ?? 0}` });
+                    + ` · ${st.objects} docs · ${st.versions} versions`
+                    + ` · ${st.revisions['queued'] ?? 0} queued` });
     }
     if (m) {
       out.push({ key: 'CPU', pct: m.cpu.load,
@@ -139,7 +142,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     return pct > 85 ? 'var(--danger)' : pct > 60 ? 'var(--warn)' : 'var(--accent)';
   }
 
-  // ---- katalog ----
+  // ---- catalog ----
   loadCatalog() {
     this.cat.tree().subscribe(t => {
       this.catalog.set(t);
@@ -162,47 +165,47 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   async openModel(m: ModelEntry) {
     if (!this.viewer) return;
-    if (!m.data) { this.flash(m.name + ': once uret'); return; }
-    this.busy.set('model yukleniyor');
+    if (!m.data) { this.flash(m.name + ': build it first'); return; }
+    this.busy.set('loading model…');
     try {
-      // Veri diskte degil; veritabanindan akiyor.
+      // Data is not on disk; it streams from the database.
       await this.viewer.load(this.cat.viewerUrl(m.id));
       this.activeModel.set(m.id);
       this.parts.set(this.viewer.parts);
       setTimeout(() => this.sizeOverlay());
     } catch (e) {
-      this.flash('yuklenemedi: ' + (e as Error).message);
+      this.flash('load failed: ' + (e as Error).message);
     }
     this.busy.set('');
   }
 
   rebuild(m: ModelEntry, ev: Event) {
     ev.stopPropagation();
-    this.busy.set(m.name + ' uretiliyor...');
+    this.busy.set('building ' + m.name + '…');
     this.cat.build(m.id).subscribe({
-      next: () => { this.busy.set(''); this.flash(m.name + ' guncellendi');
+      next: () => { this.busy.set(''); this.flash(m.name + ' rebuilt');
                     this.loadCatalog(); },
-      error: e => { this.busy.set(''); this.flash('hata: ' + (e.error?.detail ?? e.status)); },
+      error: e => { this.busy.set(''); this.flash('error: ' + (e.error?.detail ?? e.status)); },
     });
   }
 
   newFolder(parent: string) {
-    const name = prompt('Klasor adi (harf, rakam, - , _):');
+    const name = prompt('Folder name (letters, digits, - , _):');
     if (!name) return;
     this.cat.newFolder(name, parent).subscribe({
       next: () => this.loadCatalog(),
-      error: e => this.flash(e.error?.detail ?? 'klasor olusturulamadi'),
+      error: e => this.flash(e.error?.detail ?? 'could not create folder'),
     });
   }
 
   newModel(folder: string) {
-    const name = prompt('Model adi (harf, rakam, - , _):');
+    const name = prompt('Model name (letters, digits, - , _):');
     if (!name) return;
     const id = folder ? `${folder}/${name}` : name;
     const source = SEED.replace('__NAME__', name);
     this.cat.createModel(id, source).subscribe({
-      next: () => { this.flash(name + ' olusturuldu'); this.loadCatalog(); },
-      error: e => this.flash(e.error?.detail ?? 'model olusturulamadi'),
+      next: () => { this.flash(name + ' created'); this.loadCatalog(); },
+      error: e => this.flash(e.error?.detail ?? 'could not create model'),
     });
   }
 
@@ -211,32 +214,32 @@ export class Editor implements AfterViewInit, OnDestroy {
   openShot(r: Revision) { this.preview.set(r); }
   closeShot() { this.preview.set(null); }
 
-  // ---- surum gecmisi ----
+  // ---- version history ----
   loadVersions() { this.cat.versions().subscribe({ next: v => this.versions.set(v),
                                                    error: () => {} }); }
 
   takeSnapshot() {
-    const note = prompt('Surum notu:') ?? '';
-    this.busy.set('surum aliniyor');
+    const note = prompt('Version note:') ?? '';
+    this.busy.set('taking snapshot…');
     this.cat.snapshot(note).subscribe({
-      next: () => { this.busy.set(''); this.flash('surum kaydedildi'); this.loadVersions(); },
-      error: e => { this.busy.set(''); this.flash(e.error?.detail ?? 'surum alinamadi'); },
+      next: () => { this.busy.set(''); this.flash('version saved'); this.loadVersions(); },
+      error: e => { this.busy.set(''); this.flash(e.error?.detail ?? 'snapshot failed'); },
     });
   }
 
   restore(v: ModelVersion) {
-    if (!confirm(`${v.short} surumune donulsun mu?\nMevcut hal once yedeklenir.`)) return;
-    this.busy.set('geri yukleniyor');
+    if (!confirm(`Roll back to ${v.short}?\nThe current state is snapshotted first.`)) return;
+    this.busy.set('restoring…');
     this.cat.restore(v._id).subscribe({
-      next: () => { this.busy.set(''); this.flash('geri yuklendi: ' + v.short);
+      next: () => { this.busy.set(''); this.flash('restored: ' + v.short);
                     this.loadVersions(); this.loadCatalog(); },
-      error: e => { this.busy.set(''); this.flash(e.error?.detail ?? 'geri yuklenemedi'); },
+      error: e => { this.busy.set(''); this.flash(e.error?.detail ?? 'restore failed'); },
     });
   }
 
   mb(n: number): string { return (n / 1e6).toFixed(1) + ' MB'; }
 
-  /** WebGL tavsiyesini yalnizca gercekten WebGL hatasiysa goster. */
+  /** Only offer the WebGL advice when the failure really is WebGL related. */
   isWebglError(): boolean {
     return /webgl|context|gpu/i.test(this.glError());
   }
@@ -245,8 +248,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     const box = this.stage().nativeElement;
     this.viewer?.resize(box.clientWidth, box.clientHeight);
 
-    // getImage() yalnizca canvas'i dondurur; overlay tam onun ustune
-    // oturmazsa isaretler kaydedilen goruntude kayar.
+    // getImage() returns the canvas only; unless the overlay sits exactly on
+    // top of it, marks land in the wrong place in the saved image.
     const c = this.overlay().nativeElement;
     const cad = this.viewer?.canvasRect();
     const stage = box.getBoundingClientRect();
@@ -262,7 +265,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.repaint();
   }
 
-  // ---- dondur / coz ----
+  // ---- freeze / unfreeze ----
   async freeze() {
     if (!this.viewer) return;
     this.frozenShot = await this.viewer.image();
@@ -276,7 +279,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.strokes = []; this.active = null; this.repaint();
   }
 
-  // ---- cizim ----
+  // ---- drawing ----
   private pos(ev: PointerEvent): [number, number] {
     const c = this.overlay().nativeElement;
     const r = c.getBoundingClientRect();
@@ -319,10 +322,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
   }
 
-  // ---- kaydet ----
+  // ---- save ----
   async save() {
     if (!this.viewer) return;
-    if (!this.comment().trim()) { this.flash('once yorum yaz'); return; }
+    if (!this.comment().trim()) { this.flash('write a comment first'); return; }
     this.saving.set(true);
     const merged = await this.merge(this.frozenShot);
     this.api.create({
@@ -334,14 +337,14 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.saving.set(false);
         this.comment.set('');
         this.clear();
-        this.flash('revizyon kaydedildi');
+        this.flash('revision saved');
         this.refresh();
       },
-      error: e => { this.saving.set(false); this.flash('kaydedilemedi: ' + e.status); },
+      error: e => { this.saving.set(false); this.flash('save failed: ' + e.status); },
     });
   }
 
-  /** Dondurulmus kare + cizim katmanini tek PNG'de birlestirir. */
+  /** Merge the frozen frame and the drawing layer into one PNG. */
   private merge(shotUrl: string): Promise<string> {
     return new Promise(resolve => {
       const overlay = this.overlay().nativeElement;
@@ -364,11 +367,28 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.api.list().subscribe({ next: r => this.revisions.set(r), error: () => {} });
   }
 
+  startEdit(r: Revision) {
+    this.editing.set(r.id);
+    this.editText.set(r.comment);
+    this.editPart.set(r.part ?? '');
+  }
+
+  cancelEdit() { this.editing.set(null); }
+
+  saveEdit(r: Revision) {
+    const text = this.editText().trim();
+    if (!text) { this.flash('comment cannot be empty'); return; }
+    this.api.edit(r.id, { comment: text, part: this.editPart() || null }).subscribe({
+      next: () => { this.editing.set(null); this.flash('revision updated'); this.refresh(); },
+      error: e => this.flash(e.error?.detail ?? 'update failed'),
+    });
+  }
+
   remove(r: Revision) {
-    if (!confirm(`Revizyon silinsin mi?\n\n"${r.comment}"`)) return;
+    if (!confirm(`Delete this revision?\n\n"${r.comment}"`)) return;
     this.api.remove(r.id).subscribe({
-      next: () => { this.flash('revizyon silindi'); this.refresh(); this.pollHealth(); },
-      error: () => this.flash('silinemedi'),
+      next: () => { this.flash('revision deleted'); this.refresh(); this.pollHealth(); },
+      error: () => this.flash('delete failed'),
     });
   }
 
@@ -376,19 +396,19 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.api.setStatus(r.id, status).subscribe(() => { this.refresh(); this.pollHealth(); });
   }
 
-  /** Tek dugme, uc durumlu dongu: taslak -> sirada -> uygulandi -> taslak.
-   *  Boylece "uygulandi" geri de alinabiliyor. */
+  /** One button, three-state cycle: draft -> queued -> applied -> draft,
+   *  so "applied" can be undone. */
   private static NEXT: Record<string, RevisionStatus> = {
     draft: 'queued', queued: 'applied', applied: 'draft', rejected: 'draft',
   };
 
   cycle(r: Revision) { this.mark(r, Editor.NEXT[r.status] ?? 'draft'); }
 
-  /** Dugmenin uzerinde tiklayinca ne olacagi yazar. */
+  /** The button always reads as the action the next click performs. */
   nextLabel(s: RevisionStatus): string {
-    return s === 'draft' ? 'sıraya al'
-      : s === 'queued' ? 'uygulandı'
-      : 'taslağa dön';
+    return s === 'draft' ? 'queue'
+      : s === 'queued' ? 'mark applied'
+      : 'back to draft';
   }
 
   nextClass(s: RevisionStatus): string {
@@ -397,7 +417,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       : 'tcv-chip';
   }
 
-  /** Sirada kacinci oldugu; liste zaten queued_at'e gore sirali geliyor. */
+  /** Position in the queue; the list already arrives ordered by queued_at. */
   queueIndex(r: Revision): number {
     return this.revisions().filter(x => x.status === 'queued').indexOf(r) + 1;
   }
@@ -413,9 +433,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   label(s: RevisionStatus): string {
-    return s === 'applied' ? 'uygulandi'
-      : s === 'queued' ? 'sirada'
-      : s === 'rejected' ? 'iptal' : 'taslak';
+    return s === 'applied' ? 'applied'
+      : s === 'queued' ? 'queued'
+      : s === 'rejected' ? 'rejected' : 'draft';
   }
 
   private flash(msg: string) {

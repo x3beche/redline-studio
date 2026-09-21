@@ -1,58 +1,62 @@
-<!-- Ust bar yok: goruntuleyici tam yuksekligi kullaniyor, tum kontroller sagda. -->
-<!-- Her yandan esit bos payi: ekranin kenarina yapismasin. -->
+<!-- No top bar: the viewer uses full height, every control sits on the right. -->
+<!-- Equal gutter on every side so nothing sticks to the screen edge. -->
 <div class="flex h-screen gap-2 p-2">
 
-  <!-- SOL: model katalogu (katlanabilir) -->
+  <!-- LEFT: model catalog (collapsible) -->
   <aside class="tcv-panel flex shrink-0 flex-col rounded transition-[width] duration-150"
          [style.width]="collapsed() ? '46px' : '250px'"
          style="border: 1px solid var(--line)">
 
-    <!-- logo + katla -->
+    <!-- wordmark + collapse -->
     <div class="flex items-center gap-2 px-2 py-2" style="border-bottom: 1px solid var(--line)">
       <button (click)="toggleSidebar()" class="tcv-btn shrink-0 px-1.5 py-0.5"
-              [title]="collapsed() ? 'genislet' : 'daralt'">
+              [title]="collapsed() ? 'expand' : 'collapse'">
         {{ collapsed() ? '»' : '«' }}
       </button>
       @if (!collapsed()) {
-        <!-- Destiny tarzi kilit: genis aralikli kelime, isaret, ayrac, rakam -->
-        <div class="brand flex min-w-0 items-center gap-1.5">
-          <svg viewBox="0 0 34 24" class="h-[18px] w-[24px] shrink-0" aria-hidden="true">
-            <path d="M3 4 L10 12 L3 20" fill="none" stroke="var(--accent)"
-                  stroke-width="3" stroke-linecap="square"/>
-            <path d="M12 4 L19 12 L12 20" fill="none" stroke="var(--accent)"
-                  stroke-width="3" stroke-linecap="square" opacity=".55"/>
-            <path d="M23 12 L28 5 L33 12 L28 19 Z" fill="var(--ink)"/>
+        <!-- Datum-target mark: drafting language, no ornament. -->
+        <div class="flex min-w-0 items-center gap-2">
+          <svg viewBox="0 0 20 20" class="h-[18px] w-[18px] shrink-0" aria-hidden="true">
+            <rect x="2.5" y="2.5" width="15" height="15" fill="none"
+                  stroke="var(--ink-dim)" stroke-width="1.2"/>
+            <path d="M10 0.5 V4 M10 16 V19.5 M0.5 10 H4 M16 10 H19.5"
+                  stroke="var(--accent)" stroke-width="1.2"/>
+            <rect x="8" y="8" width="4" height="4" fill="var(--accent)"/>
           </svg>
-          <div class="min-w-0 leading-none">
-            <div class="brand-word">Asset</div>
-            <div class="brand-sub mt-[3px]">Manager</div>
+          <div class="min-w-0 leading-tight">
+            <div class="brand-name">Asset Manager</div>
+            <div class="brand-tag">X3 Studios</div>
           </div>
-          <div class="brand-rule mx-0.5"></div>
-          <div class="brand-num">X3</div>
-        </div>
-        <div class="ml-auto flex shrink-0 gap-1">
-          <button (click)="newModel('')" class="tcv-btn px-1.5 py-0.5"
-                  title="model ekle">+M</button>
-          <button (click)="newFolder('')" class="tcv-btn px-1.5 py-0.5"
-                  title="klasor ekle">+K</button>
         </div>
       }
     </div>
+
+    @if (!collapsed()) {
+      <!-- Create actions get their own row so the wordmark keeps full width. -->
+      <div class="flex gap-1 px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
+        <button (click)="newModel('')" class="tcv-btn flex-1" title="create a model">
+          + Model
+        </button>
+        <button (click)="newFolder('')" class="tcv-btn flex-1" title="create a folder">
+          + Folder
+        </button>
+      </div>
+    }
 
     @if (!collapsed()) {
       <div class="tcv-scroll min-h-0 flex-1 overflow-y-auto p-2 pb-4">
         @if (catalog(); as root) {
           <ng-container *ngTemplateOutlet="node; context: { $implicit: root, depth: 0 }" />
         } @else {
-          <p class="text-[11px]" style="color: var(--ink-dim)">katalog yukleniyor...</p>
+          <p class="text-[11px]" style="color: var(--ink-dim)">loading catalog…</p>
         }
       </div>
 
-      <!-- surumler -->
+      <!-- versions -->
       <div class="px-3 py-2" style="border-top: 1px solid var(--line)">
         <div class="mb-1 flex items-center justify-between">
-          <span class="tcv-label">Surumler ({{ versions().length }})</span>
-          <button (click)="takeSnapshot()" class="tcv-btn px-1.5 py-0.5 text-[11px]">surum al</button>
+          <span class="tcv-label">Versions ({{ versions().length }})</span>
+          <button (click)="takeSnapshot()" class="tcv-btn px-1.5 py-0.5 text-[11px]">snapshot</button>
         </div>
         <ul class="tcv-scroll max-h-28 overflow-y-auto">
           @for (v of versions(); track v._id) {
@@ -62,15 +66,15 @@
                 <span style="color: var(--ink-dim)"> {{ v.note || v._id }}</span>
               </span>
               <button (click)="restore(v)" class="tcv-chip shrink-0"
-                      style="color: var(--warn)">don</button>
+                      style="color: var(--warn)">restore</button>
             </li>
           } @empty {
-            <li class="text-[11px]" style="color: var(--ink-dim)">surum yok</li>
+            <li class="text-[11px]" style="color: var(--ink-dim)">no versions</li>
           }
         </ul>
       </div>
 
-      <!-- durum: veritabani + makine -->
+      <!-- status: database + machine -->
       <div class="px-3 py-2 text-[11px]" style="border-top: 1px solid var(--line)">
         @if (stats(); as st) {
           <div class="mb-1 flex items-center justify-between">
@@ -89,13 +93,13 @@
             </div>
           }
           <div class="flex justify-between" style="color: var(--ink-dim)">
-            <span>{{ st.models }} model · {{ st.objects }} kayit</span>
-            <span>{{ st.versions }} surum</span>
+            <span>{{ st.models }} models · {{ st.objects }} docs</span>
+            <span>{{ st.versions }} versions</span>
           </div>
           <div class="mt-0.5 flex gap-2" style="color: var(--ink-dim)">
-            <span>taslak {{ st.revisions['draft'] ?? 0 }}</span>
-            <span style="color: var(--accent)">sirada {{ st.revisions['queued'] ?? 0 }}</span>
-            <span>uygulandi {{ st.revisions['applied'] ?? 0 }}</span>
+            <span>draft {{ st.revisions['draft'] ?? 0 }}</span>
+            <span style="color: var(--accent)">queued {{ st.revisions['queued'] ?? 0 }}</span>
+            <span>applied {{ st.revisions['applied'] ?? 0 }}</span>
           </div>
         }
 
@@ -125,14 +129,14 @@
         }
       </div>
     } @else {
-      <!-- daraltilmis: dikey olcekler, ustune gelince tam deger -->
+      <!-- collapsed: vertical gauges, full value on hover -->
       <div class="mt-auto flex flex-col items-center gap-2.5 px-1 py-3"
            style="border-top: 1px solid var(--line)">
         @for (g of gauges(); track g.key) {
           <div class="flex flex-col items-center leading-none" [title]="g.tip">
             <div class="text-[8px] font-semibold tracking-wider"
                  style="color: var(--ink-dim)">{{ g.key }}</div>
-            <!-- alttan yukari dolan dikey cubuk -->
+            <!-- vertical bar filling bottom-up -->
             <div class="mt-1 flex h-9 w-2.5 items-end overflow-hidden rounded-sm"
                  style="background: var(--surface-2)">
               <div class="w-full rounded-sm" [style.height.%]="g.pct"
@@ -147,28 +151,28 @@
     }
   </aside>
 
-  <!-- revizyon cizimi buyutulmus -->
+  <!-- enlarged revision drawing -->
   @if (preview(); as pv) {
     <div (click)="closeShot()"
          class="fixed inset-0 flex flex-col items-center justify-center gap-3 p-8"
          style="background: rgba(0,0,0,.88); z-index: 1000">
-      <img [src]="imageUrl(pv)" alt="revizyon cizimi"
+      <img [src]="imageUrl(pv)" alt="revision drawing"
            class="max-h-[80vh] max-w-[90vw] rounded bg-white object-contain"
            style="border: 1px solid var(--line)">
       <div class="tcv-card max-w-2xl p-3 text-[12px]">
         <p class="mb-1">{{ pv.comment }}</p>
         <p style="color: var(--ink-dim)">
           {{ pv.created_at.slice(0, 16).replace('T', ' ') }}
-          @if (pv.part) { · parca: {{ pv.part }} }
+          @if (pv.part) { · part: {{ pv.part }} }
           @if (pv.model) { · model: {{ pv.model }} }
-          · durum: {{ label(pv.status) }}
+          · status: {{ label(pv.status) }}
         </p>
       </div>
-      <span class="text-[11px]" style="color: var(--ink-dim)">kapatmak icin tikla</span>
+      <span class="text-[11px]" style="color: var(--ink-dim)">click to close</span>
     </div>
   }
 
-  <!-- ORTA: goruntuleyici -->
+  <!-- CENTRE: viewer -->
   <div #stage class="relative min-w-0 flex-1 overflow-hidden rounded"
        style="border: 1px solid var(--line)">
     <div #host class="absolute inset-0"></div>
@@ -180,20 +184,20 @@
 
     @if (frozen()) {
       <div class="pointer-events-none absolute right-3 top-3 rounded px-2 py-0.5 text-[11px] font-medium"
-           style="background: var(--danger); color: #fff">DONDURULDU</div>
+           style="background: var(--danger); color: #fff">FROZEN</div>
     }
     @if (glError()) {
       <div class="absolute inset-0 flex items-center justify-center p-8">
         <div class="tcv-card max-w-lg p-4 text-[13px]">
-          <p class="mb-2 font-semibold" style="color: var(--warn)">Goruntuleyici acilamadi</p>
+          <p class="mb-2 font-semibold" style="color: var(--warn)">Viewer could not start</p>
           <p class="mb-2 font-mono text-[12px]">{{ glError() }}</p>
           @if (isWebglError()) {
-            <p class="mb-2">Chrome'da WebGL kapali. Chrome 137+ otomatik yazilim
-              yedegini kaldirdi; melez Intel + NVIDIA makinelerde ANGLE arka ucunu
-              elle secmek gerekiyor.</p>
+            <p class="mb-2">WebGL is disabled in Chrome. Chrome 137+ removed the automatic software
+              fallback; on hybrid Intel + NVIDIA machines the ANGLE backend has to be
+              chosen by hand.</p>
             <ol class="list-decimal space-y-1 pl-5">
               <li><code>chrome://flags/#use-angle</code> &rarr; <b>OpenGL</b></li>
-              <li>Chrome'u tamamen kapatip yeniden ac</li>
+              <li>Quit Chrome completely and reopen it</li>
             </ol>
           }
         </div>
@@ -205,15 +209,15 @@
     }
   </div>
 
-  <!-- SAG: dondur/ciz + revizyonlar -->
+  <!-- RIGHT: freeze/draw + revisions -->
   <aside class="tcv-panel flex w-[300px] shrink-0 flex-col rounded"
          style="border: 1px solid var(--line)">
 
     <div class="px-3 py-2" style="border-bottom: 1px solid var(--line)">
       @if (!frozen()) {
-        <button (click)="freeze()" class="tcv-btn tcv-btn-danger w-full">Dondur ve ciz</button>
+        <button (click)="freeze()" class="tcv-btn tcv-btn-danger w-full">Freeze &amp; draw</button>
       } @else {
-        <button (click)="resume()" class="tcv-btn w-full">Serbest birak</button>
+        <button (click)="resume()" class="tcv-btn w-full">Unfreeze</button>
         <div class="mt-2 flex items-center gap-1.5">
           @for (c of ['#cc3333', '#5c8a5c', '#53a0e3', '#e8a735']; track c) {
             <button (click)="color.set(c)" [style.background]="c"
@@ -226,62 +230,76 @@
                  class="ml-1 flex-1" style="accent-color: var(--accent)">
         </div>
         <div class="mt-2 flex gap-1.5">
-          <button (click)="undo()" class="tcv-btn flex-1">Geri al</button>
-          <button (click)="clear()" class="tcv-btn flex-1">Temizle</button>
+          <button (click)="undo()" class="tcv-btn flex-1">Undo</button>
+          <button (click)="clear()" class="tcv-btn flex-1">Clear</button>
         </div>
       }
     </div>
 
     <div class="px-3 py-2" style="border-bottom: 1px solid var(--line)">
-      <label class="tcv-label mb-1 block">Parca</label>
+      <label class="tcv-label mb-1 block">Part</label>
       <select [value]="part()" (change)="part.set($any($event.target).value)"
               class="tcv-field mb-2 w-full px-1.5 py-1">
-        <option value="">(secilmedi)</option>
+        <option value="">(none)</option>
         @for (p of parts(); track p) { <option [value]="p">{{ p }}</option> }
       </select>
 
-      <label class="tcv-label mb-1 block">Yorum</label>
+      <label class="tcv-label mb-1 block">Comment</label>
       <textarea rows="3" [value]="comment()"
                 (input)="comment.set($any($event.target).value)"
-                placeholder="Ornek: bu kose pahli olsun, 2 mm"
+                placeholder="e.g. chamfer this corner, 2 mm"
                 class="tcv-field w-full resize-none p-1.5"></textarea>
       <button (click)="save()" [disabled]="saving() || !frozen()"
               class="tcv-btn tcv-btn-accent mt-2 w-full py-1.5">
-        {{ saving() ? 'kaydediliyor...' : 'Taslak olarak kaydet' }}
+        {{ saving() ? 'saving…' : 'Save as draft' }}
       </button>
       <p class="mt-1 text-[11px]" style="color: var(--ink-dim)">
-        {{ frozen() ? 'Taslaklar LLM\'e gorunmez; siraya alinca gorunur.'
-                    : 'Kaydetmek icin once modeli dondur.' }}
+        {{ frozen() ? 'Drafts stay invisible to models until you queue them.'
+                    : 'Freeze the model before saving.' }}
       </p>
     </div>
 
     <div class="flex items-center justify-between px-3 py-1.5">
       <span class="tcv-label">
-        Revizyonlar ({{ revisions().length }})
+        Revisions ({{ revisions().length }})
         @if (queueCount()) {
-          <span style="color: var(--accent)"> · sirada {{ queueCount() }}</span>
+          <span style="color: var(--accent)"> · {{ queueCount() }} queued</span>
         }
       </span>
-      <button (click)="refresh()" class="text-[11px]" style="color: var(--ink-dim)">yenile</button>
+      <button (click)="refresh()" class="text-[11px]" style="color: var(--ink-dim)">refresh</button>
     </div>
 
     <ul class="tcv-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-4">
       @for (r of revisions(); track r.id) {
         <li class="tcv-card mb-1.5 p-2">
           <div class="flex items-start justify-between gap-2">
-            <p class="text-[12px] leading-snug">
-              @if (r.status === 'queued') {
-                <span class="mr-1 rounded px-1.5 py-0.5 text-[10px] font-bold"
-                      style="background: var(--accent); color: #12222e">{{ queueIndex(r) }}</span>
-              }
-              {{ r.comment }}
-            </p>
+            @if (editing() === r.id) {
+              <!-- Text only: the drawing is the record and cannot change. -->
+              <div class="min-w-0 flex-1">
+                <textarea rows="3" [value]="editText()"
+                          (input)="editText.set($any($event.target).value)"
+                          class="tcv-field w-full resize-none p-1.5"></textarea>
+                <select [value]="editPart()" (change)="editPart.set($any($event.target).value)"
+                        class="tcv-field mt-1 w-full px-1.5 py-1">
+                  <option value="">(no part)</option>
+                  @for (p of parts(); track p) { <option [value]="p">{{ p }}</option> }
+                </select>
+              </div>
+            } @else {
+              <p class="text-[12px] leading-snug">
+                @if (r.status === 'queued') {
+                  <span class="mr-1 rounded px-1.5 py-0.5 text-[10px] font-bold"
+                        style="background: var(--accent); color: #12222e">{{ queueIndex(r) }}</span>
+                }
+                {{ r.comment }}
+              </p>
+            }
             <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase"
                   [style.background]="badge(r.status)">{{ label(r.status) }}</span>
           </div>
           <button (click)="openShot(r)" class="mt-1.5 block w-full overflow-hidden rounded"
-                  style="border: 1px solid var(--line)" title="buyut">
-            <img [src]="imageUrl(r)" alt="revizyon cizimi"
+                  style="border: 1px solid var(--line)" title="enlarge">
+            <img [src]="imageUrl(r)" alt="revision drawing"
                  class="block h-20 w-full bg-white object-contain" loading="lazy">
           </button>
           <div class="mt-1 text-[10px]" style="color: var(--ink-dim)">
@@ -289,32 +307,39 @@
             @if (r.part) { · {{ r.part }} }
             @if (r.model) { · {{ r.model }} }
           </div>
-          <!-- Tek dugme durumu dondurur: taslak -> sirada -> uygulandi -> taslak -->
+          <!-- One button cycles status: draft -> queued -> applied -> draft -->
           <div class="mt-1.5 flex flex-nowrap items-center gap-1">
-            <button (click)="cycle(r)" [class]="nextClass(r.status)"
-                    title="taslak -> sirada -> uygulandi -> taslak">
-              {{ nextLabel(r.status) }}
-            </button>
+            @if (editing() === r.id) {
+              <button (click)="saveEdit(r)" class="tcv-chip tcv-chip-ok">save</button>
+              <button (click)="cancelEdit()" class="tcv-chip">cancel</button>
+            } @else {
+              <button (click)="cycle(r)" [class]="nextClass(r.status)"
+                      title="draft → queued → applied → draft">
+                {{ nextLabel(r.status) }}
+              </button>
+              <button (click)="startEdit(r)" class="tcv-chip"
+                      title="edit the text (the drawing stays as it is)">edit</button>
+            }
             <button (click)="remove(r)" class="tcv-chip tcv-chip-danger ml-auto"
-                    title="revizyonu kalici olarak sil">sil</button>
+                    title="delete permanently">delete</button>
           </div>
         </li>
       } @empty {
-        <li class="text-[11px]" style="color: var(--ink-dim)">Henuz revizyon yok.</li>
+        <li class="text-[11px]" style="color: var(--ink-dim)">No revisions yet.</li>
       }
     </ul>
   </aside>
 </div>
 
-<!-- klasor agaci, kendini cagirarak ic ice iniyor -->
+<!-- folder tree, recursing into itself -->
 <ng-template #node let-n let-depth="depth">
   @if (depth > 0) {
     <div class="flex items-center justify-between rounded px-1 py-0.5"
          [style.margin-left.px]="(depth - 1) * 10">
       <span class="text-[12px]" style="color: var(--ink-dim)">{{ n.name }}/</span>
       <span class="flex gap-1.5 text-[11px]">
-        <button (click)="newModel(n.path)" style="color: var(--ink-dim)" title="model ekle">+M</button>
-        <button (click)="newFolder(n.path)" style="color: var(--ink-dim)" title="klasor ekle">+K</button>
+        <button (click)="newModel(n.path)" style="color: var(--ink-dim)" title="new model">+M</button>
+        <button (click)="newFolder(n.path)" style="color: var(--ink-dim)" title="new folder">+K</button>
       </span>
     </div>
   }
@@ -325,11 +350,11 @@
          [style.background]="activeModel() === m.id ? 'var(--accent-deep)' : 'transparent'">
       <span class="min-w-0 truncate text-[12px]">
         {{ m.title }}
-        @if (!m.data) { <span style="color: var(--warn)" title="henuz uretilmedi"> ·</span> }
-        @else if (m.stale) { <span style="color: var(--warn)" title="kaynak degisti, yeniden uret"> *</span> }
+        @if (!m.data) { <span style="color: var(--warn)" title="not built yet"> ·</span> }
+        @else if (m.stale) { <span style="color: var(--warn)" title="source changed, rebuild"> *</span> }
       </span>
       <button (click)="rebuild(m, $event)" class="ml-1 shrink-0 text-[11px] opacity-0 group-hover:opacity-100"
-              style="color: var(--accent)" title="yeniden uret">↻</button>
+              style="color: var(--accent)" title="rebuild">↻</button>
     </div>
   }
   @for (f of n.folders; track f.path) {

@@ -1,5 +1,5 @@
-"""Model uretimi: kaynak veritabanindan gelir, gecici dizinde calisir,
-cikti tekrar veritabanina yazilir. Proje diskte kalici hicbir sey birakmaz."""
+"""Model build: source comes from the database, work happens in a temporary
+directory, output goes back to the database. Nothing persists on disk."""
 
 from __future__ import annotations
 
@@ -19,18 +19,18 @@ async def build(db, model_id: str, script: Path) -> dict:
     if not doc:
         raise KeyError(model_id)
     if not doc.get("ready"):
-        raise ValueError(f"{model_id}: PARTS tanimli degil")
+        raise ValueError(f"{model_id}: PARTS is not defined")
 
     tmp = Path(tempfile.mkdtemp(prefix="x3build-"))
     try:
         models_dir = tmp / "models"
         models_dir.mkdir()
-        # Model id'si klasorlu olabilir; gecici dizinde duz ad yeter.
+        # A model id may contain folders; a flat name is enough in the temp dir.
         flat = model_id.replace("/", "__")
         (models_dir / f"{flat}.py").write_text(doc["source"])
         assets_dir = tmp / "assets"
-        # Modeller STEP/STL'i <kok>/exports altina yazma egiliminde; klasoru
-        # biz aciyoruz ki model kodunun dizin olusturmasi gerekmesin.
+        # Models tend to write STEP/STL under <root>/exports; we create the
+        # directory so model code does not have to.
         (tmp / "exports").mkdir()
         assets_dir.mkdir()
 
@@ -43,20 +43,20 @@ async def build(db, model_id: str, script: Path) -> dict:
             out, _ = await asyncio.wait_for(proc.communicate(), TIMEOUT)
         except asyncio.TimeoutError:
             proc.kill()
-            raise TimeoutError(f"{model_id}: uretim {TIMEOUT}s icinde bitmedi")
+            raise TimeoutError(f"{model_id}: build did not finish within {TIMEOUT}s")
 
         log = out.decode(errors="replace").strip().splitlines()
         if proc.returncode != 0:
-            raise RuntimeError("\n".join(log[-8:]) or "uretim basarisiz")
+            raise RuntimeError("\n".join(log[-8:]) or "build failed")
 
         stored = {}
         viewer = assets_dir / f"{flat}.json"
         if not viewer.exists():
-            raise RuntimeError("viewer verisi uretilmedi")
+            raise RuntimeError("viewer payload was not produced")
         stored["viewer"] = await store.put_artifact(
             db, model_id, "viewer", viewer.read_bytes())
 
-        # Model kendi STEP/STL'ini yazdiysa onlari da sakla.
+        # If the model wrote its own STEP/STL, keep those too.
         for path in sorted((tmp / "exports").glob("*")) if (tmp / "exports").exists() else []:
             label = path.suffix.lstrip(".").lower()
             if label in ("step", "stl", "3mf"):

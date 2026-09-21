@@ -1,16 +1,16 @@
 #!/usr/bin/env python
-"""Revizyon ve model komut satiri araci.
+"""Command line tool for revisions and models.
 
-Sunucu calismiyorken de dogrudan MongoDB'ye baglanir; .env'deki MONGODB_URI
-ve MONGODB_DB kullanilir.
+Talks to MongoDB directly, so it works with the server stopped; MONGODB_URI
+and MONGODB_DB are read from .env.
 
-    python tools/revisions.py queue                 siradaki revizyonlar
-    python tools/revisions.py show <id> [-o DIZIN]  isaretli goruntuyu diske yaz
-    python tools/revisions.py done <id>             uygulandi isaretle
-    python tools/revisions.py models                model listesi
-    python tools/revisions.py source <model>        kaynak kodu yazdir
-    python tools/revisions.py save <model> <dosya>  kaynak kodu guncelle
-    python tools/revisions.py build <model>         yeniden uret (viewer/STEP/STL)
+    python tools/revisions.py queue                 queued revisions
+    python tools/revisions.py show <id> [-o DIR]    write the marked image to disk
+    python tools/revisions.py done <id>             mark as applied
+    python tools/revisions.py models                list models
+    python tools/revisions.py source <model>        print source code
+    python tools/revisions.py save <model> <file>   update source code
+    python tools/revisions.py build <model>         rebuild (viewer/STEP/STL)
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ def connect():
     load_dotenv(ROOT / ".env")
     uri = os.getenv("MONGODB_URI", "").strip()
     if not uri:
-        sys.exit("MONGODB_URI tanimli degil (.env)")
+        sys.exit("MONGODB_URI is not set (.env)")
     return AsyncIOMotorClient(uri)[os.getenv("MONGODB_DB", "assets_3d")]
 
 
@@ -42,17 +42,17 @@ async def cmd_queue(_):
     rows = [d async for d in db.revisions.find({"status": "queued"})]
     rows.sort(key=lambda d: d.get("queued_at") or d["created_at"])
     if not rows:
-        print("sirada revizyon yok")
+        print("nothing queued")
         return
     for i, d in enumerate(rows, 1):
         cam = d.get("camera") or {}
         print(f"\n#{i}  {d['_id']}")
-        print(f"   yorum : {d['comment']}")
-        print(f"   model : {d.get('model') or '-'}    parca: {d.get('part') or '-'}")
-        print(f"   zaman : {d['created_at'][:19].replace('T', ' ')}")
+        print(f"   note  : {d['comment']}")
+        print(f"   model : {d.get('model') or '-'}    part: {d.get('part') or '-'}")
+        print(f"   time  : {d['created_at'][:19].replace('T', ' ')}")
         if cam.get("position"):
-            print(f"   kamera: konum {cam['position']} hedef {cam.get('target')}")
-        print(f"   goruntu icin: python tools/revisions.py show {d['_id']}")
+            print(f"   camera: pos {cam['position']} target {cam.get('target')}")
+        print(f"   image : python tools/revisions.py show {d['_id']}")
 
 
 async def cmd_show(args):
@@ -61,15 +61,15 @@ async def cmd_show(args):
     db = connect()
     doc = await db.revisions.find_one({"_id": args.id})
     if not doc:
-        sys.exit(f"{args.id} bulunamadi")
+        sys.exit(f"{args.id} not found")
     png = await store.get_shot(db, doc["image"]["gridfs_id"])
     out = Path(args.out or tempfile.gettempdir()) / f"{args.id}.png"
     out.write_bytes(png)
-    print(f"yorum   : {doc['comment']}")
-    print(f"model   : {doc.get('model') or '-'}   parca: {doc.get('part') or '-'}")
-    print(f"durum   : {doc.get('status')}")
-    print(f"goruntu : {out}   ({len(png)} bayt)")
-    print("\nBu dosyayi Read araciyla acip kirmizi isaretlere bak.")
+    print(f"note    : {doc['comment']}")
+    print(f"model   : {doc.get('model') or '-'}   part: {doc.get('part') or '-'}")
+    print(f"status  : {doc.get('status')}")
+    print(f"image   : {out}   ({len(png)} bytes)")
+    print("\nOpen this file with the Read tool and look at the red marks.")
 
 
 async def cmd_done(args):
@@ -77,15 +77,15 @@ async def cmd_done(args):
     res = await db.revisions.update_one({"_id": args.id},
                                         {"$set": {"status": "applied"}})
     if res.matched_count == 0:
-        sys.exit(f"{args.id} bulunamadi")
-    print(f"{args.id} -> uygulandi")
+        sys.exit(f"{args.id} not found")
+    print(f"{args.id} -> applied")
 
 
 async def cmd_models(_):
     db = connect()
     async for m in db.models.find({}, {"source": 0}):
-        art = ", ".join(m.get("artifacts", {})) or "uretilmemis"
-        flag = " (BAYAT)" if m.get("stale") else ""
+        art = ", ".join(m.get("artifacts", {})) or "not built"
+        flag = " (STALE)" if m.get("stale") else ""
         print(f"{m['_id']:24s} {m.get('title',''):22s} {art}{flag}")
 
 
@@ -93,7 +93,7 @@ async def cmd_source(args):
     db = connect()
     doc = await db.models.find_one({"_id": args.model})
     if not doc:
-        sys.exit(f"{args.model} bulunamadi")
+        sys.exit(f"{args.model} not found")
     sys.stdout.write(doc["source"])
 
 
@@ -102,8 +102,8 @@ async def cmd_save(args):
 
     db = connect()
     doc = await store.save_model(db, args.model, Path(args.file).read_text())
-    print(f"{doc['_id']} kaydedildi  hash={doc['sha256'][:12]}  ready={doc['ready']}")
-    print("simdi: python tools/revisions.py build " + args.model)
+    print(f"{doc['_id']} saved  hash={doc['sha256'][:12]}  ready={doc['ready']}")
+    print("next: python tools/revisions.py build " + args.model)
 
 
 async def cmd_build(args):
@@ -112,7 +112,7 @@ async def cmd_build(args):
     db = connect()
     res = await build.build(db, args.model, ROOT / "export_model.py")
     sizes = ", ".join(f"{k} {v/1e6:.1f}MB" for k, v in res["artifacts"].items())
-    print(f"{res['model']} uretildi: {sizes}")
+    print(f"{res['model']} built: {sizes}")
 
 
 def main() -> None:

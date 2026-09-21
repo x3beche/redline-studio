@@ -1,6 +1,7 @@
-"""Makine durumu: CPU, RAM, GPU, disk.
+"""Machine status: CPU, RAM, GPU.
 
-GPU icin nvidia-smi cagriliyor; yoksa ya da yanit vermezse alan bos gecilir.
+nvidia-smi is called for the GPU; if missing or unresponsive the field is
+omitted.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ _CPU_NAME: str | None = None
 def _cpu_name() -> str:
     global _CPU_NAME
     if _CPU_NAME is None:
-        _CPU_NAME = platform.processor() or "bilinmiyor"
+        _CPU_NAME = platform.processor() or "unknown"
         try:
             for line in Path("/proc/cpuinfo").read_text().splitlines():
                 if line.startswith("model name"):
@@ -52,7 +53,7 @@ def _gpu() -> dict | None:
 
 
 def snapshot() -> dict:
-    """Yerel disk bilincli olarak yok: proje verisi diskte durmuyor."""
+    """Local disk is deliberately absent: no project data is stored on disk."""
     mem = psutil.virtual_memory()
     return {
         "host": platform.node(),
@@ -61,7 +62,7 @@ def snapshot() -> dict:
             "name": _cpu_name(),
             "cores": psutil.cpu_count(logical=False) or 0,
             "threads": psutil.cpu_count(logical=True) or 0,
-            # interval=None: son cagridan bu yana ortalama, bloklamaz
+            # interval=None: average since the last call, non-blocking
             "load": psutil.cpu_percent(interval=None),
             "freq_mhz": round(psutil.cpu_freq().current) if psutil.cpu_freq() else None,
         },

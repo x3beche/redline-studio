@@ -1,22 +1,22 @@
 import { Display, Viewer, decodeInstancedFormat, isInstancedFormat } from 'three-cad-viewer';
 import type { CameraState } from '../api';
 
-/** OCP CAD Viewer'in kendisi (three-cad-viewer). VS Code eklentisiyle ayni
- *  surum ve ayni veri formati; model.json'u Python tarafi ureiyor. */
+/** OCP CAD Viewer itself (three-cad-viewer): the same version and wire
+ *  format the VS Code extension uses; Python produces the payload. */
 export const TREE_W = 240;
 
 export class OcpViewer {
   display!: Display;
   viewer!: Viewer;
   parts: string[] = [];
-  /** resizeCadView, render() cagrilmadan once hata firlatiyor. */
+  /** resizeCadView throws before render() has been called. */
   private rendered = false;
 
   constructor(private container: HTMLElement) {}
 
-  /** Display/Viewer bir kez kurulur; model degisince sadece load() cagrilir. */
+  /** Display/Viewer is built once; switching models only calls load(). */
   init(size: { w: number; h: number }) {
-    // DisplayOptions alanlarinin cogu zorunlu; eksik birakmak derlemede patliyor.
+    // Most DisplayOptions fields are required; omitting one breaks the build.
     const opts = {
       cadWidth: Math.max(size.w - TREE_W, 320), height: Math.max(size.h - 48, 320),
       treeWidth: TREE_W, treeHeight: Math.max(size.h - 220, 200),
@@ -27,7 +27,7 @@ export class OcpViewer {
       zebraTool: true, studioTool: true,
     };
     this.display = new Display(this.container, opts);
-    // render() Display'de degil Viewer'da; dokumandaki display.render ornegi yanlis.
+    // render() lives on Viewer, not Display; the docs' display.render is wrong.
     this.viewer = new Viewer(this.display, opts, null);
   }
 
@@ -35,7 +35,7 @@ export class OcpViewer {
     if (this.rendered) this.viewer.clear();
     const envelope = await fetch(url).then(r => r.json());
     const raw = envelope.data ?? envelope;
-    // Python zarfi "instanced" formatta gelir; viewer once cozmemizi bekler.
+    // The Python envelope arrives instanced; the viewer expects it decoded.
     const shapes = isInstancedFormat(raw) ? decodeInstancedFormat(raw) : raw.shapes ?? raw;
 
     const states: Record<string, [number, number]> = {};
@@ -68,9 +68,9 @@ export class OcpViewer {
     this.rendered = true;
   }
 
-  /** Pencereyle birlikte buyusun; sabit olcu tasma ve kaydirma yaratiyordu.
-   *  Viewer kendi arac cubugunu canvas'in ustune koyuyor, onun yuksekligini
-   *  dusmezsek sahne pencereden tasip eksen gostergesini kirpiyor. */
+  /** Grow with the window; a fixed size caused overflow and page scroll.
+   *  The viewer puts its toolbar above the canvas, so its height must be
+   *  subtracted or the scene overflows and clips the axes marker. */
   resize(w: number, h: number) {
     if (!this.viewer || !this.rendered) return;
     const host = this.container.getBoundingClientRect();
@@ -80,19 +80,19 @@ export class OcpViewer {
 
     this.viewer.resizeCadView(Math.max(w - TREE_W, 320), TREE_W, ch, false);
 
-    // Viewer kendi kenarliklarini ekliyor; hesapla verilen genislik gercekte
-    // tasabiliyor ve sagdaki acilir liste panelin altinda kaliyordu.
-    // Olculen tasmayi bir kez geri al.
+    // The viewer adds its own borders, so the width we computed can overflow
+    // and hide the dropdown under the side panel. Undo the measured overflow
+    // once.
     const over = this.container.scrollWidth - w;
     if (over > 1) {
       this.viewer.resizeCadView(Math.max(w - TREE_W - over, 320), TREE_W, ch, false);
     }
   }
 
-  /** Modelde bir parca secilince haber verir.
-
-   *  Viewer secim icin disa acik bir olay yayinlamiyor; handlePick'i sarmalayip
-   *  orijinali cagirdiktan sonra adi iletiyoruz. */
+  /** Fires when a part is selected in the model.
+ *
+   *  The viewer emits no public selection event, so handlePick is wrapped:
+   *  the original runs first, then the name is forwarded. */
   onPick(cb: (name: string | null) => void) {
     const viewer = this.viewer as any;
     const original = viewer.handlePick.bind(viewer);
@@ -102,13 +102,13 @@ export class OcpViewer {
     };
   }
 
-  /** Cizim katmanini hizalamak icin canvas'in sahne icindeki konumu. */
+  /** Canvas position inside the stage, used to align the drawing layer. */
   canvasRect(): DOMRect | null {
     const c = this.container.querySelector('canvas');
     return c ? c.getBoundingClientRect() : null;
   }
 
-  /** Dondurulmus kareyi PNG data-URL olarak verir. */
+  /** Return the frozen frame as a PNG data URL. */
   async image(): Promise<string> {
     const res = await this.viewer.getImage('freeze');
     const d = (res as any)?.dataUrl ?? (res as any)?.data ?? res;
@@ -129,7 +129,7 @@ export class OcpViewer {
   }
 
   setEnabled(on: boolean) {
-    // Dondurunca fare etkilesimini kapat, cizim katmani devralsin.
+    // Disable pointer interaction while frozen so the drawing layer takes over.
     const el = this.container.querySelector('canvas') as HTMLCanvasElement | null;
     if (el) el.style.pointerEvents = on ? 'auto' : 'none';
   }

@@ -12,10 +12,11 @@ export interface Revision {
   model: string | null;
   status: RevisionStatus;
   queued_at: string | null;
+  edited_at: string | null;
   image_bytes: number;
 }
 
-/** draft = LLM gormez, queued = uygulama sirasina alindi (LLM bunlari okur). */
+/** draft = invisible to models; queued = in the apply queue (models read these). */
 export type RevisionStatus = 'draft' | 'queued' | 'applied' | 'rejected';
 
 export interface CameraState {
@@ -24,7 +25,7 @@ export interface CameraState {
   up: [number, number, number];
 }
 
-/** Backend ile tek temas noktasi. Atlas baglantisi burada DEGIL, FastAPI'de. */
+/** The only contact point with the backend. The Atlas URI lives in FastAPI. */
 @Injectable({ providedIn: 'root' })
 export class Api {
   private http = inject(HttpClient);
@@ -33,7 +34,7 @@ export class Api {
     return this.http.get<Revision[]>('/api/revisions');
   }
 
-  /** Isaretli goruntu veritabaninda; karttan dogrudan bu adresle gosteriliyor. */
+  /** The marked image lives in the database; cards render it from this URL. */
   imageUrl(id: string): string { return `/api/revisions/${id}/image`; }
 
   create(body: {
@@ -41,6 +42,11 @@ export class Api {
     camera: CameraState | null; part: string | null; model: string | null;
   }): Observable<Revision> {
     return this.http.post<Revision>('/api/revisions', body);
+  }
+
+  /** Only the text is editable; the drawing is the record and stays fixed. */
+  edit(id: string, body: { comment?: string; part?: string | null }): Observable<Revision> {
+    return this.http.put<Revision>(`/api/revisions/${id}`, body);
   }
 
   remove(id: string): Observable<unknown> {
@@ -52,7 +58,7 @@ export class Api {
   }
 }
 
-// ---------------- model katalogu ----------------
+// ---------------- model catalog ----------------
 export interface ModelEntry {
   id: string; name: string; title: string;
   ready: boolean; stale: boolean; data: boolean; data_bytes: number;
@@ -63,7 +69,7 @@ export interface FolderNode {
   folders: FolderNode[]; models: ModelEntry[];
 }
 
-// ---------------- model surum gecmisi ----------------
+// ---------------- version history ----------------
 export interface ModelVersion {
   _id: string; created_at: string; note: string;
   short: string; sha256: string;
@@ -106,7 +112,7 @@ export class Catalog {
   }
 }
 
-// ---------------- durum ----------------
+// ---------------- status ----------------
 export interface Stats {
   db?: string; collections?: number; objects?: number;
   data_bytes?: number; used_bytes: number; index_bytes?: number;

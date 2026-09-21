@@ -1,113 +1,115 @@
 ---
 name: asset-revisions
-description: Bu projede bekleyen CAD revizyon taleplerini veritabanindan oku ve uygula. Kullanici modeli tarayicida donduruyor, uzerine kirmizi kalemle ciziyor ve bir not birakiyor; talepler MongoDB'de durur, diskte degil. Su durumlarda kullan - "revizyonlari kontrol et", "sirada ne var", "bekleyen istek", "cizdigim seyi uygula", "modeli guncelle", ya da bu depoda ise baslarken ne yapilacagini ogrenmek icin.
+description: Read and apply pending CAD revision requests from the database in this project. The user freezes the model in the browser, draws on it with a red pen and leaves a note; requests live in MongoDB, not on disk. Use when the user says "check the revisions", "what's queued", "pending requests", "apply what I drew", "update the model", or when you need to learn how to start work in this repository.
 ---
 
-# CAD revizyonlarini oku ve uygula
+# Read and apply CAD revisions
 
-Bu depo bir **CAD revizyon araci**. Kullanici parametrik bir build123d modelini
-tarayicida acar, bir aciyi dondurur, uzerine kirmizi kalemle isaret koyar ve
-yorumunu yazar. Talep MongoDB'ye duser. **Diskte model dosyasi yoktur**; kaynak
-kod da uretilen dosyalar da veritabanindadir.
+This repository is a **CAD revision tool**. The user opens a parametric
+build123d model in the browser, freezes an angle, marks it with a red pen and
+writes a note. The request lands in MongoDB. **There are no model files on
+disk**; both source code and generated artifacts live in the database.
 
-## Onemli: yalnizca "sirada" olanlar isindir
+## Important: only "queued" items are your work
 
-Revizyonlarin dort durumu var:
+Revisions have four states:
 
-| Durum | Anlami |
+| Status | Meaning |
 |---|---|
-| `draft` | kullanici hala yaziyor — **sana gorunmez, dokunma** |
-| `queued` | uygulama sirasina alindi — **isin bunlar** |
-| `applied` | uygulandi |
-| `rejected` | iptal |
+| `draft` | the user is still writing — **invisible to you, leave it alone** |
+| `queued` | put in the apply queue — **this is your work** |
+| `applied` | done |
+| `rejected` | cancelled |
 
-Kullanici "siraya al" demeden bir revizyon is sayilmaz. Taslaklari kendi
-inisiyatifinle uygulamaya kalkma.
+Nothing counts as work until the user presses *queue*. Do not apply drafts on
+your own initiative.
 
-## Akis
+## Workflow
 
-Tum komutlar depo kokunden, projenin sanal ortamiyla calisir:
-
-```bash
-.venv/bin/python tools/revisions.py queue
-```
-
-### 1. Sirada ne var
+Run everything from the repository root with the project virtual environment:
 
 ```bash
 .venv/bin/python tools/revisions.py queue
 ```
 
-Her kayit icin yorum, hangi model, hangi parca, kamera acisi ve goruntu
-komutu yazar.
+### 1. See what is queued
 
-### 2. Cizimi gor — bu adimi atlama
+```bash
+.venv/bin/python tools/revisions.py queue
+```
+
+Prints the comment, which model, which part, the camera angle and the command
+to fetch the image for each record.
+
+### 2. Look at the drawing — do not skip this
 
 ```bash
 .venv/bin/python tools/revisions.py show <id>
 ```
 
-PNG'yi diske yazar ve yolunu soyler. **Read araciyla o dosyayi ac ve bak.**
-Yorum tek basina yeterli degil: "bu kisimlara" derken hangi kisim oldugunu
-yalnizca kirmizi isaretler soyler. Isaretlerin modelin neresine denk geldigini
-kamera acisiyla birlikte degerlendir.
+Writes the PNG to disk and prints the path. **Open that file with the Read
+tool.** The comment alone is not enough: when the user says "these areas", only
+the red marks say which areas. Interpret the marks together with the camera
+angle.
 
-### 3. Kaynagi al, degistir, geri yaz
+### 3. Fetch the source, change it, write it back
 
 ```bash
 .venv/bin/python tools/revisions.py source fan_pro > /tmp/fan_pro.py
-# /tmp/fan_pro.py dosyasini duzenle
+# edit /tmp/fan_pro.py
 .venv/bin/python tools/revisions.py save fan_pro /tmp/fan_pro.py
 .venv/bin/python tools/revisions.py build fan_pro
 ```
 
-`build` tessellation calistirir ve viewer/STEP/STL ciktilarini veritabanina
-yazar. Yaklasik 15 saniye surer. Uretmezsen kullanici degisikligi goremez.
+`build` runs tessellation and writes the viewer/STEP/STL output to the
+database. It takes roughly 15 seconds. Without it the user cannot see the
+change.
 
-Buyuk bir degisiklikten once surum almak isteyebilirsin:
+You may want a snapshot before a large change:
 
 ```bash
-curl -s -X POST "http://127.0.0.1:8000/api/versions?note=degisiklik%20oncesi"
+curl -s -X POST "http://127.0.0.1:8000/api/versions?note=before%20change"
 ```
 
-### 4. Isaretle
+### 4. Mark it
 
 ```bash
 .venv/bin/python tools/revisions.py done <id>
 ```
 
-Sadece is gercekten bitince. Emin degilsen kullaniciya sor.
+Only once the work is genuinely finished. When unsure, ask the user.
 
-## Modeli degistirirken
+## When changing a model
 
-Model modulu su sozlesmeyi saglar; bozarsan katalogda gorunmez:
+A model module must satisfy this contract or it will not appear in the catalog:
 
 ```python
-TITLE = "Fan 120 mm"          # arayuzdeki ad
-PARTS = [frame, rotor, pins]  # tessellate edilecek build123d nesneleri
-NAMES = ["govde", "pervane", "pinler"]
+TITLE = "Fan 120 mm"                      # name shown in the UI
+PARTS = [frame, rotor, pins]              # build123d objects to tessellate
+NAMES = ["housing", "impeller", "pins"]
 ```
 
-Modeller parametriktir. Bir olcu istendiginde sabiti degistir, geometriyi elle
-yeniden yazma. Degisiklikten sonra hacim, gabari ve girisim degerlerini
-kontrol et — model dosyalari bunlari zaten yazdirir.
+Models are parametric. When a dimension is requested, change the constant
+rather than rewriting the geometry. After a change, check volume, bounding box
+and interference — the model files already print these.
 
-## Bu kod tabaninin tuzaklari
+## Gotchas in this codebase
 
-- **Tessellation onbellegi**: sekilde zaten triangulation varsa
-  `linear_deflection` **sessizce yok sayilir**. Once `BRepTools.Clean_s`.
-- **`Plane.rotated()` global aci alir**, yerel degil. Yerel eksende dondurdugunu
-  sanmak sessiz geometri hatasi uretir.
-- **Loft kesitleri poligon olmali**: elips telleriyle OCCT kesitleri
-  eslestiremeyip `NCollection_DataMap::Find` atar.
-- **`Compound(children=[...])` parcalari yeniden ebeveynler**; yardimci compound
-  kurmak onlari onceki compound'dan koparir ve gabariyi bozar.
+- **Tessellation cache**: `linear_deflection` is **silently ignored** when the
+  shape already carries a triangulation. Call `BRepTools.Clean_s` first.
+- **`Plane.rotated()` takes global angles**, not local. Assuming local produces
+  silently wrong geometry.
+- **Loft sections must be polygons**: with ellipse wires OCCT fails to match
+  sections and raises `NCollection_DataMap::Find`.
+- **`Compound(children=[...])` reparents its children**; building a helper
+  compound detaches them from the previous one and corrupts the bounding box.
 
-## Dogrudan veritabani
+## Talking to the database directly
 
-Arac yetmezse koleksiyonlar: `revisions`, `models`, `folders`,
-`model_versions`; GridFS kovalari `model_files` (uretilen dosyalar, gzip'li) ve
-`shots` (revizyon goruntuleri). Baglanti `.env` icindeki `MONGODB_URI`.
+If the tool is not enough, the collections are `revisions`, `models`,
+`folders`, `model_versions`; the GridFS buckets are `model_files` (generated
+artifacts, gzipped) and `shots` (revision images). The connection string is
+`MONGODB_URI` in `.env`.
 
-Sunucu ayaktaysa HTTP de var: `GET /api/queue`,
+With the server running there is also HTTP: `GET /api/queue`,
 `GET /api/revisions/{id}/image`, `POST /api/models/{id}/build`.

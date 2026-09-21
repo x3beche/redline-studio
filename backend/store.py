@@ -1,15 +1,15 @@
-"""Projeye ait her sey MongoDB'de durur; yerel disk yalnizca gecici calisma alani.
+"""Everything project-related lives in MongoDB; local disk is scratch space only.
 
-Koleksiyonlar
-    folders        {_id: yol, name, parent}
-    models         {_id: yol, folder, name, title, source, sha256, updated_at,
+Collections
+    folders        {_id: path, name, parent}
+    models         {_id: path, folder, name, title, source, sha256, updated_at,
                     artifacts: {viewer|step|stl: {gridfs_id, bytes, sha256}}}
     revisions      {..., image: {gridfs_id, bytes}}
-    model_versions surum gecmisi (versions.py)
+    model_versions version history (versions.py)
 
-GridFS kovalari
-    model_files    uretilen viewer/step/stl dosyalari (gzip'li)
-    shots          revizyon goruntuleri (ham PNG)
+GridFS buckets
+    model_files    generated viewer/step/stl files (gzipped)
+    shots          revision images (raw PNG)
 """
 
 from __future__ import annotations
@@ -32,14 +32,14 @@ def bucket(db, name: str):
     return AsyncIOMotorGridFSBucket(db, bucket_name=name)
 
 
-# ---------------- kaynak koddan meta okuma ----------------
+# ---------------- reading metadata from source ----------------
 def read_meta(source: str) -> dict:
-    """TITLE ve PARTS'i calistirmadan okur; import etmek pahali ve riskli."""
+    """Read TITLE and PARTS without executing; importing is expensive and risky."""
     title, has_parts = None, False
     try:
         tree = ast.parse(source)
     except SyntaxError:
-        return {"title": None, "ready": False, "error": "sozdizimi hatasi"}
+        return {"title": None, "ready": False, "error": "syntax error"}
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
@@ -53,33 +53,33 @@ def read_meta(source: str) -> dict:
     return {"title": title, "ready": has_parts, "error": None}
 
 
-# ---------------- klasorler ----------------
+# ---------------- folders ----------------
 async def create_folder(db, parent: str, name: str) -> str:
     if not SAFE.match(name):
-        raise ValueError("klasor adi yalnizca harf, rakam, - ve _ icerebilir")
+        raise ValueError("folder name may only contain letters, digits, - and _")
     path = f"{parent}/{name}" if parent else name
     if await db.folders.find_one({"_id": path}):
-        raise FileExistsError(f"{path} zaten var")
+        raise FileExistsError(f"{path} already exists")
     if parent and not await db.folders.find_one({"_id": parent}):
-        raise ValueError(f"ust klasor yok: {parent}")
+        raise ValueError(f"parent folder missing: {parent}")
     await db.folders.insert_one({"_id": path, "name": name, "parent": parent})
     return path
 
 
 async def delete_folder(db, path: str) -> None:
     if await db.models.count_documents({"folder": path}):
-        raise ValueError("klasor bos degil")
+        raise ValueError("folder is not empty")
     if await db.folders.count_documents({"parent": path}):
-        raise ValueError("klasor bos degil")
+        raise ValueError("folder is not empty")
     await db.folders.delete_one({"_id": path})
 
 
-# ---------------- modeller ----------------
+# ---------------- models ----------------
 async def save_model(db, model_id: str, source: str) -> dict:
-    """Kaynak kodu yazar/gunceller. Uretilen dosyalar bayatlar, isaretlenir."""
+    """Write or update source code. Generated artifacts go stale and are flagged."""
     folder, _, name = model_id.rpartition("/")
     if not SAFE.match(name):
-        raise ValueError("model adi yalnizca harf, rakam, - ve _ icerebilir")
+        raise ValueError("model name may only contain letters, digits, - and _")
     meta = read_meta(source)
     doc = {
         "_id": model_id, "folder": folder, "name": name,
@@ -113,7 +113,7 @@ async def delete_model(db, model_id: str) -> None:
 
 
 async def put_artifact(db, model_id: str, label: str, data: bytes) -> dict:
-    """Uretilen dosyayi gzip'leyip GridFS'e koyar, eskisini siler."""
+    """Gzip the generated artifact into GridFS and drop the previous one."""
     files = bucket(db, "model_files")
     doc = await db.models.find_one({"_id": model_id})
     old = (doc or {}).get("artifacts", {}).get(label)
@@ -141,7 +141,7 @@ async def get_artifact(db, model_id: str, label: str) -> bytes:
     return gzip.decompress(await stream.read())
 
 
-# ---------------- revizyon goruntuleri ----------------
+# ---------------- revision images ----------------
 async def put_shot(db, png: bytes) -> dict:
     fid = await bucket(db, "shots").upload_from_stream("shot.png", png)
     return {"gridfs_id": fid, "bytes": len(png)}
@@ -152,7 +152,7 @@ async def get_shot(db, gridfs_id) -> bytes:
     return await stream.read()
 
 
-# ---------------- katalog agaci ----------------
+# ---------------- catalog tree ----------------
 async def catalog(db) -> dict:
     folders = [f async for f in db.folders.find({})]
     models = [m async for m in db.models.find({}, {"source": 0})]

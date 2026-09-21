@@ -1,8 +1,8 @@
 @import "tailwindcss";
 @import "./fonts.css";
 
-/* Renkler ve olculer three-cad-viewer'in kendi CSS'inden alindi; arayuzun
-   geri kalani goruntuleyiciyle ayni dili konussun diye tahmin edilmedi. */
+/* Colours and metrics are lifted from three-cad-viewer's own CSS rather than
+   guessed, so the rest of the UI speaks the same visual language. */
 :root {
   --surface:      #444;                 /* --tcv-bg-color (dark) */
   --surface-2:    #333;                 /* --tcv-dropdown-bg */
@@ -18,17 +18,17 @@
   --ok:           #5c8a5c;
 }
 
-/* Tek ekran uygulama: sayfa asla kaymaz, kaydirma yalnizca panel icinde. */
+/* Single-screen app: the page never scrolls; scrolling happens inside panels. */
 html, body { height: 100%; overflow: hidden; }
 body {
   margin: 0;
   background: var(--surface);
   color: var(--ink);
-  font: 13px/1.45 'Rajdhani', sans-serif;
+  font: 13px/1.45 'IBM Plex Sans', system-ui, sans-serif;
   overscroll-behavior: none;
 }
 
-/* Goruntuleyicinin dugme dilini taklit eden ortak stil */
+/* Shared style mirroring the viewer's own button language */
 .tcv-btn {
   background: var(--surface);
   color: var(--ink);
@@ -69,7 +69,7 @@ body {
   letter-spacing: .04em;
 }
 
-/* Kart icindeki kucuk eylemler: gercek dugme gibi davransin. */
+/* Small in-card actions that behave like real buttons. */
 .tcv-chip {
   display: inline-flex;
   align-items: center;
@@ -89,7 +89,7 @@ body {
 .tcv-chip:hover { background: var(--hover); color: var(--ink); }
 .tcv-chip:active {
   background: var(--pressed);
-  transform: translateY(1px);       /* basilma hissi */
+  transform: translateY(1px);       /* pressed feel */
   border-color: var(--ink-dim);
 }
 .tcv-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -97,21 +97,28 @@ body {
 .tcv-chip-ok     { color: var(--ok); }
 .tcv-chip-danger { color: var(--danger); }
 
-/* Ust duzey dugmelere de ayni basilma hissi */
+/* Same pressed feel on the top-level buttons */
 .tcv-btn { transition: background .12s, transform .06s; }
 .tcv-btn:active:not(:disabled) { transform: translateY(1px); }
 
-/* ince kaydirma cubugu, panel icinde kalsin */
+/* Thin scrollbar, contained within the panel */
 .tcv-scroll { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 
-/* Destiny tarzi genis harf araligi olan marka kilidi */
-.brand {
-  font-family: 'Rajdhani', sans-serif;
-  font-weight: 700;
+/* Wordmark: instrument-panel plain. No flourishes, restrained tracking. */
+.brand-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  color: var(--ink);
   text-transform: uppercase;
 }
-.brand-word { letter-spacing: .38em; font-size: 12px; color: var(--ink); }
-.brand-sub  { letter-spacing: .30em; font-size: 9px;  color: var(--ink-dim);
-              font-weight: 600; }
-.brand-num  { font-size: 19px; line-height: 1; color: var(--accent); font-weight: 700; }
-.brand-rule { width: 1px; height: 18px; background: var(--line); }
+.brand-tag {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .14em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+}
+/* Hashes, ids and figures read as data, not prose. */
+.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }

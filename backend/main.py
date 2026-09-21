@@ -1,10 +1,10 @@
 """X3 Studios Asset Manager - API.
 
-Proje verisinin tamami MongoDB'de durur: model kaynaklari, uretilen viewer
-dosyalari, revizyon goruntuleri ve surum gecmisi. Yerel disk yalnizca model
-uretimi sirasinda gecici calisma alani olarak kullanilir ve is bitince silinir.
+All project data lives in MongoDB: model sources, generated viewer payloads,
+revision images and version history. Local disk is used only as scratch space
+while a model is built, and is removed when the build finishes.
 
-Baglanti dizesi sadece burada okunur; arayuze hicbir sekilde gecmez.
+The connection string is read here alone; it never reaches the frontend.
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
 MONGODB_DB = os.getenv("MONGODB_DB", "assets_3d")
 QUOTA_MB = float(os.getenv("STORAGE_QUOTA_MB", "512"))
 
-# draft  : kullanici yaziyor, LLM gormez
-# queued : uygulama sirasina alindi, LLM bunlari okur
+# draft  : the user is still writing, models do not see it
+# queued : in the apply queue, models read these
 STATUSES = ("draft", "queued", "applied", "rejected")
 ORDER = {"queued": 0, "draft": 1, "applied": 2, "rejected": 3}
 
@@ -45,17 +45,17 @@ _client = None
 
 
 def db():
-    """Veritabani yoksa uygulama calismaz; her sey orada duruyor."""
+    """Without the database there is no app; everything lives there."""
     global _client
     if not MONGODB_URI:
-        raise HTTPException(503, "MONGODB_URI tanimli degil (.env)")
+        raise HTTPException(503, "MONGODB_URI is not set (.env)")
     if _client is None:
         from motor.motor_asyncio import AsyncIOMotorClient
         _client = AsyncIOMotorClient(MONGODB_URI)
     return _client[MONGODB_DB]
 
 
-# ---------------- durum ----------------
+# ---------------- status ----------------
 @app.get("/api/health")
 async def health():
     try:
@@ -64,7 +64,7 @@ async def health():
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(503, f"veritabanina ulasilamiyor: {exc}") from exc
+        raise HTTPException(503, f"database unreachable: {exc}") from exc
 
 
 @app.get("/api/stats")
@@ -72,8 +72,8 @@ async def stats():
     d = db()
     ds = await d.command("dbStats")
     by_status = {s: await d.revisions.count_documents({"status": s}) for s in STATUSES}
-    # Yeni olusturulmus bir veritabaninda storageSize bir sure 0 raporlanir;
-    # mantiksal boyut her zaman dolu oldugu icin buyugunu aliyoruz.
+    # A freshly created database reports storageSize as 0 for a while; the
+    # logical size is always populated, so take whichever is larger.
     used = max(int(ds.get("storageSize", 0)),
                int(ds.get("dataSize", 0))) + int(ds.get("indexSize", 0))
     quota = int(QUOTA_MB * 1024 * 1024)
@@ -97,7 +97,7 @@ async def system():
     return sysinfo.snapshot()
 
 
-# ---------------- katalog ----------------
+# ---------------- catalog ----------------
 @app.get("/api/catalog")
 async def get_catalog():
     return await store.catalog(db())
@@ -120,7 +120,7 @@ async def drop_folder(path: str):
     return {"deleted": path}
 
 
-# ---------------- modeller ----------------
+# ---------------- models ----------------
 class ModelIn(BaseModel):
     source: str = Field(min_length=1)
 
@@ -167,7 +167,7 @@ async def model_viewer(model_id: str):
     try:
         data = await store.get_artifact(db(), model_id, "viewer")
     except KeyError as exc:
-        raise HTTPException(404, f"{model_id}: once uret") from exc
+        raise HTTPException(404, f"{model_id}: build it first") from exc
     return Response(content=data, media_type="application/json")
 
 
@@ -182,7 +182,7 @@ async def model_file(model_id: str, label: str):
                     headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
-# ---------------- surum gecmisi ----------------
+# ---------------- version history ----------------
 @app.get("/api/versions")
 async def list_versions():
     return await versions.listing(db())
@@ -207,7 +207,7 @@ async def restore_version(version_id: str):
         raise HTTPException(404, str(exc)) from exc
 
 
-# ---------------- revizyonlar ----------------
+# ---------------- revisions ----------------
 class RevisionIn(BaseModel):
     comment: str = Field(min_length=1, max_length=4000)
     image_png: str
@@ -220,6 +220,7 @@ def _out(d: dict) -> dict:
     return {"id": d["_id"], "created_at": d["created_at"], "comment": d["comment"],
             "camera": d.get("camera"), "part": d.get("part"), "model": d.get("model"),
             "status": d.get("status", "draft"), "queued_at": d.get("queued_at"),
+            "edited_at": d.get("edited_at"),
             "image_bytes": (d.get("image") or {}).get("bytes", 0)}
 
 
@@ -232,7 +233,7 @@ async def create_revision(body: RevisionIn):
     try:
         png = base64.b64decode(raw, validate=True)
     except Exception as exc:
-        raise HTTPException(400, f"gecersiz PNG: {exc}") from exc
+        raise HTTPException(400, f"invalid PNG: {exc}") from exc
 
     d = db()
     rid = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
@@ -264,7 +265,7 @@ async def list_revisions(status: str | None = None):
 
 @app.get("/api/queue")
 async def queue():
-    """LLM'in okudugu liste: yalnizca uygulama sirasina alinmis revizyonlar."""
+    """What models read: queued revisions only."""
     return await list_revisions(status="queued")
 
 
@@ -276,6 +277,32 @@ async def revision_image(rid: str):
         raise HTTPException(404, rid)
     png = await store.get_shot(d, doc["image"]["gridfs_id"])
     return Response(content=png, media_type="image/png")
+
+
+class RevisionEdit(BaseModel):
+    """Only the text is editable; the drawing is the record and stays fixed."""
+    comment: str | None = Field(default=None, min_length=1, max_length=4000)
+    part: str | None = None
+
+
+@app.put("/api/revisions/{rid}")
+async def edit_revision(rid: str, body: RevisionEdit):
+    from datetime import datetime, timezone
+
+    patch: dict = {}
+    if body.comment is not None:
+        patch["comment"] = body.comment.strip()
+    if body.part is not None:
+        patch["part"] = body.part or None
+    if not patch:
+        raise HTTPException(400, "nothing to change")
+    patch["edited_at"] = datetime.now(timezone.utc).isoformat()
+
+    res = await db().revisions.update_one({"_id": rid}, {"$set": patch})
+    if res.matched_count == 0:
+        raise HTTPException(404, rid)
+    doc = await db().revisions.find_one({"_id": rid})
+    return _out(doc)
 
 
 @app.patch("/api/revisions/{rid}")
@@ -308,7 +335,7 @@ async def drop_revision(rid: str):
     return {"deleted": rid}
 
 
-# derlenmis arayuz (varsa)
+# compiled frontend, when present
 _dist = ROOT / "frontend" / "dist" / "frontend" / "browser"
 if _dist.exists():
     app.mount("/", StaticFiles(directory=_dist, html=True), name="ui")

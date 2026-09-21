@@ -1,8 +1,8 @@
-"""Surum gecmisi: son surum + onceki 10 kayit.
+"""Version history: the latest snapshot plus the previous 10.
 
-Bir surum tum modellerin KAYNAK kodunu tutar. Uretilen viewer/STEP/STL
-dosyalari kopyalanmaz: onlar kaynaktan tureyen ciktilardir, geri donduktan
-sonra yeniden uretilir. Boylece gecmis kilobaytlarla olculur.
+A version holds the SOURCE code of every model. Generated viewer/STEP/STL
+files are not copied: they are derived artifacts and get rebuilt after a
+rollback. That keeps history measured in kilobytes.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
 
-KEEP = 10                    # son surum haric saklanan gecmis sayisi
+KEEP = 10                    # history kept beyond the latest snapshot
 
 
 def _now() -> str:
@@ -20,7 +20,7 @@ def _now() -> str:
 async def snapshot(db, note: str = "") -> dict:
     models = [m async for m in db.models.find({}, {"_id": 1, "source": 1, "title": 1})]
     if not models:
-        raise ValueError("kaydedilecek model yok")
+        raise ValueError("no models to snapshot")
 
     digest = hashlib.sha256()
     entries = []
@@ -57,19 +57,19 @@ async def _prune(db) -> int:
 
 
 async def listing(db) -> list[dict]:
-    """Kaynak metinleri haric ozet liste."""
+    """Summary list, excluding source text."""
     rows = [d async for d in db.model_versions.find(
         {}, {"models.source": 0}).sort("created_at", -1)]
     return rows
 
 
 async def restore(db, version_id: str) -> dict:
-    """Bir surumun kaynaklarini geri yazar; once mevcut hali yedekler."""
+    """Restore a version's sources, snapshotting the current state first."""
     doc = await db.model_versions.find_one({"_id": version_id})
     if not doc:
         raise KeyError(version_id)
 
-    backup = await snapshot(db, note=f"{version_id} geri yuklenmeden once")
+    backup = await snapshot(db, note=f"before restoring {version_id}")
 
     for f in doc.get("folders", []):
         await db.folders.replace_one({"_id": f["_id"]}, f, upsert=True)
@@ -83,4 +83,4 @@ async def restore(db, version_id: str) -> dict:
 
     return {"restored": version_id, "short": doc["short"],
             "backup": backup["_id"], "models": touched,
-            "note": "uretilen dosyalar bayat; modelleri yeniden uretin"}
+            "note": "generated artifacts are stale; rebuild the models"}

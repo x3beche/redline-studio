@@ -1,10 +1,10 @@
-"""Bir build123d modelini OCP CAD Viewer formatina cevirir.
+"""Convert a build123d model into the OCP CAD Viewer format.
 
-    python export_model.py --models-dir DIR --assets-dir DIR <model_adi>
+    python export_model.py --models-dir DIR --assets-dir DIR <model_name>
 
-Kaynak dosyalar ve ciktilar disaridan verilir; boylece backend bu scripti
-gecici bir dizinde calistirip sonucu veritabanina koyabiliyor. Modul sozlesmesi:
-    TITLE (istege bagli), PARTS (zorunlu), NAMES (istege bagli)
+Source and output directories are supplied from outside so the backend can run
+this script in a temporary directory and store the result in the database.
+Module contract: TITLE (optional), PARTS (required), NAMES (optional).
 """
 
 from __future__ import annotations
@@ -33,8 +33,8 @@ def export(models_dir: Path, assets_dir: Path, name: str) -> Path:
     module = load(models_dir, name)
     parts = getattr(module, "PARTS", None)
     if not parts:
-        raise AttributeError(f"{name}: PARTS tanimli degil")
-    names = getattr(module, "NAMES", None) or [f"parca_{i}" for i in range(len(parts))]
+        raise AttributeError(f"{name}: PARTS is not defined")
+    names = getattr(module, "NAMES", None) or [f"part_{i}" for i in range(len(parts))]
 
     envelope, _ = _convert(*parts, names=names)
     out = assets_dir / f"{name}.json"
