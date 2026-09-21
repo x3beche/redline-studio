@@ -28,6 +28,14 @@ body {
   overscroll-behavior: none;
 }
 
+/* The viewer's WebGL context is alpha:true, so the 3D backdrop is ours to
+   set in CSS. It has to go on .tcv_cad_view - the canvas's own parent -
+   because the wrappers above it paint an opaque grey over anything further
+   out. A cool near-white reads better for CAD than the flat grey. */
+.tcv_cad_view {
+  background: linear-gradient(180deg, #f4f7fb 0%, #dfe7f1 55%, #ccd7e6 100%) !important;
+}
+
 /* Shared style mirroring the viewer's own button language */
 .tcv-btn {
   background: var(--surface);

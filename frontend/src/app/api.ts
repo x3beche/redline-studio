@@ -13,6 +13,7 @@ export interface Revision {
   status: RevisionStatus;
   queued_at: string | null;
   edited_at: string | null;
+  archived: boolean;
   image_bytes: number;
 }
 
@@ -30,15 +31,28 @@ export interface CameraState {
 export class Api {
   private http = inject(HttpClient);
 
-  list(): Observable<Revision[]> {
-    return this.http.get<Revision[]>('/api/revisions');
+  list(archived = false): Observable<Revision[]> {
+    return this.http.get<Revision[]>(`/api/revisions?archived=${archived}`);
+  }
+
+  settings(): Observable<{ auto_archive: boolean }> {
+    return this.http.get<{ auto_archive: boolean }>('/api/settings');
+  }
+
+  setAutoArchive(value: boolean): Observable<{ auto_archive: boolean }> {
+    return this.http.put<{ auto_archive: boolean }>(
+      `/api/settings?auto_archive=${value}`, {});
+  }
+
+  archive(id: string, value: boolean): Observable<unknown> {
+    return this.http.patch(`/api/revisions/${id}/archive?value=${value}`, {});
   }
 
   /** The marked image lives in the database; cards render it from this URL. */
   imageUrl(id: string): string { return `/api/revisions/${id}/image`; }
 
   create(body: {
-    comment: string; image_png: string;
+    comment: string; image_png: string | null;
     camera: CameraState | null; part: string | null; model: string | null;
   }): Observable<Revision> {
     return this.http.post<Revision>('/api/revisions', body);
@@ -66,7 +80,7 @@ export class Api {
 export interface ModelEntry {
   id: string; name: string; title: string;
   ready: boolean; stale: boolean; data: boolean; data_bytes: number;
-  updated_at: string; sha256: string;
+  updated_at: string; built_at: string | null; sha256: string;
 }
 export interface FolderNode {
   name: string; path: string;

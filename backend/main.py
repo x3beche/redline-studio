@@ -293,7 +293,8 @@ async def finish_run(status: str = "done"):
 # ---------------- revisions ----------------
 class RevisionIn(BaseModel):
     comment: str = Field(min_length=1, max_length=4000)
-    image_png: str
+    # Optional: a note about a part does not need a drawing.
+    image_png: str | None = None
     camera: dict | None = None
     part: str | None = None
     model: str | None = None
@@ -303,7 +304,7 @@ def _out(d: dict) -> dict:
     return {"id": d["_id"], "created_at": d["created_at"], "comment": d["comment"],
             "camera": d.get("camera"), "part": d.get("part"), "model": d.get("model"),
             "status": d.get("status", "draft"), "queued_at": d.get("queued_at"),
-            "edited_at": d.get("edited_at"),
+            "edited_at": d.get("edited_at"), "archived": bool(d.get("archived")),
             "image_bytes": (d.get("image") or {}).get("bytes", 0)}
 
 
@@ -312,13 +313,15 @@ async def create_revision(body: RevisionIn):
     from datetime import datetime, timezone
     import uuid
 
-    raw = body.image_png.split(",", 1)[-1]
-    try:
-        png = base64.b64decode(raw, validate=True)
-    except Exception as exc:
-        raise HTTPException(400, f"invalid PNG: {exc}") from exc
-
     d = db()
+    image = None
+    if body.image_png:
+        raw = body.image_png.split(",", 1)[-1]
+        try:
+            png = base64.b64decode(raw, validate=True)
+        except Exception as exc:
+            raise HTTPException(400, f"invalid PNG: {exc}") from exc
+        image = await store.put_shot(d, png)
     rid = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
     doc = {
         "_id": rid,
@@ -326,7 +329,7 @@ async def create_revision(body: RevisionIn):
         "comment": body.comment, "camera": body.camera,
         "part": body.part, "model": body.model,
         "status": "draft", "queued_at": None,
-        "image": await store.put_shot(d, png),
+        "image": image,
     }
     await d.revisions.insert_one(doc)
     return _out(doc)
@@ -340,16 +343,19 @@ def _sort_key(d: dict):
 
 
 @app.get("/api/revisions")
-async def list_revisions(status: str | None = None):
-    rows = [d async for d in db().revisions.find({"status": status} if status else {})]
+async def list_revisions(status: str | None = None, archived: bool = False):
+    """Archived revisions are kept but hidden; pass archived=true to see them."""
+    query: dict = {} if status is None else {"status": status}
+    query["archived"] = True if archived else {"$ne": True}
+    rows = [d async for d in db().revisions.find(query)]
     rows.sort(key=_sort_key)
     return [_out(d) for d in rows]
 
 
 @app.get("/api/queue")
 async def queue():
-    """What models read: queued revisions only."""
-    return await list_revisions(status="queued")
+    """What models read: queued revisions only, archived ones excluded."""
+    return await list_revisions(status="queued", archived=False)
 
 
 @app.get("/api/revisions/{rid}")
@@ -396,6 +402,34 @@ async def edit_revision(rid: str, body: RevisionEdit):
     return _out(doc)
 
 
+# ---------------- settings ----------------
+# Kept server-side so the CLI honours it too, not just the browser.
+SETTINGS_ID = "app"
+DEFAULT_SETTINGS = {"auto_archive": False}
+
+
+@app.get("/api/settings")
+async def get_settings():
+    doc = await db().settings.find_one({"_id": SETTINGS_ID}) or {}
+    return {**DEFAULT_SETTINGS, **{k: v for k, v in doc.items() if k != "_id"}}
+
+
+@app.put("/api/settings")
+async def put_settings(auto_archive: bool):
+    await db().settings.update_one({"_id": SETTINGS_ID},
+                                   {"$set": {"auto_archive": auto_archive}},
+                                   upsert=True)
+    return await get_settings()
+
+
+@app.patch("/api/revisions/{rid}/archive")
+async def archive_revision(rid: str, value: bool = True):
+    res = await db().revisions.update_one({"_id": rid}, {"$set": {"archived": value}})
+    if res.matched_count == 0:
+        raise HTTPException(404, rid)
+    return {"id": rid, "archived": value}
+
+
 @app.patch("/api/revisions/{rid}")
 async def set_status(rid: str, status: str):
     from datetime import datetime, timezone
@@ -405,6 +439,9 @@ async def set_status(rid: str, status: str):
     patch = {"status": status,
              "queued_at": datetime.now(timezone.utc).isoformat()
              if status == "queued" else None}
+    # With auto-archive on, finishing a task also files the card away.
+    if status == "applied" and (await get_settings())["auto_archive"]:
+        patch["archived"] = True
     res = await db().revisions.update_one({"_id": rid}, {"$set": patch})
     if res.matched_count == 0:
         raise HTTPException(404, rid)

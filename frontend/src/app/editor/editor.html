@@ -179,7 +179,9 @@
 
   <div #stage class="relative min-w-0 flex-1 overflow-hidden rounded"
        style="border: 1px solid var(--line)">
-    <div #host class="absolute inset-0"></div>
+    <!-- 8 px breathing room under the viewer, matching the top. -->
+    <div #host class="absolute left-0 right-0 top-0" style="bottom: 8px"
+         (pointerdown)="releaseCamera()"></div>
     <canvas #overlay class="absolute"
             [class.pointer-events-none]="!frozen()"
             [class.cursor-crosshair]="frozen()"
@@ -189,6 +191,30 @@
     @if (frozen()) {
       <div class="pointer-events-none absolute right-3 top-3 rounded px-2 py-0.5 text-[11px] font-medium"
            style="background: var(--danger); color: #fff">FROZEN</div>
+    }
+
+    <!-- While the scene is held at a revision's camera, show what was asked
+         for right there. It disappears as soon as the view is moved. -->
+    @if (focused(); as fv) {
+      <div class="tcv-card absolute right-3 top-3 w-64 overflow-hidden p-0"
+           style="box-shadow: 0 6px 20px rgba(0,0,0,.35)">
+        <div class="flex items-center justify-between px-2 py-1"
+             style="background: var(--surface); border-bottom: 1px solid var(--line)">
+          <span class="text-[10px] uppercase tracking-wide" style="color: var(--ink-dim)">
+            revision · {{ label(fv.status) }}
+          </span>
+          <button (click)="releaseCamera()" class="tcv-chip px-1.5 py-0" title="dismiss">×</button>
+        </div>
+        @if (fv.image_bytes) {
+          <img [src]="imageUrl(fv)" alt="revision drawing"
+               class="block h-32 w-full bg-white object-contain">
+        }
+        <p class="px-2 py-1.5 text-[11px] leading-snug">{{ fv.comment }}</p>
+        <p class="px-2 pb-1.5 text-[10px]" style="color: var(--ink-dim)">
+          {{ fv.created_at.slice(0, 16).replace('T', ' ') }}
+          @if (fv.part) { · {{ fv.part }} }
+        </p>
+      </div>
     }
     @if (glError()) {
       <div class="absolute inset-0 flex items-center justify-center p-8">
@@ -283,13 +309,13 @@
                 (input)="comment.set($any($event.target).value)"
                 placeholder="e.g. chamfer this corner, 2 mm"
                 class="tcv-field w-full resize-none p-1.5"></textarea>
-      <button (click)="save()" [disabled]="saving() || !frozen()"
+      <button (click)="save()" [disabled]="saving()"
               class="tcv-btn tcv-btn-accent mt-2 w-full py-1.5">
         {{ saving() ? 'saving…' : 'Save as draft' }}
       </button>
       <p class="mt-1 text-[11px]" style="color: var(--ink-dim)">
-        {{ frozen() ? 'Drafts stay invisible to models until you queue them.'
-                    : 'Freeze the model before saving.' }}
+        {{ frozen() ? 'Saved with the drawing. Drafts stay invisible until queued.'
+                    : 'Saved as a note. Freeze first if you want to draw on it.' }}
       </p>
     </div>
 
@@ -300,7 +326,18 @@
           <span style="color: var(--accent)"> · {{ queueCount() }} queued</span>
         }
       </span>
-      <button (click)="refresh()" class="text-[11px]" style="color: var(--ink-dim)">refresh</button>
+      <span class="flex items-center gap-1">
+        <button (click)="foldAll()" class="tcv-chip px-1.5 py-0" title="fold all">–</button>
+        <button (click)="unfoldAll()" class="tcv-chip px-1.5 py-0" title="unfold all">+</button>
+        <button (click)="toggleAutoArchive()" class="tcv-chip px-1.5 py-0"
+                [style.color]="autoArchive() ? 'var(--ok)' : 'var(--ink-dim)'"
+                [style.border-color]="autoArchive() ? 'var(--ok)' : 'var(--line)'"
+                title="archive automatically once a revision is applied">auto</button>
+        <button (click)="toggleArchivedView()" class="tcv-chip px-1.5 py-0"
+                [style.color]="showArchived() ? 'var(--accent)' : 'var(--ink-dim)'"
+                title="show archived">arch</button>
+        <button (click)="refresh()" class="tcv-chip px-1.5 py-0" title="refresh">↻</button>
+      </span>
     </div>
 
     <ul class="tcv-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-4">
@@ -320,7 +357,12 @@
                 </select>
               </div>
             } @else {
-              <p class="text-[12px] leading-snug">
+              <p class="min-w-0 flex-1 cursor-pointer text-[12px] leading-snug"
+                 [class.truncate]="isFolded(r.id)"
+                 (click)="toggleFold(r.id)" title="fold / unfold">
+                <span class="mr-1" style="color: var(--ink-dim)">
+                  {{ isFolded(r.id) ? '▸' : '▾' }}
+                </span>
                 @if (r.status === 'queued') {
                   <span class="mr-1 rounded px-1.5 py-0.5 text-[10px] font-bold"
                         style="background: var(--accent); color: #12222e">{{ queueIndex(r) }}</span>
@@ -328,37 +370,44 @@
                 {{ r.comment }}
               </p>
             }
+            @if (r.archived) {
+              <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase"
+                    style="background: var(--line)">arch</span>
+            }
             <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase"
                   [style.background]="badge(r.status)">{{ label(r.status) }}</span>
           </div>
-          <button (click)="openShot(r)" class="mt-1.5 block w-full overflow-hidden rounded"
-                  style="border: 1px solid var(--line)" title="enlarge">
-            <img [src]="imageUrl(r)" alt="revision drawing"
-                 class="block h-20 w-full bg-white object-contain" loading="lazy">
-          </button>
-          <!-- Progress belongs to the revision being worked on, so it lives
+          <!-- Progress stays visible when the card is folded, so it lives
                in that card rather than in a bar detached from it. -->
+          <!-- Only while the run is live: a finished run left a stale bar
+               sitting on an old card, showing 0% or "done" forever. -->
           @if (run(); as rn) {
-            @if (rn.revision === r.id) {
+            @if (rn.revision === r.id && rn.status === 'running') {
               <div class="mt-1.5">
                 <div class="flex items-center gap-1.5 text-[10px]">
-                  <span class="h-1.5 w-1.5 shrink-0 rounded-full"
-                        [style.background]="rn.status === 'running' ? 'var(--accent)'
-                                          : rn.status === 'failed' ? 'var(--danger)' : 'var(--ok)'"></span>
+                  <span class="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
+                        style="background: var(--accent)"></span>
                   <span class="truncate" style="color: var(--ink-dim)">{{ rn.title }}</span>
                   <span class="mono ml-auto shrink-0" style="color: var(--ink-dim)">
-                    {{ rn.status === 'running' ? (rn.percent | number:'1.0-0') + '%' : rn.status }}
+                    {{ rn.percent | number:'1.0-0' }}%
                   </span>
                 </div>
                 <div class="mt-1 h-1 w-full overflow-hidden rounded"
                      style="background: var(--surface)">
                   <div class="h-full transition-[width] duration-300"
                        [style.width.%]="rn.percent"
-                       [style.background]="rn.status === 'failed' ? 'var(--danger)'
-                                         : rn.status === 'done' ? 'var(--ok)' : 'var(--accent)'"></div>
+                       style="background: var(--accent)"></div>
                 </div>
               </div>
             }
+          }
+          @if (!isFolded(r.id)) {
+          @if (r.image_bytes) {
+            <button (click)="openShot(r)" class="mt-1.5 block w-full overflow-hidden rounded"
+                    style="border: 1px solid var(--line)" title="enlarge">
+              <img [src]="imageUrl(r)" alt="revision drawing"
+                   class="block h-20 w-full bg-white object-contain" loading="lazy">
+            </button>
           }
           <div class="mt-1 text-[10px]" style="color: var(--ink-dim)">
             {{ r.created_at.slice(0, 16).replace('T', ' ') }}
@@ -378,9 +427,14 @@
               <button (click)="startEdit(r)" class="tcv-chip"
                       title="edit the text (the drawing stays as it is)">edit</button>
             }
+            <button (click)="archive(r)" class="tcv-chip"
+                    [title]="r.archived ? 'restore from archive' : 'archive'">
+              {{ r.archived ? 'restore' : 'archive' }}
+            </button>
             <button (click)="remove(r)" class="tcv-chip tcv-chip-danger ml-auto"
                     title="delete permanently">delete</button>
           </div>
+          }
         </li>
       } @empty {
         <li class="text-[11px]" style="color: var(--ink-dim)">No revisions yet.</li>

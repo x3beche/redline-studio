@@ -17,7 +17,7 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Activity, Api, Catalog, Health, LogLine, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
+import { Activity, Api, CameraState, Catalog, Health, LogLine, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer } from './ocp';
 
@@ -55,8 +55,19 @@ export class Editor implements AfterViewInit, OnDestroy {
   log = signal<LogLine[]>([]);
   run = signal<Run | null>(null);
   logOpen = signal(true);
+  private builtAt = '';
+  private lastRunStatus = '';
+  private pendingCamera: string | null = null;
+  /** resizeCadView re-frames the scene, so an explicitly set view has to be
+   *  re-applied after every resize or it silently springs back. */
+  private heldCamera: CameraState | null = null;
+  /** The revision whose view is being held, shown over the scene. */
+  focused = signal<Revision | null>(null);
   preview = signal<Revision | null>(null);
   editing = signal<string | null>(null);
+  showArchived = signal(false);
+  autoArchive = signal(false);
+  collapsed_ = signal<Set<string>>(new Set());
   editText = signal('');
   editPart = signal('');
   sys = signal<SystemInfo | null>(null);
@@ -92,6 +103,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.loadVersions();
     this.applyUrlCamera();
     this.pollHealth();
+    this.loadSettings();
     this.healthTimer = setInterval(() => this.pollHealth(), 2000);
     setTimeout(() => this.sizeOverlay());     // after the viewer DOM settles
     this.ro = new ResizeObserver(() => this.sizeOverlay());
@@ -110,7 +122,20 @@ export class Editor implements AfterViewInit, OnDestroy {
   pollHealth() {
     this.health.stats().subscribe({ next: v => this.stats.set(v), error: () => {} });
     this.health.system().subscribe({ next: v => this.sys.set(v), error: () => {} });
-    this.activity.run().subscribe({ next: v => this.run.set(v), error: () => {} });
+    this.activity.run().subscribe({
+      next: v => {
+        const was = this.lastRunStatus;
+        this.run.set(v);
+        this.lastRunStatus = v?.status ?? '';
+        // When a run completes, swing to the angle the revision was drawn
+        // from, so the result is judged from the same viewpoint.
+        if (v && was === 'running' && v.status !== 'running' && v.revision) {
+          this.focusRevision(v.revision);
+        }
+      },
+      error: () => {},
+    });
+    this.loadCatalog();
     this.activity.lines().subscribe({
       next: v => {
         const grew = v.length !== this.log().length;
@@ -180,24 +205,22 @@ export class Editor implements AfterViewInit, OnDestroy {
     return pct > 85 ? 'var(--danger)' : pct > 60 ? 'var(--warn)' : 'var(--accent)';
   }
 
-  /** ?rev=<id> opens the model at that revision's camera, so a before/after
-   *  render can be taken from exactly the angle the user drew on. */
+  /** ?rev=<id> opens the model at that revision's camera. */
   private applyUrlCamera() {
     const rev = new URLSearchParams(location.search).get('rev');
-    if (!rev) return;
-    this.api.one(rev).subscribe({
+    if (rev) this.focusRevision(rev);
+  }
+
+  /** Move to the camera a revision was drawn from. If no model is loaded
+   *  yet, remember it and apply once the load completes. */
+  focusRevision(id: string) {
+    if (!this.activeModel() || !this.viewer) { this.pendingCamera = id; return; }
+    this.api.one(id).subscribe({
       next: r => {
-        if (!r.camera) return;
-        // Wait for the model to finish loading before moving the camera.
-        const tryApply = (left: number) => {
-          if (this.activeModel() && this.viewer) {
-            this.viewer.applyCamera(r.camera!);
-            this.flash('camera from revision ' + rev.slice(-6));
-          } else if (left > 0) {
-            setTimeout(() => tryApply(left - 1), 400);
-          }
-        };
-        tryApply(40);
+        if (!r.camera || !this.viewer) return;
+        this.heldCamera = r.camera;
+        this.focused.set(r);
+        this.viewer.applyCamera(r.camera);
       },
       error: () => {},
     });
@@ -210,8 +233,22 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (!this.activeModel()) {
         const first = this.firstReady(t);
         if (first) this.openModel(first);
+        return;
+      }
+      // A rebuild replaces the stored viewer payload. Without this the open
+      // page keeps showing the geometry it loaded the first time.
+      const live = this.findModel(t, this.activeModel());
+      if (live?.built_at && live.built_at !== this.builtAt) {
+        this.flash('model rebuilt, reloading');
+        this.openModel(live);
       }
     });
+  }
+
+  private findModel(n: FolderNode, id: string): ModelEntry | null {
+    return n.models.find(m => m.id === id)
+      ?? n.folders.reduce<ModelEntry | null>(
+        (hit, f) => hit ?? this.findModel(f, id), null);
   }
 
   private firstReady(n: FolderNode): ModelEntry | null {
@@ -227,6 +264,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   async openModel(m: ModelEntry) {
     if (!this.viewer) return;
     if (!m.data) { this.flash(m.name + ': build it first'); return; }
+    this.builtAt = m.built_at ?? '';
     this.busy.set('loading model…');
     try {
       // Data is not on disk; it streams from the database.
@@ -234,6 +272,13 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.activeModel.set(m.id);
       this.parts.set(this.viewer.parts);
       setTimeout(() => this.sizeOverlay());
+      // render() resets the camera, so a pending view has to be applied
+      // after the load finishes rather than racing it.
+      if (this.pendingCamera) {
+        const rev = this.pendingCamera;
+        this.pendingCamera = null;
+        setTimeout(() => this.focusRevision(rev), 300);
+      }
     } catch (e) {
       this.flash('load failed: ' + (e as Error).message);
     }
@@ -305,9 +350,14 @@ export class Editor implements AfterViewInit, OnDestroy {
     return /webgl|context|gpu/i.test(this.glError());
   }
 
+  /** The host sits 8 px above the card's bottom edge; the viewer must be
+   *  told the shorter height or it paints straight over that gap. */
+  private static GUTTER = 8;
+
   private sizeOverlay() {
     const box = this.stage().nativeElement;
-    this.viewer?.resize(box.clientWidth, box.clientHeight);
+    this.viewer?.resize(box.clientWidth, box.clientHeight - Editor.GUTTER);
+    if (this.heldCamera) this.viewer?.applyCamera(this.heldCamera);
 
     // getImage() returns the canvas only; unless the overlay sits exactly on
     // top of it, marks land in the wrong place in the saved image.
@@ -327,6 +377,13 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   // ---- freeze / unfreeze ----
+  /** Once the user orbits, stop forcing the stored view and drop the card. */
+  releaseCamera() {
+    if (!this.heldCamera) return;
+    this.heldCamera = null;
+    this.focused.set(null);
+  }
+
   async freeze() {
     if (!this.viewer) return;
     this.frozenShot = await this.viewer.image();
@@ -388,7 +445,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!this.viewer) return;
     if (!this.comment().trim()) { this.flash('write a comment first'); return; }
     this.saving.set(true);
-    const merged = await this.merge(this.frozenShot);
+    // A note about a part is a valid revision; the drawing is optional.
+    const merged = this.frozen() ? await this.merge(this.frozenShot) : null;
     this.api.create({
       comment: this.comment().trim(), image_png: merged,
       camera: this.viewer.cameraState(), part: this.part() || null,
@@ -425,8 +483,51 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   refresh() {
-    this.api.list().subscribe({ next: r => this.revisions.set(r), error: () => {} });
+    this.api.list(this.showArchived()).subscribe({
+      next: r => this.revisions.set(r), error: () => {} });
   }
+
+  toggleArchivedView() { this.showArchived.update(v => !v); this.refresh(); }
+
+  /** Server-side so the CLI honours it too, not just this browser. */
+  loadSettings() {
+    this.api.settings().subscribe({
+      next: s => this.autoArchive.set(s.auto_archive), error: () => {} });
+  }
+
+  toggleAutoArchive() {
+    const next = !this.autoArchive();
+    this.api.setAutoArchive(next).subscribe({
+      next: s => {
+        this.autoArchive.set(s.auto_archive);
+        this.flash(s.auto_archive ? 'applied revisions will be archived'
+                                  : 'auto-archive off');
+      },
+      error: () => this.flash('could not change the setting'),
+    });
+  }
+
+  archive(r: Revision) {
+    this.api.archive(r.id, !r.archived).subscribe(() => {
+      this.flash(r.archived ? 'restored from archive' : 'archived');
+      this.refresh();
+    });
+  }
+
+  /** Cards fold to a single line; the set holds the folded ids. */
+  isFolded(id: string): boolean { return this.collapsed_().has(id); }
+
+  toggleFold(id: string) {
+    const next = new Set(this.collapsed_());
+    next.has(id) ? next.delete(id) : next.add(id);
+    this.collapsed_.set(next);
+  }
+
+  foldAll() {
+    this.collapsed_.set(new Set(this.revisions().map(r => r.id)));
+  }
+
+  unfoldAll() { this.collapsed_.set(new Set()); }
 
   startEdit(r: Revision) {
     this.editing.set(r.id);
