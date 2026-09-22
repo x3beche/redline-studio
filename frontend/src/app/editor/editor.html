@@ -583,41 +583,78 @@
                       </svg>
                     </div>
 
-                    <table class="mono mt-1.5 w-full" style="color: var(--ink-dim)">
-                      <tbody>
-                        @for (m of a.models; track m.model) {
-                          <tr>
-                            <td class="truncate pr-1" [title]="m.provider + ' · ' + m.model">
-                              {{ m.model }}
-                            </td>
-                            <td class="pr-1 text-right">{{ tokens(m.output) }} out</td>
-                            <td class="text-right">{{ usd(m.cost_usd) }}</td>
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
+                    <!-- Not a table: "deepseek/deepseek-v4.1-flash" is wider
+                         than the 300 px panel, and a table let it push the
+                         number columns until "41.3k out" wrapped onto two
+                         lines. The name truncates, the numbers never wrap. -->
+                    <div class="mono mt-1.5" style="color: var(--ink-dim)">
+                      @for (m of a.models; track m.model) {
+                        <div class="flex items-baseline gap-1.5">
+                          <span class="min-w-0 flex-1 truncate"
+                                [title]="m.provider + ' · ' + m.model">{{ m.model }}</span>
+                          <span class="shrink-0 whitespace-nowrap">{{ tokens(m.output) }}</span>
+                          <span class="shrink-0 whitespace-nowrap text-right"
+                                style="width: 3.8rem">{{ usd(m.cost_usd) }}</span>
+                        </div>
+                      }
+                    </div>
 
                     <!-- Who spent it. Applying the revision is the agent's
                          calls; the card's one-line summary is a separate
                          request to another vendor and is charged separately. -->
                     @if (a.surfaces.length > 1) {
-                      <table class="mono mt-1 w-full" style="color: var(--ink-dim)">
-                        <tbody>
-                          @for (sf of a.surfaces; track sf.surface) {
-                            <tr>
-                              <td class="truncate pr-1" [title]="sf.provider">
-                                {{ sf.surface === 'card-summary' ? 'ai summary' : 'agent' }}
-                              </td>
-                              <td class="pr-1 text-right">{{ sf.calls }} call{{ sf.calls === 1 ? '' : 's' }}</td>
-                              <td class="text-right">{{ usd(sf.cost_usd) }}</td>
-                            </tr>
-                          }
-                        </tbody>
-                      </table>
+                      <div class="mono mt-1" style="color: var(--ink-dim)">
+                        @for (sf of a.surfaces; track sf.surface) {
+                          <div class="flex items-baseline gap-1.5">
+                            <span class="min-w-0 flex-1 truncate" [title]="sf.provider">
+                              {{ sf.surface === 'card-summary' ? 'ai summary' : 'agent' }}
+                            </span>
+                            <span class="shrink-0 whitespace-nowrap">{{ sf.calls }}&nbsp;call{{ sf.calls === 1 ? '' : 's' }}</span>
+                            <span class="shrink-0 whitespace-nowrap text-right"
+                                  style="width: 3.8rem">{{ usd(sf.cost_usd) }}</span>
+                          </div>
+                        }
+                      </div>
                     }
-                    <p class="mt-1" style="color: var(--ink-dim)">
+                    <!-- Where the money went. The raw cache-read total looks
+                         wrong (24M for one revision) until you see it is the
+                         same conversation re-read on every call, so the
+                         context size is shown instead. -->
+                    @if (donut(a); as slices) {
+                      @if (slices.length) {
+                        <div class="mt-2 flex items-center gap-2">
+                          <svg viewBox="0 0 40 40" class="h-[72px] w-[72px] shrink-0"
+                               style="transform: rotate(-90deg)">
+                            @for (sl of slices; track sl.label) {
+                              <circle cx="20" cy="20" r="15.915" fill="none"
+                                      [attr.stroke]="sl.colour" stroke-width="7"
+                                      [attr.stroke-dasharray]="sl.dash"
+                                      [attr.stroke-dashoffset]="sl.offset">
+                                <title>{{ sl.label }} · {{ usd(sl.usd) }}</title>
+                              </circle>
+                            }
+                          </svg>
+                          <div class="min-w-0 flex-1">
+                            @for (sl of slices; track sl.label) {
+                              <div class="flex items-baseline gap-1.5">
+                                <span class="h-2 w-2 shrink-0 rounded-sm"
+                                      [style.background]="sl.colour"></span>
+                                <span class="min-w-0 flex-1 truncate">{{ sl.label }}</span>
+                                <span class="mono shrink-0 whitespace-nowrap">
+                                  {{ sl.pct | number:'1.0-0' }}%
+                                </span>
+                                <span class="mono shrink-0 whitespace-nowrap text-right"
+                                      style="width: 3.8rem">{{ usd(sl.usd) }}</span>
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      }
+                    }
+
+                    <p class="mt-1.5" style="color: var(--ink-dim)">
                       {{ a.providers.length }} provider{{ a.providers.length === 1 ? '' : 's' }}
-                      · cache read {{ tokens(a.totals.cache_read) }}
+                      · context {{ tokens(a.totals.context_per_call) }}/call
                       · thinking {{ tokens(a.totals.thinking) }}
                     </p>
                   }

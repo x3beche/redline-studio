@@ -596,6 +596,35 @@ export class Editor implements AfterViewInit, OnDestroy {
       `${(h - (n / top) * (h - 2)).toFixed(1)}`).join(' ');
   }
 
+  /** Colours for the spend split. Fixed per kind so the same slice is the
+   *  same colour on every card. */
+  private static KIND = new Map<string, [string, string]>([
+    ['work', ['#53a0e3', 'design']],
+    ['build', ['#5c8a5c', 'builds']],
+    ['progress', ['#e8a735', 'progress']],
+    ['reply', ['#8a7fb5', 'replies']],
+    ['summary', ['#cc6a6a', 'ai summary']],
+  ]);
+
+  /** Slices of a donut, as stroke dash offsets on a circle of circumference
+   *  100. Drawn with SVG strokes rather than arc paths: no trigonometry, and
+   *  a single slice of 100% still renders as a full ring. */
+  donut(a: Analytics): { label: string; colour: string; dash: string;
+                         offset: number; pct: number; usd: number }[] {
+    const rows = (a.kinds ?? []).filter(k => k.cost_usd > 0);
+    const total = rows.reduce((n, k) => n + k.cost_usd, 0);
+    if (!total) return [];
+    let at = 0;
+    return rows.map(k => {
+      const pct = k.cost_usd / total * 100;
+      const [colour, label] = Editor.KIND.get(k.kind) ?? ['#6b7280', k.kind];
+      const slice = { label, colour, dash: `${pct} ${100 - pct}`,
+                      offset: -at, pct, usd: k.cost_usd };
+      at += pct;
+      return slice;
+    });
+  }
+
   /** Tokens per second at the busiest bucket, for the chart's scale label. */
   sparkPeak(a: Analytics): number {
     const v = a.series?.output ?? [];

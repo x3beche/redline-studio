@@ -35,6 +35,9 @@ export interface Analytics {
     calls: number; input: number; output: number;
     cache_read: number; cache_write: number; thinking: number;
     billed_tokens: number; cost_usd: number;
+    /** cache_read / calls: the context size, which is what the huge cache
+     *  read total actually is - the same conversation re-read every call. */
+    context_per_call: number;
     /** False when some model had no rate; the money figure is then partial. */
     complete: boolean;
     unpriced_models: string[];
@@ -56,6 +59,9 @@ export interface Analytics {
    *  ("claude-code") or the card summariser ("card-summary"). */
   surfaces: { surface: string; provider: string; model: string;
               calls: number; output: number; cost_usd: number }[];
+  /** What the spend went on: "work", "build", "progress" notes, "reply",
+   *  "summary". Decided by what each request's turn actually did. */
+  kinds: { kind: string; calls: number; output: number; cost_usd: number }[];
   /** Output tokens per bucket, for the rate chart. */
   series: { bucket_s: number; output: number[] };
 }

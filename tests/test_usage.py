@@ -145,3 +145,37 @@ def test_surface_split_separates_the_agent_from_the_summariser():
     assert by["card-summary"]["provider"] == "openrouter"
     # the summariser's cost is in the total, not off to one side
     assert out["totals"]["cost_usd"] == pytest.approx(1.0002)
+
+
+def test_kind_follows_what_the_turn_did():
+    assert usage._kind([]) == "reply"
+    assert usage._kind(["Bash python tools/revisions.py log -p 40 'x'"]) == "progress"
+    assert usage._kind(["Bash python tools/revisions.py build base"]) == "build"
+    assert usage._kind(["Read /tmp/x.png"]) == "work"
+
+
+def test_a_turn_that_logs_and_builds_counts_as_a_build():
+    # Progress lines are written in the same command as the build they start,
+    # and what that turn was for is the build.
+    tools = ["Bash revisions.py log -p 60 'x' ; revisions.py build base"]
+    assert usage._kind(tools) == "build"
+
+
+def test_context_per_call_is_the_cache_read_divided_by_calls():
+    # The raw cache-read total is the same conversation re-read every call,
+    # so on its own it reads like a bug. 4 calls x 1000 = 4000.
+    out = usage.summarise(_rows(4, 0), "2026-09-22T08:00:00+00:00",
+                          "2026-09-22T08:02:00+00:00")
+    assert out["totals"]["cache_read"] == 4000
+    assert out["totals"]["context_per_call"] == 1000
+
+
+def test_kinds_split_by_what_the_money_went_on():
+    rows = _rows(3, 0)
+    rows[0]["kind"] = "work"
+    rows[1]["kind"] = "progress"
+    rows[2]["kind"] = "build"
+    out = usage.summarise(rows, "2026-09-22T08:00:00+00:00",
+                          "2026-09-22T08:01:30+00:00")
+    assert {k["kind"] for k in out["kinds"]} == {"work", "progress", "build"}
+    assert sum(k["cost_usd"] for k in out["kinds"]) == pytest.approx(1.5)

@@ -94,6 +94,39 @@ def transcripts() -> list[Path]:
                   for p in d.glob("*.jsonl"))
 
 
+# What a request was for. The usage belongs to a whole assistant turn, and
+# the honest way to label it is by what that turn actually did: a turn that
+# ran `revisions.py log` was writing a progress line, one that ran a build
+# was building. A turn with no tool call is a reply to the person.
+KINDS = ("progress", "build", "work", "reply", "summary")
+
+
+def _kind(tools: list[str]) -> str:
+    if not tools:
+        return "reply"
+    joined = " ".join(tools)
+    # Build first: a turn usually logs a progress line in the same command as
+    # the build it kicks off, and what that turn was for is the build.
+    if any(k in joined for k in ("revisions.py build", "revisions.py save",
+                                 "export_model.py", "render.py")):
+        return "build"
+    if any(k in joined for k in ("revisions.py log", "revisions.py start",
+                                 "revisions.py finish")):
+        return "progress"
+    return "work"
+
+
+def _tools(entry: dict) -> list[str]:
+    out = []
+    for b in (entry.get("message") or {}).get("content") or []:
+        if isinstance(b, dict) and b.get("type") == "tool_use":
+            i = b.get("input") or {}
+            out.append(f"{b.get('name')} " +
+                       str(i.get("command") or i.get("file_path") or
+                           i.get("skill") or "")[:200])
+    return out
+
+
 def _row(entry: dict) -> dict | None:
     """One transcript line -> one call row, or None if it carries no usage."""
     msg = entry.get("message") or {}
@@ -130,7 +163,8 @@ async def ingest(db, full: bool = False) -> dict:
     """
     cur = {} if full else ((await db.meta.find_one({"_id": CURSOR_ID}) or {})
                            .get("files", {}))
-    fresh, seen, scanned = [], set(), 0
+    fresh, seen, scanned = [], {}, 0
+    tools: dict[str, list[str]] = {}
     for path in transcripts():
         key = str(path)
         start = int(cur.get(key, 0))
@@ -150,16 +184,37 @@ async def ingest(db, full: bool = False) -> dict:
                 row = _row(json.loads(line))
             except Exception:
                 continue
-            if row and row["_id"] not in seen:
-                seen.add(row["_id"])
+            if not row:
+                continue
+            # A request's blocks are separate lines and the tool call can be
+            # in any of them, so the tools are gathered per request and the
+            # kind decided once at the end.
+            found = _tools(json.loads(line))
+            if found:
+                tools.setdefault(row["_id"], []).extend(found)
+            if row["_id"] not in seen:
+                seen[row["_id"]] = row
                 fresh.append(row)
+
+    for r in fresh:
+        r["kind"] = _kind(tools.get(r["_id"], []))
 
     written = 0
     if fresh:
         from pymongo import UpdateOne
-        res = await db[CALLS].bulk_write(
-            [UpdateOne({"_id": r["_id"]}, {"$setOnInsert": r}, upsert=True)
-             for r in fresh], ordered=False)
+        ops = []
+        for r in fresh:
+            kind = r.pop("kind")
+            # The numbers are written once; the kind can be refined later,
+            # because a request whose tool call fell in the next chunk of the
+            # file would otherwise stay filed as a plain reply.
+            patch = {"$setOnInsert": r}
+            if kind != "reply" or full:
+                patch["$set"] = {"kind": kind}
+            else:
+                patch["$setOnInsert"] = {**r, "kind": kind}
+            ops.append(UpdateOne({"_id": r["_id"]}, patch, upsert=True))
+        res = await db[CALLS].bulk_write(ops, ordered=False)
         written = res.upserted_count
     await db.meta.update_one({"_id": CURSOR_ID}, {"$set": {"files": cur}},
                              upsert=True)
@@ -170,6 +225,7 @@ async def ingest(db, full: bool = False) -> dict:
 async def record_call(db, **row) -> None:
     """Log one non-Claude-Code call, e.g. the OpenRouter card summariser."""
     row.setdefault("at", datetime.now(timezone.utc).isoformat())
+    row.setdefault("kind", "summary")
     await db[CALLS].update_one({"_id": row["_id"]}, {"$setOnInsert": row},
                                upsert=True)
 
@@ -197,6 +253,7 @@ def summarise(rows: list[dict], started: str, finished: str | None) -> dict:
     series: dict[int, int] = {}
 
     surfaces: dict[str, dict] = {}
+    kinds: dict[str, dict] = {}
     for r in rows:
         tot["calls"] += 1
         for k in ("input", "output", "cache_read", "cache_write", "thinking"):
@@ -221,6 +278,12 @@ def summarise(rows: list[dict], started: str, finished: str | None) -> dict:
         for k in ("input", "cache_read", "cache_write"):
             m[k] += r.get(k) or 0
 
+        k = kinds.setdefault(r.get("kind") or "work",
+                             {"calls": 0, "output": 0, "cost_usd": 0.0})
+        k["calls"] += 1
+        k["output"] += r.get("output") or 0
+        k["cost_usd"] += r.get("cost_usd") or 0.0
+
         # What part of the app spent this: the agent applying the revision,
         # or the summariser writing the card's one-liner.
         sf = surfaces.setdefault(r.get("surface", "?"),
@@ -238,9 +301,15 @@ def summarise(rows: list[dict], started: str, finished: str | None) -> dict:
                 series[bucket] = series.get(bucket, 0) + (r.get("output") or 0)
 
     billed = tot["input"] + tot["output"] + tot["cache_read"] + tot["cache_write"]
+    # Cache reads look absurd as a raw total - 24M for one revision - because
+    # every request re-reads the whole conversation from cache. Divided by the
+    # calls it is just the context size, which is the number a person can
+    # actually judge.
+    per_call = round(tot["cache_read"] / tot["calls"]) if tot["calls"] else 0
     return {
         "seconds": round(seconds, 1),
         "totals": {**tot, "billed_tokens": billed,
+                   "context_per_call": per_call,
                    "cost_usd": round(tot["cost_usd"], 6),
                    "complete": priced,
                    "unpriced_models": sorted(unpriced)},
@@ -259,6 +328,9 @@ def summarise(rows: list[dict], started: str, finished: str | None) -> dict:
         "surfaces": [{"surface": k, **v, "cost_usd": round(v["cost_usd"], 6)}
                      for k, v in sorted(surfaces.items(),
                                         key=lambda kv: -kv[1]["output"])],
+        "kinds": [{"kind": k, **v, "cost_usd": round(v["cost_usd"], 6)}
+                  for k, v in sorted(kinds.items(),
+                                     key=lambda kv: -kv[1]["cost_usd"])],
         "series": {"bucket_s": 30,
                    "output": [series.get(i, 0)
                               for i in range(max(series) + 1)] if series else []},
