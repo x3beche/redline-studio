@@ -219,10 +219,11 @@ body {
    only 60 px wide, so a couple of pixels does not read as padding at all -
    it needs room on both sides and air between the word and the caret. */
 .tcv_round.tcv_filter_content {
-  padding: 3px 10px !important;
-  min-height: 22px;
+  /* Even on all four sides: 3 px against 10 px read as a squashed box. */
+  padding: 6px 10px !important;
   display: inline-flex !important;
   align-items: center;
+  line-height: 1;
 }
 .tcv_filter_value {
   padding: 0 !important;
