@@ -555,14 +555,14 @@ async def _translate_note(rid: str) -> None:
         "comment": text, "comment_original": doc["comment"],
         "translated_at": store.now()}})
     # The summary is written from the note, so it has to follow the English.
-    await _make_summary(rid)
+    await _make_summary(rid, english=True)
 
 
 # ---------------- card summaries ----------------
 # A collapsed card shows one sentence instead of a wall of text. Generated
 # off the request: a failed or slow call must never hold up saving a card,
 # and it must never overwrite a sentence the user wrote by hand.
-async def _make_summary(rid: str) -> None:
+async def _make_summary(rid: str, english: bool | None = None) -> None:
     d = db()
     doc = await d.revisions.find_one({"_id": rid})
     if not doc or doc.get("summary_manual"):
@@ -574,8 +574,14 @@ async def _make_summary(rid: str) -> None:
             png = await store.get_shot(d, gid)
         except Exception:                            # noqa: BLE001
             png = None
+    # With notes saved as English requests the summary has to follow, or the
+    # card shows an English note under a Turkish sentence. A card that carries
+    # the original it was translated from is English by definition; the caller
+    # can also say so outright, for the first pass after a translation.
+    if english is None:
+        english = bool(doc.get("comment_original"))
     try:
-        text, used = await summarise.summarise(doc["comment"], png)
+        text, used = await summarise.summarise(doc["comment"], png, english)
     except Exception as exc:                         # noqa: BLE001
         LOG.warning("summary for %s failed: %s", rid, exc)
         return
@@ -595,12 +601,13 @@ async def _translate_then_summarise(rid: str) -> None:
     """Translate first when the switch is on, because the summary is written
     from the note and would otherwise be generated from the old language and
     then thrown away."""
-    if (await store.settings(db()))["auto_translate"]:
+    english = (await store.settings(db()))["auto_translate"]
+    if english:
         await _translate_note(rid)          # writes the summary itself
         doc = await db().revisions.find_one({"_id": rid}) or {}
         if doc.get("summary"):
             return
-    await _make_summary(rid)
+    await _make_summary(rid, english=english)
 
 
 def schedule_note_work(rid: str) -> None:
@@ -618,8 +625,45 @@ async def regenerate_summary(rid: str, force: bool = False):
     if force:
         await d.revisions.update_one({"_id": rid},
                                      {"$set": {"summary_manual": False}})
-    await _make_summary(rid)
+    # With the switch on, the summary is English even for a note nobody
+    # translated: the setting is the person saying which language they want
+    # to read the board in.
+    english = bool((await store.settings(d))["auto_translate"]
+                   or doc.get("comment_original"))
+    await _make_summary(rid, english=english)
     return _out(await d.revisions.find_one({"_id": rid}))
+
+
+@app.post("/api/revisions/english")
+async def make_everything_english(limit: int = 200):
+    """Turn every note on the board into an English request.
+
+    One card at a time and never in parallel: the same rate limit that
+    protects the summariser applies here, and a card whose translation fails
+    is left exactly as it was rather than half-converted.
+    """
+    d = db()
+    rows = [r async for r in d.revisions.find(
+        {"comment_original": {"$in": [None, ""]}}).limit(limit)]
+    done, failed = [], []
+    for row in rows:
+        before = row.get("comment")
+        try:
+            await _translate_note(row["_id"])
+        except Exception as exc:                     # noqa: BLE001
+            LOG.warning("english for %s failed: %s", row["_id"], exc)
+            failed.append(row["_id"])
+            continue
+        after = await d.revisions.find_one({"_id": row["_id"]}) or {}
+        if after.get("comment_original"):
+            done.append(row["_id"])
+        elif after.get("comment") == before:
+            # Already English: nothing to translate, but the summary may
+            # still be in the other language.
+            await _make_summary(row["_id"], english=True)
+            done.append(row["_id"])
+    return {"looked_at": len(rows), "translated": len(done),
+            "failed": failed}
 
 
 @app.post("/api/revisions")

@@ -607,7 +607,15 @@ export class Editor implements AfterViewInit, OnDestroy {
     ['progress', ['#e8a735', 'progress']],
     ['reply', ['#8a7fb5', 'replies']],
     ['summary', ['#cc6a6a', 'ai summary']],
+    ['translate', ['#4fa8a0', 'translation']],
   ]);
+
+  /** The name for a spending surface. An "else agent" fallback filed the
+   *  translation calls under the agent, which is the one thing they are not. */
+  surfaceName(surface: string): string {
+    return { 'card-summary': 'ai summary', translate: 'translation',
+             'claude-code': 'agent' }[surface] ?? surface;
+  }
 
   /** Slices of a donut, as stroke dash offsets on a circle of circumference
    *  100. Drawn with SVG strokes rather than arc paths: no trigonometry, and

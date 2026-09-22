@@ -45,7 +45,7 @@ async def test_generated_summary_is_written(monkeypatch):
     fake = FakeDB(card())
     monkeypatch.setattr(M, "db", lambda: fake)
 
-    async def fake_summarise(comment, png=None):
+    async def fake_summarise(comment, png=None, english=False):
         assert comment == "bu yazinin fontunu dusurelim"
         return "Yazinin fontunu kucult", {"cost": 0.0002}
 
@@ -114,7 +114,7 @@ async def test_unreadable_drawing_does_not_stop_the_summary(monkeypatch):
 
     seen = {}
 
-    async def fake_summarise(comment, png=None):
+    async def fake_summarise(comment, png=None, english=False):
         seen["png"] = png
         return "Yuvayi kucult", {}
 
@@ -123,3 +123,38 @@ async def test_unreadable_drawing_does_not_stop_the_summary(monkeypatch):
     await M._make_summary("r1")
     assert seen["png"] is None                       # resimsiz devam etti
     assert fake.revisions.doc["summary"] == "Yuvayi kucult"
+
+
+@pytest.mark.asyncio
+async def test_a_translated_card_is_summarised_in_english(monkeypatch):
+    # The note was saved as an English request; a Turkish sentence above it
+    # is exactly the mismatch this switch was meant to remove.
+    fake = FakeDB(card(comment="Shrink the text and centre it",
+                       comment_original="yaziyi kucult ve ortala"))
+    monkeypatch.setattr(M, "db", lambda: fake)
+
+    seen = {}
+
+    async def fake_summarise(comment, png=None, english=False):
+        seen["english"] = english
+        return "Shrink the text and centre it", {"cost": 0.0002}
+
+    monkeypatch.setattr(M.summarise, "summarise", fake_summarise)
+    await M._make_summary("r1")
+    assert seen["english"] is True
+
+
+@pytest.mark.asyncio
+async def test_an_untranslated_card_keeps_its_own_language(monkeypatch):
+    fake = FakeDB(card())
+    monkeypatch.setattr(M, "db", lambda: fake)
+
+    seen = {}
+
+    async def fake_summarise(comment, png=None, english=False):
+        seen["english"] = english
+        return "Yazinin fontunu kucult", {"cost": 0.0002}
+
+    monkeypatch.setattr(M.summarise, "summarise", fake_summarise)
+    await M._make_summary("r1")
+    assert seen["english"] is False

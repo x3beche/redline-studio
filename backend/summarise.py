@@ -31,7 +31,30 @@ IMAGE_EDGE = 512            # long edge sent to the model
 BUDGET_USD = 0.005          # per request; expected around 0.0002
 
 # Kept byte-identical on every request so the provider can cache the prefix.
-SYSTEM_PROMPT = (
+# Two fixed prompts rather than one that says "use the input's language":
+# the examples are what actually pins the register and the length, and an
+# example in the wrong language drags the answer with it. Each is byte-stable
+# so the prompt cache still works, one entry per language.
+SYSTEM_PROMPT_EN = (
+    "Summarise the instruction on a 3D design task card in one English "
+    "sentence of 5-10 words. Write it as a command (e.g. 'shrink', "
+    "'centre'). Use the marks on the image to understand phrases like 'this "
+    "part' or 'this text'. Write only the sentence; no quotes, no "
+    "explanation, no prefix.\n"
+    "\n"
+    "Examples:\n"
+    "Input: the pockets are too deep all round, halve the depths top and "
+    "bottom on both faces of the fan\n"
+    "Output: Halve the pocket depths on both fan faces\n"
+    "\n"
+    "Input: lets drop the font on this text a bit and centre it vertically\n"
+    "Output: Shrink the text and centre it vertically\n"
+    "\n"
+    "Input: fill this area in and make the pocket a bit smaller\n"
+    "Output: Fill the gap and shrink the pocket"
+)
+
+SYSTEM_PROMPT_TR = (
     "3D tasarim gorev kartlarindaki talimati 5-10 kelimelik tek bir Turkce "
     "cumleyle ozetle. Emir kipinde yaz (or. 'kucult', 'ortala'). Goruntudeki "
     "isaretleri, metindeki 'bu kisim', 'bu yazi' gibi ifadeleri anlamak icin "
@@ -48,6 +71,9 @@ SYSTEM_PROMPT = (
     "Girdi: bu kisimdaki yeri fill edelim yuva biraz daha kuculsun\n"
     "Cikti: Boslugu doldur ve yuvayi kucult"
 )
+
+# Kept for anything importing the old name.
+SYSTEM_PROMPT = SYSTEM_PROMPT_TR
 
 _PREFIX = re.compile(r"^\s*(ozet|özet|summary)\s*[:\-]\s*", re.IGNORECASE)
 _QUOTES = "\"'“”‘’«»`"
@@ -86,12 +112,14 @@ def shrink_png(png: bytes, edge: int = IMAGE_EDGE) -> bytes:
     return out.getvalue()
 
 
-def build_messages(comment: str, png: bytes | None) -> list[dict]:
+def build_messages(comment: str, png: bytes | None,
+                   english: bool = False) -> list[dict]:
     content: list[dict] = [{"type": "text", "text": comment.strip()}]
     if png:
         url = "data:image/jpeg;base64," + base64.b64encode(shrink_png(png)).decode()
         content.append({"type": "image_url", "image_url": {"url": url}})
-    return [{"role": "system", "content": SYSTEM_PROMPT},
+    return [{"role": "system",
+             "content": SYSTEM_PROMPT_EN if english else SYSTEM_PROMPT_TR},
             {"role": "user", "content": content}]
 
 
@@ -157,9 +185,10 @@ def _report_usage(payload: dict) -> dict:
     return usage
 
 
-async def summarise(comment: str, png: bytes | None = None) -> tuple[str, dict]:
+async def summarise(comment: str, png: bytes | None = None,
+                    english: bool = False) -> tuple[str, dict]:
     """Return (sentence, usage). Raises if the call cannot be made."""
-    messages = build_messages(comment, png)
+    messages = build_messages(comment, png, english)
     payload = await _post(messages)
     usage = _report_usage(payload)
     text = clean(payload["choices"][0]["message"]["content"])
@@ -171,8 +200,10 @@ async def summarise(comment: str, png: bytes | None = None) -> tuple[str, dict]:
         retry = await _post(messages + [
             {"role": "assistant", "content": text},
             {"role": "user", "content":
-                f"Cok uzun. En fazla {MAX_WORDS} kelimeyle, tek cumle, "
-                "sadece ozet."}])
+                (f"Too long. One sentence, at most {MAX_WORDS} words, "
+                 "the summary only.") if english else
+                (f"Cok uzun. En fazla {MAX_WORDS} kelimeyle, tek cumle, "
+                 "sadece ozet.")}])
         usage = _report_usage(retry)
         shorter = clean(retry["choices"][0]["message"]["content"])
         if shorter:
