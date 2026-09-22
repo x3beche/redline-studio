@@ -550,12 +550,24 @@
       <!-- A build takes minutes and can be started from the command line;
            without this the page looks idle while the machine is working. -->
       @if (m.building) {
-        <span class="tcv-building absolute inset-x-1 bottom-0 h-[2px] overflow-hidden rounded"></span>
+        <!-- Against the last build's time when there is one; sliding when
+             there is not, because then nothing is known. -->
+        @if (buildPct(m); as pct) {
+          <span class="absolute inset-x-1 bottom-0 h-[2px] overflow-hidden rounded"
+                style="background: var(--line)">
+            <span class="block h-full rounded transition-[width] duration-500"
+                  [style.width.%]="pct" style="background: var(--accent)"></span>
+          </span>
+        } @else {
+          <span class="tcv-building absolute inset-x-1 bottom-0 h-[2px] overflow-hidden rounded"></span>
+        }
       }
       <span class="min-w-0 truncate text-[12px]">
         {{ m.title }}
         @if (m.building) {
-          <span class="ml-1 text-[10px]" style="color: var(--accent)">building…</span>
+          <span class="ml-1 text-[10px]" style="color: var(--accent)">
+            building{{ buildPct(m) === null ? '…' : ' ' + buildPct(m) + '%' }}
+          </span>
         }
         @if (!m.data) { <span style="color: var(--warn)" title="not built yet"> ·</span> }
         @else if (m.stale) { <span style="color: var(--warn)" title="source changed, rebuild"> *</span> }

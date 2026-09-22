@@ -161,6 +161,8 @@ export interface ModelEntry {
    *  the command line. */
   building: boolean;
   build_started: string | null;
+  /** Seconds the last successful build of this model took. */
+  build_secs: number | null;
 }
 export interface FolderNode {
   name: string; path: string;

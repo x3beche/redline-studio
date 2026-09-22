@@ -131,6 +131,14 @@ export class Editor implements AfterViewInit, OnDestroy {
     // Slower than the rest: each call re-reads the tail of the transcripts.
     this.pollLiveCost();
     this.costTimer = setInterval(() => this.pollLiveCost(), 15000);
+    // Orbiting fires far too often to write on every frame; every couple of
+    // seconds is close enough to "where I left it".
+    // Started late, so the restore above finishes before anything is written
+    // back: otherwise the default camera is saved over the one being put back.
+    setTimeout(() => {
+      this.viewTimer = setInterval(() => this.rememberView(), 2000);
+    }, 2500);
+    addEventListener('beforeunload', this.onLeave);
     setTimeout(() => this.sizeOverlay());     // after the viewer DOM settles
     this.ro = new ResizeObserver(() => this.sizeOverlay());
     this.ro.observe(box);
@@ -142,9 +150,13 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.viewer?.dispose();
     clearInterval(this.healthTimer);
     clearInterval(this.costTimer);
+    clearInterval(this.viewTimer);
+    removeEventListener('beforeunload', this.onLeave);
   }
 
   private healthTimer: ReturnType<typeof setInterval> | undefined;
+  private viewTimer: ReturnType<typeof setInterval> | undefined;
+  private onLeave = () => this.rememberView();
 
 
   pollHealth() {
@@ -359,7 +371,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.cat.tree().subscribe(t => {
       this.catalog.set(t);
       if (!this.activeModel()) {
-        const wanted = this.urlModel();
+        const wanted = this.urlModel() ?? this.lastView()?.model;
         const pick = (wanted && this.findModel(t, wanted)) || this.firstReady(t);
         if (pick) this.openModel(pick);
         return;
@@ -410,7 +422,22 @@ export class Editor implements AfterViewInit, OnDestroy {
         const rev = this.pendingCamera;
         this.pendingCamera = null;
         setTimeout(() => this.focusRevision(rev), 300);
+      } else {
+        // Back to the angle this window was left at. Only for the model it
+        // was left on: the same numbers over a different model point at
+        // nothing in particular.
+        //
+        // Applied more than once: the viewer sets its own camera after the
+        // load and again when it is resized, and a single apply at 300 ms
+        // was simply overwritten.
+        const seen = this.lastView();
+        if (seen?.model === m.id && seen.camera) {
+          for (const ms of [300, 900, 1600]) {
+            setTimeout(() => this.viewer?.applyCamera(seen.camera!), ms);
+          }
+        }
       }
+      this.rememberView();
     } catch (e) {
       this.flash('load failed: ' + (e as Error).message);
     }
@@ -630,6 +657,39 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (n >= 1) return '$' + n.toFixed(2);
     if (n >= 0.01) return '$' + n.toFixed(3);
     return '$' + n.toFixed(5);
+  }
+
+  // ---- where you left off ----
+  // A reload used to drop you on whichever model happened to be first, at
+  // the default angle. The open model and the camera are kept in this
+  // browser - they are about this window, not about the project, so they do
+  // not belong in the database.
+  private static SEEN = 'x3.lastView';
+
+  private rememberView() {
+    const id = this.activeModel();
+    if (!id || !this.viewer) return;
+    try {
+      localStorage.setItem(Editor.SEEN, JSON.stringify(
+        { model: id, camera: this.viewer.cameraState() }));
+    } catch { /* private window, or storage full */ }
+  }
+
+  private lastView(): { model: string; camera: CameraState | null } | null {
+    try {
+      const raw = localStorage.getItem(Editor.SEEN);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
+
+  /** How far along a build is, against how long this model took last time.
+   *  The script reports no progress of its own, so this is an estimate and
+   *  is held at 95% rather than sitting at 100% while the work goes on. */
+  buildPct(m: ModelEntry): number | null {
+    if (!m.building || !m.build_started || !m.build_secs) return null;
+    const gone = (Date.now() - Date.parse(m.build_started)) / 1000;
+    if (!isFinite(gone) || gone < 0) return null;
+    return Math.min(Math.round(gone / m.build_secs * 100), 95);
   }
 
   /** 825.1 -> "13m 45s" */

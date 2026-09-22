@@ -354,6 +354,9 @@ async def catalog(db) -> dict:
                     # Set while a build is running, wherever it was started.
                     "building": bool(m.get("building")),
                     "build_started": m.get("build_started"),
+                    # How long this model took last time, so a running build
+                    # can show progress against something real.
+                    "build_secs": m.get("build_secs"),
                 } for m in models if m.get("folder", "") == path),
                 key=lambda e: e["title"]),
         }

@@ -7,6 +7,7 @@ import asyncio
 import os
 import collections
 import shutil
+import time
 import sys
 import tempfile
 from pathlib import Path
@@ -26,6 +27,7 @@ async def build(db, model_id: str, script: Path) -> dict:
     # A build takes minutes and can be started from the CLI, where the browser
     # has no way of knowing. The flag lives on the model so the page can say
     # "building" wherever the build came from.
+    started = time.monotonic()
     await db.models.update_one(
         {"_id": model_id},
         {"$set": {"building": True, "build_started": store.now()}})
@@ -110,8 +112,15 @@ async def build(db, model_id: str, script: Path) -> dict:
                 "log": "\n".join(log[-4:])}
     finally:
         # Cleared however it ends: a crashed build that left the flag set
-        # would show a bar that never stops.
+        # would show a bar that never stops. The duration is kept so the next
+        # build can say how far along it is - the model script reports no
+        # progress of its own, so the only honest estimate is how long this
+        # same model took last time.
+        took = round(time.monotonic() - started, 1)
+        patch = {"building": False}
+        if took > 1:
+            patch["build_secs"] = took
         await db.models.update_one(
             {"_id": model_id},
-            {"$set": {"building": False}, "$unset": {"build_started": ""}})
+            {"$set": patch, "$unset": {"build_started": ""}})
         shutil.rmtree(tmp, ignore_errors=True)
