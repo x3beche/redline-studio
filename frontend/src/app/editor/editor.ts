@@ -49,6 +49,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private freezeBtn = viewChild<ElementRef<HTMLElement>>('freezeBtn');
   private taskPanel = viewChild<ElementRef<HTMLElement>>('taskPanel');
   private logPanel = viewChild<ElementRef<HTMLElement>>('logPanel');
+  private drawTools = viewChild<ElementRef<HTMLElement>>('drawTools');
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   frozen = signal(false);
@@ -217,6 +218,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     const btn = this.freezeBtn()?.nativeElement;
     const bar = this.viewer?.toolbar;
     if (btn && bar && btn.parentElement !== bar) bar.appendChild(btn);
+
+    // The drawing tools go in the same bar, just before the freeze control:
+    // they are for marking up what is on screen, so they sit over it.
+    const tools = this.drawTools()?.nativeElement;
+    if (tools && bar && tools.parentElement !== bar) bar.insertBefore(tools, btn ?? null);
 
     // The running task goes under the model tree, in the room the tree
     // panel was leaving empty. Always in the DOM, hidden when idle: an

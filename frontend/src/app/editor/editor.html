@@ -329,6 +329,42 @@
       }
     </div>
 
+    <!-- Drawing tools, docked in the viewer's toolbar once it is up: they
+         belong over the thing being drawn on, not in a panel across the
+         screen from it. Always in the DOM, hidden when not frozen, so the
+         docking survives. -->
+    <div #drawTools class="tcv-draw" [hidden]="!frozen()">
+      @for (t of tools; track t.id) {
+        <button (click)="tool.set(t.id)" [title]="t.label"
+                class="tcv-btn tcv-draw-btn"
+                [style.background]="tool() === t.id ? 'var(--accent)' : null"
+                [style.color]="tool() === t.id ? '#fff' : null">{{ t.glyph }}</button>
+      }
+      <span class="tcv-draw-sep"></span>
+      @for (c of ['#cc3333', '#5c8a5c', '#53a0e3', '#e8a735']; track c) {
+        <button (click)="color.set(c)" [style.background]="c"
+                class="tcv-draw-swatch"
+                [style.outline]="color() === c ? '2px solid var(--ink)' : 'none'"
+                [style.outline-offset]="'1px'"></button>
+      }
+      @if (tool() === 'text') {
+        <input type="range" min="10" max="48" [value]="fontSize()"
+               (input)="fontSize.set($any($event.target).valueAsNumber)"
+               class="tcv-draw-range" style="accent-color: var(--accent)"
+               title="Text size">
+        <span class="tcv-label tcv-draw-num">{{ fontSize() }}</span>
+      } @else {
+        <input type="range" min="1" max="16" [value]="penWidth()"
+               (input)="penWidth.set($any($event.target).valueAsNumber)"
+               class="tcv-draw-range" style="accent-color: var(--accent)"
+               title="Stroke width">
+        <span class="tcv-label tcv-draw-num">{{ penWidth() }}</span>
+      }
+      <span class="tcv-draw-sep"></span>
+      <button (click)="undo()" class="tcv-btn tcv-draw-text">Undo</button>
+      <button (click)="clear()" class="tcv-btn tcv-draw-text">Clear</button>
+    </div>
+
     <!-- Lives in the viewer's toolbar: moved there once the viewer is up,
          and wearing the viewer's own button markup (tooltip > frame > btn)
          so it is one of that row rather than a text button bolted to its
@@ -405,47 +441,6 @@
     }
 
     @if (!queueShut()) {
-
-    <!-- Cizim araclari yalnizca freeze modunda. Kutu her zaman cizilince
-         Freeze butonu viewer'in toolbar'ina tasindiktan sonra geriye
-         kendi dolgusu ve alt cizgisiyle bos bir alan kaliyordu. -->
-    @if (frozen()) {
-      <div class="px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
-        <div class="grid grid-cols-7 gap-1">
-          @for (t of tools; track t.id) {
-            <button (click)="tool.set(t.id)" [title]="t.label"
-                    class="tcv-btn px-0 text-center leading-none"
-                    [style.background]="tool() === t.id ? 'var(--accent)' : null"
-                    [style.color]="tool() === t.id ? '#fff' : null">{{ t.glyph }}</button>
-          }
-        </div>
-        <div class="mt-2 flex items-center gap-1.5">
-          @for (c of ['#cc3333', '#5c8a5c', '#53a0e3', '#e8a735']; track c) {
-            <button (click)="color.set(c)" [style.background]="c"
-                    class="h-5 w-5 rounded"
-                    [style.outline]="color() === c ? '2px solid var(--ink)' : 'none'"
-                    [style.outline-offset]="'1px'"></button>
-          }
-          @if (tool() === 'text') {
-            <input type="range" min="10" max="48" [value]="fontSize()"
-                   (input)="fontSize.set($any($event.target).valueAsNumber)"
-                   class="ml-1 flex-1" style="accent-color: var(--accent)"
-                   title="Text size">
-            <span class="tcv-label w-8 text-right">{{ fontSize() }}</span>
-          } @else {
-            <input type="range" min="1" max="16" [value]="penWidth()"
-                   (input)="penWidth.set($any($event.target).valueAsNumber)"
-                   class="ml-1 flex-1" style="accent-color: var(--accent)"
-                   title="Stroke width">
-            <span class="tcv-label w-8 text-right">{{ penWidth() }}</span>
-          }
-        </div>
-        <div class="mt-2 flex gap-1.5">
-          <button (click)="undo()" class="tcv-btn flex-1">Undo</button>
-          <button (click)="clear()" class="tcv-btn flex-1">Clear</button>
-        </div>
-      </div>
-    }
 
     <div class="px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
       <label class="tcv-label mb-1 block">Part</label>

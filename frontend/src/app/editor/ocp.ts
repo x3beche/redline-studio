@@ -91,16 +91,30 @@ export class OcpViewer {
     const host = this.container.getBoundingClientRect();
     const c = this.container.querySelector('canvas');
     const chromeH = c ? Math.max(c.getBoundingClientRect().top - host.top, 0) : 48;
-    const ch = Math.max(h - chromeH, 320);
 
-    this.viewer.resizeCadView(Math.max(w - TREE_W, 320), TREE_W, ch, false);
+    // The body is a grid: the 3D area on top, the log under it. Sizing the
+    // area to the whole stage made a canvas taller than the cell it is drawn
+    // in, and the model then sat centred in the canvas rather than in what
+    // you can see. The log's height comes off first.
+    const log = this.container.querySelector('.tcv-log') as HTMLElement | null;
+    const logH = log ? log.offsetHeight + 8 : 0;
+    const ch = Math.max(h - chromeH - logH, 240);
 
-    // The viewer adds its own borders, so the width we computed can overflow
-    // and hide the dropdown under the side panel. Undo the measured overflow
-    // once.
-    const over = this.container.scrollWidth - w;
-    if (over > 1) {
-      this.viewer.resizeCadView(Math.max(w - TREE_W - over, 320), TREE_W, ch, false);
+    let cw = Math.max(w - TREE_W, 320);
+    this.viewer.resizeCadView(cw, TREE_W, ch, false);
+
+    // The viewer adds its own borders to the width it is given, so the canvas
+    // comes out wider than the cell it is drawn in - and the model then sits
+    // off-centre by half that. Measure what came out and take it off. The
+    // grid fixes the column, so this settles rather than chasing itself.
+    const cell = this.view?.getBoundingClientRect();
+    const can = this.container.querySelector('canvas')?.getBoundingClientRect();
+    if (cell && can) {
+      const over = Math.round(can.width - cell.width);
+      if (Math.abs(over) > 1) {
+        cw = Math.max(cw - over, 320);
+        this.viewer.resizeCadView(cw, TREE_W, ch, false);
+      }
     }
   }
 

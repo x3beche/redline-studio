@@ -34,9 +34,9 @@ body {
    out. A cool near-white reads better for CAD than the flat grey. */
 .tcv_cad_view {
   position: relative;
-  /* The viewer sets its own height in pixels, which overflowed the grid row
-     and carried the 3D area on down over the log. The cell decides now; the
-     canvas is clipped to it. */
+  /* The viewer sizes this itself, with the log's height taken off first, so
+     the two rows add up to the stage. overflow guards a stale size between a
+     resize and the next frame. */
   height: 100% !important;
   width: 100% !important;
   min-height: 0;
@@ -248,7 +248,16 @@ body {
    both rows, the 3D area top right, the log under it. Laid out rather than
    floated, so the 3D area genuinely ends where the log starts instead of
    carrying on behind it. */
+/* The viewer sizes these in pixels of its own; left alone, the grid's rows
+   were dividing a body shorter than the stage and row one still overflowed.
+   They fill their parent and the grid does the dividing. */
+.tcv_cad_viewer {
+  height: 100% !important;
+  width: 100% !important;
+}
 .tcv_cad_body {
+  height: calc(100% - 48px) !important;
+  width: 100% !important;
   display: grid !important;
   grid-template-columns: 300px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
@@ -389,6 +398,41 @@ body {
 /* The freeze control sits inside the viewer's own toolbar, so it is sized and
    coloured like the icon buttons beside it rather than like a page button. It
    only goes loud once the view is actually held. */
+/* Drawing tools in the viewer's toolbar. Sized to that row rather than to a
+   side panel: small square buttons, swatches and a short slider. */
+.tcv-draw {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+.tcv-draw[hidden] { display: none; }
+.tcv-draw-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  text-align: center;
+  line-height: 1;
+}
+.tcv-draw-swatch {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tcv-draw-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--line);
+}
+.tcv-draw-range { width: 64px; }
+.tcv-draw-num { width: 18px; text-align: right; }
+.tcv-draw-text { height: 26px; padding: 0 7px; }
+
 /* The freeze control is one of the viewer's own toolbar buttons, not a
    bordered text button parked at the far right. Same 30x30 .tcv_btn, same
    hover, same icon language: the glyph is a background image the way every
