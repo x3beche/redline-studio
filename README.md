@@ -10,10 +10,11 @@ leave a revision note.** All project data lives in MongoDB.
 ![user interface](docs/screenshot.png)
 
 Models can be built from other models, so an assembly is just a module that
-imports its parts and positions them — the fit is then checked in code rather
-than by eye:
+imports its parts and positions them. The fit is then checked in code rather
+than by eye — the module below reports its own pivot alignment, engagement
+length and clash volumes on every build:
 
-![fan plugged into its stand](docs/assembly.png)
+![a fan module on its base, tilted on the yoke](docs/assembly.png)
 
 ## What it solves
 
@@ -78,6 +79,14 @@ Single-server production build: `./start.sh --build` &rarr; `:8000` only.
 
 The connection string is read by the backend alone and never reaches the
 frontend. `.env` is git-ignored.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `MONGODB_URI` | — | required; the database is the source of truth |
+| `MONGODB_DB` | `assets_3d` | database name |
+| `OPENROUTER_API_KEY` | — | card summaries; without it a card simply has none |
+| `X3_BUILD_MEM` | `6G` | memory ceiling a build may use before it is killed |
+| `X3_CACHE` | `.cache/artifacts` | where generated artifacts are kept on disk |
 
 ## Working with language models
 
@@ -278,6 +287,29 @@ Guard exports and the `show()` call in each part with
 `if STANDALONE:` (`STANDALONE = os.environ.get("X3_IMPORT_ONLY") != "1"`),
 or importing one will drop its STEP and STL into the assembly's output.
 
+## Keeping it quick
+
+A viewer payload runs to tens of megabytes, and three things were making that
+hurt:
+
+| | |
+|---|---|
+| **Served as stored** | The payload is gzipped in GridFS and was being unpacked on the server for the browser to receive it uncompressed — 63 MB on the wire for a model that packs to under six. It now goes out with `Content-Encoding: gzip`. |
+| **Cached on disk** | Generated artifacts never change, so they are kept under their GridFS id in `.cache/`. The build writes that copy too, so even the first read after a build is local. The database keeps the backup; the disk does the work. |
+| **Stamped** | The payload is served `immutable`, so the URL carries the build time. Without it the browser keeps showing the build it cached however many times the model is rebuilt. |
+
+```
+station, 63.7 MB artifact
+  before   63.7 MB on the wire, 100 s
+  now       5.8 MB on the wire,  24 s first, 0.18 s after
+```
+
+Builds run under a memory ceiling with swap disabled (`tools/capped.sh`,
+`X3_BUILD_MEM`, 6 GB by default). A model that imports a large STEP and
+booleans against it can otherwise grow until the machine swaps and the
+desktop freezes; with the ceiling the kernel kills the build instead and the
+route reports it in words rather than a traceback.
+
 ## API
 
 | Endpoint | Purpose |
@@ -287,6 +319,10 @@ or importing one will drop its STEP and STL into the assembly's output.
 | `POST /api/models/{id}/build` | tessellate, store output in the database |
 | `GET /api/models/{id}/viewer.json` | viewer payload |
 | `GET /api/models/{id}/file/{step\|stl}` | generated file |
+| `POST /api/models/{id}/move?folder=` | move between folders (the id carries the path) |
+| `DELETE /api/models/{id}?force=` | delete; refused while another model imports it |
+| `POST /api/uploads` · `GET /api/uploads` · `DELETE /api/uploads/{name}` | bring in a STEP/IGES/BREP/STL/3MF |
+| `POST /api/revisions/{id}/summary?force=` | regenerate the one-line summary |
 | `GET /api/queue` | **queued revisions only** |
 | `GET /api/revisions/{id}/image` | marked-up image |
 | `PUT /api/revisions/{id}` | edit the comment and part (the drawing is immutable) |
@@ -315,6 +351,18 @@ or importing one will drop its STEP and STL into the assembly's output.
   sections and raises `NCollection_DataMap::Find`.
 - `Compound(children=[...])` **reparents** its children, so building a helper
   compound detaches them from the previous one and corrupts the bounding box.
+- A half-space prism built from two points **stops where the points stop**.
+  Cutting "everything above this line" with a prism spanning only the line's
+  own extent leaves material standing where the line ends — in this case a
+  0.2 mm thin wall, 4 mm tall, running the width of the case. Extend the line
+  past both ends.
+- Waiting for a `canvas` element is not waiting for the model: the canvas
+  exists within a second while a 50 MB payload takes most of a minute. Every
+  screenshot taken that way came out empty.
+- A plane built for a sloped face must have its **origin on that face**.
+  Offsetting by the wall thickness from a plane that merely runs parallel puts
+  the part slightly inside the wall, and the interference is small enough to
+  look like a rounding error.
 
 ## License
 
