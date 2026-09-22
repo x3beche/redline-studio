@@ -263,6 +263,15 @@ export class Editor implements AfterViewInit, OnDestroy {
     setTimeout(() => this.sizeOverlay(), 60);   // rescale once the transition ends
   }
 
+  /** The queue folds away the same way the catalog does, for when the model
+   *  is what you want the width for. */
+  queueShut = signal(false);
+
+  toggleQueue() {
+    this.queueShut.update(v => !v);
+    setTimeout(() => this.sizeOverlay(), 60);
+  }
+
   gb(n: number): string { return (n / 1e9).toFixed(1) + ' GB'; }
 
   /** Compact gauges shown while the panel is collapsed. */

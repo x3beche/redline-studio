@@ -241,6 +241,31 @@ body {
   backdrop-filter: blur(4px);
 }
 
+/* Folding a side panel. Tailwind's arbitrary transition with two properties
+   did not survive its parser, and width alone is not enough here: the box
+   stays at its content's size unless max-width clamps it too. */
+.tcv-fold {
+  width: 300px;
+  max-width: 300px;
+  transition: width .15s cubic-bezier(.4, 0, .2, 1),
+              max-width .15s cubic-bezier(.4, 0, .2, 1);
+}
+.tcv-fold-shut {
+  width: 34px !important;
+  max-width: 34px !important;
+}
+
+/* The viewer's tree draws in its own face at its own size, which reads as a
+   different application inside the window. It follows the page's type. */
+.tcv_cad_tree,
+.tcv_cad_tree *,
+.tcv_cad_tabs,
+.tcv_cad_tabs * {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif !important;
+  font-size: 12px !important;
+  letter-spacing: normal !important;
+}
+
 /* On/off switch. A chip that changes colour asks you to remember which
    colour means on; a switch shows its state by where the knob is. */
 .tcv-switch {

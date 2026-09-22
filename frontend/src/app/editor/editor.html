@@ -377,9 +377,32 @@
   </div>
   </div>
 
-  <!-- RIGHT: freeze/draw + revisions -->
-  <aside class="tcv-panel flex w-[300px] shrink-0 flex-col rounded"
+  <!-- RIGHT: freeze/draw + revisions (collapsible, like the catalog) -->
+  <!-- Both width and max-width: the width alone was ignored here, the box
+       staying at its content's size however narrow the width was set, and
+       max-width is what actually clamps it. -->
+  <!-- Folded through a class, not an inline width: bound inline, both width
+       and max-width were set and the box still sat at its content's size. -->
+  <aside class="tcv-panel tcv-fold flex min-w-0 shrink-0 flex-col overflow-hidden rounded"
+         [class.tcv-fold-shut]="queueShut()"
          style="border: 1px solid var(--line)">
+
+    <!-- Folded, the rail still says how many are waiting: that is the one
+         thing worth knowing without opening it. -->
+    <div class="flex shrink-0 items-center gap-1 px-1 py-1.5"
+         [class.flex-col]="queueShut()"
+         style="border-bottom: 1px solid var(--line)">
+      <button (click)="toggleQueue()" class="tcv-btn shrink-0 px-1.5 py-0.5"
+              [title]="queueShut() ? 'show the queue' : 'hide the queue'">
+        {{ queueShut() ? '«' : '»' }}
+      </button>
+      @if (queueShut() && queueCount()) {
+        <span class="mono mt-1 rounded px-1 text-[10px] font-bold"
+              style="background: var(--accent); color: #12222e">{{ queueCount() }}</span>
+      }
+    </div>
+
+    @if (!queueShut()) {
 
     <!-- Cizim araclari yalnizca freeze modunda. Kutu her zaman cizilince
          Freeze butonu viewer'in toolbar'ina tasindiktan sonra geriye
@@ -495,6 +518,7 @@
         <li class="text-[11px]" style="color: var(--ink-dim)">No revisions yet.</li>
       }
     </ul>
+    }
   </aside>
 </div>
 
