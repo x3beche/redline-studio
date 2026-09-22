@@ -23,6 +23,11 @@ the agent's own transcripts and frozen onto the revision when the run
 finishes:
 
     python tools/revisions.py usage [--full] [-r ID]
+
+The card shows the drawing as the "before"; the same view once the work is
+done goes next to it:
+
+    python tools/revisions.py after <id> [--only PART]
 """
 
 from __future__ import annotations
@@ -155,8 +160,19 @@ async def cmd_finish(args):
     await db.activity.insert_one(_line(f"finished: {status}", status))
     print(f"run {status}")
 
-    # What the work cost, frozen onto the revision while the window is known.
+    # The card's "after": the same view once the work is done. Best effort -
+    # it needs the dev server and a headless browser, and a finished run must
+    # not depend on either.
     rev = cur.get("revision")
+    if rev and not args.no_shot:
+        try:
+            await _after_shot(db, rev)
+        except SystemExit as exc:
+            print(f"after shot skipped: {exc}")
+        except Exception as exc:                     # noqa: BLE001
+            print(f"after shot skipped: {type(exc).__name__}: {exc}")
+
+    # What the work cost, frozen onto the revision while the window is known.
     if rev:
         try:
             run = await db.runs.find_one({"_id": rev}) or {**cur, **patch}
@@ -203,6 +219,41 @@ async def cmd_build(args):
     res = await build.build(db, args.model, ROOT / "export_model.py")
     sizes = ", ".join(f"{k} {v/1e6:.1f}MB" for k, v in res["artifacts"].items())
     print(f"{res['model']} built: {sizes}")
+
+
+async def _after_shot(db, rid: str, width: int = 1200, height: int = 800,
+                      only: str | None = None) -> dict:
+    from backend import store
+
+    out = Path(tempfile.gettempdir()) / f"after-{rid}.png"
+    argv = [sys.executable, str(ROOT / "tools" / "render.py"), rid,
+            "-o", str(out), "--width", str(width), "--height", str(height)]
+    if only:
+        argv += ["--only", only]
+    proc = await asyncio.create_subprocess_exec(
+        *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    log, _ = await proc.communicate()
+    if proc.returncode != 0 or not out.exists():
+        raise SystemExit("render failed: " + log.decode(errors="replace")[-400:])
+    shot = await store.put_shot(db, out.read_bytes())
+    await db.revisions.update_one({"_id": rid}, {"$set": {"image_after": shot}})
+    print(f"after shot stored: {shot['bytes']} bytes")
+    return shot
+
+
+async def cmd_after(args):
+    """Take the "after" shot from the revision's own camera and store it.
+
+    The drawing on a card is the before. Putting the same view next to it
+    once the work is done is the only way to see, from the card alone,
+    whether what was asked for actually happened.
+    """
+    from backend import store
+
+    db = connect()
+    if not await db.revisions.find_one({"_id": args.id}):
+        sys.exit(f"{args.id} not found")
+    await _after_shot(db, args.id, args.width, args.height, args.only)
 
 
 async def cmd_usage(args):
@@ -286,12 +337,20 @@ def main() -> None:
                    choices=["info", "work", "done", "warn", "error"])
     s.set_defaults(fn=cmd_log)
     s = sub.add_parser("finish"); s.add_argument("--failed", action="store_true")
+    s.add_argument("--no-shot", action="store_true",
+                   help="skip the after picture")
     s.set_defaults(fn=cmd_finish)
     sub.add_parser("models").set_defaults(fn=cmd_models)
     s = sub.add_parser("source"); s.add_argument("model"); s.set_defaults(fn=cmd_source)
     s = sub.add_parser("save"); s.add_argument("model"); s.add_argument("file")
     s.set_defaults(fn=cmd_save)
     s = sub.add_parser("build"); s.add_argument("model"); s.set_defaults(fn=cmd_build)
+    s = sub.add_parser("after", help="store the after shot for a revision")
+    s.add_argument("id")
+    s.add_argument("--width", type=int, default=1200)
+    s.add_argument("--height", type=int, default=800)
+    s.add_argument("--only", help="show only this part, as in render.py")
+    s.set_defaults(fn=cmd_after)
     s = sub.add_parser("usage", help="pull LLM usage from the agent transcripts")
     s.add_argument("--full", action="store_true",
                    help="re-read every transcript from the start")

@@ -99,13 +99,27 @@ def api_key() -> str | None:
     return os.environ.get("OPENROUTER_API_KEY") or None
 
 
-async def _post(messages: list[dict]) -> dict:
+# Notes get written in whatever language comes to hand, while the model
+# sources, the card summaries and the rest of this app are English. Turning
+# the note into an English request at the door means everything downstream -
+# the summary, the model comments, a reader six months from now - reads the
+# same way.
+TRANSLATE_PROMPT = (
+    "Translate the user's CAD revision request into English. Keep it a "
+    "request: same instructions, same numbers, same part names, nothing "
+    "added and nothing dropped. Keep the wording plain and direct. If it is "
+    "already English, return it unchanged. Write only the translation."
+)
+TRANSLATE_TOKENS = 400
+
+
+async def _post(messages: list[dict], max_tokens: int = MAX_TOKENS) -> dict:
     import httpx
 
     key = api_key()
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY is not set")
-    body = {"model": MODEL, "messages": messages, "max_tokens": MAX_TOKENS,
+    body = {"model": MODEL, "messages": messages, "max_tokens": max_tokens,
             "temperature": TEMPERATURE, "reasoning": {"enabled": False},
             "usage": {"include": True}}
     delay = 1.0
@@ -164,3 +178,21 @@ async def summarise(comment: str, png: bytes | None = None) -> tuple[str, dict]:
         if shorter:
             text = shorter
     return text, usage
+
+
+async def translate(text: str) -> tuple[str, dict]:
+    """Turn a revision note into English. Returns (text, usage).
+
+    Failure is not fatal anywhere it is called: the original note is kept and
+    the card still saves, because a translation service being down is no
+    reason to lose what someone just wrote.
+    """
+    text = (text or "").strip()
+    if not text:
+        return "", {}
+    payload = await _post(
+        [{"role": "system", "content": TRANSLATE_PROMPT},
+         {"role": "user", "content": text}], max_tokens=TRANSLATE_TOKENS)
+    usage = _report_usage(payload)
+    out = clean(payload["choices"][0]["message"]["content"] or "")
+    return (out or text), usage

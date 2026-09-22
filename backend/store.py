@@ -61,7 +61,7 @@ def read_meta(source: str) -> dict:
 # revisions applied too and used to write straight to Mongo, so a task closed
 # from the terminal was never filed away.
 SETTINGS_ID = "app"
-DEFAULT_SETTINGS = {"auto_archive": False}
+DEFAULT_SETTINGS = {"auto_archive": False, "auto_translate": False}
 
 
 async def settings(db) -> dict:
@@ -351,6 +351,9 @@ async def catalog(db) -> dict:
                     "built_at": m.get("artifacts", {}).get("viewer", {}).get("at"),
                     "updated_at": m.get("updated_at"),
                     "sha256": (m.get("sha256") or "")[:12],
+                    # Set while a build is running, wherever it was started.
+                    "building": bool(m.get("building")),
+                    "build_started": m.get("build_started"),
                 } for m in models if m.get("folder", "") == path),
                 key=lambda e: e["title"]),
         }

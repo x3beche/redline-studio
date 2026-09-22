@@ -177,3 +177,40 @@ def test_cost_within_budget_is_quiet(caplog):
     with caplog.at_level("WARNING", logger="x3.summarise"):
         S._report_usage({"usage": {"cost": 0.0002}})
     assert "over the" not in caplog.text
+
+
+# ---- translation ----
+@pytest.mark.asyncio
+async def test_translate_returns_the_english_and_the_usage(monkeypatch):
+    async def fake(messages, max_tokens=60):
+        assert messages[0]["role"] == "system"
+        assert "English" in messages[0]["content"]
+        assert messages[1]["content"] == "yuvayi 2 mm kucult"
+        return {"choices": [{"message": {"content": "Shrink the pocket by 2 mm"}}],
+                "usage": {"prompt_tokens": 40, "completion_tokens": 7, "cost": 0.0001}}
+
+    monkeypatch.setattr(S, "_post", fake)
+    text, used = await S.translate("yuvayi 2 mm kucult")
+    assert text == "Shrink the pocket by 2 mm"
+    assert used["cost"] == 0.0001
+
+
+@pytest.mark.asyncio
+async def test_translate_keeps_the_original_when_the_model_says_nothing(monkeypatch):
+    # Losing what someone just typed because a translator returned blank is
+    # the one outcome this must never have.
+    async def fake(messages, max_tokens=60):
+        return {"choices": [{"message": {"content": "  "}}], "usage": {}}
+
+    monkeypatch.setattr(S, "_post", fake)
+    text, _ = await S.translate("yuvayi 2 mm kucult")
+    assert text == "yuvayi 2 mm kucult"
+
+
+@pytest.mark.asyncio
+async def test_translate_skips_empty_text(monkeypatch):
+    async def boom(*a, **k):
+        raise AssertionError("should not call the API for an empty note")
+
+    monkeypatch.setattr(S, "_post", boom)
+    assert await S.translate("   ") == ("", {})

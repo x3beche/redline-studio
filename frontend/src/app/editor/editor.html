@@ -176,9 +176,21 @@
          style="background: rgba(0,0,0,.88); z-index: 1000">
       <!-- Pulled in from the edges: the drawing reads better with room
            around it than filling the viewport. -->
-      <img [src]="imageUrl(pv)" alt="revision drawing"
+      <img [src]="imageUrl(pv, previewSide())" alt="revision drawing"
            class="max-h-[68vh] max-w-[72vw] rounded bg-white object-contain"
            style="border: 1px solid var(--line)">
+      @if (pv.image_after_bytes) {
+        <div class="flex gap-1.5" (click)="$event.stopPropagation()">
+          <button (click)="previewSide.set('before')" class="tcv-chip"
+                  [style.border-color]="previewSide() === 'before' ? 'var(--accent)' : null">
+            before
+          </button>
+          <button (click)="previewSide.set('after')" class="tcv-chip"
+                  [style.border-color]="previewSide() === 'after' ? 'var(--ok)' : null">
+            after
+          </button>
+        </div>
+      }
       <div class="tcv-card max-w-2xl p-3 text-[12px]">
         <p class="mb-1">{{ pv.comment }}</p>
         <p style="color: var(--ink-dim)">
@@ -207,12 +219,18 @@
             (pointerup)="up()" (pointerleave)="up()"></canvas>
 
     <!-- Lives in the viewer's toolbar: moved there once the viewer is up,
-         so it sits with the other view controls rather than in a side panel. -->
-    <button #freezeBtn class="tcv-freeze" [attr.data-on]="frozen() ? 1 : null"
-            (click)="frozen() ? resume() : freeze()"
-            [title]="frozen() ? 'let the view go' : 'hold the view and draw on it'">
-      {{ frozen() ? 'Unfreeze' : 'Freeze &amp; draw' }}
-    </button>
+         and wearing the viewer's own button markup (tooltip > frame > btn)
+         so it is one of that row rather than a text button bolted to its
+         right-hand end. -->
+    <span #freezeBtn class="tcv_tooltip" [attr.data-on]="frozen() ? 1 : null">
+      <span class="tcv_button_frame">
+        <button class="tcv_reset tcv_btn tcv-freeze"
+                [attr.data-on]="frozen() ? 1 : null"
+                (click)="frozen() ? resume() : freeze()"
+                [title]="frozen() ? 'let the view go'
+                                  : 'hold the view and draw on it'"></button>
+      </span>
+    </span>
 
     <!-- Typing a label: the caret sits where the click landed, so the text
          is placed against the model rather than in a dialog. -->
@@ -351,7 +369,7 @@
          Freeze butonu viewer'in toolbar'ina tasindiktan sonra geriye
          kendi dolgusu ve alt cizgisiyle bos bir alan kaliyordu. -->
     @if (frozen()) {
-      <div class="px-3 py-2" style="border-bottom: 1px solid var(--line)">
+      <div class="px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
         <div class="grid grid-cols-7 gap-1">
           @for (t of tools; track t.id) {
             <button (click)="tool.set(t.id)" [title]="t.label"
@@ -388,7 +406,7 @@
       </div>
     }
 
-    <div class="px-3 py-2" style="border-bottom: 1px solid var(--line)">
+    <div class="px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
       <label class="tcv-label mb-1 block">Part</label>
       <select [value]="part()" (change)="part.set($any($event.target).value)"
               class="tcv-field mb-2 w-full px-1.5 py-1">
@@ -401,6 +419,16 @@
                 (input)="comment.set($any($event.target).value)"
                 placeholder="e.g. chamfer this corner, 2 mm"
                 class="tcv-field w-full resize-none p-1.5"></textarea>
+      <!-- Notes get written in whatever language is to hand; with this on the
+           note is saved as an English request, so the summary and everything
+           downstream read the same way. What was typed is kept alongside. -->
+      <div class="mt-2 flex items-center gap-2">
+        <button (click)="toggleAutoTranslate()" class="tcv-switch"
+                [attr.data-on]="autoTranslate() ? 1 : null"
+                [attr.aria-pressed]="autoTranslate()"
+                title="save the note as an English revision request"></button>
+        <span class="tcv-label min-w-0 flex-1 truncate">auto english</span>
+      </div>
       <button (click)="save()" [disabled]="saving()"
               class="tcv-btn tcv-btn-accent mt-2 w-full py-1.5">
         {{ saving() ? 'saving…' : 'Save as draft' }}
@@ -411,7 +439,7 @@
       </p>
     </div>
 
-    <div class="flex items-center justify-between px-3 py-1.5">
+    <div class="flex items-center justify-between px-2 py-1">
       <span class="tcv-label">
         Revisions ({{ revisions().length }})
         @if (queueCount()) {
@@ -421,10 +449,11 @@
       <span class="flex items-center gap-1">
         <button (click)="foldAll()" class="tcv-chip px-1.5 py-0" title="fold all">–</button>
         <button (click)="unfoldAll()" class="tcv-chip px-1.5 py-0" title="unfold all">+</button>
-        <button (click)="toggleAutoArchive()" class="tcv-chip px-1.5 py-0"
-                [style.color]="autoArchive() ? 'var(--ok)' : 'var(--ink-dim)'"
-                [style.border-color]="autoArchive() ? 'var(--ok)' : 'var(--line)'"
-                title="archive automatically once a revision is applied">auto</button>
+        <span class="tcv-label">auto</span>
+        <button (click)="toggleAutoArchive()" class="tcv-switch"
+                [attr.data-on]="autoArchive() ? 1 : null"
+                [attr.aria-pressed]="autoArchive()"
+                title="archive automatically once a revision is applied"></button>
         <button (click)="toggleArchivedView()" class="tcv-chip px-1.5 py-0"
                 [style.color]="showArchived() ? 'var(--accent)' : 'var(--ink-dim)'"
                 title="show archived">arch</button>
@@ -432,9 +461,9 @@
       </span>
     </div>
 
-    <ul class="tcv-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+    <ul class="tcv-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-3">
       @for (r of revisions(); track r.id) {
-        <li class="tcv-card mb-1.5 p-2">
+        <li class="tcv-card mb-1 p-1.5">
           <div class="flex items-start justify-between gap-2">
             @if (editing() === r.id) {
               <!-- Text only: the drawing is the record and cannot change. -->
@@ -509,12 +538,32 @@
             </p>
           }
           @if (!isFolded(r.id)) {
+          <!-- The drawing is the before. Once there is an after shot from the
+               same camera the two sit side by side, which is the only way to
+               see from the card whether what was asked for happened. -->
           @if (r.image_bytes) {
-            <button (click)="openShot(r)" class="mt-1.5 block w-full overflow-hidden rounded"
-                    style="border: 1px solid var(--line)" title="enlarge">
-              <img [src]="imageUrl(r)" alt="revision drawing"
-                   class="block h-20 w-full bg-white object-contain" loading="lazy">
-            </button>
+            <div class="mt-1.5 flex gap-1">
+              <button (click)="openShot(r)"
+                      class="relative block min-w-0 flex-1 overflow-hidden rounded"
+                      style="border: 1px solid var(--line)" title="enlarge">
+                <img [src]="imageUrl(r)" alt="revision drawing"
+                     class="block h-20 w-full bg-white object-contain" loading="lazy">
+                @if (r.image_after_bytes) {
+                  <span class="absolute left-0 top-0 px-1 text-[9px] uppercase"
+                        style="background: var(--surface-2); color: var(--ink-dim)">before</span>
+                }
+              </button>
+              @if (r.image_after_bytes) {
+                <button (click)="openShot(r, 'after')"
+                        class="relative block min-w-0 flex-1 overflow-hidden rounded"
+                        style="border: 1px solid var(--line)" title="enlarge">
+                  <img [src]="imageUrl(r, 'after')" alt="after the change"
+                       class="block h-20 w-full bg-white object-contain" loading="lazy">
+                  <span class="absolute left-0 top-0 px-1 text-[9px] uppercase"
+                        style="background: var(--surface-2); color: var(--ok)">after</span>
+                </button>
+              }
+            </div>
           }
           <div class="mt-1 flex items-center gap-1 text-[10px]"
                style="color: var(--ink-dim)">
@@ -714,11 +763,19 @@
   }
   @for (m of n.models; track m.id) {
     <div (click)="openModel(m)"
-         class="group flex cursor-pointer items-center justify-between rounded px-1.5 py-1"
+         class="group relative flex cursor-pointer items-center justify-between rounded px-1.5 py-1"
          [style.margin-left.px]="depth * 10"
          [style.background]="activeModel() === m.id ? 'var(--accent-deep)' : 'transparent'">
+      <!-- A build takes minutes and can be started from the command line;
+           without this the page looks idle while the machine is working. -->
+      @if (m.building) {
+        <span class="tcv-building absolute inset-x-1 bottom-0 h-[2px] overflow-hidden rounded"></span>
+      }
       <span class="min-w-0 truncate text-[12px]">
         {{ m.title }}
+        @if (m.building) {
+          <span class="ml-1 text-[10px]" style="color: var(--accent)">building…</span>
+        }
         @if (!m.data) { <span style="color: var(--warn)" title="not built yet"> ·</span> }
         @else if (m.stale) { <span style="color: var(--warn)" title="source changed, rebuild"> *</span> }
       </span>

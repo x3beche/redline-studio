@@ -46,7 +46,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private stage = viewChild.required<ElementRef<HTMLDivElement>>('stage');
   private caret = viewChild<ElementRef<HTMLInputElement>>('caret');
   private cadInput = viewChild<ElementRef<HTMLInputElement>>('cadInput');
-  private freezeBtn = viewChild<ElementRef<HTMLButtonElement>>('freezeBtn');
+  private freezeBtn = viewChild<ElementRef<HTMLElement>>('freezeBtn');
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   frozen = signal(false);
@@ -80,6 +80,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   editing = signal<string | null>(null);
   showArchived = signal(false);
   autoArchive = signal(false);
+  autoTranslate = signal(false);
   collapsed_ = signal<Set<string>>(new Set());
   editText = signal('');
   editPart = signal('');
@@ -513,7 +514,9 @@ export class Editor implements AfterViewInit, OnDestroy {
     return first === text ? first : first + '…';
   }
 
-  imageUrl(r: Revision): string { return this.api.imageUrl(r.id); }
+  imageUrl(r: Revision, which: 'before' | 'after' = 'before'): string {
+    return this.api.imageUrl(r.id, which);
+  }
 
   // ---- what the work cost ----
   // The numbers come from the agent's own transcripts and are frozen onto the
@@ -632,7 +635,13 @@ export class Editor implements AfterViewInit, OnDestroy {
     return Math.round(Math.max(...v) / (a.series.bucket_s || 30));
   }
 
-  openShot(r: Revision) { this.preview.set(r); }
+  /** Which of the two shots the overlay is showing. */
+  previewSide = signal<'before' | 'after'>('before');
+
+  openShot(r: Revision, which: 'before' | 'after' = 'before') {
+    this.previewSide.set(which);
+    this.preview.set(r);
+  }
   closeShot() { this.preview.set(null); }
 
   // ---- version history ----
@@ -896,16 +905,32 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** Server-side so the CLI honours it too, not just this browser. */
   loadSettings() {
     this.api.settings().subscribe({
-      next: s => this.autoArchive.set(s.auto_archive), error: () => {} });
+      next: s => {
+        this.autoArchive.set(s.auto_archive);
+        this.autoTranslate.set(s.auto_translate);
+      },
+      error: () => {},
+    });
   }
 
   toggleAutoArchive() {
-    const next = !this.autoArchive();
-    this.api.setAutoArchive(next).subscribe({
+    this.api.setSetting('auto_archive', !this.autoArchive()).subscribe({
       next: s => {
         this.autoArchive.set(s.auto_archive);
         this.flash(s.auto_archive ? 'applied revisions will be archived'
                                   : 'auto-archive off');
+      },
+      error: () => this.flash('could not change the setting'),
+    });
+  }
+
+  toggleAutoTranslate() {
+    this.api.setSetting('auto_translate', !this.autoTranslate()).subscribe({
+      next: s => {
+        this.autoTranslate.set(s.auto_translate);
+        this.flash(s.auto_translate
+          ? 'notes will be saved as English requests'
+          : 'notes will be saved as written');
       },
       error: () => this.flash('could not change the setting'),
     });

@@ -15,6 +15,10 @@ export interface Revision {
   edited_at: string | null;
   archived: boolean;
   image_bytes: number;
+  /** The same view once the work is done; 0 until an after shot is taken. */
+  image_after_bytes: number;
+  /** What was typed, when the note was saved as an English request. */
+  comment_original: string | null;
   /** One short sentence, generated from the text and the drawing. */
   summary: string | null;
   /** True once someone has written it by hand; the generator then
@@ -66,6 +70,14 @@ export interface Analytics {
   series: { bucket_s: number; output: number[] };
 }
 
+/** Kept server-side so the CLI honours them too, not just this browser. */
+export interface Settings {
+  auto_archive: boolean;
+  /** Turn a note into an English revision request as it is saved, so the
+   *  summary and everything downstream read the same way. */
+  auto_translate: boolean;
+}
+
 /** draft = invisible to models; queued = in the apply queue (models read these). */
 export type RevisionStatus = 'draft' | 'queued' | 'applied' | 'rejected';
 
@@ -84,13 +96,12 @@ export class Api {
     return this.http.get<Revision[]>(`/api/revisions?archived=${archived}`);
   }
 
-  settings(): Observable<{ auto_archive: boolean }> {
-    return this.http.get<{ auto_archive: boolean }>('/api/settings');
+  settings(): Observable<Settings> {
+    return this.http.get<Settings>('/api/settings');
   }
 
-  setAutoArchive(value: boolean): Observable<{ auto_archive: boolean }> {
-    return this.http.put<{ auto_archive: boolean }>(
-      `/api/settings?auto_archive=${value}`, {});
+  setSetting(key: keyof Settings, value: boolean): Observable<Settings> {
+    return this.http.put<Settings>(`/api/settings?${key}=${value}`, {});
   }
 
   archive(id: string, value: boolean): Observable<unknown> {
@@ -98,7 +109,9 @@ export class Api {
   }
 
   /** The marked image lives in the database; cards render it from this URL. */
-  imageUrl(id: string): string { return `/api/revisions/${id}/image`; }
+  imageUrl(id: string, which: 'before' | 'after' = 'before'): string {
+    return `/api/revisions/${id}/image?which=${which}`;
+  }
 
   create(body: {
     comment: string; image_png: string | null;
@@ -137,6 +150,10 @@ export interface ModelEntry {
   id: string; name: string; title: string;
   ready: boolean; stale: boolean; data: boolean; data_bytes: number;
   updated_at: string; built_at: string | null; sha256: string;
+  /** True while a build is running, whether it was started here or from
+   *  the command line. */
+  building: boolean;
+  build_started: string | null;
 }
 export interface FolderNode {
   name: string; path: string;

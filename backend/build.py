@@ -23,6 +23,13 @@ async def build(db, model_id: str, script: Path) -> dict:
     if not doc.get("ready"):
         raise ValueError(f"{model_id}: PARTS is not defined")
 
+    # A build takes minutes and can be started from the CLI, where the browser
+    # has no way of knowing. The flag lives on the model so the page can say
+    # "building" wherever the build came from.
+    await db.models.update_one(
+        {"_id": model_id},
+        {"$set": {"building": True, "build_started": store.now()}})
+
     tmp = Path(tempfile.mkdtemp(prefix="x3build-"))
     try:
         models_dir = tmp / "models"
@@ -102,4 +109,9 @@ async def build(db, model_id: str, script: Path) -> dict:
                 "artifacts": {k: v["bytes"] for k, v in stored.items()},
                 "log": "\n".join(log[-4:])}
     finally:
+        # Cleared however it ends: a crashed build that left the flag set
+        # would show a bar that never stops.
+        await db.models.update_one(
+            {"_id": model_id},
+            {"$set": {"building": False}, "$unset": {"build_started": ""}})
         shutil.rmtree(tmp, ignore_errors=True)

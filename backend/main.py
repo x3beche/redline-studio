@@ -501,8 +501,61 @@ def _out(d: dict) -> dict:
             "status": d.get("status", "draft"), "queued_at": d.get("queued_at"),
             "edited_at": d.get("edited_at"), "archived": bool(d.get("archived")),
             "image_bytes": (d.get("image") or {}).get("bytes", 0),
+            # The same view once the work is done, so the card can show
+            # before and after side by side.
+            "image_after_bytes": (d.get("image_after") or {}).get("bytes", 0),
             "summary": d.get("summary"),
+            "comment_original": d.get("comment_original"),
             "summary_manual": bool(d.get("summary_manual"))}
+
+
+async def _log_openrouter(rid: str, used: dict, surface: str,
+                          kind: str) -> None:
+    """Put an OpenRouter call on the revision's bill.
+
+    It is a second vendor working on the same card, and the analytics panel
+    should say so rather than showing Anthropic alone. OpenRouter reports its
+    own cost, so no rate card is needed. Never fatal: the card is already
+    saved by the time this runs.
+    """
+    import uuid
+
+    try:
+        await usage.record_call(
+            db(), _id=f"or:{uuid.uuid4().hex[:16]}", provider="openrouter",
+            surface=surface, kind=kind, model=summarise.MODEL,
+            input=used.get("prompt_tokens") or 0,
+            output=used.get("completion_tokens") or 0,
+            cache_read=0, cache_write=0, thinking=0,
+            cost_usd=used.get("cost"), cost_basis="billed", revision=rid)
+    except Exception as exc:                         # noqa: BLE001
+        LOG.warning("usage for %s not recorded: %s", rid, exc)
+
+
+# ---------------- english notes ----------------
+# Notes get written in whatever language is to hand; the model sources, the
+# card summaries and the rest of this app are English. With the switch on,
+# the note becomes an English request at the door, so everything downstream
+# reads the same way. The original is kept - it is what the person actually
+# wrote, and a bad translation must not lose it.
+async def _translate_note(rid: str) -> None:
+    d = db()
+    doc = await d.revisions.find_one({"_id": rid})
+    if not doc or doc.get("comment_original"):
+        return
+    try:
+        text, used = await summarise.translate(doc["comment"])
+    except Exception as exc:                         # noqa: BLE001
+        LOG.warning("translation for %s failed: %s", rid, exc)
+        return
+    await _log_openrouter(rid, used, "translate", "translate")
+    if not text or text.strip() == doc["comment"].strip():
+        return
+    await d.revisions.update_one({"_id": rid}, {"$set": {
+        "comment": text, "comment_original": doc["comment"],
+        "translated_at": store.now()}})
+    # The summary is written from the note, so it has to follow the English.
+    await _make_summary(rid)
 
 
 # ---------------- card summaries ----------------
@@ -526,20 +579,7 @@ async def _make_summary(rid: str) -> None:
     except Exception as exc:                         # noqa: BLE001
         LOG.warning("summary for %s failed: %s", rid, exc)
         return
-    # The card summary is a second vendor working on the same revision, and
-    # the analytics panel should say so rather than showing Anthropic alone.
-    # OpenRouter reports its own cost, so no rate card is needed here.
-    try:
-        import uuid
-        await usage.record_call(
-            d, _id=f"or:{uuid.uuid4().hex[:16]}", provider="openrouter",
-            surface="card-summary", model=summarise.MODEL,
-            input=used.get("prompt_tokens") or 0,
-            output=used.get("completion_tokens") or 0,
-            cache_read=0, cache_write=0, thinking=0,
-            cost_usd=used.get("cost"), cost_basis="billed", revision=rid)
-    except Exception as exc:                         # noqa: BLE001
-        LOG.warning("usage for %s not recorded: %s", rid, exc)
+    await _log_openrouter(rid, used, "card-summary", "summary")
     if not text:
         return
     await d.revisions.update_one({"_id": rid}, {"$set": {
@@ -549,6 +589,23 @@ async def _make_summary(rid: str) -> None:
 def schedule_summary(rid: str) -> None:
     import asyncio
     asyncio.create_task(_make_summary(rid))
+
+
+async def _translate_then_summarise(rid: str) -> None:
+    """Translate first when the switch is on, because the summary is written
+    from the note and would otherwise be generated from the old language and
+    then thrown away."""
+    if (await store.settings(db()))["auto_translate"]:
+        await _translate_note(rid)          # writes the summary itself
+        doc = await db().revisions.find_one({"_id": rid}) or {}
+        if doc.get("summary"):
+            return
+    await _make_summary(rid)
+
+
+def schedule_note_work(rid: str) -> None:
+    import asyncio
+    asyncio.create_task(_translate_then_summarise(rid))
 
 
 @app.post("/api/revisions/{rid}/summary")
@@ -589,7 +646,7 @@ async def create_revision(body: RevisionIn):
         "image": image,
     }
     await d.revisions.insert_one(doc)
-    schedule_summary(rid)
+    schedule_note_work(rid)
     return _out(doc)
 
 
@@ -624,13 +681,33 @@ async def one_revision(rid: str):
     return _out(doc)
 
 
+@app.put("/api/revisions/{rid}/image/after")
+async def put_after_image(rid: str, file: UploadFile = File(...)):
+    """Store the "after" shot: the same camera once the work is done.
+
+    Uploaded rather than rendered here - rendering drives a headless browser
+    against this very server, and having the server wait on itself is a good
+    way to deadlock.
+    """
+    d = db()
+    if not await d.revisions.find_one({"_id": rid}):
+        raise HTTPException(404, "no such revision")
+    png = await file.read()
+    if not png.startswith(b"\x89PNG"):
+        raise HTTPException(400, "expected a PNG")
+    shot = await store.put_shot(d, png)
+    await d.revisions.update_one({"_id": rid}, {"$set": {"image_after": shot}})
+    return {"id": rid, "bytes": shot["bytes"]}
+
+
 @app.get("/api/revisions/{rid}/image")
-async def revision_image(rid: str):
+async def revision_image(rid: str, which: str = "before"):
     d = db()
     doc = await d.revisions.find_one({"_id": rid})
-    if not doc or not doc.get("image"):
+    key = "image_after" if which == "after" else "image"
+    if not doc or not doc.get(key):
         raise HTTPException(404, rid)
-    png = await store.get_shot(d, doc["image"]["gridfs_id"])
+    png = await store.get_shot(d, doc[key]["gridfs_id"])
     return Response(content=png, media_type="image/png")
 
 
@@ -683,10 +760,14 @@ async def get_settings():
 
 
 @app.put("/api/settings")
-async def put_settings(auto_archive: bool):
-    await db().settings.update_one({"_id": SETTINGS_ID},
-                                   {"$set": {"auto_archive": auto_archive}},
-                                   upsert=True)
+async def put_settings(auto_archive: bool | None = None,
+                       auto_translate: bool | None = None):
+    patch = {k: v for k, v in (("auto_archive", auto_archive),
+                               ("auto_translate", auto_translate))
+             if v is not None}
+    if patch:
+        await db().settings.update_one({"_id": SETTINGS_ID}, {"$set": patch},
+                                       upsert=True)
     return await get_settings()
 
 
