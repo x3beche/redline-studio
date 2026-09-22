@@ -212,6 +212,7 @@
   <div class="flex min-w-0 flex-1 flex-col gap-2">
 
   <div #stage class="relative min-w-0 flex-1 overflow-hidden rounded"
+       [style.--log-h.px]="logOpen() ? 168 : 30"
        style="border: 1px solid var(--line)">
     <!-- 8 px breathing room under the viewer, matching the top. -->
     <div #host class="absolute left-0 right-0 top-0" style="bottom: 8px"
@@ -297,6 +298,38 @@
            style="background: rgba(0,0,0,.8)">{{ toast() }}</div>
     }
 
+      <!-- Its own band under the 3D area, inside the stage. Outside it, the
+           row left the tree column stranded above a strip of dead space; in
+           here the column runs the full height beside both. -->
+      <div #logPanel class="tcv-log tcv-panel absolute bottom-0 right-0 rounded"
+           style="border: 1px solid var(--line)">
+      <div class="flex items-center gap-2 px-2.5 py-1">
+        <button (click)="toggleLog()" class="tcv-chip">
+          {{ logOpen() ? '▾' : '▸' }} log
+        </button>
+        <span class="mono text-[10px]" style="color: var(--ink-dim)">
+          {{ log().length }} lines
+        </span>
+        @if (runActive()) {
+          <span class="text-[10px]" style="color: var(--accent)">running…</span>
+        }
+        <button (click)="clearLog()" class="tcv-chip ml-auto">clear</button>
+      </div>
+      @if (logOpen()) {
+        <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
+             style="height: 132px; border-top: 1px solid var(--line)">
+          @for (l of log(); track l._id) {
+            <div class="flex gap-2 leading-snug">
+              <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
+              <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
+            </div>
+          } @empty {
+            <div style="color: var(--ink-dim)">no activity yet</div>
+          }
+        </div>
+      }
+    </div>
+
     <!-- Lives in the viewer's toolbar: moved there once the viewer is up,
          and wearing the viewer's own button markup (tooltip > frame > btn)
          so it is one of that row rather than a text button bolted to its
@@ -345,36 +378,6 @@
           </button>
           <button (click)="forcing.set(null)" class="tcv-chip flex-1">keep it</button>
         </div>
-      </div>
-    }
-  </div>
-  <!-- Its own row under the view, not laid over it: a panel that covers
-     the model is a panel you keep closing. -->
-  <div #logPanel class="tcv-log tcv-panel shrink-0 rounded"
-     style="border: 1px solid var(--line)">
-    <div class="flex items-center gap-2 px-2.5 py-1">
-      <button (click)="toggleLog()" class="tcv-chip">
-        {{ logOpen() ? '▾' : '▸' }} log
-      </button>
-      <span class="mono text-[10px]" style="color: var(--ink-dim)">
-        {{ log().length }} lines
-      </span>
-      @if (runActive()) {
-        <span class="text-[10px]" style="color: var(--accent)">running…</span>
-      }
-      <button (click)="clearLog()" class="tcv-chip ml-auto">clear</button>
-    </div>
-    @if (logOpen()) {
-      <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
-           style="height: 132px; border-top: 1px solid var(--line)">
-        @for (l of log(); track l._id) {
-          <div class="flex gap-2 leading-snug">
-            <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
-            <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
-          </div>
-        } @empty {
-          <div style="color: var(--ink-dim)">no activity yet</div>
-        }
       </div>
     }
   </div>

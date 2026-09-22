@@ -33,8 +33,10 @@ body {
    because the wrappers above it paint an opaque grey over anything further
    out. A cool near-white reads better for CAD than the flat grey. */
 .tcv_cad_view {
-  /* The log is docked inside this, positioned against its edges. */
   position: relative;
+  /* Room for the log band below it. The tree column beside it keeps its full
+     height, which is what leaves no dead space under the column. */
+  margin-bottom: var(--log-h, 30px);
   background: linear-gradient(180deg, #f4f7fb 0%, #dfe7f1 55%, #ccd7e6 100%) !important;
   /* Every panel, card and button here has a radius; the bright 3D backdrop
      was the one square thing on screen and its corners cut into the dark
@@ -237,12 +239,14 @@ body {
 /* The log has its own row under the view, starting where the view starts:
    it belongs to the 3D area, not to the tree column beside it. The offset is
    the tree column's own fixed width, set above. */
+/* The log sits under the 3D area, inside the stage, lined up with it. The
+   left offset is the tree column's own fixed width plus the viewer's border;
+   tuned against the rendered page. */
 .tcv-log {
   background: var(--surface);
-  /* Tuned against the rendered page: the tree column is 300 px, and the
-     viewer keeps its own border and padding either side of the 3D area. */
-  margin-left: 294px;
-  margin-right: 7px;
+  left: 294px;
+  margin: 0 7px 7px 0;
+  z-index: 15;
 }
 
 /* The fold handle: a short, thick grab on the column's inner edge, halfway
