@@ -12,7 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import store
+from . import compute, store
 
 TIMEOUT = 900
 
@@ -75,14 +75,29 @@ async def build(db, model_id: str, script: Path) -> dict:
         if capped.exists():
             argv = [str(capped), *argv]
 
+        # What this costs the machine, as opposed to what it costs in tokens:
+        # the card shows both. Started before the spawn, stopped after the
+        # child has been waited for, which is when its usage is final.
+        meter = compute.Meter()
         proc = await asyncio.create_subprocess_exec(
             *argv, cwd=str(tmp),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+        meter.watch(proc.pid)
         try:
             out, _ = await asyncio.wait_for(proc.communicate(), TIMEOUT)
         except asyncio.TimeoutError:
             proc.kill()
             raise TimeoutError(f"{model_id}: build did not finish within {TIMEOUT}s")
+        finally:
+            # Recorded however it ended: a build that ran for four minutes and
+            # then blew the memory ceiling spent those four minutes.
+            job = meter.stop()
+            try:
+                await compute.record(
+                    db, "build", await compute.current_revision(db),
+                    model=model_id, rc=proc.returncode, **job)
+            except Exception:                    # never fail a build over this
+                pass
 
         log = out.decode(errors="replace").strip().splitlines()
         if proc.returncode in (-9, 137):

@@ -260,7 +260,18 @@ body {
   flex-direction: column;
   min-height: 0;
 }
-.tcv_cad_toolbar { flex: none; }
+/* The viewer widths its toolbar from its own arithmetic - the canvas width
+   plus the tree width it was told about. Our grid gives the tree column more
+   room than that, so the bar stopped short of the right edge and left a dead
+   strip in the header. The bar is a header: let the container width it. */
+.tcv_cad_toolbar {
+  flex: none;
+  /* auto, not 100%: the bar carries a 2px margin, and a hundred per cent of
+     the parent plus that margin hangs over the right edge. As a stretched
+     flex item it sizes itself to what is left. */
+  width: auto !important;
+  box-sizing: border-box;
+}
 .tcv_cad_body {
   flex: 1 1 auto !important;
   height: auto !important;

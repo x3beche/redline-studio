@@ -795,6 +795,40 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
+  /** "3 builds · 1 render", or what there is of it. */
+  computeJobs(c: NonNullable<Analytics['compute']>): string {
+    const parts = (c.kinds ?? []).map(k =>
+      `${k.jobs} ${k.kind}${k.jobs === 1 ? '' : 's'}`);
+    return parts.join(' \u00b7 ') || 'nothing recorded';
+  }
+
+  /** Core-minutes, or seconds while it is still small: "42s of one core"
+   *  reads better than "0.7 core-min" for a render. */
+  coreTime(sec: number | null | undefined): string {
+    const v = sec ?? 0;
+    if (v < 90) return v.toFixed(0) + ' core-s';
+    return (v / 60).toFixed(1) + ' core-min';
+  }
+
+  mem(mb: number | null | undefined): string {
+    if (mb == null) return '-';
+    return mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : mb.toFixed(0) + ' MB';
+  }
+
+  /** Watt-hours. A build is a few of them, so this never needs a kWh. */
+  wh(v: number | null | undefined): string {
+    if (v == null) return '-';
+    return v < 10 ? v.toFixed(2) + ' Wh' : v.toFixed(0) + ' Wh';
+  }
+
+  /** The energy figure is a guess and has to look like one. */
+  energyNote(e: { basis: string; watts_per_core: number | null } | undefined): string {
+    if (!e) return '';
+    return e.basis === 'measured'
+      ? 'read from the machine\u2019s own energy counter'
+      : `assumed: ${e.watts_per_core} W per busy core, no readable power counter`;
+  }
+
   /** Tokens per second at the busiest bucket, for the chart's scale label. */
   sparkPeak(a: Analytics): number {
     const v = a.series?.output ?? [];

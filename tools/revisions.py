@@ -119,10 +119,16 @@ async def cmd_done(args):
 
 
 async def cmd_start(args):
+    from backend import compute
+
     db = connect()
     doc = {"_id": "current", "title": args.title, "revision": args.id,
            "model": None, "percent": 0.0, "status": "running",
-           "started_at": _now(), "finished_at": None}
+           "started_at": _now(), "finished_at": None,
+           # The machine's busy counter at both ends of the run: the
+           # difference is what the whole box burned while this was worked
+           # on. Our own builds are a part of that, not a separate bill.
+           "cpu_start": compute.machine_cpu()}
     await db.runs.replace_one({"_id": "current"}, doc, upsert=True)
     # A second copy keyed by the revision. "current" is overwritten by the
     # next run, and without this the window a revision was worked in - which
@@ -147,11 +153,12 @@ async def cmd_log(args):
 
 
 async def cmd_finish(args):
-    from backend import usage
+    from backend import compute, usage
 
     db = connect()
     status = "failed" if args.failed else "done"
-    patch = {"status": status, "percent": 100.0, "finished_at": _now()}
+    patch = {"status": status, "percent": 100.0, "finished_at": _now(),
+             "cpu_end": compute.machine_cpu()}
     cur = await db.runs.find_one({"_id": "current"}) or {}
     ids = ["current"] + ([cur["revision"]] if cur.get("revision") else [])
     await db.runs.update_many({"_id": {"$in": ids}}, {"$set": patch},
@@ -183,6 +190,12 @@ async def cmd_finish(args):
             print(f"analytics: {t['calls']} cagri, "
                   f"{t['billed_tokens']:,} token, {money}, "
                   f"{doc['seconds']:.0f} sn")
+            c = doc.get("compute") or {}
+            ct = c.get("totals") or {}
+            if ct.get("jobs"):
+                print(f"compute  : {ct['jobs']} is, {ct['core_min']:.1f} "
+                      f"cekirdek-dk, tepe {ct.get('peak_rss_mb') or 0:.0f} MB, "
+                      f"~{(c.get('energy') or {}).get('wh', 0):.2f} Wh")
         except Exception as exc:                 # never block finishing
             print(f"analytics skipped: {type(exc).__name__}: {exc}")
 
@@ -231,7 +244,10 @@ async def _after_shot(db, rid: str, width: int = 1200, height: int = 800,
     if only:
         argv += ["--only", only]
     proc = await asyncio.create_subprocess_exec(
-        *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+        *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        # The run is already closed by the time the after shot is taken, so
+        # the render cannot look up which revision it is for.
+        env={**os.environ, "X3_REVISION": rid})
     log, _ = await proc.communicate()
     if proc.returncode != 0 or not out.exists():
         raise SystemExit("render failed: " + log.decode(errors="replace")[-400:])

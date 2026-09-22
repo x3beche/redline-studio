@@ -377,6 +377,12 @@ async def store(db, revision_id: str, run: dict, fresh: bool = True) -> dict:
     await ingest(db, force=fresh)
     data = await for_revision(db, revision_id, run.get("started_at"),
                               run.get("finished_at"))
+    # What the machine spent on the same revision - builds and renders. A
+    # different bill from a different meter, so it sits in its own block
+    # rather than being added to the token cost.
+    from . import compute
+    data["compute"] = await compute.for_revision(
+        db, revision_id, run.get("started_at"), run.get("finished_at"), run)
     doc = {"_id": revision_id, "title": run.get("title"),
            "started_at": run.get("started_at"),
            "finished_at": run.get("finished_at"),

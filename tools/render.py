@@ -46,6 +46,12 @@ def _ink(png: bytes) -> float:
     return off / len(px)
 
 
+# What the browser spent. The picture is the return value, so the meter's
+# reading is left here for main() to log - chrome is killed rather than
+# waited for, and nothing else in the process ever sees its time.
+LAST_JOB: dict = {}
+
+
 def render(revision: str, out: Path, width: int, height: int, wait: int,
            camera: str | None = None, only: str | None = None) -> Path:
     from websockets.sync.client import connect
@@ -56,6 +62,9 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
          f"--window-size={width},{height}", f"--user-data-dir={profile}",
          f"{WEB}/?{'model=' + revision.split(':', 1)[1] if revision.startswith('model:') else 'rev=' + revision}"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from backend import compute
+    meter = compute.ProcMeter(chrome.pid)
     try:
         page = None
         for _ in range(60):
@@ -162,6 +171,9 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
             print(f"frame looks empty, waiting ({attempt + 1}/2)")
             time.sleep(25)
     finally:
+        # Read before the kill: a terminated browser takes its counters with
+        # it, and its renderers are never reaped by anyone here.
+        LAST_JOB.update(meter.stop())
         chrome.terminate()
 
 
@@ -180,8 +192,19 @@ def main() -> None:
                                    "this text, e.g. kapak")
     args = ap.parse_args()
     out = Path(args.out or f"/tmp/after-{args.revision.replace(':', '-')}.png")
-    render(args.revision, out, args.width, args.height, args.wait, args.camera,
-           args.only)
+    t0 = time.monotonic()
+    try:
+        render(args.revision, out, args.width, args.height, args.wait, args.camera,
+               args.only)
+    finally:
+        # A picture costs a browser: the card shows what that came to next to
+        # what the model cost in tokens. Recorded whether or not the frame
+        # came out - a render that timed out still ran the machine.
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from backend import compute
+        compute.record_sync(Path(__file__).resolve().parent.parent, "render",
+                            model=args.revision,
+                            **compute.whole_process(t0, LAST_JOB))
     print(f"{out}   ({out.stat().st_size} bytes)")
     print("Open it with the Read tool and compare against the revision drawing.")
 

@@ -154,6 +154,12 @@ takes the after picture and freezes what the work cost - tokens, time and
 money at list price - onto the card. Those numbers come from your own
 transcripts; `revisions.py usage` re-reads them if a run ended badly.
 
+The card also shows what the machine spent: every build and every render is
+metered by the kernel and filed against the revision you are working on, so
+nothing has to be done by hand. `start` and `finish` read the machine's own
+busy counter at both ends, which is the only way the "whole machine" figure
+exists - a run closed some other way will not have it.
+
 ## Show your progress on screen
 
 The app has a progress bar at the top and an IDE-style log at the bottom. Use
@@ -224,7 +230,8 @@ thing the next reader cannot recover.
 If the tool is not enough, the collections are `revisions`, `models`,
 `folders`, `model_versions`, `uploads`, `settings`, `runs` (one row per
 revision worked on, plus `current`), `activity` (the on-screen log),
-`llm_calls` and `analytics` (what each revision cost). The GridFS buckets are
+`llm_calls` and `analytics` (what each revision cost), `compute_jobs` (one
+row per build or render: CPU, peak memory, disk). The GridFS buckets are
 `model_files` (generated artifacts, gzipped), `shots` (revision images before
 and after) and `uploads` (imported STEP/STL). The connection string is
 `MONGODB_URI` in `.env`.

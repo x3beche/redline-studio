@@ -50,7 +50,8 @@ which puts a memory ceiling on it. A boolean against a few hundred solids
 will otherwise take the machine down with it.
 
 `finish` closes the run, takes the after picture from the revision's own
-camera and freezes what the work cost onto the card.
+camera and freezes what the work cost onto the card - tokens and money on
+one side, the machine's CPU, memory and energy on the other.
 
 ## Show your progress on screen
 
