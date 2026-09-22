@@ -47,7 +47,7 @@ def _ink(png: bytes) -> float:
 
 
 def render(revision: str, out: Path, width: int, height: int, wait: int,
-           camera: str | None = None) -> Path:
+           camera: str | None = None, only: str | None = None) -> Path:
     from websockets.sync.client import connect
 
     profile = tempfile.mkdtemp(prefix="x3render-")
@@ -122,6 +122,20 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
                f" return 'ok'; }})()")
             time.sleep(3)
 
+        # --only isolates one part, the way the user does before drawing on
+        # it. Without it a detail inside the case is buried under the walls
+        # and the check shot cannot show what the drawing showed.
+        if only:
+            got = js("(() => { const v = window.tcv; if (!v) return 'no viewer';"
+                     " const s = v.getStates(); let n = 0;"
+                     f" const want = {json.dumps(only.lower())};"
+                     " for (const p of Object.keys(s)) {"
+                     "   const on = p.toLowerCase().includes(want);"
+                     "   v.setState(p, on ? [1, 1] : [0, 0]); if (on) n++; }"
+                     " return n; })()")
+            print(f"--only {only!r}: {got} part(s) left visible")
+            time.sleep(2)
+
         # ?rev= also pops the revision card over the top-right corner, which
         # is exactly where the model usually sits. It is not part of the model.
         # Dismissing it would release the held camera too, so only hide it.
@@ -162,9 +176,12 @@ def main() -> None:
     ap.add_argument("--wait", type=int, default=40)
     ap.add_argument("--camera", help="px,py,pz,tx,ty,tz - look from somewhere "
                                      "other than the stored angle")
+    ap.add_argument("--only", help="show only parts whose tree path contains "
+                                   "this text, e.g. kapak")
     args = ap.parse_args()
     out = Path(args.out or f"/tmp/after-{args.revision.replace(':', '-')}.png")
-    render(args.revision, out, args.width, args.height, args.wait, args.camera)
+    render(args.revision, out, args.width, args.height, args.wait, args.camera,
+           args.only)
     print(f"{out}   ({out.stat().st_size} bytes)")
     print("Open it with the Read tool and compare against the revision drawing.")
 
