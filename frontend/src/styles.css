@@ -234,12 +234,36 @@ body {
 }
 .tcv-task[hidden] { display: none; }
 
-/* The log lies along the bottom of the view, over the band the model never
-   uses. Translucent so the scene still reads through it. */
-.tcv-log {
-  background: color-mix(in srgb, var(--surface-2) 90%, transparent);
-  backdrop-filter: blur(4px);
+/* The log has its own row under the view. */
+.tcv-log { background: var(--surface); }
+
+/* The fold handle: a hairline down the column's inner edge rather than a
+   button taking up a row. It is the edge you would drag, so that is where
+   the hit area is. */
+.tcv-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  z-index: 30;
 }
+.tcv-edge::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--line);
+  transition: background .12s;
+}
+.tcv-edge-r::before { right: 2px; }
+.tcv-edge-l::before { left: 2px; }
+.tcv-edge:hover::before { background: var(--accent); }
 
 /* Folding a side panel. Tailwind's arbitrary transition with two properties
    did not survive its parser, and width alone is not enough here: the box
@@ -251,8 +275,8 @@ body {
               max-width .15s cubic-bezier(.4, 0, .2, 1);
 }
 .tcv-fold-shut {
-  width: 34px !important;
-  max-width: 34px !important;
+  width: 18px !important;
+  max-width: 18px !important;
 }
 
 /* The viewer's tree draws in its own face at its own size, which reads as a

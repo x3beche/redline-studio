@@ -3,16 +3,21 @@
 <div class="flex h-screen gap-2 p-2">
 
   <!-- LEFT: model catalog (collapsible) -->
-  <aside class="tcv-panel flex shrink-0 flex-col rounded transition-[width] duration-150"
-         [style.width]="collapsed() ? '46px' : '250px'"
+  <aside class="tcv-panel relative flex shrink-0 flex-col rounded transition-[width] duration-150"
+         [style.width]="collapsed() ? '18px' : '250px'"
          style="border: 1px solid var(--line)">
 
-    <!-- wordmark + collapse -->
+    <!-- The handle is the column's own edge: a hairline, not a button in a
+         row of its own. -->
+    <button (click)="toggleSidebar()" class="tcv-edge tcv-edge-r"
+            [style.right.px]="0"
+            [title]="collapsed() ? 'show the catalog' : 'hide the catalog'"></button>
+
+    <!-- wordmark -->
     <div class="flex items-center gap-2 px-2 py-2" style="border-bottom: 1px solid var(--line)">
-      <button (click)="toggleSidebar()" class="tcv-btn shrink-0 px-1.5 py-0.5"
-              [title]="collapsed() ? 'expand' : 'collapse'">
-        {{ collapsed() ? '»' : '«' }}
-      </button>
+      @if (collapsed()) {
+        <span class="tcv-label mx-auto">≡</span>
+      }
       @if (!collapsed()) {
         <!-- Datum-target mark: drafting language, no ornament. -->
         <div class="flex min-w-0 items-center gap-2">
@@ -292,37 +297,6 @@
       <div class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded px-3 py-1.5 text-[12px]"
            style="background: rgba(0,0,0,.8)">{{ toast() }}</div>
     }
-    <!-- Along the bottom of the view itself. The model never uses that
-         band and the log is what you read while a revision is applied, so
-         the two share the space instead of competing for it. -->
-    <div #logPanel class="tcv-log absolute inset-x-3 bottom-3 z-20 rounded"
-         style="border: 1px solid var(--line)">
-      <div class="flex items-center gap-2 px-2.5 py-1">
-        <button (click)="toggleLog()" class="tcv-chip">
-          {{ logOpen() ? '▾' : '▸' }} log
-        </button>
-        <span class="mono text-[10px]" style="color: var(--ink-dim)">
-          {{ log().length }} lines
-        </span>
-        @if (runActive()) {
-          <span class="text-[10px]" style="color: var(--accent)">running…</span>
-        }
-        <button (click)="clearLog()" class="tcv-chip ml-auto">clear</button>
-      </div>
-      @if (logOpen()) {
-        <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
-             style="height: 132px; border-top: 1px solid var(--line)">
-          @for (l of log(); track l._id) {
-            <div class="flex gap-2 leading-snug">
-              <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
-              <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
-            </div>
-          } @empty {
-            <div style="color: var(--ink-dim)">no activity yet</div>
-          }
-        </div>
-      }
-    </div>
 
     <!-- Lives in the viewer's toolbar: moved there once the viewer is up,
          and wearing the viewer's own button markup (tooltip > frame > btn)
@@ -375,6 +349,36 @@
       </div>
     }
   </div>
+  <!-- Its own row under the view, not laid over it: a panel that covers
+     the model is a panel you keep closing. -->
+  <div #logPanel class="tcv-log tcv-panel shrink-0 rounded"
+     style="border: 1px solid var(--line)">
+    <div class="flex items-center gap-2 px-2.5 py-1">
+      <button (click)="toggleLog()" class="tcv-chip">
+        {{ logOpen() ? '▾' : '▸' }} log
+      </button>
+      <span class="mono text-[10px]" style="color: var(--ink-dim)">
+        {{ log().length }} lines
+      </span>
+      @if (runActive()) {
+        <span class="text-[10px]" style="color: var(--accent)">running…</span>
+      }
+      <button (click)="clearLog()" class="tcv-chip ml-auto">clear</button>
+    </div>
+    @if (logOpen()) {
+      <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
+           style="height: 132px; border-top: 1px solid var(--line)">
+        @for (l of log(); track l._id) {
+          <div class="flex gap-2 leading-snug">
+            <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
+            <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
+          </div>
+        } @empty {
+          <div style="color: var(--ink-dim)">no activity yet</div>
+        }
+      </div>
+    }
+  </div>
   </div>
 
   <!-- RIGHT: freeze/draw + revisions (collapsible, like the catalog) -->
@@ -383,24 +387,22 @@
        max-width is what actually clamps it. -->
   <!-- Folded through a class, not an inline width: bound inline, both width
        and max-width were set and the box still sat at its content's size. -->
-  <aside class="tcv-panel tcv-fold flex min-w-0 shrink-0 flex-col overflow-hidden rounded"
+  <aside class="tcv-panel tcv-fold relative flex min-w-0 shrink-0 flex-col overflow-hidden rounded"
          [class.tcv-fold-shut]="queueShut()"
          style="border: 1px solid var(--line)">
 
+    <button (click)="toggleQueue()" class="tcv-edge tcv-edge-l"
+            [style.left.px]="0"
+            [title]="queueShut() ? 'show the queue' : 'hide the queue'"></button>
+
     <!-- Folded, the rail still says how many are waiting: that is the one
          thing worth knowing without opening it. -->
-    <div class="flex shrink-0 items-center gap-1 px-1 py-1.5"
-         [class.flex-col]="queueShut()"
-         style="border-bottom: 1px solid var(--line)">
-      <button (click)="toggleQueue()" class="tcv-btn shrink-0 px-1.5 py-0.5"
-              [title]="queueShut() ? 'show the queue' : 'hide the queue'">
-        {{ queueShut() ? '«' : '»' }}
-      </button>
-      @if (queueShut() && queueCount()) {
-        <span class="mono mt-1 rounded px-1 text-[10px] font-bold"
+    @if (queueShut() && queueCount()) {
+      <div class="flex shrink-0 justify-center px-1 py-2">
+        <span class="mono rounded px-1 text-[10px] font-bold"
               style="background: var(--accent); color: #12222e">{{ queueCount() }}</span>
-      }
-    </div>
+      </div>
+    }
 
     @if (!queueShut()) {
 
