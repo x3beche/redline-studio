@@ -129,7 +129,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.healthTimer = setInterval(() => this.pollHealth(), 2000);
     // Slower than the rest: each call re-reads the tail of the transcripts.
     this.pollLiveCost();
-    this.costTimer = setInterval(() => this.pollLiveCost(), 20000);
+    this.costTimer = setInterval(() => this.pollLiveCost(), 15000);
     setTimeout(() => this.sizeOverlay());     // after the viewer DOM settles
     this.ro = new ResizeObserver(() => this.sizeOverlay());
     this.ro.observe(box);
@@ -152,8 +152,17 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.activity.run().subscribe({
       next: v => {
         const was = this.lastRunStatus;
+        const before = this.run()?.revision;
         this.run.set(v);
         this.lastRunStatus = v?.status ?? '';
+        // The cost poll fires on a twenty-second timer, and its first tick
+        // happened while this call was still in flight - so `run` was null,
+        // it gave up, and the panel sat empty for twenty seconds. Ask as
+        // soon as there is something to ask about.
+        if (v?.status === 'running'
+            && (v.revision !== before || !this.liveCost())) {
+          this.pollLiveCost();
+        }
         // When a run completes, swing to the angle the revision was drawn
         // from, so the result is judged from the same viewpoint.
         if (v && was === 'running' && v.status !== 'running') {
@@ -652,15 +661,27 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.liveCost.set(null);
       return;
     }
+    // Every live read writes its roll-up to the database, so the stored copy
+    // is never more than one poll old. Paint that first and let the live
+    // read land on top: the panel is filled in before the request returns
+    // rather than after it.
+    if (!this.liveCost()) {
+      this.api.analytics(rn.revision, false).subscribe({
+        next: a => { if (!this.liveCost()) this.showCost(rn.revision!, a); },
+        error: () => {},
+      });
+    }
     this.api.analytics(rn.revision, true).subscribe({
-      next: a => {
-        this.liveCost.set(a);
-        // The docked card shows its cost section open, and it reads from the
-        // same per-card store as the queue does.
-        this.cost.set({ ...this.cost(), [rn.revision!]: a });
-      },
+      next: a => this.showCost(rn.revision!, a),
       error: () => {},
     });
+  }
+
+  /** The docked card shows its cost section open, and it reads from the same
+   *  per-card store as the queue does. */
+  private showCost(rid: string, a: Analytics) {
+    this.liveCost.set(a);
+    this.cost.set({ ...this.cost(), [rid]: a });
   }
 
   /** The name for a spending surface. An "else agent" fallback filed the

@@ -644,9 +644,13 @@
                 <button (click)="openShot(r)"
                         class="relative block min-w-0 flex-1 overflow-hidden rounded"
                         style="border: 1px solid var(--line)" title="enlarge">
-                  <img [src]="imageUrl(r)" alt="revision drawing"
+                  <!-- The shots are 3:2. A fixed height made the box four
+                     times wider than tall, so the picture sat in a letterbox
+                     of white; the box follows the picture's shape instead. -->
+                <img [src]="imageUrl(r)" alt="revision drawing"
                        class="block w-full bg-white object-contain"
-                       [class.h-20]="!docked" [class.h-16]="docked" loading="lazy">
+                       [class.h-20]="!docked" [class.aspect-[16/9]]="docked"
+                       loading="lazy">
                   @if (r.image_after_bytes) {
                     <span class="absolute left-0 top-0 px-1 text-[9px] uppercase"
                           style="background: var(--surface-2); color: var(--ink-dim)">before</span>

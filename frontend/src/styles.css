@@ -216,7 +216,7 @@ body {
   flex: 1 1 auto !important;
   height: auto !important;
   max-height: none !important;
-  min-height: 90px;
+  min-height: 56px;
 }
 
 /* The running task, docked under the model tree. Styled like the cards it
