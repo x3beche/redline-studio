@@ -232,85 +232,6 @@
       }
     </div>
 
-    <!-- The log is docked in the same column as the task, under it: that is
-         where you look while a revision is being applied, and it keeps the
-         middle of the screen for the model. -->
-    <div #logPanel class="tcv-log rounded" style="border: 1px solid var(--line)">
-      <div class="flex items-center gap-2 px-2.5 py-1">
-        <button (click)="toggleLog()" class="tcv-chip">
-          {{ logOpen() ? '▾' : '▸' }} log
-        </button>
-        <span class="mono text-[10px]" style="color: var(--ink-dim)">
-          {{ log().length }} lines
-        </span>
-        @if (runActive()) {
-          <span class="text-[10px]" style="color: var(--accent)">running…</span>
-        }
-        <button (click)="clearLog()" class="tcv-chip ml-auto">clear</button>
-      </div>
-      @if (logOpen()) {
-        <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
-             style="height: 132px; border-top: 1px solid var(--line)">
-          @for (l of log(); track l._id) {
-            <div class="flex gap-2 leading-snug">
-              <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
-              <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
-            </div>
-          } @empty {
-            <div style="color: var(--ink-dim)">no activity yet</div>
-          }
-      
-    <!-- Lives in the viewer's toolbar: moved there once the viewer is up,
-         and wearing the viewer's own button markup (tooltip > frame > btn)
-         so it is one of that row rather than a text button bolted to its
-         right-hand end. -->
-    <span #freezeBtn class="tcv_tooltip" [attr.data-on]="frozen() ? 1 : null">
-      <span class="tcv_button_frame">
-        <button class="tcv_reset tcv_btn tcv-freeze"
-                [attr.data-on]="frozen() ? 1 : null"
-                (click)="frozen() ? resume() : freeze()"
-                [title]="frozen() ? 'let the view go'
-                                  : 'hold the view and draw on it'"></button>
-      </span>
-    </span>
-
-    <!-- Typing a label: the caret sits where the click landed, so the text
-         is placed against the model rather than in a dialog. -->
-    @if (typing(); as tp) {
-      <input #caret class="absolute rounded px-1 py-0.5 text-sm outline-none"
-             [style.left.px]="tp.left" [style.top.px]="tp.top - 12"
-             [style.color]="color()"
-             [style.font-size.px]="fontSize()"
-             style="background: rgba(255,255,255,.9); border: 1px dashed currentColor;
-                    min-width: 120px; transform: translateY(-2px)"
-             placeholder="label…"
-             (keydown.enter)="commitText($any($event.target).value)"
-             (keydown.escape)="cancelText()"
-             (blur)="commitText($any($event.target).value)">
-    }
-
-    <!-- While the scene is held at a revision's camera, show what was asked
-         for right there. It disappears as soon as the view is moved. -->
-    <!-- A finished run announces itself here; the camera move alone is easy
-         to miss when the reader is looking at another panel. -->
-    <!-- Deleting a model another one imports breaks that build, so the
-         server refuses and the override is asked for here. -->
-    @if (forcing(); as fc) {
-      <div class="tcv-card absolute left-1/2 top-3 z-40 w-80 -translate-x-1/2
-                  overflow-hidden p-0"
-           style="box-shadow: 0 8px 24px rgba(0,0,0,.45)">
-        <div class="px-2 py-1 text-[11px] font-semibold tracking-wider"
-             style="background: var(--warn); color: #201a08">STILL IN USE</div>
-        <p class="px-2 py-1.5 text-[12px]" style="color: var(--ink)">{{ fc.why }}</p>
-        <div class="flex gap-1 px-2 pb-2">
-          <button (click)="forceDelete()" class="tcv-chip tcv-chip-danger flex-1">
-            delete anyway
-          </button>
-          <button (click)="forcing.set(null)" class="tcv-chip flex-1">keep it</button>
-        </div>
-      </div>
-    }
-
     @if (notice(); as nt) {
       <div class="tcv-card absolute right-3 top-3 z-30 w-72 overflow-hidden p-0"
            style="box-shadow: 0 8px 24px rgba(0,0,0,.45)">
@@ -371,12 +292,89 @@
       <div class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded px-3 py-1.5 text-[12px]"
            style="background: rgba(0,0,0,.8)">{{ toast() }}</div>
     }
-  </div>
+    <!-- Along the bottom of the view itself. The model never uses that
+         band and the log is what you read while a revision is applied, so
+         the two share the space instead of competing for it. -->
+    <div #logPanel class="tcv-log absolute inset-x-3 bottom-3 z-20 rounded"
+         style="border: 1px solid var(--line)">
+      <div class="flex items-center gap-2 px-2.5 py-1">
+        <button (click)="toggleLog()" class="tcv-chip">
+          {{ logOpen() ? '▾' : '▸' }} log
+        </button>
+        <span class="mono text-[10px]" style="color: var(--ink-dim)">
+          {{ log().length }} lines
+        </span>
+        @if (runActive()) {
+          <span class="text-[10px]" style="color: var(--accent)">running…</span>
+        }
+        <button (click)="clearLog()" class="tcv-chip ml-auto">clear</button>
+      </div>
+      @if (logOpen()) {
+        <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
+             style="height: 132px; border-top: 1px solid var(--line)">
+          @for (l of log(); track l._id) {
+            <div class="flex gap-2 leading-snug">
+              <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
+              <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
+            </div>
+          } @empty {
+            <div style="color: var(--ink-dim)">no activity yet</div>
+          }
+        </div>
       }
     </div>
+
+    <!-- Lives in the viewer's toolbar: moved there once the viewer is up,
+         and wearing the viewer's own button markup (tooltip > frame > btn)
+         so it is one of that row rather than a text button bolted to its
+         right-hand end. -->
+    <span #freezeBtn class="tcv_tooltip" [attr.data-on]="frozen() ? 1 : null">
+      <span class="tcv_button_frame">
+        <button class="tcv_reset tcv_btn tcv-freeze"
+                [attr.data-on]="frozen() ? 1 : null"
+                (click)="frozen() ? resume() : freeze()"
+                [title]="frozen() ? 'let the view go'
+                                  : 'hold the view and draw on it'"></button>
+      </span>
+    </span>
+
+    <!-- Typing a label: the caret sits where the click landed, so the text
+         is placed against the model rather than in a dialog. -->
+    @if (typing(); as tp) {
+      <input #caret class="absolute rounded px-1 py-0.5 text-sm outline-none"
+             [style.left.px]="tp.left" [style.top.px]="tp.top - 12"
+             [style.color]="color()"
+             [style.font-size.px]="fontSize()"
+             style="background: rgba(255,255,255,.9); border: 1px dashed currentColor;
+                    min-width: 120px; transform: translateY(-2px)"
+             placeholder="label…"
+             (keydown.enter)="commitText($any($event.target).value)"
+             (keydown.escape)="cancelText()"
+             (blur)="commitText($any($event.target).value)">
+    }
+
+    <!-- While the scene is held at a revision's camera, show what was asked
+         for right there. It disappears as soon as the view is moved. -->
+    <!-- A finished run announces itself here; the camera move alone is easy
+         to miss when the reader is looking at another panel. -->
+    <!-- Deleting a model another one imports breaks that build, so the
+         server refuses and the override is asked for here. -->
+    @if (forcing(); as fc) {
+      <div class="tcv-card absolute left-1/2 top-3 z-40 w-80 -translate-x-1/2
+                  overflow-hidden p-0"
+           style="box-shadow: 0 8px 24px rgba(0,0,0,.45)">
+        <div class="px-2 py-1 text-[11px] font-semibold tracking-wider"
+             style="background: var(--warn); color: #201a08">STILL IN USE</div>
+        <p class="px-2 py-1.5 text-[12px]" style="color: var(--ink)">{{ fc.why }}</p>
+        <div class="flex gap-1 px-2 pb-2">
+          <button (click)="forceDelete()" class="tcv-chip tcv-chip-danger flex-1">
+            delete anyway
+          </button>
+          <button (click)="forcing.set(null)" class="tcv-chip flex-1">keep it</button>
+        </div>
+      </div>
+    }
   </div>
-
-
   </div>
 
   <!-- RIGHT: freeze/draw + revisions -->
@@ -675,10 +673,10 @@
               </span>
               <!-- What applying this revision cost. Fetched when opened: most
                    cards are never looked at, and the roll-up is not free. -->
-              <!-- Docked next to the model the run is changing, the cost is
-                   the point of the panel, so it is already open and there is
-                   nothing to toggle. -->
-              @if (!docked) {
+              <!-- Only where the numbers mean something: the card being
+                   worked on has them open already, and a finished one has a
+                   final figure. A queued card has not spent anything yet. -->
+              @if (!docked && r.archived) {
                 <button (click)="toggleCost(r)" class="tcv-chip ml-auto shrink-0 px-1 py-0"
                         title="tokens, cost and time spent on this revision">
                   {{ costShown(r.id) ? '▾' : '▸' }} cost

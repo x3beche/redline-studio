@@ -33,6 +33,8 @@ body {
    because the wrappers above it paint an opaque grey over anything further
    out. A cool near-white reads better for CAD than the flat grey. */
 .tcv_cad_view {
+  /* The log is docked inside this, positioned against its edges. */
+  position: relative;
   background: linear-gradient(180deg, #f4f7fb 0%, #dfe7f1 55%, #ccd7e6 100%) !important;
   /* Every panel, card and button here has a radius; the bright 3D backdrop
      was the one square thing on screen and its corners cut into the dark
@@ -225,13 +227,11 @@ body {
 }
 .tcv-task[hidden] { display: none; }
 
-/* The log, docked under the task in the same column. */
+/* The log lies along the bottom of the view, over the band the model never
+   uses. Translucent so the scene still reads through it. */
 .tcv-log {
-  width: 300px;
-  box-sizing: border-box;
-  margin-top: 8px;
-  flex: none;
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--surface-2) 90%, transparent);
+  backdrop-filter: blur(4px);
 }
 
 /* On/off switch. A chip that changes colour asks you to remember which

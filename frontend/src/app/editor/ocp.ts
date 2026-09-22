@@ -124,6 +124,12 @@ export class OcpViewer {
     return this.container.querySelector(".tcv_cad_navigation");
   }
 
+  /** The white 3D area itself. The log is docked inside it so it spans that
+   *  band and not the tree column beside it. */
+  get view(): HTMLElement | null {
+    return this.container.querySelector(".tcv_cad_view");
+  }
+
   /** Canvas position inside the stage, used to align the drawing layer. */
   canvasRect(): DOMRect | null {
     const c = this.container.querySelector('canvas');

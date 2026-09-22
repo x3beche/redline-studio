@@ -216,10 +216,13 @@ export class Editor implements AfterViewInit, OnDestroy {
     const tree = this.viewer?.tree;
     if (task && tree && task.parentElement !== tree) tree.appendChild(task);
 
-    // The log goes under it, in the same column: that is where you look
-    // while a revision is being applied.
+    // Into the 3D area, so it lies along the bottom of the view and not
+    // across the tree column next to it.
     const log = this.logPanel()?.nativeElement;
-    if (log && tree && log.parentElement !== tree) tree.appendChild(log);
+    const view = this.viewer?.view;
+    if (log && view && log.parentElement !== view) view.appendChild(log);
+
+
   }
 
   /** Keep the newest line in view, the way a terminal does. */
