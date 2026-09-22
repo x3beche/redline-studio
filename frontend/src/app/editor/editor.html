@@ -422,13 +422,13 @@
       <!-- Notes get written in whatever language is to hand; with this on the
            note is saved as an English request, so the summary and everything
            downstream read the same way. What was typed is kept alongside. -->
-      <div class="mt-2 flex items-center gap-2">
+      <label class="mt-2 flex items-center gap-1.5">
+        <span class="tcv-label min-w-0 flex-1 truncate">auto english</span>
         <button (click)="toggleAutoTranslate()" class="tcv-switch"
                 [attr.data-on]="autoTranslate() ? 1 : null"
                 [attr.aria-pressed]="autoTranslate()"
                 title="save the note as an English revision request"></button>
-        <span class="tcv-label min-w-0 flex-1 truncate">auto english</span>
-      </div>
+      </label>
       <button (click)="save()" [disabled]="saving()"
               class="tcv-btn tcv-btn-accent mt-2 w-full py-1.5">
         {{ saving() ? 'saving…' : 'Save as draft' }}
@@ -439,26 +439,31 @@
       </p>
     </div>
 
-    <div class="flex items-center justify-between px-2 py-1">
-      <span class="tcv-label">
+    <!-- Two rows. The heading and five controls did not fit across 284 px
+         and the heading wrapped mid-phrase, which read as a fault. -->
+    <div class="px-2 pb-1 pt-1.5">
+      <div class="tcv-label truncate">
         Revisions ({{ revisions().length }})
         @if (queueCount()) {
           <span style="color: var(--accent)"> · {{ queueCount() }} queued</span>
         }
-      </span>
-      <span class="flex items-center gap-1">
+      </div>
+      <div class="mt-1 flex items-center gap-1">
         <button (click)="foldAll()" class="tcv-chip px-1.5 py-0" title="fold all">–</button>
         <button (click)="unfoldAll()" class="tcv-chip px-1.5 py-0" title="unfold all">+</button>
-        <span class="tcv-label">auto</span>
-        <button (click)="toggleAutoArchive()" class="tcv-switch"
-                [attr.data-on]="autoArchive() ? 1 : null"
-                [attr.aria-pressed]="autoArchive()"
-                title="archive automatically once a revision is applied"></button>
         <button (click)="toggleArchivedView()" class="tcv-chip px-1.5 py-0"
                 [style.color]="showArchived() ? 'var(--accent)' : 'var(--ink-dim)'"
                 title="show archived">arch</button>
         <button (click)="refresh()" class="tcv-chip px-1.5 py-0" title="refresh">↻</button>
-      </span>
+        <!-- Same shape as the switch in the form above: label, then switch. -->
+        <label class="ml-auto flex items-center gap-1.5">
+          <span class="tcv-label">auto archive</span>
+          <button (click)="toggleAutoArchive()" class="tcv-switch"
+                  [attr.data-on]="autoArchive() ? 1 : null"
+                  [attr.aria-pressed]="autoArchive()"
+                  title="archive automatically once a revision is applied"></button>
+        </label>
+      </div>
     </div>
 
     <ul class="tcv-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-3">
