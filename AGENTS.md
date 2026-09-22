@@ -35,12 +35,22 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py models               # list models
 .venv/bin/python tools/revisions.py source <model>       # print source
 .venv/bin/python tools/revisions.py save <model> <file>  # update source
-.venv/bin/python tools/revisions.py build <model>        # rebuild (~15 s)
+.venv/bin/python tools/revisions.py build <model>        # rebuild (minutes)
 .venv/bin/python tools/revisions.py done <id>            # mark as applied
-.venv/bin/python tools/render.py <id>                    # render from that camera
+.venv/bin/python tools/revisions.py finish               # close the run
+.venv/bin/python tools/revisions.py after <id>           # the "after" picture
+.venv/bin/python tools/revisions.py usage [--full]       # what the work cost
+.venv/bin/python tools/render.py <id> [--camera=…|--only PART]
 ```
 
-Without `build` the user cannot see your change.
+Without `build` the user cannot see your change. It takes minutes, so check
+your arithmetic locally first - `export_model.py` renders straight from a
+directory of sources - and run anything heavy through `./tools/capped.sh`,
+which puts a memory ceiling on it. A boolean against a few hundred solids
+will otherwise take the machine down with it.
+
+`finish` closes the run, takes the after picture from the revision's own
+camera and freezes what the work cost onto the card.
 
 ## Show your progress on screen
 

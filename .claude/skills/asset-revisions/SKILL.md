@@ -80,8 +80,28 @@ angle.
 ```
 
 `build` runs tessellation and writes the viewer/STEP/STL output to the
-database. It takes roughly 15 seconds. Without it the user cannot see the
-change.
+database. Without it the user cannot see the change. It is **slow** - a
+couple of minutes for the assembly, and the page shows a progress bar while
+it runs - so do not reach for it to check your arithmetic.
+
+**Iterate locally instead.** The same script the build runs will render a
+model straight from a directory of sources, in a fraction of the time and
+without touching the database:
+
+```bash
+mkdir -p /tmp/w/models /tmp/w/assets
+.venv/bin/python tools/revisions.py source base > /tmp/w/models/base.py
+# ...and any module it imports, under the name it imports them by
+./tools/capped.sh .venv/bin/python export_model.py base \
+    --models-dir /tmp/w/models --assets-dir /tmp/w/assets
+```
+
+The model prints its own measurements, so this is where you check a change.
+Only `save` + `build` when the numbers are right.
+
+**Always run a model through `tools/capped.sh`.** A boolean against a few
+hundred solids will eat the machine's memory and freeze the desktop; the
+wrapper puts a ceiling on it so the kernel kills the build instead.
 
 You may want a snapshot before a large change:
 
@@ -95,20 +115,44 @@ Every revision stores the camera it was drawn from. After rebuilding, take the
 picture from that same angle and look at it before you call the work done:
 
 ```bash
-python tools/render.py <revision_id>          # writes /tmp/after-<id>.png
+.venv/bin/python tools/render.py <revision_id>    # writes /tmp/after-<id>.png
 ```
 
 Open that file with the Read tool and compare it against the revision drawing.
 Same viewpoint, so the before and after line up and a mistake is obvious. The
 app also accepts `?rev=<id>` in the URL, which opens the model at that camera.
 
+Two flags for when that angle is not the one that shows the change:
+
+```bash
+--camera=px,py,pz,tx,ty,tz    # look from somewhere else
+--only taban_kapak            # show one part, the way a drawing was made
+```
+
+`--camera` starting with a minus needs `--camera=-150,...`, or argparse reads
+it as another flag.
+
+The card keeps this picture as the revision's "after", beside the drawing:
+
+```bash
+.venv/bin/python tools/revisions.py after <id> [--only PART]
+```
+
+`finish` takes it for you, so this is only for a revision closed without one.
+
 ### 4. Mark it
 
 ```bash
 .venv/bin/python tools/revisions.py done <id>
+.venv/bin/python tools/revisions.py finish
 ```
 
 Only once the work is genuinely finished. When unsure, ask the user.
+
+`done` archives it too when auto-archive is on, and `finish` closes the run,
+takes the after picture and freezes what the work cost - tokens, time and
+money at list price - onto the card. Those numbers come from your own
+transcripts; `revisions.py usage` re-reads them if a run ended badly.
 
 ## Show your progress on screen
 
@@ -141,6 +185,17 @@ Models are parametric. When a dimension is requested, change the constant
 rather than rewriting the geometry. After a change, check volume, bounding box
 and interference — the model files already print these.
 
+**Measure before you change anything, and leave the measurement behind as a
+check.** Guessing at a dimension and looking at the render is how a part ends
+up 0.4 mm inside another one. Probe the geometry - a thin box intersected with
+a solid tells you where its surfaces are - then write the rule into the model
+so it raises if it is ever broken again. Nearly every real defect in this
+repository was found that way, and the ones that came back were the ones
+nobody left a check for.
+
+Write the number into the comment as well: *why* 1.6 mm and not 0.6 mm is the
+thing the next reader cannot recover.
+
 ## Gotchas in this codebase
 
 - **Tessellation cache**: `linear_deflection` is **silently ignored** when the
@@ -151,13 +206,40 @@ and interference — the model files already print these.
   sections and raises `NCollection_DataMap::Find`.
 - **`Compound(children=[...])` reparents its children**; building a helper
   compound detaches them from the previous one and corrupts the bounding box.
+- **`is_valid` does not mean "one piece"**: two solids that never touch are
+  both "valid". A lid that came apart into a body and two 0.95 mm³ flakes
+  passed every check for weeks. Count `.solids()` where a part must be whole.
+- **A half-space prism only spans the points that define it.** Extending a cut
+  from a line between two points leaves material where the line stopped; run
+  the line well past both ends.
+- **`getComputedStyle(el).width` is the used width**, not what the rule says -
+  it will report the laid-out size while a CSS rule says something else. When
+  a panel will not resize, the layout is overriding it, not the cascade.
+- **The notes may already be in English.** A switch on the comment form saves
+  each one as an English request and keeps what was typed; the card summary
+  follows the note's language.
 
 ## Talking to the database directly
 
 If the tool is not enough, the collections are `revisions`, `models`,
-`folders`, `model_versions`; the GridFS buckets are `model_files` (generated
-artifacts, gzipped) and `shots` (revision images). The connection string is
+`folders`, `model_versions`, `uploads`, `settings`, `runs` (one row per
+revision worked on, plus `current`), `activity` (the on-screen log),
+`llm_calls` and `analytics` (what each revision cost). The GridFS buckets are
+`model_files` (generated artifacts, gzipped), `shots` (revision images before
+and after) and `uploads` (imported STEP/STL). The connection string is
 `MONGODB_URI` in `.env`.
 
-With the server running there is also HTTP: `GET /api/queue`,
-`GET /api/revisions/{id}/image`, `POST /api/models/{id}/build`.
+With the server running there is also HTTP:
+
+```
+GET  /api/queue
+GET  /api/revisions/{id}/image?which=before|after
+POST /api/models/{id}/build
+GET  /api/revisions/{id}/analytics[?live=true]
+POST /api/revisions/english          # every note as an English request
+```
+
+**Secrets stay server-side.** `OPENROUTER_API_KEY` and `MONGODB_URI` live in
+`.env`, which is gitignored; never put either in code, a log line or anything
+the browser receives, and scan the diff before pushing - this repository is
+public.
