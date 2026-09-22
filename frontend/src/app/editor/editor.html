@@ -223,12 +223,8 @@
          panel had a screenful of room going spare. -->
     <div #taskPanel class="tcv-task" [hidden]="!runningRevision()">
       @if (runningRevision(); as r) {
-        <div class="mb-1 flex items-baseline gap-1.5">
-          <span class="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
-                style="background: var(--accent)"></span>
-          <span class="tcv-label">working on</span>
-        </div>
-        <!-- The same card as in the queue, not a second version of it. -->
+        <!-- The same card as in the queue, not a second version of it. No
+             heading: the live bar on the card already says it is running. -->
         <div class="tcv-card p-1.5">
           <ng-container *ngTemplateOutlet="revCard;
                         context: { $implicit: r, docked: true }" />
@@ -358,10 +354,11 @@
       <div class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded px-3 py-1.5 text-[12px]"
            style="background: rgba(0,0,0,.8)">{{ toast() }}</div>
     }
-  </div>
-
-    <!-- Log: IDE-style, newest line at the bottom. -->
-    <div class="tcv-panel shrink-0 rounded" style="border: 1px solid var(--line)">
+    <!-- The log runs along the bottom of the view. It used to have a strip
+         of its own under the viewer, which cost the left column the height
+         the running task needs; the view had that band going spare. -->
+    <div class="tcv-log absolute inset-x-2 bottom-2 z-20 rounded"
+         style="border: 1px solid var(--line)">
       <div class="flex items-center gap-2 px-2.5 py-1">
         <button (click)="toggleLog()" class="tcv-chip">
           {{ logOpen() ? '▾' : '▸' }} log
@@ -388,6 +385,9 @@
         </div>
       }
     </div>
+  </div>
+
+
   </div>
 
   <!-- RIGHT: freeze/draw + revisions -->
@@ -599,7 +599,9 @@
                   <span class="mr-1" style="color: var(--ink-dim)">
                     {{ isFolded(r.id) ? '▸' : '▾' }}
                   </span>
-                  @if (r.status === 'queued') {
+                  <!-- The queue number means "where in the line"; the card
+                       being worked on is not in the line any more. -->
+                  @if (r.status === 'queued' && !docked) {
                     <span class="mr-1 rounded px-1.5 py-0.5 text-[10px] font-bold"
                           style="background: var(--accent); color: #12222e">{{ queueIndex(r) }}</span>
                   }
@@ -658,7 +660,8 @@
                         class="relative block min-w-0 flex-1 overflow-hidden rounded"
                         style="border: 1px solid var(--line)" title="enlarge">
                   <img [src]="imageUrl(r)" alt="revision drawing"
-                       class="block h-20 w-full bg-white object-contain" loading="lazy">
+                       class="block w-full bg-white object-contain"
+                       [class.h-20]="!docked" [class.h-16]="docked" loading="lazy">
                   @if (r.image_after_bytes) {
                     <span class="absolute left-0 top-0 px-1 text-[9px] uppercase"
                           style="background: var(--surface-2); color: var(--ink-dim)">before</span>
@@ -731,22 +734,24 @@
                         <span class="mono text-right">{{ a.rate.output_per_s ?? '-' }}</span>
                       </div>
 
-                      <!-- Output tokens per 30 s bucket: where the thinking
-                           happened and where the build was just running. -->
-                      <div class="mt-1.5">
-                        <div class="flex items-baseline justify-between">
-                          <span style="color: var(--ink-dim)">output tokens/s</span>
-                          <span class="mono" style="color: var(--ink-dim)">
-                            peak {{ sparkPeak(a) }}/s
-                          </span>
+                      @if (!docked) {
+                        <!-- Output tokens per 30 s bucket: where the thinking
+                             happened and where the build was just running. -->
+                        <div class="mt-1.5">
+                          <div class="flex items-baseline justify-between">
+                            <span style="color: var(--ink-dim)">output tokens/s</span>
+                            <span class="mono" style="color: var(--ink-dim)">
+                              peak {{ sparkPeak(a) }}/s
+                            </span>
+                          </div>
+                          <svg viewBox="0 0 250 34" preserveAspectRatio="none"
+                               class="mt-0.5 block h-8 w-full">
+                            <polyline [attr.points]="spark(a)" fill="none"
+                                      stroke="var(--accent)" stroke-width="1.5"
+                                      vector-effect="non-scaling-stroke"></polyline>
+                          </svg>
                         </div>
-                        <svg viewBox="0 0 250 34" preserveAspectRatio="none"
-                             class="mt-0.5 block h-8 w-full">
-                          <polyline [attr.points]="spark(a)" fill="none"
-                                    stroke="var(--accent)" stroke-width="1.5"
-                                    vector-effect="non-scaling-stroke"></polyline>
-                        </svg>
-                      </div>
+                      }
 
                       <!-- Not a table: "deepseek/deepseek-v4.1-flash" is wider
                            than the 300 px panel, and a table let it push the
@@ -786,7 +791,7 @@
                            same conversation re-read on every call, so the
                            context size is shown instead. -->
                       @if (donut(a); as slices) {
-                        @if (slices.length) {
+                        @if (slices.length && !docked) {
                           <div class="mt-2 flex items-center gap-2">
                             <svg viewBox="0 0 40 40" class="h-[72px] w-[72px] shrink-0"
                                  style="transform: rotate(-90deg)">

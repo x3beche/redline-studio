@@ -189,10 +189,12 @@ body {
    docked under it fell off the bottom. It only ever holds a handful of rows
    here; capped, and it scrolls if a model ever brings more. */
 .tcv_cad_tree {
-  height: 300px !important;
-  max-height: 300px !important;
-  /* Wider than the viewer's 240 px default: the docked card carries the same
-     text and thumbnails as the one in the queue, and 240 px squeezed it. */
+  /* Short, so the task docked under it fits without a scrollbar of its own:
+     the tree only ever holds a handful of rows here. Wider than the viewer's
+     240 px default because the card carries the same text and thumbnails as
+     the one in the queue. */
+  height: 170px !important;
+  max-height: 170px !important;
   width: 300px !important;
 }
 
@@ -201,19 +203,19 @@ body {
 .tcv-task {
   /* The column sizes itself to its content, so without a width the card
      inside pushed the whole panel wider than the tree and shoved the viewer
-     across. Matches the tree, less the margins. */
-  width: 284px;
+     across. Same width as the tree box above it. */
+  width: 300px;
   box-sizing: border-box;
-  margin: 10px 8px 8px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface-2);
+  margin: 8px 0 0;
+  padding: 0;
+  background: transparent;
 }
 .tcv-task[hidden] { display: none; }
-.tcv-task {
-  max-height: 340px;
-  overflow-y: auto;
+
+/* The log, floating over the bottom of the view. */
+.tcv-log {
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  backdrop-filter: blur(3px);
 }
 
 /* On/off switch. A chip that changes colour asks you to remember which
