@@ -46,7 +46,8 @@ def _ink(png: bytes) -> float:
     return off / len(px)
 
 
-def render(revision: str, out: Path, width: int, height: int, wait: int) -> Path:
+def render(revision: str, out: Path, width: int, height: int, wait: int,
+           camera: str | None = None) -> Path:
     from websockets.sync.client import connect
 
     profile = tempfile.mkdtemp(prefix="x3render-")
@@ -108,6 +109,19 @@ def render(revision: str, out: Path, width: int, height: int, wait: int) -> Path
             time.sleep(1)
         time.sleep(5)                       # let the camera settle on the model
 
+        # --camera overrides the stored angle. A revision's camera looks at
+        # what the user drew on; checking the result sometimes needs a
+        # different side of the part, and clicking one up by hand is slow.
+        if camera:
+            n = [float(v) for v in camera.replace(" ", "").split(",")]
+            if len(n) != 6:
+                raise SystemExit("--camera wants px,py,pz,tx,ty,tz")
+            js(f"(() => {{ const v = window.tcv; if (!v) return 'no viewer';"
+               f" v.setCameraTarget([{n[3]},{n[4]},{n[5]}], false);"
+               f" v.setCameraPosition([{n[0]},{n[1]},{n[2]}], false, true);"
+               f" return 'ok'; }})()")
+            time.sleep(3)
+
         # ?rev= also pops the revision card over the top-right corner, which
         # is exactly where the model usually sits. It is not part of the model.
         # Dismissing it would release the held camera too, so only hide it.
@@ -146,9 +160,11 @@ def main() -> None:
     ap.add_argument("--width", type=int, default=1500)
     ap.add_argument("--height", type=int, default=950)
     ap.add_argument("--wait", type=int, default=40)
+    ap.add_argument("--camera", help="px,py,pz,tx,ty,tz - look from somewhere "
+                                     "other than the stored angle")
     args = ap.parse_args()
     out = Path(args.out or f"/tmp/after-{args.revision.replace(':', '-')}.png")
-    render(args.revision, out, args.width, args.height, args.wait)
+    render(args.revision, out, args.width, args.height, args.wait, args.camera)
     print(f"{out}   ({out.stat().st_size} bytes)")
     print("Open it with the Read tool and compare against the revision drawing.")
 
