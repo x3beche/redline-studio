@@ -46,6 +46,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private stage = viewChild.required<ElementRef<HTMLDivElement>>('stage');
   private caret = viewChild<ElementRef<HTMLInputElement>>('caret');
   private cadInput = viewChild<ElementRef<HTMLInputElement>>('cadInput');
+  private freezeBtn = viewChild<ElementRef<HTMLButtonElement>>('freezeBtn');
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   frozen = signal(false);
@@ -192,6 +193,15 @@ export class Editor implements AfterViewInit, OnDestroy {
                   : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
   }
 
+  /** Move the freeze control into the viewer's toolbar. Angular still owns
+   *  the element - only its parent changes - so the binding and the click
+   *  handler carry on working. */
+  private dockFreezeButton() {
+    const btn = this.freezeBtn()?.nativeElement;
+    const bar = this.viewer?.toolbar;
+    if (btn && bar && btn.parentElement !== bar) bar.appendChild(btn);
+  }
+
   /** Keep the newest line in view, the way a terminal does. */
   private scrollLog() {
     const el = this.logBox()?.nativeElement;
@@ -336,6 +346,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     try {
       // Data is not on disk; it streams from the database.
       await this.viewer.load(this.cat.viewerUrl(m.id, m.built_at));
+      this.dockFreezeButton();
       this.activeModel.set(m.id);
       this.parts.set(this.viewer.parts);
       setTimeout(() => this.sizeOverlay());

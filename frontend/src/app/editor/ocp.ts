@@ -14,6 +14,12 @@ export class OcpViewer {
 
   constructor(private container: HTMLElement) {}
 
+  /** The viewer's own toolbar, so a control of ours can sit among its
+   *  buttons instead of in a panel off to the side. */
+  get toolbar(): HTMLElement | null {
+    return this.container.querySelector('.tcv_cad_toolbar');
+  }
+
   /** Display/Viewer is built once; switching models only calls load(). */
   init(size: { w: number; h: number }) {
     // Most DisplayOptions fields are required; omitting one breaks the build.

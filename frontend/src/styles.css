@@ -146,3 +146,28 @@ body {
 [class*="tcv_inp_value_"], [class*="tcv_tab"] {
   border-color: var(--line) !important;
 }
+
+/* The freeze control sits inside the viewer's own toolbar, so it is sized and
+   coloured like the icon buttons beside it rather than like a page button. It
+   only goes loud once the view is actually held. */
+.tcv-freeze {
+  height: 26px;
+  margin-left: 10px;
+  padding: 0 11px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  align-self: center;
+}
+.tcv-freeze:hover { background: var(--surface); }
+.tcv-freeze:active { transform: translateY(1px); }
+.tcv-freeze[data-on="1"] {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
