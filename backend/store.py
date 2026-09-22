@@ -211,6 +211,27 @@ async def move_model(db, model_id: str, folder: str) -> str:
     return new_id
 
 
+async def importers_of(db, model_id: str) -> list[str]:
+    """Models whose source imports this one.
+
+    An assembly says `import base`, and the build writes every model's
+    source next to it. Deleting a part therefore breaks the assembly the
+    next time it is built, with a traceback and no clue why.
+    """
+    name = model_id.rpartition("/")[2]
+    flat = model_id.replace("/", "__")
+    patterns = [re.compile(rf"^\s*(?:import\s+{re.escape(n)}\b"
+                           rf"|from\s+{re.escape(n)}\s+import\b)", re.M)
+                for n in {name, flat}]
+    found = []
+    async for other in db.models.find({}, {"source": 1}):
+        if other["_id"] == model_id or not other.get("source"):
+            continue
+        if any(p.search(other["source"]) for p in patterns):
+            found.append(str(other["_id"]))
+    return sorted(found)
+
+
 async def delete_model(db, model_id: str) -> None:
     doc = await db.models.find_one({"_id": model_id})
     if not doc:

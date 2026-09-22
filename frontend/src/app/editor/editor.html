@@ -230,6 +230,24 @@
          for right there. It disappears as soon as the view is moved. -->
     <!-- A finished run announces itself here; the camera move alone is easy
          to miss when the reader is looking at another panel. -->
+    <!-- Deleting a model another one imports breaks that build, so the
+         server refuses and the override is asked for here. -->
+    @if (forcing(); as fc) {
+      <div class="tcv-card absolute left-1/2 top-3 z-40 w-80 -translate-x-1/2
+                  overflow-hidden p-0"
+           style="box-shadow: 0 8px 24px rgba(0,0,0,.45)">
+        <div class="px-2 py-1 text-[11px] font-semibold tracking-wider"
+             style="background: var(--warn); color: #201a08">STILL IN USE</div>
+        <p class="px-2 py-1.5 text-[12px]" style="color: var(--ink)">{{ fc.why }}</p>
+        <div class="flex gap-1 px-2 pb-2">
+          <button (click)="forceDelete()" class="tcv-chip tcv-chip-danger flex-1">
+            delete anyway
+          </button>
+          <button (click)="forcing.set(null)" class="tcv-chip flex-1">keep it</button>
+        </div>
+      </div>
+    }
+
     @if (notice(); as nt) {
       <div class="tcv-card absolute right-3 top-3 z-30 w-72 overflow-hidden p-0"
            style="box-shadow: 0 8px 24px rgba(0,0,0,.45)">
@@ -565,6 +583,11 @@
                 title="move to another folder">&#8594;</button>
         <button (click)="rebuild(m, $event)" style="color: var(--accent)"
                 title="rebuild">↻</button>
+        <button (click)="armDelete(m, $event)"
+                [style.color]="deleting() === m.id ? 'var(--danger)' : 'var(--ink-dim)'"
+                [title]="deleting() === m.id ? 'click again to delete' : 'delete'">
+          {{ deleting() === m.id ? 'sure?' : '×' }}
+        </button>
       </span>
     </div>
   }

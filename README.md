@@ -202,8 +202,22 @@ hands the card back to the generator.
 
 ### The left column
 
-Hovering a row shows what can be done with it: a model has **&rarr;** (move)
-and **↻** (rebuild), a folder has **+M**, **+K** and **&times;**.
+Hovering a row shows what can be done with it: a model has **&rarr;** (move),
+**↻** (rebuild) and **&times;** (delete), a folder has **+M**, **+K** and
+**&times;**.
+
+Deleting takes two clicks — the first arms the row, the second does it. No
+dialog: a `confirm()` freezes the page and cannot be driven in a test.
+
+An assembly imports the parts it is made of, so deleting one of those parts
+breaks its build the next time it runs, with a traceback and no clue why. The
+server checks who imports a model before removing it and refuses:
+
+```
+base is imported by station; deleting it breaks their build.
+```
+
+The UI offers the override rather than hiding it.
 
 Moving is two clicks rather than a drag — press **&rarr;** on the model, then
 click the folder, or *to root* in the strip that appears. A folder deletes

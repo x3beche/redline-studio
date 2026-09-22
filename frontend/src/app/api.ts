@@ -141,6 +141,11 @@ export class Catalog {
       `/api/models/${id}/move?folder=${encodeURIComponent(folder)}`, {});
   }
 
+  /** force replaces the refusal when another model imports this one. */
+  dropModel(id: string, force = false): Observable<unknown> {
+    return this.http.delete(`/api/models/${id}${force ? '?force=true' : ''}`);
+  }
+
   dropFolder(path: string): Observable<unknown> {
     return this.http.delete(`/api/catalog/folders/${path}`);
   }

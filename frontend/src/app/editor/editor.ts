@@ -403,6 +403,52 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
+  // Two clicks, no dialog: the first arms the row, the second deletes. A
+  // browser confirm() freezes the page and cannot be driven in a test.
+  deleting = signal<string | null>(null);
+  private deleteTimer: ReturnType<typeof setTimeout> | undefined;
+
+  armDelete(m: ModelEntry, ev: Event) {
+    ev.stopPropagation();
+    clearTimeout(this.deleteTimer);
+    if (this.deleting() !== m.id) {
+      this.deleting.set(m.id);
+      this.deleteTimer = setTimeout(() => this.deleting.set(null), 4000);
+      return;
+    }
+    this.deleting.set(null);
+    this.cat.dropModel(m.id).subscribe({
+      next: () => this.afterDelete(m),
+      error: e => {
+        // 409: another model imports this one. Say so and offer the override.
+        const detail = e.error?.detail ?? 'could not delete';
+        if (e.status === 409) {
+          this.forcing.set({ model: m, why: detail });
+        } else {
+          this.flash(detail);
+        }
+      },
+    });
+  }
+
+  forcing = signal<{ model: ModelEntry; why: string } | null>(null);
+
+  forceDelete() {
+    const f = this.forcing();
+    if (!f) return;
+    this.forcing.set(null);
+    this.cat.dropModel(f.model.id, true).subscribe({
+      next: () => this.afterDelete(f.model),
+      error: e => this.flash(e.error?.detail ?? 'could not delete'),
+    });
+  }
+
+  private afterDelete(m: ModelEntry) {
+    this.flash(m.title + ' deleted');
+    if (this.activeModel() === m.id) this.activeModel.set('');
+    this.loadCatalog();
+  }
+
   dropFolder(path: string, ev: Event) {
     ev.stopPropagation();
     this.cat.dropFolder(path).subscribe({

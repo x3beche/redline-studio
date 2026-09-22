@@ -281,12 +281,17 @@ async def move_model(model_id: str, folder: str = ""):
 
 
 @app.delete("/api/models/{model_id:path}")
-async def drop_model(model_id: str):
+async def drop_model(model_id: str, force: bool = False):
+    users = await store.importers_of(db(), model_id)
+    if users and not force:
+        raise HTTPException(
+            409, f"{model_id} is imported by {', '.join(users)}; "
+                 "deleting it breaks their build. Pass force=true to go ahead.")
     try:
         await store.delete_model(db(), model_id)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
-    return {"deleted": model_id}
+    return {"deleted": model_id, "was_imported_by": users}
 
 
 @app.post("/api/models/{model_id:path}/build")
