@@ -857,7 +857,8 @@
                             <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">
                               <span style="color: var(--ink-dim)">machine</span>
                               <span class="mono text-right"
-                                    [title]="'wall clock ' + duration(c.totals.wall_s)">
+                                    [title]="computeJobsTitle(c) + ', wall clock '
+                                             + duration(c.totals.wall_s)">
                                 {{ computeJobs(c) }}
                               </span>
                               <span style="color: var(--ink-dim)">cpu</span>
@@ -878,10 +879,10 @@
                               </span>
                             </div>
                             @if (c.machine; as m) {
-                              <p class="mt-1" style="color: var(--ink-dim)">
-                                whole machine {{ coreTime(m.busy_core_s) }} in the
-                                window@if (m.ours_pct != null) {, ours {{ m.ours_pct }}%}
-                                · {{ m.cores }} threads
+                              <p class="mt-1" style="color: var(--ink-dim)"
+                                 [title]="m.cores + ' threads, ' + m.avg_cores_busy
+                                          + ' of them busy on average across the run'">
+                                whole machine {{ coreTime(m.busy_core_s) }}@if (m.ours_pct != null) {, ours {{ m.ours_pct }}%}
                               </p>
                             }
                           </div>

@@ -795,11 +795,17 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
-  /** "3 builds · 1 render", or what there is of it. */
+  /** The count alone: "2 builds · 4 renders" is wider than the value column
+   *  and wrapped onto a second line. The split goes in the tooltip. */
   computeJobs(c: NonNullable<Analytics['compute']>): string {
+    const n = c.totals?.jobs ?? 0;
+    return n ? `${n} job${n === 1 ? '' : 's'}` : 'nothing recorded';
+  }
+
+  computeJobsTitle(c: NonNullable<Analytics['compute']>): string {
     const parts = (c.kinds ?? []).map(k =>
       `${k.jobs} ${k.kind}${k.jobs === 1 ? '' : 's'}`);
-    return parts.join(' \u00b7 ') || 'nothing recorded';
+    return parts.join(' \u00b7 ') || 'no build or render was recorded';
   }
 
   /** Core-minutes, or seconds while it is still small: "42s of one core"
