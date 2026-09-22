@@ -335,7 +335,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.busy.set('loading model…');
     try {
       // Data is not on disk; it streams from the database.
-      await this.viewer.load(this.cat.viewerUrl(m.id));
+      await this.viewer.load(this.cat.viewerUrl(m.id, m.built_at));
       this.activeModel.set(m.id);
       this.parts.set(this.viewer.parts);
       setTimeout(() => this.sizeOverlay());

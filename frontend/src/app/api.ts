@@ -149,7 +149,13 @@ export class Catalog {
     return this.http.put(`/api/models/${id}`, { source });
   }
 
-  viewerUrl(id: string): string { return `/api/models/${id}/viewer.json`; }
+  /** The payload is served immutable, so the URL has to change when the
+   *  model is rebuilt - without the stamp the browser keeps showing the
+   *  build it cached, whatever the server now holds. */
+  viewerUrl(id: string, stamp?: string | null): string {
+    const url = `/api/models/${id}/viewer.json`;
+    return stamp ? `${url}?v=${encodeURIComponent(stamp)}` : url;
+  }
 
   versions(): Observable<ModelVersion[]> {
     return this.http.get<ModelVersion[]>('/api/versions');
