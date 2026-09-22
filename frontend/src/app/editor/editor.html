@@ -1,16 +1,11 @@
 <!-- No top bar: the viewer uses full height, every control sits on the right. -->
 <!-- Equal gutter on every side so nothing sticks to the screen edge. -->
-<div class="flex h-screen gap-2 p-2">
+<div class="relative flex h-screen gap-2 p-2">
 
   <!-- LEFT: model catalog (collapsible) -->
-  <aside class="tcv-panel relative flex shrink-0 flex-col rounded transition-[width] duration-150"
-         [style.width]="collapsed() ? '18px' : '250px'"
+  <aside class="tcv-panel tcv-fold-l flex min-w-0 shrink-0 flex-col overflow-hidden rounded"
+         [class.tcv-fold-shut]="collapsed()"
          style="border: 1px solid var(--line)">
-
-    <!-- The handle is the column's own edge: a hairline, not a button in a
-         row of its own. -->
-    <button (click)="toggleSidebar()" class="tcv-edge tcv-edge-r"
-            [title]="collapsed() ? 'show the catalog' : 'hide the catalog'"></button>
 
     <!-- wordmark -->
     <div class="flex items-center gap-2 px-2 py-2" style="border-bottom: 1px solid var(--line)">
@@ -424,12 +419,9 @@
        max-width is what actually clamps it. -->
   <!-- Folded through a class, not an inline width: bound inline, both width
        and max-width were set and the box still sat at its content's size. -->
-  <aside class="tcv-panel tcv-fold relative flex min-w-0 shrink-0 flex-col overflow-hidden rounded"
+  <aside class="tcv-panel tcv-fold flex min-w-0 shrink-0 flex-col overflow-hidden rounded"
          [class.tcv-fold-shut]="queueShut()"
          style="border: 1px solid var(--line)">
-
-    <button (click)="toggleQueue()" class="tcv-edge tcv-edge-l"
-            [title]="queueShut() ? 'show the queue' : 'hide the queue'"></button>
 
     <!-- Folded, the rail still says how many are waiting: that is the one
          thing worth knowing without opening it. -->
@@ -517,6 +509,16 @@
     </ul>
     }
   </aside>
+  <!-- The fold handles live out here, not in the panels: a panel has to clip
+       its overflow for the fold to take, and a handle sitting on the border
+       has to hang outside it. Their offsets follow the panel widths. -->
+  <button (click)="toggleSidebar()" class="tcv-edge"
+          [style.left.px]="(collapsed() ? 18 : 250) + 3"
+          [title]="collapsed() ? 'show the catalog' : 'hide the catalog'"></button>
+  <button (click)="toggleQueue()" class="tcv-edge"
+          [style.right.px]="(queueShut() ? 18 : 300) + 3"
+          [title]="queueShut() ? 'show the queue' : 'hide the queue'"></button>
+
 </div>
 
 <!-- folder tree, recursing into itself -->

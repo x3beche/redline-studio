@@ -301,14 +301,23 @@ body {
   background: var(--surface);
   opacity: .7;
 }
-/* Just inside the edge: the queue column clips its overflow, so a handle
-   hanging outside it would be cut in half. */
-.tcv-edge-r { right: 3px; }
-.tcv-edge-l { left: 3px; }
+/* Positioned against the page, not the panel, and animated with it. */
+.tcv-edge { transition: left .15s cubic-bezier(.4, 0, .2, 1),
+                        right .15s cubic-bezier(.4, 0, .2, 1),
+                        background .12s; }
 
 /* Folding a side panel. Tailwind's arbitrary transition with two properties
    did not survive its parser, and width alone is not enough here: the box
    stays at its content's size unless max-width clamps it too. */
+/* The catalog is 250, the queue 300; both fold to the same rail. Widths in a
+   class, not bound inline: bound inline the box kept laying out at its
+   content's size however narrow the width was set. */
+.tcv-fold-l {
+  width: 250px;
+  max-width: 250px;
+  transition: width .15s cubic-bezier(.4, 0, .2, 1),
+              max-width .15s cubic-bezier(.4, 0, .2, 1);
+}
 .tcv-fold {
   width: 300px;
   max-width: 300px;
