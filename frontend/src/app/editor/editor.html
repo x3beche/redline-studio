@@ -10,7 +10,6 @@
     <!-- The handle is the column's own edge: a hairline, not a button in a
          row of its own. -->
     <button (click)="toggleSidebar()" class="tcv-edge tcv-edge-r"
-            [style.right.px]="0"
             [title]="collapsed() ? 'show the catalog' : 'hide the catalog'"></button>
 
     <!-- wordmark -->
@@ -392,7 +391,6 @@
          style="border: 1px solid var(--line)">
 
     <button (click)="toggleQueue()" class="tcv-edge tcv-edge-l"
-            [style.left.px]="0"
             [title]="queueShut() ? 'show the queue' : 'hide the queue'"></button>
 
     <!-- Folded, the rail still says how many are waiting: that is the one

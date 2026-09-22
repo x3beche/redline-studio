@@ -234,36 +234,50 @@ body {
 }
 .tcv-task[hidden] { display: none; }
 
-/* The log has its own row under the view. */
-.tcv-log { background: var(--surface); }
+/* The log has its own row under the view, starting where the view starts:
+   it belongs to the 3D area, not to the tree column beside it. The offset is
+   the tree column's own fixed width, set above. */
+.tcv-log {
+  background: var(--surface);
+  /* Tuned against the rendered page: the tree column is 300 px, and the
+     viewer keeps its own border and padding either side of the 3D area. */
+  margin-left: 294px;
+  margin-right: 7px;
+}
 
-/* The fold handle: a hairline down the column's inner edge rather than a
-   button taking up a row. It is the edge you would drag, so that is where
-   the hit area is. */
+/* The fold handle: a short, thick grab on the column's inner edge, halfway
+   down. Run full height it read as a scrollbar, which is the one thing it
+   must not look like. */
 .tcv-edge {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 9px;
+  top: 50%;
+  width: 11px;
+  height: 56px;
+  margin-top: -28px;
   border: 0;
   padding: 0;
+  border-radius: 6px;
   cursor: pointer;
-  background: transparent;
+  background: var(--line);
+  transition: background .12s;
   z-index: 30;
 }
+.tcv-edge:hover { background: var(--accent); }
 .tcv-edge::before {
   content: "";
   position: absolute;
-  top: 8px;
-  bottom: 8px;
-  width: 2px;
-  border-radius: 2px;
-  background: var(--line);
-  transition: background .12s;
+  inset: 0;
+  margin: auto;
+  width: 1px;
+  height: 22px;
+  border-radius: 1px;
+  background: var(--surface);
+  opacity: .7;
 }
-.tcv-edge-r::before { right: 2px; }
-.tcv-edge-l::before { left: 2px; }
-.tcv-edge:hover::before { background: var(--accent); }
+/* Just inside the edge: the queue column clips its overflow, so a handle
+   hanging outside it would be cut in half. */
+.tcv-edge-r { right: 3px; }
+.tcv-edge-l { left: 3px; }
 
 /* Folding a side panel. Tailwind's arbitrary transition with two properties
    did not survive its parser, and width alone is not enough here: the box
