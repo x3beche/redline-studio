@@ -229,20 +229,37 @@
           <ng-container *ngTemplateOutlet="revCard;
                         context: { $implicit: r, docked: true }" />
         </div>
-        @if (liveCost(); as a) {
-          <div class="mono mt-1 grid grid-cols-2 gap-x-2 text-[10px]"
-               style="color: var(--ink-dim)">
-            <span>cost so far</span>
-            <span class="text-right" style="color: var(--ink)">{{ usd(a.totals.cost_usd) }}</span>
-            <span>tokens</span>
-            <span class="text-right">{{ tokens(a.totals.billed_tokens) }}</span>
-            <span>time</span>
-            <span class="text-right">{{ duration(a.seconds) }}</span>
-          </div>
-        }
       }
     </div>
 
+    <!-- The log is docked in the same column as the task, under it: that is
+         where you look while a revision is being applied, and it keeps the
+         middle of the screen for the model. -->
+    <div #logPanel class="tcv-log rounded" style="border: 1px solid var(--line)">
+      <div class="flex items-center gap-2 px-2.5 py-1">
+        <button (click)="toggleLog()" class="tcv-chip">
+          {{ logOpen() ? '▾' : '▸' }} log
+        </button>
+        <span class="mono text-[10px]" style="color: var(--ink-dim)">
+          {{ log().length }} lines
+        </span>
+        @if (runActive()) {
+          <span class="text-[10px]" style="color: var(--accent)">running…</span>
+        }
+        <button (click)="clearLog()" class="tcv-chip ml-auto">clear</button>
+      </div>
+      @if (logOpen()) {
+        <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
+             style="height: 132px; border-top: 1px solid var(--line)">
+          @for (l of log(); track l._id) {
+            <div class="flex gap-2 leading-snug">
+              <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
+              <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
+            </div>
+          } @empty {
+            <div style="color: var(--ink-dim)">no activity yet</div>
+          }
+      
     <!-- Lives in the viewer's toolbar: moved there once the viewer is up,
          and wearing the viewer's own button markup (tooltip > frame > btn)
          so it is one of that row rather than a text button bolted to its
@@ -354,35 +371,7 @@
       <div class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded px-3 py-1.5 text-[12px]"
            style="background: rgba(0,0,0,.8)">{{ toast() }}</div>
     }
-    <!-- The log runs along the bottom of the view. It used to have a strip
-         of its own under the viewer, which cost the left column the height
-         the running task needs; the view had that band going spare. -->
-    <div class="tcv-log absolute inset-x-2 bottom-2 z-20 rounded"
-         style="border: 1px solid var(--line)">
-      <div class="flex items-center gap-2 px-2.5 py-1">
-        <button (click)="toggleLog()" class="tcv-chip">
-          {{ logOpen() ? '▾' : '▸' }} log
-        </button>
-        <span class="mono text-[10px]" style="color: var(--ink-dim)">
-          {{ log().length }} lines
-        </span>
-        @if (runActive()) {
-          <span class="text-[10px]" style="color: var(--accent)">running…</span>
-        }
-        <button (click)="clearLog()" class="tcv-chip ml-auto">clear</button>
-      </div>
-      @if (logOpen()) {
-        <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
-             style="height: 132px; border-top: 1px solid var(--line)">
-          @for (l of log(); track l._id) {
-            <div class="flex gap-2 leading-snug">
-              <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
-              <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
-            </div>
-          } @empty {
-            <div style="color: var(--ink-dim)">no activity yet</div>
-          }
-        </div>
+  </div>
       }
     </div>
   </div>
@@ -599,9 +588,7 @@
                   <span class="mr-1" style="color: var(--ink-dim)">
                     {{ isFolded(r.id) ? '▸' : '▾' }}
                   </span>
-                  <!-- The queue number means "where in the line"; the card
-                       being worked on is not in the line any more. -->
-                  @if (r.status === 'queued' && !docked) {
+                  @if (r.status === 'queued') {
                     <span class="mr-1 rounded px-1.5 py-0.5 text-[10px] font-bold"
                           style="background: var(--accent); color: #12222e">{{ queueIndex(r) }}</span>
                   }
@@ -734,24 +721,23 @@
                         <span class="mono text-right">{{ a.rate.output_per_s ?? '-' }}</span>
                       </div>
 
-                      @if (!docked) {
-                        <!-- Output tokens per 30 s bucket: where the thinking
-                             happened and where the build was just running. -->
-                        <div class="mt-1.5">
-                          <div class="flex items-baseline justify-between">
-                            <span style="color: var(--ink-dim)">output tokens/s</span>
-                            <span class="mono" style="color: var(--ink-dim)">
-                              peak {{ sparkPeak(a) }}/s
-                            </span>
-                          </div>
-                          <svg viewBox="0 0 250 34" preserveAspectRatio="none"
-                               class="mt-0.5 block h-8 w-full">
-                            <polyline [attr.points]="spark(a)" fill="none"
-                                      stroke="var(--accent)" stroke-width="1.5"
-                                      vector-effect="non-scaling-stroke"></polyline>
-                          </svg>
+                      <!-- Output tokens per 30 s bucket: where the thinking
+                           happened and where the build was just running. -->
+                      <div class="mt-1.5">
+                        <div class="flex items-baseline justify-between">
+                          <span style="color: var(--ink-dim)">output tokens/s</span>
+                          <span class="mono" style="color: var(--ink-dim)">
+                            peak {{ sparkPeak(a) }}/s
+                          </span>
                         </div>
-                      }
+                        <svg viewBox="0 0 250 34" preserveAspectRatio="none"
+                             class="mt-0.5 block h-8 w-full">
+                          <polyline [attr.points]="spark(a)" fill="none"
+                                    stroke="var(--accent)" stroke-width="1.5"
+                                    vector-effect="non-scaling-stroke"></polyline>
+                        </svg>
+                      </div>
+                      
 
                       <!-- Not a table: "deepseek/deepseek-v4.1-flash" is wider
                            than the 300 px panel, and a table let it push the
@@ -791,7 +777,7 @@
                            same conversation re-read on every call, so the
                            context size is shown instead. -->
                       @if (donut(a); as slices) {
-                        @if (slices.length && !docked) {
+                        @if (slices.length) {
                           <div class="mt-2 flex items-center gap-2">
                             <svg viewBox="0 0 40 40" class="h-[72px] w-[72px] shrink-0"
                                  style="transform: rotate(-90deg)">

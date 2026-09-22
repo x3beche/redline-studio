@@ -188,19 +188,32 @@ body {
 /* The tree is given a fixed height that filled the whole column, so the task
    docked under it fell off the bottom. It only ever holds a handful of rows
    here; capped, and it scrolls if a model ever brings more. */
+/* The column runs the full height: the tree takes whatever the task and the
+   log leave, rather than a fixed slice with dead space under it. */
+.tcv_cad_navigation {
+  display: flex !important;
+  flex-direction: column;
+  /* It is a flex item that was sizing to its content, so the tree could not
+     grow into the space the task and log leave. */
+  align-self: stretch !important;
+  height: auto !important;
+  min-height: 0;
+  overflow: hidden;
+}
 .tcv_cad_tree {
-  /* Short, so the task docked under it fits without a scrollbar of its own:
-     the tree only ever holds a handful of rows here. Wider than the viewer's
-     240 px default because the card carries the same text and thumbnails as
-     the one in the queue. */
-  height: 170px !important;
-  max-height: 170px !important;
+  /* Wider than the viewer's 240 px default because the card carries the same
+     text and thumbnails as the one in the queue. */
   width: 300px !important;
+  flex: 1 1 auto !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 90px;
 }
 
 /* The running task, docked under the model tree. Styled like the cards it
    came from so moving it does not make it a different thing. */
 .tcv-task {
+  flex: none;
   /* The column sizes itself to its content, so without a width the card
      inside pushed the whole panel wider than the tree and shoved the viewer
      across. Same width as the tree box above it. */
@@ -212,10 +225,13 @@ body {
 }
 .tcv-task[hidden] { display: none; }
 
-/* The log, floating over the bottom of the view. */
+/* The log, docked under the task in the same column. */
 .tcv-log {
-  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
-  backdrop-filter: blur(3px);
+  width: 300px;
+  box-sizing: border-box;
+  margin-top: 8px;
+  flex: none;
+  background: var(--surface-2);
 }
 
 /* On/off switch. A chip that changes colour asks you to remember which

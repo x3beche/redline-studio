@@ -153,7 +153,14 @@ def _row(entry: dict) -> dict | None:
             "session": entry.get("sessionId")}
 
 
-async def ingest(db, full: bool = False) -> dict:
+# The transcript is only read when it can have grown. A page reload asks for
+# the running revision's numbers straight away, and re-reading the tail of a
+# 60 MB file on every one of those made the panel arrive late for no reason.
+_LAST_INGEST = 0.0
+INGEST_EVERY = 10.0                    # seconds
+
+
+async def ingest(db, full: bool = False, force: bool = True) -> dict:
     """Pull new transcript lines into the calls collection.
 
     The transcript is tens of megabytes and only grows at the end, so the
@@ -161,6 +168,13 @@ async def ingest(db, full: bool = False) -> dict:
     tail. `full` throws the offsets away and re-reads everything; the rows
     are keyed by request id, so re-reading changes nothing.
     """
+    global _LAST_INGEST
+    import time
+
+    if not force and not full and time.time() - _LAST_INGEST < INGEST_EVERY:
+        return {"scanned": 0, "new_calls": 0, "files": 0, "skipped": True}
+    _LAST_INGEST = time.time()
+
     cur = {} if full else ((await db.meta.find_one({"_id": CURSOR_ID}) or {})
                            .get("files", {}))
     fresh, seen, scanned = [], {}, 0
@@ -358,9 +372,9 @@ async def for_revision(db, rid: str, started: str,
     return summarise(rows, started, finished)
 
 
-async def store(db, revision_id: str, run: dict) -> dict:
+async def store(db, revision_id: str, run: dict, fresh: bool = True) -> dict:
     """Freeze the numbers for one revision and keep them."""
-    await ingest(db)
+    await ingest(db, force=fresh)
     data = await for_revision(db, revision_id, run.get("started_at"),
                               run.get("finished_at"))
     doc = {"_id": revision_id, "title": run.get("title"),

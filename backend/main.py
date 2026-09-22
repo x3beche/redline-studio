@@ -470,7 +470,9 @@ async def revision_analytics(rid: str, live: bool = False):
     run = await d.runs.find_one({"_id": rid})
     if not run or not run.get("started_at"):
         raise HTTPException(404, "no run recorded for this revision")
-    return await usage.store(d, rid, run)
+    # A live read happens on every page load and every poll; it may use the
+    # transcript as it was a few seconds ago rather than wait to re-read it.
+    return await usage.store(d, rid, run, fresh=not live)
 
 
 @app.post("/api/usage/ingest")

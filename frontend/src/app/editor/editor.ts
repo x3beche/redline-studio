@@ -48,6 +48,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private cadInput = viewChild<ElementRef<HTMLInputElement>>('cadInput');
   private freezeBtn = viewChild<ElementRef<HTMLElement>>('freezeBtn');
   private taskPanel = viewChild<ElementRef<HTMLElement>>('taskPanel');
+  private logPanel = viewChild<ElementRef<HTMLElement>>('logPanel');
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   frozen = signal(false);
@@ -214,6 +215,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     const task = this.taskPanel()?.nativeElement;
     const tree = this.viewer?.tree;
     if (task && tree && task.parentElement !== tree) tree.appendChild(task);
+
+    // The log goes under it, in the same column: that is where you look
+    // while a revision is being applied.
+    const log = this.logPanel()?.nativeElement;
+    if (log && tree && log.parentElement !== tree) tree.appendChild(log);
   }
 
   /** Keep the newest line in view, the way a terminal does. */
