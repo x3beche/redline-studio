@@ -335,6 +335,10 @@ export class Editor implements AfterViewInit, OnDestroy {
         if (!r.camera || !this.viewer) return;
         this.heldCamera = r.camera;
         this.focused.set(r);
+        // Parts first, then the camera: the drawing was made against a
+        // particular set of them, and the same angle over a different set is
+        // a picture of something else.
+        this.viewer.applyStates(r.view?.states);
         this.viewer.applyCamera(r.camera);
       },
       error: () => {},
@@ -953,6 +957,10 @@ export class Editor implements AfterViewInit, OnDestroy {
       comment: this.comment().trim(), image_png: merged,
       camera: this.viewer.cameraState(), part: this.part() || null,
       model: this.activeModel() || null,
+      // What was on screen, not just where it was seen from: which parts
+      // were switched off is half of the picture, and without it the "after"
+      // shot shows a different thing from the same angle.
+      view: { states: this.viewer.states() },
     }).subscribe({
       next: () => {
         this.saving.set(false);

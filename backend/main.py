@@ -492,6 +492,9 @@ class RevisionIn(BaseModel):
     comment: str = Field(min_length=1, max_length=4000)
     # Optional: a note about a part does not need a drawing.
     image_png: str | None = None
+    # What was on screen when the note was written: which parts were shown.
+    # The camera alone is only where it was seen from.
+    view: dict | None = None
     camera: dict | None = None
     part: str | None = None
     model: str | None = None
@@ -500,6 +503,7 @@ class RevisionIn(BaseModel):
 def _out(d: dict) -> dict:
     return {"id": d["_id"], "created_at": d["created_at"], "comment": d["comment"],
             "camera": d.get("camera"), "part": d.get("part"), "model": d.get("model"),
+            "view": d.get("view"),
             "status": d.get("status", "draft"), "queued_at": d.get("queued_at"),
             "edited_at": d.get("edited_at"), "archived": bool(d.get("archived")),
             "image_bytes": (d.get("image") or {}).get("bytes", 0),
@@ -690,6 +694,7 @@ async def create_revision(body: RevisionIn):
         "part": body.part, "model": body.model,
         "status": "draft", "queued_at": None,
         "image": image,
+        "view": body.view,
     }
     await d.revisions.insert_one(doc)
     schedule_note_work(rid)

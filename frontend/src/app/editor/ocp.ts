@@ -124,6 +124,22 @@ export class OcpViewer {
     return this.container.querySelector(".tcv_cad_navigation");
   }
 
+  /** Which parts are shown and which are hidden, as the viewer keeps it:
+   *  a map of tree path to [shape, edges]. The camera alone does not
+   *  reproduce a view - half of what you see is what has been switched off. */
+  states(): Record<string, [number, number]> | null {
+    const v: any = this.viewer;
+    return v?.getStates ? v.getStates() : null;
+  }
+
+  applyStates(states: Record<string, [number, number]> | null | undefined) {
+    const v: any = this.viewer;
+    if (!states || !v?.setState) return;
+    for (const [path, st] of Object.entries(states)) {
+      try { v.setState(path, st); } catch { /* a part that no longer exists */ }
+    }
+  }
+
   /** The white 3D area itself. The log is docked inside it so it spans that
    *  band and not the tree column beside it. */
   get view(): HTMLElement | null {

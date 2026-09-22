@@ -8,6 +8,9 @@ export interface Revision {
   comment: string;
   image_path: string;
   camera: CameraState | null;
+  /** Which parts were shown when the note was written. The camera alone is
+   *  only where it was seen from. */
+  view: { states: Record<string, [number, number]> | null } | null;
   part: string | null;
   model: string | null;
   status: RevisionStatus;
@@ -113,9 +116,13 @@ export class Api {
     return `/api/revisions/${id}/image?which=${which}`;
   }
 
+  /** The viewer state a revision was drawn against: which parts were shown.
+   *  Stored with the camera so the after shot can be taken from the same
+   *  view, not just the same angle. */
   create(body: {
     comment: string; image_png: string | null;
     camera: CameraState | null; part: string | null; model: string | null;
+      view?: { states: Record<string, [number, number]> | null } | null;
   }): Observable<Revision> {
     return this.http.post<Revision>('/api/revisions', body);
   }
