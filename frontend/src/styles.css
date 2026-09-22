@@ -201,11 +201,18 @@ body {
   height: auto !important;
   min-height: 0;
   overflow: hidden;
+  /* Fixed width with the gap inside it. A margin on the column or on the 3D
+     area was swallowed by the viewer's flex layout, and the area ended up
+     lying 8 px over the card and eating its right border. */
+  width: 300px;
+  box-sizing: border-box;
+  /* 8 px, the gap the rest of the page uses between panels. */
+  padding-right: 8px;
 }
 .tcv_cad_tree {
   /* Wider than the viewer's 240 px default because the card carries the same
      text and thumbnails as the one in the queue. */
-  width: 300px !important;
+  width: 100% !important;
   flex: 1 1 auto !important;
   height: auto !important;
   max-height: none !important;
@@ -219,7 +226,7 @@ body {
   /* The column sizes itself to its content, so without a width the card
      inside pushed the whole panel wider than the tree and shoved the viewer
      across. Same width as the tree box above it. */
-  width: 300px;
+  width: 100%;
   box-sizing: border-box;
   margin: 8px 0 0;
   padding: 0;
