@@ -251,12 +251,19 @@ body {
 /* The viewer sizes these in pixels of its own; left alone, the grid's rows
    were dividing a body shorter than the stage and row one still overflowed.
    They fill their parent and the grid does the dividing. */
+/* A column: toolbar at its own height, body taking the rest. Subtracting a
+   guessed 48 px for the toolbar left a strip of dead space under the log. */
 .tcv_cad_viewer {
   height: 100% !important;
   width: 100% !important;
+  display: flex !important;
+  flex-direction: column;
+  min-height: 0;
 }
+.tcv_cad_toolbar { flex: none; }
 .tcv_cad_body {
-  height: calc(100% - 48px) !important;
+  flex: 1 1 auto !important;
+  height: auto !important;
   width: 100% !important;
   display: grid !important;
   grid-template-columns: 300px minmax(0, 1fr);

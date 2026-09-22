@@ -157,7 +157,7 @@ def _row(entry: dict) -> dict | None:
 # the running revision's numbers straight away, and re-reading the tail of a
 # 60 MB file on every one of those made the panel arrive late for no reason.
 _LAST_INGEST = 0.0
-INGEST_EVERY = 10.0                    # seconds
+INGEST_EVERY = 2.0                     # seconds
 
 
 async def ingest(db, full: bool = False, force: bool = True) -> dict:

@@ -128,9 +128,12 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.pollHealth();
     this.loadSettings();
     this.healthTimer = setInterval(() => this.pollHealth(), 2000);
-    // Slower than the rest: each call re-reads the tail of the transcripts.
+    // Once a second while a run is live: the figures are what the panel is
+    // for, and a number that moves once a quarter of a minute reads as a
+    // number that is stuck. Reads that find no new transcript bytes are
+    // answered from what was already ingested.
     this.pollLiveCost();
-    this.costTimer = setInterval(() => this.pollLiveCost(), 15000);
+    this.costTimer = setInterval(() => this.pollLiveCost(), 1000);
     // Orbiting fires far too often to write on every frame; every couple of
     // seconds is close enough to "where I left it".
     // Started late, so the restore above finishes before anything is written
