@@ -140,6 +140,12 @@ export class OcpViewer {
     }
   }
 
+  /** The viewer's body: the grid holding the tree column, the 3D area and
+   *  the log. */
+  get body(): HTMLElement | null {
+    return this.container.querySelector(".tcv_cad_body");
+  }
+
   /** The white 3D area itself. The log is docked inside it so it spans that
    *  band and not the tree column beside it. */
   get view(): HTMLElement | null {

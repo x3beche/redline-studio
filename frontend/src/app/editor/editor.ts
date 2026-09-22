@@ -225,6 +225,13 @@ export class Editor implements AfterViewInit, OnDestroy {
     const tree = this.viewer?.tree;
     if (task && tree && task.parentElement !== tree) tree.appendChild(task);
 
+    // Into the viewer's own body, which is a two-row grid: the tree column
+    // spans both rows, the 3D area is the top cell and the log the bottom
+    // one. Absolutely positioning it only ever covered the view.
+    const log = this.logPanel()?.nativeElement;
+    const body = this.viewer?.body;
+    if (log && body && log.parentElement !== body) body.appendChild(log);
+
 
 
 

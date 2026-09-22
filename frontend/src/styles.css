@@ -34,9 +34,14 @@ body {
    out. A cool near-white reads better for CAD than the flat grey. */
 .tcv_cad_view {
   position: relative;
-  /* Room for the log band below it. The tree column beside it keeps its full
-     height, which is what leaves no dead space under the column. */
-  margin-bottom: var(--log-h, 30px);
+  /* The viewer sets its own height in pixels, which overflowed the grid row
+     and carried the 3D area on down over the log. The cell decides now; the
+     canvas is clipped to it. */
+  height: 100% !important;
+  width: 100% !important;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
   background: linear-gradient(180deg, #f4f7fb 0%, #dfe7f1 55%, #ccd7e6 100%) !important;
   /* Every panel, card and button here has a radius; the bright 3D backdrop
      was the one square thing on screen and its corners cut into the dark
@@ -239,14 +244,23 @@ body {
 /* The log has its own row under the view, starting where the view starts:
    it belongs to the 3D area, not to the tree column beside it. The offset is
    the tree column's own fixed width, set above. */
-/* The log sits under the 3D area, inside the stage, lined up with it. The
-   left offset is the tree column's own fixed width plus the viewer's border;
-   tuned against the rendered page. */
+/* The viewer's body is a two-row grid: the tree column down the left across
+   both rows, the 3D area top right, the log under it. Laid out rather than
+   floated, so the 3D area genuinely ends where the log starts instead of
+   carrying on behind it. */
+.tcv_cad_body {
+  display: grid !important;
+  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+}
+.tcv_cad_navigation { grid-area: 1 / 1 / 3 / 2; }
+.tcv_cad_view { grid-area: 1 / 2 / 2 / 3; }
 .tcv-log {
+  grid-area: 2 / 2 / 3 / 3;
   background: var(--surface);
-  left: 294px;
-  margin: 0 7px 7px 0;
-  z-index: 15;
+  margin: 8px 0 0;
+  min-width: 0;
 }
 
 /* The fold handle: a short, thick grab on the column's inner edge, halfway
