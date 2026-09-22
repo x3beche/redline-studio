@@ -73,8 +73,11 @@ async def set_status(db, rev_id: str, status: str) -> dict | None:
     """Move a revision to `status`; returns the patch, or None if unknown."""
     patch = {"status": status,
              "queued_at": now() if status == "queued" else None}
-    if status == "applied" and (await settings(db))["auto_archive"]:
-        patch["archived"] = True
+    if status == "applied":
+        # When it was applied, so the card can sit next to what the work cost.
+        patch["applied_at"] = now()
+        if (await settings(db))["auto_archive"]:
+            patch["archived"] = True
     res = await db.revisions.update_one({"_id": rev_id}, {"$set": patch})
     return patch if res.matched_count else None
 

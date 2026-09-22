@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import build, store, summarise, sysinfo, versions
+from . import build, store, summarise, sysinfo, usage, versions
 
 LOG = logging.getLogger("x3.api")
 
@@ -425,6 +425,11 @@ async def start_run(body: RunStart):
            "started_at": datetime.now(timezone.utc).isoformat(),
            "finished_at": None}
     await db().runs.replace_one({"_id": RUN_ID}, doc, upsert=True)
+    # Keyed by the revision as well: "current" is overwritten by the next run
+    # and the window this one was worked in is what its cost is measured over.
+    if body.revision:
+        await db().runs.replace_one({"_id": body.revision},
+                                    {**doc, "_id": body.revision}, upsert=True)
     return doc
 
 
@@ -434,8 +439,50 @@ async def finish_run(status: str = "done"):
 
     patch = {"status": status, "percent": 100.0,
              "finished_at": datetime.now(timezone.utc).isoformat()}
-    await db().runs.update_one({"_id": RUN_ID}, {"$set": patch}, upsert=True)
-    return await db().runs.find_one({"_id": RUN_ID})
+    d = db()
+    cur = await d.runs.find_one({"_id": RUN_ID}) or {}
+    await d.runs.update_one({"_id": RUN_ID}, {"$set": patch}, upsert=True)
+    rev = cur.get("revision")
+    if rev:
+        await d.runs.update_one({"_id": rev}, {"$set": patch}, upsert=False)
+        # Freeze what the work cost. A failure here must not stop a run from
+        # finishing, so it is logged and swallowed.
+        try:
+            await usage.store(d, rev, await d.runs.find_one({"_id": rev})
+                              or {**cur, **patch})
+        except Exception as exc:
+            LOG.warning("analytics for %s skipped: %s", rev, exc)
+    return await d.runs.find_one({"_id": RUN_ID})
+
+
+@app.get("/api/revisions/{rid}/analytics")
+async def revision_analytics(rid: str, live: bool = False):
+    """What one revision cost: tokens, money at list price, time, rate.
+
+    Frozen when the run finished. `live` re-reads the transcripts, which is
+    what the card does while a run is still going.
+    """
+    d = db()
+    if not live:
+        doc = await d[usage.ANALYTICS].find_one({"_id": rid})
+        if doc:
+            return doc
+    run = await d.runs.find_one({"_id": rid})
+    if not run or not run.get("started_at"):
+        raise HTTPException(404, "no run recorded for this revision")
+    return await usage.store(d, rid, run)
+
+
+@app.post("/api/usage/ingest")
+async def usage_ingest(full: bool = False):
+    """Pull new LLM calls out of the agent transcripts into the database."""
+    return await usage.ingest(db(), full=full)
+
+
+@app.get("/api/usage/prices")
+async def usage_prices():
+    """The rate card the costs are computed with, so the page can say so."""
+    return {"unit": "USD per 1M tokens", "models": usage.PRICES}
 
 
 # ---------------- revisions ----------------
@@ -475,10 +522,24 @@ async def _make_summary(rid: str) -> None:
         except Exception:                            # noqa: BLE001
             png = None
     try:
-        text, _usage = await summarise.summarise(doc["comment"], png)
+        text, used = await summarise.summarise(doc["comment"], png)
     except Exception as exc:                         # noqa: BLE001
         LOG.warning("summary for %s failed: %s", rid, exc)
         return
+    # The card summary is a second vendor working on the same revision, and
+    # the analytics panel should say so rather than showing Anthropic alone.
+    # OpenRouter reports its own cost, so no rate card is needed here.
+    try:
+        import uuid
+        await usage.record_call(
+            d, _id=f"or:{uuid.uuid4().hex[:16]}", provider="openrouter",
+            surface="card-summary", model=summarise.MODEL,
+            input=used.get("prompt_tokens") or 0,
+            output=used.get("completion_tokens") or 0,
+            cache_read=0, cache_write=0, thinking=0,
+            cost_usd=used.get("cost"), cost_basis="billed", revision=rid)
+    except Exception as exc:                         # noqa: BLE001
+        LOG.warning("usage for %s not recorded: %s", rid, exc)
     if not text:
         return
     await d.revisions.update_one({"_id": rid}, {"$set": {

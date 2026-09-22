@@ -17,7 +17,7 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Activity, Api, CameraState, Catalog, Health, LogLine, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
+import { Activity, Analytics, Api, CameraState, Catalog, Health, LogLine, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer } from './ocp';
 
@@ -514,6 +514,94 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   imageUrl(r: Revision): string { return this.api.imageUrl(r.id); }
+
+  // ---- what the work cost ----
+  // The numbers come from the agent's own transcripts and are frozen onto the
+  // revision when its run finishes; a run still going is re-read live. Kept
+  // per card and fetched on demand: most cards are never opened.
+  cost = signal<Record<string, Analytics | 'loading' | 'none'>>({});
+  costOpen = signal<Set<string>>(new Set());
+
+  costShown(id: string): boolean { return this.costOpen().has(id); }
+
+  costOf(id: string): Analytics | null {
+    const v = this.cost()[id];
+    return v && v !== 'loading' && v !== 'none' ? v : null;
+  }
+
+  costState(id: string): 'loading' | 'none' | 'ok' | 'idle' {
+    const v = this.cost()[id];
+    if (v === 'loading' || v === 'none') return v;
+    return v ? 'ok' : 'idle';
+  }
+
+  toggleCost(r: Revision) {
+    const open = new Set(this.costOpen());
+    if (open.has(r.id)) {
+      open.delete(r.id);
+      this.costOpen.set(open);
+      return;
+    }
+    open.add(r.id);
+    this.costOpen.set(open);
+    this.loadCost(r);
+  }
+
+  loadCost(r: Revision) {
+    const rn = this.run();
+    const live = rn?.revision === r.id && rn.status === 'running';
+    this.cost.set({ ...this.cost(), [r.id]: 'loading' });
+    this.api.analytics(r.id, live).subscribe({
+      next: a => this.cost.set({ ...this.cost(), [r.id]: a }),
+      // 404 means nobody recorded a run for it - older revisions, or one
+      // applied by hand. That is a fact about the card, not an error.
+      error: () => this.cost.set({ ...this.cost(), [r.id]: 'none' }),
+    });
+  }
+
+  /** 12_714_933 -> "12.7M". Cache reads run to millions and the raw number
+   *  pushes every other column off the card. */
+  tokens(n: number | null | undefined): string {
+    const v = n ?? 0;
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+    if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + 'k';
+    return String(v);
+  }
+
+  usd(n: number | null | undefined): string {
+    if (n == null) return '-';
+    if (n >= 1) return '$' + n.toFixed(2);
+    if (n >= 0.01) return '$' + n.toFixed(3);
+    return '$' + n.toFixed(5);
+  }
+
+  /** 825.1 -> "13m 45s" */
+  duration(sec: number | null | undefined): string {
+    const s = Math.max(0, Math.round(sec ?? 0));
+    if (s < 60) return s + 's';
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return h ? `${h}h ${m}m` : `${m}m ${s % 60}s`;
+  }
+
+  /** Output tokens per bucket as an SVG polyline, scaled to the tallest
+   *  bucket. A flat empty chart says "no samples" more clearly than a
+   *  missing element, so an empty series still draws the baseline. */
+  spark(a: Analytics, w = 250, h = 34): string {
+    const v = a.series?.output ?? [];
+    if (v.length < 2) return `0,${h} ${w},${h}`;
+    const top = Math.max(...v, 1);
+    return v.map((n, i) =>
+      `${(i / (v.length - 1) * w).toFixed(1)},` +
+      `${(h - (n / top) * (h - 2)).toFixed(1)}`).join(' ');
+  }
+
+  /** Tokens per second at the busiest bucket, for the chart's scale label. */
+  sparkPeak(a: Analytics): number {
+    const v = a.series?.output ?? [];
+    if (!v.length) return 0;
+    return Math.round(Math.max(...v) / (a.series.bucket_s || 30));
+  }
 
   openShot(r: Revision) { this.preview.set(r); }
   closeShot() { this.preview.set(null); }

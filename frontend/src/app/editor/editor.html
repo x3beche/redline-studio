@@ -347,9 +347,11 @@
   <aside class="tcv-panel flex w-[300px] shrink-0 flex-col rounded"
          style="border: 1px solid var(--line)">
 
-    <div class="px-3 py-2" style="border-bottom: 1px solid var(--line)">
-      @if (!frozen()) {
-      } @else {
+    <!-- Cizim araclari yalnizca freeze modunda. Kutu her zaman cizilince
+         Freeze butonu viewer'in toolbar'ina tasindiktan sonra geriye
+         kendi dolgusu ve alt cizgisiyle bos bir alan kaliyordu. -->
+    @if (frozen()) {
+      <div class="px-3 py-2" style="border-bottom: 1px solid var(--line)">
         <div class="grid grid-cols-7 gap-1">
           @for (t of tools; track t.id) {
             <button (click)="tool.set(t.id)" [title]="t.label"
@@ -383,8 +385,8 @@
           <button (click)="undo()" class="tcv-btn flex-1">Undo</button>
           <button (click)="clear()" class="tcv-btn flex-1">Clear</button>
         </div>
-      }
-    </div>
+      </div>
+    }
 
     <div class="px-3 py-2" style="border-bottom: 1px solid var(--line)">
       <label class="tcv-label mb-1 block">Part</label>
@@ -511,11 +513,104 @@
                    class="block h-20 w-full bg-white object-contain" loading="lazy">
             </button>
           }
-          <div class="mt-1 text-[10px]" style="color: var(--ink-dim)">
-            {{ r.created_at.slice(0, 16).replace('T', ' ') }}
-            @if (r.part) { · {{ r.part }} }
-            @if (r.model) { · {{ r.model }} }
+          <div class="mt-1 flex items-center gap-1 text-[10px]"
+               style="color: var(--ink-dim)">
+            <span class="truncate">
+              {{ r.created_at.slice(0, 16).replace('T', ' ') }}
+              @if (r.part) { · {{ r.part }} }
+              @if (r.model) { · {{ r.model }} }
+            </span>
+            <!-- What applying this revision cost. Fetched when opened: most
+                 cards are never looked at, and the roll-up is not free. -->
+            <button (click)="toggleCost(r)" class="tcv-chip ml-auto shrink-0 px-1 py-0"
+                    title="tokens, cost and time spent on this revision">
+              {{ costShown(r.id) ? '▾' : '▸' }} cost
+            </button>
           </div>
+
+          @if (costShown(r.id)) {
+            <div class="mt-1 rounded p-1.5 text-[10px]"
+                 style="background: var(--surface); border: 1px solid var(--line)">
+              @switch (costState(r.id)) {
+                @case ('loading') {
+                  <span style="color: var(--ink-dim)">reading transcripts…</span>
+                }
+                @case ('none') {
+                  <span style="color: var(--ink-dim)">
+                    No run was recorded for this revision, so there is nothing
+                    to measure.
+                  </span>
+                }
+                @default {
+                  @if (costOf(r.id); as a) {
+                    <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                      <span style="color: var(--ink-dim)">tokens</span>
+                      <span class="mono text-right" [title]="a.totals.billed_tokens + ' billed'">
+                        {{ tokens(a.totals.billed_tokens) }}
+                      </span>
+                      <span style="color: var(--ink-dim)">cost (API list)</span>
+                      <span class="mono text-right"
+                            [style.color]="a.totals.complete ? null : 'var(--warn, #e8a735)'"
+                            [title]="a.totals.complete ? 'list price for the tokens above'
+                                     : 'partial: no rate for ' + a.totals.unpriced_models.join(', ')">
+                        {{ usd(a.totals.cost_usd) }}{{ a.totals.complete ? '' : '+' }}
+                      </span>
+                      <span style="color: var(--ink-dim)">time</span>
+                      <span class="mono text-right">{{ duration(a.seconds) }}</span>
+                      <span style="color: var(--ink-dim)">calls</span>
+                      <span class="mono text-right">{{ a.totals.calls }}</span>
+                      <span style="color: var(--ink-dim)">out / s</span>
+                      <span class="mono text-right">{{ a.rate.output_per_s ?? '-' }}</span>
+                    </div>
+
+                    <!-- Output tokens per 30 s bucket: where the thinking
+                         happened and where the build was just running. -->
+                    <div class="mt-1.5">
+                      <div class="flex items-baseline justify-between">
+                        <span style="color: var(--ink-dim)">output tokens/s</span>
+                        <span class="mono" style="color: var(--ink-dim)">
+                          peak {{ sparkPeak(a) }}/s
+                        </span>
+                      </div>
+                      <svg viewBox="0 0 250 34" preserveAspectRatio="none"
+                           class="mt-0.5 block h-8 w-full">
+                        <polyline [attr.points]="spark(a)" fill="none"
+                                  stroke="var(--accent)" stroke-width="1.5"
+                                  vector-effect="non-scaling-stroke"></polyline>
+                      </svg>
+                    </div>
+
+                    <table class="mono mt-1.5 w-full" style="color: var(--ink-dim)">
+                      <tbody>
+                        @for (m of a.models; track m.model) {
+                          <tr>
+                            <td class="truncate pr-1" [title]="m.provider + ' · ' + m.model">
+                              {{ m.model }}
+                            </td>
+                            <td class="pr-1 text-right">{{ tokens(m.output) }} out</td>
+                            <td class="text-right">{{ usd(m.cost_usd) }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+
+                    <p class="mt-1" style="color: var(--ink-dim)">
+                      {{ a.providers.length }} provider{{ a.providers.length === 1 ? '' : 's' }}
+                      · cache read {{ tokens(a.totals.cache_read) }}
+                      · thinking {{ tokens(a.totals.thinking) }}
+                    </p>
+                    <p class="mt-0.5" style="color: var(--ink-dim)">
+                      List price, so this is what the same work would cost on the
+                      API. A subscription pays a flat fee instead.
+                      @if (a.models.length && a.models[0].basis === 'assumed') {
+                        Rates for this model are assumed from its tier.
+                      }
+                    </p>
+                  }
+                }
+              }
+            </div>
+          }
           <!-- One button cycles status: draft -> queued -> applied -> draft -->
           <div class="mt-1.5 flex flex-nowrap items-center gap-1">
             @if (editing() === r.id) {

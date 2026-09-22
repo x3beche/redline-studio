@@ -17,12 +17,19 @@ Progress shown on screen while you work:
     python tools/revisions.py start <id> "title"    begin the top progress bar
     python tools/revisions.py log "text" [-p 40]    append a line to the log
     python tools/revisions.py finish [--failed]     complete the bar
+
+What the work cost - tokens, money at list price, wall clock - is read from
+the agent's own transcripts and frozen onto the revision when the run
+finishes:
+
+    python tools/revisions.py usage [--full] [-r ID]
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import sys
 import tempfile
@@ -112,6 +119,12 @@ async def cmd_start(args):
            "model": None, "percent": 0.0, "status": "running",
            "started_at": _now(), "finished_at": None}
     await db.runs.replace_one({"_id": "current"}, doc, upsert=True)
+    # A second copy keyed by the revision. "current" is overwritten by the
+    # next run, and without this the window a revision was worked in - which
+    # is what the cost is measured over - would be gone the moment the next
+    # one starts.
+    await db.runs.replace_one({"_id": args.id}, {**doc, "_id": args.id},
+                              upsert=True)
     await db.activity.insert_one(_line(f"started: {args.title}", "work"))
     print(f"run started: {args.title}")
 
@@ -120,21 +133,42 @@ async def cmd_log(args):
     db = connect()
     await db.activity.insert_one(_line(args.text, args.level))
     if args.percent is not None:
-        await db.runs.update_one({"_id": "current"},
-                                 {"$set": {"percent": args.percent}})
+        cur = await db.runs.find_one({"_id": "current"}) or {}
+        ids = ["current"] + ([cur["revision"]] if cur.get("revision") else [])
+        await db.runs.update_many({"_id": {"$in": ids}},
+                                  {"$set": {"percent": args.percent}})
     pct = "" if args.percent is None else f"  [{args.percent:.0f}%]"
     print(f"{args.text}{pct}")
 
 
 async def cmd_finish(args):
+    from backend import usage
+
     db = connect()
     status = "failed" if args.failed else "done"
-    await db.runs.update_one(
-        {"_id": "current"},
-        {"$set": {"status": status, "percent": 100.0, "finished_at": _now()}},
-        upsert=True)
+    patch = {"status": status, "percent": 100.0, "finished_at": _now()}
+    cur = await db.runs.find_one({"_id": "current"}) or {}
+    ids = ["current"] + ([cur["revision"]] if cur.get("revision") else [])
+    await db.runs.update_many({"_id": {"$in": ids}}, {"$set": patch},
+                              upsert=False)
+    await db.runs.update_one({"_id": "current"}, {"$set": patch}, upsert=True)
     await db.activity.insert_one(_line(f"finished: {status}", status))
     print(f"run {status}")
+
+    # What the work cost, frozen onto the revision while the window is known.
+    rev = cur.get("revision")
+    if rev:
+        try:
+            run = await db.runs.find_one({"_id": rev}) or {**cur, **patch}
+            doc = await usage.store(db, rev, run)
+            t = doc["totals"]
+            money = ("-" if not t["complete"]
+                     else f"${t['cost_usd']:.4f} (liste fiyati)")
+            print(f"analytics: {t['calls']} cagri, "
+                  f"{t['billed_tokens']:,} token, {money}, "
+                  f"{doc['seconds']:.0f} sn")
+        except Exception as exc:                 # never block finishing
+            print(f"analytics skipped: {type(exc).__name__}: {exc}")
 
 
 async def cmd_models(_):
@@ -169,6 +203,21 @@ async def cmd_build(args):
     res = await build.build(db, args.model, ROOT / "export_model.py")
     sizes = ", ".join(f"{k} {v/1e6:.1f}MB" for k, v in res["artifacts"].items())
     print(f"{res['model']} built: {sizes}")
+
+
+async def cmd_usage(args):
+    """Pull transcript usage into the database, and optionally re-roll a run."""
+    from backend import usage
+
+    db = connect()
+    print(await usage.ingest(db, full=args.full))
+    if args.revision:
+        run = await db.runs.find_one({"_id": args.revision})
+        if not run:
+            sys.exit(f"{args.revision}: no run recorded")
+        doc = await usage.store(db, args.revision, run)
+        print(json.dumps({k: doc[k] for k in ("seconds", "totals", "rate")},
+                         indent=2, ensure_ascii=False))
 
 
 async def cmd_summaries(args):
@@ -243,6 +292,11 @@ def main() -> None:
     s = sub.add_parser("save"); s.add_argument("model"); s.add_argument("file")
     s.set_defaults(fn=cmd_save)
     s = sub.add_parser("build"); s.add_argument("model"); s.set_defaults(fn=cmd_build)
+    s = sub.add_parser("usage", help="pull LLM usage from the agent transcripts")
+    s.add_argument("--full", action="store_true",
+                   help="re-read every transcript from the start")
+    s.add_argument("-r", "--revision", help="also re-roll this revision's numbers")
+    s.set_defaults(fn=cmd_usage)
     s = sub.add_parser("summaries", help="backfill the one-line card summaries")
     s.add_argument("--all", action="store_true", help="redo cards that have one")
     s.add_argument("--force", action="store_true", help="replace hand-written ones")

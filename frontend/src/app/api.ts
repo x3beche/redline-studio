@@ -22,6 +22,40 @@ export interface Revision {
   summary_manual: boolean;
 }
 
+/** What one revision cost to apply: tokens, money at list price, wall clock.
+ *  Read from the agent's own transcripts, not estimated. */
+export interface Analytics {
+  _id: string;
+  title: string | null;
+  started_at: string;
+  finished_at: string | null;
+  computed_at: string;
+  seconds: number;
+  totals: {
+    calls: number; input: number; output: number;
+    cache_read: number; cache_write: number; thinking: number;
+    billed_tokens: number; cost_usd: number;
+    /** False when some model had no rate; the money figure is then partial. */
+    complete: boolean;
+    unpriced_models: string[];
+  };
+  rate: {
+    output_per_s: number | null;
+    billed_per_s: number | null;
+    usd_per_min: number | null;
+  };
+  models: {
+    model: string; provider: string; calls: number;
+    input: number; output: number; cache_read: number; cache_write: number;
+    cost_usd: number;
+    /** "list" = published rate, "assumed" = put in its family's tier. */
+    basis: string | null;
+  }[];
+  providers: { provider: string; calls: number; output: number; cost_usd: number }[];
+  /** Output tokens per bucket, for the rate chart. */
+  series: { bucket_s: number; output: number[] };
+}
+
 /** draft = invisible to models; queued = in the apply queue (models read these). */
 export type RevisionStatus = 'draft' | 'queued' | 'applied' | 'rejected';
 
@@ -75,6 +109,12 @@ export class Api {
 
   remove(id: string): Observable<unknown> {
     return this.http.delete(`/api/revisions/${id}`);
+  }
+
+  /** `live` re-reads the transcripts, for a run that is still going. */
+  analytics(id: string, live = false): Observable<Analytics> {
+    return this.http.get<Analytics>(
+      `/api/revisions/${id}/analytics`, { params: { live } });
   }
 
   setStatus(id: string, status: RevisionStatus): Observable<unknown> {
