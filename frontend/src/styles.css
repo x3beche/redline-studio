@@ -34,6 +34,21 @@ body {
    out. A cool near-white reads better for CAD than the flat grey. */
 .tcv_cad_view {
   background: linear-gradient(180deg, #f4f7fb 0%, #dfe7f1 55%, #ccd7e6 100%) !important;
+  /* Every panel, card and button here has a radius; the bright 3D backdrop
+     was the one square thing on screen and its corners cut into the dark
+     shell around it. The canvas draws to the element's box, so the radius
+     has to clip. */
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* The viewer nests the view inside two wrappers that paint their own grey
+   (canvas < .tcv_cad_view < .tcv_cad_body < .tcv_cad_viewer).
+   Without the same radius they show as square shoulders just outside the
+   rounded backdrop. */
+.tcv_cad_body, .tcv_cad_viewer {
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 /* Shared style mirroring the viewer's own button language */

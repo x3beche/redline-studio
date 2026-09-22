@@ -196,6 +196,7 @@ def summarise(rows: list[dict], started: str, finished: str | None) -> dict:
     providers: dict[str, dict] = {}
     series: dict[int, int] = {}
 
+    surfaces: dict[str, dict] = {}
     for r in rows:
         tot["calls"] += 1
         for k in ("input", "output", "cache_read", "cache_write", "thinking"):
@@ -219,6 +220,16 @@ def summarise(rows: list[dict], started: str, finished: str | None) -> dict:
             d["cost_usd"] += r.get("cost_usd") or 0.0
         for k in ("input", "cache_read", "cache_write"):
             m[k] += r.get(k) or 0
+
+        # What part of the app spent this: the agent applying the revision,
+        # or the summariser writing the card's one-liner.
+        sf = surfaces.setdefault(r.get("surface", "?"),
+                                 {"calls": 0, "output": 0, "cost_usd": 0.0,
+                                  "model": r.get("model"),
+                                  "provider": r.get("provider")})
+        sf["calls"] += 1
+        sf["output"] += r.get("output") or 0
+        sf["cost_usd"] += r.get("cost_usd") or 0.0
 
         at = _parse(r.get("at"))
         if at and t0:
@@ -245,24 +256,41 @@ def summarise(rows: list[dict], started: str, finished: str | None) -> dict:
         "providers": [{"provider": k, **v, "cost_usd": round(v["cost_usd"], 6)}
                       for k, v in sorted(providers.items(),
                                          key=lambda kv: -kv[1]["output"])],
+        "surfaces": [{"surface": k, **v, "cost_usd": round(v["cost_usd"], 6)}
+                     for k, v in sorted(surfaces.items(),
+                                        key=lambda kv: -kv[1]["output"])],
         "series": {"bucket_s": 30,
                    "output": [series.get(i, 0)
                               for i in range(max(series) + 1)] if series else []},
     }
 
 
-async def for_window(db, started: str, finished: str | None) -> dict:
-    q = {"at": {"$gte": started}}
+async def for_revision(db, rid: str, started: str,
+                       finished: str | None) -> dict:
+    """Every call that belongs to one revision.
+
+    Two ways in. Most of the work is the agent's, and the only thing tying
+    those calls to a revision is when they happened - so the run's window
+    picks them up. The card summariser is different: it runs when the card is
+    created, long before anyone starts work on it, and would fall outside
+    every window. It writes the revision id on its rows instead, and those
+    are pulled in whenever they happened.
+    """
+    window = {"at": {"$gte": started}}
     if finished:
-        q["at"]["$lte"] = finished
-    rows = [r async for r in db[CALLS].find(q)]
+        window["at"]["$lte"] = finished
+    rows = [r async for r in db[CALLS].find(
+        {"$or": [window, {"revision": rid}]})]
+    # A summariser row inside the window would otherwise arrive twice.
+    rows = list({r["_id"]: r for r in rows}.values())
     return summarise(rows, started, finished)
 
 
 async def store(db, revision_id: str, run: dict) -> dict:
     """Freeze the numbers for one revision and keep them."""
     await ingest(db)
-    data = await for_window(db, run.get("started_at"), run.get("finished_at"))
+    data = await for_revision(db, revision_id, run.get("started_at"),
+                              run.get("finished_at"))
     doc = {"_id": revision_id, "title": run.get("title"),
            "started_at": run.get("started_at"),
            "finished_at": run.get("finished_at"),

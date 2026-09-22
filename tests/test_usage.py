@@ -128,3 +128,20 @@ def test_a_running_run_is_measured_up_to_now():
     start = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
     out = usage.summarise([], start, None)
     assert out["seconds"] >= 59
+
+
+def test_surface_split_separates_the_agent_from_the_summariser():
+    rows = _rows(2, 0)
+    for r in rows:
+        r["surface"] = "claude-code"
+    rows.append({**_rows(1, 0)[0], "surface": "card-summary",
+                 "provider": "openrouter", "model": "deepseek/deepseek-v4.1-flash",
+                 "output": 12, "cost_usd": 0.0002})
+    out = usage.summarise(rows, "2026-09-22T08:00:00+00:00",
+                          "2026-09-22T08:01:00+00:00")
+    by = {s["surface"]: s for s in out["surfaces"]}
+    assert by["claude-code"]["calls"] == 2
+    assert by["card-summary"]["calls"] == 1
+    assert by["card-summary"]["provider"] == "openrouter"
+    # the summariser's cost is in the total, not off to one side
+    assert out["totals"]["cost_usd"] == pytest.approx(1.0002)

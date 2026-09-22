@@ -499,13 +499,16 @@
               </div>
             }
           }
-          @if (!isFolded(r.id)) {
-          @if (r.summary && editing() !== r.id) {
+          <!-- The generated sentence is what a folded card says instead of
+               the full note. Open the card and the note itself is there, so
+               repeating the summary above it is just the same thing twice. -->
+          @if (isFolded(r.id) && r.summary && editing() !== r.id) {
             <p class="mt-1 text-[11px] italic" style="color: var(--ink-dim)"
                [title]="r.summary_manual ? 'written by hand' : 'generated'">
               {{ r.summary_manual ? '✎' : '◆' }} {{ r.summary }}
             </p>
           }
+          @if (!isFolded(r.id)) {
           @if (r.image_bytes) {
             <button (click)="openShot(r)" class="mt-1.5 block w-full overflow-hidden rounded"
                     style="border: 1px solid var(--line)" title="enlarge">
@@ -594,17 +597,28 @@
                       </tbody>
                     </table>
 
+                    <!-- Who spent it. Applying the revision is the agent's
+                         calls; the card's one-line summary is a separate
+                         request to another vendor and is charged separately. -->
+                    @if (a.surfaces.length > 1) {
+                      <table class="mono mt-1 w-full" style="color: var(--ink-dim)">
+                        <tbody>
+                          @for (sf of a.surfaces; track sf.surface) {
+                            <tr>
+                              <td class="truncate pr-1" [title]="sf.provider">
+                                {{ sf.surface === 'card-summary' ? 'ai summary' : 'agent' }}
+                              </td>
+                              <td class="pr-1 text-right">{{ sf.calls }} call{{ sf.calls === 1 ? '' : 's' }}</td>
+                              <td class="text-right">{{ usd(sf.cost_usd) }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    }
                     <p class="mt-1" style="color: var(--ink-dim)">
                       {{ a.providers.length }} provider{{ a.providers.length === 1 ? '' : 's' }}
                       · cache read {{ tokens(a.totals.cache_read) }}
                       · thinking {{ tokens(a.totals.thinking) }}
-                    </p>
-                    <p class="mt-0.5" style="color: var(--ink-dim)">
-                      List price, so this is what the same work would cost on the
-                      API. A subscription pays a flat fee instead.
-                      @if (a.models.length && a.models[0].basis === 'assumed') {
-                        Rates for this model are assumed from its tier.
-                      }
                     </p>
                   }
                 }

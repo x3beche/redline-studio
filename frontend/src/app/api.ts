@@ -52,6 +52,10 @@ export interface Analytics {
     basis: string | null;
   }[];
   providers: { provider: string; calls: number; output: number; cost_usd: number }[];
+  /** Which part of the app spent it: the agent applying the revision
+   *  ("claude-code") or the card summariser ("card-summary"). */
+  surfaces: { surface: string; provider: string; model: string;
+              calls: number; output: number; cost_usd: number }[];
   /** Output tokens per bucket, for the rate chart. */
   series: { bucket_s: number; output: number[] };
 }
