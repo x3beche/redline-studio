@@ -19,3 +19,6 @@ frontend/.angular/
 # --- editor / isletim sistemi ---
 .DS_Store
 *.swp
+
+# --- yerel artifact onbellegi ---
+.cache/

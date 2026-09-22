@@ -31,6 +31,21 @@ FLAGS = ["--headless=new", "--ignore-gpu-blocklist", "--use-angle=gl",
          "--no-first-run", "--disable-gpu-sandbox"]
 
 
+def _ink(png: bytes) -> float:
+    """Fraction of pixels that are not the background gradient."""
+    import io
+
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(png)).convert("RGB")
+    small = img.resize((160, 120))
+    px = list(small.getdata())
+    # The background runs pale blue-grey; anything darker or more saturated
+    # is the model.
+    off = sum(1 for r, g, b in px if max(r, g, b) - min(r, g, b) > 24 or r < 190)
+    return off / len(px)
+
+
 def render(revision: str, out: Path, width: int, height: int, wait: int) -> Path:
     from websockets.sync.client import connect
 
@@ -71,11 +86,27 @@ def render(revision: str, out: Path, width: int, height: int, wait: int) -> Path
             return r.get("result", {}).get("value")
 
         send("Runtime.enable")
+        # Waiting for a canvas is not waiting for the model: the canvas exists
+        # within a second, while a 50 MB payload takes the best part of a
+        # minute. Every shot taken that way came out empty. Wait for the
+        # viewer to hold a scene and for the canvas to have been laid out.
+        probe = ("(() => { const c = document.querySelector('canvas');"
+                 " if (!c) return '0x0/0';"
+                 " const n = (window.tcv && window.tcv.scene)"
+                 "   ? window.tcv.scene.children.length : 0;"
+                 " return c.width + 'x' + c.height + '/' + n; })()")
+        seen, stable = None, 0
         for _ in range(wait * 2):
-            if js("!!document.querySelector('canvas')"):
-                break
-            time.sleep(0.5)
-        time.sleep(6)                       # let the camera settle on the model
+            now = js(probe)
+            if now == seen and now and not now.startswith("0x0"):
+                stable += 1
+                width = int(now.split("x")[0])
+                if stable >= 3 and width > 500 and not now.endswith("/0"):
+                    break
+            else:
+                seen, stable = now, 0
+            time.sleep(1)
+        time.sleep(5)                       # let the camera settle on the model
 
         # ?rev= also pops the revision card over the top-right corner, which
         # is exactly where the model usually sits. It is not part of the model.
@@ -84,15 +115,24 @@ def render(revision: str, out: Path, width: int, height: int, wait: int) -> Path
            ".forEach(e => e.style.visibility = 'hidden')")
         time.sleep(0.5)
 
-        box = js("(()=>{const c=document.querySelector('canvas');"
-                 "const r=c.getBoundingClientRect();"
-                 "return JSON.stringify([r.left|0,r.top|0,r.width|0,r.height|0])})()")
-        x, y, w, h = json.loads(box)
-        shot = send("Page.captureScreenshot", {"format": "png",
-                                               "clip": {"x": x, "y": y, "width": w,
-                                                        "height": h, "scale": 1}})
-        out.write_bytes(base64.b64decode(shot["data"]))
-        return out
+        # The signals above say the page is ready, not that the geometry is on
+        # screen. Check the picture itself: a nearly uniform frame is the
+        # background, so wait and take it again.
+        for attempt in range(3):
+            box = js("(()=>{const c=document.querySelector('canvas');"
+                     "const r=c.getBoundingClientRect();"
+                     "return JSON.stringify([r.left|0,r.top|0,r.width|0,r.height|0])})()")
+            x, y, w, h = json.loads(box)
+            shot = send("Page.captureScreenshot",
+                        {"format": "png",
+                         "clip": {"x": x, "y": y, "width": w, "height": h,
+                                  "scale": 1}})
+            data = base64.b64decode(shot["data"])
+            if _ink(data) > 0.02 or attempt == 2:
+                out.write_bytes(data)
+                return out
+            print(f"frame looks empty, waiting ({attempt + 1}/2)")
+            time.sleep(25)
     finally:
         chrome.terminate()
 

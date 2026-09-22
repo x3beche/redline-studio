@@ -17,7 +17,9 @@ from __future__ import annotations
 import ast
 import gzip
 import hashlib
+import os
 import re
+import tempfile
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -222,6 +224,14 @@ async def delete_model(db, model_id: str) -> None:
     await db.models.delete_one({"_id": model_id})
 
 
+# Generated artifacts are big - a viewer payload runs to tens of megabytes -
+# and pulling one from Atlas took a minute and a half. They never change once
+# written, so the compressed bytes live on disk under the GridFS id and the
+# database keeps the backup.
+CACHE = Path(os.environ.get(
+    "X3_CACHE", Path(__file__).resolve().parent.parent / ".cache" / "artifacts"))
+
+
 async def put_artifact(db, model_id: str, label: str, data: bytes) -> dict:
     """Gzip the generated artifact into GridFS and drop the previous one."""
     files = bucket(db, "model_files")
@@ -239,16 +249,50 @@ async def put_artifact(db, model_id: str, label: str, data: bytes) -> dict:
     await db.models.update_one(
         {"_id": model_id},
         {"$set": {f"artifacts.{label}": meta, "stale": False}})
+    # Keep a copy on disk straight away, so even the first read after a build
+    # is local. The database holds the backup; the disk does the work.
+    cache_put(fid, packed)
     return meta
 
 
-async def get_artifact(db, model_id: str, label: str) -> bytes:
+def cache_put(gridfs_id, packed: bytes) -> None:
+    try:
+        CACHE.mkdir(parents=True, exist_ok=True)
+        tmp = CACHE / f"{gridfs_id}.part"
+        tmp.write_bytes(packed)
+        tmp.replace(CACHE / f"{gridfs_id}.gz")
+    except OSError:
+        pass                                   # cache is an optimisation only
+
+
+async def get_artifact_gz(db, model_id: str, label: str) -> bytes:
+    """The stored bytes, still gzipped."""
     doc = await db.models.find_one({"_id": model_id})
     meta = (doc or {}).get("artifacts", {}).get(label)
     if not meta:
         raise KeyError(f"{model_id}/{label}")
+
+    CACHE.mkdir(parents=True, exist_ok=True)
+    hit = CACHE / f"{meta['gridfs_id']}.gz"
+    try:
+        if hit.exists():
+            return hit.read_bytes()
+    except OSError:
+        pass
+
     stream = await bucket(db, "model_files").open_download_stream(meta["gridfs_id"])
-    return gzip.decompress(await stream.read())
+    packed = await stream.read()
+    try:
+        tmp = hit.with_suffix(".part")
+        tmp.write_bytes(packed)
+        tmp.replace(hit)                 # atomic: a half-written file is never read
+    except OSError:
+        pass
+    return packed
+
+
+async def get_artifact(db, model_id: str, label: str) -> bytes:
+    return gzip.decompress(await get_artifact_gz(db, model_id, label))
 
 
 # ---------------- revision images ----------------

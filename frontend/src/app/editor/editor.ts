@@ -270,6 +270,17 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!this.activeModel() || !this.viewer) { this.pendingCamera = id; return; }
     this.api.one(id).subscribe({
       next: r => {
+        // Open the model the revision is about. Only the camera was applied
+        // before, so a revision on one model was shown against whichever
+        // model happened to load first.
+        if (r.model && r.model !== this.activeModel()) {
+          const target = this.catalog() && this.findModel(this.catalog()!, r.model);
+          if (target) {
+            this.pendingCamera = id;
+            this.openModel(target);
+            return;
+          }
+        }
         if (!r.camera || !this.viewer) return;
         this.heldCamera = r.camera;
         this.focused.set(r);

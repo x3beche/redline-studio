@@ -301,11 +301,17 @@ async def build_model(model_id: str):
 
 @app.get("/api/models/{model_id:path}/viewer.json")
 async def model_viewer(model_id: str):
+    # Sent still compressed: the browser unpacks it for free and a 63 MB
+    # payload goes over the wire as a few megabytes instead. Unpacking it
+    # here only to have the browser see it uncompressed was the reason a
+    # model took a minute and a half to open.
     try:
-        data = await store.get_artifact(db(), model_id, "viewer")
+        packed = await store.get_artifact_gz(db(), model_id, "viewer")
     except KeyError as exc:
         raise HTTPException(404, f"{model_id}: build it first") from exc
-    return Response(content=data, media_type="application/json")
+    return Response(content=packed, media_type="application/json",
+                    headers={"Content-Encoding": "gzip",
+                             "Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/api/models/{model_id:path}/file/{label}")
