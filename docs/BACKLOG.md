@@ -1,28 +1,63 @@
 # Open work
 
-Written down so nothing is dropped between sessions. Tick a line only when
-it has been built, measured or seen on screen, and pushed.
+Written down so nothing is dropped between sessions. Tick a line only when it
+has been built, measured or seen on screen, and pushed.
+
+**Two hands now.** One agent works the revision queue, which lives in MongoDB;
+the other works the app, which lives in this repository. They do not overlap:
+a revision changes a model's source in the database and commits nothing, and
+an app change never touches a model. Only the app side pushes.
+
+## Revisions
+
+The queue is the source of truth — `tools/revisions.py queue`. Nothing is
+listed here, because a copy would go stale the moment someone presses *queue*.
+
+Rules that are easy to get wrong:
+
+- only `queued` counts as work; a draft is somebody still typing;
+- read the drawing before the note, with the Read tool, every time;
+- measure, fix, re-measure, then leave the measurement behind as a check that
+  raises;
+- zero clash proves nothing on its own — probe for the material that should be
+  there as well;
+- rebuild, render from the revision's own camera, and look at it before
+  calling it done.
+
+## App
+
+- **`render.py` does not always frame the model.** The after shot for
+  `20260922-082953-d9ecfa` came out zoomed into a corner of the base although
+  the revision's stored camera shows the whole station. The viewer sets its own
+  camera after the payload loads and again on resize; the tool applies the
+  stored one before that has settled. Until it is fixed, the before/after pair
+  on a card can be of two different things.
+- **A render's GPU time is not measured.** CPU, memory and disk are, but the
+  card in this machine reports no power through nvidia-smi and per-process
+  utilisation would need `nvidia-smi pmon` sampled alongside the process tree.
+  The CPU figure therefore understates what a render costs.
+- **Revisions applied before the machine meter existed show nothing** for
+  compute. That is deliberate — better than claiming zero — but it means the
+  first few cards read as though they were free.
+- **The bundle is 1.83 MB against a 1.5 MB budget.** Warned on every build.
+  The viewer is most of it.
 
 ## Done and pushed
-- Lid screws: three bosses deleted, two left, the left one pulled out of the
-  wall and shaved against the board's tall module.
-- Every note on the board is an English request; summaries follow.
-- Card analytics: tokens, list-price cost, time, rate, a chart, a spend
-  donut, and the split by model, provider and kind of work.
-- Before/after pictures on the card; `finish` takes the after shot.
-- The running task is docked in the viewer's column with its live cost.
-- The log runs along the bottom of the view.
-- Switches, padding, rounded viewer, native freeze icon.
 
-## Next
-- **Connector revision** `20260922-080108-aef6dc` (in progress). Measured:
-  the plug does not mate, it is buried 68.37 mm3 in the fan's shroud. The
-  shroud's cavity is open from below, roughly x -39.5..-30.5, y -6..0,
-  z 45.2..49.2, with a polarising rib. The plug's nose is 6.8 mm against a
-  4 mm cavity, which is why it cannot seat. Plan: build the nose by cutting
-  the shroud (and the pins, with clearance) out of a block that fills the
-  cavity, so the key and the fit come from the measurement rather than a
-  guess; then run the flex to it as an S bend.
-- `20260922-082752-7aeb28` start the hole higher, mirror it.
-- `20260922-082953-d9ecfa` slant the fan along the blue line.
-- `20260922-083053-febbaa` extrude the red rectangle.
+- Lid screws: three bosses deleted, two left, the left one pulled out of the
+  wall and shaved against the board's tall module, then lifted so the board
+  can be fitted and mirrored so the two are symmetric.
+- The fan leans back instead of forward (`TILT = -18`), and the plug follows
+  the tilt instead of being drawn where an upright fan's socket would be — at
+  any tilt but zero it used to hang in mid-air.
+- Every note on the board is an English request; summaries follow.
+- Card analytics: tokens, list-price cost, time, rate, a chart, a spend donut,
+  and the split by model, provider and kind of work.
+- Machine analytics beside them: CPU, peak memory, energy and the whole
+  machine's share, measured by the kernel rather than guessed.
+- Before/after pictures on the card; `finish` takes the after shot.
+- The running task is docked in the viewer's column with its live cost,
+  refreshed every second.
+- The log runs along the bottom of the view; the toolbar spans the full width.
+- Switches, padding, rounded viewer, native freeze icon.
+- README split in three: front page, INSTALL, USAGE.
