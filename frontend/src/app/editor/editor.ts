@@ -47,6 +47,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private caret = viewChild<ElementRef<HTMLInputElement>>('caret');
   private cadInput = viewChild<ElementRef<HTMLInputElement>>('cadInput');
   private freezeBtn = viewChild<ElementRef<HTMLElement>>('freezeBtn');
+  private taskPanel = viewChild<ElementRef<HTMLElement>>('taskPanel');
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   frozen = signal(false);
@@ -125,6 +126,9 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.pollHealth();
     this.loadSettings();
     this.healthTimer = setInterval(() => this.pollHealth(), 2000);
+    // Slower than the rest: each call re-reads the tail of the transcripts.
+    this.pollLiveCost();
+    this.costTimer = setInterval(() => this.pollLiveCost(), 20000);
     setTimeout(() => this.sizeOverlay());     // after the viewer DOM settles
     this.ro = new ResizeObserver(() => this.sizeOverlay());
     this.ro.observe(box);
@@ -135,9 +139,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.ro?.disconnect();
     this.viewer?.dispose();
     clearInterval(this.healthTimer);
+    clearInterval(this.costTimer);
   }
 
   private healthTimer: ReturnType<typeof setInterval> | undefined;
+
 
   pollHealth() {
     this.health.stats().subscribe({ next: v => this.stats.set(v), error: () => {} });
@@ -201,6 +207,13 @@ export class Editor implements AfterViewInit, OnDestroy {
     const btn = this.freezeBtn()?.nativeElement;
     const bar = this.viewer?.toolbar;
     if (btn && bar && btn.parentElement !== bar) bar.appendChild(btn);
+
+    // The running task goes under the model tree, in the room the tree
+    // panel was leaving empty. Always in the DOM, hidden when idle: an
+    // @if would destroy it and the docking would have to be redone.
+    const task = this.taskPanel()?.nativeElement;
+    const tree = this.viewer?.tree;
+    if (task && tree && task.parentElement !== tree) tree.appendChild(task);
   }
 
   /** Keep the newest line in view, the way a terminal does. */
@@ -609,6 +622,37 @@ export class Editor implements AfterViewInit, OnDestroy {
     ['summary', ['#cc6a6a', 'ai summary']],
     ['translate', ['#4fa8a0', 'translation']],
   ]);
+
+  // ---- the running task, shown in the viewer's own panel ----
+  // The tree panel has a lot of empty room under the model tree, and the
+  // card for the task being worked on was on the far side of the screen from
+  // the thing it is changing. It moves here while the run is live, costs and
+  // all, and comes off the queue on the right so it is not in two places.
+  liveCost = signal<Analytics | null>(null);
+  private costTimer: ReturnType<typeof setInterval> | undefined;
+
+  runningRevision(): Revision | null {
+    const rn = this.run();
+    if (!rn || rn.status !== 'running' || !rn.revision) return null;
+    return this.revisions().find(r => r.id === rn.revision) ?? null;
+  }
+
+  private pollLiveCost() {
+    const rn = this.run();
+    if (!rn?.revision || rn.status !== 'running') {
+      this.liveCost.set(null);
+      return;
+    }
+    this.api.analytics(rn.revision, true).subscribe({
+      next: a => {
+        this.liveCost.set(a);
+        // The docked card shows its cost section open, and it reads from the
+        // same per-card store as the queue does.
+        this.cost.set({ ...this.cost(), [rn.revision!]: a });
+      },
+      error: () => {},
+    });
+  }
 
   /** The name for a spending surface. An "else agent" fallback filed the
    *  translation calls under the agent, which is the one thing they are not. */

@@ -117,6 +117,13 @@ export class OcpViewer {
     };
   }
 
+  /** The column holding the model tree. The running task is docked here,
+   *  in the place the version/axes box used to sit: that box repeated what
+   *  the page already knows and the task belongs next to the model. */
+  get tree(): HTMLElement | null {
+    return this.container.querySelector(".tcv_cad_navigation");
+  }
+
   /** Canvas position inside the stage, used to align the drawing layer. */
   canvasRect(): DOMRect | null {
     const c = this.container.querySelector('canvas');

@@ -218,6 +218,35 @@
             (pointerdown)="down($event)" (pointermove)="move($event)"
             (pointerup)="up()" (pointerleave)="up()"></canvas>
 
+    <!-- Docked under the model tree once the viewer is up. The task being
+         worked on belongs next to the thing it is changing, and the tree
+         panel had a screenful of room going spare. -->
+    <div #taskPanel class="tcv-task" [hidden]="!runningRevision()">
+      @if (runningRevision(); as r) {
+        <div class="mb-1 flex items-baseline gap-1.5">
+          <span class="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
+                style="background: var(--accent)"></span>
+          <span class="tcv-label">working on</span>
+        </div>
+        <!-- The same card as in the queue, not a second version of it. -->
+        <div class="tcv-card p-1.5">
+          <ng-container *ngTemplateOutlet="revCard;
+                        context: { $implicit: r, docked: true }" />
+        </div>
+        @if (liveCost(); as a) {
+          <div class="mono mt-1 grid grid-cols-2 gap-x-2 text-[10px]"
+               style="color: var(--ink-dim)">
+            <span>cost so far</span>
+            <span class="text-right" style="color: var(--ink)">{{ usd(a.totals.cost_usd) }}</span>
+            <span>tokens</span>
+            <span class="text-right">{{ tokens(a.totals.billed_tokens) }}</span>
+            <span>time</span>
+            <span class="text-right">{{ duration(a.seconds) }}</span>
+          </div>
+        }
+      }
+    </div>
+
     <!-- Lives in the viewer's toolbar: moved there once the viewer is up,
          and wearing the viewer's own button markup (tooltip > frame > btn)
          so it is one of that row rather than a text button bolted to its
@@ -467,277 +496,14 @@
     </div>
 
     <ul class="tcv-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <!-- The one being worked on has moved into the viewer's panel; leaving
+           it here as well would put the same card in two places. -->
       @for (r of revisions(); track r.id) {
+        @if (runningRevision()?.id !== r.id) {
         <li class="tcv-card mb-1 p-1.5">
-          <div class="flex items-start justify-between gap-2">
-            @if (editing() === r.id) {
-              <!-- Text only: the drawing is the record and cannot change. -->
-              <div class="min-w-0 flex-1">
-                <textarea rows="3" [value]="editText()"
-                          (input)="editText.set($any($event.target).value)"
-                          class="tcv-field w-full resize-none p-1.5"></textarea>
-                <select [value]="editPart()" (change)="editPart.set($any($event.target).value)"
-                        class="tcv-field mt-1 w-full px-1.5 py-1">
-                  <option value="">(no part)</option>
-                  @for (p of parts(); track p) { <option [value]="p">{{ p }}</option> }
-                </select>
-                <input [value]="editSummary()"
-                       (input)="editSummary.set($any($event.target).value)"
-                       class="tcv-field mt-1 w-full px-1.5 py-1 text-[12px]"
-                       placeholder="one-line summary (leave empty to regenerate)">
-              </div>
-            } @else {
-              <p class="min-w-0 flex-1 cursor-pointer text-[12px] leading-snug"
-                 [class.truncate]="isFolded(r.id)"
-                 (click)="toggleFold(r.id)" title="fold / unfold">
-                <span class="mr-1" style="color: var(--ink-dim)">
-                  {{ isFolded(r.id) ? '▸' : '▾' }}
-                </span>
-                @if (r.status === 'queued') {
-                  <span class="mr-1 rounded px-1.5 py-0.5 text-[10px] font-bold"
-                        style="background: var(--accent); color: #12222e">{{ queueIndex(r) }}</span>
-                }
-                <!-- Folded, the card says one sentence and nothing else; the
-                     wall of text is exactly what folding is for. -->
-                {{ isFolded(r.id) ? cardLine(r) : r.comment }}
-              </p>
-            }
-            @if (r.archived) {
-              <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase"
-                    style="background: var(--line)">arch</span>
-            }
-            <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase"
-                  [style.background]="badge(r.status)">{{ label(r.status) }}</span>
-          </div>
-          <!-- Progress stays visible when the card is folded, so it lives
-               in that card rather than in a bar detached from it. -->
-          <!-- Only while the run is live: a finished run left a stale bar
-               sitting on an old card, showing 0% or "done" forever. -->
-          @if (run(); as rn) {
-            @if (rn.revision === r.id && rn.status === 'running') {
-              <div class="mt-1.5">
-                <div class="flex items-center gap-1.5 text-[10px]">
-                  <span class="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
-                        style="background: var(--accent)"></span>
-                  <span class="truncate" style="color: var(--ink-dim)">{{ rn.title }}</span>
-                  <span class="mono ml-auto shrink-0" style="color: var(--ink-dim)">
-                    {{ rn.percent | number:'1.0-0' }}%
-                  </span>
-                </div>
-                <div class="mt-1 h-1 w-full overflow-hidden rounded"
-                     style="background: var(--surface)">
-                  <div class="h-full transition-[width] duration-300"
-                       [style.width.%]="rn.percent"
-                       style="background: var(--accent)"></div>
-                </div>
-              </div>
-            }
-          }
-          <!-- The generated sentence is what a folded card says instead of
-               the full note. Open the card and the note itself is there, so
-               repeating the summary above it is just the same thing twice. -->
-          @if (isFolded(r.id) && r.summary && editing() !== r.id) {
-            <p class="mt-1 text-[11px] italic" style="color: var(--ink-dim)"
-               [title]="r.summary_manual ? 'written by hand' : 'generated'">
-              {{ r.summary_manual ? '✎' : '◆' }} {{ r.summary }}
-            </p>
-          }
-          @if (!isFolded(r.id)) {
-          <!-- The drawing is the before. Once there is an after shot from the
-               same camera the two sit side by side, which is the only way to
-               see from the card whether what was asked for happened. -->
-          @if (r.image_bytes) {
-            <div class="mt-1.5 flex gap-1">
-              <button (click)="openShot(r)"
-                      class="relative block min-w-0 flex-1 overflow-hidden rounded"
-                      style="border: 1px solid var(--line)" title="enlarge">
-                <img [src]="imageUrl(r)" alt="revision drawing"
-                     class="block h-20 w-full bg-white object-contain" loading="lazy">
-                @if (r.image_after_bytes) {
-                  <span class="absolute left-0 top-0 px-1 text-[9px] uppercase"
-                        style="background: var(--surface-2); color: var(--ink-dim)">before</span>
-                }
-              </button>
-              @if (r.image_after_bytes) {
-                <button (click)="openShot(r, 'after')"
-                        class="relative block min-w-0 flex-1 overflow-hidden rounded"
-                        style="border: 1px solid var(--line)" title="enlarge">
-                  <img [src]="imageUrl(r, 'after')" alt="after the change"
-                       class="block h-20 w-full bg-white object-contain" loading="lazy">
-                  <span class="absolute left-0 top-0 px-1 text-[9px] uppercase"
-                        style="background: var(--surface-2); color: var(--ok)">after</span>
-                </button>
-              }
-            </div>
-          }
-          <div class="mt-1 flex items-center gap-1 text-[10px]"
-               style="color: var(--ink-dim)">
-            <span class="truncate">
-              {{ r.created_at.slice(0, 16).replace('T', ' ') }}
-              @if (r.part) { · {{ r.part }} }
-              @if (r.model) { · {{ r.model }} }
-            </span>
-            <!-- What applying this revision cost. Fetched when opened: most
-                 cards are never looked at, and the roll-up is not free. -->
-            <button (click)="toggleCost(r)" class="tcv-chip ml-auto shrink-0 px-1 py-0"
-                    title="tokens, cost and time spent on this revision">
-              {{ costShown(r.id) ? '▾' : '▸' }} cost
-            </button>
-          </div>
-
-          @if (costShown(r.id)) {
-            <div class="mt-1 rounded p-1.5 text-[10px]"
-                 style="background: var(--surface); border: 1px solid var(--line)">
-              @switch (costState(r.id)) {
-                @case ('loading') {
-                  <span style="color: var(--ink-dim)">reading transcripts…</span>
-                }
-                @case ('none') {
-                  <span style="color: var(--ink-dim)">
-                    No run was recorded for this revision, so there is nothing
-                    to measure.
-                  </span>
-                }
-                @default {
-                  @if (costOf(r.id); as a) {
-                    <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                      <span style="color: var(--ink-dim)">tokens</span>
-                      <span class="mono text-right" [title]="a.totals.billed_tokens + ' billed'">
-                        {{ tokens(a.totals.billed_tokens) }}
-                      </span>
-                      <span style="color: var(--ink-dim)">cost (API list)</span>
-                      <span class="mono text-right"
-                            [style.color]="a.totals.complete ? null : 'var(--warn, #e8a735)'"
-                            [title]="a.totals.complete ? 'list price for the tokens above'
-                                     : 'partial: no rate for ' + a.totals.unpriced_models.join(', ')">
-                        {{ usd(a.totals.cost_usd) }}{{ a.totals.complete ? '' : '+' }}
-                      </span>
-                      <span style="color: var(--ink-dim)">time</span>
-                      <span class="mono text-right">{{ duration(a.seconds) }}</span>
-                      <span style="color: var(--ink-dim)">calls</span>
-                      <span class="mono text-right">{{ a.totals.calls }}</span>
-                      <span style="color: var(--ink-dim)">out / s</span>
-                      <span class="mono text-right">{{ a.rate.output_per_s ?? '-' }}</span>
-                    </div>
-
-                    <!-- Output tokens per 30 s bucket: where the thinking
-                         happened and where the build was just running. -->
-                    <div class="mt-1.5">
-                      <div class="flex items-baseline justify-between">
-                        <span style="color: var(--ink-dim)">output tokens/s</span>
-                        <span class="mono" style="color: var(--ink-dim)">
-                          peak {{ sparkPeak(a) }}/s
-                        </span>
-                      </div>
-                      <svg viewBox="0 0 250 34" preserveAspectRatio="none"
-                           class="mt-0.5 block h-8 w-full">
-                        <polyline [attr.points]="spark(a)" fill="none"
-                                  stroke="var(--accent)" stroke-width="1.5"
-                                  vector-effect="non-scaling-stroke"></polyline>
-                      </svg>
-                    </div>
-
-                    <!-- Not a table: "deepseek/deepseek-v4.1-flash" is wider
-                         than the 300 px panel, and a table let it push the
-                         number columns until "41.3k out" wrapped onto two
-                         lines. The name truncates, the numbers never wrap. -->
-                    <div class="mono mt-1.5" style="color: var(--ink-dim)">
-                      @for (m of a.models; track m.model) {
-                        <div class="flex items-baseline gap-1.5">
-                          <span class="min-w-0 flex-1 truncate"
-                                [title]="m.provider + ' · ' + m.model">{{ m.model }}</span>
-                          <span class="shrink-0 whitespace-nowrap">{{ tokens(m.output) }}</span>
-                          <span class="shrink-0 whitespace-nowrap text-right"
-                                style="width: 3.8rem">{{ usd(m.cost_usd) }}</span>
-                        </div>
-                      }
-                    </div>
-
-                    <!-- Who spent it. Applying the revision is the agent's
-                         calls; the card's one-line summary is a separate
-                         request to another vendor and is charged separately. -->
-                    @if (a.surfaces.length > 1) {
-                      <div class="mono mt-1" style="color: var(--ink-dim)">
-                        @for (sf of a.surfaces; track sf.surface) {
-                          <div class="flex items-baseline gap-1.5">
-                            <span class="min-w-0 flex-1 truncate" [title]="sf.provider">
-                              {{ surfaceName(sf.surface) }}
-                            </span>
-                            <span class="shrink-0 whitespace-nowrap">{{ sf.calls }}&nbsp;call{{ sf.calls === 1 ? '' : 's' }}</span>
-                            <span class="shrink-0 whitespace-nowrap text-right"
-                                  style="width: 3.8rem">{{ usd(sf.cost_usd) }}</span>
-                          </div>
-                        }
-                      </div>
-                    }
-                    <!-- Where the money went. The raw cache-read total looks
-                         wrong (24M for one revision) until you see it is the
-                         same conversation re-read on every call, so the
-                         context size is shown instead. -->
-                    @if (donut(a); as slices) {
-                      @if (slices.length) {
-                        <div class="mt-2 flex items-center gap-2">
-                          <svg viewBox="0 0 40 40" class="h-[72px] w-[72px] shrink-0"
-                               style="transform: rotate(-90deg)">
-                            @for (sl of slices; track sl.label) {
-                              <circle cx="20" cy="20" r="15.915" fill="none"
-                                      [attr.stroke]="sl.colour" stroke-width="7"
-                                      [attr.stroke-dasharray]="sl.dash"
-                                      [attr.stroke-dashoffset]="sl.offset">
-                                <title>{{ sl.label }} · {{ usd(sl.usd) }}</title>
-                              </circle>
-                            }
-                          </svg>
-                          <div class="min-w-0 flex-1">
-                            @for (sl of slices; track sl.label) {
-                              <div class="flex items-baseline gap-1.5">
-                                <span class="h-2 w-2 shrink-0 rounded-sm"
-                                      [style.background]="sl.colour"></span>
-                                <span class="min-w-0 flex-1 truncate">{{ sl.label }}</span>
-                                <span class="mono shrink-0 whitespace-nowrap">
-                                  {{ sl.pct | number:'1.0-0' }}%
-                                </span>
-                                <span class="mono shrink-0 whitespace-nowrap text-right"
-                                      style="width: 3.8rem">{{ usd(sl.usd) }}</span>
-                              </div>
-                            }
-                          </div>
-                        </div>
-                      }
-                    }
-
-                    <p class="mt-1.5" style="color: var(--ink-dim)">
-                      {{ a.providers.length }} provider{{ a.providers.length === 1 ? '' : 's' }}
-                      · context {{ tokens(a.totals.context_per_call) }}/call
-                      · thinking {{ tokens(a.totals.thinking) }}
-                    </p>
-                  }
-                }
-              }
-            </div>
-          }
-          <!-- One button cycles status: draft -> queued -> applied -> draft -->
-          <div class="mt-1.5 flex flex-nowrap items-center gap-1">
-            @if (editing() === r.id) {
-              <button (click)="saveEdit(r)" class="tcv-chip tcv-chip-ok">save</button>
-              <button (click)="cancelEdit()" class="tcv-chip">cancel</button>
-            } @else {
-              <button (click)="cycle(r)" [class]="nextClass(r.status)"
-                      title="draft → queued → applied → draft">
-                {{ nextLabel(r.status) }}
-              </button>
-              <button (click)="startEdit(r)" class="tcv-chip"
-                      title="edit the text (the drawing stays as it is)">edit</button>
-            }
-            <button (click)="archive(r)" class="tcv-chip"
-                    [title]="r.archived ? 'restore from archive' : 'archive'">
-              {{ r.archived ? 'restore' : 'archive' }}
-            </button>
-            <button (click)="remove(r)" class="tcv-chip tcv-chip-danger ml-auto"
-                    title="delete permanently">delete</button>
-          </div>
-          }
+          <ng-container *ngTemplateOutlet="revCard; context: { $implicit: r }" />
         </li>
+        }
       } @empty {
         <li class="text-[11px]" style="color: var(--ink-dim)">No revisions yet.</li>
       }
@@ -803,4 +569,287 @@
   @for (f of n.folders; track f.path) {
     <ng-container *ngTemplateOutlet="node; context: { $implicit: f, depth: depth + 1 }" />
   }
+</ng-template>
+
+<!-- One card, used in two places: the queue on the right and the
+     panel docked in the viewer while that revision is being worked
+     on. Written once so the two cannot drift apart. -->
+<ng-template #revCard let-r let-docked="docked">
+            <div class="flex items-start justify-between gap-2">
+              @if (editing() === r.id) {
+                <!-- Text only: the drawing is the record and cannot change. -->
+                <div class="min-w-0 flex-1">
+                  <textarea rows="3" [value]="editText()"
+                            (input)="editText.set($any($event.target).value)"
+                            class="tcv-field w-full resize-none p-1.5"></textarea>
+                  <select [value]="editPart()" (change)="editPart.set($any($event.target).value)"
+                          class="tcv-field mt-1 w-full px-1.5 py-1">
+                    <option value="">(no part)</option>
+                    @for (p of parts(); track p) { <option [value]="p">{{ p }}</option> }
+                  </select>
+                  <input [value]="editSummary()"
+                         (input)="editSummary.set($any($event.target).value)"
+                         class="tcv-field mt-1 w-full px-1.5 py-1 text-[12px]"
+                         placeholder="one-line summary (leave empty to regenerate)">
+                </div>
+              } @else {
+                <p class="min-w-0 flex-1 cursor-pointer text-[12px] leading-snug"
+                   [class.truncate]="isFolded(r.id)"
+                   (click)="toggleFold(r.id)" title="fold / unfold">
+                  <span class="mr-1" style="color: var(--ink-dim)">
+                    {{ isFolded(r.id) ? '▸' : '▾' }}
+                  </span>
+                  @if (r.status === 'queued') {
+                    <span class="mr-1 rounded px-1.5 py-0.5 text-[10px] font-bold"
+                          style="background: var(--accent); color: #12222e">{{ queueIndex(r) }}</span>
+                  }
+                  <!-- Folded, the card says one sentence and nothing else; the
+                       wall of text is exactly what folding is for. -->
+                  {{ isFolded(r.id) ? cardLine(r) : r.comment }}
+                </p>
+              }
+              @if (r.archived) {
+                <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase"
+                      style="background: var(--line)">arch</span>
+              }
+              <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase"
+                    [style.background]="badge(r.status)">{{ label(r.status) }}</span>
+            </div>
+            <!-- Progress stays visible when the card is folded, so it lives
+                 in that card rather than in a bar detached from it. -->
+            <!-- Only while the run is live: a finished run left a stale bar
+                 sitting on an old card, showing 0% or "done" forever. -->
+            @if (run(); as rn) {
+              @if (rn.revision === r.id && rn.status === 'running') {
+                <div class="mt-1.5">
+                  <div class="flex items-center gap-1.5 text-[10px]">
+                    <span class="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full"
+                          style="background: var(--accent)"></span>
+                    <span class="truncate" style="color: var(--ink-dim)">{{ rn.title }}</span>
+                    <span class="mono ml-auto shrink-0" style="color: var(--ink-dim)">
+                      {{ rn.percent | number:'1.0-0' }}%
+                    </span>
+                  </div>
+                  <div class="mt-1 h-1 w-full overflow-hidden rounded"
+                       style="background: var(--surface)">
+                    <div class="h-full transition-[width] duration-300"
+                         [style.width.%]="rn.percent"
+                         style="background: var(--accent)"></div>
+                  </div>
+                </div>
+              }
+            }
+            <!-- The generated sentence is what a folded card says instead of
+                 the full note. Open the card and the note itself is there, so
+                 repeating the summary above it is just the same thing twice. -->
+            @if (isFolded(r.id) && r.summary && editing() !== r.id) {
+              <p class="mt-1 text-[11px] italic" style="color: var(--ink-dim)"
+                 [title]="r.summary_manual ? 'written by hand' : 'generated'">
+                {{ r.summary_manual ? '✎' : '◆' }} {{ r.summary }}
+              </p>
+            }
+            @if (!isFolded(r.id)) {
+            <!-- The drawing is the before. Once there is an after shot from the
+                 same camera the two sit side by side, which is the only way to
+                 see from the card whether what was asked for happened. -->
+            @if (r.image_bytes) {
+              <div class="mt-1.5 flex gap-1">
+                <button (click)="openShot(r)"
+                        class="relative block min-w-0 flex-1 overflow-hidden rounded"
+                        style="border: 1px solid var(--line)" title="enlarge">
+                  <img [src]="imageUrl(r)" alt="revision drawing"
+                       class="block h-20 w-full bg-white object-contain" loading="lazy">
+                  @if (r.image_after_bytes) {
+                    <span class="absolute left-0 top-0 px-1 text-[9px] uppercase"
+                          style="background: var(--surface-2); color: var(--ink-dim)">before</span>
+                  }
+                </button>
+                @if (r.image_after_bytes) {
+                  <button (click)="openShot(r, 'after')"
+                          class="relative block min-w-0 flex-1 overflow-hidden rounded"
+                          style="border: 1px solid var(--line)" title="enlarge">
+                    <img [src]="imageUrl(r, 'after')" alt="after the change"
+                         class="block h-20 w-full bg-white object-contain" loading="lazy">
+                    <span class="absolute left-0 top-0 px-1 text-[9px] uppercase"
+                          style="background: var(--surface-2); color: var(--ok)">after</span>
+                  </button>
+                }
+              </div>
+            }
+            <div class="mt-1 flex items-center gap-1 text-[10px]"
+                 style="color: var(--ink-dim)">
+              <span class="truncate">
+                {{ r.created_at.slice(0, 16).replace('T', ' ') }}
+                @if (r.part) { · {{ r.part }} }
+                @if (r.model) { · {{ r.model }} }
+              </span>
+              <!-- What applying this revision cost. Fetched when opened: most
+                   cards are never looked at, and the roll-up is not free. -->
+              <!-- Docked next to the model the run is changing, the cost is
+                   the point of the panel, so it is already open and there is
+                   nothing to toggle. -->
+              @if (!docked) {
+                <button (click)="toggleCost(r)" class="tcv-chip ml-auto shrink-0 px-1 py-0"
+                        title="tokens, cost and time spent on this revision">
+                  {{ costShown(r.id) ? '▾' : '▸' }} cost
+                </button>
+              }
+            </div>
+
+            @if (costShown(r.id) || docked) {
+              <div class="mt-1 rounded p-1.5 text-[10px]"
+                   style="background: var(--surface); border: 1px solid var(--line)">
+                @switch (costState(r.id)) {
+                  @case ('loading') {
+                    <span style="color: var(--ink-dim)">reading transcripts…</span>
+                  }
+                  @case ('none') {
+                    <span style="color: var(--ink-dim)">
+                      No run was recorded for this revision, so there is nothing
+                      to measure.
+                    </span>
+                  }
+                  @default {
+                    @if (costOf(r.id); as a) {
+                      <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                        <span style="color: var(--ink-dim)">tokens</span>
+                        <span class="mono text-right" [title]="a.totals.billed_tokens + ' billed'">
+                          {{ tokens(a.totals.billed_tokens) }}
+                        </span>
+                        <span style="color: var(--ink-dim)">cost (API list)</span>
+                        <span class="mono text-right"
+                              [style.color]="a.totals.complete ? null : 'var(--warn, #e8a735)'"
+                              [title]="a.totals.complete ? 'list price for the tokens above'
+                                       : 'partial: no rate for ' + a.totals.unpriced_models.join(', ')">
+                          {{ usd(a.totals.cost_usd) }}{{ a.totals.complete ? '' : '+' }}
+                        </span>
+                        <span style="color: var(--ink-dim)">time</span>
+                        <span class="mono text-right">{{ duration(a.seconds) }}</span>
+                        <span style="color: var(--ink-dim)">calls</span>
+                        <span class="mono text-right">{{ a.totals.calls }}</span>
+                        <span style="color: var(--ink-dim)">out / s</span>
+                        <span class="mono text-right">{{ a.rate.output_per_s ?? '-' }}</span>
+                      </div>
+
+                      <!-- Output tokens per 30 s bucket: where the thinking
+                           happened and where the build was just running. -->
+                      <div class="mt-1.5">
+                        <div class="flex items-baseline justify-between">
+                          <span style="color: var(--ink-dim)">output tokens/s</span>
+                          <span class="mono" style="color: var(--ink-dim)">
+                            peak {{ sparkPeak(a) }}/s
+                          </span>
+                        </div>
+                        <svg viewBox="0 0 250 34" preserveAspectRatio="none"
+                             class="mt-0.5 block h-8 w-full">
+                          <polyline [attr.points]="spark(a)" fill="none"
+                                    stroke="var(--accent)" stroke-width="1.5"
+                                    vector-effect="non-scaling-stroke"></polyline>
+                        </svg>
+                      </div>
+
+                      <!-- Not a table: "deepseek/deepseek-v4.1-flash" is wider
+                           than the 300 px panel, and a table let it push the
+                           number columns until "41.3k out" wrapped onto two
+                           lines. The name truncates, the numbers never wrap. -->
+                      <div class="mono mt-1.5" style="color: var(--ink-dim)">
+                        @for (m of a.models; track m.model) {
+                          <div class="flex items-baseline gap-1.5">
+                            <span class="min-w-0 flex-1 truncate"
+                                  [title]="m.provider + ' · ' + m.model">{{ m.model }}</span>
+                            <span class="shrink-0 whitespace-nowrap">{{ tokens(m.output) }}</span>
+                            <span class="shrink-0 whitespace-nowrap text-right"
+                                  style="width: 3.8rem">{{ usd(m.cost_usd) }}</span>
+                          </div>
+                        }
+                      </div>
+
+                      <!-- Who spent it. Applying the revision is the agent's
+                           calls; the card's one-line summary is a separate
+                           request to another vendor and is charged separately. -->
+                      @if (a.surfaces.length > 1) {
+                        <div class="mono mt-1" style="color: var(--ink-dim)">
+                          @for (sf of a.surfaces; track sf.surface) {
+                            <div class="flex items-baseline gap-1.5">
+                              <span class="min-w-0 flex-1 truncate" [title]="sf.provider">
+                                {{ surfaceName(sf.surface) }}
+                              </span>
+                              <span class="shrink-0 whitespace-nowrap">{{ sf.calls }}&nbsp;call{{ sf.calls === 1 ? '' : 's' }}</span>
+                              <span class="shrink-0 whitespace-nowrap text-right"
+                                    style="width: 3.8rem">{{ usd(sf.cost_usd) }}</span>
+                            </div>
+                          }
+                        </div>
+                      }
+                      <!-- Where the money went. The raw cache-read total looks
+                           wrong (24M for one revision) until you see it is the
+                           same conversation re-read on every call, so the
+                           context size is shown instead. -->
+                      @if (donut(a); as slices) {
+                        @if (slices.length) {
+                          <div class="mt-2 flex items-center gap-2">
+                            <svg viewBox="0 0 40 40" class="h-[72px] w-[72px] shrink-0"
+                                 style="transform: rotate(-90deg)">
+                              @for (sl of slices; track sl.label) {
+                                <circle cx="20" cy="20" r="15.915" fill="none"
+                                        [attr.stroke]="sl.colour" stroke-width="7"
+                                        [attr.stroke-dasharray]="sl.dash"
+                                        [attr.stroke-dashoffset]="sl.offset">
+                                  <title>{{ sl.label }} · {{ usd(sl.usd) }}</title>
+                                </circle>
+                              }
+                            </svg>
+                            <div class="min-w-0 flex-1">
+                              @for (sl of slices; track sl.label) {
+                                <div class="flex items-baseline gap-1.5">
+                                  <span class="h-2 w-2 shrink-0 rounded-sm"
+                                        [style.background]="sl.colour"></span>
+                                  <span class="min-w-0 flex-1 truncate">{{ sl.label }}</span>
+                                  <span class="mono shrink-0 whitespace-nowrap">
+                                    {{ sl.pct | number:'1.0-0' }}%
+                                  </span>
+                                  <span class="mono shrink-0 whitespace-nowrap text-right"
+                                        style="width: 3.8rem">{{ usd(sl.usd) }}</span>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+                      }
+
+                      <p class="mt-1.5" style="color: var(--ink-dim)">
+                        {{ a.providers.length }} provider{{ a.providers.length === 1 ? '' : 's' }}
+                        · context {{ tokens(a.totals.context_per_call) }}/call
+                        · thinking {{ tokens(a.totals.thinking) }}
+                      </p>
+                    }
+                  }
+                }
+              </div>
+            }
+            <!-- One button cycles status: draft -> queued -> applied -> draft.
+                 Not in the docked panel: that card is a read-out of what is
+                 happening, and the controls live with the queue. -->
+            @if (!docked) {
+            <div class="mt-1.5 flex flex-nowrap items-center gap-1">
+              @if (editing() === r.id) {
+                <button (click)="saveEdit(r)" class="tcv-chip tcv-chip-ok">save</button>
+                <button (click)="cancelEdit()" class="tcv-chip">cancel</button>
+              } @else {
+                <button (click)="cycle(r)" [class]="nextClass(r.status)"
+                        title="draft → queued → applied → draft">
+                  {{ nextLabel(r.status) }}
+                </button>
+                <button (click)="startEdit(r)" class="tcv-chip"
+                        title="edit the text (the drawing stays as it is)">edit</button>
+              }
+              <button (click)="archive(r)" class="tcv-chip"
+                      [title]="r.archived ? 'restore from archive' : 'archive'">
+                {{ r.archived ? 'restore' : 'archive' }}
+              </button>
+              <button (click)="remove(r)" class="tcv-chip tcv-chip-danger ml-auto"
+                      title="delete permanently">delete</button>
+            </div>
+            }
+            }
 </ng-template>

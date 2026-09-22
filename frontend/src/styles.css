@@ -180,6 +180,42 @@ body {
   100% { transform: translateX(300%); }
 }
 
+/* The viewer's info box says "Ready", the library version, the control mode
+   and the axis colours - none of which changes or needs a permanent panel.
+   The running task takes its place. */
+.tcv_cad_info { display: none !important; }
+
+/* The tree is given a fixed height that filled the whole column, so the task
+   docked under it fell off the bottom. It only ever holds a handful of rows
+   here; capped, and it scrolls if a model ever brings more. */
+.tcv_cad_tree {
+  height: 300px !important;
+  max-height: 300px !important;
+  /* Wider than the viewer's 240 px default: the docked card carries the same
+     text and thumbnails as the one in the queue, and 240 px squeezed it. */
+  width: 300px !important;
+}
+
+/* The running task, docked under the model tree. Styled like the cards it
+   came from so moving it does not make it a different thing. */
+.tcv-task {
+  /* The column sizes itself to its content, so without a width the card
+     inside pushed the whole panel wider than the tree and shoved the viewer
+     across. Matches the tree, less the margins. */
+  width: 284px;
+  box-sizing: border-box;
+  margin: 10px 8px 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+.tcv-task[hidden] { display: none; }
+.tcv-task {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
 /* On/off switch. A chip that changes colour asks you to remember which
    colour means on; a switch shows its state by where the knob is. */
 .tcv-switch {
@@ -224,6 +260,18 @@ body {
   display: inline-flex !important;
   align-items: center;
   line-height: 1;
+}
+
+/* The filter is absolutely positioned at top:-3px right:-4px, so it hung
+   OVER the viewer's corner: no amount of padding inside the control fixes
+   that, because the gap that was missing is outside it. Brought in by the
+   same 8 px the viewer already keeps at its bottom. */
+.tcv_drop_down.tcv_shape_filter {
+  /* The box is wider than the pill you can see, so these are not the gaps
+     that end up on screen: 8/8 measured 10 at the top and 19 on the right.
+     Tuned against the rendered page, not the numbers. */
+  top: 3px !important;
+  right: -3px !important;
 }
 .tcv_filter_value {
   padding: 0 !important;
