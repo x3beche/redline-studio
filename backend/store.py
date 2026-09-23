@@ -340,8 +340,17 @@ async def get_shot(db, gridfs_id) -> bytes:
 
 # ---------------- catalog tree ----------------
 async def catalog(db) -> dict:
+    """The one tree. Models and boards live in it together.
+
+    They are different things built by different tools, but they are the
+    same kind of thing to the person looking for one: a file in a folder.
+    The extension says which - .3d builds into geometry, .pcb into a
+    circuit - and the room follows from that rather than from which list
+    it was found in.
+    """
     folders = [f async for f in db.folders.find({})]
     models = [m async for m in db.models.find({}, {"source": 0})]
+    boards = [b async for b in db.boards.find({}, {"source": 0})]
 
     def node(path: str, name: str) -> dict:
         return {
@@ -349,6 +358,19 @@ async def catalog(db) -> dict:
             "folders": sorted(
                 (node(f["_id"], f["name"]) for f in folders if f["parent"] == path),
                 key=lambda n: n["name"]),
+            "boards": sorted(
+                ({
+                    "id": b["_id"],
+                    "name": b.get("title") or b["_id"],
+                    "title": b.get("title") or b["_id"],
+                    "kind": "pcb",
+                    "ready": bool((b.get("artifacts") or {}).get("graph")),
+                    "stale": bool(b.get("stale")),
+                    "building": bool(b.get("building")),
+                    "build_secs": b.get("build_secs"),
+                    "laid_out": bool((b.get("layout") or {}).get("at")),
+                } for b in boards if b.get("folder", "") == path),
+                key=lambda e: e["title"]),
             "models": sorted(
                 ({
                     "id": m["_id"], "name": m["name"], "title": m.get("title", m["name"]),
@@ -365,6 +387,7 @@ async def catalog(db) -> dict:
                     # How long this model took last time, so a running build
                     # can show progress against something real.
                     "build_secs": m.get("build_secs"),
+                    "kind": "3d",
                 } for m in models if m.get("folder", "") == path),
                 key=lambda e: e["title"]),
         }

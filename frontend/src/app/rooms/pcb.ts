@@ -1,5 +1,6 @@
-import { Component, inject, output, signal } from '@angular/core';
+import { Component, effect, inject, output, signal } from '@angular/core';
 import { BoardEntry, BoardGraph, BoardLayout, Boards } from '../api';
+import { Selection } from '../selection';
 
 /** What a component sits at on the ring, and what a net draws between. */
 interface Placed {
@@ -28,37 +29,8 @@ interface Placed {
   template: `
 <div class="tcv-room absolute inset-0 flex">
 
-  <!-- The boards. The catalog on the far left is the model catalog; this
-       room has its own things to list. -->
-  <div class="flex w-52 shrink-0 flex-col" style="border-right: 1px solid var(--line)">
-    <div class="tcv-label px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
-      Boards
-    </div>
-    <div class="tcv-scroll min-h-0 flex-1 overflow-y-auto p-1.5">
-      @for (b of boards(); track b._id) {
-        <button (click)="open(b)" class="tcv-row w-full text-left"
-                [attr.data-on]="here()?._id === b._id ? 1 : null">
-          <span class="truncate">{{ b.title || b._id }}</span>
-          @if (b.building) {
-            <span class="ml-1 text-[10px]" style="color: var(--accent)">building</span>
-          } @else if (!b.ready) {
-            <span class="ml-1 text-[10px]" style="color: var(--ink-dim)">not built</span>
-          } @else if (b.stale) {
-            <span class="ml-1 text-[10px]" style="color: var(--warn)">stale</span>
-          }
-        </button>
-      } @empty {
-        <p class="px-1 text-[11px]" style="color: var(--ink-dim)">
-          No boards yet.
-        </p>
-      }
-    </div>
-    <div class="px-2 py-2 text-[11px]" style="border-top: 1px solid var(--line); color: var(--ink-dim)">
-      atopile builds the circuit, not the copper. Layout stays KiCad's.
-    </div>
-  </div>
-
-  <!-- The circuit -->
+  <!-- No list of its own: the catalog on the left is one tree of files
+       and a .pcb in it opens here. -->
   <div class="flex min-w-0 flex-1 flex-col">
     <div class="flex items-center gap-2 px-2 py-1.5"
          style="border-bottom: 1px solid var(--line)">
@@ -182,6 +154,7 @@ interface Placed {
 })
 export class RoomPcb {
   private api = inject(Boards);
+  private picked = inject(Selection);
   leave = output<void>();
 
   readonly SIZE = 520;
@@ -196,13 +169,23 @@ export class RoomPcb {
 
   constructor() {
     this.refresh();
+    // Opened from the catalog: the tree is shared, so the room follows
+    // what was clicked rather than keeping a list beside it.
+    effect(() => {
+      const want = this.picked.board();
+      if (!want || this.here()?._id === want) return;
+      const found = this.boards().find(b => b._id === want);
+      if (found) this.open(found);
+      else this.refresh();
+    });
   }
 
   refresh() {
     this.api.list().subscribe({
       next: rows => {
         this.boards.set(rows);
-        const keep = this.here() && rows.find(b => b._id === this.here()!._id);
+        const want = this.picked.board() ?? this.here()?._id;
+        const keep = want ? rows.find(b => b._id === want) : null;
         this.open(keep ?? rows.find(b => b.ready) ?? rows[0] ?? null);
       },
       error: () => this.note.set('could not read the boards'),

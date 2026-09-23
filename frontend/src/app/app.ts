@@ -1,5 +1,6 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { Editor } from './editor/editor';
+import { Selection } from './selection';
 import { RoomAnalyze } from './rooms/analyze';
 import { RoomCoding } from './rooms/coding';
 import { RoomPcb } from './rooms/pcb';
@@ -43,8 +44,14 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
 </app-editor>`,
 })
 export class App {
+  private picked = inject(Selection);
   tabs = WORKSPACES;
-  here = signal<Workspace['id']>(currentWorkspace());
+  /** Shared, because the catalog changes rooms by opening a file. */
+  here = this.picked.room;
+
+  constructor() {
+    this.here.set(currentWorkspace());
+  }
 
   open(id: Workspace['id']) {
     this.here.set(id);

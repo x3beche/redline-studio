@@ -255,6 +255,30 @@
   border-radius: 3px;
 }
 
+/* A folder heads the files under it, so it reads at least as strongly as
+   they do. Dimmer than its contents was backwards. */
+.tcv-folder {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--ink);
+}
+.tcv-folder-caret {
+  width: 9px;
+  font-size: 9px;
+  color: var(--ink-dim);
+}
+
+/* The extension, not the name: it says which room the file opens in, and
+   should not shout over what the file is called. */
+.tcv-ext {
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+
 /* A row in a list you pick from: the board catalog, and anything else
    that turns into a list of things to open. */
 .tcv-row {

@@ -20,6 +20,7 @@ NAMES = ["body"]
 import { Activity, Analytics, Api, CameraState, Catalog, Chat, ChatLine, Health, LogLine, Question, Questions, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer } from './ocp';
+import { Selection } from '../selection';
 
 export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'text';
 type Pt = [number, number];
@@ -41,6 +42,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private cat = inject(Catalog);
   private health = inject(Health);
   private activity = inject(Activity);
+  private picked = inject(Selection);
   private asks = inject(Questions);
   private chat = inject(Chat);
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
@@ -100,6 +102,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   autoArchive = signal(false);
   autoTranslate = signal(false);
   collapsed_ = signal<Set<string>>(new Set());
+  /** Which folders are folded shut. A tree with everything open is a list
+   *  with indentation, which is what it looked like. */
+  shutFolders = signal<Set<string>>(new Set());
   editText = signal('');
   editPart = signal('');
   editSummary = signal('');
@@ -1367,6 +1372,21 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   /** Cards fold to a single line; the set holds the folded ids. */
+  folded(path: string): boolean { return this.shutFolders().has(path); }
+
+  foldFolder(path: string, e: Event) {
+    e.stopPropagation();
+    const next = new Set(this.shutFolders());
+    next.has(path) ? next.delete(path) : next.add(path);
+    this.shutFolders.set(next);
+  }
+
+  /** Which board the PCB room is showing, so the tree can mark it. */
+  openedBoard(): string | null { return this.picked.board(); }
+
+  /** A .pcb belongs to the board room; opening one goes there. */
+  openBoard(b: { id: string }) { this.picked.openBoard(b.id); }
+
   isFolded(id: string): boolean { return this.collapsed_().has(id); }
 
   toggleFold(id: string) {

@@ -681,12 +681,16 @@
 <!-- folder tree, recursing into itself -->
 <ng-template #node let-n let-depth="depth">
   @if (depth > 0) {
-    <div class="group flex items-center justify-between rounded px-1 py-0.5"
+    <div class="group flex cursor-pointer items-center justify-between rounded px-1 py-0.5"
          [style.margin-left.px]="(depth - 1) * 10"
-         [class.cursor-pointer]="!!moving()"
          [style.outline]="moving() ? '1px dashed var(--accent)' : 'none'"
-         (click)="moving() && moveTo(n.path, $event)">
-      <span class="text-[12px]" style="color: var(--ink-dim)">{{ n.name }}/</span>
+         (click)="moving() ? moveTo(n.path, $event) : foldFolder(n.path, $event)">
+      <!-- A folder was dimmer than the files in it, which is backwards:
+           it is the thing you read first to find them. -->
+      <span class="tcv-folder min-w-0 truncate">
+        <span class="tcv-folder-caret">{{ folded(n.path) ? '▸' : '▾' }}</span>
+        {{ n.name }}
+      </span>
       @if (moving()) {
         <span class="text-[11px]" style="color: var(--accent)">move here</span>
       } @else {
@@ -697,6 +701,28 @@
                   title="delete - only works when the folder is empty">&times;</button>
         </span>
       }
+    </div>
+  }
+  @if (!folded(n.path)) {
+  @for (b of n.boards ?? []; track b.id) {
+    <div (click)="openBoard(b)"
+         class="group relative flex cursor-pointer items-center justify-between rounded px-1.5 py-1"
+         [style.margin-left.px]="depth * 10"
+         [style.background]="openedBoard() === b.id ? 'var(--accent-deep)' : 'transparent'">
+      @if (b.building) {
+        <span class="tcv-building absolute inset-x-1 bottom-0 h-[2px] overflow-hidden rounded"></span>
+      }
+      <span class="flex min-w-0 items-baseline text-[12px]">
+        <!-- The extension is not part of the name, so it does not get
+             truncated with it: it is what says which room this opens. -->
+        <span class="min-w-0 truncate">{{ b.title }}</span>
+        <span class="tcv-ext shrink-0">.pcb</span>
+        @if (b.building) {
+          <span class="ml-1 shrink-0 text-[10px]" style="color: var(--accent)">building…</span>
+        }
+        @if (!b.ready) { <span style="color: var(--warn)" title="not built yet"> ·</span> }
+        @else if (b.stale) { <span style="color: var(--warn)" title="source changed, rebuild"> *</span> }
+      </span>
     </div>
   }
   @for (m of n.models; track m.id) {
@@ -719,8 +745,9 @@
           <span class="tcv-building absolute inset-x-1 bottom-0 h-[2px] overflow-hidden rounded"></span>
         }
       }
-      <span class="min-w-0 truncate text-[12px]">
-        {{ m.title }}
+      <span class="flex min-w-0 items-baseline text-[12px]">
+        <span class="min-w-0 truncate">{{ m.title }}</span>
+        <span class="tcv-ext shrink-0">.3d</span>
         @if (m.building) {
           <span class="ml-1 text-[10px]" style="color: var(--accent)">
             building{{ buildPct(m) === null ? '…' : ' ' + buildPct(m) + '%' }}
@@ -747,6 +774,7 @@
   }
   @for (f of n.folders; track f.path) {
     <ng-container *ngTemplateOutlet="node; context: { $implicit: f, depth: depth + 1 }" />
+  }
   }
 </ng-template>
 
