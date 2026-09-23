@@ -8,10 +8,15 @@
          style="border: 1px solid var(--line)">
 
     <!-- wordmark; collapsed it is the rail's head instead -->
-    <div class="flex gap-2 px-2 py-2"
+    <!-- The side padding goes through style, not a class: `px-0` and `px-2`
+         carry the same weight and Tailwind emits them in numeric order, so
+         `px-2` won and left 14px of room for a 26px button. `margin: auto`
+         cannot centre something wider than its box, and the mark sat off to
+         one side, clipped. -->
+    <div class="flex gap-2 py-2"
          [class.items-center]="!collapsed()"
          [class.flex-col]="collapsed()"
-         [class.px-0]="collapsed()"
+         [style.padding-inline]="collapsed() ? '0' : '8px'"
          [style.border-bottom]="collapsed() ? null : '1px solid var(--line)'">
       @if (collapsed()) {
         <button (click)="toggleSidebar()" class="tcv-rail-btn"
