@@ -343,8 +343,75 @@ body {
               max-width .15s cubic-bezier(.4, 0, .2, 1);
 }
 .tcv-fold-shut {
-  width: 18px !important;
-  max-width: 18px !important;
+  width: 24px !important;
+  max-width: 24px !important;
+}
+
+/* The collapsed catalog is a rail, not a squeezed panel. At 18px with a
+   three-letter label and a number under every bar it read as a broken
+   scrollbar: the text was too small to make out and too wide for the
+   column. One letter fits, three do not, and the reading belongs on hover.
+   The empty stretch in the middle now carries the open model's name, which
+   is the one thing you cannot see with the catalog shut. */
+.tcv-rail-btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 auto;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tcv-rail-btn:hover { background: var(--surface-2); }
+
+.tcv-rail-name {
+  writing-mode: vertical-rl;
+  margin: 10px auto 0;
+  max-height: 46vh;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink-dim);
+}
+
+.tcv-rail-gauges {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 0 13px;
+}
+.tcv-rail-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+}
+.tcv-rail-track {
+  display: flex;
+  align-items: flex-end;
+  width: 6px;
+  height: 46px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface-2);
+}
+.tcv-rail-fill {
+  width: 100%;
+  border-radius: 3px;
+  transition: height .4s ease;
+}
+.tcv-rail-key {
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-dim);
 }
 
 /* The viewer's tree draws in its own face at its own size, which reads as a

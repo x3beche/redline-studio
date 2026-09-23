@@ -299,28 +299,37 @@ export class Editor implements AfterViewInit, OnDestroy {
   gb(n: number): string { return (n / 1e9).toFixed(1) + ' GB'; }
 
   /** Compact gauges shown while the panel is collapsed. */
-  gauges(): { key: string; pct: number; tip: string }[] {
+  gauges(): { key: string; short: string; pct: number; tip: string }[] {
     const st = this.stats(), m = this.sys();
-    const out: { key: string; pct: number; tip: string }[] = [];
+    const out: { key: string; short: string; pct: number; tip: string }[] = [];
     if (st?.quota_bytes) {
-      out.push({ key: 'DB', pct: st.percent ?? 0,
+      out.push({ key: 'DB', short: 'D', pct: st.percent ?? 0,
                  tip: `MongoDB ${this.mb(st.used_bytes)} / ${this.mb(st.quota_bytes)}`
                     + ` · ${st.objects} docs · ${st.versions} versions`
                     + ` · ${st.revisions['queued'] ?? 0} queued` });
     }
     if (m) {
-      out.push({ key: 'CPU', pct: m.cpu.load,
+      out.push({ key: 'CPU', short: 'C', pct: m.cpu.load,
                  tip: `${m.cpu.name} · ${m.cpu.load.toFixed(0)}% · ${m.cpu.cores}c/${m.cpu.threads}t` });
-      out.push({ key: 'RAM', pct: m.ram.percent,
+      out.push({ key: 'RAM', short: 'R', pct: m.ram.percent,
                  tip: `RAM ${this.gb(m.ram.used_bytes)} / ${this.gb(m.ram.total_bytes)}` });
       if (m.gpu) {
-        out.push({ key: 'GPU', pct: m.gpu.util,
+        out.push({ key: 'GPU', short: 'G', pct: m.gpu.util,
                    tip: `${m.gpu.name} · ${m.gpu.util.toFixed(0)}%`
                       + ` · ${(m.gpu.mem_used_mb / 1024).toFixed(1)}/${(m.gpu.mem_total_mb / 1024).toFixed(1)} GB`
                       + ` · ${m.gpu.temp_c.toFixed(0)}°` });
       }
     }
     return out;
+  }
+
+  /** The open model's title, for the collapsed rail. With the catalog shut,
+   *  which model is on screen is the one thing you can no longer see. */
+  activeTitle(): string {
+    const id = this.activeModel(), tree = this.catalog();
+    if (!id || !tree) return '';
+    const hit = this.findModel(tree, id);
+    return hit?.title || hit?.name || id;
   }
 
   gaugeColor(pct: number): string {

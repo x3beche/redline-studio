@@ -7,10 +7,26 @@
          [class.tcv-fold-shut]="collapsed()"
          style="border: 1px solid var(--line)">
 
-    <!-- wordmark -->
-    <div class="flex items-center gap-2 px-2 py-2" style="border-bottom: 1px solid var(--line)">
+    <!-- wordmark; collapsed it is the rail's head instead -->
+    <div class="flex gap-2 px-2 py-2"
+         [class.items-center]="!collapsed()"
+         [class.flex-col]="collapsed()"
+         [class.px-0]="collapsed()"
+         [style.border-bottom]="collapsed() ? null : '1px solid var(--line)'">
       @if (collapsed()) {
-        <span class="tcv-label mx-auto">≡</span>
+        <button (click)="toggleSidebar()" class="tcv-rail-btn"
+                title="show the catalog">
+          <svg viewBox="0 0 20 20" class="h-[15px] w-[15px]" aria-hidden="true">
+            <rect x="2.5" y="2.5" width="15" height="15" fill="none"
+                  stroke="var(--ink-dim)" stroke-width="1.4"/>
+            <path d="M10 0.5 V4 M10 16 V19.5 M0.5 10 H4 M16 10 H19.5"
+                  stroke="var(--accent)" stroke-width="1.4"/>
+            <rect x="8" y="8" width="4" height="4" fill="var(--accent)"/>
+          </svg>
+        </button>
+        @if (activeTitle(); as t) {
+          <div class="tcv-rail-name" [title]="t">{{ t }}</div>
+        }
       }
       @if (!collapsed()) {
         <!-- Datum-target mark: drafting language, no ornament. -->
@@ -146,22 +162,18 @@
         }
       </div>
     } @else {
-      <!-- collapsed: vertical gauges, full value on hover -->
-      <div class="mt-auto flex flex-col items-center gap-2.5 px-1 py-3"
-           style="border-top: 1px solid var(--line)">
+      <!-- Collapsed: one letter and a bar per gauge, the reading on hover.
+           A three-letter label with a number under it does not fit a rail
+           this narrow - the column came out looking like a broken
+           scrollbar. -->
+      <div class="tcv-rail-gauges">
         @for (g of gauges(); track g.key) {
-          <div class="flex flex-col items-center leading-none" [title]="g.tip">
-            <div class="text-[8px] font-semibold tracking-wider"
-                 style="color: var(--ink-dim)">{{ g.key }}</div>
-            <!-- vertical bar filling bottom-up -->
-            <div class="mt-1 flex h-9 w-2.5 items-end overflow-hidden rounded-sm"
-                 style="background: var(--surface-2)">
-              <div class="w-full rounded-sm" [style.height.%]="g.pct"
+          <div class="tcv-rail-gauge" [title]="g.key + ' · ' + g.tip">
+            <div class="tcv-rail-track">
+              <div class="tcv-rail-fill" [style.height.%]="g.pct"
                    [style.background]="gaugeColor(g.pct)"></div>
             </div>
-            <div class="mt-1 text-[9px]" style="color: var(--ink-dim)">
-              {{ g.pct.toFixed(0) }}
-            </div>
+            <div class="tcv-rail-key">{{ g.short }}</div>
           </div>
         }
       </div>
@@ -513,7 +525,7 @@
        its overflow for the fold to take, and a handle sitting on the border
        has to hang outside it. Their offsets follow the panel widths. -->
   <button (click)="toggleSidebar()" class="tcv-edge"
-          [style.left.px]="(collapsed() ? 18 : 250) + 3"
+          [style.left.px]="(collapsed() ? 24 : 250) + 3"
           [title]="collapsed() ? 'show the catalog' : 'hide the catalog'"></button>
   <button (click)="toggleQueue()" class="tcv-edge"
           [style.right.px]="(queueShut() ? 18 : 300) + 3"
