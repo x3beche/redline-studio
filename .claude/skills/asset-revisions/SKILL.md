@@ -154,6 +154,12 @@ takes the after picture and freezes what the work cost - tokens, time and
 money at list price - onto the card. Those numbers come from your own
 transcripts; `revisions.py usage` re-reads them if a run ended badly.
 
+When the work is closed, do not wait to be asked for the next one. Put
+`revisions.py wait` in the background and let the turn end: it checks the
+queue every thirty seconds and returns as soon as anything is queued, which
+brings you back with the ids in hand. `--every` changes the interval,
+`--timeout` gives it an end, and it exits 2 if it reached one.
+
 The card also shows what the machine spent: every build and every render is
 metered by the kernel and filed against the revision you are working on, so
 nothing has to be done by hand. `start` and `finish` read the machine's own

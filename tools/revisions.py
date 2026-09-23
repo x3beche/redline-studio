@@ -84,6 +84,39 @@ async def cmd_queue(_):
         print(f"   image : python tools/revisions.py show {d['_id']}")
 
 
+async def cmd_wait(args):
+    """Block until something is queued, then print it and exit.
+
+    The point is not to poll from inside a turn - it is to end the turn.
+    Started in the background, this command sits quietly on the database
+    and returns the moment a revision is queued, and its exit is what wakes
+    the agent up. Without it somebody has to type "carry on" every time a
+    piece of work lands.
+    """
+    import time as _time
+
+    db = connect()
+    deadline = _time.monotonic() + args.timeout if args.timeout else None
+    seen = set(args.ignore or [])
+    waited = 0
+    while True:
+        rows = [d async for d in db.revisions.find({"status": "queued"})]
+        rows = [d for d in rows if d["_id"] not in seen]
+        rows.sort(key=lambda d: d.get("queued_at") or d["created_at"])
+        if rows:
+            print(f"{len(rows)} queued after waiting {waited}s")
+            for d in rows:
+                print(f"  {d['_id']}  {d.get('model') or '-'}  "
+                      f"{(d.get('comment') or '')[:72]}")
+            print("\nPick the first one up: start, show, read the drawing.")
+            return
+        if deadline and _time.monotonic() > deadline:
+            print(f"nothing queued after {waited}s")
+            sys.exit(2)
+        await asyncio.sleep(args.every)
+        waited += args.every
+
+
 async def cmd_show(args):
     from backend import store
 
@@ -342,6 +375,15 @@ def main() -> None:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("queue").set_defaults(fn=cmd_queue)
+    s = sub.add_parser("wait", help="block until a revision is queued")
+    s.add_argument("--every", type=int, default=30,
+                   help="seconds between checks (default 30)")
+    s.add_argument("--timeout", type=int, default=0,
+                   help="give up after N seconds; 0 waits for as long as the "
+                        "session lasts")
+    s.add_argument("--ignore", nargs="*",
+                   help="revision ids to not count as new work")
+    s.set_defaults(fn=cmd_wait)
     s = sub.add_parser("show"); s.add_argument("id"); s.add_argument("-o", "--out")
     s.set_defaults(fn=cmd_show)
     s = sub.add_parser("done"); s.add_argument("id"); s.set_defaults(fn=cmd_done)

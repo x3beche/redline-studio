@@ -17,6 +17,30 @@ If something is queued, write the drawing to disk with `show` and **open that
 file with the Read tool**. The comment alone is not enough: when the user says
 "these areas", only the red marks say which areas.
 
+## Never stop between revisions
+
+When you finish one revision, do not hand the turn back and wait to be told
+to carry on. Start the watcher **in the background** instead:
+
+```bash
+.venv/bin/python tools/revisions.py wait     # blocks; checks every 30s
+```
+
+It sits on the database and returns the moment anything is queued, printing
+the ids. Its exit is what wakes you up, so you pick the next revision up by
+yourself and the person never has to type "continue". Nothing is polled from
+inside your turn - the turn ends, and the command brings you back.
+
+```bash
+.venv/bin/python tools/revisions.py wait --every 15        # check more often
+.venv/bin/python tools/revisions.py wait --timeout 7200    # give up after 2h
+.venv/bin/python tools/revisions.py wait --ignore <id>     # skip one you are leaving
+```
+
+It exits 0 when there is work and 2 when it timed out. Without `--timeout` it
+waits as long as the session lasts, which is what you want: finish, start the
+watcher, and the next request picks you up on its own.
+
 ## Only `queued` items are work
 
 | Status | Meaning |
@@ -31,6 +55,7 @@ Nothing counts as work until the user presses *queue*.
 
 ```bash
 .venv/bin/python tools/revisions.py queue                # what is queued
+.venv/bin/python tools/revisions.py wait                 # block until there is
 .venv/bin/python tools/revisions.py show <id>            # write drawing to disk
 .venv/bin/python tools/revisions.py models               # list models
 .venv/bin/python tools/revisions.py source <model>       # print source
