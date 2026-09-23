@@ -1,5 +1,5 @@
 import { Component, inject, output, signal } from '@angular/core';
-import { BoardEntry, BoardGraph, Boards } from '../api';
+import { BoardEntry, BoardGraph, BoardLayout, Boards } from '../api';
 
 /** What a component sits at on the ring, and what a net draws between. */
 interface Placed {
@@ -69,9 +69,22 @@ interface Placed {
           {{ g.counts.joins }} joins
         </span>
       }
+      <!-- Two ways of looking at the same board: what it is joined to,
+           and where it sits. -->
+      <div class="ml-auto flex gap-1">
+        <button (click)="view.set('layout')" class="tcv-chip"
+                [attr.data-on]="view() === 'layout' ? 1 : null">layout</button>
+        <button (click)="view.set('circuit')" class="tcv-chip"
+                [attr.data-on]="view() === 'circuit' ? 1 : null">circuit</button>
+      </div>
       <button (click)="rebuild()" [disabled]="busy()"
-              class="tcv-btn tcv-btn-accent ml-auto px-2 py-0.5">
+              class="tcv-btn tcv-btn-accent px-2 py-0.5">
         {{ busy() ? 'building…' : 'build' }}
+      </button>
+      <button (click)="relayout()" [disabled]="busy() || !here()?.ready"
+              class="tcv-btn px-2 py-0.5"
+              title="place it and draw it - KiCad, in a container">
+        {{ laying() ? 'placing…' : 'lay out' }}
       </button>
       <button (click)="leave.emit()" class="tcv-chip">back to 3D</button>
     </div>
@@ -81,7 +94,40 @@ interface Placed {
     }
 
     <div class="min-h-0 flex-1 overflow-auto p-2">
-      @if (graph(); as g) {
+      @if (view() === 'layout') {
+        @if (hasLayout()) {
+          <!-- The board as KiCad draws it: copper, silkscreen, mask and
+               the outline. Placed in a grid and not routed - the source
+               says what connects, not where it goes. -->
+          <!-- A board is a few centimetres across and the SVG says so, so
+               left at its own size it renders as a postage stamp in the
+               middle of the pane. It is a drawing: let it fill the room
+               it is in. -->
+          <img [src]="layoutUrl()" alt="board layout"
+               class="mx-auto block max-h-[58vh] w-full rounded"
+               style="background: var(--shot-bg); object-fit: contain;
+                      padding: 12px">
+          <p class="mt-2 text-[11px]" style="color: var(--ink-dim)">
+            {{ here()?.layout?.placed }} placed
+            @if (here()?.layout?.size_mm; as mm) { · {{ mm[0] }} × {{ mm[1] }} mm }
+            @if (lastLayout()?.parts_from_lcsc; as n) { · {{ n }} from LCSC }
+            · not routed
+          </p>
+          @for (m of here()?.layout?.missing ?? []; track m) {
+            <p class="text-[11px]" style="color: var(--warn)">
+              no footprint for {{ m }}
+            </p>
+          }
+          @for (t of lastLayout()?.part_trouble ?? []; track t) {
+            <p class="text-[11px]" style="color: var(--warn)">{{ t }}</p>
+          }
+        } @else {
+          <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
+            Built, but not placed yet. <b>lay out</b> fetches each part from
+            LCSC, places them and draws the board.
+          </p>
+        }
+      } @else if (graph(); as g) {
         <svg [attr.viewBox]="'0 0 ' + SIZE + ' ' + SIZE"
              class="mx-auto block h-full w-full" style="max-height: 62vh">
           <!-- nets first: a chord between two parts, a star through the
@@ -143,7 +189,10 @@ export class RoomPcb {
   here = signal<BoardEntry | null>(null);
   graph = signal<BoardGraph | null>(null);
   busy = signal(false);
+  laying = signal(false);
   note = signal('');
+  view = signal<'layout' | 'circuit'>('layout');
+  lastLayout = signal<BoardLayout | null>(null);
 
   constructor() {
     this.refresh();
@@ -169,6 +218,37 @@ export class RoomPcb {
     this.api.graph(b._id, b.artifacts?.['graph']?.at).subscribe({
       next: g => this.graph.set(g),
       error: () => this.note.set('the build output could not be read'),
+    });
+  }
+
+  hasLayout(): boolean {
+    return !!this.here()?.layout?.at;
+  }
+
+  /** The build time stamps the URL: the file is served immutable, so
+   *  without it the browser keeps showing the board from last time. */
+  layoutUrl(): string {
+    const b = this.here();
+    return `/api/boards/${b?._id}/layout.svg?v=`
+      + encodeURIComponent(b?.layout?.at ?? '');
+  }
+
+  relayout() {
+    const b = this.here();
+    if (!b || this.laying()) return;
+    this.laying.set(true);
+    this.note.set('');
+    this.api.layout(b._id).subscribe({
+      next: r => {
+        this.laying.set(false);
+        this.lastLayout.set(r);
+        this.view.set('layout');
+        this.refresh();
+      },
+      error: e => {
+        this.laying.set(false);
+        this.note.set(String(e?.error?.detail ?? e?.message ?? e).slice(0, 400));
+      },
     });
   }
 

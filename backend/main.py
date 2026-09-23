@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import ato, build, chat, questions, store, summarise, sysinfo, usage, versions
+from . import ato, build, chat, kicad, questions, store, summarise, sysinfo, usage, versions
 
 LOG = logging.getLogger("x3.api")
 
@@ -866,6 +866,39 @@ async def build_board(bid: str):
         raise HTTPException(404, bid)
     except (ValueError, RuntimeError, TimeoutError) as exc:
         raise HTTPException(400, str(exc))
+
+
+@app.post("/api/boards/{bid}/layout")
+async def layout_board(bid: str):
+    """Place the built netlist and draw it. KiCad runs in a container."""
+    try:
+        return await kicad.render(db(), bid)
+    except kicad.NoDocker as exc:
+        raise HTTPException(503, str(exc))
+    except KeyError:
+        raise HTTPException(404, "not built yet")
+    except (RuntimeError, TimeoutError) as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get("/api/boards/{bid}/layout.svg")
+async def board_layout(bid: str):
+    try:
+        raw = await store.get_artifact(db(), bid, "layout", ato.BOARDS)
+    except KeyError:
+        raise HTTPException(404, "no layout yet")
+    return Response(raw, media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.get("/api/boards/{bid}/board.glb")
+async def board_model(bid: str):
+    try:
+        raw = await store.get_artifact(db(), bid, "model3d", ato.BOARDS)
+    except KeyError:
+        raise HTTPException(404, "no model yet")
+    return Response(raw, media_type="model/gltf-binary",
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/api/boards/{bid}/graph.json")

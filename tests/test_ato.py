@@ -130,3 +130,20 @@ def test_the_project_file_names_the_entry_module():
     """The entry is what the build starts from; getting it wrong builds
     nothing and says little about why."""
     assert "elec/src/main.ato:Board" in ato.PROJECT.format(entry="Board")
+
+
+# ---------------- parts ----------------
+def test_only_an_lcsc_number_is_taken_for_one():
+    """A part number is what the footprint and the 3D model are fetched
+    by; anything else would send somebody else's API a shrug."""
+    from backend import lcsc
+    for good in ("C25744", "C1525", "C2827148"):
+        assert lcsc.looks_like_a_part(good)
+    for bad in ("", None, "R0402", "25744", "C", "C12", "CX1234",
+                " C25744 x", "0402"):
+        assert not lcsc.looks_like_a_part(bad), bad
+
+
+def test_a_part_number_with_space_round_it_is_still_one():
+    from backend import lcsc
+    assert lcsc.looks_like_a_part(" C25744 ".strip())

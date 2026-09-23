@@ -307,10 +307,24 @@ export interface BoardEntry {
   _id: string;
   title?: string;
   ready: boolean;
+  layout?: BoardLayout;
   stale?: boolean;
   building?: boolean;
   build_secs?: number;
   artifacts?: Record<string, { bytes: number; at: string }>;
+}
+
+/** What came of placing a board: how much of it could be drawn, and what
+ *  could not - a part with no footprint anywhere is named, not skipped. */
+export interface BoardLayout {
+  placed: number | null;
+  missing: string[];
+  size_mm: [number, number] | null;
+  parts_from_lcsc?: number;
+  part_trouble?: string[];
+  svg_bytes?: number;
+  glb_bytes?: number;
+  at?: string;
 }
 
 export interface BoardGraph {
@@ -343,6 +357,10 @@ export class Boards {
   build(id: string): Observable<{ components: number; nets: number; joins: number }> {
     return this.http.post<{ components: number; nets: number; joins: number }>(
       `/api/boards/${id}/build`, {});
+  }
+  /** Place the built netlist and draw it. KiCad runs in a container. */
+  layout(id: string): Observable<BoardLayout> {
+    return this.http.post<BoardLayout>(`/api/boards/${id}/layout`, {});
   }
   graph(id: string, stamp?: string): Observable<BoardGraph> {
     return this.http.get<BoardGraph>(

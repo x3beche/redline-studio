@@ -224,7 +224,24 @@ async def build(db, board_id: str) -> dict:
         stored = await store.put_artifact(
             db, board_id, "graph", json.dumps(payload).encode(),
             collection=BOARDS)
+
+        # The footprints the build used, kept beside the netlist. Laying
+        # the board out needs them, and they are the ones this build
+        # actually named - not whatever a library has under that name
+        # today.
+        used = {(c.get("footprint") or "").split(":")[-1]
+                for c in payload["components"]}
+        pretty = tmp / "build" / "footprints" / "footprints.pretty"
+        shapes = {}
+        for name in sorted(n for n in used if n):
+            f = pretty / f"{name}.kicad_mod"
+            if f.exists():
+                shapes[name] = f.read_text()
+        await store.put_artifact(db, board_id, "footprints",
+                                 json.dumps(shapes).encode(), collection=BOARDS)
+
         return {"board": board_id, "bytes": stored["bytes"],
+                "footprints": len(shapes),
                 **payload["counts"], "log": "\n".join(log[-3:])}
     finally:
         took = round(time.monotonic() - started, 1)

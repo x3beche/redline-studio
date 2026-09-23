@@ -38,6 +38,36 @@ the API key are read by the **backend only** and never reach the browser.
 | `X3_KWH_PRICE` | — | electricity price in USD/kWh; unset means the card shows energy and no money |
 | `X3_TRANSCRIPTS` | `-mnt-ssd-3d-arena*` | which agent transcript folders the token analytics read |
 
+## The board room
+
+Two things it needs, and neither goes on the machine.
+
+**atopile**, in its own virtualenv. It brings pydantic, numpy and a KiCad
+stack of its own, and this project's environment has build123d in it:
+
+```bash
+python3 -m venv .venv-ato && .venv-ato/bin/pip install atopile easyeda2kicad
+```
+
+`X3_ATO` and `X3_EASYEDA` point at the two binaries if they live somewhere
+else. Note that pip will give you atopile 0.2 on Python 3.12: 0.15 needs
+3.14, and its part picking wants an atopile account, so 0.2 is what this
+uses.
+
+**KiCad**, in a container, because it is a gigabyte of libraries and the
+point is not to install it:
+
+```bash
+docker build -f docker/kicad.Dockerfile -t redline-kicad .
+```
+
+`X3_KICAD_IMAGE` names another image. Without it the room still builds and
+shows the circuit; it just cannot place or draw the board, and says so.
+
+Footprints and 3D models come from LCSC by part number, through EasyEDA's
+public API, and are kept in the `parts` collection so a board that is
+rebuilt ten times asks once.
+
 ## Themes
 
 `?theme=light`, `?theme=oled` or `?theme=default` in the URL, or set
@@ -61,6 +91,8 @@ a model is built and removed as soon as the build finishes.
 | `activity` | the log shown at the bottom of the screen |
 | `llm_calls`, `analytics` | what each revision cost in tokens and money |
 | `compute_jobs` | one row per build or render: CPU, peak memory, disk |
+| `boards` | board source (.ato), and its netlist, footprints, layout and 3D model |
+| `parts` | footprints and 3D models fetched from LCSC, kept so the API is asked once |
 | `questions` | what the agent asked and what was answered |
 | `chat` | the thread between the person and the agent |
 | `model_files` (GridFS) | generated viewer JSON / STEP / STL, gzipped |
