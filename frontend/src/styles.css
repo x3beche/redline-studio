@@ -568,18 +568,34 @@ body {
 /* A column: toolbar at its own height, body taking the rest. Subtracting a
    guessed 48 px for the toolbar left a strip of dead space under the log. */
 /* Square where the tab meets it; the rest of the panel keeps its radius. */
-.tcv-stage, .tcv-room { border-top-left-radius: 0 !important; }
+/* The open tab's border runs into the panel below it, so the corner
+   under it is square and every other one is round. Only the first tab
+   sits over this corner. */
+.tcv-stage[data-room] { border-top-left-radius: 6px; }
+.tcv-stage[data-room="cad"] { border-top-left-radius: 0; }
 
-/* A room that is not the 3D one wears the same panel, so the open tab
-   reads as its top edge rather than as a button over a hole. Above the
-   viewer's own chrome: that paints as high as z-index 200 by itself, and
-   its tree column was standing in front of the room. */
+/* WHERE ANOTHER ROOM GOES
+   In the centre column, exactly where the 3D panel is and the same size:
+   one of them is in the layout at a time, and the catalog and the queue
+   stay either side of both. Not a layer over the viewer - a room that
+   covers another room inherits its scrollbars, its cursor and its idea of
+   what is on top. */
+/* Not .hidden: a utility class and this one weigh the same, and this one
+   is written later, so it would win and the slot would stay in the
+   layout. */
+.tcv-room-slot:not(.hidden) {
+  position: relative;
+  display: flex;
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+}
 .tcv-room {
-  z-index: 300;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface);
 }
+
 
 .tcv_cad_viewer {
   height: 100% !important;
@@ -937,3 +953,27 @@ body {
 }
 .md th { background: var(--surface-2); font-weight: 600; }
 .md strong { font-weight: 600; }
+
+/* A PANE
+   The board room is six of these at once - the drawing, the circuit, the
+   model, the parts, the machine and the log are different questions about
+   the same board, and answering one usually means looking at another. */
+.tcv-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.tcv-pane-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}

@@ -328,7 +328,13 @@
   <!-- CENTRE: viewer with the log below -->
   <div class="flex min-w-0 flex-1 flex-col gap-2">
 
+  <!-- Taken out of the layout when another room is on, not covered by it:
+       the room beside this one is a panel of its own, the same size in the
+       same place. The viewer is not destroyed - its WebGL context and the
+       geometry in it would go too - only hidden. -->
   <div #stage class="tcv-stage relative min-w-0 flex-1 overflow-hidden rounded"
+       [class.hidden]="picked.room() !== 'cad'"
+       [attr.data-room]="picked.room()"
        style="border: 1px solid var(--line)">
     <!-- 8 px breathing room under the viewer, matching the top. -->
     <div #host class="absolute left-0 right-0 top-0" style="bottom: 8px"
@@ -534,6 +540,12 @@
       </div>
     }
   </div>
+
+  <!-- And here is where another room goes: in the centre column, where
+       the 3D panel is, with the catalog on one side and the queue on the
+       other. What it puts in there is its own - a board room has its own
+       log and its own figures, because they are about the board. -->
+  <ng-content select="[room]"></ng-content>
   </div>
 
   <!-- RIGHT: freeze/draw + revisions (collapsible, like the catalog) -->
@@ -706,10 +718,6 @@
     </div>
     }
   </aside>
-  <!-- The room that is not built covers these two columns and nothing
-       else: not the catalog beside them, and not the tabs above - you
-       have to be able to leave the room you are in. -->
-  <ng-content select="[room]"></ng-content>
   </div>
   </div>
   <!-- The fold handles live out here, not in the panels: a panel has to clip

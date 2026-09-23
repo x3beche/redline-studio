@@ -77,7 +77,7 @@ as well as a solid does.
 Two of them are built. The other two are tabs with the groundwork written
 down and nothing behind them yet, and they say so.
 
-![A board in the PCB room: atopile for the circuit, KiCad for the board](docs/pcb-3d.png)
+![A board in the PCB room: atopile for the circuit, KiCad for the board](docs/pcb-room.png)
 
 The board room takes a circuit written as text, fetches each part from
 LCSC by its number — footprint and 3D model together — and has KiCad

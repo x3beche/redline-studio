@@ -341,6 +341,23 @@ export interface BoardGraph {
   built_at: string;
 }
 
+/** One build or one placement, as the machine saw it. */
+export interface BoardJob {
+  kind: string;
+  at: string;
+  wall_s?: number;
+  cpu_s?: number;
+  cores_used?: number;
+  peak_rss_mb?: number;
+  rc?: number;
+}
+
+export interface BoardCompute {
+  board: string;
+  jobs: BoardJob[];
+  total: { jobs: number; wall_s: number; cpu_s: number };
+}
+
 @Injectable({ providedIn: 'root' })
 export class Boards {
   private http = inject(HttpClient);
@@ -361,6 +378,10 @@ export class Boards {
   /** Place the built netlist and draw it. KiCad runs in a container. */
   layout(id: string): Observable<BoardLayout> {
     return this.http.post<BoardLayout>(`/api/boards/${id}/layout`, {});
+  }
+  /** What this board has cost the machine, job by job. */
+  compute(id: string): Observable<BoardCompute> {
+    return this.http.get<BoardCompute>(`/api/boards/${id}/compute`);
   }
   /** Put it in a folder. The id does not change: it is not a path. */
   move(id: string, folder: string): Observable<unknown> {

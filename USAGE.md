@@ -170,17 +170,25 @@ Two buttons, and they do different things:
   LCSC by its part number, footprint and 3D model together, and KiCad
   does the placing inside a container. Out come a layer render and a GLB.
 
-Three ways of looking at it:
+Everything at once, in five panes:
 
 | | what it shows |
 |---|---|
-| **layout** | the board as KiCad draws it: copper, silkscreen, mask and outline |
-| **3d** | the same placement with the parts standing on it — drag to turn it over |
-| **circuit** | the parts on a ring, a chord per net |
+| **layout** | the board as KiCad draws it — copper, silkscreen, mask, outline — and the two buttons that change it |
+| **circuit** | the parts on a ring, a chord per net, and what it is made of |
+| **3d** | the same placement with the parts standing on it; drag to turn it over |
+| **machine** | what each build and placement cost, and what is stored |
+| **log** | what has happened, the board's builds among it |
 
-![The layer render: copper, silkscreen and outline](docs/pcb-layout.png)
+![The board room: parts, layout, circuit, model, machine and log](docs/pcb-room.png)
 
-![The same placement in three dimensions, parts standing on it](docs/pcb-3d.png)
+There was a switch between the drawing, the circuit and the model, and it
+was wrong: they are not three ways of looking at one picture, they are
+different questions about the same board, and answering one usually means
+looking at another.
+
+The catalog is on one side and the queue on the other, as they are in the
+3D room — the room takes the centre column and nothing else.
 
 The ring is deliberate. A netlist has no positions in it, and inventing
 some with a physics run gives a different picture every time the page is

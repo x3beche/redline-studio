@@ -1,6 +1,6 @@
 import {
-  AfterViewInit, Component, ElementRef, OnDestroy, computed, inject, signal,
-  viewChild,
+  AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject,
+  signal, viewChild,
 } from '@angular/core';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 const SEED = `"""__NAME__ - a build123d model."""
@@ -44,7 +44,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   private cat = inject(Catalog);
   private health = inject(Health);
   private activity = inject(Activity);
-  private picked = inject(Selection);
+  /** Which room is on screen. The template reads it, so it is not private. */
+  picked = inject(Selection);
   private asks = inject(Questions);
   private chat = inject(Chat);
   private boards = inject(Boards);
@@ -147,6 +148,16 @@ export class Editor implements AfterViewInit, OnDestroy {
   private active: Mark | null = null;
   private drawing = false;
   private ro?: ResizeObserver;
+
+  constructor() {
+    // The 3D panel is not destroyed when another room is on - its WebGL
+    // context and tens of megabytes of geometry would go with it - it is
+    // taken out of the layout. A hidden element measures zero, so the
+    // viewer is sized again on the way back.
+    effect(() => {
+      if (this.picked.room() === 'cad') setTimeout(() => this.sizeOverlay(), 40);
+    });
+  }
 
   async ngAfterViewInit() {
     this.restorePanels();
@@ -299,6 +310,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     const log = this.logPanel()?.nativeElement;
     const body = this.viewer?.body;
     if (log && body && log.parentElement !== body) body.appendChild(log);
+
 
 
 

@@ -34,9 +34,11 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
        WebGL context and tens of megabytes of geometry; unmounting it would
        throw both away and rebuild them on the way back. An unbuilt room
        covers it instead. -->
-  <div room>
+  <!-- Empty in the 3D room, and out of the layout with it: left in, an
+       empty flex child took half the column. -->
+  <div room class="tcv-room-slot" [class.hidden]="here() === 'cad'">
     @switch (here()) {
-      @case ('pcb') { <app-room-pcb (leave)="open('cad')" /> }
+      @case ('pcb') { <app-room-pcb /> }
       @case ('code') { <app-room-coding (leave)="open('cad')" /> }
       @case ('analyze') { <app-room-analyze (leave)="open('cad')" /> }
     }

@@ -20,7 +20,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import ato, build, chat, kicad, questions, store, summarise, sysinfo, usage, versions
+from . import (ato, build, chat, compute, kicad, questions, store, summarise,
+               sysinfo, usage, versions)
 
 LOG = logging.getLogger("x3.api")
 
@@ -375,28 +376,39 @@ class RunStart(BaseModel):
     model: str | None = None
 
 
-@app.post("/api/activity")
-async def push_activity(body: ActivityIn):
+async def say(text: str, level: str = "info") -> dict:
+    """Put one line in the log, and keep the log bounded.
+
+    The agent posts its own lines over HTTP; this is for the work the
+    server does on its own behalf - a board build nobody would otherwise
+    see happen.
+    """
     from datetime import datetime, timezone
     import uuid
 
     d = db()
     doc = {"_id": uuid.uuid4().hex[:12],
            "at": datetime.now(timezone.utc).isoformat(),
-           "text": body.text.strip(), "level": body.level}
+           "text": text.strip(), "level": level}
     await d.activity.insert_one(doc)
+    total = await d.activity.count_documents({})
+    if total > ACTIVITY_KEEP:
+        old = [x["_id"] async for x in
+               d.activity.find({}, {"_id": 1}).sort("at", 1).limit(total - ACTIVITY_KEEP)]
+        await d.activity.delete_many({"_id": {"$in": old}})
+    return doc
+
+
+@app.post("/api/activity")
+async def push_activity(body: ActivityIn):
+    d = db()
+    doc = await say(body.text, body.level)
 
     # A percent on a log line also advances the bar, so one call does both.
     if body.percent is not None:
         await d.runs.update_one({"_id": RUN_ID},
                                 {"$set": {"percent": body.percent}})
 
-    # Keep the feed bounded without a capped collection, so it stays clearable.
-    total = await d.activity.count_documents({})
-    if total > ACTIVITY_KEEP:
-        old = [x["_id"] async for x in
-               d.activity.find({}, {"_id": 1}).sort("at", 1).limit(total - ACTIVITY_KEEP)]
-        await d.activity.delete_many({"_id": {"$in": old}})
     return doc
 
 
@@ -878,25 +890,42 @@ async def move_board(bid: str, folder: str = ""):
 
 @app.post("/api/boards/{bid}/build")
 async def build_board(bid: str):
+    # The log is how a build is watched, and until now a board built in
+    # silence: the only sign it had happened was the netlist changing.
+    await say(f"{bid}: building", "work")
     try:
-        return await ato.build(db(), bid)
+        out = await ato.build(db(), bid)
     except KeyError:
         raise HTTPException(404, bid)
     except (ValueError, RuntimeError, TimeoutError) as exc:
+        await say(f"{bid}: build failed - {str(exc).splitlines()[0][:160]}", "error")
         raise HTTPException(400, str(exc))
+    await say(f"{bid}: built - {out['components']} parts, {out['nets']} nets, "
+              f"{out['joins']} joins", "done")
+    return out
 
 
 @app.post("/api/boards/{bid}/layout")
 async def layout_board(bid: str):
     """Place the built netlist and draw it. KiCad runs in a container."""
+    await say(f"{bid}: placing - fetching parts, then KiCad", "work")
     try:
-        return await kicad.render(db(), bid)
+        out = await kicad.render(db(), bid)
     except kicad.NoDocker as exc:
+        await say(f"{bid}: {exc}", "error")
         raise HTTPException(503, str(exc))
     except KeyError:
         raise HTTPException(404, "not built yet")
     except (RuntimeError, TimeoutError) as exc:
+        await say(f"{bid}: placing failed - {str(exc).splitlines()[0][:160]}", "error")
         raise HTTPException(400, str(exc))
+    size = out.get("size_mm")
+    await say(f"{bid}: placed {out.get('placed')}"
+              + (f" - {size[0]} x {size[1]} mm" if size else "")
+              + f" - {out.get('parts_from_lcsc', 0)} from LCSC", "done")
+    for trouble in (out.get("part_trouble") or [])[:4]:
+        await say(f"{bid}: {trouble[:160]}", "warn")
+    return out
 
 
 @app.get("/api/boards/{bid}/layout.svg")
@@ -917,6 +946,24 @@ async def board_model(bid: str):
         raise HTTPException(404, "no model yet")
     return Response(raw, media_type="model/gltf-binary",
                     headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.get("/api/boards/{bid}/compute")
+async def board_compute(bid: str, limit: int = 12):
+    """What building and placing this board has cost the machine.
+
+    One row per job, newest first, plus the totals. The CPU figure is
+    honest about where it comes from: atopile runs here and is measured
+    here, while KiCad runs in a container whose time is nobody's child,
+    so a placement reports the wall clock and leaves it at that.
+    """
+    rows = [r async for r in db()[compute.JOBS]
+            .find({"model": bid}, {"_id": 0}).sort("at", -1).limit(limit)]
+    total = {"jobs": len(rows),
+             "wall_s": round(sum(r.get("wall_s") or 0 for r in rows), 2),
+             "cpu_s": round(sum(r.get("cpu_s") or 0 for r in rows
+                                if r.get("kind") != "layout"), 2)}
+    return {"board": bid, "jobs": rows, "total": total}
 
 
 @app.get("/api/boards/{bid}/graph.json")

@@ -1,5 +1,10 @@
-import { Component, effect, inject, output, signal } from '@angular/core';
-import { BoardEntry, BoardGraph, BoardLayout, Boards } from '../api';
+import {
+  Component, ElementRef, OnDestroy, effect, inject, signal, viewChild,
+} from '@angular/core';
+import {
+  Activity, BoardCompute, BoardEntry, BoardGraph, BoardLayout, Boards, Health,
+  LogLine, SystemInfo,
+} from '../api';
 import { Selection } from '../selection';
 import { Board3d } from './board3d';
 
@@ -29,167 +34,261 @@ interface Placed {
   selector: 'app-room-pcb',
   imports: [Board3d],
   template: `
-<div class="tcv-room absolute inset-0 flex">
+<div class="tcv-room absolute inset-0 flex min-h-0 flex-col">
 
-  <!-- No list of its own: the catalog on the left is one tree of files
-       and a .pcb in it opens here. -->
-  <div class="flex min-w-0 flex-1 flex-col">
-    <div class="flex items-center gap-2 px-2 py-1.5"
-         style="border-bottom: 1px solid var(--line)">
-      <span class="brand-name">{{ here()?.title || here()?._id || 'PCB Design' }}</span>
-      @if (graph(); as g) {
-        <span class="mono text-[11px]" style="color: var(--ink-dim)">
-          {{ g.counts.components }} parts · {{ g.counts.nets }} nets ·
-          {{ g.counts.joins }} joins
-        </span>
-      }
-      <!-- Two ways of looking at the same board: what it is joined to,
-           and where it sits. -->
-      <div class="ml-auto flex gap-1">
-        <button (click)="view.set('layout')" class="tcv-chip"
-                [attr.data-on]="view() === 'layout' ? 1 : null">layout</button>
-        <button (click)="view.set('3d')" class="tcv-chip"
-                [attr.data-on]="view() === '3d' ? 1 : null">3d</button>
-        <button (click)="view.set('circuit')" class="tcv-chip"
-                [attr.data-on]="view() === 'circuit' ? 1 : null">circuit</button>
-      </div>
-      <button (click)="rebuild()" [disabled]="busy()"
-              class="tcv-btn tcv-btn-accent px-2 py-0.5">
-        {{ busy() ? 'building…' : 'build' }}
-      </button>
-      <button (click)="relayout()" [disabled]="busy() || !here()?.ready"
-              class="tcv-btn px-2 py-0.5"
-              title="place it and draw it - KiCad, in a container">
-        {{ laying() ? 'placing…' : 'lay out' }}
-      </button>
-      <button (click)="leave.emit()" class="tcv-chip">back to 3D</button>
-    </div>
+  @if (!here()) {
+    <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
+      Pick a board in the catalog - a <b>.pcb</b> opens here.
+    </p>
+  } @else {
 
-    @if (note(); as n) {
-      <p class="px-2 py-1.5 text-[11px]" style="color: var(--warn)">{{ n }}</p>
-    }
+  <!-- Four panes, all of them at once.
+       A board is not one picture with three ways of looking at it: the
+       drawing, the circuit and the model are different questions about
+       the same thing, and answering one usually means looking at
+       another. The switch made that two clicks and a lost position.
 
-    <div class="min-h-0 flex-1 overflow-auto p-2">
-      @if (view() === 'layout') {
-        @if (hasLayout()) {
-          <!-- The board as KiCad draws it: copper, silkscreen, mask and
-               the outline. Placed in a grid and not routed - the source
-               says what connects, not where it goes. -->
-          <!-- A board is a few centimetres across and the SVG says so, so
-               left at its own size it renders as a postage stamp in the
-               middle of the pane. It is a drawing: let it fill the room
-               it is in. -->
-          <img [src]="layoutUrl()" alt="board layout"
-               class="mx-auto block max-h-[58vh] w-full rounded"
-               style="background: var(--shot-bg); object-fit: contain;
-                      padding: 12px">
-          <p class="mt-2 text-[11px]" style="color: var(--ink-dim)">
-            {{ here()?.layout?.placed }} placed
-            @if (here()?.layout?.size_mm; as mm) { · {{ mm[0] }} × {{ mm[1] }} mm }
-            @if (lastLayout()?.parts_from_lcsc; as n) { · {{ n }} from LCSC }
-            · not routed
-          </p>
-          @for (m of here()?.layout?.missing ?? []; track m) {
-            <p class="text-[11px]" style="color: var(--warn)">
-              no footprint for {{ m }}
-            </p>
-          }
-          @for (t of lastLayout()?.part_trouble ?? []; track t) {
-            <p class="text-[11px]" style="color: var(--warn)">{{ t }}</p>
-          }
-        } @else {
-          <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
-            Built, but not placed yet. <b>lay out</b> fetches each part from
-            LCSC, places them and draws the board.
-          </p>
+       The log under this and the queue beside it are the room's as much
+       as the 3D room's - it sits in the viewer's own grid, so both are
+       where they always were. -->
+  <div class="grid min-h-0 flex-1 gap-2 p-2"
+       style="grid-template-columns: 11fr 6fr;
+              grid-template-rows: 5fr 4fr 3fr">
+
+    <!-- WHAT IT COST, AND WHAT THE MACHINE IS DOING
+         The board's own figures. The catalog's foot and the revision
+         cards say the same kind of thing about models; these are about
+         this board, so they are counted here. -->
+    <section class="tcv-pane" style="grid-column: 2; grid-row: 3">
+      <header class="tcv-pane-head">
+        <span class="tcv-label">machine</span>
+        @if (cost(); as c) {
+          <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
+            {{ c.total.jobs }} jobs
+          </span>
         }
-      } @else if (view() === '3d') {
-        @if (has3d()) {
-          <!-- The board as KiCad exports it, parts and all. Drag to turn
-               it over. -->
-          <!-- Fetched when somebody asks for it. three.js and a glTF
-               loader are a third of a megabyte, and they are no use in
-               any other room. -->
-          <!-- The pane takes the room: a board turned on its side needs
-               the height, and a fixed one left a strip of empty card. -->
-          <div class="flex h-full flex-col">
-            <div class="min-h-0 w-full flex-1 overflow-hidden rounded"
-                 style="background: var(--surface-2)">
-              @defer (on viewport) {
-                <app-board-3d [src]="modelUrl()" />
-              } @placeholder {
-                <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
-                  bringing the viewer in…
-                </p>
-              }
-            </div>
-            <p class="mt-2 text-[11px]" style="color: var(--ink-dim)">
-              from the same placement as the layout · parts that had no 3D
-              shape are not there
-            </p>
+      </header>
+      <div class="min-h-0 flex-1 overflow-auto p-2 text-[11px]">
+        @if (cost()?.jobs?.length) {
+          <div class="mono">
+            @for (j of cost()!.jobs.slice(0, 5); track j.at) {
+              <div class="flex gap-2 leading-relaxed">
+                <span class="w-11 shrink-0"
+                      [style.color]="j.rc ? 'var(--danger)' : 'var(--ink)'">
+                  {{ j.kind === 'board' ? 'build' : j.kind }}
+                </span>
+                <span class="shrink-0" style="color: var(--ink-dim)">{{ secs(j.wall_s) }}</span>
+                <!-- atopile runs here and is measured here; KiCad runs in
+                     a container whose time is nobody's child, so a
+                     placement reports the clock and nothing else. -->
+                <span class="ml-auto shrink-0 truncate" style="color: var(--ink-dim)">
+                  {{ j.kind === 'layout' ? 'in a container' : cores(j.cpu_s) }}
+                </span>
+              </div>
+            }
           </div>
         } @else {
-          <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
-            No model yet. <b>lay out</b> makes one alongside the drawing.
-          </p>
+          <div style="color: var(--ink-dim)">nothing built yet</div>
         }
-      } @else if (graph(); as g) {
-        <svg [attr.viewBox]="'0 0 ' + SIZE + ' ' + SIZE"
-             class="mx-auto block h-full w-full" style="max-height: 62vh">
-          <!-- nets first: a chord between two parts, a star through the
-               middle when more than two sit on it -->
-          @for (l of links(); track l.key) {
-            <path [attr.d]="l.d" fill="none" stroke="var(--line)"
-                  stroke-width="1.4" />
-          }
-          @for (l of netLabels(); track l.key) {
-            <text [attr.x]="l.x" [attr.y]="l.y" text-anchor="middle"
-                  font-size="9" fill="var(--ink-dim)">{{ l.name }}</text>
-          }
-          @for (p of placed(); track p.ref) {
-            <g [attr.transform]="'translate(' + p.x + ',' + p.y + ')'">
-              <rect x="-34" y="-15" width="68" height="30" rx="4"
-                    fill="var(--surface-2)" stroke="var(--accent)"
-                    stroke-width="1.2" />
-              <text y="-2" text-anchor="middle" font-size="11"
-                    fill="var(--ink)">{{ p.label }}</text>
-              <text y="9" text-anchor="middle" font-size="8"
-                    fill="var(--ink-dim)">{{ p.sub }}</text>
-              <title>{{ p.where }}</title>
-            </g>
-          }
-        </svg>
 
-        <!-- the bill, as it came out of the build -->
-        @if (g.bom.length) {
-          <div class="mono mt-2 text-[11px]">
-            <div class="tcv-label mb-1">Bill of materials</div>
-            @for (row of g.bom; track row['designator']) {
-              <div class="flex gap-2" style="color: var(--ink-dim)">
-                <span class="w-10 shrink-0" style="color: var(--ink)">{{ row['designator'] }}</span>
-                <span class="min-w-0 flex-1 truncate">{{ row['footprint'] }}</span>
-                <span class="shrink-0">{{ row['lcsc'] }}</span>
+        <!-- What is stored, which is the other half of what it cost. -->
+        @if (artifacts().length) {
+          <div class="mono mt-2 pt-2" style="border-top: 1px solid var(--line)">
+            @for (a of artifacts(); track a.name) {
+              <div class="flex justify-between leading-relaxed"
+                   style="color: var(--ink-dim)">
+                <span>{{ a.name }}</span>
+                <span>{{ kb(a.bytes) }}</span>
               </div>
             }
           </div>
         }
-      } @else if (here()) {
-        <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
-          Not built yet. Press build and atopile will say what it makes of it.
-        </p>
+
+        @if (sys()) {
+          <div class="mt-2 pt-2" style="border-top: 1px solid var(--line)">
+            @for (g of gauges(); track g.key) {
+              <div class="mb-1.5">
+                <div class="flex justify-between leading-tight">
+                  <span class="truncate" [title]="g.tip">{{ g.key }}</span>
+                  <span class="mono shrink-0" style="color: var(--ink-dim)">{{ g.read }}</span>
+                </div>
+                <div class="mt-0.5 h-[3px] overflow-hidden rounded"
+                     style="background: var(--line)">
+                  <div class="h-full rounded transition-[width] duration-500"
+                       [style.width.%]="g.pct" style="background: var(--accent)"></div>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </section>
+
+    <!-- THE LOG
+         Its own, not the 3D room's: the lines a board writes are about
+         this board, and a build that happened while you were looking at
+         something else is exactly what you want to read here. -->
+    <section class="tcv-pane" style="grid-column: 1; grid-row: 3">
+      <header class="tcv-pane-head">
+        <span class="tcv-label">log</span>
+        <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
+          {{ log().length }} lines
+        </span>
+      </header>
+      <div #logBox class="tcv-scroll mono min-h-0 flex-1 overflow-y-auto px-2 py-1 text-[11px]">
+        @for (l of log(); track l._id) {
+          <div class="flex gap-2 leading-snug">
+            <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
+            <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
+          </div>
+        } @empty {
+          <div style="color: var(--ink-dim)">no activity yet</div>
+        }
+      </div>
+    </section>
+
+    <!-- LAYOUT -->
+    <section class="tcv-pane" style="grid-column: 1; grid-row: 1 / span 2">
+      <!-- The two things you can do to a board live over the drawing they
+           change, not in a bar of their own across the top. -->
+      <header class="tcv-pane-head">
+        <span class="tcv-label">layout</span>
+        @if (hasLayout()) {
+          <span class="mono text-[10px]" style="color: var(--ink-dim)">
+            {{ here()?.layout?.placed }} placed
+            @if (here()?.layout?.size_mm; as mm) { · {{ mm[0] }} × {{ mm[1] }} mm }
+            · not routed
+          </span>
+        }
+        <div class="ml-auto flex shrink-0 items-center gap-1">
+          @if (note(); as n) {
+            <span class="mono mr-1 max-w-[16rem] truncate text-[10px]"
+                  style="color: var(--warn)" [title]="n">{{ n }}</span>
+          }
+          <button (click)="rebuild()" [disabled]="busy()"
+                  class="tcv-btn tcv-btn-accent px-2 py-0.5">
+            {{ busy() ? 'building…' : 'build' }}
+          </button>
+          <button (click)="relayout()" [disabled]="busy() || !here()?.ready"
+                  class="tcv-btn px-2 py-0.5"
+                  title="place it and draw it - KiCad, in a container">
+            {{ laying() ? 'placing…' : 'lay out' }}
+          </button>
+        </div>
+      </header>
+      @if (hasLayout()) {
+        <!-- The sheet is the drawing, not the pane: a board is wider than
+             it is tall, and stretching the element to the pane put it in
+             the middle of a white block four times its height. -->
+        <div class="flex min-h-0 flex-1 items-center justify-center p-2">
+          <div class="w-full rounded" style="background: var(--shot-bg);
+                      padding: 10px; max-height: 100%"
+               [style.aspect-ratio]="sheet()">
+            <img [src]="layoutUrl()" alt="board layout"
+                 class="h-full w-full" style="object-fit: contain">
+          </div>
+        </div>
+        @if (trouble().length) {
+          <div class="shrink-0 px-2 pb-1.5 text-[11px]" style="color: var(--warn)">
+            @for (m of trouble(); track m) { <div class="truncate" [title]="m">{{ m }}</div> }
+          </div>
+        }
       } @else {
         <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
-          Pick a board.
+          {{ here()?.ready
+             ? 'Built, but not placed yet. lay out fetches each part from LCSC, places them and draws the board.'
+             : 'Not built yet. Press build and atopile will say what it makes of it.' }}
         </p>
       }
-    </div>
+    </section>
+
+    <!-- CIRCUIT -->
+    <section class="tcv-pane" style="grid-column: 2; grid-row: 1">
+      <header class="tcv-pane-head">
+        <span class="tcv-label">circuit</span>
+        <!-- What the board is made of, where the list of it used to be:
+             the ring says which parts, so the count belongs on it. -->
+        @if (graph(); as g) {
+          <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
+            {{ g.counts.components }} parts · {{ g.counts.nets }} nets ·
+            {{ g.counts.joins }} joins
+          </span>
+        }
+      </header>
+      <div class="min-h-0 flex-1 p-1">
+        @if (graph()) {
+          <svg [attr.viewBox]="'0 0 ' + SIZE + ' ' + SIZE"
+               class="h-full w-full" preserveAspectRatio="xMidYMid meet">
+            <!-- nets first: a chord between two parts, a star through the
+                 middle when more than two sit on it -->
+            @for (l of links(); track l.key) {
+              <path [attr.d]="l.d" fill="none" stroke="var(--line)"
+                    stroke-width="1.4" />
+            }
+            @for (l of netLabels(); track l.key) {
+              <text [attr.x]="l.x" [attr.y]="l.y" text-anchor="middle"
+                    font-size="9" fill="var(--ink-dim)">{{ l.name }}</text>
+            }
+            @for (p of placed(); track p.ref) {
+              <g [attr.transform]="'translate(' + p.x + ',' + p.y + ')'">
+                <rect x="-34" y="-15" width="68" height="30" rx="4"
+                      fill="var(--surface-2)" stroke="var(--accent)"
+                      stroke-width="1.2" />
+                <text y="-2" text-anchor="middle" font-size="11"
+                      fill="var(--ink)">{{ p.label }}</text>
+                <text y="9" text-anchor="middle" font-size="8"
+                      fill="var(--ink-dim)">{{ p.sub }}</text>
+                <title>{{ p.where }}</title>
+              </g>
+            }
+          </svg>
+        } @else {
+          <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
+            The circuit comes out of the build.
+          </p>
+        }
+      </div>
+    </section>
+
+    <!-- THE BOARD, IN THREE DIMENSIONS -->
+    <section class="tcv-pane" style="grid-column: 2; grid-row: 2">
+      <header class="tcv-pane-head">
+        <span class="tcv-label">3d</span>
+        <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
+          drag to turn it over
+        </span>
+      </header>
+      @if (has3d()) {
+        <!-- Fetched when the pane is on screen. three.js and a glTF
+             loader are a third of a megabyte, and they are no use in any
+             other room. -->
+        <div class="min-h-0 flex-1 overflow-hidden"
+             style="background: var(--surface-2)">
+          @defer (on viewport) {
+            <app-board-3d [src]="modelUrl()" />
+          } @placeholder {
+            <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
+              bringing the viewer in…
+            </p>
+          }
+        </div>
+      } @else {
+        <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
+          No model yet. <b>lay out</b> makes one alongside the drawing.
+        </p>
+      }
+    </section>
+
   </div>
+  }
 </div>`,
 })
-export class RoomPcb {
+export class RoomPcb implements OnDestroy {
   private api = inject(Boards);
   private picked = inject(Selection);
-  leave = output<void>();
+  private health = inject(Health);
+  private activity = inject(Activity);
+  private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   readonly SIZE = 520;
   boards = signal<BoardEntry[]>([]);
@@ -198,11 +297,18 @@ export class RoomPcb {
   busy = signal(false);
   laying = signal(false);
   note = signal('');
-  view = signal<'layout' | '3d' | 'circuit'>('layout');
   lastLayout = signal<BoardLayout | null>(null);
+  cost = signal<BoardCompute | null>(null);
+  sys = signal<SystemInfo | null>(null);
+  log = signal<LogLine[]>([]);
+  private timers: ReturnType<typeof setInterval>[] = [];
 
   constructor() {
     this.refresh();
+    this.tick();
+    // The room is only mounted while its tab is on, so this stops when
+    // somebody leaves rather than polling behind another room.
+    this.timers.push(setInterval(() => this.tick(), 3000));
     // Opened from the catalog: the tree is shared, so the room follows
     // what was clicked rather than keeping a list beside it.
     effect(() => {
@@ -212,6 +318,60 @@ export class RoomPcb {
       if (found) this.open(found);
       else this.refresh();
     });
+  }
+
+  ngOnDestroy() {
+    for (const id of this.timers) clearInterval(id);
+  }
+
+  /** The live half: what the machine is doing, and what has happened. */
+  private tick() {
+    this.health.system().subscribe({ next: s => this.sys.set(s) });
+    this.activity.lines(60).subscribe({
+      next: rows => {
+        const last = this.log()[this.log().length - 1]?._id;
+        this.log.set(rows);
+        if (rows[rows.length - 1]?._id !== last) {
+          setTimeout(() => this.scrollLog(), 30);
+        }
+      },
+    });
+  }
+
+  private scrollLog() {
+    const box = this.logBox()?.nativeElement;
+    if (box) box.scrollTop = box.scrollHeight;
+  }
+
+  /** The three live readings, drawn the way the catalog's foot draws
+   *  them. Its own copy: this one is beside a board, and the one down
+   *  there is beside the models. */
+  gauges(): { key: string; pct: number; read: string; tip: string }[] {
+    const m = this.sys();
+    if (!m) return [];
+    const out = [
+      { key: 'cpu', pct: m.cpu.load,
+        read: `${m.cpu.load.toFixed(0)}% · ${m.cpu.cores}c/${m.cpu.threads}t`,
+        tip: m.cpu.name },
+      { key: 'ram', pct: 100 * m.ram.used_bytes / (m.ram.total_bytes || 1),
+        read: `${this.gb(m.ram.used_bytes)} / ${this.gb(m.ram.total_bytes)}`,
+        tip: 'memory in use' },
+    ];
+    if (m.gpu) {
+      out.push({ key: 'gpu', pct: m.gpu.util,
+                 read: `${m.gpu.util.toFixed(0)}% · ${m.gpu.temp_c.toFixed(0)}°`,
+                 tip: m.gpu.name });
+    }
+    return out;
+  }
+
+  gb(bytes: number): string { return (bytes / 1e9).toFixed(1) + ' GB'; }
+
+  levelColor(l: LogLine['level']): string {
+    return l === 'error' ? 'var(--danger)'
+      : l === 'warn' ? 'var(--warn)'
+      : l === 'done' ? 'var(--ok)'
+      : l === 'work' ? 'var(--accent)' : 'var(--ink-dim)';
   }
 
   refresh() {
@@ -229,7 +389,10 @@ export class RoomPcb {
   open(b: BoardEntry | null) {
     this.here.set(b);
     this.graph.set(null);
-    if (!b?.ready) return;
+    this.cost.set(null);
+    if (!b) return;
+    this.api.compute(b._id).subscribe({ next: c => this.cost.set(c) });
+    if (!b.ready) return;
     // The artifact is immutable and served that way, so the build time is
     // what tells the browser to fetch a new one.
     this.api.graph(b._id, b.artifacts?.['graph']?.at).subscribe({
@@ -237,6 +400,47 @@ export class RoomPcb {
       error: () => this.note.set('the build output could not be read'),
     });
   }
+
+  /** Everything the placement could not do, in one list. */
+  trouble(): string[] {
+    return [
+      ...(this.here()?.layout?.missing ?? []).map(m => `no footprint for ${m}`),
+      ...(this.lastLayout()?.part_trouble ?? []),
+    ];
+  }
+
+  /** What is stored for this board, which is the other half of what it
+   *  cost: a netlist is kilobytes, a model with parts on it is not. */
+  artifacts(): { name: string; bytes: number }[] {
+    const a = this.here()?.artifacts ?? {};
+    const named: Record<string, string> = {
+      graph: 'netlist', footprints: 'footprints',
+      layout: 'drawing', model3d: 'model',
+    };
+    return Object.entries(named)
+      .filter(([key]) => a[key])
+      .map(([key, name]) => ({ name, bytes: a[key].bytes ?? 0 }));
+  }
+
+  /** The drawing's own shape, so the sheet is the board and not a white
+   *  block around it. The exporter writes the board area as the page. */
+  sheet(): string {
+    const mm = this.here()?.layout?.size_mm;
+    return mm && mm[1] ? `${mm[0]} / ${mm[1]}` : '3 / 2';
+  }
+
+  kb(bytes: number): string {
+    return bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + ' MB'
+                        : Math.round(bytes / 1000) + ' kB';
+  }
+
+  secs(s?: number): string {
+    if (!s) return '–';
+    return s >= 60 ? `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`
+                   : `${s.toFixed(1)} s`;
+  }
+
+  cores(s?: number): string { return s ? `${s.toFixed(1)} core-s` : '–'; }
 
   hasLayout(): boolean {
     return !!this.here()?.layout?.at;
@@ -269,7 +473,6 @@ export class RoomPcb {
       next: r => {
         this.laying.set(false);
         this.lastLayout.set(r);
-        this.view.set('layout');
         this.refresh();
       },
       error: e => {
