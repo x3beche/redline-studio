@@ -343,8 +343,8 @@ body {
               max-width .15s cubic-bezier(.4, 0, .2, 1);
 }
 .tcv-fold-shut {
-  width: 24px !important;
-  max-width: 24px !important;
+  width: 32px !important;
+  max-width: 32px !important;
 }
 
 /* The collapsed catalog is a rail, not a squeezed panel. At 18px with a
@@ -356,22 +356,22 @@ body {
 .tcv-rail-btn {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   margin: 0 auto;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
 }
 .tcv-rail-btn:hover { background: var(--surface-2); }
 
 .tcv-rail-name {
   writing-mode: vertical-rl;
-  margin: 10px auto 0;
+  margin: 12px auto 0;
   max-height: 46vh;
   overflow: hidden;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
-  letter-spacing: .1em;
+  letter-spacing: .12em;
   text-transform: uppercase;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -396,19 +396,19 @@ body {
 .tcv-rail-track {
   display: flex;
   align-items: flex-end;
-  width: 6px;
-  height: 46px;
+  width: 8px;
+  height: 52px;
   overflow: hidden;
-  border-radius: 3px;
+  border-radius: 4px;
   background: var(--surface-2);
 }
 .tcv-rail-fill {
   width: 100%;
-  border-radius: 3px;
+  border-radius: 4px;
   transition: height .4s ease;
 }
 .tcv-rail-key {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   line-height: 1;
   color: var(--ink-dim);
