@@ -332,8 +332,6 @@ async def cmd_after(args):
     once the work is done is the only way to see, from the card alone,
     whether what was asked for actually happened.
     """
-    from backend import store
-
     db = connect()
     if not await db.revisions.find_one({"_id": args.id}):
         sys.exit(f"{args.id} not found")

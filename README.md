@@ -103,7 +103,7 @@ honest substitute.
 | Model | Python 3.12 + [build123d](https://github.com/gumyr/build123d) (OpenCascade) |
 | Tessellation | `ocp_vscode` / `ocp-viewer-core` |
 | Viewer | [three-cad-viewer](https://github.com/bernhard-42/three-cad-viewer) 5.0.6 — the very viewer the VS Code extension uses |
-| Frontend | Angular 20 + Tailwind CSS 4 |
+| Frontend | Angular 20 + Tailwind CSS 4, themeable down to the last colour |
 | Service | FastAPI + Uvicorn |
 | Data | MongoDB + GridFS |
 

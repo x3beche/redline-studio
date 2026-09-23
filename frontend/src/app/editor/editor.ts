@@ -97,7 +97,12 @@ export class Editor implements AfterViewInit, OnDestroy {
   notifyState = signal<'unsupported' | 'default' | 'granted' | 'denied'>('default');
   private askedAlready = new Set<string>();
   private plainTitle = 'Redline';
-  color = signal('#ff2d3f');
+  /* theme:pigment - a mark's colour is written into the revision and
+     printed into the picture, so it must mean the same thing in every
+     theme and on paper. These four are ink, not chrome, and are the one
+     place in the application allowed a literal. */
+  readonly PENS = ['#cc3333', '#5c8a5c', '#53a0e3', '#e8a735'];
+  color = signal('#ff2d3f');            // theme:pigment
   penWidth = signal(4);
   tool = signal<Tool>('pen');
   fontSize = signal(18);
@@ -797,12 +802,12 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** Colours for the spend split. Fixed per kind so the same slice is the
    *  same colour on every card. */
   private static KIND = new Map<string, [string, string]>([
-    ['work', ['#53a0e3', 'design']],
-    ['build', ['#5c8a5c', 'builds']],
-    ['progress', ['#e8a735', 'progress']],
-    ['reply', ['#8a7fb5', 'replies']],
-    ['summary', ['#cc6a6a', 'ai summary']],
-    ['translate', ['#4fa8a0', 'translation']],
+    ['work', ['var(--chart-work)', 'design']],
+    ['build', ['var(--chart-build)', 'builds']],
+    ['progress', ['var(--chart-progress)', 'progress']],
+    ['reply', ['var(--chart-reply)', 'replies']],
+    ['summary', ['var(--chart-summary)', 'ai summary']],
+    ['translate', ['var(--chart-translate)', 'translation']],
   ]);
 
   // ---- the running task, shown in the viewer's own panel ----
@@ -866,7 +871,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     let at = 0;
     return rows.map(k => {
       const pct = k.cost_usd / total * 100;
-      const [colour, label] = Editor.KIND.get(k.kind) ?? ['#6b7280', k.kind];
+      const [colour, label] = Editor.KIND.get(k.kind)
+        ?? ['var(--chart-other)', k.kind];
       const slice = { label, colour, dash: `${pct} ${100 - pct}`,
                       offset: -at, pct, usd: k.cost_usd };
       at += pct;

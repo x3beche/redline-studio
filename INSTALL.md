@@ -37,6 +37,14 @@ the API key are read by the **backend only** and never reach the browser.
 | `X3_KWH_PRICE` | — | electricity price in USD/kWh; unset means the card shows energy and no money |
 | `X3_TRANSCRIPTS` | `-mnt-ssd-3d-arena*` | which agent transcript folders the token analytics read |
 
+## Themes
+
+`?theme=light`, `?theme=oled` or `?theme=default` in the URL, or set
+`x3.theme` in the browser's local storage. A theme is a complete set of
+tokens in `frontend/src/styles.css`; adding one means copying the default
+block and changing the values, and the tests will say if anything is
+missing.
+
 ## Where the data lives
 
 Nothing project-related is kept on disk. A temporary directory is created while

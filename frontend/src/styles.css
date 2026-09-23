@@ -1,21 +1,212 @@
 @import "tailwindcss";
 @import "./fonts.css";
 
-/* Colours and metrics are lifted from three-cad-viewer's own CSS rather than
-   guessed, so the rest of the UI speaks the same visual language. */
+/* ============================ THEME ============================
+   Every colour in this application is one of the tokens below. Nothing
+   else in the stylesheet, the template or the component carries a literal
+   - if a rule needs a colour that is not here, the colour is missing from
+   the palette, not from the rule. `tests/test_theme.py` enforces that:
+   it fails on a literal outside this block, on a `var(--x)` nobody
+   defines, on a token no theme uses, and on a theme that leaves one out.
+
+   A theme is therefore a complete set or it is not a theme. Switching one
+   in cannot leave an element unstyled, because a missing token fails the
+   test rather than the eye.
+
+   The default is what the application has always looked like: the values
+   are lifted from three-cad-viewer's own CSS, so the third-party viewer in
+   the middle of the screen speaks the same language as the panels around
+   it. Pick another with ?theme=light, or set `x3.theme` in localStorage.
+
+   One thing deliberately does NOT live here: the drawing pens. A mark's
+   colour is written into the revision and printed into the picture, so it
+   is pigment rather than chrome - it must mean the same thing in every
+   theme and on paper. Those literals are in editor.ts, marked. */
 :root {
-  --surface:      #444;                 /* --tcv-bg-color (dark) */
-  --surface-2:    #333;                 /* --tcv-dropdown-bg */
-  --hover:        rgb(104, 104, 104);   /* --tcv-bg-highlight-color */
-  --pressed:      rgb(94, 94, 94);      /* --tcv-bg-pressed-color */
-  --ink:          #ddd;                 /* --tcv-font-color */
-  --ink-dim:      #a0a0a0;
+  /* -- surfaces ------------------------------------------------- */
+  --surface:      #444;                 /* panels, the page itself */
+  --surface-2:    #333;                 /* wells: inputs, gauge tracks */
+  --hover:        rgb(104, 104, 104);
+  --pressed:      rgb(94, 94, 94);
   --line:         #5a5a5a;
+
+  /* -- ink ------------------------------------------------------ */
+  --ink:          #ddd;
+  --ink-dim:      #a0a0a0;
+  --ink-bright:   #fff;                 /* on a pressed control */
+  --ink-on-accent: #12222e;             /* text sitting on --accent */
+  --ink-on-warn:  #201a08;              /* text sitting on --warn */
+
+  /* -- meaning -------------------------------------------------- */
   --accent:       #53a0e3;
   --accent-deep:  #48627a;
   --warn:         #e8a735;
   --danger:       #cc3333;
   --ok:           #5c8a5c;
+
+  /* -- the pen, as chrome --------------------------------------- */
+  /* The application's own red: the wordmark's I, the question card. The
+     same hue the default pen draws in, but this one follows the theme. */
+  --pen:          #ff2d3f;
+  --pen-wash:     rgba(255, 45, 63, .06);
+
+  /* -- depth ---------------------------------------------------- */
+  --scrim:        rgba(0, 0, 0, .88);   /* behind an enlarged drawing */
+  --shade:        rgba(0, 0, 0, .8);    /* the toast */
+  --shadow-soft:  rgba(0, 0, 0, .35);
+  --shadow-hard:  rgba(0, 0, 0, .45);
+
+  /* -- the 3D area ---------------------------------------------- */
+  /* The viewer's GL context is alpha:true, so its backdrop is ours. */
+  --view-top:     #f4f7fb;
+  --view-mid:     #dfe7f1;
+  --view-bottom:  #ccd7e6;
+  --draw-label:   rgba(255, 255, 255, .9);   /* the caret box on a drawing */
+  --shot-bg:      #fff;                      /* behind a revision drawing */
+  --switch-knob: #fff;
+  --overlay:      rgba(68, 68, 68, .7);
+  --overlay-rest: rgba(68, 68, 68, .14);
+  --tooltip-bg:   rgb(77, 109, 138);
+  --scroll-thumb: rgba(255, 255, 255, .2);
+  --scroll-hover: rgba(255, 255, 255, .4);
+  --scroll-active: rgba(255, 255, 255, .6);
+
+  /* -- the spend chart ------------------------------------------ */
+  /* Fixed per kind of work so the same slice is the same colour on every
+     card. Read from here by the component, not written into it. */
+  --chart-work:      #53a0e3;
+  --chart-build:     #5c8a5c;
+  --chart-progress:  #e8a735;
+  --chart-reply:     #8a7fb5;
+  --chart-summary:   #cc6a6a;
+  --chart-translate: #4fa8a0;
+  --chart-other:     #6b7280;
+}
+
+/* Bright rooms and printed screenshots. The 3D backdrop stays pale in
+   every theme: a CAD view is judged against light, and flipping it would
+   change what the model looks like rather than what the window looks
+   like. */
+:root[data-theme="light"] {
+  --surface:      #eceef1;
+  --surface-2:    #f6f7f9;
+  --hover:        #dfe3e8;
+  --pressed:      #d2d8df;
+  --line:         #c3c9d1;
+
+  --ink:          #232a31;
+  --ink-dim:      #5e6873;
+  --ink-bright:   #000;
+  --ink-on-accent: #f2f8ff;
+  --ink-on-warn:  #201a08;
+
+  --accent:       #1d6fb8;
+  --accent-deep:  #bcd6ee;
+  --warn:         #a86a06;
+  --danger:       #b52a2a;
+  --ok:           #3d7a3d;
+
+  --pen:          #e00d22;
+  --pen-wash:     rgba(224, 13, 34, .07);
+
+  --scrim:        rgba(20, 24, 28, .82);
+  --shade:        rgba(20, 24, 28, .86);
+  --shadow-soft:  rgba(20, 24, 28, .12);
+  --shadow-hard:  rgba(20, 24, 28, .18);
+
+  --view-top:     #fbfcfe;
+  --view-mid:     #eef2f8;
+  --view-bottom:  #dee5ef;
+  --draw-label:   rgba(255, 255, 255, .92);
+  --shot-bg:      #fff;
+  --switch-knob: #fff;
+  --overlay:      rgba(236, 238, 241, .7);
+  --overlay-rest: rgba(236, 238, 241, .14);
+  --tooltip-bg:   #dbe7f3;
+  --scroll-thumb: rgba(20, 24, 28, .18);
+  --scroll-hover: rgba(20, 24, 28, .32);
+  --scroll-active: rgba(20, 24, 28, .5);
+
+  --chart-work:      #1d6fb8;
+  --chart-build:     #3d7a3d;
+  --chart-progress:  #a86a06;
+  --chart-reply:     #6a5aa0;
+  --chart-summary:   #b04a4a;
+  --chart-translate: #2d7d76;
+  --chart-other:     #6b7280;
+}
+
+/* For a panel that is switched off where it is black. Everything the eye
+   does not need goes to true black so the pixels stay dark. */
+:root[data-theme="oled"] {
+  --surface:      #000;
+  --surface-2:    #0a0c0e;
+  --hover:        #1b1f24;
+  --pressed:      #262b31;
+  --line:         #2a2f36;
+
+  --ink:          #d8dde3;
+  --ink-dim:      #7d868f;
+  --ink-bright:   #fff;
+  --ink-on-accent: #04121c;
+  --ink-on-warn:  #1a1405;
+
+  --accent:       #4a9be0;
+  --accent-deep:  #14344c;
+  --warn:         #d99a24;
+  --danger:       #cc3333;
+  --ok:           #4f8a4f;
+
+  --pen:          #ff2d3f;
+  --pen-wash:     rgba(255, 45, 63, .09);
+
+  --scrim:        rgba(0, 0, 0, .94);
+  --shade:        rgba(0, 0, 0, .9);
+  --shadow-soft:  rgba(0, 0, 0, .6);
+  --shadow-hard:  rgba(0, 0, 0, .75);
+
+  --view-top:     #f4f7fb;
+  --view-mid:     #dfe7f1;
+  --view-bottom:  #ccd7e6;
+  --draw-label:   rgba(255, 255, 255, .9);
+  --shot-bg:      #fff;
+  --switch-knob: #e8edf2;
+  --overlay:      rgba(0, 0, 0, .7);
+  --overlay-rest: rgba(0, 0, 0, .14);
+  --tooltip-bg:   #12202c;
+  --scroll-thumb: rgba(255, 255, 255, .16);
+  --scroll-hover: rgba(255, 255, 255, .3);
+  --scroll-active: rgba(255, 255, 255, .46);
+
+  --chart-work:      #4a9be0;
+  --chart-build:     #4f8a4f;
+  --chart-progress:  #d99a24;
+  --chart-reply:     #8a7fb5;
+  --chart-summary:   #cc6a6a;
+  --chart-translate: #4fa8a0;
+  --chart-other:     #6b7280;
+}
+
+/* The viewer keeps its own palette in --tcv-* and picks a set from the
+   class on its root, so it painted its panels dark whatever theme was on.
+   Binding the variables to our tokens is one rule instead of fighting it
+   selector by selector - and it means a new theme reaches the third-party
+   chrome in the middle of the screen for free. Its axis and LED colours
+   are not here: those belong to the 3D content, like the drawing pens. */
+.tcv_cad_viewer {
+  --tcv-font-color: var(--ink);
+  --tcv-bg-color: var(--surface);
+  --tcv-bg-highlight-color: var(--hover);
+  --tcv-bg-pressed-color: var(--pressed);
+  --tcv-bg-pressed-border-color: var(--line);
+  --tcv-bg-tooltip-color: var(--tooltip-bg);
+  --tcv-bg-overlay-color: var(--overlay);
+  --tcv-bg-overlay-rest-color: var(--overlay-rest);
+  --tcv-dropdown-bg: var(--surface-2);
+  --tcv-menu-shadow: var(--shadow-soft);
+  --tcv-scrollbar-thumb: var(--scroll-thumb);
+  --tcv-scrollbar-hover: var(--scroll-hover);
+  --tcv-scrollbar-active: var(--scroll-active);
 }
 
 /* Single-screen app: the page never scrolls; scrolling happens inside panels. */
@@ -42,7 +233,7 @@ body {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  background: linear-gradient(180deg, #f4f7fb 0%, #dfe7f1 55%, #ccd7e6 100%) !important;
+  background: linear-gradient(180deg, var(--view-top) 0%, var(--view-mid) 55%, var(--view-bottom) 100%) !important;
   /* Every panel, card and button here has a radius; the bright 3D backdrop
      was the one square thing on screen and its corners cut into the dark
      shell around it. The canvas draws to the element's box, so the radius
@@ -75,8 +266,6 @@ body {
 .tcv-btn:disabled { opacity: .45; cursor: not-allowed; }
 .tcv-btn-accent { background: var(--accent-deep); border-color: var(--accent); }
 .tcv-btn-accent:hover { background: var(--accent); }
-.tcv-btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
-.tcv-btn-danger:hover { filter: brightness(1.12); }
 
 .tcv-field {
   background: var(--surface-2);
@@ -144,7 +333,7 @@ body {
 /* The red is the drawing pen's, not the interface's danger colour: the
    letter is standing in for a mark somebody made, and in Orbitron the
    capital I is a bare upright - a pen stroke through the word. */
-.brand-i { color: #ff2d3f; }
+.brand-i { color: var(--pen); }
 
 .brand-name {
   font-family: 'Orbitron', 'IBM Plex Sans', system-ui, sans-serif;
@@ -454,8 +643,8 @@ body {
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgb(0 0 0 / .45);
+  background: var(--switch-knob);
+  box-shadow: 0 1px 2px var(--shadow-hard);
   transition: transform .16s ease;
 }
 .tcv-switch[data-on="1"] {
@@ -549,6 +738,6 @@ body {
    way the viewer's own toggles do. */
 .tcv-freeze[data-on="1"] {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23cc3333' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M12 20h9'/><path d='M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z'/></svg>");
-  background-color: var(--tcv-bg-highlight-color, rgba(255, 255, 255, .08));
+  background-color: var(--hover);
   border-radius: 6px;
 }

@@ -8,8 +8,6 @@ withdrawn cannot be answered afterwards.
 
 import asyncio
 
-import pytest
-
 from backend import questions
 
 

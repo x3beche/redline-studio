@@ -5,7 +5,6 @@ block and every line of a request repeats the SAME usage. Counting lines
 instead of requests trebles the bill.
 """
 
-import json
 from datetime import datetime, timedelta, timezone
 
 import pytest

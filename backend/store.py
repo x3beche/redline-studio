@@ -19,7 +19,6 @@ import gzip
 import hashlib
 import os
 import re
-import tempfile
 from pathlib import Path
 from datetime import datetime, timezone
 

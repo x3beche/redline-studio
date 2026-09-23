@@ -275,6 +275,32 @@ output:
   -o "FDM, 0.4 mm nozzle" -o "SLA / resin" -c "what it already knows"
 ```
 
+## Themes
+
+Every colour in the window comes from a token in `styles.css`. A theme is a
+complete set of those tokens, so switching one in cannot leave an element
+unstyled — and `tests/test_theme.py` fails if a theme is missing a token, if
+a colour is written anywhere outside the palette, or if a token nobody
+defines is used.
+
+```
+?theme=light        bright rooms, and screenshots that will be printed
+?theme=oled         true black, for a panel that switches its pixels off
+?theme=default      what it has always looked like
+```
+
+The URL wins for a single look; `localStorage['x3.theme']` is what the
+browser remembers. The viewer in the middle of the screen keeps its own
+palette in `--tcv-*` variables, and those are bound to the same tokens, so
+a new theme reaches the third-party chrome without touching it.
+
+Two things deliberately stay out of the palette. **The drawing pens** are
+pigment: a mark's colour is written into the revision and printed into the
+picture, so it has to mean the same thing in every theme and on paper.
+**The 3D backdrop** stays pale in every theme, because a CAD view is judged
+against light — flipping it would change what the model looks like rather
+than what the window looks like.
+
 ## What a revision cost
 
 Two meters, kept apart.

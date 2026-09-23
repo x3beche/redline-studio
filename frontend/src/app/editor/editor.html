@@ -21,12 +21,17 @@
       @if (collapsed()) {
         <button (click)="toggleSidebar()" class="tcv-rail-btn"
                 title="show the catalog">
-          <svg viewBox="0 0 20 20" class="h-[17px] w-[17px]" aria-hidden="true">
-            <rect x="2.5" y="2.5" width="15" height="15" fill="none"
-                  stroke="var(--ink-dim)" stroke-width="1.4"/>
-            <path d="M10 0.5 V4 M10 16 V19.5 M0.5 10 H4 M16 10 H19.5"
-                  stroke="var(--accent)" stroke-width="1.4"/>
-            <rect x="8" y="8" width="4" height="4" fill="var(--accent)"/>
+<svg viewBox="0 0 24 24" class="h-[19px] w-[19px] shrink-0" aria-hidden="true">
+            <!-- An isometric solid with a mark drawn across it: the whole
+                 application in one glyph. The stroke runs off the near face
+                 and over the silhouette, the way a correction does. -->
+            <path d="M12 2.7 L20.4 7.35 V16.65 L12 21.3 L3.6 16.65 V7.35 Z"
+                  fill="none" stroke="var(--ink-dim)" stroke-width="1.5"
+                  stroke-linejoin="round"/>
+            <path d="M12 2.7 V12 M12 12 L20.4 7.35 M12 12 L3.6 7.35"
+                  stroke="var(--ink-dim)" stroke-width="1" opacity=".5"/>
+            <path d="M5.6 16.2 C9 13.4 12.4 12.6 18.4 8.4" fill="none"
+                  stroke="var(--pen)" stroke-width="2.7" stroke-linecap="round"/>
           </svg>
         </button>
         @if (activeTitle(); as t) {
@@ -34,14 +39,20 @@
         }
       }
       @if (!collapsed()) {
-        <!-- Datum-target mark: drafting language, no ornament. -->
-        <div class="flex min-w-0 items-center gap-2">
-          <svg viewBox="0 0 20 20" class="h-[18px] w-[18px] shrink-0" aria-hidden="true">
-            <rect x="2.5" y="2.5" width="15" height="15" fill="none"
-                  stroke="var(--ink-dim)" stroke-width="1.2"/>
-            <path d="M10 0.5 V4 M10 16 V19.5 M0.5 10 H4 M16 10 H19.5"
-                  stroke="var(--accent)" stroke-width="1.2"/>
-            <rect x="8" y="8" width="4" height="4" fill="var(--accent)"/>
+        <!-- Tight to the word: the mark and the name are one lockup, not a
+             picture standing next to a label. -->
+        <div class="flex min-w-0 items-center gap-1.5">
+          <svg viewBox="0 0 24 24" class="h-[22px] w-[22px] shrink-0" aria-hidden="true">
+            <!-- An isometric solid with a mark drawn across it: the whole
+                 application in one glyph. The stroke runs off the near face
+                 and over the silhouette, the way a correction does. -->
+            <path d="M12 2.7 L20.4 7.35 V16.65 L12 21.3 L3.6 16.65 V7.35 Z"
+                  fill="none" stroke="var(--ink-dim)" stroke-width="1.5"
+                  stroke-linejoin="round"/>
+            <path d="M12 2.7 V12 M12 12 L20.4 7.35 M12 12 L3.6 7.35"
+                  stroke="var(--ink-dim)" stroke-width="1" opacity=".5"/>
+            <path d="M5.6 16.2 C9 13.4 12.4 12.6 18.4 8.4" fill="none"
+                  stroke="var(--pen)" stroke-width="2.7" stroke-linecap="round"/>
           </svg>
           <!-- The I carries the pen's own red: one upright stroke through
                the middle of the word, which is the mark the application is
@@ -189,12 +200,12 @@
   @if (preview(); as pv) {
     <div (click)="closeShot()"
          class="fixed inset-0 flex flex-col items-center justify-center gap-4 p-10"
-         style="background: rgba(0,0,0,.88); z-index: 1000">
+         style="background: var(--scrim); z-index: 1000">
       <!-- Pulled in from the edges: the drawing reads better with room
            around it than filling the viewport. -->
       <img [src]="imageUrl(pv, previewSide())" alt="revision drawing"
-           class="max-h-[68vh] max-w-[72vw] rounded bg-white object-contain"
-           style="border: 1px solid var(--line)">
+           class="max-h-[68vh] max-w-[72vw] rounded object-contain"
+           style="background: var(--shot-bg); border: 1px solid var(--line)">
       @if (pv.image_after_bytes) {
         <div class="flex gap-1.5" (click)="$event.stopPropagation()">
           <button (click)="previewSide.set('before')" class="tcv-chip"
@@ -250,10 +261,10 @@
 
     @if (notice(); as nt) {
       <div class="tcv-card absolute right-3 top-3 z-30 w-72 overflow-hidden p-0"
-           style="box-shadow: 0 8px 24px rgba(0,0,0,.45)">
+           style="box-shadow: 0 8px 24px var(--shadow-hard)">
         <div class="flex items-center gap-2 px-2 py-1"
              [style.background]="nt.ok ? 'var(--ok)' : 'var(--danger)'"
-             style="color: #fff">
+             style="color: var(--ink-bright)">
           <span class="text-[11px] font-semibold tracking-wider">
             {{ nt.ok ? 'REVISION APPLIED' : 'RUN FAILED' }}
           </span>
@@ -268,7 +279,7 @@
     @if (focused(); as fv) {
       <div class="tcv-card absolute right-3 w-64 overflow-hidden p-0"
            [style.top.px]="notice() ? 84 : 12"
-           style="box-shadow: 0 6px 20px rgba(0,0,0,.35)">
+           style="box-shadow: 0 6px 20px var(--shadow-soft)">
         <div class="flex items-center justify-between px-2 py-1"
              style="background: var(--surface); border-bottom: 1px solid var(--line)">
           <span class="text-[10px] uppercase tracking-wide" style="color: var(--ink-dim)">
@@ -278,7 +289,7 @@
         </div>
         @if (fv.image_bytes) {
           <img [src]="imageUrl(fv)" alt="revision drawing"
-               class="block h-32 w-full bg-white object-contain">
+               class="block h-32 w-full object-contain" style="background: var(--shot-bg)">
         }
         <p class="px-2 py-1.5 text-[11px] leading-snug">{{ fv.comment }}</p>
         <p class="px-2 pb-1.5 text-[10px]" style="color: var(--ink-dim)">
@@ -306,7 +317,7 @@
     }
     @if (toast()) {
       <div class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded px-3 py-1.5 text-[12px]"
-           style="background: rgba(0,0,0,.8)">{{ toast() }}</div>
+           style="background: var(--shade)">{{ toast() }}</div>
     }
 
       <!-- Its own band under the 3D area, inside the stage. Outside it, the
@@ -350,10 +361,10 @@
         <button (click)="tool.set(t.id)" [title]="t.label"
                 class="tcv-btn tcv-draw-btn"
                 [style.background]="tool() === t.id ? 'var(--accent)' : null"
-                [style.color]="tool() === t.id ? '#fff' : null">{{ t.glyph }}</button>
+                [style.color]="tool() === t.id ? 'var(--ink-bright)' : null">{{ t.glyph }}</button>
       }
       <span class="tcv-draw-sep"></span>
-      @for (c of ['#cc3333', '#5c8a5c', '#53a0e3', '#e8a735']; track c) {
+      @for (c of PENS; track c) {
         <button (click)="color.set(c)" [style.background]="c"
                 class="tcv-draw-swatch"
                 [style.outline]="color() === c ? '2px solid var(--ink)' : 'none'"
@@ -398,7 +409,7 @@
              [style.left.px]="tp.left" [style.top.px]="tp.top - 12"
              [style.color]="color()"
              [style.font-size.px]="fontSize()"
-             style="background: rgba(255,255,255,.9); border: 1px dashed currentColor;
+             style="background: var(--draw-label); border: 1px dashed currentColor;
                     min-width: 120px; transform: translateY(-2px)"
              placeholder="label…"
              (keydown.enter)="commitText($any($event.target).value)"
@@ -415,9 +426,9 @@
     @if (forcing(); as fc) {
       <div class="tcv-card absolute left-1/2 top-3 z-40 w-80 -translate-x-1/2
                   overflow-hidden p-0"
-           style="box-shadow: 0 8px 24px rgba(0,0,0,.45)">
+           style="box-shadow: 0 8px 24px var(--shadow-hard)">
         <div class="px-2 py-1 text-[11px] font-semibold tracking-wider"
-             style="background: var(--warn); color: #201a08">STILL IN USE</div>
+             style="background: var(--warn); color: var(--ink-on-warn)">STILL IN USE</div>
         <p class="px-2 py-1.5 text-[12px]" style="color: var(--ink)">{{ fc.why }}</p>
         <div class="flex gap-1 px-2 pb-2">
           <button (click)="forceDelete()" class="tcv-chip tcv-chip-danger flex-1">
@@ -445,7 +456,7 @@
     @if (queueShut() && queueCount()) {
       <div class="flex shrink-0 justify-center px-1 py-2">
         <span class="mono rounded px-1 text-[10px] font-bold"
-              style="background: var(--accent); color: #12222e">{{ queueCount() }}</span>
+              style="background: var(--accent); color: var(--ink-on-accent)">{{ queueCount() }}</span>
       </div>
     }
 
@@ -456,9 +467,9 @@
          column is blocking anyone. -->
     @for (q of questions(); track q._id) {
       <div class="shrink-0 px-2 py-2"
-           style="border-bottom: 1px solid var(--line); background: rgba(255,45,63,.06)">
+           style="border-bottom: 1px solid var(--line); background: var(--pen-wash)">
         <div class="mb-1 flex items-center justify-between">
-          <span class="tcv-label" style="color: #ff2d3f">Agent is asking</span>
+          <span class="tcv-label" style="color: var(--pen)">Agent is asking</span>
           @if (notifyState() === 'default') {
             <button (click)="enableNotices()" class="tcv-chip"
                     title="let the browser raise a notice next time, so you
@@ -473,7 +484,7 @@
           <div class="mb-1.5 flex flex-wrap gap-1">
             @for (o of q.options; track o) {
               <button (click)="pickOption(q, o)" class="tcv-chip"
-                      [style.border-color]="answerPicked().has(o) ? '#ff2d3f' : null">
+                      [style.border-color]="answerPicked().has(o) ? 'var(--pen)' : null">
                 {{ o }}
               </button>
             }
@@ -680,7 +691,7 @@
                   </span>
                   @if (r.status === 'queued') {
                     <span class="mr-1 rounded px-1.5 py-0.5 text-[10px] font-bold"
-                          style="background: var(--accent); color: #12222e">{{ queueIndex(r) }}</span>
+                          style="background: var(--accent); color: var(--ink-on-accent)">{{ queueIndex(r) }}</span>
                   }
                   <!-- Folded, the card says one sentence and nothing else; the
                        wall of text is exactly what folding is for. -->
@@ -740,7 +751,7 @@
                      times wider than tall, so the picture sat in a letterbox
                      of white; the box follows the picture's shape instead. -->
                 <img [src]="imageUrl(r)" alt="revision drawing"
-                       class="block w-full bg-white object-contain"
+                       class="block w-full object-contain" [style.background]="'var(--shot-bg)'"
                        [class.h-20]="!docked" [class.aspect-[16/9]]="docked"
                        loading="lazy">
                   @if (r.image_after_bytes) {
@@ -753,7 +764,8 @@
                           class="relative block min-w-0 flex-1 overflow-hidden rounded"
                           style="border: 1px solid var(--line)" title="enlarge">
                     <img [src]="imageUrl(r, 'after')" alt="after the change"
-                         class="block h-20 w-full bg-white object-contain" loading="lazy">
+                         class="block h-20 w-full object-contain" loading="lazy"
+                         style="background: var(--shot-bg)">
                     <span class="absolute left-0 top-0 px-1 text-[9px] uppercase"
                           style="background: var(--surface-2); color: var(--ok)">after</span>
                   </button>
@@ -802,7 +814,7 @@
                         </span>
                         <span style="color: var(--ink-dim)">cost (API list)</span>
                         <span class="mono text-right"
-                              [style.color]="a.totals.complete ? null : 'var(--warn, #e8a735)'"
+                              [style.color]="a.totals.complete ? null : 'var(--warn)'"
                               [title]="a.totals.complete ? 'list price for the tokens above'
                                        : 'partial: no rate for ' + a.totals.unpriced_models.join(', ')">
                           {{ usd(a.totals.cost_usd) }}{{ a.totals.complete ? '' : '+' }}
