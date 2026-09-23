@@ -1014,7 +1014,10 @@ export class Editor implements AfterViewInit, OnDestroy {
   coreTime(sec: number | null | undefined): string {
     const v = sec ?? 0;
     if (v < 90) return v.toFixed(0) + ' core-s';
-    return (v / 60).toFixed(1) + ' core-min';
+    // "105.5 core-min" is a number you have to divide in your head, and it
+    // is also the widest figure on the panel. Hours past an hour and a half.
+    if (v < 5400) return (v / 60).toFixed(1) + ' core-min';
+    return (v / 3600).toFixed(1) + ' core-h';
   }
 
   mem(mb: number | null | undefined): string {

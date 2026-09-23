@@ -259,11 +259,6 @@
   color: var(--ink-dim);
   white-space: nowrap;          /* "peak ram" is one label, not two lines */
 }
-/* One value is much longer than the rest - the whole machine's figure with
-   our share beside it. Sharing a line with another pair asked for 308px of
-   a 278px panel, so it takes a line of its own. */
-.tcv-stats > span.own-line { grid-column: 1; }
-.tcv-stats > b.own-line { grid-column: 2 / -1; }
 .tcv-stats > b {
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-weight: 500;

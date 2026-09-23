@@ -1023,6 +1023,11 @@
                         @if (c.totals.jobs || c.machine) {
                           <div class="mt-1.5 border-t pt-1"
                                style="border-color: var(--line)">
+                            <!-- Paired so every row is full: cpu beside gpu,
+                                 and what the whole box did beside what it
+                                 cost. A row with one pair on it and a gap
+                                 where the other should be is the eye's
+                                 first complaint. -->
                             <div class="tcv-stats">
                               <span>machine</span>
                               <b [title]="computeJobsTitle(c) + ', wall clock '
@@ -1035,24 +1040,25 @@
                               <span>cpu</span>
                               <b [title]="c.totals.cpu_s + ' core-seconds, measured by the kernel'">
                                 {{ coreTime(c.totals.cpu_s) }}</b>
+                              <span>gpu</span>
+                              <b [title]="c.totals.gpu_s
+                                          ? c.totals.gpu_s + ' GPU-seconds, from the driver\'s own per-process sampler'
+                                          : 'no card to ask, so this is unknown rather than none'">
+                                {{ c.totals.gpu_s ? coreTime(c.totals.gpu_s) : '—' }}</b>
+
                               <span>energy</span>
                               <b [style.color]="c.energy.basis === 'measured' ? null : 'var(--ink-dim)'"
                                  [title]="energyNote(c.energy)">
                                 {{ c.energy.basis === 'measured' ? '' : '~' }}{{ wh(c.energy.wh) }}</b>
-
-                              @if (c.totals.gpu_s) {
-                                <span>gpu</span>
-                                <b [title]="c.totals.gpu_s + ' GPU-seconds, from the driver\'s own per-process sampler'">
-                                  {{ coreTime(c.totals.gpu_s) }}</b>
-                              }
                               @if (c.machine; as m) {
-                                <span class="own-line"
-                                      title="everything the box did in the same window, ours included">box</span>
-                                <b class="own-line"
-                                   [title]="m.cores + ' threads, ' + m.avg_cores_busy
+                                <span title="everything the box did in the same window, ours included">box</span>
+                                <b [title]="m.cores + ' threads, ' + m.avg_cores_busy
                                             + ' of them busy on average across the run'">
-                                  {{ coreTime(m.busy_core_s) }}@if (m.ours_pct != null) {<span
-                                    style="color: var(--ink-dim)"> · {{ m.ours_pct }}%</span>}</b>
+                                  {{ coreTime(m.busy_core_s) }}<span
+                                    style="color: var(--ink-dim)">@if (m.ours_pct != null) { · {{ m.ours_pct }}%}</span></b>
+                              } @else {
+                                <span title="the run was not opened with start, so there are no counters">box</span>
+                                <b style="color: var(--ink-dim)">—</b>
                               }
                             </div>
                           </div>
