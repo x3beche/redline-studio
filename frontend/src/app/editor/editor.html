@@ -196,6 +196,14 @@
     }
   </aside>
 
+  <!-- Columns two and three, with the shell's tabs over them. The catalog
+       is not under the tabs: it is the same catalog whichever room you are
+       in, so it keeps the full height beside them rather than being roofed
+       by something that does not apply to it. -->
+  <div class="relative flex min-w-0 flex-1 flex-col gap-2">
+  <ng-content select="[tabs]"></ng-content>
+  <div class="relative flex min-h-0 min-w-0 flex-1 gap-2">
+
   <!-- enlarged revision drawing -->
   @if (preview(); as pv) {
     <div (click)="closeShot()"
@@ -652,6 +660,12 @@
     </div>
     }
   </aside>
+  <!-- The room that is not built covers these two columns and nothing
+       else: not the catalog beside them, and not the tabs above - you
+       have to be able to leave the room you are in. -->
+  <ng-content select="[room]"></ng-content>
+  </div>
+  </div>
   <!-- The fold handles live out here, not in the panels: a panel has to clip
        its overflow for the fold to take, and a handle sitting on the border
        has to hang outside it. Their offsets follow the panel widths. -->

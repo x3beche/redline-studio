@@ -6,11 +6,15 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
   selector: 'app-root',
   imports: [Editor],
   template: `
-<div class="flex h-screen flex-col">
-  <!-- The shell. Each tab is a room with the same loop in it: source in
-       the database, built into something you can look at, marked up,
-       picked up, rebuilt, checked. Only the first room is built. -->
-  <header class="flex shrink-0 items-center gap-1 px-2 pt-2">
+<!-- The shell. Each tab is a room with the same loop in it: source in the
+     database, built into something you can look at, marked up, picked up,
+     rebuilt, checked. Only the first room is built.
+
+     The tabs and the room are handed to the editor rather than wrapped
+     around it: they belong over the two right-hand columns, and the
+     catalog on the left keeps its full height beside them. -->
+<app-editor>
+  <header tabs class="flex shrink-0 items-center gap-1">
     @for (w of tabs; track w.id) {
       <button (click)="open(w.id)" class="tcv-tab"
               [attr.data-on]="here() === w.id ? 1 : null"
@@ -24,13 +28,12 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
 
   <!-- The 3D room stays mounted whichever tab is on. Its viewer holds a
        WebGL context and tens of megabytes of geometry; unmounting it would
-       throw both away and rebuild them on the way back. The other rooms
-       cover it instead. -->
-  <div class="relative min-h-0 flex-1">
-    <app-editor />
+       throw both away and rebuild them on the way back. An unbuilt room
+       covers it instead. -->
+  <div room>
     @if (room(); as w) {
       @if (!w.ready) {
-        <div class="absolute inset-0 z-50 overflow-y-auto p-2"
+        <div class="absolute inset-0 z-50 overflow-y-auto rounded"
              style="background: var(--surface)">
           <div class="tcv-card mx-auto mt-10 max-w-xl p-5">
             <h1 class="brand-name mb-2">{{ w.label }}</h1>
@@ -49,7 +52,7 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
       }
     }
   </div>
-</div>`,
+</app-editor>`,
 })
 export class App {
   tabs = WORKSPACES;
