@@ -1,6 +1,7 @@
 import { Component, effect, inject, output, signal } from '@angular/core';
 import { BoardEntry, BoardGraph, BoardLayout, Boards } from '../api';
 import { Selection } from '../selection';
+import { Board3d } from './board3d';
 
 /** What a component sits at on the ring, and what a net draws between. */
 interface Placed {
@@ -26,6 +27,7 @@ interface Placed {
  */
 @Component({
   selector: 'app-room-pcb',
+  imports: [Board3d],
   template: `
 <div class="tcv-room absolute inset-0 flex">
 
@@ -46,6 +48,8 @@ interface Placed {
       <div class="ml-auto flex gap-1">
         <button (click)="view.set('layout')" class="tcv-chip"
                 [attr.data-on]="view() === 'layout' ? 1 : null">layout</button>
+        <button (click)="view.set('3d')" class="tcv-chip"
+                [attr.data-on]="view() === '3d' ? 1 : null">3d</button>
         <button (click)="view.set('circuit')" class="tcv-chip"
                 [attr.data-on]="view() === 'circuit' ? 1 : null">circuit</button>
       </div>
@@ -97,6 +101,32 @@ interface Placed {
           <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
             Built, but not placed yet. <b>lay out</b> fetches each part from
             LCSC, places them and draws the board.
+          </p>
+        }
+      } @else if (view() === '3d') {
+        @if (has3d()) {
+          <!-- The board as KiCad exports it, parts and all. Drag to turn
+               it over. -->
+          <!-- Fetched when somebody asks for it. three.js and a glTF
+               loader are a third of a megabyte, and they are no use in
+               any other room. -->
+          <div class="h-[58vh] w-full overflow-hidden rounded"
+               style="background: var(--surface-2)">
+            @defer (on viewport) {
+              <app-board-3d [src]="modelUrl()" />
+            } @placeholder {
+              <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
+                bringing the viewer in…
+              </p>
+            }
+          </div>
+          <p class="mt-2 text-[11px]" style="color: var(--ink-dim)">
+            from the same placement as the layout · parts that had no 3D
+            shape are not there
+          </p>
+        } @else {
+          <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
+            No model yet. <b>lay out</b> makes one alongside the drawing.
           </p>
         }
       } @else if (graph(); as g) {
@@ -164,7 +194,7 @@ export class RoomPcb {
   busy = signal(false);
   laying = signal(false);
   note = signal('');
-  view = signal<'layout' | 'circuit'>('layout');
+  view = signal<'layout' | '3d' | 'circuit'>('layout');
   lastLayout = signal<BoardLayout | null>(null);
 
   constructor() {
@@ -214,6 +244,16 @@ export class RoomPcb {
     const b = this.here();
     return `/api/boards/${b?._id}/layout.svg?v=`
       + encodeURIComponent(b?.layout?.at ?? '');
+  }
+
+  has3d(): boolean {
+    return !!this.here()?.artifacts?.['model3d'];
+  }
+
+  modelUrl(): string {
+    const b = this.here();
+    return `/api/boards/${b?._id}/board.glb?v=`
+      + encodeURIComponent(b?.artifacts?.['model3d']?.at ?? '');
   }
 
   relayout() {
