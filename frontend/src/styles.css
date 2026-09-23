@@ -141,6 +141,11 @@ body {
    with square terminals - it reads as a machine's own label rather than as
    prose, which is what a mark should do. Tracked out, because the face was
    drawn for it. */
+/* The red is the drawing pen's, not the interface's danger colour: the
+   letter is standing in for a mark somebody made, and in Orbitron the
+   capital I is a bare upright - a pen stroke through the word. */
+.brand-i { color: #ff2d3f; }
+
 .brand-name {
   font-family: 'Orbitron', 'IBM Plex Sans', system-ui, sans-serif;
   font-size: 14px;
