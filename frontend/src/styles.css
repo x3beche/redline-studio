@@ -136,11 +136,16 @@ body {
 /* Thin scrollbar, contained within the panel */
 .tcv-scroll { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 
-/* Wordmark: instrument-panel plain. No flourishes, restrained tracking. */
+/* Wordmark. The rest of the interface is instrument-panel plain; the name
+   is the one place it is allowed a voice. Orbitron is wide and geometric
+   with square terminals - it reads as a machine's own label rather than as
+   prose, which is what a mark should do. Tracked out, because the face was
+   drawn for it. */
 .brand-name {
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: .07em;
+  font-family: 'Orbitron', 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .17em;
   color: var(--ink);
   text-transform: uppercase;
 }
@@ -255,7 +260,11 @@ body {
    guessed 48 px for the toolbar left a strip of dead space under the log. */
 .tcv_cad_viewer {
   height: 100% !important;
-  width: 100% !important;
+  /* Not 100%: it keeps a 4px margin of its own, and a full hundred per cent
+     plus that margin sat 4px inside the stage on the left and hung 4px past
+     it on the right - 13px of gap beside the catalog, 5px beside the queue.
+     Take the margins off and the two sides match. */
+  width: calc(100% - 8px) !important;
   display: flex !important;
   flex-direction: column;
   min-height: 0;

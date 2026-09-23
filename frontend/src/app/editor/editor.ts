@@ -12,7 +12,7 @@ with BuildPart() as part:
     Box(40, 30, 10)
     fillet(part.edges().filter_by(Axis.Z), radius=4)
 
-# Asset Manager reads these two names:
+# Redline reads these two names:
 PARTS = [part.part]
 NAMES = ["body"]
 `;

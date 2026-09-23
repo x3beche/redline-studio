@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# X3 Studios Asset Manager - development servers (Linux)
+# Redline - development servers (Linux)
 #
 #   ./start.sh          Angular + FastAPI, both with live reload
 #   ./start.sh --build  Compile the UI and serve it from a single port (8000)

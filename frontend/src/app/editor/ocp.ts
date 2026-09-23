@@ -154,6 +154,12 @@ export class OcpViewer {
     }
   }
 
+  /** The viewer's own root, inside our stage. It carries a margin of its
+   *  own, which is why the stage and it are not the same box. */
+  get root(): HTMLElement | null {
+    return this.container.querySelector('.tcv_cad_viewer');
+  }
+
   /** The viewer's body: the grid holding the tree column, the 3D area and
    *  the log. */
   get body(): HTMLElement | null {

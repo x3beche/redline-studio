@@ -1,4 +1,4 @@
-"""X3 Studios Asset Manager - API.
+"""Redline - API.
 
 All project data lives in MongoDB: model sources, generated viewer payloads,
 revision images and version history. Local disk is used only as scratch space
@@ -37,7 +37,7 @@ QUOTA_MB = float(os.getenv("STORAGE_QUOTA_MB", "512"))
 STATUSES = ("draft", "queued", "applied", "rejected")
 ORDER = {"queued": 0, "draft": 1, "applied": 2, "rejected": 3}
 
-app = FastAPI(title="X3 Asset Manager API")
+app = FastAPI(title="Redline API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:4200", "http://127.0.0.1:4200"],
