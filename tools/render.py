@@ -6,6 +6,9 @@ drew on, so the before and after can be compared side by side.
 
     python tools/render.py <revision_id> [-o out.png] [--width 1500]
 
+--width and --height are the size of the picture, not of the browser
+window: the window is grown until the canvas measures what was asked for.
+
 Needs the dev server running (start.sh). Drives headless Chrome, waits for
 the viewer to load the model and move to the stored camera, then captures
 the canvas.
@@ -110,12 +113,35 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
             now = js(probe)
             if now == seen and now and not now.startswith("0x0"):
                 stable += 1
-                width = int(now.split("x")[0])
-                if stable >= 3 and width > 500 and not now.endswith("/0"):
+                if stable >= 3 and int(now.split("x")[0]) > 500 \
+                        and not now.endswith("/0"):
                     break
             else:
                 seen, stable = now, 0
             time.sleep(1)
+
+        # The window is not the picture. The catalog, the queue, the tree
+        # column, the toolbar and the log all take their cut before the
+        # canvas gets any, and it is not a fixed cut - it moves with the
+        # layout. Asking for 1200x800 used to hand back a 320x394 canvas.
+        # So measure what came out, give the window back the difference,
+        # and check. --width and --height mean the picture now.
+        box = ("(() => { const c = document.querySelector('canvas');"
+               " const r = c.getBoundingClientRect();"
+               " return JSON.stringify([r.width|0, r.height|0,"
+               " innerWidth, innerHeight]); })()")
+        for _ in range(3):
+            cw, ch, iw, ih = json.loads(js(box))
+            dw, dh = width - cw, height - ch
+            if abs(dw) <= 2 and abs(dh) <= 2:
+                break
+            send("Emulation.setDeviceMetricsOverride",
+                 {"width": max(iw + dw, 320), "height": max(ih + dh, 240),
+                  "deviceScaleFactor": 1, "mobile": False})
+            time.sleep(1.5)
+        else:
+            print(f"canvas came out {cw}x{ch}, asked for {width}x{height}")
+
         time.sleep(5)                       # let the camera settle on the model
 
         # --camera overrides the stored angle. A revision's camera looks at
@@ -183,8 +209,10 @@ def main() -> None:
     ap.add_argument("revision", help="revision id, or model:<name> for a "
                                      "plain shot of one model")
     ap.add_argument("-o", "--out")
-    ap.add_argument("--width", type=int, default=1500)
-    ap.add_argument("--height", type=int, default=950)
+    ap.add_argument("--width", type=int, default=1400,
+                    help="width of the picture itself, not of the window")
+    ap.add_argument("--height", type=int, default=950,
+                    help="height of the picture itself")
     ap.add_argument("--wait", type=int, default=40)
     ap.add_argument("--camera", help="px,py,pz,tx,ty,tz - look from somewhere "
                                      "other than the stored angle")

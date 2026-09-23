@@ -74,8 +74,16 @@ export class Editor implements AfterViewInit, OnDestroy {
   private lastRunStatus = '';
   private pendingCamera: string | null = null;
   /** resizeCadView re-frames the scene, so an explicitly set view has to be
-   *  re-applied after every resize or it silently springs back. */
+   *  re-applied after every resize or it silently springs back.
+   *
+   *  Tagged with the model it was recorded against: the same numbers over a
+   *  different model point at nothing, and this used to survive a model
+   *  change and be stamped onto whatever loaded next. */
   private heldCamera: CameraState | null = null;
+  private heldModel: string | null = null;
+  /** One revision lookup at a time, so the retries above do not each start
+   *  their own and open the same model three times over. */
+  private focusing = false;
   /** The revision whose view is being held, shown over the scene. */
   focused = signal<Revision | null>(null);
   notice = signal<{ id: string | null; title: string;
@@ -427,8 +435,10 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  yet, remember it and apply once the load completes. */
   focusRevision(id: string) {
     if (!this.activeModel() || !this.viewer) { this.pendingCamera = id; return; }
+    this.focusing = true;
     this.api.one(id).subscribe({
       next: r => {
+        this.focusing = false;
         // Open the model the revision is about. Only the camera was applied
         // before, so a revision on one model was shown against whichever
         // model happened to load first.
@@ -442,6 +452,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         }
         if (!r.camera || !this.viewer) return;
         this.heldCamera = r.camera;
+        this.heldModel = r.model ?? this.activeModel();
         this.focused.set(r);
         // Parts first, then the camera: the drawing was made against a
         // particular set of them, and the same angle over a different set is
@@ -449,7 +460,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.viewer.applyStates(r.view?.states);
         this.viewer.applyCamera(r.camera);
       },
-      error: () => {},
+      error: () => { this.focusing = false; },
     });
   }
 
@@ -500,6 +511,12 @@ export class Editor implements AfterViewInit, OnDestroy {
       // Data is not on disk; it streams from the database.
       await this.viewer.load(this.cat.viewerUrl(m.id, m.built_at));
       this.dockFreezeButton();
+      // Whatever was being held belonged to the model that just left.
+      if (this.heldModel !== m.id) {
+        this.heldCamera = null;
+        this.heldModel = null;
+        this.focused.set(null);
+      }
       this.activeModel.set(m.id);
       this.parts.set(this.viewer.parts);
       setTimeout(() => this.sizeOverlay());
@@ -508,7 +525,17 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (this.pendingCamera) {
         const rev = this.pendingCamera;
         this.pendingCamera = null;
-        setTimeout(() => this.focusRevision(rev), 300);
+        // Asked for more than once, like the remembered view below: the
+        // viewer re-frames itself after the load and again on the next
+        // resize, and a single attempt at 300 ms was landing before that
+        // and being overwritten. Whichever attempt takes, the rest see the
+        // hold and stand down.
+        for (const ms of [300, 900, 1600]) {
+          setTimeout(() => {
+            if (this.heldCamera || this.pendingCamera || this.focusing) return;
+            this.focusRevision(rev);
+          }, ms);
+        }
       } else {
         // Back to the angle this window was left at. Only for the model it
         // was left on: the same numbers over a different model point at
@@ -520,7 +547,14 @@ export class Editor implements AfterViewInit, OnDestroy {
         const seen = this.lastView();
         if (seen?.model === m.id && seen.camera) {
           for (const ms of [300, 900, 1600]) {
-            setTimeout(() => this.viewer?.applyCamera(seen.camera!), ms);
+            setTimeout(() => {
+              // A revision's camera may have landed in between - it is the
+              // one that was asked for, and the last timer to fire used to
+              // stamp the remembered angle over it. That is why a rendered
+              // "after" came back from a different angle than the drawing.
+              if (this.heldCamera) return;
+              this.viewer?.applyCamera(seen.camera!);
+            }, ms);
           }
         }
       }
@@ -973,7 +1007,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   private sizeOverlay() {
     const box = this.stage().nativeElement;
     this.viewer?.resize(box.clientWidth, box.clientHeight - Editor.GUTTER);
-    if (this.heldCamera) this.viewer?.applyCamera(this.heldCamera);
+    if (this.heldCamera && this.heldModel === this.activeModel()) {
+      this.viewer?.applyCamera(this.heldCamera);
+    }
 
     // getImage() returns the canvas only; unless the overlay sits exactly on
     // top of it, marks land in the wrong place in the saved image.
@@ -997,6 +1033,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   releaseCamera() {
     if (!this.heldCamera) return;
     this.heldCamera = null;
+    this.heldModel = null;
     this.focused.set(null);
   }
 
