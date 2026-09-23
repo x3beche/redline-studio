@@ -152,11 +152,35 @@ async def list_uploads(db) -> list[dict]:
 
 
 async def get_upload(db, name: str) -> bytes:
+    """An uploaded CAD file, from disk if it has been read before.
+
+    Uploads never change - a new file gets a new GridFS id - and they are
+    the largest thing a build reads. This link runs at about 100 kB/s, so
+    36 MB of STEP is six minutes before any geometry happens: a model that
+    tessellates in 1.8 seconds was taking 389. Same cache the artifacts
+    use, and the same reason.
+    """
     doc = await db.uploads.find_one({"_id": name})
     if not doc:
         raise KeyError(name)
+
+    hit = CACHE / f"{doc['gridfs_id']}.bin"
+    try:
+        if hit.exists():
+            return hit.read_bytes()
+    except OSError:
+        pass
+
     stream = await bucket(db, "cad_files").open_download_stream(doc["gridfs_id"])
-    return await stream.read()
+    raw = await stream.read()
+    try:
+        CACHE.mkdir(parents=True, exist_ok=True)
+        tmp = hit.with_suffix(".part")
+        tmp.write_bytes(raw)
+        tmp.replace(hit)                 # atomic: a half-written file is never read
+    except OSError:
+        pass                             # the cache is an optimisation only
+    return raw
 
 
 async def delete_upload(db, name: str) -> None:
@@ -266,18 +290,28 @@ async def put_artifact(db, model_id: str, label: str, data: bytes,
     files = bucket(db, "model_files")
     doc = await db[collection].find_one({"_id": model_id})
     old = (doc or {}).get("artifacts", {}).get(label)
+    digest = hashlib.sha256(data).hexdigest()
+    if old and old.get("sha256") == digest:
+        # The same bytes as last time. Sending them again is a hundred
+        # seconds of upload for a file that is already there, and the page
+        # would refetch a payload it has because the timestamp moved. The
+        # build still counts as a build; the artifact is simply unchanged.
+        await db[collection].update_one({"_id": model_id},
+                                        {"$set": {"stale": False}})
+        return old
+
+    packed = gzip.compress(data, compresslevel=6)
+    fid = await files.upload_from_stream(f"{model_id}:{label}.gz", packed)
+    meta = {"gridfs_id": fid, "bytes": len(data), "stored_bytes": len(packed),
+            "sha256": digest, "at": now()}
+    await db[collection].update_one(
+        {"_id": model_id},
+        {"$set": {f"artifacts.{label}": meta, "stale": False}})
     if old:
         try:
             await files.delete(old["gridfs_id"])
         except Exception:
             pass
-    packed = gzip.compress(data, compresslevel=6)
-    fid = await files.upload_from_stream(f"{model_id}:{label}.gz", packed)
-    meta = {"gridfs_id": fid, "bytes": len(data), "stored_bytes": len(packed),
-            "sha256": hashlib.sha256(data).hexdigest(), "at": now()}
-    await db[collection].update_one(
-        {"_id": model_id},
-        {"$set": {f"artifacts.{label}": meta, "stale": False}})
     # Keep a copy on disk straight away, so even the first read after a build
     # is local. The database holds the backup; the disk does the work.
     cache_put(fid, packed)

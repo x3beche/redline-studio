@@ -49,6 +49,36 @@ async def _watch_for_stop(db, model_id: str, proc, since: str) -> str | None:
             return asked
 
 
+def _reachable(source: str, others: list[dict]) -> list[str]:
+    """The sources this build can actually run: the model's own, and those
+    of the models it imports, and so on down.
+
+    An assembly imports its parts by their bare name, and any of them may
+    open an uploaded STEP. Everything else in the catalog is written to
+    the build directory so an import resolves, but it is never executed -
+    so a file only that mentions is a file this build does not need.
+    """
+    by_name: dict[str, dict] = {}
+    for other in others:
+        for key in (str(other["_id"]), other.get("name") or ""):
+            if key:
+                by_name.setdefault(key, other)
+
+    out, seen = [source], set()
+    queue = [source]
+    while queue:
+        text = queue.pop()
+        for name, other in by_name.items():
+            if name in seen or name not in text:
+                continue
+            seen.add(name)
+            body = other.get("source") or ""
+            if body:
+                out.append(body)
+                queue.append(body)
+    return out
+
+
 async def build(db, model_id: str, script: Path) -> dict:
     doc = await db.models.find_one({"_id": model_id})
     if not doc:
@@ -99,8 +129,18 @@ async def build(db, model_id: str, script: Path) -> dict:
         # Uploaded CAD files land in the build root, which is what a model
         # module calls ROOT - so `import_step(ROOT / "bracket.step")` resolves
         # the same way `ROOT / "exports"` does on the way out.
+        #
+        # Only the ones something here names. Every build used to lay down
+        # every upload: 36 MB of STEP for a model that does not mention
+        # either of them, which on this link is six minutes before any
+        # geometry runs. A name that is not in any source cannot be opened
+        # by one.
+        reachable = _reachable(doc["source"], others)
         async for up in db.uploads.find({}):
-            (tmp / str(up["_id"])).write_bytes(await store.get_upload(db, up["_id"]))
+            name = str(up["_id"])
+            if not any(name in src for src in reachable):
+                continue
+            (tmp / name).write_bytes(await store.get_upload(db, name))
 
         # Under a memory ceiling: a model that imports a large STEP and
         # booleans against it can grow until the machine swaps and the desktop
@@ -152,7 +192,7 @@ async def build(db, model_id: str, script: Path) -> dict:
         if proc.returncode in (-9, 137):
             raise MemoryError(
                 f"{model_id}: build exceeded the memory ceiling "
-                f"({os.environ.get('X3_BUILD_MEM', '6G')}) and was killed. "
+                f"({os.environ.get('X3_BUILD_MEM', '10G')}) and was killed. "
                 "Simplify the model, or raise X3_BUILD_MEM for this server.")
         if proc.returncode != 0:
             raise RuntimeError("\n".join(log[-8:]) or "build failed")
