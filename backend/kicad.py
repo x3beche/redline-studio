@@ -116,13 +116,13 @@ async def render(db, board_id: str) -> dict:
         # variable that means nothing here, so the path is rewritten to
         # where the container will find it.
         for lcsc_id, part in parts.items():
-            blob = part.get("model_step") or part.get("model_wrl")
-            suffix = ".step" if part.get("model_step") else ".wrl"
             text = part["footprint"]
-            if blob:
-                (models / f"{lcsc_id}{suffix}").write_bytes(blob)
+            got = await lcsc.model_of(db, lcsc_id)
+            if got:
+                blob, kind = got
+                (models / f"{lcsc_id}.{kind}").write_bytes(blob)
                 text = re.sub(r'\(model\s+"[^"]*"',
-                              f'(model "/work/3d/{lcsc_id}{suffix}"', text)
+                              f'(model "/work/3d/{lcsc_id}.{kind}"', text)
             (pretty / f"{lcsc_id}.kicad_mod").write_text(text)
 
         shutil.copy(PLACER, work / "place.py")

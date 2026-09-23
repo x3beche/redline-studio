@@ -66,7 +66,10 @@ shows the circuit; it just cannot place or draw the board, and says so.
 
 Footprints and 3D models come from LCSC by part number, through EasyEDA's
 public API, and are kept in the `parts` collection so a board that is
-rebuilt ten times asks once.
+rebuilt ten times asks once. The board room searches the same catalogue,
+so a part can be found by name as well as by number. The models go into
+GridFS gzipped, not into the part document: a 9.8 MB STEP file written
+inline took ninety-nine seconds.
 
 ## Themes
 

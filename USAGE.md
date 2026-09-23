@@ -170,15 +170,39 @@ Two buttons, and they do different things:
   LCSC by its part number, footprint and 3D model together, and KiCad
   does the placing inside a container. Out come a layer render and a GLB.
 
-Everything at once, in five panes:
+Everything at once, in six panes:
 
 | | what it shows |
 |---|---|
+| **parts** | LCSC's catalogue, and the drawer of parts already fetched |
 | **layout** | the board as KiCad draws it — copper, silkscreen, mask, outline — and the two buttons that change it |
 | **circuit** | the parts on a ring, a chord per net, and what it is made of |
 | **3d** | the same placement with the parts standing on it; drag to turn it over |
 | **machine** | what each build and placement cost, and what is stored |
 | **log** | what has happened, the board's builds among it |
+
+### Parts
+
+Type a part number or what you are after — `C25744`, or `0603 100nF` —
+and the **parts** pane searches LCSC: the number to order, what it is, the
+package, who makes it, how many they have and what one costs. Searching
+downloads nothing.
+
+**+** fetches one and keeps it: the footprint, and the 3D model if there
+is one. That is what puts it within reach of a board — *lay out* draws
+each part from what is in the drawer, so a part with no model is a part
+that will not be standing on the board when you turn it over. The drawer
+marks which is which, **3d** or **2d**.
+
+Fetched once and kept: a part number means the same thing tomorrow as it
+does today, and a board rebuilt ten times should not ask somebody else's
+service ten times. The models are big — an LQFP-48 is a 9.8 MB STEP file —
+so they are gzipped into GridFS like every other generated thing, with a
+copy on disk. Expect a few seconds of waiting for a large one.
+
+The **Part** field in the right-hand column follows the room: in the board
+room it offers the board's own components, `U1 · C368196`, so a note can
+be about one of them.
 
 ![The board room: parts, layout, circuit, model, machine and log](docs/pcb-room.png)
 

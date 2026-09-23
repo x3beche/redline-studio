@@ -571,10 +571,13 @@
 
     <div class="px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
       <label class="tcv-label mb-1 block">Part</label>
+      <!-- Whatever the room on screen is made of: a model's parts come
+           from the viewer, a board's from its netlist. The question is
+           the same one either way - which bit of this is this about? -->
       <select [value]="part()" (change)="part.set($any($event.target).value)"
               class="tcv-field mb-2 w-full px-1.5 py-1">
         <option value="">(none)</option>
-        @for (p of parts(); track p) { <option [value]="p">{{ p }}</option> }
+        @for (p of partChoices(); track p) { <option [value]="p">{{ p }}</option> }
       </select>
 
       <label class="tcv-label mb-1 block">Comment</label>

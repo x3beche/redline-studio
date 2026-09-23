@@ -397,6 +397,46 @@ export class Boards {
   }
 }
 
+// ---------------- parts ----------------
+/** A part as LCSC lists it: enough to choose between two capacitors. */
+export interface PartHit {
+  lcsc: string;
+  mpn: string | null;
+  package: string | null;
+  maker: string | null;
+  stock: number | null;
+  price: number | null;
+  have?: boolean;
+}
+
+/** A part that has been fetched and kept. */
+export interface PartHeld {
+  lcsc: string;
+  name: string | null;
+  has_3d: boolean;
+  at: string;
+}
+
+@Injectable({ providedIn: 'root' })
+export class Parts {
+  private http = inject(HttpClient);
+  /** The drawer: what has been fetched already. */
+  held(): Observable<PartHeld[]> { return this.http.get<PartHeld[]>('/api/parts'); }
+  /** LCSC's catalogue. Nothing is downloaded by looking. */
+  search(q: string, limit = 20): Observable<PartHit[]> {
+    return this.http.get<PartHit[]>(
+      `/api/parts/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+  }
+  /** Fetch one and keep it: footprint, and the model if there is one. */
+  add(lcsc: string): Observable<{ lcsc: string; name: string; has_3d: boolean }> {
+    return this.http.post<{ lcsc: string; name: string; has_3d: boolean }>(
+      `/api/parts/${lcsc}`, {});
+  }
+  drop(lcsc: string): Observable<unknown> {
+    return this.http.delete(`/api/parts/${lcsc}`);
+  }
+}
+
 // ---------------- the line to the agent ----------------
 /** Everything that is not a mark on a model: move these into a folder,
  *  rename that one, why is this build slow. */

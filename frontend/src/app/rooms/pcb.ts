@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import {
   Activity, BoardCompute, BoardEntry, BoardGraph, BoardLayout, Boards, Health,
-  LogLine, SystemInfo,
+  LogLine, PartHeld, PartHit, Parts, SystemInfo,
 } from '../api';
 import { Selection } from '../selection';
 import { Board3d } from './board3d';
@@ -52,14 +52,99 @@ interface Placed {
        as the 3D room's - it sits in the viewer's own grid, so both are
        where they always were. -->
   <div class="grid min-h-0 flex-1 gap-2 p-2"
-       style="grid-template-columns: 11fr 6fr;
+       style="grid-template-columns: 5fr 10fr 6fr;
               grid-template-rows: 5fr 4fr 3fr">
+
+    <!-- PARTS, FROM LCSC
+         A board can only be drawn out of parts somebody can buy: the
+         number is what the footprint and the 3D model are fetched by, so
+         this is where a board gets its shapes. Searching downloads
+         nothing - a search is a list to choose from. -->
+    <section class="tcv-pane" style="grid-column: 1; grid-row: 1 / span 3">
+      <header class="tcv-pane-head">
+        <span class="tcv-label">parts</span>
+        <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
+          {{ held().length }} kept
+        </span>
+      </header>
+
+      <div class="flex shrink-0 gap-1 p-2" style="border-bottom: 1px solid var(--line)">
+        <input [value]="term()" (input)="term.set($any($event.target).value)"
+               (keydown.enter)="look()"
+               placeholder="C25744, or 0603 100nF"
+               class="tcv-field min-w-0 flex-1 px-1.5 py-1 text-[11px]">
+        <button (click)="look()" [disabled]="looking()"
+                class="tcv-btn shrink-0 px-2 py-0.5">
+          {{ looking() ? '…' : 'find' }}
+        </button>
+      </div>
+
+      @if (partNote(); as n) {
+        <p class="shrink-0 px-2 py-1 text-[11px]" style="color: var(--ink-dim)">{{ n }}</p>
+      }
+
+      <div class="min-h-0 flex-1 overflow-auto">
+        <!-- What LCSC has. The number, what it is, and the two things
+             that decide between two of the same part: stock and price. -->
+        @for (h of hits(); track h.lcsc) {
+          <div class="group flex items-start gap-2 px-2 py-1.5"
+               style="border-bottom: 1px solid var(--line)">
+            <div class="min-w-0 flex-1">
+              <div class="mono text-[11px]" style="color: var(--ink)">
+                {{ h.lcsc }}
+                <span style="color: var(--ink-dim)">{{ h.package }}</span>
+              </div>
+              <div class="truncate text-[11px]" [title]="h.mpn ?? ''"
+                   style="color: var(--ink-dim)">{{ h.mpn }}</div>
+              <div class="mono text-[10px]" style="color: var(--ink-dim)">
+                {{ h.maker }} · {{ countOf(h.stock) }} in stock
+                @if (h.price != null) { · {{ money(h.price) }} }
+              </div>
+            </div>
+            @if (h.have) {
+              <span class="shrink-0 text-[11px]" style="color: var(--ok)"
+                    title="already in the drawer">kept</span>
+            } @else {
+              <button (click)="keep(h)" [disabled]="!!fetching()"
+                      class="tcv-chip shrink-0"
+                      title="fetch its footprint and 3D model">
+                {{ fetching() === h.lcsc ? '…' : '+' }}
+              </button>
+            }
+          </div>
+        }
+
+        <!-- The drawer. Fetched once and kept: a part number means the
+             same thing tomorrow, and a board rebuilt ten times should not
+             ask somebody else's service ten times. -->
+        @if (held().length) {
+          <div class="tcv-label px-2 pb-1 pt-2">in the drawer</div>
+          @for (p of held(); track p.lcsc) {
+            <div (click)="lookUp(p.lcsc)"
+                 class="group flex cursor-pointer items-center gap-2 px-2 py-1">
+              <span class="mono shrink-0 text-[11px]" style="color: var(--ink)">{{ p.lcsc }}</span>
+              <span class="min-w-0 flex-1 truncate text-[11px]"
+                    style="color: var(--ink-dim)" [title]="p.name ?? ''">{{ p.name }}</span>
+              <span class="shrink-0 text-[10px]"
+                    [style.color]="p.has_3d ? 'var(--ok)' : 'var(--ink-dim)'"
+                    [title]="p.has_3d ? 'came with a 3D model'
+                                      : 'footprint only - it will not stand on the board'">
+                {{ p.has_3d ? '3d' : '2d' }}
+              </span>
+              <button (click)="forget(p, $event)"
+                      class="shrink-0 text-[11px] opacity-0 group-hover:opacity-100"
+                      style="color: var(--danger)" title="forget it">&times;</button>
+            </div>
+          }
+        }
+      </div>
+    </section>
 
     <!-- WHAT IT COST, AND WHAT THE MACHINE IS DOING
          The board's own figures. The catalog's foot and the revision
          cards say the same kind of thing about models; these are about
          this board, so they are counted here. -->
-    <section class="tcv-pane" style="grid-column: 2; grid-row: 3">
+    <section class="tcv-pane" style="grid-column: 3; grid-row: 3">
       <header class="tcv-pane-head">
         <span class="tcv-label">machine</span>
         @if (cost(); as c) {
@@ -128,7 +213,7 @@ interface Placed {
          Its own, not the 3D room's: the lines a board writes are about
          this board, and a build that happened while you were looking at
          something else is exactly what you want to read here. -->
-    <section class="tcv-pane" style="grid-column: 1; grid-row: 3">
+    <section class="tcv-pane" style="grid-column: 2; grid-row: 3">
       <header class="tcv-pane-head">
         <span class="tcv-label">log</span>
         <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
@@ -148,7 +233,7 @@ interface Placed {
     </section>
 
     <!-- LAYOUT -->
-    <section class="tcv-pane" style="grid-column: 1; grid-row: 1 / span 2">
+    <section class="tcv-pane" style="grid-column: 2; grid-row: 1 / span 2">
       <!-- The two things you can do to a board live over the drawing they
            change, not in a bar of their own across the top. -->
       <header class="tcv-pane-head">
@@ -203,7 +288,7 @@ interface Placed {
     </section>
 
     <!-- CIRCUIT -->
-    <section class="tcv-pane" style="grid-column: 2; grid-row: 1">
+    <section class="tcv-pane" style="grid-column: 3; grid-row: 1">
       <header class="tcv-pane-head">
         <span class="tcv-label">circuit</span>
         <!-- What the board is made of, where the list of it used to be:
@@ -251,7 +336,7 @@ interface Placed {
     </section>
 
     <!-- THE BOARD, IN THREE DIMENSIONS -->
-    <section class="tcv-pane" style="grid-column: 2; grid-row: 2">
+    <section class="tcv-pane" style="grid-column: 3; grid-row: 2">
       <header class="tcv-pane-head">
         <span class="tcv-label">3d</span>
         <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
@@ -288,6 +373,7 @@ export class RoomPcb implements OnDestroy {
   private picked = inject(Selection);
   private health = inject(Health);
   private activity = inject(Activity);
+  private store = inject(Parts);
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   readonly SIZE = 520;
@@ -299,12 +385,20 @@ export class RoomPcb implements OnDestroy {
   note = signal('');
   lastLayout = signal<BoardLayout | null>(null);
   cost = signal<BoardCompute | null>(null);
+  /** The drawer of parts, and what a search in LCSC turned up. */
+  held = signal<PartHeld[]>([]);
+  hits = signal<PartHit[]>([]);
+  term = signal('');
+  looking = signal(false);
+  fetching = signal<string | null>(null);
+  partNote = signal('');
   sys = signal<SystemInfo | null>(null);
   log = signal<LogLine[]>([]);
   private timers: ReturnType<typeof setInterval>[] = [];
 
   constructor() {
     this.refresh();
+    this.drawer();
     this.tick();
     // The room is only mounted while its tab is on, so this stops when
     // somebody leaves rather than polling behind another room.
@@ -322,6 +416,76 @@ export class RoomPcb implements OnDestroy {
 
   ngOnDestroy() {
     for (const id of this.timers) clearInterval(id);
+  }
+
+  // ---- parts, from LCSC ----
+
+  private drawer() {
+    this.store.held().subscribe({ next: rows => this.held.set(rows) });
+  }
+
+  /** Look in LCSC's catalogue. A part number finds itself; anything else
+   *  is a search, and nothing is downloaded by looking. */
+  look() {
+    const q = this.term().trim();
+    if (!q || this.looking()) return;
+    this.looking.set(true);
+    this.partNote.set('');
+    this.store.search(q).subscribe({
+      next: rows => {
+        this.looking.set(false);
+        this.hits.set(rows);
+        if (!rows.length) this.partNote.set('nothing came back for that');
+      },
+      error: e => {
+        this.looking.set(false);
+        this.partNote.set(String(e?.error?.detail ?? 'LCSC did not answer'));
+      },
+    });
+  }
+
+  /** Keep one: its footprint, and its 3D model if it has one. That is
+   *  what puts it within reach of a board. */
+  keep(hit: PartHit) {
+    if (this.fetching()) return;
+    this.fetching.set(hit.lcsc);
+    this.partNote.set('');
+    this.store.add(hit.lcsc).subscribe({
+      next: got => {
+        this.fetching.set(null);
+        this.hits.update(rows => rows.map(
+          r => r.lcsc === hit.lcsc ? { ...r, have: true } : r));
+        this.partNote.set(`${got.lcsc} kept`
+          + (got.has_3d ? ' with a 3D model' : ', footprint only'));
+        this.drawer();
+      },
+      error: e => {
+        this.fetching.set(null);
+        this.partNote.set(String(e?.error?.detail ?? 'could not fetch it')
+          .slice(0, 200));
+      },
+    });
+  }
+
+  forget(part: PartHeld, ev: Event) {
+    ev.stopPropagation();
+    this.store.drop(part.lcsc).subscribe({ next: () => this.drawer() });
+  }
+
+  /** Put a part number in the search box and look it up. Clicking a part
+   *  a board uses is how you find out what it actually is. */
+  lookUp(code: string) {
+    this.term.set(code);
+    this.look();
+  }
+
+  money(p: number | null): string {
+    return p == null ? '' : p < 0.01 ? `$${p.toFixed(4)}` : `$${p.toFixed(2)}`;
+  }
+
+  countOf(n: number | null): string {
+    if (!n) return 'none';
+    return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
   }
 
   /** The live half: what the machine is doing, and what has happened. */
@@ -389,6 +553,7 @@ export class RoomPcb implements OnDestroy {
   open(b: BoardEntry | null) {
     this.here.set(b);
     this.graph.set(null);
+    this.picked.boardParts.set([]);
     this.cost.set(null);
     if (!b) return;
     this.api.compute(b._id).subscribe({ next: c => this.cost.set(c) });
@@ -396,7 +561,11 @@ export class RoomPcb implements OnDestroy {
     // The artifact is immutable and served that way, so the build time is
     // what tells the browser to fetch a new one.
     this.api.graph(b._id, b.artifacts?.['graph']?.at).subscribe({
-      next: g => this.graph.set(g),
+      next: g => {
+        this.graph.set(g);
+        this.picked.boardParts.set(g.components.map(
+          c => c.part ? `${c.ref} · ${c.part}` : c.ref));
+      },
       error: () => this.note.set('the build output could not be read'),
     });
   }

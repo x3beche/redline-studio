@@ -1499,6 +1499,13 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** Which board the PCB room is showing, so the tree can mark it. */
   openedBoard(): string | null { return this.picked.board(); }
 
+  /** What the Part field offers: the open board's components while the
+   *  board room is on, the loaded model's parts otherwise. */
+  partChoices(): string[] {
+    return this.picked.room() === 'pcb'
+      ? this.picked.boardParts() : this.parts();
+  }
+
   /** The one row the catalog marks: whatever the room on screen is
    *  showing. Both can be loaded at once - the 3D room keeps its model
    *  while you are in the board room - but only one of them is what you

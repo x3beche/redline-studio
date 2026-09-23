@@ -37,6 +37,11 @@ Left to do, roughly in order:
   column, no editor for the `.ato` in the room. The source goes in
   through `PUT /api/boards/{id}`, which is fine for the agent and no use
   to a person.
+- **The parts drawer will eat the database.** Seven parts is 23 MB:
+  an LQFP-48's STEP is 9.8 MB before it is gzipped, and the quota is
+  537 MB. The link to the database runs at about 100 kB/s, so that is
+  also twenty seconds of waiting per big part. Worth a size cap, a prune,
+  or keeping the models on disk with the database as the index.
 - **The placer puts everything in one row.** `docker/place.py` walks
   along the board at a fixed pitch. It is honest — nothing pretends to
   be laid out — but a board with thirty parts will run off the edge.

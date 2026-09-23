@@ -20,8 +20,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import (ato, build, chat, compute, kicad, questions, store, summarise,
-               sysinfo, usage, versions)
+from . import (ato, build, chat, compute, kicad, lcsc, questions, store,
+               summarise, sysinfo, usage, versions)
 
 LOG = logging.getLogger("x3.api")
 
@@ -946,6 +946,58 @@ async def board_model(bid: str):
         raise HTTPException(404, "no model yet")
     return Response(raw, media_type="model/gltf-binary",
                     headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+# ---------------- parts ----------------
+@app.get("/api/parts")
+async def list_parts():
+    """The drawer: every part that has been fetched, and whether it came
+    with a 3D model."""
+    return await lcsc.known(db())
+
+
+@app.get("/api/parts/search")
+async def search_parts(q: str, limit: int = 20):
+    """LCSC's catalogue, by name, package, manufacturer or number.
+
+    Nothing is downloaded here. A search is a list to choose from; the
+    footprint and the model come when one is picked.
+    """
+    try:
+        rows = await lcsc.search(q, limit)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(502, f"LCSC did not answer: {exc}")
+    have = {p["lcsc"] for p in await lcsc.known(db())}
+    for row in rows:
+        row["have"] = row["lcsc"] in have
+    return rows
+
+
+@app.post("/api/parts/{lcsc_id}")
+async def add_part(lcsc_id: str, force: bool = False):
+    """Fetch one part and keep it: footprint, and the 3D model if there is
+    one. This is what makes it available to a board."""
+    try:
+        doc = await lcsc.fetch(db(), lcsc_id, force)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except (RuntimeError, TimeoutError, OSError) as exc:
+        await say(f"{lcsc_id}: could not be fetched - {exc}", "warn")
+        raise HTTPException(502, str(exc))
+    has_3d = bool((doc.get("artifacts") or {}).get("model")
+                  or doc.get("model_step") or doc.get("model_wrl"))
+    await say(f"{lcsc_id} fetched from LCSC - {doc.get('name')}"
+              + (f" with a {doc.get('model_kind', '3D')} model" if has_3d
+                 else ", footprint only"), "done")
+    return {"lcsc": lcsc_id, "name": doc.get("name"), "has_3d": has_3d}
+
+
+@app.delete("/api/parts/{lcsc_id}")
+async def drop_part(lcsc_id: str):
+    got = await db()[lcsc.PARTS].delete_one({"_id": lcsc_id})
+    if not got.deleted_count:
+        raise HTTPException(404, lcsc_id)
+    return {"deleted": lcsc_id}
 
 
 @app.get("/api/boards/{bid}/compute")

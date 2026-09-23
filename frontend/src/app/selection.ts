@@ -17,6 +17,12 @@ export class Selection {
   /** The board the PCB room should show, by id. */
   board = signal<string | null>(null);
 
+  /** What the open board is made of, as `U1 · C368196` - so the note
+   *  panel beside the room can offer them where it offers a model's
+   *  parts. It is the same question there: which bit of this is this
+   *  about? */
+  boardParts = signal<string[]>([]);
+
   /** Open a board: the room follows from the kind of file it is. */
   openBoard(id: string) {
     this.board.set(id);
