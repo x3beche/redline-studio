@@ -255,6 +255,20 @@
   border-radius: 3px;
 }
 
+/* A row in a list you pick from: the board catalog, and anything else
+   that turns into a list of things to open. */
+.tcv-row {
+  display: flex;
+  align-items: baseline;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.tcv-row:hover { background: var(--hover); }
+.tcv-row[data-on="1"] { background: var(--accent-deep); }
+
 /* Two label/value pairs to a line. The analytics panel is a dial to be
    glanced at, not a list to be read down, and one pair to a line made it
    half again as tall as it had to be. */

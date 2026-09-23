@@ -255,10 +255,16 @@ CACHE = Path(os.environ.get(
     "X3_CACHE", Path(__file__).resolve().parent.parent / ".cache" / "artifacts"))
 
 
-async def put_artifact(db, model_id: str, label: str, data: bytes) -> dict:
-    """Gzip the generated artifact into GridFS and drop the previous one."""
+async def put_artifact(db, model_id: str, label: str, data: bytes,
+                       collection: str = "models") -> dict:
+    """Gzip the generated artifact into GridFS and drop the previous one.
+
+    `collection` is which catalog the thing belongs to: models build into
+    geometry, boards into a netlist, and both store their output the same
+    way.
+    """
     files = bucket(db, "model_files")
-    doc = await db.models.find_one({"_id": model_id})
+    doc = await db[collection].find_one({"_id": model_id})
     old = (doc or {}).get("artifacts", {}).get(label)
     if old:
         try:
@@ -269,7 +275,7 @@ async def put_artifact(db, model_id: str, label: str, data: bytes) -> dict:
     fid = await files.upload_from_stream(f"{model_id}:{label}.gz", packed)
     meta = {"gridfs_id": fid, "bytes": len(data), "stored_bytes": len(packed),
             "sha256": hashlib.sha256(data).hexdigest(), "at": now()}
-    await db.models.update_one(
+    await db[collection].update_one(
         {"_id": model_id},
         {"$set": {f"artifacts.{label}": meta, "stale": False}})
     # Keep a copy on disk straight away, so even the first read after a build
@@ -288,9 +294,10 @@ def cache_put(gridfs_id, packed: bytes) -> None:
         pass                                   # cache is an optimisation only
 
 
-async def get_artifact_gz(db, model_id: str, label: str) -> bytes:
+async def get_artifact_gz(db, model_id: str, label: str,
+                          collection: str = "models") -> bytes:
     """The stored bytes, still gzipped."""
-    doc = await db.models.find_one({"_id": model_id})
+    doc = await db[collection].find_one({"_id": model_id})
     meta = (doc or {}).get("artifacts", {}).get(label)
     if not meta:
         raise KeyError(f"{model_id}/{label}")
@@ -314,8 +321,10 @@ async def get_artifact_gz(db, model_id: str, label: str) -> bytes:
     return packed
 
 
-async def get_artifact(db, model_id: str, label: str) -> bytes:
-    return gzip.decompress(await get_artifact_gz(db, model_id, label))
+async def get_artifact(db, model_id: str, label: str,
+                       collection: str = "models") -> bytes:
+    return gzip.decompress(
+        await get_artifact_gz(db, model_id, label, collection))
 
 
 # ---------------- revision images ----------------

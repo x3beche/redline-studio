@@ -300,6 +300,56 @@ export class Health {
   system(): Observable<SystemInfo> { return this.http.get<SystemInfo>('/api/system'); }
 }
 
+// ---------------- boards ----------------
+/** A board is parametric atopile that builds into a netlist: the parts it
+ *  is made of and what is joined to what. */
+export interface BoardEntry {
+  _id: string;
+  title?: string;
+  ready: boolean;
+  stale?: boolean;
+  building?: boolean;
+  build_secs?: number;
+  artifacts?: Record<string, { bytes: number; at: string }>;
+}
+
+export interface BoardGraph {
+  components: {
+    ref: string; value: string | null; footprint: string | null;
+    part: string | null;
+    /** Where in the source it came from, so a mark leads back to a line. */
+    where: string | null;
+  }[];
+  nets: { name: string | null; code: string | null;
+          nodes: { ref: string | null; pin: string | null }[] }[];
+  counts: { components: number; nets: number; joins: number };
+  bom: Record<string, string>[];
+  built_at: string;
+}
+
+@Injectable({ providedIn: 'root' })
+export class Boards {
+  private http = inject(HttpClient);
+  list(): Observable<BoardEntry[]> {
+    return this.http.get<BoardEntry[]>('/api/boards');
+  }
+  source(id: string): Observable<{ source: string; entry?: string; title?: string }> {
+    return this.http.get<{ source: string; entry?: string; title?: string }>(
+      `/api/boards/${id}`);
+  }
+  save(id: string, source: string): Observable<unknown> {
+    return this.http.put(`/api/boards/${id}`, { source });
+  }
+  build(id: string): Observable<{ components: number; nets: number; joins: number }> {
+    return this.http.post<{ components: number; nets: number; joins: number }>(
+      `/api/boards/${id}/build`, {});
+  }
+  graph(id: string, stamp?: string): Observable<BoardGraph> {
+    return this.http.get<BoardGraph>(
+      `/api/boards/${id}/graph.json` + (stamp ? `?v=${encodeURIComponent(stamp)}` : ''));
+  }
+}
+
 // ---------------- the line to the agent ----------------
 /** Everything that is not a mark on a model: move these into a folder,
  *  rename that one, why is this build slow. */

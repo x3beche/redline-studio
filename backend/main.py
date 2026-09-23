@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import build, chat, questions, store, summarise, sysinfo, usage, versions
+from . import ato, build, chat, questions, store, summarise, sysinfo, usage, versions
 
 LOG = logging.getLogger("x3.api")
 
@@ -815,6 +815,77 @@ async def put_settings(auto_archive: bool | None = None,
         await db().settings.update_one({"_id": SETTINGS_ID}, {"$set": patch},
                                        upsert=True)
     return await get_settings()
+
+
+# ---------------- boards ----------------
+class BoardIn(BaseModel):
+    source: str = Field(min_length=1, max_length=200_000)
+    title: str | None = None
+    entry: str | None = None
+
+
+@app.get("/api/boards")
+async def list_boards():
+    """The board catalog: source stays out of it, it is the big field."""
+    rows = [b async for b in db()[ato.BOARDS].find({}, {"source": 0})]
+    for b in rows:
+        # The GridFS id is an ObjectId and the browser has no use for it;
+        # what it needs is the build time, to know when its copy is old.
+        b["artifacts"] = {k: {"bytes": v.get("bytes"), "at": v.get("at")}
+                          for k, v in (b.get("artifacts") or {}).items()}
+        b["ready"] = "graph" in b["artifacts"]
+    rows.sort(key=lambda b: b["_id"])
+    return rows
+
+
+@app.get("/api/boards/{bid}")
+async def one_board(bid: str):
+    doc = await db()[ato.BOARDS].find_one({"_id": bid}, {"artifacts": 0})
+    if not doc:
+        raise HTTPException(404, bid)
+    return doc
+
+
+@app.put("/api/boards/{bid}")
+async def save_board(bid: str, body: BoardIn):
+    """Write the source. Building is a separate step, as for a model."""
+    patch = {"source": body.source, "saved_at": store.now(), "stale": True}
+    if body.title:
+        patch["title"] = body.title
+    if body.entry:
+        patch["entry"] = body.entry
+    await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": patch}, upsert=True)
+    return {"id": bid, "saved": True}
+
+
+@app.post("/api/boards/{bid}/build")
+async def build_board(bid: str):
+    try:
+        return await ato.build(db(), bid)
+    except KeyError:
+        raise HTTPException(404, bid)
+    except (ValueError, RuntimeError, TimeoutError) as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.get("/api/boards/{bid}/graph.json")
+async def board_graph(bid: str):
+    """What the build made of it: components, nets, and the bill."""
+    try:
+        raw = await store.get_artifact_gz(db(), bid, "graph", ato.BOARDS)
+    except KeyError:
+        raise HTTPException(404, "not built yet")
+    return Response(raw, media_type="application/json",
+                    headers={"Content-Encoding": "gzip",
+                             "Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.delete("/api/boards/{bid}")
+async def drop_board(bid: str):
+    res = await db()[ato.BOARDS].delete_one({"_id": bid})
+    if not res.deleted_count:
+        raise HTTPException(404, bid)
+    return {"id": bid, "deleted": True}
 
 
 # ---------------- chat ----------------
