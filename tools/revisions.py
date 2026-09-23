@@ -106,6 +106,9 @@ async def cmd_wait(args):
         # person typed into the thread. Both are them asking for something.
         said = await chat.unread(db)
         if said:
+            urgent = [d for d in said if d.get("urgent")]
+            if urgent:
+                await _shout_interrupts(db)
             print(f"{len(said)} message(s) after waiting {waited}s")
             for d in said:
                 print(f"  {d['at'][11:19]}  {d['text'][:88]}")
@@ -128,6 +131,26 @@ async def cmd_wait(args):
         waited += args.every
 
 
+async def _shout_interrupts(db) -> list[dict]:
+    """Print anything urgent the person has said and not had picked up.
+
+    Called from the commands the agent runs anyway - the progress log, a
+    build - so an urgent line surfaces in its own output without it having
+    to remember to look. Nothing is stopped and nothing is killed: the
+    build carries on and the person gets an answer without waiting for it.
+    It does not mark them read either - reading is what `chat` is for, and
+    an urgent line nobody has read stays loud.
+    """
+    from backend import chat
+
+    rows = await chat.interrupts(db)
+    for d in rows:
+        print(f"\n!! URGENT  {d['at'][11:19]}  {d['text']}")
+    if rows:
+        print("!! Answer it before the next step: revisions.py chat, then say\n")
+    return rows
+
+
 async def cmd_chat(args):
     """Read the thread, and mark what the person said as picked up.
 
@@ -144,7 +167,8 @@ async def cmd_chat(args):
     for d in rows:
         who = "you " if d["role"] == chat.AGENT else "them"
         mark = " " if d.get("seen_at") else "*"
-        print(f"{mark}{d['at'][11:19]}  {who}  {d['text']}")
+        bang = "!! " if d.get("urgent") and not d.get("seen_at") else ""
+        print(f"{mark}{d['at'][11:19]}  {who}  {bang}{d['text']}")
     fresh = [d["_id"] for d in rows
              if d["role"] == chat.USER and not d.get("seen_at")]
     if fresh and not args.keep_unread:
@@ -256,6 +280,9 @@ async def cmd_start(args):
 async def cmd_log(args):
     db = connect()
     await db.activity.insert_one(_line(args.text, args.level))
+    # The agent logs at every step, so this is where an interrupt catches it
+    # between one thing and the next.
+    await _shout_interrupts(db)
     if args.percent is not None:
         cur = await db.runs.find_one({"_id": "current"}) or {}
         ids = ["current"] + ([cur["revision"]] if cur.get("revision") else [])
@@ -313,6 +340,23 @@ async def cmd_finish(args):
             print(f"analytics skipped: {type(exc).__name__}: {exc}")
 
 
+async def cmd_stop(args):
+    """Stop a build that is running. Your call, not the app's.
+
+    An urgent message tells you somebody wants something; it does not
+    decide that the four minutes of booleans under way are a waste. If
+    they are, this is how you say so.
+    """
+    from backend import build
+
+    db = connect()
+    if await build.request_stop(db, args.model):
+        print(f"{args.model}: asked to stop, it will die within a couple of "
+              f"seconds")
+    else:
+        print(f"{args.model}: nothing building")
+
+
 async def cmd_models(_):
     db = connect()
     async for m in db.models.find({}, {"source": 0}):
@@ -342,6 +386,10 @@ async def cmd_build(args):
     from backend import build
 
     db = connect()
+    # Reported, not obeyed: the work carries on and the person gets their
+    # answer. Nothing here decides for them that four minutes of booleans
+    # were a waste.
+    await _shout_interrupts(db)
     res = await build.build(db, args.model, ROOT / "export_model.py")
     sizes = ", ".join(f"{k} {v/1e6:.1f}MB" for k, v in res["artifacts"].items())
     print(f"{res['model']} built: {sizes}")
@@ -504,6 +552,9 @@ def main() -> None:
     s = sub.add_parser("save"); s.add_argument("model"); s.add_argument("file")
     s.set_defaults(fn=cmd_save)
     s = sub.add_parser("build"); s.add_argument("model"); s.set_defaults(fn=cmd_build)
+    s = sub.add_parser("stop", help="stop a build that is running")
+    s.add_argument("model")
+    s.set_defaults(fn=cmd_stop)
     s = sub.add_parser("after", help="store the after shot for a revision")
     s.add_argument("id")
     s.add_argument("--width", type=int, default=1200)

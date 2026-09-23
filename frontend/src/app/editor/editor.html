@@ -591,6 +591,19 @@
           <span class="mono text-[10px]" style="color: var(--warn)"
                 title="said, not picked up yet">{{ n }} waiting</span>
         }
+        <!-- The difference between "when you get a moment" and "now". An
+             urgent line is reported by every command the agent runs, so it
+             is read between one step and the next instead of waiting for
+             the agent to be idle. It stops nothing by itself: whether the
+             build under way is worth abandoning is the agent's call. -->
+        <label class="ml-auto flex items-center gap-1.5">
+          <span class="tcv-label">urgent</span>
+          <button (click)="urgent.set(!urgent())" class="tcv-switch"
+                  [attr.data-on]="urgent() ? 1 : null"
+                  [attr.aria-pressed]="urgent()"
+                  title="have it read between steps rather than when the
+                         agent next looks up"></button>
+        </label>
       </div>
       @if (chatOpen()) {
         <div #threadBox class="tcv-scroll overflow-y-auto px-2 pb-1.5 text-[11px]"
@@ -601,6 +614,9 @@
                    [style.color]="m.role === 'agent' ? 'var(--accent)' : 'var(--ink-dim)'">
                 {{ m.role === 'agent' ? 'agent' : 'you' }}
                 <span style="color: var(--line)">{{ m.at.slice(11, 16) }}</span>
+                @if (m.urgent) {
+                  <span style="color: var(--pen)">· interrupt</span>
+                }
                 @if (m.role === 'user' && !m.seen_at) {
                   <span style="color: var(--warn)">· waiting</span>
                   <!-- Only once the server has given it an id. Pressed in
@@ -629,6 +645,7 @@
                     placeholder="message the agent…"
                     class="tcv-field min-w-0 flex-1 resize-none p-1.5"></textarea>
           <button (click)="say()" class="tcv-btn tcv-btn-accent shrink-0 px-2"
+                  [style.border-color]="urgent() ? 'var(--pen)' : null"
                   title="enter sends, shift+enter for a new line">send</button>
         </div>
       }

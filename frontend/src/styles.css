@@ -211,6 +211,20 @@
 
 /* Single-screen app: the page never scrolls; scrolling happens inside panels. */
 html, body { height: 100%; overflow: hidden; }
+
+/* The viewer's stylesheet turns selection off on `body`. It means its own
+   buttons, but it lands on the whole application and nothing on the page
+   could be copied - not a log line, not a measurement, not what somebody
+   wrote on a card. Text is text. Selection goes back on, and stays off
+   only where a drag should press something rather than highlight its
+   label. */
+/* !important because the viewer injects its stylesheet at runtime, after
+   ours: on order alone its rule wins every time. */
+body { user-select: text !important; }
+button, .tcv-chip, .tcv-btn, .tcv-edge, .tcv-switch, .tcv-rail-gauges,
+.tcv-label, .tcv_cad_toolbar, .tcv_cad_tabs, .tcv_cad_tree, canvas {
+  user-select: none !important;
+}
 body {
   margin: 0;
   background: var(--surface);

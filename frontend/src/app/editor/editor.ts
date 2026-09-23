@@ -108,6 +108,10 @@ export class Editor implements AfterViewInit, OnDestroy {
   questions = signal<Question[]>([]);
   thread = signal<ChatLine[]>([]);
   saying = signal('');
+  /** Whether what is typed next goes as urgent: read between the agent's
+   *  steps rather than when it next looks up. Sticks, because somebody
+   *  who wants one thing seen promptly usually wants the next one too. */
+  urgent = signal(false);
   chatOpen = signal(true);
   answerText = signal('');
   answerPicked = signal<Set<string>>(new Set());
@@ -345,14 +349,15 @@ export class Editor implements AfterViewInit, OnDestroy {
   say() {
     const text = this.saying().trim();
     if (!text) return;
+    const urgent = this.urgent();
     // Shown straight away rather than on the next poll: two seconds of
     // nothing looks like the message went nowhere.
     this.thread.update(t => [...t, {
       _id: 'local-' + Date.now(), at: new Date().toISOString(),
-      role: 'user' as const, text, seen_at: null }]);
+      role: 'user' as const, text, urgent, seen_at: null }]);
     this.saying.set('');
     setTimeout(() => this.scrollThread(), 40);
-    this.chat.say(text).subscribe({
+    this.chat.say(text, urgent).subscribe({
       next: () => this.chat.history().subscribe({
         next: v => this.takeThread(v), error: () => {} }),
       error: () => this.flash('could not send that'),

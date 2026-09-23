@@ -154,6 +154,11 @@ takes the after picture and freezes what the work cost - tokens, time and
 money at list price - onto the card. Those numbers come from your own
 transcripts; `revisions.py usage` re-reads them if a run ended badly.
 
+A line marked **urgent** is printed by every command you run, so it reaches
+you between steps rather than when you next go idle. It stops nothing:
+answering it, changing course, or ending a running build with
+`revisions.py stop <model>` are all your call.
+
 There is a thread at the foot of the queue column for everything that is
 not a mark on a model - moving models between folders, renaming, questions
 about a build. `revisions.py chat` reads it and marks it picked up,

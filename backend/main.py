@@ -820,6 +820,8 @@ async def put_settings(auto_archive: bool | None = None,
 # ---------------- chat ----------------
 class ChatIn(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
+    # "Stop what you are doing", as opposed to "when you get a moment".
+    urgent: bool = False
 
 
 @app.get("/api/chat")
@@ -831,7 +833,7 @@ async def chat_history(limit: int = 200):
 @app.post("/api/chat")
 async def chat_post(body: ChatIn):
     """Say something to the agent. Its own replies come in over the CLI."""
-    return await chat.post(db(), body.text)
+    return await chat.post(db(), body.text, urgent=body.urgent)
 
 
 @app.delete("/api/chat")

@@ -247,6 +247,16 @@ Under the queue there is a thread, for everything that is not a mark on a
 model — moving models between folders, renaming one, why a build is taking
 so long. Enter sends, shift+enter keeps typing.
 
+The **urgent** switch changes when it is read, not what it does. An
+ordinary line waits until the agent next looks up, which can be the far
+side of a four-minute build; an urgent one is printed by every command the
+agent runs, so it lands between one step and the next.
+
+It stops nothing by itself. Whether the work under way is worth abandoning
+is a judgement about the work, so the agent makes it — and it can end a
+build early if that is the answer. Nothing in the application throws four
+minutes of compute away on a switch.
+
 A line you have sent says **waiting** until the agent picks it up, and while
 it does there is an **undo** beside it: taking it back is refused once the
 agent has read it, because by then the work may be half done and an answer

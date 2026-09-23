@@ -27,19 +27,36 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-async def post(db, text: str, role: str = USER) -> dict:
-    """Add one message. An empty one is not a message."""
+async def post(db, text: str, role: str = USER,
+               urgent: bool = False) -> dict:
+    """Add one message. An empty one is not a message.
+
+    `urgent` is the difference between "when you get a moment" and "stop".
+    An ordinary line waits until the agent next looks up; an urgent one is
+    reported by every command the agent runs, and a build that is running
+    when it arrives is killed. Which is what the person meant, if they
+    took the trouble to mark it.
+    """
     text = (text or "").strip()
     if not text:
         raise ValueError("nothing to say")
     doc = {"_id": uuid.uuid4().hex[:12], "at": _now(),
            "role": AGENT if role == AGENT else USER,
            "text": text,
+           "urgent": bool(urgent) and role != AGENT,
            # The agent's own words are read the moment they are written;
            # only the person's wait to be picked up.
            "seen_at": _now() if role == AGENT else None}
     await db[CHAT].insert_one(doc)
     return doc
+
+
+async def interrupts(db) -> list[dict]:
+    """Unread urgent messages - the reason to stop whatever is running."""
+    rows = [d async for d in db[CHAT].find(
+        {"role": USER, "seen_at": None, "urgent": True})]
+    rows.sort(key=lambda d: d["at"])
+    return rows
 
 
 async def history(db, limit: int = 200) -> list[dict]:

@@ -304,6 +304,9 @@ export interface ChatLine {
   at: string;
   role: 'user' | 'agent';
   text: string;
+  /** "Stop what you are doing", as opposed to "when you get a moment". An
+   *  urgent line kills a build that is running when it lands. */
+  urgent?: boolean;
   /** Null until the agent has picked it up - that is what its idle wait
    *  watches, and what the page shows as "not read yet". */
   seen_at: string | null;
@@ -315,8 +318,8 @@ export class Chat {
   history(): Observable<ChatLine[]> {
     return this.http.get<ChatLine[]>('/api/chat');
   }
-  say(text: string): Observable<ChatLine> {
-    return this.http.post<ChatLine>('/api/chat', { text });
+  say(text: string, urgent = false): Observable<ChatLine> {
+    return this.http.post<ChatLine>('/api/chat', { text, urgent });
   }
   /** Unsend. Refused once the agent has picked the message up. */
   retract(id: string): Observable<unknown> {

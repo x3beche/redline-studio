@@ -56,6 +56,28 @@ at the foot of the queue column:
 again - `--keep-unread` looks without picking it up. `wait` returns on a
 message as well as on a queued revision, so the same idle loop covers both.
 
+### When a line comes in marked urgent
+
+They have flipped a switch that means "read this between steps, not when
+you next look up". Every command you run prints it:
+
+```
+!! URGENT  09:14:02  wrong model, I meant the stand
+```
+
+It stops nothing by itself. What to do about it is your judgement, and the
+whole range is open: answer and carry on, answer and change what you were
+going to do next, or decide the four minutes of booleans under way are a
+waste and end them:
+
+```bash
+.venv/bin/python tools/revisions.py stop <model>    # kill a running build
+```
+
+Nothing else in the application will do that for you. A build is expensive
+to start again, so read what they said before you throw one away - and say
+what you decided, either way.
+
 Answer in the thread rather than in your terminal. Nothing in here changes
 a model by itself: if they ask for something, do it and then say what you
 did.
@@ -107,6 +129,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py source <model>       # print source
 .venv/bin/python tools/revisions.py save <model> <file>  # update source
 .venv/bin/python tools/revisions.py build <model>        # rebuild (minutes)
+.venv/bin/python tools/revisions.py stop <model>         # end one early
 .venv/bin/python tools/revisions.py done <id>            # mark as applied
 .venv/bin/python tools/revisions.py finish               # close the run
 .venv/bin/python tools/revisions.py after <id>           # the "after" picture

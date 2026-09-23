@@ -16,6 +16,38 @@ from . import compute, store
 
 TIMEOUT = 900
 
+# How often a running build looks up to see whether it has been called off.
+# Often enough that stopping means stopping, rarely enough that a
+# four-minute boolean is not spending its time on the database.
+STOP_EVERY = 2.0
+
+
+async def request_stop(db, model_id: str) -> bool:
+    """Ask a running build to stop. Nothing else decides this.
+
+    An urgent message only tells the agent that somebody wants something;
+    whether four minutes of booleans are worth abandoning is a judgement
+    about the work, so the agent makes it and says so by calling this.
+    """
+    res = await db.models.update_one(
+        {"_id": model_id, "building": True},
+        {"$set": {"stop_at": store.now()}})
+    return res.modified_count > 0
+
+
+async def _watch_for_stop(db, model_id: str, proc, since: str) -> str | None:
+    """Kill the build if somebody asked it to stop after it started."""
+    while True:
+        await asyncio.sleep(STOP_EVERY)
+        try:
+            doc = await db.models.find_one({"_id": model_id}, {"stop_at": 1})
+        except Exception:                 # never kill a build over a hiccup
+            continue
+        asked = (doc or {}).get("stop_at")
+        if asked and asked > since:
+            proc.kill()
+            return asked
+
 
 async def build(db, model_id: str, script: Path) -> dict:
     doc = await db.models.find_one({"_id": model_id})
@@ -28,9 +60,13 @@ async def build(db, model_id: str, script: Path) -> dict:
     # has no way of knowing. The flag lives on the model so the page can say
     # "building" wherever the build came from.
     started = time.monotonic()
+    started_at = store.now()
+    # stop_at is cleared here: a stop asked for during the last build must
+    # not end this one before it has drawn a breath.
     await db.models.update_one(
         {"_id": model_id},
-        {"$set": {"building": True, "build_started": store.now()}})
+        {"$set": {"building": True, "build_started": started_at},
+         "$unset": {"stop_at": ""}})
 
     tmp = Path(tempfile.mkdtemp(prefix="x3build-"))
     try:
@@ -83,12 +119,20 @@ async def build(db, model_id: str, script: Path) -> dict:
             *argv, cwd=str(tmp),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
         meter.watch(proc.pid)
+        stop = asyncio.create_task(_watch_for_stop(db, model_id, proc, started_at))
+        called_off = None
         try:
             out, _ = await asyncio.wait_for(proc.communicate(), TIMEOUT)
         except asyncio.TimeoutError:
             proc.kill()
             raise TimeoutError(f"{model_id}: build did not finish within {TIMEOUT}s")
         finally:
+            if stop.done() and not stop.cancelled():
+                try:
+                    called_off = stop.result()
+                except Exception:               # the watcher itself failed
+                    called_off = None
+            stop.cancel()
             # Recorded however it ended: a build that ran for four minutes and
             # then blew the memory ceiling spent those four minutes.
             job = meter.stop()
@@ -98,6 +142,11 @@ async def build(db, model_id: str, script: Path) -> dict:
                     model=model_id, rc=proc.returncode, **job)
             except Exception:                    # never fail a build over this
                 pass
+
+        # Before the return code is read: a killed build looks like a failed
+        # one, and why it stopped is the interesting part.
+        if called_off:
+            raise InterruptedError(f"{model_id}: build stopped on request")
 
         log = out.decode(errors="replace").strip().splitlines()
         if proc.returncode in (-9, 137):

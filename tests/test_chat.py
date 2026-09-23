@@ -168,3 +168,35 @@ def test_the_agents_own_words_cannot_be_taken_back_from_the_page():
 
 def test_taking_back_something_that_is_not_there():
     assert run(chat.retract(FakeDb(), "nope")) is False
+
+
+# ---------------- urgent ----------------
+def test_urgent_is_a_kind_of_message_not_a_different_channel():
+    db = FakeDb()
+    said = run(chat.post(db, "wrong model", urgent=True))
+    assert said["urgent"] is True
+    assert [m["_id"] for m in run(chat.interrupts(db))] == [said["_id"]]
+    # and it is still an ordinary unread line, so the idle wait sees it too
+    assert [m["_id"] for m in run(chat.unread(db))] == [said["_id"]]
+
+
+def test_an_ordinary_line_is_not_urgent():
+    db = FakeDb()
+    run(chat.post(db, "when you get a moment"))
+    assert run(chat.interrupts(db)) == []
+
+
+def test_reading_the_thread_quiets_an_urgent_line():
+    """It is printed by every command until somebody has read it; one that
+    stayed loud after being read would drown out the next one."""
+    db = FakeDb()
+    said = run(chat.post(db, "wrong model", urgent=True))
+    run(chat.mark_seen(db, [said["_id"]]))
+    assert run(chat.interrupts(db)) == []
+
+
+def test_the_agent_cannot_mark_its_own_words_urgent():
+    db = FakeDb()
+    mine = run(chat.post(db, "on it", role=chat.AGENT, urgent=True))
+    assert mine["urgent"] is False
+    assert run(chat.interrupts(db)) == []
