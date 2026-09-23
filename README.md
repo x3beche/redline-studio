@@ -58,6 +58,25 @@ Zero clash on its own means nothing — a plug 18 mm away in open air also
 clashes with nothing. The second line is the one that matters: a probe the
 size of the socket cavity, grown slightly, has to *hit* the shroud around it.
 
+## Four rooms, one loop
+
+The loop under this is not about geometry. Source lives in a database as
+text you can change a constant in; it is built into something you can look
+at; you freeze a view, mark it and leave a note; an agent picks the note
+up, edits the source, rebuilds, photographs it from the same angle and
+checks it against a measurement. A board and a running interface fit that
+as well as a solid does.
+
+| | |
+|---|---|
+| **3D Drawing** | parametric solids — this is what is built |
+| **PCB Design** | the same loop over a board: mark a trace on the render, DRC as the check that fails the build |
+| **Coding** | redlining a running interface: draw on what is on screen, the change arrives as a diff, the tests are the check |
+| **Analyze** | what all of it cost, across every revision rather than one card at a time |
+
+Three of them are tabs with the groundwork written down and nothing behind
+them yet. They say so.
+
 ## How it goes
 
 1. **Write a model.** Python and [build123d](https://github.com/gumyr/build123d);

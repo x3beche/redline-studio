@@ -24,6 +24,19 @@ Rules that are easy to get wrong:
 - rebuild, render from the revision's own camera, and look at it before
   calling it done.
 
+## The other three rooms
+
+The shell has tabs for PCB Design, Coding and Analyze, and each one says
+what it needs before it can open. The question that decides the PCB room
+is what its source is: text and parametric (atopile, SKiDL), where a
+change is an edit and the loop works as it does here — or KiCad's own
+files, which are machine-written S-expressions an agent cannot safely
+edit, leaving the loop half manual.
+
+Do not generalise the spine before the second room exists. Everything in
+here says `model`, `PARTS`, `viewer.json`; splitting that up on a guess
+about what a board needs would split it in the wrong places.
+
 ## App — further out
 - **Revisions applied before the machine meter existed show nothing** for
   compute. That is deliberate — better than claiming zero — but it means the

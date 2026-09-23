@@ -21,6 +21,8 @@ ROOT = Path(__file__).resolve().parent.parent
 CSS = ROOT / "frontend/src/styles.css"
 HTML = ROOT / "frontend/src/app/editor/editor.html"
 TS = ROOT / "frontend/src/app/editor/editor.ts"
+# The shell carries its own template, so it can leak a colour just as well.
+SHELL = ROOT / "frontend/src/app/app.ts"
 THEME_TS = ROOT / "frontend/src/theme.ts"
 
 # A hex colour, or an rgb()/rgba() with a number in it. `rgb(var(--x))`
@@ -141,6 +143,11 @@ def test_the_component_carries_no_colour_that_is_not_pigment():
     assert not found, "literal colours in editor.ts: " + str(found[:6])
 
 
+def test_the_shell_carries_no_colour_either():
+    found = literals(SHELL)
+    assert not found, "literal colours in app.ts: " + str(found[:6])
+
+
 def test_the_pens_are_exempt_on_purpose_and_still_there():
     """The exemption has to be earning its keep, or it is a hole."""
     text = TS.read_text()
@@ -152,7 +159,7 @@ def test_the_pens_are_exempt_on_purpose_and_still_there():
 def test_every_token_used_anywhere_is_defined_by_the_default_theme(css):
     base = set(defined(blocks(css)["default"]))
     everywhere = set()
-    for path in (CSS, HTML, TS):
+    for path in (CSS, HTML, TS, SHELL):
         everywhere |= used(strip_comments(path.read_text(),
                                           css=path.suffix == ".css"))
     # The viewer's own variables are read with a fallback and belong to it.
@@ -165,7 +172,7 @@ def test_no_token_is_defined_and_then_never_used(css):
     """Dead colours drift: they stop matching and nobody notices."""
     base = set(defined(blocks(css)["default"]))
     everywhere = set()
-    for path in (CSS, HTML, TS):
+    for path in (CSS, HTML, TS, SHELL):
         everywhere |= used(path.read_text())
     assert not (base - everywhere), \
         f"defined but unused: {sorted(base - everywhere)}"
@@ -202,7 +209,7 @@ TAILWIND = re.compile(
 
 
 def test_no_tailwind_colour_utility_slips_past_the_palette():
-    for path in (HTML, TS):
+    for path in (HTML, TS, SHELL):
         text = strip_comments(path.read_text(), css=False)
         found = TAILWIND.findall(text)
         assert not found, f"{path.name} uses Tailwind colours: {sorted(set(found))}"

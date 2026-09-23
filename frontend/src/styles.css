@@ -209,6 +209,39 @@
   --tcv-scrollbar-active: var(--scroll-active);
 }
 
+/* The shell's tabs. Flat until chosen: a row of raised buttons reads as a
+   toolbar, and these are rooms, not actions. */
+.tcv-tab {
+  padding: 5px 11px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  color: var(--ink-dim);
+  border: 1px solid transparent;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  transition: color .12s, background .12s, border-color .12s;
+}
+.tcv-tab:hover { color: var(--ink); background: var(--hover); }
+.tcv-tab[data-on="1"] {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
+  border-bottom-color: transparent;
+}
+/* The three that are not built say so on the tab, not only on the page. */
+.tcv-tab-soon {
+  margin-left: 6px;
+  padding: 1px 4px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+
 /* Single-screen app: the page never scrolls; scrolling happens inside panels. */
 html, body { height: 100%; overflow: hidden; }
 

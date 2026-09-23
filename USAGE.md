@@ -2,6 +2,17 @@
 
 [← back to the README](README.md) · [Install](INSTALL.md)
 
+## The rooms
+
+Along the top: **3D Drawing**, **PCB Design**, **Coding**, **Analyze**.
+Only the first is built; the other three open on what they need before
+they can exist. `?ws=pcb` in the URL opens one, and the browser remembers
+the last one you were in.
+
+The 3D room stays loaded whichever tab is showing — its viewer holds a
+WebGL context and tens of megabytes of geometry, and throwing that away to
+look at another tab would mean waiting for it again on the way back.
+
 ## The everyday loop
 
 1. Create a model with **+ Model** in the left column. A skeleton is generated.
