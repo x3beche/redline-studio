@@ -41,6 +41,30 @@ It exits 0 when there is work and 2 when it timed out. Without `--timeout` it
 waits as long as the session lasts, which is what you want: finish, start the
 watcher, and the next request picks you up on its own.
 
+## Ask on their screen, not in your terminal
+
+When you reach a fork that is not yours to choose - which print process a
+part is for, whether a shaft is bought or printed - ask. But the person who
+drew the revision is looking at the model in a browser, not at your log:
+
+```bash
+.venv/bin/python tools/revisions.py ask "Which print process is this for?" \
+  -o "FDM, 0.4 mm nozzle" -o "SLA / resin" \
+  -c "Five fits are sized for accurate manufacture and would fuse on FDM."
+```
+
+The question appears at the top of the right-hand column, the browser raises
+a notice, and the tab title says one is waiting. The command blocks and
+prints the answer when it comes, so the answer is simply its output.
+
+`-o` offers an answer and may be repeated; the form takes free text whichever
+way, because the real answer is often "neither, and here is why". `-c` is
+what you already know, so they are not made to reconstruct it. `--timeout N`
+withdraws the question and exits 2 rather than waiting for ever.
+
+Ask when the answer changes what you build. Do not ask what the drawing
+already says, and do not ask two questions where one would do.
+
 ## Only `queued` items are work
 
 | Status | Meaning |
@@ -56,6 +80,7 @@ Nothing counts as work until the user presses *queue*.
 ```bash
 .venv/bin/python tools/revisions.py queue                # what is queued
 .venv/bin/python tools/revisions.py wait                 # block until there is
+.venv/bin/python tools/revisions.py ask "..." -o A -o B  # ask on their screen
 .venv/bin/python tools/revisions.py show <id>            # write drawing to disk
 .venv/bin/python tools/revisions.py models               # list models
 .venv/bin/python tools/revisions.py source <model>       # print source

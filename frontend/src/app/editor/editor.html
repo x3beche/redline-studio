@@ -451,6 +451,46 @@
 
     @if (!queueShut()) {
 
+    <!-- A question means the agent has stopped and is waiting. It goes above
+         everything else, in the pen's own red, because nothing else on this
+         column is blocking anyone. -->
+    @for (q of questions(); track q._id) {
+      <div class="shrink-0 px-2 py-2"
+           style="border-bottom: 1px solid var(--line); background: rgba(255,45,63,.06)">
+        <div class="mb-1 flex items-center justify-between">
+          <span class="tcv-label" style="color: #ff2d3f">Agent is asking</span>
+          @if (notifyState() === 'default') {
+            <button (click)="enableNotices()" class="tcv-chip"
+                    title="let the browser raise a notice next time, so you
+                           do not have to watch this tab">notify me</button>
+          }
+        </div>
+        <p class="mb-1.5" style="color: var(--ink)">{{ q.text }}</p>
+        @if (q.context) {
+          <p class="mb-1.5 text-[11px]" style="color: var(--ink-dim)">{{ q.context }}</p>
+        }
+        @if (q.options.length) {
+          <div class="mb-1.5 flex flex-wrap gap-1">
+            @for (o of q.options; track o) {
+              <button (click)="pickOption(q, o)" class="tcv-chip"
+                      [style.border-color]="answerPicked().has(o) ? '#ff2d3f' : null">
+                {{ o }}
+              </button>
+            }
+          </div>
+        }
+        <!-- Free text always: the answer to "which of these?" is often
+             "neither, and here is why". -->
+        <textarea rows="2" [value]="answerText()"
+                  (input)="answerText.set($any($event.target).value)"
+                  placeholder="or answer in your own words"
+                  class="tcv-field w-full resize-none p-1.5"></textarea>
+        <button (click)="sendAnswer(q)" class="tcv-btn tcv-btn-accent mt-1.5 w-full py-1">
+          Send answer
+        </button>
+      </div>
+    }
+
     <div class="px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
       <label class="tcv-label mb-1 block">Part</label>
       <select [value]="part()" (change)="part.set($any($event.target).value)"

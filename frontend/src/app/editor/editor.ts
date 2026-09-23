@@ -17,7 +17,7 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Activity, Analytics, Api, CameraState, Catalog, Health, LogLine, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
+import { Activity, Analytics, Api, CameraState, Catalog, Health, LogLine, Question, Questions, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer } from './ocp';
 
@@ -41,6 +41,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private cat = inject(Catalog);
   private health = inject(Health);
   private activity = inject(Activity);
+  private asks = inject(Questions);
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private overlay = viewChild.required<ElementRef<HTMLCanvasElement>>('overlay');
   private stage = viewChild.required<ElementRef<HTMLDivElement>>('stage');
@@ -89,6 +90,13 @@ export class Editor implements AfterViewInit, OnDestroy {
   editPart = signal('');
   editSummary = signal('');
   sys = signal<SystemInfo | null>(null);
+  /** What the agent is waiting on, and what is being typed back. */
+  questions = signal<Question[]>([]);
+  answerText = signal('');
+  answerPicked = signal<Set<string>>(new Set());
+  notifyState = signal<'unsupported' | 'default' | 'granted' | 'denied'>('default');
+  private askedAlready = new Set<string>();
+  private plainTitle = 'Redline';
   color = signal('#ff2d3f');
   penWidth = signal(4);
   tool = signal<Tool>('pen');
@@ -164,6 +172,7 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   pollHealth() {
     this.health.stats().subscribe({ next: v => this.stats.set(v), error: () => {} });
+    this.asks.open().subscribe({ next: v => this.takeQuestions(v), error: () => {} });
     this.health.system().subscribe({ next: v => this.sys.set(v), error: () => {} });
     this.activity.run().subscribe({
       next: v => {
@@ -299,6 +308,67 @@ export class Editor implements AfterViewInit, OnDestroy {
   gb(n: number): string { return (n / 1e9).toFixed(1) + ' GB'; }
 
   /** Compact gauges shown while the panel is collapsed. */
+  /** A question is the agent standing still, so it has to reach the person
+   *  even when the tab is in the background: the title carries it, and the
+   *  browser is asked to raise a notice once per question. */
+  private takeQuestions(rows: Question[]) {
+    const before = this.questions().map(q => q._id).join(',');
+    this.questions.set(rows);
+    if (rows.map(q => q._id).join(',') === before) return;
+    this.answerPicked.set(new Set());
+
+    document.title = rows.length ? `● ${rows.length} question${rows.length === 1 ? '' : 's'} · ${this.plainTitle}`
+                                 : this.plainTitle;
+    if (!('Notification' in window)) { this.notifyState.set('unsupported'); return; }
+    this.notifyState.set(Notification.permission as 'default' | 'granted' | 'denied');
+    if (Notification.permission !== 'granted') return;
+    for (const q of rows) {
+      if (this.askedAlready.has(q._id)) continue;
+      this.askedAlready.add(q._id);
+      try {
+        const n = new Notification('Redline needs an answer', {
+          body: q.text.slice(0, 180), tag: q._id, icon: '/favicon.svg',
+        });
+        n.onclick = () => { window.focus(); n.close(); };
+      } catch { /* the browser refused; the card still shows it */ }
+    }
+  }
+
+  /** Permission cannot be asked for out of the blue - browsers want a
+   *  gesture - so the card offers it and this runs on the click. */
+  async enableNotices() {
+    if (!('Notification' in window)) return;
+    try {
+      this.notifyState.set(await Notification.requestPermission() as any);
+    } catch { /* ignore */ }
+  }
+
+  pickOption(q: Question, opt: string) {
+    const next = new Set(q.multi ? this.answerPicked() : []);
+    if (next.has(opt)) next.delete(opt); else next.add(opt);
+    this.answerPicked.set(next);
+    if (!q.multi) this.sendAnswer(q, opt);
+  }
+
+  /** Whatever was typed wins over whatever was clicked: an option list is a
+   *  convenience, and the real answer is often "neither, because...". */
+  sendAnswer(q: Question, chosen?: string) {
+    const typed = this.answerText().trim();
+    const picked = [...this.answerPicked()].join(', ');
+    const answer = typed || chosen || picked;
+    if (!answer) return;
+    this.asks.answer(q._id, answer).subscribe({
+      next: () => {
+        this.answerText.set('');
+        this.answerPicked.set(new Set());
+        this.questions.update(list => list.filter(x => x._id !== q._id));
+        if (!this.questions().length) document.title = this.plainTitle;
+        this.flash('answered');
+      },
+      error: () => this.flash('could not send the answer'),
+    });
+  }
+
   gauges(): { key: string; short: string; pct: number; tip: string }[] {
     const st = this.stats(), m = this.sys();
     const out: { key: string; short: string; pct: number; tip: string }[] = [];

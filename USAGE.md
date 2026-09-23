@@ -238,6 +238,43 @@ log at the bottom:
 `finish` closes the run, takes the after picture from the revision's own camera
 and freezes what the work cost onto the card.
 
+## When the agent asks
+
+An agent applying a revision sometimes reaches a fork that is not its to
+choose: which print process the part is for, whether a shaft is bought or
+printed. It stops and asks, and the question arrives where you already are —
+at the top of the right-hand column, in the pen's red, with whatever it
+already worked out underneath:
+
+```
+AGENT IS ASKING                                    notify me
+Which print process is this part for? It decides one PRINT_FIT
+constant that every clearance derives from.
+
+Five fits are currently sized for accurate manufacture and would
+fuse on an FDM machine: button cap 0.15/side, lid 0.15, light
+pipe 0.05, pivot hole 0.1, adapter arm literally 0.
+
+[ FDM, 0.4 mm nozzle ]  [ SLA / resin ]
+```
+
+The offered answers are a convenience; the box below them always takes free
+text, because the real answer is often "neither, and here is why" — and what
+you type wins over what you clicked.
+
+The tab title carries a dot and a count while anything is waiting, so a
+background tab still shows it. **notify me** asks the browser for permission
+to raise a notice, which it can only do from a click — after that each new
+question raises one.
+
+On the agent's side it is one blocking command, so the answer is simply its
+output:
+
+```bash
+.venv/bin/python tools/revisions.py ask "Which print process?" \
+  -o "FDM, 0.4 mm nozzle" -o "SLA / resin" -c "what it already knows"
+```
+
 ## What a revision cost
 
 Two meters, kept apart.
@@ -310,6 +347,8 @@ station, 63.7 MB artifact
 | `POST /api/revisions/english` | translate every revision that has no English text |
 | `DELETE /api/revisions/{id}` | delete a revision and its image |
 | `GET /api/revisions/{id}/analytics[?live=true]` | what that revision cost, models and machine |
+| `GET /api/questions` · `POST /api/questions` | what the agent is waiting on; ask something |
+| `POST /api/questions/{id}/answer` · `DELETE /api/questions/{id}` | answer it; withdraw it |
 | `POST /api/usage/ingest` · `GET /api/usage/prices` | re-read the transcripts; the rate card |
 | `POST /api/versions` · `POST /api/versions/{id}/restore` | snapshot / roll back |
 | `GET /api/stats` · `GET /api/system` | database usage, CPU/RAM/GPU |

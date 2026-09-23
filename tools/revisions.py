@@ -117,6 +117,41 @@ async def cmd_wait(args):
         waited += args.every
 
 
+async def cmd_ask(args):
+    """Put a question on the person's screen and wait for the answer.
+
+    The terminal is the wrong place to ask: the person who drew the revision
+    is looking at the model in a browser, not at your log. This writes the
+    question to the database, where the page picks it up, notifies, and
+    writes the answer back.
+
+    Blocks, like `wait` does, so the answer is simply the command's output.
+    """
+    import time as _time
+
+    from backend import questions
+
+    db = connect()
+    doc = await questions.ask(db, args.text, args.option, args.revision,
+                              args.context, args.multi)
+    print(f"asked: {doc['_id']}")
+    if doc["options"]:
+        print("options: " + " | ".join(doc["options"]))
+    print("waiting for an answer on screen...")
+
+    deadline = _time.monotonic() + args.timeout if args.timeout else None
+    while True:
+        cur = await questions.get(db, doc["_id"])
+        if cur and cur.get("status") == questions.ANSWERED:
+            print(f"\nanswer: {cur['answer']}")
+            return
+        if deadline and _time.monotonic() > deadline:
+            await questions.drop(db, doc["_id"])
+            print(f"\nno answer after {args.timeout}s - question withdrawn")
+            sys.exit(2)
+        await asyncio.sleep(args.every)
+
+
 async def cmd_show(args):
     from backend import store
 
@@ -375,6 +410,21 @@ def main() -> None:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("queue").set_defaults(fn=cmd_queue)
+    s = sub.add_parser("ask", help="ask the person a question on their screen")
+    s.add_argument("text", help="the question, in one or two sentences")
+    s.add_argument("-o", "--option", action="append",
+                   help="an answer to offer; repeat for more. The form still "
+                        "takes free text either way")
+    s.add_argument("-c", "--context",
+                   help="what you already know, so they need not reconstruct it")
+    s.add_argument("--multi", action="store_true",
+                   help="several options may be picked")
+    s.add_argument("--revision", help="the revision this is about")
+    s.add_argument("--every", type=int, default=3,
+                   help="seconds between checks (default 3)")
+    s.add_argument("--timeout", type=int, default=0,
+                   help="withdraw the question after N seconds; 0 waits")
+    s.set_defaults(fn=cmd_ask)
     s = sub.add_parser("wait", help="block until a revision is queued")
     s.add_argument("--every", type=int, default=30,
                    help="seconds between checks (default 30)")

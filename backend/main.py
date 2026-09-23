@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import build, store, summarise, sysinfo, usage, versions
+from . import build, questions, store, summarise, sysinfo, usage, versions
 
 LOG = logging.getLogger("x3.api")
 
@@ -820,6 +820,46 @@ async def put_settings(auto_archive: bool | None = None,
         await db().settings.update_one({"_id": SETTINGS_ID}, {"$set": patch},
                                        upsert=True)
     return await get_settings()
+
+
+# ---------------- questions ----------------
+class QuestionIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    context: str | None = Field(default=None, max_length=4000)
+    options: list[str] = Field(default_factory=list)
+    multi: bool = False
+    revision: str | None = None
+
+
+class AnswerIn(BaseModel):
+    answer: str = Field(min_length=1, max_length=4000)
+
+
+@app.get("/api/questions")
+async def list_questions():
+    """What the agent is waiting on. The page polls this with the health."""
+    return await questions.open_questions(db())
+
+
+@app.post("/api/questions")
+async def create_question(body: QuestionIn):
+    return await questions.ask(db(), body.text, body.options, body.revision,
+                               body.context, body.multi)
+
+
+@app.post("/api/questions/{qid}/answer")
+async def answer_question(qid: str, body: AnswerIn):
+    doc = await questions.answer(db(), qid, body.answer)
+    if not doc:
+        raise HTTPException(404, "no open question with that id")
+    return doc
+
+
+@app.delete("/api/questions/{qid}")
+async def drop_question(qid: str):
+    if not await questions.drop(db(), qid):
+        raise HTTPException(404, "no open question with that id")
+    return {"id": qid, "status": questions.DROPPED}
 
 
 @app.patch("/api/revisions/{rid}/archive")

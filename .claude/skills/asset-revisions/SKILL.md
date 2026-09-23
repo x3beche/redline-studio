@@ -154,6 +154,12 @@ takes the after picture and freezes what the work cost - tokens, time and
 money at list price - onto the card. Those numbers come from your own
 transcripts; `revisions.py usage` re-reads them if a run ended badly.
 
+A fork that is not yours to choose goes to their screen, not to your log:
+`revisions.py ask "..." -o "one" -o "another" -c "what you already know"`.
+It blocks, the page shows it with a browser notice, and the answer comes
+back as the command's output. `--timeout` withdraws it instead of waiting
+for ever.
+
 When the work is closed, do not wait to be asked for the next one. Put
 `revisions.py wait` in the background and let the turn end: it checks the
 queue every thirty seconds and returns as soon as anything is queued, which
@@ -237,7 +243,8 @@ If the tool is not enough, the collections are `revisions`, `models`,
 `folders`, `model_versions`, `uploads`, `settings`, `runs` (one row per
 revision worked on, plus `current`), `activity` (the on-screen log),
 `llm_calls` and `analytics` (what each revision cost), `compute_jobs` (one
-row per build or render: CPU, peak memory, disk). The GridFS buckets are
+row per build or render: CPU, peak memory, disk), `questions` (what the
+agent is waiting on). The GridFS buckets are
 `model_files` (generated artifacts, gzipped), `shots` (revision images before
 and after) and `uploads` (imported STEP/STL). The connection string is
 `MONGODB_URI` in `.env`.

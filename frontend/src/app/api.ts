@@ -296,6 +296,34 @@ export class Health {
   system(): Observable<SystemInfo> { return this.http.get<SystemInfo>('/api/system'); }
 }
 
+// ---------------- questions the agent is waiting on ----------------
+/** An agent applying a revision sometimes reaches a fork that is not its
+ *  to choose. It writes the question here and blocks; the page answers. */
+export interface Question {
+  _id: string;
+  at: string;
+  text: string;
+  /** What the agent already knows, so the reader need not reconstruct it. */
+  context: string | null;
+  /** Offered answers. The form takes free text whether or not these exist. */
+  options: string[];
+  multi: boolean;
+  revision: string | null;
+  status: 'open' | 'answered' | 'dropped';
+  answer: string | null;
+}
+
+@Injectable({ providedIn: 'root' })
+export class Questions {
+  private http = inject(HttpClient);
+  open(): Observable<Question[]> {
+    return this.http.get<Question[]>('/api/questions');
+  }
+  answer(id: string, answer: string): Observable<Question> {
+    return this.http.post<Question>(`/api/questions/${id}/answer`, { answer });
+  }
+}
+
 // ---------------- activity log and run progress ----------------
 export interface LogLine {
   _id: string; at: string; text: string;

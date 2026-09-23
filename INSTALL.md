@@ -52,6 +52,7 @@ a model is built and removed as soon as the build finishes.
 | `activity` | the log shown at the bottom of the screen |
 | `llm_calls`, `analytics` | what each revision cost in tokens and money |
 | `compute_jobs` | one row per build or render: CPU, peak memory, disk |
+| `questions` | what the agent asked and what was answered |
 | `model_files` (GridFS) | generated viewer JSON / STEP / STL, gzipped |
 | `shots` (GridFS) | revision images, before and after |
 | `uploads` (GridFS) | imported STEP / IGES / BREP / STL / 3MF |
