@@ -204,6 +204,92 @@
   <ng-content select="[tabs]"></ng-content>
   <div class="relative flex min-h-0 min-w-0 flex-1 gap-2">
 
+  <!-- THE AGENT'S QUESTION
+       It stops the agent, so it stops the screen: a card in the middle
+       with room for what was measured. Written in Markdown and rendered
+       as Markdown - a question with two options and the numbers behind
+       them is a list and a table, and those do not survive being one
+       long line in a column. -->
+  @if (asking(); as q) {
+    <div class="fixed inset-0 flex items-center justify-center p-6"
+         style="background: var(--scrim); z-index: 1200">
+      <div class="tcv-card flex max-h-[84vh] w-[min(46rem,90vw)] flex-col overflow-hidden">
+        <div class="flex shrink-0 items-center gap-2 px-4 py-2.5"
+             style="border-bottom: 1px solid var(--line); background: var(--pen-wash)">
+          <span class="tcv-label" style="color: var(--pen)">Agent is asking</span>
+          @if (questions().length > 1) {
+            <span class="mono text-[11px]" style="color: var(--ink-dim)">
+              1 of {{ questions().length }}
+            </span>
+          }
+          <div class="ml-auto flex items-center gap-1.5">
+            @if (notifyState() === 'default') {
+              <button (click)="enableNotices()" class="tcv-chip"
+                      title="let the browser raise a notice next time, so you
+                             do not have to watch this tab">notify me</button>
+            }
+            <button (click)="askLater()" class="tcv-chip"
+                    title="put it back in the column - the agent is still
+                           waiting either way">later</button>
+          </div>
+        </div>
+
+        <div class="min-h-0 flex-1 overflow-auto px-4 py-3">
+          <div class="md" [innerHTML]="q.text | md"></div>
+          @if (q.context) {
+            <!-- What the agent already knows, so nobody has to reconstruct
+                 it. Quieter than the question itself. -->
+            <div class="md mt-3 text-[12px]" style="color: var(--ink-dim)"
+                 [innerHTML]="q.context | md"></div>
+          }
+        </div>
+
+        <div class="shrink-0 px-4 py-3" style="border-top: 1px solid var(--line)">
+          @if (q.options.length) {
+            <div class="mb-2 flex flex-wrap gap-1.5">
+              @for (o of q.options; track o) {
+                <button (click)="pickOption(q, o)" class="tcv-chip text-left"
+                        [style.border-color]="answerPicked().has(o) ? 'var(--pen)' : null">
+                  {{ o }}
+                </button>
+              }
+            </div>
+          }
+          <!-- Free text always: the answer to "which of these?" is often
+               "neither, and here is why". -->
+          <textarea rows="3" [value]="answerText()"
+                    (input)="answerText.set($any($event.target).value)"
+                    placeholder="or answer in your own words"
+                    class="tcv-field w-full resize-none p-2"></textarea>
+          <button (click)="sendAnswer(q)"
+                  class="tcv-btn tcv-btn-accent mt-2 w-full py-1.5">
+            Send answer
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Put aside, not dismissed. It sits in the corner rather than in a
+       column, because a room covers those and a fold can hide them - and
+       a question nobody can find is a stopped agent nobody can find. -->
+  @if (!asking() && waiting().length) {
+    <button (click)="openAsk()"
+            class="tcv-card fixed bottom-3 right-3 flex max-w-[26rem] items-center gap-2 px-3 py-2 text-left"
+            style="z-index: 900; border-color: var(--pen)">
+      <span class="tcv-label shrink-0" style="color: var(--pen)">Agent is asking</span>
+      <span class="min-w-0 flex-1 truncate text-[12px]">
+        {{ oneLine(waiting()[0].text) }}
+      </span>
+      @if (waiting().length > 1) {
+        <span class="mono shrink-0 text-[11px]" style="color: var(--ink-dim)">
+          +{{ waiting().length - 1 }}
+        </span>
+      }
+      <span class="tcv-chip shrink-0">answer</span>
+    </button>
+  }
+
   <!-- enlarged revision drawing -->
   @if (preview(); as pv) {
     <div (click)="closeShot()"
@@ -471,46 +557,6 @@
 
     @if (!queueShut()) {
 
-    <!-- A question means the agent has stopped and is waiting. It goes above
-         everything else, in the pen's own red, because nothing else on this
-         column is blocking anyone. -->
-    @for (q of questions(); track q._id) {
-      <div class="shrink-0 px-2 py-2"
-           style="border-bottom: 1px solid var(--line); background: var(--pen-wash)">
-        <div class="mb-1 flex items-center justify-between">
-          <span class="tcv-label" style="color: var(--pen)">Agent is asking</span>
-          @if (notifyState() === 'default') {
-            <button (click)="enableNotices()" class="tcv-chip"
-                    title="let the browser raise a notice next time, so you
-                           do not have to watch this tab">notify me</button>
-          }
-        </div>
-        <p class="mb-1.5" style="color: var(--ink)">{{ q.text }}</p>
-        @if (q.context) {
-          <p class="mb-1.5 text-[11px]" style="color: var(--ink-dim)">{{ q.context }}</p>
-        }
-        @if (q.options.length) {
-          <div class="mb-1.5 flex flex-wrap gap-1">
-            @for (o of q.options; track o) {
-              <button (click)="pickOption(q, o)" class="tcv-chip"
-                      [style.border-color]="answerPicked().has(o) ? 'var(--pen)' : null">
-                {{ o }}
-              </button>
-            }
-          </div>
-        }
-        <!-- Free text always: the answer to "which of these?" is often
-             "neither, and here is why". -->
-        <textarea rows="2" [value]="answerText()"
-                  (input)="answerText.set($any($event.target).value)"
-                  placeholder="or answer in your own words"
-                  class="tcv-field w-full resize-none p-1.5"></textarea>
-        <button (click)="sendAnswer(q)" class="tcv-btn tcv-btn-accent mt-1.5 w-full py-1">
-          Send answer
-        </button>
-      </div>
-    }
-
     <div class="px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
       <label class="tcv-label mb-1 block">Part</label>
       <select [value]="part()" (change)="part.set($any($event.target).value)"
@@ -708,7 +754,7 @@
     <div (click)="openBoard(b)"
          class="group relative flex cursor-pointer items-center justify-between rounded px-1.5 py-1"
          [style.margin-left.px]="depth * 10"
-         [style.background]="openedBoard() === b.id ? 'var(--accent-deep)' : 'transparent'">
+         [style.background]="inView(b.id, 'board') ? 'var(--accent-deep)' : 'transparent'">
       @if (b.building) {
         <span class="tcv-building absolute inset-x-1 bottom-0 h-[2px] overflow-hidden rounded"></span>
       }
@@ -723,13 +769,28 @@
         @if (!b.ready) { <span style="color: var(--warn)" title="not built yet"> ·</span> }
         @else if (b.stale) { <span style="color: var(--warn)" title="source changed, rebuild"> *</span> }
       </span>
+      <!-- The same two controls a model has. A board is a file in the same
+           tree; it would be strange for one to be movable and the other
+           not. There is no ↻ because a board builds in its own room. -->
+      <span class="ml-1 flex shrink-0 gap-1.5 text-[11px]"
+            [class.opacity-0]="moving()?.id !== b.id"
+            [class.group-hover:opacity-100]="true">
+        <button (click)="armMoveBoard(b, $event)"
+                [style.color]="moving()?.id === b.id ? 'var(--warn)' : 'var(--ink-dim)'"
+                title="move to another folder">&#8594;</button>
+        <button (click)="armDeleteBoard(b, $event)"
+                [style.color]="deleting() === b.id ? 'var(--danger)' : 'var(--ink-dim)'"
+                [title]="deleting() === b.id ? 'click again to delete' : 'delete'">
+          {{ deleting() === b.id ? 'sure?' : '×' }}
+        </button>
+      </span>
     </div>
   }
   @for (m of n.models; track m.id) {
-    <div (click)="openModel(m)"
+    <div (click)="pickModel(m)"
          class="group relative flex cursor-pointer items-center justify-between rounded px-1.5 py-1"
          [style.margin-left.px]="depth * 10"
-         [style.background]="activeModel() === m.id ? 'var(--accent-deep)' : 'transparent'">
+         [style.background]="inView(m.id, 'model') ? 'var(--accent-deep)' : 'transparent'">
       <!-- A build takes minutes and can be started from the command line;
            without this the page looks idle while the machine is working. -->
       @if (m.building) {

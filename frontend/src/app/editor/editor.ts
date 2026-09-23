@@ -1,5 +1,6 @@
 import {
-  AfterViewInit, Component, ElementRef, OnDestroy, inject, signal, viewChild,
+  AfterViewInit, Component, ElementRef, OnDestroy, computed, inject, signal,
+  viewChild,
 } from '@angular/core';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 const SEED = `"""__NAME__ - a build123d model."""
@@ -17,9 +18,10 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Activity, Analytics, Api, CameraState, Catalog, Chat, ChatLine, Health, LogLine, Question, Questions, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
+import { Activity, Analytics, Api, Boards, CameraState, Catalog, Chat, ChatLine, Health, LogLine, Question, Questions, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer } from './ocp';
+import { Markdown, plain } from '../markdown';
 import { Selection } from '../selection';
 
 export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'text';
@@ -34,7 +36,7 @@ type Mark =
 
 @Component({
   selector: 'app-editor',
-  imports: [DecimalPipe, NgTemplateOutlet],
+  imports: [DecimalPipe, Markdown, NgTemplateOutlet],
   templateUrl: './editor.html',
 })
 export class Editor implements AfterViewInit, OnDestroy {
@@ -45,6 +47,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private picked = inject(Selection);
   private asks = inject(Questions);
   private chat = inject(Chat);
+  private boards = inject(Boards);
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private overlay = viewChild.required<ElementRef<HTMLCanvasElement>>('overlay');
   private stage = viewChild.required<ElementRef<HTMLDivElement>>('stage');
@@ -120,6 +123,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   chatOpen = signal(true);
   answerText = signal('');
   answerPicked = signal<Set<string>>(new Set());
+  /** Questions put aside for a minute. They do not go away. */
+  private setAside = signal<Set<string>>(new Set());
   notifyState = signal<'unsupported' | 'default' | 'granted' | 'denied'>('default');
   private askedAlready = new Set<string>();
   private plainTitle = 'Redline';
@@ -439,6 +444,30 @@ export class Editor implements AfterViewInit, OnDestroy {
     }
   }
 
+  /** The question that is in the way, if any.
+   *
+   *  One at a time, and in the middle of the screen: a question worth
+   *  stopping the agent for is two paragraphs of what was measured and
+   *  the options that follow from it, and a 200 px column turns that into
+   *  a scroll bar. *Later* puts it back in the column without answering
+   *  it - the agent is still waiting either way. */
+  asking = computed(() =>
+    this.questions().find(q => !this.setAside().has(q._id)) ?? null);
+
+  /** Put aside and still unanswered. The agent is waiting on these. */
+  waiting = computed(() =>
+    this.questions().filter(q => this.setAside().has(q._id)));
+
+  openAsk() { this.setAside.set(new Set()); }
+
+  askLater() {
+    const q = this.asking();
+    if (q) this.setAside.update(s => new Set(s).add(q._id));
+  }
+
+  /** The question with its marks taken off, for the strip in the column. */
+  oneLine(text: string) { return plain(text); }
+
   /** Permission cannot be asked for out of the blue - browsers want a
    *  gesture - so the card offers it and this runs on the click. */
   async enableNotices() {
@@ -683,25 +712,43 @@ export class Editor implements AfterViewInit, OnDestroy {
   // ---- left column: move and delete ----
   // Two clicks rather than drag and drop: pick the model, then pick the
   // folder. Works the same on a trackpad and is testable.
-  moving = signal<ModelEntry | null>(null);
+  /** What is in hand. A model and a board are picked up and put down the
+   *  same way; where they land differs, because a model's id is its path
+   *  and a board's is not. */
+  moving = signal<{ id: string; title: string; board?: boolean } | null>(null);
 
   armMove(m: ModelEntry, ev: Event) {
     ev.stopPropagation();
-    this.moving.set(this.moving()?.id === m.id ? null : m);
+    this.moving.set(this.moving()?.id === m.id
+      ? null : { id: m.id, title: m.title });
+  }
+
+  armMoveBoard(b: { id: string; title: string }, ev: Event) {
+    ev.stopPropagation();
+    this.moving.set(this.moving()?.id === b.id
+      ? null : { id: b.id, title: b.title, board: true });
   }
 
   cancelMove() { this.moving.set(null); }
 
   moveTo(folder: string, ev?: Event) {
     ev?.stopPropagation();
-    const m = this.moving();
-    if (!m) return;
+    const it = this.moving();
+    if (!it) return;
     this.moving.set(null);
-    this.cat.move(m.id, folder).subscribe({
+    const said = `${it.title} -> ${folder || 'root'}`;
+    if (it.board) {
+      this.boards.move(it.id, folder).subscribe({
+        next: () => { this.flash(said); this.loadCatalog(); },
+        error: e => this.flash(e.error?.detail ?? 'move failed'),
+      });
+      return;
+    }
+    this.cat.move(it.id, folder).subscribe({
       next: r => {
-        this.flash(`${m.title} -> ${folder || 'root'}`);
+        this.flash(said);
         // The id carries the path, so the open model is now under a new one.
-        if (this.activeModel() === m.id) this.activeModel.set(r.to);
+        if (this.activeModel() === it.id) this.activeModel.set(r.to);
         this.loadCatalog();
       },
       error: e => this.flash(e.error?.detail ?? 'move failed'),
@@ -733,6 +780,25 @@ export class Editor implements AfterViewInit, OnDestroy {
           this.flash(detail);
         }
       },
+    });
+  }
+
+  armDeleteBoard(b: { id: string; title: string }, ev: Event) {
+    ev.stopPropagation();
+    clearTimeout(this.deleteTimer);
+    if (this.deleting() !== b.id) {
+      this.deleting.set(b.id);
+      this.deleteTimer = setTimeout(() => this.deleting.set(null), 4000);
+      return;
+    }
+    this.deleting.set(null);
+    this.boards.drop(b.id).subscribe({
+      next: () => {
+        this.flash(b.title + ' deleted');
+        if (this.openedBoard() === b.id) this.picked.board.set(null);
+        this.loadCatalog();
+      },
+      error: e => this.flash(e.error?.detail ?? 'could not delete'),
     });
   }
 
@@ -1421,8 +1487,27 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** Which board the PCB room is showing, so the tree can mark it. */
   openedBoard(): string | null { return this.picked.board(); }
 
+  /** The one row the catalog marks: whatever the room on screen is
+   *  showing. Both can be loaded at once - the 3D room keeps its model
+   *  while you are in the board room - but only one of them is what you
+   *  are looking at, so only one of them is lit. */
+  inView(id: string, kind: 'model' | 'board'): boolean {
+    const room = this.picked.room();
+    return kind === 'board'
+      ? room === 'pcb' && this.picked.board() === id
+      : room === 'cad' && this.activeModel() === id;
+  }
+
   /** A .pcb belongs to the board room; opening one goes there. */
   openBoard(b: { id: string }) { this.picked.openBoard(b.id); }
+
+  /** And a .3d belongs to this one. Only from the tree: openModel also
+   *  runs at startup and after a rebuild, and moving somebody out of the
+   *  room they are working in because a build finished would be rude. */
+  pickModel(m: ModelEntry) {
+    this.picked.room.set('cad');
+    this.openModel(m);
+  }
 
   isFolded(id: string): boolean { return this.collapsed_().has(id); }
 

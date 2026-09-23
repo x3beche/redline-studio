@@ -202,7 +202,13 @@ and a part number that does not exist says so the same way.
 ## The left column
 
 Hovering a row shows what can be done with it: a model has **→** (move), **↻**
-(rebuild) and **×** (delete); a folder has **+M**, **+K** and **×**.
+(rebuild) and **×** (delete); a board has **→** and **×**, since it builds in
+its own room; a folder has **+M**, **+K** and **×**.
+
+Clicking a file opens the room that can show it — a `.pcb` goes to PCB
+Design, a `.3d` to 3D Drawing — and the lit row is whatever the room on
+screen is showing. Both can be loaded at once; only one of them is what
+you are looking at.
 
 Deleting takes two clicks — the first arms the row, the second does it. No
 dialog: a `confirm()` freezes the page and cannot be driven in a test.
@@ -212,7 +218,9 @@ the folder, or *to root* in the strip that appears. A folder deletes only when
 it holds nothing; the server refuses otherwise and says so.
 
 A model's id carries its folder, so moving one renames it and its revisions
-follow. Assemblies keep working: during a build every model is also written
+follow. A board's does not: it keeps its id and its history — the netlist,
+the layout, every job filed against it — and only the folder it is listed
+under changes. Assemblies keep working: during a build every model is also written
 under its bare name while that name is unambiguous, so `import stand` still
 resolves after `stand` moves into `parts/`.
 
@@ -366,21 +374,21 @@ what you get back is the agent saying what it did.
 
 An agent applying a revision sometimes reaches a fork that is not its to
 choose: which print process the part is for, whether a shaft is bought or
-printed. It stops and asks, and the question arrives where you already are —
-at the top of the right-hand column, in the pen's red, with whatever it
-already worked out underneath:
+printed. It stops and asks, and because it has stopped, the question stops the
+screen: a card in the middle of it, in the pen's red, with whatever the
+agent already worked out underneath.
 
-```
-AGENT IS ASKING                                    notify me
-Which print process is this part for? It decides one PRINT_FIT
-constant that every clearance derives from.
+It is written in Markdown and rendered as Markdown — a question worth
+stopping for usually carries a measurement, two options and the reasoning
+between them, and that reads as a list or a table or it does not read at
+all. Headings, emphasis, code, lists, quotes, tables and links all work;
+`tests/test_markdown.py` runs the renderer and checks them, and that
+nothing in the text can become a tag.
 
-Five fits are currently sized for accurate manufacture and would
-fuse on an FDM machine: button cap 0.15/side, lid 0.15, light
-pipe 0.05, pivot hole 0.1, adapter arm literally 0.
-
-[ FDM, 0.4 mm nozzle ]  [ SLA / resin ]
-```
+**later** puts it back in the left-hand column as one line, so you can go
+and look at the model before answering. The agent is waiting either way —
+nothing is dismissed, only moved — and **answer** on that line brings it
+back.
 
 The offered answers are a convenience; the box below them always takes free
 text, because the real answer is often "neither, and here is why" — and what
@@ -395,8 +403,12 @@ On the agent's side it is one blocking command, so the answer is simply its
 output:
 
 ```bash
-.venv/bin/python tools/revisions.py ask "Which print process?" \
-  -o "FDM, 0.4 mm nozzle" -o "SLA / resin" -c "what it already knows"
+.venv/bin/python tools/revisions.py ask "**The 18650 does not fit** - 7 mm short.
+
+| option | the product |
+|---|---|
+| taller | grows 7.1 mm |
+| deeper | unchanged |" -o "taller" -o "deeper"
 ```
 
 ## Themes
