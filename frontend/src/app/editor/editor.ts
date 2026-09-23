@@ -1029,11 +1029,15 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   /** The energy figure is a guess and has to look like one. */
-  energyNote(e: { basis: string; watts_per_core: number | null } | undefined): string {
+  energyNote(e: { basis: string; watts_per_core: number | null;
+                  watts_gpu?: number | null } | undefined): string {
     if (!e) return '';
-    return e.basis === 'measured'
-      ? 'read from the machine\u2019s own energy counter'
-      : `assumed: ${e.watts_per_core} W per busy core, no readable power counter`;
+    if (e.basis === 'measured') return 'read from the machine\u2019s own energy counter';
+    const gpu = e.watts_gpu
+      ? `, and ${e.watts_gpu} W of GPU while it was busy \u2014 the card\u2019s `
+        + 'rated limit, because it reports no live draw'
+      : '';
+    return `assumed: ${e.watts_per_core} W per busy core${gpu}`;
   }
 
   /** Tokens per second at the busiest bucket, for the chart's scale label. */

@@ -34,6 +34,7 @@ the API key are read by the **backend only** and never reach the browser.
 | `X3_BUILD_MEM` | `6G` | memory ceiling a build may use before the kernel kills it |
 | `X3_CACHE` | `.cache/artifacts` | where generated artifacts are kept on disk |
 | `X3_WATTS_PER_CORE` | `8.0` | assumed power of one busy core, for the energy figure on a revision card |
+| `X3_WATTS_GPU` | the card's rated limit | assumed power of the GPU while it is busy; nvidia-smi reports no live draw on many cards |
 | `X3_KWH_PRICE` | — | electricity price in USD/kWh; unset means the card shows energy and no money |
 | `X3_TRANSCRIPTS` | `-mnt-ssd-3d-arena*` | which agent transcript folders the token analytics read |
 

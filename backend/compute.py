@@ -43,6 +43,8 @@ from __future__ import annotations
 import asyncio
 import os
 import resource
+import shutil
+import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -65,6 +67,10 @@ KWH_PRICE: float | None = float(_price) if _price else None
 WATTS_PER_CORE = float(os.environ.get("X3_WATTS_PER_CORE", 8.0))
 WATTS_BASIS = ("measured" if os.environ.get("X3_WATTS_PER_CORE")
                else "assumed")
+
+# Filled on first use: asking the driver costs a subprocess, and a machine
+# with no card should not pay it on every roll-up.
+_WATTS_GPU: float | None = None
 
 RAPL = Path("/sys/class/powercap/intel-rapl:0/energy_uj")
 
@@ -99,20 +105,122 @@ def machine_cpu() -> dict | None:
             "rapl_uj": rapl_uj()}
 
 
-def energy(core_s: float, measured_wh: float | None = None) -> dict:
-    """Watt-hours for a number of busy core-seconds."""
+def _watts_gpu() -> float:
+    global _WATTS_GPU
+    if _WATTS_GPU is None:
+        _WATTS_GPU = _gpu_watts() or 0.0
+    return _WATTS_GPU
+
+
+def energy(core_s: float, measured_wh: float | None = None,
+           gpu_s: float = 0.0) -> dict:
+    """Watt-hours for a number of busy core-seconds, and GPU-seconds.
+
+    The GPU's rate is the card's own power limit: nvidia-smi reports no
+    live draw here, so what is left is an upper bound on what it was
+    pulling while it was busy. An upper bound that says so beats a middle
+    figure that was invented.
+    """
     if measured_wh is not None:
         wh, basis = measured_wh, "measured"
     else:
-        wh, basis = core_s * WATTS_PER_CORE / 3600.0, WATTS_BASIS
+        wh = core_s * WATTS_PER_CORE / 3600.0
+        if gpu_s and _watts_gpu():
+            wh += gpu_s * _watts_gpu() / 3600.0
+        basis = WATTS_BASIS
     out = {"wh": round(wh, 4), "basis": basis,
-           "watts_per_core": WATTS_PER_CORE if measured_wh is None else None}
+           "watts_per_core": WATTS_PER_CORE if measured_wh is None else None,
+           "watts_gpu": (_watts_gpu() or None) if measured_wh is None else None}
     if KWH_PRICE:
         out["cost_usd"] = round(wh / 1000.0 * KWH_PRICE, 6)
         out["kwh_price"] = KWH_PRICE
     else:
         out["cost_usd"] = None
     return out
+
+
+# The card's rated draw. nvidia-smi reports power.draw as N/A on this card,
+# so the limit is what there is: an upper bound on what it was pulling
+# while it was busy, which is honest as long as it says so.
+def _gpu_watts() -> float | None:
+    told = os.environ.get("X3_WATTS_GPU")
+    if told:
+        return float(told)
+    out = _nvidia("--query-gpu=power.limit", "--format=csv,noheader,nounits")
+    try:
+        return float(out.splitlines()[0])
+    except (AttributeError, IndexError, ValueError):
+        return None
+
+
+def _nvidia(*args: str) -> str | None:
+    if not shutil.which("nvidia-smi"):
+        return None
+    try:
+        r = subprocess.run(["nvidia-smi", *args], capture_output=True,
+                           text=True, timeout=6)
+        return r.stdout if r.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+class GpuMeter:
+    """GPU time for a set of processes, from nvidia-smi's own sampler.
+
+    A render is drawn by the GPU, so counting only its CPU said a
+    fifteen-second render cost seven core-seconds and left the expensive
+    half out. `nvidia-smi pmon` prints one line per process per second
+    with the share of the GPU each had; summing our own processes' share
+    over the seconds they ran gives GPU-seconds, counted the same way
+    core-seconds are.
+
+    It runs as its own long-lived sampler rather than one call per tick:
+    a `pmon -c 1` takes a second to produce its sample, so polling it
+    would have seen half the timeline at best.
+    """
+
+    def __init__(self, pids: set[int]) -> None:
+        import threading
+
+        self.pids = pids                  # updated by the process sampler
+        self.gpu_s = 0.0
+        self.samples = 0
+        self.proc = None
+        if not shutil.which("nvidia-smi"):
+            return
+        try:
+            self.proc = subprocess.Popen(
+                ["nvidia-smi", "pmon", "-d", "1", "-c", "100000"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        except OSError:
+            return
+        self._thread = threading.Thread(target=self._read, daemon=True)
+        self._thread.start()
+
+    def _read(self) -> None:
+        for line in self.proc.stdout:            # one line per process-second
+            if line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+            try:
+                pid, sm = int(parts[1]), parts[3]
+            except ValueError:
+                continue
+            if pid not in self.pids or not sm.isdigit():
+                continue
+            self.gpu_s += int(sm) / 100.0        # -d 1: one second a sample
+            self.samples += 1
+
+    def stop(self) -> dict:
+        if self.proc:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=3)
+            except subprocess.SubprocessError:
+                self.proc.kill()
+        return {"gpu_s": round(self.gpu_s, 2)} if self.proc else {}
 
 
 class Meter:
@@ -191,9 +299,13 @@ class ProcMeter:
         self.every = every
         self.cpu: dict[int, float] = {}
         self.peak_rss = 0
+        # Shared with the GPU sampler, which has only a pid to go on and
+        # no way of telling our browser from anybody else's.
+        self.pids: set[int] = {pid}
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+        self.gpu = GpuMeter(self.pids)
 
     def _scan(self) -> None:
         try:
@@ -208,6 +320,7 @@ class ProcMeter:
                 self.cpu[p.pid] = max(self.cpu.get(p.pid, 0.0),
                                       t.user + t.system)
                 rss += p.memory_info().rss
+                self.pids.add(p.pid)
             except psutil.Error:             # exited between the two calls
                 pass
         self.peak_rss = max(self.peak_rss, rss)
@@ -221,7 +334,8 @@ class ProcMeter:
         self._stop.set()
         return {"cpu_s": round(sum(self.cpu.values()), 2),
                 "peak_rss_mb": round(self.peak_rss / 2 ** 20, 1) or None,
-                "procs": len(self.cpu)}
+                "procs": len(self.cpu),
+                **self.gpu.stop()}
 
 
 def whole_process(t0: float, plus: dict | None = None) -> dict:
@@ -235,11 +349,12 @@ def whole_process(t0: float, plus: dict | None = None) -> dict:
     b = resource.getrusage(resource.RUSAGE_CHILDREN)
     cpu = a.ru_utime + a.ru_stime + b.ru_utime + b.ru_stime
     cpu += (plus or {}).get("cpu_s") or 0.0
+    gpu = (plus or {}).get("gpu_s")
     wall = time.monotonic() - t0
     # rusage keeps the largest single process; the meter sums a whole tree.
     rss_mb = max(max(a.ru_maxrss, b.ru_maxrss) / 1024,
                  (plus or {}).get("peak_rss_mb") or 0.0)
-    return {
+    out = {
         "wall_s": round(wall, 2),
         "cpu_s": round(cpu, 2),
         "cores_used": round(cpu / wall, 2) if wall > 0.1 else None,
@@ -247,6 +362,11 @@ def whole_process(t0: float, plus: dict | None = None) -> dict:
         "read_mb": round((a.ru_inblock + b.ru_inblock) * 512 / 2 ** 20, 1),
         "write_mb": round((a.ru_oublock + b.ru_oublock) * 512 / 2 ** 20, 1),
     }
+    # Absent rather than zero where there is no card to ask: a render on a
+    # machine without one did not use no GPU, we just cannot say.
+    if gpu is not None:
+        out["gpu_s"] = gpu
+    return out
 
 
 def record_sync(root, kind: str, **row) -> None:
@@ -302,28 +422,29 @@ async def current_revision(db) -> str | None:
 
 def summarise(jobs: list[dict], run: dict | None) -> dict:
     """Roll up the jobs of one revision, plus the machine's own window."""
-    tot = {"jobs": 0, "wall_s": 0.0, "cpu_s": 0.0, "read_mb": 0.0,
-           "write_mb": 0.0}
+    tot = {"jobs": 0, "wall_s": 0.0, "cpu_s": 0.0, "gpu_s": 0.0,
+           "read_mb": 0.0, "write_mb": 0.0}
     peak = 0.0
     kinds: dict[str, dict] = {}
     for j in jobs:
         tot["jobs"] += 1
-        for k in ("wall_s", "cpu_s", "read_mb", "write_mb"):
+        for k in ("wall_s", "cpu_s", "gpu_s", "read_mb", "write_mb"):
             tot[k] += j.get(k) or 0.0
         peak = max(peak, j.get("peak_rss_mb") or 0.0)
         k = kinds.setdefault(j.get("kind") or "build",
                              {"jobs": 0, "wall_s": 0.0, "cpu_s": 0.0,
-                              "peak_rss_mb": 0.0})
+                              "gpu_s": 0.0, "peak_rss_mb": 0.0})
         k["jobs"] += 1
         k["wall_s"] += j.get("wall_s") or 0.0
         k["cpu_s"] += j.get("cpu_s") or 0.0
+        k["gpu_s"] += j.get("gpu_s") or 0.0
         k["peak_rss_mb"] = max(k["peak_rss_mb"], j.get("peak_rss_mb") or 0.0)
 
     out = {
         "totals": {**{k: round(v, 2) for k, v in tot.items()},
                    "core_min": round(tot["cpu_s"] / 60, 2),
                    "peak_rss_mb": round(peak, 1) or None},
-        "energy": energy(tot["cpu_s"]),
+        "energy": energy(tot["cpu_s"], gpu_s=tot["gpu_s"]),
         "kinds": [{"kind": k, **{n: round(v, 2) for n, v in d.items()}}
                   for k, d in sorted(kinds.items(),
                                      key=lambda kv: -kv[1]["cpu_s"])],

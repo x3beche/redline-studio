@@ -350,11 +350,19 @@ Cache reads look absurd as a raw total — twenty-odd million for one revision �
 until you see that every request re-reads the whole conversation from cache.
 The card shows the context size per call instead.
 
-**CPU, memory and energy** come from the kernel. A build is waited for, so its
+**CPU, GPU, memory and energy** come from the kernel and the driver. A build is waited for, so its
 `getrusage` delta is exact and covers the whole subtree, the memory-cap wrapper
 included. A render is not waited for — the headless browser is terminated and
 its renderers are reaped by nobody, which is why a 92-second render was once
 filed as 0.11 core-seconds — so its process tree is polled while it works.
+
+A render is drawn by the graphics card, so counting only its CPU left the
+expensive half out — a 90-second render that reports 23 core-seconds also
+spent 4.6 seconds of GPU, and at the rates below that is more energy than
+the CPU used. `nvidia-smi pmon` prints one line per process per second with
+the share of the card each had, and our own processes' share is summed the
+same way core-seconds are. On a machine with no card the figure is absent
+rather than zero: the render did not use no GPU, we just cannot say.
 
 What the whole machine burned over the same window is read from `/proc/stat` at
 both ends of the run. That figure includes the browser, the editor and the
@@ -364,8 +372,10 @@ the revision's own.
 Energy is the one estimate. Intel's RAPL counter has been root-only since the
 Platypus fix and this machine's GPU reports no power, so there is nothing to
 read; core-seconds times an assumed per-core wattage is the substitute, and the
-figure carries "assumed" the way the token prices do. `X3_WATTS_PER_CORE` and
-`X3_KWH_PRICE` tune it. On a host where the counter *is* readable the same code
+figure carries "assumed" the way the token prices do. The GPU's rate is the
+card's own rated limit, which is an upper bound on what it was pulling while
+it was busy — an upper bound that says so beats a middle figure that was
+invented. `X3_WATTS_PER_CORE`, `X3_WATTS_GPU` and `X3_KWH_PRICE` tune it. On a host where the counter *is* readable the same code
 reports "measured" instead.
 
 ```bash

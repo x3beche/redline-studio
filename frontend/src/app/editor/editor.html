@@ -1010,6 +1010,13 @@
                                     [title]="c.totals.cpu_s + ' core-seconds, measured by the kernel'">
                                 {{ coreTime(c.totals.cpu_s) }}
                               </span>
+                              @if (c.totals.gpu_s) {
+                                <span style="color: var(--ink-dim)">gpu</span>
+                                <span class="mono text-right"
+                                      [title]="c.totals.gpu_s + ' GPU-seconds, from the driver\'s own per-process sampler'">
+                                  {{ coreTime(c.totals.gpu_s) }}
+                                </span>
+                              }
                               <span style="color: var(--ink-dim)">peak ram</span>
                               <span class="mono text-right"
                                     title="largest the build's process tree ever was">

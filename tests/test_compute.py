@@ -201,3 +201,41 @@ def test_what_a_meter_watched_separately_is_added_to_the_job():
     assert both["cpu_s"] == pytest.approx(alone["cpu_s"] + 40.0, abs=0.05)
     assert both["peak_rss_mb"] == 8000.0     # the tree, not the biggest child
     assert both["cores_used"] == pytest.approx(both["cpu_s"] / 10.0, abs=0.05)
+
+
+# ---------------- the GPU ----------------
+def test_gpu_seconds_add_up_and_reach_the_energy():
+    """A render is drawn by the card; counting only its CPU left the
+    expensive half out."""
+    rows = [job("render", cpu=20.0), dict(job("render", cpu=4.0),
+                                          _id="r2", gpu_s=6.0)]
+    rows[0]["gpu_s"] = 4.0
+    got = compute.summarise(rows, None)
+    assert got["totals"]["gpu_s"] == 10.0
+    assert got["kinds"][0]["gpu_s"] == 10.0
+    # and the energy is the two rates, not one
+    cpu_only = compute.energy(24.0)["wh"]
+    both = compute.energy(24.0, gpu_s=10.0)["wh"]
+    assert both > cpu_only
+
+
+def test_a_job_with_no_gpu_figure_is_counted_as_none_not_as_zero_energy():
+    got = compute.summarise([job("build", cpu=60.0)], None)
+    assert got["totals"]["gpu_s"] == 0.0
+    assert got["energy"]["wh"] == pytest.approx(
+        compute.energy(60.0)["wh"], rel=1e-9)
+
+
+def test_the_gpu_rate_is_named_so_the_figure_can_be_argued_with():
+    e = compute.energy(10.0, gpu_s=10.0)
+    assert e["basis"] == "assumed"
+    if e["watts_gpu"]:
+        assert e["wh"] > compute.energy(10.0)["wh"]
+
+
+def test_a_machine_with_no_card_reports_no_gpu_time_rather_than_zero():
+    """`stop` returns an empty dict there, so the key never appears and
+    nothing claims the render used none."""
+    meter = compute.GpuMeter(set())
+    meter.proc = None
+    assert meter.stop() == {}

@@ -25,10 +25,6 @@ Rules that are easy to get wrong:
   calling it done.
 
 ## App — further out
-- **A render's GPU time is not measured.** CPU, memory and disk are, but the
-  card in this machine reports no power through nvidia-smi and per-process
-  utilisation would need `nvidia-smi pmon` sampled alongside the process tree.
-  The CPU figure therefore understates what a render costs.
 - **Revisions applied before the machine meter existed show nothing** for
   compute. That is deliberate — better than claiming zero — but it means the
   first few cards read as though they were free.
@@ -64,3 +60,9 @@ Rules that are easy to get wrong:
 - Notices start where the 3D area does instead of covering the toolbar.
 - `render.py` applies the revision's own camera from a cold profile, and
   --width/--height mean the picture rather than the window.
+- A render's GPU time is measured, from nvidia-smi's per-process sampler,
+  and reaches the energy figure at the card's rated limit.
+- The thread's urgent switch, and `revisions.py stop` so the agent can end
+  a build early when it decides that is the answer.
+- Text selection works again; the viewer's stylesheet had turned it off on
+  `body` for the whole application.

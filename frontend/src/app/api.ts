@@ -78,20 +78,24 @@ export interface Analytics {
   compute?: {
     totals: {
       jobs: number; wall_s: number; cpu_s: number; core_min: number;
+      /** Seconds of the GPU, from nvidia-smi's own per-process sampler.
+       *  Zero where there is no card to ask. */
+      gpu_s: number;
       peak_rss_mb: number | null; read_mb: number; write_mb: number;
     };
     /** "assumed" unless the host let us read a real energy counter. */
     energy: { wh: number; basis: string; watts_per_core: number | null;
+              watts_gpu: number | null;
               cost_usd: number | null; kwh_price?: number };
     kinds: { kind: string; jobs: number; wall_s: number; cpu_s: number;
-             peak_rss_mb: number }[];
+             gpu_s: number; peak_rss_mb: number }[];
     /** The whole machine over the same window - the browser and the desktop
      *  included. Ours is a part of this, never the other way round. */
     machine: {
       busy_core_s: number; busy_core_min: number; cores: number;
       avg_cores_busy: number | null; ours_pct: number | null;
       energy: { wh: number; basis: string; watts_per_core: number | null;
-                cost_usd: number | null };
+                watts_gpu: number | null; cost_usd: number | null };
     } | null;
   };
 }
