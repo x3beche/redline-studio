@@ -200,7 +200,7 @@
        is not under the tabs: it is the same catalog whichever room you are
        in, so it keeps the full height beside them rather than being roofed
        by something that does not apply to it. -->
-  <div class="relative flex min-w-0 flex-1 flex-col gap-2">
+  <div class="relative flex min-w-0 flex-1 flex-col">
   <ng-content select="[tabs]"></ng-content>
   <div class="relative flex min-h-0 min-w-0 flex-1 gap-2">
 
@@ -242,7 +242,7 @@
   <!-- CENTRE: viewer with the log below -->
   <div class="flex min-w-0 flex-1 flex-col gap-2">
 
-  <div #stage class="relative min-w-0 flex-1 overflow-hidden rounded"
+  <div #stage class="tcv-stage relative min-w-0 flex-1 overflow-hidden rounded"
        style="border: 1px solid var(--line)">
     <!-- 8 px breathing room under the viewer, matching the top. -->
     <div #host class="absolute left-0 right-0 top-0" style="bottom: 8px"
@@ -1029,12 +1029,12 @@
                                  where the other should be is the eye's
                                  first complaint. -->
                             <div class="tcv-stats">
-                              <span>machine</span>
+                              <span>jobs</span>
                               <b [title]="computeJobsTitle(c) + ', wall clock '
                                           + duration(c.totals.wall_s)">
-                                {{ computeJobs(c) }}</b>
-                              <span>peak ram</span>
-                              <b title="largest the build's process tree ever was">
+                                {{ c.totals.jobs }}</b>
+                              <span>ram</span>
+                              <b title="largest a build's process tree ever was">
                                 {{ mem(c.totals.peak_rss_mb) }}</b>
 
                               <span>cpu</span>

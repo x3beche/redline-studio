@@ -212,7 +212,7 @@
 /* The shell's tabs. Flat until chosen: a row of raised buttons reads as a
    toolbar, and these are rooms, not actions. */
 .tcv-tab {
-  padding: 5px 11px 6px;
+  padding: 5px 11px 7px;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: .02em;
@@ -220,6 +220,10 @@
   border: 1px solid transparent;
   border-radius: 6px 6px 0 0;
   cursor: pointer;
+  /* The open tab is not a button above the panel, it is the top edge of
+     it: the row overlaps the panel's border by a pixel and the open tab
+     paints over that pixel, so the two read as one shape. */
+  margin-bottom: -1px;
   transition: color .12s, background .12s, border-color .12s;
 }
 .tcv-tab:hover { color: var(--ink); background: var(--hover); }
@@ -227,7 +231,13 @@
   color: var(--ink);
   background: var(--surface);
   border-color: var(--line);
-  border-bottom-color: transparent;
+  /* Its own colour, not the line's: this pixel is where the tab opens into
+     the panel. It only works in front of the panel, though - the panel
+     comes later in the document and was painting its top border straight
+     over it, which is why the open tab still read as a closed pill. */
+  border-bottom-color: var(--surface);
+  position: relative;
+  z-index: 1;
 }
 /* The three that are not built say so on the tab, not only on the page. */
 .tcv-tab-soon {
@@ -251,10 +261,11 @@
      core-min · 5.7%" is twice as wide as "134" and an even split clipped
      it. The slack goes to the left-hand value instead. */
   grid-template-columns: auto 1fr auto auto;
-  gap: 1px 6px;
+  gap: 1px 5px;
   align-items: baseline;
   line-height: 1.25;
 }
+
 .tcv-stats > span {
   color: var(--ink-dim);
   white-space: nowrap;          /* "peak ram" is one label, not two lines */
@@ -515,6 +526,9 @@ body {
    They fill their parent and the grid does the dividing. */
 /* A column: toolbar at its own height, body taking the rest. Subtracting a
    guessed 48 px for the toolbar left a strip of dead space under the log. */
+/* Square where the tab meets it; the rest of the panel keeps its radius. */
+.tcv-stage { border-top-left-radius: 0 !important; }
+
 .tcv_cad_viewer {
   height: 100% !important;
   /* Not 100%: it keeps a 4px margin of its own, and a full hundred per cent
