@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, effect, inject } from '@angular/core';
 import { Editor } from './editor/editor';
 import { Selection } from './selection';
 import { RoomAnalyze } from './rooms/analyze';
@@ -51,16 +51,18 @@ export class App {
 
   constructor() {
     this.here.set(currentWorkspace());
+    // Whoever changed it - a tab up here, or a file clicked in the catalog
+    // - the address bar and the memory follow, so a room can be linked to
+    // and a reload comes back to the one you were in.
+    effect(() => {
+      const id = this.here();
+      rememberWorkspace(id);
+      const url = new URL(location.href);
+      if (id === 'cad') url.searchParams.delete('ws');
+      else url.searchParams.set('ws', id);
+      history.replaceState(null, '', url);
+    });
   }
 
-  open(id: Workspace['id']) {
-    this.here.set(id);
-    rememberWorkspace(id);
-    // The address bar follows, so a room can be linked to and a reload
-    // comes back to the same one.
-    const url = new URL(location.href);
-    if (id === 'cad') url.searchParams.delete('ws');
-    else url.searchParams.set('ws', id);
-    history.replaceState(null, '', url);
-  }
+  open(id: Workspace['id']) { this.here.set(id); }
 }

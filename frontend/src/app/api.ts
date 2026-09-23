@@ -362,6 +362,14 @@ export class Boards {
   layout(id: string): Observable<BoardLayout> {
     return this.http.post<BoardLayout>(`/api/boards/${id}/layout`, {});
   }
+  /** Put it in a folder. The id does not change: it is not a path. */
+  move(id: string, folder: string): Observable<unknown> {
+    return this.http.post(
+      `/api/boards/${id}/move?folder=${encodeURIComponent(folder)}`, {});
+  }
+  drop(id: string): Observable<unknown> {
+    return this.http.delete(`/api/boards/${id}`);
+  }
   graph(id: string, stamp?: string): Observable<BoardGraph> {
     return this.http.get<BoardGraph>(
       `/api/boards/${id}/graph.json` + (stamp ? `?v=${encodeURIComponent(stamp)}` : ''));

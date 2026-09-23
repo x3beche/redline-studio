@@ -858,6 +858,24 @@ async def save_board(bid: str, body: BoardIn):
     return {"id": bid, "saved": True}
 
 
+@app.post("/api/boards/{bid}/move")
+async def move_board(bid: str, folder: str = ""):
+    """Put a board in a folder.
+
+    A model's id carries its path, so moving one renames it; a board's
+    does not. The board keeps its id and its history - the netlist, the
+    layout, every compute job filed against it - and only the folder it is
+    listed under changes.
+    """
+    if folder and not await db().folders.find_one({"_id": folder}):
+        raise HTTPException(404, f"no folder {folder}")
+    got = await db()[ato.BOARDS].update_one({"_id": bid},
+                                            {"$set": {"folder": folder}})
+    if not got.matched_count:
+        raise HTTPException(404, bid)
+    return {"board": bid, "folder": folder}
+
+
 @app.post("/api/boards/{bid}/build")
 async def build_board(bid: str):
     try:
