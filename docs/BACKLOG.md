@@ -24,25 +24,44 @@ Rules that are easy to get wrong:
 - rebuild, render from the revision's own camera, and look at it before
   calling it done.
 
-## The other three rooms
+## The board room
 
-The shell has tabs for PCB Design, Coding and Analyze, and each one says
-what it needs before it can open. The question that decides the PCB room
-is what its source is: text and parametric (atopile, SKiDL), where a
-change is an edit and the loop works as it does here — or KiCad's own
-files, which are machine-written S-expressions an agent cannot safely
-edit, leaving the loop half manual.
+Built and answered: the source is atopile, text and parametric, so a
+change is an edit and the loop works as it does for a model. KiCad never
+touches the source — it places, draws and exports, in a container, from
+the netlist that build produced.
 
-Do not generalise the spine before the second room exists. Everything in
-here says `model`, `PARTS`, `viewer.json`; splitting that up on a guess
-about what a board needs would split it in the wrong places.
+Left to do, roughly in order:
+
+- **No way to make a board from the screen.** No **+ Board** in the left
+  column, no editor for the `.ato` in the room. The source goes in
+  through `PUT /api/boards/{id}`, which is fine for the agent and no use
+  to a person.
+- **The placer puts everything in one row.** `docker/place.py` walks
+  along the board at a fixed pitch. It is honest — nothing pretends to
+  be laid out — but a board with thirty parts will run off the edge.
+  Grouping by net is the first thing to try.
+- **Nothing is routed**, and the ratsnest does not show in the layer
+  render. `kicad-cli` will not draw one; it would have to come from the
+  netlist we already have.
+- **A revision loop for boards.** Notes, queue, before/after, cost — all
+  of it is `model`-shaped in `revisions.py`. Do not generalise it until
+  the coding room says what its third shape looks like; splitting on a
+  guess splits in the wrong places.
+
+## The other two rooms
+
+Coding and Analyze are tabs that say what they need before they can
+exist. Everything in the spine still says `model`, `PARTS`,
+`viewer.json`.
 
 ## App — further out
 - **Revisions applied before the machine meter existed show nothing** for
   compute. That is deliberate — better than claiming zero — but it means the
   first few cards read as though they were free.
-- **The bundle is 1.83 MB against a 1.5 MB budget.** Warned on every build.
-  The viewer is most of it.
+- **The bundle is 1.88 MB against a 1.5 MB budget.** Warned on every build.
+  The CAD viewer is most of it. three.js and the glTF loader are no longer
+  in that number — the board viewer is fetched when the 3d tab is opened.
 
 ## Done and pushed
 
@@ -79,3 +98,10 @@ about what a board needs would split it in the wrong places.
   a build early when it decides that is the answer.
 - Text selection works again; the viewer's stylesheet had turned it off on
   `body` for the whole application.
+- A header of rooms across the two right-hand columns, the active tab's
+  border opening into the card below it, the left column untouched.
+- The board room: atopile builds the netlist, LCSC supplies the footprint
+  and the 3D model for each part number, KiCad places and draws it in a
+  container, and the result is a layer render, a GLB and a BOM.
+- One tree for everything — `.3d` and `.pcb` side by side, folders that
+  fold, and what is folded survives F5 along with the log and the thread.

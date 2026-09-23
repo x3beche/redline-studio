@@ -5,9 +5,13 @@
 ## The rooms
 
 Along the top: **3D Drawing**, **PCB Design**, **Coding**, **Analyze**.
-Only the first is built; the other three open on what they need before
-they can exist. `?ws=pcb` in the URL opens one, and the browser remembers
-the last one you were in.
+The first two are built; the other two open on what they need before they
+can exist. `?ws=pcb` in the URL opens one, and the browser remembers the
+last one you were in.
+
+The left column belongs to no room. One tree holds everything: a model is
+a `.3d`, a board is a `.pcb`, and clicking either opens the room that can
+show it.
 
 The 3D room stays loaded whichever tab is showing — its viewer holds a
 WebGL context and tens of megabytes of geometry, and throwing that away to
@@ -130,6 +134,71 @@ base is imported by station; deleting it breaks their build.
 
 The UI offers the override rather than hiding it.
 
+## PCB Design
+
+A board is a `.pcb` in the same tree as the models. Its source is
+[atopile](https://github.com/atopile/atopile): a circuit written as text,
+where a part is a line and a connection is `~`, so an agent can change it
+the way it changes a model.
+
+```ato
+component R1206:
+    footprint = "R1206"
+    mpn = "C368196"          # the LCSC number: what gets bought, and drawn
+    signal p1 ~ pin 1
+    signal p2 ~ pin 2
+
+module PowerIn:
+    signal vin
+    signal vrail
+
+    r_series = new R1206
+    d1 = new Diode_SOD123
+
+    vin ~ r_series.p1
+    r_series.p2 ~ d1.anode
+    d1.cathode ~ vrail
+```
+
+Two buttons, and they do different things:
+
+- **build** runs atopile. Out comes the netlist — what parts there are,
+  what nets they sit on, and which pin of which part each net touches.
+  That is all the source can say, and it needs nothing installed beyond
+  atopile itself.
+- **lay out** places the board and draws it. Each part is fetched from
+  LCSC by its part number, footprint and 3D model together, and KiCad
+  does the placing inside a container. Out come a layer render and a GLB.
+
+Three ways of looking at it:
+
+| | what it shows |
+|---|---|
+| **layout** | the board as KiCad draws it: copper, silkscreen, mask and outline |
+| **3d** | the same placement with the parts standing on it — drag to turn it over |
+| **circuit** | the parts on a ring, a chord per net |
+
+![The layer render: copper, silkscreen and outline](docs/pcb-layout.png)
+
+![The same placement in three dimensions, parts standing on it](docs/pcb-3d.png)
+
+The ring is deliberate. A netlist has no positions in it, and inventing
+some with a physics run gives a different picture every time the page is
+opened; a ring is the same picture for the same circuit.
+
+There is no **+ Board** in the left column yet and no editor for the
+source in the room: a board is written through `PUT /api/boards/{id}`,
+which is how the agent writes one. The room reads, builds and draws it.
+
+What it does not do is route. The board comes out placed, with its nets
+attached, and says `not routed` under the drawing. Autorouting a board
+nobody has looked at is not a favour.
+
+A part without an LCSC number still appears in the netlist and in the
+circuit, and is not on the board: there is no shape to place. It is named
+under the drawing — *no footprint for U3* — rather than quietly left out,
+and a part number that does not exist says so the same way.
+
 ## The left column
 
 Hovering a row shows what can be done with it: a model has **→** (move), **↻**
@@ -146,6 +215,10 @@ A model's id carries its folder, so moving one renames it and its revisions
 follow. Assemblies keep working: during a build every model is also written
 under its bare name while that name is unambiguous, so `import stand` still
 resolves after `stand` moves into `parts/`.
+
+Folders fold. The caret on a folder closes it, and what is closed is
+remembered — after F5 the tree comes back the way it was left, along with
+the log and the thread under the queue.
 
 The foot of the column carries the database usage and the machine's live CPU,
 RAM and GPU. While a revision is being worked on, the running task sits here

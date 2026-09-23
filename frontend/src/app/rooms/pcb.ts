@@ -110,20 +110,24 @@ interface Placed {
           <!-- Fetched when somebody asks for it. three.js and a glTF
                loader are a third of a megabyte, and they are no use in
                any other room. -->
-          <div class="h-[58vh] w-full overflow-hidden rounded"
-               style="background: var(--surface-2)">
-            @defer (on viewport) {
-              <app-board-3d [src]="modelUrl()" />
-            } @placeholder {
-              <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
-                bringing the viewer in…
-              </p>
-            }
+          <!-- The pane takes the room: a board turned on its side needs
+               the height, and a fixed one left a strip of empty card. -->
+          <div class="flex h-full flex-col">
+            <div class="min-h-0 w-full flex-1 overflow-hidden rounded"
+                 style="background: var(--surface-2)">
+              @defer (on viewport) {
+                <app-board-3d [src]="modelUrl()" />
+              } @placeholder {
+                <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
+                  bringing the viewer in…
+                </p>
+              }
+            </div>
+            <p class="mt-2 text-[11px]" style="color: var(--ink-dim)">
+              from the same placement as the layout · parts that had no 3D
+              shape are not there
+            </p>
           </div>
-          <p class="mt-2 text-[11px]" style="color: var(--ink-dim)">
-            from the same placement as the layout · parts that had no 3D
-            shape are not there
-          </p>
         } @else {
           <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
             No model yet. <b>lay out</b> makes one alongside the drawing.

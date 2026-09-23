@@ -70,12 +70,19 @@ as well as a solid does.
 | | |
 |---|---|
 | **3D Drawing** | parametric solids — this is what is built |
-| **PCB Design** | the same loop over a board: mark a trace on the render, DRC as the check that fails the build |
+| **PCB Design** | atopile for the circuit, LCSC for the parts, KiCad in a container for the board |
 | **Coding** | redlining a running interface: draw on what is on screen, the change arrives as a diff, the tests are the check |
 | **Analyze** | what all of it cost, across every revision rather than one card at a time |
 
-Three of them are tabs with the groundwork written down and nothing behind
-them yet. They say so.
+Two of them are built. The other two are tabs with the groundwork written
+down and nothing behind them yet, and they say so.
+
+![A board in the PCB room: atopile for the circuit, KiCad for the board](docs/pcb-3d.png)
+
+The board room takes a circuit written as text, fetches each part from
+LCSC by its number — footprint and 3D model together — and has KiCad
+place and draw it inside a container, so a gigabyte of libraries never
+lands on the machine. Out come a layer render, a model and a BOM.
 
 ## How it goes
 

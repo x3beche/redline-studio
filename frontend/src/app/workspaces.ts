@@ -6,8 +6,8 @@
  *  an agent, rebuilt, checked against a measurement, photographed from the
  *  same angle. A board and a running interface both fit it.
  *
- *  So the shell holds the tabs and each room is a workspace inside it. One
- *  is built; the other three say what they will be rather than pretending.
+ *  So the shell holds the tabs and each room is a workspace inside it. Two
+ *  are built; the other two say what they will be rather than pretending.
  */
 export interface Workspace {
   id: 'cad' | 'pcb' | 'code' | 'analyze';
@@ -28,9 +28,9 @@ export const WORKSPACES: Workspace[] = [
   {
     id: 'pcb',
     label: 'PCB Design',
-    blurb: 'The same loop over a board. Mark a trace or a footprint on the '
-         + 'render and leave the note there.',
-    ready: false,
+    blurb: 'A circuit written as text, the parts fetched by part number, '
+         + 'and the board placed and drawn from it.',
+    ready: true,
   },
   {
     id: 'code',
