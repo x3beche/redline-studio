@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import {
   Activity, BoardCompute, BoardEntry, BoardGraph, BoardLayout, Boards, Health,
-  LogLine, PartHeld, PartHit, Parts, SystemInfo,
+  LogLine, PartHeld, PartHit, PartPreview, Parts, SystemInfo,
 } from '../api';
 import { Selection } from '../selection';
 import { Board3d } from './board3d';
@@ -83,11 +83,129 @@ interface Placed {
         <p class="shrink-0 px-2 py-1 text-[11px]" style="color: var(--ink-dim)">{{ n }}</p>
       }
 
+      @if (seen() || seeing()) {
+        <!-- ONE PART, IN FULL
+             Everything that can be known about it without keeping it:
+             what it is, what it costs, its footprint, its symbol and its
+             shape, all straight from EasyEDA on the click. Kept on the
+             server's disk, so a second look is instant. -->
+        <div class="min-h-0 flex-1 overflow-auto">
+          <div class="flex items-center gap-1 px-2 py-1.5"
+               style="border-bottom: 1px solid var(--line)">
+            <button (click)="closePart()" class="tcv-chip">&larr; list</button>
+            @if (seen(); as s) {
+              <span class="mono ml-auto text-[11px]" style="color: var(--ink)">{{ s.lcsc }}</span>
+            }
+          </div>
+
+          @if (seen(); as s) {
+            <div class="p-2">
+              <div class="flex gap-2">
+                @if (s.has_photo && noPhoto() !== s.lcsc) {
+                  <!-- Gone quietly if the host will not hand it over:
+                       LCSC's own image host turns away anything that is
+                       not a browser, and a broken-image icon says less
+                       than nothing. -->
+                  <img [src]="store.file(s.lcsc, 'photo.jpg')" alt=""
+                       (error)="noPhoto.set(s.lcsc)"
+                       class="h-16 w-16 shrink-0 rounded object-contain"
+                       style="background: var(--shot-bg)">
+                }
+                <div class="min-w-0 flex-1">
+                  <div class="text-[12px] font-semibold" style="color: var(--ink)">{{ s.name }}</div>
+                  <div class="text-[11px]" style="color: var(--ink-dim)">{{ s.maker }}</div>
+                  <div class="mt-1 text-[11px] leading-snug" style="color: var(--ink-dim)">
+                    {{ s.description }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="mono mt-2 grid text-[11px]"
+                   style="grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 2px">
+                <span style="color: var(--ink-dim)">package</span>
+                <span class="truncate" [title]="s.package ?? ''">{{ s.package }}</span>
+                <span style="color: var(--ink-dim)">price</span>
+                <span>{{ money(s.price) }}@if (s.min && s.min > 1) { · min {{ s.min }} }</span>
+                <span style="color: var(--ink-dim)">stock</span>
+                <span>{{ countOf(s.stock) }}</span>
+                <!-- JLCPCB assembles Basic parts without a loading fee;
+                     an Extended one costs a feeder per run. It decides
+                     between two equal parts more often than price does. -->
+                <span style="color: var(--ink-dim)">jlc</span>
+                <span [style.color]="basic(s) ? 'var(--ok)' : 'var(--warn)'"
+                      [title]="basic(s) ? 'no loading fee at JLCPCB'
+                                        : 'a feeder fee per assembly run at JLCPCB'">
+                  {{ s.jlc_class || '–' }}
+                </span>
+              </div>
+
+              <div class="mt-2 flex gap-1">
+                @if (s.have) {
+                  <span class="tcv-chip" style="color: var(--ok)">in the drawer</span>
+                } @else {
+                  <button (click)="keep(s.lcsc, $event)" [disabled]="!!fetching()"
+                          class="tcv-btn tcv-btn-accent px-2 py-0.5">
+                    {{ fetching() === s.lcsc ? 'fetching…' : '+ keep' }}
+                  </button>
+                }
+                @if (s.url) {
+                  <a [href]="s.url" target="_blank" rel="noreferrer"
+                     class="tcv-chip ml-auto">LCSC &#8599;</a>
+                }
+              </div>
+            </div>
+
+            <!-- The shape, turned the way it sits on a board. -->
+            <div class="tcv-label px-2 pt-1">3d</div>
+            <div class="mx-2 mt-1 h-44 overflow-hidden rounded"
+                 style="background: var(--surface-2)">
+              @if (s.has_model) {
+                @defer (on viewport) {
+                  <app-board-3d [src]="store.file(s.lcsc, 'model.glb')" />
+                } @placeholder {
+                  <p class="p-2 text-[11px]" style="color: var(--ink-dim)">…</p>
+                }
+              } @else {
+                <p class="p-2 text-[11px]" style="color: var(--ink-dim)">
+                  No 3D model. It will not be standing on the board.
+                </p>
+              }
+            </div>
+            @if (s.model_name) {
+              <div class="mono truncate px-2 pt-0.5 text-[10px]" style="color: var(--ink-dim)"
+                   [title]="s.model_name">{{ s.model_name }}</div>
+            }
+
+            <!-- The drawings are EasyEDA's own. Only ever through <img>,
+                 where nothing in the markup can run. -->
+            <div class="tcv-label px-2 pt-2">footprint</div>
+            <div class="mx-2 mt-1 flex h-40 items-center justify-center rounded p-2"
+                 style="background: var(--pcb-bg)">
+              <!-- Filled, not left at its own size: EasyEDA writes a
+                   footprint in millimetres, and an LQFP-48 at its natural
+                   15 mm is a stamp in the middle of the box. -->
+              <img [src]="store.file(s.lcsc, 'footprint.svg')" alt="footprint"
+                   class="h-full w-full object-contain">
+            </div>
+
+            <div class="tcv-label px-2 pt-2">symbol</div>
+            <div class="mx-2 mb-2 mt-1 flex h-56 items-center justify-center rounded p-2"
+                 style="background: var(--shot-bg)">
+              <img [src]="store.file(s.lcsc, 'symbol.svg')" alt="symbol"
+                   class="h-full w-full object-contain">
+            </div>
+          } @else {
+            <p class="p-2 text-[11px]" style="color: var(--ink-dim)">looking it up…</p>
+          }
+        </div>
+      } @else {
       <div class="min-h-0 flex-1 overflow-auto">
         <!-- What LCSC has. The number, what it is, and the two things
              that decide between two of the same part: stock and price. -->
         @for (h of hits(); track h.lcsc) {
-          <div class="group flex items-start gap-2 px-2 py-1.5"
+          <div (click)="inspect(h.lcsc)"
+               class="group flex cursor-pointer items-start gap-2 px-2 py-1.5"
+               [style.background]="seen()?.lcsc === h.lcsc ? 'var(--accent-deep)' : null"
                style="border-bottom: 1px solid var(--line)">
             <div class="min-w-0 flex-1">
               <div class="mono text-[11px]" style="color: var(--ink)">
@@ -105,7 +223,7 @@ interface Placed {
               <span class="shrink-0 text-[11px]" style="color: var(--ok)"
                     title="already in the drawer">kept</span>
             } @else {
-              <button (click)="keep(h)" [disabled]="!!fetching()"
+              <button (click)="keep(h.lcsc, $event)" [disabled]="!!fetching()"
                       class="tcv-chip shrink-0"
                       title="fetch its footprint and 3D model">
                 {{ fetching() === h.lcsc ? '…' : '+' }}
@@ -120,8 +238,9 @@ interface Placed {
         @if (held().length) {
           <div class="tcv-label px-2 pb-1 pt-2">in the drawer</div>
           @for (p of held(); track p.lcsc) {
-            <div (click)="lookUp(p.lcsc)"
-                 class="group flex cursor-pointer items-center gap-2 px-2 py-1">
+            <div (click)="inspect(p.lcsc)"
+                 class="group flex cursor-pointer items-center gap-2 px-2 py-1"
+                 [style.background]="seen()?.lcsc === p.lcsc ? 'var(--accent-deep)' : null">
               <span class="mono shrink-0 text-[11px]" style="color: var(--ink)">{{ p.lcsc }}</span>
               <span class="min-w-0 flex-1 truncate text-[11px]"
                     style="color: var(--ink-dim)" [title]="p.name ?? ''">{{ p.name }}</span>
@@ -138,6 +257,7 @@ interface Placed {
           }
         }
       </div>
+      }
     </section>
 
     <!-- WHAT IT COST, AND WHAT THE MACHINE IS DOING
@@ -373,7 +493,8 @@ export class RoomPcb implements OnDestroy {
   private picked = inject(Selection);
   private health = inject(Health);
   private activity = inject(Activity);
-  private store = inject(Parts);
+  /** Read by the template for the preview URLs. */
+  store = inject(Parts);
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   readonly SIZE = 520;
@@ -392,6 +513,11 @@ export class RoomPcb implements OnDestroy {
   looking = signal(false);
   fetching = signal<string | null>(null);
   partNote = signal('');
+  /** The part open in the column, and the one being looked up. */
+  seen = signal<PartPreview | null>(null);
+  seeing = signal<string | null>(null);
+  /** The part whose photo would not load, so the frame is not left empty. */
+  noPhoto = signal<string | null>(null);
   sys = signal<SystemInfo | null>(null);
   log = signal<LogLine[]>([]);
   private timers: ReturnType<typeof setInterval>[] = [];
@@ -444,17 +570,46 @@ export class RoomPcb implements OnDestroy {
     });
   }
 
+  /** Open one part in the column: the facts at once, the drawings and
+   *  the model as they arrive. Clicking through a list quickly starts
+   *  several lookups; only the last one clicked may land. */
+  inspect(lcsc: string) {
+    if (this.seen()?.lcsc === lcsc) return;
+    this.seeing.set(lcsc);
+    this.seen.set(null);
+    this.store.preview(lcsc).subscribe({
+      next: p => { if (this.seeing() === lcsc) this.seen.set(p); },
+      error: e => {
+        if (this.seeing() !== lcsc) return;
+        this.seeing.set(null);
+        this.partNote.set(String(e?.error?.detail ?? `${lcsc} could not be looked up`));
+      },
+    });
+  }
+
+  closePart() {
+    this.seen.set(null);
+    this.seeing.set(null);
+  }
+
+  /** JLCPCB's Basic parts carry no loading fee. */
+  basic(p: PartPreview): boolean {
+    return (p.jlc_class ?? '').toLowerCase().startsWith('basic');
+  }
+
   /** Keep one: its footprint, and its 3D model if it has one. That is
    *  what puts it within reach of a board. */
-  keep(hit: PartHit) {
+  keep(lcsc: string, ev?: Event) {
+    ev?.stopPropagation();
     if (this.fetching()) return;
-    this.fetching.set(hit.lcsc);
+    this.fetching.set(lcsc);
     this.partNote.set('');
-    this.store.add(hit.lcsc).subscribe({
+    this.store.add(lcsc).subscribe({
       next: got => {
         this.fetching.set(null);
         this.hits.update(rows => rows.map(
-          r => r.lcsc === hit.lcsc ? { ...r, have: true } : r));
+          r => r.lcsc === lcsc ? { ...r, have: true } : r));
+        this.seen.update(s => s?.lcsc === lcsc ? { ...s, have: true } : s);
         this.partNote.set(`${got.lcsc} kept`
           + (got.has_3d ? ' with a 3D model' : ', footprint only'));
         this.drawer();
@@ -472,15 +627,8 @@ export class RoomPcb implements OnDestroy {
     this.store.drop(part.lcsc).subscribe({ next: () => this.drawer() });
   }
 
-  /** Put a part number in the search box and look it up. Clicking a part
-   *  a board uses is how you find out what it actually is. */
-  lookUp(code: string) {
-    this.term.set(code);
-    this.look();
-  }
-
   money(p: number | null): string {
-    return p == null ? '' : p < 0.01 ? `$${p.toFixed(4)}` : `$${p.toFixed(2)}`;
+    return p == null ? '–' : p < 0.01 ? `$${p.toFixed(4)}` : `$${p.toFixed(2)}`;
   }
 
   countOf(n: number | null): string {

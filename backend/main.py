@@ -505,11 +505,16 @@ class RevisionIn(BaseModel):
     camera: dict | None = None
     part: str | None = None
     model: str | None = None
+    # "pcb" when the note is about a board. A board is not a model - it has
+    # no camera, nothing to freeze, and `build` does not take it - so the
+    # agent and the page both need to know which one they are holding.
+    kind: str | None = Field(default=None, pattern="^(cad|pcb)$")
 
 
 def _out(d: dict) -> dict:
     return {"id": d["_id"], "created_at": d["created_at"], "comment": d["comment"],
             "camera": d.get("camera"), "part": d.get("part"), "model": d.get("model"),
+            "kind": d.get("kind") or "cad",
             "view": d.get("view"),
             "status": d.get("status", "draft"), "queued_at": d.get("queued_at"),
             "edited_at": d.get("edited_at"), "archived": bool(d.get("archived")),
@@ -698,7 +703,7 @@ async def create_revision(body: RevisionIn):
         "_id": rid,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "comment": body.comment, "camera": body.camera,
-        "part": body.part, "model": body.model,
+        "part": body.part, "model": body.model, "kind": body.kind or "cad",
         "status": "draft", "queued_at": None,
         "image": image,
         "view": body.view,
@@ -971,6 +976,66 @@ async def search_parts(q: str, limit: int = 20):
     for row in rows:
         row["have"] = row["lcsc"] in have
     return rows
+
+
+async def _look(what, *args):
+    """A preview request: LCSC's errors become the browser's 404/502."""
+    try:
+        return await what(*args)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except LookupError as exc:
+        raise HTTPException(404, str(exc))
+    except (OSError, TimeoutError) as exc:
+        raise HTTPException(502, f"EasyEDA did not answer: {exc}")
+
+
+# Previews do not change for a given part number, so the browser may keep
+# them as long as it likes; the server keeps them on disk anyway.
+_KEEP = {"Cache-Control": "public, max-age=604800"}
+
+# The drawings are EasyEDA's markup served from this origin. The page only
+# ever shows them through <img>, where nothing in them can run; this is for
+# anybody who opens one directly.
+_INERT_SVG = {**_KEEP, "Content-Security-Policy":
+              "default-src 'none'; style-src 'unsafe-inline'; img-src data:"}
+
+
+@app.get("/api/parts/{lcsc_id}/preview")
+async def part_preview(lcsc_id: str):
+    """What a part is, before anybody decides to keep it."""
+    out = await _look(lcsc.preview, lcsc_id)
+    out["have"] = bool(await db()[lcsc.PARTS].find_one({"_id": lcsc_id}, {"_id": 1}))
+    return out
+
+
+@app.get("/api/parts/{lcsc_id}/footprint.svg")
+async def part_footprint(lcsc_id: str):
+    return Response(await _look(lcsc.drawing, lcsc_id, lcsc.FOOTPRINT),
+                    media_type="image/svg+xml", headers=_INERT_SVG)
+
+
+@app.get("/api/parts/{lcsc_id}/symbol.svg")
+async def part_symbol(lcsc_id: str):
+    return Response(await _look(lcsc.drawing, lcsc_id, lcsc.SYMBOL),
+                    media_type="image/svg+xml", headers=_INERT_SVG)
+
+
+@app.get("/api/parts/{lcsc_id}/model.glb")
+async def part_model(lcsc_id: str):
+    """The 3D shape, converted from EasyEDA's OBJ once and kept. Gzipped on
+    the way out: an LQFP-48 is 1.18 MB of GLB and 0.59 MB over the wire."""
+    import gzip as _gzip
+
+    raw = await _look(lcsc.model_glb, lcsc_id)
+    return Response(_gzip.compress(raw, 5), media_type="model/gltf-binary",
+                    headers={**_KEEP, "Content-Encoding": "gzip"})
+
+
+@app.get("/api/parts/{lcsc_id}/photo.jpg")
+async def part_photo(lcsc_id: str):
+    return Response(await _look(lcsc.photo, lcsc_id),
+                    media_type="image/jpeg", headers=_KEEP)
 
 
 @app.post("/api/parts/{lcsc_id}")

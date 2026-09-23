@@ -3,8 +3,8 @@ import {
   viewChild,
 } from '@angular/core';
 import {
-  AmbientLight, Box3, Color, DirectionalLight, PerspectiveCamera, Scene,
-  Vector3, WebGLRenderer,
+  AmbientLight, Box3, Color, DirectionalLight, Object3D, PerspectiveCamera,
+  Scene, Vector3, WebGLRenderer,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -30,7 +30,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 </div>`,
 })
 export class Board3d implements AfterViewInit, OnDestroy {
-  /** Where the GLB is. Changing it loads the new board into the same scene. */
+  /** Where the GLB is - a board from KiCad, or one part, which the server
+   *  converts from EasyEDA's OBJ. Changing it loads the new one into the
+   *  same scene. */
   src = input.required<string>();
 
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
@@ -119,20 +121,33 @@ export class Board3d implements AfterViewInit, OnDestroy {
     if (!this.touched) this.place_camera();
   }
 
+  /** Which load is the current one. Clicking through five parts starts
+   *  five downloads, and they finish in whatever order they like: only
+   *  the last one asked for may reach the screen. */
+  private asked = 0;
+
   private load(url: string) {
     if (!this.scene) return;
+    const mine = ++this.asked;
+    const current = () => mine === this.asked;
     this.note.set('loading the model…');
-    new GLTFLoader().load(url, gltf => {
-      // Only the board: the lights and the camera stay.
-      for (const child of [...this.scene!.children]) {
-        if ((child as { isLight?: boolean }).isLight) continue;
-        this.scene!.remove(child);
-      }
-      this.scene!.add(gltf.scene);
-      this.touched = false;
-      this.frame_the(gltf.scene);
-      this.note.set('');
-    }, undefined, () => this.note.set('the model could not be read'));
+    const failed = () => { if (current()) this.note.set('the model could not be read'); };
+    new GLTFLoader().load(url, gltf => { if (current()) this.show(gltf.scene); },
+                          undefined, failed);
+  }
+
+  /** Put this in the scene in place of whatever was there. */
+  private show(object: Object3D) {
+    if (!this.scene) return;
+    // Only the model: the lights and the camera stay.
+    for (const child of [...this.scene.children]) {
+      if ((child as { isLight?: boolean }).isLight) continue;
+      this.scene.remove(child);
+    }
+    this.scene.add(object);
+    this.touched = false;
+    this.frame_the(object);
+    this.note.set('');
   }
 
   /** Measure what came in, then put the camera on it. */

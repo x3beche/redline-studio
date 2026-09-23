@@ -63,6 +63,7 @@
   --view-bottom:  #ccd7e6;
   --draw-label:   rgba(255, 255, 255, .9);   /* the caret box on a drawing */
   --shot-bg:      #fff;                      /* behind a revision drawing */
+  --pcb-bg:       #111;                      /* behind a footprint: its layers are drawn for a dark board */
   --switch-knob: #fff;
   --overlay:      rgba(68, 68, 68, .7);
   --overlay-rest: rgba(68, 68, 68, .14);
@@ -119,6 +120,7 @@
   --view-bottom:  #dee5ef;
   --draw-label:   rgba(255, 255, 255, .92);
   --shot-bg:      #fff;
+  --pcb-bg:       #111;
   --switch-knob: #fff;
   --overlay:      rgba(236, 238, 241, .7);
   --overlay-rest: rgba(236, 238, 241, .14);
@@ -170,6 +172,7 @@
   --view-bottom:  #ccd7e6;
   --draw-label:   rgba(255, 255, 255, .9);
   --shot-bg:      #fff;
+  --pcb-bg:       #111;
   --switch-knob: #e8edf2;
   --overlay:      rgba(0, 0, 0, .7);
   --overlay-rest: rgba(0, 0, 0, .14);

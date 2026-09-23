@@ -131,6 +131,29 @@ Ask when the answer changes what you build. Do not ask what the drawing
 already says, and do not ask two questions where one would do. A question is
 worth a paragraph of what you measured; it is not worth a page.
 
+## Board notes
+
+A queued item marked `[BOARD]` is a note on a circuit board, written in
+the PCB room. `model` is then a board id, and `part` is one of its
+components as `U2 · C64898` - the reference and the LCSC number it is
+bought by. There is no drawing and no camera; the note is the request.
+
+The source is atopile, and it lives behind the API rather than behind
+`revisions.py`:
+
+```bash
+curl -s localhost:8000/api/boards/<id> | jq -r .source   # read it
+curl -s -X PUT localhost:8000/api/boards/<id> \
+     -H 'content-type: application/json' -d '{"source": "..."}'
+curl -s -X POST localhost:8000/api/boards/<id>/build     # netlist
+curl -s -X POST localhost:8000/api/boards/<id>/layout    # place, draw, model
+```
+
+A part is chosen by its LCSC number (`mpn = "C25744"` on the component);
+`GET /api/parts/search?q=...` searches LCSC's catalogue, and
+`GET /api/parts/<C…>/preview` says what one is - package, stock, price,
+and whether JLCPCB counts it Basic or Extended. Then `done <id>` as usual.
+
 ## Only `queued` items are work
 
 | Status | Meaning |

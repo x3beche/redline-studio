@@ -1391,8 +1391,9 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   // ---- save ----
   async save() {
-    if (!this.viewer) return;
     if (!this.comment().trim()) { this.flash('write a comment first'); return; }
+    if (this.picked.room() === 'pcb') { this.saveBoardNote(); return; }
+    if (!this.viewer) return;
     this.saving.set(true);
     // A note about a part is a valid revision; the drawing is optional.
     const merged = this.frozen() ? await this.merge(this.frozenShot) : null;
@@ -1416,6 +1417,37 @@ export class Editor implements AfterViewInit, OnDestroy {
       },
       error: e => { this.saving.set(false); this.flash('save failed: ' + e.status); },
     });
+  }
+
+  /** A note about a board. No camera and no drawing - the 3D viewer is
+   *  not what is on screen, and filing its angle against a board would
+   *  hand the agent a picture of something else. The part is the board's
+   *  own component, as the Part field offers it. */
+  private saveBoardNote() {
+    const board = this.picked.board();
+    if (!board) { this.flash('open a board first'); return; }
+    this.saving.set(true);
+    this.api.create({
+      comment: this.comment().trim(), image_png: null, camera: null,
+      part: this.part() || null, model: board, kind: 'pcb',
+    }).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.comment.set('');
+        this.flash('note saved');
+        this.refresh();
+      },
+      error: e => { this.saving.set(false); this.flash('save failed: ' + e.status); },
+    });
+  }
+
+  /** The revisions this room is about. A board's notes and a model's are
+   *  kept apart: the 3D queue is not something to read while laying out a
+   *  board, and a board note in the 3D room would be a card with no
+   *  picture of anything on it. */
+  roomRevisions(): Revision[] {
+    const want = this.picked.room() === 'pcb' ? 'pcb' : 'cad';
+    return this.revisions().filter(r => (r.kind ?? 'cad') === want);
   }
 
   /** Merge the frozen frame and the drawing layer into one PNG. */
@@ -1606,6 +1638,11 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   queueCount(): number {
     return this.revisions().filter(x => x.status === 'queued').length;
+  }
+
+  /** Queued, in the room on screen - the count beside that room's list. */
+  roomQueued(): number {
+    return this.roomRevisions().filter(x => x.status === 'queued').length;
   }
 
   badge(s: RevisionStatus): string {

@@ -188,6 +188,20 @@ and the **parts** pane searches LCSC: the number to order, what it is, the
 package, who makes it, how many they have and what one costs. Searching
 downloads nothing.
 
+Click a result — or anything in the drawer — and the column becomes that
+part: its photo, what it is, the package, price, stock, and whether
+JLCPCB counts it **Basic** (no loading fee) or **Extended** (a feeder fee
+per assembly run), which settles a choice between two equal parts more
+often than the price does. Under that, its 3D shape to turn over, its
+footprint and its schematic symbol, all straight from EasyEDA on the
+click and kept on the server's disk, so a second look is instant.
+**← list** goes back.
+
+The shape arrives as EasyEDA keeps it, an OBJ with its colours written
+inline. The server turns that into a GLB once — 0.15 s for an LQFP-48,
+and 1.2 MB instead of 3.8 — because parsed in the page it held the whole
+window still for seconds.
+
 **+** fetches one and keeps it: the footprint, and the 3D model if there
 is one. That is what puts it within reach of a board — *lay out* draws
 each part from what is in the drawer, so a part with no model is a part
@@ -203,6 +217,14 @@ copy on disk. Expect a few seconds of waiting for a large one.
 The **Part** field in the right-hand column follows the room: in the board
 room it offers the board's own components, `U1 · C368196`, so a note can
 be about one of them.
+
+### Board notes
+
+**Save as draft** in the board room files a note on the open board, not a
+revision of a model: no camera and no drawing, just the note and the part
+it is about. The list under it is **Board notes**, and the 3D room's
+revisions are not in it — nor are board notes in the 3D room's list. The
+agent sees them in the same queue, marked `[BOARD]`.
 
 ![The board room: parts, layout, circuit, model, machine and log](docs/pcb-room.png)
 

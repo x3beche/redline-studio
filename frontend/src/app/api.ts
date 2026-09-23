@@ -13,6 +13,8 @@ export interface Revision {
   view: { states: Record<string, [number, number]> | null } | null;
   part: string | null;
   model: string | null;
+  /** A board's note or a model's: each room shows its own. */
+  kind: 'cad' | 'pcb';
   status: RevisionStatus;
   queued_at: string | null;
   edited_at: string | null;
@@ -150,6 +152,7 @@ export class Api {
     comment: string; image_png: string | null;
     camera: CameraState | null; part: string | null; model: string | null;
       view?: { states: Record<string, [number, number]> | null } | null;
+      kind?: 'cad' | 'pcb';
   }): Observable<Revision> {
     return this.http.post<Revision>('/api/revisions', body);
   }
@@ -409,6 +412,28 @@ export interface PartHit {
   have?: boolean;
 }
 
+/** Everything about a part that can be known without keeping it. The
+ *  drawings, model and photo are separate URLs so the facts can show at
+ *  once and the 3D shape arrive when it arrives. */
+export interface PartPreview {
+  lcsc: string;
+  name: string | null;
+  description: string;
+  maker: string | null;
+  mpn: string | null;
+  package: string | null;
+  /** JLCPCB's assembly class: "Basic Part" or "Extended Part". */
+  jlc_class: string | null;
+  price: number | null;
+  stock: number | null;
+  min: number | null;
+  url: string | null;
+  has_photo: boolean;
+  has_model: boolean;
+  model_name: string | null;
+  have: boolean;
+}
+
 /** A part that has been fetched and kept. */
 export interface PartHeld {
   lcsc: string;
@@ -434,6 +459,13 @@ export class Parts {
   }
   drop(lcsc: string): Observable<unknown> {
     return this.http.delete(`/api/parts/${lcsc}`);
+  }
+  /** A look before keeping: facts now, drawings and the model by URL. */
+  preview(lcsc: string): Observable<PartPreview> {
+    return this.http.get<PartPreview>(`/api/parts/${lcsc}/preview`);
+  }
+  file(lcsc: string, name: 'footprint.svg' | 'symbol.svg' | 'model.glb' | 'photo.jpg'): string {
+    return `/api/parts/${encodeURIComponent(lcsc)}/${name}`;
   }
 }
 

@@ -600,8 +600,10 @@
         {{ saving() ? 'saving…' : 'Save as draft' }}
       </button>
       <p class="mt-1 text-[11px]" style="color: var(--ink-dim)">
-        {{ frozen() ? 'Saved with the drawing. Drafts stay invisible until queued.'
-                    : 'Saved as a note. Freeze first if you want to draw on it.' }}
+        {{ picked.room() === 'pcb'
+           ? 'Saved as a note on the open board, about the part picked above.'
+           : frozen() ? 'Saved with the drawing. Drafts stay invisible until queued.'
+                      : 'Saved as a note. Freeze first if you want to draw on it.' }}
       </p>
     </div>
 
@@ -609,9 +611,9 @@
          and the heading wrapped mid-phrase, which read as a fault. -->
     <div class="px-2 pb-1 pt-1.5">
       <div class="tcv-label truncate">
-        Revisions ({{ revisions().length }})
-        @if (queueCount()) {
-          <span style="color: var(--accent)"> · {{ queueCount() }} queued</span>
+        {{ picked.room() === 'pcb' ? 'Board notes' : 'Revisions' }} ({{ roomRevisions().length }})
+        @if (roomQueued()) {
+          <span style="color: var(--accent)"> · {{ roomQueued() }} queued</span>
         }
       </div>
       <div class="mt-1 flex items-center gap-1">
@@ -635,14 +637,16 @@
     <ul class="tcv-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-3">
       <!-- The one being worked on has moved into the viewer's panel; leaving
            it here as well would put the same card in two places. -->
-      @for (r of revisions(); track r.id) {
+      @for (r of roomRevisions(); track r.id) {
         @if (runningRevision()?.id !== r.id) {
         <li class="tcv-card mb-1 p-1.5">
           <ng-container *ngTemplateOutlet="revCard; context: { $implicit: r }" />
         </li>
         }
       } @empty {
-        <li class="text-[11px]" style="color: var(--ink-dim)">No revisions yet.</li>
+        <li class="text-[11px]" style="color: var(--ink-dim)">
+          {{ picked.room() === 'pcb' ? 'No notes on boards yet.' : 'No revisions yet.' }}
+        </li>
       }
     </ul>
 

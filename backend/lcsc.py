@@ -30,8 +30,11 @@ from . import store
 
 PARTS = "parts"
 TIMEOUT = 90
-# Their service, so it is asked politely and named honestly.
-AGENT = "redline/1.0 (board room; one request per part)"
+# Their service, so it is asked politely and named honestly. The
+# "compatible" prefix is for their image host, which holds a request
+# without a browser-shaped agent open until it times out - ninety seconds
+# for a 35 kB photo - while the same request with it takes one.
+AGENT = "Mozilla/5.0 (compatible; redline/1.0; board room)"
 
 # Lives with atopile, in its own environment.
 TOOL = os.environ.get(
@@ -113,6 +116,182 @@ async def search(term: str, limit: int = 20) -> list[dict]:
             "price": price,
         })
     return [r for r in out if looks_like_a_part(r["lcsc"])]
+
+
+# ---- a look before buying ------------------------------------------------
+#
+# Everything a person needs to decide on a part - what it is, its
+# footprint, its symbol, its 3D shape, a photo - is public on EasyEDA and
+# none of it has to be kept to be looked at. So it is fetched on click,
+# through here rather than from the browser, and kept on disk: a part
+# number means the same thing tomorrow, and this is a preview, not a part
+# of anything, so it has no business in the database.
+
+COMPONENT = "https://easyeda.com/api/products/{}/components?version=6.4.19.5"
+SVGS = "https://easyeda.com/api/products/{}/svgs"
+OBJ = "https://modules.easyeda.com/3dmodel/{}"
+
+LOOK = Path(os.environ.get(
+    "X3_LCSC_CACHE",
+    Path(__file__).resolve().parent.parent / ".cache" / "lcsc"))
+
+# EasyEDA's own numbering for the two drawings it keeps per part.
+SYMBOL, FOOTPRINT = 2, 4
+
+
+def _get_bytes(url: str) -> bytes:
+    import urllib.request
+
+    if url.startswith("//"):
+        url = "https:" + url
+    req = urllib.request.Request(url, headers={"User-Agent": AGENT})
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        return r.read()
+
+
+async def _kept(lcsc: str, name: str, url: str) -> bytes:
+    """One file about a part: from disk if it has been looked at before."""
+    if not looks_like_a_part(lcsc):
+        raise ValueError(f"{lcsc!r} is not an LCSC part number")
+    path = LOOK / lcsc.strip() / name
+    try:
+        if path.exists():
+            return path.read_bytes()
+    except OSError:
+        pass
+    blob = await asyncio.get_running_loop().run_in_executor(None, _get_bytes, url)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".part")
+        tmp.write_bytes(blob)
+        tmp.replace(path)
+    except OSError:
+        pass
+    return blob
+
+
+async def _component(lcsc: str) -> dict:
+    raw = await _kept(lcsc, "component.json", COMPONENT.format(lcsc))
+    body = json.loads(raw.decode(errors="replace"))
+    if not body.get("success") or not body.get("result"):
+        raise LookupError(f"{lcsc}: EasyEDA does not know this part")
+    return body["result"]
+
+
+def _model_of(component: dict) -> tuple[str | None, str | None]:
+    """The 3D model's id and name, from inside the footprint.
+
+    EasyEDA keeps it as one node among the footprint's shapes - a JSON
+    blob after `SVGNODE~`, tagged `outline3D`.
+    """
+    shapes = ((component.get("packageDetail") or {}).get("dataStr") or {}) \
+        .get("shape") or []
+    for shape in shapes:
+        if not shape.startswith("SVGNODE~"):
+            continue
+        try:
+            attrs = json.loads(shape[len("SVGNODE~"):]).get("attrs") or {}
+        except ValueError:
+            continue
+        if attrs.get("c_etype") == "outline3D" and attrs.get("uuid"):
+            return attrs["uuid"], attrs.get("title")
+    return None, None
+
+
+async def preview(lcsc: str) -> dict:
+    """What a part is, for somebody choosing one.
+
+    The drawings, the model and the photo are separate requests so the
+    page can show the facts at once and let the 3.8 MB model arrive when
+    it arrives.
+    """
+    c = await _component(lcsc)
+    para = ((c.get("dataStr") or {}).get("head") or {}).get("c_para") or {}
+    shop = c.get("lcsc") or {}
+    photo = (c.get("szlcsc") or {}).get("image")
+    model_id, model_name = _model_of(c)
+    return {
+        "lcsc": lcsc,
+        "name": c.get("title") or para.get("name"),
+        "description": c.get("description") or "",
+        "maker": para.get("Manufacturer"),
+        "mpn": para.get("Manufacturer Part"),
+        "package": para.get("package")
+                   or (c.get("packageDetail") or {}).get("title"),
+        # JLCPCB assembles "Basic" parts without a loading fee; an
+        # "Extended" one costs a feeder per board run. It decides between
+        # two otherwise equal parts more often than price does.
+        "jlc_class": para.get("JLCPCB Part Class"),
+        "price": shop.get("price"),
+        "stock": shop.get("stock"),
+        "min": shop.get("min"),
+        "url": shop.get("url"),
+        "has_photo": bool(photo),
+        "has_model": bool(model_id),
+        "model_name": model_name,
+    }
+
+
+async def drawing(lcsc: str, which: int) -> bytes:
+    """The symbol or the footprint, as the SVG EasyEDA draws it."""
+    raw = await _kept(lcsc, "svgs.json", SVGS.format(lcsc))
+    body = json.loads(raw.decode(errors="replace"))
+    for row in body.get("result") or []:
+        if row.get("docType") == which and row.get("svg"):
+            return row["svg"].encode()
+    raise LookupError(f"{lcsc}: no drawing of that kind")
+
+
+async def model_obj(lcsc: str) -> bytes:
+    """The 3D shape, as the OBJ EasyEDA keeps it - materials inline."""
+    model_id, _ = _model_of(await _component(lcsc))
+    if not model_id:
+        raise LookupError(f"{lcsc}: no 3D model")
+    return await _kept(lcsc, "model.obj", OBJ.format(model_id))
+
+
+async def model_glb(lcsc: str) -> bytes:
+    """The 3D shape as a GLB the page can open without parsing text.
+
+    Converted once and kept beside the OBJ it came from. In the browser the
+    OBJ froze the whole application for seconds; here it takes 0.15.
+    """
+    from . import objglb
+
+    path = LOOK / lcsc.strip() / "model.glb"
+    try:
+        if path.exists():
+            return path.read_bytes()
+    except OSError:
+        pass
+    obj = await model_obj(lcsc)
+    glb = await asyncio.get_running_loop().run_in_executor(
+        None, objglb.convert, obj.decode(errors="replace"))
+    try:
+        tmp = path.with_suffix(".glb.part")
+        tmp.write_bytes(glb)
+        tmp.replace(path)
+    except OSError:
+        pass
+    return glb
+
+
+async def photo(lcsc: str) -> bytes:
+    """The product photo, where there is one to be had.
+
+    Older parts point at EasyEDA's image host, which answers. Newer ones
+    point at LCSC's own, which turns away anything that is not a browser;
+    that is their call, so those parts simply have no photo here.
+    """
+    import urllib.error
+
+    url = ((await _component(lcsc)).get("szlcsc") or {}).get("image")
+    if not url:
+        raise LookupError(f"{lcsc}: no photo")
+    try:
+        return await _kept(lcsc, "photo.jpg", url)
+    except urllib.error.HTTPError as exc:
+        raise LookupError(f"{lcsc}: the photo host said {exc.code}") from exc
 
 
 async def fetch(db, lcsc: str, force: bool = False) -> dict:

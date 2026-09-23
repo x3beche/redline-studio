@@ -75,10 +75,19 @@ async def cmd_queue(_):
         return
     for i, d in enumerate(rows, 1):
         cam = d.get("camera") or {}
-        print(f"\n#{i}  {d['_id']}")
+        # A board note is not a model revision: there is no drawing to show
+        # and `build` does not take a board. Say so on the first line, so
+        # nobody runs the model loop on it.
+        board = d.get("kind") == "pcb"
+        print(f"\n#{i}  {d['_id']}" + ("   [BOARD]" if board else ""))
         print(f"   note  : {d['comment']}")
-        print(f"   model : {d.get('model') or '-'}    part: {d.get('part') or '-'}")
+        print(f"   {'board' if board else 'model'} : {d.get('model') or '-'}"
+              f"    part: {d.get('part') or '-'}")
         print(f"   time  : {d['created_at'][:19].replace('T', ' ')}")
+        if board:
+            print(f"   source: GET/PUT /api/boards/{d.get('model')}  "
+                  f"(then POST .../build and .../layout)")
+            continue
         if cam.get("position"):
             print(f"   camera: pos {cam['position']} target {cam.get('target')}")
         print(f"   image : python tools/revisions.py show {d['_id']}")
