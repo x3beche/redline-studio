@@ -510,7 +510,9 @@ def main() -> None:
     s.add_argument("text")
     s.set_defaults(fn=cmd_say)
     s = sub.add_parser("ask", help="ask the person a question on their screen")
-    s.add_argument("text", help="the question, in one or two sentences")
+    s.add_argument("text", help="the question, in Markdown - it is rendered "
+                                "on their screen, so a list or a table is "
+                                "worth using when the answer is a choice")
     s.add_argument("-o", "--option", action="append",
                    help="an answer to offer; repeat for more. The form still "
                         "takes free text either way")

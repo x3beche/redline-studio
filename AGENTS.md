@@ -94,9 +94,33 @@ drew the revision is looking at the model in a browser, not at your log:
   -c "Five fits are sized for accurate manufacture and would fuse on FDM."
 ```
 
-The question appears at the top of the right-hand column, the browser raises
-a notice, and the tab title says one is waiting. The command blocks and
-prints the answer when it comes, so the answer is simply its output.
+The question stops the screen: a card in the middle of it, the browser
+raises a notice, and the tab title says one is waiting. The command blocks
+and prints the answer when it comes, so the answer is simply its output.
+
+**Write it in Markdown.** The question and the `-c` context are both
+rendered, so use what the question needs and nothing it does not:
+
+- `**bold**` for the thing that has to be read first - the measurement
+  that does not fit, the constraint that broke;
+- a list for the options and what each one costs;
+- a table when every option has the same two or three numbers against it;
+- `` `BACK_H = 28` `` for anything that is a name in the source.
+
+```bash
+.venv/bin/python tools/revisions.py ask "$(cat <<'EOF'
+**The 18650 does not fit in any direction** - I need 7 mm.
+
+| option | what moves | the product |
+|---|---|---|
+| taller | `BACK_H` 28 -> 35.1 | grows 7.1 mm |
+| deeper | back wall 7.3 mm | length unchanged |
+
+Two revisions ago you asked for compact, so I am asking rather than
+guessing.
+EOF
+)" -o "taller" -o "deeper"
+```
 
 `-o` offers an answer and may be repeated; the form takes free text whichever
 way, because the real answer is often "neither, and here is why". `-c` is
@@ -104,7 +128,8 @@ what you already know, so they are not made to reconstruct it. `--timeout N`
 withdraws the question and exits 2 rather than waiting for ever.
 
 Ask when the answer changes what you build. Do not ask what the drawing
-already says, and do not ask two questions where one would do.
+already says, and do not ask two questions where one would do. A question is
+worth a paragraph of what you measured; it is not worth a page.
 
 ## Only `queued` items are work
 
