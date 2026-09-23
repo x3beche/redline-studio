@@ -896,37 +896,48 @@
                   }
                   @default {
                     @if (costOf(r.id); as a) {
-                      <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                        <span style="color: var(--ink-dim)">tokens</span>
-                        <span class="mono text-right" [title]="a.totals.billed_tokens + ' billed'">
-                          {{ tokens(a.totals.billed_tokens) }}
-                        </span>
-                        <span style="color: var(--ink-dim)">cost (API list)</span>
-                        <span class="mono text-right"
-                              [style.color]="a.totals.complete ? null : 'var(--warn)'"
-                              [title]="a.totals.complete ? 'list price for the tokens above'
-                                       : 'partial: no rate for ' + a.totals.unpriced_models.join(', ')">
-                          {{ usd(a.totals.cost_usd) }}{{ a.totals.complete ? '' : '+' }}
-                        </span>
-                        <span style="color: var(--ink-dim)">time</span>
-                        <span class="mono text-right">{{ duration(a.seconds) }}</span>
-                        <span style="color: var(--ink-dim)">calls</span>
-                        <span class="mono text-right">{{ a.totals.calls }}</span>
-                        <span style="color: var(--ink-dim)">out / s</span>
-                        <span class="mono text-right">{{ a.rate.output_per_s ?? '-' }}</span>
+                      <!-- Two pairs to a line. One pair to a line read as a
+                           list to be gone through; the panel is a dial to be
+                           glanced at, and it was half again as tall as it
+                           needed to be. Nothing left it - the footer's
+                           context and thinking came up into it. -->
+                      <div class="tcv-stats">
+                        <span>tokens</span>
+                        <b [title]="a.totals.billed_tokens + ' billed'">
+                          {{ tokens(a.totals.billed_tokens) }}</b>
+                        <span>calls</span>
+                        <b>{{ a.totals.calls }}</b>
+
+                        <span>cost</span>
+                        <b [style.color]="a.totals.complete ? null : 'var(--warn)'"
+                           [title]="a.totals.complete ? 'list price for the tokens above'
+                                    : 'partial: no rate for ' + a.totals.unpriced_models.join(', ')">
+                          {{ usd(a.totals.cost_usd) }}{{ a.totals.complete ? '' : '+' }}</b>
+                        <span>out/s</span>
+                        <b>{{ a.rate.output_per_s ?? '-' }}</b>
+
+                        <span>time</span>
+                        <b>{{ duration(a.seconds) }}</b>
+                        <span title="the conversation re-read on every call">context</span>
+                        <b>{{ tokens(a.totals.context_per_call) }}</b>
+
+                        <span>thinking</span>
+                        <b>{{ tokens(a.totals.thinking) }}</b>
+                        <span>vendors</span>
+                        <b>{{ a.providers.length }}</b>
                       </div>
 
                       <!-- Output tokens per 30 s bucket: where the thinking
                            happened and where the build was just running. -->
-                      <div class="mt-1.5">
-                        <div class="flex items-baseline justify-between">
+                      <div class="mt-1">
+                        <div class="flex items-baseline justify-between leading-none">
                           <span style="color: var(--ink-dim)">output tokens/s</span>
                           <span class="mono" style="color: var(--ink-dim)">
                             peak {{ sparkPeak(a) }}/s
                           </span>
                         </div>
                         <svg viewBox="0 0 250 34" preserveAspectRatio="none"
-                             class="mt-0.5 block h-8 w-full">
+                             class="mt-0.5 block h-5 w-full">
                           <polyline [attr.points]="spark(a)" fill="none"
                                     stroke="var(--accent)" stroke-width="1.5"
                                     vector-effect="non-scaling-stroke"></polyline>
@@ -938,7 +949,7 @@
                            than the 300 px panel, and a table let it push the
                            number columns until "41.3k out" wrapped onto two
                            lines. The name truncates, the numbers never wrap. -->
-                      <div class="mono mt-1.5" style="color: var(--ink-dim)">
+                      <div class="mono mt-1 leading-none" style="color: var(--ink-dim)">
                         @for (m of a.models; track m.model) {
                           <div class="flex items-baseline gap-1.5">
                             <span class="min-w-0 flex-1 truncate"
@@ -954,7 +965,7 @@
                            calls; the card's one-line summary is a separate
                            request to another vendor and is charged separately. -->
                       @if (a.surfaces.length > 1) {
-                        <div class="mono mt-1" style="color: var(--ink-dim)">
+                        <div class="mono mt-1 leading-none" style="color: var(--ink-dim)">
                           @for (sf of a.surfaces; track sf.surface) {
                             <div class="flex items-baseline gap-1.5">
                               <span class="min-w-0 flex-1 truncate" [title]="sf.provider">
@@ -973,8 +984,8 @@
                            context size is shown instead. -->
                       @if (donut(a); as slices) {
                         @if (slices.length) {
-                          <div class="mt-2 flex items-center gap-2">
-                            <svg viewBox="0 0 40 40" class="h-[72px] w-[72px] shrink-0"
+                          <div class="mt-1.5 flex items-center gap-2 leading-tight">
+                            <svg viewBox="0 0 40 40" class="h-[58px] w-[58px] shrink-0"
                                  style="transform: rotate(-90deg)">
                               @for (sl of slices; track sl.label) {
                                 <circle cx="20" cy="20" r="15.915" fill="none"
@@ -985,9 +996,9 @@
                                 </circle>
                               }
                             </svg>
-                            <div class="min-w-0 flex-1">
+                            <div class="min-w-0 flex-1 leading-none">
                               @for (sl of slices; track sl.label) {
-                                <div class="flex items-baseline gap-1.5">
+                                <div class="flex items-baseline gap-1.5 py-[1px]">
                                   <span class="h-2 w-2 shrink-0 rounded-sm"
                                         [style.background]="sl.colour"></span>
                                   <span class="min-w-0 flex-1 truncate">{{ sl.label }}</span>
@@ -1010,55 +1021,44 @@
                            adding them would be nonsense. -->
                       @if (a.compute; as c) {
                         @if (c.totals.jobs || c.machine) {
-                          <div class="mt-2 border-t pt-1.5"
+                          <div class="mt-1.5 border-t pt-1"
                                style="border-color: var(--line)">
-                            <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                              <span style="color: var(--ink-dim)">machine</span>
-                              <span class="mono text-right"
-                                    [title]="computeJobsTitle(c) + ', wall clock '
-                                             + duration(c.totals.wall_s)">
-                                {{ computeJobs(c) }}
-                              </span>
-                              <span style="color: var(--ink-dim)">cpu</span>
-                              <span class="mono text-right"
-                                    [title]="c.totals.cpu_s + ' core-seconds, measured by the kernel'">
-                                {{ coreTime(c.totals.cpu_s) }}
-                              </span>
+                            <div class="tcv-stats">
+                              <span>machine</span>
+                              <b [title]="computeJobsTitle(c) + ', wall clock '
+                                          + duration(c.totals.wall_s)">
+                                {{ computeJobs(c) }}</b>
+                              <span>peak ram</span>
+                              <b title="largest the build's process tree ever was">
+                                {{ mem(c.totals.peak_rss_mb) }}</b>
+
+                              <span>cpu</span>
+                              <b [title]="c.totals.cpu_s + ' core-seconds, measured by the kernel'">
+                                {{ coreTime(c.totals.cpu_s) }}</b>
+                              <span>energy</span>
+                              <b [style.color]="c.energy.basis === 'measured' ? null : 'var(--ink-dim)'"
+                                 [title]="energyNote(c.energy)">
+                                {{ c.energy.basis === 'measured' ? '' : '~' }}{{ wh(c.energy.wh) }}</b>
+
                               @if (c.totals.gpu_s) {
-                                <span style="color: var(--ink-dim)">gpu</span>
-                                <span class="mono text-right"
-                                      [title]="c.totals.gpu_s + ' GPU-seconds, from the driver\'s own per-process sampler'">
-                                  {{ coreTime(c.totals.gpu_s) }}
-                                </span>
+                                <span>gpu</span>
+                                <b [title]="c.totals.gpu_s + ' GPU-seconds, from the driver\'s own per-process sampler'">
+                                  {{ coreTime(c.totals.gpu_s) }}</b>
                               }
-                              <span style="color: var(--ink-dim)">peak ram</span>
-                              <span class="mono text-right"
-                                    title="largest the build's process tree ever was">
-                                {{ mem(c.totals.peak_rss_mb) }}
-                              </span>
-                              <span style="color: var(--ink-dim)">energy</span>
-                              <span class="mono text-right"
-                                    [style.color]="c.energy.basis === 'measured' ? null : 'var(--ink-dim)'"
-                                    [title]="energyNote(c.energy)">
-                                {{ c.energy.basis === 'measured' ? '' : '~' }}{{ wh(c.energy.wh) }}
-                              </span>
+                              @if (c.machine; as m) {
+                                <span class="own-line"
+                                      title="everything the box did in the same window, ours included">box</span>
+                                <b class="own-line"
+                                   [title]="m.cores + ' threads, ' + m.avg_cores_busy
+                                            + ' of them busy on average across the run'">
+                                  {{ coreTime(m.busy_core_s) }}@if (m.ours_pct != null) {<span
+                                    style="color: var(--ink-dim)"> · {{ m.ours_pct }}%</span>}</b>
+                              }
                             </div>
-                            @if (c.machine; as m) {
-                              <p class="mt-1" style="color: var(--ink-dim)"
-                                 [title]="m.cores + ' threads, ' + m.avg_cores_busy
-                                          + ' of them busy on average across the run'">
-                                whole machine {{ coreTime(m.busy_core_s) }}@if (m.ours_pct != null) {, ours {{ m.ours_pct }}%}
-                              </p>
-                            }
                           </div>
                         }
                       }
 
-                      <p class="mt-1.5" style="color: var(--ink-dim)">
-                        {{ a.providers.length }} provider{{ a.providers.length === 1 ? '' : 's' }}
-                        · context {{ tokens(a.totals.context_per_call) }}/call
-                        · thinking {{ tokens(a.totals.thinking) }}
-                      </p>
                     }
                   }
                 }

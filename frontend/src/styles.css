@@ -242,6 +242,35 @@
   border-radius: 3px;
 }
 
+/* Two label/value pairs to a line. The analytics panel is a dial to be
+   glanced at, not a list to be read down, and one pair to a line made it
+   half again as tall as it had to be. */
+.tcv-stats {
+  display: grid;
+  /* The right-hand value is content-sized, not a half share: "100.2
+     core-min · 5.7%" is twice as wide as "134" and an even split clipped
+     it. The slack goes to the left-hand value instead. */
+  grid-template-columns: auto 1fr auto auto;
+  gap: 1px 6px;
+  align-items: baseline;
+  line-height: 1.25;
+}
+.tcv-stats > span {
+  color: var(--ink-dim);
+  white-space: nowrap;          /* "peak ram" is one label, not two lines */
+}
+/* One value is much longer than the rest - the whole machine's figure with
+   our share beside it. Sharing a line with another pair asked for 308px of
+   a 278px panel, so it takes a line of its own. */
+.tcv-stats > span.own-line { grid-column: 1; }
+.tcv-stats > b.own-line { grid-column: 2 / -1; }
+.tcv-stats > b {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+}
+
 /* Single-screen app: the page never scrolls; scrolling happens inside panels. */
 html, body { height: 100%; overflow: hidden; }
 
