@@ -236,8 +236,11 @@
      comes later in the document and was painting its top border straight
      over it, which is why the open tab still read as a closed pill. */
   border-bottom-color: var(--surface);
+  /* In front of whatever it opens into. The stage needed one; a room
+     covers the viewer's own chrome and sits at 300, so the tab has to
+     clear that too or the room's top border paints the seam back in. */
   position: relative;
-  z-index: 1;
+  z-index: 400;
 }
 /* The three that are not built say so on the tab, not only on the page. */
 .tcv-tab-soon {
