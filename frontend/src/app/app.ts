@@ -1,10 +1,13 @@
 import { Component, signal } from '@angular/core';
 import { Editor } from './editor/editor';
+import { RoomAnalyze } from './rooms/analyze';
+import { RoomCoding } from './rooms/coding';
+import { RoomPcb } from './rooms/pcb';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor],
+  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -31,25 +34,10 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
        throw both away and rebuild them on the way back. An unbuilt room
        covers it instead. -->
   <div room>
-    @if (room(); as w) {
-      @if (!w.ready) {
-        <div class="absolute inset-0 z-50 overflow-y-auto rounded"
-             style="background: var(--surface)">
-          <div class="tcv-card mx-auto mt-10 max-w-xl p-5">
-            <h1 class="brand-name mb-2">{{ w.label }}</h1>
-            <p class="mb-4 text-[13px]" style="color: var(--ink)">{{ w.blurb }}</p>
-            <p class="tcv-label mb-1.5">Not here yet. What it needs first</p>
-            <ul class="mb-4 text-[12px] leading-relaxed" style="color: var(--ink-dim)">
-              @for (n of w.needs ?? []; track n) {
-                <li class="mb-1">— {{ n }}</li>
-              }
-            </ul>
-            <button (click)="open('cad')" class="tcv-btn tcv-btn-accent px-3 py-1">
-              back to 3D Drawing
-            </button>
-          </div>
-        </div>
-      }
+    @switch (here()) {
+      @case ('pcb') { <app-room-pcb (leave)="open('cad')" /> }
+      @case ('code') { <app-room-coding (leave)="open('cad')" /> }
+      @case ('analyze') { <app-room-analyze (leave)="open('cad')" /> }
     }
   </div>
 </app-editor>`,
@@ -57,10 +45,6 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
 export class App {
   tabs = WORKSPACES;
   here = signal<Workspace['id']>(currentWorkspace());
-
-  room(): Workspace | undefined {
-    return this.tabs.find(w => w.id === this.here());
-  }
 
   open(id: Workspace['id']) {
     this.here.set(id);

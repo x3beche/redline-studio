@@ -12,11 +12,9 @@
 export interface Workspace {
   id: 'cad' | 'pcb' | 'code' | 'analyze';
   label: string;
-  /** What this room is for, in one line. */
+  /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
   ready: boolean;
-  /** What has to exist before it opens - shown while it does not. */
-  needs?: string[];
 }
 
 export const WORKSPACES: Workspace[] = [
@@ -33,14 +31,6 @@ export const WORKSPACES: Workspace[] = [
     blurb: 'The same loop over a board. Mark a trace or a footprint on the '
          + 'render and leave the note there.',
     ready: false,
-    needs: [
-      'A source that is text and parametric, so a change is an edit rather '
-      + 'than a redraw',
-      'A headless render of the board, per layer, from a view that can be '
-      + 'stored and returned to',
-      'DRC and ERC as the check that fails the build — the board’s '
-      + 'answer to an interference volume',
-    ],
   },
   {
     id: 'code',
@@ -48,13 +38,6 @@ export const WORKSPACES: Workspace[] = [
     blurb: 'Redlining a running interface: draw on what is on screen and '
          + 'let the change arrive as a diff.',
     ready: false,
-    needs: [
-      'A screenshot of the running app as the artefact, with the route and '
-      + 'the state that produced it',
-      'The mark mapped back to the element under it, not just to a pixel',
-      'The test suite as the check, and the same screen afterwards as the '
-      + '"after"',
-    ],
   },
   {
     id: 'analyze',
@@ -62,12 +45,6 @@ export const WORKSPACES: Workspace[] = [
     blurb: 'What all of it cost and where the time went, across every '
          + 'revision rather than one card at a time.',
     ready: false,
-    needs: [
-      'The per-revision figures already stored — tokens, money, CPU, GPU, '
-      + 'energy — rolled up over a period',
-      'Spend by kind of work and by model, over time rather than per card',
-      'Build times per model, so a model that is getting slower says so',
-    ],
   },
 ];
 

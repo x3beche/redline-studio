@@ -527,7 +527,18 @@ body {
 /* A column: toolbar at its own height, body taking the rest. Subtracting a
    guessed 48 px for the toolbar left a strip of dead space under the log. */
 /* Square where the tab meets it; the rest of the panel keeps its radius. */
-.tcv-stage { border-top-left-radius: 0 !important; }
+.tcv-stage, .tcv-room { border-top-left-radius: 0 !important; }
+
+/* A room that is not the 3D one wears the same panel, so the open tab
+   reads as its top edge rather than as a button over a hole. Above the
+   viewer's own chrome: that paints as high as z-index 200 by itself, and
+   its tree column was standing in front of the room. */
+.tcv-room {
+  z-index: 300;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
 
 .tcv_cad_viewer {
   height: 100% !important;
