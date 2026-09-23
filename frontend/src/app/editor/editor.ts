@@ -144,6 +144,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private ro?: ResizeObserver;
 
   async ngAfterViewInit() {
+    this.restorePanels();
     const box = this.stage().nativeElement;
     try {
       this.viewer = new OcpViewer(this.host().nativeElement);
@@ -307,6 +308,7 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   toggleLog() {
     this.logOpen.update(v => !v);
+    this.remember('log', this.logOpen());
     setTimeout(() => this.sizeOverlay(), 60);
     setTimeout(() => this.scrollLog(), 80);
   }
@@ -323,6 +325,7 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   toggleSidebar() {
     this.collapsed.update(v => !v);
+    this.remember('catalog', this.collapsed());
     setTimeout(() => this.sizeOverlay(), 60);   // rescale once the transition ends
   }
 
@@ -332,6 +335,7 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   toggleQueue() {
     this.queueShut.update(v => !v);
+    this.remember('queue', this.queueShut());
     setTimeout(() => this.sizeOverlay(), 60);
   }
 
@@ -405,6 +409,7 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   toggleChat() {
     this.chatOpen.update(v => !v);
+    this.remember('chat', this.chatOpen());
     if (this.chatOpen()) setTimeout(() => this.scrollThread(), 40);
   }
 
@@ -873,6 +878,37 @@ export class Editor implements AfterViewInit, OnDestroy {
   // browser - they are about this window, not about the project, so they do
   // not belong in the database.
   private static SEEN = 'x3.lastView';
+  /** What was open and what was folded away. One key rather than five:
+   *  it is all the same question - how this window was left. */
+  private static PANELS = 'x3.panels';
+
+  private panels(): Record<string, unknown> {
+    try {
+      return JSON.parse(localStorage.getItem(Editor.PANELS) ?? '{}') ?? {};
+    } catch {
+      return {};                        // private window, or nonsense in it
+    }
+  }
+
+  private remember(key: string, value: unknown) {
+    try {
+      localStorage.setItem(Editor.PANELS,
+                           JSON.stringify({ ...this.panels(), [key]: value }));
+    } catch { /* private window, or storage full */ }
+  }
+
+  /** Put the panels back the way they were left. Called before the first
+   *  paint's worth of work, so nothing is seen open and then shut. */
+  private restorePanels() {
+    const saved = this.panels();
+    if (typeof saved['log'] === 'boolean') this.logOpen.set(saved['log'] as boolean);
+    if (typeof saved['chat'] === 'boolean') this.chatOpen.set(saved['chat'] as boolean);
+    if (typeof saved['catalog'] === 'boolean') this.collapsed.set(saved['catalog'] as boolean);
+    if (typeof saved['queue'] === 'boolean') this.queueShut.set(saved['queue'] as boolean);
+    if (Array.isArray(saved['folders'])) {
+      this.shutFolders.set(new Set(saved['folders'] as string[]));
+    }
+  }
 
   private rememberView() {
     const id = this.activeModel();
@@ -1379,6 +1415,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     const next = new Set(this.shutFolders());
     next.has(path) ? next.delete(path) : next.add(path);
     this.shutFolders.set(next);
+    this.remember('folders', [...next]);
   }
 
   /** Which board the PCB room is showing, so the tree can mark it. */

@@ -38,6 +38,11 @@ inside gets inspected without exporting anything.
 The log along the bottom is a record and reads as one: it can be folded
 away, and that is all. There is no clearing it from the page.
 
+What you fold away stays folded. The log, the thread under the queue, the
+two side columns and every folder in the catalog come back the way you
+left them — the window remembers its own shape in `x3.panels`, per
+browser, and nothing about it reaches the database.
+
 A single button on the card cycles the status: draft → queued → applied →
 draft, so "applied" can be undone. **edit** changes the comment and the part;
 the drawing itself is the record and stays as it was.
