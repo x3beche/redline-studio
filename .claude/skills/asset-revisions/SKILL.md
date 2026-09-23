@@ -154,6 +154,12 @@ takes the after picture and freezes what the work cost - tokens, time and
 money at list price - onto the card. Those numbers come from your own
 transcripts; `revisions.py usage` re-reads them if a run ended badly.
 
+There is a thread at the foot of the queue column for everything that is
+not a mark on a model - moving models between folders, renaming, questions
+about a build. `revisions.py chat` reads it and marks it picked up,
+`revisions.py say "..."` answers on their screen, and `wait` returns on a
+message as well as on a queued revision.
+
 A fork that is not yours to choose goes to their screen, not to your log:
 `revisions.py ask "..." -o "one" -o "another" -c "what you already know"`.
 It blocks, the page shows it with a browser notice, and the answer comes
@@ -244,7 +250,7 @@ If the tool is not enough, the collections are `revisions`, `models`,
 revision worked on, plus `current`), `activity` (the on-screen log),
 `llm_calls` and `analytics` (what each revision cost), `compute_jobs` (one
 row per build or render: CPU, peak memory, disk), `questions` (what the
-agent is waiting on). The GridFS buckets are
+agent is waiting on), `chat` (the thread). The GridFS buckets are
 `model_files` (generated artifacts, gzipped), `shots` (revision images before
 and after) and `uploads` (imported STEP/STL). The connection string is
 `MONGODB_URI` in `.env`.

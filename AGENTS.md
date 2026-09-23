@@ -41,6 +41,25 @@ It exits 0 when there is work and 2 when it timed out. Without `--timeout` it
 waits as long as the session lasts, which is what you want: finish, start the
 watcher, and the next request picks you up on its own.
 
+## They can talk back
+
+Not everything a person wants is a mark on a model. "Move these into a
+folder", "rename that one", "why is this build so slow" arrive in a thread
+at the foot of the queue column:
+
+```bash
+.venv/bin/python tools/revisions.py chat          # read it, and pick it up
+.venv/bin/python tools/revisions.py say "..."     # answer, on their screen
+```
+
+`chat` marks what they said as read, which is what stops it waking you
+again - `--keep-unread` looks without picking it up. `wait` returns on a
+message as well as on a queued revision, so the same idle loop covers both.
+
+Answer in the thread rather than in your terminal. Nothing in here changes
+a model by itself: if they ask for something, do it and then say what you
+did.
+
 ## Ask on their screen, not in your terminal
 
 When you reach a fork that is not yours to choose - which print process a
@@ -81,6 +100,8 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py queue                # what is queued
 .venv/bin/python tools/revisions.py wait                 # block until there is
 .venv/bin/python tools/revisions.py ask "..." -o A -o B  # ask on their screen
+.venv/bin/python tools/revisions.py chat                 # what they said
+.venv/bin/python tools/revisions.py say "..."            # answer them
 .venv/bin/python tools/revisions.py show <id>            # write drawing to disk
 .venv/bin/python tools/revisions.py models               # list models
 .venv/bin/python tools/revisions.py source <model>       # print source
@@ -127,6 +148,11 @@ picture from that same angle and look at it before you call the work done:
 ```bash
 python tools/render.py <revision_id>          # writes /tmp/after-<id>.png
 ```
+
+`--width` and `--height` are the size of the picture, not of the browser
+window: the window is grown until the canvas measures what was asked for.
+The stored camera is applied for you - an explicit `--camera=px,py,pz,tx,ty,tz`
+is for when you want a different side of the part than the one drawn on.
 
 Open that file with the Read tool and compare it against the revision drawing.
 Same viewpoint, so the before and after line up and a mistake is obvious. The

@@ -24,6 +24,9 @@ it is dismissed.
 The viewer's **Clip** tab cuts the model on three planes, which is how the
 inside gets inspected without exporting anything.
 
+The log along the bottom is a record and reads as one: it can be folded
+away, and that is all. There is no clearing it from the page.
+
 A single button on the card cycles the status: draft → queued → applied →
 draft, so "applied" can be undone. **edit** changes the comment and the part;
 the drawing itself is the record and stays as it was.
@@ -238,6 +241,28 @@ log at the bottom:
 `finish` closes the run, takes the after picture from the revision's own camera
 and freezes what the work cost onto the card.
 
+## Talking to the agent
+
+Under the queue there is a thread, for everything that is not a mark on a
+model — moving models between folders, renaming one, why a build is taking
+so long. Enter sends, shift+enter keeps typing.
+
+A line you have sent says **waiting** until the agent picks it up, and while
+it does there is an **undo** beside it: taking it back is refused once the
+agent has read it, because by then the work may be half done and an answer
+would be talking to a message that is no longer there.
+
+On the agent's side it is two commands, and its idle wait returns on a
+message just as it does on a queued revision — so it comes back on its own:
+
+```bash
+.venv/bin/python tools/revisions.py chat          # read, and pick it up
+.venv/bin/python tools/revisions.py say "..."     # answer, on your screen
+```
+
+Nothing in the thread changes a model by itself. If you ask for something,
+what you get back is the agent saying what it did.
+
 ## When the agent asks
 
 An agent applying a revision sometimes reaches a fork that is not its to
@@ -373,6 +398,8 @@ station, 63.7 MB artifact
 | `POST /api/revisions/english` | translate every revision that has no English text |
 | `DELETE /api/revisions/{id}` | delete a revision and its image |
 | `GET /api/revisions/{id}/analytics[?live=true]` | what that revision cost, models and machine |
+| `GET /api/chat` · `POST /api/chat` | the thread; say something |
+| `DELETE /api/chat/{id}` | unsend, while it is still unread |
 | `GET /api/questions` · `POST /api/questions` | what the agent is waiting on; ask something |
 | `POST /api/questions/{id}/answer` · `DELETE /api/questions/{id}` | answer it; withdraw it |
 | `POST /api/usage/ingest` · `GET /api/usage/prices` | re-read the transcripts; the rate card |

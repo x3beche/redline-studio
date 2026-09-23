@@ -296,6 +296,34 @@ export class Health {
   system(): Observable<SystemInfo> { return this.http.get<SystemInfo>('/api/system'); }
 }
 
+// ---------------- the line to the agent ----------------
+/** Everything that is not a mark on a model: move these into a folder,
+ *  rename that one, why is this build slow. */
+export interface ChatLine {
+  _id: string;
+  at: string;
+  role: 'user' | 'agent';
+  text: string;
+  /** Null until the agent has picked it up - that is what its idle wait
+   *  watches, and what the page shows as "not read yet". */
+  seen_at: string | null;
+}
+
+@Injectable({ providedIn: 'root' })
+export class Chat {
+  private http = inject(HttpClient);
+  history(): Observable<ChatLine[]> {
+    return this.http.get<ChatLine[]>('/api/chat');
+  }
+  say(text: string): Observable<ChatLine> {
+    return this.http.post<ChatLine>('/api/chat', { text });
+  }
+  /** Unsend. Refused once the agent has picked the message up. */
+  retract(id: string): Observable<unknown> {
+    return this.http.delete(`/api/chat/${id}`);
+  }
+}
+
 // ---------------- questions the agent is waiting on ----------------
 /** An agent applying a revision sometimes reaches a fork that is not its
  *  to choose. It writes the question here and blocks; the page answers. */
@@ -342,5 +370,4 @@ export class Activity {
     return this.http.get<LogLine[]>(`/api/activity?limit=${limit}`);
   }
   run(): Observable<Run | null> { return this.http.get<Run | null>('/api/run'); }
-  clear(): Observable<unknown> { return this.http.delete('/api/activity'); }
 }

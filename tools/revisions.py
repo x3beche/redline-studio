@@ -95,11 +95,22 @@ async def cmd_wait(args):
     """
     import time as _time
 
+    from backend import chat
+
     db = connect()
     deadline = _time.monotonic() + args.timeout if args.timeout else None
     seen = set(args.ignore or [])
     waited = 0
     while True:
+        # Either kind of work wakes it: a queued revision, or something the
+        # person typed into the thread. Both are them asking for something.
+        said = await chat.unread(db)
+        if said:
+            print(f"{len(said)} message(s) after waiting {waited}s")
+            for d in said:
+                print(f"  {d['at'][11:19]}  {d['text'][:88]}")
+            print("\nRead the thread: revisions.py chat")
+            return
         rows = [d async for d in db.revisions.find({"status": "queued"})]
         rows = [d for d in rows if d["_id"] not in seen]
         rows.sort(key=lambda d: d.get("queued_at") or d["created_at"])
@@ -115,6 +126,40 @@ async def cmd_wait(args):
             sys.exit(2)
         await asyncio.sleep(args.every)
         waited += args.every
+
+
+async def cmd_chat(args):
+    """Read the thread, and mark what the person said as picked up.
+
+    Not everything a person wants is a mark on a model - move these into a
+    folder, rename that, why is this build slow. Those arrive here.
+    """
+    from backend import chat
+
+    db = connect()
+    rows = await chat.history(db, args.limit)
+    if not rows:
+        print("nothing said yet")
+        return
+    for d in rows:
+        who = "you " if d["role"] == chat.AGENT else "them"
+        mark = " " if d.get("seen_at") else "*"
+        print(f"{mark}{d['at'][11:19]}  {who}  {d['text']}")
+    fresh = [d["_id"] for d in rows
+             if d["role"] == chat.USER and not d.get("seen_at")]
+    if fresh and not args.keep_unread:
+        await chat.mark_seen(db, fresh)
+        print(f"\n{len(fresh)} new, now marked as read. Answer with: "
+              f"revisions.py say \"...\"")
+
+
+async def cmd_say(args):
+    """Answer in the thread. This is what the person sees on screen."""
+    from backend import chat
+
+    db = connect()
+    await chat.post(db, args.text, role=chat.AGENT)
+    print("said")
 
 
 async def cmd_ask(args):
@@ -408,6 +453,14 @@ def main() -> None:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("queue").set_defaults(fn=cmd_queue)
+    s = sub.add_parser("chat", help="read what the person said")
+    s.add_argument("--limit", type=int, default=40)
+    s.add_argument("--keep-unread", action="store_true",
+                   help="look without picking it up")
+    s.set_defaults(fn=cmd_chat)
+    s = sub.add_parser("say", help="answer in the thread")
+    s.add_argument("text")
+    s.set_defaults(fn=cmd_say)
     s = sub.add_parser("ask", help="ask the person a question on their screen")
     s.add_argument("text", help="the question, in one or two sentences")
     s.add_argument("-o", "--option", action="append",

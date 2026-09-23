@@ -260,7 +260,8 @@
     </div>
 
     @if (notice(); as nt) {
-      <div class="tcv-card absolute right-3 top-3 z-30 w-72 overflow-hidden p-0"
+      <div class="tcv-card absolute right-3 z-30 w-72 overflow-hidden p-0"
+           [style.top.px]="viewTop() + 12"
            style="box-shadow: 0 8px 24px var(--shadow-hard)">
         <div class="flex items-center gap-2 px-2 py-1"
              [style.background]="nt.ok ? 'var(--ok)' : 'var(--danger)'"
@@ -278,7 +279,7 @@
 
     @if (focused(); as fv) {
       <div class="tcv-card absolute right-3 w-64 overflow-hidden p-0"
-           [style.top.px]="notice() ? 84 : 12"
+           [style.top.px]="viewTop() + (notice() ? 84 : 12)"
            style="box-shadow: 0 6px 20px var(--shadow-soft)">
         <div class="flex items-center justify-between px-2 py-1"
              style="background: var(--surface); border-bottom: 1px solid var(--line)">
@@ -335,7 +336,6 @@
         @if (runActive()) {
           <span class="text-[10px]" style="color: var(--accent)">running…</span>
         }
-        <button (click)="clearLog()" class="tcv-chip ml-auto">clear</button>
       </div>
       @if (logOpen()) {
         <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
@@ -424,8 +424,9 @@
     <!-- Deleting a model another one imports breaks that build, so the
          server refuses and the override is asked for here. -->
     @if (forcing(); as fc) {
-      <div class="tcv-card absolute left-1/2 top-3 z-40 w-80 -translate-x-1/2
+      <div class="tcv-card absolute left-1/2 z-40 w-80 -translate-x-1/2
                   overflow-hidden p-0"
+           [style.top.px]="viewTop() + 12"
            style="box-shadow: 0 8px 24px var(--shadow-hard)">
         <div class="px-2 py-1 text-[11px] font-semibold tracking-wider"
              style="background: var(--warn); color: var(--ink-on-warn)">STILL IN USE</div>
@@ -575,6 +576,63 @@
         <li class="text-[11px]" style="color: var(--ink-dim)">No revisions yet.</li>
       }
     </ul>
+
+    <!-- A line to the agent, under the queue it belongs beside. A revision
+         is a mark on a model; this is for everything else - move these into
+         a folder, rename that one, what is taking so long. It sits at the
+         foot of the column and keeps its own height, so the queue above it
+         scrolls and this does not go anywhere. -->
+    <div class="mt-auto shrink-0" style="border-top: 1px solid var(--line)">
+      <div class="flex items-center gap-2 px-2 py-1">
+        <button (click)="toggleChat()" class="tcv-chip">
+          {{ chatOpen() ? '▾' : '▸' }} ask the agent
+        </button>
+        @if (unreadSaid(); as n) {
+          <span class="mono text-[10px]" style="color: var(--warn)"
+                title="said, not picked up yet">{{ n }} waiting</span>
+        }
+      </div>
+      @if (chatOpen()) {
+        <div #threadBox class="tcv-scroll overflow-y-auto px-2 pb-1.5 text-[11px]"
+             style="height: 148px">
+          @for (m of thread(); track m._id) {
+            <div class="mb-1.5">
+              <div class="mono text-[9px] uppercase tracking-wider"
+                   [style.color]="m.role === 'agent' ? 'var(--accent)' : 'var(--ink-dim)'">
+                {{ m.role === 'agent' ? 'agent' : 'you' }}
+                <span style="color: var(--line)">{{ m.at.slice(11, 16) }}</span>
+                @if (m.role === 'user' && !m.seen_at) {
+                  <span style="color: var(--warn)">· waiting</span>
+                  <!-- Only once the server has given it an id. Pressed in
+                       the moment before that, undo took it off the screen
+                       and the next poll brought it back. -->
+                  @if (sent(m)) {
+                    <button (click)="unsay(m)" class="tcv-chip ml-1 px-1 py-0"
+                            title="take it back - only while it is unread">
+                      undo
+                    </button>
+                  }
+                }
+              </div>
+              <p class="leading-snug" style="color: var(--ink)">{{ m.text }}</p>
+            </div>
+          } @empty {
+            <p style="color: var(--ink-dim)">
+              For anything that is not a mark on a model.
+            </p>
+          }
+        </div>
+        <div class="flex gap-1 px-2 pb-2">
+          <textarea rows="2" [value]="saying()"
+                    (input)="saying.set($any($event.target).value)"
+                    (keydown)="sayKey($event)"
+                    placeholder="message the agent…"
+                    class="tcv-field min-w-0 flex-1 resize-none p-1.5"></textarea>
+          <button (click)="say()" class="tcv-btn tcv-btn-accent shrink-0 px-2"
+                  title="enter sends, shift+enter for a new line">send</button>
+        </div>
+      }
+    </div>
     }
   </aside>
   <!-- The fold handles live out here, not in the panels: a panel has to clip

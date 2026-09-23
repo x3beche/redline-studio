@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import build, questions, store, summarise, sysinfo, usage, versions
+from . import build, chat, questions, store, summarise, sysinfo, usage, versions
 
 LOG = logging.getLogger("x3.api")
 
@@ -404,11 +404,6 @@ async def push_activity(body: ActivityIn):
 async def list_activity(limit: int = 120):
     rows = [x async for x in db().activity.find({}).sort("at", -1).limit(limit)]
     return list(reversed(rows))            # oldest first, log order
-
-
-@app.delete("/api/activity")
-async def clear_activity():
-    return {"deleted": (await db().activity.delete_many({})).deleted_count}
 
 
 @app.get("/api/run")
@@ -820,6 +815,36 @@ async def put_settings(auto_archive: bool | None = None,
         await db().settings.update_one({"_id": SETTINGS_ID}, {"$set": patch},
                                        upsert=True)
     return await get_settings()
+
+
+# ---------------- chat ----------------
+class ChatIn(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+
+
+@app.get("/api/chat")
+async def chat_history(limit: int = 200):
+    """The thread, oldest first. The page polls this with the health."""
+    return await chat.history(db(), limit)
+
+
+@app.post("/api/chat")
+async def chat_post(body: ChatIn):
+    """Say something to the agent. Its own replies come in over the CLI."""
+    return await chat.post(db(), body.text)
+
+
+@app.delete("/api/chat")
+async def chat_clear():
+    return {"deleted": await chat.clear(db())}
+
+
+@app.delete("/api/chat/{mid}")
+async def chat_retract(mid: str):
+    """Unsend, while the agent has not picked it up."""
+    if not await chat.retract(db(), mid):
+        raise HTTPException(409, "already picked up, or not yours to take back")
+    return {"id": mid, "retracted": True}
 
 
 # ---------------- questions ----------------

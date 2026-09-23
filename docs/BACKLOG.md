@@ -24,14 +24,7 @@ Rules that are easy to get wrong:
 - rebuild, render from the revision's own camera, and look at it before
   calling it done.
 
-## App
-
-- **`render.py` does not always frame the model.** The after shot for
-  `20260922-082953-d9ecfa` came out zoomed into a corner of the base although
-  the revision's stored camera shows the whole station. The viewer sets its own
-  camera after the payload loads and again on resize; the tool applies the
-  stored one before that has settled. Until it is fixed, the before/after pair
-  on a card can be of two different things.
+## App — further out
 - **A render's GPU time is not measured.** CPU, memory and disk are, but the
   card in this machine reports no power through nvidia-smi and per-process
   utilisation would need `nvidia-smi pmon` sampled alongside the process tree.
@@ -61,3 +54,13 @@ Rules that are easy to get wrong:
 - The log runs along the bottom of the view; the toolbar spans the full width.
 - Switches, padding, rounded viewer, native freeze icon.
 - README split in three: front page, INSTALL, USAGE.
+- Every colour is a theme token, with default, light and oled, and tests
+  that fail on a colour written anywhere else.
+- Questions: the agent asks on the person's screen and blocks for the
+  answer, with a browser notice and a count in the tab title.
+- A thread under the queue for everything that is not a mark on a model,
+  with undo while the message is still unread.
+- The log is read-only; the clear button and its endpoint are gone.
+- Notices start where the 3D area does instead of covering the toolbar.
+- `render.py` applies the revision's own camera from a cold profile, and
+  --width/--height mean the picture rather than the window.

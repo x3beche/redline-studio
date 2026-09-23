@@ -17,7 +17,7 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Activity, Analytics, Api, CameraState, Catalog, Health, LogLine, Question, Questions, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
+import { Activity, Analytics, Api, CameraState, Catalog, Chat, ChatLine, Health, LogLine, Question, Questions, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer } from './ocp';
 
@@ -42,6 +42,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private health = inject(Health);
   private activity = inject(Activity);
   private asks = inject(Questions);
+  private chat = inject(Chat);
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private overlay = viewChild.required<ElementRef<HTMLCanvasElement>>('overlay');
   private stage = viewChild.required<ElementRef<HTMLDivElement>>('stage');
@@ -52,6 +53,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private logPanel = viewChild<ElementRef<HTMLElement>>('logPanel');
   private drawTools = viewChild<ElementRef<HTMLElement>>('drawTools');
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
+  private threadBox = viewChild<ElementRef<HTMLDivElement>>('threadBox');
 
   frozen = signal(false);
   saving = signal(false);
@@ -81,6 +83,10 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  change and be stamped onto whatever loaded next. */
   private heldCamera: CameraState | null = null;
   private heldModel: string | null = null;
+  /** Where the 3D area starts inside the stage. The cards that announce
+   *  something belong over the model, not over the viewer's toolbar - and
+   *  the toolbar's height is not a number we get to assume. */
+  viewTop = signal(0);
   /** One revision lookup at a time, so the retries above do not each start
    *  their own and open the same model three times over. */
   private focusing = false;
@@ -100,6 +106,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   sys = signal<SystemInfo | null>(null);
   /** What the agent is waiting on, and what is being typed back. */
   questions = signal<Question[]>([]);
+  thread = signal<ChatLine[]>([]);
+  saying = signal('');
+  chatOpen = signal(true);
   answerText = signal('');
   answerPicked = signal<Set<string>>(new Set());
   notifyState = signal<'unsupported' | 'default' | 'granted' | 'denied'>('default');
@@ -186,6 +195,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   pollHealth() {
     this.health.stats().subscribe({ next: v => this.stats.set(v), error: () => {} });
     this.asks.open().subscribe({ next: v => this.takeQuestions(v), error: () => {} });
+    this.chat.history().subscribe({ next: v => this.takeThread(v), error: () => {} });
     this.health.system().subscribe({ next: v => this.sys.set(v), error: () => {} });
     this.activity.run().subscribe({
       next: v => {
@@ -286,8 +296,6 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (el) el.scrollTop = el.scrollHeight;
   }
 
-  clearLog() { this.activity.clear().subscribe(() => this.pollHealth()); }
-
   toggleLog() {
     this.logOpen.update(v => !v);
     setTimeout(() => this.sizeOverlay(), 60);
@@ -321,6 +329,75 @@ export class Editor implements AfterViewInit, OnDestroy {
   gb(n: number): string { return (n / 1e9).toFixed(1) + ' GB'; }
 
   /** Compact gauges shown while the panel is collapsed. */
+  /** The thread, and the one line being typed into it. Scrolled to the
+   *  bottom when something lands, the way the log is. */
+  private takeThread(rows: ChatLine[]) {
+    const grew = rows.length !== this.thread().length;
+    this.thread.set(rows);
+    if (grew) setTimeout(() => this.scrollThread(), 40);
+  }
+
+  private scrollThread() {
+    const box = this.threadBox()?.nativeElement;
+    if (box) box.scrollTop = box.scrollHeight;
+  }
+
+  say() {
+    const text = this.saying().trim();
+    if (!text) return;
+    // Shown straight away rather than on the next poll: two seconds of
+    // nothing looks like the message went nowhere.
+    this.thread.update(t => [...t, {
+      _id: 'local-' + Date.now(), at: new Date().toISOString(),
+      role: 'user' as const, text, seen_at: null }]);
+    this.saying.set('');
+    setTimeout(() => this.scrollThread(), 40);
+    this.chat.say(text).subscribe({
+      next: () => this.chat.history().subscribe({
+        next: v => this.takeThread(v), error: () => {} }),
+      error: () => this.flash('could not send that'),
+    });
+  }
+
+  /** Take a message back. Only offered while it is still unread, and the
+   *  server checks that again - the agent may have picked it up in the
+   *  second between the card drawing and the click. */
+  unsay(m: ChatLine) {
+    if (m.seen_at || !this.sent(m)) return;
+    this.thread.update(t => t.filter(x => x._id !== m._id));
+    this.chat.retract(m._id).subscribe({
+      next: () => this.chat.history().subscribe({
+        next: v => this.takeThread(v), error: () => {} }),
+      error: () => {
+        this.flash('too late, the agent already has it');
+        this.chat.history().subscribe({
+          next: v => this.takeThread(v), error: () => {} });
+      },
+    });
+  }
+
+  /** Whether the server has this line yet. Until it does it has only the
+   *  id this window made up, which nothing else would recognise. */
+  sent(m: ChatLine): boolean { return !m._id.startsWith('local-'); }
+
+  /** Enter sends, shift+enter keeps typing - it is a line to somebody, not
+   *  a document. */
+  sayKey(e: KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.say(); }
+  }
+
+  /** How many of the person's lines the agent has not picked up. Zero
+   *  reads as nothing rather than as a 0. */
+  unreadSaid(): number | null {
+    const n = this.thread().filter(m => m.role === 'user' && !m.seen_at).length;
+    return n || null;
+  }
+
+  toggleChat() {
+    this.chatOpen.update(v => !v);
+    if (this.chatOpen()) setTimeout(() => this.scrollThread(), 40);
+  }
+
   /** A question is the agent standing still, so it has to reach the person
    *  even when the tab is in the background: the title carries it, and the
    *  browser is asked to raise a notice once per question. */
@@ -1016,6 +1093,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     const c = this.overlay().nativeElement;
     const cad = this.viewer?.canvasRect();
     const stage = box.getBoundingClientRect();
+    this.viewTop.set(cad ? Math.round(cad.top - stage.top) : 0);
     const w = cad ? cad.width : box.clientWidth;
     const h = cad ? cad.height : box.clientHeight;
     const ratio = Math.min(devicePixelRatio, 2);
