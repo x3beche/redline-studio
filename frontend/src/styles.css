@@ -143,18 +143,10 @@ body {
    drawn for it. */
 .brand-name {
   font-family: 'Orbitron', 'IBM Plex Sans', system-ui, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: .17em;
+  letter-spacing: .18em;
   color: var(--ink);
-  text-transform: uppercase;
-}
-.brand-tag {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: .14em;
-  color: var(--ink-dim);
   text-transform: uppercase;
 }
 /* Hashes, ids and figures read as data, not prose. */
