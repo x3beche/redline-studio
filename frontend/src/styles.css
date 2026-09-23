@@ -551,8 +551,8 @@ body {
 .tcv-rail-btn {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   margin: 0 auto;
   border-radius: 5px;
   cursor: pointer;
