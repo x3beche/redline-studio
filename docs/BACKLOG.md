@@ -244,3 +244,5 @@ A tab that says what it needs before it can exist.
   container, and the result is a layer render, a GLB and a BOM.
 - One tree for everything — `.3d` and `.pcb` side by side, folders that
   fold, and what is folded survives F5 along with the log and the thread.
+
+- **Users** - sign-in, workspaces, roles, agents with their own tokens. Researched and planned in [USERS-PLAN.md](USERS-PLAN.md); not started.
