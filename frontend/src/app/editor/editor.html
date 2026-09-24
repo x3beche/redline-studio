@@ -325,6 +325,15 @@
     </div>
   }
 
+  <!-- What just happened - saved, refused, sent. On the page, not in the
+       3D stage: the stage is taken out of the layout in the other rooms,
+       and a message inside it was never seen there, so Save as draft in the
+       board room looked like it did nothing. -->
+  @if (toast()) {
+    <div class="fixed bottom-6 left-1/2 z-[300] -translate-x-1/2 rounded px-3 py-1.5 text-[12px]"
+         style="background: var(--shade); color: var(--ink)" role="status">{{ toast() }}</div>
+  }
+
   <!-- CENTRE: viewer with the log below -->
   <div class="flex min-w-0 flex-1 flex-col gap-2">
 
@@ -415,10 +424,6 @@
           }
         </div>
       </div>
-    }
-    @if (toast()) {
-      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded px-3 py-1.5 text-[12px]"
-           style="background: var(--shade)">{{ toast() }}</div>
     }
 
       <!-- Its own band under the 3D area, inside the stage. Outside it, the

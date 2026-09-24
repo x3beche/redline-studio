@@ -1024,6 +1024,9 @@ export class RoomPcb implements OnDestroy {
     if (this.frozen()) this.resume();
     this.note.set('');
     this.here.set(b);
+    // The board on screen is the board a note is about, whether it was
+    // clicked in the catalog or opened by the room itself after a reload.
+    if (b && this.picked.board() !== b._id) this.picked.board.set(b._id);
     this.graph.set(null);
     this.picked.boardParts.set([]);
     this.cost.set(null);
