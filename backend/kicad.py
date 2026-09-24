@@ -27,7 +27,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from . import ato, compute, lcsc, rules, store
+from . import ato, compute, lcsc, limits, rules, store
 
 IMAGE = os.environ.get("X3_KICAD_IMAGE", "redline-kicad")
 HERE = Path(__file__).resolve().parent.parent
@@ -110,7 +110,7 @@ async def _run(args: list[str], cwd: Path) -> tuple[int, str]:
 
 
 def _docker(work: Path, *args: str, stdin: bool = False) -> list[str]:
-    run = ["docker", "run", "--rm"]
+    run = ["docker", "run", "--rm", *limits.box()]     # backend/limits.py
     if stdin:
         run.append("-i")
     return [*run, "-v", f"{work}:/work", "-w", "/work", *args]

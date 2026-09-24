@@ -21,7 +21,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from . import ato, kicad, lcsc, store
+from . import ato, kicad, lcsc, limits, store
 
 HERE = Path(__file__).resolve().parent.parent
 GENERATOR = HERE / "tools" / "schematic_gen.py"
@@ -122,7 +122,7 @@ async def draw(db, board_id: str) -> dict:
         os.chmod(work, 0o777)
         theme = ["-v", f"{THEME}:/home/board/.config/kicad/9.0/colors/redline-dark.json:ro"]
         rc, log = await kicad._run(
-            ["docker", "run", "--rm", "-v", f"{work}:/work", "-w", "/work", *theme,
+            ["docker", "run", "--rm", *limits.box(), "-v", f"{work}:/work", "-w", "/work", *theme,
              kicad.IMAGE, "sch", "export", "svg", "--exclude-drawing-sheet",
              "--theme", "redline-dark", "--output", "/work/svg", "board.kicad_sch"], work)
         svg = work / "svg" / "board.svg"
@@ -130,7 +130,7 @@ async def draw(db, board_id: str) -> dict:
             raise RuntimeError("drawing the schematic failed:\n" + log[-600:])
 
         rc, _ = await kicad._run(
-            ["docker", "run", "--rm", "-v", f"{work}:/work", "-w", "/work",
+            ["docker", "run", "--rm", *limits.box(), "-v", f"{work}:/work", "-w", "/work",
              kicad.IMAGE, "sch", "erc", "--format", "json", "--severity-all",
              "--output", "/work/erc.json", "board.kicad_sch"], work)
         try:

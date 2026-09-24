@@ -23,6 +23,8 @@ import time
 import uuid
 from pathlib import Path
 
+from . import limits
+
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".cache"
 
@@ -67,7 +69,8 @@ def argv(platform: str, cmd: list[str], *, repo: str | None = None,
     # An explicit --user in `extra` (programming a board wants root in the
     # container) comes later on the line and wins.
     run = ["docker", "run", "--rm", "--network", "host",
-           "--user", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp"]
+           "--user", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp",
+           *limits.box()]           # its share of the machine (backend/limits.py)
     if name:
         run += ["--name", name]
     if repo:
