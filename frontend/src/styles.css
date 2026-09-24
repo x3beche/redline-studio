@@ -1187,6 +1187,10 @@ a.tcv-ico { text-decoration: none; }
   border-left: 1px solid var(--line);
 }
 .tcv-log-side:empty { display: none; }
+/* Folded. Said here rather than left to the utility class: this file is
+   not in a layer, so the display above would outrank Tailwind's .hidden
+   and the log would never fold. */
+.tcv-log-body.hidden { display: none; }
 
 /* THE RULES FORM (rooms/rules-form.ts): a card per class, pair and pour,
    its fields two to a row with the label over the box. */
