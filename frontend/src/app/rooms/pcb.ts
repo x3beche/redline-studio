@@ -527,9 +527,9 @@ type BoardView = Pane | 'split';
       }
       @if (side() === 'analytics') {
         <!-- ANALYTICS: the board, its bill and its library in one glance.
-             Everything is what is already known - nothing asks LCSC. While
-             the agent works, its card docks below and takes most of the
-             column, so the tab shrinks to the four lines that matter. -->
+             Everything is what is already known - nothing asks LCSC. When
+             the agent starts on this board the room turns to this tab, so
+             what it changes can be watched as it changes it. -->
         <div class="tcv-scroll min-h-0 flex-1 overflow-y-auto px-2 py-1.5 text-[11px]">
           @if (stats(); as st) {
             <div class="tcv-stats">
@@ -555,9 +555,42 @@ type BoardView = Pane | 'split';
               }
             </div>
 
-            <!-- How it got here: each measure against itself since the tab
-                 was first opened - the compaction the agent is doing shows
-                 as the area line falling. -->
+            <!-- The tab's own picture, shown whether or not the agent is
+                 at work: what the board is built of, how its nets spread,
+                 what it adds up to, and what costs most. -->
+            <div class="tcv-mchart-title">parts by circuit block</div>
+            <app-mini-bars [rows]="st.blocks" />
+            <div class="tcv-mchart-title">nets by how many pins they join</div>
+            <app-mini-columns [rows]="st.fanout" />
+            <div class="tcv-stats mt-2 pt-1.5" style="border-top: 1px solid var(--line)">
+              @if (st.route; as r) {
+                <span>copper</span><b>{{ r.length_mm.toFixed(0) }} mm</b>
+                <span>area</span><b>{{ st.size.area_cm2 ?? '–' }} cm²</b>
+              }
+              @if (st.bom; as m) {
+                <span>BOM</span>
+                <b [title]="'unit price × quantity over the ' + m.priced + ' of ' + m.lines
+                            + ' part numbers LCSC has already been asked about'">
+                  {{ m.priced ? '$' + m.cost_usd.toFixed(2) : '–' }} · {{ m.priced }}/{{ m.lines }}</b>
+                <span>JLC</span>
+                <b title="Basic: no loading fee. Extended: a feeder fee per assembly run.">
+                  {{ m.basic }}B · <span [style.color]="m.extended ? 'var(--warn)' : null">{{ m.extended }}E</span></b>
+              }
+              <span>library</span>
+              <b [title]="st.library.with_3d + ' of them with a 3D model'">{{ st.library.parts }} · {{ st.library.with_3d }} 3d</b>
+              <span>kept</span><b>{{ mb(st.library.bytes) }}</b>
+              <span>LCSC 1h</span>
+              <b [title]="st.lcsc.disk + ' answered from disk'">{{ st.lcsc.net }} sent · {{ st.lcsc.disk }}d</b>
+              <span>budget</span>
+              <b [style.color]="st.lcsc.cooling || st.lcsc.refused ? 'var(--danger)' : null">
+                {{ st.lcsc.cooling ? 'cooling' : st.lcsc.used + '/' + st.lcsc.budget }}</b>
+            </div>
+            <div class="tcv-mchart-title">costliest parts, per board</div>
+            <app-mini-bars [rows]="st.bom_top" [fmt]="usd"
+                           empty="no prices on disk yet - LCSC has not been asked about these" />
+
+            <!-- Further down: how it got here, what DRC says, and every
+                 kind of part. The tab scrolls like any other. -->
             @if (st.history.length) {
               <div class="tcv-mchart-title">since {{ st.history[0].at.slice(11, 16) }} · {{ st.history.length }} readings</div>
               <app-mini-trend label="area cm²" [values]="series(st, 'area_cm2')" [times]="times(st)" />
@@ -568,41 +601,8 @@ type BoardView = Pane | 'split';
               <div class="tcv-mchart-title">what DRC is warning about</div>
               <app-mini-bars [rows]="st.drc_types" />
             }
-
-            @if (!busy()) {
-              <div class="tcv-mchart-title">parts by kind</div>
-              <app-mini-bars [rows]="st.kinds" />
-              <div class="tcv-mchart-title">parts by circuit block</div>
-              <app-mini-bars [rows]="st.blocks" />
-              <div class="tcv-mchart-title">nets by how many pins they join</div>
-              <app-mini-columns [rows]="st.fanout" />
-              <div class="tcv-mchart-title">costliest parts, per board</div>
-              <app-mini-bars [rows]="st.bom_top" [fmt]="usd"
-                             empty="no prices on disk yet - LCSC has not been asked about these" />
-              <div class="tcv-stats mt-2 pt-1.5" style="border-top: 1px solid var(--line)">
-                @if (st.route; as r) {
-                  <span>copper</span><b>{{ r.length_mm.toFixed(0) }} mm</b>
-                  <span>area</span><b>{{ st.size.area_cm2 ?? '–' }} cm²</b>
-                }
-                @if (st.bom; as m) {
-                  <span>BOM</span>
-                  <b [title]="'unit price × quantity over the ' + m.priced + ' of ' + m.lines
-                              + ' part numbers LCSC has already been asked about'">
-                    {{ m.priced ? '$' + m.cost_usd.toFixed(2) : '–' }} · {{ m.priced }}/{{ m.lines }}</b>
-                  <span>JLC</span>
-                  <b title="Basic: no loading fee. Extended: a feeder fee per assembly run.">
-                    {{ m.basic }}B · <span [style.color]="m.extended ? 'var(--warn)' : null">{{ m.extended }}E</span></b>
-                }
-                <span>library</span>
-                <b [title]="st.library.with_3d + ' of them with a 3D model'">{{ st.library.parts }} · {{ st.library.with_3d }} 3d</b>
-                <span>kept</span><b>{{ mb(st.library.bytes) }}</b>
-                <span>LCSC 1h</span>
-                <b [title]="st.lcsc.disk + ' answered from disk'">{{ st.lcsc.net }} sent · {{ st.lcsc.disk }}d</b>
-                <span>budget</span>
-                <b [style.color]="st.lcsc.cooling || st.lcsc.refused ? 'var(--danger)' : null">
-                  {{ st.lcsc.cooling ? 'cooling' : st.lcsc.used + '/' + st.lcsc.budget }}</b>
-              </div>
-            }
+            <div class="tcv-mchart-title">parts by kind</div>
+            <app-mini-bars [rows]="st.kinds" />
           } @else {
             <div style="color: var(--ink-dim)">reading the board…</div>
           }
@@ -769,10 +769,12 @@ export class RoomPcb implements OnDestroy {
   private checking?: ReturnType<typeof setTimeout>;
   lastLayout = signal<BoardLayout | null>(null);
   /** The Analytics tab's figures, and whether the agent is at work in
-   *  this room - its card then docks under the tabs and the tab shrinks. */
+   *  this room - the room turns to Analytics when it starts. */
   stats = signal<BoardStats | null>(null);
   busy = signal(false);
   private statsAt = 0;
+  /** The task Analytics was last opened for, so it opens once per task. */
+  private shownFor: string | null = null;
   /** The drawer of parts, and what a search in LCSC turned up. */
   held = signal<PartHeld[]>([]);
   hits = signal<PartHit[]>([]);
@@ -1057,6 +1059,14 @@ export class RoomPcb implements OnDestroy {
     this.activity.run('pcb').subscribe({ next: r => {
       const was = this.busy();
       this.busy.set(r?.status === 'running');
+      // Once per task - when it starts, or when the page is opened while it
+      // runs - the room turns to Analytics to show what is being changed.
+      // Only once: a tab picked by hand after that is left alone.
+      const task = r?.status === 'running' ? (r.revision ?? r.started_at) : null;
+      if (task && task !== this.shownFor) {
+        this.shownFor = task;
+        if (this.side() !== 'analytics') this.setSide('analytics');
+      }
       // A run that just ended changed the board: read the figures again.
       if (was && !this.busy() && this.here()) this.readStats(this.here()!._id);
     } });
