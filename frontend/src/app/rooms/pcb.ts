@@ -256,6 +256,7 @@ import { Drawing } from './drawing';
          The board's own figures. The catalog's foot and the revision
          cards say the same kind of thing about models; these are about
          this board, so they are counted here. -->
+    @if (shown('side')) {
     <section class="tcv-pane" [style.grid-area]="area('side')">
       <header class="tcv-pane-head">
         @for (tab of sideTabs; track tab) {
@@ -513,11 +514,13 @@ import { Drawing } from './drawing';
       </div>
       }
     </section>
+    }
 
     <!-- THE LOG
          Its own, not the 3D room's: the lines a board writes are about
          this board, and a build that happened while you were looking at
          something else is exactly what you want to read here. -->
+    @if (shown('log')) {
     <section class="tcv-pane" [style.grid-area]="area('log')">
       <header class="tcv-pane-head">
         <button (click)="setBottom('log')" class="tcv-chip"
@@ -623,142 +626,116 @@ import { Drawing } from './drawing';
         </div>
       }
     </section>
-
-    <!-- LAYOUT -->
-    @if (shown('layout')) {
-    <section class="tcv-pane" [style.grid-area]="area('layout')">
-      <!-- What the board came out as, and the one thing to do to it:
-           run the pipeline, which is everything from the source down. -->
-      <header class="tcv-pane-head">
-        <span class="tcv-label">layout</span>
-        @if (here()?.route; as r) {
-          <span class="mono truncate text-[10px]"
-                [style.color]="r.unrouted || here()?.drc?.error_count ? 'var(--danger)' : 'var(--ok)'"
-                [title]="routeTitle()">
-            {{ r.unrouted ? r.unrouted + ' unrouted' : 'routed' }} ·
-            DRC {{ here()?.drc?.error_count ?? '?' }}
-          </span>
-        } @else if (hasLayout()) {
-          <span class="mono truncate text-[10px]" style="color: var(--ink-dim)">
-            {{ here()?.layout?.placed }} placed · not routed
-          </span>
-        }
-        <div class="ml-auto flex shrink-0 items-center gap-1">
-          @if (note(); as n) {
-            <span class="mono mr-1 max-w-[12rem] truncate text-[10px]"
-                  style="color: var(--warn)" [title]="n">{{ n }}</span>
-          }
-          <button (click)="run()" [disabled]="busy()"
-                  class="tcv-btn tcv-btn-accent px-2 py-0.5"
-                  title="build, schematic, place, route, pour, DRC - in that order">
-            {{ running() ? 'running…' : 'run' }}
-          </button>
-          <button (click)="rebuild()" [disabled]="busy()"
-                  class="tcv-btn px-2 py-0.5"
-                  title="only the netlist - quick, to check the source compiles">
-            {{ building() ? '…' : 'build' }}
-          </button>
-          <button (click)="toggleBig('layout')" class="tcv-chip"
-                  [title]="big() === 'layout' ? 'back to its size' : 'larger'">
-            {{ big() === 'layout' ? '⤡' : '⤢' }}
-          </button>
-        </div>
-      </header>
-      @if (hasLayout()) {
-        <div class="min-h-0 flex-1 p-1">
-          <app-drawing [src]="layoutUrl()">
-            @if (here()?.route) {
-              @for (v of views; track v) {
-                <button (click)="view.set(v)" class="tcv-chip px-1.5 py-0"
-                        [attr.data-on]="view() === v ? 1 : null">{{ v }}</button>
-              }
-            }
-            <a class="tcv-chip px-1.5 py-0" [href]="file('board.kicad_pcb')"
-               title="the board as a KiCad file">.kicad_pcb</a>
-          </app-drawing>
-        </div>
-        @if (trouble().length) {
-          <div class="shrink-0 px-2 pb-1.5 text-[11px]" style="color: var(--warn)">
-            @for (m of trouble(); track m) { <div class="truncate" [title]="m">{{ m }}</div> }
-          </div>
-        }
-      } @else {
-        <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
-          {{ here()?.ready
-             ? 'Built, not laid out yet. run draws the schematic, places the parts, routes and checks it.'
-             : 'Not built yet. run takes it from the source all the way to a routed, checked board.' }}
-        </p>
-      }
-    </section>
     }
 
-    <!-- THE SCHEMATIC
-         Drawn by KiCad from what atopile built, every part with its real
-         symbol and every pin labelled with its net, and checked by ERC.
-         It follows the source: drawn again on every run, never edited, so
-         there is nothing in it for a run to overwrite. -->
-    @if (shown('schematic')) {
-    <section class="tcv-pane" [style.grid-area]="area('schematic')">
+    <!-- THE BOARD
+         One window, three ways of looking at the same board: the copper,
+         the schematic it came from, and the thing in three dimensions.
+         Nothing in here makes anything - the agent runs the pipeline
+         (build, schematic, place, route, DRC) when a change is asked for,
+         and this shows what came of it. -->
+    <section class="tcv-pane" [style.grid-area]="area('board')">
       <header class="tcv-pane-head">
-        <span class="tcv-label">schematic</span>
-        @if (here()?.schematic; as s) {
-          <span class="mono truncate text-[10px]"
-                [style.color]="s.erc.error_count ? 'var(--danger)' : 'var(--ok)'"
-                [title]="'ERC: ' + s.erc.error_count + ' errors, ' + s.erc.warning_count
-                         + ' warnings; library set-up notes left out'">
-            {{ s.parts }} parts · ERC {{ s.erc.error_count }}
-          </span>
+        @for (tab of boardTabs; track tab) {
+          <button (click)="setBoardTab(tab)" class="tcv-chip"
+                  [attr.data-on]="boardTab() === tab ? 1 : null">{{ tab }}</button>
         }
-        <button (click)="toggleBig('schematic')" class="tcv-chip ml-auto shrink-0"
-                [title]="big() === 'schematic' ? 'back to its size' : 'larger'">
-          {{ big() === 'schematic' ? '⤡' : '⤢' }}
+        @switch (boardTab()) {
+          @case ('layout') {
+            @if (here()?.route; as r) {
+              <span class="mono truncate text-[10px]"
+                    [style.color]="r.unrouted || here()?.drc?.error_count ? 'var(--danger)' : 'var(--ok)'"
+                    [title]="routeTitle()">
+                {{ r.unrouted ? r.unrouted + ' unrouted' : 'routed' }} ·
+                DRC {{ here()?.drc?.error_count ?? '?' }}
+              </span>
+            } @else if (hasLayout()) {
+              <span class="mono truncate text-[10px]" style="color: var(--ink-dim)">
+                {{ here()?.layout?.placed }} placed · not routed
+              </span>
+            }
+          }
+          @case ('schematic') {
+            @if (here()?.schematic; as s) {
+              <span class="mono truncate text-[10px]"
+                    [style.color]="s.erc.error_count ? 'var(--danger)' : 'var(--ok)'"
+                    [title]="'ERC: ' + s.erc.error_count + ' errors, ' + s.erc.warning_count
+                             + ' warnings; library set-up notes left out'">
+                {{ s.parts }} parts · ERC {{ s.erc.error_count }}
+              </span>
+            }
+          }
+          @case ('3d') {
+            <span class="mono truncate text-[10px]" style="color: var(--ink-dim)">
+              drag to turn it over
+            </span>
+          }
+        }
+        @if (note(); as n) {
+          <span class="mono max-w-[14rem] truncate text-[10px]"
+                style="color: var(--warn)" [title]="n">{{ n }}</span>
+        }
+        <button (click)="toggleBig('board')" class="tcv-chip ml-auto shrink-0"
+                [title]="big() === 'board' ? 'back to its size' : 'larger'">
+          {{ big() === 'board' ? '⤡' : '⤢' }}
         </button>
       </header>
+
       <div class="min-h-0 flex-1 p-1">
-        @if (here()?.schematic; as s) {
-          <app-drawing [src]="file('schematic.svg', s.at)">
-            <a class="tcv-chip px-1.5 py-0" [href]="file('board.kicad_sch')"
-               title="the schematic as a KiCad file">.kicad_sch</a>
-          </app-drawing>
-        } @else {
-          <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
-            No schematic yet. <b>run</b> draws it from the source, with the rest.
-          </p>
+        @switch (boardTab()) {
+          @case ('layout') {
+            @if (hasLayout()) {
+              <app-drawing [src]="layoutUrl()">
+                @if (here()?.route) {
+                  @for (v of views; track v) {
+                    <button (click)="view.set(v)" class="tcv-chip px-1.5 py-0"
+                            [attr.data-on]="view() === v ? 1 : null">{{ v }}</button>
+                  }
+                }
+                <a class="tcv-chip px-1.5 py-0" [href]="file('board.kicad_pcb')"
+                   title="the board as a KiCad file">.kicad_pcb</a>
+              </app-drawing>
+            } @else {
+              <p class="p-2 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
+            }
+          }
+          @case ('schematic') {
+            @if (here()?.schematic; as s) {
+              <app-drawing [src]="file('schematic.svg', s.at)">
+                <a class="tcv-chip px-1.5 py-0" [href]="file('board.kicad_sch')"
+                   title="the schematic as a KiCad file">.kicad_sch</a>
+              </app-drawing>
+            } @else {
+              <p class="p-2 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
+            }
+          }
+          @case ('3d') {
+            @if (has3d()) {
+              <!-- Fetched when the tab is opened. three.js and a glTF
+                   loader are a third of a megabyte, and they are no use
+                   in any other room. -->
+              <div class="h-full w-full overflow-hidden rounded"
+                   style="background: var(--surface-2)">
+                @defer (on viewport) {
+                  <app-board-3d [src]="modelUrl()" />
+                } @placeholder {
+                  <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
+                    bringing the viewer in…
+                  </p>
+                }
+              </div>
+            } @else {
+              <p class="p-2 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
+            }
+          }
         }
       </div>
-    </section>
-    }
-
-    <!-- THE BOARD, IN THREE DIMENSIONS -->
-    @if (shown('3d')) {
-    <section class="tcv-pane" [style.grid-area]="area('3d')">
-      <header class="tcv-pane-head">
-        <span class="tcv-label">3d</span>
-        <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
-          drag to turn it over
-        </span>
-      </header>
-      @if (has3d()) {
-        <!-- Fetched when the pane is on screen. three.js and a glTF
-             loader are a third of a megabyte, and they are no use in any
-             other room. -->
-        <div class="min-h-0 flex-1 overflow-hidden"
-             style="background: var(--surface-2)">
-          @defer (on viewport) {
-            <app-board-3d [src]="modelUrl()" />
-          } @placeholder {
-            <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
-              bringing the viewer in…
-            </p>
-          }
+      @if (boardTab() === 'layout' && trouble().length) {
+        <div class="shrink-0 px-2 pb-1.5 text-[11px]" style="color: var(--warn)">
+          @for (m of trouble(); track m) { <div class="truncate" [title]="m">{{ m }}</div> }
         </div>
-      } @else {
-        <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
-          No model yet. <b>run</b> makes one alongside the drawing.
-        </p>
       }
     </section>
-    }
 
   </div>
   }
@@ -776,15 +753,20 @@ export class RoomPcb implements OnDestroy {
   boards = signal<BoardEntry[]>([]);
   here = signal<BoardEntry | null>(null);
   graph = signal<BoardGraph | null>(null);
-  running = signal(false);
-  building = signal(false);
-  busy = computed(() => this.running() || this.building());
   note = signal('');
 
-  /** Which pane is made large, if any, and which side tab is showing -
-   *  kept across a reload like the other panels. */
-  big = signal<'none' | 'schematic' | 'layout' | 'side'>(
-    RoomPcb.recall('big', 'none') as 'none' | 'schematic' | 'layout' | 'side');
+  /** The board window's tab, which pane is made large if any, and which
+   *  side tab is showing - all kept across a reload like the other panels. */
+  readonly boardTabs = ['layout', 'schematic', '3d'] as const;
+  boardTab = signal<'layout' | 'schematic' | '3d'>(
+    RoomPcb.pick(RoomPcb.recall('board', 'layout'), ['layout', 'schematic', '3d'], 'layout'));
+  big = signal<'none' | 'board' | 'side'>(
+    RoomPcb.pick(RoomPcb.recall('big', 'none'), ['none', 'board', 'side'], 'none'));
+  /** What an empty tab says. Nothing here makes a board: the agent runs
+   *  the pipeline when a change is asked for. */
+  readonly notYet = 'Nothing yet. Ask for the change - a board note, or the '
+    + 'thread under the queue - and the agent runs the pipeline: build, '
+    + 'schematic, place, route, DRC.';
   readonly sideTabs = ['machine', 'rules', 'checks'] as const;
   side = signal<'machine' | 'rules' | 'checks'>(
     RoomPcb.recall('side', 'machine') as 'machine' | 'rules' | 'checks');
@@ -947,6 +929,12 @@ export class RoomPcb implements OnDestroy {
   }
 
   private static KEY = 'x3.pcb.';
+
+  /** A remembered value, if it is still one of the choices - a tab that
+   *  no longer exists is not a reason to show nothing. */
+  private static pick<T extends string>(value: string, choices: readonly T[], fallback: T): T {
+    return (choices as readonly string[]).includes(value) ? value as T : fallback;
+  }
 
   private static recall(key: string, fallback: string): string {
     try { return localStorage.getItem(RoomPcb.KEY + key) ?? fallback; }
@@ -1170,56 +1158,40 @@ export class RoomPcb implements OnDestroy {
       + `${d?.warning_count ?? '?'} warnings, ${d?.unconnected ?? '?'} unconnected`;
   }
 
-  /** The whole pipeline, in order: build, schematic, place, route, pour,
-   *  DRC. The log says which stage it is at. */
-  run() {
-    const b = this.here();
-    if (!b || this.busy()) return;
-    this.running.set(true);
-    this.note.set('');
-    this.api.run(b._id).subscribe({
-      next: () => { this.running.set(false); this.refresh(); this.loadRules(); },
-      error: e => {
-        this.running.set(false);
-        this.note.set(String(e?.error?.detail ?? e?.message ?? e).slice(0, 400));
-        this.refresh();
-      },
-    });
-  }
-
   // ---- which pane goes where ----
 
-  /** Each pane's place in the grid. One can be made large - the schematic
-   *  or the layout over the middle and right columns, the side pane down
-   *  the whole right column - and the panes it covers step aside. */
-  area(pane: 'parts' | 'layout' | 'log' | 'schematic' | '3d' | 'side'): string {
+  /** Each pane's place in the grid. The board window takes the middle
+   *  and right columns over the log and the side pane; made large it takes
+   *  both of them too, and the side pane made large takes the right
+   *  column from top to bottom. */
+  area(pane: 'parts' | 'board' | 'log' | 'side'): string {
     const big = this.big();
     const tall = this.tall();
     switch (pane) {
       case 'parts': return '1 / 1 / 4 / 2';
+      case 'board':
+        if (big === 'board') return '1 / 2 / 4 / 4';
+        if (big === 'side') return tall ? '1 / 2 / 2 / 3' : '1 / 2 / 3 / 3';
+        return tall ? '1 / 2 / 2 / 4' : '1 / 2 / 3 / 4';
       case 'log': return tall ? '2 / 2 / 4 / 3' : '3 / 2 / 4 / 3';
-      case 'layout':
-        return big === 'layout' ? (tall ? '1 / 2 / 2 / 4' : '1 / 2 / 3 / 4')
-          : big === 'side' ? (tall ? '1 / 2 / 2 / 3' : '1 / 2 / 3 / 3')
-          : tall ? '1 / 2 / 2 / 3' : '1 / 2 / 3 / 3';
-      case 'schematic':
-        return big === 'schematic' ? (tall ? '1 / 2 / 2 / 4' : '1 / 2 / 3 / 4') : '1 / 3 / 2 / 4';
-      case '3d': return '2 / 3 / 3 / 4';
-      case 'side': return big === 'side' ? '1 / 3 / 4 / 4' : '3 / 3 / 4 / 4';
+      case 'side':
+        if (big === 'side') return '1 / 3 / 4 / 4';
+        return tall ? '2 / 3 / 4 / 4' : '3 / 3 / 4 / 4';
     }
   }
 
-  shown(pane: 'layout' | 'schematic' | '3d'): boolean {
-    const big = this.big();
-    if (big === 'none') return true;
-    if (big === 'schematic') return pane === 'schematic';
-    if (big === 'layout') return pane === 'layout';
-    return pane === 'layout';               // side: the column is taken
+  shown(pane: 'log' | 'side'): boolean {
+    return this.big() !== 'board';
   }
 
-  toggleBig(pane: 'schematic' | 'layout' | 'side') {
+  toggleBig(pane: 'board' | 'side') {
     this.big.set(this.big() === pane ? 'none' : pane);
     RoomPcb.keep('big', this.big());
+  }
+
+  setBoardTab(tab: 'layout' | 'schematic' | '3d') {
+    this.boardTab.set(tab);
+    RoomPcb.keep('board', tab);
   }
 
   setSide(tab: 'machine' | 'rules' | 'checks') {
@@ -1348,19 +1320,4 @@ export class RoomPcb implements OnDestroy {
       + encodeURIComponent(b?.artifacts?.['model3d']?.at ?? '');
   }
 
-  rebuild() {
-    const b = this.here();
-    if (!b || this.busy()) return;
-    this.building.set(true);
-    this.note.set('');
-    this.api.build(b._id).subscribe({
-      next: () => { this.building.set(false); this.refresh(); },
-      error: e => {
-        this.building.set(false);
-        // atopile's own words: it is better at saying what is wrong with a
-        // circuit than anything this could paraphrase.
-        this.note.set(String(e?.error?.detail ?? e?.message ?? e).slice(0, 400));
-      },
-    });
-  }
 }

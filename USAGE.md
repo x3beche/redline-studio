@@ -162,8 +162,9 @@ module PowerIn:
     d1.cathode ~ vrail
 ```
 
-**run** is the one button that matters, and it does everything from the
-source down, in order, every time:
+There are no buttons that make anything. A change to a board is asked
+for - a board note, or the thread under the queue - and the agent runs
+the whole pipeline, in order, every time:
 
 1. **build** - atopile turns the source into a netlist;
 2. **schematic** - KiCad draws it: every part with its real symbol, grouped
@@ -174,19 +175,17 @@ source down, in order, every time:
    both layers;
 5. **check** - KiCad's DRC over the routed board.
 
-About a minute for a 33-part board. **build** on its own only checks that
-the source compiles.
+About a minute for a 33-part board. The room shows what came of it.
 
 | pane | what it shows |
 |---|---|
 | **parts** | LCSC's catalogue, the part you clicked in full, and the drawer |
-| **layout** | the routed board: **front** (with the pour), **tracks** (copper only, both layers), **back** (from below); `.kicad_pcb` to open it in KiCad |
-| **schematic** | the schematic on black - scroll to zoom, drag to move, double-click to fit; `.kicad_sch` to open it in KiCad |
-| **3d** | the same board with its parts, copper and mask |
+| **board** | one window, three tabs: **layout** - the routed board as *front* (with the pour), *tracks* (copper only, both layers) or *back* (from below); **schematic** - on black, scroll to zoom, drag to move, double-click to fit; **3d** - the board with its parts, copper and mask. `.kicad_pcb` and `.kicad_sch` open them in KiCad |
 | **machine · rules · checks** | what each run cost; the routing rules; what DRC and ERC found |
 | **log · lcsc** | this room's log; every request made of LCSC |
 
-⤢ on a pane makes it large; it remembers across a reload.
+⤢ on a pane makes it large; the room remembers which tab and which pane
+across a reload.
 
 ### Rules
 
