@@ -164,6 +164,15 @@ export class Editor implements AfterViewInit, OnDestroy {
     effect(() => {
       if (this.picked.room() === 'cad') setTimeout(() => this.sizeOverlay(), 40);
     });
+    // The running card follows the room: into the frame the room draws,
+    // once it has drawn it.
+    effect(() => {
+      this.picked.room();
+      // The last room's run and its live cost are not this room's.
+      untracked(() => { this.run.set(null); this.liveCost.set(null); });
+      setTimeout(() => this.dockTask(), 60);
+      setTimeout(() => this.dockTask(), 600);
+    });
     // Each tab has its own thread with the agent: a new tab shows its own
     // at once rather than the last room's until the next poll.
     effect(() => {
@@ -235,6 +244,7 @@ export class Editor implements AfterViewInit, OnDestroy {
 
 
   pollHealth() {
+    this.dockTask();
     this.health.stats().subscribe({ next: v => this.stats.set(v), error: () => {} });
     this.asks.open().subscribe({ next: v => this.takeQuestions(v), error: () => {} });
     this.chat.history(this.picked.room()).subscribe({ next: v => this.takeThread(v), error: () => {} });
@@ -311,6 +321,24 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** Move the freeze control into the viewer's toolbar. Angular still owns
    *  the element - only its parent changes - so the binding and the click
    *  handler carry on working. */
+  /** The running note's card: under the tree in the 3D room, under the
+   *  tabs of any other room's frame - the same card, moved, so it is next
+   *  to the thing it is changing in every room. */
+  private dockTask() {
+    const task = this.taskPanel()?.nativeElement;
+    if (!task) return;
+    const into = this.picked.room() === 'cad'
+      ? this.viewer?.tree
+      : document.querySelector<HTMLElement>('app-room-frame .tcv-frame-task');
+    if (into && task.parentElement !== into) into.appendChild(task);
+  }
+
+  /** Whether the running card has a place on screen in this room. */
+  taskDocked(): boolean {
+    return this.picked.room() === 'cad'
+      || !!document.querySelector('app-room-frame .tcv-frame-task');
+  }
+
   private dockFreezeButton() {
     const btn = this.freezeBtn()?.nativeElement;
     const bar = this.viewer?.toolbar;
@@ -324,9 +352,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     // The running task goes under the model tree, in the room the tree
     // panel was leaving empty. Always in the DOM, hidden when idle: an
     // @if would destroy it and the docking would have to be redone.
-    const task = this.taskPanel()?.nativeElement;
-    const tree = this.viewer?.tree;
-    if (task && tree && task.parentElement !== tree) tree.appendChild(task);
+    this.dockTask();
 
     // Into the viewer's own body, which is a two-row grid: the tree column
     // spans both rows, the 3D area is the top cell and the log the bottom
@@ -1093,7 +1119,10 @@ export class Editor implements AfterViewInit, OnDestroy {
   runningRevision(): Revision | null {
     const rn = this.run();
     if (!rn || rn.status !== 'running' || !rn.revision) return null;
-    return this.revisions().find(r => r.id === rn.revision) ?? null;
+    // Only a note of the room on screen: in the moment after a switch the
+    // last room's run is still held, and its card and cost flashed up in
+    // the wrong room.
+    return this.roomRevisions().find(r => r.id === rn.revision) ?? null;
   }
 
   private pollLiveCost() {

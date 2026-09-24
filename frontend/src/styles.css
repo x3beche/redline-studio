@@ -1331,3 +1331,21 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-shot em { font-size: 11px; color: var(--ink-dim); }
 .tcv-shot span { position: absolute; left: 0; top: 0; padding: 0 5px; font-size: 9px;
                  text-transform: uppercase; background: var(--surface-2); color: var(--ink-dim); }
+
+/* The running note's card, docked at the foot of a room's tab column the
+   way it docks under the 3D room's tree: fixed there, whole, with the
+   open tab above it taking what is left and scrolling in it. */
+.tcv-frame-task { flex: none; }
+.tcv-frame-task:empty { display: none; }
+.tcv-frame-task .tcv-task { margin: 0; padding: 6px; border-top: 1px solid var(--line); }
+
+/* Scrollbars in a room's frame are the 3D tree's: thin, a faint thumb on
+   no track, brighter under the mouse - the viewer's own tcv_scroller rule
+   and its colours, so the column reads the same in every room. */
+.tcv-frame, .tcv-frame * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tcv-scrollbar-thumb) transparent;
+}
+.tcv-frame *:hover {
+  scrollbar-color: var(--tcv-scrollbar-hover) transparent;
+}

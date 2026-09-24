@@ -41,6 +41,9 @@ import { LogLine } from '../api';
       }
     </div>
     <div class="tcv-frame-pane"><ng-content select="[side]"></ng-content></div>
+    <!-- The note being worked on docks here, under the tabs, as it docks
+         under the tree in the 3D room: the page moves the same card in. -->
+    <div class="tcv-frame-task"></div>
   </div>
   <div class="tcv-frame-view">
     <ng-content select="[view]"></ng-content>
