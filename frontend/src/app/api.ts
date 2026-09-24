@@ -929,7 +929,7 @@ export interface InsightRow { name: string; calls?: number; cost_usd?: number; t
 export interface Insights {
   range: { since: string; until: string; step: number };
   /** When the server worked it out, and whether a newer one is on its way. */
-  computed_at?: string; stale?: boolean; age_s?: number;
+  computed_at?: string; stale?: boolean; age_s?: number; shape?: number;
   llm: { calls: number; cost_usd: number; unpriced_calls: number;
          tokens: Record<string, number>;
          cost_by_provider: InsightSeries; cost_by_model: InsightSeries; tokens_by_type: InsightSeries;
@@ -960,6 +960,33 @@ export interface Insights {
              projects: { name: string; models: number; boards: number; apps: number; notes: number;
                          cost_usd: number }[] };
   lcsc: { by_source: InsightSeries; totals: Record<string, number> };
+  lead_times: { by_room: { room: string; notes: number; writing: number | null; waiting: number | null;
+                           working: number | null; total: number | null }[];
+                slowest: { id: string; room: string; title: string; writing: number | null;
+                           waiting: number | null; working: number | null; total: number | null }[] };
+  questions: { at: string; question: string; text: string; answer: string; status: string;
+               wait_s: number | null; room: string | null }[];
+  cache: { read: number; write: number; fresh: number; hit_ratio: number | null; saved_usd: number;
+           by_model: { name: string; cache_read: number; cache_write: number; input: number;
+                       hit_ratio: number | null; saved_usd: number | null }[];
+           hit_series: InsightSeries };
+  subscription: { plan_usd_month: number | null; plan_name: string | null; months: number;
+                  list_usd: number; plan_usd: number | null; saved_usd?: number; ratio?: number | null };
+  builds: { by_kind: { name: string; jobs: number; failed: number; fail_rate: number | null;
+                       median_s: number | null; max_s: number | null }[];
+            model_trend: InsightSeries;
+            by_model: { name: string; builds: number; median_s: number | null; max_s: number }[] };
+  note_costs: { series: InsightSeries; notes: number; median: number | null; mean: number | null };
+  api: { requests: number; errors: number; per_bucket: InsightSeries; latency: InsightSeries;
+         routes: { route: string; count: number; avg_ms: number; p95_ms: number | null;
+                   max_ms: number; errors: number }[] };
+  board_quality: { board: string; runs: BoardRunRow[]; first: BoardRunRow; last: BoardRunRow }[];
+}
+
+export interface BoardRunRow {
+  at: string; unrouted: number | null; drc_errors: number | null; drc_warnings: number | null;
+  erc_errors: number | null; area_cm2: number | null; tracks: number | null; vias: number | null;
+  length_mm: number | null; parts: number | null; seconds: number | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -968,7 +995,9 @@ export class InsightsApi {
   get(range: string): Observable<Insights> {
     return this.http.get<Insights>(`/api/insights?range=${encodeURIComponent(range)}`);
   }
-  setKwhPrice(price: number | null): Observable<unknown> {
-    return this.http.put('/api/insights/kwh-price', { price });
+  /** The electricity price and the subscription; only what is sent changes. */
+  setSettings(patch: { kwh_price?: number | null; plan_usd_month?: number | null;
+                       plan_name?: string | null }): Observable<unknown> {
+    return this.http.put('/api/insights/settings', patch);
   }
 }

@@ -1588,3 +1588,12 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 /* Tools stands just before Analytics, and takes the free space instead. */
 .tcv-tab-tools { margin-left: auto; }
 .tcv-tab-tools + .tcv-tab-end { margin-left: 0; }
+
+/* Analytics: a panel's download, and a question read in full. */
+.tcv-dl {
+  margin-left: auto; padding: 0 6px; font-size: 10px; font-weight: 500; color: var(--ink-dim);
+  border: 1px solid var(--line); border-radius: 3px; background: transparent; cursor: pointer;
+}
+.tcv-dl:hover { color: var(--ink); border-color: var(--accent); }
+.tcv-dash-qs th:first-child, .tcv-dash-qs td:first-child { width: 42%; }
+.tcv-dash-open td { white-space: normal; background: var(--surface); }

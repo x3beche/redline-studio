@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import os
 import shutil
 from collections import defaultdict
@@ -39,6 +40,8 @@ import psutil
 from . import compute, lcsc, store, sysinfo, usage
 
 METRICS = "metrics"
+TIMINGS = "api_timings"
+BOARD_RUNS = "board_runs"
 SAMPLE_EVERY = 60          # seconds
 KEEP_DAYS = 120            # machine samples are dropped after this
 
@@ -132,7 +135,10 @@ async def _llm_sums(db, lo: str, hi: str, since: datetime, size: int) -> dict:
                                   **toks}}],
             "buckets": [{"$group": {"_id": {"b": "$_b", "provider": "$provider", "model": "$model"},
                                     "cost": cost, **toks}}],
-            "model": group("$model"), "provider": group("$provider"),
+            # Per token type as well: cache savings are worked out per model.
+            "model": [{"$group": {"_id": "$model", "calls": {"$sum": 1}, "cost": cost,
+                                  "tokens": all_toks, **toks}}],
+            "provider": group("$provider"),
             "kind": group({"$ifNull": ["$kind", "$surface"]}),
             "revision": group({"rev": "$_rev", "room": "$_room"}),
         }},
@@ -141,10 +147,85 @@ async def _llm_sums(db, lo: str, hi: str, since: datetime, size: int) -> dict:
     return got[0] if got else {k: [] for k in ("total", "buckets", "model", "provider", "kind", "revision")}
 
 
+def _median(xs: list[float]) -> float | None:
+    xs = sorted(x for x in xs if x is not None)
+    if not xs:
+        return None
+    m = len(xs) // 2
+    return round(xs[m] if len(xs) % 2 else (xs[m - 1] + xs[m]) / 2, 4)
+
+
 def _rank(d: dict[str, dict], key: str, top: int = 12) -> list[dict]:
     rows = [{"name": k, **v} for k, v in d.items()]
     rows.sort(key=lambda r: -(r.get(key) or 0))
     return rows[:top]
+
+
+# ---------------------------------------------------------------- API timings
+
+# Every request the server answers, summed per minute per route in memory
+# and written once a minute: writing each request to a database this far
+# away would itself be the slowest thing the server does.
+LATENCY_EDGES = [25, 50, 100, 250, 500, 1000, 2500, 5000, 10000]   # ms
+_timing: dict[tuple, dict] = {}
+
+
+def record_request(method: str, route: str, status: int, ms: float) -> None:
+    minute = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    key = (minute, method, route)
+    t = _timing.get(key)
+    if t is None:
+        t = _timing[key] = {"count": 0, "ms": 0.0, "max_ms": 0.0, "errors": 0,
+                            "hist": [0] * (len(LATENCY_EDGES) + 1)}
+    t["count"] += 1
+    t["ms"] += ms
+    t["max_ms"] = max(t["max_ms"], ms)
+    t["errors"] += 1 if status >= 500 else 0
+    t["hist"][next((i for i, e in enumerate(LATENCY_EDGES) if ms <= e), len(LATENCY_EDGES))] += 1
+
+
+async def flush_timings(db) -> None:
+    """The finished minutes, into the database."""
+    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    done = [k for k in _timing if k[0] < now]
+    if not done:
+        return
+    rows = [{"at": k[0], "method": k[1], "route": k[2], **_timing.pop(k)} for k in done]
+    await db[TIMINGS].insert_many(rows)
+
+
+def p95(hist: list[int]) -> float | None:
+    """The 95th percentile from a histogram, as the bucket's upper edge."""
+    total = sum(hist)
+    if not total:
+        return None
+    seen = 0
+    for i, n in enumerate(hist):
+        seen += n
+        if seen >= 0.95 * total:
+            return float(LATENCY_EDGES[i]) if i < len(LATENCY_EDGES) else float(LATENCY_EDGES[-1] * 2)
+    return None
+
+
+# ---------------------------------------------------------------- board runs
+
+async def record_board_run(db, board: str, out: dict) -> None:
+    """One board pipeline run: how well the board came out, kept so its
+    quality can be followed over time."""
+    lay = out.get("layout") or {}
+    route = lay.get("route") or {}
+    drc = lay.get("drc") or {}
+    erc = (out.get("schematic") or {}).get("erc") or {}
+    size = lay.get("size_mm") or [None, None]
+    await db[BOARD_RUNS].insert_one({
+        "at": datetime.now(timezone.utc), "board": board, "seconds": out.get("seconds"),
+        "unrouted": route.get("unrouted"), "tracks": route.get("tracks"),
+        "vias": route.get("vias"), "length_mm": route.get("length_mm"),
+        "drc_errors": drc.get("error_count"), "drc_warnings": drc.get("warning_count"),
+        "erc_errors": erc.get("error_count"), "erc_warnings": erc.get("warning_count"),
+        "parts": lay.get("placed"), "width_mm": size[0], "height_mm": size[1],
+        "area_cm2": round(size[0] * size[1] / 100, 2) if size[0] and size[1] else None,
+    })
 
 
 # ---------------------------------------------------------------- sampler
@@ -192,11 +273,13 @@ async def sampler(get_db) -> None:
     psutil.cpu_percent(interval=None)          # prime the running average
     try:
         await get_db()[METRICS].create_index("at", expireAfterSeconds=KEEP_DAYS * 86400)
+        await get_db()[TIMINGS].create_index("at", expireAfterSeconds=KEEP_DAYS * 86400)
     except Exception:
         pass
     while True:
         try:
             await get_db()[METRICS].insert_one(sample_row())
+            await flush_timings(get_db())
         except Exception:
             pass
         await asyncio.sleep(SAMPLE_EVERY)
@@ -286,6 +369,7 @@ async def _work_out(db, key: str, span) -> dict:
     since, until = await span()
     data = await overview(db, since, until)
     data["computed_at"] = datetime.now(timezone.utc).isoformat()
+    data["shape"] = SHAPE
     _remember(key, data)
     return data
 
@@ -297,10 +381,16 @@ def _refresh(db, key: str, span) -> None:
     _WORKING[key] = asyncio.create_task(_work_out(db, key, span))
 
 
+# Bumped whenever the shape of the answer changes, so an answer kept in the
+# old shape is never served to a page that expects the new one.
+SHAPE = 2
+
+
 async def overview_cached(db, key: str, span) -> dict:
     """The last answer for this range at once; a fresh one on its way if it
     is older than FRESH_S. Only the very first ask of a range waits."""
     import time
+    key = f"v{SHAPE}-{key}"
     hit = _recall(key)
     if hit is None:
         return {**await _work_out(db, key, span), "stale": False}
@@ -328,20 +418,26 @@ async def overview(db, since: datetime, until: datetime) -> dict:
     async def count(coll):
         return await db[coll].count_documents({})
 
-    (projects_map, rev_rows, agg, job_rows, metric_rows, run_rows_raw, chat_rows,
-     question_rows, price, dbst, coll_names, n_folders, n_models, n_boards, n_apps,
-     n_parts) = await asyncio.gather(
+    (projects_map, rev_rows, agg, job_rows, metric_rows, all_runs, chat_rows,
+     question_rows, prefs, dbst, coll_names, n_folders, n_models, n_boards, n_apps,
+     n_parts, timing_rows, board_rows) = await asyncio.gather(
         _projects(db),
         rows("revisions", {}, {"kind": 1, "model": 1, "status": 1, "created_at": 1,
                                "queued_at": 1, "summary": 1, "comment": 1}),
         _llm_sums(db, lo, hi, since, size),
         rows(compute.JOBS, {"at": {"$gte": lo, "$lte": hi}}),
         rows(METRICS, {"at": {"$gte": since, "$lte": until}}, sort="at"),
-        rows("runs", {"started_at": {"$gte": lo, "$lte": hi}}),
+        # Every run: a note written in the range may have been done after it.
+        rows("runs", {}, {"started_at": 1, "finished_at": 1, "room": 1, "status": 1,
+                          "title": 1, "revision": 1}),
         rows("chat", {"at": {"$gte": lo, "$lte": hi}}, {"at": 1, "room": 1, "role": 1}),
-        rows("questions", {"at": {"$gte": lo, "$lte": hi}}, {"at": 1, "answered_at": 1}),
-        kwh_price(db), db.command("dbstats"), db.list_collection_names(),
-        count("folders"), count("models"), count("boards"), count("apps"), count(lcsc.PARTS))
+        rows("questions", {"at": {"$gte": lo, "$lte": hi}},
+             {"at": 1, "answered_at": 1, "text": 1, "answer": 1, "revision": 1, "status": 1}),
+        settings(db), db.command("dbstats"), db.list_collection_names(),
+        count("folders"), count("models"), count("boards"), count("apps"), count(lcsc.PARTS),
+        rows(TIMINGS, {"at": {"$gte": since, "$lte": until}}),
+        rows(BOARD_RUNS, {"at": {"$gte": since, "$lte": until}}, sort="at"))
+    price = prefs.get("kwh_price")
     owner, kinds = projects_map
 
     # Notes: which room and which project each belongs to.
@@ -446,6 +542,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
             notes_by_room.add(compute.room_of(r.get("kind")), at, 1)
             status_counts[r.get("status") or "?"] += 1
     run_rows = []
+    run_rows_raw = [r for r in all_runs if lo <= (r.get("started_at") or "") <= hi]
     for r in run_rows_raw:
         s, f = _dt(r.get("started_at")), _dt(r.get("finished_at"))
         dur = (f - s).total_seconds() if s and f else None
@@ -474,6 +571,172 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         if a and b:
             q["answered"] += 1; q["wait_s"] += (b - a).total_seconds()
     q["avg_wait_s"] = round(q["wait_s"] / q["answered"], 1) if q["answered"] else None
+
+    # ---- note lead times: writing it, waiting for the agent, the agent's work
+    runs_of: dict[str, list[dict]] = defaultdict(list)
+    for r in all_runs:
+        if r.get("revision"):
+            runs_of[r["revision"]].append(r)
+    leads, lead_rows = defaultdict(lambda: {"writing": [], "waiting": [], "working": [], "total": []}), []
+    for rid, r in revs.items():
+        made = _dt(r.get("created_at"))
+        if not made or not (since <= made <= until):
+            continue
+        queued = _dt(r.get("queued_at"))
+        rs = sorted(runs_of.get(rid, []), key=lambda x: x.get("started_at") or "")
+        start = _dt(rs[0].get("started_at")) if rs else None
+        done = max((_dt(x.get("finished_at")) for x in rs if x.get("finished_at")), default=None)
+        stage = {
+            "writing": (queued - made).total_seconds() if queued else None,
+            "waiting": (start - queued).total_seconds() if start and queued else None,
+            "working": (done - start).total_seconds() if done and start else None,
+            "total": (done - made).total_seconds() if done else None,
+        }
+        room = compute.room_of(r.get("kind"))
+        for k, v in stage.items():
+            if v is not None and v >= 0:
+                leads[room][k].append(v)
+        lead_rows.append({"id": rid, "room": room,
+                          "title": r.get("summary") or (r.get("comment") or "")[:90],
+                          **{k: (round(v, 1) if v is not None and v >= 0 else None) for k, v in stage.items()}})
+    lead_rows.sort(key=lambda x: -(x["total"] or 0))
+    lead_times = {"by_room": [{"room": room, "notes": len(v["total"]) or len(v["writing"]),
+                               **{k: _median(v[k]) for k in ("writing", "waiting", "working", "total")}}
+                              for room, v in leads.items()],
+                  "slowest": lead_rows[:10]}
+
+    # ---- the agents' questions, in full
+    question_log = []
+    for d in sorted(question_rows, key=lambda d: d.get("at") or "", reverse=True):
+        a, b = _dt(d.get("at")), _dt(d.get("answered_at"))
+        text = (d.get("text") or "").strip()
+        first = next((ln.strip("#*> -") for ln in text.splitlines() if ln.strip()), "")
+        first = re.sub(r"[*_`]{1,3}", "", first)            # the line, not its Markdown
+        question_log.append({
+            "at": d.get("at"), "question": first[:200], "text": text[:4000],
+            "answer": (d.get("answer") or "")[:1000], "status": d.get("status"),
+            "wait_s": round((b - a).total_seconds(), 1) if a and b else None,
+            "room": room_of(d["revision"]) if d.get("revision") else None})
+
+    # ---- the cache: how much of what was read came from it, and what it saved
+    cache = {"read": llm["tokens"]["cache_read"], "write": llm["tokens"]["cache_write"],
+             "fresh": llm["tokens"]["input"], "saved_usd": 0.0, "by_model": []}
+    looked = cache["read"] + cache["write"] + cache["fresh"]
+    cache["hit_ratio"] = round(cache["read"] / looked, 4) if looked else None
+    for r in agg["model"]:
+        rates = usage._rates(r["_id"] or "")
+        saved = None
+        if rates:
+            saved = r["cache_read"] * (rates["input"] - rates["cache_read"]) / 1e6
+            cache["saved_usd"] += saved
+        seen = r["cache_read"] + r["cache_write"] + r["input"]
+        cache["by_model"].append({"name": r["_id"] or "?", "cache_read": r["cache_read"],
+                                  "cache_write": r["cache_write"], "input": r["input"],
+                                  "hit_ratio": round(r["cache_read"] / seen, 4) if seen else None,
+                                  "saved_usd": round(saved, 4) if saved is not None else None})
+    cache["by_model"].sort(key=lambda m: -(m["saved_usd"] or 0))
+    hit_series = B()
+    tok = {k: {x["name"]: x["values"] for x in tokens_by_type.out()["series"]}.get(k) for k in TOKEN_KINDS}
+    for i in range(hit_series.n):
+        rd = (tok["cache_read"] or [0] * hit_series.n)[i]
+        tot = rd + (tok["cache_write"] or [0] * hit_series.n)[i] + (tok["input"] or [0] * hit_series.n)[i]
+        if tot:
+            hit_series.data.setdefault("hit %", [0.0] * hit_series.n)[i] = 100.0 * rd / tot
+    cache["hit_series"] = hit_series.out()
+
+    # ---- the subscription against what the same work lists at
+    plan = prefs.get("plan_usd_month")
+    months = span / (30.44 * 86400)
+    subscription = {"plan_usd_month": plan, "plan_name": prefs.get("plan_name"),
+                    "months": round(months, 3), "list_usd": round(llm["cost_usd"], 2),
+                    "plan_usd": round(plan * months, 2) if plan is not None else None}
+    if plan is not None:
+        subscription["saved_usd"] = round(llm["cost_usd"] - plan * months, 2)
+        subscription["ratio"] = round(llm["cost_usd"] / (plan * months), 2) if plan * months else None
+
+    # ---- build health: failures per kind, and how long builds take per model
+    health: dict[str, dict] = defaultdict(lambda: {"jobs": 0, "failed": 0, "wall": []})
+    per_model: dict[str, list] = defaultdict(list)
+    for j in job_rows:
+        k = j.get("kind") or "?"
+        health[k]["jobs"] += 1
+        health[k]["failed"] += 1 if j.get("rc") else 0
+        health[k]["wall"].append(float(j.get("wall_s") or 0))
+        if k in ("build", "render") and j.get("model") and not j.get("rc"):
+            per_model[j["model"]].append((_dt(j.get("at")), float(j.get("wall_s") or 0)))
+    builds = {"by_kind": [{"name": k, "jobs": v["jobs"], "failed": v["failed"],
+                           "fail_rate": round(v["failed"] / v["jobs"], 4) if v["jobs"] else None,
+                           "median_s": _median(v["wall"]), "max_s": round(max(v["wall"]), 1) if v["wall"] else None}
+                          for k, v in sorted(health.items(), key=lambda kv: -kv[1]["jobs"])]}
+    slowest_models = sorted(per_model.items(), key=lambda kv: -(_median([w for _, w in kv[1]]) or 0))[:6]
+    b_sum, b_n = B(), B()
+    for model, pts in slowest_models:
+        for at, w in pts:
+            if at:
+                b_sum.add(model, at, w); b_n.add(model, at, 1)
+    trend = b_sum.out()
+    counts_by = {x["name"]: x["values"] for x in b_n.out()["series"]}
+    for x in trend["series"]:
+        x["values"] = [round(v / c, 1) if c else None for v, c in zip(x["values"], counts_by[x["name"]])]
+    builds["model_trend"] = trend
+    builds["by_model"] = [{"name": m, "builds": len(p), "median_s": _median([w for _, w in p]),
+                           "max_s": round(max(w for _, w in p), 1)} for m, p in slowest_models]
+
+    # ---- what a finished note costs, over time
+    done_at = {rid: max((_dt(x.get("finished_at")) for x in rs if x.get("finished_at")), default=None)
+               for rid, rs in runs_of.items()}
+    per_bucket: dict[int, list[float]] = defaultdict(list)
+    for rid, v in by_note.items():
+        at = done_at.get(rid)
+        if at and since <= at <= until and v["cost_usd"] > 0:
+            per_bucket[int((at.timestamp() - since.timestamp()) // size)].append(v["cost_usd"])
+    note_cost = B()
+    for i, costs in per_bucket.items():
+        if 0 <= i < note_cost.n:
+            note_cost.data.setdefault("median", [None] * note_cost.n)[i] = _median(costs)
+            note_cost.data.setdefault("mean", [None] * note_cost.n)[i] = round(sum(costs) / len(costs), 4)
+    finished_costs = [c for cs in per_bucket.values() for c in cs]
+    note_costs = {"series": {"t0": note_cost.t0, "step": size, "n": note_cost.n,
+                             "series": [{"name": k, "values": v} for k, v in note_cost.data.items()]},
+                  "notes": len(finished_costs), "median": _median(finished_costs),
+                  "mean": round(sum(finished_costs) / len(finished_costs), 4) if finished_costs else None}
+
+    # ---- the API: which routes are slow
+    routes: dict[str, dict] = defaultdict(lambda: {"count": 0, "ms": 0.0, "max_ms": 0.0, "errors": 0,
+                                                  "hist": [0] * (len(LATENCY_EDGES) + 1)})
+    api_count, api_avg_sum = B(), B()
+    for t in timing_rows:
+        key = f"{t['method']} {t['route']}"
+        g = routes[key]
+        g["count"] += t["count"]; g["ms"] += t["ms"]; g["errors"] += t.get("errors", 0)
+        g["max_ms"] = max(g["max_ms"], t["max_ms"])
+        g["hist"] = [a + b for a, b in zip(g["hist"], t["hist"])]
+        at = _dt(t["at"])
+        api_count.add("requests", at, t["count"])
+        api_avg_sum.add("ms", at, t["ms"])
+    latency = api_avg_sum.out()
+    cnt = (api_count.data.get("requests") or [0] * api_count.n)
+    for x in latency["series"]:
+        x["name"] = "average ms"
+        x["values"] = [round(v / c, 1) if c else None for v, c in zip(x["values"], cnt)]
+    api = {"requests": sum(g["count"] for g in routes.values()),
+           "errors": sum(g["errors"] for g in routes.values()),
+           "per_bucket": api_count.out(), "latency": latency,
+           "routes": sorted(({"route": k, "count": g["count"], "avg_ms": round(g["ms"] / g["count"], 1),
+                              "p95_ms": p95(g["hist"]), "max_ms": round(g["max_ms"], 1),
+                              "errors": g["errors"]} for k, g in routes.items()),
+                            key=lambda r: -r["avg_ms"])[:25]}
+
+    # ---- board quality, run by run
+    boards_q: dict[str, list] = defaultdict(list)
+    for r in board_rows:
+        boards_q[r["board"]].append({k: (r.get(k) if not isinstance(r.get(k), datetime)
+                                         else r[k].isoformat())
+                                     for k in ("at", "unrouted", "drc_errors", "drc_warnings",
+                                               "erc_errors", "area_cm2", "tracks", "vias",
+                                               "length_mm", "parts", "seconds")})
+    board_quality = [{"board": b, "runs": rs, "first": rs[0], "last": rs[-1]}
+                     for b, rs in boards_q.items()]
 
     # ---- storage
     st = dbst
@@ -566,6 +829,10 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         "catalog": {**catalog, "projects": [rnd({"name": k, **v}) for k, v in
                                             sorted(projects.items(), key=lambda kv: -kv[1]["cost_usd"])]},
         "lcsc": {"by_source": lcsc_by_source.out(), "totals": dict(lcsc_tot)},
+        "lead_times": lead_times, "questions": question_log, "cache": rnd(cache) | {
+            "by_model": cache["by_model"], "hit_series": cache["hit_series"]},
+        "subscription": subscription, "builds": builds, "note_costs": note_costs,
+        "api": api, "board_quality": board_quality,
     }
 
 
@@ -595,6 +862,23 @@ async def first_use(db) -> datetime | None:
         if d and _dt(d.get(field)):
             got.append(_dt(d[field]))
     return min(got) if got else None
+
+
+SETTING_KEYS = ("kwh_price", "plan_usd_month", "plan_name")
+
+
+async def settings(db) -> dict:
+    """The room's own settings: electricity price and the subscription."""
+    s = await db.settings.find_one({"_id": store.SETTINGS_ID}, dict.fromkeys(SETTING_KEYS, 1)) or {}
+    out = {k: s.get(k) for k in SETTING_KEYS}
+    if out["kwh_price"] is None:
+        out["kwh_price"] = compute.KWH_PRICE
+    return out
+
+
+async def set_settings(db, patch: dict) -> None:
+    await db.settings.update_one({"_id": store.SETTINGS_ID}, {"$set": patch}, upsert=True)
+    forget()
 
 
 async def kwh_price(db) -> float | None:

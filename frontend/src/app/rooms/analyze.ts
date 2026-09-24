@@ -1,6 +1,6 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
-import { InsightSeries, Insights, InsightsApi } from '../api';
+import { BoardRunRow, InsightSeries, Insights, InsightsApi } from '../api';
 import { BarList, Donut, Fmt, Row, TimeChart, fmt } from './charts';
 
 type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' | 'lcsc';
@@ -34,6 +34,8 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
             (change)="setEvery(+$any($event.target).value)" title="refresh on its own">
       @for (e of everys; track e.s) { <option [value]="e.s" [selected]="every() === e.s">{{ e.label }}</option> }
     </select>
+    <button (click)="exportAll()" class="tcv-btn px-2 py-0.5" [disabled]="!data()"
+            title="everything in this range, as JSON">Export</button>
     <button (click)="load()" class="tcv-btn px-2 py-0.5" [disabled]="loading()" title="read it again">
       {{ loading() ? '…' : '↻' }}
     </button>
@@ -72,6 +74,18 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
           <em>{{ runsAvg() }} each on average</em></div>
         <div class="tcv-stat c2"><span>LCSC requests</span><b>{{ d.lcsc.totals['total'] || 0 }}</b>
           <em>{{ d.lcsc.totals['net'] || 0 }} sent · {{ d.lcsc.totals['refused'] || 0 }} refused</em></div>
+        <div class="tcv-stat c3"><span>Subscription saved</span>
+          <b>{{ d.subscription.saved_usd == null ? '–' : f.money(d.subscription.saved_usd) }}</b>
+          <em>{{ d.subscription.plan_usd == null ? 'set your plan under Costs & savings'
+                 : f.money(d.subscription.plan_usd) + ' paid for ' + f.money(d.subscription.list_usd) + ' of work' }}</em></div>
+        <div class="tcv-stat c3"><span>Cache</span>
+          <b>{{ d.cache.hit_ratio == null ? '–' : (d.cache.hit_ratio * 100).toFixed(1) + '%' }}</b>
+          <em>of prompt tokens read from cache · saved {{ f.money(d.cache.saved_usd) }}</em></div>
+        <div class="tcv-stat c3"><span>Cost per finished note</span>
+          <b>{{ d.note_costs.median == null ? '–' : f.money(d.note_costs.median) }}</b>
+          <em>median of {{ d.note_costs.notes }} · average {{ d.note_costs.mean == null ? '–' : f.money(d.note_costs.mean) }}</em></div>
+        <div class="tcv-stat c3"><span>API</span><b>{{ f.count(d.api.requests) }}</b>
+          <em>requests · {{ d.api.errors }} errors · slowest {{ d.api.routes[0]?.route ?? '–' }}</em></div>
       </div>
     }
 
@@ -79,11 +93,13 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
     <ng-container *ngTemplateOutlet="head; context: { id: 'llm', title: 'LLMs', sub: 'every call the agents and the app made' }" />
     @if (open('llm')) {
       <div class="tcv-dash-grid">
-        <section class="tcv-panel-d c8"><h3>Spend by model</h3>
+        <section class="tcv-panel-d c8"><h3>Spend by model
+            <button class="tcv-dl" (click)="dl('spend-by-model', seriesRows(d.llm.cost_by_model))">CSV</button></h3>
           <app-time-chart [data]="d.llm.cost_by_model" kind="bar" [f]="f.money" [height]="200" /></section>
         <section class="tcv-panel-d c4"><h3>Spend by room <i title="calls made while a note's run was open belong to that room; the rest is work outside any note">ⓘ</i></h3>
           <app-donut [rows]="rows(d.llm.by_room, 'cost_usd', roomName)" [f]="f.money" /></section>
-        <section class="tcv-panel-d c8"><h3>Tokens by type</h3>
+        <section class="tcv-panel-d c8"><h3>Tokens by type
+            <button class="tcv-dl" (click)="dl('tokens-by-type', seriesRows(d.llm.tokens_by_type))">CSV</button></h3>
           <app-time-chart [data]="d.llm.tokens_by_type" kind="area" [f]="f.count" [height]="180" /></section>
         <section class="tcv-panel-d c4"><h3>Spend by kind of work</h3>
           <app-bar-list [rows]="rows(d.llm.by_surface, 'cost_usd')" [f]="f.money" /></section>
@@ -93,7 +109,8 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
           <app-bar-list [rows]="rows(d.llm.by_provider, 'cost_usd')" [f]="f.money" /></section>
         <section class="tcv-panel-d c4"><h3>By project</h3>
           <app-bar-list [rows]="rows(d.llm.by_project, 'cost_usd', roomName)" [f]="f.money" /></section>
-        <section class="tcv-panel-d c12"><h3>Most expensive notes</h3>
+        <section class="tcv-panel-d c12"><h3>Most expensive notes
+            <button class="tcv-dl" (click)="dl('top-notes', d.llm.top_notes)">CSV</button></h3>
           <table class="tcv-dash-table">
             <thead><tr><th>note</th><th>room</th><th>project</th><th class="r">calls</th><th class="r">tokens</th><th class="r">spend</th></tr></thead>
             <tbody>
@@ -104,6 +121,56 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
               } @empty { <tr><td colspan="6" class="tcv-dash-dim">no notes in this range</td></tr> }
             </tbody>
           </table></section>
+      </div>
+    }
+
+    <!-- COSTS AND SAVINGS -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'costs', title: 'Costs & savings', sub: 'the subscription against list prices, what the cache saves, what a note costs' }" />
+    @if (open('costs')) {
+      <div class="tcv-dash-grid">
+        <section class="tcv-panel-d c4"><h3>Subscription</h3>
+          <div class="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5 text-[12px]">
+            <span class="tcv-dash-dim">plan</span>
+            <input [value]="d.subscription.plan_name ?? ''" placeholder="e.g. Claude Max" (change)="setPlanName($any($event.target).value)"
+                   class="tcv-field px-1.5 py-1">
+            <span class="tcv-dash-dim">$ a month</span>
+            <input type="number" min="0" step="1" [value]="d.subscription.plan_usd_month ?? ''" placeholder="e.g. 200"
+                   (change)="setPlan($any($event.target).value)" class="tcv-field px-1.5 py-1 text-right mono">
+          </div>
+          @if (d.subscription.plan_usd != null) {
+            <app-bar-list class="mt-3 block" [rows]="[{ name: 'at API list prices', value: d.subscription.list_usd },
+                                                   { name: 'paid for this range', value: d.subscription.plan_usd }]" [f]="f.money" />
+            <p class="mt-2 text-[12px]">Saved <b class="mono">{{ f.money(d.subscription.saved_usd ?? 0) }}</b>
+              @if (d.subscription.ratio) { - the work would have cost {{ d.subscription.ratio }}× the plan. }</p>
+            <p class="tcv-dash-dim mt-1">The plan is prorated over the range ({{ d.subscription.months.toFixed(2) }} months).</p>
+          } @else {
+            <p class="tcv-dash-dim mt-3 leading-snug">Enter what you pay each month and this compares it with what the same
+              work would have cost on the API.</p>
+          }
+        </section>
+        <section class="tcv-panel-d c4"><h3>Cache by model
+            <button class="tcv-dl" (click)="dl('cache-by-model', d.cache.by_model)">CSV</button></h3>
+          <table class="tcv-dash-table">
+            <thead><tr><th>model</th><th class="r">hit</th><th class="r">saved</th></tr></thead>
+            <tbody>
+              @for (m of d.cache.by_model; track m.name) {
+                <tr><td [title]="m.name">{{ m.name }}</td>
+                  <td class="r mono">{{ m.hit_ratio == null ? '–' : (m.hit_ratio * 100).toFixed(1) + '%' }}</td>
+                  <td class="r mono">{{ m.saved_usd == null ? 'unpriced' : f.money(m.saved_usd) }}</td></tr>
+              }
+            </tbody>
+          </table>
+          <p class="tcv-dash-dim mt-2 leading-snug">Saved = cache reads × (input price − cache-read price), at list prices.
+            {{ f.count(d.cache.read) }} tokens read from cache, {{ f.count(d.cache.write) }} written to it,
+            {{ f.count(d.cache.fresh) }} sent fresh.</p>
+        </section>
+        <section class="tcv-panel-d c4"><h3>Cache hit rate
+            <button class="tcv-dl" (click)="dl('cache-hit-rate', seriesRows(d.cache.hit_series))">CSV</button></h3>
+          <app-time-chart [data]="d.cache.hit_series" kind="line" [stacked]="false" [sums]="false" [legend]="false" [f]="f.pct" [height]="170" /></section>
+        <section class="tcv-panel-d c12"><h3>Cost of a finished note
+            <span class="tcv-dash-dim">median and average of the notes finished each {{ stepWord(d.range.step) }}</span>
+            <button class="tcv-dl" (click)="dl('note-cost', seriesRows(d.note_costs.series))">CSV</button></h3>
+          <app-time-chart [data]="d.note_costs.series" kind="line" [stacked]="false" [sums]="false" [f]="f.money" [height]="180" /></section>
       </div>
     }
 
@@ -119,7 +186,8 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
           <app-time-chart [data]="d.machine.energy_wh" kind="bar" [legend]="false" [f]="f.wh" [height]="160" /></section>
         <section class="tcv-panel-d c6"><h3>Compute by job <span class="tcv-dash-dim">(CPU hours)</span></h3>
           <app-time-chart [data]="d.compute.cpu_hours_by_kind" kind="bar" [f]="f.hours" [height]="160" /></section>
-        <section class="tcv-panel-d c8"><h3>Jobs</h3>
+        <section class="tcv-panel-d c8"><h3>Jobs
+            <button class="tcv-dl" (click)="dl('jobs', d.compute.by_kind)">CSV</button></h3>
           <table class="tcv-dash-table">
             <thead><tr><th>job</th><th class="r">runs</th><th class="r">wall</th><th class="r">CPU</th><th class="r">energy</th><th class="r">peak memory</th></tr></thead>
             <tbody>
@@ -147,6 +215,41 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
       </div>
     }
 
+    <!-- BUILDS -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'builds', title: 'Builds', sub: 'which kinds of job fail, and which models are slow to build' }" />
+    @if (open('builds')) {
+      <div class="tcv-dash-grid">
+        <section class="tcv-panel-d c6"><h3>Health by kind of job
+            <button class="tcv-dl" (click)="dl('build-health', d.builds.by_kind)">CSV</button></h3>
+          <table class="tcv-dash-table">
+            <thead><tr><th>job</th><th class="r">runs</th><th class="r">failed</th><th class="r">fail rate</th><th class="r">median</th><th class="r">slowest</th></tr></thead>
+            <tbody>
+              @for (k of d.builds.by_kind; track k.name) {
+                <tr><td>{{ k.name }}</td><td class="r mono">{{ k.jobs }}</td><td class="r mono">{{ k.failed }}</td>
+                  <td class="r mono" [style.color]="(k.fail_rate ?? 0) > 0.1 ? 'var(--danger)' : (k.fail_rate ?? 0) > 0 ? 'var(--warn)' : null">
+                    {{ k.fail_rate == null ? '–' : (k.fail_rate * 100).toFixed(1) + '%' }}</td>
+                  <td class="r mono">{{ k.median_s == null ? '–' : f.secs(k.median_s) }}</td>
+                  <td class="r mono">{{ k.max_s == null ? '–' : f.secs(k.max_s) }}</td></tr>
+              } @empty { <tr><td colspan="6" class="tcv-dash-dim">no jobs in this range</td></tr> }
+            </tbody>
+          </table></section>
+        <section class="tcv-panel-d c6"><h3>Slowest models to build
+            <button class="tcv-dl" (click)="dl('slowest-models', d.builds.by_model)">CSV</button></h3>
+          <table class="tcv-dash-table">
+            <thead><tr><th>model</th><th class="r">builds</th><th class="r">median</th><th class="r">slowest</th></tr></thead>
+            <tbody>
+              @for (m of d.builds.by_model; track m.name) {
+                <tr><td [title]="m.name">{{ m.name }}</td><td class="r mono">{{ m.builds }}</td>
+                  <td class="r mono">{{ m.median_s == null ? '–' : f.secs(m.median_s) }}</td><td class="r mono">{{ f.secs(m.max_s) }}</td></tr>
+              } @empty { <tr><td colspan="4" class="tcv-dash-dim">no builds in this range</td></tr> }
+            </tbody>
+          </table></section>
+        <section class="tcv-panel-d c12"><h3>Build time per model <span class="tcv-dash-dim">(average per {{ stepWord(d.range.step) }})</span>
+            <button class="tcv-dl" (click)="dl('build-time', seriesRows(d.builds.model_trend))">CSV</button></h3>
+          <app-time-chart [data]="d.builds.model_trend" kind="line" [stacked]="false" [sums]="false" [f]="f.secs" [height]="180" /></section>
+      </div>
+    }
+
     <!-- WORK -->
     <ng-container *ngTemplateOutlet="head; context: { id: 'work', title: 'Work', sub: 'notes, runs, the thread and the questions, per room' }" />
     @if (open('work')) {
@@ -155,7 +258,8 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
           <app-time-chart [data]="named(d.work.notes_by_room)" kind="bar" [height]="170" /></section>
         <section class="tcv-panel-d c6"><h3>Runs finished</h3>
           <app-time-chart [data]="named(d.work.runs_done_by_room)" kind="bar" [height]="170" /></section>
-        <section class="tcv-panel-d c6"><h3>Runs by room</h3>
+        <section class="tcv-panel-d c6"><h3>Runs by room
+            <button class="tcv-dl" (click)="dl('runs-by-room', d.work.runs_by_room)">CSV</button></h3>
           <table class="tcv-dash-table">
             <thead><tr><th>room</th><th class="r">runs</th><th class="r">finished</th><th class="r">average</th><th class="r">total</th></tr></thead>
             <tbody>
@@ -167,6 +271,82 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
           </table></section>
         <section class="tcv-panel-d c6"><h3>The thread</h3>
           <app-time-chart [data]="d.work.chat" kind="bar" [height]="150" /></section>
+        <section class="tcv-panel-d c6"><h3>From note to done <i title="median per note: writing it (created → queued), waiting for the agent (queued → run starts), the agent's work (run starts → finishes), and all of it">ⓘ</i>
+            <button class="tcv-dl" (click)="dl('note-lead-times', d.lead_times.by_room)">CSV</button></h3>
+          <table class="tcv-dash-table">
+            <thead><tr><th>room</th><th class="r">notes</th><th class="r">writing</th><th class="r">waiting</th><th class="r">agent</th><th class="r">total</th></tr></thead>
+            <tbody>
+              @for (r of d.lead_times.by_room; track r.room) {
+                <tr><td>{{ roomName(r.room) }}</td><td class="r mono">{{ r.notes }}</td>
+                  <td class="r mono">{{ dur(r.writing) }}</td><td class="r mono">{{ dur(r.waiting) }}</td>
+                  <td class="r mono">{{ dur(r.working) }}</td><td class="r mono">{{ dur(r.total) }}</td></tr>
+              } @empty { <tr><td colspan="6" class="tcv-dash-dim">no notes written in this range</td></tr> }
+            </tbody>
+          </table></section>
+        <section class="tcv-panel-d c6"><h3>Slowest notes to finish
+            <button class="tcv-dl" (click)="dl('slowest-notes', d.lead_times.slowest)">CSV</button></h3>
+          <table class="tcv-dash-table">
+            <thead><tr><th>note</th><th>room</th><th class="r">agent</th><th class="r">total</th></tr></thead>
+            <tbody>
+              @for (r of d.lead_times.slowest; track r.id) {
+                <tr><td [title]="r.title">{{ r.title || r.id }}</td><td>{{ roomName(r.room) }}</td>
+                  <td class="r mono">{{ dur(r.working) }}</td><td class="r mono">{{ dur(r.total) }}</td></tr>
+              } @empty { <tr><td colspan="4" class="tcv-dash-dim">nothing finished in this range</td></tr> }
+            </tbody>
+          </table></section>
+        <section class="tcv-panel-d c12"><h3>What the agents asked <span class="tcv-dash-dim">click one to read it in full</span>
+            <button class="tcv-dl" (click)="dl('agent-questions', d.questions)">CSV</button></h3>
+          <table class="tcv-dash-table tcv-dash-qs">
+            <thead><tr><th>question</th><th>answer</th><th>room</th><th class="r">asked</th><th class="r">waited</th></tr></thead>
+            <tbody>
+              @for (q of d.questions; track q.at) {
+                <tr (click)="openQ.set(openQ() === q.at ? null : q.at)" class="cursor-pointer">
+                  <td [title]="q.question">{{ q.question }}</td>
+                  <td [title]="q.answer" [style.color]="q.answer ? null : 'var(--warn)'">{{ q.answer || q.status }}</td>
+                  <td>{{ q.room ? roomName(q.room) : '–' }}</td>
+                  <td class="r mono">{{ when(q.at) }}</td><td class="r mono">{{ dur(q.wait_s) }}</td></tr>
+                @if (openQ() === q.at) {
+                  <tr class="tcv-dash-open"><td colspan="5">
+                    <div class="whitespace-pre-wrap text-[12px] leading-relaxed">{{ q.text }}</div>
+                    @if (q.answer) { <div class="mt-2 text-[12px]"><b>Answer:</b> {{ q.answer }}</div> }
+                  </td></tr>
+                }
+              } @empty { <tr><td colspan="5" class="tcv-dash-dim">no questions in this range</td></tr> }
+            </tbody>
+          </table></section>
+      </div>
+    }
+
+    <!-- BOARDS -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'boards', title: 'Boards', sub: 'how each board comes out of the pipeline, run by run' }" />
+    @if (open('boards')) {
+      <div class="tcv-dash-grid">
+        @for (b of d.board_quality; track b.board) {
+          <section class="tcv-panel-d c12"><h3>{{ b.board }}
+              <span class="tcv-dash-dim">{{ b.runs.length }} runs · first {{ quality(b.first) }} → last {{ quality(b.last) }}</span>
+              <button class="tcv-dl" (click)="dl('board-' + b.board, b.runs)">CSV</button></h3>
+            <table class="tcv-dash-table">
+              <thead><tr><th>run</th><th class="r">unrouted</th><th class="r">DRC errors</th><th class="r">DRC warnings</th>
+                <th class="r">ERC errors</th><th class="r">area</th><th class="r">tracks</th><th class="r">vias</th><th class="r">copper</th><th class="r">took</th></tr></thead>
+              <tbody>
+                @for (r of b.runs.slice().reverse(); track r.at) {
+                  <tr><td class="mono">{{ when(r.at) }}</td>
+                    <td class="r mono" [style.color]="r.unrouted ? 'var(--danger)' : 'var(--ok)'">{{ r.unrouted ?? '–' }}</td>
+                    <td class="r mono" [style.color]="r.drc_errors ? 'var(--danger)' : null">{{ r.drc_errors ?? '–' }}</td>
+                    <td class="r mono">{{ r.drc_warnings ?? '–' }}</td>
+                    <td class="r mono" [style.color]="r.erc_errors ? 'var(--danger)' : null">{{ r.erc_errors ?? '–' }}</td>
+                    <td class="r mono">{{ r.area_cm2 == null ? '–' : r.area_cm2 + ' cm²' }}</td>
+                    <td class="r mono">{{ r.tracks ?? '–' }}</td><td class="r mono">{{ r.vias ?? '–' }}</td>
+                    <td class="r mono">{{ r.length_mm == null ? '–' : r.length_mm + ' mm' }}</td>
+                    <td class="r mono">{{ r.seconds == null ? '–' : f.secs(r.seconds) }}</td></tr>
+                }
+              </tbody>
+            </table></section>
+        } @empty {
+          <section class="tcv-panel-d c12"><p class="tcv-dash-dim">No board runs in this range. Every run of the board
+            pipeline is recorded from now on - unrouted connections, DRC and ERC, size, copper - so a board's quality
+            can be followed over time.</p></section>
+        }
       </div>
     }
 
@@ -174,7 +354,8 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
     <ng-container *ngTemplateOutlet="head; context: { id: 'storage', title: 'Storage', sub: f.bytes(d.storage.db_bytes) + ' in the database · ' + f.bytes(cacheTotal()) + ' cached on disk' }" />
     @if (open('storage')) {
       <div class="tcv-dash-grid">
-        <section class="tcv-panel-d c6"><h3>Database, by collection</h3>
+        <section class="tcv-panel-d c6"><h3>Database, by collection
+            <button class="tcv-dl" (click)="dl('collections', d.storage.collections)">CSV</button></h3>
           <app-bar-list [rows]="collRows()" [f]="f.bytes" [mono]="true" /></section>
         <section class="tcv-panel-d c3"><h3>Caches on disk</h3>
           <app-bar-list [rows]="cacheRows()" [f]="f.bytes" /></section>
@@ -191,7 +372,8 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
     <ng-container *ngTemplateOutlet="head; context: { id: 'projects', title: 'Projects', sub: d.catalog.folders + ' folders · ' + d.catalog.parts + ' parts in the drawer' }" />
     @if (open('projects')) {
       <div class="tcv-dash-grid">
-        <section class="tcv-panel-d c12">
+        <section class="tcv-panel-d c12"><h3>Per project
+            <button class="tcv-dl" (click)="dl('projects', d.catalog.projects)">CSV</button></h3>
           <table class="tcv-dash-table">
             <thead><tr><th>project</th><th class="r">models</th><th class="r">boards</th><th class="r">apps</th><th class="r">notes</th><th class="r">LLM spend</th></tr></thead>
             <tbody>
@@ -199,6 +381,33 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
                 <tr><td>{{ roomName(p.name) }}</td><td class="r mono">{{ p.models }}</td><td class="r mono">{{ p.boards }}</td>
                   <td class="r mono">{{ p.apps }}</td><td class="r mono">{{ p.notes }}</td><td class="r mono">{{ f.money(p.cost_usd) }}</td></tr>
               }
+            </tbody>
+          </table></section>
+      </div>
+    }
+
+    <!-- API -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'api', title: 'API', sub: 'how long the server takes to answer, route by route' }" />
+    @if (open('api')) {
+      <div class="tcv-dash-grid">
+        <section class="tcv-panel-d c6"><h3>Requests
+            <button class="tcv-dl" (click)="dl('api-requests', seriesRows(d.api.per_bucket))">CSV</button></h3>
+          <app-time-chart [data]="d.api.per_bucket" kind="bar" [legend]="false" [height]="160" /></section>
+        <section class="tcv-panel-d c6"><h3>Average response time
+            <button class="tcv-dl" (click)="dl('api-latency', seriesRows(d.api.latency))">CSV</button></h3>
+          <app-time-chart [data]="d.api.latency" kind="line" [stacked]="false" [sums]="false" [legend]="false" [f]="ms" [height]="160" /></section>
+        <section class="tcv-panel-d c12"><h3>Slowest routes
+            <button class="tcv-dl" (click)="dl('api-routes', d.api.routes)">CSV</button></h3>
+          <table class="tcv-dash-table">
+            <thead><tr><th>route</th><th class="r">requests</th><th class="r">average</th><th class="r">p95</th><th class="r">slowest</th><th class="r">errors</th></tr></thead>
+            <tbody>
+              @for (r of d.api.routes; track r.route) {
+                <tr><td class="mono" [title]="r.route">{{ r.route }}</td><td class="r mono">{{ r.count }}</td>
+                  <td class="r mono">{{ ms(r.avg_ms) }}</td>
+                  <td class="r mono">{{ r.p95_ms == null ? '–' : r.p95_ms > 10000 ? '> 10 s' : '≤ ' + ms(r.p95_ms) }}</td>
+                  <td class="r mono">{{ ms(r.max_ms) }}</td>
+                  <td class="r mono" [style.color]="r.errors ? 'var(--danger)' : null">{{ r.errors }}</td></tr>
+              } @empty { <tr><td colspan="6" class="tcv-dash-dim">recorded from now on - once a minute, per route</td></tr> }
             </tbody>
           </table></section>
       </div>
@@ -286,9 +495,58 @@ export class RoomAnalyze implements OnDestroy {
     if (s.has(id)) s.delete(id); else s.add(id);
     this.shut.set(s); keep('shut', JSON.stringify([...s]));
   }
-  setPrice(v: string) {
-    const price = v === '' ? null : Math.max(0, +v);
-    this.api.setKwhPrice(price).subscribe({ next: () => this.load() });
+  openQ = signal<string | null>(null);
+
+  setPrice(v: string) { this.save({ kwh_price: v === '' ? null : Math.max(0, +v) }); }
+  setPlan(v: string) { this.save({ plan_usd_month: v === '' ? null : Math.max(0, +v) }); }
+  setPlanName(v: string) { this.save({ plan_name: v.trim() || null }); }
+  private save(patch: Parameters<InsightsApi['setSettings']>[0]) {
+    this.api.setSettings(patch).subscribe({ next: () => this.load() });
+  }
+
+  readonly ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + ' s' : Math.round(v) + ' ms';
+  dur(s: number | null | undefined): string { return s == null ? '–' : fmt.secs(s); }
+  when(iso: string): string {
+    return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+  quality(r: BoardRunRow): string {
+    return `${r.unrouted ?? '?'} unrouted, DRC ${r.drc_errors ?? '?'}` + (r.area_cm2 ? `, ${r.area_cm2} cm²` : '');
+  }
+
+  // ---- export ----
+
+  /** A time series as rows: one per bucket, a column per series. */
+  seriesRows(d: InsightSeries): Record<string, unknown>[] {
+    return Array.from({ length: d.n }, (_, i) => ({
+      time: new Date((d.t0 + i * d.step) * 1000).toISOString(),
+      ...Object.fromEntries(d.series.map(s => [s.name, s.values[i]])),
+    }));
+  }
+
+  /** Any panel's rows, downloaded as CSV. */
+  dl(name: string, rows: object[]) {
+    const flat = rows.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) =>
+      [k, v !== null && typeof v === 'object' ? JSON.stringify(v) : v])));
+    const cols = [...new Set(flat.flatMap(r => Object.keys(r)))];
+    const cell = (v: unknown) => {
+      const t = v == null ? '' : String(v);
+      return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+    };
+    const text = [cols.join(','), ...flat.map(r => cols.map(c => cell((r as Record<string, unknown>)[c])).join(','))].join('\n');
+    this.save_(`redline-${name}-${this.range()}.csv`, text, 'text/csv');
+  }
+
+  /** The whole answer for the range, as JSON. */
+  exportAll() {
+    const d = this.data();
+    if (d) this.save_(`redline-analytics-${this.range()}.json`, JSON.stringify(d, null, 1), 'application/json');
+  }
+
+  private save_(file: string, text: string, type: string) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = document.createElement('a');
+    a.href = url; a.download = file; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   updated = computed(() => this.at()?.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) ?? '');
@@ -358,9 +616,15 @@ function keep(key: string, value: string) {
   try { localStorage.setItem('x3.analytics.' + key, value); } catch { /* private window */ }
 }
 
+/** The shape of the answer this page reads; one kept in another shape is
+ *  not shown (backend/insights.py SHAPE). */
+const SHAPE = 2;
+
 function kept(range: string): Insights | null {
-  try { return JSON.parse(localStorage.getItem('x3.analytics.data.' + range) ?? 'null'); }
-  catch { return null; }
+  try {
+    const d = JSON.parse(localStorage.getItem('x3.analytics.data.' + range) ?? 'null');
+    return d?.shape === SHAPE ? d : null;
+  } catch { return null; }
 }
 function keepData(range: string, d: Insights) {
   try { localStorage.setItem('x3.analytics.data.' + range, JSON.stringify(d)); } catch { /* full or private */ }

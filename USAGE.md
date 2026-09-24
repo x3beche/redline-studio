@@ -828,4 +828,21 @@ newer one replaces it a moment later.
 - **Projects** - models, boards, apps, notes and LLM spend per project.
 - **Parts supplier (LCSC)** - every request and how it was answered.
 
-Each row folds away; the room remembers which, and the range.
+- **Costs & savings** - what you pay for the subscription (enter the plan
+  and its monthly price) against what the same work lists at, prorated to
+  the range; how much of every prompt came from the cache and what that
+  saved, per model; the median and average cost of a finished note.
+- **Builds** - failures and times per kind of job; the slowest models to
+  build, and their build time over the range.
+- **Work**, besides notes and runs: *from note to done* - per room, the
+  median time spent writing a note, waiting for the agent, and the agent's
+  own work; the slowest notes; and every question the agents asked, with
+  its answer and how long it waited (click one to read it in full).
+- **Boards** - every board pipeline run, recorded from now on: unrouted
+  connections, DRC and ERC, size, tracks, vias, copper, how long it took.
+- **API** - requests and response times per route (average, p95, slowest,
+  errors), summed once a minute.
+
+Each row folds away; the room remembers which, and the range. Every panel
+has a **CSV** button, and **Export** at the top saves the whole range as
+JSON.

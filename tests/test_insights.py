@@ -44,3 +44,31 @@ def test_the_kept_answer_survives_on_disk(tmp_path, monkeypatch):
     assert data["llm"]["calls"] == 3
     insights.forget()
     assert insights._recall("7d") is None
+
+
+def test_median():
+    assert insights._median([]) is None
+    assert insights._median([3, 1, 2]) == 2
+    assert insights._median([4, 1, 3, 2]) == 2.5
+
+
+def test_requests_are_summed_per_minute_and_route():
+    insights._timing.clear()
+    for ms in (10, 30, 400):
+        insights.record_request("GET", "/api/x", 200, ms)
+    insights.record_request("GET", "/api/x", 503, 12000)
+    (key, row), = insights._timing.items()
+    assert key[1:] == ("GET", "/api/x")
+    assert row["count"] == 4 and row["errors"] == 1 and row["max_ms"] == 12000
+    assert sum(row["hist"]) == 4 and row["hist"][-1] == 1      # the 12 s one is past the last edge
+    insights._timing.clear()
+
+
+def test_p95_reads_the_histogram():
+    hist = [0] * (len(insights.LATENCY_EDGES) + 1)
+    hist[0] = 95          # <= 25 ms
+    hist[5] = 5           # <= 1000 ms
+    assert insights.p95(hist) == 25
+    hist[0] = 90
+    assert insights.p95(hist) == 1000
+    assert insights.p95([0] * len(hist)) is None

@@ -1121,6 +1121,10 @@ async def run_board(bid: str):
               f"ERC {out['schematic'].get('erc', {}).get('error_count', '?')} errors",
               "done", room="pcb")
     out["seconds"] = took
+    try:
+        await insights.record_board_run(db(), bid, out)
+    except Exception:
+        LOG.exception("could not record the board run")
     return out
 
 
@@ -1135,6 +1139,23 @@ async def board_model(bid: str):
 
 
 # ---------------- parts ----------------
+@app.middleware("http")
+async def _timed(request, call_next):
+    """How long each API request took, by route, for the Analytics room."""
+    import time as _t
+    t0 = _t.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    finally:
+        if request.url.path.startswith("/api/"):
+            route = getattr(request.scope.get("route"), "path", None) or request.url.path
+            insights.record_request(request.method, route, status,
+                                    (_t.perf_counter() - t0) * 1000)
+
+
 @app.middleware("http")
 async def _who_asks(request, call_next):
     """Tag LCSC lookups with who wanted them, for the journal.
@@ -1393,6 +1414,21 @@ async def get_insights(range: str = "24h"):
 
 class KwhIn(BaseModel):
     price: float | None = Field(default=None, ge=0, le=10)
+
+
+class InsightSettingsIn(BaseModel):
+    kwh_price: float | None = Field(default=None, ge=0, le=10)
+    plan_usd_month: float | None = Field(default=None, ge=0, le=100000)
+    plan_name: str | None = Field(default=None, max_length=80)
+
+
+@app.put("/api/insights/settings")
+async def put_insight_settings(body: InsightSettingsIn):
+    """The electricity price and the subscription the room compares with.
+    Only the fields sent are changed; send null to clear one."""
+    patch = body.model_dump(exclude_unset=True)
+    await insights.set_settings(db(), patch)
+    return await insights.settings(db())
 
 
 @app.put("/api/insights/kwh-price")
