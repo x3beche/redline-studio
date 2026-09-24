@@ -90,7 +90,11 @@ TOOLS: dict[str, tuple] = {
         ["text"], lambda a: ["say", a["text"]] + (["--room", a["room"]] if a.get("room") else [])),
     "ask": (
         "Ask the person a question on their screen and wait for the answer. "
-        "Markdown. Use it when the answer changes what you build.",
+        "Markdown. Use it when the answer changes what you build. Ask as you "
+        "would a systems engineer who is not a specialist in this part: open "
+        "with the decision in one plain sentence, say what each choice means "
+        "for the product (time, cost, size, risk), keep jargon out and the "
+        "evidence in `context`; options are short plain answers.",
         {"text": _s("the question, in Markdown"),
          "options": {"type": "array", "items": {"type": "string"}},
          "context": _s("what you already know"),

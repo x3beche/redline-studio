@@ -140,6 +140,24 @@ The question stops the screen: a card in the middle of it, the browser
 raises a notice, and the tab title says one is waiting. The command blocks
 and prints the answer when it comes, so the answer is simply its output.
 
+**Ask it the way you would ask a systems engineer who is not a specialist
+in this part.** The person decides what the product should be; they
+should not have to know Freerouting, net names or DRC to answer. So:
+
+- **Open with the decision in one plain sentence** - what they are choosing
+  between and why it is theirs to choose. *"The board is almost done, but
+  one connection sometimes fails to route. Should I retry automatically, or
+  leave it for you to fix by hand?"*
+- **Say what each choice means for the product**, not how it is done
+  inside: time, cost, size, risk, what they would have to do. Keep jargon
+  out; where a term is needed, say what it is in half a line.
+- **Short.** Three or four sentences before the options is plenty. The
+  evidence (numbers, tables, net names) goes in `-c`, for whoever wants it -
+  the question itself reads without it.
+- **Options are answers a person would say**: a few words to lead, then
+  what it means - `-o "Retry automatically: a few seconds more per run,
+  the board comes out complete"`, not `-o "retry: route again up to 3x"`.
+
 **Write it in Markdown.** The question and the `-c` context are both
 rendered, so use what the question needs and nothing it does not:
 
@@ -168,6 +186,18 @@ EOF
 way, because the real answer is often "neither, and here is why". `-c` is
 what you already know, so they are not made to reconstruct it. `--timeout N`
 withdraws the question and exits 2 rather than waiting for ever.
+
+Worse - too technical to answer without being an expert:
+
+> Freerouting is non-deterministic at 40 passes; runs 1-4 left 1/2/0/1
+> unrouted (v3v3 to U24 pin 16, vbus at U1). Retry up to 3x or keep stub?
+
+Better - plain, short, the evidence behind it in `-c`:
+
+> **One connection sometimes doesn't get routed.** The router is a little
+> random: of four tries on the same layout, one came out complete and three
+> left one wire short. I can retry automatically until a run comes out
+> complete, or keep what we have and you finish that wire by hand.
 
 Ask when the answer changes what you build. Do not ask what the drawing
 already says, and do not ask two questions where one would do. A question is
