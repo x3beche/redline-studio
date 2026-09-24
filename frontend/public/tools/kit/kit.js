@@ -87,7 +87,8 @@ function fieldFor(def, value, onChange) {
       }));
   } else if (def.type === 'bool') {
     control = $('input', { id, type: 'checkbox', checked: !!value, onchange: (e) => onChange(e.target.checked) });
-    return $('div', { class: 'k-field k-check' }, control, label, def.help ? $('div', { class: 'k-help' }, def.help) : null);
+    const long = def.wide || String(def.label).length > 22 || def.help;
+    return $('div', { class: `k-field k-check${long ? ' k-wide' : ''}` }, control, label, def.help ? $('div', { class: 'k-help' }, def.help) : null);
   } else if (def.type === 'textarea') {
     control = $('textarea', { id, rows: def.rows || 6, spellcheck: 'false', placeholder: def.placeholder || '',
       oninput: (e) => onChange(e.target.value) });
@@ -249,8 +250,20 @@ export async function mount(base = './') {
     if (await copy(pre.textContent, copyBtn)) ping(manifest.id, 'copy');
   } }, 'Copy');
 
+  // An input with `when: {key, equals | in}` shows only while that other
+  // input has that value - a fab's custom limits only when the fab is Custom.
+  const shown = (d) => {
+    const w = d.when;
+    if (!w) return true;
+    const v = String(raw[w.key] ?? '');
+    return w.in ? w.in.map(String).includes(v) : v === String(w.equals);
+  };
   const drawForm = () => {
-    form.replaceChildren(...manifest.inputs.map((d) => fieldFor(d, raw[d.key], (v) => { raw[d.key] = v; store.set(KEY, raw); compute(); })));
+    form.replaceChildren(...manifest.inputs.filter(shown).map((d) => fieldFor(d, raw[d.key], (v) => {
+      raw[d.key] = v; store.set(KEY, raw);
+      if (manifest.inputs.some((x) => x.when?.key === d.key)) drawForm();
+      compute();
+    })));
   };
 
   const outputs = () => {
