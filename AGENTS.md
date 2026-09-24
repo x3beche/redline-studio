@@ -76,6 +76,47 @@ It exits 0 when there is work and 2 when it timed out. Without `--timeout` it
 waits as long as the session lasts, which is what you want: finish, start the
 watcher, and the next request picks you up on its own.
 
+### Never block your own turn
+
+If you are the main agent, you are the only thing moving the queue. Every
+room agent you would hand a note to, every thread you would answer, every
+question that would reach the person's screen goes through your turn. So a
+turn that sits and waits does not cost you a minute - it stops everything.
+
+Never spend your turn waiting for something to happen. In particular, never
+write a shell loop that polls:
+
+```bash
+until ! pgrep -f something; do sleep 10; done      # NO
+while [ ! -f result ]; do sleep 5; done            # NO
+sleep 60 && cat output                             # NO
+```
+
+These look harmless and they are the main way a session dies. The loop holds
+the turn open, the watcher cannot wake you because you never went to sleep,
+notes pile up queued, and the person watches a progress bar that has stopped
+and has to type "don't get stuck" to get you back.
+
+What to do instead: start the slow thing in the background and **end your
+turn**. A background command re-invokes you when it exits, and that is the
+whole mechanism - `revisions.py wait` works the same way. Both bring you
+back with the output. You do not need to watch anything to find out how it
+went.
+
+```bash
+# start it in the background, then stop talking and let the turn end
+.venv/bin/python tools/revisions.py board run controller
+```
+
+The same goes for a room agent you handed a note to: it reports back on its
+own when it is done. Do not poll it, do not ask it whether it is finished,
+and do not hold your turn open until it answers. Hand the note over, write
+your line in the thread, start the watcher, end the turn.
+
+If you genuinely have nothing to do but wait, the correct move is to end the
+turn with the watcher running. An idle main agent with a live watcher is
+working. An agent in a `sleep` loop is not.
+
 ## They can talk back
 
 Not everything a person wants is a mark on a model. "Move these into a
