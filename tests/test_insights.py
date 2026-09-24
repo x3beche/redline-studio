@@ -85,7 +85,8 @@ def test_only_one_server_holds_the_sampler_lease():
             from pymongo.errors import DuplicateKeyError
             me = update["$set"]["owner"]
             free = (self.doc is None or self.doc["owner"] == me
-                    or self.doc["until"] < update["$set"]["until"] - timedelta(seconds=insights.LEASE_S))
+                    or self.doc["until"] < update["$set"]["until"] - timedelta(seconds=insights.LEASE_S)
+                    or self.doc.get("version", 0) < update["$set"]["version"])
             if not free:
                 raise DuplicateKeyError("held")
             self.doc = dict(update["$set"])
@@ -101,3 +102,25 @@ def test_only_one_server_holds_the_sampler_lease():
     finally:
         insights._ME = insights_me
     assert asyncio.run(insights._hold_lease(db)) is True
+
+
+def test_newer_sampler_code_takes_the_lease_from_older():
+    import asyncio
+    from datetime import datetime, timezone
+
+    class Coll:
+        doc = {"_id": "sampler", "owner": "old:1", "version": 1,
+               "until": datetime.now(timezone.utc) + timedelta(seconds=60)}
+
+        async def find_one_and_update(self, query, update, upsert, return_document):
+            ors = query["$or"]
+            ok = (self.doc["owner"] == update["$set"]["owner"]
+                  or any("version" in o and o["version"].get("$lt", -1) > self.doc.get("version", 0)
+                         for o in ors))
+            if not ok:
+                from pymongo.errors import DuplicateKeyError
+                raise DuplicateKeyError("held")
+            self.doc = dict(update["$set"])
+            return self.doc
+
+    assert asyncio.run(insights._hold_lease({insights.METRICS + "_lease": Coll()})) is True

@@ -1597,3 +1597,29 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-dl:hover { color: var(--ink); border-color: var(--accent); }
 .tcv-dash-qs th:first-child, .tcv-dash-qs td:first-child { width: 42%; }
 .tcv-dash-open td { white-space: normal; background: var(--surface); }
+
+/* Analytics, part three: one project's items, change on a tile, marks. */
+.tcv-dash-grid > .c5 { grid-column: span 5; } .tcv-dash-grid > .c7 { grid-column: span 7; }
+@media (max-width: 1400px) { .tcv-dash-grid > .c5, .tcv-dash-grid > .c7 { grid-column: span 12; } }
+.tcv-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; padding-top: 10px; }
+.tcv-item { display: flex; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface-2); min-width: 0; }
+.tcv-item-pic { flex: none; width: 104px; height: 104px; border-radius: 5px; overflow: hidden;
+  background: var(--pcb-bg); display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); }
+.tcv-item-pic img { width: 100%; height: 100%; object-fit: contain; }
+.tcv-item-pic span { font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: .06em; }
+.tcv-item-body { min-width: 0; flex: 1; font-size: 12px; color: var(--ink); }
+.tcv-kind { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; padding: 0 5px;
+  border: 1px solid var(--line); border-radius: 3px; color: var(--ink-dim); }
+.tcv-item-facts { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0 0; font-size: 11.5px; }
+.tcv-item-facts dt { color: var(--ink-dim); }
+.tcv-item-facts dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcv-delta { font-style: normal; font-size: 10.5px; color: var(--ok); }
+.tcv-delta[data-up] { color: var(--warn); }
+.tcv-ch-mark { fill: var(--warn); opacity: .12; }
+.tcv-ch-notch { fill: var(--warn); }
+.tcv-spark { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+.tcv-spark-dot { fill: var(--accent); }
+.tcv-week { border-bottom: 1px solid var(--line); padding: 4px 0; font-size: 12px; }
+.tcv-week summary { cursor: pointer; color: var(--ink); }

@@ -843,6 +843,29 @@ newer one replaces it a moment later.
 - **API** - requests and response times per route (average, p95, slowest,
   errors), summed once a minute.
 
-Each row folds away; the room remembers which, and the range. Every panel
-has a **CSV** button, and **Export** at the top saves the whole range as
-JSON.
+- **The week in short** - the last seven days in a few lines (copy it
+  anywhere), and a write-up kept every Monday of the week before.
+- **Retries & waste** - money spent on re-runs of the same note and on
+  rejected notes, failed jobs and the compute they burned; loops (the same
+  job five or more times for one note) and notes run more than once.
+- **Unusual** - days, notes and jobs far above the usual (three times the
+  median, well past the typical spread); the days are marked on the spend
+  chart.
+- **Uptime & database** - share of time up, server starts, gaps nobody was
+  sampling, 5xx errors, and the database's round-trip time.
+- **Storage**, besides sizes: files stored over time, the growth per day,
+  and when the database quota and the disk run out at that pace.
+- **Docker** - images, containers, volumes and build cache, and what could
+  be reclaimed (not done from here).
+- Tiles show the change against the period before, of the same length.
+
+**One project at a time.** The selector next to the range switches from all
+of the app to one project: its models, boards and apps matched by id, each
+with a picture (a board's layout, or the latest note's drawing), its notes
+and what they cost, its runs and jobs, and what it keeps a history of - a
+model's built size and build time, a board's pipeline runs, an app's tests
+and firmware size. The machine, storage, the API and Docker stay app-wide.
+
+Each row folds away; the room remembers which, the range and the project.
+Every panel has a **CSV** button, and **Export** at the top saves the whole
+range as JSON.

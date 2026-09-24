@@ -70,6 +70,13 @@ export const fmt = {
           }
         }
       }
+      <!-- Buckets marked as unusual: a band behind them and a notch on top. -->
+      @for (i of marks(); track i) {
+        <rect [attr.x]="markX(i) - slot() / 2" [attr.y]="T" [attr.width]="slot()" [attr.height]="height() - B - T"
+              class="tcv-ch-mark" />
+        <path [attr.d]="'M' + (markX(i) - 4) + ',' + T + 'L' + (markX(i) + 4) + ',' + T + 'L' + markX(i) + ',' + (T + 6) + 'Z'"
+              class="tcv-ch-notch" />
+      }
       @if (at(); as a) {
         <line [attr.x1]="a.x" [attr.x2]="a.x" [attr.y1]="T" [attr.y2]="height() - B" class="tcv-ch-cross" />
       }
@@ -116,6 +123,8 @@ export class TimeChart implements AfterViewInit, OnDestroy {
   legend = input(true);
   /** Legend totals make no sense for averages (percent, watts). */
   sums = input(true);
+  /** Buckets to mark as unusual. */
+  marks = input<number[]>([]);
 
   readonly L = 46; readonly R = 8; readonly T = 8; readonly B = 18;
   private box = viewChild.required<ElementRef<HTMLDivElement>>('box');
@@ -159,7 +168,8 @@ export class TimeChart implements AfterViewInit, OnDestroy {
     const n = this.data().n;
     return this.L + (this.w() - this.L - this.R) * (n > 1 ? i / (n - 1) : 0.5);
   }
-  private slot() { return (this.w() - this.L - this.R) / Math.max(1, this.data().n); }
+  slot() { return (this.w() - this.L - this.R) / Math.max(1, this.data().n); }
+  markX(i: number) { return this.kind() === 'bar' ? this.L + this.slot() * (i + 0.5) : this.x(i); }
   private y(v: number) { return this.height() - this.B - (this.height() - this.B - this.T) * v / this.max(); }
 
   yTicks = computed(() => [0, 0.25, 0.5, 0.75, 1].map(k => {
@@ -323,5 +333,32 @@ export class Donut {
       off += len;
       return a;
     });
+  });
+}
+
+/** A small line of values - an item's history at a glance. */
+@Component({
+  selector: 'app-spark',
+  host: { class: 'inline-block align-middle' },
+  template: `
+<svg [attr.width]="width()" [attr.height]="height()" class="block overflow-visible">
+  @if (d(); as p) {
+    <path [attr.d]="p.line" class="tcv-spark" />
+    <circle [attr.cx]="p.last[0]" [attr.cy]="p.last[1]" r="2.2" class="tcv-spark-dot" />
+  }
+</svg>`,
+})
+export class Spark {
+  values = input.required<(number | null)[]>();
+  width = input(90);
+  height = input(22);
+  d = computed(() => {
+    const v = this.values().filter((x): x is number => x != null);
+    if (v.length < 2) return null;
+    const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
+    const pts = v.map((x, i) => [i * this.width() / (v.length - 1),
+                                 this.height() - 2 - (x - lo) / span * (this.height() - 4)]);
+    return { line: pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(''),
+             last: pts[pts.length - 1] };
   });
 }

@@ -42,6 +42,9 @@ from . import compute, lcsc, store, sysinfo, usage
 METRICS = "metrics"
 TIMINGS = "api_timings"
 BOARD_RUNS = "board_runs"
+EVENTS = "server_events"
+HISTORY = "item_history"
+WEEKLY = "weekly_reports"
 SAMPLE_EVERY = 60          # seconds
 KEEP_DAYS = 120            # machine samples are dropped after this
 
@@ -113,15 +116,17 @@ async def _llm_sums(db, lo: str, hi: str, since: datetime, size: int) -> dict:
     t0_ms = int(since.timestamp() * 1000)
     runs = [r async for r in db.runs.find(
         {"started_at": {"$lte": hi}, "$or": [{"finished_at": {"$gte": lo}}, {"finished_at": None}]},
-        {"started_at": 1, "finished_at": 1, "revision": 1, "room": 1})]
+        {"started_at": 1, "finished_at": 1, "revision": 1, "room": 1, "_id": 1})]
     runs.sort(key=lambda r: r.get("started_at") or "", reverse=True)   # latest wins
     now = datetime.now(timezone.utc).isoformat()
     branches = [{"case": {"$and": [{"$gte": ["$at", r["started_at"]]},
                                    {"$lte": ["$at", r.get("finished_at") or now]}]},
-                 "then": {"rev": r.get("revision"), "room": r.get("room") or "cad"}}
+                 "then": {"rev": r.get("revision"), "room": r.get("room") or "cad",
+                          "run": str(r["_id"])}}
                 for r in runs if r.get("started_at")]
-    owner_expr = ({"$switch": {"branches": branches, "default": {"rev": None, "room": None}}}
-                  if branches else {"rev": None, "room": None})
+    owner_expr = ({"$switch": {"branches": branches,
+                               "default": {"rev": None, "room": None, "run": None}}}
+                  if branches else {"rev": None, "room": None, "run": None})
     pipeline = [
         {"$match": {"at": {"$gte": lo, "$lte": hi}}},
         {"$addFields": {"_run": owner_expr}},
@@ -141,10 +146,16 @@ async def _llm_sums(db, lo: str, hi: str, since: datetime, size: int) -> dict:
             "provider": group("$provider"),
             "kind": group({"$ifNull": ["$kind", "$surface"]}),
             "revision": group({"rev": "$_rev", "room": "$_room"}),
+            # Per run, for re-runs of the same note; per note per bucket, so
+            # one project's spend can be drawn on its own.
+            "run": group("$_run.run"),
+            "bucket_rev": [{"$group": {"_id": {"b": "$_b", "rev": "$_rev"}, "cost": cost,
+                                       "tokens": all_toks}}],
         }},
     ]
     got = [d async for d in db[usage.CALLS].aggregate(pipeline)]
-    return got[0] if got else {k: [] for k in ("total", "buckets", "model", "provider", "kind", "revision")}
+    return got[0] if got else {k: [] for k in ("total", "buckets", "model", "provider", "kind",
+                                               "revision", "run", "bucket_rev")}
 
 
 def _median(xs: list[float]) -> float | None:
@@ -276,21 +287,92 @@ async def sampler(get_db) -> None:
         await get_db()[TIMINGS].create_index("at", expireAfterSeconds=KEEP_DAYS * 86400)
     except Exception:
         pass
+    try:
+        await get_db()[HISTORY].create_index([("item", 1), ("kind", 1), ("at", 1)], unique=True)
+        await get_db()[EVENTS].insert_one({"at": datetime.now(timezone.utc), "kind": "start",
+                                           "server": _ME})
+    except Exception:
+        pass
+    tick = 0
     while True:
         try:
             # One machine, one set of samples: more than one server can run
             # against this database (a worktree's, say), and each sampling
             # would count the machine's energy twice.
             if await _hold_lease(get_db()):
-                await get_db()[METRICS].insert_one(sample_row())
+                row = sample_row()
+                row["db_ms"] = await _db_round_trip(get_db())
+                if tick % 10 == 0:
+                    row.update(await _sizes(get_db()))
+                    await snapshot_items(get_db())
+                if tick % 60 == 0:
+                    await weekly_if_due(get_db())
+                # New lines from the agents' transcripts into llm_calls.
+                try:
+                    await usage.ingest(get_db(), force=False)
+                except Exception:
+                    pass
+                await get_db()[METRICS].insert_one(row)
+                tick += 1
             await flush_timings(get_db())
         except Exception:
             pass
         await asyncio.sleep(SAMPLE_EVERY)
 
 
+async def _db_round_trip(db) -> float:
+    """How long the database takes to answer the smallest question, in ms."""
+    import time
+    t0 = time.perf_counter()
+    await db.command("ping")
+    return round((time.perf_counter() - t0) * 1000, 1)
+
+
+async def _sizes(db) -> dict:
+    """The database and the disk, for storage growth over time."""
+    st = await db.command("dbstats")
+    disk = shutil.disk_usage(ROOT)
+    return {"db_bytes": st.get("dataSize", 0), "db_storage": st.get("storageSize", 0),
+            "disk_used": disk.used, "disk_total": disk.total}
+
+
+async def snapshot_items(db) -> None:
+    """History for what only keeps its latest value: each model's built size
+    and build time, each app's firmware size and last test. A row is written
+    when the value's own time stamp is new, so nothing repeats."""
+    from pymongo.errors import DuplicateKeyError
+    rows = []
+    async for m in db.models.find({}, {"artifacts.viewer.bytes": 1, "artifacts.viewer.at": 1,
+                                       "build_secs": 1}):
+        v = (m.get("artifacts") or {}).get("viewer") or {}
+        if v.get("at"):
+            rows.append({"item": m["_id"], "kind": "model_build", "at": v["at"],
+                         "bytes": v.get("bytes"), "build_secs": m.get("build_secs")})
+    async for a in db.apps.find({}, {"firmware": 1, "last_test": 1}):
+        fw = a.get("firmware") or {}
+        if fw.get("at") and fw.get("summary"):
+            rows.append({"item": a["_id"], "kind": "firmware", "at": fw["at"],
+                         "flash_bytes": fw["summary"].get("flash_bytes"),
+                         "ram_bytes": fw["summary"].get("ram_bytes"), "ok": fw.get("ok")})
+        t = a.get("last_test") or {}
+        if t.get("at"):
+            counts = t.get("counts") or {}
+            rows.append({"item": a["_id"], "kind": "test", "at": t["at"], "ok": t.get("ok"),
+                         "passed": counts.get("passed", 0), "failed": counts.get("failed", 0),
+                         "wall_s": t.get("wall_s")})
+    for r in rows:
+        try:
+            await db[HISTORY].insert_one(r)
+        except DuplicateKeyError:
+            pass
+
+
 _ME = f"{os.uname().nodename}:{os.getpid()}"
 LEASE_S = 90
+# Raised when the sampler records something new: a server with newer
+# sampler code takes the lease from one with older, so a worktree left on
+# yesterday's code does not keep today's fields from being recorded.
+SAMPLER_VERSION = 2
 
 
 async def _hold_lease(db) -> bool:
@@ -302,8 +384,11 @@ async def _hold_lease(db) -> bool:
     now = datetime.now(timezone.utc)
     try:
         got = await db[METRICS + "_lease"].find_one_and_update(
-            {"_id": "sampler", "$or": [{"owner": _ME}, {"until": {"$lt": now}}]},
-            {"$set": {"owner": _ME, "until": now + timedelta(seconds=LEASE_S)}},
+            {"_id": "sampler", "$or": [{"owner": _ME}, {"until": {"$lt": now}},
+                                       {"version": {"$lt": SAMPLER_VERSION}},
+                                       {"version": {"$exists": False}}]},
+            {"$set": {"owner": _ME, "until": now + timedelta(seconds=LEASE_S),
+                      "version": SAMPLER_VERSION}},
             upsert=True, return_document=ReturnDocument.AFTER)
     except DuplicateKeyError:
         return False            # held by another server, and not yet run out
@@ -347,6 +432,309 @@ def _dir_bytes(p: Path) -> int:
     return total
 
 
+# ---------------------------------------------------------------- helpers
+
+QUOTA_BYTES = float(os.getenv("STORAGE_QUOTA_MB", "512")) * 1e6
+
+
+def api_routes_err(timing_rows: list[dict]) -> list[dict]:
+    got: dict[str, int] = defaultdict(int)
+    for t in timing_rows:
+        if t.get("errors"):
+            got[f"{t['method']} {t['route']}"] += t["errors"]
+    return [{"route": k, "errors": v} for k, v in sorted(got.items(), key=lambda kv: -kv[1])]
+
+
+def _mean_of(b: "Buckets", counts: "Buckets") -> dict:
+    """Averages per bucket, from sums, over the buckets that were sampled."""
+    n = counts.data.get("n", [0.0] * counts.n)
+    out = b.out()
+    for x in out["series"]:
+        x["values"] = [round(v / c, 2) if c else None for v, c in zip(x["values"], n)]
+    return out
+
+
+async def _grid_files(db) -> list[dict]:
+    """Every stored file's size and upload time - the database's growth,
+    back to the first file, with no sampling needed."""
+    async def one(bucket):
+        return [{"bucket": bucket, "at": d.get("uploadDate"), "bytes": d.get("length") or 0}
+                async for d in db[f"{bucket}.files"].find({}, {"uploadDate": 1, "length": 1})]
+    got = await asyncio.gather(*(one(b) for b in ("model_files", "cad_files", "shots")))
+    return [r for rs in got for r in rs]
+
+
+def _growth(grid_rows, metric_rows, since, until, size) -> dict:
+    """Stored files over time, and when the quota and the disk run out at
+    the pace of the last fortnight."""
+    now = datetime.now(timezone.utc)
+    files = sorted((_dt(r["at"]), r["bytes"], r["bucket"]) for r in grid_rows if _dt(r["at"]))
+    added = Buckets(since, until, size)
+    for at, n, bucket in files:
+        added.add(bucket, at, n)
+    recent = now - timedelta(days=14)
+    per_day = sum(n for at, n, _ in files if at >= recent) / 14.0
+    sized = [m for m in metric_rows if m.get("db_storage")]
+    last = sized[-1] if sized else None
+    out = {"added": added.out(), "per_day_bytes": round(per_day),
+           "files": len(files), "files_bytes": sum(n for _, n, _ in files),
+           "quota_bytes": QUOTA_BYTES}
+    if last:
+        out["db_storage"] = last["db_storage"]
+        left = QUOTA_BYTES - last["db_storage"]
+        out["quota_days"] = round(left / per_day, 1) if per_day > 0 and left > 0 else None
+        disk_rows = [(_dt(m["at"]), m["disk_used"]) for m in sized if m.get("disk_used")]
+        if len(disk_rows) >= 2 and (disk_rows[-1][0] - disk_rows[0][0]).total_seconds() > 6 * 3600:
+            (t0, u0), (t1, u1) = disk_rows[0], disk_rows[-1]
+            rate = (u1 - u0) / ((t1 - t0).total_seconds() / 86400)
+            out["disk_per_day_bytes"] = round(rate)
+            free = last["disk_total"] - last["disk_used"]
+            out["disk_days"] = round(free / rate, 1) if rate > 0 else None
+        out["disk_free"] = last["disk_total"] - last["disk_used"]
+    return out
+
+
+def _anomalies(spend: list[float], by_note: dict, revs: dict, job_rows: list, since, size) -> dict:
+    """What stands far above the usual: buckets of spend, notes, jobs.
+    'Far' is three times the median, and more than the median plus five
+    times the typical spread - rare enough to be worth a look."""
+    out = {"buckets": [], "items": []}
+
+    def high(vals: list[float], v: float) -> float | None:
+        vals = [x for x in vals if x]
+        if len(vals) < 4:
+            return None
+        med = _median(vals) or 0
+        mad = _median([abs(x - med) for x in vals]) or 0
+        limit = max(3 * med, med + 5 * mad)
+        return med if v > limit and v > 0 else None
+
+    for i, v in enumerate(spend):
+        med = high(spend, v)
+        if med is not None:
+            out["buckets"].append(i)
+            out["items"].append({"kind": "spend", "what": datetime.fromtimestamp(
+                since.timestamp() + i * size, timezone.utc).isoformat(), "value": round(v, 2),
+                "typical": round(med, 2), "unit": "usd"})
+    costs = [v["cost_usd"] for v in by_note.values()]
+    for rid, v in by_note.items():
+        med = high(costs, v["cost_usd"])
+        if med is not None:
+            r = revs.get(rid) or {}
+            out["items"].append({"kind": "note", "what": r.get("summary") or (r.get("comment") or rid)[:90],
+                                 "id": rid, "value": round(v["cost_usd"], 2), "typical": round(med, 2),
+                                 "unit": "usd"})
+    by_kind: dict[str, list] = defaultdict(list)
+    for j in job_rows:
+        by_kind[j.get("kind") or "?"].append(j)
+    for kind, js in by_kind.items():
+        walls = [float(j.get("wall_s") or 0) for j in js]
+        for j in js:
+            med = high(walls, float(j.get("wall_s") or 0))
+            if med is not None:
+                out["items"].append({"kind": f"{kind} job", "what": j.get("model") or j.get("revision") or "?",
+                                     "at": j.get("at"), "value": round(float(j["wall_s"]), 1),
+                                     "typical": round(med, 1), "unit": "s"})
+    out["items"].sort(key=lambda x: -(x["value"] / x["typical"] if x["typical"] else 0))
+    out["items"] = out["items"][:20]
+    return out
+
+
+async def _previous(db, since: datetime, until: datetime) -> dict:
+    """The same totals for the period before, for the change on each tile."""
+    lo, hi = since.isoformat(), until.isoformat()
+    toks = {"$add": [{"$ifNull": [f"${k}", 0]} for k in TOKEN_KINDS]}
+    llm, jobs, notes, runs, wh = await asyncio.gather(
+        db[usage.CALLS].aggregate([{"$match": {"at": {"$gte": lo, "$lt": hi}}},
+                                   {"$group": {"_id": None, "usd": {"$sum": {"$ifNull": ["$cost_usd", 0]}},
+                                               "calls": {"$sum": 1}, "tokens": {"$sum": toks}}}]).to_list(1),
+        db[compute.JOBS].aggregate([{"$match": {"at": {"$gte": lo, "$lt": hi}}},
+                                    {"$group": {"_id": None, "cpu_s": {"$sum": {"$ifNull": ["$cpu_s", 0]}},
+                                                "jobs": {"$sum": 1},
+                                                "failed": {"$sum": {"$cond": [{"$ne": [{"$ifNull": ["$rc", 0]}, 0]}, 1, 0]}}}}]).to_list(1),
+        db.revisions.count_documents({"created_at": {"$gte": lo, "$lt": hi}}),
+        db.runs.count_documents({"started_at": {"$gte": lo, "$lt": hi}}),
+        db[METRICS].aggregate([{"$match": {"at": {"$gte": since, "$lt": until}}},
+                               {"$group": {"_id": None, "wh": {"$sum": {"$ifNull": ["$wh", 0]}}}}]).to_list(1))
+    a, j = (llm or [{}])[0], (jobs or [{}])[0]
+    return {"llm_usd": a.get("usd", 0.0), "llm_calls": a.get("calls", 0), "tokens": a.get("tokens", 0),
+            "cpu_s": j.get("cpu_s", 0.0), "jobs": j.get("jobs", 0), "failed": j.get("failed", 0),
+            "wh": ((wh or [{}])[0]).get("wh", 0.0), "notes": notes, "runs": runs}
+
+
+_DOCKER: tuple[float, dict] | None = None
+
+
+async def docker_usage() -> dict:
+    """What Docker holds: images, containers, volumes, build cache - the
+    sandboxes and the KiCad image. Asked at most every ten minutes."""
+    import subprocess
+    import time
+    global _DOCKER
+    if _DOCKER and time.time() - _DOCKER[0] < 600:
+        return _DOCKER[1]
+
+    def run(*args):
+        try:
+            r = subprocess.run(["docker", *args], capture_output=True, text=True, timeout=60)
+            return [json.loads(line) for line in r.stdout.splitlines() if line.strip()] if r.returncode == 0 else None
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return None
+    df, images, ps = await asyncio.gather(
+        asyncio.to_thread(run, "system", "df", "--format", "{{json .}}"),
+        asyncio.to_thread(run, "images", "--format", "{{json .}}"),
+        asyncio.to_thread(run, "ps", "-a", "--format", "{{json .}}"))
+    if df is None:
+        out = {"available": False}
+    else:
+        out = {"available": True,
+               "summary": [{"type": d.get("Type"), "total": d.get("TotalCount"), "active": d.get("Active"),
+                            "size": d.get("Size"), "reclaimable": d.get("Reclaimable")} for d in df],
+               "images": sorted(({"name": f"{i.get('Repository')}:{i.get('Tag')}", "size": i.get("Size"),
+                                  "created": i.get("CreatedSince"),
+                                  "redline": (i.get("Repository") or "").startswith("redline")}
+                                 for i in images or []), key=lambda i: (not i["redline"], i["name"]))[:40],
+               "containers": [{"name": c.get("Names"), "image": c.get("Image"), "state": c.get("State"),
+                               "status": c.get("Status"), "size": c.get("Size")} for c in ps or []]}
+    _DOCKER = (time.time(), out)
+    return out
+
+
+def _project_detail(owner, kinds, revs, by_note, runs_of, job_rows, board_rows, history_rows,
+                    model_docs, board_docs, app_docs, agg, question_log, lead_rows, since, size, B) -> dict:
+    """Each project on its own: its models, boards and apps matched by id,
+    each with a picture, its notes, what they cost, its builds, and what it
+    keeps a history of - so one project is never read off a merged total."""
+    docs = {**{d["_id"]: ("model", d) for d in model_docs}, **{d["_id"]: ("board", d) for d in board_docs},
+            **{d["_id"]: ("app", d) for d in app_docs}}
+    notes_of: dict[str, list[str]] = defaultdict(list)
+    for rid, r in revs.items():
+        if r.get("model"):
+            notes_of[r["model"]].append(rid)
+    projects: dict[str, dict] = {}
+    for item, pr in owner.items():
+        kind, d = docs.get(item, (kinds.get(item), {}))
+        rids = sorted(notes_of.get(item, []))
+        pictured = [rid for rid in rids if revs[rid].get("image")]
+        picture = (f"/api/boards/{item}/layout.svg?v={((d.get('artifacts') or {}).get('layout') or {}).get('at', '')}"
+                   if kind == "board" else
+                   f"/api/revisions/{pictured[-1]}/image" if pictured else None)
+        spend = sum(by_note.get(rid, {}).get("cost_usd", 0) for rid in rids)
+        runs = [r for rid in rids for r in runs_of.get(rid, [])]
+        secs = [(_dt(r["finished_at"]) - _dt(r["started_at"])).total_seconds()
+                for r in runs if r.get("finished_at") and r.get("started_at")]
+        jobs = [j for j in job_rows if j.get("model") == item]
+        builds = [j for j in jobs if j.get("kind") in ("build", "render", "board", "layout", "test", "flash")]
+        hist = sorted((h for h in history_rows if h.get("item") == item), key=lambda h: str(h.get("at")))
+        entry = {"id": item, "kind": kind, "title": d.get("title") or item, "picture": picture,
+                 "notes": len(rids), "applied": sum(1 for rid in rids if revs[rid].get("status") == "applied"),
+                 "spend_usd": round(spend, 2), "runs": len(runs),
+                 "run_median_s": _median(secs), "jobs": len(builds),
+                 "failed": sum(1 for j in builds if j.get("rc")),
+                 "job_median_s": _median([float(j.get("wall_s") or 0) for j in builds]),
+                 "history": [{k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in h.items()
+                              if k not in ("_id", "item")} for h in hist][-60:]}
+        if kind == "model":
+            v = (d.get("artifacts") or {}).get("viewer") or {}
+            entry.update(size_bytes=v.get("bytes"), build_secs=d.get("build_secs"),
+                         build_walls=[{"at": j.get("at"), "wall_s": j.get("wall_s"), "ok": not j.get("rc")}
+                                      for j in sorted(jobs, key=lambda j: j.get("at") or "")
+                                      if j.get("kind") == "build"][-40:])
+        elif kind == "board":
+            entry.update(unrouted=(d.get("route") or {}).get("unrouted"),
+                         drc_errors=(d.get("drc") or {}).get("error_count"),
+                         size_mm=(d.get("layout") or {}).get("size_mm"),
+                         board_runs=[{k: (v.isoformat() if isinstance(v, datetime) else v)
+                                      for k, v in r.items() if k != "_id"}
+                                     for r in board_rows if r.get("board") == item])
+        elif kind == "app":
+            t = d.get("last_test") or {}
+            tests = [j for j in jobs if j.get("kind") == "test"]
+            entry.update(platform=d.get("platform"), last_test_ok=t.get("ok"),
+                         last_test_counts=t.get("counts"),
+                         test_pass_rate=round(sum(1 for j in tests if not j.get("rc")) / len(tests), 3) if tests else None,
+                         tests=len(tests), firmware=(d.get("firmware") or {}).get("summary"))
+        p = projects.setdefault(pr, {"name": pr, "items": [], "spend_usd": 0.0, "notes": 0,
+                                     "runs": 0, "jobs": 0, "failed": 0})
+        p["items"].append(entry)
+        for k in ("spend_usd", "notes", "runs", "jobs", "failed"):
+            p[k] += entry[k]
+    # Spend over time, per item, from the per-note-per-bucket sums.
+    item_of = {rid: r.get("model") for rid, r in revs.items()}
+    series: dict[str, "Buckets"] = {}
+    for row in agg.get("bucket_rev", []):
+        rid = (row["_id"] or {}).get("rev")
+        item = item_of.get(rid)
+        if not item or item not in owner:
+            continue
+        b = series.setdefault(owner[item], B())
+        b.add(docs.get(item, (None, {}))[1].get("title") or item,
+              datetime.fromtimestamp(since.timestamp() + row["_id"]["b"] * size + 1, timezone.utc), row["cost"])
+    rev_item = {rid: r.get("model") for rid, r in revs.items()}
+    for name, p in projects.items():
+        ids = {i["id"] for i in p["items"]}
+        p["spend_usd"] = round(p["spend_usd"], 2)
+        p["items"].sort(key=lambda i: (-i["spend_usd"], i["title"]))
+        p["spend_series"] = series[name].out(top=8) if name in series else None
+        p["lead"] = [r for r in lead_rows if rev_item.get(r["id"]) in ids][:15]
+        p["questions"] = [q for q in question_log if q.get("item") in ids][:20]
+    return projects
+
+
+# ---------------------------------------------------------------- weekly
+
+def week_of(d: datetime) -> str:
+    y, w, _ = d.isocalendar()
+    return f"{y}-W{w:02d}"
+
+
+def weekly_text(d: dict) -> str:
+    """A week in a few lines of Markdown, from the 7-day answer."""
+    ch = d.get("change") or {}
+    arrow = lambda k: "" if ch.get(k) is None else f" ({'+' if ch[k] >= 0 else ''}{ch[k]:.0f}% on the week before)"  # noqa: E731
+    llm, sub, cache, nc = d["llm"], d["subscription"], d["cache"], d["note_costs"]
+    lines = [f"**LLM work: ${llm['cost_usd']:,.0f}** at API list prices, {llm['calls']:,} calls{arrow('llm_usd')}."]
+    if sub.get("plan_usd") is not None:
+        lines.append(f"The subscription cost **${sub['plan_usd']:,.0f}** for the week - "
+                     f"**${sub.get('saved_usd', 0):,.0f}** less than the same work on the API.")
+    if cache.get("hit_ratio") is not None:
+        lines.append(f"{cache['hit_ratio'] * 100:.1f}% of prompts came from the cache, saving "
+                     f"${cache['saved_usd']:,.0f}.")
+    notes = sum((d["work"]["status"] or {}).values())
+    lines.append(f"**{notes} notes** written{arrow('notes')}; a finished note cost "
+                 f"{'$%.0f' % nc['median'] if nc.get('median') is not None else '–'} (median).")
+    top = (llm.get("top_notes") or [None])[0]
+    if top:
+        lines.append(f"Most expensive: *{top['title'] or top['id']}* - ${top['cost_usd']:,.0f}.")
+    w = d.get("waste") or {}
+    if w.get("usd") or w.get("failed_jobs"):
+        lines.append(f"Waste: ${w.get('usd', 0):,.0f} on re-runs of the same note, "
+                     f"{w.get('failed_jobs', 0)} failed jobs.")
+    an = (d.get("anomalies") or {}).get("items") or []
+    if an:
+        a = an[0]
+        show = (lambda v: f"${v:,.2f}") if a["unit"] == "usd" else (lambda v: f"{v:,.1f} s")
+        lines.append(f"Unusual: {a['kind']} *{a['what']}* - {show(a['value'])} against a usual "
+                     f"{show(a['typical'])}.")
+    e = d.get("energy") or {}
+    if e.get("machine_kwh"):
+        lines.append(f"The machine used about {e['machine_kwh']:.2f} kWh ({e.get('basis')}).")
+    return "\n\n".join(lines)
+
+
+async def weekly_if_due(db) -> None:
+    """Once a week, on Monday, the week before is written up and kept."""
+    now = datetime.now(timezone.utc)
+    if now.weekday() != 0:
+        return
+    last_week = week_of(now - timedelta(days=7))
+    if await db[WEEKLY].find_one({"week": last_week}, {"_id": 1}):
+        return
+    until = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    data = await overview(db, until - timedelta(days=7), until)
+    await db[WEEKLY].insert_one({"at": now, "week": last_week, "text": weekly_text(data)})
+
+
 # The last answer for each range, kept in memory and on disk, and given
 # straight away: opening the room should be instant, and whatever is newer
 # can arrive a moment later. Older than FRESH_S, it is worked out again in
@@ -385,12 +773,8 @@ def _recall(key: str) -> tuple[float, dict] | None:
 
 
 async def _work_out(db, key: str, span) -> dict:
-    # The agents' transcripts into llm_calls first - the slow part, and the
-    # reason this runs behind the page rather than in front of it.
-    try:
-        await usage.ingest(db, force=False)
-    except Exception:
-        pass
+    # The agents' transcripts are read into llm_calls by the sampler, once a
+    # minute, in the background - never in front of a request.
     since, until = await span()
     data = await overview(db, since, until)
     data["computed_at"] = datetime.now(timezone.utc).isoformat()
@@ -408,7 +792,7 @@ def _refresh(db, key: str, span) -> None:
 
 # Bumped whenever the shape of the answer changes, so an answer kept in the
 # old shape is never served to a page that expects the new one.
-SHAPE = 2
+SHAPE = 3
 
 
 async def overview_cached(db, key: str, span) -> dict:
@@ -445,10 +829,11 @@ async def overview(db, since: datetime, until: datetime) -> dict:
 
     (projects_map, rev_rows, agg, job_rows, metric_rows, all_runs, chat_rows,
      question_rows, prefs, dbst, coll_names, n_folders, n_models, n_boards, n_apps,
-     n_parts, timing_rows, board_rows) = await asyncio.gather(
+     n_parts, timing_rows, board_rows, event_rows, history_rows, grid_rows, previous,
+     docker, weekly_rows, model_docs, board_docs, app_docs) = await asyncio.gather(
         _projects(db),
         rows("revisions", {}, {"kind": 1, "model": 1, "status": 1, "created_at": 1,
-                               "queued_at": 1, "summary": 1, "comment": 1}),
+                               "queued_at": 1, "summary": 1, "comment": 1, "image": 1}),
         _llm_sums(db, lo, hi, since, size),
         rows(compute.JOBS, {"at": {"$gte": lo, "$lte": hi}}),
         rows(METRICS, {"at": {"$gte": since, "$lte": until}}, sort="at"),
@@ -461,7 +846,19 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         settings(db), db.command("dbstats"), db.list_collection_names(),
         count("folders"), count("models"), count("boards"), count("apps"), count(lcsc.PARTS),
         rows(TIMINGS, {"at": {"$gte": since, "$lte": until}}),
-        rows(BOARD_RUNS, {"at": {"$gte": since, "$lte": until}}, sort="at"))
+        rows(BOARD_RUNS, {"at": {"$gte": since, "$lte": until}}, sort="at"),
+        rows(EVENTS, {"at": {"$gte": since, "$lte": until}}),
+        rows(HISTORY, {}),
+        _grid_files(db),
+        _previous(db, since - (until - since), since),
+        docker_usage(),
+        rows(WEEKLY, {}, {"at": 1, "week": 1, "text": 1}, sort="at"),
+        rows("models", {}, {"title": 1, "folder": 1, "artifacts.viewer.bytes": 1,
+                            "artifacts.viewer.at": 1, "build_secs": 1}),
+        rows("boards", {}, {"title": 1, "folder": 1, "route": 1, "drc": 1,
+                            "layout.size_mm": 1, "artifacts.layout.at": 1}),
+        rows("apps", {}, {"title": 1, "folder": 1, "platform": 1, "last_test": 1,
+                          "firmware.summary": 1, "firmware.at": 1}))
     price = prefs.get("kwh_price")
     owner, kinds = projects_map
 
@@ -641,7 +1038,8 @@ async def overview(db, since: datetime, until: datetime) -> dict:
             "at": d.get("at"), "question": first[:200], "text": text[:4000],
             "answer": (d.get("answer") or "")[:1000], "status": d.get("status"),
             "wait_s": round((b - a).total_seconds(), 1) if a and b else None,
-            "room": room_of(d["revision"]) if d.get("revision") else None})
+            "room": room_of(d["revision"]) if d.get("revision") else None,
+            "item": (revs.get(d.get("revision")) or {}).get("model")})
 
     # ---- the cache: how much of what was read came from it, and what it saved
     cache = {"read": llm["tokens"]["cache_read"], "write": llm["tokens"]["cache_write"],
@@ -763,6 +1161,96 @@ async def overview(db, since: datetime, until: datetime) -> dict:
     board_quality = [{"board": b, "runs": rs, "first": rs[0], "last": rs[-1]}
                      for b, rs in boards_q.items()]
 
+    # ---- retries and loops: the same job run over and over for one note
+    per_note_kind: dict[tuple, dict] = defaultdict(lambda: {"runs": 0, "failed": 0, "wall_s": 0.0})
+    for j in job_rows:
+        if j.get("revision"):
+            g = per_note_kind[(j["revision"], j.get("kind") or "?")]
+            g["runs"] += 1; g["failed"] += 1 if j.get("rc") else 0
+            g["wall_s"] += float(j.get("wall_s") or 0)
+    loops = []
+    for (rid, kind), g in per_note_kind.items():
+        if g["runs"] >= 5 or g["failed"] >= 2:
+            r = revs.get(rid) or {}
+            loops.append({"id": rid, "kind": kind, **{k: round(v, 1) for k, v in g.items()},
+                          "title": r.get("summary") or (r.get("comment") or "")[:90],
+                          "room": compute.room_of(r.get("kind")), "project": proj_of(rid)})
+    loops.sort(key=lambda x: -x["runs"])
+    reruns = [{"id": rid, "runs": len(rs), "title": (revs.get(rid) or {}).get("summary")
+               or ((revs.get(rid) or {}).get("comment") or "")[:90]}
+              for rid, rs in runs_of.items() if len(rs) > 1 and rid in revs]
+
+    # ---- waste: work that produced nothing kept
+    run_cost = {r["_id"]: r["cost"] for r in agg.get("run", []) if r["_id"]}
+    rerun_usd, rerun_runs = 0.0, 0
+    for rid, rs in runs_of.items():
+        ordered = sorted(rs, key=lambda x: x.get("started_at") or "")
+        for r in ordered[:-1]:                       # every run but the last
+            c = run_cost.get(str(r["_id"]))
+            if c:
+                rerun_usd += c; rerun_runs += 1
+    rejected_usd = sum(v["cost_usd"] for rid, v in by_note.items()
+                       if (revs.get(rid) or {}).get("status") == "rejected")
+    failed_jobs = [j for j in job_rows if j.get("rc")]
+    failed_cpu = sum(float(j.get("cpu_s") or 0) for j in failed_jobs)
+    waste = {"rerun_usd": round(rerun_usd, 2), "rerun_runs": rerun_runs,
+             "rejected_usd": round(rejected_usd, 2),
+             "rejected_notes": sum(1 for r in revs.values() if r.get("status") == "rejected"),
+             "failed_jobs": len(failed_jobs), "failed_cpu_h": round(failed_cpu / 3600, 3),
+             "failed_wh": round(compute.energy(failed_cpu)["wh"], 2),
+             "failed_by_kind": dict(sorted(((k, sum(1 for j in failed_jobs if (j.get("kind") or "?") == k))
+                                            for k in {j.get("kind") or "?" for j in failed_jobs}),
+                                           key=lambda kv: -kv[1])),
+             "usd": round(rerun_usd + rejected_usd, 2)}
+
+    # ---- uptime: server starts, and the minutes nobody was sampling
+    samples = sorted(_dt(m["at"]) for m in metric_rows)
+    gaps, down_s = [], 0.0
+    for a, b in zip(samples, samples[1:]):
+        g = (b - a).total_seconds()
+        if g > 3 * SAMPLE_EVERY:
+            gaps.append({"from": a.isoformat(), "to": b.isoformat(), "minutes": round(g / 60, 1)})
+            down_s += g - SAMPLE_EVERY
+    watched = (samples[-1] - samples[0]).total_seconds() if len(samples) > 1 else 0
+    uptime = {"starts": [{"at": _dt(e["at"]).isoformat(), "server": e.get("server")}
+                         for e in sorted(event_rows, key=lambda e: _dt(e["at"]))],
+              "gaps": gaps[-20:], "down_minutes": round(down_s / 60, 1),
+              "watched_hours": round(watched / 3600, 2),
+              "up_pct": round(100 * (1 - down_s / watched), 2) if watched else None,
+              "errors_5xx": sum(t.get("errors", 0) for t in timing_rows),
+              "error_routes": [r for r in api_routes_err(timing_rows)][:10]}
+
+    # ---- the database's answer time, as the sampler measured it
+    db_lat = B()
+    db_vals = []
+    for m in metric_rows:
+        if m.get("db_ms") is not None:
+            db_lat.add("round trip ms", _dt(m["at"]), m["db_ms"]); db_vals.append(m["db_ms"])
+    db_latency = {"series": _mean_of(db_lat, counts), "median_ms": _median(db_vals),
+                  "p95_ms": round(sorted(db_vals)[int(0.95 * (len(db_vals) - 1))], 1) if db_vals else None,
+                  "samples": len(db_vals)}
+
+    # ---- storage growth and when it runs out
+    growth = _growth(grid_rows, metric_rows, since, until, size)
+
+    # ---- anomalies: buckets and notes far above the usual
+    spend = [sum(col) for col in zip(*(x["values"] for x in cost_by_provider.out()["series"]))] \
+        if cost_by_provider.data else []
+    anomalies = _anomalies(spend, by_note, revs, job_rows, since, size)
+
+    # ---- change against the period before, of the same length
+    now_tot = {"llm_usd": llm["cost_usd"], "llm_calls": llm["calls"],
+               "tokens": sum(llm["tokens"].values()), "cpu_s": jobs["cpu_s"], "jobs": jobs["count"],
+               "failed": jobs["failed"], "wh": machine["wh"] or jobs["wh"],
+               "notes": sum(status_counts.values()), "runs": len(run_rows)}
+    change = {k: (round((now_tot[k] - previous.get(k, 0)) / previous[k] * 100, 1)
+                  if previous.get(k) else None) for k in now_tot}
+
+    # ---- per project: every model, board and app, matched by id
+    project_detail = _project_detail(owner, kinds, revs, by_note, runs_of, job_rows, board_rows,
+                                     history_rows, model_docs, board_docs, app_docs, agg,
+                                     question_log, lead_rows, since, size, B)
+
     # ---- storage
     st = dbst
     async def one(name):
@@ -858,6 +1346,14 @@ async def overview(db, since: datetime, until: datetime) -> dict:
             "by_model": cache["by_model"], "hit_series": cache["hit_series"]},
         "subscription": subscription, "builds": builds, "note_costs": note_costs,
         "api": api, "board_quality": board_quality,
+        "loops": {"jobs": loops[:15], "reruns": sorted(reruns, key=lambda x: -x["runs"])[:15]},
+        "waste": waste, "uptime": uptime, "db_latency": db_latency, "growth": growth,
+        "docker": docker, "anomalies": anomalies,
+        "previous": {k: (round(v, 4) if isinstance(v, float) else v) for k, v in previous.items()},
+        "change": change, "now_totals": {k: (round(v, 4) if isinstance(v, float) else v) for k, v in now_tot.items()},
+        "weekly": [{"at": _dt(w["at"]).isoformat(), "week": w.get("week"), "text": w.get("text")}
+                   for w in weekly_rows[-8:]][::-1],
+        "project_detail": project_detail,
     }
 
 

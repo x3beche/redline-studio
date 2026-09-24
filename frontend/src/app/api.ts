@@ -981,6 +981,51 @@ export interface Insights {
          routes: { route: string; count: number; avg_ms: number; p95_ms: number | null;
                    max_ms: number; errors: number }[] };
   board_quality: { board: string; runs: BoardRunRow[]; first: BoardRunRow; last: BoardRunRow }[];
+  loops: { jobs: { id: string; kind: string; runs: number; failed: number; wall_s: number; title: string;
+                   room: string; project: string }[];
+           reruns: { id: string; runs: number; title: string }[] };
+  waste: { rerun_usd: number; rerun_runs: number; rejected_usd: number; rejected_notes: number;
+           failed_jobs: number; failed_cpu_h: number; failed_wh: number;
+           failed_by_kind: Record<string, number>; usd: number };
+  uptime: { starts: { at: string; server: string }[]; gaps: { from: string; to: string; minutes: number }[];
+            down_minutes: number; watched_hours: number; up_pct: number | null; errors_5xx: number;
+            error_routes: { route: string; errors: number }[] };
+  db_latency: { series: InsightSeries; median_ms: number | null; p95_ms: number | null; samples: number };
+  growth: { added: InsightSeries; per_day_bytes: number; files: number; files_bytes: number;
+            quota_bytes: number; db_storage?: number; quota_days?: number | null;
+            disk_free?: number; disk_per_day_bytes?: number; disk_days?: number | null };
+  docker: { available: boolean;
+            summary?: { type: string; total: string; active: string; size: string; reclaimable: string }[];
+            images?: { name: string; size: string; created: string; redline: boolean }[];
+            containers?: { name: string; image: string; state: string; status: string; size: string }[] };
+  anomalies: { buckets: number[]; items: { kind: string; what: string; id?: string; at?: string; value: number;
+                                           typical: number; unit: string }[] };
+  previous: Record<string, number>;
+  change: Record<string, number | null>;
+  now_totals: Record<string, number>;
+  weekly: { at: string; week: string; text: string }[];
+  project_detail: Record<string, ProjectDetail>;
+}
+
+export interface ProjectItem {
+  id: string; kind: 'model' | 'board' | 'app' | string; title: string; picture: string | null;
+  notes: number; applied: number; spend_usd: number; runs: number; run_median_s: number | null;
+  jobs: number; failed: number; job_median_s: number | null;
+  history: Record<string, unknown>[];
+  size_bytes?: number | null; build_secs?: number | null;
+  build_walls?: { at: string; wall_s: number | null; ok: boolean }[];
+  unrouted?: number | null; drc_errors?: number | null; size_mm?: number[] | null;
+  board_runs?: BoardRunRow[];
+  platform?: string; last_test_ok?: boolean | null; last_test_counts?: Record<string, number> | null;
+  test_pass_rate?: number | null; tests?: number;
+  firmware?: { flash_bytes: number; ram_bytes: number } | null;
+}
+
+export interface ProjectDetail {
+  name: string; items: ProjectItem[]; spend_usd: number; notes: number; runs: number; jobs: number;
+  failed: number; spend_series: InsightSeries | null;
+  lead: Insights['lead_times']['slowest'];
+  questions: Insights['questions'];
 }
 
 export interface BoardRunRow {
@@ -994,6 +1039,10 @@ export class InsightsApi {
   private http = inject(HttpClient);
   get(range: string): Observable<Insights> {
     return this.http.get<Insights>(`/api/insights?range=${encodeURIComponent(range)}`);
+  }
+  /** The last seven days in a few lines, and the weekly write-ups kept. */
+  weekly(): Observable<{ now: string; kept: { at: string; week: string; text: string }[] }> {
+    return this.http.get<{ now: string; kept: { at: string; week: string; text: string }[] }>('/api/insights/weekly');
   }
   /** The electricity price and the subscription; only what is sent changes. */
   setSettings(patch: { kwh_price?: number | null; plan_usd_month?: number | null;

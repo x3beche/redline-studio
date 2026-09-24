@@ -1,7 +1,8 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
-import { BoardRunRow, InsightSeries, Insights, InsightsApi } from '../api';
-import { BarList, Donut, Fmt, Row, TimeChart, fmt } from './charts';
+import { BoardRunRow, InsightSeries, Insights, InsightsApi, ProjectDetail, ProjectItem } from '../api';
+import { Markdown } from '../markdown';
+import { BarList, Donut, Fmt, Row, Spark, TimeChart, fmt } from './charts';
 
 type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' | 'lcsc';
 
@@ -16,7 +17,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
  */
 @Component({
   selector: 'app-room-analyze',
-  imports: [BarList, Donut, NgTemplateOutlet, TimeChart],
+  imports: [BarList, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart],
   template: `
 <div class="tcv-room tcv-dash absolute inset-0 flex min-h-0 flex-col">
   <header class="tcv-dash-bar">
@@ -26,6 +27,14 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
         <button (click)="setRange(r.id)" [attr.data-on]="range() === r.id ? 1 : null">{{ r.label }}</button>
       }
     </div>
+    <!-- One project on its own, or everything the app has used. -->
+    <select class="tcv-field px-1.5 py-0.5 text-[11.5px]" (change)="setProject($any($event.target).value)"
+            title="one project's items and figures, or all of the app">
+      <option value="" [selected]="!project()">All projects</option>
+      @for (p of projectNames(); track p) {
+        <option [value]="p" [selected]="project() === p">{{ p }}</option>
+      }
+    </select>
     <span class="flex-1"></span>
     @if (data(); as d) {
       <span class="tcv-dash-meta">{{ stepLabel(d.range.step) }} · updated {{ updated() }}</span>
@@ -44,24 +53,139 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
   <div class="tcv-dash-body tcv-scroll min-h-0 flex-1 overflow-y-auto">
     @if (error(); as e) { <p class="tcv-dash-note" style="color: var(--danger)">{{ e }}</p> }
     @if (data(); as d) {
+    @if (project() && d.project_detail[project()]; as pd) {
+
+    <!-- ONE PROJECT: its items matched by id, each with its own figures -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'p-overview', title: pd.name, sub: pd.items.length + ' items · ' + rangeLabel() }" />
+    @if (open('p-overview')) {
+      <div class="tcv-dash-grid">
+        <div class="tcv-stat c2"><span>LLM spend</span><b>{{ f.money(pd.spend_usd) }}</b><em>on this project's notes</em></div>
+        <div class="tcv-stat c2"><span>Notes</span><b>{{ pd.notes }}</b><em>all time</em></div>
+        <div class="tcv-stat c2"><span>Runs</span><b>{{ pd.runs }}</b><em>by the agents</em></div>
+        <div class="tcv-stat c2"><span>Jobs</span><b>{{ pd.jobs }}</b><em>builds, renders, layouts, tests</em></div>
+        <div class="tcv-stat c2"><span>Failed</span><b>{{ pd.failed }}</b><em>{{ pd.jobs ? (100 * pd.failed / pd.jobs).toFixed(1) + '% of jobs' : '–' }}</em></div>
+        <div class="tcv-stat c2"><span>Items</span><b>{{ pd.items.length }}</b><em>{{ kindsLine(pd) }}</em></div>
+        @if (pd.spend_series; as ss) {
+          <section class="tcv-panel-d c12"><h3>Spend by item
+              <button class="tcv-dl" (click)="dl(pd.name + '-spend', seriesRows(ss))">CSV</button></h3>
+            <app-time-chart [data]="ss" kind="bar" [f]="f.money" [height]="180" /></section>
+        }
+      </div>
+    }
+    <ng-container *ngTemplateOutlet="head; context: { id: 'p-items', title: 'Items', sub: 'every model, board and app in ' + pd.name + ', by id' }" />
+    @if (open('p-items')) {
+      <div class="tcv-items">
+        @for (it of pd.items; track it.id) {
+          <article class="tcv-item">
+            <div class="tcv-item-pic">
+              @if (it.picture) { <img [src]="it.picture" [alt]="it.title" loading="lazy"> }
+              @else { <span>{{ it.kind }}</span> }
+            </div>
+            <div class="tcv-item-body">
+              <div class="flex items-baseline gap-2">
+                <b class="truncate">{{ it.title }}</b><span class="tcv-kind">{{ it.kind }}</span>
+              </div>
+              <div class="tcv-dash-dim mono truncate" [title]="it.id">{{ it.id }}</div>
+              <dl class="tcv-item-facts">
+                <dt>notes</dt><dd>{{ it.notes }} <span class="tcv-dash-dim">({{ it.applied }} applied)</span></dd>
+                <dt>LLM spend</dt><dd>{{ f.money(it.spend_usd) }}</dd>
+                <dt>runs</dt><dd>{{ it.runs }} @if (it.run_median_s != null) { <span class="tcv-dash-dim">· {{ f.secs(it.run_median_s) }} median</span> }</dd>
+                <dt>jobs</dt><dd>{{ it.jobs }} @if (it.failed) { <span style="color: var(--danger)">· {{ it.failed }} failed</span> }
+                  @if (it.job_median_s != null) { <span class="tcv-dash-dim">· {{ f.secs(it.job_median_s) }}</span> }</dd>
+                @if (it.kind === 'model') {
+                  <dt>built size</dt><dd>{{ it.size_bytes == null ? '–' : f.bytes(it.size_bytes) }}</dd>
+                  <dt>last build</dt><dd>{{ it.build_secs == null ? '–' : f.secs(it.build_secs) }}
+                    @if (walls(it).length > 1) { <app-spark [values]="walls(it)" title="build time, oldest to newest" /> }</dd>
+                }
+                @if (it.kind === 'board') {
+                  <dt>routing</dt><dd [style.color]="it.unrouted ? 'var(--danger)' : 'var(--ok)'">{{ it.unrouted == null ? '–' : it.unrouted + ' unrouted' }}
+                    · DRC {{ it.drc_errors ?? '–' }}</dd>
+                  <dt>size</dt><dd>{{ it.size_mm ? it.size_mm[0] + ' × ' + it.size_mm[1] + ' mm' : '–' }}</dd>
+                  <dt>pipeline runs</dt><dd>{{ it.board_runs?.length || 0 }}
+                    @if ((it.board_runs?.length || 0) > 1) { <app-spark [values]="boardSeries(it)" title="unrouted, run by run" /> }</dd>
+                }
+                @if (it.kind === 'app') {
+                  <dt>platform</dt><dd>{{ it.platform }}</dd>
+                  <dt>tests</dt><dd>{{ it.tests ?? 0 }} runs
+                    @if (it.test_pass_rate != null) { · {{ (it.test_pass_rate * 100).toFixed(0) }}% pass }
+                    @if (it.last_test_ok != null) { · last <span [style.color]="it.last_test_ok ? 'var(--ok)' : 'var(--danger)'">{{ it.last_test_ok ? 'passed' : 'failed' }}</span> }</dd>
+                  @if (it.firmware; as fw) {
+                    <dt>firmware</dt><dd>{{ f.bytes(fw.flash_bytes) }} flash · {{ f.bytes(fw.ram_bytes) }} RAM</dd>
+                  }
+                }
+                @if (it.history.length) {
+                  <dt>history</dt><dd class="tcv-dash-dim">{{ it.history.length }} snapshots
+                    <button class="tcv-dl" (click)="dl(it.id + '-history', it.history)">CSV</button></dd>
+                }
+              </dl>
+            </div>
+          </article>
+        }
+      </div>
+    }
+    <ng-container *ngTemplateOutlet="head; context: { id: 'p-notes', title: 'Notes and questions', sub: 'this project only' }" />
+    @if (open('p-notes')) {
+      <div class="tcv-dash-grid">
+        <section class="tcv-panel-d c6"><h3>Slowest notes to finish</h3>
+          <table class="tcv-dash-table">
+            <thead><tr><th>note</th><th class="r">agent</th><th class="r">total</th></tr></thead>
+            <tbody>
+              @for (r of pd.lead; track r.id) {
+                <tr><td [title]="r.title">{{ r.title || r.id }}</td><td class="r mono">{{ dur(r.working) }}</td><td class="r mono">{{ dur(r.total) }}</td></tr>
+              } @empty { <tr><td colspan="3" class="tcv-dash-dim">none in this range</td></tr> }
+            </tbody>
+          </table></section>
+        <section class="tcv-panel-d c6"><h3>What the agents asked</h3>
+          <table class="tcv-dash-table">
+            <thead><tr><th>question</th><th>answer</th><th class="r">waited</th></tr></thead>
+            <tbody>
+              @for (q of pd.questions; track q.at) {
+                <tr><td [title]="q.text">{{ q.question }}</td><td [title]="q.answer">{{ q.answer || q.status }}</td><td class="r mono">{{ dur(q.wait_s) }}</td></tr>
+              } @empty { <tr><td colspan="3" class="tcv-dash-dim">no questions on this project's notes</td></tr> }
+            </tbody>
+          </table></section>
+      </div>
+    }
+
+    } @else {
+
+    <!-- WEEK IN SHORT -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'weekly', title: 'The week in short', sub: 'the last seven days, and a write-up kept each Monday' }" />
+    @if (open('weekly')) {
+      <div class="tcv-dash-grid">
+        <section class="tcv-panel-d c8"><h3>Last 7 days
+            <button class="tcv-dl" (click)="copyWeek()">{{ copied() ? 'copied' : 'copy' }}</button></h3>
+          @if (weekly(); as w) { <div class="md text-[12.5px]" [innerHTML]="w.now | md"></div> }
+          @else { <p class="tcv-dash-dim">writing it up…</p> }
+        </section>
+        <section class="tcv-panel-d c4"><h3>Earlier weeks</h3>
+          @for (k of weekly()?.kept ?? []; track k.week) {
+            <details class="tcv-week"><summary>{{ k.week }}</summary><div class="md text-[12px]" [innerHTML]="k.text | md"></div></details>
+          } @empty { <p class="tcv-dash-dim">The first is written next Monday, of the week before.</p> }
+        </section>
+      </div>
+    }
 
     <!-- OVERVIEW -->
     <ng-container *ngTemplateOutlet="head; context: { id: 'overview', title: 'Overview', sub: rangeLabel() }" />
     @if (open('overview')) {
       <div class="tcv-dash-grid">
         <div class="tcv-stat c2"><span>LLM spend</span><b>{{ f.money(d.llm.cost_usd) }}</b>
-          <em>at API list prices · {{ f.count(d.llm.calls) }} calls</em></div>
+          <em>at API list prices · {{ f.count(d.llm.calls) }} calls</em>
+          @if (delta(d, 'llm_usd'); as dl) { <i class="tcv-delta" [attr.data-up]="dl.up ? 1 : null">{{ dl.text }}</i> }</div>
         <div class="tcv-stat c2"><span>Tokens</span><b>{{ f.count(tokTotal()) }}</b>
           <em>{{ f.count(d.llm.tokens['output'] || 0) }} written · {{ f.count(d.llm.tokens['cache_read'] || 0) }} cache reads</em></div>
         <div class="tcv-stat c2"><span>Compute</span><b>{{ f.hours(d.compute.cpu_s / 3600) }}</b>
-          <em>CPU time over {{ d.compute.count }} jobs · {{ f.secs(d.compute.wall_s) }} wall</em></div>
+          <em>CPU time over {{ d.compute.count }} jobs · {{ f.secs(d.compute.wall_s) }} wall</em>
+          @if (delta(d, 'cpu_s'); as dl) { <i class="tcv-delta" [attr.data-up]="dl.up ? 1 : null">{{ dl.text }}</i> }</div>
         <div class="tcv-stat c2"><span>Energy</span><b>{{ f.wh((d.energy.machine_kwh || d.energy.jobs_kwh) * 1000) }}</b>
           <em>{{ d.energy.machine_kwh ? 'whole machine' : 'jobs only' }} · {{ d.energy.basis }}</em></div>
         <div class="tcv-stat c2"><span>Electricity</span>
           <b>{{ elecCost() == null ? '–' : f.money(elecCost()!) }}</b>
           <em>{{ d.energy.kwh_price == null ? 'set a price per kWh below' : '$' + d.energy.kwh_price + ' per kWh' }}</em></div>
         <div class="tcv-stat c2"><span>Notes</span><b>{{ notesIn() }}</b>
-          <em>{{ d.work.status['applied'] || 0 }} applied · {{ d.work.status['queued'] || 0 }} queued</em></div>
+          <em>{{ d.work.status['applied'] || 0 }} applied · {{ d.work.status['queued'] || 0 }} queued</em>
+          @if (delta(d, 'notes'); as dl) { <i class="tcv-delta" [attr.data-up]="dl.up ? 1 : null">{{ dl.text }}</i> }</div>
         <div class="tcv-stat c2"><span>Database</span><b>{{ f.bytes(d.storage.db_bytes) }}</b>
           <em>{{ f.count(d.storage.objects) }} documents</em></div>
         <div class="tcv-stat c2"><span>Disk free</span><b>{{ f.bytes(d.storage.disk.free) }}</b>
@@ -71,7 +195,8 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
         <div class="tcv-stat c2"><span>Agent questions</span><b>{{ d.work.questions.asked }}</b>
           <em>answered in {{ d.work.questions.avg_wait_s == null ? '–' : f.secs(d.work.questions.avg_wait_s) }} on average</em></div>
         <div class="tcv-stat c2"><span>Runs</span><b>{{ runsTotal() }}</b>
-          <em>{{ runsAvg() }} each on average</em></div>
+          <em>{{ runsAvg() }} each on average</em>
+          @if (delta(d, 'runs'); as dl) { <i class="tcv-delta" [attr.data-up]="dl.up ? 1 : null">{{ dl.text }}</i> }</div>
         <div class="tcv-stat c2"><span>LCSC requests</span><b>{{ d.lcsc.totals['total'] || 0 }}</b>
           <em>{{ d.lcsc.totals['net'] || 0 }} sent · {{ d.lcsc.totals['refused'] || 0 }} refused</em></div>
         <div class="tcv-stat c3"><span>Subscription saved</span>
@@ -95,7 +220,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
       <div class="tcv-dash-grid">
         <section class="tcv-panel-d c8"><h3>Spend by model
             <button class="tcv-dl" (click)="dl('spend-by-model', seriesRows(d.llm.cost_by_model))">CSV</button></h3>
-          <app-time-chart [data]="d.llm.cost_by_model" kind="bar" [f]="f.money" [height]="200" /></section>
+          <app-time-chart [data]="d.llm.cost_by_model" kind="bar" [f]="f.money" [height]="200" [marks]="d.anomalies.buckets" /></section>
         <section class="tcv-panel-d c4"><h3>Spend by room <i title="calls made while a note's run was open belong to that room; the rest is work outside any note">ⓘ</i></h3>
           <app-donut [rows]="rows(d.llm.by_room, 'cost_usd', roomName)" [f]="f.money" /></section>
         <section class="tcv-panel-d c8"><h3>Tokens by type
@@ -365,6 +490,16 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
           <p class="tcv-dash-dim">{{ f.bytes(d.storage.disk.free) }} free</p>
           <p class="tcv-dash-dim mt-2">indexes {{ f.bytes(d.storage.index_bytes) }} · on disk {{ f.bytes(d.storage.db_storage) }}</p>
         </section>
+        <section class="tcv-panel-d c8"><h3>Files stored <span class="tcv-dash-dim">(models, CAD, pictures)</span>
+            <button class="tcv-dl" (click)="dl('files-stored', seriesRows(d.growth.added))">CSV</button></h3>
+          <app-time-chart [data]="d.growth.added" kind="bar" [f]="f.bytes" [height]="160" /></section>
+        <section class="tcv-panel-d c4"><h3>When it runs out</h3>
+          <p class="text-[12px]">Growing about <b class="mono">{{ f.bytes(d.growth.per_day_bytes) }}</b> a day (files, last 14 days).</p>
+          <p class="mt-2 text-[12px]">Database quota ({{ f.bytes(d.growth.quota_bytes) }}):
+            <b>{{ d.growth.quota_days == null ? (d.growth.db_storage == null ? 'measuring' : 'not at this pace') : 'about ' + d.growth.quota_days + ' days' }}</b></p>
+          <p class="mt-1 text-[12px]">Disk ({{ d.growth.disk_free == null ? '–' : f.bytes(d.growth.disk_free) + ' free' }}):
+            <b>{{ d.growth.disk_days == null ? 'measuring - needs six hours of samples' : 'about ' + d.growth.disk_days + ' days' }}</b></p>
+        </section>
       </div>
     }
 
@@ -413,6 +548,128 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
       </div>
     }
 
+    <!-- RETRIES AND WASTE -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'waste', title: 'Retries & waste', sub: 'work that went round in circles, or produced nothing kept' }" />
+    @if (open('waste')) {
+      <div class="tcv-dash-grid">
+        <div class="tcv-stat c3"><span>Spent on re-runs</span><b>{{ f.money(d.waste.rerun_usd) }}</b>
+          <em>{{ d.waste.rerun_runs }} runs of a note that was run again</em></div>
+        <div class="tcv-stat c3"><span>Rejected notes</span><b>{{ f.money(d.waste.rejected_usd) }}</b>
+          <em>{{ d.waste.rejected_notes }} notes</em></div>
+        <div class="tcv-stat c3"><span>Failed jobs</span><b>{{ d.waste.failed_jobs }}</b>
+          <em>{{ failedKinds(d) }}</em></div>
+        <div class="tcv-stat c3"><span>Compute on failures</span><b>{{ f.hours(d.waste.failed_cpu_h) }}</b>
+          <em>{{ f.wh(d.waste.failed_wh) }}</em></div>
+        <section class="tcv-panel-d c8"><h3>Loops <i title="the same kind of job run five or more times for one note, or failing twice">ⓘ</i>
+            <button class="tcv-dl" (click)="dl('loops', d.loops.jobs)">CSV</button></h3>
+          <table class="tcv-dash-table">
+            <thead><tr><th>note</th><th>job</th><th class="r">times</th><th class="r">failed</th><th class="r">time</th></tr></thead>
+            <tbody>
+              @for (l of d.loops.jobs; track l.id + l.kind) {
+                <tr><td [title]="l.title">{{ l.title || l.id }}</td><td>{{ l.kind }}</td><td class="r mono">{{ l.runs }}</td>
+                  <td class="r mono" [style.color]="l.failed ? 'var(--danger)' : null">{{ l.failed }}</td><td class="r mono">{{ f.secs(l.wall_s) }}</td></tr>
+              } @empty { <tr><td colspan="5" class="tcv-dash-dim">no loops in this range</td></tr> }
+            </tbody>
+          </table></section>
+        <section class="tcv-panel-d c4"><h3>Notes run more than once</h3>
+          <table class="tcv-dash-table">
+            <thead><tr><th>note</th><th class="r">runs</th></tr></thead>
+            <tbody>
+              @for (r of d.loops.reruns; track r.id) {
+                <tr><td [title]="r.title">{{ r.title || r.id }}</td><td class="r mono">{{ r.runs }}</td></tr>
+              } @empty { <tr><td colspan="2" class="tcv-dash-dim">every note ran once</td></tr> }
+            </tbody>
+          </table></section>
+      </div>
+    }
+
+    <!-- UNUSUAL -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'unusual', title: 'Unusual', sub: 'far above the usual - three times the median and well past the typical spread' }" />
+    @if (open('unusual')) {
+      <div class="tcv-dash-grid">
+        <section class="tcv-panel-d c12">
+          <table class="tcv-dash-table">
+            <thead><tr><th>what</th><th>kind</th><th class="r">value</th><th class="r">usual</th><th class="r">×</th></tr></thead>
+            <tbody>
+              @for (a of d.anomalies.items; track $index) {
+                <tr><td [title]="a.what">{{ a.kind === 'spend' ? when(a.what) : a.what }}</td><td>{{ a.kind }}</td>
+                  <td class="r mono">{{ a.unit === 'usd' ? f.money(a.value) : f.secs(a.value) }}</td>
+                  <td class="r mono">{{ a.unit === 'usd' ? f.money(a.typical) : f.secs(a.typical) }}</td>
+                  <td class="r mono" style="color: var(--warn)">{{ a.typical ? (a.value / a.typical).toFixed(1) + '×' : '–' }}</td></tr>
+              } @empty { <tr><td colspan="5" class="tcv-dash-dim">nothing out of the ordinary in this range</td></tr> }
+            </tbody>
+          </table></section>
+      </div>
+    }
+
+    <!-- UPTIME AND DATABASE -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'uptime', title: 'Uptime & database', sub: 'restarts, gaps, errors, and how long the database takes to answer' }" />
+    @if (open('uptime')) {
+      <div class="tcv-dash-grid">
+        <div class="tcv-stat c3"><span>Up</span><b>{{ d.uptime.up_pct == null ? '–' : d.uptime.up_pct + '%' }}</b>
+          <em>of {{ d.uptime.watched_hours }} h watched · {{ d.uptime.down_minutes }} min down</em></div>
+        <div class="tcv-stat c3"><span>Server starts</span><b>{{ d.uptime.starts.length }}</b>
+          <em>{{ d.uptime.starts.length ? 'last ' + when(d.uptime.starts[d.uptime.starts.length - 1].at) : 'none in this range' }}</em></div>
+        <div class="tcv-stat c3"><span>Server errors</span><b>{{ d.uptime.errors_5xx }}</b>
+          <em>{{ d.uptime.error_routes[0]?.route ?? 'no 5xx answers' }}</em></div>
+        <div class="tcv-stat c3"><span>Database</span><b>{{ d.db_latency.median_ms == null ? '–' : ms(d.db_latency.median_ms) }}</b>
+          <em>median round trip · p95 {{ d.db_latency.p95_ms == null ? '–' : ms(d.db_latency.p95_ms) }}</em></div>
+        <section class="tcv-panel-d c8"><h3>Database round trip
+            <button class="tcv-dl" (click)="dl('db-latency', seriesRows(d.db_latency.series))">CSV</button></h3>
+          <app-time-chart [data]="d.db_latency.series" kind="line" [stacked]="false" [sums]="false" [legend]="false" [f]="ms" [height]="160" /></section>
+        <section class="tcv-panel-d c4"><h3>Gaps <span class="tcv-dash-dim">(nobody sampling)</span></h3>
+          <table class="tcv-dash-table">
+            <thead><tr><th>from</th><th class="r">minutes</th></tr></thead>
+            <tbody>
+              @for (g of d.uptime.gaps; track g.from) {
+                <tr><td class="mono">{{ when(g.from) }}</td><td class="r mono">{{ g.minutes }}</td></tr>
+              } @empty { <tr><td colspan="2" class="tcv-dash-dim">no gaps</td></tr> }
+            </tbody>
+          </table></section>
+      </div>
+    }
+
+    <!-- DOCKER -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'docker', title: 'Docker', sub: 'the sandboxes and the KiCad image: what they hold on disk' }" />
+    @if (open('docker')) {
+      <div class="tcv-dash-grid">
+        @if (d.docker.available) {
+          <section class="tcv-panel-d c5"><h3>Summary</h3>
+            <table class="tcv-dash-table">
+              <thead><tr><th>kind</th><th class="r">total</th><th class="r">active</th><th class="r">size</th><th class="r">reclaimable</th></tr></thead>
+              <tbody>
+                @for (x of d.docker.summary ?? []; track x.type) {
+                  <tr><td>{{ x.type }}</td><td class="r mono">{{ x.total }}</td><td class="r mono">{{ x.active }}</td>
+                    <td class="r mono">{{ x.size }}</td><td class="r mono">{{ x.reclaimable }}</td></tr>
+                }
+              </tbody>
+            </table>
+            <p class="tcv-dash-dim mt-2">Reclaimable space is freed with <code>docker image prune</code> and <code>docker builder prune</code> - not done from here.</p>
+            <h3 class="mt-3">Containers</h3>
+            <table class="tcv-dash-table">
+              <tbody>
+                @for (c of d.docker.containers ?? []; track c.name) {
+                  <tr><td [title]="c.image">{{ c.name }}</td><td [style.color]="c.state === 'running' ? 'var(--ok)' : null">{{ c.status }}</td></tr>
+                }
+              </tbody>
+            </table></section>
+          <section class="tcv-panel-d c7"><h3>Images
+              <button class="tcv-dl" (click)="dl('docker-images', d.docker.images ?? [])">CSV</button></h3>
+            <table class="tcv-dash-table">
+              <thead><tr><th>image</th><th class="r">size</th><th class="r">made</th></tr></thead>
+              <tbody>
+                @for (i of d.docker.images ?? []; track i.name) {
+                  <tr><td [title]="i.name" [style.font-weight]="i.redline ? 600 : null">{{ i.name }}</td>
+                    <td class="r mono">{{ i.size }}</td><td class="r">{{ i.created }}</td></tr>
+                }
+              </tbody>
+            </table></section>
+        } @else {
+          <section class="tcv-panel-d c12"><p class="tcv-dash-dim">Docker did not answer on this machine.</p></section>
+        }
+      </div>
+    }
+
     <!-- LCSC -->
     <ng-container *ngTemplateOutlet="head; context: { id: 'lcsc', title: 'Parts supplier (LCSC)', sub: 'how each request was answered' }" />
     @if (open('lcsc')) {
@@ -420,6 +677,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
         <section class="tcv-panel-d c12"><h3>Requests</h3>
           <app-time-chart [data]="d.lcsc.by_source" kind="bar" [height]="150" /></section>
       </div>
+    }
     }
     } @else if (!error()) {
       <p class="tcv-dash-note">reading everything…</p>
@@ -460,6 +718,7 @@ export class RoomAnalyze implements OnDestroy {
     // once; the server's answer replaces it a moment later.
     this.data.set(kept(this.range()));
     this.load();
+    this.readWeekly();
     this.arm();
   }
   ngOnDestroy() { clearInterval(this.timer); clearTimeout(this.again); }
@@ -496,6 +755,38 @@ export class RoomAnalyze implements OnDestroy {
     this.shut.set(s); keep('shut', JSON.stringify([...s]));
   }
   openQ = signal<string | null>(null);
+
+  // ---- one project ----
+  project = signal(recall('project', ''));
+  projectNames = computed(() => Object.keys(this.data()?.project_detail ?? {}).sort());
+  setProject(p: string) { this.project.set(p); keep('project', p); }
+  kindsLine(pd: ProjectDetail): string {
+    const n = (k: string) => pd.items.filter(i => i.kind === k).length;
+    return [`${n('model')} models`, `${n('board')} boards`, `${n('app')} apps`].join(' · ');
+  }
+  walls(it: ProjectItem): number[] { return (it.build_walls ?? []).filter(w => w.ok).map(w => w.wall_s ?? 0); }
+  boardSeries(it: ProjectItem): (number | null)[] { return (it.board_runs ?? []).map(r => r.unrouted); }
+
+  // ---- change against the period before ----
+  delta(d: Insights, key: string): { text: string; up: boolean } | null {
+    const c = d.change?.[key];
+    if (c == null) return null;
+    return { text: `${c >= 0 ? '▲' : '▼'} ${Math.abs(c).toFixed(0)}% vs the ${this.range()} before`, up: c >= 0 };
+  }
+
+  // ---- the week in short ----
+  weekly = signal<{ now: string; kept: { at: string; week: string; text: string }[] } | null>(null);
+  copied = signal(false);
+  private readWeekly() { this.api.weekly().subscribe({ next: w => this.weekly.set(w) }); }
+  copyWeek() {
+    const t = this.weekly()?.now;
+    if (!t) return;
+    navigator.clipboard?.writeText(t).then(() => { this.copied.set(true); setTimeout(() => this.copied.set(false), 1500); });
+  }
+  failedKinds(d: Insights): string {
+    const k = Object.entries(d.waste.failed_by_kind ?? {});
+    return k.length ? k.map(([n, c]) => `${c} ${n}`).join(' · ') : 'none';
+  }
 
   setPrice(v: string) { this.save({ kwh_price: v === '' ? null : Math.max(0, +v) }); }
   setPlan(v: string) { this.save({ plan_usd_month: v === '' ? null : Math.max(0, +v) }); }
@@ -618,7 +909,7 @@ function keep(key: string, value: string) {
 
 /** The shape of the answer this page reads; one kept in another shape is
  *  not shown (backend/insights.py SHAPE). */
-const SHAPE = 2;
+const SHAPE = 3;
 
 function kept(range: string): Insights | null {
   try {

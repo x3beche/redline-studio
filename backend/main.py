@@ -1416,6 +1416,19 @@ class KwhIn(BaseModel):
     price: float | None = Field(default=None, ge=0, le=10)
 
 
+@app.get("/api/insights/weekly")
+async def insights_weekly():
+    """The last seven days in a few lines, and the weekly write-ups kept so
+    far (one each Monday, of the week before)."""
+    async def span():
+        return insights.parse_range("7d")
+    data = await insights.overview_cached(db(), "7d", span)
+    kept = [{"at": w["at"].isoformat() if hasattr(w["at"], "isoformat") else w["at"],
+             "week": w.get("week"), "text": w.get("text")}
+            async for w in db()[insights.WEEKLY].find({}).sort("at", -1).limit(12)]
+    return {"now": insights.weekly_text(data), "kept": kept}
+
+
 class InsightSettingsIn(BaseModel):
     kwh_price: float | None = Field(default=None, ge=0, le=10)
     plan_usd_month: float | None = Field(default=None, ge=0, le=100000)
