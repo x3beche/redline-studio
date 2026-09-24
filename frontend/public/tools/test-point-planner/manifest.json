@@ -1,0 +1,114 @@
+{
+  "id": "test-point-planner",
+  "name": "Test Point Planner",
+  "blurb": "test point list for critical nets and probe access checks",
+  "group": "pcb",
+  "rooms": [
+    "pcb"
+  ],
+  "keywords": [
+    "test point",
+    "testpoint",
+    "tp",
+    "dft",
+    "design for test",
+    "ict",
+    "in-circuit test",
+    "bed of nails",
+    "flying probe",
+    "pogo pin",
+    "probe pitch",
+    "test pad",
+    "bring-up",
+    "coverage"
+  ],
+  "intro": "Paste the nets; each is classified (power, ground, debug, clock, high-speed, analog, control, signal) by the kind you give or by its name, and gets a priority and a test-point count. With positions, the pads are checked for probe pitch, board-edge distance and side, using common in-circuit-test DFT guidance.",
+  "inputs": [
+    {
+      "key": "nets",
+      "label": "Nets",
+      "type": "textarea",
+      "rows": 10,
+      "default": "# net  [kind]  [current]  [@x,y]  [side]\nVBUS power 1.5A\nV3V3 power 800mA\nV1V8\nGND\nSWDIO\nSWCLK\nNRST\nUSB_DP\nUSB_DN\nI2C_SDA @12.0,8.5 bottom\nI2C_SCL @13.5,8.5 bottom\nXTAL_IN\nADC_BATT\nLED1 @2,20 bottom",
+      "placeholder": "NET [kind] [current A] [@x,y] [top|bottom]",
+      "help": "One net per line. Kinds: power, gnd, debug, clock, hs, analog, control, signal. A KiCad .net netlist also works."
+    },
+    {
+      "key": "method",
+      "label": "Test method",
+      "type": "select",
+      "default": "bed",
+      "options": [
+        [
+          "bed",
+          "Bed-of-nails (ICT fixture)"
+        ],
+        [
+          "flying",
+          "Flying probe"
+        ],
+        [
+          "pogo",
+          "Pogo programming / bring-up fixture"
+        ],
+        [
+          "manual",
+          "Manual probing (bench)"
+        ]
+      ]
+    },
+    {
+      "key": "rating",
+      "label": "Probe current rating",
+      "type": "number",
+      "unit": "A",
+      "default": "2",
+      "help": "Per probe; used at 50 % for power nets."
+    },
+    {
+      "key": "bw",
+      "label": "Board width",
+      "type": "number",
+      "unit": "mm",
+      "default": "50",
+      "required": false,
+      "help": "For the edge check of placed test points."
+    },
+    {
+      "key": "bh",
+      "label": "Board height",
+      "type": "number",
+      "unit": "mm",
+      "default": "40",
+      "required": false
+    }
+  ],
+  "examples": [
+    {
+      "title": "Small USB MCU board for an ICT fixture",
+      "input": {
+        "nets": "# net  [kind]  [current]  [@x,y]  [side]\nVBUS power 1.5A\nV3V3 power 800mA\nV1V8\nGND\nSWDIO\nSWCLK\nNRST\nUSB_DP\nUSB_DN\nI2C_SDA @12.0,8.5 bottom\nI2C_SCL @13.5,8.5 bottom\nXTAL_IN\nADC_BATT\nLED1 @2,20 bottom",
+        "method": "bed",
+        "rating": "2",
+        "bw": "50",
+        "bh": "40"
+      }
+    },
+    {
+      "title": "Bring-up fixture, KiCad-style names",
+      "input": {
+        "nets": "/+5V power 3A\n/+3V3 power 0.5\nGND\n/SWDIO\n/SWCLK\n/NRST\n/UART_TX\n/UART_RX\n/EN_BUCK\n/PGOOD\n/MCU_CLK",
+        "method": "pogo",
+        "rating": "3",
+        "bw": "",
+        "bh": ""
+      }
+    }
+  ],
+  "usage": "Paste nets one per line as NAME [kind] [current A] [@x,y in mm] [top|bottom] (or a KiCad netlist), and pick the method (bed, flying, pogo, manual). It returns a per-net plan (kind, must/should/optional/avoid, number of test points, why), the ground test-point count, the pad size, pitch and edge rules for the method, access problems for placed pads, and a TP list text. Use it before layout to reserve test points, or after placement to check probe access.",
+  "sources": [
+    "In-circuit test DFT guidance (Keysight/Agilent ICT fixture design guidelines): 100 mil pitch, 0.9-1.0 mm pads, 0.125 in from board edge",
+    "Flying-probe and pogo-fixture pad sizes: common fixture-maker rules of thumb",
+    "Power-probe derating and ground ratio: rule of thumb"
+  ]
+}

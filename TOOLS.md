@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-32 tools. **MCP** marks the ones agents can run with `run_tool`.
+40 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -84,11 +84,18 @@ agents, the most used, and every tool nobody used.
 | **Copper Area Thermal** · MCP | `copper-thermal` | temperature rise of a power part from the copper area under it | PCB |
 | **Crystal Load Capacitor** · MCP | `crystal-load` | load capacitors for a crystal from its CL and board stray capacitance | PCB, Embedded |
 | **Current Sense Designer** · MCP | `current-sense` | shunt value, its power and the amplifier gain for a range and an ADC input | PCB, Embedded |
+| **Design Rule Diff** · MCP | `rule-diff` | two rule sets compared side by side | PCB |
 | **Differential Pair Matcher** · MCP | `diffpair-match` | length-matching tolerance for USB, Ethernet, HDMI and similar pairs | PCB |
+| **DRC Rule Preset Builder** · MCP | `drc-presets` | track, space and drill rules from a fab's capabilities, ready for the Rules tab | PCB |
+| **ESD Protection Selector** · MCP | `esd-selector` | TVS diode selection criteria by interface and line speed | PCB |
+| **Fiducial & Tooling Planner** · MCP | `fiducial-planner` | fiducial and tooling-hole placement for assembly | PCB |
+| **Fuse & Polyfuse Selector** · MCP | `fuse-selector` | fuse rating from normal current and fault scenario | PCB |
+| **Gerber Checklist** · MCP | `gerber-checklist` | completeness of layers, drills, panel and notes before sending to fab | PCB |
 | **Heat Sink Sizing** · MCP | `heatsink-sizing` | required thermal resistance and heat sink size from power and ambient | PCB, 3D |
 | **I2C Pull-up Calculator** · MCP | `i2c-pullup` | the pull-up resistor range for an I2C bus from its supply, speed and capacitance | PCB, Embedded |
 | **Length Matching Budget** · MCP | `length-budget` | maximum length mismatch for a bus speed, in ps and mm | PCB |
 | **MOSFET Gate Drive Check** · MCP | `mosfet-gate` | switching loss and driver adequacy from gate charge, drive current and frequency | PCB |
+| **Mounting Hole Planner** · MCP | `mounting-holes` | keep-out on the board from hole size, standoff and screw | PCB, 3D |
 | **Net Naming Linter** · MCP | `net-name-linter` | checks net names against a convention and lists the inconsistent ones | PCB |
 | **Op-Amp Gain Tool** · MCP | `opamp-gain` | gain, offset and bandwidth of inverting and non-inverting stages | PCB |
 | **Power Rail Tree** · MCP | `power-rail-tree` | supply rails as a tree with each branch's current budget and total power | PCB, Embedded |
@@ -96,6 +103,7 @@ agents, the most used, and every tool nobody used.
 | **Resistor & LED** | `resistor` | Ohm's law, an LED's series resistor, a divider from standard values | PCB, Embedded |
 | **Silkscreen Legibility Check** · MCP | `silkscreen-check` | whether text height and stroke width are under a fab's minimum | PCB |
 | **Stock Risk Scanner** · MCP | `stock-risk` | ranks single-source and low-stock parts in a BOM by risk | PCB, Analytics |
+| **Test Point Planner** · MCP | `test-point-planner` | test point list for critical nets and probe access checks | PCB |
 | **Trace Width** | `trace-width` | how wide a track must be for a current, by IPC-2221, and what it drops | PCB |
 
 ### Embedded

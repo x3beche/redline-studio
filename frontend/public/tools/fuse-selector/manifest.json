@@ -1,0 +1,33 @@
+{
+  "id": "fuse-selector",
+  "name": "Fuse & Polyfuse Selector",
+  "blurb": "fuse rating from normal current and fault scenario",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["fuse", "polyfuse", "ptc", "resettable fuse", "pptc", "fuse rating", "derating", "i2t", "inrush", "melting integral", "overcurrent protection", "slow blow", "time delay", "fast acting", "breaking capacity"],
+  "intro": "A fuse rating from the normal current (75 % derating, re-rated for temperature), checked against the inrush pulse's I²t and against the fault current that has to blow it. Method: Littelfuse Fuseology selection guide; PTCs sized on hold current at temperature.",
+  "inputs": [
+    { "key": "type", "label": "Fuse type", "type": "select", "default": "fast",
+      "options": [["fast", "Fast-acting fuse"], ["slow", "Time-delay (slow-blow) fuse"], ["ptc", "PTC polyfuse (resettable)"]] },
+    { "key": "inom", "label": "Normal operating current", "type": "number", "unit": "A", "default": "1.5",
+      "help": "The highest steady current in normal use (RMS)." },
+    { "key": "vcirc", "label": "Circuit voltage", "type": "number", "unit": "V", "default": "12",
+      "help": "The highest open-circuit voltage the fuse can see once blown." },
+    { "key": "temp", "label": "Ambient around the fuse", "type": "number", "unit": "°C", "default": "40" },
+    { "key": "wave", "label": "Inrush pulse shape", "type": "select", "default": "exp",
+      "options": [["none", "No inrush"], ["exp", "Capacitor charge (exponential decay)"], ["rect", "Rectangular"], ["tri", "Triangular"], ["sine", "Half sine"]] },
+    { "key": "ipk", "label": "Inrush peak current", "type": "number", "unit": "A", "default": "10" },
+    { "key": "tp", "label": "Inrush duration (τ for exponential)", "type": "number", "unit": "ms", "default": "1",
+      "help": "For a capacitor charge: τ = R·C of the charging path." },
+    { "key": "pulses", "label": "Inrush pulses over life", "type": "select", "default": "100000",
+      "options": [["1000", "1 000"], ["10000", "10 000"], ["100000", "100 000"]] },
+    { "key": "ifault", "label": "Fault current available", "type": "number", "unit": "A", "default": "20",
+      "help": "What the source can push into a short: supply current limit, battery short-circuit current." }
+  ],
+  "examples": [
+    { "title": "12 V input, 1.5 A load, 100 µF bulk capacitor", "input": { "type": "fast", "inom": "1.5", "vcirc": "12", "temp": "40", "wave": "exp", "ipk": "10", "tp": "1", "pulses": "100000", "ifault": "20" } },
+    { "title": "USB port polyfuse, 500 mA, 5 V", "input": { "type": "ptc", "inom": "0.5", "vcirc": "5.5", "temp": "50", "wave": "exp", "ipk": "3", "tp": "0.2", "pulses": "10000", "ifault": "3" } }
+  ],
+  "usage": "Give the fuse type (fast, slow or ptc), the normal current in A, circuit voltage in V, ambient temperature in °C, the inrush pulse (shape, peak A, duration ms, number of pulses) and the fault current in A. It returns the minimum rating and the next standard rating (hold current for a PTC), the inrush I²t and the melting I²t the fuse must have, the voltage and breaking-capacity it must be rated for, and whether the fault is big enough to open it quickly. Use it when choosing an input or port fuse.",
+  "sources": ["Littelfuse Fuseology Selection Guide (75 % operating-current derating, temperature re-rating, pulse I²t factors 38/29/22 % for 1k/10k/100k pulses)", "UL 248-14 opening times (135 % within 60 min, 200 % within 2 min)", "PTC hold-current derating: typical PPTC datasheet curves (Littelfuse, Bourns), approximated linearly"]
+}

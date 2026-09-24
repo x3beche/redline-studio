@@ -1,0 +1,98 @@
+{
+  "id": "rule-diff",
+  "name": "Design Rule Diff",
+  "blurb": "two rule sets compared side by side",
+  "group": "pcb",
+  "rooms": [
+    "pcb"
+  ],
+  "keywords": [
+    "design rules",
+    "drc",
+    "rule diff",
+    "compare rules",
+    "kicad_dru",
+    "kicad_pro",
+    "eagle dru",
+    "rules tab",
+    "net class",
+    "clearance",
+    "diff",
+    "fab rules",
+    "constraint"
+  ],
+  "intro": "Paste two rule sets - Rules-tab or .kicad_pro JSON, KiCad .kicad_dru, or key = value lines such as an Eagle .dru - and see every rule that changed, appeared or went away, with lengths converted to mm and whether the second set is stricter.",
+  "inputs": [
+    {
+      "key": "a",
+      "label": "Rule set A",
+      "type": "textarea",
+      "rows": 8,
+      "default": "(version 1)\n(rule \"Min track\" (constraint track_width (min 0.127mm)))\n(rule \"Min clearance\" (constraint clearance (min 0.127mm)))\n(rule \"Min drill\" (constraint hole_size (min 0.2mm)))\n(rule \"Min via\" (condition \"A.Type == 'Via'\") (constraint via_diameter (min 0.45mm)))\n(rule \"Copper to edge\" (constraint edge_clearance (min 0.3mm)))",
+      "placeholder": "JSON, (rule ...) blocks, or key = value lines"
+    },
+    {
+      "key": "b",
+      "label": "Rule set B",
+      "type": "textarea",
+      "rows": 8,
+      "default": "(version 1)\n(rule \"Track\" (constraint track_width (min 6mil)))\n(rule \"Clearance\" (constraint clearance (min 6mil)))\n(rule \"Drill\" (constraint hole_size (min 10mil)))\n(rule \"Annular\" (constraint annular_width (min 5mil)))\n(rule \"Via\" (condition \"A.Type == 'Via'\") (constraint via_diameter (min 20mil)))\n(rule \"Edge\" (constraint edge_clearance (min 15mil)))",
+      "placeholder": "JSON, (rule ...) blocks, or key = value lines"
+    },
+    {
+      "key": "nameA",
+      "label": "Name of A",
+      "type": "text",
+      "default": "JLCPCB"
+    },
+    {
+      "key": "nameB",
+      "label": "Name of B",
+      "type": "text",
+      "default": "OSH Park"
+    },
+    {
+      "key": "tol",
+      "label": "Treat as equal within",
+      "type": "number",
+      "unit": "mm",
+      "default": "0.001"
+    },
+    {
+      "key": "only",
+      "label": "Show only differences",
+      "type": "bool",
+      "default": true
+    }
+  ],
+  "examples": [
+    {
+      "title": "Two fabs' KiCad rules (mm against mil)",
+      "input": {
+        "a": "(version 1)\n(rule \"Min track\" (constraint track_width (min 0.127mm)))\n(rule \"Min clearance\" (constraint clearance (min 0.127mm)))\n(rule \"Min drill\" (constraint hole_size (min 0.2mm)))\n(rule \"Min via\" (condition \"A.Type == 'Via'\") (constraint via_diameter (min 0.45mm)))\n(rule \"Copper to edge\" (constraint edge_clearance (min 0.3mm)))",
+        "b": "(version 1)\n(rule \"Track\" (constraint track_width (min 6mil)))\n(rule \"Clearance\" (constraint clearance (min 6mil)))\n(rule \"Drill\" (constraint hole_size (min 10mil)))\n(rule \"Annular\" (constraint annular_width (min 5mil)))\n(rule \"Via\" (condition \"A.Type == 'Via'\") (constraint via_diameter (min 20mil)))\n(rule \"Edge\" (constraint edge_clearance (min 15mil)))",
+        "nameA": "JLCPCB",
+        "nameB": "OSH Park",
+        "tol": "0.001",
+        "only": true
+      }
+    },
+    {
+      "title": "Key = value notes, mixed units",
+      "input": {
+        "a": "# board A\nmin_track = 0.15mm\nmin_clearance: 0.15 mm\nmin_drill = 0.3mm\nmdWireWire = 8mil 8mil 8mil\nfinish = HASL",
+        "b": "# board B\nmin_track = 6mil\nmin_clearance: 0.2 mm\nmin_drill = 0.3mm\nmdWireWire = 6mil 8mil 8mil\nfinish = ENIG\nmin_annular = 0.13mm",
+        "nameA": "rev A",
+        "nameB": "rev B",
+        "tol": "0.001",
+        "only": false
+      }
+    }
+  ],
+  "usage": "Paste rule set A and B as text: JSON (flattened to dotted keys, classes keyed by name), KiCad .kicad_dru (constraint.min/max keys, with the condition), or key = value lines; lengths in mm, mil, thou, in or um are converted to mm. It returns counts of changed / only-in-A / only-in-B / same rules, a table with both values, the difference and whether B is stricter, and a change list text. Use it to review a rule change or to compare a board's rules with a fab's.",
+  "sources": [
+    "KiCad custom design rules syntax (.kicad_dru)",
+    "Redline Rules tab JSON (backend/rules.py)",
+    "Eagle .dru key = value format"
+  ]
+}

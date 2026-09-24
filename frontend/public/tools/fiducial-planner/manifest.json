@@ -1,0 +1,39 @@
+{
+  "id": "fiducial-planner",
+  "name": "Fiducial & Tooling Planner",
+  "blurb": "fiducial and tooling-hole placement for assembly",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["fiducial", "fiducials", "global fiducial", "local fiducial", "tooling hole", "npth", "pick and place", "smt assembly", "vision mark", "panel rails", "keep-out", "clear area", "ipc-7351", "smema"],
+  "intro": "Where the global fiducials and tooling holes go on a board or on its panel rails, with their clear areas. Sizes follow IPC-7351B / SMEMA 3.1 (1-3 mm copper dot, clear area one diameter all round); the edge and hole distances are common assembler rules of thumb.",
+  "inputs": [
+    { "key": "w", "label": "Board width (X)", "type": "number", "unit": "mm", "default": "80" },
+    { "key": "h", "label": "Board height (Y)", "type": "number", "unit": "mm", "default": "50" },
+    { "key": "place", "label": "Place them on", "type": "select", "default": "board",
+      "options": [["board", "The board itself"], ["rails", "Panel rails (top and bottom)"]] },
+    { "key": "rail", "label": "Rail width", "type": "number", "unit": "mm", "default": "5",
+      "help": "Only used for rails. 5 mm is common; the rails run along X, top and bottom." },
+    { "key": "nfid", "label": "Global fiducials", "type": "select", "default": "3",
+      "options": [["3", "3 (L pattern)"], ["2", "2 (diagonal)"]] },
+    { "key": "fd", "label": "Fiducial diameter", "type": "number", "unit": "mm", "default": "1",
+      "help": "Bare copper dot, no mask on it. 1.0 mm is what most assemblers ask for." },
+    { "key": "clear", "label": "Clear area diameter", "type": "number", "unit": "mm", "default": "3",
+      "help": "Mask opening and keep-out: no copper, silk or parts. At least 3x the dot." },
+    { "key": "fe", "label": "Fiducial centre from edge", "type": "number", "unit": "mm", "default": "5",
+      "help": "On the board: keep the clear area out of the ~3 mm the conveyor grips." },
+    { "key": "nhole", "label": "Tooling holes", "type": "select", "default": "2",
+      "options": [["0", "None"], ["2", "2 (diagonal)"], ["3", "3 (corners)"]] },
+    { "key": "hd", "label": "Tooling hole diameter", "type": "number", "unit": "mm", "default": "3",
+      "help": "Non-plated. Ask the assembler: 2.0, 3.0 and 3.2 mm are common." },
+    { "key": "he", "label": "Tooling hole centre from edge", "type": "number", "unit": "mm", "default": "4" },
+    { "key": "fine", "label": "Fine-pitch parts (≤0.5 mm, BGA)", "type": "number", "default": "1",
+      "help": "Each gets two local fiducials on its diagonal." }
+  ],
+  "examples": [
+    { "title": "80 x 50 mm board, fiducials on the board", "input": { "w": "80", "h": "50", "place": "board", "nfid": "3", "fd": "1", "clear": "3", "fe": "5", "nhole": "2", "hd": "3", "he": "4", "fine": "1" } },
+    { "title": "Small 30 x 20 mm board on 5 mm rails", "input": { "w": "30", "h": "20", "place": "rails", "rail": "5", "nfid": "3", "fd": "1", "clear": "3", "fe": "5", "nhole": "3", "hd": "2", "he": "4", "fine": "0" } }
+  ],
+  "usage": "Give the board size in mm and whether the marks go on the board or on panel rails; fiducial and tooling-hole sizes in mm. It returns the X/Y coordinates (origin bottom-left of the board, or of the panel when on rails) of every global fiducial and tooling hole with their keep-out diameters, the fiducial spans, the local fiducial count, and warnings when a mark does not fit, sits in the conveyor edge, or overlaps another. Use it before placement so the marks are in the layout from the start.",
+  "sources": ["IPC-7351B section 3.4 (fiducial size 1.0-3.0 mm, clear area of twice the radius)", "SMEMA 3.1 Fiducial Mark Standard", "Assembler rules of thumb: 3-5 mm conveyor edge, fiducials as far apart as possible and not symmetric"],
+  "view": true
+}

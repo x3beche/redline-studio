@@ -1,0 +1,29 @@
+{
+  "id": "drc-presets",
+  "name": "DRC Rule Preset Builder",
+  "blurb": "track, space and drill rules from a fab's capabilities, ready for the Rules tab",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["drc", "design rules", "rule preset", "fab capabilities", "min track", "clearance", "via drill", "annular ring", "jlcpcb", "pcbway", "osh park", "kicad_dru", "net class", "rules tab"],
+  "intro": "Design rules from a board house's published minimums: the limits themselves for DRC, and working values with a margin for the net classes. Comes out as the Rules-tab JSON and a KiCad .kicad_dru file.",
+  "inputs": [
+    { "key": "fab", "label": "Board house", "type": "select", "default": "jlc2",
+      "options": [["jlc2", "JLCPCB 2-layer"], ["jlc4", "JLCPCB 4/6-layer"], ["pcbway", "PCBWay standard"], ["osh2", "OSH Park 2-layer"], ["osh4", "OSH Park 4-layer"], ["generic", "Generic prototype (6/6 mil)"], ["custom", "Custom (fill in below)"]] },
+    { "key": "copper", "label": "Outer copper", "type": "select", "default": "1oz", "options": [["1oz", "1 oz (35 µm)"], ["2oz", "2 oz (70 µm)"]] },
+    { "key": "margin", "label": "Margin over the limit", "type": "select", "default": "plus20",
+      "options": [["limit", "None: at the limit"], ["plus20", "+20 %"], ["safe", "+50 %, round 0.05 mm"]] },
+    { "key": "sig", "label": "Default signal track", "type": "number", "unit": "mm", "default": "0.25" },
+    { "key": "pwr", "label": "Power track", "type": "number", "unit": "mm", "default": "0.5" },
+    { "key": "ct", "label": "Custom: min track", "type": "number", "unit": "mm", "default": "0.15", "help": "Only for Custom." },
+    { "key": "cc", "label": "Custom: min gap", "type": "number", "unit": "mm", "default": "0.15" },
+    { "key": "cd", "label": "Custom: min via drill", "type": "number", "unit": "mm", "default": "0.3" },
+    { "key": "cv", "label": "Custom: min via pad", "type": "number", "unit": "mm", "default": "0.6" },
+    { "key": "ce", "label": "Custom: copper to edge", "type": "number", "unit": "mm", "default": "0.3" }
+  ],
+  "examples": [
+    { "title": "JLCPCB 2-layer with 20 % margin", "input": { "fab": "jlc2", "copper": "1oz", "margin": "plus20", "sig": "0.25", "pwr": "0.5" } },
+    { "title": "OSH Park 4-layer at the limit", "input": { "fab": "osh4", "copper": "1oz", "margin": "limit", "sig": "0.2", "pwr": "0.4" } }
+  ],
+  "usage": "Give the fab id (jlc2, jlc4, pcbway, osh2, osh4, generic or custom with ct/cc/cd/cv/ce in mm), copper weight (1oz/2oz), margin (limit, plus20, safe) and the signal and power track widths in mm. It returns the fab limits and working values for track, gap, via drill/pad, annular ring and edge clearance, a JSON object in the board room's Rules-tab shape (classes Default and Power, board minimums, a GND pour) and a KiCad .kicad_dru file. Use it when starting a board for a given fab.",
+  "sources": ["Fab capability pages (JLCPCB, PCBWay, OSH Park), minimums as published at the time of writing", "Redline backend/rules.py SCHEMA (Rules tab format and bounds)", "KiCad custom design rules syntax (.kicad_dru)", "Heavy-copper 0.2 mm minimum and margins: rule of thumb"]
+}

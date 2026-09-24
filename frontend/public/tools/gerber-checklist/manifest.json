@@ -1,0 +1,297 @@
+{
+  "id": "gerber-checklist",
+  "name": "Gerber Checklist",
+  "blurb": "completeness of layers, drills, panel and notes before sending to fab",
+  "group": "pcb",
+  "rooms": [
+    "pcb"
+  ],
+  "keywords": [
+    "gerber",
+    "gerbers",
+    "fab files",
+    "fabrication",
+    "excellon",
+    "drill file",
+    "release checklist",
+    "board outline",
+    "ipc-356",
+    "gbrjob",
+    "pick and place",
+    "bom",
+    "stackup",
+    "fab notes",
+    "manufacturing package"
+  ],
+  "intro": "Tick what is in the zip; what is still open comes back with why the fab or assembler needs it. The items are the usual reasons an order is held or a board is built wrong, with Ucamco's Gerber X2 and IPC-D-356 as the file standards. Items marked (asm), (4+) only count when those boxes apply; the full wording of each open item is in the results.",
+  "inputs": [
+    {
+      "key": "layers",
+      "label": "Layer count",
+      "type": "select",
+      "default": "2",
+      "options": [
+        [
+          "2",
+          "2 layers"
+        ],
+        [
+          "4",
+          "4 layers"
+        ],
+        [
+          "6",
+          "6 or more"
+        ]
+      ]
+    },
+    {
+      "key": "asm",
+      "label": "Assembly too (SMT)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "panel",
+      "label": "I supply the panel",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "l_cu",
+      "label": "Top/bottom copper",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "l_inner",
+      "label": "Inner layers (4+)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "l_mask",
+      "label": "Solder mask",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "l_silk",
+      "label": "Silkscreen",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "l_outline",
+      "label": "Closed outline",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "l_cutouts",
+      "label": "Cut-outs on outline",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "l_paste",
+      "label": "Paste layers (asm)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "d_pth",
+      "label": "Plated drill file",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "d_npth",
+      "label": "NPTH separated",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "d_slots",
+      "label": "Slots routed",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "d_units",
+      "label": "Drill units match",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "d_map",
+      "label": "Drill table",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "f_x2",
+      "label": "RS-274X / X2",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "f_origin",
+      "label": "One origin",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "f_names",
+      "label": "Named / .gbrjob",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "f_netlist",
+      "label": "IPC-356 netlist",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "p_drawing",
+      "label": "Panel drawing",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "p_sep",
+      "label": "V-score / tabs",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "p_fid",
+      "label": "Rail fiducials",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "n_material",
+      "label": "Material, thickness",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "n_copper",
+      "label": "Copper weight",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "n_finish",
+      "label": "Surface finish",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "n_colour",
+      "label": "Mask/silk colour",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "n_stackup",
+      "label": "Stack-up (4+)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "n_vias",
+      "label": "Via treatment",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "n_class",
+      "label": "IPC class, qty",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "a_bom",
+      "label": "BOM with MPNs",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "a_cpl",
+      "label": "Pick-and-place file",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "a_draw",
+      "label": "Assembly drawing",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "v_view",
+      "label": "Viewed in viewer",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "v_drc",
+      "label": "DRC clean",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "v_rev",
+      "label": "Latest rev zipped",
+      "type": "bool",
+      "default": false
+    }
+  ],
+  "examples": [
+    {
+      "title": "2-layer board, fab only, mostly done",
+      "input": {
+        "layers": "2",
+        "asm": false,
+        "panel": false,
+        "l_cu": true,
+        "l_mask": true,
+        "l_silk": true,
+        "l_outline": true,
+        "l_cutouts": true,
+        "d_pth": true,
+        "d_npth": true,
+        "d_slots": true,
+        "d_units": true,
+        "f_x2": true,
+        "f_origin": true,
+        "n_material": true,
+        "n_copper": true,
+        "n_finish": true,
+        "v_view": true
+      }
+    },
+    {
+      "title": "4-layer board with assembly and a panel, just started",
+      "input": {
+        "layers": "4",
+        "asm": true,
+        "panel": true,
+        "l_cu": true,
+        "l_inner": true,
+        "l_outline": true,
+        "d_pth": true
+      }
+    }
+  ],
+  "usage": "Give the layer count (2, 4 or 6), whether assembly is ordered (asm) and whether you supply the panel (panel), then true for every item that is done, by key (l_cu, l_outline, d_pth, d_npth, f_origin, n_finish, a_cpl...). It returns the progress, the open items with why each matters, a per-group summary and an 'Open items' text for a hand-off. Use it right before sending a board to the fab.",
+  "sources": [
+    "Ucamco Gerber Layer Format Specification (RS-274X / X2, .gbrjob job file)",
+    "IPC-D-356 bare-board electrical test data format",
+    "IPC-6012 performance classes",
+    "Common fab order-hold reasons: rule of thumb"
+  ]
+}

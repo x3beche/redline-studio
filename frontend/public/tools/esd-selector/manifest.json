@@ -1,0 +1,215 @@
+{
+  "id": "esd-selector",
+  "name": "ESD Protection Selector",
+  "blurb": "TVS diode selection criteria by interface and line speed",
+  "group": "pcb",
+  "rooms": [
+    "pcb"
+  ],
+  "keywords": [
+    "esd",
+    "tvs",
+    "tvs diode",
+    "transient voltage suppressor",
+    "esd protection",
+    "iec 61000-4-2",
+    "vrwm",
+    "stand-off voltage",
+    "clamping voltage",
+    "capacitance",
+    "usb esd",
+    "can esd",
+    "surge",
+    "esd array",
+    "8 kV"
+  ],
+  "intro": "What TVS diode an interface needs: stand-off voltage above the line's normal swing, capacitance its speed tolerates, polarity, and the IEC 61000-4-2 current it has to clamp. Figures are the usual guidance from TI SLVA680 and Nexperia / Semtech interface guides.",
+  "inputs": [
+    {
+      "key": "iface",
+      "label": "Interface",
+      "type": "select",
+      "default": "usb2hs",
+      "options": [
+        [
+          "gpio",
+          "GPIO, button, LED, reset"
+        ],
+        [
+          "i2c",
+          "I2C / SMBus"
+        ],
+        [
+          "uart",
+          "UART, SPI, low-speed digital"
+        ],
+        [
+          "rs232",
+          "RS-232"
+        ],
+        [
+          "rs485",
+          "RS-485 / RS-422"
+        ],
+        [
+          "can",
+          "CAN (classic)"
+        ],
+        [
+          "canfd",
+          "CAN FD"
+        ],
+        [
+          "lin",
+          "LIN"
+        ],
+        [
+          "usb2fs",
+          "USB 2.0 low / full speed D+/D-"
+        ],
+        [
+          "usb2hs",
+          "USB 2.0 high speed D+/D-"
+        ],
+        [
+          "usb3",
+          "USB 3.x SuperSpeed TX/RX"
+        ],
+        [
+          "usbccc",
+          "USB-C CC / SBU"
+        ],
+        [
+          "vbus5",
+          "USB VBUS 5 V"
+        ],
+        [
+          "vbuspd",
+          "USB PD VBUS up to 20 V"
+        ],
+        [
+          "hdmi14",
+          "HDMI 1.4 TMDS"
+        ],
+        [
+          "hdmi20",
+          "HDMI 2.x / DisplayPort HBR2-3"
+        ],
+        [
+          "lvds",
+          "LVDS / MIPI D-PHY"
+        ],
+        [
+          "eth100",
+          "Ethernet 10/100BASE-T (PHY side)"
+        ],
+        [
+          "eth1g",
+          "Ethernet 1000BASE-T (PHY side)"
+        ],
+        [
+          "sd",
+          "SD card (UHS-I)"
+        ],
+        [
+          "sim",
+          "SIM card"
+        ],
+        [
+          "audio",
+          "Analog audio / microphone"
+        ],
+        [
+          "rf",
+          "Antenna / RF feed"
+        ],
+        [
+          "dc12",
+          "12 V DC input"
+        ],
+        [
+          "dc24",
+          "24 V industrial DC input"
+        ]
+      ]
+    },
+    {
+      "key": "vline",
+      "label": "Highest line voltage",
+      "type": "number",
+      "unit": "V",
+      "default": "",
+      "required": false,
+      "help": "Leave empty for the interface's usual level."
+    },
+    {
+      "key": "absmax",
+      "label": "Protected pin absolute max",
+      "type": "number",
+      "unit": "V",
+      "default": "",
+      "required": false,
+      "help": "From the IC datasheet; the clamp must stay below it."
+    },
+    {
+      "key": "level",
+      "label": "IEC 61000-4-2 level",
+      "type": "select",
+      "default": "4",
+      "options": [
+        [
+          "1",
+          "1: ±2 kV contact"
+        ],
+        [
+          "2",
+          "2: ±4 kV contact"
+        ],
+        [
+          "3",
+          "3: ±6 kV contact"
+        ],
+        [
+          "4",
+          "4: ±8 kV contact"
+        ]
+      ]
+    },
+    {
+      "key": "filter",
+      "label": "Filter the table",
+      "type": "text",
+      "default": "",
+      "placeholder": "usb, can, eth..."
+    }
+  ],
+  "examples": [
+    {
+      "title": "USB 2.0 high-speed port, level 4",
+      "input": {
+        "iface": "usb2hs",
+        "vline": "",
+        "absmax": "",
+        "level": "4",
+        "filter": "usb"
+      }
+    },
+    {
+      "title": "CAN bus on a 24 V machine, transceiver rated ±42 V",
+      "input": {
+        "iface": "can",
+        "vline": "28",
+        "absmax": "42",
+        "level": "4",
+        "filter": "can"
+      }
+    }
+  ],
+  "usage": "Pick the interface id (e.g. usb2hs, can, rs485, eth100, hdmi14, dc24); optionally give the highest line voltage and the protected pin's absolute maximum in volts, and the IEC 61000-4-2 level 1-4. It returns the minimum stand-off voltage (VRWM), the maximum capacitance per line, the polarity, the ESD test current, the clamp target and example parts, plus a table of all interfaces (filtered by the text filter). Use it when choosing or reviewing TVS parts on connectors.",
+  "sources": [
+    "TI SLVA680 ESD protection layout guide",
+    "IEC 61000-4-2 (contact discharge waveform: 3.75 A/kV first peak, 2 A/kV at 30 ns)",
+    "Nexperia and Semtech interface protection guides (capacitance guidance)",
+    "Interface standards for line voltages: USB 2.0/3.x, ISO 11898 (CAN), TIA-485, TIA-232"
+  ]
+}
