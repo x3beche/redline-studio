@@ -150,7 +150,8 @@ def test_ids_that_exist_once_per_workspace():
 
 # ---- no route reaches around the scope
 
-ROUTE_MODULES = ["backend/main.py", "backend/code_api.py", "backend/tools_api.py"]
+ROUTE_MODULES = ["backend/main.py", "backend/code_api.py", "backend/tools_api.py",
+                 "backend/agent_api.py"]
 
 
 def test_no_route_module_reaches_the_database_around_the_scope():
@@ -175,3 +176,31 @@ def test_stored_files_reach_the_real_database_from_every_kind_of_db():
         assert isinstance(store.bucket(plain, "shots"), AsyncIOMotorGridFSBucket)
         assert isinstance(store.bucket(scope.ScopedDb(plain, "a"), "shots"), AsyncIOMotorGridFSBucket)
     asyncio.run(check())
+
+
+def test_agents_cannot_reach_around_their_collections():
+    """The agents' database way in refuses operators that read another
+    collection, write elsewhere, or run code on the server."""
+    from backend import agent_api
+    assert agent_api._forbidden({"x": 1}) is None
+    assert agent_api._forbidden({"pipeline": [{"$match": {}}, {"$lookup": {"from": "users"}}]}) == "$lookup"
+    assert agent_api._forbidden({"pipeline": [{"$unionWith": "agent_tokens"}]}) == "$unionWith"
+    assert agent_api._forbidden({"pipeline": [{"$merge": {"into": "users"}}]}) == "$merge"
+    assert agent_api._forbidden({"filter": {"$and": [{"$where": "1"}]}}) == "$where"
+    assert not {"users", "sessions", "agent_tokens", "memberships", "workspaces"} & agent_api.COLLECTIONS
+
+
+def test_a_workspace_cannot_write_into_another():
+    """Naming another workspace in the document or the update does nothing:
+    what a workspace writes stays its own."""
+    raw = world()
+    b = scope.ScopedDb(raw, "b")
+    run(b.revisions.insert_one({"_id": "planted", "workspace_id": "a"}))
+    run(b.revisions.update_one({"_id": "b1"}, {"$set": {"workspace_id": "a", "comment": "moved?"}}))
+    run(b.revisions.update_one({"_id": "b4"}, {"$set": {"workspace_id": "a"}, "$setOnInsert": {"workspace_id": "a"}},
+                               upsert=True))
+    got = {r["_id"]: r.get("workspace_id") for r in raw["revisions"].rows}
+    assert got["planted"] == "b" and got["b1"] == "b" and got["b4"] == "b"
+    assert next(r for r in raw["revisions"].rows if r["_id"] == "b1")["comment"] == "moved?"
+    assert b.revisions._upsert({"$rename": {"x": "workspace_id"}}, {}) == {}
+    assert b.revisions._upsert([{"$set": {"workspace_id": "a"}}], {})[-1] == {"$set": {"workspace_id": "b"}}

@@ -82,7 +82,8 @@ class ScopedCollection:
 
     # writes
     def _stamp(self, doc: dict) -> dict:
-        doc.setdefault("workspace_id", self._ws)
+        # Always this workspace's: a document cannot be written into another.
+        doc["workspace_id"] = self._ws
         return doc
 
     async def insert_one(self, doc: dict, *args, **kw):
@@ -92,13 +93,20 @@ class ScopedCollection:
         return await self._c.insert_many([self._stamp(d) for d in docs], *args, **kw)
 
     def _upsert(self, update: Any, kw: dict) -> Any:
-        if kw.get("upsert") and isinstance(update, dict) and any(k.startswith("$") for k in update):
-            update = dict(update)
-            soi = dict(update.get("$setOnInsert") or {})
-            if "workspace_id" not in (update.get("$set") or {}):
-                soi.setdefault("workspace_id", self._ws)
-            update["$setOnInsert"] = soi
-        return update
+        """An update cannot move a document to another workspace; one that
+        inserts (upsert) stamps it with this one."""
+        if isinstance(update, list):
+            # An update pipeline: whatever it does, it ends in this workspace.
+            return [*update, {"$set": {"workspace_id": self._ws}}]
+        if not isinstance(update, dict) or not any(k.startswith("$") for k in update):
+            return update
+        update = {op: ({k: v for k, v in fields.items()
+                        if k != "workspace_id" and not (op == "$rename" and v == "workspace_id")}
+                       if isinstance(fields, dict) else fields)
+                  for op, fields in update.items()}
+        if kw.get("upsert"):
+            update["$setOnInsert"] = {**(update.get("$setOnInsert") or {}), "workspace_id": self._ws}
+        return {op: fields for op, fields in update.items() if fields != {} or op == "$setOnInsert"}
 
     async def update_one(self, filter: dict, update, *args, **kw):
         return await self._c.update_one(within(filter, self._ws), self._upsert(update, kw), *args, **kw)

@@ -220,3 +220,62 @@ def csrf_ok(method: str, headers) -> bool:
     if method in ("GET", "HEAD", "OPTIONS"):
         return True
     return headers.get(CSRF_HEADER) == "1"
+
+
+# ---------------------------------------------------------------- agent tokens
+
+TOKENS = "agent_tokens"
+TOKEN_PREFIX = "rlat_"
+_TOKEN_CACHE: dict[str, tuple[float, dict | None]] = {}
+
+
+async def create_agent_token(raw_db, name: str, workspace: str, room: str | None,
+                             created_by: dict) -> tuple[str, dict]:
+    """A token for one agent, in one workspace (and room, if given). The
+    token itself is returned once and kept only as its SHA-256."""
+    name = (name or "").strip()[:60]
+    if not name:
+        raise ValueError("give the agent a name - it is what the person sees")
+    token = TOKEN_PREFIX + secrets.token_urlsafe(32)
+    doc = {"_id": _digest(token), "id": secrets.token_hex(6), "name": name, "workspace": workspace,
+           "room": room or None, "created_by": created_by, "created_at": _now(),
+           "last_used": None, "revoked": False}
+    await raw_db[TOKENS].insert_one(doc)
+    return token, {k: v for k, v in doc.items() if k != "_id"}
+
+
+async def token_agent(raw_db, token: str) -> dict | None:
+    """The agent a bearer token belongs to, or None if it is unknown or
+    revoked."""
+    if not token.startswith(TOKEN_PREFIX):
+        return None
+    key = _digest(token)
+    hit = _TOKEN_CACHE.get(key)
+    if hit and time.time() - hit[0] < CACHE_S:
+        return hit[1]
+    doc = await raw_db[TOKENS].find_one({"_id": key})
+    out = None
+    if doc and not doc.get("revoked"):
+        out = {"actor": {"type": "agent", "id": doc["name"], "name": doc["name"], "token": doc["id"]},
+               "workspace": doc["workspace"], "room": doc.get("room")}
+        await raw_db[TOKENS].update_one({"_id": key}, {"$set": {"last_used": _now()}})
+    _TOKEN_CACHE[key] = (time.time(), out)
+    return out
+
+
+async def list_agent_tokens(raw_db, workspace: str) -> list[dict]:
+    rows = [d async for d in raw_db[TOKENS].find({"workspace": workspace}, {"_id": 0})]
+    rows.sort(key=lambda d: d.get("created_at") or _now(), reverse=True)
+    return rows
+
+
+async def revoke_agent_token(raw_db, token_id: str, workspace: str) -> bool:
+    res = await raw_db[TOKENS].update_one({"id": token_id, "workspace": workspace},
+                                          {"$set": {"revoked": True, "revoked_at": _now()}})
+    _TOKEN_CACHE.clear()
+    return bool(getattr(res, "matched_count", 0))
+
+
+def bearer(headers) -> str | None:
+    value = headers.get("authorization") or ""
+    return value[7:].strip() if value.lower().startswith("bearer ") else None

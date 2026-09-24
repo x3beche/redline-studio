@@ -56,6 +56,9 @@ _client = None
 app.include_router(code_api.router)
 # The Tools tab's catalog, checks, runs and usage, and the tool pages.
 tools_api.mount(app)
+# And the agents' way in to their database work (users phase 4).
+from . import agent_api  # noqa: E402
+app.include_router(agent_api.router)
 
 
 def _raw_db():
@@ -1159,9 +1162,18 @@ async def _who_acts(request, call_next):
     audit trail with it, whatever route it came through."""
     who = actors.from_header(request.headers.get(actors.HEADER))
     ws = scope.DEFAULT
+    # An agent's token, whatever the mode: it names the agent and its
+    # workspace. A token that is wrong or revoked is refused outright.
+    token = auth.bearer(request.headers)
+    if token and request.url.path.startswith("/api/"):
+        from fastapi.responses import JSONResponse
+        agent = await auth.token_agent(db(), token)
+        if not agent:
+            return JSONResponse({"detail": "that agent token is unknown or revoked"}, status_code=401)
+        who, ws = agent["actor"], agent["workspace"]
     # Signed in, when sign-in is on: the session says who, and in which
     # workspace. Without one, only the few routes that sign in answer.
-    if auth.enabled() and auth.needs_session(request.method, request.url.path):
+    elif auth.enabled() and auth.needs_session(request.method, request.url.path):
         from fastapi.responses import JSONResponse
         got = await auth.session_user(db(), request.cookies.get(auth.COOKIE))
         if not got:
@@ -1169,7 +1181,7 @@ async def _who_acts(request, call_next):
         if not auth.csrf_ok(request.method, request.headers):
             return JSONResponse({"detail": "that change did not come from the app"}, status_code=403)
         who, ws = got["user"], got["workspace"]
-    token = actors.CURRENT.set(who)
+    who_token = actors.CURRENT.set(who)
     ws_token = scope.WORKSPACE.set(ws)
     try:
         response = await call_next(request)
@@ -1181,7 +1193,7 @@ async def _who_acts(request, call_next):
                                actor=who)
         return response
     finally:
-        actors.CURRENT.reset(token)
+        actors.CURRENT.reset(who_token)
         scope.WORKSPACE.reset(ws_token)
 
 
@@ -1289,6 +1301,44 @@ async def auth_logout(request: Request, response: Response):
     await auth.end_session(db(), request.cookies.get(auth.COOKIE))
     response.delete_cookie(auth.COOKIE, path="/")
     return {"signed_out": True}
+
+
+# ---------------- agent tokens ----------------
+class TokenIn(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    room: str | None = Field(default=None, max_length=20)
+
+
+def _people_only():
+    if actors.current()["type"] != "user":
+        raise HTTPException(403, "only a person can hand out or take back agent tokens")
+
+
+@app.post("/api/agent-tokens")
+async def make_agent_token(body: TokenIn):
+    """A token for one agent: shown once, kept only as a hash."""
+    _people_only()
+    try:
+        token, doc = await auth.create_agent_token(db(), body.name, scope.current(), body.room,
+                                                   actors.current())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    await actors.audit(db(), "token", body.name, {"room": body.room})
+    return {"token": token, **doc}
+
+
+@app.get("/api/agent-tokens")
+async def agent_tokens():
+    _people_only()
+    return await auth.list_agent_tokens(db(), scope.current())
+
+
+@app.delete("/api/agent-tokens/{token_id}")
+async def revoke_agent_token(token_id: str):
+    _people_only()
+    if not await auth.revoke_agent_token(db(), token_id, scope.current()):
+        raise HTTPException(404, token_id)
+    return {"revoked": token_id}
 
 
 @app.get("/api/audit")

@@ -32,10 +32,18 @@ def now() -> str:
 
 def bucket(db, name: str):
     from motor.motor_asyncio import AsyncIOMotorGridFSBucket
+    # Reached through the API (tools/remote_db.py): its own stand-in. Asked
+    # of the class - a Motor database answers any attribute with a
+    # collection, so hasattr() on the instance is always true.
+    if getattr(type(db), "REMOTE", False):
+        return db.gridfs(name)
     # Stored files are shared: the documents that point at them are what
     # belong to a workspace.
-    # Asked of the class: on a plain Motor database, db.raw is a collection.
-    return AsyncIOMotorGridFSBucket(db.raw if getattr(type(db), "SCOPED", False) else db, bucket_name=name)
+    # The workspace view (scope.ScopedDb) hands over the database itself.
+    # Asked of the class, like REMOTE above: getattr(db, "raw") on a plain
+    # Motor database is a collection called "raw".
+    return AsyncIOMotorGridFSBucket(db.raw if getattr(type(db), "SCOPED", False) else db,
+                                    bucket_name=name)
 
 
 # ---------------- reading metadata from source ----------------

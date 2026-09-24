@@ -28,6 +28,9 @@ A fork that is not yours to choose goes to the person, on their screen:
 Ask it plainly, as you would ask an engineer who is not a specialist: the
 decision in one sentence, what each choice means for the product, the
 numbers in `-c` - AGENTS.md, "Ask on their screen, not in your terminal".
+Run the commands as yourself: `X3_AGENT="embedded room"`. With sign-in on,
+use the token the person gave you (`X3_TRANSPORT=api`, `X3_TOKEN`) - AGENTS.md,
+"Working without the database password"; never ask for the database password.
 Never ask in your own output - nobody is reading it but the main agent.
 
 This room has a thread of its own under the queue. Read it with

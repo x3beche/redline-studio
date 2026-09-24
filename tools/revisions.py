@@ -69,6 +69,13 @@ def connect():
     from motor.motor_asyncio import AsyncIOMotorClient
 
     load_dotenv(ROOT / ".env")
+    # X3_TRANSPORT=api: the database through the server, with this agent's
+    # token (X3_TOKEN) - no connection string needed (tools/remote_db.py).
+    # Anything else: straight to MongoDB, as before.
+    if os.getenv("X3_TRANSPORT", "").strip().lower() == "api":
+        sys.path.insert(0, str(ROOT / "tools"))
+        from remote_db import RemoteDb
+        return RemoteDb(os.getenv("X3_API", "http://localhost:8000"), os.getenv("X3_TOKEN") or None)
     uri = os.getenv("MONGODB_URI", "").strip()
     if not uri:
         sys.exit("MONGODB_URI is not set (.env)")
@@ -327,7 +334,8 @@ async def cmd_board(args):
         req = urllib.request.Request(
             base + path, method=method,
             data=_json.dumps(body).encode() if body is not None else None,
-            headers={"content-type": "application/json", **actors.header_for_agent()})
+            headers={"content-type": "application/json", **actors.header_for_agent(),
+                     **({"Authorization": f"Bearer {os.environ['X3_TOKEN']}"} if os.environ.get("X3_TOKEN") else {})})
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 raw = r.read()

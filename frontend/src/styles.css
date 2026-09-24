@@ -1644,4 +1644,31 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-user { display: flex; align-items: center; gap: 6px; }
 .tcv-user-dot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
   border-radius: 50%; font-size: 10px; font-weight: 700; color: var(--ink-bright); background: var(--accent-deep); }
-.tcv-user-menu { right: 0; left: auto; top: calc(100% + 4px); }
+.tcv-user-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 60; min-width: 220px;
+  display: flex; flex-direction: column; padding: 4px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface-2); box-shadow: 0 4px 8px var(--shadow-soft); }
+.tcv-user-menu .tcv-menu-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 6px 8px; border-radius: 4px; text-align: left; background: none; border: 0; cursor: default; }
+.tcv-user-menu button.tcv-menu-item { cursor: pointer; }
+.tcv-user-menu button.tcv-menu-item:hover { background: var(--hover); }
+
+/* Agent tokens (app/auth.ts): who may use the agents' way in, handed out
+   and taken back by a person. */
+.tcv-tokens-back { position: fixed; inset: 0; z-index: 500; display: flex; align-items: center;
+  justify-content: center; background: var(--overlay); }
+.tcv-tokens { width: min(560px, 92vw); max-height: 80vh; overflow: auto; display: flex; flex-direction: column;
+  gap: 10px; padding: 20px 22px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2);
+  font-size: 12.5px; color: var(--ink); }
+.tcv-tokens h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink-bright); }
+.tcv-tokens p { margin: 0; color: var(--ink-dim); line-height: 1.5; }
+.tcv-tokens-new { display: flex; gap: 6px; }
+.tcv-tokens-new input { flex: 1; padding: 6px 8px; font-size: 12.5px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 5px; outline: none; }
+.tcv-tokens-new input:focus { border-color: var(--accent); }
+.tcv-tokens-once { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--accent);
+  border-radius: 6px; background: var(--surface); }
+.tcv-tokens-once code { font-size: 11.5px; word-break: break-all; color: var(--ink-bright); user-select: all; }
+.tcv-tokens-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); }
+.tcv-tokens-row > div { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.tcv-tokens-row[data-off] { opacity: .5; }
+.tcv-tokens-end { display: flex; justify-content: flex-end; }

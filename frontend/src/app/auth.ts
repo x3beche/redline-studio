@@ -1,4 +1,4 @@
-import { Component, Injectable, inject, signal } from '@angular/core';
+import { Component, Injectable, inject, output, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { catchError, throwError } from 'rxjs';
 
@@ -118,9 +118,102 @@ export class SignIn {
   }
 }
 
+export interface AgentToken {
+  id: string; name: string; workspace: string; room: string | null;
+  created_by?: { name?: string }; created_at: string; last_used: string | null; revoked: boolean;
+}
+
+/** The agents allowed in, each with its own token: made here, shown once,
+ *  taken back here. An agent with a token needs no database password - the
+ *  server does its database work for it (backend/agent_api.py). */
+@Component({
+  selector: 'app-agent-tokens',
+  template: `
+<div class="tcv-tokens-back" (click)="closed.emit()">
+  <div class="tcv-tokens" (click)="$event.stopPropagation()" role="dialog" aria-label="Agent tokens">
+    <h2>Agent tokens</h2>
+    <p>An agent - Claude Code in a terminal, a script - works in Redline with a token instead of the
+      database password. Everything it does is recorded under the name you give it, and taking the token
+      back stops it at once.</p>
+    <form class="tcv-tokens-new" (submit)="$event.preventDefault(); make()">
+      <input placeholder="Name the agent, e.g. pcb-builder" [value]="name()" maxlength="60"
+             (input)="name.set($any($event.target).value)">
+      <button class="tcv-btn tcv-btn-accent" type="submit" [disabled]="!name().trim() || busy()">Make token</button>
+    </form>
+    @if (made(); as m) {
+      <div class="tcv-tokens-once">
+        <span>The token for <b>{{ m.name }}</b>. It is shown this once - copy it now. Give the agent these lines:</span>
+        <code>X3_TRANSPORT=api<br>X3_API={{ origin }}<br>X3_TOKEN={{ m.token }}</code>
+        <div class="tcv-tokens-end"><button class="tcv-btn" (click)="copy(m.token)">{{ copied() ? 'Copied' : 'Copy the lines' }}</button></div>
+      </div>
+    }
+    @if (error(); as e) { <p class="tcv-signin-error" role="alert">{{ e }}</p> }
+    @for (t of list(); track t.id) {
+      <div class="tcv-tokens-row" [attr.data-off]="t.revoked ? '' : null">
+        <div><span class="tcv-menu-name">{{ t.name }}</span>
+          <span class="tcv-menu-blurb">made by {{ t.created_by?.name || 'someone' }} {{ ago(t.created_at) }} ·
+            {{ t.revoked ? 'taken back' : t.last_used ? 'last used ' + ago(t.last_used) : 'not used yet' }}</span></div>
+        @if (!t.revoked) { <button class="tcv-btn" (click)="revoke(t)">Take back</button> }
+      </div>
+    } @empty { <p>No agent has a token yet.</p> }
+    <div class="tcv-tokens-end"><button class="tcv-btn" (click)="closed.emit()">Close</button></div>
+  </div>
+</div>`,
+})
+export class AgentTokens {
+  private http = inject(HttpClient);
+  closed = output<void>();
+  list = signal<AgentToken[]>([]);
+  name = signal('');
+  made = signal<{ name: string; token: string } | null>(null);
+  error = signal('');
+  busy = signal(false);
+  copied = signal(false);
+  origin = location.origin;
+
+  constructor() { this.load(); }
+
+  load() {
+    this.http.get<AgentToken[]>('/api/agent-tokens').subscribe({
+      next: l => this.list.set(l), error: e => this.error.set(this.say(e)) });
+  }
+
+  make() {
+    this.busy.set(true);
+    this.error.set('');
+    this.http.post<AgentToken & { token: string }>('/api/agent-tokens', { name: this.name().trim() }).subscribe({
+      next: t => { this.busy.set(false); this.made.set({ name: t.name, token: t.token }); this.copied.set(false);
+                   this.name.set(''); this.load(); },
+      error: e => { this.busy.set(false); this.error.set(this.say(e)); },
+    });
+  }
+
+  revoke(t: AgentToken) {
+    this.http.delete(`/api/agent-tokens/${t.id}`).subscribe({
+      next: () => { if (this.made()?.name === t.name) this.made.set(null); this.load(); },
+      error: e => this.error.set(this.say(e)) });
+  }
+
+  copy(token: string) {
+    navigator.clipboard?.writeText(`X3_TRANSPORT=api\nX3_API=${this.origin}\nX3_TOKEN=${token}\n`)
+      .then(() => this.copied.set(true), () => this.error.set('the browser would not copy - select the lines instead'));
+  }
+
+  ago(iso: string) {
+    const s = (Date.now() - new Date(iso.endsWith('Z') ? iso : iso + 'Z').getTime()) / 1000;
+    if (s < 90) return 'just now';
+    if (s < 5400) return `${Math.round(s / 60)} min ago`;
+    if (s < 129600) return `${Math.round(s / 3600)} h ago`;
+    return `${Math.round(s / 86400)} days ago`;
+  }
+
+  private say(e: HttpErrorResponse) { return typeof e.error?.detail === 'string' ? e.error.detail : 'that did not work'; }
+}
+
 /** Who is signed in, and signing out - only when sign-in is on. */
 @Component({
   selector: 'app-user-chip',
+  imports: [AgentTokens],
   host: { class: 'relative flex items-center' },
   template: `
 @if (auth.state(); as s) {
@@ -132,15 +225,20 @@ export class SignIn {
       <div class="tcv-menu tcv-user-menu" (mouseleave)="open.set(false)">
         <div class="tcv-menu-item"><span class="tcv-menu-name">{{ u.name }}</span>
           <span class="tcv-menu-blurb">{{ u.email }} · workspace {{ s.workspace }}</span></div>
+        <button class="tcv-menu-item" (click)="open.set(false); tokens.set(true)">
+          <span class="tcv-menu-name">Agent tokens</span>
+          <span class="tcv-menu-blurb">Let an agent work here without the database password</span></button>
         <button class="tcv-menu-item" (click)="open.set(false); auth.logout()">
           <span class="tcv-menu-name">Sign out</span></button>
       </div>
     }
+    @if (tokens()) { <app-agent-tokens (closed)="tokens.set(false)"/> }
   }
 }`,
 })
 export class UserChip {
   auth = inject(Auth);
   open = signal(false);
+  tokens = signal(false);
   initial(n: string) { return (n.trim()[0] ?? '?').toUpperCase(); }
 }

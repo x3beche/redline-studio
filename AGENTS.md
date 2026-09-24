@@ -133,6 +133,23 @@ through the API (the command sends it as `X-Redline-Actor`). Without it you
 are "agent". Deletes and changes of state are kept in an audit trail with
 who made them; the person sees it in Analytics under *Recent changes*.
 
+### Working without the database password
+
+Two ways to reach the data, same commands and the same output:
+
+- **Direct** (the default): `MONGODB_URI` from `.env`, as always.
+- **Through the server**: `X3_TRANSPORT=api`, `X3_API=http://localhost:8000`
+  and, when sign-in is on, `X3_TOKEN=rlat_...` - a token the person makes
+  for you in the app (user menu > *Agent tokens*) and can take back at any
+  time. No connection string is needed; the server does each database
+  step for you (`backend/agent_api.py`, `tools/remote_db.py`) in the
+  token's workspace, under the token's name, and records deletes. The MCP
+  server and `revisions.py board ...` send the same token.
+
+Never write a token into a file in the repo, a log line or a note. If a
+command says it "wants an agent token", ask the person for one - do not
+fall back to the database password.
+
 ## Ask on their screen, not in your terminal
 
 When you reach a fork that is not yours to choose - which print process a

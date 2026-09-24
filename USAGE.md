@@ -878,6 +878,11 @@ and changes are written as *you* (`X3_LOCAL_USER` in `.env`). Set
 offers to make the first account, which owns the workspace; after that
 the page asks for email and password, and your name at the far right of the
 top bar has **Sign out**. Every delete and change - by you or an agent - is
-in Analytics under **Recent changes**. Until agents have their own tokens
-(docs/USERS-PLAN.md, phase 4), keep sign-in off if agents run board
-commands.
+in Analytics under **Recent changes**.
+
+With sign-in on, an agent needs a token. Open your name > **Agent
+tokens**, name the agent and press **Make token**: the three lines shown
+(`X3_TRANSPORT=api`, `X3_API=...`, `X3_TOKEN=...`) go into the agent's
+environment, and appear only this once. The agent then needs no database
+password, and everything it does is under the name you gave it. **Take
+back** stops it at once.

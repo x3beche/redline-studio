@@ -163,7 +163,10 @@ def http(method: str, path: str, body: dict | None) -> tuple[bool, str]:
                                  data=json.dumps(body).encode() if body is not None else None,
                                  headers={"Content-Type": "application/json",
                                           # who is asking, for the tools' usage and the audit
-                                          "X-Redline-Actor": "agent:" + os.environ.get("X3_AGENT", "agent")})
+                                          "X-Redline-Actor": "agent:" + os.environ.get("X3_AGENT", "agent"),
+                                          # with sign-in on, the agent's token (users phase 4)
+                                          **({"Authorization": "Bearer " + os.environ["X3_TOKEN"]}
+                                             if os.environ.get("X3_TOKEN") else {})})
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
             return True, r.read().decode()

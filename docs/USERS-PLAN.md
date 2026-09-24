@@ -227,9 +227,58 @@ browser the card, a wrong password's message, the app with the user
 signed in, sign-out back to the card, and the first-account card. Local
 mode on this machine unchanged.
 
-Limit until phase 4: with sign-in on, the agents' API calls
-(`revisions.py board …`) have no session and are refused; their direct
-database work is unaffected. Keep sign-in off until phase 4 lands.
+Limit until phase 4 (now lifted): with sign-in on, the agents' API calls
+had no session and were refused.
+
+### Phase 4 - agents on the API (done)
+
+`backend/agent_api.py`, `tools/remote_db.py`, tokens in `backend/auth.py`,
+the *Agent tokens* dialog in the user menu (`frontend/src/app/auth.ts`).
+
+- **Tokens.** A person makes one per agent: `rlat_` plus 32 random bytes,
+  shown once, stored only as its SHA-256 in `agent_tokens`, with the
+  agent's name, the workspace, who made it and when it was last used.
+  Taking it back refuses it at once in this server (the lookup cache is
+  cleared; another server process forgets it within a minute). Only a
+  person can make, list or take back tokens - an agent's token cannot.
+- **Requests.** `Authorization: Bearer rlat_...` on any `/api/` request
+  makes the request that agent, in the token's workspace, whatever the
+  sign-in mode; a wrong or taken-back token is a 401. Bearer requests
+  need no CSRF header (no cookie is involved).
+- **The database, through the server.** `revisions.py` with
+  `X3_TRANSPORT=api` gets `RemoteDb` from `connect()` instead of Motor:
+  the same calls, each one a `POST /api/agent/db` (stored files:
+  `/api/agent/files/{bucket}`). The server runs it on the scoped database,
+  so the workspace applies. Open to agents: the workspace's collections
+  (audit read-only), the LCSC parts cache, the LLM-call log; `ping`,
+  `dbstats`, `collstats`. Refused: accounts, sessions, tokens, members;
+  any other command; `$lookup`, `$graphLookup`, `$unionWith`, `$out`,
+  `$merge`, `$where`, `$function`, `$accumulator` anywhere in a request.
+  A person's session is refused here (403): it is the agents' way in.
+- **Writes stay in the workspace.** Found while testing: a document or an
+  update naming another workspace used to keep it. Now `scope.py` always
+  stamps the view's own workspace and strips `workspace_id` from updates
+  (pipeline updates end by setting it), for routes and agents alike.
+- **Both paths side by side.** Direct mode is unchanged and still the
+  default. Compared line for line on the live data, direct against
+  through-the-server: `queue`, `chat --keep-unread`, `models`, `source`,
+  `kind`, `wait` and `show` (the same 307 203-byte picture) are identical.
+
+Verified on a separate server with sign-in on and a throw-away database
+(dropped afterwards): no token 401; a person's session 403 at the agents'
+way in, also when it claims to be an agent; token made, listed, used,
+taken back, then 401; unknown token 401; `users`, `agent_tokens`,
+`dropDatabase` and `$lookup` into `users` refused; a token making a token
+refused; a stored file put, read back byte for byte and deleted; the
+command line (`queue`, `models`, `chat`) working over a token, and a plain
+message without one. Two tokens in two workspaces: B counts 0 of A's
+notes, cannot read, change or delete A's, and a note B names as A's lands
+in B. In the browser: the user menu, *Agent tokens*, a token made and
+shown once with the lines to give the agent, and taken back.
+
+Still open, for phase 5: ids are global, so a refused duplicate id tells
+workspace B that A has a document with that id; room-limited tokens (the
+`room` field is stored, not yet enforced).
 
 ### Original list of questions
 
