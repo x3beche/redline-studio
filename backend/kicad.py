@@ -27,16 +27,20 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from . import ato, compute, lcsc, store
+from . import ato, compute, lcsc, rules, store
 
 IMAGE = os.environ.get("X3_KICAD_IMAGE", "redline-kicad")
 HERE = Path(__file__).resolve().parent.parent
 PLACER = HERE / "docker" / "place.py"
+ROUTER = HERE / "docker" / "route.py"
+ROUTE_TIMEOUT = 900
 TIMEOUT = 600
 
 # The front of the board, as a render: copper, what is printed on it, the
 # soldermask openings, and the outline that says where it ends.
 LAYERS = "F.Cu,F.SilkS,F.Mask,Edge.Cuts"
+# And the back, once it has copper on it.
+BOTTOM_LAYERS = "B.Cu,B.SilkS,B.Mask,Edge.Cuts"
 
 
 # Resistors and capacitors do not come from LCSC. An 0402 is the same
@@ -70,6 +74,15 @@ def library_shapes() -> dict[str, str]:
     return out
 
 
+def module_of(component: dict) -> str:
+    """Which module a part is in, from where the source puts it:
+    `main.ato:Controller::power.charger` is in `power`. The placer lays
+    each module out as a block of its own."""
+    where = component.get("where") or ""
+    inner = where.split("::", 1)[1] if "::" in where else ""
+    return inner.split(".", 1)[0] if "." in inner else ""
+
+
 class NoDocker(RuntimeError):
     """Raised when the container is not there, with what to do about it."""
 
@@ -101,7 +114,52 @@ async def available() -> bool:
         return False
 
 
-async def render(db, board_id: str) -> dict:
+async def drc(work: Path, name: str) -> dict:
+    """KiCad's DRC over a board, as counts a person can act on.
+
+    Errors are kept apart from warnings, and a finding that sits wholly
+    inside one part's footprint - the USB-C's locating pegs a fraction of a
+    millimetre from its own pads - apart from both: that is the maker's
+    land pattern, not something the layout did.
+    """
+    rc, log = await _run(
+        _docker(work, IMAGE, "pcb", "drc", "--format", "json", "--severity-all",
+                "--output", "drc.json", name), work)
+    try:
+        report = json.loads((work / "drc.json").read_text())
+    except (OSError, ValueError):
+        return {"error": log[-400:]}
+
+    def owner(item: dict) -> str | None:
+        m = re.search(r" of (\S+)", item.get("description", ""))
+        return m.group(1) if m else None
+
+    errors, warnings, inside = {}, {}, {}
+    examples = []
+    for v in report.get("violations", []):
+        items = v.get("items", [])
+        owners = {owner(i) for i in items}
+        own = len(items) > 1 and len(owners) == 1 and None not in owners
+        bucket = inside if own else errors if v.get("severity") == "error" else warnings
+        bucket[v["type"]] = bucket.get(v["type"], 0) + 1
+        if not own and v.get("severity") == "error" and len(examples) < 8:
+            examples.append(v.get("description", "") + " - "
+                            + " / ".join(i.get("description", "")[:60] for i in items))
+    unconnected = report.get("unconnected_items", [])
+    return {
+        "errors": errors, "warnings": warnings, "in_footprints": inside,
+        "error_count": sum(errors.values()),
+        "warning_count": sum(warnings.values()),
+        "unconnected": len(unconnected),
+        "unconnected_examples": [" <-> ".join(i.get("description", "")[:50]
+                                               for i in u.get("items", []))
+                                 for u in unconnected[:6]],
+        "examples": examples,
+        "at": store.now(),
+    }
+
+
+async def render(db, board_id: str, route: bool = True) -> dict:
     """Place the board, draw it, and export a model of it.
 
     Everything comes from the last build: the netlist for what connects to
@@ -174,7 +232,7 @@ async def render(db, board_id: str) -> dict:
             "out": "/work/board.kicad_pcb",
             "components": [
                 {"ref": c.get("ref"), "value": c.get("value"),
-                 "footprint": shape_for(c)}
+                 "footprint": shape_for(c), "group": module_of(c)}
                 for c in graph.get("components", [])],
             "nets": graph.get("nets", []),
         }
@@ -196,6 +254,44 @@ async def render(db, board_id: str) -> dict:
         except ValueError:
             placed = {"placed": None, "missing": [], "note": text[-300:]}
 
+        # The placed board is kept as it came out of the placer, before any
+        # copper: what a person opens to place by hand and route again.
+        placed_pcb = (work / "board.kicad_pcb").read_bytes()
+
+        # Route: the rules on as net classes, out to Freerouting, back, and
+        # the ground poured. Then KiCad's own DRC says what came of it.
+        route_report, drc_report = None, None
+        if route:
+            nets = sorted({n.get("name") for n in graph.get("nets", []) if n.get("name")})
+            board_doc = await db[ato.BOARDS].find_one({"_id": board_id}, {"rules": 1}) or {}
+            the_rules = rules.merge(board_doc.get("rules"), nets)
+            await db[ato.BOARDS].update_one({"_id": board_id},
+                                            {"$set": {"rules": the_rules}})
+            problems = rules.check(the_rules)
+            if problems:
+                raise RuntimeError("the routing rules do not hold together: "
+                                   + "; ".join(problems))
+            shutil.copy(ROUTER, work / "route.py")
+            plan = {"board": "/work/board.kicad_pcb", "out": "/work/board.kicad_pcb",
+                    "rules": the_rules, "timeout": ROUTE_TIMEOUT}
+            proc = await asyncio.create_subprocess_exec(
+                *_docker(work, "--entrypoint", "python3", IMAGE, "/work/route.py",
+                         stdin=True),
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+            meter.watch(proc.pid)
+            out, _ = await asyncio.wait_for(
+                proc.communicate(json.dumps(plan).encode()), ROUTE_TIMEOUT + 60)
+            text = out.decode(errors="replace")
+            try:
+                route_report = json.loads(text[text.index("{"):text.rindex("}") + 1])
+            except ValueError:
+                raise RuntimeError("routing failed:\n" + text[-800:])
+            if route_report.get("error"):
+                raise RuntimeError(f"routing failed: {route_report['error']}\n"
+                                   + (route_report.get("log") or "")[-600:])
+            drc_report = await drc(work, "board.kicad_pcb")
+
         rc, svg_log = await _run(
             _docker(work, IMAGE, "pcb", "export", "svg", "--output",
                     "layout.svg", "--layers", LAYERS,
@@ -203,6 +299,17 @@ async def render(db, board_id: str) -> dict:
                     "board.kicad_pcb"), work)
         if rc != 0 or not (work / "layout.svg").exists():
             raise RuntimeError("drawing the board failed:\n" + svg_log[-800:])
+        # The bottom as well, once there is copper on it - seen from below,
+        # the way you hold a board to look at its back.
+        bottom = None
+        if route:
+            rc, _ = await _run(
+                _docker(work, IMAGE, "pcb", "export", "svg", "--output",
+                        "bottom.svg", "--layers", BOTTOM_LAYERS, "--mirror",
+                        "--exclude-drawing-sheet", "--page-size-mode", "2",
+                        "board.kicad_pcb"), work)
+            if rc == 0 and (work / "bottom.svg").exists():
+                bottom = (work / "bottom.svg").read_bytes()
 
         # The model is best effort: a footprint with no 3D shape attached
         # still draws, it just has nothing to show in three dimensions.
@@ -227,23 +334,35 @@ async def render(db, board_id: str) -> dict:
         svg = (work / "layout.svg").read_bytes()
         await store.put_artifact(db, board_id, "layout", svg,
                                  collection=ato.BOARDS)
-        # The board file itself: what routing starts from, and what anybody
-        # opens in KiCad to take it further by hand.
-        await store.put_artifact(db, board_id, "pcb",
-                                 (work / "board.kicad_pcb").read_bytes(),
+        # The board files: placed only, and routed. Either opens in KiCad
+        # for anybody who wants to take it further by hand.
+        await store.put_artifact(db, board_id, "pcb", placed_pcb,
                                  collection=ato.BOARDS)
+        if route:
+            await store.put_artifact(db, board_id, "routed",
+                                     (work / "board.kicad_pcb").read_bytes(),
+                                     collection=ato.BOARDS)
+        if bottom:
+            await store.put_artifact(db, board_id, "bottom", bottom,
+                                     collection=ato.BOARDS)
         if glb:
             await store.put_artifact(db, board_id, "model3d", glb,
                                      collection=ato.BOARDS)
+        routed = None
+        if route_report:
+            routed = {k: route_report.get(k) for k in
+                      ("tracks", "vias", "length_mm", "zones", "unrouted",
+                       "route_s", "passes", "notes")}
         await db[ato.BOARDS].update_one(
             {"_id": board_id},
             {"$set": {"layout": {"placed": placed.get("placed"),
                                  "missing": placed.get("missing") or [],
                                  "size_mm": placed.get("size_mm"),
-                                 "at": store.now()}}})
+                                 "at": store.now()},
+                      "route": routed, "drc": drc_report}})
         return {"board": board_id, "svg_bytes": len(svg),
                 "glb_bytes": len(glb) if glb else 0,
                 "parts_from_lcsc": len(parts), "part_trouble": part_trouble,
-                **placed}
+                **placed, "route": routed, "drc": drc_report}
     finally:
         shutil.rmtree(work, ignore_errors=True)

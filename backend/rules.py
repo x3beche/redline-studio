@@ -78,7 +78,8 @@ def derive(nets: list[str]) -> dict:
         "pairs": diff,
         "board": {"layers": 2, "min_track": 0.15, "min_clearance": 0.15,
                   "min_via": 0.6, "min_drill": 0.3},
-        "pour": {"net": ground, "layers": ["F.Cu", "B.Cu"], "clearance": 0.3}
+        "pour": {"net": ground, "layers": ["F.Cu", "B.Cu"], "clearance": 0.3,
+                 "connection": "solid"}
                 if ground else None,
         "route": {"passes": 40},
         "edited": False,

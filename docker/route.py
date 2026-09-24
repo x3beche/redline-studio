@@ -118,7 +118,13 @@ def pour(board, spec) -> int:
         zone.SetNetCode(net.GetNetCode())
         zone.SetLocalClearance(nm(spec.get("clearance", 0.3)))
         zone.SetMinThickness(nm(0.2))
-        zone.SetPadConnection(pcbnew.ZONE_CONNECTION_THERMAL)
+        # Solid by default: thermal spokes crowded by tracks come out
+        # "starved" - one spoke where two were asked for - and a solid
+        # joint is what reflow wants anyway. Hand-soldering a connector's
+        # ground pin to it takes a hotter iron; "thermal" is the choice.
+        zone.SetPadConnection(pcbnew.ZONE_CONNECTION_THERMAL
+                              if spec.get("connection") == "thermal"
+                              else pcbnew.ZONE_CONNECTION_FULL)
         outline = zone.Outline()
         outline.NewOutline()
         for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):

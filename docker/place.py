@@ -111,6 +111,85 @@ def shelves(boxes, gap):
     return spots
 
 
+CONNECTOR_NAMES = ("CONN", "TYPE-C", "USB", "HDR", "HEADER", "JST", "PH-K", "TERMINAL")
+
+
+def is_connector(fp) -> bool:
+    """Something a cable plugs into, and so belongs on an edge.
+
+    By name first - EasyEDA's connector footprints say what they are - and
+    then by having through-hole pads on nets, which in a board of surface
+    parts is nearly always a connector or a header.
+    """
+    name = str(fp.GetFPID().GetLibItemName()).upper()
+    if any(k in name for k in CONNECTOR_NAMES):
+        return True
+    return any(p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH and p.GetNumber()
+               for p in fp.Pads())
+
+
+def mouth(fp) -> tuple[float, float]:
+    """Which way a connector opens, as a vector, at its current turn.
+
+    A receptacle's pads are at its back and its body reaches forward to
+    the opening, so the opening is the way the body's centre sits from the
+    pads' centre. A plain vertical header has no such offset, and no
+    preferred way round.
+    """
+    x0, y0, w, h = extent(fp)
+    pads = list(fp.Pads())
+    if not pads:
+        return (0.0, 0.0)
+    px = sum(pd.GetPosition().x for pd in pads) / len(pads) / MM
+    py = sum(pd.GetPosition().y for pd in pads) / len(pads) / MM
+    return (x0 + w / 2 - px, y0 + h / 2 - py)
+
+
+def face(fp, direction: tuple[float, float]) -> None:
+    """Turn a connector so it opens towards `direction`, trying the four
+    right-angle turns and keeping the one that points best. Measured, not
+    worked out: which way KiCad counts a turn is not worth being wrong
+    about."""
+    import math
+
+    best, best_score = 0, -2.0
+    for turn in (0, 90, 180, 270):
+        fp.SetOrientationDegrees(turn)
+        mx, my = mouth(fp)
+        length = math.hypot(mx, my)
+        if length < 0.5:
+            # No opening to point: lie along the edge instead.
+            x0, y0, w, h = extent(fp)
+            along = w >= h if direction[1] else h >= w
+            score = 1.0 if along else 0.0
+        else:
+            score = (mx * direction[0] + my * direction[1]) / length
+        if score > best_score:
+            best, best_score = turn, score
+    fp.SetOrientationDegrees(best)
+
+
+def copper_reach(fp, box, edge: str) -> float:
+    """How far inside the part's outline its copper starts, on one side.
+
+    Measured at the part's current turn, with it at the origin: the gap
+    between the outline's edge and the nearest pad's edge, on the side that
+    will sit on the board's edge.
+    """
+    x0, y0, w, h = box
+    left, top, right, bottom = [], [], [], []
+    for pad in fp.Pads():
+        b = pad.GetBoundingBox()
+        left.append(b.GetX() / MM)
+        top.append(b.GetY() / MM)
+        right.append(b.GetRight() / MM)
+        bottom.append(b.GetBottom() / MM)
+    if not left:
+        return 99.0
+    return {"top": min(top) - y0, "bottom": (y0 + h) - max(bottom),
+            "left": min(left) - x0, "right": (x0 + w) - max(right)}[edge]
+
+
 def main() -> int:
     plan = json.load(sys.stdin)
     board = pcbnew.BOARD()
@@ -128,30 +207,11 @@ def main() -> int:
              for net in plan.get("nets", [])
              for n in net.get("nodes", []) if net.get("name")}
 
-    placed, missing, xs, ys = 0, [], [], []
-    gap = plan.get("gap", 1.5)                 # between two parts' extents
-    margin = plan.get("margin", 3.0)           # from the outermost part to the edge
-
-    comps = plan.get("components", [])
-    loaded = []
-    for i, comp in enumerate(comps):
-        path = Path(comp["footprint"])
-        fp = pcbnew.FootprintLoad(str(path.parent), path.stem)
-        if fp is None:
-            missing.append(f"{comp.get('ref')} ({path.stem})")
-            continue
-        fp.SetPosition(at(0, 0))
-        box = extent(fp)
-        loaded.append((comp, fp, box))
-
-    ordered = cluster(loaded, plan.get("nets", []))
-    spots = shelves([box for _, _, box in ordered], gap)
-
-    for (comp, fp, box), (x, y) in zip(ordered, spots):
-        # The shelf gives where the part's extent starts; the footprint is
-        # positioned by its own origin, which sits somewhere inside that.
+    def put(fp, comp, x, y, box):
+        """One part down: its extent's corner at (x, y), its reference and
+        value, its pads on their nets, and peg holes made unplated."""
         fp.SetPosition(at(x - box[0], y - box[1]))
-        fp.SetReference(comp.get("ref") or f"U{placed}")
+        fp.SetReference(comp.get("ref") or "U?")
         # A plated hole with no net and no copper ring round it is a
         # locating peg, which is an unplated hole. EasyEDA draws the pegs
         # of its USB-C footprints this way, and KiCad reads them as pads
@@ -171,16 +231,115 @@ def main() -> int:
             if name and name in nets:
                 pad.SetNet(nets[name])
         board.Add(fp)
-        placed += 1
-        xs += [x, x + box[2]]
-        ys += [y, y + box[3]]
 
-    # The outline. Without one there is no board, only parts in space, and
-    # the 3D export comes out empty.
+    placed, missing, xs, ys = 0, [], [], []
+    gap = plan.get("gap", 1.5)                 # between two parts' extents
+    margin = plan.get("margin", 1.5)           # from the outermost part to the edge
+
+    comps = plan.get("components", [])
+    loaded = []
+    for i, comp in enumerate(comps):
+        path = Path(comp["footprint"])
+        fp = pcbnew.FootprintLoad(str(path.parent), path.stem)
+        if fp is None:
+            missing.append(f"{comp.get('ref')} ({path.stem})")
+            continue
+        fp.SetPosition(at(0, 0))
+        box = extent(fp)
+        loaded.append((comp, fp, box))
+
+    # The parts of each module packed as a block of their own, the way a
+    # person lays a board out: power in one corner, the USB bridge in
+    # another, the MCU in the middle. Connectors are not in any block -
+    # they go on the edges, facing out, once the blocks are down.
+    groups: dict[str, list] = {}
+    connectors = []
+    for item in loaded:
+        comp, fp, _ = item
+        if is_connector(fp):
+            connectors.append(item)
+        else:
+            groups.setdefault(comp.get("group") or "", []).append(item)
+
+    blocks = []                                # (name, parts, spots, w, h)
+    for name in sorted(groups, key=lambda g: -len(groups[g])):
+        ordered = cluster(groups[name], plan.get("nets", []))
+        spots = shelves([box for _, _, box in ordered], gap)
+        spots = [(x - 20.0, y - 20.0) for x, y in spots]
+        w = max((x + box[2] for (_, _, box), (x, _) in zip(ordered, spots)), default=0)
+        h = max((y + box[3] for (_, _, box), (_, y) in zip(ordered, spots)), default=0)
+        blocks.append((name, ordered, spots, w, h))
+
+    corners = shelves([(0, 0, w, h) for *_, w, h in blocks], plan.get("block_gap", 3.0))
+    centre = {}
+    for (name, ordered, spots, w, h), (bx, by) in zip(blocks, corners):
+        for (comp, fp, box), (x, y) in zip(ordered, spots):
+            put(fp, comp, bx + x, by + y, box)
+            xs += [bx + x, bx + x + box[2]]
+            ys += [by + y, by + y + box[3]]
+            placed += 1
+        centre[name] = (bx + w / 2, by + h / 2)
+
     if not xs:
         xs, ys = [20.0], [20.0]
-    x0, x1 = min(xs) - margin, max(xs) + margin
-    y0, y1 = min(ys) - margin, max(ys) + margin
+    ix0, ix1 = min(xs) - margin, max(xs) + margin
+    iy0, iy1 = min(ys) - margin, max(ys) + margin
+
+    # Each connector to the edge nearest its own module, opening outwards,
+    # its opening flush with the edge. Along the edge they queue up rather
+    # than overlap.
+    edges = {"top": (0, -1), "bottom": (0, 1), "left": (-1, 0), "right": (1, 0)}
+    # KiCad's default copper-to-edge clearance, and a little over.
+    edge_gap = plan.get("edge_clearance", 0.5) + 0.05
+    taken = {e: [] for e in edges}
+    flush = {}
+    for comp, fp, _ in connectors:
+        cx, cy = centre.get(comp.get("group") or "", ((ix0 + ix1) / 2, (iy0 + iy1) / 2))
+        dist = {"top": cy - iy0, "bottom": iy1 - cy, "left": cx - ix0, "right": ix1 - cx}
+        edge = min(dist, key=dist.get)
+        face(fp, edges[edge])
+        fp.SetPosition(at(0, 0))
+        box = extent(fp)
+        along = cx if edge in ("top", "bottom") else cy
+        size = box[2] if edge in ("top", "bottom") else box[3]
+        start = along - size / 2
+        for a, b in sorted(taken[edge]):
+            if start < b + gap and start + size > a - gap:
+                start = b + gap
+        taken[edge].append((start, start + size))
+        # Flush means the part's outline on the edge - but copper still has
+        # to keep its distance from a cut edge. A receptacle's body reaches
+        # well past its pads, so flush is fine; a pin header's outline is a
+        # hair outside its pads, and flush put them 0.465 mm from the edge
+        # where 0.5 is the rule. So measure the copper, and step in by
+        # whatever it is short.
+        inset = max(0.0, edge_gap - copper_reach(fp, box, edge))
+        if edge == "top":
+            x, y = start, iy0 - box[3]
+        elif edge == "bottom":
+            x, y = start, iy1
+        elif edge == "left":
+            x, y = ix0 - box[2], start
+        else:
+            x, y = ix1, start
+        # The edge is where the flush outline would be; only the part steps
+        # in. Drawn around the stepped-in part, the edge came in with it and
+        # the gap was the same 0.465 mm as before.
+        xs += [x, x + box[2]]
+        ys += [y, y + box[3]]
+        dx, dy = {"top": (0, inset), "bottom": (0, -inset),
+                  "left": (inset, 0), "right": (-inset, 0)}[edge]
+        put(fp, comp, x + dx, y + dy, box)
+        flush[edge] = True
+        placed += 1
+
+    # The outline: the parts plus a margin, except where a connector sits
+    # on the edge - there the edge is the connector's front, so a plug
+    # goes all the way in.
+    x0 = min(xs) - (0 if flush.get("left") else margin)
+    x1 = max(xs) + (0 if flush.get("right") else margin)
+    y0 = min(ys) - (0 if flush.get("top") else margin)
+    y1 = max(ys) + (0 if flush.get("bottom") else margin)
     corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
     for j, (ax, ay) in enumerate(corners):
         bx, by = corners[(j + 1) % 4]
