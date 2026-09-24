@@ -34,6 +34,16 @@ HERE = Path(__file__).resolve().parent.parent
 PLACER = HERE / "docker" / "place.py"
 ROUTER = HERE / "docker" / "route.py"
 ROUTE_TIMEOUT = 900
+
+# Run in the container: the routed board, without its zones, for a view
+# where the tracks can be told apart from the ground around them.
+STRIP_ZONES = """
+import pcbnew
+b = pcbnew.LoadBoard("/work/board.kicad_pcb")
+for z in list(b.Zones()):
+    b.Remove(z)
+pcbnew.SaveBoard("/work/tracks.kicad_pcb", b)
+"""
 TIMEOUT = 600
 
 # The front of the board, as a render: copper, what is printed on it, the
@@ -299,6 +309,23 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                     "board.kicad_pcb"), work)
         if rc != 0 or not (work / "layout.svg").exists():
             raise RuntimeError("drawing the board failed:\n" + svg_log[-800:])
+        # The same front without the pour. A filled ground plane is most of
+        # the board's copper, and drawn in the same red it hides the
+        # tracks: you see the gaps round them, not them.
+        tracks = None
+        if route:
+            (work / "strip.py").write_text(STRIP_ZONES)
+            rc, _ = await _run(_docker(work, "--entrypoint", "python3", IMAGE,
+                                       "/work/strip.py"), work)
+            if rc == 0 and (work / "tracks.kicad_pcb").exists():
+                rc, _ = await _run(
+                    _docker(work, IMAGE, "pcb", "export", "svg", "--output",
+                            "tracks.svg", "--layers", "F.Cu,B.Cu,F.SilkS,Edge.Cuts",
+                            "--exclude-drawing-sheet", "--page-size-mode", "2",
+                            "tracks.kicad_pcb"), work)
+                if rc == 0 and (work / "tracks.svg").exists():
+                    tracks = (work / "tracks.svg").read_bytes()
+
         # The bottom as well, once there is copper on it - seen from below,
         # the way you hold a board to look at its back.
         bottom = None
@@ -316,10 +343,15 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         glb = None
         # The library's models are addressed through KICAD9_3DMODEL_DIR;
         # said outright so the export finds them whatever the image sets.
+        # And the copper, the mask and the silkscreen: without asking,
+        # KiCad exports the parts on a bare green slab, and a routed board
+        # looked exactly like an unrouted one.
         rc, glb_log = await _run(
             _docker(work, "-e", "KICAD9_3DMODEL_DIR=/usr/share/kicad/3dmodels",
                     IMAGE, "pcb", "export", "glb", "--output",
-                    "board.glb", "board.kicad_pcb"), work)
+                    "board.glb", "--include-tracks", "--include-pads",
+                    "--include-zones", "--include-soldermask",
+                    "--include-silkscreen", "board.kicad_pcb"), work)
         if rc == 0 and (work / "board.glb").exists():
             glb = (work / "board.glb").read_bytes()
 
@@ -344,6 +376,9 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                                      collection=ato.BOARDS)
         if bottom:
             await store.put_artifact(db, board_id, "bottom", bottom,
+                                     collection=ato.BOARDS)
+        if tracks:
+            await store.put_artifact(db, board_id, "tracks", tracks,
                                      collection=ato.BOARDS)
         if glb:
             await store.put_artifact(db, board_id, "model3d", glb,

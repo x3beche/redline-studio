@@ -22,8 +22,8 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import (ato, build, chat, compute, kicad, lcsc, questions, store,
-               summarise, sysinfo, usage, versions)
+from . import (ato, build, chat, compute, kicad, lcsc, questions, rules,
+               schematic, store, summarise, sysinfo, usage, versions)
 
 LOG = logging.getLogger("x3.api")
 
@@ -950,6 +950,125 @@ async def board_layout(bid: str):
         raise HTTPException(404, "no layout yet")
     return Response(raw, media_type="image/svg+xml",
                     headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.get("/api/boards/{bid}/{which}.svg")
+async def board_drawing(bid: str, which: str):
+    """The other drawings of a board: `tracks` (the copper without the
+    ground pour), `bottom` (the back, seen from below) and `schematic`."""
+    artifact = {"tracks": "tracks", "bottom": "bottom",
+                "schematic": "schematic_svg"}.get(which)
+    if not artifact:
+        raise HTTPException(404, which)
+    try:
+        raw = await store.get_artifact(db(), bid, artifact, ato.BOARDS)
+    except KeyError:
+        raise HTTPException(404, f"no {which} drawing yet")
+    return Response(raw, media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.get("/api/boards/{bid}/board.{kind}")
+async def board_file(bid: str, kind: str):
+    """The board and its schematic as KiCad files, to open and take further
+    by hand. The routed board where there is one, the placed one if not."""
+    if kind == "glb":
+        # This route is registered first and would otherwise swallow the
+        # 3D model's own.
+        return await board_model(bid)
+    if kind == "kicad_sch":
+        names = ["schematic"]
+    elif kind == "kicad_pcb":
+        names = ["routed", "pcb"]
+    else:
+        raise HTTPException(404, kind)
+    for name in names:
+        try:
+            raw = await store.get_artifact(db(), bid, name, ato.BOARDS)
+        except KeyError:
+            continue
+        return Response(raw, media_type="application/octet-stream", headers={
+            "Content-Disposition": f'attachment; filename="{bid}.{kind}"'})
+    raise HTTPException(404, f"no {kind} yet")
+
+
+@app.post("/api/boards/{bid}/schematic")
+async def draw_schematic(bid: str):
+    """Write the schematic from the last build, draw it, and run ERC."""
+    await say(f"{bid}: drawing the schematic", "work", room="pcb")
+    try:
+        out = await schematic.draw(db(), bid)
+    except KeyError:
+        raise HTTPException(404, "not built yet")
+    except (RuntimeError, OSError, TimeoutError) as exc:
+        await say(f"{bid}: schematic failed - {str(exc).splitlines()[0][:160]}",
+                  "error", room="pcb")
+        raise HTTPException(400, str(exc))
+    erc = out.get("erc", {})
+    await say(f"{bid}: schematic - {out['parts']} parts, {out['labels']} pins joined, "
+              f"ERC {erc.get('error_count', '?')} errors", 
+              "done" if not erc.get("error_count") else "warn", room="pcb")
+    return out
+
+
+class RulesIn(BaseModel):
+    rules: dict
+
+
+@app.get("/api/boards/{bid}/rules")
+async def board_rules(bid: str):
+    """The routing rules, brought up to date with the board's nets."""
+    doc = await db()[ato.BOARDS].find_one({"_id": bid}, {"rules": 1})
+    if doc is None:
+        raise HTTPException(404, bid)
+    try:
+        graph = json.loads(await store.get_artifact(db(), bid, "graph", ato.BOARDS))
+        nets = sorted({n.get("name") for n in graph.get("nets", []) if n.get("name")})
+    except KeyError:
+        nets = []
+    merged = rules.merge(doc.get("rules"), nets)
+    return {"rules": merged, "problems": rules.check(merged), "nets": nets}
+
+
+@app.put("/api/boards/{bid}/rules")
+async def save_board_rules(bid: str, body: RulesIn):
+    """Save the rules a person set. Checked first: a track under the
+    board's minimum, or a net in two classes, is said now rather than
+    discovered by the router."""
+    problems = rules.check(body.rules)
+    if problems:
+        raise HTTPException(400, "; ".join(problems))
+    body.rules["edited"] = True
+    got = await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": {"rules": body.rules}})
+    if not got.matched_count:
+        raise HTTPException(404, bid)
+    await say(f"{bid}: routing rules saved", "info", room="pcb")
+    return {"saved": True}
+
+
+@app.post("/api/boards/{bid}/run")
+async def run_board(bid: str):
+    """The whole of it, in order: build the source, draw the schematic,
+    place, route, pour, check. What a change to a board goes through,
+    every time - so nothing downstream is ever older than the source."""
+    import time as _time
+
+    t0 = _time.monotonic()
+    out = {"board": bid}
+    await say(f"{bid}: running the pipeline - build, schematic, place, route, DRC",
+              "work", room="pcb")
+    out["build"] = await build_board(bid)
+    out["schematic"] = await draw_schematic(bid)
+    out["layout"] = await layout_board(bid)
+    took = round(_time.monotonic() - t0, 1)
+    drc = (out["layout"] or {}).get("drc") or {}
+    route = (out["layout"] or {}).get("route") or {}
+    await say(f"{bid}: pipeline done in {took} s - unrouted {route.get('unrouted', '?')}, "
+              f"DRC {drc.get('error_count', '?')} errors, "
+              f"ERC {out['schematic'].get('erc', {}).get('error_count', '?')} errors",
+              "done", room="pcb")
+    out["seconds"] = took
+    return out
 
 
 @app.get("/api/boards/{bid}/board.glb")
