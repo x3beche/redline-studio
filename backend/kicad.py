@@ -227,6 +227,11 @@ async def render(db, board_id: str) -> dict:
         svg = (work / "layout.svg").read_bytes()
         await store.put_artifact(db, board_id, "layout", svg,
                                  collection=ato.BOARDS)
+        # The board file itself: what routing starts from, and what anybody
+        # opens in KiCad to take it further by hand.
+        await store.put_artifact(db, board_id, "pcb",
+                                 (work / "board.kicad_pcb").read_bytes(),
+                                 collection=ato.BOARDS)
         if glb:
             await store.put_artifact(db, board_id, "model3d", glb,
                                      collection=ato.BOARDS)

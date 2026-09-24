@@ -152,6 +152,18 @@ def main() -> int:
         # positioned by its own origin, which sits somewhere inside that.
         fp.SetPosition(at(x - box[0], y - box[1]))
         fp.SetReference(comp.get("ref") or f"U{placed}")
+        # A plated hole with no net and no copper ring round it is a
+        # locating peg, which is an unplated hole. EasyEDA draws the pegs
+        # of its USB-C footprints this way, and KiCad reads them as pads
+        # with negative annular width that crowd their neighbours.
+        for pad in fp.Pads():
+            if pad.GetAttribute() != pcbnew.PAD_ATTRIB_PTH or pad.GetNumber():
+                continue
+            drill = pad.GetDrillSize()
+            size = pad.GetSize()
+            if min(size.x, size.y) <= min(drill.x, drill.y):
+                pad.SetAttribute(pcbnew.PAD_ATTRIB_NPTH)
+                pad.SetSize(drill)
         if comp.get("value"):
             fp.SetValue(str(comp["value"]))
         for pad in fp.Pads():

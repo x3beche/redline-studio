@@ -273,7 +273,9 @@ them while you work so the user can follow along without reading a terminal:
 ```
 
 `-p` moves the bar, `-l` colours the line (`info`, `work`, `done`, `warn`,
-`error`). Start a run when you pick up a revision and finish it when you are
+`error`). Each room has its own log: lines go to the 3D room's by default,
+and `--room pcb` puts them in the board room's - log board work there, so
+neither room's log is half about the other. Start a run when you pick up a revision and finish it when you are
 done; the bar stays live in between.
 
 ### Always finish by rendering from the user's angle

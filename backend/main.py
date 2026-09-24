@@ -370,6 +370,10 @@ class ActivityIn(BaseModel):
     text: str = Field(min_length=1, max_length=500)
     level: str = "info"                    # info | work | done | warn | error
     percent: float | None = Field(default=None, ge=0, le=100)
+    # Which room's log this belongs in. The 3D room's log is about models
+    # and the board room's about boards; one feed for both mixed a
+    # tessellation in with a placement.
+    room: str = Field(default="cad", pattern="^(cad|pcb|code)$")
 
 
 class RunStart(BaseModel):
@@ -378,7 +382,7 @@ class RunStart(BaseModel):
     model: str | None = None
 
 
-async def say(text: str, level: str = "info") -> dict:
+async def say(text: str, level: str = "info", room: str = "cad") -> dict:
     """Put one line in the log, and keep the log bounded.
 
     The agent posts its own lines over HTTP; this is for the work the
@@ -391,7 +395,7 @@ async def say(text: str, level: str = "info") -> dict:
     d = db()
     doc = {"_id": uuid.uuid4().hex[:12],
            "at": datetime.now(timezone.utc).isoformat(),
-           "text": text.strip(), "level": level}
+           "text": text.strip(), "level": level, "room": room}
     await d.activity.insert_one(doc)
     total = await d.activity.count_documents({})
     if total > ACTIVITY_KEEP:
@@ -404,7 +408,7 @@ async def say(text: str, level: str = "info") -> dict:
 @app.post("/api/activity")
 async def push_activity(body: ActivityIn):
     d = db()
-    doc = await say(body.text, body.level)
+    doc = await say(body.text, body.level, body.room)
 
     # A percent on a log line also advances the bar, so one call does both.
     if body.percent is not None:
@@ -415,8 +419,11 @@ async def push_activity(body: ActivityIn):
 
 
 @app.get("/api/activity")
-async def list_activity(limit: int = 120):
-    rows = [x async for x in db().activity.find({}).sort("at", -1).limit(limit)]
+async def list_activity(limit: int = 120, room: str = "cad"):
+    """One room's log. Lines written before rooms had logs of their own are
+    the 3D room's, which is the only one there was."""
+    query = {"room": {"$in": ["cad", None]}} if room == "cad" else {"room": room}
+    rows = [x async for x in db().activity.find(query).sort("at", -1).limit(limit)]
     return list(reversed(rows))            # oldest first, log order
 
 
@@ -899,39 +906,39 @@ async def move_board(bid: str, folder: str = ""):
 async def build_board(bid: str):
     # The log is how a build is watched, and until now a board built in
     # silence: the only sign it had happened was the netlist changing.
-    await say(f"{bid}: building", "work")
+    await say(f"{bid}: building", "work", room="pcb")
     try:
         out = await ato.build(db(), bid)
     except KeyError:
         raise HTTPException(404, bid)
     except (ValueError, RuntimeError, TimeoutError) as exc:
-        await say(f"{bid}: build failed - {str(exc).splitlines()[0][:160]}", "error")
+        await say(f"{bid}: build failed - {str(exc).splitlines()[0][:160]}", "error", room="pcb")
         raise HTTPException(400, str(exc))
     await say(f"{bid}: built - {out['components']} parts, {out['nets']} nets, "
-              f"{out['joins']} joins", "done")
+              f"{out['joins']} joins", "done", room="pcb")
     return out
 
 
 @app.post("/api/boards/{bid}/layout")
 async def layout_board(bid: str):
     """Place the built netlist and draw it. KiCad runs in a container."""
-    await say(f"{bid}: placing - fetching parts, then KiCad", "work")
+    await say(f"{bid}: placing - fetching parts, then KiCad", "work", room="pcb")
     try:
         out = await kicad.render(db(), bid)
     except kicad.NoDocker as exc:
-        await say(f"{bid}: {exc}", "error")
+        await say(f"{bid}: {exc}", "error", room="pcb")
         raise HTTPException(503, str(exc))
     except KeyError:
         raise HTTPException(404, "not built yet")
     except (RuntimeError, TimeoutError) as exc:
-        await say(f"{bid}: placing failed - {str(exc).splitlines()[0][:160]}", "error")
+        await say(f"{bid}: placing failed - {str(exc).splitlines()[0][:160]}", "error", room="pcb")
         raise HTTPException(400, str(exc))
     size = out.get("size_mm")
     await say(f"{bid}: placed {out.get('placed')}"
               + (f" - {size[0]} x {size[1]} mm" if size else "")
-              + f" - {out.get('parts_from_lcsc', 0)} from LCSC", "done")
+              + f" - {out.get('parts_from_lcsc', 0)} from LCSC", "done", room="pcb")
     for trouble in (out.get("part_trouble") or [])[:4]:
-        await say(f"{bid}: {trouble[:160]}", "warn")
+        await say(f"{bid}: {trouble[:160]}", "warn", room="pcb")
     return out
 
 
@@ -1107,13 +1114,13 @@ async def add_part(lcsc_id: str, force: bool = False):
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except (RuntimeError, TimeoutError, OSError) as exc:
-        await say(f"{lcsc_id}: could not be fetched - {exc}", "warn")
+        await say(f"{lcsc_id}: could not be fetched - {exc}", "warn", room="pcb")
         raise HTTPException(502, str(exc))
     has_3d = bool((doc.get("artifacts") or {}).get("model")
                   or doc.get("model_step") or doc.get("model_wrl"))
     await say(f"{lcsc_id} fetched from LCSC - {doc.get('name')}"
               + (f" with a {doc.get('model_kind', '3D')} model" if has_3d
-                 else ", footprint only"), "done")
+                 else ", footprint only"), "done", room="pcb")
     return {"lcsc": lcsc_id, "name": doc.get("name"), "has_3d": has_3d}
 
 

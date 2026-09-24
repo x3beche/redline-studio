@@ -49,10 +49,10 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _line(text: str, level: str = "info") -> dict:
+def _line(text: str, level: str = "info", room: str = "cad") -> dict:
     import uuid
     return {"_id": uuid.uuid4().hex[:12], "at": _now(),
-            "text": text.strip(), "level": level}
+            "text": text.strip(), "level": level, "room": room}
 
 
 def connect():
@@ -369,7 +369,7 @@ async def cmd_start(args):
 
 async def cmd_log(args):
     db = connect()
-    await db.activity.insert_one(_line(args.text, args.level))
+    await db.activity.insert_one(_line(args.text, args.level, args.room))
     # The agent logs at every step, so this is where an interrupt catches it
     # between one thing and the next.
     await _shout_interrupts(db)
@@ -645,6 +645,8 @@ def main() -> None:
     s.add_argument("-p", "--percent", type=float)
     s.add_argument("-l", "--level", default="info",
                    choices=["info", "work", "done", "warn", "error"])
+    s.add_argument("--room", default="cad", choices=["cad", "pcb", "code"],
+                   help="whose log: cad for models (default), pcb for boards")
     s.set_defaults(fn=cmd_log)
     s = sub.add_parser("finish"); s.add_argument("--failed", action="store_true")
     s.add_argument("--no-shot", action="store_true",

@@ -811,7 +811,7 @@ export class RoomPcb implements OnDestroy {
   private tick() {
     if (this.bottom() === 'lcsc') this.readJournal();
     this.health.system().subscribe({ next: s => this.sys.set(s) });
-    this.activity.lines(60).subscribe({
+    this.activity.lines(60, 'pcb').subscribe({
       next: rows => {
         const last = this.log()[this.log().length - 1]?._id;
         this.log.set(rows);
