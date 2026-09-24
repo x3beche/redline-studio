@@ -12,7 +12,7 @@ footprint in a board is not written down anywhere obvious.
 
     plan = {
       "out": "/work/board.kicad_pcb",
-      "gap": 1.5, "margin": 3.0,
+      "gap": 0.8, "margin": 1.0, "block_gap": 1.0,
       "components": [{"ref": "R1", "footprint": "/work/fp/R0402.kicad_mod",
                       "value": "10k"}],
       "nets": [{"name": "vcc", "nodes": [{"ref": "R1", "pin": "1"}]}]
@@ -20,6 +20,7 @@ footprint in a board is not written down anywhere obvious.
 """
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -93,22 +94,101 @@ def cluster(loaded, nets):
     return [parts[r] for r in order + loose]
 
 
-def shelves(boxes, gap):
-    """Pack extents left to right in rows, the rows about as wide as the
-    whole lot is tall - a board, not a strip."""
-    import math
+REACH = 7.0                 # how far a part may land from its own chip, mm
 
-    area = sum((w + gap) * (h + gap) for _, _, w, h in boxes)
-    widest = max((w for _, _, w, _ in boxes), default=0)
-    row_w = max(widest, math.sqrt(area) * 1.15)
-    spots, x, y, row_h = [], 0.0, 0.0, 0.0
-    for _, _, w, h in boxes:
-        if x > 0 and x + w > row_w:
-            x, y, row_h = 0.0, y + row_h + gap, 0.0
-        spots.append((20.0 + x, 20.0 + y))
-        x += w + gap
-        row_h = max(row_h, h)
+
+def bottom_left(boxes, gap, limit, kin=None):
+    """One pass: each extent as far up the block as it will go, then as
+    far left, against what is already down.
+
+    The spots a part may start at are the corners the others leave - the
+    right-hand edge of one, the bottom edge of another - so a 0402 slides
+    into the space beside a chip instead of taking a row to itself.
+
+    A hole is only worth filling with a part that belongs there. A part
+    that shares a net with something already down has to land within
+    reach of it, and only when nothing within reach is free does it take
+    whatever is left: packing without that put a decoupling capacitor
+    three centimetres from the pin it decouples, and the router paid for
+    it in vias.
+    """
+    placed, spots = [], []
+    for i, (_, _, w, h) in enumerate(boxes):
+        near = [placed[j] for j in (kin[i] if kin else ()) if j < len(placed)]
+        xs = sorted({0.0} | {px + pw + gap for px, _, pw, _ in placed})
+        ys = sorted({0.0} | {py + ph + gap for _, py, _, ph in placed})
+        reaches = (REACH, 2 * REACH, None) if near else (None,)
+        if near:
+            cx = sum(p[0] + p[2] / 2 for p in near) / len(near)
+            cy = sum(p[1] + p[3] / 2 for p in near) / len(near)
+        spot = None
+        for reach in reaches:
+            for y in ys:
+                for x in xs:
+                    if x > 0 and x + w > limit + 1e-6:
+                        continue
+                    if reach is not None and math.hypot(
+                            x + w / 2 - cx, y + h / 2 - cy) > reach:
+                        continue
+                    if all(x + w + gap <= px + 1e-6 or px + pw + gap <= x + 1e-6
+                           or y + h + gap <= py + 1e-6 or py + ph + gap <= y + 1e-6
+                           for px, py, pw, ph in placed):
+                        spot = (x, y)
+                        break
+                if spot is not None:
+                    break
+            if spot is not None:
+                break
+        if spot is None:                       # wider than the trial width
+            spot = (0.0, max((py + ph + gap for _, py, _, ph in placed),
+                             default=0.0))
+        placed.append((spot[0], spot[1], w, h))
+        spots.append(spot)
     return spots
+
+
+def kinship(ordered, nets):
+    """For each part, which of the others share a net with it - the same
+    count `cluster` works from, so a rail everything is on does not make
+    every part everybody's neighbour."""
+    seats = {comp.get("ref"): i for i, (comp, _, _) in enumerate(ordered)}
+    kin = [set() for _ in ordered]
+    for net in nets:
+        refs = [seats[n["ref"]] for n in net.get("nodes", [])
+                if n.get("ref") in seats]
+        if 2 <= len(set(refs)) <= 6:
+            for a in refs:
+                kin[a] |= set(refs) - {a}
+    return kin
+
+
+def pack(boxes, gap, kin=None):
+    """Pack extents into the smallest rectangle they will go in.
+
+    Rows of shelves was what this did before, and a row is as tall as its
+    tallest part: an 0402 next to a TSSOP wasted six millimetres of the
+    row, and thirty parts covered a quarter of the ground they took up.
+    Filling from the top left instead puts the small parts in the gaps.
+
+    How wide to pack into is not obvious, so it is measured rather than
+    guessed: eight trial widths around the square root of the area, and
+    the one whose result covers the least, squarest ground wins.
+    """
+    if not boxes:
+        return []
+    area = sum((w + gap) * (h + gap) for _, _, w, h in boxes)
+    widest = max(w for _, _, w, _ in boxes)
+    side = math.sqrt(area)
+    best = None
+    for tenths in range(6, 22, 2):
+        limit = max(widest, side * tenths / 10.0)
+        spots = bottom_left(boxes, gap, limit, kin)
+        w = max(x + box[2] for (x, _), box in zip(spots, boxes))
+        h = max(y + box[3] for (_, y), box in zip(spots, boxes))
+        score = (round(w * h, 3), round(abs(w - h), 3))
+        if best is None or score < best[0]:
+            best = (score, spots)
+    return best[1]
 
 
 CONNECTOR_NAMES = ("CONN", "TYPE-C", "USB", "HDR", "HEADER", "JST", "PH-K", "TERMINAL")
@@ -190,6 +270,144 @@ def copper_reach(fp, box, edge: str) -> float:
             "left": min(left) - x0, "right": (x0 + w) - max(right)}[edge]
 
 
+def texts(fp):
+    """Every text a part carries: its reference, its value, and any the
+    footprint draws for itself."""
+    out = [fp.Reference(), fp.Value()]
+    field = getattr(pcbnew, "PCB_FIELD", ())
+    out += [i for i in fp.GraphicalItems()
+            if isinstance(i, pcbnew.PCB_TEXT) and not isinstance(i, field)]
+    return out
+
+
+def boxed(item) -> tuple[float, float, float, float]:
+    """An item's bounding box in mm: left, top, right, bottom."""
+    r = item.GetBoundingBox()
+    return (r.GetX() / MM, r.GetY() / MM, r.GetRight() / MM, r.GetBottom() / MM)
+
+
+def clashes(a, b, slack=0.05) -> bool:
+    return (a[0] < b[2] + slack and b[0] < a[2] + slack
+            and a[1] < b[3] + slack and b[1] < a[3] + slack)
+
+
+def fit(text, room_w, room_h, largest=1.0, smallest=0.8) -> float:
+    """Shrink a text until its own bounding box fits the room it has.
+
+    Measured, not worked out from the character count: how wide a string
+    sets is the font's business, and a reference that is a millimetre out
+    is a reference over its neighbour's pad.
+    """
+    height = largest
+    for _ in range(6):
+        text.SetTextSize(at(height, height))
+        text.SetTextThickness(int(height * 0.15 * MM))
+        box = text.GetBoundingBox()
+        w, h = box.GetWidth() / MM, box.GetHeight() / MM
+        if w <= 0 or h <= 0 or height <= smallest or (w <= room_w and h <= room_h):
+            break
+        height = max(smallest, height * min(room_w / w, room_h / h) * 0.97)
+    return height
+
+
+SILK = (pcbnew.F_SilkS, pcbnew.B_SilkS)
+
+
+def label(board, gap, bounds, edge=0.25) -> int:
+    """Every part's texts, on the part it names.
+
+    An EasyEDA footprint carries its reference four millimetres above
+    itself, which on a board packed this tight is over a neighbour or off
+    the board - six of this one's designators were printed on nothing.
+    So each is shrunk to what the part can hold, no smaller than a board
+    house will print, and put in the middle of it; where the middle is
+    already somebody's, it tries just off each side of the part before
+    settling there anyway. A value nobody set is not printed at all.
+
+    Says how many ended up somewhere other than the middle.
+    """
+    x0, y0, x1, y1 = bounds
+    pads = [boxed(pad) for fp in board.GetFootprints() for pad in fp.Pads()]
+    taken: dict[int, list] = {}
+    off_centre = 0
+    # Biggest first: a chip's own name has the better claim on its middle.
+    parts = sorted(board.GetFootprints(),
+                   key=lambda fp: -(extent(fp)[2] * extent(fp)[3]))
+    for fp in parts:
+        px, py, w, h = extent(fp)
+        middle = (px + w / 2, py + h / 2)
+        # The part's own ground and half the gap to its neighbour: a
+        # designator a shade wider than an 0402 is still plainly that
+        # 0402's.
+        room_w, room_h = w + gap * 0.9, h + gap * 0.9
+        for text in texts(fp):
+            if (text.GetShownText(True) or "").strip() in ("", "?", "~"):
+                text.SetVisible(False)
+                continue
+            text.SetKeepUpright(False)
+            best = (-1.0, 0.0)
+            for angle in (0.0, 90.0):
+                text.SetTextAngleDegrees(angle)
+                got = fit(text, room_w, room_h)
+                if got > best[0]:
+                    best = (got, angle)
+            text.SetTextAngleDegrees(best[1])
+            fit(text, room_w, room_h)
+            box = text.GetBoundingBox()
+            tw, th = box.GetWidth() / MM, box.GetHeight() / MM
+
+            def sits(spot):
+                return (spot[0] - tw / 2, spot[1] - th / 2,
+                        spot[0] + tw / 2, spot[1] + th / 2)
+
+            above, below = py - th / 2 - 0.1, py + h + th / 2 + 0.1
+            left, right = px - tw / 2 - 0.1, px + w + tw / 2 + 0.1
+            spots = [middle,
+                     (middle[0], above), (middle[0], below),
+                     (left, middle[1]), (right, middle[1]),
+                     (left, above), (right, above),
+                     (left, below), (right, below)]
+            spots = [s for s in spots
+                     if x0 + edge <= s[0] - tw / 2 and s[0] + tw / 2 <= x1 - edge
+                     and y0 + edge <= s[1] - th / 2 and s[1] + th / 2 <= y1 - edge]
+            mine = taken.setdefault(text.GetLayer(), [])
+            silk = text.GetLayer() in SILK
+            spot = None
+            for avoid in (mine + pads if silk else mine, mine):
+                spot = next((s for s in spots
+                             if not any(clashes(sits(s), b) for b in avoid)),
+                            None)
+                if spot is not None:
+                    break
+            spot = spot or (spots[0] if spots else middle)
+            text.SetPosition(at(*spot))
+            mine.append(sits(spot))
+            off_centre += spot != middle
+    return off_centre
+
+
+def keep_inside(board, x0, y0, x1, y1, inset=0.25) -> int:
+    """Pull any text that still reaches past the outline back inside it,
+    and say how many had to move. Nothing is printed on air."""
+    moved = 0
+    for fp in board.GetFootprints():
+        for text in texts(fp):
+            if not text.IsVisible():
+                continue
+            box = text.GetBoundingBox()
+            dx = (max(0.0, x0 + inset - box.GetX() / MM)
+                  - max(0.0, box.GetRight() / MM - (x1 - inset)))
+            dy = (max(0.0, y0 + inset - box.GetY() / MM)
+                  - max(0.0, box.GetBottom() / MM - (y1 - inset)))
+            if abs(dx) < 1e-6 and abs(dy) < 1e-6:
+                continue
+            here = text.GetPosition()
+            text.SetPosition(pcbnew.VECTOR2I(here.x + int(dx * MM),
+                                             here.y + int(dy * MM)))
+            moved += 1
+    return moved
+
+
 def main() -> int:
     plan = json.load(sys.stdin)
     board = pcbnew.BOARD()
@@ -233,8 +451,12 @@ def main() -> int:
         board.Add(fp)
 
     placed, missing, xs, ys = 0, [], [], []
-    gap = plan.get("gap", 1.5)                 # between two parts' extents
-    margin = plan.get("margin", 1.5)           # from the outermost part to the edge
+    # A courtyard is already the room a part asks for, so the gap between
+    # two of them is routing room, not clearance: eight tenths of a
+    # millimetre leaves a 0.25 mm track and its 0.2 mm either side between
+    # two 0402s, and the margin is what a connector's pads escape through.
+    gap = plan.get("gap", 0.8)                 # between two parts' extents
+    margin = plan.get("margin", 1.0)           # from the outermost part to the edge
 
     comps = plan.get("components", [])
     loaded = []
@@ -264,13 +486,15 @@ def main() -> int:
     blocks = []                                # (name, parts, spots, w, h)
     for name in sorted(groups, key=lambda g: -len(groups[g])):
         ordered = cluster(groups[name], plan.get("nets", []))
-        spots = shelves([box for _, _, box in ordered], gap)
-        spots = [(x - 20.0, y - 20.0) for x, y in spots]
+        spots = pack([box for _, _, box in ordered], gap,
+                     kinship(ordered, plan.get("nets", [])))
         w = max((x + box[2] for (_, _, box), (x, _) in zip(ordered, spots)), default=0)
         h = max((y + box[3] for (_, _, box), (_, y) in zip(ordered, spots)), default=0)
         blocks.append((name, ordered, spots, w, h))
 
-    corners = shelves([(0, 0, w, h) for *_, w, h in blocks], plan.get("block_gap", 3.0))
+    corners = [(20.0 + x, 20.0 + y)
+               for x, y in pack([(0, 0, w, h) for *_, w, h in blocks],
+                                plan.get("block_gap", 1.0))]
     centre = {}
     for (name, ordered, spots, w, h), (bx, by) in zip(blocks, corners):
         for (comp, fp, box), (x, y) in zip(ordered, spots):
@@ -351,10 +575,17 @@ def main() -> int:
         line.SetWidth(int(0.1 * MM))
         board.Add(line)
 
+    # What the board says about itself is printed on the board: every
+    # designator over the part it names, and anything still reaching past
+    # the outline pulled back in.
+    nudged = label(board, gap, (x0, y0, x1, y1))
+    escaped = keep_inside(board, x0, y0, x1, y1)
+
     out = plan.get("out", "/work/board.kicad_pcb")
     pcbnew.SaveBoard(out, board)
     json.dump({"placed": placed, "missing": missing,
                "size_mm": [round(x1 - x0, 2), round(y1 - y0, 2)],
+               "texts_beside": nudged, "texts_moved_in": escaped,
                "nets": len(nets), "out": out}, sys.stdout)
     return 0
 
