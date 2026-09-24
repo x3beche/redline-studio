@@ -302,6 +302,13 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                 # Kept for the rules form: what each net's narrowest pad is.
                 await db[ato.BOARDS].update_one(
                     {"_id": board_id}, {"$set": {"pads": route_report["pads"]}})
+            if route_report.get("geometry"):
+                # What the page hit-tests under the mouse: tracks, vias and
+                # pads with their nets, in the drawing's own millimetres.
+                await store.put_artifact(
+                    db, board_id, "geometry",
+                    json.dumps(route_report.pop("geometry")).encode(),
+                    collection=ato.BOARDS)
             if route_report.get("error") == "rules":
                 raise RuntimeError("the routing rules do not fit this board: "
                                    + "; ".join(route_report["problems"]))

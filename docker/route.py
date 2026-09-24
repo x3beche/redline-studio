@@ -151,6 +151,46 @@ def pour(board, spec, priority=0) -> int:
     return made
 
 
+def geometry(board) -> dict:
+    """The routed board as data, for looking at it in the page: every
+    track, via and pad with its net, in mm. `box` is the area the SVG
+    exporter crops to (page-size-mode 2), so a point here lands on the
+    same point of the drawing."""
+    r = lambda v: round(v / MM, 4)
+    box = board.ComputeBoundingBox(False)
+    shapes = {pcbnew.PAD_SHAPE_CIRCLE: "circle", pcbnew.PAD_SHAPE_OVAL: "oval",
+              pcbnew.PAD_SHAPE_RECTANGLE: "rect",
+              pcbnew.PAD_SHAPE_ROUNDRECT: "roundrect"}
+    tracks, vias, pads, parts = [], [], [], []
+    for t in board.GetTracks():
+        if t.GetClass() == "PCB_VIA":
+            p = t.GetPosition()
+            vias.append({"x": r(p.x), "y": r(p.y), "d": r(t.GetWidth(pcbnew.F_Cu)),
+                         "drill": r(t.GetDrillValue()), "net": t.GetNetname()})
+        else:
+            a, b = t.GetStart(), t.GetEnd()
+            tracks.append({"x1": r(a.x), "y1": r(a.y), "x2": r(b.x), "y2": r(b.y),
+                           "w": r(t.GetWidth()), "layer": t.GetLayerName(),
+                           "net": t.GetNetname()})
+    for fp in board.GetFootprints():
+        bb = fp.GetBoundingBox(False)
+        parts.append({"ref": fp.GetReference(), "value": fp.GetValue(),
+                      "side": "B" if fp.IsFlipped() else "F",
+                      "box": [r(bb.GetX()), r(bb.GetY()), r(bb.GetWidth()), r(bb.GetHeight())]})
+        for pad in fp.Pads():
+            p, sz = pad.GetPosition(), pad.GetSize()
+            side = ("FB" if pad.IsOnLayer(pcbnew.F_Cu) and pad.IsOnLayer(pcbnew.B_Cu)
+                    else "B" if pad.IsOnLayer(pcbnew.B_Cu) else "F")
+            pads.append({"x": r(p.x), "y": r(p.y), "w": r(sz.x), "h": r(sz.y),
+                         "angle": round(pad.GetOrientationDegrees(), 2),
+                         "shape": shapes.get(pad.GetShape(), "rect"), "side": side,
+                         "net": pad.GetNetname(), "ref": fp.GetReference(),
+                         "num": pad.GetNumber(), "pin": pad.GetPinFunction(),
+                         "drill": r(pad.GetDrillSize().x) if pad.GetDrillSize().x else 0})
+    return {"box": [r(box.GetX()), r(box.GetY()), r(box.GetWidth()), r(box.GetHeight())],
+            "tracks": tracks, "vias": vias, "pads": pads, "parts": parts}
+
+
 def main() -> int:
     plan = json.load(sys.stdin)
     path = plan["board"]
@@ -204,11 +244,12 @@ def main() -> int:
     unrouted = board.GetConnectivity().GetUnconnectedCount(False)
 
     pcbnew.SaveBoard(plan.get("out", path), board)
+    shape = geometry(board)
     print(json.dumps({
         "tracks": len(tracks), "vias": len(vias),
         "length_mm": round(length, 1), "zones": zones,
         "unrouted": unrouted, "route_s": round(routed_s, 1),
-        "passes": passes, "pads": pads, "log": log[-1500:],
+        "passes": passes, "pads": pads, "geometry": shape, "log": log[-1500:],
     }))
     return 0
 

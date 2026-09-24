@@ -407,6 +407,19 @@ export interface RulesRead {
   members: Record<string, string[]>;
 }
 
+/** The routed board as data (docker/route.py geometry), in mm. `box` is
+ *  the area the drawing is cropped to. */
+export interface BoardGeometry {
+  box: [number, number, number, number];
+  tracks: { x1: number; y1: number; x2: number; y2: number; w: number;
+            layer: string; net: string }[];
+  vias: { x: number; y: number; d: number; drill: number; net: string }[];
+  pads: { x: number; y: number; w: number; h: number; angle: number;
+          shape: 'circle' | 'oval' | 'rect' | 'roundrect'; side: 'F' | 'B' | 'FB';
+          net: string; ref: string; num: string; pin: string; drill: number }[];
+  parts: { ref: string; value: string; side: 'F' | 'B'; box: number[] }[];
+}
+
 export interface BoardEntry {
   _id: string;
   title?: string;
@@ -505,6 +518,10 @@ export class Boards {
   }
   saveRules(id: string, rules: BoardRules): Observable<unknown> {
     return this.http.put(`/api/boards/${id}/rules`, { rules });
+  }
+  geometry(id: string, stamp?: string): Observable<BoardGeometry> {
+    return this.http.get<BoardGeometry>(
+      `/api/boards/${id}/geometry.json` + (stamp ? `?v=${encodeURIComponent(stamp)}` : ''));
   }
   /** A drawing or a KiCad file of the board, stamped so a new one is not
    *  answered from the browser's cache. */

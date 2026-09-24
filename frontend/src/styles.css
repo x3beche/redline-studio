@@ -1222,3 +1222,32 @@ a.tcv-ico { text-decoration: none; }
   border-top: 1px solid var(--line);
   background: var(--surface);
 }
+
+/* INSPECT (rooms/drawing.ts): the net under the mouse lit over the board,
+   the item itself in the accent, and a note of what it is by the cursor. */
+.tcv-inspect-copper { fill: var(--ink-bright); stroke: var(--ink-bright); opacity: .42; }
+.tcv-inspect-hover { fill: var(--accent); stroke: var(--accent); opacity: .9; }
+.tcv-inspect-dim { fill: var(--pcb-bg); opacity: .72; }
+.tcv-inspect-copper.tcv-inspect-held { opacity: .95; }
+rect.tcv-inspect-copper, circle.tcv-inspect-copper { stroke: none; }
+/* The picked pad or via outlined in a hairline that stays a hairline at
+   any zoom. */
+rect.tcv-inspect-hover, circle.tcv-inspect-hover {
+  stroke: var(--ink-bright);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+.tcv-inspect-tip {
+  position: absolute;
+  z-index: 25;
+  pointer-events: none;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--tooltip-bg);
+  color: var(--ink-dim);
+  font-size: 10.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.tcv-inspect-head { color: var(--ink-bright); font-weight: 600; }

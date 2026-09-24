@@ -2,7 +2,7 @@ import {
   Component, OnDestroy, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
 import {
-  Activity, BoardCompute, BoardEntry, BoardGraph, BoardLayout, BoardRules,
+  Activity, BoardCompute, BoardEntry, BoardGeometry, BoardGraph, BoardLayout, BoardRules,
   Boards, LcscAsk, LcscJournal, LogLine, PartHeld, PartHit,
   PartPreview, Parts, RuleSchema,
 } from '../api';
@@ -558,7 +558,9 @@ type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc';
       @switch (boardTab()) {
         @case ('layout') {
           @if (hasLayout()) {
-            <app-drawing #flat [src]="layoutUrl()" [controls]="false" />
+            <app-drawing #flat [src]="layoutUrl()" [controls]="false"
+                         [geometry]="here()?.route ? geo() : null" [mirror]="view() === 'back'"
+                         [side]="view() === 'back' ? 'B' : 'all'" />
           } @else {
             <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
           }
@@ -628,6 +630,8 @@ export class RoomPcb implements OnDestroy {
   boards = signal<BoardEntry[]>([]);
   here = signal<BoardEntry | null>(null);
   graph = signal<BoardGraph | null>(null);
+  /** The routed board as data: what the mouse can point at on the layout. */
+  geo = signal<BoardGeometry | null>(null);
   note = signal('');
 
   /** The board window's tab, which pane is made large if any, and which
@@ -939,7 +943,13 @@ export class RoomPcb implements OnDestroy {
     this.graph.set(null);
     this.picked.boardParts.set([]);
     this.cost.set(null);
+    this.geo.set(null);
     if (!b) return;
+    if (b.artifacts?.['geometry']) {
+      this.api.geometry(b._id, b.artifacts['geometry'].at).subscribe({
+        next: g => { if (this.here()?._id === b._id) this.geo.set(g); },
+      });
+    }
     this.api.compute(b._id).subscribe({ next: c => this.cost.set(c) });
     if (!b.ready) return;
     // The artifact is immutable and served that way, so the build time is

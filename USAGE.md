@@ -188,6 +188,15 @@ It is the 3D room's layout, and every room shares it (`rooms/frame.ts`):
 one toolbar, one column of tabs, one view, one log band. The room remembers
 the tab, the view and whether the log is open across a reload.
 
+**Looking into the copper.** On the layout (front, tracks or back) point at
+anything: the track, via or pad under the mouse lights up with the rest of
+its net, and a note by the cursor says what it is - a track's net, width,
+length and layer; a pad's part, number, net, size and shape; a via's size
+and drill. Click to hold a net: the rest of the board dims and the corner
+says how many tracks, how many mm and how many pads it has. Click empty board
+or press Esc to let it go. Dragging still moves the board. This works from
+the routed board's own geometry, which every run stores.
+
 **Drawing on a board.** Press the pen: the view is held as a picture -
 exactly what is on screen, at that zoom or angle - and the 3D room's tools
 dock in the toolbar (freehand, line, arrow, rectangle, ellipse, triangle,

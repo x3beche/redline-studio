@@ -1322,6 +1322,19 @@ async def board_compute(bid: str, limit: int = 12):
     return {"board": bid, "jobs": rows, "total": total}
 
 
+@app.get("/api/boards/{bid}/geometry.json")
+async def board_geometry(bid: str):
+    """The routed board as data - tracks, vias, pads, nets - for looking
+    into it with the mouse."""
+    try:
+        raw = await store.get_artifact_gz(db(), bid, "geometry", ato.BOARDS)
+    except KeyError:
+        raise HTTPException(404, "not routed yet")
+    return Response(raw, media_type="application/json",
+                    headers={"Content-Encoding": "gzip",
+                             "Cache-Control": "public, max-age=31536000, immutable"})
+
+
 @app.get("/api/boards/{bid}/graph.json")
 async def board_graph(bid: str):
     """What the build made of it: components, nets, and the bill."""
