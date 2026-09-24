@@ -72,3 +72,32 @@ def test_p95_reads_the_histogram():
     hist[0] = 90
     assert insights.p95(hist) == 1000
     assert insights.p95([0] * len(hist)) is None
+
+
+def test_only_one_server_holds_the_sampler_lease():
+    import asyncio
+
+    class Coll:
+        def __init__(self):
+            self.doc = None
+
+        async def find_one_and_update(self, query, update, upsert, return_document):
+            from pymongo.errors import DuplicateKeyError
+            me = update["$set"]["owner"]
+            free = (self.doc is None or self.doc["owner"] == me
+                    or self.doc["until"] < update["$set"]["until"] - timedelta(seconds=insights.LEASE_S))
+            if not free:
+                raise DuplicateKeyError("held")
+            self.doc = dict(update["$set"])
+            return self.doc
+
+    coll = Coll()
+    db = {insights.METRICS + "_lease": coll}
+    assert asyncio.run(insights._hold_lease(db)) is True
+    insights_me = insights._ME
+    try:
+        insights._ME = "other:1"
+        assert asyncio.run(insights._hold_lease(db)) is False
+    finally:
+        insights._ME = insights_me
+    assert asyncio.run(insights._hold_lease(db)) is True

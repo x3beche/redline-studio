@@ -278,11 +278,36 @@ async def sampler(get_db) -> None:
         pass
     while True:
         try:
-            await get_db()[METRICS].insert_one(sample_row())
+            # One machine, one set of samples: more than one server can run
+            # against this database (a worktree's, say), and each sampling
+            # would count the machine's energy twice.
+            if await _hold_lease(get_db()):
+                await get_db()[METRICS].insert_one(sample_row())
             await flush_timings(get_db())
         except Exception:
             pass
         await asyncio.sleep(SAMPLE_EVERY)
+
+
+_ME = f"{os.uname().nodename}:{os.getpid()}"
+LEASE_S = 90
+
+
+async def _hold_lease(db) -> bool:
+    """Whether this server is the one that samples the machine. It holds a
+    lease that it renews every sample; if it stops, another takes over once
+    the lease runs out."""
+    from pymongo import ReturnDocument
+    from pymongo.errors import DuplicateKeyError
+    now = datetime.now(timezone.utc)
+    try:
+        got = await db[METRICS + "_lease"].find_one_and_update(
+            {"_id": "sampler", "$or": [{"owner": _ME}, {"until": {"$lt": now}}]},
+            {"$set": {"owner": _ME, "until": now + timedelta(seconds=LEASE_S)}},
+            upsert=True, return_document=ReturnDocument.AFTER)
+    except DuplicateKeyError:
+        return False            # held by another server, and not yet run out
+    return bool(got and got.get("owner") == _ME)
 
 
 # ---------------------------------------------------------------- the read
