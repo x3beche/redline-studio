@@ -1,0 +1,197 @@
+{
+  "id": "dp-px-converter",
+  "name": "DP / PX / DPI Converter",
+  "blurb": "sizes across density buckets and the asset sizes to export",
+  "group": "mobile",
+  "rooms": [
+    "mobile"
+  ],
+  "keywords": [
+    "dp",
+    "dip",
+    "px",
+    "sp",
+    "dpi",
+    "ppi",
+    "pixel density",
+    "mdpi",
+    "xxhdpi",
+    "@2x",
+    "@3x",
+    "points",
+    "device pixel ratio",
+    "asset export",
+    "density bucket"
+  ],
+  "intro": "Converts a size between dp, sp, px, iOS points, CSS px and millimetres with Android's px = dp × dpi / 160, lists it in every density bucket and gives the image sizes to export for Android, iOS and the web. Pick \"From a screen\" to work out a device's density from its resolution and diagonal.",
+  "inputs": [
+    {
+      "key": "value",
+      "label": "Size",
+      "type": "number",
+      "default": "24"
+    },
+    {
+      "key": "unit",
+      "label": "Unit",
+      "type": "select",
+      "default": "dp",
+      "options": [
+        [
+          "dp",
+          "dp"
+        ],
+        [
+          "sp",
+          "sp (text)"
+        ],
+        [
+          "px",
+          "px (device pixels)"
+        ],
+        [
+          "pt",
+          "pt (iOS points)"
+        ],
+        [
+          "css",
+          "CSS px"
+        ],
+        [
+          "mm",
+          "mm"
+        ],
+        [
+          "in",
+          "inch"
+        ]
+      ]
+    },
+    {
+      "key": "density",
+      "label": "Screen density",
+      "type": "select",
+      "default": "xxhdpi",
+      "options": [
+        [
+          "ldpi",
+          "ldpi 120 dpi (×0.75)"
+        ],
+        [
+          "mdpi",
+          "mdpi 160 dpi (×1)"
+        ],
+        [
+          "tvdpi",
+          "tvdpi 213 dpi (×1.33)"
+        ],
+        [
+          "hdpi",
+          "hdpi 240 dpi (×1.5)"
+        ],
+        [
+          "xhdpi",
+          "xhdpi 320 dpi (×2)"
+        ],
+        [
+          "xxhdpi",
+          "xxhdpi 480 dpi (×3)"
+        ],
+        [
+          "xxxhdpi",
+          "xxxhdpi 640 dpi (×4)"
+        ],
+        [
+          "device",
+          "From a screen (resolution + diagonal)"
+        ],
+        [
+          "custom",
+          "Custom dpi"
+        ]
+      ],
+      "help": "Used for px in and out."
+    },
+    {
+      "key": "customDpi",
+      "label": "Density",
+      "type": "number",
+      "unit": "dpi",
+      "default": "420",
+      "when": {
+        "key": "density",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "screenW",
+      "label": "Screen width",
+      "type": "number",
+      "unit": "px",
+      "default": "1080",
+      "when": {
+        "key": "density",
+        "equals": "device"
+      }
+    },
+    {
+      "key": "screenH",
+      "label": "Screen height",
+      "type": "number",
+      "unit": "px",
+      "default": "2400",
+      "when": {
+        "key": "density",
+        "equals": "device"
+      }
+    },
+    {
+      "key": "diagonal",
+      "label": "Diagonal",
+      "type": "number",
+      "unit": "in",
+      "default": "6.3",
+      "when": {
+        "key": "density",
+        "equals": "device"
+      }
+    },
+    {
+      "key": "fontScale",
+      "label": "Font scale",
+      "type": "number",
+      "default": "1.0",
+      "help": "The user's font size setting, for sp. 1.0 is the default."
+    }
+  ],
+  "examples": [
+    {
+      "title": "A 24 dp icon on an xxhdpi phone",
+      "input": {
+        "value": "24",
+        "unit": "dp",
+        "density": "xxhdpi",
+        "fontScale": "1.0"
+      }
+    },
+    {
+      "title": "A Pixel-class screen: 1080 × 2400 at 6.3 in, 132 px wide",
+      "input": {
+        "value": "132",
+        "unit": "px",
+        "density": "device",
+        "screenW": "1080",
+        "screenH": "2400",
+        "diagonal": "6.3",
+        "fontScale": "1.0"
+      }
+    }
+  ],
+  "usage": "Give value and unit (dp, sp, px, pt, css, mm, in), the density bucket (ldpi..xxxhdpi), custom (with customDpi) or device (with screenW, screenH in px and diagonal in inches), and fontScale for sp. It returns the size in dp, px at that density, sp and mm, a table of px in every Android bucket, the iOS @1x-@3x sizes, and the pixel sizes of the image files to export. Use it when handing designs to Android/iOS or exporting icons.",
+  "sources": [
+    "Android Developers, Support different pixel densities (px = dp × dpi / 160; density buckets)",
+    "Apple Human Interface Guidelines, Images (scale factors @2x, @3x)",
+    "Material Design 3, Window size classes (compact < 600 dp, medium < 840 dp)",
+    "Android DisplayMetrics density constants"
+  ]
+}

@@ -1,0 +1,271 @@
+{
+  "id": "safe-area",
+  "name": "Safe Area Overlay",
+  "blurb": "notch, status bar and navigation bar areas over a screenshot",
+  "group": "mobile",
+  "rooms": [
+    "mobile"
+  ],
+  "keywords": [
+    "safe area",
+    "safeAreaInsets",
+    "env(safe-area-inset-top)",
+    "viewport-fit=cover",
+    "notch",
+    "dynamic island",
+    "punch hole",
+    "display cutout",
+    "status bar height",
+    "home indicator",
+    "navigation bar",
+    "WindowInsets",
+    "edge-to-edge",
+    "screenshot overlay"
+  ],
+  "intro": "Draws a phone screen to scale with its status bar, notch, Dynamic Island or camera hole, home indicator and navigation bar shaded, gives the safe-area insets in points (dp) and pixels, and lays your screenshot under it to see what is covered. iOS values are UIKit's safeAreaInsets; Android values are typical and vary by device.",
+  "inputs": [
+    {
+      "key": "device",
+      "label": "Device",
+      "type": "select",
+      "default": "iphone-15",
+      "options": [
+        [
+          "iphone-se",
+          "iPhone SE (2nd/3rd gen)"
+        ],
+        [
+          "iphone-8plus",
+          "iPhone 8 Plus"
+        ],
+        [
+          "iphone-11pro",
+          "iPhone X / XS / 11 Pro"
+        ],
+        [
+          "iphone-11",
+          "iPhone XR / 11"
+        ],
+        [
+          "iphone-13mini",
+          "iPhone 12 mini / 13 mini"
+        ],
+        [
+          "iphone-14",
+          "iPhone 12 / 13 / 14"
+        ],
+        [
+          "iphone-14plus",
+          "iPhone 12/13 Pro Max, 14 Plus"
+        ],
+        [
+          "iphone-15",
+          "iPhone 14 Pro / 15 / 15 Pro / 16"
+        ],
+        [
+          "iphone-15max",
+          "iPhone 14/15 Pro Max, 15/16 Plus"
+        ],
+        [
+          "iphone-16pro",
+          "iPhone 16 Pro"
+        ],
+        [
+          "iphone-16promax",
+          "iPhone 16 Pro Max"
+        ],
+        [
+          "ipad-11",
+          "iPad Pro 11\" / iPad Air"
+        ],
+        [
+          "pixel-7",
+          "Pixel 7 / 8"
+        ],
+        [
+          "pixel-8pro",
+          "Pixel 8 Pro"
+        ],
+        [
+          "galaxy-s23",
+          "Galaxy S23 / S24"
+        ],
+        [
+          "galaxy-s24u",
+          "Galaxy S24 Ultra"
+        ],
+        [
+          "android-plain",
+          "Android, no cutout"
+        ],
+        [
+          "custom",
+          "Custom"
+        ]
+      ]
+    },
+    {
+      "key": "orientation",
+      "label": "Orientation",
+      "type": "select",
+      "default": "portrait",
+      "options": [
+        [
+          "portrait",
+          "Portrait"
+        ],
+        [
+          "landscape",
+          "Landscape"
+        ]
+      ]
+    },
+    {
+      "key": "androidNav",
+      "label": "Android navigation",
+      "type": "select",
+      "default": "gesture",
+      "options": [
+        [
+          "gesture",
+          "Gesture (≈24 dp)"
+        ],
+        [
+          "buttons",
+          "Three buttons (48 dp)"
+        ]
+      ],
+      "help": "Android devices only."
+    },
+    {
+      "key": "cw",
+      "label": "Width",
+      "type": "number",
+      "unit": "pt",
+      "default": "390",
+      "when": {
+        "key": "device",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "ch",
+      "label": "Height",
+      "type": "number",
+      "unit": "pt",
+      "default": "844",
+      "when": {
+        "key": "device",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "cs",
+      "label": "Scale",
+      "type": "number",
+      "default": "3",
+      "when": {
+        "key": "device",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "ctop",
+      "label": "Top inset",
+      "type": "number",
+      "unit": "pt",
+      "default": "47",
+      "when": {
+        "key": "device",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "cbottom",
+      "label": "Bottom inset",
+      "type": "number",
+      "unit": "pt",
+      "default": "34",
+      "when": {
+        "key": "device",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "cleft",
+      "label": "Left inset",
+      "type": "number",
+      "unit": "pt",
+      "default": "0",
+      "when": {
+        "key": "device",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "cright",
+      "label": "Right inset",
+      "type": "number",
+      "unit": "pt",
+      "default": "0",
+      "when": {
+        "key": "device",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "ccut",
+      "label": "Cutout",
+      "type": "select",
+      "default": "notch",
+      "when": {
+        "key": "device",
+        "equals": "custom"
+      },
+      "options": [
+        [
+          "none",
+          "None"
+        ],
+        [
+          "notch",
+          "Notch"
+        ],
+        [
+          "island",
+          "Dynamic Island"
+        ],
+        [
+          "punch",
+          "Camera hole"
+        ]
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "iPhone 15 in portrait",
+      "input": {
+        "device": "iphone-15",
+        "orientation": "portrait",
+        "androidNav": "gesture"
+      }
+    },
+    {
+      "title": "Pixel 7 in landscape with three-button navigation",
+      "input": {
+        "device": "pixel-7",
+        "orientation": "landscape",
+        "androidNav": "buttons"
+      }
+    }
+  ],
+  "usage": "Give device (an id such as iphone-15, iphone-se, pixel-7, galaxy-s23, or custom with cw, ch in pt/dp, cs scale and the four insets), orientation (portrait or landscape) and androidNav (gesture or buttons). It returns the screen and safe-area size, the top, bottom, left and right insets in pt/dp and px, the share of the screen outside the safe area, and CSS env() plus SwiftUI/UIKit or Compose/Views code; drawing holds the geometry. Use it to check a layout or screenshot against the system bars.",
+  "sources": [
+    "Apple Human Interface Guidelines, Layout (safe areas); UIKit safeAreaInsets as reported by the iOS Simulator per device",
+    "W3C CSS Environment Variables (safe-area-inset-*) and viewport-fit=cover",
+    "Android Developers, Display content edge-to-edge; WindowInsets / displayCutout",
+    "Android status and navigation bar heights: AOSP defaults (24 dp, 48 dp); device values are typical, not guaranteed"
+  ],
+  "view": true
+}

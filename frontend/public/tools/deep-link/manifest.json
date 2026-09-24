@@ -1,0 +1,169 @@
+{
+  "id": "deep-link",
+  "name": "Deep Link Builder",
+  "blurb": "a deep link from scheme and parameters, with the emulator test command",
+  "group": "mobile",
+  "rooms": [
+    "mobile"
+  ],
+  "keywords": [
+    "deep link",
+    "app link",
+    "universal link",
+    "url scheme",
+    "custom scheme",
+    "adb am start",
+    "simctl openurl",
+    "intent filter",
+    "assetlinks.json",
+    "apple-app-site-association",
+    "AASA",
+    "percent encoding",
+    "query parameters",
+    "emulator"
+  ],
+  "intro": "Builds a deep link from its scheme, host, path and parameters with RFC 3986 percent-encoding, and gives the adb and simctl commands that open it on an emulator, the Android intent filter and, for https links, the assetlinks.json and apple-app-site-association files.",
+  "inputs": [
+    {
+      "key": "kind",
+      "label": "Link type",
+      "type": "select",
+      "default": "scheme",
+      "options": [
+        [
+          "scheme",
+          "Custom scheme (myapp://)"
+        ],
+        [
+          "https",
+          "https App Link / Universal Link"
+        ]
+      ]
+    },
+    {
+      "key": "scheme",
+      "label": "Scheme",
+      "type": "text",
+      "default": "myshop",
+      "when": {
+        "key": "kind",
+        "equals": "scheme"
+      }
+    },
+    {
+      "key": "host",
+      "label": "Host",
+      "type": "text",
+      "default": "product",
+      "help": "For https: your domain. For a custom scheme: optional, often the screen name."
+    },
+    {
+      "key": "path",
+      "label": "Path",
+      "type": "text",
+      "default": "/42"
+    },
+    {
+      "key": "params",
+      "label": "Query parameters",
+      "type": "table",
+      "default": [
+        {
+          "key": "ref",
+          "value": "spring sale"
+        },
+        {
+          "key": "color",
+          "value": "blue & white"
+        }
+      ],
+      "columns": [
+        {
+          "key": "key",
+          "label": "Name"
+        },
+        {
+          "key": "value",
+          "label": "Value"
+        }
+      ]
+    },
+    {
+      "key": "fragment",
+      "label": "Fragment",
+      "type": "text",
+      "default": "",
+      "placeholder": "reviews"
+    },
+    {
+      "key": "pkg",
+      "label": "Android package",
+      "type": "text",
+      "default": "com.example.shop"
+    },
+    {
+      "key": "bundle",
+      "label": "iOS bundle id",
+      "type": "text",
+      "default": "com.example.shop"
+    },
+    {
+      "key": "team",
+      "label": "Apple Team ID",
+      "type": "text",
+      "default": "",
+      "placeholder": "ABCDE12345",
+      "when": {
+        "key": "kind",
+        "equals": "https"
+      }
+    }
+  ],
+  "examples": [
+    {
+      "title": "A product screen from a campaign",
+      "input": {
+        "kind": "scheme",
+        "scheme": "myshop",
+        "host": "product",
+        "path": "/42",
+        "params": [
+          {
+            "key": "ref",
+            "value": "spring sale"
+          },
+          {
+            "key": "color",
+            "value": "blue & white"
+          }
+        ],
+        "pkg": "com.example.shop",
+        "bundle": "com.example.shop"
+      }
+    },
+    {
+      "title": "A verified https link to an order",
+      "input": {
+        "kind": "https",
+        "host": "shop.example.com",
+        "path": "/orders/A-1001",
+        "params": [
+          {
+            "key": "utm_source",
+            "value": "email"
+          }
+        ],
+        "pkg": "com.example.shop",
+        "bundle": "com.example.shop",
+        "team": "ABCDE12345"
+      }
+    }
+  ],
+  "usage": "Give kind (scheme or https), scheme (for custom schemes), host, path, params as rows of {key, value} (raw, unencoded), an optional fragment, the Android package pkg and the iOS bundle id (and Apple team id for https). It returns the encoded link, its parts as typed and as encoded, and texts: the adb am start and xcrun simctl openurl commands, a Chrome intent: link, the Android intent filter, and either the iOS CFBundleURLTypes entry or the assetlinks.json and apple-app-site-association files. Use it to test a deep link on an emulator or to set one up.",
+  "sources": [
+    "RFC 3986, Uniform Resource Identifier: Generic Syntax (scheme rules, percent-encoding)",
+    "Android Developers, Create deep links to app content; Test deep links (adb shell am start); Verify Android App Links (assetlinks.json, pm verify-app-links)",
+    "Apple Developer, Defining a custom URL scheme for your app; Supporting universal links in your app (apple-app-site-association); xcrun simctl openurl",
+    "Chrome for Android, Android Intents with Chrome (intent: URLs)"
+  ]
+}

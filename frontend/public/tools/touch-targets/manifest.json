@@ -1,0 +1,235 @@
+{
+  "id": "touch-targets",
+  "name": "Touch Target Checker",
+  "blurb": "touch targets under the minimum size in a layout",
+  "group": "mobile",
+  "rooms": [
+    "mobile"
+  ],
+  "keywords": [
+    "touch target",
+    "tap target",
+    "hit area",
+    "48dp",
+    "44pt",
+    "target size",
+    "wcag 2.5.8",
+    "wcag 2.5.5",
+    "accessibility",
+    "material",
+    "human interface guidelines",
+    "button size",
+    "fat finger",
+    "spacing"
+  ],
+  "intro": "Checks each target's touch area and the gap to its neighbour against Material (48 × 48 dp, 8 dp apart), Apple (44 × 44 pt) and WCAG 2.2 (24 px with the spacing exception for AA, 44 px for AAA), and says how much padding each failing one needs.",
+  "inputs": [
+    {
+      "key": "guideline",
+      "label": "Check against",
+      "type": "select",
+      "default": "material",
+      "options": [
+        [
+          "material",
+          "Material Design (48 dp, 8 dp apart)"
+        ],
+        [
+          "apple",
+          "Apple HIG (44 pt)"
+        ],
+        [
+          "wcagAA",
+          "WCAG 2.2 AA, 2.5.8 (24 px)"
+        ],
+        [
+          "wcagAAA",
+          "WCAG 2.2 AAA, 2.5.5 (44 px)"
+        ]
+      ]
+    },
+    {
+      "key": "unit",
+      "label": "Sizes are in",
+      "type": "select",
+      "default": "dp",
+      "options": [
+        [
+          "dp",
+          "dp (Android)"
+        ],
+        [
+          "pt",
+          "pt (iOS)"
+        ],
+        [
+          "css",
+          "CSS px"
+        ],
+        [
+          "px",
+          "device pixels"
+        ]
+      ]
+    },
+    {
+      "key": "density",
+      "label": "Scale (devicePixelRatio)",
+      "type": "number",
+      "default": "3",
+      "when": {
+        "key": "unit",
+        "equals": "px"
+      },
+      "help": "2 for xhdpi / @2x, 3 for xxhdpi / @3x, 2.625 for 420 dpi."
+    },
+    {
+      "key": "targets",
+      "label": "Targets",
+      "type": "table",
+      "default": [
+        {
+          "name": "Back arrow",
+          "w": "24",
+          "h": "24",
+          "gap": "16"
+        },
+        {
+          "name": "Close ×",
+          "w": "32",
+          "h": "32",
+          "gap": "4"
+        },
+        {
+          "name": "Primary button",
+          "w": "328",
+          "h": "48",
+          "gap": "16"
+        },
+        {
+          "name": "Checkbox",
+          "w": "18",
+          "h": "18",
+          "gap": "8"
+        },
+        {
+          "name": "Filter chip",
+          "w": "72",
+          "h": "32",
+          "gap": "8"
+        },
+        {
+          "name": "Tab bar item",
+          "w": "96",
+          "h": "56",
+          "gap": "0"
+        }
+      ],
+      "columns": [
+        {
+          "key": "name",
+          "label": "Name"
+        },
+        {
+          "key": "w",
+          "label": "Width"
+        },
+        {
+          "key": "h",
+          "label": "Height"
+        },
+        {
+          "key": "gap",
+          "label": "Gap to nearest",
+          "default": "8"
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "A screen's controls against Material",
+      "input": {
+        "guideline": "material",
+        "unit": "dp",
+        "targets": [
+          {
+            "name": "Back arrow",
+            "w": "24",
+            "h": "24",
+            "gap": "16"
+          },
+          {
+            "name": "Close ×",
+            "w": "32",
+            "h": "32",
+            "gap": "4"
+          },
+          {
+            "name": "Primary button",
+            "w": "328",
+            "h": "48",
+            "gap": "16"
+          },
+          {
+            "name": "Checkbox",
+            "w": "18",
+            "h": "18",
+            "gap": "8"
+          },
+          {
+            "name": "Filter chip",
+            "w": "72",
+            "h": "32",
+            "gap": "8"
+          },
+          {
+            "name": "Tab bar item",
+            "w": "96",
+            "h": "56",
+            "gap": "0"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Web toolbar icons against WCAG AA",
+      "input": {
+        "guideline": "wcagAA",
+        "unit": "css",
+        "targets": [
+          {
+            "name": "Bold",
+            "w": "20",
+            "h": "20",
+            "gap": "4"
+          },
+          {
+            "name": "Italic",
+            "w": "20",
+            "h": "20",
+            "gap": "4"
+          },
+          {
+            "name": "Link",
+            "w": "20",
+            "h": "20",
+            "gap": "8"
+          },
+          {
+            "name": "More",
+            "w": "16",
+            "h": "24",
+            "gap": "12"
+          }
+        ]
+      }
+    }
+  ],
+  "usage": "Give guideline (material, apple, wcagAA, wcagAAA), unit (dp, pt, css or px with density = devicePixelRatio) and targets: rows of {name, w, h, gap} where gap is the space to the nearest other target, all in that unit. It returns pass/fail per target against the chosen guideline and a ✓/✗ against all four, the padding each failing target needs, and a bar chart of sizes. Use it on a layout spec or on sizes measured from a screenshot.",
+  "sources": [
+    "Material Design 3, Accessibility: touch targets 48 × 48 dp, 8 dp spacing",
+    "Apple Human Interface Guidelines, Accessibility: 44 × 44 pt hit targets",
+    "W3C WCAG 2.2 SC 2.5.8 Target Size (Minimum) and SC 2.5.5 Target Size (Enhanced)"
+  ]
+}

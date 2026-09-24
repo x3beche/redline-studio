@@ -1,0 +1,166 @@
+{
+  "id": "adaptive-icon",
+  "name": "Adaptive Icon Composer",
+  "blurb": "foreground and background layers with mask previews",
+  "group": "mobile",
+  "rooms": [
+    "mobile"
+  ],
+  "keywords": [
+    "adaptive icon",
+    "launcher icon",
+    "ic_launcher",
+    "mipmap",
+    "safe zone",
+    "66dp",
+    "108dp",
+    "icon mask",
+    "squircle",
+    "themed icon",
+    "monochrome",
+    "android icon",
+    "app icon",
+    "foreground layer"
+  ],
+  "intro": "Composes an Android adaptive launcher icon from a background colour (or gradient) and a logo, previews it under the circle, squircle, rounded-square, teardrop and square masks, and checks the logo against the 66 dp safe zone of the 108 dp layers (Android Developers, Adaptive icons).",
+  "inputs": [
+    {
+      "key": "bg",
+      "label": "Background",
+      "type": "text",
+      "default": "#1f4ed8"
+    },
+    {
+      "key": "bgStyle",
+      "label": "Background style",
+      "type": "select",
+      "default": "solid",
+      "options": [
+        [
+          "solid",
+          "Solid"
+        ],
+        [
+          "gradient",
+          "Diagonal gradient"
+        ]
+      ]
+    },
+    {
+      "key": "bg2",
+      "label": "Second colour",
+      "type": "text",
+      "default": "#0f9d8a",
+      "when": {
+        "key": "bgStyle",
+        "equals": "gradient"
+      }
+    },
+    {
+      "key": "fgKind",
+      "label": "Logo",
+      "type": "select",
+      "default": "text",
+      "options": [
+        [
+          "text",
+          "Letters"
+        ],
+        [
+          "circle",
+          "Circle"
+        ],
+        [
+          "square",
+          "Rounded square"
+        ],
+        [
+          "image",
+          "An image (load it below)"
+        ]
+      ]
+    },
+    {
+      "key": "glyph",
+      "label": "Letters",
+      "type": "text",
+      "default": "R",
+      "when": {
+        "key": "fgKind",
+        "equals": "text"
+      }
+    },
+    {
+      "key": "fg",
+      "label": "Logo colour",
+      "type": "text",
+      "default": "#ffffff",
+      "when": {
+        "key": "fgKind",
+        "in": [
+          "text",
+          "circle",
+          "square"
+        ]
+      }
+    },
+    {
+      "key": "size",
+      "label": "Logo size",
+      "type": "number",
+      "unit": "dp",
+      "default": "44",
+      "help": "Of the 108 dp layer; the safe zone is a 66 dp circle."
+    },
+    {
+      "key": "shape",
+      "label": "Logo outline",
+      "type": "select",
+      "default": "square",
+      "options": [
+        [
+          "square",
+          "Square-ish (corners count)"
+        ],
+        [
+          "round",
+          "Round"
+        ]
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "A letter mark",
+      "input": {
+        "bg": "#1f4ed8",
+        "bgStyle": "solid",
+        "fgKind": "text",
+        "glyph": "R",
+        "fg": "#ffffff",
+        "size": "44",
+        "shape": "square"
+      }
+    },
+    {
+      "title": "A round logo on a gradient, too big",
+      "input": {
+        "bg": "#d97706",
+        "bgStyle": "gradient",
+        "bg2": "#a23fbf",
+        "fgKind": "circle",
+        "fg": "#fff7ed",
+        "size": "72",
+        "shape": "round"
+      }
+    }
+  ],
+  "usage": "Give bg (hex), bgStyle (solid or gradient, with bg2), fgKind (text with glyph, circle, square, or image loaded in the page), fg (hex), size of the logo in dp on the 108 dp layer, and shape (square or round, how far the corners reach). It returns how far the logo reaches from the centre against the 33 dp safe radius, the largest logo that fits, the colour contrast, the per-density layer sizes in px, and ic_launcher.xml plus background and foreground SVGs. Use it when making or checking an Android launcher icon.",
+  "sources": [
+    "Android Developers, Adaptive icons (108 dp layers, 72 dp visible, 66 dp safe zone, monochrome layer)",
+    "AOSP frameworks/base config_icon_mask paths (circle, squircle, rounded square, teardrop)",
+    "W3C WCAG 2.2 contrast ratio (used as a legibility guide for the logo)",
+    "Google Play, app icon specification (512 × 512 px)"
+  ],
+  "view": true
+}

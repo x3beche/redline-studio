@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-152 tools. **MCP** marks the ones agents can run with `run_tool`.
+160 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -116,7 +116,7 @@ agents, the most used, and every tool nobody used.
 | **PCB Weight & CoG** · MCP | `pcb-weight` | mass and centre of gravity of board, copper and parts | PCB, 3D |
 | **Power Rail Tree** · MCP | `power-rail-tree` | supply rails as a tree with each branch's current budget and total power | PCB, Embedded |
 | **RC / LC Filter Designer** · MCP | `rc-lc-filter` | component values from a cutoff frequency, with the magnitude response drawn | PCB |
-| **Resistor & LED** | `resistor` | Ohm's law, an LED's series resistor, a divider from standard values | PCB, Embedded |
+| **Resistor & LED** · MCP | `resistor` | Ohm's law, an LED's series resistor, a divider from standard values | PCB, Embedded |
 | **Return Path Checker** · MCP | `return-path` | return-path problems of layer changes and the stitching vias they need | PCB |
 | **Schematic Symbol Checklist** · MCP | `symbol-checklist` | pin types, names and electrical properties to check on a new symbol | PCB |
 | **Silkscreen Legibility Check** · MCP | `silkscreen-check` | whether text height and stroke width are under a fab's minimum | PCB |
@@ -126,7 +126,7 @@ agents, the most used, and every tool nobody used.
 | **Stock Risk Scanner** · MCP | `stock-risk` | ranks single-source and low-stock parts in a BOM by risk | PCB, Analytics |
 | **Terminal Block & Crimp Reference** · MCP | `crimp-reference` | terminal blocks and crimp sizes for a wire cross-section | PCB |
 | **Test Point Planner** · MCP | `test-point-planner` | test point list for critical nets and probe access checks | PCB |
-| **Trace Width** | `trace-width` | how wide a track must be for a current, by IPC-2221, and what it drops | PCB |
+| **Trace Width** · MCP | `trace-width` | how wide a track must be for a current, by IPC-2221, and what it drops | PCB |
 | **Via Current & Thermal** · MCP | `via-thermal` | current a via array carries and its temperature rise from drill, plating and count | PCB |
 | **Wire Gauge Selector** · MCP | `wire-gauge` | cable size from current, length and allowed voltage drop | PCB, Embedded |
 
@@ -173,7 +173,7 @@ agents, the most used, and every tool nobody used.
 | **Stepper Motor Calculator** · MCP | `stepper-calc` | pulse frequency and torque from step angle, microstepping and speed | Embedded, 3D |
 | **Struct Packing Visualizer** · MCP | `struct-packing` | alignment of struct members and the padding bytes wasted | Embedded |
 | **Task Timing Planner** · MCP | `task-timing` | scheduling conflicts of periodic tasks from period and duration | Embedded |
-| **Units & Numbers** | `units` | mm, mil and inch; hex, decimal and binary; UART baud and timer periods | Embedded, PCB |
+| **Units & Numbers** · MCP | `units` | mm, mil and inch; hex, decimal and binary; UART baud and timer periods | Embedded, PCB |
 | **Watchdog Planner** · MCP | `watchdog-planner` | a safe watchdog period and feed points from the longest task | Embedded |
 
 ### Mechanical & 3D
@@ -213,8 +213,10 @@ agents, the most used, and every tool nobody used.
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
+| **Accessibility Audit Lite** · MCP | `a11y-audit` | contrast, focus order and missing labels in pasted HTML | Web, Mobile |
 | **Chart Spec Builder** · MCP | `chart-spec` | axes, series and scales chosen into a chart configuration | Web |
 | **CSS Specificity Calculator** · MCP | `css-specificity` | which of two selectors wins, and why | Web |
+| **DOM Selector Finder** · MCP | `selector-finder` | the shortest stable CSS selector for an element in pasted HTML | Web |
 | **Flexbox Playground** · MCP | `flexbox-playground` | try alignment properties and see the result and code | Web |
 | **Form Builder** | `form-builder` | build a form with its rules, get Zod, types and a React component | Web |
 | **Grid Sketch** | `grid-sketch` | draw a layout on a grid, copy it as a prompt, CSS or JSON | Web, Mobile |
@@ -235,10 +237,16 @@ agents, the most used, and every tool nobody used.
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
+| **Adaptive Icon Composer** · MCP | `adaptive-icon` | foreground and background layers with mask previews | Mobile |
 | **ADB Command Palette** · MCP | `adb-commands` | common emulator and device commands, ready to copy | Mobile |
+| **Deep Link Builder** · MCP | `deep-link` | a deep link from scheme and parameters, with the emulator test command | Mobile |
+| **DP / PX / DPI Converter** · MCP | `dp-px-converter` | sizes across density buckets and the asset sizes to export | Mobile |
 | **Layout Inspector Mapper** · MCP | `layout-mapper` | a region of a screen mapped to its view in a uiautomator dump | Mobile |
+| **Permission Picker** · MCP | `permission-picker` | the permissions and manifest lines a feature set needs | Mobile |
+| **Safe Area Overlay** · MCP | `safe-area` | notch, status bar and navigation bar areas over a screenshot | Mobile |
 | **Screen Flow Mapper** · MCP | `screen-flow` | screen-to-screen transitions as a diagram and a navigation graph | Mobile |
 | **String Table Editor** · MCP | `string-table` | multilingual strings in a table, out as resource files | Mobile, Web |
+| **Touch Target Checker** · MCP | `touch-targets` | touch targets under the minimum size in a layout | Mobile |
 
 ### Code, data & prompts
 

@@ -1,0 +1,101 @@
+{
+  "id": "selector-finder",
+  "name": "DOM Selector Finder",
+  "blurb": "the shortest stable CSS selector for an element in pasted HTML",
+  "group": "web",
+  "rooms": [
+    "web"
+  ],
+  "keywords": [
+    "css selector",
+    "locator",
+    "querySelector",
+    "xpath alternative",
+    "playwright",
+    "cypress",
+    "selenium",
+    "data-testid",
+    "e2e test",
+    "scraping",
+    "unique selector",
+    "getByRole",
+    "stable selector"
+  ],
+  "intro": "Finds the element you name in pasted HTML and ranks the CSS selectors that pick it out alone: test ids first, then ids, names and semantic attributes, then classes. Generated ids and hashed class names (css-1x2y3, :r1:) are rejected, and a stable ancestor is used when the element has nothing of its own.",
+  "inputs": [
+    {
+      "key": "html",
+      "label": "HTML",
+      "type": "textarea",
+      "rows": 12,
+      "default": "<header class=\"css-1q2w3e\">\n  <nav class=\"Nav_root__x7Kp2\">\n    <a class=\"Nav_link__a9f3k active\" href=\"/\">Home</a>\n    <a class=\"Nav_link__a9f3k\" href=\"/docs\">Docs</a>\n  </nav>\n</header>\n<main>\n  <form id=\"login-form\" class=\"sc-bdVaJa card\">\n    <label for=\":r1:\">Email</label>\n    <input id=\":r1:\" name=\"email\" type=\"email\" class=\"input px-3 py-2\">\n    <label for=\":r2:\">Password</label>\n    <input id=\":r2:\" name=\"password\" type=\"password\" class=\"input px-3 py-2\">\n    <button type=\"submit\" class=\"btn btn-primary css-9zx8y7\">Sign in</button>\n    <button type=\"button\" class=\"btn btn-link\">Forgot password?</button>\n  </form>\n</main>",
+      "help": "DevTools: right-click a parent > Copy > Copy outerHTML."
+    },
+    {
+      "key": "find",
+      "label": "Find the element by",
+      "type": "select",
+      "default": "text",
+      "options": [
+        [
+          "text",
+          "Its text or label"
+        ],
+        [
+          "attr",
+          "An attribute (name=email)"
+        ],
+        [
+          "selector",
+          "A selector you have"
+        ],
+        [
+          "line",
+          "Line number"
+        ]
+      ]
+    },
+    {
+      "key": "query",
+      "label": "Search",
+      "type": "text",
+      "default": "Sign in",
+      "help": "Text: Sign in · attribute: name=email · selector: form button · line: 12"
+    },
+    {
+      "key": "nth",
+      "label": "Which match",
+      "type": "number",
+      "default": "1",
+      "help": "When several elements match: 1 is the first."
+    }
+  ],
+  "examples": [
+    {
+      "title": "Submit button in a React form with generated ids",
+      "input": {
+        "html": "<header class=\"css-1q2w3e\">\n  <nav class=\"Nav_root__x7Kp2\">\n    <a class=\"Nav_link__a9f3k active\" href=\"/\">Home</a>\n    <a class=\"Nav_link__a9f3k\" href=\"/docs\">Docs</a>\n  </nav>\n</header>\n<main>\n  <form id=\"login-form\" class=\"sc-bdVaJa card\">\n    <label for=\":r1:\">Email</label>\n    <input id=\":r1:\" name=\"email\" type=\"email\" class=\"input px-3 py-2\">\n    <label for=\":r2:\">Password</label>\n    <input id=\":r2:\" name=\"password\" type=\"password\" class=\"input px-3 py-2\">\n    <button type=\"submit\" class=\"btn btn-primary css-9zx8y7\">Sign in</button>\n    <button type=\"button\" class=\"btn btn-link\">Forgot password?</button>\n  </form>\n</main>",
+        "find": "text",
+        "query": "Sign in",
+        "nth": "1"
+      }
+    },
+    {
+      "title": "The second of three identical buttons",
+      "input": {
+        "html": "<ul class=\"results\">\n  <li class=\"result-card\"><h3>Blue kettle</h3><button class=\"add\">Add to cart</button></li>\n  <li class=\"result-card\"><h3>Red kettle</h3><button class=\"add\">Add to cart</button></li>\n  <li class=\"result-card\"><h3>Steel kettle</h3><button class=\"add\">Add to cart</button></li>\n</ul>",
+        "find": "text",
+        "query": "Add to cart",
+        "nth": "2"
+      }
+    }
+  ],
+  "usage": "Pass html (the markup containing the element), find (text, attr, selector or line), query (the text, name=value, selector or line number) and nth (1-based, when several match). It returns the best unique selector with a 0-100 stability score, every candidate with its match count and why it is or is not stable, the path to the element, and ready lines for querySelector, Playwright, Cypress, Selenium and Testing Library. Use it when writing end-to-end tests or scrapers; uniqueness is only against the pasted HTML.",
+  "sources": [
+    "W3C Selectors Level 4 (the supported subset)",
+    "Playwright docs, Locators (role-based locators first, test ids)",
+    "Cypress docs, Best Practices: Selecting Elements (data-cy)",
+    "Testing Library, Which query should I use? (priority of queries)",
+    "Rule of thumb: hashed CSS-in-JS / CSS-modules class names and framework ids change between builds"
+  ]
+}

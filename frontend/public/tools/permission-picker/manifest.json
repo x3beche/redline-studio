@@ -1,0 +1,280 @@
+{
+  "id": "permission-picker",
+  "name": "Permission Picker",
+  "blurb": "the permissions and manifest lines a feature set needs",
+  "group": "mobile",
+  "rooms": [
+    "mobile"
+  ],
+  "keywords": [
+    "android permissions",
+    "AndroidManifest",
+    "uses-permission",
+    "Info.plist",
+    "usage description",
+    "purpose string",
+    "runtime permission",
+    "maxSdkVersion",
+    "NSCameraUsageDescription",
+    "POST_NOTIFICATIONS",
+    "bluetooth permissions",
+    "foreground service type",
+    "ios privacy",
+    "app review"
+  ],
+  "intro": "Tick what the app does; it returns the AndroidManifest <uses-permission> lines with the API-level limits each one has for your minSdk and targetSdk, the iOS Info.plist purpose-string keys and background modes, and which permissions are asked at run time.",
+  "inputs": [
+    {
+      "key": "platform",
+      "label": "Platforms",
+      "type": "select",
+      "default": "both",
+      "options": [
+        [
+          "both",
+          "Android and iOS"
+        ],
+        [
+          "android",
+          "Android"
+        ],
+        [
+          "ios",
+          "iOS"
+        ]
+      ]
+    },
+    {
+      "key": "minSdk",
+      "label": "Android minSdk",
+      "type": "number",
+      "default": "24"
+    },
+    {
+      "key": "targetSdk",
+      "label": "Android targetSdk",
+      "type": "number",
+      "default": "35"
+    },
+    {
+      "key": "camera",
+      "label": "Camera",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "microphone",
+      "label": "Microphone",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "photosRead",
+      "label": "Read photos/videos",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "photosSave",
+      "label": "Save to gallery",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "location",
+      "label": "Location (in use)",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "bgLocation",
+      "label": "Background location",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "bluetooth",
+      "label": "Bluetooth LE",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "notifications",
+      "label": "Notifications",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "contacts",
+      "label": "Contacts",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "calendar",
+      "label": "Calendar",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "internet",
+      "label": "Internet",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "localNetwork",
+      "label": "Local network",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "biometrics",
+      "label": "Biometrics",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "nfc",
+      "label": "NFC",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "vibrate",
+      "label": "Vibration",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "boot",
+      "label": "Start at boot",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "exactAlarm",
+      "label": "Exact alarms",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "fgs",
+      "label": "Foreground service",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "motion",
+      "label": "Activity / steps",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "speech",
+      "label": "Speech recognition",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "tracking",
+      "label": "Ad tracking ID",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "wakeLock",
+      "label": "Keep awake",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "fgsType",
+      "label": "Foreground service type",
+      "type": "select",
+      "default": "dataSync",
+      "when": {
+        "key": "fgs",
+        "equals": "true"
+      },
+      "options": [
+        [
+          "dataSync",
+          "dataSync"
+        ],
+        [
+          "location",
+          "location"
+        ],
+        [
+          "mediaPlayback",
+          "mediaPlayback"
+        ],
+        [
+          "camera",
+          "camera"
+        ],
+        [
+          "microphone",
+          "microphone"
+        ],
+        [
+          "connectedDevice",
+          "connectedDevice"
+        ],
+        [
+          "health",
+          "health"
+        ],
+        [
+          "remoteMessaging",
+          "remoteMessaging"
+        ],
+        [
+          "shortService",
+          "shortService"
+        ],
+        [
+          "specialUse",
+          "specialUse"
+        ]
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "Camera, location and notifications",
+      "input": {
+        "platform": "both",
+        "minSdk": "24",
+        "targetSdk": "35",
+        "camera": true,
+        "location": true,
+        "notifications": true,
+        "internet": true
+      }
+    },
+    {
+      "title": "A BLE companion app with a foreground service",
+      "input": {
+        "platform": "both",
+        "minSdk": "26",
+        "targetSdk": "35",
+        "bluetooth": true,
+        "notifications": true,
+        "internet": true,
+        "fgs": true,
+        "fgsType": "connectedDevice",
+        "camera": false,
+        "location": false
+      }
+    }
+  ],
+  "usage": "Pass platform (both, android, ios), minSdk and targetSdk (API levels), and true for each feature used: camera, microphone, photosRead, photosSave, location, bgLocation, bluetooth, notifications, contacts, calendar, internet, localNetwork, biometrics, nfc, vibrate, boot, exactAlarm, fgs (with fgsType), motion, speech, tracking, wakeLock. It returns a table of permission / key, kind (normal, runtime, special, iOS) and API range, and texts: the AndroidManifest.xml lines, the Info.plist keys with draft purpose strings, and Kotlin for the runtime request. Use it when adding a feature or preparing a store review.",
+  "sources": [
+    "Android Developers, Manifest.permission reference and Permissions on Android (normal, runtime, special)",
+    "Android Developers, Bluetooth permissions; Request location permissions; Granular media permissions (API 33) and partial photo access (API 34); Foreground service types (API 34)",
+    "Apple Developer, Information Property List: protected resources (NS...UsageDescription keys), UIBackgroundModes",
+    "Google Play policy: photo and video permissions, exact alarms, background location"
+  ]
+}
