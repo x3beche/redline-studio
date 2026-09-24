@@ -86,7 +86,7 @@ code, pre, .k-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
 .k-value.k-bad { border-left: 3px solid var(--danger); }
 
 .k-block { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-width: 0; }
-.k-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); margin-bottom: 6px; }
+.k-title { font-size: 11.5px; font-weight: 500; color: var(--ink-soft); margin-bottom: 6px; }
 .k-tablewrap { overflow-x: auto; }
 .k-table { border-collapse: collapse; width: 100%; font-size: 12px; }
 .k-table th { text-align: left; font-weight: 500; color: var(--ink-soft); border-bottom: 1px solid var(--line); padding: 3px 6px; }
