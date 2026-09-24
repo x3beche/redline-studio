@@ -19,7 +19,125 @@
     "temperature rise",
     "voltage drop"
   ],
-  "usage": "An interactive tool: open it in the Tools tab.",
-  "inputs": [],
+  "intro": "The width a track needs for a current on an outer and an inner layer by IPC-2221's formula I = k·ΔT^0.44·A^0.725, with the resistance, voltage drop and power loss of that track, the current a given width carries, and the rating of a via. The same arithmetic as the app's Trace Width calculator.",
+  "inputs": [
+    {
+      "key": "amps",
+      "label": "Current",
+      "type": "number",
+      "unit": "A",
+      "default": "1"
+    },
+    {
+      "key": "rise",
+      "label": "Temperature rise",
+      "type": "number",
+      "unit": "°C",
+      "default": "10",
+      "help": "10 °C is common; IPC-2221's curves cover 10–100 °C."
+    },
+    {
+      "key": "ambient",
+      "label": "Ambient",
+      "type": "number",
+      "unit": "°C",
+      "default": "25"
+    },
+    {
+      "key": "oz",
+      "label": "Copper",
+      "type": "select",
+      "default": "1",
+      "options": [
+        [
+          "0.5",
+          "0.5 oz · 17.5 µm"
+        ],
+        [
+          "1",
+          "1 oz · 35 µm"
+        ],
+        [
+          "2",
+          "2 oz · 70 µm"
+        ],
+        [
+          "3",
+          "3 oz · 105 µm"
+        ]
+      ]
+    },
+    {
+      "key": "length",
+      "label": "Track length",
+      "type": "number",
+      "unit": "mm",
+      "default": "50"
+    },
+    {
+      "key": "width",
+      "label": "A track of width",
+      "type": "number",
+      "unit": "mm",
+      "default": "0.25",
+      "help": "What a track of this width carries."
+    },
+    {
+      "key": "drill",
+      "label": "Via drill",
+      "type": "number",
+      "unit": "mm",
+      "default": "0.3"
+    },
+    {
+      "key": "plating",
+      "label": "Via plating",
+      "type": "number",
+      "unit": "µm",
+      "default": "25"
+    },
+    {
+      "key": "board",
+      "label": "Board thickness",
+      "type": "number",
+      "unit": "mm",
+      "default": "1.6"
+    }
+  ],
+  "examples": [
+    {
+      "title": "3 A motor feed, 1 oz, 20 °C rise",
+      "input": {
+        "amps": "3",
+        "rise": "20",
+        "ambient": "25",
+        "oz": "1",
+        "length": "80",
+        "width": "1",
+        "drill": "0.3",
+        "plating": "25",
+        "board": "1.6"
+      }
+    },
+    {
+      "title": "10 A on 2 oz copper",
+      "input": {
+        "amps": "10",
+        "rise": "10",
+        "ambient": "40",
+        "oz": "2",
+        "length": "40",
+        "width": "3",
+        "drill": "0.4",
+        "plating": "25",
+        "board": "1.6"
+      }
+    }
+  ],
+  "usage": "Give the current in A, the allowed temperature rise and ambient in °C, the copper weight in oz (0.5, 1, 2, 3) and the track length in mm. It returns the minimum width in mm and mil for an outer and an inner layer by IPC-2221, with that track's resistance, voltage drop and power loss; the current a track of `width` mm carries; and for a via (drill mm, plating µm, board mm) its current, resistance and how many are needed for the current. Use it to size power tracks; it warns outside the chart's 35 A / 10–100 °C range.",
+  "sources": [
+    "IPC-2221B Generic Standard on Printed Board Design, conductor current-carrying capacity: I = k·ΔT^0.44·A^0.725, k = 0.048 external, 0.024 internal (A in mil²)",
+    "Copper resistivity 1.724e-8 Ω·m at 20 °C and 0.00393 /°C (IACS annealed copper)"
+  ],
   "native": true
 }

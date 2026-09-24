@@ -19,7 +19,210 @@
     "series resistor",
     "power"
   ],
-  "usage": "An interactive tool: open it in the Tools tab.",
-  "inputs": [],
+  "intro": "Three everyday resistor sums: Ohm's law from any two of voltage, current, resistance and power; an LED's series resistor rounded up to a value that is made, with its power and package; and the standard-value divider pair nearest a target voltage. The same arithmetic as the app's Resistor & LED calculator.",
+  "inputs": [
+    {
+      "key": "mode",
+      "label": "Work out",
+      "type": "select",
+      "default": "ohm",
+      "options": [
+        [
+          "ohm",
+          "Ohm's law"
+        ],
+        [
+          "led",
+          "LED series resistor"
+        ],
+        [
+          "divider",
+          "Voltage divider"
+        ]
+      ]
+    },
+    {
+      "key": "v",
+      "label": "Voltage",
+      "type": "number",
+      "unit": "V",
+      "default": "5",
+      "when": {
+        "key": "mode",
+        "equals": "ohm"
+      },
+      "help": "Fill any two of the four; leave the others empty."
+    },
+    {
+      "key": "i",
+      "label": "Current",
+      "type": "number",
+      "unit": "A",
+      "default": "",
+      "when": {
+        "key": "mode",
+        "equals": "ohm"
+      }
+    },
+    {
+      "key": "r",
+      "label": "Resistance",
+      "type": "number",
+      "unit": "Ω",
+      "default": "1k",
+      "when": {
+        "key": "mode",
+        "equals": "ohm"
+      }
+    },
+    {
+      "key": "p",
+      "label": "Power",
+      "type": "number",
+      "unit": "W",
+      "default": "",
+      "when": {
+        "key": "mode",
+        "equals": "ohm"
+      }
+    },
+    {
+      "key": "supply",
+      "label": "Supply",
+      "type": "number",
+      "unit": "V",
+      "default": "3.3",
+      "when": {
+        "key": "mode",
+        "equals": "led"
+      }
+    },
+    {
+      "key": "vf",
+      "label": "LED forward voltage",
+      "type": "number",
+      "unit": "V",
+      "default": "2.0",
+      "when": {
+        "key": "mode",
+        "equals": "led"
+      },
+      "help": "Red 2.0, yellow 2.1, green 3.0, blue and white 3.1 V; the datasheet wins."
+    },
+    {
+      "key": "led_ma",
+      "label": "LED current",
+      "type": "number",
+      "unit": "mA",
+      "default": "5",
+      "when": {
+        "key": "mode",
+        "equals": "led"
+      }
+    },
+    {
+      "key": "led_series",
+      "label": "Values made in",
+      "type": "select",
+      "default": "E24",
+      "options": [
+        "E12",
+        "E24",
+        "E96"
+      ],
+      "when": {
+        "key": "mode",
+        "equals": "led"
+      }
+    },
+    {
+      "key": "vin",
+      "label": "Vin",
+      "type": "number",
+      "unit": "V",
+      "default": "12",
+      "when": {
+        "key": "mode",
+        "equals": "divider"
+      }
+    },
+    {
+      "key": "vout",
+      "label": "Vout wanted",
+      "type": "number",
+      "unit": "V",
+      "default": "3.3",
+      "when": {
+        "key": "mode",
+        "equals": "divider"
+      }
+    },
+    {
+      "key": "tot_lo",
+      "label": "R1 + R2 from",
+      "type": "number",
+      "unit": "Ω",
+      "default": "10k",
+      "when": {
+        "key": "mode",
+        "equals": "divider"
+      }
+    },
+    {
+      "key": "tot_hi",
+      "label": "R1 + R2 to",
+      "type": "number",
+      "unit": "Ω",
+      "default": "1M",
+      "when": {
+        "key": "mode",
+        "equals": "divider"
+      }
+    },
+    {
+      "key": "div_series",
+      "label": "Values made in",
+      "type": "select",
+      "default": "E24",
+      "options": [
+        "E12",
+        "E24",
+        "E96"
+      ],
+      "when": {
+        "key": "mode",
+        "equals": "divider"
+      }
+    }
+  ],
+  "examples": [
+    {
+      "title": "A green LED on 5 V at 10 mA",
+      "input": {
+        "mode": "led",
+        "supply": "5",
+        "vf": "3.0",
+        "led_ma": "10",
+        "led_series": "E24"
+      }
+    },
+    {
+      "title": "12 V down to 3.3 V for an ADC",
+      "input": {
+        "mode": "divider",
+        "vin": "12",
+        "vout": "3.3",
+        "tot_lo": "10k",
+        "tot_hi": "1M",
+        "div_series": "E96"
+      }
+    }
+  ],
+  "usage": "Set mode to ohm, led or divider. ohm: give exactly two of v (V), i (A), r (Ω), p (W) and leave the others empty; the other two come back. led: supply and vf in V, led_ma in mA and a series (E12/E24/E96) return the exact resistor, the next standard value up, the current and power with it, and the smallest safe SMD package. divider: vin, vout in V and the allowed R1 + R2 range in Ω (tot_lo, tot_hi) return the standard R1 (top) and R2 (bottom) nearest the ratio, Vout with them and its error, the current drawn and the source impedance.",
+  "sources": [
+    "Ohm's law (V = I·R) and Joule's law (P = V·I)",
+    "IEC 60063 preferred number series E12, E24, E96",
+    "Chip resistor power ratings: typical thick-film datasheet values at 70 °C (0402 1/16 W to 2512 1 W), used at 50 % derating (rule of thumb)"
+  ],
   "native": true
 }

@@ -26,7 +26,226 @@
     "arr",
     "pwm"
   ],
-  "usage": "An interactive tool: open it in the Tools tab.",
-  "inputs": [],
+  "intro": "One conversion at a time: a length in mm, mil, inch and µm; an integer in decimal, hex, binary and octal with its two's complement; an STM32/ESP32 UART divider and its baud error; an STM32 timer's PSC and ARR for a frequency. The same arithmetic as the app's Units & Numbers calculator.",
+  "inputs": [
+    {
+      "key": "mode",
+      "label": "Convert",
+      "type": "select",
+      "default": "length",
+      "options": [
+        [
+          "length",
+          "Length: mm, mil, inch"
+        ],
+        [
+          "bases",
+          "Number bases"
+        ],
+        [
+          "uart",
+          "UART baud divider"
+        ],
+        [
+          "timer",
+          "Timer PSC / ARR"
+        ]
+      ]
+    },
+    {
+      "key": "len_value",
+      "label": "Length",
+      "type": "number",
+      "default": "1.6",
+      "when": {
+        "key": "mode",
+        "equals": "length"
+      }
+    },
+    {
+      "key": "len_unit",
+      "label": "Given in",
+      "type": "select",
+      "default": "mm",
+      "options": [
+        [
+          "mm",
+          "mm"
+        ],
+        [
+          "mil",
+          "mil (thou)"
+        ],
+        [
+          "in",
+          "inch"
+        ],
+        [
+          "um",
+          "µm"
+        ]
+      ],
+      "when": {
+        "key": "mode",
+        "equals": "length"
+      }
+    },
+    {
+      "key": "num_text",
+      "label": "Number",
+      "type": "text",
+      "default": "1F",
+      "help": "A leading - for negative; 0x, 0b, 0o and _ are accepted.",
+      "when": {
+        "key": "mode",
+        "equals": "bases"
+      }
+    },
+    {
+      "key": "num_base",
+      "label": "Written in",
+      "type": "select",
+      "default": "hex",
+      "options": [
+        [
+          "dec",
+          "decimal"
+        ],
+        [
+          "hex",
+          "hex"
+        ],
+        [
+          "bin",
+          "binary"
+        ],
+        [
+          "oct",
+          "octal"
+        ]
+      ],
+      "when": {
+        "key": "mode",
+        "equals": "bases"
+      }
+    },
+    {
+      "key": "width",
+      "label": "Word size",
+      "type": "select",
+      "default": "32",
+      "options": [
+        [
+          "8",
+          "8-bit"
+        ],
+        [
+          "16",
+          "16-bit"
+        ],
+        [
+          "32",
+          "32-bit"
+        ],
+        [
+          "64",
+          "64-bit"
+        ]
+      ],
+      "when": {
+        "key": "mode",
+        "equals": "bases"
+      }
+    },
+    {
+      "key": "uart_clk",
+      "label": "Peripheral clock",
+      "type": "number",
+      "unit": "Hz",
+      "default": "80M",
+      "when": {
+        "key": "mode",
+        "equals": "uart"
+      }
+    },
+    {
+      "key": "baud",
+      "label": "Baud rate",
+      "type": "number",
+      "unit": "Bd",
+      "default": "115200",
+      "when": {
+        "key": "mode",
+        "equals": "uart"
+      }
+    },
+    {
+      "key": "tim_clk",
+      "label": "Timer clock",
+      "type": "number",
+      "unit": "Hz",
+      "default": "72M",
+      "when": {
+        "key": "mode",
+        "equals": "timer"
+      }
+    },
+    {
+      "key": "tim_f",
+      "label": "Target frequency",
+      "type": "number",
+      "unit": "Hz",
+      "default": "1k",
+      "when": {
+        "key": "mode",
+        "equals": "timer"
+      }
+    },
+    {
+      "key": "arr_bits",
+      "label": "Counter",
+      "type": "select",
+      "default": "16",
+      "options": [
+        [
+          "16",
+          "16-bit ARR"
+        ],
+        [
+          "32",
+          "32-bit ARR"
+        ]
+      ],
+      "when": {
+        "key": "mode",
+        "equals": "timer"
+      }
+    }
+  ],
+  "examples": [
+    {
+      "title": "A 62 mil board in mm",
+      "input": {
+        "mode": "length",
+        "len_value": "62",
+        "len_unit": "mil"
+      }
+    },
+    {
+      "title": "-100 as a 16-bit register",
+      "input": {
+        "mode": "bases",
+        "num_text": "-100",
+        "num_base": "dec",
+        "width": "16"
+      }
+    }
+  ],
+  "usage": "Set mode to length, bases, uart or timer and fill only that mode's inputs. length: len_value with len_unit (mm, mil, in, um) returns the length in all four units. bases: num_text written in num_base (dec, hex, bin, oct) with width 8/16/32/64 returns decimal, hex, binary, octal, the signed value, bits set and highest bit. uart: uart_clk in Hz and baud return BRR (= clock / baud, rounded), the actual baud and its error in %; timer: tim_clk and tim_f in Hz with arr_bits 16 or 32 return PSC, ARR, the actual frequency and its error.",
+  "sources": [
+    "Inch-millimetre: 1 in = 25.4 mm exactly (international yard and pound agreement, 1959)",
+    "STM32 reference manuals (e.g. RM0090): USART baud rate generation, BRR = fCK / baud with 16x oversampling; timer update rate = fCK / ((PSC + 1)(ARR + 1))",
+    "Espressif ESP32 Technical Reference Manual, UART baud rate generation"
+  ],
   "native": true
 }

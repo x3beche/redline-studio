@@ -1467,25 +1467,18 @@ function findMatches(re,text,cap){
   // UTF-16 index <-> code point index (Python reports code points).
   function u16ToCp(s){var m=new Array(s.length+1),cp=0,i=0;while(i<s.length){m[i]=cp;var c=s.charCodeAt(i),d=s.charCodeAt(i+1);if(c>=0xD800&&c<=0xDBFF&&d>=0xDC00&&d<=0xDFFF){m[i+1]=cp;i+=2;}else i++;cp++;}m[s.length]=cp;return m;}
   function cpToU16(s){var m=[],i=0;while(i<s.length){m.push(i);var c=s.charCodeAt(i),d=s.charCodeAt(i+1);i+=(c>=0xD800&&c<=0xDBFF&&d>=0xDC00&&d<=0xDFFF)?2:1;}m.push(s.length);return m;}
-  // pcre2grep -o prints each non-empty match plus a newline; the checker splits that output into lines.
-  function pyLines(s){var a=s.split(/\r\n|[\n\r\x0b\x0c\x1c-\x1e\x85\u2028\u2029]/);if(a.length&&a[a.length-1]==="")a.pop();return a;}
-  function asGrepLines(texts){return pyLines(texts.filter(function(t){return t!=="";}).map(function(t){return t+"\n";}).join(""));}
-  function missingFrom(a,b){var cnt={},out=[];b.forEach(function(t){cnt["~"+t]=(cnt["~"+t]||0)+1;});a.forEach(function(t){var k="~"+t;if(cnt[k])cnt[k]--;else out.push(t);});return out;}
-  function hasAnchor(p){var r=false;rewrite(p,function(s,i,inCls,esc){if(!inCls&&!esc&&(s[i]==="^"||s[i]==="$"))r=true;return null;});return r;}
-
   function runCheck(){
     if(CK.busy||!CK.ready||!R.pattern)return;
     var p=R.pattern,fl=R.flags||"",text=S.text,py=toPyPattern(p);
-    // The checker runs pcre2grep with -i only; the s flag and UTF text are passed the PCRE way, inline.
-    var pre=(/[^\x00-\x7f]/.test(text+p)?"(*UTF)":"")+(fl.indexOf("s")>=0?"(?s)":"");
-    var job={pattern:p,python:py,pcre:pre+p,pre:pre,flags:fl,text:text,sig:checkSig(),
+    // The checker runs PCRE2 through PHP's preg_match_all on the whole text, with the i/m/s flags and u.
+    var job={pattern:p,python:py,pcre:p,flags:fl,text:text,sig:checkSig(),
       js:{matches:R.re&&!R.paused?R.matches.map(function(m){return {index:m.index,text:m.text};}):null,capped:R.matches.length>=5000,
           error:R.compileError||(R.re?null:R.parseError)||null,paused:!!R.paused}};
     CK.busy=true;CK.fail=null;renderCheck();
     var ctl=window.AbortController?new AbortController():null,t=setTimeout(function(){if(ctl)ctl.abort();},200000);
     function fin(){clearTimeout(t);CK.busy=false;CK.sig=job.sig;renderCheck();if(document.activeElement===document.body||document.activeElement===el.check)el.check.focus();}
     fetch("/api/tools/check",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctl?ctl.signal:undefined,
-      body:JSON.stringify({kind:"regex",input:"",extra:{pattern:p,text:text,flags:fl,python:py,pcre:pre+p}})})
+      body:JSON.stringify({kind:"regex",input:"",extra:{pattern:p,text:text,flags:fl,python:py,pcre:p}})})
       .then(function(r){return r.text().then(function(b){var d=null;try{d=JSON.parse(b);}catch(e){}return {status:r.status,ok:r.ok,d:d,body:b};});})
       .then(function(x){
         var det=x.d&&typeof x.d.detail==="string"?x.d.detail:(x.body||"").slice(0,300);
@@ -1503,46 +1496,41 @@ function findMatches(re,text,cap){
   function compareEngines(job,d){
     var text=job.text,u2c=u16ToCp(text),c2u=cpToU16(text),CAP=500;
     var eng=d.engines||{},py=eng.python&&Array.isArray(eng.python.matches)?eng.python.matches:null;
-    var pc=eng.pcre2&&Array.isArray(eng.pcre2.matches)?eng.pcre2.matches.map(function(m){return String(m.text);}):null;
+    var pc=eng.pcre2&&Array.isArray(eng.pcre2.matches)?eng.pcre2.matches:null;
     var js=job.js.matches,res={job:job,errors:[],groups:[],notes:[],agree:true,count:null};
     (d.errors||[]).forEach(function(e){res.errors.push(e);});
     (Array.isArray(d.notes)?d.notes:[]).forEach(function(n){res.notes.push(String(n));});
     if(job.js.error)res.errors.unshift({engine:"javascript",message:job.js.error});
     if(job.js.paused)res.notes.push("JavaScript matching is paused for this pattern (nested quantifier), so only Python re and PCRE2 are compared.");
     if(res.errors.length)res.agree=false;
-    // JavaScript vs Python re: exact spans, in code points.
+    // Every engine as spans in code points (Python and the PCRE2 checker report code points; JavaScript UTF-16 units).
     var jsSp=js?js.map(function(m){var ub=m.index+m.text.length;return {a:u2c[m.index],b:u2c[ub],ua:m.index,ub:ub,text:m.text};}):null;
-    var pySp=py?py.map(function(m){return {a:m.start,b:m.end,ua:c2u[m.start],ub:c2u[m.end],text:String(m.text)};}):null;
-    if(jsSp&&pySp){
-      var jc=jsSp;
-      if(pySp.length>=CAP){var last=pySp[pySp.length-1].a;jc=jsSp.filter(function(m){return m.a<=last;});res.notes.push("Python re reported its first "+CAP+" matches; the comparison stops there.");}
-      var key=function(m){return m.a+":"+m.b;},pk={},jk={};
-      pySp.forEach(function(m){pk[key(m)]=1;});jc.forEach(function(m){jk[key(m)]=1;});
-      var onlyJ=jc.filter(function(m){return !pk[key(m)];}),onlyP=pySp.filter(function(m){return !jk[key(m)];});
-      if(onlyJ.length||onlyP.length){res.agree=false;res.groups.push({title:"JavaScript vs Python re",rows:onlyJ.map(function(m){return {who:"only JavaScript",m:m};}).concat(onlyP.map(function(m){return {who:"only Python re",m:m};})).sort(function(x,y){return x.m.a-y.m.a;})});}
+    var cpSp=function(ms){return ms.map(function(m){var a=+m.start,b=+m.end;return {a:a,b:b,ua:c2u[a]!=null?c2u[a]:a,ub:c2u[b]!=null?c2u[b]:b,text:String(m.text)};});};
+    var pySp=py?cpSp(py):null,pcSp=pc?cpSp(pc):null;
+    // Two engines, compared by exact start and end. The checker lists at most CAP matches per engine,
+    // so the comparison stops at the last match of a list that hit the cap.
+    function compare(A,nA,B,nB){
+      var stop=Infinity;
+      [[A,nA,nB],[B,nB,nA]].forEach(function(x){if(x[0].length>=CAP&&x[1]!=="JavaScript"){stop=Math.min(stop,x[0][CAP-1].a);res.notes.push(x[1]+" reported its first "+CAP+" matches; the comparison with "+x[2]+" stops there.");}});
+      var a=A.filter(function(m){return m.a<=stop;}),b=B.filter(function(m){return m.a<=stop;});
+      var key=function(m){return m.a+":"+m.b;},ka={},kb={};
+      a.forEach(function(m){ka[key(m)]=1;});b.forEach(function(m){kb[key(m)]=1;});
+      var onlyA=a.filter(function(m){return !kb[key(m)];}),onlyB=b.filter(function(m){return !ka[key(m)];});
+      if(!onlyA.length&&!onlyB.length)return true;
+      res.agree=false;
+      res.groups.push({title:nA+" vs "+nB,rows:onlyA.map(function(m){return {who:"only "+nA,m:m};}).concat(onlyB.map(function(m){return {who:"only "+nB,m:m};})).sort(function(x,y){return x.m.a-y.m.a||x.m.b-y.m.b;})});
+      return false;
     }
-    // Reference for PCRE2: JavaScript, or Python when JavaScript could not run.
-    var ref=jsSp?{name:"JavaScript",ms:jsSp}:pySp?{name:"Python re",ms:pySp}:null;
-    if(ref&&pc){
-      var exp=asGrepLines(ref.ms.map(function(m){return m.text;})),got=pc;
-      if(pc.length>=CAP){exp=exp.slice(0,CAP);res.notes.push("PCRE2 reported its first "+CAP+" matches; the comparison stops there.");}
-      var onlyR=missingFrom(exp,got),onlyC=missingFrom(got,exp),rows=[];
-      onlyR.forEach(function(t){rows.push({who:"only "+ref.name,t:t});});
-      onlyC.forEach(function(t){rows.push({who:"only PCRE2",t:t});});
-      if(rows.length){res.agree=false;res.groups.push({title:ref.name+" vs PCRE2",rows:rows});}
-      else if(exp.join("\n")!==got.join("\n")){res.notes.push("PCRE2 found the same matches as "+ref.name+" in a different order.");}
-      else if(!jsSp)res.notes.push("Python re and PCRE2 agree with each other: "+pc.length+" match"+(pc.length===1?"":"es")+".");
-      var empties=ref.ms.filter(function(m){return m.text==="";}).length;
-      if(empties)res.notes.push(empties+" empty match"+(empties===1?"":"es")+" left out of the PCRE2 comparison: pcre2grep -o does not print empty matches.");
-      if(/\n/.test(text)){
-        if(rows.length)res.notes.push("PCRE2 runs as pcre2grep, which searches line by line"+(/[ms]/.test(job.flags)?" (multi-line with -M here)":"")+": differences on matches that touch a line break may come from that rather than from the pattern.");
-        if(rows.length&&job.flags.indexOf("m")<0&&hasAnchor(job.pattern))res.notes.push("Without the m flag, ^ and $ still act per line in pcre2grep, while JavaScript and Python anchor to the whole text.");
-      }
+    if(jsSp&&pySp)compare(jsSp,"JavaScript",pySp,"Python re");
+    // PCRE2 against JavaScript, or against Python when JavaScript could not run.
+    if(pcSp){
+      if(jsSp){if(!compare(jsSp,"JavaScript",pcSp,"PCRE2")&&/[^\x00-\x7f]/.test(text))res.notes.push("PCRE2 runs with PHP's u modifier, which also turns on UCP: \\d, \\w, \\s and \\b then match non-ASCII digits, letters and spaces, as in Python re and unlike JavaScript.");}
+      else if(pySp&&compare(pySp,"Python re",pcSp,"PCRE2"))res.notes.push("Python re and PCRE2 agree with each other: "+pcSp.length+" match"+(pcSp.length===1?"":"es")+".");
     }
+    if(res.groups.length&&job.flags.indexOf("m")<0&&/[\n\r]$/.test(text)&&/\$/.test(job.pattern))res.notes.push("Without the m flag, $ in Python re and PCRE2 also matches just before a final line break; in JavaScript only at the very end of the text.");
     if(!py&&!res.errors.some(function(e){return e.engine==="python";}))res.errors.push({engine:"python",message:"no result"});
     if(!pc&&!res.errors.some(function(e){return e.engine==="pcre2";}))res.errors.push({engine:"pcre2",message:"no result"});
     if(res.errors.length)res.agree=false;
-    if(job.pre)res.notes.push("Sent to PCRE2 as "+job.pre+" + the PCRE pattern ("+(job.pre.indexOf("UTF")>=0?"UTF-8 text":"")+(job.pre.indexOf("UTF")>=0&&job.pre.indexOf("?s")>=0?", ":"")+(job.pre.indexOf("?s")>=0?"s flag inline":"")+").");
     if(job.js.capped)res.notes.push("JavaScript stops listing at 5000 matches.");
     res.count={js:js?js.length:null,py:py?py.length:null,pc:pc?pc.length:null};
     return res;
@@ -1557,7 +1545,7 @@ function findMatches(re,text,cap){
       return {tab:"py",a:a};
     }
     if(e.engine==="pcre2"&&(m=/at offset (\d+)/.exec(msg))){
-      off=Math.max(0,+m[1]-job.pre.length);
+      off=Math.max(0,Math.min(+m[1],job.pattern.length));
       return {tab:"pcre",a:1+slashEscape(job.pattern.slice(0,off)).length};
     }
     return null;
@@ -1584,7 +1572,7 @@ function findMatches(re,text,cap){
       }
       if(r.errors.length){
         body+="<ul class=\"cklist\">"+r.errors.map(function(e){
-          var tg=errTarget(e,r.job),txt=esc(engName(e.engine)+": "+String(e.message||"").replace(/^pcre2grep:\s*/,""));
+          var tg=errTarget(e,r.job),txt=esc(engName(e.engine)+": "+String(e.message||""));
           return "<li class=\"ckerr\">"+(tg?"<button type=\"button\" class=\"ckm\" data-otab=\""+tg.tab+"\" data-opos=\""+tg.a+"\" title=\"Show the spot in the "+engName(e.engine)+" output\">"+txt+"</button>":txt)+"</li>";
         }).join("")+"</ul>";
       }

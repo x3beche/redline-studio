@@ -190,7 +190,7 @@ def check_regex(req: dict, work: Path) -> dict:
     mods = "".join(f for f in "ims" if f in flags) + "u"
     php = ("$p=getenv('P'); $t=file_get_contents('php://stdin');"
            "$n=@preg_match_all($p,$t,$m,PREG_OFFSET_CAPTURE);"
-           "if($n===false){echo json_encode(['error'=>preg_last_error_msg()]);exit;}"
+           "if($n===false){$e=error_get_last();echo json_encode(['error'=>$e?preg_replace('/^preg_match_all\\(\\): /','',$e['message']):preg_last_error_msg()]);exit;}"
            "echo json_encode(['matches'=>array_map(fn($x)=>['text'=>$x[0],'byte'=>$x[1]],$m[0])]);")
     out = run(["php", "-r", php], stdin=text, timeout=20,
               env={"P": delim + pcre + delim + mods})
