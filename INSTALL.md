@@ -97,6 +97,18 @@ machine it lives on `/mnt/ssd` (`"data-root": "/mnt/ssd/docker"` in
 `/etc/docker/daemon.json`) - the system disk filled up the first time
 they were built on it.
 
+The Tools tab's checks - SQL in PostgreSQL, Prisma, TypeScript, OpenAPI,
+Mermaid, regex engines, cron - run in one more image, offline. It is
+optional: without it the tools work and just show no **Check**.
+
+```bash
+docker build -f docker/tools/tools.Dockerfile -t redline-tools docker/tools
+```
+
+| image | size | what is in it |
+|---|---|---|
+| `redline-tools` | 2.4 GB (1.2 GB shared with `redline-code-web`) | PostgreSQL 16, Node 22 with TypeScript, zod, react-hook-form, Prisma 7, mermaid-cli, Python with the OpenAPI validator and croniter, PCRE2 |
+
 The phone needs **KVM** (`/dev/kvm`); with it, it boots in about 45
 seconds, and it is left running as the container `redline-phone`. A board
 is programmed through the Embedded image with the device passed through:

@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from . import (actors, ato, insights, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
+from . import tools_api
 
 LOG = logging.getLogger("x3.api")
 
@@ -53,6 +54,7 @@ _client = None
 
 # The coding rooms keep their routes in a file of their own.
 app.include_router(code_api.router)
+app.include_router(tools_api.router)
 
 
 def db():

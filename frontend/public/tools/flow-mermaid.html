@@ -208,6 +208,26 @@ textarea{resize:vertical}
 a.btn{text-decoration:none;color:var(--ink);display:inline-block}
 a.btn[aria-disabled="true"]{opacity:.45;pointer-events:none}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+/* offline render (tools image) */
+.chk-note{margin:0;padding:6px 12px;border-top:1px solid var(--line-soft);color:var(--ink-soft);font-size:12px;overflow-wrap:anywhere}
+.chk-note[hidden],.chk[hidden]{display:none}
+.chk{border-top:1px solid var(--line-soft);padding:8px 12px 10px;font-size:12px}
+.chk-head{margin:0;display:flex;align-items:center;gap:6px;font-weight:600}
+.chk-head::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--ink-soft)}
+.chk.pass .chk-head{color:var(--ok)} .chk.pass .chk-head::before{background:var(--ok)}
+.chk.fail .chk-head{color:var(--danger)} .chk.fail .chk-head::before{background:var(--danger)}
+.chk.busy .chk-head{color:var(--ink-soft);font-weight:400}
+.chk.stale .chk-head{color:var(--warn)} .chk.stale .chk-head::before{background:var(--warn)}
+.chk.stale .chk-body{opacity:.55}
+.chk ul{list-style:none;margin:6px 0 0;padding:0}
+.chk-notes li{color:var(--ink-soft);padding:1px 0}
+.chk-errs li{padding:3px 0;border-top:1px solid var(--line-soft)}
+.chk-errs li:first-child{border-top:0}
+.chk-errs .btn{padding:1px 7px;font-size:12px;margin-right:6px}
+.chk-errs pre{margin:4px 0 0;padding:6px 8px;background:var(--sunken);border-radius:4px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;white-space:pre;overflow:auto}
+.chk-prev{margin-top:8px;max-height:420px;overflow:auto;padding:10px;border:1px solid var(--line-soft);border-radius:4px;background:var(--surface)}
+.chk-prev[hidden]{display:none}
+.chk-prev img{display:block;max-width:100%;height:auto;margin:0 auto}
 </style>
 </head>
 <body>
@@ -286,7 +306,17 @@ a.btn[aria-disabled="true"]{opacity:.45;pointer-events:none}
         <button class="btn btn-primary" id="copy">Copy</button>
         <span class="count" id="count"></span>
         <a class="btn" id="live" href="https://mermaid.live/edit" target="_blank" rel="noopener noreferrer" title="Opens mermaid.live in a new tab with this code">Open in mermaid.live ↗</a>
+        <button class="btn" id="render" hidden title="Render this Mermaid code offline in the tools container">Render</button>
         <span class="msg" id="copymsg" role="status" aria-live="polite"></span>
+      </div>
+      <p class="chk-note mono" id="chk-note" hidden></p>
+      <div class="chk" id="chk" hidden aria-live="polite">
+        <p class="chk-head" id="chk-head"></p>
+        <div class="chk-body">
+          <ul class="chk-notes" id="chk-notes"></ul>
+          <ul class="chk-errs" id="chk-errs"></ul>
+          <div class="chk-prev" id="chk-prev" hidden></div>
+        </div>
       </div>
     </div>
   </aside>
@@ -736,6 +766,7 @@ function renderOutput(){
   var live = $('live');
   if (S.nodes.length) { live.href = liveURL(mm); live.removeAttribute('aria-disabled'); }
   else { live.href = 'https://mermaid.live/edit'; live.setAttribute('aria-disabled', 'true'); }
+  renderCheck();
 }
 
 /* ---------------- side panel ---------------- */
@@ -1143,6 +1174,127 @@ $('live').addEventListener('click', function(e){
   this.href = liveURL(outs.mermaid);
 });
 
+/* ---------------- offline render (tools image, only when served over http) ---------------- */
+var CK = {ready:false, busy:false, res:null, code:'', theme:'default'};
+function pageDark(){
+  var t = document.documentElement.getAttribute('data-theme');
+  if (t === 'dark') return true;
+  if (t === 'light') return false;
+  return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
+function fetchT(url, opts, ms){
+  var ac = typeof AbortController === 'function' ? new AbortController() : null, tm = 0;
+  if (ac) { opts.signal = ac.signal; tm = setTimeout(function(){ ac.abort(); }, ms); }
+  return fetch(url, opts).then(function(r){ clearTimeout(tm); return r; }, function(e){ clearTimeout(tm); throw e; });
+}
+/* the renderer counts lines after the front matter; an error at end of input may point past the end */
+function mmLine(code, n){
+  var ls = code.replace(/\n$/, '').split('\n'), off = 0;
+  if (ls[0] === '---') { for (var i = 1; i < ls.length; i++) if (ls[i] === '---') { off = i + 1; break; } }
+  var l = Number(n) + off;
+  if (!(l >= 1)) return 0;
+  return Math.min(l, ls.length);
+}
+function selectOutLine(ln){
+  if (UI.tab !== 'mermaid') { UI.tab = 'mermaid'; save(); renderOutput(); }
+  var pre = $('out'), txt = pre.firstChild;
+  if (!txt || txt.nodeType !== 3) return;
+  var ls = txt.data.split('\n'), a = 0;
+  for (var i = 0; i < ln - 1 && i < ls.length; i++) a += ls[i].length + 1;
+  var b = a + (ls[ln - 1] || '').length;
+  pre.focus({preventScroll:true});
+  var r = document.createRange(); r.setStart(txt, a); r.setEnd(txt, b);
+  var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  var lh = parseFloat(getComputedStyle(pre).lineHeight) || 18;
+  pre.scrollTop = Math.max(0, (ln - 3) * lh);
+}
+function renderCheck(){
+  var btn = $('render'), box = $('chk'), note = $('chk-note'), onTab = UI.tab === 'mermaid';
+  btn.hidden = !(CK.ready && onTab);
+  btn.disabled = CK.busy || !S.nodes.length;
+  btn.textContent = CK.busy ? 'Rendering…' : 'Render';
+  note.hidden = !onTab || !note.textContent;
+  if (!onTab || (!CK.busy && !CK.res)) { box.hidden = true; return; }
+  box.hidden = false;
+  var head = $('chk-head'), notes = $('chk-notes'), errs = $('chk-errs'), prev = $('chk-prev');
+  if (CK.busy) {
+    box.className = 'chk busy'; head.textContent = 'Checking…';
+    notes.textContent = ''; errs.textContent = ''; prev.hidden = true; prev.textContent = '';
+    return;
+  }
+  var r = CK.res, stale = CK.code !== outs.mermaid;
+  box.className = 'chk ' + (stale ? 'stale' : r.ok ? 'pass' : 'fail');
+  head.textContent = stale ? 'Outdated: the code changed since this render. Press Render again.'
+    : r.ok ? 'Rendered: the Mermaid code parses (' + CK.theme + ' theme).'
+    : r.failText || ('Does not render: ' + r.errors.length + ' error' + (r.errors.length === 1 ? '' : 's') + '.');
+}
+function showCheck(r, code){
+  CK.res = r; CK.code = code;
+  var notes = $('chk-notes'), errs = $('chk-errs'), prev = $('chk-prev');
+  notes.textContent = ''; errs.textContent = ''; prev.textContent = ''; prev.hidden = true;
+  (r.notes || []).forEach(function(t){ var li = document.createElement('li'); li.textContent = String(t); notes.appendChild(li); });
+  (r.errors || []).forEach(function(e){
+    var li = document.createElement('li'), ln = e.line != null ? mmLine(code, e.line) : 0;
+    var msg = String(e.message || 'Error').replace(/^Error:\s*/, '').replace(/\s+on line \d+(?=[.:]|\s*$)/, '').replace(/:\s*$/, '');
+    if (ln) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = 'Line ' + ln;
+      b.title = 'Select line ' + ln + ' in the Mermaid code'; b.setAttribute('data-line', ln); li.appendChild(b);
+    }
+    li.appendChild(document.createTextNode(msg));
+    var d = String(e.detail || '').split('\n').filter(function(x, i){ return i > 0 && x && !/^\s*at\s|^\S+\s\(\S+:\d+:\d+\)$/.test(x); }).slice(0, 4).join('\n');
+    if (d) { var pre = document.createElement('pre'); pre.textContent = d; li.appendChild(pre); }
+    errs.appendChild(li);
+  });
+  if (r.ok && typeof r.svg === 'string' && r.svg) {
+    var img = document.createElement('img'), vb = /viewBox="\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)/.exec(r.svg);
+    img.alt = 'Rendered flowchart' + (S.name.trim() ? ': ' + S.name.trim() : '');
+    if (vb) { img.width = Math.round(Number(vb[1])); img.height = Math.round(Number(vb[2])); }
+    img.src = 'data:image/svg+xml;base64,' + b64utf8(r.svg);
+    prev.appendChild(img); prev.hidden = false;
+  }
+  renderCheck();
+}
+function runCheck(){
+  if (CK.busy || !CK.ready || !S.nodes.length) return;
+  var code = outs.mermaid;
+  CK.busy = true; CK.theme = pageDark() ? 'dark' : 'default'; renderCheck();
+  function fail(t){ CK.busy = false; showCheck({ok:false, errors:[], notes:[], failText:t}, code); }
+  fetchT('/api/tools/check', {method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({kind:'mermaid', input:code, extra:{theme:CK.theme}})}, 120000)
+    .then(function(resp){
+      if (resp.status === 503) return resp.json().catch(function(){ return {}; }).then(function(j){
+        CK.ready = false; setNote(j.build || (j.detail && j.detail.build) || ''); fail('The tools image is not built.');
+      });
+      if (resp.status === 413) return fail('Too large to render.');
+      if (resp.status === 504) return fail('Rendering timed out.');
+      if (!resp.ok) return fail('Render failed (HTTP ' + resp.status + ').');
+      return resp.json().then(function(j){
+        CK.busy = false;
+        showCheck({ok:!!j.ok, errors:Array.isArray(j.errors) ? j.errors : [], notes:Array.isArray(j.notes) ? j.notes : [], svg:j.svg}, code);
+      });
+    })
+    .catch(function(e){ fail(e && e.name === 'AbortError' ? 'Rendering timed out.' : 'Could not reach the render service.'); })
+    .then(function(){ if (CK.busy) { CK.busy = false; renderCheck(); } });
+}
+function setNote(build){ $('chk-note').textContent = build ? 'Checks need the tools image: ' + build : ''; renderCheck(); }
+$('render').addEventListener('click', runCheck);
+$('chk-errs').addEventListener('click', function(e){
+  var b = e.target.closest('[data-line]'); if (b) selectOutLine(Number(b.getAttribute('data-line')));
+});
+function probeTools(){
+  if (!/^http/.test(location.protocol) || typeof fetch !== 'function') return;
+  try {
+    fetchT('/api/tools/status', {headers:{Accept:'application/json'}}, 2500)
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        if (!j || typeof j !== 'object') return;
+        if (j.ready && Array.isArray(j.kinds) && j.kinds.indexOf('mermaid') >= 0) { CK.ready = true; renderCheck(); }
+        else if (j.ready === false) setNote(String(j.build || ''));
+      })
+      .catch(function(){ /* no tools API: the page works as before */ });
+  } catch (e) { /* ignore */ }
+}
+
 /* ---------------- boot ---------------- */
 (function boot(){
   var raw = lsGet('state'), u = lsGet('ui');
@@ -1153,6 +1305,7 @@ $('live').addEventListener('click', function(e){
   } catch (e) { /* ignore bad ui state */ }
   hist = [snap()]; hi = 0;
   renderAll();
+  probeTools();
 })();
 
 })();
@@ -1165,7 +1318,8 @@ Flow to Mermaid — usage
 - Click selects, Shift+click or drag on empty space multi-selects. Delete removes, arrows nudge (Shift = 1px), Ctrl+Z / Ctrl+Y undo/redo (100 steps).
 - "Group" wraps the selected steps in a Mermaid subgraph; rename it in the side panel. Choosing a type chip or link style with a selection changes the selection.
 - Output tabs: Mermaid (direction TD/LR/BT/RL), Prompt (step-by-step description for an LLM), JSON. "Open in mermaid.live" opens the code in a new tab.
-- Everything is stored in localStorage under redline.tool.flow-mermaid.*; nothing leaves the page unless you click the mermaid.live link.
+- "Render" (Mermaid tab, only when the page is served by the app and the tools image is built) renders the code offline in a container and shows the diagram or the parse error with its line; it runs only when pressed.
+- Everything is stored in localStorage under redline.tool.flow-mermaid.*; nothing leaves the page unless you click the mermaid.live link or press Render (sent to this app's own /api).
 -->
 </body>
 </html>

@@ -225,6 +225,22 @@ textarea.inp{resize:vertical;min-height:44px;line-height:1.4}
   flex:1;min-height:0;margin:0;padding:8px 10px;overflow:auto;
   font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;line-height:1.5;white-space:pre;tab-size:2;
 }
+.chk-panel{flex:none;max-height:40%;overflow:auto;border-top:1px solid var(--line-soft);padding:6px 10px;font-size:12px;display:flex;flex-direction:column;gap:4px}
+.chk-panel[hidden]{display:none}
+.chk-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chk-verdict{font-weight:600}
+.chk-verdict.pass{color:var(--ok)}
+.chk-verdict.fail{color:var(--danger)}
+.chk-verdict.busy{color:var(--ink-soft);font-weight:400}
+.chk-stale{font:600 10px "IBM Plex Mono",ui-monospace,monospace;color:var(--warn);border:1px solid var(--warn);border-radius:3px;padding:0 4px}
+.chk-notes{margin:0;padding:0;list-style:none;color:var(--ink-soft)}
+.chk-errs{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px}
+.chk-err{display:flex;gap:6px;align-items:flex-start;width:100%;text-align:left;border:0;background:transparent;padding:3px 4px;border-radius:4px;font-size:12px}
+button.chk-err{cursor:pointer}
+button.chk-err:hover{background:var(--sunken)}
+.chk-err .ln{flex:none;font:600 11px "IBM Plex Mono",ui-monospace,monospace;color:var(--danger);min-width:44px}
+.chk-err .em{flex:1;min-width:0;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;white-space:pre-wrap;word-break:break-word}
+.chk-panel.stale .chk-verdict,.chk-panel.stale .chk-errs,.chk-panel.stale .chk-notes{opacity:.6}
 
 @media (max-width:900px){
   body{height:auto;display:block}
@@ -288,10 +304,12 @@ textarea.inp{resize:vertical;min-height:44px;line-height:1.4}
         <span class="foot">
           <span class="count" id="chars"></span>
           <span class="status" id="copyMsg" role="status" aria-live="polite"></span>
+          <button class="btn btn-sm" id="checkBtn" type="button" hidden title="Run this output in the tools image">Check</button>
           <button class="btn btn-primary btn-sm" id="copy" type="button">Copy</button>
         </span>
       </div>
       <pre class="out" id="out" tabindex="0" aria-label="Generated output"></pre>
+      <div class="chk-panel" id="checkPanel" role="status" aria-live="polite" hidden></div>
     </section>
   </section>
 
@@ -1077,6 +1095,7 @@ function showOutput(){
   var txt=outputs[fmt]||'';
   $('#out').textContent=txt;
   $('#chars').textContent=txt.length.toLocaleString('en-US')+' chars';
+  renderCheck();
 }
 
 /* ============ render orchestration ============ */
@@ -1311,6 +1330,131 @@ function copyText(txt){
 $('#copy').addEventListener('click', function(){ copyText(outputs[fmt]||''); });
 window.addEventListener('resize', function(){ sizeBoard(); });
 
+/* ============ Check: run the output in the tools image (only when served over http) ============ */
+var CHECK_KIND={ sql:'sql', prisma:'prisma' };
+var checkKinds=[], checkBuild='', checkMissing=false, checkBusy=null, checkRes={};
+function checkUsable(f){ var k=CHECK_KIND[f]; return !!k && checkKinds.indexOf(k)>=0; }
+function probeChecks(){
+  if(!/^http/.test(location.protocol) || !window.fetch) return;
+  var ctl=window.AbortController ? new AbortController() : null;
+  var tm=setTimeout(function(){ if(ctl) ctl.abort(); }, 2500);
+  try{
+    fetch('/api/tools/status', { headers:{ accept:'application/json' }, signal:ctl?ctl.signal:undefined })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(st){
+        if(!st || typeof st!=='object') return;
+        checkBuild=typeof st.build==='string' ? st.build : '';
+        if(st.ready===true){ checkKinds=Array.isArray(st.kinds) ? st.kinds : []; checkMissing=false; }
+        else if(st.ready===false){ checkKinds=[]; checkMissing=true; }
+        renderCheck();
+      })
+      .catch(function(){})
+      .then(function(){ clearTimeout(tm); });
+  }catch(e){ clearTimeout(tm); }
+}
+function lineCount(txt){ return txt ? txt.replace(/\n$/,'').split('\n').length : 0; }
+function renderCheck(){
+  var btn=$('#checkBtn'), panel=$('#checkPanel'), kind=CHECK_KIND[fmt];
+  var usable=checkUsable(fmt);
+  btn.hidden=!usable;
+  btn.disabled=!!checkBusy;
+  btn.textContent=checkBusy ? 'Checking…' : 'Check';
+  if(!usable){
+    if(checkMissing && kind){
+      panel.hidden=false; panel.className='chk-panel';
+      panel.innerHTML='<p class="muted">Checks need the tools image: <span class="mono">'+esc(checkBuild||'the redline-tools Docker image')+'</span></p>';
+    } else { panel.hidden=true; panel.innerHTML=''; }
+    return;
+  }
+  var res=checkRes[fmt];
+  if(checkBusy===fmt){
+    panel.hidden=false; panel.className='chk-panel';
+    panel.innerHTML='<div class="chk-head"><span class="chk-verdict busy">Checking… ('+(kind==='sql'?'running the DDL in PostgreSQL 16':'validating with the Prisma CLI')+')</span></div>';
+    return;
+  }
+  if(!res){ panel.hidden=true; panel.innerHTML=''; return; }
+  var stale=res.input!==(outputs[fmt]||''), h='', d=res.data;
+  h+='<div class="chk-head">';
+  if(res.fail) h+='<span class="chk-verdict fail">✗ '+esc(res.fail)+'</span>';
+  else if(d.ok){
+    var tb=Array.isArray(d.tables) ? d.tables : null;
+    h+='<span class="chk-verdict pass">✓ '+(kind==='sql' ? 'PostgreSQL ran the DDL without errors'+(tb?' · '+tb.length+' table'+(tb.length===1?'':'s')+' created':'') : 'Prisma validated the schema')+'</span>';
+  } else {
+    var n=(d.errors||[]).length;
+    h+='<span class="chk-verdict fail">✗ '+(kind==='sql'?'PostgreSQL rejected the DDL':'Prisma rejected the schema')+(n?' · '+n+' error'+(n===1?'':'s'):'')+'</span>';
+  }
+  if(stale) h+='<span class="chk-stale" title="The output changed after this check">OUTDATED</span><span class="muted">the output changed; press Check again</span>';
+  h+='</div>';
+  if(d){
+    if(kind==='sql' && Array.isArray(d.tables) && d.tables.length && !d.ok) h+='<p class="muted">Created before the error: <span class="mono">'+esc(d.tables.join(', '))+'</span></p>';
+    else if(kind==='sql' && Array.isArray(d.tables) && d.tables.length) h+='<p class="muted">Tables: <span class="mono">'+esc(d.tables.join(', '))+'</span></p>';
+    var notes=(Array.isArray(d.notes)?d.notes:[]).filter(function(x){ return typeof x==='string' && x; });
+    if(notes.length) h+='<ul class="chk-notes">'+notes.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul>';
+    var errs=Array.isArray(d.errors)?d.errors:[], max=lineCount(res.input);
+    if(errs.length){
+      h+='<ul class="chk-errs">';
+      errs.forEach(function(e){
+        var ln=(e && typeof e.line==='number' && e.line>=1) ? e.line : null;
+        if(ln && kind==='sql') ln=refineSqlLine(res.input, ln, String(e.message||''));
+        var where=ln ? 'line '+ln+(typeof e.column==='number'?':'+e.column:'') : '—';
+        var body='<span class="ln">'+esc(where)+'</span><span class="em">'+esc(String(e&&e.message||'error').replace(/\s+$/,''))+'</span>';
+        if(ln && ln<=max && !stale) h+='<li><button class="chk-err" type="button" data-line="'+ln+'" title="Select line '+ln+' in the output">'+body+'</button></li>';
+        else h+='<li><div class="chk-err">'+body+'</div></li>';
+      });
+      h+='</ul>';
+    }
+  }
+  panel.hidden=false; panel.className='chk-panel'+(stale?' stale':''); panel.innerHTML=h;
+}
+// PostgreSQL quotes the failing text as "LINE k: <text>"; the checker's line can land on the
+// statement's end, so pick the nearest input line at or before it that contains that text.
+function refineSqlLine(input, ln, msg){
+  var m=/LINE \d+:\s*(?:\.\.\.)?(.*?)(?:\.\.\.)?\s*$/m.exec(msg); if(!m) return ln;
+  var frag=m[1].trim(); if(frag.length<4) return ln;
+  var lines=input.split('\n');
+  for(var i=Math.min(ln,lines.length)-1;i>=0 && i>=ln-400;i--){ if(lines[i].indexOf(frag)>=0) return i+1; }
+  return ln;
+}
+function selectOutLine(n){
+  var pre=$('#out'), node=pre.firstChild; if(!node || node.nodeType!==3) return;
+  var txt=node.nodeValue, start=0;
+  for(var i=1;i<n;i++){ var j=txt.indexOf('\n',start); if(j<0) return; start=j+1; }
+  var end=txt.indexOf('\n',start); if(end<0) end=txt.length;
+  var rg=document.createRange(); rg.setStart(node,start); rg.setEnd(node,end);
+  pre.focus({preventScroll:true});
+  var ws=window.getSelection(); ws.removeAllRanges(); ws.addRange(rg);
+  var lh=parseFloat(getComputedStyle(pre).lineHeight)||18;
+  pre.scrollTop=Math.max(0,(n-1)*lh-pre.clientHeight/3); pre.scrollLeft=0;
+}
+function runCheck(){
+  var f=fmt, kind=CHECK_KIND[f]; if(!kind || checkBusy || !checkUsable(f)) return;
+  var input=outputs[f]||'', btn=$('#checkBtn'), hadFocus=document.activeElement===btn;
+  var ctl=window.AbortController ? new AbortController() : null;
+  var tm=setTimeout(function(){ if(ctl) ctl.abort(); }, 180000);
+  checkBusy=f; renderCheck();
+  function finish(res){
+    clearTimeout(tm); checkRes[f]=res; checkBusy=null; renderCheck();
+    if(hadFocus && (document.activeElement===document.body || !document.activeElement) && !btn.hidden) btn.focus();
+  }
+  fetch('/api/tools/check', { method:'POST', headers:{ 'content-type':'application/json', accept:'application/json' },
+      body:JSON.stringify({ kind:kind, input:input, extra:{} }), signal:ctl?ctl.signal:undefined })
+    .then(function(r){ return r.text().then(function(t){ var d=null; try{ d=JSON.parse(t); }catch(e){} return { status:r.status, d:d }; }); })
+    .then(function(x){
+      var d=x.d;
+      if(x.status===503){ checkBuild=(d&&d.build)||checkBuild; finish({ input:input, fail:'Checks need the tools image: '+(checkBuild||'build redline-tools') }); }
+      else if(x.status===413) finish({ input:input, fail:'The output is too large for the checker.' });
+      else if(x.status===504) finish({ input:input, fail:'The check timed out.' });
+      else if(x.status>=400 || !d || typeof d!=='object') finish({ input:input, fail:'Check failed (HTTP '+x.status+')'+(d&&d.detail?': '+(typeof d.detail==='string'?d.detail:JSON.stringify(d.detail)):'.') });
+      else finish({ input:input, data:d });
+    }, function(err){
+      finish({ input:input, fail: err && err.name==='AbortError' ? 'The check timed out.' : 'Could not reach the checker.' });
+    });
+}
+$('#checkBtn').addEventListener('click', runCheck);
+$('#checkPanel').addEventListener('click', function(e){
+  var b=e.target.closest('[data-line]'); if(b) selectOutLine(+b.dataset.line);
+});
+
 /* ============ boot ============ */
 var savedTab=lsGet('tab'); if(savedTab && /^(prompt|sql|prisma|mermaid|json)$/.test(savedTab)) fmt=savedTab;
 var raw=lsGet('state');
@@ -1319,6 +1463,7 @@ if(raw){
   catch(err){ S={notes:'',tables:[],rels:[]}; status('Saved schema could not be restored ('+err.message+'). Starting empty.','err'); }
 }
 render();
+probeChecks();
 // expose generators for headless checks (read-only helpers, harmless in the app)
 window.__schemaSketch={ deserialize:deserialize, load:function(o){ S=deserialize(o); sel=null; render(); }, gen:function(){ return { sql:genSQL(), prisma:genPrisma(), mermaid:genMermaid(), prompt:genPrompt(validate()), issues:validate() }; }, example:EXAMPLE };
 })();

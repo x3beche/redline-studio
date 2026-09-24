@@ -85,6 +85,45 @@ The rules:
   range gets a `calc-warn` line, not silence.
 - **Shared numbers go in `eng.ts`**, not a copy in each tool.
 
+## The tools image: checks, offline
+
+Some tools write something that can be tried for real: SQL, a Prisma schema,
+TypeScript, an OpenAPI document, Mermaid, a regex, a cron schedule. One Docker
+image, `redline-tools`, tries all of them - offline, nothing installed on the
+host. Build it once (it lands in Docker's data root, `/mnt/ssd/docker`):
+
+```bash
+docker build -f docker/tools/tools.Dockerfile -t redline-tools docker/tools
+```
+
+It holds PostgreSQL 16, Node 22 with TypeScript 5, zod 3, react 19,
+react-hook-form 7 and Prisma 7, mermaid-cli with Chrome, Python with the
+OpenAPI validator and croniter, and PCRE2. Its first two layers are the Web
+Programming image's own, so the two share them on disk.
+
+| Tool | Its **Check** does |
+|---|---|
+| Schema Sketch | runs the SQL in a fresh PostgreSQL and lists the tables made; validates the Prisma schema |
+| API Sketch | validates the OpenAPI YAML; compiles the TypeScript client with `tsc --strict` |
+| Form Builder | compiles the Zod, TypeScript and React output against the real libraries |
+| Flow to Mermaid | **Render** draws the diagram offline, or says where it does not parse |
+| Regex by Example | runs the pattern in Python `re` and PCRE2 and compares with JavaScript |
+| Cron Studio | asks croniter for the next runs and compares them with its own |
+
+A check runs only when **Check** is pressed, in a container thrown away
+afterwards: `--network none`, the host's user, 2 GB and 2 CPUs, two at a
+time. The API is `GET /api/tools/status` and `POST /api/tools/check`
+(`backend/tools_api.py`); the image's side is `docker/tools/check.py`, which
+reads one JSON request on stdin and writes one JSON answer:
+
+```bash
+echo '{"kind":"sql","input":"create table t (id int primary key);"}' \
+  | docker run --rm -i --network none redline-tools
+```
+
+Opened as a plain file, or without the image, the pages work as before and
+simply show no Check.
+
 ## Checking a tool
 
 ```bash

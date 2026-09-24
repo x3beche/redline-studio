@@ -221,6 +221,24 @@ button,input,select,textarea{font:inherit;color:inherit}
 .out-card pre{margin:0;flex:1;overflow:auto;padding:10px 12px;background:var(--sunken);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;line-height:1.5;white-space:pre;tab-size:2;border-radius:0 0 6px 6px}
 .copied{color:var(--ok);font-size:12px}
 .copyfail{color:var(--danger);font-size:12px}
+
+/* external check (tools image) */
+.ck{flex:none;max-height:38%;overflow:auto;border-bottom:1px solid var(--line-soft);padding:6px 10px;font-size:12.5px}
+@media (max-width:1180px){.ck{max-height:40vh}}
+.ck-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;font-weight:600}
+.ck-head.pass{color:var(--ok)}
+.ck-head.fail{color:var(--danger)}
+.ck-head.busy,.ck-muted{color:var(--ink-soft);font-weight:400}
+.ck-stale{font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--warn);border:1px solid currentColor;border-radius:3px;padding:0 4px}
+.ck.stale .ck-list,.ck.stale .ck-notes{opacity:.6}
+.ck-notes{margin:3px 0 0;padding:0;list-style:none;color:var(--ink-soft)}
+.ck-list{margin:4px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:1px}
+.ck-err{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:1px solid transparent;background:transparent;border-radius:4px;padding:3px 6px;font-size:12.5px;line-height:1.4}
+button.ck-err{cursor:pointer}
+button.ck-err:hover{background:var(--sunken);border-color:var(--line-soft)}
+.ck-err .loc{flex:none;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;color:var(--danger);min-width:58px}
+.ck-err .msg{white-space:pre-wrap;word-break:break-word;min-width:0}
+.ck-err .sub{display:block;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;color:var(--ink-soft)}
 </style>
 </head>
 <body>
@@ -267,8 +285,10 @@ button,input,select,textarea{font:inherit;color:inherit}
       </label>
       <span class="grow"></span>
       <span id="copyMsg" role="status" aria-live="polite"></span>
+      <button class="btn btn-sm" id="btnCheck" type="button" hidden>Check</button>
       <button class="btn btn-primary btn-sm" id="btnCopy" type="button">Copy</button>
     </div>
+    <div class="ck" id="ck" hidden></div>
     <pre id="out" tabindex="0" aria-label="Generated output"></pre>
   </section>
 </main>
@@ -680,6 +700,8 @@ function checkApi(st){
       if(q.required&&q.default.trim()) add('warn',ep,'"'+n+'" is required and has a default; a default only applies to optional parameters.');
     });
     uniq(pnames).forEach(function(n){var pp=ep.pathParams[n];if(n&&pp&&pp.example.trim()&&!parseExample(pp.type,pp.example).ok) add('warn',ep,'Example "'+pp.example.trim()+'" of {'+n+'} is not a valid '+pp.type+'.');});
+    var clash=tsArgClashes(pnames.filter(Boolean),named(ep.query).length>0,ep.bodyKind!=='none');
+    if(clash.length) add('warn',ep,'Path parameter '+clash.map(function(n){return '{'+n+'}';}).join(', ')+' has the same name as the TypeScript client\'s "'+clash.join('", "')+'" argument; the client puts this endpoint\'s path parameters under args.path instead. Rename it to keep the flat call shape.');
     if(ep.bodyKind!=='none') checkFields(ep,ep.body,'Request body');
     var codes={},has2=false,has4=false,hasErr=false;
     ep.responses.forEach(function(r){
@@ -894,6 +916,9 @@ function tsBody(kind,fields){
   if(kind==='none') return 'void';
   return kind==='array'?'Array<'+tsObj(fields,0)+'>':tsObj(fields,0);
 }
+function tsArgClashes(pnames,hasQ,hasB){
+  return uniq(pnames).filter(function(n){return (n==='query'&&hasQ)||(n==='body'&&hasB);});
+}
 function tplEscape(s){return s.replace(/[\\`]/g,'\\$&').replace(/\$\{/g,'\\${');}
 function successResponse(ep){
   var ok=ep.responses.filter(function(r){return /^2/.test(r.status.trim());});
@@ -926,7 +951,10 @@ function buildTs(st){
     var ok=successResponse(ep);
     L.push('export type '+P+'Response = '+(ok?tsBody(ok.kind,ok.fields):'unknown')+';');
     var pn=uniq(pathParamNames(ep.path)).filter(Boolean);
-    var argProps=pn.map(function(n){var pp=ep.pathParams[n]||normPP({});return tsKey(n)+': '+tsScalar(pp.type);});
+    var ppProps=pn.map(function(n){var pp=ep.pathParams[n]||normPP({});return tsKey(n)+': '+tsScalar(pp.type);});
+    /* a path parameter named like another args key ("query", "body") goes under args.path instead */
+    var nestPath=tsArgClashes(pn,hasQ,hasB).length>0;
+    var argProps=nestPath?['path: { '+ppProps.join('; ')+' }']:ppProps;
     if(hasQ) argProps.push('query'+(qReq?'':'?')+': '+P+'Query');
     if(hasB) argProps.push('body: '+P+'Body');
     var allOpt=pn.length===0&&!hasB&&!qReq;
@@ -934,7 +962,7 @@ function buildTs(st){
     var segs=(ep.path.trim()||'/').split(/(\{[^{}\/]*\})/);
     var tpl=segs.map(function(s){
       var m=/^\{([^{}\/]*)\}$/.exec(s);
-      if(m){var n=m[1].trim();return n?'${enc('+tsAccess('args',n)+')}':'';}
+      if(m){var n=m[1].trim();return n?'${enc('+tsAccess(nestPath?'args.path':'args',n)+')}':'';}
       return tplEscape(s);
     }).join('');
     var call='request<'+P+'Response>(config, \''+ep.method+'\', `'+tpl+'`'+(hasQ?', args.query':(hasB?', undefined':''))+(hasB?', args.body':'')+')';
@@ -1370,7 +1398,161 @@ function renderOutput(){
   $('outCount').textContent=text.length.toLocaleString('en-US')+' chars';
   $('goalWrap').hidden=state.tab!=='prompt';
   $('goal').value=state.goal;
+  renderCheck();
 }
+
+/* ---- external check: runs the output through the tools image (only when served inside the app) ---- */
+var CHECK_KIND={yaml:'openapi',ts:'ts'};
+var CHECK_WHAT={yaml:'OpenAPI document',ts:'TypeScript client (tsc --strict)'};
+var checker={kinds:null,build:'',busy:null,results:{},sig:'',seq:0};
+function checkable(tab){var k=CHECK_KIND[tab];return !!(k&&checker.kinds&&checker.kinds.indexOf(k)>=0);}
+function probeChecker(){
+  if(!/^http/.test(location.protocol)||typeof fetch!=='function') return;
+  var ctl=typeof AbortController==='function'?new AbortController():null;
+  var t=setTimeout(function(){if(ctl) ctl.abort();},2500);
+  try{
+    fetch('/api/tools/status',{signal:ctl?ctl.signal:undefined,headers:{Accept:'application/json'}})
+      .then(function(r){return r.ok?r.json():null;})
+      .then(function(s){
+        clearTimeout(t);
+        if(!s||typeof s!=='object') return;
+        if(s.ready===true&&Array.isArray(s.kinds)) checker.kinds=s.kinds;
+        else if(s.ready===false) checker.build=typeof s.build==='string'?s.build:'';
+        else return;
+        checker.sig='';renderCheck();
+      })
+      .catch(function(){clearTimeout(t);});
+  }catch(e){clearTimeout(t);}
+}
+function checkErrorText(status,body){
+  if(status===503) return 'The tools image is not built'+(body&&body.build?': '+body.build:checker.build?': '+checker.build:'.');
+  if(status===413) return 'Output is too large to check.';
+  if(status===504) return 'The check timed out.';
+  var d=body&&(body.detail||body.error);
+  return 'Check failed (HTTP '+status+')'+(typeof d==='string'?': '+d:'.');
+}
+function runCheck(){
+  var tab=state.tab;
+  if(checker.busy||!checkable(tab)) return;
+  var text=outputs[tab]||'';
+  checker.busy=tab;checker.sig='';renderCheck();
+  function done(res){checker.busy=null;checker.seq+=1;checker.results[tab]={text:text,res:res,seq:checker.seq};checker.sig='';renderCheck();}
+  var ctl=typeof AbortController==='function'?new AbortController():null;
+  var t=setTimeout(function(){if(ctl) ctl.abort();},180000);
+  fetch('/api/tools/check',{method:'POST',signal:ctl?ctl.signal:undefined,headers:{'Content-Type':'application/json',Accept:'application/json'},
+    body:JSON.stringify({kind:CHECK_KIND[tab],input:text,extra:{}})})
+    .then(function(r){
+      return r.text().then(function(b){
+        var j=null;try{j=JSON.parse(b);}catch(e){j=null;}
+        clearTimeout(t);
+        if(!r.ok||!j||typeof j!=='object'){done({failed:checkErrorText(r.status,j)});return;}
+        done(j);
+      });
+    })
+    .catch(function(e){clearTimeout(t);done({failed:e&&e.name==='AbortError'?'The check timed out.':'Could not reach the checker.'});});
+}
+/* line number (1-based) in the generated YAML for an OpenAPI error path like "paths//books/get/responses/200" */
+function yamlKeyNodes(text){
+  var nodes=[];
+  text.split('\n').forEach(function(ln,i){
+    var m=/^( *)(- )?(.*)$/.exec(ln),ind=m[1].length,rest=m[3];
+    if(!ln.trim()) return;
+    if(m[2]){nodes.push({line:i+1,indent:ind,item:true});ind+=2;}
+    var k=null,km;
+    if((km=/^("(?:[^"\\]|\\.)*"):(?: |$)/.exec(rest))){try{k=JSON.parse(km[1]);}catch(e){k=null;}}
+    else if((km=/^([^:"]+?):(?: |$)/.exec(rest))) k=km[1];
+    if(k!==null) nodes.push({line:i+1,indent:ind,key:k});
+  });
+  return nodes;
+}
+function yamlPathLine(text,path){
+  if(Array.isArray(path)) path=path.map(String).join('/');
+  if(typeof path!=='string'||!path) return 0;
+  var nodes=yamlKeyNodes(text),pos=0,end=nodes.length,ind=0,rem=path.replace(/^\//,''),best=0;
+  while(rem&&pos<end){
+    var cands=[],j;
+    for(j=pos;j<end;j++) if(nodes[j].indent===ind) cands.push(j);
+    var pick=-1,take=0;
+    var seg=/^(\d+)(?:\/|$)/.exec(rem);
+    if(seg&&cands.length&&nodes[cands[0]].item){
+      var n=parseInt(seg[1],10);if(n<cands.length){pick=cands[n];take=seg[1].length;}
+    } else cands.forEach(function(c){
+      var k=nodes[c].key;
+      if(k===undefined||k.length<=take) return;
+      if(rem===k||rem.slice(0,k.length+1)===k+'/'){pick=c;take=k.length;}
+    });
+    if(pick<0) break;
+    best=nodes[pick].line;
+    rem=rem.slice(take).replace(/^\//,'');
+    for(end=pick+1;end<nodes.length&&!(nodes[end].indent<=ind&&!(nodes[pick].item&&nodes[end].line===nodes[pick].line));end++){}
+    pos=pick+1;ind+=2;
+  }
+  return best;
+}
+function selectOutLine(line,col){
+  var pre=$('out'),text=pre.textContent,lines=text.split('\n');
+  if(!line||line<1) return;
+  if(line>lines.length) line=lines.length;
+  var start=0;for(var i=0;i<line-1;i++) start+=lines[i].length+1;
+  var node=pre.firstChild;if(!node||node.nodeType!==3) return;
+  var len=lines[line-1].length;
+  pre.focus({preventScroll:true});
+  var range=document.createRange();
+  range.setStart(node,start);range.setEnd(node,start+len);
+  var s=window.getSelection();s.removeAllRanges();s.addRange(range);
+  pre.scrollIntoView({block:'nearest'});
+  var r=range.getBoundingClientRect(),pr=pre.getBoundingClientRect();
+  if(r.height){
+    pre.scrollTop+=r.top-pr.top-pr.height/3;
+    if(col>1&&pr.width) pre.scrollLeft=Math.max(0,pre.scrollLeft+r.left-pr.left-24);
+    else pre.scrollLeft=0;
+  }
+}
+function renderCheck(){
+  var tab=state.tab,box=$('ck'),btn=$('btnCheck');
+  var can=checkable(tab),res=checker.results[tab],text=outputs[tab]||'';
+  var stale=!!(res&&res.text!==text);
+  btn.hidden=!can;
+  btn.disabled=!!checker.busy;
+  btn.textContent=checker.busy?'Checking\u2026':'Check';
+  btn.title=can?'Check the '+CHECK_WHAT[tab]+' with the offline tools image':'';
+  var needBuild=!checker.kinds&&checker.build&&CHECK_KIND[tab];
+  var sig=[tab,can,checker.busy,res?res.seq:'',stale,needBuild?1:0].join('|');
+  if(sig===checker.sig) return;
+  checker.sig=sig;
+  box.textContent='';box.classList.toggle('stale',stale);
+  if(needBuild){box.hidden=false;box.append(h('div',{class:'ck-muted'},'Checks need the tools image: ',h('code',{class:'mono'},checker.build)));return;}
+  if(!can||(!res&&checker.busy!==tab)){box.hidden=true;return;}
+  box.hidden=false;
+  if(checker.busy===tab){box.append(h('div',{class:'ck-head busy',role:'status'},'Checking\u2026 '+CHECK_WHAT[tab]));if(!res) return;}
+  var R=res.res;
+  if(R.failed){
+    box.append(h('div',{class:'ck-head fail',role:'status'},R.failed,stale?h('span',{class:'ck-stale'},'outdated'):null));
+    return;
+  }
+  var errs=Array.isArray(R.errors)?R.errors:[],notes=Array.isArray(R.notes)?R.notes:[];
+  var pass=R.ok===true&&!errs.length;
+  box.append(h('div',{class:'ck-head '+(pass?'pass':'fail'),role:'status'},
+    h('span',null,(pass?'\u2713 Passed':'\u2717 Failed')+' \u2014 '+CHECK_WHAT[tab]+(pass?'':': '+errs.length+' error'+(errs.length===1?'':'s'))),
+    stale?h('span',{class:'ck-stale',title:'The output changed after this check; press Check again'},'outdated'):null));
+  if(notes.length) box.append(h('ul',{class:'ck-notes'},notes.map(function(n){return h('li',null,String(n));})));
+  if(!errs.length) return;
+  var list=h('ul',{class:'ck-list'});
+  errs.slice(0,200).forEach(function(e){
+    e=isObj(e)?e:{message:String(e)};
+    var line=typeof e.line==='number'&&e.line>0?e.line:0,fromPath=false;
+    if(!line&&tab==='yaml'&&e.path){line=yamlPathLine(res.text,e.path);fromPath=!!line;}
+    var loc=line?'line '+line+(e.column?':'+e.column:''):'';
+    var sub=[e.code,e.path?String(Array.isArray(e.path)?e.path.join('/'):e.path):'',fromPath?'(located by path)':''].filter(Boolean).join('  ');
+    var kids=[h('span',{class:'loc'},loc||'\u2014'),h('span',{class:'msg'},String(e.message||'Error'),sub?h('span',{class:'sub'},sub):null)];
+    var go=line&&!stale;
+    list.append(h('li',null,go?h('button',{class:'ck-err',type:'button',title:'Select line '+line+' in the output',
+      onclick:function(){selectOutLine(line,e.column||0);}},kids):h('div',{class:'ck-err'},kids)));
+  });
+  box.append(list);
+  if(errs.length>200) box.append(h('div',{class:'ck-muted'},'\u2026 and '+(errs.length-200)+' more.'));
+}
+$('btnCheck').addEventListener('click',runCheck);
 function copyText(text){
   function fallback(){
     var ta=document.createElement('textarea');
@@ -1425,6 +1607,7 @@ clearBtn.addEventListener('blur',function(){clearBtn.classList.remove('armed');c
 
 function renderAll(){renderInfo();renderEditor();changed();}
 renderAll();
+probeChecker();
 })();
 </script>
 <!--
