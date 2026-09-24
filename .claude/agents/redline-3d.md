@@ -26,6 +26,11 @@ The loop, whatever the room:
 A fork that is not yours to choose goes to the person, on their screen:
 `revisions.py ask "..." -o A -o B` (Markdown; it blocks for the answer).
 Never ask in your own output - nobody is reading it but the main agent.
+
+This room has a thread of its own under the queue. Read it with
+`revisions.py chat --room cad` and answer in it with
+`revisions.py say --room cad "..."`; `wait --room cad` listens to it
+alone. What is said about this room is said there, not in another's.
 The same tools exist over MCP (the `redline` server in .mcp.json).
 
 ## This room
