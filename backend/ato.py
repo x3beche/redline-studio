@@ -218,7 +218,7 @@ async def build(db, board_id: str) -> dict:
         finally:
             job = meter.stop()
             try:
-                await compute.record(db, "board", await compute.current_revision(db),
+                await compute.record(db, "board", await compute.current_revision(db, "pcb"),
                                      model=board_id, rc=proc.returncode, **job)
             except Exception:
                 pass

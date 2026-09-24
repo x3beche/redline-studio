@@ -358,7 +358,7 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         job = meter.stop()
         try:
             await compute.record(db, "layout",
-                                 await compute.current_revision(db),
+                                 await compute.current_revision(db, "pcb"),
                                  model=board_id, rc=0, **job)
         except Exception:
             pass
