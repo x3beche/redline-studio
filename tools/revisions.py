@@ -195,6 +195,46 @@ async def cmd_say(args):
     print("said")
 
 
+async def cmd_part(args):
+    """Parts for a board, from LCSC.
+
+    The pinout comes out of the part's own EasyEDA symbol, so a component
+    block is never written from memory - that is where a board goes wrong
+    in a way nobody sees until it is on the bench.
+    """
+    from backend import lcsc
+
+    if args.what == "passive":
+        if len(args.args) != 3:
+            sys.exit("passive KIND VALUE SIZE, e.g. passive R 10k 0402")
+        got = lcsc.passive(*args.args)
+        if not got:
+            print(f"not in the table. It has: "
+                  + ", ".join(lcsc.passive_values()))
+            sys.exit(2)
+        print(f"{got['key']:14} {got['lcsc']:9} {got['mpn']}   "
+              f"(stock {got.get('stock')} when checked)")
+        return
+    if args.what == "find":
+        rows = await lcsc.pick(" ".join(args.args), 8)
+        if not rows:
+            print("nothing came back")
+        for r in rows:
+            cls = (r.get("jlc_class") or "?").replace(" Part", "")
+            price = f"${r['price']:.4f}" if r.get("price") is not None else "-"
+            print(f"{r['lcsc']:10} {str(r.get('mpn'))[:26]:26} "
+                  f"{str(r.get('package'))[:20]:20} {cls:8} "
+                  f"stock {r.get('stock') or 0:<9} {price}")
+        return
+    for code in args.args:
+        if args.what == "pins":
+            print(f"# {code}")
+            for pin in await lcsc.pins(code):
+                print(f"  {pin['number']:>6}  {pin['name']}")
+        else:
+            print(await lcsc.ato_component(code))
+
+
 async def cmd_ask(args):
     """Put a question on the person's screen and wait for the answer.
 
@@ -535,6 +575,15 @@ def main() -> None:
     s.add_argument("--timeout", type=int, default=0,
                    help="withdraw the question after N seconds; 0 waits")
     s.set_defaults(fn=cmd_ask)
+    s = sub.add_parser("part", help="parts from LCSC, for writing a board")
+    s.add_argument("what", choices=["find", "pins", "ato", "passive"],
+                   help="find: ranked search; pins: a part's pinout; "
+                        "ato: component blocks to paste into a board; "
+                        "passive: R/C by value and size, e.g. R 10k 0402")
+    s.add_argument("args", nargs="+",
+                   help="a search for find, LCSC numbers (C...) for pins/ato, "
+                        "KIND VALUE SIZE for passive")
+    s.set_defaults(fn=cmd_part)
     s = sub.add_parser("wait", help="block until a revision is queued")
     s.add_argument("--every", type=int, default=30,
                    help="seconds between checks (default 30)")

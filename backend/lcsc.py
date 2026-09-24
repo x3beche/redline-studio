@@ -67,6 +67,158 @@ async def _run(args: list[str], cwd: Path) -> tuple[int, str]:
 SEARCH = "https://easyeda.com/api/eda/product/list"
 
 
+# ---- asking politely, and writing down every ask ---------------------------
+#
+# These are EasyEDA's own endpoints, public but not a promised API, and a
+# burst of them gets turned away: ten previews in a few seconds and the
+# component endpoint answered 403 for minutes; thirty-three searches at
+# one a second and the search endpoint did too. So every request waits
+# its turn, and a 403 or 429 stops all of them for a while rather than
+# retrying into it. Anything already looked at is on disk and asks nothing.
+#
+# The page's server and an agent's command line are two processes asking
+# the same service, so the turn-taking and the refusal live in a file both
+# of them lock - kept apart in memory, each would go on asking after the
+# other had been told to stop. And every ask is written to a journal the
+# page shows, so what the agents are doing to LCSC is something you can
+# watch rather than infer.
+
+import contextvars
+import fcntl
+import sys
+import time as _time
+
+GAP = float(os.environ.get("X3_LCSC_GAP", "2.5"))        # seconds between asks
+COOL_OFF = 600                                           # after being refused
+KEEP_LINES = 1000                                        # journal length
+
+# Who is asking: the page (through the server), an agent (the command line
+# or curl), or the passives builder. The server sets it per request.
+_DEFAULT_WHO = {"revisions.py": "agent", "passives.py": "passives"}.get(
+    Path(sys.argv[0]).name if sys.argv else "", "page")
+WHO: contextvars.ContextVar[str] = contextvars.ContextVar("who", default=_DEFAULT_WHO)
+
+
+class Refused(OSError):
+    """EasyEDA turned requests away; say when to try again, do not retry."""
+
+
+def _files() -> tuple[Path, Path, Path]:
+    LOOK.mkdir(parents=True, exist_ok=True)
+    return LOOK / "_state.json", LOOK / "_state.lock", LOOK / "requests.jsonl"
+
+
+def _locked(fn):
+    """Run fn(state) with the shared state file held; returns fn's result."""
+    state_path, lock_path, _ = _files()
+    with open(lock_path, "a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            state = json.loads(state_path.read_text()) if state_path.exists() else {}
+        except (OSError, ValueError):
+            state = {}
+        out = fn(state)
+        state_path.write_text(json.dumps(state))
+        return out
+
+
+def state() -> dict:
+    """The turn-taking as it stands: for the page's status line."""
+    now = _time.time()
+    s = _locked(lambda st: dict(st))
+    until = s.get("refused_until") or 0
+    return {"gap_s": GAP, "cool_off_s": COOL_OFF, "now": now,
+            "refused_until": until if until > now else None,
+            "refused_why": s.get("refused_why") if until > now else None,
+            "last_ask": s.get("last")}
+
+
+def _record(kind: str, target: str, source: str, *, url: str = "",
+            status: int | None = None, ms: float = 0, size: int = 0,
+            error: str | None = None) -> None:
+    """One line in the journal. Never fails the request it describes."""
+    row = {"at": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+           "who": WHO.get(), "kind": kind, "target": target, "source": source,
+           "url": url, "status": status, "ms": round(ms), "bytes": size,
+           "error": error}
+    try:
+        _, lock_path, journal = _files()
+        with open(lock_path, "a+") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            with open(journal, "a") as f:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            if journal.stat().st_size > KEEP_LINES * 600:
+                lines = journal.read_text().splitlines()[-KEEP_LINES:]
+                journal.write_text("\n".join(lines) + "\n")
+    except OSError:
+        pass
+
+
+def journal(limit: int = 200) -> list[dict]:
+    """The most recent asks, newest first."""
+    _, _, path = _files()
+    try:
+        lines = path.read_text().splitlines()[-limit:]
+    except OSError:
+        return []
+    out = []
+    for line in reversed(lines):
+        try:
+            out.append(json.loads(line))
+        except ValueError:
+            continue
+    return out
+
+
+async def _polite(kind: str, target: str, url: str, fn, *args):
+    """One request: its turn, the request, and a line in the journal."""
+    import urllib.error
+
+    def claim(st: dict):
+        now = _time.time()
+        if now < (st.get("refused_until") or 0):
+            return ("refused", st["refused_until"] - now)
+        wait = max(0.0, (st.get("last") or 0) + GAP - now)
+        st["last"] = now + wait                  # the slot is ours
+        return ("go", wait)
+
+    verdict, wait = await asyncio.get_running_loop().run_in_executor(None, _locked, claim)
+    if verdict == "refused":
+        _record(kind, target, "refused", url=url,
+                error=f"cooling off, {int(wait // 60) + 1} min left")
+        raise Refused(f"EasyEDA is turning requests away; parts already looked "
+                      f"at still work, new ones in {int(wait // 60) + 1} min")
+    if wait:
+        await asyncio.sleep(wait)
+
+    t0 = _time.monotonic()
+    try:
+        out = await asyncio.get_running_loop().run_in_executor(None, fn, *args)
+    except urllib.error.HTTPError as exc:
+        ms = (_time.monotonic() - t0) * 1000
+        if exc.code in (403, 429):
+            why = f"EasyEDA said {exc.code} to {kind} {target}"
+
+            def refuse(st: dict):
+                st["refused_until"] = _time.time() + COOL_OFF
+                st["refused_why"] = why
+            await asyncio.get_running_loop().run_in_executor(None, _locked, refuse)
+            _record(kind, target, "net", url=url, status=exc.code, ms=ms,
+                    error=f"refused - nobody asks again for {COOL_OFF // 60} min")
+            raise Refused(f"{why}; not asking again for {COOL_OFF // 60} minutes") from exc
+        _record(kind, target, "net", url=url, status=exc.code, ms=ms, error=str(exc))
+        raise
+    except Exception as exc:
+        _record(kind, target, "net", url=url, ms=(_time.monotonic() - t0) * 1000,
+                error=f"{type(exc).__name__}: {exc}"[:200])
+        raise
+    size = len(out) if isinstance(out, (bytes, bytearray)) else \
+        len(json.dumps(out)) if out is not None else 0
+    _record(kind, target, "net", url=url, status=200,
+            ms=(_time.monotonic() - t0) * 1000, size=size)
+    return out
+
+
 def _ask(url: str) -> dict:
     """One GET, blocking. Its own function so a test can stand in for it
     rather than calling somebody else's service."""
@@ -93,7 +245,7 @@ async def search(term: str, limit: int = 20) -> list[dict]:
 
     url = (f"{SEARCH}?keyword={urllib.parse.quote(term)}"
            f"&page=1&pageSize={max(1, min(limit, 50))}")
-    body = await asyncio.get_running_loop().run_in_executor(None, _ask, url)
+    body = await _polite("search", term, url, _ask, url)
     rows = ((body or {}).get("result") or {}).get("productList") or []
 
     out = []
@@ -149,17 +301,24 @@ def _get_bytes(url: str) -> bytes:
         return r.read()
 
 
+_KINDS = {"component.json": "component", "svgs.json": "drawings",
+          "model.obj": "3d model", "photo.jpg": "photo"}
+
+
 async def _kept(lcsc: str, name: str, url: str) -> bytes:
     """One file about a part: from disk if it has been looked at before."""
     if not looks_like_a_part(lcsc):
         raise ValueError(f"{lcsc!r} is not an LCSC part number")
     path = LOOK / lcsc.strip() / name
+    kind = _KINDS.get(name, name)
     try:
         if path.exists():
-            return path.read_bytes()
+            blob = path.read_bytes()
+            _record(kind, lcsc.strip(), "disk", size=len(blob))
+            return blob
     except OSError:
         pass
-    blob = await asyncio.get_running_loop().run_in_executor(None, _get_bytes, url)
+    blob = await _polite(kind, lcsc.strip(), url, _get_bytes, url)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(path.suffix + ".part")
@@ -248,6 +407,191 @@ async def model_obj(lcsc: str) -> bytes:
     if not model_id:
         raise LookupError(f"{lcsc}: no 3D model")
     return await _kept(lcsc, "model.obj", OBJ.format(model_id))
+
+
+# ---- a part, as a board's source needs it --------------------------------
+#
+# A board is written in atopile, and every pin is a line: `signal PA9 ~
+# pin 17`. Written from memory that is a guess per pin, and the guesses
+# are wrong in the way that costs a board spin. The pin list is already
+# in the part's EasyEDA symbol - numbers and names both - so it is read
+# from there, and the component block is written from it.
+
+
+def _symbol_pins(shapes: list[str]) -> list[dict]:
+    """Pins out of an EasyEDA symbol.
+
+    A pin is one `P~...` string of `^^`-separated segments: the first holds
+    the electrical type, the fourth its name as drawn, the fifth its
+    number as drawn - the pad it lands on.
+    """
+    out = []
+    for shape in shapes:
+        if not shape.startswith("P~"):
+            continue
+        parts = shape.split("^^")
+        head = parts[0].split("~")
+        try:
+            name = parts[3].split("~")[4]
+            number = parts[4].split("~")[4]
+        except IndexError:
+            continue
+        out.append({"number": number.strip(), "name": name.strip(),
+                    "electric": head[2] if len(head) > 2 else ""})
+    return out
+
+
+async def pins(lcsc: str) -> list[dict]:
+    """Every pin of a part, by the number it has on the footprint.
+
+    Parts drawn as several symbols (a dual op-amp, a relay) carry the
+    others as subparts; they are all read, and a pin that appears twice
+    is listed once.
+    """
+    c = await _component(lcsc)
+    shapes = list((c.get("dataStr") or {}).get("shape") or [])
+    for sub in c.get("subparts") or []:
+        shapes += (sub.get("dataStr") or {}).get("shape") or []
+    seen, out = set(), []
+    for pin in _symbol_pins(shapes):
+        if pin["number"] in seen:
+            continue
+        seen.add(pin["number"])
+        out.append(pin)
+
+    def order(p: dict):
+        n = p["number"]
+        return (0, int(n), "") if n.isdigit() else (1, 0, n)
+    return sorted(out, key=order)
+
+
+def _ident(text: str, fallback: str) -> str:
+    """A pin or part name as an atopile identifier: PB8-BOOT0 -> PB8_BOOT0.
+
+    The signs carry meaning and are spelled out before anything is
+    stripped: UD+ and UD- are the two halves of a USB pair, and reduced to
+    "UD" they became one signal - D+ shorted to D-.
+    """
+    text = (text or "").strip()
+    text = re.sub(r"\+$", "P", text)            # UD+   -> UDP
+    text = re.sub(r"-$", "N", text)              # UD-   -> UDN
+    text = text.replace("+", "P")               # VBAT+ -> VBATP
+    text = re.sub(r"^[~/!]", "n", text)          # ~RST  -> nRST
+    text = re.sub(r"#$", "_N", text)             # RST#  -> RST_N
+    out = re.sub(r"[^A-Za-z0-9_]", "_", text).strip("_")
+    out = re.sub(r"_+", "_", out)
+    if not out:
+        out = fallback
+    return out if not out[0].isdigit() else f"p{out}"
+
+
+async def ato_component(lcsc: str) -> str:
+    """The part as an atopile component block, ready to paste.
+
+    Pins that share a name - three GNDs, two VDDs - become one signal on
+    several pins, which is what they are.
+    """
+    c = await _component(lcsc)
+    para = ((c.get("dataStr") or {}).get("head") or {}).get("c_para") or {}
+    package = (c.get("packageDetail") or {}).get("title") or para.get("package") or ""
+    name = _ident(para.get("Manufacturer Part") or c.get("title") or lcsc, lcsc)
+
+    lines = [f"component {name}:",
+             f"    # {lcsc} · {para.get('Manufacturer') or '?'} · "
+             f"{para.get('JLCPCB Part Class') or 'class unknown'}",
+             f'    footprint = "{package}"',
+             f'    mpn = "{lcsc}"']
+    # Only pins with the same name share a signal - three GNDs are one
+    # net. Two different names that come out as the same identifier are
+    # two signals, and each gets its pin number to tell them apart.
+    by_raw: dict[str, str] = {}
+    taken: dict[str, str] = {}
+    for pin in await pins(lcsc):
+        raw = pin["name"].strip()
+        sig = _ident(raw, f"p{pin['number']}")
+        # A pin named NC is not connected to anything - and several of
+        # them are not connected to each other either.
+        if sig.upper() in ("NC", "N_C", "DNC"):
+            lines.append(f"    signal NC_{pin['number']} ~ pin {pin['number']}")
+            continue
+        if raw in by_raw:
+            lines.append(f"    {by_raw[raw]} ~ pin {pin['number']}")
+            continue
+        if sig in taken and taken[sig] != raw:
+            sig = f"{sig}_{_ident(pin['number'], 'x')}"
+        by_raw[raw] = sig
+        taken[sig] = raw
+        lines.append(f"    signal {sig} ~ pin {pin['number']}")
+    return "\n".join(lines) + "\n"
+
+
+PASSIVES = Path(__file__).resolve().parent / "passives.json"
+
+
+def passive(kind: str, value: str, size: str) -> dict | None:
+    """A resistor or capacitor by value and size, from the checked table.
+
+    No request at all: tools/passives.py confirmed every row against LCSC
+    by exact part number. `10k`, `10K`, `10kΩ` are the same resistor;
+    `100n`, `100nF` the same capacitor.
+    """
+    try:
+        table = json.loads(PASSIVES.read_text()).get("parts", {})
+    except (OSError, ValueError):
+        return None
+    k = kind.strip().upper()[:1]
+    v = value.strip().replace("Ω", "").replace("ohm", "")
+    v = re.sub(r"[Ff]$", "", v)                    # 100nF -> 100n
+    v = re.sub(r"(?<=\d)K$", "k", v)               # 10K -> 10k
+    s = size.strip()
+    for key, row in table.items():
+        tk, tv, ts = key.split(" ")
+        if tk == k and tv.lower() == v.lower() and ts == s:
+            return {"key": key, **row}
+    return None
+
+
+def passive_values() -> list[str]:
+    try:
+        return sorted(json.loads(PASSIVES.read_text()).get("parts", {}))
+    except (OSError, ValueError):
+        return []
+
+
+ASK_PER_PICK = 4
+
+
+async def pick(term: str, limit: int = 6) -> list[dict]:
+    """Search, then put first what can actually be bought and assembled.
+
+    LCSC lists by its own relevance, which put an out-of-stock TP4056
+    first. Here: in stock before out of it, JLCPCB Basic before Extended
+    (no feeder fee), then the most stock.
+    """
+    rows = await search(term, max(limit * 2, 10))
+    # The class needs a lookup per part. Only the few with the most stock
+    # are asked about - the rest could not be bought in quantity anyway -
+    # and a refusal ends the asking rather than failing the search.
+    rows.sort(key=lambda r: -(r.get("stock") or 0))
+    out, asked = [], 0
+    for row in rows:
+        row["jlc_class"], row["has_model"] = None, None
+        if asked < ASK_PER_PICK:
+            try:
+                look = await preview(row["lcsc"])
+                row["jlc_class"] = look.get("jlc_class")
+                row["has_model"] = look.get("has_model")
+            except Refused:
+                asked = ASK_PER_PICK
+            except (LookupError, OSError, ValueError, TimeoutError):
+                pass
+            asked += 1
+        out.append(row)
+
+    def rank(r: dict):
+        basic = (r.get("jlc_class") or "").lower().startswith("basic")
+        return (not (r.get("stock") or 0) > 0, not basic, -(r.get("stock") or 0))
+    return sorted(out, key=rank)[:limit]
 
 
 async def model_glb(lcsc: str) -> bytes:

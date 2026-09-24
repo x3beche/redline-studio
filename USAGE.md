@@ -218,6 +218,21 @@ The **Part** field in the right-hand column follows the room: in the board
 room it offers the board's own components, `U1 · C368196`, so a note can
 be about one of them.
 
+### Watching what is asked of LCSC
+
+The log pane at the foot of the board room has a second tab, **lcsc**:
+every request made of LCSC, by the page or by an agent, newest first —
+what was asked (a search, a part's details, its drawings, its model, its
+photo), whether it went to EasyEDA or was answered from disk, the status,
+how long it took and how big the answer was. Click a row for the full URL
+and any error; **⤢** makes the pane tall enough to read.
+
+It is there because these are EasyEDA's own endpoints, not a promised
+API, and they turn a burst away for ten minutes at a time. The line at
+the top says how far apart asks are kept (2.5 s, across every process),
+and when EasyEDA has said no, why and for how long. Nothing is sent while
+that lasts; parts already looked at still work from disk.
+
 ### Board notes
 
 **Save as draft** in the board room files a note on the open board, not a

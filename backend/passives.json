@@ -1,0 +1,246 @@
+{
+ "_about": "Checked against LCSC by exact part number. Rebuild with tools/passives.py.",
+ "parts": {
+  "C 10p 0402": {
+   "lcsc": "C32949",
+   "mpn": "CL05C100JB5NNNC",
+   "package": "0402",
+   "stock": 635150
+  },
+  "C 22p 0402": {
+   "lcsc": "C70464",
+   "mpn": "CL05C220JB5NNNC",
+   "package": "0402",
+   "stock": 90200
+  },
+  "R 0 0402": {
+   "lcsc": "C17168",
+   "mpn": "0402WGF0000TCE",
+   "package": "0402",
+   "stock": 5427700
+  },
+  "R 0 0603": {
+   "lcsc": "C21189",
+   "mpn": "0603WAF0000T5E",
+   "package": "0603",
+   "stock": 17138100
+  },
+  "R 1.2k 0402": {
+   "lcsc": "C25862",
+   "mpn": "0402WGF1201TCE",
+   "package": "0402",
+   "stock": 135500
+  },
+  "R 1.2k 0603": {
+   "lcsc": "C22765",
+   "mpn": "0603WAF1201T5E",
+   "package": "0603",
+   "stock": 2353200
+  },
+  "R 10 0402": {
+   "lcsc": "C25077",
+   "mpn": "0402WGF100JTCE",
+   "package": "0402",
+   "stock": 377500
+  },
+  "R 10 0603": {
+   "lcsc": "C22859",
+   "mpn": "0603WAF100JT5E",
+   "package": "0603",
+   "stock": 6003460
+  },
+  "R 100 0402": {
+   "lcsc": "C25076",
+   "mpn": "0402WGF1000TCE",
+   "package": "0402",
+   "stock": 1707200
+  },
+  "R 100 0603": {
+   "lcsc": "C22775",
+   "mpn": "0603WAF1000T5E",
+   "package": "0603",
+   "stock": 7359300
+  },
+  "R 100k 0402": {
+   "lcsc": "C25741",
+   "mpn": "0402WGF1003TCE",
+   "package": "0402",
+   "stock": 4844200
+  },
+  "R 100k 0603": {
+   "lcsc": "C25803",
+   "mpn": "0603WAF1003T5E",
+   "package": "0603",
+   "stock": 17486900
+  },
+  "R 10k 0402": {
+   "lcsc": "C25744",
+   "mpn": "0402WGF1002TCE",
+   "package": "0402",
+   "stock": 12332000
+  },
+  "R 10k 0603": {
+   "lcsc": "C25804",
+   "mpn": "0603WAF1002T5E",
+   "package": "0603",
+   "stock": 898800
+  },
+  "R 1M 0402": {
+   "lcsc": "C26083",
+   "mpn": "0402WGF1004TCE",
+   "package": "0402",
+   "stock": 1612500
+  },
+  "R 1M 0603": {
+   "lcsc": "C22935",
+   "mpn": "0603WAF1004T5E",
+   "package": "0603",
+   "stock": 5133200
+  },
+  "R 1k 0402": {
+   "lcsc": "C11702",
+   "mpn": "0402WGF1001TCE",
+   "package": "0402",
+   "stock": 1476400
+  },
+  "R 1k 0603": {
+   "lcsc": "C21190",
+   "mpn": "0603WAF1001T5E",
+   "package": "0603",
+   "stock": 8838800
+  },
+  "R 2.2k 0402": {
+   "lcsc": "C25879",
+   "mpn": "0402WGF2201TCE",
+   "package": "0402",
+   "stock": 98700
+  },
+  "R 2.2k 0603": {
+   "lcsc": "C4190",
+   "mpn": "0603WAF2201T5E",
+   "package": "0603",
+   "stock": 6460800
+  },
+  "R 20k 0402": {
+   "lcsc": "C25765",
+   "mpn": "0402WGF2002TCE",
+   "package": "0402",
+   "stock": 438300
+  },
+  "R 20k 0603": {
+   "lcsc": "C4184",
+   "mpn": "0603WAF2002T5E",
+   "package": "0603",
+   "stock": 6159800
+  },
+  "R 22 0402": {
+   "lcsc": "C25092",
+   "mpn": "0402WGF220JTCE",
+   "package": "0402",
+   "stock": 1660100
+  },
+  "R 22 0603": {
+   "lcsc": "C23345",
+   "mpn": "0603WAF220JT5E",
+   "package": "0603",
+   "stock": 7484600
+  },
+  "R 220 0402": {
+   "lcsc": "C25091",
+   "mpn": "0402WGF2200TCE",
+   "package": "0402",
+   "stock": 902800
+  },
+  "R 220 0603": {
+   "lcsc": "C22962",
+   "mpn": "0603WAF2200T5E",
+   "package": "0603",
+   "stock": 1048900
+  },
+  "R 2k 0402": {
+   "lcsc": "C4109",
+   "mpn": "0402WGF2001TCE",
+   "package": "0402",
+   "stock": 7151500
+  },
+  "R 2k 0603": {
+   "lcsc": "C22975",
+   "mpn": "0603WAF2001T5E",
+   "package": "0603",
+   "stock": 10912500
+  },
+  "R 330 0402": {
+   "lcsc": "C25104",
+   "mpn": "0402WGF3300TCE",
+   "package": "0402",
+   "stock": 638400
+  },
+  "R 330 0603": {
+   "lcsc": "C23138",
+   "mpn": "0603WAF3300T5E",
+   "package": "0603",
+   "stock": 2051700
+  },
+  "R 4.7k 0402": {
+   "lcsc": "C25900",
+   "mpn": "0402WGF4701TCE",
+   "package": "0402",
+   "stock": 11888600
+  },
+  "R 4.7k 0603": {
+   "lcsc": "C23162",
+   "mpn": "0603WAF4701T5E",
+   "package": "0603",
+   "stock": 15574400
+  },
+  "R 47 0402": {
+   "lcsc": "C25118",
+   "mpn": "0402WGF470JTCE",
+   "package": "0402",
+   "stock": 259700
+  },
+  "R 47 0603": {
+   "lcsc": "C23182",
+   "mpn": "0603WAF470JT5E",
+   "package": "0603",
+   "stock": 664800
+  },
+  "R 470 0402": {
+   "lcsc": "C25117",
+   "mpn": "0402WGF4700TCE",
+   "package": "0402",
+   "stock": 379600
+  },
+  "R 470 0603": {
+   "lcsc": "C23179",
+   "mpn": "0603WAF4700T5E",
+   "package": "0603",
+   "stock": 5058300
+  },
+  "R 47k 0402": {
+   "lcsc": "C25792",
+   "mpn": "0402WGF4702TCE",
+   "package": "0402",
+   "stock": 4576000
+  },
+  "R 47k 0603": {
+   "lcsc": "C25819",
+   "mpn": "0603WAF4702T5E",
+   "package": "0603",
+   "stock": 247800
+  },
+  "R 5.1k 0402": {
+   "lcsc": "C25905",
+   "mpn": "0402WGF5101TCE",
+   "package": "0402",
+   "stock": 4539700
+  },
+  "R 5.1k 0603": {
+   "lcsc": "C23186",
+   "mpn": "0603WAF5101T5E",
+   "package": "0603",
+   "stock": 23249300
+  }
+ },
+ "not_found": []
+}

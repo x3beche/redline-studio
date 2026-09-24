@@ -149,10 +149,55 @@ curl -s -X POST localhost:8000/api/boards/<id>/build     # netlist
 curl -s -X POST localhost:8000/api/boards/<id>/layout    # place, draw, model
 ```
 
-A part is chosen by its LCSC number (`mpn = "C25744"` on the component);
-`GET /api/parts/search?q=...` searches LCSC's catalogue, and
-`GET /api/parts/<C…>/preview` says what one is - package, stock, price,
-and whether JLCPCB counts it Basic or Extended. Then `done <id>` as usual.
+A part is chosen by its LCSC number (`mpn = "C25744"` on the component).
+Then `done <id>` as usual.
+
+## Designing a board from a description
+
+"STM32F042, two buttons, USB-C charging with a TP4056, a CH340G with a
+12 MHz crystal" is a board. Four commands do the part of it that is
+looking things up, and none of them is written from memory:
+
+```bash
+.venv/bin/python tools/revisions.py part find TP4056          # ranked
+.venv/bin/python tools/revisions.py part passive R 10k 0402   # instant
+.venv/bin/python tools/revisions.py part pins C2969989        # pinout
+.venv/bin/python tools/revisions.py part ato C2969989 C14267  # paste these
+```
+
+- `find` searches LCSC and puts first what can be bought and assembled:
+  in stock, then JLCPCB **Basic** (no feeder fee) before Extended, then
+  the most stock. LCSC's own order put an out-of-stock TP4056 first.
+- `passive` is for resistors and capacitors. Keyword search is useless
+  for them - "0402 10k resistor" returns 10 W through-hole parts - so
+  they come from `backend/passives.json`, every row checked against LCSC
+  by exact part number. Not in the table: pick one with `find` and the
+  manufacturer part number, never a guessed C-number.
+- `ato` writes the component block from the part's own EasyEDA symbol:
+  every pin by its footprint number, pins that share a name on one
+  signal, and names spelled out so `UD+` and `UD-` stay two signals.
+  Paste it; do not retype it.
+- `pins` is the same pinout as a list, for reading.
+
+Then write the module that connects them, build, and lay out. Check the
+netlist the build produces for the connections that matter - the USB
+pair, the UART crossover (TX to RX), power and ground - before you call it
+done.
+
+Things this does not do for you: choose topology (a regulator the MCU
+needs, load sharing on a Li-ion charger, CC pull-downs on a USB-C sink),
+and check the datasheet's application circuit. Those are yours. And a
+Cortex-M0 like the STM32F0 has SWD, not JTAG - say so when asked for JTAG.
+
+### Be gentle with LCSC
+
+These are EasyEDA's own endpoints, not a promised API, and they turn a
+burst away - a 403 that lasts ten minutes, after roughly forty requests
+in a minute or two. Every ask waits its turn (one per 2.5 s, shared by
+every process), a refusal stops all asking until it passes, and parts
+already looked at come from disk without asking. Every ask - yours, the
+page's - is written down and shown in the board room's **lcsc** tab.
+When `find` says it is cooling off, wait; do not loop on it.
 
 ## Only `queued` items are work
 
@@ -170,6 +215,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py queue                # what is queued
 .venv/bin/python tools/revisions.py wait                 # block until there is
 .venv/bin/python tools/revisions.py ask "..." -o A -o B  # ask on their screen
+.venv/bin/python tools/revisions.py part find|pins|ato|passive ...  # parts
 .venv/bin/python tools/revisions.py chat                 # what they said
 .venv/bin/python tools/revisions.py say "..."            # answer them
 .venv/bin/python tools/revisions.py show <id>            # write drawing to disk

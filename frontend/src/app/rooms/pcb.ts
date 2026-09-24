@@ -3,7 +3,8 @@ import {
 } from '@angular/core';
 import {
   Activity, BoardCompute, BoardEntry, BoardGraph, BoardLayout, Boards, Health,
-  LogLine, PartHeld, PartHit, PartPreview, Parts, SystemInfo,
+  LcscAsk, LcscJournal, LogLine, PartHeld, PartHit, PartPreview, Parts,
+  SystemInfo,
 } from '../api';
 import { Selection } from '../selection';
 import { Board3d } from './board3d';
@@ -333,27 +334,111 @@ interface Placed {
          Its own, not the 3D room's: the lines a board writes are about
          this board, and a build that happened while you were looking at
          something else is exactly what you want to read here. -->
-    <section class="tcv-pane" style="grid-column: 2; grid-row: 3">
+    <section class="tcv-pane" style="grid-column: 2"
+             [style.grid-row]="tall() ? '2 / span 2' : '3'">
       <header class="tcv-pane-head">
-        <span class="tcv-label">log</span>
-        <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
-          {{ log().length }} lines
-        </span>
-      </header>
-      <div #logBox class="tcv-scroll mono min-h-0 flex-1 overflow-y-auto px-2 py-1 text-[11px]">
-        @for (l of log(); track l._id) {
-          <div class="flex gap-2 leading-snug">
-            <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
-            <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
-          </div>
-        } @empty {
-          <div style="color: var(--ink-dim)">no activity yet</div>
+        <button (click)="setBottom('log')" class="tcv-chip"
+                [attr.data-on]="bottom() === 'log' ? 1 : null">log</button>
+        <!-- Every ask made of LCSC, by whoever made it. These are
+             somebody else's endpoints and they turn a burst away, so what
+             the agents are doing to them is worth being able to watch. -->
+        <button (click)="setBottom('lcsc')" class="tcv-chip"
+                [attr.data-on]="bottom() === 'lcsc' ? 1 : null">lcsc</button>
+        @if (bottom() === 'log') {
+          <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
+            {{ log().length }} lines
+          </span>
+        } @else if (asks(); as j) {
+          <span class="mono ml-auto truncate text-[10px]" style="color: var(--ink-dim)">
+            last hour: {{ j.last_hour.net }} sent · {{ j.last_hour.disk }} from disk
+            @if (j.last_hour.refused) {
+              · <span style="color: var(--danger)">{{ j.last_hour.refused }} refused</span>
+            }
+          </span>
         }
-      </div>
+        <button (click)="toggleTall()" class="tcv-chip shrink-0"
+                [class.ml-auto]="bottom() === 'lcsc' && !asks()"
+                [title]="tall() ? 'back to its size' : 'taller, over the drawing'">
+          {{ tall() ? '⤡' : '⤢' }}
+        </button>
+      </header>
+
+      @if (bottom() === 'log') {
+        <div #logBox class="tcv-scroll mono min-h-0 flex-1 overflow-y-auto px-2 py-1 text-[11px]">
+          @for (l of log(); track l._id) {
+            <div class="flex gap-2 leading-snug">
+              <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
+              <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
+            </div>
+          } @empty {
+            <div style="color: var(--ink-dim)">no activity yet</div>
+          }
+        </div>
+      } @else {
+        <!-- The turn-taking as it stands: how far apart asks are kept,
+             and - when EasyEDA has said no - why and for how long. -->
+        @if (asks(); as j) {
+          <div class="mono flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1 text-[10px]"
+               style="border-bottom: 1px solid var(--line)">
+            @if (j.state.refused_until) {
+              <span style="color: var(--danger)">
+                cooling off · {{ coolLeft(j) }} left · {{ j.state.refused_why }}
+              </span>
+            } @else {
+              <span style="color: var(--ok)">asking</span>
+            }
+            <span style="color: var(--ink-dim)">one ask every {{ j.state.gap_s }} s</span>
+            <span class="ml-auto flex gap-1">
+              @for (f of askFilters; track f) {
+                <button (click)="askFilter.set(f)" class="tcv-chip px-1.5 py-0"
+                        [attr.data-on]="askFilter() === f ? 1 : null">{{ f }}</button>
+              }
+            </span>
+          </div>
+        }
+        <div class="tcv-scroll mono min-h-0 flex-1 overflow-y-auto text-[11px]">
+          @for (a of shownAsks(); track a.at + a.kind + a.target) {
+            <div (click)="openAsk.set(openAsk() === a ? null : a)"
+                 class="cursor-pointer px-2 py-0.5"
+                 [style.background]="openAsk() === a ? 'var(--accent-deep)' : null">
+              <!-- The part number or the search is what is being read
+                   down this list, so it gets the room; the rest are
+                   narrow and fixed. -->
+              <div class="flex items-baseline gap-1.5">
+                <span class="shrink-0" style="color: var(--line)">{{ a.at.slice(11, 19) }}</span>
+                <span class="w-[3.6rem] shrink-0 truncate" [style.color]="whoColor(a.who)">{{ a.who }}</span>
+                <span class="w-[4.2rem] shrink-0 truncate" style="color: var(--ink-dim)">{{ a.kind }}</span>
+                <span class="min-w-0 flex-1 truncate" style="color: var(--ink)"
+                      [title]="a.target">{{ a.target }}</span>
+                <span class="w-[3.3rem] shrink-0 text-right" [style.color]="sourceColor(a)">
+                  {{ a.source === 'net' ? (a.status ?? 'err') : a.source }}
+                </span>
+                <span class="w-[3.2rem] shrink-0 text-right" style="color: var(--ink-dim)">
+                  {{ a.source === 'net' ? a.ms + 'ms' : '' }}
+                </span>
+                <span class="w-[2.6rem] shrink-0 text-right" style="color: var(--ink-dim)">
+                  {{ a.bytes ? size(a.bytes) : '' }}
+                </span>
+              </div>
+              @if (openAsk() === a) {
+                <div class="mb-1 mt-0.5 break-all pl-[3.6rem] text-[10px] leading-snug"
+                     style="color: var(--ink-dim)">
+                  @if (a.url) { <div>{{ a.url }}</div> }
+                  @if (a.error) { <div style="color: var(--danger)">{{ a.error }}</div> }
+                  <div>{{ a.at }} · {{ a.who }} · {{ sourceWord(a.source) }}</div>
+                </div>
+              }
+            </div>
+          } @empty {
+            <div class="px-2 py-1" style="color: var(--ink-dim)">nothing asked yet</div>
+          }
+        </div>
+      }
     </section>
 
     <!-- LAYOUT -->
-    <section class="tcv-pane" style="grid-column: 2; grid-row: 1 / span 2">
+    <section class="tcv-pane" style="grid-column: 2"
+             [style.grid-row]="tall() ? '1' : '1 / span 2'">
       <!-- The two things you can do to a board live over the drawing they
            change, not in a bar of their own across the top. -->
       <header class="tcv-pane-head">
@@ -518,6 +603,15 @@ export class RoomPcb implements OnDestroy {
   seeing = signal<string | null>(null);
   /** The part whose photo would not load, so the frame is not left empty. */
   noPhoto = signal<string | null>(null);
+
+  /** The bottom pane: this room's log, or every ask made of LCSC. Kept
+   *  across a reload, like the other panels. */
+  bottom = signal<'log' | 'lcsc'>(RoomPcb.recall('bottom', 'log') as 'log' | 'lcsc');
+  tall = signal(RoomPcb.recall('tall', '') === '1');
+  asks = signal<LcscJournal | null>(null);
+  readonly askFilters = ['all', 'sent', 'disk', 'refused', 'agent', 'page'] as const;
+  askFilter = signal<(typeof RoomPcb.prototype.askFilters)[number]>('all');
+  openAsk = signal<LcscAsk | null>(null);
   sys = signal<SystemInfo | null>(null);
   log = signal<LogLine[]>([]);
   private timers: ReturnType<typeof setInterval>[] = [];
@@ -636,8 +730,75 @@ export class RoomPcb implements OnDestroy {
     return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
   }
 
+  private static KEY = 'x3.pcb.';
+
+  private static recall(key: string, fallback: string): string {
+    try { return localStorage.getItem(RoomPcb.KEY + key) ?? fallback; }
+    catch { return fallback; }
+  }
+
+  private static keep(key: string, value: string) {
+    try { localStorage.setItem(RoomPcb.KEY + key, value); } catch { /* private window */ }
+  }
+
+  setBottom(which: 'log' | 'lcsc') {
+    this.bottom.set(which);
+    RoomPcb.keep('bottom', which);
+    if (which === 'lcsc') this.readJournal();
+    else setTimeout(() => this.scrollLog(), 30);
+  }
+
+  toggleTall() {
+    this.tall.update(v => !v);
+    RoomPcb.keep('tall', this.tall() ? '1' : '');
+  }
+
+  private readJournal() {
+    this.store.journal(300).subscribe({ next: j => this.asks.set(j) });
+  }
+
+  shownAsks(): LcscAsk[] {
+    const rows = this.asks()?.rows ?? [];
+    switch (this.askFilter()) {
+      case 'sent': return rows.filter(a => a.source === 'net');
+      case 'disk': return rows.filter(a => a.source === 'disk');
+      case 'refused': return rows.filter(a => a.source === 'refused'
+                                          || a.status === 403 || a.status === 429);
+      case 'agent': return rows.filter(a => a.who !== 'page');
+      case 'page': return rows.filter(a => a.who === 'page');
+      default: return rows;
+    }
+  }
+
+  coolLeft(j: LcscJournal): string {
+    const s = Math.max(0, Math.round((j.state.refused_until ?? 0) - j.state.now));
+    return s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`;
+  }
+
+  whoColor(who: string): string {
+    return who === 'page' ? 'var(--ink-dim)' : 'var(--accent)';
+  }
+
+  sourceColor(a: LcscAsk): string {
+    if (a.source === 'refused' || a.status === 403 || a.status === 429) return 'var(--danger)';
+    if (a.source === 'disk') return 'var(--ink-dim)';
+    return a.status === 200 ? 'var(--ok)' : 'var(--warn)';
+  }
+
+  sourceWord(s: LcscAsk['source']): string {
+    return s === 'net' ? 'sent to EasyEDA'
+      : s === 'disk' ? 'answered from disk, nothing sent'
+      : 'not sent - cooling off after a refusal';
+  }
+
+  size(bytes: number): string {
+    return bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + 'M'
+      : bytes >= 1000 ? Math.round(bytes / 1000) + 'k' : bytes + 'B';
+  }
+
   /** The live half: what the machine is doing, and what has happened. */
   private tick() {
+    if (this.bottom() === 'lcsc') this.readJournal();
     this.health.system().subscribe({ next: s => this.sys.set(s) });
     this.activity.lines(60).subscribe({
       next: rows => {

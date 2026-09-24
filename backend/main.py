@@ -18,6 +18,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from datetime import datetime, timedelta, timezone
+
 from pydantic import BaseModel, Field
 
 from . import (ato, build, chat, compute, kicad, lcsc, questions, store,
@@ -954,6 +956,38 @@ async def board_model(bid: str):
 
 
 # ---------------- parts ----------------
+@app.middleware("http")
+async def _who_asks(request, call_next):
+    """Tag LCSC lookups with who wanted them, for the journal.
+
+    The page asks through a browser; anything else on these routes - curl
+    from an agent, a script - is an agent. It is the same server either
+    way, so the only thing that tells them apart is the client.
+    """
+    if request.url.path.startswith("/api/parts"):
+        agent = request.headers.get("user-agent", "")
+        lcsc.WHO.set("page" if "Mozilla" in agent else "agent")
+    return await call_next(request)
+
+
+@app.get("/api/lcsc/requests")
+async def lcsc_requests(limit: int = 200):
+    """Every ask made of LCSC - by the page, by an agent, by a builder -
+    newest first, with the turn-taking as it stands."""
+    rows = lcsc.journal(max(1, min(limit, 1000)))
+    hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    recent = [r for r in rows if r.get("at", "") >= hour_ago]
+    return {
+        "state": lcsc.state(),
+        "rows": rows,
+        "last_hour": {
+            "net": sum(r["source"] == "net" for r in recent),
+            "disk": sum(r["source"] == "disk" for r in recent),
+            "refused": sum(r["source"] == "refused" or r.get("status") in (403, 429)
+                           for r in recent),
+        },
+    }
+
 @app.get("/api/parts")
 async def list_parts():
     """The drawer: every part that has been fetched, and whether it came
@@ -982,6 +1016,9 @@ async def _look(what, *args):
     """A preview request: LCSC's errors become the browser's 404/502."""
     try:
         return await what(*args)
+    except lcsc.Refused as exc:
+        # Being asked to wait is not the server failing: 503 and why.
+        raise HTTPException(503, str(exc))
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except LookupError as exc:
@@ -999,6 +1036,29 @@ _KEEP = {"Cache-Control": "public, max-age=604800"}
 # anybody who opens one directly.
 _INERT_SVG = {**_KEEP, "Content-Security-Policy":
               "default-src 'none'; style-src 'unsafe-inline'; img-src data:"}
+
+
+@app.get("/api/parts/pick")
+async def pick_parts(q: str, limit: int = 6):
+    """A search ranked for somebody about to order: in stock first, then
+    JLCPCB Basic before Extended, then the most stock."""
+    try:
+        return await lcsc.pick(q, limit)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(502, f"LCSC did not answer: {exc}")
+
+
+@app.get("/api/parts/{lcsc_id}/pins")
+async def part_pins(lcsc_id: str):
+    """Every pin, by the number it has on the footprint, from the symbol."""
+    return await _look(lcsc.pins, lcsc_id)
+
+
+@app.get("/api/parts/{lcsc_id}/ato")
+async def part_ato(lcsc_id: str):
+    """The part as an atopile component block, ready to paste into a board."""
+    return Response(await _look(lcsc.ato_component, lcsc_id),
+                    media_type="text/plain")
 
 
 @app.get("/api/parts/{lcsc_id}/preview")
