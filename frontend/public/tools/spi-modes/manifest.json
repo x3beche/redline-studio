@@ -1,0 +1,24 @@
+{
+  "id": "spi-modes",
+  "name": "SPI Mode Reference",
+  "blurb": "CPOL/CPHA combinations with timing diagrams",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["spi", "cpol", "cpha", "spi mode", "mode 0", "mode 3", "clock polarity", "clock phase", "sample edge", "sck", "mosi", "miso", "timing diagram", "ckp cke", "spidev"],
+  "intro": "Shows what each SPI mode means (mode = 2·CPOL + CPHA, the Motorola definition used by Linux and Arduino): the idle clock level, the edge data is sampled and shifted on, a timing diagram of one byte, how each MCU family and SDK spells the setting, and the modes common parts accept.",
+  "inputs": [
+    { "key": "mode", "label": "Mode", "type": "select", "default": "0",
+      "options": [["all", "All four"], ["0", "Mode 0 (CPOL 0, CPHA 0)"], ["1", "Mode 1 (CPOL 0, CPHA 1)"], ["2", "Mode 2 (CPOL 1, CPHA 0)"], ["3", "Mode 3 (CPOL 1, CPHA 1)"]] },
+    { "key": "device", "label": "Find a part", "type": "text", "default": "", "placeholder": "e.g. ADXL345, flash, display" },
+    { "key": "mosi", "label": "MOSI byte to draw", "type": "text", "default": "0xA5" },
+    { "key": "miso", "label": "MISO byte to draw", "type": "text", "default": "0x3C" },
+    { "key": "order", "label": "Bit order", "type": "select", "default": "msb", "options": [["msb", "MSB first"], ["lsb", "LSB first"]] }
+  ],
+  "examples": [
+    { "title": "ADXL345 accelerometer: which mode?", "input": { "mode": "3", "device": "ADXL345", "mosi": "0xB2", "miso": "0xE5", "order": "msb" } },
+    { "title": "Compare all four modes", "input": { "mode": "all", "device": "", "mosi": "0xA5", "miso": "0x3C", "order": "msb" } }
+  ],
+  "usage": "Give mode as all, 0, 1, 2 or 3, an optional part-name filter (device), and optionally a MOSI and MISO byte in hex plus bit order (msb or lsb) for the diagram. Returns CPOL, CPHA, idle level, sample and shift edges, the register/constant spelling for Linux, Arduino, ESP-IDF, Zephyr, STM32, AVR, PIC, SAM, TI and NXP, and the matching parts with the modes their datasheets allow. result.drawing holds the bit sequences the diagram is drawn from.",
+  "sources": ["Motorola/Freescale SPI Block Guide V03.06 (S12SPIV3), CPOL/CPHA definition", "Linux include/uapi/linux/spi/spi.h (SPI_MODE_0..3)", "ST RM0090 §28.3 (SPI_CR1 CPOL/CPHA), Microchip PIC18 MSSP (CKP/CKE), Atmel SAM3X SPI_CSR (NCPHA), TI MSP430 eUSCI (UCCKPH)", "Part datasheets for the device modes (Analog Devices ADXL345, Bosch BME280, Maxim MAX31855, ST LIS3DH, Winbond W25Q128 and others)"],
+  "view": true
+}

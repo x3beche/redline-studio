@@ -1,0 +1,23 @@
+{
+  "id": "i2c-address-map",
+  "name": "I2C Address Map",
+  "blurb": "devices on a bus by address, with conflicts and alternative addresses",
+  "group": "embedded",
+  "rooms": ["embedded", "pcb"],
+  "keywords": ["i2c", "iic", "twi", "address", "7-bit", "8-bit", "conflict", "collision", "i2cdetect", "bus scan", "mux", "tca9548a", "strap", "addr pin", "smbus"],
+  "intro": "Lists the devices of one I2C bus by 7-bit address, from a list of part names (with or without addresses) or a pasted i2cdetect grid. Parts it knows get their default address and the addresses their strap pins allow, so conflicts come with a free alternative or a mux suggestion; reserved addresses follow NXP UM10204.",
+  "inputs": [
+    { "key": "list", "label": "Devices, one per line", "type": "textarea", "rows": 9,
+      "default": "BME280\nSSD1306 0x3C\nMPU6050\nDS3231\nINA219 x3\nAT24C32 0x57\nMCP23017 0x20\nmy-sensor 0x29",
+      "help": "Part name, optional address (0x48, 48h) and optional count (x3). Unknown parts need an address. Or paste the output of i2cdetect -y 1." },
+    { "key": "format", "label": "Addresses are", "type": "select", "default": "7bit",
+      "options": [["7bit", "7-bit (0x00–0x7F)"], ["8bit", "8-bit write address (0x90 = 0x48)"]] },
+    { "key": "bus", "label": "Bus name", "type": "text", "default": "I2C1" }
+  ],
+  "examples": [
+    { "title": "Sensor board with a classic 0x68 clash (IMU and RTC)", "input": { "list": "BME280\nSSD1306 0x3C\nMPU6050\nDS3231\nINA219 x3\nAT24C32 0x57\nMCP23017 0x20\nmy-sensor 0x29", "format": "7bit", "bus": "I2C1" } },
+    { "title": "An i2cdetect scan", "input": { "list": "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n00:          -- -- -- -- -- -- -- -- -- -- -- -- --\n10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --\n20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --\n30: -- -- -- -- -- -- -- -- -- -- -- -- 3c -- -- --\n40: 40 -- -- -- -- -- -- -- -- -- -- -- -- -- -- --\n50: -- -- -- -- -- -- -- 57 -- -- -- -- -- -- -- --\n60: -- -- -- -- -- -- -- -- UU -- -- -- -- -- -- --\n70: -- -- -- -- -- -- 76 --", "format": "7bit", "bus": "i2c-1" } }
+  ],
+  "usage": "Give list as text, one device per line: a part name (BME280, INA219, SSD1306 …), an optional address (0x48 or 48h) and an optional count (x3); or paste an i2cdetect -y grid. format = 7bit or 8bit. Returns a table per device with its address, status (ok, CONFLICT, reserved, not allowed for the part), the free alternatives its pins allow and how to set them, plus warnings with a concrete fix, a bus map and C #defines. Use it when adding a device to an I2C bus or debugging a scan.",
+  "sources": ["NXP UM10204 I2C-bus specification rev. 7, section 3.1.12 and table 4 (reserved addresses)", "Device datasheets for the default and strap addresses (Bosch BME280, Solomon SSD1306, TDK MPU-6050, Maxim DS3231, TI INA219/ADS1115/TMP102, Microchip MCP23017/24LC256, ST VL53L0X, NXP PCA9685, TI TCA9548A and others)"]
+}

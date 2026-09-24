@@ -1,0 +1,41 @@
+{
+  "id": "log-format",
+  "name": "Log Format Designer",
+  "blurb": "a compact embedded log format and its parser code",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["logging", "binary log", "deferred formatting", "defmt", "dictionary logging", "trace", "printf", "cobs", "log parser", "uart bandwidth", "timestamp", "log level", "telemetry"],
+  "intro": "Designs a binary log record in which the device sends only a message id, level, timestamp and raw arguments while the format strings stay on the host (the idea behind defmt and Zephyr dictionary logging). It sizes every message against its printf text, gives the UART load of both, and generates the C encoder and a Python decoder.",
+  "inputs": [
+    { "key": "messages", "label": "Messages", "type": "table",
+      "columns": [
+        { "key": "name", "label": "Name" },
+        { "key": "text", "label": "Text ({} per argument)" },
+        { "key": "args", "label": "Arg types", "default": "u8" },
+        { "key": "rate", "label": "Rate /s", "default": "1" }
+      ],
+      "default": [
+        { "name": "boot", "text": "boot fw {}.{} reset cause {}", "args": "u8 u8 u8", "rate": "0.01" },
+        { "name": "adc_sample", "text": "adc ch{} = {} mV", "args": "u8 u16", "rate": "100" },
+        { "name": "motor", "text": "motor rpm={} current={} A temp={} C", "args": "u16 f32 i8", "rate": "10" },
+        { "name": "i2c_error", "text": "i2c bus {} addr {} error {}", "args": "u8 u8 i16", "rate": "0.1" },
+        { "name": "heartbeat", "text": "alive uptime={} s free heap={} B", "args": "u32 u32", "rate": "1" }
+      ],
+      "help": "Types: u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 bool. Add new messages at the end so old logs still decode." },
+    { "key": "levels", "label": "Levels", "type": "select", "default": "l4",
+      "options": [["none", "None"], ["l4", "4 levels (2 bits)"], ["l8", "8 levels (3 bits)"]] },
+    { "key": "ts", "label": "Timestamp", "type": "select", "default": "u32ms",
+      "options": [["none", "None"], ["u16ms", "16-bit ms"], ["u32ms", "32-bit ms"], ["u32us", "32-bit µs"]] },
+    { "key": "framing", "label": "Framing", "type": "select", "default": "cobs",
+      "options": [["cobs", "COBS, 0x00 delimited"], ["sync", "Sync byte + length"], ["none", "None (lossless channel)"]] },
+    { "key": "check", "label": "Checksum", "type": "select", "default": "crc8",
+      "options": [["none", "None"], ["crc8", "CRC-8"], ["crc16", "CRC-16"]] },
+    { "key": "baud", "label": "UART baud rate", "type": "number", "unit": "baud", "default": "115200" }
+  ],
+  "examples": [
+    { "title": "Motor controller: 100 Hz ADC samples on a 115200 UART", "input": { "levels": "l4", "ts": "u32ms", "framing": "cobs", "check": "crc8", "baud": "115200" } },
+    { "title": "Tight link: 16-bit timestamps, no levels, 57600 baud", "input": { "levels": "none", "ts": "u16ms", "framing": "cobs", "check": "none", "baud": "57600" } }
+  ],
+  "usage": "Give messages as a table of {name, text with one {} per argument, args as space-separated types (u8 i8 u16 i16 u32 i32 u64 i64 f32 f64 bool), rate in records per second}, plus levels (none, l4, l8), ts (none, u16ms, u32ms, u32us), framing (cobs, sync, none), check (none, crc8, crc16) and the UART baud rate. Returns the header size, each message's size on the wire against its printf text, total bytes per second both ways, UART load, timestamp wrap time, a C header with one log_<name>() function per message, a Python decoder, and one encoded example record. Use it when printf logging is too slow or too big for the link.",
+  "sources": ["Rust defmt book, 'Deferred formatting' (knurling-rs)", "Zephyr Project documentation, Logging: dictionary-based logging", "S. Cheshire, M. Baker, 'Consistent Overhead Byte Stuffing', IEEE/ACM ToN 1999", "Greg Cook, CRC RevEng catalogue (CRC-8/SMBUS, CRC-16/IBM-3740 a.k.a. CCITT-FALSE)"]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "serial-log-parser",
+  "name": "NMEA / Serial Log Parser",
+  "blurb": "a serial log parsed line by line into a table of fields",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["nmea", "nmea 0183", "gps", "gnss", "gga", "rmc", "gsv", "checksum", "serial log", "uart log", "csv", "key value", "telemetry", "parse", "latitude longitude"],
+  "intro": "Parses a pasted serial log line by line. NMEA 0183 sentences are checksum-verified and decoded field by field (GGA, RMC, GSA, GSV, VTG, GLL, ZDA, TXT; other types listed raw), with the last fix and time span summarised. Other logs are read as CSV or key=value lines with per-field min/max/mean. Timestamps and debug text before a '$' are skipped.",
+  "inputs": [
+    { "key": "log", "label": "Log", "type": "textarea", "rows": 10,
+      "default": "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\n$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A\n$GPGSA,A,3,04,05,,09,12,,,24,,,,,2.5,1.3,2.1*39\n$GPGSV,2,1,08,01,40,083,46,02,17,308,41,12,07,344,39,14,22,228,45*75\n$GPVTG,054.7,T,034.4,M,005.5,N,010.2,K*48\n[boot] gps uart 9600 8N1\n12:35:20.101 $GPGGA,123520,4807.040,N,01131.004,E,1,08,0.9,545.6,M,46.9,M,,*44\n$GPRMC,123520,A,4807.040,N,01131.004,E,022.6,084.1,230394,003.1,W*6D\n$GNGLL,4807.041,N,01131.006,E,123521.00,A,A*7B\n$GNZDA,123521.00,23,03,1994,00,00*79" },
+    { "key": "mode", "label": "Format", "type": "select", "default": "auto",
+      "options": [["auto", "Auto-detect"], ["nmea", "NMEA 0183"], ["csv", "CSV / delimited"], ["kv", "key=value"]] }
+  ],
+  "examples": [
+    { "title": "GPS module output with a debug line and one corrupted sentence", "input": { "log": "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\n$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A\n$GPGSA,A,3,04,05,,09,12,,,24,,,,,2.5,1.3,2.1*39\n$GPGSV,2,1,08,01,40,083,46,02,17,308,41,12,07,344,39,14,22,228,45*75\n$GPVTG,054.7,T,034.4,M,005.5,N,010.2,K*48\n[boot] gps uart 9600 8N1\n12:35:20.101 $GPGGA,123520,4807.040,N,01131.004,E,1,08,0.9,545.6,M,46.9,M,,*44\n$GPRMC,123520,A,4807.040,N,01131.004,E,022.6,084.1,230394,003.1,W*6D\n$GNGLL,4807.041,N,01131.006,E,123521.00,A,A*7B\n$GNZDA,123521.00,23,03,1994,00,00*79", "mode": "auto" } },
+    { "title": "Sensor telemetry as key=value", "input": { "log": "t=1000 temp=23.4 hum=41 vbat=3.91\nt=2000 temp=23.6 hum=41 vbat=3.90\nt=3000 temp=24.1 hum=40 vbat=3.90\nerror: i2c nack\nt=4000 temp=24.3 hum=39 vbat=3.89", "mode": "auto" } }
+  ],
+  "usage": "Give log as text (one sentence or record per line) and mode = auto, nmea, csv or kv. For NMEA it returns counts of good sentences and checksum errors, the talkers, last position in decimal degrees, fix/sats/HDOP, altitude, max speed and UTC span, one table per sentence type with decoded fields, a Problems table (bad checksum, non-NMEA lines) and a track CSV. For CSV or key=value it returns the rows as a table, min/max/mean per numeric field and a CSV export. Use it to check a GNSS module's output or to tabulate a device's serial telemetry.",
+  "sources": ["NMEA 0183 Standard v4.11, §5.2 (sentence structure and checksum) and sentence definitions GGA, RMC, GSA, GSV, VTG, GLL, ZDA, TXT", "u-blox 8 / M8 Receiver Description and Protocol Specification, §31 (NMEA protocol, field meanings)"]
+}

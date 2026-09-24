@@ -1,0 +1,41 @@
+{
+  "id": "watchdog-planner",
+  "name": "Watchdog Planner",
+  "blurb": "a safe watchdog period and feed points from the longest task",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["watchdog", "wdt", "iwdg", "wwdg", "window watchdog", "timeout", "feed", "kick", "refresh", "reload", "prescaler", "lsi", "wcet", "reset"],
+  "intro": "Finds the watchdog timeout that never fires in normal operation yet resets a hung system quickly: the worst gap between two feeds (normal feed interval + longest task + interrupt load) times a safety margin, checked at the fastest and slowest watchdog clock. It then picks the prescaler and reload for the chosen watchdog and lists where to feed.",
+  "inputs": [
+    { "key": "target", "label": "Watchdog", "type": "select", "default": "stm32-iwdg",
+      "options": [["stm32-iwdg", "STM32 IWDG (LSI 32 kHz, 12-bit)"], ["avr", "AVR WDT (128 kHz, fixed steps)"], ["nrf52", "nRF52 WDT (32.768 kHz, 32-bit)"], ["custom", "Custom counter"]] },
+    { "key": "feedInterval", "label": "Normal feed interval", "type": "number", "unit": "ms", "default": "10",
+      "help": "How often the main loop or supervisor feeds when nothing is slow (the loop or tick period)." },
+    { "key": "wcet", "label": "Longest task (WCET)", "type": "number", "unit": "ms", "default": "35",
+      "help": "Worst-case execution time of the slowest task that runs between two feeds." },
+    { "key": "isr", "label": "Interrupt load in one gap", "type": "number", "unit": "ms", "default": "3",
+      "help": "Worst-case time interrupts steal during that gap." },
+    { "key": "longOp", "label": "Longest blocking operation", "type": "number", "unit": "ms", "default": "400",
+      "help": "A one-off block such as a flash sector erase or a modem wait; 0 when there is none." },
+    { "key": "margin", "label": "Safety margin", "type": "number", "unit": "×", "default": "2",
+      "help": "Timeout ÷ worst gap. 1.5–3 is usual." },
+    { "key": "tol", "label": "Watchdog clock tolerance", "type": "number", "unit": "±%", "default": "10",
+      "help": "STM32 LSI is poor: F4 datasheets give 17–47 kHz (use 50 % unless calibrated); AVR ±10 %; nRF52 LFXO ±0.01 %." },
+    { "key": "maxRecovery", "label": "Longest allowed hang", "type": "number", "unit": "ms", "default": "500",
+      "help": "The latest a hung system may be reset (the timeout at the slowest clock must stay under it)." },
+    { "key": "clock", "label": "Counter clock", "type": "number", "unit": "Hz", "default": "32k", "when": { "key": "target", "equals": "custom" } },
+    { "key": "bits", "label": "Counter width", "type": "number", "unit": "bit", "default": "16", "when": { "key": "target", "equals": "custom" } },
+    { "key": "maxDivExp", "label": "Largest prescaler 2^n, n =", "type": "number", "default": "8", "when": { "key": "target", "equals": "custom" },
+      "help": "Prescalers 1, 2, 4 … 2^n are tried." },
+    { "key": "windowed", "label": "Window watchdog (feeding too early also resets)", "type": "bool", "default": false },
+    { "key": "windowPct", "label": "Window opens at", "type": "number", "unit": "% of timeout", "default": "50", "when": { "key": "windowed", "equals": "true" } },
+    { "key": "minGap", "label": "Shortest feed gap", "type": "number", "unit": "ms", "default": "8", "when": { "key": "windowed", "equals": "true" },
+      "help": "The quickest two feeds can follow each other." }
+  ],
+  "examples": [
+    { "title": "STM32 superloop: 10 ms tick, 35 ms slowest task, 400 ms flash erase", "input": { "target": "stm32-iwdg", "feedInterval": "10", "wcet": "35", "isr": "3", "longOp": "400", "margin": "2", "tol": "10", "maxRecovery": "500" } },
+    { "title": "ATmega sensor node, 250 ms loop, 1 s allowed hang", "input": { "target": "avr", "feedInterval": "250", "wcet": "60", "isr": "5", "longOp": "0", "margin": "2", "tol": "10", "maxRecovery": "2000" } }
+  ],
+  "usage": "Give times in ms: the normal feed interval, the longest task's WCET, the interrupt load within one gap, the longest one-off blocking operation, a safety margin factor, the watchdog clock tolerance in ± percent and the longest hang you can accept; pick target stm32-iwdg, avr, nrf52 or custom (clock Hz, counter bits, largest prescaler exponent). Returns the worst feed gap, the minimum timeout, the chosen prescaler and reload, the timeout at nominal/fast/slow clock, how many extra feeds a long operation needs, and a feed-point plan. Use it when choosing or reviewing a watchdog configuration.",
+  "sources": ["ST RM0090 section 21 (IWDG: timeout = 4·2^PR·(RLR+1)/f_LSI) and STM32F4 datasheet LSI 17–47 kHz", "Microchip ATmega328P datasheet section 10.9 (WDT prescaler, 128 kHz oscillator)", "Nordic nRF52840 product specification, WDT (timeout = (CRV+1)/32768 s)", "Jack Ganssle, 'Great Watchdog Timers for Embedded Systems' (feed only after all tasks check in)"]
+}

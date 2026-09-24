@@ -1,0 +1,30 @@
+{
+  "id": "hex-dump-decoder",
+  "name": "Hex Dump Decoder",
+  "blurb": "captured raw bytes split into frames for a chosen protocol",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["hex dump", "hexdump", "xxd", "logic analyzer", "capture", "frame", "framing", "modbus rtu", "ubx", "u-blox", "slip", "cobs", "delimiter", "length prefix", "packet"],
+  "intro": "Reads a byte capture in any common hex form (spaced, 0x-prefixed, run-together, hexdump -C or xxd) and splits it into frames: Modbus RTU by CRC, u-blox UBX by header and Fletcher checksum, SLIP (RFC 1055), COBS, or a generic delimiter, fixed length or length-prefixed layout. Each frame is checked and decoded; bytes that fit no frame are reported.",
+  "inputs": [
+    { "key": "data", "label": "Captured bytes (hex)", "type": "textarea", "rows": 8,
+      "default": "01 03 00 00 00 02 C4 0B 01 03 04 00 0A 01 02 5A 60\n7F 02 06 00 01 00 03 98 38\n01 83 02 C0 F1",
+      "help": "Any hex layout; offsets and the ASCII column of hexdump -C / xxd are skipped." },
+    { "key": "protocol", "label": "Protocol", "type": "select", "default": "modbus",
+      "options": [["modbus", "Modbus RTU"], ["ubx", "u-blox UBX"], ["slip", "SLIP (C0-delimited)"], ["cobs", "COBS (00-delimited)"], ["delim", "Delimiter byte"], ["fixed", "Fixed length"], ["len", "Sync + length field"]] },
+    { "key": "delim", "label": "Delimiter (hex)", "type": "text", "default": "0A", "when": { "key": "protocol", "equals": "delim" } },
+    { "key": "fixedLen", "label": "Frame length", "type": "number", "unit": "bytes", "default": "8", "when": { "key": "protocol", "equals": "fixed" } },
+    { "key": "sync", "label": "Sync bytes (hex)", "type": "text", "default": "AA 55", "when": { "key": "protocol", "equals": "len" } },
+    { "key": "lenOff", "label": "Length field offset", "type": "number", "unit": "bytes", "default": "2", "when": { "key": "protocol", "equals": "len" } },
+    { "key": "lenSize", "label": "Length field size", "type": "select", "default": "1", "options": [["1", "1 byte"], ["2", "2 bytes"]], "when": { "key": "protocol", "equals": "len" } },
+    { "key": "lenEndian", "label": "Length byte order", "type": "select", "default": "le", "options": [["le", "Little-endian"], ["be", "Big-endian"]], "when": { "key": "protocol", "equals": "len" } },
+    { "key": "lenAdjust", "label": "Frame length = field +", "type": "number", "unit": "bytes", "default": "4", "when": { "key": "protocol", "equals": "len" },
+      "help": "Bytes not counted by the length field (header, checksum). AA 55 LEN payload CK: payload length + 4." }
+  ],
+  "examples": [
+    { "title": "RS-485 sniff: request, reply, a stray byte, another slave, an exception", "input": { "data": "01 03 00 00 00 02 C4 0B 01 03 04 00 0A 01 02 5A 60\n7F 02 06 00 01 00 03 98 38\n01 83 02 C0 F1", "protocol": "modbus" } },
+    { "title": "u-blox GNSS: ACK-ACK for CFG-PRT", "input": { "data": "B5 62 05 01 02 00 06 00 0E 37", "protocol": "ubx" } }
+  ],
+  "usage": "Give data as hex text (spaced, 0x-prefixed, run-together, hexdump -C or xxd) and protocol = modbus, ubx, slip, cobs, delim (with delim hex byte), fixed (with fixedLen) or len (with sync hex bytes, lenOff, lenSize 1|2, lenEndian le|be, lenAdjust). Returns one row per frame with offset, length, bytes, check result and a decoded summary, plus counts of valid frames, bad frames and unframed bytes. Use it to make sense of a logic-analyzer or serial capture.",
+  "sources": ["Modbus over Serial Line V1.02 §6.2.2 (CRC-16) and Modbus Application Protocol V1.1b3 §6–7 (function and exception codes)", "u-blox 8 / M8 Receiver Description and Protocol Specification, §32.2–32.4 (UBX frame, Fletcher checksum)", "RFC 1055, A Nonstandard for Transmission of IP Datagrams over Serial Lines: SLIP", "S. Cheshire, M. Baker, 'Consistent Overhead Byte Stuffing', IEEE/ACM Transactions on Networking, 1999"]
+}
