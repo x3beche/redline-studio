@@ -1,0 +1,33 @@
+{
+  "id": "assembly-cost",
+  "name": "Assembly Cost Estimator",
+  "blurb": "assembly cost from unique parts, placements and extended-part fees",
+  "group": "pcb",
+  "rooms": ["pcb", "analyze"],
+  "keywords": ["pcba", "assembly cost", "smt", "pick and place", "placements", "solder joints", "extended parts", "basic parts", "setup fee", "stencil", "tht", "contract manufacturer", "ems", "bom lines", "unit cost"],
+  "intro": "A ballpark PCB assembly price from how many parts are placed, how many are unique, how many are 'extended' (not on the line's feeders), through-hole joints and fine-pitch parts. Two public fee structures are modelled: an online assembler that charges per solder joint and per extended part, and a contract manufacturer that charges per placement and BOM line.",
+  "inputs": [
+    { "key": "qty", "label": "Boards", "type": "number", "default": "50" },
+    { "key": "house", "label": "Assembler", "type": "select", "default": "std",
+      "options": [["econ", "Online, economic line"], ["std", "Online, standard line"], ["cm", "Contract manufacturer (US / EU)"]] },
+    { "key": "sides", "label": "SMT sides", "type": "select", "default": "one", "options": [["one", "One side"], ["two", "Both sides"]] },
+    { "key": "unique", "label": "Unique parts (BOM lines)", "type": "number", "default": "35" },
+    { "key": "extended", "label": "Of which extended (non-stock)", "type": "number", "default": "8",
+      "help": "Parts not kept loaded on the line; each costs a fee per order." },
+    { "key": "place", "label": "SMT placements per board", "type": "number", "default": "120" },
+    { "key": "pads", "label": "Average pads per SMT part", "type": "number", "default": "3", "help": "2 for passives; ICs raise it." },
+    { "key": "tht", "label": "Through-hole parts per board", "type": "number", "default": "3" },
+    { "key": "thtpins", "label": "Pins per through-hole part", "type": "number", "default": "4" },
+    { "key": "fine", "label": "BGA / fine-pitch parts per board", "type": "number", "default": "0" },
+    { "key": "bom", "label": "Parts cost per board (optional)", "type": "number", "unit": "USD", "default": "6" },
+    { "key": "attrition", "label": "Parts attrition", "type": "number", "unit": "%", "default": "2" }
+  ],
+  "examples": [
+    { "title": "Prototype run of 10 at an online assembler", "input": { "qty": "10", "house": "std", "sides": "one", "unique": "40", "extended": "12", "place": "90", "pads": "3", "tht": "2", "thtpins": "6", "fine": "1", "bom": "8", "attrition": "2" } },
+    { "title": "1000 boards, both sides, contract manufacturer", "input": { "qty": "1000", "house": "cm", "sides": "two", "unique": "60", "extended": "0", "place": "320", "pads": "3", "tht": "4", "thtpins": "8", "fine": "2", "bom": "14", "attrition": "1" } }
+  ],
+  "usage": "Give the number of boards, assembler type (econ, std or cm), SMT sides (one/two), unique parts and how many of them are extended, SMT placements per board and average pads per part, through-hole parts and pins each, BGA/fine-pitch parts per board, and optionally parts cost per board in USD and attrition in %. Returns assembly total and per board in USD, one-off vs recurring charges, a breakdown, the rates used and per-board cost against quantity. Use it to see what drives assembly cost (usually unique/extended parts at low volume, placements at high volume); it is ±50 %, not a quote.",
+  "sources": [
+    "Rule of thumb: public PCBA fee schedules of online assemblers (per-joint, extended-part and setup fees, 2024-2025) and typical US/EU contract-manufacturer quotes (per placement, per BOM line, NRE)"
+  ]
+}

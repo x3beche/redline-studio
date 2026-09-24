@@ -1,0 +1,33 @@
+{
+  "id": "panelization",
+  "name": "Panelization Planner",
+  "blurb": "how many boards fit a panel with V-cut or mouse-bite margins, and the waste",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["panelization", "panelisation", "panel", "array", "step and repeat", "v-cut", "v-score", "mouse bites", "breakaway tabs", "tab routing", "rails", "utilization", "waste", "boards per panel"],
+  "intro": "How many identical rectangular boards fit a panel as a regular grid, in either orientation, with V-score (boards touching) or tab-routed spacing and assembly rails, and how much of the panel is wasted. Works for a small delivery array or a fab's production panel.",
+  "inputs": [
+    { "key": "bw", "label": "Board width", "type": "number", "unit": "mm", "default": "50" },
+    { "key": "bh", "label": "Board height", "type": "number", "unit": "mm", "default": "30" },
+    { "key": "pw", "label": "Panel width", "type": "number", "unit": "mm", "default": "200",
+      "help": "Delivery arrays are often ≤ 250 × 250 mm; production panels 457 × 610 (18 × 24 in)." },
+    { "key": "ph", "label": "Panel height", "type": "number", "unit": "mm", "default": "150" },
+    { "key": "method", "label": "Separation", "type": "select", "default": "vscore",
+      "options": [["vscore", "V-score (V-cut)"], ["tabs", "Tab-routed with mouse bites"]] },
+    { "key": "gap", "label": "Gap between boards", "type": "number", "unit": "mm", "default": "",
+      "help": "Blank: 0 for V-score, 2 for tab routing." },
+    { "key": "rails", "label": "Rails", "type": "select", "default": "two",
+      "options": [["two", "Top and bottom"], ["four", "All four sides"], ["none", "None"]] },
+    { "key": "rail", "label": "Rail width", "type": "number", "unit": "mm", "default": "5" },
+    { "key": "qty", "label": "Boards to build (optional)", "type": "number", "default": "500" }
+  ],
+  "examples": [
+    { "title": "Small sensor boards in a tab-routed array", "input": { "bw": "25", "bh": "18", "pw": "160", "ph": "120", "method": "tabs", "gap": "2", "rails": "two", "rail": "5", "qty": "1000" } },
+    { "title": "Production panel, 18 × 24 in, V-scored", "input": { "bw": "80", "bh": "60", "pw": "457", "ph": "610", "method": "vscore", "gap": "", "rails": "four", "rail": "10", "qty": "5000" } }
+  ],
+  "usage": "Give board width and height and panel width and height in mm, separation 'vscore' or 'tabs', optional gap in mm (blank uses 0 or 2), rails 'two', 'four' or 'none', rail width in mm, and optionally how many boards are needed. Returns boards per panel (best orientation, columns × rows), panel utilisation and waste, the array outline, panels needed, both orientations as a table, and a 'layout' object with the grid geometry. Use it to choose a panel size or check array yield before ordering.",
+  "sources": [
+    "Rule of thumb from fab and EMS panel guidelines (e.g. IPC-2221B section 5 on panelization, typical fab capability pages): 0 mm V-score gap, 1.6-2.4 mm router gap, 5 mm assembly rails"
+  ],
+  "view": true
+}

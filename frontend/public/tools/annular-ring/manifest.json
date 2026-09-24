@@ -1,0 +1,33 @@
+{
+  "id": "annular-ring",
+  "name": "Annular Ring Checker",
+  "blurb": "whether the ring left around a drill is safe for a fab's tolerance",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["annular ring", "via pad", "drill", "breakout", "tangency", "registration", "hole tolerance", "land size", "ipc-6012", "ipc-2221", "pth", "npth", "via", "pad size", "dfm"],
+  "intro": "The copper ring left between a drilled hole and the edge of its pad, nominal and at the fab's worst-case drill size and position, judged against IPC-6012 class 1/2/3 acceptance (ring width or allowed breakout). It also gives the pad size the IPC-2221 land formula asks for.",
+  "inputs": [
+    { "key": "plated", "label": "Hole type", "type": "select", "default": "pth", "options": [["pth", "Plated (via or PTH)"], ["npth", "Non-plated"]] },
+    { "key": "given", "label": "Hole size is the", "type": "select", "default": "drill", "options": [["drill", "Drill size"], ["finished", "Finished (plated) hole size"]] },
+    { "key": "hole", "label": "Hole diameter", "type": "number", "unit": "mm", "default": "0.3" },
+    { "key": "pad", "label": "Pad diameter", "type": "number", "unit": "mm", "default": "0.6" },
+    { "key": "allowance", "label": "Drill oversize for plating", "type": "number", "unit": "mm", "default": "0.1",
+      "help": "Only used when the size is the finished hole: drill = finished + this." },
+    { "key": "tol", "label": "Hole size tolerance (+)", "type": "number", "unit": "mm", "default": "0.05" },
+    { "key": "reg", "label": "Drill registration tolerance", "type": "number", "unit": "mm", "default": "0.075",
+      "help": "How far the drill may land from the pad centre; ±0.075 mm is common." },
+    { "key": "layer", "label": "Layer", "type": "select", "default": "outer", "options": [["outer", "Outer layer"], ["inner", "Inner layer"]] },
+    { "key": "klass", "label": "IPC class", "type": "select", "default": "2", "options": [["1", "Class 1 (general)"], ["2", "Class 2 (dedicated service)"], ["3", "Class 3 (high reliability)"]] },
+    { "key": "fabmin", "label": "Fab's minimum ring (optional)", "type": "number", "unit": "mm", "default": "0.1",
+      "help": "The nominal ring the fab's capabilities page asks for." }
+  ],
+  "examples": [
+    { "title": "0.3 mm via in a 0.5 mm pad at a budget fab", "input": { "plated": "pth", "given": "drill", "hole": "0.3", "pad": "0.5", "allowance": "0.1", "tol": "0.05", "reg": "0.075", "layer": "outer", "klass": "2", "fabmin": "0.1" } },
+    { "title": "1.0 mm finished PTH for a header, class 3", "input": { "plated": "pth", "given": "finished", "hole": "1.0", "pad": "1.7", "allowance": "0.1", "tol": "0.05", "reg": "0.1", "layer": "inner", "klass": "3", "fabmin": "0.15" } }
+  ],
+  "usage": "Give hole type (pth/npth), whether the size is drill or finished, hole and pad diameters in mm, plating oversize, the fab's hole tolerance and registration tolerance in mm, layer (outer/inner), IPC class (1/2/3) and optionally the fab's minimum ring. Returns the drill used, nominal and worst-case ring, worst-case breakout angle, pass/fail per IPC class, the pad needed, and IPC-2221 land sizes. Use it before choosing via or PTH pad sizes for a fab.",
+  "sources": [
+    "IPC-6012 Qualification and Performance Specification for Rigid Printed Boards: annular ring and breakout acceptance by class",
+    "IPC-2221B Generic Standard on Printed Board Design, 9.1.1-9.1.2 and table 9-1 (land size = a + 2b + c)"
+  ]
+}

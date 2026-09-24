@@ -1,0 +1,37 @@
+{
+  "id": "impedance-calc",
+  "name": "Impedance Calculator",
+  "blurb": "characteristic impedance of microstrip, stripline and differential pairs from the stackup",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["impedance", "controlled impedance", "microstrip", "stripline", "differential pair", "zdiff", "z0", "50 ohm", "90 ohm", "100 ohm", "trace width", "stackup", "dielectric", "er", "usb hdmi ethernet"],
+  "intro": "Impedance of a trace from its width, copper thickness and the dielectric to its reference plane(s), and the width that hits a target. Single lines use the Hammerstad-Jensen (microstrip) and Wheeler (stripline) closed forms; pairs use the AN-905 / IPC-2141 coupling approximation.",
+  "inputs": [
+    { "key": "kind", "label": "Line type", "type": "select", "default": "microstrip",
+      "options": [["microstrip", "Surface microstrip"], ["stripline", "Stripline (between two planes)"], ["diff-microstrip", "Differential pair, microstrip"], ["diff-stripline", "Differential pair, stripline"]] },
+    { "key": "units", "label": "Lengths in", "type": "select", "default": "mm", "options": [["mm", "mm"], ["mil", "mil"]] },
+    { "key": "w", "label": "Trace width W", "type": "number", "unit": "mm / mil", "default": "0.34" },
+    { "key": "s", "label": "Gap between pair traces S", "type": "number", "unit": "mm / mil", "default": "0.2",
+      "help": "Edge to edge; only used for differential pairs." },
+    { "key": "h", "label": "Dielectric height H (H1)", "type": "number", "unit": "mm / mil", "default": "0.2",
+      "help": "Trace to its reference plane. Stripline: to the plane below." },
+    { "key": "h2", "label": "Stripline: dielectric above H2", "type": "number", "unit": "mm / mil", "default": "0.2",
+      "help": "Trace to the plane above; set equal to H for a centred stripline." },
+    { "key": "t", "label": "Copper thickness T", "type": "number", "unit": "µm", "default": "35",
+      "help": "0.5 oz = 17.5 µm, 1 oz = 35 µm, 2 oz = 70 µm. Outer layers gain ~20 µm of plating." },
+    { "key": "er", "label": "Dielectric constant Er", "type": "number", "default": "4.3",
+      "help": "FR-4 about 4.2-4.6; use the fab's value for the prepreg or core." },
+    { "key": "target", "label": "Target impedance", "type": "number", "unit": "Ω", "default": "50",
+      "help": "Optional: the tool solves the width that gives it." }
+  ],
+  "examples": [
+    { "title": "USB 90 Ω pair on the outer layer of a 4-layer board", "input": { "kind": "diff-microstrip", "units": "mm", "w": "0.27", "s": "0.15", "h": "0.21", "h2": "0.21", "t": "45", "er": "4.2", "target": "90" } },
+    { "title": "50 Ω stripline on an inner layer, mils", "input": { "kind": "stripline", "units": "mil", "w": "7.9", "s": "5", "h": "8", "h2": "10", "t": "17.5", "er": "4.0", "target": "50" } }
+  ],
+  "usage": "Give the line type (microstrip, stripline, diff-microstrip, diff-stripline), lengths W, S, H, H2 in the unit chosen by 'units' (mm or mil), copper thickness T in µm, Er, and optionally a target impedance in ohms. Returns Z0 (and Zdiff for pairs), effective Er, delay in ps/mm, L and C per mm, the width that meets the target, and a width sweep. Use it to size controlled-impedance traces before asking the fab for their stackup; pair results are ±5-10 %.",
+  "sources": [
+    "E. Hammerstad, O. Jensen, 'Accurate Models for Microstrip Computer-Aided Design', IEEE MTT-S 1980",
+    "B. C. Wadell, Transmission Line Design Handbook, Artech House 1991, sections 3.5.1 and 3.5.3 (Wheeler stripline, offset stripline)",
+    "National Semiconductor AN-905, Transmission Line RAPIDESIGNER Operation and Applications Guide (edge-coupled pairs); IPC-2141A"
+  ]
+}

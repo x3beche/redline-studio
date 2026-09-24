@@ -72,18 +72,22 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-48 tools. **MCP** marks the ones agents can run with `run_tool`.
+56 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
+| **Annular Ring Checker** · MCP | `annular-ring` | whether the ring left around a drill is safe for a fab's tolerance | PCB |
 | **Antenna Length Calculator** · MCP | `antenna-length` | quarter-wave antenna length and keep-out for a frequency | PCB |
+| **Assembly Cost Estimator** · MCP | `assembly-cost` | assembly cost from unique parts, placements and extended-part fees | PCB, Analytics |
+| **Board Cost Estimator** · MCP | `board-cost` | estimated fabrication cost from board size, layer count, quantity and options | PCB, Analytics |
 | **BOM Deduplicator** · MCP | `bom-dedupe` | merges spellings of the same part and produces a consolidated BOM | PCB, Analytics |
 | **Buck Converter Designer** · MCP | `buck-designer` | inductor, output capacitor and ripple for a buck converter | PCB |
 | **Capacitor Derating** · MCP | `cap-derating` | real capacitance of an MLCC under DC bias and temperature | PCB |
 | **Connector Pinout Library** · MCP | `connector-pinouts` | pin maps of USB-C, SWD, JTAG, JST, IDC and other common connectors | PCB, Embedded |
 | **Copper Area Thermal** · MCP | `copper-thermal` | temperature rise of a power part from the copper area under it | PCB |
+| **Creepage & Clearance** · MCP | `creepage-clearance` | minimum conductor spacing for a working voltage per IPC-2221, as a table | PCB |
 | **Crystal Load Capacitor** · MCP | `crystal-load` | load capacitors for a crystal from its CL and board stray capacitance | PCB, Embedded |
 | **Current Sense Designer** · MCP | `current-sense` | shunt value, its power and the amplifier gain for a range and an ADC input | PCB, Embedded |
 | **Decoupling Planner** · MCP | `decoupling-planner` | how many decoupling capacitors and which values for an IC's supply pins and target impedance | PCB |
@@ -96,6 +100,7 @@ agents, the most used, and every tool nobody used.
 | **Gerber Checklist** · MCP | `gerber-checklist` | completeness of layers, drills, panel and notes before sending to fab | PCB |
 | **Heat Sink Sizing** · MCP | `heatsink-sizing` | required thermal resistance and heat sink size from power and ambient | PCB, 3D |
 | **I2C Pull-up Calculator** · MCP | `i2c-pullup` | the pull-up resistor range for an I2C bus from its supply, speed and capacitance | PCB, Embedded |
+| **Impedance Calculator** · MCP | `impedance-calc` | characteristic impedance of microstrip, stripline and differential pairs from the stackup | PCB |
 | **Land Pattern Reference** · MCP | `land-pattern` | IPC-7351 pad sizes and courtyard for common packages | PCB |
 | **LDO vs Buck Advisor** · MCP | `ldo-vs-buck` | efficiency, heat and noise of an LDO against a buck, side by side | PCB |
 | **Length Matching Budget** · MCP | `length-budget` | maximum length mismatch for a bus speed, in ps and mm | PCB |
@@ -104,15 +109,18 @@ agents, the most used, and every tool nobody used.
 | **Net Naming Linter** · MCP | `net-name-linter` | checks net names against a convention and lists the inconsistent ones | PCB |
 | **Op-Amp Gain Tool** · MCP | `opamp-gain` | gain, offset and bandwidth of inverting and non-inverting stages | PCB |
 | **Package Dimension Explorer** · MCP | `package-explorer` | physical sizes of packages from 0201 to QFN, compared to scale | PCB, 3D |
+| **Panelization Planner** · MCP | `panelization` | how many boards fit a panel with V-cut or mouse-bite margins, and the waste | PCB |
 | **Power Rail Tree** · MCP | `power-rail-tree` | supply rails as a tree with each branch's current budget and total power | PCB, Embedded |
 | **RC / LC Filter Designer** · MCP | `rc-lc-filter` | component values from a cutoff frequency, with the magnitude response drawn | PCB |
 | **Resistor & LED** | `resistor` | Ohm's law, an LED's series resistor, a divider from standard values | PCB, Embedded |
 | **Silkscreen Legibility Check** · MCP | `silkscreen-check` | whether text height and stroke width are under a fab's minimum | PCB |
 | **SMD Code Decoder** · MCP | `smd-code` | resistor and capacitor markings (103, 4R7, EIA-96) to their values | PCB |
+| **Stackup Designer** · MCP | `stackup-designer` | pick layer order, dielectric thickness and copper weight; see board thickness and impedance targets | PCB |
 | **Stencil Aperture Calculator** · MCP | `stencil-aperture` | solder paste aperture and area/aspect ratio from pad size and stencil thickness | PCB |
 | **Stock Risk Scanner** · MCP | `stock-risk` | ranks single-source and low-stock parts in a BOM by risk | PCB, Analytics |
 | **Test Point Planner** · MCP | `test-point-planner` | test point list for critical nets and probe access checks | PCB |
 | **Trace Width** | `trace-width` | how wide a track must be for a current, by IPC-2221, and what it drops | PCB |
+| **Via Current & Thermal** · MCP | `via-thermal` | current a via array carries and its temperature rise from drill, plating and count | PCB |
 
 ### Embedded
 

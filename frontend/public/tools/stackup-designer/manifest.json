@@ -1,0 +1,215 @@
+{
+  "id": "stackup-designer",
+  "name": "Stackup Designer",
+  "blurb": "pick layer order, dielectric thickness and copper weight; see board thickness and impedance targets",
+  "group": "pcb",
+  "rooms": [
+    "pcb"
+  ],
+  "keywords": [
+    "stackup",
+    "stack-up",
+    "layer stack",
+    "build-up",
+    "prepreg",
+    "core",
+    "copper weight",
+    "oz",
+    "board thickness",
+    "4 layer",
+    "6 layer",
+    "impedance",
+    "reference plane",
+    "symmetry",
+    "warp"
+  ],
+  "intro": "Write the stack top to bottom (copper, prepreg, core, mask) and see the finished thickness, whether it is symmetric, which plane each signal layer refers to, and the trace width each signal layer needs for your single-ended and differential impedance targets. Copper rows: 17.5 µm = 0.5 oz, 35 µm = 1 oz, 70 µm = 2 oz; Plane is a solid reference, Mixed a plane with some routing.",
+  "inputs": [
+    {
+      "key": "layers",
+      "label": "Stack, top to bottom",
+      "type": "table",
+      "columns": [
+        {
+          "key": "kind",
+          "label": "Row",
+          "type": "select",
+          "options": [
+            "Signal",
+            "Plane",
+            "Mixed",
+            "Prepreg",
+            "Core",
+            "Mask"
+          ],
+          "default": "Prepreg"
+        },
+        {
+          "key": "t",
+          "label": "Thickness µm",
+          "default": "100"
+        },
+        {
+          "key": "er",
+          "label": "Er (dielectrics)",
+          "default": "4.3"
+        }
+      ],
+      "default": [
+        {
+          "kind": "Signal",
+          "t": "35",
+          "er": ""
+        },
+        {
+          "kind": "Prepreg",
+          "t": "200",
+          "er": "4.2"
+        },
+        {
+          "kind": "Plane",
+          "t": "35",
+          "er": ""
+        },
+        {
+          "kind": "Core",
+          "t": "1065",
+          "er": "4.5"
+        },
+        {
+          "kind": "Plane",
+          "t": "35",
+          "er": ""
+        },
+        {
+          "kind": "Prepreg",
+          "t": "200",
+          "er": "4.2"
+        },
+        {
+          "kind": "Signal",
+          "t": "35",
+          "er": ""
+        }
+      ]
+    },
+    {
+      "key": "target",
+      "label": "Target board thickness",
+      "type": "number",
+      "unit": "mm",
+      "default": "1.6"
+    },
+    {
+      "key": "tol",
+      "label": "Thickness tolerance",
+      "type": "number",
+      "unit": "%",
+      "default": "10"
+    },
+    {
+      "key": "zse",
+      "label": "Single-ended target",
+      "type": "number",
+      "unit": "Ω",
+      "default": "50"
+    },
+    {
+      "key": "zdiff",
+      "label": "Differential target",
+      "type": "number",
+      "unit": "Ω",
+      "default": "100"
+    },
+    {
+      "key": "gap",
+      "label": "Pair gap",
+      "type": "number",
+      "unit": "mm",
+      "default": "0.15"
+    },
+    {
+      "key": "minw",
+      "label": "Fab's minimum trace",
+      "type": "number",
+      "unit": "mm",
+      "default": "0.1"
+    }
+  ],
+  "examples": [
+    {
+      "title": "6-layer 1.6 mm: signal, ground, signal, power, ground, signal",
+      "input": {
+        "layers": [
+          {
+            "kind": "Signal",
+            "t": "35",
+            "er": ""
+          },
+          {
+            "kind": "Prepreg",
+            "t": "110",
+            "er": "4.1"
+          },
+          {
+            "kind": "Plane",
+            "t": "35",
+            "er": ""
+          },
+          {
+            "kind": "Core",
+            "t": "250",
+            "er": "4.4"
+          },
+          {
+            "kind": "Signal",
+            "t": "35",
+            "er": ""
+          },
+          {
+            "kind": "Prepreg",
+            "t": "670",
+            "er": "4.3"
+          },
+          {
+            "kind": "Plane",
+            "t": "35",
+            "er": ""
+          },
+          {
+            "kind": "Core",
+            "t": "250",
+            "er": "4.4"
+          },
+          {
+            "kind": "Plane",
+            "t": "35",
+            "er": ""
+          },
+          {
+            "kind": "Prepreg",
+            "t": "110",
+            "er": "4.1"
+          },
+          {
+            "kind": "Signal",
+            "t": "35",
+            "er": ""
+          }
+        ],
+        "target": "1.6",
+        "tol": "10",
+        "zse": "50",
+        "zdiff": "90",
+        "gap": "0.13",
+        "minw": "0.09"
+      }
+    }
+  ],
+  "usage": "Give 'layers' as rows {kind: Signal|Plane|Mixed|Prepreg|Core|Mask, t: thickness in µm, er: dielectric constant for prepreg/core/mask} from top to bottom, the target thickness in mm and tolerance in %, single-ended and differential impedance targets in Ω, the pair gap and the fab's minimum trace in mm. Returns total thickness, copper count, symmetry, for each copper layer its reference planes, H, Er and the widths for both targets, plane-pair capacitance, and a 'stack' array with each row's position. Use it to plan a stack before asking a fab to quote their matching build.",
+  "sources": [
+    "IPC-2221B section 6 and IPC-4101 (laminate and prepreg), fab stackup guides for build rules (symmetry, even layer counts)",
+    "E. Hammerstad, O. Jensen, IEEE MTT-S 1980 (microstrip); B. C. Wadell, Transmission Line Design Handbook 3.5.1/3.5.3 (stripline); National Semiconductor AN-905 (pairs)"
+  ],
+  "view": true
+}

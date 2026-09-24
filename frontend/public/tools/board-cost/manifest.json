@@ -1,0 +1,36 @@
+{
+  "id": "board-cost",
+  "name": "Board Cost Estimator",
+  "blurb": "estimated fabrication cost from board size, layer count, quantity and options",
+  "group": "pcb",
+  "rooms": ["pcb", "analyze"],
+  "keywords": ["pcb cost", "board price", "fabrication cost", "fab quote", "bare board", "price estimate", "layer count", "enig", "hasl", "quantity", "volume pricing", "prototype cost", "bom cost", "unit cost"],
+  "intro": "A ballpark bare-board price from size, layers, quantity and options, with how it falls with quantity. It is a rule-of-thumb model fitted to public online-fab calculators (setup per order plus a per-area rate with multipliers), good to ±50 %: use it to compare choices, then get a quote.",
+  "inputs": [
+    { "key": "w", "label": "Board width", "type": "number", "unit": "mm", "default": "100" },
+    { "key": "h", "label": "Board height", "type": "number", "unit": "mm", "default": "80" },
+    { "key": "qty", "label": "Quantity", "type": "number", "default": "50" },
+    { "key": "layers", "label": "Layers", "type": "select", "default": "4", "options": ["1", "2", "4", "6", "8", "10", "12"] },
+    { "key": "thick", "label": "Thickness", "type": "select", "default": "1.6", "options": [["0.4", "0.4 mm"], ["0.6", "0.6 mm"], ["0.8", "0.8 mm"], ["1.0", "1.0 mm"], ["1.2", "1.2 mm"], ["1.6", "1.6 mm"], ["2.0", "2.0 mm"], ["2.4", "2.4 mm"], ["3.2", "3.2 mm"]] },
+    { "key": "copper", "label": "Outer copper", "type": "select", "default": "1", "options": [["1", "1 oz"], ["2", "2 oz"], ["3", "3 oz"]] },
+    { "key": "finish", "label": "Surface finish", "type": "select", "default": "haslf", "options": [["hasl", "HASL (leaded)"], ["haslf", "HASL lead-free"], ["osp", "OSP"], ["enig", "ENIG"], ["silver", "Immersion silver"], ["hardgold", "Hard gold"]] },
+    { "key": "color", "label": "Solder mask", "type": "select", "default": "green", "options": [["green", "Green"], ["other", "Other colour"]] },
+    { "key": "trace", "label": "Smallest trace / space", "type": "select", "default": "6", "options": [["6", "≥ 6 mil (0.15 mm)"], ["5", "5 mil"], ["4", "4 mil"], ["3", "3 mil"]] },
+    { "key": "drill", "label": "Smallest drill", "type": "select", "default": "0.3", "options": [["0.3", "≥ 0.3 mm"], ["0.25", "0.25 mm"], ["0.2", "0.2 mm"], ["0.15", "0.15 mm"]] },
+    { "key": "impedance", "label": "Impedance control", "type": "bool", "default": false },
+    { "key": "viainpad", "label": "Via-in-pad (filled and capped)", "type": "bool", "default": false },
+    { "key": "blind", "label": "Blind / buried vias", "type": "bool", "default": false },
+    { "key": "castellated", "label": "Castellated holes", "type": "bool", "default": false },
+    { "key": "fingers", "label": "Gold fingers", "type": "bool", "default": false },
+    { "key": "lead", "label": "Lead time", "type": "select", "default": "standard", "options": [["standard", "Standard (5-7 days)"], ["quick", "Quick (2-3 days)"], ["express", "Express (24 h)"]] },
+    { "key": "region", "label": "Fab", "type": "select", "default": "asia", "options": [["asia", "Asian online fab"], ["local", "US / EU quick-turn fab"]] }
+  ],
+  "examples": [
+    { "title": "10 two-layer prototypes, 100 × 100 mm", "input": { "w": "100", "h": "100", "qty": "10", "layers": "2", "thick": "1.6", "copper": "1", "finish": "haslf", "color": "green", "trace": "6", "drill": "0.3", "impedance": false, "viainpad": false, "blind": false, "castellated": false, "fingers": false, "lead": "standard", "region": "asia" } },
+    { "title": "500 six-layer ENIG boards with impedance control", "input": { "w": "120", "h": "90", "qty": "500", "layers": "6", "thick": "1.6", "copper": "1", "finish": "enig", "color": "green", "trace": "4", "drill": "0.2", "impedance": true, "viainpad": false, "blind": false, "castellated": false, "fingers": false, "lead": "standard", "region": "asia" } }
+  ],
+  "usage": "Give board width and height in mm, quantity, layers (1-12), thickness, outer copper oz, finish (hasl, haslf, osp, enig, silver, hardgold), mask colour, smallest trace/space in mil and drill in mm, option flags (impedance, viainpad, blind, castellated, fingers), lead time (standard, quick, express) and region (asia, local). Returns an estimated total and per-board price in USD, a cost breakdown and cost at other quantities. Use it to compare design choices (layers, finish, HDI features) and quantities; it is ±50 %, not a quote.",
+  "sources": [
+    "Rule of thumb: a setup + per-area model fitted by hand to public online price calculators of large PCB fabs (2024-2025, no promotions or shipping)"
+  ]
+}

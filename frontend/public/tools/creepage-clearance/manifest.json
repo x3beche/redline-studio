@@ -1,0 +1,27 @@
+{
+  "id": "creepage-clearance",
+  "name": "Creepage & Clearance",
+  "blurb": "minimum conductor spacing for a working voltage per IPC-2221, as a table",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["creepage", "clearance", "conductor spacing", "high voltage", "ipc-2221", "table 6-1", "isolation", "mains", "trace spacing", "electrical spacing", "conformal coating", "altitude", "hv"],
+  "intro": "The minimum spacing between two conductors at a given voltage, from IPC-2221B table 6-1, for every location (internal, external bare, under mask, coated, component leads) and altitude. It checks your gap against it; it is functional spacing, not a safety-agency creepage rating.",
+  "inputs": [
+    { "key": "voltage", "label": "Voltage between the conductors", "type": "number", "unit": "V", "default": "48" },
+    { "key": "kind", "label": "Voltage is", "type": "select", "default": "dc",
+      "options": [["dc", "DC or AC peak"], ["rms", "AC RMS (converted to peak)"]] },
+    { "key": "category", "label": "Where the conductors are", "type": "select", "default": "B2",
+      "options": [["B1", "B1 Internal layers"], ["B2", "B2 External, uncoated, ≤ 3050 m"], ["B3", "B3 External, uncoated, > 3050 m"], ["B4", "B4 External, under solder mask / polymer"], ["A5", "A5 External, conformal coated assembly"], ["A6", "A6 Component leads, uncoated, ≤ 3050 m"], ["A7", "A7 Component leads, conformal coated"]] },
+    { "key": "actual", "label": "Your spacing (to check)", "type": "number", "unit": "mm", "default": "0.8",
+      "help": "Optional: the gap you have on the board." }
+  ],
+  "examples": [
+    { "title": "230 V AC mains traces on the outer layer", "input": { "voltage": "230", "kind": "rms", "category": "B2", "actual": "2.5" } },
+    { "title": "400 V DC bus on an inner layer", "input": { "voltage": "400", "kind": "dc", "category": "B1", "actual": "0.3" } }
+  ],
+  "usage": "Give the voltage between two conductors in volts, whether it is DC/peak ('dc') or AC RMS ('rms'), and the IPC-2221 location column (B1, B2, B3, B4, A5, A6, A7); optionally your actual gap in mm. Returns the minimum spacing in mm and mil, pass/fail for your gap, the spacing for all columns at that voltage and the whole table 6-1. For mains or safety isolation also apply IEC 62368-1 / IEC 60664-1, which usually ask for more.",
+  "sources": [
+    "IPC-2221B Generic Standard on Printed Board Design, section 6.3 and table 6-1 (electrical conductor spacing)",
+    "IEC 60664-1 / IEC 62368-1 for safety creepage and clearance (not computed here)"
+  ]
+}
