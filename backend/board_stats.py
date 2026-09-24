@@ -89,6 +89,93 @@ def lcsc_usage() -> dict:
             "used": state.get("used"), "budget": state.get("budget")}
 
 
+# ---------------- what the board is made of ----------------
+# A part's kind, read off its footprint: atopile names every part U<n>, so
+# the reference says nothing, while the footprint always says what the
+# part is soldered as. First match wins, so the specific come first.
+KINDS = [
+    ("LEDs", ("LED",)),
+    ("resistors", ("R0201", "R0402", "R0603", "R0805", "R1206", "R_")),
+    ("capacitors", ("C0201", "C0402", "C0603", "C0805", "C1206", "CAP", "C_")),
+    ("inductors", ("L0402", "L0603", "L0805", "IND")),
+    ("connectors", ("TYPE-C", "USB", "CONN", "HDR", "PH-", "JST", "SMA")),
+    ("switches", ("SW-", "SW_", "BUTTON", "KEY")),
+    ("crystals", ("CRYSTAL", "XTAL", "OSC")),
+    ("diodes", ("SOD", "DO-", "SMA_", "SMB")),
+    ("transistors", ("SOT-23_", "SOT-323", "SOT-523")),
+    ("ICs", ("SOT-23-", "SOIC", "SOP", "TSSOP", "ESOP", "QFN", "LQFP", "QFP",
+             "DFN", "MSOP", "BGA")),
+]
+
+
+def kind_of(footprint: str | None) -> str:
+    name = (footprint or "").split(":")[-1].upper()
+    for kind, marks in KINDS:
+        if any(m.upper() in name for m in marks):
+            return kind
+    return "other"
+
+
+def block_of(where: str | None) -> str:
+    """The circuit block a part is declared in: `...:Controller::power.r_cc1`
+    is in `power`."""
+    path = (where or "").split("::", 1)[-1] if "::" in (where or "") else ""
+    return path.split(".", 1)[0] if "." in path else (path or "top")
+
+
+def ranked(counter: Counter, top: int = 8) -> list[dict]:
+    """Largest first; past `top`, the rest fold into one row."""
+    rows = counter.most_common()
+    out = [{"label": k, "value": v} for k, v in rows[:top]]
+    rest = sum(v for _, v in rows[top:])
+    if rest:
+        out.append({"label": "the rest", "value": rest})
+    return out
+
+
+def fanout(nets: list[dict]) -> list[dict]:
+    """Nets by how many pins they join. A one-pin net goes nowhere - a pin
+    left unconnected on purpose, or not."""
+    bins = [("1", 1, 1), ("2", 2, 2), ("3-4", 3, 4), ("5-9", 5, 9), ("10+", 10, 10 ** 9)]
+    sizes = [len(n.get("nodes") or []) for n in nets]
+    return [{"label": b, "value": sum(lo <= n <= hi for n in sizes)} for b, lo, hi in bins]
+
+
+def bom_top(components: list[dict], top: int = 5) -> list[dict]:
+    """The part numbers that cost the most on one board, from disk only."""
+    qty = Counter(c.get("part") for c in components if c.get("part"))
+    rows = []
+    for part, n in qty.items():
+        offer = _cached_offer(part)
+        if offer and offer["price"] is not None:
+            rows.append({"label": part, "value": round(offer["price"] * n, 4), "qty": n})
+    rows.sort(key=lambda r: -r["value"])
+    return rows[:top]
+
+
+# ---------------- how it got here ----------------
+HISTORY = "board_history"
+HISTORY_KEEP = 80
+TRACKED = ("area_cm2", "components", "tracks", "vias", "unrouted",
+           "drc_errors", "drc_warnings")
+
+
+async def remember(db, bid: str, point: dict) -> list[dict]:
+    """Keep this reading if it differs from the last one, and return the
+    board's readings, oldest first. There is no history before the first
+    time anybody looked: nothing is made up backwards."""
+    col = db[HISTORY]
+    last = await col.find_one({"board": bid}, sort=[("at", -1)])
+    if not last or any(last.get(k) != point.get(k) for k in TRACKED):
+        await col.insert_one({"board": bid, "at": store.now(), **point})
+        old = [d["_id"] async for d in col.find({"board": bid}, {"_id": 1})
+               .sort("at", -1).skip(HISTORY_KEEP)]
+        if old:
+            await col.delete_many({"_id": {"$in": old}})
+    return [{k: d.get(k) for k in ("at", *TRACKED)}
+            async for d in col.find({"board": bid}).sort("at", 1)]
+
+
 async def summary(db, bid: str) -> dict:
     doc = await db[ato.BOARDS].find_one({"_id": bid}, {"source": 0})
     if not doc:
@@ -104,8 +191,23 @@ async def summary(db, bid: str) -> dict:
     route = doc.get("route") or {}
     drc = doc.get("drc") or {}
     erc = ((doc.get("schematic") or {}).get("erc")) or {}
+    drc_types = Counter()
+    for sev in ("errors", "warnings"):
+        for k, v in (drc.get(sev) or {}).items():
+            drc_types[k.replace("_", " ")] += int(v or 0)
+    point = {"area_cm2": area, "components": len(comps) or None,
+             "tracks": route.get("tracks"), "vias": route.get("vias"),
+             "unrouted": route.get("unrouted"),
+             "drc_errors": drc.get("error_count"), "drc_warnings": drc.get("warning_count")}
+    history = await remember(db, bid, point) if comps else []
     return {
         "board": bid,
+        "kinds": ranked(Counter(kind_of(c.get("footprint")) for c in comps)),
+        "blocks": ranked(Counter(block_of(c.get("where")) for c in comps)),
+        "fanout": fanout((graph or {}).get("nets") or []),
+        "drc_types": ranked(drc_types, 5),
+        "bom_top": bom_top(comps) if comps else [],
+        "history": history,
         "parts": {"components": counts.get("components", len(comps)),
                   "nets": counts.get("nets"), "joins": counts.get("joins")},
         "size": {"mm": size, "area_cm2": area,

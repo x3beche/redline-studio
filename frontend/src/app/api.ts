@@ -474,6 +474,16 @@ export interface BoardStats {
   library: { parts: number; with_3d: number; bytes: number };
   lcsc: { net: number; disk: number; refused: number; cooling: boolean;
           used: number | null; budget: number | null };
+  /** For the tab's charts: what the board is made of, how its nets
+   *  spread, what DRC says, what costs most, and how it got here. */
+  kinds: { label: string; value: number }[];
+  blocks: { label: string; value: number }[];
+  fanout: { label: string; value: number }[];
+  drc_types: { label: string; value: number }[];
+  bom_top: { label: string; value: number; qty: number }[];
+  history: { at: string; area_cm2: number | null; components: number | null;
+             tracks: number | null; vias: number | null; unrouted: number | null;
+             drc_errors: number | null; drc_warnings: number | null }[];
 }
 
 /** One build or one placement, as the machine saw it. */

@@ -14,6 +14,7 @@ import { Drawing } from './drawing';
 import { RoomFrame, ToolButton } from './frame';
 import { RulesForm } from './rules-form';
 import { DrawTools, PenState, Sketchpad } from './sketchpad';
+import { MiniBars, MiniColumns, MiniTrend } from './minicharts';
 
 type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'analytics';
 type Pane = 'layout' | 'schematic' | '3d';
@@ -33,8 +34,8 @@ type BoardView = Pane | 'split';
  */
 @Component({
   selector: 'app-room-pcb',
-  imports: [Board3d, Drawing, DrawTools, NgTemplateOutlet, RoomFrame, RulesForm, Sketchpad,
-            ToolButton],
+  imports: [Board3d, Drawing, DrawTools, MiniBars, MiniColumns, MiniTrend, NgTemplateOutlet,
+            RoomFrame, RulesForm, Sketchpad, ToolButton],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
@@ -553,8 +554,32 @@ type BoardView = Pane | 'split';
                 <b [style.color]="c.erc_errors ? 'var(--danger)' : 'var(--ok)'">{{ c.erc_errors ?? '?' }}</b>
               }
             </div>
+
+            <!-- How it got here: each measure against itself since the tab
+                 was first opened - the compaction the agent is doing shows
+                 as the area line falling. -->
+            @if (st.history.length) {
+              <div class="tcv-mchart-title">since {{ st.history[0].at.slice(11, 16) }} · {{ st.history.length }} readings</div>
+              <app-mini-trend label="area cm²" [values]="series(st, 'area_cm2')" [times]="times(st)" />
+              <app-mini-trend label="unrouted" [values]="series(st, 'unrouted')" [times]="times(st)" />
+              <app-mini-trend label="DRC warnings" [values]="series(st, 'drc_warnings')" [times]="times(st)" />
+            }
+            @if (st.drc_types.length) {
+              <div class="tcv-mchart-title">what DRC is warning about</div>
+              <app-mini-bars [rows]="st.drc_types" />
+            }
+
             @if (!busy()) {
-              <div class="tcv-stats mt-1.5 pt-1.5" style="border-top: 1px solid var(--line)">
+              <div class="tcv-mchart-title">parts by kind</div>
+              <app-mini-bars [rows]="st.kinds" />
+              <div class="tcv-mchart-title">parts by circuit block</div>
+              <app-mini-bars [rows]="st.blocks" />
+              <div class="tcv-mchart-title">nets by how many pins they join</div>
+              <app-mini-columns [rows]="st.fanout" />
+              <div class="tcv-mchart-title">costliest parts, per board</div>
+              <app-mini-bars [rows]="st.bom_top" [fmt]="usd"
+                             empty="no prices on disk yet - LCSC has not been asked about these" />
+              <div class="tcv-stats mt-2 pt-1.5" style="border-top: 1px solid var(--line)">
                 @if (st.route; as r) {
                   <span>copper</span><b>{{ r.length_mm.toFixed(0) }} mm</b>
                   <span>area</span><b>{{ st.size.area_cm2 ?? '–' }} cm²</b>
@@ -1045,6 +1070,15 @@ export class RoomPcb implements OnDestroy {
     this.statsAt = Date.now();
     this.api.analytics(id).subscribe({ next: st => this.stats.set(st) });
   }
+
+  /** One measure from the readings, for a trend line. */
+  series(st: BoardStats, key: keyof BoardStats['history'][number]): (number | null)[] {
+    return st.history.map(h => (h[key] as number | null) ?? null);
+  }
+
+  times(st: BoardStats): string[] { return st.history.map(h => h.at); }
+
+  readonly usd = (v: number) => '$' + (v >= 1 ? v.toFixed(2) : v.toFixed(3));
 
   mb(bytes: number): string {
     return bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + ' MB' : Math.round(bytes / 1000) + ' kB';
