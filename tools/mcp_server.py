@@ -77,11 +77,17 @@ TOOLS: dict[str, tuple] = {
         "Run a code note's project test command, in the tab's container.",
         {"id": _s("revision id")}, ["id"], lambda a: ["code", "test", a["id"]]),
     "chat": (
-        "Read the thread under the queue, and pick up what the person said.",
-        {}, [], lambda a: ["chat"]),
+        "Read the thread under the queue, and pick up what the person said. "
+        "Each room (tab) has its own thread; with a room, only that one.",
+        {"room": {"type": "string", "enum": ROOMS,
+                  "description": "only this room's thread"}},
+        [], lambda a: ["chat"] + (["--room", a["room"]] if a.get("room") else [])),
     "say": (
-        "Answer in the thread, on the person's screen.",
-        {"text": _s("the answer")}, ["text"], lambda a: ["say", a["text"]]),
+        "Answer in the thread, on the person's screen - in the room it was "
+        "asked in (default: where the person last spoke).",
+        {"text": _s("the answer"),
+         "room": {"type": "string", "enum": ROOMS, "description": "which room's thread"}},
+        ["text"], lambda a: ["say", a["text"]] + (["--room", a["room"]] if a.get("room") else [])),
     "ask": (
         "Ask the person a question on their screen and wait for the answer. "
         "Markdown. Use it when the answer changes what you build.",

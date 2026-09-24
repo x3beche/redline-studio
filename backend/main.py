@@ -1350,23 +1350,29 @@ class ChatIn(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     # "Stop what you are doing", as opposed to "when you get a moment".
     urgent: bool = False
+    # Which room's thread: each tab has its own.
+    room: str = "cad"
 
 
 @app.get("/api/chat")
-async def chat_history(limit: int = 200):
-    """The thread, oldest first. The page polls this with the health."""
-    return await chat.history(db(), limit)
+async def chat_history(limit: int = 200, room: str | None = None):
+    """The thread, oldest first - one room's, or all of them. The page
+    polls its room's with the health."""
+    return await chat.history(db(), limit, room)
 
 
 @app.post("/api/chat")
 async def chat_post(body: ChatIn):
     """Say something to the agent. Its own replies come in over the CLI."""
-    return await chat.post(db(), body.text, urgent=body.urgent)
+    try:
+        return await chat.post(db(), body.text, urgent=body.urgent, room=body.room)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.delete("/api/chat")
-async def chat_clear():
-    return {"deleted": await chat.clear(db())}
+async def chat_clear(room: str | None = None):
+    return {"deleted": await chat.clear(db(), room)}
 
 
 @app.delete("/api/chat/{mid}")

@@ -200,3 +200,35 @@ def test_the_agent_cannot_mark_its_own_words_urgent():
     mine = run(chat.post(db, "on it", role=chat.AGENT, urgent=True))
     assert mine["urgent"] is False
     assert run(chat.interrupts(db)) == []
+
+
+def test_each_room_has_its_own_thread():
+    db = FakeDb()
+    run(chat.post(db, "about the fan", room="cad"))
+    run(chat.post(db, "about the board", room="pcb"))
+    run(chat.post(db, "on it", role=chat.AGENT, room="pcb"))
+    assert [m["text"] for m in run(chat.history(db, room="pcb"))] == ["about the board", "on it"]
+    assert [m["text"] for m in run(chat.history(db, room="cad"))] == ["about the fan"]
+    assert len(run(chat.history(db))) == 3
+    assert [m["text"] for m in run(chat.unread(db, "pcb"))] == ["about the board"]
+
+
+def test_rows_from_before_rooms_are_the_3d_rooms():
+    db = FakeDb()
+    run(db[chat.CHAT].insert_one({"_id": "old", "at": "2026-01-01", "role": "user",
+                                  "text": "old line", "seen_at": None}))
+    assert [m["_id"] for m in run(chat.history(db, room="cad"))] == ["old"]
+    assert run(chat.history(db, room="pcb")) == []
+
+
+def test_an_answer_goes_where_the_person_last_spoke():
+    db = FakeDb()
+    run(chat.post(db, "about the fan", room="cad"))
+    run(chat.post(db, "about the board", room="pcb"))
+    assert run(chat.last_room(db)) == "pcb"
+
+
+def test_no_such_room():
+    import pytest
+    with pytest.raises(ValueError):
+        run(chat.post(FakeDb(), "hi", room="kitchen"))

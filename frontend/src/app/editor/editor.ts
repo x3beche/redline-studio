@@ -1,6 +1,6 @@
 import {
   AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject,
-  signal, viewChild,
+  signal, untracked, viewChild,
 } from '@angular/core';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 const SEED = `"""__NAME__ - a build123d model."""
@@ -159,6 +159,15 @@ export class Editor implements AfterViewInit, OnDestroy {
     effect(() => {
       if (this.picked.room() === 'cad') setTimeout(() => this.sizeOverlay(), 40);
     });
+    // Each tab has its own thread with the agent: a new tab shows its own
+    // at once rather than the last room's until the next poll.
+    effect(() => {
+      const room = this.picked.room();
+      untracked(() => {
+        this.thread.set([]);
+        this.chat.history(room).subscribe({ next: v => this.takeThread(v), error: () => {} });
+      });
+    });
   }
 
   async ngAfterViewInit() {
@@ -223,7 +232,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   pollHealth() {
     this.health.stats().subscribe({ next: v => this.stats.set(v), error: () => {} });
     this.asks.open().subscribe({ next: v => this.takeQuestions(v), error: () => {} });
-    this.chat.history().subscribe({ next: v => this.takeThread(v), error: () => {} });
+    this.chat.history(this.picked.room()).subscribe({ next: v => this.takeThread(v), error: () => {} });
     this.health.system().subscribe({ next: v => this.sys.set(v), error: () => {} });
     // The run of the room on screen: each room has its own. Switching
     // rooms is not a run finishing, so the memory of the last status is
@@ -372,6 +381,12 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** The thread, and the one line being typed into it. Scrolled to the
    *  bottom when something lands, the way the log is. */
   private takeThread(rows: ChatLine[]) {
+    // Each room has its own thread. An answer that left before a switch
+    // of tabs is the old room's, and is not shown in the new one.
+    const room = this.picked.room();
+    const mine = rows.filter(r => (r.room ?? 'cad') === room);
+    if (rows.length && !mine.length) return;
+    rows = mine;
     const grew = rows.length !== this.thread().length;
     this.thread.set(rows);
     if (grew) setTimeout(() => this.scrollThread(), 40);
@@ -393,8 +408,8 @@ export class Editor implements AfterViewInit, OnDestroy {
       role: 'user' as const, text, urgent, seen_at: null }]);
     this.saying.set('');
     setTimeout(() => this.scrollThread(), 40);
-    this.chat.say(text, urgent).subscribe({
-      next: () => this.chat.history().subscribe({
+    this.chat.say(text, urgent, this.picked.room()).subscribe({
+      next: () => this.chat.history(this.picked.room()).subscribe({
         next: v => this.takeThread(v), error: () => {} }),
       error: () => this.flash('could not send that'),
     });
@@ -407,11 +422,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (m.seen_at || !this.sent(m)) return;
     this.thread.update(t => t.filter(x => x._id !== m._id));
     this.chat.retract(m._id).subscribe({
-      next: () => this.chat.history().subscribe({
+      next: () => this.chat.history(this.picked.room()).subscribe({
         next: v => this.takeThread(v), error: () => {} }),
       error: () => {
         this.flash('too late, the agent already has it');
-        this.chat.history().subscribe({
+        this.chat.history(this.picked.room()).subscribe({
           next: v => this.takeThread(v), error: () => {} });
       },
     });

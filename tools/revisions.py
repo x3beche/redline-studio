@@ -129,18 +129,21 @@ async def cmd_wait(args):
     while True:
         # Either kind of work wakes it: a queued revision, or something the
         # person typed into the thread. Both are them asking for something.
-        said = await chat.unread(db)
+        said = await chat.unread(db, getattr(args, "room", None))
         if said:
             urgent = [d for d in said if d.get("urgent")]
             if urgent:
                 await _shout_interrupts(db)
             print(f"{len(said)} message(s) after waiting {waited}s")
             for d in said:
-                print(f"  {d['at'][11:19]}  {d['text'][:88]}")
+                print(f"  {d['at'][11:19]}  [{chat.room_of(d)}]  {d['text'][:80]}")
             print("\nRead the thread: revisions.py chat")
             return
         rows = [d async for d in db.revisions.find({"status": "queued"})]
         rows = [d for d in rows if d["_id"] not in seen]
+        if getattr(args, "room", None):
+            from backend import compute
+            rows = [d for d in rows if compute.room_of(d.get("kind")) == args.room]
         # A note somebody has started on is work in hand, not new work: the
         # main agent handed it to a room's agent, and being woken for it
         # again every half minute would be a loop.
@@ -177,7 +180,7 @@ async def _shout_interrupts(db) -> list[dict]:
 
     rows = await chat.interrupts(db)
     for d in rows:
-        print(f"\n!! URGENT  {d['at'][11:19]}  {d['text']}")
+        print(f"\n!! URGENT  {d['at'][11:19]}  [{chat.room_of(d)}]  {d['text']}")
     if rows:
         print("!! Answer it before the next step: revisions.py chat, then say\n")
     return rows
@@ -192,7 +195,7 @@ async def cmd_chat(args):
     from backend import chat
 
     db = connect()
-    rows = await chat.history(db, args.limit)
+    rows = await chat.history(db, args.limit, args.room)
     if not rows:
         print("nothing said yet")
         return
@@ -200,13 +203,13 @@ async def cmd_chat(args):
         who = "you " if d["role"] == chat.AGENT else "them"
         mark = " " if d.get("seen_at") else "*"
         bang = "!! " if d.get("urgent") and not d.get("seen_at") else ""
-        print(f"{mark}{d['at'][11:19]}  {who}  {bang}{d['text']}")
+        print(f"{mark}{d['at'][11:19]}  [{chat.room_of(d)}]  {who}  {bang}{d['text']}")
     fresh = [d["_id"] for d in rows
              if d["role"] == chat.USER and not d.get("seen_at")]
     if fresh and not args.keep_unread:
         await chat.mark_seen(db, fresh)
-        print(f"\n{len(fresh)} new, now marked as read. Answer with: "
-              f"revisions.py say \"...\"")
+        print(f"\n{len(fresh)} new, now marked as read. Answer in the room it was "
+              f"said in: revisions.py say --room <room> \"...\"")
 
 
 async def cmd_say(args):
@@ -214,8 +217,10 @@ async def cmd_say(args):
     from backend import chat
 
     db = connect()
-    await chat.post(db, args.text, role=chat.AGENT)
-    print("said")
+    # Into the thread it was asked in: named, or where the person last spoke.
+    room = args.room or await chat.last_room(db)
+    await chat.post(db, args.text, role=chat.AGENT, room=room)
+    print(f"said, in {room}")
 
 
 async def cmd_part(args):
@@ -952,9 +957,13 @@ def main() -> None:
     s.add_argument("--limit", type=int, default=40)
     s.add_argument("--keep-unread", action="store_true",
                    help="look without picking it up")
+    s.add_argument("--room", choices=["cad", "pcb", "web", "embedded", "mobile"],
+                   help="only this room's thread (each tab has its own)")
     s.set_defaults(fn=cmd_chat)
     s = sub.add_parser("say", help="answer in the thread")
     s.add_argument("text")
+    s.add_argument("--room", choices=["cad", "pcb", "web", "embedded", "mobile"],
+                   help="which room's thread; default: where the person last spoke")
     s.set_defaults(fn=cmd_say)
     s = sub.add_parser("ask", help="ask the person a question on their screen")
     s.add_argument("text", help="the question, in Markdown - it is rendered "
@@ -1004,6 +1013,8 @@ def main() -> None:
                         "session lasts")
     s.add_argument("--ignore", nargs="*",
                    help="revision ids to not count as new work")
+    s.add_argument("--room", choices=["cad", "pcb", "web", "embedded", "mobile"],
+                   help="only this room's notes and thread; default: every room")
     s.set_defaults(fn=cmd_wait)
     s = sub.add_parser("show"); s.add_argument("id"); s.add_argument("-o", "--out")
     s.set_defaults(fn=cmd_show)

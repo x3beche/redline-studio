@@ -645,16 +645,19 @@ export interface ChatLine {
   /** Null until the agent has picked it up - that is what its idle wait
    *  watches, and what the page shows as "not read yet". */
   seen_at: string | null;
+  /** Which room's thread it is in. */
+  room?: string;
 }
 
 @Injectable({ providedIn: 'root' })
 export class Chat {
   private http = inject(HttpClient);
-  history(): Observable<ChatLine[]> {
-    return this.http.get<ChatLine[]>('/api/chat');
+  /** One room's thread - each tab has its own. */
+  history(room: string): Observable<ChatLine[]> {
+    return this.http.get<ChatLine[]>(`/api/chat?room=${room}`);
   }
-  say(text: string, urgent = false): Observable<ChatLine> {
-    return this.http.post<ChatLine>('/api/chat', { text, urgent });
+  say(text: string, urgent = false, room = 'cad'): Observable<ChatLine> {
+    return this.http.post<ChatLine>('/api/chat', { text, urgent, room });
   }
   /** Unsend. Refused once the agent has picked the message up. */
   retract(id: string): Observable<unknown> {

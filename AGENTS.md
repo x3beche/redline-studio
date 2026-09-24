@@ -91,6 +91,13 @@ at the foot of the queue column:
 again - `--keep-unread` looks without picking it up. `wait` returns on a
 message as well as on a queued revision, so the same idle loop covers both.
 
+**Each room (tab) has its own thread** - cad, pcb, web, embedded, mobile.
+`chat` shows every room's, each line tagged `[pcb]` and so on; `chat --room
+pcb` shows one. Answer in the room it was asked in: `say --room pcb "..."`.
+Without `--room`, `say` goes to the room the person last spoke in. A room's
+own agent runs `wait --room pcb` and `chat --room pcb` and hears only that
+room.
+
 ### When a line comes in marked urgent
 
 They have flipped a switch that means "read this between steps, not when
