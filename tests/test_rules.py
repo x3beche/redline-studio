@@ -87,3 +87,13 @@ def test_pours_carry_their_edge_gap():
     old = rules.derive(NETS)
     del old["pours"][0]["edge"]
     assert rules.normalise(old)["pours"][0]["edge"] == rules.SCHEMA["pours"]["new"]["edge"]
+
+
+def test_router_tries_is_a_rule_with_a_default_and_limits():
+    r = rules.derive(NETS)
+    assert r["route"]["tries"] == 3
+    old = rules.derive(NETS)
+    del old["route"]["tries"]
+    assert rules.normalise(old)["route"]["tries"] == 3
+    r["route"]["tries"] = 0
+    assert any(p.startswith("route.tries:") for p in rules.check(r, NETS))

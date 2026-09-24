@@ -36,6 +36,8 @@ PAIR_ENDS = [("_pos", "_neg"), ("_p", "_n"), ("+", "-"), ("p", "n")]
 
 DEFAULT = {"name": "Default", "track": 0.25, "clearance": 0.2,
            "via": 0.6, "drill": 0.3}
+# How hard the router tries, until a person says otherwise in the Rules tab.
+ROUTE = {"passes": 40, "tries": 3}
 POWER_CLASS = {"name": "Power", "track": 0.5, "clearance": 0.2,
                "via": 0.8, "drill": 0.4}
 
@@ -86,7 +88,7 @@ def derive(nets: list[str]) -> dict:
                   "min_via": 0.6, "min_drill": 0.3},
         "pours": [{"net": ground, "layers": ["F.Cu", "B.Cu"], "clearance": 0.3,
                    "edge": 0.3, "connection": "solid"}] if ground else [],
-        "route": {"passes": 40},
+        "route": dict(ROUTE),
         "edited": False,
     }
 
@@ -190,6 +192,11 @@ SCHEMA = {
             {"key": "passes", "label": "Passes", "type": "integer",
              "min": 1, "max": 500, "step": 1,
              "help": "optimisation passes; more is shorter copper and a longer run"},
+            {"key": "tries", "label": "Tries", "type": "integer",
+             "min": 1, "max": 10, "step": 1,
+             "help": "Freerouting is not the same twice: when a run leaves a "
+                     "connection unrouted, route again, up to this many times "
+                     "in all, and keep the best; a clean first run stops there"},
         ],
     },
 }
@@ -208,6 +215,8 @@ def normalise(rules: dict) -> dict:
         cls.setdefault("patterns", [])
     for pour in out["pours"]:
         pour.setdefault("edge", SCHEMA["pours"]["new"]["edge"])
+    for key, value in ROUTE.items():
+        out.setdefault("route", {}).setdefault(key, value)
     out.setdefault("pairs", [])
     return out
 
