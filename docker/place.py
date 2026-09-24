@@ -19,9 +19,12 @@ footprint in a board is not written down anywhere obvious.
     }
 """
 
+import hashlib
 import json
 import math
+import re
 import sys
+import uuid as uuids
 from pathlib import Path
 
 import pcbnew
@@ -162,7 +165,10 @@ def kinship(ordered, nets):
     return kin
 
 
-def pack(boxes, gap, kin=None):
+TRIALS = list(range(6, 22, 2))      # trial widths, as tenths of the square side
+
+
+def pack(boxes, gap, kin=None, attempt=0):
     """Pack extents into the smallest rectangle they will go in.
 
     Rows of shelves was what this did before, and a row is as tall as its
@@ -173,22 +179,29 @@ def pack(boxes, gap, kin=None):
     How wide to pack into is not obvious, so it is measured rather than
     guessed: eight trial widths around the square root of the area, and
     the one whose result covers the least, squarest ground wins.
+
+    `attempt` takes the next-best trial instead of the best. The tightest
+    board is not always one the router can finish - a 0.5 mm rail has to
+    leave a connector's pad field somehow - and the eight trials are eight
+    real layouts of the same parts, in order of how much ground they take.
+    So a run that comes up a wire short is laid out again one step looser,
+    rather than routed again, which on the same board gives the same
+    answer every time.
     """
     if not boxes:
         return []
     area = sum((w + gap) * (h + gap) for _, _, w, h in boxes)
     widest = max(w for _, _, w, _ in boxes)
     side = math.sqrt(area)
-    best = None
-    for tenths in range(6, 22, 2):
+    trials = []
+    for tenths in TRIALS:
         limit = max(widest, side * tenths / 10.0)
         spots = bottom_left(boxes, gap, limit, kin)
         w = max(x + box[2] for (x, _), box in zip(spots, boxes))
         h = max(y + box[3] for (_, y), box in zip(spots, boxes))
-        score = (round(w * h, 3), round(abs(w - h), 3))
-        if best is None or score < best[0]:
-            best = (score, spots)
-    return best[1]
+        trials.append(((round(w * h, 3), round(abs(w - h), 3)), spots))
+    trials.sort(key=lambda t: t[0])
+    return trials[min(max(attempt, 0), len(trials) - 1)][1]
 
 
 CONNECTOR_NAMES = ("CONN", "TYPE-C", "USB", "HDR", "HEADER", "JST", "PH-K", "TERMINAL")
@@ -408,6 +421,106 @@ def keep_inside(board, x0, y0, x1, y1, inset=0.25) -> int:
     return moved
 
 
+UUID = re.compile(r'\(uuid "[0-9a-fA-F-]{36}"\)')
+
+
+def span(text: str, start: int) -> int:
+    """Where the s-expression opening at `start` closes."""
+    depth, i, quoted = 0, start, False
+    while i < len(text):
+        c = text[i]
+        if quoted:
+            if c == "\\":
+                i += 1
+            elif c == '"':
+                quoted = False
+        elif c == '"':
+            quoted = True
+        elif c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return len(text)
+
+
+def named(key: str) -> str:
+    return str(uuids.UUID(hashlib.md5(key.encode()).hexdigest()))
+
+
+def steady(path: str, salt: int) -> int:
+    """Name everything in the saved board after what it is, not after when
+    it was written. Says how many were renamed.
+
+    KiCad gives every item a fresh random uuid each time it writes a board,
+    and it writes the footprints in uuid order. So the same placement came
+    out as a different file every run, KiCad exported the DSN in that order,
+    and Freerouting - which is the same twice on the same DSN - answered
+    differently each time: this board, placed identically and routed six
+    times, came back 1, 3, 0, 0, 1 and 1 connections short. A layout nobody
+    can reproduce is not one anybody can fix.
+
+    So each uuid is derived from the part's own reference instead. The
+    board is then the same file every run, the DSN is the same, and the
+    routing is the same. `salt` moves them all at once, which is how a
+    second try becomes a different problem for the router rather than the
+    same one over again.
+    """
+    text = Path(path).read_text()
+    spans, i = [], 0
+    while True:
+        at = text.find("\n\t(", i)
+        if at < 0:
+            break
+        a = at + 1
+        b = span(text, a)
+        spans.append((a, b))
+        i = b
+
+    done = 0
+
+    def rename(chunk: str, key: str) -> str:
+        """Every uuid in one item, after the item and its place in it."""
+        nonlocal done
+        seen = [0]
+
+        def swap(_):
+            seen[0] += 1
+            return '(uuid "%s")' % named(f"{salt}:{key}:{seen[0]}")
+
+        out = UUID.sub(swap, chunk)
+        done += seen[0]
+        return out
+
+    twice: dict[str, int] = {}
+
+    def whose(chunk: str) -> str:
+        """What the item is, independent of what it is called. A footprint
+        is its reference; anything else - the four lines of the outline -
+        is its own text with the old names taken out, because where it
+        came in the file is itself one of the things that varied. Two that
+        come out the same are counted apart, so no name is used twice."""
+        ref = re.search(r'\(property "Reference" "([^"]*)"', chunk)
+        if chunk.startswith("(footprint ") and ref:
+            key = ref.group(1)
+        else:
+            key = hashlib.md5(UUID.sub("", chunk).encode()).hexdigest()
+        twice[key] = twice.get(key, 0) + 1
+        return key if twice[key] == 1 else f"{key}#{twice[key]}"
+
+    out, cursor = [], 0
+    for a, b in spans:
+        out.append(text[cursor:a])
+        chunk = text[a:b]
+        out.append(rename(chunk, whose(chunk)))
+        cursor = b
+    out.append(text[cursor:])
+    Path(path).write_text("".join(out))
+    return done
+
+
 def main() -> int:
     plan = json.load(sys.stdin)
     board = pcbnew.BOARD()
@@ -483,18 +596,22 @@ def main() -> int:
         else:
             groups.setdefault(comp.get("group") or "", []).append(item)
 
+    # Which of the eight packings to take, best first. A pipeline that
+    # came up a connection short asks for the next one.
+    attempt = int(plan.get("attempt", 0))
+
     blocks = []                                # (name, parts, spots, w, h)
     for name in sorted(groups, key=lambda g: -len(groups[g])):
         ordered = cluster(groups[name], plan.get("nets", []))
         spots = pack([box for _, _, box in ordered], gap,
-                     kinship(ordered, plan.get("nets", [])))
+                     kinship(ordered, plan.get("nets", [])), attempt)
         w = max((x + box[2] for (_, _, box), (x, _) in zip(ordered, spots)), default=0)
         h = max((y + box[3] for (_, _, box), (_, y) in zip(ordered, spots)), default=0)
         blocks.append((name, ordered, spots, w, h))
 
     corners = [(20.0 + x, 20.0 + y)
                for x, y in pack([(0, 0, w, h) for *_, w, h in blocks],
-                                plan.get("block_gap", 1.0))]
+                                plan.get("block_gap", 1.0), None, attempt)]
     centre = {}
     for (name, ordered, spots, w, h), (bx, by) in zip(blocks, corners):
         for (comp, fp, box), (x, y) in zip(ordered, spots):
@@ -583,7 +700,15 @@ def main() -> int:
 
     out = plan.get("out", "/work/board.kicad_pcb")
     pcbnew.SaveBoard(out, board)
-    json.dump({"placed": placed, "missing": missing,
+    # Written once for KiCad to name everything, renamed, then written
+    # again so KiCad itself puts the footprints in the new order - the
+    # order is its business, and hand-sorting the file is how a board
+    # stops loading.
+    steadied = steady(out, attempt)
+    pcbnew.SaveBoard(out, pcbnew.LoadBoard(out))
+    json.dump({"placed": placed, "missing": missing, "attempt": attempt,
+               "uuids": steadied,
+               "attempts_available": len(TRIALS),
                "size_mm": [round(x1 - x0, 2), round(y1 - y0, 2)],
                "texts_beside": nudged, "texts_moved_in": escaped,
                "nets": len(nets), "out": out}, sys.stdout)

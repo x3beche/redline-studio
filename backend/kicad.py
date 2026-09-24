@@ -248,30 +248,59 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         }
 
         meter = compute.Meter()
-        proc = await asyncio.create_subprocess_exec(
-            *_docker(work, "--entrypoint", "python3", IMAGE, "/work/place.py",
-                     stdin=True),
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
-        meter.watch(proc.pid)
-        out, _ = await proc.communicate(json.dumps(plan).encode())
-        text = out.decode(errors="replace")
-        if proc.returncode != 0:
-            meter.stop()
-            raise RuntimeError("placing the board failed:\n" + text[-800:])
-        try:
-            placed = json.loads(text[text.index("{"):text.rindex("}") + 1])
-        except ValueError:
-            placed = {"placed": None, "missing": [], "note": text[-300:]}
 
-        # The placed board is kept as it came out of the placer, before any
-        # copper: what a person opens to place by hand and route again.
-        placed_pcb = (work / "board.kicad_pcb").read_bytes()
+        async def place_once(attempt: int) -> dict:
+            """One layout. `attempt` 0 is the tightest packing the placer
+            found; each one after it is the next-tightest."""
+            proc = await asyncio.create_subprocess_exec(
+                *_docker(work, "--entrypoint", "python3", IMAGE, "/work/place.py",
+                         stdin=True),
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+            meter.watch(proc.pid)
+            out, _ = await proc.communicate(
+                json.dumps({**plan, "attempt": attempt}).encode())
+            text = out.decode(errors="replace")
+            if proc.returncode != 0:
+                meter.stop()
+                raise RuntimeError("placing the board failed:\n" + text[-800:])
+            try:
+                return json.loads(text[text.index("{"):text.rindex("}") + 1])
+            except ValueError:
+                return {"placed": None, "missing": [], "note": text[-300:]}
+
+        async def route_once(payload: dict) -> dict:
+            proc = await asyncio.create_subprocess_exec(
+                *_docker(work, "--entrypoint", "python3", IMAGE, "/work/route.py",
+                         stdin=True),
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+            meter.watch(proc.pid)
+            out, _ = await asyncio.wait_for(
+                proc.communicate(json.dumps(payload).encode()), ROUTE_TIMEOUT + 60)
+            text = out.decode(errors="replace")
+            try:
+                got = json.loads(text[text.index("{"):text.rindex("}") + 1])
+            except ValueError:
+                raise RuntimeError("routing failed:\n" + text[-800:])
+            if got.get("error") == "rules":
+                raise RuntimeError("the routing rules do not fit this board: "
+                                   + "; ".join(got["problems"]))
+            if got.get("error"):
+                raise RuntimeError(f"routing failed: {got['error']}\n"
+                                   + (got.get("log") or "")[-600:])
+            return got
 
         # Route: the rules on as net classes, out to Freerouting, back, and
         # the ground poured. Then KiCad's own DRC says what came of it.
         route_report, drc_report = None, None
-        if route:
+        if not route:
+            placed = await place_once(0)
+            # The placed board is kept as it came out of the placer, before
+            # any copper: what a person opens to place by hand and route
+            # again.
+            placed_pcb = (work / "board.kicad_pcb").read_bytes()
+        else:
             nets = sorted({n.get("name") for n in graph.get("nets", []) if n.get("name")})
             board_doc = await db[ato.BOARDS].find_one({"_id": board_id},
                                                       {"rules": 1, "pads": 1}) or {}
@@ -283,21 +312,36 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                 raise RuntimeError("the routing rules do not hold together: "
                                    + "; ".join(problems))
             shutil.copy(ROUTER, work / "route.py")
-            plan = {"board": "/work/board.kicad_pcb", "out": "/work/board.kicad_pcb",
-                    "rules": rules.resolved(the_rules, nets), "timeout": ROUTE_TIMEOUT}
-            proc = await asyncio.create_subprocess_exec(
-                *_docker(work, "--entrypoint", "python3", IMAGE, "/work/route.py",
-                         stdin=True),
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
-            meter.watch(proc.pid)
-            out, _ = await asyncio.wait_for(
-                proc.communicate(json.dumps(plan).encode()), ROUTE_TIMEOUT + 60)
-            text = out.decode(errors="replace")
-            try:
-                route_report = json.loads(text[text.index("{"):text.rindex("}") + 1])
-            except ValueError:
-                raise RuntimeError("routing failed:\n" + text[-800:])
+            payload = {"board": "/work/board.kicad_pcb",
+                       "out": "/work/board.kicad_pcb",
+                       "rules": rules.resolved(the_rules, nets),
+                       "timeout": ROUTE_TIMEOUT}
+
+            # `route.tries` in the rules: how many layouts to try before
+            # settling. Routing the same board again is pointless -
+            # Freerouting gives the same answer on the same DSN, every
+            # time - so a try that comes up a connection short is laid out
+            # again one packing looser, which is a different board and a
+            # different problem. The tightest that routes clean wins; if
+            # none does, the one that came closest is kept, smallest first.
+            tries = max(1, int(the_rules.get("route", {}).get("tries", 1)))
+            best, used = None, 0
+            for attempt in range(tries):
+                used = attempt + 1
+                got = await place_once(attempt)
+                pcb = (work / "board.kicad_pcb").read_bytes()
+                report = await route_once(payload)
+                size = got.get("size_mm") or [0, 0]
+                rank = (report.get("unrouted") if report.get("unrouted") is not None
+                        else 1 << 30, round(size[0] * size[1], 2))
+                if best is None or rank < best[0]:
+                    shutil.copy(work / "board.kicad_pcb", work / "best.kicad_pcb")
+                    best = (rank, got, pcb, report)
+                if rank[0] == 0:
+                    break
+            _, placed, placed_pcb, route_report = best
+            shutil.copy(work / "best.kicad_pcb", work / "board.kicad_pcb")
+            route_report["attempts"] = used
             if route_report.get("pads"):
                 # Kept for the rules form: what each net's narrowest pad is.
                 await db[ato.BOARDS].update_one(
@@ -309,12 +353,6 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                     db, board_id, "geometry",
                     json.dumps(route_report.pop("geometry")).encode(),
                     collection=ato.BOARDS)
-            if route_report.get("error") == "rules":
-                raise RuntimeError("the routing rules do not fit this board: "
-                                   + "; ".join(route_report["problems"]))
-            if route_report.get("error"):
-                raise RuntimeError(f"routing failed: {route_report['error']}\n"
-                                   + (route_report.get("log") or "")[-600:])
             drc_report = await drc(work, "board.kicad_pcb")
 
         rc, svg_log = await _run(
@@ -402,7 +440,7 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         if route_report:
             routed = {k: route_report.get(k) for k in
                       ("tracks", "vias", "length_mm", "zones", "unrouted",
-                       "route_s", "passes")}
+                       "route_s", "passes", "attempts")}
         await db[ato.BOARDS].update_one(
             {"_id": board_id},
             {"$set": {"layout": {"placed": placed.get("placed"),

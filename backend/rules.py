@@ -36,7 +36,8 @@ PAIR_ENDS = [("_pos", "_neg"), ("_p", "_n"), ("+", "-"), ("p", "n")]
 
 DEFAULT = {"name": "Default", "track": 0.25, "clearance": 0.2,
            "via": 0.6, "drill": 0.3}
-# How hard the router tries, until a person says otherwise in the Rules tab.
+# How hard the router tries, and how many layouts it may be given, until a
+# person says otherwise in the Rules tab.
 ROUTE = {"passes": 40, "tries": 3}
 POWER_CLASS = {"name": "Power", "track": 0.5, "clearance": 0.2,
                "via": 0.8, "drill": 0.4}
@@ -194,9 +195,11 @@ SCHEMA = {
              "help": "optimisation passes; more is shorter copper and a longer run"},
             {"key": "tries", "label": "Tries", "type": "integer",
              "min": 1, "max": 10, "step": 1,
-             "help": "Freerouting is not the same twice: when a run leaves a "
-                     "connection unrouted, route again, up to this many times "
-                     "in all, and keep the best; a clean first run stops there"},
+             "help": "the tightest layout is not always one the router can "
+                     "finish: when a try leaves a connection unrouted, the "
+                     "board is laid out again a packing looser and routed "
+                     "again, up to this many layouts in all, and the tightest "
+                     "clean one is kept; a clean first try stops there"},
         ],
     },
 }
