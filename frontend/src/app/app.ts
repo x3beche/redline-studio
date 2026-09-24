@@ -5,11 +5,12 @@ import { RoomAnalyze } from './rooms/analyze';
 import { RoomCoding } from './rooms/coding';
 import { RoomPcb } from './rooms/pcb';
 import { RoomTools } from './tools/room';
+import { Auth, SignIn, UserChip } from './auth';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools],
+  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, SignIn, UserChip],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -18,6 +19,9 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
      The tabs and the room are handed to the editor rather than wrapped
      around it: they belong over the two right-hand columns, and the
      catalog on the left keeps its full height beside them. -->
+<!-- Signed in, or in local mode (sign-in off): the app. Otherwise the
+     sign-in card - and nothing of the app until the server has said which. -->
+@if (auth.signedIn()) {
 <app-editor>
   <header tabs class="relative flex shrink-0 items-center gap-1">
     @for (w of rooms; track w.id) {
@@ -45,6 +49,8 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
               [attr.aria-current]="here() === w.id ? 'page' : null"
               [title]="w.blurb">{{ w.label }}</button>
     }
+    <!-- Who is signed in, over the right-hand column; nothing in local mode. -->
+    <app-user-chip class="tcv-user-end" />
   </header>
 
   <!-- The 3D room stays mounted whichever tab is on. Its viewer holds a
@@ -63,10 +69,15 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
       @case ('analyze') { <app-room-analyze /> }
     }
   </div>
-</app-editor>`,
+</app-editor>
+} @else if (auth.state()) {
+  <app-sign-in />
+}`,
 })
 export class App {
   private picked = inject(Selection);
+  /** Whether sign-in is on, and who is signed in (auth.ts). */
+  auth = inject(Auth);
   tabs = WORKSPACES;
   /** The rooms you work in, left; Tools and Analytics at the right end. */
   rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools');
@@ -76,6 +87,7 @@ export class App {
   here = this.picked.room;
 
   constructor() {
+    this.auth.load();
     this.here.set(currentWorkspace());
     // Whoever changed it - a tab up here, or a file clicked in the catalog
     // - the address bar and the memory follow, so a room can be linked to

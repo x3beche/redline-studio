@@ -869,3 +869,15 @@ and firmware size. The machine, storage, the API and Docker stay app-wide.
 Each row folds away; the room remembers which, the range and the project.
 Every panel has a **CSV** button, and **Export** at the top saves the whole
 range as JSON.
+
+## Signing in
+
+Off by default: on this machine nobody signs in, and notes, thread lines
+and changes are written as *you* (`X3_LOCAL_USER` in `.env`). Set
+`X3_AUTH=on` in `.env` and restart to ask for a sign-in: the first visit
+offers to make the first account, which owns the workspace; after that
+the page asks for email and password, and your name at the far right of the
+top bar has **Sign out**. Every delete and change - by you or an agent - is
+in Analytics under **Recent changes**. Until agents have their own tokens
+(docs/USERS-PLAN.md, phase 4), keep sign-in off if agents run board
+commands.

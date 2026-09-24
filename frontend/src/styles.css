@@ -1623,3 +1623,25 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-spark-dot { fill: var(--accent); }
 .tcv-week { border-bottom: 1px solid var(--line); padding: 4px 0; font-size: 12px; }
 .tcv-week summary { cursor: pointer; color: var(--ink); }
+
+/* SIGNING IN (app/auth.ts): the card a signed-out visitor sees, and who is
+   signed in, at the far right of the top bar. */
+.tcv-signin-wrap { height: 100%; display: flex; align-items: center; justify-content: center;
+  background: var(--surface); }
+.tcv-signin { width: min(360px, 90vw); display: flex; flex-direction: column; gap: 10px; padding: 28px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.tcv-signin-brand { font-size: 22px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-bright); margin-bottom: 4px; }
+.tcv-signin-lead { font-size: 12.5px; color: var(--ink-dim); margin: 0 0 4px; line-height: 1.5; }
+.tcv-signin label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--ink-dim); }
+.tcv-signin input { padding: 7px 9px; font-size: 13px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 5px; outline: none; }
+.tcv-signin input:focus { border-color: var(--accent); }
+.tcv-signin-hint { font-size: 11px; color: var(--ink-dim); margin: -4px 0 0; }
+.tcv-signin-error { font-size: 12px; color: var(--danger); margin: 0; }
+.tcv-signin button { padding: 8px; font-size: 13px; margin-top: 4px; }
+.tcv-user-end { position: absolute; right: 0; top: 0; bottom: 0; }
+.tcv-user { display: flex; align-items: center; gap: 6px; }
+.tcv-user-dot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+  border-radius: 50%; font-size: 10px; font-weight: 700; color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-user-menu { right: 0; left: auto; top: calc(100% + 4px); }

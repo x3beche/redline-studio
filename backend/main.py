@@ -16,14 +16,14 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import (actors, ato, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (actors, ato, auth, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
 
@@ -1155,7 +1155,19 @@ async def _who_acts(request, call_next):
     X-Redline-Actor header. Every delete and change of state goes into the
     audit trail with it, whatever route it came through."""
     who = actors.from_header(request.headers.get(actors.HEADER))
+    ws = scope.DEFAULT
+    # Signed in, when sign-in is on: the session says who, and in which
+    # workspace. Without one, only the few routes that sign in answer.
+    if auth.enabled() and auth.needs_session(request.method, request.url.path):
+        from fastapi.responses import JSONResponse
+        got = await auth.session_user(db(), request.cookies.get(auth.COOKIE))
+        if not got:
+            return JSONResponse({"detail": "sign in first"}, status_code=401)
+        if not auth.csrf_ok(request.method, request.headers):
+            return JSONResponse({"detail": "that change did not come from the app"}, status_code=403)
+        who, ws = got["user"], got["workspace"]
     token = actors.CURRENT.set(who)
+    ws_token = scope.WORKSPACE.set(ws)
     try:
         response = await call_next(request)
         kind = actors.audited(request.method, request.url.path)
@@ -1167,6 +1179,7 @@ async def _who_acts(request, call_next):
         return response
     finally:
         actors.CURRENT.reset(token)
+        scope.WORKSPACE.reset(ws_token)
 
 
 @app.middleware("http")
@@ -1198,6 +1211,81 @@ async def _who_asks(request, call_next):
         agent = request.headers.get("user-agent", "")
         lcsc.WHO.set("page" if "Mozilla" in agent else "agent")
     return await call_next(request)
+
+
+# ---------------- signing in ----------------
+class SetupIn(BaseModel):
+    email: str = Field(min_length=3, max_length=200)
+    name: str = Field(default="", max_length=80)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class LoginIn(BaseModel):
+    email: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=1, max_length=200)
+
+
+def _set_cookie(response: Response, request: Request, token: str) -> None:
+    response.set_cookie(auth.COOKIE, token, max_age=auth.SESSION_DAYS * 86400, httponly=True,
+                        samesite="lax", secure=request.url.scheme == "https", path="/")
+
+
+@app.get("/api/auth/state")
+async def auth_state(request: Request):
+    """Whether sign-in is on, whether anyone has an account yet, and who
+    this browser is signed in as."""
+    if not auth.enabled():
+        return {"mode": "off", "user": actors.local_user(), "workspace": scope.DEFAULT}
+    got = await auth.session_user(db(), request.cookies.get(auth.COOKIE))
+    return {"mode": "on", "needs_setup": not await auth.any_user(db()),
+            "user": got["user"] if got else None, "workspace": got["workspace"] if got else None}
+
+
+@app.post("/api/auth/setup")
+async def auth_setup(body: SetupIn, request: Request, response: Response):
+    """The first account, while there is none; it owns the workspace."""
+    if not auth.enabled():
+        raise HTTPException(400, "sign-in is off (X3_AUTH)")
+    try:
+        user = await auth.make_first_user(db(), body.email, body.name, body.password)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    token = await auth.create_session(db(), user, scope.DEFAULT, request.headers.get("user-agent", ""),
+                                      request.client.host if request.client else "")
+    _set_cookie(response, request, token)
+    await actors.audit(db(), "account", "setup", {"email": user["email"]},
+                       actor={"type": "user", "id": user["_id"], "name": user["name"]})
+    return {"user": {"id": user["_id"], "name": user["name"], "email": user["email"]}}
+
+
+@app.post("/api/auth/login")
+async def auth_login(body: LoginIn, request: Request, response: Response):
+    if not auth.enabled():
+        raise HTTPException(400, "sign-in is off (X3_AUTH)")
+    email = body.email.strip().lower()
+    if auth.locked_out(email):
+        raise HTTPException(429, "too many tries - wait a quarter of an hour")
+    got = await auth.check_login(db(), email, body.password)
+    if not got:
+        auth.failed(email)
+        raise HTTPException(401, "that email and password do not match")
+    auth.cleared(email)
+    user, ws = got
+    token = await auth.create_session(db(), user, ws, request.headers.get("user-agent", ""),
+                                      request.client.host if request.client else "")
+    _set_cookie(response, request, token)
+    await actors.audit(db(), "sign-in", email, None,
+                       actor={"type": "user", "id": user["_id"], "name": user.get("name") or email})
+    return {"user": {"id": user["_id"], "name": user.get("name"), "email": user["email"]}}
+
+
+@app.post("/api/auth/logout")
+async def auth_logout(request: Request, response: Response):
+    await auth.end_session(db(), request.cookies.get(auth.COOKIE))
+    response.delete_cookie(auth.COOKIE, path="/")
+    return {"signed_out": True}
 
 
 @app.get("/api/audit")

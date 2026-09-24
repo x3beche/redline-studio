@@ -1,6 +1,6 @@
 # Users in Redline - research and work plan
 
-Status: **in progress** - phases 1 and 2 done (2026-09-24). Decisions
+Status: **in progress** - phases 1, 2 and 3 done (2026-09-24). Decisions
 below are recorded in section 6.
 
 ## 1. Where things stand
@@ -197,6 +197,39 @@ route module reaches the database around `db()`.
 Known limit, for when a second workspace is real: ids are still global -
 two workspaces cannot both have a model called `iot-fan/station`. Phase 5
 (members) has to namespace new ids per workspace or refuse a clash.
+
+### Phase 3 - signing in (done)
+
+`backend/auth.py`, `frontend/src/app/auth.ts`. `X3_AUTH` in `.env`: off (the
+default) is local mode, exactly the app as before; on asks every API
+request for a session except `/api/auth/state`, `/login`, `/setup` and
+`/api/health`. Accounts are email and password, hashed with scrypt from the
+standard library, salted. The first account - made while there is none,
+from the sign-in card - owns the default workspace; after that a second
+"first account" is refused (people are invited in phase 5). Sessions are a
+random token in an HttpOnly, SameSite=Lax cookie (Secure over HTTPS), 30
+days; the database keeps only its SHA-256, and lookups are cached for a
+minute because the database is far away. Every change must carry the
+`X-Redline-CSRF` header, which only the app's page sends. Five wrong
+passwords in fifteen minutes and that address waits; a wrong address takes
+as long as a wrong password. Sign-ins and the first account go into the
+audit trail. The page shows the sign-in card when signed out, and the
+signed-in user at the far right of the top bar with *Sign out*.
+
+No new secret: session tokens are random and stored hashed, so there is
+nothing for `.env` beyond `X3_AUTH`.
+
+Verified on a separate server with sign-in on and a throw-away database
+(dropped afterwards): 401 without a session; the first account, then a
+second refused; a change without the CSRF header refused and with it
+accepted; a wrong password refused; sign-out ends the session; in the
+browser the card, a wrong password's message, the app with the user
+signed in, sign-out back to the card, and the first-account card. Local
+mode on this machine unchanged.
+
+Limit until phase 4: with sign-in on, the agents' API calls
+(`revisions.py board …`) have no session and are refused; their direct
+database work is unaffected. Keep sign-in off until phase 4 lands.
 
 ### Original list of questions
 
