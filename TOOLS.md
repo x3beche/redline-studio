@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-128 tools. **MCP** marks the ones agents can run with `run_tool`.
+136 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -209,11 +209,19 @@ agents, the most used, and every tool nobody used.
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
+| **Chart Spec Builder** · MCP | `chart-spec` | axes, series and scales chosen into a chart configuration | Web |
 | **Form Builder** | `form-builder` | build a form with its rules, get Zod, types and a React component | Web |
 | **Grid Sketch** | `grid-sketch` | draw a layout on a grid, copy it as a prompt, CSS or JSON | Web, Mobile |
+| **Icon & Favicon Generator** · MCP | `icon-generator` | every icon size and the manifest entries from one image | Web, Mobile |
+| **JSON Diff Viewer** · MCP | `json-diff` | two responses compared by line and by field | Web, Analytics |
+| **JSON Path Explorer** · MCP | `json-path` | walk a large JSON and copy the access path of a field | Web |
+| **JSON to TypeScript** · MCP | `json-to-ts` | type definitions and a validation schema from sample JSON | Web, Mobile |
+| **JWT & Base64 Decoder** · MCP | `jwt-decoder` | decode a token and show its expiry and signature fields | Web |
 | **Motion Lab** | `motion-lab` | shape an easing curve and timing, take it as CSS or JS | Web, Mobile |
 | **Palette Forge** | `palette-forge` | one colour into an accessible palette and light/dark tokens | Web, Mobile |
 | **Screenshot Annotator** | `screenshot-annotator` | mark up a screenshot and turn the marks into a fix list | Web, Mobile |
+| **SVG Path Editor** · MCP | `svg-path-editor` | edit a path node by node and trim needless decimals | Web |
+| **Telemetry Mock Generator** · MCP | `telemetry-mock` | realistic sensor time series with noise, drift and faults | Web, Embedded |
 
 ### Code, data & prompts
 

@@ -1,0 +1,32 @@
+{
+  "id": "icon-generator",
+  "name": "Icon & Favicon Generator",
+  "blurb": "every icon size and the manifest entries from one image",
+  "group": "web",
+  "rooms": ["web", "mobile"],
+  "keywords": ["favicon", "icon", "app icon", "apple-touch-icon", "manifest", "webmanifest", "pwa", "maskable", "adaptive icon", "mipmap", "appiconset", "ico", "imagemagick", "android", "ios"],
+  "intro": "Lists every icon file a web app, Android app or iOS app needs from one source image, with the logo sized to each platform's safe zone (maskable 80 % circle, Android 66 dp circle, Apple 20 px margin). It writes the HTML <link> tags, manifest entries, Android XML, iOS Contents.json and an ImageMagick script that makes the files.",
+  "inputs": [
+    { "key": "source", "label": "Source file", "type": "text", "default": "logo.svg", "help": "An SVG is best; a PNG should be 1024 px or more." },
+    { "key": "sourceSize", "label": "Source width", "type": "number", "unit": "px", "default": "512", "help": "For an SVG: its viewBox width (sets the render density)." },
+    { "key": "shape", "label": "Logo shape", "type": "select", "default": "square",
+      "options": [["square", "Square"], ["circle", "Round"], ["wide", "Wide (2:1)"], ["tall", "Tall (1:2)"]] },
+    { "key": "name", "label": "App name", "type": "text", "default": "Redline Tools" },
+    { "key": "shortName", "label": "Short name", "type": "text", "default": "Redline" },
+    { "key": "background", "label": "Background colour", "type": "text", "default": "#ffffff", "help": "Fills maskable, Apple and iOS icons (they must be opaque)." },
+    { "key": "theme", "label": "Theme colour", "type": "text", "default": "#1f4ed8" },
+    { "key": "prefix", "label": "URL path of the icons", "type": "text", "default": "/" },
+    { "key": "web", "label": "Web and PWA", "type": "bool", "default": true },
+    { "key": "android", "label": "Android app", "type": "bool", "default": false },
+    { "key": "ios", "label": "iOS app", "type": "bool", "default": false },
+    { "key": "iosSet", "label": "iOS icon set", "type": "select", "default": "single", "when": { "key": "ios", "equals": "true" },
+      "options": [["single", "One 1024 px (Xcode 14+)"], ["full", "Every size (older Xcode)"]] }
+  ],
+  "examples": [
+    { "title": "A PWA from an SVG logo", "input": { "source": "logo.svg", "sourceSize": "512", "shape": "square", "name": "Redline Tools", "shortName": "Redline", "background": "#ffffff", "theme": "#1f4ed8", "prefix": "/", "web": true, "android": false, "ios": false, "iosSet": "single" } },
+    { "title": "Web, Android and iOS from a 1024 px round PNG", "input": { "source": "logo.png", "sourceSize": "1024", "shape": "circle", "name": "Field Logger", "shortName": "Logger", "background": "#0f151b", "theme": "#0f151b", "prefix": "/icons/", "web": true, "android": true, "ios": true, "iosSet": "single" } }
+  ],
+  "usage": "Give the source file name, its width in px, the logo shape (square, circle, wide, tall), app name, short name, background and theme colours as #hex, the URL prefix, and booleans web/android/ios (iosSet single or full). Returns a table of every file with its pixel size and the logo size inside it, and texts: HTML head tags, manifest.webmanifest, Android adaptive XML, iOS Contents.json and an ImageMagick 7 shell script. It does not read the image itself; run the script to make the files.",
+  "sources": ["W3C Web App Manifest, icon purpose \"maskable\" (safe zone: circle of radius 40 %)", "Evil Martians, \"How to Favicon in 2024: Six files that fit most needs\"", "Android Developers, \"Adaptive icons\" (108 dp layers, 72 dp visible, 66 dp safe zone) and launcher density buckets", "Apple Human Interface Guidelines, \"App icons\" (single 1024 px icon, no transparency)"],
+  "view": true
+}

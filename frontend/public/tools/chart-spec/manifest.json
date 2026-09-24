@@ -1,0 +1,40 @@
+{
+  "id": "chart-spec",
+  "name": "Chart Spec Builder",
+  "blurb": "axes, series and scales chosen into a chart configuration",
+  "group": "web",
+  "rooms": ["web"],
+  "keywords": ["chart", "graph", "plot", "visualization", "dataviz", "vega-lite", "chart.js", "echarts", "axis", "scale", "log scale", "zero baseline", "bar vs line", "which chart", "encoding"],
+  "intro": "Describe your fields (type, range, number of categories) and the question; it picks the chart, the x/y/colour encodings and the scales (time, band, linear from zero or fitted, log) by Cleveland & McGill's encoding ranking and Few's chart-per-question guidance, explains each decision, and writes the Vega-Lite, Chart.js and ECharts configuration.",
+  "inputs": [
+    { "key": "fields", "label": "Fields", "type": "table",
+      "columns": [
+        { "key": "name", "label": "Name" },
+        { "key": "type", "label": "Type", "type": "select", "options": ["quantitative", "temporal", "nominal", "ordinal"], "default": "quantitative" },
+        { "key": "min", "label": "Min" },
+        { "key": "max", "label": "Max" },
+        { "key": "distinct", "label": "Distinct values" }
+      ],
+      "default": [
+        { "name": "date", "type": "temporal", "min": "2025-01-01", "max": "2025-12-31", "distinct": "" },
+        { "name": "region", "type": "nominal", "min": "", "max": "", "distinct": "4" },
+        { "name": "revenue", "type": "quantitative", "min": "12000", "max": "48000", "distinct": "" }
+      ],
+      "help": "Min/max: numbers, or dates for temporal fields. Distinct values: how many categories." },
+    { "key": "goal", "label": "Question", "type": "select", "default": "auto",
+      "options": [["auto", "Decide from the fields"], ["trend", "Trend over time"], ["compare", "Compare categories"], ["ranking", "Ranking"], ["distribution", "Distribution"], ["relationship", "Relationship between two measures"], ["part", "Part of a whole"], ["composition", "Composition over time"]] },
+    { "key": "rows", "label": "Rows of data", "type": "number", "default": "1460" },
+    { "key": "aggregate", "label": "Aggregate", "type": "select", "default": "sum",
+      "options": [["sum", "Sum"], ["mean", "Mean"], ["median", "Median"], ["max", "Max"], ["min", "Min"], ["none", "None (one row per point)"]] },
+    { "key": "library", "label": "Write it for", "type": "select", "default": "vegalite",
+      "options": [["vegalite", "Vega-Lite 5"], ["chartjs", "Chart.js 4"], ["echarts", "Apache ECharts 5"]] },
+    { "key": "title", "label": "Chart title", "type": "text", "default": "Revenue by region" },
+    { "key": "dataUrl", "label": "Data URL", "type": "text", "default": "", "placeholder": "optional, e.g. /api/revenue.json" }
+  ],
+  "examples": [
+    { "title": "Daily revenue per region over a year", "input": { "goal": "auto", "rows": "1460", "aggregate": "sum", "library": "vegalite", "title": "Revenue by region" } },
+    { "title": "Which of 30 products sells most", "input": { "fields": [ { "name": "product", "type": "nominal", "min": "", "max": "", "distinct": "30" }, { "name": "units", "type": "quantitative", "min": "3", "max": "9400", "distinct": "" } ], "goal": "ranking", "rows": "30", "aggregate": "sum", "library": "chartjs", "title": "Units sold", "dataUrl": "" } }
+  ],
+  "usage": "Give fields as rows of {name, type: quantitative|temporal|nominal|ordinal, min, max, distinct}, the goal (auto, trend, compare, ranking, distribution, relationship, part, composition), the row count, an aggregate (sum, mean, median, max, min, none), the library (vegalite, chartjs, echarts), a title and an optional data URL. Returns the chart type, x/y/colour encodings with scale choices, a table of decisions with reasons, warnings (too many colours, log bars, dual axes), and the configuration for all three libraries; result.spec holds the structured choice.",
+  "sources": ["Cleveland, W. S. & McGill, R. (1984), Graphical Perception, JASA 79(387) - ranking of visual encodings", "Few, S., Show Me the Numbers, 2nd ed. (2012), chapters on choosing a graph and scales", "Vega-Lite 5 documentation (scale.zero, fold, bin, aggregate)", "Histogram bins: Sturges (1926) and the Rice rule"]
+}

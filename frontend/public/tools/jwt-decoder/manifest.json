@@ -1,0 +1,25 @@
+{
+  "id": "jwt-decoder",
+  "name": "JWT & Base64 Decoder",
+  "blurb": "decode a token and show its expiry and signature fields",
+  "group": "web",
+  "rooms": ["web"],
+  "keywords": ["jwt", "json web token", "jwe", "bearer token", "decode", "base64", "base64url", "claims", "exp", "expiry", "signature", "verify", "hs256", "rs256", "oauth"],
+  "intro": "Splits a JWT into header, claims and signature (RFC 7519/7515), explains each registered claim, shows iat/nbf/exp as UTC dates and whether the token is valid at a check time, checks the signature length for its algorithm and, given a secret or public key, verifies it with WebCrypto in the page. Anything else is decoded as base64 or base64url into JSON, text or a hex dump.",
+  "inputs": [
+    { "key": "token", "label": "Token or base64", "type": "textarea", "rows": 5,
+      "default": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2F1dGguZXhhbXBsZS5jb20iLCJzdWIiOiJ1c2VyLTQ4MjEiLCJhdWQiOiJyZWRsaW5lLWFwaSIsImlhdCI6MTc5MDE1MDQwMCwibmJmIjoxNzkwMTUwNDAwLCJleHAiOjE3OTAxNTQwMDAsInNjb3BlIjoicmVhZDp0b29scyB3cml0ZTpyZXZpc2lvbnMiLCJuYW1lIjoiQWRhIExvdmVsYWNlIn0.j7emOYltHCUv3DU2MliuY4_fy6-ursL85aaTa8M4xxM",
+      "placeholder": "eyJhbGciOi...  (a \"Bearer \" prefix is removed)" },
+    { "key": "mode", "label": "Read as", "type": "select", "default": "auto", "options": [["auto", "Detect"], ["jwt", "JWT"], ["base64", "Base64 / base64url"]] },
+    { "key": "at", "label": "Check time (UTC)", "type": "text", "default": "2026-09-23T08:30:00Z", "placeholder": "2026-09-24T12:00:00Z or Unix seconds" },
+    { "key": "key", "label": "Secret or public key", "type": "textarea", "rows": 3, "default": "", "placeholder": "HS*: the shared secret. RS/PS/ES/EdDSA: PEM public key or a JWK. Stays in this page." },
+    { "key": "keyEnc", "label": "Secret is", "type": "select", "default": "text", "options": [["text", "Plain text (UTF-8)"], ["base64", "Base64 bytes"]] }
+  ],
+  "examples": [
+    { "title": "An HS256 access token, checked 30 min after issue with its secret", "input": { "mode": "auto", "at": "2026-09-23T08:30:00Z", "key": "redline-demo-secret", "keyEnc": "text" } },
+    { "title": "Plain base64 from a config file", "input": { "token": "eyJob3N0IjoiMTAuMC4wLjUiLCJwb3J0Ijo4ODgzLCJ0bHMiOnRydWV9", "mode": "auto", "at": "", "key": "", "keyEnc": "text" } }
+  ],
+  "usage": "Give token (a JWT, optionally with 'Bearer ', or any base64/base64url string), mode (auto, jwt, base64), at (a check time as ISO UTC or Unix seconds; blank for none), and optionally key (HS secret, PEM public key or JWK) with keyEnc (text or base64). Returns the algorithm, expiry, status at the check time, audience, signature size and verification result; tables of header fields, claims (with dates) and signature; Header and Payload JSON. result.times holds iat/nbf/exp/check in Unix seconds. Base64 input returns its JSON, text and hex dump.",
+  "sources": ["RFC 7519 JSON Web Token (registered claims §4.1, NumericDate §2)", "RFC 7515 JSON Web Signature (compact serialization) and RFC 7516 JWE", "RFC 7518 JSON Web Algorithms (signature sizes, ES raw R||S §3.4) and RFC 8037 (EdDSA)", "RFC 4648 Base64 and base64url encodings", "OWASP JSON Web Token Cheat Sheet (alg none, jku/x5u, lifetimes)"],
+  "view": true
+}

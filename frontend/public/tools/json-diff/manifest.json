@@ -1,0 +1,27 @@
+{
+  "id": "json-diff",
+  "name": "JSON Diff Viewer",
+  "blurb": "two responses compared by line and by field",
+  "group": "web",
+  "rooms": ["web", "analyze"],
+  "keywords": ["json", "diff", "compare", "api response", "regression", "json patch", "rfc 6902", "unified diff", "field diff", "deep equal", "snapshot", "changes", "before after"],
+  "intro": "Compares two JSON documents by field (every added, removed and changed value with its path; arrays by position, by a key such as id, or as unordered sets) and by line (Myers diff of the pretty-printed text, keys optionally sorted), and writes the RFC 6902 JSON Patch from A to B. Noisy fields like timestamps can be ignored and numbers compared within a tolerance.",
+  "inputs": [
+    { "key": "a", "label": "A (before / expected)", "type": "textarea", "rows": 9,
+      "default": "{\n  \"requestId\": \"a1f3\",\n  \"user\": { \"id\": 42, \"name\": \"Ada\", \"roles\": [\"admin\", \"dev\"] },\n  \"items\": [\n    { \"id\": 1, \"sku\": \"RL-100\", \"qty\": 2, \"price\": 14.5 },\n    { \"id\": 2, \"sku\": \"RL-220\", \"qty\": 1, \"price\": 99 }\n  ],\n  \"total\": 128.0,\n  \"coupon\": \"SPRING\"\n}" },
+    { "key": "b", "label": "B (after / actual)", "type": "textarea", "rows": 9,
+      "default": "{\n  \"requestId\": \"c9e0\",\n  \"user\": { \"id\": 42, \"name\": \"Ada\", \"roles\": [\"admin\"] },\n  \"items\": [\n    { \"id\": 1, \"sku\": \"RL-100\", \"qty\": 3, \"price\": 14.5 },\n    { \"id\": 2, \"sku\": \"RL-220\", \"qty\": 1, \"price\": \"99.00\" }\n  ],\n  \"total\": 142.5000001,\n  \"currency\": \"EUR\"\n}" },
+    { "key": "arrays", "label": "Compare arrays", "type": "select", "default": "index",
+      "options": [["index", "By position"], ["key", "By a key field"], ["unordered", "As unordered sets"]] },
+    { "key": "key", "label": "Key field", "type": "text", "default": "id", "when": { "key": "arrays", "equals": "key" } },
+    { "key": "ignore", "label": "Ignore keys", "type": "text", "default": "requestId", "placeholder": "e.g. timestamp, requestId" },
+    { "key": "tolerance", "label": "Number tolerance", "type": "number", "default": "1e-6", "help": "Numbers closer than this are equal; 0 for exact." },
+    { "key": "sort", "label": "Sort keys before the line diff", "type": "bool", "default": true }
+  ],
+  "examples": [
+    { "title": "An order API response before and after a change", "input": { "arrays": "index", "key": "id", "ignore": "requestId", "tolerance": "1e-6", "sort": true } },
+    { "title": "The same list in another order, matched by id", "input": { "a": "[{\"id\":1,\"state\":\"open\"},{\"id\":2,\"state\":\"closed\"},{\"id\":3,\"state\":\"open\"}]", "b": "[{\"id\":3,\"state\":\"open\"},{\"id\":1,\"state\":\"closed\"},{\"id\":4,\"state\":\"open\"}]", "arrays": "key", "key": "id", "ignore": "", "tolerance": "0", "sort": true } }
+  ],
+  "usage": "Give a and b as JSON text, arrays as index, key or unordered (key = the id field when arrays is key), ignore as a comma-separated list of keys to skip anywhere, tolerance for numbers, and sort to sort keys before the line diff. Returns counts of changed/added/removed fields, a table of differences with paths and both values, a unified line diff and an RFC 6902 JSON Patch (for index comparison). Use it to check an API response against an expected one.",
+  "sources": ["E. W. Myers, An O(ND) Difference Algorithm and Its Variations, Algorithmica 1 (1986)", "RFC 6902 JavaScript Object Notation (JSON) Patch", "RFC 6901 JSON Pointer", "GNU diffutils manual, unified format"]
+}

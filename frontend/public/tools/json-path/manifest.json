@@ -1,0 +1,26 @@
+{
+  "id": "json-path",
+  "name": "JSON Path Explorer",
+  "blurb": "walk a large JSON and copy the access path of a field",
+  "group": "web",
+  "rooms": ["web"],
+  "keywords": ["json", "path", "jsonpath", "json pointer", "jq", "accessor", "find key", "nested", "api response", "explorer", "tree", "field path", "rfc 6901", "rfc 9535"],
+  "intro": "Walks every node of a JSON document and lists each field's access path in the style you code in (JavaScript, JSONPath, jq, Python or JSON Pointer), filtered by key or value. Type a path in any style to read the value there; with wildcards on, array indices collapse to [*] so a large list reads as its shape.",
+  "inputs": [
+    { "key": "json", "label": "JSON", "type": "textarea", "rows": 12,
+      "default": "{\n  \"status\": \"ok\",\n  \"page\": { \"size\": 2, \"next\": \"/api/orders?page=2\" },\n  \"orders\": [\n    { \"id\": 5012, \"customer\": { \"name\": \"Grace Hopper\", \"e-mail\": \"grace@example.com\" },\n      \"lines\": [ { \"sku\": \"RL-100\", \"qty\": 2, \"price\": 14.5 }, { \"sku\": \"RL-220\", \"qty\": 1, \"price\": 99 } ],\n      \"shipping\": { \"method\": \"express\", \"tracking\": null } },\n    { \"id\": 5013, \"customer\": { \"name\": \"Alan Turing\", \"e-mail\": \"alan@example.com\" },\n      \"lines\": [ { \"sku\": \"RL-100\", \"qty\": 5, \"price\": 14.5 } ],\n      \"shipping\": { \"method\": \"standard\", \"tracking\": \"1Z999AA10123456784\" } }\n  ]\n}" },
+    { "key": "filter", "label": "Find key or value", "type": "text", "default": "", "placeholder": "e.g. sku, e-mail, express" },
+    { "key": "style", "label": "Path style", "type": "select", "default": "js",
+      "options": [["js", "JavaScript: data.a[0].b"], ["jsonpath", "JSONPath: $.a[0].b"], ["jq", "jq: .a[0].b"], ["python", "Python: data[\"a\"][0][\"b\"]"], ["pointer", "JSON Pointer: /a/0/b"]] },
+    { "key": "rootVar", "label": "Root variable", "type": "text", "default": "data", "when": { "key": "style", "in": ["js", "python"] } },
+    { "key": "pick", "label": "Read the value at", "type": "text", "default": "data.orders[1].shipping.tracking", "placeholder": "a path in any style, e.g. $.orders[*].id" },
+    { "key": "wildcard", "label": "Collapse array indices to [*]", "type": "bool", "default": false },
+    { "key": "leaves", "label": "Only leaf values", "type": "bool", "default": true }
+  ],
+  "examples": [
+    { "title": "Where is the tracking number, in JavaScript?", "input": { "filter": "tracking", "style": "js", "rootVar": "data", "pick": "data.orders[1].shipping.tracking", "wildcard": false, "leaves": true } },
+    { "title": "The shape of an order list as JSONPath", "input": { "filter": "", "style": "jsonpath", "rootVar": "data", "pick": "$.orders[*].lines[*].sku", "wildcard": true, "leaves": true } }
+  ],
+  "usage": "Give json as text, an optional filter (a key or value fragment, case-insensitive), style (js, jsonpath, jq, python, pointer), rootVar for js/python, an optional pick path in any style ([*] takes every item), and booleans wildcard (collapse indices) and leaves (leaves only). Returns a table of paths with type and value preview, the path list as text, node count and depth, and the value at the pick path as JSON. Invalid JSON returns the line and column of the error.",
+  "sources": ["RFC 9535 JSONPath: Query Expressions for JSON (normalized paths)", "RFC 6901 JSON Pointer", "jq 1.7 manual, basic filters (.foo, .\"foo\", .[n])", "RFC 8259 JSON grammar"]
+}

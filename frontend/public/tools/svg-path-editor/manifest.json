@@ -1,0 +1,29 @@
+{
+  "id": "svg-path-editor",
+  "name": "SVG Path Editor",
+  "blurb": "edit a path node by node and trim needless decimals",
+  "group": "web",
+  "rooms": ["web"],
+  "keywords": ["svg", "path", "d attribute", "path data", "minify", "optimize", "svgo", "decimals", "precision", "bezier", "nodes", "relative", "absolute", "icon", "vector"],
+  "intro": "Parses a path's d attribute by the SVG path grammar, lists every node, and writes it back shorter: rounded to the decimals you choose, each segment relative or absolute (whichever is shorter), H/V shorthands, no repeated command letters. Drag a node in the drawing to move it.",
+  "inputs": [
+    { "key": "d", "label": "Path data", "type": "textarea", "rows": 5, "default": "M 12.000000 2.000000 C 6.477152 2.000000 2.000000 6.477152 2.000000 12.000000 C 2.000000 17.522848 6.477152 22.000000 12.000000 22.000000 C 17.522848 22.000000 22.000000 17.522848 22.000000 12.000000 C 22.000000 6.477152 17.522848 2.000000 12.000000 2.000000 Z M 11.000000 7.000000 L 13.000000 7.000000 L 13.000000 13.000000 L 11.000000 13.000000 Z M 11.000000 15.000000 L 13.000000 15.000000 L 13.000000 17.000000 L 11.000000 17.000000 Z",
+      "placeholder": "M10 10 L90 10 L50 80 Z  (or a whole <path d=\"...\"/>)" },
+    { "key": "decimals", "label": "Decimals", "type": "select", "default": "2",
+      "options": [["0", "0 (whole units)"], ["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["keep", "Keep all"]] },
+    { "key": "mode", "label": "Coordinates", "type": "select", "default": "shortest",
+      "options": [["shortest", "Shortest per segment"], ["relative", "All relative"], ["absolute", "All absolute"]] },
+    { "key": "compact", "label": "Drop needless spaces and leading zeros", "type": "bool", "default": true },
+    { "key": "shorthand", "label": "Write straight lines as H / V where possible", "type": "bool", "default": true },
+    { "key": "tx", "label": "Translate x", "type": "number", "unit": "units", "default": "0" },
+    { "key": "ty", "label": "Translate y", "type": "number", "unit": "units", "default": "0" },
+    { "key": "scale", "label": "Scale", "type": "number", "unit": "×", "default": "1", "help": "Uniform; applied after reading, before rounding." }
+  ],
+  "examples": [
+    { "title": "An exported 24 px alert icon with six decimals", "input": { "decimals": "1", "mode": "shortest", "compact": true, "shorthand": true, "tx": "0", "ty": "0", "scale": "1" } },
+    { "title": "Scale a 100-unit logo path down to a 24 px icon", "input": { "d": "M10 80 C 40 10, 65 10, 95 80 S 150 150, 180 80", "decimals": "2", "mode": "shortest", "compact": true, "shorthand": true, "tx": "0", "ty": "0", "scale": "0.1333" } }
+  ],
+  "usage": "Give d as the path data string (or a whole <path> element), decimals as 0-4 or keep, mode as shortest, relative or absolute, and optional translate tx/ty and uniform scale. Returns the rewritten path (texts 'Path' and 'Element' with a fitted viewBox), characters before and after, bounding box, sampled length, the largest node shift rounding caused, and a node table; result.segments holds the absolute segments. Use it to shrink icon paths or check what precision a path can lose.",
+  "sources": ["W3C SVG 1.1 section 8.3 (path data grammar) and appendix F.6.5-F.6.6 (arc endpoint to centre conversion)", "SVGO convertPathData plugin (the shortest-of-relative/absolute idea)"],
+  "view": true
+}
