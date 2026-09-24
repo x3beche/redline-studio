@@ -476,7 +476,11 @@ interface Placed {
              it is tall, and stretching the element to the pane put it in
              the middle of a white block four times its height. -->
         <div class="flex min-h-0 flex-1 items-center justify-center p-2">
-          <div class="w-full rounded" style="background: var(--shot-bg);
+          <!-- Black, the way KiCad shows a board: its colours - pale
+               yellow silkscreen, red and purple copper, the grey outline -
+               are chosen for a dark ground, and on white the silkscreen
+               was barely there. -->
+          <div class="w-full rounded" style="background: var(--pcb-bg);
                       padding: 10px; max-height: 100%"
                [style.aspect-ratio]="sheet()">
             <img [src]="layoutUrl()" alt="board layout"
