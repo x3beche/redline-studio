@@ -41,7 +41,11 @@
       @if (!collapsed()) {
         <!-- Tight to the word: the mark and the name are one lockup, not a
              picture standing next to a label. -->
-        <div class="flex min-w-0 items-center gap-1.5">
+        <!-- The wordmark doubles as the Tools menu: hover it (or click, on a
+             touch screen) and the tools drop down under it. -->
+        <div class="tcv-brand relative flex min-w-0 items-center gap-1.5"
+             (mouseenter)="showTools(true)" (mouseleave)="showTools(false)"
+             (click)="toolsOpen.set(!toolsOpen())">
           <svg viewBox="0 0 24 24" class="h-[27px] w-[27px] shrink-0" aria-hidden="true">
             <!-- An isometric solid with a mark drawn across it: the whole
                  application in one glyph. The stroke runs off the near face
@@ -58,6 +62,18 @@
                the middle of the word, which is the mark the application is
                named after. -->
           <div class="brand-name min-w-0 truncate">Redl<span class="brand-i">i</span>ne</div>
+          <span class="tcv-brand-caret" aria-hidden="true">▾</span>
+          @if (toolsOpen()) {
+            <div class="tcv-menu" role="menu" (click)="$event.stopPropagation()">
+              <div class="tcv-label px-2.5 pb-1 pt-1.5">Tools</div>
+              @for (t of toolPages; track t.id) {
+                <button class="tcv-menu-item" role="menuitem" (click)="openTool(t)">
+                  <span class="tcv-menu-name">{{ t.name }}</span>
+                  <span class="tcv-menu-blurb">{{ t.blurb }}</span>
+                </button>
+              }
+            </div>
+          }
         </div>
       }
     </div>
@@ -328,6 +344,10 @@
       </div>
       <span class="text-[11px]" style="color: var(--ink-dim)">click to close</span>
     </div>
+  }
+
+  @if (toolPage(); as t) {
+    <app-tool-modal [tool]="t" (close)="toolPage.set(null)" />
   }
 
   <!-- What just happened - saved, refused, sent. On the page, not in the

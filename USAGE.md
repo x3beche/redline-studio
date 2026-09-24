@@ -799,3 +799,18 @@ station, 63.7 MB artifact
 - Zero clash volume between two parts proves nothing on its own. A part that is
   nowhere near the other also has zero. Probe for the material that *should* be
   there as well.
+
+## Tools
+
+Hover the **Redline** wordmark at the top left: a **Tools** menu drops
+down. A tool opens in a window over whatever room is on screen, in the
+app's colours; **×** or Esc closes it, and it remembers its own work for next
+time.
+
+- **Grid Sketch** - draw a layout on a grid (drag to draw an area, drag it to
+  move it, rename it in the list) and copy it as a prompt, CSS, grid areas,
+  Tailwind, ASCII or JSON. Useful for telling an agent how a screen should
+  be laid out.
+
+A tool is a self-contained page in `frontend/public/tools/`, kept as written,
+plus one line in `frontend/src/app/tools.ts`.

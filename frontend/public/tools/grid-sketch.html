@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grid Sketch — çiz, metne çevir</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#ffffff;
+  --sunken:#e4e9ee;
+  --ink:#16202a;
+  --ink-soft:#5b6b7a;
+  --line:#c8d2db;
+  --line-soft:#dde4ea;
+  --accent:#1f4ed8;
+  --accent-ink:#ffffff;
+  --danger:#c0392b;
+  --fill-alpha:0.16;
+  color-scheme:light dark;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f151b;
+    --surface:#161f27;
+    --sunken:#111920;
+    --ink:#e4ebf1;
+    --ink-soft:#8ea0b0;
+    --line:#2b3945;
+    --line-soft:#212c36;
+    --accent:#6d8dff;
+    --accent-ink:#0f151b;
+    --danger:#e57373;
+    --fill-alpha:0.30;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f151b;
+  --surface:#161f27;
+  --sunken:#111920;
+  --ink:#e4ebf1;
+  --ink-soft:#8ea0b0;
+  --line:#2b3945;
+  --line-soft:#212c36;
+  --accent:#6d8dff;
+  --accent-ink:#0f151b;
+  --danger:#e57373;
+  --fill-alpha:0.30;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:15px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.bar{
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px;
+  padding:14px 20px;border-bottom:1px solid var(--line);
+  background:var(--surface);
+}
+.brand{font-weight:600;letter-spacing:-0.01em;margin:0;font-size:17px}
+.brand span{color:var(--ink-soft);font-weight:400}
+.controls{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-left:auto}
+.field{display:flex;align-items:center;gap:6px;color:var(--ink-soft);font-size:13px}
+.field input{
+  width:58px;padding:4px 6px;border:1px solid var(--line);border-radius:4px;
+  background:var(--sunken);color:var(--ink);
+  font-family:"IBM Plex Mono",monospace;font-size:13px;text-align:right;
+}
+.btn{
+  padding:5px 11px;border:1px solid var(--line);border-radius:5px;
+  background:var(--surface);cursor:pointer;font-size:13px;
+}
+.btn:hover{border-color:var(--ink-soft)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn-primary:hover{filter:brightness(1.08)}
+
+.wrap{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:20px;padding:20px;align-items:start}
+@media (max-width:900px){.wrap{grid-template-columns:minmax(0,1fr);padding:14px;gap:14px}}
+
+.stage{min-width:0}
+.canvas{
+  position:relative;width:100%;max-width:min(78vh,900px);margin:0 auto;
+  background:var(--surface);border:1px solid var(--line);border-radius:6px;
+  touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair;
+  overflow:hidden;
+}
+.rules{position:absolute;inset:0;pointer-events:none}
+.areas{position:absolute;inset:0;display:grid;pointer-events:none}
+.area{
+  border:1.5px solid;border-radius:3px;display:flex;align-items:center;justify-content:center;
+  padding:2px;min-width:0;overflow:hidden;
+}
+.area.sel{box-shadow:0 0 0 2px var(--accent) inset}
+.area b{
+  font-weight:500;font-size:12px;line-height:1.2;text-align:center;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;
+}
+.preview{border:1.5px dashed var(--accent);border-radius:3px;background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.readout{
+  display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  max-width:min(78vh,900px);margin:8px auto 0;
+  font-size:13px;color:var(--ink-soft);
+}
+.readout code{font-family:"IBM Plex Mono",monospace;color:var(--ink)}
+.warn{color:var(--danger)}
+
+.panel{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.card-head{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 12px;border-bottom:1px solid var(--line-soft);
+}
+.card-head h2{margin:0;font-size:14px;font-weight:600}
+.count{color:var(--ink-soft);font-size:13px;font-family:"IBM Plex Mono",monospace}
+
+.list{list-style:none;margin:0;padding:6px;display:flex;flex-direction:column;gap:2px;max-height:260px;overflow:auto}
+.row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:4px;cursor:pointer}
+.row:hover{background:var(--sunken)}
+.row.sel{background:var(--sunken)}
+.swatch{width:11px;height:11px;border-radius:2px;flex:none;border:1px solid rgba(0,0,0,.15)}
+.row input.name{
+  flex:1;min-width:0;border:1px solid transparent;border-radius:3px;padding:2px 5px;
+  background:transparent;font-size:13px;
+}
+.row input.name:hover{border-color:var(--line-soft)}
+.row input.name:focus{background:var(--paper);border-color:var(--accent)}
+.span{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-soft);flex:none}
+.del{border:0;background:transparent;color:var(--ink-soft);cursor:pointer;padding:2px 5px;border-radius:3px;font-size:15px;line-height:1}
+.del:hover{color:var(--danger);background:var(--paper)}
+.tune{display:flex;flex-wrap:wrap;gap:8px 12px;padding:8px 12px 12px 30px}
+.tune label{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-soft)}
+.tune input{width:48px;padding:3px 5px;border:1px solid var(--line);border-radius:4px;background:var(--sunken);font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:right}
+.empty{padding:14px 12px;color:var(--ink-soft);font-size:13px;margin:0}
+
+.tabs{display:flex;gap:2px;padding:8px 8px 0;flex-wrap:wrap;border-bottom:1px solid var(--line-soft)}
+.tab{
+  padding:5px 10px;border:0;background:transparent;color:var(--ink-soft);
+  cursor:pointer;font-size:13px;border-radius:4px 4px 0 0;border-bottom:2px solid transparent;
+}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:500}
+.out{
+  margin:0;padding:12px;max-height:340px;overflow:auto;
+  font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:1.55;
+  white-space:pre;tab-size:2;
+}
+.out-foot{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--line-soft)}
+.hint{color:var(--ink-soft);font-size:12px;margin-left:auto}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <h1 class="brand">Grid Sketch <span>— çiz, metne çevir</span></h1>
+  <div class="controls">
+    <span class="field">kolon <input id="cols" type="number" min="2" max="40" value="20"></span>
+    <span class="field">satır <input id="rows" type="number" min="2" max="40" value="20"></span>
+    <span class="field">gap <input id="gap" type="text" value="16px"></span>
+    <button class="btn" id="clear">Hepsini sil</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="stage">
+    <div class="canvas" id="canvas">
+      <div class="rules" id="rules"></div>
+      <div class="areas" id="layer"></div>
+    </div>
+    <div class="readout">
+      <span id="status">Sürükleyerek alan çiz. Çizili alanı sürükleyip taşıyabilirsin.</span>
+      <code id="coords"></code>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <section class="card">
+      <div class="card-head">
+        <h2>Alanlar</h2>
+        <span class="count" id="count">0</span>
+      </div>
+      <ul class="list" id="list"></ul>
+      <p class="empty" id="listEmpty">Henüz alan yok. Soldaki kareye sürükle.</p>
+      <div class="tune" id="tune" hidden>
+        <label>satır <input id="t-r" type="number" min="1"></label>
+        <label>yükseklik <input id="t-rs" type="number" min="1"></label>
+        <label>kolon <input id="t-c" type="number" min="1"></label>
+        <label>genişlik <input id="t-cs" type="number" min="1"></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="tabs" role="tablist" id="tabs">
+        <button class="tab" role="tab" data-fmt="prompt" aria-selected="true">Prompt</button>
+        <button class="tab" role="tab" data-fmt="css">CSS</button>
+        <button class="tab" role="tab" data-fmt="areas">areas</button>
+        <button class="tab" role="tab" data-fmt="tw">Tailwind</button>
+        <button class="tab" role="tab" data-fmt="ascii">ASCII</button>
+        <button class="tab" role="tab" data-fmt="json">JSON</button>
+      </div>
+      <pre class="out" id="out"></pre>
+      <div class="out-foot">
+        <button class="btn btn-primary" id="copy">Kopyala</button>
+        <span class="hint" id="hint"></span>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  var PALETTE = ["#e8615a","#f0973e","#d9b93c","#5bb85f","#3fa9a0","#4a8ddb","#7a6bd6","#c964a8","#8a9a5b","#b5744a"];
+  var NAMES = ["header","sidebar","main","stats","chart","table","filters","detail","footer","panel"];
+
+  var state = { cols:20, rows:20, gap:"16px", areas:[], sel:null, seq:0 };
+
+  var $ = function(id){ return document.getElementById(id); };
+  var canvas=$("canvas"), rules=$("rules"), layer=$("layer");
+  var elCols=$("cols"), elRows=$("rows"), elGap=$("gap");
+  var list=$("list"), listEmpty=$("listEmpty"), tune=$("tune"), out=$("out"), hint=$("hint");
+  var fmt = "prompt";
+
+  /* ---------- storage ---------- */
+  function save(){
+    try{
+      localStorage.setItem("grid-sketch", JSON.stringify({
+        cols:state.cols, rows:state.rows, gap:state.gap, areas:state.areas, seq:state.seq
+      }));
+    }catch(e){}
+  }
+  function load(){
+    try{
+      var raw = localStorage.getItem("grid-sketch");
+      if(!raw) return;
+      var d = JSON.parse(raw);
+      if(d && Array.isArray(d.areas)){
+        state.cols = clamp(d.cols||20,2,40);
+        state.rows = clamp(d.rows||20,2,40);
+        state.gap = typeof d.gap === "string" ? d.gap : "16px";
+        state.areas = d.areas;
+        state.seq = d.seq || d.areas.length;
+      }
+    }catch(e){}
+  }
+
+  /* ---------- helpers ---------- */
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function hexToRgba(h,a){
+    var n = parseInt(h.slice(1),16);
+    return "rgba("+((n>>16)&255)+","+((n>>8)&255)+","+(n&255)+","+a+")";
+  }
+  function overlaps(a,b){
+    return a.c1 <= b.c2 && b.c1 <= a.c2 && a.r1 <= b.r2 && b.r1 <= a.r2;
+  }
+  function collides(rect, skipId){
+    for(var i=0;i<state.areas.length;i++){
+      var a = state.areas[i];
+      if(a.id === skipId) continue;
+      if(overlaps(rect,a)) return true;
+    }
+    return false;
+  }
+  function ident(name){
+    var s = (name||"").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+    return s || "area";
+  }
+  function uniqueIdents(){
+    var seen={}, map={};
+    state.areas.forEach(function(a){
+      var base = ident(a.name), n = base, i = 2;
+      while(seen[n]){ n = base + "-" + (i++); }
+      seen[n]=1; map[a.id]=n;
+    });
+    return map;
+  }
+  function letters(){
+    var out=[], A="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    state.areas.forEach(function(a,i){ out.push(A[i % A.length]); });
+    return out;
+  }
+  function pad(s,n){ s = String(s); while(s.length<n) s += " "; return s; }
+
+  /* ---------- rendering ---------- */
+  function drawRules(){
+    canvas.style.aspectRatio = state.cols + " / " + state.rows;
+    var cw = 100/state.cols, ch = 100/state.rows;
+    var line = getComputedStyle(document.documentElement).getPropertyValue("--line-soft").trim();
+    rules.style.backgroundImage =
+      "repeating-linear-gradient(to right, "+line+" 0 1px, transparent 1px "+cw+"%),"+
+      "repeating-linear-gradient(to bottom, "+line+" 0 1px, transparent 1px "+ch+"%)";
+    layer.style.gridTemplateColumns = "repeat("+state.cols+",1fr)";
+    layer.style.gridTemplateRows = "repeat("+state.rows+",1fr)";
+  }
+
+  function drawAreas(preview){
+    layer.innerHTML = "";
+    state.areas.forEach(function(a){
+      var el = document.createElement("div");
+      el.className = "area" + (a.id===state.sel ? " sel" : "");
+      el.style.gridArea = a.r1+" / "+a.c1+" / "+(a.r2+1)+" / "+(a.c2+1);
+      el.style.borderColor = a.color;
+      el.style.background = hexToRgba(a.color, parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fill-alpha")) || 0.16);
+      var b = document.createElement("b");
+      b.textContent = a.name;
+      b.style.color = a.color;
+      el.appendChild(b);
+      layer.appendChild(el);
+    });
+    if(preview){
+      var p = document.createElement("div");
+      p.className = "preview";
+      p.style.gridArea = preview.r1+" / "+preview.c1+" / "+(preview.r2+1)+" / "+(preview.c2+1);
+      layer.appendChild(p);
+    }
+  }
+
+  function drawList(){
+    list.innerHTML = "";
+    listEmpty.hidden = state.areas.length > 0;
+    $("count").textContent = state.areas.length + " alan";
+    state.areas.forEach(function(a){
+      var li = document.createElement("li");
+      li.className = "row" + (a.id===state.sel ? " sel" : "");
+      li.addEventListener("click", function(e){
+        if(e.target.tagName === "INPUT") return;
+        state.sel = (state.sel===a.id ? null : a.id); render();
+      });
+
+      var sw = document.createElement("span");
+      sw.className = "swatch"; sw.style.background = a.color;
+
+      var nm = document.createElement("input");
+      nm.className = "name"; nm.value = a.name;
+      nm.addEventListener("input", function(){ a.name = nm.value; drawAreas(); output(); save(); });
+
+      var sp = document.createElement("span");
+      sp.className = "span";
+      sp.textContent = (a.c2-a.c1+1) + "×" + (a.r2-a.r1+1);
+
+      var del = document.createElement("button");
+      del.className = "del"; del.type = "button"; del.textContent = "×";
+      del.title = "Sil";
+      del.addEventListener("click", function(e){
+        e.stopPropagation();
+        state.areas = state.areas.filter(function(x){ return x.id !== a.id; });
+        if(state.sel===a.id) state.sel = null;
+        render(); save();
+      });
+
+      li.appendChild(sw); li.appendChild(nm); li.appendChild(sp); li.appendChild(del);
+      list.appendChild(li);
+    });
+
+    var a = current();
+    tune.hidden = !a;
+    if(a){
+      $("t-r").value = a.r1; $("t-rs").value = a.r2-a.r1+1;
+      $("t-c").value = a.c1; $("t-cs").value = a.c2-a.c1+1;
+      $("t-r").max = state.rows; $("t-c").max = state.cols;
+      $("t-rs").max = state.rows; $("t-cs").max = state.cols;
+    }
+  }
+
+  function current(){
+    for(var i=0;i<state.areas.length;i++) if(state.areas[i].id===state.sel) return state.areas[i];
+    return null;
+  }
+
+  function render(){ drawRules(); drawAreas(); drawList(); output(); }
+
+  /* ---------- pointer interaction ---------- */
+  var drag = null;
+
+  function cellAt(ev){
+    var r = canvas.getBoundingClientRect();
+    var c = Math.floor((ev.clientX - r.left) / r.width * state.cols) + 1;
+    var w = Math.floor((ev.clientY - r.top) / r.height * state.rows) + 1;
+    return { c: clamp(c,1,state.cols), r: clamp(w,1,state.rows) };
+  }
+  function hit(cell){
+    for(var i=state.areas.length-1;i>=0;i--){
+      var a = state.areas[i];
+      if(cell.c>=a.c1 && cell.c<=a.c2 && cell.r>=a.r1 && cell.r<=a.r2) return a;
+    }
+    return null;
+  }
+  function status(msg, warn){
+    var s = $("status");
+    s.textContent = msg;
+    s.className = warn ? "warn" : "";
+  }
+
+  canvas.addEventListener("pointerdown", function(ev){
+    var cell = cellAt(ev);
+    var a = hit(cell);
+    canvas.setPointerCapture(ev.pointerId);
+    if(a){
+      state.sel = a.id;
+      drag = { mode:"move", id:a.id, dr:cell.r-a.r1, dc:cell.c-a.c1, w:a.c2-a.c1, h:a.r2-a.r1, moved:false };
+      render();
+    }else{
+      state.sel = null;
+      drag = { mode:"draw", r:cell.r, c:cell.c };
+      drawAreas({ r1:cell.r, c1:cell.c, r2:cell.r, c2:cell.c });
+      drawList();
+    }
+  });
+
+  canvas.addEventListener("pointermove", function(ev){
+    var cell = cellAt(ev);
+    $("coords").textContent = "r" + cell.r + " · c" + cell.c;
+    if(!drag) return;
+    if(drag.mode === "draw"){
+      drawAreas({
+        r1:Math.min(drag.r,cell.r), c1:Math.min(drag.c,cell.c),
+        r2:Math.max(drag.r,cell.r), c2:Math.max(drag.c,cell.c)
+      });
+    }else{
+      var a = current(); if(!a) return;
+      var r1 = clamp(cell.r - drag.dr, 1, state.rows - drag.h);
+      var c1 = clamp(cell.c - drag.dc, 1, state.cols - drag.w);
+      var rect = { r1:r1, c1:c1, r2:r1+drag.h, c2:c1+drag.w };
+      if(r1!==a.r1 || c1!==a.c1) drag.moved = true;
+      if(!collides(rect, a.id)){
+        a.r1=rect.r1; a.c1=rect.c1; a.r2=rect.r2; a.c2=rect.c2;
+        drawAreas(); drawList(); output();
+      }
+    }
+  });
+
+  function endDrag(ev){
+    if(!drag) return;
+    if(drag.mode === "draw"){
+      var cell = cellAt(ev);
+      var rect = {
+        r1:Math.min(drag.r,cell.r), c1:Math.min(drag.c,cell.c),
+        r2:Math.max(drag.r,cell.r), c2:Math.max(drag.c,cell.c)
+      };
+      if(collides(rect,null)){
+        status("Alanlar üst üste binemez. Boş bir bölgeye çiz.", true);
+      }else{
+        var i = state.seq++;
+        var a = {
+          id: "a" + i + "_" + Date.now().toString(36),
+          name: NAMES[i % NAMES.length] + (i >= NAMES.length ? "-" + (Math.floor(i/NAMES.length)+1) : ""),
+          color: PALETTE[i % PALETTE.length],
+          r1:rect.r1, c1:rect.c1, r2:rect.r2, c2:rect.c2
+        };
+        state.areas.push(a);
+        state.sel = a.id;
+        status("Alan eklendi. İsmini sağdaki listeden değiştirebilirsin.");
+      }
+    }else if(drag.moved){
+      status("Alan taşındı.");
+    }
+    drag = null;
+    render(); save();
+  }
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", function(){ drag=null; render(); });
+
+  document.addEventListener("keydown", function(ev){
+    if(ev.target.tagName === "INPUT") return;
+    if((ev.key === "Delete" || ev.key === "Backspace") && state.sel){
+      ev.preventDefault();
+      state.areas = state.areas.filter(function(x){ return x.id !== state.sel; });
+      state.sel = null; render(); save();
+    }
+    if(ev.key === "Escape"){ state.sel = null; render(); }
+  });
+
+  /* ---------- controls ---------- */
+  function resize(){
+    state.cols = clamp(parseInt(elCols.value,10) || 20, 2, 40);
+    state.rows = clamp(parseInt(elRows.value,10) || 20, 2, 40);
+    elCols.value = state.cols; elRows.value = state.rows;
+    state.areas = state.areas.filter(function(a){
+      a.c1 = clamp(a.c1,1,state.cols); a.c2 = clamp(a.c2,1,state.cols);
+      a.r1 = clamp(a.r1,1,state.rows); a.r2 = clamp(a.r2,1,state.rows);
+      return true;
+    });
+    render(); save();
+  }
+  elCols.addEventListener("change", resize);
+  elRows.addEventListener("change", resize);
+  elGap.addEventListener("input", function(){ state.gap = elGap.value.trim() || "0"; output(); save(); });
+  $("clear").addEventListener("click", function(){
+    state.areas = []; state.sel = null; state.seq = 0;
+    status("Temizlendi. Yeniden çizmeye başlayabilirsin.");
+    render(); save();
+  });
+
+  ["t-r","t-rs","t-c","t-cs"].forEach(function(id){
+    $(id).addEventListener("change", function(){
+      var a = current(); if(!a) return;
+      var r1 = clamp(parseInt($("t-r").value,10)||1, 1, state.rows);
+      var rs = clamp(parseInt($("t-rs").value,10)||1, 1, state.rows - r1 + 1);
+      var c1 = clamp(parseInt($("t-c").value,10)||1, 1, state.cols);
+      var cs = clamp(parseInt($("t-cs").value,10)||1, 1, state.cols - c1 + 1);
+      var rect = { r1:r1, c1:c1, r2:r1+rs-1, c2:c1+cs-1 };
+      if(collides(rect, a.id)){ status("Bu ölçü başka bir alanla çakışıyor.", true); drawList(); return; }
+      a.r1=rect.r1; a.c1=rect.c1; a.r2=rect.r2; a.c2=rect.c2;
+      status("Ölçü güncellendi.");
+      render(); save();
+    });
+  });
+
+  /* ---------- output formats ---------- */
+  function sorted(){
+    return state.areas.slice().sort(function(a,b){ return (a.r1-b.r1) || (a.c1-b.c1); });
+  }
+
+  function asciiMap(){
+    var L = letters(), grid = [], r, c;
+    for(r=0;r<state.rows;r++){ grid.push(new Array(state.cols).fill(".")); }
+    state.areas.forEach(function(a,i){
+      for(r=a.r1;r<=a.r2;r++) for(c=a.c1;c<=a.c2;c++) grid[r-1][c-1] = L[i];
+    });
+    return grid.map(function(row){ return row.join(""); }).join("\n");
+  }
+
+  function fmtPrompt(){
+    var ids = uniqueIdents(), L = letters(), lines = [];
+    lines.push("Dashboard layout: " + state.cols + " kolon × " + state.rows + " satır CSS Grid.");
+    lines.push("Koordinatlar 1'den başlar ve bitiş değeri dahildir.");
+    lines.push("");
+    lines.push("Alanlar:");
+    sorted().forEach(function(a){
+      var idx = state.areas.indexOf(a);
+      lines.push("- " + ids[a.id] +
+        ": satır " + a.r1 + "–" + a.r2 +
+        ", kolon " + a.c1 + "–" + a.c2 +
+        "  (" + (a.c2-a.c1+1) + " kolon × " + (a.r2-a.r1+1) + " satır, harita harfi " + L[idx] + ")");
+    });
+    var used = 0;
+    state.areas.forEach(function(a){ used += (a.c2-a.c1+1) * (a.r2-a.r1+1); });
+    lines.push("");
+    lines.push("Boş hücre: " + (state.cols*state.rows - used) + " / " + (state.cols*state.rows));
+    lines.push("Gap: " + state.gap);
+    lines.push("");
+    lines.push("Harita (her karakter bir hücre, nokta = boş):");
+    lines.push(asciiMap());
+    return lines.join("\n");
+  }
+
+  function fmtCss(){
+    var ids = uniqueIdents(), lines = [];
+    lines.push(".dashboard {");
+    lines.push("  display: grid;");
+    lines.push("  grid-template-columns: repeat(" + state.cols + ", minmax(0, 1fr));");
+    lines.push("  grid-template-rows: repeat(" + state.rows + ", minmax(0, 1fr));");
+    lines.push("  gap: " + state.gap + ";");
+    lines.push("}");
+    sorted().forEach(function(a){
+      lines.push("");
+      lines.push("." + ids[a.id] + " {");
+      lines.push("  grid-area: " + a.r1 + " / " + a.c1 + " / " + (a.r2+1) + " / " + (a.c2+1) + ";");
+      lines.push("}");
+    });
+    lines.push("");
+    lines.push("/* grid-area: row-start / column-start / row-end / column-end */");
+    return lines.join("\n");
+  }
+
+  function fmtAreas(){
+    var ids = uniqueIdents(), grid = [], r, c, w = 4;
+    state.areas.forEach(function(a){ w = Math.max(w, ids[a.id].length); });
+    for(r=0;r<state.rows;r++) grid.push(new Array(state.cols).fill("."));
+    state.areas.forEach(function(a){
+      for(r=a.r1;r<=a.r2;r++) for(c=a.c1;c<=a.c2;c++) grid[r-1][c-1] = ids[a.id];
+    });
+    var lines = [".dashboard {", "  display: grid;",
+      "  grid-template-columns: repeat(" + state.cols + ", minmax(0, 1fr));",
+      "  gap: " + state.gap + ";", "  grid-template-areas:"];
+    grid.forEach(function(row){
+      lines.push('    "' + row.map(function(t){ return pad(t,w); }).join(" ").replace(/\s+$/,"") + '"');
+    });
+    lines[lines.length-1] += ";";
+    lines.push("}");
+    return lines.join("\n");
+  }
+
+  function fmtTw(){
+    var ids = uniqueIdents(), lines = [];
+    lines.push("<!-- Konteyner -->");
+    lines.push('<div class="grid gap-4 grid-cols-[repeat(' + state.cols + ',minmax(0,1fr))] grid-rows-[repeat(' + state.rows + ',minmax(0,1fr))]">');
+    sorted().forEach(function(a){
+      lines.push('  <div class="col-start-' + a.c1 + ' col-span-' + (a.c2-a.c1+1) +
+                 ' row-start-' + a.r1 + ' row-span-' + (a.r2-a.r1+1) + '">' + ids[a.id] + '</div>');
+    });
+    lines.push("</div>");
+    lines.push("");
+    lines.push("<!-- Not: varsayılan Tailwind 12 kolona kadar hazır sınıf verir,");
+    lines.push("     bu yüzden konteynerde arbitrary value kullanıldı. -->");
+    return lines.join("\n");
+  }
+
+  function fmtJson(){
+    var ids = uniqueIdents();
+    return JSON.stringify({
+      columns: state.cols,
+      rows: state.rows,
+      gap: state.gap,
+      areas: sorted().map(function(a){
+        return {
+          name: ids[a.id],
+          rowStart: a.r1, rowEnd: a.r2, rowSpan: a.r2-a.r1+1,
+          colStart: a.c1, colEnd: a.c2, colSpan: a.c2-a.c1+1
+        };
+      })
+    }, null, 2);
+  }
+
+  function output(){
+    if(!state.areas.length){
+      out.textContent = "Alan çizdiğinde buraya kopyalamaya hazır metin gelecek.";
+      hint.textContent = "";
+      return;
+    }
+    var text =
+      fmt==="css"   ? fmtCss()   :
+      fmt==="areas" ? fmtAreas() :
+      fmt==="tw"    ? fmtTw()    :
+      fmt==="ascii" ? asciiMap() :
+      fmt==="json"  ? fmtJson()  : fmtPrompt();
+    out.textContent = text;
+    hint.textContent = text.length + " karakter";
+  }
+
+  $("tabs").addEventListener("click", function(ev){
+    var t = ev.target.closest(".tab"); if(!t) return;
+    fmt = t.dataset.fmt;
+    Array.prototype.forEach.call(this.querySelectorAll(".tab"), function(b){
+      b.setAttribute("aria-selected", b===t ? "true" : "false");
+    });
+    output();
+  });
+
+  $("copy").addEventListener("click", function(){
+    var btn = this, text = out.textContent;
+    function done(ok){
+      btn.textContent = ok ? "Kopyalandı" : "Kopyalanamadı";
+      setTimeout(function(){ btn.textContent = "Kopyala"; }, 1400);
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ done(true); }, function(){ done(false); });
+    }else{
+      var ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try{ document.execCommand("copy"); done(true); }catch(e){ done(false); }
+      document.body.removeChild(ta);
+    }
+  });
+
+  /* ---------- boot ---------- */
+  load();
+  elCols.value = state.cols; elRows.value = state.rows; elGap.value = state.gap;
+  render();
+  window.addEventListener("resize", drawRules);
+  if(window.matchMedia){
+    var mq = window.matchMedia("(prefers-color-scheme: dark)");
+    if(mq.addEventListener) mq.addEventListener("change", render);
+  }
+})();
+</script>
+</body>
+</html>

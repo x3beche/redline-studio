@@ -24,6 +24,7 @@ import { OcpViewer } from './ocp';
 import { Markdown, plain } from '../markdown';
 import { Selection } from '../selection';
 import { startFold, whenSettled } from '../fold';
+import { TOOL_PAGES, ToolModal, ToolPage } from '../tools';
 
 export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'text';
 type Pt = [number, number];
@@ -37,7 +38,7 @@ type Mark =
 
 @Component({
   selector: 'app-editor',
-  imports: [DecimalPipe, Markdown, NgTemplateOutlet],
+  imports: [DecimalPipe, Markdown, NgTemplateOutlet, ToolModal],
   templateUrl: './editor.html',
 })
 export class Editor implements AfterViewInit, OnDestroy {
@@ -417,6 +418,25 @@ export class Editor implements AfterViewInit, OnDestroy {
       : l === 'warn' ? 'var(--warn)'
       : l === 'done' ? 'var(--ok)'
       : l === 'work' ? 'var(--accent)' : 'var(--ink-dim)';
+  }
+
+  // ---- tools, from the wordmark ----
+  readonly toolPages = TOOL_PAGES;
+  toolsOpen = signal(false);
+  toolPage = signal<ToolPage | null>(null);
+  private toolsTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Open on hover; close a moment after the mouse leaves, so the way
+   *  down from the wordmark to the menu does not shut it. */
+  showTools(on: boolean) {
+    clearTimeout(this.toolsTimer);
+    if (on) this.toolsOpen.set(true);
+    else this.toolsTimer = setTimeout(() => this.toolsOpen.set(false), 180);
+  }
+
+  openTool(t: ToolPage) {
+    this.toolsOpen.set(false);
+    this.toolPage.set(t);
   }
 
   toggleSidebar() {
