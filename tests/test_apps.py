@@ -255,3 +255,72 @@ def test_a_real_browser_photographs_the_page_and_lists_what_is_on_it():
     hit = webshot.under(got["elements"], [{"box": [10, 10, 150, 60], "tip": None}],
                         width=400, height=300)
     assert [e["sel"] for e in hit] == ["#go"]
+
+
+# ---------------- one shared run, two agents ----------------
+class _Runs:
+    """Just the runs and revisions an agent's start and finish touch."""
+
+    def __init__(self, rows):
+        self.rows = {r["_id"]: dict(r) for r in rows}
+
+    async def find_one(self, q):
+        r = self.rows.get(q["_id"])
+        return dict(r) if r else None
+
+    async def replace_one(self, q, doc, upsert=False):
+        self.rows[q["_id"]] = dict(doc)
+
+    async def update_one(self, q, u, upsert=False):
+        if q["_id"] in self.rows or upsert:
+            self.rows.setdefault(q["_id"], {"_id": q["_id"]}).update(u["$set"])
+
+    async def update_many(self, q, u, upsert=False):
+        for i in q["_id"]["$in"]:
+            if i in self.rows:
+                self.rows[i].update(u["$set"])
+
+    async def insert_one(self, doc):
+        pass
+
+
+class _Db:
+    def __init__(self, runs):
+        self.runs = _Runs(runs)
+        self.revisions = _Runs([])
+        self.activity = _Runs([])
+
+
+def test_start_will_not_take_over_somebody_elses_open_run(monkeypatch):
+    """A CAD run and a code run crossed on one database: the second start
+    re-pointed the shared run, and the first agent's finish closed it."""
+    import argparse
+    import asyncio
+
+    from tools import revisions
+
+    db = _Db([{"_id": "current", "revision": "cad-1", "status": "running",
+               "title": "screws", "started_at": "2026-09-24T07:19"}])
+    monkeypatch.setattr(revisions, "connect", lambda: db)
+    with pytest.raises(SystemExit) as out:
+        asyncio.run(revisions.cmd_start(argparse.Namespace(
+            id="web-1", title="run tests", force=False)))
+    assert "cad-1" in str(out.value)
+    assert db.runs.rows["current"]["revision"] == "cad-1"
+
+
+def test_finish_by_id_closes_only_that_run(monkeypatch):
+    import argparse
+    import asyncio
+
+    from tools import revisions
+
+    db = _Db([{"_id": "current", "revision": "cad-1", "status": "running"},
+              {"_id": "cad-1", "revision": "cad-1", "status": "running"},
+              {"_id": "web-1", "revision": "web-1", "status": "running"}])
+    monkeypatch.setattr(revisions, "connect", lambda: db)
+    asyncio.run(revisions.cmd_finish(argparse.Namespace(
+        id="web-1", failed=False, no_shot=True)))
+    assert db.runs.rows["web-1"]["status"] == "done"
+    assert db.runs.rows["current"]["status"] == "running"
+    assert db.runs.rows["cad-1"]["status"] == "running"

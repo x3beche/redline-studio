@@ -438,6 +438,15 @@ async def cmd_start(args):
     from backend import compute
 
     db = connect()
+    # "current" is one document for every agent on this database. Re-point
+    # it while somebody else's run is open and their `finish` closes yours:
+    # that happened, a CAD run and a code run crossing at 07:40.
+    cur = await db.runs.find_one({"_id": "current"}) or {}
+    if (cur.get("status") == "running" and cur.get("revision")
+            and cur["revision"] != args.id and not args.force):
+        sys.exit(f"another run is open: {cur['revision']} ({cur.get('title')}), "
+                 f"started {str(cur.get('started_at'))[:19]}. Wait for it, or "
+                 "--force if it is abandoned.")
     doc = {"_id": "current", "title": args.title, "revision": args.id,
            "model": None, "percent": 0.0, "status": "running",
            "started_at": _now(), "finished_at": None,
@@ -483,10 +492,19 @@ async def cmd_finish(args):
     patch = {"status": status, "percent": 100.0, "finished_at": _now(),
              "cpu_end": compute.machine_cpu()}
     cur = await db.runs.find_one({"_id": "current"}) or {}
-    ids = ["current"] + ([cur["revision"]] if cur.get("revision") else [])
-    await db.runs.update_many({"_id": {"$in": ids}}, {"$set": patch},
-                              upsert=False)
-    await db.runs.update_one({"_id": "current"}, {"$set": patch}, upsert=True)
+    if args.id and cur.get("revision") != args.id:
+        # Closing one's own run by name, while "current" belongs to another:
+        # only the run keyed by that revision is touched.
+        mine = await db.runs.find_one({"_id": args.id})
+        if not mine:
+            sys.exit(f"no run recorded for {args.id}")
+        cur = {**mine, "revision": args.id}
+        await db.runs.update_one({"_id": args.id}, {"$set": patch})
+    else:
+        ids = ["current"] + ([cur["revision"]] if cur.get("revision") else [])
+        await db.runs.update_many({"_id": {"$in": ids}}, {"$set": patch},
+                                  upsert=False)
+        await db.runs.update_one({"_id": "current"}, {"$set": patch}, upsert=True)
     rdoc = await db.revisions.find_one({"_id": cur.get("revision")}) or {}
     room = rdoc.get("kind") if rdoc.get("kind") in CODE_KINDS else "cad"
     await db.activity.insert_one(_line(f"finished: {status}", status, room))
@@ -928,6 +946,8 @@ def main() -> None:
     s.set_defaults(fn=cmd_show)
     s = sub.add_parser("done"); s.add_argument("id"); s.set_defaults(fn=cmd_done)
     s = sub.add_parser("start"); s.add_argument("id"); s.add_argument("title")
+    s.add_argument("--force", action="store_true",
+                   help="take over the shared run even though another is open")
     s.set_defaults(fn=cmd_start)
     s = sub.add_parser("log"); s.add_argument("text")
     s.add_argument("-p", "--percent", type=float)
@@ -938,7 +958,11 @@ def main() -> None:
                    help="whose log: cad for models (default), pcb for boards, "
                         "web, embedded or mobile for a coding room")
     s.set_defaults(fn=cmd_log)
-    s = sub.add_parser("finish"); s.add_argument("--failed", action="store_true")
+    s = sub.add_parser("finish")
+    s.add_argument("id", nargs="?",
+                   help="the revision whose run to close; without it, whatever "
+                        "the shared run points at")
+    s.add_argument("--failed", action="store_true")
     s.add_argument("--no-shot", action="store_true",
                    help="skip the after picture")
     s.set_defaults(fn=cmd_finish)
