@@ -18,7 +18,7 @@ import { MiniBars, MiniColumns, MiniTrend } from './minicharts';
 
 type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'analytics';
 type Pane = 'layout' | 'schematic' | '3d';
-type BoardView = Pane | 'split';
+type BoardView = Pane | 'split' | 'focus';
 
 /** The board room.
  *
@@ -64,6 +64,8 @@ type BoardView = Pane | 'split';
                 [on]="boardTab() === '3d'" (press)="setBoardTab('3d')" />
       <app-tool icon="tcv-ico-split" tip="Windows - layout, schematic and 3D side by side, each window your pick"
                 [on]="boardTab() === 'split'" (press)="setBoardTab('split')" />
+      <app-tool icon="tcv-ico-focus" tip="Focus - one picture large, the other two small in the corner; click a small one to swap"
+                [on]="boardTab() === 'focus'" (press)="setBoardTab('focus')" />
       <span class="tcv_separator"></span>
       <app-tool icon="tcv-ico-front" tip="Front - with the ground pour"
                 [on]="showsLayout() && view() === 'front'"
@@ -76,10 +78,10 @@ type BoardView = Pane | 'split';
                 [disabled]="!showsLayout() || !here()?.route" (press)="view.set('back')" />
       <span class="tcv_separator"></span>
       <app-tool icon="tcv-ico-fit" tip="Fit - all of it (or double-click)"
-                [disabled]="boardTab() === '3d' || boardTab() === 'split' || frozen()" (press)="flat()?.fit()" />
-      <app-tool icon="tcv-ico-in" tip="Closer" [disabled]="boardTab() === '3d' || boardTab() === 'split' || frozen()"
+                [disabled]="boardTab() === '3d' || boardTab() === 'split' || boardTab() === 'focus' || frozen()" (press)="flat()?.fit()" />
+      <app-tool icon="tcv-ico-in" tip="Closer" [disabled]="boardTab() === '3d' || boardTab() === 'split' || boardTab() === 'focus' || frozen()"
                 (press)="flat()?.step(1.25)" />
-      <app-tool icon="tcv-ico-out" tip="Further" [disabled]="boardTab() === '3d' || boardTab() === 'split' || frozen()"
+      <app-tool icon="tcv-ico-out" tip="Further" [disabled]="boardTab() === '3d' || boardTab() === 'split' || boardTab() === 'focus' || frozen()"
                 (press)="flat()?.step(0.8)" />
       <span class="tcv_separator"></span>
       <app-tool icon="tcv-ico-pcbfile" tip="board.kicad_pcb - open it in KiCad"
@@ -93,7 +95,7 @@ type BoardView = Pane | 'split';
       <!-- What came of the last run, said once, where the eye already is. -->
       <span class="tcv-frame-status mono">
         @if (building()) { <span style="color: var(--accent)">building… </span> }
-        @switch (boardTab()) {
+        @switch (boardTab() === 'focus' ? 'split' : boardTab()) {
           @case ('layout') {
             @if (here()?.route; as r) {
               <span [style.color]="r.unrouted || here()?.drc?.error_count ? 'var(--danger)' : 'var(--ok)'"
@@ -635,6 +637,29 @@ type BoardView = Pane | 'split';
             </section>
           }
         </div>
+      } @else if (boardTab() === 'focus') {
+        <!-- FOCUS: one picture large, the other two small in the corner,
+             like a video call's own view. A small one's header swaps it
+             into the large place; the small ones stay live - the 3D can
+             still be turned. -->
+        <div #split class="tcv-focus">
+          <div class="tcv-focus-main">
+            <ng-container *ngTemplateOutlet="board; context: { $implicit: focusMain(), own: true }" />
+          </div>
+          <div class="tcv-focus-minis">
+            @for (k of focusMinis(); track k) {
+              <section class="tcv-focus-mini">
+                <button class="tcv-focus-head" (click)="setFocus(k)"
+                        [title]="'make ' + tabName[k] + ' the large one'">
+                  {{ tabName[k] }} <span aria-hidden="true">⤢</span>
+                </button>
+                <div class="relative min-h-0 flex-1">
+                  <ng-container *ngTemplateOutlet="board; context: { $implicit: k, own: false }" />
+                </div>
+              </section>
+            }
+          </div>
+        </div>
       } @else {
         <ng-container *ngTemplateOutlet="board; context: { $implicit: boardTab(), own: false }" />
       }
@@ -724,7 +749,11 @@ export class RoomPcb implements OnDestroy {
   readonly boardTabs = ['layout', 'schematic', '3d'] as const;
   readonly tabName = { layout: 'Layout', schematic: 'Schematic', '3d': '3D' } as const;
   boardTab = signal<BoardView>(
-    RoomPcb.pick(RoomPcb.recall('board', 'layout'), ['layout', 'schematic', '3d', 'split'], 'layout'));
+    RoomPcb.pick(RoomPcb.recall('board', 'layout'),
+                 ['layout', 'schematic', '3d', 'split', 'focus'], 'layout'));
+  /** The focus view's large picture; the other two sit small in the corner. */
+  focusMain = signal<Pane>(RoomPcb.pick(RoomPcb.recall('focus', 'schematic'),
+                                        ['layout', 'schematic', '3d'], 'schematic'));
   /** The split view's windows: a tall one on the left, two stacked on the
    *  right. Which picture each shows is the person's, and kept. */
   readonly windows = [
@@ -849,14 +878,16 @@ export class RoomPcb implements OnDestroy {
 
   canFreeze(): boolean {
     const t = this.boardTab();
-    if (t === 'split') return this.flats().some(f => f.ready()) || this.models().length > 0;
+    if (t === 'split' || t === 'focus') {
+      return this.flats().some(f => f.ready()) || this.models().length > 0;
+    }
     return t === '3d' ? !!this.model() : !!this.flat()?.ready();
   }
 
   /** Hold the view still as a picture - exactly what is on screen, at the
    *  zoom and angle it is at - and put the pad over it. */
   async freeze() {
-    const shot = this.boardTab() === 'split' ? await this.splitShot()
+    const shot = this.boardTab() === 'split' || this.boardTab() === 'focus' ? await this.splitShot()
       : this.boardTab() === '3d' ? this.model()?.snapshot() : this.flat()?.snapshot();
     if (!shot) { this.note.set('nothing on screen to draw on yet'); return; }
     this.shot.set(shot);
@@ -1198,7 +1229,19 @@ export class RoomPcb implements OnDestroy {
   /** Whether the layout is on screen - alone, or in one of the windows. */
   showsLayout(): boolean {
     const t = this.boardTab();
-    return t === 'layout' || (t === 'split' && Object.values(this.panes()).includes('layout'));
+    return t === 'layout' || t === 'focus'
+      || (t === 'split' && Object.values(this.panes()).includes('layout'));
+  }
+
+  /** The two pictures not large in the focus view, in their usual order. */
+  focusMinis(): Pane[] {
+    return this.boardTabs.filter(k => k !== this.focusMain());
+  }
+
+  setFocus(kind: Pane) {
+    if (this.frozen()) this.resume();
+    this.focusMain.set(kind);
+    RoomPcb.keep('focus', kind);
   }
 
   setPane(slot: string, kind: Pane) {

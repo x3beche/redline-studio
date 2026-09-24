@@ -1293,6 +1293,23 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   right: 6px;
   z-index: 20;
 }
+/* THE FOCUS VIEW (board room): one picture large, the other two small in
+   the bottom-right corner over it, each with a header that swaps it in. */
+.tcv-focus { position: relative; height: 100%; width: 100%; }
+.tcv-focus-main { position: absolute; inset: 0; }
+/* Lifted clear of the large picture's own zoom row, which sits in the same
+   corner: both stay reachable. */
+.tcv-focus-minis { position: absolute; right: 10px; bottom: 42px; display: flex; gap: 8px;
+                   width: min(46%, 520px); height: min(30%, 240px); z-index: 5; }
+.tcv-focus-mini { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden;
+                  border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2);
+                  box-shadow: 0 6px 18px var(--shadow-hard); }
+.tcv-focus-head { flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;
+                  padding: 2px 8px; font-size: 11px; color: var(--ink); background: var(--surface);
+                  border-bottom: 1px solid var(--line); cursor: pointer; text-align: left; }
+.tcv-focus-head:hover { background: var(--hover); }
+.tcv-focus-head span { color: var(--ink-dim); }
+.tcv-ico.tcv-ico-focus { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='2' y='3' width='22' height='20' rx='1' fill='none' stroke='%23ddd' stroke-width='1.3'/><rect x='12' y='15' width='5' height='5.5' rx='0.6' fill='rgb(48,142,225)' stroke='%23ddd' stroke-width='1'/><rect x='18' y='15' width='4.5' height='5.5' rx='0.6' fill='rgb(48,142,225)' stroke='%23ddd' stroke-width='1'/></svg>"); } /* theme:pigment */
 /* A phone's screen sits in a phone: rounded, with a bezel of the room's own
    line colour, so a tall picture in a wide pane reads as a device. */
 .tcv-phone {
