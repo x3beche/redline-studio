@@ -75,8 +75,11 @@ def test_a_kit_tool_runs_its_example_cleanly(folder):
     res = json.loads(out.stdout)
     assert res["ok"], res.get("error")
     text = json.dumps(res["result"])
-    for bad in ("NaN", "undefined", "Infinity", "null,\"unit\""):
-        assert bad not in text, f"{bad} in the result"
+    # A JavaScript value leaking into the output, not the word in prose
+    # ("undefined behaviour" is C's own term).
+    import re
+    for bad in (r"\bNaN\b", r"\bundefined\b(?! behavio)", r"(?<![+-])\bInfinity\b", r'null,\s*"unit"'):
+        assert not re.search(bad, text), f"{bad} in the result"
     assert any(res["result"].get(k) for k in ("values", "tables", "texts", "charts")), "nothing came back"
 
 
