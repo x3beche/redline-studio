@@ -311,6 +311,23 @@
 /* Two label/value pairs to a line. The analytics panel is a dial to be
    glanced at, not a list to be read down, and one pair to a line made it
    half again as tall as it had to be. */
+.tcv-files {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 3px;
+  color: var(--ink-dim);
+}
+.tcv-files > span { margin-right: auto; }
+.tcv-files > a { color: var(--accent); font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.tcv-files > a.off { color: var(--ink-dim); opacity: 0.5; pointer-events: none; }
+.tcv-files-note {
+  color: var(--warn);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
 .tcv-stats {
   display: grid;
   /* The right-hand value is content-sized, not a half share: "100.2
@@ -1391,7 +1408,7 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-mbar-fill { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
 .tcv-mbar-value { text-align: right; color: var(--ink); white-space: nowrap; }
 .tcv-mbar-value b { font-weight: 600; margin-left: 3px; }
-.tcv-mcols { display: flex; gap: 4px; align-items: stretch; height: 50px; }
+.tcv-mcols { display: flex; gap: 4px; align-items: stretch; height: 34px; }
 .tcv-mcol { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: default; }
 .tcv-mcol:hover { background: var(--hover); border-radius: 3px; }
 .tcv-mcol-well { flex: 1; width: 60%; display: flex; align-items: flex-end; }

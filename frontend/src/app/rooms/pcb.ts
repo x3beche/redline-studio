@@ -83,56 +83,6 @@ type BoardView = Pane | 'split' | 'focus';
                 (press)="flat()?.step(1.25)" />
       <app-tool icon="tcv-ico-out" tip="Further" [disabled]="boardTab() === '3d' || boardTab() === 'split' || boardTab() === 'focus' || frozen()"
                 (press)="flat()?.step(0.8)" />
-      <span class="tcv_separator"></span>
-      <app-tool icon="tcv-ico-pcbfile" tip="board.kicad_pcb - open it in KiCad"
-                [href]="hasLayout() ? file('board.kicad_pcb') : null" [disabled]="!hasLayout()" />
-      <app-tool icon="tcv-ico-schfile" tip="board.kicad_sch - the schematic, for KiCad"
-                [href]="here()?.schematic ? file('board.kicad_sch') : null"
-                [disabled]="!here()?.schematic" />
-      <app-tool icon="tcv-ico-glb" tip="board.glb - the 3D model"
-                [href]="has3d() ? modelUrl() : null" [disabled]="!has3d()" />
-      <span class="tcv_separator"></span>
-      <!-- What came of the last run, said once, where the eye already is. -->
-      <span class="tcv-frame-status mono">
-        @if (building()) { <span style="color: var(--accent)">building… </span> }
-        @switch (boardTab() === 'focus' ? 'split' : boardTab()) {
-          @case ('layout') {
-            @if (here()?.route; as r) {
-              <span [style.color]="r.unrouted || here()?.drc?.error_count ? 'var(--danger)' : 'var(--ok)'"
-                    [title]="routeTitle()">
-                {{ r.unrouted ? r.unrouted + ' unrouted' : 'routed' }} ·
-                DRC {{ here()?.drc?.error_count ?? '?' }}
-              </span>
-            } @else if (hasLayout()) {
-              <span>{{ here()?.layout?.placed }} placed · not routed</span>
-            }
-          }
-          @case ('schematic') {
-            @if (here()?.schematic; as s) {
-              <span [style.color]="s.erc.error_count ? 'var(--danger)' : 'var(--ok)'"
-                    [title]="'ERC: ' + s.erc.error_count + ' errors, ' + s.erc.warning_count
-                             + ' warnings; library set-up notes left out'">
-                {{ s.parts }} parts · ERC {{ s.erc.error_count }}
-              </span>
-            }
-          }
-          @case ('3d') { <span>drag to turn it over</span> }
-          @case ('split') {
-            @if (here()?.route; as r) {
-              <span [style.color]="r.unrouted || here()?.drc?.error_count ? 'var(--danger)' : 'var(--ok)'"
-                    [title]="routeTitle()">
-                {{ r.unrouted ? r.unrouted + ' unrouted' : 'routed' }} · DRC {{ here()?.drc?.error_count ?? '?' }}
-              </span>
-            }
-            @if (here()?.schematic; as sc) {
-              <span [style.color]="sc.erc.error_count ? 'var(--danger)' : 'var(--ok)'"> · ERC {{ sc.erc.error_count }}</span>
-            }
-          }
-        }
-        @if (note(); as n) {
-          <span style="color: var(--warn)" [title]="n"> · {{ n }}</span>
-        }
-      </span>
     </ng-container>
 
     <!-- The pen, at the toolbar's end as in the 3D room: press it and the
@@ -533,6 +483,22 @@ type BoardView = Pane | 'split' | 'focus';
              the board is, then what it is built of and how its nets run.
              Everything is what is already known; nothing asks LCSC. -->
         <div class="min-h-0 flex-1 overflow-y-auto px-2 py-1.5 text-[11px]">
+          <!-- Where the board stands and its files, which the toolbar used
+               to carry: routed or not, and the three files to take away. -->
+          <div class="tcv-files">
+            <span [style.color]="building() ? 'var(--accent)' : null" [title]="here()?.route ? routeTitle() : ''">
+              {{ building() ? 'building…' : here()?.route ? 'routed' : hasLayout() ? 'placed · not routed' : 'not built' }}
+            </span>
+            <a [attr.href]="hasLayout() ? file('board.kicad_pcb') : null" [class.off]="!hasLayout()"
+               title="the layout, to open in KiCad">.kicad_pcb</a>
+            <a [attr.href]="here()?.schematic ? file('board.kicad_sch') : null" [class.off]="!here()?.schematic"
+               title="the schematic, for KiCad">.kicad_sch</a>
+            <a [attr.href]="has3d() ? modelUrl() : null" [class.off]="!has3d()"
+               title="the 3D model">.glb</a>
+          </div>
+          @if (note(); as n) {
+            <div class="tcv-files-note" [title]="n">{{ n }}</div>
+          }
           @if (stats(); as st) {
             <div class="tcv-stats">
               <span>parts</span><b>{{ st.parts.components }}</b>
