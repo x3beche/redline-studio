@@ -39,6 +39,37 @@ TIMEOUT = 600
 LAYERS = "F.Cu,F.SilkS,F.Mask,Edge.Cuts"
 
 
+# Resistors and capacitors do not come from LCSC. An 0402 is the same
+# shape whoever made it, KiCad's own library in the container has it with
+# a 3D model, and downloading one per value cost three asks of LCSC's
+# budget each - ten of a board's twenty-three downloads, for shapes that
+# were already here. So a part from backend/passives.json is drawn from
+# the library; everything else is fetched by its number.
+LIBRARY = "/usr/share/kicad/footprints"
+PASSIVE_SHAPES = {
+    ("R", "0402"): f"{LIBRARY}/Resistor_SMD.pretty/R_0402_1005Metric.kicad_mod",
+    ("R", "0603"): f"{LIBRARY}/Resistor_SMD.pretty/R_0603_1608Metric.kicad_mod",
+    ("C", "0402"): f"{LIBRARY}/Capacitor_SMD.pretty/C_0402_1005Metric.kicad_mod",
+    ("C", "0603"): f"{LIBRARY}/Capacitor_SMD.pretty/C_0603_1608Metric.kicad_mod",
+    ("C", "0805"): f"{LIBRARY}/Capacitor_SMD.pretty/C_0805_2012Metric.kicad_mod",
+}
+
+
+def library_shapes() -> dict[str, str]:
+    """LCSC number -> KiCad library footprint, for every known passive."""
+    try:
+        table = json.loads(lcsc.PASSIVES.read_text()).get("parts", {})
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for key, row in table.items():
+        kind, _value, size = key.split(" ")
+        shape = PASSIVE_SHAPES.get((kind, size))
+        if shape:
+            out[row["lcsc"]] = shape
+    return out
+
+
 class NoDocker(RuntimeError):
     """Raised when the container is not there, with what to do about it."""
 
@@ -95,8 +126,10 @@ async def render(db, board_id: str) -> dict:
     #
     # A board drawn from a library footprint when a part number was given
     # is a picture of something nobody ordered.
+    stock = library_shapes()
     parts, part_trouble = await lcsc.fetch_many(
-        db, [c.get("part") for c in graph.get("components", [])])
+        db, [c.get("part") for c in graph.get("components", [])
+             if c.get("part") not in stock])
     try:
         shapes = json.loads(await store.get_artifact(db, board_id,
                                                     "footprints", ato.BOARDS))
@@ -128,7 +161,10 @@ async def render(db, board_id: str) -> dict:
         shutil.copy(PLACER, work / "place.py")
 
         def shape_for(c: dict) -> str:
-            """The part number if we have it, the library name otherwise."""
+            """KiCad's own for a passive, the part number's if we have it,
+            the library name otherwise."""
+            if c.get("part") in stock:
+                return stock[c["part"]]
             if c.get("part") in parts:
                 return f"/work/fp/{c['part']}.kicad_mod"
             name = (c.get("footprint") or "").split(":")[-1]
@@ -171,8 +207,11 @@ async def render(db, board_id: str) -> dict:
         # The model is best effort: a footprint with no 3D shape attached
         # still draws, it just has nothing to show in three dimensions.
         glb = None
+        # The library's models are addressed through KICAD9_3DMODEL_DIR;
+        # said outright so the export finds them whatever the image sets.
         rc, glb_log = await _run(
-            _docker(work, IMAGE, "pcb", "export", "glb", "--output",
+            _docker(work, "-e", "KICAD9_3DMODEL_DIR=/usr/share/kicad/3dmodels",
+                    IMAGE, "pcb", "export", "glb", "--output",
                     "board.glb", "board.kicad_pcb"), work)
         if rc == 0 and (work / "board.glb").exists():
             glb = (work / "board.glb").read_bytes()

@@ -186,9 +186,11 @@ fetch every part's footprint and model once:
 .venv/bin/python tools/revisions.py part keep C2969989 C14267 ...
 ```
 
-`keep` waits for LCSC's budget rather than failing, so twenty new parts
-take a quarter of an hour - better there than in a layout that places half
-the board. Then lay out.
+Resistors and capacitors from `part passive` need no fetching: the layout
+draws them from KiCad's own library, which is in the container with its
+3D models. `keep` the rest. It waits for LCSC's budget rather than
+failing - a quarter of an hour for twenty new parts, better there than in
+a layout that places half the board. Then lay out.
 
 Check the netlist the build produces for the connections that matter - the
 USB pair, the UART crossover (TX to RX), each rail on its own net, every
