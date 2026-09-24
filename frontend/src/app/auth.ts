@@ -15,13 +15,24 @@ export interface AuthState {
   needs_setup?: boolean;
   user: Me | null;
   workspace: string | null;
+  /** The role here, and what it allows (backend/access.py). */
+  role?: string | null;
+  can?: string[];
+  roles?: string[];
+  about?: Record<string, string>;
+  actions?: Record<string, string>;
+  token_roles?: string[];
 }
+export interface Invite { email: string; role: string; by: string | null; workspace: string; has_account: boolean }
 
 @Injectable({ providedIn: 'root' })
 export class Auth {
   private http = inject(HttpClient);
   /** Null until the server has said; then whether sign-in is on, and who. */
   state = signal<AuthState | null>(null);
+  /** Why the server just refused something, for a few seconds. */
+  refused = signal<string | null>(null);
+  private refusedTimer?: ReturnType<typeof setTimeout>;
 
   load() {
     this.http.get<AuthState>('/api/auth/state').subscribe({
@@ -37,6 +48,26 @@ export class Auth {
     return !!s && (s.mode === 'off' || !!s.user);
   }
 
+  /** Whether this role may (an action from backend/access.py). Before the
+   *  server has said, yes - the server decides anyway. */
+  can(action: string): boolean {
+    const c = this.state()?.can;
+    return !c || c.includes(action);
+  }
+
+  /** Why not, in a line for a tooltip; null when it may. */
+  why(action: string): string | null {
+    if (this.can(action)) return null;
+    const s = this.state();
+    return `as ${s?.role ?? 'nobody'} you cannot ${s?.actions?.[action] ?? action}`;
+  }
+
+  refuse(message: string) {
+    this.refused.set(message);
+    clearTimeout(this.refusedTimer);
+    this.refusedTimer = setTimeout(() => this.refused.set(null), 7000);
+  }
+
   signedOut() {
     const s = this.state();
     if (s?.mode === 'on') this.state.set({ ...s, user: null });
@@ -48,6 +79,12 @@ export class Auth {
 
   setup(email: string, name: string, password: string) {
     return this.http.post<{ user: Me }>('/api/auth/setup', { email, name, password });
+  }
+
+  invite(key: string) { return this.http.get<Invite>(`/api/invite/${encodeURIComponent(key)}`); }
+
+  accept(key: string, name: string, password: string) {
+    return this.http.post<{ user: Me }>(`/api/invite/${encodeURIComponent(key)}/accept`, { name, password });
   }
 
   logout() {
@@ -62,7 +99,9 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(Auth);
   const out = req.method === 'GET' ? req : req.clone({ setHeaders: { 'X-Redline-CSRF': '1' } });
   return next(out).pipe(catchError((e: HttpErrorResponse) => {
-    if (e.status === 401 && !req.url.includes('/api/auth/')) auth.signedOut();
+    if (e.status === 401 && !req.url.includes('/api/auth/') && !req.url.includes('/api/invite/')) auth.signedOut();
+    // A role's refusal (backend/access.py): said once, at the top.
+    if (e.status === 403 && e.error?.refused) auth.refuse(e.error.detail);
     return throwError(() => e);
   }));
 };
@@ -75,21 +114,34 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 <div class="tcv-signin-wrap">
   <form class="tcv-signin" (submit)="$event.preventDefault(); go()">
     <div class="tcv-signin-brand">Redl<span class="brand-i">i</span>ne</div>
-    @if (setup()) {
+    @if (invite(); as inv) {
+      <p class="tcv-signin-lead">{{ inv.by || 'Someone' }} invited you to <b>{{ inv.workspace }}</b> as
+        <b>{{ inv.role }}</b>{{ about(inv.role) }}.
+        {{ inv.has_account ? 'Sign in with your password to join.' : 'Choose a name and a password to join.' }}</p>
+      @if (!inv.has_account) {
+        <label>Name<input [value]="name()" (input)="name.set($any($event.target).value)" autocomplete="name"></label>
+      }
+      <label>Email<input type="email" [value]="inv.email" disabled autocomplete="username"></label>
+    } @else if (inviteGone(); as g) {
+      <p class="tcv-signin-error" role="alert">{{ g }}</p>
+      <p class="tcv-signin-lead">Sign in if you already have an account.</p>
+    } @else if (setup()) {
       <p class="tcv-signin-lead">Nobody has an account yet. Make the first one - it owns this workspace, and
         invites the others.</p>
       <label>Name<input [value]="name()" (input)="name.set($any($event.target).value)" autocomplete="name"></label>
     } @else {
       <p class="tcv-signin-lead">Sign in to continue.</p>
     }
-    <label>Email<input type="email" [value]="email()" (input)="email.set($any($event.target).value)"
-                       autocomplete="username" required></label>
+    @if (!invite()) {
+      <label>Email<input type="email" [value]="email()" (input)="email.set($any($event.target).value)"
+                         autocomplete="username" required></label>
+    }
     <label>Password<input type="password" [value]="password()" (input)="password.set($any($event.target).value)"
-                          [attr.autocomplete]="setup() ? 'new-password' : 'current-password'" required></label>
-    @if (setup()) { <p class="tcv-signin-hint">At least 10 characters.</p> }
+                          [attr.autocomplete]="newPassword() ? 'new-password' : 'current-password'" required></label>
+    @if (newPassword()) { <p class="tcv-signin-hint">At least 10 characters.</p> }
     @if (error(); as e) { <p class="tcv-signin-error" role="alert">{{ e }}</p> }
     <button class="tcv-btn tcv-btn-accent" type="submit" [disabled]="busy()">
-      {{ busy() ? '…' : setup() ? 'Make the account' : 'Sign in' }}</button>
+      {{ busy() ? '…' : invite() ? 'Join' : setup() ? 'Make the account' : 'Sign in' }}</button>
   </form>
 </div>`,
 })
@@ -101,15 +153,39 @@ export class SignIn {
   error = signal('');
   busy = signal(false);
   setup = () => !!this.auth.state()?.needs_setup;
+  /** An invitation link: /?invite=<key>. */
+  private key = new URLSearchParams(location.search).get('invite');
+  invite = signal<Invite | null>(null);
+  inviteGone = signal<string | null>(null);
+  newPassword = () => this.invite() ? !this.invite()!.has_account : this.setup();
+  about = (role: string) => { const a = this.auth.state()?.about?.[role]; return a ? ` - ${a}` : ''; };
+
+  constructor() {
+    if (this.key) {
+      this.auth.invite(this.key).subscribe({
+        next: i => this.invite.set(i),
+        error: (e: HttpErrorResponse) => this.inviteGone.set(
+          typeof e.error?.detail === 'string' ? e.error.detail : 'this invitation cannot be opened'),
+      });
+    }
+  }
 
   go() {
     this.busy.set(true);
     this.error.set('');
-    const call = this.setup()
+    const inv = this.invite();
+    const call = inv && this.key
+      ? this.auth.accept(this.key, this.name(), this.password())
+      : this.setup()
       ? this.auth.setup(this.email(), this.name(), this.password())
       : this.auth.login(this.email(), this.password());
     call.subscribe({
-      next: () => { this.busy.set(false); this.password.set(''); this.auth.load(); },
+      next: () => {
+        this.busy.set(false); this.password.set('');
+        // The link has done its work: off the address bar.
+        if (this.key) history.replaceState(null, '', location.pathname);
+        this.auth.load();
+      },
       error: (e: HttpErrorResponse) => {
         this.busy.set(false);
         this.error.set(typeof e.error?.detail === 'string' ? e.error.detail : 'that did not work');
@@ -119,7 +195,7 @@ export class SignIn {
 }
 
 export interface AgentToken {
-  id: string; name: string; workspace: string; room: string | null;
+  id: string; name: string; workspace: string; room: string | null; role?: string;
   created_by?: { name?: string }; created_at: string; last_used: string | null; revoked: boolean;
 }
 
@@ -138,6 +214,10 @@ export interface AgentToken {
     <form class="tcv-tokens-new" (submit)="$event.preventDefault(); make()">
       <input placeholder="Name the agent, e.g. pcb-builder" [value]="name()" maxlength="60"
              (input)="name.set($any($event.target).value)">
+      <select class="tcv-tokens-role" [value]="role()" (change)="role.set($any($event.target).value)"
+              title="What the agent may do">
+        @for (r of auth.state()?.token_roles ?? ['editor']; track r) { <option [value]="r" [selected]="r === role()">{{ r }}</option> }
+      </select>
       <button class="tcv-btn tcv-btn-accent" type="submit" [disabled]="!name().trim() || busy()">Make token</button>
     </form>
     @if (made(); as m) {
@@ -150,7 +230,7 @@ export interface AgentToken {
     @if (error(); as e) { <p class="tcv-signin-error" role="alert">{{ e }}</p> }
     @for (t of list(); track t.id) {
       <div class="tcv-tokens-row" [attr.data-off]="t.revoked ? '' : null">
-        <div><span class="tcv-menu-name">{{ t.name }}</span>
+        <div><span class="tcv-menu-name">{{ t.name }} <span class="tcv-role">{{ t.role ?? 'editor' }}</span></span>
           <span class="tcv-menu-blurb">made by {{ t.created_by?.name || 'someone' }} {{ ago(t.created_at) }} ·
             {{ t.revoked ? 'taken back' : t.last_used ? 'last used ' + ago(t.last_used) : 'not used yet' }}</span></div>
         @if (!t.revoked) { <button class="tcv-btn" (click)="revoke(t)">Take back</button> }
@@ -162,9 +242,11 @@ export interface AgentToken {
 })
 export class AgentTokens {
   private http = inject(HttpClient);
+  auth = inject(Auth);
   closed = output<void>();
   list = signal<AgentToken[]>([]);
   name = signal('');
+  role = signal('editor');
   made = signal<{ name: string; token: string } | null>(null);
   error = signal('');
   busy = signal(false);
@@ -181,7 +263,8 @@ export class AgentTokens {
   make() {
     this.busy.set(true);
     this.error.set('');
-    this.http.post<AgentToken & { token: string }>('/api/agent-tokens', { name: this.name().trim() }).subscribe({
+    this.http.post<AgentToken & { token: string }>('/api/agent-tokens',
+                                                   { name: this.name().trim(), role: this.role() }).subscribe({
       next: t => { this.busy.set(false); this.made.set({ name: t.name, token: t.token }); this.copied.set(false);
                    this.name.set(''); this.load(); },
       error: e => { this.busy.set(false); this.error.set(this.say(e)); },
@@ -210,10 +293,134 @@ export class AgentTokens {
   private say(e: HttpErrorResponse) { return typeof e.error?.detail === 'string' ? e.error.detail : 'that did not work'; }
 }
 
+interface Member { id: string; name: string; email: string; role: string; joined?: string }
+interface PendingInvite { id: string; email: string; role: string; by?: { name: string }; created_at: string }
+
+/** The people in the workspace and their roles, and inviting more. Owners
+ *  and admins only (backend/access.py). Redline sends no email: an
+ *  invitation is a link, shown once, that the inviter passes on. */
+@Component({
+  selector: 'app-members',
+  template: `
+<div class="tcv-tokens-back" (click)="closed.emit()">
+  <div class="tcv-tokens" (click)="$event.stopPropagation()" role="dialog" aria-label="Members">
+    <h2>Members</h2>
+    <p>Who works in this workspace, and what each may do. Invite someone with their email address: you get a
+      link to send them, good for a week.</p>
+    <form class="tcv-tokens-new" (submit)="$event.preventDefault(); invite()">
+      <input type="email" placeholder="their@email" [value]="email()" (input)="email.set($any($event.target).value)">
+      <select class="tcv-tokens-role" [value]="role()" (change)="role.set($any($event.target).value)">
+        @for (r of invitable(); track r) { <option [value]="r" [selected]="r === role()">{{ r }}</option> }
+      </select>
+      <button class="tcv-btn tcv-btn-accent" type="submit" [disabled]="!email().trim() || busy()">Invite</button>
+    </form>
+    <p class="tcv-menu-blurb">{{ about(role()) }}</p>
+    @if (made(); as m) {
+      <div class="tcv-tokens-once">
+        <span>Send this link to <b>{{ m.email }}</b> - it is shown this once, and it lets them in as
+          <b>{{ m.role }}</b>:</span>
+        <code>{{ m.link }}</code>
+        <div class="tcv-tokens-end"><button class="tcv-btn" (click)="copy(m.link)">{{ copied() ? 'Copied' : 'Copy the link' }}</button></div>
+      </div>
+    }
+    @if (error(); as e) { <p class="tcv-signin-error" role="alert">{{ e }}</p> }
+    @for (m of members(); track m.id) {
+      <div class="tcv-tokens-row">
+        <div><span class="tcv-menu-name">{{ m.name }}@if (m.id === me()) { <span class="tcv-role">you</span> }</span>
+          <span class="tcv-menu-blurb">{{ m.email }}</span></div>
+        <select class="tcv-tokens-role" [value]="m.role" [disabled]="!mayChange(m)" [title]="about(m.role)"
+                (change)="setRole(m, $any($event.target).value)">
+          @for (r of roles(); track r) { <option [value]="r" [selected]="r === m.role" [disabled]="!mayGive(r)">{{ r }}</option> }
+        </select>
+        @if (m.id !== me() && mayChange(m)) { <button class="tcv-btn" (click)="takeOut(m)">Take out</button> }
+      </div>
+    }
+    @for (i of pending(); track i.id) {
+      <div class="tcv-tokens-row" data-off>
+        <div><span class="tcv-menu-name">{{ i.email }} <span class="tcv-role">{{ i.role }}</span></span>
+          <span class="tcv-menu-blurb">invited by {{ i.by?.name || 'someone' }} · not joined yet</span></div>
+        <button class="tcv-btn" (click)="cancel(i)">Cancel</button>
+      </div>
+    }
+    <div class="tcv-tokens-end"><button class="tcv-btn" (click)="closed.emit()">Close</button></div>
+  </div>
+</div>`,
+})
+export class Members {
+  private http = inject(HttpClient);
+  private auth = inject(Auth);
+  closed = output<void>();
+  members = signal<Member[]>([]);
+  pending = signal<PendingInvite[]>([]);
+  email = signal('');
+  role = signal('editor');
+  made = signal<{ email: string; role: string; link: string } | null>(null);
+  error = signal('');
+  busy = signal(false);
+  copied = signal(false);
+
+  roles = () => this.auth.state()?.roles ?? [];
+  private rank = (r: string) => { const i = this.roles().indexOf(r); return i < 0 ? 99 : i; };
+  private mine = () => this.auth.state()?.role ?? 'viewer';
+  me = () => this.auth.state()?.user?.id;
+  /** Nobody gives a role above their own; an owner is made from the list. */
+  mayGive = (r: string) => this.rank(r) >= this.rank(this.mine());
+  mayChange = (m: Member) => this.rank(m.role) >= this.rank(this.mine());
+  invitable = () => this.roles().filter(r => r !== 'owner' && this.mayGive(r));
+  about = (r: string) => this.auth.state()?.about?.[r] ?? '';
+
+  constructor() { this.load(); }
+
+  load() {
+    this.http.get<{ members: Member[]; invites: PendingInvite[] }>('/api/members').subscribe({
+      next: d => { this.members.set(d.members); this.pending.set(d.invites); },
+      error: e => this.error.set(this.say(e)) });
+  }
+
+  invite() {
+    this.busy.set(true);
+    this.error.set('');
+    this.http.post<{ key: string; email: string; role: string }>('/api/invites',
+                                                                 { email: this.email().trim(), role: this.role() }).subscribe({
+      next: r => {
+        this.busy.set(false); this.copied.set(false); this.email.set('');
+        this.made.set({ email: r.email, role: r.role, link: `${location.origin}/?invite=${r.key}` });
+        this.load();
+      },
+      error: e => { this.busy.set(false); this.error.set(this.say(e)); },
+    });
+  }
+
+  setRole(m: Member, role: string) {
+    this.error.set('');
+    this.http.patch(`/api/members/${m.id}`, { role }).subscribe({
+      next: () => { this.load(); if (m.id === this.me()) this.auth.load(); },
+      error: e => { this.error.set(this.say(e)); this.load(); } });
+  }
+
+  takeOut(m: Member) {
+    if (!confirm(`Take ${m.name} out of the workspace? They are signed out at once.`)) return;
+    this.http.delete(`/api/members/${m.id}`).subscribe({ next: () => this.load(), error: e => this.error.set(this.say(e)) });
+  }
+
+  cancel(i: PendingInvite) {
+    this.http.delete(`/api/invites/${i.id}`).subscribe({
+      next: () => { if (this.made()?.email === i.email) this.made.set(null); this.load(); },
+      error: e => this.error.set(this.say(e)) });
+  }
+
+  copy(link: string) {
+    navigator.clipboard?.writeText(link)
+      .then(() => this.copied.set(true), () => this.error.set('the browser would not copy - select the link instead'));
+  }
+
+  private say(e: HttpErrorResponse) { return typeof e.error?.detail === 'string' ? e.error.detail : 'that did not work'; }
+}
+
 /** Who is signed in, and signing out - only when sign-in is on. */
 @Component({
   selector: 'app-user-chip',
-  imports: [AgentTokens],
+  imports: [AgentTokens, Members],
   host: { class: 'relative flex items-center' },
   template: `
 @if (auth.state(); as s) {
@@ -224,15 +431,23 @@ export class AgentTokens {
     @if (open()) {
       <div class="tcv-menu tcv-user-menu" (mouseleave)="open.set(false)">
         <div class="tcv-menu-item"><span class="tcv-menu-name">{{ u.name }}</span>
-          <span class="tcv-menu-blurb">{{ u.email }} · workspace {{ s.workspace }}</span></div>
-        <button class="tcv-menu-item" (click)="open.set(false); tokens.set(true)">
-          <span class="tcv-menu-name">Agent tokens</span>
-          <span class="tcv-menu-blurb">Let an agent work here without the database password</span></button>
+          <span class="tcv-menu-blurb">{{ u.email }} · {{ s.role }} in {{ s.workspace }}</span></div>
+        @if (auth.can('members')) {
+          <button class="tcv-menu-item" (click)="open.set(false); members.set(true)">
+            <span class="tcv-menu-name">Members</span>
+            <span class="tcv-menu-blurb">Invite people and set what each may do</span></button>
+        }
+        @if (auth.can('tokens')) {
+          <button class="tcv-menu-item" (click)="open.set(false); tokens.set(true)">
+            <span class="tcv-menu-name">Agent tokens</span>
+            <span class="tcv-menu-blurb">Let an agent work here without the database password</span></button>
+        }
         <button class="tcv-menu-item" (click)="open.set(false); auth.logout()">
           <span class="tcv-menu-name">Sign out</span></button>
       </div>
     }
     @if (tokens()) { <app-agent-tokens (closed)="tokens.set(false)"/> }
+    @if (members()) { <app-members (closed)="members.set(false)"/> }
   }
 }`,
 })
@@ -240,5 +455,6 @@ export class UserChip {
   auth = inject(Auth);
   open = signal(false);
   tokens = signal(false);
+  members = signal(false);
   initial(n: string) { return (n.trim()[0] ?? '?').toUpperCase(); }
 }

@@ -17,7 +17,7 @@ from __future__ import annotations
 from bson import ObjectId, json_util
 from fastapi import APIRouter, HTTPException, Request, Response
 
-from . import actors, scope
+from . import access, actors, scope
 
 router = APIRouter(prefix="/api/agent")
 
@@ -95,6 +95,11 @@ async def _run(body: dict):
         raise HTTPException(403, f"collection {coll!r} is not open to agents")
     if (bad := _forbidden(a)):
         raise HTTPException(403, f"{bad} is not open to agents")
+    # The token's role (backend/access.py): a reviewer's or viewer's token
+    # reads; writing needs an editor's.
+    need = "view" if op in READS else "delete" if op.startswith("delete") else "run"
+    if not access.allowed(access.current(), need):
+        raise HTTPException(403, access.refusal(access.current() or "nobody", need))
     c = d[coll]
     if op == "find":
         cur = c.find(a.get("filter") or {}, a.get("projection"))
@@ -152,6 +157,8 @@ def _bucket(name: str):
 @router.post("/files/{bucket}")
 async def agent_file_put(bucket: str, request: Request, filename: str = "file"):
     _agent_only()
+    if not access.allowed(access.current(), "run"):
+        raise HTTPException(403, access.refusal(access.current() or "nobody", "run"))
     fid = await _bucket(bucket).upload_from_stream(filename, await request.body())
     return Response(json_util.dumps({"id": fid}), media_type="application/json")
 
@@ -169,6 +176,8 @@ async def agent_file_get(bucket: str, fid: str):
 @router.delete("/files/{bucket}/{fid}")
 async def agent_file_delete(bucket: str, fid: str):
     _agent_only()
+    if not access.allowed(access.current(), "delete"):
+        raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
     try:
         await _bucket(bucket).delete(ObjectId(fid) if ObjectId.is_valid(fid) else fid)
     except Exception as exc:

@@ -23,6 +23,7 @@ import { Activity, Analytics, Api, Apps, Boards, CameraState, Catalog, Chat, Cha
 import { OcpViewer } from './ocp';
 import { Markdown, plain } from '../markdown';
 import { Selection } from '../selection';
+import { Auth } from '../auth';
 import { startFold, whenSettled } from '../fold';
 
 export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'text';
@@ -47,6 +48,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   private activity = inject(Activity);
   /** Which room is on screen. The template reads it, so it is not private. */
   picked = inject(Selection);
+  /** The role here: what the note buttons may do (backend/access.py). */
+  auth = inject(Auth);
   private asks = inject(Questions);
   private chat = inject(Chat);
   private boards = inject(Boards);
@@ -1810,6 +1813,11 @@ export class Editor implements AfterViewInit, OnDestroy {
   };
 
   cycle(r: Revision) { this.mark(r, Editor.NEXT[r.status] ?? 'draft'); }
+
+  /** Why this role cannot press it: back to draft is drawing, the rest runs. */
+  cycleWhy(r: Revision): string | null {
+    return this.auth.why((Editor.NEXT[r.status] ?? 'draft') === 'draft' ? 'draw' : 'run');
+  }
 
   /** The button always reads as the action the next click performs. */
   nextLabel(s: RevisionStatus): string {

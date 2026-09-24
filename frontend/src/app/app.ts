@@ -21,6 +21,7 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
      catalog on the left keeps its full height beside them. -->
 <!-- Signed in, or in local mode (sign-in off): the app. Otherwise the
      sign-in card - and nothing of the app until the server has said which. -->
+@if (auth.refused(); as m) { <div class="tcv-refused" role="alert">{{ m }}</div> }
 @if (auth.signedIn()) {
 <app-editor>
   <header tabs class="relative flex shrink-0 items-center gap-1">

@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import (actors, ato, auth, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (access, actors, ato, auth, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
 from . import tools_api
@@ -1162,6 +1162,7 @@ async def _who_acts(request, call_next):
     audit trail with it, whatever route it came through."""
     who = actors.from_header(request.headers.get(actors.HEADER))
     ws = scope.DEFAULT
+    role: str | None = "owner"          # local mode: the person at the machine
     # An agent's token, whatever the mode: it names the agent and its
     # workspace. A token that is wrong or revoked is refused outright.
     token = auth.bearer(request.headers)
@@ -1170,7 +1171,7 @@ async def _who_acts(request, call_next):
         agent = await auth.token_agent(db(), token)
         if not agent:
             return JSONResponse({"detail": "that agent token is unknown or revoked"}, status_code=401)
-        who, ws = agent["actor"], agent["workspace"]
+        who, ws, role = agent["actor"], agent["workspace"], agent["role"]
     # Signed in, when sign-in is on: the session says who, and in which
     # workspace. Without one, only the few routes that sign in answer.
     elif auth.enabled() and auth.needs_session(request.method, request.url.path):
@@ -1180,9 +1181,19 @@ async def _who_acts(request, call_next):
             return JSONResponse({"detail": "sign in first"}, status_code=401)
         if not auth.csrf_ok(request.method, request.headers):
             return JSONResponse({"detail": "that change did not come from the app"}, status_code=403)
-        who, ws = got["user"], got["workspace"]
+        who, ws, role = got["user"], got["workspace"], got["role"]
+    elif auth.enabled():
+        role = None                     # signed out: only the open routes answer
+    # What the request is, and whether the role may (backend/access.py).
+    if request.url.path.startswith("/api/"):
+        act = access.action(request.method, request.url.path, dict(request.query_params))
+        if not access.allowed(role, act):
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"detail": access.refusal(role or "nobody", act), "refused": act,
+                                 "role": role}, status_code=403)
     who_token = actors.CURRENT.set(who)
     ws_token = scope.WORKSPACE.set(ws)
+    role_token = access.ROLE.set(role)
     try:
         response = await call_next(request)
         kind = actors.audited(request.method, request.url.path)
@@ -1195,6 +1206,7 @@ async def _who_acts(request, call_next):
     finally:
         actors.CURRENT.reset(who_token)
         scope.WORKSPACE.reset(ws_token)
+        access.ROLE.reset(role_token)
 
 
 @app.middleware("http")
@@ -1249,11 +1261,15 @@ def _set_cookie(response: Response, request: Request, token: str) -> None:
 async def auth_state(request: Request):
     """Whether sign-in is on, whether anyone has an account yet, and who
     this browser is signed in as."""
+    roles = {"roles": list(access.ROLES), "about": access.ABOUT, "actions": access.ACTIONS,
+             "token_roles": list(access.TOKEN_ROLES)}
     if not auth.enabled():
-        return {"mode": "off", "user": actors.local_user(), "workspace": scope.DEFAULT}
+        return {"mode": "off", "user": actors.local_user(), "workspace": scope.DEFAULT,
+                "role": "owner", "can": access.can("owner"), **roles}
     got = await auth.session_user(db(), request.cookies.get(auth.COOKIE))
     return {"mode": "on", "needs_setup": not await auth.any_user(db()),
-            "user": got["user"] if got else None, "workspace": got["workspace"] if got else None}
+            "user": got["user"] if got else None, "workspace": got["workspace"] if got else None,
+            "role": got["role"] if got else None, "can": access.can(got["role"] if got else None), **roles}
 
 
 @app.post("/api/auth/setup")
@@ -1307,6 +1323,7 @@ async def auth_logout(request: Request, response: Response):
 class TokenIn(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     room: str | None = Field(default=None, max_length=20)
+    role: str = Field(default="editor", max_length=20)
 
 
 def _people_only():
@@ -1319,11 +1336,13 @@ async def make_agent_token(body: TokenIn):
     """A token for one agent: shown once, kept only as a hash."""
     _people_only()
     try:
+        if access.rank(body.role) < access.rank(access.current() or "viewer"):
+            raise ValueError(f"an agent cannot be more than you ({access.current()})")
         token, doc = await auth.create_agent_token(db(), body.name, scope.current(), body.room,
-                                                   actors.current())
+                                                   actors.current(), body.role)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    await actors.audit(db(), "token", body.name, {"room": body.room})
+    await actors.audit(db(), "token", body.name, {"room": body.room, "role": body.role})
     return {"token": token, **doc}
 
 
@@ -1339,6 +1358,101 @@ async def revoke_agent_token(token_id: str):
     if not await auth.revoke_agent_token(db(), token_id, scope.current()):
         raise HTTPException(404, token_id)
     return {"revoked": token_id}
+
+
+# ---------------- members and invitations ----------------
+# Owners and admins only - the middleware's role check (backend/access.py).
+def _refused(exc: Exception) -> HTTPException:
+    code = {ValueError: 400, PermissionError: 403, LookupError: 404}
+    return HTTPException(next((c for t, c in code.items() if isinstance(exc, t)), 400), str(exc))
+
+
+@app.get("/api/members")
+async def list_members():
+    return {"members": await auth.members(db(), scope.current()),
+            "invites": await auth.invites(db(), scope.current())}
+
+
+class RoleIn(BaseModel):
+    role: str = Field(max_length=20)
+
+
+@app.patch("/api/members/{user_id}")
+async def change_role(user_id: str, body: RoleIn):
+    try:
+        got = await auth.set_role(db(), scope.current(), user_id, body.role, access.current() or "viewer")
+    except (ValueError, PermissionError, LookupError) as exc:
+        raise _refused(exc) from exc
+    await actors.audit(db(), "role", user_id, {"role": body.role, "was": got["was"]})
+    return got
+
+
+@app.delete("/api/members/{user_id}")
+async def take_out_member(user_id: str):
+    if user_id == actors.current().get("id"):
+        raise HTTPException(400, "you cannot take yourself out - ask another owner or admin")
+    try:
+        await auth.remove_member(db(), scope.current(), user_id, access.current() or "viewer")
+    except (ValueError, PermissionError, LookupError) as exc:
+        raise _refused(exc) from exc
+    return {"removed": user_id}
+
+
+class InviteIn(BaseModel):
+    email: str = Field(min_length=3, max_length=200)
+    role: str = Field(default="editor", max_length=20)
+
+
+@app.post("/api/invites")
+async def invite(body: InviteIn):
+    """An invitation link for one address and role, shown once. Redline
+    sends no email: the person who invites passes the link on."""
+    try:
+        key, doc = await auth.create_invite(db(), scope.current(), body.email, body.role,
+                                            actors.current(), access.current() or "viewer")
+    except (ValueError, PermissionError, LookupError) as exc:
+        raise _refused(exc) from exc
+    await actors.audit(db(), "invite", doc["email"], {"role": doc["role"]})
+    return {"key": key, **doc}
+
+
+@app.delete("/api/invites/{invite_id}")
+async def cancel_invite(invite_id: str):
+    if not await auth.cancel_invite(db(), scope.current(), invite_id):
+        raise HTTPException(404, invite_id)
+    return {"cancelled": invite_id}
+
+
+@app.get("/api/invite/{key}")
+async def invite_page(key: str):
+    """What an invitation link's page shows - open, the link is the key."""
+    if not auth.enabled():
+        raise HTTPException(400, "sign-in is off (X3_AUTH)")
+    info = await auth.invite_info(db(), key)
+    if not info:
+        raise HTTPException(404, "this invitation has expired or was taken back - ask for a new one")
+    return info
+
+
+class AcceptIn(BaseModel):
+    name: str = Field(default="", max_length=80)
+    password: str = Field(min_length=1, max_length=400)
+
+
+@app.post("/api/invite/{key}/accept")
+async def invite_accept(key: str, body: AcceptIn, request: Request, response: Response):
+    if not auth.enabled():
+        raise HTTPException(400, "sign-in is off (X3_AUTH)")
+    try:
+        user, ws, role = await auth.accept_invite(db(), key, body.name, body.password)
+    except (ValueError, PermissionError, LookupError) as exc:
+        raise _refused(exc) from exc
+    token = await auth.create_session(db(), user, ws, request.headers.get("user-agent", ""),
+                                      request.client.host if request.client else "")
+    _set_cookie(response, request, token)
+    who = {"type": "user", "id": user["_id"], "name": user.get("name") or user["email"]}
+    await actors.audit(db(), "joined", user["email"], {"role": role}, actor=who)
+    return {"user": {"id": user["_id"], "name": user.get("name"), "email": user["email"]}, "role": role}
 
 
 @app.get("/api/audit")

@@ -280,6 +280,72 @@ Still open, for phase 5: ids are global, so a refused duplicate id tells
 workspace B that A has a document with that id; room-limited tokens (the
 `room` field is stored, not yet enforced).
 
+### Phase 5 - roles and members (done)
+
+`backend/access.py` is the one table: five roles, eight actions.
+
+| role | may |
+|---|---|
+| owner | everything, including making and unmaking owners |
+| admin | members, invitations, settings, tokens, and all an editor does |
+| editor | change designs, queue notes, run builds, delete, hand out agent tokens |
+| reviewer | draw notes and drafts, edit them, chat, answer questions |
+| viewer | look and download |
+
+- **One check, every route.** Instead of a `require()` on each route, the
+  middleware sorts every `/api/` request into an action by method and path
+  (`access.action`) and asks the table once. Nothing to forget in a new
+  route: a GET looks, a DELETE deletes, any other method changes the
+  design, until it is listed otherwise. Queueing is `PATCH
+  /api/revisions/{id}?status=queued`, so the status asked for decides:
+  back to draft is drawing, anything else is running. Local mode is the
+  owner, so nothing changed on this machine.
+- **Refusals say why**: 403 with "as reviewer you cannot queue notes and
+  run builds - ask someone who is editor or above"; the page shows it at
+  the top, and the 3D room's note buttons the role cannot use are pale
+  with that reason on hover.
+- **Members** (user menu, owners and admins): the people and their roles,
+  pending invitations. Nobody gives a role above their own; only an owner
+  makes or changes an owner; the last owner stays one; you cannot take
+  yourself out. Taking someone out ends their sessions at once in this
+  server (others within a minute), and they can no longer sign in.
+- **Invitations**: an address and a role give a link, shown once, good for
+  a week, one per address; Redline sends no email. The link opens a card
+  saying who invited you, to what, as which role; a new address chooses a
+  name and password, an existing account signs in with its password. The
+  link works once. Owners are not invited - they are made from the list.
+- **Agent tokens carry a role** too: editor (the default, and the most), reviewer or
+  viewer, never above the person making it. The agents' database way in
+  checks each operation against it: a reviewer's token reads, and writes
+  nothing. Tokens from phase 4 are editors.
+- **Tests**: `tests/test_access.py` builds the matrix from the app's own
+  route list (113 routes x 5 roles) - every route is a known action and
+  each role may do exactly its actions - plus the promises: a viewer only
+  looks, a reviewer draws but does not queue, build or delete, an editor
+  works but does not manage, signed out reaches only signing in.
+
+Verified on a separate server with sign-in on and a throw-away database
+(dropped afterwards): the owner invited an admin, an editor, a reviewer
+and a viewer, each joined through their link (a second use refused). The
+reviewer made a note, was refused queueing and deleting it, chatted, was
+refused members and tokens; the viewer read and was refused a note and a
+build; the editor queued the reviewer's note and was refused settings and
+invitations; the admin was refused changing the owner or inviting an
+owner, and made the editor a reviewer, whose next queue was refused. The
+owner could not demote themselves as the last owner; took the reviewer
+out, whose session ended and whose sign-in was then refused. A reviewer
+token read and was refused a write and a queue; an admin token was
+refused. In the browser: the owner's menu with Members and Agent tokens,
+an invitation made and its link shown, the members with their roles; the
+link's card ("Olive Owner invited you to Redline as reviewer ..."), joining,
+the link gone from the address bar, the newcomer's menu without Members
+or tokens, and the note's queue, archive and delete buttons disabled with
+their reasons. Not seen in the browser: the refusal banner (the buttons
+that would trigger it are disabled; it is covered by the API checks).
+
+Still open: ids are global (a second workspace is phase 6's to make
+real); room-limited tokens.
+
 ### Original list of questions
 
 

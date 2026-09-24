@@ -885,4 +885,14 @@ tokens**, name the agent and press **Make token**: the three lines shown
 (`X3_TRANSPORT=api`, `X3_API=...`, `X3_TOKEN=...`) go into the agent's
 environment, and appear only this once. The agent then needs no database
 password, and everything it does is under the name you gave it. **Take
-back** stops it at once.
+back** stops it at once. An agent's token is an editor unless you choose
+reviewer (it reads and writes nothing) or viewer.
+
+**Members and roles.** Owners and admins have **Members** in the same
+menu. Invite someone with their email address and a role; you get a link
+to send them (Redline sends no email), good for a week and for one use.
+The roles: *owner* (everything), *admin* (people, settings and all
+below), *editor* (designs, queueing, builds, deleting, agent tokens),
+*reviewer* (notes and drafts, chat, answers - not queue, build or
+delete), *viewer* (looks). What your role cannot do is greyed out with
+the reason on hover, and if you try anyway the reason appears at the top.

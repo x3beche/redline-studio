@@ -1238,19 +1238,19 @@
                 <button (click)="saveEdit(r)" class="tcv-chip tcv-chip-ok">save</button>
                 <button (click)="cancelEdit()" class="tcv-chip">cancel</button>
               } @else {
-                <button (click)="cycle(r)" [class]="nextClass(r.status)"
-                        title="draft → queued → applied → draft">
+                <button (click)="cycle(r)" [class]="nextClass(r.status)" [disabled]="!!cycleWhy(r)"
+                        [title]="cycleWhy(r) ?? 'draft → queued → applied → draft'">
                   {{ nextLabel(r.status) }}
                 </button>
                 <button (click)="startEdit(r)" class="tcv-chip"
                         title="edit the text (the drawing stays as it is)">edit</button>
               }
-              <button (click)="archive(r)" class="tcv-chip"
-                      [title]="r.archived ? 'restore from archive' : 'archive'">
+              <button (click)="archive(r)" class="tcv-chip" [disabled]="!auth.can('edit')"
+                      [title]="auth.why('edit') ?? (r.archived ? 'restore from archive' : 'archive')">
                 {{ r.archived ? 'restore' : 'archive' }}
               </button>
-              <button (click)="remove(r)" class="tcv-chip tcv-chip-danger ml-auto"
-                      title="delete permanently">delete</button>
+              <button (click)="remove(r)" class="tcv-chip tcv-chip-danger ml-auto" [disabled]="!auth.can('delete')"
+                      [title]="auth.why('delete') ?? 'delete permanently'">delete</button>
             </div>
             }
             }
