@@ -183,18 +183,31 @@ def check_regex(req: dict, work: Path) -> dict:
     except re.error as e:
         result["ok"] = False
         result["errors"].append({"engine": "python", "message": str(e)})
-    # PCRE2, as grep would run it: -o prints each match.
+    # PCRE2 itself, through PHP's preg_match_all: the whole text at once,
+    # with i/m/s/u as flags, and each match's byte offset.
     pcre = req.get("pcre", pattern)
-    (work / "text.txt").write_text(text)
-    opts = ["-o", "--no-filename"]
-    opts += ["-i"] if "i" in flags else []
-    out = run(["pcre2grep", *opts, *(["-M"] if "s" in flags or "m" in flags else []),
-               "-e", pcre, str(work / "text.txt")], timeout=20)
-    if out.returncode == 2:
+    delim = "\x01"
+    mods = "".join(f for f in "ims" if f in flags) + "u"
+    php = ("$p=getenv('P'); $t=file_get_contents('php://stdin');"
+           "$n=@preg_match_all($p,$t,$m,PREG_OFFSET_CAPTURE);"
+           "if($n===false){echo json_encode(['error'=>preg_last_error_msg()]);exit;}"
+           "echo json_encode(['matches'=>array_map(fn($x)=>['text'=>$x[0],'byte'=>$x[1]],$m[0])]);")
+    out = run(["php", "-r", php], stdin=text, timeout=20,
+              env={"P": delim + pcre + delim + mods})
+    try:
+        got = json.loads(out.stdout or "{}")
+    except ValueError:
+        got = {"error": (out.stderr or out.stdout).strip()[:400]}
+    if "error" in got:
         result["ok"] = False
-        result["errors"].append({"engine": "pcre2", "message": out.stderr.strip()})
+        result["errors"].append({"engine": "pcre2", "message": got["error"]})
     else:
-        result["engines"]["pcre2"] = {"matches": [{"text": t} for t in out.stdout.splitlines()][:500]}
+        # byte offsets to character offsets, as Python's are
+        raw = text.encode()
+        result["engines"]["pcre2"] = {"matches": [
+            {"start": len(raw[:m["byte"]].decode(errors="ignore")),
+             "end": len(raw[:m["byte"]].decode(errors="ignore")) + len(m["text"]),
+             "text": m["text"]} for m in got["matches"]][:500]}
     return result
 
 
@@ -219,7 +232,30 @@ def check_cron(req: dict, work: Path) -> dict:
     return {"ok": True, "errors": [], "runs": runs, "notes": [f"croniter, {tzname}"]}
 
 
-KINDS = {"sql": check_sql, "prisma": check_prisma, "ts": check_ts, "openapi": check_openapi,
+# ---------------- a PDF's text ----------------
+def check_pdftext(req: dict, work: Path) -> dict:
+    """The text of a PDF (sent as base64 in `input`), page by page, laid out
+    as on the page so a table's columns stay columns."""
+    import base64
+    pdf = work / "in.pdf"
+    try:
+        pdf.write_bytes(base64.b64decode(req.get("input", ""), validate=False))
+    except ValueError:
+        return {"ok": False, "errors": [{"message": "input is not base64"}]}
+    first, last = int(req.get("first", 1)), int(req.get("last", 0))
+    args = ["pdftotext", "-layout", "-f", str(first)] + (["-l", str(last)] if last else [])
+    out = run([*args, str(pdf), str(work / "out.txt")], timeout=60)
+    if out.returncode:
+        return {"ok": False, "errors": [{"message": out.stderr.strip()[:400] or "not a readable PDF"}]}
+    text = (work / "out.txt").read_text(errors="replace")
+    pages = text.split("\f")
+    info = run(["pdfinfo", str(pdf)], timeout=20).stdout
+    return {"ok": True, "errors": [], "pages": [p for p in pages if p.strip()][:200],
+            "info": dict(l.split(":", 1) for l in info.splitlines() if ":" in l),
+            "notes": [f"pdftotext -layout, {len([p for p in pages if p.strip()])} page(s)"]}
+
+
+KINDS = {"pdftext": check_pdftext, "sql": check_sql, "prisma": check_prisma, "ts": check_ts, "openapi": check_openapi,
          "mermaid": check_mermaid, "regex": check_regex, "cron": check_cron}
 
 

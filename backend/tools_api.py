@@ -34,9 +34,10 @@ def mount(app: FastAPI) -> None:
     app.mount("/api/tools/files", StaticFiles(directory=PAGES, html=True), name="tool-files")
 
 IMAGE = os.environ.get("X3_TOOLS_IMAGE", "redline-tools")
-KINDS = ("sql", "prisma", "ts", "openapi", "mermaid", "regex", "cron")
+KINDS = ("sql", "prisma", "ts", "openapi", "mermaid", "regex", "cron", "pdftext")
 BUILD = "docker build -f docker/tools/tools.Dockerfile -t redline-tools docker/tools"
 LIMIT = 400_000                  # characters: a check is for a tool's output, not a dump
+PDF_LIMIT = 20_000_000           # a datasheet PDF, as base64
 TIMEOUT = 180
 # Two at a time: a check starts a database or a browser, and a person
 # pressing Check twice should not start four.
@@ -71,9 +72,10 @@ async def check(body: CheckIn) -> dict:
         raise HTTPException(400, f"unknown check {body.kind!r}; one of {', '.join(KINDS)}")
     req = {**body.extra, "kind": body.kind, "input": body.input}
     payload = json.dumps(req)
-    if len(payload) > LIMIT:
+    limit = PDF_LIMIT if body.kind == "pdftext" else LIMIT
+    if len(payload) > limit:
         raise HTTPException(413, f"too large to check ({len(payload)} characters, "
-                                 f"the limit is {LIMIT})")
+                                 f"the limit is {limit})")
     if not have_image():
         raise HTTPException(503, f"the tools image is not built: {BUILD}")
     argv = ["docker", "run", "--rm", "-i", "--network", "none",

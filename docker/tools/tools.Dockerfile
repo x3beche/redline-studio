@@ -29,10 +29,12 @@ RUN curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends google-chrome-stable \
  && rm -rf /var/lib/apt/lists/*
 
-# PostgreSQL to run generated SQL in; PCRE2 for the regex dialect.
+# PostgreSQL to run generated SQL in; PHP for the regex dialect - its preg_*
+# functions are PCRE2 itself, on the whole text, with the real flags; poppler
+# to read the text out of a datasheet PDF.
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      postgresql-16 pcre2-utils xz-utils \
+      postgresql-16 pcre2-utils xz-utils php-cli poppler-utils \
  && rm -rf /var/lib/apt/lists/*
 
 # The Python side - YAML, the OpenAPI validator, croniter - in a virtualenv
