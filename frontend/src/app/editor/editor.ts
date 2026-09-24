@@ -79,7 +79,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   log = signal<LogLine[]>([]);
   run = signal<Run | null>(null);
   /** Whether `run` is this room's yet, after a switch of rooms. */
-  runKnown = signal(true);
+  runKnown = signal(false);
   logOpen = signal(true);
   private builtAt = '';
   private lastRunStatus = '';
@@ -358,10 +358,12 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (into && task.parentElement !== into) into.appendChild(task);
   }
 
-  /** Whether the running card has its place on screen in this room - then
-   *  it is not drawn in the queue as well. */
+  /** Whether the running card is kept out of the queue in this room. */
   taskDocked(): boolean {
-    return this.picked.room() === 'cad' || !!this.picked.taskSlot();
+    // Every room has its place for it - the 3D tree, or the foot of a
+    // room's frame. While that place is still being drawn the card waits
+    // out of sight; it is never drawn in the queue on its way there.
+    return true;
   }
 
   private dockFreezeButton() {
