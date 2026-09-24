@@ -485,7 +485,9 @@ Traps already hit in this codebase:
 
 ## The Tools tab
 
-Read **[TOOLS.md](TOOLS.md)**, and only when a task is about a tool.
+Read **[TOOLS.md](TOOLS.md)** when a task is about a tool, or before you
+work out an engineering value by hand: `find_tool` (MCP) finds the tool for
+it and `run_tool` runs it.
 
 ## Architecture
 

@@ -1,0 +1,33 @@
+{
+  "id": "current-sense",
+  "name": "Current Sense Designer",
+  "blurb": "shunt value, its power and the amplifier gain for a range and an ADC input",
+  "group": "pcb",
+  "rooms": ["pcb", "embedded"],
+  "keywords": ["current sense", "shunt", "sense resistor", "current shunt amplifier", "csa", "ina180", "ina181", "ina240", "ina219", "adc", "gain", "low-side", "high-side", "milliohm"],
+  "intro": "Chooses the largest standard shunt that keeps the sense voltage under your limit, then the largest amplifier gain that keeps full current inside the ADC range (with headroom). It reports the shunt's dissipation, the resolution per ADC step and the error the amplifier's offset adds.",
+  "inputs": [
+    { "key": "imax", "label": "Full-scale current", "type": "number", "unit": "A", "default": "5" },
+    { "key": "dir", "label": "Direction", "type": "select", "default": "uni",
+      "options": [["uni", "Unidirectional (0 … Imax)"], ["bi", "Bidirectional (±Imax, output at mid-scale)"]] },
+    { "key": "vsh", "label": "Max shunt voltage", "type": "number", "unit": "mV", "default": "50",
+      "help": "10–100 mV is usual: lower wastes less power, higher resolves small currents better." },
+    { "key": "vfs", "label": "ADC full scale", "type": "number", "unit": "V", "default": "3.3" },
+    { "key": "bits", "label": "ADC resolution", "type": "number", "unit": "bits", "default": "12" },
+    { "key": "head", "label": "Use of ADC range at Imax", "type": "number", "unit": "%", "default": "90",
+      "help": "Leaves room for the amplifier's output swing and for overload." },
+    { "key": "gains", "label": "Amplifier gains available", "type": "select", "default": "ina18x",
+      "options": [["ina18x", "20 / 50 / 100 / 200 (INA180/181, INA240)"], ["ina21x", "50 / 75 / 100 / 200 / 500 / 1000 (INA21x)"], ["ina199", "50 / 100 / 200 (INA199)"], ["any", "Any gain (op-amp or instrumentation amp)"]] },
+    { "key": "vos", "label": "Amplifier input offset (max)", "type": "number", "unit": "µV", "default": "150",
+      "help": "Datasheet max: INA181 ≈ 150 µV, INA240 ≈ 25 µV, general op-amp 0.5–5 mV." }
+  ],
+  "examples": [
+    { "title": "5 A motor current into a 3.3 V 12-bit ADC with an INA181", "input": { "imax": "5", "dir": "uni", "vsh": "50", "vfs": "3.3", "bits": "12", "head": "90", "gains": "ina18x", "vos": "150" } },
+    { "title": "±20 A battery current, bidirectional, INA240 into a 16-bit ADC", "input": { "imax": "20", "dir": "bi", "vsh": "40", "vfs": "5", "bits": "16", "head": "90", "gains": "ina18x", "vos": "25" } }
+  ],
+  "usage": "Give the full-scale current in A, uni or bi direction, the largest shunt voltage you accept in mV, the ADC full scale in V and its bits, the share of the ADC range to use at full current in %, the available gain set (ina18x, ina21x, ina199 or any) and the amplifier's maximum offset in µV. It returns the shunt value in ohms, its dissipation and a suggested power rating and size, the gain, output voltage and ADC counts at full current, the current per ADC step and the offset-induced current error. Use it for any shunt-plus-amplifier current measurement into an ADC.",
+  "sources": [
+    "Vout = G·I·R (bidirectional: Vref + G·I·R, Vref at mid-scale); shunt selection trade-off and gain options - TI INA180 and INA240 datasheets, application and layout sections",
+    "Shunt package ratings are typical metal-strip values; check the chosen part's derating curve"
+  ]
+}

@@ -154,8 +154,11 @@ function drawChart(c) {
   const W = 560, H = 220, L = 46, R = 12, T = 12, B = 30;
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'k-chart', role: 'img', 'aria-label': c.title || 'chart' });
   const all = c.series.flatMap((se) => se.y).filter(Number.isFinite);
-  let lo = Math.min(0, ...all), hi = Math.max(...all, 1e-12);
-  if (hi === lo) hi = lo + 1;
+  // The axis includes zero for bars; lines (a dB response, all below zero)
+  // keep to their data. A flat series still gets a visible range.
+  let lo = Math.min(...all), hi = Math.max(...all);
+  if (c.type === 'bars' || !all.length) { lo = Math.min(0, lo || 0); hi = Math.max(0, hi || 0); }
+  if (!(hi > lo)) { const pad = Math.abs(hi) * 0.1 || 1; lo -= pad; hi += pad; }
   const n = c.x.length;
   const X = (i) => L + (n <= 1 ? 0 : (i * (W - L - R)) / (c.type === 'bars' ? n : n - 1)) + (c.type === 'bars' ? (W - L - R) / n / 2 : 0);
   const Y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
@@ -177,7 +180,8 @@ function drawChart(c) {
       se.y.forEach((v, i) => {
         if (!Number.isFinite(v)) return;
         const x = X(i) - (bw * c.series.length) / 2 + si * bw;
-        const r = s('rect', { x, y: Math.min(Y(v), Y(0)), width: bw - 1, height: Math.abs(Y(v) - Y(0)), rx: 2, class: cls });
+        const base = Y(Math.max(lo, Math.min(hi, 0)));
+        const r = s('rect', { x, y: Math.min(Y(v), base), width: bw - 1, height: Math.abs(Y(v) - base), rx: 2, class: cls });
         const tt = s('title'); tt.textContent = `${se.name}: ${c.x[i]} → ${fmtNum(v, 4)}`; r.append(tt); svg.append(r);
       });
     } else {

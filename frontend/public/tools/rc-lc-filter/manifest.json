@@ -1,0 +1,32 @@
+{
+  "id": "rc-lc-filter",
+  "name": "RC / LC Filter Designer",
+  "blurb": "component values from a cutoff frequency, with the magnitude response drawn",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["rc filter", "lc filter", "low-pass", "high-pass", "cutoff frequency", "corner frequency", "-3 db", "butterworth", "bessel", "bode", "anti-aliasing", "emi filter", "second order"],
+  "intro": "Gives R and C (first-order RC) or L and C (second-order LC into a resistive load R) so the −3 dB point lands on the cutoff you ask for, then snaps them to standard values and draws the response those values really give. For LC the alignment sets Q; the −3 dB point is kept at the cutoff for every alignment.",
+  "inputs": [
+    { "key": "topo", "label": "Filter", "type": "select", "default": "rc-lp",
+      "options": [["rc-lp", "RC low-pass (1st order)"], ["rc-hp", "RC high-pass (1st order)"], ["lc-lp", "LC low-pass (2nd order, series L, shunt C)"], ["lc-hp", "LC high-pass (2nd order, series C, shunt L)"]] },
+    { "key": "fc", "label": "Cutoff (−3 dB)", "type": "number", "unit": "Hz", "default": "1k" },
+    { "key": "r", "label": "R (RC) or load resistance (LC)", "type": "number", "unit": "Ω", "default": "10k",
+      "help": "RC: the resistor you want. LC: the resistance the filter drives, which sets its damping." },
+    { "key": "c", "label": "Fix C instead (RC only)", "type": "number", "unit": "F", "default": "", "required": false,
+      "help": "Leave empty to fix R; write e.g. 100n to fix C and get R." },
+    { "key": "align", "label": "LC alignment", "type": "select", "default": "butterworth",
+      "options": [["butterworth", "Butterworth, Q 0.707 (flattest)"], ["bessel", "Bessel, Q 0.577 (best step response)"], ["critical", "Critically damped, Q 0.5"], ["cheby1", "Chebyshev 1 dB, Q 0.957 (steeper, peaks)"]] },
+    { "key": "series", "label": "Resistor series", "type": "select", "default": "E24", "options": ["E12", "E24", "E96"],
+      "help": "Capacitors and inductors are snapped to E12." }
+  ],
+  "examples": [
+    { "title": "Anti-aliasing RC low-pass at 1 kHz with 10 kΩ", "input": { "topo": "rc-lp", "fc": "1k", "r": "10k", "c": "", "align": "butterworth", "series": "E24" } },
+    { "title": "LC low-pass at 10 MHz into 50 Ω, Butterworth", "input": { "topo": "lc-lp", "fc": "10M", "r": "50", "c": "", "align": "butterworth", "series": "E24" } }
+  ],
+  "usage": "Give topo (rc-lp, rc-hp, lc-lp, lc-hp), the −3 dB cutoff in Hz, R in ohms (the resistor for RC, the load for LC), optionally C in farads to fix instead of R (RC only), the LC alignment (butterworth, bessel, critical, cheby1) and the resistor series. It returns the exact and standard component values, the cutoff and Q the standard values give, attenuation and phase at multiples of the cutoff, and the magnitude response as chart data. Use it for anti-aliasing, decoupling, EMI and simple audio or RF filters.",
+  "sources": [
+    "First order: fc = 1/(2π·R·C)",
+    "Second order into load R: H = 1/(1 − x² + j·x/Q), x = ω/ω0, ω0 = 1/√(LC), Q = R·√(C/L) (high-pass: −x² in the numerator) - e.g. Horowitz & Hill, The Art of Electronics, 3rd ed., ch. 1 and 6",
+    "Alignment Q values for 2nd order: Butterworth 0.7071, Bessel 0.5773, Chebyshev 1 dB 0.9565 - standard filter tables (e.g. Williams & Taylor, Electronic Filter Design Handbook)"
+  ]
+}

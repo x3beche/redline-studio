@@ -1,0 +1,51 @@
+{
+  "id": "power-rail-tree",
+  "name": "Power Rail Tree",
+  "blurb": "supply rails as a tree with each branch's current budget and total power",
+  "group": "pcb",
+  "rooms": ["pcb", "embedded"],
+  "keywords": ["power tree", "power budget", "current budget", "rail", "supply tree", "ldo", "buck", "regulator", "efficiency", "power dissipation", "pdn", "power distribution"],
+  "intro": "List each source, regulator and load with the rail it hangs from. Currents are summed from the leaves up: an LDO draws its output current from its parent, a switcher draws Vout·Iout/(η·Vin), so every branch shows its current, its loss and how close it is to its rating.",
+  "inputs": [
+    { "key": "rails", "label": "Rails, regulators and loads", "type": "table",
+      "help": "Parent is the name of the rail it is fed from (empty for a source). Load A is current drawn directly from this rail by things not listed as rows. Efficiency applies to switchers only. For a load row, V is ignored (it runs at its parent's voltage).",
+      "columns": [
+        { "key": "name", "label": "Name", "default": "" },
+        { "key": "parent", "label": "Parent", "default": "" },
+        { "key": "type", "label": "Type", "type": "select", "options": ["source", "switcher", "ldo", "load"], "default": "load" },
+        { "key": "v", "label": "V out", "default": "" },
+        { "key": "load", "label": "Load A", "default": "0" },
+        { "key": "limit", "label": "Rating A", "default": "" },
+        { "key": "eff", "label": "Eff. %", "default": "" }
+      ],
+      "default": [
+        { "name": "12V in", "parent": "", "type": "source", "v": "12", "load": "0", "limit": "3", "eff": "" },
+        { "name": "5V buck", "parent": "12V in", "type": "switcher", "v": "5", "load": "0", "limit": "2", "eff": "90" },
+        { "name": "3V3 LDO", "parent": "5V buck", "type": "ldo", "v": "3.3", "load": "0", "limit": "0.5", "eff": "" },
+        { "name": "MCU", "parent": "3V3 LDO", "type": "load", "v": "", "load": "0.08", "limit": "", "eff": "" },
+        { "name": "Sensors", "parent": "3V3 LDO", "type": "load", "v": "", "load": "0.12", "limit": "", "eff": "" },
+        { "name": "USB hub", "parent": "5V buck", "type": "load", "v": "", "load": "0.5", "limit": "", "eff": "" },
+        { "name": "Motor driver", "parent": "12V in", "type": "load", "v": "", "load": "1.2", "limit": "", "eff": "" }
+      ] }
+  ],
+  "examples": [
+    { "title": "12 V board: 5 V buck, 3.3 V LDO, a motor on the input rail",
+      "input": { "rails": [
+        { "name": "12V in", "parent": "", "type": "source", "v": "12", "load": "0", "limit": "3", "eff": "" },
+        { "name": "5V buck", "parent": "12V in", "type": "switcher", "v": "5", "load": "0", "limit": "2", "eff": "90" },
+        { "name": "3V3 LDO", "parent": "5V buck", "type": "ldo", "v": "3.3", "load": "0", "limit": "0.5", "eff": "" },
+        { "name": "MCU", "parent": "3V3 LDO", "type": "load", "v": "", "load": "0.08", "limit": "", "eff": "" },
+        { "name": "Sensors", "parent": "3V3 LDO", "type": "load", "v": "", "load": "0.12", "limit": "", "eff": "" },
+        { "name": "USB hub", "parent": "5V buck", "type": "load", "v": "", "load": "0.5", "limit": "", "eff": "" },
+        { "name": "Motor driver", "parent": "12V in", "type": "load", "v": "", "load": "1.2", "limit": "", "eff": "" } ] } },
+    { "title": "Li-ion cell: 1.8 V core LDO and a 5 V boost",
+      "input": { "rails": [
+        { "name": "Battery", "parent": "", "type": "source", "v": "3.7", "load": "0", "limit": "2", "eff": "" },
+        { "name": "5V boost", "parent": "Battery", "type": "switcher", "v": "5", "load": "0.3", "limit": "1", "eff": "88" },
+        { "name": "3V0 LDO", "parent": "Battery", "type": "ldo", "v": "3.0", "load": "0.05", "limit": "0.3", "eff": "" },
+        { "name": "1V8 LDO", "parent": "3V0 LDO", "type": "ldo", "v": "1.8", "load": "0.1", "limit": "0.2", "eff": "" } ] } }
+  ],
+  "usage": "Pass rails as an array of rows {name, parent, type: source|switcher|ldo|load, v (volts out), load (amps drawn directly on this rail), limit (regulator or source rating in amps), eff (switcher efficiency in percent)}. Numbers may be strings with engineering prefixes (\"120m\"). It returns, per node, output and input current, power and loss and the use of its rating (also as result.tree in depth-first order), plus total input power, delivered power, losses and efficiency; warnings flag over-rated regulators, LDO dropout and hot LDOs. Use it for a board power budget or to size a regulator or input connector.",
+  "sources": ["Energy balance: switcher Iin = Vout·Iout / (η·Vin); linear regulator Iin = Iout (quiescent current neglected), loss (Vin−Vout)·Iout - e.g. TI SLVA079 'Understanding the terms and definitions of LDO voltage regulators' and TI SLVA477 (buck power stage)", "80 % continuous-use derating is a common design rule of thumb"],
+  "view": true
+}

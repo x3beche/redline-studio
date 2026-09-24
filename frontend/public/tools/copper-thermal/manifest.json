@@ -1,0 +1,36 @@
+{
+  "id": "copper-thermal",
+  "name": "Copper Area Thermal",
+  "blurb": "temperature rise of a power part from the copper area under it",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["copper pour", "thermal pad", "heat spreading", "pcb heatsink", "theta ja", "θja", "junction temperature", "dpak", "sot-223", "exposed pad", "thermal resistance", "copper area", "temperature rise"],
+  "intro": "Treats the copper around the part as a round fin: heat spreads out through the copper and leaves both board faces by convection and radiation. It answers the junction temperature for a given area, and the area needed to stay under the limit. The bare FR4 around the pour is ignored, so the answer errs on the warm side.",
+  "inputs": [
+    { "key": "p", "label": "Power in the part", "type": "number", "unit": "W", "default": "1.2" },
+    { "key": "ta", "label": "Ambient", "type": "number", "unit": "°C", "default": "40" },
+    { "key": "area", "label": "Copper area (one layer)", "type": "number", "unit": "mm²", "default": "645",
+      "help": "645 mm² = 1 in². A 25 × 25 mm pour is 625 mm²." },
+    { "key": "pad", "label": "Package thermal pad", "type": "number", "unit": "mm²", "default": "40",
+      "help": "Where the heat enters: DPAK tab ≈ 40, D2PAK ≈ 90, SOT-223 tab ≈ 11, 3×3 QFN pad ≈ 3." },
+    { "key": "oz", "label": "Copper weight", "type": "select", "default": "1",
+      "options": [["0.5", "0.5 oz (18 µm)"], ["1", "1 oz (35 µm)"], ["2", "2 oz (70 µm)"], ["3", "3 oz (105 µm)"]] },
+    { "key": "layers", "label": "Copper layers with this area", "type": "select", "default": "1",
+      "options": [["1", "1 - top only"], ["2", "2 - top + bottom, stitched with vias"], ["4", "4 - all layers, stitched with vias"]] },
+    { "key": "tjc", "label": "Junction to board (θJB / θJC bottom)", "type": "number", "unit": "°C/W", "default": "3",
+      "help": "From the datasheet: θJC(bot) for tab or exposed-pad parts." },
+    { "key": "tjmax", "label": "Max junction", "type": "number", "unit": "°C", "default": "125" },
+    { "key": "air", "label": "Air speed", "type": "number", "unit": "m/s", "default": "0", "help": "0 = still air, board vertical." }
+  ],
+  "examples": [
+    { "title": "DPAK regulator dropping 1.5 W on 1 in² of 1 oz copper", "input": { "p": "1.5", "ta": "40", "area": "645", "pad": "40", "oz": "1", "layers": "1", "tjc": "3", "tjmax": "125", "air": "0" } },
+    { "title": "3×3 QFN buck, 0.6 W, 4-layer board with stitched planes", "input": { "p": "0.6", "ta": "50", "area": "400", "pad": "3", "oz": "1", "layers": "4", "tjc": "8", "tjmax": "125", "air": "0" } }
+  ],
+  "usage": "Give the dissipated power in W, ambient in °C, the copper area in mm² (per layer), the package thermal pad area in mm², copper weight in oz (0.5/1/2/3), the number of via-stitched layers carrying that area (1, 2 or 4), the package's junction-to-board resistance in °C/W, the maximum junction temperature and the air speed in m/s. It returns the copper-to-ambient thermal resistance, board and junction temperatures, the margin, the power allowed at this area and the area needed for this power, plus a sweep over area. Use it to size a copper pour under a DPAK, SOT-223 or exposed-pad part before reaching for a heat sink.",
+  "sources": [
+    "Annular fin efficiency, Schmidt approximation η = tanh(m·r0·φ)/(m·r0·φ), φ = (R/r0 − 1)(1 + 0.35·ln(R/r0)); m = √(h/(k·t)) - Incropera & DeWitt, Fundamentals of Heat and Mass Transfer, ch. 3 (extended surfaces)",
+    "Simplified air correlations h = 1.42·(ΔT/L)^0.25 (natural, laminar vertical plate) and h = 3.93·√(V/L) (forced, laminar) - Ellison, Thermal Computations for Electronic Equipment",
+    "Radiation h_r = ε·σ·(Ts² + Ta²)(Ts + Ta), ε = 0.9 for solder mask",
+    "Cross-check: ≈ 55 °C/W for 1 in² of 1 oz copper around a DPAK tab in still air, in line with manufacturers' θJA-vs-pad-area curves (roughly 45–60 °C/W)"
+  ]
+}

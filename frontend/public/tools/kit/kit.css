@@ -62,7 +62,10 @@ code, pre, .k-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
 }
 .k-field textarea { resize: vertical; }
 .k-field input.k-bad { border-color: var(--danger); }
+.k-tedit { overflow-x: auto; }
 .k-tedit table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+.k-tedit td { min-width: 64px; }
+.k-tedit td:last-child { min-width: 0; }
 .k-tedit th { text-align: left; font-weight: 500; font-size: 11px; color: var(--ink-soft); padding: 2px 3px; }
 .k-tedit td { padding: 2px 3px; }
 
@@ -88,7 +91,7 @@ code, pre, .k-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
 .k-table th { text-align: left; font-weight: 500; color: var(--ink-soft); border-bottom: 1px solid var(--line); padding: 3px 6px; }
 .k-table td { border-bottom: 1px solid var(--line-soft); padding: 3px 6px; font-family: "IBM Plex Mono", ui-monospace, monospace; }
 
-.k-chart { width: 100%; height: auto; display: block; }
+.k-chart { width: 100%; height: auto; max-height: 280px; display: block; }
 .k-grid { stroke: var(--line-soft); stroke-width: 1; }
 .k-axis { fill: var(--ink-soft); font: 10px "IBM Plex Mono", ui-monospace, monospace; }
 .k-line { fill: none; stroke-width: 2; }

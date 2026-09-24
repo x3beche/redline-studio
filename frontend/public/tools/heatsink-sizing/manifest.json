@@ -1,0 +1,33 @@
+{
+  "id": "heatsink-sizing",
+  "name": "Heat Sink Sizing",
+  "blurb": "required thermal resistance and heat sink size from power and ambient",
+  "group": "pcb",
+  "rooms": ["pcb", "cad"],
+  "keywords": ["heat sink", "heatsink", "thermal resistance", "theta sa", "θsa", "junction temperature", "to-220", "to-247", "thermal interface", "thermal pad", "grease", "cooling", "volumetric resistance", "fan"],
+  "intro": "Works the series thermal path junction → case → sink → air backwards: the sink may have at most θSA = (Tj,max − margin − Ta)/P − θJC − θCS. The heat sink volume is estimated from typical volumetric thermal resistance for the chosen air flow (Aavid/Boyd design guidance).",
+  "inputs": [
+    { "key": "p", "label": "Power to remove", "type": "number", "unit": "W", "default": "10" },
+    { "key": "ta", "label": "Ambient (air at the sink)", "type": "number", "unit": "°C", "default": "40",
+      "help": "Air inside an enclosure is often 10–20 °C above room." },
+    { "key": "tjmax", "label": "Max junction", "type": "number", "unit": "°C", "default": "125" },
+    { "key": "margin", "label": "Design margin", "type": "number", "unit": "°C", "default": "10" },
+    { "key": "rjc", "label": "Junction to case θJC", "type": "number", "unit": "°C/W", "default": "1.5" },
+    { "key": "rcs", "label": "Case to sink θCS", "type": "number", "unit": "°C/W", "default": "0.5",
+      "help": "TO-220 size: grease 0.3–0.5, phase-change 0.3, silicone pad 1–2.5, mica + grease 1–1.5, dry 1–1.5. Scale by area for other packages." },
+    { "key": "air", "label": "Air flow", "type": "select", "default": "natural",
+      "options": [["natural", "Natural convection"], ["1", "1 m/s (200 lfm)"], ["2.5", "2.5 m/s (500 lfm)"], ["5", "5 m/s (1000 lfm)"]] },
+    { "key": "rja", "label": "Package θJA without sink (optional)", "type": "number", "unit": "°C/W", "default": "62",
+      "help": "From the datasheet, e.g. TO-220 ≈ 62, TO-247 ≈ 40, DPAK on minimum pad ≈ 100. Leave empty to skip.", "required": false }
+  ],
+  "examples": [
+    { "title": "Linear regulator in TO-220 burning 10 W, natural convection", "input": { "p": "10", "ta": "40", "tjmax": "125", "margin": "10", "rjc": "1.5", "rcs": "0.5", "air": "natural", "rja": "62" } },
+    { "title": "TO-247 MOSFET, 35 W, fan at 2.5 m/s, insulating pad", "input": { "p": "35", "ta": "45", "tjmax": "175", "margin": "20", "rjc": "0.4", "rcs": "1.2", "air": "2.5", "rja": "40" } }
+  ],
+  "usage": "Give the dissipated power in W, ambient in °C, maximum junction and a design margin in °C, θJC and θCS in °C/W, the air flow (natural, 1, 2.5 or 5 m/s) and optionally the package's θJA without a sink. It returns the maximum sink-to-ambient θSA, the case and sink temperatures when the sink just meets it, an estimated heat sink volume range in cm³ and a table of typical heat sink classes that meet it. Use it before choosing a heat sink part; then check the chosen part's θSA curve at this power.",
+  "sources": [
+    "Series thermal path Tj = Ta + P·(θJC + θCS + θSA) - e.g. Texas Instruments SPRA953 'Semiconductor and IC package thermal metrics'",
+    "Volumetric thermal resistance: natural 500–800, 1 m/s 150–250, 2.5 m/s 80–150, 5 m/s 50–80 cm³·°C/W - Aavid Thermalloy (Boyd) 'How to select a heat sink'",
+    "Heat sink class ranges in the table are a rule of thumb from catalogue data"
+  ]
+}

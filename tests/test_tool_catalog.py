@@ -109,3 +109,11 @@ def test_every_real_tool_fits_the_window_at_once():
 def test_the_keyword_fallback_finds_the_obvious_tool():
     picks = tool_router.keyword_picks("pull-up resistor for SDA and SCL", tools_api.catalog())
     assert picks and picks[0]["id"] == "i2c-pullup"
+
+
+def test_tools_md_lists_every_tool():
+    """TOOLS.md's catalog section is written from the manifests
+    (tools/tools_md.py); a tool missing from it was added without rerunning."""
+    doc = (PAGES.parent.parent.parent / "TOOLS.md").read_text()
+    missing = [m.parent.name for m in MANIFESTS if f"`{m.parent.name}`" not in doc]
+    assert not missing, f"not in TOOLS.md (run tools/tools_md.py): {missing}"

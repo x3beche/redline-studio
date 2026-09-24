@@ -1,35 +1,123 @@
 # Tools
 
-The **Tools** tab: small calculators and sketch pads that serve every room. It
-sits on the top bar just left of Analytics. The tools are listed on the left;
-the one you pick fills the room, and the tab comes back to it next time.
+The **Tools** tab: calculators, references, checkers and sketch pads that
+serve every room - PCB, embedded, mechanical, web, mobile and the project as
+a whole. It sits on the top bar just left of Analytics. Agents reach the
+same tools over MCP.
 
-This file is the whole story of the tab. Read it only when a task is about a
-tool - using one, fixing one or adding one. Nothing else in the repository
-depends on it.
+This file is the whole story of the tab. Read it when a task is about a tool
+- using one, fixing one, adding one - or before you work out an engineering
+value by hand: there is probably a tool for it.
+
+## For agents: find a tool, read its manual, run it
+
+The MCP server (`tools/mcp_server.py`, started by `.mcp.json`) has four tools
+for this:
+
+| MCP tool | What it does |
+|---|---|
+| `find_tool` | `{task, room?, limit?}` - describe what you are trying to work out; a small model reads a one-line index of **every** tool and picks the best 1-3. Each pick comes back with its manual. |
+| `tool_manual` | `{id}` - a tool's inputs (keys, units, defaults, options), an example input, what it answers, its sources, and whether it can be run. |
+| `run_tool` | `{id, input}` - runs the tool offline in the tools image and returns `{values, tables, texts, charts, warnings, notes}`. Numbers may be engineering-notation strings: `"4k7"`, `"100n"`, `"3.3V"`. |
+| `tool_data` | `{id, data?, project?}` - reads (no `data`) or replaces a project tool's shared record: `interface-contract`, `project-constants`, `decision-log`, `glossary`, `req-test-matrix`. Every room and agent then uses the same values. |
+
+A typical call: `find_tool {task: "pull-ups for a 400 kHz I2C bus with three
+sensors"}` → `i2c-pullup` with its manual → `run_tool {id: "i2c-pullup",
+input: {vdd: "3.3", mode: "fast", cb: "120"}}`. Read the `warnings` - they
+say when a formula is outside its range or a result is unsafe. Set `X3_AGENT`
+to your name; it is sent with every call and shows in the usage.
+
+Interactive tools (Grid Sketch, Screenshot Annotator, the editors) have a
+manual but cannot be run by an agent; the manual says so.
+
+### How the picker works
+
+`backend/tool_router.py`. The index is one line per tool - `id | what it does
+| rooms` - and the whole request (instructions, the index, the task, room for
+the answer) is held under **8192 tokens**, so a small, cheap model with an 8k
+window can read every tool at once. If a catalog ever outgrows that, the
+lines are ranked by a keyword score and the best that fit are sent. The model
+is the app's OpenRouter model (`summarise.MODEL`, key in `.env`, server side
+only); its calls are billed in Analytics under surface `tools`, kind
+`tool-router`. Without a key, or when the model fails, the keyword score
+(a small BM25 over names, blurbs and keywords) answers instead. The API is
+`POST /api/tools/find`.
+
+## For people: the tab
+
+- **Search** - press `/` anywhere in the tab. Words match names, keywords,
+  descriptions and rooms; arrows move through the results, Enter opens, Esc
+  clears.
+- **Filters** - ★ shows only favourites; the room chips (PCB, Embedded, 3D,
+  Web, Mobile, Analytics) show the tools for that room.
+- **Favourites** - the ★ beside a tool, or in its header. Favourites and the
+  last few tools used are listed first.
+- **Groups** - PCB & electronics, Embedded, Mechanical & 3D, Web & design,
+  Mobile, Code, data & prompts, Project; click a heading to fold it.
+- Each tool's header shows **MCP** when agents can run it, and its uses over
+  30 days.
+
+Favourites, recents and folded groups are kept in this browser. Uses are
+counted on the server (below).
+
+## Usage, in Analytics
+
+Every open, run, copy, check, find and manual lookup is one row in
+`tool_usage` (per workspace) - the tool, the event, the surface (`ui` for
+people in the app, `mcp` for agents, `api`), when, and who
+(`actors.current()`). `GET /api/tools/usage/summary?days=N` sums it; the
+Analytics tab's **Tools** section draws it: uses by day, people against
+agents, the most used, and every tool nobody used.
 
 ## The tools
 
-The list is grouped: **Electronics**, **Design & UI**, and **Code, data &
-prompts**.
+<!-- catalog:start -->
+24 tools. **MCP** marks the ones agents can run with `run_tool`.
 
-| Tool | What it does | Mostly for |
-|---|---|---|
-| **Units & Numbers** | mm, mil, inch and µm; decimal, hex, binary and octal, with the two's complement at 8 to 64 bits; a UART's BRR and baud error for a clock (STM32 16× oversampling); the timer PSC/ARR pair nearest a frequency. | Embedded, PCB |
-| **Trace Width** | How wide a track must be for a current on an outer and an inner layer (IPC-2221), with its resistance, voltage drop and loss over a length; what a given width carries; what a via carries. | PCB |
-| **Resistor & LED** | Ohm's law from any two of V, I, R and P; an LED's series resistor rounded up to an E12/E24/E96 value, with the current and package it then needs; the standard divider pair nearest a Vout, with its current and source impedance. | PCB, Embedded |
-| **Grid Sketch** | Draw a layout on a grid and copy it as a prompt, CSS, grid areas, Tailwind, ASCII or JSON. | Web, Mobile |
-| **Screenshot Annotator** | Paste or drop a screenshot, draw numbered marks (change, remove, add, move, resize, question) with notes; get a fix list with pixel, percent and nine-region positions, a Markdown checklist, JSON, or the marked-up PNG. | Web, Mobile |
-| **Palette Forge** | One colour into seven roles × eleven OKLCH tones, WCAG contrast on each, semantic light/dark tokens, colour-blind preview; out as a prompt, CSS, Tailwind or design-tokens JSON. | Web, Mobile |
-| **Motion Lab** | Shape a cubic-bezier or spring (simulated), set duration, delay and stagger, preview on five motions; out as CSS (`linear()` for springs), Web Animations, Framer Motion or a prompt, each with a reduced-motion variant. | Web, Mobile |
-| **Form Builder** | 17 field types, validation, match rules and conditions, a working preview; out as Zod, a TypeScript type, a react-hook-form component, JSON Schema or a prompt. | Web |
-| **Schema Sketch** | Draw tables, columns and relations (1-1, 1-N, N-N with a junction table), with checks; out as PostgreSQL DDL, Prisma, Mermaid erDiagram, JSON or a prompt. | Web, Mobile |
-| **Flow to Mermaid** | Draw a flowchart (six step types, labelled links, groups, undo); out as Mermaid, a step-by-step prompt or JSON, with a mermaid.live link. | any |
-| **API Sketch** | Define endpoints, parameters, bodies and responses, with consistency checks; out as OpenAPI 3.1 YAML, curl, a typed TypeScript client or a prompt. | Web, Mobile |
-| **Regex by Example** | Mark what should and should not match in a text; get an inferred pattern, tunable part by part, in JavaScript, Python and PCRE, explained, with code and a prompt. Also explains a hand-written regex and warns of catastrophic backtracking. | any |
-| **Cron Studio** | Build or type a cron expression; read it in plain English, see the next ten runs in any time zone with DST notes; out as 5-field, Quartz, EventBridge, GitHub Actions, Kubernetes and node-cron. | Web, Embedded |
-| **Data Digest** | Profile a CSV, TSV, JSON or JSONL file in the browser (streamed, nothing uploaded): types, nulls, ranges, anomalies; out as a compact prompt, Markdown, JSON or CREATE TABLE. | any |
-| **Context Packer** | Pack instructions, code, files, logs and notes into one prompt with a token budget, trim and log-clean helpers, and five templates. | any |
+### PCB & electronics
+
+| Tool | id | What it answers | Rooms |
+|---|---|---|---|
+| **Copper Area Thermal** · MCP | `copper-thermal` | temperature rise of a power part from the copper area under it | PCB |
+| **Crystal Load Capacitor** · MCP | `crystal-load` | load capacitors for a crystal from its CL and board stray capacitance | PCB, Embedded |
+| **Current Sense Designer** · MCP | `current-sense` | shunt value, its power and the amplifier gain for a range and an ADC input | PCB, Embedded |
+| **Heat Sink Sizing** · MCP | `heatsink-sizing` | required thermal resistance and heat sink size from power and ambient | PCB, 3D |
+| **I2C Pull-up Calculator** · MCP | `i2c-pullup` | the pull-up resistor range for an I2C bus from its supply, speed and capacitance | PCB, Embedded |
+| **MOSFET Gate Drive Check** · MCP | `mosfet-gate` | switching loss and driver adequacy from gate charge, drive current and frequency | PCB |
+| **Op-Amp Gain Tool** · MCP | `opamp-gain` | gain, offset and bandwidth of inverting and non-inverting stages | PCB |
+| **Power Rail Tree** · MCP | `power-rail-tree` | supply rails as a tree with each branch's current budget and total power | PCB, Embedded |
+| **RC / LC Filter Designer** · MCP | `rc-lc-filter` | component values from a cutoff frequency, with the magnitude response drawn | PCB |
+| **Resistor & LED** | `resistor` | Ohm's law, an LED's series resistor, a divider from standard values | PCB, Embedded |
+| **Trace Width** | `trace-width` | how wide a track must be for a current, by IPC-2221, and what it drops | PCB |
+
+### Embedded
+
+| Tool | id | What it answers | Rooms |
+|---|---|---|---|
+| **Units & Numbers** | `units` | mm, mil and inch; hex, decimal and binary; UART baud and timer periods | Embedded, PCB |
+
+### Web & design
+
+| Tool | id | What it answers | Rooms |
+|---|---|---|---|
+| **Form Builder** | `form-builder` | build a form with its rules, get Zod, types and a React component | Web |
+| **Grid Sketch** | `grid-sketch` | draw a layout on a grid, copy it as a prompt, CSS or JSON | Web, Mobile |
+| **Motion Lab** | `motion-lab` | shape an easing curve and timing, take it as CSS or JS | Web, Mobile |
+| **Palette Forge** | `palette-forge` | one colour into an accessible palette and light/dark tokens | Web, Mobile |
+| **Screenshot Annotator** | `screenshot-annotator` | mark up a screenshot and turn the marks into a fix list | Web, Mobile |
+
+### Code, data & prompts
+
+| Tool | id | What it answers | Rooms |
+|---|---|---|---|
+| **API Sketch** | `api-sketch` | define endpoints, get OpenAPI, curl and a TypeScript client | Web, Mobile |
+| **Context Packer** | `context-packer` | pack code, logs and notes into one well-built prompt | Web, Embedded, Mobile, PCB, 3D |
+| **Cron Studio** | `cron-studio` | build a cron expression, see when it next runs | Web, Embedded |
+| **Data Digest** | `data-digest` | profile a large CSV or JSON into a compact brief for an LLM | Web, Embedded |
+| **Flow to Mermaid** | `flow-mermaid` | draw a flowchart with boxes and arrows, get Mermaid code | Web, Embedded, Mobile |
+| **Regex by Example** | `regex-example` | pick what should match in a text and get the regex, explained | Web, Embedded |
+| **Schema Sketch** | `schema-sketch` | draw tables and relations, get SQL, Prisma and Mermaid | Web, Mobile |
+<!-- catalog:end -->
 
 The calculators read values the way an engineer writes them: `4k7`, `2M2`,
 `100n`, `10m` (milli) and `3.3V` all work. `m` is milli and `M` is mega.
@@ -37,53 +125,62 @@ The calculators read values the way an engineer writes them: `4k7`, `2M2`,
 ## Where it lives
 
 ```
+frontend/public/tools/
+  <id>/manifest.json   every tool: name, blurb, group, rooms, keywords, inputs, usage
+  <id>/tool.js         a kit tool's calculation: export function run(input) - pure, runs in Node
+  <id>/index.html      a kit tool's page: three lines that call the kit
+  <id>/view.js         optional: a drawing the standard blocks cannot make
+  kit/kit.js           the kit: form, results, Prompt/JSON outputs, Copy, usage pings
+  kit/kit.css          the kit's look, in the colour names the app rewrites
+  kit/eng.js           engineering notation, E12/E24/E96, nearest standard value
+  kit/cli.mjs          runs one tool in Node: how run_tool and the tests call it
+  <name>.html          the older single-page tools (Grid Sketch, Palette Forge, ...)
 frontend/src/app/tools/
-  registry.ts        the list: one entry per tool
-  room.ts, room.css  the tab: the list on the left, the tool on the right
-  frame.ts           shows a tool that is a self-contained HTML page
-  eng.ts             shared: engineering notation, E12/E24/E96, nearest standard value
-  calc.css           shared: the calculators' look (sections, fields, result boxes)
-  units/ trace-width/ resistor/     native calculators (Angular components)
-  grid-sketch/ palette-forge/ ...   one folder per page tool: a one-line component
-frontend/public/tools/<id>.html      each page tool itself, self-contained
+  room.ts, room.css    the tab: search, filters, favourites, the list, the tool
+  registry.ts          groups, rooms, and the tools that are Angular components
+  frame.ts             frames a page and dresses it in the app's colours
+  units/ trace-width/ resistor/     the three Angular calculators
+backend/tools_api.py   catalog, manual, run, find, usage, project records, checks
+backend/tool_router.py the picker
 ```
 
-Each tool is loaded only when it is first opened, so a long list costs the
-first screen nothing.
+The API serves `frontend/public/tools/` itself at `/api/tools/files/`, so a
+tool added while the app runs is there at once - no restart - and the same
+path works in the production build.
 
 ## Adding a tool
 
-1. **Make a folder** `frontend/src/app/tools/<id>/` with `<id>.ts`, a
-   standalone component. A form of figures takes `styleUrl: '../calc.css'` and
-   uses its classes (`calc`, `calc-sec`, `calc-title`, `calc-hint`,
-   `calc-grid`, `calc-f`, `calc-out`, `calc-warn`, `calc-bad`). Copy an
-   existing calculator: `resistor/resistor.ts` is the fullest example.
-2. **Add one entry** to `TOOLS` in `registry.ts`: `id`, `name`, a one-line
-   `blurb`, `size` (`narrow` for a form, `wide` for a drawing surface) and
-   `load: () => import('./<id>/<id>').then(m => m.YourTool)`.
-3. **A self-contained HTML page** instead goes in `frontend/public/tools/`,
-   and its component is one line around it:
-   `<app-tool-frame src="tools/<page>.html" hide=".its-own-title" />`
-   (see `grid-sketch/`). The frame dresses the page in the app's colours: the
-   page must name its colours `--paper`, `--surface`, `--sunken`, `--ink`,
-   `--ink-soft`, `--line`, `--line-soft`, `--accent`, `--accent-ink`,
-   `--danger`, `--warn` and `--ok`, and put its title in `.brand` (hidden in
-   the app). No external requests, no CDN.
-4. **Pick its `group`** in the registry: `electronics`, `design` or `code`.
+Make a folder `frontend/public/tools/<id>/`; `i2c-pullup/` is the reference.
 
-The rules:
+1. **`manifest.json`** - `id` (the folder's name), `name`, `blurb` (one line:
+   what it answers), `group` (`pcb`, `embedded`, `mechanical`, `web`,
+   `mobile`, `code`, `project`), `rooms`, `keywords` (8-15 - the words
+   people and agents search with), `intro`, `inputs`, `examples`, `usage`
+   (for agents: which inputs, in which units, what comes back), `sources`,
+   and `"view": true` if there is a view.js. Input types: `number` (give
+   `unit`; engineering notation accepted), `text`, `textarea`, `select`
+   (`options`), `bool`, `table` (`columns`). Give every input a `default` so
+   the tool shows a real answer on first open.
+2. **`tool.js`** - `export function run(input)` returning `{values, tables,
+   texts, charts, warnings, notes}` (see the head of `kit/kit.js`). Pure: no
+   DOM, no fetch, no clock, no randomness - it must run in Node, where
+   agents call it. Import only from `../kit/eng.js`. Comment each formula
+   with its source; return a warning, never NaN, when an input is out of
+   range.
+3. **`index.html`** - copy the reference's and change the title.
+4. **`view.js`** only if a drawing helps: `export function view(el, result,
+   input)`, colours only from the CSS variables. Put the drawing's numbers
+   in the result too - agents never see the view.
 
-- **Colours come from theme tokens only** (`var(--ink)`, `var(--accent)`,
-  ...). `tests/test_theme.py` reads every file under `tools/` and fails on a
-  literal colour or an undefined token.
-- **Live results, no Calculate button.** Inputs are signals, results are
-  `computed`. A field that is being typed in keeps exactly what was typed.
-- **A `<select>` gets its state from `[selected]` on each option**, not from
-  `[value]` on the select. With options drawn by `@for`, the select's value is
-  set before the options exist and it shows the wrong one.
-- **Say where the formula stops holding.** A figure outside a standard's
-  range gets a `calc-warn` line, not silence.
-- **Shared numbers go in `eng.ts`**, not a copy in each tool.
+Nothing else to register: the catalog, the search, the picker and the MCP
+tools read the manifests. Run the tests (below) and regenerate the catalog
+section of this file with `.venv/bin/python tools/tools_md.py`.
+
+The older kinds - a self-contained page in `public/tools/<name>.html` (give
+its folder a manifest with `"page": "tools/<name>.html"`), or an Angular
+component under `src/app/tools/` (add it to `COMPONENTS` in `registry.ts`,
+and `"native": true` in its manifest) - still work, for tools that are
+editors rather than calculations.
 
 ## The tools image: checks, offline
 
@@ -127,9 +224,20 @@ simply show no Check.
 ## Checking a tool
 
 ```bash
-cd frontend && npx ng build          # no errors; the tool is its own lazy chunk
-cd .. && .venv/bin/python -m pytest tests -q
+.venv/bin/python -m pytest tests/test_tool_catalog.py -q   # every manifest; every kit tool runs its example
+cd frontend && npx ng build
 ```
 
-Then open the app with `?ws=tools`, pick the tool, and check at least one
-result against a figure worked out by hand.
+`tests/test_tool_catalog.py` holds every tool to the contract above, runs
+every kit tool's example in Node and fails on NaN, `undefined` or an empty
+result, and checks that the picker's request for the real catalog fits the
+8192-token window whole. Run a tool the way an agent does:
+
+```bash
+cd frontend/public/tools
+echo '{"vdd": "3.3", "cb": "120"}' | docker run --rm -i --network none \
+  -v "$PWD":/tools:ro --entrypoint node redline-tools /tools/kit/cli.mjs i2c-pullup
+```
+
+Then open it at `/api/tools/files/<id>/` (or in the tab) at a wide and a
+360 px window, and check one answer against a figure worked out by hand.

@@ -1,0 +1,38 @@
+{
+  "id": "mosfet-gate",
+  "name": "MOSFET Gate Drive Check",
+  "blurb": "switching loss and driver adequacy from gate charge, drive current and frequency",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["mosfet", "gate driver", "gate charge", "qg", "qgd", "miller plateau", "switching loss", "conduction loss", "gate resistor", "rise time", "dv/dt", "half-bridge", "pwm", "power loss"],
+  "intro": "Uses the gate-charge method: the drain voltage and current swing while the gate charges Qgs2 + Qgd at the plateau, with the gate current set by the driver, the gate resistors and the plateau voltage. It gives the transition times, switching, conduction and gate-drive losses, and flags a weak driver, a slow edge or a Miller turn-on risk. Hard-switched inductive load assumed.",
+  "inputs": [
+    { "key": "vbus", "label": "Switched voltage (VDS)", "type": "number", "unit": "V", "default": "48" },
+    { "key": "id", "label": "Drain current when switching", "type": "number", "unit": "A", "default": "10" },
+    { "key": "f", "label": "Switching frequency", "type": "number", "unit": "Hz", "default": "100k" },
+    { "key": "duty", "label": "Duty (on time)", "type": "number", "unit": "%", "default": "50" },
+    { "key": "rds", "label": "RDS(on) hot", "type": "number", "unit": "mΩ", "default": "10", "help": "At the operating temperature: about 1.5× the 25 °C value." },
+    { "key": "qg", "label": "Total gate charge Qg", "type": "number", "unit": "nC", "default": "30", "help": "At your drive voltage, from the gate-charge curve." },
+    { "key": "qgs", "label": "Gate-source charge Qgs", "type": "number", "unit": "nC", "default": "8" },
+    { "key": "qgd", "label": "Gate-drain (Miller) charge Qgd", "type": "number", "unit": "nC", "default": "10" },
+    { "key": "vpl", "label": "Miller plateau voltage", "type": "number", "unit": "V", "default": "4.5" },
+    { "key": "vth", "label": "Gate threshold VGS(th)", "type": "number", "unit": "V", "default": "2.5", "help": "Use the minimum for the Miller turn-on check." },
+    { "key": "rgi", "label": "Internal gate resistance", "type": "number", "unit": "Ω", "default": "1.5" },
+    { "key": "rg", "label": "External gate resistor", "type": "number", "unit": "Ω", "default": "4.7" },
+    { "key": "vdrv", "label": "Driver supply", "type": "number", "unit": "V", "default": "12" },
+    { "key": "isrc", "label": "Driver peak source current", "type": "number", "unit": "A", "default": "2" },
+    { "key": "isnk", "label": "Driver peak sink current", "type": "number", "unit": "A", "default": "2" },
+    { "key": "crss", "label": "Reverse transfer capacitance Crss (optional)", "type": "number", "unit": "pF", "default": "40", "required": false,
+      "help": "For the Miller turn-on check in a half-bridge; leave empty to skip." }
+  ],
+  "examples": [
+    { "title": "48 V, 10 A half-bridge leg at 100 kHz with a 2 A driver", "input": { "vbus": "48", "id": "10", "f": "100k", "duty": "50", "rds": "10", "qg": "30", "qgs": "8", "qgd": "10", "vpl": "4.5", "vth": "2.5", "rgi": "1.5", "rg": "4.7", "vdrv": "12", "isrc": "2", "isnk": "2", "crss": "40" } },
+    { "title": "12 V buck at 500 kHz driven straight from a 0.5 A MCU-level driver", "input": { "vbus": "12", "id": "8", "f": "500k", "duty": "30", "rds": "8", "qg": "20", "qgs": "5", "qgd": "6", "vpl": "3", "vth": "1.5", "rgi": "1", "rg": "0", "vdrv": "5", "isrc": "0.5", "isnk": "0.5", "crss": "60" } }
+  ],
+  "usage": "Give VDS in V, drain current in A, frequency in Hz, duty in %, hot RDS(on) in mΩ, Qg, Qgs and Qgd in nC, the plateau and threshold voltages in V, internal and external gate resistance in Ω, the driver supply in V, its peak source and sink current in A, and optionally Crss in pF. It returns the gate currents at the plateau, turn-on and turn-off transition times, switching, conduction and gate-drive losses, the driver's average current and power, dv/dt and the Miller-induced gate voltage, with a loss-versus-frequency table. Use it to check a driver and gate resistor choice or to estimate MOSFET losses in a converter or motor bridge.",
+  "sources": [
+    "Gate-charge switching model, Qsw = Qgs2 + Qgd, t = Qsw / Ig, Ig = (Vdrv − Vpl)/Rtotal on and Vpl/Rtotal off - L. Balogh, 'Fundamentals of MOSFET and IGBT Gate Driver Circuits', TI SLUA618 (formerly SLUP169)",
+    "Switching loss P = ½·VDS·ID·(ton + toff)·f and gate drive power P = Qg·Vdrv·f - same source, and Vishay AN608A 'Power MOSFET basics: understanding gate charge'",
+    "Driver output resistance approximated as Vdrv / Ipeak (datasheet peak current into a shorted gate)"
+  ]
+}
