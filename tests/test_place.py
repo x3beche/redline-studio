@@ -158,3 +158,94 @@ def test_two_items_that_look_alike_get_two_names(place, tmp_path):
     place.steady(str(path), 0)
     names = re.findall(r'\(uuid "([^"]+)"', path.read_text())
     assert len(names) == len(set(names))
+
+
+class FakeBox:
+    def __init__(self, x, y, w, h):
+        self._x, self._y, self._w, self._h = [v * 1_000_000 for v in (x, y, w, h)]
+
+    def GetX(self):
+        return self._x
+
+    def GetY(self):
+        return self._y
+
+    def GetRight(self):
+        return self._x + self._w
+
+    def GetBottom(self):
+        return self._y + self._h
+
+
+class FakePad:
+    def __init__(self, box):
+        self._box = box
+
+    def GetBoundingBox(self):
+        return self._box
+
+
+class FakePart:
+    def __init__(self, boxes):
+        self._pads = [FakePad(b) for b in boxes]
+
+    def Pads(self):
+        return self._pads
+
+
+class FakeBoard:
+    def __init__(self, parts):
+        self._parts = parts
+
+    def GetFootprints(self):
+        return self._parts
+
+
+def cutter(place, monkeypatch, bodies):
+    monkeypatch.setattr(place, "body_on_board", lambda path, ref: bodies.get(ref))
+    # One part, its pads well inside: 4 mm from the left edge, 4 from the right.
+    return FakeBoard([FakePart([FakeBox(14.0, 20.0, 20.0, 5.0)])])
+
+
+def test_the_edge_comes_in_to_the_nearest_body(place, monkeypatch):
+    """Two connectors on one edge: the edge stops at the one that reaches
+    least far out, and the other is reported as hanging over it."""
+    board = cutter(place, monkeypatch, {"J1": (12.0, 20.0, 21.0, 29.0),
+                                        "J2": (11.0, 18.0, 31.0, 37.0)})
+    bounds, moved, over = place.cut_to_bodies(
+        board, "board.kicad_pcb", {"left": ["J1", "J2"]}, (10.0, 19.0, 40.0, 47.0))
+    assert round(bounds[0], 3) == 12.0
+    assert moved == {"left": 2.0}
+    assert over == {"J2": 1.0}
+
+
+def test_the_edge_never_crowds_a_pad(place, monkeypatch):
+    """A body that reaches deep into the board does not drag the edge over
+    the copper: the board house's clearance wins, with a hair to spare so
+    the rounding to whole nanometres cannot undercut it."""
+    board = cutter(place, monkeypatch, {"J1": (20.0, 20.0, 25.0, 29.0)})
+    bounds, moved, _ = place.cut_to_bodies(
+        board, "b", {"left": ["J1"]}, (10.0, 19.0, 40.0, 47.0), clearance=0.5)
+    assert bounds[0] < 14.0 - 0.5 + 1e-9        # clear of the pad at 14.0
+    assert round(bounds[0], 3) == 13.45         # 0.5 mm, and 0.05 over
+
+
+def test_the_edge_only_ever_comes_inwards(place, monkeypatch):
+    board = cutter(place, monkeypatch, {"J1": (8.0, 20.0, 21.0, 29.0)})
+    bounds, moved, _ = place.cut_to_bodies(
+        board, "b", {"left": ["J1"]}, (10.0, 19.0, 40.0, 47.0))
+    assert bounds[0] == 10.0 and moved == {}
+
+
+def test_a_tenth_of_a_millimetre_is_not_worth_moving_for(place, monkeypatch):
+    board = cutter(place, monkeypatch, {"J1": (10.05, 20.0, 21.0, 29.0)})
+    _, moved, _ = place.cut_to_bodies(
+        board, "b", {"left": ["J1"]}, (10.0, 19.0, 40.0, 47.0))
+    assert moved == {}
+
+
+def test_a_part_with_no_shape_leaves_its_edge_alone(place, monkeypatch):
+    board = cutter(place, monkeypatch, {})
+    bounds, moved, _ = place.cut_to_bodies(
+        board, "b", {"right": ["J9"]}, (10.0, 19.0, 40.0, 47.0))
+    assert bounds == (10.0, 19.0, 40.0, 47.0) and moved == {}

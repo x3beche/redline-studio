@@ -22,7 +22,10 @@ footprint in a board is not written down anywhere obvious.
 import hashlib
 import json
 import math
+import os
 import re
+import struct
+import subprocess
 import sys
 import uuid as uuids
 from pathlib import Path
@@ -421,6 +424,148 @@ def keep_inside(board, x0, y0, x1, y1, inset=0.25) -> int:
     return moved
 
 
+def body_on_board(path: str, ref: str) -> tuple | None:
+    """Where one part's own 3D shape sits on the board: x0, x1, y0, y1 in mm.
+
+    A footprint's outline is a drawing, and a drawing can be generous. This
+    board's USB-C socket is drawn 8.35 mm deep and its own 3D shape is
+    8.33 mm deep - the same socket - but the shape sits 1.45 mm further
+    back in the footprint than the drawing does. Flush to the drawing left
+    1.5 mm of bare board in front of the socket, which is what the person
+    saw and asked about. The shape is the thing a plug meets, so it is what
+    the edge is cut to.
+
+    KiCad will export one part's shape on its own, placed and turned as it
+    sits on the board, and glTF carries the vertices: so this is measured,
+    not worked out from the footprint. None when the part has no shape.
+    """
+    glb = f"{path}.{ref}.glb"
+    try:
+        run = subprocess.run(
+            ["kicad-cli", "pcb", "export", "glb", "-f", "--component-filter", ref,
+             "-o", glb, path],
+            capture_output=True, text=True, timeout=120,
+            env={**os.environ,
+                 "KICAD9_3DMODEL_DIR": os.environ.get(
+                     "KICAD9_3DMODEL_DIR", "/usr/share/kicad/3dmodels")})
+        if run.returncode != 0:
+            return None
+        raw = Path(glb).read_bytes()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    finally:
+        try:
+            os.unlink(glb)
+        except OSError:
+            pass
+
+    chunks, at = [], 12
+    while at < len(raw) - 8:
+        length, _kind = struct.unpack_from("<II", raw, at)
+        chunks.append(raw[at + 8:at + 8 + length])
+        at += 8 + length
+    if len(chunks) < 2:
+        return None
+    try:
+        doc = json.loads(chunks[0].decode("utf-8").rstrip("\x00 "))
+    except ValueError:
+        return None
+    node = next((n for n in doc.get("nodes", [])
+                 if n.get("name") == ref and n.get("mesh") is not None), None)
+    if node is None:
+        return None
+
+    # glTF is metres, y up: the board's x is x and the board's y is z. The
+    # part's turn is a quaternion about that up axis.
+    tx, _ty, tz = [v * 1000 for v in node.get("translation", [0, 0, 0])]
+    qx, qy, qz, qw = node.get("rotation", [0, 0, 0, 1])
+    turn = 2 * math.atan2(qy, qw)
+    cos, sin = math.cos(turn), math.sin(turn)
+    xs, ys = [], []
+    for prim in doc["meshes"][node["mesh"]].get("primitives", []):
+        acc = doc["accessors"][prim["attributes"]["POSITION"]]
+        view = doc["bufferViews"][acc["bufferView"]]
+        base = view.get("byteOffset", 0) + acc.get("byteOffset", 0)
+        step = view.get("byteStride") or 12
+        for i in range(acc["count"]):
+            x, _y, z = struct.unpack_from("<3f", chunks[1], base + i * step)
+            x, z = x * 1000, z * 1000
+            xs.append(tx + x * cos + z * sin)
+            ys.append(tz - x * sin + z * cos)
+    if not xs:
+        return None
+    return (min(xs), max(xs), min(ys), max(ys))
+
+
+def draw_outline(board, x0, y0, x1, y1) -> None:
+    """The board's edge, as four segments."""
+    corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    for j, (ax, ay) in enumerate(corners):
+        bx, by = corners[(j + 1) % 4]
+        line = pcbnew.PCB_SHAPE(board)
+        line.SetShape(pcbnew.SHAPE_T_SEGMENT)
+        line.SetStart(at(ax, ay))
+        line.SetEnd(at(bx, by))
+        line.SetLayer(pcbnew.Edge_Cuts)
+        line.SetWidth(int(0.1 * MM))
+        board.Add(line)
+
+
+def clear_outline(board) -> None:
+    for shape in list(board.GetDrawings()):
+        if shape.GetLayer() == pcbnew.Edge_Cuts:
+            board.Remove(shape)
+
+
+def cut_to_bodies(board, path, on_edge, bounds, clearance=0.5):
+    """Bring each edge in to the front of the connectors standing on it.
+
+    Inwards only, and never nearer a pad than the board house's clearance.
+    Where two connectors share an edge, the edge stops at whichever one
+    reaches least far out; the other then hangs over it, which is what a
+    connector on an edge is for, and how far is reported rather than
+    quietly allowed.
+    """
+    x0, y0, x1, y1 = bounds
+    pads = [pad.GetBoundingBox() for fp in board.GetFootprints() for pad in fp.Pads()]
+    # How far in each edge may come before it crowds the nearest pad. A hair
+    # over the rule, not exactly on it: the outline is kept in whole
+    # nanometres, and an edge laid exactly 0.5 mm from a pad came back from
+    # DRC as 0.499999 mm, five times over.
+    room = clearance + 0.05
+    limit = {
+        "left": min((p.GetX() / MM for p in pads), default=x1) - room,
+        "right": max((p.GetRight() / MM for p in pads), default=x0) + room,
+        "top": min((p.GetY() / MM for p in pads), default=y1) - room,
+        "bottom": max((p.GetBottom() / MM for p in pads), default=y0) + room,
+    }
+    was = {"left": x0, "right": x1, "top": y0, "bottom": y1}
+    face_of = {"left": 0, "right": 1, "top": 2, "bottom": 3}
+    moved, over = {}, {}
+    for edge, refs in on_edge.items():
+        faces = {}
+        for ref in refs:
+            got = body_on_board(path, ref)
+            if got:
+                faces[ref] = got[face_of[edge]]
+        if not faces:
+            continue
+        if edge in ("left", "top"):             # the edge moves up in value
+            want = min(max(max(faces.values()), was[edge]), limit[edge])
+        else:                                   # and down on the other two
+            want = max(min(min(faces.values()), was[edge]), limit[edge])
+        # Not worth moving an edge for a tenth of a millimetre.
+        if abs(want - was[edge]) < 0.1:
+            continue
+        moved[edge] = round(abs(want - was[edge]), 3)
+        for ref, face in faces.items():
+            past = (want - face) if edge in ("left", "top") else (face - want)
+            if past > 0.01:
+                over[ref] = round(past, 3)
+        was[edge] = want
+    return (was["left"], was["top"], was["right"], was["bottom"]), moved, over
+
+
 UUID = re.compile(r'\(uuid "[0-9a-fA-F-]{36}"\)')
 
 
@@ -596,9 +741,13 @@ def main() -> int:
         else:
             groups.setdefault(comp.get("group") or "", []).append(item)
 
-    # Which of the eight packings to take, best first. A pipeline that
-    # came up a connection short asks for the next one.
+    # Which of the eight packings to take, best first, and which set of
+    # names to write it under. They are asked for separately: a looser
+    # packing is a bigger board and is only worth it when the tightest one
+    # cannot be finished, whereas another set of names costs nothing but
+    # gives the router a different problem. See `steady`.
     attempt = int(plan.get("attempt", 0))
+    salt = int(plan.get("salt", attempt))
 
     blocks = []                                # (name, parts, spots, w, h)
     for name in sorted(groups, key=lambda g: -len(groups[g])):
@@ -634,6 +783,7 @@ def main() -> int:
     edge_gap = plan.get("edge_clearance", 0.5) + 0.05
     taken = {e: [] for e in edges}
     flush = {}
+    on_edge: dict[str, list] = {}
     for comp, fp, _ in connectors:
         cx, cy = centre.get(comp.get("group") or "", ((ix0 + ix1) / 2, (iy0 + iy1) / 2))
         dist = {"top": cy - iy0, "bottom": iy1 - cy, "left": cx - ix0, "right": ix1 - cx}
@@ -672,6 +822,7 @@ def main() -> int:
                   "left": (inset, 0), "right": (-inset, 0)}[edge]
         put(fp, comp, x + dx, y + dy, box)
         flush[edge] = True
+        on_edge.setdefault(edge, []).append(comp.get("ref"))
         placed += 1
 
     # The outline: the parts plus a margin, except where a connector sits
@@ -681,16 +832,26 @@ def main() -> int:
     x1 = max(xs) + (0 if flush.get("right") else margin)
     y0 = min(ys) - (0 if flush.get("top") else margin)
     y1 = max(ys) + (0 if flush.get("bottom") else margin)
-    corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
-    for j, (ax, ay) in enumerate(corners):
-        bx, by = corners[(j + 1) % 4]
-        line = pcbnew.PCB_SHAPE(board)
-        line.SetShape(pcbnew.SHAPE_T_SEGMENT)
-        line.SetStart(at(ax, ay))
-        line.SetEnd(at(bx, by))
-        line.SetLayer(pcbnew.Edge_Cuts)
-        line.SetWidth(int(0.1 * MM))
-        board.Add(line)
+    out = plan.get("out", "/work/board.kicad_pcb")
+    draw_outline(board, x0, y0, x1, y1)
+
+    # The edge is drawn at the connectors' outlines first, because the
+    # exporter wants a board before it will say where anything is; then it
+    # is brought in to the connectors' own 3D shapes and drawn again.
+    trimmed, hanging = {}, {}
+    if on_edge and plan.get("cut_to_bodies", True):
+        probe = out + ".probe.kicad_pcb"
+        pcbnew.SaveBoard(probe, board)
+        (x0, y0, x1, y1), trimmed, hanging = cut_to_bodies(
+            board, probe, on_edge, (x0, y0, x1, y1),
+            plan.get("edge_clearance", 0.5))
+        try:
+            os.unlink(probe)
+        except OSError:
+            pass
+        if trimmed:
+            clear_outline(board)
+            draw_outline(board, x0, y0, x1, y1)
 
     # What the board says about itself is printed on the board: every
     # designator over the part it names, and anything still reaching past
@@ -698,16 +859,17 @@ def main() -> int:
     nudged = label(board, gap, (x0, y0, x1, y1))
     escaped = keep_inside(board, x0, y0, x1, y1)
 
-    out = plan.get("out", "/work/board.kicad_pcb")
     pcbnew.SaveBoard(out, board)
     # Written once for KiCad to name everything, renamed, then written
     # again so KiCad itself puts the footprints in the new order - the
     # order is its business, and hand-sorting the file is how a board
     # stops loading.
-    steadied = steady(out, attempt)
+    steadied = steady(out, salt)
     pcbnew.SaveBoard(out, pcbnew.LoadBoard(out))
     json.dump({"placed": placed, "missing": missing, "attempt": attempt,
-               "uuids": steadied,
+               "salt": salt,
+               "uuids": steadied, "trimmed_mm": trimmed,
+               "hanging_over_mm": hanging,
                "attempts_available": len(TRIALS),
                "size_mm": [round(x1 - x0, 2), round(y1 - y0, 2)],
                "texts_beside": nudged, "texts_moved_in": escaped,
