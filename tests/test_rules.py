@@ -72,3 +72,18 @@ def test_every_schema_section_has_fields():
         assert section["fields"], key
         if section["list"]:
             assert set(section["new"]) >= {f["key"] for f in section["fields"]}
+
+
+def test_a_class_wider_than_a_pad_it_reaches_is_a_problem_not_a_fix():
+    r = rules.derive(NETS)
+    pads = {"v3v3": {"width": 0.36, "who": "U24 pad 5"}}
+    got = rules.check(r, NETS, pads)
+    assert any(p.startswith("classes.Power.track:") and "U24 pad 5" in p for p in got)
+    r["classes"][1]["track"] = 0.36
+    assert rules.check(r, NETS, pads) == []
+
+
+def test_pours_carry_their_edge_gap():
+    old = rules.derive(NETS)
+    del old["pours"][0]["edge"]
+    assert rules.normalise(old)["pours"][0]["edge"] == rules.SCHEMA["pours"]["new"]["edge"]

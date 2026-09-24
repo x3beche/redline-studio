@@ -9,8 +9,11 @@ Freerouting routes to. Then:
 
     board -> DSN -> Freerouting -> SES -> board
 
-and a ground pour on both layers, filled, which ties together whatever
-ground the router left as short stubs.
+and the pours the rules ask for, filled after routing.
+
+Nothing here decides a number. A rule the board cannot meet - a track wider
+than a pad it has to reach - stops the run with the reason, and the person
+or the agent changes the rule.
 
 Freerouting routes a differential pair as two nets at the class's width
 and clearance. It does not couple them or match their lengths. For USB
@@ -32,42 +35,46 @@ def nm(mm: float) -> int:
     return int(round(mm * MM))
 
 
-def narrowest_pad(board, nets: set) -> tuple[float, str]:
-    """The smallest pad a class has to reach, in mm, and whose it is.
+def pad_limits(board) -> dict:
+    """The narrowest pad on each net, in mm, and whose it is.
 
-    Freerouting cannot neck a track down to meet a pad: a 0.5 mm power
-    track simply never reaches a 0.35 mm pin on a 0.65 mm-pitch chip, and
-    the pin is left unrouted. So a class is only as wide as its narrowest
-    pad allows.
+    Freerouting cannot neck a track down to meet a pad: a 0.5 mm track
+    never reaches a 0.35 mm pin on a 0.65 mm-pitch chip, and the pin is
+    left unrouted. So a class can be no wider than the narrowest pad on
+    any of its nets. This is measured and reported - the rules are the
+    person's, and the router does not change them.
     """
-    best, who = 1e9, ""
+    out = {}
     for fp in board.GetFootprints():
         for pad in fp.Pads():
-            if pad.GetNetname() not in nets:
+            net = pad.GetNetname()
+            if not net:
                 continue
             size = pad.GetSize()
-            short = min(size.x, size.y) / MM
-            if 0 < short < best:
-                best, who = short, f"{fp.GetReference()} pad {pad.GetNumber()}"
-    return best, who
+            short = round(min(size.x, size.y) / MM, 3)
+            if short > 0 and (net not in out or short < out[net]["width"]):
+                out[net] = {"width": short,
+                            "who": f"{fp.GetReference()} pad {pad.GetNumber()}"}
+    return out
 
 
-def apply_rules(board, rules) -> list[str]:
+def too_wide(rules, pads) -> list[str]:
+    """Classes whose track cannot reach one of their pads."""
+    out = []
+    for cls in rules.get("classes", []):
+        for net in cls.get("nets", []):
+            lim = pads.get(net)
+            if lim and cls["track"] > lim["width"]:
+                out.append(f"classes.{cls['name']}.track: {cls['track']} mm will not reach "
+                           f"{lim['who']} on {net} ({lim['width']} mm wide) - at most "
+                           f"{lim['width']} mm, or put {net} in a narrower class")
+    return out
+
+
+def apply_rules(board, rules) -> None:
     """Net classes onto the board, and the board's minimums."""
     ds = board.GetDesignSettings()
     ns = ds.m_NetSettings
-    notes = []
-    for cls in rules.get("classes", []):
-        nets = set(cls.get("nets", []))
-        if not nets:
-            continue
-        pad, who = narrowest_pad(board, nets)
-        if cls["track"] > pad:
-            fit = max(rules.get("board", {}).get("min_track", 0.15),
-                      round(pad - 0.02, 2))
-            notes.append(f"{cls['name']}: {cls['track']} -> {fit} mm, to reach "
-                         f"{who} ({pad:.2f} mm)")
-            cls["track"] = fit
     pairs = {p["p"]: p for p in rules.get("pairs", [])}
     pairs.update({p["n"]: p for p in rules.get("pairs", [])})
 
@@ -96,7 +103,6 @@ def apply_rules(board, rules) -> list[str]:
     ds.m_MinThroughDrill = nm(b.get("min_drill", 0.3))
     ns.RecomputeEffectiveNetclasses()
     board.SynchronizeNetsAndNetClasses(True)
-    return notes
 
 
 def pours(board, specs) -> int:
@@ -116,7 +122,7 @@ def pour(board, spec, priority=0) -> int:
     if net is None:
         return 0
     box = board.GetBoardEdgesBoundingBox()
-    inset = nm(0.3)
+    inset = nm(spec.get("edge", 0.3))
     x0, y0 = box.GetX() + inset, box.GetY() + inset
     x1, y1 = box.GetRight() - inset, box.GetBottom() - inset
     layers = {"F.Cu": pcbnew.F_Cu, "B.Cu": pcbnew.B_Cu}
@@ -151,7 +157,13 @@ def main() -> int:
     board = pcbnew.LoadBoard(path)
     rules = plan["rules"]
 
-    notes = apply_rules(board, rules)
+    pads = pad_limits(board)
+    problems = too_wide(rules, pads)
+    if problems:
+        # Said, not fixed: which number to change is the person's call.
+        print(json.dumps({"error": "rules", "problems": problems, "pads": pads}))
+        return 0
+    apply_rules(board, rules)
     # The pour goes on after routing: routed into, it would stand in the
     # router's way; poured afterwards it fills around the tracks.
     for zone in list(board.Zones()):
@@ -196,7 +208,7 @@ def main() -> int:
         "tracks": len(tracks), "vias": len(vias),
         "length_mm": round(length, 1), "zones": zones,
         "unrouted": unrouted, "route_s": round(routed_s, 1),
-        "passes": passes, "notes": notes, "log": log[-1500:],
+        "passes": passes, "pads": pads, "log": log[-1500:],
     }))
     return 0
 

@@ -385,8 +385,6 @@ def _print_board(out: dict) -> None:
           f"missing {lay.get('missing') or 'none'}")
     print(f"  routing    {r.get('unrouted', '?')} unrouted, {r.get('tracks', '?')} segments, "
           f"{r.get('vias', '?')} vias, {r.get('length_mm', '?')} mm")
-    for note in r.get("notes") or []:
-        print(f"             router: {note}")
     print(f"  DRC        {d.get('error_count', '?')} errors, {d.get('unconnected', '?')} unconnected, "
           f"{d.get('warning_count', '?')} warnings")
     for x in (d.get("examples") or []) + (erc.get("examples") or []):

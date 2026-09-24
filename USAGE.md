@@ -222,9 +222,13 @@ agent's edits go through) and puts each problem under the row it is about;
 the server (`/api/rules/schema`), so the form and the agent's
 `revisions.py board rules` always describe the same rules.
 
-The router cannot narrow a track to reach a small pad, so a class is capped
-to the narrowest pad it has to reach, and the run says so: *Power: 0.5 →
-0.34 mm, to reach U24 pad 5*. Your number stays as you set it.
+Freerouting cannot narrow a track to reach a small pad, and nothing narrows
+it for you. After a run the room knows each net's narrowest pad, so a class
+too wide for one of its pads is a problem in the form - *Power.track: 0.5 mm
+will not reach U24 pad 5 on v3v3 (0.364 mm wide)* - and a run with it stops
+with the same words. Lower the class's track, or move that net into a
+narrower class. **Copper pours** also take *From edge*: how far inside the
+outline the pour stops.
 
 ### Checks
 

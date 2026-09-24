@@ -84,6 +84,7 @@ type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc';
       <span class="tcv_separator"></span>
       <!-- What came of the last run, said once, where the eye already is. -->
       <span class="tcv-frame-status mono">
+        @if (building()) { <span style="color: var(--accent)">building… </span> }
         @switch (boardTab()) {
           @case ('layout') {
             @if (here()?.route; as r) {
@@ -117,6 +118,12 @@ type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc';
          view is held still as a picture to draw on; the note beside the
          room is then filed with that picture. -->
     <ng-container ngProjectAs="[barEnd]">
+      <!-- The whole pipeline, as the agent runs it: build the source, draw
+           the schematic, place, route to the rules, pour, DRC. -->
+      <app-tool icon="tcv-ico-build"
+                [tip]="building() ? 'Building…' : 'Build - source, schematic, place, route, DRC'"
+                [on]="building()" [disabled]="building() || frozen() || !here()"
+                (press)="build()" />
       @if (frozen()) {
         <app-draw-tools [pen]="pen" (undo)="pad()?.undo()" (clear)="pad()?.clear()" />
       }
@@ -342,9 +349,6 @@ type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc';
               <app-rules-form [rules]="r" [schema]="sc" [nets]="nets()"
                               [members]="members()" [problems]="shownProblems()"
                               (changed)="draftChanged($event)" />
-            }
-            @for (n of here()?.route?.notes ?? []; track n) {
-              <p class="mb-1 leading-snug" style="color: var(--ink-dim)">last run: {{ n }}</p>
             }
             <div class="tcv-rule-save">
               <button (click)="saveRules()" [disabled]="!rulesDirty() || saving()"
@@ -712,6 +716,27 @@ export class RoomPcb implements OnDestroy {
     this.picked.boardDraft.set(null);
   }
 
+  // ---- the pipeline ----
+
+  building = signal(false);
+
+  /** Build it the whole way through, the same run the agent does - never
+   *  a step on its own - and show what came of it. */
+  build() {
+    const b = this.here();
+    if (!b || this.building()) return;
+    this.building.set(true);
+    this.note.set('');
+    this.api.run(b._id).subscribe({
+      next: () => { this.building.set(false); this.refresh(); },
+      error: e => {
+        this.building.set(false);
+        this.note.set(String(e?.error?.detail ?? 'the run failed - see the log').slice(0, 160));
+        this.refresh();
+      },
+    });
+  }
+
   // ---- the pen ----
 
   canFreeze(): boolean {
@@ -909,6 +934,7 @@ export class RoomPcb implements OnDestroy {
 
   open(b: BoardEntry | null) {
     if (this.frozen()) this.resume();
+    this.note.set('');
     this.here.set(b);
     this.graph.set(null);
     this.picked.boardParts.set([]);
@@ -924,7 +950,16 @@ export class RoomPcb implements OnDestroy {
         this.picked.boardParts.set(g.components.map(
           c => c.part ? `${c.ref} · ${c.part}` : c.ref));
       },
-      error: () => this.note.set('the build output could not be read'),
+      // A run rewrites this file; asked for in that moment it can miss.
+      // Once more after a pause, and only then is it worth saying.
+      error: () => setTimeout(() => this.api.graph(b._id, b.artifacts?.['graph']?.at).subscribe({
+        next: g => {
+          this.graph.set(g);
+          this.picked.boardParts.set(g.components.map(
+            c => c.part ? `${c.ref} · ${c.part}` : c.ref));
+        },
+        error: () => this.note.set('the build output could not be read'),
+      }), 2000),
     });
   }
 

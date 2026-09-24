@@ -273,11 +273,12 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         route_report, drc_report = None, None
         if route:
             nets = sorted({n.get("name") for n in graph.get("nets", []) if n.get("name")})
-            board_doc = await db[ato.BOARDS].find_one({"_id": board_id}, {"rules": 1}) or {}
+            board_doc = await db[ato.BOARDS].find_one({"_id": board_id},
+                                                      {"rules": 1, "pads": 1}) or {}
             the_rules = rules.merge(board_doc.get("rules"), nets)
             await db[ato.BOARDS].update_one({"_id": board_id},
                                             {"$set": {"rules": the_rules}})
-            problems = rules.check(the_rules, nets)
+            problems = rules.check(the_rules, nets, board_doc.get("pads"))
             if problems:
                 raise RuntimeError("the routing rules do not hold together: "
                                    + "; ".join(problems))
@@ -297,6 +298,13 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                 route_report = json.loads(text[text.index("{"):text.rindex("}") + 1])
             except ValueError:
                 raise RuntimeError("routing failed:\n" + text[-800:])
+            if route_report.get("pads"):
+                # Kept for the rules form: what each net's narrowest pad is.
+                await db[ato.BOARDS].update_one(
+                    {"_id": board_id}, {"$set": {"pads": route_report["pads"]}})
+            if route_report.get("error") == "rules":
+                raise RuntimeError("the routing rules do not fit this board: "
+                                   + "; ".join(route_report["problems"]))
             if route_report.get("error"):
                 raise RuntimeError(f"routing failed: {route_report['error']}\n"
                                    + (route_report.get("log") or "")[-600:])
@@ -387,7 +395,7 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         if route_report:
             routed = {k: route_report.get(k) for k in
                       ("tracks", "vias", "length_mm", "zones", "unrouted",
-                       "route_s", "passes", "notes")}
+                       "route_s", "passes")}
         await db[ato.BOARDS].update_one(
             {"_id": board_id},
             {"$set": {"layout": {"placed": placed.get("placed"),

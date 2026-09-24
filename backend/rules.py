@@ -85,7 +85,7 @@ def derive(nets: list[str]) -> dict:
         "board": {"layers": 2, "min_track": 0.15, "min_clearance": 0.15,
                   "min_via": 0.6, "min_drill": 0.3},
         "pours": [{"net": ground, "layers": ["F.Cu", "B.Cu"], "clearance": 0.3,
-                   "connection": "solid"}] if ground else [],
+                   "edge": 0.3, "connection": "solid"}] if ground else [],
         "route": {"passes": 40},
         "edited": False,
     }
@@ -151,13 +151,17 @@ SCHEMA = {
         "help": "A net flooded over the whole board on the chosen layers, "
                 "after routing. The first in the list wins where two meet.",
         "new": {"net": "", "layers": ["F.Cu", "B.Cu"], "clearance": 0.3,
-                "connection": "solid"},
+                "edge": 0.3, "connection": "solid"},
         "fields": [
             {"key": "net", "label": "Net", "type": "net"},
             {"key": "layers", "label": "Layers", "type": "layers",
              "options": LAYERS},
             {"key": "clearance", "label": "Gap", "type": "number", "unit": "mm",
-             "min": 0.1, "max": 3, "step": 0.05},
+             "min": 0.1, "max": 3, "step": 0.05,
+             "help": "how far the pour keeps from other nets' copper"},
+            {"key": "edge", "label": "From edge", "type": "number", "unit": "mm",
+             "min": 0, "max": 5, "step": 0.05,
+             "help": "how far inside the board outline the pour stops"},
             {"key": "connection", "label": "Pads", "type": "choice",
              "options": ["solid", "thermal"],
              "help": "solid: straight into the pour, what reflow wants; "
@@ -202,6 +206,8 @@ def normalise(rules: dict) -> dict:
     for cls in out.setdefault("classes", []):
         cls.setdefault("nets", [])
         cls.setdefault("patterns", [])
+    for pour in out["pours"]:
+        pour.setdefault("edge", SCHEMA["pours"]["new"]["edge"])
     out.setdefault("pairs", [])
     return out
 
@@ -293,7 +299,8 @@ def merge(saved: dict | None, nets: list[str]) -> dict:
     return out
 
 
-def check(rules: dict, nets: list[str] | None = None) -> list[str]:
+def check(rules: dict, nets: list[str] | None = None,
+          pads: dict | None = None) -> list[str]:
     """What is wrong with a set of rules before a router is given them.
     Each problem starts with where it is - `classes.Power.track:` - so a
     form can put it by the field and an agent can find it in the JSON."""
@@ -355,6 +362,20 @@ def check(rules: dict, nets: list[str] | None = None) -> list[str]:
             for net in cls.get("nets", []):
                 if net not in known:
                     out.append(f"{where}.nets: {net} is not a net on this board")
+
+    # The narrowest pad on each net, from the last placement: a class wider
+    # than a pad it has to reach cannot be routed, and the router will not
+    # narrow it behind anyone's back.
+    if pads and nets is not None:
+        held = members(rules, nets)
+        for cls in rules["classes"]:
+            for net in held.get(cls["name"], []):
+                lim = pads.get(net)
+                if lim and cls.get("track", 0) > lim["width"]:
+                    out.append(f"classes.{cls['name']}.track: {cls['track']} mm will not "
+                               f"reach {lim['who']} on {net} ({lim['width']} mm wide) - "
+                               f"at most {lim['width']} mm, or put {net} in a "
+                               "narrower class")
 
     seen: dict[str, str] = {}
     for cls in rules["classes"]:

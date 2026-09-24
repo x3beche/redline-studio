@@ -1036,7 +1036,7 @@ class RulesIn(BaseModel):
 @app.get("/api/boards/{bid}/rules")
 async def board_rules(bid: str):
     """The routing rules, brought up to date with the board's nets."""
-    doc = await db()[ato.BOARDS].find_one({"_id": bid}, {"rules": 1})
+    doc = await db()[ato.BOARDS].find_one({"_id": bid}, {"rules": 1, "pads": 1})
     if doc is None:
         raise HTTPException(404, bid)
     try:
@@ -1045,7 +1045,8 @@ async def board_rules(bid: str):
     except KeyError:
         nets = []
     merged = rules.merge(doc.get("rules"), nets)
-    return {"rules": merged, "problems": rules.check(merged, nets), "nets": nets,
+    return {"rules": merged, "problems": rules.check(merged, nets, doc.get("pads")),
+            "nets": nets,
             # Who is in each class once the patterns have caught their nets.
             "members": rules.members(merged, nets)}
 
@@ -1055,6 +1056,11 @@ async def rules_schema():
     """What every rule is: label, unit, limits, help. The form in the
     board room is drawn from this, and an agent reads it before editing."""
     return rules.SCHEMA
+
+
+async def _board_pads(bid: str) -> dict | None:
+    doc = await db()[ato.BOARDS].find_one({"_id": bid}, {"pads": 1}) or {}
+    return doc.get("pads")
 
 
 async def _board_nets(bid: str) -> list[str] | None:
@@ -1071,7 +1077,7 @@ async def check_board_rules(bid: str, body: RulesIn):
     hold - without saving. The form asks this as it is edited."""
     nets = await _board_nets(bid)
     clean = rules.normalise(body.rules)
-    return {"problems": rules.check(clean, nets),
+    return {"problems": rules.check(clean, nets, await _board_pads(bid)),
             "members": rules.members(clean, nets or [])}
 
 
@@ -1082,7 +1088,7 @@ async def save_board_rules(bid: str, body: RulesIn):
     discovered by the router."""
     nets = await _board_nets(bid)
     clean = rules.normalise(body.rules)
-    problems = rules.check(clean, nets)
+    problems = rules.check(clean, nets, await _board_pads(bid))
     if problems:
         raise HTTPException(400, {"problems": problems})
     clean["edited"] = True

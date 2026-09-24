@@ -335,8 +335,6 @@ export class Health {
 export interface BoardRoute {
   tracks: number; vias: number; length_mm: number; zones: number;
   unrouted: number; route_s: number; passes: number;
-  /** Where the router changed a rule to make it work, and why. */
-  notes: string[];
 }
 
 /** KiCad's DRC over the routed board, as counts. */
