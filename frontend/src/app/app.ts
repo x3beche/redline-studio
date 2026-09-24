@@ -12,7 +12,7 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
-     rebuilt, checked. Only the first room is built.
+     rebuilt, checked. The tabs marked soon are not finished.
 
      The tabs and the room are handed to the editor rather than wrapped
      around it: they belong over the two right-hand columns, and the
@@ -39,7 +39,9 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
   <div room class="tcv-room-slot" [class.hidden]="here() === 'cad'">
     @switch (here()) {
       @case ('pcb') { <app-room-pcb /> }
-      @case ('code') { <app-room-coding (leave)="open('cad')" /> }
+      @case ('web') { <app-room-coding platform="web" /> }
+      @case ('embedded') { <app-room-coding platform="embedded" /> }
+      @case ('mobile') { <app-room-coding platform="mobile" /> }
       @case ('analyze') { <app-room-analyze (leave)="open('cad')" /> }
     }
   </div>
@@ -58,7 +60,11 @@ export class App {
     // and a reload comes back to the one you were in.
     effect(() => {
       const id = this.here();
-      rememberWorkspace(id);
+      // Not from inside a frame. The Web room shows a running page in an
+      // iframe, and when that page is this application the two share one
+      // localStorage: the one in the frame, opening on its own room, wrote
+      // over the room the outer page was left in.
+      if (window === window.top) rememberWorkspace(id);
       const url = new URL(location.href);
       if (id === 'cad') url.searchParams.delete('ws');
       else url.searchParams.set('ws', id);

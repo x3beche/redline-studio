@@ -54,11 +54,79 @@ Left to do, roughly in order:
   the coding room says what its third shape looks like; splitting on a
   guess splits in the wrong places.
 
-## The other two rooms
+## Coding rooms
 
-Coding and Analyze are tabs that say what they need before they can
-exist. Everything in the spine still says `model`, `PARTS`,
-`viewer.json`.
+Three tabs, not one: **Web**, **Embedded** and **Mobile**. They are the
+same loop over different things on screen, so they are one component
+with a platform, the way the 3D room is one viewer whatever the model.
+Web is built first and in full; the other two get the shared plumbing
+(the file in the tree, notes, diff, tests, log, machine) and say plainly
+that their preview is not there yet.
+
+**A project is a file.** Collection `apps`, one document per project:
+
+    {_id, title, folder, platform: web | embedded | mobile,
+     repo:  absolute path of the git checkout,
+     cwd:   where the commands run, relative to repo ("frontend"),
+     url:   where its dev server answers ("http://127.0.0.1:4200"),
+     dev:   the command that starts that server, if nothing answers,
+     test:  the command whose exit code is the check,
+     routes: a few routes worth offering}
+
+It sits in the catalog tree beside `.3d` and `.pcb` as `.web`, `.fw` or
+`.mobile`, and clicking it opens its room (`Selection.openApp`). Nothing
+big goes in the document: test output is a tail, a frozen diff goes
+through `store.put_artifact`.
+
+**A code note** is a revision with `kind` web | embedded | mobile,
+`model` the app id, the drawing as its image, and a `code` block:
+
+    code: {route, viewport: [w, h], base: HEAD sha when frozen,
+           dirty: {path: blob sha} of what was already changed then,
+           dom: [{selector, tag, text, box, component, file}]}
+
+`dirty` is what keeps somebody else's uncommitted work out of the note's
+diff: only files that differ from how they were when the note was drawn
+belong to it.
+
+**Endpoints**, all under `/api/apps`: list, one, PUT, move, DELETE;
+`status` (does the url answer, branch, head, dirty count); `serve`
+(start `dev` when nothing answers); `shot` (headless Chrome over CDP -
+route, viewport, PNG and every visible element's box, selector and the
+component that renders it); `diff` (working tree, or one note's since
+its base, as files and hunks); `test` (run it, measured by the same
+meter as a build, stored as a tail); `compute` (jobs, as for boards).
+
+**The room** is a grid of panes like the board room's: the preview
+(iframe, route field, viewport chips, the 3D room's freeze button and
+drawing tools over a real screenshot), diff with before/after, tests,
+the room's own log with its ⤢, and machine. What is under the marks
+fills the Part field on the right as `button.tcv-btn · rooms/pcb.ts`.
+
+**For the agent**, `tools/revisions.py code`:
+
+    code show <id>     note, route, viewport, the elements under the marks,
+                       and the drawing written to disk
+    code diff <id>     what changed since the note, as a patch
+    code test <id>     run the project's test command
+    code after <id>    the same route and viewport, photographed again
+    code done <id>     tests, then the after shot, then applied - it
+                       refuses while the tests fail
+
+`queue` marks these `[WEB]`, `[EMBEDDED]`, `[MOBILE]`.
+
+- [x] tabs, catalog entry, opening the room
+- [x] live preview
+- [ ] screenshot, pen and note
+- [ ] DOM mapping
+- [ ] agent CLI
+- [ ] diff view
+- [ ] tests as the check
+- [ ] before/after
+
+## Analyze
+
+A tab that says what it needs before it can exist.
 
 ## App — further out
 - **Revisions applied before the machine meter existed show nothing** for

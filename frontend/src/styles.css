@@ -64,6 +64,10 @@
   --draw-label:   rgba(255, 255, 255, .9);   /* the caret box on a drawing */
   --shot-bg:      #fff;                      /* behind a revision drawing */
   --pcb-bg:       #111;                      /* behind a footprint: its layers are drawn for a dark board */
+  --preview-bg:   #161616;                   /* around a running page in the coding rooms */
+  --diff-add:     rgba(92, 138, 92, .22);    /* a line a diff adds */
+  --diff-del:     rgba(204, 51, 51, .2);     /* a line it takes away */
+  --diff-hunk:    rgba(83, 160, 227, .12);   /* the @@ line between hunks */
   --switch-knob: #fff;
   --overlay:      rgba(68, 68, 68, .7);
   --overlay-rest: rgba(68, 68, 68, .14);
@@ -121,6 +125,10 @@
   --draw-label:   rgba(255, 255, 255, .92);
   --shot-bg:      #fff;
   --pcb-bg:       #111;
+  --preview-bg:   #2a2e33;
+  --diff-add:     rgba(61, 122, 61, .16);
+  --diff-del:     rgba(181, 42, 42, .13);
+  --diff-hunk:    rgba(29, 111, 184, .1);
   --switch-knob: #fff;
   --overlay:      rgba(236, 238, 241, .7);
   --overlay-rest: rgba(236, 238, 241, .14);
@@ -173,6 +181,10 @@
   --draw-label:   rgba(255, 255, 255, .9);
   --shot-bg:      #fff;
   --pcb-bg:       #111;
+  --preview-bg:   #000;
+  --diff-add:     rgba(79, 138, 79, .22);
+  --diff-del:     rgba(204, 51, 51, .22);
+  --diff-hunk:    rgba(74, 155, 224, .12);
   --switch-knob: #e8edf2;
   --overlay:      rgba(0, 0, 0, .7);
   --overlay-rest: rgba(0, 0, 0, .14);
@@ -980,3 +992,72 @@ body {
   border-bottom: 1px solid var(--line);
   background: var(--surface-2);
 }
+
+/* THE CODING ROOMS
+   Web, Embedded and Mobile: the same panes as the board room, and the same
+   drawing row the 3D room docks in its viewer, here under the preview's
+   head because the preview has no toolbar of its own. */
+.tcv-draw-row {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  margin-left: 0;
+  padding: 3px 8px;
+  border-left: 0;
+  border-bottom: 1px solid var(--line);
+}
+/* A running page sits on dark, the way a board sits on black: the frame is
+   the thing looked at, and a pale surround bleeds into a pale page. */
+.tcv-preview { background: var(--preview-bg); }
+.tcv-preview-frame {
+  border: 0;
+  transform-origin: 0 0;
+  /* What a browser paints under a page that paints nothing itself. */
+  background: var(--shot-bg);
+}
+/* What a mark landed on, outlined over the picture but never into it. */
+.tcv-hit {
+  position: absolute;
+  pointer-events: none;
+  border: 1px dashed var(--accent);
+  background: var(--diff-hunk);
+}
+.tcv-diff-file {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 3px 8px;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--ink);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.tcv-diff-hunk {
+  padding: 1px 8px;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--ink-dim);
+  background: var(--diff-hunk);
+}
+.tcv-diff-line {
+  display: flex;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.tcv-diff-line[data-k="+"] { background: var(--diff-add); }
+.tcv-diff-line[data-k="-"] { background: var(--diff-del); }
+.tcv-diff-no {
+  flex-shrink: 0;
+  width: 3.2em;
+  padding-right: 6px;
+  text-align: right;
+  color: var(--ink-dim);
+  user-select: none;
+}
+.tcv-diff-text { white-space: pre-wrap; word-break: break-all; min-width: 0; }

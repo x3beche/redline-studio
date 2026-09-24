@@ -11,7 +11,7 @@ cd "$HERE"
 
 VENV="$HERE/.venv"
 PY="$VENV/bin/python"
-API_PORT="${API_PORT:-8000}"
+export API_PORT="${API_PORT:-8000}"
 WEB_PORT="${WEB_PORT:-4200}"
 
 say() { printf '\033[1;36m> %s\033[0m\n' "$*"; }

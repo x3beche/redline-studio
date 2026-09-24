@@ -98,6 +98,8 @@ async def delete_folder(db, path: str) -> None:
         raise ValueError("folder is not empty")
     if await db.folders.count_documents({"parent": path}):
         raise ValueError("folder is not empty")
+    if await db.apps.count_documents({"folder": path}):
+        raise ValueError("folder is not empty")
     await db.folders.delete_one({"_id": path})
 
 
@@ -385,6 +387,10 @@ async def catalog(db) -> dict:
     folders = [f async for f in db.folders.find({})]
     models = [m async for m in db.models.find({}, {"source": 0})]
     boards = [b async for b in db.boards.find({}, {"source": 0})]
+    # Code projects: a checkout and the address it is served at. The
+    # extension (.web, .fw, .mobile) says which of the coding rooms opens it.
+    from . import apps as _apps
+    projects = [a async for a in db[_apps.APPS].find({}, {"last_test": 0})]
 
     def node(path: str, name: str) -> dict:
         return {
@@ -404,6 +410,9 @@ async def catalog(db) -> dict:
                     "build_secs": b.get("build_secs"),
                     "laid_out": bool((b.get("layout") or {}).get("at")),
                 } for b in boards if b.get("folder", "") == path),
+                key=lambda e: e["title"]),
+            "apps": sorted(
+                (_apps.entry(a) for a in projects if a.get("folder", "") == path),
                 key=lambda e: e["title"]),
             "models": sorted(
                 ({

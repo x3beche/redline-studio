@@ -13,8 +13,12 @@ export interface Revision {
   view: { states: Record<string, [number, number]> | null } | null;
   part: string | null;
   model: string | null;
-  /** A board's note or a model's: each room shows its own. */
-  kind: 'cad' | 'pcb';
+  /** A board's note, a model's, or one of the coding rooms': each room
+   *  shows its own. */
+  kind: RevisionKind;
+  /** A note on a running interface: where it was drawn and what was under
+   *  the marks. Null for the other rooms. */
+  code: CodeNote | null;
   status: RevisionStatus;
   queued_at: string | null;
   edited_at: string | null;
@@ -110,6 +114,26 @@ export interface Settings {
   auto_translate: boolean;
 }
 
+export type RevisionKind = 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile';
+
+/** One element a mark landed on, as the note keeps it. */
+export interface DomHit {
+  selector: string;
+  tag: string;
+  text: string;
+  box: [number, number, number, number];
+  component: string | null;
+  file: string | null;
+  line: number | null;
+}
+
+export interface CodeNote {
+  route: string;
+  viewport: [number, number];
+  base: string | null;
+  dom: DomHit[];
+}
+
 /** draft = invisible to models; queued = in the apply queue (models read these). */
 export type RevisionStatus = 'draft' | 'queued' | 'applied' | 'rejected';
 
@@ -152,7 +176,8 @@ export class Api {
     comment: string; image_png: string | null;
     camera: CameraState | null; part: string | null; model: string | null;
       view?: { states: Record<string, [number, number]> | null } | null;
-      kind?: 'cad' | 'pcb';
+      kind?: RevisionKind;
+      code?: unknown;
   }): Observable<Revision> {
     return this.http.post<Revision>('/api/revisions', body);
   }
@@ -581,4 +606,129 @@ export class Activity {
     return this.http.get<LogLine[]>(`/api/activity?limit=${limit}&room=${room}`);
   }
   run(): Observable<Run | null> { return this.http.get<Run | null>('/api/run'); }
+}
+
+// ---------------- code projects ----------------
+/** A running interface: its checkout, where it is served, and the command
+ *  whose exit code says it still works. */
+export interface AppEntry {
+  _id: string;
+  title: string;
+  platform: 'web' | 'embedded' | 'mobile';
+  folder: string;
+  repo: string;
+  cwd: string;
+  url: string | null;
+  dev: string | null;
+  test: string | null;
+  routes: string[];
+  last_test: TestRun | null;
+}
+
+export interface AppStatus {
+  up: boolean;
+  git: { head: string; short: string; branch: string; dirty: number } | null;
+  error?: string;
+}
+
+/** A frozen page: the picture inline, the element list kept server-side. */
+export interface AppShot {
+  shot: string;
+  image: string;
+  width: number;
+  height: number;
+  elements: number;
+  title: string | null;
+  base: string | null;
+  wall_s: number | null;
+}
+
+/** One line of a hunk: kind, old line number, new line number, text. */
+export type DiffLine = [' ' | '+' | '-', number | null, number | null, string];
+
+export interface DiffFile {
+  path: string;
+  status: 'modified' | 'added' | 'deleted' | 'renamed';
+  added: number;
+  removed: number;
+  binary: boolean;
+  cut: boolean;
+  hunks: { head: string; lines: DiffLine[] }[];
+}
+
+export interface AppDiff {
+  files: DiffFile[];
+  added: number;
+  removed: number;
+  cut: boolean;
+  base: string | null;
+  note: string | null;
+  frozen: boolean;
+}
+
+export interface TestRun {
+  at: string;
+  ok: boolean;
+  rc: number;
+  wall_s: number;
+  cpu_s: number | null;
+  counts: Record<string, number>;
+  command: string;
+  head: string | null;
+  tail?: string;
+  lines: number;
+  /** Whether the tree is still the one the run was made on. */
+  current?: boolean;
+}
+
+export interface AppCompute {
+  app: string;
+  jobs: BoardJob[];
+  total: { jobs: number; wall_s: number; cpu_s: number };
+}
+
+@Injectable({ providedIn: 'root' })
+export class Apps {
+  private http = inject(HttpClient);
+  list(): Observable<AppEntry[]> { return this.http.get<AppEntry[]>('/api/apps'); }
+  status(id: string): Observable<AppStatus> {
+    return this.http.get<AppStatus>(`/api/apps/${id}/status`);
+  }
+  /** Start the dev server, unless something already answers. */
+  serve(id: string): Observable<{ started: boolean; up: boolean; why?: string }> {
+    return this.http.post<{ started: boolean; up: boolean; why?: string }>(
+      `/api/apps/${id}/serve`, {});
+  }
+  serverLog(id: string): Observable<{ lines: string[] }> {
+    return this.http.get<{ lines: string[] }>(`/api/apps/${id}/server-log`);
+  }
+  /** A real screenshot of a route at a size, from headless Chrome. */
+  shot(id: string, route: string, width: number, height: number): Observable<AppShot> {
+    return this.http.post<AppShot>(`/api/apps/${id}/shot`, { route, width, height });
+  }
+  /** What the marks landed on. Boxes are in the picture's own pixels. */
+  under(shot: string, marks: { box: number[]; tip: number[] | null }[]):
+      Observable<{ dom: DomHit[]; labels: string[] }> {
+    return this.http.post<{ dom: DomHit[]; labels: string[] }>(
+      `/api/apps/shots/${shot}/under`, { marks });
+  }
+  diff(id: string, note?: string | null): Observable<AppDiff> {
+    return this.http.get<AppDiff>(`/api/apps/${id}/diff`,
+      note ? { params: { note } } : {});
+  }
+  test(id: string): Observable<TestRun> {
+    return this.http.post<TestRun>(`/api/apps/${id}/test`, {});
+  }
+  lastTest(id: string): Observable<TestRun | null> {
+    return this.http.get<TestRun | null>(`/api/apps/${id}/test`);
+  }
+  compute(id: string): Observable<AppCompute> {
+    return this.http.get<AppCompute>(`/api/apps/${id}/compute`);
+  }
+  move(id: string, folder: string): Observable<unknown> {
+    return this.http.post(`/api/apps/${id}/move?folder=${encodeURIComponent(folder)}`, {});
+  }
+  drop(id: string): Observable<unknown> {
+    return this.http.delete(`/api/apps/${id}`);
+  }
 }

@@ -6,11 +6,11 @@
  *  an agent, rebuilt, checked against a measurement, photographed from the
  *  same angle. A board and a running interface both fit it.
  *
- *  So the shell holds the tabs and each room is a workspace inside it. Two
- *  are built; the other two say what they will be rather than pretending.
+ *  So the shell holds the tabs and each room is a workspace inside it. The
+ *  ones not finished say what they will be rather than pretending.
  */
 export interface Workspace {
-  id: 'cad' | 'pcb' | 'code' | 'analyze';
+  id: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' | 'analyze';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
@@ -32,11 +32,29 @@ export const WORKSPACES: Workspace[] = [
          + 'and the board placed and drawn from it.',
     ready: true,
   },
+  // Three coding rooms, not one. A web page, a firmware image and a phone
+  // app are the same loop - look at what runs, mark it, get a diff back,
+  // let the tests say whether it still works - over different things on
+  // screen. One component serves all three; the tab says which.
   {
-    id: 'code',
-    label: 'Coding',
-    blurb: 'Redlining a running interface: draw on what is on screen and '
-         + 'let the change arrive as a diff.',
+    id: 'web',
+    label: 'Web',
+    blurb: 'Redlining a running page: draw on what is on screen, the change '
+         + 'arrives as a diff, and the tests are the check.',
+    ready: true,
+  },
+  {
+    id: 'embedded',
+    label: 'Embedded',
+    blurb: 'Firmware: the same notes, diffs and tests. What it shows on '
+         + 'screen - a serial console, a display - is not wired yet.',
+    ready: false,
+  },
+  {
+    id: 'mobile',
+    label: 'Mobile',
+    blurb: 'A phone app: the same loop at a phone\'s size. Served on the '
+         + 'web it can be drawn on today; on a device, not yet.',
     ready: false,
   },
   {

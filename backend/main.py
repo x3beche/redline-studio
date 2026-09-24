@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from . import (ato, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
+from . import code_api
 
 LOG = logging.getLogger("x3.api")
 
@@ -48,6 +49,9 @@ app.add_middleware(
 )
 
 _client = None
+
+# The coding rooms keep their routes in a file of their own.
+app.include_router(code_api.router)
 
 
 def db():
@@ -517,7 +521,11 @@ class RevisionIn(BaseModel):
     # "pcb" when the note is about a board. A board is not a model - it has
     # no camera, nothing to freeze, and `build` does not take it - so the
     # agent and the page both need to know which one they are holding.
-    kind: str | None = Field(default=None, pattern="^(cad|pcb)$")
+    kind: str | None = Field(default=None, pattern="^(cad|pcb|web|embedded|mobile)$")
+    # A note on a running interface: the route and size it was drawn at,
+    # the commit it was drawn against, and the elements under the marks.
+    # web, embedded and mobile are the three coding rooms.
+    code: dict | None = None
 
 
 def _out(d: dict) -> dict:
@@ -525,6 +533,7 @@ def _out(d: dict) -> dict:
             "camera": d.get("camera"), "part": d.get("part"), "model": d.get("model"),
             "kind": d.get("kind") or "cad",
             "view": d.get("view"),
+            "code": d.get("code"),
             "status": d.get("status", "draft"), "queued_at": d.get("queued_at"),
             "edited_at": d.get("edited_at"), "archived": bool(d.get("archived")),
             "image_bytes": (d.get("image") or {}).get("bytes", 0),
@@ -717,6 +726,8 @@ async def create_revision(body: RevisionIn):
         "image": image,
         "view": body.view,
     }
+    if body.code is not None:
+        doc["code"] = body.code
     await d.revisions.insert_one(doc)
     schedule_note_work(rid)
     return _out(doc)

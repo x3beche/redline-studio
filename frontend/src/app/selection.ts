@@ -28,4 +28,41 @@ export class Selection {
     this.board.set(id);
     this.room.set('pcb');
   }
+
+  // ---- the coding rooms ----
+
+  /** The project the coding room on screen shows, by id. */
+  app = signal<string | null>(null);
+
+  /** What is under the marks on a frozen page, as the Part field offers
+   *  it: `button.tcv-btn "build" · rooms/pcb.ts`. */
+  codeParts = signal<string[]>([]);
+
+  /** The frozen page, marked up, ready to be filed. The room owns the
+   *  picture and the marks; the note form is in the column beside it, so
+   *  the form asks the room through this rather than reaching into it.
+   *  Null while nothing is frozen. */
+  codeDraft = signal<(() => Promise<CodeDraft>) | null>(null);
+
+  /** Bumped when a code note has been filed, so the room lets go of the
+   *  frozen page the way the 3D room lets go of its view. */
+  codeFiled = signal(0);
+
+  /** Open a project: web, embedded and mobile each have their own room. */
+  openApp(id: string, platform: 'web' | 'embedded' | 'mobile') {
+    this.app.set(id);
+    this.room.set(platform);
+  }
+}
+
+/** A note on a running interface, as the room hands it to the form. */
+export interface CodeDraft {
+  image_png: string | null;
+  code: {
+    route: string;
+    viewport: [number, number];
+    base: string | null;
+    shot: string | null;
+    dom: unknown[];
+  };
 }
