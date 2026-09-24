@@ -43,16 +43,22 @@ import { Drawing } from './drawing';
        The log under this and the queue beside it are the room's as much
        as the 3D room's - it sits in the viewer's own grid, so both are
        where they always were. -->
-  <div class="grid min-h-0 flex-1 gap-2 p-2"
-       style="grid-template-columns: 5fr 10fr 6fr;
-              grid-template-rows: 5fr 4fr 3fr">
-
+  <!-- Laid out as the 3D room is: a column on the left - the parts, and
+       under them what the runs cost, the rules, the checks and every ask
+       made of LCSC - and beside it the board, with its log along the
+       bottom. -->
+  <div class="flex min-h-0 flex-1 gap-2 p-2">
+    @if (big() !== 'board') {
+    <div class="flex min-h-0 shrink-0 flex-col gap-2"
+         [style.width]="big() === 'side' ? '58%' : '24%'"
+         style="min-width: 15rem">
     <!-- PARTS, FROM LCSC
          A board can only be drawn out of parts somebody can buy: the
          number is what the footprint and the 3D model are fetched by, so
          this is where a board gets its shapes. Searching downloads
          nothing - a search is a list to choose from. -->
-    <section class="tcv-pane" [style.grid-area]="area('parts')">
+    @if (big() !== 'side') {
+    <section class="tcv-pane min-h-0 flex-1">
       <header class="tcv-pane-head">
         <span class="tcv-label">parts</span>
         <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
@@ -251,20 +257,21 @@ import { Drawing } from './drawing';
       </div>
       }
     </section>
+    }
 
     <!-- WHAT IT COST, AND WHAT THE MACHINE IS DOING
          The board's own figures. The catalog's foot and the revision
          cards say the same kind of thing about models; these are about
          this board, so they are counted here. -->
-    @if (shown('side')) {
-    <section class="tcv-pane" [style.grid-area]="area('side')">
+    <section class="tcv-pane min-h-0" [class.flex-1]="big() === 'side'"
+             [style.height]="big() === 'side' ? null : '42%'">
       <header class="tcv-pane-head">
         @for (tab of sideTabs; track tab) {
           <button (click)="setSide(tab)" class="tcv-chip"
                   [attr.data-on]="side() === tab ? 1 : null">{{ tab }}</button>
         }
         <button (click)="toggleBig('side')" class="tcv-chip ml-auto shrink-0"
-                [title]="big() === 'side' ? 'back to its size' : 'the whole column'">
+                [title]="big() === 'side' ? 'back to its size' : 'wider'">
           {{ big() === 'side' ? '⤡' : '⤢' }}
         </button>
       </header>
@@ -457,6 +464,80 @@ import { Drawing } from './drawing';
             }
           }
         </div>
+      } @else if (side() === 'lcsc') {
+        <!-- EVERY ASK MADE OF LCSC, by whoever made it. These are
+             somebody else's endpoints and they turn a burst away, so what
+             the agents are doing to them is worth being able to watch. -->
+        @if (asks(); as j) {
+          <div class="mono shrink-0 px-2 pt-1 text-[10px]" style="color: var(--ink-dim)">
+            last hour: {{ j.last_hour.net }} sent · {{ j.last_hour.disk }} from disk
+            @if (j.last_hour.refused) {
+              · <span style="color: var(--danger)">{{ j.last_hour.refused }} refused</span>
+            }
+          </div>
+        }
+        <!-- The turn-taking as it stands: how far apart asks are kept,
+             and - when EasyEDA has said no - why and for how long. -->
+        @if (asks(); as j) {
+          <div class="mono flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1 text-[10px]"
+               style="border-bottom: 1px solid var(--line)">
+            @if (j.state.refused_until) {
+              <span style="color: var(--danger)">
+                cooling off · {{ coolLeft(j) }} left · {{ j.state.refused_why }}
+              </span>
+            } @else {
+              <span style="color: var(--ok)">asking</span>
+            }
+            <span style="color: var(--ink-dim)">one ask every {{ j.state.gap_s }} s</span>
+            <!-- EasyEDA refuses a count, not a rate - 35 asks over 220 s
+                 were enough - so this is the number that matters. -->
+            <span [style.color]="j.state.used >= j.state.budget ? 'var(--warn)' : 'var(--ink-dim)'">
+              {{ j.state.used }}/{{ j.state.budget }} asks in {{ j.state.window_s / 60 }} min
+            </span>
+            <span class="flex flex-wrap gap-1">
+              @for (f of askFilters; track f) {
+                <button (click)="askFilter.set(f)" class="tcv-chip px-1.5 py-0"
+                        [attr.data-on]="askFilter() === f ? 1 : null">{{ f }}</button>
+              }
+            </span>
+          </div>
+        }
+        <div class="tcv-scroll mono min-h-0 flex-1 overflow-y-auto text-[11px]">
+          @for (a of shownAsks(); track a.at + a.kind + a.target) {
+            <div (click)="openAsk.set(openAsk() === a ? null : a)"
+                 class="cursor-pointer px-2 py-0.5"
+                 [style.background]="openAsk() === a ? 'var(--accent-deep)' : null">
+              <!-- Two lines, so it reads in a narrow column: what was
+                   asked for and how it went, then when, by whom and what
+                   it cost. On one line the part number was the thing
+                   pushed off the edge. -->
+              <div class="flex items-baseline gap-1.5">
+                <span class="min-w-0 flex-1 truncate" style="color: var(--ink)"
+                      [title]="a.target">{{ a.target }}</span>
+                <span class="shrink-0" [style.color]="sourceColor(a)">
+                  {{ a.source === 'net' ? (a.status ?? 'err') : a.source }}
+                </span>
+              </div>
+              <div class="flex flex-wrap gap-x-1.5 text-[10px]" style="color: var(--ink-dim)">
+                <span style="color: var(--line)">{{ a.at.slice(11, 19) }}</span>
+                <span [style.color]="whoColor(a.who)">{{ a.who }}</span>
+                <span>{{ a.kind }}</span>
+                @if (a.source === 'net') { <span>{{ a.ms }}ms</span> }
+                @if (a.bytes) { <span>{{ size(a.bytes) }}</span> }
+              </div>
+              @if (openAsk() === a) {
+                <div class="mb-1 mt-0.5 break-all text-[10px] leading-snug"
+                     style="color: var(--ink-dim)">
+                  @if (a.url) { <div>{{ a.url }}</div> }
+                  @if (a.error) { <div style="color: var(--danger)">{{ a.error }}</div> }
+                  <div>{{ a.at }} · {{ a.who }} · {{ sourceWord(a.source) }}</div>
+                </div>
+              }
+            </div>
+          } @empty {
+            <div class="px-2 py-1" style="color: var(--ink-dim)">nothing asked yet</div>
+          }
+        </div>
       } @else {
       <div class="min-h-0 flex-1 overflow-auto p-2 text-[11px]">
         @if (cost()?.jobs?.length) {
@@ -514,127 +595,17 @@ import { Drawing } from './drawing';
       </div>
       }
     </section>
+    </div>
     }
 
-    <!-- THE LOG
-         Its own, not the 3D room's: the lines a board writes are about
-         this board, and a build that happened while you were looking at
-         something else is exactly what you want to read here. -->
-    @if (shown('log')) {
-    <section class="tcv-pane" [style.grid-area]="area('log')">
-      <header class="tcv-pane-head">
-        <button (click)="setBottom('log')" class="tcv-chip"
-                [attr.data-on]="bottom() === 'log' ? 1 : null">log</button>
-        <!-- Every ask made of LCSC, by whoever made it. These are
-             somebody else's endpoints and they turn a burst away, so what
-             the agents are doing to them is worth being able to watch. -->
-        <button (click)="setBottom('lcsc')" class="tcv-chip"
-                [attr.data-on]="bottom() === 'lcsc' ? 1 : null">lcsc</button>
-        @if (bottom() === 'log') {
-          <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
-            {{ log().length }} lines
-          </span>
-        } @else if (asks(); as j) {
-          <span class="mono ml-auto truncate text-[10px]" style="color: var(--ink-dim)">
-            last hour: {{ j.last_hour.net }} sent · {{ j.last_hour.disk }} from disk
-            @if (j.last_hour.refused) {
-              · <span style="color: var(--danger)">{{ j.last_hour.refused }} refused</span>
-            }
-          </span>
-        }
-        <button (click)="toggleTall()" class="tcv-chip shrink-0"
-                [class.ml-auto]="bottom() === 'lcsc' && !asks()"
-                [title]="tall() ? 'back to its size' : 'taller, over the drawing'">
-          {{ tall() ? '⤡' : '⤢' }}
-        </button>
-      </header>
-
-      @if (bottom() === 'log') {
-        <div #logBox class="tcv-scroll mono min-h-0 flex-1 overflow-y-auto px-2 py-1 text-[11px]">
-          @for (l of log(); track l._id) {
-            <div class="flex gap-2 leading-snug">
-              <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
-              <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
-            </div>
-          } @empty {
-            <div style="color: var(--ink-dim)">no activity yet</div>
-          }
-        </div>
-      } @else {
-        <!-- The turn-taking as it stands: how far apart asks are kept,
-             and - when EasyEDA has said no - why and for how long. -->
-        @if (asks(); as j) {
-          <div class="mono flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1 text-[10px]"
-               style="border-bottom: 1px solid var(--line)">
-            @if (j.state.refused_until) {
-              <span style="color: var(--danger)">
-                cooling off · {{ coolLeft(j) }} left · {{ j.state.refused_why }}
-              </span>
-            } @else {
-              <span style="color: var(--ok)">asking</span>
-            }
-            <span style="color: var(--ink-dim)">one ask every {{ j.state.gap_s }} s</span>
-            <!-- EasyEDA refuses a count, not a rate - 35 asks over 220 s
-                 were enough - so this is the number that matters. -->
-            <span [style.color]="j.state.used >= j.state.budget ? 'var(--warn)' : 'var(--ink-dim)'">
-              {{ j.state.used }}/{{ j.state.budget }} asks in {{ j.state.window_s / 60 }} min
-            </span>
-            <span class="ml-auto flex gap-1">
-              @for (f of askFilters; track f) {
-                <button (click)="askFilter.set(f)" class="tcv-chip px-1.5 py-0"
-                        [attr.data-on]="askFilter() === f ? 1 : null">{{ f }}</button>
-              }
-            </span>
-          </div>
-        }
-        <div class="tcv-scroll mono min-h-0 flex-1 overflow-y-auto text-[11px]">
-          @for (a of shownAsks(); track a.at + a.kind + a.target) {
-            <div (click)="openAsk.set(openAsk() === a ? null : a)"
-                 class="cursor-pointer px-2 py-0.5"
-                 [style.background]="openAsk() === a ? 'var(--accent-deep)' : null">
-              <!-- The part number or the search is what is being read
-                   down this list, so it gets the room; the rest are
-                   narrow and fixed. -->
-              <div class="flex items-baseline gap-1.5">
-                <span class="shrink-0" style="color: var(--line)">{{ a.at.slice(11, 19) }}</span>
-                <span class="w-[3.6rem] shrink-0 truncate" [style.color]="whoColor(a.who)">{{ a.who }}</span>
-                <span class="w-[4.2rem] shrink-0 truncate" style="color: var(--ink-dim)">{{ a.kind }}</span>
-                <span class="min-w-0 flex-1 truncate" style="color: var(--ink)"
-                      [title]="a.target">{{ a.target }}</span>
-                <span class="w-[3.3rem] shrink-0 text-right" [style.color]="sourceColor(a)">
-                  {{ a.source === 'net' ? (a.status ?? 'err') : a.source }}
-                </span>
-                <span class="w-[3.2rem] shrink-0 text-right" style="color: var(--ink-dim)">
-                  {{ a.source === 'net' ? a.ms + 'ms' : '' }}
-                </span>
-                <span class="w-[2.6rem] shrink-0 text-right" style="color: var(--ink-dim)">
-                  {{ a.bytes ? size(a.bytes) : '' }}
-                </span>
-              </div>
-              @if (openAsk() === a) {
-                <div class="mb-1 mt-0.5 break-all pl-[3.6rem] text-[10px] leading-snug"
-                     style="color: var(--ink-dim)">
-                  @if (a.url) { <div>{{ a.url }}</div> }
-                  @if (a.error) { <div style="color: var(--danger)">{{ a.error }}</div> }
-                  <div>{{ a.at }} · {{ a.who }} · {{ sourceWord(a.source) }}</div>
-                </div>
-              }
-            </div>
-          } @empty {
-            <div class="px-2 py-1" style="color: var(--ink-dim)">nothing asked yet</div>
-          }
-        </div>
-      }
-    </section>
-    }
-
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
     <!-- THE BOARD
          One window, three ways of looking at the same board: the copper,
          the schematic it came from, and the thing in three dimensions.
          Nothing in here makes anything - the agent runs the pipeline
          (build, schematic, place, route, DRC) when a change is asked for,
          and this shows what came of it. -->
-    <section class="tcv-pane" [style.grid-area]="area('board')">
+    <section class="tcv-pane min-h-0 flex-1">
       <header class="tcv-pane-head">
         @for (tab of boardTabs; track tab) {
           <button (click)="setBoardTab(tab)" class="tcv-chip"
@@ -737,6 +708,34 @@ import { Drawing } from './drawing';
       }
     </section>
 
+    <!-- THE LOG
+         A band under the board, the way the 3D room has one under its
+         view: folded to one line, or open to the last lines. Its own, not
+         the 3D room's - the lines a board writes are about the board. -->
+    <div class="tcv-panel shrink-0 rounded" style="border: 1px solid var(--line)">
+      <div class="flex items-center gap-2 px-2.5 py-1">
+        <button (click)="toggleLog()" class="tcv-chip">
+          {{ logOpen() ? '▾' : '▸' }} log
+        </button>
+        <span class="mono text-[10px]" style="color: var(--ink-dim)">
+          {{ log().length }} lines
+        </span>
+      </div>
+      @if (logOpen()) {
+        <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
+             style="height: 132px; border-top: 1px solid var(--line)">
+          @for (l of log(); track l._id) {
+            <div class="flex gap-2 leading-snug">
+              <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
+              <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
+            </div>
+          } @empty {
+            <div style="color: var(--ink-dim)">no activity yet</div>
+          }
+        </div>
+      }
+    </div>
+    </div>
   </div>
   }
 </div>`,
@@ -767,9 +766,10 @@ export class RoomPcb implements OnDestroy {
   readonly notYet = 'Nothing yet. Ask for the change - a board note, or the '
     + 'thread under the queue - and the agent runs the pipeline: build, '
     + 'schematic, place, route, DRC.';
-  readonly sideTabs = ['machine', 'rules', 'checks'] as const;
-  side = signal<'machine' | 'rules' | 'checks'>(
-    RoomPcb.recall('side', 'machine') as 'machine' | 'rules' | 'checks');
+  readonly sideTabs = ['machine', 'rules', 'checks', 'lcsc'] as const;
+  side = signal<'machine' | 'rules' | 'checks' | 'lcsc'>(
+    RoomPcb.pick(RoomPcb.recall('side', 'machine'),
+                 ['machine', 'rules', 'checks', 'lcsc'], 'machine'));
   /** The copper as KiCad draws it with the ground pour, without it so the
    *  tracks can be followed, and the back seen from below. */
   readonly views = ['front', 'tracks', 'back'] as const;
@@ -802,10 +802,9 @@ export class RoomPcb implements OnDestroy {
   /** The part whose photo would not load, so the frame is not left empty. */
   noPhoto = signal<string | null>(null);
 
-  /** The bottom pane: this room's log, or every ask made of LCSC. Kept
-   *  across a reload, like the other panels. */
-  bottom = signal<'log' | 'lcsc'>(RoomPcb.recall('bottom', 'log') as 'log' | 'lcsc');
-  tall = signal(RoomPcb.recall('tall', '') === '1');
+  /** The log band, open or folded - kept across a reload, like the 3D
+   *  room's. */
+  logOpen = signal(RoomPcb.recall('log', '1') === '1');
   asks = signal<LcscJournal | null>(null);
   readonly askFilters = ['all', 'sent', 'disk', 'refused', 'agent', 'page'] as const;
   askFilter = signal<(typeof RoomPcb.prototype.askFilters)[number]>('all');
@@ -945,16 +944,10 @@ export class RoomPcb implements OnDestroy {
     try { localStorage.setItem(RoomPcb.KEY + key, value); } catch { /* private window */ }
   }
 
-  setBottom(which: 'log' | 'lcsc') {
-    this.bottom.set(which);
-    RoomPcb.keep('bottom', which);
-    if (which === 'lcsc') this.readJournal();
-    else setTimeout(() => this.scrollLog(), 30);
-  }
-
-  toggleTall() {
-    this.tall.update(v => !v);
-    RoomPcb.keep('tall', this.tall() ? '1' : '');
+  toggleLog() {
+    this.logOpen.update(v => !v);
+    RoomPcb.keep('log', this.logOpen() ? '1' : '');
+    if (this.logOpen()) setTimeout(() => this.scrollLog(), 30);
   }
 
   private readJournal() {
@@ -1004,7 +997,7 @@ export class RoomPcb implements OnDestroy {
 
   /** The live half: what the machine is doing, and what has happened. */
   private tick() {
-    if (this.bottom() === 'lcsc') this.readJournal();
+    if (this.side() === 'lcsc') this.readJournal();
     this.health.system().subscribe({ next: s => this.sys.set(s) });
     this.activity.lines(60, 'pcb').subscribe({
       next: rows => {
@@ -1160,30 +1153,6 @@ export class RoomPcb implements OnDestroy {
 
   // ---- which pane goes where ----
 
-  /** Each pane's place in the grid. The board window takes the middle
-   *  and right columns over the log and the side pane; made large it takes
-   *  both of them too, and the side pane made large takes the right
-   *  column from top to bottom. */
-  area(pane: 'parts' | 'board' | 'log' | 'side'): string {
-    const big = this.big();
-    const tall = this.tall();
-    switch (pane) {
-      case 'parts': return '1 / 1 / 4 / 2';
-      case 'board':
-        if (big === 'board') return '1 / 2 / 4 / 4';
-        if (big === 'side') return tall ? '1 / 2 / 2 / 3' : '1 / 2 / 3 / 3';
-        return tall ? '1 / 2 / 2 / 4' : '1 / 2 / 3 / 4';
-      case 'log': return tall ? '2 / 2 / 4 / 3' : '3 / 2 / 4 / 3';
-      case 'side':
-        if (big === 'side') return '1 / 3 / 4 / 4';
-        return tall ? '2 / 3 / 4 / 4' : '3 / 3 / 4 / 4';
-    }
-  }
-
-  shown(pane: 'log' | 'side'): boolean {
-    return this.big() !== 'board';
-  }
-
   toggleBig(pane: 'board' | 'side') {
     this.big.set(this.big() === pane ? 'none' : pane);
     RoomPcb.keep('big', this.big());
@@ -1194,10 +1163,11 @@ export class RoomPcb implements OnDestroy {
     RoomPcb.keep('board', tab);
   }
 
-  setSide(tab: 'machine' | 'rules' | 'checks') {
+  setSide(tab: 'machine' | 'rules' | 'checks' | 'lcsc') {
     this.side.set(tab);
     RoomPcb.keep('side', tab);
     if (tab === 'rules' && !this.draft()) this.loadRules();
+    if (tab === 'lcsc') this.readJournal();
   }
 
   entries(o: Record<string, number> | null | undefined): [string, number][] {

@@ -181,11 +181,13 @@ About a minute for a 33-part board. The room shows what came of it.
 |---|---|
 | **parts** | LCSC's catalogue, the part you clicked in full, and the drawer |
 | **board** | one window, three tabs: **layout** - the routed board as *front* (with the pour), *tracks* (copper only, both layers) or *back* (from below); **schematic** - on black, scroll to zoom, drag to move, double-click to fit; **3d** - the board with its parts, copper and mask. `.kicad_pcb` and `.kicad_sch` open them in KiCad |
-| **machine · rules · checks** | what each run cost; the routing rules; what DRC and ERC found |
-| **log · lcsc** | this room's log; every request made of LCSC |
+| **machine · rules · checks · lcsc** | under the parts: what each run cost; the routing rules; what DRC and ERC found; every request made of LCSC |
+| **log** | a band under the board, as in the 3D room: folded to one line, or open to the last lines. Only this room's lines |
 
-⤢ on a pane makes it large; the room remembers which tab and which pane
-across a reload.
+It is laid out the way the 3D room is: a column on the left, the board
+beside it, the log along the bottom. ⤢ on the board hides the column; ⤢ on
+the side pane widens it, for editing rules. The room remembers which tab,
+which pane and whether the log is open across a reload.
 
 ### Rules
 
@@ -254,7 +256,7 @@ be about one of them.
 
 ### Watching what is asked of LCSC
 
-The log pane at the foot of the board room has a second tab, **lcsc**:
+The board room's side pane, under the parts, has an **lcsc** tab:
 every request made of LCSC, by the page or by an agent, newest first —
 what was asked (a search, a part's details, its drawings, its model, its
 photo), whether it went to EasyEDA or was answered from disk, the status,
