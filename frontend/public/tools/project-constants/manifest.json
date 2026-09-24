@@ -1,0 +1,42 @@
+{
+  "id": "project-constants",
+  "name": "Project Constants",
+  "blurb": "board size, supply voltages and mechanical references kept in one place",
+  "group": "project",
+  "rooms": ["all"],
+  "keywords": ["constants", "project constants", "single source of truth", "board size", "outline", "supply voltage", "rails", "mounting holes", "dimensions", "tolerance", "parameters", "config header", "defines", "shared values", "specs"],
+  "intro": "One list of the numbers every room uses - board outline, rails, holes, heights, temperatures - saved as the project's record in the app. It checks names, units and tolerances, works out the min/max limits, and writes the same list as a C header, Python, OpenSCAD and JSON.",
+  "inputs": [
+    { "key": "constants", "label": "Constants", "type": "table",
+      "help": "Value: a number (3.3, 4k7), a range (-20..60) or text (ENIG). Tolerance: ±0.2, ±5% or +0.1/-0.05.",
+      "columns": [
+        { "key": "name", "label": "Name" },
+        { "key": "value", "label": "Value" },
+        { "key": "unit", "label": "Unit", "default": "mm" },
+        { "key": "tol", "label": "Tolerance" },
+        { "key": "group", "label": "Group", "type": "select", "options": ["board", "power", "mechanical", "thermal", "interface", "environment", "other"], "default": "board" },
+        { "key": "note", "label": "Note" }
+      ],
+      "default": [
+        { "name": "BOARD_W", "value": "50", "unit": "mm", "tol": "±0.2", "group": "board", "note": "outline, X" },
+        { "name": "BOARD_H", "value": "30", "unit": "mm", "tol": "±0.2", "group": "board", "note": "outline, Y" },
+        { "name": "PCB_THICKNESS", "value": "1.6", "unit": "mm", "tol": "±10%", "group": "board", "note": "FR-4, 2 layers" },
+        { "name": "PCB_FINISH", "value": "ENIG", "unit": "-", "tol": "", "group": "board", "note": "" },
+        { "name": "VIN", "value": "5", "unit": "V", "tol": "±5%", "group": "power", "note": "USB-C VBUS" },
+        { "name": "VCC_3V3", "value": "3.3", "unit": "V", "tol": "±3%", "group": "power", "note": "buck output" },
+        { "name": "MOUNT_HOLE_D", "value": "3.2", "unit": "mm", "tol": "+0.1/-0", "group": "mechanical", "note": "M3 clearance, ISO 273 fine" },
+        { "name": "MOUNT_HOLE_INSET", "value": "3.5", "unit": "mm", "tol": "", "group": "mechanical", "note": "hole centre from board edge" },
+        { "name": "MAX_PART_HEIGHT", "value": "8", "unit": "mm", "tol": "", "group": "mechanical", "note": "top side, under the lid" },
+        { "name": "ENCLOSURE_WALL", "value": "2", "unit": "mm", "tol": "", "group": "mechanical", "note": "FDM, 0.4 mm nozzle" },
+        { "name": "T_OPERATING", "value": "-20..60", "unit": "°C", "tol": "", "group": "environment", "note": "ambient" }
+      ] },
+    { "key": "filter", "label": "Show only", "type": "text", "default": "", "placeholder": "name, note or group" }
+  ],
+  "examples": [
+    { "title": "Small USB-C fan controller", "input": { "filter": "" } },
+    { "title": "Only the power rails", "input": { "filter": "power" } }
+  ],
+  "usage": "Pass `constants` as rows {name, value, unit, tol, group, note}: value is a number in engineering notation, a range 'min..max' or text; tol is '±0.2', '±5%' or '+0.1/-0.05'; group is board, power, mechanical, thermal, interface, environment or other. It returns the rows per group with min/max limits, warnings for bad names, duplicates, missing units and unreadable tolerances, and the list as C header, Python, OpenSCAD and JSON texts. The project's saved list is read or written with the MCP tool tool_data (id project-constants, data {constants: [...]}); read it before using a board size or rail voltage.",
+  "sources": ["ISO 80000-1:2022 (a value is a number times a unit; units written after the number)", "ISO/IEC 9899:2011 (C11) §6.4.2.1 identifiers", "ISO 273 clearance holes for bolts and screws (the M3 example)"],
+  "view": true
+}

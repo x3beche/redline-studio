@@ -1,0 +1,46 @@
+{
+  "id": "glossary",
+  "name": "Glossary & Acronym Book",
+  "blurb": "a project's acronyms and terms in one list",
+  "group": "project",
+  "rooms": ["all"],
+  "keywords": ["glossary", "acronyms", "abbreviations", "terms", "terminology", "definitions", "jargon", "dictionary", "what does it stand for", "expansion", "undefined acronyms", "vocabulary"],
+  "intro": "The project's acronyms and terms in one list, saved as the project's record in the app: one term, one meaning (ISO 704), with duplicates and conflicting expansions flagged. Paste a note or a spec to find the acronyms it uses that the glossary does not define yet.",
+  "inputs": [
+    { "key": "terms", "label": "Terms", "type": "table",
+      "help": "The same term may mean different things in two rooms: give each its Domain.",
+      "columns": [
+        { "key": "term", "label": "Term" },
+        { "key": "expansion", "label": "Stands for" },
+        { "key": "definition", "label": "Meaning" },
+        { "key": "domain", "label": "Domain", "type": "select", "options": ["all", "project", "cad", "pcb", "web", "embedded", "mobile"], "default": "all" },
+        { "key": "see", "label": "See also" }
+      ],
+      "default": [
+        { "term": "ADR", "expansion": "Architecture Decision Record", "definition": "A short record of why a part or topology was chosen.", "domain": "project", "see": "" },
+        { "term": "BOM", "expansion": "Bill of Materials", "definition": "Every part on the board with quantity, value and order number.", "domain": "pcb", "see": "" },
+        { "term": "DRC", "expansion": "Design Rule Check", "definition": "Checks the layout against the fab's clearances and widths.", "domain": "pcb", "see": "ERC" },
+        { "term": "ERC", "expansion": "Electrical Rule Check", "definition": "Checks the schematic for unconnected pins and driver conflicts.", "domain": "pcb", "see": "DRC" },
+        { "term": "ESD", "expansion": "Electrostatic Discharge", "definition": "A static spark; USB ports are tested to IEC 61000-4-2.", "domain": "all", "see": "TVS" },
+        { "term": "TVS", "expansion": "Transient Voltage Suppressor", "definition": "A diode that clamps ESD and surge on a line.", "domain": "pcb", "see": "ESD" },
+        { "term": "LDO", "expansion": "Low-Dropout regulator", "definition": "A linear regulator that works with little headroom.", "domain": "pcb", "see": "" },
+        { "term": "I2C", "expansion": "Inter-Integrated Circuit", "definition": "Two-wire bus (SDA, SCL) with open-drain lines and pull-ups.", "domain": "embedded", "see": "" },
+        { "term": "OLED", "expansion": "Organic Light-Emitting Diode", "definition": "The self-lit display; here an SSD1306 128x32.", "domain": "all", "see": "" },
+        { "term": "FDM", "expansion": "Fused Deposition Modelling", "definition": "3D printing by extruding a plastic filament.", "domain": "cad", "see": "" },
+        { "term": "OTA", "expansion": "Over-The-Air update", "definition": "Firmware update over Wi-Fi.", "domain": "embedded", "see": "" }
+      ] },
+    { "key": "domain", "label": "Domain", "type": "select", "default": "any",
+      "options": [["any", "Any"], ["project", "Project"], ["cad", "CAD"], ["pcb", "PCB"], ["web", "Web"], ["embedded", "Embedded"], ["mobile", "Mobile"]] },
+    { "key": "filter", "label": "Search", "type": "text", "default": "", "placeholder": "term or a word of its meaning" },
+    { "key": "text", "label": "Check a text for undefined acronyms", "type": "textarea", "rows": 5,
+      "default": "The PCB passed DRC and ERC. Next: add a TVS on the USB lines for ESD, route SWD to the header, and check the UART level shifter. OTA is still off.",
+      "placeholder": "Paste a note, a spec or a README" }
+  ],
+  "examples": [
+    { "title": "Check a design note", "input": { "domain": "any", "filter": "" } },
+    { "title": "PCB terms only", "input": { "domain": "pcb", "filter": "", "text": "" } }
+  ],
+  "usage": "Pass `terms` as rows {term, expansion, definition, domain: all|project|cad|pcb|web|embedded|mobile, see}, optionally `domain`/`filter` to narrow the list and `text` to scan a document. It returns the sorted glossary, warnings for duplicates, conflicting meanings in one domain and dangling see-also links, and - for a text - the acronyms used but not defined (with where they first appear), plus Markdown and CSV. Read the project's glossary with the MCP tool tool_data (id glossary) before writing documentation, and add new terms to it (data {terms: [...]}).",
+  "sources": ["ISO 704:2022 Terminology work - Principles and methods (one concept, one term)", "IEC 60050 International Electrotechnical Vocabulary (electropedia.org) for standard electrical definitions", "Acronym detection: rule of thumb"],
+  "view": true
+}

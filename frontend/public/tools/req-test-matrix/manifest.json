@@ -1,0 +1,50 @@
+{
+  "id": "req-test-matrix",
+  "name": "Requirement ↔ Test Matrix",
+  "blurb": "each requirement matched with the test that proves it, gaps shown",
+  "group": "project",
+  "rooms": ["analyze"],
+  "keywords": ["requirements", "traceability", "rtm", "traceability matrix", "verification", "validation", "test coverage", "test plan", "gaps", "v&v", "iadt", "acceptance", "coverage matrix", "requirement id"],
+  "intro": "A requirements traceability matrix: every requirement traced to the tests (or inspection and analysis records) that prove it, with the gaps, failures and orphan tests listed. Coverage follows the bidirectional traceability of ISO/IEC/IEEE 29148; the list is saved as the project's record in the app.",
+  "inputs": [
+    { "key": "reqs", "label": "Requirements", "type": "table",
+      "columns": [
+        { "key": "id", "label": "ID" },
+        { "key": "text", "label": "Requirement" },
+        { "key": "priority", "label": "Priority", "type": "select", "options": ["must", "should", "could"], "default": "must" },
+        { "key": "method", "label": "Verified by", "type": "select", "options": ["test", "analysis", "inspection", "demonstration"], "default": "test" }
+      ],
+      "default": [
+        { "id": "REQ-01", "text": "Runs from USB-C 5 V (4.75-5.25 V)", "priority": "must", "method": "test" },
+        { "id": "REQ-02", "text": "Fan speed set in 10 steps with the encoder", "priority": "must", "method": "demonstration" },
+        { "id": "REQ-03", "text": "Board fits a 50 x 30 mm outline", "priority": "must", "method": "inspection" },
+        { "id": "REQ-04", "text": "USB port survives ±8 kV contact ESD (IEC 61000-4-2)", "priority": "must", "method": "test" },
+        { "id": "REQ-05", "text": "Standby current below 1 mA", "priority": "should", "method": "test" },
+        { "id": "REQ-06", "text": "Display readable from 1 m", "priority": "could", "method": "demonstration" }
+      ] },
+    { "key": "tests", "label": "Tests and verification records", "type": "table",
+      "help": "Covers: the requirement IDs this test proves, separated by commas or spaces.",
+      "columns": [
+        { "key": "id", "label": "ID" },
+        { "key": "name", "label": "Test" },
+        { "key": "covers", "label": "Covers" },
+        { "key": "result", "label": "Result", "type": "select", "options": ["not run", "pass", "fail", "blocked"], "default": "not run" }
+      ],
+      "default": [
+        { "id": "T-01", "name": "Power-up at 4.75 V and 5.25 V", "covers": "REQ-01", "result": "pass" },
+        { "id": "T-02", "name": "Encoder sweep, count the steps", "covers": "REQ-02", "result": "pass" },
+        { "id": "T-03", "name": "Outline check against the drawing", "covers": "REQ-03", "result": "pass" },
+        { "id": "T-04", "name": "ESD gun on the USB shield and pins", "covers": "REQ-04", "result": "not run" },
+        { "id": "T-05", "name": "Standby current with a µA meter", "covers": "REQ-05, REQ-01", "result": "fail" }
+      ] },
+    { "key": "show", "label": "Show", "type": "select", "default": "all",
+      "options": [["all", "All requirements"], ["open", "Not yet verified"], ["gaps", "Gaps only (no evidence)"], ["failing", "Failing or blocked"]] }
+  ],
+  "examples": [
+    { "title": "Fan controller before release", "input": { "show": "all" } },
+    { "title": "What still needs a test", "input": { "show": "open" } }
+  ],
+  "usage": "Pass `reqs` as rows {id, text, priority: must|should|could, method: test|analysis|inspection|demonstration} and `tests` as rows {id, name, covers: 'REQ-01, REQ-02', result: 'not run'|pass|fail|blocked}. It returns coverage and verified percentages, the matrix with a status per requirement (no evidence, failing, blocked, not run, partly run, verified), a requirement x test grid when there are 12 tests or fewer, a Markdown matrix, and warnings for must-have gaps, failures, unknown IDs and tests that cover nothing. The project's lists are read or written with the MCP tool tool_data (id req-test-matrix, data {reqs: [...], tests: [...]}).",
+  "sources": ["ISO/IEC/IEEE 29148:2018 Systems and software engineering - Requirements engineering (bidirectional traceability, verification)", "INCOSE Systems Engineering Handbook, 5th ed. - verification methods: inspection, analysis, demonstration, test"],
+  "view": true
+}

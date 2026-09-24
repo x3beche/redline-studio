@@ -1,0 +1,86 @@
+{
+  "id": "datasheet-extractor",
+  "name": "Datasheet Snippet Extractor",
+  "blurb": "pinout and absolute maximum tables from a PDF into structured data",
+  "group": "project",
+  "rooms": [
+    "all"
+  ],
+  "keywords": [
+    "datasheet",
+    "pdf",
+    "pinout",
+    "pin table",
+    "pin functions",
+    "absolute maximum ratings",
+    "abs max",
+    "extract",
+    "parse",
+    "pdftotext",
+    "ratings",
+    "ball map",
+    "structured data",
+    "json",
+    "csv"
+  ],
+  "intro": "Reads the Absolute Maximum Ratings table and the pin table out of a datasheet's text, as pdftotext -layout writes it, into rows with min/max/unit and pin/name/type/description. In the app, choose the PDF and it is converted offline; it is a layout heuristic, so every row keeps its line number to check against the PDF.",
+  "inputs": [
+    {
+      "key": "part",
+      "label": "Part",
+      "type": "text",
+      "default": "SAMPLE-LDO",
+      "placeholder": "MPN, for the output"
+    },
+    {
+      "key": "what",
+      "label": "Extract",
+      "type": "select",
+      "default": "both",
+      "options": [
+        [
+          "both",
+          "Ratings and pins"
+        ],
+        [
+          "absmax",
+          "Absolute maximum only"
+        ],
+        [
+          "pins",
+          "Pins only"
+        ]
+      ]
+    },
+    {
+      "key": "text",
+      "label": "Datasheet text (pdftotext -layout)",
+      "type": "textarea",
+      "rows": 12,
+      "default": "6 Specifications\n6.1 Absolute Maximum Ratings\nover operating free-air temperature range (unless otherwise noted) (1)\n                                                                MIN        MAX      UNIT\n                            IN                                  −0.3       6.5       V\nVoltage                     EN                                  −0.3       VIN + 0.3 V\n                            OUT                                 −0.3       3.6       V\nCurrent                     Maximum output current              Internally limited\nTemperature                 Operating junction, TJ              −40        150       °C\n                            Storage, Tstg                       −65        150       °C\n(1) Stresses beyond those listed under Absolute Maximum Ratings may cause permanent damage.\n\n6.2 ESD Ratings\n                                                                VALUE      UNIT\nV(ESD)   Human-body model (HBM), per ANSI/ESDA/JEDEC JS-001      ±2000      V\n\n5 Pin Configuration and Functions\n                         Table 5-1. Pin Functions\n        PIN\nNAME           NO.       I/O       DESCRIPTION\nIN             1         I         Input supply. Bypass with 1 µF to GND.\nGND            2         —         Ground\nEN             3         I         Enable. High turns the regulator on; do not\n                                   leave floating.\nNC             4         —         No internal connection\nOUT            5         O         Regulated output. Use a 1 µF ceramic to GND.\n",
+      "help": "Columns must keep their spacing. In the app, the PDF picker above fills this; elsewhere run pdftotext -layout file.pdf - and paste the pages with the tables."
+    }
+  ],
+  "examples": [
+    {
+      "title": "An LDO datasheet page (TI layout)",
+      "input": {
+        "part": "SAMPLE-LDO",
+        "what": "both"
+      }
+    },
+    {
+      "title": "Pins only",
+      "input": {
+        "part": "SAMPLE-LDO",
+        "what": "pins"
+      }
+    }
+  ],
+  "usage": "Pass `text` as the datasheet's text from `pdftotext -layout` (only the pages with the tables is best), `part` as its name and `what` as both, absmax or pins. It returns the absolute maximum rows {parameter, condition, min, max, unit} (numbers where the cell is a number, else the text such as 'VIN + 0.3' or 'Internally limited') and the pins {pin, name, type, description}, as tables, JSON and CSV, with the source line of each row and the lines inside the tables it could not read. Check the rows against the PDF; for design limits use the recommended operating conditions, not these.",
+  "sources": [
+    "Poppler pdftotext -layout (keeps the column layout as spaces)",
+    "Table reading: layout heuristic (header column positions, 2+ space cell breaks); JEDEC JEP184-style absolute maximum ratings semantics: stress limits, not operating conditions"
+  ],
+  "view": true
+}

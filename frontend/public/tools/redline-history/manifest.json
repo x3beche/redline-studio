@@ -1,0 +1,28 @@
+{
+  "id": "redline-history",
+  "name": "Redline History Diff",
+  "blurb": "every note that landed on the same area over time, with outcomes",
+  "group": "project",
+  "rooms": ["all"],
+  "keywords": ["redline", "revision history", "notes", "markup", "same area", "hotspot", "rework", "repeat changes", "came back", "timeline", "outcomes", "applied", "rejected", "churn"],
+  "intro": "Groups the app's redline notes by the area they were drawn on - the same model and part, or else a camera target within a radius - and lists each area's notes in time order with their outcome. A note that follows an applied fix on the same spot counts as 'came back': the first fix did not settle it.",
+  "inputs": [
+    { "key": "notes", "label": "Notes (JSON)", "type": "textarea", "rows": 6,
+      "help": "In the app, Load notes fills this from /api/revisions. Fields used: id, created_at, kind, model, part, status, summary or comment, target [x,y,z] or camera.target.",
+      "default": "[{\"id\":\"n1\",\"created_at\":\"2026-09-21T10:41:17Z\",\"kind\":\"cad\",\"model\":\"fan/body\",\"part\":\"govde\",\"status\":\"applied\",\"summary\":\"Shrink the text and centre it vertically\"},\n{\"id\":\"n2\",\"created_at\":\"2026-09-21T10:45:19Z\",\"kind\":\"cad\",\"model\":\"fan/body\",\"part\":\"govde\",\"status\":\"applied\",\"summary\":\"Halve the slot depths on both sides\"},\n{\"id\":\"n3\",\"created_at\":\"2026-09-21T11:08:20Z\",\"kind\":\"cad\",\"model\":\"fan/body\",\"part\":\"govde\",\"status\":\"rejected\",\"summary\":\"Fill this area with engraved product text\"},\n{\"id\":\"n4\",\"created_at\":\"2026-09-22T06:26:04Z\",\"kind\":\"cad\",\"model\":\"fan/base\",\"status\":\"applied\",\"summary\":\"Move the hole off the column\",\"target\":[8.5,-3.1,-7.8]},\n{\"id\":\"n5\",\"created_at\":\"2026-09-22T06:30:02Z\",\"kind\":\"cad\",\"model\":\"fan/base\",\"status\":\"applied\",\"summary\":\"Remove the vertical hole here\",\"target\":[12.2,-9.0,4.1]},\n{\"id\":\"n6\",\"created_at\":\"2026-09-22T06:36:30Z\",\"kind\":\"cad\",\"model\":\"fan/base\",\"status\":\"queued\",\"summary\":\"Remove the thin wall here\",\"target\":[38.6,-31.0,-5.1]},\n{\"id\":\"n7\",\"created_at\":\"2026-09-24T10:25:51Z\",\"kind\":\"pcb\",\"model\":\"controller\",\"status\":\"applied\",\"summary\":\"Compact the PCB and fit all text on board\"},\n{\"id\":\"n8\",\"created_at\":\"2026-09-24T12:38:44Z\",\"kind\":\"pcb\",\"model\":\"controller\",\"status\":\"applied\",\"summary\":\"Move the USB-C port to the edge\"}]" },
+    { "key": "room", "label": "Room", "type": "select", "default": "all", "options": [["all", "All rooms"], "cad", "pcb", "web", "embedded", "mobile"] },
+    { "key": "by", "label": "Same area means", "type": "select", "default": "auto",
+      "options": [["auto", "Same part, else nearby camera"], ["part", "Same part only"], ["place", "Nearby camera only"], ["model", "Same model"]] },
+    { "key": "radius", "label": "Nearby within", "type": "number", "unit": "mm", "default": "30",
+      "help": "Camera targets closer than this count as one spot.", "when": { "key": "by", "in": ["auto", "place"] } },
+    { "key": "min", "label": "Show areas with at least", "type": "number", "unit": "notes", "default": "2" },
+    { "key": "area", "label": "Timeline of area", "type": "text", "default": "", "placeholder": "part or model name; empty = the most marked" }
+  ],
+  "examples": [
+    { "title": "Fan body and PCB notes", "input": { "room": "all", "by": "auto", "radius": "30", "min": "2", "area": "" } },
+    { "title": "The base part only, by camera", "input": { "room": "cad", "by": "place", "radius": "40", "min": "2", "area": "fan/base" } }
+  ],
+  "usage": "Pass `notes` as a JSON array of revision notes (the app's GET /api/revisions and /api/revisions?archived=true: id, created_at, kind, model, part, status, summary or comment, camera.target or target). `by` chooses what counts as the same area (auto, part, place, model), `radius` in mm joins nearby camera targets, `min` is the repeat threshold and `area` picks the timeline to show. It returns the areas marked repeatedly with applied/rejected/open counts and 'came back' notes (a new note after an applied fix), plus one area's timeline with note IDs. Use it before changing a spot to see what was already tried there.",
+  "sources": ["Redline revision records (the app's /api/revisions)", "Grouping by camera target within a radius: rule of thumb (the orbit camera is centred on what is being marked)"],
+  "view": true
+}

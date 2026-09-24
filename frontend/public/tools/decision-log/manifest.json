@@ -1,0 +1,41 @@
+{
+  "id": "decision-log",
+  "name": "Decision Log (ADR)",
+  "blurb": "short records of why a part or topology was chosen",
+  "group": "project",
+  "rooms": ["analyze"],
+  "keywords": ["adr", "architecture decision record", "decision log", "design decision", "rationale", "trade-off", "why", "part choice", "topology", "madr", "nygard", "superseded", "design review"],
+  "intro": "Architecture Decision Records in Michael Nygard's form - context, decision, alternatives, consequences - one row each, saved as the project's record in the app. It checks IDs, ISO dates and the superseded-by chain, flags records missing a part, and writes the log as Markdown.",
+  "inputs": [
+    { "key": "decisions", "label": "Decisions", "type": "table",
+      "help": "Never rewrite an accepted row: add a new one and set the old one to superseded, with the new ID in Superseded by.",
+      "columns": [
+        { "key": "id", "label": "ID" },
+        { "key": "date", "label": "Date" },
+        { "key": "title", "label": "Title" },
+        { "key": "status", "label": "Status", "type": "select", "options": ["proposed", "accepted", "rejected", "deprecated", "superseded"], "default": "proposed" },
+        { "key": "context", "label": "Context" },
+        { "key": "decision", "label": "Decision" },
+        { "key": "alternatives", "label": "Alternatives" },
+        { "key": "consequences", "label": "Consequences" },
+        { "key": "superseded_by", "label": "Superseded by" }
+      ],
+      "default": [
+        { "id": "ADR-001", "date": "2026-09-10", "title": "USB-C 5 V input, no barrel jack", "status": "accepted", "context": "Desk fan, users have USB chargers; 5 V at under 1.5 A is enough for fan and logic.", "decision": "Power from a USB-C receptacle with 5.1 kΩ CC pull-downs (sink, default USB power).", "alternatives": "Barrel jack 12 V: needs a wall adapter and a bigger buck. USB-C PD: extra controller for power we do not need.", "consequences": "Max 5 V x 1.5 A; fan must be a 5 V type. Needs ESD protection on VBUS and CC.", "superseded_by": "" },
+        { "id": "ADR-002", "date": "2026-09-11", "title": "Buck converter for 3V3", "status": "accepted", "context": "5 V to 3.3 V at up to 300 mA for the ESP32-C3 radio bursts.", "decision": "Synchronous buck, 2.2 µH, 2 MHz.", "alternatives": "LDO: 0.51 W lost at 300 mA and the board gets warm in a closed case.", "consequences": "Needs a careful layout of the switch node; one more inductor on the BOM.", "superseded_by": "" },
+        { "id": "ADR-003", "date": "2026-09-12", "title": "0.96 inch 128x64 OLED", "status": "superseded", "context": "A small status display for speed and temperature.", "decision": "SSD1306 128x64 OLED on I2C.", "alternatives": "Segment LEDs: less information.", "consequences": "Needs a 27 x 28 mm window in the case.", "superseded_by": "ADR-004" },
+        { "id": "ADR-004", "date": "2026-09-22", "title": "128x32 OLED instead of 128x64", "status": "accepted", "context": "The case was shrunk to pocket size; the 128x64 window no longer fits.", "decision": "SSD1306 128x32, same I2C bus and driver.", "alternatives": "Keep 128x64 and grow the case: rejected, size matters more.", "consequences": "Two lines of text instead of four; firmware layout changes.", "superseded_by": "" },
+        { "id": "ADR-005", "date": "2026-09-24", "title": "Heat-set inserts for the lid screws", "status": "proposed", "context": "The lid is opened for service; screws straight into PLA wear out.", "decision": "M3 brass heat-set inserts in the base.", "alternatives": "", "consequences": "", "superseded_by": "" }
+      ] },
+    { "key": "status", "label": "Show", "type": "select", "default": "all",
+      "options": [["all", "All"], ["active", "Accepted or proposed"], ["accepted", "Accepted"], ["proposed", "Proposed"], ["superseded", "Superseded"], ["deprecated", "Deprecated"], ["rejected", "Rejected"]] },
+    { "key": "filter", "label": "Search", "type": "text", "default": "", "placeholder": "a word from any field" }
+  ],
+  "examples": [
+    { "title": "Fan controller decisions", "input": { "status": "all", "filter": "" } },
+    { "title": "Why the display changed", "input": { "status": "all", "filter": "OLED" } }
+  ],
+  "usage": "Pass `decisions` as rows {id, date (YYYY-MM-DD), title, status: proposed|accepted|rejected|deprecated|superseded, context, decision, alternatives, consequences, superseded_by}; `status` filters (all, active, or one status) and `filter` searches every field. It returns the index table, the records missing context/alternatives/consequences, the next free ID and all records as Markdown ADRs, with warnings for duplicate IDs, bad dates and broken or looping superseded-by links. Read the project's log with the MCP tool tool_data (id decision-log) before proposing a part or topology change, and add a record (data {decisions: [...]}) when you make one.",
+  "sources": ["Michael Nygard, \"Documenting Architecture Decisions\" (2011) - the ADR form", "MADR - Markdown Any Decision Records (adr.github.io/madr): considered options", "ISO 8601-1:2019 calendar dates (YYYY-MM-DD)"],
+  "view": true
+}

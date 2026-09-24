@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-168 tools. **MCP** marks the ones agents can run with `run_tool`.
+175 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -269,12 +269,19 @@ agents, the most used, and every tool nobody used.
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
+| **Agent Queue Inspector** · MCP | `queue-inspector` | queued work by time, room and success rate, with the stuck step | all |
 | **Certification Pre-Check** · MCP | `cert-precheck` | typical gaps before CE/FCC (filtering, grounding, labels) as a checklist | Analytics |
 | **Change Impact Estimator** · MCP | `change-impact` | which rooms a change touches, from dependencies | Analytics |
+| **Datasheet Snippet Extractor** · MCP | `datasheet-extractor` | pinout and absolute maximum tables from a PDF into structured data | all |
+| **Decision Log (ADR)** · MCP | `decision-log` | short records of why a part or topology was chosen | Analytics |
 | **FMEA Lite** · MCP | `fmea-lite` | failure modes scored by likelihood and effect into a risk order | Analytics |
+| **Glossary & Acronym Book** · MCP | `glossary` | a project's acronyms and terms in one list | all |
 | **Interface Contract** · MCP | `interface-contract` | GPIO map, I2C addresses and voltage levels defined once for every room | PCB, 3D, Web, Embedded, Mobile |
 | **Naming Convention Enforcer** · MCP | `naming-enforcer` | nets, symbols, parts and files checked against one naming rule | PCB, 3D, Web, Embedded, Mobile |
 | **Pin-to-Net-to-Symbol Mapper** · MCP | `pin-net-symbol` | trace an MCU pin to its PCB net and its firmware symbol | PCB, Embedded |
+| **Project Constants** · MCP | `project-constants` | board size, supply voltages and mechanical references kept in one place | all |
+| **Redline History Diff** · MCP | `redline-history` | every note that landed on the same area over time, with outcomes | all |
+| **Requirement ↔ Test Matrix** · MCP | `req-test-matrix` | each requirement matched with the test that proves it, gaps shown | Analytics |
 | **Total Cost Roll-Up** · MCP | `cost-rollup` | PCB, BOM, assembly, enclosure and cable cost per unit at a quantity | Analytics |
 <!-- catalog:end -->
 

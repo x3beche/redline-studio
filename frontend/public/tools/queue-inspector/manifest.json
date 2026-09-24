@@ -1,0 +1,84 @@
+{
+  "id": "queue-inspector",
+  "name": "Agent Queue Inspector",
+  "blurb": "queued work by time, room and success rate, with the stuck step",
+  "group": "project",
+  "rooms": [
+    "all"
+  ],
+  "keywords": [
+    "queue",
+    "agent queue",
+    "jobs",
+    "backlog",
+    "stuck",
+    "hung run",
+    "wait time",
+    "success rate",
+    "run history",
+    "throughput",
+    "monitor",
+    "status",
+    "pipeline",
+    "workers",
+    "activity log"
+  ],
+  "intro": "One look at the agents' work: notes queued per room and how long they have waited, what each room is running, how its runs have gone (from the start/finish lines in its log), and - for a run that has gone quiet longer than the threshold - the step it stopped at. In the app it reads the live queue, runs and logs; the numbers are worked out from that snapshot only.",
+  "inputs": [
+    {
+      "key": "stuck",
+      "label": "Stuck after",
+      "type": "number",
+      "unit": "min",
+      "default": "20",
+      "help": "A running room with no log line for this long counts as stuck."
+    },
+    {
+      "key": "room",
+      "label": "Room",
+      "type": "select",
+      "default": "all",
+      "options": [
+        [
+          "all",
+          "All rooms"
+        ],
+        "cad",
+        "pcb",
+        "web",
+        "embedded",
+        "mobile"
+      ]
+    },
+    {
+      "key": "snapshot",
+      "label": "Snapshot (JSON)",
+      "type": "textarea",
+      "rows": 6,
+      "default": "{\"at\":\"2026-09-24T14:00:00Z\",\"queue\":[{\"id\":\"20260924-133510-a1b2c3\",\"kind\":\"cad\",\"summary\":\"Add a cable slot to the lid\",\"queued_at\":\"2026-09-24T13:35:10Z\"},{\"id\":\"20260924-134402-d4e5f6\",\"kind\":\"cad\",\"summary\":\"Round the base corners 2 mm\",\"queued_at\":\"2026-09-24T13:44:02Z\"},{\"id\":\"20260924-120011-0a0b0c\",\"kind\":\"web\",\"summary\":\"Rename the Run button\",\"queued_at\":\"2026-09-24T12:00:11Z\"}],\"runs\":{\"cad\":{\"status\":\"running\",\"percent\":60,\"title\":\"M3 screws at the marked parts\",\"started_at\":\"2026-09-24T13:05:00Z\",\"finished_at\":null},\"pcb\":{\"status\":\"done\",\"percent\":100,\"title\":\"Type-C flush to the board edge\",\"started_at\":\"2026-09-24T12:48:45Z\",\"finished_at\":\"2026-09-24T13:40:59Z\"},\"web\":{\"status\":\"done\",\"percent\":100,\"title\":\"run -> run tests\",\"started_at\":\"2026-09-24T07:40:23Z\",\"finished_at\":\"2026-09-24T07:56:16Z\"}},\"activity\":{\"cad\":[{\"at\":\"2026-09-24T13:05:01Z\",\"text\":\"started: M3 screws at the marked parts\",\"level\":\"work\"},{\"at\":\"2026-09-24T13:08:40Z\",\"text\":\"adding 2 x M3 countersunk screws to the lid\",\"level\":\"work\"},{\"at\":\"2026-09-24T13:21:12Z\",\"text\":\"rebuilding the model, rendering\",\"level\":\"work\"}],\"pcb\":[{\"at\":\"2026-09-24T10:29:27Z\",\"text\":\"started: Compacting the controller board\",\"level\":\"work\"},{\"at\":\"2026-09-24T11:10:35Z\",\"text\":\"controller: placing failed - routing failed\",\"level\":\"error\"},{\"at\":\"2026-09-24T11:12:02Z\",\"text\":\"finished: failed\",\"level\":\"error\"},{\"at\":\"2026-09-24T11:48:46Z\",\"text\":\"started: Finish the compaction: route the last net\",\"level\":\"work\"},{\"at\":\"2026-09-24T12:32:02Z\",\"text\":\"finished: done\",\"level\":\"done\"},{\"at\":\"2026-09-24T12:48:45Z\",\"text\":\"started: Type-C flush to the board edge\",\"level\":\"work\"},{\"at\":\"2026-09-24T13:36:57Z\",\"text\":\"controller: pipeline done - unrouted 0, DRC 0 errors\",\"level\":\"done\"},{\"at\":\"2026-09-24T13:40:59Z\",\"text\":\"finished: done\",\"level\":\"done\"}],\"web\":[{\"at\":\"2026-09-24T07:40:24Z\",\"text\":\"started: run -> run tests\",\"level\":\"work\"},{\"at\":\"2026-09-24T07:56:17Z\",\"text\":\"finished: done\",\"level\":\"done\"},{\"at\":\"2026-09-24T09:00:13Z\",\"text\":\"iot-fan-web: tests FAILED - exit 1\",\"level\":\"error\"}]},\"revisions\":[{\"id\":\"r1\",\"kind\":\"cad\",\"status\":\"applied\"},{\"id\":\"r2\",\"kind\":\"cad\",\"status\":\"applied\"},{\"id\":\"r3\",\"kind\":\"cad\",\"status\":\"rejected\"},{\"id\":\"r4\",\"kind\":\"pcb\",\"status\":\"applied\"},{\"id\":\"r5\",\"kind\":\"pcb\",\"status\":\"applied\"},{\"id\":\"r6\",\"kind\":\"web\",\"status\":\"applied\"}]}",
+      "help": "In the app, Refresh fills this from /api/queue, /api/run, /api/activity and /api/revisions. Shape: {at, queue: [...], runs: {room: {...}}, activity: {room: [...]}, revisions: [...]}."
+    }
+  ],
+  "examples": [
+    {
+      "title": "A quiet CAD run and a waiting web note",
+      "input": {
+        "stuck": "20",
+        "room": "all"
+      }
+    },
+    {
+      "title": "PCB room only",
+      "input": {
+        "stuck": "20",
+        "room": "pcb"
+      }
+    }
+  ],
+  "usage": "Pass `snapshot` as JSON {at: ISO time of the snapshot, queue: [{id, kind, summary, queued_at}], runs: {room: {status, percent, title, started_at, finished_at}}, activity: {room: [{at, text, level}]}, revisions: [{kind, status}]} - the app's /api/queue, /api/run?room=, /api/activity?room= and /api/revisions - plus `stuck` in minutes and optionally one `room`. It returns per room the queue length and oldest wait, the current run and its time, runs ok from the log's started/finished lines, error lines and the applied rate; stuck runs with the last step logged; and the queue sorted by wait. Use it when work seems not to move, to find which room and which step to look at.",
+  "sources": [
+    "Redline app API: /api/queue, /api/run, /api/activity, /api/revisions",
+    "Stuck = no log line for longer than a threshold: rule of thumb (a heartbeat timeout)"
+  ],
+  "view": true
+}
