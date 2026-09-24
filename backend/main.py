@@ -1304,6 +1304,17 @@ async def drop_part(lcsc_id: str):
     return {"deleted": lcsc_id}
 
 
+@app.get("/api/boards/{bid}/analytics")
+async def board_analytics(bid: str):
+    """The board room's Analytics tab: the board, its bill and its library,
+    from what is already known - nothing is asked of LCSC."""
+    from . import board_stats
+    try:
+        return await board_stats.summary(db(), bid)
+    except KeyError:
+        raise HTTPException(404, bid)
+
+
 @app.get("/api/boards/{bid}/compute")
 async def board_compute(bid: str, limit: int = 12):
     """What building and placing this board has cost the machine.

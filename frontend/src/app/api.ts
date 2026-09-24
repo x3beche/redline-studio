@@ -461,6 +461,21 @@ export interface BoardGraph {
   built_at: string;
 }
 
+/** The board room's Analytics tab: the board, its bill and its library,
+ *  from what is already known. */
+export interface BoardStats {
+  parts: { components: number; nets: number | null; joins: number | null };
+  size: { mm: [number, number] | null; area_cm2: number | null; density: number | null };
+  route: { tracks: number; vias: number; length_mm: number; unrouted: number } | null;
+  checks: { drc_errors: number | null; drc_warnings: number | null;
+            unconnected: number | null; erc_errors: number | null } | null;
+  bom: { lines: number; priced: number; cost_usd: number; basic: number;
+         extended: number; unpartnumbered: number } | null;
+  library: { parts: number; with_3d: number; bytes: number };
+  lcsc: { net: number; disk: number; refused: number; cooling: boolean;
+          used: number | null; budget: number | null };
+}
+
 /** One build or one placement, as the machine saw it. */
 export interface BoardJob {
   kind: string;
@@ -527,6 +542,10 @@ export class Boards {
    *  answered from the browser's cache. */
   file(id: string, name: string, stamp?: string): string {
     return `/api/boards/${id}/${name}` + (stamp ? `?v=${encodeURIComponent(stamp)}` : '');
+  }
+  /** The Analytics tab's figures. Nothing in it asks LCSC. */
+  analytics(id: string): Observable<BoardStats> {
+    return this.http.get<BoardStats>(`/api/boards/${id}/analytics`);
   }
   /** What this board has cost the machine, job by job. */
   compute(id: string): Observable<BoardCompute> {

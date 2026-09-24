@@ -3,7 +3,7 @@ import {
   viewChildren,
 } from '@angular/core';
 import {
-  Activity, BoardCompute, BoardEntry, BoardGeometry, BoardGraph, BoardLayout, BoardRules,
+  Activity, BoardEntry, BoardGeometry, BoardStats, BoardGraph, BoardLayout, BoardRules,
   Boards, LcscAsk, LcscJournal, LogLine, PartHeld, PartHit,
   PartPreview, Parts, RuleSchema,
 } from '../api';
@@ -15,7 +15,7 @@ import { RoomFrame, ToolButton } from './frame';
 import { RulesForm } from './rules-form';
 import { DrawTools, PenState, Sketchpad } from './sketchpad';
 
-type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc';
+type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'analytics';
 type Pane = 'layout' | 'schematic' | '3d';
 type BoardView = Pane | 'split';
 
@@ -524,50 +524,67 @@ type BoardView = Pane | 'split';
         </div>
       }
       }
-    </div>
-
-
-    <!-- WHAT THE RUNS COST AND WHAT IS KEPT
-         Beside the log it explains, and folded with it: each run's time,
-         and what the board's artifacts weigh. -->
-    <div logSide class="text-[11px]">
-        @if (cost()?.jobs?.length) {
-          <div class="mono">
-            @for (j of cost()!.jobs.slice(0, 5); track j.at) {
-              <div class="flex gap-2 leading-relaxed">
-                <span class="w-10 shrink-0"
-                      [style.color]="j.rc ? 'var(--danger)' : 'var(--ink)'">
-                  {{ j.kind === 'board' ? 'build' : j.kind }}
-                </span>
-                <span class="shrink-0" style="color: var(--ink-dim)">{{ secs(j.wall_s) }}</span>
-                <!-- atopile runs here and is measured here; KiCad runs in
-                     a container whose time is nobody's child, so a
-                     placement reports the clock and nothing else. -->
-                <span class="ml-auto shrink-0 truncate" style="color: var(--ink-dim)"
-                      [title]="j.kind === 'layout' ? 'in the KiCad container - only its clock is measured' : ''">
-                  {{ j.kind === 'layout' ? 'kicad' : cores(j.cpu_s) }}
-                </span>
+      @if (side() === 'analytics') {
+        <!-- ANALYTICS: the board, its bill and its library in one glance.
+             Everything is what is already known - nothing asks LCSC. While
+             the agent works, its card docks below and takes most of the
+             column, so the tab shrinks to the four lines that matter. -->
+        <div class="tcv-scroll min-h-0 flex-1 overflow-y-auto px-2 py-1.5 text-[11px]">
+          @if (stats(); as st) {
+            <div class="tcv-stats">
+              <span>parts</span><b>{{ st.parts.components }}</b>
+              <span>nets</span><b [title]="st.parts.joins + ' pins joined'">{{ st.parts.nets ?? '–' }}</b>
+              @if (st.size.mm; as mm) {
+                <span>board</span><b [title]="'millimetres'">{{ mm[0].toFixed(1) }}×{{ mm[1].toFixed(1) }}</b>
+                <span>density</span>
+                <b [title]="st.size.area_cm2 + ' cm², parts per cm²'">{{ st.size.density ?? '–' }}/cm²</b>
+              }
+              @if (st.route; as r) {
+                <span>tracks</span><b [title]="r.vias + ' vias'">{{ r.tracks }} · {{ r.vias }}v</b>
+                <span>unrouted</span>
+                <b [style.color]="r.unrouted ? 'var(--danger)' : 'var(--ok)'">{{ r.unrouted }}</b>
+              }
+              @if (st.checks; as c) {
+                <span>DRC</span>
+                <b [style.color]="c.drc_errors ? 'var(--danger)' : 'var(--ok)'"
+                   [title]="c.drc_errors + ' errors, ' + c.drc_warnings + ' warnings, ' + c.unconnected + ' unconnected'">
+                  {{ c.drc_errors ?? '?' }} · {{ c.drc_warnings ?? '?' }}w</b>
+                <span>ERC</span>
+                <b [style.color]="c.erc_errors ? 'var(--danger)' : 'var(--ok)'">{{ c.erc_errors ?? '?' }}</b>
+              }
+            </div>
+            @if (!busy()) {
+              <div class="tcv-stats mt-1.5 pt-1.5" style="border-top: 1px solid var(--line)">
+                @if (st.route; as r) {
+                  <span>copper</span><b>{{ r.length_mm.toFixed(0) }} mm</b>
+                  <span>area</span><b>{{ st.size.area_cm2 ?? '–' }} cm²</b>
+                }
+                @if (st.bom; as m) {
+                  <span>BOM</span>
+                  <b [title]="'unit price × quantity over the ' + m.priced + ' of ' + m.lines
+                              + ' part numbers LCSC has already been asked about'">
+                    {{ m.priced ? '$' + m.cost_usd.toFixed(2) : '–' }} · {{ m.priced }}/{{ m.lines }}</b>
+                  <span>JLC</span>
+                  <b title="Basic: no loading fee. Extended: a feeder fee per assembly run.">
+                    {{ m.basic }}B · <span [style.color]="m.extended ? 'var(--warn)' : null">{{ m.extended }}E</span></b>
+                }
+                <span>library</span>
+                <b [title]="st.library.with_3d + ' of them with a 3D model'">{{ st.library.parts }} · {{ st.library.with_3d }} 3d</b>
+                <span>kept</span><b>{{ mb(st.library.bytes) }}</b>
+                <span>LCSC 1h</span>
+                <b [title]="st.lcsc.disk + ' answered from disk'">{{ st.lcsc.net }} sent · {{ st.lcsc.disk }}d</b>
+                <span>budget</span>
+                <b [style.color]="st.lcsc.cooling || st.lcsc.refused ? 'var(--danger)' : null">
+                  {{ st.lcsc.cooling ? 'cooling' : st.lcsc.used + '/' + st.lcsc.budget }}</b>
               </div>
             }
-          </div>
-        } @else {
-          <div style="color: var(--ink-dim)">nothing built yet</div>
-        }
-
-        <!-- What is stored, which is the other half of what it cost. -->
-        @if (artifacts().length) {
-          <div class="mono mt-2 pt-2" style="border-top: 1px solid var(--line)">
-            @for (a of artifacts(); track a.name) {
-              <div class="flex justify-between leading-relaxed"
-                   style="color: var(--ink-dim)">
-                <span>{{ a.name }}</span>
-                <span>{{ kb(a.bytes) }}</span>
-              </div>
-            }
-          </div>
-        }
-
+          } @else {
+            <div style="color: var(--ink-dim)">reading the board…</div>
+          }
+        </div>
+      }
     </div>
+
 
     <!-- THE BOARD
          One view, three ways of looking at the same board - the copper,
@@ -699,10 +716,11 @@ export class RoomPcb implements OnDestroy {
   readonly notYet = 'Nothing yet. Ask for the change - a board note, or the '
     + 'thread under the queue - and the agent runs the pipeline: build, '
     + 'schematic, place, route, DRC.';
-  readonly sideTabs = ['parts', 'rules', 'checks', 'lcsc'] as const;
+  readonly sideTabs = ['parts', 'rules', 'checks', 'lcsc', 'analytics'] as const;
   /** The LCSC tab is the parts supplier's side of things - every request
    *  made of it and the turn-taking - so it is named for what it is. */
-  readonly tabNames = { parts: 'Parts', rules: 'Rules', checks: 'Checks', lcsc: 'Sourcing' };
+  readonly tabNames = { parts: 'Parts', rules: 'Rules', checks: 'Checks', lcsc: 'Sourcing',
+                        analytics: 'Analytics' };
   side = signal<SideTab>(RoomPcb.pick(RoomPcb.recall('side', 'parts'), this.sideTabs, 'parts'));
 
   /** The pen: the view held as a picture, and what is being drawn with. */
@@ -725,7 +743,11 @@ export class RoomPcb implements OnDestroy {
   saving = signal(false);
   private checking?: ReturnType<typeof setTimeout>;
   lastLayout = signal<BoardLayout | null>(null);
-  cost = signal<BoardCompute | null>(null);
+  /** The Analytics tab's figures, and whether the agent is at work in
+   *  this room - its card then docks under the tabs and the tab shrinks. */
+  stats = signal<BoardStats | null>(null);
+  busy = signal(false);
+  private statsAt = 0;
   /** The drawer of parts, and what a search in LCSC turned up. */
   held = signal<PartHeld[]>([]);
   hits = signal<PartHit[]>([]);
@@ -1006,6 +1028,26 @@ export class RoomPcb implements OnDestroy {
   private tick() {
     if (this.side() === 'lcsc') this.readJournal();
     this.activity.lines(60, 'pcb').subscribe({ next: rows => this.log.set(rows) });
+    // This room's own run: while it goes, the agent's card is docked here.
+    this.activity.run('pcb').subscribe({ next: r => {
+      const was = this.busy();
+      this.busy.set(r?.status === 'running');
+      // A run that just ended changed the board: read the figures again.
+      if (was && !this.busy() && this.here()) this.readStats(this.here()!._id);
+    } });
+    const b = this.here();
+    if (b && this.side() === 'analytics' && Date.now() - this.statsAt > 15000) {
+      this.readStats(b._id);
+    }
+  }
+
+  private readStats(id: string) {
+    this.statsAt = Date.now();
+    this.api.analytics(id).subscribe({ next: st => this.stats.set(st) });
+  }
+
+  mb(bytes: number): string {
+    return bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + ' MB' : Math.round(bytes / 1000) + ' kB';
   }
 
   refresh() {
@@ -1029,7 +1071,7 @@ export class RoomPcb implements OnDestroy {
     if (b && this.picked.board() !== b._id) this.picked.board.set(b._id);
     this.graph.set(null);
     this.picked.boardParts.set([]);
-    this.cost.set(null);
+    this.stats.set(null);
     this.geo.set(null);
     if (!b) return;
     if (b.artifacts?.['geometry']) {
@@ -1037,7 +1079,7 @@ export class RoomPcb implements OnDestroy {
         next: g => { if (this.here()?._id === b._id) this.geo.set(g); },
       });
     }
-    this.api.compute(b._id).subscribe({ next: c => this.cost.set(c) });
+    this.readStats(b._id);
     if (!b.ready) return;
     // The artifact is immutable and served that way, so the build time is
     // what tells the browser to fetch a new one.
@@ -1068,38 +1110,12 @@ export class RoomPcb implements OnDestroy {
     ];
   }
 
-  /** What is stored for this board, which is the other half of what it
-   *  cost: a netlist is kilobytes, a model with parts on it is not. */
-  artifacts(): { name: string; bytes: number }[] {
-    const a = this.here()?.artifacts ?? {};
-    const named: Record<string, string> = {
-      graph: 'netlist', footprints: 'footprints',
-      layout: 'drawing', model3d: 'model',
-    };
-    return Object.entries(named)
-      .filter(([key]) => a[key])
-      .map(([key, name]) => ({ name, bytes: a[key].bytes ?? 0 }));
-  }
-
   /** The drawing's own shape, so the sheet is the board and not a white
    *  block around it. The exporter writes the board area as the page. */
   sheet(): string {
     const mm = this.here()?.layout?.size_mm;
     return mm && mm[1] ? `${mm[0]} / ${mm[1]}` : '3 / 2';
   }
-
-  kb(bytes: number): string {
-    return bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + ' MB'
-                        : Math.round(bytes / 1000) + ' kB';
-  }
-
-  secs(s?: number): string {
-    if (!s) return '–';
-    return s >= 60 ? `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`
-                   : `${s.toFixed(1)} s`;
-  }
-
-  cores(s?: number): string { return s ? `${s.toFixed(1)} core-s` : '–'; }
 
   hasLayout(): boolean {
     return !!this.here()?.layout?.at;

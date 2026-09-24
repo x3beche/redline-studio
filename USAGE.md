@@ -256,6 +256,18 @@ part's footprint (a connector's pegs next to its own pads: the maker's
 land pattern), and ERC's notes about the generated project having no
 library tables.
 
+### Analytics
+
+The board at a glance, in the tab beside Sourcing: parts and nets, the
+board's size and how densely it is packed, tracks, vias and what is
+still unrouted, DRC and ERC; and below them the copper length, the bill
+- priced from LCSC's answers already on disk, `$0.77 · 10/23` meaning
+ten of twenty-three part numbers had a price, JLCPCB Basic against
+Extended - the parts drawer and what it weighs, and the last hour of
+asks made of LCSC. Nothing in it asks LCSC anything. While the agent is
+working on the board its card docks under the tabs, and the tab keeps
+to the four board lines above it.
+
 ### Parts
 
 Type a part number or what you are after — `C25744`, or `0603 100nF` —
