@@ -1,0 +1,356 @@
+{
+  "id": "thermal-expansion",
+  "name": "Thermal Expansion Calculator",
+  "blurb": "dimension change of a part over a temperature change",
+  "group": "mechanical",
+  "rooms": [
+    "cad",
+    "pcb"
+  ],
+  "keywords": [
+    "thermal expansion",
+    "cte",
+    "coefficient of thermal expansion",
+    "alpha",
+    "ppm/k",
+    "growth",
+    "temperature change",
+    "mismatch",
+    "clearance",
+    "interference",
+    "thermal stress",
+    "delta l",
+    "fr-4",
+    "aluminium"
+  ],
+  "intro": "How much a length or diameter grows or shrinks between two temperatures (ΔL = α·L·ΔT), and, with a mating material, how much the two move against each other and whether a clearance closes. Typical room-temperature CTEs are used; the stress if the part were fully restrained is shown too.",
+  "inputs": [
+    {
+      "key": "length",
+      "label": "Length or diameter at T1",
+      "type": "number",
+      "unit": "mm",
+      "default": "100"
+    },
+    {
+      "key": "material",
+      "label": "Part material",
+      "type": "select",
+      "default": "al",
+      "options": [
+        [
+          "al",
+          "Aluminium 6061"
+        ],
+        [
+          "steel",
+          "Steel (carbon)"
+        ],
+        [
+          "ss",
+          "Stainless 304"
+        ],
+        [
+          "brass",
+          "Brass"
+        ],
+        [
+          "cu",
+          "Copper"
+        ],
+        [
+          "ti",
+          "Titanium Ti-6Al-4V"
+        ],
+        [
+          "zamak",
+          "Zinc die cast"
+        ],
+        [
+          "invar",
+          "Invar 36"
+        ],
+        [
+          "fr4",
+          "FR-4 (in plane)"
+        ],
+        [
+          "fr4z",
+          "FR-4 (z axis, below Tg)"
+        ],
+        [
+          "alumina",
+          "Alumina 96 %"
+        ],
+        [
+          "si",
+          "Silicon"
+        ],
+        [
+          "glass",
+          "Soda-lime glass"
+        ],
+        [
+          "abs",
+          "ABS"
+        ],
+        [
+          "pc",
+          "Polycarbonate"
+        ],
+        [
+          "pa66",
+          "Nylon PA66"
+        ],
+        [
+          "pa66gf",
+          "PA66-GF30 (flow dir.)"
+        ],
+        [
+          "pom",
+          "Acetal POM"
+        ],
+        [
+          "pmma",
+          "Acrylic PMMA"
+        ],
+        [
+          "pla",
+          "PLA"
+        ],
+        [
+          "petg",
+          "PETG"
+        ],
+        [
+          "peek",
+          "PEEK"
+        ],
+        [
+          "ptfe",
+          "PTFE"
+        ],
+        [
+          "hdpe",
+          "HDPE"
+        ],
+        [
+          "custom",
+          "Custom"
+        ]
+      ]
+    },
+    {
+      "key": "cte",
+      "label": "CTE",
+      "type": "number",
+      "unit": "ppm/K",
+      "default": "23",
+      "when": {
+        "key": "material",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "emod",
+      "label": "Young's modulus (optional)",
+      "type": "number",
+      "unit": "GPa",
+      "default": "",
+      "required": false,
+      "when": {
+        "key": "material",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "t1",
+      "label": "T1 (assembly / reference)",
+      "type": "number",
+      "unit": "°C",
+      "default": "20"
+    },
+    {
+      "key": "t2",
+      "label": "T2 (operating)",
+      "type": "number",
+      "unit": "°C",
+      "default": "85"
+    },
+    {
+      "key": "mate",
+      "label": "Mating part / housing",
+      "type": "select",
+      "default": "fr4",
+      "options": [
+        [
+          "none",
+          "None"
+        ],
+        [
+          "al",
+          "Aluminium 6061"
+        ],
+        [
+          "steel",
+          "Steel (carbon)"
+        ],
+        [
+          "ss",
+          "Stainless 304"
+        ],
+        [
+          "brass",
+          "Brass"
+        ],
+        [
+          "cu",
+          "Copper"
+        ],
+        [
+          "ti",
+          "Titanium Ti-6Al-4V"
+        ],
+        [
+          "zamak",
+          "Zinc die cast"
+        ],
+        [
+          "invar",
+          "Invar 36"
+        ],
+        [
+          "fr4",
+          "FR-4 (in plane)"
+        ],
+        [
+          "fr4z",
+          "FR-4 (z axis, below Tg)"
+        ],
+        [
+          "alumina",
+          "Alumina 96 %"
+        ],
+        [
+          "si",
+          "Silicon"
+        ],
+        [
+          "glass",
+          "Soda-lime glass"
+        ],
+        [
+          "abs",
+          "ABS"
+        ],
+        [
+          "pc",
+          "Polycarbonate"
+        ],
+        [
+          "pa66",
+          "Nylon PA66"
+        ],
+        [
+          "pa66gf",
+          "PA66-GF30 (flow dir.)"
+        ],
+        [
+          "pom",
+          "Acetal POM"
+        ],
+        [
+          "pmma",
+          "Acrylic PMMA"
+        ],
+        [
+          "pla",
+          "PLA"
+        ],
+        [
+          "petg",
+          "PETG"
+        ],
+        [
+          "peek",
+          "PEEK"
+        ],
+        [
+          "ptfe",
+          "PTFE"
+        ],
+        [
+          "hdpe",
+          "HDPE"
+        ]
+      ]
+    },
+    {
+      "key": "gap",
+      "label": "Clearance to the housing at T1",
+      "type": "number",
+      "unit": "mm",
+      "default": "0.2",
+      "required": false,
+      "when": {
+        "key": "mate",
+        "in": [
+          "al",
+          "steel",
+          "ss",
+          "brass",
+          "cu",
+          "ti",
+          "zamak",
+          "invar",
+          "fr4",
+          "fr4z",
+          "alumina",
+          "si",
+          "glass",
+          "abs",
+          "pc",
+          "pa66",
+          "pa66gf",
+          "pom",
+          "pmma",
+          "pla",
+          "petg",
+          "peek",
+          "ptfe",
+          "hdpe"
+        ]
+      },
+      "help": "Total gap along the length between the part and the mating part. The part is the one inside."
+    }
+  ],
+  "examples": [
+    {
+      "title": "100 mm aluminium heatsink bolted to an FR-4 board, 20 to 85 °C",
+      "input": {
+        "length": "100",
+        "material": "al",
+        "t1": "20",
+        "t2": "85",
+        "mate": "fr4",
+        "gap": "0.2"
+      }
+    },
+    {
+      "title": "PCB in an ABS enclosure slot, cold start at −40 °C",
+      "input": {
+        "length": "150",
+        "material": "fr4",
+        "t1": "23",
+        "t2": "-40",
+        "mate": "abs",
+        "gap": "0.3"
+      }
+    }
+  ],
+  "usage": "Give the length in mm, the part material (key such as al, steel, fr4, abs, or custom with cte in ppm/K), T1 and T2 in °C, and optionally a mating material and the clearance in mm. It returns ΔL in µm, the length at T2, strain, area and volume change, the fully restrained stress in MPa, the relative movement against the mating part and the clearance at T2 (negative = interference). Use it for fits across temperature, slot sizes, or CTE mismatch between a board and a housing or heatsink.",
+  "sources": [
+    "ΔL = α·L·ΔT and σ = E·α·ΔT: any mechanics of materials text (e.g. Gere & Goodno, Mechanics of Materials, ch. 2)",
+    "CTE, modulus and yield: MatWeb and ASM Handbook typical values; FR-4 from Isola 370HR datasheet"
+  ]
+}

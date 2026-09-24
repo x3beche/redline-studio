@@ -1,0 +1,33 @@
+{
+  "id": "bend-allowance",
+  "name": "Sheet Metal Bend Allowance",
+  "blurb": "flat length from K-factor and bend radius",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["sheet metal", "bend allowance", "bend deduction", "k-factor", "k factor", "flat pattern", "blank length", "developed length", "setback", "neutral axis", "inside radius", "din 6935", "press brake", "flange"],
+  "intro": "The flat (blank) length of a part with one bend, from two flange lengths, the sheet thickness, the inside radius and the K-factor, the fraction of the thickness where the neutral axis sits. Standard bend allowance and bend deduction formulas are used. The K-factor can be typed in, estimated with DIN 6935, or taken from a common rule-of-thumb table.",
+  "inputs": [
+    { "key": "t", "label": "Sheet thickness T", "type": "number", "unit": "mm", "default": "2" },
+    { "key": "r", "label": "Inside bend radius R", "type": "number", "unit": "mm", "default": "2",
+      "help": "Air bending: about the V-die opening / 6 to / 8, but never less than the punch radius." },
+    { "key": "angle", "label": "Angle", "type": "number", "unit": "°", "default": "90" },
+    { "key": "angleType", "label": "The angle is the", "type": "select", "default": "bend",
+      "options": [["bend", "Bend angle (turned through: 90 for an L)"], ["included", "Included angle between flanges"]] },
+    { "key": "a", "label": "Flange A", "type": "number", "unit": "mm", "default": "50" },
+    { "key": "b", "label": "Flange B", "type": "number", "unit": "mm", "default": "30" },
+    { "key": "dims", "label": "Flanges measured to the", "type": "select", "default": "outside",
+      "options": [["outside", "Outside mould line (outer faces meet)"], ["inside", "Inside mould line (inner faces meet)"]] },
+    { "key": "kmode", "label": "K-factor from", "type": "select", "default": "din",
+      "options": [["din", "DIN 6935 (from R / T)"], ["table", "Rule-of-thumb table (R / T and hardness)"], ["manual", "Typed in"]] },
+    { "key": "k", "label": "K-factor", "type": "number", "default": "0.44", "when": { "key": "kmode", "equals": "manual" },
+      "help": "0 = neutral axis on the inside face, 0.5 = mid-thickness. Usually 0.3 to 0.5." },
+    { "key": "hard", "label": "Material", "type": "select", "default": "medium", "when": { "key": "kmode", "equals": "table" },
+      "options": [["soft", "Soft (annealed Al, copper, brass)"], ["medium", "Medium (mild steel, 5052 Al)"], ["hard", "Hard (stainless, spring steel, 6061-T6)"]] }
+  ],
+  "examples": [
+    { "title": "2 mm steel L-bracket, 50 x 30 outside, R2", "input": { "t": "2", "r": "2", "angle": "90", "angleType": "bend", "a": "50", "b": "30", "dims": "outside", "kmode": "din" } },
+    { "title": "1.5 mm aluminium, 120° included, K 0.4", "input": { "t": "1.5", "r": "1.5", "angle": "120", "angleType": "included", "a": "40", "b": "25", "dims": "outside", "kmode": "manual", "k": "0.4" } }
+  ],
+  "usage": "Give thickness, inside radius and flange lengths in mm and the angle in degrees (say whether it is the bend angle or the included angle, and whether flanges are to the outside or inside mould line). Choose kmode din, table or manual (then give k). It returns the K-factor used, bend allowance, outside setback, bend deduction and the flat length, plus a table of flat length against K-factor. Use it to size a blank or check a CAD flat pattern.",
+  "sources": ["Bend allowance BA = θ(R + K·T), setback OSSB = tan(θ/2)(R + T), bend deduction BD = 2·OSSB − BA: Machinery's Handbook, sheet metal section", "DIN 6935:2011 correction factor k = 0.65 + 0.5·lg(R/T) for R/T < 5 (K = k/2)", "K-factor table by hardness: common press-brake rule of thumb"]
+}

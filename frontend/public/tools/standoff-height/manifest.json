@@ -1,0 +1,31 @@
+{
+  "id": "standoff-height",
+  "name": "Standoff Height Planner",
+  "blurb": "standoff length from the tallest part under the board",
+  "group": "mechanical",
+  "rooms": ["cad", "pcb"],
+  "keywords": ["standoff", "spacer", "pcb spacer", "hex standoff", "board to board", "stacking height", "mezzanine", "clearance under board", "lead protrusion", "screw length", "m3", "mounting"],
+  "intro": "The shortest standoff that keeps the tallest bottom-side part (or through-hole lead) clear of the floor, rounded up to a stock length; or, for two stacked boards, the spacing their parts and board-to-board connector need. A screw length for a female-threaded standoff comes with it. Gaps and thread engagement are rules of thumb stated in the notes.",
+  "inputs": [
+    { "key": "mode", "label": "Standoff between", "type": "select", "default": "floor", "options": [["floor", "Board and floor / panel"], ["stack", "Two stacked boards"]] },
+    { "key": "under", "label": "Tallest part under the board", "type": "number", "unit": "mm", "default": "3", "when": { "key": "mode", "equals": "floor" } },
+    { "key": "leads", "label": "Through-hole lead protrusion", "type": "number", "unit": "mm", "default": "1.5", "when": { "key": "mode", "equals": "floor" }, "help": "IPC-A-610: 2.5 mm at most; 0 for SMT-only boards." },
+    { "key": "boss", "label": "Floor boss height", "type": "number", "unit": "mm", "default": "0", "when": { "key": "mode", "equals": "floor" }, "help": "If the standoff sits on a raised boss, its height counts." },
+    { "key": "top", "label": "Tallest part on top", "type": "number", "unit": "mm", "default": "10", "when": { "key": "mode", "equals": "floor" } },
+    { "key": "lowerTop", "label": "Lower board: tallest top part", "type": "number", "unit": "mm", "default": "6", "when": { "key": "mode", "equals": "stack" } },
+    { "key": "upperBottom", "label": "Upper board: tallest bottom part", "type": "number", "unit": "mm", "default": "2", "when": { "key": "mode", "equals": "stack" } },
+    { "key": "overlap", "label": "The tall parts may sit over each other", "type": "bool", "default": true, "when": { "key": "mode", "equals": "stack" }, "help": "Off when you know they are apart in x/y: then only the taller one counts." },
+    { "key": "b2b", "label": "Board-to-board connector mated height", "type": "number", "unit": "mm", "default": "", "required": false, "when": { "key": "mode", "equals": "stack" }, "help": "Leave empty without a connector." },
+    { "key": "gap", "label": "Air gap to keep", "type": "number", "unit": "mm", "default": "1" },
+    { "key": "tol", "label": "Tolerance allowance", "type": "number", "unit": "mm", "default": "0.2", "help": "Standoff and part height tolerances together." },
+    { "key": "t", "label": "Board thickness", "type": "number", "unit": "mm", "default": "1.6" },
+    { "key": "screw", "label": "Screw", "type": "select", "default": "M3", "options": ["M2", "M2.5", "M3", "M4", "M5"] },
+    { "key": "washer", "label": "Washer under the screw head", "type": "bool", "default": false }
+  ],
+  "examples": [
+    { "title": "Board with a 3 mm SMD inductor and THT leads underneath", "input": { "mode": "floor", "under": "3", "leads": "1.5", "boss": "0", "top": "10", "gap": "1", "tol": "0.2", "t": "1.6", "screw": "M3", "washer": false } },
+    { "title": "Two boards joined by an 11 mm mezzanine connector", "input": { "mode": "stack", "lowerTop": "6", "upperBottom": "3", "overlap": true, "b2b": "11", "gap": "1", "tol": "0.2", "t": "1.6", "screw": "M2.5", "washer": false } }
+  ],
+  "usage": "Mode floor: give the tallest bottom part and lead protrusion, the boss height and tallest top part; mode stack: the lower board's tallest top part, the upper board's tallest bottom part, whether they may overlap, and the board-to-board connector mated height if any. All in mm, plus the air gap, tolerance, board thickness and screw size. It returns the minimum and stock standoff length, the air gap it leaves, board and part heights above the floor, and a screw length for a female standoff. Use it when choosing spacers or the enclosure height.",
+  "sources": ["IPC-A-610 lead protrusion (max 2.5 mm)", "IPC-6012 bow and twist 0.75 % for SMT boards", "Thread engagement ≥ 1.5·d for a steel screw in a softer internal thread: Machinery's Handbook / VDI 2230 rule of thumb", "Stock standoff lengths: Würth WA-SSTII, Keystone and Ettinger catalogues; screw lengths ISO 7045 / ISO 4762"]
+}

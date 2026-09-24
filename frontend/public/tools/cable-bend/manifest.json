@@ -1,0 +1,200 @@
+{
+  "id": "cable-bend",
+  "name": "Cable Bend Radius",
+  "blurb": "minimum bend radius and clearance for a cable",
+  "group": "mechanical",
+  "rooms": [
+    "cad"
+  ],
+  "keywords": [
+    "bend radius",
+    "minimum bend radius",
+    "cable",
+    "harness",
+    "wire routing",
+    "drag chain",
+    "cable carrier",
+    "ethernet",
+    "coax",
+    "fibre",
+    "ffc",
+    "flex pcb",
+    "ipc-2223",
+    "clearance behind panel"
+  ],
+  "intro": "The minimum inside bend radius of a cable as a multiple of its outside diameter (or thickness, for flat cables and flex PCBs), fixed or flexing, and the room a bend takes: depth behind a panel for a 90° turn and the width of a U-loop. Multipliers are the usual values of BS 7671, TIA-568, IPC-2223 and cable-maker datasheets; your cable's datasheet always wins.",
+  "inputs": [
+    {
+      "key": "type",
+      "label": "Cable type",
+      "type": "select",
+      "default": "control",
+      "options": [
+        [
+          "pvcPower",
+          "PVC power cable, non-armoured"
+        ],
+        [
+          "armoured",
+          "Armoured power cable (SWA)"
+        ],
+        [
+          "control",
+          "Flexible control cable, unscreened (PVC)"
+        ],
+        [
+          "controlScr",
+          "Flexible control cable, screened (braid)"
+        ],
+        [
+          "chain",
+          "Drag-chain (continuous flex) cable"
+        ],
+        [
+          "hookup",
+          "Single stranded hook-up wire (UL1007/1015)"
+        ],
+        [
+          "silicone",
+          "Silicone test-lead / high-flex wire"
+        ],
+        [
+          "utp",
+          "Ethernet UTP (Cat5e/6), 4-pair"
+        ],
+        [
+          "stp",
+          "Ethernet screened (F/UTP, S/FTP), 4-pair"
+        ],
+        [
+          "multipair",
+          "Multi-pair backbone (> 4 pairs)"
+        ],
+        [
+          "coax",
+          "Coax (RG58, RG174, RG316)"
+        ],
+        [
+          "semirigid",
+          "Semi-rigid coax (.086, .141)"
+        ],
+        [
+          "usb",
+          "USB / HDMI round cable"
+        ],
+        [
+          "fibre",
+          "Fibre optic cable"
+        ],
+        [
+          "ffc",
+          "FFC / flat flex cable"
+        ],
+        [
+          "fpc1",
+          "Flex PCB, 1 copper layer"
+        ],
+        [
+          "fpc2",
+          "Flex PCB, 2 copper layers"
+        ],
+        [
+          "fpcN",
+          "Flex PCB, multilayer"
+        ],
+        [
+          "custom",
+          "Custom multiplier"
+        ]
+      ]
+    },
+    {
+      "key": "od",
+      "label": "Outside diameter (or thickness for flat / flex)",
+      "type": "number",
+      "unit": "mm",
+      "default": "8"
+    },
+    {
+      "key": "use",
+      "label": "Use",
+      "type": "select",
+      "default": "fixed",
+      "options": [
+        [
+          "fixed",
+          "Fixed (bent once, clamped)"
+        ],
+        [
+          "flex",
+          "Flexing (moves in use, drag chain)"
+        ]
+      ]
+    },
+    {
+      "key": "mult",
+      "label": "Multiplier",
+      "type": "number",
+      "unit": "× OD",
+      "default": "7.5",
+      "when": {
+        "key": "type",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "angle",
+      "label": "Bend angle",
+      "type": "number",
+      "unit": "°",
+      "default": "90"
+    },
+    {
+      "key": "straight",
+      "label": "Straight length before the bend",
+      "type": "number",
+      "unit": "mm",
+      "default": "15",
+      "help": "From the connector, gland or clamp to where the bend starts."
+    },
+    {
+      "key": "temp",
+      "label": "Lowest installation temperature",
+      "type": "number",
+      "unit": "°C",
+      "default": "20",
+      "required": false
+    }
+  ],
+  "examples": [
+    {
+      "title": "8 mm control cable leaving a panel gland",
+      "input": {
+        "type": "control",
+        "od": "8",
+        "use": "fixed",
+        "angle": "90",
+        "straight": "15",
+        "temp": "20"
+      }
+    },
+    {
+      "title": "Screened Ethernet in a drag chain",
+      "input": {
+        "type": "stp",
+        "od": "6.5",
+        "use": "flex",
+        "angle": "180",
+        "straight": "20",
+        "temp": "10"
+      }
+    }
+  ],
+  "usage": "Pick the cable type (key such as control, controlScr, chain, utp, stp, coax, fibre, ffc, fpc1, or custom with mult), the outside diameter (thickness for flat cable / flex PCB) in mm, fixed or flex, the bend angle in degrees and the straight length before the bend in mm. It returns the minimum inside, centre-line and outside radius, the cable length in the bend, the depth behind a panel for a 90° turn, the width of a 180° loop and, for flexing, the next drag-chain radius. Use it to leave room behind connectors or to route a harness in CAD.",
+  "sources": [
+    "BS 7671 IET On-Site Guide, minimum internal bend radii of cables",
+    "ANSI/TIA-568.2-D and 568.3-D, minimum bend radius of balanced twisted-pair and optical fibre cable",
+    "IPC-2223 Sectional design standard for flexible printed boards, bend radius ratios",
+    "Lapp ÖLFLEX CLASSIC 110 / 110 CY and igus chainflex datasheets (bend factors), igus E-chain radius list"
+  ]
+}

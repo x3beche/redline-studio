@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-112 tools. **MCP** marks the ones agents can run with `run_tool`.
+120 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -180,12 +180,20 @@ agents, the most used, and every tool nobody used.
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
+| **Bolt Circle Generator** · MCP | `bolt-circle` | hole coordinates and CAD code from count and diameter | 3D |
+| **Cable Bend Radius** · MCP | `cable-bend` | minimum bend radius and clearance for a cable | 3D |
 | **Clearance Fit Calculator** · MCP | `iso-fit` | actual clearance or interference of an ISO fit such as H7/g6 | 3D |
+| **Enclosure Fit Checker** · MCP | `enclosure-fit` | inner enclosure size and cut-outs from the board outline and connector heights | 3D, PCB |
 | **Fastener Library** · MCP | `fastener-library` | screw, nut and washer sizes by head type, with CAD variables | 3D |
 | **Heat-Set Insert Sizer** · MCP | `heat-set-insert` | boss hole diameter and wall thickness for an insert | 3D |
+| **Mass & CoG from Volume** · MCP | `mass-cog` | mass and centre of gravity from volumes and materials | 3D |
+| **Material Property Table** · MCP | `material-table` | density, modulus, yield strength and expansion of materials compared | 3D |
 | **Print Guideline Checker** · MCP | `print-guidelines` | wall, bridge and overhang values checked for a print process | 3D |
 | **Print Time & Cost** · MCP | `print-cost` | print time and cost from volume, infill and material price | 3D |
+| **Sheet Metal Bend Allowance** · MCP | `bend-allowance` | flat length from K-factor and bend radius | 3D |
 | **Shrinkage Compensator** · MCP | `shrinkage` | corrected dimension for a material's shrinkage | 3D |
+| **Standoff Height Planner** · MCP | `standoff-height` | standoff length from the tallest part under the board | 3D, PCB |
+| **Thermal Expansion Calculator** · MCP | `thermal-expansion` | dimension change of a part over a temperature change | 3D, PCB |
 | **Thread & Tap Drill Chart** · MCP | `thread-drill` | tap drill and clearance hole sizes for a thread | 3D |
 | **Tolerance Stack-Up** · MCP | `tolerance-stack` | worst-case and statistical sum of a chain of dimensions | 3D |
 

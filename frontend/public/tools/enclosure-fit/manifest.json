@@ -1,0 +1,37 @@
+{
+  "id": "enclosure-fit",
+  "name": "Enclosure Fit Checker",
+  "blurb": "inner enclosure size and cut-outs from the board outline and connector heights",
+  "group": "mechanical",
+  "rooms": ["cad", "pcb"],
+  "keywords": ["enclosure", "housing", "case", "box", "cut-out", "cutout", "connector opening", "panel", "inner dimensions", "wall thickness", "standoff", "usb-c", "openscad", "clearance"],
+  "intro": "The inner and outer size of a box around a board: the board outline plus a clearance to the walls, and the height of the standoffs, the board, the tallest part or connector and a gap under the lid. Each connector gets its cut-out position and size in the wall, and a check of how far its face sits behind the outer surface. Margins are common rules of thumb.",
+  "inputs": [
+    { "key": "bl", "label": "Board length (x)", "type": "number", "unit": "mm", "default": "80" },
+    { "key": "bw", "label": "Board width (y)", "type": "number", "unit": "mm", "default": "50" },
+    { "key": "bt", "label": "Board thickness", "type": "number", "unit": "mm", "default": "1.6" },
+    { "key": "clr", "label": "Board to wall clearance", "type": "number", "unit": "mm", "default": "1", "help": "Per side. Covers the board's outline tolerance and the enclosure's." },
+    { "key": "wall", "label": "Wall thickness", "type": "number", "unit": "mm", "default": "2" },
+    { "key": "floor", "label": "Floor and lid thickness", "type": "number", "unit": "mm", "default": "2" },
+    { "key": "so", "label": "Standoff height (floor to board)", "type": "number", "unit": "mm", "default": "5" },
+    { "key": "bottom", "label": "Tallest bottom-side part", "type": "number", "unit": "mm", "default": "2", "help": "Including through-hole leads (1-2.5 mm)." },
+    { "key": "top", "label": "Tallest top-side part", "type": "number", "unit": "mm", "default": "10" },
+    { "key": "lidgap", "label": "Gap under the lid", "type": "number", "unit": "mm", "default": "1.5" },
+    { "key": "margin", "label": "Cut-out margin (each side)", "type": "number", "unit": "mm", "default": "0.5" },
+    { "key": "conns", "label": "Connectors (position = centre along that board edge from the lower-left corner; z = body bottom above board top; overhang = face past the board edge)", "type": "table",
+      "columns": [{ "key": "name", "label": "Name" }, { "key": "side", "label": "Side", "type": "select", "options": ["front", "back", "left", "right"], "default": "front" }, { "key": "pos", "label": "Position mm" }, { "key": "w", "label": "Width mm" }, { "key": "h", "label": "Height mm" }, { "key": "z0", "label": "z mm", "default": "0" }, { "key": "over", "label": "Overhang mm", "default": "0" }],
+      "default": [
+        { "name": "USB-C", "side": "front", "pos": "20", "w": "8.94", "h": "3.26", "z0": "0", "over": "0.5" },
+        { "name": "RJ45", "side": "front", "pos": "50", "w": "16", "h": "13.5", "z0": "0", "over": "2" },
+        { "name": "DC jack 5.5/2.1", "side": "left", "pos": "25", "w": "9", "h": "11", "z0": "0", "over": "0" }
+      ] }
+  ],
+  "examples": [
+    { "title": "80 × 50 board with USB-C, RJ45 and a DC jack", "input": { "bl": "80", "bw": "50", "bt": "1.6", "clr": "1", "wall": "2", "floor": "2", "so": "5", "bottom": "2", "top": "10", "lidgap": "1.5", "margin": "0.5", "conns": [
+      { "name": "USB-C", "side": "front", "pos": "20", "w": "8.94", "h": "3.26", "z0": "0", "over": "0.5" },
+      { "name": "RJ45", "side": "front", "pos": "50", "w": "16", "h": "13.5", "z0": "0", "over": "2" },
+      { "name": "DC jack 5.5/2.1", "side": "left", "pos": "25", "w": "9", "h": "11", "z0": "0", "over": "0" }] } }
+  ],
+  "usage": "Give the board length, width and thickness, the wall and floor thickness, the clearance to the walls, standoff height, tallest top and bottom parts and the lid gap, all in mm, and a table of connectors (side front/back/left/right, centre position along that edge, width, height, z of the body bottom above the board top, overhang past the edge). It returns inner and outer L × W × H, the board height, each cut-out's centre, width and z range in outer coordinates, how far each connector face sits behind the outer wall, and an OpenSCAD box. Use it before drawing an enclosure or to check connector access.",
+  "sources": ["Box geometry: sums of the stack (no formula source needed)", "Clearances (0.5 mm cut-out margin, 0.5-1 mm board-to-wall, 1 mm under bottom parts, 1.5 mm minimum web): common enclosure design rules of thumb (e.g. Hammond and Takachi enclosure application notes)"]
+}

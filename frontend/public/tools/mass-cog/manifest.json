@@ -1,0 +1,275 @@
+{
+  "id": "mass-cog",
+  "name": "Mass & CoG from Volume",
+  "blurb": "mass and centre of gravity from volumes and materials",
+  "group": "mechanical",
+  "rooms": [
+    "cad"
+  ],
+  "keywords": [
+    "mass",
+    "weight",
+    "centre of gravity",
+    "center of gravity",
+    "cog",
+    "cg",
+    "centroid",
+    "density",
+    "volume",
+    "moment of inertia",
+    "balance",
+    "assembly mass",
+    "mass properties"
+  ],
+  "intro": "The total mass and centre of gravity of an assembly: each part's volume times its material density, placed at its centroid, then the mass-weighted average position. Negative volumes cut material out; a point-mass moment of inertia about the CoG comes along.",
+  "inputs": [
+    {
+      "key": "unit",
+      "label": "Volumes in",
+      "type": "select",
+      "default": "mm3",
+      "options": [
+        [
+          "mm3",
+          "mm³"
+        ],
+        [
+          "cm3",
+          "cm³ (ml)"
+        ],
+        [
+          "in3",
+          "in³"
+        ],
+        [
+          "m3",
+          "m³"
+        ]
+      ]
+    },
+    {
+      "key": "infill",
+      "label": "Infill of printed plastics (PLA, PETG, ABS, TPU)",
+      "type": "number",
+      "unit": "%",
+      "default": "100",
+      "help": "100 for moulded or solid parts. Only rows with one of these materials and no density of their own are scaled."
+    },
+    {
+      "key": "parts",
+      "label": "Parts (centroid x, y, z in mm; density overrides the material)",
+      "type": "table",
+      "columns": [
+        {
+          "key": "name",
+          "label": "Part"
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "select",
+          "options": [
+            "Aluminium (6061/6082)",
+            "Aluminium die cast (A380)",
+            "Steel (carbon)",
+            "Stainless steel (304/316)",
+            "Brass",
+            "Copper",
+            "Titanium (Ti-6Al-4V)",
+            "Magnesium (AZ31)",
+            "Zinc die cast (Zamak)",
+            "ABS",
+            "PC",
+            "PA66 nylon",
+            "PA66-GF30",
+            "POM (acetal)",
+            "PMMA (acrylic)",
+            "PLA",
+            "PETG",
+            "TPU",
+            "Silicone rubber",
+            "FR-4 (bare board)",
+            "Populated PCB (average)",
+            "Li-ion cell (cylindrical)",
+            "Glass",
+            "Wood (pine)",
+            "Water"
+          ],
+          "default": "Aluminium (6061/6082)"
+        },
+        {
+          "key": "volume",
+          "label": "Volume"
+        },
+        {
+          "key": "qty",
+          "label": "Qty",
+          "default": "1"
+        },
+        {
+          "key": "x",
+          "label": "x mm"
+        },
+        {
+          "key": "y",
+          "label": "y mm"
+        },
+        {
+          "key": "z",
+          "label": "z mm"
+        },
+        {
+          "key": "density",
+          "label": "ρ g/cm³ (opt.)"
+        }
+      ],
+      "default": [
+        {
+          "name": "Base plate 100x60x3",
+          "material": "Aluminium (6061/6082)",
+          "volume": "18000",
+          "qty": "1",
+          "x": "50",
+          "y": "30",
+          "z": "1.5",
+          "density": ""
+        },
+        {
+          "name": "M3 holes (4, symmetric)",
+          "material": "Aluminium (6061/6082)",
+          "volume": "-27.2",
+          "qty": "4",
+          "x": "50",
+          "y": "30",
+          "z": "1.5",
+          "density": ""
+        },
+        {
+          "name": "PCB 90x50x1.6, populated",
+          "material": "Populated PCB (average)",
+          "volume": "7200",
+          "qty": "1",
+          "x": "50",
+          "y": "30",
+          "z": "9.8",
+          "density": ""
+        },
+        {
+          "name": "18650 cell",
+          "material": "Li-ion cell (cylindrical)",
+          "volume": "16540",
+          "qty": "1",
+          "x": "70",
+          "y": "30",
+          "z": "20",
+          "density": ""
+        },
+        {
+          "name": "Cover, ABS 2 mm shell",
+          "material": "ABS",
+          "volume": "19000",
+          "qty": "1",
+          "x": "50",
+          "y": "30",
+          "z": "22",
+          "density": ""
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "Handheld box: aluminium base, board, cell and ABS cover",
+      "input": {
+        "unit": "mm3",
+        "infill": "100",
+        "parts": [
+          {
+            "name": "Base plate 100x60x3",
+            "material": "Aluminium (6061/6082)",
+            "volume": "18000",
+            "qty": "1",
+            "x": "50",
+            "y": "30",
+            "z": "1.5",
+            "density": ""
+          },
+          {
+            "name": "M3 holes (4, symmetric)",
+            "material": "Aluminium (6061/6082)",
+            "volume": "-27.2",
+            "qty": "4",
+            "x": "50",
+            "y": "30",
+            "z": "1.5",
+            "density": ""
+          },
+          {
+            "name": "PCB 90x50x1.6, populated",
+            "material": "Populated PCB (average)",
+            "volume": "7200",
+            "qty": "1",
+            "x": "50",
+            "y": "30",
+            "z": "9.8",
+            "density": ""
+          },
+          {
+            "name": "18650 cell",
+            "material": "Li-ion cell (cylindrical)",
+            "volume": "16540",
+            "qty": "1",
+            "x": "70",
+            "y": "30",
+            "z": "20",
+            "density": ""
+          },
+          {
+            "name": "Cover, ABS 2 mm shell",
+            "material": "ABS",
+            "volume": "19000",
+            "qty": "1",
+            "x": "50",
+            "y": "30",
+            "z": "22",
+            "density": ""
+          }
+        ]
+      }
+    },
+    {
+      "title": "Printed bracket with a steel insert, 30 % infill",
+      "input": {
+        "unit": "cm3",
+        "infill": "30",
+        "parts": [
+          {
+            "name": "Bracket body",
+            "material": "PETG",
+            "volume": "42",
+            "qty": "1",
+            "x": "0",
+            "y": "0",
+            "z": "15",
+            "density": ""
+          },
+          {
+            "name": "Steel shaft Ø8 x 60",
+            "material": "Steel (carbon)",
+            "volume": "3.02",
+            "qty": "1",
+            "x": "0",
+            "y": "0",
+            "z": "40",
+            "density": ""
+          }
+        ]
+      }
+    }
+  ],
+  "usage": "Give a table of parts: name, material (one of the listed names) or a density in g/cm³, volume in the chosen unit (negative to remove material), quantity and centroid x, y, z in mm. It returns the total mass in g or kg, the CoG coordinates in mm, net volume, average density, a per-part mass table and point-mass moments of inertia about the CoG. Use it to balance a design, place a handle or foot, or estimate shipping weight from CAD volumes.",
+  "sources": [
+    "Centre of mass r = Σ m_i r_i / Σ m_i and the parallel-axis theorem: any statics / dynamics textbook (e.g. Meriam & Kraige, Engineering Mechanics)",
+    "Densities: MatWeb typical values; populated PCB and Li-ion cell densities are rule-of-thumb averages"
+  ]
+}

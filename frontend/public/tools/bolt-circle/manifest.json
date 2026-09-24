@@ -1,0 +1,29 @@
+{
+  "id": "bolt-circle",
+  "name": "Bolt Circle Generator",
+  "blurb": "hole coordinates and CAD code from count and diameter",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["bolt circle", "pcd", "pitch circle diameter", "bolt pattern", "polar array", "hole pattern", "flange holes", "circular pattern", "hole coordinates", "openscad", "cadquery", "g-code", "g81", "drill"],
+  "intro": "The x/y centre of every hole on a bolt circle (pitch circle diameter), evenly around the full circle or spread over an arc, with the chord and the web between holes, and the pattern as CSV, OpenSCAD, CadQuery and G81 G-code. Angles are measured from +X, counter-clockwise unless you choose clockwise.",
+  "inputs": [
+    { "key": "n", "label": "Number of holes", "type": "number", "default": "6" },
+    { "key": "pcd", "label": "Bolt circle diameter (PCD)", "type": "number", "unit": "mm", "default": "100" },
+    { "key": "hole", "label": "Hole diameter", "type": "number", "unit": "mm", "default": "9", "help": "Used for the web between holes and the CAD code; ISO 273 medium clearance for M8 is 9 mm." },
+    { "key": "start", "label": "Start angle (hole 1)", "type": "number", "unit": "°", "default": "0" },
+    { "key": "dir", "label": "Direction", "type": "select", "default": "ccw", "options": [["ccw", "Counter-clockwise"], ["cw", "Clockwise"]] },
+    { "key": "span", "label": "Spread", "type": "select", "default": "full", "options": [["full", "Full circle, equal spacing"], ["arc", "Over an arc, first and last on its ends"]] },
+    { "key": "arc", "label": "Arc span", "type": "number", "unit": "°", "default": "90", "when": { "key": "span", "equals": "arc" } },
+    { "key": "cx", "label": "Centre x", "type": "number", "unit": "mm", "default": "0" },
+    { "key": "cy", "label": "Centre y", "type": "number", "unit": "mm", "default": "0" },
+    { "key": "dp", "label": "Decimals in the output", "type": "select", "default": "3", "options": ["0", "1", "2", "3", "4"] },
+    { "key": "depth", "label": "Drill depth for the G-code", "type": "number", "unit": "mm", "default": "5" }
+  ],
+  "examples": [
+    { "title": "DN50 PN16 flange: 4 × M16 (Ø18) on PCD 125, rotated 45°", "input": { "n": "4", "pcd": "125", "hole": "18", "start": "45", "dir": "ccw", "span": "full", "cx": "0", "cy": "0", "dp": "3", "depth": "20" } },
+    { "title": "5 holes over 120° on a 60 mm arc at (40, 30)", "input": { "n": "5", "pcd": "60", "hole": "3.4", "start": "30", "dir": "ccw", "span": "arc", "arc": "120", "cx": "40", "cy": "30", "dp": "3", "depth": "5" } }
+  ],
+  "usage": "Give the number of holes, the bolt circle diameter and hole diameter in mm, the start angle in degrees from +X, the direction (ccw or cw), full circle or an arc span in degrees, and the centre in mm. It returns every hole's angle and x/y, the angle and chord between holes, the web left between holes, and CSV, OpenSCAD, CadQuery and G81 G-code texts. Use it to place a flange, motor or lid bolt pattern in CAD or on a CNC.",
+  "sources": ["Plane geometry: x = cx + r·cos θ, y = cy + r·sin θ, chord = 2r·sin(Δθ/2)", "ISO 273 clearance holes (default hole size)", "Web of at least half a hole diameter between holes: machining rule of thumb"],
+  "view": true
+}
