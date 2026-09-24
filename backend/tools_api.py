@@ -336,8 +336,11 @@ async def get_data(tid: str, project: str = "default") -> dict:
     manifest_of(tid)
     from . import scope
     doc = await _db()[DATA].find_one({"_id": scope.key(f"{tid}:{project}")}) or {}
+    upd = doc.get("updated")
+    if upd is not None and upd.tzinfo is None:
+        upd = upd.replace(tzinfo=timezone.utc)      # Mongo gives UTC back without a zone
     return {"id": tid, "project": project, "data": doc.get("data") or {},
-            "updated": doc.get("updated")}
+            "updated": upd.isoformat() if upd else None}
 
 
 @router.put("/data/{tid}")
@@ -351,3 +354,12 @@ async def put_data(tid: str, body: DataIn, project: str = "default") -> dict:
     await _db()[DATA].update_one({"_id": scope.key(f"{tid}:{project}")},
                                  {"$set": {"data": body.data, "updated": now}}, upsert=True)
     return {"ok": True, "updated": now.isoformat()}
+
+
+@router.delete("/data/{tid}", status_code=204)
+async def delete_data(tid: str, project: str = "default") -> None:
+    """Drop a project's record for a tool - a test project, a project gone."""
+    manifest_of(tid)
+    from . import scope
+    await _db()[DATA].delete_one({"_id": scope.key(f"{tid}:{project}")})
+
