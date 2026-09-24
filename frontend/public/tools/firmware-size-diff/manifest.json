@@ -1,0 +1,77 @@
+{
+  "id": "firmware-size-diff",
+  "name": "Firmware Size Diff",
+  "blurb": "symbol-by-symbol size change between two builds, largest first",
+  "group": "embedded",
+  "rooms": [
+    "embedded"
+  ],
+  "keywords": [
+    "firmware size",
+    "size diff",
+    "code size",
+    "bloat",
+    "nm",
+    "nm -S",
+    "size-sort",
+    "map file",
+    "linker map",
+    "flash usage",
+    "ram usage",
+    "bss",
+    "rodata",
+    "bloaty",
+    "arm-none-eabi-size"
+  ],
+  "intro": "Paste the symbol sizes of two builds (nm -S output, a GNU ld map file, size -A, bloaty CSV or name/size lines) and see what grew, shrank, appeared or vanished, largest change first, with the flash and RAM totals split by text, rodata, data and bss.",
+  "inputs": [
+    {
+      "key": "before",
+      "label": "Old build",
+      "type": "textarea",
+      "rows": 9,
+      "default": "08000188 00000030 T main\n080001b8 00000124 T HAL_UART_Transmit\n080002dc 000000c8 T HAL_GPIO_Init\n080003a4 00000044 T SystemClock_Config\n080003e8 00000058 T sensor_read\n08000440 0000003c T debug_dump\n0800047c 000000a4 T memset\n08000520 00000048 T __libc_init_array\n08000568 00000010 R AHBPrescTable\n20000000 00000004 D SystemCoreClock\n20000004 00000004 D uwTickFreq\n20000008 00000100 b uart_rx_buf\n20000108 00000400 b log_buffer\n20000508 00000004 b uwTick",
+      "placeholder": "arm-none-eabi-nm -S --size-sort old.elf",
+      "help": "arm-none-eabi-nm -S --size-sort firmware.elf, or the .map file, or size -A."
+    },
+    {
+      "key": "after",
+      "label": "New build",
+      "type": "textarea",
+      "rows": 9,
+      "default": "08000188 00000044 T main\n080001cc 00000124 T HAL_UART_Transmit\n080002f0 000000c8 T HAL_GPIO_Init\n080003b8 00000044 T SystemClock_Config\n080003fc 00000090 T sensor_read\n0800048c 00000028 T filter_update\n080004b4 00000ce4 T _vfprintf_r\n08001198 0000012c T _printf_i\n080012c4 00000e54 T _dtoa_r\n08002118 000000a4 T memset\n080021bc 00000048 T __libc_init_array\n08002204 00000010 R AHBPrescTable\n08002214 00000080 R filter_coeffs\n20000000 00000004 D SystemCoreClock\n20000004 00000004 D uwTickFreq\n20000008 00000060 d impure_data\n20000068 00000100 b uart_rx_buf\n20000168 00000800 b log_buffer\n20000968 00000004 b uwTick\n2000096c 00000010 b filter_state",
+      "placeholder": "arm-none-eabi-nm -S --size-sort new.elf"
+    },
+    {
+      "key": "top",
+      "label": "Show the largest",
+      "type": "number",
+      "unit": "symbols",
+      "default": "25"
+    },
+    {
+      "key": "minDelta",
+      "label": "Ignore changes under",
+      "type": "number",
+      "unit": "bytes",
+      "default": "1"
+    }
+  ],
+  "examples": [
+    {
+      "title": "A float printf pulled in newlib's formatter",
+      "input": {
+        "before": "08000188 00000030 T main\n080001b8 00000124 T HAL_UART_Transmit\n080002dc 000000c8 T HAL_GPIO_Init\n080003a4 00000044 T SystemClock_Config\n080003e8 00000058 T sensor_read\n08000440 0000003c T debug_dump\n0800047c 000000a4 T memset\n08000520 00000048 T __libc_init_array\n08000568 00000010 R AHBPrescTable\n20000000 00000004 D SystemCoreClock\n20000004 00000004 D uwTickFreq\n20000008 00000100 b uart_rx_buf\n20000108 00000400 b log_buffer\n20000508 00000004 b uwTick",
+        "after": "08000188 00000044 T main\n080001cc 00000124 T HAL_UART_Transmit\n080002f0 000000c8 T HAL_GPIO_Init\n080003b8 00000044 T SystemClock_Config\n080003fc 00000090 T sensor_read\n0800048c 00000028 T filter_update\n080004b4 00000ce4 T _vfprintf_r\n08001198 0000012c T _printf_i\n080012c4 00000e54 T _dtoa_r\n08002118 000000a4 T memset\n080021bc 00000048 T __libc_init_array\n08002204 00000010 R AHBPrescTable\n08002214 00000080 R filter_coeffs\n20000000 00000004 D SystemCoreClock\n20000004 00000004 D uwTickFreq\n20000008 00000060 d impure_data\n20000068 00000100 b uart_rx_buf\n20000168 00000800 b log_buffer\n20000968 00000004 b uwTick\n2000096c 00000010 b filter_state",
+        "top": "25",
+        "minDelta": "1"
+      }
+    }
+  ],
+  "usage": "Give before and after as text: the output of nm -S (--print-size, hex sizes), a GNU ld .map file, size -A, bloaty --csv, or 'name size' lines in decimal; top = how many symbols to list and minDelta = smallest change in bytes to show. Returns the total, flash and RAM change in bytes, counts of added/removed/grown/shrunk symbols, a table of changed symbols sorted by absolute change, a by-region table and a Markdown summary. Use it in code review or CI to explain a firmware size jump.",
+  "sources": [
+    "GNU Binutils documentation: nm (--print-size, symbol type letters) and size (-A / Berkeley formats)",
+    "GNU ld manual: map file (-Map) layout",
+    "Bloaty McBloatface CSV output format"
+  ]
+}

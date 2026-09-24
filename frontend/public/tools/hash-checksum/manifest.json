@@ -1,0 +1,22 @@
+{
+  "id": "hash-checksum",
+  "name": "Hash & Checksum Quick Tool",
+  "blurb": "MD5, SHA and simple checksums of text or hex data",
+  "group": "embedded",
+  "rooms": ["embedded", "web"],
+  "keywords": ["hash", "checksum", "md5", "sha1", "sha-256", "sha256", "sha512", "crc32", "adler32", "fletcher", "lrc", "xor checksum", "intel hex checksum", "digest", "verify download"],
+  "intro": "Hashes (MD5, SHA-1, SHA-256, SHA-512) and simple checksums (CRC-32, Adler-32, Fletcher, byte sum, two's complement, XOR) of the same bytes, from text, hex or Base64. Paste an expected value to see which algorithm, if any, it matches.",
+  "inputs": [
+    { "key": "data", "label": "Data", "type": "textarea", "rows": 5, "default": "abc" },
+    { "key": "format", "label": "Data is", "type": "select", "default": "text",
+      "options": [["text", "Text (UTF-8)"], ["hex", "Hex bytes"], ["base64", "Base64"]] },
+    { "key": "expect", "label": "Expected value (optional)", "type": "text", "default": "", "placeholder": "e.g. ba7816bf... or 0x352441C2",
+      "help": "Any hash or checksum; case, 0x and separators are ignored." }
+  ],
+  "examples": [
+    { "title": "FIPS 180 test vector \"abc\"", "input": { "data": "abc", "format": "text", "expect": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" } },
+    { "title": "Intel HEX record data (record checksum is 0x40)", "input": { "data": "10 01 00 00 21 46 01 36 01 21 47 01 36 00 7E FE 09 D2 19 01", "format": "hex", "expect": "0x40" } }
+  ],
+  "usage": "Give data (text, hex bytes or Base64, with format = text | hex | base64) and optionally an expected hash to compare. Returns MD5, SHA-1, SHA-256, SHA-512 as lowercase hex and CRC-32, Adler-32, Fletcher-16/32, 8/16-bit sums, two's-complement sum and XOR as 0x hex, plus which one matches the expected value. Use it to verify a firmware image digest over small data, a record checksum, or to identify an unknown checksum; for files larger than 1 MiB use sha256sum.",
+  "sources": ["RFC 1321 (MD5)", "NIST FIPS 180-4 Secure Hash Standard (SHA-1, SHA-256, SHA-512)", "RFC 1950 section 8.2 (Adler-32)", "Intel Hexadecimal Object File Format Specification rev. A (record checksum)"]
+}

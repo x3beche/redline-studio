@@ -1,0 +1,38 @@
+{
+  "id": "flash-partitions",
+  "name": "Flash Partition Planner",
+  "blurb": "OTA, NVS and filesystem partitions sized, with a partition table",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["partition table", "partitions.csv", "esp32", "esp-idf", "ota", "ota_0", "factory", "nvs", "otadata", "littlefs", "spiffs", "fatfs", "coredump", "flash layout", "flash map"],
+  "intro": "Lays out an ESP-IDF partition table: NVS, otadata, PHY data, the app slots sized from your image plus headroom (64 KiB aligned), an optional core dump and a filesystem that takes the rest. Rules follow the ESP-IDF Partition Tables and OTA guides; the result is a partitions.csv with explicit offsets.",
+  "inputs": [
+    { "key": "chip", "label": "Chip", "type": "select", "default": "esp32",
+      "options": [["esp32", "ESP32"], ["esp32s2", "ESP32-S2"], ["esp32s3", "ESP32-S3"], ["esp32c3", "ESP32-C3 / C6 / H2"], ["esp32p4", "ESP32-P4"]] },
+    { "key": "flash", "label": "Flash size", "type": "select", "default": "4",
+      "options": [["2", "2 MB"], ["4", "4 MB"], ["8", "8 MB"], ["16", "16 MB"], ["32", "32 MB"]] },
+    { "key": "ota", "label": "App slots", "type": "select", "default": "ota2nf",
+      "options": [["ota2nf", "OTA: ota_0 + ota_1"], ["ota2", "Factory + ota_0 + ota_1"], ["ota3", "OTA: three slots"], ["factory", "Factory only, no OTA"]] },
+    { "key": "image", "label": "App image size", "type": "number", "unit": "KiB", "default": "1200",
+      "help": "Size of build/<project>.bin." },
+    { "key": "headroom", "label": "Headroom for growth", "type": "number", "unit": "%", "default": "25" },
+    { "key": "appMode", "label": "App slot size", "type": "select", "default": "image",
+      "options": [["image", "Image + headroom"], ["max", "As large as possible"]] },
+    { "key": "fs", "label": "Filesystem", "type": "select", "default": "littlefs",
+      "options": [["littlefs", "LittleFS"], ["spiffs", "SPIFFS"], ["fat", "FAT (wear levelled)"], ["none", "None"]] },
+    { "key": "fsSize", "label": "Filesystem size", "type": "number", "unit": "KiB", "default": "0",
+      "help": "0 = the rest of the flash (with image-sized app slots).", "when": { "key": "fs", "in": ["littlefs", "spiffs", "fat"] } },
+    { "key": "nvs", "label": "NVS size", "type": "number", "unit": "KiB", "default": "24" },
+    { "key": "phy", "label": "phy_init partition", "type": "bool", "default": true },
+    { "key": "nvsKeys", "label": "NVS encryption (nvs_keys)", "type": "bool", "default": false },
+    { "key": "coredump", "label": "Core dump to flash (64 KiB)", "type": "bool", "default": false },
+    { "key": "ptOffset", "label": "Partition table offset", "type": "text", "default": "0x8000" }
+  ],
+  "examples": [
+    { "title": "Wi-Fi sensor, 4 MB, two OTA slots and LittleFS", "input": { "chip": "esp32", "flash": "4", "ota": "ota2nf", "image": "1200", "headroom": "25", "appMode": "image", "fs": "littlefs", "fsSize": "0", "nvs": "24", "phy": true, "nvsKeys": false, "coredump": true, "ptOffset": "0x8000" } },
+    { "title": "ESP-IDF's own partitions_two_ota.csv (1 MB slots)", "input": { "chip": "esp32", "flash": "4", "ota": "ota2", "image": "1024", "headroom": "0", "appMode": "image", "fs": "none", "nvs": "16", "phy": true, "nvsKeys": false, "coredump": false, "ptOffset": "0x8000" } }
+  ],
+  "usage": "Give chip, flash size in MB (2-32), app slots (ota2nf = ota_0+ota_1, ota2 = factory+2 OTA, ota3, factory), the app image size in KiB and headroom in %, appMode (image = image+headroom, max = split the free flash), fs (littlefs|spiffs|fat|none) with fsSize in KiB (0 = rest), NVS size in KiB, and booleans phy, nvsKeys, coredump. Returns each partition's offset and size, the app slot fill, unused flash, a partitions.csv and sdkconfig lines, and a map object with every region. Use it when starting an ESP32 project or when an OTA image no longer fits.",
+  "sources": ["Espressif ESP-IDF Programming Guide: Partition Tables (offsets, alignment, subtypes)", "Espressif ESP-IDF Programming Guide: Over The Air Updates (otadata, ota_0/ota_1)", "Espressif ESP-IDF Programming Guide: Non-Volatile Storage Library (page size, NVS encryption)", "ESP-IDF components/partition_table/partitions_two_ota.csv"],
+  "view": true
+}

@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-80 tools. **MCP** marks the ones agents can run with `run_tool`.
+88 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -137,10 +137,17 @@ agents, the most used, and every tool nobody used.
 | **ADC Resolution Calculator** · MCP | `adc-resolution` | LSB size from reference and bits, and the oversampling gain | Embedded |
 | **Battery Life Estimator** · MCP | `battery-life` | run time in days from average current and battery capacity | Embedded, PCB |
 | **Clock Tree Planner** · MCP | `clock-tree` | PLL settings and peripheral clocks from a crystal frequency | Embedded |
+| **CRC Calculator** · MCP | `crc-calc` | CRC-8/16/32 with polynomial, init and reflection settings | Embedded |
 | **Cycle to Time Converter** · MCP | `cycles-time` | instruction cycles to microseconds and back at a clock | Embedded |
 | **Debounce Time Calculator** · MCP | `debounce-time` | debounce time for a button type and sampling period | Embedded |
 | **EMA / IIR Coefficient Tool** · MCP | `iir-coefficient` | smoothing coefficient from a cutoff frequency, with the response drawn | Embedded |
+| **Endianness Inspector** · MCP | `endianness` | the same bytes read as little and big endian side by side | Embedded |
+| **Firmware Size Diff** · MCP | `firmware-size-diff` | symbol-by-symbol size change between two builds, largest first | Embedded |
+| **Fixed-Point Converter** · MCP | `fixed-point` | a decimal value in a Q format and the precision lost | Embedded |
+| **Flash Partition Planner** · MCP | `flash-partitions` | OTA, NVS and filesystem partitions sized, with a partition table | Embedded |
 | **GPIO Restriction Warner** · MCP | `gpio-warner` | risks of using boot straps and special-purpose GPIOs | Embedded, PCB |
+| **Hash & Checksum Quick Tool** · MCP | `hash-checksum` | MD5, SHA and simple checksums of text or hex data | Embedded, Web |
+| **IEEE754 Float Inspector** · MCP | `float-inspector` | sign, exponent and mantissa bits of a float | Embedded |
 | **Linker Script Helper** · MCP | `linker-script` | a linker script from sections and memory regions in a form | Embedded |
 | **Memory Map Viewer** · MCP | `memory-map` | flash and RAM region use as a scaled strip | Embedded |
 | **NVIC Priority Planner** · MCP | `nvic-planner` | interrupt priorities in order, with preemption conflicts | Embedded |
@@ -150,6 +157,7 @@ agents, the most used, and every tool nobody used.
 | **Sensor Calibration Fit** · MCP | `sensor-calibration` | linear calibration coefficients from two or more readings | Embedded |
 | **Sleep Current Profiler** · MCP | `sleep-current` | average current from sleep and wake times and currents | Embedded |
 | **Stack Usage Estimator** · MCP | `stack-estimator` | worst-case stack from call depth and locals | Embedded |
+| **Struct Packing Visualizer** · MCP | `struct-packing` | alignment of struct members and the padding bytes wasted | Embedded |
 | **Units & Numbers** | `units` | mm, mil and inch; hex, decimal and binary; UART baud and timer periods | Embedded, PCB |
 
 ### Web & design

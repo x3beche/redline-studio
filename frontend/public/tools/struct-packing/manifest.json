@@ -1,0 +1,133 @@
+{
+  "id": "struct-packing",
+  "name": "Struct Packing Visualizer",
+  "blurb": "alignment of struct members and the padding bytes wasted",
+  "group": "embedded",
+  "rooms": [
+    "embedded"
+  ],
+  "keywords": [
+    "struct",
+    "padding",
+    "alignment",
+    "sizeof",
+    "offsetof",
+    "packed",
+    "pragma pack",
+    "attribute packed",
+    "struct layout",
+    "memory layout",
+    "bit-field",
+    "abi",
+    "aapcs",
+    "reorder members"
+  ],
+  "intro": "Paste C struct definitions and see each member's offset, size and alignment, the padding the compiler adds, and a byte map. Layout follows the chosen ABI (ARM Cortex-M with short enums, ESP32/RISC-V 32, x86-64 SysV, Windows x64, i386, AVR), honours __attribute__((packed)), #pragma pack and #defines for array sizes, and suggests a smaller member order.",
+  "inputs": [
+    {
+      "key": "code",
+      "label": "C code",
+      "type": "textarea",
+      "rows": 14,
+      "default": "#include <stdint.h>\n#define NAME_LEN 10\n\nstruct sensor_frame {\n    uint8_t  id;\n    uint32_t timestamp;\n    uint16_t temperature;\n    uint8_t  flags;\n    double   pressure;\n    char     name[NAME_LEN];\n    uint16_t crc;\n};",
+      "help": "Structs, unions, typedefs and #define sizes. Types defined earlier in the paste can be used by later ones."
+    },
+    {
+      "key": "abi",
+      "label": "Target ABI",
+      "type": "select",
+      "default": "armeabi",
+      "options": [
+        [
+          "armeabi",
+          "ARM Cortex-M (arm-none-eabi)"
+        ],
+        [
+          "mcu32",
+          "32-bit, int enums: ESP32, RISC-V 32"
+        ],
+        [
+          "lp64",
+          "64-bit Linux/macOS: x86-64, AArch64"
+        ],
+        [
+          "win64",
+          "Windows x64 (MSVC)"
+        ],
+        [
+          "i386",
+          "x86 32-bit Linux"
+        ],
+        [
+          "avr",
+          "AVR 8-bit"
+        ]
+      ]
+    },
+    {
+      "key": "pack",
+      "label": "Packing",
+      "type": "select",
+      "default": "natural",
+      "options": [
+        [
+          "natural",
+          "Natural alignment"
+        ],
+        [
+          "1",
+          "#pragma pack(1) / packed"
+        ],
+        [
+          "2",
+          "#pragma pack(2)"
+        ],
+        [
+          "4",
+          "#pragma pack(4)"
+        ],
+        [
+          "8",
+          "#pragma pack(8)"
+        ]
+      ],
+      "help": "Applies to every struct; #pragma pack and packed attributes in the code apply too."
+    },
+    {
+      "key": "which",
+      "label": "Struct to show",
+      "type": "text",
+      "default": "",
+      "placeholder": "blank = the last one",
+      "help": "Tag or typedef name."
+    }
+  ],
+  "examples": [
+    {
+      "title": "A sensor frame with 12 bytes of padding on Cortex-M",
+      "input": {
+        "abi": "armeabi",
+        "pack": "natural",
+        "which": ""
+      }
+    },
+    {
+      "title": "A packed message header with bit-fields and a nested struct",
+      "input": {
+        "code": "typedef struct {\n    uint16_t x, y;\n} point_t;\n\ntypedef struct __attribute__((packed)) {\n    uint8_t  version : 4;\n    uint8_t  type    : 4;\n    uint16_t length;\n    uint32_t seq;\n    point_t  origin;\n    uint8_t  payload[16];\n} msg_header_t;",
+        "abi": "armeabi",
+        "pack": "natural",
+        "which": "msg_header_t"
+      }
+    }
+  ],
+  "usage": "Give code as C source with one or more struct/union definitions (typedefs, nested structs, arrays with #define sizes, bit-fields, __attribute__((packed)), #pragma pack are understood), abi = armeabi | mcu32 | lp64 | win64 | i386 | avr, pack = natural | 1 | 2 | 4 | 8, and optionally which struct to show. Returns sizeof, alignment, total padding, a table of offset/size/alignment/padding per member, the size after reordering by alignment, static asserts to pin the layout, and a layout object with the byte map (cells with start, len, label, kind). Use it before putting a struct on the wire, in flash or in shared memory.",
+  "sources": [
+    "ARM Procedure Call Standard for the Arm Architecture (AAPCS, IHI 0042), sections 5.1 and 7.1",
+    "System V Application Binary Interface, AMD64 Architecture Processor Supplement, section 3.1.2",
+    "System V ABI Intel386 Architecture Processor Supplement, table 2.1",
+    "Microsoft Learn, x64 ABI conventions: types and storage, bit-field layout",
+    "avr-gcc ABI (GCC wiki): type sizes, byte alignment"
+  ],
+  "view": true
+}

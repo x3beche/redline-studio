@@ -1,0 +1,24 @@
+{
+  "id": "float-inspector",
+  "name": "IEEE754 Float Inspector",
+  "blurb": "sign, exponent and mantissa bits of a float",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["ieee 754", "ieee754", "float", "double", "half", "binary16", "bfloat16", "single precision", "mantissa", "exponent", "subnormal", "denormal", "nan", "ulp", "float to hex", "hex to float"],
+  "intro": "Shows how a decimal value is stored as an IEEE 754 half, bfloat16, float or double: the sign, exponent and fraction bits, the exact value stored, the rounding error and the spacing to the neighbours. Or give a bit pattern (0x…) to decode it.",
+  "inputs": [
+    { "key": "value", "label": "Value or bits", "type": "text", "default": "0.1",
+      "help": "Decimal (0.1, -1.5e-3), inf, nan, or a bit pattern like 0x3DCCCCCD." },
+    { "key": "format", "label": "Format", "type": "select", "default": "binary32",
+      "options": [["binary32", "float (32-bit)"], ["binary64", "double (64-bit)"], ["binary16", "half (16-bit)"], ["bfloat16", "bfloat16"]] },
+    { "key": "input", "label": "Read the value as", "type": "select", "default": "auto",
+      "options": [["auto", "Auto (0x… = bits)"], ["decimal", "Decimal number"], ["bits", "Hex bit pattern"]] }
+  ],
+  "examples": [
+    { "title": "Why 0.1f is not 0.1", "input": { "value": "0.1", "format": "binary32", "input": "auto" } },
+    { "title": "Decode a float read from a sensor register", "input": { "value": "0x42F6E979", "format": "binary32", "input": "auto" } }
+  ],
+  "usage": "Give value as a decimal string (or inf / nan) or a hex bit pattern starting with 0x, and format = binary32 | binary64 | binary16 | bfloat16. Returns the bit pattern, sign, exponent field and unbiased exponent, significand, the exact stored decimal, the rounding error (absolute and relative), the ULP and next values, and the format's range. The result's bits object carries the sign/exponent/fraction bit strings. Use it to explain float precision, decode raw float registers or check a constant.",
+  "sources": ["IEEE 754-2019 Standard for Floating-Point Arithmetic, sections 3.4 (binary interchange formats) and 4.3.1 (round to nearest, ties to even)", "Google / Intel BF16 (bfloat16) format description"],
+  "view": true
+}

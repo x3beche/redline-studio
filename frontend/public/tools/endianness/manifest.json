@@ -1,0 +1,26 @@
+{
+  "id": "endianness",
+  "name": "Endianness Inspector",
+  "blurb": "the same bytes read as little and big endian side by side",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["endianness", "endian", "byte order", "little endian", "big endian", "byte swap", "word swap", "network order", "modbus float", "cdab", "htonl", "bswap", "hex to float", "hex to int"],
+  "intro": "Reads the same bytes as 8 to 64-bit integers and floats in little-endian, big-endian and the two mixed orders (word swap CDAB and byte swap BADC used by Modbus and PLCs). Or write a value and get its bytes in every order.",
+  "inputs": [
+    { "key": "mode", "label": "Direction", "type": "select", "default": "bytes",
+      "options": [["bytes", "Bytes to values"], ["value", "Value to bytes"]] },
+    { "key": "bytes", "label": "Bytes (hex)", "type": "text", "default": "40 49 0F DB", "wide": true, "when": { "key": "mode", "equals": "bytes" },
+      "help": "In address / reception order, e.g. 12 34 56 78, 0x12,0x34 or 12345678." },
+    { "key": "offset", "label": "Start at byte", "type": "number", "default": "0", "when": { "key": "mode", "equals": "bytes" } },
+    { "key": "type", "label": "Type", "type": "select", "default": "u32", "when": { "key": "mode", "equals": "value" },
+      "options": [["u8", "uint8_t"], ["i8", "int8_t"], ["u16", "uint16_t"], ["i16", "int16_t"], ["u32", "uint32_t"], ["i32", "int32_t"], ["u64", "uint64_t"], ["i64", "int64_t"], ["f32", "float"], ["f64", "double"]] },
+    { "key": "value", "label": "Value", "type": "text", "default": "0x12345678", "when": { "key": "mode", "equals": "value" },
+      "help": "Decimal, 0x hex or 0b binary; floats as 3.14, 1e-3, inf, nan." }
+  ],
+  "examples": [
+    { "title": "Two Modbus registers 0x0FDB 0x4049 holding a float", "input": { "mode": "bytes", "bytes": "0F DB 40 49", "offset": "0" } },
+    { "title": "An int32 sent over the network", "input": { "mode": "value", "type": "i32", "value": "-1000" } }
+  ],
+  "usage": "mode = bytes: give hex bytes in address order (and an optional byte offset); returns each integer and float type read little endian, big endian, word swapped (CDAB) and byte swapped (BADC). mode = value: give a type (u8..i64, f32, f64) and a value (decimal, 0x hex, 0b binary, or a float); returns its bytes in every order with a C initializer. Use it to decode a hex dump, a Modbus register pair or a packet field.",
+  "sources": ["ECMAScript DataView (IEEE 754 binary32/binary64, two's complement integers)", "Modbus Application Protocol V1.1b3 (registers big endian; 32-bit word order is vendor-specific)", "RFC 1700 / RFC 791 network byte order (big endian)"]
+}
