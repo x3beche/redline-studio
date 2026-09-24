@@ -1,3 +1,4 @@
+import { ToolsUsage } from './tools-usage';
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { AuditRow, BoardRunRow, InsightSeries, Insights, InsightsApi, ProjectDetail, ProjectItem } from '../api';
@@ -17,7 +18,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
  */
 @Component({
   selector: 'app-room-analyze',
-  imports: [BarList, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart],
+  imports: [BarList, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage],
   template: `
 <div class="tcv-room tcv-dash absolute inset-0 flex min-h-0 flex-col">
   <header class="tcv-dash-bar">
@@ -648,6 +649,10 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
       </div>
     }
 
+    <!-- TOOLS -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'tools', title: 'Tools', sub: 'which tools people and agents use, and which nobody does' }" />
+    @if (open('tools')) { <app-tools-usage [days]="rangeDays()" /> }
+
     <!-- DOCKER -->
     <ng-container *ngTemplateOutlet="head; context: { id: 'docker', title: 'Docker', sub: 'the sandboxes and the KiCad image: what they hold on disk' }" />
     @if (open('docker')) {
@@ -766,6 +771,12 @@ export class RoomAnalyze implements OnDestroy {
     clearInterval(this.timer);
     if (this.every()) this.timer = setInterval(() => this.load(), this.every() * 1000);
   }
+  /** The range as whole days, for panels that count by day (1 for the short ones). */
+  rangeDays(): number {
+    const r = this.range();
+    return r === 'all' ? 365 : r.endsWith('d') ? Number(r.slice(0, -1)) : 1;
+  }
+
   setRange(r: string) { this.range.set(r); keep('range', r); this.data.set(kept(r) ?? this.data()); this.load(); }
   setEvery(s: number) { this.every.set(s); keep('every', String(s)); this.arm(); }
   open(id: Section | string) { return !this.shut().has(id); }
