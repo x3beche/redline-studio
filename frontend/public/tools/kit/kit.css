@@ -116,3 +116,7 @@ path.k-s3, i.k-s3 { stroke: var(--tool-s3); } rect.k-s3, i.k-s3 { fill: var(--to
 .k-tab[aria-selected="true"] { background: var(--sunken); color: var(--ink); }
 .k-count { margin-left: auto; font-size: 11px; color: var(--ink-soft); }
 .k-out { margin: 0; padding: 8px 10px; max-height: 340px; overflow: auto; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+
+/* A tool that owns its page ("layout": "custom") lays out inside this. */
+.k-page { padding: 14px; min-width: 0; }
+@media (max-width: 760px) { .k-page { padding: 10px; } }

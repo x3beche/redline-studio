@@ -3,27 +3,147 @@
   "name": "CAN Bit Timing Calculator",
   "blurb": "segment values and sample point from a clock and bit rate",
   "group": "embedded",
-  "rooms": ["embedded"],
-  "keywords": ["can", "can bus", "bit timing", "sample point", "time quanta", "tq", "prescaler", "brp", "tseg1", "tseg2", "sjw", "btr", "bxcan", "fdcan", "mcp2515"],
+  "rooms": [
+    "embedded"
+  ],
+  "keywords": [
+    "can",
+    "can bus",
+    "bit timing",
+    "sample point",
+    "time quanta",
+    "tq",
+    "prescaler",
+    "brp",
+    "tseg1",
+    "tseg2",
+    "sjw",
+    "btr",
+    "bxcan",
+    "fdcan",
+    "mcp2515"
+  ],
   "intro": "Searches every prescaler of the chosen CAN controller for the exact bit rate with the sample point nearest the target (CiA 301 defaults), then splits TSEG1 into propagation and phase segments from the bus length and gives the register values and the oscillator tolerance per ISO 11898-1.",
   "inputs": [
-    { "key": "controller", "label": "Controller", "type": "select", "default": "bxcan",
-      "options": [["bxcan", "STM32 bxCAN"], ["fdcan", "STM32 FDCAN / M_CAN (nominal)"], ["mcp2515", "MCP2515"], ["sja1000", "SJA1000"], ["twai", "ESP32 TWAI"], ["flexcan", "NXP FlexCAN"]] },
-    { "key": "fclk", "label": "CAN clock", "type": "number", "unit": "Hz", "default": "36M",
-      "help": "The controller's input clock: APB1 for bxCAN, the crystal for MCP2515/SJA1000, 80 MHz APB for ESP32." },
-    { "key": "bitrate", "label": "Bit rate", "type": "number", "unit": "bit/s", "default": "500k" },
-    { "key": "sp", "label": "Target sample point", "type": "number", "unit": "%", "default": "87.5",
-      "help": "CiA 301: 87.5 % up to 500 kbit/s, 80 % at 800k, 75 % at 1M. Leave empty for that default." },
-    { "key": "busLen", "label": "Bus length", "type": "number", "unit": "m", "default": "40" },
-    { "key": "loopDelay", "label": "Transceiver loop delay", "type": "number", "unit": "ns", "default": "150",
-      "help": "TXD→RXD loop delay per node; TJA1051 typ. ~150 ns, max 255 ns." },
-    { "key": "tolErr", "label": "Accept rate error up to", "type": "number", "unit": "%", "default": "0.5" }
+    {
+      "key": "controller",
+      "label": "Controller",
+      "type": "select",
+      "default": "bxcan",
+      "options": [
+        [
+          "bxcan",
+          "STM32 bxCAN"
+        ],
+        [
+          "fdcan",
+          "STM32 FDCAN / M_CAN (nominal)"
+        ],
+        [
+          "mcp2515",
+          "MCP2515"
+        ],
+        [
+          "sja1000",
+          "SJA1000"
+        ],
+        [
+          "twai",
+          "ESP32 TWAI"
+        ],
+        [
+          "flexcan",
+          "NXP FlexCAN"
+        ]
+      ]
+    },
+    {
+      "key": "fclk",
+      "label": "CAN clock",
+      "type": "number",
+      "unit": "Hz",
+      "default": "36M",
+      "help": "The controller's input clock: APB1 for bxCAN, the crystal for MCP2515/SJA1000, 80 MHz APB for ESP32."
+    },
+    {
+      "key": "bitrate",
+      "label": "Bit rate",
+      "type": "number",
+      "unit": "bit/s",
+      "default": "500k"
+    },
+    {
+      "key": "sp",
+      "label": "Target sample point",
+      "type": "number",
+      "unit": "%",
+      "default": "87.5",
+      "help": "CiA 301: 87.5 % up to 500 kbit/s, 80 % at 800k, 75 % at 1M. Leave empty for that default."
+    },
+    {
+      "key": "busLen",
+      "label": "Bus length",
+      "type": "number",
+      "unit": "m",
+      "default": "40"
+    },
+    {
+      "key": "loopDelay",
+      "label": "Transceiver loop delay",
+      "type": "number",
+      "unit": "ns",
+      "default": "150",
+      "help": "TXD→RXD loop delay per node; TJA1051 typ. ~150 ns, max 255 ns."
+    },
+    {
+      "key": "tolErr",
+      "label": "Accept rate error up to",
+      "type": "number",
+      "unit": "%",
+      "default": "0.5"
+    },
+    {
+      "key": "brp",
+      "label": "Prescaler (BRP)",
+      "type": "number",
+      "default": "",
+      "required": false,
+      "help": "Empty = the best prescaler. A number fixes BRP (as a clicked candidate does); the sample point is then fitted within it."
+    }
   ],
   "examples": [
-    { "title": "STM32F103 bxCAN, 36 MHz APB1, 500 kbit/s", "input": { "controller": "bxcan", "fclk": "36M", "bitrate": "500k", "sp": "87.5", "busLen": "40", "loopDelay": "150", "tolErr": "0.5" } },
-    { "title": "MCP2515 with an 8 MHz crystal, 250 kbit/s", "input": { "controller": "mcp2515", "fclk": "8M", "bitrate": "250k", "sp": "87.5", "busLen": "100", "loopDelay": "150", "tolErr": "0.5" } }
+    {
+      "title": "STM32F103 bxCAN, 36 MHz APB1, 500 kbit/s",
+      "input": {
+        "controller": "bxcan",
+        "fclk": "36M",
+        "bitrate": "500k",
+        "sp": "87.5",
+        "busLen": "40",
+        "loopDelay": "150",
+        "tolErr": "0.5"
+      }
+    },
+    {
+      "title": "MCP2515 with an 8 MHz crystal, 250 kbit/s",
+      "input": {
+        "controller": "mcp2515",
+        "fclk": "8M",
+        "bitrate": "250k",
+        "sp": "87.5",
+        "busLen": "100",
+        "loopDelay": "150",
+        "tolErr": "0.5"
+      }
+    }
   ],
-  "usage": "Give controller (bxcan, fdcan, mcp2515, sja1000, twai, flexcan), the CAN clock in Hz, the bit rate in bit/s, the target sample point in % (empty = CiA 301 default), the bus length in m, the transceiver loop delay in ns and the largest acceptable rate error in %. Returns BRP, quanta per bit, TSEG1 (split into Prop + PS1), TSEG2, SJW, the actual sample point and bit rate, the allowed oscillator tolerance, register values and a table of alternative settings. Use it to configure a CAN peripheral or check that nodes on a bus agree.",
-  "sources": ["ISO 11898-1:2015 §11.3 (bit timing, oscillator tolerance conditions)", "Florian Hartwich, Armin Bassemir (Bosch), 'The Configuration of the CAN Bit Timing', 6th iCC 1999", "CiA 301 §7.3.2 (recommended bit timing / sample points)", "ST RM0008 §24.7.7 (bxCAN BTR), Microchip MCP2515 datasheet §5, NXP SJA1000 datasheet §6.5, Espressif ESP32 TRM (TWAI)"],
-  "view": true
+  "usage": "Give controller (bxcan, fdcan, mcp2515, sja1000, twai, flexcan), the CAN clock in Hz, the bit rate in bit/s, the target sample point in % (empty = CiA 301 default), the bus length in m, the transceiver loop delay in ns and the largest acceptable rate error in %; optionally brp to fix the prescaler (empty = best). Returns BRP, quanta per bit, TSEG1 (split into Prop + PS1), TSEG2, SJW, the actual sample point and bit rate, the allowed oscillator tolerance, register values and a table of alternative settings. Use it to configure a CAN peripheral or check that nodes on a bus agree.",
+  "sources": [
+    "ISO 11898-1:2015 §11.3 (bit timing, oscillator tolerance conditions)",
+    "Florian Hartwich, Armin Bassemir (Bosch), 'The Configuration of the CAN Bit Timing', 6th iCC 1999",
+    "CiA 301 §7.3.2 (recommended bit timing / sample points)",
+    "ST RM0008 §24.7.7 (bxCAN BTR), Microchip MCP2515 datasheet §5, NXP SJA1000 datasheet §6.5, Espressif ESP32 TRM (TWAI)"
+  ],
+  "view": true,
+  "layout": "custom"
 }

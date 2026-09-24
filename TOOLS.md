@@ -334,7 +334,15 @@ Make a folder `frontend/public/tools/<id>/`; `i2c-pullup/` is the reference.
    with its source; return a warning, never NaN, when an input is out of
    range.
 3. **`index.html`** - copy the reference's and change the title.
-4. **`view.js`** only if a drawing helps: `export function view(el, result,
+4. **Its own interface** (`"layout": "custom"` in the manifest): `view.js`
+   exports `page(root, ctx)` and builds the whole page around the thing the
+   tool is about - Grid Sketch's grid, the Impedance Calculator's
+   cross-section, the CRC's shift register, the FMEA's risk matrix - worked
+   on directly. The kit still keeps the inputs, runs the tool and hands over
+   `ctx.outputs` (the Prompt/JSON panel) to place. `ctx.set(key, value)`
+   changes an input, `ctx.onResult(fn)` gets every new result; every number
+   drawn comes from `run()`'s result. See the head of `kit/kit.js`.
+5. **`view.js`** with `view()` only, when a drawing under the standard form helps: `export function view(el, result,
    input)`, colours only from the CSS variables. Put the drawing's numbers
    in the result too - agents never see the view.
 

@@ -5,6 +5,8 @@
 // Ranking ties are broken by S, then O (a severe mode outranks a frequent one at equal score).
 // High severity is actioned whatever its score (AIAG: S 9-10 = safety / regulatory).
 // Pareto: how many modes make up 80 % of the total score (Juran's vital few).
+// Optional revised scores (rs, ro, rd: S/O/D after the planned action; a blank
+// one keeps the original) re-score each mode as it would stand after its action.
 import { fmtNum } from '../kit/eng.js';
 
 const int10 = (v) => {
@@ -26,7 +28,7 @@ export function run({ modes, method, rpnMin, soMin, sevMin }) {
   if (!useD && limit > 100) warnings.push(`An S×O threshold of ${limit} is above the maximum 100: nothing is actioned by score.`);
 
   const items = [];
-  const bad = [];
+  const bad = [], badAfter = [];
   rows.forEach((r, i) => {
     const label = String(r?.item ?? '').trim(), mode = String(r?.mode ?? '').trim();
     if (!label && !mode) return;
@@ -35,8 +37,20 @@ export function run({ modes, method, rpnMin, soMin, sevMin }) {
     const wrong = need.filter(([, v]) => v == null || !Number.isInteger(v) || v < 1 || v > 10);
     if (wrong.length) { bad.push(`row ${i + 1} (${label || mode}): ${wrong.map(([k, v, raw]) => `${k} ${v == null ? 'missing' : `"${raw}"`}`).join(', ')}`); return; }
     const score = useD ? s * o * d : s * o;
-    items.push({ row: i + 1, label: label || '–', mode: mode || '–', effect: String(r?.effect ?? '').trim(), cause: String(r?.cause ?? '').trim(), s, o, d: useD ? d : null, score, action: String(r?.action ?? '').trim() });
+    const item = { row: i + 1, label: label || '–', mode: mode || '–', effect: String(r?.effect ?? '').trim(), cause: String(r?.cause ?? '').trim(), s, o, d: useD ? d : null, score, action: String(r?.action ?? '').trim(), after: null };
+    const rev = [['S', 'rs', s], ['O', 'ro', o], ...(useD ? [['D', 'rd', d]] : [])];
+    if (rev.some(([, k]) => String(r?.[k] ?? '').trim() !== '')) {
+      const got = rev.map(([n, k, was]) => { const v = int10(r[k]); return [n, v == null ? was : v, r[k]]; });
+      const off = got.filter(([, v]) => !Number.isInteger(v) || v < 1 || v > 10);
+      if (off.length) badAfter.push(`row ${i + 1} (${label || mode}): ${off.map(([n, , raw]) => `${n} after "${raw}"`).join(', ')}`);
+      else {
+        const [as, ao, ad] = got.map(([, v]) => v);
+        item.after = { s: as, o: ao, d: useD ? ad : null, score: useD ? as * ao * ad : as * ao };
+      }
+    }
+    items.push(item);
   });
+  if (badAfter.length) warnings.push(`Revised scores ignored, they must be whole numbers 1 to 10: ${badAfter.join('; ')}.`);
   if (bad.length) warnings.push(`Skipped, scores must be whole numbers 1 to 10: ${bad.join('; ')}.`);
   if (!items.length) return { warnings: [...warnings, 'Add failure modes with S, O' + (useD ? ' and D' : '') + ' scored 1-10.'] };
 
@@ -49,7 +63,15 @@ export function run({ modes, method, rpnMin, soMin, sevMin }) {
     if (x.score >= limit) why.push(`${useD ? 'RPN' : 'S×O'} ≥ ${limit}`);
     if (x.s >= sevLimit) why.push(`S ≥ ${sevLimit}`);
     x.why = why;
+    if (x.after) {
+      const aw = [];
+      if (x.after.score >= limit) aw.push(`${useD ? 'RPN' : 'S×O'} ≥ ${limit}`);
+      if (x.after.s >= sevLimit) aw.push(`S ≥ ${sevLimit}`);
+      x.after.why = aw;
+    }
   }
+  const revised = items.filter((x) => x.after);
+  const totalAfter = items.reduce((t, x) => t + (x.after ? x.after.score : x.score), 0);
   const act = items.filter((x) => x.why.length);
   const noPlan = act.filter((x) => !x.action);
   const hidden = items.filter((x) => x.s >= sevLimit && x.score < limit);
@@ -63,6 +85,11 @@ export function run({ modes, method, rpnMin, soMin, sevMin }) {
     { label: '80 % of the risk in', value: `${vital} of ${items.length}`, hint: 'Pareto: fix these first' },
     { label: `Mean ${useD ? 'RPN' : 'S×O'}`, value: fmtNum(total / items.length, 3) },
   ];
+  if (revised.length) {
+    const still = items.filter((x) => (x.after ? x.after.why : x.why).length);
+    values.push({ label: 'Total risk after actions', value: `${total} → ${totalAfter}`, hint: `${fmtNum((100 * (total - totalAfter)) / total, 3)} % lower, ${revised.length} mode${revised.length > 1 ? 's' : ''} re-scored` });
+    values.push({ label: 'Still need action after', value: still.length, tone: still.length ? 'warn' : 'ok' });
+  }
   if (hidden.length) notes.push(`${hidden.map((x) => x.mode).join(', ')}: severity ${sevLimit}+ but a low ${useD ? 'RPN' : 'score'}. A product score hides rare catastrophic failures, which is why severity is actioned on its own.`);
   if (noPlan.length) warnings.push(`${noPlan.length} mode${noPlan.length > 1 ? 's need' : ' needs'} action but ${noPlan.length > 1 ? 'have' : 'has'} none planned: ${noPlan.map((x) => x.mode).join(', ')}. Add a design change that lowers S or O, or a test that raises detection.`);
   const counts = new Map();
@@ -73,14 +100,26 @@ export function run({ modes, method, rpnMin, soMin, sevMin }) {
     ? 'RPN = S × O × D, each 1-10 (detection 10 = cannot be detected). AIAG-VDA 2019 replaces RPN with Action Priority tables; RPN is still the IEC 60812 / AIAG 4th edition method.'
     : 'Criticality = S × O, detection not scored. Use it early in design, before test coverage is known.');
 
+  const aft = (x) => (x.after ? `${x.after.s}/${x.after.o}${useD ? `/${x.after.d}` : ''} = ${x.after.score}` : '–');
   const cols = useD ? ['#', 'Item', 'Failure mode', 'Effect', 'S', 'O', 'D', 'RPN', 'Share', 'Action?'] : ['#', 'Item', 'Failure mode', 'Effect', 'S', 'O', 'S×O', 'Share', 'Action?'];
   const tables = [{
     title: 'Risk order',
     columns: cols,
-    rows: items.map((x, i) => [i + 1, x.label, x.mode, x.effect || '–', x.s, x.o, ...(useD ? [x.d] : []), x.score, `${fmtNum((100 * x.score) / total, 3)} %`, x.why.length ? `yes (${x.why.join(', ')})` : 'no']),
+    rows: items.map((x, i) => [i + 1, x.label, x.mode, x.effect || '–', x.s, x.o, ...(useD ? [x.d] : []), x.score, `${fmtNum((100 * x.score) / total, 3)} %`, x.why.length ? `yes (${x.why.join(', ')})` : 'no', ...(revised.length ? [aft(x)] : [])]),
   }];
+  if (revised.length) tables[0].columns.push(useD ? 'After S/O/D = RPN' : 'After S/O = S×O');
   const charts = [{ title: `${useD ? 'RPN' : 'S×O'} per failure mode, highest first`, type: 'bars', x: items.map((x, i) => `${i + 1}`), series: [{ name: useD ? 'RPN' : 'S×O', y: items.map((x) => x.score) }] }];
-  const list = act.map((x, i) => `${i + 1}. ${x.label} - ${x.mode} (S${x.s} O${x.o}${useD ? ` D${x.d}` : ''} = ${x.score}; ${x.why.join(', ')})${x.cause ? `\n   Cause: ${x.cause}` : ''}${x.effect ? `\n   Effect: ${x.effect}` : ''}\n   Action: ${x.action || 'OPEN - none planned'}`).join('\n');
-  return { values, tables, charts, warnings, notes,
+  const list = act.map((x, i) => `${i + 1}. ${x.label} - ${x.mode} (S${x.s} O${x.o}${useD ? ` D${x.d}` : ''} = ${x.score}; ${x.why.join(', ')})${x.cause ? `\n   Cause: ${x.cause}` : ''}${x.effect ? `\n   Effect: ${x.effect}` : ''}\n   Action: ${x.action || 'OPEN - none planned'}${x.after ? `\n   After: S${x.after.s} O${x.after.o}${useD ? ` D${x.after.d}` : ''} = ${x.after.score}${x.after.why.length ? ` (still ${x.after.why.join(', ')})` : ''}` : ''}`).join('\n');
+  // The same order as structured data, for drawings (the risk matrix) and agents.
+  let cum = 0;
+  const fmea = {
+    method: useD ? 'rpn' : 'so', limit, sevLimit, total, totalAfter: revised.length ? totalAfter : null, vital,
+    modes: items.map((x, i) => {
+      cum += x.score;
+      return { rank: i + 1, row: x.row, item: x.label, mode: x.mode, effect: x.effect, cause: x.cause, s: x.s, o: x.o, d: x.d, score: x.score,
+        share: (100 * x.score) / total, cumShare: (100 * cum) / total, vital: i < vital, act: x.why.length > 0, why: x.why, action: x.action, after: x.after };
+    }),
+  };
+  return { values, tables, charts, warnings, notes, fmea,
     texts: [{ title: 'Action list', body: act.length ? `Failure modes needing action (${act.length}):\n\n${list}\n` : 'No failure mode is over the thresholds.\n', lang: 'text' }] };
 }

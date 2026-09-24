@@ -12,6 +12,10 @@
 //   transverse contact ratio
 //     ea = (sqrt(ra1^2 - rb1^2) + sqrt(ra2^2 - rb2^2) - aw sin awt) / (pi mt cos at)
 //   undercut limit         z_min = 2 cos b (1 - x) / sin^2 at
+// With a target centre distance aw the sum of the shifts follows from it:
+//   cos awt = a cos at / aw,  x1 + x2 = (inv awt - inv at)(z1 + z2) / (2 tan an)
+// split in proportion z2 : z1 (the pinion takes the larger share), but never
+// leaving the pinion below its undercut-free shift 1 - z1 sin^2 at / (2 cos b).
 import { fmtNum } from '../kit/eng.js';
 
 const DEG = Math.PI / 180;
@@ -29,7 +33,7 @@ function invInverse(v) {
   return a;
 }
 
-export function run({ system, m, dp, z1, z2, alpha, beta, x1, x2, rpm }) {
+export function run({ system, m, dp, z1, z2, alpha, beta, x1, x2, rpm, aw: awTarget }) {
   const warnings = [];
   const mn = system === 'dp' ? (dp > 0 ? 25.4 / dp : null) : m;
   if (!(mn > 0)) return { warnings: [system === 'dp' ? 'Give the diametral pitch (teeth per inch of pitch diameter), e.g. 24.' : 'Give the module in mm, e.g. 1.'] };
@@ -37,8 +41,8 @@ export function run({ system, m, dp, z1, z2, alpha, beta, x1, x2, rpm }) {
   if (!Number.isInteger(z1) || !Number.isInteger(z2)) warnings.push('Tooth counts should be whole numbers.');
   const an = (Number(alpha) || 20) * DEG; // the select gives a string
   const b = (Number.isFinite(beta) ? beta : 0) * DEG;
-  const s1 = Number.isFinite(x1) ? x1 : 0;
-  const s2 = Number.isFinite(x2) ? x2 : 0;
+  let s1 = Number.isFinite(x1) ? x1 : 0;
+  let s2 = Number.isFinite(x2) ? x2 : 0;
   if (Math.abs(b) >= 45 * DEG) return { warnings: ['The helix angle must be under 45°; 15-30° is usual.'] };
   if (an <= 10 * DEG || an >= 35 * DEG) return { warnings: ['The pressure angle should be 14.5°, 20° or 25°.'] };
 
@@ -47,6 +51,19 @@ export function run({ system, m, dp, z1, z2, alpha, beta, x1, x2, rpm }) {
   const d1 = z1 * mt, d2 = z2 * mt;
   const db1 = d1 * Math.cos(at), db2 = d2 * Math.cos(at);
   const a = (d1 + d2) / 2;
+  let fromAw = false;
+  if (awTarget > 0) {
+    const c = (a * Math.cos(at)) / awTarget;
+    if (c >= 1) {
+      warnings.push(`A centre distance of ${fmtNum(awTarget, 5)} mm is too small for these gears to mesh (the working pressure angle would be zero); it has to be above ${fmtNum(a * Math.cos(at), 5)} mm. Using the profile shifts given instead.`);
+    } else {
+      const sum = ((inv(Math.acos(c)) - inv(at)) * (z1 + z2)) / (2 * Math.tan(an));
+      const free1 = 1 - (z1 * Math.sin(at) ** 2) / (2 * Math.cos(b));
+      s1 = Math.max((sum * z2) / (z1 + z2), Math.min(free1, sum));
+      s2 = sum - s1;
+      fromAw = true;
+    }
+  }
   const awt = invInverse((2 * Math.tan(an) * (s1 + s2)) / (z1 + z2) + inv(at));
   const aw = (a * Math.cos(at)) / Math.cos(awt);
   const y = ((z1 + z2) / (2 * Math.cos(b))) * (Math.cos(at) / Math.cos(awt) - 1);
@@ -60,11 +77,18 @@ export function run({ system, m, dp, z1, z2, alpha, beta, x1, x2, rpm }) {
   const sn = (x) => mn * (Math.PI / 2 + 2 * x * Math.tan(an)); // normal tooth thickness at the pitch circle
   const zmin = (x) => (2 * Math.cos(b) * (1 - x)) / Math.sin(at) ** 2;
   const ratio = z2 / z1;
+  const st = (x) => mt * (Math.PI / 2 + 2 * x * Math.tan(an)); // transverse tooth thickness at d
+  const tipThk = (d, da, db, x) => (da > db ? da * (st(x) / d + inv(at) - inv(Math.acos(db / da))) : 0);
+  const sa1 = tipThk(d1, da1, db1, s1), sa2 = tipThk(d2, da2, db2, s2);
 
   for (const [z, x, n] of [[z1, s1, 'Pinion'], [z2, s2, 'Gear']]) {
     if (z < zmin(x) - 1e-9) warnings.push(`${n} (${z} teeth) is below the undercut limit of ${fmtNum(zmin(x), 3)} teeth at x = ${x}: add a positive profile shift of about ${fmtNum(Math.max(0, 1 - (z * Math.sin(at) ** 2) / (2 * Math.cos(b))), 2)} or use more teeth.`);
   }
   if (ea < 1.2) warnings.push(`Contact ratio ${fmtNum(ea, 3)} is under 1.2: the drive runs rough or loses contact between teeth. Use more teeth or a smaller pressure angle.`);
+  for (const [sa, n] of [[sa1, 'Pinion'], [sa2, 'Gear']]) {
+    if (sa < 0.2 * mn) warnings.push(`${n} teeth are ${sa <= 0 ? 'pointed' : 'nearly pointed'} at the tip (tip thickness ${fmtNum(Math.max(0, sa), 3)} mm, want at least 0.2 m = ${fmtNum(0.2 * mn, 3)} mm): less profile shift.`);
+  }
+  const awNote = fromAw ? `Profile shift set by the centre distance ${fmtNum(aw, 6)} mm: x1 = ${fmtNum(s1, 4)}, x2 = ${fmtNum(s2, 4)} (x1 + x2 = ${fmtNum(s1 + s2, 4)}), split z2 : z1 and keeping the pinion free of undercut where the sum allows.` : null;
   if (df1 <= 0 || df2 <= 0) warnings.push('A root diameter is zero or negative: too few teeth for this module.');
 
   const values = [
@@ -85,7 +109,26 @@ export function run({ system, m, dp, z1, z2, alpha, beta, x1, x2, rpm }) {
     { z: z2, x: s2, d: d2, da: da2, df: df2, db: db2 },
   ];
   const mm = (v) => `${fmtNum(v, 5)} mm`;
+  const f = (v) => String(Math.round(v * 1e4) / 1e4);
+  const cad = [
+    `// Gear pair, ISO 21771 involute, ${Math.abs(b) > 0 ? 'helical (transverse section)' : 'spur'}. Lengths in mm, angles in degrees.`,
+    `m = ${f(mn)}`, `mt = ${f(mt)}`, `alpha = ${f(an / DEG)}`, `alpha_w = ${f(awt / DEG)}`, `beta = ${f(b / DEG)}`,
+    `z1 = ${z1}`, `z2 = ${z2}`, `x1 = ${f(s1)}`, `x2 = ${f(s2)}`,
+    `a = ${f(aw)}`,
+    `d1 = ${f(d1)}`, `da1 = ${f(da1)}`, `df1 = ${f(df1)}`, `db1 = ${f(db1)}`, `s1 = ${f(st(s1))}`,
+    `d2 = ${f(d2)}`, `da2 = ${f(da2)}`, `df2 = ${f(df2)}`, `db2 = ${f(db2)}`, `s2 = ${f(st(s2))}`,
+    `h = ${f(h)}`, `pb = ${f(Math.PI * mt * Math.cos(at))}`,
+  ].join('\n') + '\n';
+  // Numbers for a drawing of the pair (the page draws the teeth from these).
+  const geometry = {
+    mn, mt, alpha: an / DEG, alphaT: at / DEG, alphaW: awt / DEG, beta: b / DEG,
+    a, aw, y, ratio, ea, h, pb: Math.PI * mt * Math.cos(at),
+    contactLength: ea * Math.PI * mt * Math.cos(at), fromAw,
+    gears: g.map((gi, i) => ({ ...gi, st: st(gi.x), sn: sn(gi.x), sa: i ? sa2 : sa1, zmin: zmin(gi.x), xFree: 1 - (gi.z * Math.sin(at) ** 2) / (2 * Math.cos(b)), undercut: gi.z < zmin(gi.x) - 1e-9 })),
+  };
   return {
+    geometry,
+    texts: [{ title: 'CAD variables', body: cad }],
     values,
     warnings,
     tables: [{
@@ -93,7 +136,7 @@ export function run({ system, m, dp, z1, z2, alpha, beta, x1, x2, rpm }) {
       columns: ['', 'Pinion', 'Gear'],
       rows: [
         row('Teeth z', (i) => String(g[i].z)),
-        row('Profile shift x', (i) => String(g[i].x)),
+        row('Profile shift x', (i) => (fromAw ? fmtNum(g[i].x, 4) : String(g[i].x))),
         row('Pitch diameter d', (i) => mm(g[i].d)),
         row('Outside (tip) diameter da', (i) => mm(g[i].da)),
         row('Root diameter df', (i) => mm(g[i].df)),
@@ -115,6 +158,7 @@ export function run({ system, m, dp, z1, z2, alpha, beta, x1, x2, rpm }) {
       ],
     }],
     notes: [
+      ...(awNote ? [awNote] : []),
       'Standard full-depth teeth: addendum 1 m, dedendum 1.25 m. No backlash allowance: thin the teeth or open the centre distance by the backlash you need.',
       Math.abs(b) > 0 ? 'Helical pair: diameters use the transverse module; the two gears need opposite hands. Overlap ratio depends on face width and is not computed.' : 'Spur pair.',
       'With profile shift the tip diameters are reduced by y so the root clearance stays 0.25 m (KHK method).',

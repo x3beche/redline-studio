@@ -4,6 +4,7 @@
   "blurb": "tightening torque and preload for a bolt size and material",
   "group": "mechanical",
   "rooms": ["cad"],
+  "layout": "custom",
   "keywords": ["bolt", "screw", "torque", "tightening torque", "preload", "clamp force", "vdi 2230", "property class", "8.8", "10.9", "12.9", "a2-70", "stainless", "friction", "nut factor"],
   "intro": "The torque that loads a metric coarse-thread bolt to a chosen share of its yield strength, and the preload it gives, by the VDI 2230 formulas with thread and head friction. Head bearing sizes are ISO 4017 / ISO 4762, holes ISO 273 medium.",
   "inputs": [

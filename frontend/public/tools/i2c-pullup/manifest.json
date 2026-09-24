@@ -3,20 +3,139 @@
   "name": "I2C Pull-up Calculator",
   "blurb": "the pull-up resistor range for an I2C bus from its supply, speed and capacitance",
   "group": "pcb",
-  "rooms": ["pcb", "embedded"],
-  "keywords": ["i2c", "iic", "twi", "pull-up", "pullup", "resistor", "bus capacitance", "rise time", "sda", "scl", "smbus"],
+  "rooms": [
+    "pcb",
+    "embedded"
+  ],
+  "keywords": [
+    "i2c",
+    "iic",
+    "twi",
+    "pull-up",
+    "pullup",
+    "resistor",
+    "bus capacitance",
+    "rise time",
+    "sda",
+    "scl",
+    "smbus"
+  ],
   "intro": "The pull-up has to be strong enough for the bus to rise in time, and weak enough that a device can pull it low. Both limits come from the I2C specification (NXP UM10204).",
   "inputs": [
-    { "key": "vdd", "label": "Bus supply", "type": "number", "unit": "V", "default": "3.3" },
-    { "key": "mode", "label": "Speed mode", "type": "select", "default": "fast",
-      "options": [["standard", "Standard, 100 kHz"], ["fast", "Fast, 400 kHz"], ["fastplus", "Fast-mode Plus, 1 MHz"]] },
-    { "key": "cb", "label": "Bus capacitance", "type": "number", "unit": "pF", "default": "100",
-      "help": "About 10 pF per device plus the traces; 400 pF is the specification's limit." },
-    { "key": "series", "label": "Values made in", "type": "select", "default": "E24", "options": ["E12", "E24", "E96"] }
+    {
+      "key": "vdd",
+      "label": "Bus supply",
+      "type": "number",
+      "unit": "V",
+      "default": "3.3"
+    },
+    {
+      "key": "mode",
+      "label": "Speed mode",
+      "type": "select",
+      "default": "fast",
+      "options": [
+        [
+          "standard",
+          "Standard, 100 kHz"
+        ],
+        [
+          "fast",
+          "Fast, 400 kHz"
+        ],
+        [
+          "fastplus",
+          "Fast-mode Plus, 1 MHz"
+        ]
+      ]
+    },
+    {
+      "key": "cb",
+      "label": "Bus capacitance",
+      "type": "number",
+      "unit": "pF",
+      "default": "100",
+      "help": "About 10 pF per device plus the traces; 400 pF is the specification's limit."
+    },
+    {
+      "key": "series",
+      "label": "Values made in",
+      "type": "select",
+      "default": "E24",
+      "options": [
+        "E12",
+        "E24",
+        "E96"
+      ]
+    },
+    {
+      "key": "devices",
+      "label": "Devices on the bus",
+      "type": "table",
+      "wide": true,
+      "columns": [
+        {
+          "key": "name",
+          "label": "Device"
+        },
+        {
+          "key": "pf",
+          "label": "Pin capacitance pF",
+          "default": "10"
+        }
+      ],
+      "default": [
+        {
+          "name": "MCU",
+          "pf": "10"
+        },
+        {
+          "name": "Temp sensor",
+          "pf": "10"
+        },
+        {
+          "name": "IMU",
+          "pf": "10"
+        },
+        {
+          "name": "EEPROM",
+          "pf": "10"
+        }
+      ],
+      "help": "Optional: what the bus capacitance is made of. The part of the bus capacitance the devices do not account for is counted as wiring."
+    },
+    {
+      "key": "pfcm",
+      "label": "Wiring capacitance",
+      "type": "number",
+      "unit": "pF/cm",
+      "default": "1",
+      "help": "About 1 pF per cm of PCB trace over a ground plane; turns the wiring's capacitance into a length."
+    },
+    {
+      "key": "rp",
+      "label": "Chosen pull-up",
+      "type": "number",
+      "unit": "Ω",
+      "default": "",
+      "required": false,
+      "help": "Optional: a resistor to check instead of the suggested one, e.g. 4k7."
+    }
   ],
   "examples": [
-    { "title": "Three sensors at 400 kHz on 3.3 V", "input": { "vdd": "3.3", "mode": "fast", "cb": "120", "series": "E24" } }
+    {
+      "title": "Three sensors at 400 kHz on 3.3 V",
+      "input": {
+        "vdd": "3.3",
+        "mode": "fast",
+        "cb": "120",
+        "series": "E24"
+      }
+    }
   ],
-  "usage": "Give the bus supply in volts, the speed mode (standard, fast or fastplus) and the total bus capacitance in pF. It returns the minimum and maximum pull-up in ohms, a standard value between them, the rise time and sink current with that value, and a warning when no resistor can satisfy both limits (then lower the capacitance or the speed).",
-  "sources": ["NXP UM10204 I2C-bus specification rev. 7, section 7.1 (pull-up resistor sizing) and table 10"]
+  "usage": "Give the bus supply in volts, the speed mode (standard, fast or fastplus) and the total bus capacitance in pF. It returns the minimum and maximum pull-up in ohms, a standard value between them, the rise time and sink current with that value, and a warning when no resistor can satisfy both limits (then lower the capacitance or the speed). Optionally give rp (a pull-up to check: its rise time, sink current and whether it is inside the range), devices (a list of {name, pf} pin capacitances, shown as what the bus capacitance is made of) and pfcm (wiring pF per cm).",
+  "sources": [
+    "NXP UM10204 I2C-bus specification rev. 7, section 7.1 (pull-up resistor sizing) and table 10"
+  ],
+  "layout": "custom"
 }

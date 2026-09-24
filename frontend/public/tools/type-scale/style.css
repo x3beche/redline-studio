@@ -1,0 +1,163 @@
+/* Type scale: the specimen page. Chrome colours from kit.css; data colours
+   as --tool-* below, light and dark. */
+:root {
+  --tool-small: var(--accent);          /* the small-screen scale (and the static one) */
+  --tool-large: #c2610c;                /* the large-screen scale */
+  --tool-curve: #7d8b98;
+  --tool-band: rgba(31, 78, 216, 0.06); /* a line box */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tool-large: #f0a33a; --tool-curve: #6b7c8c; --tool-band: rgba(109, 141, 255, 0.08); }
+}
+:root[data-theme="dark"] { --tool-large: #f0a33a; --tool-curve: #6b7c8c; --tool-band: rgba(109, 141, 255, 0.08); }
+
+.ts-root { padding: 12px 14px 16px; }
+.ts { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ts-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); gap: 12px; align-items: start; }
+.ts-main, .ts-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+@media (max-width: 1020px) { .ts-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.ts-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-width: 0; }
+.ts-phead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.ts-h { font-size: 11.5px; font-weight: 600; color: var(--ink); text-transform: uppercase; letter-spacing: .06em; }
+.ts-sub { font-size: 11.5px; color: var(--ink-soft); }
+[hidden] { display: none !important; }
+
+/* ---- controls bar ---- */
+.ts-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+.ts-ctl { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.ts-ctl i { font-style: normal; color: var(--ink-soft); font-size: 11.5px; }
+.ts-num { width: 52px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; color: var(--ink); }
+.ts-prefix { width: 64px; }
+.ts-bar select { padding: 3px 4px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; }
+.ts-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.ts-seg button { border: 0; background: var(--surface); padding: 3px 10px; font-size: 12px; cursor: pointer; color: var(--ink-soft); }
+.ts-seg button + button { border-left: 1px solid var(--line); }
+.ts-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.ts-stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); }
+.ts-stepper button { border: 0; background: transparent; width: 22px; height: 24px; cursor: pointer; font-size: 14px; line-height: 1; color: var(--ink); }
+.ts-stepper button:hover { background: var(--line-soft); }
+.ts-stepv { min-width: 18px; text-align: center; font: 500 12.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); }
+.ts-chk input { margin: 0; }
+
+/* ---- ratio strip ---- */
+.ts-rhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+.ts-rval { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.ts-rname { color: var(--ink-soft); min-width: 8em; }
+.ts-tag { font-size: 10.5px; padding: 1px 6px; border-radius: 3px; color: var(--accent-ink); }
+.ts-tag-min { background: var(--tool-small); }
+.ts-tag-max { background: var(--tool-large); color: var(--paper); }
+.ts-root:not(.ts-is-fluid) .ts-tag { display: none; }
+.ts-link { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 11.5px; text-decoration: underline; }
+.ts-ratio-svg, .ts-vp-svg { display: block; width: 100%; touch-action: none; user-select: none; cursor: pointer; }
+.ts-ratio-svg.ts-dragging, .ts-vp-svg.ts-dragging { cursor: grabbing; }
+.ts-axis-line { stroke: var(--line); stroke-width: 2; }
+.ts-semi { stroke: var(--line); stroke-width: 1; }
+.ts-iv-hit { fill: transparent; }
+.ts-iv-tick { stroke: var(--ink-soft); stroke-width: 1.5; }
+.ts-iv-name { font-size: 11px; fill: var(--ink-soft); }
+.ts-iv-r { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.ts-iv:hover .ts-iv-hit { fill: var(--sunken); }
+.ts-iv.ts-on .ts-iv-name, .ts-iv.ts-on .ts-iv-r { fill: var(--ink); font-weight: 600; }
+.ts-iv:focus { outline: none; }
+.ts-iv:focus-visible .ts-iv-hit { fill: var(--sunken); stroke: var(--accent); stroke-width: 2; }
+.ts-thumb { cursor: grab; }
+.ts-thumb path, .ts-thumb circle { stroke: var(--surface); stroke-width: 1.5; }
+.ts-thumb-min path, .ts-thumb-min circle { fill: var(--tool-small); }
+.ts-thumb-max path, .ts-thumb-max circle { fill: var(--tool-large); }
+.ts-thumb:focus { outline: none; }
+.ts-thumb:focus-visible circle { stroke: var(--ink); stroke-width: 2.5; }
+
+/* ---- viewport chart ---- */
+line.ts-gl { stroke: var(--line-soft); }
+.ts-ax { font: 10px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.ts-lowband { fill: var(--danger); fill-opacity: calc(var(--fill-alpha) * 0.6); }
+.ts-lowtxt { font-size: 10px; fill: var(--danger); }
+.ts-range { fill: var(--sunken); }
+.ts-curve { fill: none; stroke: var(--tool-curve); stroke-width: 1.5; }
+.ts-curve-body { stroke: var(--accent); stroke-width: 2.5; }
+.ts-curve-bad { stroke: var(--danger); }
+.ts-curve.ts-hot { stroke: var(--ink); stroke-width: 3; }
+.ts-clabel { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.ts-clabel-body { fill: var(--accent); font-weight: 600; }
+.ts-vwh { cursor: ew-resize; }
+.ts-vwline { stroke: var(--ink-soft); stroke-dasharray: 3 3; }
+.ts-vwtab { fill: var(--surface); stroke: var(--ink-soft); }
+.ts-vwtxt { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.ts-vwh:focus { outline: none; }
+.ts-vwh:focus-visible .ts-vwtab { stroke: var(--accent); stroke-width: 2; }
+.ts-cursor { cursor: ew-resize; }
+.ts-curline { stroke: var(--accent); stroke-width: 1.5; }
+.ts-curtab { fill: var(--accent); }
+.ts-curtxt { font: 600 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--accent-ink); }
+.ts-dot { fill: var(--surface); stroke: var(--ink); stroke-width: 1.5; }
+.ts-dot-body { stroke: var(--accent); stroke-width: 2; }
+.ts-cursor:focus { outline: none; }
+.ts-cursor:focus-visible .ts-curtab { stroke: var(--ink); stroke-width: 2; }
+
+/* ---- specimen ---- */
+.ts-ladder { display: flex; flex-direction: column; touch-action: pan-y; }
+.ts-row { display: grid; grid-template-columns: 124px minmax(0, 1fr) 132px; gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line-soft);
+  border-left: 3px solid transparent; padding-left: 8px; margin-left: -10px; }
+.ts-row:first-child { border-top: 0; }
+.ts-row.ts-hot { background: var(--sunken); }
+.ts-row-bad { border-left-color: var(--danger); }
+.ts-row-warn { border-left-color: var(--warn); }
+.ts-meta { font-size: 11.5px; color: var(--ink-soft); line-height: 1.35; min-width: 0; }
+.ts-role { font-weight: 600; color: var(--ink); font-size: 12.5px; display: flex; gap: 8px; align-items: baseline; }
+.ts-stepn { font-weight: 400; font-size: 10.5px; color: var(--ink-soft); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.ts-var { display: block; font-size: 11px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ts-size { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px; }
+.ts-size b { color: var(--ink); font-weight: 600; }
+.ts-nums { font-size: 11.5px; color: var(--ink-soft); line-height: 1.4; text-align: right; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.ts-range-txt, .ts-lh { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; }
+.ts-specwrap { min-width: 0; display: flex; flex-direction: column; gap: 3px; justify-content: center; }
+.ts-linebox { position: relative; background: var(--tool-band); border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); min-width: 0; }
+.ts-line { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
+.ts-line.ts-wrap { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }
+/* Each wrapped line's box: dashed rules one line height apart. */
+.ts-line.ts-wrap { background: repeating-linear-gradient(to bottom, transparent 0 calc(1lh - 1px), var(--line) calc(1lh - 1px) 1lh); }
+.ts-row:not(.ts-body):not([data-n^="-"]) .ts-line { font-weight: 600; letter-spacing: -0.01em; }
+.ts-cropped { -webkit-mask-image: linear-gradient(to bottom, #000 80%, transparent); mask-image: linear-gradient(to bottom, #000 80%, transparent); }
+.ts-row-bad .ts-linebox { background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--danger) 16%, transparent) 6px 8px);
+  border-color: var(--danger); }
+.ts-flag { font-size: 11.5px; color: var(--ink-soft); }
+.ts-flag.ts-bad { color: var(--danger); }
+.ts-flag.ts-warn { color: var(--warn); }
+.ts-body .ts-linebox { cursor: ns-resize; touch-action: none; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); padding-right: 118px; }
+.ts-ladder.ts-dragging .ts-body .ts-linebox { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.ts-grip { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 6px;
+  padding: 2px 8px 2px 6px; border: 1px solid var(--accent); border-radius: 4px; background: var(--surface); cursor: ns-resize;
+  font: 500 11px/1.3 "IBM Plex Mono", ui-monospace, monospace; color: var(--accent); white-space: nowrap; }
+.ts-grip-bars { width: 8px; height: 12px; background: repeating-linear-gradient(to bottom, var(--accent) 0 1.5px, transparent 1.5px 4px); }
+.ts-empty { padding: 20px; color: var(--danger); }
+
+/* ---- in use ---- */
+.ts-article { padding: 4px 4px 2px; overflow-wrap: anywhere; overflow: hidden; }
+.ts-article > * { margin: 0 0 .45em; color: var(--ink); }
+.ts-article h1, .ts-article h2, .ts-article h3, .ts-article h4 { font-weight: 600; letter-spacing: -0.01em; margin-top: .7em; }
+.ts-article h1 { margin-top: 0; }
+.ts-article p[data-n^="-"] { color: var(--ink-soft); }
+.ts-article .ts-hot { background: var(--tool-band); outline: 1px dashed var(--accent); }
+.ts-warns { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 6px; padding: 6px 10px; background: var(--surface); font-size: 12px; }
+.ts-warns div + div { margin-top: 4px; }
+.ts-notes { font-size: 12px; color: var(--ink-soft); }
+.ts-notes summary { cursor: pointer; }
+.ts-notes p { margin: 4px 0; }
+
+@media (max-width: 640px) {
+  .ts-root { padding: 8px; }
+  .ts-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .ts-specwrap { grid-row: 3; margin-top: 3px; }
+  .ts-nums { display: flex; flex-wrap: wrap; gap: 0 10px; text-align: left; }
+  .ts-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
+  .ts-var { display: inline; }
+  .ts-body .ts-linebox { padding-right: 0; padding-bottom: 26px; }
+  .ts-grip { top: auto; bottom: 2px; transform: none; }
+  .ts-bar { gap: 6px 10px; }
+}
+
+.ts-out .k-out { max-height: 260px; }

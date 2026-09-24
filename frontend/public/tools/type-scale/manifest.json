@@ -3,6 +3,7 @@
   "name": "Type Scale Generator",
   "blurb": "heading and body sizes from a base and ratio, as CSS variables",
   "group": "web",
+  "layout": "custom",
   "rooms": ["web", "mobile"],
   "keywords": ["type scale", "typography", "modular scale", "font size", "headings", "css variables", "custom properties", "rem", "fluid type", "clamp", "utopia", "line height", "design tokens"],
   "intro": "A modular type scale: every step is the base size times the ratio to the power of the step. Optionally fluid, growing from a small-screen scale to a large-screen one with CSS clamp() (the Utopia method), with line heights and ready CSS variables.",

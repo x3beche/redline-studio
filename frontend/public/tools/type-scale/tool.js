@@ -93,6 +93,27 @@ export function run({ base, ratio, custom, up, down, unit, naming, prefix, fluid
   if (rounding) notes.push('Sizes are rounded to whole pixels, so the ratio between steps is only approximate.');
   if (fluid) notes.push(`Fluid: each size moves linearly from the small scale at ${fmtNum(vwMin, 4)} px wide to the large one at ${fmtNum(vwMax, 4)} px, then stops.`);
 
+  // Per step, for drawings: the roles CSS gives it, its clamp() line and the
+  // readability limits it breaks (the same limits the warnings name).
+  const roles = new Map(steps.map((s) => [s.n, []]));
+  for (let h = 1; h <= 6; h++) { const s = at(Math.max(0, Math.min(nUp, 6) - (h - 1))); if (s) roles.get(s.n).push(`h${h}`); }
+  if (at(0)) roles.get(0).push('body');
+  if (at(-1)) roles.get(-1).push('small');
+  const scale = {
+    fluid: !!fluid, ratio: rq, ratioMax: rMax, base, baseMax: bMax, rem,
+    vwMin: fluid ? vwMin : null, vwMax: fluid ? vwMax : null,
+    limits: { text: 12, body: 16, grow: 2.5 },
+    steps: steps.map((s) => {
+      const slope = fluid ? (s.max - s.min) / (vwMax - vwMin) : 0;
+      const flags = [];
+      if (Math.min(s.min, s.max) < 12) flags.push('below-12');
+      if (s.n === 0 && (s.min < 16 || s.max < 16)) flags.push('body-below-16');
+      if (fluid && s.max / s.min > 2.5) flags.push('grows-over-2.5x');
+      return { n: s.n, name: s.name, var: varName(s), roles: roles.get(s.n), min: s.min, max: s.max, lh: s.lh,
+        slope, intercept: s.min - slope * (fluid ? vwMin : 0), css: cssVal(s), flags };
+    }),
+  };
+
   return {
     values,
     warnings,
@@ -108,5 +129,6 @@ export function run({ base, ratio, custom, up, down, unit, naming, prefix, fluid
         : [{ name: 'size', y: steps.slice().reverse().map((s) => s.min) }] }],
     texts: [{ title: 'CSS', body: css.join('\n'), lang: 'css' }],
     notes,
+    scale,
   };
 }

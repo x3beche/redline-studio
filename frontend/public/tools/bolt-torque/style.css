@@ -1,0 +1,253 @@
+/* Bolt Torque: the joint in section, the wrench dial, the stress bar. */
+:root {
+  --tool-steel: #9aa7b3; --tool-plate: #5b6b7a; --tool-nut: #6f7f8c;
+  --tool-force: #d97706; --tool-friction: #0f9d8a; --tool-torque: var(--accent);
+  --tool-bolt-fill: color-mix(in srgb, var(--tool-steel) 42%, var(--surface));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-steel: #6e7d8a; --tool-plate: #8ea0b0; --tool-nut: #9fb0bf;
+    --tool-force: #f0a33a; --tool-friction: #3cc7b3;
+    --tool-bolt-fill: color-mix(in srgb, var(--tool-steel) 38%, var(--surface));
+  }
+}
+:root[data-theme="dark"] {
+  --tool-steel: #6e7d8a; --tool-plate: #8ea0b0; --tool-nut: #9fb0bf;
+  --tool-force: #f0a33a; --tool-friction: #3cc7b3;
+  --tool-bolt-fill: color-mix(in srgb, var(--tool-steel) 38%, var(--surface));
+}
+
+.k-page { padding: 10px 12px; }
+.bt {
+  display: grid; gap: 10px;
+  grid-template-columns: 58px minmax(0, 1fr) 160px minmax(300px, 340px);
+  grid-template-rows: auto minmax(380px, 1fr) 180px;
+  grid-template-areas:
+    "top top top top"
+    "ladder stage stress side"
+    "ladder curve curve side";
+  height: calc(100vh - 66px); min-height: 640px;
+}
+.bt-top { grid-area: top; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
+.bt-ladder { grid-area: ladder; }
+.bt-stage { grid-area: stage; }
+.bt-stress { grid-area: stress; }
+.bt-curve { grid-area: curve; }
+.bt-side { grid-area: side; }
+
+.bt-stage, .bt-stress, .bt-curve, .bt-card, .bt-ladder {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; min-height: 0;
+}
+.bt-cap { font-size: 11.5px; font-weight: 500; color: var(--ink-soft); }
+.bt-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* segmented radio strips */
+.bt-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; background: var(--surface); }
+.bt-seg button, .bt-toggle {
+  white-space: nowrap;
+  border: 0; background: transparent; padding: 4px 10px; cursor: pointer; font-size: 12.5px; color: var(--ink-soft);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+.bt-seg button + button { border-left: 1px solid var(--line-soft); }
+.bt-seg button:hover, .bt-toggle:hover { color: var(--ink); background: var(--sunken); }
+.bt-seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+.bt-class button[data-v^="A"] { font-style: italic; }
+.bt-toggle { border: 1px solid var(--line); border-radius: 5px; background: var(--surface); }
+.bt-toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent); }
+.bt-toggle[aria-pressed="true"]::before { content: "✓ "; color: var(--accent); }
+.bt-fields { margin-left: auto; }
+.bt-num { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.bt-num input {
+  width: 52px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; text-align: right;
+}
+
+/* thread ladder */
+.bt-ladder { display: flex; flex-direction: column; padding: 4px; gap: 1px; overflow: auto; }
+.bt-ladder button {
+  flex: 1; min-height: 24px; display: flex; flex-direction: column; justify-content: center; gap: 2px; align-items: stretch;
+  border: 0; border-radius: 4px; background: transparent; cursor: pointer; padding: 2px 5px; color: var(--ink-soft);
+}
+.bt-ladder button b { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; text-align: left; }
+.bt-rung { display: block; height: 4px; width: var(--w); min-width: 4px; background: color-mix(in srgb, var(--ink-soft) 45%, transparent); border-radius: 2px; }
+.bt-ladder button:hover { background: var(--sunken); color: var(--ink); }
+.bt-ladder button[aria-checked="true"] { background: var(--sunken); color: var(--ink); box-shadow: inset 3px 0 0 var(--accent); }
+.bt-ladder button[aria-checked="true"] .bt-rung { background: var(--accent); }
+
+/* SVGs fill a box and never size it, so a redraw cannot feed back into the layout */
+.bt-box { position: relative; flex: 1; min-height: 0; }
+.bt-box > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* the section */
+.bt-stage { position: relative; display: flex; flex-direction: column; overflow: hidden; }
+.bt-section { display: block; }
+.bt-warns:empty { display: none; }
+.bt-warns { border-top: 1px solid var(--warn); padding: 5px 10px; font-size: 12px; color: var(--ink); background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+.bt-warns div::before { content: "! "; color: var(--warn); font-weight: 600; }
+
+.bt-hp-bg { fill: color-mix(in srgb, var(--tool-plate) 10%, var(--surface)); }
+.bt-hp-ln { stroke: color-mix(in srgb, var(--tool-plate) 55%, transparent); stroke-width: 1; }
+.bt-hn-bg { fill: color-mix(in srgb, var(--tool-nut) 18%, var(--surface)); }
+.bt-hn-ln { stroke: color-mix(in srgb, var(--tool-nut) 60%, transparent); stroke-width: 1; }
+.bt-hw-bg { fill: color-mix(in srgb, var(--tool-nut) 26%, var(--surface)); }
+.bt-hw-ln { stroke: color-mix(in srgb, var(--tool-nut) 70%, transparent); stroke-width: .8; }
+.bt-plate, .bt-nut, .bt-washer { stroke: var(--ink-soft); stroke-width: 1.2; stroke-linejoin: round; }
+.bt-bolt { fill: var(--tool-bolt-fill); stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
+.bt-bolt.bt-over { fill: color-mix(in srgb, var(--danger) 30%, var(--surface)); stroke: var(--danger); }
+.bt-socket { fill: var(--surface); stroke: var(--ink); stroke-width: 1.2; }
+.bt-edge { stroke: var(--ink-soft); stroke-width: 1; }
+.bt-minor { stroke: var(--ink-soft); stroke-width: .8; stroke-dasharray: 1 0; opacity: .7; }
+.bt-axis { stroke: var(--ink-soft); stroke-width: .8; stroke-dasharray: 10 3 2 3; }
+.bt-bearing { stroke: var(--tool-friction); stroke-width: 4; stroke-linecap: butt; }
+.bt-flanks { fill: color-mix(in srgb, var(--tool-friction) 22%, transparent); stroke: none; }
+.bt-force { fill: var(--tool-force); }
+.bt-force-max { fill: color-mix(in srgb, var(--tool-force) 22%, transparent); stroke: var(--tool-force); stroke-width: 1.2; }
+.bt-turn { fill: none; stroke: var(--tool-torque); stroke-width: 2; }
+.bt-dimhead { fill: var(--ink-soft); }
+#bt-ar-dim path { fill: var(--ink-soft); }
+.bt-ext { stroke: var(--ink-soft); stroke-width: .7; }
+.bt-dim { stroke: var(--ink-soft); stroke-width: .8; }
+.bt-dimtxt { fill: var(--ink); font: 11.5px "IBM Plex Mono", ui-monospace, monospace; }
+.bt-leader { fill: none; stroke: var(--ink-soft); stroke-width: .8; }
+.bt-dot { fill: var(--ink-soft); }
+.bt-lab { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.bt-lab-force tspan:first-child { fill: var(--tool-force); font-weight: 600; }
+.bt-lab-torque { fill: var(--tool-torque); font-weight: 600; }
+.bt-lab-bad { fill: var(--danger); font-weight: 600; }
+.bt-soft, .bt-lab .bt-soft { fill: var(--ink-soft); font-weight: 400; }
+
+.bt-spot { cursor: pointer; outline: none; }
+.bt-spot-halo { fill: color-mix(in srgb, var(--tool-friction) 22%, transparent); stroke: var(--tool-friction); stroke-width: 1.2; }
+.bt-spot-dot { fill: var(--tool-friction); }
+.bt-spot-box { fill: var(--surface); stroke: var(--tool-friction); stroke-width: 1; }
+.bt-spot-t { font: 600 13px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.bt-spot-s { font: 10.5px "IBM Plex Sans", sans-serif; fill: var(--ink-soft); }
+.bt-spot:hover .bt-spot-box, .bt-spot:focus-visible .bt-spot-box { stroke-width: 2; fill: var(--sunken); }
+.bt-spot:hover .bt-spot-halo { fill: color-mix(in srgb, var(--tool-friction) 40%, transparent); }
+.bt-spot:focus-visible .bt-spot-box { stroke: var(--accent); }
+.bt-spot.bt-bad .bt-spot-halo, .bt-spot.bt-bad .bt-spot-box { stroke: var(--warn); }
+.bt-spot.bt-bad .bt-spot-dot { fill: var(--warn); }
+.bt-spot.bt-bad .bt-spot-s { fill: var(--warn); }
+
+.bt-menu {
+  position: absolute; z-index: 5; width: 220px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, .18); padding: 4px; display: flex; flex-direction: column;
+}
+.bt-menu-head { font-size: 11px; color: var(--ink-soft); padding: 4px 6px 5px; border-bottom: 1px solid var(--line-soft); margin-bottom: 2px; white-space: pre; }
+.bt-menu button {
+  display: flex; justify-content: space-between; gap: 8px; border: 0; background: transparent; cursor: pointer;
+  padding: 4px 6px; border-radius: 4px; font-size: 12.5px; text-align: left;
+}
+.bt-menu button b { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+.bt-menu button:hover, .bt-menu button:focus-visible { background: var(--sunken); }
+.bt-menu button[aria-checked="true"] { box-shadow: inset 3px 0 0 var(--tool-friction); background: var(--sunken); }
+.bt-menu-num { display: flex; align-items: center; gap: 6px; padding: 6px 6px 3px; border-top: 1px solid var(--line-soft); margin-top: 2px; font-size: 12px; color: var(--ink-soft); }
+.bt-menu-num input { flex: 1; min-width: 0; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+/* stress bar */
+.bt-stress { display: flex; flex-direction: column; padding: 8px 4px 4px 8px; }
+.bt-stress-svg { display: block; touch-action: none; }
+.bt-sb-track { fill: var(--sunken); stroke: var(--line); }
+.bt-sb-plastic { fill: color-mix(in srgb, var(--danger) 16%, transparent); }
+.bt-sb-sure { fill: color-mix(in srgb, var(--tool-force) 70%, var(--surface)); }
+.bt-sb-band { fill: color-mix(in srgb, var(--tool-force) 26%, transparent); stroke: var(--tool-force); stroke-dasharray: 3 2; }
+.bt-sb-yield { stroke: var(--danger); stroke-width: 1.5; }
+.bt-sb-lim { stroke: var(--ink-soft); stroke-width: 1; }
+.bt-sb-t { fill: var(--ink-soft); font: 10.5px "IBM Plex Mono", ui-monospace, monospace; }
+.bt-sb-v { fill: var(--ink); font: 500 11.5px "IBM Plex Mono", ui-monospace, monospace; }
+.bt-sb-a { fill: var(--tool-force); }
+.bt-sb-vm { fill: var(--accent); font-weight: 600; }
+.bt-handle { cursor: ns-resize; outline: none; }
+.bt-handle rect { fill: var(--accent); stroke: var(--surface); stroke-width: 1.5; }
+.bt-handle.bt-handle-a rect { fill: var(--tool-force); }
+.bt-handle.bt-bad rect { fill: var(--danger); }
+.bt-handle:focus-visible rect { stroke: var(--ink); stroke-width: 2; }
+
+/* wrench */
+.bt-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.bt-card { padding: 8px 10px; }
+.bt-dial { width: 100%; max-width: 300px; display: block; margin: 0 auto; touch-action: none; cursor: grab; }
+.bt-dial-face { fill: var(--sunken); stroke: var(--line); }
+.bt-dial-track { fill: none; stroke: var(--line); }
+.bt-dial-red { fill: none; stroke: var(--danger); }
+.bt-dial-green { fill: none; stroke: var(--ok); }
+.bt-dial-major { stroke: var(--ink); stroke-width: 1.5; }
+.bt-dial-minor { stroke: var(--ink-soft); stroke-width: .8; }
+.bt-dial-num { fill: var(--ink-soft); font: 10.5px "IBM Plex Mono", ui-monospace, monospace; }
+.bt-dial-tag { fill: var(--ok); font: 9.5px "IBM Plex Mono", ui-monospace, monospace; }
+.bt-bad-t { fill: var(--danger); }
+.bt-dial-read { fill: var(--ink); font: 600 26px "IBM Plex Mono", ui-monospace, monospace; }
+.bt-dial-unit { fill: var(--ink-soft); font: 11px "IBM Plex Sans", sans-serif; }
+.bt-needle { outline: none; cursor: grab; }
+.bt-needle path, .bt-needle circle { fill: var(--tool-torque); }
+.bt-needle .bt-needle-tip { fill: var(--surface); stroke: var(--tool-torque); stroke-width: 2.5; }
+.bt-needle.bt-bad path, .bt-needle.bt-bad circle { fill: var(--danger); }
+.bt-needle:focus-visible .bt-needle-tip { stroke: var(--ink); stroke-width: 3; }
+
+.bt-split { margin: 4px 0 6px; }
+.bt-split-bar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; border: 1px solid var(--line); }
+.bt-split-seg + .bt-split-seg { border-left: 1px solid var(--surface); }
+.bt-sp-pitch { background: var(--tool-force); }
+.bt-sp-thread { background: var(--tool-friction); }
+.bt-sp-head { background: color-mix(in srgb, var(--tool-friction) 45%, var(--surface)); }
+.bt-split-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--ink-soft); margin-top: 4px; }
+.bt-split-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.bt-facts { display: grid; grid-template-columns: auto auto; gap: 2px 10px; margin: 0; font-size: 12px; }
+.bt-facts dt { color: var(--ink-soft); }
+.bt-facts dd { margin: 0; text-align: right; font: 500 12.5px "IBM Plex Mono", ui-monospace, monospace; }
+.bt-facts small { color: var(--ink-soft); font-weight: 400; }
+.bt-side .k-outwrap { flex: 1; min-height: 140px; display: flex; flex-direction: column; }
+.bt-side .k-out { flex: 1; max-height: none; min-height: 0; }
+
+/* torque against friction */
+.bt-curve { display: flex; flex-direction: column; padding: 6px 8px 2px; }
+.bt-curve-head { display: flex; flex-wrap: wrap; gap: 3px 14px; align-items: center; font-size: 11.5px; color: var(--ink-soft); }
+.bt-key i { display: inline-block; width: 16px; height: 0; border-top: 2px solid; margin-right: 5px; vertical-align: 3px; }
+.bt-k-t { border-color: var(--tool-torque) !important; }
+.bt-k-f { border-top-style: dotted !important; border-color: var(--tool-friction) !important; }
+.bt-k-fat { border-top-style: dashed !important; border-color: var(--tool-force) !important; }
+.bt-cv-read { margin-left: auto; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); }
+.bt-curve-svg { display: block; touch-action: none; cursor: ew-resize; }
+.bt-grid { stroke: var(--line-soft); stroke-width: 1; }
+.bt-ax { fill: var(--ink-soft); font: 10px "IBM Plex Mono", ui-monospace, monospace; }
+.bt-ax-t { fill: var(--tool-torque); }
+.bt-ax-f { fill: var(--tool-friction); }
+.bt-cv-t { fill: none; stroke: var(--tool-torque); stroke-width: 2.2; }
+.bt-cv-f { fill: none; stroke: var(--tool-friction); stroke-width: 1.8; stroke-dasharray: 2 3; }
+.bt-cv-fat { fill: none; stroke: var(--tool-force); stroke-width: 1.8; stroke-dasharray: 6 4; }
+.bt-cv-over { fill: color-mix(in srgb, var(--danger) 16%, transparent); }
+.bt-cv-cur { stroke: var(--tool-torque); stroke-width: 1; stroke-dasharray: 3 3; }
+.bt-cv-hover { stroke: var(--ink-soft); stroke-width: 1; }
+.bt-cv-h { outline: none; cursor: ew-resize; }
+.bt-cv-h circle { fill: var(--surface); stroke: var(--tool-torque); stroke-width: 3; }
+.bt-cv-h:focus-visible circle { stroke: var(--ink); }
+.bt-cv-fdot { fill: var(--tool-friction); }
+
+/* medium: the wrench panel goes under */
+@media (max-width: 1150px) {
+  .bt {
+    height: auto; min-height: 0;
+    grid-template-columns: 58px minmax(0, 1fr) 140px;
+    grid-template-rows: auto 480px 220px auto;
+    grid-template-areas: "top top top" "ladder stage stress" "ladder curve curve" "side side side";
+  }
+  .bt-side { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); align-items: start; }
+  .bt-side .k-outwrap { min-height: 0; }
+  .bt-side .k-out { max-height: 340px; }
+}
+/* narrow: everything stacks, the ladder becomes a strip */
+@media (max-width: 700px) {
+  .k-page { padding: 8px; }
+  .bt {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto 400px 250px 220px auto;
+    grid-template-areas: "top" "ladder" "stage" "stress" "curve" "side";
+    gap: 8px;
+  }
+  .bt-ladder { flex-direction: row; flex-wrap: wrap; }
+  .bt-ladder button { flex: 1 0 44px; min-height: 30px; }
+  .bt-side { display: flex; }
+  .bt-fields { margin-left: 0; }
+  .bt-cv-read { margin-left: 0; flex-basis: 100%; }
+  .bt-seg button { padding: 4px 7px; }
+}

@@ -32,29 +32,59 @@ export const PRESETS = {
 const mask = (w) => (w === 32 ? 0xFFFFFFFF : (1 << w) - 1);
 const hex = (v, w) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(Math.ceil(w / 4), '0');
 
-function reflect(v, w) {
+export function reflect(v, w) {
   let r = 0;
   for (let i = 0; i < w; i++) if (v & (2 ** i)) r += 2 ** (w - 1 - i);
   return r >>> 0;
 }
 
-export function crc(bytes, p) {
-  const { w } = p;
-  const m = mask(w), top = 2 ** (w - 1);
-  let reg = p.init >>> 0;
-  for (const b0 of bytes) {
-    const b = p.refin ? reflect(b0, 8) : b0;
-    reg = ((reg ^ (b * 2 ** (w - 8))) >>> 0) & m;
-    reg >>>= 0;
-    for (let i = 0; i < 8; i++) {
-      const hi = reg >= top;
-      reg = ((reg * 2) % (2 ** w)) >>> 0; // shift left inside w bits
-      if (hi) reg = (reg ^ p.poly) >>> 0;
-      reg = (reg & m) >>> 0;
-    }
+// The same computation one input bit at a time (the serial form of the
+// register above, which it equals): the bit leaving the top of the register
+// is XORed with the incoming data bit, and when that feedback is 1 the
+// polynomial is XORed into the register after the shift. crc() runs on it, and
+// the page's step-through view shows exactly these states.
+
+/** The 8 bits of byte b in the order they enter the register. */
+export function feedOrder(b, refin) {
+  return Array.from({ length: 8 }, (_, i) => (refin ? (b >> i) & 1 : (b >> (7 - i)) & 1));
+}
+
+/** One bit into the register: {reg, bit, top, fb}. */
+export function stepBit(reg, bit, p) {
+  const top = Math.floor(reg / 2 ** (p.w - 1)) & 1;
+  const fb = top ^ bit;
+  let r = (reg * 2) % 2 ** p.w;
+  if (fb) r = (r ^ p.poly) >>> 0;
+  return { reg: (r & mask(p.w)) >>> 0, bit, top, fb };
+}
+
+/** The register before and after each of byte b's 8 bits: 9 states, [0] = start. */
+export function byteSteps(reg, b, p) {
+  const out = [{ reg }];
+  for (const bit of feedOrder(b, p.refin)) out.push(stepBit(out[out.length - 1].reg, bit, p));
+  return out;
+}
+
+/** The register at the start of every byte and after the last: bytes.length + 1 values. */
+export function registerTrace(bytes, p) {
+  let reg = (p.init & mask(p.w)) >>> 0;
+  const out = [reg];
+  for (const b of bytes) {
+    for (const bit of feedOrder(b, p.refin)) reg = stepBit(reg, bit, p).reg;
+    out.push(reg);
   }
-  if (p.refout) reg = reflect(reg, w);
-  return ((reg ^ p.xorout) & m) >>> 0;
+  return out;
+}
+
+/** The output stages: the final register, reflected if refout, then XORed with xorout. */
+export function finish(reg, p) {
+  const reflected = p.refout ? reflect(reg, p.w) : reg;
+  return { reg, reflected, out: ((reflected ^ p.xorout) & mask(p.w)) >>> 0 };
+}
+
+export function crc(bytes, p) {
+  const t = registerTrace(bytes, p);
+  return finish(t[t.length - 1], p).out;
 }
 
 // ---- input bytes ----
@@ -131,7 +161,7 @@ function cCode(name, p) {
   return lines.join('\n');
 }
 
-export function run({ data, format, preset, width, poly, init, refin, refout, xorout }) {
+export function run({ data, format, preset, width, poly, init, refin, refout, xorout, expect }) {
   const warnings = [];
   const got = toBytes(data, format);
   if (got.error) return { warnings: [got.error] };
@@ -169,9 +199,32 @@ export function run({ data, format, preset, width, poly, init, refin, refout, xo
     { label: 'Bytes, little endian', value: hb([...be].reverse()), hint: 'as a uint on ARM/x86' },
     { label: 'Check ("123456789")', value: hex(check, p.w), hint: p.check != null ? 'matches the catalogue' : 'compare with your datasheet' },
   ];
-  const rows = Object.entries(PRESETS).map(([n, q]) => [
-    n, q.w, hex(q.poly, q.w), hex(q.init, q.w), q.refin ? 'yes' : 'no', q.refout ? 'yes' : 'no', hex(q.xorout, q.w), hex(crc(bytes, q), q.w), q.alias || '',
+  const all = Object.entries(PRESETS).map(([n, q]) => [n, q, crc(bytes, q)]);
+  const rows = all.map(([n, q, c]) => [
+    n, q.w, hex(q.poly, q.w), hex(q.init, q.w), q.refin ? 'yes' : 'no', q.refout ? 'yes' : 'no', hex(q.xorout, q.w), hex(c, q.w), q.alias || '',
   ]);
+  // Custom parameters that are exactly a catalogue preset get its name.
+  const same = Object.entries(PRESETS).find(([, q]) => q.w === p.w && q.poly === p.poly && q.init === p.init && q.refin === p.refin && q.refout === p.refout && q.xorout === p.xorout)?.[0] || null;
+  // Identify: which presets give a known CRC over this data, as written or byte-swapped.
+  let identify = null;
+  const want = String(expect ?? '').trim();
+  if (want) {
+    const E = parseHexNum(want.replace(/\s+/g, ''));
+    if (E == null) warnings.push(`Known CRC "${want}" is not hex: write it like 0x29B1 or 29 B1.`);
+    else {
+      const swap = (x, w) => { let r = 0; for (let i = 0; i < w / 8; i++) r = r * 256 + ((x >>> (8 * i)) & 0xFF); return r >>> 0; };
+      const matches = [], swapped = [];
+      for (const [n, q, c] of all) {
+        if (E > mask(q.w)) continue;
+        if (c === E) matches.push(n);
+        else if (q.w > 8 && swap(c, q.w) === E) swapped.push(n);
+      }
+      identify = { value: E, matches, swapped };
+      values.push({ label: `Known CRC ${hex(E, E > 0xFFFF ? 32 : E > 0xFF ? 16 : 8)}`, tone: matches.length || swapped.length ? 'ok' : 'warn',
+        value: matches.length ? matches.join(', ') : swapped.length ? `${swapped.join(', ')} (bytes swapped)` : 'no preset',
+        hint: matches.length || swapped.length ? 'catalogue presets giving it over this data' : 'try other data, or custom parameters' });
+    }
+  }
   const notes = [
     'Polynomials are written in normal (MSB-first) form without the implicit top bit: CRC-32 is 0x04C11DB7, its reflected form 0xEDB88320 is what the C code uses when refin and refout are set.',
     'Which bytes go on the wire in which order is protocol-specific: Modbus RTU sends the CRC low byte first; most big-endian protocols send it high byte first.',
@@ -184,5 +237,8 @@ export function run({ data, format, preset, width, poly, init, refin, refout, xo
     tables: [{ title: 'The same data under every preset', columns: ['Preset', 'Width', 'Poly', 'Init', 'RefIn', 'RefOut', 'XorOut', 'CRC', 'Also known as'], rows }],
     texts: [{ title: 'C code', body: cCode(name, p), lang: 'c' }],
     notes,
+    // The CRC in structured form, for the page and for agents.
+    crc: { name, same, width: p.w, poly: p.poly, init: p.init, refin: p.refin, refout: p.refout, xorout: p.xorout,
+      value: v, hex: hex(v, p.w), be: hb(be), le: hb([...be].reverse()), bytes: bytes.length, check, catalogueCheck: p.check ?? null, identify },
   };
 }

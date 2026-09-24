@@ -3,6 +3,7 @@
   "name": "Impedance Calculator",
   "blurb": "characteristic impedance of microstrip, stripline and differential pairs from the stackup",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["impedance", "controlled impedance", "microstrip", "stripline", "differential pair", "zdiff", "z0", "50 ohm", "90 ohm", "100 ohm", "trace width", "stackup", "dielectric", "er", "usb hdmi ethernet"],
   "intro": "Impedance of a trace from its width, copper thickness and the dielectric to its reference plane(s), and the width that hits a target. Single lines use the Hammerstad-Jensen (microstrip) and Wheeler (stripline) closed forms; pairs use the AN-905 / IPC-2141 coupling approximation.",

@@ -28,7 +28,7 @@
       "key": "modes",
       "label": "Failure modes",
       "type": "table",
-      "help": "S: 1 no effect … 10 hazardous without warning. O: 1 very unlikely … 10 almost certain. D: 1 certain to be caught … 10 cannot be detected before the user sees it.",
+      "help": "S: 1 no effect … 10 hazardous without warning. O: 1 very unlikely … 10 almost certain. D: 1 certain to be caught … 10 cannot be detected before the user sees it. S/O/D after: optional re-scores once the planned action is done (blank = unchanged).",
       "columns": [
         {
           "key": "item",
@@ -69,6 +69,21 @@
           "key": "action",
           "label": "Planned action",
           "default": ""
+        },
+        {
+          "key": "rs",
+          "label": "S after",
+          "default": ""
+        },
+        {
+          "key": "ro",
+          "label": "O after",
+          "default": ""
+        },
+        {
+          "key": "rd",
+          "label": "D after",
+          "default": ""
         }
       ],
       "default": [
@@ -80,7 +95,10 @@
           "s": "10",
           "o": "2",
           "d": "4",
-          "action": "Add NTC cutoff, test at 45 °C"
+          "action": "Add NTC cutoff, test at 45 °C",
+          "rs": "10",
+          "ro": "1",
+          "rd": "2"
         },
         {
           "item": "USB-C port",
@@ -90,7 +108,10 @@
           "s": "6",
           "o": "5",
           "d": "6",
-          "action": "Through-hole shell tabs"
+          "action": "Through-hole shell tabs",
+          "rs": "6",
+          "ro": "2",
+          "rd": "4"
         },
         {
           "item": "Firmware OTA",
@@ -100,7 +121,10 @@
           "s": "8",
           "o": "3",
           "d": "5",
-          "action": "A/B partitions with rollback"
+          "action": "A/B partitions with rollback",
+          "rs": "8",
+          "ro": "1",
+          "rd": "3"
         },
         {
           "item": "Button",
@@ -349,13 +373,103 @@
         "soMin": "30",
         "sevMin": "9"
       }
+    },
+    {
+      "title": "Same list with the planned actions re-scored (after action)",
+      "input": {
+        "modes": [
+          {
+            "item": "Li-ion charger",
+            "mode": "Overcharge",
+            "effect": "Cell swelling, fire",
+            "cause": "Charger IC thermal foldback disabled",
+            "s": "10",
+            "o": "2",
+            "d": "4",
+            "action": "Add NTC cutoff, test at 45 °C",
+            "rs": "10",
+            "ro": "1",
+            "rd": "2"
+          },
+          {
+            "item": "USB-C port",
+            "mode": "Connector cracks off board",
+            "effect": "No charging",
+            "cause": "Only SMD pads hold the shell",
+            "s": "6",
+            "o": "5",
+            "d": "6",
+            "action": "Through-hole shell tabs",
+            "rs": "6",
+            "ro": "2",
+            "rd": "4"
+          },
+          {
+            "item": "Firmware OTA",
+            "mode": "Update bricks device",
+            "effect": "Device dead in the field",
+            "cause": "Power loss during flash write",
+            "s": "8",
+            "o": "3",
+            "d": "5",
+            "action": "A/B partitions with rollback",
+            "rs": "8",
+            "ro": "1",
+            "rd": "3"
+          },
+          {
+            "item": "Button",
+            "mode": "Bounce double-press",
+            "effect": "Menu skips an item",
+            "cause": "No debounce",
+            "s": "3",
+            "o": "6",
+            "d": "3",
+            "action": ""
+          },
+          {
+            "item": "BLE link",
+            "mode": "Drops on phone sleep",
+            "effect": "Data gap, user retries",
+            "cause": "Supervision timeout too short",
+            "s": "5",
+            "o": "6",
+            "d": "4",
+            "action": ""
+          },
+          {
+            "item": "Enclosure",
+            "mode": "Water ingress at seam",
+            "effect": "Corrosion, board failure",
+            "cause": "Gasket compression set",
+            "s": "8",
+            "o": "3",
+            "d": "7",
+            "action": ""
+          },
+          {
+            "item": "Temp sensor",
+            "mode": "Reads 2 °C high",
+            "effect": "Wrong display value",
+            "cause": "Self-heating from nearby LDO",
+            "s": "4",
+            "o": "7",
+            "d": "5",
+            "action": ""
+          }
+        ],
+        "method": "rpn",
+        "rpnMin": "100",
+        "sevMin": "9"
+      }
     }
   ],
-  "usage": "Give modes as rows {item, mode, effect, cause, s, o, d (whole numbers 1-10), action}, method = rpn | so, the action threshold (rpnMin for rpn, soMin for so) and sevMin. It returns the modes in risk order with score, share of the total and whether action is needed and why, counts of modes needing action and those without a plan, the Pareto count holding 80 % of the risk, a bar chart and an action list text. Use it to prioritise design or process risks on a small project; it is not a full AIAG-VDA Action Priority analysis.",
+  "usage": "Give modes as rows {item, mode, effect, cause, s, o, d (whole numbers 1-10), action, and optionally rs, ro, rd: the scores after the action, blank = unchanged}, method = rpn | so, the action threshold (rpnMin for rpn, soMin for so) and sevMin. It returns the modes in risk order with score, share of the total and whether action is needed and why, counts of modes needing action and those without a plan, the Pareto count holding 80 % of the risk, a bar chart, an action list text, the risk after actions when revised scores are given, and result.fmea with every mode's scores, share and status as data. Use it to prioritise design or process risks on a small project; it is not a full AIAG-VDA Action Priority analysis.",
   "sources": [
     "AIAG Potential Failure Mode and Effects Analysis, 4th edition (2008): S/O/D 1-10 scales and RPN",
     "IEC 60812:2018 Failure modes and effects analysis (FMEA and FMECA), RPN and criticality",
     "AIAG & VDA FMEA Handbook (2019) - notes the move to Action Priority; severity 9-10 = safety / regulatory",
     "Rule of thumb: RPN action threshold 100"
-  ]
+  ],
+  "layout": "custom"
 }

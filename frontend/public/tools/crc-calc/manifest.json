@@ -3,27 +3,190 @@
   "name": "CRC Calculator",
   "blurb": "CRC-8/16/32 with polynomial, init and reflection settings",
   "group": "embedded",
-  "rooms": ["embedded"],
-  "keywords": ["crc", "cyclic redundancy check", "crc8", "crc16", "crc32", "crc-32c", "modbus crc", "ccitt", "xmodem", "polynomial", "reflected", "checksum", "rocksoft", "reveng", "sensirion crc"],
+  "rooms": [
+    "embedded"
+  ],
+  "keywords": [
+    "crc",
+    "cyclic redundancy check",
+    "crc8",
+    "crc16",
+    "crc32",
+    "crc-32c",
+    "modbus crc",
+    "ccitt",
+    "xmodem",
+    "polynomial",
+    "reflected",
+    "checksum",
+    "rocksoft",
+    "reveng",
+    "sensirion crc"
+  ],
   "intro": "Computes a CRC over text or hex bytes with the Rocksoft parameter model (width, polynomial, init, reflect in/out, xor out). Pick a catalogue preset or set your own; every preset is also run on the same data so you can find which one a device uses, and C code is generated for the chosen one.",
   "inputs": [
-    { "key": "data", "label": "Data", "type": "textarea", "rows": 4, "default": "123456789",
-      "help": "Text, text with C escapes (\\r\\n, \\x02) or hex bytes, as chosen below." },
-    { "key": "format", "label": "Data is", "type": "select", "default": "text",
-      "options": [["text", "Text (UTF-8)"], ["escaped", "Text with C escapes"], ["hex", "Hex bytes"]] },
-    { "key": "preset", "label": "CRC", "type": "select", "default": "CRC-32",
-      "options": ["CRC-8", "CRC-8/MAXIM", "CRC-8/AUTOSAR", "CRC-8/SAE-J1850", "CRC-8/NRSC-5", "CRC-16/CCITT-FALSE", "CRC-16/XMODEM", "CRC-16/KERMIT", "CRC-16/X-25", "CRC-16/MODBUS", "CRC-16/ARC", "CRC-16/USB", "CRC-32", "CRC-32C", "CRC-32/BZIP2", "CRC-32/MPEG-2", ["custom", "Custom parameters"]] },
-    { "key": "width", "label": "Width", "type": "select", "default": "16", "options": [["8", "8 bit"], ["16", "16 bit"], ["32", "32 bit"]], "when": { "key": "preset", "equals": "custom" } },
-    { "key": "poly", "label": "Polynomial (hex, normal form)", "type": "text", "default": "1021", "when": { "key": "preset", "equals": "custom" } },
-    { "key": "init", "label": "Init (hex)", "type": "text", "default": "FFFF", "when": { "key": "preset", "equals": "custom" } },
-    { "key": "xorout", "label": "Xor out (hex)", "type": "text", "default": "0000", "when": { "key": "preset", "equals": "custom" } },
-    { "key": "refin", "label": "Reflect input bytes", "type": "bool", "default": false, "when": { "key": "preset", "equals": "custom" } },
-    { "key": "refout", "label": "Reflect output", "type": "bool", "default": false, "when": { "key": "preset", "equals": "custom" } }
+    {
+      "key": "data",
+      "label": "Data",
+      "type": "textarea",
+      "rows": 4,
+      "default": "123456789",
+      "help": "Text, text with C escapes (\\r\\n, \\x02) or hex bytes, as chosen below."
+    },
+    {
+      "key": "format",
+      "label": "Data is",
+      "type": "select",
+      "default": "text",
+      "options": [
+        [
+          "text",
+          "Text (UTF-8)"
+        ],
+        [
+          "escaped",
+          "Text with C escapes"
+        ],
+        [
+          "hex",
+          "Hex bytes"
+        ]
+      ]
+    },
+    {
+      "key": "preset",
+      "label": "CRC",
+      "type": "select",
+      "default": "CRC-32",
+      "options": [
+        "CRC-8",
+        "CRC-8/MAXIM",
+        "CRC-8/AUTOSAR",
+        "CRC-8/SAE-J1850",
+        "CRC-8/NRSC-5",
+        "CRC-16/CCITT-FALSE",
+        "CRC-16/XMODEM",
+        "CRC-16/KERMIT",
+        "CRC-16/X-25",
+        "CRC-16/MODBUS",
+        "CRC-16/ARC",
+        "CRC-16/USB",
+        "CRC-32",
+        "CRC-32C",
+        "CRC-32/BZIP2",
+        "CRC-32/MPEG-2",
+        [
+          "custom",
+          "Custom parameters"
+        ]
+      ]
+    },
+    {
+      "key": "width",
+      "label": "Width",
+      "type": "select",
+      "default": "16",
+      "options": [
+        [
+          "8",
+          "8 bit"
+        ],
+        [
+          "16",
+          "16 bit"
+        ],
+        [
+          "32",
+          "32 bit"
+        ]
+      ],
+      "when": {
+        "key": "preset",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "poly",
+      "label": "Polynomial (hex, normal form)",
+      "type": "text",
+      "default": "1021",
+      "when": {
+        "key": "preset",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "init",
+      "label": "Init (hex)",
+      "type": "text",
+      "default": "FFFF",
+      "when": {
+        "key": "preset",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "xorout",
+      "label": "Xor out (hex)",
+      "type": "text",
+      "default": "0000",
+      "when": {
+        "key": "preset",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "refin",
+      "label": "Reflect input bytes",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "preset",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "refout",
+      "label": "Reflect output",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "preset",
+        "equals": "custom"
+      }
+    },
+    {
+      "key": "expect",
+      "label": "Known CRC (hex), to identify",
+      "type": "text",
+      "default": "",
+      "placeholder": "e.g. 0x29B1",
+      "help": "Optional: a CRC you already have for this data. The presets that give it (as written or byte-swapped) are named."
+    }
   ],
   "examples": [
-    { "title": "Modbus RTU frame: read 2 holding registers from slave 1", "input": { "data": "01 03 00 00 00 02", "format": "hex", "preset": "CRC-16/MODBUS" } },
-    { "title": "Sensirion SHT3x word 0xBEEF (datasheet: CRC 0x92)", "input": { "data": "BE EF", "format": "hex", "preset": "CRC-8/NRSC-5" } }
+    {
+      "title": "Modbus RTU frame: read 2 holding registers from slave 1",
+      "input": {
+        "data": "01 03 00 00 00 02",
+        "format": "hex",
+        "preset": "CRC-16/MODBUS"
+      }
+    },
+    {
+      "title": "Sensirion SHT3x word 0xBEEF (datasheet: CRC 0x92)",
+      "input": {
+        "data": "BE EF",
+        "format": "hex",
+        "preset": "CRC-8/NRSC-5"
+      }
+    }
   ],
-  "usage": "Give data as text, escaped text or hex bytes (format = text | escaped | hex) and a preset name, or preset = custom with width (8/16/32), poly, init and xorout as hex strings and refin/refout as booleans. Returns the CRC in hex and decimal, its bytes in both orders, the check value over \"123456789\", the CRC under every catalogue preset, and C code. Use it to verify a protocol checksum or to identify which CRC variant a device uses.",
-  "sources": ["Ross N. Williams, A Painless Guide to CRC Error Detection Algorithms (1993), the Rocksoft model", "Greg Cook, Catalogue of parametrised CRC algorithms (CRC RevEng), check values", "Modbus over Serial Line V1.02, section 6.2.2 (CRC-16 low byte first)"]
+  "usage": "Give data as text, escaped text or hex bytes (format = text | escaped | hex) and a preset name, or preset = custom with width (8/16/32), poly, init and xorout as hex strings and refin/refout as booleans. Optionally give expect = a known CRC (hex) to list the catalogue presets that produce it over the data. Returns the CRC in hex and decimal, its bytes in both orders, the check value over \"123456789\", the CRC under every catalogue preset, and C code. Use it to verify a protocol checksum or to identify which CRC variant a device uses. result.crc holds the chosen parameters and the CRC as numbers.",
+  "sources": [
+    "Ross N. Williams, A Painless Guide to CRC Error Detection Algorithms (1993), the Rocksoft model",
+    "Greg Cook, Catalogue of parametrised CRC algorithms (CRC RevEng), check values",
+    "Modbus over Serial Line V1.02, section 6.2.2 (CRC-16 low byte first)"
+  ],
+  "layout": "custom"
 }

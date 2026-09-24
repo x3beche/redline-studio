@@ -21,6 +21,18 @@ const SIZES = {
   M24: [24, 3.0, 33.6, 34.8, 26],
 };
 
+// Drawing sizes, mm: hex head across flats s and height k (ISO 4017), socket
+// cap head dk, height k and key size (ISO 4762), nut height m (ISO 4032),
+// washer outside diameter and thickness (ISO 7089). Only for the joint
+// section the page draws; the calculation above does not use them.
+const PARTS = {
+  M2: [4, 1.4, 3.8, 2, 1.5, 1.6, 5, 0.3], 'M2.5': [5, 1.7, 4.5, 2.5, 2, 2, 6, 0.5], M3: [5.5, 2, 5.5, 3, 2.5, 2.4, 7, 0.5],
+  M4: [7, 2.8, 7, 4, 3, 3.2, 9, 0.8], M5: [8, 3.5, 8.5, 5, 4, 4.7, 10, 1], M6: [10, 4, 10, 6, 5, 5.2, 12, 1.6],
+  M8: [13, 5.3, 13, 8, 6, 6.8, 16, 1.6], M10: [16, 6.4, 16, 10, 8, 8.4, 20, 2], M12: [18, 7.5, 18, 12, 10, 10.8, 24, 2.5],
+  M14: [21, 8.8, 21, 14, 12, 12.8, 28, 2.5], M16: [24, 10, 24, 16, 14, 14.8, 30, 3], M20: [30, 12.5, 30, 20, 17, 18, 37, 3],
+  M24: [36, 15, 36, 24, 19, 21.5, 44, 4],
+};
+
 // Property classes: minimum 0.2 % proof (yield) Rp0.2 and tensile Rm, MPa
 // (ISO 898-1 for steel, ISO 3506-1 for stainless), and proof load stress Sp.
 const GRADES = {
@@ -93,7 +105,30 @@ export function run({ size, grade, head, muG, muK, nu, alphaA }) {
     const t = (f * (0.16 * P + 0.58 * d2 * m + m * DKm / 2)) / 1000;
     return [String(m), `${fmtNum(f / 1000, 3)} kN`, `${fmtNum(t, 3)} N m`];
   });
+  // Everything the page draws, as numbers: the joint to scale, the forces,
+  // the stresses against the class limits, and torque against friction.
+  const ratio = mk / mg; // µK / µG, kept along the friction curve
+  const MA1 = MA / util; // torque that would take the bolt to 100 % of yield
+  const curve = [];
+  for (let i = 4; i <= 30; i++) {
+    const m = i / 100;
+    const kk = 1.5 * (d2 / ds) * (P / (Math.PI * d2) + 1.155 * m);
+    const f = (As * util * g.rp) / Math.sqrt(1 + 3 * kk * kk);
+    const lever = 0.16 * P + 0.58 * d2 * m + m * ratio * DKm / 2; // mm
+    curve.push({ mu: m, torque: (f * lever) / 1000, preload: f / 1000, preloadAtTorque: (MA * 1000) / lever / 1000 });
+  }
+  const [sHex, kHex, dkCap, kCap, keyCap, mNut, dWasher, hWasher] = PARTS[size];
+  const joint = {
+    size, grade, head, d, P, d2, d3, ds, As, dw, dh, DKm,
+    rp: g.rp, rm: g.rm, sp: g.sp, muG: mg, muK: mk, muKGiven: muK > 0, util, alphaA: aA,
+    torque: MA, torqueAtYield: MA1, preloadMax: F / 1000, preloadMin: F / aA / 1000,
+    sigma, sigmaMin: sigma / aA, tau, vonMises: vm, nutFactor: K,
+    torqueParts: { pitch: tPitch / 1000, thread: tThread / 1000, head: tHead / 1000 },
+    parts: { hexS: sHex, hexK: kHex, capDk: dkCap, capK: kCap, capKey: keyCap, nutM: mNut, washerD: dWasher, washerH: hWasher },
+    curve,
+  };
   return {
+    joint,
     values,
     warnings,
     tables: [

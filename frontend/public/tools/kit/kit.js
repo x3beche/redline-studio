@@ -9,7 +9,11 @@
 //   index.html     three lines that call mount()
 //   view.js        optional: export function view(el, result, input, api)
 //                  for a drawing the standard blocks cannot make; api.set(key,
-//                  value) changes an input (a clicked bit), api.raw is the form
+//                  value) changes an input (a clicked bit), api.raw is the form.
+//                  With "layout": "custom", view.js exports page(root, ctx)
+//                  instead and builds the whole page itself: ctx = {manifest,
+//                  raw, input, result, set, setMany, onResult(fn), outputs,
+//                  form, results, fmtNum, parseEng}.
 //
 // A result is { values, tables, texts, charts, warnings, notes } - every key
 // optional:
@@ -249,14 +253,20 @@ export function promptFor(manifest, input, result) {
 export async function mount(base = './') {
   const manifest = await (await fetch(base + 'manifest.json')).json();
   const tool = await import(new URL(base + 'tool.js', location.href).href);
-  let view = null;
-  if (manifest.view) { try { view = (await import(new URL(base + 'view.js', location.href).href)).view; } catch (e) { console.error(e); } }
+  let view = null, page = null;
+  if (manifest.view || manifest.layout === 'custom') {
+    try {
+      const mod = await import(new URL(base + 'view.js', location.href).href);
+      view = mod.view || null;
+      page = mod.page || null;
+    } catch (e) { console.error(e); }
+  }
   document.title = `${manifest.name} — ${manifest.blurb}`;
   const KEY = `redline.tool.${manifest.id}.input`;
   const defaults = () => Object.fromEntries(manifest.inputs.map((d) => [d.key, d.default ?? (d.type === 'table' ? [] : d.type === 'bool' ? false : '')]));
   let raw = { ...defaults(), ...(store.get(KEY) || {}) };
   let tab = store.get(KEY + '.tab') || 'Prompt';
-  let last = null, pinged = false;
+  let last = null, pinged = false, customNotify = null;
 
   const form = $('div', { class: 'k-form' });
   const results = $('div', { class: 'k-results', 'aria-live': 'polite' });
@@ -322,6 +332,7 @@ export async function mount(base = './') {
       try { view(custom, last, input, { fmtNum, set, raw: { ...raw } }); } catch (e) { console.error(e); }
     }
     drawOutputs();
+    if (customNotify) customNotify(last, input);
     if (!pinged) { pinged = true; ping(manifest.id, 'run'); }
   };
 
@@ -331,6 +342,31 @@ export async function mount(base = './') {
     $('div', { class: 'k-actions' },
       ex ? $('button', { class: 'k-btn', onclick: () => { raw = { ...defaults(), ...structuredClone(ex.input) }; store.set(KEY, raw); drawForm(); compute(); } }, 'Example') : null,
       $('button', { class: 'k-btn', onclick: () => { raw = defaults(); store.set(KEY, raw); drawForm(); compute(); } }, 'Reset')));
+  if (manifest.layout === 'custom' && page) {
+    // The tool owns the page: it lays out its own interface for what it
+    // does, and puts the kit's pieces (the output panel, the form or the
+    // standard results if it wants them) where they belong. The kit keeps
+    // the input, runs the tool, and tells the page each new result.
+    const listeners = [];
+    const outputs = $('div', { class: 'k-outwrap' }, $('div', { class: 'k-outbar' }, tabs, count, copyBtn), pre);
+    const ctx = {
+      manifest,
+      get raw() { return { ...raw }; },
+      get input() { return Object.fromEntries(manifest.inputs.map((d) => [d.key, readValue(d, raw[d.key])])); },
+      get result() { return last; },
+      set(key, value) { raw[key] = value; store.set(KEY, raw); drawForm(); compute(); },
+      setMany(obj) { Object.assign(raw, obj); store.set(KEY, raw); drawForm(); compute(); },
+      onResult(fn) { listeners.push(fn); if (last) fn(last, ctx.input); },
+      outputs, form, results, fmtNum, parseEng,
+    };
+    customNotify = (res, input) => { for (const fn of listeners) { try { fn(res, input); } catch (e) { console.error(e); } } };
+    const root = $('main', { class: 'k-page' });
+    document.body.replaceChildren(bar, root);
+    try { page(root, ctx); } catch (e) { console.error(e); root.append($('div', { class: 'k-warns' }, String(e))); }
+    drawForm();
+    compute();
+    return;
+  }
   document.body.replaceChildren(bar,
     $('main', { class: 'k-main' },
       $('section', { class: 'k-left' }, manifest.intro ? $('p', { class: 'k-intro' }, manifest.intro) : null, form),
