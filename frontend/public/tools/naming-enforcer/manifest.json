@@ -1,0 +1,29 @@
+{
+  "id": "naming-enforcer",
+  "name": "Naming Convention Enforcer",
+  "blurb": "nets, symbols, parts and files checked against one naming rule",
+  "group": "project",
+  "rooms": ["pcb", "cad", "web", "embedded", "mobile"],
+  "keywords": ["naming convention", "net names", "reference designator", "refdes", "file names", "snake_case", "kebab-case", "camelCase", "lint", "rename", "style guide", "ieee 315", "consistency", "case"],
+  "intro": "Paste names one per line; each is checked against one case rule plus the rules for its kind (IEEE 315 class letters for reference designators, portable characters for files, 3V3-style values for nets), with a suggested rename. Names that differ only in case or separators are flagged: tools disagree on whether they are the same.",
+  "inputs": [
+    { "key": "kind", "label": "These names are", "type": "select", "default": "auto",
+      "options": [["auto", "Mixed (guess per line)"], ["net", "Nets"], ["refdes", "Reference designators"], ["part", "Library parts / symbols"], ["file", "File names"]] },
+    { "key": "style", "label": "Case rule", "type": "select", "default": "upper_snake",
+      "options": [["upper_snake", "UPPER_SNAKE"], ["lower_snake", "lower_snake"], ["kebab", "kebab-case"], ["camel", "camelCase"], ["pascal", "PascalCase"], ["custom", "Custom regex"]] },
+    { "key": "pattern", "label": "Custom pattern (regex)", "type": "text", "default": "^[A-Z][A-Z0-9_]*$", "when": { "key": "style", "equals": "custom" } },
+    { "key": "maxlen", "label": "Max length", "type": "number", "unit": "chars", "default": "24", "help": "0 = no limit" },
+    { "key": "prefixes", "label": "Allowed prefixes", "type": "text", "default": "", "placeholder": "e.g. PWR_, I2C_, SPI_",
+      "help": "Comma separated; empty = any." },
+    { "key": "names", "label": "Names, one per line", "type": "textarea", "rows": 10,
+      "default": "SDA\nI2C_SCL\n+3V3\nVbat_sense\nuart-tx\n3.3V_LDO\nnRESET\n~{RESET}\nNet-(R4-Pad2)\nR1\nC07\nLED1\nIC2\nU3\nref: sw2\npart: AMS1117_3V3\nfile: Main Board rev B.PDF\nfile: gerbers.zip\nsda" }
+  ],
+  "examples": [
+    { "title": "Mixed net, refdes and file list against UPPER_SNAKE", "input": { "kind": "auto", "style": "upper_snake", "maxlen": "24",
+      "names": "SDA\nI2C_SCL\n+3V3\nVbat_sense\nuart-tx\n3.3V_LDO\n~{RESET}\nR1\nC07\nLED1\nIC2\nfile: Main Board rev B.PDF\nsda" } },
+    { "title": "Web asset files in kebab-case", "input": { "kind": "file", "style": "kebab", "maxlen": "40",
+      "names": "hero-image.png\nHeroBanner.jpg\nuser_profile.svg\nicon-close.SVG\ncon.txt\nnew logo final.png" } }
+  ],
+  "usage": "Give names as one per line in names (optionally prefixed net:, ref:, part: or file:), the kind (auto, net, refdes, part, file), the case style (upper_snake, lower_snake, kebab, camel, pascal or custom with pattern as a regex), maxlen in characters (0 = none) and optional comma-separated prefixes. It returns pass/fail counts, a failures table with the problem and a suggested name, clashes between names that differ only in case or separators, and a CSV rename map. Use it before a netlist review, a library cleanup or a file release.",
+  "sources": ["IEEE 315-1975 / ASME Y14.44-2008 reference designator class letters", "IEC 60062 (RKM code: 3V3 for 3.3 V)", "IEEE 1003.1 (POSIX) portable filename character set, section 3.282", "Microsoft: Naming Files, Paths, and Namespaces (reserved device names)", "Case styles: convention, not a standard"]
+}

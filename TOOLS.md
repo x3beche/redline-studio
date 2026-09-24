@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-160 tools. **MCP** marks the ones agents can run with `run_tool`.
+168 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -113,6 +113,7 @@ agents, the most used, and every tool nobody used.
 | **Op-Amp Gain Tool** · MCP | `opamp-gain` | gain, offset and bandwidth of inverting and non-inverting stages | PCB |
 | **Package Dimension Explorer** · MCP | `package-explorer` | physical sizes of packages from 0201 to QFN, compared to scale | PCB, 3D |
 | **Panelization Planner** · MCP | `panelization` | how many boards fit a panel with V-cut or mouse-bite margins, and the waste | PCB |
+| **Part Alternative Finder** · MCP | `part-alternatives` | alternatives for a part in stock, with basic/extended class compared | PCB |
 | **PCB Weight & CoG** · MCP | `pcb-weight` | mass and centre of gravity of board, copper and parts | PCB, 3D |
 | **Power Rail Tree** · MCP | `power-rail-tree` | supply rails as a tree with each branch's current budget and total power | PCB, Embedded |
 | **RC / LC Filter Designer** · MCP | `rc-lc-filter` | component values from a cutoff frequency, with the magnitude response drawn | PCB |
@@ -220,18 +221,22 @@ agents, the most used, and every tool nobody used.
 | **Flexbox Playground** · MCP | `flexbox-playground` | try alignment properties and see the result and code | Web |
 | **Form Builder** | `form-builder` | build a form with its rules, get Zod, types and a React component | Web |
 | **Grid Sketch** | `grid-sketch` | draw a layout on a grid, copy it as a prompt, CSS or JSON | Web, Mobile |
+| **HTTP Request Tester** · MCP | `http-tester` | send a request and see headers, timing and the response | Web, Embedded |
 | **Icon & Favicon Generator** · MCP | `icon-generator` | every icon size and the manifest entries from one image | Web, Mobile |
 | **JSON Diff Viewer** · MCP | `json-diff` | two responses compared by line and by field | Web, Analytics |
 | **JSON Path Explorer** · MCP | `json-path` | walk a large JSON and copy the access path of a field | Web |
 | **JSON to TypeScript** · MCP | `json-to-ts` | type definitions and a validation schema from sample JSON | Web, Mobile |
 | **JWT & Base64 Decoder** · MCP | `jwt-decoder` | decode a token and show its expiry and signature fields | Web |
 | **Motion Lab** | `motion-lab` | shape an easing curve and timing, take it as CSS or JS | Web, Mobile |
+| **MQTT Message Simulator** · MCP | `mqtt-simulator` | fake telemetry messages to test an IoT dashboard | Web, Embedded |
 | **Palette Forge** | `palette-forge` | one colour into an accessible palette and light/dark tokens | Web, Mobile |
+| **Responsive Preview Matrix** · MCP | `responsive-matrix` | one page at several breakpoints side by side, with overflow flagged | Web, Mobile |
 | **Screenshot Annotator** | `screenshot-annotator` | mark up a screenshot and turn the marks into a fix list | Web, Mobile |
 | **Shadow & Radius Studio** · MCP | `shadow-radius` | layered shadows and radii tuned visually, as one CSS line | Web |
 | **SVG Path Editor** · MCP | `svg-path-editor` | edit a path node by node and trim needless decimals | Web |
 | **Telemetry Mock Generator** · MCP | `telemetry-mock` | realistic sensor time series with noise, drift and faults | Web, Embedded |
 | **Type Scale Generator** · MCP | `type-scale` | heading and body sizes from a base and ratio, as CSS variables | Web, Mobile |
+| **WebSocket Echo Tester** · MCP | `websocket-tester` | open a socket, send messages and list replies with timestamps | Web |
 
 ### Mobile
 
@@ -264,8 +269,11 @@ agents, the most used, and every tool nobody used.
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
+| **Certification Pre-Check** · MCP | `cert-precheck` | typical gaps before CE/FCC (filtering, grounding, labels) as a checklist | Analytics |
 | **Change Impact Estimator** · MCP | `change-impact` | which rooms a change touches, from dependencies | Analytics |
 | **FMEA Lite** · MCP | `fmea-lite` | failure modes scored by likelihood and effect into a risk order | Analytics |
+| **Interface Contract** · MCP | `interface-contract` | GPIO map, I2C addresses and voltage levels defined once for every room | PCB, 3D, Web, Embedded, Mobile |
+| **Naming Convention Enforcer** · MCP | `naming-enforcer` | nets, symbols, parts and files checked against one naming rule | PCB, 3D, Web, Embedded, Mobile |
 | **Pin-to-Net-to-Symbol Mapper** · MCP | `pin-net-symbol` | trace an MCU pin to its PCB net and its firmware symbol | PCB, Embedded |
 | **Total Cost Roll-Up** · MCP | `cost-rollup` | PCB, BOM, assembly, enclosure and cable cost per unit at a quantity | Analytics |
 <!-- catalog:end -->

@@ -1,0 +1,380 @@
+{
+  "id": "cert-precheck",
+  "name": "Certification Pre-Check",
+  "blurb": "typical gaps before CE/FCC (filtering, grounding, labels) as a checklist",
+  "group": "project",
+  "rooms": [
+    "analyze"
+  ],
+  "keywords": [
+    "ce",
+    "fcc",
+    "certification",
+    "compliance",
+    "emc",
+    "emi",
+    "esd",
+    "red",
+    "lvd",
+    "part 15",
+    "en 55032",
+    "en 55035",
+    "pre-compliance",
+    "labeling",
+    "declaration of conformity"
+  ],
+  "intro": "Tick what the design already does; what is open comes back with why it fails or delays CE / FCC testing, critical items first. Items follow EN 55032/55035, IEC 62368-1, RED and FCC Part 15; set market, power and radio first so only the items that apply count.",
+  "inputs": [
+    {
+      "key": "market",
+      "label": "Market",
+      "type": "select",
+      "default": "both",
+      "options": [
+        [
+          "both",
+          "EU (CE) and US (FCC)"
+        ],
+        [
+          "ce",
+          "EU only (CE)"
+        ],
+        [
+          "fcc",
+          "US only (FCC)"
+        ]
+      ]
+    },
+    {
+      "key": "power",
+      "label": "Power",
+      "type": "select",
+      "default": "lowv",
+      "options": [
+        [
+          "battery",
+          "Battery only"
+        ],
+        [
+          "lowv",
+          "USB / external adapter"
+        ],
+        [
+          "mains",
+          "Mains inside the product"
+        ]
+      ]
+    },
+    {
+      "key": "radio",
+      "label": "Radio",
+      "type": "select",
+      "default": "module",
+      "options": [
+        [
+          "none",
+          "No radio"
+        ],
+        [
+          "module",
+          "Pre-certified module"
+        ],
+        [
+          "discrete",
+          "Own RF design"
+        ]
+      ]
+    },
+    {
+      "key": "battery",
+      "label": "Has a lithium cell",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "f_input",
+      "label": "Power input filter",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "power",
+        "in": [
+          "lowv",
+          "mains"
+        ]
+      }
+    },
+    {
+      "key": "f_cables",
+      "label": "Cables filtered/shielded",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "f_decouple",
+      "label": "Per-pin decoupling",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "f_edges",
+      "label": "Edges slowed",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "f_switcher",
+      "label": "DC/DC hot loop tight",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "g_plane",
+      "label": "Solid ground plane",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "g_shield",
+      "label": "Shields bonded at connector",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "g_edge",
+      "label": "Edge via stitching",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "g_crystal",
+      "label": "Crystal guarded",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "e_esd",
+      "label": "ESD diodes (CE)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "e_reset",
+      "label": "Reset/boot filtered (CE)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "e_surge",
+      "label": "Surge/EFT protection (CE)",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "power",
+        "in": [
+          "lowv",
+          "mains"
+        ]
+      }
+    },
+    {
+      "key": "e_recover",
+      "label": "Self-recovery (CE)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "s_creepage",
+      "label": "Mains creepage/clearance",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "power",
+        "equals": "mains"
+      }
+    },
+    {
+      "key": "s_fuse",
+      "label": "Mains fuse",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "power",
+        "equals": "mains"
+      }
+    },
+    {
+      "key": "s_adapter",
+      "label": "Certified adapter",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "power",
+        "equals": "lowv"
+      }
+    },
+    {
+      "key": "s_battery",
+      "label": "Li cell PCM + reports (Li)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "r_grant",
+      "label": "Module within its grant",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "radio",
+        "equals": "module"
+      }
+    },
+    {
+      "key": "r_keepout",
+      "label": "Antenna keep-out",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "radio",
+        "in": [
+          "module",
+          "discrete"
+        ]
+      }
+    },
+    {
+      "key": "r_red",
+      "label": "RED test plan (CE)",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "radio",
+        "in": [
+          "module",
+          "discrete"
+        ]
+      }
+    },
+    {
+      "key": "r_exposure",
+      "label": "RF exposure assessed",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "radio",
+        "in": [
+          "module",
+          "discrete"
+        ]
+      }
+    },
+    {
+      "key": "r_discrete",
+      "label": "Intentional radiator tests",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "radio",
+        "equals": "discrete"
+      }
+    },
+    {
+      "key": "r_testmode",
+      "label": "Radio test firmware",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "radio",
+        "in": [
+          "module",
+          "discrete"
+        ]
+      }
+    },
+    {
+      "key": "l_ce",
+      "label": "CE mark + address (CE)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "l_weee",
+      "label": "WEEE / RoHS (CE)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "l_fcc",
+      "label": "FCC label (FCC)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "l_manual",
+      "label": "Manual statements",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "l_doc",
+      "label": "DoC + technical file",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "p_prescan",
+      "label": "Pre-scan done",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "p_worst",
+      "label": "Worst-case mode defined",
+      "type": "bool",
+      "default": false
+    }
+  ],
+  "examples": [
+    {
+      "title": "BLE sensor on USB power, module-based, design half done",
+      "input": {
+        "market": "both",
+        "power": "lowv",
+        "radio": "module",
+        "battery": true,
+        "f_input": true,
+        "f_decouple": true,
+        "g_plane": true,
+        "g_crystal": true,
+        "e_esd": true,
+        "s_adapter": true,
+        "r_grant": true,
+        "r_keepout": true,
+        "l_doc": false
+      }
+    },
+    {
+      "title": "Mains-powered controller, no radio, EU only",
+      "input": {
+        "market": "ce",
+        "power": "mains",
+        "radio": "none",
+        "f_input": true,
+        "f_cables": true,
+        "g_plane": true,
+        "s_fuse": true,
+        "e_esd": true
+      }
+    }
+  ],
+  "usage": "Give market (ce, fcc or both), power (battery, lowv or mains), radio (none, module or discrete) and battery (bool), then true for each item already done (keys f_*, g_*, e_*, s_*, r_*, l_*, p_*). It returns progress, the number of critical open items, a table of open items with why each matters, and the regulations in scope. Use it before a pre-scan or lab booking, or when reviewing a design for compliance risk.",
+  "sources": [
+    "EMC Directive 2014/30/EU with EN 55032 (CISPR 32) and EN 55035 (IEC 61000-4-2/-4/-5)",
+    "Low Voltage Directive 2014/35/EU and IEC/EN 62368-1",
+    "Radio Equipment Directive 2014/53/EU: EN 300 328, EN 301 489-1/-17, EN 62311",
+    "47 CFR Part 15 (15.19, 15.105, 15.107, 15.109, Subpart C), FCC KDB 996369 (modular transmitters)",
+    "Decision 768/2008/EC (CE marking), WEEE 2012/19/EU, RoHS 2011/65/EU",
+    "H. W. Ott, Electromagnetic Compatibility Engineering (design items, rule of thumb)"
+  ],
+  "prompt": "For each open item above, suggest the concrete change to the design, the layout or the paperwork, starting with the critical ones."
+}

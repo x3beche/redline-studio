@@ -1,0 +1,91 @@
+{
+  "id": "websocket-tester",
+  "name": "WebSocket Echo Tester",
+  "blurb": "open a socket, send messages and list replies with timestamps",
+  "group": "web",
+  "rooms": [
+    "web"
+  ],
+  "keywords": [
+    "websocket",
+    "ws",
+    "wss",
+    "echo",
+    "socket",
+    "realtime",
+    "round trip",
+    "latency",
+    "close code",
+    "rfc 6455",
+    "subprotocol",
+    "websocat",
+    "handshake"
+  ],
+  "intro": "In the app, Connect opens the socket from this page, sends your messages and keeps a timestamped transcript; the results pair each reply with what was sent (round trip) and explain the close code (RFC 6455). Without the app, paste a transcript to have it read.",
+  "inputs": [
+    {
+      "key": "url",
+      "label": "WebSocket URL",
+      "type": "text",
+      "default": "wss://echo.websocket.org",
+      "wide": true
+    },
+    {
+      "key": "protocols",
+      "label": "Subprotocols",
+      "type": "text",
+      "default": "",
+      "placeholder": "e.g. graphql-ws, mqtt",
+      "help": "Comma separated; empty = none."
+    },
+    {
+      "key": "mode",
+      "label": "Send",
+      "type": "select",
+      "default": "lines",
+      "options": [
+        [
+          "lines",
+          "Each line as a message"
+        ],
+        [
+          "whole",
+          "The whole text as one message"
+        ]
+      ]
+    },
+    {
+      "key": "messages",
+      "label": "Messages",
+      "type": "textarea",
+      "rows": 5,
+      "default": "hello\n{\"type\":\"ping\",\"id\":1}\n{\"type\":\"subscribe\",\"channel\":\"ticker\"}"
+    },
+    {
+      "key": "transcript",
+      "label": "Transcript (written by a live session, or pasted)",
+      "type": "textarea",
+      "rows": 6,
+      "default": "",
+      "placeholder": "2026-09-24T10:00:01.500Z -> hello\n2026-09-24T10:00:01.561Z <- hello"
+    }
+  ],
+  "examples": [
+    {
+      "title": "Echo server session with two messages",
+      "input": {
+        "url": "wss://echo.websocket.org",
+        "protocols": "",
+        "mode": "lines",
+        "messages": "hello\n{\"type\":\"ping\",\"id\":1}",
+        "transcript": "2026-09-24T10:00:00.000Z ** connect wss://echo.websocket.org\n2026-09-24T10:00:00.182Z ** open\n2026-09-24T10:00:00.190Z <- Request served by 1781505b56ee58\n2026-09-24T10:00:01.500Z -> hello\n2026-09-24T10:00:01.500Z -> {\"type\":\"ping\",\"id\":1}\n2026-09-24T10:00:01.561Z <- hello\n2026-09-24T10:00:01.566Z <- {\"type\":\"ping\",\"id\":1}\n2026-09-24T10:00:05.000Z ** close 1000 done"
+      }
+    }
+  ],
+  "usage": "Give the url (ws:// or wss://), optional comma-separated protocols, the messages (one per line, or mode whole for one message) and optionally a transcript of lines '<ISO time> <-|->|** <text>' (-> sent, <- received, ** event such as open or close 1006). It returns URL checks, message and frame sizes, sent/received counts, echo round-trip times, the handshake time and the close code with its meaning, plus JavaScript and websocat snippets. Agents cannot open sockets through run(): they read a transcript captured in the app or produced with websocat.",
+  "sources": [
+    "RFC 6455 The WebSocket Protocol: sections 3 (URIs), 4.1 (subprotocol tokens), 5.2 (framing), 7.4.1 (close codes)",
+    "WHATWG WebSockets Standard (browser API, mixed content)"
+  ],
+  "view": true
+}

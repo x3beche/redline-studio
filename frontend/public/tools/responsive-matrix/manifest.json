@@ -1,0 +1,167 @@
+{
+  "id": "responsive-matrix",
+  "name": "Responsive Preview Matrix",
+  "blurb": "one page at several breakpoints side by side, with overflow flagged",
+  "group": "web",
+  "rooms": [
+    "web",
+    "mobile"
+  ],
+  "keywords": [
+    "responsive",
+    "breakpoints",
+    "viewport",
+    "media query",
+    "mobile preview",
+    "overflow",
+    "horizontal scroll",
+    "reflow",
+    "tailwind",
+    "bootstrap",
+    "screen sizes",
+    "layout test",
+    "wcag 1.4.10"
+  ],
+  "intro": "Shows one page in a frame per breakpoint (Tailwind, Bootstrap, Material or your own widths) at its real CSS width, scaled to fit, and flags each width where the document is wider than the viewport, with the elements that stick out. Measuring needs the page on this app's origin; other sites are shown but cannot be inspected.",
+  "inputs": [
+    {
+      "key": "url",
+      "label": "Page URL",
+      "type": "text",
+      "default": "/api/tools/files/i2c-pullup/",
+      "wide": true,
+      "help": "A path on this app (/…) can be measured; another site is only shown."
+    },
+    {
+      "key": "preset",
+      "label": "Breakpoints",
+      "type": "select",
+      "default": "common",
+      "options": [
+        [
+          "common",
+          "Common devices"
+        ],
+        [
+          "tailwind",
+          "Tailwind"
+        ],
+        [
+          "bootstrap",
+          "Bootstrap 5"
+        ],
+        [
+          "material",
+          "Material 3 classes"
+        ],
+        [
+          "reflow",
+          "WCAG reflow (320 px)"
+        ],
+        [
+          "custom",
+          "Custom"
+        ]
+      ]
+    },
+    {
+      "key": "scale",
+      "label": "Preview scale",
+      "type": "select",
+      "default": "0",
+      "options": [
+        [
+          "0",
+          "Fit"
+        ],
+        [
+          "0.25",
+          "25 %"
+        ],
+        [
+          "0.33",
+          "33 %"
+        ],
+        [
+          "0.5",
+          "50 %"
+        ]
+      ]
+    },
+    {
+      "key": "sizes",
+      "label": "Sizes",
+      "type": "table",
+      "when": {
+        "key": "preset",
+        "equals": "custom"
+      },
+      "default": [
+        {
+          "name": "phone",
+          "width": "360",
+          "height": "780"
+        },
+        {
+          "name": "tablet",
+          "width": "820",
+          "height": "1180"
+        },
+        {
+          "name": "desktop",
+          "width": "1440",
+          "height": "900"
+        }
+      ],
+      "columns": [
+        {
+          "key": "name",
+          "label": "Name"
+        },
+        {
+          "key": "width",
+          "label": "Width px"
+        },
+        {
+          "key": "height",
+          "label": "Height px",
+          "default": "800"
+        }
+      ]
+    },
+    {
+      "key": "report",
+      "label": "Overflow report (written by the preview, or pasted)",
+      "type": "textarea",
+      "rows": 4,
+      "default": "",
+      "placeholder": "360 overflow sw=412 table.data(412)\n768 ok sw=768"
+    }
+  ],
+  "examples": [
+    {
+      "title": "A kit tool page at common device widths",
+      "input": {
+        "url": "/api/tools/files/i2c-pullup/",
+        "preset": "common",
+        "scale": "0",
+        "report": ""
+      }
+    },
+    {
+      "title": "Report from a headless run, Tailwind widths",
+      "input": {
+        "url": "/",
+        "preset": "tailwind",
+        "report": "375 overflow sw=436 div.toolbar(436) pre.code(420)\n640 overflow sw=652 div.toolbar(652)\n768 ok sw=768\n1024 ok sw=1024\n1280 ok sw=1280\n1536 ok sw=1536"
+      }
+    }
+  ],
+  "usage": "Give url, preset (common, tailwind, bootstrap, material, reflow or custom with sizes rows {name, width, height}) and optionally report lines '<width> ok|overflow|blocked [sw=<scrollWidth>] [culprit(right px) ...]'. It returns the breakpoint table with device class, media query, overflow in px and culprits, warnings with fixes, a mobile-first media-query skeleton, a Playwright script that screenshots and checks every width, and a DevTools overflow finder. Agents run the Playwright script (or their own browser) and pass its lines as report.",
+  "sources": [
+    "Tailwind CSS default breakpoints; Bootstrap 5 grid breakpoints; Material Design 3 window size classes",
+    "WCAG 2.1 Success Criterion 1.4.10 Reflow (320 CSS px)",
+    "CSSOM View: scrollWidth / clientWidth, getBoundingClientRect"
+  ],
+  "view": true
+}

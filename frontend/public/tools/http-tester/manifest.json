@@ -1,0 +1,127 @@
+{
+  "id": "http-tester",
+  "name": "HTTP Request Tester",
+  "blurb": "send a request and see headers, timing and the response",
+  "group": "web",
+  "rooms": [
+    "web",
+    "embedded"
+  ],
+  "keywords": [
+    "http",
+    "rest",
+    "api",
+    "request",
+    "curl",
+    "fetch",
+    "headers",
+    "cors",
+    "preflight",
+    "status code",
+    "latency",
+    "postman",
+    "response time",
+    "debug api"
+  ],
+  "intro": "In the app, Send makes the request from this page with fetch() and captures status, timing, headers and body; the results explain the status, the caching, CORS and security headers, and whether a browser will preflight it (WHATWG Fetch rules). The same request comes back as curl, fetch and raw HTTP.",
+  "inputs": [
+    {
+      "key": "method",
+      "label": "Method",
+      "type": "select",
+      "default": "GET",
+      "options": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "HEAD",
+        "OPTIONS"
+      ]
+    },
+    {
+      "key": "timeout",
+      "label": "Timeout",
+      "type": "number",
+      "unit": "s",
+      "default": "15"
+    },
+    {
+      "key": "url",
+      "label": "URL",
+      "type": "text",
+      "default": "https://httpbin.org/get",
+      "wide": true,
+      "help": "https://… for another server (needs CORS), or /api/… for this app."
+    },
+    {
+      "key": "headers",
+      "label": "Headers, one per line",
+      "type": "textarea",
+      "rows": 3,
+      "default": "Accept: application/json"
+    },
+    {
+      "key": "body",
+      "label": "Body",
+      "type": "textarea",
+      "rows": 4,
+      "default": "",
+      "when": {
+        "key": "method",
+        "in": [
+          "POST",
+          "PUT",
+          "PATCH",
+          "DELETE",
+          "OPTIONS"
+        ]
+      }
+    },
+    {
+      "key": "cookies",
+      "label": "Send cookies to other origins (credentials: include)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "response",
+      "label": "Response (written by Send, or pasted)",
+      "type": "textarea",
+      "rows": 6,
+      "default": "",
+      "placeholder": "200 OK\ncontent-type: application/json\n\n{\"ok\":true}"
+    }
+  ],
+  "examples": [
+    {
+      "title": "POST JSON to an echo API (with a captured response)",
+      "input": {
+        "method": "POST",
+        "url": "https://httpbin.org/post",
+        "timeout": "15",
+        "headers": "Content-Type: application/json\nAccept: application/json",
+        "body": "{\"device\":\"dev-01\",\"temp_c\":21.5}",
+        "response": "200 OK\n# timing total=412.3 ttfb=388.1\ncontent-type: application/json\ncontent-length: 431\naccess-control-allow-origin: http://127.0.0.1:4201\n\n{\"args\":{},\"data\":\"{\\\"device\\\":\\\"dev-01\\\",\\\"temp_c\\\":21.5}\",\"json\":{\"device\":\"dev-01\",\"temp_c\":21.5},\"url\":\"https://httpbin.org/post\"}"
+      }
+    },
+    {
+      "title": "This app's queue, same origin",
+      "input": {
+        "method": "GET",
+        "url": "/api/queue",
+        "headers": "Accept: application/json",
+        "response": ""
+      }
+    }
+  ],
+  "usage": "Give method, url (absolute http(s) or a /path on the app), headers as 'Name: value' lines, an optional body and optionally a captured response (first line '<status> <text>' or 'ERROR <message>', optional '# timing total=<ms> ttfb=<ms>', header lines, blank line, body - curl -i output also works). It returns request checks (forbidden headers, body on GET, invalid JSON), the CORS preflight prediction, the status with its meaning, timing, body size, header findings (CORS, caching, compression, HSTS) and curl/fetch/raw-HTTP texts. run() sends nothing: agents run the curl text themselves and paste the output into response.",
+  "sources": [
+    "WHATWG Fetch Standard: forbidden request-header names, CORS-safelisted methods/headers, CORS preflight",
+    "RFC 9110 HTTP Semantics (status codes)",
+    "RFC 9111 HTTP Caching (Cache-Control, validators)",
+    "W3C Resource Timing Level 2 (timing phases, Timing-Allow-Origin)"
+  ],
+  "view": true
+}

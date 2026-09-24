@@ -1,0 +1,343 @@
+{
+  "id": "mqtt-simulator",
+  "name": "MQTT Message Simulator",
+  "blurb": "fake telemetry messages to test an IoT dashboard",
+  "group": "web",
+  "rooms": [
+    "web",
+    "embedded"
+  ],
+  "keywords": [
+    "mqtt",
+    "iot",
+    "telemetry",
+    "simulator",
+    "fake data",
+    "mock",
+    "broker",
+    "mosquitto",
+    "websocket",
+    "publish",
+    "dashboard test",
+    "sensor data",
+    "influx line protocol",
+    "load test"
+  ],
+  "intro": "Builds repeatable fake telemetry (same seed, same values) from N devices: drifting, cyclic, random, counter, boolean and status fields, as JSON or InfluxDB line protocol. In the app it publishes them live to a broker over MQTT-over-WebSocket and reports what came back; topic rules follow MQTT 3.1.1.",
+  "inputs": [
+    {
+      "key": "broker",
+      "label": "Broker (WebSocket URL)",
+      "type": "text",
+      "default": "wss://test.mosquitto.org:8081/mqtt",
+      "wide": true,
+      "help": "Public test broker by default: anybody can read what you publish there."
+    },
+    {
+      "key": "topic",
+      "label": "Topic",
+      "type": "text",
+      "default": "redline/demo/{device}/telemetry",
+      "wide": true,
+      "help": "{device} becomes the device id."
+    },
+    {
+      "key": "prefix",
+      "label": "Device id prefix",
+      "type": "text",
+      "default": "dev"
+    },
+    {
+      "key": "devices",
+      "label": "Devices",
+      "type": "number",
+      "default": "3"
+    },
+    {
+      "key": "interval",
+      "label": "Interval",
+      "type": "number",
+      "unit": "s",
+      "default": "5"
+    },
+    {
+      "key": "count",
+      "label": "Preview steps",
+      "type": "number",
+      "default": "4",
+      "help": "Messages per device in the preview (max 50)."
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "number",
+      "default": "1"
+    },
+    {
+      "key": "start",
+      "label": "Preview start (UTC)",
+      "type": "text",
+      "default": "2026-01-01T08:00:00Z"
+    },
+    {
+      "key": "format",
+      "label": "Payload",
+      "type": "select",
+      "default": "json",
+      "options": [
+        [
+          "json",
+          "JSON"
+        ],
+        [
+          "influx",
+          "InfluxDB line protocol"
+        ]
+      ]
+    },
+    {
+      "key": "measurement",
+      "label": "Measurement",
+      "type": "text",
+      "default": "telemetry",
+      "when": {
+        "key": "format",
+        "equals": "influx"
+      }
+    },
+    {
+      "key": "qos",
+      "label": "QoS (script)",
+      "type": "select",
+      "default": "0",
+      "options": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "key": "retain",
+      "label": "Retain",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "with_ts",
+      "label": "Add ts key",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "username",
+      "label": "Username",
+      "type": "text",
+      "default": "",
+      "help": "Only for private brokers."
+    },
+    {
+      "key": "password",
+      "label": "Password",
+      "type": "text",
+      "default": "",
+      "help": "Kept in this browser's storage: use a test account."
+    },
+    {
+      "key": "fields",
+      "label": "Fields",
+      "type": "table",
+      "default": [
+        {
+          "name": "temp_c",
+          "kind": "sine",
+          "min": "18",
+          "max": "26",
+          "extra": "86400",
+          "decimals": "1"
+        },
+        {
+          "name": "humidity",
+          "kind": "walk",
+          "min": "30",
+          "max": "70",
+          "extra": "0.8",
+          "decimals": "0"
+        },
+        {
+          "name": "battery_v",
+          "kind": "walk",
+          "min": "3.5",
+          "max": "4.2",
+          "extra": "0.005",
+          "decimals": "3"
+        },
+        {
+          "name": "uptime_s",
+          "kind": "counter",
+          "min": "0",
+          "max": "1000000",
+          "extra": "5",
+          "decimals": "0"
+        },
+        {
+          "name": "door_open",
+          "kind": "bool",
+          "min": "0.1",
+          "max": "",
+          "extra": "",
+          "decimals": "0"
+        },
+        {
+          "name": "status",
+          "kind": "enum",
+          "min": "",
+          "max": "",
+          "extra": "ok|warn|fault",
+          "decimals": "0"
+        }
+      ],
+      "columns": [
+        {
+          "key": "name",
+          "label": "Name"
+        },
+        {
+          "key": "kind",
+          "label": "Kind",
+          "type": "select",
+          "options": [
+            "walk",
+            "sine",
+            "random",
+            "counter",
+            "bool",
+            "enum"
+          ],
+          "default": "walk"
+        },
+        {
+          "key": "min",
+          "label": "Min (bool: p)"
+        },
+        {
+          "key": "max",
+          "label": "Max"
+        },
+        {
+          "key": "extra",
+          "label": "Step / period s / a|b|c"
+        },
+        {
+          "key": "decimals",
+          "label": "Decimals",
+          "default": "1"
+        }
+      ]
+    },
+    {
+      "key": "received",
+      "label": "Received (filled by a live run)",
+      "type": "textarea",
+      "rows": 4,
+      "default": "",
+      "placeholder": "2026-01-01T08:00:00.120Z topic payload"
+    }
+  ],
+  "examples": [
+    {
+      "title": "Three room sensors every 5 s",
+      "input": {
+        "devices": "3",
+        "interval": "5",
+        "count": "4",
+        "seed": "1",
+        "format": "json",
+        "fields": [
+          {
+            "name": "temp_c",
+            "kind": "sine",
+            "min": "18",
+            "max": "26",
+            "extra": "86400",
+            "decimals": "1"
+          },
+          {
+            "name": "humidity",
+            "kind": "walk",
+            "min": "30",
+            "max": "70",
+            "extra": "0.8",
+            "decimals": "0"
+          },
+          {
+            "name": "battery_v",
+            "kind": "walk",
+            "min": "3.5",
+            "max": "4.2",
+            "extra": "0.005",
+            "decimals": "3"
+          },
+          {
+            "name": "uptime_s",
+            "kind": "counter",
+            "min": "0",
+            "max": "1000000",
+            "extra": "5",
+            "decimals": "0"
+          },
+          {
+            "name": "door_open",
+            "kind": "bool",
+            "min": "0.1",
+            "max": "",
+            "extra": "",
+            "decimals": "0"
+          },
+          {
+            "name": "status",
+            "kind": "enum",
+            "min": "",
+            "max": "",
+            "extra": "ok|warn|fault",
+            "decimals": "0"
+          }
+        ]
+      }
+    },
+    {
+      "title": "50 meters every second as line protocol",
+      "input": {
+        "devices": "50",
+        "interval": "1",
+        "count": "2",
+        "seed": "7",
+        "format": "influx",
+        "topic": "plant/{device}/power",
+        "fields": [
+          {
+            "name": "power_w",
+            "kind": "walk",
+            "min": "0",
+            "max": "3000",
+            "extra": "40",
+            "decimals": "0"
+          },
+          {
+            "name": "energy_wh",
+            "kind": "counter",
+            "min": "0",
+            "max": "100000000",
+            "extra": "1",
+            "decimals": "0"
+          }
+        ]
+      }
+    }
+  ],
+  "usage": "Give the topic (with {device}), devices, interval in seconds, preview steps, a seed, the start time (ISO, UTC), the payload format (json or influx) and fields as rows {name, kind: walk|sine|random|counter|bool|enum, min, max, extra: walk step, sine period in s, counter step or enum options a|b|c, decimals}. It returns the preview messages (table and a Messages text, one 'topic payload' per line), message rate, bytes per message and broker traffic, and a mosquitto_pub script. Agents use the messages or the script; live publishing happens only in the app's browser view.",
+  "sources": [
+    "OASIS MQTT Version 3.1.1 (2014): packet formats (section 3) and topic names (section 4.7)",
+    "InfluxDB line protocol reference",
+    "mulberry32 PRNG and Box-Muller transform for repeatable noise"
+  ],
+  "view": true
+}

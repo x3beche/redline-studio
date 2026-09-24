@@ -1,0 +1,347 @@
+{
+  "id": "part-alternatives",
+  "name": "Part Alternative Finder",
+  "blurb": "alternatives for a part in stock, with basic/extended class compared",
+  "group": "pcb",
+  "rooms": [
+    "pcb"
+  ],
+  "keywords": [
+    "alternative",
+    "second source",
+    "substitute",
+    "replacement",
+    "lcsc",
+    "jlcpcb",
+    "basic part",
+    "extended part",
+    "loading fee",
+    "stock",
+    "out of stock",
+    "drop-in",
+    "cross reference",
+    "bom cost"
+  ],
+  "intro": "Search LCSC for a part (in the app), then the candidates are ranked against the part you have: enough stock for the order, same footprint family, same MPN, no JLCPCB loading fee, lowest order cost. Order cost = quantity × unit price + the Extended-part loading fee, per JLCPCB's assembly pricing.",
+  "inputs": [
+    {
+      "key": "query",
+      "label": "Search LCSC for",
+      "type": "text",
+      "default": "AMS1117-3.3",
+      "help": "Press Search LCSC below (in the app). Part number, MPN or a description like 3.3V LDO SOT-223."
+    },
+    {
+      "key": "orig_lcsc",
+      "label": "Original LCSC #",
+      "type": "text",
+      "default": "C6186"
+    },
+    {
+      "key": "orig_mpn",
+      "label": "Original MPN",
+      "type": "text",
+      "default": "AMS1117-3.3"
+    },
+    {
+      "key": "orig_package",
+      "label": "Original package",
+      "type": "text",
+      "default": "SOT-223"
+    },
+    {
+      "key": "orig_class",
+      "label": "Original class",
+      "type": "select",
+      "default": "basic",
+      "options": [
+        [
+          "basic",
+          "Basic"
+        ],
+        [
+          "preferred",
+          "Preferred"
+        ],
+        [
+          "extended",
+          "Extended"
+        ],
+        [
+          "unknown",
+          "Unknown"
+        ]
+      ]
+    },
+    {
+      "key": "orig_price",
+      "label": "Original unit price",
+      "type": "number",
+      "unit": "$",
+      "default": "0.2203"
+    },
+    {
+      "key": "orig_stock",
+      "label": "Original stock",
+      "type": "number",
+      "unit": "pcs",
+      "default": "",
+      "required": false,
+      "help": "Empty = unknown."
+    },
+    {
+      "key": "boards",
+      "label": "Boards",
+      "type": "number",
+      "default": "50"
+    },
+    {
+      "key": "per_board",
+      "label": "Per board",
+      "type": "number",
+      "unit": "pcs",
+      "default": "2"
+    },
+    {
+      "key": "fee",
+      "label": "Extended loading fee",
+      "type": "number",
+      "unit": "$",
+      "default": "3",
+      "help": "JLCPCB, per unique Extended part per order."
+    },
+    {
+      "key": "assume",
+      "label": "Unknown class counts as",
+      "type": "select",
+      "default": "extended",
+      "options": [
+        [
+          "extended",
+          "Extended (worst case)"
+        ],
+        [
+          "basic",
+          "Basic"
+        ]
+      ]
+    },
+    {
+      "key": "candidates",
+      "label": "Candidates",
+      "type": "table",
+      "default": [
+        {
+          "lcsc": "C5250992",
+          "mpn": "AMS1117-3.3",
+          "package": "SOT-223-3L",
+          "maker": "TWGMC",
+          "stock": "172610",
+          "price": "0.0423",
+          "class": "unknown"
+        },
+        {
+          "lcsc": "C18212698",
+          "mpn": "AMS1117-3.3",
+          "package": "SOT-223",
+          "maker": "TECH PUBLIC",
+          "stock": "106900",
+          "price": "0.0534",
+          "class": "unknown"
+        },
+        {
+          "lcsc": "C917183",
+          "mpn": "AMS1117-3.3",
+          "package": "SOT-223-3",
+          "maker": "JSMSEMI",
+          "stock": "64200",
+          "price": "0.0601",
+          "class": "unknown"
+        },
+        {
+          "lcsc": "C369933",
+          "mpn": "AMS1117-3.3",
+          "package": "SOT-223-4",
+          "maker": "KEXIN",
+          "stock": "36540",
+          "price": "0.0581",
+          "class": "unknown"
+        },
+        {
+          "lcsc": "C2992570",
+          "mpn": "AMS1117-3.3",
+          "package": "SOT-223-3",
+          "maker": "GUOXIN JIAPIN SEMICONDUCTOR",
+          "stock": "19120",
+          "price": "0.038",
+          "class": "unknown"
+        },
+        {
+          "lcsc": "C6067465",
+          "mpn": "AMS1117-3.3",
+          "package": "SOT-89",
+          "maker": "GOODWORK",
+          "stock": "11290",
+          "price": "0.0523",
+          "class": "unknown"
+        },
+        {
+          "lcsc": "C41414107",
+          "mpn": "AMS1117-3.3",
+          "package": "TO-252",
+          "maker": "YONGYUTAI",
+          "stock": "1765",
+          "price": "0.121",
+          "class": "unknown"
+        },
+        {
+          "lcsc": "C22458961",
+          "mpn": "AMS1117-3.3",
+          "package": "SOT-223",
+          "maker": "ALJ",
+          "stock": "0",
+          "price": "0.0457",
+          "class": "unknown"
+        }
+      ],
+      "columns": [
+        {
+          "key": "lcsc",
+          "label": "LCSC #"
+        },
+        {
+          "key": "mpn",
+          "label": "MPN"
+        },
+        {
+          "key": "package",
+          "label": "Package"
+        },
+        {
+          "key": "maker",
+          "label": "Maker"
+        },
+        {
+          "key": "stock",
+          "label": "Stock"
+        },
+        {
+          "key": "price",
+          "label": "Price $"
+        },
+        {
+          "key": "class",
+          "label": "Class",
+          "type": "select",
+          "options": [
+            "unknown",
+            "basic",
+            "preferred",
+            "extended"
+          ],
+          "default": "unknown"
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "Second source for an AMS1117-3.3 (search snapshot, Sept 2026)",
+      "input": {
+        "query": "AMS1117-3.3",
+        "orig_lcsc": "C6186",
+        "orig_mpn": "AMS1117-3.3",
+        "orig_package": "SOT-223",
+        "orig_class": "basic",
+        "orig_price": "0.2203",
+        "orig_stock": "",
+        "boards": "50",
+        "per_board": "2",
+        "fee": "3",
+        "assume": "extended",
+        "candidates": [
+          {
+            "lcsc": "C5250992",
+            "mpn": "AMS1117-3.3",
+            "package": "SOT-223-3L",
+            "maker": "TWGMC",
+            "stock": "172610",
+            "price": "0.0423",
+            "class": "unknown"
+          },
+          {
+            "lcsc": "C18212698",
+            "mpn": "AMS1117-3.3",
+            "package": "SOT-223",
+            "maker": "TECH PUBLIC",
+            "stock": "106900",
+            "price": "0.0534",
+            "class": "unknown"
+          },
+          {
+            "lcsc": "C917183",
+            "mpn": "AMS1117-3.3",
+            "package": "SOT-223-3",
+            "maker": "JSMSEMI",
+            "stock": "64200",
+            "price": "0.0601",
+            "class": "unknown"
+          },
+          {
+            "lcsc": "C369933",
+            "mpn": "AMS1117-3.3",
+            "package": "SOT-223-4",
+            "maker": "KEXIN",
+            "stock": "36540",
+            "price": "0.0581",
+            "class": "unknown"
+          },
+          {
+            "lcsc": "C2992570",
+            "mpn": "AMS1117-3.3",
+            "package": "SOT-223-3",
+            "maker": "GUOXIN JIAPIN SEMICONDUCTOR",
+            "stock": "19120",
+            "price": "0.038",
+            "class": "unknown"
+          },
+          {
+            "lcsc": "C6067465",
+            "mpn": "AMS1117-3.3",
+            "package": "SOT-89",
+            "maker": "GOODWORK",
+            "stock": "11290",
+            "price": "0.0523",
+            "class": "unknown"
+          },
+          {
+            "lcsc": "C41414107",
+            "mpn": "AMS1117-3.3",
+            "package": "TO-252",
+            "maker": "YONGYUTAI",
+            "stock": "1765",
+            "price": "0.121",
+            "class": "unknown"
+          },
+          {
+            "lcsc": "C22458961",
+            "mpn": "AMS1117-3.3",
+            "package": "SOT-223",
+            "maker": "ALJ",
+            "stock": "0",
+            "price": "0.0457",
+            "class": "unknown"
+          }
+        ]
+      }
+    }
+  ],
+  "usage": "Give the original part (orig_lcsc, orig_mpn, orig_package, orig_class basic|preferred|extended|unknown, orig_price in $, optional orig_stock), the order (boards, per_board), the Extended loading fee in $ and candidates as rows {lcsc, mpn, package, maker, stock, price, class}. Agents get candidates from the app's /api/parts/search (or MCP part search) and pass them in; run() does no network. It returns the candidates ranked with footprint fit, stock check, effective class and order cost, the best alternative and its cost difference to the original.",
+  "sources": [
+    "JLCPCB assembly pricing: Basic/Preferred parts without loading fee, Extended parts with a per-part loading fee (jlcpcb.com/parts)",
+    "LCSC catalogue search through the app's /api/parts/search",
+    "Package-family matching: rule of thumb, verify pinout on both datasheets"
+  ],
+  "view": true,
+  "prompt": "Recommend one alternative from the ranked list, and list what to verify on its datasheet against the original before swapping it."
+}

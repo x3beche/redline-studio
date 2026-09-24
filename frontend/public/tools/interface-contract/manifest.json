@@ -1,0 +1,447 @@
+{
+  "id": "interface-contract",
+  "name": "Interface Contract",
+  "blurb": "GPIO map, I2C addresses and voltage levels defined once for every room",
+  "group": "project",
+  "rooms": [
+    "pcb",
+    "cad",
+    "web",
+    "embedded",
+    "mobile"
+  ],
+  "keywords": [
+    "interface contract",
+    "gpio map",
+    "pinout",
+    "pin assignment",
+    "i2c address",
+    "address conflict",
+    "voltage levels",
+    "level shifter",
+    "rails",
+    "pins.h",
+    "hardware firmware contract",
+    "io map",
+    "board definition"
+  ],
+  "intro": "One record of the board's GPIO map, I2C devices and rails that every room reads: saved to the project in the app, checked here for pin and address conflicts, reserved I2C addresses (UM10204) and voltage-level mismatches (CMOS VIH = 0.7 VDD), and exported as a C header, Markdown and JSON.",
+  "inputs": [
+    {
+      "key": "board",
+      "label": "Board name",
+      "type": "text",
+      "default": "sensor-node rev A"
+    },
+    {
+      "key": "project",
+      "label": "Project record",
+      "type": "text",
+      "default": "default",
+      "help": "Which project's record Load/Save use."
+    },
+    {
+      "key": "mcu_rail",
+      "label": "MCU I/O rail",
+      "type": "text",
+      "default": "3V3",
+      "help": "A rail name from the table, or a voltage."
+    },
+    {
+      "key": "five_tolerant",
+      "label": "MCU inputs are 5 V tolerant",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "rails",
+      "label": "Rails",
+      "type": "table",
+      "default": [
+        {
+          "name": "3V3",
+          "volts": "3.3",
+          "source": "LDO from 5V",
+          "notes": "MCU and sensors"
+        },
+        {
+          "name": "5V",
+          "volts": "5",
+          "source": "USB-C",
+          "notes": ""
+        },
+        {
+          "name": "VBAT",
+          "volts": "4.2",
+          "source": "1S Li-ion",
+          "notes": "max when charged"
+        }
+      ],
+      "columns": [
+        {
+          "key": "name",
+          "label": "Rail"
+        },
+        {
+          "key": "volts",
+          "label": "Volts"
+        },
+        {
+          "key": "source",
+          "label": "Source"
+        },
+        {
+          "key": "notes",
+          "label": "Notes"
+        }
+      ]
+    },
+    {
+      "key": "gpio",
+      "label": "GPIO",
+      "type": "table",
+      "default": [
+        {
+          "signal": "I2C_SDA",
+          "pin": "GPIO8",
+          "dir": "od",
+          "rail": "",
+          "pull": "up",
+          "notes": "2k2 on board"
+        },
+        {
+          "signal": "I2C_SCL",
+          "pin": "GPIO9",
+          "dir": "od",
+          "rail": "",
+          "pull": "up",
+          "notes": "2k2 on board"
+        },
+        {
+          "signal": "LED_STATUS",
+          "pin": "GPIO2",
+          "dir": "out",
+          "rail": "",
+          "pull": "none",
+          "notes": "active high"
+        },
+        {
+          "signal": "BTN_USER",
+          "pin": "GPIO0",
+          "dir": "in",
+          "rail": "",
+          "pull": "up",
+          "notes": "boot strap"
+        },
+        {
+          "signal": "UART_TX",
+          "pin": "GPIO43",
+          "dir": "out",
+          "rail": "",
+          "pull": "none",
+          "notes": "debug"
+        },
+        {
+          "signal": "UART_RX",
+          "pin": "GPIO44",
+          "dir": "in",
+          "rail": "",
+          "pull": "none",
+          "notes": "debug"
+        },
+        {
+          "signal": "VBAT_SENSE",
+          "pin": "GPIO1",
+          "dir": "analog",
+          "rail": "",
+          "pull": "none",
+          "notes": "100k/100k divider"
+        },
+        {
+          "signal": "WS2812_DIN",
+          "pin": "GPIO48",
+          "dir": "out",
+          "rail": "5V",
+          "pull": "none",
+          "notes": "LED strip on 5V"
+        }
+      ],
+      "columns": [
+        {
+          "key": "signal",
+          "label": "Signal"
+        },
+        {
+          "key": "pin",
+          "label": "Pin"
+        },
+        {
+          "key": "dir",
+          "label": "Dir",
+          "type": "select",
+          "options": [
+            "in",
+            "out",
+            "io",
+            "od",
+            "analog",
+            "pwm"
+          ],
+          "default": "in"
+        },
+        {
+          "key": "rail",
+          "label": "Rail (empty = MCU)"
+        },
+        {
+          "key": "pull",
+          "label": "Pull",
+          "type": "select",
+          "options": [
+            "none",
+            "up",
+            "down"
+          ],
+          "default": "none"
+        },
+        {
+          "key": "notes",
+          "label": "Notes"
+        }
+      ]
+    },
+    {
+      "key": "i2c",
+      "label": "I2C devices",
+      "type": "table",
+      "default": [
+        {
+          "bus": "0",
+          "addr": "0x44",
+          "device": "SHT40",
+          "khz": "1000",
+          "notes": "temp/RH"
+        },
+        {
+          "bus": "0",
+          "addr": "0x76",
+          "device": "BMP280",
+          "khz": "3400",
+          "notes": "SDO low"
+        },
+        {
+          "bus": "0",
+          "addr": "0x3C",
+          "device": "SSD1306",
+          "khz": "400",
+          "notes": "OLED"
+        },
+        {
+          "bus": "0",
+          "addr": "0xD0",
+          "device": "MPU6050",
+          "khz": "400",
+          "notes": "from its datasheet (8-bit)"
+        }
+      ],
+      "columns": [
+        {
+          "key": "bus",
+          "label": "Bus",
+          "default": "0"
+        },
+        {
+          "key": "addr",
+          "label": "Address"
+        },
+        {
+          "key": "device",
+          "label": "Device"
+        },
+        {
+          "key": "khz",
+          "label": "Max kHz"
+        },
+        {
+          "key": "notes",
+          "label": "Notes"
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "ESP32-S3 sensor node with a 5 V LED strip",
+      "input": {
+        "board": "sensor-node rev A",
+        "project": "default",
+        "mcu_rail": "3V3",
+        "five_tolerant": false,
+        "rails": [
+          {
+            "name": "3V3",
+            "volts": "3.3",
+            "source": "LDO from 5V",
+            "notes": "MCU and sensors"
+          },
+          {
+            "name": "5V",
+            "volts": "5",
+            "source": "USB-C",
+            "notes": ""
+          },
+          {
+            "name": "VBAT",
+            "volts": "4.2",
+            "source": "1S Li-ion",
+            "notes": "max when charged"
+          }
+        ],
+        "gpio": [
+          {
+            "signal": "I2C_SDA",
+            "pin": "GPIO8",
+            "dir": "od",
+            "rail": "",
+            "pull": "up",
+            "notes": "2k2 on board"
+          },
+          {
+            "signal": "I2C_SCL",
+            "pin": "GPIO9",
+            "dir": "od",
+            "rail": "",
+            "pull": "up",
+            "notes": "2k2 on board"
+          },
+          {
+            "signal": "LED_STATUS",
+            "pin": "GPIO2",
+            "dir": "out",
+            "rail": "",
+            "pull": "none",
+            "notes": "active high"
+          },
+          {
+            "signal": "BTN_USER",
+            "pin": "GPIO0",
+            "dir": "in",
+            "rail": "",
+            "pull": "up",
+            "notes": "boot strap"
+          },
+          {
+            "signal": "UART_TX",
+            "pin": "GPIO43",
+            "dir": "out",
+            "rail": "",
+            "pull": "none",
+            "notes": "debug"
+          },
+          {
+            "signal": "UART_RX",
+            "pin": "GPIO44",
+            "dir": "in",
+            "rail": "",
+            "pull": "none",
+            "notes": "debug"
+          },
+          {
+            "signal": "VBAT_SENSE",
+            "pin": "GPIO1",
+            "dir": "analog",
+            "rail": "",
+            "pull": "none",
+            "notes": "100k/100k divider"
+          },
+          {
+            "signal": "WS2812_DIN",
+            "pin": "GPIO48",
+            "dir": "out",
+            "rail": "5V",
+            "pull": "none",
+            "notes": "LED strip on 5V"
+          }
+        ],
+        "i2c": [
+          {
+            "bus": "0",
+            "addr": "0x44",
+            "device": "SHT40",
+            "khz": "1000",
+            "notes": "temp/RH"
+          },
+          {
+            "bus": "0",
+            "addr": "0x76",
+            "device": "BMP280",
+            "khz": "3400",
+            "notes": "SDO low"
+          },
+          {
+            "bus": "0",
+            "addr": "0x3C",
+            "device": "SSD1306",
+            "khz": "400",
+            "notes": "OLED"
+          },
+          {
+            "bus": "0",
+            "addr": "0xD0",
+            "device": "MPU6050",
+            "khz": "400",
+            "notes": "from its datasheet (8-bit)"
+          }
+        ]
+      }
+    },
+    {
+      "title": "Two sensors on the same address",
+      "input": {
+        "board": "weather",
+        "mcu_rail": "3.3",
+        "rails": [
+          {
+            "name": "3V3",
+            "volts": "3.3"
+          }
+        ],
+        "gpio": [
+          {
+            "signal": "SDA",
+            "pin": "PB7",
+            "dir": "od",
+            "pull": "up"
+          },
+          {
+            "signal": "SCL",
+            "pin": "PB6",
+            "dir": "od",
+            "pull": "up"
+          }
+        ],
+        "i2c": [
+          {
+            "bus": "1",
+            "addr": "0x76",
+            "device": "BME280 A",
+            "khz": "400"
+          },
+          {
+            "bus": "1",
+            "addr": "0x76",
+            "device": "BME280 B",
+            "khz": "400"
+          }
+        ]
+      }
+    }
+  ],
+  "usage": "Give board, mcu_rail (a rail name or volts), five_tolerant, rails rows {name, volts, source, notes}, gpio rows {signal, pin, dir: in|out|io|od|analog|pwm, rail (empty = MCU rail), pull: none|up|down, notes} and i2c rows {bus, addr as 0x48 / 72 / 8-bit form, device, khz, notes}. It returns issues (duplicate pins or signals, I2C address conflicts and reserved addresses, 8-bit addresses converted, voltage-level mismatches, open-drain without pull-up), per-bus speed, and a C header, Markdown and JSON export. The project's saved record is read and written with MCP tool_data (tool interface-contract), the same record the app's Save button writes.",
+  "sources": [
+    "NXP UM10204 I2C-bus specification rev. 7: table 4 (reserved addresses), section 5 (speed modes)",
+    "JEDEC JESD8C / JESD8-5: CMOS input levels VIH = 0.7 VDD, VIL = 0.3 VDD",
+    "Absolute maximum VDD + 0.3 V: typical MCU datasheet rating (rule of thumb; check the part)"
+  ],
+  "view": true
+}
