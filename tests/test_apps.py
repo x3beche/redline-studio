@@ -67,6 +67,31 @@ def test_a_file_that_moves_again_joins_the_note(repo):
     assert apps.changed_since(repo, base, then) == ["src/b.ts"]
 
 
+def test_a_file_dirty_when_drawn_is_diffed_from_how_it_was_then(
+        repo, tmp_path, monkeypatch):
+    """Somebody's half-finished edit is in the file the note is about. The
+    note's diff is the note's work: their lines are not in it."""
+    monkeypatch.setattr(apps, "BLOBS", tmp_path / "blobs")
+    (repo / "src" / "a.ts").write_text("one\ntheirs\ntwo\nthree\n")
+    base, then = apps.head(repo), apps.dirty(repo)
+    assert apps.snapshot(repo, then) == 1
+    assert apps.blob_sha((repo / "src" / "a.ts").read_bytes()) == then["src/a.ts"]
+
+    (repo / "src" / "a.ts").write_text("one\ntheirs\ntwo\nTHREE\n")
+    paths = apps.changed_since(repo, base, then)
+    d = apps.parse(apps.patch(repo, base, paths, then))
+    f = d["files"][0]
+    assert f["path"] == "src/a.ts"
+    changed = [l for h in f["hunks"] for l in h["lines"] if l[0] != " "]
+    assert changed == [["-", 4, None, "three"], ["+", None, 4, "THREE"]]
+
+
+def test_a_copy_is_only_kept_under_its_own_hash(repo, tmp_path, monkeypatch):
+    monkeypatch.setattr(apps, "BLOBS", tmp_path / "blobs")
+    (repo / "src" / "a.ts").write_text("changed\n")
+    assert apps.snapshot(repo, {"src/a.ts": "0" * 40}) == 0
+
+
 def test_committed_work_still_counts(repo):
     base, then = apps.head(repo), apps.dirty(repo)
     (repo / "src" / "a.ts").write_text("one\n")

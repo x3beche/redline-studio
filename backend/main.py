@@ -377,7 +377,7 @@ class ActivityIn(BaseModel):
     # Which room's log this belongs in. The 3D room's log is about models
     # and the board room's about boards; one feed for both mixed a
     # tessellation in with a placement.
-    room: str = Field(default="cad", pattern="^(cad|pcb|code)$")
+    room: str = Field(default="cad", pattern="^(cad|pcb|web|embedded|mobile)$")
 
 
 class RunStart(BaseModel):
@@ -727,7 +727,7 @@ async def create_revision(body: RevisionIn):
         "view": body.view,
     }
     if body.code is not None:
-        doc["code"] = body.code
+        doc["code"] = code_api.enrich(body.code)
     await d.revisions.insert_one(doc)
     schedule_note_work(rid)
     return _out(doc)

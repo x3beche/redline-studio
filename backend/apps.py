@@ -39,6 +39,11 @@ EXT = {"web": ".web", "embedded": ".fw", "mobile": ".mobile"}
 
 ROOT = Path(__file__).resolve().parent.parent
 LOGS = ROOT / ".cache" / "apps"
+# What a dirty file said when a note was drawn, by blob hash. Kept here and
+# not in the project's own .git: that checkout is somebody's working tree,
+# and writing objects into it is not this room's business.
+BLOBS = ROOT / ".cache" / "blobs"
+BLOB_MAX = 2_000_000
 
 # A test suite is allowed ten minutes. Longer than that and it is not a
 # check somebody waits for between two edits.
@@ -105,6 +110,43 @@ def dirty(repo: str | Path) -> dict[str, str]:
     return out
 
 
+def blob_sha(data: bytes) -> str:
+    """The id git gives a file's content, without asking git."""
+    import hashlib
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def snapshot(repo: str | Path, state: dict[str, str]) -> int:
+    """Keep what each dirty file says now, so a note drawn over somebody
+    else's half-finished file can later be diffed against that file as it
+    was, rather than against the last commit. Returns how many were kept."""
+    BLOBS.mkdir(parents=True, exist_ok=True)
+    kept = 0
+    for path, sha in state.items():
+        if sha == "deleted" or not re.fullmatch(r"[0-9a-f]{40,64}", sha):
+            continue
+        dst = BLOBS / sha
+        if dst.exists():
+            kept += 1
+            continue
+        src = Path(repo) / path
+        try:
+            if src.stat().st_size > BLOB_MAX:
+                continue
+            data = src.read_bytes()
+            # Only under the hash it really has: the file may have moved
+            # between git hashing it and this reading it.
+            if blob_sha(data) != sha:
+                continue
+            tmp = dst.with_suffix(".part")
+            tmp.write_bytes(data)
+            tmp.replace(dst)
+            kept += 1
+        except OSError:
+            pass
+    return kept
+
+
 def changed_since(repo: str | Path, base: str,
                   dirty_then: dict[str, str]) -> list[str]:
     """The files a note's work touched: committed since its base, or
@@ -117,30 +159,62 @@ def changed_since(repo: str | Path, base: str,
     return sorted(p for p in paths if p)
 
 
-def patch(repo: str | Path, base: str, paths: list[str]) -> str:
-    """A unified diff of `paths` from `base` to the working tree.
+def patch(repo: str | Path, base: str, paths: list[str],
+          then: dict[str, str] | None = None) -> str:
+    """A unified diff of `paths` from how they were to the working tree.
 
-    `git diff` leaves untracked files out, and a new component is exactly
-    the kind of file a note produces, so those are diffed against nothing.
+    How they were is the base commit, except for a file that was already
+    dirty when the note was drawn: that one is diffed from the copy kept
+    at the time, so the note's diff is the note's work and not somebody
+    else's half-finished edit. `git diff` leaves untracked files out, and
+    a new component is exactly the kind of file a note produces, so those
+    are diffed against nothing.
     """
     if not paths:
         return ""
-    tracked = set(git(repo, "ls-files", "--", *paths).split("\n")) - {""}
-    tracked |= set(git(repo, "ls-tree", "-r", "--name-only", base, "--",
-                       *paths).split("\n")) - {""}
+    then = then or {}
+    from_copy = [p for p in paths
+                 if then.get(p, "deleted") != "deleted" and (BLOBS / then[p]).exists()]
+    rest = [p for p in paths if p not in from_copy]
     text = ""
+    tracked: set[str] = set()
+    if rest:
+        tracked = set(git(repo, "ls-files", "--", *rest).split("\n")) - {""}
+        tracked |= set(git(repo, "ls-tree", "-r", "--name-only", base, "--",
+                           *rest).split("\n")) - {""}
     if tracked:
         text += git(repo, "diff", "--no-color", "-U3", base, "--",
                     *sorted(tracked))
     for p in paths:
-        if p in tracked or not (Path(repo) / p).is_file():
+        if p in tracked:
             continue
-        # --no-index exits 1 when the files differ, which they always do.
-        out = subprocess.run(["git", "-C", str(repo), "diff", "--no-color",
-                              "--no-index", "--", "/dev/null", p],
-                             capture_output=True, timeout=20)
-        text += out.stdout.decode(errors="replace")
+        old = str(BLOBS / then[p]) if p in from_copy else "/dev/null"
+        new = p if (Path(repo) / p).is_file() else "/dev/null"
+        if old == "/dev/null" and new == "/dev/null":
+            continue
+        text += _no_index(repo, old, new, p)
     return text
+
+
+def _no_index(repo: str | Path, old: str, new: str, path: str) -> str:
+    """Two files diffed outside git's index, labelled as `path` - the kept
+    copy's own name is a hash, which says nothing to whoever reads it."""
+    # --no-index exits 1 when the files differ, which they always do here.
+    out = subprocess.run(["git", "-C", str(repo), "diff", "--no-color",
+                          "--no-index", "--", old, new],
+                         capture_output=True, timeout=20)
+    text = out.stdout.decode(errors="replace")
+    if not text:
+        return ""
+    lines = text.split("\n")
+    for i, line in enumerate(lines[:6]):
+        if line.startswith("diff --git "):
+            lines[i] = f"diff --git a/{path} b/{path}"
+        elif line.startswith("--- ") and old != "/dev/null":
+            lines[i] = f"--- a/{path}"
+        elif line.startswith("+++ ") and new != "/dev/null":
+            lines[i] = f"+++ b/{path}"
+    return "\n".join(lines)
 
 
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")

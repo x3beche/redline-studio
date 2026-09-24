@@ -28,6 +28,14 @@ The card shows the drawing as the "before"; the same view once the work is
 done goes next to it:
 
     python tools/revisions.py after <id> [--only PART]
+
+A note from one of the coding rooms (web, embedded, mobile) is a frozen page
+and the elements under the marks:
+
+    python tools/revisions.py code show <id>     the note, the page, the elements
+    python tools/revisions.py code diff <id>     what changed since it was drawn
+    python tools/revisions.py code test <id>     the project's test command
+    python tools/revisions.py code done <id>     tests, after shot, then applied
 """
 
 from __future__ import annotations
@@ -79,6 +87,9 @@ async def cmd_queue(_):
         # and `build` does not take a board. Say so on the first line, so
         # nobody runs the model loop on it.
         board = d.get("kind") == "pcb"
+        if d.get("kind") in CODE_KINDS:
+            _queue_code(i, d)
+            continue
         print(f"\n#{i}  {d['_id']}" + ("   [BOARD]" if board else ""))
         print(f"   note  : {d['comment']}")
         print(f"   {'board' if board else 'model'} : {d.get('model') or '-'}"
@@ -339,6 +350,11 @@ async def cmd_done(args):
     from backend import store
 
     db = connect()
+    doc = await db.revisions.find_one({"_id": args.id})
+    if doc and doc.get("kind") in CODE_KINDS:
+        # Not done until the tests pass and the after shot is taken.
+        await _code_done(db, doc)
+        return
     patch = await store.set_status(db, args.id, "applied")
     if patch is None:
         sys.exit(f"{args.id} not found")
@@ -363,7 +379,11 @@ async def cmd_start(args):
     # one starts.
     await db.runs.replace_one({"_id": args.id}, {**doc, "_id": args.id},
                               upsert=True)
-    await db.activity.insert_one(_line(f"started: {args.title}", "work"))
+    # In the log of the room the revision belongs to: a code note's run is
+    # read in its coding room, not in the 3D room's.
+    rdoc = await db.revisions.find_one({"_id": args.id}) or {}
+    room = rdoc.get("kind") if rdoc.get("kind") in CODE_KINDS else "cad"
+    await db.activity.insert_one(_line(f"started: {args.title}", "work", room))
     print(f"run started: {args.title}")
 
 
@@ -394,7 +414,9 @@ async def cmd_finish(args):
     await db.runs.update_many({"_id": {"$in": ids}}, {"$set": patch},
                               upsert=False)
     await db.runs.update_one({"_id": "current"}, {"$set": patch}, upsert=True)
-    await db.activity.insert_one(_line(f"finished: {status}", status))
+    rdoc = await db.revisions.find_one({"_id": cur.get("revision")}) or {}
+    room = rdoc.get("kind") if rdoc.get("kind") in CODE_KINDS else "cad"
+    await db.activity.insert_one(_line(f"finished: {status}", status, room))
     print(f"run {status}")
 
     # The card's "after": the same view once the work is done. Best effort -
@@ -489,6 +511,9 @@ async def _after_shot(db, rid: str, width: int = 1200, height: int = 800,
                       only: str | None = None) -> dict:
     from backend import store
 
+    doc = await db.revisions.find_one({"_id": rid}) or {}
+    if doc.get("kind") in CODE_KINDS:
+        return await _code_after(db, doc)
     out = Path(tempfile.gettempdir()) / f"after-{rid}.png"
     argv = [sys.executable, str(ROOT / "tools" / "render.py"), rid,
             "-o", str(out), "--width", str(width), "--height", str(height)]
@@ -586,6 +611,189 @@ async def cmd_summaries(args):
           f"   total {spend:.5f} USD")
 
 
+# ---------------- code notes ----------------
+# A note on a running interface, written in the Web, Embedded or Mobile
+# room. `model` is the project's id, the drawing is a real screenshot of a
+# route at a size, and `code` says what was under the marks - selector,
+# box, and the file that renders it. The change is an edit in the
+# project's checkout, the diff is read from git, the check is its test
+# command, and the "after" is the same route at the same size again.
+CODE_KINDS = ("web", "embedded", "mobile")
+
+
+def _queue_code(i: int, d: dict) -> None:
+    code = d.get("code") or {}
+    vp = code.get("viewport") or ["?", "?"]
+    print(f"\n#{i}  {d['_id']}   [{d['kind'].upper()}]")
+    print(f"   note  : {d['comment']}")
+    print(f"   app   : {d.get('model') or '-'}    part: {d.get('part') or '-'}")
+    print(f"   page  : {code.get('route') or '/'} at {vp[0]}x{vp[1]}")
+    for e in (code.get("dom") or [])[:3]:
+        print(f"   under : {e.get('tag')} \"{(e.get('text') or '')[:30]}\"  "
+              f"{e.get('file') or '?'}")
+    print(f"   read  : python tools/revisions.py code show {d['_id']}")
+
+
+async def _code_note(db, rid: str) -> tuple[dict, dict]:
+    from backend import apps
+
+    doc = await db.revisions.find_one({"_id": rid})
+    if not doc:
+        sys.exit(f"{rid} not found")
+    if doc.get("kind") not in CODE_KINDS:
+        sys.exit(f"{rid} is a {doc.get('kind') or 'cad'} note, not a code note")
+    app = await db[apps.APPS].find_one({"_id": doc.get("model")})
+    if not app:
+        sys.exit(f"{rid}: its project {doc.get('model')} is gone")
+    return doc, app
+
+
+async def _code_show(db, args):
+    from backend import store
+
+    doc, app = await _code_note(db, args.id)
+    code = doc.get("code") or {}
+    vp = code.get("viewport") or ["?", "?"]
+    print(f"note    : {doc['comment']}")
+    print(f"status  : {doc.get('status')}    part: {doc.get('part') or '-'}")
+    print(f"project : {app['_id']}  ({app.get('platform')})  {app['repo']}"
+          + (f"  cwd {app['cwd']}" if app.get("cwd") else ""))
+    print(f"page    : {(app.get('url') or '').rstrip('/')}{code.get('route') or '/'}"
+          f"  at {vp[0]}x{vp[1]}")
+    print(f"base    : {(code.get('base') or '-')[:12]}"
+          f"   ({len(code.get('dirty') or {})} files were already uncommitted"
+          " - they are not this note's)")
+    print(f"check   : {app.get('test') or 'no test command'}")
+    dom = code.get("dom") or []
+    print(f"\nunder the marks ({len(dom)}):" if dom else "\nunder the marks: nothing mapped")
+    for e in dom:
+        x, y, w, h = e.get("box") or [0, 0, 0, 0]
+        where = e.get("file") or "?"
+        if e.get("line"):
+            where += f":{e['line']}"
+        print(f"  {e.get('tag'):8} \"{(e.get('text') or '')[:40]}\"  "
+              f"at {x},{y} {w}x{h}")
+        print(f"           {where}   ({e.get('component') or '-'})")
+        print(f"           {e.get('selector')}")
+    if (doc.get("image") or {}).get("gridfs_id"):
+        png = await store.get_shot(db, doc["image"]["gridfs_id"])
+        out = Path(args.out or tempfile.gettempdir()) / f"{args.id}.png"
+        out.write_bytes(png)
+        print(f"\nimage   : {out}   ({len(png)} bytes)")
+        print("Open it with the Read tool: the marks say which part of the "
+              "page, the list above says which element.")
+    else:
+        print("\nimage   : none - a written note about the project")
+
+
+async def _code_diff(db, args):
+    from backend import code_api
+
+    doc, _ = await _code_note(db, args.id)
+    try:
+        text, frozen = await code_api.note_patch(db, doc)
+    except (KeyError, ValueError) as exc:
+        sys.exit(str(exc))
+    if not text:
+        print("nothing has changed since this note was drawn")
+        return
+    sys.stdout.write(text)
+    if frozen:
+        print("\n(frozen when the note was done)")
+
+
+async def _code_test(db, app: dict) -> dict:
+    from backend import apps
+
+    print(f"$ {app['test']}   (in {apps.workdir(app)})")
+    sys.stdout.flush()
+    out = await apps.run_test(db, app)
+    tail = out["tail"].rstrip().splitlines()[-25:]
+    print("\n".join(tail))
+    c = ", ".join(f"{v} {k}" for k, v in out["counts"].items()) or f"exit {out['rc']}"
+    print(f"\ntests {'PASS' if out['ok'] else 'FAIL'}: {c} in {out['wall_s']:.1f} s")
+    await db.activity.insert_one(_line(
+        f"{app['_id']}: tests {'passed' if out['ok'] else 'FAILED'} - {c}",
+        "done" if out["ok"] else "error", app.get("platform") or "web"))
+    return out
+
+
+async def _code_after(db, doc: dict) -> dict:
+    """The same route at the same size, photographed again."""
+    from backend import apps, code_api
+
+    app = await db[apps.APPS].find_one({"_id": doc.get("model")})
+    if not app:
+        raise SystemExit(f"its project {doc.get('model')} is gone")
+    code = doc.get("code") or {}
+    w, h = (code.get("viewport") or [1280, 800])[:2]
+    got = await code_api.take_shot(db, app, code.get("route") or "/", w, h)
+    out = Path(tempfile.gettempdir()) / f"after-{doc['_id']}.png"
+    out.write_bytes(got["png"])
+    from backend import store
+    shot = await store.put_shot(db, got["png"])
+    await db.revisions.update_one({"_id": doc["_id"]},
+                                  {"$set": {"image_after": shot}})
+    print(f"after shot: {out}   ({shot['bytes']} bytes, "
+          f"{code.get('route') or '/'} at {w}x{h})")
+    print("Open it with the Read tool and compare it against the drawing.")
+    return shot
+
+
+async def _code_done(db, doc: dict) -> None:
+    """Tests, then the after shot, then applied - and never the last
+    without the first two. The patch is frozen onto the note on the way,
+    so its card shows its own change after the checkout has moved on."""
+    from backend import apps, code_api, store
+
+    app = await db[apps.APPS].find_one({"_id": doc.get("model")})
+    if not app:
+        sys.exit(f"its project {doc.get('model')} is gone")
+    if app.get("test"):
+        out = await _code_test(db, app)
+        if not out["ok"]:
+            sys.exit(f"\n{doc['_id']} is not done: the tests fail. Fix them, "
+                     "or say why on their screen (revisions.py ask).")
+    else:
+        print("no test command for this project - nothing to check against")
+        out = None
+    await _code_after(db, doc)
+    text, frozen = await code_api.note_patch(db, doc)
+    if not frozen:
+        await code_api.freeze_patch(db, doc["_id"], text)
+    parsed = apps.parse(text)
+    await db.revisions.update_one({"_id": doc["_id"]}, {"$set": {
+        "code.check": None if out is None else {
+            "ok": out["ok"], "counts": out["counts"], "wall_s": out["wall_s"],
+            "at": out["at"], "command": out["command"]},
+        "code.changed": [f["path"] for f in parsed["files"]]}})
+    patch = await store.set_status(db, doc["_id"], "applied")
+    print(f"\n{doc['_id']} -> applied: {len(parsed['files'])} files, "
+          f"+{parsed['added']} -{parsed['removed']}"
+          + ("  (archived)" if patch and patch.get("archived") else ""))
+
+
+async def cmd_code(args):
+    """Code notes: read one, see its change, run its check, finish it."""
+    db = connect()
+    await _shout_interrupts(db)
+    if args.what == "show":
+        await _code_show(db, args)
+    elif args.what == "diff":
+        await _code_diff(db, args)
+    elif args.what == "test":
+        doc, app = await _code_note(db, args.id)
+        out = await _code_test(db, app)
+        if not out["ok"]:
+            sys.exit(1)
+    elif args.what == "after":
+        doc, _ = await _code_note(db, args.id)
+        await _code_after(db, doc)
+    elif args.what == "done":
+        doc, _ = await _code_note(db, args.id)
+        await _code_done(db, doc)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -645,8 +853,10 @@ def main() -> None:
     s.add_argument("-p", "--percent", type=float)
     s.add_argument("-l", "--level", default="info",
                    choices=["info", "work", "done", "warn", "error"])
-    s.add_argument("--room", default="cad", choices=["cad", "pcb", "code"],
-                   help="whose log: cad for models (default), pcb for boards")
+    s.add_argument("--room", default="cad",
+                   choices=["cad", "pcb", "web", "embedded", "mobile"],
+                   help="whose log: cad for models (default), pcb for boards, "
+                        "web, embedded or mobile for a coding room")
     s.set_defaults(fn=cmd_log)
     s = sub.add_parser("finish"); s.add_argument("--failed", action="store_true")
     s.add_argument("--no-shot", action="store_true",
@@ -666,6 +876,17 @@ def main() -> None:
     s.add_argument("--height", type=int, default=800)
     s.add_argument("--only", help="show only this part, as in render.py")
     s.set_defaults(fn=cmd_after)
+    s = sub.add_parser("code", help="notes on a running interface: web, "
+                                    "embedded and mobile")
+    s.add_argument("what", choices=["show", "diff", "test", "after", "done"],
+                   help="show: the note, the page and the elements under the "
+                        "marks, drawing written to disk; diff: what changed "
+                        "since it was drawn; test: the project's check; "
+                        "after: the same page again; done: test, after, then "
+                        "applied - refused while the tests fail")
+    s.add_argument("id")
+    s.add_argument("-o", "--out", help="where show writes the drawing")
+    s.set_defaults(fn=cmd_code)
     s = sub.add_parser("usage", help="pull LLM usage from the agent transcripts")
     s.add_argument("--full", action="store_true",
                    help="re-read every transcript from the start")

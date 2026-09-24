@@ -119,10 +119,10 @@ fills the Part field on the right as `button.tcv-btn · rooms/pcb.ts`.
 - [x] live preview
 - [x] screenshot, pen and note
 - [x] DOM mapping
-- [ ] agent CLI
-- [ ] diff view
-- [ ] tests as the check
-- [ ] before/after
+- [x] agent CLI
+- [x] diff view
+- [x] tests as the check
+- [x] before/after
 
 ## Analyze
 

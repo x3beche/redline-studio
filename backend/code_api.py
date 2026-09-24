@@ -27,10 +27,12 @@ def _db():
     return db()
 
 
-async def _say(text: str, level: str = "info") -> None:
+async def _say(text: str, level: str = "info", room: str = "web") -> None:
+    """A line in the coding room's own log. Each of the three has one, the
+    way the board room has its own."""
     from .main import say
     try:
-        await say(text, level)
+        await say(text, level, room)
     except Exception:                                # noqa: BLE001
         pass
 
@@ -40,6 +42,10 @@ async def _app(aid: str) -> dict:
     if not doc:
         raise HTTPException(404, aid)
     return doc
+
+
+def _room(a: dict) -> str:
+    return a.get("platform") or "web"
 
 
 def _public(a: dict) -> dict:
@@ -136,7 +142,8 @@ async def serve_app(aid: str):
     if out.get("started"):
         await _db()[apps.APPS].update_one({"_id": aid},
                                           {"$set": {"served_pid": out["pid"]}})
-        await _say(f"{aid}: starting the dev server - {a.get('dev')}", "work")
+        await _say(f"{aid}: starting the dev server - {a.get('dev')}", "work",
+                   _room(a))
     return out
 
 
@@ -180,6 +187,7 @@ async def take_shot(db, a: dict, route: str, width: int, height: int) -> dict:
     try:
         base = await asyncio.to_thread(apps.head, a["repo"])
         dirty = await asyncio.to_thread(apps.dirty, a["repo"])
+        await asyncio.to_thread(apps.snapshot, a["repo"], dirty)
     except (RuntimeError, OSError, subprocess.TimeoutExpired):
         base, dirty = None, {}
     sid = webshot.keep(shot, {"app": a["_id"], "route": route,
@@ -203,7 +211,7 @@ async def shoot_app(aid: str, body: ShotIn):
         raise HTTPException(502, f"could not photograph it: {exc}")
     png = got.pop("png")
     await _say(f"{aid}: froze {body.route} at {body.width}x{body.height} - "
-               f"{got['elements']} elements on it", "info")
+               f"{got['elements']} elements on it", "info", _room(a))
     return {**got, "image": "data:image/png;base64,"
             + base64.b64encode(png).decode()}
 
@@ -239,29 +247,71 @@ async def shot_png(sid: str):
         raise HTTPException(404, sid)
 
 
+def enrich(code: dict) -> dict:
+    """Complete a note's code block from the shot it was drawn on.
+
+    The page knows the route, the size and the marks; the server knows
+    what the checkout looked like at the freeze - the commit and which
+    files were already dirty - because it wrote that down when it took the
+    picture. The dirty files are what keep somebody else's work out of the
+    note's diff later, so they are copied onto the note rather than left in
+    a cache that is pruned.
+    """
+    out = dict(code)
+    sid = code.get("shot")
+    if sid:
+        try:
+            s = webshot.recall(str(sid))
+        except KeyError:
+            return out
+        out["dirty"] = s.get("dirty") or {}
+        out["base"] = out.get("base") or s.get("base")
+        out["app"] = s.get("app")
+    return out
+
+
 # ---------------- the diff ----------------
+async def note_patch(db, doc: dict) -> tuple[str, bool]:
+    """A note's change as a unified diff, and whether it was frozen.
+
+    Live until the note is done: the files that moved since it was drawn,
+    from its base commit. Done, it is the patch as it stood then, kept in
+    GridFS - the checkout moves on and the card should still show its own
+    change.
+    """
+    if (doc.get("artifacts") or {}).get("diff"):
+        raw = await store.get_artifact(db, doc["_id"], "diff", "revisions")
+        return raw.decode(errors="replace"), True
+    code = doc.get("code") or {}
+    a = await db[apps.APPS].find_one({"_id": doc.get("model") or ""})
+    if not a:
+        raise KeyError(f"no project {doc.get('model')}")
+    base = code.get("base")
+    if not base:
+        raise ValueError("this note has no base commit to diff against")
+    then = code.get("dirty") or {}
+    paths = await asyncio.to_thread(apps.changed_since, a["repo"], base, then)
+    return await asyncio.to_thread(apps.patch, a["repo"], base, paths, then), False
+
+
+async def freeze_patch(db, rid: str, text: str) -> dict:
+    """Keep a done note's patch. Text, gzipped into GridFS like every other
+    generated file - a patch can be megabytes and the link is slow."""
+    return await store.put_artifact(db, rid, "diff", text.encode(), "revisions")
+
+
 async def note_diff(db, rid: str) -> dict:
-    """What changed since a note was drawn. Frozen onto the note when it
-    is done, so the card still shows its own change after the checkout
-    has moved on."""
     doc = await db.revisions.find_one({"_id": rid})
     if not doc:
         raise HTTPException(404, rid)
-    frozen = (doc.get("artifacts") or {}).get("diff")
-    if frozen:
-        import json
-        raw = await store.get_artifact(db, rid, "diff", "revisions")
-        return {**json.loads(raw), "frozen": True}
-    code = doc.get("code") or {}
-    a = await _app(doc.get("model") or "")
-    base = code.get("base")
-    if not base:
-        raise HTTPException(400, "this note has no base commit to diff against")
-    paths = await asyncio.to_thread(apps.changed_since, a["repo"], base,
-                                    code.get("dirty") or {})
-    text = await asyncio.to_thread(apps.patch, a["repo"], base, paths)
-    return {**apps.parse(text), "base": base, "frozen": False,
-            "note": rid, "patch_bytes": len(text)}
+    try:
+        text, frozen = await note_patch(db, doc)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {**apps.parse(text), "base": (doc.get("code") or {}).get("base"),
+            "frozen": frozen, "note": rid, "patch_bytes": len(text)}
 
 
 @router.get("/{aid}/diff")
@@ -284,7 +334,7 @@ async def app_diff(aid: str, note: str | None = None):
 @router.post("/{aid}/test")
 async def test_app(aid: str):
     a = await _app(aid)
-    await _say(f"{aid}: running the tests - {a.get('test')}", "work")
+    await _say(f"{aid}: running the tests - {a.get('test')}", "work", _room(a))
     try:
         out = await apps.run_test(_db(), a)
     except ValueError as exc:
@@ -292,7 +342,8 @@ async def test_app(aid: str):
     c = out["counts"]
     said = ", ".join(f"{v} {k}" for k, v in c.items()) or f"exit {out['rc']}"
     await _say(f"{aid}: tests {'passed' if out['ok'] else 'FAILED'} - {said} "
-               f"in {out['wall_s']:.1f} s", "done" if out["ok"] else "error")
+               f"in {out['wall_s']:.1f} s", "done" if out["ok"] else "error",
+               _room(a))
     return out
 
 

@@ -1,8 +1,9 @@
 import {
-  Component, ElementRef, OnDestroy, computed, effect, inject, input, signal,
+  Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, input, signal,
   untracked, viewChild,
 } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { forkJoin } from 'rxjs';
 import {
   Activity, AppCompute, AppDiff, AppEntry, AppShot, AppStatus, Api, Apps,
   DomHit, Health, LogLine, Revision, SystemInfo, TestRun,
@@ -148,6 +149,13 @@ const VIEWPORTS: { key: string; w: number; h: number; label: string }[] = [
             {{ platform() === 'embedded'
                ? 'Firmware has nothing to frame yet - a serial console or a display capture would go here. Notes, the diff and the tests work already.'
                : 'This project has no url to show. Give it one, and the page it serves is framed here.' }}
+          </p>
+        } @else if (framed) {
+          <!-- Redline framing Redline: the page in the frame shares this
+               origin's storage, opens its own Web room and would frame
+               itself again, all the way down. One level is enough. -->
+          <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
+            This page is already inside a frame, so it does not frame another.
           </p>
         } @else if (!status()?.up && !frozen()) {
           <div class="p-3 text-[12px]" style="color: var(--ink-dim)">
@@ -375,7 +383,7 @@ const VIEWPORTS: { key: string; w: number; h: number; label: string }[] = [
         <button (click)="runTests()" [disabled]="testing() || !here()!.test"
                 class="tcv-btn tcv-btn-accent ml-auto shrink-0 px-2 py-0.5"
                 [title]="here()!.test ?? 'no test command'">
-          {{ testing() ? 'running…' : 'run' }}
+          {{ testing() ? 'running…' : 'run tests' }}
         </button>
       </header>
       <div class="tcv-scroll mono min-h-0 flex-1 overflow-auto px-2 py-1 text-[11px]">
@@ -452,7 +460,7 @@ const VIEWPORTS: { key: string; w: number; h: number; label: string }[] = [
   }
 </div>`,
 })
-export class RoomCoding implements OnDestroy {
+export class RoomCoding implements OnInit, OnDestroy {
   platform = input.required<Platform>();
 
   /** Read by the template for the before and after URLs. */
@@ -467,6 +475,8 @@ export class RoomCoding implements OnDestroy {
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
   readonly viewports = VIEWPORTS;
+  /** Whether this page is itself the one being previewed. */
+  readonly framed = window !== window.top;
   readonly tools = TOOLS;
   readonly PENS = PENS;
 
@@ -526,11 +536,17 @@ export class RoomCoding implements OnDestroy {
 
   diffNote = computed(() => this.notes().find(r => r.id === this.diffOf()) ?? null);
 
-  constructor() {
+  /** Not in the constructor: the platform is an input, and it is not set
+   *  until the room is initialised - reading it any earlier throws, and
+   *  took the whole shell down with it. */
+  ngOnInit() {
     this.refresh();
     this.tick();
     this.timers.push(setInterval(() => this.tick(), 3000));
     this.timers.push(setInterval(() => this.slowTick(), 8000));
+  }
+
+  constructor() {
     // Opened from the catalog: the tree is shared, so the room follows
     // what was clicked rather than keeping a list beside it.
     effect(() => {
@@ -922,7 +938,7 @@ export class RoomCoding implements OnDestroy {
 
   private tick() {
     this.health.system().subscribe({ next: s => this.sys.set(s) });
-    this.activity.lines(60).subscribe({
+    this.activity.lines(60, this.platform()).subscribe({
       next: rows => {
         const last = this.log()[this.log().length - 1]?._id;
         this.log.set(rows);
@@ -941,7 +957,11 @@ export class RoomCoding implements OnDestroy {
     const a = this.here();
     if (!a) return;
     this.apps.status(a._id).subscribe({ next: s => this.status.set(s) });
-    this.api.list().subscribe({ next: r => this.revisions.set(r) });
+    // Archived ones as well: auto-archive files a note away the moment it
+    // is done, which is exactly when its before and after are worth seeing.
+    forkJoin([this.api.list(false), this.api.list(true)]).subscribe({
+      next: ([open, filed]) => this.revisions.set([...open, ...filed]),
+    });
     this.loadCost();
     if (!this.diffOf() || !this.diff()?.frozen) this.loadDiff();
   }

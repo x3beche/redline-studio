@@ -602,7 +602,7 @@ export class Activity {
   private http = inject(HttpClient);
   /** One room's log: the 3D room's is about models, the board room's
    *  about boards. */
-  lines(limit = 120, room: 'cad' | 'pcb' | 'code' = 'cad'): Observable<LogLine[]> {
+  lines(limit = 120, room: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' = 'cad'): Observable<LogLine[]> {
     return this.http.get<LogLine[]>(`/api/activity?limit=${limit}&room=${room}`);
   }
   run(): Observable<Run | null> { return this.http.get<Run | null>('/api/run'); }
