@@ -132,6 +132,11 @@ async def _llm_sums(db, lo: str, hi: str, since: datetime, size: int) -> dict:
         {"$addFields": {"_run": owner_expr}},
         {"$addFields": {"_rev": {"$ifNull": ["$revision", "$_run.rev"]},
                         "_room": "$_run.room"}},
+        # The LLM-call log is the machine's. A workspace other than the
+        # default one counts only the calls made during its own runs; a call
+        # with no run open is the default workspace's.
+        *([] if getattr(db, "workspace", scope.DEFAULT) == scope.DEFAULT
+          else [{"$match": {"_run.run": {"$ne": None}}}]),
         {"$addFields": {"_b": {"$floor": {"$divide": [
             {"$subtract": [{"$toLong": {"$toDate": "$at"}}, t0_ms]}, size * 1000]}}}},
         {"$facet": {
@@ -799,7 +804,9 @@ async def overview_cached(db, key: str, span) -> dict:
     """The last answer for this range at once; a fresh one on its way if it
     is older than FRESH_S. Only the very first ask of a range waits."""
     import time
-    key = f"v{SHAPE}-{key}"
+    # One cache per workspace: each sees its own figures.
+    ws = getattr(db, "workspace", scope.DEFAULT)
+    key = f"v{SHAPE}-{key}" if ws == scope.DEFAULT else f"v{SHAPE}-{ws}-{key}"
     hit = _recall(key)
     if hit is None:
         return {**await _work_out(db, key, span), "stale": False}

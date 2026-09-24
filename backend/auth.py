@@ -428,3 +428,61 @@ async def accept_invite(raw_db, key: str, name: str, password: str) -> tuple[dic
         upsert=True)
     await raw_db[INVITES].delete_one({"_id": inv["_id"]})
     return u, inv["workspace"], inv["role"]
+
+
+# ---------------------------------------------------------------- workspaces
+
+async def my_workspaces(raw_db, user_id: str) -> list[dict]:
+    """The workspaces a person is in, with their role in each."""
+    out = []
+    async for m in raw_db[MEMBERS].find({"user": user_id}):
+        ws = await raw_db[WORKSPACES].find_one({"_id": m["workspace"]}) or {}
+        out.append({"id": m["workspace"], "name": ws.get("name") or m["workspace"],
+                    "role": m.get("role") or "viewer"})
+    out.sort(key=lambda w: (w["id"] != "default", w["name"].lower()))
+    return out
+
+
+async def workspace_name(raw_db, ws: str) -> str:
+    doc = await raw_db[WORKSPACES].find_one({"_id": ws}, {"name": 1}) or {}
+    return doc.get("name") or ws
+
+
+def _slug(name: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:32]
+    return s or "workspace"
+
+
+async def create_workspace(raw_db, name: str, user: dict) -> dict:
+    """A new, empty workspace; whoever makes it owns it."""
+    name = (name or "").strip()[:60]
+    if not name:
+        raise ValueError("give the workspace a name")
+    base = _slug(name)
+    if base == "default":
+        base = "default-2"
+    wid, n = base, 2
+    while await raw_db[WORKSPACES].find_one({"_id": wid}, {"_id": 1}):
+        wid, n = f"{base}-{n}", n + 1
+    await raw_db[WORKSPACES].insert_one({"_id": wid, "name": name, "created_at": _now(),
+                                         "created_by": user.get("id")})
+    await raw_db[MEMBERS].update_one(
+        {"_id": f"{user['id']}:{wid}"},
+        {"$set": {"user": user["id"], "workspace": wid, "role": "owner", "joined": _now()}},
+        upsert=True)
+    return {"id": wid, "name": name, "role": "owner"}
+
+
+async def rename_workspace(raw_db, ws: str, name: str) -> None:
+    name = (name or "").strip()[:60]
+    if not name:
+        raise ValueError("give the workspace a name")
+    await raw_db[WORKSPACES].update_one({"_id": ws}, {"$set": {"name": name}}, upsert=True)
+
+
+async def open_workspace(raw_db, token: str | None, user_id: str, ws: str) -> None:
+    """Move this browser's session to another workspace the person is in."""
+    if not await raw_db[MEMBERS].find_one({"user": user_id, "workspace": ws}):
+        raise LookupError("you are not a member of that workspace")
+    await raw_db[SESSIONS].update_one({"_id": _digest(token or "")}, {"$set": {"workspace": ws}})
+    forget_sessions()

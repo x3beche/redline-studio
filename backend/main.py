@@ -1269,6 +1269,7 @@ async def auth_state(request: Request):
     got = await auth.session_user(db(), request.cookies.get(auth.COOKIE))
     return {"mode": "on", "needs_setup": not await auth.any_user(db()),
             "user": got["user"] if got else None, "workspace": got["workspace"] if got else None,
+            "workspace_name": await auth.workspace_name(db(), got["workspace"]) if got else None,
             "role": got["role"] if got else None, "can": access.can(got["role"] if got else None), **roles}
 
 
@@ -1358,6 +1359,60 @@ async def revoke_agent_token(token_id: str):
     if not await auth.revoke_agent_token(db(), token_id, scope.current()):
         raise HTTPException(404, token_id)
     return {"revoked": token_id}
+
+
+# ---------------- workspaces ----------------
+def _signed_in_person() -> dict:
+    if not auth.enabled():
+        raise HTTPException(400, "workspaces need sign-in (X3_AUTH=on)")
+    who = actors.current()
+    if who.get("type") != "user":
+        raise HTTPException(403, "an agent works in its token's workspace")
+    return who
+
+
+@app.get("/api/workspaces")
+async def workspaces():
+    who = _signed_in_person()
+    return {"current": scope.current(), "workspaces": await auth.my_workspaces(db(), who["id"])}
+
+
+class WorkspaceIn(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+
+
+@app.post("/api/workspaces")
+async def new_workspace(body: WorkspaceIn):
+    """A new, empty workspace, owned by whoever makes it."""
+    who = _signed_in_person()
+    try:
+        got = await auth.create_workspace(db(), body.name, who)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    await actors.audit(db(), "workspace", got["id"], {"name": got["name"]})
+    return got
+
+
+@app.post("/api/workspaces/{ws}/open")
+async def open_workspace(ws: str, request: Request):
+    who = _signed_in_person()
+    try:
+        await auth.open_workspace(db(), request.cookies.get(auth.COOKIE), who["id"], ws)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"workspace": ws}
+
+
+@app.patch("/api/workspaces/{ws}")
+async def rename_workspace(ws: str, body: WorkspaceIn):
+    _signed_in_person()
+    if ws != scope.current():
+        raise HTTPException(400, "rename the workspace you are in")
+    try:
+        await auth.rename_workspace(db(), ws, body.name)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"id": ws, "name": body.name.strip()}
 
 
 # ---------------- members and invitations ----------------

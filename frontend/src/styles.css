@@ -1651,6 +1651,10 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   padding: 6px 8px; border-radius: 4px; text-align: left; background: none; border: 0; cursor: default; }
 .tcv-user-menu button.tcv-menu-item { cursor: pointer; }
 .tcv-user-menu button.tcv-menu-item:hover { background: var(--hover); }
+.tcv-user-menu button.tcv-menu-item:disabled { cursor: default; background: none; }
+.tcv-user-menu .tcv-menu-head { padding: 6px 8px 2px; font-size: 10.5px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-dim); border-top: 1px solid var(--line); margin-top: 2px; }
+.tcv-user-ws { margin-left: 6px; font-size: 11px; color: var(--ink-dim); }
 
 /* Agent tokens (app/auth.ts): who may use the agents' way in, handed out
    and taken back by a person. */

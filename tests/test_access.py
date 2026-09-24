@@ -40,11 +40,12 @@ def test_a_viewer_only_looks():
             continue
         ok = access.allowed("viewer", act)
         # The few writes a viewer may make are checks and lookups that
-        # change nothing, and the agents' way in (which checks its writes).
+        # change nothing, the agents' way in (which checks its writes), and
+        # moving to another workspace they are a member of.
         assert not ok or (method, path) in {
             ("POST", "/api/boards/x/rules/check"), ("POST", "/api/tools/find"),
             ("POST", "/api/tools/usage"), ("POST", "/api/agent/db"), ("POST", "/api/agent/files/x"),
-            ("DELETE", "/api/agent/files/x/x")}, (method, path)
+            ("DELETE", "/api/agent/files/x/x"), ("POST", "/api/workspaces/x/open")}, (method, path)
 
 
 def test_a_reviewer_draws_but_does_not_queue_build_or_delete():

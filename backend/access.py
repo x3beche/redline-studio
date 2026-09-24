@@ -74,6 +74,11 @@ _RULES: list[tuple[str, str, str]] = [
     ("*", "/api/members(/.*)?", "members"),
     ("*", "/api/invites(/.*)?", "members"),
     ("*", "/api/agent-tokens(/.*)?", "tokens"),
+    # the workspaces: seeing and opening one's own, making one, naming this one
+    ("GET", "/api/workspaces", "view"),
+    ("POST", "/api/workspaces/{}/open", "view"),      # membership of the other is checked
+    ("POST", "/api/workspaces", "members"),
+    ("PATCH", "/api/workspaces/{}", "settings"),
     # the agents' way in: agent_api checks writes against the token's role
     ("*", "/api/agent/.*", "view"),
     # notes: drawing and editing one is a reviewer's; queueing it is not

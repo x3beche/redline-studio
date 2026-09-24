@@ -896,3 +896,10 @@ below), *editor* (designs, queueing, builds, deleting, agent tokens),
 *reviewer* (notes and drafts, chat, answers - not queue, build or
 delete), *viewer* (looks). What your role cannot do is greyed out with
 the reason on hover, and if you try anyway the reason appears at the top.
+
+**Workspaces.** Your name at the top shows the workspace you are in; the
+menu lists the others you belong to - click one to move there. **New
+workspace** (owners and admins) makes an empty one with its own projects,
+notes, boards, apps, members and agent tokens; the same names can be used
+in both, and neither sees into the other. Invite people to a workspace
+while you are in it.

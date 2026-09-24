@@ -15,6 +15,7 @@ export interface AuthState {
   needs_setup?: boolean;
   user: Me | null;
   workspace: string | null;
+  workspace_name?: string | null;
   /** The role here, and what it allows (backend/access.py). */
   role?: string | null;
   can?: string[];
@@ -425,13 +426,27 @@ export class Members {
   template: `
 @if (auth.state(); as s) {
   @if (s.mode === 'on' && s.user; as u) {
-    <button class="tcv-tab tcv-user" (click)="open.set(!open())" [title]="u.email ?? u.name">
+    <button class="tcv-tab tcv-user" (click)="toggle()" [title]="u.email ?? u.name">
       <span class="tcv-user-dot">{{ initial(u.name) }}</span>{{ u.name }}
+      <span class="tcv-user-ws">{{ s.workspace_name ?? s.workspace }}</span>
     </button>
     @if (open()) {
       <div class="tcv-menu tcv-user-menu" (mouseleave)="open.set(false)">
         <div class="tcv-menu-item"><span class="tcv-menu-name">{{ u.name }}</span>
-          <span class="tcv-menu-blurb">{{ u.email }} · {{ s.role }} in {{ s.workspace }}</span></div>
+          <span class="tcv-menu-blurb">{{ u.email }} · {{ s.role }} in {{ s.workspace_name ?? s.workspace }}</span></div>
+        @if (spaces().length > 1) {
+          <div class="tcv-menu-head">Workspaces</div>
+          @for (w of spaces(); track w.id) {
+            <button class="tcv-menu-item" (click)="openSpace(w.id)" [disabled]="w.id === s.workspace">
+              <span class="tcv-menu-name">{{ w.name }}@if (w.id === s.workspace) { <span class="tcv-role">here</span> }</span>
+              <span class="tcv-menu-blurb">{{ w.role }}</span></button>
+          }
+        }
+        @if (auth.can('members')) {
+          <button class="tcv-menu-item" (click)="open.set(false); making.set(true)">
+            <span class="tcv-menu-name">New workspace</span>
+            <span class="tcv-menu-blurb">Its own projects, members and agents - nothing shared with this one</span></button>
+        }
         @if (auth.can('members')) {
           <button class="tcv-menu-item" (click)="open.set(false); members.set(true)">
             <span class="tcv-menu-name">Members</span>
@@ -448,13 +463,67 @@ export class Members {
     }
     @if (tokens()) { <app-agent-tokens (closed)="tokens.set(false)"/> }
     @if (members()) { <app-members (closed)="members.set(false)"/> }
+    @if (making()) {
+      <div class="tcv-tokens-back" (click)="making.set(false)">
+        <div class="tcv-tokens" (click)="$event.stopPropagation()" role="dialog" aria-label="New workspace">
+          <h2>New workspace</h2>
+          <p>An empty workspace with its own projects, notes, boards, apps, members and agent tokens. Nobody in
+            this one sees into it, and it does not see into this one; the same names can be used in both.
+            You own it, and can invite people to it once you are in it.</p>
+          <form class="tcv-tokens-new" (submit)="$event.preventDefault(); makeSpace()">
+            <input placeholder="Name, e.g. Customer A" [value]="spaceName()" maxlength="60"
+                   (input)="spaceName.set($any($event.target).value)">
+            <button class="tcv-btn tcv-btn-accent" type="submit" [disabled]="!spaceName().trim()">Make and open</button>
+          </form>
+          @if (spaceError(); as e) { <p class="tcv-signin-error" role="alert">{{ e }}</p> }
+          <div class="tcv-tokens-end"><button class="tcv-btn" (click)="making.set(false)">Close</button></div>
+        </div>
+      </div>
+    }
   }
 }`,
 })
 export class UserChip {
   auth = inject(Auth);
+  private http = inject(HttpClient);
   open = signal(false);
   tokens = signal(false);
   members = signal(false);
+  making = signal(false);
+  spaces = signal<{ id: string; name: string; role: string }[]>([]);
+  spaceName = signal('');
+  spaceError = signal('');
+
+  toggle() {
+    this.open.set(!this.open());
+    if (this.open()) {
+      this.http.get<{ workspaces: { id: string; name: string; role: string }[] }>('/api/workspaces')
+        .subscribe({ next: d => this.spaces.set(d.workspaces), error: () => this.spaces.set([]) });
+    }
+  }
+
+  /** Into another workspace: everything on the page is the other one's, so
+   *  the page starts over - and forgets figures it kept for the last one. */
+  openSpace(id: string) {
+    this.http.post('/api/workspaces/' + encodeURIComponent(id) + '/open', {}).subscribe({
+      next: () => {
+        try {
+          Object.keys(localStorage).filter(k => k.startsWith('x3.analytics.data.'))
+            .forEach(k => localStorage.removeItem(k));
+        } catch { /* private window */ }
+        location.reload();
+      },
+      error: (e: HttpErrorResponse) => this.auth.refuse(typeof e.error?.detail === 'string' ? e.error.detail : 'that did not work'),
+    });
+  }
+
+  makeSpace() {
+    this.spaceError.set('');
+    this.http.post<{ id: string }>('/api/workspaces', { name: this.spaceName().trim() }).subscribe({
+      next: w => this.openSpace(w.id),
+      error: (e: HttpErrorResponse) => this.spaceError.set(typeof e.error?.detail === 'string' ? e.error.detail : 'that did not work'),
+    });
+  }
+
   initial(n: string) { return (n.trim()[0] ?? '?').toUpperCase(); }
 }

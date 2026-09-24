@@ -343,8 +343,41 @@ or tokens, and the note's queue, archive and delete buttons disabled with
 their reasons. Not seen in the browser: the refusal banner (the buttons
 that would trigger it are disabled; it is covered by the API checks).
 
-Still open: ids are global (a second workspace is phase 6's to make
-real); room-limited tokens.
+Still open: room-limited tokens.
+
+### Phase 6 - separate workspaces and container limits (done)
+
+Decided 2026-09-24: separate workspaces are needed (e.g. one per
+customer); limits only on the build containers, no spending limits; the
+machine is reached from the office network only; sign-in on.
+
+- **Container limits** (`backend/limits.py`): every container the coding
+  rooms and the PCB room start gets `--cpus`, `--memory`, `--pids-limit` -
+  by default half the cores, 40 % of the memory up to 12g, 4096 processes
+  (`X3_BOX_*` in `.env`). Seen inside one: 14 cores, 12 GB, 4096.
+- **Same names in two workspaces** (`scope.Ids`): the default workspace's
+  documents keep their names exactly; another workspace's text names are
+  stored with its suffix (`controller@customer-a`), added and removed in
+  the scope layer, so no route, room or agent sees it. Exact names, `$in`
+  / `$nin` lists and `$match` stages are translated; nothing in the code
+  filters names by pattern.
+- **Workspaces** (user menu): the ones you are in, with your role in
+  each; opening one moves this browser's session there and reloads the
+  page. *New workspace* (owners and admins) makes an empty one you own;
+  invitations and agent tokens belong to the workspace you are in.
+- **Analytics** is per workspace: its cache is keyed by it, and a
+  workspace other than the default one counts only the LLM calls made
+  during its own runs (calls with no run open are the default one's).
+  Machine figures (CPU, power, the database's size) are the machine's and
+  show in every workspace.
+
+Verified on a separate server with sign-in on and a throw-away database
+(dropped afterwards): a board `controller` in the default workspace and
+another in *Customer A*, each workspace reading its own under the same
+name (stored as `controller` and `controller@customer-a`); notes apart; a
+reviewer invited to *Customer A* sees only its note and is refused opening
+the default workspace; each workspace's agent token lists only its own
+queued note, and cannot open the other's; switching in the browser.
 
 ### Original list of questions
 
