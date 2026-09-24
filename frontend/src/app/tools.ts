@@ -1,12 +1,13 @@
 import {
-  Component, ElementRef, HostListener, computed, inject, input, output, viewChild,
+  Component, ElementRef, HostListener, computed, inject, input, output, signal, viewChild,
 } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 
-/** Small standalone tools, opened from the menu on the wordmark.
+/** Small standalone tools, opened from the Tools menu at the right end of
+ *  the top bar.
  *
- *  A tool is a page of its own under `public/tools/`, kept exactly as it
- *  was written so it can be updated by dropping in a new copy. It opens in
+ *  A tool is a page of its own under `public/tools/`, self-contained, so it
+ *  can be updated by dropping in a new copy. It opens in
  *  a modal over whatever room is on screen, and takes the app's colours on
  *  the way in, so it looks like part of Redline in any theme. A new tool is
  *  a file there and a line here.
@@ -100,5 +101,51 @@ export class ToolModal {
     doc.addEventListener('keydown', ev => { if (ev.key === 'Escape') this.close.emit(); });
     // Its grid lines read a colour once when drawn; draw again in ours.
     this.frame().nativeElement.contentWindow?.dispatchEvent(new Event('resize'));
+  }
+}
+
+/** "Tools" at the right end of the top bar: the list drops down on hover (or a
+ *  click, on a touch screen), and the chosen tool opens in its modal. */
+@Component({
+  selector: 'app-tools-menu',
+  imports: [ToolModal],
+  host: { class: 'relative flex items-center' },
+  template: `
+<button class="tcv-tab tcv-tools-btn" [attr.data-open]="open() ? 1 : null"
+        (mouseenter)="show(true)" (mouseleave)="show(false)"
+        (click)="open.set(!open())" aria-haspopup="menu" [attr.aria-expanded]="open()">
+  Tools <span class="tcv-tools-caret">▾</span>
+</button>
+@if (open()) {
+  <div class="tcv-menu" role="menu" (mouseenter)="show(true)" (mouseleave)="show(false)">
+    @for (t of pages; track t.id) {
+      <button class="tcv-menu-item" role="menuitem" (click)="pick(t)">
+        <span class="tcv-menu-name">{{ t.name }}</span>
+        <span class="tcv-menu-blurb">{{ t.blurb }}</span>
+      </button>
+    }
+  </div>
+}
+@if (page(); as t) {
+  <app-tool-modal [tool]="t" (close)="page.set(null)" />
+}`,
+})
+export class ToolsMenu {
+  readonly pages = TOOL_PAGES;
+  open = signal(false);
+  page = signal<ToolPage | null>(null);
+  private timer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Close a moment after the mouse leaves, so the way down from the
+   *  button to the list does not shut it. */
+  show(on: boolean) {
+    clearTimeout(this.timer);
+    if (on) this.open.set(true);
+    else this.timer = setTimeout(() => this.open.set(false), 180);
+  }
+
+  pick(t: ToolPage) {
+    this.open.set(false);
+    this.page.set(t);
   }
 }

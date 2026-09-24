@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Grid Sketch — çiz, metne çevir</title>
+<title>Grid Sketch — draw it, turn it into text</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -166,12 +166,12 @@ button,input,select,textarea{font:inherit;color:inherit}
 <body>
 
 <header class="bar">
-  <h1 class="brand">Grid Sketch <span>— çiz, metne çevir</span></h1>
+  <h1 class="brand">Grid Sketch <span>— draw it, turn it into text</span></h1>
   <div class="controls">
-    <span class="field">kolon <input id="cols" type="number" min="2" max="40" value="20"></span>
-    <span class="field">satır <input id="rows" type="number" min="2" max="40" value="20"></span>
+    <span class="field">columns <input id="cols" type="number" min="2" max="40" value="20"></span>
+    <span class="field">rows <input id="rows" type="number" min="2" max="40" value="20"></span>
     <span class="field">gap <input id="gap" type="text" value="16px"></span>
-    <button class="btn" id="clear">Hepsini sil</button>
+    <button class="btn" id="clear">Clear all</button>
   </div>
 </header>
 
@@ -182,7 +182,7 @@ button,input,select,textarea{font:inherit;color:inherit}
       <div class="areas" id="layer"></div>
     </div>
     <div class="readout">
-      <span id="status">Sürükleyerek alan çiz. Çizili alanı sürükleyip taşıyabilirsin.</span>
+      <span id="status">Drag to draw an area. Drag an area to move it.</span>
       <code id="coords"></code>
     </div>
   </section>
@@ -190,16 +190,16 @@ button,input,select,textarea{font:inherit;color:inherit}
   <aside class="panel">
     <section class="card">
       <div class="card-head">
-        <h2>Alanlar</h2>
+        <h2>Areas</h2>
         <span class="count" id="count">0</span>
       </div>
       <ul class="list" id="list"></ul>
-      <p class="empty" id="listEmpty">Henüz alan yok. Soldaki kareye sürükle.</p>
+      <p class="empty" id="listEmpty">No areas yet. Drag on the grid to draw one.</p>
       <div class="tune" id="tune" hidden>
-        <label>satır <input id="t-r" type="number" min="1"></label>
-        <label>yükseklik <input id="t-rs" type="number" min="1"></label>
-        <label>kolon <input id="t-c" type="number" min="1"></label>
-        <label>genişlik <input id="t-cs" type="number" min="1"></label>
+        <label>row <input id="t-r" type="number" min="1"></label>
+        <label>height <input id="t-rs" type="number" min="1"></label>
+        <label>column <input id="t-c" type="number" min="1"></label>
+        <label>width <input id="t-cs" type="number" min="1"></label>
       </div>
     </section>
 
@@ -214,7 +214,7 @@ button,input,select,textarea{font:inherit;color:inherit}
       </div>
       <pre class="out" id="out"></pre>
       <div class="out-foot">
-        <button class="btn btn-primary" id="copy">Kopyala</button>
+        <button class="btn btn-primary" id="copy">Copy</button>
         <span class="hint" id="hint"></span>
       </div>
     </section>
@@ -333,7 +333,7 @@ button,input,select,textarea{font:inherit;color:inherit}
   function drawList(){
     list.innerHTML = "";
     listEmpty.hidden = state.areas.length > 0;
-    $("count").textContent = state.areas.length + " alan";
+    $("count").textContent = state.areas.length + (state.areas.length === 1 ? " area" : " areas");
     state.areas.forEach(function(a){
       var li = document.createElement("li");
       li.className = "row" + (a.id===state.sel ? " sel" : "");
@@ -355,7 +355,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 
       var del = document.createElement("button");
       del.className = "del"; del.type = "button"; del.textContent = "×";
-      del.title = "Sil";
+      del.title = "Delete";
       del.addEventListener("click", function(e){
         e.stopPropagation();
         state.areas = state.areas.filter(function(x){ return x.id !== a.id; });
@@ -453,7 +453,7 @@ button,input,select,textarea{font:inherit;color:inherit}
         r2:Math.max(drag.r,cell.r), c2:Math.max(drag.c,cell.c)
       };
       if(collides(rect,null)){
-        status("Alanlar üst üste binemez. Boş bir bölgeye çiz.", true);
+        status("Areas cannot overlap. Draw in an empty part of the grid.", true);
       }else{
         var i = state.seq++;
         var a = {
@@ -464,10 +464,10 @@ button,input,select,textarea{font:inherit;color:inherit}
         };
         state.areas.push(a);
         state.sel = a.id;
-        status("Alan eklendi. İsmini sağdaki listeden değiştirebilirsin.");
+        status("Area added. Rename it in the list on the right.");
       }
     }else if(drag.moved){
-      status("Alan taşındı.");
+      status("Area moved.");
     }
     drag = null;
     render(); save();
@@ -502,7 +502,7 @@ button,input,select,textarea{font:inherit;color:inherit}
   elGap.addEventListener("input", function(){ state.gap = elGap.value.trim() || "0"; output(); save(); });
   $("clear").addEventListener("click", function(){
     state.areas = []; state.sel = null; state.seq = 0;
-    status("Temizlendi. Yeniden çizmeye başlayabilirsin.");
+    status("Cleared. Start drawing again.");
     render(); save();
   });
 
@@ -514,9 +514,9 @@ button,input,select,textarea{font:inherit;color:inherit}
       var c1 = clamp(parseInt($("t-c").value,10)||1, 1, state.cols);
       var cs = clamp(parseInt($("t-cs").value,10)||1, 1, state.cols - c1 + 1);
       var rect = { r1:r1, c1:c1, r2:r1+rs-1, c2:c1+cs-1 };
-      if(collides(rect, a.id)){ status("Bu ölçü başka bir alanla çakışıyor.", true); drawList(); return; }
+      if(collides(rect, a.id)){ status("That size overlaps another area.", true); drawList(); return; }
       a.r1=rect.r1; a.c1=rect.c1; a.r2=rect.r2; a.c2=rect.c2;
-      status("Ölçü güncellendi.");
+      status("Size updated.");
       render(); save();
     });
   });
@@ -537,24 +537,24 @@ button,input,select,textarea{font:inherit;color:inherit}
 
   function fmtPrompt(){
     var ids = uniqueIdents(), L = letters(), lines = [];
-    lines.push("Dashboard layout: " + state.cols + " kolon × " + state.rows + " satır CSS Grid.");
-    lines.push("Koordinatlar 1'den başlar ve bitiş değeri dahildir.");
+    lines.push("Dashboard layout: a CSS Grid of " + state.cols + " columns × " + state.rows + " rows.");
+    lines.push("Coordinates start at 1, and the end values are inclusive.");
     lines.push("");
-    lines.push("Alanlar:");
+    lines.push("Areas:");
     sorted().forEach(function(a){
       var idx = state.areas.indexOf(a);
       lines.push("- " + ids[a.id] +
-        ": satır " + a.r1 + "–" + a.r2 +
-        ", kolon " + a.c1 + "–" + a.c2 +
-        "  (" + (a.c2-a.c1+1) + " kolon × " + (a.r2-a.r1+1) + " satır, harita harfi " + L[idx] + ")");
+        ": rows " + a.r1 + "–" + a.r2 +
+        ", columns " + a.c1 + "–" + a.c2 +
+        "  (" + (a.c2-a.c1+1) + " columns × " + (a.r2-a.r1+1) + " rows, map letter " + L[idx] + ")");
     });
     var used = 0;
     state.areas.forEach(function(a){ used += (a.c2-a.c1+1) * (a.r2-a.r1+1); });
     lines.push("");
-    lines.push("Boş hücre: " + (state.cols*state.rows - used) + " / " + (state.cols*state.rows));
+    lines.push("Empty cells: " + (state.cols*state.rows - used) + " / " + (state.cols*state.rows));
     lines.push("Gap: " + state.gap);
     lines.push("");
-    lines.push("Harita (her karakter bir hücre, nokta = boş):");
+    lines.push("Map (one character per cell, dot = empty):");
     lines.push(asciiMap());
     return lines.join("\n");
   }
@@ -598,7 +598,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 
   function fmtTw(){
     var ids = uniqueIdents(), lines = [];
-    lines.push("<!-- Konteyner -->");
+    lines.push("<!-- Container -->");
     lines.push('<div class="grid gap-4 grid-cols-[repeat(' + state.cols + ',minmax(0,1fr))] grid-rows-[repeat(' + state.rows + ',minmax(0,1fr))]">');
     sorted().forEach(function(a){
       lines.push('  <div class="col-start-' + a.c1 + ' col-span-' + (a.c2-a.c1+1) +
@@ -606,8 +606,8 @@ button,input,select,textarea{font:inherit;color:inherit}
     });
     lines.push("</div>");
     lines.push("");
-    lines.push("<!-- Not: varsayılan Tailwind 12 kolona kadar hazır sınıf verir,");
-    lines.push("     bu yüzden konteynerde arbitrary value kullanıldı. -->");
+    lines.push("<!-- Note: stock Tailwind only has ready-made classes up to 12 columns,");
+    lines.push("     so the container uses arbitrary values. -->");
     return lines.join("\n");
   }
 
@@ -629,7 +629,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 
   function output(){
     if(!state.areas.length){
-      out.textContent = "Alan çizdiğinde buraya kopyalamaya hazır metin gelecek.";
+      out.textContent = "Draw an area and the text to copy appears here.";
       hint.textContent = "";
       return;
     }
@@ -640,7 +640,7 @@ button,input,select,textarea{font:inherit;color:inherit}
       fmt==="ascii" ? asciiMap() :
       fmt==="json"  ? fmtJson()  : fmtPrompt();
     out.textContent = text;
-    hint.textContent = text.length + " karakter";
+    hint.textContent = text.length + " characters";
   }
 
   $("tabs").addEventListener("click", function(ev){
@@ -655,8 +655,8 @@ button,input,select,textarea{font:inherit;color:inherit}
   $("copy").addEventListener("click", function(){
     var btn = this, text = out.textContent;
     function done(ok){
-      btn.textContent = ok ? "Kopyalandı" : "Kopyalanamadı";
-      setTimeout(function(){ btn.textContent = "Kopyala"; }, 1400);
+      btn.textContent = ok ? "Copied" : "Could not copy";
+      setTimeout(function(){ btn.textContent = "Copy"; }, 1400);
     }
     if(navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(text).then(function(){ done(true); }, function(){ done(false); });

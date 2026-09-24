@@ -4,11 +4,12 @@ import { Selection } from './selection';
 import { RoomAnalyze } from './rooms/analyze';
 import { RoomCoding } from './rooms/coding';
 import { RoomPcb } from './rooms/pcb';
+import { ToolsMenu } from './tools';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze],
+  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, ToolsMenu],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -28,6 +29,9 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
         @if (!w.ready) { <span class="tcv-tab-soon">soon</span> }
       </button>
     }
+    <!-- Tools at the far end, apart from the rooms: they open over any
+         room rather than being one. -->
+    <app-tools-menu class="ml-auto" />
   </header>
 
   <!-- The 3D room stays mounted whichever tab is on. Its viewer holds a

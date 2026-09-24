@@ -802,7 +802,7 @@ station, 63.7 MB artifact
 
 ## Tools
 
-Hover the **Redline** wordmark at the top left: a **Tools** menu drops
+**Tools** at the right end of the top bar: hover it and the tools drop
 down. A tool opens in a window over whatever room is on screen, in the
 app's colours; **×** or Esc closes it, and it remembers its own work for next
 time.
@@ -812,5 +812,5 @@ time.
   Tailwind, ASCII or JSON. Useful for telling an agent how a screen should
   be laid out.
 
-A tool is a self-contained page in `frontend/public/tools/`, kept as written,
-plus one line in `frontend/src/app/tools.ts`.
+A tool is a self-contained page in `frontend/public/tools/` plus one line in
+`frontend/src/app/tools.ts`.
