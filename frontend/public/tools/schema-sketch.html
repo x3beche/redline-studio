@@ -1436,7 +1436,7 @@ function runCheck(){
     clearTimeout(tm); checkRes[f]=res; checkBusy=null; renderCheck();
     if(hadFocus && (document.activeElement===document.body || !document.activeElement) && !btn.hidden) btn.focus();
   }
-  fetch('/api/tools/check', { method:'POST', headers:{ 'content-type':'application/json', accept:'application/json' },
+  fetch('/api/tools/check', { method:'POST', headers:{ 'content-type':'application/json','X-Redline-CSRF':'1', accept:'application/json' },
       body:JSON.stringify({ kind:kind, input:input, extra:{} }), signal:ctl?ctl.signal:undefined })
     .then(function(r){ return r.text().then(function(t){ var d=null; try{ d=JSON.parse(t); }catch(e){} return { status:r.status, d:d }; }); })
     .then(function(x){

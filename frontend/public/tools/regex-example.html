@@ -1477,7 +1477,7 @@ function findMatches(re,text,cap){
     CK.busy=true;CK.fail=null;renderCheck();
     var ctl=window.AbortController?new AbortController():null,t=setTimeout(function(){if(ctl)ctl.abort();},200000);
     function fin(){clearTimeout(t);CK.busy=false;CK.sig=job.sig;renderCheck();if(document.activeElement===document.body||document.activeElement===el.check)el.check.focus();}
-    fetch("/api/tools/check",{method:"POST",headers:{"Content-Type":"application/json"},signal:ctl?ctl.signal:undefined,
+    fetch("/api/tools/check",{method:"POST",headers:{"Content-Type":"application/json","X-Redline-CSRF":"1"},signal:ctl?ctl.signal:undefined,
       body:JSON.stringify({kind:"regex",input:"",extra:{pattern:p,text:text,flags:fl,python:py,pcre:p}})})
       .then(function(r){return r.text().then(function(b){var d=null;try{d=JSON.parse(b);}catch(e){}return {status:r.status,ok:r.ok,d:d,body:b};});})
       .then(function(x){

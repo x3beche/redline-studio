@@ -120,3 +120,21 @@ def test_tools_md_lists_every_tool():
     doc = (PAGES.parent.parent.parent / "TOOLS.md").read_text()
     missing = [m.parent.name for m in MANIFESTS if f"`{m.parent.name}`" not in doc]
     assert not missing, f"not in TOOLS.md (run tools/tools_md.py): {missing}"
+
+
+def test_every_tool_request_that_writes_carries_the_csrf_header():
+    """With sign-in on, the API refuses a POST, PUT or DELETE without
+    X-Redline-CSRF (backend/auth.py). A tool page is outside the Angular app,
+    so its own fetches must send it - and a beacon cannot, so none is used."""
+    import re
+    files = [*PAGES.glob("*.html"), *PAGES.glob("*/*.js"), PAGES.parent.parent / "src/app/tools/room.ts"]
+    bad = []
+    for f in files:
+        text = f.read_text()
+        assert "sendBeacon" not in text, f"{f.name} uses sendBeacon, which cannot carry the CSRF header"
+        for m in re.finditer(r"method\s*:\s*['\"](POST|PUT|DELETE)['\"]", text):
+            window = text[max(0, m.start() - 300):m.end() + 300]
+            if "/api/" in window or "url(" in window:
+                if "X-Redline-CSRF" not in window:
+                    bad.append(f"{f.relative_to(PAGES.parent)}:{text[:m.start()].count(chr(10)) + 1}")
+    assert not bad, "writes to the API without X-Redline-CSRF: " + ", ".join(bad)

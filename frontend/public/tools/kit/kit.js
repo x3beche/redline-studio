@@ -41,11 +41,16 @@ const store = {
 };
 
 // Usage, for the Analytics tab: only when served by the app, never from a file.
+// A keepalive fetch rather than a beacon, because with sign-in on the app's
+// API wants its CSRF header, which a beacon cannot carry.
 function ping(id, event) {
   if (!/^https?:/.test(location.protocol)) return;
   try {
-    const body = JSON.stringify({ id, event, surface: 'ui' });
-    if (navigator.sendBeacon) navigator.sendBeacon('/api/tools/usage', new Blob([body], { type: 'application/json' }));
+    fetch('/api/tools/usage', {
+      method: 'POST', keepalive: true, credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Redline-CSRF': '1' },
+      body: JSON.stringify({ id, event, surface: 'ui' }),
+    }).catch(() => undefined);
   } catch { /* analytics never breaks a tool */ }
 }
 

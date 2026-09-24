@@ -1439,7 +1439,7 @@ function runCheck(){
   function done(res){checker.busy=null;checker.seq+=1;checker.results[tab]={text:text,res:res,seq:checker.seq};checker.sig='';renderCheck();}
   var ctl=typeof AbortController==='function'?new AbortController():null;
   var t=setTimeout(function(){if(ctl) ctl.abort();},180000);
-  fetch('/api/tools/check',{method:'POST',signal:ctl?ctl.signal:undefined,headers:{'Content-Type':'application/json',Accept:'application/json'},
+  fetch('/api/tools/check',{method:'POST',signal:ctl?ctl.signal:undefined,headers:{'Content-Type':'application/json','X-Redline-CSRF':'1',Accept:'application/json'},
     body:JSON.stringify({kind:CHECK_KIND[tab],input:text,extra:{}})})
     .then(function(r){
       return r.text().then(function(b){

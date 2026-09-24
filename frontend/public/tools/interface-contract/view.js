@@ -67,7 +67,7 @@ async function save(api, redraw) {
       }
     }
     const data = pick(api.raw);
-    const r = await fetch(url(project), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) });
+    const r = await fetch(url(project), { method: 'PUT', headers: { 'Content-Type': 'application/json','X-Redline-CSRF':'1' }, body: JSON.stringify({ data }) });
     if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 120)}`);
     const body = await r.json();
     S.project = project; S.updated = body.updated || new Date().toISOString(); S.saved = structuredClone(data); S.confirm = false;

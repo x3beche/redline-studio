@@ -1523,7 +1523,7 @@ if (typeof document !== "undefined") (function(){
       clearTimeout(timer); check.busy = null; check.results[t] = entry; syncCheck();
       if (hadFocus && !btn.hidden && (document.activeElement === document.body || !document.activeElement)) btn.focus();
     };
-    fetch("/api/tools/check", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({kind:"ts", input:"", extra:{files:files}}), signal:ac ? ac.signal : undefined})
+    fetch("/api/tools/check", {method:"POST", headers:{"Content-Type":"application/json","X-Redline-CSRF":"1"}, body:JSON.stringify({kind:"ts", input:"", extra:{files:files}}), signal:ac ? ac.signal : undefined})
       .then(function(res){
         return res.json().catch(function(){ return null; }).then(function(body){
           if (res.ok && body && typeof body === "object") return done({text:text, file:file, res:body});

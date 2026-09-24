@@ -65,7 +65,7 @@ async function save() {
   st.busy = true; st.msg = 'Saving…'; st.tone = ''; draw();
   const data = current();
   try {
-    const r = await fetch(url(), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) });
+    const r = await fetch(url(), { method: 'PUT', headers: { 'Content-Type': 'application/json','X-Redline-CSRF':'1' }, body: JSON.stringify({ data }) });
     if (!r.ok) {
       let why = String(r.status);
       try { why = (await r.json()).detail || why; } catch { /* not JSON */ }

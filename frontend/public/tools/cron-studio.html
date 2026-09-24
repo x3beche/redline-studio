@@ -1064,7 +1064,7 @@ function runCheck(){
   var body=JSON.stringify({kind:"cron",input:c.expr,extra:{tz:snap.tz,start:new Date(snap.now).toISOString(),count:10}});
   function finish(res){ res.tz=snap.tz; res.expr=c.expr; ck.busy=false; ck.res=res; ck.key=snap.key; renderCheck(); }
   try{
-    ckFetch("/api/tools/check",{method:"POST",headers:{"Content-Type":"application/json"},body:body},90000)
+    ckFetch("/api/tools/check",{method:"POST",headers:{"Content-Type":"application/json","X-Redline-CSRF":"1"},body:body},90000)
       .then(function(r){ return r.text().then(function(t){ var j=null; try{ j=JSON.parse(t); }catch(e){} return {status:r.status,j:j,t:t}; }); })
       .then(function(x){ finish(ckInterpret(x,snap)); },function(e){ finish({level:"danger",head:"The check could not run: "+(e&&e.name==="AbortError"?"no answer in 90 s.":(e&&e.message)||"network error."),notes:[]}); });
   }catch(e){ finish({level:"danger",head:"The check could not run: "+e.message,notes:[]}); }

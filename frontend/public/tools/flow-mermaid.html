@@ -1259,7 +1259,7 @@ function runCheck(){
   var code = outs.mermaid;
   CK.busy = true; CK.theme = pageDark() ? 'dark' : 'default'; renderCheck();
   function fail(t){ CK.busy = false; showCheck({ok:false, errors:[], notes:[], failText:t}, code); }
-  fetchT('/api/tools/check', {method:'POST', headers:{'Content-Type':'application/json'},
+  fetchT('/api/tools/check', {method:'POST', headers:{'Content-Type':'application/json','X-Redline-CSRF':'1'},
     body:JSON.stringify({kind:'mermaid', input:code, extra:{theme:CK.theme}})}, 120000)
     .then(function(resp){
       if (resp.status === 503) return resp.json().catch(function(){ return {}; }).then(function(j){

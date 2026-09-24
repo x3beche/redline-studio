@@ -41,7 +41,7 @@ async function convert() {
   st.busy = true; st.msg = `Converting ${f.name}…`; st.tone = ''; draw();
   try {
     const input = await b64(f);
-    const r = await fetch('/api/tools/check', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const r = await fetch('/api/tools/check', { method: 'POST', headers: { 'Content-Type': 'application/json','X-Redline-CSRF':'1' },
       body: JSON.stringify({ kind: 'pdftext', input, extra: { first, last } }) });
     if (!r.ok) {
       let why = String(r.status);

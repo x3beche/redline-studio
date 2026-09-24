@@ -17,7 +17,7 @@ function save(key: string, v: unknown): void {
 /** Usage for the Analytics tab; never in the way of opening a tool. */
 function ping(id: string, event: string): void {
   fetch('/api/tools/usage', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json','X-Redline-CSRF':'1' },
     body: JSON.stringify({ id, event, surface: 'ui' }), keepalive: true,
   }).catch(() => undefined);
 }
