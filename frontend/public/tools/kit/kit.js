@@ -8,7 +8,8 @@
 //   tool.js        export function run(input) -> result   (pure: no DOM)
 //   index.html     three lines that call mount()
 //   view.js        optional: export function view(el, result, input, api)
-//                  for a drawing the standard blocks cannot make
+//                  for a drawing the standard blocks cannot make; api.set(key,
+//                  value) changes an input (a clicked bit), api.raw is the form
 //
 // A result is { values, tables, texts, charts, warnings, notes } - every key
 // optional:
@@ -133,11 +134,15 @@ function tableEditor(def, rows, onChange) {
 }
 
 // ---------------- results ----------------
+// Whole numbers as they are (a byte count of 41236 is not 41240); the rest
+// to four significant figures.
+const show = (v, digits = 4) => (Number.isInteger(v) && Math.abs(v) < 1e15 ? String(v) : fmtNum(v, digits));
+
 function drawValues(values) {
   return $('div', { class: 'k-values' }, values.map((v) =>
     $('div', { class: `k-value${v.tone ? ` k-${v.tone}` : ''}`, title: v.hint || null },
       $('span', {}, v.label),
-      $('b', {}, typeof v.value === 'number' ? fmtNum(v.value, 4) : String(v.value ?? '–'), v.unit ? $('small', {}, ` ${v.unit}`) : null),
+      $('b', {}, typeof v.value === 'number' ? show(v.value) : String(v.value ?? '–'), v.unit ? $('small', {}, ` ${v.unit}`) : null),
       v.hint ? $('em', {}, v.hint) : null)));
 }
 
@@ -145,7 +150,7 @@ function drawTable(t) {
   return $('div', { class: 'k-block' }, t.title ? $('div', { class: 'k-title' }, t.title) : null,
     $('div', { class: 'k-tablewrap' }, $('table', { class: 'k-table' },
       $('thead', {}, $('tr', {}, t.columns.map((c) => $('th', {}, c)))),
-      $('tbody', {}, t.rows.map((r) => $('tr', {}, r.map((c) => $('td', {}, typeof c === 'number' ? fmtNum(c, 4) : String(c ?? '')))))))));
+      $('tbody', {}, t.rows.map((r) => $('tr', {}, r.map((c) => $('td', {}, typeof c === 'number' ? show(c) : String(c ?? '')))))))));
 }
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -213,12 +218,12 @@ export function promptFor(manifest, input, result) {
   const out = [`Tool: ${manifest.name} - ${manifest.blurb}`, '', 'Inputs:', inputText(manifest, input), ''];
   if (result.values?.length) {
     out.push('Results:');
-    for (const v of result.values) out.push(`- ${v.label}: ${typeof v.value === 'number' ? fmtNum(v.value, 5) : v.value}${v.unit ? ' ' + v.unit : ''}${v.hint ? ` (${v.hint})` : ''}`);
+    for (const v of result.values) out.push(`- ${v.label}: ${typeof v.value === 'number' ? show(v.value, 5) : v.value}${v.unit ? ' ' + v.unit : ''}${v.hint ? ` (${v.hint})` : ''}`);
     out.push('');
   }
   for (const t of result.tables || []) {
     out.push(`${t.title || 'Table'}:`, '| ' + t.columns.join(' | ') + ' |', '|' + t.columns.map(() => '---').join('|') + '|');
-    for (const r of t.rows) out.push('| ' + r.map((c) => (typeof c === 'number' ? fmtNum(c, 5) : String(c ?? ''))).join(' | ') + ' |');
+    for (const r of t.rows) out.push('| ' + r.map((c) => (typeof c === 'number' ? show(c, 5) : String(c ?? ''))).join(' | ') + ' |');
     out.push('');
   }
   if (result.warnings?.length) out.push('Warnings:', ...result.warnings.map((w) => `- ${w}`), '');
@@ -303,7 +308,11 @@ export async function mount(base = './') {
       ...(last.charts || []).map(drawChart),
       ...(last.tables || []).map(drawTable),
       ...(last.notes?.length ? [$('div', { class: 'k-notes' }, last.notes.map((w) => $('div', {}, w)))] : []));
-    if (view) { try { view(custom, last, input, { fmtNum }); } catch (e) { console.error(e); } }
+    if (view) {
+      // A drawing may change an input - a bit clicked, a node dragged - with api.set.
+      const set = (key, value) => { raw[key] = value; store.set(KEY, raw); drawForm(); compute(); };
+      try { view(custom, last, input, { fmtNum, set, raw: { ...raw } }); } catch (e) { console.error(e); }
+    }
     drawOutputs();
     if (!pinged) { pinged = true; ping(manifest.id, 'run'); }
   };
