@@ -1,0 +1,29 @@
+{
+  "id": "print-guidelines",
+  "name": "Print Guideline Checker",
+  "blurb": "wall, bridge and overhang values checked for a print process",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["3d printing", "design for additive", "dfam", "fdm", "sla", "resin", "sls", "mjf", "minimum wall thickness", "overhang angle", "bridge length", "hole size", "clearance", "escape hole", "print tolerance"],
+  "intro": "Enter the thinnest wall, longest bridge, steepest overhang and the other critical features of a part; each is checked against the typical published limit of the chosen process (Hubs, Formlabs and HP design guides; FDM limits scale with the nozzle). Leave a value empty to skip it.",
+  "inputs": [
+    { "key": "process", "label": "Process", "type": "select", "default": "fdm",
+      "options": [["fdm", "FDM / FFF"], ["sla", "SLA / resin"], ["sls", "SLS nylon"], ["mjf", "HP Multi Jet Fusion"]] },
+    { "key": "nozzle", "label": "Nozzle", "type": "number", "unit": "mm", "default": "0.4", "when": { "key": "process", "equals": "fdm" } },
+    { "key": "wall", "label": "Thinnest wall", "type": "number", "unit": "mm", "default": "1.2" },
+    { "key": "overhang", "label": "Steepest overhang", "type": "number", "unit": "° from vertical", "default": "40" },
+    { "key": "bridge", "label": "Longest bridge", "type": "number", "unit": "mm", "default": "8" },
+    { "key": "hole", "label": "Smallest hole Ø", "type": "number", "unit": "mm", "default": "3" },
+    { "key": "pin", "label": "Thinnest pin / post Ø", "type": "number", "unit": "mm", "default": "4" },
+    { "key": "detail", "label": "Smallest detail", "type": "number", "unit": "mm", "default": "0.8", "help": "Text stroke, emboss or engrave width." },
+    { "key": "clearance", "label": "Clearance between parts", "type": "number", "unit": "mm", "default": "0.5" },
+    { "key": "escape", "label": "Drain / escape hole Ø", "type": "number", "unit": "mm", "default": "", "when": { "key": "process", "in": ["sla", "sls", "mjf"] }, "help": "Only for hollow parts." },
+    { "key": "size", "label": "Largest dimension", "type": "number", "unit": "mm", "default": "100", "help": "For the expected tolerance." }
+  ],
+  "examples": [
+    { "title": "FDM enclosure lid", "input": { "process": "fdm", "nozzle": "0.4", "wall": "1.2", "overhang": "40", "bridge": "8", "hole": "3", "pin": "4", "detail": "0.8", "clearance": "0.4", "size": "100" } },
+    { "title": "Hollow resin figure", "input": { "process": "sla", "wall": "1.0", "overhang": "60", "bridge": "15", "hole": "1", "pin": "0.6", "detail": "0.3", "clearance": "0.5", "escape": "3", "size": "60" } }
+  ],
+  "usage": "Give the process (fdm, sla, sls, mjf), for fdm the nozzle in mm, and any of: wall, bridge, hole, pin, detail, clearance, escape in mm, overhang in degrees from vertical, and the largest dimension (size) in mm. Empty values are skipped. It returns a pass / at-the-limit / fail table with the guideline for each, the count passed, the expected tolerance, and a warning for each failing value with why it matters. Use it before printing or when designing a part for a given process.",
+  "sources": ["Hubs (Protolabs Network), Key design considerations for 3D printing: FDM and SLS limits and tolerances", "Formlabs, Design guide for SLA 3D printing (walls, overhangs, bridges, holes, drain holes)", "HP Multi Jet Fusion design guidelines (typical values)"]
+}

@@ -1,0 +1,34 @@
+{
+  "id": "print-cost",
+  "name": "Print Time & Cost",
+  "blurb": "print time and cost from volume, infill and material price",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["3d print cost", "print time", "fdm", "filament", "filament usage", "grams", "infill", "slicer estimate", "material cost", "machine hour", "quote", "volumetric flow"],
+  "intro": "Estimates an FDM print's filament mass, time and cost from the part volume (and surface area if you have it), the walls, infill and print settings. It is a first-order model (shell + infill, time = volume / effective flow), typically within ±25 % of a slicer.",
+  "inputs": [
+    { "key": "volume", "label": "Part volume", "type": "number", "unit": "cm³", "default": "50" },
+    { "key": "area", "label": "Surface area", "type": "number", "unit": "cm²", "default": "", "help": "From CAD; empty = estimated as a cube." },
+    { "key": "material", "label": "Material", "type": "select", "default": "pla",
+      "options": [["pla", "PLA (1.24 g/cm³)"], ["petg", "PETG (1.27)"], ["abs", "ABS (1.04)"], ["asa", "ASA (1.07)"], ["tpu", "TPU (1.21)"], ["pa", "Nylon (1.14)"], ["pc", "PC (1.20)"], ["cf", "PLA-CF / PETG-CF (1.30)"]] },
+    { "key": "price", "label": "Filament price", "type": "number", "unit": "per kg", "default": "25" },
+    { "key": "infill", "label": "Infill", "type": "number", "unit": "%", "default": "20" },
+    { "key": "walls", "label": "Walls", "type": "number", "unit": "lines", "default": "3" },
+    { "key": "support", "label": "Support", "type": "number", "unit": "% of volume", "default": "0" },
+    { "key": "line", "label": "Line width", "type": "number", "unit": "mm", "default": "0.45" },
+    { "key": "layer", "label": "Layer height", "type": "number", "unit": "mm", "default": "0.2" },
+    { "key": "speed", "label": "Print speed", "type": "number", "unit": "mm/s", "default": "60" },
+    { "key": "efficiency", "label": "Efficiency", "type": "number", "unit": "%", "default": "55", "help": "Average share of the nominal speed actually reached." },
+    { "key": "rate", "label": "Machine rate", "type": "number", "unit": "per hour", "default": "1" },
+    { "key": "power", "label": "Printer power", "type": "number", "unit": "W", "default": "120" },
+    { "key": "kwh", "label": "Energy price", "type": "number", "unit": "per kWh", "default": "0.3" },
+    { "key": "failure", "label": "Failure margin", "type": "number", "unit": "%", "default": "10" },
+    { "key": "currency", "label": "Currency", "type": "text", "default": "EUR" }
+  ],
+  "examples": [
+    { "title": "50 cm³ PLA bracket, 20 % infill", "input": { "volume": "50", "area": "", "material": "pla", "price": "25", "infill": "20", "walls": "3", "support": "0", "line": "0.45", "layer": "0.2", "speed": "60", "efficiency": "55", "rate": "1", "power": "120", "kwh": "0.3", "failure": "10", "currency": "EUR" } },
+    { "title": "PETG enclosure with support, 0.6 mm nozzle", "input": { "volume": "180", "area": "900", "material": "petg", "price": "22", "infill": "15", "walls": "2", "support": "8", "line": "0.65", "layer": "0.3", "speed": "70", "efficiency": "50", "rate": "1.5", "power": "150", "kwh": "0.3", "failure": "5", "currency": "EUR" } }
+  ],
+  "usage": "Give the part volume in cm³ (and surface area in cm² if known), material (pla, petg, abs, asa, tpu, pa, pc, cf), filament price per kg, infill %, walls, support % of volume, line width and layer height in mm, speed in mm/s and efficiency %; optionally machine rate per hour, printer power in W, energy price per kWh, failure margin % and a currency label. It returns print time, filament grams and length, material, machine and total cost, and a table for other infills. Use it for a quick quote or to compare settings before slicing.",
+  "sources": ["Rule of thumb: shell + infill volume model and time = extruded volume / (speed x line width x layer height x efficiency), as used by slicer estimates", "Filament densities: manufacturers' data sheets (Prusament, Polymaker)"]
+}

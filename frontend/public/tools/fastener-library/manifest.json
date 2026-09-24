@@ -1,0 +1,27 @@
+{
+  "id": "fastener-library",
+  "name": "Fastener Library",
+  "blurb": "screw, nut and washer sizes by head type, with CAD variables",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["screw", "bolt", "nut", "washer", "socket head cap", "din 912", "iso 4762", "button head", "countersunk", "pan head", "hex head", "nyloc", "counterbore", "nut trap", "screw length"],
+  "intro": "Pick a metric size and head type and get the head, nut and washer dimensions from the ISO/DIN standards, the clearance hole and counterbore or countersink, the screw length to order for your grip, and the numbers as CAD variables.",
+  "inputs": [
+    { "key": "size", "label": "Size", "type": "select", "default": "M3", "options": ["M1.6", "M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "M10", "M12", "M16"] },
+    { "key": "head", "label": "Head", "type": "select", "default": "socket",
+      "options": [["socket", "Socket head cap (ISO 4762 / DIN 912)"], ["button", "Button head (ISO 7380)"], ["countersunk", "Countersunk (ISO 10642 / DIN 7991)"], ["pan", "Pan head Phillips (ISO 7045)"], ["hex", "Hex head (ISO 4017 / DIN 933)"]] },
+    { "key": "nut", "label": "Nut", "type": "select", "default": "none",
+      "options": [["none", "None: tapped hole"], ["hex", "Hex nut (ISO 4032)"], ["nyloc", "Nyloc nut (DIN 985)"]] },
+    { "key": "material", "label": "Tapped into", "type": "select", "default": "aluminium", "when": { "key": "nut", "equals": "none" },
+      "options": [["steel", "Steel"], ["castiron", "Cast iron"], ["aluminium", "Aluminium"], ["plastic", "Plastic"]] },
+    { "key": "grip", "label": "Clamped thickness (grip)", "type": "number", "unit": "mm", "default": "6",
+      "help": "Thickness of the parts the screw passes through, without washers." },
+    { "key": "washer", "label": "Washer (ISO 7089) under head and nut", "type": "bool", "default": false }
+  ],
+  "examples": [
+    { "title": "M3 socket head into aluminium through a 6 mm plate", "input": { "size": "M3", "head": "socket", "nut": "none", "material": "aluminium", "grip": "6", "washer": false } },
+    { "title": "M5 button head with a nyloc nut through 10 mm", "input": { "size": "M5", "head": "button", "nut": "nyloc", "grip": "10", "washer": true } }
+  ],
+  "usage": "Give size (M1.6-M16), head (socket, button, countersunk, pan, hex), nut (none, hex, nyloc), for nut=none the material tapped into (steel, castiron, aluminium, plastic), the grip in mm and whether washers are used. It returns head diameter and height, drive, ISO 273 clearance hole, counterbore or countersink, nut and washer sizes, the length needed and the standard length to order, and a 'CAD variables' text with all of them in mm. Use it when modelling holes and pockets for a screw joint.",
+  "sources": ["ISO 4762, ISO 7380-1, ISO 10642, ISO 7045, ISO 4017 (screw heads)", "ISO 4032 and DIN 985 (nuts), ISO 7089 (washers)", "ISO 273 (clearance holes), DIN 974-1 (counterbores)", "Thread engagement lengths and nut protrusion: rule of thumb (VDI 2230 / Machinery's Handbook practice)"]
+}

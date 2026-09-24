@@ -1,0 +1,21 @@
+{
+  "id": "iso-fit",
+  "name": "Clearance Fit Calculator",
+  "blurb": "actual clearance or interference of an ISO fit such as H7/g6",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["iso fit", "iso 286", "limits and fits", "h7", "g6", "clearance fit", "interference fit", "press fit", "transition fit", "shaft tolerance", "hole tolerance", "bearing fit", "it grade", "fundamental deviation"],
+  "intro": "Give a nominal size and a fit like H7/g6: it returns the hole and shaft limits from ISO 286-1 and the smallest and largest clearance (or interference) that can occur, with the preferred fits at that size for comparison.",
+  "view": true,
+  "inputs": [
+    { "key": "size", "label": "Nominal size", "type": "number", "unit": "mm", "default": "25" },
+    { "key": "fit", "label": "Fit (hole/shaft)", "type": "text", "default": "H7/g6", "placeholder": "H7/g6, H7/p6, G7/h6",
+      "help": "Letters C D E F G H JS K M N P R S (hole) and c-s (shaft), grades 4-12." }
+  ],
+  "examples": [
+    { "title": "Ø25 sliding fit H7/g6", "input": { "size": "25", "fit": "H7/g6" } },
+    { "title": "Ø10 dowel pin press fit H7/p6", "input": { "size": "10", "fit": "H7/p6" } }
+  ],
+  "usage": "Give the nominal size in mm (0-500) and the fit as text 'H7/g6' (hole letter and grade / shaft letter and grade; letters C-S, grades 4-12). It returns the hole and shaft deviations in µm and limits in mm, the minimum and maximum clearance in µm (negative = interference), the fit type, and a table of the preferred hole-basis fits at that size. Use it to choose or check a fit for a shaft, pin or bearing seat.",
+  "sources": ["ISO 286-1:2010 tables 1-3 (IT grades, fundamental deviations) and clause 5.3 (hole deviations: general rule and Δ rule)", "ISO 286-2 / Machinery's Handbook preferred fits (H11/c11 … H7/s6)"]
+}

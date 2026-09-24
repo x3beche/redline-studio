@@ -1,0 +1,29 @@
+{
+  "id": "shrinkage",
+  "name": "Shrinkage Compensator",
+  "blurb": "corrected dimension for a material's shrinkage",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["shrinkage", "shrink", "mould shrinkage", "mold shrinkage", "shrink allowance", "pattern allowance", "casting", "injection moulding", "scale factor", "3d print scaling", "calibration", "dimensional compensation", "clay shrinkage"],
+  "intro": "Gives the size to make a mould, pattern or print so the part shrinks to the size you want: mould = part / (1 - s). Take s from a material's typical range (moulding, casting, FDM, clay), give it directly, or measure it on a test piece.",
+  "inputs": [
+    { "key": "mode", "label": "Shrinkage from", "type": "select", "default": "material",
+      "options": [["material", "A material's typical range"], ["custom", "A value I know"], ["measured", "A test piece I measured"]] },
+    { "key": "material", "label": "Material", "type": "select", "default": "abs", "when": { "key": "mode", "equals": "material" },
+      "options": [["abs", "ABS (moulded, 0.4-0.7 %)"], ["pc", "PC (0.5-0.7 %)"], ["pcabs", "PC/ABS (0.5-0.7 %)"], ["pmma", "PMMA (0.3-0.6 %)"], ["ps", "PS (0.3-0.6 %)"], ["pp", "PP (1.0-2.5 %)"], ["hdpe", "HDPE (1.5-3.0 %)"], ["ldpe", "LDPE (1.5-3.0 %)"], ["pom", "POM (1.8-2.5 %)"], ["pa6", "PA6 (0.8-1.5 %)"], ["pa66", "PA66 (1.0-2.0 %)"], ["pa66gf", "PA66 GF30, flow (0.3-0.8 %)"], ["pbt", "PBT (1.5-2.0 %)"],
+        ["castiron", "Cast: grey iron (0.8-1.0 %)"], ["caststeel", "Cast: steel (1.5-2.0 %)"], ["castal", "Cast: aluminium (1.0-1.5 %)"], ["brass", "Cast: brass (1.3-1.5 %)"], ["bronze", "Cast: bronze (1.0-2.0 %)"], ["zinc", "Zinc die casting (0.4-0.7 %)"],
+        ["fdmpla", "FDM: PLA (0.2-0.4 %)"], ["fdmpetg", "FDM: PETG (0.3-0.5 %)"], ["fdmabs", "FDM: ABS / ASA (0.5-0.8 %)"], ["fdmpa", "FDM: nylon (1.0-1.5 %)"], ["clay", "Stoneware clay, wet to fired (10-13 %)"]] },
+    { "key": "shrink", "label": "Shrinkage", "type": "number", "unit": "%", "default": "0.5", "when": { "key": "mode", "equals": "custom" } },
+    { "key": "design", "label": "Test piece, designed", "type": "number", "unit": "mm", "default": "100", "when": { "key": "mode", "equals": "measured" } },
+    { "key": "measured", "label": "Test piece, measured", "type": "number", "unit": "mm", "default": "99.4", "when": { "key": "mode", "equals": "measured" } },
+    { "key": "dims", "label": "Part dimensions", "type": "table",
+      "columns": [{ "key": "name", "label": "Name" }, { "key": "size", "label": "Size (mm)" }],
+      "default": [{ "name": "Length", "size": "120" }, { "name": "Width", "size": "60" }, { "name": "Boss hole Ø", "size": "4.2" }] }
+  ],
+  "examples": [
+    { "title": "ABS housing, 120 x 60 mm", "input": { "mode": "material", "material": "abs", "dims": [{ "name": "Length", "size": "120" }, { "name": "Width", "size": "60" }, { "name": "Boss hole Ø", "size": "4.2" }] } },
+    { "title": "Aluminium casting pattern", "input": { "mode": "material", "material": "castal", "dims": [{ "name": "Flange Ø", "size": "180" }, { "name": "Height", "size": "45" }] } }
+  ],
+  "usage": "Give mode (material, custom or measured): for material a key such as abs, pp, pom, castal, fdmpla, clay; for custom the shrinkage in %; for measured the designed and measured test-piece size in mm. Give dims as a list of {name, size} in mm. It returns the shrinkage, the exact scale factor 1/(1-s) and CAD/slicer scale %, the corrected size of each dimension, and for a material range the spread of the part size. Use it to size a mould cavity, casting pattern or a print that must end at an exact size.",
+  "sources": ["Linear mould shrinkage: typical ranges from resin suppliers' data sheets (e.g. Covestro, BASF, DuPont) and moulding handbooks", "Patternmaker's shrinkage allowances: foundry practice (Campbell, Castings)", "Exact correction mould = part / (1 - s); FDM and clay values: rule of thumb"]
+}

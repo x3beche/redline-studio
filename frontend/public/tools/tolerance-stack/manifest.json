@@ -1,0 +1,38 @@
+{
+  "id": "tolerance-stack",
+  "name": "Tolerance Stack-Up",
+  "blurb": "worst-case and statistical sum of a chain of dimensions",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["tolerance stack", "stack-up", "stackup", "tolerance analysis", "worst case", "rss", "root sum square", "statistical tolerancing", "gap analysis", "dimension chain", "tolerance loop", "assembly fit", "gd&t"],
+  "intro": "Enter the dimensions of a one-dimensional loop with their tolerances and whether each adds to or takes from the result (for example a gap). It returns the worst-case and root-sum-square (RSS) range, which dimension contributes most, and checks the result against your limits.",
+  "inputs": [
+    { "key": "dims", "label": "Dimensions in the loop", "type": "table",
+      "columns": [
+        { "key": "name", "label": "Name" },
+        { "key": "nominal", "label": "Nominal" },
+        { "key": "plus", "label": "+ tol", "default": "0.1" },
+        { "key": "minus", "label": "− tol", "default": "0.1" },
+        { "key": "dir", "label": "Dir", "type": "select", "options": ["+", "-"], "default": "-" }
+      ],
+      "default": [
+        { "name": "Housing bore depth", "nominal": "60", "plus": "0.1", "minus": "0.1", "dir": "+" },
+        { "name": "Bearing width", "nominal": "20", "plus": "0", "minus": "0.12", "dir": "-" },
+        { "name": "Spacer", "nominal": "25", "plus": "0.08", "minus": "0.08", "dir": "-" },
+        { "name": "Gear hub", "nominal": "14.5", "plus": "0.05", "minus": "0.05", "dir": "-" }
+      ] },
+    { "key": "lsl", "label": "Result must be at least", "type": "number", "default": "0.1", "help": "Lower limit of the result, e.g. the smallest allowed gap; empty for none." },
+    { "key": "usl", "label": "Result must be at most", "type": "number", "default": "1", "help": "Upper limit; empty for none." },
+    { "key": "unit", "label": "Unit", "type": "select", "default": "mm", "options": ["mm", "in", "µm"] }
+  ],
+  "examples": [
+    { "title": "End play of a gear on a shaft", "input": { "dims": [
+      { "name": "Housing bore depth", "nominal": "60", "plus": "0.1", "minus": "0.1", "dir": "+" },
+      { "name": "Bearing width", "nominal": "20", "plus": "0", "minus": "0.12", "dir": "-" },
+      { "name": "Spacer", "nominal": "25", "plus": "0.08", "minus": "0.08", "dir": "-" },
+      { "name": "Gear hub", "nominal": "14.5", "plus": "0.05", "minus": "0.05", "dir": "-" }
+    ], "lsl": "0.1", "usl": "1", "unit": "mm" } }
+  ],
+  "usage": "Give dims as a list of {name, nominal, plus, minus, dir}: plus and minus are the tolerance sizes (minus as a positive number), dir '+' if the dimension increases the result and '-' if it decreases it. Optionally lsl and usl limits for the result, and the unit label. It returns nominal and mean result, worst-case, RSS and modified-RSS ranges, pass/fail against the limits, the expected out-of-spec share, and each dimension's percentage contribution. Use it to check a gap, end play or fit that depends on several parts.",
+  "sources": ["Fortini, Dimensioning for Interchangeable Manufacture (worst case and RSS stack-up)", "ASME Y14.5 / ASME Y14.5.1 tolerance analysis practice; Bender's 1.5 factor for modified RSS", "Abramowitz & Stegun 7.1.26 (normal distribution)"]
+}

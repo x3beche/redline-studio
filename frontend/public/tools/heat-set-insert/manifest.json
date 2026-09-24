@@ -1,0 +1,26 @@
+{
+  "id": "heat-set-insert",
+  "name": "Heat-Set Insert Sizer",
+  "blurb": "boss hole diameter and wall thickness for an insert",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["heat-set insert", "heat set", "threaded insert", "brass insert", "thermal insert", "ruthex", "boss", "boss diameter", "wall thickness", "3d print thread", "melt-in insert", "knurled insert", "pull-out"],
+  "intro": "Gives the hole diameter and depth to model for a tapered brass heat-set insert, and the boss around it: at least 1.6 x, better 2 x the insert's outer diameter (thermoplastic boss guides). It checks your boss and, for FDM, how many perimeters fit in the wall.",
+  "inputs": [
+    { "key": "insert", "label": "Insert", "type": "select", "default": "m3",
+      "options": [["m2", "M2 (Ø3.6 x 4.0)"], ["m2.5", "M2.5 (Ø4.0 x 5.7)"], ["m3", "M3 (Ø4.6 x 5.7)"], ["m3-short", "M3 short (Ø4.6 x 3.0)"], ["m4", "M4 (Ø6.3 x 8.1)"], ["m5", "M5 (Ø7.0 x 9.5)"], ["m6", "M6 (Ø8.7 x 12.7)"], ["custom", "Custom: from its data sheet"]] },
+    { "key": "od", "label": "Insert outer Ø", "type": "number", "unit": "mm", "default": "4.6", "when": { "key": "insert", "equals": "custom" } },
+    { "key": "length", "label": "Insert length", "type": "number", "unit": "mm", "default": "5.7", "when": { "key": "insert", "equals": "custom" } },
+    { "key": "process", "label": "Part made by", "type": "select", "default": "fdm", "options": [["fdm", "FDM 3D print"], ["moulded", "Injection moulding / machined"]] },
+    { "key": "material", "label": "Material", "type": "select", "default": "pla",
+      "options": [["pla", "PLA"], ["petg", "PETG"], ["abs", "ABS / ASA"], ["pa", "Nylon (PA)"], ["pc", "PC"], ["other", "Other thermoplastic"]] },
+    { "key": "boss", "label": "Your boss outer Ø", "type": "number", "unit": "mm", "default": "10", "help": "The outside of the plastic around the hole; leave empty to skip the check." },
+    { "key": "line", "label": "Line width", "type": "number", "unit": "mm", "default": "0.45", "when": { "key": "process", "equals": "fdm" } }
+  ],
+  "examples": [
+    { "title": "M3 insert in a PETG print, 8 mm boss", "input": { "insert": "m3", "process": "fdm", "material": "petg", "boss": "8", "line": "0.45" } },
+    { "title": "Custom Ø5.3 x 6.4 insert, moulded ABS", "input": { "insert": "custom", "od": "5.3", "length": "6.4", "process": "moulded", "material": "abs", "boss": "11" } }
+  ],
+  "usage": "Give the insert (m2, m2.5, m3, m3-short, m4, m5, m6 or custom with od and length in mm), the process (fdm or moulded), the material and optionally your boss outer diameter and FDM line width in mm. It returns the hole diameter and depth, the minimum and recommended boss diameter, the resulting wall and perimeter count, the iron temperature and CAD variables. Use it when modelling a boss for a threaded insert in a plastic part.",
+  "sources": ["Ruthex and CNC Kitchen heat-set insert data sheets (typical hole diameters and lengths)", "Spirol, PEM and Tappex design guides for inserts in thermoplastics: boss OD about 2 x insert OD", "CNC Kitchen heat-set insert pull-out tests (hole depth, perimeters); iron temperature: rule of thumb"]
+}

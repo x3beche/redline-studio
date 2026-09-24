@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-104 tools. **MCP** marks the ones agents can run with `run_tool`.
+112 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -175,6 +175,19 @@ agents, the most used, and every tool nobody used.
 | **Task Timing Planner** · MCP | `task-timing` | scheduling conflicts of periodic tasks from period and duration | Embedded |
 | **Units & Numbers** | `units` | mm, mil and inch; hex, decimal and binary; UART baud and timer periods | Embedded, PCB |
 | **Watchdog Planner** · MCP | `watchdog-planner` | a safe watchdog period and feed points from the longest task | Embedded |
+
+### Mechanical & 3D
+
+| Tool | id | What it answers | Rooms |
+|---|---|---|---|
+| **Clearance Fit Calculator** · MCP | `iso-fit` | actual clearance or interference of an ISO fit such as H7/g6 | 3D |
+| **Fastener Library** · MCP | `fastener-library` | screw, nut and washer sizes by head type, with CAD variables | 3D |
+| **Heat-Set Insert Sizer** · MCP | `heat-set-insert` | boss hole diameter and wall thickness for an insert | 3D |
+| **Print Guideline Checker** · MCP | `print-guidelines` | wall, bridge and overhang values checked for a print process | 3D |
+| **Print Time & Cost** · MCP | `print-cost` | print time and cost from volume, infill and material price | 3D |
+| **Shrinkage Compensator** · MCP | `shrinkage` | corrected dimension for a material's shrinkage | 3D |
+| **Thread & Tap Drill Chart** · MCP | `thread-drill` | tap drill and clearance hole sizes for a thread | 3D |
+| **Tolerance Stack-Up** · MCP | `tolerance-stack` | worst-case and statistical sum of a chain of dimensions | 3D |
 
 ### Web & design
 

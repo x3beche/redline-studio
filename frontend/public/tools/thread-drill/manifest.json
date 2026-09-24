@@ -1,0 +1,124 @@
+{
+  "id": "thread-drill",
+  "name": "Thread & Tap Drill Chart",
+  "blurb": "tap drill and clearance hole sizes for a thread",
+  "group": "mechanical",
+  "rooms": [
+    "cad"
+  ],
+  "keywords": [
+    "tap drill",
+    "thread",
+    "tapping",
+    "clearance hole",
+    "through hole",
+    "iso 273",
+    "metric thread",
+    "unc",
+    "unf",
+    "pitch",
+    "minor diameter",
+    "thread engagement",
+    "percent thread",
+    "drill chart",
+    "bolt hole"
+  ],
+  "intro": "Pick an ISO metric (coarse or fine) or Unified inch thread and get the chart tap drill, the drill for any percentage of thread, the basic minor diameter and the clearance holes. Tap drills follow the standard charts (about 75 % thread), clearance holes ISO 273 or the inch close/free fit charts.",
+  "inputs": [
+    {
+      "key": "thread",
+      "label": "Thread",
+      "type": "select",
+      "default": "M3",
+      "options": [
+        "M1",
+        "M1.2",
+        "M1.4",
+        "M1.6",
+        "M2",
+        "M2.5",
+        "M3",
+        "M4",
+        "M5",
+        "M6",
+        "M8",
+        "M10",
+        "M12",
+        "M14",
+        "M16",
+        "M20",
+        "M24",
+        "M30",
+        "M3x0.35",
+        "M4x0.5",
+        "M5x0.5",
+        "M6x0.75",
+        "M8x1",
+        "M10x1.25",
+        "M10x1",
+        "M12x1.5",
+        "M12x1.25",
+        "M14x1.5",
+        "M16x1.5",
+        "M20x1.5",
+        "M24x2",
+        "M30x2",
+        "#0-80 UNF",
+        "#2-56 UNC",
+        "#4-40 UNC",
+        "#6-32 UNC",
+        "#8-32 UNC",
+        "#10-24 UNC",
+        "#10-32 UNF",
+        "1/4-20 UNC",
+        "1/4-28 UNF",
+        "5/16-18 UNC",
+        "5/16-24 UNF",
+        "3/8-16 UNC",
+        "3/8-24 UNF",
+        "1/2-13 UNC",
+        "1/2-20 UNF"
+      ]
+    },
+    {
+      "key": "engagement",
+      "label": "Thread engagement",
+      "type": "number",
+      "unit": "%",
+      "default": "75",
+      "help": "75 % is the chart value; 60-70 % for soft or plastic material."
+    },
+    {
+      "key": "filter",
+      "label": "Filter the table",
+      "type": "text",
+      "default": "",
+      "placeholder": "e.g. fine, M1, UNF"
+    }
+  ],
+  "examples": [
+    {
+      "title": "M4 into aluminium",
+      "input": {
+        "thread": "M4",
+        "engagement": "70",
+        "filter": ""
+      }
+    },
+    {
+      "title": "1/4-20 UNC",
+      "input": {
+        "thread": "1/4-20 UNC",
+        "engagement": "75",
+        "filter": ""
+      }
+    }
+  ],
+  "usage": "Give the thread as one of the listed names (M3, M8x1, 1/4-20 UNC, #6-32 UNC) and optionally the thread engagement in % (default 75). It returns the chart tap drill, the drill diameter for that engagement in mm, the basic minor diameter, the clearance holes (ISO 273 fine/medium/coarse or inch close/free), a table of the whole thread family and CAD variables. Use it when modelling a tapped or through hole for a screw.",
+  "sources": [
+    "ISO 261 / ISO 262 (metric pitches), ISO 68-1 (basic profile, D1 = D - 1.0825 P)",
+    "ISO 273 (clearance holes for bolts and screws)",
+    "DIN 336 (tap drill diameters)",
+    "Machinery's Handbook: percentage of thread formula and inch tap / clearance drill charts; ASME B1.1 (Unified threads)"
+  ]
+}
