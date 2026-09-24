@@ -1037,6 +1037,11 @@ async def cmd_code(args):
 
 
 def main() -> None:
+    # The repo's .env, before anything reads the environment: the token
+    # (X3_TOKEN) is needed by the API-backed commands - `board ...` - as
+    # well as by the database ones. What the shell already set wins.
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / ".env")
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
