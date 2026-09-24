@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import (ato, insights, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (actors, ato, insights, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
 
@@ -549,7 +549,10 @@ def _out(d: dict) -> dict:
             "image_after_bytes": (d.get("image_after") or {}).get("bytes", 0),
             "summary": d.get("summary"),
             "comment_original": d.get("comment_original"),
-            "summary_manual": bool(d.get("summary_manual"))}
+            "summary_manual": bool(d.get("summary_manual")),
+            # Who wrote it, and who last changed its status; older notes
+            # predate attribution and say nothing.
+            "created_by": d.get("created_by"), "status_by": d.get("status_by")}
 
 
 async def _log_openrouter(rid: str, used: dict, surface: str,
@@ -727,6 +730,7 @@ async def create_revision(body: RevisionIn):
     doc = {
         "_id": rid,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": actors.current(),
         "comment": body.comment, "camera": body.camera,
         "part": body.part, "model": body.model, "kind": body.kind or "cad",
         "status": "draft", "queued_at": None,
@@ -825,6 +829,7 @@ async def edit_revision(rid: str, body: RevisionEdit):
     if not patch:
         raise HTTPException(400, "nothing to change")
     patch["edited_at"] = datetime.now(timezone.utc).isoformat()
+    patch["edited_by"] = actors.current()
 
     res = await db().revisions.update_one({"_id": rid}, {"$set": patch})
     if res.matched_count == 0:
@@ -1140,6 +1145,26 @@ async def board_model(bid: str):
 
 # ---------------- parts ----------------
 @app.middleware("http")
+async def _who_acts(request, call_next):
+    """Who this request is from: the person, or the agent named in the
+    X-Redline-Actor header. Every delete and change of state goes into the
+    audit trail with it, whatever route it came through."""
+    who = actors.from_header(request.headers.get(actors.HEADER))
+    token = actors.CURRENT.set(who)
+    try:
+        response = await call_next(request)
+        kind = actors.audited(request.method, request.url.path)
+        if kind and response.status_code < 400:
+            await actors.audit(db(), kind, request.url.path,
+                               {"method": request.method,
+                                **({"query": str(request.url.query)} if request.url.query else {})},
+                               actor=who)
+        return response
+    finally:
+        actors.CURRENT.reset(token)
+
+
+@app.middleware("http")
 async def _timed(request, call_next):
     """How long each API request took, by route, for the Analytics room."""
     import time as _t
@@ -1168,6 +1193,15 @@ async def _who_asks(request, call_next):
         agent = request.headers.get("user-agent", "")
         lcsc.WHO.set("page" if "Mozilla" in agent else "agent")
     return await call_next(request)
+
+
+@app.get("/api/audit")
+async def audit_trail(limit: int = 200):
+    """Who deleted, changed or reset what, newest first."""
+    rows = [d async for d in db()[actors.AUDIT].find({}, {"_id": 0}).sort("at", -1).limit(min(limit, 1000))]
+    for r in rows:
+        r["at"] = r["at"].isoformat() if hasattr(r.get("at"), "isoformat") else r.get("at")
+    return rows
 
 
 @app.get("/api/lcsc/requests")
@@ -1544,6 +1578,7 @@ async def set_status(rid: str, status: str):
     patch = await store.set_status(db(), rid, status)
     if patch is None:
         raise HTTPException(404, rid)
+    await db().revisions.update_one({"_id": rid}, {"$set": {"status_by": actors.current()}})
     return {"id": rid, **patch}
 
 

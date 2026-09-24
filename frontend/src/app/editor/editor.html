@@ -713,7 +713,7 @@
             <div class="mb-1.5">
               <div class="mono text-[9px] uppercase tracking-wider"
                    [style.color]="m.role === 'agent' ? 'var(--accent)' : 'var(--ink-dim)'">
-                {{ m.role === 'agent' ? 'agent' : 'you' }}
+                {{ whoSaid(m) }}
                 <span style="color: var(--line)">{{ m.at.slice(11, 16) }}</span>
                 @if (m.urgent) {
                   <span style="color: var(--pen)">· interrupt</span>
@@ -1023,6 +1023,7 @@
                  style="color: var(--ink-dim)">
               <span class="truncate">
                 {{ r.created_at.slice(0, 16).replace('T', ' ') }}
+                @if (r.created_by; as by) { · by {{ by.name }} }
                 @if (r.part) { · {{ r.part }} }
                 @if (r.model) { · {{ r.model }} }
               </span>

@@ -23,6 +23,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
+from . import actors
+
 CHAT = "chat"
 USER, AGENT = "user", "agent"
 ROOMS = ("cad", "pcb", "web", "embedded", "mobile")
@@ -60,6 +62,10 @@ async def post(db, text: str, role: str = USER,
            "text": text,
            "urgent": bool(urgent) and role != AGENT,
            "room": room,
+           # Who wrote it. An agent's line is an agent's even when the
+           # command line did not say which one.
+           "by": (actors.current() if role != AGENT or actors.current()["type"] == "agent"
+                  else actors.agent()),
            # The agent's own words are read the moment they are written;
            # only the person's wait to be picked up.
            "seen_at": _now() if role == AGENT else None}

@@ -124,6 +124,15 @@ Answer in the thread rather than in your terminal. Nothing in here changes
 a model by itself: if they ask for something, do it and then say what you
 did.
 
+## Say who you are
+
+Set `X3_AGENT` to your name before running `tools/revisions.py` - the room
+you work, e.g. `X3_AGENT="pcb room"` - and everything you write carries it:
+runs, log lines, thread replies, questions, and every change you make
+through the API (the command sends it as `X-Redline-Actor`). Without it you
+are "agent". Deletes and changes of state are kept in an audit trail with
+who made them; the person sees it in Analytics under *Recent changes*.
+
 ## Ask on their screen, not in your terminal
 
 When you reach a fork that is not yours to choose - which print process a

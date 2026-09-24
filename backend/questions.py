@@ -21,6 +21,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
+from . import actors
+
 QUESTIONS = "questions"
 
 OPEN, ANSWERED, DROPPED = "open", "answered", "dropped"
@@ -47,6 +49,7 @@ async def ask(db, text: str, options: list[str] | None = None,
         "status": OPEN,
         "answer": None,
         "answered_at": None,
+        "asked_by": actors.current() if actors.current()["type"] == "agent" else actors.agent(),
     }
     await db[QUESTIONS].insert_one(doc)
     return doc
@@ -63,7 +66,8 @@ async def answer(db, qid: str, text: str) -> dict | None:
     text = (text or "").strip()
     if not text:
         return None
-    patch = {"answer": text, "status": ANSWERED, "answered_at": _now()}
+    patch = {"answer": text, "status": ANSWERED, "answered_at": _now(),
+             "answered_by": actors.current()}
     res = await db[QUESTIONS].find_one_and_update(
         {"_id": qid, "status": OPEN}, {"$set": patch},
         return_document=True)

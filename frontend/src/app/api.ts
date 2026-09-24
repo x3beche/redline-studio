@@ -2,9 +2,14 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+/** Who did something: the person, or one of the agents. */
+export interface Actor { type: 'user' | 'agent'; id: string; name: string }
+
 export interface Revision {
   id: string;
   created_at: string;
+  created_by?: Actor | null;
+  status_by?: Actor | null;
   comment: string;
   image_path: string;
   camera: CameraState | null;
@@ -675,6 +680,8 @@ export interface ChatLine {
   _id: string;
   at: string;
   role: 'user' | 'agent';
+  /** Which agent, or which person, wrote it (absent on older lines). */
+  by?: Actor;
   text: string;
   /** "Stop what you are doing", as opposed to "when you get a moment". An
    *  urgent line kills a build that is running when it lands. */
@@ -1040,6 +1047,10 @@ export class InsightsApi {
   get(range: string): Observable<Insights> {
     return this.http.get<Insights>(`/api/insights?range=${encodeURIComponent(range)}`);
   }
+  /** Who deleted, changed or reset what, newest first. */
+  audit(limit = 100): Observable<AuditRow[]> {
+    return this.http.get<AuditRow[]>(`/api/audit?limit=${limit}`);
+  }
   /** The last seven days in a few lines, and the weekly write-ups kept. */
   weekly(): Observable<{ now: string; kept: { at: string; week: string; text: string }[] }> {
     return this.http.get<{ now: string; kept: { at: string; week: string; text: string }[] }>('/api/insights/weekly');
@@ -1050,3 +1061,6 @@ export class InsightsApi {
     return this.http.put('/api/insights/settings', patch);
   }
 }
+
+export interface AuditRow { at: string; actor: Actor; action: string; target: string;
+  detail?: { method?: string; query?: string } }

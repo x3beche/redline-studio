@@ -475,6 +475,13 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
+  /** Who wrote a thread line: "you", or the agent by name when it gave one. */
+  whoSaid(m: ChatLine): string {
+    if (m.role !== 'agent') return 'you';
+    const name = m.by?.name;
+    return name && name !== 'agent' ? name : 'agent';
+  }
+
   /** Take a message back. Only offered while it is still unread, and the
    *  server checks that again - the agent may have picked it up in the
    *  second between the card drawing and the click. */

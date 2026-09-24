@@ -59,8 +59,9 @@ def _now() -> str:
 
 def _line(text: str, level: str = "info", room: str = "cad") -> dict:
     import uuid
+    from backend import actors
     return {"_id": uuid.uuid4().hex[:12], "at": _now(),
-            "text": text.strip(), "level": level, "room": room}
+            "text": text.strip(), "level": level, "room": room, "by": actors.agent()}
 
 
 def connect():
@@ -317,6 +318,8 @@ async def cmd_board(args):
     import urllib.error
     import urllib.request
 
+    from backend import actors
+
     base = os.environ.get("X3_API", "http://localhost:8000")
 
     def call(path: str, method: str = "GET", body: dict | None = None,
@@ -324,7 +327,7 @@ async def cmd_board(args):
         req = urllib.request.Request(
             base + path, method=method,
             data=_json.dumps(body).encode() if body is not None else None,
-            headers={"content-type": "application/json"})
+            headers={"content-type": "application/json", **actors.header_for_agent()})
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 raw = r.read()
@@ -388,8 +391,11 @@ def _print_board(out: dict) -> None:
           f"ERC {erc.get('error_count', '?')} errors / {erc.get('warning_count', '?')} warnings")
     print(f"  board      {lay.get('placed', '?')} placed, {lay.get('size_mm', '?')} mm, "
           f"missing {lay.get('missing') or 'none'}")
+    # How many layouts it took, when it took more than the first one.
+    tried = r.get("attempts") or 1
     print(f"  routing    {r.get('unrouted', '?')} unrouted, {r.get('tracks', '?')} segments, "
-          f"{r.get('vias', '?')} vias, {r.get('length_mm', '?')} mm")
+          f"{r.get('vias', '?')} vias, {r.get('length_mm', '?')} mm"
+          + (f", {tried} layouts tried" if tried > 1 else ""))
     print(f"  DRC        {d.get('error_count', '?')} errors, {d.get('unconnected', '?')} unconnected, "
           f"{d.get('warning_count', '?')} warnings")
     for x in (d.get("examples") or []) + (erc.get("examples") or []):
@@ -482,6 +488,7 @@ async def cmd_start(args):
     # run is open lets their `finish` close yours: that happened, a CAD run
     # and a code run crossing at 07:40 when there was only one.
     from backend import compute
+    from backend import actors
     rdoc = await db.revisions.find_one({"_id": args.id}) or {}
     room = compute.room_of(rdoc.get("kind"))
     key = compute.run_key(room)
@@ -494,6 +501,7 @@ async def cmd_start(args):
     doc = {"_id": key, "title": args.title, "revision": args.id,
            "model": None, "percent": 0.0, "status": "running", "room": room,
            "started_at": _now(), "finished_at": None,
+           "by": actors.agent(),
            # The machine's busy counter at both ends of the run: the
            # difference is what the whole box burned while this was worked
            # on. Our own builds are a part of that, not a separate bill.
@@ -1166,6 +1174,9 @@ def main() -> None:
     s.add_argument("--limit", type=int, default=0)
     s.set_defaults(fn=cmd_summaries)
     args = ap.parse_args()
+    # Everything this command writes is the agent's, named by X3_AGENT.
+    from backend import actors
+    actors.CURRENT.set(actors.agent())
     asyncio.run(args.fn(args))
 
 

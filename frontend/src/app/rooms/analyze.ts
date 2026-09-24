@@ -1,6 +1,6 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
-import { BoardRunRow, InsightSeries, Insights, InsightsApi, ProjectDetail, ProjectItem } from '../api';
+import { AuditRow, BoardRunRow, InsightSeries, Insights, InsightsApi, ProjectDetail, ProjectItem } from '../api';
 import { Markdown } from '../markdown';
 import { BarList, Donut, Fmt, Row, Spark, TimeChart, fmt } from './charts';
 
@@ -629,6 +629,25 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
       </div>
     }
 
+    <!-- RECENT CHANGES -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'audit', title: 'Recent changes', sub: 'every delete, change of state and settings change, and who made it' }" />
+    @if (open('audit')) {
+      <div class="tcv-dash-grid">
+        <section class="tcv-panel-d c12"><h3>Audit trail
+            <button class="tcv-dl" (click)="dl('audit', auditRows())">CSV</button></h3>
+          <table class="tcv-dash-table">
+            <thead><tr><th>what</th><th>who</th><th>kind</th><th class="r">when</th></tr></thead>
+            <tbody>
+              @for (a of auditRows(); track $index) {
+                <tr><td class="mono" [title]="auditWhat(a)">{{ auditWhat(a) }}</td>
+                  <td [style.color]="a.actor.type === 'agent' ? 'var(--accent)' : null">{{ a.actor.name }}</td>
+                  <td>{{ a.action }}</td><td class="r mono">{{ when(a.at) }}</td></tr>
+              } @empty { <tr><td colspan="4" class="tcv-dash-dim">nothing deleted or changed since the trail began</td></tr> }
+            </tbody>
+          </table></section>
+      </div>
+    }
+
     <!-- DOCKER -->
     <ng-container *ngTemplateOutlet="head; context: { id: 'docker', title: 'Docker', sub: 'the sandboxes and the KiCad image: what they hold on disk' }" />
     @if (open('docker')) {
@@ -719,6 +738,7 @@ export class RoomAnalyze implements OnDestroy {
     this.data.set(kept(this.range()));
     this.load();
     this.readWeekly();
+    this.api.audit(100).subscribe({ next: a => this.auditRows.set(a) });
     this.arm();
   }
   ngOnDestroy() { clearInterval(this.timer); clearTimeout(this.again); }
@@ -772,6 +792,12 @@ export class RoomAnalyze implements OnDestroy {
     const c = d.change?.[key];
     if (c == null) return null;
     return { text: `${c >= 0 ? '▲' : '▼'} ${Math.abs(c).toFixed(0)}% vs the ${this.range()} before`, up: c >= 0 };
+  }
+
+  auditRows = signal<AuditRow[]>([]);
+  auditWhat(a: AuditRow): string {
+    const q = a.detail?.query;
+    return `${a.detail?.method ?? ''} ${a.target}${q ? '?' + q : ''}`.trim();
   }
 
   // ---- the week in short ----

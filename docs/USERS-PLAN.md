@@ -1,6 +1,7 @@
 # Users in Redline - research and work plan
 
-Status: **plan, not started**. Written 2026-09-24 to be implemented later.
+Status: **in progress** - phase 1 done (2026-09-24). Decisions below are
+recorded in section 6.
 
 ## 1. Where things stand
 
@@ -135,7 +136,44 @@ Each phase ships on its own and leaves the app working. Estimates are for one ag
 
 Tests along the way: an authorisation matrix (every route × every role → allowed or refused), a cross-workspace leak test (workspace B asks for A's board, note, artefact, chat, run → 404), session expiry and CSRF tests, and agent-token scope tests.
 
-## 6. Decisions needed before starting
+## 6. Decisions
+
+Taken 2026-09-24, without further questions, as asked:
+
+1. **Who it is for:** the owner plus a few invited people.
+2. **Sign-in:** email and password first; passkeys later (phase 8).
+3. **Workspaces:** one shared team space to start; the data model carries a
+   workspace on everything, so personal spaces can come later unchanged.
+4. **Sharing:** the workspace is enough.
+5. **Agents:** one set of agents per workspace.
+6. **Local mode:** kept - a no-login mode for running on this machine, so the
+   agents and the current setup keep working until sign-in is switched on.
+7. **Limits and billing:** not needed yet.
+
+Changes to the plan these make:
+
+- Phase 3 uses **email and password** (Argon2id, server-side sessions), not
+  GitHub/Google OAuth; OAuth can be added later behind the same sessions.
+- Phase 2 needs **no live migration to start with**: a document without a
+  `workspace_id` belongs to the default workspace, read through the scope
+  helper. New documents are written with one. A backfill script (dry run,
+  backup first) can make it explicit later.
+
+### Phase 1 - attribution (done)
+
+`backend/actors.py`: the actor of every request - the local user (named by
+`X3_LOCAL_USER`, default "you") or the agent named in the `X-Redline-Actor`
+header - and of every command-line run (the agent named by `X3_AGENT`). New
+notes carry `created_by`, status changes `status_by`, edits `edited_by`,
+thread lines `by`, questions `asked_by` and `answered_by`, runs and log lines
+`by`. Every DELETE, PATCH and settings or rules change is written to `audit`
+by a middleware, whatever route it came through; `/api/audit` lists it and
+the Analytics room shows it under *Recent changes*. Note cards say who wrote
+them, and the thread names the agent.
+
+### Original list of questions
+
+
 
 1. **Who is it for?** Just you plus a few invited people on this machine, a team, or a public product people sign up to? This decides how far phases 6 and 7 go.
 2. **Sign-in methods:** GitHub + Google, email + password, passkeys - which at first?
