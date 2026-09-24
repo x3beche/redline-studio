@@ -1,23 +1,14 @@
 import {
-  Component, ElementRef, OnDestroy, effect, inject, signal, viewChild,
+  Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild,
 } from '@angular/core';
 import {
-  Activity, BoardCompute, BoardEntry, BoardGraph, BoardLayout, Boards, Health,
-  LcscAsk, LcscJournal, LogLine, PartHeld, PartHit, PartPreview, Parts,
-  SystemInfo,
+  Activity, BoardCompute, BoardEntry, BoardGraph, BoardLayout, BoardRules,
+  Boards, Health, LcscAsk, LcscJournal, LogLine, NetClass, PartHeld, PartHit,
+  PartPreview, Parts, SystemInfo,
 } from '../api';
 import { Selection } from '../selection';
 import { Board3d } from './board3d';
-
-/** What a component sits at on the ring, and what a net draws between. */
-interface Placed {
-  ref: string;
-  x: number;
-  y: number;
-  label: string;
-  sub: string;
-  where: string | null;
-}
+import { Drawing } from './drawing';
 
 /** The board room.
  *
@@ -33,7 +24,7 @@ interface Placed {
  */
 @Component({
   selector: 'app-room-pcb',
-  imports: [Board3d],
+  imports: [Board3d, Drawing],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col">
 
@@ -61,7 +52,7 @@ interface Placed {
          number is what the footprint and the 3D model are fetched by, so
          this is where a board gets its shapes. Searching downloads
          nothing - a search is a list to choose from. -->
-    <section class="tcv-pane" style="grid-column: 1; grid-row: 1 / span 3">
+    <section class="tcv-pane" [style.grid-area]="area('parts')">
       <header class="tcv-pane-head">
         <span class="tcv-label">parts</span>
         <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
@@ -265,15 +256,207 @@ interface Placed {
          The board's own figures. The catalog's foot and the revision
          cards say the same kind of thing about models; these are about
          this board, so they are counted here. -->
-    <section class="tcv-pane" style="grid-column: 3; grid-row: 3">
+    <section class="tcv-pane" [style.grid-area]="area('side')">
       <header class="tcv-pane-head">
-        <span class="tcv-label">machine</span>
-        @if (cost(); as c) {
-          <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
-            {{ c.total.jobs }} jobs
-          </span>
+        @for (tab of sideTabs; track tab) {
+          <button (click)="setSide(tab)" class="tcv-chip"
+                  [attr.data-on]="side() === tab ? 1 : null">{{ tab }}</button>
         }
+        <button (click)="toggleBig('side')" class="tcv-chip ml-auto shrink-0"
+                [title]="big() === 'side' ? 'back to its size' : 'the whole column'">
+          {{ big() === 'side' ? '⤡' : '⤢' }}
+        </button>
       </header>
+
+      @if (side() === 'rules') {
+        <!-- ROUTING RULES
+             What the router is told. Worked out from the net names the
+             first time; anything changed here is kept, and the next run
+             routes to it. -->
+        <div class="min-h-0 flex-1 overflow-auto p-2 text-[11px]">
+          @if (draft(); as r) {
+            <div class="tcv-label mb-1">net classes · mm</div>
+            <div class="mono grid items-center gap-x-1 gap-y-1"
+                 style="grid-template-columns: minmax(2.6rem, 1fr) repeat(4, minmax(0, 2.8rem))">
+              <span style="color: var(--ink-dim)">class</span>
+              <span style="color: var(--ink-dim)" title="track width">track</span>
+              <span style="color: var(--ink-dim)" title="clearance to anything else">gap</span>
+              <span style="color: var(--ink-dim)" title="via diameter">via</span>
+              <span style="color: var(--ink-dim)" title="via drill">drill</span>
+              @for (c of r.classes; track c.name) {
+                <span class="truncate" style="color: var(--ink)" [title]="c.name">{{ c.name }}</span>
+                @for (k of classKeys; track k) {
+                  <input type="number" step="0.01" min="0" [value]="c[k]"
+                         (change)="setClass(c.name, k, $event)"
+                         class="tcv-field w-full min-w-0 px-0.5 py-0.5 text-right text-[10px]">
+                }
+                <!-- Which nets this class holds. Default is everything
+                     not named elsewhere, so it lists none. -->
+                <div class="col-span-5 mb-1 flex flex-wrap gap-1">
+                  @for (n of c.nets; track n) {
+                    <span class="tcv-chip px-1.5 py-0">
+                      {{ n }}
+                      <button (click)="takeNet(c.name, n)" style="color: var(--ink-dim)"
+                              title="back to Default">×</button>
+                    </span>
+                  }
+                  @if (c.name !== 'Default' && loose().length) {
+                    <select (change)="giveNet(c.name, $event)"
+                            class="tcv-field px-1 py-0 text-[10px]">
+                      <option value="">+ net</option>
+                      @for (n of loose(); track n) { <option [value]="n">{{ n }}</option> }
+                    </select>
+                  }
+                </div>
+              }
+            </div>
+
+            @if (r.pairs.length) {
+              <div class="tcv-label mb-1 mt-2">differential pairs</div>
+              @for (pair of r.pairs; track pair.name) {
+                <div class="mono mb-1 flex items-center gap-1.5">
+                  <span class="min-w-0 flex-1 truncate">{{ pair.name }}: {{ pair.p }} / {{ pair.n }}</span>
+                  <span style="color: var(--ink-dim)">w</span>
+                  <input type="number" step="0.01" [value]="pair.width"
+                         (change)="setPair(pair.name, 'width', $event)"
+                         class="tcv-field w-[3.4rem] px-1 py-0.5 text-right">
+                  <span style="color: var(--ink-dim)">gap</span>
+                  <input type="number" step="0.01" [value]="pair.gap"
+                         (change)="setPair(pair.name, 'gap', $event)"
+                         class="tcv-field w-[3.4rem] px-1 py-0.5 text-right">
+                </div>
+              }
+              <!-- Said plainly, because it is the limit of the tool: the
+                   pair comes out as two tracks at these numbers, not as a
+                   coupled, length-matched pair. -->
+              <p class="mb-1 leading-snug" style="color: var(--warn)">
+                Freerouting routes a pair as two nets at this width and gap;
+                it does not couple them or match their lengths. Fine for USB
+                full speed on a board this size - not for anything fast.
+              </p>
+            }
+
+            @if (r.pour; as pour) {
+              <div class="tcv-label mb-1 mt-2">ground pour</div>
+              <div class="mono flex flex-wrap items-center gap-1.5">
+                <span>{{ pour.net }}</span>
+                <span style="color: var(--ink-dim)">on {{ pour.layers.join(' + ') }}</span>
+                <select (change)="setPour('connection', $any($event.target).value)"
+                        class="tcv-field px-1 py-0.5"
+                        title="solid: straight into the pour, what reflow wants; thermal: spokes, easier to hand-solder">
+                  <option value="solid" [selected]="pour.connection !== 'thermal'">solid</option>
+                  <option value="thermal" [selected]="pour.connection === 'thermal'">thermal</option>
+                </select>
+                <span style="color: var(--ink-dim)">gap</span>
+                <input type="number" step="0.05" [value]="pour.clearance"
+                       (change)="setPour('clearance', +$any($event.target).value)"
+                       class="tcv-field w-[3.4rem] px-1 py-0.5 text-right">
+              </div>
+            }
+
+            <div class="tcv-label mb-1 mt-2">what the board house can make</div>
+            <div class="mono grid items-center gap-x-1.5 gap-y-1"
+                 style="grid-template-columns: 1fr 3.4rem">
+              @for (k of boardKeys; track k.key) {
+                <span style="color: var(--ink-dim)">{{ k.label }}</span>
+                <input type="number" step="0.01" [value]="r.board[k.key]"
+                       (change)="setBoard(k.key, $event)"
+                       class="tcv-field w-full px-1 py-0.5 text-right">
+              }
+              <span style="color: var(--ink-dim)">router passes</span>
+              <input type="number" step="1" min="1" [value]="r.route.passes"
+                     (change)="setPasses($event)"
+                     class="tcv-field w-full px-1 py-0.5 text-right">
+            </div>
+
+            @for (n of here()?.route?.notes ?? []; track n) {
+              <p class="mt-2 leading-snug" style="color: var(--ink-dim)">
+                last run: {{ n }}
+              </p>
+            }
+            @for (pr of ruleProblems(); track pr) {
+              <p class="mt-1 leading-snug" style="color: var(--danger)">{{ pr }}</p>
+            }
+            <div class="mt-2 flex items-center gap-1">
+              <button (click)="saveRules()" [disabled]="!rulesDirty() || ruleProblems().length > 0"
+                      class="tcv-btn tcv-btn-accent px-2 py-0.5">save</button>
+              <button (click)="loadRules()" [disabled]="!rulesDirty()"
+                      class="tcv-btn px-2 py-0.5">revert</button>
+              @if (rulesNote(); as n) {
+                <span class="text-[10px]" style="color: var(--ink-dim)">{{ n }}</span>
+              }
+            </div>
+          } @else {
+            <div style="color: var(--ink-dim)">build the board first - rules follow its nets</div>
+          }
+        </div>
+      } @else if (side() === 'checks') {
+        <!-- WHAT THE CHECKS FOUND
+             KiCad's DRC over the routed board and ERC over the schematic,
+             itemised: errors first, then warnings, then what sits inside a
+             part's own footprint or is about the project's set-up rather
+             than the design. -->
+        <div class="mono min-h-0 flex-1 overflow-auto p-2 text-[11px]">
+          @if (here()?.drc; as d) {
+            <div class="tcv-label mb-1">DRC · the board</div>
+            <div [style.color]="d.error_count ? 'var(--danger)' : 'var(--ok)'">
+              {{ d.error_count }} errors · {{ d.unconnected }} unconnected
+            </div>
+            @for (e of entries(d.errors); track e[0]) {
+              <div class="flex justify-between" style="color: var(--danger)"><span>{{ e[0] }}</span><span>{{ e[1] }}</span></div>
+            }
+            @for (x of d.examples; track x) {
+              <div class="mb-0.5 break-words leading-snug" style="color: var(--ink-dim)">· {{ x }}</div>
+            }
+            @for (u of d.unconnected_examples; track u) {
+              <div class="break-words leading-snug" style="color: var(--danger)">unconnected: {{ u }}</div>
+            }
+            <div class="mt-1" style="color: var(--ink-dim)">{{ d.warning_count }} warnings</div>
+            @for (e of entries(d.warnings); track e[0]) {
+              <div class="flex justify-between" style="color: var(--ink-dim)"><span>{{ e[0] }}</span><span>{{ e[1] }}</span></div>
+            }
+            @if (entries(d.in_footprints).length) {
+              <div class="mt-1" style="color: var(--ink-dim)"
+                   title="both ends of the finding are in the same part: the maker's land pattern, not the layout">
+                inside a part's own footprint
+              </div>
+              @for (e of entries(d.in_footprints); track e[0]) {
+                <div class="flex justify-between" style="color: var(--ink-dim)"><span>{{ e[0] }}</span><span>{{ e[1] }}</span></div>
+              }
+            }
+          } @else {
+            <div style="color: var(--ink-dim)">no DRC yet - run routes and checks the board</div>
+          }
+
+          @if (here()?.schematic?.erc; as e) {
+            <div class="tcv-label mb-1 mt-3">ERC · the schematic</div>
+            <div [style.color]="e.error_count ? 'var(--danger)' : 'var(--ok)'">
+              {{ e.error_count }} errors · {{ e.warning_count }} warnings
+            </div>
+            @for (x of entries(e.errors); track x[0]) {
+              <div class="flex justify-between" style="color: var(--danger)"><span>{{ x[0] }}</span><span>{{ x[1] }}</span></div>
+            }
+            @for (x of e.examples; track x) {
+              <div class="mb-0.5 break-words leading-snug" style="color: var(--ink-dim)">· {{ x }}</div>
+            }
+            @for (x of entries(e.warnings); track x[0]) {
+              <div class="flex justify-between" style="color: var(--ink-dim)"
+                   [title]="x[0] === 'pin_to_pin' ? 'mostly LCSC symbols whose pins are typed Unspecified' : ''">
+                <span>{{ x[0] }}</span><span>{{ x[1] }}</span>
+              </div>
+            }
+            @if (entries(e.setup).length) {
+              <div class="mt-1" style="color: var(--ink-dim)"
+                   title="the generated project has no library tables; not about the design">
+                library set-up notes
+              </div>
+              @for (x of entries(e.setup); track x[0]) {
+                <div class="flex justify-between" style="color: var(--ink-dim)"><span>{{ x[0] }}</span><span>{{ x[1] }}</span></div>
+              }
+            }
+          }
+        </div>
+      } @else {
       <div class="min-h-0 flex-1 overflow-auto p-2 text-[11px]">
         @if (cost()?.jobs?.length) {
           <div class="mono">
@@ -328,14 +511,14 @@ interface Placed {
           </div>
         }
       </div>
+      }
     </section>
 
     <!-- THE LOG
          Its own, not the 3D room's: the lines a board writes are about
          this board, and a build that happened while you were looking at
          something else is exactly what you want to read here. -->
-    <section class="tcv-pane" style="grid-column: 2"
-             [style.grid-row]="tall() ? '2 / span 2' : '3'">
+    <section class="tcv-pane" [style.grid-area]="area('log')">
       <header class="tcv-pane-head">
         <button (click)="setBottom('log')" class="tcv-chip"
                 [attr.data-on]="bottom() === 'log' ? 1 : null">log</button>
@@ -442,50 +625,57 @@ interface Placed {
     </section>
 
     <!-- LAYOUT -->
-    <section class="tcv-pane" style="grid-column: 2"
-             [style.grid-row]="tall() ? '1' : '1 / span 2'">
-      <!-- The two things you can do to a board live over the drawing they
-           change, not in a bar of their own across the top. -->
+    @if (shown('layout')) {
+    <section class="tcv-pane" [style.grid-area]="area('layout')">
+      <!-- What the board came out as, and the one thing to do to it:
+           run the pipeline, which is everything from the source down. -->
       <header class="tcv-pane-head">
         <span class="tcv-label">layout</span>
-        @if (hasLayout()) {
-          <span class="mono text-[10px]" style="color: var(--ink-dim)">
-            {{ here()?.layout?.placed }} placed
-            @if (here()?.layout?.size_mm; as mm) { · {{ mm[0] }} × {{ mm[1] }} mm }
-            · not routed
+        @if (here()?.route; as r) {
+          <span class="mono truncate text-[10px]"
+                [style.color]="r.unrouted || here()?.drc?.error_count ? 'var(--danger)' : 'var(--ok)'"
+                [title]="routeTitle()">
+            {{ r.unrouted ? r.unrouted + ' unrouted' : 'routed' }} ·
+            DRC {{ here()?.drc?.error_count ?? '?' }}
+          </span>
+        } @else if (hasLayout()) {
+          <span class="mono truncate text-[10px]" style="color: var(--ink-dim)">
+            {{ here()?.layout?.placed }} placed · not routed
           </span>
         }
         <div class="ml-auto flex shrink-0 items-center gap-1">
           @if (note(); as n) {
-            <span class="mono mr-1 max-w-[16rem] truncate text-[10px]"
+            <span class="mono mr-1 max-w-[12rem] truncate text-[10px]"
                   style="color: var(--warn)" [title]="n">{{ n }}</span>
           }
-          <button (click)="rebuild()" [disabled]="busy()"
-                  class="tcv-btn tcv-btn-accent px-2 py-0.5">
-            {{ busy() ? 'building…' : 'build' }}
+          <button (click)="run()" [disabled]="busy()"
+                  class="tcv-btn tcv-btn-accent px-2 py-0.5"
+                  title="build, schematic, place, route, pour, DRC - in that order">
+            {{ running() ? 'running…' : 'run' }}
           </button>
-          <button (click)="relayout()" [disabled]="busy() || !here()?.ready"
+          <button (click)="rebuild()" [disabled]="busy()"
                   class="tcv-btn px-2 py-0.5"
-                  title="place it and draw it - KiCad, in a container">
-            {{ laying() ? 'placing…' : 'lay out' }}
+                  title="only the netlist - quick, to check the source compiles">
+            {{ building() ? '…' : 'build' }}
+          </button>
+          <button (click)="toggleBig('layout')" class="tcv-chip"
+                  [title]="big() === 'layout' ? 'back to its size' : 'larger'">
+            {{ big() === 'layout' ? '⤡' : '⤢' }}
           </button>
         </div>
       </header>
       @if (hasLayout()) {
-        <!-- The sheet is the drawing, not the pane: a board is wider than
-             it is tall, and stretching the element to the pane put it in
-             the middle of a white block four times its height. -->
-        <div class="flex min-h-0 flex-1 items-center justify-center p-2">
-          <!-- Black, the way KiCad shows a board: its colours - pale
-               yellow silkscreen, red and purple copper, the grey outline -
-               are chosen for a dark ground, and on white the silkscreen
-               was barely there. -->
-          <div class="w-full rounded" style="background: var(--pcb-bg);
-                      padding: 10px; max-height: 100%"
-               [style.aspect-ratio]="sheet()">
-            <img [src]="layoutUrl()" alt="board layout"
-                 class="h-full w-full" style="object-fit: contain">
-          </div>
+        <div class="min-h-0 flex-1 p-1">
+          <app-drawing [src]="layoutUrl()">
+            @if (here()?.route) {
+              @for (v of views; track v) {
+                <button (click)="view.set(v)" class="tcv-chip px-1.5 py-0"
+                        [attr.data-on]="view() === v ? 1 : null">{{ v }}</button>
+              }
+            }
+            <a class="tcv-chip px-1.5 py-0" [href]="file('board.kicad_pcb')"
+               title="the board as a KiCad file">.kicad_pcb</a>
+          </app-drawing>
         </div>
         @if (trouble().length) {
           <div class="shrink-0 px-2 pb-1.5 text-[11px]" style="color: var(--warn)">
@@ -495,62 +685,53 @@ interface Placed {
       } @else {
         <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
           {{ here()?.ready
-             ? 'Built, but not placed yet. lay out fetches each part from LCSC, places them and draws the board.'
-             : 'Not built yet. Press build and atopile will say what it makes of it.' }}
+             ? 'Built, not laid out yet. run draws the schematic, places the parts, routes and checks it.'
+             : 'Not built yet. run takes it from the source all the way to a routed, checked board.' }}
         </p>
       }
     </section>
+    }
 
-    <!-- CIRCUIT -->
-    <section class="tcv-pane" style="grid-column: 3; grid-row: 1">
+    <!-- THE SCHEMATIC
+         Drawn by KiCad from what atopile built, every part with its real
+         symbol and every pin labelled with its net, and checked by ERC.
+         It follows the source: drawn again on every run, never edited, so
+         there is nothing in it for a run to overwrite. -->
+    @if (shown('schematic')) {
+    <section class="tcv-pane" [style.grid-area]="area('schematic')">
       <header class="tcv-pane-head">
-        <span class="tcv-label">circuit</span>
-        <!-- What the board is made of, where the list of it used to be:
-             the ring says which parts, so the count belongs on it. -->
-        @if (graph(); as g) {
-          <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
-            {{ g.counts.components }} parts · {{ g.counts.nets }} nets ·
-            {{ g.counts.joins }} joins
+        <span class="tcv-label">schematic</span>
+        @if (here()?.schematic; as s) {
+          <span class="mono truncate text-[10px]"
+                [style.color]="s.erc.error_count ? 'var(--danger)' : 'var(--ok)'"
+                [title]="'ERC: ' + s.erc.error_count + ' errors, ' + s.erc.warning_count
+                         + ' warnings; library set-up notes left out'">
+            {{ s.parts }} parts · ERC {{ s.erc.error_count }}
           </span>
         }
+        <button (click)="toggleBig('schematic')" class="tcv-chip ml-auto shrink-0"
+                [title]="big() === 'schematic' ? 'back to its size' : 'larger'">
+          {{ big() === 'schematic' ? '⤡' : '⤢' }}
+        </button>
       </header>
       <div class="min-h-0 flex-1 p-1">
-        @if (graph()) {
-          <svg [attr.viewBox]="'0 0 ' + SIZE + ' ' + SIZE"
-               class="h-full w-full" preserveAspectRatio="xMidYMid meet">
-            <!-- nets first: a chord between two parts, a star through the
-                 middle when more than two sit on it -->
-            @for (l of links(); track l.key) {
-              <path [attr.d]="l.d" fill="none" stroke="var(--line)"
-                    stroke-width="1.4" />
-            }
-            @for (l of netLabels(); track l.key) {
-              <text [attr.x]="l.x" [attr.y]="l.y" text-anchor="middle"
-                    font-size="9" fill="var(--ink-dim)">{{ l.name }}</text>
-            }
-            @for (p of placed(); track p.ref) {
-              <g [attr.transform]="'translate(' + p.x + ',' + p.y + ')'">
-                <rect x="-34" y="-15" width="68" height="30" rx="4"
-                      fill="var(--surface-2)" stroke="var(--accent)"
-                      stroke-width="1.2" />
-                <text y="-2" text-anchor="middle" font-size="11"
-                      fill="var(--ink)">{{ p.label }}</text>
-                <text y="9" text-anchor="middle" font-size="8"
-                      fill="var(--ink-dim)">{{ p.sub }}</text>
-                <title>{{ p.where }}</title>
-              </g>
-            }
-          </svg>
+        @if (here()?.schematic; as s) {
+          <app-drawing [src]="file('schematic.svg', s.at)">
+            <a class="tcv-chip px-1.5 py-0" [href]="file('board.kicad_sch')"
+               title="the schematic as a KiCad file">.kicad_sch</a>
+          </app-drawing>
         } @else {
           <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
-            The circuit comes out of the build.
+            No schematic yet. <b>run</b> draws it from the source, with the rest.
           </p>
         }
       </div>
     </section>
+    }
 
     <!-- THE BOARD, IN THREE DIMENSIONS -->
-    <section class="tcv-pane" style="grid-column: 3; grid-row: 2">
+    @if (shown('3d')) {
+    <section class="tcv-pane" [style.grid-area]="area('3d')">
       <header class="tcv-pane-head">
         <span class="tcv-label">3d</span>
         <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
@@ -573,10 +754,11 @@ interface Placed {
         </div>
       } @else {
         <p class="p-2 text-[12px]" style="color: var(--ink-dim)">
-          No model yet. <b>lay out</b> makes one alongside the drawing.
+          No model yet. <b>run</b> makes one alongside the drawing.
         </p>
       }
     </section>
+    }
 
   </div>
   }
@@ -591,13 +773,38 @@ export class RoomPcb implements OnDestroy {
   store = inject(Parts);
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
 
-  readonly SIZE = 520;
   boards = signal<BoardEntry[]>([]);
   here = signal<BoardEntry | null>(null);
   graph = signal<BoardGraph | null>(null);
-  busy = signal(false);
-  laying = signal(false);
+  running = signal(false);
+  building = signal(false);
+  busy = computed(() => this.running() || this.building());
   note = signal('');
+
+  /** Which pane is made large, if any, and which side tab is showing -
+   *  kept across a reload like the other panels. */
+  big = signal<'none' | 'schematic' | 'layout' | 'side'>(
+    RoomPcb.recall('big', 'none') as 'none' | 'schematic' | 'layout' | 'side');
+  readonly sideTabs = ['machine', 'rules', 'checks'] as const;
+  side = signal<'machine' | 'rules' | 'checks'>(
+    RoomPcb.recall('side', 'machine') as 'machine' | 'rules' | 'checks');
+  /** The copper as KiCad draws it with the ground pour, without it so the
+   *  tracks can be followed, and the back seen from below. */
+  readonly views = ['front', 'tracks', 'back'] as const;
+  view = signal<'front' | 'tracks' | 'back'>('tracks');
+
+  /** The rules as saved, and as being edited. */
+  private savedRules = signal<string>('');
+  draft = signal<BoardRules | null>(null);
+  nets = signal<string[]>([]);
+  rulesNote = signal('');
+  readonly classKeys = ['track', 'clearance', 'via', 'drill'] as const;
+  readonly boardKeys = [
+    { key: 'min_track' as const, label: 'narrowest track' },
+    { key: 'min_clearance' as const, label: 'smallest gap' },
+    { key: 'min_via' as const, label: 'smallest via' },
+    { key: 'min_drill' as const, label: 'smallest drill' },
+  ];
   lastLayout = signal<BoardLayout | null>(null);
   cost = signal<BoardCompute | null>(null);
   /** The drawer of parts, and what a search in LCSC turned up. */
@@ -939,8 +1146,196 @@ export class RoomPcb implements OnDestroy {
    *  without it the browser keeps showing the board from last time. */
   layoutUrl(): string {
     const b = this.here();
-    return `/api/boards/${b?._id}/layout.svg?v=`
-      + encodeURIComponent(b?.layout?.at ?? '');
+    const a = b?.artifacts ?? {};
+    if (b?.route && this.view() === 'tracks' && a['tracks']) {
+      return this.file('tracks.svg', a['tracks'].at);
+    }
+    if (b?.route && this.view() === 'back' && a['bottom']) {
+      return this.file('bottom.svg', a['bottom'].at);
+    }
+    return this.file('layout.svg', b?.layout?.at);
+  }
+
+  /** A drawing or a KiCad file of the open board. */
+  file(name: string, stamp?: string | null): string {
+    return this.api.file(this.here()?._id ?? '', name, stamp ?? undefined);
+  }
+
+  routeTitle(): string {
+    const r = this.here()?.route;
+    const d = this.here()?.drc;
+    if (!r) return '';
+    return `${r.tracks} track segments, ${r.vias} vias, ${r.length_mm} mm of copper, `
+      + `routed in ${r.route_s} s; DRC ${d?.error_count ?? '?'} errors, `
+      + `${d?.warning_count ?? '?'} warnings, ${d?.unconnected ?? '?'} unconnected`;
+  }
+
+  /** The whole pipeline, in order: build, schematic, place, route, pour,
+   *  DRC. The log says which stage it is at. */
+  run() {
+    const b = this.here();
+    if (!b || this.busy()) return;
+    this.running.set(true);
+    this.note.set('');
+    this.api.run(b._id).subscribe({
+      next: () => { this.running.set(false); this.refresh(); this.loadRules(); },
+      error: e => {
+        this.running.set(false);
+        this.note.set(String(e?.error?.detail ?? e?.message ?? e).slice(0, 400));
+        this.refresh();
+      },
+    });
+  }
+
+  // ---- which pane goes where ----
+
+  /** Each pane's place in the grid. One can be made large - the schematic
+   *  or the layout over the middle and right columns, the side pane down
+   *  the whole right column - and the panes it covers step aside. */
+  area(pane: 'parts' | 'layout' | 'log' | 'schematic' | '3d' | 'side'): string {
+    const big = this.big();
+    const tall = this.tall();
+    switch (pane) {
+      case 'parts': return '1 / 1 / 4 / 2';
+      case 'log': return tall ? '2 / 2 / 4 / 3' : '3 / 2 / 4 / 3';
+      case 'layout':
+        return big === 'layout' ? (tall ? '1 / 2 / 2 / 4' : '1 / 2 / 3 / 4')
+          : big === 'side' ? (tall ? '1 / 2 / 2 / 3' : '1 / 2 / 3 / 3')
+          : tall ? '1 / 2 / 2 / 3' : '1 / 2 / 3 / 3';
+      case 'schematic':
+        return big === 'schematic' ? (tall ? '1 / 2 / 2 / 4' : '1 / 2 / 3 / 4') : '1 / 3 / 2 / 4';
+      case '3d': return '2 / 3 / 3 / 4';
+      case 'side': return big === 'side' ? '1 / 3 / 4 / 4' : '3 / 3 / 4 / 4';
+    }
+  }
+
+  shown(pane: 'layout' | 'schematic' | '3d'): boolean {
+    const big = this.big();
+    if (big === 'none') return true;
+    if (big === 'schematic') return pane === 'schematic';
+    if (big === 'layout') return pane === 'layout';
+    return pane === 'layout';               // side: the column is taken
+  }
+
+  toggleBig(pane: 'schematic' | 'layout' | 'side') {
+    this.big.set(this.big() === pane ? 'none' : pane);
+    RoomPcb.keep('big', this.big());
+  }
+
+  setSide(tab: 'machine' | 'rules' | 'checks') {
+    this.side.set(tab);
+    RoomPcb.keep('side', tab);
+    if (tab === 'rules' && !this.draft()) this.loadRules();
+  }
+
+  entries(o: Record<string, number> | null | undefined): [string, number][] {
+    return Object.entries(o ?? {}).sort((a, b) => b[1] - a[1]);
+  }
+
+  // ---- the rules ----
+
+  loadRules() {
+    const b = this.here();
+    if (!b?.ready) { this.draft.set(null); return; }
+    this.api.rules(b._id).subscribe({
+      next: r => {
+        this.nets.set(r.nets);
+        this.draft.set(r.rules);
+        this.savedRules.set(JSON.stringify(r.rules));
+        this.rulesNote.set('');
+      },
+    });
+  }
+
+  rulesDirty(): boolean {
+    return !!this.draft() && JSON.stringify(this.draft()) !== this.savedRules();
+  }
+
+  /** What the server would refuse, said before it is asked. */
+  ruleProblems(): string[] {
+    const r = this.draft();
+    if (!r) return [];
+    const out: string[] = [];
+    for (const c of r.classes) {
+      if (c.track < r.board.min_track) out.push(`${c.name}: track under the ${r.board.min_track} mm minimum`);
+      if (c.clearance < r.board.min_clearance) out.push(`${c.name}: gap under the ${r.board.min_clearance} mm minimum`);
+      if (c.drill >= c.via) out.push(`${c.name}: the drill leaves no copper in the via`);
+    }
+    for (const pr of r.pairs) {
+      if (pr.gap < r.board.min_clearance) out.push(`pair ${pr.name}: gap under the minimum`);
+    }
+    return out;
+  }
+
+  /** Nets in no class but Default, which any class can take. */
+  loose(): string[] {
+    const r = this.draft();
+    if (!r) return [];
+    const named = new Set(r.classes.flatMap(c => c.nets));
+    return this.nets().filter(n => !named.has(n));
+  }
+
+  private edit(change: (r: BoardRules) => void) {
+    const r = this.draft();
+    if (!r) return;
+    const next: BoardRules = JSON.parse(JSON.stringify(r));
+    change(next);
+    this.draft.set(next);
+    this.rulesNote.set('');
+  }
+
+  private num(ev: Event): number {
+    return Number((ev.target as HTMLInputElement).value);
+  }
+
+  setClass(name: string, key: 'track' | 'clearance' | 'via' | 'drill', ev: Event) {
+    const v = this.num(ev);
+    this.edit(r => { const c = r.classes.find(x => x.name === name); if (c) c[key] = v; });
+  }
+
+  takeNet(name: string, net: string) {
+    this.edit(r => {
+      const c = r.classes.find(x => x.name === name);
+      if (c) c.nets = c.nets.filter(n => n !== net);
+    });
+  }
+
+  giveNet(name: string, ev: Event) {
+    const net = (ev.target as HTMLSelectElement).value;
+    if (!net) return;
+    this.edit(r => { r.classes.find(x => x.name === name)?.nets.push(net); });
+  }
+
+  setPair(name: string, key: 'width' | 'gap', ev: Event) {
+    const v = this.num(ev);
+    this.edit(r => { const pr = r.pairs.find(x => x.name === name); if (pr) pr[key] = v; });
+  }
+
+  setPour(key: 'connection' | 'clearance', value: string | number) {
+    this.edit(r => { if (r.pour) (r.pour as Record<string, unknown>)[key] = value; });
+  }
+
+  setBoard(key: 'min_track' | 'min_clearance' | 'min_via' | 'min_drill', ev: Event) {
+    const v = this.num(ev);
+    this.edit(r => { r.board[key] = v; });
+  }
+
+  setPasses(ev: Event) {
+    const v = Math.max(1, Math.round(this.num(ev)));
+    this.edit(r => { r.route.passes = v; });
+  }
+
+  saveRules() {
+    const b = this.here();
+    const r = this.draft();
+    if (!b || !r) return;
+    this.api.saveRules(b._id, r).subscribe({
+      next: () => {
+        this.savedRules.set(JSON.stringify(r));
+        this.rulesNote.set('saved - the next run routes to these');
+      },
+      error: e => this.rulesNote.set(String(e?.error?.detail ?? 'not saved')),
+    });
   }
 
   has3d(): boolean {
@@ -953,103 +1348,19 @@ export class RoomPcb implements OnDestroy {
       + encodeURIComponent(b?.artifacts?.['model3d']?.at ?? '');
   }
 
-  relayout() {
-    const b = this.here();
-    if (!b || this.laying()) return;
-    this.laying.set(true);
-    this.note.set('');
-    this.api.layout(b._id).subscribe({
-      next: r => {
-        this.laying.set(false);
-        this.lastLayout.set(r);
-        this.refresh();
-      },
-      error: e => {
-        this.laying.set(false);
-        this.note.set(String(e?.error?.detail ?? e?.message ?? e).slice(0, 400));
-      },
-    });
-  }
-
   rebuild() {
     const b = this.here();
     if (!b || this.busy()) return;
-    this.busy.set(true);
+    this.building.set(true);
     this.note.set('');
     this.api.build(b._id).subscribe({
-      next: () => { this.busy.set(false); this.refresh(); },
+      next: () => { this.building.set(false); this.refresh(); },
       error: e => {
-        this.busy.set(false);
+        this.building.set(false);
         // atopile's own words: it is better at saying what is wrong with a
         // circuit than anything this could paraphrase.
         this.note.set(String(e?.error?.detail ?? e?.message ?? e).slice(0, 400));
       },
     });
-  }
-
-  /** Components on a ring, in the order the netlist lists them. */
-  placed(): Placed[] {
-    const g = this.graph();
-    if (!g) return [];
-    const n = g.components.length || 1;
-    const r = n <= 2 ? 110 : Math.min(190, 60 + n * 14);
-    const mid = this.SIZE / 2;
-    return g.components.map((c, i) => {
-      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
-      return {
-        ref: c.ref,
-        x: Math.round(mid + Math.cos(a) * r),
-        y: Math.round(mid + Math.sin(a) * r),
-        label: c.ref,
-        sub: (c.footprint ?? '').replace(/^lib:/, '') || (c.part ?? ''),
-        where: [c.where, c.part, c.value].filter(Boolean).join(' · '),
-      };
-    });
-  }
-
-  private at(ref: string | null): Placed | undefined {
-    return this.placed().find(p => p.ref === ref);
-  }
-
-  /** A net with two pins is a chord; with more, a star through its middle,
-   *  which is what a shared rail actually is. */
-  links(): { key: string; d: string }[] {
-    const g = this.graph();
-    if (!g) return [];
-    const out: { key: string; d: string }[] = [];
-    const mid = this.SIZE / 2;
-    for (const net of g.nets) {
-      const ends = net.nodes.map(nd => this.at(nd.ref)).filter(Boolean) as Placed[];
-      if (ends.length === 2) {
-        const [a, b] = ends;
-        // bowed towards the middle, so two nets between the same pair do
-        // not lie on top of each other
-        const cx = (a.x + b.x) / 2 * 0.75 + mid * 0.25;
-        const cy = (a.y + b.y) / 2 * 0.75 + mid * 0.25;
-        out.push({ key: net.code + '-' + net.name,
-                   d: `M${a.x},${a.y} Q${cx},${cy} ${b.x},${b.y}` });
-      } else if (ends.length > 2) {
-        const hx = ends.reduce((s, p) => s + p.x, 0) / ends.length;
-        const hy = ends.reduce((s, p) => s + p.y, 0) / ends.length;
-        ends.forEach((p, i) => out.push({
-          key: net.code + '-' + net.name + '-' + i,
-          d: `M${p.x},${p.y} L${Math.round(hx)},${Math.round(hy)}`,
-        }));
-      }
-    }
-    return out;
-  }
-
-  netLabels(): { key: string; name: string; x: number; y: number }[] {
-    const g = this.graph();
-    if (!g) return [];
-    return g.nets.map(net => {
-      const ends = net.nodes.map(nd => this.at(nd.ref)).filter(Boolean) as Placed[];
-      if (!ends.length) return null;
-      const x = ends.reduce((s, p) => s + p.x, 0) / ends.length;
-      const y = ends.reduce((s, p) => s + p.y, 0) / ends.length;
-      return { key: net.code + '-' + net.name, name: net.name ?? '',
-               x: Math.round(x), y: Math.round(y) - 4 };
-    }).filter(Boolean) as { key: string; name: string; x: number; y: number }[];
   }
 }

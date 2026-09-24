@@ -162,26 +162,59 @@ module PowerIn:
     d1.cathode ~ vrail
 ```
 
-Two buttons, and they do different things:
+**run** is the one button that matters, and it does everything from the
+source down, in order, every time:
 
-- **build** runs atopile. Out comes the netlist — what parts there are,
-  what nets they sit on, and which pin of which part each net touches.
-  That is all the source can say, and it needs nothing installed beyond
-  atopile itself.
-- **lay out** places the board and draws it. Each part is fetched from
-  LCSC by its part number, footprint and 3D model together, and KiCad
-  does the placing inside a container. Out come a layer render and a GLB.
+1. **build** - atopile turns the source into a netlist;
+2. **schematic** - KiCad draws it: every part with its real symbol, grouped
+   by module, each pin joined to its net by a labelled stub, then ERC;
+3. **place** - each module's parts as a block, small parts beside the chip
+   they serve, connectors on the board's edge facing out;
+4. **route** - Freerouting, to the board's rules, then a ground pour on
+   both layers;
+5. **check** - KiCad's DRC over the routed board.
 
-Everything at once, in six panes:
+About a minute for a 33-part board. **build** on its own only checks that
+the source compiles.
 
-| | what it shows |
+| pane | what it shows |
 |---|---|
-| **parts** | LCSC's catalogue, and the drawer of parts already fetched |
-| **layout** | the board as KiCad draws it — copper, silkscreen, mask, outline — and the two buttons that change it |
-| **circuit** | the parts on a ring, a chord per net, and what it is made of |
-| **3d** | the same placement with the parts standing on it; drag to turn it over |
-| **machine** | what each build and placement cost, and what is stored |
-| **log** | what has happened, the board's builds among it |
+| **parts** | LCSC's catalogue, the part you clicked in full, and the drawer |
+| **layout** | the routed board: **front** (with the pour), **tracks** (copper only, both layers), **back** (from below); `.kicad_pcb` to open it in KiCad |
+| **schematic** | the schematic on black - scroll to zoom, drag to move, double-click to fit; `.kicad_sch` to open it in KiCad |
+| **3d** | the same board with its parts, copper and mask |
+| **machine · rules · checks** | what each run cost; the routing rules; what DRC and ERC found |
+| **log · lcsc** | this room's log; every request made of LCSC |
+
+⤢ on a pane makes it large; it remembers across a reload.
+
+### Rules
+
+The **rules** tab is what the router is told. It starts worked out from the
+net names — `vbus`, `gnd`, `v3v3` are power and get 0.5 mm tracks, `dp`/`dn`
+are a pair, `gnd` is poured — and anything changed there is kept.
+
+- **Net classes**: track width, clearance, via and drill, and which nets are
+  in each. Default holds every net not named elsewhere.
+- **Differential pairs**: width and gap. Freerouting routes a pair as two
+  nets at these numbers; it does not couple them or match their lengths.
+  Fine for USB full speed; not for anything fast. The panel says so too.
+- **Ground pour**: *solid* joins pads straight into the pour (what reflow
+  wants); *thermal* uses spokes (easier to hand-solder).
+- **What the board house can make**: the minimums every class is checked
+  against before the router sees it.
+
+The router cannot narrow a track to reach a small pad, so a class is capped
+to the narrowest pad it has to reach, and the run says so: *Power: 0.5 →
+0.34 mm, to reach U24 pad 5*. Your number stays as you set it.
+
+### Checks
+
+DRC and ERC, itemised: errors first, then warnings, then two kinds kept
+apart because they are not about the design — findings wholly inside one
+part's footprint (a connector's pegs next to its own pads: the maker's
+land pattern), and ERC's notes about the generated project having no
+library tables.
 
 ### Parts
 
@@ -260,10 +293,6 @@ opened; a ring is the same picture for the same circuit.
 There is no **+ Board** in the left column yet and no editor for the
 source in the room: a board is written through `PUT /api/boards/{id}`,
 which is how the agent writes one. The room reads, builds and draws it.
-
-What it does not do is route. The board comes out placed, with its nets
-attached, and says `not routed` under the drawing. Autorouting a board
-nobody has looked at is not a favour.
 
 A part without an LCSC number still appears in the netlist and in the
 circuit, and is not on the board: there is no shape to place. It is named

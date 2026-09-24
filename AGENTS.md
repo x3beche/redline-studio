@@ -138,16 +138,32 @@ the PCB room. `model` is then a board id, and `part` is one of its
 components as `U2 · C64898` - the reference and the LCSC number it is
 bought by. There is no drawing and no camera; the note is the request.
 
-The source is atopile, and it lives behind the API rather than behind
-`revisions.py`:
+The source is atopile. **Every change to a board goes through the whole
+pipeline** - never a build on its own, never a layout on its own:
 
 ```bash
-curl -s localhost:8000/api/boards/<id> | jq -r .source   # read it
-curl -s -X PUT localhost:8000/api/boards/<id> \
-     -H 'content-type: application/json' -d '{"source": "..."}'
-curl -s -X POST localhost:8000/api/boards/<id>/build     # netlist
-curl -s -X POST localhost:8000/api/boards/<id>/layout    # place, draw, model
+.venv/bin/python tools/revisions.py board source <id> > board.ato   # read it
+.venv/bin/python tools/revisions.py board save <id> board.ato       # write it
+.venv/bin/python tools/revisions.py board run <id>                  # all of it
+.venv/bin/python tools/revisions.py board show <id>                 # where it stands
 ```
+
+`run` builds the source, draws the schematic (KiCad, every part's real
+symbol, pins joined by net labels, then ERC), places the parts (by module,
+connectors on the edges facing out), routes with Freerouting to the
+board's rules, pours ground, and runs KiCad's DRC. It prints what came
+out. A board is done when it says **0 unrouted, DRC 0 errors, ERC 0
+errors** - read the examples it prints when it does not, fix the source
+or the rules, and run again. Log board work with `log --room pcb`.
+
+The routing rules - net classes, pairs, the pour, the board house's
+minimums - are the person's, in the room's **rules** tab. They are worked
+out from net names the first time; do not overwrite what someone set. The
+router narrows a class that cannot reach its narrowest pad and says so
+("Power: 0.5 -> 0.34 mm, to reach U24 pad 5"); that is reported, not an
+error. Freerouting routes a differential pair as two nets at the class's
+width and gap, without coupling or length matching - fine for USB full
+speed, and say so if someone asks for anything faster.
 
 A part is chosen by its LCSC number (`mpn = "C25744"` on the component).
 Then `done <id>` as usual.

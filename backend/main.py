@@ -10,6 +10,7 @@ The connection string is read here alone; it never reaches the frontend.
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import os
 from pathlib import Path
@@ -1297,6 +1298,9 @@ async def drop_board(bid: str):
     res = await db()[ato.BOARDS].delete_one({"_id": bid})
     if not res.deleted_count:
         raise HTTPException(404, bid)
+    # Written down: a board went missing once with nothing to say when or
+    # how, and a deletion is the one change there is no undoing.
+    await say(f"{bid}: deleted", "warn", room="pcb")
     return {"id": bid, "deleted": True}
 
 

@@ -34,25 +34,22 @@ the netlist that build produced.
 Left to do, roughly in order:
 
 - **No way to make a board from the screen.** No **+ Board** in the left
-  column, no editor for the `.ato` in the room. The source goes in
-  through `PUT /api/boards/{id}`, which is fine for the agent and no use
-  to a person.
-- **The parts drawer will eat the database.** Seven parts is 23 MB:
-  an LQFP-48's STEP is 9.8 MB before it is gzipped, and the quota is
-  537 MB. The link to the database runs at about 100 kB/s, so that is
-  also twenty seconds of waiting per big part. Worth a size cap, a prune,
-  or keeping the models on disk with the database as the index.
-- **The placer puts everything in one row.** `docker/place.py` walks
-  along the board at a fixed pitch. It is honest — nothing pretends to
-  be laid out — but a board with thirty parts will run off the edge.
-  Grouping by net is the first thing to try.
-- **Nothing is routed**, and the ratsnest does not show in the layer
-  render. `kicad-cli` will not draw one; it would have to come from the
-  netlist we already have.
-- **A revision loop for boards.** Notes, queue, before/after, cost — all
-  of it is `model`-shaped in `revisions.py`. Do not generalise it until
-  the coding room says what its third shape looks like; splitting on a
-  guess splits in the wrong places.
+  column, no editor for the `.ato` in the room. The source goes in through
+  `revisions.py board save`, which is fine for the agent and no use to a
+  person.
+- **Differential pairs are not coupled.** Freerouting routes them as two
+  nets at the class's width and gap. Fine for USB full speed; a fast pair
+  would need KiCad's own interactive router or another tool.
+- **Silkscreen warnings.** Reference text lands on pads and outlines on a
+  dense board - 16 warnings on the controller. The fab clips silk from
+  pads, but moving the text would be tidier.
+- **ERC pin types.** LCSC symbols mostly type their pins Unspecified, so
+  ERC warns on every connection to them (57 on the controller) and cannot
+  catch two outputs tied together. Typing the pins from the datasheet, or
+  from the symbol's own names (VDD, GND, ~RST), would make ERC mean more.
+- **The placer is a start, not a layout.** Modules as blocks, connectors on
+  edges, decoupling beside its chip; not thermal zones, not keep-outs, not
+  "this LED on the front".
 
 ## Coding rooms
 

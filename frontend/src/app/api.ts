@@ -331,11 +331,70 @@ export class Health {
 // ---------------- boards ----------------
 /** A board is parametric atopile that builds into a netlist: the parts it
  *  is made of and what is joined to what. */
+/** What the router made of a board. */
+export interface BoardRoute {
+  tracks: number; vias: number; length_mm: number; zones: number;
+  unrouted: number; route_s: number; passes: number;
+  /** Where the router changed a rule to make it work, and why. */
+  notes: string[];
+}
+
+/** KiCad's DRC over the routed board, as counts. */
+export interface BoardDrc {
+  errors: Record<string, number>;
+  warnings: Record<string, number>;
+  /** Findings wholly inside one part's footprint: the maker's land
+   *  pattern, not the layout's doing. */
+  in_footprints: Record<string, number>;
+  error_count: number; warning_count: number; unconnected: number;
+  unconnected_examples: string[];
+  examples: string[];
+  at: string;
+}
+
+export interface BoardErc {
+  errors: Record<string, number>;
+  warnings: Record<string, number>;
+  /** About the generated project's library set-up, not the design. */
+  setup: Record<string, number>;
+  error_count: number; warning_count: number;
+  examples: string[];
+}
+
+export interface BoardSchematic {
+  parts: number; wires: number; labels: number; no_connects: number;
+  symbols: number; size_mm: [number, number];
+  erc: BoardErc;
+  at: string;
+}
+
+/** A net class: how wide, how far apart, which via, and its nets. */
+export interface NetClass {
+  name: string; track: number; clearance: number; via: number; drill: number;
+  nets: string[];
+}
+
+export interface DiffPair { name: string; p: string; n: string; width: number; gap: number; }
+
+export interface BoardRules {
+  classes: NetClass[];
+  pairs: DiffPair[];
+  board: { layers: number; min_track: number; min_clearance: number;
+           min_via: number; min_drill: number };
+  pour: { net: string; layers: string[]; clearance: number;
+          connection: 'solid' | 'thermal' } | null;
+  route: { passes: number };
+  edited: boolean;
+}
+
 export interface BoardEntry {
   _id: string;
   title?: string;
   ready: boolean;
   layout?: BoardLayout;
+  route?: BoardRoute | null;
+  drc?: BoardDrc | null;
+  schematic?: BoardSchematic | null;
   stale?: boolean;
   building?: boolean;
   build_secs?: number;
@@ -406,6 +465,22 @@ export class Boards {
   /** Place the built netlist and draw it. KiCad runs in a container. */
   layout(id: string): Observable<BoardLayout> {
     return this.http.post<BoardLayout>(`/api/boards/${id}/layout`, {});
+  }
+  /** The whole of it: build, schematic, place, route, pour, DRC. */
+  run(id: string): Observable<unknown> {
+    return this.http.post(`/api/boards/${id}/run`, {});
+  }
+  rules(id: string): Observable<{ rules: BoardRules; problems: string[]; nets: string[] }> {
+    return this.http.get<{ rules: BoardRules; problems: string[]; nets: string[] }>(
+      `/api/boards/${id}/rules`);
+  }
+  saveRules(id: string, rules: BoardRules): Observable<unknown> {
+    return this.http.put(`/api/boards/${id}/rules`, { rules });
+  }
+  /** A drawing or a KiCad file of the board, stamped so a new one is not
+   *  answered from the browser's cache. */
+  file(id: string, name: string, stamp?: string): string {
+    return `/api/boards/${id}/${name}` + (stamp ? `?v=${encodeURIComponent(stamp)}` : '');
   }
   /** What this board has cost the machine, job by job. */
   compute(id: string): Observable<BoardCompute> {

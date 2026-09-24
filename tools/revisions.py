@@ -287,6 +287,79 @@ async def cmd_part(args):
         sys.exit(2)
 
 
+async def cmd_board(args):
+    """A board, the whole way through, by the server that owns the work.
+
+    `run` is what a change to a board goes through every time: build the
+    source, draw the schematic, place, route, pour, check. The steps are
+    the server's - it has the KiCad container and the router - so this asks
+    it, and prints what came out: the numbers to read before saying a
+    board is done.
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    base = os.environ.get("X3_API", "http://localhost:8000")
+
+    def call(path: str, method: str = "GET", body: dict | None = None,
+             timeout: int = 60):
+        req = urllib.request.Request(
+            base + path, method=method,
+            data=_json.dumps(body).encode() if body is not None else None,
+            headers={"content-type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                raw = r.read()
+                return _json.loads(raw) if raw[:1] in (b"{", b"[") else raw.decode()
+        except urllib.error.HTTPError as exc:
+            sys.exit(f"{method} {path}: {exc.code} {exc.read().decode(errors='replace')[:800]}")
+        except urllib.error.URLError as exc:
+            sys.exit(f"the server is not answering at {base} ({exc.reason}) - start.sh")
+
+    bid = args.board
+    if args.what == "source":
+        print(call(f"/api/boards/{bid}")["source"])
+    elif args.what == "save":
+        text = Path(args.file).read_text()
+        print(call(f"/api/boards/{bid}", "PUT", {"source": text}))
+    elif args.what == "run":
+        print(f"{bid}: build, schematic, place, route, pour, DRC - a minute or so")
+        out = call(f"/api/boards/{bid}/run", "POST", {}, timeout=1800)
+        _print_board(out)
+    else:                                        # show
+        doc = next((b for b in call("/api/boards") if b["_id"] == bid), None)
+        if not doc:
+            sys.exit(f"no board {bid}")
+        _print_board({"schematic": doc.get("schematic") or {},
+                      "layout": {**(doc.get("layout") or {}),
+                                 "route": doc.get("route"), "drc": doc.get("drc")}})
+
+
+def _print_board(out: dict) -> None:
+    s = out.get("schematic") or {}
+    lay = out.get("layout") or {}
+    r = lay.get("route") or {}
+    d = lay.get("drc") or {}
+    erc = s.get("erc") or {}
+    if out.get("seconds"):
+        print(f"  took       {out['seconds']} s")
+    print(f"  schematic  {s.get('parts', '?')} parts, {s.get('labels', '?')} pins joined, "
+          f"ERC {erc.get('error_count', '?')} errors / {erc.get('warning_count', '?')} warnings")
+    print(f"  board      {lay.get('placed', '?')} placed, {lay.get('size_mm', '?')} mm, "
+          f"missing {lay.get('missing') or 'none'}")
+    print(f"  routing    {r.get('unrouted', '?')} unrouted, {r.get('tracks', '?')} segments, "
+          f"{r.get('vias', '?')} vias, {r.get('length_mm', '?')} mm")
+    for note in r.get("notes") or []:
+        print(f"             router: {note}")
+    print(f"  DRC        {d.get('error_count', '?')} errors, {d.get('unconnected', '?')} unconnected, "
+          f"{d.get('warning_count', '?')} warnings")
+    for x in (d.get("examples") or []) + (erc.get("examples") or []):
+        print(f"             {x[:150]}")
+    for u in d.get("unconnected_examples") or []:
+        print(f"             unconnected: {u}")
+
+
 async def cmd_ask(args):
     """Put a question on the person's screen and wait for the answer.
 
@@ -835,6 +908,13 @@ def main() -> None:
                    help="a search for find, LCSC numbers (C...) for pins/ato, "
                         "KIND VALUE SIZE for passive")
     s.set_defaults(fn=cmd_part)
+    s = sub.add_parser("board", help="a board: its source, and the whole pipeline")
+    s.add_argument("what", choices=["run", "show", "source", "save"],
+                   help="run: build, schematic, place, route, DRC; show: where it "
+                        "stands; source/save: read or write its atopile")
+    s.add_argument("board")
+    s.add_argument("file", nargs="?", help="for save: the .ato file to write")
+    s.set_defaults(fn=cmd_board)
     s = sub.add_parser("wait", help="block until a revision is queued")
     s.add_argument("--every", type=int, default=30,
                    help="seconds between checks (default 30)")

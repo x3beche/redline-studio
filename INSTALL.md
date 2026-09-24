@@ -46,7 +46,7 @@ Two things it needs, and neither goes on the machine.
 stack of its own, and this project's environment has build123d in it:
 
 ```bash
-python3 -m venv .venv-ato && .venv-ato/bin/pip install atopile easyeda2kicad
+python3 -m venv .venv-ato && .venv-ato/bin/pip install atopile easyeda2kicad kiutils
 ```
 
 `X3_ATO` and `X3_EASYEDA` point at the two binaries if they live somewhere
@@ -55,7 +55,9 @@ else. Note that pip will give you atopile 0.2 on Python 3.12: 0.15 needs
 uses.
 
 **KiCad**, in a container, because it is a gigabyte of libraries and the
-point is not to install it:
+point is not to install it. The image carries the footprint, 3D-model and
+symbol libraries, a Java 25 runtime and Freerouting 2.4 - the autorouter,
+which is built for Java 25 and will not start on 21:
 
 ```bash
 docker build -f docker/kicad.Dockerfile -t redline-kicad .
