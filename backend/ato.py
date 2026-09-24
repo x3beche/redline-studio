@@ -151,6 +151,22 @@ def bom(csv_text: str) -> list[dict]:
     return [dict(zip(head, [c.strip() for c in r])) for r in rows[1:]]
 
 
+def parts_from_bom(components: list[dict], rows: list[dict]) -> None:
+    """Give each component the part number the bill gives its designator.
+
+    The bill groups identical parts - `"U9,U11"` on one row - so each
+    designator in the group gets that row's number.
+    """
+    by_ref = {}
+    for row in rows:
+        for ref in (row.get("designator") or "").split(","):
+            if ref.strip():
+                by_ref[ref.strip()] = row.get("lcsc") or row.get("comment")
+    for comp in components:
+        if comp["ref"] in by_ref:
+            comp["part"] = by_ref[comp["ref"]]
+
+
 # ---------------- building ----------------
 async def build(db, board_id: str) -> dict:
     """Run atopile over a board's source and store what comes out.
@@ -217,7 +233,14 @@ async def build(db, board_id: str) -> dict:
 
         payload = graph(net.read_text())
         csv = tmp / "build" / "default.csv"
-        payload["bom"] = bom(csv.read_text()) if csv.exists() else []
+        # The part number comes from the bill, not from the netlist. The
+        # netlist keeps one library part per footprint name, so every
+        # R0402 on a board carried the first one's number - a 2 kΩ and a
+        # 1 kΩ both read C25905, the 5.1 kΩ - and two different chips in
+        # the same package would have been fetched and drawn as one.
+        rows = bom(csv.read_text()) if csv.exists() else []
+        parts_from_bom(payload["components"], rows)
+        payload["bom"] = rows
         payload["built_at"] = store.now()
 
         import json

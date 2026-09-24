@@ -147,3 +147,17 @@ def test_only_an_lcsc_number_is_taken_for_one():
 def test_a_part_number_with_space_round_it_is_still_one():
     from backend import lcsc
     assert lcsc.looks_like_a_part(" C25744 ".strip())
+
+
+def test_each_part_number_comes_from_the_bill_not_the_footprint():
+    # The netlist keeps one library part per footprint name, so reading the
+    # number from there gave every R0402 the first one's: a 2 kΩ and a
+    # 1 kΩ both came out as the 5.1 kΩ C25905.
+    comps = [{"ref": "U2", "part": "C25905"}, {"ref": "U6", "part": "C25905"},
+             {"ref": "U9", "part": "C25905"}, {"ref": "U11", "part": "C25905"}]
+    rows = ato.bom('Comment,Designator,Footprint,LCSC\n'
+                   'C25905,"U2,U3",R0402,C25905\n'
+                   'C4109,U6,R0402,C4109\n'
+                   'C11702,"U9,U11",R0402,C11702\n')
+    ato.parts_from_bom(comps, rows)
+    assert [c["part"] for c in comps] == ["C25905", "C4109", "C11702", "C11702"]
