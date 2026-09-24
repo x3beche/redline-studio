@@ -153,6 +153,33 @@ select,.inp{padding:4px 6px;border:1px solid var(--line);border-radius:4px;backg
 .out-foot{display:flex;gap:10px;align-items:center;padding:8px 10px;flex-wrap:wrap}
 .count{color:var(--ink-soft);font-size:12px;font-family:"IBM Plex Mono",ui-monospace,monospace}
 .copied{color:var(--ok);font-size:12px}
+.btn:disabled{opacity:.6;cursor:default}
+.btn:disabled:hover{border-color:var(--line)}
+
+/* second opinion (croniter), only when served with /api */
+.ck{padding:8px 10px 10px;border-top:1px solid var(--line-soft);font-size:12px}
+.ck.stale .ck-body{opacity:.55}
+.ck-head{margin:0;font-weight:600;font-size:13px}
+.ck-head.ok{color:var(--ok)}
+.ck-head.warn{color:var(--warn)}
+.ck-head.danger{color:var(--danger)}
+.ck-note{margin:3px 0 0;color:var(--ink-soft)}
+.ck-list{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.ck-list li{padding-left:14px;position:relative}
+.ck-list li::before{content:"";position:absolute;left:0;top:5px;width:7px;height:7px;border-radius:50%;background:var(--ink-soft)}
+.ck-list li.warn::before{background:var(--warn)}
+.ck-list li.danger::before{background:var(--danger)}
+.ck-when{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.ck-why{display:block;color:var(--ink-soft);margin-top:1px}
+.ck-link{background:none;border:none;padding:0;color:inherit;font:inherit;cursor:pointer;text-align:left;text-decoration:underline dotted;text-underline-offset:2px}
+.ck-link:hover{color:var(--accent)}
+.ck details{margin-top:6px}
+.ck summary{cursor:pointer;color:var(--ink-soft)}
+.ck table{border-collapse:collapse;margin-top:4px;width:100%;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px}
+.ck th,.ck td{text-align:left;padding:2px 6px 2px 0;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+.ck th{font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-weight:600;color:var(--ink-soft)}
+.ck td.x{color:var(--danger)}
+.ck-tw{overflow-x:auto}
 </style>
 </head>
 <body>
@@ -209,9 +236,11 @@ select,.inp{padding:4px 6px;border:1px solid var(--line);border-radius:4px;backg
       <pre class="out" id="out" tabindex="0"></pre>
       <div class="out-foot">
         <button class="btn btn-primary" id="copy">Copy</button>
+        <button class="btn" id="ckBtn" type="button" hidden title="Ask croniter for the next 10 runs and compare them with this page's list">Check</button>
         <span class="count" id="ocount"></span>
         <span class="copied" id="copied" aria-live="polite"></span>
       </div>
+      <div class="ck" id="ck" hidden aria-live="polite"></div>
     </section>
   </div>
 </main>
@@ -884,6 +913,7 @@ function renderOut(){
   $("out").textContent=txt;
   $("ocount").textContent=txt.length.toLocaleString("en-US")+" chars";
   $("copied").textContent="";
+  renderCheck();
 }
 $("otabs").addEventListener("click",function(e){ var t=e.target.closest(".tab"); if(!t) return; state.out=t.getAttribute("data-fmt"); save("out",state.out); renderOut(); });
 $("copy").addEventListener("click",function(){
@@ -894,6 +924,166 @@ $("copy").addEventListener("click",function(){
   }
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function(){ done(true); },fallback); else fallback();
 });
+
+/* ---- Check: a second opinion from croniter (only when served with /api/tools) ---- */
+var ck={ready:false,busy:false,note:"",build:"",key:null,res:null};
+function ckKey(){ return state.parsed?state.parsed.expr+"|"+state.tz:null; }
+function ckFetch(url,opts,ms){
+  var ctl=typeof AbortController==="function"?new AbortController():null, timer=null;
+  if(ctl){ opts.signal=ctl.signal; timer=setTimeout(function(){ ctl.abort(); },ms); }
+  return fetch(url,opts).then(function(r){ if(timer) clearTimeout(timer); return r; },function(e){ if(timer) clearTimeout(timer); throw e; });
+}
+/* Select the output line that contains `needle`, switching to a tab that has it if needed. */
+function selectInOut(needle){
+  if(!needle) return;
+  if((outputs[state.out]||"").indexOf(needle)<0){
+    var other=["cron","prompt","code"].filter(function(f){ return (outputs[f]||"").indexOf(needle)>=0; })[0];
+    if(!other) return;
+    state.out=other; save("out",other); renderOut();
+  }
+  var pre=$("out"), node=pre.firstChild, txt=pre.textContent, i=txt.indexOf(needle);
+  if(!node||i<0) return;
+  var a=txt.lastIndexOf("\n",i)+1, b=txt.indexOf("\n",i); if(b<0) b=txt.length;
+  var range=document.createRange(); range.setStart(node,a); range.setEnd(node,b);
+  var sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  pre.focus({preventScroll:true});
+  var rr=range.getBoundingClientRect(), pr=pre.getBoundingClientRect();
+  if(rr.top<pr.top||rr.bottom>pr.bottom) pre.scrollTop+=rr.top-pr.top-pr.height/3;
+}
+function outHas(needle){ return ["cron","prompt","code"].some(function(f){ return (outputs[f]||"").indexOf(needle)>=0; }); }
+function ckWhen(tz,t){ return fmtZone(tz,t)+" "+fmtOffset(offsetMin(tz,t)); }
+/* Why a run is on one list and not the other, where a known rule explains it. */
+function ckExplain(snap,t,side){
+  var c=snap.c, tz=snap.tz, W=wallMs(tz,t), d=new Date(W), dom=d.getUTCDate(), wd=d.getUTCDay(), mo=d.getUTCMonth()+1;
+  var near=dstTransitions(tz,t-2*864e5,4).map(function(tr){ var x=transitionHits(c,tr); x.tr=tr; return x; });
+  for(var i=0;i<near.length;i++){
+    var h=near[i], len=Math.abs(h.tr.after-h.tr.before)*6e4;
+    if(t<h.tr.at-len-6e4||t>h.tr.at+len+6e4) continue;
+    var from=hm(new Date(h.from).getUTCHours(),new Date(h.from).getUTCMinutes()), to=hm(new Date(h.to).getUTCHours(),new Date(h.to).getUTCMinutes());
+    if(h.kind==="gap") return side==="cron"
+      ? ["DST gap: clocks jump "+from+" → "+to+" that day.","DST gap: the page marks a scheduled time that falls inside the skipped hour as skipped; croniter moves it to the first minute after the jump (Vixie cron/cronie also run it once right after the jump)."]
+      : ["DST gap: clocks jump "+from+" → "+to+" that day.","DST gap: croniter shifts runs out of the skipped hour differently from this page."];
+    return side==="page"
+      ? ["DST fall-back: "+to+" → "+from+" repeats that day.","DST fall-back: the page lists both occurrences of a repeated wall time; croniter lists it once here (Vixie cron/cronie also run a fixed-time job once)."]
+      : ["DST fall-back: "+to+" → "+from+" repeats that day.","DST fall-back: croniter lists the repeated wall time twice; the page lists it once. Vixie cron/cronie run a fixed-time job once."];
+  }
+  if(!c.dom.full&&!c.dow.full&&c.month.set[mo]){
+    var a=!!c.dom.set[dom], b=!!c.dow.set[wd];
+    if((a||b)&&!(a&&b)){
+      var what=(a?"day "+dom+" matches day-of-month "+c.dom.raw+" but "+DAY_NAMES[wd]+" is not in day-of-week "+c.dow.raw:DAY_NAMES[wd]+" matches day-of-week "+c.dow.raw+" but day "+dom+" is not in day-of-month "+c.dom.raw);
+      if(c.dom.star||c.dow.star) return [what[0].toUpperCase()+what.slice(1)+".","Day-of-month / day-of-week rule: "+c.dom.raw+" / "+c.dow.raw+" has a day field starting with \"*\", so Vixie cron/cronie (and this page) need BOTH to match (AND); croniter ORs the two fields whenever neither is a bare \"*\", so it also runs on days that match only one."];
+      return [what[0].toUpperCase()+what.slice(1)+".","Day-of-month / day-of-week rule: both fields are restricted, so standard cron ORs them; croniter disagrees here."];
+    }
+  }
+  return "";
+}
+function ckCompare(snap,runs){
+  var P=snap.runs.filter(function(r){ return !r.gap; }).map(function(r){ return r.t; });
+  var C=runs.map(function(s){ return Date.parse(s); });
+  if(C.some(isNaN)) return {level:"danger",head:"croniter answered with times this page cannot read.",notes:runs.slice(0,3)};
+  var horizon=Math.min(P.length?P[P.length-1]:Infinity,C.length?C[C.length-1]:Infinity);
+  var pset={}, cset={}; P.forEach(function(t){ pset[t]=1; }); C.forEach(function(t){ cset[t]=1; });
+  var all=P.concat(C.filter(function(t){ return !pset[t]; })).sort(function(a,b){ return a-b; });
+  var diffs=[], beyond=0, same=0;
+  all.forEach(function(t){
+    if(pset[t]&&cset[t]){ same++; return; }
+    if(t>horizon){ beyond++; return; }
+    var side=pset[t]?"page":"cron", why=ckExplain(snap,t,side);
+    diffs.push({t:t,side:side,why:why});
+  });
+  var unexplained=diffs.filter(function(x){ return !x.why; }).length;
+  var res={level:!diffs.length?"ok":unexplained?"danger":"warn",diffs:diffs,P:P,C:C,horizon:horizon,notes:[]};
+  if(!diffs.length) res.head="Agrees with croniter: all "+same+" runs match.";
+  else res.head="Differs from croniter: "+diffs.length+" run"+(diffs.length>1?"s":"")+" on only one list"+(unexplained?"":" (all explained by a known rule below)")+".";
+  if(beyond) res.notes.push(beyond+" run"+(beyond>1?"s":"")+" after "+ckWhen(snap.tz,horizon)+" fall past the end of the other list and are not compared.");
+  return res;
+}
+function ckInterpret(x,snap){
+  var j=x.j||{}, detail=typeof j.detail==="string"?j.detail:"";
+  if(x.status===503) return {level:"danger",head:"Checks need the tools image.",notes:[ck.build?"Build it with: "+ck.build:detail]};
+  if(x.status===413) return {level:"danger",head:"Too large to check.",notes:detail?[detail]:[]};
+  if(x.status===504) return {level:"danger",head:"The check timed out.",notes:detail?[detail]:[]};
+  if(x.status!==200) return {level:"danger",head:"The check failed (HTTP "+x.status+").",notes:[detail||String(x.t||"").slice(0,300)]};
+  var notes=(j.notes||[]).map(String);
+  notes.push("Start: "+fmtZone(snap.tz,snap.now)+" "+snap.tz+" ("+isoUTC(snap.now)+"), the moment the page's list was computed.");
+  if(!j.ok){
+    var errs=(j.errors||[]).map(function(e){ return e&&e.message?String(e.message):String(e); });
+    var noRun=!snap.runs.some(function(r){ return !r.gap; });
+    if(noRun&&errs.some(function(m){ return /failed to find/i.test(m); })) return {level:"ok",head:"Agrees with croniter: neither finds any run.",notes:notes};
+    return {level:"danger",head:"croniter rejects this schedule.",errors:errs,notes:notes};
+  }
+  var r=ckCompare(snap,j.runs||[]); r.notes=notes.concat(r.notes||[]); return r;
+}
+function renderCheck(){
+  var btn=$("ckBtn"), box=$("ck");
+  if(!ck.ready){
+    btn.hidden=true;
+    box.hidden=!ck.note; box.className="ck";
+    if(ck.note) box.innerHTML='<p class="ck-note">'+esc(ck.note)+"</p>";
+    return;
+  }
+  btn.hidden=false; btn.disabled=ck.busy||!state.parsed; btn.textContent=ck.busy?"Checking…":"Check";
+  btn.setAttribute("aria-busy",String(ck.busy));
+  if(ck.busy&&!ck.res){ box.hidden=false; box.className="ck"; box.innerHTML='<p class="ck-note">Checking with croniter…</p>'; return; }
+  var r=ck.res;
+  if(!r){ box.hidden=true; box.innerHTML=""; return; }
+  var stale=ck.key!==ckKey(), tz=r.tz;
+  var h='<p class="ck-head '+r.level+'">'+esc(r.head)+(stale?'<span class="tag">outdated</span>':"")+"</p>";
+  if(stale) h+='<p class="ck-note">The expression or time zone changed since this check. Press Check again.</p>';
+  h+='<div class="ck-body">';
+  var items=[], rules=[];
+  (r.errors||[]).forEach(function(m){
+    var needle=r.expr&&outHas(r.expr)?r.expr:"";
+    items.push('<li class="danger">'+(needle?'<button type="button" class="ck-link" data-needle="'+esc(needle)+'" title="Select the expression in the output">'+esc(m)+"</button>":esc(m))+"</li>");
+  });
+  (r.diffs||[]).forEach(function(d){
+    var when=ckWhen(tz,d.t), needle=fmtZone(tz,d.t)+" "+tz+" = "+isoUTC(d.t), label='<span class="ck-when">'+esc(when)+"</span> — only "+(d.side==="page"?"on this page":"in croniter");
+    if(d.side==="page"&&!stale&&outHas(needle)) label='<button type="button" class="ck-link" data-needle="'+esc(needle)+'" title="Select this run in the output">'+label+"</button>";
+    items.push('<li class="'+(d.why?"warn":"danger")+'">'+label+'<span class="ck-why">'+esc(d.why?d.why[0]:"No known rule explains this difference.")+"</span></li>");
+    if(d.why&&rules.indexOf(d.why[1])<0) rules.push(d.why[1]);
+  });
+  if(items.length) h+='<ul class="ck-list">'+items.join("")+"</ul>";
+  rules.forEach(function(x){ h+='<p class="ck-note"><b>Why:</b> '+esc(x)+"</p>"; });
+  (r.notes||[]).forEach(function(n){ if(n) h+='<p class="ck-note">'+esc(n)+"</p>"; });
+  if(r.P&&r.C){
+    var rows="", n=Math.max(r.P.length,r.C.length), pset={}, cset={};
+    r.P.forEach(function(t){ pset[t]=1; }); r.C.forEach(function(t){ cset[t]=1; });
+    for(var i=0;i<n;i++){
+      var p=r.P[i], c=r.C[i];
+      rows+="<tr><td>"+(i+1)+"</td><td"+(p!=null&&!cset[p]&&p<=r.horizon?' class="x"':"")+">"+(p!=null?esc(ckWhen(tz,p)):"—")+"</td><td"+(c!=null&&!pset[c]&&c<=r.horizon?' class="x"':"")+">"+(c!=null?esc(ckWhen(tz,c)):"—")+"</td></tr>";
+    }
+    h+='<details'+(r.level!=="ok"?" open":"")+'><summary>Both lists side by side ('+esc(tz)+')</summary><div class="ck-tw"><table><thead><tr><th>#</th><th>This page</th><th>croniter</th></tr></thead><tbody>'+rows+"</tbody></table></div></details>";
+  }
+  h+="</div>";
+  box.hidden=false; box.className="ck"+(stale?" stale":""); box.innerHTML=h;
+}
+function runCheck(){
+  if(ck.busy||!state.parsed) return;
+  var c=state.parsed, snap={key:ckKey(),c:c,tz:state.tz,now:cache.now,runs:cache.runs.slice()};
+  ck.busy=true; renderCheck();
+  var body=JSON.stringify({kind:"cron",input:c.expr,extra:{tz:snap.tz,start:new Date(snap.now).toISOString(),count:10}});
+  function finish(res){ res.tz=snap.tz; res.expr=c.expr; ck.busy=false; ck.res=res; ck.key=snap.key; renderCheck(); }
+  try{
+    ckFetch("/api/tools/check",{method:"POST",headers:{"Content-Type":"application/json"},body:body},90000)
+      .then(function(r){ return r.text().then(function(t){ var j=null; try{ j=JSON.parse(t); }catch(e){} return {status:r.status,j:j,t:t}; }); })
+      .then(function(x){ finish(ckInterpret(x,snap)); },function(e){ finish({level:"danger",head:"The check could not run: "+(e&&e.name==="AbortError"?"no answer in 90 s.":(e&&e.message)||"network error."),notes:[]}); });
+  }catch(e){ finish({level:"danger",head:"The check could not run: "+e.message,notes:[]}); }
+}
+$("ckBtn").addEventListener("click",runCheck);
+$("ck").addEventListener("click",function(e){ var b=e.target.closest(".ck-link"); if(b) selectInOut(b.getAttribute("data-needle")); });
+if(/^http/.test(location.protocol)&&typeof fetch==="function"){
+  try{
+    ckFetch("/api/tools/status",{headers:{"Accept":"application/json"}},2500)
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(s){
+        if(!s||typeof s!=="object") return;
+        ck.build=s.build||"";
+        if(s.ready===true&&(s.kinds||[]).indexOf("cron")>=0) ck.ready=true;
+        else if(s.ready===false) ck.note="Checks need the tools image: "+(s.build||"");
+        renderCheck();
+      })["catch"](function(){});
+  }catch(e){}
+}
 
 /* ---- top ---- */
 function renderHead(){
@@ -926,5 +1116,7 @@ Cron Studio — usage
 - The time zone selector sets the zone the schedule is read in; runs are listed in that zone with UTC underneath.
 - Next 10 runs are computed locally (Vixie cron rules: DOM/DOW OR unless one starts with "*"); DST gaps and repeated hours are marked.
 - Checks lists risky patterns; the output panel gives Cron variants (5-field, Quartz/Spring 6-field, EventBridge), a Prompt, and Code.
+- Check (only inside the app, when /api/tools is up): asks croniter for the next 10 runs from the same start and zone
+  and compares them with this page's list; differences are explained where a DST or day-of-month/day-of-week rule does.
 - State is kept in localStorage under "redline.tool.cron-studio.".
 -->

@@ -142,6 +142,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .flag{font-size:10px;padding:0 4px;border-radius:3px;border:1px solid var(--line);color:var(--ink-soft);font-family:"IBM Plex Mono",ui-monospace,monospace}
 .flag.req{color:var(--danger);border-color:currentColor}
 .flag.cond{color:var(--accent);border-color:currentColor}
+.flag.stale{color:var(--warn);border-color:currentColor}
 .rbtns{display:flex;gap:1px;flex:none}
 .ib{border:0;background:none;color:var(--ink-soft);cursor:pointer;padding:2px 4px;border-radius:3px;font-size:12px;line-height:1}
 .ib:hover{background:var(--sunken);color:var(--ink)}
@@ -188,6 +189,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pf .inline{display:flex;align-items:center;gap:7px;font-weight:400}
 .pf .help{color:var(--ink-soft);font-size:12px;margin:0}
 .pf .err{color:var(--danger);font-size:12px;margin:0}
+.pf .cwarn{color:var(--warn);font-size:12px;margin:0}
 .pf.sec{border-bottom:1px solid var(--line-soft);padding-bottom:3px;margin-top:4px}
 .pf.sec h3{margin:0;font-size:14px}
 .pv-actions{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -210,6 +212,20 @@ button,input,select,textarea{font:inherit;color:inherit}
 .copied{color:var(--ok);font-size:12px}
 .out{margin:0;padding:10px 12px;max-height:520px;overflow:auto;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;line-height:1.5;white-space:pre;tab-size:2}
 .out.wrapit{white-space:pre-wrap;word-break:break-word}
+/* check (offline compiler, only inside the app) */
+.check-res{padding:6px 10px;border-bottom:1px solid var(--line-soft);font-size:12px;max-height:180px;overflow:auto;flex:none}
+.check-res p{margin:0}
+.check-res .pass{color:var(--ok);font-weight:500}
+.check-res .fail{color:var(--danger);font-weight:500}
+.check-res .stale{color:var(--warn)}
+.check-res.is-stale .pass,.check-res.is-stale .fail,.check-res.is-stale ul{opacity:.6}
+.check-res .muted{color:var(--ink-soft)}
+.check-res ul{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.check-err{display:block;width:100%;text-align:left;border:0;background:none;padding:1px 4px;border-radius:3px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--ink);white-space:pre-wrap;word-break:break-word}
+button.check-err{cursor:pointer}
+button.check-err:hover{background:var(--sunken)}
+.check-err .loc{color:var(--danger)}
+.check-err .code{color:var(--ink-soft)}
 </style>
 </head>
 <body>
@@ -257,9 +273,11 @@ button,input,select,textarea{font:inherit;color:inherit}
       <div class="tabs" role="tablist" id="tabs"></div>
       <div class="out-foot">
         <button class="btn btn-primary" id="copyBtn" type="button">Copy</button>
+        <button class="btn" id="checkBtn" type="button" hidden aria-describedby="checkRes">Check</button>
         <span class="count" id="count"></span>
         <span class="copied" id="copied" role="status" aria-live="polite"></span>
       </div>
+      <div class="check-res" id="checkRes" role="status" aria-live="polite" hidden></div>
       <pre class="out" id="out" tabindex="0" role="tabpanel" aria-labelledby="outTitle"></pre>
     </div>
   </section>
@@ -344,7 +362,26 @@ function activeCond(f, fields){
   var c = byId(fields, f.condField);
   if (!c || c === f || c.type === "section" || c.type === "file") return null;
   if (f.condValue === "" || f.condValue == null) return null;
+  if (condIssue(f, fields)) return null;   /* stale: left out of every output, field always shown */
   return {ctrl:c, value:String(f.condValue)};
+}
+/* Why a condition that was set up can no longer apply (the controlling field was deleted, retyped,
+   or no longer offers the compared value). null when it is fine or simply not filled in yet. */
+function condIssue(f, fields){
+  if (!f.condField) return null;
+  var c = byId(fields, f.condField);
+  if (!c) return "the field this condition used was deleted";
+  if (c === f) return "a field cannot depend on itself";
+  if (c.type === "section" || c.type === "file") return "\u201c" + lbl(c) + "\u201d is now a " + TYPE_BY[c.type].label.toLowerCase() + ", which cannot control visibility";
+  if (f.condValue === "" || f.condValue == null) return null;
+  var k = kindOf(c), v = String(f.condValue), opts = parseOptions(c);
+  if ((k === "enum" || k === "array") && opts.length && !opts.some(function(o){ return o.value === v; }))
+    return "condition compares with \u2018" + v + "\u2019, which " + lbl(c) + " no longer offers";
+  if (k === "boolean" && v !== "true" && v !== "false")
+    return "condition compares with \u2018" + v + "\u2019, but " + lbl(c) + " is now a " + TYPE_BY[c.type].label.toLowerCase() + " (checked or unchecked only)";
+  if (k === "number" && num(v) == null)
+    return "condition compares with \u2018" + v + "\u2019, but " + lbl(c) + " is now a number";
+  return null;
 }
 function matchTarget(f, fields){
   if (!f.match || !MATCHABLE[f.type]) return null;
@@ -1027,6 +1064,8 @@ if (typeof document !== "undefined") (function(){
       if (isReq(f)) flags += "<span class=\"flag req\" title=\"Required\">req</span>";
       if (f.width === "half" && f.type !== "section" && f.type !== "hidden") flags += "<span class=\"flag\" title=\"Half width\">½</span>";
       if (cond) flags += "<span class=\"flag cond\" title=\"Shown when " + esc(condText(cond)) + "\">if</span>";
+      var ci = condIssue(f, S.fields);
+      if (ci) flags += "<span class=\"flag stale\" title=\"Condition ignored: " + esc(ci) + "\">if!</span>";
       if (t) flags += "<span class=\"flag cond\" title=\"Must match " + esc(t.name) + "\">=</span>";
       return "<li class=\"frow" + (f.id === S.sel ? " sel" : "") + (f.type === "section" ? " section" : "") + "\" data-id=\"" + f.id + "\" tabindex=\"0\" aria-label=\"" + esc(lbl(f) + ", " + TYPE_BY[f.type].label) + "\"" + (f.id === S.sel ? " aria-current=\"true\"" : "") + ">" +
         "<button type=\"button\" class=\"handle\" aria-label=\"Drag to reorder\" tabindex=\"-1\">⋮⋮</button>" +
@@ -1195,14 +1234,16 @@ if (typeof document !== "undefined") (function(){
     var co = others.filter(function(o){ return o.type !== "file"; });
     h.push("<label class=\"ir\"><span>Show only when</span><select data-k=\"condField\"><option value=\"\">(always shown)</option>" + co.map(function(o){ return "<option value=\"" + o.id + "\"" + (o.id === f.condField ? " selected" : "") + ">" + esc(lbl(o) + " — " + o.name) + "</option>"; }).join("") + "</select></label>");
     var ctrl = f.condField ? byId(S.fields, f.condField) : null;
+    var issue = condIssue(f, S.fields);
     if (f.condField && !ctrl) h.push("<p class=\"note bad\">The controlling field was deleted; pick another or clear the condition.</p>");
     if (ctrl){
       var k = kindOf(ctrl), vc;
-      if (k === "boolean") vc = "<select data-k=\"condValue\"><option value=\"true\"" + (f.condValue !== "false" ? " selected" : "") + ">is checked</option><option value=\"false\"" + (f.condValue === "false" ? " selected" : "") + ">is unchecked</option></select>";
-      else if (k === "enum" || k === "array") vc = "<select data-k=\"condValue\"><option value=\"\">(pick a value)</option>" + parseOptions(ctrl).map(function(o){ return "<option value=\"" + esc(o.value) + "\"" + (o.value === f.condValue ? " selected" : "") + ">" + esc(o.label) + "</option>"; }).join("") + "</select>";
+      if (k === "boolean") vc = "<select data-k=\"condValue\">" + (issue ? "<option value=\"" + esc(f.condValue) + "\" selected>" + esc(f.condValue) + " (not a checkbox state)</option>" : "") + "<option value=\"true\"" + (!issue && f.condValue !== "false" ? " selected" : "") + ">is checked</option><option value=\"false\"" + (f.condValue === "false" ? " selected" : "") + ">is unchecked</option></select>";
+      else if (k === "enum" || k === "array") vc = "<select data-k=\"condValue\"><option value=\"\">(pick a value)</option>" + (issue ? "<option value=\"" + esc(f.condValue) + "\" selected>" + esc(f.condValue) + " (no longer offered)</option>" : "") + parseOptions(ctrl).map(function(o){ return "<option value=\"" + esc(o.value) + "\"" + (o.value === f.condValue ? " selected" : "") + ">" + esc(o.label) + "</option>"; }).join("") + "</select>";
       else vc = "<input data-k=\"condValue\" value=\"" + esc(f.condValue) + "\"" + (k === "number" ? " type=\"number\"" : "") + " placeholder=\"value\">";
       h.push("<label class=\"ir\"><span>" + (k === "array" ? "includes" : k === "boolean" ? "state" : "equals") + "</span>" + vc + "</label>");
-      if (!activeCond(f, S.fields)) h.push("<p class=\"note warn\">Enter a value to activate the condition.</p>");
+      if (issue) h.push("<p class=\"note bad\" role=\"alert\">Stale condition: " + esc(issue) + ". It is left out of the generated code and the field is always shown. Pick another value or clear the condition.</p>");
+      else if (!activeCond(f, S.fields)) h.push("<p class=\"note warn\">Enter a value to activate the condition.</p>");
       else if (isReq(f)) h.push("<p class=\"note\">Required only while visible.</p>");
     }
     insp.innerHTML = h.join("");
@@ -1282,9 +1323,10 @@ if (typeof document !== "undefined") (function(){
       var star = req ? " <span class=\"req\" aria-hidden=\"true\">*</span>" : "";
       var cls = "pf" + (f.width === "half" ? " half" : "");
       var help = f.help ? "<p class=\"help\" id=\"" + id + "-help\">" + esc(f.help) + "</p>" : "";
-      var err = "<p class=\"err\" id=\"" + id + "-err\" role=\"alert\" hidden></p>";
+      var ci = condIssue(f, S.fields), cw = ci ? "<p class=\"cwarn\">Always shown, condition ignored: " + esc(ci) + ".</p>" : "";
+      var err = "<p class=\"err\" id=\"" + id + "-err\" role=\"alert\" hidden></p>" + cw;
       var ad = "aria-describedby=\"" + (f.help ? id + "-help " : "") + id + "-err\"" + (req ? " aria-required=\"true\"" : "");
-      if (f.type === "section"){ h.push("<div class=\"pf sec\" data-fid=\"" + f.id + "\"><h3>" + esc(lbl(f)) + "</h3>" + (f.help ? "<p class=\"help\">" + esc(f.help) + "</p>" : "") + "</div>"); return; }
+      if (f.type === "section"){ h.push("<div class=\"pf sec\" data-fid=\"" + f.id + "\"><h3>" + esc(lbl(f)) + "</h3>" + (f.help ? "<p class=\"help\">" + esc(f.help) + "</p>" : "") + cw + "</div>"); return; }
       if (f.type === "hidden"){ h.push("<input type=\"hidden\" data-fid=\"" + f.id + "\" id=\"" + id + "\" value=\"" + esc(f.def) + "\">"); return; }
       var ph = f.placeholder && PLACEHOLDER[f.type] ? " placeholder=\"" + esc(f.placeholder) + "\"" : "";
       var opts = parseOptions(f), ctl;
@@ -1413,6 +1455,102 @@ if (typeof document !== "undefined") (function(){
     out.classList.toggle("wrapit", !!fmt.wrap);
     $("count").textContent = text.length.toLocaleString("en-US") + " chars";
     $("copyBtn").disabled = !text;
+    syncCheck();
+  }
+
+  /* Check: compile the Zod / TypeScript / React output with tsc --strict in the tools image.
+     Only offered when served by the app (http) and /api/tools/status says the image is ready.
+     Runs only on a button press; results are kept per tab and marked outdated when the output changes. */
+  var CHECKABLE = {
+    zod:function(n){ return n.schema + ".ts"; },
+    ts:function(n){ return n.values + ".ts"; },
+    react:function(n){ return n.comp + ".tsx"; }   /* self-contained: declares its own schema, imports only packages */
+  };
+  var check = {ready:false, note:"", busy:null, results:{}};
+  function syncCheck(){
+    var btn = $("checkBtn"), box = $("checkRes"), can = !!CHECKABLE[tab];
+    btn.hidden = !(check.ready && can);
+    btn.disabled = !!check.busy || !cache[tab];
+    btn.textContent = check.busy ? "Checking\u2026" : "Check";
+    if (!can || (!check.ready && !check.note)){ box.hidden = true; box.innerHTML = ""; return; }
+    if (!check.ready){ box.hidden = false; box.className = "check-res"; box.innerHTML = "<p class=\"muted\">Checks need the tools image: <span class=\"mono\">" + esc(check.note) + "</span></p>"; return; }
+    var r = check.results[tab];
+    if (check.busy === tab){ box.hidden = false; box.className = "check-res"; box.innerHTML = "<p class=\"muted\">Checking\u2026 compiling with tsc --strict</p>"; return; }
+    if (!r){ box.hidden = true; box.innerHTML = ""; return; }
+    var stale = r.text !== cache[tab], h = [];
+    box.hidden = false; box.className = "check-res" + (stale ? " is-stale" : "");
+    if (r.err){
+      h.push("<p class=\"fail\">\u2717 Check could not run: " + esc(r.err) + "</p>");
+    } else {
+      var errs = r.res.errors || [];
+      if (r.res.ok && !errs.length) h.push("<p class=\"pass\">\u2713 " + esc(r.file) + " compiles cleanly under tsc --strict</p>");
+      else h.push("<p class=\"fail\">\u2717 " + (errs.length ? errs.length + " error" + (errs.length === 1 ? "" : "s") : "Failed") + " in " + esc(r.file) + "</p>");
+    }
+    if (stale) h.push("<p class=\"stale\">Outdated: the output has changed since this check. Press Check again.</p>");
+    if (r.res){
+      (r.res.notes || []).forEach(function(t){ h.push("<p class=\"muted\">" + esc(t) + "</p>"); });
+      var list = (r.res.errors || []).map(function(e){
+        var mine = !e.file || e.file === r.file, ln = mine && e.line > 0 ? e.line : 0;
+        var loc = (e.file && !mine ? e.file + " " : "") + (e.line ? "line " + e.line + (e.column ? ":" + e.column : "") : "");
+        var inner = (loc ? "<span class=\"loc\">" + esc(loc) + "</span> " : "") + (e.code ? "<span class=\"code\">" + esc(e.code) + "</span> " : "") + esc(e.message || "");
+        return "<li>" + (ln && !stale ? "<button type=\"button\" class=\"check-err\" data-line=\"" + ln + "\" title=\"Select line " + ln + " in the output\">" + inner + "</button>" : "<span class=\"check-err\">" + inner + "</span>") + "</li>";
+      });
+      if (list.length) h.push("<ul>" + list.join("") + "</ul>");
+    }
+    box.innerHTML = h.join("");
+  }
+  function selectOutLine(n){
+    var out = $("out"), node = out.firstChild; if (!node || node.nodeType !== 3) return;
+    var lines = node.nodeValue.split("\n"); if (n < 1 || n > lines.length) return;
+    var start = 0; for (var i = 0; i < n - 1; i++) start += lines[i].length + 1;
+    out.focus({preventScroll:true});
+    var range = document.createRange(); range.setStart(node, start); range.setEnd(node, start + lines[n - 1].length);
+    var sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(range);
+    var cs = getComputedStyle(out), lh = parseFloat(cs.lineHeight) || 18;
+    if (!out.classList.contains("wrapit")) out.scrollTop = Math.max(0, (n - 1) * lh + (parseFloat(cs.paddingTop) || 0) - out.clientHeight / 3);
+    out.scrollIntoView({block:"nearest"});
+  }
+  $("checkRes").addEventListener("click", function(e){
+    var b = e.target.closest("[data-line]"); if (b) selectOutLine(Number(b.dataset.line));
+  });
+  $("checkBtn").addEventListener("click", function(){
+    var t = tab, text = cache[t]; if (!text || check.busy || !CHECKABLE[t]) return;
+    var file = CHECKABLE[t](names(S)), files = {}, btn = $("checkBtn"), hadFocus = document.activeElement === btn;
+    files[file] = text;
+    check.busy = t; syncCheck();
+    var ac = typeof AbortController === "function" ? new AbortController() : null, timer = ac ? setTimeout(function(){ ac.abort(); }, 120000) : null;
+    var done = function(entry){
+      clearTimeout(timer); check.busy = null; check.results[t] = entry; syncCheck();
+      if (hadFocus && !btn.hidden && (document.activeElement === document.body || !document.activeElement)) btn.focus();
+    };
+    fetch("/api/tools/check", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({kind:"ts", input:"", extra:{files:files}}), signal:ac ? ac.signal : undefined})
+      .then(function(res){
+        return res.json().catch(function(){ return null; }).then(function(body){
+          if (res.ok && body && typeof body === "object") return done({text:text, file:file, res:body});
+          var why = res.status === 503 ? "the tools image is not built" + (body && body.build ? " (" + body.build + ")" : "")
+                  : res.status === 413 ? "the output is too large to check"
+                  : res.status === 504 ? "the check timed out"
+                  : "HTTP " + res.status + (body && (body.detail || body.error) ? " \u2014 " + (body.detail || body.error) : "");
+          if (res.status === 503 && body && body.build){ check.ready = false; check.note = body.build; }
+          done({text:text, file:file, err:typeof why === "string" ? why : "HTTP " + res.status});
+        });
+      })
+      .catch(function(e){ done({text:text, file:file, err:e && e.name === "AbortError" ? "no answer after 2 minutes" : "the checker could not be reached"}); });
+  });
+  if (typeof location !== "undefined" && /^https?:$/.test(location.protocol) && typeof fetch === "function"){
+    try {
+      var sac = typeof AbortController === "function" ? new AbortController() : null, st = sac ? setTimeout(function(){ sac.abort(); }, 2500) : null;
+      fetch("/api/tools/status", {cache:"no-store", signal:sac ? sac.signal : undefined})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(s){
+          clearTimeout(st);
+          if (!s || typeof s !== "object") return;
+          if (s.ready === true && Array.isArray(s.kinds) && s.kinds.indexOf("ts") >= 0) check.ready = true;
+          else if (s.ready === false && s.build) check.note = String(s.build);
+          syncCheck();
+        })
+        .catch(function(){});
+    } catch (e) {}
   }
   $("copyBtn").addEventListener("click", function(){
     var text = cache[tab] || ""; if (!text) return;
