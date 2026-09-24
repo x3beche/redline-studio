@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { BoardGeometry } from '../api';
 import { capture } from './sketchpad';
+import { whenSettled } from '../fold';
 
 type Geo = BoardGeometry;
 /** What is under the mouse: one track, via or pad. */
@@ -180,6 +181,8 @@ export class Drawing implements OnDestroy {
     addEventListener('keydown', this.onKey);
   }
 
+  private refit = () => { if (this.fitted) this.fit(); };
+
   loaded() {
     const im = this.img().nativeElement;
     this.natural = { w: im.naturalWidth || 1, h: im.naturalHeight || 1 };
@@ -188,7 +191,7 @@ export class Drawing implements OnDestroy {
     if (!this.ro) {
       // Fitted, it stays fitted when the pane changes size; moved by hand,
       // it stays where it was put.
-      this.ro = new ResizeObserver(() => { if (this.fitted) this.fit(); });
+      this.ro = new ResizeObserver(() => whenSettled(this.refit));
       this.ro.observe(this.box().nativeElement);
     }
   }

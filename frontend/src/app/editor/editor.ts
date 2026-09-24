@@ -23,6 +23,7 @@ import { Activity, Analytics, Api, Apps, Boards, CameraState, Catalog, Chat, Cha
 import { OcpViewer } from './ocp';
 import { Markdown, plain } from '../markdown';
 import { Selection } from '../selection';
+import { startFold, whenSettled } from '../fold';
 
 export type Tool = 'pen' | 'line' | 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'text';
 type Pt = [number, number];
@@ -248,7 +249,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     }, 2500);
     addEventListener('beforeunload', this.onLeave);
     setTimeout(() => this.sizeOverlay());     // after the viewer DOM settles
-    this.ro = new ResizeObserver(() => this.sizeOverlay());
+    // Not every frame of a side column folding: once, when it has.
+    this.ro = new ResizeObserver(() => whenSettled(this.resized));
     this.ro.observe(box);
     this.refresh();
   }
@@ -418,9 +420,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   toggleSidebar() {
+    startFold();
     this.collapsed.update(v => !v);
     this.remember('catalog', this.collapsed());
-    setTimeout(() => this.sizeOverlay(), 60);   // rescale once the transition ends
   }
 
   /** The queue folds away the same way the catalog does, for when the model
@@ -428,9 +430,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   queueShut = signal(false);
 
   toggleQueue() {
+    startFold();
     this.queueShut.update(v => !v);
     this.remember('queue', this.queueShut());
-    setTimeout(() => this.sizeOverlay(), 60);
   }
 
   gb(n: number): string { return (n / 1e9).toFixed(1) + ' GB'; }
@@ -570,6 +572,13 @@ export class Editor implements AfterViewInit, OnDestroy {
     try {
       this.notifyState.set(await Notification.requestPermission() as any);
     } catch { /* ignore */ }
+  }
+
+  /** An answer as Markdown, its lead phrase bold when it is written as
+   *  "retry: when a run..." and not already marked up. */
+  optionMd(o: string): string {
+    const m = /^([^:*`\n]{1,40}):\s+/.exec(o);
+    return m && !o.includes('**') ? `**${m[1]}**: ${o.slice(m[0].length)}` : o;
   }
 
   pickOption(q: Question, opt: string) {
@@ -1304,6 +1313,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** The host sits 8 px above the card's bottom edge; the viewer must be
    *  told the shorter height or it paints straight over that gap. */
   private static GUTTER = 8;
+
+  private resized = () => this.sizeOverlay();
 
   private sizeOverlay() {
     const box = this.stage().nativeElement;

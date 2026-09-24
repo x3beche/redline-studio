@@ -696,15 +696,22 @@ body {
 .tcv-fold-l {
   width: 250px;
   max-width: 250px;
-  transition: width .15s cubic-bezier(.4, 0, .2, 1),
-              max-width .15s cubic-bezier(.4, 0, .2, 1);
+  transition: width .2s cubic-bezier(.4, 0, .2, 1),
+              max-width .2s cubic-bezier(.4, 0, .2, 1);
 }
 .tcv-fold {
   width: 300px;
   max-width: 300px;
-  transition: width .15s cubic-bezier(.4, 0, .2, 1),
-              max-width .15s cubic-bezier(.4, 0, .2, 1);
+  transition: width .2s cubic-bezier(.4, 0, .2, 1),
+              max-width .2s cubic-bezier(.4, 0, .2, 1);
 }
+/* Open, a column's content keeps its full width while the column grows or
+   shrinks round it: it is uncovered and covered, not re-wrapped on every
+   frame of the fold - which is what made it judder. (app/fold.ts holds the
+   centre's resizes until the fold is over, for the same reason.) */
+.tcv-fold-l:not(.tcv-fold-shut) > * { min-width: 248px; }
+.tcv-fold:not(.tcv-fold-shut) > * { min-width: 298px; }
+.tcv-fold-l, .tcv-fold { will-change: width; }
 .tcv-fold-shut {
   width: 32px !important;
   max-width: 32px !important;
@@ -1378,3 +1385,41 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-mcol-fill { display: block; width: 100%; border-radius: 3px 3px 0 0; background: var(--accent); }
 .tcv-mcol-value { font-size: 10px; color: var(--ink); }
 .tcv-mcol-label { font-size: 9px; color: var(--ink-dim); }
+
+/* THE AGENT'S ANSWER OPTIONS: stacked, whole, readable - a mark like a
+   radio (or a box when several can be picked), the text in Markdown. */
+.tcv-answers { display: flex; flex-direction: column; gap: 6px; max-height: 38vh; overflow-y: auto; }
+.tcv-answer {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.tcv-answer:hover { border-color: var(--accent); background: var(--hover); }
+.tcv-answer[data-on] { border-color: var(--accent); background: var(--accent-deep); }
+.tcv-answer .md p { margin: 0; }
+.tcv-answer-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  border: 1.5px solid var(--ink-dim);
+  border-radius: 50%;
+}
+.tcv-answer-mark.tcv-answer-multi { border-radius: 3px; }
+.tcv-answer:hover .tcv-answer-mark { border-color: var(--accent); }
+.tcv-answer[data-on] .tcv-answer-mark {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--surface-2);
+}

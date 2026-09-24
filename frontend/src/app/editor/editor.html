@@ -246,11 +246,16 @@
 
         <div class="shrink-0 px-4 py-3" style="border-top: 1px solid var(--line)">
           @if (q.options.length) {
-            <div class="mb-2 flex flex-wrap gap-1.5">
+            <!-- One answer to a line, whole, in Markdown - they are often a
+                 sentence or two each, and a chip cut them off mid-word. The
+                 lead word before a colon is set in bold so the choices can
+                 be told apart at a glance. -->
+            <div class="tcv-answers mb-2">
               @for (o of q.options; track o) {
-                <button (click)="pickOption(q, o)" class="tcv-chip text-left"
-                        [style.border-color]="answerPicked().has(o) ? 'var(--pen)' : null">
-                  {{ o }}
+                <button (click)="pickOption(q, o)" class="tcv-answer"
+                        [attr.data-on]="answerPicked().has(o) ? 1 : null">
+                  <span class="tcv-answer-mark" [class.tcv-answer-multi]="q.multi"></span>
+                  <span class="md min-w-0 flex-1" [innerHTML]="optionMd(o) | md"></span>
                 </button>
               }
             </div>
@@ -723,7 +728,7 @@
                   }
                 }
               </div>
-              <p class="leading-snug" style="color: var(--ink)">{{ m.text }}</p>
+              <div class="md leading-snug" style="color: var(--ink)" [innerHTML]="m.text | md"></div>
             </div>
           } @empty {
             <p style="color: var(--ink-dim)">

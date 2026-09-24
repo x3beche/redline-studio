@@ -9,6 +9,7 @@ import {
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { capture } from './sketchpad';
+import { whenSettled } from '../fold';
 
 /** The board, in three dimensions.
  *
@@ -63,6 +64,8 @@ export class Board3d implements AfterViewInit, OnDestroy {
     });
   }
 
+  private resized = () => this.resize();
+
   ngAfterViewInit() {
     const box = this.host().nativeElement;
     this.renderer = new WebGLRenderer({ antialias: true, alpha: true });
@@ -85,7 +88,7 @@ export class Board3d implements AfterViewInit, OnDestroy {
     fill.position.set(-1.5, -0.5, -1);
     this.scene.add(fill);
 
-    this.ro = new ResizeObserver(() => this.resize());
+    this.ro = new ResizeObserver(() => whenSettled(this.resized));
     this.ro.observe(box);
     this.resize();
 

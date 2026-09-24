@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import type { Tool } from '../editor/editor';
 import { FIRST_PEN, Mark, PENS, TOOLS, paint } from './sketch';
+import { whenSettled } from '../fold';
 
 /** Which pen is in hand. Held by the room, so the tools in its toolbar
  *  and the pad over its view are talking about the same one. */
@@ -110,6 +111,8 @@ export class Sketchpad implements OnDestroy {
 
   ngOnDestroy() { this.ro?.disconnect(); }
 
+  private resized = () => this.size();
+
   private ratio() { return Math.min(devicePixelRatio, 2); }
 
   /** The canvas matches its box at the screen's density, the way the 3D
@@ -118,7 +121,7 @@ export class Sketchpad implements OnDestroy {
     const b = this.box().nativeElement;
     const c = this.overlay().nativeElement;
     if (!this.ro) {
-      this.ro = new ResizeObserver(() => this.size());
+      this.ro = new ResizeObserver(() => whenSettled(this.resized));
       this.ro.observe(b);
     }
     const w = Math.round(b.clientWidth * this.ratio());
