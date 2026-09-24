@@ -150,23 +150,6 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
 
     } @else {
 
-    <!-- WEEK IN SHORT -->
-    <ng-container *ngTemplateOutlet="head; context: { id: 'weekly', title: 'The week in short', sub: 'the last seven days, and a write-up kept each Monday' }" />
-    @if (open('weekly')) {
-      <div class="tcv-dash-grid">
-        <section class="tcv-panel-d c8"><h3>Last 7 days
-            <button class="tcv-dl" (click)="copyWeek()">{{ copied() ? 'copied' : 'copy' }}</button></h3>
-          @if (weekly(); as w) { <div class="md text-[12.5px]" [innerHTML]="w.now | md"></div> }
-          @else { <p class="tcv-dash-dim">writing it up…</p> }
-        </section>
-        <section class="tcv-panel-d c4"><h3>Earlier weeks</h3>
-          @for (k of weekly()?.kept ?? []; track k.week) {
-            <details class="tcv-week"><summary>{{ k.week }}</summary><div class="md text-[12px]" [innerHTML]="k.text | md"></div></details>
-          } @empty { <p class="tcv-dash-dim">The first is written next Monday, of the week before.</p> }
-        </section>
-      </div>
-    }
-
     <!-- OVERVIEW -->
     <ng-container *ngTemplateOutlet="head; context: { id: 'overview', title: 'Overview', sub: rangeLabel() }" />
     @if (open('overview')) {
@@ -700,6 +683,23 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
       <div class="tcv-dash-grid">
         <section class="tcv-panel-d c12"><h3>Requests</h3>
           <app-time-chart [data]="d.lcsc.by_source" kind="bar" [height]="150" /></section>
+      </div>
+    }
+
+    <!-- WEEK IN SHORT: last, a summing-up of everything above -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'weekly', title: 'The week in short', sub: 'the last seven days, and a write-up kept each Monday' }" />
+    @if (open('weekly')) {
+      <div class="tcv-dash-grid">
+        <section class="tcv-panel-d c8"><h3>Last 7 days
+            <button class="tcv-dl" (click)="copyWeek()">{{ copied() ? 'copied' : 'copy' }}</button></h3>
+          @if (weekly(); as w) { <div class="md text-[12.5px]" [innerHTML]="w.now | md"></div> }
+          @else { <p class="tcv-dash-dim">writing it up…</p> }
+        </section>
+        <section class="tcv-panel-d c4"><h3>Earlier weeks</h3>
+          @for (k of weekly()?.kept ?? []; track k.week) {
+            <details class="tcv-week"><summary>{{ k.week }}</summary><div class="md text-[12px]" [innerHTML]="k.text | md"></div></details>
+          } @empty { <p class="tcv-dash-dim">The first is written next Monday, of the week before.</p> }
+        </section>
       </div>
     }
     }
