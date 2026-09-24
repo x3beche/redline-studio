@@ -1,0 +1,29 @@
+{
+  "id": "diffpair-match",
+  "name": "Differential Pair Matcher",
+  "blurb": "length-matching tolerance for USB, Ethernet, HDMI and similar pairs",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["differential pair", "diff pair", "length matching", "intra-pair skew", "inter-pair skew", "usb", "pcie", "hdmi", "ethernet", "mipi", "lvds", "impedance", "90 ohm", "100 ohm"],
+  "intro": "Lists the differential impedance and the P/N (intra-pair) and pair-to-pair (inter-pair) length tolerances that layout guides give for common interfaces, in mm, mil and ps, and checks your measured P and N lengths against them.",
+  "inputs": [
+    { "key": "iface", "label": "Interface", "type": "select", "default": "usb3", "wide": true,
+      "options": [["all", "All interfaces"], ["usb2", "USB 2.0 High-Speed"], ["usb3", "USB 3.2 Gen 1 (5 Gb/s)"], ["usb32g2", "USB 3.2 Gen 2 (10 Gb/s)"], ["usb4", "USB4 / Thunderbolt"], ["pcie12", "PCIe Gen 1/2"], ["pcie34", "PCIe Gen 3/4"], ["sata", "SATA"], ["eth100", "Ethernet 10/100BASE-TX"], ["eth1000", "Ethernet 1000BASE-T"], ["sgmii", "SGMII / SerDes"], ["hdmi14", "HDMI 1.4"], ["hdmi20", "HDMI 2.0"], ["dp", "DisplayPort"], ["mipi", "MIPI D-PHY (CSI/DSI)"], ["lvds", "LVDS"], ["ddr_ck", "DDR3/DDR4 CK, DQS"], ["can", "CAN / CAN FD"], ["rs485", "RS-485 / RS-422"]] },
+    { "key": "filter", "label": "Filter text", "type": "text", "default": "", "placeholder": "e.g. 100 Ω, AC-coupling" },
+    { "key": "layer", "label": "Routing layer", "type": "select", "default": "microstrip",
+      "options": [["microstrip", "Microstrip (outer)"], ["stripline", "Stripline (inner)"]] },
+    { "key": "er", "label": "Dielectric constant εr", "type": "number", "default": "4.2", "help": "Only for converting mm to ps." },
+    { "key": "lenP", "label": "P line length", "type": "number", "unit": "mm", "default": "42.3", "help": "Optional: from your layout tool." },
+    { "key": "lenN", "label": "N line length", "type": "number", "unit": "mm", "default": "42.21" }
+  ],
+  "examples": [
+    { "title": "USB 3 pair from the layout tool", "input": { "iface": "usb3", "layer": "microstrip", "er": "4.2", "lenP": "42.3", "lenN": "42.21" } },
+    { "title": "Every 100 Ω interface", "input": { "iface": "all", "filter": "100 Ω", "layer": "stripline", "er": "4.2", "lenP": "", "lenN": "" } }
+  ],
+  "usage": "Pick the interface id (usb2, usb3, pcie34, hdmi20, eth1000, mipi, ... or all) and optionally a text filter; give the layer and εr to convert mm to ps. With one interface and both P and N lengths in mm, it returns the mismatch in mm, ps and share of UI and whether it meets the target. Use it to set a length-tuning tolerance or to check a routed pair.",
+  "sources": [
+    "TI SPRAAR7 High-Speed Interface Layout Guidelines (intra-pair skew, impedance targets)",
+    "USB 2.0 / USB 3.2 / USB4, PCI Express CEM, HDMI and MIPI D-PHY specifications for impedance targets",
+    "Vendor board design guides (Intel, NXP, Microchip PHY application notes) for the typical mm tolerances; rule of thumb where the spec budgets in ps"
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "id": "stock-risk",
+  "name": "Stock Risk Scanner",
+  "blurb": "ranks single-source and low-stock parts in a BOM by risk",
+  "group": "pcb",
+  "rooms": [
+    "pcb",
+    "analyze"
+  ],
+  "keywords": [
+    "supply chain",
+    "stock",
+    "availability",
+    "single source",
+    "sole source",
+    "lifecycle",
+    "eol",
+    "nrnd",
+    "obsolete",
+    "lead time",
+    "bom risk",
+    "shortage",
+    "second source",
+    "procurement"
+  ],
+  "intro": "Paste a BOM with stock, sources, lead time and lifecycle columns (e.g. from a distributor or Octopart export). Each part gets a 0–100 risk score from a stated rule of thumb: lifecycle, number of manufacturers, stock against what this build needs, and lead time. Parts are ranked worst first.",
+  "inputs": [
+    {
+      "key": "bom",
+      "label": "BOM with supply data",
+      "type": "textarea",
+      "rows": 12,
+      "default": "Reference,Qty,MPN,Manufacturer,Stock,Sources,Lead time,Lifecycle\nU1,1,STM32F103C8T6,ST,1520,1,20 wk,Active\nU2,1,AMS1117-3.3,AMS,250000,4,6 wk,Active\nU3,1,MAX3232CSE+,Analog Devices,85,2,30 wk,NRND\nU4,1,FT232RL,FTDI,40000,1,12 wk,Active\nY1,1,ABM8-8.000MHZ-B2-T,Abracon,0,3,16 wk,Active\nQ1 Q2,2,BSS138,onsemi,500000,5,8 wk,Active\nU5,1,LM1117IMP-3.3,Texas Instruments,1200,3,,Obsolete\nR1-R3,3,RC0603FR-0710KL,Yageo,2000000,4,,Active\nC1-C8,8,,,,,,\nJ1,1,USB4105-GF-A,GCT,3100,1,10 wk,Active",
+      "placeholder": "Reference,Qty,MPN,Manufacturer,Stock,Sources,Lead time,Lifecycle",
+      "help": "Columns recognised: Reference, Qty (per board), MPN, Manufacturer, Stock, Sources (count) or Alternates (MPNs), Lead time (12 wk, 60 days), Lifecycle (Active, NRND, EOL, Obsolete)."
+    },
+    {
+      "key": "builds",
+      "label": "Boards to build",
+      "type": "number",
+      "default": "500"
+    },
+    {
+      "key": "coverage",
+      "label": "Comfortable stock",
+      "type": "number",
+      "unit": "× need",
+      "default": "3",
+      "help": "Stock below this multiple of the build need counts as low: other buyers draw from it too."
+    }
+  ],
+  "examples": [
+    {
+      "title": "MCU board, 500 units",
+      "input": {
+        "bom": "Reference,Qty,MPN,Manufacturer,Stock,Sources,Lead time,Lifecycle\nU1,1,STM32F103C8T6,ST,1520,1,20 wk,Active\nU2,1,AMS1117-3.3,AMS,250000,4,6 wk,Active\nU3,1,MAX3232CSE+,Analog Devices,85,2,30 wk,NRND\nU4,1,FT232RL,FTDI,40000,1,12 wk,Active\nY1,1,ABM8-8.000MHZ-B2-T,Abracon,0,3,16 wk,Active\nQ1 Q2,2,BSS138,onsemi,500000,5,8 wk,Active\nU5,1,LM1117IMP-3.3,Texas Instruments,1200,3,,Obsolete\nR1-R3,3,RC0603FR-0710KL,Yageo,2000000,4,,Active\nC1-C8,8,,,,,,\nJ1,1,USB4105-GF-A,GCT,3100,1,10 wk,Active",
+        "builds": "500",
+        "coverage": "3"
+      }
+    },
+    {
+      "title": "Alternates column instead of a source count",
+      "input": {
+        "bom": "Designator\tQty\tMPN\tStock\tAlternates\tLifecycle\nU1\t1\tTPS62160DGKR\t12000\tTPS62162DGKR; MP2359DJ\tActive\nU2\t1\tMCP2551-I/SN\t300\t\tNRND\nD1\t1\tBAT54S\t800k\tBAT54S-7-F, BAT54S,215\tActive",
+        "builds": "1000",
+        "coverage": "3"
+      }
+    }
+  ],
+  "usage": "Give the BOM as CSV/TSV text with a header row: MPN and Qty per board plus any of Stock, Sources (count) or Alternates (MPN list), Lead time (weeks or days) and Lifecycle; give the number of boards and the comfortable stock multiple. It returns every part ranked by a 0–100 score with level (High/Medium/Low), need vs stock, coverage and the reasons, plus counts of high-risk, single-source and short parts. Use it before a production buy or when choosing where to add second sources.",
+  "sources": [
+    "Rule of thumb: scoring weights are this tool's own, modelled on common supply-risk checks (lifecycle per IEC 62402 obsolescence management, single-source and stock coverage as in distributor BOM tools)"
+  ]
+}

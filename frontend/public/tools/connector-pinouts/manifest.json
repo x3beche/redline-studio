@@ -1,0 +1,25 @@
+{
+  "id": "connector-pinouts",
+  "name": "Connector Pinout Library",
+  "blurb": "pin maps of USB-C, SWD, JTAG, JST, IDC and other common connectors",
+  "group": "pcb",
+  "rooms": ["pcb", "embedded"],
+  "keywords": ["pinout", "pin map", "usb-c", "type-c", "swd", "jtag", "debug header", "qwiic", "stemma qt", "raspberry pi gpio", "rj45", "db9", "hdmi", "microsd", "tag-connect"],
+  "intro": "Pin maps of common board connectors, transcribed from each connector's standard or owner document, with the view (which side pin 1 is seen from) stated. Pick a connector, or search all of them for a signal name.",
+  "inputs": [
+    { "key": "connector", "label": "Connector", "type": "select", "default": "usbc", "wide": true,
+      "options": [["all", "All connectors"], ["usbc", "USB Type-C (24-pin)"], ["usbc2", "USB Type-C, USB 2.0 only (16-pin)"], ["usba", "USB Type-A"], ["usbmicro", "USB Micro-B / Mini-B"], ["swd10", "ARM Cortex Debug 10-pin (SWD)"], ["jtag20", "ARM JTAG 20-pin"], ["tc2030", "Tag-Connect TC2030 (SWD)"], ["avrisp", "AVR ISP 6-pin"], ["ftdi6", "FTDI TTL-232R 6-pin"], ["qwiic", "Qwiic / STEMMA QT (JST SH)"], ["grove", "Seeed Grove"], ["rpi40", "Raspberry Pi 40-pin"], ["pmod", "Digilent Pmod (SPI)"], ["rj45", "RJ45 Ethernet"], ["db9rs232", "DE-9 RS-232"], ["db9can", "DE-9 CAN (CiA 303-1)"], ["hdmi", "HDMI Type A"], ["microsd", "microSD"]] },
+    { "key": "filter", "label": "Search pins", "type": "text", "default": "", "placeholder": "e.g. CC, SWDIO, GND, SDA" }
+  ],
+  "examples": [
+    { "title": "USB-C configuration pins", "input": { "connector": "usbc", "filter": "CC" } },
+    { "title": "Where is SWDIO on each debug header", "input": { "connector": "all", "filter": "swdio" } }
+  ],
+  "usage": "Give a connector id (usbc, usbc2, usba, usbmicro, swd10, jtag20, tc2030, avrisp, ftdi6, qwiic, grove, rpi40, pmod, rj45, db9rs232, db9can, hdmi, microsd, or all) and optionally a search text matched against pin, signal and function. It returns the pin table, the pitch and the view pin 1 is seen from, plus design notes (e.g. Rd on CC). Use it when drawing a symbol or wiring a debug/IO header; for JST/IDC housings it explains that pin meaning comes from the schematic.",
+  "sources": [
+    "USB Type-C Cable and Connector Specification R2.x; USB 2.0 and USB 3.2 specifications",
+    "ARM DUI 0499 / Keil Cortex Debug connectors; SEGGER UM08001; Tag-Connect TC2030-CTX",
+    "Raspberry Pi GPIO documentation; SparkFun Qwiic; Seeed Grove; Digilent Pmod spec v1.3.1",
+    "TIA-568, TIA-574, CiA 303-1, HDMI 1.4, SD Physical Layer Simplified Specification"
+  ]
+}

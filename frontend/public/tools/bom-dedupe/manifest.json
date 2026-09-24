@@ -1,0 +1,83 @@
+{
+  "id": "bom-dedupe",
+  "name": "BOM Deduplicator",
+  "blurb": "merges spellings of the same part and produces a consolidated BOM",
+  "group": "pcb",
+  "rooms": [
+    "pcb",
+    "analyze"
+  ],
+  "keywords": [
+    "bom",
+    "bill of materials",
+    "deduplicate",
+    "dedupe",
+    "merge",
+    "consolidate",
+    "part list",
+    "mpn",
+    "value normalisation",
+    "footprint",
+    "csv",
+    "kicad bom",
+    "altium bom",
+    "line items"
+  ],
+  "intro": "Paste a BOM with a header row (CSV, TSV or ;). Lines merge when they are the same part spelled differently: same MPN (manufacturer aliases like TI = Texas Instruments), or, without an MPN, the same kind, value read as a number (10k = 10K = 10 kohm, 100n = 0.1uF, 4R7 = 4.7 Ω) and package (0603 = R_0603_1608Metric). Near-misses are listed for review, not merged.",
+  "inputs": [
+    {
+      "key": "bom",
+      "label": "BOM",
+      "type": "textarea",
+      "rows": 14,
+      "default": "Reference,Qty,Value,Footprint,MPN,Manufacturer\nR1,1,10k,R_0603_1608Metric,,\nR2 R3,2,10K,0603,,\nR4,1,10 kohm,Resistor_SMD:R_0603_1608Metric,,\nR5-R7,3,4k7,0603,RC0603FR-074K7L,Yageo\nR8,1,4.7k,0603,RC0603FR-074K7L,YAGEO\nC1,1,100nF,C_0603_1608Metric,,\nC2 C3 C4,3,0.1uF,0603,,\nC5,1,100n 50V X7R,0603,,\nC6,1,10uF 16V,0805,CL21A106KOQNNNE,Samsung\nC7,1,10uF 16V,0805,CL21A106KOQNNNE,Samsung Electro-Mechanics\nU1,1,STM32F103C8T6,LQFP-48,STM32F103C8T6,ST\nU2,1,AMS1117-3.3,SOT-223,AMS1117-3.3,AMS\nU3,1,AMS1117-3.3,SOT-223-3,AMS1117-3.3,Advanced Monolithic Systems\nD1,1,LED red,LED_0603,,\nD2 D3,1,LED red,LED_0603_1608Metric,,",
+      "placeholder": "Reference,Qty,Value,Footprint,MPN,Manufacturer\nR1,1,10k,0603,,",
+      "help": "Recognised columns: Reference/Designator, Qty, Value/Comment, Footprint/Package, MPN/Part Number, Manufacturer, Description, LCSC/Digi-Key/Mouser PN."
+    },
+    {
+      "key": "mergeBy",
+      "label": "Merge by",
+      "type": "select",
+      "default": "mpn",
+      "options": [
+        [
+          "mpn",
+          "MPN first, then value + package"
+        ],
+        [
+          "value",
+          "Value + package only (ignore MPN)"
+        ]
+      ]
+    },
+    {
+      "key": "ignoreMfr",
+      "label": "Ignore manufacturer when MPNs match",
+      "type": "bool",
+      "default": false
+    }
+  ],
+  "examples": [
+    {
+      "title": "KiCad export with mixed spellings",
+      "input": {
+        "bom": "Reference,Qty,Value,Footprint,MPN,Manufacturer\nR1,1,10k,R_0603_1608Metric,,\nR2 R3,2,10K,0603,,\nR4,1,10 kohm,Resistor_SMD:R_0603_1608Metric,,\nR5-R7,3,4k7,0603,RC0603FR-074K7L,Yageo\nR8,1,4.7k,0603,RC0603FR-074K7L,YAGEO\nC1,1,100nF,C_0603_1608Metric,,\nC2 C3 C4,3,0.1uF,0603,,\nC5,1,100n 50V X7R,0603,,\nC6,1,10uF 16V,0805,CL21A106KOQNNNE,Samsung\nC7,1,10uF 16V,0805,CL21A106KOQNNNE,Samsung Electro-Mechanics\nU1,1,STM32F103C8T6,LQFP-48,STM32F103C8T6,ST\nU2,1,AMS1117-3.3,SOT-223,AMS1117-3.3,AMS\nU3,1,AMS1117-3.3,SOT-223-3,AMS1117-3.3,Advanced Monolithic Systems\nD1,1,LED red,LED_0603,,\nD2 D3,1,LED red,LED_0603_1608Metric,,",
+        "mergeBy": "mpn",
+        "ignoreMfr": false
+      }
+    },
+    {
+      "title": "Semicolon BOM, value-only merge",
+      "input": {
+        "bom": "Designator;Quantity;Comment;Package\nR1;1;100R;0402\nR2;1;100 Ω;R_0402_1005Metric\nC1,C2;2;1uF;0402\nC3;1;1u;0402",
+        "mergeBy": "value",
+        "ignoreMfr": false
+      }
+    }
+  ],
+  "usage": "Give the BOM as text with a header row (comma, tab or semicolon separated); designator ranges like R1-R4 are expanded. Choose mergeBy (mpn or value) and whether to ignore the manufacturer when MPNs match. It returns the consolidated BOM table (qty, references, normalised value, package, MPN, manufacturer), the spellings that were merged, possible duplicates for review, quantity/designator problems as warnings, and a Consolidated CSV text. Use it before ordering or quoting assembly.",
+  "sources": [
+    "Rule of thumb: BOM scrubbing practice of assembly houses (merge by MPN, else by value + package + rating)",
+    "Resistor/capacitor value notation (4R7, 4k7): IEC 60062; chip sizes imperial/metric (0603 = 1608): EIA-198 / IEC 60115-8"
+  ]
+}

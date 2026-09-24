@@ -1,0 +1,120 @@
+{
+  "id": "antenna-length",
+  "name": "Antenna Length Calculator",
+  "blurb": "quarter-wave antenna length and keep-out for a frequency",
+  "group": "pcb",
+  "rooms": [
+    "pcb"
+  ],
+  "keywords": [
+    "antenna",
+    "quarter wave",
+    "lambda/4",
+    "monopole",
+    "dipole",
+    "wavelength",
+    "whip",
+    "pcb antenna",
+    "ifa",
+    "keep-out",
+    "ground plane",
+    "433 MHz",
+    "2.4 GHz",
+    "lora",
+    "velocity factor"
+  ],
+  "intro": "Gives the starting length of a quarter-wave (or half-wave, 5/8, loop) antenna from λ = c/f: for wire with 0.95 end-effect shortening, for a PCB trace as a range between air and the thick-laminate limit εeff ≈ (εr+1)/2, with a start length at the long end to trim down. Also the copper keep-out and ground plane that application notes recommend.",
+  "inputs": [
+    {
+      "key": "freq",
+      "label": "Frequency",
+      "type": "number",
+      "unit": "Hz",
+      "default": "2.44G",
+      "help": "433.92M, 868M, 915M, 2.44G ..."
+    },
+    {
+      "key": "type",
+      "label": "Antenna type",
+      "type": "select",
+      "default": "quarter",
+      "options": [
+        [
+          "quarter",
+          "Quarter-wave monopole"
+        ],
+        [
+          "half",
+          "Half-wave dipole"
+        ],
+        [
+          "fiveeighths",
+          "5/8-wave monopole"
+        ],
+        [
+          "loop",
+          "Full-wave loop"
+        ]
+      ]
+    },
+    {
+      "key": "medium",
+      "label": "Made as",
+      "type": "select",
+      "default": "pcb",
+      "options": [
+        [
+          "wire",
+          "Wire in air"
+        ],
+        [
+          "pcb",
+          "PCB trace (no ground under)"
+        ],
+        [
+          "custom",
+          "Custom velocity factor"
+        ]
+      ]
+    },
+    {
+      "key": "er",
+      "label": "Laminate εr",
+      "type": "number",
+      "default": "4.4",
+      "help": "For PCB traces; FR-4 ≈ 4.4 at 2.4 GHz."
+    },
+    {
+      "key": "vf",
+      "label": "Velocity factor",
+      "type": "number",
+      "default": "0.95",
+      "help": "Only for 'Custom velocity factor'."
+    }
+  ],
+  "examples": [
+    {
+      "title": "2.4 GHz monopole trace on FR-4",
+      "input": {
+        "freq": "2.44G",
+        "type": "quarter",
+        "medium": "pcb",
+        "er": "4.4"
+      }
+    },
+    {
+      "title": "433 MHz wire whip",
+      "input": {
+        "freq": "433.92M",
+        "type": "quarter",
+        "medium": "wire"
+      }
+    }
+  ],
+  "usage": "Give the frequency in Hz (engineering notation: 433.92M, 2.44G), the antenna type (quarter, half, fiveeighths, loop) and how it is made (wire, pcb with εr, or custom velocity factor). It returns the free-space wavelength, the length to cut in mm (for pcb also the expected resonant range), the copper keep-out and the ground-plane size, and a table for common ISM bands. Use it for the first cut of a wire whip or PCB trace antenna before tuning with a VNA.",
+  "sources": [
+    "λ = c/f; 0.95 end-effect shortening for wire antennas: ARRL Antenna Book, chapter 2",
+    "PCB trace εeff ≈ (εr+1)/2 and keep-out practice: TI AN043 'Small Size 2.4 GHz PCB antenna' and DN007",
+    "Keep-out λ/20 and λ/4 ground plane: rule of thumb from chip-antenna application notes"
+  ]
+}

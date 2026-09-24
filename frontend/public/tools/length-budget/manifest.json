@@ -1,0 +1,33 @@
+{
+  "id": "length-budget",
+  "name": "Length Matching Budget",
+  "blurb": "maximum length mismatch for a bus speed, in ps and mm",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["length matching", "skew", "timing budget", "unit interval", "ui", "propagation delay", "ps/mm", "trace length", "serpentine", "tuning", "ddr", "diff pair", "mismatch"],
+  "intro": "Turns a bit rate into the length mismatch routing may use: a share of the unit interval (UI = 1/bit rate), divided by the trace's propagation delay from εr (stripline) or Hammerstad-Jensen εeff (microstrip).",
+  "inputs": [
+    { "key": "rate", "label": "Bit rate per lane", "type": "number", "unit": "b/s", "default": "5G",
+      "help": "5G = 5 Gb/s. For DDR give the transfer rate, e.g. 3200M." },
+    { "key": "basis", "label": "What is being matched", "type": "select", "default": "lanes", "wide": true,
+      "options": [["intra", "P to N inside one pair (5 % UI)"], ["lanes", "Lane to lane / data to strobe (10 % UI)"], ["bus", "Slow parallel bus to clock (15 % UI)"], ["custom", "Custom share of UI"]] },
+    { "key": "share", "label": "Custom share of UI", "type": "number", "unit": "%", "default": "10",
+      "help": "Only used when 'Custom share of UI' is picked." },
+    { "key": "layer", "label": "Routing layer", "type": "select", "default": "stripline",
+      "options": [["stripline", "Stripline (inner)"], ["microstrip", "Microstrip (outer)"]] },
+    { "key": "er", "label": "Dielectric constant εr", "type": "number", "default": "4.2",
+      "help": "FR-4 ≈ 4.2 at 1 GHz; low-loss laminates 3.0–3.7." },
+    { "key": "wh", "label": "Microstrip width / height", "type": "number", "default": "2",
+      "help": "Trace width over the height to the plane; about 2 for 50 Ω on FR-4. Ignored for stripline." }
+  ],
+  "examples": [
+    { "title": "DDR4-3200 byte lane on inner layers", "input": { "rate": "3200M", "basis": "lanes", "layer": "stripline", "er": "4.2" } },
+    { "title": "PCIe Gen3 pair on the top layer", "input": { "rate": "8G", "basis": "intra", "layer": "microstrip", "er": "4.2", "wh": "1.8" } }
+  ],
+  "usage": "Give the bit rate per lane in bit/s (engineering notation: 5G, 3200M), what is being matched (intra, lanes, bus or custom with share in %), the layer (stripline or microstrip), εr and, for microstrip, the width/height ratio. It returns the UI, the skew budget in ps, the maximum length mismatch in mm and mil, and the propagation delay in ps/mm, plus tables for other shares and rates. Use it to set a length-tuning tolerance when the interface's own guide gives none.",
+  "sources": [
+    "Unit interval and skew budget: rule of thumb from high-speed layout guides (e.g. TI SPRAAR7 High-Speed Interface Layout Guidelines)",
+    "Microstrip effective permittivity: Hammerstad & Jensen, 'Accurate models for microstrip computer-aided design', IEEE MTT-S 1980",
+    "Propagation delay t = sqrt(εeff)/c: Johnson & Graham, High-Speed Digital Design, ch. 4"
+  ]
+}

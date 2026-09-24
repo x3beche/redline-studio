@@ -1,0 +1,30 @@
+{
+  "id": "silkscreen-check",
+  "name": "Silkscreen Legibility Check",
+  "blurb": "whether text height and stroke width are under a fab's minimum",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["silkscreen", "silk", "legend", "overlay", "reference designator", "text height", "stroke width", "line width", "font size", "jlcpcb", "pcbway", "fab limits", "legibility"],
+  "intro": "Checks legend text against a fab's published minimum line width and text height, and checks the height-to-stroke ratio (5–8 : 1 reads well; below 4 : 1 the letters fill in).",
+  "inputs": [
+    { "key": "fab", "label": "Fab", "type": "select", "default": "jlcpcb",
+      "options": [["jlcpcb", "JLCPCB"], ["pcbway", "PCBWay"], ["generic", "Generic (conservative)"], ["fine", "Fine inkjet legend"], ["custom", "Custom limits"]] },
+    { "key": "units", "label": "Units", "type": "select", "default": "mm", "options": [["mm", "mm"], ["mil", "mil"]] },
+    { "key": "height", "label": "Text height", "type": "number", "default": "0.8" },
+    { "key": "stroke", "label": "Stroke width", "type": "number", "default": "0.12", "help": "Line width of a stroke font (KiCad 'thickness')." },
+    { "key": "font", "label": "Font", "type": "select", "default": "stroke",
+      "options": [["stroke", "Stroke / vector font"], ["ttf", "TrueType regular"], ["ttfbold", "TrueType bold"]] },
+    { "key": "minStroke", "label": "Custom: min line width", "type": "number", "default": "0.15", "help": "Only for 'Custom limits'." },
+    { "key": "minHeight", "label": "Custom: min text height", "type": "number", "default": "1.0" },
+    { "key": "clearance", "label": "Custom: legend-to-pad clearance", "type": "number", "default": "0.15" }
+  ],
+  "examples": [
+    { "title": "Dense 0402 board refdes at JLCPCB", "input": { "fab": "jlcpcb", "units": "mm", "height": "0.8", "stroke": "0.12", "font": "stroke" } },
+    { "title": "40 mil text, 6 mil stroke at PCBWay", "input": { "fab": "pcbway", "units": "mil", "height": "40", "stroke": "6", "font": "stroke" } }
+  ],
+  "usage": "Give the fab (jlcpcb, pcbway, generic, fine or custom with its limits), the units (mm or mil), the text height and the stroke width, and the font type (stroke, ttf, ttfbold). It returns a verdict, each value against the fab minimum, the height:stroke ratio, the smallest legible height and a suggested stroke, plus a table of common sizes. Use it before ordering boards or when setting default refdes sizes.",
+  "sources": [
+    "JLCPCB and PCBWay published PCB capability pages (legend line width and character height)",
+    "Height:stroke ratio 1:6 recommendation from JLCPCB; KiCad default text 1.0 mm / 0.15 mm; ratio bounds are a rule of thumb"
+  ]
+}

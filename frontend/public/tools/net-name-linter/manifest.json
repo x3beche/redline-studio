@@ -1,0 +1,29 @@
+{
+  "id": "net-name-linter",
+  "name": "Net Naming Linter",
+  "blurb": "checks net names against a convention and lists the inconsistent ones",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["net names", "netlist", "naming convention", "lint", "schematic review", "active low", "diff pair suffix", "bus index", "power net", "3V3", "kicad", "duplicate nets", "rename"],
+  "intro": "Paste net names (one per line) or a KiCad .net netlist. It checks case, separators, illegal characters, voltage style (3V3 vs 3.3V), active-low style (nRESET, RESET_N, RESET#, ~{RESET}), differential-pair suffixes and partners, bus index style and names that split one net two ways, and suggests renames.",
+  "inputs": [
+    { "key": "nets", "label": "Net names", "type": "textarea", "rows": 12,
+      "placeholder": "one net per line, or paste a KiCad .net file",
+      "default": "GND\n+3V3\n+3.3V\nVCC_5V\n5V0\n/MCU/nRESET\nBOOT0\nSPI1_MOSI\nSPI1_MISO\nspi1_sck\nSPI1_CS_N\nI2C SDA\nI2C_SCL\nUSB_D+\nUSB_D-\nETH_TX_P\nETH_TX_N\nETH_RX_P\nLED-STATUS\nNet-(D1-Pad2)\nDATA[0]\nDATA1\nnIRQ\nMOTOR_EN#\nVBAT\nvbat" },
+    { "key": "convention", "label": "Case", "type": "select", "default": "auto",
+      "options": [["auto", "Design's majority"], ["upper", "UPPER_SNAKE"], ["lower", "lower_snake"]] },
+    { "key": "activeLowStyle", "label": "Active-low style", "type": "select", "default": "auto",
+      "options": [["auto", "Design's majority"], ["n", "nRESET"], ["_N", "RESET_N"], ["#", "RESET#"], ["~{}", "~{RESET} (KiCad overbar)"]] },
+    { "key": "voltageStyle", "label": "Voltage style", "type": "select", "default": "auto",
+      "options": [["auto", "Design's majority"], ["V", "3V3"], ["dot", "3.3V"]] },
+    { "key": "maxLen", "label": "Max name length", "type": "number", "default": "32", "help": "Some CAM and simulation tools truncate long names." }
+  ],
+  "examples": [
+    { "title": "A mixed-habit MCU board", "input": { "nets": "GND\n+3V3\n+3.3V\n/MCU/nRESET\nSPI1_MOSI\nspi1_sck\nSPI1_CS_N\nI2C SDA\nUSB_D+\nUSB_D-\nETH_RX_P\nLED-STATUS\nNet-(D1-Pad2)\nDATA[0]\nDATA1\nMOTOR_EN#", "convention": "upper", "activeLowStyle": "n", "voltageStyle": "V", "maxLen": "32" } }
+  ],
+  "usage": "Give the net names as text, one per line (a CSV/TSV first column or a KiCad .net netlist also works), and the convention: case (auto, upper, lower), active-low style (auto, n, _N, #, ~{}), voltage style (auto, V for 3V3, dot for 3.3V) and a maximum length. It returns counts, a table of each inconsistent net with the problem and a suggested name, and a Renames text (old -> new). Use it during schematic review before layout or before exporting a netlist.",
+  "sources": [
+    "Rule of thumb: common schematic-review conventions (IPC-2612-1 style consistent naming, vendor reference designs)",
+    "Voltage R-notation (3V3) after IEC 60062 value coding; KiCad netlist S-expression format for parsing"
+  ]
+}
