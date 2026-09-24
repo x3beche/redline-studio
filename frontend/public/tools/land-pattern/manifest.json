@@ -1,0 +1,269 @@
+{
+  "id": "land-pattern",
+  "name": "Land Pattern Reference",
+  "blurb": "IPC-7351 pad sizes and courtyard for common packages",
+  "group": "pcb",
+  "rooms": [
+    "pcb"
+  ],
+  "keywords": [
+    "land pattern",
+    "footprint",
+    "IPC-7351",
+    "pad size",
+    "courtyard",
+    "SMD pads",
+    "density level",
+    "toe heel side",
+    "SOIC",
+    "QFN",
+    "SOT-23",
+    "0603",
+    "0402",
+    "footprint dimensions",
+    "PCB library"
+  ],
+  "intro": "Pad size, pad spacing and courtyard for common SMD packages, calculated with the IPC-7351B equations from typical JEDEC/EIA component tolerances at the density level you choose. Pick one package for its full detail, or list them all and filter.",
+  "inputs": [
+    {
+      "key": "pkg",
+      "label": "Package",
+      "type": "select",
+      "default": "SOIC-8",
+      "options": [
+        [
+          "all",
+          "All packages (use the filter)"
+        ],
+        [
+          "0201",
+          "0201"
+        ],
+        [
+          "0402",
+          "0402"
+        ],
+        [
+          "0603",
+          "0603"
+        ],
+        [
+          "0805",
+          "0805"
+        ],
+        [
+          "1206",
+          "1206"
+        ],
+        [
+          "1210",
+          "1210"
+        ],
+        [
+          "2010",
+          "2010"
+        ],
+        [
+          "2512",
+          "2512"
+        ],
+        [
+          "Tantalum A (3216-18)",
+          "Tantalum A (3216-18)"
+        ],
+        [
+          "Tantalum B (3528-21)",
+          "Tantalum B (3528-21)"
+        ],
+        [
+          "SMA (DO-214AC)",
+          "SMA (DO-214AC)"
+        ],
+        [
+          "SMB (DO-214AA)",
+          "SMB (DO-214AA)"
+        ],
+        [
+          "SMC (DO-214AB)",
+          "SMC (DO-214AB)"
+        ],
+        [
+          "SOD-323",
+          "SOD-323"
+        ],
+        [
+          "SOD-123",
+          "SOD-123"
+        ],
+        [
+          "SOT-23-3",
+          "SOT-23-3"
+        ],
+        [
+          "SOT-23-5",
+          "SOT-23-5"
+        ],
+        [
+          "SOT-23-6",
+          "SOT-23-6"
+        ],
+        [
+          "SC-70-5 (SOT-353)",
+          "SC-70-5 (SOT-353)"
+        ],
+        [
+          "SOT-223",
+          "SOT-223"
+        ],
+        [
+          "SOIC-8",
+          "SOIC-8"
+        ],
+        [
+          "SOIC-14",
+          "SOIC-14"
+        ],
+        [
+          "SOIC-16",
+          "SOIC-16"
+        ],
+        [
+          "SOIC-16W",
+          "SOIC-16W"
+        ],
+        [
+          "MSOP-8",
+          "MSOP-8"
+        ],
+        [
+          "MSOP-10",
+          "MSOP-10"
+        ],
+        [
+          "TSSOP-14",
+          "TSSOP-14"
+        ],
+        [
+          "TSSOP-16",
+          "TSSOP-16"
+        ],
+        [
+          "TSSOP-20",
+          "TSSOP-20"
+        ],
+        [
+          "TSSOP-28",
+          "TSSOP-28"
+        ],
+        [
+          "LQFP-32 (7×7, 0.8)",
+          "LQFP-32 (7×7, 0.8)"
+        ],
+        [
+          "LQFP-48 (7×7, 0.5)",
+          "LQFP-48 (7×7, 0.5)"
+        ],
+        [
+          "LQFP-64 (10×10, 0.5)",
+          "LQFP-64 (10×10, 0.5)"
+        ],
+        [
+          "LQFP-100 (14×14, 0.5)",
+          "LQFP-100 (14×14, 0.5)"
+        ],
+        [
+          "DFN-8 (3×3, 0.65)",
+          "DFN-8 (3×3, 0.65)"
+        ],
+        [
+          "QFN-16 (3×3, 0.5)",
+          "QFN-16 (3×3, 0.5)"
+        ],
+        [
+          "QFN-20 (4×4, 0.5)",
+          "QFN-20 (4×4, 0.5)"
+        ],
+        [
+          "QFN-24 (4×4, 0.5)",
+          "QFN-24 (4×4, 0.5)"
+        ],
+        [
+          "QFN-32 (5×5, 0.5)",
+          "QFN-32 (5×5, 0.5)"
+        ],
+        [
+          "QFN-48 (7×7, 0.5)",
+          "QFN-48 (7×7, 0.5)"
+        ]
+      ]
+    },
+    {
+      "key": "filter",
+      "label": "Filter (when listing all)",
+      "type": "text",
+      "default": "",
+      "placeholder": "SOT, QFN, 0.5, chip…"
+    },
+    {
+      "key": "level",
+      "label": "Density level",
+      "type": "select",
+      "default": "N",
+      "options": [
+        [
+          "M",
+          "M - most (hand solder, wave)"
+        ],
+        [
+          "N",
+          "N - nominal"
+        ],
+        [
+          "L",
+          "L - least (dense boards)"
+        ]
+      ]
+    },
+    {
+      "key": "fab",
+      "label": "Fabrication tolerance F",
+      "type": "number",
+      "unit": "mm",
+      "default": "0.05"
+    },
+    {
+      "key": "place",
+      "label": "Placement tolerance P",
+      "type": "number",
+      "unit": "mm",
+      "default": "0.025"
+    }
+  ],
+  "examples": [
+    {
+      "title": "SOIC-8 at nominal density",
+      "input": {
+        "pkg": "SOIC-8",
+        "filter": "",
+        "level": "N",
+        "fab": "0.05",
+        "place": "0.025"
+      }
+    },
+    {
+      "title": "All QFNs, least density",
+      "input": {
+        "pkg": "all",
+        "filter": "QFN",
+        "level": "L",
+        "fab": "0.05",
+        "place": "0.025"
+      }
+    }
+  ],
+  "usage": "Give pkg as one of the listed package names (e.g. 0603, SOIC-8, QFN-32 (5×5, 0.5)) or 'all' with a filter text, the density level M, N or L, and the fabrication and placement tolerances in mm. For one package it returns pad length × width, pad centre spacing C, outer/inner spans Z and G, courtyard, pitch, first-pin position and thermal/tab pad in mm, plus the three density levels side by side under the IPC name; for 'all' a table of every matching package. Use it to draw or check a footprint; for production, recalculate with the exact part's datasheet tolerances.",
+  "sources": [
+    "IPC-7351B Generic Requirements for Surface Mount Design and Land Pattern Standard, section 3 (land equations, fillet goal tables, courtyard excess)",
+    "JEDEC MS-012, MO-153, MO-187, TO-236, TO-261, MO-220 and EIA-481 outlines for the component tolerances (typical values)"
+  ]
+}

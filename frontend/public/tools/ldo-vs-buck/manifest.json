@@ -1,0 +1,29 @@
+{
+  "id": "ldo-vs-buck",
+  "name": "LDO vs Buck Advisor",
+  "blurb": "efficiency, heat and noise of an LDO against a buck, side by side",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["LDO", "linear regulator", "buck", "switching regulator", "efficiency", "power dissipation", "junction temperature", "thermal", "noise", "PSRR", "dropout", "post-regulator", "regulator choice"],
+  "intro": "An LDO burns the whole voltage drop as heat but is quiet and simple; a buck is efficient but switches. This puts both (and a buck followed by an LDO) side by side for your rail: input current, efficiency, dissipation, junction temperature and output noise, and says which fits.",
+  "inputs": [
+    { "key": "vin", "label": "Input voltage", "type": "number", "unit": "V", "default": "5" },
+    { "key": "vout", "label": "Output voltage", "type": "number", "unit": "V", "default": "3.3" },
+    { "key": "iout", "label": "Load current", "type": "number", "unit": "A", "default": "300m" },
+    { "key": "ta", "label": "Ambient temperature", "type": "number", "unit": "°C", "default": "50" },
+    { "key": "pkg", "label": "LDO package", "type": "select", "default": "sot23-5",
+      "options": [["sot23-5", "SOT-23-5 (θJA ≈ 180 °C/W)"], ["sc70", "SC-70 (≈ 250 °C/W)"], ["dfn2x2", "DFN 2×2 with pad (≈ 70 °C/W)"], ["sot223", "SOT-223 (≈ 60 °C/W)"], ["sot89", "SOT-89 (≈ 110 °C/W)"], ["dpak", "DPAK / TO-252 (≈ 40 °C/W)"]] },
+    { "key": "dropout", "label": "LDO dropout at this load", "type": "number", "unit": "mV", "default": "250" },
+    { "key": "iq", "label": "LDO quiescent current", "type": "number", "unit": "µA", "default": "50" },
+    { "key": "eff", "label": "Buck efficiency at this load", "type": "number", "unit": "%", "default": "88",
+      "help": "From the buck's datasheet curve at your Vin, Vout and load." },
+    { "key": "ripple", "label": "Buck output ripple", "type": "number", "unit": "mV p-p", "default": "10" },
+    { "key": "quiet", "label": "Load is noise-sensitive (ADC reference, RF, audio, PLL)", "type": "bool", "default": false }
+  ],
+  "examples": [
+    { "title": "5 V USB to 3.3 V at 300 mA", "input": { "vin": "5", "vout": "3.3", "iout": "300m", "ta": "50", "pkg": "sot23-5", "dropout": "250", "iq": "50", "eff": "88", "ripple": "10", "quiet": false } },
+    { "title": "12 V to 3.3 V at 500 mA for a radio", "input": { "vin": "12", "vout": "3.3", "iout": "500m", "ta": "40", "pkg": "sot223", "dropout": "300", "iq": "100", "eff": "85", "ripple": "15", "quiet": true } }
+  ],
+  "usage": "Give input and output voltage (V), load current (A, 300m accepted), ambient °C, the LDO package (sets θJA), LDO dropout in mV and quiescent current in µA, the buck's efficiency in % at this load from its datasheet, the buck's output ripple in mV p-p, and quiet=true if the load is noise-sensitive. It returns efficiency, input current, dissipation and junction temperature for an LDO, a buck and a buck followed by an LDO, plus a recommendation with the reason. Use it when choosing the regulator for one rail.",
+  "sources": ["LDO: P = (Vin − Vout)·Iout + Vin·Iq, Tj = Ta + P·θJA (TI SLVA118A, Digital Designer's Guide to Linear Voltage Regulators and Thermal Management)", "θJA values: typical JEDEC 2s2p figures from regulator datasheets (rule of thumb)", "Buck light-load curve: full-load loss scaled as 2 % fixed + 68 % linear + 30 % I² (rule-of-thumb model of an auto-PFM buck)"]
+}

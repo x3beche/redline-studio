@@ -1,0 +1,29 @@
+{
+  "id": "stencil-aperture",
+  "name": "Stencil Aperture Calculator",
+  "blurb": "solder paste aperture and area/aspect ratio from pad size and stencil thickness",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["stencil", "solder paste", "aperture", "area ratio", "aspect ratio", "IPC-7525", "foil thickness", "paste release", "paste volume", "SMT", "reduction", "fine pitch", "window pane"],
+  "intro": "Paste only leaves the stencil cleanly when the aperture walls are small compared with its opening. This checks the IPC-7525 area ratio (at least 0.66) and aspect ratio (at least 1.5) of the aperture made from your pad, and finds the thickest foil that still prints it.",
+  "inputs": [
+    { "key": "shape", "label": "Aperture shape", "type": "select", "default": "rect",
+      "options": [["rect", "Rectangle / square"], ["round", "Circle (BGA, round pad)"]] },
+    { "key": "padL", "label": "Pad length (or diameter)", "type": "number", "unit": "mm", "default": "1.25",
+      "help": "The long side of the copper pad; the diameter for a circle." },
+    { "key": "padW", "label": "Pad width", "type": "number", "unit": "mm", "default": "0.25",
+      "help": "The short side. Ignored for a circle." },
+    { "key": "reduce", "label": "Aperture area vs pad", "type": "number", "unit": "%", "default": "100",
+      "help": "100 = aperture as big as the pad. 90 is a common 10 % area reduction for fine pitch; 50-80 for exposed pads (split into window panes)." },
+    { "key": "thick", "label": "Stencil thickness", "type": "number", "unit": "µm", "default": "125",
+      "help": "Common foils: 80, 100, 120, 127 (5 mil), 150 µm." },
+    { "key": "count", "label": "Apertures of this size", "type": "number", "default": "1",
+      "help": "For the total paste volume, e.g. the pins of one package." }
+  ],
+  "examples": [
+    { "title": "0.5 mm pitch QFP lead on a 125 µm foil (IPC-7525 example)", "input": { "shape": "rect", "padL": "1.25", "padW": "0.25", "reduce": "100", "thick": "125", "count": "1" } },
+    { "title": "0.4 mm BGA ball pad, 250 µm round, 100 µm foil", "input": { "shape": "round", "padL": "0.25", "padW": "0.25", "reduce": "100", "thick": "100", "count": "1" } }
+  ],
+  "usage": "Give the pad length and width in mm (diameter for shape=round), the aperture area as a percentage of the pad (100 for no reduction) and the foil thickness in µm. It returns the aperture size, area ratio, aspect ratio with pass/fail against IPC-7525 (0.66 and 1.5), the thickest foil that still passes, and the paste volume. Use it before choosing a foil for a board with fine-pitch parts: the smallest aperture decides the thickness.",
+  "sources": ["IPC-7525B Stencil Design Guidelines, section 3.2 (aspect ratio > 1.5, area ratio > 0.66)", "Area ratio = L·W / (2·(L+W)·T); circle: D / (4·T)"]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "smd-code",
+  "name": "SMD Code Decoder",
+  "blurb": "resistor and capacitor markings (103, 4R7, EIA-96) to their values",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["smd code", "resistor marking", "capacitor code", "EIA-96", "E96", "3-digit code", "4-digit code", "4R7", "103", "104", "chip resistor", "value code", "EIA-198", "decode", "marking"],
+  "intro": "Decodes the value printed on a chip resistor (3-digit, 4-digit, R-notation, EIA-96) or a capacitor (3-digit pF code, EIA-198 letter code). Paste several codes separated by spaces or commas to decode them all at once.",
+  "inputs": [
+    { "key": "codes", "label": "Marking(s)", "type": "text", "default": "103, 4R7, 01C, 1002", "wide": true,
+      "placeholder": "103, 4R7, 01C, 1002",
+      "help": "One or more codes, separated by spaces or commas." },
+    { "key": "kind", "label": "Part", "type": "select", "default": "resistor",
+      "options": [["resistor", "Resistor"], ["capacitor", "Capacitor"]] }
+  ],
+  "examples": [
+    { "title": "Four resistor markings", "input": { "codes": "103, 4R7, 01C, 1002", "kind": "resistor" } },
+    { "title": "Capacitor codes", "input": { "codes": "104 225 1R5 S3", "kind": "capacitor" } }
+  ],
+  "usage": "Give one or more markings in codes (space or comma separated) and kind = resistor or capacitor. For each code it returns the format it was read as, the value in ohms or farads, the usual tolerance of that format, and the other ways the same value is marked. Codes that fit no format are listed with the reason.",
+  "sources": ["IEC 60062 (marking codes for resistors and capacitors)", "EIA-96 code table for 1 % E96 resistors", "EIA-198 two-character capacitance code"]
+}

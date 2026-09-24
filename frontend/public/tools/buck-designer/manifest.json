@@ -1,0 +1,30 @@
+{
+  "id": "buck-designer",
+  "name": "Buck Converter Designer",
+  "blurb": "inductor, output capacitor and ripple for a buck converter",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["buck", "step-down", "DC-DC", "SMPS", "inductor", "ripple current", "output capacitor", "duty cycle", "switching regulator", "ESR", "load transient", "input capacitor", "SLVA477"],
+  "intro": "Sizes the power stage of a synchronous buck in continuous conduction: the inductor from the ripple current you allow at the highest input voltage, and the output capacitance for both the ripple and a load step. Formulas from TI SLVA477B plus the energy balance for load release.",
+  "inputs": [
+    { "key": "vinmin", "label": "Input voltage, minimum", "type": "number", "unit": "V", "default": "10.8" },
+    { "key": "vinmax", "label": "Input voltage, maximum", "type": "number", "unit": "V", "default": "13.2" },
+    { "key": "vout", "label": "Output voltage", "type": "number", "unit": "V", "default": "3.3" },
+    { "key": "iout", "label": "Output current, maximum", "type": "number", "unit": "A", "default": "2" },
+    { "key": "fsw", "label": "Switching frequency", "type": "number", "unit": "Hz", "default": "500k" },
+    { "key": "ripple", "label": "Inductor ripple", "type": "number", "unit": "% of Iout", "default": "30",
+      "help": "Peak-to-peak ripple as a share of the output current; 20-40 % is the usual range." },
+    { "key": "vripple", "label": "Output ripple allowed", "type": "number", "unit": "mV p-p", "default": "20" },
+    { "key": "istep", "label": "Load step", "type": "number", "unit": "A", "default": "1" },
+    { "key": "vstep", "label": "Deviation allowed on the step", "type": "number", "unit": "mV", "default": "100" },
+    { "key": "eff", "label": "Efficiency", "type": "number", "unit": "%", "default": "90",
+      "help": "Only corrects the duty cycle; take it from the controller's datasheet." },
+    { "key": "tonmin", "label": "Controller minimum on-time", "type": "number", "unit": "ns", "default": "100" }
+  ],
+  "examples": [
+    { "title": "12 V to 3.3 V at 2 A, 500 kHz", "input": { "vinmin": "10.8", "vinmax": "13.2", "vout": "3.3", "iout": "2", "fsw": "500k", "ripple": "30", "vripple": "20", "istep": "1", "vstep": "100", "eff": "90", "tonmin": "100" } },
+    { "title": "5 V to 1.2 V at 3 A, 2 MHz", "input": { "vinmin": "4.5", "vinmax": "5.5", "vout": "1.2", "iout": "3", "fsw": "2M", "ripple": "35", "vripple": "12", "istep": "1.5", "vstep": "36", "eff": "88", "tonmin": "60" } }
+  ],
+  "usage": "Give input voltage min/max, output voltage (V), maximum output current (A), switching frequency (Hz, 500k accepted), ripple current as % of Iout, the output ripple in mV p-p, a load step in A with its allowed deviation in mV, efficiency in % and the controller's minimum on-time in ns. It returns the duty cycle range, the calculated and a standard inductance, ripple and peak/RMS inductor current (the saturation rating to buy), the minimum output capacitance and maximum ESR, and input capacitor RMS current. Use it to pick the inductor and capacitors before a detailed loop design.",
+  "sources": ["TI SLVA477B, Basic Calculation of a Buck Converter's Power Stage (eq. 1-13)", "Load release: ½·L·(I1² − I2²) = ½·C·((Vout+ΔV)² − Vout²) (energy balance)", "Loop-limited step: Cout ≥ ΔI / (2π·fc·ΔV) with fc = fsw/10 (rule of thumb)"]
+}

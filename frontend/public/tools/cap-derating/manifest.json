@@ -1,0 +1,28 @@
+{
+  "id": "cap-derating",
+  "name": "Capacitor Derating",
+  "blurb": "real capacitance of an MLCC under DC bias and temperature",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["MLCC", "DC bias", "derating", "effective capacitance", "X5R", "X7R", "C0G", "NP0", "Y5V", "voltage coefficient", "temperature coefficient", "aging", "ceramic capacitor", "capacitance loss"],
+  "intro": "A class II ceramic (X5R, X7R, Y5V) loses much of its capacitance under DC bias, and more in small packages. This estimates the remaining capacitance from the electric field across one dielectric layer, the dielectric's temperature curve and aging. It is an engineering estimate: check the final part against the maker's measured curve.",
+  "inputs": [
+    { "key": "cnom", "label": "Nominal capacitance", "type": "number", "unit": "F", "default": "10u" },
+    { "key": "vrated", "label": "Rated voltage", "type": "number", "unit": "V", "default": "10" },
+    { "key": "pkg", "label": "Package", "type": "select", "default": "0603",
+      "options": [["0201", "0201 (0603 metric)"], ["0402", "0402 (1005)"], ["0603", "0603 (1608)"], ["0805", "0805 (2012)"], ["1206", "1206 (3216)"], ["1210", "1210 (3225)"], ["1812", "1812 (4532)"], ["2220", "2220 (5750)"]] },
+    { "key": "diel", "label": "Dielectric", "type": "select", "default": "X5R",
+      "options": ["C0G", "X7R", "X5R", "X6S", "X7S", "X8R", "Y5V"] },
+    { "key": "vbias", "label": "DC bias across it", "type": "number", "unit": "V", "default": "5" },
+    { "key": "temp", "label": "Temperature", "type": "number", "unit": "°C", "default": "25" },
+    { "key": "tol", "label": "Tolerance", "type": "select", "default": "10", "options": [["5", "±5 % (J)"], ["10", "±10 % (K)"], ["20", "±20 % (M)"]] },
+    { "key": "years", "label": "Age since last reflow", "type": "number", "unit": "years", "default": "1",
+      "help": "Class II parts lose a few % per decade of hours; reflow resets it. 0 ignores aging." }
+  ],
+  "examples": [
+    { "title": "10 µF 10 V X5R 0603 on a 5 V rail", "input": { "cnom": "10u", "vrated": "10", "pkg": "0603", "diel": "X5R", "vbias": "5", "temp": "25", "tol": "10", "years": "1" } },
+    { "title": "4.7 µF 50 V X7R 1206 on 24 V at 85 °C", "input": { "cnom": "4.7u", "vrated": "50", "pkg": "1206", "diel": "X7R", "vbias": "24", "temp": "85", "tol": "10", "years": "5" } }
+  ],
+  "usage": "Give the nominal capacitance in farads (engineering notation like 10u), rated voltage, package (0201...2220), dielectric (C0G, X5R, X7R, X6S, X7S, X8R, Y5V), DC bias in volts, temperature in °C, tolerance and age in years. It returns the typical effective capacitance, its fraction of nominal, a worst case with tolerance and the temperature code's full band, and a curve of capacitance against bias. Use it to size output and decoupling capacitors; the numbers are a model estimate, typically within 15-20 percentage points of the maker's curves.",
+  "sources": ["EIA-198 / EIA RS-198 temperature characteristic codes (X7R ±15 % from -55 to 125 °C, etc.)", "Murata and TDK DC-bias application notes (capacitance loss rises with the field across the layer)", "Model: layer thickness d ≈ sqrt(ε0·εr·V_active / C), C(E)/C0 = 1 / (1 + (E/E50)^k), fitted to published curves (rule of thumb)"]
+}

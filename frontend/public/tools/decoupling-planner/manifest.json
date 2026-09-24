@@ -1,0 +1,33 @@
+{
+  "id": "decoupling-planner",
+  "name": "Decoupling Planner",
+  "blurb": "how many decoupling capacitors and which values for an IC's supply pins and target impedance",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["decoupling", "bypass capacitor", "target impedance", "PDN", "power distribution network", "ESL", "ESR", "anti-resonance", "100nF", "MLCC", "power integrity", "supply pins", "mounting inductance", "SRF"],
+  "intro": "Uses the target-impedance method: the supply may move by ripple × V when the IC's current steps by ΔI, so the network must stay below Z = V·ripple/ΔI from the regulator's bandwidth up to the highest frequency you care about. It starts with one 100 nF per supply pin and adds the capacitor that removes the most excess impedance until the curve is under the target, counting ESR, ESL and mounting inductance.",
+  "inputs": [
+    { "key": "vdd", "label": "Supply voltage", "type": "number", "unit": "V", "default": "1.8" },
+    { "key": "ripple", "label": "Allowed ripple", "type": "number", "unit": "%", "default": "5" },
+    { "key": "istep", "label": "Transient current step", "type": "number", "unit": "A", "default": "0.5",
+      "help": "The largest change in supply current, often half the IC's maximum current." },
+    { "key": "pins", "label": "Supply pins (power/ground pairs)", "type": "number", "default": "4" },
+    { "key": "freg", "label": "Regulator bandwidth", "type": "number", "unit": "Hz", "default": "50k",
+      "help": "Below this the regulator holds the voltage; 10-100 kHz for most bucks, 100 kHz-1 MHz for LDOs." },
+    { "key": "fmax", "label": "Highest frequency to cover", "type": "number", "unit": "Hz", "default": "100M",
+      "help": "Board capacitors rarely help above 100-200 MHz; the package and die take over." },
+    { "key": "pkg", "label": "Small capacitor package", "type": "select", "default": "0402", "options": ["0201", "0402", "0603"] },
+    { "key": "lmount", "label": "Mounting inductance per capacitor", "type": "number", "unit": "nH", "default": "0.5",
+      "help": "Pads, vias and the path to the planes: 0.3 nH for via-in-pad, 1-2 nH for a trace to a via." },
+    { "key": "derate", "label": "Effective capacitance after DC bias", "type": "number", "unit": "%", "default": "70",
+      "help": "Share of the nominal a ceramic keeps at this voltage (see Capacitor Derating)." },
+    { "key": "bulk", "label": "Allow a polymer bulk capacitor (100 µF)", "type": "bool", "default": true }
+  ],
+  "examples": [
+    { "title": "1.8 V FPGA I/O bank, 0.5 A step, 4 pins", "input": { "vdd": "1.8", "ripple": "5", "istep": "0.5", "pins": "4", "freg": "50k", "fmax": "100M", "pkg": "0402", "lmount": "0.5", "derate": "70", "bulk": true } },
+    { "title": "3.3 V microcontroller, 100 mA step, 6 pins", "input": { "vdd": "3.3", "ripple": "3", "istep": "0.1", "pins": "6", "freg": "100k", "fmax": "50M", "pkg": "0402", "lmount": "1", "derate": "60", "bulk": false } }
+  ],
+  "usage": "Give the supply voltage in V, allowed ripple in %, the transient current step in A, the number of supply pins, the regulator bandwidth and highest frequency in Hz (50k, 100M accepted), the small-capacitor package, the mounting inductance in nH, the effective capacitance share in % and whether a 100 µF polymer bulk capacitor may be used. It returns the target impedance, the capacitor list (value, package, count), the worst impedance reached and where, and |Z| at each decade (the plot data are in result.plot). Use it for a first decoupling plan; a PDN simulation with the real stack-up is the final check.",
+  "sources": ["Target impedance: Z = V·ripple / ΔI (L. D. Smith et al., 'Power Distribution System Design Methodology and Capacitor Selection for Modern CMOS Technology', IEEE Trans. Adv. Packaging, 1999)", "Capacitor model: series R-L-C with ESR and ESL from Murata / TDK typical data plus mounting inductance", "Regulator: flat output impedance below its bandwidth, inductive above (rule of thumb)"],
+  "view": true
+}
