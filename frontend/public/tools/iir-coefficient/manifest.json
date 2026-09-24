@@ -1,0 +1,29 @@
+{
+  "id": "iir-coefficient",
+  "name": "EMA / IIR Coefficient Tool",
+  "blurb": "smoothing coefficient from a cutoff frequency, with the response drawn",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["ema", "exponential moving average", "iir", "first-order low-pass", "single pole", "smoothing", "alpha", "filter coefficient", "cutoff frequency", "time constant", "leaky integrator", "rc filter digital", "shift filter", "q15"],
+  "intro": "The first-order low-pass y += α (x − y), sampled at fs. From a cutoff it gives α (either the exact −3 dB point or the matched RC time constant), from α or a right shift it gives the cutoff; the magnitude and step responses are drawn from the filter's own transfer function α / (1 − (1 − α) z⁻¹).",
+  "inputs": [
+    { "key": "mode", "label": "Start from", "type": "select", "default": "cutoff",
+      "options": [["cutoff", "Cutoff frequency"], ["alpha", "Coefficient α"], ["shift", "Right shift k (α = 1/2^k)"]] },
+    { "key": "fs", "label": "Sample rate", "type": "number", "unit": "Hz", "default": "1k" },
+    { "key": "fc", "label": "Cutoff frequency", "type": "number", "unit": "Hz", "default": "10", "when": { "key": "mode", "equals": "cutoff" } },
+    { "key": "method", "label": "Cutoff means", "type": "select", "default": "exact", "when": { "key": "mode", "equals": "cutoff" },
+      "options": [["exact", "Exact −3 dB point"], ["rc", "RC time constant, τ = 1/(2π fc)"]] },
+    { "key": "alpha", "label": "Coefficient α", "type": "number", "default": "0.1", "when": { "key": "mode", "equals": "alpha" } },
+    { "key": "k", "label": "Right shift k", "type": "number", "default": "4", "when": { "key": "mode", "equals": "shift" } }
+  ],
+  "examples": [
+    { "title": "10 Hz smoothing on a 1 kHz sensor loop", "input": { "mode": "cutoff", "fs": "1k", "fc": "10", "method": "exact" } },
+    { "title": "What does y += (x - y) >> 4 do at 200 Hz?", "input": { "mode": "shift", "fs": "200", "k": "4" } }
+  ],
+  "usage": "Choose mode cutoff (give fs and fc in Hz and method exact or rc), alpha (give α between 0 and 1) or shift (give k, α = 1/2^k). It returns α, the −3 dB frequency, the time constant in samples and seconds, samples to settle to 63/95/99 %, the white-noise variance reduction, the nearest shift and Q15 constants, C code, and the magnitude (dB) and step-response curves as chart data. Use it to pick a firmware smoothing filter from a wanted bandwidth or to see what an existing α does.",
+  "sources": [
+    "Exact −3 dB point of y[n] = α x[n] + (1 − α) y[n−1]: α = cos ω − 1 + √(cos²ω − 4 cos ω + 3), ω = 2π fc / fs, from |H(e^jω)|² = 1/2 (standard derivation, e.g. dsp.stackexchange 'exponential weighted moving average time constant')",
+    "Matched time constant α = 1 − e^(−2π fc / fs): impulse invariance of an RC low-pass, Oppenheim & Schafer, Discrete-Time Signal Processing, ch. 7",
+    "Noise variance ratio α / (2 − α): sum of the squared impulse response α (1 − α)^n"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "id": "pid-playground",
+  "name": "PID Tuning Playground",
+  "blurb": "a simple plant's step response live as the gains move",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["pid", "pi controller", "control loop", "tuning", "step response", "overshoot", "settling time", "rise time", "kp ki kd", "simc", "skogestad", "ziegler nichols", "dead time", "fopdt", "anti-windup", "motor control", "temperature control"],
+  "intro": "A discrete PID controller (sampled every dt, derivative on the measurement with a filter, clamping anti-windup) closes the loop around a first-order, second-order or integrating plant with dead time. The setpoint step, and an optional load step, are simulated; rise time, overshoot and settling are measured from the curve, and SIMC and Ziegler–Nichols gains for the plant are listed for comparison.",
+  "inputs": [
+    { "key": "plant", "label": "Plant", "type": "select", "default": "fo",
+      "options": [["fo", "First order + dead time: K e^-θs / (τs + 1)"], ["so", "Second order + dead time: K ωn² e^-θs / (s² + 2ζωn s + ωn²)"], ["int", "Integrating + lag: K e^-θs / (s (τs + 1))"]] },
+    { "key": "K", "label": "Plant gain K", "type": "number", "default": "2", "help": "Output change per unit of controller output (per second for the integrating plant)." },
+    { "key": "tau", "label": "Time constant τ", "type": "number", "unit": "s", "default": "5", "when": { "key": "plant", "in": ["fo", "int"] } },
+    { "key": "wn", "label": "Natural frequency ωn", "type": "number", "unit": "rad/s", "default": "1", "when": { "key": "plant", "equals": "so" } },
+    { "key": "zeta", "label": "Damping ζ", "type": "number", "default": "0.5", "when": { "key": "plant", "equals": "so" } },
+    { "key": "theta", "label": "Dead time θ", "type": "number", "unit": "s", "default": "1" },
+    { "key": "kp", "label": "Kp", "type": "number", "default": "1.5" },
+    { "key": "ki", "label": "Ki", "type": "number", "unit": "1/s", "default": "0.3" },
+    { "key": "kd", "label": "Kd", "type": "number", "unit": "s", "default": "0.3" },
+    { "key": "dt", "label": "Controller period dt", "type": "number", "unit": "s", "default": "50m" },
+    { "key": "nf", "label": "Derivative filter N", "type": "number", "default": "10", "help": "The D term is low-passed at N / Td (Td = Kd / Kp); 5 … 20 is usual." },
+    { "key": "umin", "label": "Output min", "type": "number", "default": "0" },
+    { "key": "umax", "label": "Output max", "type": "number", "default": "2" },
+    { "key": "sp", "label": "Setpoint step", "type": "number", "default": "1" },
+    { "key": "dist", "label": "Load step at plant input", "type": "number", "default": "0", "help": "0 = none. Added to the controller output from the time below." },
+    { "key": "tdist", "label": "Load step time", "type": "number", "unit": "s", "default": "0", "help": "0 = half-way through the run." },
+    { "key": "tend", "label": "Run length", "type": "number", "unit": "s", "default": "0", "help": "0 = automatic, about ten plant time constants." }
+  ],
+  "examples": [
+    { "title": "Heater: first order, τ 5 s, θ 1 s, PID with a load step",
+      "input": { "plant": "fo", "K": "2", "tau": "5", "theta": "1", "kp": "1.5", "ki": "0.3", "kd": "0.3", "dt": "50m", "nf": "10", "umin": "0", "umax": "2", "sp": "1", "dist": "-0.2", "tdist": "0", "tend": "0" } },
+    { "title": "Motor position: integrating plant, PD",
+      "input": { "plant": "int", "K": "10", "tau": "0.2", "theta": "10m", "kp": "2", "ki": "0", "kd": "0.2", "dt": "1m", "nf": "10", "umin": "-12", "umax": "12", "sp": "1", "dist": "0", "tdist": "0", "tend": "0" } }
+  ],
+  "usage": "Choose plant fo, so or int and give K, τ in s (fo, int) or ωn in rad/s and ζ (so), dead time θ in s; the parallel gains Kp, Ki (1/s), Kd (s), the controller period dt in s, derivative filter N, output limits, setpoint step, optional load step size and time (0 = mid-run) and run length (0 = auto). It returns rise time, overshoot, 2 % settling time, steady-state error, peak output, time saturated, the load-step recovery, SIMC and Ziegler–Nichols gains for the plant with their own simulated overshoot and settling, and the sampled curves in result.sim (t, sp, y, u). Use it to try gains before touching hardware, or to find a starting point from a step-test model of the plant.",
+  "sources": [
+    "S. Skogestad, 'Simple analytic rules for model reduction and PID controller tuning', J. Process Control 13 (2003) 291–309 (SIMC rules, τc = θ)",
+    "J. G. Ziegler, N. B. Nichols, 'Optimum settings for automatic controllers', Trans. ASME 64 (1942) (open-loop reaction-curve rule)",
+    "K. J. Åström, T. Hägglund, 'Advanced PID Control' (ISA 2006), ch. 3: derivative filter, derivative on measurement, anti-windup, discretisation"
+  ],
+  "view": true
+}

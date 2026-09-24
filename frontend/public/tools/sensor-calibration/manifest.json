@@ -1,0 +1,42 @@
+{
+  "id": "sensor-calibration",
+  "name": "Sensor Calibration Fit",
+  "blurb": "linear calibration coefficients from two or more readings",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["calibration", "linear fit", "least squares", "regression", "gain", "offset", "slope", "intercept", "two-point calibration", "adc counts", "scaling", "fixed point", "residual", "r squared", "sensor"],
+  "intro": "Enter raw readings next to what a reference instrument said. Two points give the exact line through them; three or more give the least-squares line y = gain · raw + offset, with the residual at every point so you can see whether a straight line is good enough.",
+  "inputs": [
+    { "key": "points", "label": "Calibration points", "type": "table",
+      "help": "Raw = what the sensor/ADC reports; Reference = the true value from the reference instrument. Engineering notation is fine (4k7, 2.5m).",
+      "columns": [
+        { "key": "raw", "label": "Raw reading", "default": "" },
+        { "key": "ref", "label": "Reference value", "default": "" }
+      ],
+      "default": [
+        { "raw": "512", "ref": "0.0" },
+        { "raw": "1580", "ref": "25.1" },
+        { "raw": "2650", "ref": "49.8" },
+        { "raw": "3710", "ref": "75.2" }
+      ] },
+    { "key": "rawUnit", "label": "Raw unit", "type": "text", "default": "counts" },
+    { "key": "refUnit", "label": "Reference unit", "type": "text", "default": "°C" },
+    { "key": "probe", "label": "Raw reading to convert", "type": "number", "default": "2048" },
+    { "key": "scale", "label": "Fixed-point output scale", "type": "number", "unit": "×", "default": "100",
+      "help": "The integer result is in reference units × this, e.g. 100 = hundredths of a degree." },
+    { "key": "shift", "label": "Fixed-point fraction bits", "type": "number", "unit": "bits", "default": "16" }
+  ],
+  "examples": [
+    { "title": "Thermistor ADC counts against a reference thermometer, 4 points",
+      "input": { "points": [ { "raw": "512", "ref": "0.0" }, { "raw": "1580", "ref": "25.1" }, { "raw": "2650", "ref": "49.8" }, { "raw": "3710", "ref": "75.2" } ],
+        "rawUnit": "counts", "refUnit": "°C", "probe": "2048", "scale": "100", "shift": "16" } },
+    { "title": "Load cell: two-point calibration, empty and 1 kg",
+      "input": { "points": [ { "raw": "8388", "ref": "0" }, { "raw": "125000", "ref": "1000" } ],
+        "rawUnit": "counts", "refUnit": "g", "probe": "60000", "scale": "10", "shift": "20" } }
+  ],
+  "usage": "Give points as a table of {raw, ref} pairs (at least two with different raw values), the unit names as text, one raw reading to convert, and the fixed-point scale and fraction bits. It returns gain and offset (ref = gain × raw + offset), the inverse, R², the residual at every point, the converted reading, and C code with float and integer versions. Use it to turn a bench calibration into firmware constants.",
+  "sources": [
+    "Ordinary least-squares straight line: NIST/SEMATECH e-Handbook of Statistical Methods, section 4.1.4.1 (linear least squares)",
+    "Fixed-point scaling (Q format): rule of thumb, value × 2^bits rounded, product in a wide enough integer"
+  ]
+}

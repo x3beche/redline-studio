@@ -1,0 +1,27 @@
+{
+  "id": "debounce-time",
+  "name": "Debounce Time Calculator",
+  "blurb": "debounce time for a button type and sampling period",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["debounce", "switch bounce", "contact bounce", "button", "pushbutton", "tactile switch", "reed switch", "rotary encoder", "sampling", "integrator", "shift register", "rc debounce", "schmitt trigger", "keypad", "input filter"],
+  "intro": "Pick the switch; its worst-case bounce times a safety margin is the window the input must stay stable. At your sampling period that is N equal samples in a row (a counter or an N-bit shift register), which sets the delay a press sees. Bounce figures are typical datasheet maxima and Ganssle's measurements, so a rule of thumb: measure your own switch when it matters.",
+  "inputs": [
+    { "key": "type", "label": "Switch type", "type": "select", "default": "tact",
+      "options": [["tact", "Tactile (6 mm tact) switch"], ["panel", "Panel pushbutton"], ["toggle", "Toggle switch"], ["slide", "Slide switch"], ["micro", "Snap-action microswitch"], ["encoder", "Mechanical rotary encoder"], ["membrane", "Membrane keypad"], ["reed", "Reed switch"], ["relay", "Relay contact"], ["custom", "Custom (give the bounce)"]] },
+    { "key": "bounce", "label": "Worst-case bounce", "type": "number", "unit": "s", "default": "5m", "when": { "key": "type", "equals": "custom" } },
+    { "key": "ts", "label": "Sampling period", "type": "number", "unit": "s", "default": "1m", "help": "How often the pin is read (timer tick or scan interval)." },
+    { "key": "margin", "label": "Safety margin", "type": "number", "unit": "×", "default": "2", "help": "Window = worst-case bounce × this. 1.5 … 3 is usual; aged contacts bounce longer." },
+    { "key": "vdd", "label": "Supply, for the RC option", "type": "number", "unit": "V", "default": "3.3" }
+  ],
+  "examples": [
+    { "title": "Tact switch scanned from a 1 ms tick", "input": { "type": "tact", "ts": "1m", "margin": "2", "vdd": "3.3" } },
+    { "title": "Toggle switch polled every 5 ms", "input": { "type": "toggle", "ts": "5m", "margin": "1.5", "vdd": "5" } }
+  ],
+  "usage": "Choose the switch type (or custom and give the worst-case bounce in seconds), the sampling period in seconds, the safety margin as a factor and the supply in volts. It returns the stable-window N (samples in a row), the debounce time N·Ts, the worst-case response from the first contact, the shift-register width that holds N, an RC + Schmitt alternative, and C code. Use it to size a firmware debounce or check an existing scan rate.",
+  "sources": [
+    "J. Ganssle, 'A Guide to Debouncing' (2008): 18 switches measured, mean bounce 1.6 ms, worst 6.2 ms apart from outliers; counter and shift-register debouncers; RC + Schmitt formula R = −t / (C ln(Vth/Vdd))",
+    "Switch bounce maxima: Omron B3F tactile switch datasheet (5 ms max), Alps EC11 encoder datasheet (chattering), typical relay and reed switch datasheets; rule of thumb for the other types",
+    "Response limit: rule of thumb, under about 50 ms feels instant to a user"
+  ]
+}

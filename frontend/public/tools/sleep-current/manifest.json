@@ -1,0 +1,42 @@
+{
+  "id": "sleep-current",
+  "name": "Sleep Current Profiler",
+  "blurb": "average current from sleep and wake times and currents",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["sleep current", "average current", "duty cycle", "low power", "power budget", "wake time", "active current", "deep sleep", "current profile", "charge per cycle", "energy budget", "iot", "radio tx", "battery"],
+  "intro": "A device wakes once per period, runs through a few active states, then sleeps for the rest. The average current is the charge of every state per period divided by the period; states that run only every Nth wake are spread over their own interval. The breakdown shows which state to optimise first.",
+  "inputs": [
+    { "key": "period", "label": "Wake-up period", "type": "number", "unit": "s", "default": "10", "help": "Time from one wake-up to the next." },
+    { "key": "isleep", "label": "Sleep current", "type": "number", "unit": "A", "default": "2u", "help": "Whole board while asleep: MCU, regulator quiescent, pull-ups, sensors." },
+    { "key": "states", "label": "Active states per wake-up", "type": "table",
+      "help": "Current in A (5m = 5 mA), time in s (2m = 2 ms). 'Every' = runs once every N wake-ups (1 = each time).",
+      "columns": [
+        { "key": "name", "label": "State", "default": "" },
+        { "key": "i", "label": "Current A", "default": "" },
+        { "key": "t", "label": "Time s", "default": "" },
+        { "key": "every", "label": "Every N", "default": "1" }
+      ],
+      "default": [
+        { "name": "Wake + clock start", "i": "1.5m", "t": "1m", "every": "1" },
+        { "name": "Sensor read", "i": "4m", "t": "5m", "every": "1" },
+        { "name": "Radio TX", "i": "25m", "t": "3m", "every": "6" }
+      ] },
+    { "key": "vbat", "label": "Supply voltage", "type": "number", "unit": "V", "default": "3" }
+  ],
+  "examples": [
+    { "title": "Sensor node: read every 10 s, send every minute",
+      "input": { "period": "10", "isleep": "2u", "vbat": "3", "states": [
+        { "name": "Wake + clock start", "i": "1.5m", "t": "1m", "every": "1" },
+        { "name": "Sensor read", "i": "4m", "t": "5m", "every": "1" },
+        { "name": "Radio TX", "i": "25m", "t": "3m", "every": "6" } ] } },
+    { "title": "BLE beacon: advertise every second",
+      "input": { "period": "1", "isleep": "1.5u", "vbat": "3", "states": [
+        { "name": "Pre-processing", "i": "3m", "t": "400u", "every": "1" },
+        { "name": "Advertising, 3 channels", "i": "8m", "t": "1.2m", "every": "1" } ] } }
+  ],
+  "usage": "Give the wake-up period in seconds, the sleep current in A, and the active states as a table of {name, i (A), t (s), every (run once per N wake-ups)}, plus the supply in volts. It returns the average current, the duty cycle, charge per period and per day (mAh/day), average power and energy per day, and each state's share of the average. Feed the average current into the battery life estimator.",
+  "sources": [
+    "I_avg = [Σ I_k · t_k / N_k + I_sleep · (T − Σ t_k / N_k)] / T: charge balance over one period (definition), the same method as TI application report SWRA349 'Coin cells and peak current draw'"
+  ]
+}

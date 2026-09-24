@@ -1,0 +1,29 @@
+{
+  "id": "cycles-time",
+  "name": "Cycle to Time Converter",
+  "blurb": "instruction cycles to microseconds and back at a clock",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["cycles", "clock cycles", "instruction cycle", "cpu clock", "microseconds", "delay loop", "busy wait", "timer prescaler", "auto-reload", "arr", "psc", "fosc/4", "mhz", "execution time", "timing"],
+  "intro": "Time = cycles × clocks per cycle / clock frequency, and back. It also gives the busy-wait loop count for that time and the prescaler and reload a 8-, 16- or 32-bit timer needs to count it, with the rounding error.",
+  "inputs": [
+    { "key": "dir", "label": "Convert", "type": "select", "default": "c2t",
+      "options": [["c2t", "Cycles → time"], ["t2c", "Time → cycles"]] },
+    { "key": "fclk", "label": "Clock frequency", "type": "number", "unit": "Hz", "default": "16M" },
+    { "key": "cycles", "label": "Cycles", "type": "number", "default": "1000", "when": { "key": "dir", "equals": "c2t" } },
+    { "key": "time", "label": "Time", "type": "number", "unit": "s", "default": "10u", "when": { "key": "dir", "equals": "t2c" } },
+    { "key": "cpc", "label": "Clocks per instruction cycle", "type": "number", "default": "1",
+      "help": "1 for AVR, ARM Cortex-M, RISC-V; 4 for PIC10/12/16/18 (Fosc/4); 12 for a classic 8051." },
+    { "key": "loop", "label": "Cycles per delay-loop pass", "type": "number", "default": "4",
+      "help": "Instruction cycles one pass of your busy-wait loop takes (e.g. 4 for AVR _delay_loop_2, 3 for a Cortex-M SUBS/BNE loop)." }
+  ],
+  "examples": [
+    { "title": "How long are 1000 cycles on a 16 MHz AVR?", "input": { "dir": "c2t", "fclk": "16M", "cycles": "1000", "cpc": "1", "loop": "4" } },
+    { "title": "Cycles for 10 µs on a PIC18 at 64 MHz", "input": { "dir": "t2c", "fclk": "64M", "time": "10u", "cpc": "4", "loop": "3" } }
+  ],
+  "usage": "Choose c2t (give cycles) or t2c (give time in seconds), the clock in Hz, the clocks per instruction cycle and the instruction cycles per delay-loop pass. It returns the time or cycle count, the cycle period, the delay-loop count, a table of the same count at common clocks, and timer prescaler/reload settings (8-bit, 16-bit, 32-bit, any or power-of-two prescaler) with their actual time and error.",
+  "sources": [
+    "t = N × CPC / fclk: definition; PIC instruction cycle = Fosc/4 (Microchip PIC16/PIC18 datasheets), 8051 machine cycle = 12 clocks (Intel MCS-51 manual)",
+    "Timer period = (PSC + 1)(ARR + 1) / f_timer: STM32 reference manuals (general-purpose timers); AVR prescalers 1/8/64/256/1024: ATmega328P datasheet, Timer/Counter1"
+  ]
+}

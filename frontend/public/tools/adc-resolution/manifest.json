@@ -1,0 +1,31 @@
+{
+  "id": "adc-resolution",
+  "name": "ADC Resolution Calculator",
+  "blurb": "LSB size from reference and bits, and the oversampling gain",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["adc", "analog to digital", "lsb", "resolution", "quantization", "reference voltage", "vref", "bits", "oversampling", "decimation", "enob", "snr", "noise-free bits", "counts", "code"],
+  "intro": "One LSB is the reference span divided by 2^N; the code for an input voltage follows from it. Oversampling by 4^n and decimating adds n bits, but only when the input carries at least about half an LSB of noise (Silicon Labs AN118, Microchip AVR121).",
+  "inputs": [
+    { "key": "vref", "label": "Reference voltage", "type": "number", "unit": "V", "default": "3.3" },
+    { "key": "bits", "label": "ADC bits", "type": "number", "unit": "bits", "default": "12" },
+    { "key": "range", "label": "Input range", "type": "select", "default": "unipolar",
+      "options": [["unipolar", "Unipolar, 0 … Vref"], ["bipolar", "Bipolar, −Vref … +Vref"]] },
+    { "key": "vin", "label": "Input voltage to convert", "type": "number", "unit": "V", "default": "1.0" },
+    { "key": "noise", "label": "Input noise (RMS)", "type": "number", "unit": "V", "default": "500u",
+      "help": "Analog noise at the ADC pin, referred to the input. It is the dither oversampling needs." },
+    { "key": "fs", "label": "Sample rate", "type": "number", "unit": "Hz", "default": "100k" },
+    { "key": "osr", "label": "Oversampling ratio", "type": "number", "unit": "×", "default": "16",
+      "help": "Samples summed per output; 4^n adds n bits (4, 16, 64, 256). 1 = no oversampling." }
+  ],
+  "examples": [
+    { "title": "12-bit MCU ADC at 3.3 V, 16× oversampled to 14 bits", "input": { "vref": "3.3", "bits": "12", "range": "unipolar", "vin": "1.0", "noise": "500u", "fs": "100k", "osr": "16" } },
+    { "title": "24-bit bipolar ±2.5 V, no oversampling", "input": { "vref": "2.5", "bits": "24", "range": "bipolar", "vin": "-0.1", "noise": "1u", "fs": "1k", "osr": "1" } }
+  ],
+  "usage": "Give the reference in volts, the ADC bit count, the range (unipolar or bipolar), an input voltage, the RMS input noise in volts, the sample rate in Hz and the oversampling ratio. It returns the LSB in volts, the code for the input, the ideal SNR, the ENOB and noise-free bits with that noise, and the resolution, output rate and SNR after oversampling. Use it to size a reference or decide whether oversampling will buy the resolution you need.",
+  "sources": [
+    "LSB = FSR / 2^N and ideal SNR = 6.02 N + 1.76 dB: Analog Devices MT-001 'Taking the Mystery out of the Infamous Formula SNR = 6.02N + 1.76dB'",
+    "Oversampling and decimation, OSR = 4^n for n extra bits: Silicon Labs AN118, Microchip (Atmel) AVR121",
+    "ENOB = (SNR − 1.76) / 6.02: Analog Devices MT-003; noise-free resolution from RMS noise (peak-to-peak = 6.6 × RMS): Analog Devices MT-229"
+  ]
+}

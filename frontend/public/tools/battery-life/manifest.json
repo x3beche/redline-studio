@@ -1,0 +1,30 @@
+{
+  "id": "battery-life",
+  "name": "Battery Life Estimator",
+  "blurb": "run time in days from average current and battery capacity",
+  "group": "embedded",
+  "rooms": ["embedded", "pcb"],
+  "keywords": ["battery life", "run time", "runtime", "mah", "capacity", "average current", "self-discharge", "coin cell", "cr2032", "alkaline", "li-ion", "lipo", "lifepo4", "nimh", "li-socl2", "derating"],
+  "intro": "Run time = usable capacity / (average load + self-discharge). Usable capacity is the rated mAh times a derating for cut-off voltage, temperature and ageing; self-discharge is turned into an equivalent current from the chemistry's typical monthly loss. The result is capped by the cell's shelf life.",
+  "inputs": [
+    { "key": "chem", "label": "Battery", "type": "select", "default": "cr2032",
+      "options": [["cr2032", "CR2032 lithium coin, 3 V"], ["cr2450", "CR2450 lithium coin, 3 V"], ["aa-alk", "AA alkaline, 1.5 V"], ["aaa-alk", "AAA alkaline, 1.5 V"], ["aa-li", "AA lithium Li-FeS2, 1.5 V"], ["aa-lisocl2", "AA Li-SOCl2 bobbin (ER14505), 3.6 V"], ["aa-nimh", "AA NiMH standard, 1.2 V"], ["aa-lsd", "AA NiMH low self-discharge, 1.2 V"], ["liion", "Li-ion / LiPo, 3.7 V"], ["lifepo4", "LiFePO4, 3.2 V"], ["custom", "Custom"]] },
+    { "key": "cap", "label": "Capacity per cell", "type": "number", "unit": "mAh", "default": "0", "help": "0 = typical for the chosen battery (Li-ion/LiPo and LiFePO4 need yours)." },
+    { "key": "np", "label": "Cells in parallel", "type": "number", "default": "1", "help": "Series cells add voltage, not mAh: count only parallel strings." },
+    { "key": "iavg", "label": "Average current", "type": "number", "unit": "A", "default": "10u", "help": "From the sleep current profiler, or measured (10u = 10 µA)." },
+    { "key": "ipeak", "label": "Peak current", "type": "number", "unit": "A", "default": "15m", "help": "Largest burst, e.g. a radio transmit. 0 = no check." },
+    { "key": "usable", "label": "Usable fraction", "type": "number", "unit": "%", "default": "80", "help": "Derating for cut-off voltage, cold and ageing; 70 … 90 % is usual." },
+    { "key": "sd", "label": "Self-discharge", "type": "number", "unit": "%/month", "default": "2", "when": { "key": "chem", "equals": "custom" } },
+    { "key": "shelf", "label": "Shelf life", "type": "number", "unit": "years", "default": "5", "when": { "key": "chem", "equals": "custom" } }
+  ],
+  "examples": [
+    { "title": "BLE sensor on a CR2032 at 10 µA average, 15 mA TX bursts", "input": { "chem": "cr2032", "cap": "0", "np": "1", "iavg": "10u", "ipeak": "15m", "usable": "80" } },
+    { "title": "Tracker on a 2000 mAh LiPo at 1.2 mA", "input": { "chem": "liion", "cap": "2000", "np": "1", "iavg": "1.2m", "ipeak": "500m", "usable": "85" } }
+  ],
+  "usage": "Choose the battery chemistry (or custom with self-discharge in %/month and shelf life in years), the capacity per cell in mAh (0 = typical), cells in parallel, the average current in A, the peak current in A (0 = skip) and the usable fraction in %. It returns the run time in hours, days, months and years, the usable capacity, the self-discharge as an equivalent current, whether shelf life or self-discharge limits it, and warnings when the average or peak current is more than the cell is rated for.",
+  "sources": [
+    "Battery University BU-802b 'What does elevated self-discharge do?' (self-discharge by chemistry)",
+    "Energizer CR2032 / CR2450, E91 alkaline and L91 lithium product datasheets (capacity, drain limits); Tadiran / Saft ER14505 datasheets (Li-SOCl2)",
+    "Usable-fraction derating: rule of thumb"
+  ]
+}
