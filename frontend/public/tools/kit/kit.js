@@ -202,8 +202,16 @@ function drawChart(c) {
 }
 
 // ---------------- the prompt ----------------
+/** Whether an input is in play: one with `when` only while that other input has that value. */
+export function isShown(d, input) {
+  const w = d.when;
+  if (!w) return true;
+  const v = String(input[w.key] ?? '');
+  return w.in ? w.in.map(String).includes(v) : v === String(w.equals);
+}
+
 function inputText(manifest, input) {
-  return manifest.inputs.map((d) => {
+  return manifest.inputs.filter((d) => isShown(d, input)).map((d) => {
     const v = input[d.key];
     if (d.type === 'table') {
       const rows = (v || []).map((r) => '  - ' + d.columns.map((c) => `${c.label}: ${r[c.key] ?? ''}`).join(', '));
@@ -257,12 +265,7 @@ export async function mount(base = './') {
 
   // An input with `when: {key, equals | in}` shows only while that other
   // input has that value - a fab's custom limits only when the fab is Custom.
-  const shown = (d) => {
-    const w = d.when;
-    if (!w) return true;
-    const v = String(raw[w.key] ?? '');
-    return w.in ? w.in.map(String).includes(v) : v === String(w.equals);
-  };
+  const shown = (d) => isShown(d, raw);
   const drawForm = () => {
     form.replaceChildren(...manifest.inputs.filter(shown).map((d) => fieldFor(d, raw[d.key], (v) => {
       raw[d.key] = v; store.set(KEY, raw);
