@@ -180,9 +180,9 @@ About a minute for a 33-part board. The room shows what came of it.
 | place | what it holds |
 |---|---|
 | **toolbar** | across the top, the 3D room's icon buttons: *layout*, *schematic*, *3D*; the board's *front* (with the pour), *tracks* (copper only) or *back*; fit, closer, further; the `.kicad_pcb`, `.kicad_sch` and `.glb` files; what the last run came to (routed, DRC, ERC). The **pen** is at its far end |
-| **tabs** | down the left, like the 3D room's Tree/Clip/…: **Parts** (LCSC's catalogue, the part you clicked in full, the drawer), **Rules**, **Checks** (DRC and ERC), **LCSC** (every request made of it), **Machine** (what each run cost) |
+| **tabs** | down the left, like the 3D room's Tree/Clip/…: **Parts** (LCSC's catalogue, the part you clicked in full, the drawer), **Rules**, **Checks** (DRC and ERC), **Sourcing** (every request made of LCSC) |
 | **view** | the board as the toolbar picked it; on the layout the corner selector switches side, as *All* does in the 3D room. Scroll to zoom, drag to move, double-click to fit; drag to turn the 3D one over |
-| **log** | a band under the view, as in the 3D room: folded to one line, or open to the last lines. Only this room's lines |
+| **log** | a card under the view, as in the 3D room: folded to one line, or open to the last lines - only this room's lines - with what each run took and what the board's files weigh in a narrow column on its right |
 
 It is the 3D room's layout, and every room shares it (`rooms/frame.ts`):
 one toolbar, one column of tabs, one view, one log band. The room remembers
@@ -197,19 +197,30 @@ let the view go.
 
 ### Rules
 
-The **rules** tab is what the router is told. It starts worked out from the
-net names — `vbus`, `gnd`, `v3v3` are power and get 0.5 mm tracks, `dp`/`dn`
-are a pair, `gnd` is poured — and anything changed there is kept.
+The **Rules** tab is a form of what the router is told. It starts worked
+out from the net names — `vbus`, `gnd`, `v3v3` are power and get 0.5 mm
+tracks, `dp`/`dn` are a pair, `gnd` is poured — and everything in it can be
+changed, added or removed:
 
-- **Net classes**: track width, clearance, via and drill, and which nets are
-  in each. Default holds every net not named elsewhere.
-- **Differential pairs**: width and gap. Freerouting routes a pair as two
-  nets at these numbers; it does not couple them or match their lengths.
-  Fine for USB full speed; not for anything fast. The panel says so too.
-- **Ground pour**: *solid* joins pads straight into the pour (what reflow
-  wants); *thermal* uses spokes (easier to hand-solder).
+- **Net classes**: name, track, gap, via and drill; which nets are in it, by
+  name or by a pattern such as `usb_*` that catches them on any board.
+  *holds:* under a class lists what it catches. Default holds every net no
+  other class takes, and cannot be removed.
+- **Differential pairs**: pick the + and − nets, width and gap. Freerouting
+  routes a pair as two nets at these numbers; it does not couple them or
+  match their lengths. Fine for USB full speed; not for anything fast.
+- **Copper pours**: any net, on either or both layers, *solid* (pads straight
+  into the pour, what reflow wants) or *thermal* (spokes, easier to
+  hand-solder). The first in the list wins where two meet.
 - **What the board house can make**: the minimums every class is checked
-  against before the router sees it.
+  against, and **Router** passes.
+
+**+ add** makes a row, **×** removes one; ⓘ and each field's tooltip say
+what it is. The server checks the form as you type (the same check the
+agent's edits go through) and puts each problem under the row it is about;
+**Save** keeps it, and the next run routes to it. The field list comes from
+the server (`/api/rules/schema`), so the form and the agent's
+`revisions.py board rules` always describe the same rules.
 
 The router cannot narrow a track to reach a small pad, so a class is capped
 to the narrowest pad it has to reach, and the run says so: *Power: 0.5 →
@@ -262,7 +273,7 @@ be about one of them.
 
 ### Watching what is asked of LCSC
 
-The board room's side pane, under the parts, has an **lcsc** tab:
+The board room's left column has a **Sourcing** tab:
 every request made of LCSC, by the page or by an agent, newest first —
 what was asked (a search, a part's details, its drawings, its model, its
 photo), whether it went to EasyEDA or was answered from disk, the status,

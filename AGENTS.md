@@ -183,6 +183,21 @@ pipeline** - never a build on its own, never a layout on its own:
 .venv/bin/python tools/revisions.py board show <id>                 # where it stands
 ```
 
+Routing rules (net classes, differential pairs, copper pours, the board
+house's minimums, router passes) are the same ones the person edits in the
+Rules tab. Change them as JSON, checked by the server before they are kept:
+
+```bash
+.venv/bin/python tools/revisions.py board rules-schema               # what every field is
+.venv/bin/python tools/revisions.py board rules <id> rules.json      # current rules to a file
+.venv/bin/python tools/revisions.py board rules-save <id> rules.json # write back (400 lists problems)
+```
+
+A class takes nets by name (`nets`) or by shell pattern (`patterns`, e.g.
+`usb_*`); Default holds the rest and cannot be removed. `pours` is a list;
+the first wins where two meet. Each problem names its field
+(`classes.Power.track: ...`). Save the rules, then `board run`.
+
 `run` builds the source, draws the schematic (KiCad, every part's real
 symbol, pins joined by net labels, then ERC), places the parts (by module,
 connectors on the edges facing out), routes with Freerouting to the

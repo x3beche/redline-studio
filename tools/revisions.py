@@ -330,7 +330,30 @@ async def cmd_board(args):
             sys.exit(f"the server is not answering at {base} ({exc.reason}) - start.sh")
 
     bid = args.board
-    if args.what == "source":
+    if args.what == "rules-schema":
+        print(_json.dumps(call("/api/rules/schema"), indent=1, ensure_ascii=False))
+        return
+    if not bid:
+        sys.exit(f"board {args.what} needs a board id")
+    if args.what == "rules":
+        # The rules as the board room shows them: what is set, who each
+        # class catches once patterns apply, the nets there are, and what
+        # is wrong. Edit the "rules" part and give it back with rules-save.
+        got = call(f"/api/boards/{bid}/rules")
+        text = _json.dumps(got, indent=1, ensure_ascii=False)
+        if args.file:
+            Path(args.file).write_text(text + "\n")
+            print(f"wrote {args.file} - edit its \"rules\", then: board rules-save {bid} {args.file}")
+        else:
+            print(text)
+    elif args.what == "rules-save":
+        if not args.file:
+            sys.exit("board rules-save <board> <file.json>")
+        body = _json.loads(Path(args.file).read_text())
+        body = body.get("rules", body)
+        print(call(f"/api/boards/{bid}/rules", "PUT", {"rules": body}))
+        print("saved - `board run` routes to them")
+    elif args.what == "source":
         print(call(f"/api/boards/{bid}")["source"])
     elif args.what == "save":
         text = Path(args.file).read_text()
@@ -964,11 +987,16 @@ def main() -> None:
                         "KIND VALUE SIZE for passive")
     s.set_defaults(fn=cmd_part)
     s = sub.add_parser("board", help="a board: its source, and the whole pipeline")
-    s.add_argument("what", choices=["run", "show", "source", "save"],
+    s.add_argument("what", choices=["run", "show", "source", "save", "rules",
+                                    "rules-save", "rules-schema"],
                    help="run: build, schematic, place, route, DRC; show: where it "
-                        "stands; source/save: read or write its atopile")
-    s.add_argument("board")
-    s.add_argument("file", nargs="?", help="for save: the .ato file to write")
+                        "stands; source/save: read or write its atopile; rules: "
+                        "the routing rules as JSON (to a file if given); "
+                        "rules-save: write them back, checked; rules-schema: "
+                        "what every rule field is")
+    s.add_argument("board", nargs="?")
+    s.add_argument("file", nargs="?", help="for save: the .ato file; for rules / "
+                                           "rules-save: the JSON file")
     s.set_defaults(fn=cmd_board)
     s = sub.add_parser("wait", help="block until a revision is queued")
     s.add_argument("--every", type=int, default=30,

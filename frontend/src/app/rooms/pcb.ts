@@ -3,16 +3,17 @@ import {
 } from '@angular/core';
 import {
   Activity, BoardCompute, BoardEntry, BoardGraph, BoardLayout, BoardRules,
-  Boards, Health, LcscAsk, LcscJournal, LogLine, NetClass, PartHeld, PartHit,
-  PartPreview, Parts, SystemInfo,
+  Boards, LcscAsk, LcscJournal, LogLine, PartHeld, PartHit,
+  PartPreview, Parts, RuleSchema,
 } from '../api';
 import { Selection } from '../selection';
 import { Board3d } from './board3d';
 import { Drawing } from './drawing';
 import { RoomFrame, ToolButton } from './frame';
+import { RulesForm } from './rules-form';
 import { DrawTools, PenState, Sketchpad } from './sketchpad';
 
-type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'machine';
+type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc';
 
 /** The board room.
  *
@@ -28,7 +29,7 @@ type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'machine';
  */
 @Component({
   selector: 'app-room-pcb',
-  imports: [Board3d, Drawing, DrawTools, RoomFrame, Sketchpad, ToolButton],
+  imports: [Board3d, Drawing, DrawTools, RoomFrame, RulesForm, Sketchpad, ToolButton],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
@@ -330,121 +331,30 @@ type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'machine';
       } @else {
       @if (side() === 'rules') {
         <!-- ROUTING RULES
-             What the router is told. Worked out from the net names the
-             first time; anything changed here is kept, and the next run
-             routes to it. -->
+             What the router is told, as a form drawn from the server's
+             schema: classes, pairs and pours added, changed and removed.
+             Worked out from the net names the first time; what is saved
+             is kept, and the next run routes to it. The agent edits the
+             same rules (revisions.py board rules). -->
         <div class="min-h-0 flex-1 overflow-auto p-2 text-[11px]">
           @if (draft(); as r) {
-            <div class="tcv-label mb-1">net classes · mm</div>
-            <div class="mono grid items-center gap-x-1 gap-y-1"
-                 style="grid-template-columns: minmax(2.6rem, 1fr) repeat(4, minmax(0, 2.8rem))">
-              <span style="color: var(--ink-dim)">class</span>
-              <span style="color: var(--ink-dim)" title="track width">track</span>
-              <span style="color: var(--ink-dim)" title="clearance to anything else">gap</span>
-              <span style="color: var(--ink-dim)" title="via diameter">via</span>
-              <span style="color: var(--ink-dim)" title="via drill">drill</span>
-              @for (c of r.classes; track c.name) {
-                <span class="truncate" style="color: var(--ink)" [title]="c.name">{{ c.name }}</span>
-                @for (k of classKeys; track k) {
-                  <input type="number" step="0.01" min="0" [value]="c[k]"
-                         (change)="setClass(c.name, k, $event)"
-                         class="tcv-field w-full min-w-0 px-0.5 py-0.5 text-right text-[10px]">
-                }
-                <!-- Which nets this class holds. Default is everything
-                     not named elsewhere, so it lists none. -->
-                <div class="col-span-5 mb-1 flex flex-wrap gap-1">
-                  @for (n of c.nets; track n) {
-                    <span class="tcv-chip px-1.5 py-0">
-                      {{ n }}
-                      <button (click)="takeNet(c.name, n)" style="color: var(--ink-dim)"
-                              title="back to Default">×</button>
-                    </span>
-                  }
-                  @if (c.name !== 'Default' && loose().length) {
-                    <select (change)="giveNet(c.name, $event)"
-                            class="tcv-field px-1 py-0 text-[10px]">
-                      <option value="">+ net</option>
-                      @for (n of loose(); track n) { <option [value]="n">{{ n }}</option> }
-                    </select>
-                  }
-                </div>
-              }
-            </div>
-
-            @if (r.pairs.length) {
-              <div class="tcv-label mb-1 mt-2">differential pairs</div>
-              @for (pair of r.pairs; track pair.name) {
-                <div class="mono mb-1 flex items-center gap-1.5">
-                  <span class="min-w-0 flex-1 truncate">{{ pair.name }}: {{ pair.p }} / {{ pair.n }}</span>
-                  <span style="color: var(--ink-dim)">w</span>
-                  <input type="number" step="0.01" [value]="pair.width"
-                         (change)="setPair(pair.name, 'width', $event)"
-                         class="tcv-field w-[3.4rem] px-1 py-0.5 text-right">
-                  <span style="color: var(--ink-dim)">gap</span>
-                  <input type="number" step="0.01" [value]="pair.gap"
-                         (change)="setPair(pair.name, 'gap', $event)"
-                         class="tcv-field w-[3.4rem] px-1 py-0.5 text-right">
-                </div>
-              }
-              <!-- Said plainly, because it is the limit of the tool: the
-                   pair comes out as two tracks at these numbers, not as a
-                   coupled, length-matched pair. -->
-              <p class="mb-1 leading-snug" style="color: var(--warn)">
-                Freerouting routes a pair as two nets at this width and gap;
-                it does not couple them or match their lengths. Fine for USB
-                full speed on a board this size - not for anything fast.
-              </p>
+            @if (schema(); as sc) {
+              <app-rules-form [rules]="r" [schema]="sc" [nets]="nets()"
+                              [members]="members()" [problems]="shownProblems()"
+                              (changed)="draftChanged($event)" />
             }
-
-            @if (r.pour; as pour) {
-              <div class="tcv-label mb-1 mt-2">ground pour</div>
-              <div class="mono flex flex-wrap items-center gap-1.5">
-                <span>{{ pour.net }}</span>
-                <span style="color: var(--ink-dim)">on {{ pour.layers.join(' + ') }}</span>
-                <select (change)="setPour('connection', $any($event.target).value)"
-                        class="tcv-field px-1 py-0.5"
-                        title="solid: straight into the pour, what reflow wants; thermal: spokes, easier to hand-solder">
-                  <option value="solid" [selected]="pour.connection !== 'thermal'">solid</option>
-                  <option value="thermal" [selected]="pour.connection === 'thermal'">thermal</option>
-                </select>
-                <span style="color: var(--ink-dim)">gap</span>
-                <input type="number" step="0.05" [value]="pour.clearance"
-                       (change)="setPour('clearance', +$any($event.target).value)"
-                       class="tcv-field w-[3.4rem] px-1 py-0.5 text-right">
-              </div>
-            }
-
-            <div class="tcv-label mb-1 mt-2">what the board house can make</div>
-            <div class="mono grid items-center gap-x-1.5 gap-y-1"
-                 style="grid-template-columns: 1fr 3.4rem">
-              @for (k of boardKeys; track k.key) {
-                <span style="color: var(--ink-dim)">{{ k.label }}</span>
-                <input type="number" step="0.01" [value]="r.board[k.key]"
-                       (change)="setBoard(k.key, $event)"
-                       class="tcv-field w-full px-1 py-0.5 text-right">
-              }
-              <span style="color: var(--ink-dim)">router passes</span>
-              <input type="number" step="1" min="1" [value]="r.route.passes"
-                     (change)="setPasses($event)"
-                     class="tcv-field w-full px-1 py-0.5 text-right">
-            </div>
-
             @for (n of here()?.route?.notes ?? []; track n) {
-              <p class="mt-2 leading-snug" style="color: var(--ink-dim)">
-                last run: {{ n }}
-              </p>
+              <p class="mb-1 leading-snug" style="color: var(--ink-dim)">last run: {{ n }}</p>
             }
-            @for (pr of ruleProblems(); track pr) {
-              <p class="mt-1 leading-snug" style="color: var(--danger)">{{ pr }}</p>
-            }
-            <div class="mt-2 flex items-center gap-1">
-              <button (click)="saveRules()" [disabled]="!rulesDirty() || ruleProblems().length > 0"
-                      class="tcv-btn tcv-btn-accent px-2 py-0.5">save</button>
+            <div class="tcv-rule-save">
+              <button (click)="saveRules()" [disabled]="!rulesDirty() || saving()"
+                      class="tcv-btn tcv-btn-accent px-3 py-0.5">{{ saving() ? 'saving…' : 'Save' }}</button>
               <button (click)="loadRules()" [disabled]="!rulesDirty()"
-                      class="tcv-btn px-2 py-0.5">revert</button>
-              @if (rulesNote(); as n) {
-                <span class="text-[10px]" style="color: var(--ink-dim)">{{ n }}</span>
-              }
+                      class="tcv-btn px-2 py-0.5">Revert</button>
+              <span class="min-w-0 truncate text-[10px]"
+                    [style.color]="shownProblems().length ? 'var(--danger)' : 'var(--ink-dim)'">
+                {{ shownProblems().length ? shownProblems().length + ' to fix' : rulesNote() }}
+              </span>
             </div>
           } @else {
             <div style="color: var(--ink-dim)">build the board first - rules follow its nets</div>
@@ -590,13 +500,20 @@ type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'machine';
             <div class="px-2 py-1" style="color: var(--ink-dim)">nothing asked yet</div>
           }
         </div>
-      } @else {
-      <div class="min-h-0 flex-1 overflow-auto p-2 text-[11px]">
+      }
+      }
+    </div>
+
+
+    <!-- WHAT THE RUNS COST AND WHAT IS KEPT
+         Beside the log it explains, and folded with it: each run's time,
+         and what the board's artifacts weigh. -->
+    <div logSide class="text-[11px]">
         @if (cost()?.jobs?.length) {
           <div class="mono">
             @for (j of cost()!.jobs.slice(0, 5); track j.at) {
               <div class="flex gap-2 leading-relaxed">
-                <span class="w-11 shrink-0"
+                <span class="w-10 shrink-0"
                       [style.color]="j.rc ? 'var(--danger)' : 'var(--ink)'">
                   {{ j.kind === 'board' ? 'build' : j.kind }}
                 </span>
@@ -604,8 +521,9 @@ type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'machine';
                 <!-- atopile runs here and is measured here; KiCad runs in
                      a container whose time is nobody's child, so a
                      placement reports the clock and nothing else. -->
-                <span class="ml-auto shrink-0 truncate" style="color: var(--ink-dim)">
-                  {{ j.kind === 'layout' ? 'in a container' : cores(j.cpu_s) }}
+                <span class="ml-auto shrink-0 truncate" style="color: var(--ink-dim)"
+                      [title]="j.kind === 'layout' ? 'in the KiCad container - only its clock is measured' : ''">
+                  {{ j.kind === 'layout' ? 'kicad' : cores(j.cpu_s) }}
                 </span>
               </div>
             }
@@ -627,26 +545,6 @@ type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'machine';
           </div>
         }
 
-        @if (sys()) {
-          <div class="mt-2 pt-2" style="border-top: 1px solid var(--line)">
-            @for (g of gauges(); track g.key) {
-              <div class="mb-1.5">
-                <div class="flex justify-between leading-tight">
-                  <span class="truncate" [title]="g.tip">{{ g.key }}</span>
-                  <span class="mono shrink-0" style="color: var(--ink-dim)">{{ g.read }}</span>
-                </div>
-                <div class="mt-0.5 h-[3px] overflow-hidden rounded"
-                     style="background: var(--line)">
-                  <div class="h-full rounded transition-[width] duration-500"
-                       [style.width.%]="g.pct" style="background: var(--accent)"></div>
-                </div>
-              </div>
-            }
-          </div>
-        }
-      </div>
-      }
-      }
     </div>
 
     <!-- THE BOARD
@@ -713,7 +611,6 @@ type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'machine';
 export class RoomPcb implements OnDestroy {
   private api = inject(Boards);
   private picked = inject(Selection);
-  private health = inject(Health);
   private activity = inject(Activity);
   /** Read by the template for the preview URLs. */
   store = inject(Parts);
@@ -739,9 +636,10 @@ export class RoomPcb implements OnDestroy {
   readonly notYet = 'Nothing yet. Ask for the change - a board note, or the '
     + 'thread under the queue - and the agent runs the pipeline: build, '
     + 'schematic, place, route, DRC.';
-  readonly sideTabs = ['parts', 'rules', 'checks', 'lcsc', 'machine'] as const;
-  readonly tabNames = { parts: 'Parts', rules: 'Rules', checks: 'Checks', lcsc: 'LCSC',
-                        machine: 'Machine' };
+  readonly sideTabs = ['parts', 'rules', 'checks', 'lcsc'] as const;
+  /** The LCSC tab is the parts supplier's side of things - every request
+   *  made of it and the turn-taking - so it is named for what it is. */
+  readonly tabNames = { parts: 'Parts', rules: 'Rules', checks: 'Checks', lcsc: 'Sourcing' };
   side = signal<SideTab>(RoomPcb.pick(RoomPcb.recall('side', 'parts'), this.sideTabs, 'parts'));
 
   /** The pen: the view held as a picture, and what is being drawn with. */
@@ -758,13 +656,11 @@ export class RoomPcb implements OnDestroy {
   draft = signal<BoardRules | null>(null);
   nets = signal<string[]>([]);
   rulesNote = signal('');
-  readonly classKeys = ['track', 'clearance', 'via', 'drill'] as const;
-  readonly boardKeys = [
-    { key: 'min_track' as const, label: 'narrowest track' },
-    { key: 'min_clearance' as const, label: 'smallest gap' },
-    { key: 'min_via' as const, label: 'smallest via' },
-    { key: 'min_drill' as const, label: 'smallest drill' },
-  ];
+  schema = signal<RuleSchema | null>(null);
+  members = signal<Record<string, string[]>>({});
+  shownProblems = signal<string[]>([]);
+  saving = signal(false);
+  private checking?: ReturnType<typeof setTimeout>;
   lastLayout = signal<BoardLayout | null>(null);
   cost = signal<BoardCompute | null>(null);
   /** The drawer of parts, and what a search in LCSC turned up. */
@@ -784,7 +680,6 @@ export class RoomPcb implements OnDestroy {
   readonly askFilters = ['all', 'sent', 'disk', 'refused', 'agent', 'page'] as const;
   askFilter = signal<(typeof RoomPcb.prototype.askFilters)[number]>('all');
   openAsk = signal<LcscAsk | null>(null);
-  sys = signal<SystemInfo | null>(null);
   log = signal<LogLine[]>([]);
   private timers: ReturnType<typeof setInterval>[] = [];
 
@@ -997,33 +892,8 @@ export class RoomPcb implements OnDestroy {
   /** The live half: what the machine is doing, and what has happened. */
   private tick() {
     if (this.side() === 'lcsc') this.readJournal();
-    this.health.system().subscribe({ next: s => this.sys.set(s) });
     this.activity.lines(60, 'pcb').subscribe({ next: rows => this.log.set(rows) });
   }
-
-  /** The three live readings, drawn the way the catalog's foot draws
-   *  them. Its own copy: this one is beside a board, and the one down
-   *  there is beside the models. */
-  gauges(): { key: string; pct: number; read: string; tip: string }[] {
-    const m = this.sys();
-    if (!m) return [];
-    const out = [
-      { key: 'cpu', pct: m.cpu.load,
-        read: `${m.cpu.load.toFixed(0)}% · ${m.cpu.cores}c/${m.cpu.threads}t`,
-        tip: m.cpu.name },
-      { key: 'ram', pct: 100 * m.ram.used_bytes / (m.ram.total_bytes || 1),
-        read: `${this.gb(m.ram.used_bytes)} / ${this.gb(m.ram.total_bytes)}`,
-        tip: 'memory in use' },
-    ];
-    if (m.gpu) {
-      out.push({ key: 'gpu', pct: m.gpu.util,
-                 read: `${m.gpu.util.toFixed(0)}% · ${m.gpu.temp_c.toFixed(0)}°`,
-                 tip: m.gpu.name });
-    }
-    return out;
-  }
-
-  gb(bytes: number): string { return (bytes / 1e9).toFixed(1) + ' GB'; }
 
   refresh() {
     this.api.list().subscribe({
@@ -1155,10 +1025,13 @@ export class RoomPcb implements OnDestroy {
   loadRules() {
     const b = this.here();
     if (!b?.ready) { this.draft.set(null); return; }
+    if (!this.schema()) this.api.rulesSchema().subscribe({ next: sc => this.schema.set(sc) });
     this.api.rules(b._id).subscribe({
       next: r => {
         this.nets.set(r.nets);
         this.draft.set(r.rules);
+        this.members.set(r.members ?? {});
+        this.shownProblems.set(r.problems);
         this.savedRules.set(JSON.stringify(r.rules));
         this.rulesNote.set('');
       },
@@ -1169,90 +1042,43 @@ export class RoomPcb implements OnDestroy {
     return !!this.draft() && JSON.stringify(this.draft()) !== this.savedRules();
   }
 
-  /** What the server would refuse, said before it is asked. */
-  ruleProblems(): string[] {
-    const r = this.draft();
-    if (!r) return [];
-    const out: string[] = [];
-    for (const c of r.classes) {
-      if (c.track < r.board.min_track) out.push(`${c.name}: track under the ${r.board.min_track} mm minimum`);
-      if (c.clearance < r.board.min_clearance) out.push(`${c.name}: gap under the ${r.board.min_clearance} mm minimum`);
-      if (c.drill >= c.via) out.push(`${c.name}: the drill leaves no copper in the via`);
-    }
-    for (const pr of r.pairs) {
-      if (pr.gap < r.board.min_clearance) out.push(`pair ${pr.name}: gap under the minimum`);
-    }
-    return out;
-  }
-
-  /** Nets in no class but Default, which any class can take. */
-  loose(): string[] {
-    const r = this.draft();
-    if (!r) return [];
-    const named = new Set(r.classes.flatMap(c => c.nets));
-    return this.nets().filter(n => !named.has(n));
-  }
-
-  private edit(change: (r: BoardRules) => void) {
-    const r = this.draft();
-    if (!r) return;
-    const next: BoardRules = JSON.parse(JSON.stringify(r));
-    change(next);
-    this.draft.set(next);
+  /** A change in the form: kept as the draft, and checked by the server a
+   *  moment later - the same check the save and the agent go through. */
+  draftChanged(r: BoardRules) {
+    this.draft.set(r);
     this.rulesNote.set('');
-  }
-
-  private num(ev: Event): number {
-    return Number((ev.target as HTMLInputElement).value);
-  }
-
-  setClass(name: string, key: 'track' | 'clearance' | 'via' | 'drill', ev: Event) {
-    const v = this.num(ev);
-    this.edit(r => { const c = r.classes.find(x => x.name === name); if (c) c[key] = v; });
-  }
-
-  takeNet(name: string, net: string) {
-    this.edit(r => {
-      const c = r.classes.find(x => x.name === name);
-      if (c) c.nets = c.nets.filter(n => n !== net);
-    });
-  }
-
-  giveNet(name: string, ev: Event) {
-    const net = (ev.target as HTMLSelectElement).value;
-    if (!net) return;
-    this.edit(r => { r.classes.find(x => x.name === name)?.nets.push(net); });
-  }
-
-  setPair(name: string, key: 'width' | 'gap', ev: Event) {
-    const v = this.num(ev);
-    this.edit(r => { const pr = r.pairs.find(x => x.name === name); if (pr) pr[key] = v; });
-  }
-
-  setPour(key: 'connection' | 'clearance', value: string | number) {
-    this.edit(r => { if (r.pour) (r.pour as Record<string, unknown>)[key] = value; });
-  }
-
-  setBoard(key: 'min_track' | 'min_clearance' | 'min_via' | 'min_drill', ev: Event) {
-    const v = this.num(ev);
-    this.edit(r => { r.board[key] = v; });
-  }
-
-  setPasses(ev: Event) {
-    const v = Math.max(1, Math.round(this.num(ev)));
-    this.edit(r => { r.route.passes = v; });
+    clearTimeout(this.checking);
+    const b = this.here();
+    if (!b) return;
+    this.checking = setTimeout(() => {
+      this.api.checkRules(b._id, r).subscribe({
+        next: got => {
+          if (this.draft() !== r) return;
+          this.shownProblems.set(got.problems);
+          this.members.set(got.members);
+        },
+      });
+    }, 250);
   }
 
   saveRules() {
     const b = this.here();
     const r = this.draft();
     if (!b || !r) return;
+    this.saving.set(true);
     this.api.saveRules(b._id, r).subscribe({
       next: () => {
+        this.saving.set(false);
         this.savedRules.set(JSON.stringify(r));
+        this.shownProblems.set([]);
         this.rulesNote.set('saved - the next run routes to these');
       },
-      error: e => this.rulesNote.set(String(e?.error?.detail ?? 'not saved')),
+      error: e => {
+        this.saving.set(false);
+        const d = e?.error?.detail;
+        if (d?.problems) this.shownProblems.set(d.problems);
+        else this.rulesNote.set(String(d ?? 'not saved'));
+      },
     });
   }
 

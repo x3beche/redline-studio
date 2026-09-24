@@ -1045,7 +1045,34 @@ async def board_rules(bid: str):
     except KeyError:
         nets = []
     merged = rules.merge(doc.get("rules"), nets)
-    return {"rules": merged, "problems": rules.check(merged), "nets": nets}
+    return {"rules": merged, "problems": rules.check(merged, nets), "nets": nets,
+            # Who is in each class once the patterns have caught their nets.
+            "members": rules.members(merged, nets)}
+
+
+@app.get("/api/rules/schema")
+async def rules_schema():
+    """What every rule is: label, unit, limits, help. The form in the
+    board room is drawn from this, and an agent reads it before editing."""
+    return rules.SCHEMA
+
+
+async def _board_nets(bid: str) -> list[str] | None:
+    try:
+        graph = json.loads(await store.get_artifact(db(), bid, "graph", ato.BOARDS))
+    except KeyError:
+        return None
+    return sorted({n.get("name") for n in graph.get("nets", []) if n.get("name")})
+
+
+@app.post("/api/boards/{bid}/rules/check")
+async def check_board_rules(bid: str, body: RulesIn):
+    """What would be wrong with these rules, and who each class would
+    hold - without saving. The form asks this as it is edited."""
+    nets = await _board_nets(bid)
+    clean = rules.normalise(body.rules)
+    return {"problems": rules.check(clean, nets),
+            "members": rules.members(clean, nets or [])}
 
 
 @app.put("/api/boards/{bid}/rules")
@@ -1053,11 +1080,13 @@ async def save_board_rules(bid: str, body: RulesIn):
     """Save the rules a person set. Checked first: a track under the
     board's minimum, or a net in two classes, is said now rather than
     discovered by the router."""
-    problems = rules.check(body.rules)
+    nets = await _board_nets(bid)
+    clean = rules.normalise(body.rules)
+    problems = rules.check(clean, nets)
     if problems:
-        raise HTTPException(400, "; ".join(problems))
-    body.rules["edited"] = True
-    got = await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": {"rules": body.rules}})
+        raise HTTPException(400, {"problems": problems})
+    clean["edited"] = True
+    got = await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": {"rules": clean}})
     if not got.matched_count:
         raise HTTPException(404, bid)
     await say(f"{bid}: routing rules saved", "info", room="pcb")

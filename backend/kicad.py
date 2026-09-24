@@ -277,13 +277,13 @@ async def render(db, board_id: str, route: bool = True) -> dict:
             the_rules = rules.merge(board_doc.get("rules"), nets)
             await db[ato.BOARDS].update_one({"_id": board_id},
                                             {"$set": {"rules": the_rules}})
-            problems = rules.check(the_rules)
+            problems = rules.check(the_rules, nets)
             if problems:
                 raise RuntimeError("the routing rules do not hold together: "
                                    + "; ".join(problems))
             shutil.copy(ROUTER, work / "route.py")
             plan = {"board": "/work/board.kicad_pcb", "out": "/work/board.kicad_pcb",
-                    "rules": the_rules, "timeout": ROUTE_TIMEOUT}
+                    "rules": rules.resolved(the_rules, nets), "timeout": ROUTE_TIMEOUT}
             proc = await asyncio.create_subprocess_exec(
                 *_docker(work, "--entrypoint", "python3", IMAGE, "/work/route.py",
                          stdin=True),

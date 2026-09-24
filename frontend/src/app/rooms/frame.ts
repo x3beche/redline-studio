@@ -18,6 +18,7 @@ import { LogLine } from '../api';
  *    [side]   the open tab's content
  *    [view]   the thing being looked at
  *    [corner] a selector in the view's top right, like the 3D room's "All"
+ *    [logSide] a narrow column inside the log card, folded with it
  */
 @Component({
   selector: 'app-room-frame',
@@ -55,9 +56,11 @@ import { LogLine } from '../api';
       </span>
       <ng-content select="[logHead]"></ng-content>
     </div>
-    @if (logOpen()) {
-      <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
-           style="height: 132px; border-top: 1px solid var(--line)">
+    <!-- Open, the lines take the width; whatever the room keeps beside
+         its log (what the runs cost) is a narrow column on the right, and
+         folds away with it. -->
+    <div class="tcv-log-body" [class.hidden]="!logOpen()">
+      <div #logBox class="tcv-scroll mono min-w-0 flex-1 overflow-y-auto px-2.5 pb-2 text-[11px]">
         @for (l of log(); track l._id) {
           <div class="flex gap-2 leading-snug">
             <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
@@ -67,7 +70,8 @@ import { LogLine } from '../api';
           <div style="color: var(--ink-dim)">no activity yet</div>
         }
       </div>
-    }
+      <div class="tcv-log-side tcv-scroll"><ng-content select="[logSide]"></ng-content></div>
+    </div>
   </div>
 </div>`,
 })

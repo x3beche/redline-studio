@@ -99,8 +99,17 @@ def apply_rules(board, rules) -> list[str]:
     return notes
 
 
-def pour(board, spec) -> int:
-    """A zone per layer on the ground net, covering the board, filled."""
+def pours(board, specs) -> int:
+    """Every pour, the first in the list on top where two meet."""
+    made = 0
+    for i, spec in enumerate(specs):
+        made += pour(board, spec, priority=len(specs) - i)
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    return made
+
+
+def pour(board, spec, priority=0) -> int:
+    """A zone per layer on one net, covering the board."""
     if not spec or not spec.get("net"):
         return 0
     net = board.FindNet(spec["net"])
@@ -116,6 +125,7 @@ def pour(board, spec) -> int:
         zone = pcbnew.ZONE(board)
         zone.SetLayer(layers[name])
         zone.SetNetCode(net.GetNetCode())
+        zone.SetAssignedPriority(priority)
         zone.SetLocalClearance(nm(spec.get("clearance", 0.3)))
         zone.SetMinThickness(nm(0.2))
         # Solid by default: thermal spokes crowded by tracks come out
@@ -132,7 +142,6 @@ def pour(board, spec) -> int:
         outline.Outline(0).SetClosed(True)
         board.Add(zone)
         made += 1
-    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
     return made
 
 
@@ -173,7 +182,8 @@ def main() -> int:
                           "log": log}))
         return 1
 
-    zones = pour(board, rules.get("pour"))
+    zones = pours(board, rules.get("pours")
+                  or ([rules["pour"]] if rules.get("pour") else []))
     tracks = [t for t in board.GetTracks() if t.GetClass() == "PCB_TRACK"]
     vias = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA"]
     length = sum(t.GetLength() for t in tracks) / MM

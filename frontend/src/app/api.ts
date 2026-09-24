@@ -371,20 +371,42 @@ export interface BoardSchematic {
 /** A net class: how wide, how far apart, which via, and its nets. */
 export interface NetClass {
   name: string; track: number; clearance: number; via: number; drill: number;
-  nets: string[];
+  nets: string[]; patterns: string[];
 }
 
 export interface DiffPair { name: string; p: string; n: string; width: number; gap: number; }
+
+export interface Pour {
+  net: string; layers: string[]; clearance: number; connection: 'solid' | 'thermal';
+}
 
 export interface BoardRules {
   classes: NetClass[];
   pairs: DiffPair[];
   board: { layers: number; min_track: number; min_clearance: number;
            min_via: number; min_drill: number };
-  pour: { net: string; layers: string[]; clearance: number;
-          connection: 'solid' | 'thermal' } | null;
+  pours: Pour[];
   route: { passes: number };
   edited: boolean;
+}
+
+/** One rule field, as the server describes it (backend/rules.py SCHEMA). */
+export interface RuleField {
+  key: string; label: string;
+  type: 'text' | 'number' | 'integer' | 'choice' | 'net' | 'nets' | 'patterns' | 'layers';
+  unit?: string; min?: number; max?: number; step?: number; help?: string;
+  options?: string[];
+}
+
+/** Every section of the rules: one set of fields, or a list of rows. */
+export type RuleSchema = Record<string, {
+  label: string; help: string; list: boolean; fields: RuleField[];
+  new?: Record<string, unknown>; fixed?: string[];
+}>;
+
+export interface RulesRead {
+  rules: BoardRules; problems: string[]; nets: string[];
+  members: Record<string, string[]>;
 }
 
 export interface BoardEntry {
@@ -470,9 +492,18 @@ export class Boards {
   run(id: string): Observable<unknown> {
     return this.http.post(`/api/boards/${id}/run`, {});
   }
-  rules(id: string): Observable<{ rules: BoardRules; problems: string[]; nets: string[] }> {
-    return this.http.get<{ rules: BoardRules; problems: string[]; nets: string[] }>(
-      `/api/boards/${id}/rules`);
+  rules(id: string): Observable<RulesRead> {
+    return this.http.get<RulesRead>(`/api/boards/${id}/rules`);
+  }
+  /** What would be wrong with a draft, and who each class would hold. */
+  checkRules(id: string, rules: BoardRules):
+      Observable<{ problems: string[]; members: Record<string, string[]> }> {
+    return this.http.post<{ problems: string[]; members: Record<string, string[]> }>(
+      `/api/boards/${id}/rules/check`, { rules });
+  }
+  /** What every rule field is - the form is drawn from it. */
+  rulesSchema(): Observable<RuleSchema> {
+    return this.http.get<RuleSchema>('/api/rules/schema');
   }
   saveRules(id: string, rules: BoardRules): Observable<unknown> {
     return this.http.put(`/api/boards/${id}/rules`, { rules });
