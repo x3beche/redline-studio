@@ -135,6 +135,8 @@ class ScopedDb:
     """A database seen from one workspace; `raw` is the database itself,
     for what must see all of it (stored files, and nothing in a route)."""
 
+    SCOPED = True        # store.bucket() asks this of the class
+
     def __init__(self, raw, ws: str):
         self.raw, self.workspace = raw, ws
 

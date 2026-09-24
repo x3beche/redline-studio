@@ -161,3 +161,17 @@ def test_no_route_module_reaches_the_database_around_the_scope():
         assert "_raw_db(" not in body, f"{rel} calls _raw_db() outside db()"
         assert "AsyncIOMotorClient(" not in body, f"{rel} opens its own client"
         assert "_client[" not in body, f"{rel} indexes the client directly"
+
+
+def test_stored_files_reach_the_real_database_from_every_kind_of_db():
+    """store.bucket() must get the database itself from a workspace view,
+    and must not mistake a plain Motor database's attribute for one: on
+    Motor, db.raw or db.gridfs is just a collection with that name."""
+    from backend import store
+    from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
+
+    async def check():
+        plain = AsyncIOMotorClient("mongodb://localhost:1", connect=False)["x"]
+        assert isinstance(store.bucket(plain, "shots"), AsyncIOMotorGridFSBucket)
+        assert isinstance(store.bucket(scope.ScopedDb(plain, "a"), "shots"), AsyncIOMotorGridFSBucket)
+    asyncio.run(check())

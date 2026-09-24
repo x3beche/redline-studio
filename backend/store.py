@@ -34,7 +34,8 @@ def bucket(db, name: str):
     from motor.motor_asyncio import AsyncIOMotorGridFSBucket
     # Stored files are shared: the documents that point at them are what
     # belong to a workspace.
-    return AsyncIOMotorGridFSBucket(getattr(db, "raw", db), bucket_name=name)
+    # Asked of the class: on a plain Motor database, db.raw is a collection.
+    return AsyncIOMotorGridFSBucket(db.raw if getattr(type(db), "SCOPED", False) else db, bucket_name=name)
 
 
 # ---------------- reading metadata from source ----------------
