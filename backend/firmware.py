@@ -94,6 +94,28 @@ def parse_nm(text: str, repo: str | Path) -> list[dict]:
     return out
 
 
+def _idf_size(build_cmd: str) -> str | None:
+    """`idf.py ... build` as `idf.py ... size --format json2`."""
+    if "idf.py" not in build_cmd or not build_cmd.rstrip().endswith(" build"):
+        return None
+    return build_cmd.rstrip()[:-len(" build")] + " size --format json2 2>/dev/null"
+
+
+def parse_idf_size(text: str) -> list[dict]:
+    """esp-idf-size's json2: one entry per memory type that is used."""
+    try:
+        data = json.loads(text[text.index("{"):])
+    except (ValueError, json.JSONDecodeError):
+        return []
+    out = []
+    for m in data.get("layout") or []:
+        total, used = int(m.get("total") or 0), int(m.get("used") or 0)
+        if total and used:
+            out.append({"name": m.get("name") or "?", "used": used, "size": total,
+                        "pct": round(100 * used / total, 2)})
+    return out
+
+
 def summarise(regions: list[dict], symbols: list[dict]) -> dict:
     flash = sum(s["size"] for s in symbols if s["where"] in ("flash", "both"))
     ram = sum(s["size"] for s in symbols if s["where"] in ("ram", "both"))
@@ -172,6 +194,16 @@ async def build(db, app: dict) -> dict:
             result["arch"] = arch
             symbols = parse_nm(nm, app["repo"]) if rc2 == 0 else []
             regions = parse_memory(log)
+            if not regions and target_of(app) == "esp32":
+                # ESP-IDF does not print the linker's memory map; its own
+                # size tool says the same thing per memory type.
+                size_cmd = _idf_size(cmd)
+                if size_cmd:
+                    rc3, out3, _ = await sandbox.run(
+                        "embedded", ["bash", "-c", size_cmd], repo=app["repo"],
+                        workdir=apps.workdir(app), timeout=300)
+                    if rc3 == 0:
+                        regions = parse_idf_size(out3)
             before = (app.get("firmware") or {}).get("summary")
             summary = summarise(regions, symbols)
             result.update(elf=str(elf.relative_to(out_dir)), summary=summary,

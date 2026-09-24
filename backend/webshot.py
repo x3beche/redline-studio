@@ -429,6 +429,30 @@ def source_of(repo: str | Path, tag: str | None,
     return found
 
 
+def source_of_id(repo: str | Path, selector: str) -> dict | None:
+    """The file and line where the nearest element with an id is written,
+    found by its `id="..."` - for pages without a framework to ask."""
+    ids = re.findall(r"#([A-Za-z][\w-]*)", selector)
+    last = selector.split(" > ")[-1]
+    classes = re.findall(r"\.([A-Za-z][\w-]*)", re.sub(r":nth-of-type\(\d+\)", "", last))
+    if ids:
+        pattern = rf"id=[\"']{re.escape(ids[-1])}[\"']"
+    elif classes:
+        # No id: the tag written with all of the element's classes on it.
+        pattern = "".join(rf"(?=.*class=[\"'][^\"']*\b{re.escape(c)}\b)" for c in classes)
+    else:
+        return None
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo), "grep", "-n", "-P", pattern, "--",
+             "*.html", "*.htm", "*.jsx", "*.tsx", "*.vue", "*.svelte"],
+            capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    m = re.match(r"^(.*?):(\d+):", out.splitlines()[0]) if out else None
+    return {"file": m.group(1), "line": int(m.group(2))} if m else None
+
+
 def describe(repo: str | Path, e: dict) -> dict:
     """One element as a note keeps it: where it is, what it says, and the
     file it is written in."""
@@ -448,6 +472,10 @@ def describe(repo: str | Path, e: dict) -> dict:
         src = {"file": path, "line": own.get("line"), "name": own.get("name")}
     else:
         src = source_of(repo, own.get("tag"), own.get("name"))
+    if not src:
+        # Plain HTML has no component to trace, but an element with an id
+        # is written somewhere with that id on it.
+        src = source_of_id(repo, e["sel"])
     # A development build names the class `_RoomPcb`; the source says
     # RoomPcb, and the source is what the name is for.
     name = (own.get("name") or "").lstrip("_") or None

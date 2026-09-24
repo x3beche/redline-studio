@@ -24,3 +24,11 @@ RUN apt-get update \
 # Run as the person's own uid: the IDF tools must be readable by anyone,
 # and a HOME that is writable is given at run time.
 RUN chmod -R a+rX /opt/esp
+
+# ESP-IDF's own entrypoint announces every tool it finds on each start -
+# forty lines ahead of a test run's four. The same environment, set up
+# quietly; what the command itself prints is untouched.
+RUN printf '#!/usr/bin/env bash\n. "$IDF_PATH/export.sh" >/dev/null 2>&1\nexec "$@"\n' \
+      > /opt/esp/quiet-entrypoint.sh \
+ && chmod +x /opt/esp/quiet-entrypoint.sh
+ENTRYPOINT ["/opt/esp/quiet-entrypoint.sh"]

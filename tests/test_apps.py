@@ -127,6 +127,9 @@ def test_test_counts_are_read_from_the_runner_summary():
         == {"passed": 170, "failed": 2}
     assert apps.counts("Tests:       3 passed, 3 total\n") == {"passed": 3}
     assert apps.counts("no summary at all") == {}
+    # node --test, as TAP
+    assert apps.counts("# tests 4\n# pass 4\n# fail 0\n# duration_ms 95\n") == {"passed": 4}
+    assert apps.counts("# pass 3\n# fail 1\n") == {"passed": 3, "failed": 1}
 
 
 def test_a_project_must_be_a_git_checkout(tmp_path, repo):
@@ -504,3 +507,34 @@ def test_a_view_is_traced_to_the_layout_that_declares_it(repo):
                                 "own": {"rid": "com.x.app:id/save_button"}})
     assert d["file"] == "res/main.xml" and d["line"] == 2
     assert d["component"] == "save_button"
+
+
+def test_an_esp32s_memory_comes_from_its_own_size_tool():
+    from backend import firmware
+
+    out = ('Not using an unsupported version of tool cmake\n'
+           '{"version": "1.2", "layout": ['
+           '{"name": "Flash Code", "total": 3342304, "used": 136894, "free": 3205410},'
+           '{"name": "DRAM", "total": 180736, "used": 11508, "free": 169228},'
+           '{"name": "RTC FAST", "total": 8192, "used": 0, "free": 8192}]}')
+    regions = firmware.parse_idf_size(out)
+    assert [r["name"] for r in regions] == ["Flash Code", "DRAM"]      # unused left out
+    assert regions[1] == {"name": "DRAM", "used": 11508, "size": 180736, "pct": 6.37}
+    assert firmware._idf_size("idf.py -C esp32 -B $BUILD build") == \
+        "idf.py -C esp32 -B $BUILD size --format json2 2>/dev/null"
+    assert firmware._idf_size("cmake -S . && ninja") is None
+
+
+def test_a_plain_page_is_traced_by_the_id_it_is_written_with(repo):
+    (repo / "index.html").write_text('<main>\n  <b id="duty">0</b>\n</main>\n')
+    run(repo, "add", ".")
+    d = webshot.describe(repo, {"i": 0, "tag": "span", "sel": "#duty > span",
+                                "text": "", "box": [0, 0, 10, 10], "own": None})
+    assert (d["file"], d["line"]) == ("index.html", 2)
+    # No id: found by its classes, all of them.
+    (repo / "index.html").write_text('<main>\n <section class="card">\n'
+                                     ' <section class="card speed">\n</main>\n')
+    run(repo, "add", ".")
+    d = webshot.describe(repo, {"i": 0, "tag": "section", "sel": "main > section.card.speed",
+                                "text": "", "box": [0, 0, 10, 10], "own": None})
+    assert (d["file"], d["line"]) == ("index.html", 3)

@@ -170,6 +170,26 @@ Asked for on 2026-09-24:
   dependency): queue by room, show a note, start, log, finish, done,
   chat, say, ask - the same operations as revisions.py.
 
+Run end to end on 2026-09-24, with Docker's storage on /mnt/ssd (web image
+1.23 GB, mobile 5.09 GB, embedded 12.1 GB - Espressif's base is most of it):
+
+- Web: the iot-fan dashboard served from its container, frozen in 3.0 s,
+  a ring round the speed readout mapped to `#duty · web/public/index.html`;
+  4 tests pass in 0.4 s.
+- Embedded: the STM32F042 firmware builds in 1.1 s (12.0 kB of 32 kB
+  flash, 36.7% - newlib's stdio is most of it), the ESP32 in 11.9 s the
+  first time (252 kB app; five memory types from idf.py size); the fan
+  logic's 5 tests pass in 1.1 s. Nothing plugged in, so no board has been
+  programmed yet.
+- Mobile: the phone boots in 44 s on KVM; Chrome's first run is pressed
+  through by its own words; the app's page elements come from the phone's
+  Chrome in screen pixels - `#up` at [564, 1356, 396, 168], exactly the +
+  button - and map to `mobile/public/index.html:26`; 4 tests pass.
+
+Still open: flashing a real board, a native Android app (the image has no
+Gradle yet), and the iot-fan firmware drives a fan pin the Controller
+board does not break out.
+
 ## Analyze
 
 A tab that says what it needs before it can exist.

@@ -433,6 +433,18 @@ async def phone_boot():
         raise HTTPException(502, str(exc))
 
 
+@router.post("/{aid}/phone-open")
+async def phone_open(aid: str, route: str = "/"):
+    """Bring the project up on the phone - its activity, or its page in
+    Chrome - so the live view shows it, not the home screen."""
+    a = await _app(aid)
+    st = await asyncio.to_thread(phone.state)
+    if not st["booted"]:
+        raise HTTPException(503, "the phone is not running")
+    await asyncio.to_thread(phone.open_app, a, route)
+    return {"opened": aid, "route": route}
+
+
 @router.get("/phone/screen.png")
 async def phone_screen():
     """The phone's screen now. The room polls this for its live view."""

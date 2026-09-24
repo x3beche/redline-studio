@@ -956,7 +956,11 @@ async def cmd_code(args):
     elif args.what == "diff":
         await _code_diff(db, args)
     elif args.what == "test":
-        doc, app = await _code_note(db, args.id)
+        # A note's project, or a project by its own id.
+        from backend import apps
+        app = await db[apps.APPS].find_one({"_id": args.id})
+        if not app:
+            _, app = await _code_note(db, args.id)
         out = await _code_test(db, app)
         if not out["ok"]:
             sys.exit(1)

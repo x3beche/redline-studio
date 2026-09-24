@@ -689,6 +689,16 @@ export class RoomCoding implements OnInit, OnDestroy {
     return { w: this.viewport().w, h: this.viewport().h };
   }
 
+  /** Which project the phone was last told to show. */
+  private phoneFor: string | null = null;
+
+  private showOnPhone() {
+    const a = this.here();
+    if (!a || this.frozen()) return;
+    this.phoneFor = a._id;
+    this.apps.phoneOpen(a._id, this.route()).subscribe({ error: e => this.note.set(this.why(e)) });
+  }
+
   screenUrl(): string { return `/api/apps/phone/screen.png?t=${this.phoneNonce()}`; }
 
   phoneSized(ev: Event) {
@@ -765,6 +775,7 @@ export class RoomCoding implements OnInit, OnDestroy {
   reload() {
     this.nonce.update(n => n + 1);
     this.phoneNonce.update(n => n + 1);
+    if (this.platform() === 'mobile' && this.phoneUp()) this.showOnPhone();
   }
 
   pageHref(): string | null {
@@ -1099,7 +1110,13 @@ export class RoomCoding implements OnInit, OnDestroy {
     if (!a) return;
     this.apps.status(a._id).subscribe({ next: s => this.status.set(s) });
     if (this.platform() === 'mobile') {
-      this.apps.phoneState().subscribe({ next: st => this.phoneUp.set(st.booted) });
+      this.apps.phoneState().subscribe({ next: st => {
+        // The phone just came up, or the project was just opened: put the
+        // project on it, so the live view is the app and not a home screen.
+        const was = this.phoneUp();
+        this.phoneUp.set(st.booted);
+        if (st.booted && (!was || this.phoneFor !== a._id)) this.showOnPhone();
+      } });
     }
     if (this.platform() === 'embedded') {
       this.apps.boards().subscribe({ next: b => this.boards.set(b) });

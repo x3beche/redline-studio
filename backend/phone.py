@@ -93,14 +93,35 @@ def boot(wait: bool = True) -> dict:
     raise TimeoutError(f"the phone did not finish booting in {BOOT_S}s")
 
 
-def _prepare_chrome() -> None:
-    """Chrome's welcome screens would be the first thing every freeze saw.
-    A debug app reads its flags from this file, so it starts straight on
-    the page."""
-    adb("shell", "sh", "-c",
-        "echo 'chrome --disable-fre --no-default-browser-check --no-first-run' "
-        "> /data/local/tmp/chrome-command-line")
-    adb("shell", "am", "set-debug-app", "--persistent", "com.android.chrome")
+# What a person presses to get past Chrome's first run, and past the
+# questions Android asks the first time a page is opened. Pressed the way
+# a person would - found on the screen by its words - because the Play
+# Store image ignores the command-line flags that would skip them.
+PAST = ("Use without an account", "No thanks", "No, thanks", "Accept & continue",
+        "Got it", "Don't allow", "Not now", "Skip", "Continue", "Done")
+
+
+def _prepare_chrome(rounds: int = 8) -> list[str]:
+    """Open Chrome once and press through its welcome screens. The phone
+    keeps the answer, so this is once per phone, not once per freeze."""
+    adb("shell", "am", "start", "-W", "-a", "android.intent.action.VIEW",
+        "-d", "about:blank", "com.android.chrome")
+    return press_through(rounds)
+
+
+def press_through(rounds: int = 8) -> list[str]:
+    """Press whatever is standing between the screen and the page."""
+    pressed: list[str] = []
+    for _ in range(rounds):
+        time.sleep(1.5)
+        hit = next((e for e in parse_dump(dump())
+                    if e["text"].strip() in PAST), None)
+        if not hit:
+            break
+        x, y, w, h = hit["box"]
+        adb("shell", "input", "tap", str(x + w // 2), str(y + h // 2))
+        pressed.append(hit["text"].strip())
+    return pressed
 
 
 def screen() -> bytes:
@@ -124,6 +145,8 @@ def open_app(app: dict, route: str = "/") -> None:
         url = (app.get("url") or "").rstrip("/") + (route or "/")
         adb("shell", "am", "start", "-W", "-a", "android.intent.action.VIEW",
             "-d", url, "com.android.chrome")
+    # Anything the system put in front of it - a first run, a permission.
+    press_through(3)
 
 
 # ---------------- what is on the screen ----------------

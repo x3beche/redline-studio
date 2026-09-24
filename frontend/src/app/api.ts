@@ -850,6 +850,10 @@ export class Apps {
   buildLog(id: string): Observable<{ lines: string[] }> {
     return this.http.get<{ lines: string[] }>(`/api/apps/${id}/build-log`);
   }
+  /** Bring a project up on the phone, so the live view shows it. */
+  phoneOpen(id: string, route: string): Observable<unknown> {
+    return this.http.post(`/api/apps/${id}/phone-open`, {}, { params: { route } });
+  }
   phoneState(): Observable<{ container: boolean; booted: boolean }> {
     return this.http.get<{ container: boolean; booted: boolean }>('/api/apps/phone/state');
   }

@@ -360,6 +360,12 @@ def counts(output: str) -> dict:
     """pytest, jest and vitest all end on a line of counts. Read the last
     one that has any; the exit code stays the verdict either way."""
     found: dict[str, int] = {}
+    # node --test writes TAP, its totals as comments: "# pass 4", "# fail 0".
+    tap = dict((w, int(n)) for w, n in
+               re.findall(r"(?m)^# (pass|fail) (\d+)\s*$", output))
+    if tap:
+        return {"passed": tap.get("pass", 0), **({"failed": tap["fail"]}
+                                                  if tap.get("fail") else {})}
     for line in reversed(output.splitlines()[-40:]):
         hits = SUMMARY.findall(line)
         if hits:

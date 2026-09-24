@@ -577,7 +577,12 @@
       <select [value]="part()" (change)="part.set($any($event.target).value)"
               class="tcv-field mb-2 w-full px-1.5 py-1">
         <option value="">(none)</option>
-        @for (p of partChoices(); track p) { <option [value]="p">{{ p }}</option> }
+        <!-- [selected] as well as the select's value: a room can offer a
+             new choice and pick it in the same moment, and a value set
+             before its option exists is dropped. -->
+        @for (p of partChoices(); track p) {
+          <option [value]="p" [selected]="p === part()">{{ p }}</option>
+        }
       </select>
 
       <label class="tcv-label mb-1 block">Comment</label>
