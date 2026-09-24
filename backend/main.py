@@ -1172,6 +1172,11 @@ async def _who_acts(request, call_next):
         if not agent:
             return JSONResponse({"detail": "that agent token is unknown or revoked"}, status_code=401)
         who, ws, role = agent["actor"], agent["workspace"], agent["role"]
+        # One token can serve several agents on one machine: each still says
+        # who it is (X3_AGENT), within what the token allows.
+        named = actors.from_header(request.headers.get(actors.HEADER))
+        if named["type"] == "agent" and named["name"] != "agent":
+            who = {**who, "id": named["id"], "name": named["name"]}
     # Signed in, when sign-in is on: the session says who, and in which
     # workspace. Without one, only the few routes that sign in answer.
     elif auth.enabled() and auth.needs_session(request.method, request.url.path):

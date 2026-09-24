@@ -13,6 +13,11 @@ VENV="$HERE/.venv"
 PY="$VENV/bin/python"
 export API_PORT="${API_PORT:-8000}"
 WEB_PORT="${WEB_PORT:-4200}"
+# Who can open the page: this machine only (the default), or the office
+# network with X3_WEB_HOST=0.0.0.0 in .env. The API stays on this machine
+# either way - the page's server passes the page's requests on to it.
+WEB_HOST="${X3_WEB_HOST:-$(grep -E '^X3_WEB_HOST=' .env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' || true)}"
+WEB_HOST="${WEB_HOST:-127.0.0.1}"
 
 say() { printf '\033[1;36m> %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31merror: %s\033[0m\n' "$*" >&2; exit 1; }
@@ -57,5 +62,5 @@ say "FastAPI  http://127.0.0.1:$API_PORT  (--reload)"
 "$PY" -m uvicorn backend.main:app --host 127.0.0.1 --port "$API_PORT" --reload \
       --reload-dir backend &
 
-say "Angular  http://127.0.0.1:$WEB_PORT  (hot reload)"
-(cd frontend && npx ng serve --port "$WEB_PORT" --host 127.0.0.1)
+say "Angular  http://$WEB_HOST:$WEB_PORT  (hot reload)"
+(cd frontend && npx ng serve --port "$WEB_PORT" --host "$WEB_HOST")

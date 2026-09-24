@@ -117,6 +117,22 @@ TOOLS: dict[str, tuple] = {
 
 API = os.environ.get("REDLINE_API", "http://127.0.0.1:8000")
 
+
+def _token_from_env_file() -> None:
+    """With sign-in on, the agents' token (X3_TOKEN) - from the repo's .env
+    when the MCP client did not pass it. Only that one line is read."""
+    if os.environ.get("X3_TOKEN"):
+        return
+    try:
+        for line in (ROOT / ".env").read_text().splitlines():
+            if line.startswith("X3_TOKEN="):
+                os.environ["X3_TOKEN"] = line.split("=", 1)[1].strip().strip('"')
+    except OSError:
+        pass
+
+
+_token_from_env_file()
+
 # name -> (description, input schema properties, required, (method, path, body) builder)
 HTTP_TOOLS: dict[str, tuple] = {
     "find_tool": (

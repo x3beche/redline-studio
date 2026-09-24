@@ -146,6 +146,10 @@ Two ways to reach the data, same commands and the same output:
   token's workspace, under the token's name, and records deletes. The MCP
   server and `revisions.py board ...` send the same token.
 
+On this machine the agents share one token, `X3_TOKEN` in `.env` (which
+is not in the repo): the commands and the MCP server read it from there,
+and `X3_AGENT` still says which of you is acting.
+
 Never write a token into a file in the repo, a log line or a note. If a
 command says it "wants an agent token", ask the person for one - do not
 fall back to the database password.
