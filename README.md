@@ -5,7 +5,7 @@
 **Open a parametric CAD model in the browser, freeze an angle, draw on it,
 leave a revision note.** All project data lives in MongoDB.
 
-[Install](INSTALL.md) · [Usage](USAGE.md) · [For language models](AGENTS.md)
+[Install](INSTALL.md) · [Usage](USAGE.md) · [Tools](TOOLS.md) · [For language models](AGENTS.md)
 
 </div>
 
@@ -174,6 +174,7 @@ length and clash volumes on every build:
 |---|---|
 | **[INSTALL.md](INSTALL.md)** | requirements, `.env`, first run, the production build, what to do when WebGL will not start |
 | **[USAGE.md](USAGE.md)** | day-to-day use, the model contract, assemblies, importing CAD, the API, and the traps this codebase has already fallen into |
+| **[TOOLS.md](TOOLS.md)** | the Tools tab: what each calculator does, and how to add a tool |
 | **[AGENTS.md](AGENTS.md)** | the short version, written for a language model opening this repository |
 
 ## License

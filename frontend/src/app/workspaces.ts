@@ -10,7 +10,7 @@
  *  ones not finished say what they will be rather than pretending.
  */
 export interface Workspace {
-  id: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' | 'analyze';
+  id: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' | 'tools' | 'analyze';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
@@ -56,6 +56,13 @@ export const WORKSPACES: Workspace[] = [
     label: 'Mobile Programming',
     blurb: 'A phone app on an emulated phone: draw on its screen, the change '
          + 'arrives as a diff, the tests are the check.',
+    ready: true,
+  },
+  {
+    id: 'tools',
+    label: 'Tools',
+    blurb: 'Small calculators and sketch pads for any room: units, track '
+         + 'widths, resistors, a layout grid.',
     ready: true,
   },
   {

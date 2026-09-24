@@ -474,6 +474,10 @@ Traps already hit in this codebase:
 - **Use `grep -a` when scanning binaries** — in a concatenation that includes
   PNGs, grep treats the file as binary and silently reports nothing.
 
+## The Tools tab
+
+Read **[TOOLS.md](TOOLS.md)**, and only when a task is about a tool.
+
 ## Architecture
 
 | Layer | Location |

@@ -1,6 +1,6 @@
-import { InjectionToken, Type } from '@angular/core';
+import { Type } from '@angular/core';
 
-/** The tools in the Tools menu, one line each.
+/** The tools in the Tools tab, one line each.
  *
  *  Every tool is a component in a folder of its own under `tools/`, loaded
  *  only when it is first opened, so a long list costs the first screen
@@ -9,9 +9,9 @@ import { InjectionToken, Type } from '@angular/core';
 export interface ToolDef {
   id: string;
   name: string;
-  /** One line, for the menu and the modal's head. */
+  /** One line, for the list and the tool's head. */
   blurb: string;
-  /** `wide` for a drawing surface, `narrow` for a form of figures. */
+  /** `wide` fills the room (a drawing surface); `narrow` keeps a form's width. */
   size: 'wide' | 'narrow';
   load: () => Promise<Type<unknown>>;
 }
@@ -46,7 +46,3 @@ export const TOOLS: ToolDef[] = [
     load: () => import('./resistor/resistor').then(m => m.ResistorTool),
   },
 ];
-
-/** Closes the modal a tool is open in - for a tool that catches the
- *  keyboard itself, as a framed page does. */
-export const CLOSE_TOOL = new InjectionToken<() => void>('close the tool');
