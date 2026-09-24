@@ -86,6 +86,15 @@
   --chart-summary:   #cc6a6a;
   --chart-translate: #4fa8a0;
   --chart-other:     #6b7280;
+  /* Analytics series, in order: distinct from each other in this theme. */
+  --series-1: #4a90d9;
+  --series-2: #e8a735;
+  --series-3: #5bb85f;
+  --series-4: #c964a8;
+  --series-5: #3fa9a0;
+  --series-6: #e8615a;
+  --series-7: #7a6bd6;
+  --series-8: #8a9a5b;
 }
 
 /* Bright rooms and printed screenshots. The 3D backdrop stays pale in
@@ -144,6 +153,15 @@
   --chart-summary:   #b04a4a;
   --chart-translate: #2d7d76;
   --chart-other:     #6b7280;
+  /* Analytics series, in order: distinct from each other in this theme. */
+  --series-1: #2f6fb8;
+  --series-2: #c7851a;
+  --series-3: #3f9444;
+  --series-4: #a84a8a;
+  --series-5: #2b8a82;
+  --series-6: #c9483f;
+  --series-7: #5e50b5;
+  --series-8: #6f7f42;
 }
 
 /* For a panel that is switched off where it is black. Everything the eye
@@ -200,6 +218,15 @@
   --chart-summary:   #cc6a6a;
   --chart-translate: #4fa8a0;
   --chart-other:     #6b7280;
+  /* Analytics series, in order: distinct from each other in this theme. */
+  --series-1: #4a90d9;
+  --series-2: #e8a735;
+  --series-3: #5bb85f;
+  --series-4: #c964a8;
+  --series-5: #3fa9a0;
+  --series-6: #e8615a;
+  --series-7: #7a6bd6;
+  --series-8: #8a9a5b;
 }
 
 /* The viewer keeps its own palette in --tcv-* and picks a set from the
@@ -1488,3 +1515,105 @@ app-tools-menu .tcv-menu { left: auto; right: 0; }
 .tcv-menu-item:hover { background: var(--hover); }
 .tcv-menu-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
 .tcv-menu-blurb { font-size: 11px; line-height: 1.35; color: var(--ink-dim); }
+
+/* THE ANALYTICS ROOM (rooms/analyze.ts, rooms/charts.ts): a dashboard -
+   a bar with the range and refresh, then rows of panels on a 12-column
+   grid that fold away. */
+.tcv-dash { background: var(--surface); }
+.tcv-dash-bar {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2);
+}
+.tcv-dash-title { font-size: 13px; font-weight: 600; color: var(--ink); margin-right: 6px; }
+.tcv-dash-seg { display: flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.tcv-dash-seg button {
+  padding: 3px 10px; font-size: 11.5px; color: var(--ink-dim); background: transparent;
+  border: 0; border-right: 1px solid var(--line); cursor: pointer;
+}
+.tcv-dash-seg button:last-child { border-right: 0; }
+.tcv-dash-seg button:hover { color: var(--ink); background: var(--hover); }
+.tcv-dash-seg button[data-on] { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-dash-meta { font-size: 11px; color: var(--ink-dim); }
+.tcv-dash-body { padding: 4px 12px 16px; }
+.tcv-dash-note { padding: 16px 4px; font-size: 12px; color: var(--ink-dim); }
+.tcv-dash-row {
+  display: flex; align-items: baseline; gap: 8px; width: 100%;
+  margin-top: 10px; padding: 6px 2px; border: 0; background: transparent;
+  border-bottom: 1px solid var(--line); cursor: pointer; text-align: left;
+}
+.tcv-dash-caret { width: 10px; font-size: 10px; color: var(--ink-dim); }
+.tcv-dash-rowtitle { font-size: 12.5px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.tcv-dash-dim { font-size: 11px; color: var(--ink-dim); }
+.tcv-dash-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px; padding-top: 10px; }
+.tcv-dash-grid > .c2 { grid-column: span 2; } .tcv-dash-grid > .c3 { grid-column: span 3; }
+.tcv-dash-grid > .c4 { grid-column: span 4; } .tcv-dash-grid > .c6 { grid-column: span 6; }
+.tcv-dash-grid > .c8 { grid-column: span 8; } .tcv-dash-grid > .c12 { grid-column: span 12; }
+@media (max-width: 1400px) {
+  .tcv-dash-grid > .c2 { grid-column: span 3; } .tcv-dash-grid > .c3 { grid-column: span 6; }
+  .tcv-dash-grid > .c4, .tcv-dash-grid > .c8 { grid-column: span 6; }
+}
+.tcv-panel-d, .tcv-stat {
+  min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface-2);
+}
+.tcv-panel-d h3 {
+  margin: 0 0 8px; font-size: 11.5px; font-weight: 600; color: var(--ink);
+  display: flex; align-items: center; gap: 6px;
+}
+.tcv-panel-d h3 i { font-style: normal; color: var(--ink-dim); cursor: help; font-weight: 400; }
+.tcv-stat { display: flex; flex-direction: column; gap: 2px; }
+.tcv-stat span { font-size: 11px; color: var(--ink-dim); }
+.tcv-stat b { font-size: 21px; font-weight: 600; color: var(--ink-bright); line-height: 1.2;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.tcv-stat em { font-style: normal; font-size: 10.5px; color: var(--ink-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcv-dash-table { width: 100%; border-collapse: collapse; font-size: 11.5px; table-layout: fixed; }
+.tcv-dash-table th { text-align: left; font-weight: 500; color: var(--ink-dim); padding: 3px 6px;
+  border-bottom: 1px solid var(--line); }
+.tcv-dash-table td { padding: 4px 6px; border-bottom: 1px solid var(--line); color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcv-dash-table th:first-child, .tcv-dash-table td:first-child { width: 40%; }
+.tcv-dash-table .r { text-align: right; }
+.tcv-dash-table tr:hover td { background: var(--hover); }
+.tcv-gauge { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
+.tcv-gauge span { display: block; height: 100%; background: var(--accent); }
+
+/* Charts. */
+.tcv-ch-grid { stroke: var(--line); stroke-width: 1; opacity: .6; }
+.tcv-ch-tick { fill: var(--ink-dim); font-size: 10px; font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.tcv-ch-line { fill: none; stroke-width: 1.6; }
+.tcv-ch-area { opacity: .28; }
+.tcv-ch-cross { stroke: var(--ink-dim); stroke-width: 1; stroke-dasharray: 3 3; }
+.tcv-ch-tip {
+  position: absolute; top: 4px; z-index: 5; min-width: 150px; max-width: 260px; pointer-events: none;
+  padding: 6px 8px; font-size: 11px; color: var(--ink); background: var(--tooltip-bg);
+  border: 1px solid var(--line); border-radius: 5px;
+}
+.tcv-ch-tip-head { margin-bottom: 3px; color: var(--ink-dim); }
+.tcv-ch-tip-total { margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--line); }
+.tcv-ch-dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 2px; }
+.tcv-ch-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--ink-dim); pointer-events: none; }
+.tcv-ch-empty.static { position: static; padding: 10px 0; }
+.tcv-ch-legend { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 6px; }
+.tcv-ch-legend button { display: flex; align-items: center; gap: 5px; border: 0; background: transparent;
+  padding: 0; font-size: 11px; color: var(--ink); cursor: pointer; }
+.tcv-ch-legend button.tcv-ch-off { opacity: .35; }
+.tcv-ch-sum { color: var(--ink-dim); }
+.tcv-bl-row { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; align-items: center;
+  gap: 8px; padding: 3px 0; font-size: 11.5px; }
+.tcv-bl-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink); }
+.tcv-bl-track { height: 8px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.tcv-bl-bar { display: block; height: 100%; border-radius: 3px; }
+.tcv-bl-val { color: var(--ink-dim); min-width: 4.5rem; text-align: right; }
+.tcv-dn-track { stroke: var(--line); }
+
+/* The top bar's two right-hand items (app.ts): Analytics ends where the
+   middle column ends, Tools sits at the far right over the right column. */
+.tcv-tab-end {
+  margin-left: auto;
+  /* ...but never under Tools, when the right column is folded to a rail. */
+  margin-right: max(calc(var(--layout-queue-w, 300px) + 8px), 76px);
+  transition: margin-right .2s cubic-bezier(.4, 0, .2, 1);
+}
+.tcv-tools-end { position: absolute; right: 0; top: 0; bottom: 0; }

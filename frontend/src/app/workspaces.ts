@@ -60,10 +60,10 @@ export const WORKSPACES: Workspace[] = [
   },
   {
     id: 'analyze',
-    label: 'Analyze',
-    blurb: 'What all of it cost and where the time went, across every '
-         + 'revision rather than one card at a time.',
-    ready: false,
+    label: 'Analytics',
+    blurb: 'Everything the app has used: LLM tokens and money, the machine '
+         + 'and its energy, the work in each room, storage, projects.',
+    ready: true,
   },
 ];
 

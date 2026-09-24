@@ -918,3 +918,57 @@ export class Apps {
     return this.http.delete(`/api/apps/${id}`);
   }
 }
+
+// ---------------- analytics ----------------
+
+/** What /api/insights answers: everything used over a range, bucketed. */
+export interface InsightSeries { t0: number; step: number; n: number;
+  series: { name: string; values: (number | null)[] }[] }
+export interface InsightRow { name: string; calls?: number; cost_usd?: number; tokens?: number;
+  [k: string]: unknown }
+export interface Insights {
+  range: { since: string; until: string; step: number };
+  /** When the server worked it out, and whether a newer one is on its way. */
+  computed_at?: string; stale?: boolean; age_s?: number;
+  llm: { calls: number; cost_usd: number; unpriced_calls: number;
+         tokens: Record<string, number>;
+         cost_by_provider: InsightSeries; cost_by_model: InsightSeries; tokens_by_type: InsightSeries;
+         by_model: InsightRow[]; by_provider: InsightRow[]; by_surface: InsightRow[];
+         by_room: InsightRow[]; by_project: InsightRow[];
+         top_notes: { id: string; title: string; room: string; project: string; calls: number;
+                      cost_usd: number; tokens: number }[] };
+  compute: { count: number; wall_s: number; cpu_s: number; wh: number; failed: number;
+             cpu_hours_by_kind: InsightSeries;
+             by_kind: { name: string; jobs: number; wall_s: number; cpu_s: number; wh: number;
+                        peak_rss_mb: number }[] };
+  machine: { cpu: InsightSeries; ram: InsightSeries; gpu: InsightSeries; watts: InsightSeries;
+             energy_wh: InsightSeries; now: SystemInfo };
+  energy: { machine_kwh: number; jobs_kwh: number; basis: string; kwh_price: number | null;
+            machine_cost: number | null; samples: number; sampled_since: string | null;
+            watts_per_core: number };
+  work: { notes_by_room: InsightSeries; runs_done_by_room: InsightSeries;
+          status: Record<string, number>;
+          runs_by_room: { room: string; runs: number; done: number; seconds: number; avg_s: number | null }[];
+          chat: InsightSeries;
+          questions: { asked: number; answered: number; avg_wait_s: number | null } };
+  storage: { db_bytes: number; db_storage: number; index_bytes: number; objects: number;
+             collections: { name: string; docs: number; bytes: number; storage: number }[];
+             caches: { name: string; bytes: number }[];
+             disk: { total: number; used: number; free: number } };
+  catalog: { folders: number; models: number; boards: number; apps: number; parts: number;
+             notes: number;
+             projects: { name: string; models: number; boards: number; apps: number; notes: number;
+                         cost_usd: number }[] };
+  lcsc: { by_source: InsightSeries; totals: Record<string, number> };
+}
+
+@Injectable({ providedIn: 'root' })
+export class InsightsApi {
+  private http = inject(HttpClient);
+  get(range: string): Observable<Insights> {
+    return this.http.get<Insights>(`/api/insights?range=${encodeURIComponent(range)}`);
+  }
+  setKwhPrice(price: number | null): Observable<unknown> {
+    return this.http.put('/api/insights/kwh-price', { price });
+  }
+}

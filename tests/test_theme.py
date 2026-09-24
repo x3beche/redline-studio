@@ -183,8 +183,10 @@ def test_every_token_used_anywhere_is_defined_by_the_default_theme(css):
     for path in [CSS, HTML, TS, SHELL, *ROOMS, *TOOLS]:
         everywhere |= used(strip_comments(path.read_text(),
                                           css=path.suffix == ".css"))
-    # The viewer's own variables are read with a fallback and belong to it.
-    everywhere = {t for t in everywhere if not t.startswith("--tcv-")}
+    # The viewer's own variables are read with a fallback and belong to it;
+    # --layout-* are sizes the page sets at runtime (how wide a column is
+    # right now), read with a fallback too, and no colour at all.
+    everywhere = {t for t in everywhere if not t.startswith(("--tcv-", "--layout-"))}
     assert not (everywhere - base), \
         f"used but undefined: {sorted(everywhere - base)}"
 

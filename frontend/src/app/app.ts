@@ -19,8 +19,8 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
      around it: they belong over the two right-hand columns, and the
      catalog on the left keeps its full height beside them. -->
 <app-editor>
-  <header tabs class="flex shrink-0 items-center gap-1">
-    @for (w of tabs; track w.id) {
+  <header tabs class="relative flex shrink-0 items-center gap-1">
+    @for (w of rooms; track w.id) {
       <button (click)="open(w.id)" class="tcv-tab"
               [attr.data-on]="here() === w.id ? 1 : null"
               [attr.aria-current]="here() === w.id ? 'page' : null"
@@ -29,9 +29,17 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
         @if (!w.ready) { <span class="tcv-tab-soon">soon</span> }
       </button>
     }
-    <!-- Tools at the far end, apart from the rooms: they open over any
-         room rather than being one. -->
-    <app-tools-menu class="ml-auto" />
+    <!-- Apart from the rooms you work in. Analytics, which reads across all
+         of them, closes the middle column - its right edge on the edge of
+         the right-hand column, which it follows when that folds. Tools sits
+         over the right-hand column, at the far end. -->
+    @if (analytics; as w) {
+      <button (click)="open(w.id)" class="tcv-tab tcv-tab-end"
+              [attr.data-on]="here() === w.id ? 1 : null"
+              [attr.aria-current]="here() === w.id ? 'page' : null"
+              [title]="w.blurb">{{ w.label }}</button>
+    }
+    <app-tools-menu class="tcv-tools-end" />
   </header>
 
   <!-- The 3D room stays mounted whichever tab is on. Its viewer holds a
@@ -46,7 +54,7 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
       @case ('web') { <app-room-coding platform="web" /> }
       @case ('embedded') { <app-room-coding platform="embedded" /> }
       @case ('mobile') { <app-room-coding platform="mobile" /> }
-      @case ('analyze') { <app-room-analyze (leave)="open('cad')" /> }
+      @case ('analyze') { <app-room-analyze /> }
     }
   </div>
 </app-editor>`,
@@ -54,6 +62,9 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
 export class App {
   private picked = inject(Selection);
   tabs = WORKSPACES;
+  /** The rooms you work in, left; Analytics sits at the right end. */
+  rooms = WORKSPACES.filter(w => w.id !== 'analyze');
+  analytics = WORKSPACES.find(w => w.id === 'analyze');
   /** Shared, because the catalog changes rooms by opening a file. */
   here = this.picked.room;
 

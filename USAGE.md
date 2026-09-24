@@ -829,3 +829,30 @@ and one entry in `tools/registry.ts`. The calculators share `tools/calc.css`
 and `tools/eng.ts` (engineering notation, E-series values); a tool that is a
 self-contained page, like Grid Sketch, lives in `frontend/public/tools/` and
 is shown through `tools/frame.ts`, which dresses it in the app's colours.
+
+## The Analytics room
+
+The **Analytics** tab, at the right end of the middle column, reads across
+everything the app has used, for a range (1h to All) you pick at the top.
+It refreshes on its own (every 30 s, 1 min or 5 min, or not) and opens at
+once: the last answer is kept - in the browser and on the server - and a
+newer one replaces it a moment later.
+
+- **Overview** - LLM spend, tokens, compute, energy, electricity, notes,
+  database, disk, projects, agent questions, runs, LCSC requests.
+- **LLMs** - spend by model over time, tokens by type, and spend by room,
+  kind of work, model, provider and project; the most expensive notes.
+  Money is at API list prices: on a subscription it is what the same work
+  would have cost. A call counts for the room and note whose run was open
+  when it was made; the rest is "outside any note" (building the app).
+- **Machine & energy** - CPU, memory and GPU load and power, sampled once a
+  minute; energy per hour or day; compute by kind of job. Energy is
+  estimated (busy CPU time at 8 W a core, plus the GPU at its limit) unless
+  this user may read `/sys/class/powercap/intel-rapl:0/energy_uj`. Set the
+  price of a kWh there and the electricity cost follows.
+- **Work** - notes written and runs finished per room, run times, the thread.
+- **Storage** - the database by collection, caches on disk, free space.
+- **Projects** - models, boards, apps, notes and LLM spend per project.
+- **Parts supplier (LCSC)** - every request and how it was answered.
+
+Each row folds away; the room remembers which, and the range.

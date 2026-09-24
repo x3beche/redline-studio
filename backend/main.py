@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import (ato, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (ato, insights, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
 
@@ -1367,6 +1367,39 @@ async def drop_board(bid: str):
     # how, and a deletion is the one change there is no undoing.
     await say(f"{bid}: deleted", "warn", room="pcb")
     return {"id": bid, "deleted": True}
+
+
+# ---------------- analytics ----------------
+@app.on_event("startup")
+async def _start_sampler():
+    """The machine, once a minute, for the Analytics room's energy figures."""
+    import asyncio
+    if MONGODB_URI:
+        asyncio.create_task(insights.sampler(db))
+
+
+@app.get("/api/insights")
+async def get_insights(range: str = "24h"):
+    """Everything the app has used over a range: LLMs, compute, the
+    machine and its energy, work, storage, catalog, LCSC. Answered from the
+    last result at once, refreshed behind it when older than 20 s."""
+    async def span():
+        since, until = insights.parse_range(range)
+        if range == "all":
+            since = await insights.first_use(db()) or since
+        return since, until
+    return await insights.overview_cached(db(), range, span)
+
+
+class KwhIn(BaseModel):
+    price: float | None = Field(default=None, ge=0, le=10)
+
+
+@app.put("/api/insights/kwh-price")
+async def put_kwh_price(body: KwhIn):
+    """What a kilowatt-hour costs here, for the electricity figures."""
+    await insights.set_kwh_price(db(), body.price)
+    return {"kwh_price": body.price}
 
 
 # ---------------- chat ----------------
