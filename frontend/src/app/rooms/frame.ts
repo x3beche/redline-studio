@@ -1,7 +1,9 @@
 import {
-  Component, ElementRef, effect, input, output, signal, viewChild,
+  AfterViewInit, Component, ElementRef, OnDestroy, effect, inject, input, output, signal,
+  viewChild,
 } from '@angular/core';
 import { LogLine } from '../api';
+import { Selection } from '../selection';
 
 /** The one layout every room shares.
  *
@@ -43,7 +45,7 @@ import { LogLine } from '../api';
     <div class="tcv-frame-pane"><ng-content select="[side]"></ng-content></div>
     <!-- The note being worked on docks here, under the tabs, as it docks
          under the tree in the 3D room: the page moves the same card in. -->
-    <div class="tcv-frame-task"></div>
+    <div #taskSlot class="tcv-frame-task"></div>
   </div>
   <div class="tcv-frame-view">
     <ng-content select="[view]"></ng-content>
@@ -78,7 +80,16 @@ import { LogLine } from '../api';
   </div>
 </div>`,
 })
-export class RoomFrame {
+export class RoomFrame implements AfterViewInit, OnDestroy {
+  private picked = inject(Selection);
+  private taskSlot = viewChild.required<ElementRef<HTMLElement>>('taskSlot');
+
+  ngAfterViewInit() { this.picked.taskSlot.set(this.taskSlot().nativeElement); }
+
+  ngOnDestroy() {
+    if (this.picked.taskSlot() === this.taskSlot().nativeElement) this.picked.taskSlot.set(null);
+  }
+
   /** Which room this is: the log's fold is remembered per room. */
   room = input.required<string>();
   tabs = input.required<readonly string[]>();

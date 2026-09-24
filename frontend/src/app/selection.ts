@@ -31,6 +31,11 @@ export class Selection {
   /** Bumped when a board note has been filed, so the room lets go. */
   boardFiled = signal(0);
 
+  /** Where the running note's card docks in the room on screen - the foot
+   *  of its frame's tab column - set by the frame the moment it exists,
+   *  so the card goes straight there instead of via the queue. */
+  taskSlot = signal<HTMLElement | null>(null);
+
   /** Open a board: the room follows from the kind of file it is. */
   openBoard(id: string) {
     this.board.set(id);

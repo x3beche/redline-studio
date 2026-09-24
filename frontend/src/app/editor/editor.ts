@@ -78,6 +78,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   stats = signal<Stats | null>(null);
   log = signal<LogLine[]>([]);
   run = signal<Run | null>(null);
+  /** Whether `run` is this room's yet, after a switch of rooms. */
+  runKnown = signal(true);
   logOpen = signal(true);
   private builtAt = '';
   private lastRunStatus = '';
@@ -168,10 +170,32 @@ export class Editor implements AfterViewInit, OnDestroy {
     // once it has drawn it.
     effect(() => {
       this.picked.room();
-      // The last room's run and its live cost are not this room's.
-      untracked(() => { this.run.set(null); this.liveCost.set(null); });
-      setTimeout(() => this.dockTask(), 60);
-      setTimeout(() => this.dockTask(), 600);
+      // The last room's run and its live cost are not this room's; this
+      // room's is asked for now rather than on the next poll, and until it
+      // is known the queue holds back - otherwise the note being worked on
+      // is drawn in the queue first and jumps into the column after.
+      untracked(() => {
+        const room = this.picked.room();
+        this.run.set(null);
+        this.liveCost.set(null);
+        this.runKnown.set(false);
+        this.activity.run(room).subscribe({
+          next: v => {
+            if (this.picked.room() !== room) return;
+            this.run.set(v);
+            this.runKnown.set(true);
+            if (v?.status === 'running') this.pollLiveCost();
+          },
+          error: () => this.runKnown.set(true),
+        });
+      });
+    });
+    // Docked the moment there is somewhere to dock it: the 3D tree, or a
+    // room's frame announcing its slot.
+    effect(() => {
+      this.picked.room();
+      this.picked.taskSlot();
+      untracked(() => this.dockTask());
     });
     // Each tab has its own thread with the agent: a new tab shows its own
     // at once rather than the last room's until the next poll.
@@ -255,6 +279,9 @@ export class Editor implements AfterViewInit, OnDestroy {
     const room = this.picked.room();
     this.activity.run(room).subscribe({
       next: v => {
+        // An answer about the room that was on screen when it was asked.
+        if (room !== this.picked.room()) return;
+        this.runKnown.set(true);
         if (room !== this.lastRunRoom) {
           this.lastRunRoom = room;
           this.lastRunStatus = v?.status ?? '';
@@ -327,16 +354,14 @@ export class Editor implements AfterViewInit, OnDestroy {
   private dockTask() {
     const task = this.taskPanel()?.nativeElement;
     if (!task) return;
-    const into = this.picked.room() === 'cad'
-      ? this.viewer?.tree
-      : document.querySelector<HTMLElement>('app-room-frame .tcv-frame-task');
+    const into = this.picked.room() === 'cad' ? this.viewer?.tree : this.picked.taskSlot();
     if (into && task.parentElement !== into) into.appendChild(task);
   }
 
-  /** Whether the running card has a place on screen in this room. */
+  /** Whether the running card has its place on screen in this room - then
+   *  it is not drawn in the queue as well. */
   taskDocked(): boolean {
-    return this.picked.room() === 'cad'
-      || !!document.querySelector('app-room-frame .tcv-frame-task');
+    return this.picked.room() === 'cad' || !!this.picked.taskSlot();
   }
 
   private dockFreezeButton() {

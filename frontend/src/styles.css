@@ -1337,7 +1337,10 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
    open tab above it taking what is left and scrolling in it. */
 .tcv-frame-task { flex: none; }
 .tcv-frame-task:empty { display: none; }
-.tcv-frame-task .tcv-task { margin: 0; padding: 6px; border-top: 1px solid var(--line); }
+.tcv-frame-task .tcv-task { margin: 0; padding: 6px 4px 4px; border-top: 1px solid var(--line); }
+/* Straight in the column, as under the 3D tree: the column is the frame,
+   so the card does not bring a second one. */
+.tcv-frame-task .tcv-task > .tcv-card { border: 0; border-radius: 0; background: transparent; padding: 0; }
 
 /* Scrollbars in a room's frame are the 3D tree's: thin, a faint thumb on
    no track, brighter under the mouse - the viewer's own tcv_scroller rule

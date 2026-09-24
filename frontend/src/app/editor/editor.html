@@ -656,7 +656,7 @@
         <!-- Outside the 3D room the viewer is hidden, and the card would
              be docked in something nobody can see: there it stays in the
              queue, drawn as the docked card - live, with its cost open. -->
-        @if (runningRevision()?.id !== r.id || !taskDocked()) {
+        @if (runKnown() && (runningRevision()?.id !== r.id || !taskDocked())) {
         <li class="tcv-card mb-1 p-1.5">
           <ng-container *ngTemplateOutlet="revCard;
                         context: { $implicit: r, docked: runningRevision()?.id === r.id }" />
