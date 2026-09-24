@@ -55,7 +55,8 @@ code, pre, .k-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
 .k-field.k-check { flex-direction: row; align-items: center; gap: 6px; flex-wrap: wrap; }
 .k-label { font-size: 11.5px; color: var(--ink-soft); }
 .k-unit { color: var(--ink-soft); opacity: .8; }
-.k-help { font-size: 11px; color: var(--ink-soft); flex-basis: 100%; }
+.k-help { font-size: 11px; color: var(--ink-soft); }
+.k-check .k-help { flex-basis: 100%; }
 .k-field input[type="text"], .k-field select, .k-field textarea, .k-tedit input, .k-tedit select {
   width: 100%; min-width: 0; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px;
   background: var(--sunken); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px;
