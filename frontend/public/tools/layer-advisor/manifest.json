@@ -1,0 +1,23 @@
+{
+  "id": "layer-advisor",
+  "name": "Layer Assignment Advisor",
+  "blurb": "signal, power and ground distribution for a layer count",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["layer stack", "stackup", "stack-up", "layer assignment", "ground plane", "power plane", "reference plane", "4 layer", "6 layer", "8 layer", "stripline", "microstrip", "emc", "signal integrity", "layer count"],
+  "intro": "Which layer is signal, ground or power for 2 to 12 copper layers, and which plane each signal layer returns its current on. The arrangements are the standard ones from Ott's EMC Engineering (ch. 16): every signal layer beside a plane, power beside ground, copper mirrored about the centre.",
+  "inputs": [
+    { "key": "layers", "label": "Copper layers", "type": "select", "default": "4", "options": [["2", "2 layers"], ["4", "4 layers"], ["6", "6 layers"], ["8", "8 layers"], ["10", "10 layers"], ["12", "12 layers"]] },
+    { "key": "priority", "label": "Priority", "type": "select", "default": "general",
+      "options": [["general", "Routing capacity (most signal layers)"], ["emc", "EMC / signal integrity (more planes)"]] },
+    { "key": "rails", "label": "Power rails to distribute", "type": "number", "default": "2", "help": "Distinct supply voltages that need low impedance (e.g. 3.3 V, 1.2 V, 5 V = 3)." },
+    { "key": "fast", "label": "Fast edges (rise times under ~1 ns: DDR, USB, PCIe, fast MCU buses)", "type": "bool", "default": false }
+  ],
+  "examples": [
+    { "title": "6-layer MCU board with DDR, EMC first", "input": { "layers": "6", "priority": "emc", "rails": "3", "fast": true } },
+    { "title": "Cheap 4-layer controller", "input": { "layers": "4", "priority": "general", "rails": "2", "fast": false } }
+  ],
+  "usage": "Give the copper layer count (2-12, even), the priority (general = most routing layers, emc = more planes), the number of supply rails and whether fast edges are present. It returns a layer-by-layer table (role, reference plane, what to route there), counts of signal and plane layers, whether every signal layer has an adjacent plane, and notes on copper balance and via transitions. Use it before the Stack-up Designer to decide what each layer is for.",
+  "sources": ["H. W. Ott, Electromagnetic Compatibility Engineering, Wiley 2009, ch. 16 (PCB layout and stack-up)", "E. Bogatin, Signal and Power Integrity - Simplified, 3rd ed., ch. 10 (return paths and stack-up)", "IPC-2221B, 4.x (board symmetry to limit bow and twist)"],
+  "view": true
+}

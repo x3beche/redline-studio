@@ -1,0 +1,27 @@
+{
+  "id": "board-density",
+  "name": "Board Density Estimator",
+  "blurb": "density class and routing difficulty from part count and area",
+  "group": "pcb",
+  "rooms": ["pcb", "analyze"],
+  "keywords": ["board density", "pin density", "pins per square inch", "routing density", "wiring demand", "wiring capacity", "routability", "layer count estimate", "placement density", "hdi", "component density", "board size"],
+  "intro": "How full the board is and whether it will route: pin density sets the density class, and the wiring the netlist needs (links × average link length) is compared with what the routing layers can hold at your track and space. The demand/capacity method follows Coombs' Printed Circuits Handbook; the class limits and the link-length factor are rules of thumb.",
+  "inputs": [
+    { "key": "width", "label": "Board width", "type": "number", "unit": "mm", "default": "100" },
+    { "key": "height", "label": "Board height", "type": "number", "unit": "mm", "default": "80" },
+    { "key": "sides", "label": "Parts placed on", "type": "select", "default": "1", "options": [["1", "One side"], ["2", "Both sides"]] },
+    { "key": "parts", "label": "Part count", "type": "number", "default": "250", "help": "Every placed part, passives included." },
+    { "key": "pins", "label": "Total pin count", "type": "number", "default": "1100", "help": "Sum of pads that connect to nets (from the netlist or BOM)." },
+    { "key": "courtyard", "label": "Average courtyard per part", "type": "number", "unit": "mm²", "default": "12", "help": "0402 ≈ 2, 0603 ≈ 4, SOIC-8 ≈ 35, QFP-64 ≈ 200 mm²." },
+    { "key": "layers", "label": "Signal routing layers", "type": "number", "default": "2", "help": "Layers with traces, not planes." },
+    { "key": "track", "label": "Track width", "type": "number", "unit": "mm", "default": "0.15" },
+    { "key": "space", "label": "Clearance", "type": "number", "unit": "mm", "default": "0.15" },
+    { "key": "ppn", "label": "Average pins per net", "type": "number", "default": "2.5", "help": "2-3 for most boards; higher with many buses or big ground nets counted." }
+  ],
+  "examples": [
+    { "title": "MCU board, 100 × 80 mm, 4 layers (2 routing)", "input": { "width": "100", "height": "80", "sides": "1", "parts": "250", "pins": "1100", "courtyard": "12", "layers": "2", "track": "0.15", "space": "0.15", "ppn": "2.5" } },
+    { "title": "Compact wearable, 35 × 25 mm, both sides, 4 routing layers", "input": { "width": "35", "height": "25", "sides": "2", "parts": "180", "pins": "900", "courtyard": "5", "layers": "4", "track": "0.1", "space": "0.1", "ppn": "2.5" } }
+  ],
+  "usage": "Give board width and height in mm, parts, total pins, average courtyard in mm², the number of signal routing layers, track and clearance in mm, and average pins per net. It returns pin density (pins/in² and pins/cm²), the density class, placement fill in %, wiring demand and capacity in metres, the demand/capacity ratio as a routing difficulty, and the routing layers needed for 50 % utilisation. Use it early to pick layer count and board size, or to judge an existing layout.",
+  "sources": ["C. F. Coombs, Printed Circuits Handbook, 7th ed., McGraw-Hill: wiring demand vs wiring capacity (density evaluation)", "H. Holden, The HDI Handbook, ch. 2 (density and wiring formulas)", "Rule of thumb: pin-density classes, link length 2.25·√(area/part), 50 % channel usability"]
+}

@@ -1,0 +1,29 @@
+{
+  "id": "return-path",
+  "name": "Return Path Checker",
+  "blurb": "return-path problems of layer changes and the stitching vias they need",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["return path", "return current", "stitching via", "ground via", "layer change", "via transition", "reference plane", "split plane", "plane gap", "slot", "stitching capacitor", "emc", "signal integrity", "loop inductance"],
+  "intro": "Pick the situation a trace is in: the table says what its return current does and the fix. For layer changes it sizes the return via or capacitor so the via loop stays under 10 % of the trace impedance at the edge's knee frequency (0.5 / rise time), and gives the λ/20 stitching pitch.",
+  "inputs": [
+    { "key": "scenario", "label": "Situation", "type": "select", "default": "gnd-gnd", "wide": true,
+      "options": [["same-plane", "Layer change around one shared plane"], ["gnd-gnd", "Layer change: GND plane to another GND plane"], ["gnd-pwr", "Layer change: GND-referenced to PWR-referenced"], ["pwr-pwr", "Layer change: between two power rails"], ["split", "Trace crosses a plane split"], ["slot", "Trace over a slot / merged anti-pads"], ["edge", "Trace near the plane or board edge"], ["connector", "Through a connector / to another board"], ["no-plane", "No plane under the trace"]] },
+    { "key": "tr", "label": "Rise time (10-90 %)", "type": "number", "unit": "ns", "default": "1" },
+    { "key": "er", "label": "Dielectric εr", "type": "number", "default": "4.2" },
+    { "key": "z0", "label": "Trace impedance", "type": "number", "unit": "Ω", "default": "50", "when": { "key": "scenario", "in": ["gnd-gnd", "gnd-pwr", "pwr-pwr", "split", "connector"] } },
+    { "key": "thick", "label": "Board thickness (via length)", "type": "number", "unit": "mm", "default": "1.6", "when": { "key": "scenario", "in": ["gnd-gnd", "gnd-pwr", "pwr-pwr", "split", "connector"] } },
+    { "key": "drill", "label": "Via drill", "type": "number", "unit": "mm", "default": "0.3", "when": { "key": "scenario", "in": ["gnd-gnd", "gnd-pwr", "pwr-pwr", "split", "connector"] } },
+    { "key": "dist", "label": "Signal via to return via / cap", "type": "number", "unit": "mm", "default": "1", "when": { "key": "scenario", "in": ["gnd-gnd", "gnd-pwr", "pwr-pwr", "split", "connector"] }, "help": "Centre to centre." },
+    { "key": "nvias", "label": "Signal vias at this spot", "type": "number", "default": "1", "when": { "key": "scenario", "in": ["gnd-gnd", "gnd-pwr", "pwr-pwr", "split", "connector"] } },
+    { "key": "h", "label": "Trace height over plane", "type": "number", "unit": "mm", "default": "0.2", "when": { "key": "scenario", "equals": "edge" } },
+    { "key": "clearance", "label": "Trace to plane edge", "type": "number", "unit": "mm", "default": "0.5", "when": { "key": "scenario", "equals": "edge" } },
+    { "key": "filter", "label": "Filter the table", "type": "text", "default": "", "placeholder": "e.g. via, split, capacitor", "wide": true }
+  ],
+  "examples": [
+    { "title": "USB 2.0 HS pair dropping from L1 to L6 (GND to GND), 1.6 mm board", "input": { "scenario": "gnd-gnd", "tr": "0.5", "er": "4.2", "z0": "45", "thick": "1.6", "drill": "0.3", "dist": "0.8", "nvias": "2" } },
+    { "title": "SPI clock moving to a PWR-referenced layer", "input": { "scenario": "gnd-pwr", "tr": "2", "er": "4.2", "z0": "50", "thick": "1.6", "drill": "0.3", "dist": "2", "nvias": "1" } }
+  ],
+  "usage": "Pick the scenario (same-plane, gnd-gnd, gnd-pwr, pwr-pwr, split, slot, edge, connector, no-plane) and give the rise time in ns and εr; for layer changes also the trace impedance (Ω), board thickness, via drill and via-to-return distance (mm) and the number of signal vias. It returns the knee frequency, the λ/20 stitching-via pitch, the via loop inductance and reactance, the largest distance for the return via or capacitor, how many are needed, and the fix for the case. Use it when reviewing layer changes, plane splits and board edges.",
+  "sources": ["H. Johnson, M. Graham, High-Speed Digital Design, Prentice Hall 1993, 1.1 (knee frequency 0.5/tr)", "C. R. Paul, Inductance: Loop and Partial, Wiley 2010, ch. 5 (two-wire loop inductance)", "H. W. Ott, Electromagnetic Compatibility Engineering, Wiley 2009, ch. 16 (return paths, split planes, stitching)", "E. Bogatin, Signal and Power Integrity - Simplified, 3rd ed., ch. 10; λ/20 stitching pitch and 10 % of Z0 are rules of thumb"]
+}

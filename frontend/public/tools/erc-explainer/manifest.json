@@ -1,0 +1,176 @@
+{
+  "id": "erc-explainer",
+  "name": "ERC Rule Explainer",
+  "blurb": "what an ERC error means and its usual fix, in plain words",
+  "group": "pcb",
+  "rooms": [
+    "pcb"
+  ],
+  "keywords": [
+    "erc",
+    "electrical rules check",
+    "schematic errors",
+    "pin not connected",
+    "power pin not driven",
+    "pwr_flag",
+    "pin conflict",
+    "dangling label",
+    "kicad erc",
+    "altium error reporting",
+    "net with no driving source",
+    "duplicate reference",
+    "no connect"
+  ],
+  "intro": "Pick an ERC rule or paste the message your tool printed: you get what it means, the usual causes, the fix and when it is safe to waive. Rule codes and messages are KiCad 7/8's, with the Altium name of the same check; causes and fixes are common practice.",
+  "inputs": [
+    {
+      "key": "rule",
+      "label": "ERC rule",
+      "type": "select",
+      "default": "power_pin_not_driven",
+      "wide": true,
+      "options": [
+        [
+          "pin_not_connected",
+          "Pin not connected"
+        ],
+        [
+          "pin_not_driven",
+          "Input pin not driven by any Output pins"
+        ],
+        [
+          "power_pin_not_driven",
+          "Input Power pin not driven by any Output Power pins"
+        ],
+        [
+          "pin_to_pin",
+          "Pin conflict (e.g. Output pin connected to Output pin)"
+        ],
+        [
+          "no_connect_connected",
+          "A pin with a \"no connection\" flag is connected"
+        ],
+        [
+          "no_connect_dangling",
+          "Unconnected \"no connection\" flag"
+        ],
+        [
+          "label_dangling",
+          "Label not connected to anything"
+        ],
+        [
+          "isolated_pin_label",
+          "Label connected to only one pin"
+        ],
+        [
+          "single_global_label",
+          "Global label only appears once in the schematic"
+        ],
+        [
+          "similar_labels",
+          "Labels are similar (only differ in case)"
+        ],
+        [
+          "multiple_net_names",
+          "More than one name given to this net"
+        ],
+        [
+          "wire_dangling",
+          "Unconnected wire endpoint"
+        ],
+        [
+          "endpoint_off_grid",
+          "Symbol pin or wire end off connection grid"
+        ],
+        [
+          "four_way_junction",
+          "Four items connected at one point"
+        ],
+        [
+          "bus_to_net_conflict",
+          "Invalid connection between bus and net items"
+        ],
+        [
+          "net_not_bus_member",
+          "Net is graphically connected to a bus but not a bus member"
+        ],
+        [
+          "hier_label_mismatch",
+          "Mismatch between hierarchical labels and sheet pins"
+        ],
+        [
+          "duplicate_reference",
+          "Duplicate reference designators"
+        ],
+        [
+          "unannotated",
+          "Symbol not annotated (R?)"
+        ],
+        [
+          "missing_unit",
+          "Unit of a multi-unit symbol not placed"
+        ],
+        [
+          "missing_power_pin",
+          "Missing input power pin in unit"
+        ],
+        [
+          "different_unit_footprint",
+          "Different footprints assigned to units of one part"
+        ],
+        [
+          "lib_symbol_issues",
+          "Symbol library not found / symbol differs from library"
+        ],
+        [
+          "footprint_link_issues",
+          "Footprint link issues (footprint not found)"
+        ],
+        [
+          "unresolved_variable",
+          "Unresolved text variable"
+        ]
+      ]
+    },
+    {
+      "key": "message",
+      "label": "Or paste the ERC message",
+      "type": "text",
+      "default": "",
+      "placeholder": "e.g. Input Power pin not driven by any Output Power pins",
+      "wide": true,
+      "help": "When it matches a rule, it overrides the pick above."
+    },
+    {
+      "key": "filter",
+      "label": "Filter the rule list",
+      "type": "text",
+      "default": "",
+      "placeholder": "e.g. label, bus, power"
+    }
+  ],
+  "examples": [
+    {
+      "title": "The classic: power pin not driven",
+      "input": {
+        "rule": "power_pin_not_driven",
+        "message": "",
+        "filter": ""
+      }
+    },
+    {
+      "title": "Pasted message from KiCad",
+      "input": {
+        "rule": "pin_not_connected",
+        "message": "Label connected to only one pin",
+        "filter": ""
+      }
+    }
+  ],
+  "usage": "Give the KiCad rule code (rule, e.g. power_pin_not_driven, pin_to_pin, label_dangling) or paste the ERC message text (message; it overrides rule when it matches). It returns the rule's message, the Altium name, how likely it is a real wiring bug, and a table with its meaning, usual causes, fix and when it may be waived, plus a filtered list of all rules. Use it while cleaning up an ERC report.",
+  "sources": [
+    "KiCad 7/8 Eeschema documentation: Electrical Rules Check, ERC settings and pin conflict map",
+    "Altium Designer documentation: Project Options - Error Reporting and Connection Matrix",
+    "Causes and fixes: common practice (rule of thumb)"
+  ]
+}

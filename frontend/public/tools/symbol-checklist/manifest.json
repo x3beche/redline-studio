@@ -1,0 +1,382 @@
+{
+  "id": "symbol-checklist",
+  "name": "Schematic Symbol Checklist",
+  "blurb": "pin types, names and electrical properties to check on a new symbol",
+  "group": "pcb",
+  "rooms": [
+    "pcb"
+  ],
+  "keywords": [
+    "schematic symbol",
+    "library part",
+    "pin type",
+    "electrical type",
+    "pinout",
+    "erc",
+    "hidden pins",
+    "power pins",
+    "footprint mapping",
+    "symbol review",
+    "klc",
+    "component library",
+    "exposed pad",
+    "multi-unit"
+  ],
+  "intro": "Tick what is checked on a new schematic symbol; what is still open comes back with the failure it causes. The items follow IPC-2612-1, the KiCad Library Conventions and the usual first-spin pinout mistakes; set the part kind first so only the relevant checks show.",
+  "inputs": [
+    {
+      "key": "kind",
+      "label": "Part kind",
+      "type": "select",
+      "default": "ic",
+      "options": [
+        [
+          "ic",
+          "IC / active part"
+        ],
+        [
+          "passive",
+          "Passive (R, C, L, diode...)"
+        ],
+        [
+          "conn",
+          "Connector"
+        ]
+      ]
+    },
+    {
+      "key": "multi",
+      "label": "Multi-unit symbol (e.g. dual op-amp, FPGA banks)",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "ep",
+      "label": "Package has an exposed / thermal pad",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "p_count",
+      "label": "Pins: Pin count equals the package pin count, NC and exposed pad included",
+      "type": "bool",
+      "default": false,
+      "help": "A pin missing from the symbol leaves its pad unconnected in the layout, and no check will tell you."
+    },
+    {
+      "key": "p_numbers",
+      "label": "Pins: Pin numbers match the datasheet for this exact package",
+      "type": "bool",
+      "default": false,
+      "help": "The same chip has a different pinout in SOIC and QFN; a swapped number is a board respin."
+    },
+    {
+      "key": "p_names",
+      "label": "Pins: Pin names as in the datasheet, active-low marked (~{RESET} or RESET_N)",
+      "type": "bool",
+      "default": false,
+      "help": "Renamed pins make the schematic impossible to check against the datasheet.",
+      "when": {
+        "key": "kind",
+        "in": [
+          "ic",
+          "conn"
+        ]
+      }
+    },
+    {
+      "key": "p_types",
+      "label": "Pins: Electrical type set on every pin (input, output, bidirectional, tri-state, passive...)",
+      "type": "bool",
+      "default": false,
+      "help": "ERC finds undriven inputs and output conflicts only from these types; all-passive pins disable it.",
+      "when": {
+        "key": "kind",
+        "in": [
+          "ic"
+        ]
+      }
+    },
+    {
+      "key": "p_power",
+      "label": "Pins: Supply pins are Power input; regulator outputs are Power output",
+      "type": "bool",
+      "default": false,
+      "help": "ERC then flags a rail with no source, and two sources shorted together.",
+      "when": {
+        "key": "kind",
+        "in": [
+          "ic"
+        ]
+      }
+    },
+    {
+      "key": "p_od",
+      "label": "Pins: Open-drain / open-collector outputs typed as such",
+      "type": "bool",
+      "default": false,
+      "help": "Typed as plain outputs, shared lines (I2C, interrupts) give output-to-output ERC errors.",
+      "when": {
+        "key": "kind",
+        "in": [
+          "ic"
+        ]
+      }
+    },
+    {
+      "key": "p_nc",
+      "label": "Pins: Only truly unconnected pins typed No-connect (\"reserved, tie to GND\" is not NC)",
+      "type": "bool",
+      "default": false,
+      "help": "Reserved pins that must be tied get left floating when marked NC.",
+      "when": {
+        "key": "kind",
+        "in": [
+          "ic",
+          "conn"
+        ]
+      }
+    },
+    {
+      "key": "p_hidden",
+      "label": "Pins: No hidden power pins (or deliberately, with the net name documented)",
+      "type": "bool",
+      "default": false,
+      "help": "Hidden pins join a net by name: a part on another rail is silently tied to the wrong supply.",
+      "when": {
+        "key": "kind",
+        "in": [
+          "ic"
+        ]
+      }
+    },
+    {
+      "key": "p_stacked",
+      "label": "Pins: Repeated GND/VDD pins all present, stacked or shown on purpose",
+      "type": "bool",
+      "default": false,
+      "help": "A GND pin left out of a stack is an unconnected pad: less current, worse thermal and EMC.",
+      "when": {
+        "key": "kind",
+        "in": [
+          "ic"
+        ]
+      }
+    },
+    {
+      "key": "p_ep",
+      "label": "Pins: Exposed / thermal pad is a pin with its own number and its net (usually GND)",
+      "type": "bool",
+      "default": false,
+      "help": "Without a pin the pad has no net: the layout leaves it unsoldered or unconnected.",
+      "when": {
+        "key": "ep",
+        "equals": true
+      }
+    },
+    {
+      "key": "g_grid",
+      "label": "Graphics: Pin ends on the 100 mil (2.54 mm) grid, pointing outward",
+      "type": "bool",
+      "default": false,
+      "help": "Off-grid pin ends do not connect to wires; ERC reports them unconnected (or misses them)."
+    },
+    {
+      "key": "g_layout",
+      "label": "Graphics: Inputs left, outputs right, supplies top, ground bottom; related pins grouped",
+      "type": "bool",
+      "default": false,
+      "help": "Signal flow reads left to right; review is faster and errors show.",
+      "when": {
+        "key": "kind",
+        "in": [
+          "ic"
+        ]
+      }
+    },
+    {
+      "key": "g_pin1",
+      "label": "Graphics: Polarity / pin 1 visible (diode cathode, electrolytic +, pin 1 of connectors)",
+      "type": "bool",
+      "default": false,
+      "help": "The schematic is what assembly and debug read to know the orientation."
+    },
+    {
+      "key": "g_text",
+      "label": "Graphics: Names and numbers readable at print size, not overlapping the body or each other",
+      "type": "bool",
+      "default": false,
+      "help": "Unreadable pin numbers slow every review and bring-up."
+    },
+    {
+      "key": "g_origin",
+      "label": "Graphics: Symbol origin at the body centre, on grid",
+      "type": "bool",
+      "default": false,
+      "help": "Rotated or mirrored symbols stay on grid and connect."
+    },
+    {
+      "key": "f_ref",
+      "label": "Fields: Reference prefix is standard (U, R, C, L, D, Q, J, Y, F...)",
+      "type": "bool",
+      "default": false,
+      "help": "Annotation, BOM grouping and assembly drawings rely on it (IEEE 315 / ASME Y14.44)."
+    },
+    {
+      "key": "f_value",
+      "label": "Fields: Value field holds the value or the part number",
+      "type": "bool",
+      "default": false,
+      "help": "The BOM and the schematic print show it."
+    },
+    {
+      "key": "f_fp",
+      "label": "Fields: Footprint assigned, and its pad numbers match the pin numbers",
+      "type": "bool",
+      "default": false,
+      "help": "The netlist connects by number: a mismatch routes signals to the wrong pads."
+    },
+    {
+      "key": "f_mpn",
+      "label": "Fields: Manufacturer and MPN fields (or a link to your parts database)",
+      "type": "bool",
+      "default": false,
+      "help": "The BOM needs an orderable part; \"10k\" alone is not one."
+    },
+    {
+      "key": "f_rating",
+      "label": "Fields: Ratings where they matter: voltage for capacitors, power for resistors, current for inductors",
+      "type": "bool",
+      "default": false,
+      "help": "A right value with a wrong rating fails in the field (cap derating, resistor burn-out).",
+      "when": {
+        "key": "kind",
+        "in": [
+          "passive"
+        ]
+      }
+    },
+    {
+      "key": "f_ds",
+      "label": "Fields: Datasheet link",
+      "type": "bool",
+      "default": false,
+      "help": "Reviewers check the pinout against it."
+    },
+    {
+      "key": "f_desc",
+      "label": "Fields: Description and keywords filled in",
+      "type": "bool",
+      "default": false,
+      "help": "The part can be found in the library search, and not duplicated."
+    },
+    {
+      "key": "m_units",
+      "label": "Multi-unit: Each unit has its own pins; no pin in two units",
+      "type": "bool",
+      "default": false,
+      "help": "A pin in two units is connected twice or not at all.",
+      "when": {
+        "key": "multi",
+        "equals": true
+      }
+    },
+    {
+      "key": "m_swap",
+      "label": "Multi-unit: Units / pins marked swappable only where they really are",
+      "type": "bool",
+      "default": false,
+      "help": "Pin and gate swapping in layout must not swap non-equivalent pins.",
+      "when": {
+        "key": "multi",
+        "equals": true
+      }
+    },
+    {
+      "key": "m_power",
+      "label": "Multi-unit: Power pins in their own unit or on every unit, as your tool expects",
+      "type": "bool",
+      "default": false,
+      "help": "An unplaced power unit leaves the chip unpowered; ERC \"missing unit\" catches it only if set up.",
+      "when": {
+        "key": "multi",
+        "equals": true
+      }
+    },
+    {
+      "key": "c_mating",
+      "label": "Connector: Numbering matches the physical connector and its mating half",
+      "type": "bool",
+      "default": false,
+      "help": "Plug and receptacle often number mirror-image; pin 1 of the cable is not always pin 1 of the board.",
+      "when": {
+        "key": "kind",
+        "in": [
+          "conn"
+        ]
+      }
+    },
+    {
+      "key": "c_shell",
+      "label": "Connector: Shield / shell / mounting pins present as numbered pins",
+      "type": "bool",
+      "default": false,
+      "help": "Otherwise the shield has no net and the footprint pads are orphaned.",
+      "when": {
+        "key": "kind",
+        "in": [
+          "conn"
+        ]
+      }
+    },
+    {
+      "key": "v_lib",
+      "label": "Verify: Library checker passes (KiCad symbol checker, Altium component rule check)",
+      "type": "bool",
+      "default": false,
+      "help": "Catches duplicate pin numbers, off-grid pins and empty fields for free."
+    },
+    {
+      "key": "v_erc",
+      "label": "Verify: Placed in a test sheet with typical connections: ERC clean",
+      "type": "bool",
+      "default": false,
+      "help": "Shows at once whether the pin types make sense."
+    },
+    {
+      "key": "v_review",
+      "label": "Verify: Pinout cross-checked against the datasheet by a second person",
+      "type": "bool",
+      "default": false,
+      "help": "Pinout errors are the most common first-spin schematic bug; a second reader finds most."
+    }
+  ],
+  "examples": [
+    {
+      "title": "New QFN MCU symbol, pins and footprint done",
+      "input": {
+        "kind": "ic",
+        "multi": false,
+        "ep": true,
+        "p_count": true,
+        "p_numbers": true,
+        "p_names": true,
+        "p_types": true,
+        "p_power": true,
+        "g_grid": true,
+        "g_layout": true,
+        "f_ref": true,
+        "f_value": true,
+        "f_fp": true,
+        "f_ds": true
+      }
+    }
+  ],
+  "usage": "Set kind (ic, passive or conn) and the multi and ep booleans, then set each check key (p_count, p_numbers, p_types, f_fp...) to true when done. It returns progress in %, the open checks with why each matters, a per-group summary and an 'Open items' text listing what is left; a warning names the open checks that would put wrong connections on the board. Use it when creating or reviewing a library symbol.",
+  "sources": [
+    "IPC-2612-1 (schematic symbol generation)",
+    "KiCad Library Conventions (KLC) S3/S4: pin grid, electrical types, hidden power pins, fields",
+    "IEEE 315 / IEC 60617 graphic symbols; ASME Y14.44 reference designators",
+    "Altium component rule check"
+  ]
+}

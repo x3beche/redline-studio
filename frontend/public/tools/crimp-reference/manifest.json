@@ -1,0 +1,21 @@
+{
+  "id": "crimp-reference",
+  "name": "Terminal Block & Crimp Reference",
+  "blurb": "terminal blocks and crimp sizes for a wire cross-section",
+  "group": "pcb",
+  "rooms": ["pcb"],
+  "keywords": ["crimp", "ferrule", "wire end sleeve", "terminal block", "screw terminal", "din rail", "ring terminal", "spade", "cable lug", "jst", "molex", "awg", "mm2", "wire to board", "din 46228"],
+  "intro": "Give a wire size (mm² or AWG) and get the ferrule (DIN 46228-4 colour and pin length), the insulated terminal colour, lugs, and the PCB, DIN-rail and wire-to-board crimp connectors whose rated wire range includes it. Ranges and currents are typical catalogue values (Phoenix Contact, JST, Molex, Anderson): confirm on the part's data sheet.",
+  "inputs": [
+    { "key": "wire", "label": "Wire size", "type": "text", "default": "1.5", "placeholder": "1.5, 0.5 mm², 18 AWG, 2/0", "help": "A bare number is mm²; add AWG for gauges." },
+    { "key": "category", "label": "Show", "type": "select", "default": "all",
+      "options": [["all", "All kinds"], ["ferrule", "Ferrules"], ["insulated", "Insulated crimp terminals"], ["tube", "Tube cable lugs"], ["pcb", "PCB terminal blocks"], ["din-rail", "DIN-rail terminal blocks"], ["wire-to-board", "Wire-to-board crimp connectors"]] },
+    { "key": "filter", "label": "Filter", "type": "text", "default": "", "placeholder": "e.g. 5.08, JST, pluggable" }
+  ],
+  "examples": [
+    { "title": "22 AWG signal wire to a board", "input": { "wire": "22 AWG", "category": "all", "filter": "" } },
+    { "title": "2.5 mm² into a DIN-rail block", "input": { "wire": "2.5", "category": "din-rail", "filter": "" } }
+  ],
+  "usage": "Give the wire size as text: a number in mm² (1.5, 0.75 mm²) or a gauge (18 AWG, 2/0). Optionally a category (ferrule, insulated, tube, pcb, din-rail, wire-to-board) and a text filter. It returns the matching ferrule with colour and strip length, the insulated-terminal colour, and a table of parts whose wire range includes the size, with their pitch, range in mm² and AWG, and rated current. Use it when choosing connectors and terminations for a harness or panel.",
+  "sources": ["DIN 46228-4 (ferrule colour code) and Phoenix Contact AI ferrule range", "DIN 46235 (tube cable lugs); red/blue/yellow insulated terminal convention (UL 486A-B)", "Phoenix Contact catalogue (MPT, MKDS, MSTB, MC, UT/PT terminal blocks)", "JST (SH, GH, PH, XH, VH), Molex (PicoBlade, KK 254, Micro-Fit 3.0, Mini-Fit Jr) and Anderson Powerpole data sheets", "ASTM B258 (AWG to mm²)"]
+}

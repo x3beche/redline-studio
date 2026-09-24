@@ -1,0 +1,45 @@
+{
+  "id": "pcb-weight",
+  "name": "PCB Weight & CoG",
+  "blurb": "mass and centre of gravity of board, copper and parts",
+  "group": "pcb",
+  "rooms": ["pcb", "cad"],
+  "keywords": ["pcb weight", "board mass", "centre of gravity", "center of gravity", "cog", "copper weight", "laminate density", "fr-4 density", "assembly mass", "balance", "vibration", "shipping weight", "enclosure"],
+  "intro": "Mass of the bare board (laminate, copper by oz and coverage, solder mask) plus the parts you list, and the centre of gravity in x, y and z as the mass-weighted average position. Densities come from the laminate data sheets; 1 oz copper is 305 g/m².",
+  "inputs": [
+    { "key": "width", "label": "Board width (x)", "type": "number", "unit": "mm", "default": "100" },
+    { "key": "height", "label": "Board height (y)", "type": "number", "unit": "mm", "default": "80" },
+    { "key": "thick", "label": "Thickness", "type": "number", "unit": "mm", "default": "1.6" },
+    { "key": "material", "label": "Laminate", "type": "select", "default": "fr4",
+      "options": [["fr4", "FR-4 (1.85 g/cm³)"], ["ro4350b", "Rogers RO4350B (1.86)"], ["ptfe", "PTFE / RT-duroid 5880 (2.2)"], ["polyimide", "Polyimide flex (1.42)"], ["ims", "Aluminium IMS (≈2.6)"], ["cem1", "CEM-1 / FR-2 (≈1.6)"]] },
+    { "key": "layers", "label": "Copper layers", "type": "number", "default": "4" },
+    { "key": "outerOz", "label": "Outer copper", "type": "number", "unit": "oz", "default": "1" },
+    { "key": "innerOz", "label": "Inner copper", "type": "number", "unit": "oz", "default": "0.5" },
+    { "key": "outerCov", "label": "Outer copper coverage", "type": "number", "unit": "%", "default": "60" },
+    { "key": "innerCov", "label": "Inner copper coverage", "type": "number", "unit": "%", "default": "90", "help": "Planes ≈ 90 %, signal layers 20-40 %." },
+    { "key": "mask", "label": "Solder mask both sides", "type": "bool", "default": true },
+    { "key": "parts", "label": "Parts (x, y from the lower-left corner, seen from the top)", "type": "table",
+      "columns": [{ "key": "ref", "label": "Part" }, { "key": "mass", "label": "Mass g" }, { "key": "x", "label": "x mm" }, { "key": "y", "label": "y mm" }, { "key": "h", "label": "Height mm" }, { "key": "side", "label": "Side", "type": "select", "options": ["top", "bottom"], "default": "top" }],
+      "default": [
+        { "ref": "J1 terminal block 3p", "mass": "4.5", "x": "92", "y": "20", "h": "10", "side": "top" },
+        { "ref": "L1 power inductor", "mass": "2.5", "x": "78", "y": "60", "h": "6", "side": "top" },
+        { "ref": "C1 470 µF 10x12", "mass": "1.6", "x": "70", "y": "22", "h": "12.5", "side": "top" },
+        { "ref": "U1 LQFP-64", "mass": "0.35", "x": "48", "y": "40", "h": "1.6", "side": "top" },
+        { "ref": "Passives (≈200)", "mass": "1", "x": "45", "y": "42", "h": "0.6", "side": "top" },
+        { "ref": "BT1 CR2032 holder", "mass": "1.3", "x": "18", "y": "60", "h": "4", "side": "bottom" }
+      ] }
+  ],
+  "examples": [
+    { "title": "4-layer controller with a terminal block and a coin cell", "input": { "width": "100", "height": "80", "thick": "1.6", "material": "fr4", "layers": "4", "outerOz": "1", "innerOz": "0.5", "outerCov": "60", "innerCov": "90", "mask": true,
+      "parts": [
+        { "ref": "J1 terminal block 3p", "mass": "4.5", "x": "92", "y": "20", "h": "10", "side": "top" },
+        { "ref": "L1 power inductor", "mass": "2.5", "x": "78", "y": "60", "h": "6", "side": "top" },
+        { "ref": "C1 470 µF 10x12", "mass": "1.6", "x": "70", "y": "22", "h": "12.5", "side": "top" },
+        { "ref": "U1 LQFP-64", "mass": "0.35", "x": "48", "y": "40", "h": "1.6", "side": "top" },
+        { "ref": "Passives (≈200)", "mass": "1", "x": "45", "y": "42", "h": "0.6", "side": "top" },
+        { "ref": "BT1 CR2032 holder", "mass": "1.3", "x": "18", "y": "60", "h": "4", "side": "bottom" }] } }
+  ],
+  "usage": "Give the board size and thickness in mm, laminate, copper layer count, copper weights in oz and coverages in %, and a parts table with mass (g), x and y (mm from the lower-left corner, top view), body height (mm) and side. It returns total, board and parts mass in grams, the centre of gravity (x, y in mm from the corner, z in mm above the bottom face) and a mass breakdown; warnings flag heavy bottom-side parts and parts off the board. Use it for enclosure balance, vibration/drop checks and shipping weight.",
+  "sources": ["IPC-4562 copper foil nominal weights (1 oz/ft² = 305 g/m²)", "Laminate data sheets: Isola/Kingboard FR-4, Rogers RO4350B and RT/duroid 5880, DuPont Kapton HN", "Centre of gravity as the first moment of mass (any statics text)"],
+  "view": true
+}
