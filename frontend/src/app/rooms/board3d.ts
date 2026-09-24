@@ -36,7 +36,7 @@ export class Board3d implements AfterViewInit, OnDestroy {
    *  same scene. */
   src = input.required<string>();
 
-  private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
+  host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   note = signal('loading the model…');
 
   private renderer?: WebGLRenderer;

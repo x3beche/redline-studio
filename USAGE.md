@@ -188,6 +188,14 @@ It is the 3D room's layout, and every room shares it (`rooms/frame.ts`):
 one toolbar, one column of tabs, one view, one log band. The room remembers
 the tab, the view and whether the log is open across a reload.
 
+**Windows.** The fourth view button (three rectangles) opens the centre as
+windows: a tall one on the left and two stacked on the right. The picker
+in each window's corner sets what it shows - Layout, Schematic or 3D, the
+same one twice if you like - and the room remembers the choice. Each window
+zooms on its own (+, −, fit); the toolbar's side buttons (front, tracks,
+back) apply to any window showing the layout; the pen draws over all
+three at once.
+
 **Looking into the copper.** On the layout (front, tracks or back) point at
 anything: the track, via or pad under the mouse lights up with the rest of
 its net, and a note by the cursor says what it is - a track's net, width,

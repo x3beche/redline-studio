@@ -1161,6 +1161,7 @@ a.tcv-ico { text-decoration: none; }
 .tcv-ico.tcv-ico-layout { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='2' y='2' width='22' height='22' rx='1.5' fill='none' stroke='%23ddd' stroke-width='1.5'/><path d='M5.5,8 L10,8 L13,11 M5.5,19 L9,19 L13,15 M18,5.5 L18,9.5' fill='none' stroke='%23ddd' stroke-width='1.8'/><rect x='12.5' y='9.5' width='8' height='7' rx='0.8' fill='rgb(48,142,225)' stroke='%23ddd' stroke-width='1.2'/><circle cx='19' cy='20' r='2' fill='none' stroke='%23ddd' stroke-width='1.5'/></svg>"); } /* theme:pigment */
 .tcv-ico.tcv-ico-schematic { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><path d='M2,8 L7,8 M2,13 L7,13 M2,18 L7,18 M19,8 L24,8 M19,18 L24,18 M24,8 L24,18' fill='none' stroke='%23ddd' stroke-width='1.6'/><rect x='7' y='4' width='12' height='18' rx='1' fill='rgb(48,142,225)' stroke='%23ddd' stroke-width='1.4'/><circle cx='10' cy='7' r='1.2' fill='%23ddd'/></svg>"); } /* theme:pigment */
 .tcv-ico.tcv-ico-model { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><path d='M2,11.5 L2,15.5 L13,21 L13,17 Z' fill='none' stroke='%23ddd' stroke-width='1.2'/><path d='M13,17 L13,21 L24,15.5 L24,11.5 Z' fill='none' stroke='%23ddd' stroke-width='1.2'/><path d='M2,11.5 L13,6 L24,11.5 L13,17 Z' fill='rgb(48,142,225)' stroke='%23ddd' stroke-width='1.2'/><path d='M9,11 L13,9 L17,11 L13,13 Z' fill='%23ddd' stroke='%23ddd' stroke-width='1'/></svg>"); } /* theme:pigment */
+.tcv-ico.tcv-ico-split { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='2' y='3' width='11' height='20' rx='1' fill='rgb(48,142,225)' stroke='%23ddd' stroke-width='1.3'/><rect x='15' y='3' width='9' height='9' rx='1' fill='none' stroke='%23ddd' stroke-width='1.3'/><rect x='15' y='14' width='9' height='9' rx='1' fill='none' stroke='%23ddd' stroke-width='1.3'/></svg>"); } /* theme:pigment */
 .tcv-ico.tcv-ico-front { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><path d='M2,17 L13,11.5 L24,17 L13,22.5 Z' fill='none' stroke='%23ddd' stroke-width='1.3'/><path d='M2,9 L13,3.5 L24,9 L13,14.5 Z' fill='rgb(255,69,0)' stroke='%23ddd' stroke-width='1.2'/></svg>"); } /* theme:pigment */
 .tcv-ico.tcv-ico-tracks { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><path d='M2,17 L13,11.5 L24,17 L13,22.5 Z' fill='none' stroke='%23ddd' stroke-width='1.3'/><path d='M2,9 L13,3.5 L24,9 L13,14.5 Z' fill='none' stroke='%23ddd' stroke-width='1.3'/><path d='M6.5,9.2 L11.5,6.7 L16.5,9.2' fill='none' stroke='rgb(255,69,0)' stroke-width='2'/><path d='M9.5,11.2 L14.5,8.7 L19.5,11.2' fill='none' stroke='rgb(59,158,255)' stroke-width='2'/></svg>"); } /* theme:pigment */
 .tcv-ico.tcv-ico-back { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><path d='M2,17 L13,11.5 L24,17 L13,22.5 Z' fill='rgb(59,158,255)' stroke='%23ddd' stroke-width='1.2'/><path d='M2,9 L13,3.5 L24,9 L13,14.5 Z' fill='none' stroke='%23ddd' stroke-width='1.3'/></svg>"); } /* theme:pigment */
@@ -1251,3 +1252,33 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   white-space: nowrap;
 }
 .tcv-inspect-head { color: var(--ink-bright); font-weight: 600; }
+
+/* THE SPLIT VIEW (rooms/pcb.ts): six columns by four rows - a tall window
+   on the left three columns, two stacked on the right three - each showing
+   whichever picture its corner picker says. */
+.tcv-split {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  height: 100%;
+  padding: 8px;
+  background: var(--surface);
+}
+.tcv-split-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--pcb-bg);
+}
+.tcv-split-head {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 20;
+}

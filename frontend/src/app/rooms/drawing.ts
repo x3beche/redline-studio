@@ -157,6 +157,8 @@ export class Drawing implements OnDestroy {
   });
 
   private box = viewChild.required<ElementRef<HTMLDivElement>>('box');
+  /** The drawing's box, for a room laying several shots into one. */
+  host(): ElementRef<HTMLElement> { return this.box(); }
   private img = viewChild.required<ElementRef<HTMLImageElement>>('img');
 
   ready = signal(false);
