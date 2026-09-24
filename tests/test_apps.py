@@ -218,8 +218,12 @@ PAGE_HTML = b"""<!doctype html><html><body style="margin:0">
 <p class="note">a line of text</p></main></body></html>"""
 
 
-@pytest.mark.skipif(not __import__("shutil").which("google-chrome"),
-                    reason="needs google-chrome")
+def _web_image() -> bool:
+    from backend import sandbox
+    return sandbox.have_image("web")
+
+
+@pytest.mark.skipif(not _web_image(), reason="needs the redline-code-web image")
 def test_a_real_browser_photographs_the_page_and_lists_what_is_on_it():
     import http.server
     import threading
@@ -236,10 +240,12 @@ def test_a_real_browser_photographs_the_page_and_lists_what_is_on_it():
 
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), One)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    import asyncio
     try:
-        job: dict = {}
-        got = webshot.shoot(f"http://127.0.0.1:{srv.server_port}/", 400, 300,
-                            wait=10, meter_into=job)
+        # In the Web Programming container, the way the room takes it: the
+        # page is on the host's loopback, and the container shares it.
+        got, job = asyncio.run(webshot.shoot_in_container(
+            f"http://127.0.0.1:{srv.server_port}/", 400, 300, wait=10))
     finally:
         srv.shutdown()
     assert got["png"].startswith(b"\x89PNG")
@@ -250,7 +256,7 @@ def test_a_real_browser_photographs_the_page_and_lists_what_is_on_it():
     assert button["sel"] == "#go" and button["text"] == "Go on"
     # The box is where the button is on the picture: 20 px of padding in.
     assert button["box"] == [20, 20, 120, 40]
-    assert job["wall_s"] > 0
+    assert job["wall_s"] > 0 and job["where"] == "container"
     # A ring round it on the picture comes back as the button.
     hit = webshot.under(got["elements"], [{"box": [10, 10, 150, 60], "tip": None}],
                         width=400, height=300)
@@ -387,3 +393,114 @@ def test_mcp_tools_are_the_cli_commands():
         m.argv("start", {"id": "r1"})
     got = m.call("nope", {})
     assert got["isError"]
+
+
+# ---------------- firmware ----------------
+# Lines as arm-none-eabi-nm -S --size-sort -l and the linker's
+# --print-memory-usage printed them for the STM32H743 firmware in PS.
+NM_OUT = """\
+08000194 00000048 t deregister_tm_clones
+080057a0 00001414 T HAL_RCCEx_PeriphCLKConfig\t/p/fw/Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc_ex.c:105
+20000bf4 00002603 B memp_memory_PBUF_POOL_base\t/p/fw/cmake/stm32cubemx/../../Middlewares/LwIP/memp_std.h:134
+24000010 00000100 D uwTickPrio\t/p/fw/Core/Src/main.c:40
+0800a000 00000200 T memcpy\t/usr/lib/newlib/memcpy.c:12
+"""
+MEM_OUT = """Memory region         Used Size  Region Size  %age Used
+          DTCMRAM:           0 B       128 KB      0.00%
+           RAM_D2:       20612 B       288 KB      6.99%
+           FLASH:      152128 B         2 MB      7.25%
+"""
+
+
+def test_firmware_symbols_carry_their_source():
+    from backend import firmware
+
+    syms = firmware.parse_nm(NM_OUT, "/p")
+    by = {s["name"]: s for s in syms}
+    # Largest first: 0x2603 of pool, then 0x1414 of clock setup.
+    assert [s["name"] for s in syms[:2]] == ["memp_memory_PBUF_POOL_base",
+                                             "HAL_RCCEx_PeriphCLKConfig"]
+    assert by["HAL_RCCEx_PeriphCLKConfig"]["where"] == "flash"
+    assert by["HAL_RCCEx_PeriphCLKConfig"]["file"] == \
+        "fw/Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc_ex.c"
+    assert by["HAL_RCCEx_PeriphCLKConfig"]["line"] == 105
+    # CubeMX's ../.. is resolved before the path is made relative.
+    assert by["memp_memory_PBUF_POOL_base"]["file"] == "fw/Middlewares/LwIP/memp_std.h"
+    assert by["memp_memory_PBUF_POOL_base"]["where"] == "ram"
+    assert by["uwTickPrio"]["where"] == "both"
+    # The C library is not the project's: no file, no line.
+    assert by["memcpy"]["file"] is None and by["memcpy"]["line"] is None
+    assert by["deregister_tm_clones"]["file"] is None
+
+
+def test_firmware_memory_regions_from_the_linker():
+    from backend import firmware
+
+    mem = firmware.parse_memory(MEM_OUT)
+    assert [r["name"] for r in mem] == ["DTCMRAM", "RAM_D2", "FLASH"]
+    assert mem[2] == {"name": "FLASH", "used": 152128, "size": 2 * 1024 ** 2,
+                      "pct": 7.25}
+
+
+def test_the_firmware_page_tags_each_block_with_its_source():
+    from backend import firmware
+
+    data = {"regions": firmware.parse_memory(MEM_OUT),
+            "symbols": firmware.parse_nm(NM_OUT, "/p"),
+            "before": {"regions": [{"name": "FLASH", "used": 150000,
+                                    "size": 2 * 1024 ** 2, "pct": 7.15}]}}
+    page = firmware.page("PS", data)
+    assert 'data-src="fw/Core/Src/main.c:40"' in page
+    assert 'data-sym="HAL_RCCEx_PeriphCLKConfig"' in page
+    # A region that grew says by how much.
+    assert "+2.1 kB" in page
+
+
+# ---------------- the phone ----------------
+DUMP = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0">
+<node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.x.app" content-desc="" bounds="[0,0][1080,2400]">
+  <node index="0" text="Save" resource-id="com.x.app:id/save_button" class="android.widget.Button" package="com.x.app" content-desc="" bounds="[60,2000][520,2140]" />
+  <node index="1" text="" resource-id="" class="android.widget.ImageView" package="com.x.app" content-desc="avatar" bounds="[40,120][200,280]" />
+  <node index="2" text="" resource-id="android:id/navigationBarBackground" class="android.view.View" package="com.android.systemui" content-desc="" bounds="[0,2274][1080,2400]" />
+</node></hierarchy>"""
+
+
+def test_a_phone_screen_lists_its_views_by_resource_id():
+    from backend import phone
+
+    els = phone.parse_dump(DUMP)
+    save = next(e for e in els if e["text"] == "Save")
+    assert save["sel"] == "#save_button" and save["tag"] == "Button"
+    assert save["box"] == [60, 2000, 460, 140]
+    # No id: named by class and place, and its description is its text.
+    avatar = next(e for e in els if e["tag"] == "ImageView")
+    assert avatar["text"] == "avatar" and "ImageView[1]" in avatar["sel"]
+    # A ring round the button on the screenshot is the button.
+    hit = webshot.under(els, [{"box": [40, 1980, 500, 180], "tip": None}],
+                        width=1080, height=2400)
+    assert [e["sel"] for e in hit] == ["#save_button"]
+
+
+def test_a_page_in_the_phones_browser_ends_at_the_navigation_bar():
+    from backend import phone
+
+    els = phone.parse_dump(DUMP)
+    # 780 CSS px tall at 2.625: 2047.5 px, ending where the bar starts.
+    assert phone.content_top(els, 2400, 780, 2.625) == 2274 - 2048
+
+
+def test_a_view_is_traced_to_the_layout_that_declares_it(repo):
+    from backend import phone
+
+    (repo / "res").mkdir()
+    (repo / "res" / "main.xml").write_text(
+        '<LinearLayout>\n  <Button android:id="@+id/save_button" />\n</LinearLayout>\n')
+    run(repo, "add", ".")
+    assert phone.source_of_view(repo, "com.x.app:id/save_button") == \
+        {"file": "res/main.xml", "line": 2}
+    assert phone.source_of_view(repo, "") is None
+    d = webshot.describe(repo, {**{"i": 0, "tag": "Button", "sel": "#save_button",
+                                   "text": "Save", "box": [60, 2000, 460, 140]},
+                                "own": {"rid": "com.x.app:id/save_button"}})
+    assert d["file"] == "res/main.xml" and d["line"] == 2
+    assert d["component"] == "save_button"

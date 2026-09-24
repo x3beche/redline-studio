@@ -67,31 +67,49 @@ const VIEWPORTS: { key: string; w: number; h: number; label: string }[] = [
     <section class="tcv-pane" style="grid-column: 1"
              [style.grid-row]="tall() ? '1' : '1 / span 2'">
       <header class="tcv-pane-head">
-        <span class="tcv-label">preview</span>
+        <span class="tcv-label">{{ platform() === 'embedded' ? 'firmware'
+                                   : platform() === 'mobile' ? 'phone' : 'preview' }}</span>
         <span class="h-1.5 w-1.5 shrink-0 rounded-full"
-              [style.background]="status()?.up ? 'var(--ok)' : 'var(--danger)'"
-              [title]="status()?.up ? here()!.url + ' answers' : 'nothing answers at ' + here()!.url"></span>
-        @if (!frozen()) {
-          <input [value]="route()" (change)="setRoute($any($event.target).value)"
-                 (keydown.enter)="setRoute($any($event.target).value)"
-                 [attr.list]="'routes-' + platform()"
-                 class="tcv-field mono min-w-0 flex-1 px-1.5 py-0.5 text-[11px]"
-                 title="the route, after {{ here()!.url }}">
-          <datalist [id]="'routes-' + platform()">
-            @for (r of here()!.routes; track r) { <option [value]="r"></option> }
-          </datalist>
-          @for (v of viewports; track v.key) {
-            <button (click)="setViewport(v.key)" class="tcv-chip shrink-0 px-1.5 py-0"
-                    [attr.data-on]="viewport().key === v.key ? 1 : null"
-                    [title]="v.key + ' · ' + v.w + ' × ' + v.h">{{ v.label }}</button>
-          }
-          <button (click)="reload()" class="tcv-chip shrink-0 px-1.5 py-0"
-                  title="load the page again">↻</button>
-        } @else {
+              [style.background]="live() ? 'var(--ok)' : 'var(--danger)'"
+              [title]="liveNote()"></span>
+        @if (frozen()) {
           <span class="mono min-w-0 flex-1 truncate text-[10px]" style="color: var(--ink-dim)">
-            {{ shot()?.width }} × {{ shot()?.height }} · {{ route() }}
+            {{ shot()?.width }} × {{ shot()?.height }} · {{ platform() === 'embedded' ? 'as built' : route() }}
             · {{ shot()?.elements }} elements
           </span>
+        } @else if (platform() === 'embedded') {
+          <!-- What the build made of it, in the head the way the board
+               room puts its size over the layout. Built by the agent. -->
+          <span class="mono min-w-0 flex-1 truncate text-[10px]" style="color: var(--ink-dim)">
+            @if (here()!.firmware; as fw) {
+              {{ fw.ok ? 'built' : 'build failed' }} {{ fw.at.slice(11, 16) }}
+              @for (r of usedRegions(); track r.name) { · {{ r.name }} {{ r.pct.toFixed(2) }}% }
+            } @else { not built yet - the agent builds it (revisions.py code build) }
+          </span>
+        } @else {
+          @if (platform() === 'web' || here()!.url) {
+            <input [value]="route()" (change)="setRoute($any($event.target).value)"
+                   (keydown.enter)="setRoute($any($event.target).value)"
+                   [attr.list]="'routes-' + platform()"
+                   class="tcv-field mono min-w-0 flex-1 px-1.5 py-0.5 text-[11px]"
+                   title="the route, after {{ here()!.url }}">
+            <datalist [id]="'routes-' + platform()">
+              @for (r of here()!.routes; track r) { <option [value]="r"></option> }
+            </datalist>
+          } @else {
+            <span class="mono min-w-0 flex-1 truncate text-[10px]" style="color: var(--ink-dim)">
+              {{ here()!.package }}
+            </span>
+          }
+          @if (platform() === 'web') {
+            @for (v of viewports; track v.key) {
+              <button (click)="setViewport(v.key)" class="tcv-chip shrink-0 px-1.5 py-0"
+                      [attr.data-on]="viewport().key === v.key ? 1 : null"
+                      [title]="v.key + ' · ' + v.w + ' × ' + v.h">{{ v.label }}</button>
+            }
+            <button (click)="reload()" class="tcv-chip shrink-0 px-1.5 py-0"
+                    title="load the page again">↻</button>
+          }
         }
         <!-- The 3D room's own freeze control: the viewer's button markup
              and the same pen glyph, loud while the page is held. -->
@@ -147,7 +165,7 @@ const VIEWPORTS: { key: string; w: number; h: number; label: string }[] = [
         @if (!canLook()) {
           <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
             {{ platform() === 'embedded'
-               ? 'Firmware has nothing to frame yet - a serial console or a display capture would go here. Notes, the diff and the tests work already.'
+               ? 'Not built yet. The agent builds the firmware in the Embedded Programming container, and what it made of the source - memory and the largest symbols, each with its file - is drawn here.'
                : 'This project has no url to show. Give it one, and the page it serves is framed here.' }}
           </p>
         } @else if (framed) {
@@ -157,25 +175,40 @@ const VIEWPORTS: { key: string; w: number; h: number; label: string }[] = [
           <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
             This page is already inside a frame, so it does not frame another.
           </p>
-        } @else if (!status()?.up && !frozen()) {
+        } @else if (!live() && !frozen()) {
           <div class="p-3 text-[12px]" style="color: var(--ink-dim)">
-            <p class="mb-2">Nothing answers at <span class="mono">{{ here()!.url }}</span>.</p>
-            @if (here()!.dev) {
-              <!-- Started by the agent (revisions.py code serve), not from
-                   a button: the person marks, the agent runs things. -->
-              <p>The agent starts it with <span class="mono">{{ here()!.dev }}</span>
-                 - ask in the thread.</p>
+            @if (platform() === 'mobile') {
+              <!-- The phone is the Mobile Programming container's; the agent
+                   starts it (revisions.py code phone). -->
+              <p>The phone is off. The agent starts it in the Mobile Programming
+                 container - ask in the thread.</p>
+            } @else {
+              <p class="mb-2">Nothing answers at <span class="mono">{{ here()!.url }}</span>.</p>
+              @if (here()!.dev) {
+                <!-- Started by the agent (revisions.py code serve), not from
+                     a button: the person marks, the agent runs things. -->
+                <p>The agent starts it with <span class="mono">{{ here()!.dev }}</span>
+                   - ask in the thread.</p>
+              }
             }
           </div>
         } @else {
           <div class="absolute" [style.left.px]="fit().x" [style.top.px]="fit().y"
-               [style.width.px]="fit().w" [style.height.px]="fit().h">
+               [style.width.px]="fit().w" [style.height.px]="fit().h"
+               [class.tcv-phone]="platform() === 'mobile'">
             @if (!frozen()) {
-              <!-- Drawn at its real size and scaled down, so a 1280 px page
-                   lays itself out as 1280 px wide, not as the pane is. -->
-              <iframe [src]="frameUrl()" title="preview" class="tcv-preview-frame"
-                      [style.width.px]="viewport().w" [style.height.px]="viewport().h"
-                      [style.transform]="'scale(' + fit().k + ')'"></iframe>
+              @if (platform() === 'mobile') {
+                <!-- The phone's own screen, a picture every second and a
+                     half: there is no frame to put a phone in. -->
+                <img [src]="screenUrl()" alt="the phone's screen" class="block h-full w-full"
+                     draggable="false" (load)="phoneSized($event)">
+              } @else {
+                <!-- Drawn at its real size and scaled down, so a 1280 px page
+                     lays itself out as 1280 px wide, not as the pane is. -->
+                <iframe [src]="frameUrl()" title="preview" class="tcv-preview-frame"
+                        [style.width.px]="liveSize().w" [style.height.px]="liveSize().h"
+                        [style.transform]="'scale(' + fit().k + ')'"></iframe>
+              }
             } @else if (shot(); as s) {
               <img [src]="s.image" alt="the page, frozen" class="block h-full w-full" draggable="false">
               <!-- What the marks landed on, outlined over the picture but
@@ -237,8 +270,11 @@ const VIEWPORTS: { key: string; w: number; h: number; label: string }[] = [
       <header class="tcv-pane-head">
         <button (click)="setBottom('log')" class="tcv-chip"
                 [attr.data-on]="bottom() === 'log' ? 1 : null">log</button>
+        <!-- The second tab is what the machine said: the dev server's
+             output for a page or a phone app, the build's for firmware. -->
         <button (click)="setBottom('server')" class="tcv-chip"
-                [attr.data-on]="bottom() === 'server' ? 1 : null">server</button>
+                [attr.data-on]="bottom() === 'server' ? 1 : null">
+          {{ platform() === 'embedded' ? 'build' : 'server' }}</button>
         <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
           {{ bottom() === 'log' ? log().length + ' lines' : serverLines().length + ' lines' }}
         </span>
@@ -262,8 +298,9 @@ const VIEWPORTS: { key: string; w: number; h: number; label: string }[] = [
             <div class="whitespace-pre-wrap break-all leading-snug" style="color: var(--ink-dim)">{{ l }}</div>
           } @empty {
             <div style="color: var(--ink-dim)">
-              Nothing from the dev server. It prints here when this room started it;
-              one started elsewhere writes to its own terminal.
+              {{ platform() === 'embedded'
+                 ? 'No build yet. The agent builds in the Embedded Programming container, and its output lands here.'
+                 : 'Nothing from the dev server. It prints here when the agent started it; one started elsewhere writes to its own terminal.' }}
             </div>
           }
         }
@@ -542,6 +579,13 @@ export class RoomCoding implements OnInit, OnDestroy {
     this.tick();
     this.timers.push(setInterval(() => this.tick(), 3000));
     this.timers.push(setInterval(() => this.slowTick(), 8000));
+    // The phone's screen, again every second and a half while it is the
+    // live view: a picture that moves once in eight seconds reads as stuck.
+    this.timers.push(setInterval(() => {
+      if (this.platform() === 'mobile' && this.phoneUp() && !this.frozen()) {
+        this.phoneNonce.update(n => n + 1);
+      }
+    }, 1500));
   }
 
   constructor() {
@@ -593,8 +637,61 @@ export class RoomCoding implements OnInit, OnDestroy {
   }
 
   /** Whether there is anything to frame. Firmware has no page. */
+  /** Whether there is anything to show. A page needs an address,
+   *  firmware a build; the phone is always there to be looked at. */
   canLook(): boolean {
-    return !!this.here()?.url;
+    const a = this.here();
+    if (!a) return false;
+    if (this.platform() === 'embedded') return !!a.firmware;
+    if (this.platform() === 'mobile') return true;
+    return !!a.url;
+  }
+
+  /** Whether what is shown is current: the dev server answers, the
+   *  firmware built, the phone is up. */
+  live(): boolean {
+    if (this.platform() === 'embedded') return !!this.here()?.firmware?.ok;
+    if (this.platform() === 'mobile') return this.phoneUp();
+    return !!this.status()?.up;
+  }
+
+  liveNote(): string {
+    const a = this.here();
+    if (this.platform() === 'embedded') {
+      return a?.firmware ? (a.firmware.ok ? 'the last build succeeded' : 'the last build failed')
+                         : 'not built yet';
+    }
+    if (this.platform() === 'mobile') return this.phoneUp() ? 'the phone is up' : 'the phone is off';
+    return this.status()?.up ? `${a?.url} answers` : `nothing answers at ${a?.url}`;
+  }
+
+  /** The regions the firmware actually uses, for the head. */
+  usedRegions(): { name: string; pct: number }[] {
+    return (this.here()?.firmware?.summary?.regions ?? []).filter(r => r.used > 0);
+  }
+
+  /** The size the live view is drawn at before it is scaled into the
+   *  pane: the chosen viewport for a page, the firmware page's fixed size,
+   *  the phone's own screen. */
+  liveSize(): { w: number; h: number } {
+    if (this.platform() === 'embedded') return { w: 1280, h: 800 };
+    if (this.platform() === 'mobile') return this.phoneSize();
+    return { w: this.viewport().w, h: this.viewport().h };
+  }
+
+  // ---- the phone ----
+  phoneUp = signal(false);
+  phoneSize = signal({ w: 1080, h: 2400 });
+  private phoneNonce = signal(0);
+
+  screenUrl(): string { return `/api/apps/phone/screen.png?t=${this.phoneNonce()}`; }
+
+  phoneSized(ev: Event) {
+    const img = ev.target as HTMLImageElement;
+    const s = this.phoneSize();
+    if (img.naturalWidth && (img.naturalWidth !== s.w || img.naturalHeight !== s.h)) {
+      this.phoneSize.set({ w: img.naturalWidth, h: img.naturalHeight });
+    }
   }
 
   // ---- which project ----
@@ -651,6 +748,11 @@ export class RoomCoding implements OnInit, OnDestroy {
    *  the frame without the server or the app's router seeing it. */
   frameUrl = computed(() => {
     const a = this.here();
+    // Firmware's page is drawn by this server from the last build.
+    if (a && this.platform() === 'embedded') {
+      return this.trust(`/api/apps/${a._id}/firmware.html?v=`
+                        + encodeURIComponent(a.firmware?.at ?? ''));
+    }
     if (!a?.url) return null;
     const url = a.url.replace(/\/$/, '') + this.route() + '#r' + this.nonce();
     return this.trust(url);
@@ -670,8 +772,9 @@ export class RoomCoding implements OnInit, OnDestroy {
   fit = computed(() => {
     const { w: bw, h: bh } = this.room();
     const s = this.shot();
-    const vw = this.frozen() && s ? s.width : this.viewport().w;
-    const vh = this.frozen() && s ? s.height : this.viewport().h;
+    const live = this.liveSize();
+    const vw = this.frozen() && s ? s.width : live.w;
+    const vh = this.frozen() && s ? s.height : live.h;
     const pad = 10;
     const k = Math.max(0.05, Math.min((bw - 2 * pad) / vw, (bh - 2 * pad) / vh, 1));
     const w = Math.round(vw * k), h = Math.round(vh * k);
@@ -685,7 +788,7 @@ export class RoomCoding implements OnInit, OnDestroy {
     if (!a || this.shooting()) return;
     this.shooting.set(true);
     this.note.set('');
-    const vp = this.viewport();
+    const vp = this.liveSize();
     this.apps.shot(a._id, this.route(), vp.w, vp.h).subscribe({
       next: s => {
         this.shooting.set(false);
@@ -916,7 +1019,11 @@ export class RoomCoding implements OnInit, OnDestroy {
     });
     const a = this.here();
     if (a && this.bottom() === 'server') {
-      this.apps.serverLog(a._id).subscribe({ next: r => this.serverLines.set(r.lines) });
+      if (this.platform() === 'embedded') {
+        this.apps.buildLog(a._id).subscribe({ next: r => this.serverLines.set(r.lines) });
+      } else {
+        this.apps.serverLog(a._id).subscribe({ next: r => this.serverLines.set(r.lines) });
+      }
     }
   }
 
@@ -926,6 +1033,13 @@ export class RoomCoding implements OnInit, OnDestroy {
     const a = this.here();
     if (!a) return;
     this.apps.status(a._id).subscribe({ next: s => this.status.set(s) });
+    if (this.platform() === 'mobile') {
+      this.apps.phoneState().subscribe({ next: st => this.phoneUp.set(st.booted) });
+    }
+    // A build the agent made since: the head and the page follow it.
+    this.apps.one(a._id).subscribe({ next: fresh => {
+      if (fresh.firmware?.at !== a.firmware?.at) this.here.set(fresh);
+    } });
     // Archived ones as well: auto-archive files a note away the moment it
     // is done, which is exactly when its before and after are worth seeing.
     forkJoin([this.api.list(false), this.api.list(true)]).subscribe({

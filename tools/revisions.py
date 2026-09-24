@@ -856,6 +856,26 @@ async def _code_test(db, app: dict) -> dict:
     return out
 
 
+async def _code_build(db, app: dict) -> dict:
+    """Build firmware in the Embedded image, into Redline's cache."""
+    from backend import firmware
+
+    print(f"$ {app.get('build')}   (in the embedded container)")
+    sys.stdout.flush()
+    out = await firmware.build(db, app)
+    print("\n".join(out["log"].rstrip().splitlines()[-12:]))
+    s = out.get("summary") or {}
+    for r in s.get("regions", []):
+        if r["used"]:
+            print(f"  {r['name']:10} {r['used']:>9} B of {r['size']:>9} B  {r['pct']:.2f}%")
+    print(f"build {'OK' if out['ok'] else 'FAILED'} in {out.get('wall_s') or 0:.1f} s"
+          + (f", {out.get('cpu_s')} core-s" if out.get("cpu_s") else ""))
+    await db.activity.insert_one(_line(
+        f"{app['_id']}: build {'done' if out['ok'] else 'FAILED'}",
+        "done" if out["ok"] else "error", "embedded"))
+    return out
+
+
 async def _code_after(db, doc: dict) -> dict:
     """The same route at the same size, photographed again."""
     from backend import apps, code_api
@@ -887,6 +907,12 @@ async def _code_done(db, doc: dict) -> None:
     app = await db[apps.APPS].find_one({"_id": doc.get("model")})
     if not app:
         sys.exit(f"its project {doc.get('model')} is gone")
+    if app.get("platform") == "embedded":
+        # Firmware is checked by building it first: a change that does not
+        # link is not done, whatever the tests say.
+        built = await _code_build(db, app)
+        if not built["ok"]:
+            sys.exit(f"\n{doc['_id']} is not done: the firmware does not build.")
     if app.get("test"):
         out = await _code_test(db, app)
         if not out["ok"]:
@@ -934,6 +960,25 @@ async def cmd_code(args):
         out = await _code_test(db, app)
         if not out["ok"]:
             sys.exit(1)
+    elif args.what == "build":
+        # A note's project, or a project by its own id.
+        from backend import apps
+        app = await db[apps.APPS].find_one({"_id": args.id})
+        if not app:
+            _, app = await _code_note(db, args.id)
+        out = await _code_build(db, app)
+        if not out["ok"]:
+            sys.exit(1)
+    elif args.what == "phone":
+        # The Mobile room's phone, started by the agent: the room has no
+        # power button, the person marks and the agent runs things.
+        from backend import phone
+        print("starting the phone (a minute or two the first time)...")
+        sys.stdout.flush()
+        st = await asyncio.to_thread(phone.boot)
+        print(f"phone up: {st}")
+        await db.activity.insert_one(_line("phone booted"
+            + (f" in {st['boot_s']} s" if st.get("boot_s") else ""), "done", "mobile"))
     elif args.what == "after":
         doc, _ = await _code_note(db, args.id)
         await _code_after(db, doc)
@@ -1059,10 +1104,13 @@ def main() -> None:
     s.set_defaults(fn=cmd_after)
     s = sub.add_parser("code", help="notes on a running interface: web, "
                                     "embedded and mobile")
-    s.add_argument("what", choices=["show", "diff", "test", "after", "done"],
+    s.add_argument("what", choices=["show", "diff", "test", "build", "phone",
+                                    "after", "done"],
                    help="show: the note, the page and the elements under the "
                         "marks, drawing written to disk; diff: what changed "
                         "since it was drawn; test: the project's check; "
+                        "build: firmware, in the embedded container; "
+                        "phone: start the mobile room's phone (id: its project); "
                         "after: the same page again; done: test, after, then "
                         "applied - refused while the tests fail")
     s.add_argument("id")

@@ -28,11 +28,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SHOTS = ROOT / ".cache" / "shots"
 
-# The same backend tools/render.py uses: a page that draws with WebGL (this
-# one does) comes out black with the default one on this machine.
-FLAGS = ["--headless=new", "--ignore-gpu-blocklist", "--use-angle=gl",
+# Chrome runs in the Web Programming tab's container, which has no GPU:
+# WebGL is drawn by SwiftShader, on the CPU, so a page that draws with it
+# (this one does) still comes out as it renders. No sandbox inside a
+# container that is already one, and /dev/shm is small in there.
+FLAGS = ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+         "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
          "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
-         "--disable-gpu-sandbox", "--remote-debugging-port=0"]
+         "--remote-debugging-port=0"]
+# Where this file is mounted inside the web image.
+IN_IMAGE = "/opt/redline/webshot.py"
 
 # Walked once per shot, inside the page. Kept compact: two thousand
 # elements with a selector each is already a few hundred kilobytes.
@@ -65,6 +70,16 @@ INVENTORY = r"""
     return parts.join(' > ');
   }
   function owner(el) {
+    // A page that says where each thing came from - the firmware view does,
+    // symbol by symbol - is taken at its word before anything is guessed.
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+      const src = e.getAttribute && e.getAttribute('data-src');
+      if (src && src !== ':') {
+        const i = src.lastIndexOf(':');
+        return {file: src.slice(0, i) || null, line: +src.slice(i + 1) || null,
+                name: e.getAttribute('data-sym')};
+      }
+    }
     // Angular in development says who owns an element; the host's tag is
     // what the source is searched for.
     try {
@@ -165,18 +180,38 @@ def _devtools_port(profile: Path, chrome: subprocess.Popen,
     raise TimeoutError("chrome did not open a DevTools port")
 
 
-def shoot(url: str, width: int, height: int, wait: float = 25,
-          meter_into: dict | None = None) -> dict:
+async def shoot_in_container(url: str, width: int, height: int,
+                             wait: float = 25) -> tuple[dict, dict]:
+    """Photograph a page with the Chrome in the Web Programming image.
+
+    This file is mounted into the container and run there; it prints the
+    picture and the inventory as JSON. Returns that, and what the
+    container cost the machine.
+    """
+    from . import sandbox
+
+    rc, out, job = await sandbox.run(
+        "web", ["/opt/shoot/bin/python", IN_IMAGE, url, str(width), str(height),
+                str(wait)],
+        mounts=[(str(Path(__file__).resolve()), IN_IMAGE, "ro")],
+        extra=["--shm-size", "1g"], timeout=wait + 60)
+    last = out.strip().splitlines()[-1] if out.strip() else ""
+    if rc != 0 or not last.startswith("{"):
+        raise RuntimeError(f"the web container could not photograph {url}: "
+                           + out.strip()[-400:])
+    got = json.loads(last)
+    got["png"] = base64.b64decode(got["png"])
+    return got, job
+
+
+def shoot(url: str, width: int, height: int, wait: float = 25) -> dict:
     """Open `url` at `width` x `height`, wait for it to settle, and return
-    the PNG and the element inventory. Blocking: call it from a thread."""
+    the PNG and the element inventory. Runs inside the web image."""
     profile = Path(tempfile.mkdtemp(prefix="x3shot-"))
     chrome = subprocess.Popen(
         ["google-chrome", *FLAGS, f"--user-data-dir={profile}",
          f"--window-size={width},{height}", "about:blank"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    from . import compute
-    meter = compute.ProcMeter(chrome.pid)
-    t0 = time.monotonic()
     cdp = None
     try:
         port = _devtools_port(profile, chrome)
@@ -220,11 +255,6 @@ def shoot(url: str, width: int, height: int, wait: float = 25,
                                                    "scale": 1}})
         png = base64.b64decode(shot["data"])
     finally:
-        if meter_into is not None:
-            meter_into.update(meter.stop())
-            meter_into["wall_s"] = round(time.monotonic() - t0, 2)
-        else:
-            meter.stop()
         if cdp:
             cdp.close()
         chrome.terminate()
@@ -404,7 +434,12 @@ def describe(repo: str | Path, e: dict) -> dict:
     file it is written in."""
     own = e.get("own") or {}
     src = None
-    if own.get("file"):
+    if own.get("rid") is not None:
+        # A view on the phone, named by its resource id.
+        from .phone import source_of_view
+        src = source_of_view(repo, own.get("rid") or "")
+        own = {**own, "name": (own.get("rid") or "").split("/", 1)[-1] or None}
+    elif own.get("file"):
         path = str(own["file"])
         try:
             path = str(Path(path).resolve().relative_to(Path(repo).resolve()))
@@ -433,3 +468,14 @@ def label(d: dict) -> str:
     if where:
         where = "/".join(where.split("/")[-2:])
     return f"{what} · {where}" if where else what
+
+
+if __name__ == "__main__":
+    # Inside the web image: `webshot.py URL WIDTH HEIGHT [WAIT]`, one line
+    # of JSON out, the picture base64 in it.
+    import sys
+
+    got = shoot(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]),
+                float(sys.argv[4]) if len(sys.argv) > 4 else 25)
+    got["png"] = base64.b64encode(got["png"]).decode()
+    print(json.dumps(got))

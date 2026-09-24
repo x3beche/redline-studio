@@ -751,6 +751,22 @@ export interface AppEntry {
   test: string | null;
   routes: string[];
   last_test: TestRun | null;
+  /** Firmware: how it is built, and what the last build made. */
+  build?: string | null;
+  firmware?: FirmwareBuild | null;
+  /** A phone app: its Android package; without one, url is opened in the
+   *  phone's browser. */
+  package?: string | null;
+}
+
+export interface FirmwareBuild {
+  at: string;
+  ok: boolean;
+  rc: number;
+  wall_s: number | null;
+  cpu_s: number | null;
+  summary?: { regions: { name: string; used: number; size: number; pct: number }[];
+              flash_bytes: number; ram_bytes: number; symbols: number };
 }
 
 export interface AppStatus {
@@ -819,6 +835,13 @@ export interface AppCompute {
 export class Apps {
   private http = inject(HttpClient);
   list(): Observable<AppEntry[]> { return this.http.get<AppEntry[]>('/api/apps'); }
+  one(id: string): Observable<AppEntry> { return this.http.get<AppEntry>(`/api/apps/${id}`); }
+  buildLog(id: string): Observable<{ lines: string[] }> {
+    return this.http.get<{ lines: string[] }>(`/api/apps/${id}/build-log`);
+  }
+  phoneState(): Observable<{ container: boolean; booted: boolean }> {
+    return this.http.get<{ container: boolean; booted: boolean }>('/api/apps/phone/state');
+  }
   status(id: string): Observable<AppStatus> {
     return this.http.get<AppStatus>(`/api/apps/${id}/status`);
   }

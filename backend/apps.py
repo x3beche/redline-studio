@@ -362,44 +362,26 @@ def counts(output: str) -> dict:
 
 
 async def run_test(db, app: dict) -> dict:
-    """Run the project's test command, measured the way a build is.
+    """Run the project's test command in its tab's container, measured.
 
     The verdict is the exit code. The counts are read off the output for
     the pane's heading, and are only as good as the runner's own summary.
     """
+    from . import sandbox
+
     if not app.get("test"):
         raise ValueError(f"{app['_id']}: no test command")
-    capped = ROOT / "tools" / "capped.sh"
-    argv = ["bash", "-c", app["test"]]
-    if capped.exists():
-        argv = [str(capped), *argv]
+    platform = app.get("platform") or "web"
     started = store.now()
     t0 = time.monotonic()
-    meter = compute.Meter()
-    proc = await asyncio.create_subprocess_exec(
-        *argv, cwd=workdir(app), stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT, start_new_session=True)
-    meter.watch(proc.pid)
-    timed_out = False
-    try:
-        raw, _ = await asyncio.wait_for(proc.communicate(), TEST_TIMEOUT)
-    except asyncio.TimeoutError:
-        timed_out = True
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        raw = b""
-        await proc.wait()
-    job = meter.stop()
-    output = raw.decode(errors="replace")
-    if timed_out:
-        output += f"\n(stopped after {TEST_TIMEOUT}s)"
-    rc = proc.returncode if not timed_out else -9
+    rc, output, job = await sandbox.run(
+        platform, ["bash", "-c", app["test"]], repo=app["repo"],
+        workdir=workdir(app), timeout=TEST_TIMEOUT,
+        # The ceiling tools/capped.sh puts on a build on the host.
+        extra=["--memory", "8g"])
     try:
         await compute.record(db, "test", await compute.current_revision(
-            db, app.get("platform") or "web"),
-                             model=app["_id"], rc=rc, **job)
+            db, platform), model=app["_id"], rc=rc, **job)
     except Exception:                                # noqa: BLE001
         pass
     try:
@@ -411,7 +393,7 @@ async def run_test(db, app: dict) -> dict:
         "at": started, "ok": rc == 0, "rc": rc,
         "wall_s": round(time.monotonic() - t0, 2),
         "cpu_s": job.get("cpu_s"), "counts": counts(output),
-        "command": app["test"],
+        "command": app["test"], "image": sandbox.image_of(platform),
         # What the tree looked like when it passed, so "the tests pass" can
         # be checked against the tree as it is now rather than taken on
         # trust from an older run.
@@ -454,6 +436,7 @@ def clean(body: dict) -> dict:
     if not repo.is_absolute() or not (repo / ".git").exists():
         raise ValueError(f"repo must be the absolute path of a git checkout: {repo}")
     return {k: body.get(k) for k in
-            ("title", "folder", "cwd", "url", "dev", "test", "routes")
+            ("title", "folder", "cwd", "url", "dev", "test", "routes",
+             "build", "elf", "device", "package", "activity")
             if body.get(k) is not None} | {"platform": platform,
                                            "repo": str(repo)}

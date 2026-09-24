@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import os
 import re
 import subprocess
 
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
-from . import apps, compute, store, webshot
+from . import apps, compute, firmware, phone, sandbox, store, webshot
 
 router = APIRouter(prefix="/api/apps")
 
@@ -57,6 +58,7 @@ def _public(a: dict) -> dict:
             "repo": a.get("repo"), "cwd": a.get("cwd") or "",
             "url": a.get("url"), "dev": a.get("dev"), "test": a.get("test"),
             "routes": a.get("routes") or ["/"],
+            "build": a.get("build"), "firmware": a.get("firmware"),
             "last_test": ({k: v for k, v in last.items() if k != "tail"}
                           if last else None)}
 
@@ -71,6 +73,14 @@ class AppIn(BaseModel):
     test: str | None = None
     routes: list[str] | None = None
     folder: str | None = None
+    # Firmware: the build command, with $BUILD for Redline's own output
+    # directory, and the .elf in it when there is more than one.
+    build: str | None = None
+    elf: str | None = None
+    # A phone app: the Android package and activity to launch; without
+    # them the url is opened in the phone's browser.
+    package: str | None = None
+    activity: str | None = None
 
 
 @router.get("")
@@ -161,6 +171,10 @@ class ShotIn(BaseModel):
 
 
 def _page_url(a: dict, route: str) -> str:
+    # Firmware's page is the one this server draws of it.
+    if (a.get("platform") or "web") == "embedded":
+        port = os.environ.get("API_PORT", "8000")
+        return f"http://127.0.0.1:{port}/api/apps/{a['_id']}/firmware.html"
     base = (a.get("url") or "").rstrip("/")
     if not base:
         raise HTTPException(400, f"{a['_id']}: no url to photograph")
@@ -169,14 +183,42 @@ def _page_url(a: dict, route: str) -> str:
     return base + route
 
 
+def _phone_shot(a: dict, route: str) -> dict:
+    """The phone's screen, after bringing the project up on it, and what is
+    on it: views from uiautomator, and a page's elements from Chrome."""
+    st = phone.state()
+    if not st["booted"]:
+        raise RuntimeError("the phone is not running - the agent starts it "
+                           "(revisions.py code phone)")
+    phone.open_app(a, route)
+    import time as _t
+    _t.sleep(2.5)                     # let the screen settle after the launch
+    png = phone.screen()
+    w, h = phone.png_size(png)
+    native = phone.parse_dump(phone.dump())
+    elements = native
+    if not a.get("package") and a.get("url"):
+        try:
+            elements = phone.web_inventory(a["url"], native, h) + [
+                e for e in native if (e["own"].get("package") or "") != "com.android.chrome"]
+            for i, e in enumerate(elements):
+                e["i"] = i
+        except (OSError, ValueError, RuntimeError, TimeoutError):
+            pass                      # the views alone, if Chrome will not say
+    return {"png": png, "width": w, "height": h, "title": a.get("title"),
+            "url": a.get("url"), "elements": elements}
+
+
 async def take_shot(db, a: dict, route: str, width: int, height: int) -> dict:
     """Photograph a route and keep the inventory for the marks. Shared by
     the freeze button and the agent's after shot."""
-    url = _page_url(a, route)
     job: dict = {}
     try:
-        shot = await asyncio.to_thread(webshot.shoot, url, width, height,
-                                       25, job)
+        if (a.get("platform") or "web") == "mobile":
+            shot = await asyncio.to_thread(_phone_shot, a, route)
+        else:
+            shot, job = await webshot.shoot_in_container(
+                _page_url(a, route), width, height)
     finally:
         if job:
             try:
@@ -192,7 +234,8 @@ async def take_shot(db, a: dict, route: str, width: int, height: int) -> dict:
         base, dirty = None, {}
     sid = webshot.keep(shot, {"app": a["_id"], "route": route,
                               "base": base, "dirty": dirty})
-    return {"shot": sid, "png": shot["png"], "width": width, "height": height,
+    return {"shot": sid, "png": shot["png"], "width": shot.get("width", width),
+            "height": shot.get("height", height),
             "elements": len(shot["elements"]), "title": shot.get("title"),
             "base": base, "wall_s": job.get("wall_s")}
 
@@ -207,10 +250,12 @@ async def shoot_app(aid: str, body: ShotIn):
     a = await _app(aid)
     try:
         got = await take_shot(_db(), a, body.route, body.width, body.height)
+    except sandbox.NoImage as exc:
+        raise HTTPException(503, str(exc))
     except (RuntimeError, TimeoutError, OSError) as exc:
         raise HTTPException(502, f"could not photograph it: {exc}")
     png = got.pop("png")
-    await _say(f"{aid}: froze {body.route} at {body.width}x{body.height} - "
+    await _say(f"{aid}: froze {body.route} at {got['width']}x{got['height']} - "
                f"{got['elements']} elements on it", "info", _room(a))
     return {**got, "image": "data:image/png;base64,"
             + base64.b64encode(png).decode()}
@@ -360,6 +405,77 @@ async def last_test(aid: str):
         now, head = None, None
     # A pass is only worth something for the tree it ran on.
     return {**last, "current": last.get("tree") == now and last.get("head") == head}
+
+
+# ---------------- the phone ----------------
+@router.get("/phone/state")
+async def phone_state():
+    return await asyncio.to_thread(phone.state)
+
+
+@router.post("/phone/boot")
+async def phone_boot():
+    """For the agent: the room has no power button either."""
+    try:
+        return await asyncio.to_thread(phone.boot)
+    except sandbox.NoImage as exc:
+        raise HTTPException(503, str(exc))
+    except (TimeoutError, subprocess.CalledProcessError) as exc:
+        raise HTTPException(502, str(exc))
+
+
+@router.get("/phone/screen.png")
+async def phone_screen():
+    """The phone's screen now. The room polls this for its live view."""
+    st = await asyncio.to_thread(phone.state)
+    if not st["booted"]:
+        raise HTTPException(503, "the phone is not running")
+    png = await asyncio.to_thread(phone.screen)
+    return Response(png, media_type="image/png",
+                    headers={"Cache-Control": "no-store"})
+
+
+# ---------------- firmware ----------------
+@router.post("/{aid}/build")
+async def build_app(aid: str):
+    """Build firmware in the Embedded image. For the agent: the room has
+    no build button, the person marks and the agent builds."""
+    a = await _app(aid)
+    if (a.get("platform") or "web") != "embedded":
+        raise HTTPException(400, f"{aid} is not firmware")
+    await _say(f"{aid}: building - {a.get('build')}", "work", "embedded")
+    try:
+        out = await firmware.build(_db(), a)
+    except sandbox.NoImage as exc:
+        raise HTTPException(503, str(exc))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    s = out.get("summary") or {}
+    flash = next((r for r in s.get("regions", []) if r["name"].upper() == "FLASH"), None)
+    await _say(f"{aid}: build {'done' if out['ok'] else 'FAILED'} in "
+               f"{out.get('wall_s') or 0:.1f} s"
+               + (f" - flash {flash['pct']:.2f}%" if flash else ""),
+               "done" if out["ok"] else "error", "embedded")
+    return {k: v for k, v in out.items() if k != "log"}
+
+
+@router.get("/{aid}/firmware.html")
+async def firmware_page(aid: str):
+    a = await _app(aid)
+    try:
+        import json as _json
+        data = _json.loads(await store.get_artifact(_db(), aid, "firmware", apps.APPS))
+    except KeyError:
+        data = {}
+    return Response(firmware.page(a.get("title") or aid, data),
+                    media_type="text/html")
+
+
+@router.get("/{aid}/build-log")
+async def build_log(aid: str):
+    a = await _app(aid)
+    return {"lines": (a.get("firmware_log") or "").splitlines()[-300:],
+            "firmware": a.get("firmware")}
 
 
 @router.get("/{aid}/compute")
