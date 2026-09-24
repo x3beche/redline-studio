@@ -1,0 +1,114 @@
+/* The kit tools' one look. Colours are the names the app's frame rewrites
+   (tools/frame.ts), so a tool takes the app's theme inside the app and its
+   own light/dark when opened as a file. */
+:root {
+  --paper: #eef1f4; --surface: #ffffff; --sunken: #e4e9ee;
+  --ink: #16202a; --ink-soft: #5b6b7a; --line: #c8d2db; --line-soft: #dde4ea;
+  --accent: #1f4ed8; --accent-ink: #ffffff;
+  --danger: #c0392b; --warn: #b7791f; --ok: #2f855a; --fill-alpha: 0.16;
+  /* Series colours for charts with more than one line: data, not chrome. */
+  --tool-s0: var(--accent); --tool-s1: #d97706; --tool-s2: #0f9d8a; --tool-s3: #a23fbf;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f151b; --surface: #161f27; --sunken: #111920;
+    --ink: #e4ebf1; --ink-soft: #8ea0b0; --line: #2b3945; --line-soft: #212c36;
+    --accent: #6d8dff; --accent-ink: #0f151b;
+    --danger: #e57373; --warn: #e8a735; --ok: #68b36b; --fill-alpha: 0.30;
+    --tool-s1: #f0a33a; --tool-s2: #3cc7b3; --tool-s3: #c982e0;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f151b; --surface: #161f27; --sunken: #111920;
+  --ink: #e4ebf1; --ink-soft: #8ea0b0; --line: #2b3945; --line-soft: #212c36;
+  --accent: #6d8dff; --accent-ink: #0f151b;
+  --danger: #e57373; --warn: #e8a735; --ok: #68b36b; --fill-alpha: 0.30;
+  --tool-s1: #f0a33a; --tool-s2: #3cc7b3; --tool-s3: #c982e0;
+  color-scheme: dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 13px/1.45 "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+code, pre, .k-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+.k-bar { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.brand { font-size: 15px; font-weight: 600; margin: 0; }
+.brand span { color: var(--ink-soft); font-weight: 400; }
+.k-actions { margin-left: auto; display: flex; gap: 6px; }
+
+.k-main { display: grid; grid-template-columns: minmax(260px, 380px) minmax(0, 1fr); gap: 14px; padding: 14px; align-items: start; }
+@media (max-width: 760px) { .k-main { grid-template-columns: minmax(0, 1fr); padding: 10px; } }
+.k-left, .k-right { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.k-intro { margin: 0; color: var(--ink-soft); font-size: 12px; }
+
+.k-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 10px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+.k-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.k-field.k-wide { grid-column: 1 / -1; }
+.k-field.k-check { flex-direction: row; align-items: center; gap: 6px; flex-wrap: wrap; }
+.k-label { font-size: 11.5px; color: var(--ink-soft); }
+.k-unit { color: var(--ink-soft); opacity: .8; }
+.k-help { font-size: 11px; color: var(--ink-soft); flex-basis: 100%; }
+.k-field input[type="text"], .k-field select, .k-field textarea, .k-tedit input, .k-tedit select {
+  width: 100%; min-width: 0; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px;
+  background: var(--sunken); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px;
+}
+.k-field textarea { resize: vertical; }
+.k-field input.k-bad { border-color: var(--danger); }
+.k-tedit table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+.k-tedit th { text-align: left; font-weight: 500; font-size: 11px; color: var(--ink-soft); padding: 2px 3px; }
+.k-tedit td { padding: 2px 3px; }
+
+.k-btn { padding: 3px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); cursor: pointer; font-size: 12px; }
+.k-btn:hover { border-color: var(--ink-soft); }
+.k-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.k-x { padding: 0 7px; }
+
+.k-values { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.k-value { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; min-width: 0; }
+.k-value span { display: block; font-size: 11px; color: var(--ink-soft); }
+.k-value b { display: block; font: 500 16px "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-value b small { font-size: 11px; color: var(--ink-soft); }
+.k-value em { display: block; font-style: normal; font-size: 10.5px; color: var(--ink-soft); }
+.k-value.k-ok { border-left: 3px solid var(--ok); }
+.k-value.k-warn { border-left: 3px solid var(--warn); }
+.k-value.k-bad { border-left: 3px solid var(--danger); }
+
+.k-block { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-width: 0; }
+.k-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); margin-bottom: 6px; }
+.k-tablewrap { overflow-x: auto; }
+.k-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.k-table th { text-align: left; font-weight: 500; color: var(--ink-soft); border-bottom: 1px solid var(--line); padding: 3px 6px; }
+.k-table td { border-bottom: 1px solid var(--line-soft); padding: 3px 6px; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+.k-chart { width: 100%; height: auto; display: block; }
+.k-grid { stroke: var(--line-soft); stroke-width: 1; }
+.k-axis { fill: var(--ink-soft); font: 10px "IBM Plex Mono", ui-monospace, monospace; }
+.k-line { fill: none; stroke-width: 2; }
+path.k-s0, i.k-s0 { stroke: var(--tool-s0); } rect.k-s0, i.k-s0 { fill: var(--tool-s0); background: var(--tool-s0); }
+path.k-s1, i.k-s1 { stroke: var(--tool-s1); } rect.k-s1, i.k-s1 { fill: var(--tool-s1); background: var(--tool-s1); }
+path.k-s2, i.k-s2 { stroke: var(--tool-s2); } rect.k-s2, i.k-s2 { fill: var(--tool-s2); background: var(--tool-s2); }
+path.k-s3, i.k-s3 { stroke: var(--tool-s3); } rect.k-s3, i.k-s3 { fill: var(--tool-s3); background: var(--tool-s3); }
+.k-legend { display: flex; gap: 12px; font-size: 11px; color: var(--ink-soft); margin-top: 4px; }
+.k-legend i { display: inline-block; width: 10px; height: 3px; margin-right: 4px; vertical-align: middle; }
+
+.k-warns { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 6px; padding: 6px 10px; background: var(--surface); }
+.k-warns div + div { margin-top: 3px; }
+.k-notes { color: var(--ink-soft); font-size: 12px; }
+.k-notes div + div { margin-top: 3px; }
+.k-view:empty { display: none; }
+
+.k-outwrap { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.k-outbar { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.k-tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+.k-tab { padding: 3px 9px; border: 0; border-radius: 4px; background: transparent; color: var(--ink-soft); cursor: pointer; font-size: 12px; }
+.k-tab[aria-selected="true"] { background: var(--sunken); color: var(--ink); }
+.k-count { margin-left: auto; font-size: 11px; color: var(--ink-soft); }
+.k-out { margin: 0; padding: 8px 10px; max-height: 340px; overflow: auto; font-size: 12px; white-space: pre-wrap; word-break: break-word; }

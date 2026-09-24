@@ -1,0 +1,21 @@
+{
+  "id": "flow-mermaid",
+  "name": "Flow to Mermaid",
+  "blurb": "draw a flowchart with boxes and arrows, get Mermaid code",
+  "group": "code",
+  "rooms": [
+    "web",
+    "embedded",
+    "mobile"
+  ],
+  "keywords": [
+    "flowchart",
+    "mermaid",
+    "diagram",
+    "flow",
+    "state"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "page": "tools/flow-mermaid.html"
+}

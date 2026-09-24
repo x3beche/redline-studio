@@ -1,0 +1,23 @@
+{
+  "id": "schema-sketch",
+  "name": "Schema Sketch",
+  "blurb": "draw tables and relations, get SQL, Prisma and Mermaid",
+  "group": "code",
+  "rooms": [
+    "web",
+    "mobile"
+  ],
+  "keywords": [
+    "database",
+    "schema",
+    "sql",
+    "postgres",
+    "prisma",
+    "erd",
+    "tables",
+    "relations"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "page": "tools/schema-sketch.html"
+}

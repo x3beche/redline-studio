@@ -1,0 +1,22 @@
+{
+  "id": "grid-sketch",
+  "name": "Grid Sketch",
+  "blurb": "draw a layout on a grid, copy it as a prompt, CSS or JSON",
+  "group": "web",
+  "rooms": [
+    "web",
+    "mobile"
+  ],
+  "keywords": [
+    "layout",
+    "grid",
+    "css grid",
+    "wireframe",
+    "sketch",
+    "tailwind",
+    "areas"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "page": "tools/grid-sketch.html"
+}

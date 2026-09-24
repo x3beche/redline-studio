@@ -1,0 +1,21 @@
+{
+  "id": "data-digest",
+  "name": "Data Digest",
+  "blurb": "profile a large CSV or JSON into a compact brief for an LLM",
+  "group": "code",
+  "rooms": [
+    "web",
+    "embedded"
+  ],
+  "keywords": [
+    "csv",
+    "json",
+    "profile",
+    "dataset",
+    "summary",
+    "columns"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "page": "tools/data-digest.html"
+}

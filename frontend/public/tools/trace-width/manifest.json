@@ -1,0 +1,25 @@
+{
+  "id": "trace-width",
+  "name": "Trace Width",
+  "blurb": "how wide a track must be for a current, by IPC-2221, and what it drops",
+  "group": "pcb",
+  "rooms": [
+    "pcb"
+  ],
+  "keywords": [
+    "trace",
+    "track",
+    "width",
+    "current",
+    "ampacity",
+    "ipc-2221",
+    "copper",
+    "oz",
+    "via",
+    "temperature rise",
+    "voltage drop"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "native": true
+}

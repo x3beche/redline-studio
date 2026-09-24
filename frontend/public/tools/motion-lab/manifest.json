@@ -1,0 +1,22 @@
+{
+  "id": "motion-lab",
+  "name": "Motion Lab",
+  "blurb": "shape an easing curve and timing, take it as CSS or JS",
+  "group": "web",
+  "rooms": [
+    "web",
+    "mobile"
+  ],
+  "keywords": [
+    "easing",
+    "animation",
+    "cubic-bezier",
+    "spring",
+    "transition",
+    "motion",
+    "framer"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "page": "tools/motion-lab.html"
+}

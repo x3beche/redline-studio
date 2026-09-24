@@ -1,0 +1,22 @@
+{
+  "id": "api-sketch",
+  "name": "API Sketch",
+  "blurb": "define endpoints, get OpenAPI, curl and a TypeScript client",
+  "group": "code",
+  "rooms": [
+    "web",
+    "mobile"
+  ],
+  "keywords": [
+    "api",
+    "rest",
+    "openapi",
+    "swagger",
+    "endpoint",
+    "curl",
+    "client"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "page": "tools/api-sketch.html"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "cron-studio",
+  "name": "Cron Studio",
+  "blurb": "build a cron expression, see when it next runs",
+  "group": "code",
+  "rooms": [
+    "web",
+    "embedded"
+  ],
+  "keywords": [
+    "cron",
+    "schedule",
+    "crontab",
+    "timer",
+    "job"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "page": "tools/cron-studio.html"
+}

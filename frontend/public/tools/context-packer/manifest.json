@@ -1,0 +1,23 @@
+{
+  "id": "context-packer",
+  "name": "Context Packer",
+  "blurb": "pack code, logs and notes into one well-built prompt",
+  "group": "code",
+  "rooms": [
+    "web",
+    "embedded",
+    "mobile",
+    "pcb",
+    "cad"
+  ],
+  "keywords": [
+    "prompt",
+    "context",
+    "pack",
+    "llm",
+    "tokens"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "page": "tools/context-packer.html"
+}

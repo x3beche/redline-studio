@@ -1,0 +1,32 @@
+{
+  "id": "units",
+  "name": "Units & Numbers",
+  "blurb": "mm, mil and inch; hex, decimal and binary; UART baud and timer periods",
+  "group": "embedded",
+  "rooms": [
+    "embedded",
+    "pcb"
+  ],
+  "keywords": [
+    "unit",
+    "convert",
+    "mil",
+    "inch",
+    "mm",
+    "hex",
+    "binary",
+    "decimal",
+    "two's complement",
+    "uart",
+    "baud",
+    "brr",
+    "timer",
+    "prescaler",
+    "psc",
+    "arr",
+    "pwm"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "native": true
+}

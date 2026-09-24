@@ -1,0 +1,20 @@
+{
+  "id": "form-builder",
+  "name": "Form Builder",
+  "blurb": "build a form with its rules, get Zod, types and a React component",
+  "group": "web",
+  "rooms": [
+    "web"
+  ],
+  "keywords": [
+    "form",
+    "validation",
+    "zod",
+    "react-hook-form",
+    "schema",
+    "fields"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "page": "tools/form-builder.html"
+}

@@ -1,0 +1,24 @@
+{
+  "id": "palette-forge",
+  "name": "Palette Forge",
+  "blurb": "one colour into an accessible palette and light/dark tokens",
+  "group": "web",
+  "rooms": [
+    "web",
+    "mobile"
+  ],
+  "keywords": [
+    "palette",
+    "colour",
+    "color",
+    "contrast",
+    "wcag",
+    "tokens",
+    "oklch",
+    "dark mode",
+    "theme"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "page": "tools/palette-forge.html"
+}

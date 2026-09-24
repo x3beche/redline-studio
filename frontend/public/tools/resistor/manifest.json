@@ -1,0 +1,25 @@
+{
+  "id": "resistor",
+  "name": "Resistor & LED",
+  "blurb": "Ohm's law, an LED's series resistor, a divider from standard values",
+  "group": "pcb",
+  "rooms": [
+    "pcb",
+    "embedded"
+  ],
+  "keywords": [
+    "ohm",
+    "ohm's law",
+    "led",
+    "resistor",
+    "voltage divider",
+    "e24",
+    "e12",
+    "e96",
+    "series resistor",
+    "power"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "native": true
+}

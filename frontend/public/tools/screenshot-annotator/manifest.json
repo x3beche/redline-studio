@@ -1,0 +1,21 @@
+{
+  "id": "screenshot-annotator",
+  "name": "Screenshot Annotator",
+  "blurb": "mark up a screenshot and turn the marks into a fix list",
+  "group": "web",
+  "rooms": [
+    "web",
+    "mobile"
+  ],
+  "keywords": [
+    "screenshot",
+    "annotate",
+    "markup",
+    "feedback",
+    "redline",
+    "ui review"
+  ],
+  "usage": "An interactive tool: open it in the Tools tab.",
+  "inputs": [],
+  "page": "tools/screenshot-annotator.html"
+}
