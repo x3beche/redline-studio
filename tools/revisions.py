@@ -74,9 +74,14 @@ def connect():
     return AsyncIOMotorClient(uri)[os.getenv("MONGODB_DB", "assets_3d")]
 
 
-async def cmd_queue(_):
+async def cmd_queue(args):
+    from backend import compute
+
     db = connect()
     rows = [d async for d in db.revisions.find({"status": "queued"})]
+    # One room's queue, for the agent that works that room.
+    if getattr(args, "room", None):
+        rows = [d for d in rows if compute.room_of(d.get("kind")) == args.room]
     rows.sort(key=lambda d: d.get("queued_at") or d["created_at"])
     if not rows:
         print("nothing queued")
@@ -136,6 +141,13 @@ async def cmd_wait(args):
             return
         rows = [d async for d in db.revisions.find({"status": "queued"})]
         rows = [d for d in rows if d["_id"] not in seen]
+        # A note somebody has started on is work in hand, not new work: the
+        # main agent handed it to a room's agent, and being woken for it
+        # again every half minute would be a loop.
+        if rows:
+            busy = {r["_id"] async for r in db.runs.find(
+                {"_id": {"$in": [d["_id"] for d in rows]}, "status": "running"})}
+            rows = [d for d in rows if d["_id"] not in busy]
         rows.sort(key=lambda d: d.get("queued_at") or d["created_at"])
         if rows:
             print(f"{len(rows)} queued after waiting {waited}s")
@@ -873,6 +885,16 @@ async def _code_done(db, doc: dict) -> None:
           + ("  (archived)" if patch and patch.get("archived") else ""))
 
 
+async def cmd_kind(args):
+    """Which room a revision belongs to: cad, pcb, web, embedded, mobile."""
+    from backend import compute
+
+    doc = await connect().revisions.find_one({"_id": args.id}, {"kind": 1})
+    if not doc:
+        sys.exit(f"{args.id} not found")
+    print(compute.room_of(doc.get("kind")))
+
+
 async def cmd_code(args):
     """Code notes: read one, see its change, run its check, finish it."""
     db = connect()
@@ -898,7 +920,13 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("queue").set_defaults(fn=cmd_queue)
+    s = sub.add_parser("queue")
+    s.add_argument("--room", choices=["cad", "pcb", "web", "embedded", "mobile"],
+                   help="only this room's notes")
+    s.set_defaults(fn=cmd_queue)
+    s = sub.add_parser("kind", help="which room a revision belongs to")
+    s.add_argument("id")
+    s.set_defaults(fn=cmd_kind)
     s = sub.add_parser("chat", help="read what the person said")
     s.add_argument("--limit", type=int, default=40)
     s.add_argument("--keep-unread", action="store_true",

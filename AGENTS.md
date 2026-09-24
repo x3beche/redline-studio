@@ -17,6 +17,41 @@ If something is queued, write the drawing to disk with `show` and **open that
 file with the Read tool**. The comment alone is not enough: when the user says
 "these areas", only the red marks say which areas.
 
+## One main agent, one agent per room
+
+Five rooms write notes into one queue: **3D Drawing** (`cad`), **PCB
+Design** (`pcb`), and the three coding rooms **Web Programming** (`web`),
+**Embedded Programming** (`embedded`) and **Mobile Programming**
+(`mobile`). The agent opened in this repository is the **main agent**. It
+does not apply notes itself. It keeps the queue moving:
+
+1. `revisions.py wait` in the background - it returns on a queued note or
+   on something said in the thread.
+2. `revisions.py chat` first, when something was said: the person comes
+   before the queue. Answer with `say`.
+3. `revisions.py queue`, then hand each note to its room's agent with the
+   Agent tool - `redline-3d`, `redline-pcb`, `redline-web`,
+   `redline-embedded`, `redline-mobile` (`.claude/agents/`). Give it the
+   revision id and nothing it can read for itself. `revisions.py kind
+   <id>` says which room a note is from.
+4. Rooms run **in parallel**, one note per room at a time: every room has
+   its own run (`runs/current` for the 3D room, `runs/current:<room>` for
+   the others), so one room's `start` and `finish` never touch another's.
+   A second note for a busy room waits for the first.
+5. When an agent reports back, say what happened in the thread in a
+   line, and start `wait` again.
+
+A room's agent owns its note from `start` to `finish`; `wait` stops
+counting a note once its run has started, so the main agent is not woken
+for work already in hand. Questions to the person go through `ask` from
+whichever agent has the fork in front of it.
+
+The same operations are an MCP server - `redline` in `.mcp.json`
+(`tools/mcp_server.py`): `queue` (by room), `show`, `start`, `log`,
+`finish`, `done`, `code_diff`, `code_test`, `chat`, `say`, `ask`. Each
+one runs the matching revisions.py command, so the answers and the
+refusals are the same either way.
+
 ## Never stop between revisions
 
 When you finish one revision, do not hand the turn back and wait to be told
@@ -276,7 +311,8 @@ Nothing counts as work until the user presses *queue*.
 ## Commands
 
 ```bash
-.venv/bin/python tools/revisions.py queue                # what is queued
+.venv/bin/python tools/revisions.py queue [--room R]     # what is queued, all or one room
+.venv/bin/python tools/revisions.py kind <id>            # which room a note is from
 .venv/bin/python tools/revisions.py wait                 # block until there is
 .venv/bin/python tools/revisions.py ask "..." -o A -o B  # ask on their screen
 .venv/bin/python tools/revisions.py part find|pins|ato|passive|keep ...  # parts
@@ -289,7 +325,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py build <model>        # rebuild (minutes)
 .venv/bin/python tools/revisions.py stop <model>         # end one early
 .venv/bin/python tools/revisions.py done <id>            # mark as applied
-.venv/bin/python tools/revisions.py finish               # close the run
+.venv/bin/python tools/revisions.py finish <id>          # close that note's run
 .venv/bin/python tools/revisions.py after <id>           # the "after" picture
 .venv/bin/python tools/revisions.py usage [--full]       # what the work cost
 .venv/bin/python tools/revisions.py code show|diff|test|after|done <id>  # code notes

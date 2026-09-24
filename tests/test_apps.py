@@ -345,3 +345,45 @@ def test_rooms_have_runs_of_their_own(monkeypatch):
         id="web-1", failed=False, no_shot=True, room="cad")))
     assert db.runs.rows["current:web"]["status"] == "done"
     assert db.runs.rows["current"]["status"] == "running"
+
+
+# ---------------- the queues, over MCP ----------------
+def test_mcp_server_speaks_the_protocol_over_stdio():
+    """initialize, tools/list, and an unknown method - through a real
+    process, the way an agent starts it from .mcp.json."""
+    import json as _json
+    import sys as _sys
+
+    root = Path(__file__).resolve().parent.parent
+    msgs = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+         "params": {"protocolVersion": "2025-06-18"}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        {"jsonrpc": "2.0", "id": 3, "method": "nonsense"},
+    ]
+    out = subprocess.run([_sys.executable, str(root / "tools/mcp_server.py")],
+                         input="".join(_json.dumps(m) + "\n" for m in msgs),
+                         capture_output=True, text=True, timeout=30)
+    replies = [_json.loads(line) for line in out.stdout.splitlines()]
+    # The notification gets no answer; the three requests get one each.
+    assert [r["id"] for r in replies] == [1, 2, 3]
+    assert replies[0]["result"]["serverInfo"]["name"] == "redline"
+    names = {t["name"] for t in replies[1]["result"]["tools"]}
+    assert {"queue", "show", "start", "finish", "done", "ask", "chat"} <= names
+    assert replies[2]["error"]["code"] == -32601
+
+
+def test_mcp_tools_are_the_cli_commands():
+    from tools import mcp_server as m
+
+    assert m.argv("queue", {"room": "web"}) == ["queue", "--room", "web"]
+    assert m.argv("log", {"text": "x", "room": "pcb", "percent": 40}) == \
+        ["log", "x", "--room", "pcb", "-l", "info", "-p", "40"]
+    assert m.argv("ask", {"text": "which?", "options": ["a", "b"]}) == \
+        ["ask", "which?", "-o", "a", "-o", "b"]
+    assert m.argv("finish", {"id": "r1", "failed": True}) == ["finish", "r1", "--failed"]
+    with pytest.raises(ValueError):
+        m.argv("start", {"id": "r1"})
+    got = m.call("nope", {})
+    assert got["isError"]

@@ -93,6 +93,16 @@ check and the same page, at the same size, as the after.
 
 ![The Web room: a note's diff with its before and after](docs/web-room.png)
 
+## Who does the work
+
+One main agent watches the queue and the thread, and hands each note to
+an agent for its room - 3D, board, web, embedded, mobile - which applies
+it, checks it and closes it. Rooms work in parallel, each with its own
+run, its own log and, for the three programming rooms, its own Docker
+image, so nothing a project needs is installed on the machine itself.
+The queue is also an MCP server (`.mcp.json`), for any agent that
+speaks it. [AGENTS.md](AGENTS.md) has the details.
+
 ## How it goes
 
 1. **Write a model.** Python and [build123d](https://github.com/gumyr/build123d);
