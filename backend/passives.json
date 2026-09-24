@@ -1,17 +1,77 @@
 {
  "_about": "Checked against LCSC by exact part number. Rebuild with tools/passives.py.",
  "parts": {
+  "C 100n 0402": {
+   "lcsc": "C1525",
+   "mpn": "CL05B104KO5NNNC",
+   "package": "0402",
+   "stock": 6104000
+  },
+  "C 100n 0603": {
+   "lcsc": "C1591",
+   "mpn": "CL10B104KB8NNNC",
+   "package": "0603",
+   "stock": 1317700
+  },
+  "C 100p 0402": {
+   "lcsc": "C26409",
+   "mpn": "CL05C101JB5NNNC",
+   "package": "0402",
+   "stock": 798800
+  },
+  "C 10n 0402": {
+   "lcsc": "C15195",
+   "mpn": "CL05B103KB5NNNC",
+   "package": "0402",
+   "stock": 1569400
+  },
   "C 10p 0402": {
    "lcsc": "C32949",
    "mpn": "CL05C100JB5NNNC",
    "package": "0402",
    "stock": 635150
   },
+  "C 10u 0603": {
+   "lcsc": "C19702",
+   "mpn": "CL10A106KP8NNNC",
+   "package": "0603",
+   "stock": 5047760
+  },
+  "C 1n 0402": {
+   "lcsc": "C14442",
+   "mpn": "CL05B102KB5NNNC",
+   "package": "0402",
+   "stock": 1917200
+  },
+  "C 1u 0402": {
+   "lcsc": "C52923",
+   "mpn": "CL05A105KA5NQNC",
+   "package": "0402",
+   "stock": 1313050
+  },
+  "C 1u 0603": {
+   "lcsc": "C15849",
+   "mpn": "CL10A105KB8NNNC",
+   "package": "0603",
+   "stock": 1000
+  },
   "C 22p 0402": {
    "lcsc": "C70464",
    "mpn": "CL05C220JB5NNNC",
    "package": "0402",
    "stock": 90200
+  },
+  "C 22u 0805": {
+   "lcsc": "C45783",
+   "mpn": "CL21A226MAQNNNE",
+   "package": "0805",
+   "stock": 2032440
+  },
+  "C 4.7u 0603": {
+   "lcsc": "C19666",
+   "mpn": "CL10A475KO8NNNC",
+   "package": "0603",
+   "stock": 1034600
   },
   "R 0 0402": {
    "lcsc": "C17168",
