@@ -397,7 +397,8 @@ async def run_test(db, app: dict) -> dict:
         output += f"\n(stopped after {TEST_TIMEOUT}s)"
     rc = proc.returncode if not timed_out else -9
     try:
-        await compute.record(db, "test", await compute.current_revision(db),
+        await compute.record(db, "test", await compute.current_revision(
+            db, app.get("platform") or "web"),
                              model=app["_id"], rc=rc, **job)
     except Exception:                                # noqa: BLE001
         pass

@@ -680,7 +680,11 @@ export class Activity {
   lines(limit = 120, room: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' = 'cad'): Observable<LogLine[]> {
     return this.http.get<LogLine[]>(`/api/activity?limit=${limit}&room=${room}`);
   }
-  run(): Observable<Run | null> { return this.http.get<Run | null>('/api/run'); }
+  /** The run in one room. Each room has its own, so the tabs' agents can
+   *  work at once. */
+  run(room: string = 'cad'): Observable<Run | null> {
+    return this.http.get<Run | null>(`/api/run?room=${room}`);
+  }
 }
 
 // ---------------- code projects ----------------

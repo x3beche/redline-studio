@@ -137,6 +137,39 @@ Left to do, roughly in order:
 - **websockets warns** that `connect()` should be a context manager, in
   webshot.py and render.py both; the sync client still works.
 
+## Coding rooms, second round
+
+Asked for on 2026-09-24:
+
+- The tabs are called **Web Programming**, **Embedded Programming** and
+  **Mobile Programming**, and stay three tabs of their own.
+- **Each has its own Docker image and its own view.** Nothing is
+  installed on the host. `docker/code/web.Dockerfile` (Chrome, Node,
+  python for the photographer), `embedded.Dockerfile` (arm-none-eabi,
+  CMake, Ninja), `mobile.Dockerfile` (Android SDK, an emulated Pixel 7 on
+  KVM). A shot, a build and a test run go through the tab's container,
+  with the checkout mounted at its own path and the host's network.
+  - Web: the page in a frame, as now.
+  - Embedded: the firmware as built - memory regions and the largest
+    symbols, each one tagged with its source file and line so a ring
+    round it says `Core/Src/main.c:212`. First project: the STM32H743
+    firmware in ~/Desktop/stm32_projects/PS, built out of tree (4.0 s).
+  - Mobile: the phone's screen, live, from `adb screencap`; freeze lists
+    the elements on it (uiautomator for a native app, Chrome's DevTools
+    for a page) with their boxes in the screen's pixels.
+- **No run or build buttons.** The person marks; the agent builds, runs
+  the tests and starts servers. The board room's are going the same way
+  (its owner is doing that).
+- **One main agent, one sub-agent per tab.** The main agent waits on the
+  queue, reads the thread, and hands each queued note to the sub-agent
+  for its room (`.claude/agents/redline-*.md`). Rooms work in parallel,
+  so a run is per room - `runs/current` for the 3D room as before,
+  `runs/current:<room>` for the others - and a build is filed under its
+  own room's run.
+- **An MCP server for the queues** (`tools/mcp_server.py`, stdio, no new
+  dependency): queue by room, show a note, start, log, finish, done,
+  chat, say, ask - the same operations as revisions.py.
+
 ## Analyze
 
 A tab that says what it needs before it can exist.

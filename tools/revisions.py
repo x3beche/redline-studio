@@ -438,33 +438,36 @@ async def cmd_start(args):
     from backend import compute
 
     db = connect()
-    # "current" is one document for every agent on this database. Re-point
-    # it while somebody else's run is open and their `finish` closes yours:
-    # that happened, a CAD run and a code run crossing at 07:40.
-    cur = await db.runs.find_one({"_id": "current"}) or {}
+    # One run per room: the 3D room's is "current", the others their own,
+    # so a tab's agent can work while another room's is busy. Within a room
+    # it is still one document, and re-pointing it while somebody else's
+    # run is open lets their `finish` close yours: that happened, a CAD run
+    # and a code run crossing at 07:40 when there was only one.
+    from backend import compute
+    rdoc = await db.revisions.find_one({"_id": args.id}) or {}
+    room = compute.room_of(rdoc.get("kind"))
+    key = compute.run_key(room)
+    cur = await db.runs.find_one({"_id": key}) or {}
     if (cur.get("status") == "running" and cur.get("revision")
             and cur["revision"] != args.id and not args.force):
         sys.exit(f"another run is open: {cur['revision']} ({cur.get('title')}), "
                  f"started {str(cur.get('started_at'))[:19]}. Wait for it, or "
                  "--force if it is abandoned.")
-    doc = {"_id": "current", "title": args.title, "revision": args.id,
-           "model": None, "percent": 0.0, "status": "running",
+    doc = {"_id": key, "title": args.title, "revision": args.id,
+           "model": None, "percent": 0.0, "status": "running", "room": room,
            "started_at": _now(), "finished_at": None,
            # The machine's busy counter at both ends of the run: the
            # difference is what the whole box burned while this was worked
            # on. Our own builds are a part of that, not a separate bill.
            "cpu_start": compute.machine_cpu()}
-    await db.runs.replace_one({"_id": "current"}, doc, upsert=True)
+    await db.runs.replace_one({"_id": key}, doc, upsert=True)
     # A second copy keyed by the revision. "current" is overwritten by the
     # next run, and without this the window a revision was worked in - which
     # is what the cost is measured over - would be gone the moment the next
     # one starts.
     await db.runs.replace_one({"_id": args.id}, {**doc, "_id": args.id},
                               upsert=True)
-    # In the log of the room the revision belongs to: a code note's run is
-    # read in its coding room, not in the 3D room's.
-    rdoc = await db.revisions.find_one({"_id": args.id}) or {}
-    room = rdoc.get("kind") if rdoc.get("kind") in CODE_KINDS else "cad"
+    # In the log of the room the revision belongs to.
     await db.activity.insert_one(_line(f"started: {args.title}", "work", room))
     print(f"run started: {args.title}")
 
@@ -476,8 +479,10 @@ async def cmd_log(args):
     # between one thing and the next.
     await _shout_interrupts(db)
     if args.percent is not None:
-        cur = await db.runs.find_one({"_id": "current"}) or {}
-        ids = ["current"] + ([cur["revision"]] if cur.get("revision") else [])
+        from backend import compute
+        key = compute.run_key(args.room)
+        cur = await db.runs.find_one({"_id": key}) or {}
+        ids = [key] + ([cur["revision"]] if cur.get("revision") else [])
         await db.runs.update_many({"_id": {"$in": ids}},
                                   {"$set": {"percent": args.percent}})
     pct = "" if args.percent is None else f"  [{args.percent:.0f}%]"
@@ -491,7 +496,13 @@ async def cmd_finish(args):
     status = "failed" if args.failed else "done"
     patch = {"status": status, "percent": 100.0, "finished_at": _now(),
              "cpu_end": compute.machine_cpu()}
-    cur = await db.runs.find_one({"_id": "current"}) or {}
+    from backend import compute as _c
+    room = args.room
+    if args.id:
+        rdoc = await db.revisions.find_one({"_id": args.id}) or {}
+        room = _c.room_of(rdoc.get("kind"))
+    key = _c.run_key(room)
+    cur = await db.runs.find_one({"_id": key}) or {}
     if args.id and cur.get("revision") != args.id:
         # Closing one's own run by name, while "current" belongs to another:
         # only the run keyed by that revision is touched.
@@ -501,12 +512,10 @@ async def cmd_finish(args):
         cur = {**mine, "revision": args.id}
         await db.runs.update_one({"_id": args.id}, {"$set": patch})
     else:
-        ids = ["current"] + ([cur["revision"]] if cur.get("revision") else [])
+        ids = [key] + ([cur["revision"]] if cur.get("revision") else [])
         await db.runs.update_many({"_id": {"$in": ids}}, {"$set": patch},
                                   upsert=False)
-        await db.runs.update_one({"_id": "current"}, {"$set": patch}, upsert=True)
-    rdoc = await db.revisions.find_one({"_id": cur.get("revision")}) or {}
-    room = rdoc.get("kind") if rdoc.get("kind") in CODE_KINDS else "cad"
+        await db.runs.update_one({"_id": key}, {"$set": patch}, upsert=True)
     await db.activity.insert_one(_line(f"finished: {status}", status, room))
     print(f"run {status}")
 
@@ -963,6 +972,9 @@ def main() -> None:
                    help="the revision whose run to close; without it, whatever "
                         "the shared run points at")
     s.add_argument("--failed", action="store_true")
+    s.add_argument("--room", default="cad",
+                   choices=["cad", "pcb", "web", "embedded", "mobile"],
+                   help="without an id: which room's run to close")
     s.add_argument("--no-shot", action="store_true",
                    help="skip the after picture")
     s.set_defaults(fn=cmd_finish)

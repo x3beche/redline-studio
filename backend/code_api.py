@@ -180,7 +180,7 @@ async def take_shot(db, a: dict, route: str, width: int, height: int) -> dict:
     finally:
         if job:
             try:
-                await compute.record(db, "shot", await compute.current_revision(db),
+                await compute.record(db, "shot", await compute.current_revision(db, _room(a)),
                                      model=a["_id"], **job)
             except Exception:                        # noqa: BLE001
                 pass

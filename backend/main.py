@@ -385,6 +385,9 @@ class RunStart(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     revision: str | None = None
     model: str | None = None
+    # Whose run: each room has its own, so agents in different rooms can
+    # work at once without closing each other's.
+    room: str = Field(default="cad", pattern="^(cad|pcb|web|embedded|mobile)$")
 
 
 async def say(text: str, level: str = "info", room: str = "cad") -> dict:
@@ -417,7 +420,7 @@ async def push_activity(body: ActivityIn):
 
     # A percent on a log line also advances the bar, so one call does both.
     if body.percent is not None:
-        await d.runs.update_one({"_id": RUN_ID},
+        await d.runs.update_one({"_id": compute.run_key(body.room)},
                                 {"$set": {"percent": body.percent}})
 
     return doc
@@ -433,19 +436,21 @@ async def list_activity(limit: int = 120, room: str = "cad"):
 
 
 @app.get("/api/run")
-async def get_run():
-    return await db().runs.find_one({"_id": RUN_ID})
+async def get_run(room: str = "cad"):
+    return await db().runs.find_one({"_id": compute.run_key(room)})
 
 
 @app.post("/api/run/start")
 async def start_run(body: RunStart):
     from datetime import datetime, timezone
 
-    doc = {"_id": RUN_ID, "title": body.title, "revision": body.revision,
+    key = compute.run_key(body.room)
+    doc = {"_id": key, "title": body.title, "revision": body.revision,
            "model": body.model, "percent": 0.0, "status": "running",
+           "room": body.room,
            "started_at": datetime.now(timezone.utc).isoformat(),
            "finished_at": None}
-    await db().runs.replace_one({"_id": RUN_ID}, doc, upsert=True)
+    await db().runs.replace_one({"_id": key}, doc, upsert=True)
     # Keyed by the revision as well: "current" is overwritten by the next run
     # and the window this one was worked in is what its cost is measured over.
     if body.revision:
@@ -455,14 +460,15 @@ async def start_run(body: RunStart):
 
 
 @app.post("/api/run/finish")
-async def finish_run(status: str = "done"):
+async def finish_run(status: str = "done", room: str = "cad"):
     from datetime import datetime, timezone
 
     patch = {"status": status, "percent": 100.0,
              "finished_at": datetime.now(timezone.utc).isoformat()}
     d = db()
-    cur = await d.runs.find_one({"_id": RUN_ID}) or {}
-    await d.runs.update_one({"_id": RUN_ID}, {"$set": patch}, upsert=True)
+    key = compute.run_key(room)
+    cur = await d.runs.find_one({"_id": key}) or {}
+    await d.runs.update_one({"_id": key}, {"$set": patch}, upsert=True)
     rev = cur.get("revision")
     if rev:
         await d.runs.update_one({"_id": rev}, {"$set": patch}, upsert=False)
@@ -473,7 +479,7 @@ async def finish_run(status: str = "done"):
                               or {**cur, **patch})
         except Exception as exc:
             LOG.warning("analytics for %s skipped: %s", rev, exc)
-    return await d.runs.find_one({"_id": RUN_ID})
+    return await d.runs.find_one({"_id": key})
 
 
 @app.get("/api/revisions/{rid}/analytics")

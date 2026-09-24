@@ -404,7 +404,22 @@ async def record(db, kind: str, revision: str | None = None, **row) -> dict:
     return doc
 
 
-async def current_revision(db) -> str | None:
+# One run per room. The 3D room's is "current", as it always was; the others
+# have their own, because a tab's agent works in parallel with the others
+# and a single shared run let one agent's `finish` close another's.
+ROOMS = ("cad", "pcb", "web", "embedded", "mobile")
+
+
+def run_key(room: str | None) -> str:
+    return "current" if room in (None, "", "cad") else f"current:{room}"
+
+
+def room_of(kind: str | None) -> str:
+    """The room a revision of this kind is worked in."""
+    return kind if kind in ROOMS else "cad"
+
+
+async def current_revision(db, room: str | None = None) -> str | None:
     """The revision being worked on, so a build can be filed under it.
 
     The environment wins: the "after" picture is taken once the run has been
@@ -414,7 +429,7 @@ async def current_revision(db) -> str | None:
     told = os.environ.get("X3_REVISION")
     if told:
         return told
-    run = await db.runs.find_one({"_id": "current"})
+    run = await db.runs.find_one({"_id": run_key(room)})
     if run and run.get("status") == "running":
         return run.get("revision")
     return None

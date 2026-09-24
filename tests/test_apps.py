@@ -320,7 +320,28 @@ def test_finish_by_id_closes_only_that_run(monkeypatch):
               {"_id": "web-1", "revision": "web-1", "status": "running"}])
     monkeypatch.setattr(revisions, "connect", lambda: db)
     asyncio.run(revisions.cmd_finish(argparse.Namespace(
-        id="web-1", failed=False, no_shot=True)))
+        id="web-1", failed=False, no_shot=True, room="cad")))
     assert db.runs.rows["web-1"]["status"] == "done"
     assert db.runs.rows["current"]["status"] == "running"
     assert db.runs.rows["cad-1"]["status"] == "running"
+
+
+def test_rooms_have_runs_of_their_own(monkeypatch):
+    """A tab's agent works while another room's run is open: the code note's
+    run goes in its own room's document, and the 3D room's is untouched."""
+    import argparse
+    import asyncio
+
+    from tools import revisions
+
+    db = _Db([{"_id": "current", "revision": "cad-1", "status": "running"}])
+    db.revisions = _Runs([{"_id": "web-1", "kind": "web"}])
+    monkeypatch.setattr(revisions, "connect", lambda: db)
+    asyncio.run(revisions.cmd_start(argparse.Namespace(
+        id="web-1", title="run tests", force=False)))
+    assert db.runs.rows["current:web"]["revision"] == "web-1"
+    assert db.runs.rows["current"]["revision"] == "cad-1"
+    asyncio.run(revisions.cmd_finish(argparse.Namespace(
+        id="web-1", failed=False, no_shot=True, room="cad")))
+    assert db.runs.rows["current:web"]["status"] == "done"
+    assert db.runs.rows["current"]["status"] == "running"

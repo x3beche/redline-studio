@@ -81,6 +81,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   logOpen = signal(true);
   private builtAt = '';
   private lastRunStatus = '';
+  private lastRunRoom = '';
   private pendingCamera: string | null = null;
   /** resizeCadView re-frames the scene, so an explicitly set view has to be
    *  re-applied after every resize or it silently springs back.
@@ -224,8 +225,16 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.asks.open().subscribe({ next: v => this.takeQuestions(v), error: () => {} });
     this.chat.history().subscribe({ next: v => this.takeThread(v), error: () => {} });
     this.health.system().subscribe({ next: v => this.sys.set(v), error: () => {} });
-    this.activity.run().subscribe({
+    // The run of the room on screen: each room has its own. Switching
+    // rooms is not a run finishing, so the memory of the last status is
+    // per room and a switch starts it afresh.
+    const room = this.picked.room();
+    this.activity.run(room).subscribe({
       next: v => {
+        if (room !== this.lastRunRoom) {
+          this.lastRunRoom = room;
+          this.lastRunStatus = v?.status ?? '';
+        }
         const was = this.lastRunStatus;
         const before = this.run()?.revision;
         this.run.set(v);

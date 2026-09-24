@@ -38,21 +38,21 @@ export const WORKSPACES: Workspace[] = [
   // screen. One component serves all three; the tab says which.
   {
     id: 'web',
-    label: 'Web',
+    label: 'Web Programming',
     blurb: 'Redlining a running page: draw on what is on screen, the change '
          + 'arrives as a diff, and the tests are the check.',
     ready: true,
   },
   {
     id: 'embedded',
-    label: 'Embedded',
+    label: 'Embedded Programming',
     blurb: 'Firmware: the same notes, diffs and tests. What it shows on '
          + 'screen - a serial console, a display - is not wired yet.',
     ready: false,
   },
   {
     id: 'mobile',
-    label: 'Mobile',
+    label: 'Mobile Programming',
     blurb: 'A phone app: the same loop at a phone\'s size. Served on the '
          + 'web it can be drawn on today; on a device, not yet.',
     ready: false,

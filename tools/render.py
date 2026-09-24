@@ -201,6 +201,15 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
         # it, and its renderers are never reaped by anyone here.
         LAST_JOB.update(meter.stop())
         chrome.terminate()
+        # The profile goes with it. Every render used to leave its own
+        # behind in /tmp - 150 MB each, 8.7 GB of them by the time the
+        # system disk filled up on 2026-09-24.
+        try:
+            chrome.wait(10)
+        except subprocess.TimeoutExpired:
+            chrome.kill()
+        import shutil
+        shutil.rmtree(profile, ignore_errors=True)
 
 
 def main() -> None:

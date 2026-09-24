@@ -161,11 +161,10 @@ const VIEWPORTS: { key: string; w: number; h: number; label: string }[] = [
           <div class="p-3 text-[12px]" style="color: var(--ink-dim)">
             <p class="mb-2">Nothing answers at <span class="mono">{{ here()!.url }}</span>.</p>
             @if (here()!.dev) {
-              <button (click)="serve()" [disabled]="starting()"
-                      class="tcv-btn tcv-btn-accent px-2 py-0.5">
-                {{ starting() ? 'starting…' : 'start the dev server' }}
-              </button>
-              <span class="mono ml-2 text-[11px]">{{ here()!.dev }}</span>
+              <!-- Started by the agent (revisions.py code serve), not from
+                   a button: the person marks, the agent runs things. -->
+              <p>The agent starts it with <span class="mono">{{ here()!.dev }}</span>
+                 - ask in the thread.</p>
             }
           </div>
         } @else {
@@ -380,11 +379,11 @@ const VIEWPORTS: { key: string; w: number; h: number; label: string }[] = [
             @if (t.current === false) { · <span style="color: var(--warn)">tree changed since</span> }
           </span>
         }
-        <button (click)="runTests()" [disabled]="testing() || !here()!.test"
-                class="tcv-btn tcv-btn-accent ml-auto shrink-0 px-2 py-0.5"
-                [title]="here()!.test ?? 'no test command'">
-          {{ testing() ? 'running…' : 'run tests' }}
-        </button>
+        <!-- No run button: the agent runs the check (revisions.py code
+             test), the way it builds a board. This pane reads it out. -->
+        @if (!tests()) {
+          <span class="mono ml-auto shrink-0 text-[10px]" style="color: var(--ink-dim)">run by the agent</span>
+        }
       </header>
       <div class="tcv-scroll mono min-h-0 flex-1 overflow-auto px-2 py-1 text-[11px]">
         @if (tests(); as t) {
@@ -394,7 +393,8 @@ const VIEWPORTS: { key: string; w: number; h: number; label: string }[] = [
           <pre class="whitespace-pre-wrap break-all leading-snug" style="color: var(--ink)">{{ t.tail }}</pre>
         } @else {
           <div style="color: var(--ink-dim)">
-            {{ here()!.test ? 'Not run yet. run starts ' + here()!.test : 'This project has no test command.' }}
+            {{ here()!.test ? 'Not run yet. The agent runs ' + here()!.test + ' when it works a note.'
+                            : 'This project has no test command.' }}
           </div>
         }
       </div>
@@ -484,7 +484,6 @@ export class RoomCoding implements OnInit, OnDestroy {
   here = signal<AppEntry | null>(null);
   status = signal<AppStatus | null>(null);
   note = signal('');
-  starting = signal(false);
 
   route = signal('/');
   viewport = signal(VIEWPORTS[0]);
@@ -515,7 +514,6 @@ export class RoomCoding implements OnInit, OnDestroy {
   revisions = signal<Revision[]>([]);
 
   tests = signal<TestRun | null>(null);
-  testing = signal(false);
   cost = signal<AppCompute | null>(null);
   sys = signal<SystemInfo | null>(null);
   log = signal<LogLine[]>([]);
@@ -679,21 +677,6 @@ export class RoomCoding implements OnInit, OnDestroy {
     const w = Math.round(vw * k), h = Math.round(vh * k);
     return { k, w, h, x: Math.round((bw - w) / 2), y: Math.round((bh - h) / 2) };
   });
-
-  serve() {
-    const a = this.here();
-    if (!a || this.starting()) return;
-    this.starting.set(true);
-    this.apps.serve(a._id).subscribe({
-      next: r => {
-        this.starting.set(false);
-        this.note.set(r.started ? 'dev server starting - it prints in the server tab'
-                                : r.why ?? '');
-        if (r.started) this.setBottom('server');
-      },
-      error: e => { this.starting.set(false); this.note.set(this.why(e)); },
-    });
-  }
 
   // ---- freeze, draw ----
 
@@ -914,20 +897,6 @@ export class RoomCoding implements OnInit, OnDestroy {
   }
 
   // ---- the check ----
-
-  runTests() {
-    const a = this.here();
-    if (!a || this.testing()) return;
-    this.testing.set(true);
-    this.apps.test(a._id).subscribe({
-      next: t => {
-        this.testing.set(false);
-        this.tests.set({ ...t, current: true });
-        this.loadCost();
-      },
-      error: e => { this.testing.set(false); this.note.set(this.why(e)); },
-    });
-  }
 
   countLine(t: TestRun): string {
     const c = Object.entries(t.counts ?? {});
