@@ -161,7 +161,9 @@ HTTP_TOOLS: dict[str, tuple] = {
 def http(method: str, path: str, body: dict | None) -> tuple[bool, str]:
     req = urllib.request.Request(API + path, method=method,
                                  data=json.dumps(body).encode() if body is not None else None,
-                                 headers={"Content-Type": "application/json"})
+                                 headers={"Content-Type": "application/json",
+                                          # who is asking, for the tools' usage and the audit
+                                          "X-Redline-Actor": "agent:" + os.environ.get("X3_AGENT", "agent")})
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
             return True, r.read().decode()

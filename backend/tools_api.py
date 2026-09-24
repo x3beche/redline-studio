@@ -157,9 +157,13 @@ def manifest_of(tid: str) -> dict:
 
 
 async def _record(tid: str, event: str, surface: str, extra: dict | None = None) -> None:
+    """One use of a tool, stamped with who: the person, or the agent named
+    by the request (X-Redline-Actor), as the audit trail stamps them."""
     try:
+        from . import actors
+        who = actors.current()
         await _db()[USAGE].insert_one({"tool": tid, "event": event, "surface": surface,
-                                       "at": datetime.now(timezone.utc), **(extra or {})})
+                                       "at": datetime.now(timezone.utc), "by": who, **(extra or {})})
     except Exception:                                    # noqa: BLE001 - never fatal
         pass
 
@@ -328,7 +332,8 @@ class DataIn(BaseModel):
 @router.get("/data/{tid}")
 async def get_data(tid: str, project: str = "default") -> dict:
     manifest_of(tid)
-    doc = await _db()[DATA].find_one({"_id": f"{tid}:{project}"}) or {}
+    from . import scope
+    doc = await _db()[DATA].find_one({"_id": scope.key(f"{tid}:{project}")}) or {}
     return {"id": tid, "project": project, "data": doc.get("data") or {},
             "updated": doc.get("updated")}
 
@@ -340,6 +345,7 @@ async def put_data(tid: str, body: DataIn, project: str = "default") -> dict:
     if len(blob) > 500_000:
         raise HTTPException(413, "too large")
     now = datetime.now(timezone.utc)
-    await _db()[DATA].update_one({"_id": f"{tid}:{project}"},
+    from . import scope
+    await _db()[DATA].update_one({"_id": scope.key(f"{tid}:{project}")},
                                  {"$set": {"data": body.data, "updated": now}}, upsert=True)
     return {"ok": True, "updated": now.isoformat()}
