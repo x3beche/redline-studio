@@ -24,6 +24,9 @@ TS = ROOT / "frontend/src/app/editor/editor.ts"
 # The shell carries its own template, so it can leak a colour just as well.
 SHELL = ROOT / "frontend/src/app/app.ts"
 ROOMS = sorted((ROOT / "frontend/src/app/rooms").glob("*.ts"))
+# Each tool in the Tools menu is its own component, often with a stylesheet.
+TOOLS = sorted([*(ROOT / "frontend/src/app/tools").rglob("*.ts"),
+                *(ROOT / "frontend/src/app/tools").rglob("*.css")])
 THEME_TS = ROOT / "frontend/src/theme.ts"
 
 # A hex colour, or an rgb()/rgba() with a number in it. `rgb(var(--x))`
@@ -158,6 +161,14 @@ def test_no_room_carries_a_colour_of_its_own():
         assert not found, f"literal colours in {path.name}: {found[:4]}"
 
 
+def test_no_tool_carries_a_colour_of_its_own():
+    """The Tools menu grows one component at a time, each a new way in."""
+    assert TOOLS, "the tools went missing"
+    for path in TOOLS:
+        found = literals(path)
+        assert not found, f"literal colours in {path.name}: {found[:4]}"
+
+
 def test_the_pens_are_exempt_on_purpose_and_still_there():
     """The exemption has to be earning its keep, or it is a hole."""
     text = TS.read_text()
@@ -169,7 +180,7 @@ def test_the_pens_are_exempt_on_purpose_and_still_there():
 def test_every_token_used_anywhere_is_defined_by_the_default_theme(css):
     base = set(defined(blocks(css)["default"]))
     everywhere = set()
-    for path in [CSS, HTML, TS, SHELL, *ROOMS]:
+    for path in [CSS, HTML, TS, SHELL, *ROOMS, *TOOLS]:
         everywhere |= used(strip_comments(path.read_text(),
                                           css=path.suffix == ".css"))
     # The viewer's own variables are read with a fallback and belong to it.
@@ -182,7 +193,7 @@ def test_no_token_is_defined_and_then_never_used(css):
     """Dead colours drift: they stop matching and nobody notices."""
     base = set(defined(blocks(css)["default"]))
     everywhere = set()
-    for path in [CSS, HTML, TS, SHELL, *ROOMS]:
+    for path in [CSS, HTML, TS, SHELL, *ROOMS, *TOOLS]:
         everywhere |= used(path.read_text())
     assert not (base - everywhere), \
         f"defined but unused: {sorted(base - everywhere)}"

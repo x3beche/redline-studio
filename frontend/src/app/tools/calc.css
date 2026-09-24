@@ -1,0 +1,41 @@
+/* The calculators' one look: sections of labelled fields over a result.
+   Shared by every form-of-figures tool; each takes it as its styleUrl. */
+:host { display: block; min-height: 0; overflow-y: auto; }
+
+.calc { padding: 10px 16px 14px; font-size: 12px; color: var(--ink); }
+.calc-sec + .calc-sec { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.calc-title { font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+.calc-hint { font-size: 11px; color: var(--ink-dim); margin: -2px 0 6px; }
+
+.calc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 10px; }
+.calc-f { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.calc-f > span { font-size: 11px; color: var(--ink-dim); }
+.calc-f input, .calc-f select {
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 4px;
+  padding: 3px 6px; font-size: 12px; outline: none; min-width: 0;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+}
+.calc-f input:focus, .calc-f select:focus { border-color: var(--accent); }
+.calc-f input.bad { border-color: var(--danger); }
+.calc-f.given input { border-color: var(--accent-deep); }
+
+.calc-out { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 10px; margin-top: 8px; }
+.calc-out > div { background: var(--surface); border-radius: 4px; padding: 5px 8px; min-width: 0; }
+.calc-out span { display: block; font-size: 11px; color: var(--ink-dim); }
+.calc-out b {
+  display: block; font-weight: 500; color: var(--ink-bright);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 14px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.calc-out small { display: block; font-size: 10.5px; color: var(--ink-dim); }
+
+.calc-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.calc-seg button { padding: 3px 9px; font-size: 11px; color: var(--ink-dim); background: var(--surface); }
+.calc-seg button + button { border-left: 1px solid var(--line); }
+.calc-seg button:hover { background: var(--hover); color: var(--ink); }
+.calc-seg button.on { background: var(--accent-deep); color: var(--ink-bright); }
+
+.calc-warn { color: var(--warn); font-size: 11px; margin-top: 6px; }
+.calc-bad { color: var(--danger); font-size: 11px; margin-top: 6px; }
+.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }

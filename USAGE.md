@@ -801,13 +801,31 @@ station, 63.7 MB artifact
 
 **Tools** at the right end of the top bar: hover it and the tools drop
 down. A tool opens in a window over whatever room is on screen, in the
-app's colours; **×** or Esc closes it, and it remembers its own work for next
-time.
+app's colours; **×** or Esc closes it. Grid Sketch remembers its own work
+for next time.
 
 - **Grid Sketch** - draw a layout on a grid (drag to draw an area, drag it to
   move it, rename it in the list) and copy it as a prompt, CSS, grid areas,
   Tailwind, ASCII or JSON. Useful for telling an agent how a screen should
   be laid out.
 
-A tool is a self-contained page in `frontend/public/tools/` plus one line in
-`frontend/src/app/tools.ts`.
+- **Units & Numbers** - mm, mil, inch and µm; decimal, hex, binary and octal
+  (with the two's complement at 8 to 64 bits); a UART's BRR and baud error
+  for a clock; the timer PSC/ARR pair nearest a frequency.
+- **Trace Width** - how wide a track must be for a current on an outer and
+  an inner layer (IPC-2221), with its resistance, voltage drop and loss over
+  a length; what a given width carries; what a via carries.
+- **Resistor & LED** - Ohm's law from any two of V, I, R and P; an LED's
+  series resistor rounded up to an E12/E24/E96 value, with the current and
+  package it then needs; the standard divider pair nearest a Vout.
+
+The calculators read values the way an engineer writes them: `4k7`, `2M2`,
+`100n`, `10m`.
+
+Each tool is a component in a folder of its own under
+`frontend/src/app/tools/` (`units/`, `trace-width/`, `resistor/`,
+`grid-sketch/`), loaded only when first opened. A new tool is a folder there
+and one entry in `tools/registry.ts`. The calculators share `tools/calc.css`
+and `tools/eng.ts` (engineering notation, E-series values); a tool that is a
+self-contained page, like Grid Sketch, lives in `frontend/public/tools/` and
+is shown through `tools/frame.ts`, which dresses it in the app's colours.

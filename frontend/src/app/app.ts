@@ -4,7 +4,7 @@ import { Selection } from './selection';
 import { RoomAnalyze } from './rooms/analyze';
 import { RoomCoding } from './rooms/coding';
 import { RoomPcb } from './rooms/pcb';
-import { ToolsMenu } from './tools';
+import { ToolsMenu } from './tools/menu';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 
 @Component({
