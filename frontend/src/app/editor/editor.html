@@ -605,7 +605,8 @@
                                   : 'Saved as a note on the open board. Press the pen to draw on it.')
            : codeRoom()
              ? (picked.codeDraft() ? 'Saved with the frozen page and the elements under the marks.'
-                                   : 'Saved as a note on the project. Freeze the preview to draw on it.')
+                : picked.room() === 'embedded' ? 'Saved as a note on the firmware, about the function or table picked in the view.'
+                : 'Saved as a note on the project. Press the pen to draw on it.')
            : frozen() ? 'Saved with the drawing. Drafts stay invisible until queued.'
                       : 'Saved as a note. Freeze first if you want to draw on it.' }}
       </p>

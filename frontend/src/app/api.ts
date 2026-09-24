@@ -757,6 +757,8 @@ export interface AppEntry {
   /** A phone app: its Android package; without one, url is opened in the
    *  phone's browser. */
   package?: string | null;
+  target?: 'stm32' | 'esp32' | null;
+  flashed?: { at: string; ok: boolean; target: string; port: string | null } | null;
 }
 
 export interface FirmwareBuild {
@@ -836,6 +838,15 @@ export class Apps {
   private http = inject(HttpClient);
   list(): Observable<AppEntry[]> { return this.http.get<AppEntry[]>('/api/apps'); }
   one(id: string): Observable<AppEntry> { return this.http.get<AppEntry>(`/api/apps/${id}`); }
+  /** The last build as data: regions, symbols with their files. */
+  firmware(id: string): Observable<unknown> {
+    return this.http.get<unknown>(`/api/apps/${id}/firmware.json`);
+  }
+  /** STM32 probes and ESP32 boards plugged into this machine. */
+  boards(): Observable<{ kind: string; name: string; port?: string; usb?: string }[]> {
+    return this.http.get<{ kind: string; name: string; port?: string; usb?: string }[]>(
+      '/api/apps/hardware/boards');
+  }
   buildLog(id: string): Observable<{ lines: string[] }> {
     return this.http.get<{ lines: string[] }>(`/api/apps/${id}/build-log`);
   }

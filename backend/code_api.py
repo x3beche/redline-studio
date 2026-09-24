@@ -502,6 +502,18 @@ async def flash_app(aid: str, port: str | None = None):
     return out
 
 
+@router.get("/{aid}/firmware.elf")
+async def firmware_elf(aid: str):
+    """The last build's image, for a debugger or a programmer of one's own."""
+    a = await _app(aid)
+    fw = a.get("firmware") or {}
+    path = firmware.build_dir(aid) / (fw.get("elf") or "")
+    if not fw.get("ok") or not path.is_file():
+        raise HTTPException(404, "not built")
+    return Response(path.read_bytes(), media_type="application/octet-stream",
+                    headers={"Content-Disposition": f'attachment; filename="{path.name}"'})
+
+
 @router.get("/{aid}/firmware.html")
 async def firmware_page(aid: str):
     a = await _app(aid)

@@ -152,6 +152,11 @@ export class Editor implements AfterViewInit, OnDestroy {
   private ro?: ResizeObserver;
 
   constructor() {
+    // A coding room picked something to be the note's Part.
+    effect(() => {
+      const got = this.picked.codePick();
+      if (got) untracked(() => this.part.set(got.label));
+    });
     // The 3D panel is not destroyed when another room is on - its WebGL
     // context and tens of megabytes of geometry would go with it - it is
     // taken out of the layout. A hidden element measures zero, so the

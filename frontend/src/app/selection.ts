@@ -46,6 +46,11 @@ export class Selection {
    *  it: `button.tcv-btn "build" · rooms/pcb.ts`. */
   codeParts = signal<string[]>([]);
 
+  /** Something picked in a coding room's view to be the note's Part - a
+   *  function in the firmware view, say. The form beside the room takes
+   *  it, the way a click on a model's part fills the field in 3D. */
+  codePick = signal<{ label: string } | null>(null);
+
   /** The frozen page, marked up, ready to be filed. The room owns the
    *  picture and the marks; the note form is in the column beside it, so
    *  the form asks the room through this rather than reaching into it.
