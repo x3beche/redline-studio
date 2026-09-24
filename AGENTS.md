@@ -179,10 +179,27 @@ looking things up, and none of them is written from memory:
   Paste it; do not retype it.
 - `pins` is the same pinout as a list, for reading.
 
-Then write the module that connects them, build, and lay out. Check the
-netlist the build produces for the connections that matter - the USB
-pair, the UART crossover (TX to RX), power and ground - before you call it
-done.
+Then write the module that connects them and build. Before laying out,
+fetch every part's footprint and model once:
+
+```bash
+.venv/bin/python tools/revisions.py part keep C2969989 C14267 ...
+```
+
+`keep` waits for LCSC's budget rather than failing, so twenty new parts
+take a quarter of an hour - better there than in a layout that places half
+the board. Then lay out.
+
+Check the netlist the build produces for the connections that matter - the
+USB pair, the UART crossover (TX to RX), each rail on its own net, every
+ground - before you call it done. Write the checks down as code against
+the build's netlist, not by eye.
+
+Read each generated block, do not assume one from its neighbour: the
+red KT-0603R LED has its anode on pin 1 and the green KT-0603G its
+cathode. A four-pin tactile switch joins its pins in pairs; which pairs is
+in the symbol's drawing (`part pins` then look at the shapes), and wiring
+the wrong two makes a button that is always pressed.
 
 Things this does not do for you: choose topology (a regulator the MCU
 needs, load sharing on a Li-ion charger, CC pull-downs on a USB-C sink),
@@ -215,7 +232,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py queue                # what is queued
 .venv/bin/python tools/revisions.py wait                 # block until there is
 .venv/bin/python tools/revisions.py ask "..." -o A -o B  # ask on their screen
-.venv/bin/python tools/revisions.py part find|pins|ato|passive ...  # parts
+.venv/bin/python tools/revisions.py part find|pins|ato|passive|keep ...  # parts
 .venv/bin/python tools/revisions.py chat                 # what they said
 .venv/bin/python tools/revisions.py say "..."            # answer them
 .venv/bin/python tools/revisions.py show <id>            # write drawing to disk

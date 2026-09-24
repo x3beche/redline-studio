@@ -12,7 +12,7 @@ footprint in a board is not written down anywhere obvious.
 
     plan = {
       "out": "/work/board.kicad_pcb",
-      "pitch": 12.0, "margin": 8.0, "per_row": 5,
+      "gap": 1.5, "margin": 3.0,
       "components": [{"ref": "R1", "footprint": "/work/fp/R0402.kicad_mod",
                       "value": "10k"}],
       "nets": [{"name": "vcc", "nodes": [{"ref": "R1", "pin": "1"}]}]
@@ -32,6 +32,85 @@ def at(x_mm: float, y_mm: float):
     return pcbnew.VECTOR2I(int(x_mm * MM), int(y_mm * MM))
 
 
+def extent(fp) -> tuple[float, float, float, float]:
+    """A footprint's extent in mm, relative to its origin: x, y, w, h.
+
+    The courtyard where it has one - that is what the footprint says it
+    needs - and the pads and outline otherwise.
+    """
+    box = None
+    try:
+        court = fp.GetCourtyard(pcbnew.F_CrtYd)
+        if court.OutlineCount():
+            box = court.BBox()
+    except Exception:
+        box = None
+    if box is None:
+        try:
+            box = fp.GetBoundingBox(False, False)
+        except TypeError:
+            box = fp.GetBoundingBox(False)
+    return (box.GetX() / MM, box.GetY() / MM, box.GetWidth() / MM, box.GetHeight() / MM)
+
+
+def cluster(loaded, nets):
+    """Order the parts so each small one follows the chip it serves.
+
+    A decoupling capacitor belongs beside the pin it decouples, and a
+    crystal's load capacitors beside the crystal. Parts with five pads or
+    more are anchors, biggest first; every smaller part goes after the
+    anchor it shares the most nets with. Nets that touch more than six
+    parts - ground, the rails - are left out of that count: they share
+    everything with everything and would put every part beside the MCU.
+    """
+    parts = {comp.get("ref"): (comp, fp, box) for comp, fp, box in loaded}
+    touches = {}
+    for net in nets:
+        refs = {n["ref"] for n in net.get("nodes", []) if n.get("ref") in parts}
+        if 2 <= len(refs) <= 6:
+            for r in refs:
+                touches.setdefault(r, set()).add(net.get("name"))
+
+    def pads(ref):
+        return len(list(parts[ref][1].Pads()))
+
+    anchors = sorted((r for r in parts if pads(r) >= 5),
+                     key=lambda r: (-pads(r), r))
+    followers = {a: [] for a in anchors}
+    loose = []
+    for ref in sorted(r for r in parts if r not in followers):
+        mine = touches.get(ref, set())
+        best = max(anchors, key=lambda a: len(mine & touches.get(a, set())),
+                   default=None)
+        if best is not None and mine & touches.get(best, set()):
+            followers[best].append(ref)
+        else:
+            loose.append(ref)
+
+    order = []
+    for a in anchors:
+        order += [a] + followers[a]
+    return [parts[r] for r in order + loose]
+
+
+def shelves(boxes, gap):
+    """Pack extents left to right in rows, the rows about as wide as the
+    whole lot is tall - a board, not a strip."""
+    import math
+
+    area = sum((w + gap) * (h + gap) for _, _, w, h in boxes)
+    widest = max((w for _, _, w, _ in boxes), default=0)
+    row_w = max(widest, math.sqrt(area) * 1.15)
+    spots, x, y, row_h = [], 0.0, 0.0, 0.0
+    for _, _, w, h in boxes:
+        if x > 0 and x + w > row_w:
+            x, y, row_h = 0.0, y + row_h + gap, 0.0
+        spots.append((20.0 + x, 20.0 + y))
+        x += w + gap
+        row_h = max(row_h, h)
+    return spots
+
+
 def main() -> int:
     plan = json.load(sys.stdin)
     board = pcbnew.BOARD()
@@ -49,21 +128,30 @@ def main() -> int:
              for net in plan.get("nets", [])
              for n in net.get("nodes", []) if net.get("name")}
 
-    pitch = plan.get("pitch", 12.0)
-    margin = plan.get("margin", 8.0)
-    per_row = plan.get("per_row", 5)
-
     placed, missing, xs, ys = 0, [], [], []
-    for i, comp in enumerate(plan.get("components", [])):
+    gap = plan.get("gap", 1.5)                 # between two parts' extents
+    margin = plan.get("margin", 3.0)           # from the outermost part to the edge
+
+    comps = plan.get("components", [])
+    loaded = []
+    for i, comp in enumerate(comps):
         path = Path(comp["footprint"])
         fp = pcbnew.FootprintLoad(str(path.parent), path.stem)
         if fp is None:
             missing.append(f"{comp.get('ref')} ({path.stem})")
             continue
-        x = 20.0 + (i % per_row) * pitch
-        y = 20.0 + (i // per_row) * pitch
-        fp.SetPosition(at(x, y))
-        fp.SetReference(comp.get("ref") or f"U{i}")
+        fp.SetPosition(at(0, 0))
+        box = extent(fp)
+        loaded.append((comp, fp, box))
+
+    ordered = cluster(loaded, plan.get("nets", []))
+    spots = shelves([box for _, _, box in ordered], gap)
+
+    for (comp, fp, box), (x, y) in zip(ordered, spots):
+        # The shelf gives where the part's extent starts; the footprint is
+        # positioned by its own origin, which sits somewhere inside that.
+        fp.SetPosition(at(x - box[0], y - box[1]))
+        fp.SetReference(comp.get("ref") or f"U{placed}")
         if comp.get("value"):
             fp.SetValue(str(comp["value"]))
         for pad in fp.Pads():
@@ -72,8 +160,8 @@ def main() -> int:
                 pad.SetNet(nets[name])
         board.Add(fp)
         placed += 1
-        xs.append(x)
-        ys.append(y)
+        xs += [x, x + box[2]]
+        ys += [y, y + box[3]]
 
     # The outline. Without one there is no board, only parts in space, and
     # the 3D export comes out empty.

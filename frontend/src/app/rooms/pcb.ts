@@ -388,6 +388,11 @@ interface Placed {
               <span style="color: var(--ok)">asking</span>
             }
             <span style="color: var(--ink-dim)">one ask every {{ j.state.gap_s }} s</span>
+            <!-- EasyEDA refuses a count, not a rate - 35 asks over 220 s
+                 were enough - so this is the number that matters. -->
+            <span [style.color]="j.state.used >= j.state.budget ? 'var(--warn)' : 'var(--ink-dim)'">
+              {{ j.state.used }}/{{ j.state.budget }} asks in {{ j.state.window_s / 60 }} min
+            </span>
             <span class="ml-auto flex gap-1">
               @for (f of askFilters; track f) {
                 <button (click)="askFilter.set(f)" class="tcv-chip px-1.5 py-0"
@@ -782,13 +787,15 @@ export class RoomPcb implements OnDestroy {
   sourceColor(a: LcscAsk): string {
     if (a.source === 'refused' || a.status === 403 || a.status === 429) return 'var(--danger)';
     if (a.source === 'disk') return 'var(--ink-dim)';
+    if (a.source === 'wait') return 'var(--warn)';
     return a.status === 200 ? 'var(--ok)' : 'var(--warn)';
   }
 
   sourceWord(s: LcscAsk['source']): string {
     return s === 'net' ? 'sent to EasyEDA'
       : s === 'disk' ? 'answered from disk, nothing sent'
-      : 'not sent - cooling off after a refusal';
+      : s === 'wait' ? 'an agent waiting for the budget; sent when it frees'
+      : 'not sent - cooling off, or the budget is spent';
   }
 
   size(bytes: number): string {

@@ -443,8 +443,9 @@ export interface LcscAsk {
   kind: string;
   /** The search, or the part number. */
   target: string;
-  /** net: went to EasyEDA. disk: already here. refused: not sent, cooling off. */
-  source: 'net' | 'disk' | 'refused';
+  /** net: went to EasyEDA. disk: already here. refused: not sent, cooling
+   *  off or out of budget. wait: an agent waiting for the budget. */
+  source: 'net' | 'disk' | 'refused' | 'wait';
   url: string;
   status: number | null;
   ms: number;
@@ -455,7 +456,9 @@ export interface LcscAsk {
 export interface LcscJournal {
   state: { gap_s: number; cool_off_s: number; now: number;
            refused_until: number | null; refused_why: string | null;
-           last_ask: number | null };
+           last_ask: number | null;
+           /** At most `budget` asks in any `window_s`; `used` so far. */
+           budget: number; window_s: number; used: number };
   rows: LcscAsk[];
   last_hour: { net: number; disk: number; refused: number };
 }

@@ -204,6 +204,33 @@ async def cmd_part(args):
     """
     from backend import lcsc
 
+    if args.what == "keep":
+        # Ahead of a layout, and patient: each download is three asks of a
+        # budget of 25 per five minutes, so twenty parts is a wait - better
+        # spent here than in a layout that places half the board.
+        from backend import store  # noqa: F401  (connect() needs the env)
+        lcsc.PATIENT.set(True)
+        # Line by line, even into a file: this takes minutes, and progress
+        # that sits in a buffer until the end is no progress at all.
+        sys.stdout.reconfigure(line_buffering=True)
+        db = connect()
+        codes = list(dict.fromkeys(args.args))
+        for i, code in enumerate(codes, 1):
+            have = await db[lcsc.PARTS].find_one({"_id": code}, {"_id": 1})
+            if have:
+                print(f"[{i}/{len(codes)}] {code}: already in the drawer")
+                continue
+            try:
+                doc = await lcsc.fetch(db, code)
+                has3d = bool((doc.get("artifacts") or {}).get("model"))
+                print(f"[{i}/{len(codes)}] {code}: {doc.get('name')}"
+                      + (" + 3D" if has3d else ", footprint only"))
+            except lcsc.Refused as exc:
+                sys.exit(f"[{i}/{len(codes)}] {code}: {exc} - run it again later; "
+                         "what was kept stays kept")
+            except (RuntimeError, ValueError, OSError) as exc:
+                print(f"[{i}/{len(codes)}] {code}: could not be fetched - {exc}")
+        return
     if args.what == "passive":
         if len(args.args) != 3:
             sys.exit("passive KIND VALUE SIZE, e.g. passive R 10k 0402")
@@ -226,13 +253,27 @@ async def cmd_part(args):
                   f"{str(r.get('package'))[:20]:20} {cls:8} "
                   f"stock {r.get('stock') or 0:<9} {price}")
         return
+    # Each part on its own: one that cannot be had right now - EasyEDA
+    # cooling off, a part it does not know - is named, and the rest still
+    # come out. A traceback for the fourth of nine parts helped nobody.
+    left_out = []
     for code in args.args:
-        if args.what == "pins":
-            print(f"# {code}")
-            for pin in await lcsc.pins(code):
-                print(f"  {pin['number']:>6}  {pin['name']}")
-        else:
-            print(await lcsc.ato_component(code))
+        try:
+            if args.what == "pins":
+                rows = await lcsc.pins(code)
+                print(f"# {code}")
+                for pin in rows:
+                    print(f"  {pin['number']:>6}  {pin['name']}")
+            else:
+                print(await lcsc.ato_component(code))
+        except lcsc.Refused as exc:
+            left_out.append(f"{code}: {exc}")
+        except LookupError as exc:
+            left_out.append(f"{code}: {exc}")
+    if left_out:
+        print("\n# not written:\n" + "\n".join(f"#   {x}" for x in left_out),
+              file=sys.stderr)
+        sys.exit(2)
 
 
 async def cmd_ask(args):
@@ -576,10 +617,12 @@ def main() -> None:
                    help="withdraw the question after N seconds; 0 waits")
     s.set_defaults(fn=cmd_ask)
     s = sub.add_parser("part", help="parts from LCSC, for writing a board")
-    s.add_argument("what", choices=["find", "pins", "ato", "passive"],
+    s.add_argument("what", choices=["find", "pins", "ato", "passive", "keep"],
                    help="find: ranked search; pins: a part's pinout; "
                         "ato: component blocks to paste into a board; "
-                        "passive: R/C by value and size, e.g. R 10k 0402")
+                        "passive: R/C by value and size, e.g. R 10k 0402; "
+                        "keep: fetch footprints and models ahead of a layout, "
+                        "waiting out LCSC's budget")
     s.add_argument("args", nargs="+",
                    help="a search for find, LCSC numbers (C...) for pins/ato, "
                         "KIND VALUE SIZE for passive")

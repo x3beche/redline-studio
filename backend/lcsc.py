@@ -90,6 +90,13 @@ import time as _time
 
 GAP = float(os.environ.get("X3_LCSC_GAP", "2.5"))        # seconds between asks
 COOL_OFF = 600                                           # after being refused
+# Spacing alone does not keep EasyEDA happy. The journal's two refusals:
+# 42 searches in 71 s, and 35 asks spread over 220 s - one every 6 s. So
+# it is a count, not a rate, and asks are budgeted: this many in any
+# window this long, across every process, then nothing is sent until the
+# window moves on.
+BUDGET = int(os.environ.get("X3_LCSC_BUDGET", "25"))
+WINDOW = 300
 KEEP_LINES = 1000                                        # journal length
 
 # Who is asking: the page (through the server), an agent (the command line
@@ -97,6 +104,10 @@ KEEP_LINES = 1000                                        # journal length
 _DEFAULT_WHO = {"revisions.py": "agent", "passives.py": "passives"}.get(
     Path(sys.argv[0]).name if sys.argv else "", "page")
 WHO: contextvars.ContextVar[str] = contextvars.ContextVar("who", default=_DEFAULT_WHO)
+# Whether a spent budget means "wait for it" or "say so now". The page
+# answers someone looking at it, so it says so. An agent fetching twenty
+# parts for a board would rather wait twelve minutes than get eight.
+PATIENT: contextvars.ContextVar[bool] = contextvars.ContextVar("patient", default=False)
 
 
 class Refused(OSError):
@@ -127,10 +138,12 @@ def state() -> dict:
     now = _time.time()
     s = _locked(lambda st: dict(st))
     until = s.get("refused_until") or 0
+    recent = [t for t in s.get("asks", []) if t > now - WINDOW]
     return {"gap_s": GAP, "cool_off_s": COOL_OFF, "now": now,
             "refused_until": until if until > now else None,
             "refused_why": s.get("refused_why") if until > now else None,
-            "last_ask": s.get("last")}
+            "last_ask": s.get("last"),
+            "budget": BUDGET, "window_s": WINDOW, "used": len(recent)}
 
 
 def _record(kind: str, target: str, source: str, *, url: str = "",
@@ -170,7 +183,7 @@ def journal(limit: int = 200) -> list[dict]:
     return out
 
 
-async def _polite(kind: str, target: str, url: str, fn, *args):
+async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
     """One request: its turn, the request, and a line in the journal."""
     import urllib.error
 
@@ -178,16 +191,37 @@ async def _polite(kind: str, target: str, url: str, fn, *args):
         now = _time.time()
         if now < (st.get("refused_until") or 0):
             return ("refused", st["refused_until"] - now)
+        recent = [t for t in st.get("asks", []) if t > now - WINDOW]
+        if len(recent) + weight > BUDGET:
+            st["asks"] = recent
+            return ("budget", recent[0] + WINDOW - now)
         wait = max(0.0, (st.get("last") or 0) + GAP - now)
-        st["last"] = now + wait                  # the slot is ours
+        # A heavy ask (a download that is several requests inside) takes
+        # its weight in slots from the budget and pushes the next ask back.
+        st["last"] = now + wait + GAP * (weight - 1)
+        st["asks"] = recent + [now + wait] * weight
         return ("go", wait)
 
     verdict, wait = await asyncio.get_running_loop().run_in_executor(None, _locked, claim)
+    waited = 0.0
+    while verdict == "budget" and PATIENT.get():
+        if not waited:
+            _record(kind, target, "wait", url=url,
+                    error=f"budget spent - waiting {int(wait) + 1} s for it")
+        await asyncio.sleep(min(wait + 0.5, 30))
+        waited += min(wait + 0.5, 30)
+        verdict, wait = await asyncio.get_running_loop().run_in_executor(None, _locked, claim)
     if verdict == "refused":
         _record(kind, target, "refused", url=url,
                 error=f"cooling off, {int(wait // 60) + 1} min left")
         raise Refused(f"EasyEDA is turning requests away; parts already looked "
                       f"at still work, new ones in {int(wait // 60) + 1} min")
+    if verdict == "budget":
+        _record(kind, target, "refused", url=url,
+                error=f"budget: {BUDGET} asks per {WINDOW // 60} min spent, "
+                      f"next in {int(wait) + 1} s")
+        raise Refused(f"{BUDGET} asks in {WINDOW // 60} minutes is all EasyEDA is "
+                      f"asked for; the next one can go in {int(wait) + 1} s")
     if wait:
         await asyncio.sleep(wait)
 
@@ -212,10 +246,17 @@ async def _polite(kind: str, target: str, url: str, fn, *args):
         _record(kind, target, "net", url=url, ms=(_time.monotonic() - t0) * 1000,
                 error=f"{type(exc).__name__}: {exc}"[:200])
         raise
+    ms = (_time.monotonic() - t0) * 1000
+    if isinstance(out, tuple):
+        # A download reports (return code, log): a failed one is written
+        # down as failed, not as a 200 it never got.
+        rc, log = out
+        _record(kind, target, "net", url=url, status=200 if rc == 0 else None,
+                ms=ms, error=None if rc == 0 else log.strip()[-200:])
+        return out
     size = len(out) if isinstance(out, (bytes, bytearray)) else \
         len(json.dumps(out)) if out is not None else 0
-    _record(kind, target, "net", url=url, status=200,
-            ms=(_time.monotonic() - t0) * 1000, size=size)
+    _record(kind, target, "net", url=url, status=200, ms=ms, size=size)
     return out
 
 
@@ -558,7 +599,7 @@ def passive_values() -> list[str]:
         return []
 
 
-ASK_PER_PICK = 4
+ASK_PER_PICK = 2
 
 
 async def pick(term: str, limit: int = 6) -> list[dict]:
@@ -654,9 +695,24 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
 
     tmp = Path(tempfile.mkdtemp(prefix="x3lcsc-"))
     try:
-        rc, log = await _run(
-            [TOOL, "--lcsc_id", lcsc, "--footprint", "--3d",
-             "--output", str(tmp / "lib")], tmp)
+        # easyeda2kicad asks EasyEDA itself - the component, then the 3D
+        # model twice over - so it takes its turn like any other ask, is
+        # written down, and counts as three against the budget. Unthrottled,
+        # laying out a twenty-part board was sixty requests nobody saw.
+        def download(argv, cwd):
+            import subprocess
+            done = subprocess.run(argv, cwd=str(cwd), capture_output=True,
+                                  text=True, timeout=TIMEOUT)
+            if done.returncode != 0 and "403" in (done.stdout + done.stderr):
+                import urllib.error
+                raise urllib.error.HTTPError("easyeda2kicad", 403, "refused",
+                                             {}, None)
+            return done.returncode, (done.stdout + done.stderr)
+
+        rc, log = await _polite(
+            "download", lcsc, f"easyeda2kicad --lcsc_id {lcsc} --footprint --3d",
+            download, [TOOL, "--lcsc_id", lcsc, "--footprint", "--3d",
+                       "--output", str(tmp / "lib")], tmp, weight=3)
         pretty = list((tmp / "lib.pretty").glob("*.kicad_mod")) \
             if (tmp / "lib.pretty").exists() else []
         if rc != 0 or not pretty:

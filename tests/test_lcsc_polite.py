@@ -117,3 +117,36 @@ def test_the_journal_is_newest_first_and_bounded(monkeypatch):
     assert rows[0]["target"] == "q39"
     assert len(rows) <= 40
     assert (lcsc.LOOK / "requests.jsonl").stat().st_size < 40 * 600
+
+
+def test_the_budget_stops_asks_before_easyeda_has_to(monkeypatch):
+    # The journal's evidence: 35 asks spread over 220 s were refused, so it
+    # is a count per window. Past the budget nothing is sent at all.
+    monkeypatch.setattr(lcsc, "GAP", 0.0)
+    monkeypatch.setattr(lcsc, "BUDGET", 3)
+    sent = []
+    for i in range(3):
+        run(lcsc._polite("search", f"q{i}", "", lambda url: sent.append(url), "u"))
+    with pytest.raises(lcsc.Refused):
+        run(lcsc._polite("search", "q3", "", lambda url: sent.append(url), "u"))
+    assert len(sent) == 3
+    row = lcsc.journal()[0]
+    assert row["source"] == "refused" and "budget" in row["error"]
+    assert lcsc.state()["used"] == 3
+
+
+def test_a_heavy_ask_takes_its_weight_from_the_budget(monkeypatch):
+    # A download is several requests inside; it counts as that many.
+    monkeypatch.setattr(lcsc, "GAP", 0.0)
+    monkeypatch.setattr(lcsc, "BUDGET", 4)
+    run(lcsc._polite("download", "C1234", "", lambda url: (0, ""), "u", weight=3))
+    run(lcsc._polite("search", "one more", "", lambda url: {}, "u"))
+    with pytest.raises(lcsc.Refused):
+        run(lcsc._polite("search", "too many", "", lambda url: {}, "u"))
+
+
+def test_a_failed_download_is_not_written_down_as_a_success(monkeypatch):
+    monkeypatch.setattr(lcsc, "GAP", 0.0)
+    run(lcsc._polite("download", "C1234", "", lambda url: (1, "no such part"), "u"))
+    row = lcsc.journal()[0]
+    assert row["status"] is None and "no such part" in row["error"]
