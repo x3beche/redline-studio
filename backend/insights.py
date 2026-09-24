@@ -37,7 +37,7 @@ from pathlib import Path
 
 import psutil
 
-from . import compute, lcsc, store, sysinfo, usage
+from . import compute, lcsc, scope, store, sysinfo, usage
 
 METRICS = "metrics"
 TIMINGS = "api_timings"
@@ -1360,7 +1360,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
 # ---------------------------------------------------------------- settings
 
 async def set_kwh_price(db, price: float | None) -> None:
-    await db.settings.update_one({"_id": store.SETTINGS_ID},
+    await db.settings.update_one({"_id": scope.key(store.SETTINGS_ID)},
                                  {"$set": {"kwh_price": price}}, upsert=True)
     forget()
 
@@ -1390,7 +1390,7 @@ SETTING_KEYS = ("kwh_price", "plan_usd_month", "plan_name")
 
 async def settings(db) -> dict:
     """The room's own settings: electricity price and the subscription."""
-    s = await db.settings.find_one({"_id": store.SETTINGS_ID}, dict.fromkeys(SETTING_KEYS, 1)) or {}
+    s = await db.settings.find_one({"_id": scope.key(store.SETTINGS_ID)}, dict.fromkeys(SETTING_KEYS, 1)) or {}
     out = {k: s.get(k) for k in SETTING_KEYS}
     if out["kwh_price"] is None:
         out["kwh_price"] = compute.KWH_PRICE
@@ -1398,13 +1398,13 @@ async def settings(db) -> dict:
 
 
 async def set_settings(db, patch: dict) -> None:
-    await db.settings.update_one({"_id": store.SETTINGS_ID}, {"$set": patch}, upsert=True)
+    await db.settings.update_one({"_id": scope.key(store.SETTINGS_ID)}, {"$set": patch}, upsert=True)
     forget()
 
 
 async def kwh_price(db) -> float | None:
     """What a kilowatt-hour costs: set in the room, else the environment."""
-    s = await db.settings.find_one({"_id": store.SETTINGS_ID}, {"kwh_price": 1}) or {}
+    s = await db.settings.find_one({"_id": scope.key(store.SETTINGS_ID)}, {"kwh_price": 1}) or {}
     v = s.get("kwh_price")
     return float(v) if v is not None else compute.KWH_PRICE
 

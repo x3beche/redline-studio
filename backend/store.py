@@ -21,6 +21,7 @@ import os
 import re
 from pathlib import Path
 from datetime import datetime, timezone
+from . import scope
 
 SAFE = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -31,7 +32,9 @@ def now() -> str:
 
 def bucket(db, name: str):
     from motor.motor_asyncio import AsyncIOMotorGridFSBucket
-    return AsyncIOMotorGridFSBucket(db, bucket_name=name)
+    # Stored files are shared: the documents that point at them are what
+    # belong to a workspace.
+    return AsyncIOMotorGridFSBucket(getattr(db, "raw", db), bucket_name=name)
 
 
 # ---------------- reading metadata from source ----------------
@@ -64,7 +67,7 @@ DEFAULT_SETTINGS = {"auto_archive": False, "auto_translate": False}
 
 
 async def settings(db) -> dict:
-    doc = await db.settings.find_one({"_id": SETTINGS_ID}) or {}
+    doc = await db.settings.find_one({"_id": scope.key(SETTINGS_ID)}) or {}
     return {**DEFAULT_SETTINGS, **{k: v for k, v in doc.items() if k != "_id"}}
 
 

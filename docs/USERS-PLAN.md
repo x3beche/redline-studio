@@ -1,7 +1,7 @@
 # Users in Redline - research and work plan
 
-Status: **in progress** - phase 1 done (2026-09-24). Decisions below are
-recorded in section 6.
+Status: **in progress** - phases 1 and 2 done (2026-09-24). Decisions
+below are recorded in section 6.
 
 ## 1. Where things stand
 
@@ -170,6 +170,33 @@ thread lines `by`, questions `asked_by` and `answered_by`, runs and log lines
 by a middleware, whatever route it came through; `/api/audit` lists it and
 the Analytics room shows it under *Recent changes*. Note cards say who wrote
 them, and the thread names the agent.
+
+### Phase 2 - workspaces in the data (done)
+
+`backend/scope.py`. `main.db()` - the only way a route reaches the database,
+`code_api` included - returns a `ScopedDb` for the request's workspace
+(a context variable, "default" until sign-in). Collections that belong to a
+workspace (models, folders, uploads, notes, runs, the thread, questions,
+activity, boards, apps, settings, board runs, item history, weekly
+reports, the audit trail, compute jobs, analytics) come back wrapped: reads
+are kept to the workspace, writes stamped with it, aggregations start by
+keeping to it, upserts set it on insert. What belongs to the machine or to
+everyone - the LCSC parts cache, machine samples, API timings, server
+events, LLM calls and the stored files - passes through. Ids that exist
+once per workspace (the settings document, a room's current run) get the
+workspace appended outside the default one.
+
+No data was migrated: a document without `workspace_id` is the default
+workspace's. Checked on the live database: every collection counts the
+same through the default scope as raw; a second workspace sees none of it;
+a real upsert through a scope gets its `_id` and its workspace. Tests: the
+leak test (a second workspace cannot read, count, aggregate, update or
+delete the first's), stamping, pass-through, and a guard that fails if a
+route module reaches the database around `db()`.
+
+Known limit, for when a second workspace is real: ids are still global -
+two workspaces cannot both have a model called `iot-fan/station`. Phase 5
+(members) has to namespace new ids per workspace or refuse a clash.
 
 ### Original list of questions
 

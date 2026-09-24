@@ -411,7 +411,10 @@ ROOMS = ("cad", "pcb", "web", "embedded", "mobile")
 
 
 def run_key(room: str | None) -> str:
-    return "current" if room in (None, "", "cad") else f"current:{room}"
+    """The id of a room's open run - once per room, and per workspace."""
+    from . import scope
+    base = "current" if room in (None, "", "cad") else f"current:{room}"
+    return scope.key(base)
 
 
 def room_of(kind: str | None) -> str:

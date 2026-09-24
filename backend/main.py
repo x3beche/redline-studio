@@ -23,10 +23,9 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import (actors, ato, insights, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (actors, ato, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
-from . import tools_api
 
 LOG = logging.getLogger("x3.api")
 
@@ -54,11 +53,10 @@ _client = None
 
 # The coding rooms keep their routes in a file of their own.
 app.include_router(code_api.router)
-app.include_router(tools_api.router)
 
 
-def db():
-    """Without the database there is no app; everything lives there."""
+def _raw_db():
+    """The database itself. Not for routes: they go through db()."""
     global _client
     if not MONGODB_URI:
         raise HTTPException(503, "MONGODB_URI is not set (.env)")
@@ -66,6 +64,12 @@ def db():
         from motor.motor_asyncio import AsyncIOMotorClient
         _client = AsyncIOMotorClient(MONGODB_URI)
     return _client[MONGODB_DB]
+
+
+def db():
+    """The database as the request's workspace sees it (backend/scope.py).
+    Everything lives there, and every route reaches it through here."""
+    return scope.ScopedDb(_raw_db(), scope.current())
 
 
 # ---------------- status ----------------
@@ -846,13 +850,12 @@ async def edit_revision(rid: str, body: RevisionEdit):
 
 # ---------------- settings ----------------
 # Kept server-side so the CLI honours it too, not just the browser.
-SETTINGS_ID = store.SETTINGS_ID
 DEFAULT_SETTINGS = store.DEFAULT_SETTINGS
 
 
 @app.get("/api/settings")
 async def get_settings():
-    doc = await db().settings.find_one({"_id": SETTINGS_ID}) or {}
+    doc = await db().settings.find_one({"_id": scope.key(store.SETTINGS_ID)}) or {}
     return {**DEFAULT_SETTINGS, **{k: v for k, v in doc.items() if k != "_id"}}
 
 
@@ -863,7 +866,7 @@ async def put_settings(auto_archive: bool | None = None,
                                ("auto_translate", auto_translate))
              if v is not None}
     if patch:
-        await db().settings.update_one({"_id": SETTINGS_ID}, {"$set": patch},
+        await db().settings.update_one({"_id": scope.key(store.SETTINGS_ID)}, {"$set": patch},
                                        upsert=True)
     return await get_settings()
 
