@@ -1,0 +1,34 @@
+{
+  "id": "stepper-calc",
+  "name": "Stepper Motor Calculator",
+  "blurb": "pulse frequency and torque from step angle, microstepping and speed",
+  "group": "embedded",
+  "rooms": ["embedded", "cad"],
+  "keywords": ["stepper", "stepper motor", "step rate", "pulse frequency", "microstepping", "microstep", "steps per mm", "rpm", "pull-out torque", "corner speed", "nema 17", "lead screw", "back-emf", "a4988", "tmc2209"],
+  "intro": "Turns a speed (rpm, or mm/s through a lead screw or belt) into the STEP pulse frequency and resolution, and estimates the torque left at that speed from a first-order phase model: the supply must drive the rated current through the winding's resistance, inductance and back-EMF. The datasheet pull-out curve always wins over this estimate.",
+  "inputs": [
+    { "key": "step", "label": "Full-step angle", "type": "number", "unit": "°", "default": "1.8", "help": "1.8° = 200 steps/rev, 0.9° = 400." },
+    { "key": "micro", "label": "Microstepping", "type": "select", "default": "16",
+      "options": [["1", "Full step"], ["2", "1/2"], ["4", "1/4"], ["8", "1/8"], ["16", "1/16"], ["32", "1/32"], ["64", "1/64"], ["128", "1/128"], ["256", "1/256"]] },
+    { "key": "motion", "label": "Speed given as", "type": "select", "default": "rotary",
+      "options": [["rotary", "Shaft speed (rpm)"], ["linear", "Linear speed (lead screw / belt)"]] },
+    { "key": "rpm", "label": "Shaft speed", "type": "number", "unit": "rpm", "default": "300", "when": { "key": "motion", "equals": "rotary" } },
+    { "key": "vlin", "label": "Linear speed", "type": "number", "unit": "mm/s", "default": "50", "when": { "key": "motion", "equals": "linear" } },
+    { "key": "lead", "label": "Travel per revolution", "type": "number", "unit": "mm", "default": "8", "when": { "key": "motion", "equals": "linear" },
+      "help": "Lead screw lead (pitch × starts), or belt pitch × pulley teeth (GT2 × 20 T = 40 mm)." },
+    { "key": "thold", "label": "Holding torque", "type": "number", "unit": "N·m", "default": "0.45", "help": "Datasheet value, both phases at rated current." },
+    { "key": "irated", "label": "Rated phase current", "type": "number", "unit": "A", "default": "1.7" },
+    { "key": "idrive", "label": "Driver current setting", "type": "number", "unit": "A", "default": "1.5", "help": "Peak phase current the driver regulates to." },
+    { "key": "lmh", "label": "Phase inductance", "type": "number", "unit": "mH", "default": "2.8" },
+    { "key": "rph", "label": "Phase resistance", "type": "number", "unit": "Ω", "default": "1.5" },
+    { "key": "vs", "label": "Driver supply", "type": "number", "unit": "V", "default": "24" },
+    { "key": "fmax", "label": "Max step input rate", "type": "number", "unit": "kHz", "default": "250", "required": false,
+      "help": "Driver or MCU limit, e.g. A4988 ≈ 500 kHz (1 µs high + 1 µs low); leave blank to skip." }
+  ],
+  "examples": [
+    { "title": "NEMA 17 on a T8 lead screw at 50 mm/s, 1/16 steps, 24 V", "input": { "step": "1.8", "micro": "16", "motion": "linear", "vlin": "50", "lead": "8", "thold": "0.45", "irated": "1.7", "idrive": "1.5", "lmh": "2.8", "rph": "1.5", "vs": "24", "fmax": "250" } },
+    { "title": "NEMA 23 direct drive at 600 rpm, 1/8 steps, 36 V", "input": { "step": "1.8", "micro": "8", "motion": "rotary", "rpm": "600", "thold": "1.26", "irated": "2.8", "idrive": "2.8", "lmh": "3.2", "rph": "0.9", "vs": "36", "fmax": "200" } }
+  ],
+  "usage": "Give the full-step angle in degrees, the microstep divisor (1-256), the speed either as rpm (motion=rotary) or as mm/s with the travel per revolution in mm (motion=linear), and the motor data: holding torque N·m, rated and driver current A, inductance mH, resistance Ω, supply V, and optionally the max step rate in kHz. It returns the STEP frequency, step period, steps/rev and steps/mm, microstep resolution, the estimated torque at that speed, the corner speed and a torque-speed curve. Use it to size a step timer or check a motor/supply choice before the datasheet curve is at hand.",
+  "sources": ["Phase voltage model V = |I(R + jωL) + E| per winding, electrical frequency = full-step rate / 4 for a 2-phase hybrid motor (standard first-order stepper model, e.g. Oriental Motor technical reference 'Stepping motor characteristics')", "Incremental microstep torque T·sin(90°/n): Faulhaber/MICROMO application note 'Microstepping myths and realities'", "Back-EMF constant estimated as holding torque / (√2 · rated current) per phase (rule of thumb)"]
+}

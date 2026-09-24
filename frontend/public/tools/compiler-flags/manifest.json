@@ -1,0 +1,21 @@
+{
+  "id": "compiler-flags",
+  "name": "Compiler Flag Explainer",
+  "blurb": "size and speed effect of the optimisation flags in a build log",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["gcc flags", "cflags", "optimization level", "-Os", "-O2", "-flto", "gc-sections", "function-sections", "nano.specs", "build log", "code size", "firmware size", "clang", "arm-none-eabi-gcc", "compile command"],
+  "intro": "Reads GCC/Clang flags out of a pasted build log or CFLAGS/LDFLAGS and says, for each one, which way it moves code size and speed and why, from the GCC manual. It flags mixed -O levels, section flags without --gc-sections, fast-math and float-ABI mistakes, and lists what is missing for a size, speed or debug build.",
+  "inputs": [
+    { "key": "log", "label": "Build log or flags", "type": "textarea", "rows": 8,
+      "default": "arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -O2 -g3 -Wall -Wextra -ffunction-sections -fdata-sections -DSTM32F411xE -DUSE_HAL_DRIVER -IInc -c Src/main.c -o build/main.o\narm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -O0 -g3 -Wall -ffunction-sections -fdata-sections -c Src/stm32f4xx_it.c -o build/stm32f4xx_it.o\narm-none-eabi-gcc build/main.o build/stm32f4xx_it.o -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard --specs=nano.specs -u _printf_float -TSTM32F411RETx_FLASH.ld -Wl,-Map=build/app.map,--cref -o build/app.elf",
+      "help": "make V=1, ninja -v, or compile_commands.json output; one command per line." },
+    { "key": "goal", "label": "Build goal", "type": "select", "default": "size", "options": [["size", "Smallest flash"], ["speed", "Fastest code"], ["debug", "Debuggable"]] }
+  ],
+  "examples": [
+    { "title": "STM32 Makefile build aimed at small flash", "input": { "log": "arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -O2 -g3 -Wall -Wextra -ffunction-sections -fdata-sections -DSTM32F411xE -DUSE_HAL_DRIVER -IInc -c Src/main.c -o build/main.o\narm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard -O0 -g3 -Wall -ffunction-sections -fdata-sections -c Src/stm32f4xx_it.c -o build/stm32f4xx_it.o\narm-none-eabi-gcc build/main.o build/stm32f4xx_it.o -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard --specs=nano.specs -u _printf_float -TSTM32F411RETx_FLASH.ld -Wl,-Map=build/app.map,--cref -o build/app.elf", "goal": "size" } },
+    { "title": "Host C++ build aimed at speed", "input": { "log": "g++ -std=c++17 -O3 -ffast-math -march=native -flto -fno-exceptions -Wall -c dsp.cpp -o dsp.o\ng++ -O3 -flto dsp.o -o dsp", "goal": "speed" } }
+  ],
+  "usage": "Give the build log text (one compiler or linker command per line, or plain CFLAGS/LDFLAGS) and the goal (size, speed or debug). It returns the dominant -O level, a table of every recognised flag with its size and speed direction and a one-line explanation, the flags worth adding for the goal, warnings about mixed or conflicting flags, and a Flags text with a suggested set. Use it to explain why a firmware image is large or slow, or to review a build configuration.",
+  "sources": ["GCC manual, 'Options That Control Optimization', 'Options for Code Generation Conventions', 'ARM Options', 'Options for Linking' (gcc.gnu.org/onlinedocs)", "newlib-nano README (nano.specs, _printf_float)", "Clang command line reference (-Oz)", "avr-libc manual, vfprintf (printf_flt / printf_min)"]
+}

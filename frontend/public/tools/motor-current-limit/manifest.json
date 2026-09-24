@@ -1,0 +1,30 @@
+{
+  "id": "motor-current-limit",
+  "name": "Motor Driver Current Limit",
+  "blurb": "current limit and reference voltage from the sense resistor",
+  "group": "embedded",
+  "rooms": ["embedded", "pcb"],
+  "keywords": ["vref", "current limit", "sense resistor", "rsense", "a4988", "drv8825", "tmc2209", "tmc2208", "a4950", "drv8870", "stepper driver", "trimpot", "chopper", "itrip", "motor current"],
+  "intro": "Uses each driver's datasheet equation to go from the current you want to the VREF to set (or from a measured VREF to the current you get), and checks the sense voltage, the driver's rating and the sense resistor's dissipation. The limit a chopper driver regulates is the peak coil current.",
+  "inputs": [
+    { "key": "driver", "label": "Driver", "type": "select", "default": "a4988",
+      "options": [["a4988", "A4988 / A4982 (stepper)"], ["drv8825", "DRV8825 (stepper)"], ["tmc22xx", "TMC2208 / TMC2209 / TMC2226 standalone (stepper)"], ["a4950", "A4950 (brushed DC)"], ["drv8870", "DRV8870 (brushed DC)"], ["custom", "Other: VREF / (gain × Rs)"]] },
+    { "key": "mode", "label": "Solve for", "type": "select", "default": "vref",
+      "options": [["vref", "VREF from the current I want"], ["current", "Current from a measured VREF"]] },
+    { "key": "rs", "label": "Sense resistor", "type": "number", "unit": "Ω", "default": "0.068",
+      "help": "Pololu A4988: 0.068 (older 0.05); DRV8825: 0.1; SilentStepStick TMC2209: 0.11; BIGTREETECH TMC2209: 0.11." },
+    { "key": "iset", "label": "Current wanted", "type": "number", "unit": "A", "default": "1.2", "when": { "key": "mode", "equals": "vref" } },
+    { "key": "vref", "label": "Measured VREF", "type": "number", "unit": "V", "default": "0.65", "when": { "key": "mode", "equals": "current" } },
+    { "key": "kind", "label": "Current is given as", "type": "select", "default": "peak", "options": [["peak", "Peak (the chopper limit)"], ["rms", "RMS per coil (TMC style, motor rating)"]] },
+    { "key": "gain", "label": "Gain (VREF / sense voltage)", "type": "number", "default": "5", "when": { "key": "driver", "equals": "custom" } },
+    { "key": "vsense", "label": "TMC sense range", "type": "select", "default": "0", "when": { "key": "driver", "equals": "tmc22xx" },
+      "options": [["0", "vsense = 0 (325 mV, default)"], ["1", "vsense = 1 (180 mV)"]] },
+    { "key": "irated", "label": "Motor rated current", "type": "number", "unit": "A", "default": "1.7", "required": false, "help": "Per phase, from the motor datasheet; blank to skip." }
+  ],
+  "examples": [
+    { "title": "A4988 Pololu board, NEMA 17 at 1.2 A", "input": { "driver": "a4988", "mode": "vref", "rs": "0.068", "iset": "1.2", "kind": "peak", "irated": "1.7" } },
+    { "title": "TMC2209 with 0.11 Ω, measured 1.2 V", "input": { "driver": "tmc22xx", "mode": "current", "rs": "0.11", "vref": "1.2", "kind": "rms", "vsense": "0", "irated": "1.5" } }
+  ],
+  "usage": "Give the driver (a4988, drv8825, tmc22xx, a4950, drv8870 or custom with its gain), what to solve (vref or current), the sense resistor in Ω, and either the wanted current in A or the measured VREF in V; say whether currents are peak or rms. It returns VREF, peak and rms coil current, the sense voltage, the sense resistor's dissipation and warnings when a datasheet limit is passed. Use it before turning a driver's trimpot or choosing a sense resistor.",
+  "sources": ["Allegro A4988 datasheet: ITripMAX = VREF / (8 × RS)", "TI DRV8825 datasheet 7.3.4: ICHOP = xVREF / (5 × RISENSE)", "Trinamic TMC2209 datasheet 9 (sense resistor): IRMS = (CS+1)/32 × VFS/(RSENSE + 20 mΩ) × 1/√2, scaled by VREF/2.5 V", "Allegro A4950 datasheet: ITRIP = VREF / (10 × RS)", "TI DRV8870 datasheet 7.3.2: ITRIP = VREF / (10 × RISEN)"]
+}

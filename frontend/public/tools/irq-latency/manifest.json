@@ -1,0 +1,45 @@
+{
+  "id": "irq-latency",
+  "name": "Interrupt Latency Budget",
+  "blurb": "CPU load and miss risk from interrupt rates and handler times",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["interrupt latency", "isr", "irq", "cpu load", "interrupt load", "handler time", "missed interrupt", "overrun", "response time", "exception entry", "tail chaining", "cortex-m", "critical section", "interrupt budget", "worst case"],
+  "intro": "Adds the core's exception entry/exit cycles to each handler, sums the CPU time interrupts take, and runs a worst-case response-time analysis (Joseph & Pandya; blocking from a disabled-interrupt section and from lower-priority handlers already running) to show which interrupt can miss its deadline or lose an event because the next one arrives while it is still pending.",
+  "inputs": [
+    { "key": "fclk", "label": "CPU clock", "type": "number", "unit": "Hz", "default": "72M" },
+    { "key": "core", "label": "Core (entry / exit cycles)", "type": "select", "default": "m3",
+      "options": [["m0", "Cortex-M0 (16 / 16)"], ["m0p", "Cortex-M0+ (15 / 15)"], ["m3", "Cortex-M3/M4/M33 (12 / 10)"], ["m4f", "Cortex-M4F/M7 with FPU context (29 / 27)"], ["custom", "Other"]] },
+    { "key": "entry", "label": "Entry + exit cycles", "type": "number", "default": "40", "when": { "key": "core", "equals": "custom" },
+      "help": "Per interrupt, including any wrapper code (RISC-V without CLIC: 40-80 for saving registers in software)." },
+    { "key": "ws", "label": "Extra cycles per interrupt", "type": "number", "default": "0", "help": "Flash wait states on the vector fetch and stacking, HAL dispatch code, etc." },
+    { "key": "mode", "label": "Nesting", "type": "select", "default": "nested",
+      "options": [["nested", "Nested: a lower priority number preempts"], ["flat", "Flat: no preemption (all one level)"]] },
+    { "key": "crit", "label": "Longest interrupts-off section", "type": "number", "unit": "µs", "default": "5",
+      "help": "The longest __disable_irq() / taskENTER_CRITICAL() stretch in your code." },
+    { "key": "irqs", "label": "Interrupts", "type": "table", "help": "Priority 0 is the most urgent; equal numbers do not preempt each other. Deadline blank = one period.",
+      "columns": [{ "key": "name", "label": "Name" }, { "key": "prio", "label": "Priority" }, { "key": "rate", "label": "Rate Hz" }, { "key": "time", "label": "Handler µs" }, { "key": "deadline", "label": "Deadline µs" }],
+      "default": [
+        { "name": "TIM1 PWM update", "prio": "0", "rate": "20k", "time": "3", "deadline": "" },
+        { "name": "ADC end of conversion", "prio": "1", "rate": "10k", "time": "5", "deadline": "" },
+        { "name": "USART RX byte (115200)", "prio": "2", "rate": "11520", "time": "2", "deadline": "" },
+        { "name": "SPI DMA complete", "prio": "3", "rate": "1k", "time": "15", "deadline": "" },
+        { "name": "EXTI button", "prio": "5", "rate": "50", "time": "1", "deadline": "1000" },
+        { "name": "SysTick", "prio": "15", "rate": "1k", "time": "4", "deadline": "" }] }
+  ],
+  "examples": [
+    { "title": "STM32F1 motor control at 72 MHz", "input": { "fclk": "72M", "core": "m3", "ws": "0", "mode": "nested", "crit": "5", "irqs": [
+      { "name": "TIM1 PWM update", "prio": "0", "rate": "20k", "time": "3", "deadline": "" },
+      { "name": "ADC end of conversion", "prio": "1", "rate": "10k", "time": "5", "deadline": "" },
+      { "name": "USART RX byte (115200)", "prio": "2", "rate": "11520", "time": "2", "deadline": "" },
+      { "name": "SPI DMA complete", "prio": "3", "rate": "1k", "time": "15", "deadline": "" },
+      { "name": "EXTI button", "prio": "5", "rate": "50", "time": "1", "deadline": "1000" },
+      { "name": "SysTick", "prio": "15", "rate": "1k", "time": "4", "deadline": "" }] } },
+    { "title": "Cortex-M0+ at 16 MHz, one level, UART at 1 Mbaud", "input": { "fclk": "16M", "core": "m0p", "ws": "2", "mode": "flat", "crit": "20", "irqs": [
+      { "name": "UART RX byte", "prio": "0", "rate": "100k", "time": "3", "deadline": "" },
+      { "name": "Timer tick", "prio": "0", "rate": "1k", "time": "25", "deadline": "" },
+      { "name": "GPIO edge", "prio": "0", "rate": "200", "time": "4", "deadline": "50" }] } }
+  ],
+  "usage": "Give the CPU clock in Hz, the core (m0, m0p, m3, m4f or custom with entry+exit cycles), extra cycles per interrupt, the nesting mode (nested or flat), the longest interrupts-off section in µs, and a table of interrupts with name, priority (0 = most urgent), rate in Hz, handler time in µs and an optional deadline in µs. It returns the total interrupt CPU load, the CPU left, and per interrupt its load, worst-case start latency, worst-case response time, deadline, slack and whether it can miss or lose events. Use it to budget interrupt handlers, or to explain lost UART bytes or jitter.",
+  "sources": ["Joseph & Pandya, 'Finding response times in a real-time system', The Computer Journal 29(5), 1986 (R = B + C + Σ ceil(R/Tj)·Cj)", "Arm Cortex-M3/M4 Technical Reference Manuals and Arm 'Cortex-M for beginners' (12-cycle entry, 6-cycle tail-chain; M0 16, M0+ 15 cycles; lazy FP stacking)", "Liu & Layland 1973 (utilisation above 100 % is never schedulable)"]
+}

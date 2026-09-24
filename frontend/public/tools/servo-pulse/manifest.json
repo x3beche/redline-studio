@@ -1,0 +1,27 @@
+{
+  "id": "servo-pulse",
+  "name": "Servo Pulse Mapper",
+  "blurb": "angle range to pulse width, with calibration values",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["servo", "rc servo", "pwm", "pulse width", "1500 us", "angle to pulse", "sg90", "mg996r", "timer compare", "ccr", "arr", "prescaler", "calibration", "50 hz", "duty cycle"],
+  "intro": "Maps a servo angle to its pulse width by a straight line through two calibration points you measured (or the nominal 1000/2000 µs), then turns that pulse into a timer compare value and duty cycle at your frame rate. Hobby servos are close to linear over their range; the two points take out the unit-to-unit offset and gain.",
+  "inputs": [
+    { "key": "a1", "label": "Calibration angle 1", "type": "number", "unit": "°", "default": "0" },
+    { "key": "p1", "label": "Pulse at angle 1", "type": "number", "unit": "µs", "default": "1000" },
+    { "key": "a2", "label": "Calibration angle 2", "type": "number", "unit": "°", "default": "180" },
+    { "key": "p2", "label": "Pulse at angle 2", "type": "number", "unit": "µs", "default": "2000" },
+    { "key": "amin", "label": "Allowed angle min", "type": "number", "unit": "°", "default": "0", "help": "Mechanical limit of your linkage; targets are clamped to it." },
+    { "key": "amax", "label": "Allowed angle max", "type": "number", "unit": "°", "default": "180" },
+    { "key": "target", "label": "Target angle", "type": "number", "unit": "°", "default": "90" },
+    { "key": "frame", "label": "Frame rate", "type": "number", "unit": "Hz", "default": "50", "help": "50 Hz analog servos; many digital servos accept up to 333 Hz." },
+    { "key": "tclk", "label": "Timer counter clock", "type": "number", "unit": "Hz", "default": "1M", "help": "Timer input clock after the prescaler, e.g. 72 MHz / 72 = 1 MHz." },
+    { "key": "step", "label": "Table step", "type": "number", "unit": "°", "default": "15" }
+  ],
+  "examples": [
+    { "title": "SG90 measured at 544/2400 µs, STM32 timer at 1 MHz", "input": { "a1": "0", "p1": "544", "a2": "180", "p2": "2400", "amin": "10", "amax": "170", "target": "45", "frame": "50", "tclk": "1M", "step": "15" } },
+    { "title": "Digital servo at 333 Hz, ±60° calibrated", "input": { "a1": "-60", "p1": "900", "a2": "60", "p2": "2100", "amin": "-60", "amax": "60", "target": "20", "frame": "333", "tclk": "2M", "step": "10" } }
+  ],
+  "usage": "Give two calibration points (angle in degrees and the pulse in µs that produced it), the allowed angle range, the target angle, the frame rate in Hz and the timer counter clock in Hz. It returns the pulse width in µs for the target, µs per degree, the timer period (ARR+1) and compare value, the duty cycle, the angle resolution one timer tick gives, and a table of angle-to-pulse values. Use it to write a servo angle-to-CCR function or to check a timer setup.",
+  "sources": ["RC servo convention: 1.0-2.0 ms pulse, 1.5 ms centre, repeated every 20 ms (50 Hz); many servos travel further on 0.5-2.5 ms", "Linear two-point calibration (straight line through two measured points)"]
+}

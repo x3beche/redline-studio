@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-96 tools. **MCP** marks the ones agents can run with `run_tool`.
+104 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -136,8 +136,10 @@ agents, the most used, and every tool nobody used.
 |---|---|---|---|
 | **ADC Resolution Calculator** · MCP | `adc-resolution` | LSB size from reference and bits, and the oversampling gain | Embedded |
 | **Battery Life Estimator** · MCP | `battery-life` | run time in days from average current and battery capacity | Embedded, PCB |
+| **Bootloader Size Check** · MCP | `bootloader-fit` | whether application and bootloader regions fit | Embedded |
 | **CAN Bit Timing Calculator** · MCP | `can-bit-timing` | segment values and sample point from a clock and bit rate | Embedded |
 | **Clock Tree Planner** · MCP | `clock-tree` | PLL settings and peripheral clocks from a crystal frequency | Embedded |
+| **Compiler Flag Explainer** · MCP | `compiler-flags` | size and speed effect of the optimisation flags in a build log | Embedded |
 | **CRC Calculator** · MCP | `crc-calc` | CRC-8/16/32 with polynomial, init and reflection settings | Embedded |
 | **Cycle to Time Converter** · MCP | `cycles-time` | instruction cycles to microseconds and back at a clock | Embedded |
 | **Debounce Time Calculator** · MCP | `debounce-time` | debounce time for a button type and sampling period | Embedded |
@@ -151,20 +153,26 @@ agents, the most used, and every tool nobody used.
 | **Hex Dump Decoder** · MCP | `hex-dump-decoder` | captured raw bytes split into frames for a chosen protocol | Embedded |
 | **I2C Address Map** · MCP | `i2c-address-map` | devices on a bus by address, with conflicts and alternative addresses | Embedded, PCB |
 | **IEEE754 Float Inspector** · MCP | `float-inspector` | sign, exponent and mantissa bits of a float | Embedded |
+| **Interrupt Latency Budget** · MCP | `irq-latency` | CPU load and miss risk from interrupt rates and handler times | Embedded |
 | **Linker Script Helper** · MCP | `linker-script` | a linker script from sections and memory regions in a form | Embedded |
 | **Log Format Designer** · MCP | `log-format` | a compact embedded log format and its parser code | Embedded |
 | **Memory Map Viewer** · MCP | `memory-map` | flash and RAM region use as a scaled strip | Embedded |
 | **Modbus Frame Builder** · MCP | `modbus-frame` | an RTU/TCP frame with its CRC from function code and registers | Embedded |
+| **Motor Driver Current Limit** · MCP | `motor-current-limit` | current limit and reference voltage from the sense resistor | Embedded, PCB |
 | **NMEA / Serial Log Parser** · MCP | `serial-log-parser` | a serial log parsed line by line into a table of fields | Embedded |
 | **NVIC Priority Planner** · MCP | `nvic-planner` | interrupt priorities in order, with preemption conflicts | Embedded |
 | **PID Tuning Playground** · MCP | `pid-playground` | a simple plant's step response live as the gains move | Embedded |
 | **Pin Mux Explorer** · MCP | `pin-mux` | a pin's alternate functions on an MCU and the conflicts | Embedded, PCB |
+| **printf Format Checker** · MCP | `printf-checker` | whether a format string matches its argument types | Embedded |
 | **Register Bitfield Editor** · MCP | `bitfield-editor` | toggle bits of a hex value and read each field's meaning | Embedded |
 | **Sensor Calibration Fit** · MCP | `sensor-calibration` | linear calibration coefficients from two or more readings | Embedded |
+| **Servo Pulse Mapper** · MCP | `servo-pulse` | angle range to pulse width, with calibration values | Embedded |
 | **Sleep Current Profiler** · MCP | `sleep-current` | average current from sleep and wake times and currents | Embedded |
 | **SPI Mode Reference** · MCP | `spi-modes` | CPOL/CPHA combinations with timing diagrams | Embedded |
 | **Stack Usage Estimator** · MCP | `stack-estimator` | worst-case stack from call depth and locals | Embedded |
+| **Stepper Motor Calculator** · MCP | `stepper-calc` | pulse frequency and torque from step angle, microstepping and speed | Embedded, 3D |
 | **Struct Packing Visualizer** · MCP | `struct-packing` | alignment of struct members and the padding bytes wasted | Embedded |
+| **Task Timing Planner** · MCP | `task-timing` | scheduling conflicts of periodic tasks from period and duration | Embedded |
 | **Units & Numbers** | `units` | mm, mil and inch; hex, decimal and binary; UART baud and timer periods | Embedded, PCB |
 | **Watchdog Planner** · MCP | `watchdog-planner` | a safe watchdog period and feed points from the longest task | Embedded |
 

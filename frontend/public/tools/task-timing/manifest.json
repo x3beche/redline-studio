@@ -1,0 +1,39 @@
+{
+  "id": "task-timing",
+  "name": "Task Timing Planner",
+  "blurb": "scheduling conflicts of periodic tasks from period and duration",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["task scheduling", "periodic tasks", "timeline", "gantt", "super loop", "cooperative scheduler", "time-triggered", "rate monotonic", "rtos", "hyperperiod", "jitter", "deadline miss", "offset", "cpu utilisation", "wcet"],
+  "intro": "Simulates periodic tasks over one hyperperiod (the least common multiple of the periods) under a cooperative run-to-completion scheduler (a super loop or time-triggered scheduler) or a preemptive fixed-priority RTOS, and shows where tasks collide, how late each one starts (jitter), which deadlines are missed, and offsets that spread the tasks apart. Priority blank = rate monotonic (shorter period first).",
+  "inputs": [
+    { "key": "mode", "label": "Scheduler", "type": "select", "default": "coop",
+      "options": [["coop", "Cooperative: each task runs to completion"], ["preempt", "Preemptive: higher priority interrupts lower (RTOS)"]] },
+    { "key": "tasks", "label": "Tasks", "type": "table", "help": "Times in ms. Duration = worst-case execution time. Deadline blank = the period. Priority: 0 is most urgent, blank = by period.",
+      "columns": [{ "key": "name", "label": "Name" }, { "key": "period", "label": "Period ms" }, { "key": "dur", "label": "Duration ms" }, { "key": "offset", "label": "Offset ms" }, { "key": "prio", "label": "Priority" }, { "key": "deadline", "label": "Deadline ms" }],
+      "default": [
+        { "name": "Control loop", "period": "1", "dur": "0.2", "offset": "0", "prio": "", "deadline": "" },
+        { "name": "Sensors", "period": "5", "dur": "0.8", "offset": "0", "prio": "", "deadline": "" },
+        { "name": "Comms", "period": "10", "dur": "2.5", "offset": "0", "prio": "", "deadline": "" },
+        { "name": "Display", "period": "50", "dur": "8", "offset": "0", "prio": "", "deadline": "" },
+        { "name": "Logger", "period": "100", "dur": "5", "offset": "0", "prio": "", "deadline": "" }] },
+    { "key": "window", "label": "Drawing window", "type": "number", "unit": "ms", "default": "", "required": false, "help": "Blank: two periods of the slowest task, at most the hyperperiod." }
+  ],
+  "examples": [
+    { "title": "Super loop with a slow display task", "input": { "mode": "coop", "window": "", "tasks": [
+      { "name": "Control loop", "period": "1", "dur": "0.2", "offset": "0", "prio": "", "deadline": "" },
+      { "name": "Sensors", "period": "5", "dur": "0.8", "offset": "0", "prio": "", "deadline": "" },
+      { "name": "Comms", "period": "10", "dur": "2.5", "offset": "0", "prio": "", "deadline": "" },
+      { "name": "Display", "period": "50", "dur": "8", "offset": "0", "prio": "", "deadline": "" },
+      { "name": "Logger", "period": "100", "dur": "5", "offset": "0", "prio": "", "deadline": "" }] } },
+    { "title": "Same tasks under a preemptive RTOS", "input": { "mode": "preempt", "window": "", "tasks": [
+      { "name": "Control loop", "period": "1", "dur": "0.2", "offset": "0", "prio": "", "deadline": "" },
+      { "name": "Sensors", "period": "5", "dur": "0.8", "offset": "0", "prio": "", "deadline": "" },
+      { "name": "Comms", "period": "10", "dur": "2.5", "offset": "0", "prio": "", "deadline": "" },
+      { "name": "Display", "period": "50", "dur": "8", "offset": "0", "prio": "", "deadline": "" },
+      { "name": "Logger", "period": "100", "dur": "5", "offset": "0", "prio": "", "deadline": "" }] } }
+  ],
+  "usage": "Give the scheduler (coop for run-to-completion, preempt for a fixed-priority RTOS) and a table of tasks with name, period, duration (worst-case execution time) and offset in ms, plus optional priority (0 = most urgent; blank = rate monotonic) and deadline in ms. It returns the CPU utilisation, the hyperperiod, per task the worst start delay, worst response time and deadline misses, a table of which task delayed which, suggested offsets that reduce collisions, and result.timeline (segments per task in ms) for the drawing. Use it to plan a super loop or RTOS task set, or to explain jitter.",
+  "sources": ["Liu & Layland, 'Scheduling algorithms for multiprogramming in a hard-real-time environment', JACM 1973 (rate monotonic, bound n(2^(1/n) - 1))", "Leung & Whitehead 1982 / Audsley et al.: simulating one hyperperiod from the synchronous release is exact for fixed priorities", "Michael J. Pont, 'Patterns for Time-Triggered Embedded Systems', 2001 (cooperative schedulers, task offsets)"],
+  "view": true
+}

@@ -1,0 +1,26 @@
+{
+  "id": "printf-checker",
+  "name": "printf Format Checker",
+  "blurb": "whether a format string matches its argument types",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["printf", "format string", "wformat", "format specifier", "conversion", "%lu", "%d", "PRIu32", "inttypes", "snprintf", "uint32_t", "size_t %zu", "ESP_LOGI", "printk", "type mismatch"],
+  "intro": "Finds the printf-style calls in pasted C code and checks every conversion against its argument's type after the default argument promotions, using the integer sizes and stdint typedefs of the chosen target (uint32_t is unsigned long on arm-none-eabi but unsigned int on Linux). Types come from the declarations in the code, a declarations box, casts and literals; an argument can also be written as a bare type name.",
+  "inputs": [
+    { "key": "code", "label": "Code with printf calls", "type": "textarea", "rows": 9,
+      "default": "uint32_t ticks = HAL_GetTick();\nsize_t len = strlen(name);\nfloat temp = read_temp();\nint16_t raw = adc_raw();\nuint8_t id = 7;\n\nprintf(\"up %u ms\\n\", ticks);\nprintf(\"name %s is %d bytes\\n\", name, len);\nprintf(\"T=%d.%02d C raw=%d\\n\", temp, raw);\nsnprintf(buf, sizeof buf, \"id=%\" PRIu8 \" t=%\" PRIu32, id, ticks);\nprintf(\"%lu %lu\\n\", sizeof(buf), (unsigned long)ticks);",
+      "placeholder": "printf(\"%lu\\n\", count);" },
+    { "key": "decls", "label": "Declarations (optional)", "type": "textarea", "rows": 4, "default": "const char *name;\nchar buf[64];\nfloat read_temp(void);\nint16_t adc_raw(void);",
+      "help": "Variables, prototypes and typedefs the code uses but does not declare, e.g. 'typedef uint32_t tick_t;'." },
+    { "key": "target", "label": "Target", "type": "select", "default": "arm",
+      "options": [["arm", "32-bit MCU: arm-none-eabi, ESP-IDF 5 (uint32_t = unsigned long)"], ["ilp32", "32-bit Linux glibc (uint32_t = unsigned int)"], ["lp64", "64-bit Linux / macOS (long = 64 bit)"], ["llp64", "64-bit Windows (long = 32 bit)"], ["avr", "AVR 8-bit (int = 16 bit)"]] },
+    { "key": "extra", "label": "Extra printf-like functions", "type": "text", "default": "", "placeholder": "my_log:1, trace:0",
+      "help": "name:index of the format argument (0 = first)." }
+  ],
+  "examples": [
+    { "title": "STM32 debug prints with uint32_t and size_t", "input": { "code": "uint32_t ticks = HAL_GetTick();\nsize_t len = strlen(name);\nfloat temp = read_temp();\nint16_t raw = adc_raw();\nuint8_t id = 7;\n\nprintf(\"up %u ms\\n\", ticks);\nprintf(\"name %s is %d bytes\\n\", name, len);\nprintf(\"T=%d.%02d C raw=%d\\n\", temp, raw);\nsnprintf(buf, sizeof buf, \"id=%\" PRIu8 \" t=%\" PRIu32, id, ticks);\nprintf(\"%lu %lu\\n\", sizeof(buf), (unsigned long)ticks);", "decls": "const char *name;\nchar buf[64];\nfloat read_temp(void);\nint16_t adc_raw(void);", "target": "arm", "extra": "" } },
+    { "title": "Types only, checked for 64-bit Linux", "input": { "code": "printf(\"%d %lu %s %f\", uint64_t, size_t, const char *, float);\nprintf(\"%x %p\", uint32_t, int *);", "decls": "", "target": "lp64", "extra": "" } }
+  ],
+  "usage": "Give C code containing printf/fprintf/snprintf/printk/ESP_LOGx/LOG_INF calls (arguments may be expressions or bare type names like uint32_t), optional declarations, the target (arm, ilp32, lp64, llp64, avr) and optional extra function names as name:formatIndex. It returns a table of every conversion with its argument, inferred type, expected type and verdict (ok / note / warning / error) with the specifier to use, counts, and a Problems text. Use it to review log statements before porting code between targets or to explain -Wformat warnings.",
+  "sources": ["ISO/IEC 9899:2011 7.21.6.1 (fprintf conversions and length modifiers), 6.5.2.2p6 (default argument promotions), 6.3.1.8 (usual arithmetic conversions), 7.8.1 (inttypes.h PRI macros)", "GCC manual: -Wformat, -Wformat-signedness, -Wformat-security; target type sizes from GCC's __INT32_TYPE__ etc. per target", "newlib-nano and avr-libc documentation (float printf needs -u _printf_float / -lprintf_flt)"]
+}

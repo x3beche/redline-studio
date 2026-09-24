@@ -1,0 +1,34 @@
+{
+  "id": "bootloader-fit",
+  "name": "Bootloader Size Check",
+  "blurb": "whether application and bootloader regions fit",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["bootloader", "flash layout", "partition", "application slot", "ota", "a/b", "dual bank", "mcuboot", "sector", "erase page", "vtor", "vector table alignment", "linker origin", "flash size", "image size"],
+  "intro": "Lays the bootloader, one or two application slots, an optional swap scratch sector and a reserved data area onto the chip's real erase sectors (each region must start and end on a sector boundary so it can be erased alone), then checks that each image fits with your growth margin and that the application's vector table is aligned for VTOR.",
+  "inputs": [
+    { "key": "base", "label": "Flash start address", "type": "text", "default": "0x08000000" },
+    { "key": "size", "label": "Flash size", "type": "text", "default": "512K", "help": "Bytes; K = 1024, M = 1048576, or hex (0x80000)." },
+    { "key": "layout", "label": "Erase sectors", "type": "select", "default": "uniform",
+      "options": [["uniform", "Uniform pages"], ["list", "Listed sectors (STM32F4/F7 style)"]] },
+    { "key": "page", "label": "Page / sector size", "type": "text", "default": "2K", "when": { "key": "layout", "equals": "uniform" },
+      "help": "STM32G4/L4: 2K, STM32F1 HD: 2K, nRF52: 4K, RP2040: 4K, SAMD21: 256 bytes (row)." },
+    { "key": "sectors", "label": "Sector list", "type": "text", "default": "16K*4, 64K, 128K*7", "when": { "key": "layout", "equals": "list" },
+      "help": "In address order; n*size repeats. STM32F407 1 MB: 16K*4, 64K, 128K*7." },
+    { "key": "boot", "label": "Bootloader image size", "type": "text", "default": "18432", "help": "text + data from arm-none-eabi-size, or the .bin size." },
+    { "key": "bootres", "label": "Bootloader reserve", "type": "text", "default": "", "help": "Blank: the image size rounded up to whole sectors, plus the margin." },
+    { "key": "app", "label": "Application image size", "type": "text", "default": "190000" },
+    { "key": "slots", "label": "Application slots", "type": "select", "default": "2",
+      "options": [["1", "One slot (update in place)"], ["2", "Two slots (A/B or download slot)"], ["2s", "Two slots + scratch sector (MCUboot swap-scratch)"]] },
+    { "key": "hdr", "label": "Image header + trailer", "type": "text", "default": "0x200", "help": "Bytes per slot the bootloader keeps; MCUboot: 0x200 header plus a trailer of a few hundred bytes." },
+    { "key": "nvm", "label": "Reserved data at the end", "type": "text", "default": "4K", "help": "Settings or EEPROM emulation; rounded up to whole sectors. 0 for none." },
+    { "key": "vectors", "label": "Vector table entries", "type": "number", "default": "98", "help": "16 system + the device's IRQs (STM32F407: 16 + 82)." },
+    { "key": "margin", "label": "Growth margin", "type": "number", "unit": "%", "default": "20" }
+  ],
+  "examples": [
+    { "title": "STM32G4 512 KB, A/B update, 2 KB pages", "input": { "base": "0x08000000", "size": "512K", "layout": "uniform", "page": "2K", "boot": "18432", "bootres": "", "app": "190000", "slots": "2", "hdr": "0x200", "nvm": "4K", "vectors": "118", "margin": "20" } },
+    { "title": "STM32F407 1 MB with MCUboot swap-scratch", "input": { "base": "0x08000000", "size": "1M", "layout": "list", "sectors": "16K*4, 64K, 128K*7", "boot": "40000", "bootres": "", "app": "300000", "slots": "2s", "hdr": "0x400", "nvm": "0", "vectors": "98", "margin": "15" } }
+  ],
+  "usage": "Give the flash start and size, the erase sector layout (uniform with page size, or list like '16K*4, 64K, 128K*7'), bootloader and application image sizes in bytes (K = 1024 or hex accepted), the number of slots (1, 2 or 2s for MCUboot swap-scratch), per-slot header/trailer bytes, a reserved data area at the end, the vector table entry count and a growth margin in %. It returns the region table with addresses, fit and headroom per image, the VTOR alignment check and linker MEMORY lines. Use it when planning a bootloader partition or when an image outgrows its slot.",
+  "sources": ["Armv7-M Architecture Reference Manual B3.2.5 (VTOR: table aligned to the entry count rounded up to a power of two, minimum 128 bytes)", "MCUboot design documentation (image slots, swap using scratch: scratch at least the largest sector)", "Device reference manuals for sector layouts (e.g. ST RM0090 table 5 for STM32F4)"]
+}
