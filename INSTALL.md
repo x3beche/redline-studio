@@ -6,8 +6,8 @@ Requirements: **Python ≥ 3.10**, **Node ≥ 20.19**, and a MongoDB connection 
 Atlas or a local server, either works.
 
 ```bash
-git clone https://github.com/x3beche/x3-studios-asset-manager.git
-cd x3-studios-asset-manager
+git clone https://github.com/x3beche/redline-studio.git
+cd redline-studio
 cp .env.example .env          # fill in MONGODB_URI
 ./start.sh
 ```
