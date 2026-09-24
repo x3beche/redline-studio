@@ -8,6 +8,7 @@ import {
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { capture } from './sketchpad';
 
 /** The board, in three dimensions.
  *
@@ -99,6 +100,21 @@ export class Board3d implements AfterViewInit, OnDestroy {
 
     this.started = true;
     if (this.src()) this.load(this.src());
+  }
+
+  /** What is on screen, as a picture the size of the box. Rendered and
+   *  read in one go: the drawing buffer is not kept between frames. */
+  snapshot(): string | null {
+    const box = this.host().nativeElement;
+    if (!this.renderer || !this.scene || !this.camera) return null;
+    this.renderer.render(this.scene, this.camera);
+    const gl = this.renderer.domElement;
+    let bg = getComputedStyle(box).backgroundColor;
+    for (let el: HTMLElement | null = box; el && /rgba\(.*, 0\)|transparent/.test(bg);
+         el = el.parentElement) {
+      bg = getComputedStyle(el).backgroundColor;
+    }
+    return capture(box, bg, [{ src: gl, x: 0, y: 0, w: box.clientWidth, h: box.clientHeight }]);
   }
 
   ngOnDestroy() {

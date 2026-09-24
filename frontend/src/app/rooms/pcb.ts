@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, OnDestroy, computed, effect, inject, signal, viewChild,
+  Component, OnDestroy, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
 import {
   Activity, BoardCompute, BoardEntry, BoardGraph, BoardLayout, BoardRules,
@@ -9,6 +9,10 @@ import {
 import { Selection } from '../selection';
 import { Board3d } from './board3d';
 import { Drawing } from './drawing';
+import { RoomFrame, ToolButton } from './frame';
+import { DrawTools, PenState, Sketchpad } from './sketchpad';
+
+type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'machine';
 
 /** The board room.
  *
@@ -24,9 +28,9 @@ import { Drawing } from './drawing';
  */
 @Component({
   selector: 'app-room-pcb',
-  imports: [Board3d, Drawing],
+  imports: [Board3d, Drawing, DrawTools, RoomFrame, Sketchpad, ToolButton],
   template: `
-<div class="tcv-room absolute inset-0 flex min-h-0 flex-col">
+<div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
   @if (!here()) {
     <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
@@ -34,37 +38,104 @@ import { Drawing } from './drawing';
     </p>
   } @else {
 
-  <!-- Four panes, all of them at once.
-       A board is not one picture with three ways of looking at it: the
-       drawing, the circuit and the model are different questions about
-       the same thing, and answering one usually means looking at
-       another. The switch made that two clicks and a lost position.
+  <!-- The 3D room's layout, because it is the app's one layout: the
+       toolbar across the top with the pen at its end, the tabs down the
+       left, the board beside them and the log under it. -->
+  <app-room-frame room="pcb" [tabs]="sideTabs" [tab]="side()" [labels]="tabNames"
+                  (tabChange)="setSide($any($event))" [log]="log()">
 
-       The log under this and the queue beside it are the room's as much
-       as the 3D room's - it sits in the viewer's own grid, so both are
-       where they always were. -->
-  <!-- Laid out as the 3D room is: a column on the left - the parts, and
-       under them what the runs cost, the rules, the checks and every ask
-       made of LCSC - and beside it the board, with its log along the
-       bottom. -->
-  <div class="flex min-h-0 flex-1 gap-2 p-2">
-    @if (big() !== 'board') {
-    <div class="flex min-h-0 shrink-0 flex-col gap-2"
-         [style.width]="big() === 'side' ? '58%' : '24%'"
-         style="min-width: 15rem">
-    <!-- PARTS, FROM LCSC
-         A board can only be drawn out of parts somebody can buy: the
-         number is what the footprint and the 3D model are fetched by, so
-         this is where a board gets its shapes. Searching downloads
-         nothing - a search is a list to choose from. -->
-    @if (big() !== 'side') {
-    <section class="tcv-pane min-h-0 flex-1">
-      <header class="tcv-pane-head">
-        <span class="tcv-label">parts</span>
-        <span class="mono ml-auto text-[10px]" style="color: var(--ink-dim)">
-          {{ held().length }} kept
+    <!-- THE TOOLBAR
+         Which picture of the board, which side of it, how close, and the
+         files it is made of. Nothing here makes anything: the agent runs
+         the pipeline when a change is asked for. -->
+    <ng-container ngProjectAs="[bar]">
+      <app-tool icon="tcv-ico-layout" tip="Layout - the copper, placed and routed"
+                [on]="boardTab() === 'layout'" (press)="setBoardTab('layout')" />
+      <app-tool icon="tcv-ico-schematic" tip="Schematic - drawn from the source"
+                [on]="boardTab() === 'schematic'" (press)="setBoardTab('schematic')" />
+      <app-tool icon="tcv-ico-model" tip="3D - the board with its parts on"
+                [on]="boardTab() === '3d'" (press)="setBoardTab('3d')" />
+      <span class="tcv_separator"></span>
+      <app-tool icon="tcv-ico-front" tip="Front - with the ground pour"
+                [on]="boardTab() === 'layout' && view() === 'front'"
+                [disabled]="boardTab() !== 'layout' || !here()?.route" (press)="view.set('front')" />
+      <app-tool icon="tcv-ico-tracks" tip="Tracks - the pour left off to follow them"
+                [on]="boardTab() === 'layout' && view() === 'tracks'"
+                [disabled]="boardTab() !== 'layout' || !here()?.route" (press)="view.set('tracks')" />
+      <app-tool icon="tcv-ico-back" tip="Back - seen from below"
+                [on]="boardTab() === 'layout' && view() === 'back'"
+                [disabled]="boardTab() !== 'layout' || !here()?.route" (press)="view.set('back')" />
+      <span class="tcv_separator"></span>
+      <app-tool icon="tcv-ico-fit" tip="Fit - all of it (or double-click)"
+                [disabled]="boardTab() === '3d' || frozen()" (press)="flat()?.fit()" />
+      <app-tool icon="tcv-ico-in" tip="Closer" [disabled]="boardTab() === '3d' || frozen()"
+                (press)="flat()?.step(1.25)" />
+      <app-tool icon="tcv-ico-out" tip="Further" [disabled]="boardTab() === '3d' || frozen()"
+                (press)="flat()?.step(0.8)" />
+      <span class="tcv_separator"></span>
+      <app-tool icon="tcv-ico-pcbfile" tip="board.kicad_pcb - open it in KiCad"
+                [href]="hasLayout() ? file('board.kicad_pcb') : null" [disabled]="!hasLayout()" />
+      <app-tool icon="tcv-ico-schfile" tip="board.kicad_sch - the schematic, for KiCad"
+                [href]="here()?.schematic ? file('board.kicad_sch') : null"
+                [disabled]="!here()?.schematic" />
+      <app-tool icon="tcv-ico-glb" tip="board.glb - the 3D model"
+                [href]="has3d() ? modelUrl() : null" [disabled]="!has3d()" />
+      <span class="tcv_separator"></span>
+      <!-- What came of the last run, said once, where the eye already is. -->
+      <span class="tcv-frame-status mono">
+        @switch (boardTab()) {
+          @case ('layout') {
+            @if (here()?.route; as r) {
+              <span [style.color]="r.unrouted || here()?.drc?.error_count ? 'var(--danger)' : 'var(--ok)'"
+                    [title]="routeTitle()">
+                {{ r.unrouted ? r.unrouted + ' unrouted' : 'routed' }} ·
+                DRC {{ here()?.drc?.error_count ?? '?' }}
+              </span>
+            } @else if (hasLayout()) {
+              <span>{{ here()?.layout?.placed }} placed · not routed</span>
+            }
+          }
+          @case ('schematic') {
+            @if (here()?.schematic; as s) {
+              <span [style.color]="s.erc.error_count ? 'var(--danger)' : 'var(--ok)'"
+                    [title]="'ERC: ' + s.erc.error_count + ' errors, ' + s.erc.warning_count
+                             + ' warnings; library set-up notes left out'">
+                {{ s.parts }} parts · ERC {{ s.erc.error_count }}
+              </span>
+            }
+          }
+          @case ('3d') { <span>drag to turn it over</span> }
+        }
+        @if (note(); as n) {
+          <span style="color: var(--warn)" [title]="n"> · {{ n }}</span>
+        }
+      </span>
+    </ng-container>
+
+    <!-- The pen, at the toolbar's end as in the 3D room: press it and the
+         view is held still as a picture to draw on; the note beside the
+         room is then filed with that picture. -->
+    <ng-container ngProjectAs="[barEnd]">
+      @if (frozen()) {
+        <app-draw-tools [pen]="pen" (undo)="pad()?.undo()" (clear)="pad()?.clear()" />
+      }
+      <span class="tcv_tooltip" [attr.data-tooltip]="frozen() ? 'Let the view go' : 'Draw on it'">
+        <span class="tcv_button_frame">
+          <button class="tcv_reset tcv_btn tcv-freeze" [attr.data-on]="frozen() ? 1 : null"
+                  [disabled]="!canFreeze()"
+                  (click)="frozen() ? resume() : freeze()"></button>
         </span>
-      </header>
+      </span>
+    </ng-container>
+
+    <!-- THE TABS -->
+    <div side class="flex h-full min-h-0 flex-col">
+      @if (side() === 'parts') {
+        <!-- PARTS, FROM LCSC
+             A board can only be drawn out of parts somebody can buy: the
+             number is what the footprint and the 3D model are fetched by,
+             so this is where a board gets its shapes. Searching downloads
+             nothing - a search is a list to choose from. -->
 
       <div class="flex shrink-0 gap-1 p-2" style="border-bottom: 1px solid var(--line)">
         <input [value]="term()" (input)="term.set($any($event.target).value)"
@@ -256,26 +327,7 @@ import { Drawing } from './drawing';
         }
       </div>
       }
-    </section>
-    }
-
-    <!-- WHAT IT COST, AND WHAT THE MACHINE IS DOING
-         The board's own figures. The catalog's foot and the revision
-         cards say the same kind of thing about models; these are about
-         this board, so they are counted here. -->
-    <section class="tcv-pane min-h-0" [class.flex-1]="big() === 'side'"
-             [style.height]="big() === 'side' ? null : '42%'">
-      <header class="tcv-pane-head">
-        @for (tab of sideTabs; track tab) {
-          <button (click)="setSide(tab)" class="tcv-chip"
-                  [attr.data-on]="side() === tab ? 1 : null">{{ tab }}</button>
-        }
-        <button (click)="toggleBig('side')" class="tcv-chip ml-auto shrink-0"
-                [title]="big() === 'side' ? 'back to its size' : 'wider'">
-          {{ big() === 'side' ? '⤡' : '⤢' }}
-        </button>
-      </header>
-
+      } @else {
       @if (side() === 'rules') {
         <!-- ROUTING RULES
              What the router is told. Worked out from the net names the
@@ -594,149 +646,67 @@ import { Drawing } from './drawing';
         }
       </div>
       }
-    </section>
+      }
     </div>
-    }
 
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
     <!-- THE BOARD
-         One window, three ways of looking at the same board: the copper,
-         the schematic it came from, and the thing in three dimensions.
-         Nothing in here makes anything - the agent runs the pipeline
-         (build, schematic, place, route, DRC) when a change is asked for,
-         and this shows what came of it. -->
-    <section class="tcv-pane min-h-0 flex-1">
-      <header class="tcv-pane-head">
-        @for (tab of boardTabs; track tab) {
-          <button (click)="setBoardTab(tab)" class="tcv-chip"
-                  [attr.data-on]="boardTab() === tab ? 1 : null">{{ tab }}</button>
-        }
-        @switch (boardTab()) {
-          @case ('layout') {
-            @if (here()?.route; as r) {
-              <span class="mono truncate text-[10px]"
-                    [style.color]="r.unrouted || here()?.drc?.error_count ? 'var(--danger)' : 'var(--ok)'"
-                    [title]="routeTitle()">
-                {{ r.unrouted ? r.unrouted + ' unrouted' : 'routed' }} ·
-                DRC {{ here()?.drc?.error_count ?? '?' }}
-              </span>
-            } @else if (hasLayout()) {
-              <span class="mono truncate text-[10px]" style="color: var(--ink-dim)">
-                {{ here()?.layout?.placed }} placed · not routed
-              </span>
-            }
-          }
-          @case ('schematic') {
-            @if (here()?.schematic; as s) {
-              <span class="mono truncate text-[10px]"
-                    [style.color]="s.erc.error_count ? 'var(--danger)' : 'var(--ok)'"
-                    [title]="'ERC: ' + s.erc.error_count + ' errors, ' + s.erc.warning_count
-                             + ' warnings; library set-up notes left out'">
-                {{ s.parts }} parts · ERC {{ s.erc.error_count }}
-              </span>
-            }
-          }
-          @case ('3d') {
-            <span class="mono truncate text-[10px]" style="color: var(--ink-dim)">
-              drag to turn it over
-            </span>
+         One view, three ways of looking at the same board: the copper,
+         the schematic it came from, and the thing in three dimensions. -->
+    <div view class="relative h-full w-full">
+      @switch (boardTab()) {
+        @case ('layout') {
+          @if (hasLayout()) {
+            <app-drawing #flat [src]="layoutUrl()" [controls]="false" />
+          } @else {
+            <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
           }
         }
-        @if (note(); as n) {
-          <span class="mono max-w-[14rem] truncate text-[10px]"
-                style="color: var(--warn)" [title]="n">{{ n }}</span>
-        }
-        <button (click)="toggleBig('board')" class="tcv-chip ml-auto shrink-0"
-                [title]="big() === 'board' ? 'back to its size' : 'larger'">
-          {{ big() === 'board' ? '⤡' : '⤢' }}
-        </button>
-      </header>
-
-      <div class="min-h-0 flex-1 p-1">
-        @switch (boardTab()) {
-          @case ('layout') {
-            @if (hasLayout()) {
-              <app-drawing [src]="layoutUrl()">
-                @if (here()?.route) {
-                  @for (v of views; track v) {
-                    <button (click)="view.set(v)" class="tcv-chip px-1.5 py-0"
-                            [attr.data-on]="view() === v ? 1 : null">{{ v }}</button>
-                  }
-                }
-                <a class="tcv-chip px-1.5 py-0" [href]="file('board.kicad_pcb')"
-                   title="the board as a KiCad file">.kicad_pcb</a>
-              </app-drawing>
-            } @else {
-              <p class="p-2 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
-            }
-          }
-          @case ('schematic') {
-            @if (here()?.schematic; as s) {
-              <app-drawing [src]="file('schematic.svg', s.at)">
-                <a class="tcv-chip px-1.5 py-0" [href]="file('board.kicad_sch')"
-                   title="the schematic as a KiCad file">.kicad_sch</a>
-              </app-drawing>
-            } @else {
-              <p class="p-2 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
-            }
-          }
-          @case ('3d') {
-            @if (has3d()) {
-              <!-- Fetched when the tab is opened. three.js and a glTF
-                   loader are a third of a megabyte, and they are no use
-                   in any other room. -->
-              <div class="h-full w-full overflow-hidden rounded"
-                   style="background: var(--surface-2)">
-                @defer (on viewport) {
-                  <app-board-3d [src]="modelUrl()" />
-                } @placeholder {
-                  <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
-                    bringing the viewer in…
-                  </p>
-                }
-              </div>
-            } @else {
-              <p class="p-2 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
-            }
+        @case ('schematic') {
+          @if (here()?.schematic; as s) {
+            <app-drawing #flat [src]="file('schematic.svg', s.at)" [controls]="false" />
+          } @else {
+            <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
           }
         }
-      </div>
-      @if (boardTab() === 'layout' && trouble().length) {
-        <div class="shrink-0 px-2 pb-1.5 text-[11px]" style="color: var(--warn)">
+        @case ('3d') {
+          @if (has3d()) {
+            <!-- Fetched when the tab is opened. three.js and a glTF
+                 loader are a third of a megabyte, and they are no use
+                 in any other room. -->
+            <div class="h-full w-full overflow-hidden rounded"
+                 style="background: var(--surface-2)">
+              @defer (on viewport) {
+                <app-board-3d #model [src]="modelUrl()" />
+              } @placeholder {
+                <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
+                  bringing the viewer in…
+                </p>
+              }
+            </div>
+          } @else {
+            <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
+          }
+        }
+      }
+      @if (frozen() && shot(); as s) {
+        <app-sketchpad #pad [shot]="s" [pen]="pen" />
+      }
+      @if (boardTab() === 'layout' && trouble().length && !frozen()) {
+        <div class="absolute inset-x-2 bottom-2 rounded px-2 py-1 text-[11px]"
+             style="background: var(--shade); color: var(--warn)">
           @for (m of trouble(); track m) { <div class="truncate" [title]="m">{{ m }}</div> }
         </div>
       }
-    </section>
+    </div>
 
-    <!-- THE LOG
-         A band under the board, the way the 3D room has one under its
-         view: folded to one line, or open to the last lines. Its own, not
-         the 3D room's - the lines a board writes are about the board. -->
-    <div class="tcv-panel shrink-0 rounded" style="border: 1px solid var(--line)">
-      <div class="flex items-center gap-2 px-2.5 py-1">
-        <button (click)="toggleLog()" class="tcv-chip">
-          {{ logOpen() ? '▾' : '▸' }} log
-        </button>
-        <span class="mono text-[10px]" style="color: var(--ink-dim)">
-          {{ log().length }} lines
-        </span>
-      </div>
-      @if (logOpen()) {
-        <div #logBox class="tcv-scroll mono overflow-y-auto px-2.5 pb-2 text-[11px]"
-             style="height: 132px; border-top: 1px solid var(--line)">
-          @for (l of log(); track l._id) {
-            <div class="flex gap-2 leading-snug">
-              <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
-              <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
-            </div>
-          } @empty {
-            <div style="color: var(--ink-dim)">no activity yet</div>
-          }
-        </div>
-      }
-    </div>
-    </div>
-  </div>
+    <!-- The view's corner: which side of the board, like the 3D room's "All". -->
+    @if (boardTab() === 'layout' && here()?.route && !frozen()) {
+      <select ngProjectAs="[corner]" class="tcv-corner"
+              (change)="view.set($any($event.target).value)" title="which side of the board">
+        @for (v of views; track v) { <option [value]="v" [selected]="view() === v">{{ v }}</option> }
+      </select>
+    }
+  </app-room-frame>
   }
 </div>`,
 })
@@ -747,7 +717,12 @@ export class RoomPcb implements OnDestroy {
   private activity = inject(Activity);
   /** Read by the template for the preview URLs. */
   store = inject(Parts);
-  private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
+  /** The flat drawing on screen, the 3D view, and the pad over either
+   *  while the view is held. The 3D one by its shape, not its class: its
+   *  class would pull three.js out of the deferred chunk. */
+  flat = viewChild<Drawing>('flat');
+  private model = viewChild<{ snapshot(): string | null }>('model');
+  pad = viewChild<Sketchpad>('pad');
 
   boards = signal<BoardEntry[]>([]);
   here = signal<BoardEntry | null>(null);
@@ -759,17 +734,20 @@ export class RoomPcb implements OnDestroy {
   readonly boardTabs = ['layout', 'schematic', '3d'] as const;
   boardTab = signal<'layout' | 'schematic' | '3d'>(
     RoomPcb.pick(RoomPcb.recall('board', 'layout'), ['layout', 'schematic', '3d'], 'layout'));
-  big = signal<'none' | 'board' | 'side'>(
-    RoomPcb.pick(RoomPcb.recall('big', 'none'), ['none', 'board', 'side'], 'none'));
   /** What an empty tab says. Nothing here makes a board: the agent runs
    *  the pipeline when a change is asked for. */
   readonly notYet = 'Nothing yet. Ask for the change - a board note, or the '
     + 'thread under the queue - and the agent runs the pipeline: build, '
     + 'schematic, place, route, DRC.';
-  readonly sideTabs = ['machine', 'rules', 'checks', 'lcsc'] as const;
-  side = signal<'machine' | 'rules' | 'checks' | 'lcsc'>(
-    RoomPcb.pick(RoomPcb.recall('side', 'machine'),
-                 ['machine', 'rules', 'checks', 'lcsc'], 'machine'));
+  readonly sideTabs = ['parts', 'rules', 'checks', 'lcsc', 'machine'] as const;
+  readonly tabNames = { parts: 'Parts', rules: 'Rules', checks: 'Checks', lcsc: 'LCSC',
+                        machine: 'Machine' };
+  side = signal<SideTab>(RoomPcb.pick(RoomPcb.recall('side', 'parts'), this.sideTabs, 'parts'));
+
+  /** The pen: the view held as a picture, and what is being drawn with. */
+  readonly pen = new PenState();
+  frozen = signal(false);
+  shot = signal<string | null>(null);
   /** The copper as KiCad draws it with the ground pour, without it so the
    *  tracks can be followed, and the back seen from below. */
   readonly views = ['front', 'tracks', 'back'] as const;
@@ -802,9 +780,6 @@ export class RoomPcb implements OnDestroy {
   /** The part whose photo would not load, so the frame is not left empty. */
   noPhoto = signal<string | null>(null);
 
-  /** The log band, open or folded - kept across a reload, like the 3D
-   *  room's. */
-  logOpen = signal(RoomPcb.recall('log', '1') === '1');
   asks = signal<LcscJournal | null>(null);
   readonly askFilters = ['all', 'sent', 'disk', 'refused', 'agent', 'page'] as const;
   askFilter = signal<(typeof RoomPcb.prototype.askFilters)[number]>('all');
@@ -820,6 +795,12 @@ export class RoomPcb implements OnDestroy {
     // The room is only mounted while its tab is on, so this stops when
     // somebody leaves rather than polling behind another room.
     this.timers.push(setInterval(() => this.tick(), 3000));
+    // A note filed with the drawing lets the view go, as the 3D room does.
+    let filed = this.picked.boardFiled();
+    effect(() => {
+      const n = this.picked.boardFiled();
+      if (n !== filed) { filed = n; untracked(() => this.resume()); }
+    });
     // Opened from the catalog: the tree is shared, so the room follows
     // what was clicked rather than keeping a list beside it.
     effect(() => {
@@ -833,6 +814,30 @@ export class RoomPcb implements OnDestroy {
 
   ngOnDestroy() {
     for (const id of this.timers) clearInterval(id);
+    this.picked.boardDraft.set(null);
+  }
+
+  // ---- the pen ----
+
+  canFreeze(): boolean {
+    const t = this.boardTab();
+    return t === '3d' ? !!this.model() : !!this.flat()?.ready();
+  }
+
+  /** Hold the view still as a picture - exactly what is on screen, at the
+   *  zoom and angle it is at - and put the pad over it. */
+  freeze() {
+    const shot = this.boardTab() === '3d' ? this.model()?.snapshot() : this.flat()?.snapshot();
+    if (!shot) { this.note.set('nothing on screen to draw on yet'); return; }
+    this.shot.set(shot);
+    this.frozen.set(true);
+    this.picked.boardDraft.set(() => this.pad()?.merged() ?? Promise.resolve(null));
+  }
+
+  resume() {
+    this.frozen.set(false);
+    this.shot.set(null);
+    this.picked.boardDraft.set(null);
   }
 
   // ---- parts, from LCSC ----
@@ -944,12 +949,6 @@ export class RoomPcb implements OnDestroy {
     try { localStorage.setItem(RoomPcb.KEY + key, value); } catch { /* private window */ }
   }
 
-  toggleLog() {
-    this.logOpen.update(v => !v);
-    RoomPcb.keep('log', this.logOpen() ? '1' : '');
-    if (this.logOpen()) setTimeout(() => this.scrollLog(), 30);
-  }
-
   private readJournal() {
     this.store.journal(300).subscribe({ next: j => this.asks.set(j) });
   }
@@ -999,20 +998,7 @@ export class RoomPcb implements OnDestroy {
   private tick() {
     if (this.side() === 'lcsc') this.readJournal();
     this.health.system().subscribe({ next: s => this.sys.set(s) });
-    this.activity.lines(60, 'pcb').subscribe({
-      next: rows => {
-        const last = this.log()[this.log().length - 1]?._id;
-        this.log.set(rows);
-        if (rows[rows.length - 1]?._id !== last) {
-          setTimeout(() => this.scrollLog(), 30);
-        }
-      },
-    });
-  }
-
-  private scrollLog() {
-    const box = this.logBox()?.nativeElement;
-    if (box) box.scrollTop = box.scrollHeight;
+    this.activity.lines(60, 'pcb').subscribe({ next: rows => this.log.set(rows) });
   }
 
   /** The three live readings, drawn the way the catalog's foot draws
@@ -1039,13 +1025,6 @@ export class RoomPcb implements OnDestroy {
 
   gb(bytes: number): string { return (bytes / 1e9).toFixed(1) + ' GB'; }
 
-  levelColor(l: LogLine['level']): string {
-    return l === 'error' ? 'var(--danger)'
-      : l === 'warn' ? 'var(--warn)'
-      : l === 'done' ? 'var(--ok)'
-      : l === 'work' ? 'var(--accent)' : 'var(--ink-dim)';
-  }
-
   refresh() {
     this.api.list().subscribe({
       next: rows => {
@@ -1059,6 +1038,7 @@ export class RoomPcb implements OnDestroy {
   }
 
   open(b: BoardEntry | null) {
+    if (this.frozen()) this.resume();
     this.here.set(b);
     this.graph.set(null);
     this.picked.boardParts.set([]);
@@ -1153,17 +1133,13 @@ export class RoomPcb implements OnDestroy {
 
   // ---- which pane goes where ----
 
-  toggleBig(pane: 'board' | 'side') {
-    this.big.set(this.big() === pane ? 'none' : pane);
-    RoomPcb.keep('big', this.big());
-  }
-
   setBoardTab(tab: 'layout' | 'schematic' | '3d') {
+    if (this.frozen()) this.resume();
     this.boardTab.set(tab);
     RoomPcb.keep('board', tab);
   }
 
-  setSide(tab: 'machine' | 'rules' | 'checks' | 'lcsc') {
+  setSide(tab: SideTab) {
     this.side.set(tab);
     RoomPcb.keep('side', tab);
     if (tab === 'rules' && !this.draft()) this.loadRules();

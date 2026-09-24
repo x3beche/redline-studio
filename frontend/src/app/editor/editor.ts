@@ -1437,21 +1437,24 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
-  /** A note about a board. No camera and no drawing - the 3D viewer is
-   *  not what is on screen, and filing its angle against a board would
-   *  hand the agent a picture of something else. The part is the board's
+  /** A note about a board. No camera - the 3D viewer is not what is on
+   *  screen. The drawing is the board room's own: its view, frozen and
+   *  marked, handed over through `boardDraft`. The part is the board's
    *  own component, as the Part field offers it. */
-  private saveBoardNote() {
+  private async saveBoardNote() {
     const board = this.picked.board();
     if (!board) { this.flash('open a board first'); return; }
     this.saving.set(true);
+    const draft = this.picked.boardDraft();
+    const image = draft ? await draft().catch(() => null) : null;
     this.api.create({
-      comment: this.comment().trim(), image_png: null, camera: null,
+      comment: this.comment().trim(), image_png: image, camera: null,
       part: this.part() || null, model: board, kind: 'pcb',
     }).subscribe({
       next: () => {
         this.saving.set(false);
         this.comment.set('');
+        this.picked.boardFiled.update(n => n + 1);
         this.flash('note saved');
         this.refresh();
       },

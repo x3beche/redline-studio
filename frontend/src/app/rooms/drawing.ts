@@ -1,6 +1,7 @@
 import {
   Component, ElementRef, OnDestroy, effect, input, signal, viewChild,
 } from '@angular/core';
+import { capture } from './sketchpad';
 
 /** A drawing you can move around in: a schematic, a board's copper.
  *
@@ -34,16 +35,20 @@ import {
   <div class="absolute bottom-1.5 left-1.5 flex gap-1" (pointerdown)="$event.stopPropagation()">
     <ng-content></ng-content>
   </div>
+  @if (controls()) {
   <div class="absolute bottom-1.5 right-1.5 flex gap-1">
     <button (click)="step(1.25)" class="tcv-chip px-1.5 py-0" title="closer">+</button>
     <button (click)="step(0.8)" class="tcv-chip px-1.5 py-0" title="further">–</button>
     <button (click)="fit()" class="tcv-chip px-1.5 py-0"
             title="all of it (or double-click)">fit</button>
   </div>
+  }
 </div>`,
 })
 export class Drawing implements OnDestroy {
   src = input.required<string>();
+  /** Its own zoom buttons - off where the room's toolbar has them. */
+  controls = input(true);
 
   private box = viewChild.required<ElementRef<HTMLDivElement>>('box');
   private img = viewChild.required<ElementRef<HTMLImageElement>>('img');
@@ -108,6 +113,15 @@ export class Drawing implements OnDestroy {
   }
 
   step(k: number) { this.zoom(k); }
+
+  /** What is on screen, as a picture the size of the box: the drawing
+   *  where it has been moved to, at the zoom it is at. */
+  snapshot(): string {
+    const b = this.box().nativeElement;
+    return capture(b, getComputedStyle(b).backgroundColor, [
+      { src: this.img().nativeElement, x: this.x(), y: this.y(), w: this.w(), h: this.h() },
+    ]);
+  }
 
   wheel(ev: WheelEvent) {
     ev.preventDefault();

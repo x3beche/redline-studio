@@ -177,17 +177,23 @@ the whole pipeline, in order, every time:
 
 About a minute for a 33-part board. The room shows what came of it.
 
-| pane | what it shows |
+| place | what it holds |
 |---|---|
-| **parts** | LCSC's catalogue, the part you clicked in full, and the drawer |
-| **board** | one window, three tabs: **layout** - the routed board as *front* (with the pour), *tracks* (copper only, both layers) or *back* (from below); **schematic** - on black, scroll to zoom, drag to move, double-click to fit; **3d** - the board with its parts, copper and mask. `.kicad_pcb` and `.kicad_sch` open them in KiCad |
-| **machine · rules · checks · lcsc** | under the parts: what each run cost; the routing rules; what DRC and ERC found; every request made of LCSC |
-| **log** | a band under the board, as in the 3D room: folded to one line, or open to the last lines. Only this room's lines |
+| **toolbar** | across the top, the 3D room's icon buttons: *layout*, *schematic*, *3D*; the board's *front* (with the pour), *tracks* (copper only) or *back*; fit, closer, further; the `.kicad_pcb`, `.kicad_sch` and `.glb` files; what the last run came to (routed, DRC, ERC). The **pen** is at its far end |
+| **tabs** | down the left, like the 3D room's Tree/Clip/…: **Parts** (LCSC's catalogue, the part you clicked in full, the drawer), **Rules**, **Checks** (DRC and ERC), **LCSC** (every request made of it), **Machine** (what each run cost) |
+| **view** | the board as the toolbar picked it; on the layout the corner selector switches side, as *All* does in the 3D room. Scroll to zoom, drag to move, double-click to fit; drag to turn the 3D one over |
+| **log** | a band under the view, as in the 3D room: folded to one line, or open to the last lines. Only this room's lines |
 
-It is laid out the way the 3D room is: a column on the left, the board
-beside it, the log along the bottom. ⤢ on the board hides the column; ⤢ on
-the side pane widens it, for editing rules. The room remembers which tab,
-which pane and whether the log is open across a reload.
+It is the 3D room's layout, and every room shares it (`rooms/frame.ts`):
+one toolbar, one column of tabs, one view, one log band. The room remembers
+the tab, the view and whether the log is open across a reload.
+
+**Drawing on a board.** Press the pen: the view is held as a picture -
+exactly what is on screen, at that zoom or angle - and the 3D room's tools
+dock in the toolbar (freehand, line, arrow, rectangle, ellipse, triangle,
+text; four inks; width; undo, clear). **Save as draft** in the column on
+the right files the board note with that picture. Press the pen again to
+let the view go.
 
 ### Rules
 

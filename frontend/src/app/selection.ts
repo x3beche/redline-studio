@@ -23,6 +23,14 @@ export class Selection {
    *  about? */
   boardParts = signal<string[]>([]);
 
+  /** The board view, frozen and marked up, as the PNG a board note
+   *  carries. Null while nothing is frozen - the same hand-off as the
+   *  coding rooms' `codeDraft`. */
+  boardDraft = signal<(() => Promise<string | null>) | null>(null);
+
+  /** Bumped when a board note has been filed, so the room lets go. */
+  boardFiled = signal(0);
+
   /** Open a board: the room follows from the kind of file it is. */
   openBoard(id: string) {
     this.board.set(id);

@@ -601,7 +601,8 @@
       </button>
       <p class="mt-1 text-[11px]" style="color: var(--ink-dim)">
         {{ picked.room() === 'pcb'
-           ? 'Saved as a note on the open board, about the part picked above.'
+           ? (picked.boardDraft() ? 'Saved with the frozen view and your marks on it.'
+                                  : 'Saved as a note on the open board. Press the pen to draw on it.')
            : codeRoom()
              ? (picked.codeDraft() ? 'Saved with the frozen page and the elements under the marks.'
                                    : 'Saved as a note on the project. Freeze the preview to draw on it.')
