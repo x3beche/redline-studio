@@ -46,16 +46,17 @@ export const WORKSPACES: Workspace[] = [
   {
     id: 'embedded',
     label: 'Embedded Programming',
-    blurb: 'Firmware: the same notes, diffs and tests. What it shows on '
-         + 'screen - a serial console, a display - is not wired yet.',
-    ready: false,
+    blurb: 'Firmware: what the build makes of the source - memory per region, '
+         + 'the largest functions and tables with their files - the change as '
+         + 'a diff, and the build as the check.',
+    ready: true,
   },
   {
     id: 'mobile',
     label: 'Mobile Programming',
-    blurb: 'A phone app: the same loop at a phone\'s size. Served on the '
-         + 'web it can be drawn on today; on a device, not yet.',
-    ready: false,
+    blurb: 'A phone app on an emulated phone: draw on its screen, the change '
+         + 'arrives as a diff, the tests are the check.',
+    ready: true,
   },
   {
     id: 'analyze',

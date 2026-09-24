@@ -7,9 +7,11 @@ it was written on. That is drawn as a page of its own, each block tagged
 with its source, so a ring round one on the frozen picture says
 `Core/Src/main.c:212` the way a ring on a web page says which button.
 
-The build and the reading both happen in the Embedded Programming image
-(arm-none-eabi, CMake, Ninja). The build goes to Redline's own cache,
-never into the project's tree.
+The build, the reading and the programming all happen in the Embedded
+Programming image: ESP-IDF for ESP32, arm-none-eabi and OpenOCD/stlink
+for STM32. The build goes to Redline's own cache, never into the
+project's tree. Which compiler made an image is read off the ELF itself,
+so the right nm reads it.
 """
 
 from __future__ import annotations
@@ -99,6 +101,44 @@ def summarise(regions: list[dict], symbols: list[dict]) -> dict:
             "flash_bytes": flash, "ram_bytes": ram}
 
 
+# ---------------- which chip ----------------
+# e_machine in the ELF header: what the image was compiled for, and so
+# which binutils read it.
+MACHINES = {40: "arm", 94: "xtensa", 243: "riscv"}
+NM_FOR = {
+    "arm": "arm-none-eabi-nm",
+    # ESP-IDF 5.2 onwards names one Xtensa toolchain for every chip; older
+    # releases one per chip. Whichever the image has.
+    "xtensa": "$(command -v xtensa-esp-elf-nm || command -v xtensa-esp32-elf-nm)",
+    "riscv": "$(command -v riscv32-esp-elf-nm)",
+}
+
+
+def machine(elf: Path) -> str | None:
+    try:
+        head = elf.read_bytes()[:20]
+    except OSError:
+        return None
+    if head[:4] != b"\x7fELF":
+        return None
+    order = "little" if head[5] == 1 else "big"
+    return MACHINES.get(int.from_bytes(head[18:20], order))
+
+
+def target_of(app: dict) -> str:
+    """stm32 or esp32: said by the project, or read off its build."""
+    if app.get("target") in ("stm32", "esp32"):
+        return app["target"]
+    return "esp32" if "idf.py" in (app.get("build") or "") else "stm32"
+
+
+DEFAULT_FLASH = {
+    "esp32": "idf.py -B $BUILD -p $PORT flash",
+    "stm32": 'openocd -f interface/stlink.cfg -f target/stm32h7x.cfg '
+             '-c "program $ELF verify reset exit"',
+}
+
+
 async def build(db, app: dict) -> dict:
     """Build the firmware in the Embedded image and read what came out."""
     if not app.get("build"):
@@ -124,9 +164,12 @@ async def build(db, app: dict) -> dict:
         if not elf:
             result.update(ok=False, why="the build made no .elf")
         else:
+            arch = machine(elf) or "arm"
             rc2, nm, _ = await sandbox.run(
-                "embedded", ["arm-none-eabi-nm", "-S", "--size-sort", "-l", str(elf)],
+                "embedded", ["bash", "-c",
+                             f'{NM_FOR[arch]} -S --size-sort -l "{elf}"'],
                 repo=app["repo"], timeout=300)
+            result["arch"] = arch
             symbols = parse_nm(nm, app["repo"]) if rc2 == 0 else []
             regions = parse_memory(log)
             before = (app.get("firmware") or {}).get("summary")
@@ -142,6 +185,82 @@ async def build(db, app: dict) -> dict:
         {"$set": {"firmware": {k: v for k, v in result.items() if k != "log"},
                   "firmware_log": result["log"]}})
     return result
+
+
+# ---------------- boards ----------------
+# USB vendor ids worth naming: an ST-Link probe, and Espressif's own
+# chips with a USB port (S2, S3, C3...). A classic ESP32 board shows up
+# through its USB-serial bridge instead.
+PROBES = {"0483": "ST-Link", "303a": "Espressif USB"}
+BRIDGES = ("CP210", "Silicon_Labs", "CH340", "1a86", "FTDI", "Espressif",
+           "USB_Serial", "wch.cn")
+
+
+def boards() -> list[dict]:
+    """What is plugged in that firmware could go to. Read from /dev and
+    /sys on the host - listing files, nothing installed."""
+    out: list[dict] = []
+    for p in sorted(Path("/dev/serial/by-id").glob("*")) if \
+            Path("/dev/serial/by-id").exists() else []:
+        name = p.name
+        kind = ("stm32" if "STM" in name or "STLink" in name
+                else "esp32" if any(b in name for b in BRIDGES) else "serial")
+        out.append({"kind": kind, "name": name, "port": str(p.resolve())})
+    for dev in sorted(Path("/sys/bus/usb/devices").glob("*")):
+        try:
+            vid = (dev / "idVendor").read_text().strip()
+            pid = (dev / "idProduct").read_text().strip()
+        except OSError:
+            continue
+        if vid in PROBES:
+            prod = ""
+            try:
+                prod = (dev / "product").read_text().strip()
+            except OSError:
+                pass
+            out.append({"kind": "stm32" if vid == "0483" else "esp32",
+                        "name": prod or PROBES[vid], "usb": f"{vid}:{pid}",
+                        "bus": dev.name})
+    return out
+
+
+async def flash(db, app: dict, port: str | None = None) -> dict:
+    """Program the board with the last build, in the Embedded image, with
+    the board passed through. As root in there: a probe's USB node is not
+    usually the person's to write to on the host."""
+    fw = app.get("firmware") or {}
+    if not fw.get("ok"):
+        raise ValueError("nothing built to program - build it first")
+    target = target_of(app)
+    out_dir = build_dir(app["_id"])
+    elf = out_dir / fw.get("elf", "")
+    if not port:
+        near = [b for b in boards() if b["kind"] == target and b.get("port")]
+        port = near[0]["port"] if near else None
+    if target == "esp32" and not port:
+        raise ValueError("no ESP32 board is plugged in (no serial port found)")
+    if target == "stm32" and not any(b["kind"] == "stm32" for b in boards()):
+        raise ValueError("no ST-Link probe is plugged in")
+    cmd = (app.get("flash") or DEFAULT_FLASH[target]).replace(
+        "$BUILD", str(out_dir)).replace("$ELF", str(elf)).replace("$PORT", port or "")
+    devices = ["--device", port] if port else []
+    if target == "stm32":
+        devices += ["--device", "/dev/bus/usb"]
+    rc, log, job = await sandbox.run(
+        "embedded", ["bash", "-c", cmd], repo=app["repo"],
+        workdir=apps.workdir(app), timeout=600,
+        extra=["--user", "0:0", *devices])
+    try:
+        await compute.record(db, "flash", await compute.current_revision(
+            db, "embedded"), model=app["_id"], rc=rc, **job)
+    except Exception:                                # noqa: BLE001
+        pass
+    result = {"at": store.now(), "ok": rc == 0, "rc": rc, "target": target,
+              "port": port, "command": cmd, "wall_s": job.get("wall_s")}
+    await db[apps.APPS].update_one({"_id": app["_id"]}, {"$set": {
+        "flashed": result, "firmware_log": (app.get("firmware_log") or "")[-6000:]
+        + f"\n$ {cmd}\n" + log[-6000:]}})
+    return {**result, "log": log[-4000:]}
 
 
 def _find_elf(app: dict, out_dir: Path) -> Path | None:

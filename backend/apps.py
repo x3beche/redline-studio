@@ -38,7 +38,6 @@ PLATFORMS = ("web", "embedded", "mobile")
 EXT = {"web": ".web", "embedded": ".fw", "mobile": ".mobile"}
 
 ROOT = Path(__file__).resolve().parent.parent
-LOGS = ROOT / ".cache" / "apps"
 # What a dirty file said when a note was drawn, by blob hash. Kept here and
 # not in the project's own .git: that checkout is somebody's working tree,
 # and writing objects into it is not this room's business.
@@ -302,41 +301,51 @@ def answers(url: str, timeout: float = 1.5) -> bool:
 
 
 def serve(app: dict) -> dict:
-    """Start the project's dev server, unless something already answers.
+    """Start the project's dev server in its tab's container, unless
+    something already answers.
 
-    Started in a session of its own and left running: a dev server is
-    slow to come up and is meant to outlive the request that asked for it.
-    What it prints goes to a file the room's log tab reads.
+    Left running, detached, under a name of its own: a dev server is slow
+    to come up and is meant to outlive the request that asked for it. The
+    host's network, so it answers on the host's loopback like any other.
+    What it prints is read back with `docker logs` for the server tab.
     """
+    from . import sandbox
+
     url = app.get("url") or ""
-    if url and answers(url):
+    probe = url.replace("10.0.2.2", "127.0.0.1")    # the phone's name for the host
+    if probe and answers(probe):
         return {"started": False, "up": True, "why": "already answering"}
     if not app.get("dev"):
         return {"started": False, "up": False, "why": "no dev command"}
-    LOGS.mkdir(parents=True, exist_ok=True)
-    log = LOGS / f"{app['_id']}.log"
-    out = open(log, "ab")
-    proc = subprocess.Popen(["bash", "-c", app["dev"]], cwd=workdir(app),
-                            stdout=out, stderr=subprocess.STDOUT,
-                            stdin=subprocess.DEVNULL, start_new_session=True)
-    return {"started": True, "up": False, "pid": proc.pid, "log": str(log)}
+    platform = app.get("platform") or "web"
+    if not sandbox.have_image(platform):
+        raise sandbox.NoImage(f"the {platform} image is not built: "
+                              f"{sandbox.build_hint(platform)}")
+    name = server_name(app["_id"])
+    subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+    cmd = sandbox.argv(platform, ["bash", "-c", app["dev"]], repo=app["repo"],
+                       workdir=workdir(app), name=name)
+    cmd.remove("--rm")
+    cmd.insert(2, "-d")
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    if out.returncode != 0:
+        raise RuntimeError(out.stderr.strip()[-400:] or "docker run failed")
+    return {"started": True, "up": False, "container": name}
 
 
-def stop_served(pid: int) -> bool:
-    try:
-        os.killpg(pid, signal.SIGTERM)
-        return True
-    except (ProcessLookupError, PermissionError):
-        return False
+def server_name(app_id: str) -> str:
+    return f"redline-serve-{app_id}"
 
 
 def server_log(app_id: str, limit: int = 200) -> list[str]:
-    log = LOGS / f"{app_id}.log"
+    """What the dev server printed, from its container."""
     try:
-        lines = log.read_text(errors="replace").splitlines()
-    except OSError:
+        out = subprocess.run(["docker", "logs", "--tail", str(limit),
+                              server_name(app_id)],
+                             capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
         return []
-    return lines[-limit:]
+    return (out.stdout + out.stderr).splitlines()[-limit:]
 
 
 def workdir(app: dict) -> str:
@@ -437,6 +446,7 @@ def clean(body: dict) -> dict:
         raise ValueError(f"repo must be the absolute path of a git checkout: {repo}")
     return {k: body.get(k) for k in
             ("title", "folder", "cwd", "url", "dev", "test", "routes",
-             "build", "elf", "device", "package", "activity")
+             "build", "elf", "device", "package", "activity", "target",
+             "flash")
             if body.get(k) is not None} | {"platform": platform,
                                            "repo": str(repo)}

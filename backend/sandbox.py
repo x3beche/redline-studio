@@ -64,6 +64,8 @@ def argv(platform: str, cmd: list[str], *, repo: str | None = None,
     As the person's own user, so what a build writes can be deleted by
     them, and with HOME somewhere writable for tools that want one.
     """
+    # An explicit --user in `extra` (programming a board wants root in the
+    # container) comes later on the line and wins.
     run = ["docker", "run", "--rm", "--network", "host",
            "--user", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp"]
     if name:

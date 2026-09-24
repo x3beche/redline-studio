@@ -59,6 +59,8 @@ def _public(a: dict) -> dict:
             "url": a.get("url"), "dev": a.get("dev"), "test": a.get("test"),
             "routes": a.get("routes") or ["/"],
             "build": a.get("build"), "firmware": a.get("firmware"),
+            "target": firmware.target_of(a) if (a.get("platform") == "embedded") else None,
+            "flashed": a.get("flashed"), "package": a.get("package"),
             "last_test": ({k: v for k, v in last.items() if k != "tail"}
                           if last else None)}
 
@@ -73,10 +75,13 @@ class AppIn(BaseModel):
     test: str | None = None
     routes: list[str] | None = None
     folder: str | None = None
-    # Firmware: the build command, with $BUILD for Redline's own output
-    # directory, and the .elf in it when there is more than one.
+    # Firmware: stm32 or esp32; the build command, with $BUILD for
+    # Redline's own output directory; the .elf in it when there is more
+    # than one; and how to program a board ($ELF, $BUILD, $PORT).
+    target: str | None = None
     build: str | None = None
     elf: str | None = None
+    flash: str | None = None
     # A phone app: the Android package and activity to launch; without
     # them the url is opened in the phone's browser.
     package: str | None = None
@@ -147,11 +152,15 @@ async def app_status(aid: str):
 
 @router.post("/{aid}/serve")
 async def serve_app(aid: str):
+    """Start the dev server, in the tab's container. For the agent."""
     a = await _app(aid)
-    out = await asyncio.to_thread(apps.serve, a)
+    try:
+        out = await asyncio.to_thread(apps.serve, a)
+    except sandbox.NoImage as exc:
+        raise HTTPException(503, str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc))
     if out.get("started"):
-        await _db()[apps.APPS].update_one({"_id": aid},
-                                          {"$set": {"served_pid": out["pid"]}})
         await _say(f"{aid}: starting the dev server - {a.get('dev')}", "work",
                    _room(a))
     return out
@@ -457,6 +466,40 @@ async def build_app(aid: str):
                + (f" - flash {flash['pct']:.2f}%" if flash else ""),
                "done" if out["ok"] else "error", "embedded")
     return {k: v for k, v in out.items() if k != "log"}
+
+
+@router.get("/hardware/boards")
+async def list_boards():
+    """STM32 probes and ESP32 boards plugged into this machine."""
+    return await asyncio.to_thread(firmware.boards)
+
+
+@router.get("/{aid}/firmware.json")
+async def firmware_json(aid: str):
+    """The last build as data: regions, symbols with their files, and the
+    build before it, for the room's own firmware pane."""
+    await _app(aid)
+    try:
+        raw = await store.get_artifact(_db(), aid, "firmware", apps.APPS)
+    except KeyError:
+        return None
+    return Response(raw, media_type="application/json")
+
+
+@router.post("/{aid}/flash")
+async def flash_app(aid: str, port: str | None = None):
+    """Program the board. For the agent; the room has no button."""
+    a = await _app(aid)
+    try:
+        out = await firmware.flash(_db(), a, port)
+    except sandbox.NoImage as exc:
+        raise HTTPException(503, str(exc))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    await _say(f"{aid}: programmed the {out['target']} "
+               + ("- verified" if out["ok"] else "FAILED"),
+               "done" if out["ok"] else "error", "embedded")
+    return out
 
 
 @router.get("/{aid}/firmware.html")

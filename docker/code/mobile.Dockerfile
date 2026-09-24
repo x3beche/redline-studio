@@ -3,14 +3,15 @@
 #
 #   docker build -f docker/code/mobile.Dockerfile -t redline-code-mobile docker/code
 #
-# Run with /dev/kvm passed through - an x86_64 phone on KVM boots in about
+# A phone app served on the web is served and tested from here too, so
+# Node is in it. Run with /dev/kvm passed through - an x86_64 phone on KVM boots in about
 # a minute; without it, not in any useful time - and left running while
 # the room is open. Headless: the screen reaches the page as screenshots.
 FROM ubuntu:24.04
 
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      ca-certificates curl unzip openjdk-17-jre-headless python3 \
+      ca-certificates curl unzip openjdk-17-jre-headless python3 nodejs npm git \
       libpulse0 libnss3 libxcomposite1 libxcursor1 libxi6 libxtst6 \
       libasound2t64 libgl1 libx11-6 libxkbfile1 libxdamage1 libxrandr2 \
       libdbus-1-3 libbsd0 libgbm1 libdrm2 libegl1 \

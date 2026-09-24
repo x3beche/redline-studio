@@ -969,6 +969,35 @@ async def cmd_code(args):
         out = await _code_build(db, app)
         if not out["ok"]:
             sys.exit(1)
+    elif args.what == "serve":
+        # A project's dev server, in its tab's container, left running.
+        from backend import apps
+        app = await db[apps.APPS].find_one({"_id": args.id})
+        if not app:
+            _, app = await _code_note(db, args.id)
+        out = await asyncio.to_thread(apps.serve, app)
+        print(out)
+    elif args.what == "flash":
+        # Program the board with the last build. The room has no button.
+        from backend import apps, firmware
+        app = await db[apps.APPS].find_one({"_id": args.id})
+        if not app:
+            _, app = await _code_note(db, args.id)
+        try:
+            out = await firmware.flash(db, app, args.port)
+        except ValueError as exc:
+            sys.exit(str(exc))
+        print(out["log"])
+        print(f"programmed {out['target']} on {out['port'] or 'the probe'}: "
+              f"{'ok' if out['ok'] else 'FAILED'}")
+        if not out["ok"]:
+            sys.exit(1)
+    elif args.what == "boards":
+        from backend import firmware
+        for b in firmware.boards():
+            print(f"{b['kind']:7} {b.get('port') or b.get('usb')}  {b['name']}")
+        if not firmware.boards():
+            print("nothing plugged in")
     elif args.what == "phone":
         # The Mobile room's phone, started by the agent: the room has no
         # power button, the person marks and the agent runs things.
@@ -1104,17 +1133,20 @@ def main() -> None:
     s.set_defaults(fn=cmd_after)
     s = sub.add_parser("code", help="notes on a running interface: web, "
                                     "embedded and mobile")
-    s.add_argument("what", choices=["show", "diff", "test", "build", "phone",
-                                    "after", "done"],
+    s.add_argument("what", choices=["show", "diff", "test", "build", "flash",
+                                    "boards", "serve", "phone", "after", "done"],
                    help="show: the note, the page and the elements under the "
                         "marks, drawing written to disk; diff: what changed "
                         "since it was drawn; test: the project's check; "
                         "build: firmware, in the embedded container; "
-                        "phone: start the mobile room's phone (id: its project); "
+                        "flash: program the board (STM32 or ESP32); boards: "
+                        "what is plugged in; serve: the dev server, in its "
+                        "container; phone: start the mobile room's phone; "
                         "after: the same page again; done: test, after, then "
                         "applied - refused while the tests fail")
     s.add_argument("id")
     s.add_argument("-o", "--out", help="where show writes the drawing")
+    s.add_argument("--port", help="flash: the serial port, when there is more than one")
     s.set_defaults(fn=cmd_code)
     s = sub.add_parser("usage", help="pull LLM usage from the agent transcripts")
     s.add_argument("--full", action="store_true",
