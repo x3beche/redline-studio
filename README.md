@@ -71,11 +71,12 @@ as well as a solid does.
 |---|---|
 | **3D Drawing** | parametric solids — this is what is built |
 | **PCB Design** | atopile for the circuit, LCSC for the parts, KiCad in a container for the board |
-| **Coding** | redlining a running interface: draw on what is on screen, the change arrives as a diff, the tests are the check |
+| **Web · Embedded · Mobile** | redlining a running interface: draw on what is on screen, the change arrives as a diff, the tests are the check |
 | **Analyze** | what all of it cost, across every revision rather than one card at a time |
 
-Two of them are built. The other two are tabs with the groundwork written
-down and nothing behind them yet, and they say so.
+The 3D, board and Web rooms are built. Embedded and Mobile share the Web
+room's notes, diffs and tests and say what their preview still needs;
+Analyze is a tab with the groundwork written down, and says so.
 
 ![A board in the PCB room: atopile for the circuit, KiCad for the board](docs/pcb-room.png)
 
@@ -83,6 +84,14 @@ The board room takes a circuit written as text, fetches each part from
 LCSC by its number — footprint and 3D model together — and has KiCad
 place and draw it inside a container, so a gigabyte of libraries never
 lands on the machine. Out come a layer render, a model and a BOM.
+
+The Web room redlines a page while it runs. Freeze takes a real
+screenshot in headless Chrome, a ring or an arrow is laid on the
+elements under it - "this button, in rooms/pcb.ts", not "these
+pixels" - and the note comes back as a diff with the test suite as the
+check and the same page, at the same size, as the after.
+
+![The Web room: a note's diff with its before and after](docs/web-room.png)
 
 ## How it goes
 

@@ -152,6 +152,35 @@ curl -s -X POST localhost:8000/api/boards/<id>/layout    # place, draw, model
 A part is chosen by its LCSC number (`mpn = "C25744"` on the component).
 Then `done <id>` as usual.
 
+## Code notes
+
+A queued item marked `[WEB]`, `[EMBEDDED]` or `[MOBILE]` is a note on a
+running interface, written in one of the three coding rooms. `model` is a
+project's id: a git checkout, the address its dev server answers on, and
+its test command. The drawing is a real screenshot of one route at one
+size, and the note carries what was under the marks - selector, box, and
+the file that renders it.
+
+```bash
+.venv/bin/python tools/revisions.py code show <id>    # note, page, elements, drawing
+.venv/bin/python tools/revisions.py code diff <id>    # what changed since it was drawn
+.venv/bin/python tools/revisions.py code test <id>    # the project's test command
+.venv/bin/python tools/revisions.py code done <id>    # tests, after shot, applied
+```
+
+`show` writes the drawing out: **read it**, then go to the file it names.
+Edit the project's checkout (`show` prints where it is). Files that were
+already uncommitted when the note was drawn are somebody else's work in
+progress: `show` counts them, and `code diff` leaves out what they said
+then, so the diff is yours alone.
+
+`done` is the only way a code note closes. It runs the test command and
+**refuses while it fails**, then photographs the same route at the same
+size as the after picture, freezes the patch onto the note and marks it
+applied. `done <id>` does the same thing for a code note, so the check
+cannot be skipped by using the older command. Log with `--room web` (or
+`embedded`, `mobile`) so the lines land in that room's log.
+
 ## Designing a board from a description
 
 "STM32F042, two buttons, USB-C charging with a TP4056, a CH340G with a
@@ -247,6 +276,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py finish               # close the run
 .venv/bin/python tools/revisions.py after <id>           # the "after" picture
 .venv/bin/python tools/revisions.py usage [--full]       # what the work cost
+.venv/bin/python tools/revisions.py code show|diff|test|after|done <id>  # code notes
 .venv/bin/python tools/render.py <id> [--camera=…|--only PART]
 ```
 
@@ -275,7 +305,8 @@ them while you work so the user can follow along without reading a terminal:
 `-p` moves the bar, `-l` colours the line (`info`, `work`, `done`, `warn`,
 `error`). Each room has its own log: lines go to the 3D room's by default,
 and `--room pcb` puts them in the board room's - log board work there, so
-neither room's log is half about the other. Start a run when you pick up a revision and finish it when you are
+neither room's log is half about the other. `--room web`, `embedded` and
+`mobile` are the coding rooms'. Start a run when you pick up a revision and finish it when you are
 done; the bar stays live in between.
 
 ### Always finish by rendering from the user's angle
@@ -329,6 +360,8 @@ Traps already hit in this codebase:
 | Model source | `models` collection |
 | Generated viewer/STEP/STL | GridFS `model_files` (gzip) |
 | Revision images | GridFS `shots` |
+| Code projects | `apps` collection - a checkout, a url, a test command |
+| A done code note's patch | GridFS `model_files` (gzip), on the revision |
 | Version history | `model_versions` — source text only |
 | Build | temporary directory, removed when finished |
 

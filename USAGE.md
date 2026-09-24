@@ -4,14 +4,16 @@
 
 ## The rooms
 
-Along the top: **3D Drawing**, **PCB Design**, **Coding**, **Analyze**.
-The first two are built; the other two open on what they need before they
-can exist. `?ws=pcb` in the URL opens one, and the browser remembers the
-last one you were in.
+Along the top: **3D Drawing**, **PCB Design**, **Web**, **Embedded**,
+**Mobile**, **Analyze**. The three in the middle are the coding rooms;
+Web is built, Embedded and Mobile share its notes, diff and tests and
+say what their preview still needs, and Analyze opens on what it needs
+before it can exist. `?ws=pcb` in the URL opens one, and the browser
+remembers the last one you were in.
 
 The left column belongs to no room. One tree holds everything: a model is
-a `.3d`, a board is a `.pcb`, and clicking either opens the room that can
-show it.
+a `.3d`, a board is a `.pcb`, a code project a `.web`, `.fw` or
+`.mobile`, and clicking any of them opens the room that can show it.
 
 The 3D room stays loaded whichever tab is showing — its viewer holds a
 WebGL context and tens of megabytes of geometry, and throwing that away to
@@ -267,6 +269,47 @@ A part without an LCSC number still appears in the netlist and in the
 circuit, and is not on the board: there is no shape to place. It is named
 under the drawing — *no footprint for U3* — rather than quietly left out,
 and a part number that does not exist says so the same way.
+
+## Web, Embedded, Mobile
+
+Redlining a running interface. A project is a git checkout with a dev
+server: the room shows the page it serves in a frame, at a route and a
+size - 1280, 820 or 390 wide - scaled into a dark surround so the page
+reads as it renders. Nothing answering? **start the dev server** runs
+the project's own command and its output goes to the **server** tab.
+
+![The Web room: a note's diff with its before and after, and the tests](docs/web-room.png)
+
+**Freeze** is the 3D room's pen button. It takes a real screenshot of the
+route with headless Chrome - about five seconds - and puts the same seven
+drawing tools over it. Every mark is laid on the page's elements as it is
+drawn: a ring means the outermost element mostly inside it, an arrow the
+smallest element under its head. What it landed on is outlined over the
+picture, listed under it, and offered in the Part field as
+`button.tcv-btn "build" · rooms/pcb.ts` - which button, in which file.
+**Save as draft** files the note with the picture and that list.
+
+The **diff** pane shows the working tree against HEAD, or one note's own
+change: only the files that moved since it was drawn, so somebody else's
+uncommitted work in the same checkout stays out of it. Pick a note and
+its before and after sit over its diff - the same route at the same size,
+twice. **tests** runs the project's test command; a pass says when the
+tree has changed since, rather than showing a green from an older tree. A
+note is not done until they pass and the after shot is taken, and the
+agent's `code done` will not mark it applied otherwise.
+
+A project is registered through the API:
+
+```bash
+curl -X PUT localhost:8000/api/apps/redline -H 'content-type: application/json' -d '{
+  "title": "Redline", "platform": "web", "repo": "/path/to/checkout",
+  "url": "http://127.0.0.1:4200", "dev": "./start.sh",
+  "test": ".venv/bin/python -m pytest tests -q", "routes": ["/", "/?ws=pcb"]}'
+```
+
+Embedded and Mobile keep everything but the picture for now: firmware has
+no page to frame yet (a serial console or a display capture would go
+there), and a phone app can be drawn on when it is served on the web.
 
 ## The left column
 

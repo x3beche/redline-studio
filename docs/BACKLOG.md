@@ -124,6 +124,22 @@ fills the Part field on the right as `button.tcv-btn · rooms/pcb.ts`.
 - [x] tests as the check
 - [x] before/after
 
+Left to do, roughly in order:
+
+- **No + App in the left column.** A project is registered with
+  `PUT /api/apps/{id}`; fine for an agent, no use to a person.
+- **Embedded has nothing to frame.** A serial console in the log pane's
+  second tab and a capture of the device's display as the "page" are the
+  obvious two; the notes, diff and tests already work for firmware.
+- **Mobile is a phone-sized web page.** Real devices want an emulator
+  screenshot (adb exec-out screencap, xcrun simctl io) and a view
+  hierarchy dump in place of the DOM inventory.
+- **A note's picture is 340-380 kB of PNG** and takes about 4.6 s to
+  reach the database at this link's speed. A lossless crop to what the
+  marks touch, or WebP, would cut it several times over.
+- **websockets warns** that `connect()` should be a context manager, in
+  webshot.py and render.py both; the sync client still works.
+
 ## Analyze
 
 A tab that says what it needs before it can exist.
