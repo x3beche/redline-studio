@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cron Studio</title>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#ffffff;
+  --sunken:#e4e9ee;
+  --ink:#16202a;
+  --ink-soft:#5b6b7a;
+  --line:#c8d2db;
+  --line-soft:#dde4ea;
+  --accent:#1f4ed8;
+  --accent-ink:#ffffff;
+  --danger:#c0392b;
+  --warn:#a86400;
+  --ok:#2e7d32;
+  --fill-alpha:0.16;
+  color-scheme:light dark;
+  box-sizing:border-box;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f151b;
+    --surface:#161f27;
+    --sunken:#111920;
+    --ink:#e4ebf1;
+    --ink-soft:#8ea0b0;
+    --line:#2b3945;
+    --line-soft:#212c36;
+    --accent:#6d8dff;
+    --accent-ink:#0f151b;
+    --danger:#e57373;
+    --warn:#e0a84a;
+    --ok:#6cc070;
+    --fill-alpha:0.30;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f151b;
+  --surface:#161f27;
+  --sunken:#111920;
+  --ink:#e4ebf1;
+  --ink-soft:#8ea0b0;
+  --line:#2b3945;
+  --line-soft:#212c36;
+  --accent:#6d8dff;
+  --accent-ink:#0f151b;
+  --danger:#e57373;
+  --warn:#e0a84a;
+  --ok:#6cc070;
+  --fill-alpha:0.30;
+}
+*,*::before,*::after{box-sizing:inherit}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.mono,code,pre{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+.bar{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--surface)}
+.brand{font-weight:600;margin:0;font-size:15px}
+.brand span{color:var(--ink-soft);font-weight:400}
+
+.wrap{display:grid;gap:12px;padding:12px;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr);align-items:start}
+@media (max-width:1180px){.wrap{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.col-out{grid-column:1/-1}}
+@media (max-width:760px){.wrap{grid-template-columns:minmax(0,1fr);padding:8px;gap:8px}}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;min-width:0}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.card-head h2{margin:0;font-size:13px;font-weight:600}
+.card-body{padding:10px}
+.muted{color:var(--ink-soft)}
+.small{font-size:12px}
+
+.expr-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.expr{flex:1 1 220px;min-width:0;padding:7px 9px;font-size:18px;letter-spacing:.04em;border:1px solid var(--line);border-radius:5px;background:var(--sunken);font-family:"IBM Plex Mono",ui-monospace,monospace}
+.expr.bad{border-color:var(--danger)}
+select,.inp{padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--sunken);font-size:13px;max-width:100%}
+.tzsel{flex:0 1 230px;min-width:0}
+.err{color:var(--danger);margin:6px 0 0;font-size:12px}
+.desc{margin:8px 0 0;font-size:15px;font-weight:500}
+.desc.empty{font-weight:400;color:var(--ink-soft);font-size:13px}
+
+.strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:10px}
+.cell{border:1px solid var(--line-soft);border-radius:4px;padding:4px 6px;background:var(--paper);cursor:pointer;text-align:left;min-width:0}
+.cell:hover{border-color:var(--ink-soft)}
+.cell[aria-selected="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.cell b{display:block;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cell small{display:block;color:var(--ink-soft);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.presets{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}
+.chip{padding:3px 8px;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;font-size:12px}
+.chip:hover{border-color:var(--ink-soft)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
+.btn{padding:4px 10px;border:1px solid var(--line);border-radius:5px;background:var(--surface);cursor:pointer;font-size:13px}
+.btn:hover{border-color:var(--ink-soft)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
+.tabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--line-soft);padding:6px 8px 0}
+.tab{padding:5px 9px;border:1px solid transparent;border-bottom:none;border-radius:5px 5px 0 0;background:none;cursor:pointer;font-size:12px;color:var(--ink-soft);margin-bottom:-1px}
+.tab[aria-selected="true"]{background:var(--surface);border-color:var(--line-soft);color:var(--ink);font-weight:600}
+
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.seg button{border:none;border-right:1px solid var(--line);background:var(--surface);padding:4px 9px;cursor:pointer;font-size:12px}
+.seg button:last-child{border-right:none}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+
+.grid{display:grid;gap:3px;margin-top:10px}
+.g60{grid-template-columns:repeat(12,minmax(0,1fr))}
+.g24{grid-template-columns:repeat(12,minmax(0,1fr))}
+.g31{grid-template-columns:repeat(7,minmax(0,1fr))}
+.g12{grid-template-columns:repeat(6,minmax(0,1fr))}
+.g7{grid-template-columns:repeat(7,minmax(0,1fr))}
+@media (max-width:420px){.g12{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.v{padding:4px 0;border:1px solid var(--line-soft);border-radius:3px;background:var(--paper);cursor:pointer;font-size:12px;font-family:"IBM Plex Mono",ui-monospace,monospace;min-width:0;overflow:hidden}
+.v.name{font-family:inherit}
+.v:hover{border-color:var(--ink-soft)}
+.v[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.form{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:10px}
+.form label{display:flex;gap:6px;align-items:center;color:var(--ink-soft)}
+.hint{color:var(--ink-soft);font-size:12px;margin:8px 0 0}
+
+.runs{list-style:none;margin:0;padding:0}
+.run{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:2px 8px;padding:5px 10px;border-bottom:1px solid var(--line-soft);align-items:baseline}
+.run:last-child{border-bottom:none}
+.run .n{color:var(--ink-soft);font-size:11px;font-family:"IBM Plex Mono",ui-monospace,monospace}
+.run .when{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px;min-width:0}
+.run .rel{color:var(--ink-soft);font-size:12px;text-align:right;white-space:nowrap}
+.run .utc{grid-column:2/-1;color:var(--ink-soft);font-size:12px;font-family:"IBM Plex Mono",ui-monospace,monospace}
+.run.gap .when{text-decoration:line-through;color:var(--ink-soft)}
+.tag{display:inline-block;font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:11px;padding:0 5px;border-radius:3px;border:1px solid var(--warn);color:var(--warn);margin-left:6px;vertical-align:1px}
+.empty{padding:14px 10px;color:var(--ink-soft);margin:0}
+
+.checks{list-style:none;margin:0;padding:6px 10px;display:flex;flex-direction:column;gap:6px}
+.checks li{padding-left:14px;position:relative}
+.checks li::before{content:"";position:absolute;left:0;top:6px;width:7px;height:7px;border-radius:50%;background:var(--ink-soft)}
+.checks li.danger::before{background:var(--danger)}
+.checks li.warn::before{background:var(--warn)}
+.checks li.ok::before{background:var(--ok)}
+.checks h3{margin:4px 0 0;font-size:12px;font-weight:600;color:var(--ink-soft)}
+.checks li.h{padding-left:0}.checks li.h::before{display:none}
+
+.out{margin:0;padding:10px;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.5;background:var(--sunken);max-height:560px;overflow:auto;border-bottom:1px solid var(--line-soft)}
+.out-foot{display:flex;gap:10px;align-items:center;padding:8px 10px;flex-wrap:wrap}
+.count{color:var(--ink-soft);font-size:12px;font-family:"IBM Plex Mono",ui-monospace,monospace}
+.copied{color:var(--ok);font-size:12px}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <h1 class="brand">Cron Studio <span>— build, check and preview cron schedules</span></h1>
+</header>
+
+<main class="wrap">
+  <div class="col">
+    <section class="card">
+      <div class="card-body">
+        <div class="expr-row">
+          <input id="expr" class="expr" type="text" spellcheck="false" autocomplete="off" aria-label="Cron expression" placeholder="*/15 9-17 * * 1-5">
+          <select id="tz" class="tzsel" aria-label="Time zone"></select>
+        </div>
+        <p class="err" id="err" hidden></p>
+        <p class="desc empty" id="desc">Type a 5-field cron expression (minute hour day-of-month month day-of-week), pick a template below, or build it field by field.</p>
+        <div class="strip" id="strip" role="tablist" aria-label="Fields"></div>
+        <div class="presets" id="presets" aria-label="Templates"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 id="bTitle">Minute</h2>
+        <div class="seg" id="modes" aria-label="Selection mode"></div>
+      </div>
+      <div class="card-body" id="builder"></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card">
+      <div class="card-head">
+        <h2>Next 10 runs</h2>
+        <span class="muted small" id="runsTz"></span>
+      </div>
+      <ol class="runs" id="runs"></ol>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>Checks</h2><span class="muted small" id="checkCount"></span></div>
+      <ul class="checks" id="checks"></ul>
+    </section>
+  </div>
+
+  <div class="col col-out">
+    <section class="card">
+      <div class="tabs" role="tablist" id="otabs">
+        <button class="tab" role="tab" data-fmt="cron">Cron</button>
+        <button class="tab" role="tab" data-fmt="prompt">Prompt</button>
+        <button class="tab" role="tab" data-fmt="code">Code</button>
+      </div>
+      <pre class="out" id="out" tabindex="0"></pre>
+      <div class="out-foot">
+        <button class="btn btn-primary" id="copy">Copy</button>
+        <span class="count" id="ocount"></span>
+        <span class="copied" id="copied" aria-live="polite"></span>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+(function(){
+"use strict";
+
+/* ==CORE START== (pure scheduling logic; no DOM) */
+var MONTH_NAMES=["January","February","March","April","May","June","July","August","September","October","November","December"];
+var MONTH_ABBR=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+var DAY_NAMES=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+var DAY_ABBR=["SUN","MON","TUE","WED","THU","FRI","SAT"];
+var FIELD_SPECS=[
+  {key:"minute",label:"Minute",short:"Minute",min:0,max:59},
+  {key:"hour",label:"Hour",short:"Hour",min:0,max:23},
+  {key:"dom",label:"Day of month",short:"Day",min:1,max:31},
+  {key:"month",label:"Month",short:"Month",min:1,max:12,names:MONTH_ABBR,nameBase:1},
+  {key:"dow",label:"Day of week",short:"Weekday",min:0,max:7,names:DAY_ABBR,nameBase:0}
+];
+var MACROS={"@yearly":"0 0 1 1 *","@annually":"0 0 1 1 *","@monthly":"0 0 1 * *","@weekly":"0 0 * * 0","@daily":"0 0 * * *","@midnight":"0 0 * * *","@hourly":"0 * * * *"};
+
+function CronError(field,msg){ this.field=field; this.message=msg; }
+
+function pad2(n){ return (n<10?"0":"")+n; }
+function hm(h,m){ return pad2(h)+":"+pad2(m); }
+function ordinal(n){ var s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
+function joinList(a){ return a.length<2 ? a.join("") : a.slice(0,-1).join(", ")+" and "+a[a.length-1]; }
+function runsOf(vals){ var r=[]; vals.forEach(function(v){ var l=r[r.length-1]; if(l&&v===l[1]+1) l[1]=v; else r.push([v,v]); }); return r; }
+
+function parseValue(tok,spec){
+  var t=tok.toUpperCase();
+  if(spec.names){ var i=spec.names.indexOf(t); if(i>=0) return i+spec.nameBase; }
+  if(!/^\d+$/.test(t)){
+    throw new CronError(spec.key, spec.label+': "'+tok+'" is not a value. Use '+spec.min+"–"+spec.max+(spec.names?" or "+spec.names[0]+"–"+spec.names[spec.names.length-1]:"")+".");
+  }
+  var v=parseInt(t,10);
+  if(v<spec.min||v>spec.max) throw new CronError(spec.key, spec.label+" "+v+" is out of range. Allowed: "+spec.min+"–"+spec.max+(spec.key==="dow"?" (0 and 7 are Sunday)":"")+".");
+  return v;
+}
+
+function parseField(raw,spec){
+  if(raw==="?"&&(spec.key==="dom"||spec.key==="dow")) raw="*";
+  var set=[]; for(var i=0;i<=spec.max;i++) set.push(false);
+  raw.split(",").forEach(function(it){
+    if(it==="") throw new CronError(spec.key, spec.label+': empty item in "'+raw+'". Remove the extra comma.');
+    var sl=it.split("/");
+    if(sl.length>2) throw new CronError(spec.key, spec.label+': "'+it+'" has more than one "/".');
+    var step=1;
+    if(sl.length===2){
+      if(!/^\d+$/.test(sl[1])||+sl[1]<1) throw new CronError(spec.key, spec.label+': step "/'+sl[1]+'" must be a whole number of 1 or more.');
+      step=+sl[1];
+    }
+    var base=sl[0], lo, hi;
+    if(base==="*"){ lo=spec.min; hi=spec.max; }
+    else if(base.indexOf("-")>=0){
+      var p=base.split("-");
+      if(p.length!==2||p[0]===""||p[1]==="") throw new CronError(spec.key, spec.label+': range "'+base+'" must look like 1-5.');
+      lo=parseValue(p[0],spec); hi=parseValue(p[1],spec);
+      if(lo>hi) throw new CronError(spec.key, spec.label+': range "'+base+'" runs backwards. Split it, e.g. "'+p[0]+"-"+(spec.names?spec.names[spec.names.length-1]:spec.max)+","+(spec.names?spec.names[0]:spec.min)+"-"+p[1]+'".');
+    } else if(base===""){
+      throw new CronError(spec.key, spec.label+': "'+it+'" is missing a value before "/".');
+    } else { lo=parseValue(base,spec); hi=sl.length===2?spec.max:lo; }
+    for(var v=lo;v<=hi;v+=step) set[v]=true;
+  });
+  if(spec.key==="dow"){ if(set[7]) set[0]=true; set.length=7; }
+  var values=[]; set.forEach(function(b,v){ if(b) values.push(v); });
+  var full=values.length===(spec.key==="dow"?7:spec.max-spec.min+1);
+  return {raw:raw, set:set, values:values, star:raw.charAt(0)==="*", full:full};
+}
+
+function parseCron(input){
+  var s=String(input||"").trim().replace(/\s+/g," ");
+  if(s==="") throw new CronError(null,"Empty expression.");
+  var macro=null;
+  if(s.charAt(0)==="@"){
+    var k=s.toLowerCase();
+    if(k==="@reboot") throw new CronError(null,"@reboot runs once at boot, not on a schedule, so there is nothing to preview.");
+    if(!MACROS[k]) throw new CronError(null,'Unknown macro "'+s+'". Known: '+Object.keys(MACROS).join(", ")+".");
+    macro=k; s=MACROS[k];
+  }
+  var parts=s.split(" ");
+  if(parts.length!==5){
+    var hint=parts.length===6?" Six fields looks like Quartz/Spring (seconds first): drop the seconds field.":parts.length===7?" Seven fields looks like Quartz with seconds and year: drop the first and last field.":"";
+    throw new CronError(null,"Expected 5 fields (minute hour day-of-month month day-of-week), got "+parts.length+"."+hint);
+  }
+  var f=parts.map(function(p,i){ return parseField(p,FIELD_SPECS[i]); });
+  return {expr:parts.join(" "), macro:macro, minute:f[0], hour:f[1], dom:f[2], month:f[3], dow:f[4], fields:f};
+}
+
+function dayMatches(c,y,m,d){
+  if(!c.month.set[m]) return false;
+  var wd=new Date(Date.UTC(y,m-1,d)).getUTCDay();
+  var a=c.dom.set[d], b=c.dow.set[wd];
+  /* Vixie/cronie: if either day field starts with "*", both must match (AND); otherwise either (OR). */
+  if(c.dom.star||c.dow.star) return a&&b;
+  return a||b;
+}
+function daysInMonth(y,m){ return new Date(Date.UTC(y,m,0)).getUTCDate(); }
+function wallMatches(c,W){
+  var d=new Date(W);
+  return c.minute.set[d.getUTCMinutes()]&&c.hour.set[d.getUTCHours()]&&dayMatches(c,d.getUTCFullYear(),d.getUTCMonth()+1,d.getUTCDate());
+}
+/* Calls fn(W) for every matching naive wall-clock time (ms, UTC fields = wall fields) at or after fromW. */
+function forEachWallMatch(c,fromW,maxDays,fn){
+  var s=new Date(fromW), h0=s.getUTCHours(), m0=s.getUTCMinutes();
+  var day=Date.UTC(s.getUTCFullYear(),s.getUTCMonth(),s.getUTCDate());
+  for(var i=0;i<maxDays;i++,day+=864e5){
+    var d=new Date(day);
+    if(d.getUTCDate()>daysInMonth(d.getUTCFullYear(),d.getUTCMonth()+1)) continue;
+    if(!dayMatches(c,d.getUTCFullYear(),d.getUTCMonth()+1,d.getUTCDate())) continue;
+    for(var hi=0;hi<c.hour.values.length;hi++){
+      var h=c.hour.values[hi]; if(i===0&&h<h0) continue;
+      for(var mi=0;mi<c.minute.values.length;mi++){
+        var m=c.minute.values[mi]; if(i===0&&h===h0&&m<m0) continue;
+        if(fn(day+h*36e5+m*6e4)===false) return;
+      }
+    }
+  }
+}
+
+var dtfCache={};
+function zoneDTF(tz){
+  if(!dtfCache[tz]) dtfCache[tz]=new Intl.DateTimeFormat("en-US",{timeZone:tz,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  return dtfCache[tz];
+}
+function isValidZone(tz){ try{ zoneDTF(tz); return true; }catch(e){ return false; } }
+/* Wall clock of instant t in tz, returned as naive ms. */
+function wallMs(tz,t){
+  var p={}; zoneDTF(tz).formatToParts(new Date(t)).forEach(function(x){ p[x.type]=x.value; });
+  var h=+p.hour; if(h===24) h=0;
+  return Date.UTC(+p.year,+p.month-1,+p.day,h,+p.minute,+p.second);
+}
+function offsetMin(tz,t){ var tt=Math.floor(t/1000)*1000; return Math.round((wallMs(tz,tt)-tt)/6e4); }
+/* Instants (sorted) at which the wall clock in tz reads W. [] = inside a DST gap; 2 items = repeated hour. */
+function wallToInstants(tz,W){
+  var before=offsetMin(tz,W-864e5), after=offsetMin(tz,W+864e5), out=[];
+  [before,after].forEach(function(o){ var t=W-o*6e4; if(out.indexOf(t)<0&&wallMs(tz,t)===W) out.push(t); });
+  out.sort(function(a,b){ return a-b; });
+  return {instants:out, before:before, after:after};
+}
+/* Next `count` runs strictly after fromMs. Skipped (DST gap) wall times are included as {gap:true} but not counted. */
+function nextRuns(c,tz,fromMs,count,maxDays){
+  var ev=[], real=0, stopW=null, fromWall=wallMs(tz,fromMs);
+  var startW=Math.floor((fromWall-3*36e5)/6e4)*6e4;
+  forEachWallMatch(c,startW,maxDays||366*30,function(W){
+    if(stopW!==null&&W>stopW) return false;
+    var r=wallToInstants(tz,W);
+    if(r.instants.length===0){
+      if(W>fromWall) ev.push({wall:W,t:null,gap:true,sortT:W-r.before*6e4});
+    } else r.instants.forEach(function(t,i){
+      if(t>fromMs){ ev.push({wall:W,t:t,repeat:r.instants.length>1,second:i===1,sortT:t}); real++; }
+    });
+    if(real>=count&&stopW===null) stopW=W+4*36e5;
+  });
+  ev.sort(function(a,b){ return a.sortT-b.sortT; });
+  var out=[], n=0;
+  for(var i=0;i<ev.length&&n<count;i++){ out.push(ev[i]); if(!ev[i].gap) n++; }
+  return out;
+}
+/* DST transitions in tz within `days` after fromMs. */
+function dstTransitions(tz,fromMs,days){
+  var res=[], step=6*36e5, t=Math.floor(fromMs/6e4)*6e4, prev=offsetMin(tz,t);
+  for(var i=0;i<days*4;i++){
+    var t2=t+step, o=offsetMin(tz,t2);
+    if(o!==prev){
+      var lo=t, hi=t2;
+      while(hi-lo>6e4){ var mid=lo+Math.floor((hi-lo)/2/6e4)*6e4; if(mid===lo) break; if(offsetMin(tz,mid)===prev) lo=mid; else hi=mid; }
+      res.push({at:hi,before:prev,after:o}); prev=o;
+    }
+    t=t2;
+  }
+  return res;
+}
+/* Which matching wall times fall into the gap / repeated span of a transition. */
+function transitionHits(c,tr){
+  var a=tr.at+Math.min(tr.before,tr.after)*6e4, b=tr.at+Math.max(tr.before,tr.after)*6e4, hits=[];
+  for(var W=a;W<b&&hits.length<400;W+=6e4) if(wallMatches(c,W)) hits.push(W);
+  return {kind:tr.after>tr.before?"gap":"repeat", from:a, to:b, hits:hits};
+}
+function fmtOffset(min){ var s=min<0?"-":"+", a=Math.abs(min); return "UTC"+s+pad2(Math.floor(a/60))+":"+pad2(a%60); }
+
+/* ---- English description ---- */
+function stepOf(f,spec){
+  var m=/^(\*|(\d+)-(\d+)|(\d+))\/(\d+)$/.exec(f.raw);
+  if(!m) return null;
+  return {step:+m[5], all:m[1]==="*", from:m[1]==="*"?spec.min:+(m[2]||m[4]), to:m[1]==="*"||m[4]?spec.max:+m[3]};
+}
+function isPlainList(f){ return /^[0-9A-Za-z]+(,[0-9A-Za-z]+)*$/.test(f.raw); }
+function hourWindows(H){
+  var r=runsOf(H.values);
+  return joinList(r.map(function(x){ return "between "+hm(x[0],0)+" and "+hm(x[1],59); }));
+}
+function timePhrase(c){
+  var M=c.minute, H=c.hour, ms=stepOf(M,FIELD_SPECS[0]), hs=stepOf(H,FIELD_SPECS[1]);
+  var mSingle=M.values.length===1?M.values[0]:null;
+  if(!M.full&&!H.full&&M.values.length<=3&&M.values.length*H.values.length<=6){
+    var t=[]; H.values.forEach(function(h){ M.values.forEach(function(m){ t.push(hm(h,m)); }); });
+    return "at "+joinList(t);
+  }
+  if(mSingle!==null){
+    if(H.full) return mSingle===0?"every hour, on the hour":"at minute "+mSingle+" of every hour";
+    if(hs&&hs.all) return "every "+hs.step+" hours at minute "+mSingle+" ("+H.values.slice(0,3).map(function(h){ return hm(h,mSingle); }).join(", ")+(H.values.length>3?", …":"")+")";
+    var r=runsOf(H.values);
+    if(r.length===1) return "every hour from "+hm(r[0][0],mSingle)+" through "+hm(r[0][1],mSingle);
+    return "at minute "+mSingle+" past hours "+joinList(H.values.map(pad2));
+  }
+  var mp;
+  if(M.full) mp="every minute";
+  else if(ms&&ms.all) mp="every "+ms.step+" minutes";
+  else if(ms) mp="every "+ms.step+" minutes from minute "+ms.from+" through "+ms.to;
+  else if(isPlainList(M)) mp="at minutes "+joinList(M.values.map(String));
+  else mp="at minutes "+joinList(runsOf(M.values).map(function(x){ return x[0]===x[1]?String(x[0]):x[0]+"–"+x[1]; }));
+  if(H.full) return mp+(mp.indexOf("every")===0?"":" of every hour");
+  if(hs&&hs.all&&H.values.length>3) return mp+" during every "+ordinal(hs.step)+" hour (from 00:00)";
+  if(runsOf(H.values).length<=3) return mp+" "+hourWindows(H);
+  return mp+" during hours "+joinList(H.values.map(pad2));
+}
+function dowList(values){
+  var key=values.join(",");
+  if(key==="1,2,3,4,5") return "weekdays";
+  if(key==="0,6") return "weekends";
+  var mon=values.map(function(v){ return v===0?7:v; }).sort(function(a,b){ return a-b; });
+  var r=runsOf(mon), names=function(v){ return DAY_NAMES[v%7]; };
+  if(values.length===1) return DAY_NAMES[values[0]]+"s";
+  return joinList(r.map(function(x){ return x[1]-x[0]>=2?names(x[0])+" through "+names(x[1]):x[0]===x[1]?names(x[0]):names(x[0])+", "+names(x[1]); }));
+}
+function domList(c){
+  var st=stepOf(c.dom,FIELD_SPECS[2]);
+  if(st&&st.all) return "every "+ordinal(st.step)+" day of the month (the "+joinList(c.dom.values.slice(0,3).map(ordinal))+(c.dom.values.length>3?", …":"")+")";
+  var r=runsOf(c.dom.values);
+  return "the "+joinList(r.map(function(x){ return x[1]-x[0]>=2?ordinal(x[0])+" through "+ordinal(x[1]):x[0]===x[1]?ordinal(x[0]):ordinal(x[0])+" and "+ordinal(x[1]); }))+" of the month";
+}
+function dayPhrase(c){
+  var domR=!c.dom.full, dowR=!c.dow.full;
+  if(!domR&&!dowR) return "";
+  var dp=domR?"on "+domList(c):"";
+  var wp=dowR?"on "+dowList(c.dow.values):"";
+  if(!domR) return wp;
+  if(!dowR) return dp;
+  if(c.dom.star||c.dow.star) return dp+", but only when that day is a "+dowList(c.dow.values).replace(/s$/,"").replace(/^weekday$/,"weekday").replace(/^weekend$/,"weekend day");
+  return dp+" or "+wp;
+}
+function monthPhrase(c){
+  if(c.month.full) return "";
+  var r=runsOf(c.month.values);
+  return "in "+joinList(r.map(function(x){ return x[1]-x[0]>=2?MONTH_NAMES[x[0]-1]+" through "+MONTH_NAMES[x[1]-1]:x[0]===x[1]?MONTH_NAMES[x[0]-1]:MONTH_NAMES[x[0]-1]+" and "+MONTH_NAMES[x[1]-1]; }));
+}
+function describe(c){
+  var t=timePhrase(c), d=dayPhrase(c), m=monthPhrase(c);
+  if(!d&&!m&&t.indexOf("at ")===0&&/^at \d/.test(t)) d="every day";
+  var s=[t,d,m].filter(Boolean).join(" ");
+  return s.charAt(0).toUpperCase()+s.slice(1);
+}
+/* Short per-field summary for the field strip. */
+function fieldSummary(i,f){
+  var spec=FIELD_SPECS[i];
+  if(f.full&&f.star&&f.raw.indexOf("/")<0) return "any";
+  var st=stepOf(f,spec);
+  if(st&&st.all) return "every "+st.step;
+  var r=runsOf(f.values), lbl=function(v){ return i===3?MONTH_ABBR[v-1].charAt(0)+MONTH_ABBR[v-1].slice(1).toLowerCase():i===4?DAY_ABBR[v].charAt(0)+DAY_ABBR[v].slice(1).toLowerCase():String(v); };
+  return r.map(function(x){ return x[0]===x[1]?lbl(x[0]):lbl(x[0])+"–"+lbl(x[1]); }).join(", ");
+}
+/* Canonical list text for a value set, e.g. [1,2,3,5] -> "1-3,5"; names optional. */
+function compactField(values,nameFn){
+  return runsOf(values).map(function(x){
+    var a=nameFn?nameFn(x[0]):x[0], b=nameFn?nameFn(x[1]):x[1];
+    return x[0]===x[1]?String(a):x[1]-x[0]===1?a+","+b:a+"-"+b;
+  }).join(",");
+}
+/* Quartz / Spring 6-field and AWS EventBridge variants. Returns arrays (two when DOM/DOW OR can't be expressed). */
+function variants(c){
+  var dowNames=c.dow.full?"*":compactField(c.dow.values,function(v){ return DAY_ABBR[v]; });
+  var domTxt=c.dom.full?"*":c.dom.raw;
+  var head=c.minute.raw+" "+c.hour.raw, mon=c.month.raw;
+  var q=[], a=[], split=false;
+  var domR=!c.dom.full, dowR=!c.dow.full;
+  if(domR&&dowR&&!(c.dom.star||c.dow.star)){
+    split=true;
+    q.push("0 "+head+" "+domTxt+" "+mon+" ?"); q.push("0 "+head+" ? "+mon+" "+dowNames);
+    a.push("cron("+head+" "+domTxt+" "+mon+" ? *)"); a.push("cron("+head+" ? "+mon+" "+dowNames+" *)");
+  } else if(dowR&&!domR){
+    q.push("0 "+head+" ? "+mon+" "+dowNames); a.push("cron("+head+" ? "+mon+" "+dowNames+" *)");
+  } else if(domR&&dowR){
+    /* AND case (a field starts with *): not expressible with '?' — keep the day-of-month field and note it. */
+    split="and";
+    q.push("0 "+head+" "+domTxt+" "+mon+" ?"); a.push("cron("+head+" "+domTxt+" "+mon+" ? *)");
+  } else {
+    q.push("0 "+head+" "+domTxt+" "+mon+" ?"); a.push("cron("+head+" "+domTxt+" "+mon+" ? *)");
+  }
+  return {quartz:q, aws:a, split:split};
+}
+/* Static checks (not DST). Each: {level:"danger"|"warn"|"info", text}. */
+function checks(c,runsFound){
+  var out=[], perDay=c.minute.values.length*c.hour.values.length;
+  if(!runsFound) out.push({level:"danger",text:"This schedule never runs: no date matches it (for example, February 30). Change the day-of-month or month field."});
+  if(c.minute.full) out.push({level:"warn",text:"Runs every minute"+(c.hour.full?" (1,440 runs a day)":" ("+perDay+" runs on each matching day)")+". Make sure the job finishes in under a minute and cannot overlap itself."});
+  else if(perDay>=96) out.push({level:"info",text:perDay+" runs on each matching day."});
+  if(!c.dom.full&&!c.dow.full){
+    if(!c.dom.star&&!c.dow.star) out.push({level:"warn",text:"Day of month ("+c.dom.raw+") and day of week ("+c.dow.raw+") are both set. Standard cron runs when EITHER matches (OR), not only when both do. For something like \"the first Monday\", keep day of week and add a date check inside the job, e.g. [ \"$(date +\\%d)\" -le 07 ]."});
+    else out.push({level:"warn",text:"A day field starts with \"*\" ("+(c.dom.star?c.dom.raw:c.dow.raw)+"), so Vixie cron/cronie require BOTH day fields to match (AND). Some other implementations use OR here; check yours."});
+  }
+  var dayGoverns=c.dow.full||c.dom.star||c.dow.star;
+  if(!c.dom.full&&dayGoverns){
+    var big=c.dom.values.filter(function(d){ return d>28; });
+    big.forEach(function(d){
+      var miss=c.month.values.filter(function(m){ return d>(m===2?29:daysInMonth(2025,m)); }).map(function(m){ return MONTH_NAMES[m-1]; });
+      if(d===29&&c.month.set[2]) out.push({level:"warn",text:"Day 29 exists in February only in leap years."+(miss.length?" Missing in: "+joinList(miss)+".":"")});
+      else if(miss.length) out.push({level:"warn",text:"Day "+d+" does not exist in "+joinList(miss)+"; no run on that day in those months. For \"last day of the month\" use day 28-31 and check that tomorrow is the 1st inside the job."});
+    });
+  }
+  [["minute",0,60,"minute","hour"],["hour",1,24,"hour","day"]].forEach(function(x){
+    var f=c[x[0]], st=stepOf(f,FIELD_SPECS[x[1]]);
+    if(st&&st.all&&x[2]%st.step!==0){
+      var last=f.values[f.values.length-1];
+      out.push({level:"warn",text:"*/"+st.step+" in the "+x[3]+" field restarts every "+x[4]+": it runs at "+last+" then "+f.values[0]+", so one gap is "+(x[2]-last)+", not "+st.step+"."});
+    }
+  });
+  var dst=stepOf(c.dom,FIELD_SPECS[2]);
+  if(dst&&dst.all&&dst.step>1) out.push({level:"info",text:"*/"+dst.step+" in day of month restarts on the 1st of every month, so the gap across a month end is irregular."});
+  var ms=stepOf(c.minute,FIELD_SPECS[0]);
+  if(c.minute.full||(ms&&ms.all&&ms.step<5)) out.push({level:"info",text:"GitHub Actions runs schedules at most every 5 minutes and may delay them under load."});
+  if(c.dow.raw.indexOf("7")>=0&&/(^|[,\-])7($|[,\-\/])/.test(c.dow.raw)) out.push({level:"info",text:"7 means Sunday here; some tools only accept 0 for Sunday."});
+  return out;
+}
+/* ==CORE END== */
+
+/* ---------------- UI ---------------- */
+var $=function(id){ return document.getElementById(id); };
+var LS="redline.tool.cron-studio.";
+function load(k,d){ try{ var v=localStorage.getItem(LS+k); return v===null?d:v; }catch(e){ return d; } }
+function save(k,v){ try{ localStorage.setItem(LS+k,v); }catch(e){} }
+
+var browserTz="UTC";
+try{ browserTz=Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC"; }catch(e){}
+
+var state={ text:load("expr",""), tz:load("tz",browserTz), field:+load("field","0")||0, out:load("out","prompt"), parsed:null, lastGood:null, error:null };
+if(!isValidZone(state.tz)) state.tz=browserTz;
+if(["cron","prompt","code"].indexOf(state.out)<0) state.out="prompt";
+if(!(state.field>=0&&state.field<5)) state.field=0;
+
+var PRESETS=[
+  ["Every minute","* * * * *"],["Every 15 min","*/15 * * * *"],["Hourly","0 * * * *"],
+  ["Daily 09:00","0 9 * * *"],["Weekdays 09:00","0 9 * * 1-5"],["Mondays 09:00","0 9 * * 1"],
+  ["1st of month","0 0 1 * *"]
+];
+
+/* time zone list */
+(function(){
+  var sel=$("tz"), zones=[];
+  try{ if(Intl.supportedValuesOf) zones=Intl.supportedValuesOf("timeZone"); }catch(e){}
+  if(!zones.length) zones=["UTC","Europe/London","Europe/Berlin","Europe/Istanbul","America/New_York","America/Chicago","America/Denver","America/Los_Angeles","America/Sao_Paulo","Asia/Kolkata","Asia/Shanghai","Asia/Tokyo","Australia/Sydney"];
+  var top=["UTC"]; if(browserTz!=="UTC") top.push(browserTz);
+  var html='<optgroup label="Common">'+top.map(function(z){ return '<option value="'+z+'">'+z+(z===browserTz&&z!=="UTC"?" (this device)":"")+"</option>"; }).join("")+"</optgroup>";
+  html+='<optgroup label="All zones">'+zones.filter(function(z){ return top.indexOf(z)<0; }).map(function(z){ return '<option value="'+z+'">'+z+"</option>"; }).join("")+"</optgroup>";
+  sel.innerHTML=html;
+  if(!sel.querySelector('option[value="'+state.tz+'"]')){ var o=document.createElement("option"); o.value=o.textContent=state.tz; sel.appendChild(o); }
+  sel.value=state.tz;
+})();
+
+$("presets").innerHTML=PRESETS.map(function(p){ return '<button class="chip" type="button" data-expr="'+p[1]+'" title="'+p[1]+'">'+p[0]+"</button>"; }).join("")+'<button class="chip" type="button" data-expr="30 9 * * 1-5" title="Example">Example</button>';
+
+function esc(s){ return String(s).replace(/[&<>"]/g,function(ch){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]; }); }
+
+/* ---- parse & state ---- */
+function setText(t,fromInput){
+  state.text=t; save("expr",t);
+  if(!fromInput) $("expr").value=t;
+  if(t.trim()===""){ state.parsed=null; state.error=null; }
+  else{
+    try{ state.parsed=parseCron(t); state.lastGood=state.parsed; state.error=null; }
+    catch(e){ if(!(e instanceof CronError)) throw e; state.parsed=null; state.error=e; if(e.field){ var fi=FIELD_SPECS.findIndex(function(s){ return s.key===e.field; }); if(fi>=0) state.field=fi; } }
+  }
+  renderAll();
+}
+function baseFields(){
+  var c=state.parsed||state.lastGood;
+  return c?c.fields.map(function(f){ return f.raw; }):["*","*","*","*","*"];
+}
+function setField(i,raw){
+  var f=baseFields(); f[i]=raw; setText(f.join(" "));
+}
+
+/* ---- builder ---- */
+var MODES=[["every","Every"],["specific","Specific"],["range","Range"],["step","Step"],["custom","Custom"]];
+var customForced=false;
+function modeOf(raw,spec){
+  if(customForced&&spec===FIELD_SPECS[state.field]) return "custom";
+  if(raw==="*"||raw==="?") return "every";
+  var st=/^(\*|(\w+)-(\w+)|(\w+))\/(\d+)$/.exec(raw);
+  if(st){
+    if(st[1]==="*"||st[4]) return "step";
+    try{ if(parseValue(st[3],spec)===spec.max) return "step"; }catch(e){}
+    return "range";
+  }
+  if(/^\w+-\w+$/.test(raw)) return "range";
+  if(/^\w+(,\w+)*$/.test(raw)) return "specific";
+  return "custom";
+}
+function valLabel(i,v,long){
+  if(i===3) return long?MONTH_NAMES[v-1]:MONTH_ABBR[v-1].charAt(0)+MONTH_ABBR[v-1].slice(1).toLowerCase();
+  if(i===4) return long?DAY_NAMES[v%7]:DAY_ABBR[v%7].charAt(0)+DAY_ABBR[v%7].slice(1).toLowerCase();
+  return i<2?pad2(v):String(v);
+}
+function domain(i){ var s=FIELD_SPECS[i], a=[]; for(var v=s.min;v<=(i===4?6:s.max);v++) a.push(v); return a; }
+var DEFAULTS={specific:["0","9","1","1","1"],range:["0-29","9-17","1-7","1-3","1-5"],step:["*/15","*/2","*/2","*/3","*/2"]};
+var builderNote="";
+
+function renderBuilder(){
+  var i=state.field, spec=FIELD_SPECS[i], raws=baseFields(), raw=raws[i], mode=modeOf(raw,spec);
+  var cur=null; try{ cur=parseField(raw,spec); }catch(e){}
+  $("bTitle").textContent=spec.label;
+  $("modes").innerHTML=MODES.map(function(m){ return '<button type="button" data-mode="'+m[0]+'" aria-pressed="'+(m[0]===mode)+'">'+m[1]+"</button>"; }).join("");
+  var b="", opts=function(sel){ return domain(i).map(function(v){ return '<option value="'+v+'"'+(v===sel?" selected":"")+">"+valLabel(i,v,true)+(i>=3?" ("+v+")":"")+"</option>"; }).join(""); };
+  if(mode==="every"){
+    b='<p class="hint" style="margin:0">Every '+spec.label.toLowerCase()+' matches (<code>*</code>). Pick another mode to restrict it.</p>';
+  } else if(mode==="specific"){
+    var g=["g60","g24","g31","g12","g7"][i], order=i===4?[1,2,3,4,5,6,0]:domain(i);
+    b='<div class="grid '+g+'" role="group" aria-label="'+spec.label+' values">'+order.map(function(v){ var on=cur&&cur.set[v]; return '<button type="button" class="v'+(i>=3?" name":"")+'" data-v="'+v+'" aria-pressed="'+!!on+'" title="'+valLabel(i,v,true)+'">'+valLabel(i,v,false)+"</button>"; }).join("")+"</div>";
+    b+='<p class="hint">Click to toggle. For long runs of values, Range or Step gives a shorter expression.</p>';
+  } else if(mode==="range"){
+    var m=/^(\w+)-(\w+)(?:\/(\d+))?$/.exec(raw), from=spec.min, to=spec.max, every=1;
+    try{ from=parseValue(m[1],spec); to=parseValue(m[2],spec); every=m[3]?+m[3]:1; }catch(e){}
+    if(i===4){ from%=7; to=to===7?6:to; }
+    var stepOpts=""; for(var s=1;s<=Math.max(2,Math.floor((spec.max-spec.min+1)/2));s++) stepOpts+='<option value="'+s+'"'+(s===every?" selected":"")+">"+(s===1?"every value":"every "+ordinal(s))+"</option>";
+    b='<div class="form"><label>From <select id="rFrom">'+opts(from)+'</select></label><label>through <select id="rTo">'+opts(to)+'</select></label><label>taking <select id="rStep">'+stepOpts+"</select></label></div>";
+  } else if(mode==="step"){
+    var ms=/^(\*|(\w+)-\w+|(\w+))\/(\d+)$/.exec(raw), st=2, start=spec.min;
+    if(ms){ st=+ms[4]; try{ start=ms[1]==="*"?spec.min:parseValue(ms[2]||ms[3],spec); }catch(e){} }
+    var so=""; for(var k=2;k<=Math.floor((i===4?7:spec.max-spec.min+1)/2)||k===2;k++) so+='<option value="'+k+'"'+(k===st?" selected":"")+">"+k+"</option>";
+    if(st>Math.floor((spec.max-spec.min+1)/2)) so+='<option value="'+st+'" selected>'+st+"</option>";
+    var unit={minute:"minutes",hour:"hours",dom:"days",month:"months",dow:"days"}[spec.key];
+    b='<div class="form"><label>Every <select id="sStep">'+so+"</select> "+unit+'</label><label>starting at <select id="sStart">'+opts(i===4?start%7:start)+"</select></label></div>";
+    if(cur) b+='<p class="hint">Matches: '+esc(cur.values.map(function(v){ return valLabel(i,v,false); }).join(", "))+"</p>";
+  } else {
+    b='<div class="form"><label style="flex:1 1 200px">Field <input id="cRaw" class="inp mono" style="flex:1;min-width:0" value="'+esc(raw)+'" spellcheck="false"></label></div>';
+    b+='<p class="hint">Mix lists, ranges and steps, e.g. <code>'+["0,30","8-11,14-17","1-7,15","1-3,7-9","MON-FRI,SUN"][i]+"</code>.</p>";
+  }
+  if(builderNote) b+='<p class="err">'+esc(builderNote)+"</p>";
+  $("builder").innerHTML=b;
+}
+
+$("modes").addEventListener("click",function(e){
+  var btn=e.target.closest("button[data-mode]"); if(!btn) return;
+  var i=state.field, mode=btn.getAttribute("data-mode"), raw=baseFields()[i], spec=FIELD_SPECS[i];
+  if(mode===modeOf(raw,spec)) return;
+  builderNote="";
+  if(mode==="every") return setField(i,"*");
+  if(mode==="custom"){ customForced=true; renderBuilder(); var ci=$("cRaw"); if(ci) ci.focus(); return; }
+  var cur=null; try{ cur=parseField(raw,spec); }catch(err){}
+  if(mode==="specific"&&cur&&!cur.full) return setField(i,cur.values.join(","));
+  if(mode==="range"&&cur&&!cur.full&&cur.values.length>1) return setField(i,cur.values[0]+"-"+cur.values[cur.values.length-1]);
+  setField(i,DEFAULTS[mode][i]);
+});
+
+$("builder").addEventListener("click",function(e){
+  var v=e.target.closest("button[data-v]"); if(!v) return;
+  var i=state.field, spec=FIELD_SPECS[i], cur=null;
+  try{ cur=parseField(baseFields()[i],spec); }catch(err){ return; }
+  var val=+v.getAttribute("data-v"), set=cur.values.slice(), at=set.indexOf(val);
+  if(at>=0){ if(set.length===1){ builderNote="Keep at least one value selected, or switch to Every."; renderBuilder(); return; } set.splice(at,1); }
+  else set.push(val);
+  set.sort(function(a,b){ return a-b; }); builderNote="";
+  setField(i,set.join(","));
+});
+$("builder").addEventListener("change",function(e){
+  var i=state.field, spec=FIELD_SPECS[i], id=e.target.id;
+  if(id==="rFrom"||id==="rTo"||id==="rStep"){
+    var a=+$("rFrom").value, b=+$("rTo").value, s=+$("rStep").value;
+    if(a>b){ builderNote="\"From\" must not be after \"through\". For a wrap-around (e.g. Fri–Mon) use Custom: 5-6,0-1."; renderBuilder(); return; }
+    builderNote=""; setField(i,a+"-"+b+(s>1?"/"+s:""));
+  } else if(id==="sStep"||id==="sStart"){
+    var st=+$("sStep").value, start=+$("sStart").value;
+    builderNote=""; setField(i,start===spec.min?"*/"+st:start+"-"+(i===4?6:spec.max)+"/"+st);
+  }
+});
+$("builder").addEventListener("input",function(e){
+  if(e.target.id!=="cRaw") return;
+  var i=state.field, raw=e.target.value.trim().replace(/\s+/g,"");
+  try{ parseField(raw,FIELD_SPECS[i]); builderNote=""; }catch(err){ builderNote=err.message; var n=$("builder").querySelector(".err"); if(n) n.textContent=builderNote; else $("builder").insertAdjacentHTML("beforeend",'<p class="err">'+esc(builderNote)+"</p>"); return; }
+  var f=baseFields(); f[i]=raw||"*"; state.text=f.join(" "); $("expr").value=state.text; save("expr",state.text);
+  state.parsed=parseCron(state.text); state.lastGood=state.parsed; state.error=null;
+  var n2=$("builder").querySelector(".err"); if(n2) n2.remove();
+  renderAll(true);
+});
+
+/* ---- strip & header ---- */
+function renderStrip(){
+  var c=state.parsed||state.lastGood, raws=baseFields();
+  $("strip").innerHTML=FIELD_SPECS.map(function(s,i){
+    var sum=""; if(c) sum=fieldSummary(i,c.fields[i]);
+    var bad=state.error&&state.error.field===s.key;
+    return '<button type="button" role="tab" class="cell" data-i="'+i+'" aria-selected="'+(i===state.field)+'" title="'+esc(s.label)+'"><small>'+esc(s.short)+'</small><b'+(bad?' style="color:var(--danger)"':"")+">"+esc(raws[i])+"</b><small>"+esc(sum||"—")+"</small></button>";
+  }).join("");
+}
+$("strip").addEventListener("click",function(e){
+  var b=e.target.closest(".cell"); if(!b) return;
+  state.field=+b.getAttribute("data-i"); save("field",state.field); customForced=false; builderNote=""; renderStrip(); renderBuilder();
+});
+
+/* ---- runs ---- */
+var partsCache={};
+function zoneParts(tz,t){
+  if(!partsCache[tz]) partsCache[tz]=new Intl.DateTimeFormat("en-GB",{timeZone:tz,weekday:"short",day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",hourCycle:"h23",timeZoneName:"short"});
+  var p={}; partsCache[tz].formatToParts(new Date(t)).forEach(function(x){ p[x.type]=x.value; });
+  return p;
+}
+function fmtZone(tz,t){ return fmtWall(wallMs(tz,t)); }
+function fmtWall(W){ var d=new Date(W); return DAY_ABBR[d.getUTCDay()].charAt(0)+DAY_ABBR[d.getUTCDay()].slice(1).toLowerCase()+" "+pad2(d.getUTCDate())+" "+MONTH_ABBR[d.getUTCMonth()].charAt(0)+MONTH_ABBR[d.getUTCMonth()].slice(1).toLowerCase()+" "+d.getUTCFullYear()+" "+hm(d.getUTCHours(),d.getUTCMinutes()); }
+function isoUTC(t){ return new Date(t).toISOString().slice(0,16).replace("T"," ")+" UTC"; }
+function rel(ms){
+  var m=Math.round(ms/6e4); if(m<1) return "now";
+  if(m<60) return "in "+m+" min";
+  var h=Math.floor(m/60); if(h<48) return "in "+h+" h"+(m%60?" "+m%60+" min":"");
+  var d=Math.floor(h/24); if(d<60) return "in "+d+" d";
+  return "in "+Math.round(d/30.4)+" mo";
+}
+var cache={runs:[],trans:[]};
+function computePreview(){
+  var c=state.parsed, now=Date.now();
+  cache.runs=c?nextRuns(c,state.tz,now,10):[];
+  cache.trans=c?dstTransitions(state.tz,now,366).map(function(tr){ var h=transitionHits(c,tr); h.tr=tr; return h; }):[];
+  cache.now=now;
+}
+function renderRuns(){
+  var c=state.parsed, tz=state.tz, el=$("runs");
+  $("runsTz").textContent=tz+(tz!=="UTC"?" · UTC below":"");
+  if(!c){ el.innerHTML='<li class="empty">'+(state.error?"Fix the expression to see run times.":"No schedule yet. Pick a template or type an expression, and the next 10 run times appear here.")+"</li>"; return; }
+  if(!cache.runs.filter(function(r){ return !r.gap; }).length){ el.innerHTML='<li class="empty">No run found in the next 30 years. See Checks.</li>'; return; }
+  var n=0;
+  el.innerHTML=cache.runs.map(function(r){
+    if(r.gap) return '<li class="run gap"><span class="n">–</span><span class="when">'+fmtWall(r.wall)+'<span class="tag">skipped · DST</span></span><span class="rel"></span><span class="utc">This local time does not exist (clocks jump forward).</span></li>';
+    n++;
+    var p=zoneParts(tz,r.t), off=fmtOffset(offsetMin(tz,r.t));
+    var tag=r.repeat?'<span class="tag">'+(r.second?"repeat · DST":"1st of 2 · DST")+"</span>":"";
+    return '<li class="run"><span class="n">'+n+'</span><span class="when">'+fmtZone(tz,r.t)+" <span class=\"muted small\">"+esc(p.timeZoneName||"")+"</span>"+tag+'</span><span class="rel">'+rel(r.t-cache.now)+'</span><span class="utc">'+(tz==="UTC"?off:isoUTC(r.t)+" · "+off)+"</span></li>";
+  }).join("");
+}
+function dstNotes(){
+  var tz=state.tz, notes=[];
+  if(!cache.trans.length) return [{level:"ok",text:"No daylight-saving change in "+tz+" in the next 12 months."}];
+  cache.trans.forEach(function(h){
+    var W0=new Date(h.from), date=DAY_NAMES[W0.getUTCDay()].slice(0,3)+" "+pad2(W0.getUTCDate())+" "+MONTH_NAMES[W0.getUTCMonth()].slice(0,3)+" "+W0.getUTCFullYear();
+    var fromT=hm(new Date(h.from).getUTCHours(),new Date(h.from).getUTCMinutes()), toT=hm(new Date(h.to).getUTCHours(),new Date(h.to).getUTCMinutes());
+    var times=h.hits.slice(0,6).map(function(W){ var d=new Date(W); return hm(d.getUTCHours(),d.getUTCMinutes()); }).join(", ")+(h.hits.length>6?", … ("+h.hits.length+" in total)":"");
+    if(h.kind==="gap"){
+      notes.push(h.hits.length?{level:"warn",text:date+": clocks jump from "+fromT+" to "+toT+". Scheduled "+times+" does not exist that day. cronie/Vixie cron run such jobs once right after the jump; many other schedulers (Kubernetes, node-cron, Quartz) skip them."}:{level:"ok",text:date+": clocks jump "+fromT+" → "+toT+"; no scheduled time falls in the skipped hour."});
+    } else {
+      notes.push(h.hits.length?{level:"warn",text:date+": clocks fall back from "+toT+" to "+fromT+". Scheduled "+times+" happens twice on the wall clock. cronie/Vixie cron run fixed-time jobs only once; others may run them twice. Make the job idempotent."}:{level:"ok",text:date+": clocks fall back "+toT+" → "+fromT+"; no scheduled time falls in the repeated hour."});
+    }
+  });
+  return notes;
+}
+function renderChecks(){
+  var el=$("checks"), c=state.parsed;
+  if(!c){ el.innerHTML='<li class="h muted">'+(state.error?"":"Warnings about risky patterns (every minute, day-of-month OR day-of-week, days 29–31, DST) show up here.")+"</li>"; $("checkCount").textContent=""; if(state.error) el.innerHTML='<li class="danger">'+esc(state.error.message)+"</li>"; return; }
+  var list=checks(c,cache.runs.some(function(r){ return !r.gap; }));
+  var d=dstNotes();
+  var html=list.length?list.map(function(x){ return '<li class="'+x.level+'">'+esc(x.text)+"</li>"; }).join(""):'<li class="ok">No risky patterns found.</li>';
+  html+='<li class="h"><h3>Daylight saving · '+esc(state.tz)+"</h3></li>"+d.map(function(x){ return '<li class="'+x.level+'">'+esc(x.text)+"</li>"; }).join("");
+  el.innerHTML=html;
+  var nw=list.concat(d).filter(function(x){ return x.level==="warn"||x.level==="danger"; }).length;
+  $("checkCount").textContent=nw?nw+" to review":"all clear";
+}
+
+/* ---- outputs ---- */
+function zoneOffsets(tz){
+  var y=new Date().getUTCFullYear(), a=offsetMin(tz,Date.UTC(y,0,15)), b=offsetMin(tz,Date.UTC(y,6,15));
+  return a===b?[a]:[Math.min(a,b),Math.max(a,b)];
+}
+function buildOutputs(){
+  var c=state.parsed;
+  if(!c){
+    var msg=state.error?"Fix the expression first: "+state.error.message:"Nothing to output yet. Pick a template or type a cron expression.";
+    return {cron:msg,prompt:msg,code:msg};
+  }
+  var tz=state.tz, desc=describe(c), v=variants(c), offs=zoneOffsets(tz), offTxt=offs.map(fmtOffset).join(" / ");
+  var cron=[];
+  cron.push("# "+desc+(c.macro?"  ("+c.macro+")":""));
+  cron.push("# Time zone: "+tz+(tz==="UTC"?"":" ("+offTxt+")"));
+  cron.push("");
+  cron.push("# Standard 5-field: minute hour day-of-month month day-of-week");
+  cron.push("# (crontab, Kubernetes CronJob, GitHub Actions, node-cron)");
+  cron.push(c.expr);
+  cron.push("");
+  cron.push("# 6-field with seconds: Quartz / Spring @Scheduled");
+  if(v.split===true) cron.push("# Quartz cannot OR day-of-month with day-of-week: use two triggers.");
+  if(v.split==="and") cron.push("# Quartz cannot combine both day fields; day-of-week filter must move into the job.");
+  v.quartz.forEach(function(x){ cron.push(x); });
+  cron.push("");
+  cron.push("# AWS EventBridge: cron(minutes hours day-of-month month day-of-week year)");
+  if(v.split===true) cron.push("# EventBridge needs '?' in one day field: create two rules/schedules.");
+  if(v.split==="and") cron.push("# EventBridge cannot combine both day fields; filter the weekday in the target.");
+  v.aws.forEach(function(x){ cron.push(x); });
+  cron.push(tz==="UTC"?"# Rules evaluate in UTC.":"# EventBridge rules use UTC; EventBridge Scheduler accepts ScheduleExpressionTimezone="+tz+".");
+
+  var runs=cache.runs.filter(function(r){ return !r.gap; }).slice(0,5);
+  var fieldLines=FIELD_SPECS.map(function(s,i){ var f=c.fields[i]; var vals=i>=3?f.values.map(function(x){ return valLabel(i,x,true); }).join(", "):f.values.length>20?fieldSummary(i,f):f.values.join(", "); return "- "+s.label+": "+f.raw+(f.full&&f.raw==="*"?" (any)":vals===f.raw?"":" = "+vals); });
+  var p=[];
+  p.push("Set up a recurring scheduled job with exactly this timing.");
+  p.push("");
+  p.push("When it runs: "+desc+".");
+  p.push("Time zone: "+tz+". All times are local wall-clock times in this zone"+(tz==="UTC"?".":" (UTC offset "+offTxt+" depending on daylight saving)."));
+  p.push("Cron expression (standard 5-field: minute hour day-of-month month day-of-week): "+c.expr);
+  p.push("");
+  p.push("Field by field:");
+  fieldLines.forEach(function(l){ p.push(l); });
+  if(!c.dom.full&&!c.dow.full) p.push(!c.dom.star&&!c.dow.star?"- Day rule: runs when the day of month OR the day of week matches (standard cron OR semantics). Keep this OR behaviour.":"- Day rule: both the day of month AND the day of week must match.");
+  if(runs.length){
+    p.push("");
+    p.push("Next "+runs.length+" runs, to verify your implementation:");
+    runs.forEach(function(r){ p.push("- "+fmtZone(tz,r.t)+" "+tz+" = "+isoUTC(r.t)); });
+  }
+  var warn=checks(c,runs.length>0).filter(function(x){ return x.level!=="info"; });
+  var dn=dstNotes().filter(function(x){ return x.level==="warn"; });
+  if(warn.length||dn.length){
+    p.push("");
+    p.push("Edge cases to handle:");
+    warn.concat(dn).forEach(function(x){ p.push("- "+x.text); });
+  }
+  p.push("");
+  p.push("Requirements:");
+  p.push("- Use the scheduler's own time zone setting for "+tz+" if it has one. If it only supports UTC (for example GitHub Actions), say so and explain how the UTC run time shifts across daylight saving instead of silently converting.");
+  p.push("- If a run is still going when the next one is due, do not start a second copy; say how you prevent overlap.");
+  p.push("- Log the start and end time of each run so missed or doubled runs can be spotted.");
+  p.push("- Show me the final schedule expression you used and the platform it is written for.");
+
+  var k=[], ghNote=tz==="UTC"?"":"    # GitHub evaluates this in UTC, not "+tz+" ("+offTxt+"). Shift the hour field, and re-check across DST.";
+  k.push("# GitHub Actions: .github/workflows/scheduled.yml");
+  k.push("on:");
+  k.push("  schedule:");
+  k.push("    - cron: '"+c.expr+"'");
+  if(ghNote) k.push(ghNote);
+  k.push("  workflow_dispatch: {}");
+  k.push("");
+  k.push("# Kubernetes CronJob (timeZone needs Kubernetes 1.27+)");
+  k.push("apiVersion: batch/v1");
+  k.push("kind: CronJob");
+  k.push("metadata:");
+  k.push("  name: scheduled-job");
+  k.push("spec:");
+  k.push('  schedule: "'+c.expr+'"');
+  k.push('  timeZone: "'+tz+'"');
+  k.push("  concurrencyPolicy: Forbid");
+  k.push("  startingDeadlineSeconds: 300");
+  k.push("  jobTemplate:");
+  k.push("    spec:");
+  k.push("      template:");
+  k.push("        spec:");
+  k.push("          restartPolicy: OnFailure");
+  k.push("          containers:");
+  k.push("            - name: job");
+  k.push("              image: busybox:1.36");
+  k.push('              command: ["sh", "-c", "date; echo run"]');
+  k.push("");
+  k.push("// node-cron (npm i node-cron)");
+  k.push("const cron = require('node-cron');");
+  k.push("");
+  k.push("// "+desc);
+  k.push("cron.schedule('"+c.expr+"', () => {");
+  k.push("  console.log('run at', new Date().toISOString());");
+  k.push("}, { timezone: '"+tz+"' });");
+  return {cron:cron.join("\n"),prompt:p.join("\n"),code:k.join("\n")};
+}
+var outputs={};
+function renderOut(){
+  outputs=buildOutputs();
+  Array.prototype.forEach.call(document.querySelectorAll("#otabs .tab"),function(t){ t.setAttribute("aria-selected",String(t.getAttribute("data-fmt")===state.out)); });
+  var txt=outputs[state.out]||"";
+  $("out").textContent=txt;
+  $("ocount").textContent=txt.length.toLocaleString("en-US")+" chars";
+  $("copied").textContent="";
+}
+$("otabs").addEventListener("click",function(e){ var t=e.target.closest(".tab"); if(!t) return; state.out=t.getAttribute("data-fmt"); save("out",state.out); renderOut(); });
+$("copy").addEventListener("click",function(){
+  var text=outputs[state.out]||"", done=function(ok){ $("copied").textContent=ok?"Copied":"Copy failed: select the text and press Ctrl+C"; if(ok) setTimeout(function(){ $("copied").textContent=""; },1800); };
+  function fallback(){
+    var ta=document.createElement("textarea"); ta.value=text; ta.setAttribute("readonly",""); ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select();
+    var ok=false; try{ ok=document.execCommand("copy"); }catch(e){} document.body.removeChild(ta); done(ok);
+  }
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function(){ done(true); },fallback); else fallback();
+});
+
+/* ---- top ---- */
+function renderHead(){
+  var c=state.parsed, d=$("desc"), err=$("err");
+  $("expr").classList.toggle("bad",!!state.error);
+  err.hidden=!state.error; err.textContent=state.error?state.error.message:"";
+  if(c){ d.className="desc"; d.textContent=describe(c)+(state.tz==="UTC"?" (UTC)":" ("+state.tz+")"); }
+  else { d.className="desc empty"; d.textContent=state.error?"Showing the builder for the last valid expression.":"Type a 5-field cron expression (minute hour day-of-month month day-of-week), pick a template below, or build it field by field."; }
+  Array.prototype.forEach.call(document.querySelectorAll("#presets .chip"),function(ch){ ch.classList.toggle("on",!!c&&ch.getAttribute("data-expr")===c.expr&&ch.textContent!=="Example"); });
+}
+function renderAll(keepBuilder){
+  computePreview(); renderHead(); renderStrip(); if(!keepBuilder) renderBuilder(); renderRuns(); renderChecks(); renderOut();
+}
+
+$("expr").addEventListener("input",function(e){ customForced=false; builderNote=""; setText(e.target.value,true); });
+$("tz").addEventListener("change",function(e){ state.tz=e.target.value; save("tz",state.tz); renderAll(true); });
+$("presets").addEventListener("click",function(e){ var b=e.target.closest(".chip"); if(!b) return; customForced=false; builderNote=""; setText(b.getAttribute("data-expr")); });
+setInterval(function(){ if(state.parsed){ computePreview(); renderRuns(); } },30000);
+
+$("expr").value=state.text;
+setText(state.text,true);
+})();
+</script>
+</body>
+</html>
+<!--
+Cron Studio — usage
+- Type a 5-field cron expression at the top (minute hour day-of-month month day-of-week), click a template,
+  or pick a field in the strip and build it with Every / Specific / Range / Step / Custom. Both directions stay in sync.
+- The time zone selector sets the zone the schedule is read in; runs are listed in that zone with UTC underneath.
+- Next 10 runs are computed locally (Vixie cron rules: DOM/DOW OR unless one starts with "*"); DST gaps and repeated hours are marked.
+- Checks lists risky patterns; the output panel gives Cron variants (5-field, Quartz/Spring 6-field, EventBridge), a Prompt, and Code.
+- State is kept in localStorage under "redline.tool.cron-studio.".
+-->

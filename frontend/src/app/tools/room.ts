@@ -1,6 +1,6 @@
 import { Component, Type, computed, effect, signal } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
-import { TOOLS, ToolDef } from './registry';
+import { GROUPS, TOOLS, ToolDef, ToolGroup } from './registry';
 
 const KEY = 'x3.tool';
 
@@ -18,13 +18,15 @@ function recall(): string {
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
   <nav class="tcv-tools-list">
-    <div class="tcv-label" style="padding: 10px 12px 6px">Tools</div>
-    @for (t of tools; track t.id) {
-      <button class="tcv-tools-item" [attr.data-on]="t.id === here().id ? 1 : null"
-              (click)="pick(t)">
-        <span class="tcv-menu-name">{{ t.name }}</span>
-        <span class="tcv-menu-blurb">{{ t.blurb }}</span>
-      </button>
+    @for (g of groups; track g.id) {
+      <div class="tcv-tools-group">{{ g.label }}</div>
+      @for (t of inGroup(g.id); track t.id) {
+        <button class="tcv-tools-item" [attr.data-on]="t.id === here().id ? 1 : null"
+                (click)="pick(t)" [title]="t.blurb">
+          <span class="tcv-menu-name">{{ t.name }}</span>
+          <span class="tcv-menu-blurb">{{ t.blurb }}</span>
+        </button>
+      }
     }
   </nav>
   <section class="tcv-tools-body">
@@ -43,7 +45,8 @@ function recall(): string {
 </div>`,
 })
 export class RoomTools {
-  readonly tools = TOOLS;
+  readonly groups = GROUPS;
+  inGroup(g: ToolGroup): ToolDef[] { return TOOLS.filter(t => t.group === g); }
   private id = signal(recall());
   here = computed(() => TOOLS.find(t => t.id === this.id()) ?? TOOLS[0]);
   body = signal<Type<unknown> | null>(null);

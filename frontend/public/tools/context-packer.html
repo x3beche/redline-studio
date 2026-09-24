@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Context Packer — pack scattered context into one prompt</title>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#ffffff;
+  --sunken:#e4e9ee;
+  --ink:#16202a;
+  --ink-soft:#5b6b7a;
+  --line:#c8d2db;
+  --line-soft:#dde4ea;
+  --accent:#1f4ed8;
+  --accent-ink:#ffffff;
+  --danger:#c0392b;
+  --warn:#b7791f;
+  --ok:#2f855a;
+  --fill-alpha:0.16;
+  --tool-instruction:#7c3aed;
+  --tool-code:#1f4ed8;
+  --tool-file:#0e7490;
+  --tool-log:#c2410c;
+  --tool-data:#4d7c0f;
+  --tool-note:#6b7280;
+  --tool-example:#be185d;
+  --tool-overhead:#94a3b8;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f151b;
+    --surface:#161f27;
+    --sunken:#111920;
+    --ink:#e4ebf1;
+    --ink-soft:#8ea0b0;
+    --line:#2b3945;
+    --line-soft:#212c36;
+    --accent:#6d8dff;
+    --accent-ink:#0f151b;
+    --danger:#e57373;
+    --warn:#e0b050;
+    --ok:#5fbf8a;
+    --fill-alpha:0.30;
+    --tool-instruction:#a78bfa;
+    --tool-code:#7c9cff;
+    --tool-file:#38bdd8;
+    --tool-log:#fb923c;
+    --tool-data:#a3d65c;
+    --tool-note:#9ca3af;
+    --tool-example:#f472b6;
+    --tool-overhead:#64748b;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f151b;
+  --surface:#161f27;
+  --sunken:#111920;
+  --ink:#e4ebf1;
+  --ink-soft:#8ea0b0;
+  --line:#2b3945;
+  --line-soft:#212c36;
+  --accent:#6d8dff;
+  --accent-ink:#0f151b;
+  --danger:#e57373;
+  --warn:#e0b050;
+  --ok:#5fbf8a;
+  --fill-alpha:0.30;
+  --tool-instruction:#a78bfa;
+  --tool-code:#7c9cff;
+  --tool-file:#38bdd8;
+  --tool-log:#fb923c;
+  --tool-data:#a3d65c;
+  --tool-note:#9ca3af;
+  --tool-example:#f472b6;
+  --tool-overhead:#64748b;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.mono,textarea.btext,.out{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+.bar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;
+  padding:8px 12px;border-bottom:1px solid var(--line);background:var(--surface);
+}
+.brand{font-weight:600;margin:0;font-size:15px;min-width:0}
+.brand span{color:var(--ink-soft);font-weight:400}
+.grp{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.grp label{color:var(--ink-soft)}
+.bar .end{margin-left:auto}
+select,input[type=text],input[type=number]{
+  background:var(--sunken);border:1px solid var(--line);border-radius:4px;padding:3px 6px;min-height:26px;
+}
+input[type=number]{width:52px}
+.btn{
+  background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:3px 9px;min-height:26px;
+  cursor:pointer;white-space:nowrap;
+}
+.btn:hover{border-color:var(--ink-soft)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--ink-soft)}
+.btn.ghost:hover{color:var(--ink);border-color:var(--line)}
+.btn.icon{padding:2px 6px;min-width:26px}
+.btn.danger:hover{color:var(--danger);border-color:var(--danger)}
+.btn:disabled{opacity:.45;cursor:default}
+
+.meter{
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:6px 12px;
+  background:var(--surface);border-bottom:1px solid var(--line);
+}
+.meter-track{
+  flex:1 1 260px;height:12px;border-radius:3px;background:var(--sunken);border:1px solid var(--line-soft);
+  display:flex;overflow:hidden;position:relative;
+}
+.meter-track i{display:block;height:100%;flex:none}
+.meter-track.over{outline:2px solid var(--danger);outline-offset:1px}
+.meter-text{font-variant-numeric:tabular-nums}
+.nw{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.meter-text b{font-weight:600}
+.meter-text .over{color:var(--danger);font-weight:600}
+.meter-text .near{color:var(--warn);font-weight:600}
+.privacy{color:var(--ink-soft);display:flex;align-items:center;gap:6px}
+.privacy::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none}
+
+main{flex:1;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);min-height:0}
+.panel{display:flex;flex-direction:column;min-height:0;min-width:0}
+.left{border-right:1px solid var(--line);position:relative}
+.ptools{
+  display:flex;flex-wrap:wrap;align-items:center;gap:5px 8px;padding:8px 12px;
+  border-bottom:1px solid var(--line-soft);background:var(--surface);
+}
+.ptools .lbl{color:var(--ink-soft);margin-right:2px}
+.add{border-left:3px solid var(--c,var(--line))}
+.sep{width:1px;height:20px;background:var(--line-soft)}
+.scroll{flex:1;overflow:auto;min-height:0;padding:10px 12px 40px}
+.req{display:block;margin-bottom:10px}
+.req span{display:block;color:var(--ink-soft);margin-bottom:3px}
+.req textarea{
+  width:100%;min-height:52px;resize:vertical;background:var(--surface);border:1px solid var(--line);
+  border-radius:4px;padding:6px 8px;
+}
+.empty{
+  border:1.5px dashed var(--line);border-radius:6px;padding:22px 16px;color:var(--ink-soft);text-align:center;
+}
+.empty b{color:var(--ink)}
+.list{display:flex;flex-direction:column;gap:8px}
+
+.blk{
+  background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--c,var(--line));
+  border-radius:5px;min-width:0;
+}
+.blk.off{opacity:.55}
+.blk.off .bh{background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line-soft) 6px 7px)}
+.blk.dragging{box-shadow:0 6px 20px color-mix(in srgb,var(--ink) 25%,transparent);border-color:var(--accent);position:relative;z-index:2}
+.list.sorting{user-select:none;-webkit-user-select:none}
+.bh{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:5px 6px}
+.grip{
+  touch-action:none;cursor:grab;border:1px solid transparent;background:transparent;border-radius:4px;
+  padding:0 4px;min-height:26px;color:var(--ink-soft);font-size:15px;line-height:1;letter-spacing:-2px;
+}
+.grip:hover{border-color:var(--line);color:var(--ink)}
+.list.sorting .grip{cursor:grabbing}
+.idx{color:var(--ink-soft);font-variant-numeric:tabular-nums;min-width:20px}
+.btype{max-width:112px}
+.blabel{flex:1 1 120px;min-width:60px}
+.blang{width:78px}
+.bcount{color:var(--ink-soft);font-variant-numeric:tabular-nums;white-space:nowrap;margin-left:auto}
+.bact{display:flex;align-items:center;gap:3px}
+.inc{display:flex;align-items:center;gap:3px;color:var(--ink-soft);padding:0 4px;cursor:pointer}
+.inc input{margin:0}
+.bwarn{
+  display:none;margin:0 8px 6px;padding:4px 8px;border-radius:4px;color:var(--ink);
+  border:1px solid var(--warn);background:color-mix(in srgb,var(--warn) calc(var(--fill-alpha)*100%),transparent);
+}
+.bwarn.show{display:block}
+.bbody{padding:0 8px 8px}
+.btext{
+  display:block;width:100%;resize:vertical;min-height:70px;background:var(--sunken);border:1px solid var(--line-soft);
+  border-radius:4px;padding:6px 8px;font-size:12px;line-height:1.45;white-space:pre;overflow:auto;tab-size:2;
+}
+.btools{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:5px}
+.bmsg{color:var(--ink-soft)}
+.bmsg.ok{color:var(--ok)}
+.bprev{
+  display:none;padding:0 10px 7px 12px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;
+}
+.blk.collapsed .bbody{display:none}
+.blk.collapsed .bprev{display:block}
+.dropping::after{
+  content:"Drop text files to add them as blocks";position:absolute;inset:0;display:flex;align-items:center;
+  justify-content:center;font-weight:600;color:var(--accent);border:2px dashed var(--accent);
+  background:color-mix(in srgb,var(--accent) calc(var(--fill-alpha)*60%),var(--paper));z-index:5;pointer-events:none;
+}
+.status{min-height:18px;color:var(--ink-soft)}
+.status.err{color:var(--danger)}
+.status.ok{color:var(--ok)}
+
+.tabs{display:flex;gap:2px;padding:6px 10px 0;flex-wrap:wrap;border-bottom:1px solid var(--line-soft);background:var(--surface)}
+.tab{
+  background:transparent;border:0;border-bottom:2px solid transparent;padding:5px 10px;cursor:pointer;color:var(--ink-soft);
+}
+.tab small{font-variant-numeric:tabular-nums;opacity:.8}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:500}
+.out-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 10px;border-bottom:1px solid var(--line-soft)}
+.out-head .cnt{color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.out-head .end{margin-left:auto;display:flex;align-items:center;gap:8px}
+.copied{color:var(--ok);font-weight:500}
+.out{
+  flex:1;margin:0;overflow:auto;padding:10px 12px;font-size:12px;line-height:1.5;white-space:pre-wrap;
+  word-break:break-word;tab-size:2;min-height:0;background:var(--sunken);
+}
+.out.placeholder{color:var(--ink-soft);font-family:inherit;font-size:13px;white-space:normal}
+
+@media (max-width:860px){
+  body{height:auto;display:block}
+  html,body{height:auto}
+  main{display:block}
+  .left{border-right:0;border-bottom:1px solid var(--line)}
+  .scroll{overflow:visible;padding-bottom:16px}
+  .out{max-height:70vh;min-height:200px}
+}
+@media (max-width:480px){
+  .bar,.meter,.ptools{padding-left:8px;padding-right:8px}
+  .scroll{padding-left:8px;padding-right:8px}
+  .blabel{flex-basis:100%;order:5}
+  .blang{order:6;flex:1}
+  .bcount{order:4}
+  .bact{order:7;width:100%;justify-content:flex-end}
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1 class="brand">Context Packer <span>— pack code, logs and notes into one prompt</span></h1>
+  <div class="grp">
+    <label for="tpl">Template</label>
+    <select id="tpl">
+      <option value="debug">Debugging</option>
+      <option value="review">Code review</option>
+      <option value="feature">New feature</option>
+      <option value="refactor">Refactor</option>
+      <option value="docs">Documentation</option>
+    </select>
+    <label for="model">Model limit</label>
+    <select id="model">
+      <option value="8192">8k</option>
+      <option value="32768">32k</option>
+      <option value="128000">128k</option>
+      <option value="200000">200k</option>
+      <option value="1000000">1M</option>
+    </select>
+  </div>
+  <div class="grp end">
+    <label for="packName">Pack</label>
+    <input type="text" id="packName" placeholder="name" style="width:120px" maxlength="60">
+    <button class="btn" id="packSave" type="button">Save</button>
+    <select id="packList" aria-label="Saved packs"><option value="">Saved packs…</option></select>
+    <button class="btn" id="packLoad" type="button">Open</button>
+    <button class="btn danger" id="packDel" type="button">Delete</button>
+    <span class="sep" aria-hidden="true"></span>
+    <button class="btn" id="sample" type="button">Sample</button>
+    <button class="btn" id="clear" type="button">New</button>
+  </div>
+</header>
+<div class="meter">
+  <div class="meter-track" id="track" role="img" aria-label="Context fill"></div>
+  <div class="meter-text" id="meterText">0 tokens</div>
+  <div class="privacy">Nothing leaves this device: packs are saved in this browser only.</div>
+</div>
+<main>
+  <section class="panel left" id="left" aria-label="Blocks">
+    <div class="ptools">
+      <span class="lbl">Add</span>
+      <button class="btn add" type="button" data-add="instruction" style="--c:var(--tool-instruction)">Instruction</button>
+      <button class="btn add" type="button" data-add="code" style="--c:var(--tool-code)">Code</button>
+      <button class="btn add" type="button" data-add="file" style="--c:var(--tool-file)">File</button>
+      <button class="btn add" type="button" data-add="log" style="--c:var(--tool-log)">Log / error</button>
+      <button class="btn add" type="button" data-add="data" style="--c:var(--tool-data)">Data</button>
+      <button class="btn add" type="button" data-add="note" style="--c:var(--tool-note)">Note</button>
+      <button class="btn add" type="button" data-add="example" style="--c:var(--tool-example)">Example output</button>
+      <button class="btn" type="button" id="openFiles">Open files…</button>
+      <input type="file" id="fileInput" multiple hidden>
+      <span class="sep" aria-hidden="true"></span>
+      <button class="btn ghost" type="button" id="collapseAll">Collapse all</button>
+      <button class="btn ghost" type="button" id="expandAll">Expand all</button>
+      <span class="nw" style="margin-left:auto"><span class="lbl">Trim keeps</span>
+      <input type="number" id="trimHead" min="1" max="2000" value="30" aria-label="Trim: lines kept at the start">
+      <span class="lbl">+</span>
+      <input type="number" id="trimTail" min="0" max="2000" value="20" aria-label="Trim: lines kept at the end">
+      <span class="lbl">lines</span></span>
+    </div>
+    <div class="scroll" id="scroller">
+      <label class="req"><span>Request — what should the model do? (empty = the template's default request)</span>
+        <textarea id="request" rows="2" placeholder="e.g. The upload fails with 413 for files over 1 MB. Find why and fix it."></textarea>
+      </label>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+      <div class="list" id="list"></div>
+      <div class="empty" id="empty">
+        <b>No blocks yet.</b><br>Add a block with the buttons above, drop text files here, or load the <b>Sample</b> to see how a pack works.
+      </div>
+    </div>
+  </section>
+  <section class="panel" aria-label="Output">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" type="button" data-fmt="prompt" aria-selected="true">Prompt <small data-c="prompt"></small></button>
+      <button class="tab" role="tab" type="button" data-fmt="markdown" aria-selected="false">Markdown <small data-c="markdown"></small></button>
+      <button class="tab" role="tab" type="button" data-fmt="plain" aria-selected="false">Plain text <small data-c="plain"></small></button>
+    </div>
+    <div class="out-head">
+      <span class="cnt" id="outCount">0 chars</span>
+      <div class="end">
+        <span class="copied" id="copied" aria-live="polite"></span>
+        <button class="btn primary" type="button" id="copy">Copy</button>
+      </div>
+    </div>
+    <pre class="out" id="out" tabindex="0"></pre>
+  </section>
+</main>
+
+<script>
+"use strict";
+// ==PURE-START==
+var TYPES = {
+  instruction: { label: "Instruction", tag: "instructions", title: "Instructions", fenced: false, path: false },
+  code:        { label: "Code",        tag: "code",         title: "Code",         fenced: true,  path: true },
+  file:        { label: "File",        tag: "file",         title: "File",         fenced: true,  path: true },
+  log:         { label: "Log / error", tag: "log",          title: "Log",          fenced: true,  path: false },
+  data:        { label: "Data",        tag: "data",         title: "Data",         fenced: true,  path: false },
+  note:        { label: "Note",        tag: "note",         title: "Note",         fenced: false, path: false },
+  example:     { label: "Example output", tag: "example_output", title: "Example of the expected output", fenced: true, path: false }
+};
+var NOUNS = {
+  instruction: ["instruction block", "instruction blocks"], code: ["code snippet", "code snippets"], file: ["file", "files"],
+  log: ["log", "logs"], data: ["data block", "data blocks"], note: ["note", "notes"], example: ["example output", "example outputs"]
+};
+var TYPE_ORDER = ["instruction", "code", "file", "log", "data", "note", "example"];
+
+var TEMPLATES = {
+  debug: {
+    title: "Debugging",
+    role: "You are a senior software engineer helping to debug a failure. Work from evidence: read the error output and the relevant code before forming a hypothesis, and find the root cause instead of patching the symptom.",
+    request: "Find the root cause of the failure shown in the context and fix it.",
+    output: "1. Root cause: one or two sentences naming the file and line responsible.\n2. Evidence: the specific log lines or code that prove it.\n3. Fix: a minimal unified diff against the files shown.\n4. Verification: how to confirm the fix (a command, a test or an observable behaviour).\nIf the context is not enough to be certain, list the exact extra information you need instead of guessing."
+  },
+  review: {
+    title: "Code review",
+    role: "You are a meticulous code reviewer. Review the code in the context for correctness bugs, security problems, missing error handling and maintainability issues. Real defects matter more than style preferences.",
+    request: "Review the code in the context.",
+    output: "A list of findings ordered by severity (critical, major, minor). For each finding give: severity, file:line, what is wrong, why it matters, and a concrete suggested change (with a code snippet when useful).\nEnd with a one-paragraph overall assessment.\nDo not report pure style nits unless they hide a bug. If you find nothing significant, say so plainly."
+  },
+  feature: {
+    title: "New feature",
+    role: "You are a senior software engineer adding a feature to an existing codebase. Follow the conventions, libraries and patterns already used in the code shown, and do not add new dependencies without saying why.",
+    request: "Implement the feature described in the instructions.",
+    output: "1. Plan: a short list of the changes, file by file.\n2. Code: complete code for every new file and a unified diff for every changed file.\n3. Tests: the tests to add or update.\n4. Open questions: the assumptions you made and anything that needs a decision."
+  },
+  refactor: {
+    title: "Refactor",
+    role: "You are a senior software engineer refactoring existing code. External behaviour, public interfaces and outputs must stay exactly the same unless the request says otherwise.",
+    request: "Refactor the code in the context to make it simpler and easier to maintain.",
+    output: "1. Summary: what you changed and why, in a few bullets.\n2. Code: a unified diff for every changed file.\n3. Behaviour check: why behaviour is preserved and which existing tests cover it.\n4. Risks: anything that could break and how to test it."
+  },
+  docs: {
+    title: "Documentation",
+    role: "You are a technical writer who reads code carefully. Document only what the code actually does; do not invent options, defaults or behaviour that are not shown.",
+    request: "Write documentation for the code in the context.",
+    output: "Markdown documentation with: a one-paragraph overview; usage with a minimal working example; a reference of the public functions, options or endpoints (name, parameters, return value, errors); and a short list of caveats or limitations visible in the code. Use only information present in the context."
+  }
+};
+
+function estTokens(s) { return Math.ceil(String(s).length / 4); }
+
+var OMIT_RE = /\[\.\.\. \d+ lines? omitted \.\.\.\]/;
+
+// Keep the first `head` and last `tail` lines, replace the middle with a marker.
+function trimMiddle(text, head, tail) {
+  head = Math.max(1, Math.floor(head) || 1);
+  tail = Math.max(0, Math.floor(tail) || 0);
+  var lines = String(text).split("\n");
+  // not worth trimming if fewer than 5 lines would go
+  if (lines.length - head - tail < 5) return { text: String(text), omitted: 0 };
+  var omitted = lines.length - head - tail;
+  var out = lines.slice(0, head);
+  out.push("[... " + omitted + " line" + (omitted === 1 ? "" : "s") + " omitted ...]");
+  if (tail) out = out.concat(lines.slice(lines.length - tail));
+  return { text: out.join("\n"), omitted: omitted };
+}
+
+var TS_RES = [
+  /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:[.,]\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2}| ?UTC)?/,
+  /^\d{4}\/\d{2}\/\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{1,9})?/,
+  /^\d{2}\/(?:\d{2}|[A-Z][a-z]{2})\/\d{4}[: ]\d{2}:\d{2}:\d{2}(?: [+-]\d{4})?/,
+  /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +\d{1,2} \d{2}:\d{2}:\d{2}(?:\.\d+)?/,
+  /^\d{2}:\d{2}:\d{2}(?:[.,]\d{1,9})?/,
+  /^\d{13}(?=\s|$)/,
+  /^\d{10}(?:\.\d{1,9})?(?=\s|$)/
+];
+function matchTs(s) {
+  for (var i = 0; i < TS_RES.length; i++) {
+    var m = s.match(TS_RES[i]);
+    if (m) return m[0].length;
+  }
+  return 0;
+}
+// Remove timestamps at the start of a line (bare or in [..]/(..)). Returns null if none.
+function stripTimestamp(line) {
+  var s = line, found = false;
+  for (var guard = 0; guard < 3; guard++) {
+    var lead = s.match(/^\s*/)[0].length;
+    var rest = s.slice(lead);
+    var n = 0;
+    var br = rest.match(/^[\[(]([^\])]{4,48})[\])]/);
+    if (br) {
+      var inner = br[1].trim();
+      if (matchTs(inner) === inner.length) n = br[0].length;
+    }
+    if (!n) n = matchTs(rest);
+    if (!n) break;
+    found = true;
+    s = rest.slice(n).replace(/^\s*[|:]?\s*/, "");
+  }
+  return found ? s : null;
+}
+var ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]/g;
+
+// Strip ANSI + leading timestamps, collapse consecutive repeated lines and
+// repeated groups of up to 4 lines, squeeze blank runs.
+function cleanLog(text) {
+  var src = String(text).replace(/\r\n?/g, "\n").split("\n");
+  var ts = 0, lines = [];
+  for (var i = 0; i < src.length; i++) {
+    var l = src[i].replace(ANSI_RE, "");
+    var st = stripTimestamp(l);
+    if (st !== null) { ts++; l = st; }
+    lines.push(l.replace(/\s+$/, ""));
+  }
+  // squeeze blank runs, trim edges
+  var sq = [];
+  for (i = 0; i < lines.length; i++) {
+    if (lines[i] === "" && (sq.length === 0 || sq[sq.length - 1] === "")) continue;
+    sq.push(lines[i]);
+  }
+  while (sq.length && sq[sq.length - 1] === "") sq.pop();
+  var out = [], removed = 0;
+  i = 0;
+  while (i < sq.length) {
+    var best = null;
+    for (var k = 1; k <= 4 && i + 2 * k <= sq.length; k++) {
+      var reps = 1;
+      while (i + (reps + 1) * k <= sq.length && sameWindow(sq, i, i + reps * k, k)) reps++;
+      if (reps >= 2 && (!best || reps * k > best.reps * best.k)) best = { k: k, reps: reps };
+    }
+    if (!best || (best.k === 1 && sq[i] === "")) { out.push(sq[i]); i++; continue; }
+    if (best.k === 1) {
+      out.push(sq[i] + "  [x" + best.reps + "]");
+    } else {
+      for (var j = 0; j < best.k; j++) out.push(sq[i + j]);
+      out.push("[above " + best.k + " lines repeated x" + best.reps + " in total]");
+    }
+    removed += (best.reps - 1) * best.k;
+    i += best.reps * best.k;
+  }
+  return { text: out.join("\n"), timestamps: ts, collapsed: removed, before: src.length, after: out.length };
+}
+function sameWindow(a, p, q, k) {
+  for (var t = 0; t < k; t++) if (a[p + t] !== a[q + t]) return false;
+  return true;
+}
+
+function normContent(s) { return String(s).replace(/\s+/g, " ").trim(); }
+
+// Returns { blockId: [message, ...] } for blocks that repeat content or paths.
+function findDuplicates(blocks) {
+  var res = {};
+  function add(id, msg) { (res[id] = res[id] || []).push(msg); }
+  var norm = blocks.map(function (b) { return normContent(b.content); });
+  for (var i = 0; i < blocks.length; i++) {
+    var a = norm[i];
+    if (a.length < 20) continue;
+    for (var j = 0; j < blocks.length; j++) {
+      if (i === j) continue;
+      var b = norm[j];
+      if (b.length < 20) continue;
+      if (a === b) {
+        if (j < i) add(blocks[i].id, "Same content as block #" + (j + 1) + ".");
+        else add(blocks[i].id, "Same content as block #" + (j + 1) + " below.");
+      } else if (a.length >= 80 && b.length > a.length && b.indexOf(a) !== -1) {
+        add(blocks[i].id, "All of this is already inside block #" + (j + 1) + ".");
+      }
+    }
+    var pa = (blocks[i].label || "").trim();
+    if (pa && TYPES[blocks[i].type] && TYPES[blocks[i].type].path) {
+      for (j = 0; j < blocks.length; j++) {
+        if (i !== j && TYPES[blocks[j].type] && TYPES[blocks[j].type].path && (blocks[j].label || "").trim() === pa && norm[i] !== norm[j]) {
+          add(blocks[i].id, "Path \"" + pa + "\" is also used by block #" + (j + 1) + " with different content.");
+        }
+      }
+    }
+  }
+  return res;
+}
+
+function fenceFor(s) {
+  var m = String(s).match(/`{3,}/g), n = 3;
+  if (m) for (var i = 0; i < m.length; i++) n = Math.max(n, m[i].length + 1);
+  return new Array(n + 1).join("`");
+}
+function escAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+var LANG_BY_EXT = {
+  js: "javascript", mjs: "javascript", cjs: "javascript", jsx: "jsx", ts: "typescript", tsx: "tsx",
+  py: "python", rb: "ruby", go: "go", rs: "rust", java: "java", kt: "kotlin", swift: "swift",
+  c: "c", h: "c", cpp: "cpp", cc: "cpp", hpp: "cpp", cs: "csharp", php: "php", sh: "bash", bash: "bash",
+  zsh: "bash", ps1: "powershell", sql: "sql", html: "html", htm: "html", css: "css", scss: "scss",
+  vue: "vue", svelte: "svelte", json: "json", yaml: "yaml", yml: "yaml", toml: "toml", xml: "xml",
+  md: "markdown", ini: "ini", csv: "csv", tsv: "tsv", dockerfile: "dockerfile", lua: "lua",
+  scad: "openscad", kicad_sch: "sexpr", kicad_pcb: "sexpr", ino: "cpp", log: "text", txt: "text"
+};
+function langFromPath(p) {
+  var base = String(p).split(/[\\/]/).pop().toLowerCase();
+  if (base === "dockerfile") return "dockerfile";
+  if (base === "makefile") return "makefile";
+  var dot = base.lastIndexOf(".");
+  if (dot < 0) return "";
+  return LANG_BY_EXT[base.slice(dot + 1)] || "";
+}
+function typeFromPath(p) {
+  var l = String(p).toLowerCase();
+  if (/\.(log|out|err)$/.test(l)) return "log";
+  if (/\.(csv|tsv)$/.test(l)) return "data";
+  return "file";
+}
+
+function hasOmitted(blocks) {
+  for (var i = 0; i < blocks.length; i++) if (OMIT_RE.test(blocks[i].content)) return true;
+  return false;
+}
+function blockHeading(b, n) {
+  var t = TYPES[b.type] || TYPES.note;
+  var h = "[" + n + "] " + t.title.toUpperCase();
+  if (b.label && b.label.trim()) h += ": " + b.label.trim();
+  if (t.path && b.lang && b.lang.trim()) h += " (" + b.lang.trim() + ")";
+  return h;
+}
+
+// Build the three output variants from a pack state.
+function buildOutputs(st) {
+  var T = TEMPLATES[st.template] || TEMPLATES.debug;
+  var act = (st.blocks || []).filter(function (b) { return b.active !== false && String(b.content).trim() !== ""; });
+  var userReq = String(st.request || "").trim();
+  if (!act.length && !userReq) return { prompt: "", markdown: "", plain: "" };
+  var req = userReq || T.request;
+  var omitted = hasOmitted(act);
+  var counts = {};
+  act.forEach(function (b) { counts[b.type] = (counts[b.type] || 0) + 1; });
+  var kinds = TYPE_ORDER.filter(function (k) { return counts[k]; }).map(function (k) {
+    return counts[k] + " " + NOUNS[k][counts[k] > 1 ? 1 : 0];
+  }).join(", ");
+  var guide = "Read every context block before answering and treat it as the source of truth. Do not invent code, APIs or behaviour that the context does not show; if something you need is missing, say exactly what.";
+  var omitNote = "Some blocks were shortened: a line like \"[... N lines omitted ...]\" marks removed lines, and \"[xN]\" or \"[above K lines repeated xN in total]\" marks collapsed log repeats. Do not assume what the removed lines contained.";
+
+  // Prompt (XML-style tags)
+  var p = [];
+  p.push(T.role, "");
+  if (act.length) {
+    p.push("The context below contains " + act.length + " block" + (act.length > 1 ? "s" : "") + " (" + kinds + "), each wrapped in an XML-style tag. " + guide);
+    if (omitted) p.push(omitNote);
+    p.push("", "<context>");
+    act.forEach(function (b) {
+      var t = TYPES[b.type] || TYPES.note;
+      var attrs = "";
+      if (b.label && b.label.trim()) attrs += " " + (t.path ? "path" : "title") + "=\"" + escAttr(b.label.trim()) + "\"";
+      if (t.path && b.lang && b.lang.trim()) attrs += " lang=\"" + escAttr(b.lang.trim()) + "\"";
+      p.push("<" + t.tag + attrs + ">", String(b.content).replace(/\s+$/, ""), "</" + t.tag + ">", "");
+    });
+    p.push("</context>", "");
+  }
+  p.push("<request>", req, "</request>", "", "<output_format>", T.output, "</output_format>");
+
+  // Markdown
+  var m = [];
+  m.push("# " + T.title + (userReq ? ": " + firstLine(userReq, 70) : ""), "", T.role, "");
+  if (act.length) {
+    m.push("The context has " + act.length + " section" + (act.length > 1 ? "s" : "") + " (" + kinds + "). " + guide);
+    if (omitted) m.push("", omitNote);
+    m.push("", "## Context", "");
+    act.forEach(function (b, i) {
+      var t = TYPES[b.type] || TYPES.note;
+      var h = "### " + (i + 1) + ". " + t.title;
+      if (b.label && b.label.trim()) h += t.path ? " — `" + b.label.trim().replace(/`/g, "") + "`" : " — " + b.label.trim();
+      m.push(h, "");
+      var body = String(b.content).replace(/\s+$/, "");
+      if (t.fenced) {
+        var f = fenceFor(body);
+        var lang = (b.lang && b.lang.trim()) || (b.type === "log" ? "text" : "");
+        m.push(f + lang, body, f);
+      } else {
+        m.push(body);
+      }
+      m.push("");
+    });
+  }
+  m.push("## Request", "", req, "", "## Expected output", "", T.output);
+
+  // Plain text
+  var q = [];
+  q.push("ROLE AND TASK", T.role, "");
+  if (act.length) {
+    q.push("The context below has " + act.length + " numbered block" + (act.length > 1 ? "s" : "") + " (" + kinds + "), each between ===== markers. " + guide);
+    if (omitted) q.push(omitNote);
+    q.push("");
+    act.forEach(function (b, i) {
+      q.push("===== " + blockHeading(b, i + 1) + " =====", String(b.content).replace(/\s+$/, ""), "===== END [" + (i + 1) + "] =====", "");
+    });
+  }
+  q.push("REQUEST", req, "", "EXPECTED OUTPUT", T.output);
+
+  return { prompt: p.join("\n"), markdown: m.join("\n"), plain: q.join("\n") };
+}
+function firstLine(s, max) {
+  var l = String(s).split("\n")[0].trim();
+  return l.length > max ? l.slice(0, max - 1) + "…" : l;
+}
+// ==PURE-END==
+
+(function () {
+  var KEY = "redline.tool.context-packer.";
+  var $ = function (id) { return document.getElementById(id); };
+  var list = $("list"), out = $("out");
+  var state = defaultState();
+  var undo = {};           // block id -> previous content (trim / clean)
+  var bmsgs = {};          // block id -> {text, cls}
+  var lastDeleted = null;  // {block, index}
+  var fmt = "prompt";
+  var outputs = { prompt: "", markdown: "", plain: "" };
+  var uid = 0;
+
+  function defaultState() {
+    return { v: 1, template: "debug", model: 200000, request: "", trimHead: 30, trimTail: 20, blocks: [] };
+  }
+  function newId() { uid++; return "b" + Date.now().toString(36) + uid; }
+  function mkBlock(type, content, label, lang) {
+    return { id: newId(), type: type, label: label || "", lang: lang || "", content: content || "", active: true, collapsed: false };
+  }
+  function lsGet(k) { try { return localStorage.getItem(KEY + k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(KEY + k, v); return true; } catch (e) { return false; } }
+  function sanitize(s) {
+    var d = defaultState();
+    if (!s || typeof s !== "object") return d;
+    d.template = TEMPLATES[s.template] ? s.template : "debug";
+    d.model = [8192, 32768, 128000, 200000, 1000000].indexOf(+s.model) >= 0 ? +s.model : 200000;
+    d.request = typeof s.request === "string" ? s.request : "";
+    d.trimHead = +s.trimHead > 0 ? Math.floor(+s.trimHead) : 30;
+    d.trimTail = +s.trimTail >= 0 ? Math.floor(+s.trimTail) : 20;
+    d.blocks = Array.isArray(s.blocks) ? s.blocks.filter(function (b) { return b && TYPES[b.type]; }).map(function (b) {
+      var nb = mkBlock(b.type, String(b.content || ""), String(b.label || ""), String(b.lang || ""));
+      nb.active = b.active !== false; nb.collapsed = !!b.collapsed;
+      return nb;
+    }) : [];
+    return d;
+  }
+  function packData() {
+    return {
+      v: 1, template: state.template, model: state.model, request: state.request,
+      trimHead: state.trimHead, trimTail: state.trimTail,
+      blocks: state.blocks.map(function (b) {
+        return { type: b.type, label: b.label, lang: b.lang, content: b.content, active: b.active, collapsed: b.collapsed };
+      })
+    };
+  }
+  var saveTimer = null;
+  function autosave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      if (!lsSet("current", JSON.stringify(packData()))) setStatus("Autosave failed: browser storage is full or blocked. Save the prompt elsewhere.", "err");
+    }, 300);
+  }
+  function getPacks() {
+    try { var p = JSON.parse(lsGet("packs") || "{}"); return p && typeof p === "object" ? p : {}; } catch (e) { return {}; }
+  }
+  function setStatus(text, cls) {
+    var s = $("status");
+    s.className = "status" + (cls ? " " + cls : "");
+    s.innerHTML = "";
+    s.appendChild(document.createTextNode(text));
+    return s;
+  }
+  function fmtNum(n) { return n.toLocaleString("en-US"); }
+
+  // ---------- rendering ----------
+  function typeOptions(sel) {
+    return TYPE_ORDER.map(function (k) {
+      return "<option value=\"" + k + "\"" + (k === sel ? " selected" : "") + ">" + TYPES[k].label + "</option>";
+    }).join("");
+  }
+  function rowsFor(text) {
+    var n = String(text).split("\n").length;
+    return Math.max(4, Math.min(18, n + 1));
+  }
+  function renderBlocks() {
+    list.innerHTML = "";
+    state.blocks.forEach(function (b, i) { list.appendChild(blockEl(b, i)); });
+    $("empty").style.display = state.blocks.length ? "none" : "";
+    refreshMeta();
+  }
+  function blockEl(b, i) {
+    var t = TYPES[b.type];
+    var el = document.createElement("article");
+    el.className = "blk" + (b.active ? "" : " off") + (b.collapsed ? " collapsed" : "");
+    el.dataset.id = b.id;
+    el.style.setProperty("--c", "var(--tool-" + b.type + ")");
+    var n = state.blocks.length;
+    el.innerHTML =
+      "<div class=\"bh\">" +
+        "<button class=\"grip\" type=\"button\" data-act=\"grip\" aria-label=\"Reorder block " + (i + 1) + ": drag, or press Arrow Up / Arrow Down\" title=\"Drag to reorder (or focus and use arrow keys)\">⋮⋮</button>" +
+        "<span class=\"idx\">#" + (i + 1) + "</span>" +
+        "<select class=\"btype\" data-f=\"type\" aria-label=\"Block type\">" + typeOptions(b.type) + "</select>" +
+        "<input type=\"text\" class=\"blabel\" data-f=\"label\" aria-label=\"" + (t.path ? "File path" : "Label") + "\" placeholder=\"" + (t.path ? "path/to/file.ext" : "label (optional)") + "\">" +
+        (t.path ? "<input type=\"text\" class=\"blang\" data-f=\"lang\" aria-label=\"Language\" placeholder=\"lang\">" : "") +
+        "<span class=\"bcount\"></span>" +
+        "<div class=\"bact\">" +
+          "<label class=\"inc\" title=\"Include in output\"><input type=\"checkbox\" data-f=\"active\"" + (b.active ? " checked" : "") + "> Include</label>" +
+          "<button class=\"btn icon ghost\" type=\"button\" data-act=\"up\" aria-label=\"Move block up\" title=\"Move up\"" + (i === 0 ? " disabled" : "") + ">↑</button>" +
+          "<button class=\"btn icon ghost\" type=\"button\" data-act=\"down\" aria-label=\"Move block down\" title=\"Move down\"" + (i === n - 1 ? " disabled" : "") + ">↓</button>" +
+          "<button class=\"btn icon ghost\" type=\"button\" data-act=\"toggle\" aria-expanded=\"" + (!b.collapsed) + "\" aria-label=\"" + (b.collapsed ? "Expand" : "Collapse") + " block\" title=\"" + (b.collapsed ? "Expand" : "Collapse") + "\">" + (b.collapsed ? "▸" : "▾") + "</button>" +
+          "<button class=\"btn icon ghost danger\" type=\"button\" data-act=\"del\" aria-label=\"Delete block\" title=\"Delete\">✕</button>" +
+        "</div>" +
+      "</div>" +
+      "<div class=\"bwarn\" role=\"note\"></div>" +
+      "<div class=\"bbody\">" +
+        "<textarea class=\"btext\" data-f=\"content\" spellcheck=\"false\" aria-label=\"Block content\" rows=\"" + rowsFor(b.content) + "\" placeholder=\"" + placeholderFor(b.type) + "\"></textarea>" +
+        "<div class=\"btools\">" +
+          "<button class=\"btn\" type=\"button\" data-act=\"trim\" title=\"Cut the middle, keep the first and last lines\">Trim middle</button>" +
+          "<button class=\"btn\" type=\"button\" data-act=\"clean\" title=\"Remove timestamps and ANSI colours, collapse repeated lines\">Clean log</button>" +
+          "<button class=\"btn ghost\" type=\"button\" data-act=\"undo\"" + (undo[b.id] != null ? "" : " hidden") + ">Undo</button>" +
+          "<span class=\"bmsg\"></span>" +
+        "</div>" +
+      "</div>" +
+      "<div class=\"bprev\"></div>";
+    el.querySelector("[data-f=label]").value = b.label;
+    if (t.path) el.querySelector("[data-f=lang]").value = b.lang;
+    el.querySelector("textarea").value = b.content;
+    var m = bmsgs[b.id];
+    if (m) { var s = el.querySelector(".bmsg"); s.textContent = m.text; s.className = "bmsg " + (m.cls || ""); }
+    return el;
+  }
+  function placeholderFor(type) {
+    return {
+      instruction: "Constraints and rules, e.g. Keep the public API unchanged. Use TypeScript strict mode.",
+      code: "Paste a snippet…", file: "Paste the file content, or drop a file on this panel…",
+      log: "Paste error output, stack trace or log…", data: "Paste JSON, CSV, a table…",
+      note: "Background the model should know…", example: "Show the shape of the answer you want…"
+    }[type] || "";
+  }
+  function findBlock(id) {
+    for (var i = 0; i < state.blocks.length; i++) if (state.blocks[i].id === id) return i;
+    return -1;
+  }
+  // Counts, previews, duplicate warnings — no re-render, keeps focus.
+  function refreshMeta() {
+    var dups = findDuplicates(state.blocks);
+    var els = list.children;
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i], b = state.blocks[findBlock(el.dataset.id)];
+      if (!b) continue;
+      var c = b.content.length, lines = b.content ? b.content.split("\n").length : 0;
+      el.querySelector(".bcount").textContent = fmtNum(c) + " ch · ~" + fmtNum(estTokens(b.content)) + " tok";
+      el.querySelector(".bcount").title = fmtNum(lines) + " lines";
+      var w = el.querySelector(".bwarn"), d = dups[b.id];
+      w.textContent = d ? "Duplicate: " + d.join(" ") + (b.active ? " Exclude or delete one copy to save tokens." : "") : "";
+      w.classList.toggle("show", !!d);
+      var first = b.content.split("\n").filter(function (l) { return l.trim(); })[0] || "(empty)";
+      el.querySelector(".bprev").textContent = (b.label ? b.label + " — " : "") + first.trim();
+    }
+    scheduleOutput();
+  }
+  var outTimer = null;
+  function scheduleOutput() {
+    clearTimeout(outTimer);
+    outTimer = setTimeout(updateOutput, 80);
+  }
+  function updateOutput() {
+    outputs = buildOutputs(state);
+    ["prompt", "markdown", "plain"].forEach(function (k) {
+      document.querySelector("[data-c=" + k + "]").textContent = outputs[k] ? fmtNum(outputs[k].length) : "";
+    });
+    var txt = outputs[fmt];
+    if (!txt) {
+      out.className = "out placeholder";
+      out.textContent = "The packed prompt appears here. Write a request or add a block on the left; the output updates as you type.";
+    } else {
+      out.className = "out";
+      out.textContent = txt;
+    }
+    $("outCount").textContent = fmtNum(txt.length) + " chars · ~" + fmtNum(estTokens(txt)) + " tokens";
+    $("copy").disabled = !txt;
+    updateMeter();
+  }
+  function updateMeter() {
+    var limit = state.model, total = estTokens(outputs.prompt);
+    var track = $("track");
+    track.innerHTML = "";
+    var used = 0;
+    state.blocks.forEach(function (b) {
+      if (!b.active || !b.content.trim()) return;
+      var tk = estTokens(b.content); used += tk;
+      var i = document.createElement("i");
+      i.style.width = Math.min(100, tk / limit * 100) + "%";
+      i.style.background = "var(--tool-" + b.type + ")";
+      i.title = TYPES[b.type].label + (b.label ? " " + b.label : "") + ": ~" + fmtNum(tk) + " tok";
+      track.appendChild(i);
+    });
+    var over = Math.max(0, total - used);
+    if (over) {
+      var oi = document.createElement("i");
+      oi.style.width = Math.min(100, over / limit * 100) + "%";
+      oi.style.background = "var(--tool-overhead)";
+      oi.title = "Template and tags: ~" + fmtNum(over) + " tok";
+      track.appendChild(oi);
+    }
+    var pct = total / limit * 100;
+    track.classList.toggle("over", pct > 100);
+    track.setAttribute("aria-label", "Context fill " + pct.toFixed(1) + "% of " + fmtNum(limit) + " tokens");
+    var cls = pct > 100 ? "over" : pct > 80 ? "near" : "";
+    var mt = $("meterText");
+    var lim = $("model").options[$("model").selectedIndex].text;
+    var tail = pct > 100
+      ? " — over the " + lim + " limit by ~" + fmtNum(total - limit) + ". Trim, clean or exclude blocks."
+      : " — leaves ~" + fmtNum(limit - total) + " for the reply";
+    mt.innerHTML = "";
+    var b = document.createElement("b"); b.textContent = "~" + fmtNum(total);
+    var s = document.createElement("span"); s.className = cls; s.textContent = " / " + fmtNum(limit) + " tokens (" + (pct < 0.1 && total ? "<0.1" : pct.toFixed(pct < 10 ? 1 : 0)) + "%)";
+    mt.appendChild(b); mt.appendChild(s); mt.appendChild(document.createTextNode(tail));
+  }
+  function syncControls() {
+    $("tpl").value = state.template;
+    $("model").value = String(state.model);
+    $("request").value = state.request;
+    $("trimHead").value = state.trimHead;
+    $("trimTail").value = state.trimTail;
+  }
+  function refreshPackList(selected) {
+    var packs = getPacks(), sel = $("packList");
+    var names = Object.keys(packs).sort(function (a, b) { return a.localeCompare(b); });
+    sel.innerHTML = "<option value=\"\">" + (names.length ? "Saved packs (" + names.length + ")…" : "No saved packs") + "</option>";
+    names.forEach(function (n) {
+      var o = document.createElement("option"); o.value = n; o.textContent = n; sel.appendChild(o);
+    });
+    if (selected && packs[selected]) sel.value = selected;
+  }
+
+  // ---------- block actions ----------
+  function move(idx, to, focusSel) {
+    if (to < 0 || to >= state.blocks.length || to === idx) return;
+    var b = state.blocks.splice(idx, 1)[0];
+    state.blocks.splice(to, 0, b);
+    renderBlocks(); autosave();
+    var el = list.querySelector("[data-id=\"" + b.id + "\"]");
+    if (el && focusSel) {
+      var f = el.querySelector(focusSel);
+      if (!f || f.disabled) f = el.querySelector(".grip");
+      f.focus();
+    }
+    setStatus("Moved block to position " + (to + 1) + ".");
+  }
+  function addBlock(type, content, label, lang, focus) {
+    var b = mkBlock(type, content, label, lang);
+    state.blocks.push(b);
+    renderBlocks(); autosave();
+    var el = list.querySelector("[data-id=\"" + b.id + "\"]");
+    if (el) {
+      if (focus) (TYPES[type].path && !label ? el.querySelector(".blabel") : el.querySelector("textarea")).focus();
+      el.scrollIntoView({ block: "nearest" });
+    }
+    return b;
+  }
+
+  document.querySelector(".ptools").addEventListener("click", function (e) {
+    var a = e.target.closest("[data-add]");
+    if (a) addBlock(a.dataset.add, "", "", "", true);
+  });
+  $("collapseAll").addEventListener("click", function () {
+    state.blocks.forEach(function (b) { b.collapsed = true; }); renderBlocks(); autosave();
+  });
+  $("expandAll").addEventListener("click", function () {
+    state.blocks.forEach(function (b) { b.collapsed = false; }); renderBlocks(); autosave();
+  });
+
+  list.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-act]");
+    if (!btn || btn.dataset.act === "grip") return;
+    var el = btn.closest(".blk"), idx = findBlock(el.dataset.id), b = state.blocks[idx];
+    if (!b) return;
+    var act = btn.dataset.act;
+    if (act === "up") move(idx, idx - 1, "[data-act=up]");
+    else if (act === "down") move(idx, idx + 1, "[data-act=down]");
+    else if (act === "toggle") {
+      b.collapsed = !b.collapsed; renderBlocks(); autosave();
+      var ne = list.querySelector("[data-id=\"" + b.id + "\"] [data-act=toggle]"); if (ne) ne.focus();
+    } else if (act === "del") {
+      lastDeleted = { block: b, index: idx };
+      state.blocks.splice(idx, 1);
+      delete undo[b.id]; delete bmsgs[b.id];
+      renderBlocks(); autosave();
+      var s = setStatus("Deleted block #" + (idx + 1) + " (" + TYPES[b.type].label + "). ");
+      var u = document.createElement("button");
+      u.className = "btn"; u.type = "button"; u.textContent = "Undo delete";
+      u.addEventListener("click", function () {
+        if (!lastDeleted) return;
+        state.blocks.splice(Math.min(lastDeleted.index, state.blocks.length), 0, lastDeleted.block);
+        lastDeleted = null; renderBlocks(); autosave(); setStatus("Block restored.", "ok");
+      });
+      s.appendChild(u);
+      var next = list.children[Math.min(idx, list.children.length - 1)];
+      (next ? next.querySelector(".grip") : $("request")).focus();
+    } else if (act === "trim") {
+      var r = trimMiddle(b.content, state.trimHead, state.trimTail);
+      if (!r.omitted) {
+        bmsgs[b.id] = { text: "Nothing to trim: " + b.content.split("\n").length + " lines, keeps " + state.trimHead + " + " + state.trimTail + ".", cls: "" };
+      } else {
+        undo[b.id] = b.content; b.content = r.text;
+        bmsgs[b.id] = { text: "Cut " + fmtNum(r.omitted) + " lines from the middle.", cls: "ok" };
+      }
+      rerenderOne(b, "[data-act=trim]");
+    } else if (act === "clean") {
+      var c = cleanLog(b.content);
+      if (c.text === b.content) {
+        bmsgs[b.id] = { text: "Already clean: no timestamps, colour codes or repeats found.", cls: "" };
+      } else {
+        undo[b.id] = b.content; b.content = c.text;
+        bmsgs[b.id] = { text: "Removed " + c.timestamps + " timestamp" + (c.timestamps === 1 ? "" : "s") + ", collapsed " + c.collapsed + " repeated line" + (c.collapsed === 1 ? "" : "s") + " (" + c.before + " → " + c.after + " lines).", cls: "ok" };
+      }
+      rerenderOne(b, "[data-act=clean]");
+    } else if (act === "undo") {
+      if (undo[b.id] != null) { b.content = undo[b.id]; delete undo[b.id]; bmsgs[b.id] = { text: "Restored the previous text.", cls: "" }; }
+      rerenderOne(b, "textarea");
+    }
+  });
+  function rerenderOne(b, focusSel) {
+    var old = list.querySelector("[data-id=\"" + b.id + "\"]");
+    var ne = blockEl(b, findBlock(b.id));
+    list.replaceChild(ne, old);
+    refreshMeta(); autosave();
+    var f = ne.querySelector(focusSel); if (f) f.focus();
+  }
+
+  list.addEventListener("input", function (e) {
+    var f = e.target.dataset.f; if (!f) return;
+    var el = e.target.closest(".blk"), b = state.blocks[findBlock(el.dataset.id)];
+    if (!b) return;
+    if (f === "content") {
+      b.content = e.target.value;
+      var r = rowsFor(b.content); if (r > e.target.rows) e.target.rows = r;
+      if (bmsgs[b.id]) { delete bmsgs[b.id]; el.querySelector(".bmsg").textContent = ""; }
+    } else if (f === "label") {
+      b.label = e.target.value;
+      var t = TYPES[b.type];
+      var langEl = el.querySelector("[data-f=lang]");
+      if (t.path && langEl && !b.lang) { var lg = langFromPath(b.label); if (lg) langEl.placeholder = lg; }
+    } else if (f === "lang") b.lang = e.target.value;
+    else return;
+    refreshMeta(); autosave();
+  });
+  list.addEventListener("change", function (e) {
+    var f = e.target.dataset.f; if (!f) return;
+    var el = e.target.closest(".blk"), b = state.blocks[findBlock(el.dataset.id)];
+    if (!b) return;
+    if (f === "type") {
+      b.type = e.target.value;
+      if (TYPES[b.type].path && !b.lang && b.label) b.lang = langFromPath(b.label);
+      rerenderOne(b, ".btype");
+    } else if (f === "active") {
+      b.active = e.target.checked;
+      el.classList.toggle("off", !b.active);
+      refreshMeta(); autosave();
+    } else if (f === "label") {
+      if (TYPES[b.type].path && !b.lang) { b.lang = langFromPath(b.label); var le = el.querySelector("[data-f=lang]"); if (le) le.value = b.lang; refreshMeta(); autosave(); }
+    }
+  });
+
+  // ---------- keyboard reorder on the grip ----------
+  list.addEventListener("keydown", function (e) {
+    if (!e.target.classList || !e.target.classList.contains("grip")) return;
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    var idx = findBlock(e.target.closest(".blk").dataset.id);
+    move(idx, idx + (e.key === "ArrowUp" ? -1 : 1), ".grip");
+  });
+
+  // ---------- pointer drag reorder ----------
+  var drag = null;
+  list.addEventListener("pointerdown", function (e) {
+    var g = e.target.closest(".grip");
+    if (!g || (e.pointerType === "mouse" && e.button !== 0)) return;
+    e.preventDefault();
+    var el = g.closest(".blk");
+    drag = { el: el, id: el.dataset.id, pid: e.pointerId, grip: g, startIdx: findBlock(el.dataset.id), moved: false };
+    try { g.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    el.classList.add("dragging");
+    list.classList.add("sorting");
+  });
+  window.addEventListener("pointermove", function (e) {
+    if (!drag || e.pointerId !== drag.pid) return;
+    var y = e.clientY, before = null;
+    var kids = list.children;
+    for (var i = 0; i < kids.length; i++) {
+      var k = kids[i]; if (k === drag.el) continue;
+      var r = k.getBoundingClientRect();
+      if (y < r.top + r.height / 2) { before = k; break; }
+    }
+    if (before !== drag.el.nextElementSibling && !(before === null && drag.el === list.lastElementChild)) {
+      list.insertBefore(drag.el, before);
+      drag.moved = true;
+    }
+    autoScroll(y);
+  });
+  function autoScroll(y) {
+    var sc = $("scroller");
+    var scrollable = sc.scrollHeight > sc.clientHeight + 1 && getComputedStyle(sc).overflowY !== "visible";
+    var top = scrollable ? sc.getBoundingClientRect().top : 0;
+    var bottom = scrollable ? sc.getBoundingClientRect().bottom : window.innerHeight;
+    var d = y < top + 40 ? -14 : y > bottom - 40 ? 14 : 0;
+    if (!d) return;
+    if (scrollable) sc.scrollTop += d; else window.scrollBy(0, d);
+  }
+  function endDrag(e) {
+    if (!drag || (e && e.pointerId !== drag.pid)) return;
+    var d = drag; drag = null;
+    d.el.classList.remove("dragging");
+    list.classList.remove("sorting");
+    var order = Array.prototype.map.call(list.children, function (k) { return k.dataset.id; });
+    var byId = {};
+    state.blocks.forEach(function (b) { byId[b.id] = b; });
+    state.blocks = order.map(function (id) { return byId[id]; }).filter(Boolean);
+    var newIdx = findBlock(d.id);
+    renderBlocks(); autosave();
+    var g = list.querySelector("[data-id=\"" + d.id + "\"] .grip"); if (g) g.focus();
+    if (newIdx !== d.startIdx) setStatus("Moved block to position " + (newIdx + 1) + ".");
+  }
+  // window-level: moving the dragged node in the DOM drops pointer capture
+  window.addEventListener("pointerup", endDrag);
+  window.addEventListener("pointercancel", endDrag);
+
+  // ---------- files ----------
+  var MAX_FILE = 2 * 1024 * 1024;
+  function readFiles(files) {
+    files = Array.prototype.slice.call(files || []);
+    if (!files.length) return;
+    var added = 0, skipped = [], pending = files.length;
+    function done() {
+      pending--;
+      if (pending) return;
+      var msg = added ? "Added " + added + " file" + (added > 1 ? "s" : "") + "." : "";
+      if (skipped.length) msg += (msg ? " " : "") + "Skipped " + skipped.join("; ") + ".";
+      setStatus(msg, skipped.length && !added ? "err" : added ? "ok" : "");
+    }
+    files.forEach(function (f) {
+      if (f.size > MAX_FILE) { skipped.push(f.name + " (over 2 MB — paste the relevant part instead)"); done(); return; }
+      var rd = new FileReader();
+      rd.onload = function () {
+        var text = String(rd.result || "");
+        if (/\u0000/.test(text.slice(0, 8000))) { skipped.push(f.name + " (binary file)"); done(); return; }
+        var path = f.webkitRelativePath || f.name;
+        var type = typeFromPath(path);
+        var b = mkBlock(type, text.replace(/\r\n?/g, "\n"), path, TYPES[type].path ? langFromPath(path) : "");
+        state.blocks.push(b); added++;
+        renderBlocks(); autosave();
+        done();
+      };
+      rd.onerror = function () { skipped.push(f.name + " (could not be read)"); done(); };
+      rd.readAsText(f);
+    });
+  }
+  $("openFiles").addEventListener("click", function () { $("fileInput").click(); });
+  $("fileInput").addEventListener("change", function (e) { readFiles(e.target.files); e.target.value = ""; });
+  var left = $("left"), dragDepth = 0;
+  function hasFiles(e) {
+    var t = e.dataTransfer && e.dataTransfer.types;
+    return t && Array.prototype.indexOf.call(t, "Files") >= 0;
+  }
+  left.addEventListener("dragenter", function (e) { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; left.classList.add("dropping"); });
+  left.addEventListener("dragover", function (e) { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+  left.addEventListener("dragleave", function (e) { if (!hasFiles(e)) return; dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) left.classList.remove("dropping"); });
+  left.addEventListener("drop", function (e) {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); dragDepth = 0; left.classList.remove("dropping");
+    readFiles(e.dataTransfer.files);
+  });
+  window.addEventListener("dragover", function (e) { if (hasFiles(e)) e.preventDefault(); });
+  window.addEventListener("drop", function (e) { if (hasFiles(e)) e.preventDefault(); });
+
+  // ---------- top controls ----------
+  $("tpl").addEventListener("change", function (e) { state.template = e.target.value; scheduleOutput(); autosave(); });
+  $("model").addEventListener("change", function (e) { state.model = +e.target.value; updateMeter(); autosave(); });
+  $("request").addEventListener("input", function (e) { state.request = e.target.value; scheduleOutput(); autosave(); });
+  $("trimHead").addEventListener("change", function (e) { var v = Math.floor(+e.target.value); state.trimHead = v > 0 ? v : 30; e.target.value = state.trimHead; autosave(); });
+  $("trimTail").addEventListener("change", function (e) { var v = Math.floor(+e.target.value); state.trimTail = v >= 0 ? v : 20; e.target.value = state.trimTail; autosave(); });
+
+  $("packSave").addEventListener("click", function () {
+    var name = $("packName").value.trim();
+    if (!name) { setStatus("Type a pack name next to Save, then press Save.", "err"); $("packName").focus(); return; }
+    var packs = getPacks(), existed = !!packs[name];
+    packs[name] = packData();
+    if (lsSet("packs", JSON.stringify(packs))) {
+      refreshPackList(name);
+      setStatus((existed ? "Updated" : "Saved") + " pack \"" + name + "\" in this browser.", "ok");
+    } else setStatus("Could not save: browser storage is full or blocked. Delete old packs or copy the prompt instead.", "err");
+  });
+  $("packLoad").addEventListener("click", function () {
+    var name = $("packList").value, packs = getPacks();
+    if (!name || !packs[name]) { setStatus("Pick a saved pack from the list first.", "err"); return; }
+    state = sanitize(packs[name]); undo = {}; bmsgs = {};
+    $("packName").value = name;
+    syncControls(); renderBlocks(); autosave();
+    setStatus("Opened pack \"" + name + "\" (" + state.blocks.length + " blocks).", "ok");
+  });
+  $("packDel").addEventListener("click", function () {
+    var name = $("packList").value, packs = getPacks();
+    if (!name || !packs[name]) { setStatus("Pick a saved pack from the list to delete.", "err"); return; }
+    var data = packs[name];
+    delete packs[name]; lsSet("packs", JSON.stringify(packs)); refreshPackList();
+    var s = setStatus("Deleted pack \"" + name + "\". ");
+    var u = document.createElement("button");
+    u.className = "btn"; u.type = "button"; u.textContent = "Undo";
+    u.addEventListener("click", function () {
+      var p = getPacks(); p[name] = data; lsSet("packs", JSON.stringify(p)); refreshPackList(name); setStatus("Pack \"" + name + "\" restored.", "ok");
+    });
+    s.appendChild(u);
+  });
+  $("packList").addEventListener("change", function (e) { if (e.target.value) $("packName").value = e.target.value; });
+
+  $("clear").addEventListener("click", function () {
+    var prev = packData();
+    state = defaultState(); state.model = prev.model; state.template = prev.template;
+    undo = {}; bmsgs = {};
+    $("packName").value = "";
+    syncControls(); renderBlocks(); autosave();
+    var s = setStatus("Started a new, empty pack. ");
+    if (prev.blocks.length || prev.request) {
+      var u = document.createElement("button");
+      u.className = "btn"; u.type = "button"; u.textContent = "Undo";
+      u.addEventListener("click", function () { state = sanitize(prev); syncControls(); renderBlocks(); autosave(); setStatus("Previous pack restored.", "ok"); });
+      s.appendChild(u);
+    }
+  });
+  $("sample").addEventListener("click", function () {
+    var prev = packData();
+    state = sanitize(SAMPLE);
+    undo = {}; bmsgs = {};
+    syncControls(); renderBlocks(); autosave();
+    var s = setStatus("Sample loaded. Try Clean log on block #4 and Trim middle on block #2. ");
+    if (prev.blocks.length || prev.request) {
+      var u = document.createElement("button");
+      u.className = "btn"; u.type = "button"; u.textContent = "Back to my pack";
+      u.addEventListener("click", function () { state = sanitize(prev); syncControls(); renderBlocks(); autosave(); setStatus("Your pack is back.", "ok"); });
+      s.appendChild(u);
+    }
+  });
+
+  // ---------- output tabs + copy ----------
+  document.querySelector(".tabs").addEventListener("click", function (e) {
+    var t = e.target.closest(".tab"); if (!t) return;
+    fmt = t.dataset.fmt;
+    document.querySelectorAll(".tab").forEach(function (x) { x.setAttribute("aria-selected", x === t ? "true" : "false"); });
+    lsSet("fmt", fmt);
+    $("copied").textContent = "";
+    updateOutput();
+  });
+  document.querySelector(".tabs").addEventListener("keydown", function (e) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
+    var i = tabs.indexOf(document.activeElement); if (i < 0) return;
+    var n = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+    n.focus(); n.click();
+  });
+  var copiedTimer = null;
+  function showCopied(msg, bad) {
+    var c = $("copied"); c.textContent = msg; c.style.color = bad ? "var(--danger)" : "";
+    clearTimeout(copiedTimer); copiedTimer = setTimeout(function () { c.textContent = ""; }, 2200);
+  }
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.setAttribute("readonly", "");
+    ta.style.position = "fixed"; ta.style.top = "-1000px"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    showCopied(ok ? "Copied" : "Copy blocked — select the text and press Ctrl+C", !ok);
+  }
+  $("copy").addEventListener("click", function () {
+    clearTimeout(outTimer); outputs = buildOutputs(state);
+    var text = outputs[fmt];
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { showCopied("Copied"); }, function () { fallbackCopy(text); });
+    } else fallbackCopy(text);
+  });
+
+  // ---------- sample ----------
+  var SAMPLE = {
+    template: "debug", model: 32768, trimHead: 12, trimTail: 6,
+    request: "Uploads larger than about 1 MB fail with HTTP 413 in production, but work locally. Find the cause and fix it.",
+    blocks: [
+      { type: "instruction", content: "Keep the Express 4 API. Do not add new npm dependencies.\nThe fix must work behind the nginx reverse proxy we use in production." },
+      { type: "file", label: "server/upload.js", lang: "javascript", content: sampleFile() },
+      { type: "file", label: "deploy/nginx.conf", lang: "nginx", content: "server {\n  listen 80;\n  server_name files.example.test;\n\n  location /api/ {\n    proxy_pass http://127.0.0.1:3000;\n    proxy_set_header Host $host;\n  }\n}" },
+      { type: "log", label: "production error log", content: sampleLog() },
+      { type: "note", content: "Started after moving from the old VM to the new container image last week. Locally we run the Node server directly, without nginx." },
+      { type: "note", content: "Started after moving from the old VM to the new container image last week. Locally we run the Node server directly, without nginx.", active: false }
+    ]
+  };
+  function sampleFile() {
+    var l = ["const express = require('express');", "const multer = require('multer');", "const path = require('path');", "", "const router = express.Router();",
+      "const upload = multer({", "  dest: path.join(__dirname, '../uploads'),", "  limits: { fileSize: 25 * 1024 * 1024 },", "});", ""];
+    for (var i = 1; i <= 24; i++) l.push("// helper " + i + ": unrelated formatting code", "function fmt" + i + "(v) { return String(v).padStart(" + (i % 5 + 2) + ", '0'); }");
+    l.push("", "router.post('/upload', upload.single('file'), (req, res) => {", "  if (!req.file) return res.status(400).json({ error: 'no file' });",
+      "  res.json({ id: req.file.filename, size: req.file.size });", "});", "", "module.exports = router;");
+    return l.join("\n");
+  }
+  function sampleLog() {
+    var l = [];
+    for (var i = 0; i < 6; i++) l.push("2026-09-24T07:40:0" + i + ".412Z [warn] client intended to send too large body: 1843200 bytes, client: 10.0.0.7, request: \"POST /api/upload HTTP/1.1\"");
+    l.push("2026-09-24T07:40:07.019Z [info] upstream healthy");
+    for (i = 0; i < 3; i++) l.push("[07:40:1" + i + "] GET /api/health 200", "[07:40:1" + i + "] GET /api/status 200");
+    l.push("2026-09-24T07:40:14.557Z [error] 413 Request Entity Too Large while sending to client");
+    return l.join("\n");
+  }
+
+  // ---------- boot ----------
+  try {
+    var saved = lsGet("current");
+    if (saved) state = sanitize(JSON.parse(saved));
+  } catch (e) { state = defaultState(); }
+  var sf = lsGet("fmt");
+  if (sf && outputs.hasOwnProperty(sf)) {
+    fmt = sf;
+    document.querySelectorAll(".tab").forEach(function (x) { x.setAttribute("aria-selected", x.dataset.fmt === fmt ? "true" : "false"); });
+  }
+  syncControls();
+  refreshPackList();
+  renderBlocks();
+  updateOutput();
+})();
+</script>
+<!--
+Context Packer — usage
+1. Pick a template (debugging, review, feature, refactor, docs) and the model's context limit.
+2. Write the request, then add blocks (instruction, code, file, log, data, note, example output)
+   or drop text files on the left panel. Code/file blocks take a path and a language.
+3. Reorder by dragging the ⋮⋮ grip, with the ↑/↓ buttons, or by focusing the grip and pressing Arrow keys.
+   Untick "Include" to keep a block without sending it; collapse blocks to save space.
+4. "Trim middle" keeps the first/last N lines of a long block; "Clean log" strips timestamps and ANSI codes
+   and collapses repeated lines. Both can be undone. Duplicate content is flagged on the block.
+5. Copy the Prompt (XML-tagged), Markdown or Plain text variant. Save packs by name; all data stays in localStorage.
+-->
+</body>
+</html>

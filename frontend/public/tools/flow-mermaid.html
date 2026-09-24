@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flow to Mermaid — draw a flowchart, get Mermaid code</title>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#ffffff;
+  --sunken:#e4e9ee;
+  --ink:#16202a;
+  --ink-soft:#5b6b7a;
+  --line:#c8d2db;
+  --line-soft:#dde4ea;
+  --accent:#1f4ed8;
+  --accent-ink:#ffffff;
+  --danger:#c0392b;
+  --warn:#b7791f;
+  --ok:#2f855a;
+  --fill-alpha:0.16;
+  --tool-process:#1f6feb;
+  --tool-decision:#c2410c;
+  --tool-terminal:#2f855a;
+  --tool-data:#7c3aed;
+  --tool-subprocess:#0e7490;
+  --tool-note:#a16207;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f151b;
+    --surface:#161f27;
+    --sunken:#111920;
+    --ink:#e4ebf1;
+    --ink-soft:#8ea0b0;
+    --line:#2b3945;
+    --line-soft:#212c36;
+    --accent:#6d8dff;
+    --accent-ink:#0f151b;
+    --danger:#e57373;
+    --warn:#e0a84a;
+    --ok:#5fbf8a;
+    --fill-alpha:0.30;
+    --tool-process:#6ea8ff;
+    --tool-decision:#f0884d;
+    --tool-terminal:#5fbf8a;
+    --tool-data:#b59cff;
+    --tool-subprocess:#4fc3d9;
+    --tool-note:#e0b44a;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f151b;
+  --surface:#161f27;
+  --sunken:#111920;
+  --ink:#e4ebf1;
+  --ink-soft:#8ea0b0;
+  --line:#2b3945;
+  --line-soft:#212c36;
+  --accent:#6d8dff;
+  --accent-ink:#0f151b;
+  --danger:#e57373;
+  --warn:#e0a84a;
+  --ok:#5fbf8a;
+  --fill-alpha:0.30;
+  --tool-process:#6ea8ff;
+  --tool-decision:#f0884d;
+  --tool-terminal:#5fbf8a;
+  --tool-data:#b59cff;
+  --tool-subprocess:#4fc3d9;
+  --tool-note:#e0b44a;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;display:flex;flex-direction:column;
+  background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+/* top bar */
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--surface)}
+.brand{font-weight:600;margin:0;font-size:15px;letter-spacing:-0.01em}
+.brand span{color:var(--ink-soft);font-weight:400}
+.bar .grow{flex:1 1 auto}
+.namefield{display:flex;align-items:center;gap:6px;color:var(--ink-soft);min-width:0}
+.namefield input{width:200px;max-width:52vw}
+.group{display:flex;gap:4px;flex-wrap:wrap}
+
+input[type=text],textarea,select{
+  padding:4px 7px;border:1px solid var(--line);border-radius:4px;background:var(--sunken);color:var(--ink);font-size:13px;
+}
+textarea{resize:vertical}
+.btn{padding:4px 10px;border:1px solid var(--line);border-radius:4px;background:var(--surface);cursor:pointer;font-size:13px;white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--ink-soft)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn-primary:hover:not(:disabled){filter:brightness(1.08)}
+.btn-danger{color:var(--danger)}
+
+/* layout */
+.main{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 400px}
+.stage{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--line)}
+.side{min-height:0;overflow:auto;display:flex;flex-direction:column;background:var(--surface)}
+@media (max-width:980px){
+  body{height:auto;display:block}
+  .main{display:block}
+  .stage{border-right:0;border-bottom:1px solid var(--line)}
+  .canvaswrap{height:62vh;min-height:360px;flex:none}
+}
+
+/* tool strip */
+.strip{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:6px 10px;border-bottom:1px solid var(--line-soft);background:var(--surface)}
+.strip .lbl{color:var(--ink-soft);font-size:12px}
+.chips{display:flex;flex-wrap:wrap;gap:3px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 6px 3px 5px;border:1px solid var(--line);border-radius:4px;background:var(--surface);cursor:pointer;font-size:12px}
+.chip svg{width:18px;height:12px;flex:none}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:var(--sunken);font-weight:500}
+.sep{width:1px;align-self:stretch;background:var(--line-soft)}
+
+.canvasbox{position:relative;flex:1 1 auto;min-height:0;display:flex}
+.canvaswrap{position:relative;flex:1 1 auto;min-height:0;overflow:auto;background:var(--paper)}
+.canvaswrap:focus-visible{outline-offset:-2px}
+.world{position:relative;width:2400px;height:1600px}
+#svg{display:block;touch-action:none;user-select:none;-webkit-user-select:none;cursor:default}
+.hint{padding:5px 10px;color:var(--ink-soft);font-size:12px;border-top:1px solid var(--line-soft);background:var(--surface)}
+.hint kbd{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;padding:0 3px;border:1px solid var(--line);border-radius:3px;background:var(--sunken)}
+.empty{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);width:min(360px,86%);text-align:center;pointer-events:none;
+  background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px 18px;color:var(--ink-soft)}
+.empty strong{display:block;color:var(--ink);margin-bottom:4px;font-size:14px}
+.empty .btn{pointer-events:auto;margin-top:10px}
+.empty[hidden]{display:none}
+
+/* svg parts */
+.dot{fill:var(--line)}
+.shape-base{fill:var(--surface)}
+.shape{stroke-width:1.6;fill-opacity:var(--fill-alpha)}
+.t-process{--c:var(--tool-process)} .t-decision{--c:var(--tool-decision)} .t-terminal{--c:var(--tool-terminal)}
+.t-data{--c:var(--tool-data)} .t-subprocess{--c:var(--tool-subprocess)} .t-note{--c:var(--tool-note)}
+.shape{fill:var(--c);stroke:var(--c)}
+.inner{stroke:var(--c);stroke-width:1.4;fill:none}
+.node{cursor:move;outline:none}
+.node text{fill:var(--ink);font-size:13px;font-weight:500;pointer-events:none}
+.node text.ph{fill:var(--ink-soft);font-style:italic;font-weight:400}
+.node.sel .shape{stroke:var(--accent);stroke-width:2.6}
+.node:focus-visible .shape{stroke:var(--accent);stroke-width:2.6;stroke-dasharray:4 3}
+.handle{opacity:0;cursor:crosshair}
+.handle .hv{fill:var(--surface);stroke:var(--accent);stroke-width:1.5}
+.handle .hh{fill:transparent}
+.node:hover .handle,.node.sel .handle{opacity:1}
+.edge{cursor:pointer}
+.edge .ln{fill:none;stroke:var(--ink-soft);stroke-width:1.6}
+.edge .hit{fill:none;stroke:transparent;stroke-width:14}
+.edge.dashed .ln{stroke-dasharray:6 4}
+.edge.thick .ln{stroke-width:3.4}
+.edge.sel .ln{stroke:var(--accent)}
+.elbl rect{fill:var(--paper);stroke:var(--line-soft)}
+.elbl text{fill:var(--ink);font-size:12px}
+.edge.sel .elbl rect{stroke:var(--accent)}
+.mk{fill:var(--ink-soft)} .mk-sel{fill:var(--accent)}
+.grp{cursor:move}
+.grp .frame{fill:var(--ink);fill-opacity:.035;stroke:var(--ink-soft);stroke-width:1.2;stroke-dasharray:5 4}
+.grp text{fill:var(--ink-soft);font-size:12px;font-weight:600}
+.grp.sel .frame{stroke:var(--accent)}
+.grp.sel text{fill:var(--accent)}
+.rubber{stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 4;fill:none;pointer-events:none}
+.marq{fill:var(--accent);fill-opacity:.08;stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
+#ed{position:absolute;display:none;z-index:2;text-align:center;resize:none;padding:4px 6px;border:2px solid var(--accent);border-radius:4px;background:var(--surface);color:var(--ink);font-size:13px;line-height:17px;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+
+/* side panel */
+.sec{border-bottom:1px solid var(--line-soft)}
+.sec h2{margin:0;padding:8px 12px 0;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);font-weight:600}
+.sec .body{padding:6px 12px 10px}
+.row{display:flex;align-items:center;gap:8px;margin:5px 0;flex-wrap:wrap}
+.row > label{width:64px;flex:none;color:var(--ink-soft)}
+.row > input,.row > select,.row > textarea{flex:1 1 150px;min-width:0}
+.muted{color:var(--ink-soft)}
+.kv{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;background:var(--sunken);padding:1px 5px;border-radius:3px}
+.links{margin:4px 0 0;padding:0;list-style:none}
+.links li{padding:2px 0;color:var(--ink-soft)}
+.checks{list-style:none;margin:0;padding:0}
+.checks li{display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-top:1px solid var(--line-soft)}
+.checks li:first-child{border-top:0}
+.checks .mark{flex:none;width:8px;height:8px;border-radius:50%;margin-top:5px;background:var(--warn)}
+.checks li.ok .mark{background:var(--ok)}
+.checks li span.t{flex:1;min-width:0}
+.checks .btn{padding:1px 7px;font-size:12px}
+
+.outsec{flex:1 1 0;display:flex;flex-direction:column;min-height:340px}
+.tabs{display:flex;gap:2px;padding:6px 8px 0;flex-wrap:wrap;border-bottom:1px solid var(--line-soft)}
+.tab{padding:5px 10px;border:0;border-bottom:2px solid transparent;background:none;cursor:pointer;color:var(--ink-soft);font-size:13px}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:500}
+.tab small{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-soft);margin-left:4px;font-weight:400}
+.outopts{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 12px;border-bottom:1px solid var(--line-soft)}
+.outopts[hidden]{display:none}
+.outopts input{flex:1 1 200px;min-width:0}
+.out{flex:1 1 0;margin:0;padding:10px 12px;overflow:auto;min-height:160px;background:var(--sunken);
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;line-height:1.5;white-space:pre;tab-size:2}
+.out-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:8px 12px;border-top:1px solid var(--line-soft)}
+.out-foot .count{color:var(--ink-soft);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
+.out-foot .msg{color:var(--ok);font-size:12px}
+a.btn{text-decoration:none;color:var(--ink);display:inline-block}
+a.btn[aria-disabled="true"]{opacity:.45;pointer-events:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1 class="brand">Flow to Mermaid <span>— draw boxes and arrows, get Mermaid flowchart code</span></h1>
+  <label class="namefield">Flow <input type="text" id="name" placeholder="Untitled flow" aria-label="Flow name"></label>
+  <span class="grow"></span>
+  <div class="group">
+    <button class="btn" id="undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button class="btn" id="redo" title="Redo (Ctrl+Shift+Z / Ctrl+Y)">Redo</button>
+  </div>
+  <div class="group">
+    <button class="btn" id="example">Load example</button>
+    <button class="btn btn-danger" id="clear">Clear</button>
+  </div>
+  <span class="muted" id="barmsg" role="status" aria-live="polite"></span>
+</header>
+
+<div class="main">
+  <section class="stage" aria-label="Canvas">
+    <div class="strip">
+      <div class="chips" id="types" role="group" aria-label="Step type"></div>
+      <span class="sep"></span>
+      <select id="linkstyle" aria-label="Link style for new links"></select>
+      <span class="sep"></span>
+      <button class="btn" id="add">Add step</button>
+      <button class="btn" id="grp" disabled>Group</button>
+      <button class="btn btn-danger" id="del" disabled>Delete</button>
+    </div>
+    <div class="canvasbox">
+      <div class="canvaswrap" id="wrap" tabindex="0" aria-label="Flow canvas. Double-click to add a step.">
+        <div class="world" id="world">
+          <svg id="svg" width="2400" height="1600" viewBox="0 0 2400 1600" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle class="dot" cx="10" cy="10" r="1"/></pattern>
+              <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="arr-sel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="mk-sel" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <rect id="bg" width="2400" height="1600" fill="url(#dots)"/>
+            <g id="lgroups"></g><g id="ledges"></g><g id="lnodes"></g><g id="lover"></g>
+          </svg>
+          <textarea id="ed" rows="1" aria-label="Edit text" spellcheck="false"></textarea>
+        </div>
+      </div>
+      <div class="empty" id="empty">
+        <strong>Empty flow</strong>
+        Double-click the canvas (or press <em>Add step</em>) to place a step. Drag from a dot on a step's edge to another step to link them.
+        <br><button class="btn btn-primary" id="example2">Load example</button>
+      </div>
+    </div>
+    <div class="hint">Double-click: add / rename · drag an edge dot: link (drop on empty space for a new linked step) · <kbd>Shift</kbd>+click or drag on empty space: multi-select · <kbd>Del</kbd> delete · <kbd>Ctrl</kbd>+<kbd>Z</kbd>/<kbd>Y</kbd> undo/redo · arrows nudge</div>
+  </section>
+
+  <aside class="side" aria-label="Details and output">
+    <div class="sec"><h2 id="insp-h">Selection</h2><div class="body" id="insp"></div></div>
+    <div class="sec"><h2>Checks</h2><div class="body"><ul class="checks" id="checks"></ul></div></div>
+    <div class="outsec">
+      <div class="tabs" role="tablist" id="tabs">
+        <button class="tab" role="tab" data-fmt="mermaid">Mermaid<small></small></button>
+        <button class="tab" role="tab" data-fmt="prompt">Prompt<small></small></button>
+        <button class="tab" role="tab" data-fmt="json">JSON<small></small></button>
+      </div>
+      <div class="outopts" id="opt-mermaid">
+        <label class="muted" for="dir">Direction</label>
+        <select id="dir">
+          <option value="TD">TD — top down</option><option value="LR">LR — left to right</option>
+          <option value="BT">BT — bottom up</option><option value="RL">RL — right to left</option>
+        </select>
+      </div>
+      <div class="outopts" id="opt-prompt" hidden>
+        <label class="muted" for="ask">Ask</label>
+        <input type="text" id="ask" placeholder="Default: implement it as code + list test cases">
+      </div>
+      <pre class="out" id="out" tabindex="0" aria-label="Generated output"></pre>
+      <div class="out-foot">
+        <button class="btn btn-primary" id="copy">Copy</button>
+        <span class="count" id="count"></span>
+        <a class="btn" id="live" href="https://mermaid.live/edit" target="_blank" rel="noopener noreferrer" title="Opens mermaid.live in a new tab with this code">Open in mermaid.live ↗</a>
+        <span class="msg" id="copymsg" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var KEY = 'redline.tool.flow-mermaid.';
+var WORLD_W = 2400, WORLD_H = 1600;
+var TYPES = {
+  process:    {label:'Process',     mm:['[', ']'],   word:'Process'},
+  decision:   {label:'Decision',    mm:['{', '}'],   word:'Decision'},
+  terminal:   {label:'Start/End',   mm:['([', '])'], word:'Start/End'},
+  data:       {label:'Data',        mm:['[/', '/]'], word:'Data (input/output)'},
+  subprocess: {label:'Subprocess',  mm:['[[', ']]'], word:'Subprocess'},
+  note:       {label:'Note',        mm:['>', ']'],   word:'Note'}
+};
+var TYPE_KEYS = Object.keys(TYPES);
+var STYLES = {
+  solid:  {label:'Solid',   mm:'-->'},
+  dashed: {label:'Dashed',  mm:'-.->'},
+  thick:  {label:'Thick',   mm:'==>'},
+  both:   {label:'Two-way', mm:'<-->'}
+};
+var DIRS = {TD:'top to bottom', LR:'left to right', BT:'bottom to top', RL:'right to left'};
+var RESERVED = ['end','graph','flowchart','subgraph','style','classdef','class','click','linkstyle','direction','default','call','href','interpolate','acctitle','accdescr','flowchart-elk'];
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function lsGet(k){ try { return localStorage.getItem(KEY + k); } catch (e) { return null; } }
+function lsSet(k, v){ try { localStorage.setItem(KEY + k, v); } catch (e) { /* storage unavailable */ } }
+function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+
+/* ---------------- state ---------------- */
+var S = blank();
+var UI = {newType:'process', linkStyle:'solid', tab:'mermaid'};
+var sel = {nodes:new Set(), edges:new Set(), groups:new Set()};
+var drag = null, pointerDown = false;
+var hist = [], hi = -1;
+
+function blank(){ return {name:'', dir:'TD', ask:'', nodes:[], edges:[], groups:[], seq:1}; }
+function snap(){ return JSON.stringify({name:S.name, dir:S.dir, ask:S.ask, nodes:S.nodes, edges:S.edges, groups:S.groups, seq:S.seq}); }
+function sanitize(o){
+  var s = blank();
+  if (!o || typeof o !== 'object') return s;
+  s.name = typeof o.name === 'string' ? o.name : '';
+  s.dir = DIRS[o.dir] ? o.dir : 'TD';
+  s.ask = typeof o.ask === 'string' ? o.ask : '';
+  s.seq = Number(o.seq) > 0 ? Number(o.seq) : 1;
+  var keys = {};
+  (Array.isArray(o.nodes) ? o.nodes : []).forEach(function(n){
+    if (!n || typeof n.key !== 'string' || keys[n.key]) return;
+    keys[n.key] = 1;
+    s.nodes.push({key:n.key, type:TYPES[n.type] ? n.type : 'process', text:typeof n.text === 'string' ? n.text : '',
+      x:clamp(Number(n.x) || 100, 0, WORLD_W), y:clamp(Number(n.y) || 100, 0, WORLD_H), group:typeof n.group === 'string' ? n.group : null});
+  });
+  (Array.isArray(o.edges) ? o.edges : []).forEach(function(e){
+    if (!e || !keys[e.from] || !keys[e.to] || e.from === e.to) return;
+    s.edges.push({key:String(e.key || ('e' + s.seq++)), from:e.from, to:e.to, label:typeof e.label === 'string' ? e.label : '', style:STYLES[e.style] ? e.style : 'solid'});
+  });
+  var gk = {};
+  (Array.isArray(o.groups) ? o.groups : []).forEach(function(g){
+    if (!g || typeof g.key !== 'string' || gk[g.key]) return;
+    gk[g.key] = 1; s.groups.push({key:g.key, title:typeof g.title === 'string' ? g.title : 'Group'});
+  });
+  s.nodes.forEach(function(n){ if (n.group && !gk[n.group]) n.group = null; });
+  pruneGroups(s);
+  return s;
+}
+function pruneGroups(s){
+  s.groups = s.groups.filter(function(g){ return s.nodes.some(function(n){ return n.group === g.key; }); });
+}
+function restore(str){
+  S = sanitize(JSON.parse(str));
+  ['nodes','edges','groups'].forEach(function(k){
+    var list = S[k];
+    sel[k].forEach(function(id){ if (!list.some(function(x){ return x.key === id; })) sel[k].delete(id); });
+  });
+}
+function commit(){
+  pruneGroups(S);
+  var s = snap();
+  if (hist[hi] === s) { save(); return; }
+  hist = hist.slice(0, hi + 1); hist.push(s);
+  if (hist.length > 101) hist.shift();
+  hi = hist.length - 1;
+  save();
+}
+function save(){ lsSet('state', snap()); lsSet('ui', JSON.stringify(UI)); }
+function undo(){ if (hi > 0) { hi--; restore(hist[hi]); save(); renderAll(); flash('Undone'); } }
+function redo(){ if (hi < hist.length - 1) { hi++; restore(hist[hi]); save(); renderAll(); flash('Redone'); } }
+
+var barTimer = 0;
+function flash(t){ var m = $('barmsg'); m.textContent = t; clearTimeout(barTimer); barTimer = setTimeout(function(){ m.textContent = ''; }, 1400); }
+
+function node(k){ for (var i = 0; i < S.nodes.length; i++) if (S.nodes[i].key === k) return S.nodes[i]; return null; }
+function edge(k){ for (var i = 0; i < S.edges.length; i++) if (S.edges[i].key === k) return S.edges[i]; return null; }
+function grp(k){ for (var i = 0; i < S.groups.length; i++) if (S.groups[i].key === k) return S.groups[i]; return null; }
+function clearSel(){ sel.nodes.clear(); sel.edges.clear(); sel.groups.clear(); }
+function selCount(){ return sel.nodes.size + sel.edges.size + sel.groups.size; }
+
+/* ---------------- geometry ---------------- */
+var mctx = document.createElement('canvas').getContext('2d');
+mctx.font = '500 13px "IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+var sizeCache = {};
+function lines(n){ var t = n.text.length ? n.text : TYPES[n.type].label; return t.split('\n'); }
+function size(n){
+  var k = n.type + '\u0001' + n.text;
+  if (sizeCache[k]) return sizeCache[k];
+  var ls = lines(n), tw = 0;
+  ls.forEach(function(l){ tw = Math.max(tw, mctx.measureText(l).width); });
+  var th = ls.length * 17, w, h;
+  if (n.type === 'decision') { w = Math.max(120, tw * 1.5 + 44); h = Math.max(70, th * 1.5 + 38); }
+  else {
+    w = tw + 30 + (n.type === 'data' ? 26 : 0) + (n.type === 'subprocess' ? 20 : 0) + (n.type === 'terminal' ? 16 : 0) + (n.type === 'note' ? 12 : 0);
+    w = Math.max(96, w); h = Math.max(40, th + 20);
+  }
+  return (sizeCache[k] = {w:Math.round(w), h:Math.round(h)});
+}
+function boundary(n, tx, ty){
+  var dx = tx - n.x, dy = ty - n.y;
+  if (!dx && !dy) return {x:n.x, y:n.y};
+  var sz = size(n), hw = sz.w / 2 + 2, hh = sz.h / 2 + 2, t;
+  if (n.type === 'decision') t = 1 / (Math.abs(dx) / hw + Math.abs(dy) / hh);
+  else t = Math.min(hw / (Math.abs(dx) || 1e-9), hh / (Math.abs(dy) || 1e-9));
+  return {x:n.x + dx * t, y:n.y + dy * t};
+}
+function shapeSVG(n, cls){
+  var sz = size(n), w = sz.w, h = sz.h, x = -w / 2, y = -h / 2;
+  switch (n.type) {
+    case 'decision': return '<polygon class="' + cls + '" points="0,' + y + ' ' + (w / 2) + ',0 0,' + (h / 2) + ' ' + x + ',0"/>';
+    case 'terminal': return '<rect class="' + cls + '" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + (h / 2) + '"/>';
+    case 'data': var s = 13; return '<polygon class="' + cls + '" points="' + (x + s) + ',' + y + ' ' + (w / 2) + ',' + y + ' ' + (w / 2 - s) + ',' + (h / 2) + ' ' + x + ',' + (h / 2) + '"/>';
+    case 'note': return '<path class="' + cls + '" d="M' + x + ',' + y + ' H' + (w / 2 - 11) + ' L' + (w / 2) + ',' + (y + 11) + ' V' + (h / 2) + ' H' + x + ' Z"/>';
+    default: return '<rect class="' + cls + '" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="3"/>';
+  }
+}
+function groupBox(g){
+  var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+  S.nodes.forEach(function(n){
+    if (n.group !== g.key) return;
+    var sz = size(n);
+    x1 = Math.min(x1, n.x - sz.w / 2); y1 = Math.min(y1, n.y - sz.h / 2);
+    x2 = Math.max(x2, n.x + sz.w / 2); y2 = Math.max(y2, n.y + sz.h / 2);
+  });
+  if (x1 === Infinity) return null;
+  return {x:x1 - 16, y:y1 - 30, w:x2 - x1 + 32, h:y2 - y1 + 46};
+}
+
+/* ---------------- rendering: canvas ---------------- */
+var svg = $('svg'), wrap = $('wrap');
+function renderCanvas(){
+  var active = document.activeElement, activeKey = active && active.getAttribute && active.getAttribute('data-nid');
+  var gh = '';
+  S.groups.forEach(function(g){
+    var b = groupBox(g); if (!b) return;
+    gh += '<g class="grp' + (sel.groups.has(g.key) ? ' sel' : '') + '" data-gid="' + g.key + '">' +
+      '<rect class="frame" x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="6"/>' +
+      '<text x="' + (b.x + 10) + '" y="' + (b.y + 18) + '">' + esc(g.title || 'Group') + '</text></g>';
+  });
+  $('lgroups').innerHTML = gh;
+
+  var eh = '';
+  S.edges.forEach(function(e){
+    var a = node(e.from), b = node(e.to); if (!a || !b) return;
+    var p = boundary(a, b.x, b.y), q = boundary(b, a.x, a.y), on = sel.edges.has(e.key);
+    var mk = on ? 'url(#arr-sel)' : 'url(#arr)';
+    var cls = 'edge' + (on ? ' sel' : '') + (e.style === 'dashed' ? ' dashed' : '') + (e.style === 'thick' ? ' thick' : '');
+    var d = 'M' + p.x.toFixed(1) + ',' + p.y.toFixed(1) + ' L' + q.x.toFixed(1) + ',' + q.y.toFixed(1);
+    eh += '<g class="' + cls + '" data-eid="' + e.key + '"><path class="hit" d="' + d + '"/>' +
+      '<path class="ln" d="' + d + '" marker-end="' + mk + '"' + (e.style === 'both' ? ' marker-start="' + mk + '"' : '') + '/>';
+    if (e.label) {
+      var mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2, lw = mctx.measureText(e.label).width * 0.93 + 12;
+      eh += '<g class="elbl"><rect x="' + (mx - lw / 2) + '" y="' + (my - 10) + '" width="' + lw + '" height="20" rx="3"/>' +
+        '<text x="' + mx + '" y="' + (my + 4) + '" text-anchor="middle">' + esc(e.label) + '</text></g>';
+    }
+    eh += '</g>';
+  });
+  $('ledges').innerHTML = eh;
+
+  var nh = '';
+  S.nodes.forEach(function(n){
+    var sz = size(n), ls = lines(n), on = sel.nodes.has(n.key);
+    var y0 = -((ls.length - 1) * 17) / 2 + 4.5;
+    nh += '<g class="node t-' + n.type + (on ? ' sel' : '') + '" data-nid="' + n.key + '" tabindex="0" role="button" aria-label="' +
+      esc(TYPES[n.type].label + ': ' + (n.text || 'empty')) + '" transform="translate(' + n.x + ',' + n.y + ')">' +
+      shapeSVG(n, 'shape-base') + shapeSVG(n, 'shape');
+    if (n.type === 'subprocess') nh += '<path class="inner" d="M' + (-sz.w / 2 + 9) + ',' + (-sz.h / 2) + ' V' + (sz.h / 2) + ' M' + (sz.w / 2 - 9) + ',' + (-sz.h / 2) + ' V' + (sz.h / 2) + '"/>';
+    if (n.type === 'note') nh += '<path class="inner" d="M' + (sz.w / 2 - 11) + ',' + (-sz.h / 2) + ' V' + (-sz.h / 2 + 11) + ' H' + (sz.w / 2) + '"/>';
+    nh += '<text text-anchor="middle"' + (n.text ? '' : ' class="ph"') + '>';
+    ls.forEach(function(l, i){ nh += '<tspan x="0" y="' + (y0 + i * 17) + '">' + esc(l || ' ') + '</tspan>'; });
+    nh += '</text>';
+    [[0, -sz.h / 2], [sz.w / 2, 0], [0, sz.h / 2], [-sz.w / 2, 0]].forEach(function(c){
+      nh += '<g class="handle"><circle class="hh" cx="' + c[0] + '" cy="' + c[1] + '" r="11"/><circle class="hv" cx="' + c[0] + '" cy="' + c[1] + '" r="4.5"/></g>';
+    });
+    nh += '</g>';
+  });
+  $('lnodes').innerHTML = nh;
+  renderOverlay();
+  $('empty').hidden = S.nodes.length > 0;
+  if (activeKey) { var el = svg.querySelector('[data-nid="' + activeKey + '"]'); if (el) el.focus({preventScroll:true}); }
+}
+function renderOverlay(){
+  var h = '';
+  if (drag && drag.mode === 'link') {
+    var a = node(drag.from);
+    if (a) { var p = boundary(a, drag.x, drag.y); h = '<path class="rubber" d="M' + p.x + ',' + p.y + ' L' + drag.x + ',' + drag.y + '"/>'; }
+  } else if (drag && drag.mode === 'marquee') {
+    var r = rectOf(drag.a, drag.b);
+    h = '<rect class="marq" x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '"/>';
+  }
+  $('lover').innerHTML = h;
+}
+function rectOf(a, b){ return {x:Math.min(a.x, b.x), y:Math.min(a.y, b.y), w:Math.abs(a.x - b.x), h:Math.abs(a.y - b.y)}; }
+
+/* ---------------- Mermaid ---------------- */
+function mmText(s){
+  return String(s).replace(/\r/g, '')
+    .replace(/#/g, '#35;')
+    .replace(/"/g, '#quot;')
+    .replace(/</g, '#lt;')
+    .replace(/>/g, '#gt;')
+    .replace(/\|/g, '#124;')
+    .replace(/`/g, '#96;')
+    .replace(/\n/g, '<br>');
+}
+function slug(t){
+  var s = String(t).toLowerCase();
+  try { s = s.normalize('NFKD').replace(/[̀-ͯ]/g, ''); } catch (e) { /* no normalize */ }
+  s = s.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  if (s.length > 24) { s = s.slice(0, 24); var cut = s.lastIndexOf('_'); if (cut > 8) s = s.slice(0, cut); s = s.replace(/_+$/, ''); }
+  return s;
+}
+function idMap(){
+  var used = {}, map = {};
+  function take(base, fallback){
+    var b = base || fallback;
+    if (/^[0-9]/.test(b)) b = 'n_' + b;
+    if (RESERVED.indexOf(b) >= 0) b = b + '_step';
+    var id = b, i = 2;
+    while (used[id]) id = b + '_' + (i++);
+    used[id] = 1; return id;
+  }
+  S.nodes.forEach(function(n){ map[n.key] = take(slug(n.text), n.type === 'terminal' ? 'terminal' : n.type); });
+  S.groups.forEach(function(g){ map[g.key] = take('sg_' + (slug(g.title) || 'group'), 'sg_group'); });
+  return map;
+}
+function yamlStr(s){ return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"'; }
+function buildMermaid(ids){
+  var L = [];
+  if (S.name.trim()) L.push('---', 'title: ' + yamlStr(S.name.trim()), '---');
+  L.push('flowchart ' + S.dir);
+  function def(n){ var m = TYPES[n.type].mm; return ids[n.key] + m[0] + '"' + mmText(n.text.trim() || ' ') + '"' + m[1]; }
+  S.nodes.forEach(function(n){ if (!n.group) L.push('    ' + def(n)); });
+  S.groups.forEach(function(g){
+    L.push('    subgraph ' + ids[g.key] + ' ["' + mmText(g.title.trim() || 'Group') + '"]');
+    S.nodes.forEach(function(n){ if (n.group === g.key) L.push('        ' + def(n)); });
+    L.push('    end');
+  });
+  S.edges.forEach(function(e){
+    var lab = e.label.trim() ? '|"' + mmText(e.label.trim()) + '"|' : '';
+    L.push('    ' + ids[e.from] + ' ' + STYLES[e.style].mm + lab + ' ' + ids[e.to]);
+  });
+  var notes = S.nodes.filter(function(n){ return n.type === 'note'; }).map(function(n){ return ids[n.key]; });
+  if (notes.length) {
+    L.push('    classDef note fill:#fff5c2,stroke:#c9a227,color:#3d3200');
+    L.push('    class ' + notes.join(',') + ' note');
+  }
+  return L.join('\n') + '\n';
+}
+
+/* ---------------- analysis ---------------- */
+function analyse(){
+  var info = {};
+  S.nodes.forEach(function(n){ info[n.key] = {inn:[], out:[], any:0}; });
+  S.edges.forEach(function(e){
+    info[e.from].out.push(e); info[e.to].inn.push(e);
+    info[e.from].any++; info[e.to].any++;
+  });
+  return info;
+}
+function byPos(a, b){ return (a.y - b.y) || (a.x - b.x); }
+function traversal(info){
+  var steps = S.nodes.filter(function(n){ return n.type !== 'note'; });
+  var isStep = {}; steps.forEach(function(n){ isStep[n.key] = 1; });
+  function stepIn(n){ return info[n.key].inn.filter(function(e){ return isStep[e.from]; }).length; }
+  var entries = steps.filter(function(n){ return stepIn(n) === 0; }).sort(function(a, b){
+    return ((b.type === 'terminal') - (a.type === 'terminal')) || byPos(a, b);
+  });
+  /* reverse post-order DFS: a topological order for the acyclic part, so every
+     link to an earlier-or-same number is a real loop (back edge). */
+  var seen = {}, post = [];
+  function dfs(n){
+    seen[n.key] = 1;
+    var outs = info[n.key].out;
+    outs.forEach(function(e){ var t = node(e.to); if (t && isStep[t.key] && !seen[t.key]) dfs(t); });
+    post.push(n);
+  }
+  var roots = entries.concat(steps.slice().sort(byPos)), order = [];
+  roots.forEach(function(n){
+    if (seen[n.key]) return;
+    post = []; dfs(n); order = order.concat(post.reverse());
+  });
+  return {order:order, entries:entries};
+}
+function checks(info){
+  var out = [];
+  function q(n){ return '“' + (n.text.trim() || TYPES[n.type].label) + '”'; }
+  S.nodes.forEach(function(n){
+    if (!n.text.trim()) out.push({t:'A ' + TYPES[n.type].label.toLowerCase() + ' step has no text; double-click it to name it.', n:[n.key]});
+    if (n.type !== 'note' && info[n.key].any === 0 && S.nodes.length > 1) out.push({t:q(n) + ' is not connected. Drag from one of its dots to link it, or delete it.', n:[n.key]});
+    if (n.type === 'note' && info[n.key].any === 0) out.push({t:'Note ' + q(n) + ' is not attached to a step. Link it to the step it explains.', n:[n.key]});
+    if (n.type === 'decision') {
+      var o = info[n.key].out;
+      if (o.length < 2) out.push({t:'Decision ' + q(n) + ' has ' + (o.length ? 'only one branch' : 'no branches') + '. Add a link for each answer (e.g. yes and no).', n:[n.key]});
+      o.forEach(function(e){ if (!e.label.trim()) out.push({t:'A branch of decision ' + q(n) + ' has no label. Select the link and name the answer.', e:[e.key]}); });
+    }
+  });
+  if (S.nodes.length > 1) {
+    var steps = S.nodes.filter(function(n){ return n.type !== 'note'; });
+    var hasEntry = steps.some(function(n){ return info[n.key].inn.every(function(e){ var f = node(e.from); return f && f.type === 'note'; }); });
+    if (steps.length && !hasEntry) out.push({t:'Every step has an incoming link, so the flow has no clear start. Add a Start/End step.', n:[]});
+  }
+  return out;
+}
+
+/* ---------------- Prompt ---------------- */
+function buildPrompt(ids, mermaid){
+  if (!S.nodes.length) return 'The flow is empty. Add steps on the canvas and this tab will describe the flow for an LLM.\n';
+  var info = analyse(), tr = traversal(info), order = tr.order;
+  var num = {}; order.forEach(function(n, i){ num[n.key] = i + 1; });
+  function nm(n){ return (n.text.trim() || '(unnamed ' + TYPES[n.type].label.toLowerCase() + ')').replace(/\s*\n\s*/g, ' / '); }
+  function ref(k){ var n = node(k); return num[k] ? 'step ' + num[k] + ' (' + nm(n) + ')' : 'note "' + nm(n) + '"'; }
+  var notes = S.nodes.filter(function(n){ return n.type === 'note'; });
+  var decisions = order.filter(function(n){ return n.type === 'decision'; });
+  var used = {}; S.edges.forEach(function(e){ used[e.style] = 1; });
+  var L = [];
+  L.push('You are given a process flow that was drawn as a flowchart. Treat it as the specification of the logic: keep every step, every decision branch and every loop exactly as described, and do not invent steps that are not listed. Where the drawing is incomplete (see "Open issues"), ask instead of guessing.');
+  L.push('');
+  L.push('Flow: ' + (S.name.trim() || 'Untitled flow'));
+  L.push('Size: ' + order.length + ' step' + (order.length === 1 ? '' : 's') + ', ' + S.edges.length + ' link' + (S.edges.length === 1 ? '' : 's') + ', ' +
+    decisions.length + ' decision' + (decisions.length === 1 ? '' : 's') +
+    (notes.length ? ', ' + notes.length + ' note' + (notes.length === 1 ? '' : 's') : '') +
+    (S.groups.length ? ', ' + S.groups.length + ' group' + (S.groups.length === 1 ? '' : 's') : '') + '.');
+  var starts = tr.entries.map(function(n){ return ref(n.key); });
+  var ends = order.filter(function(n){ return info[n.key].out.every(function(e){ return !num[e.to]; }); }).map(function(n){ return ref(n.key); });
+  if (starts.length) L.push('Starts at: ' + starts.join('; ') + '.');
+  if (ends.length) L.push('Ends at: ' + ends.join('; ') + '.');
+  L.push('Diagram direction: ' + DIRS[S.dir] + '.');
+  L.push('');
+  L.push('Steps (numbered in the order they are reached):');
+  order.forEach(function(n){
+    var i = num[n.key];
+    L.push(i + '. [' + TYPES[n.type].word + '] ' + nm(n));
+    if (n.group) { var g = grp(n.group); if (g) L.push('   In group: ' + (g.title.trim() || 'Group')); }
+    var outs = info[n.key].out.filter(function(e){ return num[e.to]; });
+    var ins2 = info[n.key].inn.filter(function(e){ return e.style === 'both' && num[e.from]; });
+    function tail(e, tgt){
+      var t = [];
+      if (num[tgt] <= i) t.push('loops back');
+      if (e.style === 'dashed') t.push('dashed: optional/asynchronous');
+      if (e.style === 'thick') t.push('main path');
+      if (e.style === 'both') t.push('two-way');
+      return t.length ? '  [' + t.join(', ') + ']' : '';
+    }
+    if (n.type === 'decision') {
+      outs.forEach(function(e){ L.push('   - if "' + (e.label.trim() || '(unlabelled answer)') + '" -> ' + ref(e.to) + tail(e, e.to)); });
+      if (outs.length < 2) L.push('   - (other answers are not drawn yet)');
+    } else if (outs.length === 1 && !outs[0].label.trim()) {
+      L.push('   -> next: ' + ref(outs[0].to) + tail(outs[0], outs[0].to));
+    } else {
+      outs.forEach(function(e){ L.push('   -> ' + (e.label.trim() ? '"' + e.label.trim() + '": ' : 'next: ') + ref(e.to) + tail(e, e.to)); });
+    }
+    ins2.forEach(function(e){ L.push('   <-> also connected both ways with ' + ref(e.from) + (e.label.trim() ? ' ("' + e.label.trim() + '")' : '')); });
+    if (!outs.length && !ins2.length) L.push(n.type === 'terminal' ? '   (end of flow)' : '   (no next step drawn; the flow stops here)');
+  });
+  if (S.groups.length) {
+    L.push(''); L.push('Groups (steps that belong together, e.g. one module or phase):');
+    S.groups.forEach(function(g){
+      var m = order.filter(function(n){ return n.group === g.key; }).map(function(n){ return num[n.key]; });
+      var nn = notes.filter(function(n){ return n.group === g.key; }).length;
+      L.push('- ' + (g.title.trim() || 'Group') + ': ' + (m.length ? 'steps ' + m.join(', ') : 'no steps') + (nn ? ' (+' + nn + ' note' + (nn > 1 ? 's' : '') + ')' : ''));
+    });
+  }
+  if (notes.length) {
+    L.push(''); L.push('Notes (constraints or explanations attached to steps):');
+    notes.forEach(function(n){
+      var att = [];
+      S.edges.forEach(function(e){ if (e.from === n.key && num[e.to]) att.push(ref(e.to)); if (e.to === n.key && num[e.from]) att.push(ref(e.from)); });
+      L.push('- "' + nm(n) + '"' + (att.length ? ' — applies to ' + att.join(', ') : ' — not attached to a step'));
+    });
+  }
+  if (used.dashed || used.thick || used.both) {
+    L.push(''); L.push('Link legend:');
+    if (used.thick) L.push('- "main path": thick link, the expected (happy) path.');
+    if (used.dashed) L.push('- "dashed": optional, asynchronous or informal transition.');
+    if (used.both) L.push('- "two-way": the steps can move in both directions.');
+  }
+  var ch = checks(info);
+  if (ch.length) {
+    L.push(''); L.push('Open issues in the drawing:');
+    ch.forEach(function(c){ L.push('- ' + c.t.replace(/[“”]/g, '"')); });
+  }
+  L.push('');
+  L.push('Task: ' + (S.ask.trim() || 'Implement this flow as code (a function or a small state machine) with one clearly named branch per decision answer, then list the test cases needed to cover every path, including each loop.'));
+  L.push('');
+  L.push('The same flow as Mermaid (for reference):');
+  L.push(mermaid.replace(/\n$/, ''));
+  return L.join('\n') + '\n';
+}
+
+/* ---------------- JSON ---------------- */
+function buildJSON(ids){
+  return JSON.stringify({
+    format:'flow-mermaid/1',
+    name:S.name.trim(),
+    direction:S.dir,
+    nodes:S.nodes.map(function(n){ return {id:ids[n.key], type:n.type, text:n.text, x:Math.round(n.x), y:Math.round(n.y), group:n.group ? ids[n.group] : null}; }),
+    edges:S.edges.map(function(e){ return {from:ids[e.from], to:ids[e.to], label:e.label, style:e.style}; }),
+    groups:S.groups.map(function(g){ return {id:ids[g.key], title:g.title, nodes:S.nodes.filter(function(n){ return n.group === g.key; }).map(function(n){ return ids[n.key]; })}; })
+  }, null, 2) + '\n';
+}
+
+function b64utf8(str){
+  var bytes = new TextEncoder().encode(str), bin = '';
+  for (var i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function liveURL(code){ return 'https://mermaid.live/edit#base64:' + b64utf8(JSON.stringify({code:code, mermaid:JSON.stringify({theme:'default'}, null, 2), autoSync:true, updateDiagram:true})); }
+
+var outs = {};
+function renderOutput(){
+  var ids = idMap(), mm = buildMermaid(ids);
+  outs = {mermaid:mm, prompt:buildPrompt(ids, mm), json:buildJSON(ids)};
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(t){
+    var f = t.getAttribute('data-fmt');
+    t.setAttribute('aria-selected', f === UI.tab ? 'true' : 'false');
+    t.tabIndex = f === UI.tab ? 0 : -1;
+    t.querySelector('small').textContent = outs[f].length;
+  });
+  $('opt-mermaid').hidden = UI.tab === 'prompt';
+  $('opt-prompt').hidden = UI.tab !== 'prompt';
+  $('out').textContent = outs[UI.tab];
+  $('count').textContent = outs[UI.tab].length + ' chars';
+  var live = $('live');
+  if (S.nodes.length) { live.href = liveURL(mm); live.removeAttribute('aria-disabled'); }
+  else { live.href = 'https://mermaid.live/edit'; live.setAttribute('aria-disabled', 'true'); }
+}
+
+/* ---------------- side panel ---------------- */
+function renderChecks(){
+  var list = checks(analyse()), h = '';
+  if (!S.nodes.length) h = '<li class="ok"><span class="mark"></span><span class="t muted">Nothing to check yet.</span></li>';
+  else if (!list.length) h = '<li class="ok"><span class="mark"></span><span class="t">No problems: every step is linked and every decision has labelled branches.</span></li>';
+  else list.forEach(function(c, i){
+    h += '<li><span class="mark"></span><span class="t">' + esc(c.t) + '</span>' +
+      ((c.n && c.n.length) || (c.e && c.e.length) ? '<button class="btn" data-check="' + i + '">Show</button>' : '') + '</li>';
+  });
+  var ul = $('checks'); ul.innerHTML = h; ul._list = list;
+}
+function opt(v, label, cur){ return '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + esc(label) + '</option>'; }
+function renderInspector(){
+  var el = $('insp'), h = '', head = 'Selection';
+  var ids = idMap();
+  if (sel.nodes.size === 1 && !sel.edges.size && !sel.groups.size) {
+    var n = node(sel.nodes.values().next().value); head = 'Step';
+    var info = analyse()[n.key];
+    h += '<div class="row"><label for="i-text">Text</label><textarea id="i-text" rows="2">' + esc(n.text) + '</textarea></div>';
+    h += '<div class="row"><label for="i-type">Type</label><select id="i-type">' + TYPE_KEYS.map(function(k){ return opt(k, TYPES[k].label, n.type); }).join('') + '</select></div>';
+    h += '<div class="row"><label for="i-group">Group</label><select id="i-group">' + opt('', '(none)', n.group || '') +
+      S.groups.map(function(g){ return opt(g.key, g.title || 'Group', n.group || ''); }).join('') + '</select></div>';
+    h += '<div class="row"><label>Mermaid id</label><span class="kv">' + esc(ids[n.key]) + '</span></div>';
+    h += '<ul class="links">' + (info.out.length || info.inn.length ? '' : '<li>No links yet. Drag from a dot on its edge to another step.</li>');
+    info.out.forEach(function(e){ h += '<li>→ ' + esc(nodeName(e.to)) + (e.label ? ' <span class="kv">' + esc(e.label) + '</span>' : '') + '</li>'; });
+    info.inn.forEach(function(e){ h += '<li>← ' + esc(nodeName(e.from)) + (e.label ? ' <span class="kv">' + esc(e.label) + '</span>' : '') + '</li>'; });
+    h += '</ul>';
+  } else if (sel.edges.size === 1 && !sel.nodes.size && !sel.groups.size) {
+    var e = edge(sel.edges.values().next().value); head = 'Link';
+    h += '<div class="row"><label>From</label><span>' + esc(nodeName(e.from)) + ' → ' + esc(nodeName(e.to)) + '</span></div>';
+    h += '<div class="row"><label for="i-label">Label</label><input type="text" id="i-label" value="' + esc(e.label) + '" placeholder="e.g. yes / no"></div>';
+    h += '<div class="row"><label for="i-style">Style</label><select id="i-style">' + Object.keys(STYLES).map(function(k){ return opt(k, STYLES[k].label + '  ' + STYLES[k].mm, e.style); }).join('') + '</select></div>';
+    h += '<div class="row"><label></label><button class="btn" id="i-rev">Reverse direction</button></div>';
+  } else if (sel.groups.size === 1 && !sel.nodes.size && !sel.edges.size) {
+    var g = grp(sel.groups.values().next().value); head = 'Group (subgraph)';
+    var cnt = S.nodes.filter(function(x){ return x.group === g.key; }).length;
+    h += '<div class="row"><label for="i-title">Title</label><input type="text" id="i-title" value="' + esc(g.title) + '"></div>';
+    h += '<div class="row"><label>Contains</label><span>' + cnt + ' step' + (cnt === 1 ? '' : 's') + ' · id <span class="kv">' + esc(ids[g.key]) + '</span></span></div>';
+    h += '<div class="row"><label></label><button class="btn" id="i-ungroup">Ungroup</button></div>';
+  } else if (selCount() > 1) {
+    head = 'Selection';
+    h += '<p style="margin:2px 0 6px">' + sel.nodes.size + ' step' + (sel.nodes.size === 1 ? '' : 's') + ', ' + sel.edges.size + ' link' + (sel.edges.size === 1 ? '' : 's') +
+      (sel.groups.size ? ', ' + sel.groups.size + ' group' + (sel.groups.size === 1 ? '' : 's') : '') + ' selected.</p>';
+    if (sel.nodes.size) h += '<div class="row"><label for="i-mtype">Set type</label><select id="i-mtype"><option value="">—</option>' + TYPE_KEYS.map(function(k){ return opt(k, TYPES[k].label, ''); }).join('') + '</select></div>';
+    if (sel.edges.size) h += '<div class="row"><label for="i-mstyle">Link style</label><select id="i-mstyle"><option value="">—</option>' + Object.keys(STYLES).map(function(k){ return opt(k, STYLES[k].label, ''); }).join('') + '</select></div>';
+    h += '<p class="muted" style="margin:6px 0 0">Group puts the selected steps into one Mermaid subgraph.</p>';
+  } else {
+    h += '<p class="muted" style="margin:2px 0">Nothing selected. Click a step, link or group to edit it here. ' +
+      S.nodes.length + ' step' + (S.nodes.length === 1 ? '' : 's') + ', ' + S.edges.length + ' link' + (S.edges.length === 1 ? '' : 's') + ', ' + S.groups.length + ' group' + (S.groups.length === 1 ? '' : 's') + '.</p>';
+  }
+  $('insp-h').textContent = head;
+  el.innerHTML = h;
+  bindInspector();
+}
+function nodeName(k){ var n = node(k); return n ? (n.text.trim() || TYPES[n.type].label).replace(/\n/g, ' ') : '?'; }
+function bindInspector(){
+  var t;
+  if ((t = $('i-text'))) {
+    t.addEventListener('input', function(){ var n = node(sel.nodes.values().next().value); if (!n) return; n.text = t.value; liveUpdate(); });
+    t.addEventListener('change', function(){ commit(); renderChecks(); });
+  }
+  if ((t = $('i-type'))) t.addEventListener('change', function(){ var n = node(sel.nodes.values().next().value); n.type = this.value; commit(); renderAll(); });
+  if ((t = $('i-group'))) t.addEventListener('change', function(){ var n = node(sel.nodes.values().next().value); n.group = this.value || null; commit(); renderAll(); });
+  if ((t = $('i-label'))) {
+    t.addEventListener('input', function(){ var e = edge(sel.edges.values().next().value); e.label = this.value; liveUpdate(); });
+    t.addEventListener('change', function(){ commit(); renderChecks(); });
+  }
+  if ((t = $('i-style'))) t.addEventListener('change', function(){ var e = edge(sel.edges.values().next().value); e.style = this.value; commit(); renderAll(); });
+  if ((t = $('i-rev'))) t.addEventListener('click', function(){ var e = edge(sel.edges.values().next().value); var f = e.from; e.from = e.to; e.to = f; commit(); renderAll(); });
+  if ((t = $('i-title'))) {
+    t.addEventListener('input', function(){ var g = grp(sel.groups.values().next().value); g.title = this.value; liveUpdate(); });
+    t.addEventListener('change', function(){ commit(); });
+  }
+  if ((t = $('i-ungroup'))) t.addEventListener('click', function(){ var k = sel.groups.values().next().value; S.nodes.forEach(function(n){ if (n.group === k) n.group = null; }); sel.groups.clear(); commit(); renderAll(); });
+  if ((t = $('i-mtype'))) t.addEventListener('change', function(){ var v = this.value; if (!v) return; sel.nodes.forEach(function(k){ node(k).type = v; }); commit(); renderAll(); });
+  if ((t = $('i-mstyle'))) t.addEventListener('change', function(){ var v = this.value; if (!v) return; sel.edges.forEach(function(k){ edge(k).style = v; }); commit(); renderAll(); });
+}
+function liveUpdate(){ renderCanvas(); renderOutput(); save(); }
+
+function renderButtons(){
+  $('undo').disabled = hi <= 0;
+  $('redo').disabled = hi >= hist.length - 1;
+  $('del').disabled = selCount() === 0;
+  $('grp').disabled = sel.nodes.size === 0;
+  $('clear').disabled = S.nodes.length === 0;
+  Array.prototype.forEach.call($('types').children, function(b){ b.setAttribute('aria-pressed', b.getAttribute('data-type') === UI.newType ? 'true' : 'false'); });
+  $('linkstyle').value = UI.linkStyle;
+  if (document.activeElement !== $('name')) $('name').value = S.name;
+  if (document.activeElement !== $('ask')) $('ask').value = S.ask;
+  $('dir').value = S.dir;
+}
+function renderAll(){ renderCanvas(); renderInspector(); renderChecks(); renderOutput(); renderButtons(); }
+
+/* ---------------- mutations ---------------- */
+function addNode(type, x, y, text){
+  var n = {key:'n' + (S.seq++), type:type, text:text || '', x:clamp(Math.round(x), 60, WORLD_W - 60), y:clamp(Math.round(y), 30, WORLD_H - 30), group:null};
+  S.nodes.push(n); return n;
+}
+function addEdge(from, to, style){
+  var e = {key:'e' + (S.seq++), from:from, to:to, label:'', style:style || UI.linkStyle};
+  var a = node(from); if (a && a.type === 'note' && !style) e.style = 'dashed';
+  S.edges.push(e); return e;
+}
+function deleteSel(){
+  if (!selCount()) return;
+  var dn = sel.nodes;
+  S.nodes = S.nodes.filter(function(n){ return !dn.has(n.key); });
+  S.edges = S.edges.filter(function(e){ return !sel.edges.has(e.key) && !dn.has(e.from) && !dn.has(e.to); });
+  sel.groups.forEach(function(k){ S.nodes.forEach(function(n){ if (n.group === k) n.group = null; }); });
+  clearSel(); commit(); renderAll(); flash('Deleted');
+}
+function groupSel(){
+  if (!sel.nodes.size) return;
+  var g = {key:'g' + (S.seq++), title:'Group ' + (S.groups.length + 1)};
+  S.groups.push(g);
+  sel.nodes.forEach(function(k){ node(k).group = g.key; });
+  clearSel(); sel.groups.add(g.key); commit(); renderAll();
+  var t = $('i-title'); if (t) { t.focus(); t.select(); }
+}
+function visibleCenter(){ return {x:wrap.scrollLeft + wrap.clientWidth / 2, y:wrap.scrollTop + Math.min(wrap.clientHeight / 2, 200)}; }
+function freeSpot(p){
+  var x = p.x, y = p.y, tries = 0;
+  while (tries++ < 30 && S.nodes.some(function(n){ return Math.abs(n.x - x) < 110 && Math.abs(n.y - y) < 60; })) y += 70;
+  return {x:x, y:y};
+}
+
+/* ---------------- inline editor ---------------- */
+var ed = $('ed'), editing = null;
+function startEdit(kind, key){
+  var x, y, w, val;
+  if (kind === 'node') { var n = node(key); if (!n) return; var sz = size(n); w = Math.max(150, sz.w); x = n.x; y = n.y; val = n.text; }
+  else if (kind === 'edge') {
+    var e = edge(key); if (!e) return; var a = node(e.from), b = node(e.to);
+    var p = boundary(a, b.x, b.y), q = boundary(b, a.x, a.y);
+    x = (p.x + q.x) / 2; y = (p.y + q.y) / 2; w = 140; val = e.label;
+  } else { var g = grp(key), bx = groupBox(g); if (!bx) return; x = bx.x + 90; y = bx.y + 14; w = 170; val = g.title; }
+  editing = {kind:kind, key:key, orig:val};
+  var rows = Math.min(5, val.split('\n').length);
+  ed.style.width = w + 'px'; ed.style.height = (rows * 17 + 12) + 'px';
+  ed.style.left = (x - w / 2) + 'px'; ed.style.top = (y - (rows * 17 + 12) / 2) + 'px';
+  ed.value = val; ed.style.display = 'block'; ed.focus({preventScroll:true}); ed.select();
+}
+function finishEdit(keep){
+  if (!editing) return;
+  var ctx = editing; editing = null; ed.style.display = 'none';
+  var v = ed.value.replace(/\r/g, '');
+  if (ctx.kind === 'node') { var n = node(ctx.key); if (n) n.text = keep ? v.replace(/^\s+|\s+$/g, '') : ctx.orig; }
+  else if (ctx.kind === 'edge') { var e = edge(ctx.key); if (e) e.label = keep ? v.replace(/\n/g, ' ').trim() : ctx.orig; }
+  else { var g = grp(ctx.key); if (g) g.title = keep ? (v.replace(/\n/g, ' ').trim() || 'Group') : ctx.orig; }
+  commit(); renderAll();
+  wrap.focus({preventScroll:true});
+}
+ed.addEventListener('keydown', function(e){
+  if (e.key === 'Enter' && !(e.shiftKey && editing && editing.kind === 'node')) { e.preventDefault(); finishEdit(true); }
+  else if (e.key === 'Escape') { e.preventDefault(); finishEdit(false); }
+  e.stopPropagation();
+});
+ed.addEventListener('input', function(){
+  var rows = Math.min(5, ed.value.split('\n').length);
+  ed.style.height = (rows * 17 + 12) + 'px';
+});
+ed.addEventListener('blur', function(){ if (editing) finishEdit(true); });
+
+/* ---------------- pointer interaction ---------------- */
+function pt(e){ var r = svg.getBoundingClientRect(); return {x:e.clientX - r.left, y:e.clientY - r.top}; }
+function hitAt(cx, cy){
+  var el = document.elementFromPoint(cx, cy);
+  if (!el || !svg.contains(el)) return {};
+  return {handle:el.closest('.handle'), nid:attr(el.closest('[data-nid]'), 'data-nid'), eid:attr(el.closest('[data-eid]'), 'data-eid'), gid:attr(el.closest('[data-gid]'), 'data-gid'), empty:el === svg || el.id === 'bg'};
+}
+function attr(el, a){ return el ? el.getAttribute(a) : null; }
+function toggle(set, k){ if (set.has(k)) set.delete(k); else set.add(k); }
+function startMove(p, keys){
+  var orig = {};
+  keys.forEach(function(k){ var n = node(k); if (n) orig[k] = {x:n.x, y:n.y}; });
+  drag = {mode:'move', start:p, orig:orig, moved:false};
+}
+
+svg.addEventListener('pointerdown', function(e){
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (editing) finishEdit(true);
+  pointerDown = true;
+  var p = pt(e), h = hitAt(e.clientX, e.clientY);
+  try { svg.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  e.preventDefault();
+  if (h.handle && h.nid) { drag = {mode:'link', from:h.nid, x:p.x, y:p.y}; renderOverlay(); return; }
+  if (!h.nid) wrap.focus({preventScroll:true});
+  var changed = true;
+  if (h.nid) {
+    if (e.shiftKey) toggle(sel.nodes, h.nid);
+    else if (!sel.nodes.has(h.nid)) { clearSel(); sel.nodes.add(h.nid); }
+    else changed = false;
+    startMove(p, Array.from(sel.nodes));
+    var ne = svg.querySelector('[data-nid="' + h.nid + '"]'); if (ne) ne.focus({preventScroll:true});
+  } else if (h.eid) {
+    if (e.shiftKey) toggle(sel.edges, h.eid); else { clearSel(); sel.edges.add(h.eid); }
+    drag = null;
+  } else if (h.gid) {
+    if (e.shiftKey) toggle(sel.groups, h.gid); else if (!sel.groups.has(h.gid)) { clearSel(); sel.groups.add(h.gid); } else changed = false;
+    startMove(p, S.nodes.filter(function(n){ return n.group === h.gid; }).map(function(n){ return n.key; }));
+  } else if (e.pointerType === 'touch') {
+    drag = {mode:'pan', cx:e.clientX, cy:e.clientY, sl:wrap.scrollLeft, st:wrap.scrollTop};
+    changed = false;
+  } else {
+    var base = e.shiftKey ? new Set(sel.nodes) : new Set();
+    if (!e.shiftKey) { changed = selCount() > 0; clearSel(); } else changed = false;
+    drag = {mode:'marquee', a:p, b:p, base:base};
+  }
+  if (changed) { renderCanvas(); renderInspector(); renderButtons(); }
+});
+svg.addEventListener('pointermove', function(e){
+  if (!drag) return;
+  var p = pt(e);
+  if (drag.mode === 'link') { drag.x = p.x; drag.y = p.y; renderOverlay(); }
+  else if (drag.mode === 'move') {
+    var dx = p.x - drag.start.x, dy = p.y - drag.start.y;
+    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 3) return;
+    drag.moved = true;
+    Object.keys(drag.orig).forEach(function(k){ var n = node(k); n.x = clamp(Math.round(drag.orig[k].x + dx), 40, WORLD_W - 40); n.y = clamp(Math.round(drag.orig[k].y + dy), 24, WORLD_H - 24); });
+    renderCanvas();
+  } else if (drag.mode === 'marquee') {
+    drag.b = p; var r = rectOf(drag.a, drag.b);
+    sel.nodes = new Set(drag.base);
+    S.nodes.forEach(function(n){ if (n.x >= r.x && n.x <= r.x + r.w && n.y >= r.y && n.y <= r.y + r.h) sel.nodes.add(n.key); });
+    renderCanvas();
+  } else if (drag.mode === 'pan') {
+    wrap.scrollLeft = drag.sl - (e.clientX - drag.cx); wrap.scrollTop = drag.st - (e.clientY - drag.cy);
+  }
+});
+function endPointer(e, cancelled){
+  pointerDown = false;
+  if (!drag) return;
+  var d = drag; drag = null;
+  if (d.mode === 'link' && !cancelled) {
+    var h = hitAt(e.clientX, e.clientY), a = node(d.from);
+    if (h.nid && h.nid !== d.from) {
+      var ne = addEdge(d.from, h.nid); clearSel(); sel.edges.add(ne.key); commit(); renderAll();
+      if (a && a.type === 'decision') startEdit('edge', ne.key);
+    } else if (!h.nid && a && Math.hypot(d.x - a.x, d.y - a.y) > Math.max(size(a).w, size(a).h) / 2 + 30) {
+      var t = UI.newType === 'note' ? 'process' : UI.newType;
+      var nn = addNode(t, d.x, d.y, ''); if (a.group) nn.group = a.group;
+      var ne2 = addEdge(d.from, nn.key); clearSel(); sel.nodes.add(nn.key); commit(); renderAll();
+      if (a.type === 'decision') { startEdit('edge', ne2.key); } else startEdit('node', nn.key);
+    } else renderOverlay();
+  } else if (d.mode === 'move') { if (d.moved) commit(); renderAll(); }
+  else if (d.mode === 'marquee') { renderAll(); }
+  else renderOverlay();
+}
+svg.addEventListener('pointerup', function(e){ endPointer(e, false); });
+svg.addEventListener('pointercancel', function(e){ endPointer(e, true); });
+svg.addEventListener('dblclick', function(e){
+  var h = hitAt(e.clientX, e.clientY);
+  if (h.nid && !h.handle) { clearSel(); sel.nodes.add(h.nid); renderAll(); startEdit('node', h.nid); }
+  else if (h.eid) { clearSel(); sel.edges.add(h.eid); renderAll(); startEdit('edge', h.eid); }
+  else if (h.gid) { clearSel(); sel.groups.add(h.gid); renderAll(); startEdit('group', h.gid); }
+  else if (h.empty) {
+    var p = pt(e), n = addNode(UI.newType, p.x, p.y, '');
+    clearSel(); sel.nodes.add(n.key); commit(); renderAll(); startEdit('node', n.key);
+  }
+});
+svg.addEventListener('focusin', function(e){
+  if (pointerDown) return;
+  var k = e.target.getAttribute && e.target.getAttribute('data-nid');
+  if (k && !sel.nodes.has(k)) { clearSel(); sel.nodes.add(k); renderInspector(); renderButtons();
+    Array.prototype.forEach.call(svg.querySelectorAll('.node'), function(g){ g.classList.toggle('sel', g.getAttribute('data-nid') === k); });
+    Array.prototype.forEach.call(svg.querySelectorAll('.edge.sel,.grp.sel'), function(g){ g.classList.remove('sel'); });
+  }
+});
+
+/* ---------------- keyboard ---------------- */
+document.addEventListener('keydown', function(e){
+  var tag = (e.target.tagName || '').toLowerCase();
+  var typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
+  var mod = e.ctrlKey || e.metaKey, k = e.key;
+  if (mod && !typing && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+  if (mod && !typing && (k === 'y' || k === 'Y')) { e.preventDefault(); redo(); return; }
+  if (typing) return;
+  if (tag === 'button' && (k === 'Enter' || k === ' ')) return;
+  if (k === 'Delete' || k === 'Backspace') { if (selCount()) { e.preventDefault(); deleteSel(); } }
+  else if (k === 'Escape') { if (selCount()) { clearSel(); renderAll(); } }
+  else if (mod && (k === 'a' || k === 'A')) { e.preventDefault(); clearSel(); S.nodes.forEach(function(n){ sel.nodes.add(n.key); }); renderAll(); }
+  else if ((k === 'Enter' || k === 'F2') && selCount() === 1) {
+    e.preventDefault();
+    if (sel.nodes.size) startEdit('node', sel.nodes.values().next().value);
+    else if (sel.edges.size) startEdit('edge', sel.edges.values().next().value);
+    else startEdit('group', sel.groups.values().next().value);
+  } else if (/^Arrow/.test(k) && (sel.nodes.size || sel.groups.size)) {
+    e.preventDefault();
+    var st = e.shiftKey ? 1 : 10, dx = k === 'ArrowLeft' ? -st : k === 'ArrowRight' ? st : 0, dy = k === 'ArrowUp' ? -st : k === 'ArrowDown' ? st : 0;
+    S.nodes.forEach(function(n){ if (sel.nodes.has(n.key) || sel.groups.has(n.group)) { n.x = clamp(n.x + dx, 40, WORLD_W - 40); n.y = clamp(n.y + dy, 24, WORLD_H - 24); } });
+    commit(); renderCanvas(); renderOutput(); renderButtons();
+  }
+});
+
+/* ---------------- toolbar & output controls ---------------- */
+function typeIcon(t){
+  var c = 'class="shape t-' + t + '" style="stroke-width:1.4"';
+  switch (t) {
+    case 'decision': return '<polygon ' + c + ' points="9,1 17,6 9,11 1,6"/>';
+    case 'terminal': return '<rect ' + c + ' x="1" y="2" width="16" height="8" rx="4"/>';
+    case 'data': return '<polygon ' + c + ' points="4,2 17,2 14,10 1,10"/>';
+    case 'subprocess': return '<rect ' + c + ' x="1" y="2" width="16" height="8"/><path class="inner t-subprocess" d="M4,2 V10 M14,2 V10"/>';
+    case 'note': return '<path ' + c + ' d="M2,1 H13 L16,4 V11 H2 Z"/>';
+    default: return '<rect ' + c + ' x="1" y="2" width="16" height="8" rx="1"/>';
+  }
+}
+$('types').innerHTML = TYPE_KEYS.map(function(t){
+  return '<button class="chip" data-type="' + t + '" aria-pressed="false" title="New steps will be: ' + TYPES[t].label + '"><svg viewBox="0 0 18 12" aria-hidden="true">' + typeIcon(t) + '</svg>' + TYPES[t].label + '</button>';
+}).join('');
+$('types').addEventListener('click', function(e){
+  var b = e.target.closest('.chip'); if (!b) return;
+  UI.newType = b.getAttribute('data-type');
+  if (sel.nodes.size) { sel.nodes.forEach(function(k){ node(k).type = UI.newType; }); commit(); renderAll(); }
+  else { save(); renderButtons(); }
+});
+$('linkstyle').innerHTML = Object.keys(STYLES).map(function(k){ return opt(k, 'Link: ' + STYLES[k].label, UI.linkStyle); }).join('');
+$('linkstyle').addEventListener('change', function(){
+  UI.linkStyle = this.value;
+  if (sel.edges.size) { sel.edges.forEach(function(k){ edge(k).style = UI.linkStyle; }); commit(); renderAll(); } else save();
+});
+$('add').addEventListener('click', function(){
+  var p = freeSpot(visibleCenter()), n = addNode(UI.newType, p.x, p.y, '');
+  clearSel(); sel.nodes.add(n.key); commit(); renderAll(); startEdit('node', n.key);
+});
+$('grp').addEventListener('click', groupSel);
+$('del').addEventListener('click', deleteSel);
+$('undo').addEventListener('click', undo);
+$('redo').addEventListener('click', redo);
+$('clear').addEventListener('click', function(){
+  if (!S.nodes.length) return;
+  var keepName = '';
+  S.nodes = []; S.edges = []; S.groups = []; S.name = keepName; clearSel(); commit(); renderAll();
+  flash('Cleared — Undo brings it back');
+});
+function loadExample(){
+  var s = blank();
+  s.name = 'Sign-in';
+  S = s; clearSel();
+  var st = addNode('terminal', 200, 60, 'Start');
+  var en = addNode('data', 200, 150, 'Enter email & password');
+  var va = addNode('decision', 200, 265, 'Credentials valid?');
+  var er = addNode('process', 470, 265, 'Show "Invalid password" [retry]');
+  var no = addNode('note', 735, 265, 'Lock account after 5 failures');
+  var mf = addNode('decision', 200, 410, 'MFA enabled?');
+  var cd = addNode('process', 470, 410, 'Send code (SMS/email)');
+  var vc = addNode('subprocess', 470, 500, 'Verify code');
+  var da = addNode('process', 200, 600, 'Open dashboard');
+  var dn = addNode('terminal', 200, 690, 'Done');
+  var g = {key:'g' + (S.seq++), title:'Two-factor'}; S.groups.push(g); cd.group = g.key; vc.group = g.key;
+  addEdge(st.key, en.key, 'solid');
+  addEdge(en.key, va.key, 'solid');
+  addEdge(va.key, mf.key, 'thick').label = 'yes';
+  addEdge(va.key, er.key, 'solid').label = 'no';
+  addEdge(er.key, en.key, 'dashed').label = 'retry';
+  addEdge(no.key, er.key, 'dashed');
+  addEdge(mf.key, cd.key, 'solid').label = 'yes';
+  addEdge(mf.key, da.key, 'thick').label = 'no';
+  addEdge(cd.key, vc.key, 'solid');
+  addEdge(vc.key, da.key, 'solid');
+  addEdge(da.key, dn.key, 'thick');
+  commit(); renderAll(); wrap.scrollTo(0, 0); flash('Example loaded');
+}
+$('example').addEventListener('click', loadExample);
+$('example2').addEventListener('click', loadExample);
+$('name').addEventListener('input', function(){ S.name = this.value; renderOutput(); save(); });
+$('name').addEventListener('change', function(){ commit(); });
+$('ask').addEventListener('input', function(){ S.ask = this.value; renderOutput(); save(); });
+$('ask').addEventListener('change', function(){ commit(); });
+$('dir').addEventListener('change', function(){ S.dir = this.value; commit(); renderOutput(); renderButtons(); });
+$('tabs').addEventListener('click', function(e){
+  var t = e.target.closest('.tab'); if (!t) return;
+  UI.tab = t.getAttribute('data-fmt'); save(); renderOutput(); $('copymsg').textContent = '';
+});
+$('tabs').addEventListener('keydown', function(e){
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  var f = ['mermaid', 'prompt', 'json'], i = f.indexOf(UI.tab);
+  UI.tab = f[(i + (e.key === 'ArrowRight' ? 1 : 2)) % 3]; save(); renderOutput();
+  document.querySelector('.tab[data-fmt="' + UI.tab + '"]').focus();
+});
+$('checks').addEventListener('click', function(e){
+  var b = e.target.closest('[data-check]'); if (!b) return;
+  var c = this._list[Number(b.getAttribute('data-check'))]; if (!c) return;
+  clearSel(); (c.n || []).forEach(function(k){ sel.nodes.add(k); }); (c.e || []).forEach(function(k){ sel.edges.add(k); });
+  renderAll();
+  var k = (c.n && c.n[0]) ? node(c.n[0]) : (c.e && c.e[0]) ? node(edge(c.e[0]).from) : null;
+  if (k) wrap.scrollTo({left:Math.max(0, k.x - wrap.clientWidth / 2), top:Math.max(0, k.y - wrap.clientHeight / 2)});
+});
+var copyTimer = 0;
+$('copy').addEventListener('click', function(){
+  var text = outs[UI.tab] || '', msg = $('copymsg');
+  function done(ok){ msg.style.color = ok ? '' : 'var(--danger)'; msg.textContent = ok ? 'Copied' : 'Copy failed — select the text and press Ctrl+C'; clearTimeout(copyTimer); copyTimer = setTimeout(function(){ msg.textContent = ''; }, 1800); }
+  function fallback(){
+    var ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed'; ta.style.left = '-9999px'; document.body.appendChild(ta); ta.select();
+    var ok = false; try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+    document.body.removeChild(ta); done(ok);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function(){ done(true); }, fallback);
+  else fallback();
+});
+$('live').addEventListener('click', function(e){
+  if (!S.nodes.length) { e.preventDefault(); return; }
+  this.href = liveURL(outs.mermaid);
+});
+
+/* ---------------- boot ---------------- */
+(function boot(){
+  var raw = lsGet('state'), u = lsGet('ui');
+  try { if (raw) S = sanitize(JSON.parse(raw)); } catch (e) { S = blank(); }
+  try {
+    var o = u ? JSON.parse(u) : null;
+    if (o) { if (TYPES[o.newType]) UI.newType = o.newType; if (STYLES[o.linkStyle]) UI.linkStyle = o.linkStyle; if (['mermaid', 'prompt', 'json'].indexOf(o.tab) >= 0) UI.tab = o.tab; }
+  } catch (e) { /* ignore bad ui state */ }
+  hist = [snap()]; hi = 0;
+  renderAll();
+})();
+
+})();
+</script>
+<!--
+Flow to Mermaid — usage
+- Double-click empty canvas to add a step of the type chosen under "New step" (or press "Add step"). Type, Enter to finish, Shift+Enter for a new line, Esc to cancel.
+- Hover a step and drag one of its edge dots onto another step to link them. Dropping on empty space creates a new linked step.
+  Links from a decision immediately ask for a label (yes / no). Double-click a link or group title to rename it.
+- Click selects, Shift+click or drag on empty space multi-selects. Delete removes, arrows nudge (Shift = 1px), Ctrl+Z / Ctrl+Y undo/redo (100 steps).
+- "Group" wraps the selected steps in a Mermaid subgraph; rename it in the side panel. Choosing a type chip or link style with a selection changes the selection.
+- Output tabs: Mermaid (direction TD/LR/BT/RL), Prompt (step-by-step description for an LLM), JSON. "Open in mermaid.live" opens the code in a new tab.
+- Everything is stored in localStorage under redline.tool.flow-mermaid.*; nothing leaves the page unless you click the mermaid.live link.
+-->
+</body>
+</html>

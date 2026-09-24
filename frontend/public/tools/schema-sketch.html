@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Schema Sketch — tables and relations to SQL, Prisma and a prompt</title>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#ffffff;
+  --sunken:#e4e9ee;
+  --ink:#16202a;
+  --ink-soft:#5b6b7a;
+  --line:#c8d2db;
+  --line-soft:#dde4ea;
+  --accent:#1f4ed8;
+  --accent-ink:#ffffff;
+  --danger:#c0392b;
+  --warn:#b7791f;
+  --ok:#2f855a;
+  --fill-alpha:0.16;
+  --tool-pk:#b7791f;
+  --tool-fk:#2b6cb0;
+  --tool-nn:#8a5cc2;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f151b;
+    --surface:#161f27;
+    --sunken:#111920;
+    --ink:#e4ebf1;
+    --ink-soft:#8ea0b0;
+    --line:#2b3945;
+    --line-soft:#212c36;
+    --accent:#6d8dff;
+    --accent-ink:#0f151b;
+    --danger:#e57373;
+    --warn:#e0a84a;
+    --ok:#5fbf8a;
+    --fill-alpha:0.30;
+    --tool-pk:#e0b050;
+    --tool-fk:#6fa8ef;
+    --tool-nn:#b99af0;
+  }
+}
+:root[data-theme="light"]{color-scheme:light}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#0f151b;
+  --surface:#161f27;
+  --sunken:#111920;
+  --ink:#e4ebf1;
+  --ink-soft:#8ea0b0;
+  --line:#2b3945;
+  --line-soft:#212c36;
+  --accent:#6d8dff;
+  --accent-ink:#0f151b;
+  --danger:#e57373;
+  --warn:#e0a84a;
+  --ok:#5fbf8a;
+  --fill-alpha:0.30;
+  --tool-pk:#e0b050;
+  --tool-fk:#6fa8ef;
+  --tool-nn:#b99af0;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+.bar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;
+  padding:8px 12px;border-bottom:1px solid var(--line);background:var(--surface);flex:none;
+}
+.brand{font-weight:600;margin:0;font-size:15px}
+.brand span{color:var(--ink-soft);font-weight:400}
+.actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-left:auto}
+.btn{
+  padding:4px 10px;border:1px solid var(--line);border-radius:5px;background:var(--surface);
+  cursor:pointer;font-size:13px;line-height:1.35;white-space:nowrap;
+}
+.btn:hover{border-color:var(--ink-soft)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-sm{padding:2px 7px;font-size:12px}
+.btn-danger{color:var(--danger)}
+.btn-danger:hover{border-color:var(--danger)}
+.status{font-size:12px;color:var(--ink-soft);min-height:1em}
+.status.err{color:var(--danger)}
+.status.good{color:var(--ok)}
+
+.wrap{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:10px;padding:10px}
+.left{display:flex;flex-direction:column;gap:10px;min-height:0;min-width:0}
+.side{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:auto;padding-right:2px}
+
+.viewport{
+  position:relative;flex:1 1 55%;min-height:260px;overflow:auto;
+  border:1px solid var(--line);border-radius:6px;background-color:var(--sunken);
+  background-image:radial-gradient(circle,var(--line) 1px,transparent 1.2px);
+  background-size:20px 20px;
+}
+.board{position:relative;min-width:100%;min-height:100%}
+#wires{position:absolute;left:0;top:0;overflow:visible;z-index:0}
+#wires path{fill:none}
+#wires .w{stroke:var(--ink-soft);stroke-width:1.5}
+#wires .w.nn{stroke:var(--tool-nn);stroke-dasharray:5 4}
+#wires .w.sel{stroke:var(--accent);stroke-width:2.5}
+#wires .m{stroke:var(--ink-soft);stroke-width:1.5}
+#wires .m.nn{stroke:var(--tool-nn)}
+#wires .m.sel{stroke:var(--accent);stroke-width:2}
+#wires circle.m{fill:var(--sunken)}
+#wires .hit{stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
+#wires .wl{font:600 10px "IBM Plex Mono",ui-monospace,monospace;fill:var(--ink-soft);stroke:var(--sunken);stroke-width:4;paint-order:stroke;text-anchor:middle;dominant-baseline:middle;pointer-events:none}
+#wires .wl.sel{fill:var(--accent)}
+#wires .tmp{stroke:var(--accent);stroke-width:2;stroke-dasharray:4 3}
+
+.tbl{
+  position:absolute;width:224px;z-index:1;background:var(--surface);
+  border:1px solid var(--line);border-radius:6px;touch-action:none;user-select:none;-webkit-user-select:none;
+  box-shadow:0 1px 3px color-mix(in srgb,var(--ink) 12%,transparent);
+}
+.tbl.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.tbl:focus-visible{outline-offset:2px}
+.th{
+  display:flex;align-items:center;gap:6px;padding:5px 8px;cursor:grab;
+  border-bottom:1px solid var(--line-soft);font-weight:600;font-size:13px;
+}
+.th .tn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.th .tc{font-weight:400;color:var(--ink-soft);font-size:11px}
+.th .tw{color:var(--warn);font-weight:700;font-size:12px}
+.tr{position:relative;display:flex;align-items:center;gap:6px;height:22px;padding:0 12px 0 8px;font-size:12px}
+.tr + .tr{border-top:1px solid var(--line-soft)}
+.tr .kb{flex:none;width:18px;font:600 9px "IBM Plex Mono",ui-monospace,monospace;color:var(--ink-soft)}
+.tr .kb.pk{color:var(--tool-pk)}
+.tr .kb.fk{color:var(--tool-fk)}
+.tr .cn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tr .ct{flex:none;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-soft)}
+.tr.none{color:var(--ink-soft);font-style:italic}
+.tr.drop{background:color-mix(in srgb,var(--accent) calc(var(--fill-alpha) * 100%),transparent)}
+.h{
+  position:absolute;right:-7px;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;
+  background:var(--surface);border:2px solid var(--accent);cursor:crosshair;opacity:.55;
+}
+.h::before{content:"";position:absolute;inset:-7px}
+.tr:hover .h,.tbl.sel .h{opacity:1}
+.board-empty{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(340px,90%);
+  text-align:center;color:var(--ink-soft);background:var(--surface);border:1px solid var(--line);
+  border-radius:6px;padding:14px;z-index:2;
+}
+.board-empty p{margin:0 0 10px}
+.board-empty .row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.board-hint{font-size:12px;color:var(--ink-soft);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;min-width:0}
+.card-head{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line-soft)}
+.card-head h2{margin:0;font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-body{padding:8px 10px;display:flex;flex-direction:column;gap:7px}
+.count{color:var(--ink-soft);font-size:12px;font-family:"IBM Plex Mono",ui-monospace,monospace}
+.lbl{font-size:11px;color:var(--ink-soft);display:block;margin-bottom:2px}
+.inp,.sel-in,textarea.inp{
+  width:100%;min-width:0;padding:3px 6px;border:1px solid var(--line);border-radius:4px;
+  background:var(--sunken);font-size:13px;
+}
+textarea.inp{resize:vertical;min-height:44px;line-height:1.4}
+.inp.bad{border-color:var(--danger)}
+.msg{font-size:11px;color:var(--danger);min-height:0}
+.msg:empty{display:none}
+.muted{color:var(--ink-soft);font-size:12px;margin:0}
+.cols-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cols-head b{font-size:12px}
+.col{border:1px solid var(--line-soft);border-radius:5px;padding:5px;display:flex;flex-direction:column;gap:4px;background:var(--paper)}
+.col.is-fk{border-left:3px solid var(--tool-fk)}
+.c1{display:flex;gap:4px;align-items:center}
+.c1 .inp{flex:1;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
+.c1 select{width:100px;flex:none;font-size:12px;padding:3px 4px;border:1px solid var(--line);border-radius:4px;background:var(--sunken)}
+.ib{border:1px solid transparent;background:transparent;color:var(--ink-soft);cursor:pointer;padding:1px 5px;border-radius:3px;font-size:13px;line-height:1.2;flex:none}
+.ib:hover{color:var(--ink);border-color:var(--line)}
+.ib.x:hover{color:var(--danger)}
+.ib:disabled{opacity:.3;cursor:default}
+.c2{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chk{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--ink-soft);cursor:pointer}
+.chk input{margin:0}
+.c2 .inp{flex:1;min-width:90px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
+.fkline{font-size:11px;color:var(--tool-fk);font-family:"IBM Plex Mono",ui-monospace,monospace}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.rel-title{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;word-break:break-all}
+.explain{font-size:12px;color:var(--ink-soft);background:var(--paper);border-radius:4px;padding:6px 8px;margin:0}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap}
+
+.list{list-style:none;margin:0;padding:4px;display:flex;flex-direction:column;gap:1px}
+.li{
+  display:flex;align-items:center;gap:6px;width:100%;text-align:left;padding:4px 6px;border:0;border-radius:4px;
+  background:transparent;cursor:pointer;font-size:12px;
+}
+.li:hover,.li.on{background:var(--sunken)}
+.li .mono{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px}
+.tag{flex:none;font-size:10.5px;font-family:"IBM Plex Mono",ui-monospace,monospace;color:var(--ink-soft)}
+.addrel{display:grid;grid-template-columns:1fr auto 1fr auto;gap:4px;align-items:center;padding:6px 8px 8px;border-top:1px solid var(--line-soft)}
+.addrel select{min-width:0;font-size:12px;padding:3px 4px;border:1px solid var(--line);border-radius:4px;background:var(--sunken)}
+.issue{display:flex;gap:6px;align-items:flex-start;padding:4px 6px;border-radius:4px;font-size:12px;text-align:left;border:0;background:transparent;width:100%;cursor:pointer}
+.issue:hover{background:var(--sunken)}
+.issue .sv{flex:none;font:700 10px "IBM Plex Mono",ui-monospace,monospace;padding:1px 4px;border-radius:3px;margin-top:1px}
+.issue .sv.error{color:var(--danger);border:1px solid var(--danger)}
+.issue .sv.warn{color:var(--warn);border:1px solid var(--warn)}
+.okline{color:var(--ok);font-size:12px;margin:0;padding:8px 10px}
+
+.outcard{flex:0 0 42%;min-height:200px;display:flex;flex-direction:column}
+.tabs{display:flex;gap:2px;padding:4px 6px 0;flex-wrap:wrap;border-bottom:1px solid var(--line-soft);align-items:flex-end}
+.tab{padding:4px 9px;border:0;background:transparent;color:var(--ink-soft);cursor:pointer;font-size:13px;border-bottom:2px solid transparent}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:500}
+.tabs .sp{flex:1}
+.tabs .foot{display:flex;align-items:center;gap:8px;padding-bottom:4px}
+.out{
+  flex:1;min-height:0;margin:0;padding:8px 10px;overflow:auto;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;line-height:1.5;white-space:pre;tab-size:2;
+}
+
+@media (max-width:900px){
+  body{height:auto;display:block}
+  .wrap{display:flex;flex-direction:column;padding:8px;gap:8px}
+  .left{min-height:0}
+  .viewport{flex:none;height:62vh;min-height:320px}
+  .outcard{flex:none;height:auto}
+  .out{max-height:420px;flex:none}
+  .side{overflow:visible;padding-right:0}
+}
+@media (max-width:480px){
+  .bar{padding:6px 8px}
+  .actions{margin-left:0}
+  .addrel{grid-template-columns:1fr auto;}
+  .addrel .arrow{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <h1 class="brand">Schema Sketch <span>— tables and relations to SQL, Prisma and a prompt</span></h1>
+  <div class="actions">
+    <button class="btn btn-primary" id="addTable" type="button">+ Table</button>
+    <button class="btn" id="layout" type="button" title="Arrange tables so none overlap, parents on the left">Auto layout</button>
+    <button class="btn" id="example" type="button">Load example</button>
+    <button class="btn" id="import" type="button">Import JSON</button>
+    <button class="btn" id="export" type="button">Export JSON</button>
+    <button class="btn btn-danger" id="clear" type="button">Clear</button>
+    <input type="file" id="file" accept=".json,application/json" hidden>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="left">
+    <div class="viewport" id="vp">
+      <div class="board" id="board">
+        <svg id="wires" aria-hidden="true"></svg>
+        <div id="tables"></div>
+      </div>
+      <div class="board-empty" id="boardEmpty" hidden>
+        <p>No tables yet. Add a table, then drag from the <b>●</b> on a column to the column it references.</p>
+        <div class="row">
+          <button class="btn btn-primary" type="button" data-act="add-table">+ Table</button>
+          <button class="btn" type="button" data-act="load-example">Load example</button>
+        </div>
+      </div>
+    </div>
+    <div class="board-hint">
+      <span>Drag a table by its header. Drag a column’s <b>●</b> onto another column to link (FK → referenced column).</span>
+      <span class="status" id="status" role="status" aria-live="polite"></span>
+    </div>
+    <section class="card outcard" aria-label="Output">
+      <div class="tabs" role="tablist" id="tabs">
+        <button class="tab" role="tab" type="button" data-fmt="prompt">Prompt</button>
+        <button class="tab" role="tab" type="button" data-fmt="sql">SQL</button>
+        <button class="tab" role="tab" type="button" data-fmt="prisma">Prisma</button>
+        <button class="tab" role="tab" type="button" data-fmt="mermaid">Mermaid</button>
+        <button class="tab" role="tab" type="button" data-fmt="json">JSON</button>
+        <span class="sp"></span>
+        <span class="foot">
+          <span class="count" id="chars"></span>
+          <span class="status" id="copyMsg" role="status" aria-live="polite"></span>
+          <button class="btn btn-primary btn-sm" id="copy" type="button">Copy</button>
+        </span>
+      </div>
+      <pre class="out" id="out" tabindex="0" aria-label="Generated output"></pre>
+    </section>
+  </section>
+
+  <aside class="side" id="side">
+    <section class="card" id="insp"></section>
+    <section class="card" id="relcard"></section>
+    <section class="card" id="issues"></section>
+  </aside>
+</main>
+
+<script>
+(function(){
+'use strict';
+
+/* ============ constants & state ============ */
+var LS = 'redline.tool.schema-sketch.';
+var TYPES = ['text','integer','bigint','boolean','timestamp','uuid','json','decimal','enum'];
+var KINDS = ['1-1','1-N','N-N'];
+var ACTIONS = ['cascade','set null','restrict'];
+var TW = 224;
+var IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+var S = { notes:'', tables:[], rels:[] };
+var sel = null;            // {k:'t'|'r', id}
+var fmt = 'prompt';
+var outputs = {};
+var seq = 0;
+
+var $ = function(s){ return document.querySelector(s); };
+var vp = $('#vp'), board = $('#board'), wires = $('#wires'), tablesEl = $('#tables');
+
+function lsGet(k){ try{ return localStorage.getItem(LS+k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(LS+k,v); }catch(e){} }
+function uid(p){ seq++; return p + seq.toString(36) + Math.random().toString(36).slice(2,6); }
+function esc(s){ return String(s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function tById(id){ for(var i=0;i<S.tables.length;i++) if(S.tables[i].id===id) return S.tables[i]; return null; }
+function cById(t,id){ if(!t) return null; for(var i=0;i<t.cols.length;i++) if(t.cols[i].id===id) return t.cols[i]; return null; }
+function rById(id){ for(var i=0;i<S.rels.length;i++) if(S.rels[i].id===id) return S.rels[i]; return null; }
+function refName(end){ var t=tById(end.t), c=cById(t,end.c); return (t?t.name:'?')+'.'+(c?c.name:'?'); }
+function enumVals(c){ return String(c.ev||'').split(',').map(function(s){ return s.trim(); }).filter(Boolean); }
+function pkCols(t){ return t.cols.filter(function(c){ return c.pk; }); }
+function isSel(k,id){ return !!sel && sel.k===k && sel.id===id; }
+function status(msg, cls){ var s=$('#status'); s.textContent=msg||''; s.className='status'+(cls?' '+cls:''); }
+
+/* ============ naming helpers ============ */
+function singular(w){
+  if(/ies$/i.test(w)) return w.slice(0,-3)+'y';
+  if(/(ss|us|is)$/i.test(w)) return w;
+  if(/(x|ch|sh|ss|z)es$/i.test(w)) return w.slice(0,-2);
+  if(/s$/i.test(w) && w.length>1) return w.slice(0,-1);
+  return w;
+}
+function plural(w){
+  if(/[^aeiou]y$/i.test(w)) return w.slice(0,-1)+'ies';
+  if(/(s|x|z|ch|sh)$/i.test(w)) return w+'es';
+  return w+'s';
+}
+function words(s){ return String(s).replace(/([a-z0-9])([A-Z])/g,'$1 $2').split(/[^A-Za-z0-9]+/).filter(Boolean); }
+function pascal(s){ return words(s).map(function(w){ return w.charAt(0).toUpperCase()+w.slice(1).toLowerCase(); }).join(''); }
+function camel(s){ var p=pascal(s); return p.charAt(0).toLowerCase()+p.slice(1); }
+function uniqueName(base, taken){ var n=base, i=2; while(taken.has(n.toLowerCase())){ n=base+'_'+i; i++; } return n; }
+
+/* ============ analysis shared by validation and generators ============ */
+function fkRelOf(cid){ for(var i=0;i<S.rels.length;i++){ var r=S.rels[i]; if(r.kind!=='N-N' && r.from.c===cid) return r; } return null; }
+function isOneToOneFk(c){ var r=fkRelOf(c.id); return !!r && r.kind==='1-1'; }
+function effUnique(t,c){ var pk=pkCols(t); if(c.pk && pk.length===1) return false; return !!c.unique || isOneToOneFk(c); }
+function isUniqueTarget(t,c){ var pk=pkCols(t); return (c.pk && pk.length===1) || !!c.unique; }
+function isIdentity(c){ return /^(identity|autoincrement(\(\))?|serial)$/i.test(String(c.def||'').trim()); }
+function junctionInfo(t){
+  // a table whose primary key is exactly two FK columns = many-to-many junction
+  var pk=pkCols(t); if(pk.length!==2) return null;
+  var r1=fkRelOf(pk[0].id), r2=fkRelOf(pk[1].id);
+  if(!r1||!r2) return null;
+  return { a:r1, b:r2 };
+}
+function indexSuggestions(){
+  var out=[];
+  S.tables.forEach(function(t){
+    var pk=pkCols(t);
+    t.cols.forEach(function(c){
+      var r=fkRelOf(c.id); if(!r) return;
+      if(pk.length && pk[0].id===c.id) return;       // leading PK column already indexed
+      if(effUnique(t,c) || (c.pk && pk.length===1)) return;   // unique index exists
+      out.push({ t:t, c:c, r:r });
+    });
+  });
+  return out;
+}
+
+/* ============ validation ============ */
+function validate(){
+  var list=[], seen={};
+  S.tables.forEach(function(t){
+    var k=t.name.toLowerCase();
+    if(seen[k]) list.push({sev:'error', t:t.id, msg:'Two tables are named "'+t.name+'". Rename one of them.'});
+    seen[k]=1;
+    if(!t.cols.length){ list.push({sev:'warn', t:t.id, msg:t.name+' has no columns. Add at least an id column.'}); return; }
+    if(!pkCols(t).length) list.push({sev:'warn', t:t.id, msg:t.name+' has no primary key. Tick PK on an id column; Prisma refuses a model without @id or @unique.'});
+    var cs={};
+    t.cols.forEach(function(c){
+      var ck=c.name.toLowerCase();
+      if(cs[ck]) list.push({sev:'error', t:t.id, msg:t.name+' has two columns named "'+c.name+'". Rename one.'});
+      cs[ck]=1;
+      if(c.type==='enum'){
+        var v=enumVals(c);
+        if(!v.length) list.push({sev:'error', t:t.id, msg:t.name+'.'+c.name+' is an enum with no values. List them comma-separated, e.g. draft, published.'});
+        else if(v.some(function(x){ return !/^[A-Za-z][A-Za-z0-9_]*$/.test(x); })) list.push({sev:'warn', t:t.id, msg:t.name+'.'+c.name+' has enum values that are not identifiers; Prisma output maps them with @map.'});
+        var d=String(c.def||'').trim().replace(/^'(.*)'$/,'$1');
+        if(d && v.length && v.indexOf(d)<0) list.push({sev:'error', t:t.id, msg:'Default "'+d+'" of '+t.name+'.'+c.name+' is not one of its enum values.'});
+      }
+      if(isIdentity(c) && c.type!=='integer' && c.type!=='bigint') list.push({sev:'error', t:t.id, msg:t.name+'.'+c.name+': identity/autoincrement only works on integer or bigint.'});
+    });
+  });
+  S.rels.forEach(function(r){
+    var ft=tById(r.from.t), tt=tById(r.to.t), fc=cById(ft,r.from.c), tc=cById(tt,r.to.c);
+    if(!fc||!tc) return;
+    var label=refName(r.from)+' → '+refName(r.to);
+    if(r.kind==='N-N'){
+      list.push({sev:'warn', r:r.id, fix:'junction', msg:'Many-to-many '+ft.name+' ↔ '+tt.name+' has no junction table. SQL cannot express it directly.'});
+      if(!(tc.pk && pkCols(tt).length===1) || !(fc.pk && pkCols(ft).length===1))
+        list.push({sev:'warn', r:r.id, msg:'Many-to-many '+ft.name+' ↔ '+tt.name+' should link the single-column primary keys of both tables.'});
+      return;
+    }
+    if(!isUniqueTarget(tt,tc))
+      list.push({sev:'error', r:r.id, msg:label+': '+tt.name+'.'+tc.name+' is neither the primary key nor unique. PostgreSQL rejects this foreign key; point it at the id or mark the column unique.'});
+    if(fc.type!==tc.type || (fc.type==='enum' && fc.ev!==tc.ev))
+      list.push({sev:'warn', r:r.id, msg:'Type mismatch '+label+': '+fc.type+' vs '+tc.type+'. Make the FK column '+tc.type+'.'});
+    if(r.onDelete==='set null' && (!fc.nullable || fc.pk))
+      list.push({sev:'error', r:r.id, msg:label+': on delete "set null" needs '+ft.name+'.'+fc.name+' to be nullable. Tick Null or pick cascade/restrict.'});
+  });
+  // one FK column pointing at two targets
+  var fkc={};
+  S.rels.forEach(function(r){ if(r.kind==='N-N') return; if(fkc[r.from.c]) list.push({sev:'warn', r:r.id, msg:refName(r.from)+' is used as a foreign key twice. Keep one relation per FK column.'}); fkc[r.from.c]=1; });
+  // cascade cycles: edge parent -> child for every cascading relation
+  var adj={};
+  S.rels.forEach(function(r){ if(r.kind!=='N-N' && r.onDelete==='cascade'){ (adj[r.to.t]=adj[r.to.t]||[]).push(r); } });
+  var reported={};
+  S.tables.forEach(function(start){
+    var stack=[], onPath={};
+    (function dfs(tid){
+      onPath[tid]=true;
+      (adj[tid]||[]).forEach(function(r){
+        var nxt=r.from.t;
+        if(nxt===start.id){
+          var path=stack.concat([r]);
+          var key=path.map(function(x){ return x.id; }).sort().join(',');
+          if(!reported[key]){
+            reported[key]=1;
+            if(path.length===1) list.push({sev:'warn', r:r.id, msg:'Self-referencing cascade on '+refName(r.from)+': deleting one row deletes its whole chain of children. Consider set null or restrict.'});
+            else list.push({sev:'warn', r:r.id, msg:'Cascade cycle: '+[start.name].concat(path.map(function(x){ return tById(x.from.t).name; })).join(' → ')+'. One delete can cascade around the loop; make one link restrict or set null.'});
+          }
+        } else if(!onPath[nxt] && stack.length<S.tables.length){
+          stack.push(r); dfs(nxt); stack.pop();
+        }
+      });
+      onPath[tid]=false;
+    })(start.id);
+  });
+  return list;
+}
+
+/* ============ SQL (PostgreSQL 16) ============ */
+var RESERVED = ('all analyse analyze and any array as asc asymmetric authorization binary both case cast check collate column concurrently constraint create cross current_catalog current_date current_role current_schema current_time current_timestamp current_user default deferrable desc distinct do else end except false fetch for foreign freeze from full grant group having ilike in initially inner intersect into is isnull join lateral leading left like limit localtime localtimestamp natural not notnull null offset on only or order outer overlaps placing primary references returning right select session_user similar some symmetric system_user table tablesample then to trailing true union unique user using variadic verbose when where window with').split(' ');
+function qi(n){ return (/^[a-z_][a-z0-9_]*$/.test(n) && RESERVED.indexOf(n)<0) ? n : '"'+String(n).replace(/"/g,'""')+'"'; }
+function qs(s){ return "'"+String(s).replace(/'/g,"''")+"'"; }
+function cname(s){ return s.length>63 ? s.slice(0,63) : s; }
+function enumTypeName(t,c){ return t.name.toLowerCase()+'_'+c.name.toLowerCase(); }
+function sqlType(t,c){
+  switch(c.type){
+    case 'timestamp': return 'timestamptz';
+    case 'json': return 'jsonb';
+    case 'decimal': return 'numeric(12,2)';
+    case 'enum': return qi(enumTypeName(t,c));
+    default: return c.type;
+  }
+}
+function isFuncOrKeyword(d){ return /^[A-Za-z_][\w.]*\(.*\)$/.test(d) || /^(current_timestamp|current_date|localtimestamp|null)$/i.test(d); }
+function sqlDefault(t,c){
+  var d=String(c.def||'').trim();
+  if(!d || isIdentity(c)) return '';
+  if(isFuncOrKeyword(d)) return d;
+  if(/^'.*'$/.test(d)) return d;
+  if(c.type==='integer'||c.type==='bigint'||c.type==='decimal') return /^-?\d+(\.\d+)?$/.test(d) ? d : qs(d);
+  if(c.type==='boolean') return /^(true|false)$/i.test(d) ? d.toLowerCase() : qs(d);
+  if(c.type==='json') return qs(d)+'::jsonb';
+  return qs(d);
+}
+function genSQL(){
+  if(!S.tables.length) return '-- No tables yet. Add a table or load the example.\n';
+  var L=['-- PostgreSQL 16 DDL generated by Schema Sketch','-- '+S.tables.length+' tables, '+S.rels.filter(function(r){ return r.kind!=='N-N'; }).length+' foreign keys',''];
+  var enums=[];
+  S.tables.forEach(function(t){ t.cols.forEach(function(c){ if(c.type==='enum') enums.push([t,c]); }); });
+  enums.forEach(function(p){
+    var v=enumVals(p[1]);
+    L.push('CREATE TYPE '+qi(enumTypeName(p[0],p[1]))+' AS ENUM ('+(v.length?v.map(qs).join(', '):"'todo'")+');');
+  });
+  if(enums.length) L.push('');
+  S.tables.forEach(function(t){
+    if(t.note) L.push('-- '+t.note.replace(/\s*\n\s*/g,' '));
+    var parts=[], pk=pkCols(t);
+    t.cols.forEach(function(c){
+      var s='  '+qi(c.name)+' '+sqlType(t,c);
+      if(isIdentity(c) && (c.type==='integer'||c.type==='bigint')) s+=' GENERATED BY DEFAULT AS IDENTITY';
+      else { if(!c.nullable || c.pk) s+=' NOT NULL'; var d=sqlDefault(t,c); if(d) s+=' DEFAULT '+d; }
+      parts.push(s);
+    });
+    if(pk.length) parts.push('  CONSTRAINT '+qi(cname(t.name+'_pkey'))+' PRIMARY KEY ('+pk.map(function(c){ return qi(c.name); }).join(', ')+')');
+    t.cols.forEach(function(c){ if(effUnique(t,c)) parts.push('  CONSTRAINT '+qi(cname(t.name+'_'+c.name+'_key'))+' UNIQUE ('+qi(c.name)+')'); });
+    if(!parts.length) parts.push('  -- no columns yet');
+    L.push('CREATE TABLE '+qi(t.name)+' (');
+    L.push(parts.join(',\n'));
+    L.push(');','');
+  });
+  var fks=S.rels.filter(function(r){ return r.kind!=='N-N'; });
+  if(fks.length){
+    L.push('-- Foreign keys');
+    fks.forEach(function(r){
+      var ft=tById(r.from.t), tt=tById(r.to.t), fc=cById(ft,r.from.c), tc=cById(tt,r.to.c);
+      L.push('ALTER TABLE '+qi(ft.name)+' ADD CONSTRAINT '+qi(cname(ft.name+'_'+fc.name+'_fkey')));
+      L.push('  FOREIGN KEY ('+qi(fc.name)+') REFERENCES '+qi(tt.name)+' ('+qi(tc.name)+') ON DELETE '+r.onDelete.toUpperCase()+';');
+    });
+    L.push('');
+  }
+  var idx=indexSuggestions();
+  if(idx.length){
+    L.push('-- Suggested indexes (foreign key columns not already covered by a key)');
+    idx.forEach(function(x){ L.push('CREATE INDEX '+qi(cname(x.t.name+'_'+x.c.name+'_idx'))+' ON '+qi(x.t.name)+' ('+qi(x.c.name)+');'); });
+    L.push('');
+  }
+  var notes=S.tables.filter(function(t){ return t.note; });
+  if(notes.length){
+    notes.forEach(function(t){ L.push('COMMENT ON TABLE '+qi(t.name)+' IS '+qs(t.note)+';'); });
+    L.push('');
+  }
+  S.rels.filter(function(r){ return r.kind==='N-N'; }).forEach(function(r){
+    L.push('-- TODO: many-to-many '+tById(r.from.t).name+' <-> '+tById(r.to.t).name+' has no junction table yet.');
+  });
+  return L.join('\n').replace(/\n+$/,'')+'\n';
+}
+
+/* ============ Prisma ============ */
+var PRISMA_T = { text:'String', integer:'Int', bigint:'BigInt', boolean:'Boolean', timestamp:'DateTime', uuid:'String', json:'Json', decimal:'Decimal' };
+var PRISMA_DB = { uuid:'@db.Uuid', timestamp:'@db.Timestamptz(6)', decimal:'@db.Decimal(12, 2)' };
+var PRISMA_ACT = { 'cascade':'Cascade', 'set null':'SetNull', 'restrict':'Restrict' };
+function prismaEnumValue(v){ var s=v.replace(/[^A-Za-z0-9_]/g,'_'); if(!/^[A-Za-z]/.test(s)) s='v'+s; return s; }
+function prismaDefault(c, enumName){
+  var d=String(c.def||'').trim();
+  if(!d) return '';
+  if(isIdentity(c)) return (c.type==='integer'||c.type==='bigint') ? '@default(autoincrement())' : '';
+  if(/^(now\(\)|current_timestamp)$/i.test(d)) return '@default(now())';
+  if(isFuncOrKeyword(d)) return /^null$/i.test(d) ? '' : '@default(dbgenerated('+JSON.stringify(d)+'))';
+  var lit=d.replace(/^'(.*)'$/,'$1');
+  switch(c.type){
+    case 'integer': case 'bigint': case 'decimal': return /^-?\d+(\.\d+)?$/.test(lit) ? '@default('+lit+')' : '';
+    case 'boolean': return /^(true|false)$/i.test(lit) ? '@default('+lit.toLowerCase()+')' : '';
+    case 'enum': return '@default('+prismaEnumValue(lit)+')';
+    case 'timestamp': return '@default(dbgenerated('+JSON.stringify(d)+'))';
+    default: return '@default('+JSON.stringify(lit)+')';
+  }
+}
+function genPrisma(){
+  var head=[
+    '// schema.prisma generated by Schema Sketch (PostgreSQL, Prisma 7+).',
+    '// The connection URL lives in prisma.config.ts: datasource: { url: env("DATABASE_URL") }.',
+    '// Prisma 6 or older: add  url = env("DATABASE_URL")  to the datasource block below.',
+    'generator client {',
+    '  provider = "prisma-client"',
+    '  output   = "../generated/prisma"',
+    '}',
+    '',
+    'datasource db {',
+    '  provider = "postgresql"',
+    '}'
+  ];
+  if(!S.tables.length) return head.join('\n')+'\n\n// No tables yet.\n';
+  var taken=new Set(), model={}, enumName={}, fields={}, fname={};
+  S.tables.forEach(function(t){
+    var n=pascal(singular(t.name))||'Model', b=n, i=2;
+    while(taken.has(n.toLowerCase())){ n=b+i; i++; }
+    taken.add(n.toLowerCase()); model[t.id]=n;
+  });
+  var enumBlocks=[];
+  S.tables.forEach(function(t){ t.cols.forEach(function(c){
+    if(c.type!=='enum') return;
+    var n=model[t.id]+pascal(c.name), b=n, i=2;
+    while(taken.has(n.toLowerCase())){ n=b+i; i++; }
+    taken.add(n.toLowerCase()); enumName[c.id]=n;
+    var vals=enumVals(c), blk=['enum '+n+' {'];
+    (vals.length?vals:['todo']).forEach(function(v){ var p=prismaEnumValue(v); blk.push('  '+p+(p!==v?' @map('+JSON.stringify(v)+')':'')); });
+    if(n!==enumTypeName(t,c)) blk.push('','  @@map('+JSON.stringify(enumTypeName(t,c))+')');
+    blk.push('}');
+    enumBlocks.push(blk.join('\n'));
+  }); });
+  // scalar fields
+  var names={};
+  S.tables.forEach(function(t){
+    names[t.id]=new Set(); fields[t.id]=[];
+    var pk=pkCols(t);
+    t.cols.forEach(function(c){
+      var n=camel(c.name)||'field', b=n, i=2;
+      while(names[t.id].has(n)){ n=b+i; i++; }
+      names[t.id].add(n); fname[c.id]=n;
+      var type=c.type==='enum' ? enumName[c.id] : PRISMA_T[c.type];
+      var attrs=[];
+      if(c.pk && pk.length===1) attrs.push('@id');
+      if(effUnique(t,c)) attrs.push('@unique');
+      var d=prismaDefault(c, enumName[c.id]); if(d) attrs.push(d);
+      if(n!==c.name) attrs.push('@map('+JSON.stringify(c.name)+')');
+      if(PRISMA_DB[c.type]) attrs.push(PRISMA_DB[c.type]);
+      fields[t.id].push([n, type+(c.nullable && !c.pk ? '?' : ''), attrs.join(' ')]);
+    });
+  });
+  function claim(tid, bases){
+    for(var i=0;i<bases.length;i++){ if(bases[i] && !names[tid].has(bases[i])){ names[tid].add(bases[i]); return bases[i]; } }
+    var b=bases[0]||'rel', n=b+'2', k=3; while(names[tid].has(n)){ n=b+k; k++; }
+    names[tid].add(n); return n;
+  }
+  function pairCount(a,b){ return S.rels.filter(function(r){ return (r.from.t===a&&r.to.t===b)||(r.from.t===b&&r.to.t===a); }).length; }
+  S.rels.forEach(function(r){
+    var C=tById(r.from.t), P=tById(r.to.t), fc=cById(C,r.from.c), rc=cById(P,r.to.c);
+    if(!fc||!rc) return;
+    var needName = pairCount(C.id,P.id)>1 || C.id===P.id;
+    if(r.kind==='N-N'){
+      var rn = needName ? JSON.stringify(model[C.id]+'_'+model[P.id]+'_'+camel(fc.name)) : '';
+      var fa=claim(C.id,[camel(plural(singular(P.name)))]), fb=claim(P.id,[camel(plural(singular(C.name)))]);
+      fields[C.id].push([fa, model[P.id]+'[]', rn?'@relation('+rn+')':'']);
+      fields[P.id].push([fb, model[C.id]+'[]', rn?'@relation('+rn+')':'']);
+      return;
+    }
+    var base=camel(fc.name.replace(/_?id$/i,''));
+    if(base===camel(fc.name)) base='';
+    var cf=claim(C.id,[base, camel(singular(P.name))]);
+    var relName = needName ? JSON.stringify(model[C.id]+'_'+cf) : '';
+    var backBases = C.id===P.id ? [cf+(r.kind==='1-1'?'Of':'Children')]
+      : needName ? [camel(r.kind==='1-1'?singular(C.name):plural(singular(C.name)))+pascal(cf)]
+      : [camel(r.kind==='1-1'?singular(C.name):plural(singular(C.name)))];
+    var pf=claim(P.id, backBases);
+    fields[C.id].push([cf, model[P.id]+(fc.nullable?'?':''),
+      '@relation('+(relName?relName+', ':'')+'fields: ['+fname[fc.id]+'], references: ['+fname[rc.id]+'], onDelete: '+PRISMA_ACT[r.onDelete]+')']);
+    fields[P.id].push([pf, model[C.id]+(r.kind==='1-1'?'?':'[]'), relName?'@relation('+relName+')':'']);
+  });
+  var idx=indexSuggestions(), out=head.slice();
+  S.tables.forEach(function(t){
+    var f=fields[t.id], w1=0, w2=0;
+    f.forEach(function(x){ w1=Math.max(w1,x[0].length); w2=Math.max(w2,x[1].length); });
+    var B=[''];
+    if(t.note) B.push('/// '+t.note.replace(/\s*\n\s*/g,' '));
+    B.push('model '+model[t.id]+' {');
+    if(!f.length) B.push('  // no columns yet');
+    f.forEach(function(x){ B.push(('  '+pad(x[0],w1)+' '+(x[2]?pad(x[1],w2)+' '+x[2]:x[1])).replace(/\s+$/,'')); });
+    var tail=[], pk=pkCols(t);
+    if(pk.length>1) tail.push('@@id(['+pk.map(function(c){ return fname[c.id]; }).join(', ')+'])');
+    idx.filter(function(x){ return x.t===t; }).forEach(function(x){ tail.push('@@index(['+fname[x.c.id]+'])'); });
+    if(model[t.id]!==t.name) tail.push('@@map('+JSON.stringify(t.name)+')');
+    if(tail.length){ B.push(''); tail.forEach(function(s){ B.push('  '+s); }); }
+    if(!pk.length && !t.cols.some(function(c){ return c.unique; })) B.push('  // WARNING: no primary key; Prisma needs @id, @@id or @unique');
+    B.push('}');
+    out.push(B.join('\n'));
+  });
+  if(enumBlocks.length){ out.push(''); out.push(enumBlocks.join('\n\n')); }
+  return out.join('\n')+'\n';
+}
+function pad(s,n){ while(s.length<n) s+=' '; return s; }
+
+/* ============ Mermaid ============ */
+function mq(s){ return String(s).replace(/"/g,"'"); }
+function genMermaid(){
+  if(!S.tables.length) return 'erDiagram\n  %% No tables yet.\n';
+  var L=['erDiagram'];
+  S.tables.forEach(function(t){
+    var ent=t.name.replace(/[^A-Za-z0-9_-]/g,'_');
+    L.push('  '+ent+' {');
+    t.cols.forEach(function(c){
+      var keys=[]; if(c.pk) keys.push('PK'); if(fkRelOf(c.id)) keys.push('FK'); if(effUnique(t,c)) keys.push('UK');
+      var note = c.type==='enum' ? enumVals(c).join(' | ') : (c.nullable && !c.pk ? 'nullable' : '');
+      L.push('    '+c.type+' '+c.name.replace(/[^A-Za-z0-9_]/g,'_')+(keys.length?' '+keys.join(', '):'')+(note?' "'+mq(note)+'"':''));
+    });
+    L.push('  }');
+  });
+  S.rels.forEach(function(r){
+    var a=tById(r.from.t).name.replace(/[^A-Za-z0-9_-]/g,'_'), b=tById(r.to.t).name.replace(/[^A-Za-z0-9_-]/g,'_');
+    var fc=cById(tById(r.from.t), r.from.c);
+    if(r.kind==='N-N') L.push('  '+a+' }o--o{ '+b+' : "many-to-many"');
+    else L.push('  '+b+' '+(fc.nullable?'|o':'||')+'--'+(r.kind==='1-1'?'o|':'o{')+' '+a+' : "'+mq(fc.name)+'"');
+  });
+  return L.join('\n')+'\n';
+}
+
+/* ============ Prompt ============ */
+var TYPE_WORDS = { text:'text', integer:'integer (32-bit)', bigint:'bigint (64-bit)', boolean:'boolean', timestamp:'timestamp with time zone', uuid:'uuid', json:'jsonb', decimal:'numeric(12,2)', enum:'enum' };
+function genPrompt(issues){
+  if(!S.tables.length) return 'No tables yet. Add tables (or press "Load example") and the brief for an LLM appears here.\n';
+  var fks=S.rels.filter(function(r){ return r.kind!=='N-N'; });
+  var junctions=S.tables.map(function(t){ return [t, junctionInfo(t)]; }).filter(function(x){ return x[1]; });
+  var L=[];
+  L.push('Implement the following relational database schema for PostgreSQL 16. Keep every table name, column name, type, nullability, default and constraint exactly as specified. If something below is contradictory or unsafe, point it out before changing it.');
+  L.push('');
+  L.push('PURPOSE');
+  L.push(S.notes.trim() ? S.notes.trim() : '(not described)');
+  L.push('');
+  L.push('SUMMARY');
+  L.push(S.tables.length+' tables, '+fks.length+' foreign keys'+(junctions.length?', '+junctions.length+' many-to-many link'+(junctions.length>1?'s':'')+' via junction tables':'')+'.');
+  L.push('');
+  L.push('TABLES');
+  S.tables.forEach(function(t,i){
+    var pk=pkCols(t);
+    L.push('');
+    L.push((i+1)+'. '+t.name+(t.note?' — '+t.note.replace(/\s*\n\s*/g,' '):''));
+    L.push('   Primary key: '+(pk.length ? pk.map(function(c){ return c.name; }).join(' + ')+(pk.length>1?' (composite)':'') : 'NONE (needs one)'));
+    t.cols.forEach(function(c){
+      var bits=[c.type==='enum' ? 'enum ('+enumVals(c).join(' | ')+')' : TYPE_WORDS[c.type]];
+      bits.push(c.nullable && !c.pk ? 'nullable' : 'not null');
+      if(effUnique(t,c)) bits.push('unique');
+      if(isIdentity(c)) bits.push('auto-generated identity');
+      else if(String(c.def||'').trim()) bits.push('default '+String(c.def).trim());
+      var r=fkRelOf(c.id);
+      if(r) bits.push('foreign key → '+refName(r.to)+' (on delete '+r.onDelete+')');
+      L.push('   - '+c.name+': '+bits.join(', '));
+    });
+    if(!t.cols.length) L.push('   (no columns defined yet)');
+    var refs=S.rels.filter(function(r){ return r.kind!=='N-N' && r.to.t===t.id; }).map(function(r){ return refName(r.from); });
+    if(refs.length) L.push('   Referenced by: '+refs.join(', '));
+  });
+  L.push('');
+  L.push('RELATIONSHIPS');
+  if(!S.rels.length) L.push('- none');
+  S.rels.forEach(function(r){ L.push('- '+relSentence(r)); });
+  junctions.forEach(function(x){
+    var t=x[0], a=tById(x[1].a.to.t), b=tById(x[1].b.to.t);
+    L.push('- Many-to-many: '+a.name+' ↔ '+b.name+' through junction table '+t.name+'. Its composite primary key ('+pkCols(t).map(function(c){ return c.name; }).join(', ')+') prevents duplicate pairs.');
+  });
+  var idx=indexSuggestions();
+  L.push('');
+  L.push('INDEXES');
+  L.push('- Primary keys and unique columns get their own index.');
+  idx.forEach(function(x){ L.push('- Add an index on '+x.t.name+'('+x.c.name+') for foreign key lookups and deletes.'); });
+  L.push('');
+  L.push('CONVENTIONS');
+  L.push('- "timestamp" means timestamptz; "json" means jsonb; "decimal" means numeric(12,2).');
+  if(S.tables.some(function(t){ return t.cols.some(function(c){ return c.type==='enum'; }); }))
+    L.push('- Enums are native PostgreSQL enum types named <table>_<column>.');
+  if(S.tables.some(function(t){ return t.cols.some(isIdentity); }))
+    L.push('- "auto-generated identity" means GENERATED BY DEFAULT AS IDENTITY (autoincrement in ORMs).');
+  L.push('- Name constraints <table>_pkey, <table>_<column>_key, <table>_<column>_fkey, <table>_<column>_idx.');
+  if(issues.length){
+    L.push('');
+    L.push('OPEN ISSUES (resolve or ask about these first)');
+    issues.forEach(function(x){ L.push('- ['+x.sev+'] '+x.msg); });
+  }
+  L.push('');
+  L.push('DELIVERABLE');
+  L.push('1. A single PostgreSQL migration: CREATE TYPE for enums, CREATE TABLE for every table, foreign keys with the ON DELETE actions above, and the indexes.');
+  L.push('2. Matching ORM models if the project uses an ORM (for Prisma: model names in singular PascalCase with @@map to the table names, fields in camelCase with @map to the column names).');
+  L.push('3. A short list of anything you changed or added, with the reason.');
+  return L.join('\n')+'\n';
+}
+function relSentence(r){
+  var ft=tById(r.from.t), tt=tById(r.to.t), fc=cById(ft,r.from.c);
+  if(r.kind==='N-N') return ft.name+' ↔ '+tt.name+': many-to-many, NOT YET MODELLED. Create a junction table with one foreign key to each side and a composite primary key.';
+  var s=refName(r.from)+' → '+refName(r.to)+': ';
+  if(r.kind==='1-1') s+='one-to-one (each '+tt.name+' row has at most one '+ft.name+' row; '+ft.name+'.'+fc.name+' is unique)';
+  else s+='many-to-one (each '+ft.name+' row belongs to '+(fc.nullable?'zero or one':'exactly one')+' '+tt.name+' row; a '+tt.name+' row can have many '+ft.name+' rows)';
+  s+='. On delete of the '+tt.name+' row: ';
+  if(r.onDelete==='cascade') s+='CASCADE, its '+ft.name+' rows are deleted too.';
+  else if(r.onDelete==='set null') s+='SET NULL, '+ft.name+'.'+fc.name+' becomes NULL.';
+  else s+='RESTRICT, the delete is refused while '+ft.name+' rows still point at it.';
+  return s;
+}
+
+/* ============ JSON (portable, name-based) ============ */
+function serialize(){
+  return {
+    format:'schema-sketch', version:1, notes:S.notes,
+    tables:S.tables.map(function(t){
+      return { name:t.name, note:t.note||'', x:Math.round(t.x), y:Math.round(t.y),
+        columns:t.cols.map(function(c){
+          var o={ name:c.name, type:c.type };
+          if(c.pk) o.pk=true; if(c.nullable && !c.pk) o.nullable=true; if(c.unique) o.unique=true;
+          if(String(c.def||'').trim()) o['default']=String(c.def).trim();
+          if(c.type==='enum') o.enumValues=enumVals(c);
+          return o;
+        }) };
+    }),
+    relations:S.rels.map(function(r){ return { from:refName(r.from), to:refName(r.to), kind:r.kind, onDelete:r.onDelete }; })
+  };
+}
+function deserialize(o){
+  if(!o || typeof o!=='object' || !Array.isArray(o.tables)) throw new Error('not a Schema Sketch file (missing "tables" array).');
+  var st={ notes:typeof o.notes==='string'?o.notes:'', tables:[], rels:[] }, byName={};
+  o.tables.forEach(function(t,i){
+    if(!t || typeof t.name!=='string' || !IDENT.test(t.name)) throw new Error('table #'+(i+1)+' needs a name made of letters, digits and _.');
+    if(byName[t.name.toLowerCase()]) throw new Error('two tables are named "'+t.name+'".');
+    var nt={ id:uid('t'), name:t.name, note:typeof t.note==='string'?t.note:'', x:+t.x||40+i*40, y:+t.y||40+i*40, cols:[] }, cn={};
+    (Array.isArray(t.columns)?t.columns:[]).forEach(function(c,j){
+      if(!c || typeof c.name!=='string' || !IDENT.test(c.name)) throw new Error(t.name+': column #'+(j+1)+' needs a name made of letters, digits and _.');
+      if(cn[c.name.toLowerCase()]) throw new Error(t.name+' has two columns named "'+c.name+'".');
+      if(TYPES.indexOf(c.type)<0) throw new Error(t.name+'.'+c.name+' has unknown type "'+c.type+'". Use one of: '+TYPES.join(', ')+'.');
+      var col={ id:uid('c'), name:c.name, type:c.type, pk:!!c.pk, nullable:!!c.nullable && !c.pk, unique:!!c.unique,
+        def:c['default']!=null?String(c['default']):'', ev:Array.isArray(c.enumValues)?c.enumValues.join(', '):'' };
+      cn[c.name.toLowerCase()]=col; nt.cols.push(col);
+    });
+    nt._cn=cn; byName[t.name.toLowerCase()]=nt; st.tables.push(nt);
+  });
+  function end(s, what){
+    var m=/^([^.]+)\.(.+)$/.exec(String(s||''));
+    var t=m && byName[m[1].toLowerCase()], c=t && t._cn[m[2].toLowerCase()];
+    if(!c) throw new Error('relation '+what+' "'+s+'" does not match a table.column.');
+    return { t:t.id, c:c.id };
+  }
+  (Array.isArray(o.relations)?o.relations:[]).forEach(function(r){
+    var kind=KINDS.indexOf(r.kind)>=0?r.kind:'1-N', od=ACTIONS.indexOf(r.onDelete)>=0?r.onDelete:'restrict';
+    st.rels.push({ id:uid('r'), from:end(r.from,'from'), to:end(r.to,'to'), kind:kind, onDelete:od });
+  });
+  st.tables.forEach(function(t){ delete t._cn; });
+  return st;
+}
+
+/* ============ example ============ */
+var EXAMPLE = {
+  format:'schema-sketch', version:1,
+  notes:'Blog backend: users write posts, posts are labelled with tags (many-to-many through post_tags).',
+  tables:[
+    { name:'users', note:'Registered accounts that can author posts.', x:30, y:30, columns:[
+      { name:'id', type:'uuid', pk:true, 'default':'gen_random_uuid()' },
+      { name:'email', type:'text', unique:true },
+      { name:'display_name', type:'text', nullable:true },
+      { name:'created_at', type:'timestamp', 'default':'now()' } ] },
+    { name:'posts', note:'Articles written by a user.', x:320, y:30, columns:[
+      { name:'id', type:'bigint', pk:true, 'default':'identity' },
+      { name:'author_id', type:'uuid' },
+      { name:'title', type:'text' },
+      { name:'body', type:'text', nullable:true },
+      { name:'status', type:'enum', enumValues:['draft','published','archived'], 'default':'draft' },
+      { name:'published_at', type:'timestamp', nullable:true },
+      { name:'created_at', type:'timestamp', 'default':'now()' } ] },
+    { name:'tags', note:'Labels that can be attached to many posts.', x:30, y:210, columns:[
+      { name:'id', type:'integer', pk:true, 'default':'identity' },
+      { name:'name', type:'text', unique:true },
+      { name:'slug', type:'text', unique:true } ] },
+    { name:'post_tags', note:'Junction table linking posts and tags.', x:610, y:120, columns:[
+      { name:'post_id', type:'bigint', pk:true },
+      { name:'tag_id', type:'integer', pk:true },
+      { name:'added_at', type:'timestamp', 'default':'now()' } ] }
+  ],
+  relations:[
+    { from:'posts.author_id', to:'users.id', kind:'1-N', onDelete:'cascade' },
+    { from:'post_tags.post_id', to:'posts.id', kind:'1-N', onDelete:'cascade' },
+    { from:'post_tags.tag_id', to:'tags.id', kind:'1-N', onDelete:'cascade' }
+  ]
+};
+
+/* ============ mutations ============ */
+function newTableName(){ var taken=new Set(S.tables.map(function(t){ return t.name.toLowerCase(); })); return uniqueName('new_table', taken); }
+function tableH(t){ var el=tblEl(t.id); return el ? el.offsetHeight : 30+Math.max(1,t.cols.length)*23; }
+function overlapsAny(x,y,h,skip){
+  return S.tables.some(function(t){ if(t===skip) return false; var th=tableH(t);
+    return x < t.x+TW+30 && t.x < x+TW+30 && y < t.y+th+30 && t.y < y+h+30; });
+}
+function addTable(){
+  var h=30+23, x0=Math.max(20,vp.scrollLeft+20), y0=Math.max(20,vp.scrollTop+20), spot=null;
+  var maxX=Math.max(x0+TW, vp.scrollLeft+vp.clientWidth-TW-20);
+  for(var y=y0; y<y0+3000 && !spot; y+=40) for(var x=x0; x<=maxX; x+=40){ if(!overlapsAny(x,y,h)){ spot=[x,y]; break; } }
+  if(!spot) spot=[x0,y0];
+  var t={ id:uid('t'), name:newTableName(), note:'', x:spot[0], y:spot[1],
+    cols:[{ id:uid('c'), name:'id', type:'bigint', pk:true, nullable:false, unique:false, def:'identity', ev:'' }] };
+  S.tables.push(t); sel={k:'t',id:t.id};
+  render();
+  var el=tblEl(t.id); if(el) el.scrollIntoView({block:'nearest',inline:'nearest'});
+  var inp=document.querySelector('[data-f="t-name"]'); if(inp){ inp.focus(); inp.select(); }
+  status('Added '+t.name+'. Rename it and add columns on the right.');
+}
+function deleteTable(id){
+  var t=tById(id); if(!t) return;
+  S.rels=S.rels.filter(function(r){ return r.from.t!==id && r.to.t!==id; });
+  S.tables=S.tables.filter(function(x){ return x.id!==id; });
+  sel=null; render(); status('Deleted table '+t.name+' and its relations.');
+}
+function addRelation(from,to){
+  if(from.c===to.c){ status('Pick two different columns to link.','err'); return; }
+  var ft=tById(from.t), tt=tById(to.t), fc=cById(ft,from.c), tc=cById(tt,to.c);
+  if(!fc||!tc) return;
+  var bothPk = fc.pk && tc.pk && pkCols(ft).length===1 && pkCols(tt).length===1 && ft!==tt;
+  // user dragged from the referenced key to the FK column: flip it
+  if(!bothPk && fc.pk && pkCols(ft).length===1 && !tc.pk){ var sw=from; from=to; to=sw; var st=ft; ft=tt; tt=st; var sc=fc; fc=tc; tc=sc; }
+  var dup=S.rels.some(function(r){ return (r.from.c===from.c&&r.to.c===to.c)||(r.from.c===to.c&&r.to.c===from.c); });
+  if(dup){ status('Those columns are already linked.','err'); return; }
+  var r={ id:uid('r'), from:from, to:to, kind: bothPk?'N-N':'1-N', onDelete: fc.nullable?'set null':'restrict' };
+  S.rels.push(r); sel={k:'r',id:r.id}; render();
+  status(bothPk ? 'Linked two primary keys as many-to-many; create its junction table on the right.' : 'Linked '+refName(r.from)+' → '+refName(r.to)+'.', 'good');
+}
+function createJunction(rid){
+  var r=rById(rid); if(!r) return;
+  var A=tById(r.from.t), B=tById(r.to.t), ca=cById(A,r.from.c), cb=cById(B,r.to.c);
+  var taken=new Set(S.tables.map(function(t){ return t.name.toLowerCase(); }));
+  var name=uniqueName(singular(A.name)+'_'+B.name, taken);
+  var n1=singular(A.name)+'_'+ca.name, n2=singular(B.name)+'_'+cb.name;
+  if(n1.toLowerCase()===n2.toLowerCase()) n2='related_'+n2;
+  var j={ id:uid('t'), name:name, note:'Junction table linking '+A.name+' and '+B.name+'.', x:(A.x+B.x)/2, y:Math.max(A.y+tableH(A),B.y+tableH(B))+40, cols:[
+    { id:uid('c'), name:n1, type:ca.type, pk:true, nullable:false, unique:false, def:'', ev:ca.ev },
+    { id:uid('c'), name:n2, type:cb.type, pk:true, nullable:false, unique:false, def:'', ev:cb.ev } ] };
+  S.tables.push(j);
+  S.rels=S.rels.filter(function(x){ return x.id!==rid; });
+  S.rels.push({ id:uid('r'), from:{t:j.id,c:j.cols[0].id}, to:{t:A.id,c:ca.id}, kind:'1-N', onDelete:'cascade' });
+  S.rels.push({ id:uid('r'), from:{t:j.id,c:j.cols[1].id}, to:{t:B.id,c:cb.id}, kind:'1-N', onDelete:'cascade' });
+  sel={k:'t',id:j.id}; render();
+  status('Created junction table '+name+' with a composite primary key and two cascading FKs.','good');
+}
+function autoLayout(){
+  var lvl={}, n=S.tables.length;
+  S.tables.forEach(function(t){ lvl[t.id]=0; });
+  for(var pass=0; pass<n; pass++){
+    var changed=false;
+    S.rels.forEach(function(r){
+      if(r.kind==='N-N' || r.from.t===r.to.t) return;
+      if(lvl[r.from.t] < lvl[r.to.t]+1 && lvl[r.to.t]+1 < n){ lvl[r.from.t]=lvl[r.to.t]+1; changed=true; }
+    });
+    if(!changed) break;
+  }
+  var colY={};
+  S.tables.forEach(function(t){
+    var L=lvl[t.id]; var y=colY[L]||30;
+    t.x=30+L*(TW+80); t.y=y; colY[L]=y+tableH(t)+36;
+  });
+  render(); vp.scrollTo(0,0); status('Arranged '+n+' tables by dependency (parents on the left).');
+}
+function loadState(st, msg){ S=st; sel=null; render(); status(msg,'good'); }
+
+/* ============ board rendering ============ */
+function tblEl(id){ return tablesEl.querySelector('.tbl[data-t="'+id+'"]'); }
+function renderBoard(issues){
+  var warnT={}; issues.forEach(function(x){ if(x.t) warnT[x.t]=1; });
+  var html='';
+  S.tables.forEach(function(t){
+    html+='<div class="tbl'+(isSel('t',t.id)?' sel':'')+'" data-t="'+t.id+'" data-f="tbl-'+t.id+'" tabindex="0" role="group" aria-label="Table '+esc(t.name)+'. Arrow keys move, Delete removes." style="left:'+t.x+'px;top:'+t.y+'px">';
+    html+='<div class="th"><span class="tn">'+esc(t.name)+'</span>'+(warnT[t.id]?'<span class="tw" title="See Issues">!</span>':'')+'<span class="tc">'+t.cols.length+'</span></div>';
+    if(!t.cols.length) html+='<div class="tr none">no columns</div>';
+    t.cols.forEach(function(c){
+      var fk=fkRelOf(c.id), kb=c.pk?(fk?'PF':'PK'):(fk?'FK':(effUnique(t,c)?'UQ':''));
+      html+='<div class="tr" data-t="'+t.id+'" data-col="'+c.id+'"><span class="kb '+(c.pk?'pk':(fk?'fk':''))+'">'+kb+'</span><span class="cn">'+esc(c.name)+'</span><span class="ct">'+esc(c.type)+(c.nullable&&!c.pk?'?':'')+'</span><span class="h" title="Drag to another column to link"></span></div>';
+    });
+    html+='</div>';
+  });
+  tablesEl.innerHTML=html;
+  $('#boardEmpty').hidden = S.tables.length>0;
+  sizeBoard();
+  drawWires();
+}
+function sizeBoard(){
+  var w=0,h=0;
+  S.tables.forEach(function(t){ w=Math.max(w,t.x+TW); h=Math.max(h,t.y+tableH(t)); });
+  board.style.width=Math.max(vp.clientWidth, w+160)+'px';
+  board.style.height=Math.max(vp.clientHeight, h+120)+'px';
+  wires.setAttribute('width', board.style.width.replace('px',''));
+  wires.setAttribute('height', board.style.height.replace('px',''));
+}
+function anchor(end){
+  var t=tById(end.t), el=t&&tblEl(t.id); if(!el) return null;
+  var row=el.querySelector('[data-col="'+end.c+'"]');
+  return { l:t.x, r:t.x+el.offsetWidth, y:t.y+(row?row.offsetTop+row.offsetHeight/2:14) };
+}
+var tmpWire='';
+function drawWires(){
+  var s='';
+  S.rels.forEach(function(r){
+    var a=anchor(r.from), b=anchor(r.to); if(!a||!b) return;
+    var s1,s2,x1,x2;
+    if(r.from.t===r.to.t){ s1=s2=1; x1=a.r; x2=b.r; }
+    else if(a.r+40<b.l){ s1=1; x1=a.r; s2=-1; x2=b.l; }
+    else if(b.r+40<a.l){ s1=-1; x1=a.l; s2=1; x2=b.r; }
+    else { s1=s2=1; x1=a.r; x2=b.r; }
+    var y1=a.y, y2=b.y, st=18, k=(s1===s2) ? 40+Math.abs(x1-x2)/2 : Math.max(30,Math.abs(x2-x1)/2-st);
+    var p0=[x1+s1*st,y1], p1=[x1+s1*(st+k),y1], p2=[x2+s2*(st+k),y2], p3=[x2+s2*st,y2];
+    var d='M'+x1+' '+y1+'L'+p0[0]+' '+p0[1]+'C'+p1[0]+' '+p1[1]+' '+p2[0]+' '+p2[1]+' '+p3[0]+' '+p3[1]+'L'+x2+' '+y2;
+    var on=isSel('r',r.id), cls=(r.kind==='N-N'?' nn':'')+(on?' sel':'');
+    s+='<path class="w'+cls+'" d="'+d+'"/>';
+    var fc=cById(tById(r.from.t),r.from.c);
+    s+= r.kind==='1-1' ? oneMark(x1,y1,s1,false,cls) : crow(x1,y1,s1,cls);
+    s+= r.kind==='N-N' ? crow(x2,y2,s2,cls) : oneMark(x2,y2,s2, fc&&fc.nullable, cls);
+    var mx=(p0[0]+3*p1[0]+3*p2[0]+p3[0])/8, my=(p0[1]+3*p1[1]+3*p2[1]+p3[1])/8;
+    s+='<text class="wl'+(on?' sel':'')+'" x="'+mx+'" y="'+my+'">'+(r.kind==='N-N'?'N:N':r.kind==='1-1'?'1:1':'N:1')+'</text>';
+    s+='<path class="hit" data-r="'+r.id+'" d="'+d+'"><title>'+esc(refName(r.from)+' → '+refName(r.to))+'</title></path>';
+  });
+  wires.innerHTML=s+tmpWire;
+}
+function crow(x,y,sd,cls){ var tx=x+sd*13; return '<path class="m'+cls+'" d="M'+tx+' '+y+'L'+x+' '+(y-6)+'M'+tx+' '+y+'L'+x+' '+y+'M'+tx+' '+y+'L'+x+' '+(y+6)+'"/>'; }
+function oneMark(x,y,sd,optional,cls){
+  var s='<path class="m'+cls+'" d="M'+(x+sd*6)+' '+(y-6)+'L'+(x+sd*6)+' '+(y+6)+(optional?'':'M'+(x+sd*10)+' '+(y-6)+'L'+(x+sd*10)+' '+(y+6))+'"/>';
+  if(optional) s+='<circle class="m'+cls+'" cx="'+(x+sd*13)+'" cy="'+y+'" r="3.5"/>';
+  return s;
+}
+
+/* ============ side panel rendering ============ */
+function opt(v,cur,label){ return '<option value="'+esc(v)+'"'+(v===cur?' selected':'')+'>'+esc(label||v)+'</option>'; }
+function renderInspector(){
+  var h='', t=sel&&sel.k==='t'&&tById(sel.id), r=sel&&sel.k==='r'&&rById(sel.id);
+  if(t){
+    h+='<div class="card-head"><h2>Table · '+esc(t.name)+'</h2><button class="btn btn-sm btn-danger" type="button" data-act="t-del" data-f="t-del">Delete table</button></div>';
+    h+='<div class="card-body">';
+    h+='<div><label class="lbl" for="tName">Name</label><input class="inp mono" id="tName" data-act="t-name" data-f="t-name" value="'+esc(t.name)+'" spellcheck="false" autocomplete="off"><div class="msg" id="tNameMsg"></div></div>';
+    h+='<div><label class="lbl" for="tNote">Purpose (goes into the Prompt and SQL comments)</label><textarea class="inp" id="tNote" rows="2" data-act="t-note" data-f="t-note" placeholder="What one row of this table represents">'+esc(t.note||'')+'</textarea></div>';
+    h+='<div class="cols-head"><b>Columns ('+t.cols.length+')</b><button class="btn btn-sm" type="button" data-act="c-add" data-f="c-add">+ Column</button></div>';
+    if(!t.cols.length) h+='<p class="muted">No columns. Add one; tick PK on the id.</p>';
+    t.cols.forEach(function(c,i){
+      var fk=fkRelOf(c.id), inRels=S.rels.filter(function(x){ return x.kind!=='N-N' && x.to.c===c.id; }).length;
+      h+='<div class="col'+(fk?' is-fk':'')+'" data-c="'+c.id+'">';
+      h+='<div class="c1"><input class="inp" aria-label="Column name" data-act="c-name" data-c="'+c.id+'" data-f="cn-'+c.id+'" value="'+esc(c.name)+'" spellcheck="false" autocomplete="off">';
+      h+='<select aria-label="Type of '+esc(c.name)+'" data-act="c-type" data-c="'+c.id+'" data-f="ct-'+c.id+'">'+TYPES.map(function(x){ return opt(x,c.type); }).join('')+'</select>';
+      h+='<button class="ib" type="button" title="Move up" aria-label="Move '+esc(c.name)+' up" data-act="c-up" data-c="'+c.id+'" data-f="cu-'+c.id+'"'+(i===0?' disabled':'')+'>↑</button>';
+      h+='<button class="ib" type="button" title="Move down" aria-label="Move '+esc(c.name)+' down" data-act="c-down" data-c="'+c.id+'" data-f="cd-'+c.id+'"'+(i===t.cols.length-1?' disabled':'')+'>↓</button>';
+      h+='<button class="ib x" type="button" title="Delete column" aria-label="Delete column '+esc(c.name)+'" data-act="c-del" data-c="'+c.id+'" data-f="cx-'+c.id+'">×</button></div>';
+      h+='<div class="msg" data-msg="'+c.id+'"></div>';
+      h+='<div class="c2">';
+      h+='<label class="chk"><input type="checkbox" data-act="c-pk" data-c="'+c.id+'" data-f="cp-'+c.id+'"'+(c.pk?' checked':'')+'>PK</label>';
+      h+='<label class="chk"><input type="checkbox" data-act="c-null" data-c="'+c.id+'" data-f="cl-'+c.id+'"'+(c.nullable&&!c.pk?' checked':'')+(c.pk?' disabled':'')+'>Null</label>';
+      h+='<label class="chk"><input type="checkbox" data-act="c-uniq" data-c="'+c.id+'" data-f="cq-'+c.id+'"'+(c.unique?' checked':'')+'>Unique</label>';
+      h+='<input class="inp" aria-label="Default of '+esc(c.name)+'" placeholder="'+defaultHint(c)+'" data-act="c-def" data-c="'+c.id+'" data-f="cf-'+c.id+'" value="'+esc(c.def||'')+'" spellcheck="false" autocomplete="off">';
+      h+='</div>';
+      if(c.type==='enum') h+='<input class="inp mono" aria-label="Enum values of '+esc(c.name)+'" placeholder="values, comma-separated: draft, published" data-act="c-ev" data-c="'+c.id+'" data-f="ce-'+c.id+'" value="'+esc(c.ev||'')+'" spellcheck="false">';
+      if(fk) h+='<div class="fkline">→ '+esc(refName(fk.to))+' · '+fk.kind+' · on delete '+fk.onDelete+'</div>';
+      if(inRels) h+='<div class="fkline">← referenced by '+inRels+' foreign key'+(inRels>1?'s':'')+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  } else if(r){
+    var ft=tById(r.from.t), tt=tById(r.to.t);
+    h+='<div class="card-head"><h2>Relation</h2><button class="btn btn-sm btn-danger" type="button" data-act="r-del" data-f="r-del">Delete</button></div><div class="card-body">';
+    h+='<div class="rel-title">'+esc(refName(r.from))+' → '+esc(refName(r.to))+'</div>';
+    h+='<div class="grid2"><div><label class="lbl" for="rKind">Type</label><select class="sel-in" id="rKind" data-act="r-kind" data-f="r-kind">'+opt('1-1',r.kind,'1-1 one-to-one')+opt('1-N',r.kind,'1-N one-to-many')+opt('N-N',r.kind,'N-N many-to-many')+'</select></div>';
+    h+='<div><label class="lbl" for="rOd">On delete</label><select class="sel-in" id="rOd" data-act="r-od" data-f="r-od"'+(r.kind==='N-N'?' disabled':'')+'>'+ACTIONS.map(function(a){ return opt(a,r.onDelete); }).join('')+'</select></div></div>';
+    h+='<p class="explain">'+esc(relSentence(r))+'</p>';
+    if(r.kind==='N-N') h+='<div class="btnrow"><button class="btn btn-primary btn-sm" type="button" data-act="r-junction" data-f="r-junction">Create junction table '+esc(singular(ft.name)+'_'+tt.name)+'</button></div>';
+    else h+='<div class="btnrow"><button class="btn btn-sm" type="button" data-act="r-swap" data-f="r-swap">Swap direction</button></div>';
+    h+='<p class="muted">The arrow starts at the foreign-key column and ends at the column it references.</p></div>';
+  } else {
+    h+='<div class="card-head"><h2>Schema</h2><span class="count">'+S.tables.length+' tables</span></div><div class="card-body">';
+    h+='<div><label class="lbl" for="sNotes">What is this database for? (first section of the Prompt)</label><textarea class="inp" id="sNotes" rows="3" data-act="s-notes" data-f="s-notes" placeholder="e.g. Blog backend: users write posts, posts have tags">'+esc(S.notes)+'</textarea></div>';
+    h+='<p class="muted">Select a table or a relation to edit it. Types: timestamp → timestamptz, json → jsonb, decimal → numeric(12,2). Defaults: <span class="mono">now()</span>, <span class="mono">gen_random_uuid()</span>, <span class="mono">identity</span>, or a literal.</p></div>';
+  }
+  $('#insp').innerHTML=h;
+}
+function defaultHint(c){
+  return { uuid:'default: gen_random_uuid()', timestamp:'default: now()', integer:'default: identity / 0', bigint:'default: identity / 0', boolean:'default: false', json:'default: {}', enum:'default: a value', decimal:'default: 0' }[c.type] || 'default';
+}
+function renderRelCard(){
+  var h='<div class="card-head"><h2>Relations</h2><span class="count">'+S.rels.length+'</span></div>';
+  if(S.rels.length){
+    h+='<ul class="list">';
+    S.rels.forEach(function(r){
+      h+='<li><button class="li'+(isSel('r',r.id)?' on':'')+'" type="button" data-act="r-sel" data-r="'+r.id+'" data-f="rs-'+r.id+'"><span class="mono">'+esc(refName(r.from))+' → '+esc(refName(r.to))+'</span><span class="tag">'+r.kind+(r.kind==='N-N'?'':' · '+r.onDelete)+'</span></button></li>';
+    });
+    h+='</ul>';
+  } else h+='<p class="muted" style="padding:6px 10px">No relations. Drag a column’s ● onto another column, or pick two columns below.</p>';
+  var allCols=[];
+  S.tables.forEach(function(t){ t.cols.forEach(function(c){ allCols.push([t.id+'|'+c.id, t.name+'.'+c.name]); }); });
+  var o='<option value="">'+(allCols.length?'column…':'no columns')+'</option>'+allCols.map(function(x){ return '<option value="'+x[0]+'">'+esc(x[1])+'</option>'; }).join('');
+  h+='<div class="addrel"><select aria-label="Foreign key column" id="raFrom" data-f="ra-from">'+o+'</select><span class="arrow">→</span><select aria-label="Referenced column" id="raTo" data-f="ra-to">'+o+'</select><button class="btn btn-sm" type="button" data-act="ra-add" data-f="ra-add">Link</button></div>';
+  var prevF=$('#raFrom'), prevT=$('#raTo'), pf=prevF?prevF.value:'', pt=prevT?prevT.value:'';
+  $('#relcard').innerHTML=h;
+  if(pf) $('#raFrom').value=pf; if(pt) $('#raTo').value=pt;
+}
+function renderIssues(issues){
+  var err=issues.filter(function(x){ return x.sev==='error'; }).length;
+  var h='<div class="card-head"><h2>Issues</h2><span class="count">'+(issues.length?err+' errors · '+(issues.length-err)+' warnings':'')+'</span></div>';
+  if(!S.tables.length) h+='<p class="muted" style="padding:8px 10px">Checks run as you build: missing primary keys, FK type mismatches, cascade cycles.</p>';
+  else if(!issues.length) h+='<p class="okline">No problems found.</p>';
+  else {
+    h+='<ul class="list">';
+    issues.forEach(function(x,i){
+      h+='<li><button class="issue" type="button" data-act="i-go" data-i="'+i+'" data-f="ig-'+i+'"><span class="sv '+x.sev+'">'+(x.sev==='error'?'ERR':'WARN')+'</span><span>'+esc(x.msg)+(x.fix?' <u>Create junction table</u>':'')+'</span></button></li>';
+    });
+    h+='</ul>';
+  }
+  $('#issues').innerHTML=h;
+}
+
+/* ============ output ============ */
+function renderOutput(issues){
+  outputs={ prompt:genPrompt(issues), sql:genSQL(), prisma:genPrisma(), mermaid:genMermaid(), json:JSON.stringify(serialize(),null,2)+'\n' };
+  showOutput();
+}
+function showOutput(){
+  document.querySelectorAll('.tab').forEach(function(b){ b.setAttribute('aria-selected', String(b.dataset.fmt===fmt)); b.tabIndex = b.dataset.fmt===fmt ? 0 : -1; });
+  var txt=outputs[fmt]||'';
+  $('#out').textContent=txt;
+  $('#chars').textContent=txt.length.toLocaleString('en-US')+' chars';
+}
+
+/* ============ render orchestration ============ */
+var lastIssues=[], restoring=false;
+function render(){
+  var a=document.activeElement, fk=a&&a.dataset?a.dataset.f:null, ss=null, se=null;
+  try{ if(a && 'selectionStart' in a && a.type!=='checkbox'){ ss=a.selectionStart; se=a.selectionEnd; } }catch(e){}
+  var st=$('#side').scrollTop;
+  lastIssues=validate();
+  renderBoard(lastIssues);
+  renderInspector(); renderRelCard(); renderIssues(lastIssues);
+  renderOutput(lastIssues);
+  save();
+  $('#side').scrollTop=st;
+  if(fk){
+    var el=document.querySelector('[data-f="'+fk+'"]');
+    if(el && el!==document.activeElement){ restoring=true; el.focus({preventScroll:true}); restoring=false; try{ if(ss!=null) el.setSelectionRange(ss,se); }catch(e){} }
+  }
+}
+var saveTimer=null;
+function save(){ clearTimeout(saveTimer); saveTimer=setTimeout(function(){ lsSet('state', JSON.stringify(serialize())); }, 150); }
+
+/* ============ side panel events ============ */
+function selT(){ return sel&&sel.k==='t' ? tById(sel.id) : null; }
+function colOf(el){ var t=selT(); return t ? cById(t, el.dataset.c) : null; }
+function nameCheck(v, others, what){
+  if(!v) return what+' name is required.';
+  if(!IDENT.test(v)) return 'Use letters, digits and _ only, starting with a letter or _.';
+  if(others.some(function(n){ return n.toLowerCase()===v.toLowerCase(); })) return what+' "'+v+'" already exists. Pick another name.';
+  return '';
+}
+$('#side').addEventListener('input', function(e){
+  var el=e.target, act=el.dataset.act; if(!act) return;
+  var t=selT(), c;
+  if(act==='s-notes'){ S.notes=el.value; renderOutput(lastIssues); save(); return; }
+  if(act==='t-note' && t){ t.note=el.value; renderOutput(lastIssues); save(); return; }
+  if(act==='t-name' && t){
+    var v=el.value.trim(), m=nameCheck(v, S.tables.filter(function(x){ return x!==t; }).map(function(x){ return x.name; }), 'Table');
+    el.classList.toggle('bad', !!m); $('#tNameMsg').textContent=m;
+    if(!m){ t.name=v; render(); }
+    return;
+  }
+  if(act==='c-name' && (c=colOf(el))){
+    var v2=el.value.trim(), m2=nameCheck(v2, t.cols.filter(function(x){ return x!==c; }).map(function(x){ return x.name; }), 'Column');
+    el.classList.toggle('bad', !!m2);
+    var mm=document.querySelector('[data-msg="'+c.id+'"]'); if(mm) mm.textContent=m2;
+    if(!m2){ c.name=v2; render(); }
+    return;
+  }
+  if(act==='c-def' && (c=colOf(el))){ c.def=el.value; render(); return; }
+  if(act==='c-ev' && (c=colOf(el))){ c.ev=el.value; render(); return; }
+});
+$('#side').addEventListener('focusout', function(e){
+  // an invalid name that was never committed snaps back to the stored name
+  var el=e.target, act=el.dataset&&el.dataset.act;
+  if((act==='t-name'||act==='c-name') && el.classList.contains('bad')) render();
+});
+$('#side').addEventListener('change', function(e){
+  var el=e.target, act=el.dataset.act, t=selT(), c, r=sel&&sel.k==='r'&&rById(sel.id);
+  if(act==='c-type' && (c=colOf(el))){ c.type=el.value; if(c.type!=='enum') c.ev=c.ev||''; render(); }
+  else if(act==='c-pk' && (c=colOf(el))){ c.pk=el.checked; if(c.pk) c.nullable=false; render(); }
+  else if(act==='c-null' && (c=colOf(el))){ c.nullable=el.checked; render(); }
+  else if(act==='c-uniq' && (c=colOf(el))){ c.unique=el.checked; render(); }
+  else if(act==='r-kind' && r){ r.kind=el.value; render(); }
+  else if(act==='r-od' && r){ r.onDelete=el.value; render(); }
+});
+$('#side').addEventListener('click', function(e){
+  var el=e.target.closest('[data-act]'); if(!el || el.tagName==='INPUT' || el.tagName==='SELECT' || el.tagName==='TEXTAREA') return;
+  var act=el.dataset.act, t=selT(), r=sel&&sel.k==='r'&&rById(sel.id), c, i;
+  if(act==='t-del' && t) deleteTable(t.id);
+  else if(act==='c-add' && t){
+    var nm=uniqueName('column', new Set(t.cols.map(function(x){ return x.name.toLowerCase(); })));
+    var nc={ id:uid('c'), name:nm, type:'text', pk:false, nullable:false, unique:false, def:'', ev:'' };
+    t.cols.push(nc); render();
+    var inp=document.querySelector('[data-f="cn-'+nc.id+'"]'); if(inp){ inp.focus(); inp.select(); inp.scrollIntoView({block:'nearest'}); }
+  }
+  else if((act==='c-up'||act==='c-down') && t && (c=colOf(el))){
+    i=t.cols.indexOf(c); var j=act==='c-up'?i-1:i+1;
+    if(j>=0 && j<t.cols.length){ t.cols.splice(i,1); t.cols.splice(j,0,c); render(); }
+  }
+  else if(act==='c-del' && t && (c=colOf(el))){
+    var n=S.rels.length;
+    S.rels=S.rels.filter(function(x){ return x.from.c!==c.id && x.to.c!==c.id; });
+    t.cols=t.cols.filter(function(x){ return x!==c; }); render();
+    status('Deleted column '+t.name+'.'+c.name+(n!==S.rels.length?' and '+(n-S.rels.length)+' relation(s).':'.'));
+  }
+  else if(act==='r-del' && r){ S.rels=S.rels.filter(function(x){ return x!==r; }); sel=null; render(); status('Relation deleted.'); }
+  else if(act==='r-swap' && r){ var tmp=r.from; r.from=r.to; r.to=tmp; render(); }
+  else if(act==='r-junction' && r) createJunction(r.id);
+  else if(act==='r-sel'){ sel={k:'r',id:el.dataset.r}; render(); }
+  else if(act==='ra-add'){
+    var f=$('#raFrom').value, to=$('#raTo').value;
+    if(!f||!to){ status('Choose the foreign-key column on the left and the referenced column on the right.','err'); return; }
+    f=f.split('|'); to=to.split('|');
+    addRelation({t:f[0],c:f[1]},{t:to[0],c:to[1]});
+  }
+  else if(act==='i-go'){
+    var x=lastIssues[+el.dataset.i]; if(!x) return;
+    if(x.fix==='junction') createJunction(x.r);
+    else { sel = x.r ? {k:'r',id:x.r} : {k:'t',id:x.t}; render(); var te=x.t&&tblEl(x.t); if(te) te.scrollIntoView({block:'nearest',inline:'nearest'}); }
+  }
+});
+
+/* ============ board pointer & keyboard ============ */
+var drag=null;
+function boardPt(e){ var b=board.getBoundingClientRect(); return [e.clientX-b.left, e.clientY-b.top]; }
+function markSel(){
+  tablesEl.querySelectorAll('.tbl').forEach(function(el){ el.classList.toggle('sel', isSel('t',el.dataset.t)); });
+  renderInspector(); renderRelCard();
+}
+board.addEventListener('pointerdown', function(e){
+  if(e.button!==0) return;
+  var h=e.target.closest('.h'), hit=e.target.closest('.hit'), tb=e.target.closest('.tbl');
+  if(h){
+    var row=h.closest('.tr'), p=boardPt(e), a=anchor({t:row.dataset.t,c:row.dataset.col});
+    drag={ mode:'link', from:{t:row.dataset.t,c:row.dataset.col}, x0:a.r, y0:a.y, id:e.pointerId };
+    try{ board.setPointerCapture(e.pointerId); }catch(err){} e.preventDefault();
+    tmpWire='<path class="tmp" d="M'+a.r+' '+a.y+'L'+p[0]+' '+p[1]+'"/>'; drawWires();
+    return;
+  }
+  if(hit){ sel={k:'r',id:hit.dataset.r}; render(); return; }
+  if(tb){
+    var t=tById(tb.dataset.t), pt=boardPt(e);
+    drag={ mode:'move', t:t, dx:pt[0]-t.x, dy:pt[1]-t.y, sx:pt[0], sy:pt[1], moved:false, el:tb, id:e.pointerId };
+    try{ board.setPointerCapture(e.pointerId); }catch(err){}
+    if(!isSel('t',t.id)){ sel={k:'t',id:t.id}; markSel(); drawWires(); }
+    return;
+  }
+  if(sel){ sel=null; render(); }
+});
+board.addEventListener('pointermove', function(e){
+  if(!drag || e.pointerId!==drag.id) return;
+  var p=boardPt(e);
+  if(drag.mode==='move'){
+    if(!drag.moved && Math.abs(p[0]-drag.sx)+Math.abs(p[1]-drag.sy)<4) return;
+    drag.moved=true;
+    drag.t.x=Math.max(0,Math.round(p[0]-drag.dx)); drag.t.y=Math.max(0,Math.round(p[1]-drag.dy));
+    drag.el.style.left=drag.t.x+'px'; drag.el.style.top=drag.t.y+'px';
+    drawWires();
+  } else {
+    tablesEl.querySelectorAll('.tr.drop').forEach(function(x){ x.classList.remove('drop'); });
+    var over=document.elementFromPoint(e.clientX,e.clientY), row=over&&over.closest('.tr[data-col]');
+    if(row && row.dataset.col!==drag.from.c) row.classList.add('drop');
+    tmpWire='<path class="tmp" d="M'+drag.x0+' '+drag.y0+'L'+p[0]+' '+p[1]+'"/>'; drawWires();
+  }
+});
+function endDrag(e){
+  if(!drag || e.pointerId!==drag.id) return;
+  var d=drag; drag=null;
+  if(d.mode==='move'){ if(d.moved){ sizeBoard(); } render(); return; }
+  tmpWire='';
+  tablesEl.querySelectorAll('.tr.drop').forEach(function(x){ x.classList.remove('drop'); });
+  var over=e.type==='pointerup' && document.elementFromPoint(e.clientX,e.clientY), row=over&&over.closest('.tr[data-col]');
+  if(row && row.dataset.col!==d.from.c) addRelation(d.from,{t:row.dataset.t,c:row.dataset.col});
+  else { drawWires(); if(e.type==='pointerup') status('Drop the line on a column row to link it.'); }
+}
+board.addEventListener('pointerup', endDrag);
+board.addEventListener('pointercancel', endDrag);
+tablesEl.addEventListener('focusin', function(e){
+  var tb=e.target.closest('.tbl'); if(tb && !drag && !restoring && !isSel('t',tb.dataset.t)){ sel={k:'t',id:tb.dataset.t}; markSel(); drawWires(); }
+});
+tablesEl.addEventListener('keydown', function(e){
+  var tb=e.target.closest('.tbl'); if(!tb || e.target!==tb) return;
+  var t=tById(tb.dataset.t), step=e.shiftKey?40:10, mv={ArrowLeft:[-step,0],ArrowRight:[step,0],ArrowUp:[0,-step],ArrowDown:[0,step]}[e.key];
+  if(mv){ e.preventDefault(); t.x=Math.max(0,t.x+mv[0]); t.y=Math.max(0,t.y+mv[1]); render(); }
+  else if(e.key==='Delete'||e.key==='Backspace'){ e.preventDefault(); deleteTable(t.id); }
+  else if(e.key==='Enter'){ e.preventDefault(); var n=$('#tName'); if(n){ n.focus(); n.select(); } }
+});
+document.addEventListener('keydown', function(e){
+  if((e.key==='Delete'||e.key==='Backspace') && sel && sel.k==='r'){
+    var a=document.activeElement; if(a && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;
+    e.preventDefault(); S.rels=S.rels.filter(function(x){ return x.id!==sel.id; }); sel=null; render(); status('Relation deleted.');
+  }
+});
+
+/* ============ top bar & output events ============ */
+$('#addTable').addEventListener('click', addTable);
+$('#layout').addEventListener('click', function(){ if(!S.tables.length){ status('Nothing to arrange yet.'); return; } autoLayout(); });
+$('#example').addEventListener('click', loadExample);
+function loadExample(){ loadState(deserialize(EXAMPLE), 'Loaded example: users, posts, tags and the post_tags junction table.'); autoLayout(); status('Loaded example: users, posts, tags and the post_tags junction table.','good'); }
+document.querySelector('.board-empty').addEventListener('click', function(e){
+  var b=e.target.closest('[data-act]'); if(!b) return;
+  if(b.dataset.act==='add-table') addTable(); else loadExample();
+});
+$('#import').addEventListener('click', function(){ $('#file').click(); });
+$('#file').addEventListener('change', function(){
+  var f=this.files&&this.files[0]; if(!f) return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{ loadState(deserialize(JSON.parse(rd.result)), 'Imported '+f.name+'.'); }
+    catch(err){ status('Import failed: '+(err instanceof SyntaxError ? 'the file is not valid JSON.' : err.message),'err'); }
+  };
+  rd.onerror=function(){ status('Import failed: the file could not be read.','err'); };
+  rd.readAsText(f); this.value='';
+});
+$('#export').addEventListener('click', function(){
+  if(!S.tables.length){ status('Nothing to export yet.','err'); return; }
+  try{
+    var blob=new Blob([JSON.stringify(serialize(),null,2)],{type:'application/json'}), a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='schema-sketch.json'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+    status('Downloaded schema-sketch.json. The JSON tab has the same content to copy.','good');
+  }catch(err){ status('Download blocked here; copy it from the JSON tab instead.','err'); }
+});
+var clearArmed=null;
+$('#clear').addEventListener('click', function(){
+  var b=this;
+  if(!S.tables.length && !S.notes){ status('Already empty.'); return; }
+  if(!clearArmed){ b.textContent='Click again to clear'; clearArmed=setTimeout(function(){ clearArmed=null; b.textContent='Clear'; }, 3000); return; }
+  clearTimeout(clearArmed); clearArmed=null; b.textContent='Clear';
+  S={notes:'',tables:[],rels:[]}; sel=null; render(); status('Cleared. Export JSON first next time if you want a backup.');
+});
+$('#tabs').addEventListener('click', function(e){
+  var b=e.target.closest('.tab'); if(!b) return;
+  fmt=b.dataset.fmt; lsSet('tab',fmt); showOutput(); $('#copyMsg').textContent='';
+});
+$('#tabs').addEventListener('keydown', function(e){
+  if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft') return;
+  var tabs=[].slice.call(document.querySelectorAll('.tab')), i=tabs.findIndex(function(b){ return b.dataset.fmt===fmt; });
+  i=(i+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length; fmt=tabs[i].dataset.fmt; lsSet('tab',fmt); showOutput(); tabs[i].focus();
+});
+function copyText(txt){
+  var msg=$('#copyMsg');
+  function done(ok){ msg.textContent=ok?'Copied':'Copy failed: select the text and press Ctrl+C'; msg.className='status '+(ok?'good':'err'); setTimeout(function(){ msg.textContent=''; }, 2000); }
+  function fallback(){
+    try{ var ta=document.createElement('textarea'); ta.value=txt; ta.setAttribute('readonly',''); ta.style.position='fixed'; ta.style.opacity='0'; ta.style.left='-9999px';
+      document.body.appendChild(ta); ta.select(); var ok=document.execCommand('copy'); ta.remove(); done(ok); }catch(e){ done(false); }
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){ done(true); }, fallback);
+  else fallback();
+}
+$('#copy').addEventListener('click', function(){ copyText(outputs[fmt]||''); });
+window.addEventListener('resize', function(){ sizeBoard(); });
+
+/* ============ boot ============ */
+var savedTab=lsGet('tab'); if(savedTab && /^(prompt|sql|prisma|mermaid|json)$/.test(savedTab)) fmt=savedTab;
+var raw=lsGet('state');
+if(raw){
+  try{ S=deserialize(JSON.parse(raw)); }
+  catch(err){ S={notes:'',tables:[],rels:[]}; status('Saved schema could not be restored ('+err.message+'). Starting empty.','err'); }
+}
+render();
+// expose generators for headless checks (read-only helpers, harmless in the app)
+window.__schemaSketch={ deserialize:deserialize, load:function(o){ S=deserialize(o); sel=null; render(); }, gen:function(){ return { sql:genSQL(), prisma:genPrisma(), mermaid:genMermaid(), prompt:genPrompt(validate()), issues:validate() }; }, example:EXAMPLE };
+})();
+</script>
+</body>
+</html>
+<!--
+Schema Sketch — usage
+- "+ Table" adds a table with a bigint identity id. Rename it and add columns in the right panel
+  (name, type, PK, Null, Unique, default; enum columns take comma-separated values).
+- Link tables by dragging the dot at the right end of a foreign-key column onto the column it
+  references (usually the other table's id), or with the From → To selects under Relations.
+  Linking two primary keys creates a many-to-many; "Create junction table" turns it into a
+  junction table with a composite key and two cascading foreign keys.
+- Select a relation (click its line or its row) to set 1-1 / 1-N / N-N and on-delete behaviour.
+- Issues lists missing primary keys, duplicate names, FK type mismatches, bad FK targets,
+  set-null on NOT NULL columns and cascade cycles. Click an issue to jump to it.
+- Output tabs: Prompt (brief for an LLM), SQL (PostgreSQL 16 DDL), Prisma, Mermaid erDiagram, JSON.
+  JSON is the same format Import/Export JSON uses. State is kept in localStorage
+  under redline.tool.schema-sketch.*.
+-->

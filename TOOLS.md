@@ -10,12 +10,26 @@ depends on it.
 
 ## The tools
 
+The list is grouped: **Electronics**, **Design & UI**, and **Code, data &
+prompts**.
+
 | Tool | What it does | Mostly for |
 |---|---|---|
-| **Grid Sketch** | Draw a layout on a grid (drag to draw an area, drag it to move it, rename it in the list) and copy it as a prompt, CSS, grid areas, Tailwind, ASCII or JSON. Remembers its own work. | Web, Mobile |
 | **Units & Numbers** | mm, mil, inch and µm; decimal, hex, binary and octal, with the two's complement at 8 to 64 bits; a UART's BRR and baud error for a clock (STM32 16× oversampling); the timer PSC/ARR pair nearest a frequency. | Embedded, PCB |
 | **Trace Width** | How wide a track must be for a current on an outer and an inner layer (IPC-2221), with its resistance, voltage drop and loss over a length; what a given width carries; what a via carries. | PCB |
 | **Resistor & LED** | Ohm's law from any two of V, I, R and P; an LED's series resistor rounded up to an E12/E24/E96 value, with the current and package it then needs; the standard divider pair nearest a Vout, with its current and source impedance. | PCB, Embedded |
+| **Grid Sketch** | Draw a layout on a grid and copy it as a prompt, CSS, grid areas, Tailwind, ASCII or JSON. | Web, Mobile |
+| **Screenshot Annotator** | Paste or drop a screenshot, draw numbered marks (change, remove, add, move, resize, question) with notes; get a fix list with pixel, percent and nine-region positions, a Markdown checklist, JSON, or the marked-up PNG. | Web, Mobile |
+| **Palette Forge** | One colour into seven roles × eleven OKLCH tones, WCAG contrast on each, semantic light/dark tokens, colour-blind preview; out as a prompt, CSS, Tailwind or design-tokens JSON. | Web, Mobile |
+| **Motion Lab** | Shape a cubic-bezier or spring (simulated), set duration, delay and stagger, preview on five motions; out as CSS (`linear()` for springs), Web Animations, Framer Motion or a prompt, each with a reduced-motion variant. | Web, Mobile |
+| **Form Builder** | 17 field types, validation, match rules and conditions, a working preview; out as Zod, a TypeScript type, a react-hook-form component, JSON Schema or a prompt. | Web |
+| **Schema Sketch** | Draw tables, columns and relations (1-1, 1-N, N-N with a junction table), with checks; out as PostgreSQL DDL, Prisma, Mermaid erDiagram, JSON or a prompt. | Web, Mobile |
+| **Flow to Mermaid** | Draw a flowchart (six step types, labelled links, groups, undo); out as Mermaid, a step-by-step prompt or JSON, with a mermaid.live link. | any |
+| **API Sketch** | Define endpoints, parameters, bodies and responses, with consistency checks; out as OpenAPI 3.1 YAML, curl, a typed TypeScript client or a prompt. | Web, Mobile |
+| **Regex by Example** | Mark what should and should not match in a text; get an inferred pattern, tunable part by part, in JavaScript, Python and PCRE, explained, with code and a prompt. Also explains a hand-written regex and warns of catastrophic backtracking. | any |
+| **Cron Studio** | Build or type a cron expression; read it in plain English, see the next ten runs in any time zone with DST notes; out as 5-field, Quartz, EventBridge, GitHub Actions, Kubernetes and node-cron. | Web, Embedded |
+| **Data Digest** | Profile a CSV, TSV, JSON or JSONL file in the browser (streamed, nothing uploaded): types, nulls, ranges, anomalies; out as a compact prompt, Markdown, JSON or CREATE TABLE. | any |
+| **Context Packer** | Pack instructions, code, files, logs and notes into one prompt with a token budget, trim and log-clean helpers, and five templates. | any |
 
 The calculators read values the way an engineer writes them: `4k7`, `2M2`,
 `100n`, `10m` (milli) and `3.3V` all work. `m` is milli and `M` is mega.
@@ -29,11 +43,9 @@ frontend/src/app/tools/
   frame.ts           shows a tool that is a self-contained HTML page
   eng.ts             shared: engineering notation, E12/E24/E96, nearest standard value
   calc.css           shared: the calculators' look (sections, fields, result boxes)
-  grid-sketch/       one folder per tool
-  units/
-  trace-width/
-  resistor/
-frontend/public/tools/grid-sketch.html   Grid Sketch's page itself
+  units/ trace-width/ resistor/     native calculators (Angular components)
+  grid-sketch/ palette-forge/ ...   one folder per page tool: a one-line component
+frontend/public/tools/<id>.html      each page tool itself, self-contained
 ```
 
 Each tool is loaded only when it is first opened, so a long list costs the
@@ -52,7 +64,12 @@ first screen nothing.
 3. **A self-contained HTML page** instead goes in `frontend/public/tools/`,
    and its component is one line around it:
    `<app-tool-frame src="tools/<page>.html" hide=".its-own-title" />`
-   (see `grid-sketch/`). The frame dresses the page in the app's colours.
+   (see `grid-sketch/`). The frame dresses the page in the app's colours: the
+   page must name its colours `--paper`, `--surface`, `--sunken`, `--ink`,
+   `--ink-soft`, `--line`, `--line-soft`, `--accent`, `--accent-ink`,
+   `--danger`, `--warn` and `--ok`, and put its title in `.brand` (hidden in
+   the app). No external requests, no CDN.
+4. **Pick its `group`** in the registry: `electronics`, `design` or `code`.
 
 The rules:
 

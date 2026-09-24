@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Regex by Example — mark matches, get a pattern</title>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#ffffff;
+  --sunken:#e7ecf1;
+  --ink:#16202a;
+  --ink-soft:#5b6b7a;
+  --line:#c8d2db;
+  --line-soft:#dde4ea;
+  --accent:#1f4ed8;
+  --accent-ink:#ffffff;
+  --danger:#c0392b;
+  --warn:#b7791f;
+  --ok:#1e8a4c;
+  --fill-alpha:0.16;
+  --tool-match2:#8b3fd1;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f151b;
+    --surface:#161f27;
+    --sunken:#111920;
+    --ink:#e4ebf1;
+    --ink-soft:#8ea0b0;
+    --line:#2b3945;
+    --line-soft:#212c36;
+    --accent:#6d8dff;
+    --accent-ink:#0f151b;
+    --danger:#ef7a6d;
+    --warn:#e0b050;
+    --ok:#4cc38a;
+    --fill-alpha:0.30;
+    --tool-match2:#c08cff;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f151b;
+  --surface:#161f27;
+  --sunken:#111920;
+  --ink:#e4ebf1;
+  --ink-soft:#8ea0b0;
+  --line:#2b3945;
+  --line-soft:#212c36;
+  --accent:#6d8dff;
+  --accent-ink:#0f151b;
+  --danger:#ef7a6d;
+  --warn:#e0b050;
+  --ok:#4cc38a;
+  --fill-alpha:0.30;
+  --tool-match2:#c08cff;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{
+  background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+.app{display:flex;flex-direction:column;min-height:100vh}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:7px 10px;border-bottom:1px solid var(--line);background:var(--surface)}
+.brand{margin:0;font-size:15px;font-weight:600;letter-spacing:-0.01em}
+.brand span{color:var(--ink-soft);font-weight:400}
+.bar-tools{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+
+.btn{display:inline-flex;align-items:center;gap:4px;min-height:26px;padding:2px 9px;border:1px solid var(--line);border-radius:4px;background:var(--surface);cursor:pointer;font-size:12px;white-space:nowrap}
+.btn:hover{border-color:var(--ink-soft)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.pos{border-color:var(--ok);color:var(--ok)}
+.btn.neg{border-color:var(--danger);color:var(--danger)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--ink-soft)}
+.btn.ghost:hover{color:var(--ink);border-color:var(--line-soft)}
+select,.inp{min-height:26px;padding:2px 6px;border:1px solid var(--line);border-radius:4px;background:var(--sunken);font-size:12px}
+.inp.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.inp.num{width:52px;text-align:right}
+label.chk{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--ink-soft);white-space:nowrap;cursor:pointer}
+label.chk input{margin:0}
+
+main.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:8px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;min-width:0}
+.ph{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:6px 10px;border-bottom:1px solid var(--line-soft);min-height:36px}
+.ph h2{margin:0;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+.ph .sp{flex:1}
+.pbody{display:flex;flex-direction:column;min-height:0}
+.sec{padding:8px 10px;border-bottom:1px solid var(--line-soft)}
+.sec:last-child{border-bottom:0}
+.sec h3{margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);display:flex;align-items:center;gap:6px}
+.sec h3 .sp{flex:1}
+.muted{color:var(--ink-soft)}
+.small{font-size:12px}
+
+/* test text editor with highlight backdrop */
+.selbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line-soft)}
+.selinfo{flex:1 1 140px;min-width:0;font-size:12px;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.selinfo code{color:var(--ink)}
+.editor{position:relative;overflow:auto;background:var(--sunken);min-height:170px;max-height:46vh}
+.editor:focus-within{box-shadow:inset 0 0 0 2px var(--accent)}
+.ed-in{display:grid}
+.ed-in>.backdrop,.ed-in>textarea{
+  grid-area:1/1;margin:0;padding:10px 12px;border:0;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px;line-height:1.6;letter-spacing:0;
+  white-space:pre-wrap;overflow-wrap:break-word;word-wrap:break-word;word-break:normal;tab-size:4;
+}
+.backdrop{color:transparent;pointer-events:none;min-width:0}
+.ed-in>textarea{width:100%;min-width:0;background:transparent;color:var(--ink);resize:none;overflow:hidden;outline:none;caret-color:var(--ink);display:block}
+.ed-in>textarea::placeholder{color:var(--ink-soft)}
+.backdrop span{border-radius:2px}
+.backdrop .m0{background:color-mix(in srgb,var(--accent) calc(var(--fill-alpha)*100%),transparent)}
+.backdrop .m1{background:color-mix(in srgb,var(--tool-match2) calc(var(--fill-alpha)*100%),transparent)}
+.backdrop .xp{box-shadow:inset 0 -2px 0 var(--ok)}
+.backdrop .xn{box-shadow:inset 0 -2px 0 var(--danger)}
+.backdrop .bad{box-shadow:inset 0 -3px 0 var(--danger),inset 0 2px 0 var(--danger)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;padding:5px 10px;font-size:11px;color:var(--ink-soft);border-top:1px solid var(--line-soft)}
+.legend i{display:inline-block;width:14px;height:10px;vertical-align:-1px;margin-right:4px;border-radius:2px}
+.lg-m{background:color-mix(in srgb,var(--accent) calc(var(--fill-alpha)*100% + 10%),transparent)}
+.lg-p{box-shadow:inset 0 -2px 0 var(--ok)}
+.lg-n{box-shadow:inset 0 -2px 0 var(--danger)}
+.lg-b{box-shadow:inset 0 -3px 0 var(--danger),inset 0 2px 0 var(--danger)}
+.matches{max-height:150px;overflow:auto;margin:0;padding:0;list-style:none;font-size:12px}
+.matches li{display:flex;gap:8px;padding:2px 0;border-bottom:1px dashed var(--line-soft);min-width:0}
+.matches li:last-child{border-bottom:0}
+.matches .mi{color:var(--ink-soft);flex:none;width:64px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px}
+.matches code{overflow-wrap:anywhere;min-width:0}
+.matches .gr{color:var(--ink-soft);font-size:11px;overflow-wrap:anywhere}
+
+/* pattern */
+.rxbox{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:4px;background:var(--sunken);min-width:0}
+.rxbox:focus-within{border-color:var(--accent)}
+.rxbox span{padding:5px 2px 5px 7px;color:var(--ink-soft);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px;flex:none}
+.rxbox span+textarea{padding-left:1px}
+.rxbox textarea{flex:1;min-width:0;border:0;background:transparent;outline:none;resize:vertical;padding:5px 0;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px;line-height:1.45;min-height:32px;height:52px;overflow-wrap:anywhere}
+.rxbox.err{border-color:var(--danger)}
+.optrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-top:7px}
+.badge{display:inline-block;padding:1px 6px;border-radius:9px;font-size:11px;border:1px solid var(--line);color:var(--ink-soft);white-space:nowrap}
+.badge.man{border-color:var(--warn);color:var(--warn)}
+.status{display:flex;flex-direction:column;gap:4px;font-size:12px}
+.msg{padding:5px 8px;border-radius:4px;border-left:3px solid var(--line);background:var(--sunken);overflow-wrap:anywhere}
+.msg.ok{border-left-color:var(--ok)}
+.msg.bad{border-left-color:var(--danger);color:var(--danger)}
+.msg.warn{border-left-color:var(--warn)}
+.msg.bad b,.msg.warn b{font-weight:600}
+.msg code{font-size:11.5px}
+
+.exlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.exlist li{display:flex;align-items:center;gap:6px;padding:3px 4px 3px 6px;border-radius:4px;background:var(--sunken);min-width:0;border-left:3px solid var(--ok)}
+.exlist li.neg{border-left-color:var(--danger)}
+.exlist li.fail{box-shadow:inset 0 0 0 1px var(--danger)}
+.exlist .ext{flex:1;min-width:0;border:0;background:none;padding:0;text-align:left;cursor:pointer;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exlist .exs{font-size:11px;white-space:nowrap}
+.exlist .exs.good{color:var(--ok)}
+.exlist .exs.fail{color:var(--danger)}
+.exlist .tag{font-size:10px;color:var(--ink-soft);border:1px solid var(--line);border-radius:3px;padding:0 3px}
+.x{border:0;background:transparent;color:var(--ink-soft);cursor:pointer;padding:0 5px;font-size:15px;line-height:1;border-radius:3px;min-height:22px}
+.x:hover{color:var(--danger)}
+.typed{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.typed .inp{flex:1 1 150px;min-width:0}
+.empty{margin:0;color:var(--ink-soft);font-size:12px}
+.samples{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+
+.parts{display:flex;flex-direction:column;gap:4px}
+.prow{display:grid;grid-template-columns:22px minmax(0,1fr);gap:2px 6px;padding:5px 6px;border:1px solid var(--line-soft);border-radius:4px}
+.pidx{grid-row:span 2;font-size:11px;color:var(--ink-soft);font-family:"IBM Plex Mono",ui-monospace,monospace;padding-top:1px}
+.phead{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;min-width:0}
+.pcode{font-size:12.5px;color:var(--accent);overflow-wrap:anywhere}
+.pdesc{font-size:12px;color:var(--ink-soft);overflow-wrap:anywhere}
+.pctl{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
+.pctl .inp.name{width:96px}
+.xtree{margin:0;padding:0;list-style:none;font-size:12px}
+.xtree li{display:flex;gap:8px;padding:2px 0;align-items:baseline;min-width:0}
+.xtree code{color:var(--accent);flex:none;max-width:45%;overflow-wrap:anywhere;font-size:12px}
+.xtree span{min-width:0;overflow-wrap:anywhere}
+
+/* output */
+.tabs{display:flex;flex-wrap:wrap;gap:2px;padding:6px 8px 0;border-bottom:1px solid var(--line-soft)}
+.tab{padding:4px 9px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--ink-soft);cursor:pointer;font-size:12px;border-radius:4px 4px 0 0}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.outmeta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 10px;border-bottom:1px solid var(--line-soft)}
+.outmeta .cnt{font-size:12px;color:var(--ink-soft);font-family:"IBM Plex Mono",ui-monospace,monospace}
+.outmeta .copied{font-size:12px;color:var(--ok)}
+.outnote{flex:1 1 180px;font-size:11px;color:var(--ink-soft);min-width:0}
+pre.out{margin:0;padding:10px 12px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;min-height:160px;max-height:60vh;tab-size:2}
+pre.out.empty{color:var(--ink-soft);font-family:inherit}
+
+@media (min-width:760px){
+  main.grid{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}
+  .p-out{grid-column:1 / -1}
+}
+@media (min-width:1150px){
+  .app{height:100vh;min-height:0}
+  main.grid{flex:1;min-height:0;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,1fr)}
+  .p-out{grid-column:auto}
+  .panel{min-height:0;overflow:hidden}
+  .pbody{flex:1;overflow:auto}
+  .p-text .pbody{overflow:hidden}
+  .p-text .editor{flex:1;max-height:none}
+  pre.out{flex:1;max-height:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="bar">
+  <h1 class="brand">Regex by Example <span>— mark what should match, get a pattern and its explanation</span></h1>
+  <div class="bar-tools">
+    <select id="sample" aria-label="Load a sample">
+      <option value="">Load sample…</option>
+      <option value="dates">Dates</option>
+      <option value="emails">Emails</option>
+      <option value="orders">Order IDs</option>
+      <option value="phones">Phone numbers</option>
+      <option value="manual">Explain a hand-written regex</option>
+    </select>
+    <button class="btn" id="clearAll" type="button">Clear</button>
+  </div>
+</header>
+
+<main class="grid">
+  <section class="panel p-text" aria-label="Test text">
+    <div class="ph"><h2>Test text</h2><span class="sp"></span><span class="small muted" id="matchCount"></span></div>
+    <div class="pbody">
+      <div class="selbar">
+        <span class="selinfo" id="selInfo">Select part of the text, then mark it.</span>
+        <button class="btn pos" id="addPos" type="button" title="Alt+1" disabled>✓ Should match</button>
+        <button class="btn neg" id="addNeg" type="button" title="Alt+2" disabled>✕ Should not match</button>
+      </div>
+      <div class="editor" id="editor">
+        <div class="ed-in">
+          <div class="backdrop" id="backdrop" aria-hidden="true"></div>
+          <textarea id="text" spellcheck="false" autocomplete="off" aria-label="Test text" placeholder="Paste the text you want to search. Select a piece that should match and press “Should match” (Alt+1). Two or three examples are usually enough; mark wrong hits with “Should not match” (Alt+2)."></textarea>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i class="lg-m"></i>match</span><span><i class="lg-p"></i>should match</span><span><i class="lg-n"></i>should not match</span><span><i class="lg-b"></i>problem</span><span>Alt+1 / Alt+2 mark the selection</span>
+      </div>
+      <div class="sec" id="matchSec">
+        <h3>Matches <span class="sp"></span><span class="muted" id="matchNote"></span></h3>
+        <ul class="matches" id="matchList"></ul>
+        <p class="empty" id="matchEmpty">No matches yet.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel p-pattern" aria-label="Pattern">
+    <div class="ph"><h2>Pattern</h2><span class="badge" id="modeBadge">no pattern</span><span class="sp"></span>
+      <button class="btn ghost" id="useInferred" type="button" hidden>Back to inferred</button>
+    </div>
+    <div class="pbody">
+      <div class="sec">
+        <div class="rxbox" id="rxbox"><span>/</span><textarea id="rx" spellcheck="false" autocomplete="off" rows="2" aria-label="Regular expression (edit to write your own)" placeholder="Mark examples, or type a regex here to get it explained"></textarea><span id="rxFlags">/g</span></div>
+        <div class="optrow">
+          <span class="small muted">Flags</span>
+          <label class="chk" title="global: find every match"><input type="checkbox" id="fg">g</label>
+          <label class="chk" title="ignore case"><input type="checkbox" id="fi">i</label>
+          <label class="chk" title="multiline: ^ and $ match at line breaks"><input type="checkbox" id="fm">m</label>
+          <label class="chk" title="dotAll: . also matches line breaks"><input type="checkbox" id="fs">s</label>
+          <label class="chk inf-only">Boundaries <select id="bound" aria-label="Word boundaries"><option value="auto">auto</option><option value="on">on</option><option value="off">off</option></select></label>
+          <label class="chk inf-only"><input type="checkbox" id="wline">whole line (^…$)</label>
+        </div>
+      </div>
+      <div class="sec"><div class="status" id="status"></div></div>
+      <div class="sec">
+        <h3>Examples <span class="sp"></span><span class="muted" id="exCount"></span></h3>
+        <ul class="exlist" id="exList"></ul>
+        <div id="exEmpty">
+          <p class="empty">No examples yet. Select text on the left and press <b>Should match</b>, or type one below. Try a sample:</p>
+          <div class="samples">
+            <button class="btn" type="button" data-sample="dates">Dates</button>
+            <button class="btn" type="button" data-sample="emails">Emails</button>
+            <button class="btn" type="button" data-sample="orders">Order IDs</button>
+            <button class="btn" type="button" data-sample="phones">Phones</button>
+          </div>
+        </div>
+        <div class="typed">
+          <input class="inp mono" id="typed" type="text" spellcheck="false" placeholder="Type an example…" aria-label="Typed example">
+          <button class="btn pos" id="typedPos" type="button">+ match</button>
+          <button class="btn neg" id="typedNeg" type="button">+ reject</button>
+        </div>
+      </div>
+      <div class="sec">
+        <h3><span id="partsTitle">Parts</span><span class="sp"></span><button class="btn ghost" id="resetParts" type="button" hidden>Reset tweaks</button></h3>
+        <div class="parts" id="parts"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel p-out" aria-label="Output">
+    <div class="tabs" role="tablist" id="tabs">
+      <button class="tab" role="tab" data-tab="js" type="button">JavaScript</button>
+      <button class="tab" role="tab" data-tab="py" type="button">Python</button>
+      <button class="tab" role="tab" data-tab="pcre" type="button">PCRE</button>
+      <button class="tab" role="tab" data-tab="explain" type="button">Explanation</button>
+      <button class="tab" role="tab" data-tab="code" type="button">Code</button>
+      <button class="tab" role="tab" data-tab="prompt" type="button">Prompt</button>
+    </div>
+    <div class="outmeta">
+      <button class="btn primary" id="copy" type="button">Copy</button>
+      <span class="cnt" id="outCount">0 chars</span>
+      <span class="copied" id="copied" aria-live="polite"></span>
+      <span class="outnote" id="outNote"></span>
+    </div>
+    <pre class="out" id="out" tabindex="0"></pre>
+  </section>
+</main>
+</div>
+
+<script>
+"use strict";
+// ==ENGINE== pure functions (no DOM); tested headless in node
+function escRe(s){
+  return s.replace(/[\\^$.*+?()[\]{}|]/g,"\\$&").replace(/\t/g,"\\t").replace(/\n/g,"\\n").replace(/\r/g,"\\r");
+}
+function escCls(c){
+  if(c==="\t")return "\\t"; if(c==="\n")return "\\n"; if(c==="\r")return "\\r";
+  return /[\\\]\[^-]/.test(c) ? "\\"+c : c;
+}
+function charCat(c){
+  if(c>="0"&&c<="9")return "D";
+  if(c.toLowerCase()!==c.toUpperCase())return "A";
+  if(/\s/.test(c))return "S";
+  return "P";
+}
+function tokenize(s){
+  var out=[],i=0;
+  while(i<s.length){
+    var c=s[i],k=charCat(c),j=i+1;
+    while(j<s.length){
+      var d=s[j];
+      if(charCat(d)!==k)break;
+      if(k==="P"&&d!==c)break;
+      j++;
+    }
+    var t={t:k,text:s.slice(i,j)};
+    if(k==="P")t.ch=c;
+    out.push(t);i=j;
+  }
+  return out;
+}
+function tkey(t){return t.t==="P"?"P"+t.ch:t.t;}
+function allSame(a){for(var i=1;i<a.length;i++)if(a[i]!==a[0])return false;return true;}
+function lensOf(texts){
+  var mn=Infinity,mx=0;
+  texts.forEach(function(t){mn=Math.min(mn,t.length);mx=Math.max(mx,t.length);});
+  return [mn===Infinity?0:mn,mx];
+}
+function uniq(a){var o=[];a.forEach(function(x){if(o.indexOf(x)<0)o.push(x);});return o;}
+function countChar(s,c){var n=0;for(var i=0;i<s.length;i++)if(s[i]===c)n++;return n;}
+
+// Build a character class that covers every character in `chars`.
+// opts.ci: case-insensitive, opts.wide: prefer \w when letters and digits/_ mix.
+function classFromChars(chars,opts){
+  opts=opts||{};
+  var L=false,U=false,D=false,S=false,extra={};
+  for(var i=0;i<chars.length;i++){
+    var c=chars[i];
+    if(c>="a"&&c<="z")L=true;
+    else if(c>="A"&&c<="Z")U=true;
+    else if(c>="0"&&c<="9")D=true;
+    else if(/\s/.test(c))S=true;
+    else extra[opts.ci?c.toLowerCase():c]=1;
+  }
+  var parts=[];
+  if(opts.wide&&(L||U)&&(D||extra["_"])){
+    delete extra["_"];parts.push("\\w");
+  }else{
+    if(L||U){ if(opts.ci||(L&&!U))parts.push("a-z"); else if(U&&!L)parts.push("A-Z"); else parts.push("A-Za-z"); }
+    if(D)parts.push("0-9");
+  }
+  if(S)parts.push("\\s");
+  var ex=Object.keys(extra).sort();
+  if(parts.length===0&&ex.length===1)return escRe(ex[0]);
+  parts=parts.concat(ex.map(escCls));
+  if(parts.length===1){
+    if(parts[0]==="0-9")return "\\d";
+    if(parts[0]==="\\s"||parts[0]==="\\w")return parts[0];
+  }
+  return "["+parts.join("")+"]";
+}
+
+// Affine-gap alignment of a token sequence against profile columns (Gotoh).
+function gotoh(cols,seq){
+  var n=cols.length,m=seq.length,INF=1e9,O=1,E=1,i,j;
+  function mk(){var a=[];for(var r=0;r<=n;r++){a.push(new Array(m+1).fill(INF));}return a;}
+  function mkb(){var a=[];for(var r=0;r<=n;r++){a.push(new Array(m+1).fill(""));}return a;}
+  var M=mk(),X=mk(),Y=mk(),bM=mkb(),bX=mkb(),bY=mkb();
+  M[0][0]=0;
+  for(i=1;i<=n;i++){X[i][0]=O+E*i;bX[i][0]=i===1?"M":"X";}
+  for(j=1;j<=m;j++){Y[0][j]=O+E*j;bY[0][j]=j===1?"M":"Y";}
+  function cost(col,tok){
+    if(col.key!==tkey(tok))return INF;
+    var s=0,k=0;col.toks.forEach(function(t){if(t){s+=t.text.length;k++;}});
+    return Math.min(0.5,0.05*Math.abs(tok.text.length-(k?s/k:0)));
+  }
+  function pick(cands){var b=cands[0];for(var q=1;q<cands.length;q++)if(cands[q][0]<b[0])b=cands[q];return b;}
+  for(i=1;i<=n;i++){
+    for(j=1;j<=m;j++){
+      var c=cost(cols[i-1],seq[j-1]);
+      if(c<INF){var pm=pick([[M[i-1][j-1],"M"],[X[i-1][j-1],"X"],[Y[i-1][j-1],"Y"]]);M[i][j]=pm[0]+c;bM[i][j]=pm[1];}
+      var px=pick([[M[i-1][j]+O+E,"M"],[X[i-1][j]+E,"X"],[Y[i-1][j]+O+E,"Y"]]);X[i][j]=px[0];bX[i][j]=px[1];
+      var py=pick([[M[i][j-1]+O+E,"M"],[Y[i][j-1]+E,"Y"],[X[i][j-1]+O+E,"X"]]);Y[i][j]=py[0];bY[i][j]=py[1];
+    }
+  }
+  var end=pick([[M[n][m],"M"],[X[n][m],"X"],[Y[n][m],"Y"]]),s=end[1],ops=[];
+  i=n;j=m;
+  if(n===0&&m===0)return ops;
+  while(i>0||j>0){
+    var prev;
+    if(s==="M"){ops.push("M");prev=bM[i][j];i--;j--;}
+    else if(s==="X"){ops.push("X");prev=bX[i][j];i--;}
+    else{ops.push("Y");prev=bY[i][j];j--;}
+    s=prev;
+  }
+  return ops.reverse();
+}
+function alignSeqs(seqs){
+  var n=seqs.length,cols=null;
+  var order=seqs.map(function(s,i){return i;}).sort(function(a,b){return seqs[b].length-seqs[a].length||a-b;});
+  order.forEach(function(si){
+    var seq=seqs[si];
+    if(!cols){cols=seq.map(function(t){var toks=new Array(n).fill(null);toks[si]=t;return {key:tkey(t),toks:toks};});return;}
+    var ops=gotoh(cols,seq),out=[],ci=0,ti=0;
+    ops.forEach(function(op){
+      if(op==="M"){cols[ci].toks[si]=seq[ti];out.push(cols[ci]);ci++;ti++;}
+      else if(op==="X"){out.push(cols[ci]);ci++;}
+      else{var toks=new Array(n).fill(null);toks[si]=seq[ti];out.push({key:tkey(seq[ti]),toks:toks});ti++;}
+    });
+    cols=out;
+  });
+  return cols||[];
+}
+function colsToParts(cols){
+  function mask(c){return c.toks.map(function(t){return t?"1":"0";}).join("");}
+  function colPart(c){
+    var live=c.toks.filter(Boolean),t=live[0];
+    var p={kind:"run",cat:t.t,texts:live.map(function(x){return x.text;})};
+    if(t.t==="P")p.ch=t.ch;
+    return p;
+  }
+  var parts=[],i=0;
+  while(i<cols.length){
+    var mk=mask(cols[i]);
+    if(mk.indexOf("0")<0){parts.push(colPart(cols[i]));i++;continue;}
+    var grp=[],present=mk.split("1").length-1;
+    while(i<cols.length&&mask(cols[i])===mk){grp.push(colPart(cols[i]));i++;}
+    parts.push({kind:"opt",parts:grp,present:present,total:mk.length});
+  }
+  return parts;
+}
+function tryRepeat(strs){
+  var cand=uniq(strs.join("").split("").filter(function(c){var k=charCat(c);return k==="P"||k==="S";}));
+  for(var q=0;q<cand.length;q++){
+    var sep=cand[q],ok=true,pieces=[],counts=[];
+    strs.forEach(function(s){
+      var ps=s.split(sep);counts.push(ps.length-1);
+      ps.forEach(function(p){
+        if(!p)ok=false;
+        for(var i=0;i<p.length;i++){var k=charCat(p[i]);if(!(k==="D"||k==="A"||p[i]==="_"))ok=false;}
+        pieces.push(p);
+      });
+    });
+    if(ok&&!allSame(counts))return {kind:"rep",sep:sep,pieces:pieces,minReps:Math.min.apply(null,counts),maxReps:Math.max.apply(null,counts)};
+  }
+  return null;
+}
+function genSegment(strs){
+  if(strs.every(function(s){return s==="";}))return [];
+  var parts=colsToParts(alignSeqs(strs.map(tokenize)));
+  var opt=parts.filter(function(p){return p.kind==="opt";});
+  if(!opt.length)return parts;
+  var rep=tryRepeat(strs);
+  if(rep)return [rep];
+  var req=parts.length-opt.length,optCols=opt.reduce(function(a,p){return a+p.parts.length;},0);
+  if(opt.length<=2&&optCols<=Math.max(req,3))return parts;
+  return [{kind:"set",texts:strs.slice()}];
+}
+// Separator characters that occur equally often, in the same order, in every example.
+function findAnchors(strs){
+  var set={};
+  uniq(strs[0].split("")).forEach(function(c){
+    var k=charCat(c);if(k!=="P"&&k!=="S")return;
+    var n=countChar(strs[0],c);
+    if(n>0&&strs.every(function(s){return countChar(s,c)===n;}))set[c]=1;
+  });
+  function seq(s){return s.split("").filter(function(c){return set[c];}).join("");}
+  var s0=seq(strs[0]);
+  if(!strs.every(function(s){return seq(s)===s0;}))return {};
+  return set;
+}
+function inferParts(pos){
+  var anchors=findAnchors(pos);
+  var split=pos.map(function(s){
+    var segs=[""],seps=[];
+    for(var i=0;i<s.length;i++){var c=s[i];if(anchors[c]){seps.push(c);segs.push("");}else segs[segs.length-1]+=c;}
+    return {segs:segs,seps:seps};
+  });
+  var nSeg=split[0].segs.length,parts=[];
+  for(var k=0;k<nSeg;k++){
+    parts=parts.concat(genSegment(split.map(function(x){return x.segs[k];})));
+    if(k<nSeg-1){
+      var sep=split[0].seps[k],last=parts[parts.length-1];
+      if(last&&last.kind==="lit")last.text+=sep;else parts.push({kind:"lit",text:sep});
+    }
+  }
+  return parts;
+}
+function isAtom(b){return /^(\\.|\[(?:\\.|[^\]\\])*\]|[^\\])$/.test(b);}
+function quantify(body,q){if(!q)return body;return (isAtom(body)?body:"(?:"+body+")")+q;}
+function numOr(v,d){v=parseInt(v,10);return isFinite(v)&&v>=0?v:d;}
+function quantFor(ov,lens,ctx,loosenEqual){
+  var mn=lens[0],mx=lens[1],mode=ov.quant||"auto";
+  function nq(n){return n===1?"":"{"+n+"}";}
+  if(mode==="exact")return nq(numOr(ov.n,mx));
+  if(mode==="range"){var a=numOr(ov.min,mn),b=numOr(ov.max,mx);if(b<a)b=a;return a===b?nq(a):"{"+a+","+b+"}";}
+  if(mode==="plus")return "+";
+  if(mode==="star")return "*";
+  if(mn===mx){if(loosenEqual&&ctx.tight<1)return mn===0?"*":"+";return nq(mn);}
+  if(ctx.tight>=1)return "{"+mn+","+mx+"}";
+  return mn===0?"*":"+";
+}
+function runIsLiteral(p,ctx){
+  if(!allSame(p.texts))return false;
+  var ov=p.ov||{};
+  if(ov.literal!=null)return !!ov.literal;
+  return p.cat!=="D"||ctx.tight>=2;
+}
+function partCore(p,ctx){
+  var ov=p.ov||{};
+  switch(p.kind){
+    case "lit":return escRe(p.text);
+    case "run":{
+      if(runIsLiteral(p,ctx))return escRe(p.texts[0]);
+      var body=p.cat==="D"?"\\d":p.cat==="S"?"\\s":p.cat==="P"?escRe(p.ch):classFromChars(p.texts.join(""),{ci:ctx.ci});
+      return quantify(body,quantFor(ov,lensOf(p.texts),ctx,p.cat==="A"||p.cat==="S"));
+    }
+    case "set":{
+      var cls=classFromChars(p.texts.join(""),{ci:ctx.ci,wide:ctx.tight<1});
+      return quantify(cls,quantFor(ov,lensOf(p.texts),ctx,true));
+    }
+    case "rep":{
+      var pc=classFromChars(p.pieces.join(""),{ci:ctx.ci,wide:ctx.tight<1}),pl=lensOf(p.pieces);
+      var pq=ctx.tight>=1?(pl[0]===pl[1]?(pl[0]===1?"":"{"+pl[0]+"}"):"{"+pl[0]+","+pl[1]+"}"):"+";
+      var rq=ov.quant==="plus"?"+":ov.quant==="star"?"*":ctx.tight>=1?"{"+p.minReps+","+p.maxReps+"}":(p.minReps>=1?"+":"*");
+      return quantify(pc,pq)+"(?:"+escRe(p.sep)+quantify(pc,pq)+")"+rq;
+    }
+    case "opt":return p.parts.map(function(x){return renderPart(x,ctx);}).join("");
+    case "alt":return "(?:"+uniq(p.texts).sort(function(a,b){return b.length-a.length;}).map(escRe).join("|")+")";
+  }
+  return "";
+}
+function validName(n){return /^[A-Za-z_][A-Za-z0-9_]*$/.test(n||"");}
+function renderPart(p,ctx){
+  var ov=p.ov||{},core=partCore(p,ctx);
+  var optional=ov.optional!=null?!!ov.optional:p.kind==="opt";
+  if(ov.capture){
+    var g="("+(validName(ov.name)?"?<"+ov.name+">":"")+core+")";
+    return optional?g+"?":g;
+  }
+  return optional?(isAtom(core)?core+"?":"(?:"+core+")?"):core;
+}
+function renderAll(parts,ctx){
+  var body=parts.map(function(p){return renderPart(p,ctx);}).join("");
+  if(!body)return "";
+  if(ctx.line)return "^"+body+"$";
+  if(ctx.boundary){
+    var e=ctx.edges||{};
+    body=(e.startWord?"\\b":"(?<!\\w)")+body+(e.endWord?"\\b":"(?!\\w)");
+  }
+  return body;
+}
+function checkPattern(pat,flags,pos,neg){
+  var f=(flags||"").replace(/[gy]/g,""),full,srch;
+  try{full=new RegExp("^(?:"+pat+")$",f);srch=new RegExp(pat,f+"g");}catch(e){return {error:e.message,missed:pos.slice(),caught:[],ok:false};}
+  var missed=pos.filter(function(s){return !full.test(s);});
+  var caught=neg.filter(function(s){srch.lastIndex=0;return srch.test(s);});
+  return {missed:missed,caught:caught,ok:!missed.length&&!caught.length};
+}
+var LEVELS=["loose","loose + boundaries","length ranges + boundaries","exact values + boundaries","literal list"];
+// Infer a pattern from positive (and negative) example strings.
+// Tries the most general candidate first and tightens until no negative is caught.
+function inferRegex(pos,neg,opt){
+  opt=opt||{};neg=(neg||[]).filter(function(s){return s.length;});
+  pos=uniq((pos||[]).filter(function(s){return s.length;}));
+  if(!pos.length)return null;
+  var flags=opt.flags||"",ci=flags.indexOf("i")>=0;
+  var edges={startWord:pos.every(function(s){return /^\w/.test(s);}),endWord:pos.every(function(s){return /\w$/.test(s);})};
+  var parts=inferParts(pos),best=null;
+  var ladder=[[0,false],[0,true],[1,true],[2,true]];
+  function attempt(ps,t,b,lvl){
+    var ctx={tight:t,boundary:b,edges:edges,ci:ci};
+    var pat=renderAll(ps,ctx),r=checkPattern(pat,flags,pos,neg);
+    var res={parts:ps,tight:t,boundary:b,edges:edges,pattern:pat,check:r,level:lvl,score:r.missed.length*100+r.caught.length};
+    if(!best||res.score<best.score)best=res;
+    return r.ok?res:null;
+  }
+  for(var k=0;k<ladder.length;k++){var r=attempt(parts,ladder[k][0],ladder[k][1],k);if(r)return r;}
+  var alt=[{kind:"alt",texts:pos}];
+  var ra=attempt(alt,2,true,4);if(ra)return ra;
+  best.warning="No pattern fits every example: "+best.check.caught.length+" negative example(s) are still matched. A negative that contains a positive example (or equals one) cannot be excluded.";
+  return best;
+}
+
+// ---- regex parser (JS syntax, plus Python (?P<name>) forms) ----
+function parseRegex(src){
+  var i=0,groupCount=0,names=[];
+  function err(msg,pos){var p=pos==null?i:pos;var e=new Error(msg+" (at position "+(p+1)+")");e.pos=p;throw e;}
+  function parseAlt(){
+    var s=i,br=[parseSeq()];
+    while(src[i]==="|"){i++;br.push(parseSeq());}
+    return br.length===1?br[0]:{type:"alt",branches:br,start:s,end:i};
+  }
+  function parseSeq(){
+    var s=i,items=[];
+    while(i<src.length&&src[i]!=="|"&&src[i]!==")"){items.push(parseQuant(parseAtom()));}
+    return {type:"seq",items:items,start:s,end:i};
+  }
+  function parseQuant(atom){
+    var c=src[i],s=i,q=null,m;
+    if(c==="*"){q=[0,Infinity];i++;}
+    else if(c==="+"){q=[1,Infinity];i++;}
+    else if(c==="?"){q=[0,1];i++;}
+    else if(c==="{"&&(m=/^\{(\d+)(,(\d*))?\}/.exec(src.slice(i)))){
+      q=[+m[1],m[2]?(m[3]===""?Infinity:+m[3]):+m[1]];i+=m[0].length;
+      if(q[1]<q[0])err("Quantifier "+m[0]+" has its numbers in the wrong order — write the smaller one first",s);
+    }
+    if(!q)return atom;
+    if(!atom.quantifiable)err("Nothing to repeat before \""+c+"\" — escape it as \\"+c+" to match it literally",s);
+    var lazy=false,poss=false;
+    if(src[i]==="?"){lazy=true;i++;}else if(src[i]==="+"){poss=true;i++;}
+    return {type:"quant",min:q[0],max:q[1],lazy:lazy,poss:poss,body:atom,start:atom.start,end:i};
+  }
+  function parseAtom(){
+    var s=i,c=src[i];
+    if(c==="(")return parseGroup();
+    if(c==="[")return parseClass();
+    if(c==="\\")return parseEscape(false);
+    if(c==="^"||c==="$"){i++;return {type:"anchor",kind:c,start:s,end:i};}
+    if(c==="."){i++;return {type:"any",start:s,end:i,quantifiable:true};}
+    if(c==="*"||c==="+"||c==="?")err("Nothing to repeat before \""+c+"\" — escape it as \\"+c+" to match it literally");
+    i++;return {type:"char",value:c,start:s,end:i,quantifiable:true};
+  }
+  function parseGroup(){
+    var s=i,kind="capture",name=null,m;i++;
+    if(src[i]==="?"){
+      var rest=src.slice(i);
+      if(rest.indexOf("?:")===0){kind="noncap";i+=2;}
+      else if(rest.indexOf("?=")===0){kind="ahead";i+=2;}
+      else if(rest.indexOf("?!")===0){kind="negahead";i+=2;}
+      else if(rest.indexOf("?<=")===0){kind="behind";i+=3;}
+      else if(rest.indexOf("?<!")===0){kind="negbehind";i+=3;}
+      else if(rest.indexOf("?>")===0){kind="atomic";i+=2;}
+      else if((m=/^\?P?<([A-Za-z_][A-Za-z0-9_]*)>/.exec(rest))){kind="named";name=m[1];i+=m[0].length;}
+      else if((m=/^\?P=([A-Za-z_]\w*)\)/.exec(rest))){i+=m[0].length;return {type:"backref",ref:m[1],start:s,end:i,quantifiable:true};}
+      else if((m=/^\?([imsx]+)(?:-([imsx]+))?\)/.exec(rest))){i+=m[0].length;return {type:"inline",on:m[1],off:m[2]||"",start:s,end:i};}
+      else err("Unknown group syntax \"(?"+(src[i+1]||"")+"\" — use (?: ), (?= ), (?! ), (?<= ), (?<! ) or (?<name> )",s);
+    }
+    var idx=null;
+    if(kind==="capture"||kind==="named"){
+      idx=++groupCount;
+      if(name){if(names.indexOf(name)>=0)err("Duplicate group name \""+name+"\" — each name may be used once",s);names.push(name);}
+    }
+    var body=parseAlt();
+    if(src[i]!==")")err("Missing \")\" for the group opened here — add a closing parenthesis",s);
+    i++;
+    return {type:"group",kind:kind,name:name,index:idx,body:body,start:s,end:i,quantifiable:kind!=="behind"&&kind!=="negbehind"};
+  }
+  function parseClass(){
+    var s=i,neg=false,items=[];i++;
+    if(src[i]==="^"){neg=true;i++;}
+    while(i<src.length&&src[i]!=="]"){
+      var a=classAtom();
+      if(src[i]==="-"&&src[i+1]!==undefined&&src[i+1]!=="]"&&a.kind==="char"){
+        var dash=i;i++;var b=classAtom();
+        if(b.kind!=="char"){items.push(a,{kind:"char",value:"-"},b);continue;}
+        if(b.value.charCodeAt(0)<a.value.charCodeAt(0))err("Range \""+a.value+"-"+b.value+"\" is out of order in the character class — put the smaller character first",dash);
+        items.push({kind:"range",from:a.value,to:b.value});
+      }else items.push(a);
+    }
+    if(src[i]!=="]")err("Missing \"]\" to close the character class opened here",s);
+    i++;
+    return {type:"class",neg:neg,items:items,start:s,end:i,quantifiable:true};
+  }
+  function classAtom(){
+    if(src[i]==="\\"){
+      var e=parseEscape(true);
+      if(e.type==="esc")return {kind:"esc",code:e.code};
+      if(e.type==="prop")return {kind:"prop",neg:e.neg,name:e.name};
+      return {kind:"char",value:e.value};
+    }
+    return {kind:"char",value:src[i++]};
+  }
+  function parseEscape(inCls){
+    var s=i;i++;
+    var c=src[i],m;
+    if(c===undefined)err("The pattern ends with a lone backslash — write \\\\ to match a backslash",s);
+    i++;
+    function ch(v){return {type:"char",value:v,escaped:true,start:s,end:i,quantifiable:true};}
+    if("dDwWsS".indexOf(c)>=0)return {type:"esc",code:c,start:s,end:i,quantifiable:true};
+    if(!inCls&&(c==="b"||c==="B"||c==="A"||c==="z"||c==="Z"||c==="G"))return {type:"anchor",kind:"\\"+c,start:s,end:i};
+    if(c==="b")return ch("\b");
+    if(!inCls&&/[1-9]/.test(c)){m=/^\d*/.exec(src.slice(i));i+=m[0].length;return {type:"backref",ref:+(c+m[0]),start:s,end:i,quantifiable:true};}
+    if(!inCls&&c==="k"&&src[i]==="<"){
+      m=/^<([A-Za-z_]\w*)>/.exec(src.slice(i));
+      if(!m)err("\\k must be followed by <name>",s);
+      i+=m[0].length;return {type:"backref",ref:m[1],start:s,end:i,quantifiable:true};
+    }
+    if(c==="x"&&(m=/^[0-9a-fA-F]{2}/.exec(src.slice(i)))){i+=2;return ch(String.fromCharCode(parseInt(m[0],16)));}
+    if(c==="u"&&(m=/^[0-9a-fA-F]{4}/.exec(src.slice(i)))){i+=4;return ch(String.fromCharCode(parseInt(m[0],16)));}
+    if(c==="u"&&(m=/^\{([0-9a-fA-F]+)\}/.exec(src.slice(i)))){i+=m[0].length;return ch(String.fromCodePoint(parseInt(m[1],16)));}
+    if((c==="p"||c==="P")&&(m=/^\{([^}]+)\}/.exec(src.slice(i)))){i+=m[0].length;return {type:"prop",neg:c==="P",name:m[1],start:s,end:i,quantifiable:true};}
+    if(c==="c"&&/[A-Za-z]/.test(src[i]||"")){var cc=src[i++];return ch(String.fromCharCode(cc.toUpperCase().charCodeAt(0)-64));}
+    var map={n:"\n",t:"\t",r:"\r",f:"\f",v:"\v","0":"\0"};
+    if(map.hasOwnProperty(c))return ch(map[c]);
+    return ch(c);
+  }
+  var root=parseAlt();
+  if(i<src.length&&src[i]===")")err("Unmatched \")\" — remove it or escape it as \\)");
+  return {root:root,groupCount:groupCount,names:names};
+}
+
+function charLabel(c){
+  var m={" ":"a space","\t":"a tab","\n":"a line break","\r":"a carriage return","\f":"a form feed","\v":"a vertical tab","\0":"a NUL character","\b":"a backspace"};
+  return m[c]||"\""+c+"\"";
+}
+var ESC_DESC={d:"a digit (0–9)",D:"any character except a digit",w:"a word character (letter, digit or _)",W:"any character except a word character",s:"a whitespace character (space, tab, line break)",S:"any character except whitespace"};
+var ESC_SHORT={d:"digits",D:"non-digits",w:"word characters",W:"non-word characters",s:"whitespace",S:"non-whitespace"};
+function quantText(q){
+  var t;
+  if(q.min===0&&q.max===1)t="optional (zero or one time)";
+  else if(q.min===0&&q.max===Infinity)t="zero or more times";
+  else if(q.min===1&&q.max===Infinity)t="one or more times";
+  else if(q.max===Infinity)t=q.min+" or more times";
+  else if(q.min===q.max)t="exactly "+q.min+" time"+(q.min===1?"":"s");
+  else t="between "+q.min+" and "+q.max+" times";
+  if(q.lazy)t+=", as few as possible (lazy)";
+  if(q.poss)t+=", possessive — never gives characters back (PCRE / Python 3.11+ only)";
+  return t;
+}
+function describeAtom(n,flags){
+  switch(n.type){
+    case "char":return n.value===" "||n.value.length!==1||/[\t\n\r\f\v\0\b]/.test(n.value)?charLabel(n.value):"the character \""+n.value+"\"";
+    case "any":return flags.indexOf("s")>=0?"any character, including line breaks":"any character except a line break";
+    case "esc":return ESC_DESC[n.code];
+    case "prop":return (n.neg?"any character NOT in":"a character in")+" the Unicode category "+n.name+" (needs the u flag in JavaScript)";
+    case "backref":return "the same text that "+(typeof n.ref==="number"?"group #"+n.ref:"group \""+n.ref+"\"")+" captured";
+    case "class":{
+      var list=n.items.map(function(it){
+        if(it.kind==="range")return it.from+"–"+it.to;
+        if(it.kind==="esc")return ESC_SHORT[it.code];
+        if(it.kind==="prop")return (it.neg?"not ":"")+it.name;
+        return charLabel(it.value);
+      });
+      if(!list.length)return n.neg?"any character":"nothing (an empty class never matches)";
+      var txt=list.length===1?list[0]:list.slice(0,-1).join(", ")+" or "+list[list.length-1];
+      return n.neg?"one character that is NOT "+txt:"one character: "+txt;
+    }
+  }
+  return "";
+}
+function groupTitle(g){
+  switch(g.kind){
+    case "capture":return "Capture group #"+g.index;
+    case "named":return "Capture group #"+g.index+" \""+g.name+"\"";
+    case "noncap":return "Group (not captured)";
+    case "ahead":return "Lookahead — the next characters must be (not consumed)";
+    case "negahead":return "Negative lookahead — the next characters must NOT be";
+    case "behind":return "Lookbehind — must be preceded by (not consumed)";
+    case "negbehind":return "Negative lookbehind — must NOT be preceded by";
+    case "atomic":return "Atomic group — no backtracking into it (PCRE / Python 3.11+ only)";
+  }
+  return "Group";
+}
+function anchorText(k,flags){
+  var m=flags.indexOf("m")>=0;
+  switch(k){
+    case "^":return m?"start of a line":"start of the text";
+    case "$":return m?"end of a line":"end of the text";
+    case "\\b":return "a word boundary (between a word character and a non-word character)";
+    case "\\B":return "NOT at a word boundary";
+    case "\\A":return "start of the text (Python/PCRE; not supported in JavaScript)";
+    case "\\z":return "end of the text (PCRE; Python uses \\Z; not supported in JavaScript)";
+    case "\\Z":return "end of the text (Python/PCRE; not supported in JavaScript)";
+    case "\\G":return "where the previous match ended (PCRE only)";
+  }
+  return k;
+}
+function clip(s,n){return s.length>n?s.slice(0,n-1)+"…":s;}
+function explainRegex(src,flags){
+  flags=flags||"";
+  var P=parseRegex(src),lines=[];
+  function L(d,node,text,code){lines.push({depth:d,code:code!=null?code:src.slice(node.start,node.end),text:text});}
+  function sub(fn){var save=lines;lines=[];fn();var got=lines;lines=save;return got;}
+  function fold(d,node,title,body){
+    var inner=sub(function(){walk(body,d+1);});
+    if(inner.length===1&&inner[0].depth===d+1){L(d,node,title+": "+inner[0].text);}
+    else{L(d,node,title+":",clip(src.slice(node.start,node.end),24));inner.forEach(function(x){lines.push(x);});}
+  }
+  function walkSeq(seq,d){
+    var it=seq.items,k=0;
+    if(!it.length){L(d,seq,"nothing (matches the empty string)","(empty)");return;}
+    while(k<it.length){
+      var n=it[k];
+      if(n.type==="char"){
+        var j=k;while(j+1<it.length&&it[j+1].type==="char")j++;
+        if(j>k){
+          var txt=it.slice(k,j+1).map(function(x){return x.value;}).join("");
+          lines.push({depth:d,code:src.slice(n.start,it[j].end),text:"the text \""+txt.replace(/\n/g,"\\n").replace(/\t/g,"\\t")+"\""});
+          k=j+1;continue;
+        }
+      }
+      walk(n,d);k++;
+    }
+  }
+  function walk(n,d){
+    switch(n.type){
+      case "seq":walkSeq(n,d);break;
+      case "alt":
+        L(d,n,"One of "+n.branches.length+" alternatives (separated by |), tried left to right:","|");
+        n.branches.forEach(function(b,k){
+          var inner=sub(function(){walk(b,d+2);});
+          if(inner.length===1)lines.push({depth:d+1,code:inner[0].code,text:"option "+(k+1)+": "+inner[0].text});
+          else{lines.push({depth:d+1,code:clip(src.slice(b.start,b.end),24)||"(empty)",text:"option "+(k+1)+":"});inner.forEach(function(x){lines.push(x);});}
+        });
+        break;
+      case "group":fold(d,n,groupTitle(n),n.body);break;
+      case "quant":
+        if(n.body.type==="group"){fold(d,n,groupTitle(n.body)+", "+quantText(n),n.body.body);}
+        else L(d,n,describeAtom(n.body,flags)+", "+quantText(n));
+        break;
+      case "anchor":L(d,n,anchorText(n.kind,flags));break;
+      case "inline":L(d,n,"inline flags: turn on "+n.on+(n.off?" and off "+n.off:"")+" from here (Python/PCRE)");break;
+      default:L(d,n,describeAtom(n,flags));
+    }
+  }
+  walk(P.root,0);
+  var groups=[];
+  (function collect(n){
+    if(!n)return;
+    if(n.type==="group"&&n.index)groups.push({index:n.index,name:n.name});
+    if(n.type==="alt")n.branches.forEach(collect);
+    else if(n.type==="seq")n.items.forEach(collect);
+    else if(n.body)collect(n.body);
+  })(P.root);
+  groups.sort(function(a,b){return a.index-b.index;});
+  return {ast:P.root,lines:lines,groups:groups,warnings:regexWarnings(P.root,src)};
+}
+// Nested quantifiers without a separating required character can backtrack catastrophically.
+function regexWarnings(root,src){
+  var warns=[],SAMPLES=" \t\n.,;:-_@/+#=aZ09";
+  function atomsOf(n,acc){
+    if(!n)return acc;
+    if(n.type==="quant"&&n.max>1){acc.push(n);}
+    if(n.type==="alt")n.branches.forEach(function(b){atomsOf(b,acc);});
+    else if(n.type==="seq")n.items.forEach(function(x){atomsOf(x,acc);});
+    else if(n.body)atomsOf(n.body,acc);
+    return acc;
+  }
+  function charsMatched(code){
+    var out="";try{var re=new RegExp("^(?:"+code+")$");for(var i=0;i<SAMPLES.length;i++)if(re.test(SAMPLES[i]))out+=SAMPLES[i];}catch(e){return null;}
+    return out;
+  }
+  function visit(n){
+    if(!n)return;
+    if(n.type==="quant"&&n.max>1){
+      var inner=atomsOf(n.body.type==="group"?n.body.body:n.body,[]);
+      if(inner.length){
+        var body=n.body.type==="group"?n.body.body:n.body,safe=false;
+        if(body.type==="seq"){
+          body.items.forEach(function(it){
+            var req=it.type!=="quant"||it.min>=1,atom=it.type==="quant"?it.body:it;
+            if(!req||!(atom.type==="char"||atom.type==="class"||atom.type==="esc"))return;
+            var sepChars=charsMatched(src.slice(atom.start,atom.end));
+            if(!sepChars)return;
+            var clash=inner.some(function(q){var cm=charsMatched(src.slice(q.body.start,q.body.end));return cm===null||cm.split("").some(function(c){return sepChars.indexOf(c)>=0;});});
+            if(!clash)safe=true;
+          });
+        }
+        if(!safe)warns.push("Nested quantifier in "+clip(src.slice(n.start,n.end),40)+": the inner and outer repetition can split the same text in many ways, which takes exponential time on a near-miss (catastrophic backtracking). Put a required separator between repetitions, e.g. \\w+(?:\\s\\w+)*, or use an atomic group in PCRE.");
+      }
+    }
+    if(n.type==="group"&&(n.kind==="behind"||n.kind==="negbehind")){
+      var qs=atomsOf(n.body,[]).concat([]);
+      var varw=qs.some(function(q){return q.min!==q.max;})||(function has(x){return x&&(x.type==="quant"&&x.min!==x.max||x.type==="alt"||(x.items||[]).some(has)||has(x.body));})(n.body);
+      if(varw)warns.push("Lookbehind "+clip(src.slice(n.start,n.end),30)+" has a variable width: JavaScript accepts it, Python's re and PCRE do not.");
+    }
+    if(n.type==="alt")n.branches.forEach(visit);
+    else if(n.type==="seq")n.items.forEach(visit);
+    else if(n.body)visit(n.body);
+  }
+  visit(root);
+  return uniq(warns);
+}
+
+// ---- dialects ----
+// Walk a pattern outside/inside character classes, letting fn rewrite tokens.
+function rewrite(p,fn){
+  var out="",inCls=false;
+  for(var i=0;i<p.length;i++){
+    var c=p[i];
+    if(c==="\\"){var t=p.slice(i,i+2),r=fn(p,i,inCls,true);if(r){out+=r.text;i+=r.len-1;}else{out+=t;i++;}continue;}
+    if(!inCls&&c==="["){inCls=true;out+=c;continue;}
+    if(inCls&&c==="]"){inCls=false;out+=c;continue;}
+    var r2=fn(p,i,inCls,false);
+    if(r2){out+=r2.text;i+=r2.len-1;}else out+=c;
+  }
+  return out;
+}
+// Accept JavaScript or Python syntax, return a pattern JavaScript can run.
+function toJsPattern(p){
+  return rewrite(p,function(s,i,inCls,esc){
+    if(inCls)return null;
+    var rest=s.slice(i),m;
+    if(esc){
+      if(rest.indexOf("\\A")===0)return {text:"^",len:2};
+      if(rest.indexOf("\\Z")===0||rest.indexOf("\\z")===0)return {text:"$",len:2};
+      return null;
+    }
+    if((m=/^\(\?P<([A-Za-z_]\w*)>/.exec(rest)))return {text:"(?<"+m[1]+">",len:m[0].length};
+    if((m=/^\(\?P=([A-Za-z_]\w*)\)/.exec(rest)))return {text:"\\k<"+m[1]+">",len:m[0].length};
+    return null;
+  });
+}
+function toPyPattern(p){
+  return rewrite(p,function(s,i,inCls,esc){
+    if(inCls)return null;
+    var rest=s.slice(i),m;
+    if(esc){if((m=/^\\k<([A-Za-z_]\w*)>/.exec(rest)))return {text:"(?P="+m[1]+")",len:m[0].length};return null;}
+    if((m=/^\(\?<([A-Za-z_]\w*)>/.exec(rest)))return {text:"(?P<"+m[1]+">",len:m[0].length};
+    return null;
+  });
+}
+function slashEscape(p){
+  return rewrite(p,function(s,i,inCls,esc){
+    if(esc)return null;
+    if(s[i]==="/")return {text:"\\/",len:1};
+    if(s[i]==="\n")return {text:"\\n",len:1};
+    return null;
+  });
+}
+function jsLiteral(p,flags){return "/"+slashEscape(p)+"/"+flags;}
+function pcreLiteral(p,flags){return "/"+slashEscape(p)+"/"+flags.replace(/[gyd]/g,"");}
+function pyString(p){
+  var oddTail=/(^|[^\\])(\\\\)*\\$/.test(p);
+  if(!oddTail&&p.indexOf("\n")<0){
+    if(p.indexOf("\"")<0)return "r\""+p+"\"";
+    if(p.indexOf("'")<0)return "r'"+p+"'";
+  }
+  return "\""+p.replace(/\\/g,"\\\\").replace(/"/g,"\\\"").replace(/\n/g,"\\n")+"\"";
+}
+function pyFlags(flags){
+  var m={i:"re.IGNORECASE",m:"re.MULTILINE",s:"re.DOTALL"},out=[];
+  flags.split("").forEach(function(f){if(m[f])out.push(m[f]);});
+  return out.join(" | ");
+}
+function findMatches(re,text,cap){
+  var out=[],m,guard=0;re.lastIndex=0;
+  if(!re.global){m=re.exec(text);return m?[{index:m.index,text:m[0],groups:m.slice(1),named:m.groups||null}]:[];}
+  while((m=re.exec(text))!==null){
+    out.push({index:m.index,text:m[0],groups:m.slice(1),named:m.groups||null});
+    if(m[0]==="")re.lastIndex++;
+    if(out.length>=cap||++guard>cap*2)break;
+  }
+  return out;
+}
+// ==/ENGINE==
+
+(function(){
+  var KEY="redline.tool.regex-example.";
+  var $=function(id){return document.getElementById(id);};
+  var el={text:$("text"),backdrop:$("backdrop"),editor:$("editor"),selInfo:$("selInfo"),addPos:$("addPos"),addNeg:$("addNeg"),
+    rx:$("rx"),rxbox:$("rxbox"),rxFlags:$("rxFlags"),fg:$("fg"),fi:$("fi"),fm:$("fm"),fs:$("fs"),bound:$("bound"),wline:$("wline"),
+    status:$("status"),exList:$("exList"),exEmpty:$("exEmpty"),exCount:$("exCount"),typed:$("typed"),parts:$("parts"),partsTitle:$("partsTitle"),
+    resetParts:$("resetParts"),modeBadge:$("modeBadge"),useInferred:$("useInferred"),tabs:$("tabs"),out:$("out"),outCount:$("outCount"),
+    copy:$("copy"),copied:$("copied"),outNote:$("outNote"),matchList:$("matchList"),matchEmpty:$("matchEmpty"),matchNote:$("matchNote"),
+    matchCount:$("matchCount"),sample:$("sample")};
+
+  var S={text:"",examples:[],overrides:{},opts:{boundary:"auto",flags:{g:true,i:false,m:false,s:false},line:false},manual:null,tab:"js"};
+  var R={};           // last computed result
+  var nextId=1,forceRun=false,lastRunPattern="";
+
+  function load(){
+    try{
+      var raw=localStorage.getItem(KEY+"state");
+      if(!raw)return;
+      var d=JSON.parse(raw);
+      if(typeof d.text==="string")S.text=d.text;
+      if(Array.isArray(d.examples))S.examples=d.examples.filter(function(e){return e&&typeof e.text==="string"&&(e.kind==="pos"||e.kind==="neg");});
+      if(d.overrides&&typeof d.overrides==="object")S.overrides=d.overrides;
+      if(d.opts&&d.opts.flags)S.opts=d.opts;
+      if(typeof d.manual==="string")S.manual=d.manual;
+      if(typeof d.tab==="string")S.tab=d.tab;
+    }catch(e){}
+    S.examples.forEach(function(e){e.id=nextId++;});
+  }
+  var saveT=null;
+  function save(){
+    clearTimeout(saveT);
+    saveT=setTimeout(function(){
+      try{localStorage.setItem(KEY+"state",JSON.stringify({text:S.text,examples:S.examples.map(function(e){return {kind:e.kind,text:e.text,start:e.start,end:e.end};}),overrides:S.overrides,opts:S.opts,manual:S.manual,tab:S.tab}));}catch(e){}
+    },250);
+  }
+
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
+  function flagStr(){var f=S.opts.flags,o="";["g","i","m","s"].forEach(function(k){if(f[k])o+=k;});return o;}
+  function showStr(s,n){s=s.replace(/\n/g,"⏎").replace(/\t/g,"⇥");return clip(s,n||60);}
+
+  // Keep examples anchored to the text after edits.
+  function relocate(){
+    S.examples.forEach(function(e){
+      if(e.start==null)return;
+      if(S.text.slice(e.start,e.end)===e.text)return;
+      var best=-1,d=Infinity,i=S.text.indexOf(e.text);
+      while(i>=0){if(Math.abs(i-e.start)<d){d=Math.abs(i-e.start);best=i;}i=S.text.indexOf(e.text,i+1);}
+      if(best>=0){e.start=best;e.end=best+e.text.length;}else{e.start=null;e.end=null;}
+    });
+  }
+
+  function partSig(p,i){return i+"|"+p.kind+"|"+(p.cat||"")+"|"+(p.kind==="lit"?p.text:"");}
+
+  function compute(){
+    var pos=[],neg=[];
+    S.examples.forEach(function(e){(e.kind==="pos"?pos:neg).push(e.text);});
+    var fl=flagStr(),r={pos:pos,neg:neg,flags:fl,notes:[],warnings:[]};
+    if(S.manual==null){
+      var inf=inferRegex(pos,neg,{flags:fl});
+      r.inf=inf;
+      if(inf){
+        inf.parts.forEach(function(p,i){var o=S.overrides[partSig(p,i)];if(o)p.ov=o;});
+        r.ctx={tight:inf.tight,boundary:S.opts.boundary==="auto"?inf.boundary:S.opts.boundary==="on",edges:inf.edges,ci:S.opts.flags.i,line:S.opts.line};
+        r.pattern=renderAll(inf.parts,r.ctx);
+      }else r.pattern="";
+    }else{
+      r.pattern=toJsPattern(S.manual);
+      if(r.pattern!==S.manual)r.notes.push("Converted Python/PCRE-only syntax (\\A, \\Z, (?P<name>), (?P=name)) to JavaScript for testing.");
+    }
+    if(r.pattern){
+      try{r.expl=explainRegex(r.pattern,fl);r.warnings=r.expl.warnings.slice();}catch(e){r.parseError=e.message;}
+      try{r.re=new RegExp(r.pattern,fl.replace("g","")+"g");}catch(e){r.compileError=e.message;}
+    }
+    r.risky=r.warnings.some(function(w){return w.indexOf("Nested quantifier")===0;});
+    if(r.pattern!==lastRunPattern){forceRun=false;lastRunPattern=r.pattern;}
+    r.paused=!!(r.re&&r.risky&&!forceRun);
+    r.matches=r.re&&!r.paused?findMatches(r.re,S.text,5000):[];
+    var starts={};r.matches.forEach(function(m){if(m.text!=="")starts[m.index+":"+m.text.length]=1;});
+    var fullRe=null,srchRe=null;
+    if(r.re){try{fullRe=new RegExp("^(?:"+r.pattern+")$",fl.replace("g",""));srchRe=new RegExp(r.pattern,fl.replace("g","")+"g");}catch(e){}}
+    r.status={};
+    S.examples.forEach(function(e){
+      var good=null;
+      if(!r.re||r.paused){good=null;}
+      else if(e.start!=null){
+        if(e.kind==="pos")good=!!starts[e.start+":"+(e.end-e.start)];
+        else good=!r.matches.some(function(m){return m.text!==""&&m.index<e.end&&m.index+m.text.length>e.start;});
+      }else if(fullRe){
+        if(e.kind==="pos")good=fullRe.test(e.text);
+        else{srchRe.lastIndex=0;good=!srchRe.test(e.text);}
+      }
+      r.status[e.id]=good;
+    });
+    R=r;
+  }
+
+  // ---------- rendering ----------
+  function renderBackdrop(){
+    var t=S.text,pts={0:1};pts[t.length]=1;
+    var ms=R.matches.filter(function(m){return m.text!=="";});
+    ms.forEach(function(m){pts[m.index]=1;pts[m.index+m.text.length]=1;});
+    var loc=S.examples.filter(function(e){return e.start!=null;});
+    loc.forEach(function(e){pts[e.start]=1;pts[e.end]=1;});
+    var P=Object.keys(pts).map(Number).sort(function(a,b){return a-b;}),html="",mi=0;
+    for(var k=0;k<P.length-1;k++){
+      var a=P[k],b=P[k+1];if(b<=a)continue;
+      var seg=esc(t.slice(a,b)),cls=[];
+      while(mi<ms.length&&ms[mi].index+ms[mi].text.length<=a)mi++;
+      if(mi<ms.length&&ms[mi].index<=a)cls.push("m"+(mi%2));
+      var isP=false,isN=false,bad=false;
+      loc.forEach(function(e){if(e.start<=a&&e.end>=b){if(e.kind==="pos")isP=true;else isN=true;if(R.status[e.id]===false)bad=true;}});
+      if(bad)cls.push("bad");else if(isN)cls.push("xn");else if(isP)cls.push("xp");
+      html+=cls.length?"<span class=\""+cls.join(" ")+"\">"+seg+"</span>":seg;
+    }
+    if(/\n$/.test(t)||!t)html+=" ";
+    el.backdrop.innerHTML=html;
+    fitEditor();
+  }
+  function fitEditor(){
+    var ta=el.text,st=el.editor.scrollTop;
+    ta.style.height="auto";
+    ta.style.height=Math.max(ta.scrollHeight,el.editor.clientHeight)+"px";
+    el.editor.scrollTop=st;
+  }
+  function renderMatches(){
+    var n=R.matches.length;
+    el.matchCount.textContent=R.paused?"matching paused":R.re?n+(n>=5000?"+":"")+" match"+(n===1?"":"es"):"";
+    el.matchNote.textContent=n>100?"first 100 shown":"";
+    el.matchEmpty.hidden=n>0;
+    el.matchEmpty.textContent=!R.pattern?"No pattern yet.":R.paused?"Live matching is paused for this pattern (see the warning).":R.re?(S.text?"The pattern finds nothing in the text.":"Paste some text to see matches."):"Fix the pattern to see matches.";
+    var html="";
+    R.matches.slice(0,100).forEach(function(m,i){
+      var g="";
+      if(m.groups.length){
+        if(m.named)g=Object.keys(m.named).map(function(k){return k+"="+(m.named[k]==null?"–":showStr(m.named[k],24));}).join("  ");
+        else g=m.groups.map(function(x,j){return "$"+(j+1)+"="+(x==null?"–":showStr(x,24));}).join("  ");
+      }
+      html+="<li><span class=\"mi\">#"+(i+1)+" @"+m.index+"</span><code>"+esc(showStr(m.text,80))+"</code>"+(g?"<span class=\"gr\">"+esc(g)+"</span>":"")+"</li>";
+    });
+    el.matchList.innerHTML=html;
+  }
+  function renderStatus(){
+    var h=[],pos=S.examples.filter(function(e){return e.kind==="pos";}),neg=S.examples.filter(function(e){return e.kind==="neg";});
+    function msg(cls,t){h.push("<div class=\"msg "+cls+"\">"+t+"</div>");}
+    if(!R.pattern){
+      if(S.manual==null)msg("",pos.length?"":"Mark at least one piece of text that <b>should match</b>. The pattern is inferred from those examples; <b>should not match</b> examples tighten it.");
+    }else{
+      if(R.parseError)msg("bad","<b>Pattern error:</b> "+esc(R.parseError));
+      else if(R.compileError)msg("bad","<b>JavaScript cannot run this pattern:</b> "+esc(R.compileError)+(/\(\?>|[*+?}]\+/.test(R.pattern)?". Atomic groups (?>…) and possessive quantifiers (a++) exist only in PCRE and Python 3.11+; the explanation still works.":". Check the explanation below for the part it points at."));
+      if(R.re&&!R.paused){
+        var missP=pos.filter(function(e){return R.status[e.id]===false;}),caught=neg.filter(function(e){return R.status[e.id]===false;});
+        if(pos.length||neg.length){
+          var ok=!missP.length&&!caught.length;
+          msg(ok?"ok":"bad",(pos.length?"Matches "+(pos.length-missP.length)+" of "+pos.length+" examples":"No positive examples")+(neg.length?" · rejects "+(neg.length-caught.length)+" of "+neg.length+" negatives":"")+" · "+R.matches.length+" match"+(R.matches.length===1?"":"es")+" in the text.");
+          if(missP.length)msg("bad","<b>Misses:</b> "+missP.map(function(e){return "<code>"+esc(showStr(e.text,40))+"</code>";}).join(", ")+". Loosen a part (e.g. switch a quantifier to “1 or more”), turn off “Literal”, or remove a boundary.");
+          if(caught.length)msg("bad","<b>Wrongly matches:</b> "+caught.map(function(e){return "<code>"+esc(showStr(e.text,40))+"</code>";}).join(", ")+". Tighten a part (exact count or range), add boundaries, or mark more negatives.");
+        }else msg("","Pattern runs: "+R.matches.length+" match"+(R.matches.length===1?"":"es")+" in the text. Add examples to check it.");
+      }
+      if(R.inf&&S.manual==null){
+        msg("","Inferred from "+pos.length+" example"+(pos.length===1?"":"s")+" — level: <b>"+LEVELS[R.inf.level]+"</b>"+(R.inf.level>0&&neg.length?" (tightened to reject the negatives)":"")+".");
+        if(R.inf.warning)msg("bad",esc(R.inf.warning));
+        if(pos.length===1)msg("warn","Only one example: letters are kept literally and digits keep their exact count. Add a second, different example to generalise.");
+      }
+      R.warnings.forEach(function(w){msg("warn","<b>Warning:</b> "+esc(w));});
+      if(R.paused)msg("warn","Live matching is paused so a slow pattern cannot freeze the page. <button class=\"btn\" type=\"button\" id=\"runAnyway\">Run anyway</button>");
+      R.notes.forEach(function(n){msg("",esc(n));});
+    }
+    el.status.innerHTML=h.join("");
+    var ra=$("runAnyway");if(ra)ra.addEventListener("click",function(){forceRun=true;update();});
+  }
+  function renderExamples(){
+    el.exEmpty.hidden=S.examples.length>0;
+    var np=0,nn=0;
+    el.exList.innerHTML=S.examples.map(function(e){
+      if(e.kind==="pos")np++;else nn++;
+      var st=R.status[e.id],label,cls;
+      if(st==null){label="";cls="";}
+      else if(e.kind==="pos"){label=st?"✓ matched":"✕ missed";cls=st?"good":"fail";}
+      else{label=st?"✓ rejected":"✕ matched";cls=st?"good":"fail";}
+      return "<li class=\""+e.kind+(st===false?" fail":"")+"\"><button type=\"button\" class=\"ext\" data-sel=\""+e.id+"\" title=\""+esc(e.start!=null?"Select in text":"Typed example (not in the text)")+"\">"+esc(showStr(e.text,70))+"</button>"+
+        (e.start==null?"<span class=\"tag\">typed</span>":"")+"<span class=\"exs "+cls+"\">"+label+"</span>"+
+        "<button type=\"button\" class=\"x\" data-del=\""+e.id+"\" aria-label=\"Remove example "+esc(showStr(e.text,30))+"\">×</button></li>";
+    }).join("");
+    el.exCount.textContent=S.examples.length?np+" match · "+nn+" reject":"";
+  }
+
+  function partDesc(p){
+    function samples(a){return uniq(a).slice(0,3).map(function(s){return "“"+showStr(s,14)+"”";}).join(" ")+(uniq(a).length>3?" …":"");}
+    function lenTxt(a){var l=lensOf(a);return l[0]===l[1]?l[0]+" long":l[0]+"–"+l[1]+" long";}
+    switch(p.kind){
+      case "lit":return "fixed text, same in every example";
+      case "run":
+        if(p.cat==="D")return "digits, "+lenTxt(p.texts)+" · "+samples(p.texts);
+        if(p.cat==="A")return "letters, "+lenTxt(p.texts)+" · "+samples(p.texts);
+        if(p.cat==="S")return "whitespace · "+lenTxt(p.texts);
+        return "“"+p.ch+"” repeated, "+lenTxt(p.texts);
+      case "opt":return "optional — present in "+p.present+" of "+p.total+" examples";
+      case "rep":return "pieces joined by “"+p.sep+"”, "+p.minReps+"–"+p.maxReps+" separators · "+samples(p.pieces);
+      case "set":return "mixed characters, "+lenTxt(p.texts)+" · "+samples(p.texts);
+      case "alt":return "exact list of the examples (nothing simpler fits)";
+    }
+    return "";
+  }
+  function renderParts(){
+    var h="";
+    el.resetParts.hidden=!(S.manual==null&&Object.keys(S.overrides).length);
+    if(S.manual!=null||!R.inf){
+      el.partsTitle.textContent="Explanation";
+      if(R.expl){
+        h="<ul class=\"xtree\">"+R.expl.lines.map(function(l){return "<li style=\"padding-left:"+(l.depth*14)+"px\"><code>"+esc(l.code)+"</code><span>"+esc(l.text)+"</span></li>";}).join("")+"</ul>";
+      }else if(R.parseError)h="<p class=\"empty\">Fix the error above to see the explanation.</p>";
+      else h="<p class=\"empty\">Type a regex in the pattern box to get it explained part by part: classes, groups, quantifiers, anchors, alternation and lookarounds.</p>";
+      el.parts.innerHTML=h;return;
+    }
+    el.partsTitle.textContent="Parts";
+    R.inf.parts.forEach(function(p,i){
+      var sig=partSig(p,i),ov=p.ov||{},c="";
+      var code=renderPart(p,R.ctx);
+      if(p.kind==="run"||p.kind==="set"){
+        var lit=p.kind==="run"&&runIsLiteral(p,R.ctx);
+        if(!lit){
+          var q=ov.quant||"auto",l=lensOf(p.texts);
+          c+="<select data-k=\""+sig+"\" data-f=\"quant\" aria-label=\"Repetition for part "+(i+1)+"\">"+[["auto","auto"],["exact","exactly n"],["range","range"],["plus","1 or more"],["star","0 or more"]].map(function(o){return "<option value=\""+o[0]+"\""+(q===o[0]?" selected":"")+">"+o[1]+"</option>";}).join("")+"</select>";
+          if(q==="exact")c+="<label class=\"chk\">n <input class=\"inp num\" type=\"number\" min=\"0\" data-k=\""+sig+"\" data-f=\"n\" value=\""+numOr(ov.n,l[1])+"\"></label>";
+          if(q==="range")c+="<label class=\"chk\">min <input class=\"inp num\" type=\"number\" min=\"0\" data-k=\""+sig+"\" data-f=\"min\" value=\""+numOr(ov.min,l[0])+"\"></label><label class=\"chk\">max <input class=\"inp num\" type=\"number\" min=\"0\" data-k=\""+sig+"\" data-f=\"max\" value=\""+numOr(ov.max,l[1])+"\"></label>";
+        }
+        if(p.kind==="run"&&allSame(p.texts))c+="<label class=\"chk\"><input type=\"checkbox\" data-k=\""+sig+"\" data-f=\"literal\""+(lit?" checked":"")+">literal</label>";
+      }
+      if(p.kind==="rep"){
+        var rq=ov.quant||"auto";
+        c+="<select data-k=\""+sig+"\" data-f=\"quant\" aria-label=\"Repetition for part "+(i+1)+"\">"+[["auto","auto"],["plus","1+ separators"],["star","0+ separators"]].map(function(o){return "<option value=\""+o[0]+"\""+(rq===o[0]?" selected":"")+">"+o[1]+"</option>";}).join("")+"</select>";
+      }
+      var optional=ov.optional!=null?!!ov.optional:p.kind==="opt";
+      c+="<label class=\"chk\"><input type=\"checkbox\" data-k=\""+sig+"\" data-f=\"optional\""+(optional?" checked":"")+">optional</label>";
+      c+="<label class=\"chk\"><input type=\"checkbox\" data-k=\""+sig+"\" data-f=\"capture\""+(ov.capture?" checked":"")+">capture</label>";
+      if(ov.capture)c+="<input class=\"inp mono name\" type=\"text\" placeholder=\"name\" spellcheck=\"false\" data-k=\""+sig+"\" data-f=\"name\" value=\""+esc(ov.name||"")+"\" aria-label=\"Group name for part "+(i+1)+"\""+(ov.name&&!validName(ov.name)?" style=\"border-color:var(--danger)\" title=\"Use letters, digits and _ ; start with a letter\"":"")+">";
+      h+="<div class=\"prow\"><span class=\"pidx\">"+(i+1)+"</span><div class=\"phead\"><code class=\"pcode\">"+esc(code)+"</code><span class=\"pdesc\">"+esc(partDesc(p))+"</span></div><div class=\"pctl\">"+c+"</div></div>";
+    });
+    if(R.ctx&&(R.ctx.boundary||R.ctx.line))h+="<p class=\"empty\">"+(R.ctx.line?"Wrapped in ^…$ so each match is a whole line (use flag m for multi-line text).":"Wrapped in word boundaries so a match cannot start or end inside a longer word or number.")+"</p>";
+    el.parts.innerHTML=h;
+  }
+
+  // ---------- outputs ----------
+  function outputs(){
+    var p=R.pattern,fl=R.flags,o={};
+    if(!p){return null;}
+    var py=toPyPattern(p),caps=R.expl?R.expl.groups:[];
+    o.js=jsLiteral(p,fl);
+    o.py="re.compile("+pyString(py)+(pyFlags(fl)?", "+pyFlags(fl):"")+")";
+    o.pcre=pcreLiteral(p,fl);
+    // explanation
+    var ex=["Pattern: "+o.js,""];
+    var fdesc={g:"g — find every match, not just the first",i:"i — ignore upper/lower case",m:"m — ^ and $ match at every line break",s:"s — . also matches line breaks"};
+    if(fl){ex.push("Flags:");fl.split("").forEach(function(f){ex.push("  "+fdesc[f]);});ex.push("");}
+    if(R.expl){
+      ex.push("Step by step:");
+      R.expl.lines.forEach(function(l){ex.push("  "+new Array(l.depth+1).join("  ")+l.code+"  — "+l.text);});
+      if(caps.length){ex.push("");ex.push("Capture groups:");caps.forEach(function(g){ex.push("  #"+g.index+(g.name?" "+g.name:""));});}
+      if(R.warnings.length){ex.push("");ex.push("Warnings:");R.warnings.forEach(function(x){ex.push("  - "+x);});}
+    }else ex.push(R.parseError||"");
+    if(R.inf&&S.manual==null){ex.push("");ex.push("Inferred from "+R.pos.length+" example(s) at level: "+LEVELS[R.inf.level]+".");}
+    o.explain=ex.join("\n");
+    // code
+    var repl=caps.length?(caps[0].name?"$<"+caps[0].name+">":"$1"):"[MATCH]";
+    var pyRepl=caps.length?(caps[0].name?"\\g<"+caps[0].name+">":"\\1"):"[MATCH]";
+    var jsFl=fl.indexOf("g")>=0?fl:fl+"g";
+    o.code=[
+      "// JavaScript",
+      "const re = "+jsLiteral(p,jsFl)+";",
+      "const all = text.match(re) ?? [];            // every matched string",
+      "for (const m of text.matchAll(re)) {",
+      "  console.log(m.index, m[0]"+(caps.length?(caps[0].name?", m.groups":", m.slice(1)"):"")+");",
+      "}",
+      "const replaced = text.replace(re, "+JSON.stringify(repl)+");",
+      "const isMatch = "+jsLiteral("^(?:"+p+")$",fl.replace("g",""))+".test(input);  // whole-string check",
+      "",
+      "# Python",
+      "import re",
+      "pattern = "+o.py,
+      "found = pattern.findall(text)"+(caps.length?"   # returns the group(s) because the pattern has capture groups":""),
+      "for m in pattern.finditer(text):",
+      "    print(m.start(), m.group(0)"+(caps.length?", m.groups()":"")+")",
+      "replaced = pattern.sub("+pyString(pyRepl).replace(/^r/,"r")+", text)",
+      "is_match = pattern.fullmatch(value) is not None"
+    ].join("\n");
+    o.prompt=buildPrompt(o);
+    return o;
+  }
+  function buildPrompt(o){
+    var L=[],pos=R.pos,neg=R.neg;
+    L.push("I need a regular expression. Target flavour: JavaScript. Also give the Python re and PCRE versions where they differ.");
+    L.push("");
+    if(pos.length){L.push("It must match each of these strings completely (the whole string, not only part of it):");pos.forEach(function(s){L.push("  - "+JSON.stringify(s));});}
+    else L.push("There are no positive examples yet; infer the intent from the current pattern below.");
+    if(neg.length){L.push("");L.push("It must NOT match any of these, not even a substring of them:");neg.forEach(function(s){L.push("  - "+JSON.stringify(s));});}
+    if(S.text.trim()){
+      L.push("");L.push("It will be used to search inside free text like this excerpt:");
+      L.push("\"\"\"");L.push(clip(S.text,700));L.push("\"\"\"");
+    }
+    L.push("");
+    L.push("Current "+(S.manual!=null?"hand-written":"inferred")+" pattern: "+o.js);
+    if(R.expl){L.push("What it does, part by part:");R.expl.lines.forEach(function(l){L.push("  "+new Array(l.depth+1).join("  ")+l.code+"  = "+l.text);});}
+    var miss=[],caught=[];
+    S.examples.forEach(function(e){if(R.status[e.id]===false)(e.kind==="pos"?miss:caught).push(e.text);});
+    if(R.parseError||R.compileError)L.push("Problem: the pattern does not compile in JavaScript: "+(R.parseError||R.compileError));
+    else if(miss.length||caught.length){
+      L.push("Problems with the current pattern:");
+      if(miss.length)L.push("  - it fails to match: "+miss.map(function(s){return JSON.stringify(s);}).join(", "));
+      if(caught.length)L.push("  - it wrongly matches: "+caught.map(function(s){return JSON.stringify(s);}).join(", "));
+    }else if(pos.length||neg.length)L.push("It currently passes all the examples above; improve it only if it is too loose or too strict for real data.");
+    L.push("");
+    L.push("Requirements:");
+    L.push("  - Generalise from the examples: keep a value literal only when every example shares it; otherwise use a character class with a sensible length.");
+    L.push("  - A match must not start or end inside a longer word or number (use \\b or lookarounds).");
+    L.push("  - No nested quantifiers such as (\\w+)+ — the pattern must not backtrack catastrophically on long input.");
+    if(R.flags)L.push("  - Flags: "+R.flags+".");
+    if(R.expl&&R.expl.groups.length)L.push("  - Keep the capture groups: "+R.expl.groups.map(function(g){return g.name?g.name:"#"+g.index;}).join(", ")+".");
+    R.warnings.forEach(function(w){L.push("  - Fix: "+w);});
+    L.push("");
+    L.push("Reply with: 1) the regex for each flavour, 2) one line per part explaining it, 3) three more strings that should match and three that should not, chosen to show exactly where the boundaries are.");
+    return L.join("\n");
+  }
+  var TAB_NOTES={js:"Use as a literal, or new RegExp(source, flags).",py:"Python's \\d and \\w also match non-ASCII digits and letters; add re.ASCII to restrict them.",pcre:"PHP: preg_match_all(pattern, $text, $m). PCRE has no g flag; use the *_all function.",explain:"Plain-language reading of the current pattern.",code:"Match, iterate, replace and whole-string check in JavaScript and Python.",prompt:"Paste into an LLM to refine or verify the pattern."};
+  function renderOutput(){
+    var o=outputs(),t=S.tab;
+    Array.prototype.forEach.call(el.tabs.querySelectorAll(".tab"),function(b){var on=b.getAttribute("data-tab")===t;b.setAttribute("aria-selected",on?"true":"false");b.tabIndex=on?0:-1;});
+    var txt=o?o[t]:"";
+    el.out.classList.toggle("empty",!txt);
+    el.out.textContent=txt||"Nothing to output yet. Mark an example in the text (or type a regex in the pattern box) and the "+(t==="prompt"?"prompt":"output")+" appears here.";
+    el.outCount.textContent=(txt?txt.length:0)+" chars";
+    el.copy.disabled=!txt;
+    el.outNote.textContent=TAB_NOTES[t]||"";
+    el.copied.textContent="";
+  }
+
+  function renderPattern(){
+    if(document.activeElement!==el.rx)el.rx.value=S.manual!=null?S.manual:R.pattern||"";
+    el.rx.style.height="auto";el.rx.style.height=Math.min(140,Math.max(34,el.rx.scrollHeight+2))+"px";
+    el.rxFlags.textContent="/"+R.flags;
+    el.rxbox.classList.toggle("err",!!(R.parseError||R.compileError));
+    var man=S.manual!=null;
+    el.modeBadge.textContent=man?"hand-written":R.pattern?"inferred":"no pattern";
+    el.modeBadge.classList.toggle("man",man);
+    el.useInferred.hidden=!man;
+    ["g","i","m","s"].forEach(function(f){el["f"+f].checked=!!S.opts.flags[f];});
+    el.bound.value=S.opts.boundary;el.wline.checked=!!S.opts.line;
+    Array.prototype.forEach.call(document.querySelectorAll(".inf-only"),function(n){n.style.opacity=man?".45":"";n.querySelector("input,select").disabled=man;});
+  }
+
+  function update(){
+    var fe=document.activeElement,fk=fe&&fe.getAttribute&&fe.getAttribute("data-k")?[fe.getAttribute("data-k"),fe.getAttribute("data-f")]:null;
+    var selS=fe&&fe.selectionStart,selE=fe&&fe.selectionEnd;
+    compute();
+    renderPattern();renderStatus();renderExamples();renderParts();renderBackdrop();renderMatches();renderOutput();
+    if(fk){
+      var n=el.parts.querySelector("[data-k=\""+fk[0].replace(/["\\]/g,"\\$&")+"\"][data-f=\""+fk[1]+"\"]");
+      if(n){n.focus();try{if(n.type==="text")n.setSelectionRange(selS,selE);}catch(e){}}
+    }
+    save();
+  }
+
+  // ---------- actions ----------
+  function selection(){
+    var a=el.text.selectionStart,b=el.text.selectionEnd;
+    return b>a?{start:a,end:b,text:S.text.slice(a,b)}:null;
+  }
+  function updateSel(){
+    var s=selection();
+    el.addPos.disabled=el.addNeg.disabled=!s;
+    el.selInfo.innerHTML=s?"Selected <code>"+esc(showStr(s.text,40))+"</code> ("+s.text.length+" chars)":"Select part of the text, then mark it.";
+  }
+  function addExample(kind,text,start,end){
+    if(!text)return;
+    S.examples=S.examples.filter(function(e){return !(e.start!=null&&e.start===start&&e.end===end)&&!(start==null&&e.start==null&&e.text===text);});
+    S.examples.push({id:nextId++,kind:kind,text:text,start:start==null?null:start,end:end==null?null:end});
+    update();
+  }
+  function markSel(kind){var s=selection();if(!s){el.selInfo.textContent="Select some text first.";return;}addExample(kind,s.text,s.start,s.end);updateSel();}
+
+  el.text.addEventListener("input",function(){S.text=el.text.value;relocate();update();updateSel();});
+  ["select","keyup","mouseup","focus"].forEach(function(ev){el.text.addEventListener(ev,updateSel);});
+  document.addEventListener("selectionchange",function(){if(document.activeElement===el.text)updateSel();});
+  el.text.addEventListener("keydown",function(e){
+    if(e.altKey&&!e.ctrlKey&&!e.metaKey&&(e.key==="1"||e.code==="Digit1")){e.preventDefault();markSel("pos");}
+    else if(e.altKey&&!e.ctrlKey&&!e.metaKey&&(e.key==="2"||e.code==="Digit2")){e.preventDefault();markSel("neg");}
+  });
+  el.addPos.addEventListener("mousedown",function(e){e.preventDefault();});
+  el.addNeg.addEventListener("mousedown",function(e){e.preventDefault();});
+  el.addPos.addEventListener("click",function(){markSel("pos");});
+  el.addNeg.addEventListener("click",function(){markSel("neg");});
+  function addTyped(kind){var v=el.typed.value;if(!v){el.typed.focus();return;}addExample(kind,v,null,null);el.typed.value="";}
+  $("typedPos").addEventListener("click",function(){addTyped("pos");});
+  $("typedNeg").addEventListener("click",function(){addTyped("neg");});
+  el.typed.addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();addTyped(e.shiftKey?"neg":"pos");}});
+  el.exList.addEventListener("click",function(e){
+    var d=e.target.closest("[data-del]"),s=e.target.closest("[data-sel]");
+    if(d){var id=+d.getAttribute("data-del");S.examples=S.examples.filter(function(x){return x.id!==id;});update();return;}
+    if(s){var ex=S.examples.filter(function(x){return x.id===+s.getAttribute("data-sel");})[0];
+      if(ex&&ex.start!=null){el.text.focus();el.text.setSelectionRange(ex.start,ex.end);updateSel();}}
+  });
+
+  el.rx.addEventListener("input",function(){
+    var v=el.rx.value,m=/^\/([\s\S]*)\/([dgimsuy]*)$/.exec(v);
+    if(m){v=m[1].replace(/\\\//g,"/");["g","i","m","s"].forEach(function(f){S.opts.flags[f]=m[2].indexOf(f)>=0;});}
+    S.manual=v===""?null:v;
+    update();
+  });
+  el.rx.addEventListener("blur",function(){renderPattern();});
+  el.useInferred.addEventListener("click",function(){S.manual=null;el.rx.blur();update();});
+  ["g","i","m","s"].forEach(function(f){el["f"+f].addEventListener("change",function(){S.opts.flags[f]=el["f"+f].checked;update();});});
+  el.bound.addEventListener("change",function(){S.opts.boundary=el.bound.value;update();});
+  el.wline.addEventListener("change",function(){S.opts.line=el.wline.checked;if(S.opts.line&&!S.opts.flags.m)S.opts.flags.m=true;update();});
+  el.resetParts.addEventListener("click",function(){S.overrides={};update();});
+
+  function onPartCtl(e){
+    var n=e.target,k=n.getAttribute("data-k"),f=n.getAttribute("data-f");
+    if(!k)return;
+    if(e.type==="input"&&n.type!=="text"&&n.type!=="number")return;
+    var o=S.overrides[k]||(S.overrides[k]={});
+    if(n.type==="checkbox")o[f]=n.checked;
+    else if(n.type==="number"){if(n.value==="")return;o[f]=numOr(n.value,0);}
+    else o[f]=n.value;
+    if(f==="quant"&&n.value==="auto")delete o.quant;
+    if(!Object.keys(o).length)delete S.overrides[k];
+    update();
+  }
+  el.parts.addEventListener("change",onPartCtl);
+  el.parts.addEventListener("input",onPartCtl);
+
+  el.tabs.addEventListener("click",function(e){var b=e.target.closest(".tab");if(!b)return;S.tab=b.getAttribute("data-tab");renderOutput();save();});
+  el.tabs.addEventListener("keydown",function(e){
+    if(e.key!=="ArrowRight"&&e.key!=="ArrowLeft")return;
+    var tabs=Array.prototype.slice.call(el.tabs.querySelectorAll(".tab")),i=tabs.indexOf(document.activeElement);if(i<0)return;
+    i=(i+(e.key==="ArrowRight"?1:tabs.length-1))%tabs.length;S.tab=tabs[i].getAttribute("data-tab");renderOutput();tabs[i].focus();save();
+  });
+  el.copy.addEventListener("click",function(){
+    var txt=el.out.classList.contains("empty")?"":el.out.textContent;if(!txt)return;
+    function done(ok){el.copied.textContent=ok?"Copied":"Copy failed — select the text and press Ctrl+C";clearTimeout(done.t);done.t=setTimeout(function(){el.copied.textContent="";},1800);}
+    function fallback(){
+      var ta=document.createElement("textarea");ta.value=txt;ta.setAttribute("readonly","");ta.style.position="fixed";ta.style.opacity="0";ta.style.left="-9999px";
+      document.body.appendChild(ta);ta.select();var ok=false;try{ok=document.execCommand("copy");}catch(e){}document.body.removeChild(ta);done(ok);
+    }
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(function(){done(true);},fallback);else fallback();
+  });
+
+  var SAMPLES={
+    dates:{text:"Invoice 2024-01-05 was paid on 2023-12-31.\nThe old system wrote 2024/01/05 or 5.1.2024, and a typo left 2024-1-5 in the log.\nNext review: 2025-03-14.",pos:["2024-01-05","2023-12-31"],neg:["2024-1-5"]},
+    emails:{text:"Contact john.doe@example.com or jane@mail.example.org.\nbob_smith42@test.io is on leave until Monday.\nNot addresses: user@localhost, @handle, name@ and a plain example.com.",pos:["john.doe@example.com","jane@mail.example.org","bob_smith42@test.io"],neg:["user@localhost"]},
+    orders:{text:"Shipped: ORD-00123, ORD-9 and ORD-4410.\nLegacy ids like ORD-123456 must not be picked up, nor the draft ORD- with no number.",pos:["ORD-00123","ORD-9"],neg:["ORD-123456"]},
+    phones:{text:"Call +1 555-123-4567 or 555-987-6543 during office hours.\nLondon desk: +44 555-222-3333. Fax 555-0199 is too short to be a phone number.",pos:["+1 555-123-4567","555-987-6543","+44 555-222-3333"],neg:["555-0199"]},
+    manual:{text:"2024-01-05 paid\nprice: $1,299.00 and $15\nuser: jane_doe  ref=AB-77\n",pos:[],neg:[],manual:"^(?<year>\\d{4})-(?<month>0[1-9]|1[0-2])-\\d{2}\\b|(?<=\\$)\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})?|[A-Z]{2}-\\d+(?![\\w-])",flags:{g:true,i:false,m:true,s:false}}
+  };
+  function loadSample(key){
+    var s=SAMPLES[key];if(!s)return;
+    S.text=s.text;S.examples=[];S.overrides={};S.manual=s.manual||null;
+    S.opts={boundary:"auto",flags:s.flags||{g:true,i:false,m:false,s:false},line:false};
+    var used={};
+    function place(kind,t){var i=S.text.indexOf(t);while(i>=0&&used[i])i=S.text.indexOf(t,i+1);if(i>=0)used[i]=1;S.examples.push({id:nextId++,kind:kind,text:t,start:i>=0?i:null,end:i>=0?i+t.length:null});}
+    s.pos.forEach(function(t){place("pos",t);});s.neg.forEach(function(t){place("neg",t);});
+    el.text.value=S.text;
+    S.tab=s.manual?"explain":S.tab;
+    update();updateSel();
+  }
+  el.sample.addEventListener("change",function(){loadSample(el.sample.value);el.sample.value="";});
+  document.addEventListener("click",function(e){var b=e.target.closest("[data-sample]");if(b)loadSample(b.getAttribute("data-sample"));});
+  $("clearAll").addEventListener("click",function(){S.text="";S.examples=[];S.overrides={};S.manual=null;el.text.value="";update();updateSel();el.text.focus();});
+
+  var lastBox="",fitRaf=0;
+  function onBox(){var b=el.editor.clientWidth+"x"+el.editor.clientHeight;if(b===lastBox)return;lastBox=b;cancelAnimationFrame(fitRaf);fitRaf=requestAnimationFrame(fitEditor);}
+  if(window.ResizeObserver)new ResizeObserver(onBox).observe(el.editor);
+  else window.addEventListener("resize",fitEditor);
+
+  load();
+  el.text.value=S.text;
+  relocate();
+  update();
+  updateSel();
+})();
+</script>
+<!--
+Regex by Example — usage
+1. Paste text on the left (or pick a sample). Select a piece that should match and press "Should match" (Alt+1).
+   Mark wrong hits with "Should not match" (Alt+2). Examples can also be typed below the list (Enter = match, Shift+Enter = reject).
+2. The pattern is inferred from the examples: each example is split into digit / letter / separator runs, the runs are aligned
+   across examples (runs missing from some examples become optional groups, "a.b.c"-style lists become repeats, messy parts
+   become a character class), then quantifiers are generalised. If a negative example is still matched, the pattern is
+   tightened step by step: word boundaries, then length ranges, then exact values, then a literal list.
+3. Tweak each part (exactly n / range / 1 or more, literal, optional, capture group + name) and the g i m s flags.
+4. Type your own regex into the pattern box to switch to hand-written mode: it is explained part by part and still checked
+   against the examples. "Back to inferred" returns to the generated pattern.
+5. Output tabs: JavaScript, Python, PCRE, Explanation, Code and Prompt, each with Copy and a character count.
+State is kept in localStorage under redline.tool.regex-example.state
+-->
+</body>
+</html>

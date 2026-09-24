@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Data Digest</title>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#ffffff;
+  --sunken:#e4e9ee;
+  --ink:#16202a;
+  --ink-soft:#5b6b7a;
+  --line:#c8d2db;
+  --line-soft:#dde4ea;
+  --accent:#1f4ed8;
+  --accent-ink:#ffffff;
+  --danger:#c0392b;
+  --warn:#b26a00;
+  --ok:#1e8449;
+  --fill-alpha:0.16;
+  --tool-type-num:#1f6fd8;
+  --tool-type-time:#8e44ad;
+  --tool-type-bool:#16a085;
+  --tool-type-id:#7f8c8d;
+  --tool-type-enum:#d35400;
+  --tool-type-text:#2c3e50;
+  --tool-type-contact:#c0392b;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f151b;
+    --surface:#161f27;
+    --sunken:#111920;
+    --ink:#e4ebf1;
+    --ink-soft:#8ea0b0;
+    --line:#2b3945;
+    --line-soft:#212c36;
+    --accent:#6d8dff;
+    --accent-ink:#0f151b;
+    --danger:#e57373;
+    --warn:#f0b35a;
+    --ok:#6fcf97;
+    --fill-alpha:0.30;
+    --tool-type-num:#6ea8ff;
+    --tool-type-time:#c39bd3;
+    --tool-type-bool:#48c9b0;
+    --tool-type-id:#aab7b8;
+    --tool-type-enum:#f0a060;
+    --tool-type-text:#d5dde5;
+    --tool-type-contact:#f1948a;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f151b;
+  --surface:#161f27;
+  --sunken:#111920;
+  --ink:#e4ebf1;
+  --ink-soft:#8ea0b0;
+  --line:#2b3945;
+  --line-soft:#212c36;
+  --accent:#6d8dff;
+  --accent-ink:#0f151b;
+  --danger:#e57373;
+  --warn:#f0b35a;
+  --ok:#6fcf97;
+  --fill-alpha:0.30;
+  --tool-type-num:#6ea8ff;
+  --tool-type-time:#c39bd3;
+  --tool-type-bool:#48c9b0;
+  --tool-type-id:#aab7b8;
+  --tool-type-enum:#f0a060;
+  --tool-type-text:#d5dde5;
+  --tool-type-contact:#f1948a;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono,code,pre,textarea{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--surface);flex:0 0 auto}
+.brand{font-weight:600;margin:0;font-size:15px}
+.brand span{color:var(--ink-soft);font-weight:400}
+.bar .actions{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+
+.btn{padding:4px 10px;border:1px solid var(--line);border-radius:4px;background:var(--surface);cursor:pointer;font-size:13px;line-height:1.4;white-space:nowrap}
+.btn:hover{border-color:var(--ink-soft)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn-primary:hover{border-color:var(--accent);filter:brightness(1.08)}
+.btn:disabled{opacity:.5;cursor:default}
+
+.layout{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:290px minmax(0,1fr) minmax(340px,440px);gap:0}
+.pane{min-width:0;min-height:0;overflow:auto;border-right:1px solid var(--line-soft)}
+.pane:last-child{border-right:0}
+.pane-in{padding:12px}
+.pane h2{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:0 0 8px;font-weight:600}
+
+.drop{display:block;border:1.5px dashed var(--line);border-radius:6px;padding:14px 10px;text-align:center;background:var(--sunken);cursor:pointer;color:var(--ink-soft)}
+.drop strong{color:var(--ink);font-weight:600}
+.drop.over{border-color:var(--accent);color:var(--ink)}
+.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.drop input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.srcline{margin:6px 0 0;font-size:12px;color:var(--ink-soft);word-break:break-all}
+.srcline b{color:var(--ink);font-weight:500}
+textarea{width:100%;min-height:130px;resize:vertical;border:1px solid var(--line);border-radius:4px;background:var(--sunken);padding:6px 8px;font-size:12px;line-height:1.4;white-space:pre;overflow:auto}
+.lbl{display:block;font-size:12px;color:var(--ink-soft);margin:10px 0 4px}
+.opts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 8px;align-items:center;margin-top:10px}
+.opts label{color:var(--ink-soft);font-size:12px}
+.opts select{width:100%;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:var(--surface);font-size:13px}
+.checks{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.checks label{display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer}
+.checks input{accent-color:var(--accent);margin:0}
+.privacy{margin-top:12px;padding:8px;border-radius:4px;background:var(--sunken);font-size:12px;color:var(--ink-soft)}
+.privacy b{color:var(--ok);font-weight:600}
+.detected{margin-top:8px;font-size:12px;color:var(--ink-soft)}
+.detected b{color:var(--ink);font-weight:500}
+
+.prog{margin-top:10px;display:none}
+.prog.on{display:block}
+.prog-track{height:6px;border-radius:3px;background:var(--sunken);overflow:hidden;border:1px solid var(--line-soft)}
+.prog-fill{height:100%;width:0;background:var(--accent);transition:width .12s linear}
+.prog-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px;font-size:12px;color:var(--ink-soft)}
+.prog-row .btn{padding:1px 8px;font-size:12px}
+.msg{margin-top:8px;font-size:12px;min-height:0}
+.msg.err{color:var(--danger)}
+.msg.warn{color:var(--warn)}
+.msg.ok{color:var(--ok)}
+
+.empty{padding:28px 18px;color:var(--ink-soft);max-width:520px}
+.empty h3{color:var(--ink);font-size:14px;margin:0 0 6px;font-weight:600}
+.empty p{margin:0 0 8px}
+
+.summary{display:flex;flex-wrap:wrap;gap:4px 14px;padding:10px 12px;border-bottom:1px solid var(--line-soft);background:var(--surface);position:sticky;top:0;z-index:1}
+.summary div{font-size:12px;color:var(--ink-soft)}
+.summary b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.issues{margin:10px 12px 0;padding:8px 10px;border:1px solid var(--line-soft);border-left:3px solid var(--warn);border-radius:4px;background:var(--surface)}
+.issues.clean{border-left-color:var(--ok)}
+.issues h3{margin:0 0 4px;font-size:12px;font-weight:600}
+.issues ul{margin:0;padding-left:16px}
+.issues li{font-size:12px;margin:1px 0}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;padding:10px 12px 14px}
+.card{background:var(--surface);border:1px solid var(--line-soft);border-radius:6px;padding:8px 10px;min-width:0}
+.card-h{display:flex;align-items:baseline;gap:6px;min-width:0}
+.card-h .idx{color:var(--ink-soft);font-size:11px;font-variant-numeric:tabular-nums}
+.card-h .nm{font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0}
+.badge{--c:var(--tool-type-text);font-size:11px;padding:0 6px;border-radius:3px;border:1px solid var(--c);color:var(--c);white-space:nowrap;flex:0 0 auto}
+.t-num{--c:var(--tool-type-num)}.t-time{--c:var(--tool-type-time)}.t-bool{--c:var(--tool-type-bool)}
+.t-id{--c:var(--tool-type-id)}.t-enum{--c:var(--tool-type-enum)}.t-text{--c:var(--tool-type-text)}
+.t-contact{--c:var(--tool-type-contact)}.t-bad{--c:var(--warn)}
+.meta{display:flex;gap:10px;font-size:12px;color:var(--ink-soft);margin-top:4px;font-variant-numeric:tabular-nums}
+.meta b{color:var(--ink);font-weight:500}
+.nullbar{height:3px;background:var(--sunken);border-radius:2px;margin-top:4px;overflow:hidden}
+.nullbar i{display:block;height:100%;background:var(--warn)}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0 8px;margin-top:6px;font-size:12px}
+.kv dt{color:var(--ink-soft)}
+.kv dd{margin:0;font-family:"IBM Plex Mono",ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+.hist{display:flex;align-items:flex-end;gap:1px;height:28px;margin-top:6px}
+.hist i{flex:1 1 0;background:var(--tool-type-num);opacity:.75;min-height:1px;border-radius:1px 1px 0 0}
+.top{margin-top:6px;display:flex;flex-direction:column;gap:2px}
+.top div{position:relative;display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:0 4px;border-radius:2px;overflow:hidden}
+.top div::before{content:"";position:absolute;inset:0;width:var(--w);background:var(--accent);opacity:var(--fill-alpha)}
+.top span{position:relative;font-family:"IBM Plex Mono",ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.top em{position:relative;font-style:normal;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.cwarn{margin:6px 0 0;padding:0;list-style:none}
+.cwarn li{font-size:12px;color:var(--warn)}
+
+.outpane{display:flex;flex-direction:column;overflow:hidden}
+.tabs{display:flex;gap:2px;padding:6px 8px 0;border-bottom:1px solid var(--line-soft);flex-wrap:wrap;flex:0 0 auto}
+.tab{border:0;background:none;padding:5px 9px;border-bottom:2px solid transparent;color:var(--ink-soft);cursor:pointer;font-size:13px}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:500}
+.tab small{color:var(--ink-soft);font-weight:400;margin-left:3px;font-variant-numeric:tabular-nums}
+.out{flex:1 1 auto;min-height:0;margin:0;padding:10px 12px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.45;tab-size:2;background:var(--sunken)}
+.out.placeholder{white-space:normal;color:var(--ink-soft);font-family:inherit;font-size:13px}
+.out-foot{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;padding:8px 12px;border-top:1px solid var(--line-soft);flex:0 0 auto}
+.out-foot .count{font-size:12px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.out-foot .copied{font-size:12px;color:var(--ok)}
+
+@media (max-width:1100px){
+  .layout{grid-template-columns:270px minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(320px,45%)}
+  .outpane{grid-column:1 / -1;border-top:1px solid var(--line-soft)}
+}
+@media (max-width:720px){
+  body{height:auto;display:block}
+  html{height:auto}
+  .layout{display:block}
+  .pane{overflow:visible;border-right:0;border-bottom:1px solid var(--line-soft)}
+  .summary{position:static}
+  .outpane{height:560px}
+  .cards{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1 class="brand">Data Digest <span>— profile a CSV / JSON file into a compact brief for an LLM</span></h1>
+  <div class="actions">
+    <button class="btn" id="sampleBtn" type="button">Load sample</button>
+    <button class="btn" id="clearBtn" type="button">Clear</button>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="pane" aria-label="Input">
+    <div class="pane-in">
+      <h2>Input</h2>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept=".csv,.tsv,.txt,.json,.jsonl,.ndjson,text/csv,application/json">
+        <strong>Choose a file</strong> or drop it here<br>
+        <span style="font-size:12px">CSV, TSV, JSON array, JSONL — any size</span>
+      </label>
+      <p class="srcline" id="srcline"></p>
+      <label class="lbl" for="paste">…or paste text</label>
+      <textarea id="paste" spellcheck="false" placeholder="id,name,price&#10;1,Widget,9.99&#10;2,&quot;Gadget, large&quot;,24.50"></textarea>
+
+      <div class="opts">
+        <label for="fmt">Format</label>
+        <select id="fmt">
+          <option value="auto">Auto-detect</option>
+          <option value="csv">CSV / TSV</option>
+          <option value="json">JSON array</option>
+          <option value="jsonl">JSONL</option>
+        </select>
+        <label for="delim">Delimiter</label>
+        <select id="delim">
+          <option value="auto">Auto-detect</option>
+          <option value=",">Comma ,</option>
+          <option value=";">Semicolon ;</option>
+          <option value="&#9;">Tab</option>
+          <option value="|">Pipe |</option>
+        </select>
+        <label for="limit">Full profile</label>
+        <select id="limit">
+          <option value="100000">first 100k rows, then sample</option>
+          <option value="500000">first 500k rows, then sample</option>
+          <option value="2000000">first 2M rows, then sample</option>
+          <option value="0">every row</option>
+        </select>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="header" checked> First row is a header (CSV)</label>
+        <label><input type="checkbox" id="mask" checked> Mask emails and phone numbers</label>
+      </div>
+
+      <div class="prog" id="prog" aria-live="polite">
+        <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+        <div class="prog-row"><span id="progText">Starting…</span><button class="btn" id="cancelBtn" type="button">Cancel</button></div>
+      </div>
+      <div class="detected" id="detected"></div>
+      <div class="msg" id="msg" role="status"></div>
+      <div class="privacy"><b>Local only.</b> The file is read and parsed in this browser tab. Nothing is uploaded or sent anywhere.</div>
+    </div>
+  </section>
+
+  <section class="pane" id="profilePane" aria-label="Column profile">
+    <div class="empty" id="emptyState">
+      <h3>No data loaded</h3>
+      <p>Choose or drop a CSV, TSV, JSON or JSONL file, paste text on the left, or press <b>Load sample</b>.</p>
+      <p>You get one card per column (type, nulls, distinct values, ranges, top values) and a digest on the right that is usually tens to thousands of times smaller than the file.</p>
+    </div>
+    <div id="profile" hidden></div>
+  </section>
+
+  <section class="pane outpane" aria-label="Output">
+    <div class="tabs" role="tablist" id="tabs">
+      <button class="tab" role="tab" type="button" data-fmt="prompt" aria-selected="true">Prompt<small></small></button>
+      <button class="tab" role="tab" type="button" data-fmt="md" aria-selected="false">Markdown<small></small></button>
+      <button class="tab" role="tab" type="button" data-fmt="json" aria-selected="false">JSON<small></small></button>
+      <button class="tab" role="tab" type="button" data-fmt="sql" aria-selected="false">CREATE TABLE<small></small></button>
+    </div>
+    <pre class="out placeholder" id="out" tabindex="0">The digest appears here once data is loaded. The Prompt tab is plain text you can paste straight into an LLM chat.</pre>
+    <div class="out-foot">
+      <button class="btn btn-primary" id="copyBtn" type="button" disabled>Copy</button>
+      <span class="count" id="count"></span>
+      <span class="copied" id="copied" aria-live="polite"></span>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+/*CORE-BEGIN*/
+/* ---------- RFC 4180 streaming CSV parser ---------- */
+function CsvParser(delimiter){
+  this.d = (delimiter || ",").charCodeAt(0);
+  this.field = ""; this.row = []; this.st = 0; // 0 field start, 1 unquoted, 2 in quotes, 3 quote inside quotes
+  this.skipLF = false; this.first = true;
+  this.rowCount = 0; this.quoteStartRow = -1; this.unterminated = -1;
+}
+CsvParser.prototype.push = function(s){
+  var out = [], i = 0, n = s.length, d = this.d;
+  var field = this.field, row = this.row, st = this.st;
+  if (this.first && n) { if (s.charCodeAt(0) === 0xFEFF) i = 1; this.first = false; }
+  if (this.skipLF && i < n) { if (s.charCodeAt(i) === 10) i++; this.skipLF = false; }
+  while (i < n) {
+    if (st === 2) {
+      var q = s.indexOf('"', i);
+      if (q < 0) { field += s.slice(i); i = n; break; }
+      field += s.slice(i, q); i = q + 1; st = 3; continue;
+    }
+    var c = s.charCodeAt(i);
+    if (st === 3) {
+      if (c === 34) { field += '"'; i++; st = 2; continue; }
+      st = 1; // closing quote; anything that is not a separator is kept literally (lenient)
+    }
+    if (c === d) { row.push(field); field = ""; st = 0; i++; continue; }
+    if (c === 10 || c === 13) {
+      row.push(field); field = ""; out.push(row); row = []; st = 0; i++; this.rowCount++;
+      if (c === 13) { if (i < n) { if (s.charCodeAt(i) === 10) i++; } else this.skipLF = true; }
+      continue;
+    }
+    if (c === 34 && st === 0) { st = 2; this.quoteStartRow = this.rowCount; i++; continue; }
+    var j = i + 1;
+    while (j < n) { var cc = s.charCodeAt(j); if (cc === d || cc === 10 || cc === 13) break; j++; }
+    field += s.slice(i, j); st = 1; i = j;
+  }
+  this.field = field; this.row = row; this.st = st;
+  return out;
+};
+CsvParser.prototype.end = function(){
+  var out = [];
+  if (this.st === 2) this.unterminated = this.quoteStartRow;
+  if (this.field !== "" || this.row.length || this.st === 2 || this.st === 3) {
+    this.row.push(this.field); out.push(this.row); this.rowCount++;
+  }
+  this.field = ""; this.row = []; this.st = 0;
+  return out;
+};
+function parseCsv(text, delimiter){
+  var p = new CsvParser(delimiter);
+  return p.push(text).concat(p.end());
+}
+function isBlankRow(r){ return r.length === 1 && r[0] === ""; }
+
+function detectDelimiter(sample){
+  var s = sample.slice(0, 65536);
+  if (sample.length > 65536) { var k = s.lastIndexOf("\n"); if (k > 0) s = s.slice(0, k); }
+  var cands = [",", ";", "\t", "|"], best = ",", bestScore = -1;
+  for (var c = 0; c < cands.length; c++) {
+    var rows = parseCsv(s, cands[c]).filter(function(r){ return !isBlankRow(r); }).slice(0, 60);
+    if (!rows.length) continue;
+    var freq = {}, mode = 0, modeN = 0;
+    var stray = 0; // quotes left inside fields mean the quoting did not line up with this delimiter
+    rows.forEach(function(r){ freq[r.length] = (freq[r.length] || 0) + 1; for (var f = 0; f < r.length; f++) if (r[f].indexOf('"') >= 0) stray++; });
+    Object.keys(freq).forEach(function(k){ if (freq[k] > modeN || (freq[k] === modeN && +k > mode)) { modeN = freq[k]; mode = +k; } });
+    if (mode < 2) continue;
+    var score = (modeN / rows.length) * 1000 - Math.min(1, stray / rows.length) * 600 + Math.min(mode, 100);
+    if (score > bestScore) { bestScore = score; best = cands[c]; }
+  }
+  return best;
+}
+function detectFormat(sample){
+  var t = sample.replace(/^﻿/, "").replace(/^\s+/, "");
+  if (t[0] === "[") return "json";
+  if (t[0] === "{") {
+    var lines = t.split(/\r?\n/).filter(function(l){ return l.trim(); });
+    if (lines.length > 1 && lines[1].trim()[0] === "{" && /\}\s*$/.test(lines[0])) return "jsonl";
+    return "json";
+  }
+  return "csv";
+}
+
+/* ---------- value classification ---------- */
+var K = { INT:0, FLOAT:1, BOOL:2, DATE:3, DATETIME:4, EMAIL:5, URL:6, UUID:7, PHONE:8, JSON:9, TEXT:10 };
+var KIND_NAMES = ["integer","float","boolean","date","datetime","email","url","uuid","phone","json","text"];
+var NULL_TOKENS = new Set(["", "null", "NULL", "Null", "NA", "N/A", "n/a", "NaN", "nan", "None", "none", "nil", "#N/A"]);
+var BOOL_WORDS = { "true":1, "false":1, "yes":1, "no":1 };
+var RE_INT = /^[+-]?\d+$/;
+var RE_FLOAT = /^[+-]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?$/;
+var RE_ISO = /^(\d{4})-(\d{2})-(\d{2})(?:([T ])(\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?\s?(Z|[+-]\d{2}:?\d{2})?)?$/;
+var RE_DMY = /^(\d{1,2})([\/.])(\d{1,2})\2(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
+var RE_EMAIL = /^[^\s@,;<>]+@[^\s@,;<>]+\.[A-Za-z]{2,}$/;
+var RE_URL = /^(?:(?:https?|ftp):\/\/|www\.)[^\s]+$/i;
+var RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var RE_PHONE = /^\+?\(?\d[\d\s().\-]{5,22}\d$/;
+var RE_IP = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+var scratch = { num:0, ts:0, ts2:0, fmt:"", p1:0, p2:0, dec:0, intDigits:0, exp:false, tz:false };
+
+function validYMD(y, m, d){ return m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 1000; }
+function classify(t){
+  var c0 = t.charCodeAt(0);
+  var digitish = (c0 >= 48 && c0 <= 57) || c0 === 43 || c0 === 45 || c0 === 46 || c0 === 40;
+  if (digitish) {
+    if (RE_INT.test(t)) {
+      if (/^[+-]?0\d/.test(t)) return K.TEXT; // leading zero: a code, not a number
+      scratch.num = +t; var dg = t.replace(/^[+-]/, "").length;
+      scratch.dec = 0; scratch.intDigits = dg; scratch.exp = false;
+      return K.INT;
+    }
+    if (RE_FLOAT.test(t)) {
+      if (/^[+-]?0\d/.test(t)) return K.TEXT;
+      scratch.num = +t;
+      var e = t.search(/[eE]/), body = e >= 0 ? t.slice(0, e) : t, dot = body.indexOf(".");
+      scratch.exp = e >= 0;
+      scratch.dec = dot >= 0 ? body.length - dot - 1 : 0;
+      scratch.intDigits = (dot >= 0 ? body.slice(0, dot) : body).replace(/^[+-]/, "").length;
+      return K.FLOAT;
+    }
+    var m = RE_ISO.exec(t);
+    if (m && validYMD(+m[1], +m[2], +m[3])) {
+      if (!m[4]) { scratch.ts = Date.UTC(+m[1], m[2] - 1, +m[3]); scratch.fmt = "YYYY-MM-DD"; return K.DATE; }
+      scratch.ts = Date.UTC(+m[1], m[2] - 1, +m[3], +m[5], +m[6], +(m[7] || 0));
+      scratch.tz = !!m[9];
+      scratch.fmt = "YYYY-MM-DD" + m[4] + "HH:MM" + (m[7] ? ":SS" : "") + (m[8] ? ".sss" : "") +
+        (m[9] ? (m[9] === "Z" ? "Z" : "±HH:MM") : "");
+      return K.DATETIME;
+    }
+    m = RE_DMY.exec(t);
+    if (m && (+m[1] <= 31) && (+m[3] <= 31) && (+m[1] <= 12 || +m[3] <= 12) && +m[4] >= 1000) {
+      var a = +m[1], b = +m[3], y = +m[4], hh = +(m[5] || 0), mi = +(m[6] || 0), ss = +(m[7] || 0);
+      scratch.p1 = a; scratch.p2 = b;
+      scratch.ts = b <= 12 ? Date.UTC(y, b - 1, a, hh, mi, ss) : NaN;  // day/month
+      scratch.ts2 = a <= 12 ? Date.UTC(y, a - 1, b, hh, mi, ss) : NaN; // month/day
+      scratch.fmt = "SLASH" + m[2] + (m[5] ? (m[7] ? " HH:MM:SS" : " HH:MM") : "");
+      scratch.tz = false;
+      return m[5] ? K.DATETIME : K.DATE;
+    }
+    if (RE_PHONE.test(t) && !RE_IP.test(t)) {
+      var digits = t.replace(/\D/g, "").length;
+      if (digits >= 7 && digits <= 15 && /[\s().\-+]/.test(t)) return K.PHONE;
+    }
+    if (RE_UUID.test(t)) return K.UUID;
+    return K.TEXT;
+  }
+  if (t.length <= 5 && BOOL_WORDS[t.toLowerCase()]) return K.BOOL;
+  if (t.indexOf("@") > 0 && RE_EMAIL.test(t)) return K.EMAIL;
+  if (RE_URL.test(t)) return K.URL;
+  if (t.length === 36 && RE_UUID.test(t)) return K.UUID;
+  return K.TEXT;
+}
+
+/* ---------- small helpers ---------- */
+function mulberry32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function fmtNum(x){
+  if (x === null || x === undefined || !isFinite(x)) return "—";
+  if (Number.isInteger(x)) return String(x);
+  var a = Math.abs(x);
+  if (a >= 1e15 || a < 1e-4) return x.toExponential(3);
+  return String(a >= 1000 ? Math.round(x * 100) / 100 : parseFloat(x.toPrecision(5)));
+}
+function fmtInt(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+function pct(a, b){ if (!b) return "0%"; var p = 100 * a / b; return (p === 0 ? "0" : p < 0.1 ? "<0.1" : p.toFixed(1).replace(/\.0$/, "")) + "%"; }
+function fmtBytes(b){ if (b < 1024) return b + " B"; if (b < 1048576) return (b / 1024).toFixed(1) + " KB"; if (b < 1073741824) return (b / 1048576).toFixed(1) + " MB"; return (b / 1073741824).toFixed(2) + " GB"; }
+function clip(s, n){ s = String(s).replace(/\r?\n/g, "\\n"); n = n || 60; return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+function isoOf(ts, withTime){ if (!isFinite(ts)) return "?"; var s = new Date(ts).toISOString(); return withTime ? s.slice(0, 19).replace("T", " ") : s.slice(0, 10); }
+function maskEmail(t){ var at = t.indexOf("@"); return t[0] + "***" + t.slice(at); }
+function maskPhone(t){ var total = t.replace(/\D/g, "").length, seen = 0; return t.replace(/\d/g, function(d){ seen++; return seen > total - 2 ? d : "x"; }); }
+function maskCell(v){
+  if (v === null || v === undefined) return v;
+  var s = String(v), t = s.trim();
+  if (!t) return s;
+  var k = classify(t);
+  if (k === K.EMAIL) return maskEmail(t);
+  if (k === K.PHONE) return maskPhone(t);
+  return s;
+}
+function csvCell(v){
+  if (v === null || v === undefined) return "";
+  var s = String(v);
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+/* ---------- streaming profiler ---------- */
+var DISTINCT_CAP = 100000, DISTINCT_CAP_UNIQUE = 2000000, NUM_CAP = 250000, DUP_CAP = 2000000;
+function newCol(name, nullsSoFar){
+  return { name:name, n:0, nulls:nullsSoFar || 0, kinds:[0,0,0,0,0,0,0,0,0,0,0], ex:[], distinct:new Map(), capped:false,
+    minLen:Infinity, maxLen:0, padded:0,
+    num:{ count:0, mean:0, m2:0, min:Infinity, max:-Infinity, vals:new Float64Array(1024), len:0, seen:0, dec:0, intDigits:0, exp:false },
+    fmts:new Map(), tmin:Infinity, tmax:-Infinity, tminS:"", tmaxS:"", tz:false,
+    s1:false, s2:false, amin:Infinity, amax:-Infinity, aminS:"", amaxS:"", bmin:Infinity, bmax:-Infinity, bminS:"", bmaxS:"" };
+}
+function Profiler(opts){
+  opts = opts || {};
+  this.cols = []; this.index = new Map();
+  this.rows = 0; this.profiled = 0;
+  this.fullLimit = opts.fullLimit > 0 ? opts.fullLimit : Infinity;
+  this.stride = opts.stride || 10;
+  this.expected = -1; this.ragged = 0; this.raggedFirst = -1;
+  this.dupSet = new Set(); this.dups = 0; this.dupChecked = 0;
+  this.rng = mulberry32(opts.seed || 20240501);
+  this.first = null; this.last = null; this.mostNulls = null; this.longest = null; this.randoms = [];
+}
+Profiler.prototype.setHeader = function(names){
+  var seen = {}, self = this;
+  names.forEach(function(raw, i){
+    var nm = String(raw == null ? "" : raw).trim() || ("col_" + (i + 1));
+    var base = nm, k = 2; while (seen[nm]) nm = base + "_" + (k++);
+    seen[nm] = 1; self.addColumn(nm);
+  });
+  this.expected = names.length;
+};
+Profiler.prototype.addColumn = function(name){
+  var c = newCol(name, this.profiled); this.index.set(name, this.cols.length); this.cols.push(c); return this.cols.length - 1;
+};
+Profiler.prototype.keyIndex = function(key){
+  var i = this.index.get(key); return i === undefined ? this.addColumn(key) : i;
+};
+Profiler.prototype.addRow = function(vals){
+  var rowNo = ++this.rows, L = vals.length;
+  if (this.expected < 0) this.expected = L;
+  else if (L !== this.expected) { this.ragged++; if (this.raggedFirst < 0) this.raggedFirst = rowNo; }
+  var entry = null;
+  if (rowNo === 1) { entry = { i:rowNo, v:vals }; this.first = entry; }
+  if (rowNo > this.fullLimit && (rowNo - this.fullLimit) % this.stride !== 0) { this.last = { i:rowNo, v:vals }; return; }
+  this.profiled++;
+  while (this.cols.length < L) this.addColumn("col_" + (this.cols.length + 1));
+  var nulls = 0, chars = 0, cols = this.cols, C = cols.length;
+  for (var ci = 0; ci < C; ci++) {
+    var v = ci < L ? vals[ci] : null;
+    var len = this.addValue(cols[ci], v);
+    if (len < 0) nulls++; else chars += len;
+  }
+  if (this.dupChecked < DUP_CAP) {
+    this.dupChecked++;
+    var key = L === 1 ? String(vals[0]) : vals.join("\u001f");
+    if (this.dupSet.has(key)) this.dups++; else this.dupSet.add(key);
+  }
+  entry = entry || { i:rowNo, v:vals };
+  this.last = entry;
+  if (!this.mostNulls || nulls > this.mostNulls.nulls) { entry.nulls = nulls; this.mostNulls = entry; }
+  if (!this.longest || chars > this.longest.chars) { entry.chars = chars; this.longest = entry; }
+  // reservoir of 4 random rows
+  if (this.randoms.length < 4) this.randoms.push(entry);
+  else { var r = Math.floor(this.rng() * this.profiled); if (r < 4) this.randoms[r] = entry; }
+};
+/* returns -1 for null, else the string length */
+Profiler.prototype.addValue = function(col, v){
+  var s, t, kind;
+  if (v === null || v === undefined) { col.nulls++; return -1; }
+  if (typeof v === "number") {
+    if (!isFinite(v)) { col.nulls++; return -1; }
+    s = t = String(v); kind = Number.isInteger(v) ? K.INT : K.FLOAT;
+    scratch.num = v; scratch.exp = /e/i.test(s);
+    var dot = s.indexOf("."); scratch.dec = dot >= 0 && !scratch.exp ? s.length - dot - 1 : 0;
+    scratch.intDigits = (dot >= 0 ? s.slice(0, dot) : s).replace("-", "").length;
+  } else if (typeof v === "boolean") { s = t = String(v); kind = K.BOOL; }
+  else if (typeof v === "object") { s = t = JSON.stringify(v); kind = K.JSON; }
+  else {
+    s = String(v); t = s.trim();
+    if (NULL_TOKENS.has(t)) { col.nulls++; return -1; }
+    if (t.length !== s.length) col.padded++;
+    kind = classify(t);
+  }
+  col.n++; col.kinds[kind]++;
+  if (col.ex[kind] === undefined) col.ex[kind] = t;
+  var len = s.length;
+  if (len < col.minLen) col.minLen = len;
+  if (len > col.maxLen) col.maxLen = len;
+  var d = col.distinct, c = d.get(t);
+  if (c !== undefined) d.set(t, c + 1);
+  else if (d.size < DISTINCT_CAP || (d.size < DISTINCT_CAP_UNIQUE && d.size === col.n - 1)) d.set(t, 1); // all-unique columns (ids) are tracked further
+  else col.capped = true;
+  if (kind === K.INT || kind === K.FLOAT) {
+    var x = scratch.num, N = col.num;
+    N.count++; var delta = x - N.mean; N.mean += delta / N.count; N.m2 += delta * (x - N.mean);
+    if (x < N.min) N.min = x; if (x > N.max) N.max = x;
+    if (scratch.dec > N.dec) N.dec = scratch.dec;
+    if (scratch.intDigits > N.intDigits) N.intDigits = scratch.intDigits;
+    if (scratch.exp) N.exp = true;
+    N.seen++;
+    if (N.len < NUM_CAP) {
+      if (N.len === N.vals.length) { var nv = new Float64Array(Math.min(NUM_CAP, N.vals.length * 2)); nv.set(N.vals); N.vals = nv; }
+      N.vals[N.len++] = x;
+    } else { var r = Math.floor(this.rng() * N.seen); if (r < NUM_CAP) N.vals[r] = x; }
+  } else if (kind === K.DATE || kind === K.DATETIME) {
+    var f = scratch.fmt;
+    col.fmts.set(f, (col.fmts.get(f) || 0) + 1);
+    if (scratch.tz) col.tz = true;
+    if (f.charCodeAt(0) === 83) { // SLASH: keep both day/month and month/day readings
+      if (scratch.p1 > 12) col.s1 = true;
+      if (scratch.p2 > 12) col.s2 = true;
+      var a = scratch.ts, b = scratch.ts2;
+      if (a < col.amin) { col.amin = a; col.aminS = t; } if (a > col.amax) { col.amax = a; col.amaxS = t; }
+      if (b < col.bmin) { col.bmin = b; col.bminS = t; } if (b > col.bmax) { col.bmax = b; col.bmaxS = t; }
+    } else {
+      var ts = scratch.ts;
+      if (ts < col.tmin) { col.tmin = ts; col.tminS = t; }
+      if (ts > col.tmax) { col.tmax = ts; col.tmaxS = t; }
+    }
+  }
+  return len;
+};
+
+var ID_NAME = /(^|[_\s.\-])(id|uuid|guid|key|code|sku)$/i, ID_CAMEL = /[a-z0-9](Id|ID|Uuid|Key)$/;
+function quantile(sorted, q){
+  if (!sorted.length) return NaN;
+  var p = (sorted.length - 1) * q, lo = Math.floor(p), hi = Math.ceil(p);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (p - lo);
+}
+function finalizeColumn(col, P){
+  var nn = col.n, out = { name:col.name, type:"text", nulls:col.nulls, nonNull:nn,
+    unique:col.distinct.size, uniqueCapped:col.capped, warnings:[] };
+  var total = nn + col.nulls;
+  out.nullRate = total ? col.nulls / total : 0;
+  if (nn === 0) { out.type = "empty"; out.warnings.push("always empty"); return out; }
+  var k = col.kinds;
+  var groups = [
+    ["num", k[K.INT] + k[K.FLOAT]], ["time", k[K.DATE] + k[K.DATETIME]], ["bool", k[K.BOOL]],
+    ["email", k[K.EMAIL]], ["url", k[K.URL]], ["uuid", k[K.UUID]], ["phone", k[K.PHONE]],
+    ["json", k[K.JSON]], ["text", k[K.TEXT]]
+  ];
+  groups.sort(function(a, b){ return b[1] - a[1]; });
+  var dom = groups[0][0], share = groups[0][1] / nn;
+  var map = { num: k[K.FLOAT] ? "float" : "integer", time: k[K.DATETIME] ? "datetime" : "date", bool:"boolean",
+    email:"email", url:"url", uuid:"text", phone:"phone", json:"json", text:"text" };
+  out.type = share >= 0.8 ? map[dom] : "text";
+  if (share < 1) {
+    out.mixed = groups.filter(function(g){ return g[1] > 0; }).map(function(g){
+      var kinds = { num:[K.INT, K.FLOAT], time:[K.DATE, K.DATETIME], bool:[K.BOOL], email:[K.EMAIL], url:[K.URL], uuid:[K.UUID], phone:[K.PHONE], json:[K.JSON], text:[K.TEXT] }[g[0]];
+      var ex; kinds.forEach(function(kk){ if (ex === undefined && col.ex[kk] !== undefined) ex = col.ex[kk]; });
+      return { kind: g[0] === "uuid" ? "uuid" : map[g[0]], count: g[1], example: ex };
+    });
+    var minor = out.mixed.slice(1).map(function(m){ return m.count + " " + m.kind + " (e.g. \"" + clip(m.example, 24) + "\")"; }).join(", ");
+    out.warnings.push("mixed types: " + out.mixed[0].count + " " + out.mixed[0].kind + ", " + minor);
+  }
+  var allUnique = !col.capped && col.distinct.size === nn;
+  var nameId = ID_NAME.test(col.name) || ID_CAMEL.test(col.name);
+  if (allUnique && col.nulls === 0 && nn >= 2 && !out.mixed &&
+      ((nameId && (out.type === "integer" || out.type === "text")) || (dom === "uuid" && share === 1))) {
+    out.idOf = dom === "uuid" ? "uuid" : out.type; out.type = "id";
+  } else if (nameId && !col.capped && col.nulls === 0 && nn >= 10 && !out.mixed && col.distinct.size >= 0.9 * nn &&
+      (out.type === "integer" || out.type === "text")) {
+    out.idOf = out.type; out.type = "id"; out.notUnique = true;
+    var rep = 0; col.distinct.forEach(function(v){ if (v > 1) rep++; });
+    out.warnings.push("looks like an id but is not unique: " + rep + " value" + (rep > 1 ? "s repeat" : " repeats"));
+  }
+  out.minLen = col.minLen; out.maxLen = col.maxLen;
+  if (col.padded) out.warnings.push(col.padded + " value" + (col.padded > 1 ? "s have" : " has") + " leading/trailing spaces");
+  var entries = null;
+  function topN(n){
+    if (!entries && !col.capped && col.distinct.size === nn) { // every value once: no sort needed
+      var it = col.distinct.keys(), res = []; for (var q = 0; q < n; q++) { var nx = it.next(); if (nx.done) break; res.push({ value:nx.value, count:1 }); } return res;
+    }
+    if (!entries) { entries = Array.from(col.distinct.entries()); entries.sort(function(a, b){ return b[1] - a[1] || (a[0] < b[0] ? -1 : 1); }); }
+    return entries.slice(0, n).map(function(e){ return { value:e[0], count:e[1] }; });
+  }
+  if (out.type === "text" && !out.mixed && !col.capped && col.distinct.size <= 20 &&
+      col.distinct.size <= Math.max(2, Math.floor(nn / 3)) && col.maxLen <= 48) {
+    out.type = "enum"; out.values = topN(20);
+  }
+  if (out.type === "integer" || out.type === "float" || (out.type === "id" && out.idOf === "integer")) {
+    var N = col.num, sorted = N.vals.slice(0, N.len).sort();
+    out.stats = { min:N.min, max:N.max, mean:N.mean, median:quantile(sorted, 0.5),
+      sd: N.count > 1 ? Math.sqrt(N.m2 / (N.count - 1)) : 0, decimals:N.dec, intDigits:N.intDigits,
+      exponent:N.exp, approxMedian: N.seen > N.len };
+    if (out.type !== "id") {
+      var q1 = quantile(sorted, 0.25), q3 = quantile(sorted, 0.75), iqr = q3 - q1;
+      if (iqr > 0 && sorted.length >= 8) {
+        var lo = q1 - 3 * iqr, hi = q3 + 3 * iqr, cnt = 0, exs = [];
+        for (var i = 0; i < sorted.length; i++) if (sorted[i] < lo || sorted[i] > hi) { cnt++; }
+        if (cnt) {
+          for (i = sorted.length - 1; i >= 0 && exs.length < 3; i--) if (sorted[i] > hi) exs.push(sorted[i]);
+          for (i = 0; i < sorted.length && exs.length < 4; i++) if (sorted[i] < lo) exs.push(sorted[i]);
+          var scaled = N.seen > N.len ? Math.round(cnt * N.seen / sorted.length) : cnt;
+          out.outliers = { count:scaled, approx:N.seen > N.len, low:lo, high:hi, examples:exs };
+          out.warnings.push((out.outliers.approx ? "≈" : "") + scaled + " extreme outlier" + (scaled > 1 ? "s" : "") +
+            " outside [" + fmtNum(lo) + ", " + fmtNum(hi) + "] (3×IQR), e.g. " + exs.slice(0, 3).map(fmtNum).join(", "));
+        }
+      }
+      var bins = 20, h = new Array(bins).fill(0), span = N.max - N.min;
+      if (span > 0) { for (i = 0; i < sorted.length; i++) h[Math.min(bins - 1, Math.floor((sorted[i] - N.min) / span * bins))]++; out.hist = h; }
+    }
+    if (out.type === "integer" && col.distinct.size <= 12 && nn >= 20 && !col.capped) {
+      out.values = topN(12); out.lowCardinality = true;
+    }
+  }
+  if (out.type === "date" || out.type === "datetime") {
+    var fm = Array.from(col.fmts.entries()).sort(function(a, b){ return b[1] - a[1]; });
+    var slash = fm.length && fm[0][0].indexOf("SLASH") === 0;
+    var withTime = out.type === "datetime";
+    if (slash) {
+      var sep = fm[0][0].charAt(5), rest = fm[0][0].slice(6), order;
+      if (col.s1 && !col.s2) order = "DMY"; else if (col.s2 && !col.s1) order = "MDY"; else order = col.s1 ? "conflict" : "ambiguous";
+      var dmy = "DD" + sep + "MM" + sep + "YYYY" + rest, mdy = "MM" + sep + "DD" + sep + "YYYY" + rest;
+      if (order === "MDY") { out.format = mdy; out.min = col.bminS; out.max = col.bmaxS; out.minISO = isoOf(col.bmin, withTime); out.maxISO = isoOf(col.bmax, withTime); }
+      else {
+        out.format = order === "DMY" ? dmy : dmy + " (or " + mdy + "; ambiguous, no day > 12 seen)";
+        out.min = col.aminS; out.max = col.amaxS; out.minISO = isoOf(col.amin, withTime); out.maxISO = isoOf(col.amax, withTime);
+        if (order === "conflict") out.warnings.push("dates mix DD/MM and MM/DD order");
+      }
+    } else {
+      out.format = fm.length ? fm[0][0] : ""; out.min = col.tminS; out.max = col.tmaxS;
+      out.minISO = isoOf(col.tmin, withTime); out.maxISO = isoOf(col.tmax, withTime);
+    }
+    out.tz = col.tz;
+    if (fm.length > 1) out.otherFormats = fm.slice(1).map(function(e){ return e[0].replace(/^SLASH(.)/, "D$1M$1Y"); });
+  }
+  if (["text", "enum", "email", "url", "phone", "json"].indexOf(out.type) >= 0 || (out.type === "id" && out.idOf !== "integer")) {
+    if (!out.values) out.top = topN(5);
+  }
+  if (out.type === "boolean") out.values = topN(4);
+  if (col.distinct.size === 1 && nn > 1 && !col.capped) out.warnings.push("single value: \"" + clip(col.distinct.keys().next().value, 30) + "\"");
+  if (out.nullRate >= 0.5) out.warnings.push("mostly empty (" + pct(col.nulls, total) + " null)");
+  return out;
+};
+Profiler.prototype.finalize = function(meta){
+  var self = this, cols = this.cols.map(function(c){ return finalizeColumn(c, self); });
+  var warnings = [];
+  cols.forEach(function(c){ c.warnings.forEach(function(w){ warnings.push({ column:c.name, text:w }); }); });
+  if (this.dups) warnings.push({ column:null, text:this.dups + " duplicate row" + (this.dups > 1 ? "s" : "") + (this.dupChecked < this.profiled ? " (checked first " + fmtInt(this.dupChecked) + " rows)" : "") });
+  if (this.ragged) warnings.push({ column:null, text:this.ragged + " row" + (this.ragged > 1 ? "s have" : " has") + " a different field count than " + (meta && meta.header ? "the header" : "the first row") + " (" + this.expected + "), first at data row " + this.raggedFirst });
+  (meta && meta.extraWarnings || []).forEach(function(w){ warnings.push({ column:null, text:w }); });
+  // representative rows: first, last, most nulls, longest, random
+  var picks = [], byIdx = {};
+  function add(e, label){
+    if (!e) return;
+    if (byIdx[e.i]) { byIdx[e.i].labels.push(label); return; }
+    var p = { row:e.i, labels:[label], values:e.v }; byIdx[e.i] = p; picks.push(p);
+  }
+  add(this.first, "first"); add(this.last, "last");
+  if (this.mostNulls && this.mostNulls.nulls > 0) add(this.mostNulls, "most nulls");
+  add(this.longest, "longest");
+  for (var r = 0; r < this.randoms.length && picks.length < 5; r++) {
+    var e = this.randoms[r]; if (!byIdx[e.i]) add(e, "random");
+  }
+  picks.sort(function(a, b){ return a.row - b.row; });
+  return { rows:this.rows, profiled:this.profiled, sampled:this.profiled < this.rows, fullLimit:this.fullLimit, stride:this.stride,
+    columns:cols, duplicates:this.dups, ragged:this.ragged, warnings:warnings, samples:picks, meta:meta || {} };
+};
+
+/* ---------- JSON helpers ---------- */
+function flattenObject(o, prefix, out, depth){
+  out = out || {}; prefix = prefix || ""; depth = depth || 0;
+  for (var k in o) {
+    if (!Object.prototype.hasOwnProperty.call(o, k)) continue;
+    var v = o[k], key = prefix ? prefix + "." + k : k;
+    if (v && typeof v === "object" && !Array.isArray(v) && depth < 2 && Object.keys(v).length) flattenObject(v, key, out, depth + 1);
+    else out[key] = v;
+  }
+  return out;
+}
+function pickJsonRows(data){
+  if (Array.isArray(data)) return { rows:data, path:"" };
+  if (data && typeof data === "object") {
+    for (var k in data) if (Array.isArray(data[k]) && data[k].length && typeof data[k][0] === "object") return { rows:data[k], path:k };
+    return { rows:[data], path:"" };
+  }
+  return { rows:[data], path:"" };
+}
+function addJsonRecord(prof, rec){
+  if (rec && typeof rec === "object" && !Array.isArray(rec)) {
+    var flat = flattenObject(rec), vals = [];
+    for (var key in flat) { var i = prof.keyIndex(key); vals[i] = flat[key]; }
+    for (var j = 0; j < vals.length; j++) if (vals[j] === undefined) vals[j] = null;
+    prof.expected = -2; // field count checks do not apply to JSON
+    prof.addRow(vals);
+  } else if (Array.isArray(rec)) { prof.expected = -2; prof.addRow(rec); }
+  else { prof.keyIndex("value"); prof.expected = -2; prof.addRow([rec]); }
+}
+
+/* ---------- output builders ---------- */
+function typeLabel(c){
+  if (c.type === "id") return "id (" + c.idOf + ")";
+  if (c.type === "enum") return "enum (" + c.unique + " values)";
+  if (c.type === "datetime" && c.tz) return "datetime (with time zone)";
+  return c.type;
+}
+function uniqueLabel(c){
+  if (c.uniqueCapped) return "≥" + fmtInt(c.unique);
+  return fmtInt(c.unique) + (c.unique === c.nonNull && c.nonNull > 1 ? " (all unique)" : "");
+}
+function nullLabel(c){ return c.nulls ? fmtInt(c.nulls) + " (" + pct(c.nulls, c.nulls + c.nonNull) + ")" : "0"; }
+function mv(v, mask){ return mask ? maskCell(v) : v; }
+function listValues(arr, mask, n){
+  return arr.slice(0, n || arr.length).map(function(e){ return clip(mv(e.value, mask), 40) + " " + fmtInt(e.count); }).join(", ");
+}
+function columnDetail(c, mask){
+  var p = [];
+  if (c.type === "empty") return "no values";
+  if (c.stats) {
+    var s = c.stats;
+    p.push("min " + fmtNum(s.min) + ", max " + fmtNum(s.max) + ", mean " + fmtNum(s.mean) + ", " + (s.approxMedian ? "median ≈" : "median ") + fmtNum(s.median) + ", sd " + fmtNum(s.sd));
+    if (c.type === "float") p.push(s.exponent ? "scientific notation present" : "up to " + s.decimals + " decimal" + (s.decimals === 1 ? "" : "s"));
+  }
+  if (c.lowCardinality) p.push("values: " + listValues(c.values, false));
+  if (c.type === "date" || c.type === "datetime") {
+    p.push(clip(c.min, 30) + " → " + clip(c.max, 30) + (c.min !== c.minISO ? " (" + c.minISO + " → " + c.maxISO + ")" : ""));
+    p.push("format " + c.format + (c.otherFormats ? " (+ " + c.otherFormats.join(", ") + ")" : ""));
+  }
+  if (c.type === "enum") p.push("values: " + listValues(c.values, mask));
+  if (c.type === "boolean") p.push("values: " + listValues(c.values, false));
+  if (c.top) {
+    p.push("length " + (c.minLen === c.maxLen ? c.minLen : c.minLen + "–" + c.maxLen));
+    var allOnce = c.top.length && c.top[0].count === 1;
+    p.push((allOnce ? "e.g. " : "top: ") + (allOnce ? c.top.slice(0, 3).map(function(e){ return clip(mv(e.value, mask), 40); }).join(", ") : listValues(c.top, mask)));
+  }
+  return p.join("; ");
+}
+function sourceLine(P){
+  var m = P.meta, parts = [m.name || "pasted text"];
+  var f = m.format === "csv" ? (m.delimiter === "\t" ? "TSV" : "CSV, delimiter \"" + m.delimiter + "\"") + (m.header ? ", header row" : ", no header row") :
+    m.format === "json" ? "JSON array" + (m.jsonPath ? " at key \"" + m.jsonPath + "\"" : "") : "JSONL";
+  return parts[0] + " (" + f + ")" + (m.bytes ? ", " + fmtBytes(m.bytes) : "");
+}
+function profiledLine(P){
+  if (!P.sampled) return "every row";
+  return "first " + fmtInt(P.fullLimit) + " rows fully, then every " + P.stride + "th row (" + fmtInt(P.profiled) + " of " + fmtInt(P.rows) + " rows); counts below refer to profiled rows";
+}
+function sampleCsv(P, mask){
+  var head = P.columns.map(function(c){ return csvCell(c.name); }).join(",");
+  var lines = [head];
+  P.samples.forEach(function(s){
+    var vals = [];
+    for (var i = 0; i < P.columns.length; i++) {
+      var v = s.values[i];
+      if (v !== null && v !== undefined && typeof v === "object") v = JSON.stringify(v);
+      vals.push(csvCell(v === null || v === undefined ? "" : clip(mv(v, mask), 80)));
+    }
+    lines.push(vals.join(","));
+  });
+  return lines.join("\n");
+}
+function buildPrompt(P, opts){
+  var mask = opts && opts.mask, L = [];
+  L.push("Below is a statistical profile of a tabular dataset, not the dataset itself. Use it to understand the columns, their types, value ranges and data-quality problems. Do not assume values that the profile does not show; ask if something you need is missing.");
+  L.push("");
+  L.push("DATASET");
+  L.push("- Source: " + sourceLine(P));
+  L.push("- Shape: " + fmtInt(P.rows) + " data rows × " + P.columns.length + " columns");
+  L.push("- Profiled: " + profiledLine(P));
+  L.push("- Treated as missing: empty cells and NULL, NA, N/A, NaN, None, nil");
+  if (mask) L.push("- Email addresses and phone numbers in examples are masked (x / ***), the real data is not masked");
+  L.push("");
+  L.push("COLUMNS (# | name | type | nulls | distinct | profile)");
+  P.columns.forEach(function(c, i){
+    L.push((i + 1) + ". " + c.name + " | " + typeLabel(c) + " | " + nullLabel(c) + " | " + uniqueLabel(c) + " | " + columnDetail(c, mask));
+  });
+  L.push("");
+  L.push("DATA QUALITY");
+  if (!P.warnings.length) L.push("- No issues found (no empty or constant columns, mixed types, duplicates or extreme outliers).");
+  P.warnings.forEach(function(w){ L.push("- " + (w.column ? w.column + ": " : "") + w.text); });
+  L.push("");
+  L.push("REPRESENTATIVE ROWS (CSV; chosen as " + P.samples.map(function(s){ return "row " + s.row + " = " + s.labels.join(" + "); }).join(", ") + "; long cells cut at 80 chars)");
+  L.push(sampleCsv(P, mask));
+  return L.join("\n");
+}
+function mdCell(s){ return String(s).replace(/\|/g, "\\|").replace(/\r?\n/g, " "); }
+function buildMarkdown(P, opts){
+  var mask = opts && opts.mask, L = [];
+  L.push("## Dataset profile: " + mdCell(P.meta.name || "pasted text"));
+  L.push("");
+  L.push("- **Source:** " + mdCell(sourceLine(P)));
+  L.push("- **Shape:** " + fmtInt(P.rows) + " rows × " + P.columns.length + " columns");
+  L.push("- **Profiled:** " + profiledLine(P));
+  L.push("");
+  L.push("| # | Column | Type | Nulls | Distinct | Profile |");
+  L.push("|---|---|---|---|---|---|");
+  P.columns.forEach(function(c, i){
+    L.push("| " + (i + 1) + " | `" + mdCell(c.name) + "` | " + typeLabel(c) + " | " + nullLabel(c) + " | " + uniqueLabel(c) + " | " + mdCell(columnDetail(c, mask)) + " |");
+  });
+  L.push("");
+  L.push("### Data quality");
+  L.push("");
+  if (!P.warnings.length) L.push("- No issues found.");
+  P.warnings.forEach(function(w){ L.push("- " + (w.column ? "`" + mdCell(w.column) + "`: " : "") + mdCell(w.text)); });
+  L.push("");
+  L.push("### Representative rows");
+  L.push("");
+  L.push("| row | why | " + P.columns.map(function(c){ return mdCell(c.name); }).join(" | ") + " |");
+  L.push("|---|---|" + P.columns.map(function(){ return "---"; }).join("|") + "|");
+  P.samples.forEach(function(s){
+    var cells = P.columns.map(function(c, i){ var v = s.values[i]; if (v === null || v === undefined) return ""; if (typeof v === "object") v = JSON.stringify(v); return mdCell(clip(mv(v, mask), 50)); });
+    L.push("| " + s.row + " | " + s.labels.join(", ") + " | " + cells.join(" | ") + " |");
+  });
+  return L.join("\n");
+}
+function buildJson(P, opts){
+  var mask = opts && opts.mask;
+  function mvals(arr){ return arr && arr.map(function(e){ return { value: mv(e.value, mask), count: e.count }; }); }
+  var obj = {
+    source: { name: P.meta.name || null, format: P.meta.format, delimiter: P.meta.format === "csv" ? P.meta.delimiter : undefined,
+      header: P.meta.format === "csv" ? P.meta.header : undefined, jsonPath: P.meta.jsonPath || undefined, bytes: P.meta.bytes || null },
+    rows: P.rows, profiledRows: P.profiled, sampled: P.sampled, masked: !!mask,
+    columns: P.columns.map(function(c){
+      var o = { name:c.name, type:c.type };
+      if (c.idOf) o.idOf = c.idOf;
+      o.nulls = c.nulls; o.nullRate = +c.nullRate.toFixed(4); o.distinct = c.unique; if (c.uniqueCapped) o.distinctIsLowerBound = true;
+      if (c.type !== "empty") { o.minLength = c.minLen; o.maxLength = c.maxLen; }
+      if (c.stats) o.stats = { min:c.stats.min, max:c.stats.max, mean:+fmtNum(c.stats.mean), median:+fmtNum(c.stats.median), sd:+fmtNum(c.stats.sd), maxDecimals:c.stats.decimals };
+      if (c.format) { o.format = c.format; o.min = c.min; o.max = c.max; o.minISO = c.minISO; o.maxISO = c.maxISO; if (c.otherFormats) o.otherFormats = c.otherFormats; }
+      if (c.values) o.values = mvals(c.values);
+      if (c.top) o.top = mvals(c.top);
+      if (c.outliers) o.outliers = { count:c.outliers.count, approx:c.outliers.approx, below:+fmtNum(c.outliers.low), above:+fmtNum(c.outliers.high), examples:c.outliers.examples };
+      if (c.mixed) o.mixed = c.mixed.map(function(m){ return { kind:m.kind, count:m.count, example: mv(m.example, mask) }; });
+      if (c.warnings.length) o.warnings = c.warnings;
+      return o;
+    }),
+    duplicateRows: P.duplicates, raggedRows: P.ragged,
+    warnings: P.warnings.map(function(w){ return w.column ? w.column + ": " + w.text : w.text; }),
+    sampleRows: P.samples.map(function(s){
+      var o = { row:s.row, why:s.labels.join(", "), values:{} };
+      P.columns.forEach(function(c, i){ var v = s.values[i]; o.values[c.name] = v === undefined ? null : (typeof v === "string" ? mv(v, mask) : v); });
+      return o;
+    })
+  };
+  return JSON.stringify(obj, null, 2);
+}
+var SQL_RESERVED = /^(select|from|where|order|group|user|table|index|key|primary|check|default|limit|offset|desc|asc|date|time|timestamp|value|values|type|status|name|comment|references|column|constraint|unique|null|not|and|or|in|is|as|by|to|end|case|when|then|else|all|any|some|union|join|on|left|right|inner|outer|full|create|drop|alter|insert|update|delete|grant|with)$/i;
+function sqlIdent(name){
+  var s = String(name).normalize ? String(name).normalize("NFKD").replace(/[̀-ͯ]/g, "") : String(name);
+  s = s.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").replace(/_+/g, "_");
+  if (!s) s = "col";
+  if (/^\d/.test(s)) s = "c_" + s;
+  return SQL_RESERVED.test(s) ? '"' + s + '"' : s;
+}
+function varcharLen(n){ var steps = [8, 16, 32, 64, 128, 255]; for (var i = 0; i < steps.length; i++) if (n <= steps[i]) return steps[i]; return 0; }
+function sqlQuote(s){ return "'" + String(s).replace(/'/g, "''") + "'"; }
+function buildSql(P){
+  var table = sqlIdent((P.meta.name || "dataset").replace(/\.[^.]+$/, "")), pkDone = false, lines = [], used = {};
+  var defs = P.columns.map(function(c){
+    var id = sqlIdent(c.name), base = id, k = 2; while (used[id]) id = base.replace(/"$/, "") + "_" + (k++) + (base.slice(-1) === '"' ? '"' : ""); used[id] = 1;
+    var t, notes = [], extra = "";
+    switch (c.type) {
+      case "integer": t = c.stats && (c.stats.min < -2147483648 || c.stats.max > 2147483647) ? "BIGINT" : "INTEGER"; break;
+      case "float":
+        var s = c.stats; t = (s.exponent || s.decimals > 6 || s.intDigits + s.decimals > 18) ? "DOUBLE PRECISION" : "NUMERIC(" + Math.max(s.intDigits + s.decimals, s.decimals + 1) + "," + s.decimals + ")"; break;
+      case "boolean": t = "BOOLEAN"; break;
+      case "date": t = "DATE"; if (c.format !== "YYYY-MM-DD") notes.push("source format " + c.format); break;
+      case "datetime": t = c.tz ? "TIMESTAMPTZ" : "TIMESTAMP"; if (!/^YYYY-MM-DD/.test(c.format)) notes.push("source format " + c.format); break;
+      case "json": t = "JSONB"; break;
+      case "id":
+        if (c.idOf === "integer") t = c.stats && c.stats.max > 2147483647 ? "BIGINT" : "INTEGER";
+        else if (c.idOf === "uuid") t = "UUID";
+        else t = "VARCHAR(" + (varcharLen(c.maxLen) || c.maxLen) + ")";
+        if (!pkDone && !c.notUnique) { extra = " PRIMARY KEY"; pkDone = true; }
+        if (c.notUnique) notes.push("not unique in source, no PRIMARY KEY");
+        break;
+      case "enum":
+        t = "VARCHAR(" + (varcharLen(c.maxLen) || c.maxLen) + ")";
+        extra = " CHECK (" + id + " IN (" + c.values.map(function(v){ return sqlQuote(v.value); }).join(", ") + "))";
+        break;
+      case "empty": t = "TEXT"; notes.push("always empty in source"); break;
+      default:
+        var vl = varcharLen(c.maxLen); t = vl ? "VARCHAR(" + vl + ")" : "TEXT";
+        if (c.type !== "text") notes.push(c.type);
+    }
+    if (c.mixed) notes.push("mixed types in source");
+    if (c.nulls === 0 && c.nonNull > 0 && !extra.match(/PRIMARY/)) extra = " NOT NULL" + extra;
+    if (c.nulls) notes.push(pct(c.nulls, c.nulls + c.nonNull) + " null");
+    if (id.replace(/"/g, "") !== c.name) notes.push("source column \"" + c.name + "\"");
+    return { sql: "  " + id + " " + t + extra, note: notes.join("; ") };
+  });
+  lines.push("-- Draft schema inferred by Data Digest from " + fmtInt(P.profiled) + " profiled rows of " + (P.meta.name || "pasted text") + " (PostgreSQL syntax).");
+  lines.push("-- Review lengths and constraints before use; they reflect only the observed data.");
+  lines.push("CREATE TABLE " + table + " (");
+  defs.forEach(function(d, i){ lines.push(d.sql + (i < defs.length - 1 ? "," : "") + (d.note ? "  -- " + d.note : "")); });
+  lines.push(");");
+  return lines.join("\n");
+}
+/*CORE-END*/
+
+/* =================== UI =================== */
+(function(){
+  var LS = "redline.tool.data-digest.";
+  function lsGet(k, d){ try { var v = localStorage.getItem(LS + k); return v === null ? d : v; } catch (e) { return d; } }
+  function lsSet(k, v){ try { localStorage.setItem(LS + k, v); } catch (e) { /* storage unavailable */ } }
+  function $(id){ return document.getElementById(id); }
+  var el = { file:$("file"), drop:$("drop"), paste:$("paste"), fmt:$("fmt"), delim:$("delim"), limit:$("limit"), header:$("header"), mask:$("mask"),
+    prog:$("prog"), progFill:$("progFill"), progText:$("progText"), cancel:$("cancelBtn"), msg:$("msg"), detected:$("detected"), srcline:$("srcline"),
+    empty:$("emptyState"), profile:$("profile"), out:$("out"), tabs:$("tabs"), copy:$("copyBtn"), count:$("count"), copied:$("copied") };
+
+  var SAMPLE_NAME = "orders_sample.csv";
+  var SAMPLE = [
+    "order_id,created_at,customer_email,customer_phone,country,status,items,amount_usd,discount_code,paid,notes",
+    "ORD-10231,2024-03-01 09:14:22,maria.lopez@example.com,+34 612 345 678,ES,delivered,2,58.40,,true,",
+    "ORD-10232,2024-03-01 11:02:05,j.schmidt@example.de,+49 151 2345 6789,DE,delivered,1,24.99,SPRING10,true,",
+    "ORD-10233,2024-03-02 16:45:10,akira.tanaka@example.jp,,JP,shipped,3,112.00,,true,\"Leave at the back door, gate code 4411\"",
+    "ORD-10234,2024-03-03 08:20:47,emma.brown@example.co.uk,+44 7700 900123,GB,cancelled,1,19.50,,false,Customer changed mind",
+    "ORD-10235,2024-03-04 13:33:00,liam.wilson@example.com,+1 (415) 555-0142,US,delivered,5,245.75,SPRING10,true,",
+    "ORD-10236,2024-03-05 10:11:59,sofia.rossi@example.it,+39 347 123 4567,IT,refunded,2,86.20,,true,\"Item arrived damaged.",
+    "Refund issued on 2024-03-12\"",
+    "ORD-10237,2024-03-05 19:58:31,noah.martin@example.fr,+33 6 12 34 56 78,FR,delivered,1,32.00,,true,",
+    "ORD-10238,2024-03-06 07:45:12,olivia.jones@example.com,+1 (212) 555-0199,US,shipped,4,178.30,VIP20,true,",
+    "ORD-10239,2024-03-07 15:26:40,lucas.silva@example.com.br,,BR,pending,2,64.90,,false,Awaiting bank transfer",
+    "ORD-10240,2024-03-08 12:00:00,ana.garcia@example.es,+34 699 876 543,ES,delivered,1,18450.00,,true,\"B2B order, invoice to \"\"Garcia Logistics S.L.\"\"\"",
+    "ORD-10241,2024-03-08 18:37:26,ben.taylor@example.com,+1 (646) 555-0110,US,delivered,3,97.15,SPRING10,true,",
+    "ORD-10242,2024-03-09 09:09:09,chloe.dubois@example.fr,+33 7 98 76 54 32,FR,shipped,2,71.40,,true,",
+    "ORD-10243,2024-03-10 14:14:52,yuki.sato@example.jp,,JP,delivered,1,29.99,,true,",
+    "ORD-10244,2024-03-11 21:05:33,felix.wagner@example.de,+49 160 9876 5432,DE,pending,6,312.60,VIP20,false,",
+    "ORD-10245,2024-03-12 10:48:17,isabella.moore@example.com,+1 (310) 555-0175,US,delivered,2,54.00,,true,",
+    "ORD-10246,2024-03-13 16:30:05,mateo.fernandez@example.es,+34 622 111 222,ES,delivered,1,22.50,,true,",
+    "ORD-10247,2024-03-14 08:59:41,hannah.fischer@example.de,+49 176 5555 1234,DE,refunded,1,45.00,,true,Wrong size",
+    "ORD-10248,2024-03-15 13:22:08,ethan.clark@example.com,+1 (718) 555-0133,US,shipped,2,88.80,SPRING10,true,",
+    "ORD-10242,2024-03-09 09:09:09,chloe.dubois@example.fr,+33 7 98 76 54 32,FR,shipped,2,71.40,,true,",
+    "ORD-10249,2024-03-16 11:41:56,giulia.bianchi@example.it,+39 333 987 6543,IT,delivered,3,139.95,,true,",
+    "ORD-10250,2024-03-17 17:17:17,oliver.smith@example.co.uk,+44 7700 900456,GB,delivered,1,27.30,,true,",
+    "ORD-10251,2024-03-18 09:30:44,haruto.ito@example.jp,,JP,pending,2,N/A,,false,Price to be confirmed",
+    "ORD-10252,2024-03-19 20:02:13,lea.moreau@example.fr,+33 6 55 44 33 22,FR,delivered,4,156.40,VIP20,true,",
+    "ORD-10253,2024-03-20 12:12:12,jack.white@example.com,+1 (503) 555-0188,US,delivered,1,39.00,,true,"
+  ].join("\n") + "\n";
+
+  var state = { source:null, job:0, P:null, tab:"prompt", outputs:{} };
+
+  // restore preferences
+  el.fmt.value = lsGet("format", "auto");
+  el.delim.value = lsGet("delim", "auto");
+  el.limit.value = lsGet("limit", "500000");
+  el.header.checked = lsGet("header", "1") === "1";
+  el.mask.checked = lsGet("mask", "1") === "1";
+  state.tab = lsGet("tab", "prompt");
+  if (!/^(prompt|md|json|sql)$/.test(state.tab)) state.tab = "prompt";
+  if (!el.fmt.value) el.fmt.value = "auto";
+  if (!el.delim.value) el.delim.value = "auto";
+  if (!el.limit.value) el.limit.value = "500000";
+
+  function setMsg(text, kind){ el.msg.textContent = text || ""; el.msg.className = "msg" + (kind ? " " + kind : ""); }
+  function yieldNow(){ return new Promise(function(r){ setTimeout(r, 0); }); }
+  function Cancelled(){ this.cancelled = true; }
+
+  /* ----- chunked sources ----- */
+  function makeReader(src){
+    var CH = 1 << 20;
+    if (src.kind === "file") {
+      var f = src.file, pos = 0, dec = new TextDecoder("utf-8");
+      return { total:f.size, done:function(){ return pos; }, next:function(){
+        if (pos >= f.size) { var tail = dec.decode(); pos = f.size + 1; return Promise.resolve(tail ? tail : null); }
+        if (pos > f.size) return Promise.resolve(null);
+        var blob = f.slice(pos, pos + CH); pos += CH;
+        var p = blob.arrayBuffer ? blob.arrayBuffer() : new Promise(function(res, rej){ var r = new FileReader(); r.onload = function(){ res(r.result); }; r.onerror = function(){ rej(r.error); }; r.readAsArrayBuffer(blob); });
+        return p.then(function(buf){ return dec.decode(buf, { stream:true }); });
+      } };
+    }
+    var t = src.text, i = 0, CHT = 512 * 1024;
+    return { total:t.length, done:function(){ return Math.min(i, t.length); }, next:function(){
+      if (i >= t.length) return Promise.resolve(null);
+      var s = t.slice(i, i + CHT); i += CHT; return Promise.resolve(s);
+    } };
+  }
+
+  function showProgress(on){ el.prog.classList.toggle("on", on); }
+  function updateProgress(reader, rows, t0){
+    var total = reader.total || 1, f = Math.min(1, reader.done() / total);
+    el.progFill.style.width = (f * 100).toFixed(1) + "%";
+    el.progText.textContent = Math.round(f * 100) + "% · " + fmtInt(rows) + " rows · " + ((performance.now() - t0) / 1000).toFixed(1) + " s";
+  }
+
+  async function run(){
+    var job = ++state.job, src = state.source;
+    if (!src) { renderEmpty(); showProgress(false); return; }
+    var opts = { format:el.fmt.value, delim:el.delim.value, header:el.header.checked, limit:+el.limit.value };
+    var reader = makeReader(src), t0 = performance.now(), lastYield = t0;
+    var prof = new Profiler({ fullLimit: opts.limit });
+    var meta = { name: src.kind === "file" ? src.file.name : (src.name || null), bytes: src.kind === "file" ? src.file.size : new Blob([src.text]).size, header:opts.header, extraWarnings:[] };
+    setMsg(""); showProgress(true); updateProgress(reader, 0, t0);
+    async function tick(){
+      if (job !== state.job) throw new Cancelled();
+      var now = performance.now();
+      if (now - lastYield > 30) { updateProgress(reader, prof.rows, t0); await yieldNow(); lastYield = performance.now(); if (job !== state.job) throw new Cancelled(); }
+    }
+    try {
+      var first = await reader.next();
+      if (first === null || !first.replace(/^﻿/, "").trim()) { showProgress(false); state.P = null; renderEmpty("The input is empty. Choose a file with data or paste some rows."); return; }
+      var fmt = opts.format === "auto" ? detectFormat(first) : opts.format;
+      meta.format = fmt;
+      if (fmt === "csv") {
+        var delim = opts.delim === "auto" ? detectDelimiter(first) : opts.delim;
+        meta.delimiter = delim;
+        var parser = new CsvParser(delim), headerPending = opts.header;
+        var feed = async function(rows){
+          for (var i = 0; i < rows.length; i++) {
+            var r = rows[i];
+            if (isBlankRow(r)) continue;
+            if (headerPending) { prof.setHeader(r); headerPending = false; continue; }
+            prof.addRow(r);
+            if ((i & 1023) === 1023) await tick();
+          }
+          await tick();
+        };
+        var chunk = first;
+        while (chunk !== null) { await feed(parser.push(chunk)); chunk = await reader.next(); }
+        await feed(parser.end());
+        if (parser.unterminated >= 0) meta.extraWarnings.push("a quoted field opened near line " + (parser.unterminated + 1) + " is never closed; everything after it was read as one cell. Look for a stray \" character");
+      } else if (fmt === "jsonl") {
+        var carry = "", lineNo = 0, bad = 0, firstBad = 0, c2 = first;
+        var feedLines = async function(lines){
+          for (var i = 0; i < lines.length; i++) {
+            lineNo++; var l = lines[i].trim(); if (!l) continue;
+            var rec; try { rec = JSON.parse(l); } catch (e) { bad++; if (!firstBad) firstBad = lineNo; continue; }
+            addJsonRecord(prof, rec);
+            if ((i & 511) === 511) await tick();
+          }
+          await tick();
+        };
+        while (c2 !== null) {
+          var parts = (carry + c2).split("\n"); carry = parts.pop();
+          await feedLines(parts); c2 = await reader.next();
+        }
+        await feedLines([carry]);
+        if (bad) meta.extraWarnings.push(bad + " line" + (bad > 1 ? "s are" : " is") + " not valid JSON and were skipped, first at line " + firstBad);
+        if (!prof.rows && bad) throw new Error("No line could be parsed as JSON. If the file is a single JSON array, set Format to \"JSON array\".");
+      } else {
+        var bufs = [], c3 = first;
+        while (c3 !== null) { bufs.push(c3); c3 = await reader.next(); await tick(); }
+        el.progText.textContent = "Parsing JSON…"; await yieldNow();
+        var data;
+        try { data = JSON.parse(bufs.join("").replace(/^﻿/, "")); }
+        catch (e) { throw new Error("JSON parse failed: " + e.message + ". If each line is its own object, set Format to \"JSONL\"; if it is a table, set \"CSV / TSV\"."); }
+        var picked = pickJsonRows(data); meta.jsonPath = picked.path;
+        var recs = picked.rows, total = recs.length;
+        reader = { total: total, done: function(){ return prof.rows; } };
+        for (var ri = 0; ri < total; ri++) { addJsonRecord(prof, recs[ri]); if ((ri & 1023) === 1023) await tick(); }
+      }
+      if (job !== state.job) return;
+      meta.ms = performance.now() - t0;
+      if (!prof.rows) { showProgress(false); state.P = null; renderEmpty(opts.header && prof.cols.length ? "Only a header row was found — there are no data rows to profile." : "No rows were found in the input."); return; }
+      el.progText.textContent = "Building profile…"; await yieldNow();
+      if (job !== state.job) return;
+      state.P = prof.finalize(meta);
+      showProgress(false);
+      el.detected.innerHTML = "Detected: <b>" + (fmt === "csv" ? (meta.delimiter === "\t" ? "TSV" : "CSV") + "</b>, delimiter <b>" + ({ ",":"comma", ";":"semicolon", "\t":"tab", "|":"pipe" }[meta.delimiter]) + "</b>" + (opts.delim === "auto" ? " (auto)" : "") : fmt === "json" ? "JSON array</b>" + (meta.jsonPath ? " at key <b>" + esc(meta.jsonPath) + "</b>" : "") : "JSONL</b>");
+      setMsg("Profiled " + fmtInt(state.P.profiled) + " rows in " + (meta.ms < 1000 ? Math.round(meta.ms) + " ms" : (meta.ms / 1000).toFixed(1) + " s") + ".", "ok");
+      renderProfile(); renderOutputs();
+    } catch (e) {
+      if (e instanceof Cancelled) return;
+      showProgress(false);
+      state.P = null; renderEmpty();
+      setMsg(e && e.message ? e.message : String(e), "err");
+    }
+  }
+
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
+  function typeClass(c){
+    return { integer:"t-num", float:"t-num", date:"t-time", datetime:"t-time", boolean:"t-bool", id:"t-id", enum:"t-enum", email:"t-contact", phone:"t-contact", empty:"t-bad" }[c.type] || "t-text";
+  }
+
+  function renderEmpty(note){
+    el.empty.hidden = false; el.profile.hidden = true; el.profile.innerHTML = "";
+    el.detected.textContent = "";
+    if (note) setMsg(note, "warn");
+    state.outputs = {}; renderOutputs();
+  }
+
+  function renderProfile(){
+    var P = state.P, mask = el.mask.checked;
+    el.empty.hidden = true; el.profile.hidden = false;
+    var h = [];
+    h.push('<div class="summary"><div><b>' + fmtInt(P.rows) + '</b> rows</div><div><b>' + P.columns.length + '</b> columns</div>' +
+      (P.meta.bytes ? '<div><b>' + fmtBytes(P.meta.bytes) + '</b></div>' : '') +
+      (P.sampled ? '<div>profiled <b>' + fmtInt(P.profiled) + '</b> (sampled)</div>' : '') +
+      '<div><b>' + P.duplicates + '</b> duplicate row' + (P.duplicates === 1 ? '' : 's') + '</div><div><b>' + P.warnings.length + '</b> issue' + (P.warnings.length === 1 ? '' : 's') + '</div></div>');
+    if (P.warnings.length) {
+      h.push('<div class="issues"><h3>Data quality</h3><ul>' + P.warnings.map(function(w){ return "<li>" + (w.column ? "<b>" + esc(w.column) + "</b>: " : "") + esc(w.text) + "</li>"; }).join("") + "</ul></div>");
+    } else h.push('<div class="issues clean"><h3>No data-quality issues found</h3></div>');
+    h.push('<div class="cards">');
+    P.columns.forEach(function(c, i){
+      var tot = c.nulls + c.nonNull;
+      h.push('<article class="card"><div class="card-h"><span class="idx">' + (i + 1) + '</span><span class="nm" title="' + esc(c.name) + '">' + esc(c.name) + '</span><span class="badge ' + typeClass(c) + '">' + esc(c.type === "id" ? "id · " + c.idOf : c.type) + (c.mixed ? " · mixed" : "") + '</span></div>');
+      h.push('<div class="meta"><span>nulls <b>' + nullLabel(c) + '</b></span><span>distinct <b>' + (c.uniqueCapped ? "≥" : "") + fmtInt(c.unique) + '</b></span></div>');
+      h.push('<div class="nullbar" title="null share"><i style="width:' + (tot ? (100 * c.nulls / tot).toFixed(1) : 0) + '%"></i></div>');
+      var kv = [];
+      if (c.stats) {
+        var s = c.stats;
+        kv.push(["min", fmtNum(s.min)], ["max", fmtNum(s.max)], ["mean", fmtNum(s.mean)], [s.approxMedian ? "median≈" : "median", fmtNum(s.median)], ["sd", fmtNum(s.sd)]);
+        if (c.type === "float") kv.push(["decimals", s.exponent ? "sci" : String(s.decimals)]);
+      }
+      if (c.format) { kv.push(["from", c.min], ["to", c.max], ["format", c.format]); }
+      if (c.top || c.type === "enum") kv.push(["length", c.minLen === c.maxLen ? String(c.minLen) : c.minLen + "–" + c.maxLen]);
+      if (kv.length) h.push('<dl class="kv">' + kv.map(function(p){ return "<dt>" + p[0] + "</dt><dd title=\"" + esc(p[1]) + "\">" + esc(p[1]) + "</dd>"; }).join("") + "</dl>");
+      if (c.hist && !c.lowCardinality) { var mx = Math.max.apply(null, c.hist) || 1; h.push('<div class="hist" aria-hidden="true">' + c.hist.map(function(v){ return '<i style="height:' + (v ? Math.max(4, 100 * v / mx) : 0) + '%"></i>'; }).join("") + "</div>"); }
+      var list = c.values || c.top;
+      if (list && list.length) {
+        var mxc = list[0].count || 1;
+        h.push('<div class="top">' + list.slice(0, c.type === "enum" ? 20 : 5).map(function(e){ var v = mask ? maskCell(e.value) : e.value; return '<div style="--w:' + (100 * e.count / mxc).toFixed(1) + '%"><span title="' + esc(v) + '">' + esc(clip(v, 60)) + '</span><em>' + fmtInt(e.count) + "</em></div>"; }).join("") + "</div>");
+      }
+      if (c.warnings.length) h.push('<ul class="cwarn">' + c.warnings.map(function(w){ return "<li>" + esc(w) + "</li>"; }).join("") + "</ul>");
+      h.push("</article>");
+    });
+    h.push("</div>");
+    el.profile.innerHTML = h.join("");
+    el.profile.parentNode.scrollTop = 0;
+  }
+
+  function renderOutputs(){
+    var P = state.P, opts = { mask: el.mask.checked };
+    if (P) {
+      state.outputs = { prompt:buildPrompt(P, opts), md:buildMarkdown(P, opts), json:buildJson(P, opts), sql:buildSql(P) };
+    }
+    Array.prototype.forEach.call(el.tabs.querySelectorAll(".tab"), function(b){
+      var f = b.getAttribute("data-fmt"), txt = state.outputs[f];
+      b.setAttribute("aria-selected", f === state.tab ? "true" : "false");
+      b.tabIndex = f === state.tab ? 0 : -1;
+      b.querySelector("small").textContent = txt ? fmtInt(txt.length) : "";
+    });
+    var text = state.outputs[state.tab];
+    el.copied.textContent = "";
+    if (!text) {
+      el.out.className = "out placeholder";
+      el.out.textContent = "The digest appears here once data is loaded. The Prompt tab is plain text you can paste straight into an LLM chat.";
+      el.copy.disabled = true; el.count.textContent = ""; return;
+    }
+    el.out.className = "out"; el.out.textContent = text; el.copy.disabled = false;
+    var tokens = Math.ceil(text.length / 4), bytes = P && P.meta.bytes;
+    el.count.textContent = fmtInt(text.length) + " chars · ≈" + fmtInt(tokens) + " tokens" +
+      (bytes ? sizeNote(bytes, text.length) : "");
+  }
+  function ratio(r){ return r >= 10 ? fmtInt(Math.round(r)) + "×" : r.toFixed(1) + "×"; }
+  function sizeNote(bytes, len){
+    var r = bytes / len;
+    return r >= 1 ? " · " + ratio(r) + " smaller than the source (" + fmtBytes(bytes) + ")" : " · the source is only " + fmtBytes(bytes) + ", so the digest is not smaller here";
+  }
+
+  /* ----- events ----- */
+  function setSource(src){
+    state.source = src;
+    if (src && src.kind === "file") {
+      el.srcline.innerHTML = "Loaded <b>" + esc(src.file.name) + "</b> · " + fmtBytes(src.file.size);
+      el.paste.value = ""; lsSet("paste", "");
+    } else if (src && src.name) el.srcline.innerHTML = "Loaded <b>" + esc(src.name) + "</b> (sample)";
+    else el.srcline.textContent = "";
+    run();
+  }
+  el.file.addEventListener("change", function(){ if (el.file.files && el.file.files[0]) setSource({ kind:"file", file:el.file.files[0] }); el.file.value = ""; });
+  ["dragenter", "dragover"].forEach(function(t){ document.addEventListener(t, function(e){ e.preventDefault(); el.drop.classList.add("over"); }); });
+  ["dragleave", "dragend"].forEach(function(t){ document.addEventListener(t, function(e){ if (!e.relatedTarget) el.drop.classList.remove("over"); }); });
+  document.addEventListener("drop", function(e){
+    e.preventDefault(); el.drop.classList.remove("over");
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) setSource({ kind:"file", file:f });
+    else { var t = e.dataTransfer && e.dataTransfer.getData("text"); if (t) { el.paste.value = t; onPaste(); } }
+  });
+  var pasteTimer = 0;
+  function onPaste(){
+    clearTimeout(pasteTimer);
+    pasteTimer = setTimeout(function(){
+      var v = el.paste.value;
+      lsSet("paste", v.length <= 200000 ? v : "");
+      if (!v.trim()) { state.job++; state.source = null; el.srcline.textContent = ""; showProgress(false); setMsg(""); state.P = null; renderEmpty(); return; }
+      state.source = { kind:"text", text:v, name:null }; el.srcline.textContent = ""; run();
+    }, 250);
+  }
+  el.paste.addEventListener("input", onPaste);
+  [["fmt", "format"], ["delim", "delim"], ["limit", "limit"]].forEach(function(p){
+    el[p[0]].addEventListener("change", function(){ lsSet(p[1], el[p[0]].value); run(); });
+  });
+  el.header.addEventListener("change", function(){ lsSet("header", el.header.checked ? "1" : "0"); run(); });
+  el.mask.addEventListener("change", function(){ lsSet("mask", el.mask.checked ? "1" : "0"); if (state.P) { renderProfile(); renderOutputs(); } });
+  el.cancel.addEventListener("click", function(){ state.job++; showProgress(false); setMsg("Cancelled. Change an option or load the file again to restart.", "warn"); });
+  $("sampleBtn").addEventListener("click", function(){ el.paste.value = SAMPLE; lsSet("paste", ""); setSource({ kind:"text", text:SAMPLE, name:SAMPLE_NAME }); });
+  $("clearBtn").addEventListener("click", function(){
+    state.job++; el.paste.value = ""; lsSet("paste", ""); state.source = null; state.P = null;
+    el.srcline.textContent = ""; showProgress(false); setMsg(""); renderEmpty();
+  });
+  el.tabs.addEventListener("click", function(e){
+    var b = e.target.closest(".tab"); if (!b) return;
+    state.tab = b.getAttribute("data-fmt"); lsSet("tab", state.tab); renderOutputs();
+  });
+  el.tabs.addEventListener("keydown", function(e){
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    var tabs = Array.prototype.slice.call(el.tabs.querySelectorAll(".tab")), i = tabs.findIndex(function(t){ return t.getAttribute("data-fmt") === state.tab; });
+    i = (i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
+    state.tab = tabs[i].getAttribute("data-fmt"); lsSet("tab", state.tab); renderOutputs(); tabs[i].focus();
+  });
+  el.copy.addEventListener("click", function(){
+    var text = state.outputs[state.tab]; if (!text) return;
+    function done(ok){ el.copied.textContent = ok ? "Copied" : "Copy failed — select the text and press Ctrl+C"; }
+    function fallback(){
+      var ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0"; ta.style.top = "0";
+      document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta); done(ok);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function(){ done(true); }, fallback);
+    else fallback();
+  });
+
+  // initial state: restore a small pasted text if there was one
+  var saved = lsGet("paste", "");
+  if (saved && saved.trim()) { el.paste.value = saved; state.source = { kind:"text", text:saved, name:null }; run(); }
+  else renderOutputs();
+})();
+</script>
+<!--
+Data Digest — usage
+1. Choose/drop a CSV, TSV, JSON array or JSONL file, paste text, or press "Load sample".
+2. Format and delimiter are auto-detected; override them on the left. Untick "First row is a header" for headerless CSV.
+3. Files are streamed in 1 MB chunks and parsed with an RFC 4180 parser (quoted fields, "" escapes, embedded newlines,
+   CRLF/LF/CR). Work is time-sliced with setTimeout so the page stays responsive; progress and Cancel appear while parsing.
+   Beyond the "Full profile" row limit every 10th row is profiled (row count stays exact).
+4. The right panel has the digest as Prompt (plain text for an LLM), Markdown, JSON and a PostgreSQL CREATE TABLE draft.
+   Copy copies the active tab. Email/phone masking applies to examples and top values.
+Nothing is uploaded; preferences (and pasted text under 200k chars) are kept in localStorage under "redline.tool.data-digest.".
+-->
+</body>
+</html>

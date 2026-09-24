@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Motion Lab — easing and timing to CSS, JS and Framer Motion</title>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#ffffff;
+  --sunken:#e4e9ee;
+  --ink:#16202a;
+  --ink-soft:#5b6b7a;
+  --line:#c8d2db;
+  --line-soft:#dde4ea;
+  --accent:#1f4ed8;
+  --accent-ink:#ffffff;
+  --danger:#c0392b;
+  --warn:#a86408;
+  --ok:#1e7d4f;
+  --fill-alpha:0.16;
+  --tool-curve-a:#1f4ed8;
+  --tool-curve-b:#d9480f;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f151b;
+    --surface:#161f27;
+    --sunken:#111920;
+    --ink:#e4ebf1;
+    --ink-soft:#8ea0b0;
+    --line:#2b3945;
+    --line-soft:#212c36;
+    --accent:#6d8dff;
+    --accent-ink:#0f151b;
+    --danger:#e57373;
+    --warn:#e0a84a;
+    --ok:#5cc28f;
+    --fill-alpha:0.30;
+    --tool-curve-a:#6d8dff;
+    --tool-curve-b:#ff8a50;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f151b;
+  --surface:#161f27;
+  --sunken:#111920;
+  --ink:#e4ebf1;
+  --ink-soft:#8ea0b0;
+  --line:#2b3945;
+  --line-soft:#212c36;
+  --accent:#6d8dff;
+  --accent-ink:#0f151b;
+  --danger:#e57373;
+  --warn:#e0a84a;
+  --ok:#5cc28f;
+  --fill-alpha:0.30;
+  --tool-curve-a:#6d8dff;
+  --tool-curve-b:#ff8a50;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono,code,pre{font-family:"IBM Plex Mono",ui-monospace,monospace}
+[hidden]{display:none !important}
+
+.bar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;
+  padding:8px 14px;border-bottom:1px solid var(--line);background:var(--surface);
+}
+.brand{font-weight:600;margin:0;font-size:15px;letter-spacing:-0.01em}
+.brand span{color:var(--ink-soft);font-weight:400}
+.transport{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-left:auto}
+.clock{color:var(--ink-soft);font-size:12px;min-width:92px;text-align:right}
+.btn{
+  padding:4px 10px;border:1px solid var(--line);border-radius:5px;background:var(--surface);
+  cursor:pointer;font-size:13px;line-height:1.35;white-space:nowrap;
+}
+.btn:hover{border-color:var(--ink-soft)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) calc(var(--fill-alpha)*100%),var(--surface));border-color:var(--accent)}
+.btn.sm{padding:2px 7px;font-size:12px}
+
+.wrap{
+  display:grid;gap:12px;padding:12px;align-items:start;
+  grid-template-columns:320px minmax(0,1fr) minmax(340px,400px);
+}
+@media (max-width:1180px){
+  .wrap{grid-template-columns:320px minmax(0,1fr)}
+  .out{grid-column:1 / -1}
+}
+@media (max-width:760px){
+  .wrap{grid-template-columns:minmax(0,1fr);padding:8px;gap:8px}
+}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;min-width:0}
+.sec{padding:10px 12px;border-bottom:1px solid var(--line-soft)}
+.sec:last-child{border-bottom:0}
+.sec h2{margin:0 0 6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft)}
+
+/* editor */
+.ab{display:flex;gap:4px;margin-bottom:8px}
+.ab button{flex:1}
+.ab .chip{display:inline-block;width:10px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.chip.a{background:var(--tool-curve-a)}
+.chip.b{background:var(--tool-curve-b)}
+.curvehead{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.curvehead b{font-weight:600;font-size:14px}
+.curvehead span{color:var(--ink-soft);font-size:12px;overflow-wrap:anywhere}
+.graph{display:block;width:100%;max-width:340px;margin:6px auto 0;touch-action:none;user-select:none;-webkit-user-select:none}
+.graph .unit{fill:var(--sunken);stroke:var(--line);stroke-width:1}
+.graph .grid{stroke:var(--line-soft);stroke-width:1}
+.graph .guide{stroke:var(--line-soft);stroke-width:1;stroke-dasharray:3 4}
+.graph .lbl{fill:var(--ink-soft);font-size:10px;font-family:"IBM Plex Mono",ui-monospace,monospace}
+.graph .arm{stroke:var(--ink-soft);stroke-width:1.2}
+.graph .ca{stroke:var(--tool-curve-a);fill:none;stroke-width:2.6;stroke-linejoin:round}
+.graph .cb{stroke:var(--tool-curve-b);fill:none;stroke-width:2.6;stroke-linejoin:round}
+.graph .dim{stroke-width:1.6;stroke-dasharray:5 4;opacity:.85}
+.graph .handle{fill:var(--surface);stroke:var(--ink);stroke-width:2;cursor:grab}
+.graph .handle:focus{outline:none}
+.graph .handle:focus-visible{stroke:var(--accent);stroke-width:3}
+.graph .hit{fill:transparent;cursor:grab}
+.graph .dot{stroke:var(--surface);stroke-width:2}
+.fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}
+.fields label,.slider label{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--ink-soft)}
+input[type=number],input[type=text],select{
+  width:100%;min-width:0;padding:3px 6px;border:1px solid var(--line);border-radius:4px;
+  background:var(--sunken);color:var(--ink);font-size:13px;
+}
+input[type=number]{font-family:"IBM Plex Mono",ui-monospace,monospace;text-align:right}
+.paste{display:flex;gap:6px;margin-top:6px}
+.paste input{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
+.msg{font-size:12px;margin-top:4px;min-height:0}
+.msg.err{color:var(--danger)}
+.msg.warn{color:var(--warn)}
+.slider{display:grid;grid-template-columns:78px minmax(0,1fr) 64px;gap:8px;align-items:center;margin:3px 0}
+.slider .name{color:var(--ink-soft);font-size:12px}
+.slider input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:6px}
+.stat{background:var(--sunken);border-radius:4px;padding:3px 6px}
+.stat small{display:block;color:var(--ink-soft);font-size:10.5px}
+.stat b{font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:500;font-size:12px}
+
+.presets{display:grid;grid-template-columns:44px repeat(3,minmax(0,1fr));gap:3px;align-items:center}
+.presets .fam{font-size:11px;color:var(--ink-soft)}
+.presets .wide{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:3px}
+.pbtn{
+  display:flex;align-items:center;gap:4px;padding:2px 5px;border:1px solid var(--line-soft);border-radius:4px;
+  background:var(--surface);cursor:pointer;font-size:11.5px;min-width:0;white-space:nowrap;overflow:hidden;
+}
+.pbtn:hover{border-color:var(--ink-soft)}
+.pbtn[aria-pressed="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) calc(var(--fill-alpha)*100%),var(--surface))}
+.pbtn svg{flex:none;width:16px;height:16px}
+.pbtn svg path{fill:none;stroke:var(--ink-soft);stroke-width:1.6}
+.pbtn[aria-pressed="true"] svg path{stroke:var(--accent)}
+
+/* timing + preview */
+.timing{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 18px}
+@media (max-width:560px){.timing{grid-template-columns:minmax(0,1fr)}}
+.slider.off{opacity:.55}
+.row{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px;align-items:end}
+.row label{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--ink-soft)}
+.row .grow{flex:1 1 140px}
+.note{margin-top:8px;padding:6px 8px;border-radius:4px;font-size:12px;border-left:3px solid var(--warn);
+  background:color-mix(in srgb,var(--warn) calc(var(--fill-alpha)*70%),var(--surface))}
+.note.bad{border-left-color:var(--danger);background:color-mix(in srgb,var(--danger) calc(var(--fill-alpha)*70%),var(--surface))}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.card{border:1px solid var(--line-soft);border-radius:5px;padding:6px 8px 8px;background:var(--paper);min-width:0}
+.card.span{grid-column:1 / -1}
+.card h3{margin:0 0 4px;font-size:12px;font-weight:500;display:flex;justify-content:space-between;gap:6px}
+.card h3 span{color:var(--ink-soft);font-weight:400;font-size:11px}
+.lanes{display:grid;gap:6px}
+.lanes.cols{grid-template-columns:repeat(2,minmax(0,1fr))}
+.lane{position:relative;min-width:0}
+.lane.tagged{padding-left:14px}
+.lane .tag{position:absolute;top:2px;left:0;font-size:10px;font-family:"IBM Plex Mono",ui-monospace,monospace;color:var(--ink-soft);z-index:1}
+.lane.a .obj{background:var(--tool-curve-a)}
+.lane.b .obj{background:var(--tool-curve-b)}
+.track{position:relative;height:30px;border-radius:4px;background:var(--sunken)}
+.track .obj{position:absolute;top:5px;left:0;width:20px;height:20px;border-radius:4px}
+.box{height:46px;display:flex;align-items:center;justify-content:center;background:var(--sunken);border-radius:4px}
+.box .obj{width:30px;height:30px;border-radius:5px}
+.acc{background:var(--sunken);border-radius:4px;padding:4px 6px}
+.acc .head{font-size:11px;color:var(--ink-soft);display:flex;justify-content:space-between}
+.acc .body{overflow:hidden;height:0}
+.acc .body i{display:block;height:6px;margin:5px 0;border-radius:3px;opacity:.55}
+.lane.a .acc .body i{background:var(--tool-curve-a)}
+.lane.b .acc .body i{background:var(--tool-curve-b)}
+.list{display:flex;flex-direction:column;gap:3px;padding-top:12px}
+.list .obj{height:8px;border-radius:3px}
+.empty-hint{color:var(--ink-soft);font-size:12px;margin:6px 0 0}
+
+/* output */
+.tabs{display:flex;gap:2px;padding:6px 8px 0;flex-wrap:wrap;border-bottom:1px solid var(--line-soft)}
+.tab{padding:5px 8px;border:0;border-bottom:2px solid transparent;background:none;cursor:pointer;color:var(--ink-soft);font-size:13px}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:500}
+.tab small{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;color:var(--ink-soft);margin-left:3px;font-weight:400}
+.outbar{display:flex;gap:8px;align-items:center;padding:6px 10px;flex-wrap:wrap;border-bottom:1px solid var(--line-soft)}
+.outbar .what{flex:1 1 150px;color:var(--ink-soft);font-size:12px;min-width:0}
+.copied{font-size:12px;color:var(--ok)}
+pre.code{
+  margin:0;padding:10px 12px;font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;
+  overflow:auto;max-height:calc(100vh - 150px);min-height:200px;background:var(--surface);border-radius:0 0 6px 6px;
+}
+@media (max-width:1180px){pre.code{max-height:560px}}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1 class="brand">Motion Lab <span>— tune easing and timing, export CSS / JS / Framer Motion</span></h1>
+  <div class="transport">
+    <button class="btn btn-primary" id="play" type="button" title="Play once (Space)">Play</button>
+    <button class="btn" id="loop" type="button" aria-pressed="false">Loop</button>
+    <button class="btn" id="slow" type="button" aria-pressed="false" title="Slow motion">0.25×</button>
+    <button class="btn" id="compare" type="button" aria-pressed="false">Compare A/B</button>
+    <span class="clock mono" id="clock" aria-live="off">0 / 0 ms</span>
+    <button class="btn" id="reset" type="button">Reset</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="panel" aria-label="Curve editor">
+    <div class="sec">
+      <div class="ab" id="ab" hidden>
+        <button class="btn" type="button" data-ab="A" aria-pressed="true"><span class="chip a"></span>Edit curve A</button>
+        <button class="btn" type="button" data-ab="B" aria-pressed="false"><span class="chip b"></span>Edit curve B</button>
+      </div>
+      <div class="curvehead"><b id="curveName">—</b><span id="curveSub" class="mono"></span></div>
+      <svg class="graph" id="graph" viewBox="0 0 320 400" role="group" aria-label="Easing curve: horizontal axis is time, vertical axis is progress"></svg>
+      <div id="bezierFields">
+        <div class="fields">
+          <label>x1<input type="number" id="x1" step="0.01" min="0" max="1"></label>
+          <label>y1<input type="number" id="y1" step="0.01" min="-0.6" max="1.6"></label>
+          <label>x2<input type="number" id="x2" step="0.01" min="0" max="1"></label>
+          <label>y2<input type="number" id="y2" step="0.01" min="-0.6" max="1.6"></label>
+        </div>
+        <div class="paste">
+          <input type="text" id="pasteIn" placeholder="Paste cubic-bezier(0.33, 1, 0.68, 1)" aria-label="Paste a cubic-bezier value">
+          <button class="btn sm" type="button" id="pasteBtn">Load</button>
+        </div>
+        <div class="msg" id="pasteMsg" role="status"></div>
+      </div>
+      <div id="springFields" hidden>
+        <div class="slider"><span class="name">Stiffness</span><input type="range" id="sk" min="10" max="1000" step="1" aria-label="Stiffness"><input type="number" id="skN" min="10" max="1000" step="1" aria-label="Stiffness value"></div>
+        <div class="slider"><span class="name">Damping</span><input type="range" id="sc" min="1" max="100" step="0.5" aria-label="Damping"><input type="number" id="scN" min="1" max="100" step="0.5" aria-label="Damping value"></div>
+        <div class="slider"><span class="name">Mass</span><input type="range" id="sm" min="0.1" max="10" step="0.1" aria-label="Mass"><input type="number" id="smN" min="0.1" max="10" step="0.1" aria-label="Mass value"></div>
+        <div class="stats">
+          <div class="stat"><small>Settles in</small><b id="stSettle">—</b></div>
+          <div class="stat"><small>Damping ratio ζ</small><b id="stZeta">—</b></div>
+          <div class="stat"><small>Overshoot</small><b id="stOver">—</b></div>
+        </div>
+        <div class="msg" id="springMsg" role="status"></div>
+      </div>
+    </div>
+    <div class="sec">
+      <h2>Presets</h2>
+      <div class="presets" id="presets"></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Timing and preview">
+    <div class="sec">
+      <h2>Timing</h2>
+      <div class="timing">
+        <div class="slider" id="durRow"><span class="name">Duration</span><input type="range" id="dur" min="50" max="2000" step="10" aria-label="Duration in ms"><input type="number" id="durN" min="50" max="2000" step="10" aria-label="Duration ms"></div>
+        <div class="slider"><span class="name">Delay</span><input type="range" id="delay" min="0" max="1000" step="10" aria-label="Delay in ms"><input type="number" id="delayN" min="0" max="1000" step="10" aria-label="Delay ms"></div>
+        <div class="slider"><span class="name">Stagger</span><input type="range" id="stagger" min="0" max="300" step="5" aria-label="Stagger delay in ms"><input type="number" id="staggerN" min="0" max="300" step="5" aria-label="Stagger ms"></div>
+        <div class="slider"><span class="name">Items</span><input type="range" id="count" min="1" max="12" step="1" aria-label="Number of list items"><input type="number" id="countN" min="1" max="12" step="1" aria-label="Items"></div>
+      </div>
+      <div class="row">
+        <label class="grow">Element<input type="text" id="elName" maxlength="40" placeholder="Panel"></label>
+        <label class="grow">Motion<select id="motion">
+          <option value="slide">Slide in (translateX)</option>
+          <option value="rise">Rise + fade (translateY, opacity)</option>
+          <option value="fade">Fade (opacity)</option>
+          <option value="scale">Scale in (scale, opacity)</option>
+          <option value="expand">Expand (height 0 → auto)</option>
+        </select></label>
+        <label style="width:86px" id="distWrap">Offset px<input type="number" id="dist" min="1" max="400" step="1"></label>
+      </div>
+      <div id="warns"></div>
+    </div>
+    <div class="sec">
+      <h2>Preview</h2>
+      <div class="cards" id="cards"></div>
+      <p class="empty-hint" id="hint">Showing the end state. Press Play (or Space) to run the motion once, Loop to repeat it.</p>
+    </div>
+  </section>
+
+  <section class="panel out" aria-label="Output">
+    <div class="tabs" role="tablist" id="tabs">
+      <button class="tab" role="tab" type="button" data-fmt="prompt">Prompt<small></small></button>
+      <button class="tab" role="tab" type="button" data-fmt="css">CSS<small></small></button>
+      <button class="tab" role="tab" type="button" data-fmt="js">JS (WAAPI)<small></small></button>
+      <button class="tab" role="tab" type="button" data-fmt="framer">Framer Motion<small></small></button>
+    </div>
+    <div class="outbar">
+      <span class="what" id="outWhat"></span>
+      <span class="copied" id="copied" role="status"></span>
+      <button class="btn btn-primary" type="button" id="copy">Copy</button>
+    </div>
+    <pre class="code" id="out" tabindex="0" aria-live="off"></pre>
+  </section>
+</main>
+
+<script>
+(function(){
+"use strict";
+
+/* PURE:BEGIN — pure easing, spring and export logic (no DOM) */
+var CSS_PRESETS = [
+  ["linear",[0,0,1,1]],
+  ["ease",[0.25,0.1,0.25,1]],
+  ["ease-in",[0.42,0,1,1]],
+  ["ease-out",[0,0,0.58,1]],
+  ["ease-in-out",[0.42,0,0.58,1]]
+];
+/* easings.net cubic-bezier approximations: [family, In, Out, InOut] */
+var FAMILIES = [
+  ["Sine",  [0.12,0,0.39,0],   [0.61,1,0.88,1],   [0.37,0,0.63,1]],
+  ["Quad",  [0.11,0,0.5,0],    [0.5,1,0.89,1],    [0.45,0,0.55,1]],
+  ["Cubic", [0.32,0,0.67,0],   [0.33,1,0.68,1],   [0.65,0,0.35,1]],
+  ["Quart", [0.5,0,0.75,0],    [0.25,1,0.5,1],    [0.76,0,0.24,1]],
+  ["Quint", [0.64,0,0.78,0],   [0.22,1,0.36,1],   [0.83,0,0.17,1]],
+  ["Expo",  [0.7,0,0.84,0],    [0.16,1,0.3,1],    [0.87,0,0.13,1]],
+  ["Circ",  [0.55,0,1,0.45],   [0,0.55,0.45,1],   [0.85,0,0.15,1]],
+  ["Back",  [0.36,0,0.66,-0.56],[0.34,1.56,0.64,1],[0.68,-0.6,0.32,1.6]]
+];
+/* react-spring's named configs (tension = stiffness, friction = damping), mass 1 */
+var SPRINGS = [["Default",170,26,1],["Gentle",120,14,1],["Wobbly",180,12,1],["Stiff",210,20,1],["Slow",280,60,1]];
+
+var PRESETS = {};
+CSS_PRESETS.forEach(function(p){ PRESETS[p[0]] = {id:p[0], label:p[0], kind:"bezier", p:p[1], css:true}; });
+FAMILIES.forEach(function(f){
+  ["In","Out","InOut"].forEach(function(v,i){
+    var id = "ease" + v + f[0];
+    PRESETS[id] = {id:id, label:id, kind:"bezier", p:f[i+1]};
+  });
+});
+SPRINGS.forEach(function(s){
+  var id = "spring:" + s[0];
+  PRESETS[id] = {id:id, label:"Spring · " + s[0], kind:"spring", k:s[1], c:s[2], m:s[3]};
+});
+
+function cubicBezier(x1,y1,x2,y2){
+  function bx(t){ var u=1-t; return 3*u*u*t*x1 + 3*u*t*t*x2 + t*t*t; }
+  function by(t){ var u=1-t; return 3*u*u*t*y1 + 3*u*t*t*y2 + t*t*t; }
+  function dbx(t){ var u=1-t; return 3*u*u*x1 + 6*u*t*(x2-x1) + 3*t*t*(1-x2); }
+  function solve(x){
+    var t = x, i;
+    for(i=0;i<8;i++){
+      var e = bx(t) - x;
+      if(Math.abs(e) < 1e-7) return t;
+      var d = dbx(t);
+      if(Math.abs(d) < 1e-6) break;
+      t -= e/d;
+      if(t < 0 || t > 1) break;
+    }
+    var lo = 0, hi = 1; t = x;
+    for(i=0;i<60;i++){
+      var v = bx(t);
+      if(Math.abs(v - x) < 1e-7) return t;
+      if(v < x) lo = t; else hi = t;
+      t = (lo + hi)/2;
+    }
+    return t;
+  }
+  return function(x){
+    if(x <= 0) return 0;
+    if(x >= 1) return 1;
+    if(x1 === y1 && x2 === y2) return x;
+    return by(solve(x));
+  };
+}
+
+/* Damped harmonic oscillator m·x'' + c·x' + k·(x − 1) = 0, x(0)=0, x'(0)=0.
+   Integrated with RK4 at 1 ms. Settle = first time after which |x − 1| stays below eps. */
+function simulateSpring(k,c,m,opts){
+  opts = opts || {};
+  var dt = opts.dt || 0.001, maxT = opts.maxT || 10, eps = opts.eps || 0.001;
+  var n = Math.round(maxT/dt), xs = new Float64Array(n+1);
+  var x = 0, v = 0, last = 0, peak = 0, minX = 0;
+  function acc(px,pv){ return (-k*(px-1) - c*pv)/m; }
+  var extrema = 0, prevV = 0;
+  for(var i=1;i<=n;i++){
+    var a1 = acc(x,v),                 v1 = v;
+    var a2 = acc(x+v1*dt/2, v+a1*dt/2), v2 = v+a1*dt/2;
+    var a3 = acc(x+v2*dt/2, v+a2*dt/2), v3 = v+a2*dt/2;
+    var a4 = acc(x+v3*dt,   v+a3*dt),   v4 = v+a3*dt;
+    x += dt*(v1 + 2*v2 + 2*v3 + v4)/6;
+    v += dt*(a1 + 2*a2 + 2*a3 + a4)/6;
+    xs[i] = x;
+    if(x > peak) peak = x;
+    if(x < minX) minX = x;
+    if(Math.abs(x-1) > eps) last = i;
+    if(i > 1 && ((prevV > 0 && v <= 0) || (prevV < 0 && v >= 0)) && Math.abs(x-1) > 0.01) extrema++;
+    prevV = v;
+  }
+  var settled = last < n;
+  var steps = Math.min(n, last + 1);
+  return {
+    k:k, c:c, m:m, dt:dt, eps:eps,
+    xs: xs.subarray(0, steps+1),
+    steps: steps,
+    settleMs: Math.round(steps*dt*1000),
+    settled: settled,
+    zeta: c/(2*Math.sqrt(k*m)),
+    omega0: Math.sqrt(k/m),
+    overshoot: Math.max(0, peak-1),
+    undershoot: Math.max(0, -minX),
+    oscillations: extrema
+  };
+}
+
+function springFn(sim){
+  var xs = sim.xs, n = sim.steps;
+  return function(t){
+    if(t <= 0) return 0;
+    if(t >= 1) return 1;
+    var f = t*n, i = Math.floor(f), r = f - i;
+    return xs[i] + (xs[Math.min(n,i+1)] - xs[i])*r;
+  };
+}
+
+/* Ramer–Douglas–Peucker on (t, y) using vertical error, which is what the eye sees in an easing. */
+function simplify(pts, tol){
+  var keep = new Uint8Array(pts.length);
+  keep[0] = keep[pts.length-1] = 1;
+  var stack = [[0, pts.length-1]];
+  while(stack.length){
+    var s = stack.pop(), a = s[0], b = s[1], worst = -1, wd = 0;
+    var ta = pts[a][0], ya = pts[a][1], tb = pts[b][0], yb = pts[b][1];
+    for(var i=a+1;i<b;i++){
+      var y = ya + (yb-ya)*(pts[i][0]-ta)/(tb-ta);
+      var d = Math.abs(pts[i][1]-y);
+      if(d > wd){ wd = d; worst = i; }
+    }
+    if(worst > 0 && wd > tol){ keep[worst] = 1; stack.push([a,worst],[worst,b]); }
+  }
+  var out = [];
+  for(var j=0;j<pts.length;j++) if(keep[j]) out.push(pts[j]);
+  return out;
+}
+
+function round(v, d){ var p = Math.pow(10,d); var r = Math.round(v*p)/p; return r === 0 ? 0 : r; }
+
+function springLinear(sim, tol){
+  tol = tol || 0.002;
+  var pts = [], n = sim.steps;
+  for(var i=0;i<=n;i++) pts.push([i/n, sim.xs[i]]);
+  var s = simplify(pts, tol);
+  s[0] = [0,0];
+  s[s.length-1] = [1,1];
+  var parts = s.map(function(p,i){
+    if(i === 0) return "0";
+    if(i === s.length-1) return "1";
+    return round(p[1],4) + " " + round(p[0]*100,2) + "%";
+  });
+  return {points:s, css:"linear(" + parts.join(", ") + ")"};
+}
+
+function evalLinear(points, t){
+  if(t <= 0) return points[0][1];
+  for(var i=1;i<points.length;i++){
+    if(t <= points[i][0]){
+      var a = points[i-1], b = points[i];
+      return a[1] + (b[1]-a[1])*(t-a[0])/(b[0]-a[0]);
+    }
+  }
+  return points[points.length-1][1];
+}
+
+function fmtN(v){ return String(round(v,3)); }
+function bezierCss(p){ return "cubic-bezier(" + p.map(fmtN).join(", ") + ")"; }
+
+/* Turns a stored curve into something playable and exportable. */
+function makeEase(curve){
+  if(curve.kind === "spring"){
+    var sim = simulateSpring(curve.k, curve.c, curve.m);
+    var lin = springLinear(sim);
+    return {kind:"spring", curve:curve, sim:sim, fn:springFn(sim), css:lin.css, points:lin.points, durMs:sim.settleMs};
+  }
+  var p = curve.p;
+  return {kind:"bezier", curve:curve, fn:cubicBezier(p[0],p[1],p[2],p[3]), css:bezierCss(p), durMs:null};
+}
+
+function presetName(curve){
+  var pr = PRESETS[curve.preset];
+  if(!pr) return curve.kind === "spring" ? "custom spring" : "custom curve";
+  return pr.label;
+}
+
+function analyze(fn){
+  var N = 400, max = -Infinity, min = Infinity, t50 = null, tPeak = 0;
+  for(var i=0;i<=N;i++){
+    var t = i/N, y = fn(t);
+    if(y > max){ max = y; tPeak = t; }
+    if(y < min) min = y;
+    if(t50 === null && y >= 0.5) t50 = t;
+  }
+  return {
+    overshoot: Math.max(0, max-1),
+    anticipation: Math.max(0, -min),
+    tPeak: tPeak,
+    t50: t50 === null ? 1 : t50,
+    s0: (fn(0.02) - fn(0))/0.02,
+    s1: (fn(1) - fn(0.98))/0.02
+  };
+}
+
+function pct(v){ return round(v*100, 1) + "%"; }
+
+function characterOf(ez){
+  var a = analyze(ez.fn), bits = [];
+  if(ez.kind === "spring"){
+    var s = ez.sim;
+    if(s.zeta < 1 && s.overshoot > 0.005) bits.push("underdamped spring (damping ratio " + round(s.zeta,2) + "): springy");
+    else if(s.zeta <= 1.05) bits.push("near-critically damped spring (damping ratio " + round(s.zeta,2) + "): fast approach with no visible bounce");
+    else bits.push("overdamped spring (damping ratio " + round(s.zeta,2) + "): slow, heavy creep into place with no bounce");
+  }
+  if(a.anticipation > 0.005) bits.push("pulls back " + pct(a.anticipation) + " of the distance before moving forward (anticipation)");
+  if(a.s0 < 0.35) bits.push("starts slowly and gathers speed");
+  else if(a.s0 > 1.8) bits.push("starts fast");
+  else bits.push("starts at a steady pace");
+  if(a.overshoot > 0.005){
+    var over = "overshoots the target by " + pct(a.overshoot);
+    if(ez.kind === "spring" && ez.sim.oscillations > 1) over += " and oscillates " + ez.sim.oscillations + " times before resting (visible bounce)";
+    else over += " and settles back (slight recoil)";
+    bits.push(over);
+  } else if(a.s1 < 0.35) bits.push("eases into a soft stop, no overshoot");
+  else if(a.s1 > 1.8) bits.push("arrives at speed and stops abruptly");
+  else bits.push("finishes at a steady pace, no overshoot");
+  return {text: bits.join("; "), a: a};
+}
+
+function slugify(name){
+  var s = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+  if(!s) s = "el";
+  if(/^[0-9]/.test(s)) s = "m-" + s;
+  return s;
+}
+function camel(slug){
+  return slug.replace(/-([a-z0-9])/g, function(_,c){ return c.toUpperCase(); });
+}
+
+function motionDef(id, d){
+  switch(id){
+    case "rise": return {id:id, label:"Rise + fade",
+      what:"rises " + d + "px upward into place while fading in",
+      props:["transform","opacity"],
+      from:{transform:"translateY(" + d + "px)", opacity:"0"}, to:{transform:"translateY(0)", opacity:"1"},
+      fmFrom:"{ y: " + d + ", opacity: 0 }", fmTo:"{ y: 0, opacity: 1 }", reduced:"fade"};
+    case "fade": return {id:id, label:"Fade",
+      what:"fades in from fully transparent to fully opaque",
+      props:["opacity"], from:{opacity:"0"}, to:{opacity:"1"},
+      fmFrom:"{ opacity: 0 }", fmTo:"{ opacity: 1 }", reduced:"fade"};
+    case "scale": return {id:id, label:"Scale in",
+      what:"grows from 95% to 100% size while fading in, scaling from its center",
+      props:["transform","opacity"],
+      from:{transform:"scale(0.95)", opacity:"0"}, to:{transform:"scale(1)", opacity:"1"},
+      fmFrom:"{ scale: 0.95, opacity: 0 }", fmTo:"{ scale: 1, opacity: 1 }", reduced:"fade"};
+    case "expand": return {id:id, label:"Expand",
+      what:"expands its height from 0 to its natural content height (accordion reveal), content clipped while it opens",
+      props:["height"], from:{height:"0"}, to:{height:"auto"},
+      fmFrom:"{ height: 0 }", fmTo:"{ height: \"auto\" }", reduced:"instant"};
+    default: return {id:"slide", label:"Slide in",
+      what:"slides in horizontally from " + d + "px to the left of its resting position",
+      props:["transform"], from:{transform:"translateX(-" + d + "px)"}, to:{transform:"translateX(0)"},
+      fmFrom:"{ x: -" + d + " }", fmTo:"{ x: 0 }", reduced:"fade"};
+  }
+}
+
+function timingSummary(ez, t){
+  var D = ez.kind === "spring" ? ez.durMs : t.dur;
+  var stag = t.count > 1 ? t.stagger : 0;
+  var total = t.delay + (t.count-1)*stag + D;
+  return {D:D, stag:stag, total:total, stagger: t.count > 1 && t.stagger > 0};
+}
+
+function warningsFor(ez, t, motionId){
+  var w = [], s = timingSummary(ez, t);
+  if(ez.kind === "spring" && !ez.sim.settled)
+    w.push({bad:true, text:"This spring does not settle within 10 s. Raise damping or stiffness; the export is cut at 10 s."});
+  if(s.D > 400)
+    w.push({text:"Duration " + s.D + " ms is over 400 ms. Interface transitions this long make people wait; 150–300 ms is typical for UI." + (ez.kind === "spring" ? " Raise stiffness or damping to settle sooner." : "")});
+  if(s.stagger && s.total > 1000)
+    w.push({text:"The last of " + t.count + " items finishes at " + s.total + " ms. Shorten the stagger or cap the number of staggered items."});
+  if(motionId === "expand" && analyze(ez.fn).overshoot > 0.005)
+    w.push({text:"Overshoot is clipped on a height expand (grid rows cannot exceed 1fr). Pick a curve without overshoot for accordions."});
+  return w;
+}
+
+function buildCss(ez, t, m, name, label){
+  var slug = slugify(name), s = timingSummary(ez, t);
+  var v = "--" + slug;
+  var L = [];
+  L.push("/* Motion Lab — " + name + ": " + m.label + ", " + label + " */");
+  if(ez.kind === "spring")
+    L.push("/* Spring k=" + ez.sim.k + " c=" + ez.sim.c + " m=" + ez.sim.m + " simulated; settles within 0.1% in " + ez.durMs + " ms. Sampled as a " + ez.points.length + "-point linear() easing. */");
+  L.push(":root {");
+  L.push("  " + v + "-ease: " + ez.css + ";");
+  L.push("  " + v + "-duration: " + s.D + "ms;");
+  L.push("  " + v + "-delay: " + t.delay + "ms;");
+  if(s.stagger) L.push("  " + v + "-stagger: " + t.stagger + "ms;");
+  L.push("}");
+  L.push("");
+  var tr = function(prop){ return prop + " var(" + v + "-duration) var(" + v + "-ease) var(" + v + "-delay)"; };
+  if(m.id === "expand"){
+    L.push("/* 1. Transition: toggle .is-open. Grid rows animate 0fr → 1fr, i.e. height 0 → auto. */");
+    L.push("." + slug + " {");
+    L.push("  display: grid;");
+    L.push("  grid-template-rows: 0fr;");
+    L.push("  transition: " + tr("grid-template-rows") + ";");
+    L.push("}");
+    L.push("." + slug + " > * { min-height: 0; overflow: hidden; }");
+    L.push("." + slug + ".is-open { grid-template-rows: 1fr; }");
+    L.push("");
+    L.push("/* 2. Enter animation (plays once when .is-entering is added) */");
+    L.push("@keyframes " + slug + "-enter {");
+    L.push("  from { grid-template-rows: 0fr; }");
+    L.push("  to   { grid-template-rows: 1fr; }");
+    L.push("}");
+  } else {
+    L.push("/* 1. Transition: from-state on ." + slug + ", to-state on ." + slug + ".is-in */");
+    L.push("." + slug + " {");
+    Object.keys(m.from).forEach(function(k){ L.push("  " + k + ": " + m.from[k] + ";"); });
+    L.push("  transition: " + m.props.map(tr).join(",\n              ") + ";");
+    L.push("}");
+    L.push("." + slug + ".is-in {");
+    Object.keys(m.to).forEach(function(k){ L.push("  " + k + ": " + m.to[k] + ";"); });
+    L.push("}");
+    L.push("");
+    L.push("/* 2. Enter animation (plays once when .is-entering is added) */");
+    L.push("@keyframes " + slug + "-enter {");
+    L.push("  from { " + Object.keys(m.from).map(function(k){ return k + ": " + m.from[k] + ";"; }).join(" ") + " }");
+    L.push("  to   { " + Object.keys(m.to).map(function(k){ return k + ": " + m.to[k] + ";"; }).join(" ") + " }");
+    L.push("}");
+  }
+  L.push("." + slug + ".is-entering {");
+  L.push("  animation: " + slug + "-enter var(" + v + "-duration) var(" + v + "-ease) var(" + v + "-delay) both;");
+  L.push("}");
+  if(s.stagger){
+    L.push("");
+    L.push("/* 3. Stagger: set style=\"--i: 0\", \"--i: 1\", … on each item (" + t.count + " items, " + t.stagger + " ms apart) */");
+    L.push("." + slug + "-list > * {");
+    L.push("  animation: " + slug + "-enter var(" + v + "-duration) var(" + v + "-ease) both;");
+    L.push("  animation-delay: calc(var(" + v + "-delay) + var(--i, 0) * var(" + v + "-stagger));");
+    L.push("}");
+  }
+  L.push("");
+  var sel = "." + slug + ".is-entering" + (s.stagger ? ",\n  ." + slug + "-list > *" : "");
+  L.push("/* " + (s.stagger ? "4" : "3") + ". Reduced motion: safe variant */");
+  L.push("@media (prefers-reduced-motion: reduce) {");
+  if(m.reduced === "instant"){
+    L.push("  /* No height animation: the panel opens and closes instantly. */");
+    L.push("  ." + slug + " { transition: none; }");
+    L.push("  " + sel + " { animation: none; }");
+  } else {
+    L.push("  /* No movement or scaling: a short opacity fade only, no stagger. */");
+    if(m.id !== "fade") L.push("  ." + slug + " { transform: none; }");
+    L.push("  ." + slug + " { transition: opacity 150ms linear var(" + v + "-delay); }");
+    L.push("  " + sel + " {");
+    L.push("    animation: " + slug + "-fade 150ms linear var(" + v + "-delay) both;");
+    L.push("  }");
+    L.push("  @keyframes " + slug + "-fade { from { opacity: 0; } to { opacity: 1; } }");
+  }
+  L.push("}");
+  return L.join("\n");
+}
+
+function jsKeyframes(m, indent){
+  if(m.id === "expand") return indent + "{ height: '0px' },\n" + indent + "{ height: el.scrollHeight + 'px' }";
+  var obj = function(o){ return "{ " + Object.keys(o).map(function(k){ return k + ": '" + o[k] + "'"; }).join(", ") + " }"; };
+  return indent + obj(m.from) + ",\n" + indent + obj(m.to);
+}
+
+function buildJs(ez, t, m, name, label){
+  var slug = slugify(name), fnName = "animate" + camel(slug).replace(/^./, function(c){ return c.toUpperCase(); });
+  var s = timingSummary(ez, t), L = [];
+  L.push("// Motion Lab — " + name + ": " + m.label + ", " + label);
+  if(ez.kind === "spring") L.push("// Spring k=" + ez.sim.k + " c=" + ez.sim.c + " m=" + ez.sim.m + " → settles in " + ez.durMs + " ms (sampled as linear()).");
+  L.push("const EASE = '" + ez.css + "';");
+  L.push("const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;");
+  L.push("");
+  L.push("function " + fnName + "(el, i = 0) {");
+  if(m.reduced === "instant"){
+    L.push("  // Reduced-motion safe variant: no height animation, show the final state at once.");
+    L.push("  if (reduceMotion) return null;");
+  } else {
+    L.push("  // Reduced-motion safe variant: opacity only, 150 ms, linear, no stagger.");
+    L.push("  if (reduceMotion) {");
+    L.push("    return el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, delay: " + t.delay + ", easing: 'linear', fill: 'both' });");
+    L.push("  }");
+  }
+  if(m.id === "expand") L.push("  el.style.overflow = 'hidden';");
+  L.push("  const anim = el.animate([");
+  L.push(jsKeyframes(m, "    "));
+  L.push("  ], {");
+  L.push("    duration: " + s.D + ",");
+  L.push("    delay: " + t.delay + (s.stagger ? " + i * " + t.stagger : "") + ",");
+  L.push("    easing: EASE,");
+  L.push("    fill: '" + (m.id === "expand" ? "backwards" : "both") + "'");
+  L.push("  });");
+  if(m.id === "expand") L.push("  anim.onfinish = () => { el.style.overflow = ''; }; // height returns to auto");
+  L.push("  return anim;");
+  L.push("}");
+  L.push("");
+  if(s.stagger){
+    L.push("// Stagger: " + t.count + " items, " + t.stagger + " ms apart");
+    L.push("document.querySelectorAll('." + slug + "-list > *').forEach((el, i) => " + fnName + "(el, i));");
+  } else {
+    L.push(fnName + "(document.querySelector('." + slug + "'));");
+  }
+  return L.join("\n");
+}
+
+function buildFramer(ez, t, m, name, label){
+  var slug = slugify(name), c = camel(slug), comp = c.replace(/^./, function(x){ return x.toUpperCase(); });
+  var s = timingSummary(ez, t), L = [];
+  L.push("// Motion Lab — " + name + ": " + m.label + ", " + label);
+  L.push("import { motion, useReducedMotion } from \"framer-motion\";");
+  L.push("");
+  L.push("export const " + c + "Transition = {");
+  if(ez.kind === "spring"){
+    L.push("  type: \"spring\",");
+    L.push("  stiffness: " + ez.sim.k + ",");
+    L.push("  damping: " + ez.sim.c + ",");
+    L.push("  mass: " + ez.sim.m + ",");
+    L.push("  delay: " + round(t.delay/1000,3) + ",");
+    L.push("  restDelta: 0.001 // settles in ≈" + ez.durMs + " ms, matching Motion Lab");
+  } else {
+    L.push("  duration: " + round(s.D/1000,3) + ",");
+    L.push("  delay: " + round(t.delay/1000,3) + ",");
+    L.push("  ease: [" + ez.curve.p.map(fmtN).join(", ") + "] // " + label);
+  }
+  L.push("};");
+  L.push("");
+  if(m.reduced === "instant") L.push("// Reduced-motion safe variant: no animation, final state at once.");
+  else L.push("// Reduced-motion safe variant: opacity only, 150 ms, linear, no stagger.");
+  L.push("const reducedTransition = " + (m.reduced === "instant" ? "{ duration: 0 }" : "{ duration: 0.15, ease: \"linear\", delay: " + round(t.delay/1000,3) + " }") + ";");
+  var rFrom = m.reduced === "instant" ? m.fmTo : "{ opacity: 0 }";
+  var rTo = m.reduced === "instant" ? m.fmTo : "{ opacity: 1 }";
+  L.push("");
+  if(s.stagger){
+    L.push("const listVariants = {");
+    L.push("  hidden: {},");
+    L.push("  show: { transition: { staggerChildren: " + round(t.stagger/1000,3) + " } }");
+    L.push("};");
+    L.push("");
+    L.push("export function " + comp + "List({ items }) {");
+    L.push("  const reduce = useReducedMotion();");
+    L.push("  const item = {");
+    L.push("    hidden: reduce ? " + rFrom + " : " + m.fmFrom + ",");
+    L.push("    show: { ...(reduce ? " + rTo + " : " + m.fmTo + "), transition: reduce ? reducedTransition : " + c + "Transition }");
+    L.push("  };");
+    L.push("  return (");
+    L.push("    <motion.ul variants={reduce ? {} : listVariants} initial=\"hidden\" animate=\"show\">");
+    L.push("      {items.map((it) => (");
+    L.push("        <motion.li key={it.id} variants={item}" + (m.id === "expand" ? " style={{ overflow: \"hidden\" }}" : "") + ">{it.label}</motion.li>");
+    L.push("      ))}");
+    L.push("    </motion.ul>");
+    L.push("  );");
+    L.push("}");
+  } else {
+    L.push("export function " + comp + "({ children }) {");
+    L.push("  const reduce = useReducedMotion();");
+    L.push("  return (");
+    L.push("    <motion.div");
+    L.push("      initial={reduce ? " + rFrom + " : " + m.fmFrom + "}");
+    L.push("      animate={reduce ? " + rTo + " : " + m.fmTo + "}");
+    L.push("      transition={reduce ? reducedTransition : " + c + "Transition}");
+    if(m.id === "expand") L.push("      style={{ overflow: \"hidden\" }}");
+    L.push("    >");
+    L.push("      {children}");
+    L.push("    </motion.div>");
+    L.push("  );");
+    L.push("}");
+  }
+  return L.join("\n");
+}
+
+function buildPrompt(ez, t, m, name, label, other){
+  var s = timingSummary(ez, t), ch = characterOf(ez), L = [];
+  L.push("Implement this UI motion exactly as specified.");
+  L.push("");
+  L.push("ELEMENT: " + name);
+  L.push("WHAT MOVES: the " + name + " " + m.what + ".");
+  var fromTo = Object.keys(m.from).map(function(k){ return k + ": " + m.from[k] + " → " + m.to[k]; }).join("; ");
+  L.push("FROM → TO: " + fromTo + ".");
+  L.push("");
+  L.push("TIMING");
+  if(ez.kind === "spring")
+    L.push("- Duration: " + s.D + " ms. This is the settle time of a physical spring (stiffness " + ez.sim.k + ", damping " + ez.sim.c + ", mass " + ez.sim.m + ", zero initial velocity), measured by simulation as the moment it stays within 0.1% of the target.");
+  else
+    L.push("- Duration: " + s.D + " ms.");
+  L.push("- Delay before start: " + t.delay + " ms.");
+  if(s.stagger)
+    L.push("- Stagger: " + t.count + " list items enter one after another, each starting " + t.stagger + " ms after the previous. The first starts at " + t.delay + " ms, the last starts at " + (t.delay + (t.count-1)*t.stagger) + " ms and finishes at " + s.total + " ms.");
+  else if(t.count > 1)
+    L.push("- " + t.count + " items all start together (stagger 0 ms).");
+  L.push("");
+  L.push("EASING");
+  if(ez.kind === "spring"){
+    L.push("- Spring: stiffness " + ez.sim.k + ", damping " + ez.sim.c + ", mass " + ez.sim.m + " (damping ratio " + round(ez.sim.zeta,3) + ").");
+    L.push("- In CSS/WAAPI use this sampled spring: " + ez.css);
+    L.push("- In a spring-capable library (Framer Motion, react-spring, SwiftUI, Compose) use the spring parameters directly instead of a fixed duration.");
+  } else {
+    L.push("- " + ez.css + (PRESETS[ez.curve.preset] ? " (" + label + ")" : " (custom curve)") + ".");
+  }
+  L.push("- Character: " + ch.text + ".");
+  L.push("- It reaches half of the distance at " + Math.round(ch.a.t50*s.D) + " ms (" + pct(ch.a.t50) + " of the duration).");
+  if(ch.a.overshoot > 0.005) L.push("- Peak overshoot occurs at " + Math.round(ch.a.tPeak*s.D) + " ms.");
+  L.push("");
+  L.push("REDUCED MOTION (required)");
+  if(m.reduced === "instant")
+    L.push("- When prefers-reduced-motion: reduce is set, do not animate the height: show the final open/closed state immediately.");
+  else
+    L.push("- When prefers-reduced-motion: reduce is set, drop all movement and scaling" + (s.stagger ? " and the stagger" : "") + ": fade opacity 0 → 1 over 150 ms, linear, after the same " + t.delay + " ms delay.");
+  L.push("");
+  L.push("IMPLEMENTATION RULES");
+  if(m.id === "expand")
+    L.push("- Animate height 0 → auto without measuring every frame: use a grid wrapper (grid-template-rows 0fr → 1fr, child min-height: 0; overflow: hidden), or WAAPI height 0 → scrollHeight and clear the inline height when finished.");
+  else
+    L.push("- Animate only " + m.props.join(" and ") + " so the motion stays on the compositor; do not animate top/left/width/margin.");
+  L.push("- Use the exact easing value above; do not substitute a named easing keyword.");
+  L.push("- The animation must end exactly on the final state (" + Object.keys(m.to).map(function(k){ return k + ": " + m.to[k]; }).join("; ") + ") and leave no inline styles that block later interaction.");
+  L.push("- If the element is interrupted mid-animation, continue from its current value rather than jumping back to the start.");
+  if(s.D > 400) L.push("- Note: " + s.D + " ms is longer than the usual 400 ms ceiling for interface transitions; confirm this length is intended.");
+  if(other){
+    L.push("");
+    L.push("ALTERNATIVE CONSIDERED (do not implement unless asked): " + other.label + " — " + other.ez.css.slice(0, 120) + (other.ez.css.length > 120 ? "…" : "") + "; " + characterOf(other.ez).text + ".");
+  }
+  return L.join("\n");
+}
+
+function buildAll(st){
+  var key = st.compare ? st.active : "A";
+  var ez = makeEase(st.curves[key]);
+  var t = {dur:st.dur, delay:st.delay, stagger:st.stagger, count:st.count};
+  var m = motionDef(st.motion, st.dist);
+  var name = (st.name || "").trim() || "Panel";
+  var label = presetName(st.curves[key]);
+  var other = null;
+  if(st.compare){
+    var ok = key === "A" ? "B" : "A";
+    other = {label: presetName(st.curves[ok]), ez: makeEase(st.curves[ok])};
+  }
+  return {
+    key:key, label:label, ez:ez,
+    prompt: buildPrompt(ez, t, m, name, label, other),
+    css: buildCss(ez, t, m, name, label),
+    js: buildJs(ez, t, m, name, label),
+    framer: buildFramer(ez, t, m, name, label),
+    warnings: warningsFor(ez, t, st.motion)
+  };
+}
+/* PURE:END */
+
+/* ---------- state ---------- */
+var LS = "redline.tool.motion-lab.";
+function curveFromPreset(id){
+  var p = PRESETS[id];
+  if(p.kind === "spring") return {preset:id, kind:"spring", p:[0.33,1,0.68,1], k:p.k, c:p.c, m:p.m};
+  return {preset:id, kind:"bezier", p:p.p.slice(), k:170, c:26, m:1};
+}
+function defaults(){
+  return {
+    curves:{A:curveFromPreset("easeOutCubic"), B:curveFromPreset("spring:Default")},
+    active:"A", compare:false, slow:false,
+    dur:300, delay:0, stagger:40, count:5,
+    motion:"slide", name:"Panel", dist:24, tab:"prompt"
+  };
+}
+function clampN(v, lo, hi, def){ v = Number(v); if(!isFinite(v)) return def; return Math.min(hi, Math.max(lo, v)); }
+function validCurve(c, def){
+  if(!c || typeof c !== "object") return def;
+  var out = {preset: typeof c.preset === "string" ? c.preset : "custom", kind: c.kind === "spring" ? "spring" : "bezier"};
+  var p = Array.isArray(c.p) && c.p.length === 4 ? c.p : def.p;
+  out.p = [clampN(p[0],0,1,0.33), clampN(p[1],-0.6,1.6,1), clampN(p[2],0,1,0.68), clampN(p[3],-0.6,1.6,1)];
+  out.k = clampN(c.k,10,1000,170); out.c = clampN(c.c,1,100,26); out.m = clampN(c.m,0.1,10,1);
+  return out;
+}
+function load(){
+  var d = defaults(), raw = null;
+  try { raw = JSON.parse(localStorage.getItem(LS + "state") || "null"); } catch(e){ raw = null; }
+  if(!raw || typeof raw !== "object") return d;
+  d.curves.A = validCurve(raw.curves && raw.curves.A, d.curves.A);
+  d.curves.B = validCurve(raw.curves && raw.curves.B, d.curves.B);
+  d.active = raw.active === "B" ? "B" : "A";
+  d.compare = !!raw.compare;
+  d.slow = !!raw.slow;
+  d.dur = clampN(raw.dur,50,2000,300);
+  d.delay = clampN(raw.delay,0,1000,0);
+  d.stagger = clampN(raw.stagger,0,300,40);
+  d.count = Math.round(clampN(raw.count,1,12,5));
+  d.motion = ["slide","rise","fade","scale","expand"].indexOf(raw.motion) >= 0 ? raw.motion : "slide";
+  d.name = typeof raw.name === "string" ? raw.name.slice(0,40) : "Panel";
+  d.dist = Math.round(clampN(raw.dist,1,400,24));
+  d.tab = ["prompt","css","js","framer"].indexOf(raw.tab) >= 0 ? raw.tab : "prompt";
+  return d;
+}
+var saveTimer = 0;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function(){
+    try { localStorage.setItem(LS + "state", JSON.stringify(st)); } catch(e){ /* storage unavailable: keep working in memory */ }
+  }, 150);
+}
+
+var st = load();
+var eases = {A:null, B:null};
+var built = null;
+function editKey(){ return st.compare ? st.active : "A"; }
+function cur(){ return st.curves[editKey()]; }
+
+/* ---------- DOM helpers ---------- */
+var $ = function(id){ return document.getElementById(id); };
+var SVGNS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs, parent){
+  var e = document.createElementNS(SVGNS, tag);
+  for(var k in attrs) e.setAttribute(k, attrs[k]);
+  if(parent) parent.appendChild(e);
+  return e;
+}
+function el(tag, cls, parent, text){
+  var e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(text != null) e.textContent = text;
+  if(parent) parent.appendChild(e);
+  return e;
+}
+
+/* ---------- graph ---------- */
+var G = {x0:24, w:272, yTop:8, h:384, yMax:1.6, yMin:-0.6};
+function GX(x){ return G.x0 + x*G.w; }
+function GY(y){ return G.yTop + (G.yMax - y)*G.h/(G.yMax - G.yMin); }
+function invX(px){ return (px - G.x0)/G.w; }
+function invY(py){ return G.yMax - (py - G.yTop)*(G.yMax - G.yMin)/G.h; }
+function curvePath(fn, n){
+  var d = "";
+  for(var i=0;i<=n;i++){
+    var t = i/n, y = Math.max(G.yMin - 0.05, Math.min(G.yMax + 0.05, fn(t)));
+    d += (i ? "L" : "M") + GX(t).toFixed(1) + " " + GY(y).toFixed(1);
+  }
+  return d;
+}
+var graph = $("graph"), gLayer = {};
+(function buildGraphStatic(){
+  svgEl("rect", {"class":"unit", x:GX(0), y:GY(1), width:G.w, height:GY(0)-GY(1)}, graph);
+  [0.25,0.5,0.75].forEach(function(v){
+    svgEl("line", {"class":"grid", x1:GX(v), x2:GX(v), y1:GY(1), y2:GY(0)}, graph);
+    svgEl("line", {"class":"grid", x1:GX(0), x2:GX(1), y1:GY(v), y2:GY(v)}, graph);
+  });
+  [-0.5,1.5].forEach(function(v){ svgEl("line", {"class":"guide", x1:GX(0), x2:GX(1), y1:GY(v), y2:GY(v)}, graph); });
+  var t1 = svgEl("text", {"class":"lbl", x:GX(0)+3, y:GY(1)-4}, graph); t1.textContent = "1";
+  var t0 = svgEl("text", {"class":"lbl", x:GX(0)+3, y:GY(0)+12}, graph); t0.textContent = "0";
+  var tt = svgEl("text", {"class":"lbl", x:GX(1)-3, y:GY(0)+12, "text-anchor":"end"}, graph); tt.textContent = "time →";
+  gLayer.other = svgEl("path", {"class":"dim"}, graph);
+  gLayer.arm1 = svgEl("line", {"class":"arm"}, graph);
+  gLayer.arm2 = svgEl("line", {"class":"arm"}, graph);
+  gLayer.main = svgEl("path", {}, graph);
+  gLayer.dotOther = svgEl("circle", {"class":"dot", r:5}, graph);
+  gLayer.dotMain = svgEl("circle", {"class":"dot", r:5}, graph);
+  gLayer.h = [1,2].map(function(n){
+    var g = svgEl("g", {}, graph);
+    var hit = svgEl("circle", {"class":"hit", r:16}, g);
+    var c = svgEl("circle", {"class":"handle", r:7, tabindex:"0", role:"slider",
+      "aria-label":"Control point " + n + " (arrow keys move, Shift for larger steps)"}, g);
+    return {g:g, hit:hit, c:c, n:n};
+  });
+})();
+
+function renderGraph(){
+  var k = editKey(), ok = k === "A" ? "B" : "A", c = cur(), ez = eases[k];
+  gLayer.main.setAttribute("class", k === "A" ? "ca" : "cb");
+  gLayer.main.setAttribute("d", curvePath(ez.fn, ez.kind === "spring" ? 240 : 120));
+  if(st.compare){
+    gLayer.other.setAttribute("class", (ok === "A" ? "ca" : "cb") + " dim");
+    gLayer.other.setAttribute("d", curvePath(eases[ok].fn, eases[ok].kind === "spring" ? 240 : 120));
+    gLayer.other.removeAttribute("display");
+  } else gLayer.other.setAttribute("display","none");
+  gLayer.dotMain.setAttribute("fill", "var(--tool-curve-" + k.toLowerCase() + ")");
+  gLayer.dotOther.setAttribute("fill", "var(--tool-curve-" + ok.toLowerCase() + ")");
+  var bez = c.kind === "bezier";
+  [gLayer.arm1, gLayer.arm2].forEach(function(a){ a.setAttribute("display", bez ? "inline" : "none"); });
+  gLayer.h.forEach(function(h){ h.g.setAttribute("display", bez ? "inline" : "none"); });
+  if(bez){
+    var p = c.p;
+    svgAttrs(gLayer.arm1, {x1:GX(0), y1:GY(0), x2:GX(p[0]), y2:GY(p[1])});
+    svgAttrs(gLayer.arm2, {x1:GX(1), y1:GY(1), x2:GX(p[2]), y2:GY(p[3])});
+    gLayer.h.forEach(function(h, i){
+      var x = GX(p[i*2]), y = GY(p[i*2+1]);
+      svgAttrs(h.hit, {cx:x, cy:y}); svgAttrs(h.c, {cx:x, cy:y});
+      h.c.setAttribute("aria-valuetext", "x " + fmtN(p[i*2]) + ", y " + fmtN(p[i*2+1]));
+    });
+  }
+}
+function svgAttrs(e, a){ for(var k in a) e.setAttribute(k, a[k]); }
+
+function setDot(dot, t, fn, show){
+  if(!show){ dot.setAttribute("display","none"); return; }
+  dot.removeAttribute("display");
+  var y = Math.max(G.yMin, Math.min(G.yMax, fn(t)));
+  svgAttrs(dot, {cx:GX(t), cy:GY(y)});
+}
+
+/* dragging control points */
+var drag = null;
+function svgPoint(ev){
+  var m = graph.getScreenCTM();
+  if(!m) return null;
+  var pt = graph.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+  return pt.matrixTransform(m.inverse());
+}
+function setHandle(n, x, y){
+  var c = cur();
+  x = Math.round(Math.min(1, Math.max(0, x))*100)/100;
+  y = Math.round(Math.min(G.yMax, Math.max(G.yMin, y))*100)/100;
+  c.p[(n-1)*2] = x; c.p[(n-1)*2+1] = y;
+  c.preset = matchPreset(c.p);
+  changed(false);
+}
+function matchPreset(p){
+  for(var id in PRESETS){
+    var q = PRESETS[id];
+    if(q.kind === "bezier" && q.p[0] === p[0] && q.p[1] === p[1] && q.p[2] === p[2] && q.p[3] === p[3]) return id;
+  }
+  return "custom";
+}
+gLayer.h.forEach(function(h){
+  var start = function(ev){
+    ev.preventDefault();
+    drag = {n:h.n, id:ev.pointerId, g:h.g};
+    try { h.g.setPointerCapture(ev.pointerId); } catch(e){}
+    h.c.focus({preventScroll:true});
+  };
+  h.g.addEventListener("pointerdown", start);
+  h.g.addEventListener("pointermove", function(ev){
+    if(!drag || drag.id !== ev.pointerId) return;
+    var p = svgPoint(ev); if(!p) return;
+    setHandle(drag.n, invX(p.x), invY(p.y));
+  });
+  var end = function(ev){ if(drag && drag.id === ev.pointerId){ drag = null; } };
+  h.g.addEventListener("pointerup", end);
+  h.g.addEventListener("pointercancel", end);
+  h.c.addEventListener("keydown", function(ev){
+    var step = ev.shiftKey ? 0.1 : 0.01, c = cur(), i = (h.n-1)*2, dx = 0, dy = 0;
+    if(ev.key === "ArrowLeft") dx = -step; else if(ev.key === "ArrowRight") dx = step;
+    else if(ev.key === "ArrowUp") dy = step; else if(ev.key === "ArrowDown") dy = -step;
+    else return;
+    ev.preventDefault();
+    setHandle(h.n, c.p[i] + dx, c.p[i+1] + dy);
+  });
+});
+
+/* ---------- presets ---------- */
+function thumbPath(fn){
+  var d = "";
+  for(var i=0;i<=24;i++){
+    var t = i/24, y = fn(t);
+    d += (i ? "L" : "M") + (1 + t*14).toFixed(2) + " " + (13 - y*10).toFixed(2);
+  }
+  return d;
+}
+function presetButton(id, text, parent){
+  var b = el("button", "pbtn", parent);
+  b.type = "button"; b.dataset.preset = id; b.title = PRESETS[id].label;
+  var s = svgEl("svg", {viewBox:"0 0 16 16", "aria-hidden":"true"}, b);
+  svgEl("path", {d: thumbPath(makeEase(curveFromPreset(id)).fn)}, s);
+  el("span", "", b, text);
+  return b;
+}
+(function buildPresets(){
+  var box = $("presets");
+  var css = el("div", "wide", box);
+  CSS_PRESETS.forEach(function(p){ presetButton(p[0], p[0], css); });
+  el("span", "fam", box, "");
+  ["In","Out","InOut"].forEach(function(v){ el("span", "fam", box, v); });
+  FAMILIES.forEach(function(f){
+    el("span", "fam", box, f[0]);
+    ["In","Out","InOut"].forEach(function(v){ presetButton("ease" + v + f[0], v, box); });
+  });
+  var sp = el("div", "wide", box);
+  SPRINGS.forEach(function(s){ presetButton("spring:" + s[0], "Spring " + s[0].toLowerCase(), sp); });
+  box.addEventListener("click", function(ev){
+    var b = ev.target.closest(".pbtn"); if(!b) return;
+    var k = editKey();
+    var prev = st.curves[k];
+    var next = curveFromPreset(b.dataset.preset);
+    if(next.kind === "spring") next.p = prev.p.slice();
+    else { next.k = prev.k; next.c = prev.c; next.m = prev.m; }
+    st.curves[k] = next;
+    changed(true);
+  });
+})();
+
+/* ---------- controls wiring ---------- */
+function pair(rangeId, numId, key, lo, hi, isInt, onSet){
+  var r = $(rangeId), n = $(numId);
+  var apply = function(v, fromNum){
+    v = Number(v);
+    if(!isFinite(v)) return;
+    v = Math.min(hi, Math.max(lo, v));
+    if(isInt) v = Math.round(v);
+    onSet(v);
+    if(fromNum) r.value = v; else n.value = v;
+    changed(false);
+  };
+  r.addEventListener("input", function(){ apply(r.value, false); });
+  n.addEventListener("change", function(){ apply(n.value, true); n.value = Number(r.value); });
+}
+pair("dur","durN","dur",50,2000,true,function(v){ st.dur = v; });
+pair("delay","delayN","delay",0,1000,true,function(v){ st.delay = v; });
+pair("stagger","staggerN","stagger",0,300,true,function(v){ st.stagger = v; });
+pair("count","countN","count",1,12,true,function(v){ var re = v !== st.count; st.count = v; if(re) needCards = true; });
+pair("sk","skN","k",10,1000,true,function(v){ cur().k = v; cur().preset = "custom"; });
+pair("sc","scN","c",1,100,false,function(v){ cur().c = Math.round(v*10)/10; cur().preset = "custom"; });
+pair("sm","smN","m",0.1,10,false,function(v){ cur().m = Math.round(v*10)/10; cur().preset = "custom"; });
+
+["x1","y1","x2","y2"].forEach(function(id, i){
+  $(id).addEventListener("change", function(){
+    var v = Number(this.value), c = cur();
+    if(!isFinite(v)){ this.value = c.p[i]; return; }
+    v = i % 2 === 0 ? Math.min(1, Math.max(0, v)) : Math.min(G.yMax, Math.max(G.yMin, v));
+    c.p[i] = Math.round(v*1000)/1000;
+    c.preset = matchPreset(c.p);
+    changed(true);
+  });
+});
+function loadPaste(){
+  var raw = $("pasteIn").value.trim(), msg = $("pasteMsg");
+  msg.className = "msg"; msg.textContent = "";
+  if(!raw) return;
+  var named = PRESETS[raw] && PRESETS[raw].kind === "bezier" ? raw : null;
+  var nums = named ? PRESETS[named].p.slice() : (raw.replace(/^cubic-bezier\s*\(/i,"").replace(/\)\s*;?\s*$/,"").match(/-?\d*\.?\d+(?:e-?\d+)?/gi) || []).map(Number);
+  if(nums.length !== 4 || nums.some(function(v){ return !isFinite(v); })){
+    msg.className = "msg err";
+    msg.textContent = "Expected four numbers, e.g. cubic-bezier(0.33, 1, 0.68, 1) or a preset name like easeOutCubic.";
+    return;
+  }
+  if(nums[0] < 0 || nums[0] > 1 || nums[2] < 0 || nums[2] > 1){
+    msg.className = "msg err";
+    msg.textContent = "x1 and x2 must be between 0 and 1 (time cannot run backwards). Fix the 1st and 3rd numbers.";
+    return;
+  }
+  var clipped = nums[1] < G.yMin || nums[1] > G.yMax || nums[3] < G.yMin || nums[3] > G.yMax;
+  var c = cur();
+  c.kind = "bezier";
+  c.p = [nums[0], Math.min(G.yMax, Math.max(G.yMin, nums[1])), nums[2], Math.min(G.yMax, Math.max(G.yMin, nums[3]))];
+  c.preset = matchPreset(c.p);
+  if(clipped){ msg.className = "msg warn"; msg.textContent = "y values were limited to the editor range −0.6…1.6."; }
+  $("pasteIn").value = "";
+  changed(true);
+}
+$("pasteBtn").addEventListener("click", loadPaste);
+$("pasteIn").addEventListener("keydown", function(ev){ if(ev.key === "Enter"){ ev.preventDefault(); loadPaste(); } });
+
+$("elName").addEventListener("input", function(){ st.name = this.value.slice(0,40); changed(false); });
+$("motion").addEventListener("change", function(){ st.motion = this.value; changed(true); });
+$("dist").addEventListener("change", function(){ st.dist = Math.round(clampN(this.value,1,400,24)); this.value = st.dist; changed(false); });
+
+$("ab").addEventListener("click", function(ev){
+  var b = ev.target.closest("button[data-ab]"); if(!b) return;
+  st.active = b.dataset.ab; changed(true);
+});
+$("compare").addEventListener("click", function(){
+  st.compare = !st.compare;
+  if(!st.compare) st.active = "A";
+  needCards = true; changed(true);
+});
+$("slow").addEventListener("click", function(){
+  var now = performance.now();
+  if(play.on){ var el0 = elapsed(now); st.slow = !st.slow; play.t0 = now - el0/rate(); }
+  else st.slow = !st.slow;
+  changed(false);
+});
+$("loop").addEventListener("click", function(){
+  play.loop = !play.loop;
+  this.setAttribute("aria-pressed", String(play.loop));
+  if(play.loop && !play.on) startPlay();
+});
+$("play").addEventListener("click", function(){ startPlay(); });
+$("reset").addEventListener("click", function(){
+  var keepTab = st.tab;
+  st = defaults(); st.tab = keepTab;
+  stopPlay(); needCards = true;
+  $("pasteMsg").textContent = "";
+  changed(true);
+});
+document.addEventListener("keydown", function(ev){
+  if(ev.key !== " " || ev.repeat) return;
+  var t = ev.target, tag = t && t.tagName;
+  if(tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON" || (t && t.getAttribute && t.getAttribute("role") === "slider")) return;
+  ev.preventDefault(); startPlay();
+});
+
+/* ---------- preview ---------- */
+var needCards = true, lanes = [];
+function laneKeys(){ return st.compare ? ["A","B"] : ["A"]; }
+function buildCards(){
+  var box = $("cards"); box.textContent = ""; lanes = [];
+  var keys = laneKeys();
+  function card(title, sub, span){
+    var c = el("div", "card" + (span ? " span" : ""), box);
+    var h = el("h3", "", c, title); el("span", "", h, sub);
+    return el("div", "lanes" + (st.compare && span ? " cols" : ""), c);
+  }
+  function lane(parent, key){
+    var l = el("div", "lane " + key.toLowerCase() + (st.compare ? " tagged" : ""), parent);
+    if(st.compare) el("span", "tag", l, key);
+    return l;
+  }
+  var c1 = card("Slide", "translateX");
+  keys.forEach(function(k){
+    var l = lane(c1, k), tr = el("div", "track", l), o = el("div", "obj", tr);
+    lanes.push({key:k, i:0, apply:function(p){ o.style.left = "calc(" + p + " * (100% - 20px))"; }});
+  });
+  var c2 = card("Opacity", "0 → 1");
+  keys.forEach(function(k){
+    var l = lane(c2, k), b = el("div", "box", l), o = el("div", "obj", b);
+    lanes.push({key:k, i:0, apply:function(p){ o.style.opacity = Math.max(0, Math.min(1, p)); }});
+  });
+  var c3 = card("Scale", "0.3 → 1 (exaggerated)");
+  keys.forEach(function(k){
+    var l = lane(c3, k), b = el("div", "box", l), o = el("div", "obj", b);
+    lanes.push({key:k, i:0, apply:function(p){ o.style.transform = "scale(" + Math.max(0, 0.3 + 0.7*p) + ")"; }});
+  });
+  var c4 = card("Height", "0 → auto");
+  keys.forEach(function(k){
+    var l = lane(c4, k), a = el("div", "acc", l), hd = el("div", "head", a);
+    el("span", "", hd, "Details"); el("span", "", hd, "▾");
+    var body = el("div", "body", a);
+    for(var i=0;i<3;i++){ var ln = el("i", "", body); ln.style.width = (92 - i*18) + "%"; }
+    lanes.push({key:k, i:0, apply:function(p){ body.style.height = Math.max(0, p*42) + "px"; }});
+  });
+  var c5 = card("Stagger", st.count + " items, rise + fade", true);
+  keys.forEach(function(k){
+    var l = lane(c5, k), list = el("div", "list", l);
+    for(var i=0;i<st.count;i++){
+      (function(i){
+        var o = el("div", "obj", list); o.style.width = (96 - (i % 4)*12) + "%";
+        lanes.push({key:k, i:i, apply:function(p){
+          o.style.opacity = Math.max(0, Math.min(1, p));
+          o.style.transform = "translateY(" + ((1-p)*14).toFixed(2) + "px)";
+        }});
+      })(i);
+    }
+  });
+  needCards = false;
+}
+
+var play = {on:false, loop:false, t0:0, raf:0};
+function rate(){ return st.slow ? 0.25 : 1; }
+function elapsed(now){ return (now - play.t0)*rate(); }
+function durOf(k){ var e = eases[k]; return e.kind === "spring" ? e.durMs : st.dur; }
+function totalMs(){
+  var s = st.count > 1 ? st.stagger : 0, m = 0;
+  laneKeys().forEach(function(k){ m = Math.max(m, durOf(k)); });
+  return st.delay + (st.count-1)*s + m;
+}
+function progressFor(k, i, ms){
+  var s = st.count > 1 ? st.stagger : 0, D = durOf(k);
+  return Math.max(0, Math.min(1, (ms - st.delay - i*s)/D));
+}
+function frame(ms){
+  lanes.forEach(function(l){ l.apply(eases[l.key].fn(progressFor(l.key, l.i, ms))); });
+  var k = editKey(), ok = k === "A" ? "B" : "A";
+  var tk = progressFor(k, 0, ms);
+  setDot(gLayer.dotMain, tk, eases[k].fn, play.on && ms >= st.delay);
+  setDot(gLayer.dotOther, progressFor(ok, 0, ms), eases[ok].fn, play.on && st.compare && ms >= st.delay);
+  $("clock").textContent = Math.round(Math.min(ms, totalMs())) + " / " + totalMs() + " ms";
+}
+function tick(now){
+  var ms = elapsed(now), T = totalMs();
+  if(ms > T + (play.loop ? 450 : 0)){
+    if(play.loop){ play.t0 = now; ms = 0; }
+    else { stopPlay(); return; }
+  }
+  frame(ms);
+  play.raf = requestAnimationFrame(tick);
+}
+function startPlay(){
+  cancelAnimationFrame(play.raf);
+  play.on = true; play.t0 = performance.now();
+  $("play").textContent = "Replay";
+  $("hint").hidden = true;
+  frame(0);
+  play.raf = requestAnimationFrame(tick);
+}
+function stopPlay(){
+  cancelAnimationFrame(play.raf);
+  play.on = false;
+  $("play").textContent = "Play";
+  frame(Infinity);
+}
+
+/* ---------- output ---------- */
+var FMT_NAMES = {prompt:"Prompt", css:"CSS", js:"JS (WAAPI)", framer:"Framer Motion"};
+$("tabs").addEventListener("click", function(ev){
+  var b = ev.target.closest(".tab"); if(!b) return;
+  st.tab = b.dataset.fmt; save(); renderOutput();
+});
+$("tabs").addEventListener("keydown", function(ev){
+  if(ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
+  var order = ["prompt","css","js","framer"], i = order.indexOf(st.tab);
+  i = (i + (ev.key === "ArrowRight" ? 1 : 3)) % 4;
+  st.tab = order[i]; save(); renderOutput();
+  document.querySelector('.tab[data-fmt="' + st.tab + '"]').focus();
+});
+function renderOutput(){
+  document.querySelectorAll(".tab").forEach(function(t){
+    var on = t.dataset.fmt === st.tab;
+    t.setAttribute("aria-selected", String(on));
+    t.tabIndex = on ? 0 : -1;
+    t.querySelector("small").textContent = built[t.dataset.fmt].length;
+  });
+  $("out").textContent = built[st.tab];
+  $("outWhat").textContent = FMT_NAMES[st.tab] + " · " + built[st.tab].length + " chars · " + (st.compare ? "curve " + built.key + " · " : "") + built.label;
+  $("copied").textContent = "";
+}
+function copyText(text){
+  var done = function(ok){
+    $("copied").textContent = ok ? "Copied" : "Copy failed: select the text and press Ctrl+C.";
+    $("copied").style.color = ok ? "" : "var(--danger)";
+    clearTimeout(copyText.t); copyText.t = setTimeout(function(){ $("copied").textContent = ""; }, 1800);
+  };
+  var fallback = function(){
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.setAttribute("readonly",""); ta.style.position = "fixed"; ta.style.opacity = "0"; ta.style.left = "-9999px";
+    document.body.appendChild(ta); ta.select();
+    var ok = false; try { ok = document.execCommand("copy"); } catch(e){ ok = false; }
+    document.body.removeChild(ta); done(ok);
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){ done(true); }, fallback);
+  } else fallback();
+}
+$("copy").addEventListener("click", function(){ copyText(built[st.tab]); });
+
+/* ---------- render ---------- */
+function syncInputs(){
+  var c = cur(), bez = c.kind === "bezier";
+  $("bezierFields").hidden = !bez;
+  $("springFields").hidden = bez;
+  var ae = document.activeElement;
+  ["x1","y1","x2","y2"].forEach(function(id, i){ if(ae !== $(id)) $(id).value = fmtN(c.p[i]); });
+  [["sk","skN",c.k],["sc","scN",c.c],["sm","smN",c.m],["dur","durN",st.dur],["delay","delayN",st.delay],["stagger","staggerN",st.stagger],["count","countN",st.count]]
+    .forEach(function(a){ if(ae !== $(a[0])) $(a[0]).value = a[2]; if(ae !== $(a[1])) $(a[1]).value = a[2]; });
+  if(ae !== $("elName")) $("elName").value = st.name;
+  $("motion").value = st.motion;
+  $("dist").value = st.dist;
+  $("distWrap").hidden = !(st.motion === "slide" || st.motion === "rise");
+  var k = editKey(), ez = eases[k];
+  $("curveName").textContent = (st.compare ? k + " · " : "") + presetName(c);
+  $("curveSub").textContent = bez ? ez.css : ez.durMs + " ms · " + ez.points.length + "-pt linear()";
+  var durRow = $("durRow");
+  var spring = ez.kind === "spring";
+  durRow.classList.toggle("off", spring);
+  $("dur").disabled = spring; $("durN").disabled = spring;
+  durRow.title = spring ? "Spring duration comes from its physics: " + ez.durMs + " ms" : "";
+  if(spring){
+    $("stSettle").textContent = ez.sim.settled ? ez.durMs + " ms" : "> 10 s";
+    $("stZeta").textContent = round(ez.sim.zeta, 3);
+    $("stOver").textContent = ez.sim.overshoot > 0.0005 ? pct(ez.sim.overshoot) : "none";
+    $("springMsg").className = "msg";
+    $("springMsg").textContent = "Duration slider is off: a spring's length comes from its physics (" + ez.durMs + " ms to settle within 0.1%).";
+  }
+  $("ab").hidden = !st.compare;
+  document.querySelectorAll("#ab button").forEach(function(b){ b.setAttribute("aria-pressed", String(b.dataset.ab === k)); });
+  $("compare").setAttribute("aria-pressed", String(st.compare));
+  $("slow").setAttribute("aria-pressed", String(st.slow));
+  $("loop").setAttribute("aria-pressed", String(play.loop));
+  document.querySelectorAll(".pbtn").forEach(function(b){ b.setAttribute("aria-pressed", String(b.dataset.preset === c.preset)); });
+}
+function renderWarnings(){
+  var box = $("warns"); box.textContent = "";
+  built.warnings.forEach(function(w){ el("div", "note" + (w.bad ? " bad" : ""), box, w.text); });
+}
+function changed(){
+  eases.A = makeEase(st.curves.A);
+  eases.B = makeEase(st.curves.B);
+  built = buildAll(st);
+  if(needCards) buildCards();
+  syncInputs();
+  renderGraph();
+  renderWarnings();
+  renderOutput();
+  if(!play.on) frame(Infinity);
+  save();
+}
+
+changed();
+})();
+</script>
+<!--
+Motion Lab — usage
+1. Pick a preset (CSS keywords, easings.net families, or a spring) or drag the two control points.
+   Handles are keyboard focusable: arrows move 0.01, Shift+arrows 0.1. You can paste a cubic-bezier().
+2. Springs are simulated (m·x'' + c·x' + k·(x−1) = 0, RK4 at 1 ms); the settle time within 0.1% becomes
+   the duration, and the curve is exported as a CSS linear() easing plus a Framer Motion spring object.
+3. Set duration, delay, stagger and item count; choose the element name and motion type.
+4. Play runs the preview once, Loop repeats, 0.25× slows it down. Nothing plays until you ask.
+5. Compare A/B edits two curves side by side; the output follows the curve being edited.
+6. Copy the Prompt, CSS, JS (Web Animations API) or Framer Motion output. Every format includes a
+   prefers-reduced-motion safe variant. State is kept in localStorage (redline.tool.motion-lab.*).
+-->
+</body>
+</html>

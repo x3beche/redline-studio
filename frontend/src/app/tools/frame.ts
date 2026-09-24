@@ -13,6 +13,8 @@ const TOKENS: [string, string][] = [
   ['--accent', '--accent'],
   ['--accent-ink', '--ink-bright'],
   ['--danger', '--danger'],
+  ['--warn', '--warn'],
+  ['--ok', '--ok'],
 ];
 
 /** A tool that is a page of its own under `public/tools/`, self-contained

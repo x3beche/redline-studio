@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Form Builder — fields, rules, schema and component code</title>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#ffffff;
+  --sunken:#e4e9ee;
+  --ink:#16202a;
+  --ink-soft:#5b6b7a;
+  --line:#c8d2db;
+  --line-soft:#dde4ea;
+  --accent:#1f4ed8;
+  --accent-ink:#ffffff;
+  --danger:#c0392b;
+  --warn:#a86500;
+  --ok:#1e7a46;
+  --fill-alpha:0.16;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f151b;
+    --surface:#161f27;
+    --sunken:#111920;
+    --ink:#e4ebf1;
+    --ink-soft:#8ea0b0;
+    --line:#2b3945;
+    --line-soft:#212c36;
+    --accent:#6d8dff;
+    --accent-ink:#0f151b;
+    --danger:#e57373;
+    --warn:#e0a84a;
+    --ok:#5cc28a;
+    --fill-alpha:0.30;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f151b;
+  --surface:#161f27;
+  --sunken:#111920;
+  --ink:#e4ebf1;
+  --ink-soft:#8ea0b0;
+  --line:#2b3945;
+  --line-soft:#212c36;
+  --accent:#6d8dff;
+  --accent-ink:#0f151b;
+  --danger:#e57373;
+  --warn:#e0a84a;
+  --ok:#5cc28a;
+  --fill-alpha:0.30;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+/* top bar */
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--surface);flex:none}
+.brand{font-weight:600;margin:0;font-size:15px;letter-spacing:-0.01em}
+.brand span{color:var(--ink-soft);font-weight:400}
+.formmeta{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
+.formmeta label{display:flex;align-items:center;gap:6px;color:var(--ink-soft)}
+.formmeta input{width:130px}
+.actions{display:flex;gap:6px;margin-left:auto;align-items:center;flex-wrap:wrap}
+.status{color:var(--ink-soft);font-size:12px;min-height:1em}
+.status.ok{color:var(--ok)}
+
+.btn{padding:4px 10px;border:1px solid var(--line);border-radius:4px;background:var(--surface);cursor:pointer;font-size:13px;white-space:nowrap}
+.btn:hover{border-color:var(--ink-soft)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-link{border:0;background:none;color:var(--accent);cursor:pointer;padding:0 2px;text-decoration:underline}
+.inp,.formmeta input,.insp input:not([type=checkbox]):not([type=radio]),.insp select,.insp textarea{
+  padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--sunken);color:var(--ink);font-size:13px;min-width:0
+}
+.insp textarea{resize:vertical;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
+
+/* layout */
+.wrap{flex:1;min-height:0;display:grid;gap:10px;padding:10px;
+  grid-template-columns:136px minmax(0,1fr) 290px minmax(0,1.3fr);
+  grid-template-areas:"pal list insp right"}
+.wrap>*{min-width:0;min-height:0}
+.pal{grid-area:pal}.listcol{grid-area:list}.insp{grid-area:insp}.right{grid-area:right}
+@media (min-width:1180px){
+  .pal,.listcol,.insp{overflow:auto}
+  .right{display:flex;flex-direction:column;gap:10px}
+  .right>.card{margin:0;min-height:0;display:flex;flex-direction:column}
+  .right>.pv-wrap{flex:1 1 55%;overflow:auto}
+  .right>.outcard{flex:1 1 45%;min-height:240px}
+  .outcard .out{flex:1;max-height:none;min-height:0}
+}
+@media (max-width:1179px){
+  body{height:auto;display:block}
+  .wrap{grid-template-columns:minmax(0,1fr) 290px;grid-template-areas:"pal pal" "list insp" "right right"}
+}
+@media (max-width:719px){
+  .wrap{grid-template-columns:minmax(0,1fr);grid-template-areas:"pal" "list" "insp" "right";padding:8px;gap:8px}
+  .formmeta input{width:110px}
+}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.card+.card{margin-top:10px}
+.head{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line-soft)}
+.head h2{margin:0;font-size:13px;font-weight:600}
+.head .sub{color:var(--ink-soft);font-size:12px;margin-left:auto;text-align:right}
+
+/* palette */
+.types{list-style:none;margin:0;padding:6px;display:flex;flex-direction:column;gap:2px}
+@media (max-width:1179px){.types{flex-direction:row;flex-wrap:wrap}}
+.ptype{display:flex;align-items:center;gap:7px;width:100%;padding:4px 6px;border:1px solid transparent;border-radius:4px;background:none;cursor:grab;text-align:left;font-size:13px}
+.ptype:hover{background:var(--sunken);border-color:var(--line-soft)}
+.ptype .ic{width:32px;flex:none;text-align:center;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-soft);border:1px solid var(--line-soft);border-radius:3px;padding:0 2px;background:var(--sunken)}
+@media (max-width:1179px){.ptype{width:auto;border-color:var(--line-soft)}}
+.pal-hint{margin:0;padding:4px 10px 8px;color:var(--ink-soft);font-size:12px}
+
+/* field list */
+.fields{list-style:none;margin:0;padding:6px;display:flex;flex-direction:column;gap:3px;min-height:120px;position:relative}
+.fields.dropping{outline:2px dashed var(--accent);outline-offset:-4px}
+.frow{display:flex;align-items:center;gap:6px;padding:4px 4px 4px 2px;border:1px solid var(--line-soft);border-radius:4px;background:var(--surface);cursor:pointer}
+.frow:hover{border-color:var(--line)}
+.frow.sel{border-color:var(--accent);background:color-mix(in srgb,var(--accent) calc(var(--fill-alpha)*60%),var(--surface))}
+.frow.dragging{opacity:.45}
+.frow.section{background:var(--sunken)}
+.handle{cursor:grab;touch-action:none;color:var(--ink-soft);padding:2px 3px;border:0;background:none;font-size:14px;line-height:1;letter-spacing:-2px}
+.handle:active{cursor:grabbing}
+.tbadge{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-soft);border:1px solid var(--line-soft);border-radius:3px;padding:0 4px;flex:none;min-width:58px;text-align:center}
+.fmain{flex:1;min-width:0;display:flex;flex-direction:column}
+.flabel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fname{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.flags{display:flex;gap:3px;flex:none}
+.flag{font-size:10px;padding:0 4px;border-radius:3px;border:1px solid var(--line);color:var(--ink-soft);font-family:"IBM Plex Mono",ui-monospace,monospace}
+.flag.req{color:var(--danger);border-color:currentColor}
+.flag.cond{color:var(--accent);border-color:currentColor}
+.rbtns{display:flex;gap:1px;flex:none}
+.ib{border:0;background:none;color:var(--ink-soft);cursor:pointer;padding:2px 4px;border-radius:3px;font-size:12px;line-height:1}
+.ib:hover{background:var(--sunken);color:var(--ink)}
+.ib.del:hover{color:var(--danger)}
+.dropline{height:2px;background:var(--accent);border-radius:1px;margin:-1px 0;pointer-events:none}
+.empty{padding:18px 12px;color:var(--ink-soft);text-align:center;border:1px dashed var(--line);border-radius:4px;margin:4px}
+.empty b{color:var(--ink);font-weight:500}
+.undo{display:flex;gap:8px;align-items:center;padding:4px 10px 8px;color:var(--ink-soft);font-size:12px}
+@media (max-width:480px){.tbadge{display:none}.rbtns .ib.dup{display:none}}
+
+/* inspector */
+.insp-body{padding:8px 10px 10px;display:flex;flex-direction:column;gap:7px}
+.insp h3{margin:6px 0 0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);border-top:1px solid var(--line-soft);padding-top:8px}
+.ir{display:flex;flex-direction:column;gap:2px}
+.ir>span{color:var(--ink-soft);font-size:12px}
+.ir input,.ir select,.ir textarea{width:100%}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.chk{display:flex;align-items:center;gap:6px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg label{padding:2px 9px;cursor:pointer;color:var(--ink-soft)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){background:var(--accent);color:var(--accent-ink)}
+.seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+.note{font-size:12px;color:var(--ink-soft);margin:0}
+.note.bad{color:var(--danger)}
+.note.warn{color:var(--warn)}
+
+/* preview */
+.pv-wrap{container-type:inline-size}
+.pv{padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+@container (max-width:440px){.pv{grid-template-columns:1fr}.pv .pf{grid-column:1/-1}}
+.pf{display:flex;flex-direction:column;gap:3px;grid-column:1/-1;min-width:0}
+.pf.half{grid-column:span 1}
+.pf[hidden]{display:none}
+.pf>label,.pf legend{font-weight:500}
+.pf .req{color:var(--danger)}
+.pf input:not([type=checkbox]):not([type=radio]),.pf select,.pf textarea{
+  width:100%;padding:5px 7px;border:1px solid var(--line);border-radius:4px;background:var(--sunken);color:var(--ink);font-size:13px
+}
+.pf select[multiple]{min-height:70px}
+.pf [aria-invalid="true"]{border-color:var(--danger)!important}
+.pf fieldset{border:0;margin:0;padding:0;min-width:0}
+.pf .opts{display:flex;flex-wrap:wrap;gap:4px 14px}
+.pf .inline{display:flex;align-items:center;gap:7px;font-weight:400}
+.pf .help{color:var(--ink-soft);font-size:12px;margin:0}
+.pf .err{color:var(--danger);font-size:12px;margin:0}
+.pf.sec{border-bottom:1px solid var(--line-soft);padding-bottom:3px;margin-top:4px}
+.pf.sec h3{margin:0;font-size:14px}
+.pv-actions{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pv-result{grid-column:1/-1;margin:0;font-size:12px}
+.pv-result.ok{color:var(--ok)}
+.pv-result.bad{color:var(--danger)}
+.pv-result pre{margin:4px 0 0;padding:8px;background:var(--sunken);border-radius:4px;color:var(--ink);overflow:auto;max-height:160px;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
+.switch{appearance:none;-webkit-appearance:none;width:30px;height:17px;border-radius:9px;background:var(--line);position:relative;cursor:pointer;flex:none;margin:0}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:var(--surface);transition:left .12s}
+.switch:checked{background:var(--accent)}
+.switch:checked::after{left:15px}
+
+/* output */
+.tabs{display:flex;gap:2px;flex-wrap:wrap;align-items:flex-end;padding:6px 8px 0;border-bottom:1px solid var(--line-soft)}
+.tab{padding:4px 9px;border:0;background:none;color:var(--ink-soft);cursor:pointer;font-size:13px;border-bottom:2px solid transparent}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:500}
+.out-foot{display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.count{color:var(--ink-soft);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
+.copied{color:var(--ok);font-size:12px}
+.out{margin:0;padding:10px 12px;max-height:520px;overflow:auto;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;line-height:1.5;white-space:pre;tab-size:2}
+.out.wrapit{white-space:pre-wrap;word-break:break-word}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <h1 class="brand">Form Builder <span>— fields and rules in, schema and component code out</span></h1>
+  <div class="formmeta">
+    <label>Form name <input id="formName" class="mono" value="Contact" spellcheck="false" aria-describedby="formNameNote"></label>
+    <label>Submit label <input id="submitLabel" value="Submit"></label>
+    <span id="formNameNote" class="status"></span>
+  </div>
+  <div class="actions">
+    <span id="status" class="status" role="status" aria-live="polite"></span>
+    <button class="btn" id="sampleBtn" type="button">Load sample</button>
+    <button class="btn" id="clearBtn" type="button">Clear</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="pal card" aria-labelledby="palTitle">
+    <div class="head"><h2 id="palTitle">Add field</h2></div>
+    <ul class="types" id="types"></ul>
+    <p class="pal-hint">Click to add below the selected field, or drag into the form.</p>
+  </section>
+
+  <section class="listcol card" aria-labelledby="listTitle">
+    <div class="head"><h2 id="listTitle">Form fields</h2><span class="sub" id="listSub"></span></div>
+    <ul class="fields" id="fields" aria-describedby="listHelp"></ul>
+    <div class="undo" id="undo" hidden></div>
+    <p class="pal-hint" id="listHelp">Drag the ⋮⋮ handle to reorder. Keyboard: focus a row, Alt+↑/↓ moves it, Delete removes it.</p>
+  </section>
+
+  <section class="insp card" aria-labelledby="inspTitle">
+    <div class="head"><h2 id="inspTitle">Field settings</h2><span class="sub" id="inspSub"></span></div>
+    <div class="insp-body" id="insp"></div>
+  </section>
+
+  <section class="right">
+    <div class="card pv-wrap" aria-labelledby="pvTitle">
+      <div class="head"><h2 id="pvTitle">Live preview</h2><span class="sub">validation runs on submit, then as you type</span></div>
+      <form class="pv" id="pv" novalidate></form>
+    </div>
+    <div class="card outcard" aria-labelledby="outTitle">
+      <div class="head"><h2 id="outTitle">Output</h2></div>
+      <div class="tabs" role="tablist" id="tabs"></div>
+      <div class="out-foot">
+        <button class="btn btn-primary" id="copyBtn" type="button">Copy</button>
+        <span class="count" id="count"></span>
+        <span class="copied" id="copied" role="status" aria-live="polite"></span>
+      </div>
+      <pre class="out" id="out" tabindex="0" role="tabpanel" aria-labelledby="outTitle"></pre>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+/* ---------- field type catalogue ---------- */
+var TYPES = [
+  {t:"text",label:"Text",ic:"Aa"},{t:"email",label:"Email",ic:"@"},{t:"password",label:"Password",ic:"***"},
+  {t:"number",label:"Number",ic:"12"},{t:"tel",label:"Phone",ic:"tel"},{t:"url",label:"URL",ic:"url"},
+  {t:"textarea",label:"Textarea",ic:"¶"},{t:"select",label:"Select",ic:"▾"},{t:"multiselect",label:"Multi-select",ic:"▾▾"},
+  {t:"radio",label:"Radio group",ic:"◉"},{t:"checkbox",label:"Checkbox",ic:"☑"},{t:"switch",label:"Switch",ic:"on"},
+  {t:"date",label:"Date",ic:"dd"},{t:"time",label:"Time",ic:"hh"},{t:"file",label:"File",ic:"file"},
+  {t:"hidden",label:"Hidden",ic:"—"},{t:"section",label:"Section heading",ic:"H"}
+];
+var TYPE_BY = {}; TYPES.forEach(function(x){ TYPE_BY[x.t] = x; });
+function setOf(a){ var o = {}; a.forEach(function(k){ o[k] = true; }); return o; }
+var LEN = setOf(["text","email","password","tel","url","textarea"]);
+var PAT = setOf(["text","email","password","tel","url","textarea"]);
+var OPT = setOf(["select","multiselect","radio"]);
+var PLACEHOLDER = setOf(["text","email","password","number","tel","url","textarea","select"]);
+var RANGE = setOf(["number","date","time","multiselect"]);
+var MATCHABLE = setOf(["text","email","password","tel","url","textarea","number","date","time","hidden"]);
+
+/* ---------- pure helpers (also exercised in node) ---------- */
+function toCamel(s){
+  var parts = String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/ı/g, "i").replace(/([a-z0-9])([A-Z])/g, "$1 $2").split(/[^A-Za-z0-9]+/).filter(Boolean);
+  if (!parts.length) return "";
+  var out = parts.map(function(p, i){
+    p = p.toLowerCase();
+    return i === 0 ? p : p.charAt(0).toUpperCase() + p.slice(1);
+  }).join("");
+  if (/^[0-9]/.test(out)) out = "field" + out;
+  return out;
+}
+function toPascal(s){ var c = toCamel(s); return c ? c.charAt(0).toUpperCase() + c.slice(1) : ""; }
+function uniqueName(base, fields, selfId){
+  base = base || "field";
+  var taken = {};
+  fields.forEach(function(f){ if (f.id !== selfId && f.type !== "section") taken[f.name] = true; });
+  if (!taken[base]) return base;
+  var n = 2; while (taken[base + n]) n++;
+  return base + n;
+}
+function num(v){ if (v === "" || v == null) return null; var n = Number(v); return isFinite(n) ? n : null; }
+function int(v){ var n = num(v); return n == null || n < 0 ? null : Math.floor(n); }
+function isDate(v){ return /^\d{4}-\d{2}-\d{2}$/.test(v || ""); }
+function isTime(v){ return /^\d{2}:\d{2}(:\d{2})?$/.test(v || ""); }
+function patternError(p){
+  if (!p) return null;
+  try { new RegExp(p); return null; } catch (e) { return e.message.replace(/^Invalid regular expression: /, ""); }
+}
+function q(s){ return JSON.stringify(String(s)); }
+function reLit(p){ return "/" + p.replace(/\\?\//g, "\\/") + "/"; }
+function parseOptions(f){
+  var seen = {}, out = [];
+  String(f.options || "").split(/\n/).forEach(function(line){
+    line = line.trim(); if (!line) return;
+    var i = line.indexOf("|"), v, l;
+    if (i >= 0){ v = line.slice(0, i).trim(); l = line.slice(i + 1).trim() || v; } else { v = line; l = line; }
+    if (!v || seen[v]) return;
+    seen[v] = true; out.push({value:v, label:l});
+  });
+  return out;
+}
+function kindOf(f){
+  if (f.type === "multiselect") return "array";
+  if (OPT[f.type]) return parseOptions(f).length ? "enum" : "string";
+  if (f.type === "number") return "number";
+  if (f.type === "checkbox" || f.type === "switch") return "boolean";
+  if (f.type === "file") return "file";
+  return "string";
+}
+function lbl(f){ return (f.label || "").trim() || f.name || "This field"; }
+function isReq(f){ return !!f.required && f.type !== "hidden" && f.type !== "section"; }
+function dataFields(fields){ return fields.filter(function(f){ return f.type !== "section"; }); }
+function byId(fields, id){ for (var i = 0; i < fields.length; i++) if (fields[i].id === id) return fields[i]; return null; }
+function activeCond(f, fields){
+  if (!f.condField) return null;
+  var c = byId(fields, f.condField);
+  if (!c || c === f || c.type === "section" || c.type === "file") return null;
+  if (f.condValue === "" || f.condValue == null) return null;
+  return {ctrl:c, value:String(f.condValue)};
+}
+function matchTarget(f, fields){
+  if (!f.match || !MATCHABLE[f.type]) return null;
+  var t = byId(fields, f.match);
+  return t && t !== f && t.type !== "section" ? t : null;
+}
+function msg(f, kind, a, b){
+  if (f.message && String(f.message).trim()) return String(f.message).trim();
+  var L = lbl(f);
+  switch (kind){
+    case "required": return (f.type === "checkbox" || f.type === "switch") ? "Check \u201c" + L + "\u201d to continue" : L + " is required";
+    case "email": return "Enter a valid email address";
+    case "url": return "Enter a valid URL, including https://";
+    case "minLength": return L + " must be at least " + a + " characters";
+    case "maxLength": return L + " must be at most " + a + " characters";
+    case "pattern": return L + " has an invalid format";
+    case "nan": return L + " must be a number";
+    case "min": return L + " must be at least " + a;
+    case "max": return L + " must be at most " + a;
+    case "dateMin": return L + " must be on or after " + a;
+    case "dateMax": return L + " must be on or before " + a;
+    case "timeMin": return L + " must be at or after " + a;
+    case "timeMax": return L + " must be at or before " + a;
+    case "countMin": return "Select at least " + a + " option" + (a === 1 ? "" : "s") + " for " + L;
+    case "countMax": return "Select at most " + a + " option" + (a === 1 ? "" : "s") + " for " + L;
+    case "match": return L + " must match " + lbl(b);
+    case "file": return "Upload a valid file";
+  }
+  return L + " is invalid";
+}
+/* JS literal of a condition value, typed by the controlling field */
+function condLiteral(c, value){
+  var k = kindOf(c);
+  if (k === "boolean") return value === "true" ? "true" : "false";
+  if (k === "number") { var n = num(value); return n == null ? "undefined" : String(n); }
+  return q(value);
+}
+function condExpr(cond, obj){
+  var k = kindOf(cond.ctrl), ref = obj + "." + cond.ctrl.name;
+  if (k === "array") return ref + "?.includes(" + q(cond.value) + ")";
+  return ref + " === " + condLiteral(cond.ctrl, cond.value);
+}
+function condMatches(cond, v){
+  var k = kindOf(cond.ctrl);
+  if (k === "array") return Array.isArray(v) && v.indexOf(cond.value) >= 0;
+  if (k === "boolean") return v === (cond.value === "true");
+  if (k === "number") return v === num(cond.value);
+  return String(v == null ? "" : v) === cond.value;
+}
+function condText(cond){
+  var k = kindOf(cond.ctrl);
+  if (k === "array") return "\"" + lbl(cond.ctrl) + "\" (" + cond.ctrl.name + ") includes " + q(cond.value);
+  if (k === "boolean") return "\"" + lbl(cond.ctrl) + "\" (" + cond.ctrl.name + ") is " + (cond.value === "true" ? "checked" : "unchecked");
+  return "\"" + lbl(cond.ctrl) + "\" (" + cond.ctrl.name + ") equals " + condLiteral(cond.ctrl, cond.value);
+}
+function emptyExpr(f, obj){
+  var k = kindOf(f), ref = obj + "." + f.name;
+  if (k === "number") return ref + " === undefined";
+  if (k === "boolean") return ref + " !== true";
+  if (k === "array" || k === "file") return "!" + ref + "?.length";
+  return "!" + ref;
+}
+function isEmptyVal(f, v){
+  var k = kindOf(f);
+  if (k === "number") return v === undefined;
+  if (k === "boolean") return v !== true;
+  if (k === "array" || k === "file") return !v || !v.length;
+  return !v;
+}
+function names(S){
+  var base = toPascal(S.formName) || "My";
+  var comp = /Form$/.test(base) ? base : base + "Form";
+  var lower = comp.charAt(0).toLowerCase() + comp.slice(1);
+  return {comp:comp, schema:lower + "Schema", values:comp + "Values"};
+}
+
+/* ---------- Zod ---------- */
+function zodField(f, fields){
+  var k = kindOf(f), cond = activeCond(f, fields), req = isReq(f), here = req && !cond, s, constrained = false;
+  var opts = parseOptions(f).map(function(o){ return q(o.value); });
+  if (k === "string"){
+    s = "z.string()";
+    if (here) s += ".min(1, " + q(msg(f, "required")) + ")";
+    if (f.type === "email"){ s += ".email(" + q(msg(f, "email")) + ")"; constrained = true; }
+    if (f.type === "url"){ s += ".url(" + q(msg(f, "url")) + ")"; constrained = true; }
+    var mn = LEN[f.type] ? int(f.minLength) : null, mx = LEN[f.type] ? int(f.maxLength) : null;
+    if (mn != null && mn > 0){ s += ".min(" + mn + ", " + q(msg(f, "minLength", mn)) + ")"; constrained = true; }
+    if (mx != null){ s += ".max(" + mx + ", " + q(msg(f, "maxLength", mx)) + ")"; constrained = true; }
+    if (PAT[f.type] && f.pattern && !patternError(f.pattern)){ s += ".regex(" + reLit(f.pattern) + ", " + q(msg(f, "pattern")) + ")"; constrained = true; }
+    if (f.type === "date" || f.type === "time"){
+      var mk = f.type === "date" ? isDate : isTime, pre = f.type === "date" ? "date" : "time";
+      if (mk(f.min)) s += ".refine((v) => v === \"\" || v >= " + q(f.min) + ", " + q(msg(f, pre + "Min", f.min)) + ")";
+      if (mk(f.max)) s += ".refine((v) => v === \"\" || v <= " + q(f.max) + ", " + q(msg(f, pre + "Max", f.max)) + ")";
+    }
+    if (!here && constrained) s += ".or(z.literal(\"\"))";
+    if (cond) s += ".optional()";
+  } else if (k === "enum"){
+    if (here) s = "z.enum([" + opts.join(", ") + "], { errorMap: () => ({ message: " + q(msg(f, "required")) + " }) })";
+    else s = "z.enum([" + opts.join(", ") + "]).or(z.literal(\"\"))" + (f.type === "radio" ? ".nullable()" : "");
+    if (cond) s += ".optional()";
+  } else if (k === "number"){
+    s = here ? "z.number({ required_error: " + q(msg(f, "required")) + ", invalid_type_error: " + q(msg(f, "nan")) + " })"
+             : "z.number({ invalid_type_error: " + q(msg(f, "nan")) + " })";
+    var a = num(f.min), b = num(f.max);
+    if (a != null) s += ".min(" + a + ", " + q(msg(f, "min", a)) + ")";
+    if (b != null) s += ".max(" + b + ", " + q(msg(f, "max", b)) + ")";
+    if (!here) s += ".optional()";
+  } else if (k === "boolean"){
+    s = "z.boolean()";
+    if (here) s += ".refine((v) => v === true, { message: " + q(msg(f, "required")) + " })";
+    if (cond) s += ".optional()";
+  } else if (k === "array"){
+    s = "z.array(" + (opts.length ? "z.enum([" + opts.join(", ") + "])" : "z.string()") + ")";
+    var cmn = int(f.min), cmx = int(f.max);
+    if (here) s += ".min(1, " + q(msg(f, "required")) + ")";
+    if (cmx != null) s += ".max(" + cmx + ", " + q(msg(f, "countMax", cmx)) + ")";
+    if (cmn != null && cmn > (here ? 1 : 0)){
+      s += here ? ".min(" + cmn + ", " + q(msg(f, "countMin", cmn)) + ")"
+                : ".refine((v) => v.length === 0 || v.length >= " + cmn + ", " + q(msg(f, "countMin", cmn)) + ")";
+    }
+    if (cond) s += ".optional()";
+  } else { /* file */
+    s = "z.custom<FileList>((v) => typeof FileList === \"undefined\" || v instanceof FileList, { message: " + q(msg(f, "file")) + " })";
+    if (here) s += ".refine((v) => v.length > 0, { message: " + q(msg(f, "required")) + " })";
+    if (cond) s += ".optional()";
+  }
+  return s;
+}
+function crossRules(fields){
+  var rules = [];
+  dataFields(fields).forEach(function(f){
+    var cond = activeCond(f, fields);
+    if (cond && isReq(f)) rules.push({f:f, when:condExpr(cond, "data") + " && " + emptyExpr(f, "data"), message:msg(f, "required"), text:"required when " + condText(cond)});
+    var t = matchTarget(f, fields);
+    if (t) rules.push({f:f, when:(cond ? condExpr(cond, "data") + " && " : "") + "data." + f.name + " !== data." + t.name, message:msg(f, "match", 0, t), text:"must equal " + t.name});
+  });
+  return rules;
+}
+function genZodSchema(S){
+  var fields = S.fields, n = names(S), df = dataFields(fields);
+  var lines = df.map(function(f){ return "    " + f.name + ": " + zodField(f, fields) + ","; });
+  var rules = crossRules(fields);
+  var out = "export const " + n.schema + " = z\n  .object({\n" + lines.join("\n") + "\n  })";
+  if (rules.length){
+    out += "\n  .superRefine((data, ctx) => {\n" + rules.map(function(r){
+      return "    if (" + r.when + ") {\n      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [" + q(r.f.name) + "], message: " + q(r.message) + " });\n    }";
+    }).join("\n") + "\n  })";
+  }
+  return out + ";";
+}
+function genZod(S){
+  var n = names(S);
+  return "import { z } from \"zod\";\n\n" + genZodSchema(S) + "\n\nexport type " + n.values + " = z.infer<typeof " + n.schema + ">;\n";
+}
+
+/* ---------- TypeScript ---------- */
+function tsType(f, fields){
+  var k = kindOf(f), cond = activeCond(f, fields), here = isReq(f) && !cond;
+  var union = parseOptions(f).map(function(o){ return q(o.value); }).join(" | ");
+  var t, opt = !!cond;
+  if (k === "string") t = "string";
+  else if (k === "enum") t = here ? union : union + " | \"\"" + (f.type === "radio" ? " | null" : "");
+  else if (k === "number"){ t = "number"; if (!here) opt = true; }
+  else if (k === "boolean") t = "boolean";
+  else if (k === "array") t = union ? "Array<" + union + ">" : "string[]";
+  else t = "FileList";
+  return {t:t, opt:opt};
+}
+function genTS(S){
+  var n = names(S), fields = S.fields;
+  var body = dataFields(fields).map(function(f){
+    var x = tsType(f, fields), doc = [lbl(f)];
+    if (f.help) doc.push(f.help);
+    var cond = activeCond(f, fields);
+    if (cond) doc.push("Only present when " + condText(cond) + ".");
+    return "  /** " + doc.join(" — ").replace(/\*\//g, "* /") + " */\n  " + f.name + (x.opt ? "?" : "") + ": " + x.t + ";";
+  });
+  return "// Values submitted by " + n.comp + " (equivalent to z.infer<typeof " + n.schema + ">).\nexport interface " + n.values + " {\n" + body.join("\n") + "\n}\n";
+}
+
+/* ---------- JSON Schema ---------- */
+function genJSONSchema(S){
+  var fields = S.fields, props = {}, required = [], allOf = [], comments = [];
+  dataFields(fields).forEach(function(f){
+    var k = kindOf(f), p = {}, cond = activeCond(f, fields), opts = parseOptions(f).map(function(o){ return o.value; });
+    p.title = lbl(f);
+    if (f.help) p.description = f.help;
+    if (k === "string"){
+      p.type = "string";
+      if (f.type === "email") p.format = "email";
+      if (f.type === "url") p.format = "uri";
+      if (f.type === "date") p.format = "date";
+      if (f.type === "time") p.format = "time";
+      if (f.type === "textarea") p["x-multiline"] = true;
+      if (f.type === "password") p.writeOnly = true;
+      if (f.type === "hidden") p.readOnly = true;
+      var mn = LEN[f.type] ? int(f.minLength) : null, mx = LEN[f.type] ? int(f.maxLength) : null;
+      if (isReq(f) && !cond && (mn == null || mn < 1)) mn = 1;
+      if (mn != null && mn > 0) p.minLength = mn;
+      if (mx != null) p.maxLength = mx;
+      if (PAT[f.type] && f.pattern && !patternError(f.pattern)) p.pattern = f.pattern;
+      if (f.type === "date" && isDate(f.min)) p.formatMinimum = f.min;
+      if (f.type === "date" && isDate(f.max)) p.formatMaximum = f.max;
+      if (f.type === "time" && isTime(f.min)) p.formatMinimum = f.min;
+      if (f.type === "time" && isTime(f.max)) p.formatMaximum = f.max;
+      if (f.def) p.default = f.def;
+    } else if (k === "enum"){
+      p.type = "string"; p.enum = opts;
+      if (f.def && opts.indexOf(f.def) >= 0) p.default = f.def;
+    } else if (k === "number"){
+      p.type = "number";
+      if (num(f.min) != null) p.minimum = num(f.min);
+      if (num(f.max) != null) p.maximum = num(f.max);
+      if (num(f.def) != null) p.default = num(f.def);
+    } else if (k === "boolean"){
+      p.type = "boolean";
+      if (isReq(f) && !cond) p.const = true;
+      p.default = f.def === "true";
+    } else if (k === "array"){
+      p.type = "array"; p.items = opts.length ? {type:"string", enum:opts} : {type:"string"}; p.uniqueItems = true;
+      var cmn = int(f.min), cmx = int(f.max);
+      if (isReq(f) && !cond) cmn = Math.max(cmn || 0, 1);
+      if (cmn) p.minItems = cmn;
+      if (cmx != null) p.maxItems = cmx;
+      var d = defaultArray(f); if (d.length) p.default = d;
+    } else {
+      p.type = "string"; p.format = "binary";
+      if (f.accept) p.contentMediaType = f.accept;
+    }
+    props[f.name] = p;
+    if (isReq(f) && !cond) required.push(f.name);
+    if (cond){
+      var ifp = {}; ifp[cond.ctrl.name] = kindOf(cond.ctrl) === "array" ? {contains:{const:cond.value}} : {const:jsonCondValue(cond)};
+      var rule = {"if":{properties:ifp, required:[cond.ctrl.name]}};
+      if (isReq(f)) rule.then = {required:[f.name]};
+      else rule.then = {};
+      var notp = {}; notp[f.name] = false;
+      rule["else"] = {properties:notp};
+      allOf.push(rule);
+    }
+    var t = matchTarget(f, fields);
+    if (t) comments.push(f.name + " must equal " + t.name + " (not expressible in JSON Schema; enforce in code)");
+  });
+  var n = names(S);
+  var out = {"$schema":"https://json-schema.org/draft/2020-12/schema", title:n.comp, type:"object", properties:props};
+  if (required.length) out.required = required;
+  if (allOf.length) out.allOf = allOf;
+  if (comments.length) out["$comment"] = comments.join("; ");
+  out.additionalProperties = false;
+  return JSON.stringify(out, null, 2) + "\n";
+}
+function jsonCondValue(cond){
+  var k = kindOf(cond.ctrl);
+  if (k === "boolean") return cond.value === "true";
+  if (k === "number") return num(cond.value);
+  return cond.value;
+}
+function defaultArray(f){
+  var opts = parseOptions(f).map(function(o){ return o.value; });
+  return String(f.def || "").split(",").map(function(x){ return x.trim(); }).filter(function(x){ return x && (!opts.length || opts.indexOf(x) >= 0); });
+}
+
+/* ---------- React (react-hook-form + zod) ---------- */
+function jsxText(t){ return /[{}<>&]/.test(t) ? "{" + q(t) + "}" : t; }
+function jsxAttr(name, v){ return /["\n\\]/.test(v) ? name + "={" + q(v) + "}" : name + "=\"" + v + "\""; }
+function defaultsObj(S){
+  var lines = [];
+  dataFields(S.fields).forEach(function(f){
+    var k = kindOf(f), here = isReq(f) && !activeCond(f, S.fields), opts = parseOptions(f).map(function(o){ return o.value; });
+    if (k === "string") lines.push(f.name + ": " + q(f.def || ""));
+    else if (k === "enum"){
+      if (f.def && opts.indexOf(f.def) >= 0) lines.push(f.name + ": " + q(f.def));
+      else if (!here) lines.push(f.name + ": \"\"");
+    } else if (k === "number"){ if (num(f.def) != null) lines.push(f.name + ": " + num(f.def)); }
+    else if (k === "boolean") lines.push(f.name + ": " + (f.def === "true"));
+    else if (k === "array") lines.push(f.name + ": [" + defaultArray(f).map(q).join(", ") + "]");
+  });
+  return lines;
+}
+function reactField(f, S, ind){
+  var fields = S.fields, name = f.name, P = function(s){ return ind + s; }, out = [];
+  var cls = "field" + (f.width === "half" ? " field--half" : "");
+  if (f.type === "section"){
+    out.push(P("<div className=\"form-section\">"));
+    out.push(P("  <h3>" + jsxText(lbl(f)) + "</h3>"));
+    if (f.help) out.push(P("  <p className=\"field-help\">" + jsxText(f.help) + "</p>"));
+    out.push(P("</div>"));
+    return out;
+  }
+  if (f.type === "hidden") return [P("<input type=\"hidden\" {...register(" + q(name) + ")} />")];
+  var req = isReq(f), helpId = name + "-help", errId = name + "-error";
+  var described = f.help ? "aria-describedby={errors." + name + " ? \"" + helpId + " " + errId + "\" : \"" + helpId + "\"}"
+                         : "aria-describedby={errors." + name + " ? \"" + errId + "\" : undefined}";
+  var common = [
+    "aria-invalid={errors." + name + " ? \"true\" : \"false\"}",
+    described
+  ];
+  if (req) common.push("aria-required=\"true\"");
+  var star = req ? "<span aria-hidden=\"true\"> *</span>" : "";
+  var tail = [];
+  if (f.help) tail.push(P("  <p id=\"" + helpId + "\" className=\"field-help\">" + jsxText(f.help) + "</p>"));
+  tail.push(P("  {errors." + name + " && ("));
+  tail.push(P("    <p id=\"" + errId + "\" className=\"field-error\" role=\"alert\">"));
+  tail.push(P("      {errors." + name + ".message}"));
+  tail.push(P("    </p>"));
+  tail.push(P("  )}"));
+  var opts = parseOptions(f);
+  function input(tag, attrs, reg, selfClose, children){
+    var a = attrs.concat(common).concat([reg]);
+    var lines = [P("  <" + tag)];
+    a.forEach(function(x){ lines.push(P("    " + x)); });
+    if (selfClose) lines.push(P("  />"));
+    else { lines.push(P("  >")); children.forEach(function(c){ lines.push(P("    " + c)); }); lines.push(P("  </" + tag + ">")); }
+    return lines;
+  }
+  var reg = "{...register(" + q(name) + ")}";
+  if (f.type === "checkbox" || f.type === "switch"){
+    out.push(P("<div className=\"" + cls + " field--check\">"));
+    var ca = ["id=\"" + name + "\"", "type=\"checkbox\""];
+    if (f.type === "switch") ca.push("role=\"switch\"");
+    out = out.concat(input("input", ca, reg, true));
+    out.push(P("  <label htmlFor=\"" + name + "\">" + jsxText(lbl(f)) + star + "</label>"));
+  } else if (f.type === "radio"){
+    out.push(P("<fieldset className=\"" + cls + "\" " + (f.help ? "aria-describedby=\"" + helpId + "\"" : "") + ">").replace(" >", ">"));
+    out.push(P("  <legend>" + jsxText(lbl(f)) + star + "</legend>"));
+    out.push(P("  <div className=\"field-options\" role=\"radiogroup\"" + (req ? " aria-required=\"true\"" : "") + ">"));
+    opts.forEach(function(o, i){
+      var id = name + "-" + i;
+      out.push(P("    <label htmlFor=\"" + id + "\">"));
+      out.push(P("      <input"));
+      out.push(P("        id=\"" + id + "\""));
+      out.push(P("        type=\"radio\""));
+      out.push(P("        " + jsxAttr("value", o.value)));
+      out.push(P("        aria-invalid={errors." + name + " ? \"true\" : \"false\"}"));
+      out.push(P("        aria-describedby={errors." + name + " ? \"" + errId + "\" : undefined}"));
+      out.push(P("        " + reg));
+      out.push(P("      />"));
+      out.push(P("      " + jsxText(o.label)));
+      out.push(P("    </label>"));
+    });
+    out.push(P("  </div>"));
+  } else {
+    out.push(P("<div className=\"" + cls + "\">"));
+    out.push(P("  <label htmlFor=\"" + name + "\">" + jsxText(lbl(f)) + star + "</label>"));
+    var attrs = ["id=\"" + name + "\""];
+    if (f.type === "select" || f.type === "multiselect"){
+      if (f.type === "multiselect") attrs.push("multiple");
+      var ch = [];
+      if (f.type === "select") ch.push("<option value=\"\">" + jsxText(f.placeholder || "Select…") + "</option>");
+      opts.forEach(function(o){ ch.push("<option " + jsxAttr("value", o.value) + ">" + jsxText(o.label) + "</option>"); });
+      out = out.concat(input("select", attrs, reg, false, ch));
+    } else if (f.type === "textarea"){
+      attrs.push("rows={4}");
+      if (f.placeholder) attrs.push(jsxAttr("placeholder", f.placeholder));
+      out = out.concat(input("textarea", attrs, reg, true));
+    } else {
+      attrs.push("type=\"" + f.type + "\"");
+      if (f.type === "number") attrs.push("inputMode=\"decimal\"");
+      if (f.type === "email") attrs.push("autoComplete=\"email\"");
+      if (f.type === "tel") attrs.push("autoComplete=\"tel\"");
+      if (f.type === "password") attrs.push("autoComplete=\"" + (matchTarget(f, fields) ? "new-password" : "current-password") + "\"");
+      if (f.type === "file" && f.accept) attrs.push(jsxAttr("accept", f.accept));
+      if (PLACEHOLDER[f.type] && f.placeholder) attrs.push(jsxAttr("placeholder", f.placeholder));
+      if (f.type === "number") reg = "{...register(" + q(name) + ", { setValueAs: (v: string) => (v === \"\" ? undefined : Number(v)) })}";
+      out = out.concat(input("input", attrs, reg, true));
+    }
+  }
+  out = out.concat(tail);
+  out.push(P(f.type === "radio" ? "</fieldset>" : "</div>"));
+  return out;
+}
+function genReact(S){
+  var n = names(S), fields = S.fields;
+  var watched = [], wmap = {};
+  fields.forEach(function(f){
+    var c = activeCond(f, fields);
+    if (c && !wmap[c.ctrl.id]){ wmap[c.ctrl.id] = "watch" + c.ctrl.name.charAt(0).toUpperCase() + c.ctrl.name.slice(1); watched.push(c.ctrl); }
+  });
+  var L = [];
+  L.push("import { useForm } from \"react-hook-form\";");
+  L.push("import { zodResolver } from \"@hookform/resolvers/zod\";");
+  L.push("import { z } from \"zod\";");
+  L.push("");
+  L.push(genZodSchema(S));
+  L.push("");
+  L.push("export type " + n.values + " = z.infer<typeof " + n.schema + ">;");
+  L.push("");
+  L.push("type " + n.comp + "Props = {");
+  L.push("  onSubmit: (values: " + n.values + ") => void | Promise<void>;");
+  L.push("};");
+  L.push("");
+  L.push("// Layout hooks: .form-grid is a 2-column grid; .field spans both columns, .field--half spans one.");
+  L.push("export function " + n.comp + "({ onSubmit }: " + n.comp + "Props) {");
+  L.push("  const {");
+  L.push("    register,");
+  if (watched.length) L.push("    watch,");
+  L.push("    handleSubmit,");
+  L.push("    formState: { errors, isSubmitting },");
+  L.push("  } = useForm<" + n.values + ">({");
+  L.push("    resolver: zodResolver(" + n.schema + "),");
+  L.push("    mode: \"onSubmit\",");
+  L.push("    reValidateMode: \"onChange\",");
+  L.push("    // Fields hidden by a condition are unregistered, so their values are not submitted.");
+  L.push("    shouldUnregister: true,");
+  var d = defaultsObj(S);
+  L.push("    defaultValues: {" + (d.length ? "\n" + d.map(function(x){ return "      " + x + ","; }).join("\n") + "\n    " : "") + "},");
+  L.push("  });");
+  watched.forEach(function(c){ L.push("  const " + wmap[c.id] + " = watch(" + q(c.name) + ");"); });
+  L.push("");
+  L.push("  return (");
+  L.push("    <form className=\"form-grid\" onSubmit={handleSubmit(onSubmit)} noValidate>");
+  fields.forEach(function(f){
+    var c = activeCond(f, fields);
+    if (c){
+      var ref = wmap[c.ctrl.id];
+      var expr = kindOf(c.ctrl) === "array" ? ref + "?.includes(" + q(c.value) + ")" : ref + " === " + condLiteral(c.ctrl, c.value);
+      L.push("      {" + expr + " && (");
+      L.push.apply(L, reactField(f, S, "        "));
+      L.push("      )}");
+    } else L.push.apply(L, reactField(f, S, "      "));
+  });
+  L.push("      <div className=\"form-actions\">");
+  L.push("        <button type=\"submit\" disabled={isSubmitting}>");
+  L.push("          " + jsxText(S.submitLabel || "Submit"));
+  L.push("        </button>");
+  L.push("      </div>");
+  L.push("    </form>");
+  L.push("  );");
+  L.push("}");
+  return L.join("\n") + "\n";
+}
+
+/* ---------- Prompt ---------- */
+function describeRules(f, fields){
+  var r = [], k = kindOf(f);
+  if (f.type === "email") r.push("must be a valid email address (\"" + msg(f, "email") + "\")");
+  if (f.type === "url") r.push("must be an absolute URL (\"" + msg(f, "url") + "\")");
+  if (k === "number") r.push("must be a number (\"" + msg(f, "nan") + "\")");
+  var mn = LEN[f.type] ? int(f.minLength) : null, mx = LEN[f.type] ? int(f.maxLength) : null;
+  if (mn) r.push("at least " + mn + " characters (\"" + msg(f, "minLength", mn) + "\")");
+  if (mx != null) r.push("at most " + mx + " characters (\"" + msg(f, "maxLength", mx) + "\")");
+  if (PAT[f.type] && f.pattern && !patternError(f.pattern)) r.push("must match the regular expression " + reLit(f.pattern) + " (\"" + msg(f, "pattern") + "\")");
+  if (f.type === "number"){
+    if (num(f.min) != null) r.push("minimum " + num(f.min) + " (\"" + msg(f, "min", num(f.min)) + "\")");
+    if (num(f.max) != null) r.push("maximum " + num(f.max) + " (\"" + msg(f, "max", num(f.max)) + "\")");
+  }
+  if (f.type === "date" || f.type === "time"){
+    var ok = f.type === "date" ? isDate : isTime, pre = f.type === "date" ? "date" : "time";
+    if (ok(f.min)) r.push("not earlier than " + f.min + " (\"" + msg(f, pre + "Min", f.min) + "\")");
+    if (ok(f.max)) r.push("not later than " + f.max + " (\"" + msg(f, pre + "Max", f.max) + "\")");
+  }
+  if (f.type === "multiselect"){
+    if (int(f.min)) r.push("select at least " + int(f.min) + " (\"" + msg(f, "countMin", int(f.min)) + "\")");
+    if (int(f.max) != null) r.push("select at most " + int(f.max) + " (\"" + msg(f, "countMax", int(f.max)) + "\")");
+  }
+  var t = matchTarget(f, fields);
+  if (t) r.push("must be identical to " + t.name + " (\"" + msg(f, "match", 0, t) + "\")");
+  return r;
+}
+function genPrompt(S){
+  var n = names(S), fields = S.fields, df = dataFields(fields), P = [];
+  P.push("Build a form component called " + n.comp + ".");
+  P.push("");
+  P.push("Stack: React with TypeScript, react-hook-form for state, zod (v3) with @hookform/resolvers/zod for validation. Adapt to my stack if I say otherwise.");
+  P.push("It has " + df.length + " field" + (df.length === 1 ? "" : "s") + (fields.length > df.length ? " in " + (fields.length - df.length) + " section" + (fields.length - df.length === 1 ? "" : "s") : "") + " and a submit button labelled \"" + (S.submitLabel || "Submit") + "\". Render them in this exact order.");
+  P.push("");
+  P.push("FIELDS");
+  var i = 0;
+  fields.forEach(function(f){
+    if (f.type === "section"){
+      P.push("");
+      P.push("== Section heading: \"" + lbl(f) + "\"" + (f.help ? " — intro text: \"" + f.help + "\"" : "") + " ==");
+      return;
+    }
+    i++;
+    var k = kindOf(f), cond = activeCond(f, fields), line = [];
+    P.push("");
+    P.push(i + ". " + f.name + " — " + TYPE_BY[f.type].label.toLowerCase() + (f.type === "hidden" ? " (not visible, submitted as-is)" : ", label \"" + lbl(f) + "\""));
+    if (f.type !== "hidden") line.push("width: " + (f.width === "half" ? "half row (pairs with the next half-width field)" : "full row"));
+    if (f.placeholder && PLACEHOLDER[f.type]) line.push("placeholder: \"" + f.placeholder + "\"");
+    if (f.help && f.type !== "hidden") line.push("help text under the input: \"" + f.help + "\"");
+    if (OPT[f.type]){
+      var o = parseOptions(f);
+      line.push("options (value → label): " + (o.length ? o.map(function(x){ return x.value + " → \"" + x.label + "\""; }).join(", ") : "none defined yet, free text"));
+    }
+    if (f.type === "file" && f.accept) line.push("accept: " + f.accept);
+    var d = k === "array" ? defaultArray(f).join(", ") : (k === "boolean" ? (f.def === "true" ? "checked" : "") : f.def);
+    if (d) line.push("default: " + (k === "boolean" ? d : "\"" + d + "\""));
+    if (isReq(f)) line.push(cond ? "required only while visible (\"" + msg(f, "required") + "\")" : "required (\"" + msg(f, "required") + "\")");
+    else if (f.type !== "hidden") line.push("optional" + (k === "string" || k === "enum" ? "; an empty value is allowed and skips the other checks" : ""));
+    describeRules(f, fields).forEach(function(r){ line.push(r); });
+    if (cond) line.push("VISIBLE ONLY WHEN " + condText(cond) + "; when hidden it is unmounted, not validated and not submitted");
+    line.push("value type: " + (function(){ var x = tsType(f, fields); return x.t + (x.opt ? " (may be absent)" : ""); })());
+    line.forEach(function(l){ P.push("   - " + l); });
+  });
+  var withCond = df.filter(function(f){ return activeCond(f, fields); });
+  var withMatch = df.filter(function(f){ return matchTarget(f, fields); });
+  if (withCond.length || withMatch.length){
+    P.push("");
+    P.push("CROSS-FIELD LOGIC");
+    withCond.forEach(function(f){ P.push("- Show " + f.name + " only when " + condText(activeCond(f, fields)) + "."); });
+    withMatch.forEach(function(f){ var t = matchTarget(f, fields); P.push("- " + f.name + " must equal " + t.name + "; put the error on " + f.name + "."); });
+    P.push("- Implement these with .superRefine on the zod object (ctx.addIssue with path set to the field), and useForm({ shouldUnregister: true }) so hidden fields drop out of the submitted values.");
+    P.push("- zod only runs .superRefine once every field-level rule passes, so these errors appear after the per-field errors are fixed. That is expected; do not work around it.");
+  }
+  P.push("");
+  P.push("VALIDATION BEHAVIOUR");
+  P.push("- Validate on submit, then re-validate each field as the user edits it. Show one error per field (the first failing rule) directly below that field, using the exact messages quoted above.");
+  P.push("- Empty number inputs submit undefined (register with setValueAs), never 0 or NaN.");
+  P.push("");
+  P.push("ACCESSIBILITY");
+  P.push("- Every input has a <label htmlFor> matching its id (use the field name as the id). Radio groups use <fieldset> + <legend>.");
+  P.push("- Set aria-invalid on the input when it has an error, and aria-describedby pointing at the help text id and the error message id; the error element has role=\"alert\".");
+  P.push("- Required fields show a visual asterisk marked aria-hidden, plus aria-required=\"true\". Switches are checkboxes with role=\"switch\".");
+  P.push("- Keep native inputs (no div-based fakes) so keyboard use works without extra code.");
+  P.push("");
+  P.push("LAYOUT");
+  P.push("- Two-column grid; full-width fields span both columns, half-width fields span one. Collapse to one column below 600px.");
+  P.push("");
+  P.push("DELIVERABLE");
+  P.push("- One .tsx file exporting the zod schema, the " + n.values + " type (z.infer) and the " + n.comp + " component with an onSubmit(values) prop. Disable the submit button while submitting. No other dependencies.");
+  return P.join("\n") + "\n";
+}
+
+/* ---------- preview validation (mirrors the generated zod) ---------- */
+var EMAIL_RE = /^(?!\.)(?!.*\.\.)([A-Z0-9_'+\-\.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9\-]*\.)+[A-Z]{2,}$/i;
+function checkValue(f, v, fields){
+  var k = kindOf(f), cond = activeCond(f, fields), here = isReq(f) && !cond;
+  if (k === "string"){
+    v = v == null ? "" : String(v);
+    if (v === ""){ return here ? msg(f, "required") : null; }
+    if (f.type === "email" && !EMAIL_RE.test(v)) return msg(f, "email");
+    if (f.type === "url"){ try { new URL(v); } catch (e) { return msg(f, "url"); } }
+    var mn = LEN[f.type] ? int(f.minLength) : null, mx = LEN[f.type] ? int(f.maxLength) : null;
+    if (mn && v.length < mn) return msg(f, "minLength", mn);
+    if (mx != null && v.length > mx) return msg(f, "maxLength", mx);
+    if (PAT[f.type] && f.pattern && !patternError(f.pattern) && !new RegExp(f.pattern).test(v)) return msg(f, "pattern");
+    var ok = f.type === "date" ? isDate : f.type === "time" ? isTime : null, pre = f.type;
+    if (ok && ok(f.min) && v < f.min) return msg(f, pre + "Min", f.min);
+    if (ok && ok(f.max) && v > f.max) return msg(f, pre + "Max", f.max);
+    return null;
+  }
+  if (k === "enum"){
+    var vals = parseOptions(f).map(function(o){ return o.value; });
+    if (vals.indexOf(v) >= 0) return null;
+    return here ? msg(f, "required") : null;
+  }
+  if (k === "number"){
+    if (v === undefined) return here ? msg(f, "required") : null;
+    if (typeof v !== "number" || isNaN(v)) return msg(f, "nan");
+    if (num(f.min) != null && v < num(f.min)) return msg(f, "min", num(f.min));
+    if (num(f.max) != null && v > num(f.max)) return msg(f, "max", num(f.max));
+    return null;
+  }
+  if (k === "boolean") return here && v !== true ? msg(f, "required") : null;
+  if (k === "array"){
+    var len = v ? v.length : 0, cmn = int(f.min), cmx = int(f.max);
+    if (here && !len) return msg(f, "required");
+    if (cmx != null && len > cmx) return msg(f, "countMax", cmx);
+    if (cmn && len && len < cmn) return msg(f, "countMin", cmn);
+    return null;
+  }
+  return here && (!v || !v.length) ? msg(f, "required") : null;
+}
+function visibleMap(fields, values){
+  var vis = {};
+  function isVis(f, depth){
+    if (vis[f.id] !== undefined) return vis[f.id];
+    var c = activeCond(f, fields);
+    var r = !c || (depth < 20 && isVis(c.ctrl, depth + 1) && condMatches(c, values[c.ctrl.name]));
+    vis[f.id] = r; return r;
+  }
+  fields.forEach(function(f){ isVis(f, 0); });
+  return vis;
+}
+function validateValues(fields, values){
+  var vis = visibleMap(fields, values), errs = {};
+  dataFields(fields).forEach(function(f){
+    if (!vis[f.id]) return;
+    var e = checkValue(f, values[f.name], fields);
+    if (!e && activeCond(f, fields) && isReq(f) && isEmptyVal(f, values[f.name])) e = msg(f, "required");
+    if (!e){ var t = matchTarget(f, fields); if (t && values[f.name] !== values[t.name]) e = msg(f, "match", 0, t); }
+    if (e) errs[f.name] = e;
+  });
+  return {errors:errs, visible:vis};
+}
+
+/* ---------- samples ---------- */
+function sampleState(){
+  var id = 0, mk = function(o){ id++; return Object.assign(blank(o.type, "f" + id), o, {nameTouched:true}); };
+  var fields = [
+    mk({type:"section", label:"Account", help:"We use this to sign you in."}),
+    mk({type:"text", name:"fullName", label:"Full name", placeholder:"Ada Lovelace", required:true, maxLength:"80"}),
+    mk({type:"email", name:"email", label:"Email", placeholder:"you@example.com", required:true, width:"half"}),
+    mk({type:"tel", name:"phone", label:"Phone", placeholder:"+90 555 000 00 00", pattern:"^\\+?[0-9 ()-]{7,20}$", help:"Optional, digits and spaces.", width:"half"}),
+    mk({type:"password", name:"password", label:"Password", required:true, minLength:"8", pattern:"^(?=.*[A-Za-z])(?=.*\\d).+$", help:"At least 8 characters with a letter and a digit.", width:"half"}),
+    mk({type:"password", name:"confirmPassword", label:"Confirm password", required:true, match:"f5", width:"half"}),
+    mk({type:"section", label:"About you"}),
+    mk({type:"radio", name:"accountType", label:"Account type", required:true, options:"personal | Personal\nbusiness | Business", def:"personal"}),
+    mk({type:"text", name:"companyName", label:"Company name", required:true, condField:"f8", condValue:"business", width:"half"}),
+    mk({type:"text", name:"vatNumber", label:"VAT number", pattern:"^[A-Z0-9]{8,12}$", message:"Use 8–12 capital letters or digits", condField:"f8", condValue:"business", width:"half"}),
+    mk({type:"number", name:"age", label:"Age", min:"18", max:"120", width:"half"}),
+    mk({type:"select", name:"country", label:"Country", required:true, placeholder:"Choose a country", options:"tr | Türkiye\nde | Germany\nus | United States\nother | Other", width:"half"}),
+    mk({type:"multiselect", name:"interests", label:"Interests", options:"cad | CAD\npcb | PCB design\nfirmware | Firmware", max:"2"}),
+    mk({type:"textarea", name:"message", label:"Message", placeholder:"What are you building?", maxLength:"500"}),
+    mk({type:"switch", name:"newsletter", label:"Send me the monthly newsletter"}),
+    mk({type:"checkbox", name:"terms", label:"I accept the terms", required:true}),
+    mk({type:"hidden", name:"source", label:"Source", def:"landing-page"})
+  ];
+  return {formName:"Signup", submitLabel:"Create account", fields:fields, sel:"f2", nextId:id + 1};
+}
+function blank(type, id){
+  return {id:id, type:type, name:"", nameTouched:false, label:"", placeholder:"", help:"", required:false, def:"", width:"full",
+    options:OPT[type] ? "option1 | Option 1\noption2 | Option 2" : "", min:"", max:"", minLength:"", maxLength:"", pattern:"", message:"",
+    match:"", condField:"", condValue:"", accept:""};
+}
+
+/* =================== UI =================== */
+if (typeof document !== "undefined") (function(){
+  var KEY = "redline.tool.form-builder.";
+  var $ = function(id){ return document.getElementById(id); };
+  var S = load() || {formName:"Contact", submitLabel:"Submit", fields:[], sel:null, nextId:1};
+  var tab = "prompt", lastDeleted = null, submitted = false, pvVals = {};
+  try { tab = localStorage.getItem(KEY + "tab") || "prompt"; } catch (e) {}
+
+  function load(){
+    try {
+      var raw = localStorage.getItem(KEY + "state"); if (!raw) return null;
+      var s = JSON.parse(raw);
+      if (!s || !Array.isArray(s.fields)) return null;
+      s.fields = s.fields.filter(function(f){ return f && TYPE_BY[f.type]; }).map(function(f){ return Object.assign(blank(f.type, f.id), f); });
+      return s;
+    } catch (e) { return null; }
+  }
+  function save(){ try { localStorage.setItem(KEY + "state", JSON.stringify(S)); } catch (e) {} }
+  function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
+  function sel(){ return byId(S.fields, S.sel); }
+  var statusT;
+  function status(t, ok){ var el = $("status"); el.textContent = t; el.className = "status" + (ok ? " ok" : ""); clearTimeout(statusT); statusT = setTimeout(function(){ el.textContent = ""; }, 3500); }
+
+  /* palette */
+  $("types").innerHTML = TYPES.map(function(x){
+    return "<li><button type=\"button\" class=\"ptype\" draggable=\"true\" data-type=\"" + x.t + "\"><span class=\"ic\" aria-hidden=\"true\">" + esc(x.ic) + "</span>" + esc(x.label) + "</button></li>";
+  }).join("");
+  $("types").addEventListener("click", function(e){
+    var b = e.target.closest(".ptype"); if (!b) return;
+    var i = S.sel ? S.fields.indexOf(sel()) + 1 : S.fields.length;
+    addField(b.dataset.type, i);
+  });
+  $("types").addEventListener("dragstart", function(e){
+    var b = e.target.closest(".ptype"); if (!b) return;
+    e.dataTransfer.setData("text/x-fb-type", b.dataset.type); e.dataTransfer.setData("text/plain", b.dataset.type);
+    e.dataTransfer.effectAllowed = "copy";
+  });
+
+  function addField(type, at){
+    var f = blank(type, "f" + S.nextId++);
+    var base = type === "section" ? "" : TYPE_BY[type].label;
+    f.label = type === "section" ? "New section" : base;
+    if (type !== "section") f.name = uniqueName(toCamel(base), S.fields, f.id);
+    if (type === "switch" || type === "checkbox") f.def = "false";
+    S.fields.splice(at == null ? S.fields.length : at, 0, f);
+    S.sel = f.id;
+    changed(true);
+    setTimeout(function(){ var l = document.querySelector("#insp [data-k=label]"); if (l){ l.focus(); l.select(); } }, 0);
+  }
+
+  /* list */
+  var listEl = $("fields");
+  function renderList(){
+    var n = dataFields(S.fields).length;
+    $("listSub").textContent = S.fields.length ? n + " field" + (n === 1 ? "" : "s") + (dataFields(S.fields).some(isReq) ? "" : " · none required") : "";
+    if (!S.fields.length){
+      listEl.innerHTML = "<li class=\"empty\"><b>No fields yet.</b><br>Click a field type on the left or drag one here. <button type=\"button\" class=\"btn-link\" data-act=\"sample\">Load the sample signup form</button> to see every feature.</li>";
+      return;
+    }
+    listEl.innerHTML = S.fields.map(function(f, i){
+      var cond = activeCond(f, S.fields), t = matchTarget(f, S.fields);
+      var flags = "";
+      if (isReq(f)) flags += "<span class=\"flag req\" title=\"Required\">req</span>";
+      if (f.width === "half" && f.type !== "section" && f.type !== "hidden") flags += "<span class=\"flag\" title=\"Half width\">½</span>";
+      if (cond) flags += "<span class=\"flag cond\" title=\"Shown when " + esc(condText(cond)) + "\">if</span>";
+      if (t) flags += "<span class=\"flag cond\" title=\"Must match " + esc(t.name) + "\">=</span>";
+      return "<li class=\"frow" + (f.id === S.sel ? " sel" : "") + (f.type === "section" ? " section" : "") + "\" data-id=\"" + f.id + "\" tabindex=\"0\" aria-label=\"" + esc(lbl(f) + ", " + TYPE_BY[f.type].label) + "\"" + (f.id === S.sel ? " aria-current=\"true\"" : "") + ">" +
+        "<button type=\"button\" class=\"handle\" aria-label=\"Drag to reorder\" tabindex=\"-1\">⋮⋮</button>" +
+        "<span class=\"tbadge\">" + esc(TYPE_BY[f.type].label.split(" ")[0].toLowerCase()) + "</span>" +
+        "<span class=\"fmain\"><span class=\"flabel\">" + esc(f.type === "section" ? "§ " + lbl(f) : lbl(f)) + "</span>" +
+        (f.type === "section" ? "" : "<span class=\"fname\">" + esc(f.name) + "</span>") + "</span>" +
+        "<span class=\"flags\">" + flags + "</span>" +
+        "<span class=\"rbtns\">" +
+        "<button type=\"button\" class=\"ib\" data-act=\"up\" aria-label=\"Move up\"" + (i === 0 ? " disabled" : "") + ">↑</button>" +
+        "<button type=\"button\" class=\"ib\" data-act=\"down\" aria-label=\"Move down\"" + (i === S.fields.length - 1 ? " disabled" : "") + ">↓</button>" +
+        "<button type=\"button\" class=\"ib dup\" data-act=\"dup\" aria-label=\"Duplicate\">⧉</button>" +
+        "<button type=\"button\" class=\"ib del\" data-act=\"del\" aria-label=\"Delete\">✕</button>" +
+        "</span></li>";
+    }).join("");
+  }
+  function move(id, to){
+    var i = S.fields.findIndex(function(f){ return f.id === id; }); if (i < 0) return;
+    to = Math.max(0, Math.min(S.fields.length - 1, to)); if (to === i) return;
+    var f = S.fields.splice(i, 1)[0]; S.fields.splice(to, 0, f);
+    changed(false);
+    var r = listEl.querySelector("[data-id=\"" + id + "\"]"); if (r) r.focus();
+  }
+  function del(id){
+    var i = S.fields.findIndex(function(f){ return f.id === id; }); if (i < 0) return;
+    var f = S.fields.splice(i, 1)[0];
+    lastDeleted = {f:f, i:i};
+    if (S.sel === id) S.sel = S.fields[Math.min(i, S.fields.length - 1)] ? S.fields[Math.min(i, S.fields.length - 1)].id : null;
+    var u = $("undo"); u.hidden = false;
+    u.innerHTML = "Deleted “" + esc(lbl(f)) + "”. <button type=\"button\" class=\"btn-link\" id=\"undoBtn\">Undo</button>";
+    changed(true);
+  }
+  $("undo").addEventListener("click", function(e){
+    if (e.target.id !== "undoBtn" || !lastDeleted) return;
+    S.fields.splice(Math.min(lastDeleted.i, S.fields.length), 0, lastDeleted.f);
+    S.sel = lastDeleted.f.id; lastDeleted = null; $("undo").hidden = true;
+    changed(true);
+  });
+  listEl.addEventListener("click", function(e){
+    var a = e.target.closest("[data-act]");
+    if (a && a.dataset.act === "sample"){ loadSample(); return; }
+    var row = e.target.closest(".frow"); if (!row) return;
+    var id = row.dataset.id, i = S.fields.findIndex(function(f){ return f.id === id; });
+    if (a){
+      if (a.dataset.act === "up") move(id, i - 1);
+      else if (a.dataset.act === "down") move(id, i + 1);
+      else if (a.dataset.act === "del") del(id);
+      else if (a.dataset.act === "dup"){
+        var c = Object.assign({}, S.fields[i], {id:"f" + S.nextId++});
+        if (c.type !== "section") c.name = uniqueName(c.name, S.fields, c.id);
+        S.fields.splice(i + 1, 0, c); S.sel = c.id; changed(true);
+      }
+      return;
+    }
+    if (S.sel !== id){ S.sel = id; renderList(); renderInsp(); }
+  });
+  listEl.addEventListener("keydown", function(e){
+    var row = e.target.closest(".frow"); if (!row || e.target !== row) return;
+    var id = row.dataset.id, i = S.fields.findIndex(function(f){ return f.id === id; });
+    if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")){ e.preventDefault(); move(id, i + (e.key === "ArrowUp" ? -1 : 1)); }
+    else if (e.key === "ArrowUp" || e.key === "ArrowDown"){ e.preventDefault(); var r = row[e.key === "ArrowUp" ? "previousElementSibling" : "nextElementSibling"]; if (r) r.focus(); }
+    else if (e.key === "Enter" || e.key === " "){ e.preventDefault(); S.sel = id; renderList(); renderInsp(); var l = document.querySelector("#insp [data-k=label]"); if (l) l.focus(); }
+    else if (e.key === "Delete" || e.key === "Backspace"){ e.preventDefault(); del(id); var nr = listEl.querySelector(".frow.sel") || listEl.querySelector(".frow"); if (nr) nr.focus(); }
+  });
+
+  /* drop index from pointer Y */
+  var dropLine = document.createElement("li"); dropLine.className = "dropline";
+  function indexAtY(y, skipId){
+    var rows = Array.prototype.slice.call(listEl.querySelectorAll(".frow")), idx = 0;
+    for (var k = 0; k < rows.length; k++){
+      if (rows[k].dataset.id === skipId) continue;
+      var r = rows[k].getBoundingClientRect();
+      if (y > r.top + r.height / 2) idx = k + 1;
+    }
+    return idx;
+  }
+  function showDropLine(idx){
+    var rows = listEl.querySelectorAll(".frow");
+    if (idx < rows.length) listEl.insertBefore(dropLine, rows[idx]); else listEl.appendChild(dropLine);
+  }
+  function hideDropLine(){ if (dropLine.parentNode) dropLine.parentNode.removeChild(dropLine); listEl.classList.remove("dropping"); }
+  listEl.addEventListener("dragover", function(e){
+    if (Array.prototype.indexOf.call(e.dataTransfer.types, "text/x-fb-type") < 0) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = "copy";
+    listEl.classList.add("dropping");
+    if (S.fields.length) showDropLine(indexAtY(e.clientY));
+  });
+  listEl.addEventListener("dragleave", function(e){ if (!listEl.contains(e.relatedTarget)) hideDropLine(); });
+  listEl.addEventListener("drop", function(e){
+    var t = e.dataTransfer.getData("text/x-fb-type"); if (!t || !TYPE_BY[t]) return;
+    e.preventDefault();
+    var idx = S.fields.length ? indexAtY(e.clientY) : 0;
+    hideDropLine(); addField(t, idx);
+  });
+  /* pointer reorder via handle */
+  var drag = null;
+  listEl.addEventListener("pointerdown", function(e){
+    var h = e.target.closest(".handle"); if (!h) return;
+    var row = h.closest(".frow"); e.preventDefault();
+    drag = {id:row.dataset.id, row:row, idx:null}; row.classList.add("dragging");
+    h.setPointerCapture(e.pointerId);
+  });
+  listEl.addEventListener("pointermove", function(e){
+    if (!drag) return;
+    drag.idx = indexAtY(e.clientY, drag.id);
+    var rows = Array.prototype.filter.call(listEl.querySelectorAll(".frow"), function(r){ return r.dataset.id !== drag.id; });
+    if (drag.idx < rows.length) listEl.insertBefore(dropLine, rows[drag.idx]); else listEl.appendChild(dropLine);
+  });
+  function endDrag(){
+    if (!drag) return;
+    var d = drag; drag = null; d.row.classList.remove("dragging"); hideDropLine();
+    if (d.idx != null) move(d.id, d.idx);
+  }
+  listEl.addEventListener("pointerup", endDrag);
+  listEl.addEventListener("pointercancel", function(){ if (drag){ drag.idx = null; endDrag(); } });
+
+  /* inspector */
+  var insp = $("insp");
+  function inp(k, label, val, attrs){ return "<label class=\"ir\"><span>" + label + "</span><input data-k=\"" + k + "\" value=\"" + esc(val) + "\" " + (attrs || "") + "></label>"; }
+  function renderInsp(){
+    var f = sel();
+    if (!f){
+      $("inspSub").textContent = "";
+      insp.innerHTML = "<p class=\"note\">" + (S.fields.length ? "Select a field in the list to edit its label, rules and conditions." : "Add a field to edit its settings here.") + "</p>";
+      return;
+    }
+    $("inspSub").textContent = TYPE_BY[f.type].label;
+    var h = [], t = f.type, others = S.fields.filter(function(o){ return o !== f && o.type !== "section"; });
+    h.push("<label class=\"ir\"><span>Type</span><select data-k=\"type\">" + TYPES.map(function(x){ return "<option value=\"" + x.t + "\"" + (x.t === t ? " selected" : "") + ">" + x.label + "</option>"; }).join("") + "</select></label>");
+    h.push(inp("label", t === "section" ? "Heading" : "Label", f.label));
+    if (t !== "section"){
+      h.push(inp("name", "Name (code)", f.name, "class=\"mono\" spellcheck=\"false\" autocomplete=\"off\" aria-describedby=\"nameNote\""));
+      h.push("<p class=\"note\" id=\"nameNote\">" + (f.nameTouched ? "Set by hand." : "Follows the label until you edit it.") + "</p>");
+    }
+    if (PLACEHOLDER[t]) h.push(inp("placeholder", t === "select" ? "Empty option text" : "Placeholder", f.placeholder));
+    h.push(inp("help", t === "section" ? "Intro text" : "Help text", f.help));
+    if (OPT[t]) h.push("<label class=\"ir\"><span>Options — one per line, <span class=\"mono\">value | Label</span></span><textarea data-k=\"options\" rows=\"4\" spellcheck=\"false\">" + esc(f.options) + "</textarea></label>");
+    if (t === "file") h.push(inp("accept", "Accept (e.g. image/*,.pdf)", f.accept, "class=\"mono\""));
+    if (t !== "section"){
+      var defCtl;
+      if (t === "checkbox" || t === "switch") defCtl = "<select data-k=\"def\"><option value=\"false\"" + (f.def !== "true" ? " selected" : "") + ">Unchecked</option><option value=\"true\"" + (f.def === "true" ? " selected" : "") + ">Checked</option></select>";
+      else if (t === "select" || t === "radio") defCtl = "<select data-k=\"def\"><option value=\"\">(none)</option>" + parseOptions(f).map(function(o){ return "<option value=\"" + esc(o.value) + "\"" + (o.value === f.def ? " selected" : "") + ">" + esc(o.label) + "</option>"; }).join("") + "</select>";
+      else if (t === "file") defCtl = null;
+      else defCtl = "<input data-k=\"def\" value=\"" + esc(f.def) + "\"" + (t === "date" || t === "time" || t === "number" ? " type=\"" + t + "\"" : "") + (t === "multiselect" ? " placeholder=\"values, comma separated\" class=\"mono\"" : "") + ">";
+      var row = "<div class=\"pair\">";
+      if (defCtl) row += "<label class=\"ir\"><span>Default" + (t === "hidden" ? " (submitted value)" : "") + "</span>" + defCtl + "</label>";
+      if (t !== "hidden") row += "<div class=\"ir\"><span>Width</span><span class=\"seg\" role=\"radiogroup\" aria-label=\"Width\"><label><input type=\"radio\" name=\"w\" data-k=\"width\" value=\"full\"" + (f.width !== "half" ? " checked" : "") + ">Full</label><label><input type=\"radio\" name=\"w\" data-k=\"width\" value=\"half\"" + (f.width === "half" ? " checked" : "") + ">Half</label></span></div>";
+      h.push(row + "</div>");
+    }
+    if (t !== "section" && t !== "hidden"){
+      h.push("<h3>Validation</h3>");
+      h.push("<label class=\"chk\"><input type=\"checkbox\" data-k=\"required\"" + (f.required ? " checked" : "") + "> Required" + (t === "checkbox" || t === "switch" ? " (must be checked)" : "") + "</label>");
+      if (LEN[t]) h.push("<div class=\"pair\">" + inp("minLength", "Min length", f.minLength, "type=\"number\" min=\"0\"") + inp("maxLength", "Max length", f.maxLength, "type=\"number\" min=\"0\"") + "</div>");
+      if (RANGE[t]){
+        var ty = t === "multiselect" ? "number" : t, lab = t === "multiselect" ? ["Min selected", "Max selected"] : ["Min", "Max"];
+        h.push("<div class=\"pair\">" + inp("min", lab[0], f.min, "type=\"" + ty + "\"") + inp("max", lab[1], f.max, "type=\"" + ty + "\"") + "</div>");
+      }
+      if (PAT[t]) h.push(inp("pattern", "Pattern (regex, no slashes)", f.pattern, "class=\"mono\" spellcheck=\"false\" aria-describedby=\"patNote\"") + "<p class=\"note\" id=\"patNote\"></p>");
+      h.push(inp("message", "Custom error message (replaces all messages)", f.message));
+      if (MATCHABLE[t]){
+        var mo = others.filter(function(o){ return MATCHABLE[o.type]; });
+        h.push("<label class=\"ir\"><span>Must match field</span><select data-k=\"match\"><option value=\"\">(no match rule)</option>" + mo.map(function(o){ return "<option value=\"" + o.id + "\"" + (o.id === f.match ? " selected" : "") + ">" + esc(lbl(o) + " — " + o.name) + "</option>"; }).join("") + "</select></label>");
+      }
+      h.push("<p class=\"note warn\" id=\"rangeNote\"></p>");
+    }
+    h.push("<h3>Conditional visibility</h3>");
+    var co = others.filter(function(o){ return o.type !== "file"; });
+    h.push("<label class=\"ir\"><span>Show only when</span><select data-k=\"condField\"><option value=\"\">(always shown)</option>" + co.map(function(o){ return "<option value=\"" + o.id + "\"" + (o.id === f.condField ? " selected" : "") + ">" + esc(lbl(o) + " — " + o.name) + "</option>"; }).join("") + "</select></label>");
+    var ctrl = f.condField ? byId(S.fields, f.condField) : null;
+    if (f.condField && !ctrl) h.push("<p class=\"note bad\">The controlling field was deleted; pick another or clear the condition.</p>");
+    if (ctrl){
+      var k = kindOf(ctrl), vc;
+      if (k === "boolean") vc = "<select data-k=\"condValue\"><option value=\"true\"" + (f.condValue !== "false" ? " selected" : "") + ">is checked</option><option value=\"false\"" + (f.condValue === "false" ? " selected" : "") + ">is unchecked</option></select>";
+      else if (k === "enum" || k === "array") vc = "<select data-k=\"condValue\"><option value=\"\">(pick a value)</option>" + parseOptions(ctrl).map(function(o){ return "<option value=\"" + esc(o.value) + "\"" + (o.value === f.condValue ? " selected" : "") + ">" + esc(o.label) + "</option>"; }).join("") + "</select>";
+      else vc = "<input data-k=\"condValue\" value=\"" + esc(f.condValue) + "\"" + (k === "number" ? " type=\"number\"" : "") + " placeholder=\"value\">";
+      h.push("<label class=\"ir\"><span>" + (k === "array" ? "includes" : k === "boolean" ? "state" : "equals") + "</span>" + vc + "</label>");
+      if (!activeCond(f, S.fields)) h.push("<p class=\"note warn\">Enter a value to activate the condition.</p>");
+      else if (isReq(f)) h.push("<p class=\"note\">Required only while visible.</p>");
+    }
+    insp.innerHTML = h.join("");
+    refreshNotes();
+  }
+  function refreshNotes(){
+    var f = sel(); if (!f) return;
+    var pn = document.getElementById("patNote");
+    if (pn){ var pe = patternError(f.pattern); pn.textContent = pe ? "Invalid regex (" + pe + "). It is left out of the output until fixed." : ""; pn.className = "note" + (pe ? " bad" : ""); }
+    var rn = document.getElementById("rangeNote");
+    if (rn){
+      var w = [];
+      if (int(f.minLength) != null && int(f.maxLength) != null && int(f.minLength) > int(f.maxLength)) w.push("Min length is larger than max length.");
+      if (f.min !== "" && f.max !== "" && (f.type === "number" || f.type === "multiselect" ? num(f.min) > num(f.max) : f.min > f.max)) w.push("Min is larger than max.");
+      if (OPT[f.type] && !parseOptions(f).length) w.push("No options yet: the value is validated as free text.");
+      if (f.type === "multiselect" && f.def && defaultArray(f).length !== f.def.split(",").filter(function(x){ return x.trim(); }).length) w.push("Some default values are not options and are ignored.");
+      rn.textContent = w.join(" ");
+    }
+  }
+  function setVal(f, k, el){
+    var v = el.type === "checkbox" ? el.checked : el.value;
+    if (k === "name"){ f.name = v; f.nameTouched = true; return; }
+    f[k] = v;
+    if (k === "label" && !f.nameTouched && f.type !== "section"){
+      f.name = uniqueName(toCamel(v) || toCamel(TYPE_BY[f.type].label), S.fields, f.id);
+      var ni = insp.querySelector("[data-k=name]"); if (ni) ni.value = f.name;
+    }
+  }
+  insp.addEventListener("input", function(e){
+    var el = e.target, k = el.dataset && el.dataset.k, f = sel(); if (!k || !f || el.tagName === "SELECT" || el.type === "radio" || el.type === "checkbox") return;
+    setVal(f, k, el);
+    refreshNotes();
+    if (k === "options") refreshDefaultOptions(f);
+    changed(false, true);
+  });
+  insp.addEventListener("change", function(e){
+    var el = e.target, k = el.dataset && el.dataset.k, f = sel(); if (!k || !f) return;
+    if (k === "name"){
+      var n = toCamel(el.value) || toCamel(f.label) || toCamel(TYPE_BY[f.type].label);
+      var u = uniqueName(n, S.fields, f.id);
+      if (!el.value.trim()) f.nameTouched = false;
+      f.name = u; el.value = u;
+      var note = document.getElementById("nameNote");
+      if (note){ note.textContent = u !== el.defaultValue && u !== n ? "“" + n + "” is taken; renamed to " + u + "." : (f.nameTouched ? "Set by hand." : "Follows the label until you edit it."); note.className = "note" + (u !== n ? " warn" : ""); }
+      changed(false, true); return;
+    }
+    if (el.tagName === "SELECT" || el.type === "radio" || el.type === "checkbox"){
+      setVal(f, k, el);
+      if (k === "type") retype(f);
+      if (k === "condField"){ var c = byId(S.fields, f.condField); f.condValue = c && kindOf(c) === "boolean" ? "true" : ""; }
+      changed(k === "type" || k === "condField");
+    }
+  });
+  function refreshDefaultOptions(f){
+    var d = insp.querySelector("select[data-k=def]"); if (!d || !(f.type === "select" || f.type === "radio")) return;
+    d.innerHTML = "<option value=\"\">(none)</option>" + parseOptions(f).map(function(o){ return "<option value=\"" + esc(o.value) + "\"" + (o.value === f.def ? " selected" : "") + ">" + esc(o.label) + "</option>"; }).join("");
+  }
+  function retype(f){
+    if (OPT[f.type] && !f.options) f.options = "option1 | Option 1\noption2 | Option 2";
+    if (f.type === "checkbox" || f.type === "switch"){ if (f.def !== "true") f.def = "false"; }
+    else if (f.def === "true" || f.def === "false") f.def = "";
+    if (f.type === "section"){ f.required = false; }
+    else if (!f.name) f.name = uniqueName(toCamel(f.label) || toCamel(TYPE_BY[f.type].label), S.fields, f.id);
+  }
+
+  /* preview */
+  var pv = $("pv");
+  function renderPreview(){
+    readPreview();
+    if (!dataFields(S.fields).length && !S.fields.length){
+      pv.innerHTML = "<p class=\"note\" style=\"grid-column:1/-1\">The working form appears here as you add fields. Fill it in and press the submit button to test the validation rules.</p>";
+      return;
+    }
+    var h = [];
+    S.fields.forEach(function(f){
+      var id = "pv-" + f.id, name = f.name, req = isReq(f);
+      var star = req ? " <span class=\"req\" aria-hidden=\"true\">*</span>" : "";
+      var cls = "pf" + (f.width === "half" ? " half" : "");
+      var help = f.help ? "<p class=\"help\" id=\"" + id + "-help\">" + esc(f.help) + "</p>" : "";
+      var err = "<p class=\"err\" id=\"" + id + "-err\" role=\"alert\" hidden></p>";
+      var ad = "aria-describedby=\"" + (f.help ? id + "-help " : "") + id + "-err\"" + (req ? " aria-required=\"true\"" : "");
+      if (f.type === "section"){ h.push("<div class=\"pf sec\" data-fid=\"" + f.id + "\"><h3>" + esc(lbl(f)) + "</h3>" + (f.help ? "<p class=\"help\">" + esc(f.help) + "</p>" : "") + "</div>"); return; }
+      if (f.type === "hidden"){ h.push("<input type=\"hidden\" data-fid=\"" + f.id + "\" id=\"" + id + "\" value=\"" + esc(f.def) + "\">"); return; }
+      var ph = f.placeholder && PLACEHOLDER[f.type] ? " placeholder=\"" + esc(f.placeholder) + "\"" : "";
+      var opts = parseOptions(f), ctl;
+      if (f.type === "checkbox" || f.type === "switch"){
+        h.push("<div class=\"" + cls + "\" data-fid=\"" + f.id + "\"><label class=\"inline\" for=\"" + id + "\"><input type=\"checkbox\" id=\"" + id + "\"" + (f.type === "switch" ? " role=\"switch\" class=\"switch\"" : "") + " " + ad + (f.def === "true" ? " checked" : "") + ">" + esc(lbl(f)) + star + "</label>" + help + err + "</div>");
+        return;
+      }
+      if (f.type === "radio"){
+        h.push("<div class=\"" + cls + "\" data-fid=\"" + f.id + "\"><fieldset " + ad + "><legend>" + esc(lbl(f)) + star + "</legend><div class=\"opts\">" +
+          (opts.length ? opts.map(function(o, i){ return "<label class=\"inline\"><input type=\"radio\" name=\"" + id + "\" value=\"" + esc(o.value) + "\"" + (o.value === f.def ? " checked" : "") + ">" + esc(o.label) + "</label>"; }).join("") : "<span class=\"help\">No options defined.</span>") +
+          "</div></fieldset>" + help + err + "</div>");
+        return;
+      }
+      if (f.type === "select" || f.type === "multiselect"){
+        var dv = f.type === "multiselect" ? defaultArray(f) : [f.def];
+        ctl = "<select id=\"" + id + "\" " + ad + (f.type === "multiselect" ? " multiple" : "") + ">" +
+          (f.type === "select" ? "<option value=\"\">" + esc(f.placeholder || "Select…") + "</option>" : "") +
+          opts.map(function(o){ return "<option value=\"" + esc(o.value) + "\"" + (dv.indexOf(o.value) >= 0 ? " selected" : "") + ">" + esc(o.label) + "</option>"; }).join("") + "</select>";
+      } else if (f.type === "textarea") ctl = "<textarea id=\"" + id + "\" rows=\"3\" " + ad + ph + ">" + esc(f.def) + "</textarea>";
+      else ctl = "<input id=\"" + id + "\" type=\"" + f.type + "\" " + ad + ph + (f.type === "file" && f.accept ? " accept=\"" + esc(f.accept) + "\"" : "") + (f.type !== "file" ? " value=\"" + esc(f.def) + "\"" : "") + (f.type === "number" ? " step=\"any\"" : "") + ">";
+      h.push("<div class=\"" + cls + "\" data-fid=\"" + f.id + "\"><label for=\"" + id + "\">" + esc(lbl(f)) + star + "</label>" + ctl + help + err + "</div>");
+    });
+    h.push("<div class=\"pv-actions\"><button type=\"submit\" class=\"btn btn-primary\">" + esc(S.submitLabel || "Submit") + "</button><button type=\"button\" class=\"btn\" id=\"pvReset\">Reset</button></div>");
+    h.push("<div class=\"pv-result\" id=\"pvResult\" role=\"status\" aria-live=\"polite\"></div>");
+    pv.innerHTML = h.join("");
+    // restore values typed into the previous render
+    S.fields.forEach(function(f){ if (pvVals[f.id] !== undefined && f.type !== "file" && f.type !== "hidden") writeCtl(f, pvVals[f.id]); });
+    refreshPreview();
+  }
+  function ctlOf(f){ return document.getElementById("pv-" + f.id); }
+  function readCtl(f){
+    if (f.type === "radio"){ var c = pv.querySelector("input[name=\"pv-" + f.id + "\"]:checked"); return c ? c.value : ""; }
+    var el = ctlOf(f); if (!el) return undefined;
+    if (f.type === "checkbox" || f.type === "switch") return el.checked;
+    if (f.type === "multiselect") return Array.prototype.filter.call(el.options, function(o){ return o.selected; }).map(function(o){ return o.value; });
+    if (f.type === "number") return el.value === "" ? (el.validity && el.validity.badInput ? NaN : undefined) : Number(el.value);
+    if (f.type === "file") return el.files;
+    return el.value;
+  }
+  function writeCtl(f, v){
+    if (f.type === "radio"){ Array.prototype.forEach.call(pv.querySelectorAll("input[name=\"pv-" + f.id + "\"]"), function(r){ r.checked = r.value === v; }); return; }
+    var el = ctlOf(f); if (!el) return;
+    if (f.type === "checkbox" || f.type === "switch") el.checked = !!v;
+    else if (f.type === "multiselect") Array.prototype.forEach.call(el.options, function(o){ o.selected = (v || []).indexOf(o.value) >= 0; });
+    else if (f.type === "number") el.value = v === undefined || isNaN(v) ? "" : String(v);
+    else if (f.type === "select" && typeof v === "string" && !parseOptions(f).some(function(o){ return o.value === v; })) el.value = "";
+    else el.value = v == null ? "" : v;
+  }
+  function readPreview(){
+    S.fields.forEach(function(f){
+      if (f.type === "section" || f.type === "file") return;
+      if (!pv.querySelector("[data-fid=\"" + f.id + "\"]")) return;
+      pvVals[f.id] = readCtl(f);
+    });
+  }
+  function currentValues(){
+    var v = {};
+    dataFields(S.fields).forEach(function(f){ v[f.name] = readCtl(f); });
+    return v;
+  }
+  function refreshPreview(){
+    var vals = currentValues(), r = validateValues(S.fields, vals);
+    S.fields.forEach(function(f){
+      var wrap = pv.querySelector("[data-fid=\"" + f.id + "\"]"); if (!wrap || f.type === "hidden") return;
+      wrap.hidden = !r.visible[f.id];
+      if (f.type === "section") return;
+      var e = submitted ? r.errors[f.name] : null, errEl = document.getElementById("pv-" + f.id + "-err");
+      if (errEl){ errEl.textContent = e || ""; errEl.hidden = !e; }
+      var targets = f.type === "radio" ? pv.querySelectorAll("input[name=\"pv-" + f.id + "\"]") : [ctlOf(f)];
+      Array.prototype.forEach.call(targets, function(t){ if (t) t.setAttribute("aria-invalid", e ? "true" : "false"); });
+    });
+    return {vals:vals, r:r};
+  }
+  pv.addEventListener("input", function(){ refreshPreview(); var res = $("pvResult"); if (res && res.className.indexOf("ok") >= 0){ res.textContent = ""; res.className = "pv-result"; } });
+  pv.addEventListener("change", function(){ refreshPreview(); });
+  pv.addEventListener("click", function(e){
+    if (e.target.id !== "pvReset") return;
+    submitted = false; pvVals = {}; renderPreview();
+  });
+  pv.addEventListener("submit", function(e){
+    e.preventDefault(); submitted = true;
+    var x = refreshPreview(), n = Object.keys(x.r.errors).length, res = $("pvResult");
+    if (n){
+      res.className = "pv-result bad"; res.textContent = n + " field" + (n === 1 ? " has" : "s have") + " an error. Fix the highlighted field" + (n === 1 ? "" : "s") + " and submit again.";
+      var first = S.fields.filter(function(f){ return x.r.errors[f.name]; })[0];
+      if (first){ var c = first.type === "radio" ? pv.querySelector("input[name=\"pv-" + first.id + "\"]") : ctlOf(first); if (c) c.focus(); }
+      return;
+    }
+    var out = {};
+    dataFields(S.fields).forEach(function(f){
+      if (!x.r.visible[f.id]) return;
+      var v = x.vals[f.name];
+      if (f.type === "file") v = v && v.length ? Array.prototype.map.call(v, function(fl){ return fl.name; }) : [];
+      if (v === undefined) return;
+      out[f.name] = v;
+    });
+    res.className = "pv-result ok";
+    res.innerHTML = "Valid. onSubmit would receive:<pre>" + esc(JSON.stringify(out, null, 2)) + "</pre>";
+  });
+
+  /* output */
+  var FORMATS = [
+    {id:"prompt", label:"Prompt", gen:genPrompt, wrap:true},
+    {id:"zod", label:"Zod", gen:genZod},
+    {id:"ts", label:"TypeScript", gen:genTS},
+    {id:"react", label:"React", gen:genReact},
+    {id:"json", label:"JSON Schema", gen:genJSONSchema}
+  ];
+  var cache = {};
+  $("tabs").innerHTML = FORMATS.map(function(x){ return "<button type=\"button\" class=\"tab\" role=\"tab\" data-tab=\"" + x.id + "\">" + x.label + "</button>"; }).join("");
+  $("tabs").addEventListener("click", function(e){ var b = e.target.closest(".tab"); if (!b) return; tab = b.dataset.tab; try { localStorage.setItem(KEY + "tab", tab); } catch (er) {} renderOut(); });
+  $("tabs").addEventListener("keydown", function(e){
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    var i = FORMATS.findIndex(function(x){ return x.id === tab; }); i = (i + (e.key === "ArrowRight" ? 1 : FORMATS.length - 1)) % FORMATS.length;
+    tab = FORMATS[i].id; renderOut(); $("tabs").querySelector("[data-tab=" + tab + "]").focus();
+  });
+  function renderOut(){
+    if (!FORMATS.some(function(x){ return x.id === tab; })) tab = "prompt";
+    Array.prototype.forEach.call($("tabs").children, function(b){ var on = b.dataset.tab === tab; b.setAttribute("aria-selected", on ? "true" : "false"); b.tabIndex = on ? 0 : -1; });
+    var fmt = FORMATS.filter(function(x){ return x.id === tab; })[0], text;
+    if (!dataFields(S.fields).length) text = "";
+    else { try { text = fmt.gen(S); } catch (e) { text = "// Could not generate this format: " + e.message; } }
+    cache[tab] = text;
+    var out = $("out");
+    out.textContent = text || "Add at least one input field to generate " + fmt.label + ".";
+    out.classList.toggle("wrapit", !!fmt.wrap);
+    $("count").textContent = text.length.toLocaleString("en-US") + " chars";
+    $("copyBtn").disabled = !text;
+  }
+  $("copyBtn").addEventListener("click", function(){
+    var text = cache[tab] || ""; if (!text) return;
+    var done = function(ok){ var c = $("copied"); c.textContent = ok ? "Copied" : "Copy failed: select the text and press Ctrl+C"; c.style.color = ok ? "" : "var(--danger)"; clearTimeout(done.t); done.t = setTimeout(function(){ c.textContent = ""; }, 2000); };
+    var fallback = function(){
+      var ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0"; ta.style.top = "0";
+      document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand("copy"); } catch (e) {} document.body.removeChild(ta); done(ok);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function(){ done(true); }, fallback);
+    else fallback();
+  });
+
+  /* form meta */
+  function syncMeta(){ $("formName").value = S.formName; $("submitLabel").value = S.submitLabel; noteName(); }
+  function noteName(){ var n = names(S); $("formNameNote").innerHTML = "→ <span class=\"mono\">" + esc(n.comp) + "</span>"; }
+  $("formName").addEventListener("input", function(e){ S.formName = e.target.value; noteName(); changed(false, true); });
+  $("submitLabel").addEventListener("input", function(e){ S.submitLabel = e.target.value; changed(false, true); });
+
+  function loadSample(){ S = sampleState(); pvVals = {}; submitted = false; lastDeleted = null; $("undo").hidden = true; syncMeta(); changed(true); status("Sample loaded: 15 fields with conditions and a match rule.", true); }
+  $("sampleBtn").addEventListener("click", loadSample);
+  $("clearBtn").addEventListener("click", function(){
+    if (!S.fields.length) return;
+    var prev = JSON.stringify(S);
+    S.fields = []; S.sel = null; pvVals = {}; submitted = false;
+    var u = $("undo"); u.hidden = false; u.innerHTML = "Cleared the form. <button type=\"button\" class=\"btn-link\" id=\"undoClear\">Undo</button>";
+    u.onclick = function(e){ if (e.target.id !== "undoClear") return; S = JSON.parse(prev); u.hidden = true; u.onclick = null; syncMeta(); changed(true); };
+    changed(true);
+  });
+
+  /* render cycle: structural changes rebuild the inspector; typing in it does not */
+  var pvTimer;
+  function changed(rebuildInsp, fromTyping){
+    save();
+    renderList();
+    if (rebuildInsp) renderInsp();
+    renderOut();
+    if (fromTyping){ clearTimeout(pvTimer); pvTimer = setTimeout(renderPreview, 150); } else renderPreview();
+  }
+  syncMeta();
+  if (S.sel && !sel()) S.sel = null;
+  renderList(); renderInsp(); renderOut(); renderPreview();
+})();
+</script>
+<!--
+Form Builder — usage
+- Add fields from the left list (click adds below the selection, or drag into the form). Reorder with the ⋮⋮ handle,
+  the ↑/↓ buttons or Alt+↑/↓ on a focused row. Delete has a one-step Undo.
+- Select a field to edit label, code name (auto camelCase and de-duplicated), placeholder, help, default, width,
+  validation (required, lengths, min/max, regex, custom message, "must match") and "show only when X equals Y".
+- The preview is a real form: submit it to see the same error messages the generated zod schema produces.
+- Output tabs: Prompt (plain-text brief for an LLM), Zod, TypeScript, React (react-hook-form + zodResolver) and JSON Schema.
+- State is kept in localStorage under "redline.tool.form-builder.".
+-->
+</body>
+</html>

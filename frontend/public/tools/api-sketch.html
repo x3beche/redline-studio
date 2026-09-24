@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Sketch — endpoints to OpenAPI, curl and TypeScript</title>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#ffffff;
+  --sunken:#e8edf1;
+  --ink:#16202a;
+  --ink-soft:#5b6b7a;
+  --line:#c8d2db;
+  --line-soft:#dde4ea;
+  --accent:#1f4ed8;
+  --accent-ink:#ffffff;
+  --danger:#c0392b;
+  --warn:#9a5b00;
+  --ok:#1e7a46;
+  --fill-alpha:0.16;
+  --tool-get:#1f6fd1;
+  --tool-post:#1e7a46;
+  --tool-put:#8a5a00;
+  --tool-patch:#7b3fbf;
+  --tool-delete:#c0392b;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f151b;
+    --surface:#161f27;
+    --sunken:#111920;
+    --ink:#e4ebf1;
+    --ink-soft:#8ea0b0;
+    --line:#2b3945;
+    --line-soft:#212c36;
+    --accent:#6d8dff;
+    --accent-ink:#0f151b;
+    --danger:#f07b6e;
+    --warn:#e0a84a;
+    --ok:#5cc98a;
+    --fill-alpha:0.30;
+    --tool-get:#6ea8ff;
+    --tool-post:#5cc98a;
+    --tool-put:#e0a84a;
+    --tool-patch:#b48cf0;
+    --tool-delete:#f07b6e;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f151b;
+  --surface:#161f27;
+  --sunken:#111920;
+  --ink:#e4ebf1;
+  --ink-soft:#8ea0b0;
+  --line:#2b3945;
+  --line-soft:#212c36;
+  --accent:#6d8dff;
+  --accent-ink:#0f151b;
+  --danger:#f07b6e;
+  --warn:#e0a84a;
+  --ok:#5cc98a;
+  --fill-alpha:0.30;
+  --tool-get:#6ea8ff;
+  --tool-post:#5cc98a;
+  --tool-put:#e0a84a;
+  --tool-patch:#b48cf0;
+  --tool-delete:#f07b6e;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+/* top bar */
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--surface)}
+.brand{margin:0;font-size:15px;font-weight:600;letter-spacing:-0.01em}
+.brand span{color:var(--ink-soft);font-weight:400}
+.actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-left:auto}
+.note{font-size:12px;color:var(--ink-soft);min-height:1em}
+.note button{margin-left:6px}
+
+.btn{padding:4px 10px;border:1px solid var(--line);border-radius:4px;background:var(--surface);cursor:pointer;font-size:13px;line-height:1.35;white-space:nowrap}
+.btn:hover{border-color:var(--ink-soft)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn-primary:hover{filter:brightness(1.08);border-color:var(--accent)}
+.btn-sm{padding:2px 7px;font-size:12px}
+.btn-danger{color:var(--danger)}
+.btn-danger.armed{background:var(--danger);border-color:var(--danger);color:var(--surface)}
+.icon{border:0;background:transparent;color:var(--ink-soft);cursor:pointer;padding:2px 6px;border-radius:3px;font-size:14px;line-height:1}
+.icon:hover{color:var(--ink);background:var(--sunken)}
+.icon.del:hover{color:var(--danger)}
+.icon:disabled{visibility:hidden}
+
+/* layout */
+.wrap{display:grid;grid-template-columns:260px minmax(0,1.05fr) minmax(0,1fr);gap:12px;padding:12px;align-items:start}
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;min-width:0}
+.card-head{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line-soft)}
+.card-head h2{margin:0;font-size:13px;font-weight:600}
+.card-head .grow{flex:1}
+.count{color:var(--ink-soft);font-size:12px;font-family:"IBM Plex Mono",ui-monospace,monospace}
+.pad{padding:10px}
+.out-card{position:sticky;top:12px;display:flex;flex-direction:column;height:calc(100vh - 24px - 49px);min-height:420px}
+@media (max-width:1180px){
+  .wrap{grid-template-columns:250px minmax(0,1fr)}
+  .out-card{grid-column:1 / -1;position:static;height:auto;min-height:0}
+  .out-card pre{max-height:70vh;min-height:260px}
+}
+@media (max-width:760px){
+  .wrap{grid-template-columns:minmax(0,1fr);padding:8px;gap:8px}
+}
+
+/* form bits */
+.in,.sel,.ta{
+  width:100%;min-width:0;padding:3px 6px;border:1px solid var(--line);border-radius:4px;
+  background:var(--sunken);font-size:13px;line-height:1.35;
+}
+.in:focus,.sel:focus,.ta:focus{border-color:var(--accent);outline:none;background:var(--paper)}
+.in:focus-visible,.sel:focus-visible,.ta:focus-visible{outline:2px solid var(--accent);outline-offset:0}
+.in.mono{font-size:12.5px}
+.ta{resize:vertical;min-height:44px}
+.sel{padding:3px 4px}
+.lbl{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--ink-soft);min-width:0}
+.lbl > .in,.lbl > .sel,.lbl > .ta{color:var(--ink)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stack{display:flex;flex-direction:column;gap:8px}
+.chk{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--ink-soft);cursor:pointer;white-space:nowrap}
+.chk input{margin:0;accent-color:var(--accent)}
+.hint{font-size:12px;color:var(--ink-soft)}
+
+/* endpoint list */
+.eplist{padding:4px 6px 8px;max-height:46vh;overflow:auto}
+@media (max-width:1180px){.eplist{max-height:none}}
+.group{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);padding:8px 6px 3px;font-weight:600;display:flex;justify-content:space-between}
+.ep{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:2px 6px;align-items:center;width:100%;text-align:left;border:1px solid transparent;background:transparent;border-radius:4px;padding:4px 6px;cursor:pointer}
+.ep:hover{background:var(--sunken)}
+.ep.sel{background:var(--sunken);border-color:var(--line)}
+.ep .p{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ep .s{grid-column:2 / 4;font-size:12px;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--warn)}
+.dot.err{background:var(--danger)}
+.badge{display:inline-block;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;font-weight:600;border:1px solid currentColor;border-radius:3px;padding:0 4px;text-align:center;line-height:16px}
+.m-GET{color:var(--tool-get)}.m-POST{color:var(--tool-post)}.m-PUT{color:var(--tool-put)}.m-PATCH{color:var(--tool-patch)}.m-DELETE{color:var(--tool-delete)}
+.empty{padding:14px 12px;color:var(--ink-soft);font-size:13px}
+.empty b{color:var(--ink);font-weight:600}
+
+/* checks */
+.checks{list-style:none;margin:0;padding:6px;display:flex;flex-direction:column;gap:2px;max-height:30vh;overflow:auto}
+@media (max-width:1180px){.checks{max-height:none}}
+.checks li{display:flex;gap:7px;align-items:flex-start;padding:4px 6px;border-radius:4px;font-size:12.5px}
+.checks li.link{cursor:pointer}
+.checks li.link:hover{background:var(--sunken)}
+.checks li .dot{margin-top:5px;flex:none}
+.checks li .where{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;color:var(--ink-soft);display:block}
+.okline{color:var(--ok);padding:10px 12px;font-size:12.5px}
+
+/* editor */
+.editor{container-type:inline-size;min-width:0}
+.ed-head .p{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.ed-body{padding:10px;display:flex;flex-direction:column;gap:12px}
+.row1{display:grid;grid-template-columns:100px minmax(0,1fr);gap:8px}
+.sec{border-top:1px solid var(--line-soft);padding-top:10px}
+.sec-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+.sec-head h3{margin:0;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
+.sec-head .grow{flex:1}
+.muted{color:var(--ink-soft);font-size:12px}
+
+.cols,.frow,.qrow,.prow{display:grid;gap:4px 6px;align-items:center}
+.cols{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;padding:0 0 2px}
+.frow,.qrow,.prow{padding:2px 0}
+.frow{grid-template-columns:minmax(0,1.1fr) 190px 44px minmax(0,1fr) minmax(0,1.3fr) 50px;grid-template-areas:"name type req ex desc act"}
+.cols.f{grid-template-columns:minmax(0,1.1fr) 190px 44px minmax(0,1fr) minmax(0,1.3fr) 50px}
+.qrow,.cols.q{grid-template-columns:minmax(0,1.1fr) 104px 44px minmax(0,.9fr) minmax(0,1.5fr) 26px}
+.prow,.cols.p{grid-template-columns:minmax(0,1fr) 104px minmax(0,1fr) minmax(0,1.5fr)}
+.frow .c-name{grid-area:name;display:flex;align-items:center;min-width:0}
+.frow .c-type{grid-area:type;display:flex;gap:4px;min-width:0}
+.frow .c-req{grid-area:req}
+.frow .c-ex{grid-area:ex;min-width:0}
+.frow .c-desc{grid-area:desc;min-width:0}
+.frow .c-act{grid-area:act;display:flex;justify-content:flex-end}
+.indent{flex:none;align-self:stretch;border-left:1px solid var(--line);margin-left:6px}
+.pname{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px;padding:3px 6px;border:1px dashed var(--line);border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.derived{font-size:12px;color:var(--ink-soft);font-style:italic;padding:3px 6px}
+.resp{border:1px solid var(--line-soft);border-radius:5px;padding:8px;margin-bottom:8px;background:var(--paper)}
+.resp-head{display:grid;grid-template-columns:62px minmax(0,1fr) 150px 26px;gap:6px;align-items:center;margin-bottom:6px}
+.resp-head .code{font-weight:600;text-align:center}
+.st-2{color:var(--ok)}.st-4,.st-5{color:var(--danger)}.st-3,.st-1{color:var(--warn)}
+.addrow{margin-top:4px}
+@container (max-width:620px){
+  .cols{display:none}
+  .frow{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto auto;grid-template-areas:"name type req act" "ex desc desc desc";border-bottom:1px dashed var(--line-soft);padding:5px 0}
+  .qrow{grid-template-columns:minmax(0,1fr) 100px auto auto;border-bottom:1px dashed var(--line-soft);padding:5px 0}
+  .qrow .q-def{grid-column:1 / 3}.qrow .q-desc{grid-column:1 / 5}
+  .prow{grid-template-columns:minmax(0,1fr) 100px;border-bottom:1px dashed var(--line-soft);padding:5px 0}
+  .resp-head{grid-template-columns:56px minmax(0,1fr) 26px}
+  .resp-head .r-kind{grid-column:1 / 4}
+  .row1{grid-template-columns:90px minmax(0,1fr)}
+}
+@container (max-width:430px){
+  .frow{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name name" "type req" "ex ex" "desc act"}
+}
+
+/* output */
+.tabs{display:flex;gap:2px;padding:6px 6px 0;border-bottom:1px solid var(--line-soft);overflow-x:auto}
+.tab{border:1px solid transparent;border-bottom:0;background:transparent;padding:5px 10px;border-radius:5px 5px 0 0;cursor:pointer;font-size:13px;color:var(--ink-soft);white-space:nowrap}
+.tab .n{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;margin-left:5px;opacity:.8}
+.tab[aria-selected="true"]{background:var(--sunken);border-color:var(--line-soft);color:var(--ink);font-weight:600}
+.out-tools{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line-soft)}
+.out-tools .grow{flex:1}
+.out-tools .sel{width:auto}
+.out-card pre{margin:0;flex:1;overflow:auto;padding:10px 12px;background:var(--sunken);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;line-height:1.5;white-space:pre;tab-size:2;border-radius:0 0 6px 6px}
+.copied{color:var(--ok);font-size:12px}
+.copyfail{color:var(--danger);font-size:12px}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <h1 class="brand">API Sketch <span>— endpoints to OpenAPI, curl and TypeScript</span></h1>
+  <div class="actions">
+    <span class="note" id="note" role="status" aria-live="polite"></span>
+    <button class="btn" id="btnSample" type="button">Load sample</button>
+    <button class="btn btn-danger" id="btnClear" type="button">Clear all</button>
+    <button class="btn btn-primary" id="btnAdd" type="button">+ Endpoint</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="side">
+    <section class="card" aria-labelledby="h-info">
+      <div class="card-head"><h2 id="h-info">API</h2></div>
+      <div class="pad stack" id="info"></div>
+    </section>
+    <section class="card" aria-labelledby="h-eps">
+      <div class="card-head"><h2 id="h-eps" class="grow">Endpoints</h2><span class="count" id="epCount">0</span></div>
+      <div class="eplist" id="epList"></div>
+    </section>
+    <section class="card" aria-labelledby="h-checks">
+      <div class="card-head"><h2 id="h-checks" class="grow">Consistency checks</h2><span class="count" id="checkCount">0</span></div>
+      <ul class="checks" id="checks"></ul>
+    </section>
+  </div>
+
+  <section class="card editor" id="editor" aria-label="Endpoint editor"></section>
+
+  <section class="card out-card" aria-label="Output">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="out-tools">
+      <span class="count" id="outCount"></span>
+      <label class="chk" id="goalWrap" hidden>Task
+        <select class="sel" id="goal" aria-label="Prompt task">
+          <option value="express">Build an Express server</option>
+          <option value="react-query">Write React Query hooks</option>
+          <option value="tests">Write contract tests</option>
+          <option value="none">Spec only, no task</option>
+        </select>
+      </label>
+      <span class="grow"></span>
+      <span id="copyMsg" role="status" aria-live="polite"></span>
+      <button class="btn btn-primary btn-sm" id="btnCopy" type="button">Copy</button>
+    </div>
+    <pre id="out" tabindex="0" aria-label="Generated output"></pre>
+  </section>
+</main>
+
+<script>
+(function(){
+'use strict';
+
+/* PURE-START: logic below has no DOM access */
+var METHODS=['GET','POST','PUT','PATCH','DELETE'];
+var FIELD_TYPES=['string','integer','number','boolean','object','array','uuid','date','date-time','email'];
+var ITEM_TYPES=FIELD_TYPES.filter(function(t){return t!=='array';});
+var PARAM_TYPES=['string','integer','number','boolean','uuid','date','date-time'];
+var BODY_KINDS=[['none','No body'],['object','JSON object'],['array','JSON array of objects']];
+var MAX_DEPTH=4;
+var STATUS_TEXT={'200':'OK','201':'Created','202':'Accepted','204':'No Content','301':'Moved Permanently','302':'Found','304':'Not Modified',
+  '400':'Bad Request','401':'Unauthorized','403':'Forbidden','404':'Not Found','405':'Method Not Allowed','409':'Conflict','410':'Gone',
+  '412':'Precondition Failed','415':'Unsupported Media Type','422':'Unprocessable Content','429':'Too Many Requests',
+  '500':'Internal Server Error','502':'Bad Gateway','503':'Service Unavailable','504':'Gateway Timeout'};
+
+var uidCounter=0;
+function uid(){uidCounter+=1;return 'k'+Date.now().toString(36)+uidCounter.toString(36);}
+function str(v,d){return typeof v==='string'?v:(d===undefined?'':d);}
+function uniq(a){return a.filter(function(x,i){return a.indexOf(x)===i;});}
+
+/* ---------- YAML emitter ---------- */
+var YAML_RESERVED=/^(?:y|n|yes|no|true|false|on|off|null|~)$/i;
+var YAML_PLAIN=/^[A-Za-z_\/(][A-Za-z0-9_ .\/+()\-,;$^=]*$/;
+function yamlStr(s){
+  s=String(s);
+  if(s===''||YAML_RESERVED.test(s)||/^[-+.]?\d/.test(s)||!YAML_PLAIN.test(s)||/\s$/.test(s)) return JSON.stringify(s);
+  return s;
+}
+function isObj(v){return v!==null&&typeof v==='object'&&!Array.isArray(v);}
+function yamlScalar(v){
+  if(v===null||v===undefined) return 'null';
+  if(typeof v==='boolean') return v?'true':'false';
+  if(typeof v==='number'){
+    if(Number.isFinite(v)) return String(v);
+    return Number.isNaN(v)?'.nan':(v>0?'.inf':'-.inf');
+  }
+  if(Array.isArray(v)) return '[]';
+  if(isObj(v)) return '{}';
+  return yamlStr(v);
+}
+function yamlBlock(v,ind){
+  var pad=' '.repeat(ind),out=[];
+  if(Array.isArray(v)){
+    v.forEach(function(item){
+      if((isObj(item)&&Object.keys(item).some(function(k){return item[k]!==undefined;}))||(Array.isArray(item)&&item.length)){
+        var sub=yamlBlock(item,ind+2);
+        out.push(pad+'- '+sub[0].slice(ind+2));
+        for(var i=1;i<sub.length;i++) out.push(sub[i]);
+      } else out.push(pad+'- '+yamlScalar(item));
+    });
+  } else {
+    Object.keys(v).forEach(function(k){
+      var val=v[k];
+      if(val===undefined) return;
+      var key=pad+yamlStr(k)+':';
+      if((isObj(val)&&Object.keys(val).some(function(x){return val[x]!==undefined;}))||(Array.isArray(val)&&val.length)){
+        out.push(key);
+        Array.prototype.push.apply(out,yamlBlock(val,ind+2));
+      } else out.push(key+' '+yamlScalar(val));
+    });
+  }
+  return out;
+}
+function toYaml(v){
+  if(isObj(v)||Array.isArray(v)){
+    var lines=yamlBlock(v,0);
+    return lines.length?lines.join('\n')+'\n':yamlScalar(v)+'\n';
+  }
+  return yamlScalar(v)+'\n';
+}
+
+/* ---------- model helpers ---------- */
+function normField(f,depth){
+  f=isObj(f)?f:{};
+  return {
+    id:str(f.id)||uid(), name:str(f.name),
+    type:FIELD_TYPES.indexOf(f.type)>=0?f.type:'string',
+    items:ITEM_TYPES.indexOf(f.items)>=0?f.items:'string',
+    required:!!f.required, description:str(f.description), example:str(f.example),
+    children:(depth<MAX_DEPTH-1&&Array.isArray(f.children))?f.children.map(function(c){return normField(c,depth+1);}):[]
+  };
+}
+function normParam(q){
+  q=isObj(q)?q:{};
+  return {id:str(q.id)||uid(),name:str(q.name),type:PARAM_TYPES.indexOf(q.type)>=0?q.type:'string',
+    required:!!q.required,default:str(q.default),description:str(q.description)};
+}
+function normPP(p){p=isObj(p)?p:{};return {type:PARAM_TYPES.indexOf(p.type)>=0?p.type:'string',description:str(p.description),example:str(p.example)};}
+function kindOk(k){return k==='object'||k==='array'?k:'none';}
+function normResponse(r){
+  r=isObj(r)?r:{};
+  return {id:str(r.id)||uid(),status:str(r.status,'200'),description:str(r.description),kind:kindOk(r.kind),
+    fields:(Array.isArray(r.fields)?r.fields:[]).map(function(f){return normField(f,0);})};
+}
+function normEndpoint(e){
+  e=isObj(e)?e:{};
+  var pp={};
+  if(isObj(e.pathParams)) Object.keys(e.pathParams).forEach(function(k){pp[k]=normPP(e.pathParams[k]);});
+  var ep={id:str(e.id)||uid(),method:METHODS.indexOf(e.method)>=0?e.method:'GET',path:str(e.path,'/'),
+    summary:str(e.summary),description:str(e.description),tag:str(e.tag),operationId:str(e.operationId),
+    pathParams:pp,query:(Array.isArray(e.query)?e.query:[]).map(normParam),bodyKind:kindOk(e.bodyKind),
+    body:(Array.isArray(e.body)?e.body:[]).map(function(f){return normField(f,0);}),
+    responses:(Array.isArray(e.responses)?e.responses:[]).map(normResponse)};
+  syncPathParams(ep);
+  return ep;
+}
+function blankInfo(){return {title:'',version:'1.0.0',baseUrl:'',description:'',auth:'none',apiKeyName:'X-API-Key',apiKeyIn:'header'};}
+function normState(s){
+  s=isObj(s)?s:{};
+  var i=isObj(s.info)?s.info:{},b=blankInfo();
+  var info={title:str(i.title),version:str(i.version,b.version),baseUrl:str(i.baseUrl),description:str(i.description),
+    auth:['none','bearer','apiKey','basic'].indexOf(i.auth)>=0?i.auth:'none',
+    apiKeyName:str(i.apiKeyName,b.apiKeyName),apiKeyIn:i.apiKeyIn==='query'?'query':'header'};
+  var eps=(Array.isArray(s.endpoints)?s.endpoints:[]).map(normEndpoint);
+  var sel=eps.some(function(e){return e.id===s.sel;})?s.sel:(eps[0]?eps[0].id:null);
+  return {info:info,endpoints:eps,sel:sel,tab:['yaml','prompt','curl','ts'].indexOf(s.tab)>=0?s.tab:'yaml',
+    goal:['express','react-query','tests','none'].indexOf(s.goal)>=0?s.goal:'express'};
+}
+function pathParamNames(path){
+  var out=[],re=/\{([^{}\/]*)\}/g,m;
+  while((m=re.exec(path))) out.push(m[1].trim());
+  return out;
+}
+function syncPathParams(ep){
+  pathParamNames(ep.path).forEach(function(n){ if(n&&!ep.pathParams[n]) ep.pathParams[n]=normPP({}); });
+}
+function newField(p){return normField(p||{},0);}
+function errorFields(){return [newField({name:'code',type:'string',required:true,example:'not_found'}),newField({name:'message',type:'string',required:true,example:'Resource not found'})];}
+function newResponse(status,kind,fields,description){return normResponse({status:String(status),kind:kind||'none',fields:fields||[],description:description||''});}
+function defaultResponses(method){
+  if(method==='POST') return [newResponse(201,'object'),newResponse(400,'object',errorFields())];
+  if(method==='DELETE') return [newResponse(204),newResponse(404,'object',errorFields())];
+  if(method==='GET') return [newResponse(200,'object'),newResponse(404,'object',errorFields())];
+  return [newResponse(200,'object'),newResponse(400,'object',errorFields())];
+}
+function newEndpoint(method,path){
+  var ep=normEndpoint({method:method||'GET',path:path||'/'});
+  ep.responses=defaultResponses(ep.method);
+  if(ep.method==='POST'||ep.method==='PUT'||ep.method==='PATCH') ep.bodyKind='object';
+  return ep;
+}
+function isVersionSeg(s){return /^(v\d+(\.\d+)*|api)$/i.test(s);}
+function isParamSeg(s){return /[{}]/.test(s);}
+function staticSegs(path){return path.split('/').filter(function(s){return s&&!isParamSeg(s);});}
+function effTag(ep){
+  var t=ep.tag.trim(); if(t) return t;
+  var s=staticSegs(ep.path).filter(function(x){return !isVersionSeg(x);})[0];
+  return s?s.charAt(0).toUpperCase()+s.slice(1):'default';
+}
+function singular(w){
+  if(/ies$/i.test(w)&&w.length>3) return w.slice(0,-3)+(/IES$/.test(w)?'Y':'y');
+  if(/(ss|us|is)$/i.test(w)) return w;
+  if(/(sh|ch|x|z)es$/i.test(w)) return w.slice(0,-2);
+  if(/s$/i.test(w)&&w.length>1) return w.slice(0,-1);
+  return w;
+}
+function plural(w){
+  if(/[^aeiou]y$/i.test(w)) return w.slice(0,-1)+'ies';
+  if(/(s|sh|ch|x|z)$/i.test(w)) return w+'es';
+  return w+'s';
+}
+function isPlural(w){return singular(w)!==w;}
+function words(s){return String(s).replace(/([a-z0-9])([A-Z])/g,'$1 $2').split(/[^A-Za-z0-9]+/).filter(Boolean);}
+function pascal(s){return words(s).map(function(w){return w.charAt(0).toUpperCase()+w.slice(1).toLowerCase();}).join('');}
+function sanitizeIdent(s){var r=String(s).replace(/[^A-Za-z0-9_$]/g,'_');if(/^[0-9]/.test(r)) r='_'+r;return r||'op';}
+function autoOpId(ep){
+  var segs=ep.path.split('/').filter(Boolean);
+  var endsParam=segs.length>0&&isParamSeg(segs[segs.length-1]);
+  var w=segs.filter(function(s){return !isParamSeg(s)&&!isVersionSeg(s);});
+  var verbs={GET:endsParam?'get':'list',POST:'create',PUT:'replace',PATCH:'update',DELETE:'delete'};
+  var singLast=endsParam||ep.method==='POST';
+  var parts=w.map(function(s,i){return (i<w.length-1||singLast)?singular(s):s;});
+  var tail=parts.map(pascal).join('');
+  return sanitizeIdent(verbs[ep.method]+(tail||'Root'));
+}
+function opIds(eps){
+  var used={},out={};
+  eps.forEach(function(ep){
+    var base=ep.operationId.trim()?sanitizeIdent(ep.operationId.trim()):autoOpId(ep);
+    var id=base,n=2;
+    while(used[id]){id=base+n;n+=1;}
+    used[id]=true; out[ep.id]=id;
+  });
+  return out;
+}
+function statusText(code){
+  code=String(code).trim();
+  if(STATUS_TEXT[code]) return STATUS_TEXT[code];
+  if(/^2/.test(code)) return 'Success';
+  if(/^3/.test(code)) return 'Redirect';
+  if(/^4/.test(code)) return 'Client error';
+  if(/^5/.test(code)) return 'Server error';
+  if(code==='default') return 'Unexpected error';
+  return 'Response';
+}
+function validStatus(code){return /^([1-5]\d\d|[1-5]XX|default)$/.test(code);}
+function named(fields){
+  var seen={};
+  return (fields||[]).filter(function(f){var n=f.name.trim();if(!n||seen[n]) return false;seen[n]=true;return true;});
+}
+function hasKids(f){return f.type==='object'||(f.type==='array'&&f.items==='object');}
+
+/* ---------- examples ---------- */
+function parseExample(type,raw){
+  raw=raw==null?'':String(raw);
+  var t=raw.trim();
+  if(t==='') return {ok:true,value:undefined};
+  if(type==='integer') return /^-?\d+$/.test(t)?{ok:true,value:parseInt(t,10)}:{ok:false,value:t};
+  if(type==='number') return /^-?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(t)?{ok:true,value:Number(t)}:{ok:false,value:t};
+  if(type==='boolean') return /^(true|false)$/i.test(t)?{ok:true,value:/^true$/i.test(t)}:{ok:false,value:t};
+  if(type==='uuid') return {ok:/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t),value:raw};
+  if(type==='date') return {ok:/^\d{4}-\d{2}-\d{2}$/.test(t),value:raw};
+  if(type==='date-time') return {ok:/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(t),value:raw};
+  if(type==='email') return {ok:/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(t),value:raw};
+  return {ok:true,value:raw};
+}
+function placeholder(type,forPath){
+  switch(type){
+    case 'integer': return 1;
+    case 'number': return 1.5;
+    case 'boolean': return true;
+    case 'uuid': return '3fa85f64-5717-4562-b3fc-2c963f66afa6';
+    case 'date': return '2024-05-01';
+    case 'date-time': return '2024-05-01T12:00:00Z';
+    case 'email': return 'user@example.com';
+    default: return forPath?'abc123':'string';
+  }
+}
+function splitList(raw){return String(raw).split(',').map(function(s){return s.trim();}).filter(function(s){return s!=='';});}
+function fieldExample(f){
+  if(f.type==='object') return objExample(f.children);
+  if(f.type==='array'){
+    if(f.items==='object') return [objExample(f.children)];
+    var parts=splitList(f.example);
+    if(!parts.length) return [placeholder(f.items)];
+    return parts.map(function(s){var p=parseExample(f.items,s);return p.ok&&p.value!==undefined?p.value:s;});
+  }
+  var p=parseExample(f.type,f.example);
+  return p.value!==undefined?p.value:placeholder(f.type);
+}
+function objExample(fields){var o={};named(fields).forEach(function(f){o[f.name.trim()]=fieldExample(f);});return o;}
+function bodyExample(kind,fields){return kind==='array'?[objExample(fields)]:objExample(fields);}
+
+/* ---------- schemas ---------- */
+function scalarSchema(t){
+  if(t==='uuid'||t==='date'||t==='date-time'||t==='email') return {type:'string',format:t};
+  return {type:t};
+}
+function fieldSchema(f){
+  var s;
+  if(f.type==='object') s=objSchema(f.children);
+  else if(f.type==='array') s={type:'array',items:f.items==='object'?objSchema(f.children):scalarSchema(f.items)};
+  else s=scalarSchema(f.type);
+  if(f.description.trim()) s.description=f.description.trim();
+  return s;
+}
+function objSchema(fields){
+  var s={type:'object'},fs=named(fields);
+  var req=fs.filter(function(f){return f.required;}).map(function(f){return f.name.trim();});
+  if(req.length) s.required=req;
+  if(fs.length){
+    s.properties={};
+    fs.forEach(function(f){s.properties[f.name.trim()]=fieldSchema(f);});
+  }
+  return s;
+}
+function bodySchema(kind,fields){return kind==='array'?{type:'array',items:objSchema(fields)}:objSchema(fields);}
+
+/* ---------- OpenAPI ---------- */
+function secName(auth){return {bearer:'bearerAuth',basic:'basicAuth',apiKey:'apiKeyAuth'}[auth];}
+function buildOperation(ep,opId){
+  var op={tags:[effTag(ep)]};
+  if(ep.summary.trim()) op.summary=ep.summary.trim();
+  if(ep.description.trim()) op.description=ep.description.trim();
+  op.operationId=opId;
+  var params=[];
+  uniq(pathParamNames(ep.path)).filter(Boolean).forEach(function(name){
+    var pp=ep.pathParams[name]||normPP({});
+    var p={name:name,in:'path',required:true};
+    if(pp.description.trim()) p.description=pp.description.trim();
+    p.schema=scalarSchema(pp.type);
+    var ex=parseExample(pp.type,pp.example);
+    if(ex.value!==undefined) p.example=ex.value;
+    params.push(p);
+  });
+  named(ep.query).forEach(function(q){
+    var p={name:q.name.trim(),in:'query',required:q.required};
+    if(q.description.trim()) p.description=q.description.trim();
+    p.schema=scalarSchema(q.type);
+    var d=parseExample(q.type,q.default);
+    if(d.value!==undefined) p.schema.default=d.value;
+    params.push(p);
+  });
+  if(params.length) op.parameters=params;
+  if(ep.bodyKind!=='none'){
+    op.requestBody={required:true,content:{'application/json':{schema:bodySchema(ep.bodyKind,ep.body),example:bodyExample(ep.bodyKind,ep.body)}}};
+  }
+  var res={};
+  ep.responses.forEach(function(r){
+    var code=r.status.trim();
+    if(!code||res[code]) return;
+    var o={description:r.description.trim()||statusText(code)};
+    if(r.kind!=='none') o.content={'application/json':{schema:bodySchema(r.kind,r.fields),example:bodyExample(r.kind,r.fields)}};
+    res[code]=o;
+  });
+  op.responses=res;
+  return op;
+}
+function buildOpenApi(st){
+  var I=st.info,ids=opIds(st.endpoints);
+  var doc={openapi:'3.1.0',info:{title:I.title.trim()||'Untitled API',version:I.version.trim()||'0.1.0'}};
+  if(I.description.trim()) doc.info.description=I.description.trim();
+  if(I.baseUrl.trim()) doc.servers=[{url:I.baseUrl.trim()}];
+  var tags=uniq(st.endpoints.map(effTag));
+  if(tags.length) doc.tags=tags.map(function(n){return {name:n};});
+  if(I.auth!=='none'){var sec={};sec[secName(I.auth)]=[];doc.security=[sec];}
+  var paths={},seen={};
+  st.endpoints.forEach(function(ep){
+    var key=ep.path.trim()||'/',m=ep.method.toLowerCase(),route=m+' '+key.replace(/\{[^{}\/]*\}/g,'{}');
+    if(seen[route]) return;
+    seen[route]=true;
+    if(!paths[key]) paths[key]={};
+    paths[key][m]=buildOperation(ep,ids[ep.id]);
+  });
+  doc.paths=paths;
+  if(I.auth!=='none'){
+    var sch={};
+    sch[secName(I.auth)]=I.auth==='bearer'?{type:'http',scheme:'bearer'}:I.auth==='basic'?{type:'http',scheme:'basic'}:
+      {type:'apiKey',in:I.apiKeyIn,name:I.apiKeyName.trim()||'X-API-Key'};
+    doc.components={securitySchemes:sch};
+  }
+  return doc;
+}
+
+/* ---------- consistency checks ---------- */
+function nameStyle(n){
+  if(/^[a-z][a-z0-9]*(_[a-z0-9]+)+$/.test(n)) return 'snake_case';
+  if(/^[a-z][a-z0-9]*([A-Z][a-z0-9]*)+$/.test(n)) return 'camelCase';
+  if(/^[a-z][a-z0-9]*(-[a-z0-9]+)+$/.test(n)) return 'kebab-case';
+  if(/^[A-Z][a-z0-9]+([A-Z][a-z0-9]*)*$/.test(n)&&/[a-z]/.test(n)) return 'PascalCase';
+  return null;
+}
+function checkApi(st){
+  var out=[];
+  function add(level,ep,text){out.push({level:level,ep:ep?ep.id:null,where:ep?ep.method+' '+(ep.path||'/'):'',text:text});}
+  var I=st.info;
+  if(!I.title.trim()) add('warn',null,'API title is empty; OpenAPI will say "Untitled API".');
+  if(I.auth==='apiKey'&&!I.apiKeyName.trim()) add('warn',null,'API key auth needs a header or query parameter name.');
+  if(I.baseUrl.trim()&&!/^https?:\/\/[^\s]+$/i.test(I.baseUrl.trim())) add('warn',null,'Base URL should start with http:// or https:// and contain no spaces.');
+  var allNames=[];
+  function note(n,ctx){n=n.trim();if(n) allNames.push({n:n,ctx:ctx});}
+  function checkFields(ep,fields,ctx){
+    var seen={};
+    fields.forEach(function(f){
+      var n=f.name.trim();
+      if(!n){add('warn',ep,ctx+': a field has no name and is left out of the output.');}
+      else if(seen[n]) add('error',ep,ctx+': field "'+n+'" appears twice.');
+      else seen[n]=true;
+      if(n) note(n,ctx);
+      if(!hasKids(f)){
+        var t=f.type==='array'?f.items:f.type;
+        var vals=f.type==='array'?splitList(f.example):(f.example.trim()?[f.example]:[]);
+        vals.forEach(function(v){ if(!parseExample(t,v).ok) add('warn',ep,ctx+': example "'+v.trim()+'" for "'+(n||'?')+'" is not a valid '+t+'.'); });
+      } else {
+        if(!named(f.children).length) add('warn',ep,ctx+': "'+(n||'?')+'" is an object with no fields; add fields with the + button.');
+        checkFields(ep,f.children,ctx+' > '+(n||'?'));
+      }
+    });
+  }
+  var seenRoute={},forms={};
+  st.endpoints.forEach(function(ep){
+    var path=ep.path.trim();
+    if(!path||path.charAt(0)!=='/') add('error',ep,'Path must start with "/".');
+    if(/[{}]/.test(path.replace(/\{[^{}\/]*\}/g,''))) add('error',ep,'Unbalanced braces in path; write parameters as {name}.');
+    if(/\/\//.test(path)) add('warn',ep,'Path contains "//".');
+    if(path.length>1&&/\/$/.test(path)) add('warn',ep,'Trailing slash in path; most APIs leave it off.');
+    var pnames=pathParamNames(path);
+    if(pnames.some(function(n){return !n;})) add('error',ep,'Empty path parameter "{}"; give it a name like {id}.');
+    var dupP=pnames.filter(function(n,i){return n&&pnames.indexOf(n)!==i;});
+    if(dupP.length) add('error',ep,'Path parameter {'+dupP[0]+'} is used twice.');
+    pnames.forEach(function(n){ if(n) note(n,'path'); });
+    var routeKey=ep.method+' '+path.replace(/\{[^{}\/]*\}/g,'{}');
+    if(seenRoute[routeKey]) add('error',ep,'Same method and path template as an earlier endpoint; OpenAPI allows only one. This one is left out of the OpenAPI output.');
+    seenRoute[routeKey]=true;
+    var segs=path.split('/').filter(Boolean);
+    segs.forEach(function(s,i){
+      if(isParamSeg(s)||isVersionSeg(s)) return;
+      var key=singular(s.toLowerCase());
+      (forms[key]=forms[key]||{})[s.toLowerCase()]=true;
+      if(i+1<segs.length&&isParamSeg(segs[i+1])&&!isPlural(s))
+        add('warn',ep,'"'+s+'" is followed by a parameter; collection segments are usually plural ("'+plural(s)+'").');
+    });
+    if(!ep.summary.trim()) add('warn',ep,'No summary; add one so the list, docs and prompt read well.');
+    if((ep.method==='GET'||ep.method==='DELETE')&&ep.bodyKind!=='none') add('warn',ep,ep.method+' with a request body; many clients and proxies drop it. Use query parameters.');
+    var qseen={};
+    ep.query.forEach(function(q){
+      var n=q.name.trim();
+      if(!n){add('warn',ep,'A query parameter has no name and is left out.');return;}
+      if(qseen[n]) add('error',ep,'Query parameter "'+n+'" appears twice.');
+      qseen[n]=true;
+      if(pnames.indexOf(n)>=0) add('error',ep,'"'+n+'" is both a path and a query parameter.');
+      note(n,'query');
+      if(q.default.trim()&&!parseExample(q.type,q.default).ok) add('warn',ep,'Default "'+q.default.trim()+'" of "'+n+'" is not a valid '+q.type+'.');
+      if(q.required&&q.default.trim()) add('warn',ep,'"'+n+'" is required and has a default; a default only applies to optional parameters.');
+    });
+    uniq(pnames).forEach(function(n){var pp=ep.pathParams[n];if(n&&pp&&pp.example.trim()&&!parseExample(pp.type,pp.example).ok) add('warn',ep,'Example "'+pp.example.trim()+'" of {'+n+'} is not a valid '+pp.type+'.');});
+    if(ep.bodyKind!=='none') checkFields(ep,ep.body,'Request body');
+    var codes={},has2=false,has4=false,hasErr=false;
+    ep.responses.forEach(function(r){
+      var c=r.status.trim();
+      if(!validStatus(c)){add('error',ep,'Response status "'+c+'" is not a valid code (100-599, 4XX or default).');return;}
+      if(codes[c]) add('error',ep,'Response '+c+' is defined twice.');
+      codes[c]=true;
+      if(/^2/.test(c)) has2=true;
+      if(/^4/.test(c)) has4=true;
+      if(/^[45]/.test(c)||c==='default') hasErr=true;
+      if(c==='204'&&r.kind!=='none') add('warn',ep,'204 No Content cannot carry a body.');
+      if(r.kind!=='none') checkFields(ep,r.fields,'Response '+c);
+    });
+    if(!has2) add('error',ep,'No 2xx response; every endpoint needs a success response (e.g. 200).');
+    if(!hasErr) add('error',ep,'No error response; add at least one 4xx or 5xx.');
+    else if(!has4) add('warn',ep,'No 4xx response; document how bad input or a missing resource is reported.');
+  });
+  Object.keys(forms).forEach(function(k){
+    var f=Object.keys(forms[k]);
+    if(f.length>1) add('warn',null,'Both '+f.map(function(x){return '"/'+x+'"';}).join(' and ')+' appear in paths; pick singular or plural and use it everywhere.');
+  });
+  var styles={};
+  allNames.forEach(function(x){var s=nameStyle(x.n);if(s){(styles[s]=styles[s]||[]);if(styles[s].indexOf(x.n)<0) styles[s].push(x.n);}});
+  var sk=Object.keys(styles);
+  if(sk.length>1){
+    add('warn',null,'Mixed naming styles: '+sk.map(function(s){return s+' ('+styles[s].slice(0,3).join(', ')+(styles[s].length>3?', …':'')+')';}).join(' vs ')+'. Pick one style for all parameter and field names.');
+  }
+  return out;
+}
+
+/* ---------- Prompt ---------- */
+function typeLabel(f){
+  if(f.type==='array') return f.items==='object'?'array of objects':'array of '+typeLabel({type:f.items});
+  if(f.type==='uuid'||f.type==='date'||f.type==='date-time'||f.type==='email') return 'string, format '+f.type;
+  return f.type;
+}
+function exampleText(f){
+  if(hasKids(f)) return '';
+  if(f.type==='array'){var p=splitList(f.example);return p.length?JSON.stringify(fieldExample(f)):'';}
+  if(!f.example.trim()) return '';
+  return JSON.stringify(fieldExample(f));
+}
+function fieldLines(fields,ind){
+  var lines=[],pad='  '.repeat(ind);
+  named(fields).forEach(function(f){
+    var line=pad+'- '+f.name.trim()+' ('+typeLabel(f)+', '+(f.required?'required':'optional')+')';
+    if(f.description.trim()) line+=': '+f.description.trim().replace(/\s*\n\s*/g,' ');
+    var ex=exampleText(f);
+    if(ex) line+='; example '+ex;
+    lines.push(line);
+    if(hasKids(f)){
+      if(named(f.children).length){
+        if(f.type==='array') lines.push(pad+'  each item has:');
+        Array.prototype.push.apply(lines,fieldLines(f.children,ind+1));
+      } else lines.push(pad+'  (fields not specified)');
+    }
+  });
+  return lines;
+}
+function bodyLines(kind,fields,ind){
+  var pad='  '.repeat(ind);
+  if(kind==='none') return [];
+  var fs=named(fields);
+  if(!fs.length) return [pad+(kind==='array'?'JSON array of objects (fields not specified)':'JSON object (fields not specified)')];
+  return [pad+(kind==='array'?'JSON array; each item is an object with:':'JSON object with:')].concat(fieldLines(fields,ind));
+}
+var GOALS={
+  express:['## Task','Implement this API as a Node.js server with Express and TypeScript.',
+    '- Routes, methods, status codes and field names exactly as listed above; one router per group.',
+    '- Validate path, query and body input against the types and required flags above. On invalid input answer with the documented 4xx status and error body.',
+    '- Apply query parameter defaults when a parameter is missing.',
+    '- Put the authentication described above in a middleware.',
+    '- Keep data in an in-memory store behind a small repository interface so it can be replaced by a database later.',
+    '- Return the documented response shapes; do not add, drop or rename fields.',
+    '- Finish with a short list of curl commands that exercise every endpoint.'],
+  'react-query':['## Task','Write a typed client and TanStack Query (React Query v5) hooks for this API in TypeScript.',
+    '- One fetch-based function per endpoint, named after its operationId, with request and response types taken from the shapes above.',
+    '- useQuery hooks for GET endpoints with stable query keys built from the path and query parameters, for example ["books", { limit }].',
+    '- useMutation hooks for POST, PUT, PATCH and DELETE that invalidate the affected list and detail queries on success.',
+    '- Throw a typed error carrying the HTTP status and the parsed error body for every non-2xx response.',
+    '- Read the base URL and credentials from one config object; do not hard-code them.'],
+  tests:['## Task','Write an automated contract test suite for this API in TypeScript with Vitest and fetch, against a BASE_URL environment variable.',
+    '- For every endpoint: one test for the documented success response (status code and response shape) and one test per documented error status.',
+    '- Check required fields, field types and formats (uuid, date, date-time, email) of every response body.',
+    '- Check that invalid path, query and body input is rejected with the documented 4xx status.',
+    '- Create any data a test needs through the API itself and clean it up afterwards.'],
+  none:[]
+};
+function authSentence(I){
+  if(I.auth==='bearer') return 'Every request sends "Authorization: Bearer <token>". Missing or invalid tokens get 401 Unauthorized.';
+  if(I.auth==='basic') return 'Every request uses HTTP Basic authentication ("Authorization: Basic <base64 user:password>"). Missing or wrong credentials get 401 Unauthorized.';
+  if(I.auth==='apiKey'){var n=I.apiKeyName.trim()||'X-API-Key';return I.apiKeyIn==='query'?'Every request carries the API key in the query parameter "'+n+'". Missing or invalid keys get 401 Unauthorized.':'Every request sends the API key in the "'+n+'" header. Missing or invalid keys get 401 Unauthorized.';}
+  return 'None; all endpoints are public.';
+}
+function buildPrompt(st){
+  var I=st.info,ids=opIds(st.endpoints),L=[];
+  var title=I.title.trim()||'Untitled API';
+  L.push('# '+title+' (version '+(I.version.trim()||'0.1.0')+') - HTTP API specification');
+  if(I.description.trim()) L.push('',I.description.trim());
+  L.push('');
+  L.push('Base URL: '+(I.baseUrl.trim()||'(not set; use http://localhost:3000)'));
+  L.push('Authentication: '+authSentence(I));
+  L.push('Format: request and response bodies are JSON (Content-Type: application/json). "required" means the key must be present; optional keys may be omitted.');
+  var tags=uniq(st.endpoints.map(effTag));
+  if(!st.endpoints.length){
+    L.push('','No endpoints defined yet.');
+  } else {
+    L.push('Endpoints: '+st.endpoints.length+' in '+tags.length+' group'+(tags.length===1?'':'s')+' ('+tags.join(', ')+').');
+    tags.forEach(function(tag){
+      L.push('','## '+tag);
+      st.endpoints.filter(function(ep){return effTag(ep)===tag;}).forEach(function(ep){
+        L.push('','### '+ep.method+' '+(ep.path.trim()||'/')+(ep.summary.trim()?' - '+ep.summary.trim():''));
+        L.push('operationId: '+ids[ep.id]);
+        if(ep.description.trim()) L.push(ep.description.trim());
+        var pn=uniq(pathParamNames(ep.path)).filter(Boolean);
+        if(pn.length){
+          L.push('Path parameters:');
+          pn.forEach(function(n){var pp=ep.pathParams[n]||normPP({});var line='- '+n+' ('+typeLabel({type:pp.type})+', required)';if(pp.description.trim()) line+=': '+pp.description.trim();if(pp.example.trim()) line+='; example '+JSON.stringify(parseExample(pp.type,pp.example).value);L.push(line);});
+        }
+        var qs=named(ep.query);
+        if(qs.length){
+          L.push('Query parameters:');
+          qs.forEach(function(q){var line='- '+q.name.trim()+' ('+typeLabel({type:q.type})+', '+(q.required?'required':'optional')+(q.default.trim()?', default '+JSON.stringify(parseExample(q.type,q.default).value):'')+')';if(q.description.trim()) line+=': '+q.description.trim();L.push(line);});
+        }
+        if(ep.bodyKind==='none') L.push('Request body: none');
+        else {L.push('Request body (required):');Array.prototype.push.apply(L,bodyLines(ep.bodyKind,ep.body,1));}
+        L.push('Responses:');
+        if(!ep.responses.length) L.push('- (none defined)');
+        ep.responses.forEach(function(r){
+          var c=r.status.trim();
+          L.push('- '+c+' '+statusText(c)+(r.description.trim()&&r.description.trim()!==statusText(c)?': '+r.description.trim():'')+(r.kind==='none'?' (no body)':''));
+          if(r.kind!=='none'){
+            Array.prototype.push.apply(L,bodyLines(r.kind,r.fields,1));
+            L.push('  Example body: '+JSON.stringify(bodyExample(r.kind,r.fields)));
+          }
+        });
+      });
+    });
+  }
+  var g=GOALS[st.goal]||[];
+  if(g.length){L.push('');Array.prototype.push.apply(L,g);}
+  else L.push('','Use this specification as the single source of truth for the API.');
+  return L.join('\n')+'\n';
+}
+
+/* ---------- curl ---------- */
+function shq(s){return "'"+String(s).replace(/'/g,"'\\''")+"'";}
+function dq(s){return '"'+String(s).replace(/(["\\$`])/g,'\\$1')+'"';}
+function exampleValue(type,raw,forPath){var p=parseExample(type,raw);return p.value!==undefined?p.value:placeholder(type,forPath);}
+function buildCurl(st){
+  var I=st.info,out=[];
+  var base=I.baseUrl.trim().replace(/\/+$/,'')||'http://localhost:3000';
+  var keyName=(I.apiKeyName.trim()||'X-API-Key').replace(/[^A-Za-z0-9_.\-]/g,'');
+  out.push('# '+(I.title.trim()||'Untitled API')+' - example requests');
+  if(I.auth==='bearer') out.push('# export TOKEN=...');
+  if(I.auth==='basic') out.push('# export API_USER=... API_PASSWORD=...');
+  if(I.auth==='apiKey') out.push('# export API_KEY=...');
+  if(!st.endpoints.length){out.push('','# No endpoints yet.');return out.join('\n')+'\n';}
+  var tags=uniq(st.endpoints.map(effTag));
+  tags.forEach(function(tag){
+    out.push('','# ===== '+tag+' =====');
+    st.endpoints.filter(function(ep){return effTag(ep)===tag;}).forEach(function(ep){
+      var path=(ep.path.trim()||'/').replace(/\{([^{}\/]*)\}/g,function(m,n){
+        var pp=ep.pathParams[n.trim()];
+        return encodeURIComponent(String(exampleValue(pp?pp.type:'string',pp?pp.example:'',true)));
+      });
+      var qs=[];
+      named(ep.query).forEach(function(q){
+        if(q.default.trim()) qs.push(encodeURIComponent(q.name.trim())+'='+encodeURIComponent(String(exampleValue(q.type,q.default))));
+        else if(q.required) qs.push(encodeURIComponent(q.name.trim())+'='+encodeURIComponent(String(placeholder(q.type))));
+      });
+      var url=base+path+(qs.length?'?'+qs.join('&'):'');
+      var urlArg=dq(url);
+      if(I.auth==='apiKey'&&I.apiKeyIn==='query') urlArg=dq(url+(qs.length?'&':'?')+keyName+'=').slice(0,-1)+'$API_KEY"';
+      var parts=['curl '+(ep.method==='GET'?'':'-X '+ep.method+' ')+urlArg];
+      if(I.auth==='bearer') parts.push('-H "Authorization: Bearer $TOKEN"');
+      if(I.auth==='basic') parts.push('-u "$API_USER:$API_PASSWORD"');
+      if(I.auth==='apiKey'&&I.apiKeyIn!=='query') parts.push('-H "'+keyName+': $API_KEY"');
+      if(ep.bodyKind!=='none'){
+        parts.push("-H 'Content-Type: application/json'");
+        parts.push('-d '+shq(JSON.stringify(bodyExample(ep.bodyKind,ep.body),null,2)));
+      }
+      out.push('','# '+ep.method+' '+(ep.path.trim()||'/')+(ep.summary.trim()?' - '+ep.summary.trim():''));
+      out.push(parts.join(' \\\n  '));
+    });
+  });
+  return out.join('\n')+'\n';
+}
+
+/* ---------- TypeScript ---------- */
+function tsKey(n){return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(n)?n:JSON.stringify(n);}
+function tsAccess(obj,n){return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(n)?obj+'.'+n:obj+'['+JSON.stringify(n)+']';}
+function tsScalar(t){return t==='integer'||t==='number'?'number':t==='boolean'?'boolean':'string';}
+function cmt(s){return s.trim().replace(/\*\//g,'*\\/').replace(/\s*\n\s*/g,' ');}
+function tsFieldType(f,ind){
+  if(f.type==='object') return tsObj(f.children,ind);
+  if(f.type==='array') return f.items==='object'?'Array<'+tsObj(f.children,ind)+'>':tsScalar(f.items)+'[]';
+  return tsScalar(f.type);
+}
+function tsObj(fields,ind){
+  var fs=named(fields);
+  if(!fs.length) return 'Record<string, unknown>';
+  var pad='  '.repeat(ind+1),lines=['{'];
+  fs.forEach(function(f){
+    if(f.description.trim()) lines.push(pad+'/** '+cmt(f.description)+' */');
+    lines.push(pad+tsKey(f.name.trim())+(f.required?'':'?')+': '+tsFieldType(f,ind+1)+';');
+  });
+  lines.push('  '.repeat(ind)+'}');
+  return lines.join('\n');
+}
+function tsBody(kind,fields){
+  if(kind==='none') return 'void';
+  return kind==='array'?'Array<'+tsObj(fields,0)+'>':tsObj(fields,0);
+}
+function tplEscape(s){return s.replace(/[\\`]/g,'\\$&').replace(/\$\{/g,'\\${');}
+function successResponse(ep){
+  var ok=ep.responses.filter(function(r){return /^2/.test(r.status.trim());});
+  ok.sort(function(a,b){return a.status.trim()<b.status.trim()?-1:1;});
+  return ok[0]||null;
+}
+function buildTs(st){
+  var I=st.info,ids=opIds(st.endpoints),L=[];
+  L.push('// '+(I.title.trim()||'Untitled API')+' '+(I.version.trim()||'0.1.0')+' - generated by API Sketch');
+  L.push('// Types and a fetch-based client. No runtime dependencies.');
+  L.push('');
+  L.push('/* ---------- types ---------- */');
+  var fnDefs=[];
+  st.endpoints.forEach(function(ep){
+    var id=ids[ep.id],P=id.charAt(0).toUpperCase()+id.slice(1);
+    var head='// '+ep.method+' '+(ep.path.trim()||'/')+(ep.summary.trim()?' - '+ep.summary.trim().replace(/\s*\n\s*/g,' '):'');
+    L.push('',head);
+    var qs=named(ep.query),hasQ=qs.length>0,qReq=qs.some(function(q){return q.required;});
+    if(hasQ){
+      L.push('export type '+P+'Query = {');
+      qs.forEach(function(q){
+        if(q.description.trim()) L.push('  /** '+cmt(q.description)+(q.default.trim()?(/[.!?]$/.test(q.description.trim())?' ':'. ')+'Default: '+cmt(q.default):'')+' */');
+        else if(q.default.trim()) L.push('  /** Default: '+cmt(q.default)+' */');
+        L.push('  '+tsKey(q.name.trim())+(q.required?'':'?')+': '+tsScalar(q.type)+';');
+      });
+      L.push('};');
+    }
+    var hasB=ep.bodyKind!=='none';
+    if(hasB) L.push('export type '+P+'Body = '+tsBody(ep.bodyKind,ep.body)+';');
+    var ok=successResponse(ep);
+    L.push('export type '+P+'Response = '+(ok?tsBody(ok.kind,ok.fields):'unknown')+';');
+    var pn=uniq(pathParamNames(ep.path)).filter(Boolean);
+    var argProps=pn.map(function(n){var pp=ep.pathParams[n]||normPP({});return tsKey(n)+': '+tsScalar(pp.type);});
+    if(hasQ) argProps.push('query'+(qReq?'':'?')+': '+P+'Query');
+    if(hasB) argProps.push('body: '+P+'Body');
+    var allOpt=pn.length===0&&!hasB&&!qReq;
+    var sig=argProps.length?'(args: { '+argProps.join('; ')+' }'+(allOpt?' = {}':'')+')':'()';
+    var segs=(ep.path.trim()||'/').split(/(\{[^{}\/]*\})/);
+    var tpl=segs.map(function(s){
+      var m=/^\{([^{}\/]*)\}$/.exec(s);
+      if(m){var n=m[1].trim();return n?'${enc('+tsAccess('args',n)+')}':'';}
+      return tplEscape(s);
+    }).join('');
+    var call='request<'+P+'Response>(config, \''+ep.method+'\', `'+tpl+'`'+(hasQ?', args.query':(hasB?', undefined':''))+(hasB?', args.body':'')+')';
+    fnDefs.push('    /** '+cmt(ep.method+' '+(ep.path.trim()||'/')+(ep.summary.trim()?' - '+ep.summary:''))+' */');
+    fnDefs.push('    '+id+': '+sig+': Promise<'+P+'Response> =>');
+    fnDefs.push('      '+call+',');
+  });
+  L.push('');
+  L.push('/* ---------- client ---------- */');
+  L.push('');
+  L.push('export interface ClientConfig {');
+  L.push('  /** Default: '+cmt(I.baseUrl.trim()||'http://localhost:3000')+' */');
+  L.push('  baseUrl?: string;');
+  if(I.auth==='bearer') L.push('  token?: string;');
+  if(I.auth==='basic'){L.push('  username?: string;');L.push('  password?: string;');}
+  if(I.auth==='apiKey') L.push('  apiKey?: string;');
+  L.push('  headers?: Record<string, string>;');
+  L.push('  fetch?: typeof fetch;');
+  L.push('}');
+  L.push('');
+  L.push('export class ApiError extends Error {');
+  L.push('  readonly status: number;');
+  L.push('  readonly body: unknown;');
+  L.push('  constructor(status: number, body: unknown) {');
+  L.push('    super(`HTTP ${status}`);');
+  L.push('    this.name = \'ApiError\';');
+  L.push('    this.status = status;');
+  L.push('    this.body = body;');
+  L.push('  }');
+  L.push('}');
+  L.push('');
+  L.push('const enc = (v: string | number | boolean): string => encodeURIComponent(String(v));');
+  L.push('');
+  L.push('async function request<T>(config: ClientConfig, method: string, path: string, query?: object, body?: unknown): Promise<T> {');
+  L.push('  const base = (config.baseUrl ?? '+JSON.stringify(I.baseUrl.trim()||'http://localhost:3000')+').replace(/\\/+$/, \'\');');
+  L.push('  const url = new URL(base + path);');
+  L.push('  if (query) {');
+  L.push('    for (const [key, value] of Object.entries(query)) {');
+  L.push('      if (value !== undefined && value !== null) url.searchParams.set(key, String(value));');
+  L.push('    }');
+  L.push('  }');
+  L.push('  const headers: Record<string, string> = { Accept: \'application/json\', ...config.headers };');
+  if(I.auth==='bearer') L.push('  if (config.token) headers[\'Authorization\'] = `Bearer ${config.token}`;');
+  if(I.auth==='basic') L.push('  if (config.username !== undefined) headers[\'Authorization\'] = \'Basic \' + btoa(`${config.username}:${config.password ?? \'\'}`);');
+  if(I.auth==='apiKey'){
+    var kn=JSON.stringify(I.apiKeyName.trim()||'X-API-Key').replace(/'/g,"\\'");
+    if(I.apiKeyIn==='query') L.push('  if (config.apiKey) url.searchParams.set('+kn+', config.apiKey);');
+    else L.push('  if (config.apiKey) headers['+kn+'] = config.apiKey;');
+  }
+  L.push('  if (body !== undefined) headers[\'Content-Type\'] = \'application/json\';');
+  L.push('  const doFetch = config.fetch ?? fetch;');
+  L.push('  const res = await doFetch(url.toString(), {');
+  L.push('    method,');
+  L.push('    headers,');
+  L.push('    body: body === undefined ? undefined : JSON.stringify(body),');
+  L.push('  });');
+  L.push('  const text = await res.text();');
+  L.push('  let data: unknown = undefined;');
+  L.push('  if (text) {');
+  L.push('    try {');
+  L.push('      data = JSON.parse(text);');
+  L.push('    } catch {');
+  L.push('      data = text;');
+  L.push('    }');
+  L.push('  }');
+  L.push('  if (!res.ok) throw new ApiError(res.status, data);');
+  L.push('  return data as T;');
+  L.push('}');
+  L.push('');
+  L.push('export function createClient(config: ClientConfig = {}) {');
+  if(fnDefs.length){L.push('  return {');Array.prototype.push.apply(L,fnDefs);L.push('  };');}
+  else L.push('  return { config, request: <T>(method: string, path: string, query?: object, body?: unknown) => request<T>(config, method, path, query, body) };');
+  L.push('}');
+  L.push('');
+  L.push('export type ApiClient = ReturnType<typeof createClient>;');
+  return L.join('\n')+'\n';
+}
+
+/* ---------- sample ---------- */
+function sampleState(){
+  function F(name,type,req,example,description,children,items){
+    return normField({name:name,type:type,required:req,example:example||'',description:description||'',children:children||[],items:items||'string'},0);
+  }
+  function Q(name,type,req,def,description){return normParam({name:name,type:type,required:req,default:def||'',description:description||''});}
+  function R(status,kind,fields,description){return newResponse(status,kind,fields,description);}
+  function err(ex,msg){return [F('code','string',true,ex,'Machine-readable error code'),F('message','string',true,msg)];}
+  function book(){return [
+    F('id','uuid',true,'9b2f6c1e-3a4d-4b8e-9f10-2c3d4e5f6a7b'),
+    F('title','string',true,'The Dispossessed'),
+    F('isbn','string',false,'978-0-06-051275-3','ISBN-13 with dashes'),
+    F('publishedOn','date',false,'1974-05-01'),
+    F('tags','array',false,'fiction, classic','Free-form labels',[],'string'),
+    F('author','object',true,'','Primary author',[F('id','integer',true,'7'),F('name','string',true,'Ursula K. Le Guin')]),
+    F('editions','array',false,'','Formats on the shelf',[F('format','string',true,'paperback','One of: paperback, hardcover, ebook'),F('pages','integer',false,'387')],'object'),
+    F('available','boolean',true,'true','Can be borrowed right now')];}
+  function review(){return [
+    F('id','uuid',true,'0f8e2c55-8b1d-4d1e-a0b4-6f5e4d3c2b1a'),
+    F('rating','integer',true,'5','1 to 5'),
+    F('text','string',false,'Quietly radical. #mustread'),
+    F('reader','object',true,'','',[F('id','integer',true,'42'),F('displayName','string',true,'Ada')]),
+    F('createdAt','date-time',true,'2024-06-01T09:30:00Z')];}
+  var eps=[
+    {method:'GET',path:'/books',tag:'Books',summary:'List books',description:'Cursor-paginated, newest first unless sort says otherwise.',
+      query:[Q('q','string',false,'','Full-text search in title and author'),Q('limit','integer',false,'20','Page size, 1-100'),
+        Q('cursor','string',false,'','Opaque cursor from the previous page'),Q('sort','string',false,'-publishedOn','Sort key; prefix with - for descending')],
+      responses:[R(200,'array',book()),R(400,'object',err('invalid_query','limit must be between 1 and 100'))]},
+    {method:'POST',path:'/books',tag:'Books',summary:'Create a book',bodyKind:'object',
+      body:[F('title','string',true,'The Dispossessed'),F('isbn','string',false,'978-0-06-051275-3'),F('publishedOn','date',false,'1974-05-01'),
+        F('tags','array',false,'fiction, classic','',[],'string'),F('authorId','integer',true,'7')],
+      responses:[R(201,'object',book()),R(400,'object',err('validation_failed','title: required')),R(409,'object',err('duplicate_isbn','A book with this ISBN exists'),'ISBN already exists')]},
+    {method:'GET',path:'/books/{bookId}',tag:'Books',summary:'Get a book',
+      pathParams:{bookId:{type:'uuid',example:'9b2f6c1e-3a4d-4b8e-9f10-2c3d4e5f6a7b',description:'Book id'}},
+      responses:[R(200,'object',book()),R(404,'object',err('not_found','Book not found: check the id'))]},
+    {method:'PATCH',path:'/books/{bookId}',tag:'Books',summary:'Update a book',description:'Only the fields sent are changed.',bodyKind:'object',
+      pathParams:{bookId:{type:'uuid',example:'9b2f6c1e-3a4d-4b8e-9f10-2c3d4e5f6a7b',description:'Book id'}},
+      body:[F('title','string',false,'The Dispossessed: An Ambiguous Utopia'),F('tags','array',false,'fiction','',[],'string'),F('available','boolean',false,'false')],
+      responses:[R(200,'object',book()),R(400,'object',err('validation_failed','tags: must be an array')),R(404,'object',err('not_found','Book not found'))]},
+    {method:'DELETE',path:'/books/{bookId}',tag:'Books',summary:'Delete a book',
+      pathParams:{bookId:{type:'uuid',example:'9b2f6c1e-3a4d-4b8e-9f10-2c3d4e5f6a7b',description:'Book id'}},
+      responses:[R(204,'none',[]),R(404,'object',err('not_found','Book not found'))]},
+    {method:'GET',path:'/books/{bookId}/reviews',tag:'Reviews',summary:'List reviews of a book',
+      pathParams:{bookId:{type:'uuid',example:'9b2f6c1e-3a4d-4b8e-9f10-2c3d4e5f6a7b'}},
+      query:[Q('minRating','integer',false,'1','Only reviews with at least this rating')],
+      responses:[R(200,'array',review()),R(404,'object',err('not_found','Book not found'))]},
+    {method:'POST',path:'/books/{bookId}/reviews',tag:'Reviews',summary:'Add a review',bodyKind:'object',
+      pathParams:{bookId:{type:'uuid',example:'9b2f6c1e-3a4d-4b8e-9f10-2c3d4e5f6a7b'}},
+      body:[F('rating','integer',true,'5','1 to 5'),F('text','string',false,'Quietly radical. #mustread'),F('recommend','boolean',false,'true'),
+        F('context','object',false,'','Where the review was written',[F('client','string',false,'web'),
+          F('location','object',false,'','',[F('city','string',false,'Boston'),F('postalCode','string',false,'02134','Keep as string: leading zero')])])],
+      responses:[R(201,'object',review()),R(400,'object',err('validation_failed','rating: must be 1 to 5')),R(404,'object',err('not_found','Book not found'))]},
+    {method:'GET',path:'/users/me',tag:'Users',summary:'Get the current user',
+      responses:[R(200,'object',[F('id','integer',true,'42'),F('email','email',true,'ada@example.com'),F('displayName','string',true,'Ada'),
+        F('newsletter','string',true,'yes','Opt-in flag from the legacy CRM: yes | no'),F('darkMode','string',false,'off','Legacy toggle: on | off'),
+        F('memberSince','date',false,'2019-03-14')]),R(401,'object',err('unauthorized','Token missing or expired'))]}
+  ];
+  return normState({info:{title:'Bookshelf API',version:'1.0',baseUrl:'https://api.bookshelf.example/v1',
+    description:'Catalogue of books, reader reviews and user profiles.',auth:'bearer'},
+    endpoints:eps,tab:'yaml',goal:'express'});
+}
+/* PURE-END */
+
+/* ================= UI ================= */
+var LS='redline.tool.api-sketch.';
+function lsGet(k){try{return window.localStorage.getItem(LS+k);}catch(e){return null;}}
+function lsSet(k,v){try{window.localStorage.setItem(LS+k,v);}catch(e){/* storage unavailable */}}
+
+var state=(function(){
+  var raw=lsGet('state');
+  if(raw){try{return normState(JSON.parse(raw));}catch(e){/* fall through to blank */}}
+  return normState({});
+})();
+var undoSnap=null,saveTimer=0,pendingFocus=null;
+
+function $(id){return document.getElementById(id);}
+function h(tag,attrs){
+  var el=document.createElement(tag),val,hasVal=false;
+  if(attrs) Object.keys(attrs).forEach(function(k){
+    var v=attrs[k];
+    if(v===null||v===undefined||v===false) return;
+    if(k==='class') el.className=v;
+    else if(k==='text') el.textContent=v;
+    else if(k==='value'){val=v;hasVal=true;}
+    else if(k==='checked') el.checked=!!v;
+    else if(k.slice(0,2)==='on') el.addEventListener(k.slice(2),v);
+    else if(k==='style') el.setAttribute('style',v);
+    else el.setAttribute(k,v===true?'':v);
+  });
+  for(var i=2;i<arguments.length;i++) appendKid(el,arguments[i]);
+  if(hasVal) el.value=val;
+  return el;
+}
+function appendKid(el,c){
+  if(c===null||c===undefined||c===false) return;
+  if(Array.isArray(c)){c.forEach(function(x){appendKid(el,x);});return;}
+  el.append(c.nodeType?c:document.createTextNode(String(c)));
+}
+function curEp(){for(var i=0;i<state.endpoints.length;i++) if(state.endpoints[i].id===state.sel) return state.endpoints[i];return null;}
+
+function save(){clearTimeout(saveTimer);saveTimer=setTimeout(function(){lsSet('state',JSON.stringify(state));},200);}
+function changed(){save();renderList();renderChecks();renderOutput();renderEdHead();}
+function structural(){renderEditor();changed();}
+
+function note(msg,undo){
+  var n=$('note');n.textContent=msg;
+  if(undo){n.append(h('button',{class:'btn btn-sm',type:'button',onclick:function(){
+    if(!undoSnap) return;
+    state=normState(JSON.parse(undoSnap));undoSnap=null;note('Restored.');renderAll();
+  }},'Undo'));}
+}
+function snapshot(){undoSnap=JSON.stringify(state);}
+
+/* ---- inputs ---- */
+function inp(obj,key,o){
+  o=o||{};
+  return h('input',{class:'in'+(o.mono?' mono':''),type:'text',value:obj[key],placeholder:o.ph||'','aria-label':o.label,
+    'data-fk':(obj.id||'info')+':'+key,spellcheck:'false',autocomplete:'off',list:o.list,
+    oninput:function(e){obj[key]=e.target.value;if(o.after) o.after(e);changed();}});
+}
+function sel(obj,key,options,o){
+  o=o||{};
+  return h('select',{class:'sel','aria-label':o.label,'data-fk':(obj.id||'info')+':'+key,value:obj[key],
+    onchange:function(e){obj[key]=e.target.value;if(o.after) o.after();if(o.structural) structural();else changed();}},
+    options.map(function(x){var v=Array.isArray(x)?x[0]:x,l=Array.isArray(x)?x[1]:x;return h('option',{value:v},l);}));
+}
+function chk(obj,key,label,o){
+  o=o||{};
+  return h('label',{class:'chk',title:o.title||''},h('input',{type:'checkbox',checked:obj[key],'data-fk':obj.id+':'+key,'aria-label':o.aria||label,
+    onchange:function(e){obj[key]=e.target.checked;changed();}}),label);
+}
+function lbl(text,control){return h('label',{class:'lbl'},text,control);}
+
+/* ---- API info ---- */
+function renderInfo(){
+  var I=state.info,box=$('info');box.textContent='';
+  var keyRow=h('div',{class:'grid2',hidden:I.auth!=='apiKey'},
+    lbl('Key name',inp(I,'apiKeyName',{mono:true,ph:'X-API-Key'})),
+    lbl('Sent in',sel(I,'apiKeyIn',[['header','Header'],['query','Query']])));
+  box.append(
+    lbl('Title',inp(I,'title',{ph:'Bookshelf API'})),
+    h('div',{class:'grid2'},lbl('Version',inp(I,'version',{mono:true,ph:'1.0.0'})),
+      lbl('Auth',sel(I,'auth',[['none','None'],['bearer','Bearer token'],['apiKey','API key'],['basic','Basic']],{after:function(){keyRow.hidden=I.auth!=='apiKey';}}))),
+    keyRow,
+    lbl('Base URL',inp(I,'baseUrl',{mono:true,ph:'https://api.example.com/v1'})),
+    lbl('Description',h('textarea',{class:'ta',rows:2,'data-fk':'info:description',placeholder:'What the API is for',
+      oninput:function(e){I.description=e.target.value;changed();}},I.description))
+  );
+}
+
+/* ---- endpoint list ---- */
+var lastChecks=[];
+function renderList(){
+  var box=$('epList');box.textContent='';
+  $('epCount').textContent=state.endpoints.length;
+  if(!state.endpoints.length){
+    box.append(h('p',{class:'empty'},'No endpoints yet. Press ',h('b',null,'+ Endpoint'),' to add one, or ',h('b',null,'Load sample'),' to see a filled API.'));
+    return;
+  }
+  var byEp={};
+  lastChecks.forEach(function(c){if(c.ep){byEp[c.ep]=byEp[c.ep]==='error'?'error':c.level;}});
+  uniq(state.endpoints.map(effTag)).forEach(function(tag){
+    var eps=state.endpoints.filter(function(ep){return effTag(ep)===tag;});
+    box.append(h('div',{class:'group'},h('span',null,tag),h('span',null,String(eps.length))));
+    eps.forEach(function(ep){
+      box.append(h('button',{class:'ep'+(ep.id===state.sel?' sel':''),type:'button','aria-current':ep.id===state.sel?'true':null,
+        onclick:function(){state.sel=ep.id;save();renderList();renderEditor();}},
+        h('span',{class:'badge m-'+ep.method},ep.method),
+        h('span',{class:'p'},ep.path||'/'),
+        byEp[ep.id]?h('span',{class:'dot'+(byEp[ep.id]==='error'?' err':''),title:byEp[ep.id]==='error'?'Has errors':'Has warnings'}):h('span'),
+        ep.summary.trim()?h('span',{class:'s'},ep.summary):null));
+    });
+  });
+}
+
+/* ---- checks ---- */
+function renderChecks(){
+  lastChecks=checkApi(state);
+  var box=$('checks');box.textContent='';
+  var errs=lastChecks.filter(function(c){return c.level==='error';}).length;
+  $('checkCount').textContent=lastChecks.length?(errs?errs+' error'+(errs>1?'s':'')+', ':'')+(lastChecks.length-errs)+' warning'+(lastChecks.length-errs===1?'':'s'):'0';
+  if(!lastChecks.length){
+    box.append(h('li',{class:'okline'},state.endpoints.length?'No issues found.':'Checks run as you add endpoints.'));
+    return;
+  }
+  lastChecks.forEach(function(c){
+    box.append(h('li',{class:c.ep?'link':'',tabindex:c.ep?'0':null,role:c.ep?'button':null,
+      onclick:c.ep?function(){state.sel=c.ep;save();renderList();renderEditor();}:null,
+      onkeydown:c.ep?function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();state.sel=c.ep;save();renderList();renderEditor();}}:null},
+      h('span',{class:'dot'+(c.level==='error'?' err':''),'aria-label':c.level}),
+      h('span',null,c.where?h('span',{class:'where'},c.where):null,c.text)));
+  });
+  renderList();
+}
+
+/* ---- editor ---- */
+function renderEdHead(){
+  var ep=curEp();if(!ep) return;
+  var b=$('edBadge'),p=$('edPath');
+  if(b){b.className='badge m-'+ep.method;b.textContent=ep.method;}
+  if(p) p.textContent=ep.path||'/';
+}
+function renderEditor(){
+  var ae=document.activeElement,fk=pendingFocus||(ae&&ae.getAttribute?ae.getAttribute('data-fk'):null);
+  pendingFocus=null;
+  var box=$('editor');box.textContent='';
+  var ep=curEp();
+  if(!ep){
+    box.append(h('div',{class:'card-head'},h('h2',null,'Endpoint')),
+      h('div',{class:'empty'},h('p',null,'Nothing selected. Add an endpoint with ',h('b',null,'+ Endpoint'),' or press ',h('b',null,'Load sample'),'.'),
+        h('p',null,'Type a path like ',h('code',{class:'mono'},'/users/{id}'),' and the {id} parameter row appears. Every endpoint starts with a success and an error response; the output panel updates as you type.')));
+    return;
+  }
+  var delBtn=h('button',{class:'btn btn-sm btn-danger',type:'button','data-fk':ep.id+':del',onclick:function(){
+    if(!delBtn.classList.contains('armed')){delBtn.classList.add('armed');delBtn.textContent='Confirm delete';return;}
+    snapshot();
+    var i=state.endpoints.indexOf(ep);state.endpoints.splice(i,1);
+    var nx=state.endpoints[i]||state.endpoints[i-1];state.sel=nx?nx.id:null;
+    note('Deleted '+ep.method+' '+ep.path+'.',true);structural();
+  },onblur:function(){delBtn.classList.remove('armed');delBtn.textContent='Delete';}},'Delete');
+  box.append(h('div',{class:'card-head ed-head'},
+    h('span',{class:'badge m-'+ep.method,id:'edBadge'},ep.method),
+    h('span',{class:'p grow',id:'edPath'},ep.path||'/'),
+    h('button',{class:'btn btn-sm',type:'button',onclick:function(){
+      var copy=normEndpoint(JSON.parse(JSON.stringify(ep,function(k,v){return k==='id'?undefined:v;})));
+      state.endpoints.splice(state.endpoints.indexOf(ep)+1,0,copy);state.sel=copy.id;pendingFocus=copy.id+':path';note('Duplicated.');structural();
+    }},'Duplicate'),delBtn));
+
+  var body=h('div',{class:'ed-body'});box.append(body);
+  var ppBox=h('div');
+  var tagList=h('datalist',{id:'tagList'},uniq(state.endpoints.map(function(e){return e.tag.trim();}).filter(Boolean)).map(function(t){return h('option',{value:t});}));
+  body.append(
+    h('div',{class:'row1'},lbl('Method',sel(ep,'method',METHODS,{structural:true})),
+      lbl('Path',inp(ep,'path',{mono:true,ph:'/users/{id}',after:function(){syncPathParams(ep);renderPP(ep,ppBox);}}))),
+    h('div',{class:'grid2'},lbl('Tag (group)',inp(ep,'tag',{ph:effTag(ep),list:'tagList'})),
+      lbl('Operation id',inp(ep,'operationId',{mono:true,ph:autoOpId(ep)}))),tagList,
+    lbl('Summary',inp(ep,'summary',{ph:'Get a user'})),
+    lbl('Description',h('textarea',{class:'ta',rows:2,'data-fk':ep.id+':description',placeholder:'Behaviour, side effects, pagination…',
+      oninput:function(e){ep.description=e.target.value;changed();}},ep.description))
+  );
+
+  body.append(h('div',{class:'sec'},h('div',{class:'sec-head'},h('h3',null,'Path parameters'),h('span',{class:'muted'},'from {braces} in the path')),ppBox));
+  renderPP(ep,ppBox);
+
+  var qSec=h('div',{class:'sec'},h('div',{class:'sec-head'},h('h3',null,'Query parameters'),h('span',{class:'grow'}),
+    h('button',{class:'btn btn-sm',type:'button','data-fk':ep.id+':addq',onclick:function(){var q=normParam({});ep.query.push(q);pendingFocus=q.id+':name';structural();}},'+ Query')));
+  if(ep.query.length){
+    qSec.append(h('div',{class:'cols q'},h('span',null,'Name'),h('span',null,'Type'),h('span',null,'Req'),h('span',null,'Default'),h('span',null,'Description'),h('span')));
+    ep.query.forEach(function(q){
+      qSec.append(h('div',{class:'qrow'},inp(q,'name',{mono:true,ph:'limit',label:'Query name'}),sel(q,'type',PARAM_TYPES,{label:'Type'}),
+        chk(q,'required','req',{aria:'Required'}),h('div',{class:'q-def'},inp(q,'default',{mono:true,ph:'default',label:'Default'})),h('div',{class:'q-desc'},inp(q,'description',{ph:'description',label:'Description'})),
+        h('button',{class:'icon del',type:'button',title:'Remove parameter','aria-label':'Remove query parameter '+q.name,onclick:function(){ep.query.splice(ep.query.indexOf(q),1);structural();}},'×')));
+    });
+  } else qSec.append(h('p',{class:'muted',style:'margin:0'},'None.'));
+  body.append(qSec);
+
+  var bSec=h('div',{class:'sec'},h('div',{class:'sec-head'},h('h3',null,'Request body'),h('span',{class:'grow'}),
+    h('span',{style:'width:190px'},sel(ep,'bodyKind',BODY_KINDS,{structural:true,label:'Request body kind'}))));
+  if(ep.bodyKind!=='none') bSec.append(fieldEditor(ep.body,ep.id+':body'));
+  body.append(bSec);
+
+  var rSec=h('div',{class:'sec'},h('div',{class:'sec-head'},h('h3',null,'Responses'),h('span',{class:'muted'},'need one 2xx and one 4xx'),h('span',{class:'grow'}),
+    h('button',{class:'btn btn-sm',type:'button',onclick:function(){
+      var used=ep.responses.map(function(r){return r.status.trim();});
+      var code=['200','201','204','400','401','403','404','409','422','500'].filter(function(c){return used.indexOf(c)<0;})[0]||'default';
+      var r=newResponse(code,/^[45]/.test(code)?'object':'none',/^[45]/.test(code)?errorFields():[]);
+      ep.responses.push(r);pendingFocus=r.id+':status';structural();
+    }},'+ Response')));
+  ep.responses.forEach(function(r){
+    var code=r.status.trim();
+    var cls='code in mono st-'+code.charAt(0);
+    var statusIn=h('input',{class:cls,type:'text',value:r.status,'aria-label':'Status code','data-fk':r.id+':status',maxlength:7,spellcheck:'false',
+      oninput:function(e){r.status=e.target.value;e.target.className='code in mono st-'+r.status.trim().charAt(0);changed();}});
+    rSec.append(h('div',{class:'resp'},
+      h('div',{class:'resp-head'},statusIn,
+        inp(r,'description',{ph:statusText(code),label:'Response description'}),
+        h('span',{class:'r-kind'},sel(r,'kind',[['none','No body'],['object','JSON object'],['array','JSON array']],{structural:true,label:'Response body kind'})),
+        h('button',{class:'icon del',type:'button',title:'Remove response','aria-label':'Remove response '+code,onclick:function(){ep.responses.splice(ep.responses.indexOf(r),1);structural();}},'×')),
+      r.kind!=='none'?fieldEditor(r.fields,r.id+':fields'):null));
+  });
+  if(!ep.responses.length) rSec.append(h('p',{class:'muted',style:'margin:0'},'No responses. Add a 2xx success and a 4xx error.'));
+  body.append(rSec);
+
+  if(fk){var el=box.querySelector('[data-fk="'+fk.replace(/["\\]/g,'\\$&')+'"]');if(el) el.focus();}
+}
+function renderPP(ep,box){
+  var names=uniq(pathParamNames(ep.path)).filter(Boolean);
+  var ae=document.activeElement,fk=ae&&box.contains(ae)?ae.getAttribute('data-fk'):null;
+  box.textContent='';
+  if(!names.length){box.append(h('p',{class:'muted',style:'margin:0'},'None. Write {name} in the path to add one.'));return;}
+  box.append(h('div',{class:'cols p'},h('span',null,'Name'),h('span',null,'Type'),h('span',null,'Example'),h('span',null,'Description')));
+  names.forEach(function(n){
+    var pp=ep.pathParams[n];
+    var key={id:ep.id+'-pp-'+n};
+    box.append(h('div',{class:'prow'},h('span',{class:'pname',title:'Required; comes from the path'},'{'+n+'}'),
+      h('select',{class:'sel','aria-label':'Type of '+n,'data-fk':key.id+':type',value:pp.type,onchange:function(e){pp.type=e.target.value;changed();}},PARAM_TYPES.map(function(t){return h('option',{value:t},t);})),
+      h('input',{class:'in mono',type:'text',value:pp.example,placeholder:String(placeholder(pp.type,true)),'aria-label':'Example of '+n,'data-fk':key.id+':example',oninput:function(e){pp.example=e.target.value;changed();}}),
+      h('input',{class:'in',type:'text',value:pp.description,placeholder:'description','aria-label':'Description of '+n,'data-fk':key.id+':description',oninput:function(e){pp.description=e.target.value;changed();}})));
+  });
+  if(fk){var el=box.querySelector('[data-fk="'+fk.replace(/["\\]/g,'\\$&')+'"]');if(el) el.focus();}
+}
+function fieldEditor(list,fkBase){
+  var wrap=h('div');
+  wrap.append(h('div',{class:'cols f'},h('span',null,'Field'),h('span',null,'Type'),h('span',null,'Req'),h('span',null,'Example'),h('span',null,'Description'),h('span')));
+  if(!list.length) wrap.append(h('p',{class:'muted',style:'margin:2px 0'},'No fields yet.'));
+  fieldRows(list,0,wrap);
+  wrap.append(h('div',{class:'addrow'},h('button',{class:'btn btn-sm',type:'button','data-fk':fkBase+':add',onclick:function(){
+    var f=newField();list.push(f);pendingFocus=f.id+':name';structural();
+  }},'+ Field')));
+  return wrap;
+}
+function fieldRows(list,depth,wrap){
+  list.forEach(function(f){
+    var kids=hasKids(f);
+    var typeCell=h('div',{class:'c-type'},sel(f,'type',FIELD_TYPES,{structural:true,label:'Type of '+(f.name||'field')}),
+      f.type==='array'?sel(f,'items',ITEM_TYPES.map(function(t){return [t,'of '+t];}),{structural:true,label:'Array item type'}):null);
+    var exCell=kids?h('span',{class:'derived'},'from fields'):inp(f,'example',{mono:true,ph:f.type==='array'?'a, b':String(placeholder(f.type)),label:'Example'});
+    var nameCell=h('div',{class:'c-name'});
+    for(var d=0;d<depth;d++) nameCell.append(h('span',{class:'indent','aria-hidden':'true'}));
+    if(depth) nameCell.append(h('span',{style:'width:6px;flex:none'}));
+    nameCell.append(inp(f,'name',{mono:true,ph:depth?'child':'name',label:'Field name'}));
+    wrap.append(h('div',{class:'frow'},nameCell,typeCell,
+      h('div',{class:'c-req'},chk(f,'required','req',{aria:'Required'})),
+      h('div',{class:'c-ex'},exCell),
+      h('div',{class:'c-desc'},inp(f,'description',{ph:'description',label:'Description'})),
+      h('div',{class:'c-act'},
+        h('button',{class:'icon',type:'button',title:'Add nested field','aria-label':'Add nested field to '+(f.name||'field'),disabled:!(kids&&depth<MAX_DEPTH-1),
+          onclick:function(){var c=newField();f.children.push(c);pendingFocus=c.id+':name';structural();}},'+'),
+        h('button',{class:'icon del',type:'button',title:'Remove field','aria-label':'Remove field '+(f.name||''),
+          onclick:function(){list.splice(list.indexOf(f),1);structural();}},'×'))));
+    if(kids) fieldRows(f.children,depth+1,wrap);
+  });
+}
+
+/* ---- output ---- */
+var TABS=[['yaml','OpenAPI'],['prompt','Prompt'],['curl','curl'],['ts','TypeScript']];
+var outputs={};
+function fmtCount(n){return n>=10000?(n/1000).toFixed(1)+'k':String(n);}
+function renderOutput(){
+  var doc=buildOpenApi(state);
+  outputs={yaml:toYaml(doc),prompt:buildPrompt(state),curl:buildCurl(state),ts:buildTs(state)};
+  var tabs=$('tabs');tabs.textContent='';
+  TABS.forEach(function(t){
+    tabs.append(h('button',{class:'tab',role:'tab',type:'button','aria-selected':state.tab===t[0]?'true':'false',
+      onclick:function(){state.tab=t[0];save();renderOutput();},
+      onkeydown:function(e){
+        if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft') return;
+        var i=TABS.findIndex(function(x){return x[0]===state.tab;});
+        i=(i+(e.key==='ArrowRight'?1:TABS.length-1))%TABS.length;state.tab=TABS[i][0];save();renderOutput();
+        var b=$('tabs').children[i];if(b) b.focus();
+      }},t[1],h('span',{class:'n'},fmtCount(outputs[t[0]].length))));
+  });
+  var text=outputs[state.tab];
+  $('out').textContent=text;
+  $('outCount').textContent=text.length.toLocaleString('en-US')+' chars';
+  $('goalWrap').hidden=state.tab!=='prompt';
+  $('goal').value=state.goal;
+}
+function copyText(text){
+  function fallback(){
+    var ta=document.createElement('textarea');
+    ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';ta.style.top='0';
+    document.body.appendChild(ta);ta.select();
+    var ok=false;try{ok=document.execCommand('copy');}catch(e){ok=false;}
+    document.body.removeChild(ta);
+    return ok;
+  }
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(text).then(function(){return true;},function(){return fallback();});
+  }
+  return Promise.resolve(fallback());
+}
+var copyTimer=0;
+$('btnCopy').addEventListener('click',function(){
+  copyText(outputs[state.tab]||'').then(function(ok){
+    var m=$('copyMsg');
+    m.className=ok?'copied':'copyfail';
+    m.textContent=ok?'Copied':'Copy blocked; select the text and press Ctrl+C';
+    clearTimeout(copyTimer);copyTimer=setTimeout(function(){m.textContent='';},2200);
+  });
+});
+$('goal').addEventListener('change',function(e){state.goal=e.target.value;save();renderOutput();});
+
+/* ---- top bar ---- */
+$('btnAdd').addEventListener('click',function(){
+  var cur=curEp(),base=cur?'/'+(staticSegs(cur.path).filter(function(s){return !isVersionSeg(s);})[0]||''):'/';
+  var ep=newEndpoint('GET',base==='/'?'/items':base);
+  if(cur&&cur.tag.trim()) ep.tag=cur.tag;
+  var i=cur?state.endpoints.indexOf(cur)+1:state.endpoints.length;
+  state.endpoints.splice(i,0,ep);state.sel=ep.id;pendingFocus=ep.id+':path';
+  note('');structural();
+});
+$('btnSample').addEventListener('click',function(){
+  var had=state.endpoints.length>0;
+  if(had) snapshot();
+  var tab=state.tab,goal=state.goal;
+  state=sampleState();state.tab=tab;state.goal=goal;
+  note('Sample loaded.',had);renderAll();
+});
+var clearBtn=$('btnClear');
+clearBtn.addEventListener('click',function(){
+  if(!clearBtn.classList.contains('armed')){clearBtn.classList.add('armed');clearBtn.textContent='Confirm clear';return;}
+  clearBtn.classList.remove('armed');clearBtn.textContent='Clear all';
+  snapshot();
+  var tab=state.tab,goal=state.goal;
+  state=normState({tab:tab,goal:goal});
+  note('Cleared.',true);renderAll();
+});
+clearBtn.addEventListener('blur',function(){clearBtn.classList.remove('armed');clearBtn.textContent='Clear all';});
+
+function renderAll(){renderInfo();renderEditor();changed();}
+renderAll();
+})();
+</script>
+<!--
+API Sketch - usage
+- Fill in the API box (title, version, base URL, auth). Press "+ Endpoint", pick a method and type a path;
+  {name} segments become path parameter rows automatically.
+- Add query parameters, a request body and responses. Fields of type object, or array of object,
+  get nested fields via the "+" button (up to 4 levels). Examples are typed: integer "07" is flagged.
+- The list on the left groups endpoints by tag (defaults to the first path segment). Consistency checks
+  flag singular/plural and camelCase/snake_case mixing, duplicate method+path, missing 2xx or 4xx responses.
+- Output tabs: OpenAPI 3.1 YAML, Prompt (plain-text spec plus a chosen task for an LLM), curl, TypeScript.
+- Everything is saved in localStorage under "redline.tool.api-sketch.". "Load sample" fills a Bookshelf API.
+-->
+</body>
+</html>

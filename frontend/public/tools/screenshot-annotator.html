@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Screenshot Annotator — mark a UI, get a fix list</title>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#ffffff;
+  --sunken:#e4e9ee;
+  --ink:#16202a;
+  --ink-soft:#5b6b7a;
+  --line:#c8d2db;
+  --line-soft:#dde4ea;
+  --accent:#1f4ed8;
+  --accent-ink:#ffffff;
+  --danger:#c0392b;
+  --warn:#b7791f;
+  --ok:#2f855a;
+  --fill-alpha:0.16;
+  --tool-change:#2563eb;
+  --tool-remove:#dc2626;
+  --tool-add:#16a34a;
+  --tool-move:#9333ea;
+  --tool-resize:#d97706;
+  --tool-question:#0891b2;
+  --tool-badge-ink:#ffffff;
+  --tool-halo:rgba(0,0,0,0.45);
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f151b;
+    --surface:#161f27;
+    --sunken:#111920;
+    --ink:#e4ebf1;
+    --ink-soft:#8ea0b0;
+    --line:#2b3945;
+    --line-soft:#212c36;
+    --accent:#6d8dff;
+    --accent-ink:#0f151b;
+    --danger:#e57373;
+    --warn:#e0a84a;
+    --ok:#5cc28a;
+    --fill-alpha:0.30;
+    --tool-change:#5b8cff;
+    --tool-remove:#f05252;
+    --tool-add:#34c46a;
+    --tool-move:#b07cff;
+    --tool-resize:#f0a030;
+    --tool-question:#22b8d4;
+    --tool-badge-ink:#0b0f14;
+    --tool-halo:rgba(0,0,0,0.6);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f151b;
+  --surface:#161f27;
+  --sunken:#111920;
+  --ink:#e4ebf1;
+  --ink-soft:#8ea0b0;
+  --line:#2b3945;
+  --line-soft:#212c36;
+  --accent:#6d8dff;
+  --accent-ink:#0f151b;
+  --danger:#e57373;
+  --warn:#e0a84a;
+  --ok:#5cc28a;
+  --fill-alpha:0.30;
+  --tool-change:#5b8cff;
+  --tool-remove:#f05252;
+  --tool-add:#34c46a;
+  --tool-move:#b07cff;
+  --tool-resize:#f0a030;
+  --tool-question:#22b8d4;
+  --tool-badge-ink:#0b0f14;
+  --tool-halo:rgba(0,0,0,0.6);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;display:flex;flex-direction:column;
+  background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+.bar{
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;
+  padding:8px 14px;border-bottom:1px solid var(--line);background:var(--surface);flex:none;
+}
+.brand{font-weight:600;margin:0;font-size:15px;letter-spacing:-0.01em}
+.brand span{color:var(--ink-soft);font-weight:400}
+.controls{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-left:auto}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;border:1px solid var(--line);border-radius:5px;
+  background:var(--surface);cursor:pointer;font-size:13px;line-height:1.4;white-space:nowrap;
+}
+.btn:hover{border-color:var(--ink-soft)}
+.btn:disabled{opacity:.45;cursor:not-allowed;border-color:var(--line)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn-primary:hover{filter:brightness(1.08);border-color:var(--accent)}
+.btn-danger{color:var(--danger)}
+.btn-danger.arm{background:var(--danger);border-color:var(--danger);color:var(--accent-ink)}
+.file-in{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.status{font-size:12px;color:var(--ink-soft);min-height:1em;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.status:empty{display:none}
+.status.err{color:var(--danger)}
+.status.ok{color:var(--ok)}
+.status.warn{color:var(--warn)}
+.linkbtn{border:0;background:none;padding:0;color:var(--accent);cursor:pointer;text-decoration:underline;font-size:12px}
+
+.wrap{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 380px}
+.stage{min-width:0;overflow:auto;padding:12px 14px}
+.stage-inner{position:relative;min-height:100%}
+.panel{min-width:0;overflow:auto;border-left:1px solid var(--line);background:var(--paper);padding:12px;display:flex;flex-direction:column;gap:12px}
+@media (max-width:900px){
+  body{height:auto;display:block}
+  html{height:auto}
+  .wrap{display:block}
+  .stage{overflow:visible;padding:10px}
+  .panel{border-left:0;border-top:1px solid var(--line);overflow:visible;padding:10px}
+}
+
+.drop{
+  border:1.5px dashed var(--line);border-radius:8px;background:var(--surface);
+  min-height:320px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;padding:24px 16px;text-align:center;color:var(--ink-soft);
+}
+.drop h2{margin:0;font-size:15px;color:var(--ink);font-weight:600}
+.drop p{margin:0;max-width:440px}
+.drop .row-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.stage.dragging .drop,.stage.dragging .board{outline:2px dashed var(--accent);outline-offset:4px}
+kbd{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:0 4px;background:var(--sunken);color:var(--ink)}
+
+.missing{
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:8px;
+  padding:8px 10px;border:1px solid var(--warn);border-radius:6px;background:var(--surface);
+}
+.missing b{color:var(--warn)}
+.board{position:relative;margin:0 auto;border:1px solid var(--line);background:var(--sunken);line-height:0}
+#cv{display:block;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
+.readout{
+  display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 14px;margin:6px auto 0;
+  font-size:12px;color:var(--ink-soft);
+}
+.readout .mono{color:var(--ink)}
+
+.pop{
+  position:absolute;z-index:5;width:270px;max-width:100%;
+  background:var(--surface);border:1px solid var(--line);border-radius:6px;
+  box-shadow:0 6px 20px color-mix(in srgb,var(--ink) 18%,transparent);padding:8px;display:flex;flex-direction:column;gap:6px;
+}
+.pop.dock{position:static;width:auto;margin-top:8px;box-shadow:none}
+.pop-head{display:flex;align-items:center;gap:6px}
+.pop-geo{margin-left:auto;min-width:0;font-size:11px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pop textarea,.mk textarea{
+  width:100%;resize:vertical;border:1px solid var(--line);border-radius:4px;background:var(--sunken);
+  padding:5px 7px;font-size:13px;line-height:1.4;min-height:54px;
+}
+.pop-foot{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:11px;color:var(--ink-soft)}
+select.type{
+  border:1px solid var(--line);border-radius:4px;background:var(--sunken);padding:2px 4px;font-size:12px;
+}
+.num{
+  flex:none;min-width:22px;height:20px;padding:0 5px;border-radius:4px;border:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:var(--c);color:var(--tool-badge-ink);font:600 12px/1 "IBM Plex Mono",ui-monospace,monospace;cursor:pointer;
+}
+.icon{border:1px solid transparent;background:none;border-radius:4px;padding:1px 6px;cursor:pointer;color:var(--ink-soft);font-size:13px;line-height:1.4}
+.icon:hover{border-color:var(--line);color:var(--ink)}
+.icon.del:hover{color:var(--danger);border-color:var(--danger)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;min-width:0}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line-soft)}
+.card-head h2{margin:0;font-size:13px;font-weight:600}
+.card-head small{color:var(--ink-soft);font-size:12px}
+
+.legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:8px}
+.lg{
+  display:flex;align-items:center;gap:6px;padding:4px 6px;border:1px solid var(--line-soft);border-radius:5px;
+  background:var(--surface);cursor:pointer;font-size:12px;text-align:left;min-width:0;
+}
+.lg:hover{border-color:var(--line)}
+.lg[aria-pressed="true"]{border-color:var(--c);box-shadow:0 0 0 1px var(--c) inset;background:var(--sunken)}
+.sw{width:11px;height:11px;border-radius:2px;flex:none;background:var(--c)}
+.lg .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lg .ct{color:var(--ink-soft);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px}
+.legend-note{padding:0 10px 8px;color:var(--ink-soft);font-size:12px}
+
+.list{list-style:none;margin:0;padding:6px;display:flex;flex-direction:column;gap:4px;max-height:min(42vh,420px);overflow:auto}
+@media (max-width:900px){.list{max-height:none;overflow:visible}}
+.mk{border:1px solid var(--line-soft);border-left:3px solid var(--c);border-radius:5px;padding:6px;display:flex;flex-direction:column;gap:5px}
+.mk.sel{background:var(--sunken);border-color:var(--c)}
+.mk-head{display:flex;align-items:center;gap:6px;min-width:0}
+.mk-geo{flex:1;min-width:0;font-size:11px;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mk textarea{min-height:38px}
+.empty-li{color:var(--ink-soft);padding:8px 6px;font-size:12px}
+
+.tabs{display:flex;gap:2px;padding:6px 8px 0;border-bottom:1px solid var(--line-soft)}
+.tab{border:0;border-bottom:2px solid transparent;background:none;padding:4px 8px 5px;cursor:pointer;color:var(--ink-soft);font-size:13px}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:500}
+.out{
+  margin:0;padding:10px;max-height:340px;min-height:120px;overflow:auto;
+  font:12px/1.5 "IBM Plex Mono",ui-monospace,monospace;white-space:pre-wrap;word-break:break-word;background:var(--sunken);
+}
+.out.placeholder{color:var(--ink-soft);font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.out-foot{display:flex;align-items:center;gap:10px;padding:7px 10px;border-top:1px solid var(--line-soft)}
+.out-foot .count{margin-left:auto;color:var(--ink-soft);font-size:12px}
+.copied{color:var(--ok);font-size:12px}
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1 class="brand">Screenshot Annotator <span>— mark up a UI screenshot, get a fix list an LLM can act on</span></h1>
+  <div class="controls">
+    <input type="file" id="file" class="file-in" accept="image/*" tabindex="-1" aria-hidden="true">
+    <button class="btn btn-primary" id="openBtn" type="button">Open image</button>
+    <button class="btn" id="sampleBtn" type="button">Sample</button>
+    <button class="btn" id="pngBtn" type="button" disabled>Download PNG</button>
+    <button class="btn btn-danger" id="clearBtn" type="button" disabled>Clear marks</button>
+  </div>
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+</header>
+
+<main class="wrap">
+  <section class="stage" id="stage" aria-label="Screenshot">
+    <div class="stage-inner" id="stageInner">
+      <div class="drop" id="empty">
+        <h2>Add a screenshot to start</h2>
+        <p>Drop an image here, choose a file, or paste one with <kbd>Ctrl</kbd>+<kbd>V</kbd>. Then drag on it to draw a mark, pick an action and write a note.</p>
+        <div class="row-btns">
+          <button class="btn btn-primary" id="openBtn2" type="button">Choose image…</button>
+          <button class="btn" id="sampleBtn2" type="button">Load the sample</button>
+        </div>
+        <p style="font-size:12px">The image stays in this browser tab. Only marks and the image name are saved, so after a reload you re-add the image.</p>
+      </div>
+      <div class="missing" id="missing" hidden>
+        <span><b>Image missing.</b> Your <span id="missCount">0</span> marks were made on <span class="mono" id="missName"></span> (<span class="mono" id="missDims"></span>). Re-add that image to see it under the marks.</span>
+        <button class="btn btn-primary" id="reAddBtn" type="button">Re-add image</button>
+        <button class="btn btn-danger" id="discardBtn" type="button">Discard marks</button>
+      </div>
+      <div class="board" id="board" hidden>
+        <canvas id="cv" tabindex="0" aria-label="Annotation canvas. Drag to draw a mark. Keys: 1 to 6 set the action, N adds a mark, arrows move, Alt+arrows resize, Delete removes, Enter edits the note."></canvas>
+      </div>
+      <div class="readout" id="readout" hidden>
+        <span><span class="mono" id="roName"></span> · <span class="mono" id="roDims"></span> · shown at <span class="mono" id="roScale"></span> · cursor <span class="mono" id="roCur">–</span></span>
+        <span>Drag: new mark · drag mark: move · drag corner: resize · <kbd>1</kbd>–<kbd>6</kbd> action · <kbd>N</kbd> new · <kbd>Del</kbd> delete</span>
+      </div>
+      <div class="pop" id="pop" hidden role="group" aria-label="Selected mark">
+        <div class="pop-head">
+          <span class="num" id="popNum">1</span>
+          <select class="type" id="popType" aria-label="Action"></select>
+          <span class="pop-geo mono" id="popGeo"></span>
+          <button class="icon" id="popClose" type="button" aria-label="Close note">×</button>
+        </div>
+        <textarea id="popNote" rows="3" placeholder="What should happen here?" aria-label="Note for the selected mark"></textarea>
+        <div class="pop-foot"><span><kbd>Esc</kbd> back to canvas</span><button class="icon del" id="popDel" type="button">Delete mark</button></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="card">
+      <div class="card-head"><h2>Actions</h2><small>new marks use the selected one</small></div>
+      <div class="legend" id="legend" role="group" aria-label="Action for new marks"></div>
+      <div class="legend-note" id="legendNote"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Marks</h2><small class="mono" id="listCount">0</small></div>
+      <ol class="list" id="list"></ol>
+    </div>
+
+    <div class="card">
+      <div class="tabs" role="tablist" id="tabs">
+        <button class="tab" role="tab" data-fmt="prompt" type="button">Prompt</button>
+        <button class="tab" role="tab" data-fmt="md" type="button">Markdown</button>
+        <button class="tab" role="tab" data-fmt="json" type="button">JSON</button>
+      </div>
+      <pre class="out" id="out" role="tabpanel" tabindex="0"></pre>
+      <div class="out-foot">
+        <button class="btn btn-primary" id="copyBtn" type="button">Copy</button>
+        <span class="copied" id="copied" aria-live="polite"></span>
+        <span class="count mono" id="charCount">0 chars</span>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+"use strict";
+const TOOL_ID = "screenshot-annotator";
+const KEY = "redline.tool." + TOOL_ID + ".";
+const TYPES = [
+  { id: "change",   label: "Change",   hint: "Modify the element inside the mark as the note describes." },
+  { id: "remove",   label: "Remove",   hint: "Delete the element inside the mark and close the gap it leaves." },
+  { id: "add",      label: "Add",      hint: "Add a new element at this location as the note describes." },
+  { id: "move",     label: "Move",     hint: "Move the element inside the mark to where the note says." },
+  { id: "resize",   label: "Resize",   hint: "Make the element inside the mark larger or smaller as the note says." },
+  { id: "question", label: "Question", hint: "Answer the question about this area in text; do not change code for it." }
+];
+const TYPE = TYPES.reduce(function (o, t) { o[t.id] = t; return o; }, {});
+const FORMATS = { prompt: "Prompt", md: "Markdown", json: "JSON" };
+
+const $ = function (id) { return document.getElementById(id); };
+const cv = $("cv"), ctx = cv.getContext("2d");
+const stage = $("stage"), stageInner = $("stageInner"), board = $("board"), pop = $("pop");
+
+function load(k, d) { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
+function store(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+
+function blankState() { return { name: "", w: 0, h: 0, marks: [], active: "change", tab: "prompt", seq: 1 }; }
+function sanitize(o) {
+  const d = blankState();
+  if (!o || typeof o !== "object") return d;
+  d.name = typeof o.name === "string" ? o.name.slice(0, 200) : "";
+  d.w = Math.max(0, Math.round(+o.w || 0));
+  d.h = Math.max(0, Math.round(+o.h || 0));
+  if (!d.w || !d.h) { d.w = 0; d.h = 0; }
+  d.active = TYPE[o.active] ? o.active : "change";
+  d.tab = FORMATS[o.tab] ? o.tab : "prompt";
+  let maxId = 0;
+  if (Array.isArray(o.marks) && d.w) {
+    o.marks.forEach(function (m) {
+      if (!m || typeof m !== "object") return;
+      const r = clampRect({ x: +m.x || 0, y: +m.y || 0, w: +m.w || 0, h: +m.h || 0 }, d.w, d.h);
+      const id = Math.max(1, Math.round(+m.id || 0)) || 1;
+      d.marks.push({ id: id, type: TYPE[m.type] ? m.type : "change", note: typeof m.note === "string" ? m.note : "", x: r.x, y: r.y, w: r.w, h: r.h });
+      maxId = Math.max(maxId, id);
+    });
+  }
+  d.seq = Math.max(maxId + 1, Math.round(+o.seq || 1));
+  // make ids unique
+  const seen = {};
+  d.marks.forEach(function (m) { if (seen[m.id]) m.id = d.seq++; seen[m.id] = 1; });
+  return d;
+}
+
+function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+function clampRect(r, W, H) {
+  let x = Math.round(clamp(r.x, 0, W - 1)), y = Math.round(clamp(r.y, 0, H - 1));
+  let w = Math.round(clamp(r.w, 1, W - x)), h = Math.round(clamp(r.h, 1, H - y));
+  return { x: x, y: y, w: w, h: h };
+}
+function normRect(a, b) {
+  return { x: Math.round(Math.min(a.x, b.x)), y: Math.round(Math.min(a.y, b.y)), w: Math.round(Math.abs(a.x - b.x)), h: Math.round(Math.abs(a.y - b.y)) };
+}
+
+let S = sanitize(load("state", null));
+let img = null, imgURL = null;
+let scale = 1, cssW = 0, cssH = 0, dpr = 1;
+let sel = null, drag = null, undoState = null;
+let saveTimer = 0, statusTimer = 0;
+
+function byId(id) { for (let i = 0; i < S.marks.length; i++) if (S.marks[i].id === id) return S.marks[i]; return null; }
+function indexOf(id) { for (let i = 0; i < S.marks.length; i++) if (S.marks[i].id === id) return i; return -1; }
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function colorOf(t) { return cssVar("--tool-" + t) || cssVar("--accent"); }
+
+/* ---------- geometry helpers used by the outputs ---------- */
+function pct(v, t) { return Math.round(v / t * 1000) / 10; }
+function region(m, W, H) {
+  const cx = (m.x + m.w / 2) / W, cy = (m.y + m.h / 2) / H;
+  const col = cx < 1 / 3 ? "left" : cx < 2 / 3 ? "center" : "right";
+  const row = cy < 1 / 3 ? "top" : cy < 2 / 3 ? "middle" : "bottom";
+  if (row === "middle" && col === "center") return "center";
+  return row + " " + col;
+}
+
+/* ---------- output builders ---------- */
+function countsText(marks) {
+  const parts = [];
+  TYPES.forEach(function (t) {
+    const n = marks.filter(function (m) { return m.type === t.id; }).length;
+    if (n) parts.push(n + " " + t.id);
+  });
+  return parts.join(", ");
+}
+function noteOr(m) { return m.note.trim() ? m.note.trim() : "(no note: infer the intent from the action and the location)"; }
+function oneLine(s) { return s.replace(/\s*\n\s*/g, " / "); }
+
+function buildPrompt(st) {
+  const W = st.w, H = st.h, n = st.marks.length;
+  const L = [];
+  L.push("Apply the following review marks to the user interface shown in the screenshot \"" + (st.name || "screenshot") + "\".");
+  L.push("");
+  L.push("Screenshot: " + W + " x " + H + " px. Marks: " + n + " (" + countsText(st.marks) + ").");
+  L.push("Coordinates are in the screenshot's original pixels, origin at the top-left corner; x and y give the mark's top-left corner. Percentages are of the image width (x, width) and height (y, height). Regions split the image into a 3 x 3 grid (top/middle/bottom, left/center/right).");
+  L.push("");
+  L.push("Action types used:");
+  TYPES.forEach(function (t) {
+    if (st.marks.some(function (m) { return m.type === t.id; })) L.push("- " + t.id.toUpperCase() + ": " + t.hint);
+  });
+  L.push("");
+  L.push("Marks:");
+  st.marks.forEach(function (m, i) {
+    L.push((i + 1) + ". " + m.type.toUpperCase() + ": " + oneLine(noteOr(m)));
+    L.push("   Location: " + region(m, W, H) + "; x " + m.x + ", y " + m.y + ", width " + m.w + ", height " + m.h + " px" +
+      " (x " + pct(m.x, W) + "%, y " + pct(m.y, H) + "%, width " + pct(m.w, W) + "%, height " + pct(m.h, H) + "%).");
+  });
+  L.push("");
+  L.push("How to work:");
+  L.push("- Identify the UI element inside each marked area. If the screenshot is attached, look at it; otherwise rely on the region, the coordinates and the note.");
+  L.push("- Make each requested change in the code that renders this screen. Leave everything that is not marked unchanged.");
+  if (st.marks.some(function (m) { return m.type === "question"; })) L.push("- QUESTION marks need an answer in text, not a code change.");
+  L.push("- If a mark is ambiguous, state the assumption you made rather than skipping it.");
+  L.push("- Finish with one line per mark number saying what you changed (or answered), or why it could not be done.");
+  return L.join("\n");
+}
+function buildMarkdown(st) {
+  const W = st.w, H = st.h;
+  const L = ["### Screenshot review: `" + (st.name || "screenshot") + "` (" + W + "×" + H + ", " + st.marks.length + " marks)", ""];
+  st.marks.forEach(function (m, i) {
+    L.push("- [ ] **" + (i + 1) + ". " + TYPE[m.type].label + "** · " + region(m, W, H) + " · `x" + m.x + " y" + m.y + " " + m.w + "×" + m.h + "` — " + oneLine(noteOr(m)));
+  });
+  return L.join("\n");
+}
+function buildJSON(st) {
+  const W = st.w, H = st.h;
+  return JSON.stringify({
+    image: { name: st.name || "screenshot", width: W, height: H },
+    count: st.marks.length,
+    marks: st.marks.map(function (m, i) {
+      return {
+        n: i + 1, type: m.type, note: m.note.trim(), region: region(m, W, H),
+        x: m.x, y: m.y, width: m.w, height: m.h,
+        percent: { x: pct(m.x, W), y: pct(m.y, H), width: pct(m.w, W), height: pct(m.h, H) }
+      };
+    })
+  }, null, 2);
+}
+
+/* ---------- drawing ---------- */
+function paintMarks(c, k, o) {
+  const fa = parseFloat(cssVar("--fill-alpha")) || 0.2;
+  const halo = cssVar("--tool-halo"), ink = cssVar("--tool-badge-ink");
+  const cw = o.width, ch = o.height, lw = o.lw;
+  S.marks.forEach(function (m) {
+    const col = colorOf(m.type), x = m.x * k, y = m.y * k, w = m.w * k, h = m.h * k;
+    c.save();
+    c.globalAlpha = fa * 0.7; c.fillStyle = col; c.fillRect(x, y, w, h);
+    c.globalAlpha = 1;
+    c.lineWidth = lw + 2; c.strokeStyle = halo; c.strokeRect(x, y, w, h);
+    c.lineWidth = o.sel === m.id ? lw + 1 : lw; c.strokeStyle = col; c.strokeRect(x, y, w, h);
+    if (o.sel === m.id) {
+      const hs = 8;
+      [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(function (p) {
+        c.fillStyle = ink; c.fillRect(p[0] - hs / 2, p[1] - hs / 2, hs, hs);
+        c.lineWidth = 1.5; c.strokeStyle = col; c.strokeRect(p[0] - hs / 2, p[1] - hs / 2, hs, hs);
+      });
+    }
+    c.restore();
+  });
+  // numbers go on top of every rectangle
+  c.save();
+  c.font = "600 " + o.font + "px \"IBM Plex Mono\", ui-monospace, monospace";
+  c.textAlign = "center"; c.textBaseline = "middle";
+  S.marks.forEach(function (m, i) {
+    const b = labelBox(c, String(i + 1), m, k, o.font, cw, ch);
+    const col = colorOf(m.type);
+    c.fillStyle = halo; c.fillRect(b.x - 1, b.y - 1, b.w + 2, b.h + 2);
+    c.fillStyle = col; c.fillRect(b.x, b.y, b.w, b.h);
+    c.fillStyle = ink; c.fillText(String(i + 1), b.x + b.w / 2, b.y + b.h / 2 + 0.5);
+  });
+  c.restore();
+  if (o.draft) {
+    c.save();
+    c.setLineDash([5, 4]); c.lineWidth = lw; c.strokeStyle = colorOf(S.active);
+    c.strokeRect(o.draft.x * k, o.draft.y * k, o.draft.w * k, o.draft.h * k);
+    c.restore();
+  }
+}
+// Badge sits inside the top-left corner when it fits; small marks get it outside (above, else below).
+function labelBox(c, text, m, k, font, cw, ch) {
+  const pad = Math.max(3, Math.round(font * 0.35));
+  const bw = Math.ceil(c.measureText(text).width + pad * 2), bh = Math.ceil(font + pad * 1.2);
+  const x = m.x * k, y = m.y * k, w = m.w * k, h = m.h * k;
+  let bx = x, by = y;
+  if (!(w >= bw + 6 && h >= bh + 6)) {
+    by = y - bh - 2 >= 0 ? y - bh - 2 : y + h + 2;
+    if (by + bh > ch) by = Math.max(0, y - bh);
+  }
+  bx = clamp(bx, 0, Math.max(0, cw - bw));
+  return { x: bx, y: by, w: bw, h: bh };
+}
+function drawPlaceholder(c, w, h) {
+  c.fillStyle = cssVar("--sunken"); c.fillRect(0, 0, w, h);
+  c.strokeStyle = cssVar("--line"); c.lineWidth = 1;
+  for (let i = 1; i < 10; i++) {
+    const gx = Math.round(w * i / 10) + 0.5, gy = Math.round(h * i / 10) + 0.5;
+    c.beginPath(); c.moveTo(gx, 0); c.lineTo(gx, h); c.stroke();
+    c.beginPath(); c.moveTo(0, gy); c.lineTo(w, gy); c.stroke();
+  }
+  c.fillStyle = cssVar("--ink-soft"); c.textAlign = "center"; c.textBaseline = "middle";
+  c.font = "13px \"IBM Plex Sans\", -apple-system, sans-serif";
+  c.fillText("Image missing: " + (S.name || "screenshot") + " (" + S.w + " × " + S.h + ")", w / 2, h / 2);
+}
+function draw() {
+  if (!S.w) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  if (img) { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.drawImage(img, 0, 0, cssW, cssH); }
+  else drawPlaceholder(ctx, cssW, cssH);
+  paintMarks(ctx, scale, { lw: 2, font: 12, width: cssW, height: cssH, sel: sel, draft: drag && drag.mode === "new" ? drag.rect : null });
+}
+
+function layout() {
+  const has = S.w > 0;
+  $("empty").hidden = has;
+  board.hidden = !has;
+  $("readout").hidden = !has;
+  $("missing").hidden = !(has && !img);
+  $("pngBtn").disabled = !(has && img);
+  $("clearBtn").disabled = !S.marks.length;
+  if (!has) { pop.hidden = true; return; }
+  if (!img) {
+    $("missCount").textContent = S.marks.length;
+    $("missName").textContent = S.name || "screenshot";
+    $("missDims").textContent = S.w + "×" + S.h;
+  }
+  const narrow = window.matchMedia("(max-width:900px)").matches;
+  const avail = Math.max(120, stageInner.clientWidth - 2);
+  let maxH;
+  if (narrow) maxH = Math.max(240, window.innerHeight * 0.72);
+  else maxH = Math.max(240, stage.clientHeight - 24 - 44 - ($("missing").hidden ? 0 : $("missing").offsetHeight + 8));
+  scale = Math.min(avail / S.w, maxH / S.h, 2);
+  cssW = Math.max(1, Math.round(S.w * scale));
+  cssH = Math.max(1, Math.round(S.h * scale));
+  dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
+  cv.style.width = cssW + "px"; cv.style.height = cssH + "px";
+  board.style.width = (cssW + 2) + "px";
+  $("readout").style.maxWidth = Math.max(cssW + 2, 300) + "px";
+  $("roName").textContent = S.name || "screenshot";
+  $("roDims").textContent = S.w + "×" + S.h + " px";
+  $("roScale").textContent = Math.round(scale * 100) + "%";
+  draw();
+  placePop();
+}
+
+/* ---------- selection + note popover ---------- */
+function geoText(m) { return "x" + m.x + " y" + m.y + " · " + m.w + "×" + m.h; }
+function select(id) {
+  sel = id;
+  Array.prototype.forEach.call($("list").children, function (li) { li.classList.toggle("sel", +li.dataset.id === id); });
+  draw();
+  placePop();
+}
+function placePop() {
+  const m = byId(sel);
+  if (!m || !S.w || drag) { pop.hidden = true; return; }
+  const i = indexOf(m.id);
+  pop.hidden = false;
+  const num = $("popNum");
+  num.textContent = i + 1; num.style.setProperty("--c", "var(--tool-" + m.type + ")");
+  $("popType").value = m.type;
+  $("popGeo").textContent = geoText(m);
+  if (document.activeElement !== $("popNote") || $("popNote").dataset.id !== String(m.id)) { $("popNote").value = m.note; }
+  $("popNote").dataset.id = String(m.id);
+  const sw = stageInner.clientWidth;
+  if (sw < 520) { pop.classList.add("dock"); pop.style.left = ""; pop.style.top = ""; return; }
+  pop.classList.remove("dock");
+  const bl = board.offsetLeft + 1, bt = board.offsetTop + 1, pw = pop.offsetWidth, ph = pop.offsetHeight;
+  let left = bl + (m.x + m.w) * scale + 10, top;
+  if (left + pw > sw) left = bl + m.x * scale - pw - 10;
+  if (left < 0) {
+    left = clamp(bl + m.x * scale, 0, sw - pw);
+    top = bt + (m.y + m.h) * scale + 10;
+    if (top + ph > bt + cssH) top = Math.max(bt, bt + m.y * scale - ph - 10);
+  } else {
+    top = clamp(bt + m.y * scale, bt, Math.max(bt, bt + cssH - ph));
+  }
+  pop.style.left = Math.round(left) + "px";
+  pop.style.top = Math.round(top) + "px";
+}
+
+/* ---------- mutations ---------- */
+function changed(structural) {
+  if (structural) renderList(); else refreshListGeo();
+  renderLegend();
+  renderOutput();
+  $("clearBtn").disabled = !S.marks.length;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persist, 200);
+}
+function persist() {
+  if (!store("state", S)) setStatus("Could not save marks in this browser (storage full or blocked). Copy the JSON output to keep them.", "warn");
+}
+function addMark(r) {
+  const m = { id: S.seq++, type: S.active, note: "", x: r.x, y: r.y, w: Math.max(1, r.w), h: Math.max(1, r.h) };
+  const c = clampRect(m, S.w, S.h); m.x = c.x; m.y = c.y; m.w = c.w; m.h = c.h;
+  S.marks.push(m);
+  changed(true);
+  select(m.id);
+  focusNote();
+  return m;
+}
+function removeMark(id) {
+  const i = indexOf(id);
+  if (i < 0) return;
+  S.marks.splice(i, 1);
+  if (sel === id) sel = null;
+  changed(true);
+  draw(); placePop();
+  cv.focus({ preventScroll: true });
+}
+function setType(id, t) {
+  const m = byId(id); if (!m || !TYPE[t]) return;
+  m.type = t;
+  changed(true); draw(); placePop();
+}
+function setActive(t) { S.active = t; renderLegend(); changed(false); }
+function focusNote() { if (!pop.hidden) { const n = $("popNote"); n.focus({ preventScroll: true }); } }
+
+/* ---------- panel rendering ---------- */
+function renderLegend() {
+  const el = $("legend");
+  if (!el.children.length) {
+    TYPES.forEach(function (t, i) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "lg"; b.dataset.type = t.id;
+      b.style.setProperty("--c", "var(--tool-" + t.id + ")");
+      b.title = t.hint + " (key " + (i + 1) + ")";
+      b.innerHTML = '<span class="sw"></span><span class="nm"></span><span class="ct"></span>';
+      b.querySelector(".nm").textContent = (i + 1) + " " + t.label;
+      b.addEventListener("click", function () { setActive(t.id); if (sel) setType(sel, t.id); });
+      el.appendChild(b);
+    });
+  }
+  Array.prototype.forEach.call(el.children, function (b) {
+    const t = b.dataset.type;
+    b.setAttribute("aria-pressed", String(S.active === t));
+    b.querySelector(".ct").textContent = S.marks.filter(function (m) { return m.type === t; }).length || "";
+  });
+  $("legendNote").textContent = TYPE[S.active].label + ": " + TYPE[S.active].hint + (sel ? " Clicking an action also sets it on the selected mark." : "");
+}
+function typeSelect(value, label) {
+  const s = document.createElement("select");
+  s.className = "type"; s.setAttribute("aria-label", label);
+  TYPES.forEach(function (t) { const o = document.createElement("option"); o.value = t.id; o.textContent = t.label; s.appendChild(o); });
+  s.value = value;
+  return s;
+}
+function renderList() {
+  const list = $("list");
+  list.innerHTML = "";
+  $("listCount").textContent = S.marks.length;
+  if (!S.marks.length) {
+    const li = document.createElement("li"); li.className = "empty-li";
+    li.textContent = S.w ? "No marks yet. Drag on the screenshot to draw one, or press N with the canvas focused." : "Marks you draw appear here with their notes.";
+    list.appendChild(li);
+    return;
+  }
+  S.marks.forEach(function (m, i) {
+    const li = document.createElement("li");
+    li.className = "mk" + (m.id === sel ? " sel" : "");
+    li.dataset.id = m.id;
+    li.style.setProperty("--c", "var(--tool-" + m.type + ")");
+    const head = document.createElement("div"); head.className = "mk-head";
+    const num = document.createElement("button"); num.type = "button"; num.className = "num"; num.textContent = i + 1;
+    num.setAttribute("aria-label", "Select mark " + (i + 1));
+    num.addEventListener("click", function () { select(m.id); });
+    const s = typeSelect(m.type, "Action for mark " + (i + 1));
+    s.addEventListener("change", function () { setType(m.id, s.value); });
+    const geo = document.createElement("span"); geo.className = "mk-geo mono"; geo.textContent = geoText(m) + " · " + region(m, S.w, S.h);
+    const del = document.createElement("button"); del.type = "button"; del.className = "icon del"; del.textContent = "×";
+    del.setAttribute("aria-label", "Delete mark " + (i + 1)); del.title = "Delete mark";
+    del.addEventListener("click", function () { removeMark(m.id); });
+    head.appendChild(num); head.appendChild(s); head.appendChild(geo); head.appendChild(del);
+    const ta = document.createElement("textarea"); ta.rows = 2; ta.value = m.note;
+    ta.placeholder = "Note for mark " + (i + 1); ta.setAttribute("aria-label", "Note for mark " + (i + 1));
+    ta.addEventListener("focus", function () { if (sel !== m.id) select(m.id); });
+    ta.addEventListener("input", function () {
+      m.note = ta.value;
+      if (sel === m.id && $("popNote").dataset.id === String(m.id)) $("popNote").value = m.note;
+      changed(false);
+    });
+    li.appendChild(head); li.appendChild(ta);
+    list.appendChild(li);
+  });
+}
+function refreshListGeo() {
+  Array.prototype.forEach.call($("list").querySelectorAll(".mk"), function (li) {
+    const m = byId(+li.dataset.id); if (!m) return;
+    li.querySelector(".mk-geo").textContent = geoText(m) + " · " + region(m, S.w, S.h);
+  });
+}
+function currentOutput() {
+  if (!S.w) return null;
+  if (!S.marks.length) return null;
+  if (S.tab === "md") return buildMarkdown(S);
+  if (S.tab === "json") return buildJSON(S);
+  return buildPrompt(S);
+}
+function renderOutput() {
+  Array.prototype.forEach.call($("tabs").children, function (b) {
+    const on = b.dataset.fmt === S.tab;
+    b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1;
+  });
+  const txt = currentOutput(), out = $("out");
+  if (txt == null) {
+    out.classList.add("placeholder");
+    out.textContent = S.w ? "Draw at least one mark on the screenshot. The " + FORMATS[S.tab] + " output appears here and updates as you edit." : "Add a screenshot and draw marks on it. The " + FORMATS[S.tab] + " output appears here.";
+    $("charCount").textContent = "0 chars";
+    $("copyBtn").disabled = true;
+  } else {
+    out.classList.remove("placeholder");
+    out.textContent = txt;
+    $("charCount").textContent = txt.length.toLocaleString("en-US") + " chars";
+    $("copyBtn").disabled = false;
+  }
+}
+function renderAll() { renderLegend(); renderList(); renderOutput(); layout(); }
+
+/* ---------- status line ---------- */
+function setStatus(msg, kind, action) {
+  const el = $("status");
+  el.className = "status" + (kind ? " " + kind : "");
+  el.textContent = msg;
+  if (action) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "linkbtn"; b.textContent = action.label;
+    b.addEventListener("click", action.run); el.appendChild(b);
+  }
+  clearTimeout(statusTimer);
+  if (msg) statusTimer = setTimeout(function () { el.textContent = ""; el.className = "status"; }, action ? 12000 : 7000);
+}
+
+/* ---------- image loading ---------- */
+function loadImage(src, name, after) {
+  const im = new Image();
+  im.onload = function () {
+    const W = im.naturalWidth, H = im.naturalHeight;
+    if (!W || !H) { setStatus("\"" + name + "\" has no pixels. Choose a different image.", "err"); return; }
+    let msg = "Loaded " + name + " (" + W + "×" + H + ").", kind = "ok", action = null;
+    if (img && S.marks.length) {
+      undoState = { S: JSON.parse(JSON.stringify(S)), img: img, url: imgURL };
+      msg += " The " + S.marks.length + " marks from the previous image were cleared.";
+      action = { label: "Undo", run: undoLoad };
+      S.marks = []; S.seq = 1;
+    } else if (!img && S.w && S.marks.length) {
+      if (W !== S.w || H !== S.h) {
+        const fx = W / S.w, fy = H / S.h;
+        S.marks.forEach(function (m) { const r = clampRect({ x: m.x * fx, y: m.y * fy, w: m.w * fx, h: m.h * fy }, W, H); m.x = r.x; m.y = r.y; m.w = r.w; m.h = r.h; });
+        msg = "Marks were drawn on " + S.w + "×" + S.h + "; scaled them to " + name + " (" + W + "×" + H + "). Check their positions.";
+        kind = "warn";
+      } else {
+        msg = "Image re-attached; " + S.marks.length + " marks restored.";
+      }
+    } else {
+      S.marks = []; S.seq = 1;
+    }
+    if (imgURL && imgURL !== src && !(undoState && undoState.url === imgURL)) { try { URL.revokeObjectURL(imgURL); } catch (e) { /* not an object URL */ } }
+    img = im; imgURL = src.indexOf("blob:") === 0 ? src : null;
+    S.name = name; S.w = W; S.h = H; sel = null;
+    renderAll();
+    changed(true);
+    setStatus(msg, kind, action);
+    if (after) after();
+  };
+  im.onerror = function () { setStatus("Could not read \"" + name + "\" as an image. Use a PNG, JPEG, WebP or GIF file.", "err"); };
+  im.src = src;
+}
+function undoLoad() {
+  if (!undoState) return;
+  S = undoState.S; img = undoState.img; imgURL = undoState.url; undoState = null; sel = null;
+  renderAll(); changed(true);
+  setStatus("Previous image and marks restored.", "ok");
+}
+function loadFile(file, fallbackName) {
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { setStatus("\"" + (file.name || "file") + "\" is not an image. Drop or choose a PNG, JPEG, WebP or GIF.", "err"); return; }
+  loadImage(URL.createObjectURL(file), file.name || fallbackName || "screenshot.png");
+}
+function stamp() { const d = new Date(), p = function (n) { return String(n).padStart(2, "0"); }; return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-" + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()); }
+
+/* ---------- sample ---------- */
+function sampleURL() {
+  const W = 1280, H = 800, c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  const font = function (s, w) { g.font = (w || 400) + " " + s + "px -apple-system, 'Segoe UI', Roboto, sans-serif"; };
+  g.fillStyle = "#f4f6f8"; g.fillRect(0, 0, W, H);
+  g.fillStyle = "#1e293b"; g.fillRect(0, 0, W, 56);
+  g.fillStyle = "#ffffff"; font(18, 600); g.textBaseline = "middle"; g.fillText("Acme Console", 24, 28);
+  font(14); g.fillStyle = "#cbd5e1";
+  ["Dashboard", "Orders", "Customers", "Reports"].forEach(function (t, i) { g.fillText(t, 250 + i * 110, 28); });
+  g.fillStyle = "#64748b"; g.beginPath(); g.arc(1238, 28, 16, 0, Math.PI * 2); g.fill();
+  g.fillStyle = "#ffffff"; g.fillRect(0, 56, 220, H - 56);
+  g.fillStyle = "#e2e8f0"; g.fillRect(220, 56, 1, H - 56);
+  font(14); ["Overview", "Orders", "Shipments", "Returns", "Invoices", "Settings"].forEach(function (t, i) {
+    if (i === 1) { g.fillStyle = "#e0e7ff"; g.fillRect(12, 80 + i * 40, 196, 32); }
+    g.fillStyle = i === 1 ? "#3730a3" : "#334155"; g.fillText(t, 28, 96 + i * 40);
+  });
+  g.fillStyle = "#0f172a"; font(24, 600); g.fillText("Orders", 252, 100);
+  g.fillStyle = "#94a3b8"; g.fillRect(1100, 82, 150, 36);
+  g.fillStyle = "#ffffff"; font(14, 600); g.fillText("Export CSV", 1135, 100);
+  [["Open orders", "1,284"], ["Revenue (30d)", "$92,410"], ["Refunds", "37"]].forEach(function (k, i) {
+    const x = 252 + i * 336;
+    g.fillStyle = "#ffffff"; g.fillRect(x, 140, 320, 100);
+    g.strokeStyle = "#e2e8f0"; g.lineWidth = 1; g.strokeRect(x + 0.5, 140.5, 319, 99);
+    g.fillStyle = "#64748b"; font(13); g.fillText(k[0], x + 18, 166);
+    g.fillStyle = "#0f172a"; font(28, 600); g.fillText(k[1], x + 18, 206);
+  });
+  g.fillStyle = "#ffffff"; g.fillRect(252, 264, 998, 500);
+  g.strokeStyle = "#e2e8f0"; g.strokeRect(252.5, 264.5, 997, 499);
+  const cols = ["Order", "Customer", "Date", "Status", "Total"], cx = [272, 420, 660, 820, 1120];
+  g.fillStyle = "#f8fafc"; g.fillRect(253, 265, 996, 40);
+  g.fillStyle = "#475569"; font(13, 600); cols.forEach(function (t, i) { g.fillText(t, cx[i], 285); });
+  const names = ["Nora Blake", "Ilya Petrov", "Sam Okafor", "Mei Tanaka", "Luis Ortega", "Ada Moreau", "Tom Reyes", "Zoe Grant"];
+  names.forEach(function (n, r) {
+    const y = 305 + r * 56;
+    g.fillStyle = "#e2e8f0"; g.fillRect(253, y + 55, 996, 1);
+    g.fillStyle = "#0f172a"; font(14);
+    g.fillText("#" + (10421 + r), cx[0], y + 28); g.fillText(n, cx[1], y + 28);
+    g.fillText("2026-09-" + String(20 - r).padStart(2, "0"), cx[2], y + 28);
+    g.fillStyle = r % 3 ? "#15803d" : "#b45309"; g.fillText(r % 3 ? "Paid" : "Pending", cx[3], y + 28);
+    g.fillStyle = "#0f172a"; g.fillText("$" + (120 + r * 37) + ".00", cx[4], y + 28);
+  });
+  return c.toDataURL("image/png");
+}
+function loadSample() {
+  loadImage(sampleURL(), "sample-dashboard.png", function () {
+    const marks = [
+      ["change", "Make this the primary action: label it \"Download CSV\" and use the accent blue, not grey.", 1094, 76, 162, 48],
+      ["remove", "Drop the Refunds card; nobody reads it. Let the other two cards share the row.", 918, 136, 330, 108],
+      ["add", "Add a date-range picker here, left of the export button (default: last 30 days).", 820, 80, 262, 40],
+      ["move", "Move the user menu to the bottom of the sidebar.", 1216, 8, 44, 40],
+      ["resize", "Rows are too tall. Make them 40px high.", 253, 305, 996, 56],
+      ["question", "Is \"Reports\" still used? If not, remove it from the top nav.", 564, 14, 80, 28]
+    ];
+    marks.forEach(function (a) { S.marks.push({ id: S.seq++, type: a[0], note: a[1], x: a[2], y: a[3], w: a[4], h: a[5] }); });
+    changed(true); draw();
+    setStatus("Sample loaded with one mark of each action. Drag, resize or edit them, or open your own image.", "ok");
+  });
+}
+
+/* ---------- PNG export ---------- */
+function downloadPNG() {
+  if (!img) return;
+  const c = document.createElement("canvas"); c.width = S.w; c.height = S.h;
+  const g = c.getContext("2d");
+  g.drawImage(img, 0, 0, S.w, S.h);
+  const big = Math.max(S.w, S.h);
+  paintMarks(g, 1, { lw: Math.max(2, Math.round(big / 500)), font: Math.max(12, Math.round(big / 70)), width: S.w, height: S.h, sel: null, draft: null });
+  let url;
+  try { url = c.toDataURL("image/png"); }
+  catch (e) { setStatus("The browser blocked reading this image back (cross-origin). Save it to disk and open the file instead.", "err"); return; }
+  const a = document.createElement("a");
+  a.href = url; a.download = (S.name || "screenshot").replace(/\.[a-z0-9]+$/i, "") + "-annotated.png";
+  document.body.appendChild(a); a.click(); a.remove();
+  setStatus("Saved " + a.download + " (" + S.w + "×" + S.h + ").", "ok");
+}
+
+/* ---------- two-step destructive buttons ---------- */
+function armed(btn, label, run) {
+  let t = 0;
+  const orig = btn.textContent;
+  btn.addEventListener("click", function () {
+    if (btn.classList.contains("arm")) { clearTimeout(t); btn.classList.remove("arm"); btn.textContent = orig; run(); return; }
+    btn.classList.add("arm"); btn.textContent = label;
+    t = setTimeout(function () { btn.classList.remove("arm"); btn.textContent = orig; }, 3000);
+  });
+}
+
+/* ---------- pointer interaction ---------- */
+function toImg(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: clamp((e.clientX - r.left) / scale, 0, S.w), y: clamp((e.clientY - r.top) / scale, 0, S.h) };
+}
+function hit(p) {
+  const tol = 7 / scale;
+  const order = S.marks.slice().reverse();
+  const s = byId(sel);
+  if (s) { order.splice(order.indexOf(s), 1); order.unshift(s); }
+  for (let i = 0; i < order.length; i++) {
+    const m = order[i];
+    const cs = [["nw", m.x, m.y], ["ne", m.x + m.w, m.y], ["sw", m.x, m.y + m.h], ["se", m.x + m.w, m.y + m.h]];
+    for (let j = 0; j < 4; j++) if (Math.abs(p.x - cs[j][1]) <= tol && Math.abs(p.y - cs[j][2]) <= tol) return { m: m, mode: "resize", corner: cs[j][0] };
+  }
+  for (let i = S.marks.length - 1; i >= 0; i--) {
+    const m = S.marks[i];
+    if (p.x >= m.x && p.x <= m.x + m.w && p.y >= m.y && p.y <= m.y + m.h) return { m: m, mode: "move" };
+  }
+  return null;
+}
+function cursorFor(h) {
+  if (!h) return "crosshair";
+  if (h.mode === "move") return "move";
+  return h.corner === "nw" || h.corner === "se" ? "nwse-resize" : "nesw-resize";
+}
+cv.addEventListener("pointerdown", function (e) {
+  if (!S.w || e.button > 0) return;
+  cv.focus({ preventScroll: true });
+  const p = toImg(e), h = hit(p);
+  try { cv.setPointerCapture(e.pointerId); } catch (err) { /* pointer already released */ }
+  if (h) {
+    sel = h.m.id;
+    Array.prototype.forEach.call($("list").children, function (li) { li.classList.toggle("sel", +li.dataset.id === sel); });
+    drag = { mode: h.mode, corner: h.corner, id: h.m.id, start: p, orig: { x: h.m.x, y: h.m.y, w: h.m.w, h: h.m.h }, moved: false };
+  } else {
+    drag = { mode: "new", start: p, rect: null, moved: false };
+  }
+  pop.hidden = true;
+  draw();
+  e.preventDefault();
+});
+cv.addEventListener("pointermove", function (e) {
+  if (!S.w) return;
+  const p = toImg(e);
+  $("roCur").textContent = Math.round(p.x) + ", " + Math.round(p.y);
+  if (!drag) { cv.style.cursor = cursorFor(hit(p)); return; }
+  if (!drag.moved && Math.hypot((p.x - drag.start.x) * scale, (p.y - drag.start.y) * scale) < 3) return;
+  drag.moved = true;
+  if (drag.mode === "new") {
+    drag.rect = normRect(drag.start, p);
+  } else {
+    const m = byId(drag.id), o = drag.orig;
+    if (!m) return;
+    if (drag.mode === "move") {
+      m.x = Math.round(clamp(o.x + p.x - drag.start.x, 0, S.w - m.w));
+      m.y = Math.round(clamp(o.y + p.y - drag.start.y, 0, S.h - m.h));
+    } else {
+      const ax = drag.corner === "nw" || drag.corner === "sw" ? o.x + o.w : o.x;
+      const ay = drag.corner === "nw" || drag.corner === "ne" ? o.y + o.h : o.y;
+      const r = normRect({ x: ax, y: ay }, p);
+      if (r.w < 4) { r.w = 4; if (p.x < ax) r.x = ax - 4; }
+      if (r.h < 4) { r.h = 4; if (p.y < ay) r.y = ay - 4; }
+      const c = clampRect(r, S.w, S.h);
+      m.x = c.x; m.y = c.y; m.w = c.w; m.h = c.h;
+    }
+  }
+  draw();
+});
+function endDrag() {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (d.mode === "new") {
+    if (d.moved && d.rect && d.rect.w * scale >= 5 && d.rect.h * scale >= 5) { addMark(d.rect); return; }
+    select(null);
+  } else {
+    if (d.moved) changed(false);
+    select(d.id);
+  }
+  renderLegend();
+}
+cv.addEventListener("pointerup", endDrag);
+cv.addEventListener("pointercancel", endDrag);
+cv.addEventListener("pointerleave", function () { if (!drag) $("roCur").textContent = "–"; });
+
+cv.addEventListener("keydown", function (e) {
+  if (!S.w) return;
+  const k = e.key, m = byId(sel);
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && k >= "1" && k <= "6") {
+    const t = TYPES[+k - 1].id; setActive(t); if (m) setType(m.id, t); e.preventDefault(); return;
+  }
+  if ((k === "n" || k === "N") && !e.ctrlKey && !e.metaKey) {
+    const w = Math.max(8, Math.round(S.w * 0.2)), h = Math.max(8, Math.round(S.h * 0.15));
+    addMark({ x: Math.round((S.w - w) / 2), y: Math.round((S.h - h) / 2), w: w, h: h });
+    e.preventDefault(); return;
+  }
+  if (k === "]" || k === "[") {
+    if (!S.marks.length) return;
+    const i = indexOf(sel), n = S.marks.length;
+    select(S.marks[((i < 0 ? (k === "]" ? -1 : 0) : i) + (k === "]" ? 1 : -1) + n) % n].id);
+    e.preventDefault(); return;
+  }
+  if (!m) return;
+  const step = e.shiftKey ? 10 : 1;
+  const dx = k === "ArrowLeft" ? -step : k === "ArrowRight" ? step : 0;
+  const dy = k === "ArrowUp" ? -step : k === "ArrowDown" ? step : 0;
+  if (dx || dy) {
+    if (e.altKey) { m.w = clamp(m.w + dx, 1, S.w - m.x); m.h = clamp(m.h + dy, 1, S.h - m.y); }
+    else { m.x = clamp(m.x + dx, 0, S.w - m.w); m.y = clamp(m.y + dy, 0, S.h - m.h); }
+    changed(false); draw(); placePop(); e.preventDefault(); return;
+  }
+  if (k === "Delete" || k === "Backspace") { removeMark(m.id); e.preventDefault(); return; }
+  if (k === "Enter") { placePop(); focusNote(); e.preventDefault(); return; }
+  if (k === "Escape") { select(null); e.preventDefault(); }
+});
+
+/* ---------- popover events ---------- */
+TYPES.forEach(function (t) { const o = document.createElement("option"); o.value = t.id; o.textContent = t.label; $("popType").appendChild(o); });
+$("popType").addEventListener("change", function () { if (sel) { setType(sel, $("popType").value); S.active = $("popType").value; renderLegend(); } });
+$("popNote").addEventListener("input", function () {
+  const m = byId(+$("popNote").dataset.id); if (!m) return;
+  m.note = $("popNote").value;
+  const li = $("list").querySelector('.mk[data-id="' + m.id + '"] textarea');
+  if (li) li.value = m.note;
+  changed(false);
+});
+pop.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.preventDefault(); cv.focus({ preventScroll: true }); } });
+$("popClose").addEventListener("click", function () { select(null); cv.focus({ preventScroll: true }); });
+$("popDel").addEventListener("click", function () { if (sel) removeMark(sel); });
+
+/* ---------- toolbar, file, paste, drop ---------- */
+function openPicker() { $("file").value = ""; $("file").click(); }
+$("openBtn").addEventListener("click", openPicker);
+$("openBtn2").addEventListener("click", openPicker);
+$("reAddBtn").addEventListener("click", openPicker);
+$("file").addEventListener("change", function () { loadFile($("file").files[0]); });
+$("sampleBtn").addEventListener("click", loadSample);
+$("sampleBtn2").addEventListener("click", loadSample);
+$("pngBtn").addEventListener("click", downloadPNG);
+armed($("clearBtn"), "Click again to clear", function () {
+  const n = S.marks.length; S.marks = []; sel = null; changed(true); layout();
+  setStatus("Cleared " + n + " marks.", "ok");
+});
+armed($("discardBtn"), "Click again to discard", function () {
+  const keep = { active: S.active, tab: S.tab };
+  S = blankState(); S.active = keep.active; S.tab = keep.tab; sel = null;
+  renderAll(); changed(true);
+  setStatus("Marks discarded. Add a new screenshot to start again.", "ok");
+});
+
+document.addEventListener("paste", function (e) {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (items) {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === "file" && /^image\//.test(items[i].type)) {
+        const f = items[i].getAsFile();
+        e.preventDefault();
+        const generic = !f.name || /^image\.\w+$/i.test(f.name);
+        loadImage(URL.createObjectURL(f), generic ? "pasted-" + stamp() + "." + (items[i].type.split("/")[1] || "png") : f.name);
+        return;
+      }
+    }
+  }
+  const tag = (e.target && e.target.tagName) || "";
+  if (tag !== "TEXTAREA" && tag !== "INPUT") setStatus("The clipboard has no image. Copy a screenshot (e.g. PrtScn or Cmd+Shift+Ctrl+4), then paste again.", "err");
+});
+let dragDepth = 0;
+function hasFiles(e) { const t = e.dataTransfer && e.dataTransfer.types; return !!t && Array.prototype.indexOf.call(t, "Files") >= 0; }
+window.addEventListener("dragenter", function (e) { if (!hasFiles(e)) return; dragDepth++; stage.classList.add("dragging"); });
+window.addEventListener("dragleave", function (e) { if (!hasFiles(e)) return; dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) stage.classList.remove("dragging"); });
+window.addEventListener("dragover", function (e) { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener("drop", function (e) {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; stage.classList.remove("dragging");
+  const f = e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+/* ---------- output panel ---------- */
+$("tabs").addEventListener("click", function (e) {
+  const b = e.target.closest(".tab"); if (!b) return;
+  S.tab = b.dataset.fmt; renderOutput(); changed(false);
+});
+$("tabs").addEventListener("keydown", function (e) {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  const keys = Object.keys(FORMATS), i = keys.indexOf(S.tab);
+  S.tab = keys[(i + (e.key === "ArrowRight" ? 1 : keys.length - 1)) % keys.length];
+  renderOutput(); changed(false);
+  $("tabs").querySelector('[data-fmt="' + S.tab + '"]').focus();
+});
+function copyText(txt) {
+  function fallback() {
+    const ta = document.createElement("textarea");
+    ta.value = txt; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.left = "-9999px";
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    ta.remove();
+    return ok ? Promise.resolve() : Promise.reject(new Error("copy failed"));
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(txt).catch(fallback);
+  return fallback();
+}
+let copiedTimer = 0;
+$("copyBtn").addEventListener("click", function () {
+  const txt = currentOutput(); if (txt == null) return;
+  copyText(txt).then(function () { $("copied").style.color = ""; $("copied").textContent = "Copied " + FORMATS[S.tab]; },
+    function () { $("copied").style.color = "var(--danger)"; $("copied").textContent = "Copy blocked. Select the text above and press Ctrl+C."; });
+  clearTimeout(copiedTimer);
+  copiedTimer = setTimeout(function () { $("copied").textContent = ""; }, 2500);
+});
+
+/* ---------- boot ---------- */
+if (typeof ResizeObserver === "function") {
+  let raf = 0;
+  new ResizeObserver(function () { cancelAnimationFrame(raf); raf = requestAnimationFrame(layout); }).observe(stage);
+} else {
+  window.addEventListener("resize", layout);
+}
+new MutationObserver(function () { renderLegend(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["style", "data-theme", "class"] });
+renderAll();
+if (S.w && S.marks.length) setStatus("Restored " + S.marks.length + " marks for " + (S.name || "screenshot") + ". Re-add the image to see it.", "warn");
+</script>
+<!--
+Screenshot Annotator: usage
+- Open, drop or paste (Ctrl+V) a screenshot. "Sample" loads a demo UI with one mark per action.
+- Drag on the image to draw a mark; it gets the action selected under Actions (keys 1-6).
+- Drag a mark to move it, drag a corner to resize. The note box opens next to the selected mark.
+- Keyboard on the canvas: N new mark, [ ] cycle, arrows move (Shift = 10px), Alt+arrows resize, Delete removes, Enter edits the note, Esc deselects.
+- Marks are stored in original image pixels in localStorage (redline.tool.screenshot-annotator.state); the image itself is not stored.
+- Output: Prompt (brief for an LLM), Markdown checklist, JSON. "Download PNG" exports the image with marks at full size.
+-->
+</body>
+</html>
