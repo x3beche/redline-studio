@@ -258,20 +258,17 @@ library tables.
 
 ### Analytics
 
-The board at a glance, in the tab beside Sourcing: parts and nets, size
-and density, tracks and what is still unrouted, DRC and ERC; the parts
-by circuit block, the nets by how many pins they join, the copper, the
-bill - priced from LCSC's answers already on disk, `$0.77 · 10/23`
-meaning ten of twenty-three part numbers had a price, JLCPCB Basic
-against Extended - the parts drawer and the last hour of asks made of
-LCSC; then how area, unrouted and DRC warnings have moved since the tab
-was first opened, what DRC is warning about, and the parts by kind.
+The board at a glance, compact enough to sit above the agent's card while
+it works: parts and nets, size and density, tracks and what is still
+unrouted, DRC and ERC, copper and area, and the bill - priced from
+LCSC's answers already on disk, `$0.77 · 10/23` meaning ten of
+twenty-three part numbers had a price, JLCPCB Basic against Extended -
+then the parts by circuit block and the nets by how many pins they join.
 Nothing in it asks LCSC anything.
 
 When the agent starts on the board the room turns to this tab, once per
-task - also when the page is opened while one runs - so what it changes
-can be watched as it changes. Any other tab picked after that stays
-picked.
+task - also when the page is opened while one runs. Any other tab picked
+after that stays picked.
 
 ### Parts
 

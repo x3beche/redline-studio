@@ -1383,19 +1383,15 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-mchart-title { font-size: 10px; color: var(--ink-dim); margin: 8px 0 3px;
                     text-transform: uppercase; letter-spacing: .05em; }
 .tcv-mchart-empty { font-size: 10px; color: var(--ink-dim); }
-.tcv-mbar, .tcv-mtrend { display: grid; grid-template-columns: 76px 1fr 54px; align-items: center;
+.tcv-mbar { display: grid; grid-template-columns: 76px 1fr 54px; align-items: center;
                          gap: 6px; height: 14px; font-size: 10px; cursor: default; }
-.tcv-mbar:hover, .tcv-mtrend:hover { background: var(--hover); border-radius: 3px; }
+.tcv-mbar:hover { background: var(--hover); border-radius: 3px; }
 .tcv-mbar-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-dim); }
 .tcv-mbar-track { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .tcv-mbar-fill { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
 .tcv-mbar-value { text-align: right; color: var(--ink); white-space: nowrap; }
 .tcv-mbar-value b { font-weight: 600; margin-left: 3px; }
-.tcv-mtrend-plot { width: 100%; height: 14px; overflow: visible; }
-.tcv-mtrend-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.tcv-mtrend-hit { fill: transparent; }
-.tcv-mtrend-hit:hover { fill: var(--hover); }
-.tcv-mcols { display: flex; gap: 4px; align-items: stretch; height: 64px; }
+.tcv-mcols { display: flex; gap: 4px; align-items: stretch; height: 50px; }
 .tcv-mcol { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: default; }
 .tcv-mcol:hover { background: var(--hover); border-radius: 3px; }
 .tcv-mcol-well { flex: 1; width: 60%; display: flex; align-items: flex-end; }

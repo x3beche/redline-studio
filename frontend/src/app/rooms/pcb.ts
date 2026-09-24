@@ -14,7 +14,7 @@ import { Drawing } from './drawing';
 import { RoomFrame, ToolButton } from './frame';
 import { RulesForm } from './rules-form';
 import { DrawTools, PenState, Sketchpad } from './sketchpad';
-import { MiniBars, MiniColumns, MiniTrend } from './minicharts';
+import { MiniBars, MiniColumns } from './minicharts';
 
 type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'analytics';
 type Pane = 'layout' | 'schematic' | '3d';
@@ -34,7 +34,7 @@ type BoardView = Pane | 'split' | 'focus';
  */
 @Component({
   selector: 'app-room-pcb',
-  imports: [Board3d, Drawing, DrawTools, MiniBars, MiniColumns, MiniTrend, NgTemplateOutlet,
+  imports: [Board3d, Drawing, DrawTools, MiniBars, MiniColumns, NgTemplateOutlet,
             RoomFrame, RulesForm, Sketchpad, ToolButton],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
@@ -528,17 +528,17 @@ type BoardView = Pane | 'split' | 'focus';
       }
       }
       @if (side() === 'analytics') {
-        <!-- ANALYTICS: the board, its bill and its library in one glance.
-             Everything is what is already known - nothing asks LCSC. When
-             the agent starts on this board the room turns to this tab, so
-             what it changes can be watched as it changes it. -->
-        <div class="tcv-scroll min-h-0 flex-1 overflow-y-auto px-2 py-1.5 text-[11px]">
+        <!-- ANALYTICS: the board at a glance, small enough to sit above
+             the agent's card while it works - the figures that say what
+             the board is, then what it is built of and how its nets run.
+             Everything is what is already known; nothing asks LCSC. -->
+        <div class="min-h-0 flex-1 overflow-y-auto px-2 py-1.5 text-[11px]">
           @if (stats(); as st) {
             <div class="tcv-stats">
               <span>parts</span><b>{{ st.parts.components }}</b>
               <span>nets</span><b [title]="st.parts.joins + ' pins joined'">{{ st.parts.nets ?? '–' }}</b>
               @if (st.size.mm; as mm) {
-                <span>board</span><b [title]="'millimetres'">{{ mm[0].toFixed(1) }}×{{ mm[1].toFixed(1) }}</b>
+                <span>board</span><b title="millimetres">{{ mm[0].toFixed(1) }}×{{ mm[1].toFixed(1) }}</b>
                 <span>density</span>
                 <b [title]="st.size.area_cm2 + ' cm², parts per cm²'">{{ st.size.density ?? '–' }}/cm²</b>
               }
@@ -555,16 +555,6 @@ type BoardView = Pane | 'split' | 'focus';
                 <span>ERC</span>
                 <b [style.color]="c.erc_errors ? 'var(--danger)' : 'var(--ok)'">{{ c.erc_errors ?? '?' }}</b>
               }
-            </div>
-
-            <!-- The tab's own picture, shown whether or not the agent is
-                 at work: what the board is built of, how its nets spread,
-                 what it adds up to, and what costs most. -->
-            <div class="tcv-mchart-title">parts by circuit block</div>
-            <app-mini-bars [rows]="st.blocks" />
-            <div class="tcv-mchart-title">nets by how many pins they join</div>
-            <app-mini-columns [rows]="st.fanout" />
-            <div class="tcv-stats mt-2 pt-1.5" style="border-top: 1px solid var(--line)">
               @if (st.route; as r) {
                 <span>copper</span><b>{{ r.length_mm.toFixed(0) }} mm</b>
                 <span>area</span><b>{{ st.size.area_cm2 ?? '–' }} cm²</b>
@@ -578,33 +568,11 @@ type BoardView = Pane | 'split' | 'focus';
                 <b title="Basic: no loading fee. Extended: a feeder fee per assembly run.">
                   {{ m.basic }}B · <span [style.color]="m.extended ? 'var(--warn)' : null">{{ m.extended }}E</span></b>
               }
-              <span>library</span>
-              <b [title]="st.library.with_3d + ' of them with a 3D model'">{{ st.library.parts }} · {{ st.library.with_3d }} 3d</b>
-              <span>kept</span><b>{{ mb(st.library.bytes) }}</b>
-              <span>LCSC 1h</span>
-              <b [title]="st.lcsc.disk + ' answered from disk'">{{ st.lcsc.net }} sent · {{ st.lcsc.disk }}d</b>
-              <span>budget</span>
-              <b [style.color]="st.lcsc.cooling || st.lcsc.refused ? 'var(--danger)' : null">
-                {{ st.lcsc.cooling ? 'cooling' : st.lcsc.used + '/' + st.lcsc.budget }}</b>
             </div>
-            <div class="tcv-mchart-title">costliest parts, per board</div>
-            <app-mini-bars [rows]="st.bom_top" [fmt]="usd"
-                           empty="no prices on disk yet - LCSC has not been asked about these" />
-
-            <!-- Further down: how it got here, what DRC says, and every
-                 kind of part. The tab scrolls like any other. -->
-            @if (st.history.length) {
-              <div class="tcv-mchart-title">since {{ st.history[0].at.slice(11, 16) }} · {{ st.history.length }} readings</div>
-              <app-mini-trend label="area cm²" [values]="series(st, 'area_cm2')" [times]="times(st)" />
-              <app-mini-trend label="unrouted" [values]="series(st, 'unrouted')" [times]="times(st)" />
-              <app-mini-trend label="DRC warnings" [values]="series(st, 'drc_warnings')" [times]="times(st)" />
-            }
-            @if (st.drc_types.length) {
-              <div class="tcv-mchart-title">what DRC is warning about</div>
-              <app-mini-bars [rows]="st.drc_types" />
-            }
-            <div class="tcv-mchart-title">parts by kind</div>
-            <app-mini-bars [rows]="st.kinds" />
+            <div class="tcv-mchart-title">parts by circuit block</div>
+            <app-mini-bars [rows]="st.blocks" />
+            <div class="tcv-mchart-title">nets by pins joined</div>
+            <app-mini-columns [rows]="st.fanout" />
           } @else {
             <div style="color: var(--ink-dim)">reading the board…</div>
           }
@@ -1112,18 +1080,6 @@ export class RoomPcb implements OnDestroy {
     this.api.analytics(id).subscribe({ next: st => this.stats.set(st) });
   }
 
-  /** One measure from the readings, for a trend line. */
-  series(st: BoardStats, key: keyof BoardStats['history'][number]): (number | null)[] {
-    return st.history.map(h => (h[key] as number | null) ?? null);
-  }
-
-  times(st: BoardStats): string[] { return st.history.map(h => h.at); }
-
-  readonly usd = (v: number) => '$' + (v >= 1 ? v.toFixed(2) : v.toFixed(3));
-
-  mb(bytes: number): string {
-    return bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + ' MB' : Math.round(bytes / 1000) + ' kB';
-  }
 
   refresh() {
     this.api.list().subscribe({
