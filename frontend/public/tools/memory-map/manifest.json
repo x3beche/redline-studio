@@ -1,0 +1,26 @@
+{
+  "id": "memory-map",
+  "name": "Memory Map Viewer",
+  "blurb": "flash and RAM region use as a scaled strip",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["memory map", "flash usage", "ram usage", "arm-none-eabi-size", "size -A", "sections", ".text", ".data", ".bss", "linker regions", "firmware size", "memory usage", "rom", "overflow"],
+  "intro": "Paste the output of arm-none-eabi-size (-A for per-section addresses, or the default Berkeley line) and give the memory regions from your linker script. Each section is placed in the region its address falls in, and .data is counted twice: in RAM, and as its load copy in flash. The strips are drawn to scale.",
+  "inputs": [
+    { "key": "regions", "label": "Memory regions", "type": "table", "help": "As in the linker script's MEMORY block; lengths like 512K or 0x80000.",
+      "columns": [{ "key": "name", "label": "Name" }, { "key": "origin", "label": "Origin" }, { "key": "length", "label": "Length" }],
+      "default": [{ "name": "FLASH", "origin": "0x08000000", "length": "512K" }, { "name": "RAM", "origin": "0x20000000", "length": "128K" }] },
+    { "key": "sizes", "label": "Size output", "type": "textarea", "rows": 10,
+      "default": "firmware.elf  :\nsection               size         addr\n.isr_vector            408    134217728\n.text                41236    134218136\n.rodata               6712    134259372\n.ARM                     8    134266084\n.init_array              8    134266092\n.fini_array              4    134266100\n.data                  372    536870912\n.bss                  9844    536871284\n._user_heap_stack     6656    536881128\n.ARM.attributes         48            0\n.debug_info         180344            0\n.comment               121            0\nTotal               245761",
+      "placeholder": "arm-none-eabi-size -A firmware.elf  (or name size region per line)" },
+    { "key": "flashName", "label": "Load region (flash)", "type": "text", "default": "FLASH", "help": "Where .data's initial values are stored." },
+    { "key": "ramName", "label": "RAM region (Berkeley format)", "type": "text", "default": "RAM" }
+  ],
+  "examples": [
+    { "title": "STM32F411 firmware, size -A", "input": { "regions": [{ "name": "FLASH", "origin": "0x08000000", "length": "512K" }, { "name": "RAM", "origin": "0x20000000", "length": "128K" }], "sizes": "section               size         addr\n.isr_vector            408    134217728\n.text                41236    134218136\n.rodata               6712    134259372\n.data                  372    536870912\n.bss                  9844    536871284\n._user_heap_stack     6656    536881128", "flashName": "FLASH", "ramName": "RAM" } },
+    { "title": "Small STM32F030 with the Berkeley line", "input": { "regions": [{ "name": "FLASH", "origin": "0x08000000", "length": "16K" }, { "name": "RAM", "origin": "0x20000000", "length": "4K" }], "sizes": "   text    data     bss     dec     hex filename\n  14820     120    2952   17892    45e4 blinky.elf", "flashName": "FLASH", "ramName": "RAM" } }
+  ],
+  "usage": "Give the memory regions (name, origin as 0x hex, length like 512K) and paste the output of arm-none-eabi-size -A (or -A -x), the default Berkeley size line, or lines 'name size region'. It returns each region's use in % and bytes, a section table with addresses, result.regions (parts with offsets, for the drawing), and warnings when a region overflows or is over 90 % full. Use it to see how close a firmware is to its flash or RAM limit.",
+  "sources": ["GNU binutils size(1): Berkeley and System V formats", "GNU ld manual §3.6.8.2 output section LMA (load copies of initialised data)"],
+  "view": true
+}

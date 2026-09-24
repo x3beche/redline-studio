@@ -1,0 +1,24 @@
+{
+  "id": "pin-mux",
+  "name": "Pin Mux Explorer",
+  "blurb": "a pin's alternate functions on an MCU and the conflicts",
+  "group": "embedded",
+  "rooms": ["embedded", "pcb"],
+  "keywords": ["pin mux", "pinmux", "alternate function", "af", "remap", "afio", "pinout", "gpio function", "funcsel", "pin conflict", "stm32f103", "blue pill", "rp2040", "atmega328p", "pin assignment"],
+  "intro": "Lists what a pin can do, which pins offer a function, and checks a full pin assignment: a pin used twice, a function on a pin that does not have it, F1 peripherals whose signals need different remap settings, and special pins (debug, boot, crystal). Data is transcribed from the chips' datasheets.",
+  "inputs": [
+    { "key": "chip", "label": "Microcontroller", "type": "select", "default": "stm32f103c8",
+      "options": [["stm32f103c8", "STM32F103C8 (LQFP48, Blue Pill)"], ["rp2040", "RP2040 (QFN-56)"], ["atmega328p", "ATmega328P (DIP-28)"]] },
+    { "key": "pin", "label": "Pin to look up", "type": "text", "default": "PB6", "placeholder": "PA9, GPIO4, PD1 or a package pin number" },
+    { "key": "find", "label": "Find pins offering", "type": "text", "default": "USART1", "placeholder": "USART1, I2C, PWM3, ADC" },
+    { "key": "assign", "label": "Planned assignment", "type": "table", "help": "One row per signal; leave the function blank or write GPIO for a plain I/O.",
+      "columns": [{ "key": "signal", "label": "Function" }, { "key": "pin", "label": "Pin" }],
+      "default": [{ "signal": "USART1_TX", "pin": "PB6" }, { "signal": "USART1_RX", "pin": "PA10" }, { "signal": "I2C2_SCL", "pin": "PB10" }, { "signal": "I2C2_SDA", "pin": "PB11" }, { "signal": "GPIO", "pin": "PC13" }] }
+  ],
+  "examples": [
+    { "title": "Blue Pill: UART, I2C and SPI1 on the remapped pins", "input": { "chip": "stm32f103c8", "pin": "PB3", "find": "SPI1", "assign": [{ "signal": "USART1_TX", "pin": "PA9" }, { "signal": "USART1_RX", "pin": "PA10" }, { "signal": "SPI1_SCK", "pin": "PB3" }, { "signal": "SPI1_MISO", "pin": "PB4" }, { "signal": "SPI1_MOSI", "pin": "PB5" }, { "signal": "I2C1_SCL", "pin": "PB8" }, { "signal": "I2C1_SDA", "pin": "PB9" }] } },
+    { "title": "RP2040: UART0, I2C1 and a PWM", "input": { "chip": "rp2040", "pin": "GPIO6", "find": "UART0", "assign": [{ "signal": "UART0_TX", "pin": "GPIO0" }, { "signal": "UART0_RX", "pin": "GPIO1" }, { "signal": "I2C1_SDA", "pin": "GPIO6" }, { "signal": "I2C1_SCL", "pin": "GPIO7" }, { "signal": "PWM4_A", "pin": "GPIO8" }] } }
+  ],
+  "usage": "Give the chip (stm32f103c8, rp2040, atmega328p), optionally a pin name (PA9, GPIO4, PD1 or a package pin number) to list its functions, a function fragment (USART1, PWM3) to list the pins that offer it, and an assignment table of {signal, pin} rows using datasheet function names such as USART1_TX, I2C1_SDA, SPI0_SCK, PWM4_A, ADC0 or GPIO. It returns the tables, an issue count, the AFIO remap values each F1 peripheral needs, and warnings for double-used pins, missing functions, remap splits and shared-resource conflicts (F103 CAN + USB).",
+  "sources": ["ST DS5319 STM32F103x8/xB datasheet, table 5 pin definitions", "ST RM0008 §9.3 alternate function I/O and debug configuration (AFIO_MAPR)", "Raspberry Pi RP2040 datasheet §1.4.3 pin locations and §2.19.2 function select", "Microchip ATmega328P datasheet §1.1 pinout and §14.3 alternate port functions"]
+}

@@ -1,0 +1,45 @@
+{
+  "id": "nvic-planner",
+  "name": "NVIC Priority Planner",
+  "blurb": "interrupt priorities in order, with preemption conflicts",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["nvic", "interrupt priority", "preemption", "subpriority", "prigroup", "irq", "isr", "cortex-m", "response time analysis", "interrupt latency", "configMAX_SYSCALL_INTERRUPT_PRIORITY", "freertos", "basepri", "deadline"],
+  "intro": "Sorts your interrupts the way the Cortex-M NVIC does (group priority, then subpriority), encodes the priority bytes and PRIGROUP, and runs a worst-case response-time analysis: each handler's own time, the time it is blocked by its own group, and the time handlers above it preempt it, against its deadline. It flags shared levels, deadline-order inversions and RTOS-API calls above the FreeRTOS syscall limit.",
+  "inputs": [
+    { "key": "bits", "label": "Implemented priority bits", "type": "select", "default": "4",
+      "options": [["2", "2 bits (Cortex-M0/M0+)"], ["3", "3 bits (NXP LPC, Kinetis)"], ["4", "4 bits (STM32, most M3/M4/M7)"], ["8", "8 bits"]] },
+    { "key": "pbits", "label": "Preemption bits (priority grouping)", "type": "select", "default": "all",
+      "options": [["all", "All preemption, no subpriority"], "0", "1", "2", "3", "4", "5", "6", "7"],
+      "help": "STM32 HAL NVIC_PRIORITYGROUP_n uses n preemption bits." },
+    { "key": "rtos", "label": "RTOS syscall limit (FreeRTOS)", "type": "number", "default": "5", "required": false,
+      "help": "configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY; leave blank without an RTOS." },
+    { "key": "irqs", "label": "Interrupts", "type": "table", "help": "Priority 0 is the most urgent. Times in µs; deadline blank = period.",
+      "columns": [{ "key": "name", "label": "Name" }, { "key": "pre", "label": "Priority" }, { "key": "sub", "label": "Sub" },
+        { "key": "time", "label": "Handler µs" }, { "key": "period", "label": "Period µs" }, { "key": "deadline", "label": "Deadline µs" },
+        { "key": "rtos", "label": "RTOS API", "type": "select", "options": ["no", "yes"], "default": "no" }],
+      "default": [
+        { "name": "TIM1_UP", "pre": "1", "sub": "0", "time": "12", "period": "50", "deadline": "", "rtos": "no" },
+        { "name": "ADC", "pre": "2", "sub": "0", "time": "6", "period": "25", "deadline": "", "rtos": "no" },
+        { "name": "USART1", "pre": "5", "sub": "0", "time": "4", "period": "87", "deadline": "", "rtos": "yes" },
+        { "name": "SPI2", "pre": "5", "sub": "0", "time": "20", "period": "500", "deadline": "", "rtos": "yes" },
+        { "name": "EXTI0", "pre": "3", "sub": "0", "time": "3", "period": "10000", "deadline": "1000", "rtos": "yes" },
+        { "name": "SysTick", "pre": "15", "sub": "0", "time": "5", "period": "1000", "deadline": "", "rtos": "yes" }] }
+  ],
+  "examples": [
+    { "title": "STM32F4 motor control with FreeRTOS", "input": { "bits": "4", "pbits": "all", "rtos": "5", "irqs": [
+      { "name": "TIM1_UP", "pre": "1", "sub": "0", "time": "12", "period": "50", "deadline": "", "rtos": "no" },
+      { "name": "ADC", "pre": "2", "sub": "0", "time": "6", "period": "25", "deadline": "", "rtos": "no" },
+      { "name": "USART1", "pre": "5", "sub": "0", "time": "4", "period": "87", "deadline": "", "rtos": "yes" },
+      { "name": "SPI2", "pre": "5", "sub": "0", "time": "20", "period": "500", "deadline": "", "rtos": "yes" },
+      { "name": "EXTI0", "pre": "3", "sub": "0", "time": "3", "period": "10000", "deadline": "1000", "rtos": "yes" },
+      { "name": "SysTick", "pre": "15", "sub": "0", "time": "5", "period": "1000", "deadline": "", "rtos": "yes" }] } },
+    { "title": "Cortex-M0 with three interrupts", "input": { "bits": "2", "pbits": "all", "rtos": "", "irqs": [
+      { "name": "TIM3", "pre": "0", "sub": "0", "time": "8", "period": "100", "deadline": "", "rtos": "no" },
+      { "name": "USART2", "pre": "1", "sub": "0", "time": "5", "period": "87", "deadline": "", "rtos": "no" },
+      { "name": "I2C1", "pre": "2", "sub": "0", "time": "15", "period": "200", "deadline": "", "rtos": "no" }] } }
+  ],
+  "usage": "Give the implemented priority bits (2, 3, 4 or 8), the preemption bits ('all' or 0-7), an optional FreeRTOS syscall limit, and a table of interrupts with name, priority, subpriority, handler time, period and optional deadline in µs, and whether it calls the RTOS API (yes/no). It returns the interrupts in NVIC order with IPR byte values, blocking, preemption and worst-case response times against deadlines, the CPU load, a conflicts table, HAL code, and result.irqs for the drawing. Use it to choose priorities before writing NVIC setup or to explain a missed interrupt.",
+  "sources": ["Arm Armv7-M Architecture Reference Manual B1.5.4 (priority grouping) and B3.2.6 AIRCR.PRIGROUP", "Joseph & Pandya, 'Finding response times in a real-time system', Computer Journal 1986; Audsley et al. 1993 (blocking term)", "FreeRTOS 'Running the RTOS on an ARM Cortex-M core' (configMAX_SYSCALL_INTERRUPT_PRIORITY)"],
+  "view": true
+}

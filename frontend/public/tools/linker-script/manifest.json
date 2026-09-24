@@ -1,0 +1,29 @@
+{
+  "id": "linker-script",
+  "name": "Linker Script Helper",
+  "blurb": "a linker script from sections and memory regions in a form",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["linker script", "ld script", ".ld", "gnu ld", "MEMORY block", "SECTIONS", "_estack", "ccmram", "noload", "AT>", "LOADADDR", "stack size", "heap size", "cortex-m", "stm32 linker"],
+  "intro": "Writes a GNU ld linker script for a Cortex-M part in the layout STM32CubeIDE and CMSIS startup files expect: vectors and code in flash, .data run in RAM and loaded from flash, .bss zeroed, a stack and heap reservation, and extra sections (CCM RAM, backup RAM, no-init) with the start-up code they need. It checks region overlaps, alignment and whether the stack and heap fit.",
+  "inputs": [
+    { "key": "regions", "label": "Memory regions", "type": "table", "help": "From the datasheet memory map; lengths like 512K or 0x80000.",
+      "columns": [{ "key": "name", "label": "Name" }, { "key": "attr", "label": "Attributes", "type": "select", "options": ["rx", "rwx", "xrw", "rw", "r"], "default": "rwx" }, { "key": "origin", "label": "Origin" }, { "key": "length", "label": "Length" }],
+      "default": [{ "name": "FLASH", "attr": "rx", "origin": "0x08000000", "length": "1024K" }, { "name": "RAM", "attr": "xrw", "origin": "0x20000000", "length": "128K" }, { "name": "CCMRAM", "attr": "rw", "origin": "0x10000000", "length": "64K" }] },
+    { "key": "flash", "label": "Code region", "type": "text", "default": "FLASH" },
+    { "key": "ram", "label": "Data and stack region", "type": "text", "default": "RAM" },
+    { "key": "stack", "label": "Stack size", "type": "text", "default": "0x800", "placeholder": "0x400, 2K or 2048" },
+    { "key": "heap", "label": "Heap size", "type": "text", "default": "0x400" },
+    { "key": "entry", "label": "Entry point", "type": "text", "default": "Reset_Handler" },
+    { "key": "cpp", "label": "C++ / init_array sections", "type": "bool", "default": true },
+    { "key": "extra", "label": "Extra sections", "type": "table", "help": "init = copied from flash at start-up, zero = zeroed, noload = left alone (survives reset), rom = constant data in that region.",
+      "columns": [{ "key": "name", "label": "Section" }, { "key": "region", "label": "Region" }, { "key": "kind", "label": "Kind", "type": "select", "options": ["init", "zero", "noload", "rom"], "default": "zero" }],
+      "default": [{ "name": ".ccmram", "region": "CCMRAM", "kind": "zero" }] }
+  ],
+  "examples": [
+    { "title": "STM32F407 with CCM RAM for buffers", "input": { "regions": [{ "name": "FLASH", "attr": "rx", "origin": "0x08000000", "length": "1024K" }, { "name": "RAM", "attr": "xrw", "origin": "0x20000000", "length": "128K" }, { "name": "CCMRAM", "attr": "rw", "origin": "0x10000000", "length": "64K" }], "flash": "FLASH", "ram": "RAM", "stack": "0x800", "heap": "0x400", "entry": "Reset_Handler", "cpp": true, "extra": [{ "name": ".ccmram", "region": "CCMRAM", "kind": "zero" }] } },
+    { "title": "Bootloader offset app with a no-init crash log", "input": { "regions": [{ "name": "FLASH", "attr": "rx", "origin": "0x08008000", "length": "480K" }, { "name": "RAM", "attr": "xrw", "origin": "0x20000000", "length": "127K" }, { "name": "NOINIT", "attr": "rw", "origin": "0x2001FC00", "length": "1K" }], "flash": "FLASH", "ram": "RAM", "stack": "0x1000", "heap": "0", "entry": "Reset_Handler", "cpp": false, "extra": [{ "name": ".noinit", "region": "NOINIT", "kind": "noload" }] } }
+  ],
+  "usage": "Give the memory regions (name, attributes rx/xrw/rw, origin as 0x hex, length like 512K), the names of the code and data regions, stack and heap sizes (bytes, 0x hex or K), the entry symbol, whether to include C++ init/exidx sections, and extra sections {name, region, kind: init|zero|noload|rom}. It returns the full .ld text (texts 'Linker script'), start-up C for extra sections, the _estack address, the reserved stack+heap share of RAM, a placement table, and warnings for overlaps, misalignment and a reservation that does not fit.",
+  "sources": ["GNU ld manual §3.6 SECTIONS, §3.6.8.2 output section LMA (AT>), §3.6.7 NOLOAD, §3.7 MEMORY", "STM32CubeIDE generated linker scripts (symbol names _sidata, _sdata, _edata, _sbss, _ebss, _estack)", "Arm AAPCS §6.2.1.2 stack alignment; Armv7-M ARM B3.2.5 VTOR alignment"]
+}

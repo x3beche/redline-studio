@@ -1,0 +1,25 @@
+{
+  "id": "clock-tree",
+  "name": "Clock Tree Planner",
+  "blurb": "PLL settings and peripheral clocks from a crystal frequency",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["clock tree", "pll", "pllm", "plln", "pllp", "pllq", "sysclk", "hclk", "pclk", "apb", "ahb", "crystal", "hse", "usb 48 mhz", "flash wait states", "rcc", "stm32", "rp2040"],
+  "intro": "Searches every PLL divider combination the chip allows for the one that makes your system clock exactly, preferring a 48 MHz USB clock when asked, then sets the bus prescalers to the fastest legal values and reads off the timer clocks and flash wait states. Limits come from the ST reference manuals and the RP2040 datasheet.",
+  "inputs": [
+    { "key": "family", "label": "Microcontroller", "type": "select", "default": "f407",
+      "options": [["f407", "STM32F405/407 (168 MHz)"], ["f429", "STM32F427/429 (180 MHz)"], ["f411", "STM32F411 (100 MHz)"], ["g474", "STM32G431/474 (170 MHz)"], ["rp2040", "RP2040 (133 MHz)"]] },
+    { "key": "source", "label": "PLL source", "type": "select", "default": "hse", "options": [["hse", "Crystal / HSE"], ["hsi", "Internal RC (HSI 16 MHz)"]],
+      "help": "RP2040 always uses the crystal." },
+    { "key": "xtal", "label": "Crystal frequency", "type": "number", "unit": "MHz", "default": "8" },
+    { "key": "target", "label": "Wanted system clock", "type": "number", "unit": "MHz", "default": "168" },
+    { "key": "need48", "label": "Need a 48 MHz clock (USB, SDIO)", "type": "bool", "default": true },
+    { "key": "ahb", "label": "AHB prescaler", "type": "select", "default": "1", "options": ["1", "2", "4", "8", "16", "64", "128", "256", "512"] }
+  ],
+  "examples": [
+    { "title": "STM32F407, 8 MHz crystal, 168 MHz with USB", "input": { "family": "f407", "source": "hse", "xtal": "8", "target": "168", "need48": true, "ahb": "1" } },
+    { "title": "RP2040 at 125 MHz from 12 MHz", "input": { "family": "rp2040", "source": "hse", "xtal": "12", "target": "125", "need48": true, "ahb": "1" } }
+  ],
+  "usage": "Give the family (f407, f429, f411, g474, rp2040), the PLL source (hse or hsi), the crystal and wanted system clock in MHz, whether a 48 MHz USB clock is needed and the AHB prescaler. It returns the PLL dividers (PLLM/PLLN/PLLP/PLLQ or REFDIV/FBDIV/POSTDIV), VCO frequencies, HCLK, PCLK1/2, timer clocks, flash wait states, alternative settings and a HAL/SDK code snippet. Use it before writing SystemClock_Config or when a crystal choice has to support USB.",
+  "sources": ["ST RM0090 (STM32F405/407/427/429) §6.3.2 RCC_PLLCFGR and §3.5.1 flash latency", "ST RM0383 (STM32F411) §6.3.2 and table 6", "ST RM0440 (STM32G4) §7.4.4 RCC_PLLCFGR and §5.3.3", "Raspberry Pi RP2040 datasheet §2.18 PLL"]
+}

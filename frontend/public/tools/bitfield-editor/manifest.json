@@ -1,0 +1,27 @@
+{
+  "id": "bitfield-editor",
+  "name": "Register Bitfield Editor",
+  "blurb": "toggle bits of a hex value and read each field's meaning",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["register", "bitfield", "bit field", "hex decoder", "bit mask", "_Msk", "_Pos", "flags", "binary", "toggle bits", "register map", "datasheet register", "decode hex value", "cmsis macros"],
+  "intro": "Decodes a register value into named fields (value = (reg >> lsb) & mask), shows what each field's code means, flips bits when you click them, and writes CMSIS-style _Pos/_Msk macros. Describe the fields one per line as NAME msb:lsb followed by code=meaning pairs, or pick a preset register.",
+  "inputs": [
+    { "key": "preset", "label": "Register", "type": "select", "default": "custom",
+      "options": [["custom", "Custom (field list below)"], ["aircr", "SCB->AIRCR (Cortex-M)"], ["tccr1b", "TCCR1B (ATmega328P)"], ["usartcr1", "USART_CR1 (STM32F4)"]] },
+    { "key": "width", "label": "Width (custom)", "type": "select", "default": "8", "options": [["8", "8 bits"], ["16", "16 bits"], ["32", "32 bits"]] },
+    { "key": "value", "label": "Value", "type": "text", "default": "0x27", "placeholder": "0x1A2B, 0b1010 or 6699",
+      "help": "Leave empty to use the preset's typical value." },
+    { "key": "flip", "label": "Flip bits", "type": "text", "default": "", "placeholder": "3, 5", "help": "Bit numbers to toggle; clicking a bit in the drawing does the same to the value." },
+    { "key": "fields", "label": "Fields (custom)", "type": "textarea", "rows": 6,
+      "default": "# BME280 ctrl_meas (0xF4)\nosrs_t 7:5 0=skipped 1=x1 2=x2 3=x4 4=x8 5=x16\nosrs_p 4:2 0=skipped 1=x1 2=x2 3=x4 4=x8 5=x16\nmode 1:0 0=sleep 1=forced 2=forced 3=normal",
+      "placeholder": "NAME msb:lsb 0=meaning 1=meaning\nNAME bit description" }
+  ],
+  "examples": [
+    { "title": "BME280 ctrl_meas: normal mode, x1 oversampling", "input": { "preset": "custom", "width": "8", "value": "0x27", "flip": "", "fields": "osrs_t 7:5 0=skipped 1=x1 2=x2 3=x4 4=x8 5=x16\nosrs_p 4:2 0=skipped 1=x1 2=x2 3=x4 4=x8 5=x16\nmode 1:0 0=sleep 1=forced 2=forced 3=normal" } },
+    { "title": "Decode an AIRCR read-back", "input": { "preset": "aircr", "width": "32", "value": "0xFA050300", "flip": "", "fields": "" } }
+  ],
+  "usage": "Give the value (0x hex, 0b binary or decimal), the width (8/16/32) and a field list (one per line: NAME msb:lsb then code=meaning pairs), or a preset (aircr, tccr1b, usartcr1); optionally bit numbers to flip. It returns the value in hex, decimal and binary, a table of each field's value and meaning, result.bits and result.fields, warnings for set bits outside any field and overlapping fields, and C _Pos/_Msk macros. Use it to decode a register dump or to compose a value to write.",
+  "sources": ["Field extraction: value = (reg >> lsb) & (2^width - 1); macro style from Arm CMSIS-Core", "Arm Armv7-M ARM B3.2.6 (AIRCR)", "Microchip ATmega328P datasheet §15.11.2 (TCCR1B)", "ST RM0090 §30.6.4 (USART_CR1)", "Bosch BME280 datasheet §5.4.5 (ctrl_meas)"],
+  "view": true
+}

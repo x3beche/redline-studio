@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-72 tools. **MCP** marks the ones agents can run with `run_tool`.
+80 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -136,12 +136,20 @@ agents, the most used, and every tool nobody used.
 |---|---|---|---|
 | **ADC Resolution Calculator** · MCP | `adc-resolution` | LSB size from reference and bits, and the oversampling gain | Embedded |
 | **Battery Life Estimator** · MCP | `battery-life` | run time in days from average current and battery capacity | Embedded, PCB |
+| **Clock Tree Planner** · MCP | `clock-tree` | PLL settings and peripheral clocks from a crystal frequency | Embedded |
 | **Cycle to Time Converter** · MCP | `cycles-time` | instruction cycles to microseconds and back at a clock | Embedded |
 | **Debounce Time Calculator** · MCP | `debounce-time` | debounce time for a button type and sampling period | Embedded |
 | **EMA / IIR Coefficient Tool** · MCP | `iir-coefficient` | smoothing coefficient from a cutoff frequency, with the response drawn | Embedded |
+| **GPIO Restriction Warner** · MCP | `gpio-warner` | risks of using boot straps and special-purpose GPIOs | Embedded, PCB |
+| **Linker Script Helper** · MCP | `linker-script` | a linker script from sections and memory regions in a form | Embedded |
+| **Memory Map Viewer** · MCP | `memory-map` | flash and RAM region use as a scaled strip | Embedded |
+| **NVIC Priority Planner** · MCP | `nvic-planner` | interrupt priorities in order, with preemption conflicts | Embedded |
 | **PID Tuning Playground** · MCP | `pid-playground` | a simple plant's step response live as the gains move | Embedded |
+| **Pin Mux Explorer** · MCP | `pin-mux` | a pin's alternate functions on an MCU and the conflicts | Embedded, PCB |
+| **Register Bitfield Editor** · MCP | `bitfield-editor` | toggle bits of a hex value and read each field's meaning | Embedded |
 | **Sensor Calibration Fit** · MCP | `sensor-calibration` | linear calibration coefficients from two or more readings | Embedded |
 | **Sleep Current Profiler** · MCP | `sleep-current` | average current from sleep and wake times and currents | Embedded |
+| **Stack Usage Estimator** · MCP | `stack-estimator` | worst-case stack from call depth and locals | Embedded |
 | **Units & Numbers** | `units` | mm, mil and inch; hex, decimal and binary; UART baud and timer periods | Embedded, PCB |
 
 ### Web & design

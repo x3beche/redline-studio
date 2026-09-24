@@ -1,0 +1,25 @@
+{
+  "id": "gpio-warner",
+  "name": "GPIO Restriction Warner",
+  "blurb": "risks of using boot straps and special-purpose GPIOs",
+  "group": "embedded",
+  "rooms": ["embedded", "pcb"],
+  "keywords": ["strapping pins", "boot strap", "boot mode", "gpio0", "gpio12", "mtdi", "flash pins", "input only", "adc2 wifi", "swd pins", "jtag pins", "5v tolerant", "esp32", "esp8266", "stm32", "rp2040", "unsafe gpio"],
+  "intro": "Lists the pins of a chip that are boot straps, wired to flash or PSRAM, input only, used for debug, USB or the serial bootloader, or limited in drive or voltage, and flags the ones among the pins you plan to use. Severity high means a wrong level at reset can stop the chip from booting or being programmed. Data from the chips' datasheets.",
+  "inputs": [
+    { "key": "chip", "label": "Chip", "type": "select", "default": "esp32",
+      "options": [["esp32", "ESP32 (WROOM/WROVER)"], ["esp32s3", "ESP32-S3 (WROOM-1)"], ["esp32c3", "ESP32-C3"], ["esp8266", "ESP8266 (ESP-12)"], ["stm32f103", "STM32F103C8 (Blue Pill)"], ["rp2040", "RP2040 (Pico)"], ["atmega328p", "ATmega328P (Uno)"]] },
+    { "key": "pins", "label": "Pins you plan to use", "type": "text", "default": "0, 2, 4, 12, 16, 21, 22, 34", "wide": true,
+      "placeholder": "GPIO numbers (12, IO12) or names (PA13, PB6)", "help": "Comma or space separated." },
+    { "key": "wifi", "label": "Wi-Fi is used (ESP32 ADC2 limit)", "type": "bool", "default": true },
+    { "key": "psram", "label": "Module has PSRAM or octal flash", "type": "bool", "default": false },
+    { "key": "board", "label": "On a Raspberry Pi Pico board", "type": "bool", "default": true },
+    { "key": "show", "label": "Show", "type": "select", "default": "all", "options": [["all", "All special pins"], ["mine", "Only pins I use"]] }
+  ],
+  "examples": [
+    { "title": "ESP32 sensor board with an analog input on GPIO4 and Wi-Fi", "input": { "chip": "esp32", "pins": "0, 2, 4, 12, 16, 21, 22, 34", "wifi": true, "psram": false, "board": false, "show": "all" } },
+    { "title": "Blue Pill using SWD pins and PC13", "input": { "chip": "stm32f103", "pins": "PA13, PB3, PC13, PA9, PA10, PA2", "wifi": false, "psram": false, "board": false, "show": "mine" } }
+  ],
+  "usage": "Give the chip (esp32, esp32s3, esp32c3, esp8266, stm32f103, rp2040, atmega328p) and the pins you plan to use as a comma list (GPIO numbers for ESP/RP2040, names like PA13 for STM32/AVR); set wifi, psram and board for the conditional limits. It returns counts of high/medium risks, your restricted pins with what to do, the full special-pin table, and a warning for every high-severity pin (boot straps, flash pins, SWD). Use it while choosing pins for a schematic or firmware.",
+  "sources": ["Espressif ESP32 datasheet §2.4 strapping pins; ESP32-WROOM-32E / WROVER-E datasheets", "Espressif ESP32-S3 datasheet §2.6, ESP32-C3 datasheet §2.4 and ESP32-C3 errata (ADC2)", "Espressif ESP8266EX datasheet and boot-mode FAQ", "ST DS5319 STM32F103x8 §3.4 and table 5; RM0008 §9.3.5", "Raspberry Pi RP2040 datasheet §2.8 and Pico datasheet", "Microchip ATmega328P datasheet §13, §28"]
+}
