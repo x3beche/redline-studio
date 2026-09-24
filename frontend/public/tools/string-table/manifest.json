@@ -1,0 +1,126 @@
+{
+  "id": "string-table",
+  "name": "String Table Editor",
+  "blurb": "multilingual strings in a table, out as resource files",
+  "group": "mobile",
+  "rooms": [
+    "mobile",
+    "web"
+  ],
+  "keywords": [
+    "localization",
+    "l10n",
+    "i18n",
+    "translation",
+    "strings.xml",
+    "Localizable.strings",
+    "arb",
+    "flutter",
+    "i18next",
+    "json",
+    "csv",
+    "resource file",
+    "placeholders",
+    "missing translations"
+  ],
+  "intro": "Paste a spreadsheet of strings (key, one column per language, optional comment) as CSV or TSV. It writes one resource file per language for Android, iOS, JSON or Flutter ARB with the platform's escaping, and checks for missing translations, duplicate keys, invalid key names and placeholders that differ from the base language.",
+  "inputs": [
+    {
+      "key": "table",
+      "label": "String table (CSV or TSV, header row first)",
+      "type": "textarea",
+      "rows": 9,
+      "default": "key,en,tr,de,comment\napp_name,Redline,Redline,Redline,Launcher label\nwelcome_title,\"Welcome, %1$s!\",\"Hoş geldin, %1$s!\",\"Willkommen, %1$s!\",Home screen header\nitems_left,%1$d items left,%1$d öğe kaldı,,Cart badge\nsave,Save,Kaydet,Speichern,\nerror_network,\"Can't reach the server.\nCheck your connection.\",Sunucuya ulaşılamıyor.,\"Server nicht erreichbar.\",Shown in a dialog",
+      "help": "Header: key, then language codes (en, tr, pt-BR), optionally a comment column. Copy straight from a spreadsheet (tab-separated) or paste CSV; quote values that contain the separator or a line break."
+    },
+    {
+      "key": "format",
+      "label": "Output format",
+      "type": "select",
+      "default": "android",
+      "options": [
+        [
+          "android",
+          "Android strings.xml"
+        ],
+        [
+          "ios",
+          "iOS Localizable.strings"
+        ],
+        [
+          "json",
+          "JSON (i18next / web)"
+        ],
+        [
+          "arb",
+          "Flutter ARB"
+        ]
+      ]
+    },
+    {
+      "key": "base",
+      "label": "Base language",
+      "type": "text",
+      "default": "en",
+      "help": "The source language column; placeholders are checked against it. Empty = the first language column."
+    },
+    {
+      "key": "missing",
+      "label": "Missing translations",
+      "type": "select",
+      "default": "omit",
+      "options": [
+        [
+          "omit",
+          "Leave out (platform falls back)"
+        ],
+        [
+          "base",
+          "Copy the base text"
+        ],
+        [
+          "empty",
+          "Write an empty string"
+        ]
+      ]
+    },
+    {
+      "key": "nestKeys",
+      "label": "Nest JSON keys at dots (login.title -> {login: {title}})",
+      "type": "bool",
+      "default": false,
+      "when": {
+        "key": "format",
+        "equals": "json"
+      }
+    }
+  ],
+  "examples": [
+    {
+      "title": "App strings in English, Turkish and German for Android",
+      "input": {
+        "table": "key,en,tr,de,comment\napp_name,Redline,Redline,Redline,Launcher label\nwelcome_title,\"Welcome, %1$s!\",\"Hoş geldin, %1$s!\",\"Willkommen, %1$s!\",Home screen header\nitems_left,%1$d items left,%1$d öğe kaldı,,Cart badge\nsave,Save,Kaydet,Speichern,\nerror_network,\"Can't reach the server.\nCheck your connection.\",Sunucuya ulaşılamıyor.,\"Server nicht erreichbar.\",Shown in a dialog",
+        "format": "android",
+        "base": "en",
+        "missing": "omit"
+      }
+    },
+    {
+      "title": "Web strings from a spreadsheet as nested JSON, with a placeholder mistake",
+      "input": {
+        "table": "key\ten\tfr\tpt-BR\nlogin.title\tSign in\tConnexion\tEntrar\nlogin.button\tContinue\tContinuer\tContinuar\nlogin.greeting\tHi {name}\tSalut {nom}\tOlá {name}\ncart.total\tTotal: %s\tTotal : %s\t",
+        "format": "json",
+        "base": "en",
+        "missing": "base",
+        "nestKeys": true
+      }
+    }
+  ],
+  "usage": "Give table as CSV or TSV text (header: key, language codes, optional comment column), format = android | ios | json | arb, base = the source language code, missing = omit | base | empty, and nestKeys (JSON only). It returns one text output per language holding the finished resource file (named like values-tr/strings.xml), a coverage table per language, a Problems table (duplicate keys, invalid names, placeholder mismatches, non-positional Android placeholders) and the list of untranslated keys. Use it to turn a translators' sheet into app resources or to audit a sheet before release.",
+  "sources": [
+    "Android Developers, String resources: formatting and styling (escaping of apostrophes, quotes, @ and ?, positional format arguments)",
+    "Apple, String Resources Programming Guide / Localizable.strings file format",
+    "Application Resource Bundle (ARB) specification, github.com/google/app-resource-bundle",
+    "RFC 4180 (CSV quoting)"
+  ]
+}

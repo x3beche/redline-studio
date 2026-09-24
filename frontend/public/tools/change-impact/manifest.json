@@ -1,0 +1,340 @@
+{
+  "id": "change-impact",
+  "name": "Change Impact Estimator",
+  "blurb": "which rooms a change touches, from dependencies",
+  "group": "project",
+  "rooms": [
+    "analyze"
+  ],
+  "keywords": [
+    "change impact",
+    "impact analysis",
+    "dependency graph",
+    "ripple effect",
+    "blast radius",
+    "engineering change",
+    "ECO",
+    "ECN",
+    "traceability",
+    "what breaks",
+    "downstream",
+    "cross-team",
+    "dependencies"
+  ],
+  "intro": "List the parts of the project, the room each belongs to and what each depends on, then name what changes. Everything that depends on it, directly or through others, is in the impact set (reverse reachability, the standard change impact analysis), ranked by hops, with a weight that halves at each hop and a per-room summary.",
+  "inputs": [
+    {
+      "key": "items",
+      "label": "Parts and dependencies",
+      "type": "table",
+      "help": "Depends on: names of other rows, comma-separated. A row changes when something it depends on changes.",
+      "columns": [
+        {
+          "key": "name",
+          "label": "Item",
+          "default": ""
+        },
+        {
+          "key": "room",
+          "label": "Room",
+          "type": "select",
+          "options": [
+            "pcb",
+            "embedded",
+            "cad",
+            "mobile",
+            "web",
+            "analyze"
+          ],
+          "default": "pcb"
+        },
+        {
+          "key": "deps",
+          "label": "Depends on",
+          "default": ""
+        }
+      ],
+      "default": [
+        {
+          "name": "MCU pinout",
+          "room": "pcb",
+          "deps": ""
+        },
+        {
+          "name": "Power schematic",
+          "room": "pcb",
+          "deps": ""
+        },
+        {
+          "name": "PCB layout",
+          "room": "pcb",
+          "deps": "MCU pinout, Power schematic"
+        },
+        {
+          "name": "Board outline",
+          "room": "pcb",
+          "deps": ""
+        },
+        {
+          "name": "Connector positions",
+          "room": "pcb",
+          "deps": "PCB layout, Board outline"
+        },
+        {
+          "name": "Enclosure",
+          "room": "cad",
+          "deps": "Board outline, Connector positions"
+        },
+        {
+          "name": "Firmware HAL",
+          "room": "embedded",
+          "deps": "MCU pinout"
+        },
+        {
+          "name": "Sensor driver",
+          "room": "embedded",
+          "deps": "Firmware HAL"
+        },
+        {
+          "name": "BLE protocol",
+          "room": "embedded",
+          "deps": "Sensor driver"
+        },
+        {
+          "name": "Mobile BLE client",
+          "room": "mobile",
+          "deps": "BLE protocol"
+        },
+        {
+          "name": "Mobile UI",
+          "room": "mobile",
+          "deps": "Mobile BLE client"
+        },
+        {
+          "name": "Data schema",
+          "room": "web",
+          "deps": "BLE protocol"
+        },
+        {
+          "name": "Cloud API",
+          "room": "web",
+          "deps": "Data schema"
+        },
+        {
+          "name": "Dashboard",
+          "room": "web",
+          "deps": "Cloud API"
+        },
+        {
+          "name": "Test jig",
+          "room": "analyze",
+          "deps": "PCB layout, Firmware HAL"
+        },
+        {
+          "name": "Cost estimate",
+          "room": "analyze",
+          "deps": "PCB layout, Enclosure"
+        }
+      ]
+    },
+    {
+      "key": "changed",
+      "label": "Changed items",
+      "type": "text",
+      "default": "MCU pinout",
+      "help": "Comma-separated names from the table."
+    },
+    {
+      "key": "maxHops",
+      "label": "Max hops (0 = no limit)",
+      "type": "number",
+      "default": "0"
+    }
+  ],
+  "examples": [
+    {
+      "title": "IoT sensor: the MCU pinout changes",
+      "input": {
+        "items": [
+          {
+            "name": "MCU pinout",
+            "room": "pcb",
+            "deps": ""
+          },
+          {
+            "name": "Power schematic",
+            "room": "pcb",
+            "deps": ""
+          },
+          {
+            "name": "PCB layout",
+            "room": "pcb",
+            "deps": "MCU pinout, Power schematic"
+          },
+          {
+            "name": "Board outline",
+            "room": "pcb",
+            "deps": ""
+          },
+          {
+            "name": "Connector positions",
+            "room": "pcb",
+            "deps": "PCB layout, Board outline"
+          },
+          {
+            "name": "Enclosure",
+            "room": "cad",
+            "deps": "Board outline, Connector positions"
+          },
+          {
+            "name": "Firmware HAL",
+            "room": "embedded",
+            "deps": "MCU pinout"
+          },
+          {
+            "name": "Sensor driver",
+            "room": "embedded",
+            "deps": "Firmware HAL"
+          },
+          {
+            "name": "BLE protocol",
+            "room": "embedded",
+            "deps": "Sensor driver"
+          },
+          {
+            "name": "Mobile BLE client",
+            "room": "mobile",
+            "deps": "BLE protocol"
+          },
+          {
+            "name": "Mobile UI",
+            "room": "mobile",
+            "deps": "Mobile BLE client"
+          },
+          {
+            "name": "Data schema",
+            "room": "web",
+            "deps": "BLE protocol"
+          },
+          {
+            "name": "Cloud API",
+            "room": "web",
+            "deps": "Data schema"
+          },
+          {
+            "name": "Dashboard",
+            "room": "web",
+            "deps": "Cloud API"
+          },
+          {
+            "name": "Test jig",
+            "room": "analyze",
+            "deps": "PCB layout, Firmware HAL"
+          },
+          {
+            "name": "Cost estimate",
+            "room": "analyze",
+            "deps": "PCB layout, Enclosure"
+          }
+        ],
+        "changed": "MCU pinout",
+        "maxHops": "0"
+      }
+    },
+    {
+      "title": "Board outline shrinks, direct and second-order only",
+      "input": {
+        "items": [
+          {
+            "name": "MCU pinout",
+            "room": "pcb",
+            "deps": ""
+          },
+          {
+            "name": "Power schematic",
+            "room": "pcb",
+            "deps": ""
+          },
+          {
+            "name": "PCB layout",
+            "room": "pcb",
+            "deps": "MCU pinout, Power schematic"
+          },
+          {
+            "name": "Board outline",
+            "room": "pcb",
+            "deps": ""
+          },
+          {
+            "name": "Connector positions",
+            "room": "pcb",
+            "deps": "PCB layout, Board outline"
+          },
+          {
+            "name": "Enclosure",
+            "room": "cad",
+            "deps": "Board outline, Connector positions"
+          },
+          {
+            "name": "Firmware HAL",
+            "room": "embedded",
+            "deps": "MCU pinout"
+          },
+          {
+            "name": "Sensor driver",
+            "room": "embedded",
+            "deps": "Firmware HAL"
+          },
+          {
+            "name": "BLE protocol",
+            "room": "embedded",
+            "deps": "Sensor driver"
+          },
+          {
+            "name": "Mobile BLE client",
+            "room": "mobile",
+            "deps": "BLE protocol"
+          },
+          {
+            "name": "Mobile UI",
+            "room": "mobile",
+            "deps": "Mobile BLE client"
+          },
+          {
+            "name": "Data schema",
+            "room": "web",
+            "deps": "BLE protocol"
+          },
+          {
+            "name": "Cloud API",
+            "room": "web",
+            "deps": "Data schema"
+          },
+          {
+            "name": "Dashboard",
+            "room": "web",
+            "deps": "Cloud API"
+          },
+          {
+            "name": "Test jig",
+            "room": "analyze",
+            "deps": "PCB layout, Firmware HAL"
+          },
+          {
+            "name": "Cost estimate",
+            "room": "analyze",
+            "deps": "PCB layout, Enclosure"
+          }
+        ],
+        "changed": "Board outline",
+        "maxHops": "2"
+      }
+    }
+  ],
+  "usage": "Give items as rows {name, room: pcb|embedded|cad|mobile|web|analyze, deps: comma-separated names it depends on}, changed as comma-separated item names and maxHops (0 = unlimited). It returns the affected items with hop count, weight (0.5^(hops-1)) and the dependency path that reaches them, a per-room table and chart, an overall score and level (low/medium/high), warnings for unknown names and dependency cycles, and a per-room review checklist. Use it before an engineering change to see which teams must re-check their work.",
+  "sources": [
+    "Bohner & Arnold, Software Change Impact Analysis, IEEE Computer Society Press 1996 (impact set as transitive dependants)",
+    "Tarjan, 'Depth-first search and linear graph algorithms', SIAM J. Computing 1972 (cycle detection)",
+    "Rule of thumb: halving weight per hop and the low/medium/high thresholds"
+  ]
+}

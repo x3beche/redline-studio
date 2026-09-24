@@ -1,0 +1,105 @@
+{
+  "id": "layout-mapper",
+  "name": "Layout Inspector Mapper",
+  "blurb": "a region of a screen mapped to its view in a uiautomator dump",
+  "group": "mobile",
+  "rooms": [
+    "mobile"
+  ],
+  "keywords": [
+    "uiautomator",
+    "window dump",
+    "view hierarchy",
+    "layout inspector",
+    "bounds",
+    "resource-id",
+    "espresso",
+    "appium",
+    "xpath",
+    "selector",
+    "locator",
+    "ui test",
+    "screenshot coordinates",
+    "content-desc"
+  ],
+  "intro": "Give a point or a rectangle on a screenshot and paste the uiautomator dump of the same screen. It finds the view there (the innermost view under a point, or the view whose bounds overlap the rectangle best by IoU), the clickable view a tap would reach, and ready-to-paste Espresso, UiAutomator and Appium selectors with a uniqueness check.",
+  "inputs": [
+    {
+      "key": "dump",
+      "label": "uiautomator dump (window_dump.xml)",
+      "type": "textarea",
+      "rows": 8,
+      "default": "<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation=\"0\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.FrameLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.LinearLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\"><node index=\"0\" text=\"\" resource-id=\"android:id/content\" class=\"android.widget.FrameLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,136][1080,2400]\"><node index=\"0\" text=\"\" resource-id=\"com.acme.shop:id/login_root\" class=\"androidx.constraintlayout.widget.ConstraintLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,136][1080,2400]\"><node index=\"0\" text=\"\" resource-id=\"com.acme.shop:id/logo\" class=\"android.widget.ImageView\" package=\"com.acme.shop\" content-desc=\"Acme Shop logo\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[390,280][690,580]\" /><node index=\"1\" text=\"Sign in to Acme\" resource-id=\"com.acme.shop:id/title\" class=\"android.widget.TextView\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[96,640][984,730]\" /><node index=\"2\" text=\"you@example.com\" resource-id=\"com.acme.shop:id/email\" class=\"android.widget.EditText\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[96,800][984,944]\" /><node index=\"3\" text=\"\" resource-id=\"com.acme.shop:id/password\" class=\"android.widget.EditText\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"true\" selected=\"false\" bounds=\"[96,984][984,1128]\" /><node index=\"4\" text=\"Sign in\" resource-id=\"com.acme.shop:id/sign_in\" class=\"android.widget.Button\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[96,1208][984,1352]\" /><node index=\"5\" text=\"\" resource-id=\"com.acme.shop:id/forgot_row\" class=\"android.widget.LinearLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[96,1400][984,1480]\"><node index=\"0\" text=\"Forgot password?\" resource-id=\"\" class=\"android.widget.TextView\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[320,1410][760,1470]\" /></node><node index=\"6\" text=\"\" resource-id=\"\" class=\"android.widget.ImageButton\" package=\"com.acme.shop\" content-desc=\"Close\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[24,160][152,288]\" /></node></node></node></node></hierarchy>",
+      "help": "adb shell uiautomator dump /sdcard/window_dump.xml, then adb pull /sdcard/window_dump.xml and paste its contents."
+    },
+    {
+      "key": "x",
+      "label": "X",
+      "type": "number",
+      "unit": "px",
+      "default": "540",
+      "help": "Point, or the rectangle's left edge, in screenshot pixels."
+    },
+    {
+      "key": "y",
+      "label": "Y",
+      "type": "number",
+      "unit": "px",
+      "default": "1440"
+    },
+    {
+      "key": "w",
+      "label": "Width (0 = a point)",
+      "type": "number",
+      "unit": "px",
+      "default": "0"
+    },
+    {
+      "key": "h",
+      "label": "Height (0 = a point)",
+      "type": "number",
+      "unit": "px",
+      "default": "0"
+    },
+    {
+      "key": "shotWidth",
+      "label": "Screenshot width",
+      "type": "number",
+      "unit": "px",
+      "default": "",
+      "required": false,
+      "help": "Only when the screenshot was resized: its width in pixels. Empty = same pixels as the device."
+    }
+  ],
+  "examples": [
+    {
+      "title": "Tap on the 'Forgot password?' label of a login screen",
+      "input": {
+        "dump": "<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation=\"0\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.FrameLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.LinearLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\"><node index=\"0\" text=\"\" resource-id=\"android:id/content\" class=\"android.widget.FrameLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,136][1080,2400]\"><node index=\"0\" text=\"\" resource-id=\"com.acme.shop:id/login_root\" class=\"androidx.constraintlayout.widget.ConstraintLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,136][1080,2400]\"><node index=\"0\" text=\"\" resource-id=\"com.acme.shop:id/logo\" class=\"android.widget.ImageView\" package=\"com.acme.shop\" content-desc=\"Acme Shop logo\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[390,280][690,580]\" /><node index=\"1\" text=\"Sign in to Acme\" resource-id=\"com.acme.shop:id/title\" class=\"android.widget.TextView\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[96,640][984,730]\" /><node index=\"2\" text=\"you@example.com\" resource-id=\"com.acme.shop:id/email\" class=\"android.widget.EditText\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[96,800][984,944]\" /><node index=\"3\" text=\"\" resource-id=\"com.acme.shop:id/password\" class=\"android.widget.EditText\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"true\" selected=\"false\" bounds=\"[96,984][984,1128]\" /><node index=\"4\" text=\"Sign in\" resource-id=\"com.acme.shop:id/sign_in\" class=\"android.widget.Button\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[96,1208][984,1352]\" /><node index=\"5\" text=\"\" resource-id=\"com.acme.shop:id/forgot_row\" class=\"android.widget.LinearLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[96,1400][984,1480]\"><node index=\"0\" text=\"Forgot password?\" resource-id=\"\" class=\"android.widget.TextView\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[320,1410][760,1470]\" /></node><node index=\"6\" text=\"\" resource-id=\"\" class=\"android.widget.ImageButton\" package=\"com.acme.shop\" content-desc=\"Close\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[24,160][152,288]\" /></node></node></node></node></hierarchy>",
+        "x": "540",
+        "y": "1440",
+        "w": "0",
+        "h": "0",
+        "shotWidth": ""
+      }
+    },
+    {
+      "title": "Rectangle drawn around the Sign in button on a half-size screenshot",
+      "input": {
+        "dump": "<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation=\"0\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.FrameLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.LinearLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\"><node index=\"0\" text=\"\" resource-id=\"android:id/content\" class=\"android.widget.FrameLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,136][1080,2400]\"><node index=\"0\" text=\"\" resource-id=\"com.acme.shop:id/login_root\" class=\"androidx.constraintlayout.widget.ConstraintLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,136][1080,2400]\"><node index=\"0\" text=\"\" resource-id=\"com.acme.shop:id/logo\" class=\"android.widget.ImageView\" package=\"com.acme.shop\" content-desc=\"Acme Shop logo\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[390,280][690,580]\" /><node index=\"1\" text=\"Sign in to Acme\" resource-id=\"com.acme.shop:id/title\" class=\"android.widget.TextView\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[96,640][984,730]\" /><node index=\"2\" text=\"you@example.com\" resource-id=\"com.acme.shop:id/email\" class=\"android.widget.EditText\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[96,800][984,944]\" /><node index=\"3\" text=\"\" resource-id=\"com.acme.shop:id/password\" class=\"android.widget.EditText\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"true\" selected=\"false\" bounds=\"[96,984][984,1128]\" /><node index=\"4\" text=\"Sign in\" resource-id=\"com.acme.shop:id/sign_in\" class=\"android.widget.Button\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[96,1208][984,1352]\" /><node index=\"5\" text=\"\" resource-id=\"com.acme.shop:id/forgot_row\" class=\"android.widget.LinearLayout\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[96,1400][984,1480]\"><node index=\"0\" text=\"Forgot password?\" resource-id=\"\" class=\"android.widget.TextView\" package=\"com.acme.shop\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[320,1410][760,1470]\" /></node><node index=\"6\" text=\"\" resource-id=\"\" class=\"android.widget.ImageButton\" package=\"com.acme.shop\" content-desc=\"Close\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[24,160][152,288]\" /></node></node></node></node></hierarchy>",
+        "x": "50",
+        "y": "602",
+        "w": "442",
+        "h": "74",
+        "shotWidth": "540"
+      }
+    }
+  ],
+  "usage": "Give dump as the uiautomator window_dump.xml text, x and y in screenshot pixels, w and h (0 for a point) and shotWidth only if the screenshot is scaled. It returns the matched view (class, id, bounds), the nearest clickable view, its tap coordinates, a table of selectors (resource-id, content-desc, text, XPath) for Espresso, UiAutomator and Appium with how many nodes each matches, the candidate views, and the hierarchy path. Use it to turn 'this button on the screenshot' into a test locator or an adb input tap.",
+  "sources": [
+    "AOSP uiautomator dump / UiAutomator2 window hierarchy XML (bounds as Rect [left,top][right,bottom])",
+    "Android Developers: Espresso ViewMatchers; UI Automator BySelector",
+    "Appium UiAutomator2 driver locator strategies (id, accessibility id, -android uiautomator, xpath)",
+    "Intersection over union for box matching (Everingham et al., PASCAL VOC)"
+  ]
+}

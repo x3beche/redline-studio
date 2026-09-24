@@ -1,0 +1,325 @@
+{
+  "id": "cost-rollup",
+  "name": "Total Cost Roll-Up",
+  "blurb": "PCB, BOM, assembly, enclosure and cable cost per unit at a quantity",
+  "group": "project",
+  "rooms": [
+    "analyze"
+  ],
+  "keywords": [
+    "cost roll-up",
+    "unit cost",
+    "cogs",
+    "bom cost",
+    "landed cost",
+    "nre",
+    "tooling amortization",
+    "moq",
+    "attrition",
+    "assembly cost",
+    "pcba",
+    "enclosure cost",
+    "quote",
+    "price per unit"
+  ],
+  "intro": "Adds up what one delivered unit costs at an order quantity: PCB, BOM lines (with minimum order quantities and attrition), SMT and hand assembly, enclosure, cables, test and freight. Yield fallout is built extra, one-time costs (tooling, setup, stencils) are spread over the order, and other quantities are shown at the same unit prices.",
+  "inputs": [
+    {
+      "key": "qty",
+      "label": "Good units to deliver",
+      "type": "number",
+      "default": "500"
+    },
+    {
+      "key": "currency",
+      "label": "Currency",
+      "type": "text",
+      "default": "USD"
+    },
+    {
+      "key": "pcbUnit",
+      "label": "PCB price per board",
+      "type": "number",
+      "default": "1.40"
+    },
+    {
+      "key": "pcbNre",
+      "label": "PCB one-time (tooling, e-test, stencil)",
+      "type": "number",
+      "default": "120"
+    },
+    {
+      "key": "bom",
+      "label": "BOM",
+      "type": "table",
+      "help": "Unit price at your order volume. MOQ = minimum you must buy (a reel). Attrition % = extra for machine loss (1-5 % typical for small SMT parts).",
+      "columns": [
+        {
+          "key": "part",
+          "label": "Part",
+          "default": ""
+        },
+        {
+          "key": "per",
+          "label": "Qty per unit",
+          "default": "1"
+        },
+        {
+          "key": "price",
+          "label": "Unit price",
+          "default": ""
+        },
+        {
+          "key": "moq",
+          "label": "MOQ",
+          "default": "1"
+        },
+        {
+          "key": "attr",
+          "label": "Attrition %",
+          "default": "2"
+        }
+      ],
+      "default": [
+        {
+          "part": "STM32G0 MCU",
+          "per": "1",
+          "price": "1.85",
+          "moq": "1",
+          "attr": "1"
+        },
+        {
+          "part": "3.3 V LDO",
+          "per": "1",
+          "price": "0.12",
+          "moq": "1",
+          "attr": "2"
+        },
+        {
+          "part": "Passives (0402 R/C)",
+          "per": "42",
+          "price": "0.004",
+          "moq": "10000",
+          "attr": "5"
+        },
+        {
+          "part": "USB-C receptacle",
+          "per": "1",
+          "price": "0.32",
+          "moq": "1",
+          "attr": "2"
+        },
+        {
+          "part": "Li-ion 1000 mAh cell",
+          "per": "1",
+          "price": "2.6",
+          "moq": "100",
+          "attr": "0"
+        },
+        {
+          "part": "Status LED",
+          "per": "2",
+          "price": "0.03",
+          "moq": "4000",
+          "attr": "3"
+        },
+        {
+          "part": "BLE module",
+          "per": "1",
+          "price": "2.95",
+          "moq": "1",
+          "attr": "1"
+        }
+      ]
+    },
+    {
+      "key": "places",
+      "label": "SMT placements per board",
+      "type": "number",
+      "default": "64"
+    },
+    {
+      "key": "perPlace",
+      "label": "Price per placement",
+      "type": "number",
+      "default": "0.012"
+    },
+    {
+      "key": "hand",
+      "label": "Hand / THT work per board",
+      "type": "number",
+      "default": "0.35"
+    },
+    {
+      "key": "asmSetup",
+      "label": "Assembly setup per order",
+      "type": "number",
+      "default": "280"
+    },
+    {
+      "key": "encUnit",
+      "label": "Enclosure per unit",
+      "type": "number",
+      "default": "1.20"
+    },
+    {
+      "key": "encTool",
+      "label": "Enclosure tooling (mold)",
+      "type": "number",
+      "default": "3800"
+    },
+    {
+      "key": "cableUnit",
+      "label": "Cables per unit",
+      "type": "number",
+      "default": "0.85"
+    },
+    {
+      "key": "testUnit",
+      "label": "Test, programming, packing per unit",
+      "type": "number",
+      "default": "0.55"
+    },
+    {
+      "key": "freight",
+      "label": "Freight and duty, whole order",
+      "type": "number",
+      "default": "220"
+    },
+    {
+      "key": "yieldPct",
+      "label": "Yield",
+      "type": "number",
+      "default": "97",
+      "unit": "%",
+      "help": "Good units out of units built; the rest are rebuilt."
+    },
+    {
+      "key": "amortize",
+      "label": "Spread one-time costs over this order",
+      "type": "bool",
+      "default": true
+    }
+  ],
+  "examples": [
+    {
+      "title": "500 BLE sensors with a molded enclosure",
+      "input": {
+        "qty": "500",
+        "currency": "USD",
+        "pcbUnit": "1.40",
+        "pcbNre": "120",
+        "bom": [
+          {
+            "part": "STM32G0 MCU",
+            "per": "1",
+            "price": "1.85",
+            "moq": "1",
+            "attr": "1"
+          },
+          {
+            "part": "3.3 V LDO",
+            "per": "1",
+            "price": "0.12",
+            "moq": "1",
+            "attr": "2"
+          },
+          {
+            "part": "Passives (0402 R/C)",
+            "per": "42",
+            "price": "0.004",
+            "moq": "10000",
+            "attr": "5"
+          },
+          {
+            "part": "USB-C receptacle",
+            "per": "1",
+            "price": "0.32",
+            "moq": "1",
+            "attr": "2"
+          },
+          {
+            "part": "Li-ion 1000 mAh cell",
+            "per": "1",
+            "price": "2.6",
+            "moq": "100",
+            "attr": "0"
+          },
+          {
+            "part": "Status LED",
+            "per": "2",
+            "price": "0.03",
+            "moq": "4000",
+            "attr": "3"
+          },
+          {
+            "part": "BLE module",
+            "per": "1",
+            "price": "2.95",
+            "moq": "1",
+            "attr": "1"
+          }
+        ],
+        "places": "64",
+        "perPlace": "0.012",
+        "hand": "0.35",
+        "asmSetup": "280",
+        "encUnit": "1.20",
+        "encTool": "3800",
+        "cableUnit": "0.85",
+        "testUnit": "0.55",
+        "freight": "220",
+        "yieldPct": "97",
+        "amortize": true
+      }
+    },
+    {
+      "title": "100 prototype units, 3D-printed case, no mold",
+      "input": {
+        "qty": "100",
+        "currency": "EUR",
+        "pcbUnit": "4.80",
+        "pcbNre": "0",
+        "bom": [
+          {
+            "part": "ESP32-S3 module",
+            "per": "1",
+            "price": "3.1",
+            "moq": "1",
+            "attr": "0"
+          },
+          {
+            "part": "Passives",
+            "per": "25",
+            "price": "0.01",
+            "moq": "1",
+            "attr": "5"
+          },
+          {
+            "part": "OLED 0.96 in",
+            "per": "1",
+            "price": "2.4",
+            "moq": "1",
+            "attr": "0"
+          }
+        ],
+        "places": "30",
+        "perPlace": "0.03",
+        "hand": "1.50",
+        "asmSetup": "150",
+        "encUnit": "3.50",
+        "encTool": "0",
+        "cableUnit": "0",
+        "testUnit": "1.00",
+        "freight": "60",
+        "yieldPct": "95",
+        "amortize": true
+      }
+    }
+  ],
+  "usage": "Give qty (good units), currency, pcbUnit and pcbNre, bom rows {part, per (qty per unit), price, moq, attr (attrition %)}, SMT placements and price per placement, hand work, assembly setup, enclosure unit and tooling, cable and test/packing per unit, freight for the order, yieldPct and amortize (spread one-time costs). Money values are plain numbers in the chosen currency. It returns the cost per unit, order total, units to build, NRE, the per-category breakdown, BOM lines with buy quantities and MOQ excess, and a table of other quantities. Use it for a first production quote or to see where the unit cost goes.",
+  "sources": [
+    "Ulrich & Eppinger, Product Design and Development, ch. 13 Design for Manufacturing (unit cost = components + assembly + overhead; amortized tooling)",
+    "Rule of thumb: SMT attrition 1-5 % for small reeled parts; placement pricing per component from typical PCBA quotes"
+  ]
+}

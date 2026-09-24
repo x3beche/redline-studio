@@ -1,0 +1,84 @@
+{
+  "id": "screen-flow",
+  "name": "Screen Flow Mapper",
+  "blurb": "screen-to-screen transitions as a diagram and a navigation graph",
+  "group": "mobile",
+  "rooms": [
+    "mobile"
+  ],
+  "keywords": [
+    "screen flow",
+    "user flow",
+    "navigation graph",
+    "nav_graph.xml",
+    "jetpack navigation",
+    "mermaid",
+    "flowchart",
+    "wireframe flow",
+    "unreachable screen",
+    "dead end",
+    "deep link",
+    "app map",
+    "state diagram",
+    "ux flow"
+  ],
+  "intro": "Write the transitions as lines like \"Home -> Cart : cart icon\". It lays the screens out by the fewest steps from the start screen, flags screens that cannot be reached and screens with no way out, finds loops, gives the shortest path to any screen and exports the flow as Mermaid, a Jetpack Navigation graph and JSON.",
+  "inputs": [
+    {
+      "key": "flow",
+      "label": "Transitions, one per line",
+      "type": "textarea",
+      "rows": 10,
+      "default": "# shop app\nSplash -> Onboarding : first launch\nSplash -> Home : signed in\nOnboarding -> Login : get started\nLogin -> Home : sign in ok\nLogin <-> Forgot password : forgot?\nHome -> Product : tap item\nHome -> Cart : cart icon\nHome -> Settings : menu\nProduct -> Cart : add to cart\nProduct -> Home : back\nCart -> Checkout : checkout\nCheckout -> Order done! : pay\nSettings -> Login : sign out\nPromo banner",
+      "help": "A -> B : label (or [label]); A -> B -> C chains; A <-> B both ways; a name alone declares a screen; Name! marks an intended end screen; # comments."
+    },
+    {
+      "key": "start",
+      "label": "Start screen",
+      "type": "text",
+      "default": "Splash",
+      "help": "Empty = the first screen in the list."
+    },
+    {
+      "key": "goal",
+      "label": "Show path to",
+      "type": "text",
+      "default": "Checkout",
+      "help": "Or click a screen in the diagram."
+    },
+    {
+      "key": "pkg",
+      "label": "Package for nav_graph.xml",
+      "type": "text",
+      "default": "com.example.app"
+    }
+  ],
+  "examples": [
+    {
+      "title": "Shop app: onboarding, login, cart and checkout",
+      "input": {
+        "flow": "# shop app\nSplash -> Onboarding : first launch\nSplash -> Home : signed in\nOnboarding -> Login : get started\nLogin -> Home : sign in ok\nLogin <-> Forgot password : forgot?\nHome -> Product : tap item\nHome -> Cart : cart icon\nHome -> Settings : menu\nProduct -> Cart : add to cart\nProduct -> Home : back\nCart -> Checkout : checkout\nCheckout -> Order done! : pay\nSettings -> Login : sign out\nPromo banner",
+        "start": "Splash",
+        "goal": "Checkout",
+        "pkg": "com.acme.shop"
+      }
+    },
+    {
+      "title": "Content app with a search chain and a dead end",
+      "input": {
+        "flow": "Home -> Search -> Results -> Detail\nDetail -> Home [back to top]\nHome -> Profile\nProfile -> Edit profile : edit\nEdit profile -> Profile : save\nDetail -> Share sheet",
+        "start": "Home",
+        "goal": "Detail",
+        "pkg": "com.example.news"
+      }
+    }
+  ],
+  "usage": "Give flow as text, one transition per line (\"A -> B : label\", chains, \"<->\" for both ways, \"Name!\" for an end screen), start as the entry screen name, optional goal for a shortest path and pkg for the generated fragments. It returns counts, the steps from start per screen, unreachable screens, dead ends, loops (strongly connected screens), the shortest path to goal, and texts: a Mermaid flowchart, a Jetpack Navigation nav_graph.xml and a JSON adjacency list; result.graph holds the layered layout. Use it to check an app's navigation for orphans and dead ends or to start a navigation graph.",
+  "sources": [
+    "Breadth-first search for fewest steps; Tarjan, 'Depth-first search and linear graph algorithms', SIAM J. Computing 1972 (strongly connected components)",
+    "Sugiyama, Tagawa & Toda, 'Methods for visual understanding of hierarchical system structures', IEEE SMC 1981 (layered drawing, barycentre ordering)",
+    "Android Developers: Navigation component, navigation graph XML (<navigation>, <fragment>, <action>)",
+    "Mermaid flowchart syntax, mermaid.js.org"
+  ],
+  "view": true
+}

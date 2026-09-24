@@ -1,0 +1,190 @@
+{
+  "id": "adb-commands",
+  "name": "ADB Command Palette",
+  "blurb": "common emulator and device commands, ready to copy",
+  "group": "mobile",
+  "rooms": [
+    "mobile"
+  ],
+  "keywords": [
+    "adb",
+    "android debug bridge",
+    "emulator",
+    "logcat",
+    "am start",
+    "pm clear",
+    "screencap",
+    "screenrecord",
+    "uiautomator",
+    "deep link",
+    "reverse port",
+    "wireless debugging",
+    "avd",
+    "shell",
+    "input tap"
+  ],
+  "intro": "About 95 adb, adb shell and emulator commands for everyday Android work, grouped by topic and filtered by words, with your package, activity, device serial and paths filled in. Commands follow the Android Developers adb, logcat and emulator documentation.",
+  "inputs": [
+    {
+      "key": "category",
+      "label": "Topic",
+      "type": "select",
+      "default": "all",
+      "options": [
+        [
+          "all",
+          "All topics"
+        ],
+        [
+          "device",
+          "Device"
+        ],
+        [
+          "apps",
+          "Apps"
+        ],
+        [
+          "files",
+          "Files"
+        ],
+        [
+          "logs",
+          "Logs"
+        ],
+        [
+          "screen",
+          "Screen and display"
+        ],
+        [
+          "input",
+          "Input (tap, keys)"
+        ],
+        [
+          "network",
+          "Network and Wi-Fi"
+        ],
+        [
+          "emulator",
+          "Emulator"
+        ],
+        [
+          "debug",
+          "Debug and performance"
+        ]
+      ]
+    },
+    {
+      "key": "filter",
+      "label": "Filter words",
+      "type": "text",
+      "default": "",
+      "placeholder": "log, install, proxy, tap..."
+    },
+    {
+      "key": "pkg",
+      "label": "Application id",
+      "type": "text",
+      "default": "com.example.app"
+    },
+    {
+      "key": "activity",
+      "label": "Activity",
+      "type": "text",
+      "default": ".MainActivity",
+      "help": "Relative (.MainActivity) or full class name.",
+      "when": {
+        "key": "category",
+        "in": [
+          "all",
+          "apps"
+        ]
+      }
+    },
+    {
+      "key": "serial",
+      "label": "Device serial (optional)",
+      "type": "text",
+      "default": "",
+      "placeholder": "emulator-5554",
+      "help": "From adb devices; adds -s to every adb call."
+    },
+    {
+      "key": "apk",
+      "label": "APK file",
+      "type": "text",
+      "default": "app/build/outputs/apk/debug/app-debug.apk",
+      "when": {
+        "key": "category",
+        "in": [
+          "all",
+          "apps"
+        ]
+      }
+    },
+    {
+      "key": "url",
+      "label": "Deep link",
+      "type": "text",
+      "default": "myapp://home",
+      "when": {
+        "key": "category",
+        "in": [
+          "all",
+          "apps"
+        ]
+      }
+    },
+    {
+      "key": "ip",
+      "label": "Phone IP / proxy host",
+      "type": "text",
+      "default": "192.168.1.50",
+      "when": {
+        "key": "category",
+        "in": [
+          "all",
+          "network"
+        ]
+      }
+    },
+    {
+      "key": "avd",
+      "label": "AVD name",
+      "type": "text",
+      "default": "Pixel_8_API_35",
+      "when": {
+        "key": "category",
+        "in": [
+          "all",
+          "emulator"
+        ]
+      }
+    }
+  ],
+  "examples": [
+    {
+      "title": "Logs of one app on a given emulator",
+      "input": {
+        "category": "logs",
+        "filter": "",
+        "pkg": "com.acme.shop",
+        "serial": "emulator-5554"
+      }
+    },
+    {
+      "title": "Open a deep link in the app",
+      "input": {
+        "category": "apps",
+        "filter": "deep link",
+        "pkg": "com.acme.shop",
+        "url": "acmeshop://product/42"
+      }
+    }
+  ],
+  "usage": "Give category (all, device, apps, files, logs, screen, input, network, emulator, debug), optional filter words (all must match), the application id in pkg, and optionally activity, serial, apk, url, ip and avd. It returns the matching commands as a table (topic, task, ready-to-run command, note) and as a commented shell script. Use it to look up the exact adb/emulator syntax for a task instead of recalling flags.",
+  "sources": [
+    "Android Developers: Android Debug Bridge (adb), developer.android.com/tools/adb",
+    "Android Developers: Logcat command-line tool; Start the emulator from the command line; Send emulator console commands",
+    "AOSP shell tools am, pm, wm, input, settings, dumpsys, cmd (help output of each)"
+  ]
+}

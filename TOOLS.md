@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-136 tools. **MCP** marks the ones agents can run with `run_tool`.
+144 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -223,6 +223,15 @@ agents, the most used, and every tool nobody used.
 | **SVG Path Editor** · MCP | `svg-path-editor` | edit a path node by node and trim needless decimals | Web |
 | **Telemetry Mock Generator** · MCP | `telemetry-mock` | realistic sensor time series with noise, drift and faults | Web, Embedded |
 
+### Mobile
+
+| Tool | id | What it answers | Rooms |
+|---|---|---|---|
+| **ADB Command Palette** · MCP | `adb-commands` | common emulator and device commands, ready to copy | Mobile |
+| **Layout Inspector Mapper** · MCP | `layout-mapper` | a region of a screen mapped to its view in a uiautomator dump | Mobile |
+| **Screen Flow Mapper** · MCP | `screen-flow` | screen-to-screen transitions as a diagram and a navigation graph | Mobile |
+| **String Table Editor** · MCP | `string-table` | multilingual strings in a table, out as resource files | Mobile, Web |
+
 ### Code, data & prompts
 
 | Tool | id | What it answers | Rooms |
@@ -234,6 +243,15 @@ agents, the most used, and every tool nobody used.
 | **Flow to Mermaid** | `flow-mermaid` | draw a flowchart with boxes and arrows, get Mermaid code | Web, Embedded, Mobile |
 | **Regex by Example** | `regex-example` | pick what should match in a text and get the regex, explained | Web, Embedded |
 | **Schema Sketch** | `schema-sketch` | draw tables and relations, get SQL, Prisma and Mermaid | Web, Mobile |
+
+### Project
+
+| Tool | id | What it answers | Rooms |
+|---|---|---|---|
+| **Change Impact Estimator** · MCP | `change-impact` | which rooms a change touches, from dependencies | Analytics |
+| **FMEA Lite** · MCP | `fmea-lite` | failure modes scored by likelihood and effect into a risk order | Analytics |
+| **Pin-to-Net-to-Symbol Mapper** · MCP | `pin-net-symbol` | trace an MCU pin to its PCB net and its firmware symbol | PCB, Embedded |
+| **Total Cost Roll-Up** · MCP | `cost-rollup` | PCB, BOM, assembly, enclosure and cable cost per unit at a quantity | Analytics |
 <!-- catalog:end -->
 
 The calculators read values the way an engineer writes them: `4k7`, `2M2`,
