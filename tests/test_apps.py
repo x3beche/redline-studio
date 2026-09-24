@@ -158,3 +158,75 @@ def test_a_component_is_found_by_its_selector_and_its_markup_file(repo):
                                         "name": "_RoomThing"}})
     assert d["file"] == "src/room.html" and d["component"] == "RoomThing"
     assert webshot.label(d) == 'button.build "build" · src/room.html'
+
+
+# ---------------- the picture itself ----------------
+def test_a_note_can_be_any_of_the_three_coding_kinds():
+    from pydantic import ValidationError
+
+    from backend.main import RevisionIn
+
+    for kind in ("web", "embedded", "mobile", "pcb", "cad"):
+        assert RevisionIn(comment="x", kind=kind).kind == kind
+    with pytest.raises(ValidationError):
+        RevisionIn(comment="x", kind="code")
+    note = RevisionIn(comment="x", kind="web",
+                      code={"route": "/", "viewport": [1280, 800], "dom": []})
+    assert note.code["viewport"] == [1280, 800]
+
+
+def test_a_frozen_page_waits_on_disk_not_in_memory(tmp_path, monkeypatch):
+    """The server reloads itself whenever a file changes, and a person can
+    draw for as long as they like between the freeze and the save."""
+    monkeypatch.setattr(webshot, "SHOTS", tmp_path / "shots")
+    sid = webshot.keep({"png": b"\x89PNG...", "width": 10, "height": 10,
+                        "elements": [BUILD]}, {"app": "p", "route": "/x"})
+    back = webshot.recall(sid)
+    assert back["route"] == "/x" and back["elements"][0]["sel"] == "button.build"
+    assert webshot.picture(sid) == b"\x89PNG..."
+    with pytest.raises(KeyError):
+        webshot.recall("../../etc/passwd")
+
+
+PAGE_HTML = b"""<!doctype html><html><body style="margin:0">
+<main style="padding:20px"><button id="go" style="width:120px;height:40px">Go on</button>
+<p class="note">a line of text</p></main></body></html>"""
+
+
+@pytest.mark.skipif(not __import__("shutil").which("google-chrome"),
+                    reason="needs google-chrome")
+def test_a_real_browser_photographs_the_page_and_lists_what_is_on_it():
+    import http.server
+    import threading
+
+    class One(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("content-type", "text/html")
+            self.end_headers()
+            self.wfile.write(PAGE_HTML)
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), One)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        job: dict = {}
+        got = webshot.shoot(f"http://127.0.0.1:{srv.server_port}/", 400, 300,
+                            wait=10, meter_into=job)
+    finally:
+        srv.shutdown()
+    assert got["png"].startswith(b"\x89PNG")
+    from PIL import Image
+    import io
+    assert Image.open(io.BytesIO(got["png"])).size == (400, 300)
+    button = next(e for e in got["elements"] if e["tag"] == "button")
+    assert button["sel"] == "#go" and button["text"] == "Go on"
+    # The box is where the button is on the picture: 20 px of padding in.
+    assert button["box"] == [20, 20, 120, 40]
+    assert job["wall_s"] > 0
+    # A ring round it on the picture comes back as the button.
+    hit = webshot.under(got["elements"], [{"box": [10, 10, 150, 60], "tip": None}],
+                        width=400, height=300)
+    assert [e["sel"] for e in hit] == ["#go"]

@@ -1,6 +1,6 @@
 import {
   Component, ElementRef, OnDestroy, computed, effect, inject, input, signal,
-  viewChild,
+  untracked, viewChild,
 } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import {
@@ -542,8 +542,14 @@ export class RoomCoding implements OnDestroy {
     });
     // The note is filed: let go of the page, as the 3D room lets go of
     // its view once a revision is saved.
+    // On the count moving, not on it being non-zero: read as a flag, the
+    // first note filed let go of every page frozen after it.
+    let filed = this.picked.codeFiled();
     effect(() => {
-      if (this.picked.codeFiled() && this.frozen()) this.resume();
+      const now = this.picked.codeFiled();
+      if (now === filed) return;
+      filed = now;
+      if (untracked(this.frozen)) this.resume();
     });
     // The box the page is scaled into. Measured, not assumed: the panes
     // move when the log is made tall and when a column folds.

@@ -117,8 +117,8 @@ fills the Part field on the right as `button.tcv-btn · rooms/pcb.ts`.
 
 - [x] tabs, catalog entry, opening the room
 - [x] live preview
-- [ ] screenshot, pen and note
-- [ ] DOM mapping
+- [x] screenshot, pen and note
+- [x] DOM mapping
 - [ ] agent CLI
 - [ ] diff view
 - [ ] tests as the check
