@@ -1,0 +1,31 @@
+{
+  "id": "snap-fit",
+  "name": "Snap-Fit Calculator",
+  "blurb": "insertion force and strain of a cantilever snap hook",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["snap fit", "snap-fit", "snap hook", "cantilever", "clip", "latch", "undercut", "insertion force", "mating force", "strain", "plastic housing", "bayer", "retention", "lead-in angle"],
+  "intro": "The strain at the root of a rectangular cantilever snap hook and the force to push it home and pull it apart, from the Bayer snap-fit design guide's cantilever equations. Material strain limits, moduli and friction are typical values.",
+  "inputs": [
+    { "key": "material", "label": "Material", "type": "select", "default": "abs",
+      "options": [["abs", "ABS"], ["pc", "PC"], ["pcabs", "PC/ABS"], ["pbt", "PBT"], ["pom", "POM (acetal)"], ["pa6", "PA6, conditioned"], ["pa6gf", "PA6 GF30, conditioned"], ["pp", "PP"], ["custom", "Custom"]] },
+    { "key": "es", "label": "Secant modulus", "type": "number", "unit": "GPa", "default": "2", "when": { "key": "material", "equals": "custom" } },
+    { "key": "eps", "label": "Permissible strain", "type": "number", "unit": "%", "default": "2.5", "when": { "key": "material", "equals": "custom" } },
+    { "key": "shape", "label": "Arm shape", "type": "select", "default": "constant",
+      "options": [["constant", "Constant thickness"], ["tapered", "Tapered to half thickness at the hook"]] },
+    { "key": "l", "label": "Arm length", "type": "number", "unit": "mm", "default": "15", "help": "From the root to the hook's contact point." },
+    { "key": "h", "label": "Thickness at the root", "type": "number", "unit": "mm", "default": "1.5" },
+    { "key": "b", "label": "Arm width", "type": "number", "unit": "mm", "default": "6" },
+    { "key": "y", "label": "Deflection (undercut)", "type": "number", "unit": "mm", "default": "1" },
+    { "key": "alpha", "label": "Lead-in angle", "type": "number", "unit": "°", "default": "30" },
+    { "key": "alpha2", "label": "Retaining angle", "type": "number", "unit": "°", "default": "90", "help": "90° is a square hook that does not come apart." },
+    { "key": "mu", "label": "Friction coefficient", "type": "number", "default": "", "required": false, "help": "Leave empty for the material's value against steel." },
+    { "key": "repeated", "label": "Assembled and taken apart often", "type": "bool", "default": false, "help": "Uses 60 % of the single-assembly strain limit." }
+  ],
+  "examples": [
+    { "title": "ABS lid clip, 15 mm arm, 1 mm undercut", "input": { "material": "abs", "shape": "constant", "l": "15", "h": "1.5", "b": "6", "y": "1", "alpha": "30", "alpha2": "90", "mu": "", "repeated": false } },
+    { "title": "Removable PC battery door hook", "input": { "material": "pc", "shape": "tapered", "l": "10", "h": "1.2", "b": "5", "y": "0.8", "alpha": "25", "alpha2": "45", "mu": "", "repeated": true } }
+  ],
+  "usage": "Give the material, arm shape, arm length, root thickness, width and deflection (undercut depth) in mm, and the lead-in and retaining angles in degrees. It returns the root strain in % against the material's limit, the allowed deflection in mm, and the deflection, insertion and separation forces in N. Use it when sizing a snap hook on a plastic enclosure.",
+  "sources": ["Bayer MaterialScience, Snap-Fit Joints for Plastics - A Design Guide: cantilever equations, permissible strains and friction coefficients", "Material data: typical values, check the grade datasheet"]
+}

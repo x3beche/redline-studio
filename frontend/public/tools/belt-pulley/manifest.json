@@ -1,0 +1,29 @@
+{
+  "id": "belt-pulley",
+  "name": "Belt & Pulley Calculator",
+  "blurb": "belt length and ratio from pulley diameters and centre distance",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["belt", "pulley", "belt length", "centre distance", "center distance", "timing belt", "gt2", "htd", "v-belt", "speed ratio", "wrap angle", "teeth in mesh", "pitch diameter", "idler", "drive"],
+  "intro": "The pitch length of an open belt around two pulleys and the speed ratio, or the centre distance for a belt you already have. Exact open-belt geometry; for timing belts it works in teeth and lists the closed belts nearest your layout.",
+  "inputs": [
+    { "key": "kind", "label": "Belt", "type": "select", "default": "gt2",
+      "options": [["diameter", "Flat / V-belt (give diameters)"], ["gt2", "GT2 2 mm"], ["gt3", "GT2 3 mm (GT3)"], ["htd3", "HTD 3M"], ["htd5", "HTD 5M"], ["htd8", "HTD 8M"], ["mxl", "MXL"], ["xl", "XL"], ["l", "L"]] },
+    { "key": "d1", "label": "Driver pulley Ø", "type": "number", "unit": "mm", "default": "50", "when": { "key": "kind", "equals": "diameter" } },
+    { "key": "d2", "label": "Driven pulley Ø", "type": "number", "unit": "mm", "default": "100", "when": { "key": "kind", "equals": "diameter" } },
+    { "key": "z1", "label": "Driver pulley teeth", "type": "number", "default": "20", "when": { "key": "kind", "in": ["gt2", "gt3", "htd3", "htd5", "htd8", "mxl", "xl", "l"] } },
+    { "key": "z2", "label": "Driven pulley teeth", "type": "number", "default": "60", "when": { "key": "kind", "in": ["gt2", "gt3", "htd3", "htd5", "htd8", "mxl", "xl", "l"] } },
+    { "key": "mode", "label": "Find", "type": "select", "default": "length",
+      "options": [["length", "Belt length from centre distance"], ["centre", "Centre distance from belt length"]] },
+    { "key": "C", "label": "Centre distance", "type": "number", "unit": "mm", "default": "120", "when": { "key": "mode", "equals": "length" } },
+    { "key": "L", "label": "Belt pitch length", "type": "number", "unit": "mm", "default": "600", "when": { "key": "mode", "equals": "centre" }, "help": "Used for flat / V-belts." },
+    { "key": "teeth", "label": "Belt teeth", "type": "number", "default": "200", "when": { "key": "mode", "equals": "centre" }, "help": "Used for timing belts." },
+    { "key": "rpm", "label": "Driver speed", "type": "number", "unit": "rpm", "default": "", "required": false }
+  ],
+  "examples": [
+    { "title": "3D-printer axis: GT2 20T to 60T, 120 mm apart", "input": { "kind": "gt2", "z1": "20", "z2": "60", "mode": "length", "C": "120", "rpm": "600" } },
+    { "title": "V-belt 80 mm to 200 mm on a 1250 mm belt", "input": { "kind": "diameter", "d1": "80", "d2": "200", "mode": "centre", "L": "1250", "rpm": "1450" } }
+  ],
+  "usage": "Choose the belt (flat/V by diameters in mm, or a timing profile with pulley tooth counts), then either give the centre distance in mm to get the belt length, or the belt length in mm (teeth for timing belts) to get the centre distance. It returns belt pitch length, centre distance, speed ratio, wrap angle and, for timing belts, belt teeth, teeth in mesh and the nearest closed belts with their centre distances. Use it when laying out a belt drive or picking a belt.",
+  "sources": ["Shigley's Mechanical Engineering Design, section 17-2: open-belt length and contact angle", "Gates PowerGrip GT / HTD and Optibelt timing belt catalogues: pitches and pitch-line differentials", "Teeth-in-mesh (6) and wrap (120°) minimums: belt makers' rule of thumb"]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "gear-calc",
+  "name": "Gear Calculator",
+  "blurb": "pitch and outside diameter and centre distance from module and teeth",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["gear", "spur gear", "helical gear", "module", "diametral pitch", "dp", "pitch diameter", "outside diameter", "tip diameter", "centre distance", "center distance", "gear ratio", "profile shift", "involute", "contact ratio"],
+  "intro": "The pitch, tip, root and base diameters of an external spur or helical gear pair and the centre distance between them, from module (or diametral pitch), tooth counts, pressure angle and optional profile shift. Standard full-depth involute teeth, ISO 21771 geometry as in the KHK gear reference.",
+  "inputs": [
+    { "key": "system", "label": "Size by", "type": "select", "default": "module",
+      "options": [["module", "Module (mm)"], ["dp", "Diametral pitch (1/in)"]] },
+    { "key": "m", "label": "Module", "type": "number", "unit": "mm", "default": "1", "when": { "key": "system", "equals": "module" } },
+    { "key": "dp", "label": "Diametral pitch", "type": "number", "unit": "1/in", "default": "24", "when": { "key": "system", "equals": "dp" } },
+    { "key": "z1", "label": "Pinion teeth z1", "type": "number", "default": "20" },
+    { "key": "z2", "label": "Gear teeth z2", "type": "number", "default": "40" },
+    { "key": "alpha", "label": "Pressure angle", "type": "select", "default": "20", "options": [["20", "20°"], ["14.5", "14.5°"], ["25", "25°"]] },
+    { "key": "beta", "label": "Helix angle", "type": "number", "unit": "°", "default": "0", "help": "0 for spur gears." },
+    { "key": "x1", "label": "Pinion profile shift x1", "type": "number", "default": "0" },
+    { "key": "x2", "label": "Gear profile shift x2", "type": "number", "default": "0" },
+    { "key": "rpm", "label": "Pinion speed", "type": "number", "unit": "rpm", "default": "", "required": false }
+  ],
+  "examples": [
+    { "title": "Module 1, 20 : 40 spur pair", "input": { "system": "module", "m": "1", "z1": "20", "z2": "40", "alpha": "20", "beta": "0", "x1": "0", "x2": "0", "rpm": "3000" } },
+    { "title": "KHK profile-shift example: m3, 12 : 24, x 0.6 / 0.36", "input": { "system": "module", "m": "3", "z1": "12", "z2": "24", "alpha": "20", "beta": "0", "x1": "0.6", "x2": "0.36", "rpm": "" } }
+  ],
+  "usage": "Give the module in mm (or diametral pitch), both tooth counts, the pressure angle, helix angle in degrees (0 = spur) and profile shift coefficients (0 = standard). It returns the centre distance in mm, ratio, pitch/tip/root/base diameters of both gears, tooth thickness, contact ratio and undercut warnings. Use it to lay out a gear pair in CAD or check a centre distance.",
+  "sources": ["ISO 21771:2007 gear geometry and ISO 53 basic rack", "KHK Gear Technical Reference, section 4: calculation of gear dimensions (profile-shifted spur and helical gears), incl. the worked example m3, z 12/24, x 0.6/0.36, aw = 56.4999 mm"]
+}

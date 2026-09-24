@@ -1,0 +1,41 @@
+{
+  "id": "beam-deflection",
+  "name": "Beam Deflection Calculator",
+  "blurb": "deflection and maximum stress of a simple beam under load",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["beam", "deflection", "bending", "bending stress", "cantilever", "simply supported", "fixed beam", "moment of inertia", "second moment of area", "udl", "point load", "sag", "stiffness", "roark", "section modulus"],
+  "intro": "How far a straight beam bends and how hard it is stressed, for a cantilever, a simply supported or a fixed-fixed beam under a point load or a uniform load. Closed-form Euler-Bernoulli cases from Roark's table 8.1; self weight can be added.",
+  "inputs": [
+    { "key": "support", "label": "Supports", "type": "select", "default": "simple",
+      "options": [["simple", "Simply supported"], ["cantilever", "Cantilever"], ["fixed", "Fixed both ends"]] },
+    { "key": "load", "label": "Load", "type": "select", "default": "point",
+      "options": [["point", "Point load P"], ["udl", "Uniform load w"]] },
+    { "key": "P", "label": "Point load P", "type": "number", "unit": "N", "default": "1000", "when": { "key": "load", "equals": "point" } },
+    { "key": "a", "label": "Load position a", "type": "number", "unit": "mm", "default": "", "required": false, "when": { "key": "load", "equals": "point" },
+      "help": "From the left / fixed end. Empty: mid-span, or the tip of a cantilever." },
+    { "key": "w", "label": "Uniform load w", "type": "number", "unit": "N/mm", "default": "1", "when": { "key": "load", "equals": "udl" }, "help": "1 N/mm = 1 kN/m." },
+    { "key": "L", "label": "Span L", "type": "number", "unit": "mm", "default": "1000" },
+    { "key": "sec", "label": "Section", "type": "select", "default": "rect",
+      "options": [["rect", "Solid rectangle"], ["round", "Round bar"], ["tube", "Round tube"], ["rhs", "Rectangular box / tube"], ["custom", "Custom (I and c)"]] },
+    { "key": "b", "label": "Width b", "type": "number", "unit": "mm", "default": "20", "when": { "key": "sec", "in": ["rect", "rhs"] } },
+    { "key": "h", "label": "Height h (load direction)", "type": "number", "unit": "mm", "default": "40", "when": { "key": "sec", "in": ["rect", "rhs"] } },
+    { "key": "d", "label": "Outside diameter", "type": "number", "unit": "mm", "default": "30", "when": { "key": "sec", "in": ["round", "tube"] } },
+    { "key": "t", "label": "Wall thickness", "type": "number", "unit": "mm", "default": "2", "when": { "key": "sec", "in": ["tube", "rhs"] } },
+    { "key": "I", "label": "Second moment I", "type": "number", "unit": "mm⁴", "default": "100000", "when": { "key": "sec", "equals": "custom" } },
+    { "key": "c", "label": "Extreme fibre distance c", "type": "number", "unit": "mm", "default": "20", "when": { "key": "sec", "equals": "custom" } },
+    { "key": "A", "label": "Area (for self weight)", "type": "number", "unit": "mm²", "default": "", "required": false, "when": { "key": "sec", "equals": "custom" } },
+    { "key": "mat", "label": "Material", "type": "select", "default": "s235",
+      "options": [["s235", "Steel S235"], ["s355", "Steel S355"], ["ss304", "Stainless 304"], ["al6061", "Aluminium 6061-T6"], ["al6063", "Aluminium 6063-T6"], ["ti", "Titanium Ti-6Al-4V"], ["pla", "PLA, 3D printed"], ["abs", "ABS"], ["custom", "Custom"]] },
+    { "key": "E", "label": "Young's modulus E", "type": "number", "unit": "GPa", "default": "200", "when": { "key": "mat", "equals": "custom" } },
+    { "key": "fy", "label": "Yield strength", "type": "number", "unit": "MPa", "default": "250", "when": { "key": "mat", "equals": "custom" } },
+    { "key": "selfweight", "label": "Add the beam's own weight", "type": "bool", "default": false },
+    { "key": "limit", "label": "Deflection limit L /", "type": "number", "default": "250", "help": "250 general, 360 under finishes." }
+  ],
+  "examples": [
+    { "title": "40 × 20 steel bar, 1 m span, 1 kN at mid-span", "input": { "support": "simple", "load": "point", "P": "1000", "a": "", "L": "1000", "sec": "rect", "b": "20", "h": "40", "mat": "s235", "selfweight": false, "limit": "250" } },
+    { "title": "Aluminium tube shelf arm, 300 mm cantilever", "input": { "support": "cantilever", "load": "point", "P": "200", "a": "", "L": "300", "sec": "tube", "d": "25", "t": "2", "mat": "al6061", "selfweight": true, "limit": "250" } }
+  ],
+  "usage": "Choose the supports and load type, give the load in N (point) or N/mm (uniform), the span in mm, the section (rectangle b×h, round d, tube d×t, box b×h×t in mm, or I in mm⁴ and c in mm) and the material. It returns the maximum deflection in mm and where, span/deflection, the maximum moment in N m, the bending stress in MPa, the safety factor on yield, the reactions and a deflection curve. Use it to size a bracket, shelf, frame member or cantilever arm.",
+  "sources": ["Roark's Formulas for Stress and Strain, 8th ed., table 8.1 (shear, moment and deflection formulas for elastic straight beams)", "AISC Steel Construction Manual, beam diagrams and formulas", "Material properties: typical minimum values (EN 10025 S235/S355, ASM for aluminium, titanium and polymers)", "Deflection limits L/250 and L/360: rule of thumb (serviceability)"]
+}

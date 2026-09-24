@@ -1,0 +1,28 @@
+{
+  "id": "bolt-torque",
+  "name": "Bolt Torque Calculator",
+  "blurb": "tightening torque and preload for a bolt size and material",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["bolt", "screw", "torque", "tightening torque", "preload", "clamp force", "vdi 2230", "property class", "8.8", "10.9", "12.9", "a2-70", "stainless", "friction", "nut factor"],
+  "intro": "The torque that loads a metric coarse-thread bolt to a chosen share of its yield strength, and the preload it gives, by the VDI 2230 formulas with thread and head friction. Head bearing sizes are ISO 4017 / ISO 4762, holes ISO 273 medium.",
+  "inputs": [
+    { "key": "size", "label": "Thread", "type": "select", "default": "M6",
+      "options": ["M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "M10", "M12", "M14", "M16", "M20", "M24"] },
+    { "key": "grade", "label": "Property class", "type": "select", "default": "8.8",
+      "options": [["4.6", "4.6"], ["5.6", "5.6"], ["8.8", "8.8"], ["10.9", "10.9"], ["12.9", "12.9"], ["A2-70", "A2-70 stainless"], ["A4-70", "A4-70 stainless"], ["A4-80", "A4-80 stainless"]] },
+    { "key": "head", "label": "Head", "type": "select", "default": "hex",
+      "options": [["hex", "Hex (ISO 4017)"], ["socket", "Socket cap (ISO 4762)"]] },
+    { "key": "muG", "label": "Thread friction µG", "type": "number", "default": "0.12",
+      "help": "0.10-0.12 oiled zinc or black oxide; 0.14 dry zinc; 0.2+ dry stainless." },
+    { "key": "muK", "label": "Head friction µK", "type": "number", "default": "", "required": false, "help": "Leave empty to use µG." },
+    { "key": "nu", "label": "Yield utilisation", "type": "number", "unit": "%", "default": "90", "help": "VDI 2230 uses 90 % of the yield strength." },
+    { "key": "alphaA", "label": "Tightening factor αA", "type": "number", "default": "1.6", "help": "Max / min preload scatter: 1.6 torque wrench." }
+  ],
+  "examples": [
+    { "title": "M8 8.8 hex bolt, oiled zinc", "input": { "size": "M8", "grade": "8.8", "head": "hex", "muG": "0.12", "muK": "", "nu": "90", "alphaA": "1.6" } },
+    { "title": "M5 A2-70 cap screw with anti-seize", "input": { "size": "M5", "grade": "A2-70", "head": "socket", "muG": "0.1", "muK": "", "nu": "90", "alphaA": "1.6" } }
+  ],
+  "usage": "Give the thread size (M2-M24 coarse), property class, head type, the thread and head friction coefficients and the yield utilisation in %. It returns the tightening torque in N m, the maximum and minimum preload in kN, the tensile stress in MPa and the equivalent nut factor, plus a table of torque against friction. Use it to put a torque value on a drawing or to check a joint's clamp force.",
+  "sources": ["VDI 2230 Part 1 (2015), section 5.5.1: permissible assembly preload and tightening torque", "ISO 898-1 (steel property classes), ISO 3506-1 (stainless)", "ISO 724 thread geometry; ISO 4017 / ISO 4762 bearing face diameters; ISO 273 clearance holes", "Friction values: VDI 2230 table A5 ranges, rounded"]
+}

@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-120 tools. **MCP** marks the ones agents can run with `run_tool`.
+128 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -180,11 +180,17 @@ agents, the most used, and every tool nobody used.
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
+| **Beam Deflection Calculator** · MCP | `beam-deflection` | deflection and maximum stress of a simple beam under load | 3D |
+| **Bearing Fit Advisor** · MCP | `bearing-fit` | shaft and housing tolerances for a bearing's bore and outside diameter | 3D |
+| **Belt & Pulley Calculator** · MCP | `belt-pulley` | belt length and ratio from pulley diameters and centre distance | 3D |
 | **Bolt Circle Generator** · MCP | `bolt-circle` | hole coordinates and CAD code from count and diameter | 3D |
+| **Bolt Torque Calculator** · MCP | `bolt-torque` | tightening torque and preload for a bolt size and material | 3D |
 | **Cable Bend Radius** · MCP | `cable-bend` | minimum bend radius and clearance for a cable | 3D |
 | **Clearance Fit Calculator** · MCP | `iso-fit` | actual clearance or interference of an ISO fit such as H7/g6 | 3D |
+| **Draft Angle Checker** · MCP | `draft-angle` | minimum draft angle for release from a mould | 3D |
 | **Enclosure Fit Checker** · MCP | `enclosure-fit` | inner enclosure size and cut-outs from the board outline and connector heights | 3D, PCB |
 | **Fastener Library** · MCP | `fastener-library` | screw, nut and washer sizes by head type, with CAD variables | 3D |
+| **Gear Calculator** · MCP | `gear-calc` | pitch and outside diameter and centre distance from module and teeth | 3D |
 | **Heat-Set Insert Sizer** · MCP | `heat-set-insert` | boss hole diameter and wall thickness for an insert | 3D |
 | **Mass & CoG from Volume** · MCP | `mass-cog` | mass and centre of gravity from volumes and materials | 3D |
 | **Material Property Table** · MCP | `material-table` | density, modulus, yield strength and expansion of materials compared | 3D |
@@ -192,6 +198,8 @@ agents, the most used, and every tool nobody used.
 | **Print Time & Cost** · MCP | `print-cost` | print time and cost from volume, infill and material price | 3D |
 | **Sheet Metal Bend Allowance** · MCP | `bend-allowance` | flat length from K-factor and bend radius | 3D |
 | **Shrinkage Compensator** · MCP | `shrinkage` | corrected dimension for a material's shrinkage | 3D |
+| **Snap-Fit Calculator** · MCP | `snap-fit` | insertion force and strain of a cantilever snap hook | 3D |
+| **Spring Rate Calculator** · MCP | `spring-rate` | spring constant from wire diameter, coils and diameter | 3D |
 | **Standoff Height Planner** · MCP | `standoff-height` | standoff length from the tallest part under the board | 3D, PCB |
 | **Thermal Expansion Calculator** · MCP | `thermal-expansion` | dimension change of a part over a temperature change | 3D, PCB |
 | **Thread & Tap Drill Chart** · MCP | `thread-drill` | tap drill and clearance hole sizes for a thread | 3D |

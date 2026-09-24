@@ -1,0 +1,31 @@
+{
+  "id": "spring-rate",
+  "name": "Spring Rate Calculator",
+  "blurb": "spring constant from wire diameter, coils and diameter",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["spring", "spring rate", "spring constant", "stiffness", "compression spring", "helical spring", "coil spring", "wire diameter", "active coils", "solid length", "music wire", "shigley", "buckling", "spring index"],
+  "intro": "The rate of a round-wire helical compression spring, k = d⁴G / 8D³Na, with its solid length, force and stress at solid and a buckling check. Wire strengths and allowable stresses are Shigley's (ASTM wire grades).",
+  "inputs": [
+    { "key": "material", "label": "Wire", "type": "select", "default": "music",
+      "options": [["music", "Music wire (A228)"], ["hd", "Hard-drawn (A227)"], ["ot", "Oil-tempered (A229)"], ["crv", "Chrome-vanadium (A232)"], ["crsi", "Chrome-silicon (A401)"], ["ss302", "Stainless 302 (A313)"], ["pb", "Phosphor bronze (B159)"], ["custom", "Custom (give G)"]] },
+    { "key": "Gc", "label": "Shear modulus G", "type": "number", "unit": "GPa", "default": "79", "when": { "key": "material", "equals": "custom" } },
+    { "key": "d", "label": "Wire diameter d", "type": "number", "unit": "mm", "default": "1" },
+    { "key": "dia", "label": "Coil diameter", "type": "number", "unit": "mm", "default": "10" },
+    { "key": "diaIs", "label": "That diameter is the", "type": "select", "default": "od",
+      "options": [["od", "Outside diameter"], ["mean", "Mean diameter"], ["id", "Inside diameter"]] },
+    { "key": "coils", "label": "Coils", "type": "number", "default": "10" },
+    { "key": "coilsAre", "label": "Coil count is", "type": "select", "default": "total",
+      "options": [["total", "Total coils"], ["active", "Active coils"]] },
+    { "key": "ends", "label": "Ends", "type": "select", "default": "sqground",
+      "options": [["sqground", "Squared and ground"], ["squared", "Squared (closed), not ground"], ["plainground", "Plain and ground"], ["plain", "Plain (open)"]] },
+    { "key": "L0", "label": "Free length", "type": "number", "unit": "mm", "default": "25", "required": false },
+    { "key": "L1", "label": "Working length", "type": "number", "unit": "mm", "default": "18", "required": false, "help": "Compressed length in use; leave empty to skip." }
+  ],
+  "examples": [
+    { "title": "Shigley ex. 10-1: music wire 0.94 mm, OD 11.1 mm, 12.5 coils, squared ends", "input": { "material": "music", "d": "0.9398", "dia": "11.1125", "diaIs": "od", "coils": "12.5", "coilsAre": "total", "ends": "squared", "L0": "52.3", "L1": "" } },
+    { "title": "Stainless button spring, 0.5 mm wire", "input": { "material": "ss302", "d": "0.5", "dia": "5", "diaIs": "od", "coils": "8", "coilsAre": "total", "ends": "squared", "L0": "12", "L1": "8" } }
+  ],
+  "usage": "Give the wire material and diameter d in mm, the coil diameter in mm (say whether outside, mean or inside), the coil count (total or active) and end type, and optionally the free and working lengths in mm. It returns the rate in N/mm, spring index, active and total coils, solid length, force and shear stress at solid against the allowable, the working force and a buckling warning. Use it to pick or check a compression spring for a mechanism.",
+  "sources": ["Shigley's Mechanical Engineering Design, 10th ed., chapter 10: eqs. 10-5, 10-7, 10-9, 10-10, 10-14; tables 10-1, 10-4, 10-5, 10-6", "ASTM A228, A227, A229, A232, A401, A313, B159 spring wire grades"]
+}

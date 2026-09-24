@@ -1,0 +1,30 @@
+{
+  "id": "draft-angle",
+  "name": "Draft Angle Checker",
+  "blurb": "minimum draft angle for release from a mould",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["draft", "draft angle", "taper", "mould", "mold", "injection moulding", "die casting", "nadca", "texture", "mold-tech", "spi finish", "demoulding", "ejection", "casting", "vacuum forming"],
+  "intro": "The least draft a wall needs to leave the tool, and what that draft does to the wall over its depth. Injection moulding uses the SPI-finish and Mold-Tech texture rules, die casting the NADCA draft formula; the other processes use common rules of thumb.",
+  "inputs": [
+    { "key": "process", "label": "Process", "type": "select", "default": "injection",
+      "options": [["injection", "Injection moulding (thermoplastic)"], ["die", "Die casting (NADCA)"], ["sand", "Sand casting"], ["investment", "Investment casting"], ["silicone", "Urethane casting in silicone"], ["vac-male", "Vacuum forming, male mould"], ["vac-female", "Vacuum forming, female mould"], ["compression", "Rubber / compression moulding"]] },
+    { "key": "finish", "label": "Surface finish", "type": "select", "default": "spi-c", "when": { "key": "process", "equals": "injection" },
+      "options": [["spi-a", "SPI A, diamond polish"], ["spi-b", "SPI B, paper polish"], ["spi-c", "SPI C, stone finish"], ["spi-d", "SPI D, bead blast"], ["texture", "Texture (etched, give depth)"]] },
+    { "key": "texture", "label": "Texture depth", "type": "number", "unit": "µm", "default": "25", "when": { "key": "finish", "equals": "texture" },
+      "help": "From the texture chart, e.g. MT-11010 about 25 µm (0.001 in)." },
+    { "key": "alloy", "label": "Alloy", "type": "select", "default": "al", "when": { "key": "process", "equals": "die" },
+      "options": [["al", "Aluminium"], ["zn", "Zinc"], ["mg", "Magnesium"], ["cu", "Copper / brass"]] },
+    { "key": "wall", "label": "Wall type", "type": "select", "default": "inside", "when": { "key": "process", "equals": "die" },
+      "options": [["inside", "Inside wall (shrinks onto core)"], ["outside", "Outside wall"], ["hole", "Cored hole"]] },
+    { "key": "depth", "label": "Wall depth (pull direction)", "type": "number", "unit": "mm", "default": "20" },
+    { "key": "draft", "label": "Your draft (to check)", "type": "number", "unit": "°", "default": "1", "required": false,
+      "help": "Leave empty to see only the recommendation." }
+  ],
+  "examples": [
+    { "title": "Textured ABS housing wall, 30 mm deep", "input": { "process": "injection", "finish": "texture", "texture": "25", "depth": "30", "draft": "1.5" } },
+    { "title": "Aluminium die-cast rib, inside wall 15 mm deep", "input": { "process": "die", "alloy": "al", "wall": "inside", "depth": "15", "draft": "1" } }
+  ],
+  "usage": "Give the process, the finish (injection) or alloy and wall type (die casting), the wall depth in mm along the pull direction and optionally the draft you drew in degrees. It returns the minimum and recommended draft per side in degrees, the wall offset in mm over the depth, and flags a drawn draft that is too small. Use it when adding draft to a moulded or cast CAD part.",
+  "sources": ["NADCA Product Specification Standards for Die Castings, section 4A: draft D = √L / C", "Mold-Tech / Standex texture guideline: 1.5° per 0.001 in of texture depth", "Protolabs injection moulding design guide: draft by SPI finish, 1° per inch of depth", "Sand, investment, silicone, vacuum forming and rubber drafts: rule of thumb"]
+}

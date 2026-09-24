@@ -1,0 +1,28 @@
+{
+  "id": "bearing-fit",
+  "name": "Bearing Fit Advisor",
+  "blurb": "shaft and housing tolerances for a bearing's bore and outside diameter",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["bearing fit", "ball bearing", "roller bearing", "shaft tolerance", "housing tolerance", "iso 286", "k5", "k6", "h7", "j6", "interference fit", "press fit", "iso 492", "bore", "seat"],
+  "intro": "Which ISO 286 tolerance class to put on the shaft and in the housing for a radial ball or roller bearing, and the interference or clearance it makes with the bearing's ISO 492 tolerances. The choice follows the SKF / NSK general tables: the ring that turns relative to the load gets the interference.",
+  "inputs": [
+    { "key": "d", "label": "Bearing bore d", "type": "number", "unit": "mm", "default": "20" },
+    { "key": "D", "label": "Bearing outside Ø D", "type": "number", "unit": "mm", "default": "47" },
+    { "key": "type", "label": "Bearing type", "type": "select", "default": "ball",
+      "options": [["ball", "Ball bearing"], ["roller", "Roller bearing (cylindrical, tapered, spherical)"]] },
+    { "key": "rotating", "label": "What turns relative to the load", "type": "select", "default": "inner",
+      "options": [["inner", "Inner ring (shaft turns, load fixed)"], ["outer", "Outer ring (hub turns on a fixed axle)"], ["indeterminate", "Indeterminate (unbalance, vibration)"]] },
+    { "key": "load", "label": "Load", "type": "select", "default": "normal",
+      "options": [["light", "Light (P ≤ 0.05 C)"], ["normal", "Normal (0.05-0.1 C)"], ["heavy", "Heavy or shock (> 0.1 C)"]] },
+    { "key": "housing", "label": "Housing", "type": "select", "default": "solid",
+      "options": [["solid", "Solid (one piece)"], ["split", "Split (plummer block)"]] },
+    { "key": "slide", "label": "Stationary ring must slide axially (floating bearing)", "type": "bool", "default": false }
+  ],
+  "examples": [
+    { "title": "6204 on a motor shaft, normal load", "input": { "d": "20", "D": "47", "type": "ball", "rotating": "inner", "load": "normal", "housing": "solid", "slide": false } },
+    { "title": "6005 in a wheel hub on a fixed axle", "input": { "d": "25", "D": "47", "type": "ball", "rotating": "outer", "load": "normal", "housing": "solid", "slide": true } }
+  ],
+  "usage": "Give the bearing bore and outside diameter in mm, ball or roller, which ring turns relative to the load (inner, outer or indeterminate), the load class and housing type. It returns the shaft and housing tolerance classes, their limit sizes in mm, and the resulting interference / clearance range in µm, plus tables of neighbouring classes. Use it to put a bearing seat tolerance on a shaft or housing drawing.",
+  "sources": ["ISO 286-1 and ISO 286-2: limits and fits (IT grades, fundamental deviations)", "ISO 492: radial bearings, tolerance class normal", "SKF Rolling bearings catalogue, 'Selecting fits' tables (solid steel shafts, cast iron / steel housings)", "NSK Rolling Bearings catalogue, section 8.2 'Fits'"]
+}
