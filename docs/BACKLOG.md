@@ -125,12 +125,8 @@ Left to do, roughly in order:
 
 - **No + App in the left column.** A project is registered with
   `PUT /api/apps/{id}`; fine for an agent, no use to a person.
-- **Embedded has nothing to frame.** A serial console in the log pane's
-  second tab and a capture of the device's display as the "page" are the
-  obvious two; the notes, diff and tests already work for firmware.
-- **Mobile is a phone-sized web page.** Real devices want an emulator
-  screenshot (adb exec-out screencap, xcrun simctl io) and a view
-  hierarchy dump in place of the DOM inventory.
+- **A serial console for firmware.** A plugged-in board's output would
+  belong in the Build tab's neighbour; nothing reads a port yet.
 - **A note's picture is 340-380 kB of PNG** and takes about 4.6 s to
   reach the database at this link's speed. A lossless crop to what the
   marks touch, or WebP, would cut it several times over.
@@ -145,21 +141,25 @@ Asked for on 2026-09-24:
   **Mobile Programming**, and stay three tabs of their own.
 - **Each has its own Docker image and its own view.** Nothing is
   installed on the host. `docker/code/web.Dockerfile` (Chrome, Node,
-  python for the photographer), `embedded.Dockerfile` (arm-none-eabi,
-  CMake, Ninja), `mobile.Dockerfile` (Android SDK, an emulated Pixel 7 on
-  KVM). A shot, a build and a test run go through the tab's container,
+  python for the photographer), `embedded.Dockerfile` (ESP-IDF's own
+  image with arm-none-eabi, OpenOCD and stlink added), `mobile.Dockerfile`
+  (Android SDK, an emulated Pixel 7 on KVM, Node). A shot, a build and a test run go through the tab's container,
   with the checkout mounted at its own path and the host's network.
-  - Web: the page in a frame, as now.
-  - Embedded: the firmware as built - memory regions and the largest
-    symbols, each one tagged with its source file and line so a ring
-    round it says `Core/Src/main.c:212`. First project: the STM32H743
-    firmware in ~/Desktop/stm32_projects/PS, built out of tree (4.0 s).
+  - Web: the page in a frame, at desktop, tablet or phone size.
+  - Embedded: no preview and no pen. The view is the firmware as built -
+    memory regions and the largest functions and tables with their files
+    - and a click on one makes it the note's Part. STM32 and ESP32.
   - Mobile: the phone's screen, live, from `adb screencap`; freeze lists
     the elements on it (uiautomator for a native app, Chrome's DevTools
     for a page) with their boxes in the screen's pixels.
 - **No run or build buttons.** The person marks; the agent builds, runs
-  the tests and starts servers. The board room's are going the same way
-  (its owner is doing that).
+  the tests, starts servers and flashes boards. The board room lost its
+  own in 2e593cb.
+- **The example projects are iot-fan's** - dashboard, phone app, and the
+  controller firmware for the Controller board's STM32F042 and for an
+  ESP32 - in /mnt/ssd/3d-arena/projects/iot-fan. Redline itself is no
+  longer a project in these rooms.
+- **All rooms share one layout**, the 3D room's (rooms/frame.ts).
 - **One main agent, one sub-agent per tab.** The main agent waits on the
   queue, reads the thread, and hands each queued note to the sub-agent
   for its room (`.claude/agents/redline-*.md`). Rooms work in parallel,

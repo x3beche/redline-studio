@@ -227,18 +227,29 @@ Then `done <id>` as usual.
 
 ## Code notes
 
-A queued item marked `[WEB]`, `[EMBEDDED]` or `[MOBILE]` is a note on a
-running interface, written in one of the three coding rooms. `model` is a
-project's id: a git checkout, the address its dev server answers on, and
-its test command. The drawing is a real screenshot of one route at one
-size, and the note carries what was under the marks - selector, box, and
-the file that renders it.
+A queued item marked `[WEB]`, `[EMBEDDED]` or `[MOBILE]` is a note from
+one of the programming rooms. `model` is a project's id: a git checkout,
+where it is served or how it is built, and its test command. A web or
+phone note's drawing is a real screenshot of one route at one size, and
+the note carries what was under the marks - selector, box, and the file
+that renders it. A firmware note has no drawing; its `part` is the
+function or table it is about, as `fan_command · firmware/common/fan.c:66`.
+
+**Nothing runs on the host.** Every command below runs in the room's own
+Docker image - `redline-code-web`, `-embedded`, `-mobile` - with the
+checkout mounted at its own path. Do not install a compiler, a browser
+or an SDK to get around a missing image; say which image is missing.
 
 ```bash
-.venv/bin/python tools/revisions.py code show <id>    # note, page, elements, drawing
-.venv/bin/python tools/revisions.py code diff <id>    # what changed since it was drawn
-.venv/bin/python tools/revisions.py code test <id>    # the project's test command
-.venv/bin/python tools/revisions.py code done <id>    # tests, after shot, applied
+.venv/bin/python tools/revisions.py code show <id>     # note, page, elements, drawing
+.venv/bin/python tools/revisions.py code diff <id>     # what changed since it was drawn
+.venv/bin/python tools/revisions.py code test <id>     # the project's test command
+.venv/bin/python tools/revisions.py code done <id>     # check, after shot, applied
+.venv/bin/python tools/revisions.py code serve <app>   # its dev server, in its container
+.venv/bin/python tools/revisions.py code build <app>   # firmware, into Redline's cache
+.venv/bin/python tools/revisions.py code boards x      # STM32 / ESP32 boards plugged in
+.venv/bin/python tools/revisions.py code flash <app>   # program the board
+.venv/bin/python tools/revisions.py code phone x       # start the emulated phone
 ```
 
 `show` writes the drawing out: **read it**, then go to the file it names.
@@ -247,12 +258,17 @@ already uncommitted when the note was drawn are somebody else's work in
 progress: `show` counts them, and `code diff` leaves out what they said
 then, so the diff is yours alone.
 
-`done` is the only way a code note closes. It runs the test command and
-**refuses while it fails**, then photographs the same route at the same
-size as the after picture, freezes the patch onto the note and marks it
-applied. `done <id>` does the same thing for a code note, so the check
-cannot be skipped by using the older command. Log with `--room web` (or
-`embedded`, `mobile`) so the lines land in that room's log.
+`done` is the only way a code note closes. For firmware it builds first
+and refuses a build that fails; then it runs the test command and
+**refuses while it fails**, photographs the same route at the same size
+as the after picture, freezes the patch onto the note and marks it
+applied. `done <id>` does the same for a code note, so the check cannot
+be skipped by using the older command. Say what a firmware change cost in
+flash and RAM - the build prints both.
+
+Each room has its own log and its own thread: `log --room web`,
+`chat --room web`, `say --room web` (or `embedded`, `mobile`). The room
+agents in `.claude/agents/` already know theirs.
 
 ## Designing a board from a description
 
@@ -350,7 +366,8 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py finish <id>          # close that note's run
 .venv/bin/python tools/revisions.py after <id>           # the "after" picture
 .venv/bin/python tools/revisions.py usage [--full]       # what the work cost
-.venv/bin/python tools/revisions.py code show|diff|test|after|done <id>  # code notes
+.venv/bin/python tools/revisions.py code show|diff|test|done <id>        # code notes
+.venv/bin/python tools/revisions.py code serve|build|flash <app>          # in the room's container
 .venv/bin/python tools/render.py <id> [--camera=…|--only PART]
 ```
 

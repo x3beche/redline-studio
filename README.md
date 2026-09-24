@@ -71,12 +71,14 @@ as well as a solid does.
 |---|---|
 | **3D Drawing** | parametric solids — this is what is built |
 | **PCB Design** | atopile for the circuit, LCSC for the parts, KiCad in a container for the board |
-| **Web · Embedded · Mobile** | redlining a running interface: draw on what is on screen, the change arrives as a diff, the tests are the check |
+| **Web Programming** | a page while it runs: draw on it, the change arrives as a diff, the tests are the check |
+| **Embedded Programming** | STM32 and ESP32 firmware: what the build made of the source, the change as a diff, programmed by the agent |
+| **Mobile Programming** | an app on an emulated phone, redlined the way a page is |
 | **Analyze** | what all of it cost, across every revision rather than one card at a time |
 
-The 3D, board and Web rooms are built. Embedded and Mobile share the Web
-room's notes, diffs and tests and say what their preview still needs;
-Analyze is a tab with the groundwork written down, and says so.
+All but Analyze are built, and they share one layout - the 3D room's -
+so a board, a page and a phone are looked at the same way. Analyze is a
+tab with the groundwork written down, and says so.
 
 ![A board in the PCB room: atopile for the circuit, KiCad for the board](docs/pcb-room.png)
 
@@ -85,13 +87,20 @@ LCSC by its number — footprint and 3D model together — and has KiCad
 place and draw it inside a container, so a gigabyte of libraries never
 lands on the machine. Out come a layer render, a model and a BOM.
 
-The Web room redlines a page while it runs. Freeze takes a real
-screenshot in headless Chrome, a ring or an arrow is laid on the
-elements under it - "this button, in rooms/pcb.ts", not "these
-pixels" - and the note comes back as a diff with the test suite as the
-check and the same page, at the same size, as the after.
+The programming rooms redline a program while it runs. The pen takes a
+real screenshot - of a page in a container's Chrome, of an emulated
+phone's screen - and a ring or an arrow is laid on the elements under
+it: "this button, in public/index.html", not "these pixels". Firmware has
+no screen, so its view is what the build made of the source, and a note
+is about a function picked there. Each comes back as a diff, with the
+test suite or the build as the check and the same screen afterwards as
+the after.
 
-![The Web room: a note's diff with its before and after](docs/web-room.png)
+![The Web room: the iot-fan dashboard running, and its tests](docs/web-room.png)
+
+| | |
+|---|---|
+| ![The Embedded room: STM32 firmware as built](docs/embedded-room.png) | ![The Mobile room: the app on the phone](docs/mobile-room.png) |
 
 ## Who does the work
 

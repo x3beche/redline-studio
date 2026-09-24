@@ -4,16 +4,17 @@
 
 ## The rooms
 
-Along the top: **3D Drawing**, **PCB Design**, **Web**, **Embedded**,
-**Mobile**, **Analyze**. The three in the middle are the coding rooms;
-Web is built, Embedded and Mobile share its notes, diff and tests and
-say what their preview still needs, and Analyze opens on what it needs
-before it can exist. `?ws=pcb` in the URL opens one, and the browser
-remembers the last one you were in.
+Along the top: **3D Drawing**, **PCB Design**, **Web Programming**,
+**Embedded Programming**, **Mobile Programming** and **Analyze**. All but
+Analyze are built, and every built room has the same layout - the 3D
+room's: a toolbar across the top with the pen at its end, tabs down the
+left, the view, and the room's own log under it. Analyze opens on what it
+needs before it can exist. `?ws=pcb` in the URL opens a room, and the
+browser remembers the last one you were in.
 
 The left column belongs to no room. One tree holds everything: a model is
-a `.3d`, a board is a `.pcb`, a code project a `.web`, `.fw` or
-`.mobile`, and clicking any of them opens the room that can show it.
+a `.3d`, a board is a `.pcb`, a program a `.web`, `.fw` or `.mobile`, and
+clicking any of them opens the room that can show it.
 
 The 3D room stays loaded whichever tab is showing — its viewer holds a
 WebGL context and tens of megabytes of geometry, and throwing that away to
@@ -338,46 +339,85 @@ circuit, and is not on the board: there is no shape to place. It is named
 under the drawing — *no footprint for U3* — rather than quietly left out,
 and a part number that does not exist says so the same way.
 
-## Web, Embedded, Mobile
+## Web, Embedded and Mobile Programming
 
-Redlining a running interface. A project is a git checkout with a dev
-server: the room shows the page it serves in a frame, at a route and a
-size - 1280, 820 or 390 wide - scaled into a dark surround so the page
-reads as it renders. Nothing answering? **start the dev server** runs
-the project's own command and its output goes to the **server** tab.
+Redlining a running program. A project is a git checkout: where it is
+served, how it is built, and the command whose exit code says it still
+works. The example projects are **iot-fan**'s - the dashboard, the phone
+app and the controller firmware for the fan in the 3D room, in
+`/mnt/ssd/3d-arena/projects/iot-fan`.
 
-![The Web room: a note's diff with its before and after, and the tests](docs/web-room.png)
+Nothing runs on the machine itself. Each room has its own Docker image
+(see [INSTALL](INSTALL.md)): a page is served and photographed in
+`redline-code-web`, firmware is built and flashed in
+`redline-code-embedded`, and the phone is an emulator in
+`redline-code-mobile`. Nor is there a button that runs anything: the
+person marks, and the agent starts servers, builds, tests and flashes.
 
-**Freeze** is the 3D room's pen button. It takes a real screenshot of the
-route with headless Chrome - about five seconds - and puts the same seven
-drawing tools over it. Every mark is laid on the page's elements as it is
-drawn: a ring means the outermost element mostly inside it, an arrow the
+### Web Programming
+
+![The Web room: the iot-fan dashboard, live, and its tests](docs/web-room.png)
+
+The page runs in the view, in a frame at a chosen size - desktop, tablet
+or phone, from the toolbar - scaled into a dark surround so it reads as it
+renders. **The pen** takes a real screenshot of the route in the web
+container's Chrome, about three seconds, and puts the same seven drawing
+tools over it. Every mark is laid on the page's elements as it is drawn:
+a ring means the outermost element mostly inside it, an arrow the
 smallest element under its head. What it landed on is outlined over the
-picture, listed under it, and offered in the Part field as
-`button.tcv-btn "build" · rooms/pcb.ts` - which button, in which file.
-**Save as draft** files the note with the picture and that list.
+picture and offered in the Part field with its file -
+`#duty "0" · public/index.html`, or `button.tcv-btn "build" ·
+rooms/pcb.ts` for an Angular component. **Save as draft** files the note
+with the picture and that list.
 
-The **diff** pane shows the working tree against HEAD, or one note's own
-change: only the files that moved since it was drawn, so somebody else's
-uncommitted work in the same checkout stays out of it. Pick a note and
-its before and after sit over its diff - the same route at the same size,
-twice. **tests** runs the project's test command; a pass says when the
-tree has changed since, rather than showing a green from an older tree. A
-note is not done until they pass and the after shot is taken, and the
+### Embedded Programming
+
+![The Embedded room: the STM32 firmware as built, a function picked](docs/embedded-room.png)
+
+Firmware has no screen to draw on, so there is no pen here. The view is
+the firmware as built: memory per region - with how much it grew since
+the build before - and the largest functions and tables, file by file.
+Click one and it becomes the note's Part, `fan_command ·
+firmware/common/fan.c:66`, the way the board room offers its components.
+STM32 and ESP32 both: the ARM or Xtensa toolchain is chosen from the
+image itself. The **Boards** tab lists an ST-Link or an ESP32 serial port
+when one is plugged in, and the agent programs it (`code flash`).
+
+### Mobile Programming
+
+![The Mobile room: the iot-fan app on the emulated phone](docs/mobile-room.png)
+
+The view is the phone - an emulated Pixel 7 on KVM, its screen refreshed
+every second and a half, the project put on it when its room opens. The
+pen freezes the phone's own screen; a page's elements come from the
+phone's Chrome and a native app's from its view tree, both in the
+screen's pixels, so a ring round the **+** button is `#up "+" ·
+mobile/public/index.html:26`.
+
+### The diff, the check
+
+The toolbar's second button turns the view into the **diff**: the working
+tree against HEAD, or one note's own change - only the files that moved
+since it was drawn, so somebody else's uncommitted work in the same
+checkout stays out of it - with the note's before and after over it. The
+**Check** tab shows the last test run; a pass says so when the tree has
+changed since, rather than showing a green from an older one. A note is
+not done until the check passes and the after shot is taken, and the
 agent's `code done` will not mark it applied otherwise.
 
 A project is registered through the API:
 
 ```bash
-curl -X PUT localhost:8000/api/apps/redline -H 'content-type: application/json' -d '{
-  "title": "Redline", "platform": "web", "repo": "/path/to/checkout",
-  "url": "http://127.0.0.1:4200", "dev": "./start.sh",
-  "test": ".venv/bin/python -m pytest tests -q", "routes": ["/", "/?ws=pcb"]}'
+curl -X PUT localhost:8000/api/apps/iot-fan-web -H 'content-type: application/json' -d '{
+  "title": "iot-fan dashboard", "platform": "web", "folder": "iot-fan",
+  "repo": "/mnt/ssd/3d-arena/projects/iot-fan", "cwd": "web",
+  "url": "http://127.0.0.1:5173", "dev": "node server.js", "test": "node --test"}'
 ```
 
-Embedded and Mobile keep everything but the picture for now: firmware has
-no page to frame yet (a serial console or a display capture would go
-there), and a phone app can be drawn on when it is served on the web.
+Firmware adds `target` (`stm32` or `esp32`), `build` - with `$BUILD` for
+Redline's own output directory, never the project's tree - and `flash`
+(`$ELF`, `$BUILD`, `$PORT`). A phone app served on the web gives the url
+as the phone sees the host, `http://10.0.2.2:5174`.
 
 ## The left column
 

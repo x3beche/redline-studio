@@ -28,6 +28,18 @@ disk**; both source code and generated artifacts live in the database.
    before the first edit, and every step that takes more than a moment gets
    its own `log` line with a percentage.
 
+## Not every queued item is a model
+
+The queue is shared by five rooms. `revisions.py queue` marks a board note
+`[BOARD]` and a programming room's note `[WEB]`, `[EMBEDDED]` or
+`[MOBILE]`; `revisions.py kind <id>` says which room any note is from.
+This skill is the model loop. Everything else goes to that room's agent
+(`redline-pcb`, `redline-web`, `redline-embedded`, `redline-mobile` in
+`.claude/agents/`) and follows AGENTS.md - a firmware note does not have
+a camera, and `build` does not take a board.
+
+Rooms work in parallel, so close a run by its id: `finish <id>`.
+
 ## Important: only "queued" items are your work
 
 Revisions have four states:

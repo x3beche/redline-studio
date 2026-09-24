@@ -73,6 +73,38 @@ so a part can be found by name as well as by number. The models go into
 GridFS gzipped, not into the part document: a 9.8 MB STEP file written
 inline took ninety-nine seconds.
 
+## The programming rooms
+
+Web, Embedded and Mobile Programming run everything in Docker - a
+project's dev server, its tests, a firmware build, a phone - so nothing a
+project needs is installed on the machine. One image per room:
+
+```bash
+docker build -f docker/code/web.Dockerfile      -t redline-code-web      docker/code
+docker build -f docker/code/embedded.Dockerfile -t redline-code-embedded docker/code
+docker build -f docker/code/mobile.Dockerfile   -t redline-code-mobile   docker/code
+```
+
+| image | size | what is in it |
+|---|---|---|
+| `redline-code-web` | 1.2 GB | Chrome (to photograph pages), Node, Python |
+| `redline-code-embedded` | 12.1 GB | ESP-IDF 5.3 with its Xtensa and RISC-V compilers, arm-none-eabi, CMake, Ninja, OpenOCD, stlink |
+| `redline-code-mobile` | 5.1 GB | the Android SDK and an emulated Pixel 7 (Android 14, Play Store image), Node |
+
+Built in parallel they took 167, 277 and 217 seconds here. They are
+large: keep Docker's storage on a disk with room for them. On this
+machine it lives on `/mnt/ssd` (`"data-root": "/mnt/ssd/docker"` in
+`/etc/docker/daemon.json`) - the system disk filled up the first time
+they were built on it.
+
+The phone needs **KVM** (`/dev/kvm`); with it, it boots in about 45
+seconds, and it is left running as the container `redline-phone`. A board
+is programmed through the Embedded image with the device passed through:
+an ST-Link for an STM32, the serial port for an ESP32.
+
+`X3_WEB_IMAGE`, `X3_EMBEDDED_IMAGE` and `X3_MOBILE_IMAGE` name other
+images. Without an image, a room still opens and says which one to build.
+
 ## Themes
 
 `?theme=light`, `?theme=oled` or `?theme=default` in the URL, or set
