@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-144 tools. **MCP** marks the ones agents can run with `run_tool`.
+152 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -180,18 +180,21 @@ agents, the most used, and every tool nobody used.
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
+| **Assembly Order Planner** · MCP | `assembly-order` | assembly order and access needs as a step list | 3D |
 | **Beam Deflection Calculator** · MCP | `beam-deflection` | deflection and maximum stress of a simple beam under load | 3D |
 | **Bearing Fit Advisor** · MCP | `bearing-fit` | shaft and housing tolerances for a bearing's bore and outside diameter | 3D |
 | **Belt & Pulley Calculator** · MCP | `belt-pulley` | belt length and ratio from pulley diameters and centre distance | 3D |
 | **Bolt Circle Generator** · MCP | `bolt-circle` | hole coordinates and CAD code from count and diameter | 3D |
 | **Bolt Torque Calculator** · MCP | `bolt-torque` | tightening torque and preload for a bolt size and material | 3D |
 | **Cable Bend Radius** · MCP | `cable-bend` | minimum bend radius and clearance for a cable | 3D |
+| **Chamfer & Fillet Guide** · MCP | `chamfer-fillet` | recommended chamfers and radii by manufacturing process | 3D |
 | **Clearance Fit Calculator** · MCP | `iso-fit` | actual clearance or interference of an ISO fit such as H7/g6 | 3D |
 | **Draft Angle Checker** · MCP | `draft-angle` | minimum draft angle for release from a mould | 3D |
 | **Enclosure Fit Checker** · MCP | `enclosure-fit` | inner enclosure size and cut-outs from the board outline and connector heights | 3D, PCB |
 | **Fastener Library** · MCP | `fastener-library` | screw, nut and washer sizes by head type, with CAD variables | 3D |
 | **Gear Calculator** · MCP | `gear-calc` | pitch and outside diameter and centre distance from module and teeth | 3D |
 | **Heat-Set Insert Sizer** · MCP | `heat-set-insert` | boss hole diameter and wall thickness for an insert | 3D |
+| **Knurl & Grip Pattern** · MCP | `knurl-pattern` | grip pattern parameters and CAD code | 3D |
 | **Mass & CoG from Volume** · MCP | `mass-cog` | mass and centre of gravity from volumes and materials | 3D |
 | **Material Property Table** · MCP | `material-table` | density, modulus, yield strength and expansion of materials compared | 3D |
 | **Print Guideline Checker** · MCP | `print-guidelines` | wall, bridge and overhang values checked for a print process | 3D |
@@ -204,12 +207,15 @@ agents, the most used, and every tool nobody used.
 | **Thermal Expansion Calculator** · MCP | `thermal-expansion` | dimension change of a part over a temperature change | 3D, PCB |
 | **Thread & Tap Drill Chart** · MCP | `thread-drill` | tap drill and clearance hole sizes for a thread | 3D |
 | **Tolerance Stack-Up** · MCP | `tolerance-stack` | worst-case and statistical sum of a chain of dimensions | 3D |
+| **Vibration Frequency Estimator** · MCP | `vibration-freq` | rough first natural frequency from geometry and material | 3D |
 
 ### Web & design
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
 | **Chart Spec Builder** · MCP | `chart-spec` | axes, series and scales chosen into a chart configuration | Web |
+| **CSS Specificity Calculator** · MCP | `css-specificity` | which of two selectors wins, and why | Web |
+| **Flexbox Playground** · MCP | `flexbox-playground` | try alignment properties and see the result and code | Web |
 | **Form Builder** | `form-builder` | build a form with its rules, get Zod, types and a React component | Web |
 | **Grid Sketch** | `grid-sketch` | draw a layout on a grid, copy it as a prompt, CSS or JSON | Web, Mobile |
 | **Icon & Favicon Generator** · MCP | `icon-generator` | every icon size and the manifest entries from one image | Web, Mobile |
@@ -220,8 +226,10 @@ agents, the most used, and every tool nobody used.
 | **Motion Lab** | `motion-lab` | shape an easing curve and timing, take it as CSS or JS | Web, Mobile |
 | **Palette Forge** | `palette-forge` | one colour into an accessible palette and light/dark tokens | Web, Mobile |
 | **Screenshot Annotator** | `screenshot-annotator` | mark up a screenshot and turn the marks into a fix list | Web, Mobile |
+| **Shadow & Radius Studio** · MCP | `shadow-radius` | layered shadows and radii tuned visually, as one CSS line | Web |
 | **SVG Path Editor** · MCP | `svg-path-editor` | edit a path node by node and trim needless decimals | Web |
 | **Telemetry Mock Generator** · MCP | `telemetry-mock` | realistic sensor time series with noise, drift and faults | Web, Embedded |
+| **Type Scale Generator** · MCP | `type-scale` | heading and body sizes from a base and ratio, as CSS variables | Web, Mobile |
 
 ### Mobile
 

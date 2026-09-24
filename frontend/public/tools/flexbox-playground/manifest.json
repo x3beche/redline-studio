@@ -1,0 +1,46 @@
+{
+  "id": "flexbox-playground",
+  "name": "Flexbox Playground",
+  "blurb": "try alignment properties and see the result and code",
+  "group": "web",
+  "rooms": ["web"],
+  "keywords": ["flexbox", "flex", "css layout", "justify-content", "align-items", "align-content", "align-self", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "gap", "centering"],
+  "intro": "Set the container's direction, wrapping and alignment and a few boxes' sizes and flex factors; the browser lays them out live and the tool computes the same positions with the CSS Flexbox algorithm, says which properties currently do nothing, and prints the CSS.",
+  "inputs": [
+    { "key": "direction", "label": "flex-direction", "type": "select", "default": "row", "options": ["row", "row-reverse", "column", "column-reverse"] },
+    { "key": "wrap", "label": "flex-wrap", "type": "select", "default": "nowrap", "options": ["nowrap", "wrap", "wrap-reverse"] },
+    { "key": "justify", "label": "justify-content", "type": "select", "default": "center", "options": ["flex-start", "flex-end", "center", "space-between", "space-around", "space-evenly"] },
+    { "key": "alignItems", "label": "align-items", "type": "select", "default": "center", "options": ["stretch", "flex-start", "flex-end", "center"] },
+    { "key": "alignContent", "label": "align-content", "type": "select", "default": "normal", "options": ["normal", "stretch", "flex-start", "flex-end", "center", "space-between", "space-around", "space-evenly"] },
+    { "key": "gap", "label": "gap", "type": "number", "unit": "px", "default": "8" },
+    { "key": "width", "label": "Container width", "type": "number", "unit": "px", "default": "480" },
+    { "key": "height", "label": "Container height", "type": "number", "unit": "px", "default": "220" },
+    { "key": "items", "label": "Items (px or auto)", "type": "table",
+      "columns": [
+        { "key": "w", "label": "width", "default": "80" },
+        { "key": "h", "label": "height", "default": "auto" },
+        { "key": "grow", "label": "grow", "default": "0" },
+        { "key": "shrink", "label": "shrink", "default": "1" },
+        { "key": "self", "label": "align-self", "type": "select", "options": ["auto", "stretch", "flex-start", "flex-end", "center"], "default": "auto" },
+        { "key": "order", "label": "order", "default": "0" }
+      ],
+      "default": [
+        { "w": "80", "h": "50", "grow": "0", "shrink": "1", "self": "auto", "order": "0" },
+        { "w": "120", "h": "70", "grow": "0", "shrink": "1", "self": "auto", "order": "0" },
+        { "w": "60", "h": "90", "grow": "0", "shrink": "1", "self": "auto", "order": "0" },
+        { "w": "100", "h": "auto", "grow": "0", "shrink": "1", "self": "stretch", "order": "0" }
+      ] }
+  ],
+  "examples": [
+    { "title": "Wrapping cards, space-between", "input": { "direction": "row", "wrap": "wrap", "justify": "space-between", "alignItems": "flex-start", "alignContent": "flex-start", "gap": "12", "width": "420", "height": "260",
+      "items": [{ "w": "120", "h": "80", "grow": "0", "shrink": "1", "self": "auto", "order": "0" }, { "w": "120", "h": "60", "grow": "0", "shrink": "1", "self": "auto", "order": "0" }, { "w": "120", "h": "90", "grow": "0", "shrink": "1", "self": "auto", "order": "0" }, { "w": "120", "h": "70", "grow": "0", "shrink": "1", "self": "auto", "order": "0" }, { "w": "120", "h": "50", "grow": "0", "shrink": "1", "self": "auto", "order": "0" }] } },
+    { "title": "Toolbar: logo, growing search, buttons", "input": { "direction": "row", "wrap": "nowrap", "justify": "flex-start", "alignItems": "center", "alignContent": "normal", "gap": "8", "width": "480", "height": "64",
+      "items": [{ "w": "90", "h": "40", "grow": "0", "shrink": "0", "self": "auto", "order": "0" }, { "w": "160", "h": "36", "grow": "1", "shrink": "1", "self": "auto", "order": "0" }, { "w": "40", "h": "40", "grow": "0", "shrink": "0", "self": "auto", "order": "0" }, { "w": "40", "h": "40", "grow": "0", "shrink": "0", "self": "auto", "order": "0" }] } }
+  ],
+  "usage": "Give direction, wrap, justify, alignItems, alignContent (CSS keyword values), gap, container width and height in px, and items as a list of {w, h (px number or 'auto'), grow, shrink, self (align-self), order}. It returns every item's x, y, width and height in px from the container's top-left, the number of lines and free space, notes on properties that currently have no effect, overflow warnings, and the CSS. Use it to predict or explain a flex layout, or to find the properties that give a wanted arrangement.",
+  "sources": [
+    "W3C CSS Flexible Box Layout Module Level 1, section 9 'Flex Layout Algorithm' and 8 'Alignment'",
+    "W3C CSS Box Alignment Module Level 3 (gap, content distribution)"
+  ],
+  "view": true
+}

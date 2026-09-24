@@ -1,0 +1,25 @@
+{
+  "id": "css-specificity",
+  "name": "CSS Specificity Calculator",
+  "blurb": "which of two selectors wins, and why",
+  "group": "web",
+  "rooms": ["web"],
+  "keywords": ["css", "specificity", "selector", "cascade", "which rule wins", "important", "!important", ":is", ":where", ":not", ":has", "id class type", "override", "style conflict"],
+  "intro": "Counts IDs, classes and types for two selectors, including :is(), :not(), :has(), :where() and :nth-child(… of S), and says which one wins, by !important, specificity or source order. Counting follows Selectors Level 4; the order of checks follows CSS Cascading Level 5.",
+  "inputs": [
+    { "key": "a", "label": "Selector A", "type": "text", "default": "#nav .menu li a:hover", "wide": true },
+    { "key": "b", "label": "Selector B", "type": "text", "default": "header nav :is(.menu, .links) > li.active a", "wide": true },
+    { "key": "importantA", "label": "A is !important", "type": "bool", "default": false },
+    { "key": "importantB", "label": "B is !important", "type": "bool", "default": false },
+    { "key": "bLater", "label": "B comes later in the stylesheet", "type": "bool", "default": true }
+  ],
+  "examples": [
+    { "title": ":where() makes a reset lose", "input": { "a": ":where(#app) button", "b": ".btn", "importantA": false, "importantB": false, "bLater": false } },
+    { "title": ":is() takes its most specific argument", "input": { "a": ":is(p, #intro) span", "b": "article p.lead span.note", "importantA": false, "importantB": false, "bLater": true } }
+  ],
+  "usage": "Give two selectors as text (a pasted rule 'sel { … }' is fine), whether each declaration is !important, and whether B comes later in the stylesheet. It returns each specificity as (IDs, classes, types), the winner and the reason (importance, specificity column, or source order), and a per-part breakdown. Use it to explain why a style does not apply or to choose a selector that overrides another.",
+  "sources": [
+    "W3C Selectors Level 4, section 17 'Calculating a selector's specificity'",
+    "W3C CSS Cascading and Inheritance Level 5, section 6 'Cascading' (importance, layers, specificity, order of appearance)"
+  ]
+}

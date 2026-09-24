@@ -1,0 +1,32 @@
+{
+  "id": "shadow-radius",
+  "name": "Shadow & Radius Studio",
+  "blurb": "layered shadows and radii tuned visually, as one CSS line",
+  "group": "web",
+  "rooms": ["web"],
+  "keywords": ["box-shadow", "shadow", "elevation", "drop shadow", "layered shadow", "border-radius", "rounded corners", "nested radius", "css", "card", "depth", "design tokens"],
+  "intro": "Builds a soft, layered box-shadow (several shadows doubling in size, after Josh Comeau's method) and a border-radius, with a live preview you can click to aim the light. Also gives the concentric inner radius for a nested element (outer radius minus padding) and an elevation scale.",
+  "inputs": [
+    { "key": "distance", "label": "Distance", "type": "number", "unit": "px", "default": "12", "help": "Offset of the largest layer; the elevation." },
+    { "key": "angle", "label": "Direction", "type": "number", "unit": "°", "default": "165", "help": "CSS angle: 180 = straight down." },
+    { "key": "layers", "label": "Layers", "type": "number", "default": "5" },
+    { "key": "softness", "label": "Softness", "type": "number", "default": "1", "help": "Blur = 2 × softness × offset." },
+    { "key": "spread", "label": "Spread", "type": "number", "unit": "px", "default": "0", "help": "Negative tucks the shadow under the box." },
+    { "key": "opacity", "label": "Opacity (total)", "type": "number", "default": "0.2" },
+    { "key": "color", "label": "Shadow colour", "type": "text", "default": "hsl(220 40% 12%)", "help": "Hex, rgb() or hsl(); tint it with the background hue." },
+    { "key": "radius", "label": "Corner radius", "type": "number", "unit": "px", "default": "14" },
+    { "key": "padding", "label": "Padding (for nested radius)", "type": "number", "unit": "px", "default": "8" },
+    { "key": "inset", "label": "Inset shadow", "type": "bool", "default": false }
+  ],
+  "examples": [
+    { "title": "Floating card", "input": { "distance": "16", "angle": "170", "layers": "5", "softness": "1", "spread": "0", "opacity": "0.22", "color": "hsl(220 40% 12%)", "radius": "16", "padding": "12", "inset": false } },
+    { "title": "Subtle button", "input": { "distance": "3", "angle": "180", "layers": "3", "softness": "1", "spread": "-1", "opacity": "0.15", "color": "#0b1a2e", "radius": "8", "padding": "4", "inset": false } }
+  ],
+  "usage": "Give distance in px (largest layer offset), direction as a CSS angle in degrees (180 = down), the number of layers (1-8), softness (blur factor), spread in px, total opacity 0-1, the shadow colour (hex, rgb() or hsl()), corner radius and padding in px, and inset true/false. It returns one CSS line with box-shadow and border-radius, the per-layer offsets, blur, spread and alpha, how far the shadow reaches past the box, the nested inner radius, and a 5-step elevation scale of custom properties. Use it to design card, button or modal shadows.",
+  "sources": [
+    "Josh W. Comeau, 'Designing Beautiful Shadows in CSS' (2021) - layered shadows",
+    "W3C CSS Backgrounds and Borders Level 3, box-shadow and border-radius",
+    "Concentric corners: inner radius = outer radius - padding (rule of thumb)"
+  ],
+  "view": true
+}

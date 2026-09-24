@@ -1,0 +1,30 @@
+{
+  "id": "chamfer-fillet",
+  "name": "Chamfer & Fillet Guide",
+  "blurb": "recommended chamfers and radii by manufacturing process",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["chamfer", "fillet", "radius", "edge break", "corner radius", "round", "bevel", "dfm", "design for manufacturing", "cnc", "injection molding", "sheet metal bend radius", "3d printing"],
+  "intro": "Which edges to chamfer, which corners to round, and by how much, for the process that makes the part. Values follow published design guides (Covestro/Bayer, NADCA, ISO 13715, CNC and printing service guides); rules that scale with wall thickness or pocket depth are computed from your numbers.",
+  "inputs": [
+    { "key": "process", "label": "Process", "type": "select", "default": "mill",
+      "options": [["mill", "CNC milling"], ["turn", "CNC turning"], ["fdm", "FDM printing"], ["sla", "SLA / resin printing"], ["sls", "SLS / MJF printing"], ["mold", "Injection moulding"], ["diecast", "Die casting"], ["sheet", "Sheet metal"], ["all", "All processes"]] },
+    { "key": "t", "label": "Wall / sheet thickness", "type": "number", "unit": "mm", "default": "2",
+      "help": "Nominal wall for moulding, casting and printing; sheet thickness for sheet metal." },
+    { "key": "depth", "label": "Pocket depth", "type": "number", "unit": "mm", "default": "12",
+      "help": "Deepest pocket with inside corners (CNC milling).", "when": { "key": "process", "in": ["mill", "all"] } },
+    { "key": "filter", "label": "Filter", "type": "text", "default": "", "placeholder": "corner, edge, rib, hole…" }
+  ],
+  "examples": [
+    { "title": "Milled aluminium housing, 18 mm deep pockets", "input": { "process": "mill", "t": "3", "depth": "18", "filter": "" } },
+    { "title": "2.5 mm ABS moulded enclosure", "input": { "process": "mold", "t": "2.5", "depth": "12", "filter": "" } }
+  ],
+  "usage": "Give process (mill, turn, fdm, sla, sls, mold, diecast, sheet or all), the wall or sheet thickness t in mm and, for milling, the deepest pocket depth in mm; filter narrows the rows by words. It returns the key recommended radii/chamfers as values and a table of feature, recommended and minimum size, the rule and why. Use it when modelling edges and corners so the part suits its process.",
+  "sources": [
+    "Covestro (Bayer) 'Engineering Polymers: Part and Mold Design', corners and ribs (R_in = 0.5 t, R_out = 1.5 t)",
+    "NADCA Product Specification Standards for Die Castings, section 4A (fillets and radii)",
+    "ISO 13715 edges of undefined shape (edge break 0.2-0.5 mm)",
+    "Hubs / Protolabs CNC machining design guides (internal corner R >= depth/3)",
+    "Rule of thumb for printing values (FDM/SLA/SLS vendor design guides)"
+  ]
+}

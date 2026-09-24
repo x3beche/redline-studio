@@ -1,0 +1,38 @@
+{
+  "id": "vibration-freq",
+  "name": "Vibration Frequency Estimator",
+  "blurb": "rough first natural frequency from geometry and material",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["natural frequency", "resonance", "vibration", "modal", "eigenfrequency", "cantilever", "beam", "plate", "pcb vibration", "stiffness", "rayleigh", "octave rule", "fn", "hz"],
+  "intro": "The first natural frequency of a beam (cantilever, simply supported, fixed or free) or a simply supported plate such as a PCB, from its size and material, with an optional point or component mass. Closed-form Euler-Bernoulli and thin-plate formulas (Blevins, Leissa); good for a first check before FEA.",
+  "inputs": [
+    { "key": "shape", "label": "Shape and supports", "type": "select", "default": "cantilever",
+      "options": [["cantilever", "Beam, cantilever"], ["ss", "Beam, simply supported"], ["fixed", "Beam, fixed both ends"], ["free", "Beam, free-free"], ["plate", "Plate, edges simply supported"]] },
+    { "key": "section", "label": "Beam section", "type": "select", "default": "rect",
+      "options": [["rect", "Rectangle"], ["round", "Round rod"], ["tube", "Round tube"]], "when": { "key": "shape", "in": ["cantilever", "ss", "fixed", "free"] } },
+    { "key": "material", "label": "Material", "type": "select", "default": "steel",
+      "options": [["steel", "Steel"], ["stainless", "Stainless 304"], ["alu", "Aluminium 6061"], ["ti", "Titanium Ti-6Al-4V"], ["brass", "Brass"], ["copper", "Copper"], ["fr4", "FR-4 (PCB)"], ["cfrp", "CFRP (quasi-iso)"], ["pla", "PLA"], ["abs", "ABS"], ["petg", "PETG"], ["pa12", "PA12 (SLS)"], ["pc", "Polycarbonate"], ["custom", "Custom…"]] },
+    { "key": "E", "label": "Young's modulus", "type": "number", "unit": "GPa", "default": "70", "when": { "key": "material", "equals": "custom" } },
+    { "key": "rho", "label": "Density", "type": "number", "unit": "kg/m³", "default": "2700", "when": { "key": "material", "equals": "custom" } },
+    { "key": "nu", "label": "Poisson's ratio", "type": "number", "default": "0.33", "when": { "key": "material", "equals": "custom" } },
+    { "key": "len", "label": "Length / span", "type": "number", "unit": "mm", "default": "100", "help": "Free length of a cantilever, span between supports, or the plate's long side." },
+    { "key": "width", "label": "Width", "type": "number", "unit": "mm", "default": "10", "help": "Rectangular section or plate." },
+    { "key": "thick", "label": "Thickness", "type": "number", "unit": "mm", "default": "2", "help": "Bending direction; rectangle or plate." },
+    { "key": "dia", "label": "Outer diameter", "type": "number", "unit": "mm", "default": "10", "when": { "key": "section", "in": ["round", "tube"] } },
+    { "key": "inner", "label": "Inner diameter", "type": "number", "unit": "mm", "default": "8", "when": { "key": "section", "equals": "tube" } },
+    { "key": "mass", "label": "Added mass", "type": "number", "unit": "g", "default": "0", "help": "At the tip (cantilever) or centre (beams); spread over a plate (components)." },
+    { "key": "target", "label": "Excitation frequency", "type": "number", "unit": "Hz", "default": "0", "help": "Highest forcing frequency; 0 = no check." }
+  ],
+  "examples": [
+    { "title": "Steel strip cantilever, 100 × 10 × 2 mm", "input": { "shape": "cantilever", "section": "rect", "material": "steel", "len": "100", "width": "10", "thick": "2", "mass": "0", "target": "0" } },
+    { "title": "100 × 80 × 1.6 mm PCB with 40 g of parts, 60 Hz fan", "input": { "shape": "plate", "section": "rect", "material": "fr4", "len": "100", "width": "80", "thick": "1.6", "mass": "40", "target": "60" } }
+  ],
+  "usage": "Give shape (cantilever, ss, fixed, free or plate), for beams the section (rect, round, tube), material (or custom with E in GPa, rho in kg/m³, nu), length/span, width and thickness in mm (or outer/inner diameter in mm), an added mass in g (tip/centre point mass for beams, smeared over a plate) and optionally the excitation frequency in Hz. It returns the first natural frequency in Hz, the first modes, the part's mass, the equivalent static sag, a chart of f1 against length and a warning when f1 is not at least 2x the excitation. Use it to check that a bracket, arm, rod or PCB will not resonate.",
+  "sources": [
+    "R. D. Blevins, 'Formulas for Natural Frequency and Mode Shape', table 8-1 (beam eigenvalues)",
+    "A. W. Leissa, 'Vibration of Plates', NASA SP-160, simply supported rectangular plate",
+    "D. S. Steinberg, 'Vibration Analysis for Electronic Equipment' (PCB as a plate, octave rule)",
+    "Rayleigh's energy method for a beam with a point mass"
+  ]
+}

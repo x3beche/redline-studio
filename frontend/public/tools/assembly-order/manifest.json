@@ -1,0 +1,25 @@
+{
+  "id": "assembly-order",
+  "name": "Assembly Order Planner",
+  "blurb": "assembly order and access needs as a step list",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["assembly", "assembly sequence", "build order", "work instructions", "dfa", "design for assembly", "bom", "precedence", "tool changes", "reorientation", "access", "exploded view", "steps"],
+  "intro": "Paste the parts, one per line, with what each goes onto and optionally the tool, approach direction and time. It sorts them into a buildable order (a topological sort), keeps covers until the parts behind them are in, and counts tool changes and turn-overs, the two things design-for-assembly tries to minimise.",
+  "inputs": [
+    { "key": "text", "label": "Parts (part -> goes onto | tool: … | from: … | time: … | blocks: …)", "type": "textarea", "rows": 11,
+      "default": "# part -> what it goes onto | tool | from | time | blocks\nbottom case\nstandoffs -> bottom case | tool: 5 mm nut driver | from: top | time: 40s\nmain pcb -> standoffs | tool: PH1 screwdriver | from: top | time: 60s\ntop case -> main pcb, battery cable | from: top | blocks: top | time: 20s\ncase screws -> top case | tool: 2 mm hex key | from: bottom | time: 45s\nbattery -> bottom case | from: top | time: 20s\nbattery cable -> main pcb, battery | from: top | time: 15s\ndisplay -> main pcb | tool: PH1 screwdriver | from: top | time: 45s\nrubber feet -> case screws | from: bottom | time: 20s\nknob -> top case | from: top | time: 10s",
+      "placeholder": "main pcb -> bottom case | tool: PH1 | from: top" },
+    { "key": "strategy", "label": "Order by", "type": "select", "default": "group",
+      "options": [["group", "Fewest turn-overs and tool changes"], ["input", "The listed order where possible"]] }
+  ],
+  "examples": [
+    { "title": "Small electronics enclosure", "input": { "strategy": "group", "text": "# part -> what it goes onto | tool | from | time | blocks\nbottom case\nstandoffs -> bottom case | tool: 5 mm nut driver | from: top | time: 40s\nmain pcb -> standoffs | tool: PH1 screwdriver | from: top | time: 60s\ntop case -> main pcb, battery cable | from: top | blocks: top | time: 20s\ncase screws -> top case | tool: 2 mm hex key | from: bottom | time: 45s\nbattery -> bottom case | from: top | time: 20s\nbattery cable -> main pcb, battery | from: top | time: 15s\ndisplay -> main pcb | tool: PH1 screwdriver | from: top | time: 45s\nrubber feet -> case screws | from: bottom | time: 20s\nknob -> top case | from: top | time: 10s" } },
+    { "title": "3D printer hot end", "input": { "strategy": "input", "text": "heater block\nnozzle -> heater block | tool: 7 mm spanner | from: bottom\nheat break -> heater block | tool: 7 mm spanner | from: top\nheatsink -> heat break | from: top\nheater cartridge -> heater block | tool: 1.5 mm hex key | from: side\nthermistor -> heater block | tool: 1.5 mm hex key | from: side\nsilicone sock -> nozzle, heater cartridge, thermistor | from: bottom | blocks: side\nfan shroud -> heatsink | tool: 2 mm hex key | from: front" } }
+  ],
+  "usage": "Give text: one part per line as 'part -> part it goes onto, another | tool: name | from: top/bottom/front/back/left/right/side | time: 30s | blocks: top | note: …' (only the part name is required; # starts a comment) and strategy 'group' (fewest turn-overs and tool changes) or 'input' (listed order where possible). It returns the ordered step table, counts of tool changes, reorientations, dependency levels and total time, access conflicts and circular dependencies as warnings, and the steps as text plus a Mermaid dependency graph. Use it to plan or check a build sequence and write work instructions.",
+  "sources": [
+    "Kahn, 'Topological sorting of large networks', CACM 1962 (ordering algorithm)",
+    "Boothroyd, Dewhurst and Knight, 'Product Design for Manufacture and Assembly' (minimise reorientations and tool changes)"
+  ]
+}

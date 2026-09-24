@@ -1,0 +1,39 @@
+{
+  "id": "type-scale",
+  "name": "Type Scale Generator",
+  "blurb": "heading and body sizes from a base and ratio, as CSS variables",
+  "group": "web",
+  "rooms": ["web", "mobile"],
+  "keywords": ["type scale", "typography", "modular scale", "font size", "headings", "css variables", "custom properties", "rem", "fluid type", "clamp", "utopia", "line height", "design tokens"],
+  "intro": "A modular type scale: every step is the base size times the ratio to the power of the step. Optionally fluid, growing from a small-screen scale to a large-screen one with CSS clamp() (the Utopia method), with line heights and ready CSS variables.",
+  "inputs": [
+    { "key": "base", "label": "Body size", "type": "number", "unit": "px", "default": "16" },
+    { "key": "ratio", "label": "Ratio", "type": "select", "default": "1.25",
+      "options": [["1.067", "1.067 Minor second"], ["1.125", "1.125 Major second"], ["1.2", "1.2 Minor third"], ["1.25", "1.25 Major third"], ["1.333", "1.333 Perfect fourth"], ["1.414", "1.414 Augmented fourth"], ["1.5", "1.5 Perfect fifth"], ["1.618", "1.618 Golden ratio"], ["custom", "Custom…"]] },
+    { "key": "custom", "label": "Custom ratio", "type": "number", "default": "1.3", "when": { "key": "ratio", "equals": "custom" } },
+    { "key": "up", "label": "Steps up", "type": "number", "default": "5", "help": "Headings; up to 10." },
+    { "key": "down", "label": "Steps down", "type": "number", "default": "1", "help": "Small print; up to 3." },
+    { "key": "unit", "label": "CSS unit", "type": "select", "default": "rem", "options": [["rem", "rem"], ["px", "px"]] },
+    { "key": "naming", "label": "Variable names", "type": "select", "default": "numeric",
+      "options": [["numeric", "--step-0, --step-1 …"], ["tshirt", "--step-sm, -base, -lg …"], ["headings", "--step-body, -h6 … -h1"]] },
+    { "key": "prefix", "label": "Variable prefix", "type": "text", "default": "step" },
+    { "key": "rounding", "label": "Round to whole pixels", "type": "bool", "default": false },
+    { "key": "fluid", "label": "Fluid: grow with the viewport (clamp)", "type": "bool", "default": false },
+    { "key": "baseMax", "label": "Body size at large viewport", "type": "number", "unit": "px", "default": "18", "when": { "key": "fluid", "equals": "true" } },
+    { "key": "ratioMax", "label": "Ratio at large viewport", "type": "select", "default": "1.333", "when": { "key": "fluid", "equals": "true" },
+      "options": [["same", "Same as small"], ["1.125", "1.125"], ["1.2", "1.2"], ["1.25", "1.25"], ["1.333", "1.333"], ["1.414", "1.414"], ["1.5", "1.5"], ["1.618", "1.618"], ["custom", "Custom…"]] },
+    { "key": "customMax", "label": "Custom large ratio", "type": "number", "default": "1.4", "when": { "key": "ratioMax", "equals": "custom" } },
+    { "key": "vwMin", "label": "Small viewport", "type": "number", "unit": "px", "default": "360", "when": { "key": "fluid", "equals": "true" } },
+    { "key": "vwMax", "label": "Large viewport", "type": "number", "unit": "px", "default": "1280", "when": { "key": "fluid", "equals": "true" } }
+  ],
+  "examples": [
+    { "title": "16 px, major third, six headings", "input": { "base": "16", "ratio": "1.25", "up": "6", "down": "1", "unit": "rem", "naming": "headings", "prefix": "fs", "rounding": false, "fluid": false } },
+    { "title": "Fluid 16→18 px, 1.2→1.333", "input": { "base": "16", "ratio": "1.2", "up": "5", "down": "1", "unit": "rem", "naming": "numeric", "prefix": "step", "rounding": false, "fluid": true, "baseMax": "18", "ratioMax": "1.333", "vwMin": "360", "vwMax": "1280" } }
+  ],
+  "usage": "Give base (body size in px), ratio ('1.25' etc. or 'custom' with custom), steps up and down, unit (rem or px), naming (numeric, tshirt, headings), a variable prefix, and optionally fluid=true with baseMax (px), ratioMax and the viewport range vwMin/vwMax in px. It returns every step's size in px and rem (or its clamp() at both viewports), line heights, and a CSS text with :root custom properties plus h1-h6/body rules. Use it to set up or check the font sizes of a web or app design system.",
+  "sources": [
+    "Tim Brown, 'More Meaningful Typography', A List Apart (2011) - modular scales",
+    "Utopia fluid type scale (utopia.fyi) - clamp() interpolation between two scales",
+    "WCAG 2.2 success criteria 1.4.4 (resize text) and 1.4.12 (text spacing, line height 1.5)"
+  ]
+}

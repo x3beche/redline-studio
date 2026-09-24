@@ -1,0 +1,34 @@
+{
+  "id": "knurl-pattern",
+  "name": "Knurl & Grip Pattern",
+  "blurb": "grip pattern parameters and CAD code",
+  "group": "mechanical",
+  "rooms": ["cad"],
+  "keywords": ["knurl", "knurling", "grip", "diamond knurl", "straight knurl", "diagonal knurl", "din 82", "knob", "thumb screw", "helix", "pitch", "openscad", "cadquery", "texture"],
+  "intro": "Tooth count, real pitch, groove depth and helix for a straight, diagonal or diamond knurl on a cylinder, with OpenSCAD and CadQuery code to model it. Pitches and pattern names follow DIN 82; the tooth count is rounded so a whole number of teeth fits the circumference.",
+  "inputs": [
+    { "key": "pattern", "label": "Pattern", "type": "select", "default": "diamond",
+      "options": [["diamond", "Diamond (RGE)"], ["straight", "Straight (RAA)"], ["left", "Diagonal left (RBL)"], ["right", "Diagonal right (RBR)"]] },
+    { "key": "process", "label": "Made by", "type": "select", "default": "machined",
+      "options": [["machined", "Machined (knurling tool)"], ["printed", "3D printed"], ["moulded", "Moulded / cast"]] },
+    { "key": "d", "label": "Diameter", "type": "number", "unit": "mm", "default": "20" },
+    { "key": "len", "label": "Knurled length", "type": "number", "unit": "mm", "default": "15" },
+    { "key": "pitch", "label": "Pitch", "type": "select", "default": "auto",
+      "options": [["auto", "Auto (DIN 82 guide)"], ["0.5", "0.5 mm"], ["0.6", "0.6 mm"], ["0.8", "0.8 mm"], ["1", "1.0 mm"], ["1.2", "1.2 mm"], ["1.6", "1.6 mm"], ["2", "2.0 mm (printed)"], ["2.5", "2.5 mm (printed)"]] },
+    { "key": "beta", "label": "Helix angle", "type": "number", "unit": "°", "default": "30",
+      "help": "30° is standard for diagonal and diamond knurls.", "when": { "key": "pattern", "in": ["diamond", "left", "right"] } },
+    { "key": "depth", "label": "Groove depth", "type": "number", "unit": "mm", "default": "", "required": false,
+      "help": "Empty = full sharp 90° tooth (half the circumferential pitch)." }
+  ],
+  "examples": [
+    { "title": "Ø20 mm machined thumb knob, diamond", "input": { "pattern": "diamond", "process": "machined", "d": "20", "len": "15", "pitch": "auto", "beta": "30", "depth": "" } },
+    { "title": "Printed Ø30 mm grip, straight ribs", "input": { "pattern": "straight", "process": "printed", "d": "30", "len": "12", "pitch": "2", "beta": "30", "depth": "0.6" } }
+  ],
+  "usage": "Give pattern (diamond, straight, left, right), process (machined, printed, moulded), diameter and knurled length in mm, pitch ('auto' or a mm value like '0.8'), helix angle in degrees and optionally the groove depth in mm. It returns the groove count, the actual pitch after rounding to whole teeth, depth, root diameter, helix lead and twist, the blank diameter for form knurling, a table of all standard pitches, and OpenSCAD and CadQuery code that cut the pattern. Use it when adding a knurl or grip to a knob, thumb screw or handle.",
+  "sources": [
+    "DIN 82 Knurls (patterns RAA, RBL, RBR, RGE; pitch series 0.5-1.6 mm; 30° helix)",
+    "ANSI/ASME B94.6 Knurling (whole number of teeth on the blank: N = P x D)",
+    "Rule of thumb: form-knurl blank about half a pitch under the finished diameter"
+  ],
+  "view": true
+}
