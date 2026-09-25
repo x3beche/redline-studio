@@ -24,65 +24,72 @@ const ident = (s) => String(s).toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace
 
 export function run(input) {
   const warnings = [], issues = [];
-  const rails = (Array.isArray(input.rails) ? input.rails : []).map((r) => ({ name: String(r.name || '').trim(), v: num(r.volts), source: String(r.source || '').trim(), notes: String(r.notes || '').trim() })).filter((r) => r.name);
-  const gpio = (Array.isArray(input.gpio) ? input.gpio : []).map((g) => ({ signal: String(g.signal || '').trim(), pin: String(g.pin || '').trim(), dir: String(g.dir || '').trim().toLowerCase(),
+  // Each issue goes into the Issues table and onto the item it is about (for the page's drawing).
+  const flag = (item, row) => { issues.push(row); if (item) item.issues.push(row[2]); };
+  const rails = (Array.isArray(input.rails) ? input.rails : []).map((r, row) => ({ row, issues: [], name: String(r.name || '').trim(), v: num(r.volts), source: String(r.source || '').trim(), notes: String(r.notes || '').trim() })).filter((r) => r.name);
+  const gpio = (Array.isArray(input.gpio) ? input.gpio : []).map((g, row) => ({ row, issues: [], signal: String(g.signal || '').trim(), pin: String(g.pin || '').trim(), dir: String(g.dir || '').trim().toLowerCase(),
     rail: String(g.rail || '').trim(), pull: String(g.pull || 'none').trim().toLowerCase(), notes: String(g.notes || '').trim() })).filter((g) => g.signal || g.pin);
-  const i2c = (Array.isArray(input.i2c) ? input.i2c : []).map((d) => ({ bus: String(d.bus || '0').trim() || '0', addr: parseAddr(d.addr), raw: String(d.addr ?? '').trim(), device: String(d.device || '').trim(), khz: num(d.khz), notes: String(d.notes || '').trim() })).filter((d) => d.raw || d.device);
+  const i2c = (Array.isArray(input.i2c) ? input.i2c : []).map((d, row) => ({ row, issues: [], bus: String(d.bus || '0').trim() || '0', addr: parseAddr(d.addr), raw: String(d.addr ?? '').trim(), device: String(d.device || '').trim(), khz: num(d.khz), notes: String(d.notes || '').trim() })).filter((d) => d.raw || d.device);
 
   const railV = new Map(rails.map((r) => [r.name.toUpperCase(), r.v]));
   const mcuRail = String(input.mcu_rail || '').trim();
   const mcuV = railV.get(mcuRail.toUpperCase()) ?? num(mcuRail);
   const tol5 = !!input.five_tolerant;
   if (mcuV == null) warnings.push(`MCU I/O rail "${mcuRail}" is not in the rails table: add it, or write its voltage (e.g. 3.3).`);
-  for (const r of rails) if (r.v == null) issues.push(['Rails', r.name, 'no voltage given']);
+  for (const r of rails) if (r.v == null) flag(r, ['Rails', r.name, 'no voltage given']);
 
   // ---- GPIO ----
   const seenPin = new Map(), seenSig = new Map();
   for (const g of gpio) {
     const id = g.signal || g.pin;
-    if (!g.signal) issues.push(['GPIO', id, 'no signal name']);
-    if (!g.pin) issues.push(['GPIO', id, 'no pin assigned']);
-    if (g.pin) { const k = g.pin.toUpperCase(); if (seenPin.has(k)) issues.push(['GPIO', id, `pin ${g.pin} also used by ${seenPin.get(k)}`]); else seenPin.set(k, id); }
-    if (g.signal) { const k = g.signal.toUpperCase(); if (seenSig.has(k)) issues.push(['GPIO', id, 'signal name defined twice']); else seenSig.set(k, 1); }
-    if (!DIRS.includes(g.dir)) issues.push(['GPIO', id, `direction "${g.dir}" is not one of ${DIRS.join(', ')}`]);
+    if (!g.signal) flag(g, ['GPIO', id, 'no signal name']);
+    if (!g.pin) flag(g, ['GPIO', id, 'no pin assigned']);
+    if (g.pin) { const k = g.pin.toUpperCase(); if (seenPin.has(k)) flag(g, ['GPIO', id, `pin ${g.pin} also used by ${seenPin.get(k)}`]); else seenPin.set(k, id); }
+    if (g.signal) { const k = g.signal.toUpperCase(); if (seenSig.has(k)) flag(g, ['GPIO', id, 'signal name defined twice']); else seenSig.set(k, 1); }
+    if (!DIRS.includes(g.dir)) flag(g, ['GPIO', id, `direction "${g.dir}" is not one of ${DIRS.join(', ')}`]);
     const v = g.rail ? (railV.get(g.rail.toUpperCase()) ?? num(g.rail)) : mcuV;
     g.v = v;
-    if (g.rail && v == null) issues.push(['GPIO', id, `rail "${g.rail}" is not in the rails table`]);
+    if (g.rail && v == null) flag(g, ['GPIO', id, `rail "${g.rail}" is not in the rails table`]);
     if (v != null && mcuV != null && v > mcuV + 0.05) {
       if (['in', 'io', 'analog', 'od'].includes(g.dir)) {
         const lim = mcuV + 0.3;
-        if (!tol5 || v > 5.5) issues.push(['GPIO', id, `${v} V into a ${mcuV} V pin: above its ~${lim.toFixed(1)} V absolute maximum. Use a divider, a level shifter, or a 5 V tolerant pin`]);
-        else issues.push(['GPIO', id, `${v} V on a 5 V tolerant pin: fine when the MCU is powered; check the datasheet for the unpowered case and analog mode`]);
+        if (!tol5 || v > 5.5) flag(g, ['GPIO', id, `${v} V into a ${mcuV} V pin: above its ~${lim.toFixed(1)} V absolute maximum. Use a divider, a level shifter, or a 5 V tolerant pin`]);
+        else flag(g, ['GPIO', id, `${v} V on a 5 V tolerant pin: fine when the MCU is powered; check the datasheet for the unpowered case and analog mode`]);
       }
       if (['out', 'io', 'pwm'].includes(g.dir)) {
         const vih = 0.7 * v;
-        if (vih > mcuV - 0.1) issues.push(['GPIO', id, `the device on ${v} V wants VIH ≈ ${vih.toFixed(2)} V (0.7 × VDD); a ${mcuV} V output may not reach it. Use a level shifter or a TTL-input part (74HCT, VIH 2.0 V)`]);
+        if (vih > mcuV - 0.1) flag(g, ['GPIO', id, `the device on ${v} V wants VIH ≈ ${vih.toFixed(2)} V (0.7 × VDD); a ${mcuV} V output may not reach it. Use a level shifter or a TTL-input part (74HCT, VIH 2.0 V)`]);
       }
     }
-    if (g.dir === 'od' && g.pull === 'none') issues.push(['GPIO', id, 'open-drain with no pull-up listed: add one (here or on the board)']);
-    if (g.dir === 'analog' && g.pull !== 'none') issues.push(['GPIO', id, `analog input with a pull-${g.pull}: the pull skews the reading; turn it off`]);
+    if (g.dir === 'od' && g.pull === 'none') flag(g, ['GPIO', id, 'open-drain with no pull-up listed: add one (here or on the board)']);
+    if (g.dir === 'analog' && g.pull !== 'none') flag(g, ['GPIO', id, `analog input with a pull-${g.pull}: the pull skews the reading; turn it off`]);
   }
 
   // ---- I2C ----
   const buses = new Map();
   for (const d of i2c) {
     const id = `${d.device || '?'} @ ${d.raw || '?'}`;
-    if (d.addr == null) { issues.push(['I2C', id, 'no address']); continue; }
-    if (Number.isNaN(d.addr)) { issues.push(['I2C', id, 'address not readable: write 0x48, 72 or 1001000b']); continue; }
-    if (d.addr > 0x7F && d.addr <= 0xFF) { issues.push(['I2C', id, `${hex(d.addr)} is an 8-bit address (with R/W): the 7-bit address is ${hex(d.addr >> 1)}`]); d.addr >>= 1; }
-    else if (d.addr > 0xFF) { issues.push(['I2C', id, 'address above 0xFF: 10-bit addressing is not checked here']); continue; }
-    if (d.addr <= 0x07 || d.addr >= 0x78) issues.push(['I2C', id, `${hex(d.addr)} is in a reserved range (0x00-0x07, 0x78-0x7F; UM10204 table 4)`]);
+    if (d.addr == null) { flag(d, ['I2C', id, 'no address']); continue; }
+    if (Number.isNaN(d.addr)) { flag(d, ['I2C', id, 'address not readable: write 0x48, 72 or 1001000b']); continue; }
+    if (d.addr > 0x7F && d.addr <= 0xFF) { flag(d, ['I2C', id, `${hex(d.addr)} is an 8-bit address (with R/W): the 7-bit address is ${hex(d.addr >> 1)}`]); d.addr >>= 1; d.eight = true; }
+    else if (d.addr > 0xFF) { flag(d, ['I2C', id, 'address above 0xFF: 10-bit addressing is not checked here']); continue; }
+    if (d.addr <= 0x07 || d.addr >= 0x78) flag(d, ['I2C', id, `${hex(d.addr)} is in a reserved range (0x00-0x07, 0x78-0x7F; UM10204 table 4)`]);
     if (!buses.has(d.bus)) buses.set(d.bus, []);
     buses.get(d.bus).push(d);
   }
-  const busRows = [];
+  const busRows = [], busInfo = [];
   for (const [bus, list] of buses) {
     const by = new Map();
     for (const d of list) { const k = d.addr; if (!by.has(k)) by.set(k, []); by.get(k).push(d.device || '?'); }
-    for (const [a, devs] of by) if (devs.length > 1) issues.push(['I2C', `bus ${bus} ${hex(a)}`, `address conflict: ${devs.join(', ')}. Change an address strap, or move one to another bus / behind a mux (TCA9548A)`]);
+    for (const [a, devs] of by) if (devs.length > 1) {
+      const msg = `address conflict: ${devs.join(', ')}. Change an address strap, or move one to another bus / behind a mux (TCA9548A)`;
+      issues.push(['I2C', `bus ${bus} ${hex(a)}`, msg]);
+      for (const d of list) if (d.addr === a) d.issues.push(msg);
+    }
     const speeds = list.map((d) => d.khz).filter((k) => k > 0);
     const busKhz = speeds.length ? Math.min(...speeds) : null;
     const slow = speeds.length && busKhz < Math.max(...speeds) ? list.filter((d) => d.khz === busKhz).map((d) => d.device).join(', ') : '';
+    busInfo.push({ bus, khz: busKhz, limitedBy: slow ? slow.split(', ') : [], devices: list.length });
     busRows.push([bus, list.length, [...by.keys()].sort((a, b) => a - b).map(hex).join(' '), busKhz ? `${busKhz} kHz` : '–', slow ? `limited by ${slow}` : '']);
   }
 
@@ -117,7 +124,16 @@ export function run(input) {
     gpio: gpio.map((g) => ({ signal: g.signal, pin: g.pin, dir: g.dir, volts: g.v ?? null, pull: g.pull })),
     i2c: i2c.map((d) => ({ bus: d.bus, addr: Number.isFinite(d.addr) && d.addr != null ? hex(d.addr) : d.raw, device: d.device, khz: d.khz })) }, null, 2) + '\n';
 
+  // For the page's drawing (agentOmit: contract): every row with its index, level and issues.
+  const contract = {
+    board: name, mcuRail, mcuV: mcuV ?? null, fiveTolerant: tol5,
+    rails: rails.map((r) => ({ row: r.row, name: r.name, v: r.v, source: r.source, mcu: r.name.toUpperCase() === mcuRail.toUpperCase() || (r.v != null && r.v === num(mcuRail)), issues: r.issues })),
+    gpio: gpio.map((g) => ({ row: g.row, signal: g.signal, pin: g.pin, dir: g.dir, pull: g.pull, rail: g.rail, v: g.v ?? null, issues: g.issues })),
+    i2c: i2c.map((d) => ({ row: d.row, bus: d.bus, addr: Number.isFinite(d.addr) ? d.addr : null, raw: d.raw, device: d.device, khz: d.khz, eight: !!d.eight, issues: d.issues })),
+    buses: busInfo,
+  };
   return {
+    contract,
     values, warnings,
     tables: [
       ...(issues.length ? [{ title: 'Issues', columns: ['Area', 'Item', 'Problem'], rows: issues }] : []),

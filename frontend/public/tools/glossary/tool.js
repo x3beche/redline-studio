@@ -18,8 +18,8 @@ const STOP = new Set(['A', 'I', 'OK', 'NO', 'YES', 'AND', 'OR', 'NOT', 'THE', 'T
   'MAX', 'MIN', 'TYP', 'MHZ', 'KHZ', 'GHZ', 'HZ', 'MA', 'UA', 'MV', 'KV', 'MW', 'MM', 'CM', 'KB', 'MB', 'GB', 'TB', 'AM', 'PM', 'ID',
   'HIGH', 'LOW', 'SET', 'GET', 'PUT', 'POST', 'DELETE', 'PATCH', 'TRUE', 'FALSE', 'NULL', 'NONE']);
 
-/** Acronym candidates in text -> Map(term -> {count, first context}). */
-function scan(text) {
+/** Acronym candidates in text -> Map(term -> {count, first context}); every hit's span goes into `spans`. */
+function scan(text, spans = []) {
   const found = new Map();
   const re = /(?<![A-Za-z0-9_])([A-Za-z0-9][A-Za-z0-9/&-]{0,11})(?![A-Za-z0-9_])/g;
   let m;
@@ -39,12 +39,13 @@ function scan(text) {
     const ctx = text.slice(Math.max(0, at - 30), at + w.length + 30).replace(/\s+/g, ' ').trim();
     const f = found.get(w);
     if (f) f.count++; else found.set(w, { count: 1, ctx });
+    spans.push([at, at + w.length, w]);
   }
   return found;
 }
 
 export function run({ terms, filter, domain, text }) {
-  const rows = (Array.isArray(terms) ? terms : []).filter((r) => norm(r.term) || norm(r.expansion) || norm(r.definition));
+  const rows = (Array.isArray(terms) ? terms : []).map((r, i) => ({ ...r, _row: i })).filter((r) => norm(r.term) || norm(r.expansion) || norm(r.definition));
   const warnings = [];
   const notes = [];
 
@@ -54,14 +55,19 @@ export function run({ terms, filter, domain, text }) {
   rows.forEach((r, i) => {
     const term = norm(r.term);
     if (!term) { warnings.push(`Row ${i + 1} ("${(norm(r.expansion) || norm(r.definition)).slice(0, 40)}") has no term.`); return; }
-    const e = { term, expansion: norm(r.expansion), definition: norm(r.definition), domain: DOMAINS.includes(norm(r.domain)) ? norm(r.domain) : 'all', see: norm(r.see) };
-    if (!e.expansion && !e.definition) warnings.push(`${term} has neither an expansion nor a definition: say what it stands for or what it means.`);
+    const e = { term, expansion: norm(r.expansion), definition: norm(r.definition), domain: DOMAINS.includes(norm(r.domain)) ? norm(r.domain) : 'all', see: norm(r.see), row: r._row, issues: [] };
+    if (!e.expansion && !e.definition) { warnings.push(`${term} has neither an expansion nor a definition: say what it stands for or what it means.`); e.issues.push('no expansion and no meaning'); }
     const k = term.toLowerCase();
     const same = byKey.get(k) || [];
     for (const o of same) {
       if (o.domain !== e.domain && o.domain !== 'all' && e.domain !== 'all') continue;   // one term, two rooms, two meanings: allowed
-      if (o.expansion.toLowerCase() === e.expansion.toLowerCase()) warnings.push(`${term} is listed twice with the same expansion: delete one.`);
-      else warnings.push(`${term} has two meanings in the same scope: "${o.expansion || o.definition}" and "${e.expansion || e.definition}". Keep one, or give each its room in Domain.`);
+      if (o.expansion.toLowerCase() === e.expansion.toLowerCase()) {
+        warnings.push(`${term} is listed twice with the same expansion: delete one.`);
+        o.issues.push('listed twice'); e.issues.push('listed twice: delete one');
+      } else {
+        warnings.push(`${term} has two meanings in the same scope: "${o.expansion || o.definition}" and "${e.expansion || e.definition}". Keep one, or give each its room in Domain.`);
+        o.issues.push(`second meaning in the same scope: "${e.expansion || e.definition}"`); e.issues.push(`second meaning in the same scope: "${o.expansion || o.definition}"`);
+      }
     }
     same.push(e); byKey.set(k, same);
     entries.push(e);
@@ -69,7 +75,7 @@ export function run({ terms, filter, domain, text }) {
   // "See also" pointing nowhere.
   for (const e of entries) {
     for (const s of e.see.split(/[,;]+/).map(norm).filter(Boolean)) {
-      if (!byKey.has(s.toLowerCase())) warnings.push(`${e.term}: "see also ${s}" is not in the glossary - add ${s} or remove the reference.`);
+      if (!byKey.has(s.toLowerCase())) { warnings.push(`${e.term}: "see also ${s}" is not in the glossary - add ${s} or remove the reference.`); (e.dangling ||= []).push(s); }
     }
   }
 
@@ -92,12 +98,16 @@ export function run({ terms, filter, domain, text }) {
     { label: 'Shown', value: shown.length },
   ];
   const body = String(text ?? '');
+  const spans = [];
+  let found = new Map();
+  let unknown = [];
   if (body.trim()) {
-    const found = scan(body);
+    found = scan(body, spans);
     const known = new Set(entries.map((e) => e.term.toLowerCase()));
     const used = [...found.entries()].sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]));
     const missing = used.filter(([w]) => !known.has(w.toLowerCase()));
     const hit = used.filter(([w]) => known.has(w.toLowerCase()));
+    unknown = missing.map(([w, x]) => ({ term: w, count: x.count, ctx: x.ctx }));
     values.push(
       { label: 'Acronyms in text', value: used.length },
       { label: 'Not in glossary', value: missing.length, tone: missing.length ? 'warn' : 'ok', hint: missing.length ? 'add them or spell them out' : 'all defined' },
@@ -117,6 +127,15 @@ export function run({ terms, filter, domain, text }) {
   const csvCell = (s) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
   const csv = ['term,expansion,definition,domain,see', ...entries.map((e) => [e.term, e.expansion, e.definition, e.domain, e.see].map(csvCell).join(','))];
 
+  // For the page: every entry with its row, flags and uses, and every acronym
+  // in the text with its place (agentOmit: book, marks).
+  const known = new Set(entries.map((e) => e.term.toLowerCase()));
+  const shownSet = new Set(shown);
+  const book = entries.slice().sort((a, b) => a.term.localeCompare(b.term, 'en', { sensitivity: 'base' }))
+    .map((e) => ({ row: e.row, term: e.term, expansion: e.expansion, definition: e.definition, domain: e.domain, see: e.see,
+      issues: e.issues, dangling: e.dangling || [], shown: shownSet.has(e), uses: [...found].filter(([w]) => w.toLowerCase() === e.term.toLowerCase()).reduce((n, [, x]) => n + x.count, 0) }));
+  const marks = spans.map(([start, end, term]) => ({ start, end, term, known: known.has(term.toLowerCase()) }));
+
   if (!entries.length) warnings.push('The glossary is empty: add a row per term (term, what it stands for, what it means).');
   return {
     values,
@@ -127,5 +146,8 @@ export function run({ terms, filter, domain, text }) {
     ],
     warnings,
     notes,
+    book,
+    marks,
+    unknown,
   };
 }

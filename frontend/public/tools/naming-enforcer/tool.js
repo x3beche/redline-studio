@@ -47,6 +47,44 @@ function guessKind(name) {
   return 'net';
 }
 
+// Where in a name the rules break, as [start, end, why] spans over the name as written
+// (for the page's drawing; agents get the same facts as text in "problems").
+const ALLOWED = { upper_snake: /[A-Z0-9_]/, lower_snake: /[a-z0-9_]/, kebab: /[a-z0-9-]/, camel: /[A-Za-z0-9]/, pascal: /[A-Za-z0-9]/ };
+function spansOf(r, style, maxLen, caseBad, badClass) {
+  const out = [];
+  const t = r.raw;
+  const mark = (i, why) => out.push([i, i + 1, why]);
+  let base = t, off = 0, ext = '';
+  if (r.kind === 'net' && t.includes('/')) { off = t.lastIndexOf('/') + 1; base = t.slice(off); }
+  if (r.kind === 'file') { const dot = t.lastIndexOf('.'); if (dot > 0) { ext = t.slice(dot); base = t.slice(0, dot); } }
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (/\s/.test(ch)) { mark(i, 'space'); continue; }
+    if (i < off) continue;
+    if (r.kind === 'net' && /[~#!{}]/.test(ch)) { mark(i, 'active-low mark'); continue; }
+    if (r.kind === 'net' && ch === '.' && /\d/.test(t[i - 1] || '') && /\d/.test(t[i + 1] || '')) { mark(i, 'decimal point'); continue; }
+    if (r.kind === 'file' && /[^A-Za-z0-9._-]/.test(ch)) { mark(i, 'not portable'); continue; }
+    if (r.kind === 'file' && i >= base.length && /[A-Z]/.test(ch)) { mark(i, 'upper-case extension'); continue; }
+    if (r.kind === 'refdes') { if (/[a-z]/.test(ch)) mark(i, 'lower case'); continue; }
+    if (caseBad && ALLOWED[style] && i < off + base.length && !(r.kind === 'net' && i === off && ch === '+') && !ALLOWED[style].test(ch) && !/[~#!{}.]/.test(ch)) mark(i, 'case rule');
+  }
+  if (r.kind === 'refdes') {
+    const m = /^([A-Za-z]+)(0*)\d/.exec(t);
+    if (m && badClass) out.push([0, m[1].length, 'class letter']);
+    if (m && m[2]) out.push([m[1].length, m[1].length + m[2].length, 'leading zero']);
+  }
+  if (maxLen && t.length > maxLen) out.push([maxLen, t.length, 'over the length limit']);
+  void ext;
+  // Neighbouring characters broken for the same reason make one span.
+  out.sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const sp of out) {
+    const last = merged[merged.length - 1];
+    if (last && last[2] === sp[2] && sp[0] <= last[1]) last[1] = Math.max(last[1], sp[1]); else merged.push([...sp]);
+  }
+  return merged;
+}
+
 export function run(input) {
   const kindSel = ['auto', 'net', 'refdes', 'part', 'file'].includes(input.kind) ? input.kind : 'auto';
   const style = CASES[input.style] ? input.style : input.style === 'custom' ? 'custom' : 'upper_snake';
@@ -133,7 +171,8 @@ export function run(input) {
     const full = r.kind === 'file' ? name + ext : head + name;
     if (maxLen && full.length > maxLen) problems.push(`${full.length} characters, over the ${maxLen} limit`);
     if (fix === r.raw) fix = null;
-    return { ...r, problems, fix: problems.length ? fix : null, norm: (r.kind + ':' + words(full).join('').toLowerCase()) };
+    const caseBad = problems.some((p) => p.startsWith('not '));
+    return { ...r, problems, fix: problems.length ? fix : null, norm: (r.kind + ':' + words(full).join('').toLowerCase()), spans: spansOf(r, style, maxLen, caseBad, problems.some((p) => /IEEE 315 class/.test(p))) };
   }).filter(Boolean);
 
   // Names that differ only in case or separators: many tools merge them, some do not.
@@ -152,6 +191,14 @@ export function run(input) {
 
   const bad = results.filter((r) => r.problems.length);
   const ok = results.length - bad.length;
+  clashes.forEach((g, i) => { for (const r of g) r.group = i; });
+  // How the same list fares under each case rule: the page lets the rule be tried on.
+  const rules = input._inner ? [] : Object.entries(CASES).map(([id, c]) => {
+    const other = id === style ? null : run({ ...input, style: id, _inner: true });
+    const pass = other ? other.values.find((v) => v.label === 'Pass').value : ok;
+    const sample = results.find((r) => r.kind === 'net' && r.fix) || results.find((r) => r.kind !== 'refdes');
+    return { style: id, name: c.name, pass, total: results.length, sample: sample ? c.join(words(rkm(sample.raw.replace(/^\+/, '').replace(/[~#!{}]/g, '')))) : c.join(['net', 'name']) };
+  });
   if (!results.length && !auto.length) warnings.push('No names found: paste one name per line (optionally prefixed net:, ref:, part: or file:).');
   if (unparsed.length) warnings.push(`${unparsed.length} line(s) could not be read - see the table "Not read".`);
   if (clashes.length) warnings.push(`${clashes.length} group(s) of names differ only in case or separators - tools disagree on whether they are the same net or file. Pick one spelling.`);
@@ -163,6 +210,9 @@ export function run(input) {
   const renames = bad.filter((r) => r.fix && r.fix !== r.raw);
   const pct = results.length ? Math.round((100 * ok) / results.length) : 100;
   return {
+    names: results.map((r) => ({ line: r.line, raw: r.raw, kind: r.kind, problems: r.problems, fix: r.fix, spans: r.spans, group: r.group ?? null })),
+    autoNamed: auto.map((r) => ({ line: r.line, raw: r.raw })),
+    rules,
     values: [
       { label: 'Names checked', value: results.length },
       { label: 'Pass', value: ok, tone: bad.length ? undefined : 'ok' },

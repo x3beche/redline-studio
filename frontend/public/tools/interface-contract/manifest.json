@@ -1,5 +1,5 @@
 {
-  "id": "interface-contract", "version": "1.0",
+  "id": "interface-contract", "version": "1.1",
   "name": "Interface Contract",
   "blurb": "GPIO map, I2C addresses and voltage levels defined once for every room",
   "group": "project",
@@ -443,5 +443,7 @@
     "JEDEC JESD8C / JESD8-5: CMOS input levels VIH = 0.7 VDD, VIL = 0.3 VDD",
     "Absolute maximum VDD + 0.3 V: typical MCU datasheet rating (rule of thumb; check the part)"
   ],
-  "view": true
+  "view": true,
+  "layout": "custom",
+  "agentOmit": ["contract"]
 }

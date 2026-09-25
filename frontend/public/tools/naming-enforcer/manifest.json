@@ -1,5 +1,5 @@
 {
-  "id": "naming-enforcer", "version": "1.0",
+  "id": "naming-enforcer", "version": "1.1",
   "name": "Naming Convention Enforcer",
   "blurb": "nets, symbols, parts and files checked against one naming rule",
   "group": "project",
@@ -25,5 +25,7 @@
       "names": "hero-image.png\nHeroBanner.jpg\nuser_profile.svg\nicon-close.SVG\ncon.txt\nnew logo final.png" } }
   ],
   "usage": "Give names as one per line in names (optionally prefixed net:, ref:, part: or file:), the kind (auto, net, refdes, part, file), the case style (upper_snake, lower_snake, kebab, camel, pascal or custom with pattern as a regex), maxlen in characters (0 = none) and optional comma-separated prefixes. It returns pass/fail counts, a failures table with the problem and a suggested name, clashes between names that differ only in case or separators, and a CSV rename map. Use it before a netlist review, a library cleanup or a file release.",
-  "sources": ["IEEE 315-1975 / ASME Y14.44-2008 reference designator class letters", "IEC 60062 (RKM code: 3V3 for 3.3 V)", "IEEE 1003.1 (POSIX) portable filename character set, section 3.282", "Microsoft: Naming Files, Paths, and Namespaces (reserved device names)", "Case styles: convention, not a standard"]
+  "sources": ["IEEE 315-1975 / ASME Y14.44-2008 reference designator class letters", "IEC 60062 (RKM code: 3V3 for 3.3 V)", "IEEE 1003.1 (POSIX) portable filename character set, section 3.282", "Microsoft: Naming Files, Paths, and Namespaces (reserved device names)", "Case styles: convention, not a standard"],
+  "layout": "custom",
+  "agentOmit": ["names", "autoNamed"]
 }

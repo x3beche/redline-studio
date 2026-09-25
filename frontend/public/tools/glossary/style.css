@@ -1,0 +1,136 @@
+/* Glossary & Acronym Book: a document with its acronyms marked, and the
+   glossary as a dictionary with a thumb index. Data colours are --tool-*
+   tokens, defined for light and dark the way kit.css defines its own. */
+:root {
+  --tool-known-bg: rgba(31, 78, 216, 0.08); --tool-unknown-bg: rgba(192, 57, 43, 0.10);
+  --tool-hot-bg: rgba(31, 78, 216, 0.24);
+  --tool-d-all: #7a8794; --tool-d-project: #1f4ed8; --tool-d-cad: #0f9d8a; --tool-d-pcb: #2f855a;
+  --tool-d-web: #a23fbf; --tool-d-embedded: #d97706; --tool-d-mobile: #c0397a;
+  --tool-letter: #c3ccd5;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-known-bg: rgba(109, 141, 255, 0.12); --tool-unknown-bg: rgba(229, 115, 115, 0.16);
+    --tool-hot-bg: rgba(109, 141, 255, 0.34);
+    --tool-d-all: #8ea0b0; --tool-d-project: #6d8dff; --tool-d-cad: #3cc7b3; --tool-d-pcb: #68b36b;
+    --tool-d-web: #c982e0; --tool-d-embedded: #f0a33a; --tool-d-mobile: #e87aa9;
+    --tool-letter: #34424f;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-known-bg: rgba(109, 141, 255, 0.12); --tool-unknown-bg: rgba(229, 115, 115, 0.16);
+  --tool-hot-bg: rgba(109, 141, 255, 0.34);
+  --tool-d-all: #8ea0b0; --tool-d-project: #6d8dff; --tool-d-cad: #3cc7b3; --tool-d-pcb: #68b36b;
+  --tool-d-web: #c982e0; --tool-d-embedded: #f0a33a; --tool-d-mobile: #e87aa9;
+  --tool-letter: #34424f;
+}
+
+.gl { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.gl-work { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 900px) { .gl-work { grid-template-columns: minmax(0, 1fr); } }
+.gl-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.gl-head { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); min-height: 38px; }
+.gl-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.gl-sub { font-size: 11.5px; color: var(--ink-soft); }
+.gl-grow { flex: 1; }
+.gl-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* the document */
+.gl-left { position: sticky; top: 8px; }
+@media (max-width: 900px) { .gl-left { position: static; } }
+.gl-sheet { position: relative; padding: 22px 26px 20px; }
+.gl-page, .gl-ta {
+  font: 17px/1.8 "IBM Plex Serif", Georgia, "Times New Roman", serif; color: var(--ink);
+  white-space: pre-wrap; word-break: break-word; min-height: 220px; max-height: calc(100vh - 250px); overflow: auto;
+}
+.gl-page { margin: 0; cursor: text; }
+.gl-ta { display: block; width: 100%; resize: vertical; border: 1px dashed var(--line); border-radius: 4px; background: var(--sunken); padding: 8px 10px; }
+.gl-page[hidden], .gl-ta[hidden] { display: none; }
+@media (max-width: 600px) { .gl-sheet { padding: 14px 14px 12px; } .gl-page, .gl-ta { font-size: 15.5px; min-height: 150px; } }
+.gl-m { font: inherit; color: inherit; background: var(--tool-known-bg); border: 0; padding: 0 1px; margin: 0; border-radius: 2px;
+  border-bottom: 2px solid var(--accent); cursor: pointer; line-height: inherit; }
+.gl-m.gl-unknown { background: var(--tool-unknown-bg); border-bottom: 2px dashed var(--danger); color: var(--danger); font-weight: 600; }
+.gl-m.gl-on, .gl-m.gl-hot { background: var(--tool-hot-bg); }
+.gl-m:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gl-empty { color: var(--ink-soft); font: 13px/1.5 "IBM Plex Sans", sans-serif; }
+.gl-tip { position: absolute; display: none; z-index: 5; max-width: 320px; padding: 7px 9px; font-size: 12px; line-height: 1.4;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 5px; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); pointer-events: none; }
+.gl-tipdef { margin-top: 3px; }
+.gl-tipsoft { margin-top: 3px; font-size: 11px; color: var(--ink-soft); }
+.gl-tipbad { color: var(--danger); margin-top: 2px; }
+.gl-missing { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px 10px; border-top: 1px solid var(--line-soft); }
+.gl-missing:empty { display: none; }
+.gl-mlabel { font-size: 11.5px; color: var(--ink-soft); margin-right: 2px; }
+.gl-ok { font-size: 12px; color: var(--ok); }
+.gl-chip { display: inline-flex; align-items: baseline; gap: 5px; padding: 2px 8px; border: 1px dashed var(--danger); border-radius: 12px;
+  background: var(--tool-unknown-bg); cursor: pointer; font-size: 12px; }
+.gl-chip b { font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--danger); }
+.gl-chip span { color: var(--ink-soft); font-size: 11px; }
+.gl-chip i { font-style: normal; font-size: 11px; color: var(--accent); }
+.gl-chip:hover { border-style: solid; }
+
+/* the book */
+.gl-tools { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); }
+.gl-doms { display: flex; flex-wrap: wrap; gap: 2px; }
+.gl-dom { border: 0; background: transparent; color: var(--ink-soft); font-size: 12px; padding: 3px 8px; border-radius: 4px; cursor: pointer; }
+.gl-dom small { margin-left: 4px; font-size: 10.5px; opacity: .75; }
+.gl-dom[aria-selected="true"] { background: var(--sunken); color: var(--ink); font-weight: 500; }
+.gl-search { flex: 1; min-width: 140px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); font-size: 12.5px; }
+.gl-add { padding: 10px; border-bottom: 1px solid var(--line-soft); background: var(--sunken); }
+.gl-add[hidden] { display: none; }
+.gl-addgrid, .gl-edit { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px 8px; margin-bottom: 8px; }
+.gl-f { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gl-f span { font-size: 11px; color: var(--ink-soft); }
+.gl-f input, .gl-f select, .gl-f textarea { width: 100%; min-width: 0; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px;
+  background: var(--surface); font-size: 12.5px; resize: vertical; }
+.gl-wide { grid-column: 1 / -1; }
+.gl-hint { font-size: 11.5px; color: var(--warn); margin-bottom: 6px; }
+.gl-hint:empty { display: none; }
+
+.gl-book { display: grid; grid-template-columns: minmax(0, 1fr) 30px; }
+.gl-scroll { max-height: calc(100vh - 205px); min-height: 300px; overflow: auto; overscroll-behavior: contain; }
+@media (max-width: 900px) { .gl-scroll { max-height: 70vh; } }
+.gl-leaves { position: relative; padding: 4px 12px 14px 30px; }
+.gl-arcs { position: absolute; left: 4px; top: 4px; width: 26px; overflow: visible; pointer-events: none; }
+.gl-arc { fill: none; stroke: var(--line); stroke-width: 1.4; }
+.gl-arcon { stroke: var(--accent); stroke-width: 2; }
+.gl-arcbad { stroke: var(--danger); stroke-dasharray: 3 2; }
+.gl-arcdot { fill: var(--danger); }
+.gl-letter { font: 600 22px/1 "IBM Plex Serif", Georgia, serif; color: var(--tool-letter); padding: 12px 0 4px; border-bottom: 1px solid var(--line-soft); margin-bottom: 2px; }
+.gl-e { padding: 7px 8px 8px; border-radius: 5px; cursor: pointer; border-left: 3px solid transparent; margin: 2px 0; }
+.gl-e:hover { background: var(--sunken); }
+.gl-e.gl-bad { border-left-color: var(--danger); }
+.gl-e.gl-sel { background: var(--sunken); border-left-color: var(--accent); cursor: default; outline: 1px solid var(--line); }
+.gl-ehead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
+.gl-term { font: 600 15px "IBM Plex Mono", ui-monospace, monospace; }
+.gl-exp { font: italic 14px "IBM Plex Serif", Georgia, serif; }
+.gl-domtag { font-size: 10.5px; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 4px; }
+.gl-domtag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--tool-d-all); }
+.gl-domtag.d-project::before { background: var(--tool-d-project); } .gl-domtag.d-cad::before { background: var(--tool-d-cad); }
+.gl-domtag.d-pcb::before { background: var(--tool-d-pcb); } .gl-domtag.d-web::before { background: var(--tool-d-web); }
+.gl-domtag.d-embedded::before { background: var(--tool-d-embedded); } .gl-domtag.d-mobile::before { background: var(--tool-d-mobile); }
+.gl-uses { margin-left: auto; font-size: 11px; color: var(--accent); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.gl-def { margin: 3px 0 0; font-size: 13px; color: var(--ink); }
+.gl-seerow { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; font-size: 12px; }
+.gl-seerow > span:first-child { color: var(--ink-soft); font-style: italic; }
+.gl-see { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font: 500 12px "IBM Plex Mono", ui-monospace, monospace; text-decoration: underline dotted; }
+.gl-see.gl-dangle { color: var(--danger); text-decoration: line-through; cursor: default; }
+.gl-issue { margin-top: 4px; font-size: 12px; color: var(--danger); }
+.gl-issue::before { content: "! "; font-weight: 700; }
+.gl-edit { margin-top: 8px; }
+.gl-del { color: var(--danger); }
+
+.gl-thumbs { display: flex; flex-direction: column; border-left: 1px solid var(--line-soft); padding: 4px 0; max-height: calc(100vh - 205px); overflow: hidden; }
+.gl-thumb { flex: 1 1 0; min-height: 13px; max-height: 26px; border: 0; background: transparent; color: var(--ink); font: 600 11px "IBM Plex Mono", ui-monospace, monospace;
+  cursor: pointer; padding: 0; border-radius: 0 4px 4px 0; }
+.gl-thumb:not(:disabled) { background: var(--sunken); margin: 1px 3px 1px 0; }
+.gl-thumb:not(:disabled):hover { background: var(--accent); color: var(--accent-ink); }
+.gl-thumb:disabled { color: var(--line); cursor: default; font-weight: 400; }
+
+/* bottom */
+.gl-bottom { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 900px) { .gl-bottom { grid-template-columns: minmax(0, 1fr); } }
+.gl-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.gl-col .k-warns[hidden] { display: none; }
+.gl-all summary { padding: 8px 10px; cursor: pointer; font-size: 12px; color: var(--ink-soft); }
+.gl-all .k-form { border: 0; border-top: 1px solid var(--line-soft); border-radius: 0 0 6px 6px; }

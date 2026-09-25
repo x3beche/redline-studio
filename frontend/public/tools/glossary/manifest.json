@@ -1,5 +1,5 @@
 {
-  "id": "glossary", "version": "1.0",
+  "id": "glossary", "version": "1.1",
   "name": "Glossary & Acronym Book",
   "blurb": "a project's acronyms and terms in one list",
   "group": "project",
@@ -42,5 +42,7 @@
   ],
   "usage": "Pass `terms` as rows {term, expansion, definition, domain: all|project|cad|pcb|web|embedded|mobile, see}, optionally `domain`/`filter` to narrow the list and `text` to scan a document. It returns the sorted glossary, warnings for duplicates, conflicting meanings in one domain and dangling see-also links, and - for a text - the acronyms used but not defined (with where they first appear), plus Markdown and CSV. Read the project's glossary with the MCP tool tool_data (id glossary) before writing documentation, and add new terms to it (data {terms: [...]}).",
   "sources": ["ISO 704:2022 Terminology work - Principles and methods (one concept, one term)", "IEC 60050 International Electrotechnical Vocabulary (electropedia.org) for standard electrical definitions", "Acronym detection: rule of thumb"],
-  "view": true
+  "view": true,
+  "layout": "custom",
+  "agentOmit": ["book", "marks"]
 }
