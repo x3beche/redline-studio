@@ -22,6 +22,10 @@ function breakout(R, r, e) {
   return (2 * Math.acos(c) * 180) / Math.PI;
 }
 
+// µm resolution for the drawing's numbers, no float dust in the JSON
+const tidy = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k,
+  typeof v === 'number' ? Math.round(v * 1e6) / 1e6 : Array.isArray(v) ? v.map((x) => (x && typeof x === 'object' ? tidy(x) : x)) : v]));
+
 const mm = (v) => `${fmtNum(v, 3)} mm`;
 const mil = (v) => `${fmtNum(v / 0.0254, 3)} mil`;
 
@@ -45,7 +49,20 @@ export function run({ plated, given, hole, pad, allowance, tol, reg, layer, klas
   const dmax = drill + t;
   const worst = Math.round(((pad - dmax) / 2 - e) * 1e6) / 1e6; // µm resolution, no float dust
   const angle = breakout(pad / 2, dmax / 2, e);
-  if (pad <= drill) return { warnings: [`The ${mm(pad)} pad is not larger than the ${mm(drill)} drill: there is no ring at all. Make the pad at least ${mm(drill + 2 * (bmin + e) + t)}.`] };
+  // Everything the page draws, as numbers (mm, degrees): the pad, the nominal
+  // and worst-case drill, the tolerances, and the pad sizes worth marking.
+  const ring = {
+    pth, inner, cls, drill, finished: allow ? hole : null, allow, tol: t, reg: e, pad, dmax, nominal, worst, angle,
+    bmin, allowBreak, fabmin: fabmin > 0 ? fabmin : null,
+    padTangent: dmax + 2 * e,                                   // worst-case drill just touches the pad edge
+    padNeeded: dmax + 2 * ((!pth || cls === 3) ? bmin : 0) + 2 * e,
+    padFab: fabmin > 0 ? drill + 2 * fabmin : null,             // the fab's stated minimum nominal ring
+    padRing3: dmax + 2 * bmin + 2 * e,                           // worst case still keeps the class 3 ring
+    // class 1/2 plated: the pad at which the worst-case breakout reaches the allowed angle
+    padBreakLimit: pth && cls !== 3 ? 2 * Math.sqrt(Math.max(0, e * e + (dmax / 2) ** 2 + 2 * e * (dmax / 2) * Math.cos((allowBreak / 2) * Math.PI / 180))) : null,
+    lands: ALLOW.map(([lvl, c]) => ({ level: lvl, land: dmax + 2 * bmin + c })),
+  };
+  if (pad <= drill) return { warnings: [`The ${mm(pad)} pad is not larger than the ${mm(drill)} drill: there is no ring at all. Make the pad at least ${mm(drill + 2 * (bmin + e) + t)}.`], ring: tidy({ ...ring, tone: 'bad', noRing: true }) };
 
   let verdict, tone;
   if (!pth || cls === 3) {
@@ -85,9 +102,13 @@ export function run({ plated, given, hole, pad, allowance, tol, reg, layer, klas
     return [`Class ${c}`, need, ok ? 'pass' : 'fail'];
   });
   const landRows = ALLOW.map(([lvl, c]) => [lvl, mm(c), mm(dmax + 2 * bmin + c), fmtNum((dmax + 2 * bmin + c) / 0.0254, 3)]);
+  ring.tone = tone;
+  ring.verdict = verdict;
+  ring.classes = classRows.map(([c, need, res], i) => ({ cls: i + 1, need, ok: res === 'pass' }));
   return {
     values,
     warnings,
+    ring: tidy(ring),
     tables: [
       { title: `IPC-6012 acceptance at worst case (${pth ? (inner ? 'plated, inner layer' : 'plated, outer layer') : 'non-plated'})`, columns: ['Class', 'Requirement', 'Result'], rows: classRows },
       { title: 'IPC-2221 design land size: max hole + 2 × min ring + fabrication allowance', columns: ['Producibility level', 'Allowance', 'Land (mm)', 'Land (mil)'], rows: landRows },

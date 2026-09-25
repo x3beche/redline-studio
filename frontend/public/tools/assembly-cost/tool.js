@@ -84,9 +84,28 @@ export function run(input) {
     ['Per BOM line', H.unique || '–'], ['Per extended part', H.extended || '–'], ['Per THT joint', H.tht], ['Per fine-pitch part', H.fine],
   ];
   const qs = [5, 10, 25, 50, 100, 250, 500, 1000, 5000];
+  // Everything the page draws, as numbers (USD): the order and per-board
+  // charges with the counts and rates behind them, and the per-board cost
+  // of each charge against quantity (one-off charges spread over the run).
+  const r6 = (x) => Math.round(x * 1e6) / 1e6;
+  const KEYS = ['setup', 'stencil', 'lines', 'ext'], BKEYS = ['smt', 'tht', 'fine'];
+  const curveQ = [...new Set([...Array.from({ length: 41 }, (_, i) => Math.round(10 ** (i / 10))), qty])].sort((x, y) => x - y);
+  const cost = {
+    qty, house: HOUSES[input.house] ? input.house : 'std', houseName: H.name, sides: e.sides,
+    unique: p.unique, extended: p.extended, place: p.place, pads: p.pads, joints: e.joints, tht: num(input.tht, 0), thtpins: num(input.thtpins, 0),
+    thtJoints: p.thtJoints, fine: p.fine, bom: p.bom, attrition: p.attrition,
+    rates: { ...H },
+    order: e.order.map(([label, v], i) => ({ key: KEYS[i], label, amount: r6(v) })),
+    board: e.board.map(([label, v], i) => ({ key: BKEYS[i], label, amount: r6(v) })),
+    perOrder: r6(e.perOrder), perBoard: r6(e.perBoard), assembly: r6(e.assembly), parts: r6(e.parts), total: r6(e.total),
+    partsPerBoard: r6(p.bom * (1 + p.attrition)),
+    oneOffPerBoard: r6(e.perOrder / qty), assemblyPerBoard: r6(e.assembly / qty), totalPerBoard: r6(e.total / qty), recurring: r6(qty * e.perBoard),
+    curve: { q: curveQ, assemblyPerBoard: curveQ.map((n) => r6(estimate(p, n).assembly / n)) },
+  };
   return {
     values,
     warnings,
+    cost,
     charts: [{ title: 'Assembly cost per board against quantity', type: 'bars', x: qs.map(String),
       series: [{ name: 'USD per board', y: qs.map((n) => Number(fmtNum(estimate(p, n).assembly / n, 3))) }], xLabel: 'quantity', yLabel: 'USD per board' }],
     tables: [

@@ -73,9 +73,19 @@ export function run({ freq, type, medium, er, vf }) {
     const len = vLow ? `${fmtNum(t.frac * l * vLow * 1000, 3)}–${fmtNum(t.frac * l * v * 1000, 3)} mm` : `${fmtNum(t.frac * l * v * 1000, 4)} mm`;
     return [name, fmtEng(f, 'Hz'), `${fmtNum(l * 1000, 4)} mm`, len, `${fmtNum(l / 20 * 1000, 3)} mm`];
   });
+  // Everything the page draws, as numbers (mm, Hz): the element, its trim
+  // range, the keep-out, the ground plane and the same antenna at each band.
+  const r4 = (x) => (x == null ? null : Number(x.toPrecision(6)));
+  const antenna = {
+    freq, type: TYPES[type] ? type : 'quarter', medium: medium === 'pcb' || medium === 'custom' ? medium : 'wire', frac: t.frac, vf: v, vfLow: vLow == null ? null : r4(vLow),
+    lambda: r4(lambda * 1000), len: r4(mm), lenLow: vLow ? r4(t.frac * lambda * vLow * 1000) : null, lenFree: r4(t.frac * lambda * 1000),
+    keepout: r4(keepout), ground: type === 'quarter' || type === 'fiveeighths' ? r4(ground) : null,
+    bands: BANDS.map(([f, name]) => ({ f, name, len: r4(t.frac * (C / f) * v * 1000), lenLow: vLow ? r4(t.frac * (C / f) * vLow * 1000) : null })),
+  };
   return {
     values,
     warnings,
+    antenna,
     tables: [{ title: `${t.name} at common bands (${medium === 'pcb' ? 'PCB trace' : medium === 'custom' ? 'custom VF' : 'wire'})`,
       columns: ['Band', 'Frequency', 'λ0', 'Length', 'Keep-out λ/20'], rows }],
     notes: [

@@ -4,6 +4,7 @@
   "blurb": "assembly cost from unique parts, placements and extended-part fees",
   "group": "pcb",
   "rooms": ["pcb", "analyze"],
+  "layout": "custom",
   "keywords": ["pcba", "assembly cost", "smt", "pick and place", "placements", "solder joints", "extended parts", "basic parts", "setup fee", "stencil", "tht", "contract manufacturer", "ems", "bom lines", "unit cost"],
   "intro": "A ballpark PCB assembly price from how many parts are placed, how many are unique, how many are 'extended' (not on the line's feeders), through-hole joints and fine-pitch parts. Two public fee structures are modelled: an online assembler that charges per solder joint and per extended part, and a contract manufacturer that charges per placement and BOM line.",
   "inputs": [

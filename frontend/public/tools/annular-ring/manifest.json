@@ -4,6 +4,7 @@
   "blurb": "whether the ring left around a drill is safe for a fab's tolerance",
   "group": "pcb",
   "rooms": ["pcb"],
+  "layout": "custom",
   "keywords": ["annular ring", "via pad", "drill", "breakout", "tangency", "registration", "hole tolerance", "land size", "ipc-6012", "ipc-2221", "pth", "npth", "via", "pad size", "dfm"],
   "intro": "The copper ring left between a drilled hole and the edge of its pad, nominal and at the fab's worst-case drill size and position, judged against IPC-6012 class 1/2/3 acceptance (ring width or allowed breakout). It also gives the pad size the IPC-2221 land formula asks for.",
   "inputs": [
