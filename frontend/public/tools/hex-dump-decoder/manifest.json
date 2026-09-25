@@ -1,8 +1,9 @@
 {
-  "id": "hex-dump-decoder", "version": "1.0",
+  "id": "hex-dump-decoder", "version": "1.1",
   "name": "Hex Dump Decoder",
   "blurb": "captured raw bytes split into frames for a chosen protocol",
   "group": "embedded",
+  "layout": "custom",
   "rooms": ["embedded"],
   "keywords": ["hex dump", "hexdump", "xxd", "logic analyzer", "capture", "frame", "framing", "modbus rtu", "ubx", "u-blox", "slip", "cobs", "delimiter", "length prefix", "packet"],
   "intro": "Reads a byte capture in any common hex form (spaced, 0x-prefixed, run-together, hexdump -C or xxd) and splits it into frames: Modbus RTU by CRC, u-blox UBX by header and Fletcher checksum, SLIP (RFC 1055), COBS, or a generic delimiter, fixed length or length-prefixed layout. Each frame is checked and decoded; bytes that fit no frame are reported.",

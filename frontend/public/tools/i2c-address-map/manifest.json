@@ -1,8 +1,9 @@
 {
-  "id": "i2c-address-map", "version": "1.0",
+  "id": "i2c-address-map", "version": "1.1",
   "name": "I2C Address Map",
   "blurb": "devices on a bus by address, with conflicts and alternative addresses",
   "group": "embedded",
+  "layout": "custom",
   "rooms": ["embedded", "pcb"],
   "keywords": ["i2c", "iic", "twi", "address", "7-bit", "8-bit", "conflict", "collision", "i2cdetect", "bus scan", "mux", "tca9548a", "strap", "addr pin", "smbus"],
   "intro": "Lists the devices of one I2C bus by 7-bit address, from a list of part names (with or without addresses) or a pasted i2cdetect grid. Parts it knows get their default address and the addresses their strap pins allow, so conflicts come with a free alternative or a mux suggestion; reserved addresses follow NXP UM10204.",

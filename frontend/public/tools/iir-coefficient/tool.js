@@ -30,6 +30,12 @@ const magDb = (a, f, fs) => {
   return 10 * Math.log10((a * a) / (1 - 2 * b * Math.cos(w) + b * b));
 };
 
+/** The filter itself, y += α (x − y), run over a signal from y = y0: what the page draws its scope traces with. */
+export function filterSignal(a, xs, y0 = 0) {
+  let y = y0;
+  return xs.map((x) => (y += a * (x - y)));
+}
+
 export function run({ mode, fs, fc, method, alpha, k }) {
   const warnings = [];
   if (!(fs > 0)) return { warnings: ['Give the sample rate in Hz, e.g. 1k.'] };
@@ -108,7 +114,12 @@ export function run({ mode, fs, fc, method, alpha, k }) {
   return {
     values,
     warnings,
-    response: { alpha: a, f3db: f3, fs },
+    response: {
+      alpha: a, f3db: f3, fs, beta: b, fRc, tauN, tauS: tauN / fs, nvr, kNear, aNear, q15, src,
+      mode: mode === 'alpha' || mode === 'shift' ? mode : 'cutoff',
+      settle: { p63: Math.ceil(settle(0.632)), p95: Math.ceil(settle(0.95)), p99: Math.ceil(settle(0.99)) },
+      shifts: Array.from({ length: 15 }, (_, s) => ({ k: s, alpha: 2 ** -s, f3db: f3db(2 ** -s, fs) })),
+    },
     charts: [
       { title: 'Magnitude response', type: 'line', x: fx.map((f) => Number(f.toPrecision(3))),
         series: [{ name: `EMA α = ${fmtNum(a, 4)}`, y: mag }, { name: 'Analog RC, same corner', y: rc }],

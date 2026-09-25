@@ -214,6 +214,77 @@ function splitLen(b, sync, lenOff, lenSize, lenEndian, adjust) {
   return frames;
 }
 
+
+// --- field layout of each frame, for the page's byte-by-byte colouring ---
+// A field: {from, len, role, name}; roles: addr func meta data check sync delim esc code.
+function fieldsOf(protocol, f, opt) {
+  const b = f.bytes, n = b.length, out = [];
+  const put = (from, len, role, name) => {
+    if (from >= n || len <= 0) return;
+    out.push({ from, len: Math.min(len, n - from), role, name });
+  };
+  if (f.junk) return [{ from: 0, len: n, role: 'junk', name: 'unframed' }];
+  if (protocol === 'modbus') {
+    const fc = b[1], d = n - 4;
+    put(0, 1, 'addr', `slave ${b[0]}`);
+    put(1, 1, 'func', fc & 0x80 ? `exc fc ${fc & 0x7F}` : `fc ${fc}`);
+    if (fc & 0x80) put(2, 1, 'meta', `code ${b[2]}`);
+    else if (fc >= 1 && fc <= 4) {
+      if (d === 4) { put(2, 2, 'meta', `start ${w16(b, 2)}`); put(4, 2, 'meta', `qty ${w16(b, 4)}`); }
+      else {
+        put(2, 1, 'meta', `${b[2]} bytes`);
+        if (fc <= 2) put(3, d - 1, 'data', 'bits');
+        else for (let i = 3; i + 1 < n - 2; i += 2) put(i, 2, 'data', `${w16(b, i)}`);
+      }
+    } else if (fc === 5 || fc === 6) { put(2, 2, 'meta', `addr ${w16(b, 2)}`); put(4, 2, 'data', fc === 5 ? (w16(b, 4) === 0xFF00 ? 'ON' : 'OFF') : `${w16(b, 4)}`); }
+    else if (fc === 15 || fc === 16) {
+      put(2, 2, 'meta', `addr ${w16(b, 2)}`); put(4, 2, 'meta', `qty ${w16(b, 4)}`);
+      if (d > 4) { put(6, 1, 'meta', `${b[6]} bytes`); put(7, d - 5, 'data', 'values'); }
+    } else put(2, d, 'data', 'data');
+    put(n - 2, 2, 'check', f.bad ? 'CRC bad' : 'CRC');
+  } else if (protocol === 'ubx') {
+    const len = b[4] | (b[5] << 8);
+    put(0, 2, 'sync', 'sync');
+    put(2, 1, 'func', `class ${h2(b[2])}`);
+    put(3, 1, 'func', `id ${h2(b[3] ?? 0)}`);
+    put(4, 2, 'meta', `len ${len}`);
+    put(6, len, 'data', 'payload');
+    put(6 + len, 2, 'check', f.bad ? 'CK bad' : 'CK_A CK_B');
+  } else if (protocol === 'slip') {
+    let i = 0;
+    while (i < n) {
+      if (b[i] === 0xC0) { put(i, 1, 'delim', 'END'); i++; continue; }
+      if (b[i] === 0xDB) { put(i, 2, 'esc', b[i + 1] === 0xDC ? 'ESC = C0' : b[i + 1] === 0xDD ? 'ESC = DB' : 'bad ESC'); i += 2; continue; }
+      const s0 = i; while (i < n && b[i] !== 0xC0 && b[i] !== 0xDB) i++;
+      put(s0, i - s0, 'data', 'data');
+    }
+  } else if (protocol === 'cobs') {
+    const end = b[n - 1] === 0 ? n - 1 : n;
+    let k = 0;
+    while (k < end) {
+      const code = b[k];
+      if (!code) break;
+      put(k, 1, 'code', `code ${code}`);
+      put(k + 1, Math.min(code - 1, end - k - 1), 'data', 'data');
+      k += code;
+    }
+    if (end < n) put(n - 1, 1, 'delim', '00');
+  } else if (protocol === 'delim') {
+    const hasEnd = b[n - 1] === opt.delim;
+    put(0, hasEnd ? n - 1 : n, 'data', 'data');
+    if (hasEnd) put(n - 1, 1, 'delim', 'delimiter');
+  } else if (opt.sync) {
+    const role = new Array(n).fill('data');
+    for (let i = 0; i < opt.sync.length && i < n; i++) role[i] = 'sync';
+    for (let i = opt.sync.length; i < opt.lenOff && i < n; i++) role[i] = 'func';
+    for (let i = opt.lenOff; i < opt.lenOff + opt.lenSize && i < n; i++) role[i] = 'meta';
+    const names = { sync: 'sync', func: 'header', meta: 'length', data: 'body' };
+    let i = 0;
+    while (i < n) { const s0 = i; while (i < n && role[i] === role[s0]) i++; put(s0, i - s0, role[s0], names[role[s0]]); }
+  } else put(0, n, 'data', 'data');
+  return out;
+}
+
 function hexByte(t) {
   const m = /^(?:0x)?([0-9a-f]{1,2})$/i.exec(String(t ?? '').trim());
   return m ? parseInt(m[1], 16) : null;
@@ -226,6 +297,7 @@ export function run({ data, protocol, delim, fixedLen, sync, lenOff, lenSize, le
   if (!bytes.length) return { warnings: [...warnings, 'Paste the captured bytes as hex: "01 03 00 00", "0x01,0x03", "010300" or a hexdump -C / xxd listing.'] };
 
   let frames;
+  const opt = {};
   if (protocol === 'modbus') frames = splitModbus(bytes);
   else if (protocol === 'ubx') frames = splitUbx(bytes);
   else if (protocol === 'slip') frames = splitSlip(bytes);
@@ -233,7 +305,7 @@ export function run({ data, protocol, delim, fixedLen, sync, lenOff, lenSize, le
   else if (protocol === 'delim') {
     const d = hexByte(delim);
     if (d == null) return { warnings: [`Delimiter "${delim}" is not one hex byte, e.g. 0A.`] };
-    frames = splitDelim(bytes, d);
+    frames = splitDelim(bytes, d); opt.delim = d;
   } else if (protocol === 'fixed') {
     const n = Math.round(fixedLen);
     if (!(n >= 1)) return { warnings: ['Give the fixed frame length in bytes (1 or more).'] };
@@ -245,6 +317,7 @@ export function run({ data, protocol, delim, fixedLen, sync, lenOff, lenSize, le
     if (!(off >= 0)) return { warnings: ['Give the offset of the length field from the frame start (0 or more).'] };
     if (!syn.length) warnings.push('Without sync bytes one bad length loses the rest of the capture; give the sync bytes if the protocol has them.');
     frames = splitLen(bytes, syn, off, size, lenEndian, Math.round(lenAdjust) || 0);
+    Object.assign(opt, { sync: syn, lenOff: off, lenSize: size });
   }
 
   const good = frames.filter((f) => !f.junk && !f.bad);
@@ -269,6 +342,12 @@ export function run({ data, protocol, delim, fixedLen, sync, lenOff, lenSize, le
     ],
     warnings,
     tables: [{ title: 'Frames', columns: ['#', 'Offset', 'Len', 'Bytes', 'Check', 'Decoded'], rows }],
+    // the frame layout for the page: where each frame sits in the capture and its fields
+    capture: {
+      bytes: bytes.length, protocol: protocol || 'modbus',
+      frames: frames.map((f, k) => ({ n: k + 1, off: f.off, len: f.bytes.length, kind: f.junk ? 'junk' : f.bad ? 'bad' : 'ok',
+        check: f.junk ? 'unframed' : f.check, info: f.junk ? ascii(f.bytes) : f.info, fields: fieldsOf(protocol, f, opt) })),
+    },
     texts: [{ title: 'Frames (hex)', body: frames.map((f) => `${f.junk ? '? ' : f.bad ? '! ' : '  '}${f.bytes.map(h2).join(' ')}`).join('\n') + '\n' }],
     notes,
   };

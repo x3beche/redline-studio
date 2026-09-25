@@ -71,6 +71,9 @@ const DEVICES = [
   { names: ['TCA6408', 'TCA6408A'], addrs: [0x20, 0x21], how: 'ADDR low/high' },
   { names: ['PCAL6416', 'TCA6416'], addrs: [0x20, 0x21], how: 'ADDR low/high' },
 ];
+/** Every part name the tool knows, for the page's add-a-device list. */
+export const PART_NAMES = DEVICES.flatMap((d) => d.names);
+
 const norm = (s) => String(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
 const INDEX = new Map();
 for (const d of DEVICES) for (const n of d.names) INDEX.set(norm(n), d);
@@ -152,7 +155,8 @@ export function run({ list, format, bus }) {
       if (!name && addr == null) { unparsed.push(`line ${li + 1}: "${raw.trim()}"`); return; }
       if (!dev && addr == null) { unparsed.push(`line ${li + 1}: "${raw.trim()}" (unknown part and no address; add it as "name 0x48")`); return; }
       for (let k = 0; k < count; k++) {
-        devices.push({ name: count > 1 ? `${name} #${k + 1}` : name, addr: k === 0 ? addr : null, fixed: k === 0 && addr != null, allowed: dev ? dev.addrs : null, how: dev?.how, line: li + 1 });
+        devices.push({ name: count > 1 ? `${name} #${k + 1}` : name, addr: k === 0 ? addr : null, fixed: k === 0 && addr != null, allowed: dev ? dev.addrs : null, how: dev?.how, line: li + 1,
+          base: name, k, count, part: dev ? dev.names[0] : null });
       }
       if (addr != null && addr > 0x7F) warnings.push(`Line ${li + 1}: ${hx(addr)} is not a 7-bit address. If it is the 8-bit (R/W) form, set "Addresses are" to 8-bit.`);
     });
@@ -181,6 +185,7 @@ export function run({ list, format, bus }) {
     else if (same.length > 1) status = `CONFLICT with ${same.filter((x) => x !== d).map((x) => x.name).join(', ')}`;
     else if (d.allowed && !d.allowed.includes(d.addr)) status = `not an address this part can take (${d.allowed.map(hx).join(', ')})`;
     if (same.length > 1) conflicts++;
+    d.status = status; d.alts = alts;
     rows.push([hx(d.addr), d.name, d.scan ? 'scan' : d.auto ? 'default/auto' : 'given', status,
       d.allowed ? (d.allowed.length === 1 ? 'none (fixed address)' : alts.length ? alts.slice(0, 6).map(hx).join(' ') + (alts.length > 6 ? ' …' : '') : 'none free') : '–',
       d.how || (d.allowed ? '' : 'unknown part: check its datasheet')]);
@@ -222,7 +227,16 @@ export function run({ list, format, bus }) {
   notes.push('Unknown parts are placed only where you give an address; the alternatives column comes from the built-in list of common parts.');
 
   const free = range(0x08, 0x77).filter((a) => !used.has(a)).length;
+  // the map for the page: every device where it sits, what it could move to, and why
+  const map = {
+    bus: busName, eight, scan: !!detect,
+    devices: devices.map((d, i) => ({ i, name: d.name, base: d.base ?? d.name, part: d.part ?? null, addr: d.addr, line: d.line, k: d.k ?? 0, count: d.count ?? 1,
+      from: d.scan ? 'scan' : d.auto ? 'auto' : 'given', allowed: d.allowed || null, how: d.how || '', status: d.status,
+      conflict: (used.get(d.addr) || []).length > 1, reserved: reserved(d.addr), alts: d.alts })),
+    reserved: [...range(0x00, 0x07), ...range(0x78, 0x7F)].map((a) => ({ addr: a, why: RESERVED_WHY(a) })),
+  };
   return {
+    map,
     values: [
       { label: 'Devices', value: devices.length },
       { label: 'Conflicts', value: conflicts, tone: conflicts ? 'bad' : 'ok', hint: conflicts ? 'devices sharing an address' : 'none' },

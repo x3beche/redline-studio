@@ -1,8 +1,9 @@
 {
-  "id": "iir-coefficient", "version": "1.0",
+  "id": "iir-coefficient", "version": "1.1",
   "name": "EMA / IIR Coefficient Tool",
   "blurb": "smoothing coefficient from a cutoff frequency, with the response drawn",
   "group": "embedded",
+  "layout": "custom",
   "rooms": ["embedded"],
   "keywords": ["ema", "exponential moving average", "iir", "first-order low-pass", "single pole", "smoothing", "alpha", "filter coefficient", "cutoff frequency", "time constant", "leaky integrator", "rc filter digital", "shift filter", "q15"],
   "intro": "The first-order low-pass y += α (x − y), sampled at fs. From a cutoff it gives α (either the exact −3 dB point or the matched RC time constant), from α or a right shift it gives the cutoff; the magnitude and step responses are drawn from the filter's own transfer function α / (1 − (1 − α) z⁻¹).",
