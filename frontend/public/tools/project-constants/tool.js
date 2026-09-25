@@ -175,6 +175,21 @@ export function run({ constants, filter }) {
     }
   }
 
+  // For the page: every row as data, with its limits and the problems that name it.
+  const shownSet = new Set(shown.map((it) => it.i));
+  const sheet = items.map((it) => {
+    const lim = limits(it);
+    const label = it.name || `row ${it.i + 1}`;
+    return {
+      row: it.i, name: it.name, code: it.sname, group: it.group, unit: it.unit, note: it.note, tol: it.tolText,
+      kind: it.val.kind, value: it.val.kind === 'number' ? it.val.v : null, text: valueText(it),
+      lo: it.val.kind === 'range' ? it.val.lo : null, hi: it.val.kind === 'range' ? it.val.hi : null,
+      min: lim ? lim[0] : null, max: lim ? lim[1] : null, shown: shownSet.has(it.i),
+      problems: warnings.filter((w) => w.includes(`"${it.name}"`) || w.startsWith(`${label} `) || w.startsWith(`${label}:`)
+        || (it.name && new RegExp(`No unit on .*\\b${it.name.replace(/[^\w]/g, '')}\\b`).test(w)) || (!it.name && w.startsWith(`Row ${it.i + 1} `))),
+    };
+  });
+
   const numeric = items.filter((it) => it.val.kind === 'number' || it.val.kind === 'range').length;
   const groups = new Set(items.map((it) => it.group));
   notes.push('Values are exported in the unit they are written in; nothing is converted. Keep one unit per quantity (mm for lengths) across the project.',
@@ -196,5 +211,6 @@ export function run({ constants, filter }) {
     ],
     warnings,
     notes,
+    sheet,
   };
 }

@@ -1,8 +1,10 @@
 {
-  "id": "queue-inspector", "version": "1.0",
+  "id": "queue-inspector", "version": "1.1",
   "name": "Agent Queue Inspector",
   "blurb": "queued work by time, room and success rate, with the stuck step",
   "group": "project",
+  "layout": "custom",
+  "agentOmit": ["timeline"],
   "rooms": [
     "all"
   ],

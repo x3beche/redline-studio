@@ -24,7 +24,7 @@ const norm = (s) => String(s ?? '').trim();
 const ms = (iso) => { const t = Date.parse(norm(iso)); return Number.isFinite(t) ? t : null; };
 
 /** Seconds -> "45 s", "12 min", "3 h 5 min", "2 d 4 h". */
-function dur(sec) {
+export function dur(sec) {
   if (sec == null || !Number.isFinite(sec)) return '–';
   const s = Math.max(0, Math.round(sec));
   if (s < 90) return `${s} s`;
@@ -68,6 +68,7 @@ export function run({ snapshot, stuck, room }) {
   const names = [...new Set([...ROOMS, ...Object.keys(runs), ...Object.keys(activity), ...queue.map((q) => norm(q.kind) || 'cad')])];
   const want = room && room !== 'all' ? room : null;
   const rows = [], stuckRows = [], history = [];
+  const lanes = []; // the same rooms as data, for the page's timeline
   let running = 0, stuckCount = 0, waitingRooms = 0, doneAll = 0, finishedAll = 0;
   const durations = [];
 
@@ -105,13 +106,16 @@ export function run({ snapshot, stuck, room }) {
     // State of the room.
     const isRunning = r && norm(r.status) === 'running';
     let state = 'idle';
+    let stuckStep = null, quietFor = null;
     if (isRunning) {
       running++;
       const since = age(ms(r.started_at));
       const quiet = idle ?? since;
+      quietFor = quiet;
       if (quiet != null && quiet > limit * 60) {
         state = 'stuck'; stuckCount++;
         const step = [...log].reverse().find((l) => l.level === 'work' || l.level === 'info') || lastLine;
+        stuckStep = step ? { at: ms(step.at), text: norm(step.text), level: step.level || '' } : null;
         stuckRows.push([name, dur(quiet), step ? short(norm(step.text), 120) : 'no log line since the run started', step ? step.level || '–' : '–', short(norm(r.title) || '–', 60)]);
       } else state = 'running';
     } else if (q.length && waits.length && Math.max(...waits) > limit * 60) { state = 'waiting'; waitingRooms++; }
@@ -129,6 +133,16 @@ export function run({ snapshot, stuck, room }) {
       applied + rejected ? `${Math.round((100 * applied) / (applied + rejected))} %` : '–',
       state,
     ]);
+    lanes.push({
+      room: name, state, quietFor,
+      queue: q.map((x) => ({ id: norm(x.id ?? x._id), summary: norm(x.summary) || norm(x.comment), at: ms(x.queued_at) ?? ms(x.created_at), wait: age(ms(x.queued_at) ?? ms(x.created_at)) })),
+      run: r ? { status: norm(r.status), percent: Number.isFinite(Number(r.percent)) ? Number(r.percent) : null, title: norm(r.title), start: ms(r.started_at), end: ms(r.finished_at), time: runTime(r) } : null,
+      runs: mine.map((x) => ({ start: x.start, end: x.end, took: x.start != null ? (x.end - x.start) / 1000 : null, status: x.status, ok: OK.has(x.status), title: x.title })),
+      open: open ? { start: open.at, title: open.title } : null,
+      log: log.map((l) => ({ at: ms(l.at), text: norm(l.text), level: l.level || '' })),
+      stuckStep,
+      stats: { queued: q.length, oldest: waits.length ? Math.max(...waits) : null, ok, finished, errors, applied, rejected },
+    });
   }
   const qShown = queue.filter((x) => !want || (norm(x.kind) || 'cad') === want)
     .map((x) => ({ x, w: age(ms(x.queued_at) ?? ms(x.created_at)) }))
@@ -170,6 +184,7 @@ export function run({ snapshot, stuck, room }) {
     ],
     charts,
     tables,
+    timeline: { now, limit, lanes },
     warnings,
     notes: [
       `Stuck = a running run whose last log line is older than ${limit} min; the last work line is the step it stopped at.`,

@@ -1,0 +1,163 @@
+/* Agent Queue Inspector: rooms as swimlanes in time. Data colours are
+   --tool-* tokens, defined for light and dark the way kit.css does. */
+:root {
+  --tool-run-ok: #3f9d6a; --tool-run-bad: #c0392b; --tool-run-live: #1f4ed8; --tool-run-live2: #5b7fe6;
+  --tool-queue: #b7791f; --tool-window: rgba(183, 121, 31, 0.08); --tool-lane: #f6f8fa; --tool-quiet: rgba(192, 57, 43, 0.55);
+  --tool-tick: #7b8a98; --tool-rt: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-run-ok: #3f8f60; --tool-run-bad: #c65a5a; --tool-run-live: #4f6fe0; --tool-run-live2: #3552b8;
+    --tool-queue: #e8a735; --tool-window: rgba(232, 167, 53, 0.08); --tool-lane: #131b22; --tool-quiet: rgba(229, 115, 115, 0.6);
+    --tool-tick: #6e7f8e; --tool-rt: #0f151b;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-run-ok: #3f8f60; --tool-run-bad: #c65a5a; --tool-run-live: #4f6fe0; --tool-run-live2: #3552b8;
+  --tool-queue: #e8a735; --tool-window: rgba(232, 167, 53, 0.08); --tool-lane: #131b22; --tool-quiet: rgba(229, 115, 115, 0.6);
+  --tool-tick: #6e7f8e; --tool-rt: #0f151b;
+}
+
+.qi { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.qi-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.qi-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); min-height: 38px; }
+.qi-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.qi-sub { font-size: 11.5px; color: var(--ink-soft); }
+.qi-grow { flex: 1; }
+.qi-live { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.qi-msg { font-size: 11.5px; color: var(--ink-soft); }
+.qi-msg.ok { color: var(--ok); } .qi-msg.bad { color: var(--danger); }
+.qi-f { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--ink-soft); }
+.qi-in { width: 46px; padding: 2px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); font: 12px "IBM Plex Mono", ui-monospace, monospace; text-align: right; }
+.qi-in.bad { border-color: var(--danger); }
+.qi-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; flex-wrap: wrap; }
+.qi-seg button { border: 0; background: transparent; padding: 3px 8px; font-size: 12px; color: var(--ink-soft); cursor: pointer; }
+.qi-seg button + button { border-left: 1px solid var(--line); }
+.qi-seg button[aria-pressed="true"] { background: var(--sunken); color: var(--ink); font-weight: 500; }
+.qi-tools { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); }
+
+.qi-stats { display: flex; flex-wrap: wrap; gap: 0; }
+.qi-stat { display: grid; padding: 0 10px; border-left: 1px solid var(--line-soft); min-width: 0; }
+.qi-stat small { font-size: 10.5px; color: var(--ink-soft); }
+.qi-stat b { font: 500 14px "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; }
+.qi-stat em { font-style: normal; font-size: 10px; color: var(--ink-soft); white-space: nowrap; }
+.qi-stat.bad b { color: var(--danger); } .qi-stat.ok b { color: var(--ok); } .qi-stat.warn b { color: var(--warn); }
+
+/* the timeline, drawn at 1 SVG unit = 1 px */
+.qi-stage { padding: 4px 0 0; }
+.qi-svg { display: block; width: 100%; user-select: none; -webkit-user-select: none; touch-action: none; }
+.qi-lanebg { fill: transparent; }
+.qi-lanebg.odd { fill: var(--tool-lane); }
+.qi-grid { stroke: var(--line-soft); stroke-width: 1; }
+.qi-tick { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.qi-tick.b { fill: var(--ink); font-weight: 600; }
+.qi-tick.warn { fill: var(--warn); font-weight: 600; }
+.qi-t { font: 12px "IBM Plex Sans", sans-serif; fill: var(--ink-soft); }
+.qi-window { fill: var(--tool-window); stroke: none; }
+.qi-now { stroke: var(--ink); stroke-width: 1.5; }
+.qi-rname { font: 600 13px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.qi-state { font: 600 11px "IBM Plex Sans", sans-serif; fill: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.qi-state.st-stuck, .qi-state.st-last-run-failed { fill: var(--danger); }
+.qi-state.st-running { fill: var(--tool-run-live); }
+.qi-state.st-waiting { fill: var(--warn); }
+.qi-state.st-queued { fill: var(--tool-queue); }
+.qi-fact { font: 10.5px "IBM Plex Sans", sans-serif; fill: var(--ink-soft); }
+.qi-room { cursor: pointer; outline: none; }
+.qi-room:hover .qi-rname { fill: var(--accent); text-decoration: underline; }
+.qi-room:focus-visible .qi-rname { fill: var(--accent); text-decoration: underline; }
+.qi-lane.st-stuck .qi-lanebg { fill: color-mix(in srgb, var(--danger) 6%, transparent); }
+
+.qi-run { cursor: pointer; outline: none; }
+.qi-run rect { stroke: var(--surface); stroke-width: 1; }
+.qi-run.ok rect { fill: var(--tool-run-ok); }
+.qi-run.bad rect { fill: var(--tool-run-bad); }
+.qi-run.live rect.body { fill: url(#qi-live); }
+.qi-livebg { fill: var(--tool-run-live); } .qi-livel { fill: var(--tool-run-live2); }
+.qi-run .qi-fade { fill: var(--line); opacity: .5; }
+.qi-quiet { fill: url(#qi-hatch); stroke: var(--danger) !important; stroke-width: 1.5 !important; }
+.qi-hatchl { fill: var(--tool-quiet); }
+.qi-rt { font: 500 11px "IBM Plex Sans", sans-serif; fill: var(--tool-rt); pointer-events: none; }
+.qi-run.on rect, .qi-run:focus-visible rect { stroke: var(--ink); stroke-width: 2.5; }
+.qi-run:hover rect { stroke: var(--ink-soft); stroke-width: 1.5; }
+
+.qi-base { stroke: var(--line); stroke-width: 1; }
+.qi-tk { cursor: pointer; }
+.qi-tk line { stroke: var(--tool-tick); stroke-width: 1.6; }
+.qi-tk.lv-error line { stroke: var(--danger); stroke-width: 2.4; }
+.qi-tk.lv-done line { stroke: var(--ok); stroke-width: 2; }
+.qi-tk .hit { fill: transparent; }
+.qi-tk:hover line, .qi-tk.on line { stroke: var(--accent); stroke-width: 3; }
+
+.qi-callout { cursor: pointer; outline: none; }
+.qi-cl { stroke: var(--danger); stroke-width: 1.2; stroke-dasharray: 3 2; }
+.qi-cd { fill: var(--danger); }
+.qi-ct { font: 600 11.5px "IBM Plex Sans", sans-serif; fill: var(--danger); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.qi-callout:focus-visible .qi-ct { text-decoration: underline; }
+
+.qi-q { cursor: pointer; outline: none; }
+.qi-q .bar { stroke: var(--tool-queue); stroke-width: 3; stroke-linecap: round; opacity: .75; }
+.qi-q .dot { fill: var(--surface); stroke: var(--tool-queue); stroke-width: 2; }
+.qi-q.late .bar { stroke-dasharray: 6 3; opacity: 1; }
+.qi-q .hit { fill: transparent; }
+.qi-q.on .bar, .qi-q:focus-visible .bar, .qi-q:hover .bar { stroke-width: 5; opacity: 1; }
+.qi-qn { font: 600 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--tool-queue); }
+
+.qi-h { cursor: ew-resize; outline: none; }
+.qi-hhit { fill: transparent; }
+.qi-hline { stroke: var(--warn); stroke-width: 2; stroke-dasharray: 5 3; }
+.qi-hgrip { fill: var(--surface); stroke: var(--warn); stroke-width: 2; }
+.qi-h:hover .qi-hgrip, .qi-h:focus-visible .qi-hgrip { fill: var(--warn); }
+.qi-h:focus-visible .qi-hline { stroke-width: 3; }
+
+.qi-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 10px 8px; border-top: 1px solid var(--line-soft); font-size: 11px; color: var(--ink-soft); align-items: center; }
+.qi-legend .grow { flex-basis: 100%; }
+.qi-legend .lg { display: inline-block; width: 18px; height: 9px; margin-right: 5px; vertical-align: middle; border-radius: 2px; }
+.lg.run.ok { background: var(--tool-run-ok); } .lg.run.bad { background: var(--tool-run-bad); }
+.lg.run.live { background: repeating-linear-gradient(-45deg, var(--tool-run-live) 0 5px, var(--tool-run-live2) 5px 8px); }
+.lg.quiet { background: repeating-linear-gradient(45deg, var(--tool-quiet) 0 2px, transparent 2px 5px); border: 1px solid var(--danger); }
+.lg.tick { width: 2px; height: 11px; background: var(--tool-tick); border-radius: 0; }
+.lg.tick.err { background: var(--danger); height: 15px; }
+.lg.q { height: 3px; background: var(--tool-queue); }
+.lg.win { background: var(--tool-window); border: 1px dashed var(--warn); }
+
+/* below the timeline */
+.qi-below { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 1100px) { .qi-below { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .qi-msgs { grid-column: 1 / -1; } }
+@media (max-width: 700px) { .qi-below { grid-template-columns: minmax(0, 1fr); } }
+.qi-insp { padding: 8px 10px 10px; display: grid; gap: 4px; }
+.qi-ih { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+.qi-ih.bad { color: var(--danger); } .qi-ih.ok { color: var(--ok); } .qi-ih.warn { color: var(--warn); } .qi-ih.live { color: var(--tool-run-live); }
+.qi-title { font-weight: 600; font-size: 13.5px; margin-bottom: 4px; }
+.qi-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; border-bottom: 1px dotted var(--line-soft); padding: 2px 0; }
+.qi-kv span { color: var(--ink-soft); }
+.qi-kv b { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; text-align: right; word-break: break-all; }
+.qi-kv.bad b { color: var(--danger); } .qi-kv.warn b { color: var(--warn); }
+.qi-step { margin-top: 6px; display: grid; gap: 3px; }
+.qi-step span { font-size: 11px; color: var(--ink-soft); }
+.qi-step code, .qi-code { display: block; padding: 6px 8px; border-left: 3px solid var(--danger); background: var(--sunken); border-radius: 0 4px 4px 0; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+.qi-code { border-left-color: var(--accent); }
+.qi-advice { margin-top: 6px; font-size: 12px; color: var(--ink); }
+.qi-lines { margin-top: 6px; font: 11.5px/1.5 "IBM Plex Mono", ui-monospace, monospace; background: var(--sunken); border-radius: 4px; padding: 5px 7px; max-height: 180px; overflow: auto; }
+.qi-lines div { white-space: pre-wrap; word-break: break-word; }
+.qi-lines span { color: var(--ink-soft); }
+.qi-lines .lv-error { color: var(--danger); } .qi-lines .lv-done { color: var(--ok); }
+.qi-lines .on { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.qi-empty { color: var(--ink-soft); font-size: 12px; padding: 4px 0; }
+
+.qi-queue { padding: 6px 8px 8px; display: grid; gap: 3px; }
+.qi-qrow { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; grid-template-rows: auto 5px; gap: 2px 8px; align-items: baseline; text-align: left;
+  border: 1px solid transparent; background: transparent; border-radius: 4px; padding: 4px 6px; cursor: pointer; font-size: 12px; }
+.qi-qrow:hover { border-color: var(--line); }
+.qi-qrow.on { border-color: var(--accent); background: var(--sunken); }
+.qi-qrow .r { font: 600 11.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+.qi-qrow .s { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qi-qrow b { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; }
+.qi-qrow.late b { color: var(--warn); }
+.qi-qrow .bar { grid-column: 1 / -1; position: relative; display: block; height: 4px; background: var(--sunken); border-radius: 2px; }
+.qi-qrow .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--tool-queue); border-radius: 2px; }
+.qi-qrow .bar i.lim { width: 0; top: -2px; bottom: -2px; border-left: 2px solid var(--warn); background: none; }
+
+.qi-msgs { display: grid; gap: 8px; }
+.qi-msgs .k-warns:empty, .qi-msgs .k-notes:empty { display: none; }
+.qi-snap summary { cursor: pointer; padding: 7px 10px; font-size: 12px; font-weight: 500; }
+.qi-ta { display: block; width: calc(100% - 20px); margin: 0 10px 10px; resize: vertical; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); font: 11.5px "IBM Plex Mono", ui-monospace, monospace; }

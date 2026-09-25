@@ -138,6 +138,11 @@ const isPower = (net) => /^(\/)?(GND|AGND|DGND|PGND|VSS\w*|VDD\w*|VCC\w*|VBAT|VR
 const isUnconnected = (net) => /^unconnected-/i.test(net) || /^NC$/i.test(net);
 const isAuto = (net) => /^Net-\(/.test(net);
 
+/** Whether a map row [pin, pin name, net, symbol, ...] matches a trace query (lower-cased). */
+export function rowMatches(r, q) {
+  return r.slice(0, 4).some((c) => String(c).toLowerCase().includes(q)) || !!(canon(q) && canon(q) === pinKey(r[1]));
+}
+
 export function run({ netlist, mcu, firmware, numbers, query }) {
   const warnings = [], notes = [];
   const nl = String(netlist ?? '');
@@ -178,6 +183,7 @@ export function run({ netlist, mcu, firmware, numbers, query }) {
 
   // ---- rows per MCU pin ----
   const rows = [];
+  const chipPins = []; // the same rows as structured data, for the page's drawing of the part
   let ok = 0, missingFw = 0, onDead = 0, mismatch = 0;
   const sorted = [...pins].sort((a, b) => (parseInt(a.pin, 10) - parseInt(b.pin, 10)) || String(a.pin).localeCompare(String(b.pin)));
   const seenPin = new Set();
@@ -195,6 +201,9 @@ export function run({ netlist, mcu, firmware, numbers, query }) {
     else if (unc) status = 'unconnected';
     else { status = isAuto(p.net) ? 'unnamed net, not in firmware' : 'not in firmware'; missingFw++; }
     rows.push([p.pin, p.name || '–', unc && !isUnconnected(p.net) && !others.length ? `${p.net} (no other pin)` : p.net, ss.map((s) => s.sym).join(', ') || '–', others.slice(0, 4).join(', ') + (others.length > 4 ? ` +${others.length - 4}` : '') || '–', status]);
+    chipPins.push({ pin: p.pin, name: p.name || '', key: p.key || null, net: p.net, type: p.type || '', status, unconnected: unc,
+      symbols: ss.map((s) => ({ sym: s.sym, line: s.line, how: s.how })),
+      others: (byNet.get(p.net) || []).filter((o) => o !== p).map((o) => ({ ref: o.ref, pin: o.pin, name: o.name || '', type: o.type || '' })) });
   }
   const orphans = syms.filter((s) => !keyToPins.has(s.at));
   const dupes = [...symsByKey].filter(([k, v]) => keyToPins.has(k) && new Set(v.map((s) => s.sym)).size > 1);
@@ -217,7 +226,7 @@ export function run({ netlist, mcu, firmware, numbers, query }) {
     { label: 'Symbols not on this MCU', value: orphans.length, tone: orphans.length ? 'bad' : 'ok' },
   ];
   if (q) {
-    shown = rows.filter((r) => r.slice(0, 4).some((c) => String(c).toLowerCase().includes(q)) || canon(q) && canon(q) === pinKey(r[1]));
+    shown = rows.filter((r) => rowMatches(r, q));
     if (!shown.length) warnings.push(`Nothing matches "${query}" among ${ref}'s pins, nets or firmware symbols.`);
     else if (shown.length === 1) {
       const r = shown[0];
@@ -229,5 +238,13 @@ export function run({ netlist, mcu, firmware, numbers, query }) {
   if (syms.length) tables.push({ title: 'Firmware symbols read', columns: ['Symbol', 'Pin', 'Line', 'Read as'], rows: syms.map((s) => [s.sym, s.at, s.line, s.how]) });
   const csv = ['pin,pin_name,net,firmware_symbol,status', ...rows.map((r) => [r[0], r[1], r[2], r[3], r[5]].map((c) => (/[,"]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : c)).join(','))].join('\n') + '\n';
   notes.push('Pins are joined on port and number (PA5 = PA_5 = GPIOA pin 5; GPIO5 = IO5 = GPIO_NUM_5; P0.13 = NRF_GPIO_PIN_MAP(0,13)). Power nets are recognised by name (GND, VDD, +3V3...).');
-  return { values, tables, warnings, notes, texts: [{ title: 'Pin map CSV', body: csv, lang: 'csv' }] };
+  // For the page: the part's pins as data (which rows the query picked, too).
+  const picked = new Set(q ? shown.map((r) => r[0]) : []);
+  const chip = {
+    ref, format, pinCount: seenPin.size, query: q,
+    pins: chipPins.map((c) => ({ ...c, match: picked.has(c.pin) })),
+    orphans: orphans.map((s) => ({ sym: s.sym, key: s.key, line: s.line, how: s.how })),
+    counts: { ok, mismatch, onDead, missingFw, orphans: orphans.length },
+  };
+  return { values, tables, warnings, notes, texts: [{ title: 'Pin map CSV', body: csv, lang: 'csv' }], chip };
 }

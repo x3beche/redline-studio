@@ -1,8 +1,10 @@
 {
-  "id": "project-constants", "version": "1.0",
+  "id": "project-constants", "version": "1.1",
   "name": "Project Constants",
   "blurb": "board size, supply voltages and mechanical references kept in one place",
   "group": "project",
+  "layout": "custom",
+  "agentOmit": ["sheet"],
   "rooms": ["all"],
   "keywords": ["constants", "project constants", "single source of truth", "board size", "outline", "supply voltage", "rails", "mounting holes", "dimensions", "tolerance", "parameters", "config header", "defines", "shared values", "specs"],
   "intro": "One list of the numbers every room uses - board outline, rails, holes, heights, temperatures - saved as the project's record in the app. It checks names, units and tolerances, works out the min/max limits, and writes the same list as a C header, Python, OpenSCAD and JSON.",
