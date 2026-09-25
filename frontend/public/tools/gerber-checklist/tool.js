@@ -57,7 +57,14 @@ export function run(input) {
   const warnings = [];
   const blockers = ['l_outline', 'd_pth', 'l_cu', 'f_origin', 'd_units'].filter((k) => open.some((it) => it[0] === k));
   if (blockers.length) warnings.push(`Not ready to send - open: ${blockers.map((k) => ITEMS.find((it) => it[0] === k)[2]).join('; ')} - these make a scrap board or a held order.`);
+  // For the page's drawing: every item with its state.
+  const check = {
+    pct, done: done.length, live: live.length, open: open.length, skipped,
+    blockers,
+    items: ITEMS.map(([key, group, what, why, app]) => ({ key, group, what, why, applies: app, live: applies(app), done: !!input[key], blocker: blockers.includes(key) })),
+  };
   return {
+    check,
     values: [
       { label: 'Progress', value: `${pct} %`, tone: pct === 100 ? 'ok' : pct >= 70 ? 'warn' : 'bad' },
       { label: 'Done', value: `${done.length} / ${live.length}` },

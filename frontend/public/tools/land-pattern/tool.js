@@ -116,7 +116,15 @@ export function run({ pkg, filter, level, fab, place }) {
       const r = land(x, lv, F, Pl);
       return [x.id, name(x), x.p ? fmtNum(x.p, 3) : '–', size(r.Y, r.X) + (r.Xtab ? ` (tab ${fmtNum(r.Xtab, 3)})` : ''), fmtNum(r.C, 3), fmtNum(r.Z, 3), fmtNum(r.G, 3), size(r.cyX, r.cyY)];
     });
+    // For the page's drawing: every matching pattern's lands, as run() computed them.
+    const patterns = list.map((x) => {
+      const r = land(x, lv, F, Pl);
+      return { id: x.id, ipc: name(x), form: x.form, p: x.p || null, n: x.n, row: x.row || 1, sides: x.sides || 2, ep: x.ep || null,
+        bx: x.bx, by: x.by, L: x.L, Z: r.Z, G: r.G, X: r.X, Y: r.Y, C: r.C, Xtab: r.Xtab, gap: r.gap, cyX: r.cyX, cyY: r.cyY };
+    });
     return {
+      pattern: null,
+      patterns,
       values: [
         { label: 'Packages', value: `${list.length} of ${P.length}`, hint: q ? `matching "${filter}"` : 'all' },
         { label: 'Density level', value: LEVEL_NAME[lv] },
@@ -153,7 +161,22 @@ export function run({ pkg, filter, level, fab, place }) {
     ['Height (max)', fmtNum(one.h, 3), ''],
   ];
   if (one.ep && one.form === 'nolead') warnings.push('Exposed pad sizes differ between makers: take the thermal land from your part\'s datasheet.');
+  const levels = Object.fromEntries(['M', 'N', 'L'].map((k) => {
+    const t = land(one, k, F, Pl);
+    return [k, { Z: t.Z, G: t.G, X: t.X, Y: t.Y, C: t.C, Xtab: t.Xtab, gap: t.gap, cyX: t.cyX, cyY: t.cyY, cy: t.goal.cy[LEVEL[k]] }];
+  }));
+  // For the page's drawing: the pattern and the part it was calculated for (mm).
+  const pattern = {
+    id: one.id, ipc: name(one), level: lv, form: one.form, formName: r.goal.name,
+    p: one.p || null, n: one.n, row: one.row || 1, sides: one.sides || 2, ep: one.ep || null, tab: one.tab || null,
+    L: one.L, T: one.T, W: one.W, bx: one.bx, by: one.by, h: one.h,
+    Z: r.Z, G: r.G, X: r.X, Y: r.Y, C: r.C, Xtab: r.Xtab, gap: r.gap, cyX: r.cyX, cyY: r.cyY, cy: r.goal.cy[LEVEL[lv]],
+    jt: r.goal.jt[LEVEL[lv]], jh: r.goal.jh[LEVEL[lv]], js: r.goal.js[LEVEL[lv]],
+    pin1: one.p ? [-r.C / 2, (one.row - 1) * one.p / 2] : null,
+    F, P: Pl, levels,
+  };
   return {
+    pattern,
     values,
     warnings,
     tables: [
@@ -173,3 +196,6 @@ function notes(F, Pl) {
 }
 
 export const PACKAGES = P.map((x) => x.id);
+// The component outlines (not the lands), for drawing the packages to scale.
+export const OUTLINES = P.map((x) => ({ id: x.id, ipc: x.ipc, formName: GOALS[x.form].name, form: x.form, L: x.L, T: x.T, W: x.W, bx: x.bx, by: x.by, n: x.n, row: x.row || 1, sides: x.sides || 2, p: x.p || null, ep: x.ep || null, tab: x.tab || null,
+  family: x.form.startsWith('chip') ? 'Chip' : x.form === 'molded' ? 'Molded' : x.form === 'nolead' ? 'QFN / DFN' : x.sides === 4 ? 'LQFP' : /^SO[DT]|^SC/.test(x.id) ? 'SOD / SOT' : 'SOIC / SOP' }));

@@ -47,7 +47,8 @@ export function run({ p, ta, tjmax, margin, rjc, rcs, air, rja }) {
   if (!(sa > 0)) {
     warnings.push(`θJC + θCS (${fmtNum(jc + cs, 3)} °C/W) already uses up the ${fmtNum(budget, 3)} °C/W budget: no heat sink is good enough. Use a better interface, a lower-θJC package, split the power over several parts, or lower the ambient.`);
     values.unshift({ label: 'Max sink θSA', value: 'impossible', tone: 'bad' });
-    return { values, warnings };
+    const tcX = target - p * jc;
+    return { values, warnings, path: pathOf({ ok: false, p, ta, tjmax, mg, target, jc, cs, sa, budget, tc: tcX, ts: tcX - p * cs, rja, air: flow }) };
   }
   const vLo = flow.lo / sa, vHi = flow.hi / sa;
   const tc = target - p * jc, ts = tc - p * cs;
@@ -84,10 +85,30 @@ export function run({ p, ta, tjmax, margin, rjc, rcs, air, rja }) {
     values,
     warnings,
     tables,
+    path: pathOf({ ok: true, p, ta, tjmax, mg, target, jc, cs, sa, budget, tc, ts, rja, air: flow, vLo, vHi }),
     notes: [
       'Heat sink θSA falls as power (and so temperature rise) grows; read the chosen part\'s curve at this power, not its single headline figure.',
       'The volume estimate is the envelope of the fins for a well-designed extrusion; poor orientation (fins horizontal) or blocked air can double it.',
       'Several parts on one sink: add their powers for the sink, but check each junction through its own θJC and θCS.',
     ],
+  };
+}
+
+// The thermal path as numbers, for the page's drawing (every temperature and
+// size it shows comes from here).
+function pathOf({ ok, p, ta, tjmax, mg, target, jc, cs, sa, budget, tc, ts, rja, air, vLo, vHi }) {
+  const flowKey = Object.keys(RV).find((k) => RV[k] === air);
+  return {
+    ok, p, ta, tjmax, margin: mg, tj: target, tc, ts, budget,
+    theta: { jc, cs, sa },
+    drop: { jc: p * jc, cs: p * cs, sa: p * sa },
+    tjBare: rja > 0 ? ta + p * rja : null,
+    // with a perfect sink (θSA = 0): the coolest this part can run on this interface
+    perfect: { ts: ta, tc: ta + p * cs, tj: ta + p * (jc + cs), over: ta + p * (jc + cs) - target },
+    air: flowKey,
+    volume: ok ? [vLo, vHi] : null,
+    cube: ok ? [Math.cbrt(vLo) * 10, Math.cbrt(vHi) * 10] : null,
+    flows: ok ? ['natural', '1', '2.5', '5'].map((k) => [k, RV[k]]).map(([k, f]) => ({ key: k, name: f.name, rv: [f.lo, f.hi], volume: [f.lo / sa, f.hi / sa], cube: [Math.cbrt(f.lo / sa) * 10, Math.cbrt(f.hi / sa) * 10] })) : null,
+    classes: CLASSES.map((c) => ({ name: c.name, lo: c.lo, hi: c.hi, size: c.size, fit: !(sa > 0) ? 'no' : c.hi <= sa ? 'yes' : c.lo <= sa ? 'some' : 'no' })),
   };
 }

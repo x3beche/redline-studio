@@ -3,6 +3,7 @@
   "name": "Gerber Checklist",
   "blurb": "completeness of layers, drills, panel and notes before sending to fab",
   "group": "pcb",
+  "layout": "custom",
   "rooms": [
     "pcb"
   ],

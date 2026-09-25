@@ -3,6 +3,7 @@
   "name": "Heat Sink Sizing",
   "blurb": "required thermal resistance and heat sink size from power and ambient",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb", "cad"],
   "keywords": ["heat sink", "heatsink", "thermal resistance", "theta sa", "θsa", "junction temperature", "to-220", "to-247", "thermal interface", "thermal pad", "grease", "cooling", "volumetric resistance", "fan"],
   "intro": "Works the series thermal path junction → case → sink → air backwards: the sink may have at most θSA = (Tj,max − margin − Ta)/P − θJC − θCS. The heat sink volume is estimated from typical volumetric thermal resistance for the chosen air flow (Aavid/Boyd design guidance).",
