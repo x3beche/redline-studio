@@ -7,6 +7,7 @@ import type * as Monaco from 'monaco-editor';
 import { Auth } from '../auth';
 import { Catalog, FolderNode } from '../api';
 import { T } from '../i18n';
+import { LIGHT_THEMES } from '../../theme';
 
 /** The source behind what is on screen, in VS Code's editor (Monaco): the
  *  3D room's models are build123d (Python), the PCB room's boards atopile.
@@ -97,7 +98,7 @@ function hex(css: string): string {
 export function redlineTheme(m: MonacoApi): string {
   // The page resolves each var() for us: the probe in hex() is styled with it.
   const v = (color: string) => hex(color);
-  const light = document.documentElement.dataset['theme'] === 'light';
+  const light = LIGHT_THEMES.has(document.documentElement.dataset['theme'] ?? '');
   const fg = (color: string) => v(color).slice(1);
   m.editor.defineTheme('redline', {
     base: light ? 'vs' : 'vs-dark',

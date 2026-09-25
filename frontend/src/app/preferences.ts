@@ -1,5 +1,5 @@
 import { Component, Injectable, inject, signal } from '@angular/core';
-import { THEMES, THEME_NAMES, Theme, currentTheme, setTheme } from '../theme';
+import { LIGHT_THEMES, THEMES, THEME_NAMES, Theme, currentTheme, setTheme } from '../theme';
 import { LANG, LANGS, Lang, T, setLang } from './i18n';
 import { redlineTheme } from './rooms/code-view';
 
@@ -33,6 +33,25 @@ const SWATCH: Record<Theme, string[]> = { // theme:pigment
   'atom-one-dark': ['#282c34', '#21252b', '#abb2bf', '#c678dd'], // theme:pigment
   'one-dark-pro': ['#282c34', '#21252b', '#abb2bf', '#4d78cc'], // theme:pigment
   'vscode-dark': ['#1f1f1f', '#181818', '#cccccc', '#0078d4'], // theme:pigment
+  'dracula': ['#282a36', '#21222c', '#f8f8f2', '#bd93f9'], // theme:pigment
+  'tokyo-night': ['#1a1b26', '#16161e', '#c0caf5', '#7aa2f7'], // theme:pigment
+  'catppuccin-mocha': ['#1e1e2e', '#181825', '#cdd6f4', '#89b4fa'], // theme:pigment
+  'nord': ['#2e3440', '#272c36', '#d8dee9', '#88c0d0'], // theme:pigment
+  'monokai': ['#272822', '#1e1f1c', '#f8f8f2', '#66d9ef'], // theme:pigment
+  'gruvbox-dark': ['#282828', '#1d2021', '#ebdbb2', '#83a598'], // theme:pigment
+  'solarized-dark': ['#002b36', '#00212b', '#93a1a1', '#268bd2'], // theme:pigment
+  'material-palenight': ['#292d3e', '#232635', '#a6accd', '#82aaff'], // theme:pigment
+  'night-owl': ['#011627', '#01111d', '#d6deeb', '#82aaff'], // theme:pigment
+  'ayu-mirage': ['#1f2430', '#1a1f29', '#cccac2', '#ffcc66'], // theme:pigment
+  'rose-pine': ['#191724', '#1f1d2e', '#e0def4', '#c4a7e7'], // theme:pigment
+  'kanagawa': ['#1f1f28', '#16161d', '#dcd7ba', '#7e9cd8'], // theme:pigment
+  'synthwave-84': ['#262335', '#1e1a2b', '#ececf2', '#ff7edb'], // theme:pigment
+  'github-light': ['#ffffff', '#f6f8fa', '#1f2328', '#0969da'], // theme:pigment
+  'vscode-light': ['#ffffff', '#f8f8f8', '#3b3b3b', '#005fb8'], // theme:pigment
+  'solarized-light': ['#fdf6e3', '#eee8d5', '#586e75', '#268bd2'], // theme:pigment
+  'catppuccin-latte': ['#eff1f5', '#e6e9ef', '#4c4f69', '#1e66f5'], // theme:pigment
+  'gruvbox-light': ['#fbf1c7', '#f2e5bc', '#3c3836', '#076678'], // theme:pigment
+  'high-contrast': ['#000000', '#000000', '#ffffff', '#f38518'], // theme:pigment
 };
 
 interface Shortcut { keys: string[]; what: string }
@@ -56,8 +75,10 @@ interface Shortcut { keys: string[]; what: string }
       @switch (tab) {
         @case ('appearance') {
           <p>{{ 'The whole window, the 3D backdrop and the code editor follow it.' | t }}</p>
+          @for (grp of groups; track grp.name) {
+          <div class="tcv-prefs-group">{{ grp.name | t }}</div>
           <div class="tcv-prefs-themes">
-            @for (th of themes; track th) {
+            @for (th of grp.themes; track th) {
               <button class="tcv-prefs-theme" [attr.data-on]="prefs.theme() === th ? 1 : null" (click)="prefs.wear(th)">
                 <span class="tcv-prefs-swatch">
                   @for (c of swatch[th]; track $index) { <i [style.background]="c"></i> }
@@ -66,6 +87,7 @@ interface Shortcut { keys: string[]; what: string }
               </button>
             }
           </div>
+          }
         }
         @case ('language') {
           <p>{{ 'The words Redline says. Names of models, boards, parts and code stay as they are.' | t }}</p>
@@ -97,6 +119,9 @@ interface Shortcut { keys: string[]; what: string }
 export class Preferences {
   prefs = inject(Prefs);
   readonly themes = THEMES;
+  /** Dark ones first, then the light ones. */
+  readonly groups = [{ name: 'Dark', themes: THEMES.filter(t => !LIGHT_THEMES.has(t)) },
+                     { name: 'Light', themes: THEMES.filter(t => LIGHT_THEMES.has(t)) }];
   readonly names = THEME_NAMES;
   readonly swatch = SWATCH;
   readonly langs = LANGS;

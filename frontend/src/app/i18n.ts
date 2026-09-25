@@ -52,7 +52,7 @@ const TR: Record<string, string> = {
   'Name': 'Ad', 'Join': 'Katıl', 'Make the account': 'Hesabı oluştur', 'At least 10 characters.': 'En az 10 karakter.',
   'Set the password': 'Şifreyi belirle', 'Close': 'Kapat',
   // preferences
-  'Appearance': 'Görünüm', 'Language': 'Dil', 'Keyboard shortcuts': 'Klavye kısayolları', 'Theme': 'Tema',
+  'Appearance': 'Görünüm', 'Dark': 'Koyu', 'Light': 'Açık', 'Language': 'Dil', 'Keyboard shortcuts': 'Klavye kısayolları', 'Theme': 'Tema',
   'The whole window, the 3D backdrop and the code editor follow it.': 'Tüm pencere, 3D arka plan ve kod editörü buna uyar.',
   'The words Redline says. Names of models, boards, parts and code stay as they are.':
     'Redline\'ın arayüz metinleri. Model, kart, parça adları ve kod olduğu gibi kalır.',

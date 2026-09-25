@@ -35,7 +35,7 @@ COLOUR = re.compile(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(\s*\d")
 EXEMPT = "theme:pigment"
 
 DEFAULT = ":root {"
-THEME_HEAD = re.compile(r':root\[data-theme="([a-z-]+)"\]\s*\{')
+THEME_HEAD = re.compile(r':root\[data-theme="([a-z0-9-]+)"\]\s*\{')
 
 
 def blocks(css: str) -> dict[str, str]:
@@ -204,8 +204,8 @@ def test_no_token_is_defined_and_then_never_used(css):
 # ---------------- the switch ----------------
 def test_the_switch_knows_exactly_the_themes_the_stylesheet_has(css):
     names = set(blocks(css))
-    listed = set(re.search(r"THEMES = \[([^\]]+)\]",
-                           THEME_TS.read_text()).group(1).replace("'", "").split(", "))
+    listed = {t.strip().strip("'") for t in re.search(r"THEMES = \[([^\]]+)\]",
+                                                      THEME_TS.read_text()).group(1).split(",") if t.strip()}
     assert listed == names, f"stylesheet has {sorted(names)}, switch has {sorted(listed)}"
 
 
