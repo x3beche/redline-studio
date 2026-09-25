@@ -1,8 +1,9 @@
 {
-  "id": "bolt-circle", "version": "1.0",
+  "id": "bolt-circle", "version": "1.1",
   "name": "Bolt Circle Generator",
   "blurb": "hole coordinates and CAD code from count and diameter",
   "group": "mechanical",
+  "layout": "custom",
   "rooms": ["cad"],
   "keywords": ["bolt circle", "pcd", "pitch circle diameter", "bolt pattern", "polar array", "hole pattern", "flange holes", "circular pattern", "hole coordinates", "openscad", "cadquery", "g-code", "g81", "drill"],
   "intro": "The x/y centre of every hole on a bolt circle (pitch circle diameter), evenly around the full circle or spread over an arc, with the chord and the web between holes, and the pattern as CSV, OpenSCAD, CadQuery and G81 G-code. Angles are measured from +X, counter-clockwise unless you choose clockwise.",

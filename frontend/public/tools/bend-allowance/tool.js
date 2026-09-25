@@ -71,7 +71,16 @@ export function run({ t, r, angle, angleType, a, b, dims, kmode, k, hard }) {
   if (straightA < 0 || straightB < 0) warnings.push('A flange is shorter than the setback: it ends inside the bend. Make the flanges longer.');
 
   const ks = [0.30, 0.33, 0.38, 0.40, 0.42, 0.44, 0.45, 0.50];
+  const row = TABLE[hard] || TABLE.medium;
+  // For the drawing: the geometry above as numbers, and where each warning belongs.
+  const drawing = {
+    t, r, deg, K, kmode: kmode || 'din', kDin: r > 0 ? kDin(rt) : 0.325, kTable: rt <= 1 ? row[0] : rt <= 3 ? row[1] : row[2],
+    a, b, inside, BA, OSSB, ISSB, BD, flat, setback, straightA, straightB, bendLine: straightA + BA / 2,
+    minFlange, flags: { crack: r < t * 0.5, nearHem: deg > 150, shortA: a < minFlange, shortB: b < minFlange, inBend: straightA < 0 || straightB < 0 },
+    ks: ks.map((kk) => ({ k: kk, flat: flatFor(kk) })),
+  };
   return {
+    drawing,
     values: [
       { label: 'Flat length', value: straightA < 0 || straightB < 0 ? '–' : f(flat, 5), unit: 'mm', tone: 'ok', hint: inside ? 'A + B − 2·ISSB + BA' : 'A + B − BD' },
       { label: 'K-factor', value: f(K, 3), hint: kWhy },

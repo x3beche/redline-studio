@@ -1,8 +1,9 @@
 {
-  "id": "bend-allowance", "version": "1.0",
+  "id": "bend-allowance", "version": "1.1",
   "name": "Sheet Metal Bend Allowance",
   "blurb": "flat length from K-factor and bend radius",
   "group": "mechanical",
+  "layout": "custom",
   "rooms": ["cad"],
   "keywords": ["sheet metal", "bend allowance", "bend deduction", "k-factor", "k factor", "flat pattern", "blank length", "developed length", "setback", "neutral axis", "inside radius", "din 6935", "press brake", "flange"],
   "intro": "The flat (blank) length of a part with one bend, from two flange lengths, the sheet thickness, the inside radius and the K-factor, the fraction of the thickness where the neutral axis sits. Standard bend allowance and bend deduction formulas are used. The K-factor can be typed in, estimated with DIN 6935, or taken from a common rule-of-thumb table.",

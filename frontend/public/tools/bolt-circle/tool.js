@@ -80,6 +80,7 @@ export function run({ n, pcd, start, cx, cy, hole, dir, span, arc, depth, dp }) 
       'Hole 1 is at the start angle; x/y are from the drawing origin, with the bolt circle centre at (cx, cy).',
       'G-code is a plain G81 drill cycle in mm and absolute coordinates: set the feed, retract and work offset for your machine before running it.',
     ],
-    drawing: { pcd, hole: D, cx: X0, cy: Y0, start: a0, holes: holes.map((h) => ({ i: h.i, x: h.x, y: h.y, deg: h.deg })) },
+    drawing: { pcd, hole: D, cx: X0, cy: Y0, start: a0, holes: holes.map((h) => ({ i: h.i, x: h.x, y: h.y, deg: h.deg })),
+      step, sign, full, arc: full ? null : arc, chord, lig, ligTone: lig == null ? null : lig <= 0 ? 'bad' : lig < 0.5 * D ? 'warn' : 'ok', decimals, depth: zd },
   };
 }

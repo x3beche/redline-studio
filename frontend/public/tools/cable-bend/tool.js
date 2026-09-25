@@ -79,7 +79,15 @@ export function run({ type, od, use, mult, angle, straight, temp }) {
     const kf = t[1](od), kd = t[2] ? t[2](od) : null;
     return [t[0], `${f(kf, 3)} ×`, f(kf * od), kd ? `${f(kd, 3)} ×` : '–', kd ? f(kd * od) : '–'];
   });
+  const chain = values.find((v) => v.label.startsWith('Drag-chain'));
+  // For the drawing: the geometry above as numbers, and where each warning belongs.
+  const drawing = {
+    type: TYPES[type] ? type : 'control', k, od, R, Rc, Ro, arc, depth, loop, L0, deg: (th * 180) / Math.PI, flat, flexing,
+    chainR: chain ? CHAIN_R.find((r) => r >= R) ?? null : null,
+    flags: { shortLead: L0 < od && !flat, cold: temp != null && temp < -5 && !flat && /PVC|control|power|hook-up|USB/.test(T[0]), notFlex: flexing && !T[2] && type !== 'custom' },
+  };
   return {
+    drawing,
     values, warnings,
     tables: [{ title: `The same ${f(od)} mm ${flat ? 'thick' : 'OD'} as other cable types (inside radius, mm)`, columns: ['Cable type', 'Fixed', 'Fixed R', 'Flexing', 'Flexing R'], rows }],
     notes: [
