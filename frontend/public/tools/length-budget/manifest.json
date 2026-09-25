@@ -1,5 +1,5 @@
 {
-  "id": "length-budget", "version": "1.0",
+  "id": "length-budget", "version": "1.1",
   "name": "Length Matching Budget",
   "blurb": "maximum length mismatch for a bus speed, in ps and mm",
   "group": "pcb",
@@ -29,5 +29,6 @@
     "Unit interval and skew budget: rule of thumb from high-speed layout guides (e.g. TI SPRAAR7 High-Speed Interface Layout Guidelines)",
     "Microstrip effective permittivity: Hammerstad & Jensen, 'Accurate models for microstrip computer-aided design', IEEE MTT-S 1980",
     "Propagation delay t = sqrt(εeff)/c: Johnson & Graham, High-Speed Digital Design, ch. 4"
-  ]
+  ],
+  "layout": "custom"
 }

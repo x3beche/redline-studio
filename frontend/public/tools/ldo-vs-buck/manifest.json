@@ -1,5 +1,5 @@
 {
-  "id": "ldo-vs-buck", "version": "1.0",
+  "id": "ldo-vs-buck", "version": "1.1",
   "name": "LDO vs Buck Advisor",
   "blurb": "efficiency, heat and noise of an LDO against a buck, side by side",
   "group": "pcb",
@@ -25,5 +25,6 @@
     { "title": "12 V to 3.3 V at 500 mA for a radio", "input": { "vin": "12", "vout": "3.3", "iout": "500m", "ta": "40", "pkg": "sot223", "dropout": "300", "iq": "100", "eff": "85", "ripple": "15", "quiet": true } }
   ],
   "usage": "Give input and output voltage (V), load current (A, 300m accepted), ambient °C, the LDO package (sets θJA), LDO dropout in mV and quiescent current in µA, the buck's efficiency in % at this load from its datasheet, the buck's output ripple in mV p-p, and quiet=true if the load is noise-sensitive. It returns efficiency, input current, dissipation and junction temperature for an LDO, a buck and a buck followed by an LDO, plus a recommendation with the reason. Use it when choosing the regulator for one rail.",
-  "sources": ["LDO: P = (Vin − Vout)·Iout + Vin·Iq, Tj = Ta + P·θJA (TI SLVA118A, Digital Designer's Guide to Linear Voltage Regulators and Thermal Management)", "θJA values: typical JEDEC 2s2p figures from regulator datasheets (rule of thumb)", "Buck light-load curve: full-load loss scaled as 2 % fixed + 68 % linear + 30 % I² (rule-of-thumb model of an auto-PFM buck)"]
+  "sources": ["LDO: P = (Vin − Vout)·Iout + Vin·Iq, Tj = Ta + P·θJA (TI SLVA118A, Digital Designer's Guide to Linear Voltage Regulators and Thermal Management)", "θJA values: typical JEDEC 2s2p figures from regulator datasheets (rule of thumb)", "Buck light-load curve: full-load loss scaled as 2 % fixed + 68 % linear + 30 % I² (rule-of-thumb model of an auto-PFM buck)"],
+  "layout": "custom"
 }

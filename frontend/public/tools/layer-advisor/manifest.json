@@ -1,5 +1,5 @@
 {
-  "id": "layer-advisor", "version": "1.0",
+  "id": "layer-advisor", "version": "1.1",
   "name": "Layer Assignment Advisor",
   "blurb": "signal, power and ground distribution for a layer count",
   "group": "pcb",
@@ -19,5 +19,6 @@
   ],
   "usage": "Give the copper layer count (2-12, even), the priority (general = most routing layers, emc = more planes), the number of supply rails and whether fast edges are present. It returns a layer-by-layer table (role, reference plane, what to route there), counts of signal and plane layers, whether every signal layer has an adjacent plane, and notes on copper balance and via transitions. Use it before the Stack-up Designer to decide what each layer is for.",
   "sources": ["H. W. Ott, Electromagnetic Compatibility Engineering, Wiley 2009, ch. 16 (PCB layout and stack-up)", "E. Bogatin, Signal and Power Integrity - Simplified, 3rd ed., ch. 10 (return paths and stack-up)", "IPC-2221B, 4.x (board symmetry to limit bow and twist)"],
-  "view": true
+  "view": true,
+  "layout": "custom"
 }

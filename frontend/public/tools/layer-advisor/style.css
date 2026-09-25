@@ -1,0 +1,151 @@
+/* Layer Assignment Advisor: the board's cross-section is the interface. */
+:root {
+  --tool-cu: #b8702a; --tool-cu-edge: #8a4f16;
+  --tool-pp: #ece4c8; --tool-core: #ddd2ab; --tool-diel-ink: #7a6d45;
+  --tool-mask: #3d8a57;
+  --tool-gnd: #0f8a78; --tool-pwr: #c2410c; --tool-sig: var(--accent);
+  --tool-fast: #a23fbf;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-cu: #d99450; --tool-cu-edge: #f0b57a;
+    --tool-pp: #2a281d; --tool-core: #34301f; --tool-diel-ink: #a89c78;
+    --tool-mask: #4fae72;
+    --tool-gnd: #3cc7b3; --tool-pwr: #f08a5d;
+    --tool-fast: #d193ea;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-cu: #d99450; --tool-cu-edge: #f0b57a;
+  --tool-pp: #2a281d; --tool-core: #34301f; --tool-diel-ink: #a89c78;
+  --tool-mask: #4fae72;
+  --tool-gnd: #3cc7b3; --tool-pwr: #f08a5d;
+  --tool-fast: #d193ea;
+}
+
+.la { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 12px; align-items: start; }
+.la-stage { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; display: flex; flex-direction: column; }
+.la-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); }
+.la-group { display: flex; align-items: center; gap: 6px; }
+.la-cap { font-size: 11.5px; color: var(--ink-soft); }
+.la-tip { margin-left: auto; font-size: 11.5px; color: var(--ink-soft); }
+.la-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.la-seg button { border: 0; background: transparent; padding: 3px 9px; cursor: pointer; font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.la-seg button + button { border-left: 1px solid var(--line); }
+.la-seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 500; }
+.la-seg button:hover:not([aria-checked="true"]) { background: var(--sunken); color: var(--ink); }
+.la-rails { display: flex; align-items: center; gap: 4px; }
+.la-step { width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); cursor: pointer; line-height: 1; }
+.la-step:hover { border-color: var(--ink-soft); }
+.la-rails-n { min-width: 18px; text-align: center; font: 500 13px "IBM Plex Mono", ui-monospace, monospace; }
+.la-toggle { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); padding: 3px 9px; cursor: pointer; font-size: 12px; color: var(--ink-soft); }
+.la-toggle i { width: 10px; height: 10px; border-radius: 2px; border: 1.5px solid var(--ink-soft); }
+.la-toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--tool-fast); }
+.la-toggle[aria-pressed="true"] i { background: var(--tool-fast); border-color: var(--tool-fast); }
+
+.la-box { position: relative; min-height: clamp(380px, calc(100vh - 196px), 760px); min-width: 0; }
+.la-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
+.la-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 10px; border-top: 1px solid var(--line-soft); font-size: 11px; color: var(--ink-soft); }
+.la-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.la-legend i { display: inline-block; width: 14px; height: 8px; border-radius: 1px; }
+.la-legend .la-ns { margin-left: auto; }
+.lg-cu { background: var(--tool-cu); } .lg-pp { background: var(--tool-pp); border: 1px solid var(--tool-diel-ink); }
+.lg-core { background: var(--tool-core); border: 1px solid var(--tool-diel-ink); }
+.lg-gnd { height: 2px !important; background: var(--tool-gnd); } .lg-pwr { height: 2px !important; background: var(--tool-pwr); }
+.lg-mir { height: 2px !important; background: var(--line); }
+
+/* drawing */
+.la-ghost line { stroke: var(--line-soft); stroke-dasharray: 2 4; }
+.la-ghost line.on { stroke: var(--line); stroke-dasharray: none; }
+.la-ghost text { fill: var(--ink-soft); opacity: .55; font: 10px "IBM Plex Mono", ui-monospace, monospace; }
+.la-ghost text.on { opacity: 1; fill: var(--ink); font-weight: 600; }
+.la-pp { fill: var(--tool-pp); }
+.la-core { fill: var(--tool-core); }
+.la-dtxt { fill: var(--tool-diel-ink); font: 10px "IBM Plex Mono", ui-monospace, monospace; }
+.la-mask { fill: var(--tool-mask); opacity: .85; }
+.la-cu { fill: var(--tool-cu); }
+.la-cu.la-fast { fill: var(--tool-fast); }
+.la-fasttxt { fill: var(--tool-fast); font: 600 9.5px "IBM Plex Mono", ui-monospace, monospace; }
+.la-isl { fill: var(--tool-pwr); font: 600 9.5px "IBM Plex Mono", ui-monospace, monospace; }
+.la-barrel { fill: var(--tool-cu-edge); opacity: .9; }
+.la-vtxt { fill: var(--ink-soft); font: 10px "IBM Plex Mono", ui-monospace, monospace; }
+.la-centre { stroke: var(--ink-soft); stroke-dasharray: 6 3 1 3; opacity: .7; }
+
+.la-layer { cursor: pointer; outline: none; }
+.la-hit { fill: transparent; }
+.la-layer:hover .la-hit { fill: var(--sunken); fill-opacity: .55; }
+.la-layer.sel .la-hit { fill: var(--accent); fill-opacity: .10; }
+.la-selbox { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+.la-layer:focus-visible .la-hit { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
+.la-lname { fill: var(--ink); font: 600 12.5px "IBM Plex Mono", ui-monospace, monospace; }
+.la-chip { fill: none; stroke-width: 1.2; }
+.la-chip.r-S, .la-chip.r-SP { stroke: var(--tool-sig); fill: var(--tool-sig); fill-opacity: .12; }
+.la-chip.r-G, .la-chip.r-M { stroke: var(--tool-gnd); fill: var(--tool-gnd); fill-opacity: .14; }
+.la-chip.r-P { stroke: var(--tool-pwr); fill: var(--tool-pwr); fill-opacity: .14; }
+.la-chiptxt { fill: var(--ink); font: 600 10.5px "IBM Plex Mono", ui-monospace, monospace; }
+
+.la-mir { fill: none; stroke: var(--line); stroke-width: 1.2; }
+.la-mir.bad { stroke: var(--warn); stroke-width: 1.8; stroke-dasharray: 4 2; }
+.la-ret { fill: none; stroke-width: 1.6; }
+.la-ret.gnd { stroke: var(--tool-gnd); } .la-ret.pwr { stroke: var(--tool-pwr); }
+.la-arrhead.gnd { fill: var(--tool-gnd); } .la-arrhead.pwr { fill: var(--tool-pwr); }
+.la-ref { fill: var(--ink); font: 500 11.5px "IBM Plex Mono", ui-monospace, monospace; }
+.la-ref.bad, .la-noref { fill: var(--danger); font: 600 11px "IBM Plex Mono", ui-monospace, monospace; }
+.la-kind { fill: var(--ink-soft); font: 10.5px "IBM Plex Sans", sans-serif; }
+.la-warnbox { fill: var(--warn); fill-opacity: .08; stroke: var(--warn); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.la-warntxt { fill: var(--warn); font: 600 11.5px "IBM Plex Sans", sans-serif; }
+
+.la-handle { cursor: ns-resize; outline: none; touch-action: none; }
+.la-hhit { fill: transparent; }
+.la-hbar { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
+.la-hgrip { stroke: var(--accent); stroke-width: 1.5; }
+.la-handle:hover .la-hbar, .la-handle:focus-visible .la-hbar { fill: var(--accent); }
+.la-handle:hover .la-hgrip, .la-handle:focus-visible .la-hgrip { stroke: var(--accent-ink); }
+.la-handle:focus-visible .la-hhit { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 3; }
+.la-htxt { fill: var(--accent); font: 600 12px "IBM Plex Mono", ui-monospace, monospace; }
+.la-svg { touch-action: none; }
+
+/* side */
+.la-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.la-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; min-width: 0; }
+.la-insp { border-left: 3px solid var(--accent); }
+.la-insp-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.la-insp-head b { font: 600 20px "IBM Plex Mono", ui-monospace, monospace; }
+.la-pos { margin-left: auto; font-size: 11px; color: var(--ink-soft); }
+.la-pill { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 10px; border: 1px solid; }
+.la-pill.r-S, .la-pill.r-SP { color: var(--tool-sig); border-color: var(--tool-sig); }
+.la-pill.r-G, .la-pill.r-M { color: var(--tool-gnd); border-color: var(--tool-gnd); }
+.la-pill.r-P { color: var(--tool-pwr); border-color: var(--tool-pwr); }
+.la-dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 8px 0 0; font-size: 12.5px; }
+.la-dl dt { color: var(--ink-soft); }
+.la-dl dd { margin: 0; }
+.la-dl dd.bad { color: var(--danger); font-weight: 600; }
+.la-hit-note { margin: 8px 0 0; padding: 5px 8px; font-size: 12px; background: var(--sunken); border-radius: 4px; border-left: 2px solid var(--warn); }
+
+.la-title { font-size: 11.5px; font-weight: 500; color: var(--ink-soft); margin-bottom: 4px; }
+.la-check { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline; padding: 3px 0; border-top: 1px solid var(--line-soft); font-size: 12.5px; }
+.la-check:first-of-type { border-top: 0; }
+.la-check i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); align-self: center; }
+.la-check.t-ok i { background: var(--ok); } .la-check.t-warn i { background: var(--warn); } .la-check.t-bad i { background: var(--danger); }
+.la-check b { font: 500 12.5px "IBM Plex Mono", ui-monospace, monospace; text-align: right; }
+.la-check.t-warn b { color: var(--warn); }
+.la-check em { grid-column: 2 / -1; font-style: normal; font-size: 11px; color: var(--ink-soft); }
+
+.la-warns { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 6px; padding: 6px 10px; background: var(--surface); font-size: 12.5px; }
+.la-warns[hidden] { display: none; }
+.la-warns div + div { margin-top: 4px; }
+.la-notes { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 11px; font-size: 12px; color: var(--ink-soft); }
+.la-notes[hidden] { display: none; }
+.la-notes summary { cursor: pointer; color: var(--ink); font-size: 12px; }
+.la-notes p { margin: 6px 0 0; }
+.la-side .k-out { max-height: clamp(140px, calc(100vh - 640px), 360px); }
+
+@media (max-width: 980px) {
+  .la { grid-template-columns: minmax(0, 1fr); }
+  .la-box { min-height: 480px; }
+  .la-tip { margin-left: 0; flex-basis: 100%; }
+}
+@media (max-width: 520px) {
+  .la-box { min-height: 360px; }
+  .la-legend .la-ns { margin-left: 0; }
+}
