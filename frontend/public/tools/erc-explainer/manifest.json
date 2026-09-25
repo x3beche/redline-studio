@@ -3,6 +3,7 @@
   "name": "ERC Rule Explainer",
   "blurb": "what an ERC error means and its usual fix, in plain words",
   "group": "pcb",
+  "layout": "custom",
   "rooms": [
     "pcb"
   ],

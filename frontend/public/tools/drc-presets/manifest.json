@@ -3,6 +3,7 @@
   "name": "DRC Rule Preset Builder",
   "blurb": "track, space and drill rules from a fab's capabilities, ready for the Rules tab",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["drc", "design rules", "rule preset", "fab capabilities", "min track", "clearance", "via drill", "annular ring", "jlcpcb", "pcbway", "osh park", "kicad_dru", "net class", "rules tab"],
   "intro": "Design rules from a board house's published minimums: the limits themselves for DRC, and working values with a margin for the net classes. Comes out as the Rules-tab JSON and a KiCad .kicad_dru file.",

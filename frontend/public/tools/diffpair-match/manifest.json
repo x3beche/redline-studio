@@ -3,6 +3,7 @@
   "name": "Differential Pair Matcher",
   "blurb": "length-matching tolerance for USB, Ethernet, HDMI and similar pairs",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["differential pair", "diff pair", "length matching", "intra-pair skew", "inter-pair skew", "usb", "pcie", "hdmi", "ethernet", "mipi", "lvds", "impedance", "90 ohm", "100 ohm"],
   "intro": "Lists the differential impedance and the P/N (intra-pair) and pair-to-pair (inter-pair) length tolerances that layout guides give for common interfaces, in mm, mil and ps, and checks your measured P and N lengths against them.",
