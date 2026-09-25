@@ -1,0 +1,136 @@
+/* JSON Diff Viewer: the joined sheet. Colours from kit.css only. */
+:root { --tool-del: var(--danger); --tool-add: var(--ok); --tool-chg: var(--warn); }
+
+.jd-page { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 12px; align-items: start;
+  grid-template-areas: "bar bar" "sheet side" "out out"; }
+.jd-bar { grid-area: bar; }
+.jd-sheetpanel { grid-area: sheet; position: relative; }
+.jd-changes { grid-area: side; }
+.jd-out { grid-area: out; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+@media (max-width: 1060px) {
+  .jd-page { grid-template-columns: minmax(0, 1fr); grid-template-areas: "bar" "sheet" "side" "out"; }
+}
+.jd-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.jd-row { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; min-width: 0; }
+.jd-grow { flex: 1 1 auto; }
+.jd-h { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.jd-soft { color: var(--ink-soft); }
+.jd-small { font-size: 11.5px; }
+.jd-sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+.jd-page input[type="text"], .jd-page textarea { padding: 3px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; color: var(--ink); min-width: 0; }
+.jd-page [hidden] { display: none !important; }
+
+/* toolbar */
+.jd-summary { display: flex; align-items: baseline; gap: 6px 18px; flex-wrap: wrap; margin-bottom: 8px; }
+.jd-result { font-size: 18px; font-weight: 600; }
+.jd-result.is-warn { color: var(--warn); }
+.jd-result.is-ok { color: var(--ok); }
+.jd-result.is-bad { color: var(--danger); }
+.jd-count { font-size: 13px; }
+.jd-count b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 15px; }
+.jd-c-chg b { color: var(--tool-chg); } .jd-c-add b { color: var(--tool-add); } .jd-c-del b { color: var(--tool-del); }
+.jd-segs { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.jd-seg { border: 0; background: transparent; padding: 3px 10px; font-size: 12px; color: var(--ink-soft); cursor: pointer; }
+.jd-seg + .jd-seg { border-left: 1px solid var(--line); }
+.jd-seg[aria-pressed="true"] { background: var(--sunken); color: var(--ink); font-weight: 600; }
+.jd-keywrap { font-size: 12px; color: var(--ink-soft); display: inline-flex; gap: 4px; align-items: center; }
+.jd-keyin { width: 70px; }
+.jd-chips { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.jd-chip { border: 1px solid var(--line); background: var(--sunken); border-radius: 10px; padding: 1px 8px; cursor: pointer;
+  font: 12px "IBM Plex Mono", ui-monospace, monospace; text-decoration: line-through; text-decoration-color: var(--ink-soft); }
+.jd-chip span { text-decoration: none; display: inline-block; color: var(--ink-soft); }
+.jd-chip:hover { border-color: var(--danger); }
+.jd-ignadd { width: 100px; }
+.jd-cb { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; cursor: pointer; }
+
+/* sheet */
+.jd-heads { display: grid; grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr); gap: 0; margin-bottom: 6px; }
+.jd-colhead { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.jd-side { font-weight: 700; font-size: 13px; width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 4px; background: var(--sunken); border: 1px solid var(--line); }
+.jd-sbtn { padding: 2px 9px; font-size: 12px; }
+.jd-sbtn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.is-narrow .jd-heads { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.is-narrow .jd-gutterhead { display: none; }
+.jd-err:empty { display: none; }
+.jd-err { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 4px; padding: 5px 9px; margin-bottom: 6px; font-size: 12px; }
+.jd-err div + div { margin-top: 3px; }
+.jd-sheetbody { display: flex; gap: 6px; }
+.jd-scroll { flex: 1 1 auto; min-width: 0; height: clamp(380px, calc(100vh - 300px), 720px); overflow: auto; border: 1px solid var(--line-soft); border-radius: 4px; background: var(--sunken); }
+.jd-cols { display: grid; grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr); align-items: start; min-height: 100%; }
+.jd-cols-edit { height: 100%; }
+.jd-pane { min-width: 0; background: var(--surface); }
+.jd-gutter { display: block; background: var(--sunken); }
+.jd-ln { display: flex; height: 20px; line-height: 20px; font: 12.5px/20px "IBM Plex Mono", ui-monospace, monospace; white-space: pre; overflow: hidden; position: relative; }
+.jd-no { flex: 0 0 auto; width: 44px; padding-right: 8px; text-align: right; color: var(--ink-soft); opacity: .7; user-select: none; font-size: 11px; }
+.jd-code { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.jd-key { border: 0; background: transparent; padding: 0; font: inherit; color: var(--ink); cursor: pointer; border-radius: 2px; }
+.jd-key:hover { background: var(--line); text-decoration: underline dotted; }
+.jd-str { color: var(--tool-s2); } .jd-num { color: var(--tool-s1); } .jd-bool { color: var(--tool-s3); } .jd-null { color: var(--ink-soft); } .jd-p { color: var(--ink-soft); }
+.jd-ln.is-del { background: color-mix(in srgb, var(--tool-del) calc(var(--fill-alpha) * 70%), transparent); }
+.jd-ln.is-add { background: color-mix(in srgb, var(--tool-add) calc(var(--fill-alpha) * 70%), transparent); }
+.jd-ln.is-chg { background: color-mix(in srgb, var(--tool-chg) calc(var(--fill-alpha) * 70%), transparent); }
+.jd-ln.is-tol { background: var(--line-soft); }
+.jd-ln.is-tol .jd-num { text-decoration: underline dotted; text-underline-offset: 3px; }
+.jd-ln.has-field::before { content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; width: 3px; border-radius: 1px; }
+.jd-ln.f-changed::before, .jd-ln.f-type::before { background: var(--tool-chg); }
+.jd-ln.f-added::before { background: var(--tool-add); }
+.jd-ln.f-removed::before { background: var(--tool-del); }
+.jd-ln.is-focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+.jd-rib { stroke-width: 1; }
+.jd-rib-del { fill: var(--tool-del); fill-opacity: var(--fill-alpha); stroke: var(--tool-del); }
+.jd-rib-add { fill: var(--tool-add); fill-opacity: var(--fill-alpha); stroke: var(--tool-add); }
+.jd-rib-chg { fill: var(--tool-chg); fill-opacity: var(--fill-alpha); stroke: var(--tool-chg); }
+.jd-rib-tol { fill: none; stroke: var(--ink-soft); stroke-dasharray: 2 3; }
+.jd-ribn { font: 600 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); paint-order: stroke; stroke: var(--sunken); stroke-width: 3px; }
+.jd-uni .jd-no { width: 52px; }
+.jd-edit { display: block; width: 100%; height: 100%; min-height: 360px; border: 0 !important; border-radius: 0 !important; resize: none; font-size: 12.5px !important; line-height: 20px; background: var(--surface) !important; white-space: pre; }
+.jd-cols-edit .jd-edit { min-height: 100%; }
+.jd-cols-edit .jd-edit + div { background: var(--sunken); }
+.jd-cut { padding: 6px 10px; }
+.jd-ruler { flex: 0 0 12px; position: relative; border-radius: 3px; background: var(--sunken); border: 1px solid var(--line-soft); cursor: pointer; }
+.is-narrow .jd-ruler { display: none; }
+.jd-rk { position: absolute; left: 1px; right: 1px; border-radius: 1px; }
+.jd-rk-del { background: var(--tool-del); } .jd-rk-add { background: var(--tool-add); } .jd-rk-chg { background: var(--tool-chg); } .jd-rk-tol { background: var(--line); }
+.jd-edit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.jd-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 11.5px; color: var(--ink-soft); }
+.jd-legend i { display: inline-block; width: 12px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.jd-lg-del { background: var(--tool-del); } .jd-lg-add { background: var(--tool-add); } .jd-lg-chg { background: var(--tool-chg); }
+.jd-lg-tol { background: var(--line); }
+.jd-menu { position: absolute; z-index: 5; min-width: 220px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px; box-shadow: 0 6px 20px rgba(0,0,0,.25); display: flex; flex-direction: column; }
+.jd-mi { border: 0; background: transparent; text-align: left; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12.5px; }
+.jd-mi:hover, .jd-mi:focus-visible { background: var(--sunken); }
+
+/* changes */
+.jd-strip { margin: 4px 0 2px; }
+.jd-stripsvg { display: block; width: 100%; height: auto; touch-action: none; cursor: ew-resize; user-select: none; }
+.jd-eqband { fill: var(--ok); fill-opacity: var(--fill-alpha); }
+.jd-axis, .jd-tickl { stroke: var(--ink-soft); }
+.jd-tick { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.jd-dot { fill: var(--tool-chg); stroke: var(--surface); stroke-width: 1; }
+.jd-dot.is-within { fill: var(--surface); stroke: var(--ok); stroke-width: 1.8; }
+.jd-handle line { stroke: var(--accent); stroke-width: 2; }
+.jd-handle rect { fill: var(--accent); }
+.jd-handle { cursor: ew-resize; outline: none; }
+.jd-handle:focus-visible rect { stroke: var(--ink); stroke-width: 2; }
+.jd-tolin { width: 80px; }
+.jd-changes .jd-row + .jd-strip { margin-top: 6px; }
+.jd-listcount { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.jd-listhead { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.jd-bandlab { font: 10.5px "IBM Plex Sans", sans-serif; fill: var(--ink-soft); }
+.jd-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; max-height: calc(100vh - 380px); min-height: 200px; overflow: auto; }
+.jd-empty { padding: 8px 2px; font-size: 12px; }
+.jd-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; text-align: left; border: 1px solid var(--line-soft); border-left-width: 3px;
+  border-radius: 4px; background: var(--surface); padding: 5px 8px; cursor: pointer; }
+.jd-item:hover { border-color: var(--line); }
+.jd-item.is-on { border-color: var(--accent); }
+.jd-i-changed, .jd-i-type { border-left-color: var(--tool-chg) !important; }
+.jd-i-added { border-left-color: var(--tool-add) !important; }
+.jd-i-removed { border-left-color: var(--tool-del) !important; }
+.jd-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); align-self: center; }
+.jd-path { font: 600 12.5px "IBM Plex Mono", ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jd-vals { grid-column: 1 / -1; font: 12px "IBM Plex Mono", ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jd-va { color: var(--tool-del); } .jd-vb { color: var(--tool-add); }
+.jd-notes { color: var(--ink-soft); font-size: 12px; }
+.jd-notes div + div { margin-top: 3px; }
+.is-stale .jd-pane:not(:has(.jd-edit)), .is-stale .jd-gutter, .is-stale .jd-ruler { opacity: .45; }

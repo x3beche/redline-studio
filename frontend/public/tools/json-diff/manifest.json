@@ -1,5 +1,5 @@
 {
-  "id": "json-diff", "version": "1.0",
+  "id": "json-diff", "version": "1.1",
   "name": "JSON Diff Viewer",
   "blurb": "two responses compared by line and by field",
   "group": "web",
@@ -23,5 +23,7 @@
     { "title": "The same list in another order, matched by id", "input": { "a": "[{\"id\":1,\"state\":\"open\"},{\"id\":2,\"state\":\"closed\"},{\"id\":3,\"state\":\"open\"}]", "b": "[{\"id\":3,\"state\":\"open\"},{\"id\":1,\"state\":\"closed\"},{\"id\":4,\"state\":\"open\"}]", "arrays": "key", "key": "id", "ignore": "", "tolerance": "0", "sort": true } }
   ],
   "usage": "Give a and b as JSON text, arrays as index, key or unordered (key = the id field when arrays is key), ignore as a comma-separated list of keys to skip anywhere, tolerance for numbers, and sort to sort keys before the line diff. Returns counts of changed/added/removed fields, a table of differences with paths and both values, a unified line diff and an RFC 6902 JSON Patch (for index comparison). Use it to check an API response against an expected one.",
+  "layout": "custom",
+  "agentOmit": ["view"],
   "sources": ["E. W. Myers, An O(ND) Difference Algorithm and Its Variations, Algorithmica 1 (1986)", "RFC 6902 JavaScript Object Notation (JSON) Patch", "RFC 6901 JSON Pointer", "GNU diffutils manual, unified format"]
 }

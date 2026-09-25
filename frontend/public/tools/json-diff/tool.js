@@ -115,6 +115,30 @@ function unified(ops, A, B, ctx = 3) {
   return lines.join('\n');
 }
 
+// JSON.stringify(v, null, 2)'s lines, each with the path of the value it opens
+// (in the field diff's path notation, so a difference finds its line), the key
+// on it and whether that key belongs to an object that is an array item.
+function prettyLines(v, stepFor) {
+  const lines = [], paths = [], keys = [], inItem = [];
+  const put = (s, steps, k, it) => { lines.push(s); paths.push(jsPath(steps)); keys.push(k); inItem.push(it); };
+  const val = (x, steps, ind, k, it, comma) => {
+    const pad = ' '.repeat(ind), pre = pad + (k != null ? JSON.stringify(k) + ': ' : '');
+    const t = typeOf(x);
+    if (t === 'object' && Object.keys(x).length) {
+      put(pre + '{', steps, k, it);
+      const ks = Object.keys(x);
+      ks.forEach((kk, j) => val(x[kk], [...steps, kk], ind + 2, kk, typeof steps[steps.length - 1] !== 'string' && steps.length > 0, j < ks.length - 1 ? ',' : ''));
+      put(pad + '}' + comma, steps, null, it);
+    } else if (t === 'array' && x.length) {
+      put(pre + '[', steps, k, it);
+      x.forEach((e, j) => val(e, [...steps, stepFor(x, j)], ind + 2, null, false, j < x.length - 1 ? ',' : ''));
+      put(pad + ']' + comma, steps, null, it);
+    } else put(pre + JSON.stringify(x) + comma, steps, k, it);
+  };
+  val(v, [], 0, null, false, '');
+  return { lines, paths, keys, inItem };
+}
+
 export function run({ a, b, arrays, key, tolerance, ignore, sort }) {
   const warnings = [];
   const ta = String(a ?? '').trim(), tb = String(b ?? '').trim();
@@ -128,6 +152,7 @@ export function run({ a, b, arrays, key, tolerance, ignore, sort }) {
   if (mode === 'key' && !idKey) warnings.push('Arrays by key needs the key field name (e.g. id); comparing by index instead.');
 
   const rows = [];   // [path, change, A, B]
+  const numeric = []; // every number that differs at all, for the page's tolerance strip
   const patch = [];  // RFC 6902 ops
   let patchable = true;
   const strip = (v) => {
@@ -181,6 +206,7 @@ export function run({ a, b, arrays, key, tolerance, ignore, sort }) {
       for (let i = x.length - 1; i >= n; i--) { rows.push([jsPath([...steps, i]), 'removed', short(x[i]), '–']); patch.push({ op: 'remove', path: ptr([...steps, i]) }); }
       return;
     }
+    if (tx === 'number' && x !== y) numeric.push({ path: jsPath(steps), a: x, b: y, d: Math.abs(x - y), within: tol > 0 && Math.abs(x - y) <= tol });
     if (tx === 'number' && tol > 0 ? Math.abs(x - y) <= tol : x === y) return;
     rows.push([jsPath(steps), 'changed', short(x), short(y)]);
     patch.push({ op: 'replace', path: ptr(steps), value: y });
@@ -204,13 +230,14 @@ export function run({ a, b, arrays, key, tolerance, ignore, sort }) {
   };
   const fa = JSON.stringify(sort ? sortKeys(order(A)) : order(A), null, 2).split('\n');
   const fb = JSON.stringify(sort ? sortKeys(order(B)) : order(B), null, 2).split('\n');
-  let udiff = '', plus = 0, minus = 0;
+  let udiff = '', plus = 0, minus = 0, lineOps = null;
   if (fa.length + fb.length > 40000) warnings.push('Over 40 000 lines together: the line diff is skipped; the field diff is complete.');
   else {
     const ops = myers(fa, fb);
     if (!ops) warnings.push('The documents differ in over 4000 lines: the line diff is skipped; the field diff is complete.');
     else {
       plus = ops.filter((o) => o.op === '+').length; minus = ops.filter((o) => o.op === '-').length;
+      lineOps = ops.map((o) => [o.op, o.a ?? -1, o.b ?? -1]);
       udiff = unified(ops, fa, fb);
       udiff = udiff ? `--- A\n+++ B\n${udiff}` : '(no line differences)';
     }
@@ -220,10 +247,25 @@ export function run({ a, b, arrays, key, tolerance, ignore, sort }) {
   const MAXROWS = 500;
   if (rows.length > MAXROWS) warnings.push(`${rows.length} differences; the table shows the first ${MAXROWS}.`);
   if (sort === false && same && plus + minus) warnings.push('Same fields, but the key order differs: sort keys to hide order-only line changes.');
+  // For the page's drawing (agents do not receive it: manifest agentOmit).
+  const keyedArr = (arr) => mode === 'key' && idKey && arr.length && arr.every((e) => e && typeof e === 'object' && !Array.isArray(e) && idKey in e);
+  const stepFor = (arr, j) => (keyedArr(arr) ? { k: `${idKey}=${canon(arr[j][idKey])}` } : mode === 'unordered' ? { k: '*' } : j);
+  const doc = (v) => (sort ? sortKeys(order(v)) : order(v));
+  const LA = prettyLines(doc(A), stepFor), LB = prettyLines(doc(B), stepFor);
+  const firstLine = (L) => { const m = new Map(); L.paths.forEach((p, i) => { if (!m.has(p)) m.set(p, i); }); return m; };
+  const mA = firstLine(LA), mB = firstLine(LB);
+  const view = {
+    a: fa, b: fb, ops: lineOps, same: LA.lines.join('\n') === fa.join('\n') && LB.lines.join('\n') === fb.join('\n'),
+    keysA: LA.keys, keysB: LB.keys, itemA: LA.inItem, itemB: LB.inItem,
+    fields: rows.map((r) => ({ path: r[0], change: r[1], a: r[2], b: r[3], la: mA.get(r[0]) ?? null, lb: mB.get(r[0]) ?? null })),
+    numeric: numeric.map((n) => ({ ...n, la: mA.get(n.path) ?? null, lb: mB.get(n.path) ?? null })),
+    ignored: [...ign], mode, key: idKey, tolerance: tol,
+  };
   const texts = [];
   if (udiff) texts.push({ title: 'Line diff', body: udiff, lang: 'diff' });
   texts.push({ title: 'JSON Patch', body: patchable ? JSON.stringify(patch, null, 2) : '(not written: arrays compared by key or as sets have no index paths; compare by index for a patch)', lang: 'json' });
   return {
+    view,
     values: [
       { label: 'Result', value: same ? 'identical' : `${rows.length} difference${rows.length === 1 ? '' : 's'}`, tone: same ? 'ok' : 'warn', hint: [ign.size && `ignoring ${[...ign].join(', ')}`, tol && `numbers ±${tol}`].filter(Boolean).join('; ') || null },
       { label: 'Changed', value: count('changed') + count('type') },

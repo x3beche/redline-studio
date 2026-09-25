@@ -1,5 +1,5 @@
 {
-  "id": "json-path", "version": "1.0",
+  "id": "json-path", "version": "1.1",
   "name": "JSON Path Explorer",
   "blurb": "walk a large JSON and copy the access path of a field",
   "group": "web",
@@ -22,5 +22,7 @@
     { "title": "The shape of an order list as JSONPath", "input": { "filter": "", "style": "jsonpath", "rootVar": "data", "pick": "$.orders[*].lines[*].sku", "wildcard": true, "leaves": true } }
   ],
   "usage": "Give json as text, an optional filter (a key or value fragment, case-insensitive), style (js, jsonpath, jq, python, pointer), rootVar for js/python, an optional pick path in any style ([*] takes every item), and booleans wildcard (collapse indices) and leaves (leaves only). Returns a table of paths with type and value preview, the path list as text, node count and depth, and the value at the pick path as JSON. Invalid JSON returns the line and column of the error.",
+  "layout": "custom",
+  "agentOmit": ["tree"],
   "sources": ["RFC 9535 JSONPath: Query Expressions for JSON (normalized paths)", "RFC 6901 JSON Pointer", "jq 1.7 manual, basic filters (.foo, .\"foo\", .[n])", "RFC 8259 JSON grammar"]
 }

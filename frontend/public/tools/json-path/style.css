@@ -1,0 +1,114 @@
+/* JSON Path Explorer: the icicle page. Colours from kit.css only. */
+:root {
+  --tool-object: #5b6b7a; --tool-array: #a23fbf; --tool-string: #0f9d8a;
+  --tool-number: #d97706; --tool-boolean: #2f855a; --tool-null: #94a3b0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tool-object: #8ea0b0; --tool-array: #c982e0; --tool-string: #3cc7b3; --tool-number: #f0a33a; --tool-boolean: #68b36b; --tool-null: #56697a; }
+}
+:root[data-theme="dark"] { --tool-object: #8ea0b0; --tool-array: #c982e0; --tool-string: #3cc7b3; --tool-number: #f0a33a; --tool-boolean: #68b36b; --tool-null: #56697a; }
+
+.jp-page { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; align-items: start;
+  grid-template-areas: "path path" "map side" "out out"; }
+.jp-pathbar { grid-area: path; }
+.jp-mappanel { grid-area: map; }
+.jp-side { grid-area: side; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.jp-out { grid-area: out; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 980px) {
+  .jp-page { grid-template-columns: minmax(0, 1fr); grid-template-areas: "path" "map" "side" "out"; }
+}
+
+.jp-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.jp-row { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; min-width: 0; }
+.jp-row + .jp-row { margin-top: 8px; }
+.jp-grow { flex: 1 1 auto; }
+.jp-h { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.jp-soft { color: var(--ink-soft); }
+.jp-small { font-size: 11.5px; }
+.jp-bad { color: var(--danger); }
+.jp-page input[type="text"], .jp-page input[type="search"], .jp-page textarea {
+  padding: 4px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; min-width: 0; color: var(--ink); }
+
+/* path bar */
+.jp-tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.jp-tab { border: 0; background: transparent; padding: 3px 10px; font-size: 12px; color: var(--ink-soft); cursor: pointer; }
+.jp-tab + .jp-tab { border-left: 1px solid var(--line); }
+.jp-tab[aria-selected="true"] { background: var(--sunken); color: var(--ink); font-weight: 600; }
+.jp-rootwrap { font-size: 12px; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 4px; }
+.jp-root { width: 80px; }
+.jp-pickinfo { font-size: 12px; color: var(--ink-soft); }
+.jp-pickinfo.is-warn { color: var(--warn); }
+.jp-chainrow { flex-wrap: nowrap; align-items: stretch; }
+.jp-chain { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 0; min-height: 38px; padding: 4px 6px;
+  border: 1px solid var(--line); border-radius: 5px; background: var(--sunken); min-width: 0; }
+.jp-step { font: 500 16px/1.2 "IBM Plex Mono", ui-monospace, monospace; border: 1px solid transparent; background: transparent;
+  color: var(--ink); padding: 3px 2px; border-radius: 4px; cursor: pointer; word-break: break-all; text-align: left; }
+.jp-step:hover { border-color: var(--line); background: var(--surface); }
+.jp-steproot { color: var(--ink-soft); }
+.jp-stepidx { color: var(--tool-array); }
+.jp-stepidx.is-all { background: var(--tool-array); color: var(--surface); padding: 3px 4px; }
+.jp-step.is-last:not(.is-all) { color: var(--accent); }
+.jp-copy { flex: 0 0 auto; }
+.jp-pick { flex: 1 1 260px; }
+
+/* map */
+.jp-find { width: 220px; }
+.jp-crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px; min-width: 0; }
+.jp-crumb { border: 1px solid var(--line); background: var(--surface); border-radius: 4px; padding: 1px 7px; cursor: pointer;
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px; color: var(--ink-soft); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jp-crumb.is-cur { color: var(--ink); border-color: var(--ink-soft); }
+.jp-sbtn { padding: 2px 9px; font-size: 12px; }
+.jp-maperr:empty { display: none; }
+.jp-maperr { margin-top: 8px; border: 1px solid var(--warn); border-left-width: 3px; border-radius: 4px; padding: 5px 9px; font-size: 12px; }
+.jp-mapwrap { margin-top: 8px; border: 1px solid var(--line-soft); border-radius: 4px; background: var(--sunken); overflow: hidden; touch-action: manipulation; }
+.jp-mapwrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.is-stale .jp-mapwrap { opacity: .4; }
+.jp-svg { display: block; width: 100%; height: auto; user-select: none; }
+.jp-cols line { stroke: var(--line-soft); }
+.jp-band { cursor: pointer; }
+.jp-bg { fill: var(--surface); }
+.jp-band:hover .jp-bg { fill: var(--paper); stroke: var(--ink-soft); stroke-width: 1; }
+.jp-band.is-onpath .jp-bg { fill: var(--accent); fill-opacity: var(--fill-alpha); }
+.jp-band.is-pick .jp-bg { fill: var(--accent); }
+.jp-band.is-sel .jp-bg { stroke: var(--ink); stroke-width: 1.5; }
+.jp-t-object { fill: var(--tool-object); background: var(--tool-object); }
+.jp-t-array { fill: var(--tool-array); background: var(--tool-array); }
+.jp-t-string { fill: var(--tool-string); background: var(--tool-string); }
+.jp-t-number { fill: var(--tool-number); background: var(--tool-number); }
+.jp-t-boolean { fill: var(--tool-boolean); background: var(--tool-boolean); }
+.jp-t-null { fill: var(--tool-null); background: var(--tool-null); }
+.jp-labels { pointer-events: none; }
+.jp-lab { font: 12px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); white-space: pre; }
+.jp-key { font-weight: 600; }
+.jp-pv { fill: var(--ink-soft); font-weight: 400; }
+.jp-pv-string { fill: var(--tool-string); }
+.jp-pv-number { fill: var(--tool-number); }
+.jp-pv-boolean { fill: var(--tool-boolean); }
+.jp-cnt { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.jp-hidden { font: 600 10.5px "IBM Plex Sans", sans-serif; fill: var(--warn); }
+.jp-match { fill: var(--warn); pointer-events: none; }
+.jp-band.is-pick ~ * {}
+.jp-status { margin-top: 6px; }
+.jp-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 11.5px; color: var(--ink-soft); }
+.jp-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.jp-legend .jp-lg-match { background: var(--warn); border-radius: 50%; width: 8px; height: 8px; }
+.jp-legend .jp-lg-pick { background: var(--accent); }
+
+/* side */
+.jp-valhead { font-size: 12px; margin-left: auto; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.jp-val { margin: 8px 0 0; padding: 8px 10px; background: var(--sunken); border: 1px solid var(--line-soft); border-radius: 4px;
+  max-height: 230px; overflow: auto; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; }
+.jp-val.is-empty { color: var(--ink-soft); font-family: "IBM Plex Sans", sans-serif; }
+.jp-doc { display: block; width: 100%; margin-top: 8px; resize: vertical; font-size: 12px !important; line-height: 1.45; }
+.jp-listopts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; font-size: 12.5px; padding: 0 2px; }
+.jp-listopts label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.jp-lab.is-pick, .jp-lab.is-pick .jp-pv { fill: var(--accent-ink); }
+.jp-more { stroke: var(--accent); stroke-width: 3; }
+.jp-band.is-pickbox .jp-bg { fill: var(--accent); fill-opacity: calc(var(--fill-alpha) * 2); stroke: var(--accent); stroke-width: 2; }
+.jp-page [hidden] { display: none !important; }
+.jp-dense { opacity: .9; }
+.jp-hatchline { stroke: var(--line); stroke-width: 2; }
+.jp-denselab { font: 11.5px "IBM Plex Sans", sans-serif; fill: var(--ink-soft); paint-order: stroke; stroke: var(--sunken); stroke-width: 4px; }
+.jp-warntext { color: var(--warn); }
+.jp-dense { cursor: crosshair; }

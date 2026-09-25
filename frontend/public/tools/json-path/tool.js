@@ -56,6 +56,7 @@ export function parsePath(p, rootVar = 'data') {
       let m;
       if ((m = /^\[\s*(-?\d+)\s*\]/.exec(rest))) steps.push(Number(m[1]));
       else if ((m = /^\[\s*\*\s*\]/.exec(rest))) steps.push('*');
+      else if ((m = /^\[\s*\]/.exec(rest))) steps.push('*'); // jq's .[]
       else if ((m = /^\[\s*"((?:[^"\\]|\\.)*)"\s*\]/.exec(rest))) steps.push(JSON.parse(`"${m[1]}"`));
       else if ((m = /^\[\s*'((?:[^'\\]|\\.)*)'\s*\]/.exec(rest))) steps.push(m[1].replace(/\\(.)/g, '$1'));
       else return { error: `cannot read "${rest.slice(0, 12)}" at ${i + 1}` };
@@ -112,6 +113,18 @@ function locate(src) {
   return null;
 }
 
+/** A step list written in one of the five styles (the page builds click-picked paths with it). */
+export function formatPath(steps, style = 'js', rootVar = 'data') {
+  const S = STYLES[style] || STYLES.js;
+  const rv = String(rootVar || '').trim() || 'data';
+  const body = steps.map((st) => (st === '*' ? (style === 'pointer' ? '/*' : style === 'jq' ? '[]' : '[*]') : typeof st === 'number' ? S.idx(st) : S.key(st))).join('');
+  if (!body) return S.empty ?? S.root(rv);
+  return S.root(rv) + body;
+}
+export { STYLES };
+
+const TREE_MAX = 60000;
+
 export function run({ json, filter, style, rootVar, pick, wildcard, leaves }) {
   const warnings = [];
   const text = String(json ?? '').trim();
@@ -125,27 +138,24 @@ export function run({ json, filter, style, rootVar, pick, wildcard, leaves }) {
   }
   const S = STYLES[style] || STYLES.js;
   const rv = String(rootVar || '').trim() || 'data';
-  const fmtPath = (steps) => {
-    const body = steps.map((st) => (st === '*' ? (style === 'pointer' ? '/*' : style === 'jq' ? '[]' : '[*]') : typeof st === 'number' ? S.idx(st) : S.key(st))).join('');
-    const r = S.root(rv);
-    if (!body) return S.empty ?? r;
-    return r + body;
-  };
+  const fmtPath = (steps) => formatPath(steps, STYLES[style] ? style : 'js', rv);
 
   // Walk depth first, keeping paths as step arrays.
   const nodes = [];
   let count = 0, maxDepth = 0, truncated = false;
-  const walk = (v, steps) => {
+  const walk = (v, steps, parent) => {
     if (count >= MAX_NODES) { truncated = true; return; }
     count++;
     maxDepth = Math.max(maxDepth, steps.length);
     const t = typeOf(v);
     const leaf = t !== 'object' && t !== 'array' || (t === 'array' ? v.length === 0 : Object.keys(v).length === 0);
-    nodes.push({ steps, v, t, leaf });
-    if (t === 'array') v.forEach((x, i) => walk(x, [...steps, i]));
-    else if (t === 'object') for (const k of Object.keys(v)) walk(v[k], [...steps, k]);
+    const me = nodes.length;
+    nodes.push({ steps, v, t, leaf, parent, kids: [] });
+    if (parent >= 0) nodes[parent].kids.push(me);
+    if (t === 'array') v.forEach((x, i) => walk(x, [...steps, i], me));
+    else if (t === 'object') for (const k of Object.keys(v)) walk(v[k], [...steps, k], me);
   };
-  walk(doc, []);
+  walk(doc, [], -1);
   if (truncated) warnings.push(`The document has over ${MAX_NODES} nodes; only the first ${MAX_NODES} are listed.`);
 
   const f = String(filter || '').trim().toLowerCase();
@@ -182,6 +192,7 @@ export function run({ json, filter, style, rootVar, pick, wildcard, leaves }) {
   ];
   if (rows.length) values.push({ label: f ? 'First match' : 'First path', value: rows[0][0], tone: 'ok' });
 
+  let pickIdx = [], pickSteps = null;
   const texts = [{ title: 'Paths', body: rows.map((r) => r[0]).join('\n'), lang: 'text' }];
   const pk = String(pick || '').trim();
   if (pk) {
@@ -189,12 +200,40 @@ export function run({ json, filter, style, rootVar, pick, wildcard, leaves }) {
     if (pr.error) warnings.push(`Cannot read the path "${pk}": ${pr.error}.`);
     else {
       const got = get(doc, pr.steps);
+      let cur = [0];
+      for (const stp of pr.steps) {
+        const next = [];
+        for (const i of cur) {
+          const n = nodes[i];
+          if (!n) continue;
+          if (stp === '*') next.push(...n.kids);
+          else if (n.t === 'array' && typeof stp === 'number') { const k = stp < 0 ? n.kids.length + stp : stp; if (n.kids[k] != null) next.push(n.kids[k]); }
+          else if (n.t === 'object') { const j = n.kids.find((c) => nodes[c].steps[nodes[c].steps.length - 1] === String(stp)); if (j != null) next.push(j); }
+        }
+        cur = next;
+      }
+      pickIdx = cur;
+      pickSteps = pr.steps;
       values.push({ label: 'At the path', value: got.length ? (got.length === 1 ? typeOf(got[0]) : `${got.length} values`) : 'nothing', tone: got.length ? 'ok' : 'warn', hint: fmtPath(pr.steps) });
       if (got.length) texts.unshift({ title: 'Value at path', body: JSON.stringify(got.length === 1 ? got[0] : got, null, 2), lang: 'json' });
       else warnings.push(`Nothing at ${fmtPath(pr.steps)}: check the key spelling and array indices (they start at 0).`);
     }
   }
+  // For the page's drawing (agents do not receive it: manifest agentOmit).
+  // node: [parent, key (string | index), type, leaves under it, preview (leaf) or child count]
+  const nt = Math.min(nodes.length, TREE_MAX);
+  const leafN = new Array(nt).fill(0);
+  for (let i = nt - 1; i >= 0; i--) { if (nodes[i].leaf) leafN[i] += 1; const p = nodes[i].parent; if (p >= 0) leafN[p] += leafN[i]; }
+  const tree = {
+    nodes: nodes.slice(0, nt).map((n, i) => [n.parent, n.steps.length ? n.steps[n.steps.length - 1] : null, n.t, leafN[i], n.leaf ? preview(n.v, 48) : n.kids.length]),
+    depth: maxDepth,
+    truncated: nodes.length > nt,
+    match: f ? nodes.slice(0, nt).map((n, i) => (n.steps.length && matches(n) ? i : -1)).filter((i) => i >= 0) : [],
+    pick: pickIdx.filter((i) => i < nt),
+    pickSteps,
+  };
   return {
+    tree,
     values,
     tables: [{ title: wildcard ? 'Distinct paths (array indices as *)' : 'Paths', columns: wildcard ? ['Path', 'Type', 'Occurs', 'Example'] : ['Path', 'Type', 'Value'], rows: rows.slice(0, MAXROWS) }],
     texts,

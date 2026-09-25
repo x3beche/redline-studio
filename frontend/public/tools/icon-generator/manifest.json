@@ -1,5 +1,5 @@
 {
-  "id": "icon-generator", "version": "1.0",
+  "id": "icon-generator", "version": "1.1",
   "name": "Icon & Favicon Generator",
   "blurb": "every icon size and the manifest entries from one image",
   "group": "web",
@@ -28,5 +28,6 @@
   ],
   "usage": "Give the source file name, its width in px, the logo shape (square, circle, wide, tall), app name, short name, background and theme colours as #hex, the URL prefix, and booleans web/android/ios (iosSet single or full). Returns a table of every file with its pixel size and the logo size inside it, and texts: HTML head tags, manifest.webmanifest, Android adaptive XML, iOS Contents.json and an ImageMagick 7 shell script. It does not read the image itself; run the script to make the files.",
   "sources": ["W3C Web App Manifest, icon purpose \"maskable\" (safe zone: circle of radius 40 %)", "Evil Martians, \"How to Favicon in 2024: Six files that fit most needs\"", "Android Developers, \"Adaptive icons\" (108 dp layers, 72 dp visible, 66 dp safe zone) and launcher density buckets", "Apple Human Interface Guidelines, \"App icons\" (single 1024 px icon, no transparency)"],
-  "view": true
+  "view": true,
+  "layout": "custom"
 }
