@@ -1668,7 +1668,10 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
    workspace and role, a caret. Quiet until hovered or open. */
 .tcv-user { display: flex; align-items: center; gap: 8px; max-width: 240px; height: 24px; padding: 0 8px 0 2px;
   border: 1px solid transparent; border-radius: 6px; background: none; color: var(--ink); cursor: pointer; }
-.tcv-user:hover, .tcv-user[data-on] { background: var(--surface-2); border-color: var(--line); }
+/* No box behind it on hover or while open: the name and the caret brighten. */
+.tcv-user-text { opacity: .85; transition: opacity .12s; }
+.tcv-user:hover .tcv-user-text, .tcv-user[data-on] .tcv-user-text { opacity: 1; }
+.tcv-user:hover .tcv-user-caret, .tcv-user[data-on] .tcv-user-caret { stroke: var(--ink); }
 .tcv-user-dot { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; line-height: 1;
   border-radius: 50%; font-size: 10.5px; font-weight: 700; color: var(--ink-bright); background: var(--accent-deep);
   box-shadow: 0 0 0 1px var(--accent); }

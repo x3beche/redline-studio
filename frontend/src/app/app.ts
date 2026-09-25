@@ -51,7 +51,10 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
       <button (click)="open(w.id)" class="tcv-tab tcv-tab-end"
               [attr.data-on]="here() === w.id ? 1 : null"
               [attr.aria-current]="here() === w.id ? 'page' : null"
-              [title]="w.blurb">{{ w.label }}</button>
+              [title]="brief()?.title ?? w.blurb">{{ w.label }}
+        <!-- The week in a few words, quietly: spend, notes, how fresh. -->
+        @if (brief(); as b) { <span class="tcv-tab-count">{{ b.text }}</span> }
+      </button>
     }
     <!-- Who is signed in, over the right-hand column; nothing in local mode. -->
     <app-user-chip class="tcv-user-end" />
@@ -86,6 +89,34 @@ export class App {
   /** The rooms you work in, left; Tools and Analytics at the right end. */
   rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools');
   toolsTab = WORKSPACES.find(w => w.id === 'tools');
+  /** A few words from Analytics for its tab: the last seven days' LLM
+   *  spend and notes, and how long ago the figures were worked out. The
+   *  server keeps them cached, so asking once a minute costs nothing. */
+  brief = signal<{ text: string; title: string } | null>(null);
+  private briefTimer?: ReturnType<typeof setInterval>;
+  private readBrief = effect(() => {
+    clearInterval(this.briefTimer);
+    if (!this.auth.signedIn()) return;
+    const read = () => fetch('/api/insights?range=7d', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { now_totals?: { llm_usd?: number; notes?: number; runs?: number }; computed_at?: string;
+                  took_ms?: number } | null) => {
+        const t = d?.now_totals;
+        if (!t) return;
+        const usd = t.llm_usd ?? 0;
+        const money = usd >= 1000 ? `$${(usd / 1000).toFixed(1)}k` : `$${Math.round(usd)}`;
+        const mins = d?.computed_at ? Math.round((Date.now() - Date.parse(d.computed_at)) / 60000) : null;
+        const ago = mins === null ? '' : mins < 1 ? ' · just now' : mins < 60 ? ` · ${mins} min ago` : ` · ${Math.round(mins / 60)} h ago`;
+        this.brief.set({
+          text: `${money} · ${t.notes ?? 0} notes${ago}`,
+          title: `Last 7 days: $${usd.toFixed(2)} of LLM work, ${t.notes ?? 0} notes, ${t.runs ?? 0} runs`
+               + (d?.took_ms != null ? ` - worked out in ${d.took_ms} ms` : ''),
+        });
+      })
+      .catch(() => { /* the tab is still the tab without its figures */ });
+    untracked(() => { void read(); this.briefTimer = setInterval(read, 60_000); });
+  });
+
   /** The number of tools in the Tools tab's catalog, for its label. */
   toolCount = signal<number | null>(null);
   private countTools = effect(() => {
