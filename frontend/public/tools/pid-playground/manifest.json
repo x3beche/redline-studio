@@ -1,5 +1,5 @@
 {
-  "id": "pid-playground", "version": "1.0",
+  "id": "pid-playground", "version": "1.1",
   "name": "PID Tuning Playground",
   "blurb": "a simple plant's step response live as the gains move",
   "group": "embedded",
@@ -38,5 +38,6 @@
     "J. G. Ziegler, N. B. Nichols, 'Optimum settings for automatic controllers', Trans. ASME 64 (1942) (open-loop reaction-curve rule)",
     "K. J. Åström, T. Hägglund, 'Advanced PID Control' (ISA 2006), ch. 3: derivative filter, derivative on measurement, anti-windup, discretisation"
   ],
-  "view": true
+  "view": true,
+  "layout": "custom"
 }

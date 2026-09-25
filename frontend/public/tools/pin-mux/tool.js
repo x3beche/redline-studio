@@ -110,10 +110,17 @@ const M328_SPECIAL = {
   PB3: 'ISP programming (MOSI): keep loads light.', PB4: 'ISP programming (MISO).', PB5: 'ISP programming (SCK); the LED on an Arduino Uno.',
 };
 
+// Package pins that carry no GPIO (supply, reset, boot, crystal-only, QSPI), for the drawing.
+const F103_OTHER = { 1: 'VBAT', 7: 'NRST', 8: 'VSSA', 9: 'VDDA', 23: 'VSS_1', 24: 'VDD_1', 35: 'VSS_2', 36: 'VDD_2', 44: 'BOOT0', 47: 'VSS_3', 48: 'VDD_3' };
+const RP_OTHER = { 1: 'IOVDD', 10: 'IOVDD', 19: 'TESTEN', 20: 'XIN', 21: 'XOUT', 22: 'IOVDD', 23: 'DVDD', 24: 'SWCLK', 25: 'SWDIO', 26: 'RUN',
+  33: 'IOVDD', 42: 'IOVDD', 43: 'ADC_AVDD', 44: 'VREG_VIN', 45: 'VREG_VOUT', 46: 'USB_DM', 47: 'USB_DP', 48: 'USB_VDD', 49: 'IOVDD', 50: 'DVDD',
+  51: 'QSPI_SD3', 52: 'QSPI_SCLK', 53: 'QSPI_SD0', 54: 'QSPI_SD2', 55: 'QSPI_SD1', 56: 'QSPI_SS' };
+const M328_OTHER = { 7: 'VCC', 8: 'GND', 20: 'AVCC', 21: 'AREF', 22: 'GND' };
+
 const CHIPS = {
-  stm32f103c8: { name: 'STM32F103C8 (LQFP48)', pins: F103, special: F103_SPECIAL, remap: true },
-  rp2040: { name: 'RP2040 (QFN-56)', pins: rp2040(), special: RP_SPECIAL },
-  atmega328p: { name: 'ATmega328P (DIP-28)', pins: M328, special: M328_SPECIAL },
+  stm32f103c8: { name: 'STM32F103C8 (LQFP48)', pins: F103, special: F103_SPECIAL, remap: true, pkg: { kind: 'qfp', count: 48, other: F103_OTHER, label: 'LQFP48' } },
+  rp2040: { name: 'RP2040 (QFN-56)', pins: rp2040(), special: RP_SPECIAL, pkg: { kind: 'qfn', count: 56, other: RP_OTHER, label: 'QFN-56', pad: 'GND' } },
+  atmega328p: { name: 'ATmega328P (DIP-28)', pins: M328, special: M328_SPECIAL, pkg: { kind: 'dip', count: 28, other: M328_OTHER, label: 'DIP-28' } },
 };
 
 const norm = (s) => String(s ?? '').toUpperCase().replace(/[\s\-/]+/g, '_').replace(/^_+|_+$/g, '');
@@ -173,38 +180,47 @@ export function run({ chip: chipKey, pin, find, assign }) {
   const perRemap = new Map();   // peripheral -> [{sig, remaps}]
   const periphs = new Set();
   let bad = 0;
-  for (const a of assign || []) {
+  const pinUse = new Map();     // pin -> [{signal, status, note, row}]
+  const assignRows = [];
+  const mark = (pn, sigs, why) => { for (const u of pinUse.get(pn) || []) if (!sigs || sigs.includes(u.signal)) { u.status = 'bad'; u.note = why; } };
+  (assign || []).forEach((a, row) => {
     const sig = norm(a.signal), pt = String(a.pin ?? '').trim();
-    if (!sig && !pt) continue;
+    if (!sig && !pt) return;
     const p = findPin(chip, pt);
     if (!p) {
       const offer = chip.pins.filter((x) => x[2].some((f) => split(f).name === sig)).map((x) => x[0]);
       rows.push([sig || '–', pt || '–', 'no such pin', offer.length ? `offered on ${offer.join(', ')}` : 'unknown function too']);
-      bad++; continue;
+      assignRows.push({ row, signal: sig || '', pin: pt, status: 'bad', note: rows[rows.length - 1][3] });
+      bad++; return;
     }
     used.set(p[0], [...(used.get(p[0]) || []), sig || 'GPIO']);
+    const use = { signal: sig || 'GPIO', row, status: 'ok', note: '' };
+    pinUse.set(p[0], [...(pinUse.get(p[0]) || []), use]);
+    const done = () => { const r = rows[rows.length - 1]; use.status = r[2] === 'ok' ? 'ok' : r[2] === 'check' ? 'check' : 'bad'; use.note = r[3]; assignRows.push({ row, signal: use.signal, pin: p[0], status: use.status, note: use.note }); };
     if (!sig || sig === 'GPIO' || sig === 'SIO') {
       rows.push([sig || 'GPIO', p[0], chip.special[p[0]] ? 'check' : 'ok', chip.special[p[0]] || 'plain GPIO']);
       if (chip.special[p[0]]) bad++;
-      continue;
+      done(); return;
     }
     const hit = p[2].map(split).find((s) => s.name === sig);
     if (!hit) {
       const offer = chip.pins.filter((x) => x[2].some((f) => split(f).name === sig)).map((x) => x[0]);
       rows.push([sig, p[0], 'not on this pin', offer.length ? `use ${offer.join(' or ')}` : 'unknown function']);
-      bad++; continue;
+      done(); bad++; return;
     }
     periphs.add(periph(sig));
     if (hit.remaps) perRemap.set(periph(sig), [...(perRemap.get(periph(sig)) || []), { sig, pin: p[0], remaps: hit.remaps }]);
     rows.push([sig, p[0], chip.special[p[0]] ? 'check' : 'ok', chip.special[p[0]] || (hit.remaps && !hit.remaps.includes(0) ? `needs remap ${hit.remaps.join('/')}` : '')]);
     if (chip.special[p[0]]) bad++;
-  }
-  for (const [pn, sigs] of used) if (sigs.length > 1) { warnings.push(`${pn} is assigned twice (${sigs.join(', ')}): a pin carries one function at a time. Move one of them.`); bad++; }
+    done();
+  });
+  for (const [pn, sigs] of used) if (sigs.length > 1) { mark(pn, null, `${pn} is used twice`); warnings.push(`${pn} is assigned twice (${sigs.join(', ')}): a pin carries one function at a time. Move one of them.`); bad++; }
   const remapPick = [];
   for (const [per, list] of perRemap) {
     let ok = [0, 1, 2, 3];
     for (const x of list) ok = ok.filter((r) => x.remaps.includes(r));
     if (!ok.length) {
+      for (const x of list) mark(x.pin, [x.sig], `${per} signals need different remaps`);
       warnings.push(`${per}: ${list.map((x) => `${x.sig} on ${x.pin}`).join(', ')} need different AFIO remap settings. On the F1 all of ${per}'s signals move together: put them all on default or all on remapped pins.`);
       bad++;
     } else remapPick.push([per, ok.join(' or '), ok.includes(0) ? 'no remap needed' : `set the ${per} remap field to ${ok[0]}`]);
@@ -221,5 +237,22 @@ export function run({ chip: chipKey, pin, find, assign }) {
   if (remapPick.length) tables.push({ title: 'Remap settings (AFIO_MAPR)', columns: ['Peripheral', 'Valid remap values', 'What to do'], rows: remapPick });
   if (chipKey === 'rp2040') notes.push('RP2040: each GPIO selects one function in its IO_BANK0 GPIOx_CTRL FUNCSEL; SIO is software GPIO, PIO0/PIO1 hand the pin to a state machine.');
   notes.push(`Data transcribed from the ${chip.name} datasheet; confirm against the current revision before ordering boards.`);
-  return { values, tables, warnings, notes };
+  // For the page: the package with every pin, its functions, what is on it and whether it matches the search.
+  for (const r of assignRows) { const u = (pinUse.get(r.pin) || []).find((x) => x.row === r.row); if (u) { r.status = u.status; r.note = u.note; } }
+  const byPkg = new Map(chip.pins.map((p) => [p[1], p]));
+  const found = findPin(chip, pin);
+  const pkgPins = [];
+  for (let n = 1; n <= chip.pkg.count; n++) {
+    const p = byPkg.get(n);
+    if (!p) { pkgPins.push({ n, name: chip.pkg.other[n] || '–', io: false, funcs: [], use: [], match: [] }); continue; }
+    const funcs = p[2].map((f) => { const x = split(f); const per = periph(x.name);
+      return { name: x.name, periph: per, family: per.replace(/^(CLOCK|USB)_.*$/, '$1').replace(/^(PCINT|ADC|INT|OC|AIN|XTAL|TOSC|T)\d+[AB]?$/, '$1'),
+        remap: chip.remap ? (x.remaps ? (x.remaps.includes(0) ? (x.remaps.length > 1 ? `default, ${x.remaps.filter((r) => r).join('/')}` : 'default') : `remap ${x.remaps.join('/')}`) : 'fixed') : null }; });
+    pkgPins.push({ n, name: p[0], io: true, funcs, special: chip.special[p[0]] || null,
+      use: (pinUse.get(p[0]) || []).map((u) => ({ signal: u.signal, status: u.status, row: u.row, note: u.note })),
+      match: q ? funcs.filter((f) => f.name.includes(q)).map((f) => f.name) : [] });
+  }
+  const pkg = { chip: chipKey in CHIPS ? chipKey : 'stm32f103c8', name: chip.name, kind: chip.pkg.kind, label: chip.pkg.label, count: chip.pkg.count, pad: chip.pkg.pad || null,
+    selected: found ? found[0] : null, find: q, pins: pkgPins, assign: assignRows, issues: bad };
+  return { values, tables, warnings, notes, package: pkg };
 }

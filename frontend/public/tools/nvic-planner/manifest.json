@@ -1,5 +1,5 @@
 {
-  "id": "nvic-planner", "version": "1.0",
+  "id": "nvic-planner", "version": "1.1",
   "name": "NVIC Priority Planner",
   "blurb": "interrupt priorities in order, with preemption conflicts",
   "group": "embedded",
@@ -41,5 +41,6 @@
   ],
   "usage": "Give the implemented priority bits (2, 3, 4 or 8), the preemption bits ('all' or 0-7), an optional FreeRTOS syscall limit, and a table of interrupts with name, priority, subpriority, handler time, period and optional deadline in µs, and whether it calls the RTOS API (yes/no). It returns the interrupts in NVIC order with IPR byte values, blocking, preemption and worst-case response times against deadlines, the CPU load, a conflicts table, HAL code, and result.irqs for the drawing. Use it to choose priorities before writing NVIC setup or to explain a missed interrupt.",
   "sources": ["Arm Armv7-M Architecture Reference Manual B1.5.4 (priority grouping) and B3.2.6 AIRCR.PRIGROUP", "Joseph & Pandya, 'Finding response times in a real-time system', Computer Journal 1986; Audsley et al. 1993 (blocking term)", "FreeRTOS 'Running the RTOS on an ARM Cortex-M core' (configMAX_SYSCALL_INTERRUPT_PRIORITY)"],
-  "view": true
+  "view": true,
+  "layout": "custom"
 }

@@ -111,8 +111,14 @@ export function run({ bits: bitsIn, pbits: pIn, rtos, irqs }) {
       ...(conflicts.length ? [{ title: 'Preemption conflicts', columns: ['Where', 'What', 'Why it matters'], rows: conflicts }] : []),
     ],
     texts: [{ title: 'HAL', lang: 'c', body: hal.join('\n') + '\n' }],
-    irqs: list.map((x) => ({ name: x.name, pre: x.pre, sub: x.sub, C: x.C, B: x.B, I: Number.isFinite(x.I) ? x.I : null, R: Number.isFinite(x.R) ? x.R : null, D: x.D, ok: x.ok, rtos: x.rtos })),
+    irqs: list.map((x) => ({ name: x.name, pre: x.pre, sub: x.sub, C: x.C, B: x.B, I: Number.isFinite(x.I) ? x.I : null, R: Number.isFinite(x.R) ? x.R : null, D: x.D, ok: x.ok, rtos: x.rtos,
+      // for the page: the table row it came from, its period, IPR byte, and what is wrong with it
+      idx: x.idx, T: x.T, ipr: x.ipr, rtosBad: rt != null && x.rtos && x.pre < rt,
+      shared: (groups.get(x.pre) || []).length > 1,
+      inverted: list.filter((a) => a.pre < x.pre && x.D < a.D).map((a) => a.name) })),
     rtosLimit: rt,
+    nvic: { bits, p, sb, prigroup: 7 - p, maxPre, maxSub, v6m, load: U, missed: miss.length, conflicts: conflicts.length,
+      rtosByte: rt != null ? (rt << (8 - bits)) & 0xff : null },
     warnings, notes,
   };
 }

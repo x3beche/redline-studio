@@ -89,9 +89,12 @@ function metrics(s, p) {
   const yn = s.y.map((y) => y / yf);
   const i10 = yn.findIndex((y, i) => i < end && y >= 0.1);
   const i90 = yn.findIndex((y, i) => i < end && y >= 0.9);
-  if (i10 >= 0 && i90 >= 0) out.rise = s.t[i90] - s.t[i10];
+  if (i10 >= 0 && i90 >= 0) { out.rise = s.t[i90] - s.t[i10]; out.t10 = s.t[i10]; out.t90 = s.t[i90]; }
+  out.yf = yf;
   let mx = -Infinity;
-  for (let i = 0; i < end; i++) mx = Math.max(mx, yn[i]);
+  let ipk = 0;
+  for (let i = 0; i < end; i++) if (yn[i] > mx) { mx = yn[i]; ipk = i; }
+  out.tPeak = s.t[ipk]; out.yPeak = s.y[ipk];
   out.overshoot = Math.max(0, (mx - 1) * 100);
   let last = -1;
   for (let i = 0; i < end; i++) if (Math.abs(yn[i] - 1) > 0.02) last = i;
@@ -178,8 +181,10 @@ export function run(input) {
   if (s.satFrac > 0.3) warnings.push(`The output sits on a limit ${fmtNum(s.satFrac * 100, 2)} % of the time: the response is set by the actuator, not by the gains.`);
 
   // Tuning references, each simulated with the same plant and limits.
+  const tuning = [];
   const sug = suggestions(p).map((x) => {
     const r = simulate(p, x); const q = metrics(r, { ...p, integral: x.ki > 0 || plant === 'int' });
+    tuning.push({ name: x.name, kp: x.kp, ki: x.ki, kd: x.kd, overshoot: r.diverged ? null : q.overshoot, settle: r.diverged ? null : q.settle, unstable: r.diverged });
     return [x.name, fmtNum(x.kp, 3), fmtNum(x.ki, 3), fmtNum(x.kd, 3),
       r.diverged ? 'unstable' : `${fmtNum(q.overshoot, 3)} %`, r.diverged ? '–' : q.settle != null ? fmtEng(q.settle, 's') : 'not settled'];
   });
@@ -222,7 +227,11 @@ export function run(input) {
     values,
     warnings,
     sim: { t: down(s.t, idx), sp: down(s.r, idx), y: down(s.y, idx), u: down(s.u, idx), umin, umax,
-      settle: mt.settle, tdist: p.dist ? p.tdist : null, diverged: s.diverged },
+      settle: mt.settle, tdist: p.dist ? p.tdist : null, diverged: s.diverged,
+      // for the page: where the measurements were taken on the curve
+      t10: mt.t10 ?? null, t90: mt.t90 ?? null, tPeak: mt.tPeak ?? null, yPeak: mt.yPeak ?? null, yf: mt.yf ?? null,
+      overshoot: mt.overshoot, rise: mt.rise, sse: mt.sse, dist: p.dist, dPeak: mt.dPeak, dRecover: mt.dRecover, tend: p.tend },
+    tuning,
     tables: [{ title: 'SIMC and Ziegler–Nichols gains for this plant, simulated',
       columns: ['Rule', 'Kp', 'Ki', 'Kd', 'Overshoot', 'Settling'], rows: sug }],
     texts: [{ title: 'C code', body: ctrlCode, lang: 'c' }],

@@ -1,5 +1,5 @@
 {
-  "id": "pin-mux", "version": "1.0",
+  "id": "pin-mux", "agentOmit": ["package"], "version": "1.1",
   "name": "Pin Mux Explorer",
   "blurb": "a pin's alternate functions on an MCU and the conflicts",
   "group": "embedded",
@@ -20,5 +20,6 @@
     { "title": "RP2040: UART0, I2C1 and a PWM", "input": { "chip": "rp2040", "pin": "GPIO6", "find": "UART0", "assign": [{ "signal": "UART0_TX", "pin": "GPIO0" }, { "signal": "UART0_RX", "pin": "GPIO1" }, { "signal": "I2C1_SDA", "pin": "GPIO6" }, { "signal": "I2C1_SCL", "pin": "GPIO7" }, { "signal": "PWM4_A", "pin": "GPIO8" }] } }
   ],
   "usage": "Give the chip (stm32f103c8, rp2040, atmega328p), optionally a pin name (PA9, GPIO4, PD1 or a package pin number) to list its functions, a function fragment (USART1, PWM3) to list the pins that offer it, and an assignment table of {signal, pin} rows using datasheet function names such as USART1_TX, I2C1_SDA, SPI0_SCK, PWM4_A, ADC0 or GPIO. It returns the tables, an issue count, the AFIO remap values each F1 peripheral needs, and warnings for double-used pins, missing functions, remap splits and shared-resource conflicts (F103 CAN + USB).",
-  "sources": ["ST DS5319 STM32F103x8/xB datasheet, table 5 pin definitions", "ST RM0008 §9.3 alternate function I/O and debug configuration (AFIO_MAPR)", "Raspberry Pi RP2040 datasheet §1.4.3 pin locations and §2.19.2 function select", "Microchip ATmega328P datasheet §1.1 pinout and §14.3 alternate port functions"]
+  "sources": ["ST DS5319 STM32F103x8/xB datasheet, table 5 pin definitions", "ST RM0008 §9.3 alternate function I/O and debug configuration (AFIO_MAPR)", "Raspberry Pi RP2040 datasheet §1.4.3 pin locations and §2.19.2 function select", "Microchip ATmega328P datasheet §1.1 pinout and §14.3 alternate port functions"],
+  "layout": "custom"
 }
