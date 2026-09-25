@@ -1,8 +1,9 @@
 {
-  "id": "silkscreen-check", "version": "1.0",
+  "id": "silkscreen-check", "version": "1.1",
   "name": "Silkscreen Legibility Check",
   "blurb": "whether text height and stroke width are under a fab's minimum",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["silkscreen", "silk", "legend", "overlay", "reference designator", "text height", "stroke width", "line width", "font size", "jlcpcb", "pcbway", "fab limits", "legibility"],
   "intro": "Checks legend text against a fab's published minimum line width and text height, and checks the height-to-stroke ratio (5–8 : 1 reads well; below 4 : 1 the letters fill in).",

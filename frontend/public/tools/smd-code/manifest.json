@@ -1,8 +1,9 @@
 {
-  "id": "smd-code", "version": "1.0",
+  "id": "smd-code", "version": "1.1",
   "name": "SMD Code Decoder",
   "blurb": "resistor and capacitor markings (103, 4R7, EIA-96) to their values",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["smd code", "resistor marking", "capacitor code", "EIA-96", "E96", "3-digit code", "4-digit code", "4R7", "103", "104", "chip resistor", "value code", "EIA-198", "decode", "marking"],
   "intro": "Decodes the value printed on a chip resistor (3-digit, 4-digit, R-notation, EIA-96) or a capacitor (3-digit pF code, EIA-198 letter code). Paste several codes separated by spaces or commas to decode them all at once.",

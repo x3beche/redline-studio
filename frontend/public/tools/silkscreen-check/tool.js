@@ -75,9 +75,17 @@ export function run({ fab, units, height, stroke, font, minStroke, minHeight, cl
     const ok = sh >= F.height - TOL && sw >= F.stroke - TOL && r >= 4 && r <= 10;
     return [out(sh), out(sw), `${fmtNum(r, 3)} : 1`, ok ? 'yes' : 'no'];
   });
+  // The same numbers in mm, for the page's drawing (and agents that want numbers, not text).
+  const legend = {
+    h, w, ratio, pass, good, hOk, wOk, rOk, font: font === 'ttf' || font === 'ttfbold' ? font : 'stroke',
+    fab: { id: fab in FABS ? fab : 'jlcpcb', name: F.name, stroke: F.stroke, height: F.height, clear: F.clear },
+    minLegible, suggestStroke,
+    sizes: SIZES.map(([sh, sw]) => ({ h: sh, w: sw, ok: sh >= F.height - TOL && sw >= F.stroke - TOL && sh / sw >= 4 && sh / sw <= 10 })),
+  };
   return {
     values,
     warnings,
+    legend,
     tables: [{ title: `Common sizes at ${F.name}`, columns: ['Height', 'Stroke', 'Ratio', 'Prints legibly?'], rows }],
     notes: [
       `Fab limits: ${F.src}. Fabs update these pages; check the current one before ordering. Values within 0.005 mm of a limit count as meeting it (6 mil = 0.1524 mm rounding).`,

@@ -107,7 +107,7 @@ function norm(rows, warnings) {
     if (isDiel(kind) || kind === 'mask') {
       if (!(er >= 1)) { er = kind === 'mask' ? 3.8 : 4.3; warnings.push(`Row ${i + 1} (${KIND[kind]}): no valid Er, ${er} used.`); }
     } else er = null;
-    out.push({ kind, t, er });
+    out.push({ kind, t, er, src: i });
   });
   return out;
 }
@@ -168,6 +168,7 @@ export function run({ layers, target, tol, zse, zdiff, gap, minw }) {
     layerOut.push(out);
     if (r.kind === 'plane') { out.structure = 'reference plane'; cuRows.push([name, KIND[r.kind], `${fmtNum(r.t, 3)} µm (${fmtNum(r.t / OZ, 2)} oz)`, 'reference', '–', '–', '–', '–']); return; }
     const up = reference(rows, i, -1), dn = reference(rows, i, +1);
+    out.refUp = up ? up.j : null; out.refDn = dn ? dn.j : null;
     const outer = i === firstCu || i === lastCu;
     let kind = null, geo = null;
     const T = r.t / 1000;
@@ -203,12 +204,14 @@ export function run({ layers, target, tol, zse, zdiff, gap, minw }) {
 
   // adjacent plane pairs: buried capacitance C = ε0 εr / d
   const caps = [];
+  const planePairs = [];
   for (let i = 0; i < rows.length; i++) {
     if (!isRef(rows[i].kind)) continue;
     const d = reference(rows, i, +1);
     if (d && rows.slice(i + 1, d.j).every((x) => isDiel(x.kind))) {
       const pfcm2 = (8.854e-12 * d.er * 1e-4) / (d.h * 1e-6) * 1e12;
       const a = layerOut.find((l) => l.row === i), b = layerOut.find((l) => l.row === d.j);
+      planePairs.push({ a: i, b: d.j, d: Number(fmtNum(d.h, 4)), pfPerCm2: Number(fmtNum(pfcm2, 4)) });
       caps.push(`${a.name}-${b.name} plane pair: ${fmtNum(d.h, 3)} µm apart, ${fmtNum(pfcm2, 3)} pF/cm² of plane capacitance.`);
     }
   }
@@ -233,8 +236,8 @@ export function run({ layers, target, tol, zse, zdiff, gap, minw }) {
 
   let z = 0;
   const r4 = (v) => (v == null ? null : Number(fmtNum(v, 4)));
-  const stack = rows.map((r) => { const o = { kind: r.kind, t: r.t, er: r.er, top: z }; z += r.t; return o; });
-  layerOut.forEach((l) => { Object.assign(stack[l.row], { name: l.name, structure: l.structure, wse: r4(l.wse), wdiff: r4(l.wdiff), h1: r4(l.h1), h2: r4(l.h2), erRef: r4(l.er) }); });
+  const stack = rows.map((r) => { const o = { kind: r.kind, t: r.t, er: r.er, top: z, src: r.src }; z += r.t; return o; });
+  layerOut.forEach((l) => { Object.assign(stack[l.row], { name: l.name, structure: l.structure, wse: r4(l.wse), wdiff: r4(l.wdiff), h1: r4(l.h1), h2: r4(l.h2), erRef: r4(l.er), refUp: l.refUp, refDn: l.refDn }); });
   // agents read this: no nulls, lengths in µm, widths in mm
   for (const r of stack) for (const k of Object.keys(r)) if (r[k] == null) delete r[k];
   return {
@@ -247,6 +250,7 @@ export function run({ layers, target, tol, zse, zdiff, gap, minw }) {
         rows: stack.map((r, i) => [i + 1, r.name ? `${r.name} ${KIND[r.kind]}` : KIND[r.kind], fmtNum(r.t, 4), r.er ?? '–', fmtNum(r.top / 1000, 4)]) },
     ],
     stack,
+    planePairs,
     notes: [
       ...caps,
       'Widths use Hammerstad-Jensen (microstrip) and Wheeler (stripline) with the thickness-weighted Er of the dielectric to the plane; pairs use the AN-905 coupling approximation (±5-10 %).',

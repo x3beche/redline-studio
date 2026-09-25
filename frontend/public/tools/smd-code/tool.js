@@ -120,19 +120,66 @@ function encodeCapacitor(v) {
   return [...new Set(out)];
 }
 
+// How each printed character is read, for the page's drawing: groups of
+// characters with their role and meaning. Same patterns as the decoders above.
+//   role: sig (significant digits), mult (multiplier), point (decimal point /
+//   unit letter), index (EIA-96 table index), mant (EIA-198 mantissa letter),
+//   zero (jumper), bad (not read)
+const sup = (n) => String(n).replace(/-/g, '⁻').split('').map((ch) => '⁰¹²³⁴⁵⁶⁷⁸⁹⁻'['0123456789⁻'.indexOf(ch)] || ch).join('');
+function groupsFor(c, cap, d) {
+  if (d.error) return [{ chars: c, role: 'bad', meaning: 'not read' }];
+  const G = [];
+  const add = (chars, role, meaning) => { if (chars) G.push({ chars, role, meaning }); };
+  let m;
+  if (!cap && /^0+$/.test(c)) { add(c, 'zero', 'jumper, 0 Ω'); return G; }
+  if (cap && (m = /^(\d{2})(\d)$/.exec(c))) {
+    const n = Number(m[2]);
+    add(m[1], 'sig', m[1]); add(m[2], 'mult', n === 8 ? '× 0.01 pF' : n === 9 ? '× 0.1 pF' : `× 10${sup(n)} pF`); return G;
+  }
+  if ((m = /^(\d*)([Rr])(\d*)$/.exec(c))) { add(m[1], 'sig', m[1]); add(m[2], 'point', cap ? 'decimal point, pF' : 'decimal point'); add(m[3], 'sig', m[3]); return G; }
+  if (!cap && (m = /^(\d*)(m)(\d*)$/.exec(c))) { add(m[1], 'sig', m[1]); add(m[2], 'point', 'point, in mΩ'); add(m[3], 'sig', m[3]); return G; }
+  if (!cap && (m = /^(\d+)([kKM])(\d*)$/.exec(c))) { add(m[1], 'sig', m[1]); add(m[2], 'point', m[2] === 'M' ? 'point, in MΩ' : 'point, in kΩ'); add(m[3], 'sig', m[3]); return G; }
+  if (cap && (m = /^(\d*)([pnuµ])(\d*)$/.exec(c))) { add(m[1], 'sig', m[1]); add(m[2], 'point', `point, in ${m[2] === 'u' ? 'µ' : m[2]}F`); add(m[3], 'sig', m[3]); return G; }
+  if (!cap && (m = /^(\d{2})([A-Za-z])$/.exec(c))) {
+    const L = m[2].toUpperCase();
+    add(m[1], 'index', `E96 #${Number(m[1])} = ${EIA96[Number(m[1]) - 1]}`); add(m[2], 'mult', `× ${EIA96_MULT[L]}`); return G;
+  }
+  if (!cap && (m = /^(\d{2,3})(\d)$/.exec(c))) { add(m[1], 'sig', m[1]); add(m[2], 'mult', `× 10${sup(Number(m[2]))}`); return G; }
+  if (cap && (m = /^([A-Za-z])(\d)$/.exec(c))) {
+    const n = Number(m[2]);
+    add(m[1], 'mant', `${EIA198[m[1]]}`); add(m[2], 'mult', n === 9 ? '× 0.1 pF' : `× 10${sup(n)} pF`); return G;
+  }
+  return [{ chars: c, role: 'bad', meaning: 'not read' }];
+}
+
+// What a printed character can be turned to, for the page's steppers.
+export const WHEELS = {
+  digit: '0123456789',
+  eia96: 'ZYRXSABHCDEF',
+  eia198: Object.keys(EIA198).join(''),
+};
+
 export function run({ codes, kind }) {
   const cap = kind === 'capacitor';
   const list = String(codes || '').split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
   if (!list.length) return { warnings: ['Give a marking, e.g. 103 or 4R7.'] };
   const warnings = [];
   const rows = [];
+  const parts = [];
   let first = null;
   for (const c of list.slice(0, 50)) {
     const d = cap ? decodeCapacitor(c) : decodeResistor(c);
-    if (d.error) { rows.push([c, '–', 'not read', d.error, '']); warnings.push(`${c}: ${d.error}`); continue; }
+    if (d.error) {
+      rows.push([c, '–', 'not read', d.error, '']); warnings.push(`${c}: ${d.error}`);
+      parts.push({ code: c, ok: false, error: d.error, groups: groupsFor(c, cap, d) });
+      continue;
+    }
     const val = cap ? fmtEng(d.value, 'F') : fmtEng(d.value, 'Ω');
-    const also = (cap ? encodeCapacitor(d.value) : encodeResistor(d.value)).filter((x) => x !== c).join(', ');
+    const alsoList = (cap ? encodeCapacitor(d.value) : encodeResistor(d.value)).filter((x) => x !== c);
+    const also = alsoList.join(', ');
     rows.push([c, val, d.format, d.tol + (d.note ? `; ${d.note}` : ''), also]);
+    parts.push({ code: c, ok: true, value: d.value, text: val, base: cap ? `${clean(d.value * 1e12)} pF` : `${clean(d.value)} Ω`,
+      format: d.format, tol: d.tol, note: d.note || null, also: alsoList, groups: groupsFor(c, cap, d) });
     if (d.note) warnings.push(`${c}: ${d.note}.`);
     if (!first) first = { c, d, val };
   }
@@ -146,6 +193,7 @@ export function run({ codes, kind }) {
   return {
     values,
     warnings,
+    parts,
     tables: [{ title: cap ? 'Capacitor codes' : 'Resistor codes', columns: ['Code', 'Value', 'Read as', 'Tolerance / note', 'Also written'], rows }],
     notes: cap ? [
       '3-digit capacitor codes are in pF: 104 = 10 × 10^4 pF = 100 nF; a 9 as the last digit means × 0.1 (109 = 1 pF).',
