@@ -251,12 +251,15 @@ export function promptFor(manifest, input, result) {
 
 // ---------------- mount ----------------
 export async function mount(base = './') {
-  const manifest = await (await fetch(base + 'manifest.json')).json();
-  const tool = await import(new URL(base + 'tool.js', location.href).href);
+  // The page's ?v= (the catalog's version of this tool) goes on everything it
+  // loads, so a browser never mixes an old tool.js or view.js with a new page.
+  const v = location.search.match(/[?&]v=([\w]+)/) ? `?v=${RegExp.$1}` : '';
+  const manifest = await (await fetch(base + 'manifest.json' + v, { cache: 'no-cache' })).json();
+  const tool = await import(new URL(base + 'tool.js' + v, location.href).href);
   let view = null, page = null;
   if (manifest.view || manifest.layout === 'custom') {
     try {
-      const mod = await import(new URL(base + 'view.js', location.href).href);
+      const mod = await import(new URL(base + 'view.js' + v, location.href).href);
       view = mod.view || null;
       page = mod.page || null;
     } catch (e) { console.error(e); }

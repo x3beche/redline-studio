@@ -135,7 +135,7 @@ def _db():
 
 def catalog() -> list[dict]:
     files = sorted(PAGES.glob("*/manifest.json"))
-    key = tuple((str(f), f.stat().st_mtime_ns) for f in files)
+    key = tuple((str(x), x.stat().st_mtime_ns) for f in files for x in f.parent.iterdir() if x.is_file())
     if _cache["key"] == key:
         return _cache["tools"]
     tools = []
@@ -146,13 +146,18 @@ def catalog() -> list[dict]:
             continue
         tid = m.get("id") or f.parent.name
         runnable = (f.parent / "tool.js").exists()
+        # Changes whenever any of the tool's files or the kit's does: the
+        # page is loaded with ?v=<this>, so a browser never keeps an old copy.
+        stamp = max([x.stat().st_mtime_ns for x in f.parent.iterdir() if x.is_file()]
+                    + [x.stat().st_mtime_ns for x in (PAGES / "kit").iterdir() if x.is_file()])
+        version = format(stamp // 1_000_000, "x")
         tools.append({
             "id": tid, "name": m.get("name", tid), "blurb": m.get("blurb", ""),
             "group": m.get("group", "code"), "rooms": m.get("rooms") or [],
             "keywords": m.get("keywords") or [],
             # Where the page is: a kit tool's folder, an older single page, or
             # an Angular calculator (the app knows those by id).
-            "src": m.get("page") or (f"/api/tools/files/{tid}/" if runnable else None),
+            "src": m.get("page") or (f"/api/tools/files/{tid}/?v={version}" if runnable else None),
             "native": bool(m.get("native")),
             "runnable": runnable,
         })
