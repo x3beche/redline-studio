@@ -1,0 +1,155 @@
+/* Certification Pre-Check: the product cutaway with its check pins. Data
+   colours are --tool-* tokens, set for light and dark like kit.css. */
+:root {
+  --tool-pcb: #dfeadf; --tool-pcb-line: #6f9a73; --tool-cu: #b7791f; --tool-ic: #26313b; --tool-ic-ink: #e4ebf1;
+  --tool-part: #eef1f4; --tool-encl: #7b8a98; --tool-keep: rgba(192, 57, 43, 0.28); --tool-cable: #4a5968;
+  --tool-cell: #e8e1c8; --tool-label: #fbfbf7; --tool-doc: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-pcb: #16281d; --tool-pcb-line: #3f6e4a; --tool-cu: #d19a45; --tool-ic: #0b1015; --tool-ic-ink: #c9d4de;
+    --tool-part: #25313b; --tool-encl: #6a7a88; --tool-keep: rgba(229, 115, 115, 0.30); --tool-cable: #8ea0b0;
+    --tool-cell: #3a3624; --tool-label: #1d2730; --tool-doc: #1d2730;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-pcb: #16281d; --tool-pcb-line: #3f6e4a; --tool-cu: #d19a45; --tool-ic: #0b1015; --tool-ic-ink: #c9d4de;
+  --tool-part: #25313b; --tool-encl: #6a7a88; --tool-keep: rgba(229, 115, 115, 0.30); --tool-cable: #8ea0b0;
+  --tool-cell: #3a3624; --tool-label: #1d2730; --tool-doc: #1d2730;
+}
+
+.cp { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.cp-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.cp-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); min-height: 38px; }
+.cp-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.cp-sub, .cp-lbl { color: var(--ink-soft); font-size: 11.5px; }
+.cp-grow { flex: 1; }
+.cp-empty { color: var(--ink-soft); font-size: 12px; padding: 10px; }
+
+/* top: product configuration and counts */
+.cp-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.cp-ctl { display: flex; align-items: center; gap: 6px; }
+.cp-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; background: var(--surface); }
+.cp-seg button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; padding: 4px 10px; font-size: 12px; color: var(--ink-soft); cursor: pointer; }
+.cp-seg button + button { border-left: 1px solid var(--line); }
+.cp-seg button[aria-pressed="true"] { background: var(--sunken); color: var(--ink); font-weight: 600; }
+.ico svg { width: 22px; height: 15px; display: block; fill: none; stroke: currentColor; stroke-width: 1.4; }
+.ico svg .f { fill: currentColor; stroke: none; }
+.cp-tog { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink-soft); cursor: pointer; font-size: 12px; }
+.cp-tog[aria-pressed="true"] { color: var(--ink); font-weight: 600; border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.cp-stats { display: flex; flex-wrap: wrap; margin-left: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.cp-stat { padding: 4px 12px; border-right: 1px solid var(--line-soft); }
+.cp-stat:last-child { border-right: 0; }
+.cp-stat span { display: block; font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; }
+.cp-stat b { font: 500 15px "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; }
+.cp-stat.bad b { color: var(--danger); } .cp-stat.ok b { color: var(--ok); } .cp-stat.warn b { color: var(--warn); }
+
+.cp-work { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); align-items: start; }
+@media (max-width: 1000px) { .cp-work { grid-template-columns: minmax(0, 1fr); } }
+.cp-side { display: grid; gap: 12px; min-width: 0; }
+
+/* gauge: group segments */
+.cp-gauge { display: flex; gap: 3px; width: min(100%, 420px); }
+.cp-gs { position: relative; height: 18px; background: var(--sunken); border-radius: 3px; overflow: hidden; min-width: 30px; }
+.cp-gs i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ok); opacity: .55; }
+.cp-gs.crit { box-shadow: inset 0 -2px 0 var(--danger); }
+.cp-gs em { position: relative; font: normal 600 9.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); padding: 0 4px; line-height: 18px; }
+
+/* the drawing */
+.cp-scroll { overflow-x: auto; padding: 4px 6px; }
+.cp-svg { display: block; width: 100%; min-width: 620px; height: auto; max-height: calc(100vh - 170px); user-select: none; -webkit-user-select: none; }
+.cp-t { font: 11px "IBM Plex Sans", sans-serif; fill: var(--ink); pointer-events: none; }
+.cp-t.soft { fill: var(--ink-soft); }
+.cp-t.b { font-weight: 600; }
+.cp-t.ic { fill: var(--tool-ic-ink); font-size: 10.5px; }
+.cp-t.lbl { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.cp-t.lbl.soft { fill: var(--ink-soft); }
+.cp-encl { fill: none; stroke: var(--tool-encl); stroke-width: 3; }
+.cp-pcb { fill: var(--tool-pcb); stroke: var(--tool-pcb-line); stroke-width: 1.5; }
+.cp-plane { fill: url(#cp-plane); pointer-events: none; }
+.cp-via { fill: var(--surface); stroke: var(--tool-cu); stroke-width: 1.2; }
+.cp-ic { fill: var(--tool-ic); stroke: var(--tool-ic); }
+.cp-part { fill: var(--tool-part); stroke: var(--ink-soft); stroke-width: 1.2; }
+.cp-cap { fill: var(--tool-cu); }
+.cp-coil { fill: none; stroke: var(--tool-cu); stroke-width: 1.6; }
+.cp-trace { fill: none; stroke: var(--tool-cu); stroke-width: 2.2; stroke-linecap: round; }
+.cp-trace.fast { stroke-dasharray: 5 3; }
+.cp-sym { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+.cp-conn { fill: var(--tool-part); stroke: var(--ink-soft); stroke-width: 1.4; }
+.cp-conn.shell { stroke: var(--ink); stroke-width: 2; }
+.cp-cable { fill: none; stroke: var(--tool-cable); stroke-width: 5; stroke-linecap: round; }
+.cp-cable.thick { stroke-width: 7; }
+.cp-prong { stroke: var(--ink-soft); stroke-width: 4; }
+.cp-ferrite { fill: var(--ink-soft); }
+.cp-box { fill: var(--surface); stroke: var(--ink-soft); stroke-width: 1.4; }
+.cp-mod { fill: var(--tool-ic); stroke: var(--tool-ic); }
+.cp-ant { fill: none; stroke: var(--tool-cu); stroke-width: 2; }
+.cp-keep { fill: url(#cp-hatch); stroke: var(--danger); stroke-width: 1; stroke-dasharray: 4 3; }
+.cp-arc { fill: none; stroke: var(--ink-soft); stroke-width: 1.2; stroke-dasharray: 3 5; }
+.cp-slot { stroke: var(--danger); stroke-width: 4; stroke-dasharray: 10 4; opacity: .7; }
+.cp-cell { fill: var(--tool-cell); stroke: var(--ink-soft); stroke-width: 1.2; }
+.cp-label { fill: var(--tool-label); stroke: var(--ink-soft); stroke-width: 1.2; }
+.cp-ce { font: 700 46px "IBM Plex Sans", sans-serif; fill: var(--ink); letter-spacing: -2px; }
+.cp-bin { fill: none; stroke: var(--ink); stroke-width: 2; }
+.cp-binbar { fill: var(--ink); }
+.cp-doc { fill: var(--tool-doc); stroke: var(--ink-soft); stroke-width: 1.2; }
+.cp-probe { fill: none; stroke: var(--ink-soft); stroke-width: 3; }
+.cp-probe.shaft { stroke-width: 7; stroke-linecap: round; }
+
+.cp-lead { stroke-width: 1.5; stroke: var(--ink-soft); }
+.cp-lead.crit { stroke: var(--danger); } .cp-lead.done { stroke: var(--ok); }
+.cp-anchor { fill: var(--ink-soft); } .cp-anchor.crit { fill: var(--danger); } .cp-anchor.done { fill: var(--ok); }
+.cp-lead.dim, .cp-anchor.dim, .cp-pin.dim { opacity: .2; }
+.cp-pin { cursor: pointer; outline: none; }
+.cp-pin .core { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+.cp-pin .num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 600; fill: var(--ink); pointer-events: none; }
+.cp-pin.crit .core { fill: var(--danger); stroke: var(--surface); }
+.cp-pin.crit .num { fill: #fff; }
+.cp-pin.done .core { fill: var(--ok); stroke: var(--surface); }
+.cp-pin.done .num { fill: #fff; }
+.cp-pin .sel { fill: none; stroke: var(--accent); stroke-width: 2.5; opacity: 0; }
+.cp-pin.is-sel .sel { opacity: 1; }
+.cp-pin:focus-visible .sel { opacity: 1; stroke-dasharray: 4 2; }
+.cp-pin:hover .core { stroke-width: 3; }
+
+.cp-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 6px 10px 8px; border-top: 1px solid var(--line-soft); font-size: 11px; color: var(--ink-soft); }
+.cp-legend .pin { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.cp-legend .pin.crit { background: var(--danger); } .cp-legend .pin.done { background: var(--ok); }
+.cp-legend .pin.open { border: 2px solid var(--ink); }
+.cp-keys { flex-basis: 100%; }
+
+/* detail */
+.cp-num { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 3px; border-radius: 10px; font: 600 11px "IBM Plex Mono", ui-monospace, monospace; border: 1.5px solid var(--ink); }
+.cp-num.crit { background: var(--danger); border-color: var(--danger); color: #fff; }
+.cp-num.done { background: var(--ok); border-color: var(--ok); color: #fff; }
+.cp-dbody { padding: 8px 10px 10px; display: grid; gap: 6px; }
+.cp-item { margin: 0; font-size: 12.5px; font-weight: 500; }
+.cp-why { margin: 0; font-size: 12px; color: var(--ink-soft); }
+.cp-why b { color: var(--ink); font-weight: 600; }
+.cp-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cp-tag { padding: 0 6px; border: 1px solid var(--line); border-radius: 3px; font-size: 11px; color: var(--ink-soft); }
+.cp-tag.bad { color: var(--danger); border-color: currentColor; }
+
+/* punch list */
+.cp-list { padding: 6px 8px 8px; display: grid; gap: 6px; max-height: calc(100vh - 330px); min-height: 240px; overflow: auto; }
+.cp-grp { border: 1px solid var(--line-soft); border-radius: 5px; padding: 4px 6px 5px; }
+.cp-gh { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 1px 0 3px; }
+.cp-crit { color: var(--danger); font-size: 11px; }
+.cp-gc { font: 11px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+.cp-gbar { width: 44px; height: 5px; background: var(--sunken); border-radius: 3px; overflow: hidden; }
+.cp-gbar i { display: block; height: 100%; background: var(--ok); }
+.cp-row { display: flex; align-items: center; gap: 6px; padding: 1px 2px; border-radius: 3px; font-size: 12px; min-width: 0; }
+.cp-row.is-sel { background: var(--sunken); box-shadow: inset 2px 0 0 var(--accent); }
+.cp-row input { margin: 0; accent-color: var(--ok); }
+.cp-row .cp-num { min-width: 18px; height: 16px; font-size: 10px; border-width: 1.2px; }
+.cp-rn { flex: 1; min-width: 0; border: 0; background: transparent; padding: 2px 0; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+.cp-row.done .cp-rn { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--line); }
+.cp-row.crit .cp-rn { font-weight: 500; }
+.cp-na { font-size: 10.5px; color: var(--ink-soft); padding: 1px 2px 0 26px; }
+
+.cp-bottom { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 900px) { .cp-bottom { grid-template-columns: minmax(0, 1fr); } }
+.cp-col { display: grid; gap: 10px; min-width: 0; }
+.cp-col .k-warns[hidden] { display: none; }
+.cp-rl { margin: 0; padding: 8px 10px 10px 28px; font-size: 12px; display: grid; gap: 3px; }
+@media (max-width: 760px) { .cp-stats { margin-left: 0; } .cp-list { max-height: none; } }

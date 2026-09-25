@@ -124,7 +124,21 @@ export function run(input) {
   const openText = open.length
     ? `Certification pre-check (${mk(market)}), still open (${open.length}, ${critical.length} critical):\n${open.map((it) => `- ${it[6] ? '[critical] ' : ''}[${it[1]}] ${it[2]}\n    why: ${it[3]}`).join('\n')}\n`
     : `Everything on the ${mk(market)} pre-check is done: book the pre-scan or the lab.\n`;
+  // For the page's drawing (agentOmit): every item with whether it applies
+  // here and whether it is done, and each group's count.
+  const liveKeys = new Set(live.map((it) => it[0]));
+  const checklist = {
+    market, ...ctx,
+    items: ITEMS.map((it) => ({ key: it[0], group: it[1], item: it[2], why: it[3], market: it[4], applies: it[5], critical: it[6], name: it[7],
+      live: liveKeys.has(it[0]), done: liveKeys.has(it[0]) && !!input[it[0]] })),
+    groups: groups.map((g) => {
+      const all = live.filter((it) => it[1] === g);
+      return { group: g, total: all.length, done: all.filter((it) => input[it[0]]).length, criticalOpen: all.filter((it) => it[6] && !input[it[0]]).length };
+    }),
+    regs,
+  };
   return {
+    checklist,
     values: [
       { label: 'Progress', value: `${pct} %`, tone: pct === 100 ? 'ok' : pct >= 70 ? 'warn' : 'bad' },
       { label: 'Done', value: `${done.length} / ${live.length}` },

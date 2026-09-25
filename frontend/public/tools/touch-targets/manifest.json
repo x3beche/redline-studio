@@ -1,5 +1,6 @@
 {
-  "id": "touch-targets", "version": "1.0",
+  "id": "touch-targets", "version": "1.1",
+  "layout": "custom", "agentOmit": ["specimens", "rule"],
   "name": "Touch Target Checker",
   "blurb": "touch targets under the minimum size in a layout",
   "group": "mobile",

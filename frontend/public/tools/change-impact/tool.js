@@ -58,7 +58,16 @@ export function run({ items, changed, maxHops }) {
     const p = byLower.get(c.toLowerCase());
     if (p) { if (!start.includes(p.name)) start.push(p.name); } else warnings.push(`Changed item "${c}" is not in the table: check the spelling.`);
   }
-  if (!start.length) return { warnings: [...warnings, 'Name at least one changed item (comma-separated) that is in the table.'] };
+  // For the page's drawing (agentOmit): the parts, their resolved links and,
+  // once the search has run, each one's hops, weight and path.
+  const graphOf = (hops, via, roomRows, limit) => ({
+    nodes: parts.map((p) => ({ name: p.name, room: p.room, deps: dependsOn.get(p.name), changed: start.includes(p.name),
+      hops: hops ? (hops.has(p.name) ? hops.get(p.name) : null) : null,
+      weight: hops && hops.has(p.name) && hops.get(p.name) > 0 ? Math.pow(0.5, hops.get(p.name) - 1) : null,
+      via: via && via.has(p.name) ? via.get(p.name) : null })),
+    cycles, rooms: roomRows || [], limit: limit === Infinity ? 0 : limit, start,
+  });
+  if (!start.length) return { warnings: [...warnings, 'Name at least one changed item (comma-separated) that is in the table.'], graph: graphOf(null, null, null, 0) };
   const limit = maxHops > 0 ? Math.floor(maxHops) : Infinity;
   if (maxHops != null && maxHops < 0) warnings.push('Max hops cannot be negative: no limit was applied.');
 
@@ -107,6 +116,6 @@ export function run({ items, changed, maxHops }) {
   const check = roomRows.filter((r) => r.n).map((r) => `## ${r.room}\n${hit.filter(([n]) => byName.get(n).room === r.room).map(([n, h]) => `- [ ] ${n} (${h === 1 ? 'direct' : `${h} hops`}: ${pathTo(n)})`).join('\n')}`).join('\n\n');
   if (!hit.length) notes.push('Nothing depends on the changed items: the change stays where it is (or the table is missing its "depends on" links).');
   notes.push(`${untouched} item${untouched === 1 ? ' is' : 's are'} not reached. Impact level: high at a score of 6 or 4+ rooms, medium at 2.5 or 3 rooms (rule of thumb for how much coordination the change needs).`);
-  return { values, tables, charts, warnings, notes,
+  return { graph: graphOf(hops, via, roomRows, limit), values, tables, charts, warnings, notes,
     texts: [{ title: 'Review checklist', body: `# Change: ${start.join(', ')}\n\n${check || 'Nothing else to review.'}\n`, lang: 'markdown' }] };
 }

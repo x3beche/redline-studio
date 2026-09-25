@@ -37,10 +37,13 @@ export function run({ guideline, unit, density, targets }) {
   const list = Array.isArray(targets) ? targets : [];
   if (!list.length) return { warnings: ['Add the targets to check: a name, width, height and the gap to the nearest other target.'] };
   const res = [];
+  // For the page's drawing (agentOmit): every row, in input order, with its
+  // size in the guideline's unit, verdicts and the padding it needs.
+  const specimens = [];
   list.forEach((t, i) => {
     const name = String(t.name || '').trim() || `Target ${i + 1}`;
     let w = n(t.w), h = n(t.h), g = n(t.gap);
-    if (w == null || h == null || w <= 0 || h <= 0) { skipped.push(name); return; }
+    if (w == null || h == null || w <= 0 || h <= 0) { skipped.push(name); specimens.push({ i, name, invalid: true }); return; }
     w /= scale; h /= scale; if (g != null) g = Math.max(0, g / scale);
     const main = check(rule, w, h, g);
     const all = Object.fromEntries(Object.entries(RULES).map(([k, r]) => [k, check(r, w, h, g)]));
@@ -58,16 +61,20 @@ export function run({ guideline, unit, density, targets }) {
         : `; that leaves ${fmtNum(left, 3)} ${u} to its neighbour, under ${rule.gap}: move them ${fmtNum(rule.gap - left, 3)} ${u} further apart`;
     }
     res.push({ name, w, h, g, main, all });
+    specimens.push({ i, name, w, h, g, ok: main.ok, why: main.why, all, padX, padY, fix,
+      left: g == null || !(padX || padY) ? g : g - Math.max(padX, padY) });
     rows.push([name, `${fmtNum(w, 4)} × ${fmtNum(h, 4)}`, g == null ? '–' : fmtNum(g, 4), main.ok ? (main.why === 'spacing exception' ? 'pass (spacing)' : 'pass') : 'FAIL',
       Object.values(all).map((c) => (c.ok ? '✓' : '✗')).join(' '), fix || '–']);
   });
   if (skipped.length) warnings.push(`Skipped (no valid width and height): ${skipped.join(', ')}.`);
-  if (!res.length) return { warnings: [...warnings, 'No target has a valid size.'] };
+  const ruleOut = { key: RULES[guideline] ? guideline : 'material', ...rule, unit: u, scale };
+  if (!res.length) return { warnings: [...warnings, 'No target has a valid size.'], specimens, rule: ruleOut };
   const fails = res.filter((r) => !r.main.ok);
   const smallest = res.reduce((a, b) => (Math.min(b.w, b.h) < Math.min(a.w, a.h) ? b : a));
   if (res.some((r) => r.g == null)) warnings.push('Some targets have no gap: spacing rules (Material 8 dp, WCAG spacing exception) were not applied to them.');
   if (fails.length) warnings.push(`${fails.length} of ${res.length} target(s) are under ${rule.name}: ${fails.map((f) => f.name).join(', ')}. Grow the touch area with padding - the icon can stay small.`);
   return {
+    specimens, rule: ruleOut,
     values: [
       { label: 'Pass', value: `${res.length - fails.length} / ${res.length}`, tone: fails.length ? 'bad' : 'ok', hint: rule.name },
       { label: 'Minimum', value: rule.min, unit: u, hint: rule.gap ? `and ${rule.gap} ${u} apart` : rule.spacing ? 'or spaced to 24 px circles' : '' },
