@@ -61,6 +61,18 @@ export function run({ driver, mode, rs, iset, vref, kind, gain, vsense, irated }
     'Measure VREF between the trimpot wiper (or VREF pin) and GND with the driver powered, motor idle.',
     'Stepper motor ratings are per phase with both phases on; setting the chopper limit to that value is the usual choice.'];
   if (d.tmc) notes.push('TMC: the 20 mΩ adds the internal bond wires and traces; with UART control IRUN/IHOLD (CS) scale it by (CS+1)/32 and VREF is ignored unless i_scale_analog = 1.');
-  return { values, warnings, notes,
+  // The numbers for a drawing: the operating point and the limits it is held against.
+  const motor = {
+    driver: driver in DRIVERS || driver === 'custom' ? driver : 'a4988', name: d.name, stepper: !!d.stepper, tmc: !!d.tmc, gain: d.tmc ? null : d.gain,
+    mode: mode === 'current' ? 'current' : 'vref', kind: kind === 'rms' ? 'rms' : 'peak', rs,
+    vref: v, ipk, irms, vsense: vsns, prs, prsRating: Math.max(0.125, prs * 2),
+    fullStep: driver === 'a4988' || driver === 'drv8825' ? ipk * Math.SQRT1_2 : null,
+    vrefMax: d.vrefMax ?? null, vsMax: d.vsMax ?? null, iMax: d.iMax ?? null, iRmsMax: d.iRmsMax ?? null, iBare: d.iBare ?? null,
+    irated: irated > 0 ? irated : null, ofRated: irated > 0 ? (ipk / irated) * 100 : null,
+    ladder: [0.5, 0.8, 1, 1.2, 1.5, 1.7, 2, 2.5].map((i) => ({ i, vref: vOf(i) })), // VREF for other peak currents (the table)
+    iAtVrefMax: d.vrefMax ? iOf(d.vrefMax) : null, // the most this Rs allows at the top of the VREF range
+    vfs: d.tmc ? vfs : null, clipped: !!(d.tmc && mode === 'current' && v > 2.5),
+  };
+  return { motor, values, warnings, notes,
     tables: [{ title: `VREF for other peak currents with ${fmtEng(rs, 'Ω')}`, columns: ['Peak current', 'VREF', d.stepper ? 'RMS' : 'Current', 'Within ratings'], rows }] };
 }

@@ -1,5 +1,5 @@
 {
-  "id": "memory-map", "version": "1.0",
+  "id": "memory-map", "version": "1.1",
   "name": "Memory Map Viewer",
   "blurb": "flash and RAM region use as a scaled strip",
   "group": "embedded",
@@ -22,5 +22,6 @@
   ],
   "usage": "Give the memory regions (name, origin as 0x hex, length like 512K) and paste the output of arm-none-eabi-size -A (or -A -x), the default Berkeley size line, or lines 'name size region'. It returns each region's use in % and bytes, a section table with addresses, result.regions (parts with offsets, for the drawing), and warnings when a region overflows or is over 90 % full. Use it to see how close a firmware is to its flash or RAM limit.",
   "sources": ["GNU binutils size(1): Berkeley and System V formats", "GNU ld manual §3.6.8.2 output section LMA (load copies of initialised data)"],
-  "view": true
+  "view": true,
+  "layout": "custom"
 }

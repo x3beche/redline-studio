@@ -1,5 +1,5 @@
 {
-  "id": "motor-current-limit", "version": "1.0",
+  "id": "motor-current-limit", "version": "1.1",
   "name": "Motor Driver Current Limit",
   "blurb": "current limit and reference voltage from the sense resistor",
   "group": "embedded",
@@ -26,5 +26,6 @@
     { "title": "TMC2209 with 0.11 Ω, measured 1.2 V", "input": { "driver": "tmc22xx", "mode": "current", "rs": "0.11", "vref": "1.2", "kind": "rms", "vsense": "0", "irated": "1.5" } }
   ],
   "usage": "Give the driver (a4988, drv8825, tmc22xx, a4950, drv8870 or custom with its gain), what to solve (vref or current), the sense resistor in Ω, and either the wanted current in A or the measured VREF in V; say whether currents are peak or rms. It returns VREF, peak and rms coil current, the sense voltage, the sense resistor's dissipation and warnings when a datasheet limit is passed. Use it before turning a driver's trimpot or choosing a sense resistor.",
-  "sources": ["Allegro A4988 datasheet: ITripMAX = VREF / (8 × RS)", "TI DRV8825 datasheet 7.3.4: ICHOP = xVREF / (5 × RISENSE)", "Trinamic TMC2209 datasheet 9 (sense resistor): IRMS = (CS+1)/32 × VFS/(RSENSE + 20 mΩ) × 1/√2, scaled by VREF/2.5 V", "Allegro A4950 datasheet: ITRIP = VREF / (10 × RS)", "TI DRV8870 datasheet 7.3.2: ITRIP = VREF / (10 × RISEN)"]
+  "sources": ["Allegro A4988 datasheet: ITripMAX = VREF / (8 × RS)", "TI DRV8825 datasheet 7.3.4: ICHOP = xVREF / (5 × RISENSE)", "Trinamic TMC2209 datasheet 9 (sense resistor): IRMS = (CS+1)/32 × VFS/(RSENSE + 20 mΩ) × 1/√2, scaled by VREF/2.5 V", "Allegro A4950 datasheet: ITRIP = VREF / (10 × RS)", "TI DRV8870 datasheet 7.3.2: ITRIP = VREF / (10 × RISEN)"],
+  "layout": "custom"
 }
