@@ -25,6 +25,7 @@ import { Markdown, plain } from '../markdown';
 import { Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
 import { Releases } from '../rooms/releases';
+import { Changes } from '../rooms/changes';
 import { Auth } from '../auth';
 import { startFold, whenSettled } from '../fold';
 
@@ -40,7 +41,7 @@ type Mark =
 
 @Component({
   selector: 'app-editor',
-  imports: [CodeView, DecimalPipe, Markdown, NgTemplateOutlet, Releases],
+  imports: [Changes, CodeView, DecimalPipe, Markdown, NgTemplateOutlet, Releases],
   templateUrl: './editor.html',
 })
 export class Editor implements AfterViewInit, OnDestroy {
@@ -76,6 +77,13 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** The code view: the model's source over the viewer (rooms/code-view.ts). */
   ide = signal(false);
   ideTop = signal(0);
+  /** The note whose changes are open (rooms/changes.ts). */
+  changesOf = signal<Revision | null>(null);
+  changeSum(r: Revision) {
+    return r.changes?.length
+      ? r.changes.reduce((t, c) => ({ added: t.added + c.added, removed: t.removed + c.removed }), { added: 0, removed: 0 })
+      : null;
+  }
   /** The releases of the model's project (rooms/releases.ts). */
   releasing = signal(false);
 

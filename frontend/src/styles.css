@@ -1892,3 +1892,31 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-rel-log { margin: 4px 0 0; padding: 6px 8px; max-height: 140px; overflow: auto; font-size: 10.5px; line-height: 1.45;
   color: var(--ink-dim); background: var(--surface); border-radius: 4px; white-space: pre-wrap; }
 .tcv-rel-row[data-status="failed"] .tcv-role { color: var(--danger); border-color: var(--danger); }
+
+/* WHAT A NOTE CHANGED (rooms/changes.ts): the files side by side, and the
+   pictures before and after. */
+.tcv-diff-add { color: var(--ok); }
+.tcv-diff-del { color: var(--danger); }
+.tcv-diff-counts { margin-left: auto; font-size: 10.5px; white-space: nowrap; }
+.tcv-changes { width: 94vw; height: 88vh; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 10px 30px var(--shadow-soft); }
+.tcv-changes-head { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  border-bottom: 1px solid var(--line); background: var(--surface-2); font-size: 13px; color: var(--ink); }
+.tcv-changes-main { flex: 1; min-height: 0; display: flex; }
+.tcv-changes-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tcv-pics-bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.tcv-pics { flex: 1; min-height: 0; overflow: auto; display: flex; gap: 12px; padding: 12px; justify-content: center;
+  align-items: flex-start; }
+.tcv-pics figure { flex: 1; min-width: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.tcv-pics figure img { width: 100%; border: 1px solid var(--line); border-radius: 4px; }
+.tcv-pics figcaption { font-size: 11px; color: var(--ink-dim); text-align: center; }
+.tcv-pics-slide { position: relative; max-width: 100%; cursor: ew-resize; user-select: none; border: 1px solid var(--line); }
+.tcv-pics-slide img { display: block; max-width: 100%; max-height: 72vh; pointer-events: none; }
+.tcv-pics-top { position: absolute; inset: 0; width: 100%; height: 100%; }
+.tcv-pics-rule { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); }
+.tcv-pics-tag { position: absolute; top: 6px; padding: 1px 6px; font-size: 10.5px; border-radius: 3px;
+  color: var(--ink-bright); background: var(--overlay); }
+.tcv-pics-l { left: 6px; }
+.tcv-pics-r { right: 6px; }
+/* The colour the changed pixels are painted in, read by the canvas. */
+.tcv-pics-canvas { max-width: 100%; max-height: 72vh; border: 1px solid var(--line); color: var(--danger); }

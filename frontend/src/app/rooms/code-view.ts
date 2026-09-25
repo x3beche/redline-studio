@@ -30,7 +30,7 @@ export type CodeKind = 'model' | 'board';
 type MonacoApi = typeof Monaco;
 let loading: Promise<MonacoApi> | null = null;
 
-function loadMonaco(): Promise<MonacoApi> {
+export function loadMonaco(): Promise<MonacoApi> {
   const w = window as unknown as { monaco?: MonacoApi; require?: any };
   if (w.monaco) return Promise.resolve(w.monaco);
   loading ??= new Promise<MonacoApi>((ok, fail) => {
@@ -93,7 +93,7 @@ function hex(css: string): string {
 }
 
 /** Redline's theme, as a Monaco theme: the same tokens as the rest of the app. */
-function redlineTheme(m: MonacoApi): string {
+export function redlineTheme(m: MonacoApi): string {
   // The page resolves each var() for us: the probe in hex() is styled with it.
   const v = (color: string) => hex(color);
   const light = document.documentElement.dataset['theme'] === 'light';

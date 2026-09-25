@@ -523,6 +523,12 @@ async def cmd_start(args):
                               upsert=True)
     # In the log of the room the revision belongs to.
     await db.activity.insert_one(_line(f"started: {args.title}", "work", room))
+    # The sources as they are now, so what this note changes can be shown.
+    try:
+        from backend import changes
+        await changes.started(db, args.id)
+    except Exception as exc:                     # noqa: BLE001 - never block a start
+        print(f"(sources not recorded: {type(exc).__name__}: {exc})")
     print(f"run started: {args.title}")
 
 
@@ -577,6 +583,15 @@ async def cmd_finish(args):
     # it needs the dev server and a headless browser, and a finished run must
     # not depend on either.
     rev = cur.get("revision")
+    if rev:
+        # What changed since the start, kept on the note for the page to show.
+        try:
+            from backend import changes
+            got = await changes.finished(db, rev)
+            if got:
+                print("changed : " + ", ".join(f"{c['id'].split('/')[-1]} +{c['added']} -{c['removed']}" for c in got))
+        except Exception as exc:                 # noqa: BLE001 - never block a finish
+            print(f"(changes not recorded: {type(exc).__name__}: {exc})")
     if rev and not args.no_shot:
         try:
             await _after_shot(db, rev)

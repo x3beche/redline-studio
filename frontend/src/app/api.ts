@@ -31,6 +31,8 @@ export interface Revision {
   image_bytes: number;
   /** The same view once the work is done; 0 until an after shot is taken. */
   image_after_bytes: number;
+  /** What the work changed, file by file; null if it was not kept. */
+  changes?: { kind: 'model' | 'board'; id: string; added: number; removed: number }[] | null;
   /** What was typed, when the note was saved as an English request. */
   comment_original: string | null;
   /** One short sentence, generated from the text and the drawing. */

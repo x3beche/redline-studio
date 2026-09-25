@@ -1278,6 +1278,13 @@
                 <button (click)="startEdit(r)" class="tcv-chip"
                         title="edit the text (the drawing stays as it is)">edit</button>
               }
+              <!-- What the work changed: the files side by side, and the pictures. -->
+              @if (r.changes?.length || r.image_after_bytes) {
+                <button (click)="changesOf.set(r)" class="tcv-chip"
+                        [title]="r.changes?.length ? 'what this note changed, file by file, and the pictures' : 'the picture before against the one after'">
+                  @if (changeSum(r); as c) { <span class="tcv-diff-add">+{{ c.added }}</span> <span class="tcv-diff-del">−{{ c.removed }}</span> } @else { compare }
+                </button>
+              }
               <button (click)="archive(r)" class="tcv-chip" [disabled]="!auth.can('edit')"
                       [title]="auth.why('edit') ?? (r.archived ? 'restore from archive' : 'archive')">
                 {{ r.archived ? 'restore' : 'archive' }}
@@ -1288,3 +1295,8 @@
             }
             }
 </ng-template>
+
+<!-- What a note changed (rooms/changes.ts), over everything. -->
+@if (changesOf(); as r) {
+  <app-changes [rid]="r.id" [title]="r.summary || r.comment" (closed)="changesOf.set(null)" />
+}

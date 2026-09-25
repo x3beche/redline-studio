@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import (access, actors, ato, auth, notes, release, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (access, actors, ato, auth, changes, notes, release, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
 from . import tools_api
@@ -492,6 +492,10 @@ async def start_run(body: RunStart):
     if body.revision:
         await db().runs.replace_one({"_id": body.revision},
                                     {**doc, "_id": body.revision}, upsert=True)
+        try:
+            await changes.started(db(), body.revision)      # the sources before the work
+        except Exception as exc:
+            LOG.warning("sources for %s not recorded: %s", body.revision, exc)
     return doc
 
 
@@ -508,6 +512,10 @@ async def finish_run(status: str = "done", room: str = "cad"):
     rev = cur.get("revision")
     if rev:
         await d.runs.update_one({"_id": rev}, {"$set": patch}, upsert=False)
+        try:
+            await changes.finished(d, rev)                   # what the work changed
+        except Exception as exc:
+            LOG.warning("changes for %s not recorded: %s", rev, exc)
         # Freeze what the work cost. A failure here must not stop a run from
         # finishing, so it is logged and swallowed.
         try:
@@ -516,6 +524,16 @@ async def finish_run(status: str = "done", room: str = "cad"):
         except Exception as exc:
             LOG.warning("analytics for %s skipped: %s", rev, exc)
     return await d.runs.find_one({"_id": key})
+
+
+@app.get("/api/revisions/{rid}/changes")
+async def revision_changes(rid: str):
+    """What the work on a note changed: each file before and after (kept
+    when the agent started and finished), and whether there are pictures."""
+    got = await changes.detail(db(), rid)
+    if got is None:
+        raise HTTPException(404, rid)
+    return got
 
 
 @app.get("/api/revisions/{rid}/analytics")
@@ -588,7 +606,11 @@ def _out(d: dict) -> dict:
             "summary_manual": bool(d.get("summary_manual")),
             # Who wrote it, and who last changed its status; older notes
             # predate attribution and say nothing.
-            "created_by": d.get("created_by"), "status_by": d.get("status_by")}
+            "created_by": d.get("created_by"), "status_by": d.get("status_by"),
+            # What the work changed, file by file (backend/changes.py); null
+            # for notes finished before that was kept.
+            "changes": [{k: c.get(k) for k in ("kind", "id", "added", "removed")} for c in d["changes"]]
+                       if d.get("changes") is not None else None}
 
 
 async def _log_openrouter(rid: str, used: dict, surface: str,

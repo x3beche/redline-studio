@@ -913,6 +913,15 @@ keys, pin, edit (it saves as you type), 🎙 to dictate where the browser
 can listen, and **Send to agent** hands a note to a room's agent as a
 message in its thread.
 
+**What a note changed.** When an agent works a note, Redline keeps every
+source in the project as it was when the agent started and as it was when
+it finished. The note's card then carries a chip with the lines added and
+removed (`+12 −3`); it opens the changed files side by side in VS Code's
+diff view (or inline), and **Before and after**: the picture the note was
+drawn on against the one taken after the work - side by side, with a
+slider, or with the pixels that changed painted in. Notes finished before
+this was kept show the pictures only (a **compare** chip).
+
 **Releases.** The box button in the 3D and PCB toolbars packs the
 project as it stands into one zip, under a tag you choose (v1.0, v1.1 -
 the next one is suggested), kept for good and never overwritten:
