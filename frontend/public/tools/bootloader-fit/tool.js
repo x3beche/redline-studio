@@ -170,8 +170,18 @@ export function run(inp) {
     '',
     `/* in the application's SystemInit: SCB->VTOR = ${hex(base + vt)}; */`,
   ].join('\n');
+  // For the page's drawing (the map itself): the same numbers, as data.
+  const kind = (n) => (n === 'Bootloader' ? 'boot' : n.startsWith('Slot A') ? 'slota' : n.startsWith('Slot B') ? 'slotb'
+    : n === 'Scratch' ? 'scratch' : n === 'Reserved data' ? 'nvm' : n === 'Application' ? 'slota' : 'unused');
+  const drawing = {
+    base, end, sectors, boundaries: bnd, page: inp.layout === 'list' ? null : sectors[0],
+    regions: regions.map((r) => ({ name: r.name, kind: kind(r.name), start: r.start, end: r.end, used: r.used, sectors: count(r.start, r.end) })),
+    boot, app, hdr, appNeed, margin, bootEnd, bootAuto: !(res > 0), slotSize, slots: inp.slots === '2s' ? '2s' : String(slotsN),
+    nvmStart, scratch: scr, vt, align, vtOk, entries,
+    bootOk, appOk, bootMarginOk, appMarginOk,
+  };
   return {
-    values, warnings,
+    values, warnings, drawing,
     tables: [{ title: 'Flash layout', columns: ['Region', 'Start', 'End', 'Size', 'Sectors', 'Image', 'Free'], rows }],
     texts: [{ title: 'Linker', body: ld, lang: 'ld' }],
     notes: ['Sizes: K = 1024 bytes. Image size = text + data (what is programmed), not bss.',

@@ -1,9 +1,10 @@
 {
-  "id": "bootloader-fit", "version": "1.0",
+  "id": "bootloader-fit", "version": "1.1",
   "name": "Bootloader Size Check",
   "blurb": "whether application and bootloader regions fit",
   "group": "embedded",
   "rooms": ["embedded"],
+  "layout": "custom",
   "keywords": ["bootloader", "flash layout", "partition", "application slot", "ota", "a/b", "dual bank", "mcuboot", "sector", "erase page", "vtor", "vector table alignment", "linker origin", "flash size", "image size"],
   "intro": "Lays the bootloader, one or two application slots, an optional swap scratch sector and a reserved data area onto the chip's real erase sectors (each region must start and end on a sector boundary so it can be erased alone), then checks that each image fits with your growth margin and that the application's vector table is aligned for VTOR.",
   "inputs": [

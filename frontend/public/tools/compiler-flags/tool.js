@@ -111,6 +111,30 @@ function explain(flag) {
 const WORD = { '--': 'much smaller', '-': 'smaller', '0': 'none', '+': 'larger', '++': 'much larger', '?': 'depends' };
 const SWORD = { '--': 'much slower', '-': 'slower', '0': 'none', '+': 'faster', '++': 'much faster', '?': 'depends' };
 
+// The same reading as run()'s loop, keeping where each flag sits in the line,
+// for the page's drawing of the log (and for editing a flag out of it).
+function scanLine(raw) {
+  const toks = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g; let m;
+  while ((m = re.exec(raw))) toks.push({ text: m[1] ?? m[2] ?? m[3], start: m.index, end: m.index + m[0].length });
+  const pieces = [];
+  toks.forEach((t, ti) => {
+    if (t.text.startsWith('-Wl,') && !/^-Wl,-Map,/.test(t.text)) {
+      const parts = t.text.slice(4).split(',').filter(Boolean);
+      parts.forEach((x, k) => pieces.push({ t: x.startsWith('-') ? '-Wl,' + x : x, ref: [ti, k] }));
+    } else pieces.push({ t: t.text, ref: [ti, null] });
+  });
+  const items = [];
+  for (let i = 0; i < pieces.length; i++) {
+    let t = pieces[i].t; const refs = [pieces[i].ref];
+    if ((t === '-u' || t === '-Wl,-u') && pieces[i + 1]) { t = `-u ${pieces[i + 1].t}`; refs.push(pieces[++i].ref); }
+    else if (/^-u_/.test(t)) t = `-u ${t.slice(2)}`;
+    if (t === '--specs' && pieces[i + 1]) { t = `--specs=${pieces[i + 1].t}`; refs.push(pieces[++i].ref); }
+    items.push({ t, refs, flag: /^-/.test(t) && t !== '-' && t !== '--' });
+  }
+  return { toks, items };
+}
+
 export function run({ log, goal }) {
   const text = String(log || '');
   if (!text.trim()) return { warnings: ['Paste a build log, a compile command, or CFLAGS/LDFLAGS lines.'] };
@@ -204,5 +228,21 @@ export function run({ log, goal }) {
   const sugg = [...new Set([...[...flags.keys()].filter((k) => !/^-O/.test(k) && !['warning', 'report'].includes(flags.get(k).cat) && !risky(k)), ...missing.filter((m) => !m.includes('<'))])];
   const body = `# ${goal} build: optimisation and the code-changing flags worth keeping or adding (fast-math, sanitisers and conflicting ABIs left out)\n${goalO.includes(mainO) ? mainO : goalO[0]} ${sugg.filter((f) => !/^-O/.test(f)).join(' ')}\n` +
     (missing.some((m) => m.includes('<')) ? `# also set: ${missing.filter((m) => m.includes('<')).join(' ')}\n` : '');
-  return { values, warnings, notes, tables, texts: [{ title: 'Flags', body, lang: 'sh' }] };
+  // For the page: every line with its tokens, and what each flag is.
+  const drawing = {
+    goal, mainO, goalO, oCount, netSize,
+    lines: text.split(/\r?\n/).map((raw) => {
+      const { toks, items } = scanLine(raw);
+      return {
+        raw, toks: toks.map((t) => [t.start, t.end, t.text]),
+        items: items.map((it) => ({ t: it.t, refs: it.refs, kind: !it.flag ? 'arg' : flags.has(it.t) ? 'flag' : unknown.has(it.t) ? 'unknown' : 'other' })),
+        o: items.filter((it) => /^-O/.test(it.t)).map((it) => it.t).pop() || null,
+        link: !toks.some((t) => t.text === '-c') && toks.length > 1,
+      };
+    }),
+    flags: Object.fromEntries([...flags.entries()].map(([k, f]) => [k, { cat: f.cat, size: f.size, speed: f.speed, what: f.what, count: f.count, lines: [...f.lines] }])),
+    missing: missing.map((m) => ({ flag: m, ...(explain(m.replace(/=<.*>$/, '=x')) || {}), placeholder: m.includes('<') })),
+    unknown: [...unknown.keys()],
+  };
+  return { values, warnings, notes, tables, texts: [{ title: 'Flags', body, lang: 'sh' }], drawing };
 }

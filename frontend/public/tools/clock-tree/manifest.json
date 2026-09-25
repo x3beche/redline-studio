@@ -1,9 +1,10 @@
 {
-  "id": "clock-tree", "version": "1.0",
+  "id": "clock-tree", "version": "1.1",
   "name": "Clock Tree Planner",
   "blurb": "PLL settings and peripheral clocks from a crystal frequency",
   "group": "embedded",
   "rooms": ["embedded"],
+  "layout": "custom",
   "keywords": ["clock tree", "pll", "pllm", "plln", "pllp", "pllq", "sysclk", "hclk", "pclk", "apb", "ahb", "crystal", "hse", "usb 48 mhz", "flash wait states", "rcc", "stm32", "rp2040"],
   "intro": "Searches every PLL divider combination the chip allows for the one that makes your system clock exactly, preferring a 48 MHz USB clock when asked, then sets the bus prescalers to the fastest legal values and reads off the timer clocks and flash wait states. Limits come from the ST reference manuals and the RP2040 datasheet.",
   "inputs": [

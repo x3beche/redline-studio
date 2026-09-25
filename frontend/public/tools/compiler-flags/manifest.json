@@ -1,9 +1,10 @@
 {
-  "id": "compiler-flags", "version": "1.0",
+  "id": "compiler-flags", "version": "1.1",
   "name": "Compiler Flag Explainer",
   "blurb": "size and speed effect of the optimisation flags in a build log",
   "group": "embedded",
   "rooms": ["embedded"],
+  "layout": "custom",
   "keywords": ["gcc flags", "cflags", "optimization level", "-Os", "-O2", "-flto", "gc-sections", "function-sections", "nano.specs", "build log", "code size", "firmware size", "clang", "arm-none-eabi-gcc", "compile command"],
   "intro": "Reads GCC/Clang flags out of a pasted build log or CFLAGS/LDFLAGS and says, for each one, which way it moves code size and speed and why, from the GCC manual. It flags mixed -O levels, section flags without --gc-sections, fast-math and float-ABI mistakes, and lists what is missing for a size, speed or debug build.",
   "inputs": [

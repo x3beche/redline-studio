@@ -113,7 +113,15 @@ export function run({ family, source, xtal, target, need48, ahb }) {
     if (b.e > 1e-6) warnings.push(`No exact setting: the nearest is ${fmtEng(b.sys, 'Hz')} (${(b.e * 100).toFixed(3)} % off).`);
     if (!u || u.e > 0.0025) warnings.push('PLL_USB cannot make 48 MHz within ±0.25 % from this crystal: USB will not work. Use a 12 MHz crystal.');
     if (fsrc !== 12e6) notes.push('The boot ROM and the Pico SDK assume a 12 MHz crystal; for another value set XOSC_KHZ and PLL_COMMON_REFDIV in the board header.');
+    const drawing = {
+      kind: 'rp', family: family in FAMILIES ? family : 'f407', name: F.name, source: 'hse', fsrc, target: ft, srcRange: F.src,
+      limits: { vco: F.vco, sys: F.sys, ref: 5e6 },
+      sys: { r: b.r, fb: b.fb, p1: b.p1, p2: b.p2, vco: b.vco, out: b.sys, e: b.e },
+      usb: u ? { r: u.r, fb: u.fb, p1: u.p1, p2: u.p2, vco: u.vco, out: u.sys, e: u.e, ok: u.e < 0.0025 } : null,
+      alternatives: c.slice(1, 6).map((x) => ({ r: x.r, fb: x.fb, p1: x.p1, p2: x.p2, vco: x.vco, out: x.sys })),
+    };
     return {
+      drawing,
       values: [
         { label: 'System clock', value: fmtEng(b.sys, 'Hz'), tone: Math.abs(b.sys - ft) / ft < 1e-6 ? 'ok' : 'warn', hint: `target ${fmtEng(ft, 'Hz')}` },
         { label: 'PLL_SYS VCO', value: fmtEng(b.vco, 'Hz'), hint: '750-1600 MHz' },
@@ -186,9 +194,18 @@ export function run({ family, source, xtal, target, need48, ahb }) {
     `RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;\nRCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV${ahbDiv};\n` +
     `RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV${d1};\nRCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV${d2};\n` +
     `HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_${ws});\n`;
+  const drawing = {
+    kind: F.kind, family: family in FAMILIES ? family : 'f407', name: F.name, source: useHsi ? 'hsi' : 'hse', hsi: F.hsi, fsrc, target: ft, srcRange: F.src,
+    limits: { vin: F.vin, vco: F.vco, sys: F.sys, apb1: F.apb1, apb2: F.apb2, ws: F.ws },
+    m: b.m, n: b.n, p: b.p, q: b.q, pName: rName, vin: b.vin, vco: b.vco, sys: b.sys, e: b.e,
+    need48: !!need48, f48: b.f48, ok48: need48 ? b.e48 <= 0.0025 : null,
+    ahb: ahbDiv, hclk, apb1: d1, apb2: d2, pclk1: p1, pclk2: p2, tim1: t1, tim2: t2, ws,
+    alternatives: c.slice(1, 6).map((x) => ({ m: x.m, n: x.n, p: x.p, q: x.q, vco: x.vco, sys: x.sys, f48: x.f48 })),
+  };
   if (F.kind === 'g4' && hclk > 150e6) notes.push('Above 150 MHz the G4 needs voltage range 1 boost mode (PWR_REGULATOR_VOLTAGE_SCALE1_BOOST); step through an AHB /2 for 1 µs when switching (RM0440 §6.1.5).');
   if (family === 'f429' && hclk > 168e6) notes.push('Above 168 MHz the F429 needs over-drive mode on (HAL_PWREx_EnableOverDrive) before raising the clock.');
   return {
+    drawing,
     values,
     tables: [
       { title: 'Clock tree', columns: ['Clock', 'From', 'Frequency'], rows },
