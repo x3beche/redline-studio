@@ -14,6 +14,9 @@ export class Selection {
    *  catalog can change rooms by opening something. */
   room = signal<Workspace['id']>('cad');
 
+  /** The model open in the 3D room, by id - so a quick note knows it. */
+  model = signal<string | null>(null);
+
   /** The board the PCB room should show, by id. */
   board = signal<string | null>(null);
 

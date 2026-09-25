@@ -90,6 +90,12 @@ _RULES: list[tuple[str, str, str]] = [
     ("PATCH", "/api/revisions/{}", "status"),          # see action(): by the status asked for
     ("PATCH", "/api/revisions/{}/archive", "edit"),
     ("PUT", "/api/revisions/{}/image/after", "run"),
+    # notes: anyone who may draw a note on a model may jot one down; the
+    # route itself keeps deleting someone else's to those who may delete
+    ("POST", "/api/notes", "draw"),
+    ("PATCH", "/api/notes/{}", "draw"),
+    ("DELETE", "/api/notes/{}", "draw"),
+    ("POST", "/api/notes/{}/send", "draw"),
     # talking with the agents
     ("POST", "/api/chat", "draw"),
     ("POST", "/api/questions", "draw"),

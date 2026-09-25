@@ -903,6 +903,16 @@ saved while you were typing, nothing is written over: you are asked to
 load theirs or save yours over it. A change that comes in while you are
 not typing is simply shown.
 
+**Notes** (the tab left of Tools): write and press Enter - no title,
+folder or form. The first line is the title, `#words` are tags,
+`@controller` points at a board or model, and `- [ ]` lines become boxes
+to tick (**To-do** collects the open ones). **Alt+N** anywhere opens a
+small box: the note is kept with the room and the model or board that was
+open, and you stay where you are. Search with `/`, move with the arrow
+keys, pin, edit (it saves as you type), 🎙 to dictate where the browser
+can listen, and **Send to agent** hands a note to a room's agent as a
+message in its thread.
+
 **Forgot the password** (or the address)? On the machine itself:
 `.venv/bin/python tools/account.py list` shows every account, and
 `.venv/bin/python tools/account.py reset <email>` prints a link, good for an

@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import (access, actors, ato, auth, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (access, actors, ato, auth, notes, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
 from . import tools_api
@@ -1878,6 +1878,78 @@ async def chat_history(limit: int = 200, room: str | None = None):
     """The thread, oldest first - one room's, or all of them. The page
     polls its room's with the health."""
     return await chat.history(db(), limit, room)
+
+
+# ---------------- notes ----------------
+class NoteIn(BaseModel):
+    text: str = Field(min_length=1, max_length=20_000)
+    # Where it was written: the room, and what was open there.
+    context: dict | None = None
+
+
+class NotePatch(BaseModel):
+    text: str | None = Field(default=None, min_length=1, max_length=20_000)
+    pinned: bool | None = None
+
+
+def _note_out(d: dict) -> dict:
+    return {**{k: v for k, v in d.items() if k not in ("_id", "workspace_id")}, "id": d["_id"]}
+
+
+@app.get("/api/notes")
+async def notes_list(q: str = "", tag: str = "", only: str = ""):
+    rows = await notes.listing(db(), q=q, tag=tag, only=only, me=actors.current().get("id", ""))
+    return [_note_out(d) for d in rows]
+
+
+@app.get("/api/notes/tags")
+async def notes_tags():
+    return await notes.tags(db())
+
+
+@app.post("/api/notes")
+async def notes_create(body: NoteIn):
+    ctx = {k: str(v)[:200] for k, v in (body.context or {}).items() if k in ("room", "model", "board", "app") and v}
+    return _note_out(await notes.create(db(), body.text, ctx, actors.current()))
+
+
+@app.patch("/api/notes/{nid}")
+async def notes_update(nid: str, body: NotePatch):
+    doc = await notes.update(db(), nid, body.text, body.pinned)
+    if not doc:
+        raise HTTPException(404, nid)
+    return _note_out(doc)
+
+
+@app.delete("/api/notes/{nid}")
+async def notes_delete(nid: str):
+    doc = await db()[notes.COLL].find_one({"_id": nid}, {"by": 1})
+    if not doc:
+        raise HTTPException(404, nid)
+    # Your own, always; someone else's, only if you may delete.
+    if (doc.get("by") or {}).get("id") != actors.current().get("id") and not access.allowed(access.current(), "delete"):
+        raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
+    await notes.remove(db(), nid)
+    return {"deleted": nid}
+
+
+class NoteSend(BaseModel):
+    room: str = Field(pattern="^(cad|pcb|web|embedded|mobile)$")
+    urgent: bool = False
+
+
+@app.post("/api/notes/{nid}/send")
+async def notes_send(nid: str, body: NoteSend):
+    """Hand a note to a room's agent: it arrives in that room's thread."""
+    doc = await db()[notes.COLL].find_one({"_id": nid})
+    if not doc:
+        raise HTTPException(404, nid)
+    try:
+        line = await chat.post(db(), notes.as_message(doc)[:4000], urgent=body.urgent, room=body.room)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    await db()[notes.COLL].update_one({"_id": nid}, {"$set": {"sent": {"room": body.room, "at": notes._now()}}})
+    return {"sent": body.room, "message": line}
 
 
 @app.post("/api/chat")

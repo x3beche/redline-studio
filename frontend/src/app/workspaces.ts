@@ -10,7 +10,7 @@
  *  ones not finished say what they will be rather than pretending.
  */
 export interface Workspace {
-  id: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' | 'tools' | 'analyze';
+  id: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' | 'notes' | 'tools' | 'analyze';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
@@ -37,13 +37,6 @@ export const WORKSPACES: Workspace[] = [
   // let the tests say whether it still works - over different things on
   // screen. One component serves all three; the tab says which.
   {
-    id: 'web',
-    label: 'Web Programming',
-    blurb: 'Redlining a running page: draw on what is on screen, the change '
-         + 'arrives as a diff, and the tests are the check.',
-    ready: true,
-  },
-  {
     id: 'embedded',
     label: 'Embedded Programming',
     blurb: 'Firmware: what the build makes of the source - memory per region, '
@@ -52,10 +45,24 @@ export const WORKSPACES: Workspace[] = [
     ready: true,
   },
   {
+    id: 'web',
+    label: 'Web Programming',
+    blurb: 'Redlining a running page: draw on what is on screen, the change '
+         + 'arrives as a diff, and the tests are the check.',
+    ready: true,
+  },
+  {
     id: 'mobile',
     label: 'Mobile Programming',
     blurb: 'A phone app on an emulated phone: draw on its screen, the change '
          + 'arrives as a diff, the tests are the check.',
+    ready: true,
+  },
+  {
+    id: 'notes',
+    label: 'Notes',
+    blurb: 'What you jot down while working: Enter keeps it, Alt+N from anywhere; '
+         + '#tags, @boards, to-dos to tick, and a note can go to an agent.',
     ready: true,
   },
   {

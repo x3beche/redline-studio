@@ -5,12 +5,13 @@ import { RoomAnalyze } from './rooms/analyze';
 import { RoomCoding } from './rooms/coding';
 import { RoomPcb } from './rooms/pcb';
 import { RoomTools } from './tools/room';
+import { QuickNote, RoomNotes } from './rooms/notes';
 import { Auth, SignIn, UserChip } from './auth';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, SignIn, UserChip],
+  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, RoomNotes, QuickNote, SignIn, UserChip],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -38,6 +39,12 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
          of them, closes the middle column - its right edge on the edge of
          the right-hand column, which it follows when that folds. Tools
          stands just before it. -->
+    @if (notesTab; as w) {
+      <button (click)="open(w.id)" class="tcv-tab tcv-tab-notes"
+              [attr.data-on]="here() === w.id ? 1 : null"
+              [attr.aria-current]="here() === w.id ? 'page' : null"
+              [title]="w.blurb + ' (Alt+N)'">{{ w.label }}</button>
+    }
     @if (toolsTab; as w) {
       <button (click)="open(w.id)" class="tcv-tab tcv-tab-tools"
               [attr.data-on]="here() === w.id ? 1 : null"
@@ -72,11 +79,14 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
       @case ('web') { <app-room-coding platform="web" /> }
       @case ('embedded') { <app-room-coding platform="embedded" /> }
       @case ('mobile') { <app-room-coding platform="mobile" /> }
+      @case ('notes') { <app-room-notes /> }
       @case ('tools') { <app-room-tools /> }
       @case ('analyze') { <app-room-analyze /> }
     }
   </div>
 </app-editor>
+<!-- Alt+N anywhere: a note, without leaving the room. -->
+<app-quick-note />
 } @else if (auth.state()) {
   <app-sign-in />
 }`,
@@ -87,7 +97,8 @@ export class App {
   auth = inject(Auth);
   tabs = WORKSPACES;
   /** The rooms you work in, left; Tools and Analytics at the right end. */
-  rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools');
+  rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes');
+  notesTab = WORKSPACES.find(w => w.id === 'notes');
   toolsTab = WORKSPACES.find(w => w.id === 'tools');
   /** A few words from Analytics for its tab: the last seven days' LLM
    *  spend and notes, and how long ago the figures were worked out. The
@@ -108,8 +119,8 @@ export class App {
         const mins = d?.computed_at ? Math.round((Date.now() - Date.parse(d.computed_at)) / 60000) : null;
         const ago = mins === null ? '' : mins < 1 ? ' · just now' : mins < 60 ? ` · ${mins} min ago` : ` · ${Math.round(mins / 60)} h ago`;
         this.brief.set({
-          text: `${money} · ${t.notes ?? 0} notes${ago}`,
-          title: `Last 7 days: $${usd.toFixed(2)} of LLM work, ${t.notes ?? 0} notes, ${t.runs ?? 0} runs`
+          text: `${money} · ${t.notes ?? 0} revisions${ago}`,
+          title: `Last 7 days: $${usd.toFixed(2)} of LLM work, ${t.notes ?? 0} revisions, ${t.runs ?? 0} runs`
                + (d?.took_ms != null ? ` - worked out in ${d.took_ms} ms` : ''),
         });
       })

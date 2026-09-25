@@ -163,6 +163,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   private ro?: ResizeObserver;
 
   constructor() {
+    // The model on screen, for whoever else needs to know (a quick note).
+    effect(() => { const id = this.activeModel(); untracked(() => this.picked.model.set(id || null)); });
     // The code view sits below the viewer's toolbar, which holds its switch.
     effect(() => {
       if (!this.ide()) return;
