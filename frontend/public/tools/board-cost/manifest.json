@@ -3,6 +3,7 @@
   "name": "Board Cost Estimator",
   "blurb": "estimated fabrication cost from board size, layer count, quantity and options",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb", "analyze"],
   "keywords": ["pcb cost", "board price", "fabrication cost", "fab quote", "bare board", "price estimate", "layer count", "enig", "hasl", "quantity", "volume pricing", "prototype cost", "bom cost", "unit cost"],
   "intro": "A ballpark bare-board price from size, layers, quantity and options, with how it falls with quantity. It is a rule-of-thumb model fitted to public online-fab calculators (setup per order plus a per-area rate with multipliers), good to ±50 %: use it to compare choices, then get a quote.",

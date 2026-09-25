@@ -3,6 +3,7 @@
   "name": "Board Density Estimator",
   "blurb": "density class and routing difficulty from part count and area",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb", "analyze"],
   "keywords": ["board density", "pin density", "pins per square inch", "routing density", "wiring demand", "wiring capacity", "routability", "layer count estimate", "placement density", "hdi", "component density", "board size"],
   "intro": "How full the board is and whether it will route: pin density sets the density class, and the wiring the netlist needs (links × average link length) is compared with what the routing layers can hold at your track and space. The demand/capacity method follows Coombs' Printed Circuits Handbook; the class limits and the link-length factor are rules of thumb.",

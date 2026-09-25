@@ -1,0 +1,85 @@
+/* Board Density Estimator: the board filled with its parts, the wire poured
+   into the routing layers. Data colours are --tool-* tokens, defined for
+   light and dark the way kit.css defines its own. */
+:root {
+  --tool-board: #f7f5ee; --tool-board-edge: #8f8a78; --tool-part: #7b8fa6; --tool-part-b: #a58a6a;
+  --tool-part-edge: #506276; --tool-link: #d97706; --tool-cu: #c47a3a; --tool-lam: #e9e1c4;
+  --tool-z0: rgba(47, 133, 90, 0.16); --tool-z1: rgba(47, 133, 90, 0.08); --tool-z2: rgba(183, 121, 31, 0.16); --tool-z3: rgba(192, 57, 43, 0.14);
+  --tool-c0: #2f855a; --tool-c1: #6b8e23; --tool-c2: #b7791f; --tool-c3: #c0392b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-board: #1b252e; --tool-board-edge: #6f7f8e; --tool-part: #5f7690; --tool-part-b: #8b7358;
+    --tool-part-edge: #93a7bd; --tool-link: #f0a33a; --tool-cu: #d08a4a; --tool-lam: #3b3a2c;
+    --tool-z0: rgba(104, 179, 107, 0.20); --tool-z1: rgba(104, 179, 107, 0.09); --tool-z2: rgba(232, 167, 53, 0.17); --tool-z3: rgba(229, 115, 115, 0.18);
+    --tool-c0: #68b36b; --tool-c1: #a4c45a; --tool-c2: #e8a735; --tool-c3: #e57373;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-board: #1b252e; --tool-board-edge: #6f7f8e; --tool-part: #5f7690; --tool-part-b: #8b7358;
+  --tool-part-edge: #93a7bd; --tool-link: #f0a33a; --tool-cu: #d08a4a; --tool-lam: #3b3a2c;
+  --tool-z0: rgba(104, 179, 107, 0.20); --tool-z1: rgba(104, 179, 107, 0.09); --tool-z2: rgba(232, 167, 53, 0.17); --tool-z3: rgba(229, 115, 115, 0.18);
+  --tool-c0: #68b36b; --tool-c1: #a4c45a; --tool-c2: #e8a735; --tool-c3: #e57373;
+}
+
+.k-page { padding: 12px; }
+.bd { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+.bd-box { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+
+/* the ruler: pin density against the classes */
+.bd-ruler { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 14px; align-items: center; padding: 6px 12px 4px; }
+.bd-ruler svg { display: block; width: 100%; height: 62px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.bd-counts { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.bd-f { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--ink-soft); }
+.bd-f input { width: 62px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font: 12.5px "IBM Plex Mono", ui-monospace, monospace; text-align: right; color: var(--ink); }
+.bd-f input.bad { border-color: var(--danger); }
+.bd-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.bd-seg button { border: 0; background: transparent; padding: 3px 9px; font-size: 12px; color: var(--ink-soft); cursor: pointer; }
+.bd-seg button + button { border-left: 1px solid var(--line); }
+.bd-seg button[aria-pressed="true"] { background: var(--sunken); color: var(--ink); font-weight: 600; }
+@media (max-width: 900px) { .bd-ruler { grid-template-columns: minmax(0, 1fr); } }
+
+.bd-work { display: grid; gap: 10px; grid-template-columns: minmax(0, 1.5fr) minmax(330px, 1fr); align-items: stretch; }
+@media (max-width: 1000px) { .bd-work { grid-template-columns: minmax(0, 1fr); } }
+.bd-plan { position: relative; display: flex; flex-direction: column; }
+.bd-plan-svg { position: relative; flex: 1; min-height: 320px; height: clamp(320px, calc(100vh - 250px), 720px); }
+.bd-plan-svg svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+.bd-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; padding: 7px 12px 5px; border-bottom: 1px solid var(--line-soft); }
+.bd-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.bd-head span { font-size: 11.5px; color: var(--ink-soft); }
+.bd-head .grow { flex: 1; }
+.bd-verdict { font: 600 12px "IBM Plex Mono", ui-monospace, monospace; padding: 1px 7px; border-radius: 3px; border: 1px solid currentColor; }
+.bd-verdict.ok { color: var(--ok); } .bd-verdict.warn { color: var(--warn); } .bd-verdict.bad { color: var(--danger); }
+
+.bd-route { display: flex; flex-direction: column; min-width: 0; }
+.bd-rows { padding: 4px 0 2px; }
+.bd-rows svg { display: block; width: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+.bd-wire { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 6px 12px 8px; border-top: 1px solid var(--line-soft); }
+.bd-wire div { font-size: 10.5px; color: var(--ink-soft); min-width: 0; }
+.bd-wire b { display: block; font: 500 14px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); white-space: nowrap; }
+.bd-wire em { display: block; font-style: normal; font-size: 10.5px; }
+.bd-mag { border-top: 1px solid var(--line-soft); position: relative; }
+.bd-mag svg { display: block; width: 100%; height: 150px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.bd-cap { position: absolute; left: 12px; top: 5px; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); pointer-events: none; }
+
+.bd-foot { display: grid; gap: 10px; grid-template-columns: minmax(0, 1.5fr) minmax(330px, 1fr); align-items: start; }
+@media (max-width: 1000px) { .bd-foot { grid-template-columns: minmax(0, 1fr); } }
+.bd-msgs { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.bd-msgs div { padding: 5px 9px; border-radius: 5px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--warn); }
+.bd-msgs div.note { border-left-color: var(--line); color: var(--ink-soft); }
+
+.bd svg text { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.bd .halo { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.bd .halo-b { paint-order: stroke; stroke: var(--tool-board); stroke-width: 3px; stroke-linejoin: round; }
+.bd .hdl { cursor: grab; outline: none; }
+.bd .hdl:focus-visible .kc { stroke: var(--accent); stroke-width: 3px; }
+.bd .row { cursor: pointer; outline: none; }
+.bd .row:hover .rbg { fill: var(--sunken); }
+.bd .row:focus-visible .rbg { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.bd .row.cur .rbg { fill: var(--sunken); stroke: var(--accent); stroke-width: 1.5; }
+.bd .dragging, .bd .dragging * { cursor: grabbing !important; }
+@media (max-width: 640px) {
+  .bd-plan-svg { height: 330px; min-height: 0; flex: none; }
+  .bd-wire { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

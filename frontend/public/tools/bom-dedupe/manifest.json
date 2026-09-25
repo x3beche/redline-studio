@@ -3,6 +3,7 @@
   "name": "BOM Deduplicator",
   "blurb": "merges spellings of the same part and produces a consolidated BOM",
   "group": "pcb",
+  "layout": "custom",
   "rooms": [
     "pcb",
     "analyze"

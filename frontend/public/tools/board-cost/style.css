@@ -1,0 +1,117 @@
+/* Board Cost Estimator: the board on the bench, priced part by part.
+   Data colours (mask, copper, finishes, laminate) are --tool-* tokens,
+   defined for light and dark the way kit.css defines its own. */
+:root {
+  --tool-mask: #2f7d4f; --tool-mask-edge: #1f5a37; --tool-mask-trace: #3f9563;
+  --tool-mask-alt: #27406f; --tool-mask-alt-edge: #192c50; --tool-mask-alt-trace: #36558c;
+  --tool-cu: #c47a3a; --tool-fr4: #d9cfa6; --tool-fr4-edge: #b9ad80; --tool-silk: #f4f6f2;
+  --tool-hasl: #b7bdc4; --tool-osp: #d0894a; --tool-enig: #d9ae3f; --tool-silver: #dfe4ea; --tool-hardgold: #c8951c;
+  --tool-hole: var(--paper); --tool-bad-silk: #ffd2cc; --tool-money-setup: #6b7fa8; --tool-money-area: var(--accent); --tool-money-opt: #d97706;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-mask: #2b6e46; --tool-mask-edge: #3f9563; --tool-mask-trace: #378a58;
+    --tool-mask-alt: #2a4679; --tool-mask-alt-edge: #4766a0; --tool-mask-alt-trace: #36588f;
+    --tool-cu: #d08a4a; --tool-fr4: #5c5538; --tool-fr4-edge: #7a7150; --tool-silk: #e8ece6;
+    --tool-hasl: #a9b1ba; --tool-osp: #c9834a; --tool-enig: #e0b54a; --tool-silver: #d6dce3; --tool-hardgold: #d49f26;
+    --tool-money-setup: #8a9cc4; --tool-money-opt: #f0a33a;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-mask: #2b6e46; --tool-mask-edge: #3f9563; --tool-mask-trace: #378a58;
+  --tool-mask-alt: #2a4679; --tool-mask-alt-edge: #4766a0; --tool-mask-alt-trace: #36588f;
+  --tool-cu: #d08a4a; --tool-fr4: #5c5538; --tool-fr4-edge: #7a7150; --tool-silk: #e8ece6;
+  --tool-hasl: #a9b1ba; --tool-osp: #c9834a; --tool-enig: #e0b54a; --tool-silver: #d6dce3; --tool-hardgold: #d49f26;
+  --tool-money-setup: #8a9cc4; --tool-money-opt: #f0a33a;
+}
+
+.k-page { padding: 12px; }
+.bc { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) 390px; align-items: start; }
+@media (max-width: 1040px) { .bc { grid-template-columns: minmax(0, 1fr); } }
+.bc-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.bc-bench { display: flex; flex-direction: column; min-width: 0; }
+.bc-hint { font-size: 11.5px; color: var(--ink-soft); padding: 7px 12px 0; }
+.bc-plan { position: relative; height: clamp(300px, calc(100vh - 350px), 660px); min-height: 300px; }
+.bc-sect { position: relative; height: 158px; border-top: 1px dashed var(--line-soft); }
+.bc-plan svg, .bc-sect svg { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+.bc-cap { position: absolute; left: 12px; top: 6px; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); pointer-events: none; }
+
+/* inspector: the options of the part in hand, each with its price */
+.bc-insp { border-top: 1px solid var(--line); padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; min-height: 86px; }
+.bc-insp-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.bc-insp-h b { font-size: 13px; }
+.bc-insp-h span { font-size: 11.5px; color: var(--ink-soft); }
+.bc-opts { display: flex; flex-wrap: wrap; gap: 5px; }
+.bc-opt { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 0; min-width: 74px; padding: 4px 9px 3px;
+  border: 1px solid var(--line); border-radius: 5px; background: var(--surface); cursor: pointer; text-align: left; }
+.bc-opt:hover { border-color: var(--ink-soft); }
+.bc-opt .t { font-size: 12px; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+.bc-opt .d { font: 11px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+.bc-opt .d.up { color: var(--danger); } .bc-opt .d.down { color: var(--ok); }
+.bc-opt[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--sunken); }
+.bc-opt[aria-pressed="true"] .d { color: var(--ink); }
+.bc-sw { width: 11px; height: 11px; border-radius: 2px; border: 1px solid rgba(0,0,0,.25); display: inline-block; }
+.bc-dims { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 12px; color: var(--ink-soft); }
+.bc-dims input { width: 64px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font: 12.5px "IBM Plex Mono", ui-monospace, monospace; text-align: right; }
+.bc-chip { padding: 2px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 11.5px; cursor: pointer; }
+.bc-chip:hover { border-color: var(--ink-soft); }
+
+/* the quote slip */
+.bc-quote { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.bc-slip { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 9px; }
+.bc-price { display: grid; grid-template-columns: auto 1fr; align-items: end; gap: 2px 12px; }
+.bc-price .big { font: 600 38px/1 "IBM Plex Mono", ui-monospace, monospace; letter-spacing: -0.02em; }
+.bc-price .big small { font-size: 15px; font-weight: 500; color: var(--ink-soft); margin-left: 4px; letter-spacing: 0; }
+.bc-price .tot { font-size: 12px; color: var(--ink-soft); text-align: right; line-height: 1.35; }
+.bc-price .tot b { display: block; font: 600 17px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); }
+.bc-price .rng { grid-column: 1 / -1; font-size: 11px; color: var(--ink-soft); }
+.bc-terms { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 5px 8px; align-items: center; font-size: 11.5px; color: var(--ink-soft); }
+.bc-seg { display: flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; min-width: 0; }
+.bc-seg button { flex: 1 1 0; min-width: 0; border: 0; background: transparent; padding: 3px 6px; cursor: pointer; color: var(--ink-soft);
+  display: flex; flex-direction: column; align-items: center; line-height: 1.25; }
+.bc-seg button + button { border-left: 1px solid var(--line); }
+.bc-seg button .t { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.bc-seg button .d { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; }
+.bc-seg button .d.up { color: var(--danger); }
+.bc-seg button[aria-pressed="true"] { background: var(--sunken); color: var(--ink); font-weight: 600; }
+.bc-money svg { display: block; width: 100%; height: 58px; }
+.bc-mults { display: flex; flex-wrap: wrap; gap: 4px; }
+.bc-mults span { font: 11px "IBM Plex Mono", ui-monospace, monospace; padding: 1px 6px; border-radius: 3px; background: var(--sunken); color: var(--ink-soft); }
+.bc-mults span b { color: var(--ink); font-weight: 500; }
+.bc-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; border-top: 1px solid var(--line-soft); padding-top: 8px; }
+.bc-facts div { font-size: 10.5px; color: var(--ink-soft); min-width: 0; }
+.bc-facts b { display: block; font: 500 13px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); white-space: nowrap; }
+
+.bc-qty { padding: 6px 4px 4px 10px; }
+.bc-qty-h { display: flex; align-items: center; gap: 8px; padding-right: 8px; font-size: 11.5px; color: var(--ink-soft); }
+.bc-qty-h input { width: 72px; padding: 2px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font: 12.5px "IBM Plex Mono", ui-monospace, monospace; text-align: right; }
+.bc-qty-h .grow { flex: 1; }
+.bc-qty svg { display: block; width: 100%; height: 190px; touch-action: none; user-select: none; -webkit-user-select: none; }
+
+.bc-warns { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.bc-warns div { padding: 5px 9px; border-radius: 5px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--warn); }
+.bc-warns:empty { display: none; }
+.bc-notes { font-size: 11.5px; color: var(--ink-soft); }
+.bc-notes summary { cursor: pointer; }
+.bc-notes div { margin-top: 3px; }
+
+.bc svg text { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.bc .halo { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.bc .hot { cursor: pointer; outline: none; }
+.bc .hot:hover .ring, .bc .hot:focus-visible .ring { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
+.bc .hot.sel .ring { stroke: var(--accent); stroke-width: 2; }
+.bc .ring { fill: transparent; stroke: transparent; }
+.bc .hdl { cursor: nwse-resize; outline: none; }
+.bc .hdl[data-k="w"] { cursor: ew-resize; } .bc .hdl[data-k="h"] { cursor: ns-resize; }
+.bc .hdl:focus-visible .kc { stroke: var(--accent); stroke-width: 3px; }
+.bc .qdot { cursor: ew-resize; outline: none; }
+.bc .qdot:focus-visible .kc { stroke: var(--accent); stroke-width: 3px; }
+.bc .dragging, .bc .dragging * { cursor: grabbing !important; }
+@media (max-width: 640px) {
+  .bc-plan { height: 290px; min-height: 0; }
+  .bc-sect { height: 150px; }
+  .bc-price .big { font-size: 32px; }
+  .bc-opt { min-width: 64px; }
+}
