@@ -1,5 +1,5 @@
 {
-  "id": "assembly-order", "version": "1.0",
+  "id": "assembly-order", "version": "1.1",
   "name": "Assembly Order Planner",
   "blurb": "assembly order and access needs as a step list",
   "group": "mechanical",
@@ -21,5 +21,6 @@
   "sources": [
     "Kahn, 'Topological sorting of large networks', CACM 1962 (ordering algorithm)",
     "Boothroyd, Dewhurst and Knight, 'Product Design for Manufacture and Assembly' (minimise reorientations and tool changes)"
-  ]
+  ],
+  "layout": "custom"
 }

@@ -1,5 +1,5 @@
 {
-  "id": "watchdog-planner", "version": "1.0",
+  "id": "watchdog-planner", "version": "1.1",
   "name": "Watchdog Planner",
   "blurb": "a safe watchdog period and feed points from the longest task",
   "group": "embedded",
@@ -37,5 +37,6 @@
     { "title": "ATmega sensor node, 250 ms loop, 1 s allowed hang", "input": { "target": "avr", "feedInterval": "250", "wcet": "60", "isr": "5", "longOp": "0", "margin": "2", "tol": "10", "maxRecovery": "2000" } }
   ],
   "usage": "Give times in ms: the normal feed interval, the longest task's WCET, the interrupt load within one gap, the longest one-off blocking operation, a safety margin factor, the watchdog clock tolerance in ± percent and the longest hang you can accept; pick target stm32-iwdg, avr, nrf52 or custom (clock Hz, counter bits, largest prescaler exponent). Returns the worst feed gap, the minimum timeout, the chosen prescaler and reload, the timeout at nominal/fast/slow clock, how many extra feeds a long operation needs, and a feed-point plan. Use it when choosing or reviewing a watchdog configuration.",
-  "sources": ["ST RM0090 section 21 (IWDG: timeout = 4·2^PR·(RLR+1)/f_LSI) and STM32F4 datasheet LSI 17–47 kHz", "Microchip ATmega328P datasheet section 10.9 (WDT prescaler, 128 kHz oscillator)", "Nordic nRF52840 product specification, WDT (timeout = (CRV+1)/32768 s)", "Jack Ganssle, 'Great Watchdog Timers for Embedded Systems' (feed only after all tasks check in)"]
+  "sources": ["ST RM0090 section 21 (IWDG: timeout = 4·2^PR·(RLR+1)/f_LSI) and STM32F4 datasheet LSI 17–47 kHz", "Microchip ATmega328P datasheet section 10.9 (WDT prescaler, 128 kHz oscillator)", "Nordic nRF52840 product specification, WDT (timeout = (CRV+1)/32768 s)", "Jack Ganssle, 'Great Watchdog Timers for Embedded Systems' (feed only after all tasks check in)"],
+  "layout": "custom"
 }

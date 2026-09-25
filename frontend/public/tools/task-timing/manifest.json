@@ -1,5 +1,5 @@
 {
-  "id": "task-timing", "version": "1.0",
+  "id": "task-timing", "version": "1.1",
   "name": "Task Timing Planner",
   "blurb": "scheduling conflicts of periodic tasks from period and duration",
   "group": "embedded",
@@ -35,5 +35,6 @@
   ],
   "usage": "Give the scheduler (coop for run-to-completion, preempt for a fixed-priority RTOS) and a table of tasks with name, period, duration (worst-case execution time) and offset in ms, plus optional priority (0 = most urgent; blank = rate monotonic) and deadline in ms. It returns the CPU utilisation, the hyperperiod, per task the worst start delay, worst response time and deadline misses, a table of which task delayed which, suggested offsets that reduce collisions, and result.timeline (segments per task in ms) for the drawing. Use it to plan a super loop or RTOS task set, or to explain jitter.",
   "sources": ["Liu & Layland, 'Scheduling algorithms for multiprogramming in a hard-real-time environment', JACM 1973 (rate monotonic, bound n(2^(1/n) - 1))", "Leung & Whitehead 1982 / Audsley et al.: simulating one hyperperiod from the synchronous release is exact for fixed priorities", "Michael J. Pont, 'Patterns for Time-Triggered Embedded Systems', 2001 (cooperative schedulers, task offsets)"],
-  "view": true
+  "view": true,
+  "layout": "custom"
 }

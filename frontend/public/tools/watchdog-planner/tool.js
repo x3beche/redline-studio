@@ -122,6 +122,15 @@ export function run(input) {
     notes.push('Window check: the shortest feed gap must be after the window opens at the slowest clock, and the worst gap before the timeout at the fastest clock.');
   }
 
+  // The same numbers, structured, for the drawing (times in ms, clocks in Hz).
+  const plan = { target, targetName: t.name, f, fFast, fSlow, tol: tl, margin: m, feedInterval, wcet, isr: irq, longOp: lop,
+    gap, tMin, tNom, tFast, tSlow, allowedGap, maxRecovery: maxRecovery > 0 ? maxRecovery : null,
+    chunk, extraFeeds: Number.isFinite(extraFeeds) ? extraFeeds : null,
+    count: cfg.count, prescaler: cfg.pre, reload: cfg.rel, registers: cfg.regs, atMax: cfg.max, window: null };
+  if (windowed) {
+    const pct = windowPct > 0 && windowPct < 100 ? windowPct : 50;
+    plan.window = { pct, open: (pct / 100) * tSlow, minGap: minGap > 0 ? minGap : feedInterval };
+  }
   notes.push('Worst gap is taken as the sum of the normal interval, the longest task and the interrupt load: a pass feeds, then the next pass runs the slowest task on top.');
   return {
     values,
@@ -133,5 +142,6 @@ export function run(input) {
         rows: [['fast', fmtEng(fFast, 'Hz'), ms(tFast), tFast >= tMin ? 'yes' : 'no'], ['nominal', fmtEng(f, 'Hz'), ms(tNom), tNom >= tMin ? 'yes' : 'no'], ['slow', fmtEng(fSlow, 'Hz'), ms(tSlow), tSlow >= tMin ? 'yes' : 'no']] },
     ],
     notes,
+    plan,
   };
 }

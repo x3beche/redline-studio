@@ -104,7 +104,7 @@ export function run({ mode, tasks, window }) {
     const T = parseEng(r.period), C = parseEng(r.dur), off = parseEng(r.offset) ?? 0, p = parseEng(r.prio), d = parseEng(r.deadline);
     const name = String(r.name || `Task ${k + 1}`).trim();
     if (T == null || C == null || !(T > 0) || !(C >= 0)) { if (Object.values(r).some((v) => String(v ?? '').trim())) skipped.push(name); return; }
-    list.push({ name, T: Math.max(1, Math.round(T * 1000)), C: Math.round(C * 1000), off: Math.max(0, Math.round(off * 1000)), prioIn: p, D: d > 0 ? Math.round(d * 1000) : Math.max(1, Math.round(T * 1000)) });
+    list.push({ row: k, name, T: Math.max(1, Math.round(T * 1000)), C: Math.round(C * 1000), off: Math.max(0, Math.round(off * 1000)), prioIn: p, D: d > 0 ? Math.round(d * 1000) : Math.max(1, Math.round(T * 1000)) });
   });
   if (skipped.length) warnings.push(`Rows skipped (need a period > 0 and a duration): ${skipped.join(', ')}.`);
   if (!list.length) return { warnings: [...warnings, 'Add tasks with a period and a duration in ms.'] };
@@ -189,5 +189,17 @@ export function run({ mode, tasks, window }) {
   }
   notes.push('Durations are worst cases: every job is assumed to take its full duration. Scheduler overhead and interrupts are not included; add them to the durations.',
     preempt ? 'Preemptive: the highest-priority ready task always runs; ties go to the earlier release.' : 'Cooperative: when the CPU is free the most urgent ready task starts and runs to its end, so a long task delays all others.');
-  return { values, warnings, notes, tables, timeline: { window: win / 1000, unit: 'ms', lanes }, suggestion };
+  // The same numbers, structured, for the drawing (times in ms; row = index in the input table).
+  const byPrio = [...list].sort((a, b) => a.prio - b.prio || a.idx - b.idx);
+  const taskData = list.map((t) => {
+    const p = per[t.idx];
+    return { row: t.row, name: t.name, period: t.T / 1000, dur: t.C / 1000, offset: t.off / 1000, deadline: t.D / 1000,
+      prio: t.prioIn != null ? t.prioIn : null, rank: t.rmRank, order: byPrio.indexOf(t), load: t.C / t.T,
+      maxDelay: Number.isFinite(p.maxDelay) ? p.maxDelay / 1000 : null, maxResp: Number.isFinite(p.maxResp) ? p.maxResp / 1000 : null,
+      jobs: p.jobs, missed: p.miss };
+  });
+  const blameData = [...blame.entries()].sort((a, b) => b[1].time - a[1].time).slice(0, 10)
+    .map(([k, b]) => { const [v, c] = k.split('|').map(Number); return { victim: v, culprit: c, times: b.count, total: b.time / 1000, avg: b.time / Math.max(1, b.count) / 1000 }; });
+  return { values, warnings, notes, tables, timeline: { window: win / 1000, unit: 'ms', lanes }, suggestion,
+    schedule: { mode: preempt ? 'preempt' : 'coop', utilisation: U, bound, hyperperiod: full ? H / 1000 : null, simulated: horizon / 1000, full, tasks: taskData, blame: blameData } };
 }

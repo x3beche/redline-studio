@@ -176,7 +176,18 @@ export function run({ text, strategy }) {
     ...all.flatMap((p) => p.deps.map((d) => `  ${id(p)} --> ${id(parts.get(d))}`))].join('\n') + '\n';
 
   if (problems.length) warnings.push(`Could not read everything: ${problems.join('; ')}.`);
+  // The same plan, structured, for the drawing: parts in build order.
+  const plan = {
+    strategy,
+    steps: seq.map((p, i) => ({ step: i + 1, key: p.key, name: p.name, line: p.line || null, implicit: !!p.implicit,
+      onto: p.deps.map((d) => parts.get(d).name), ontoKeys: [...p.deps], from: p.from || null, tool: p.tool || null,
+      time: p.time, level: level.get(p.key), blocks: [...p.blocks], notes: p.note.filter((n) => n !== 'not listed'),
+      cyclic: cyc.includes(p) })),
+    conflicts: conflicts.map(({ q, b, side }) => ({ part: q.key, blocker: b.key, side })),
+    toolChanges, reorientations: turns, levels: depth, totalTime: timed ? time : null, timedSteps: timed, tools,
+  };
   return {
+    plan,
     values: [
       { label: 'Steps', value: seq.length },
       { label: 'Tool changes', value: toolChanges, hint: `${tools.length} tool${tools.length === 1 ? '' : 's'}`, tone: toolChanges <= Math.max(0, tools.length - 1) ? 'ok' : 'warn' },
