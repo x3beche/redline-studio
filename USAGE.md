@@ -891,6 +891,15 @@ reviewer (it reads and writes nothing) or viewer.
 The whole runbook - accounts, forgotten passwords, the agents' token, the
 office network - is in [docs/ACCOUNTS.md](docs/ACCOUNTS.md).
 
+**Code.** In the 3D and PCB rooms, the `</>` button just left of the pen
+opens the source behind the view - the model's build123d, the board's
+atopile - in VS Code's editor (Monaco): search, folding, the minimap.
+Editors and up can change it and save (Ctrl+S or **Save**); the model or
+board is then marked changed, and **Build** rebuilds it. If an agent
+saved while you were typing, nothing is written over: you are asked to
+load theirs or save yours over it. A change that comes in while you are
+not typing is simply shown.
+
 **Forgot the password** (or the address)? On the machine itself:
 `.venv/bin/python tools/account.py list` shows every account, and
 `.venv/bin/python tools/account.py reset <email>` prints a link, good for an

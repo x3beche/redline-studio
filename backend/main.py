@@ -269,6 +269,23 @@ async def drop_upload(name: str):
 # ---------------- models ----------------
 class ModelIn(BaseModel):
     source: str = Field(min_length=1)
+    # The version the writer started from (`rev` from reading it): if the
+    # source has changed since - an agent's edit - the write is refused
+    # rather than laid over it.
+    if_match: str | None = Field(default=None, max_length=64)
+
+
+def _rev(source: str | None) -> str:
+    """A short fingerprint of a source text: its version, for if_match."""
+    import hashlib
+    return hashlib.sha256((source or "").encode()).hexdigest()[:16]
+
+
+def _stale_write(current: str | None, if_match: str | None) -> None:
+    if if_match and current is not None and _rev(current) != if_match:
+        raise HTTPException(409, {"detail": "the source changed while you were editing it - "
+                                            "an agent or someone else saved first",
+                                  "rev": _rev(current)})
 
 
 @app.get("/api/models/{model_id:path}/source")
@@ -276,17 +293,24 @@ async def model_source(model_id: str):
     doc = await db().models.find_one({"_id": model_id})
     if not doc:
         raise HTTPException(404, model_id)
+    if "source" not in doc:
+        raise HTTPException(404, "this one has no source - it was brought in as a file, not written as code")
     return {"id": model_id, "title": doc.get("title"), "source": doc["source"],
-            "sha256": doc.get("sha256"), "stale": doc.get("stale", True)}
+            "sha256": doc.get("sha256"), "stale": doc.get("stale", True), "rev": _rev(doc["source"])}
 
 
 @app.put("/api/models/{model_id:path}")
 async def put_model(model_id: str, body: ModelIn):
+    if body.if_match:
+        cur = await db().models.find_one({"_id": model_id}, {"source": 1})
+        _stale_write((cur or {}).get("source"), body.if_match)
     try:
         doc = await store.save_model(db(), model_id, body.source)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {k: doc[k] for k in ("_id", "title", "ready", "stale", "sha256", "error")}
+    if body.if_match:
+        await actors.audit(db(), "edit", f"model {model_id}", {"how": "code view"})
+    return {**{k: doc[k] for k in ("_id", "title", "ready", "stale", "sha256", "error")}, "rev": _rev(body.source)}
 
 
 @app.post("/api/models/{model_id:path}/move")
@@ -882,6 +906,7 @@ class BoardIn(BaseModel):
     source: str = Field(min_length=1, max_length=200_000)
     title: str | None = None
     entry: str | None = None
+    if_match: str | None = Field(default=None, max_length=64)      # as for a model
 
 
 @app.get("/api/boards")
@@ -903,19 +928,24 @@ async def one_board(bid: str):
     doc = await db()[ato.BOARDS].find_one({"_id": bid}, {"artifacts": 0})
     if not doc:
         raise HTTPException(404, bid)
-    return doc
+    return {**doc, "rev": _rev(doc.get("source"))}
 
 
 @app.put("/api/boards/{bid}")
 async def save_board(bid: str, body: BoardIn):
     """Write the source. Building is a separate step, as for a model."""
+    if body.if_match:
+        cur = await db()[ato.BOARDS].find_one({"_id": bid}, {"source": 1})
+        _stale_write((cur or {}).get("source"), body.if_match)
     patch = {"source": body.source, "saved_at": store.now(), "stale": True}
     if body.title:
         patch["title"] = body.title
     if body.entry:
         patch["entry"] = body.entry
     await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": patch}, upsert=True)
-    return {"id": bid, "saved": True}
+    if body.if_match:
+        await actors.audit(db(), "edit", f"board {bid}", {"how": "code view"})
+    return {"id": bid, "saved": True, "rev": _rev(body.source)}
 
 
 @app.post("/api/boards/{bid}/move")

@@ -10,6 +10,7 @@ import {
 import { Selection } from '../selection';
 import { NgTemplateOutlet } from '@angular/common';
 import { Board3d } from './board3d';
+import { CodeView } from './code-view';
 import { Drawing } from './drawing';
 import { RoomFrame, ToolButton } from './frame';
 import { RulesForm } from './rules-form';
@@ -34,7 +35,7 @@ type BoardView = Pane | 'split' | 'focus';
  */
 @Component({
   selector: 'app-room-pcb',
-  imports: [Board3d, Drawing, DrawTools, MiniBars, MiniColumns, NgTemplateOutlet,
+  imports: [Board3d, CodeView, Drawing, DrawTools, MiniBars, MiniColumns, NgTemplateOutlet,
             RoomFrame, RulesForm, Sketchpad, ToolButton],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
@@ -95,6 +96,9 @@ type BoardView = Pane | 'split' | 'focus';
                 [tip]="building() ? 'Building…' : 'Build - source, schematic, place, route, DRC'"
                 [on]="building()" [disabled]="building() || frozen() || !here()"
                 (press)="build()" />
+      <!-- The board's source, as an IDE shows it, over the view. -->
+      <app-tool icon="tcv-ico-code" [tip]="ide() ? 'Back to the view' : 'Code - the board source (atopile)'"
+                [on]="ide()" [disabled]="!here() || frozen()" (press)="ide.set(!ide())" />
       @if (frozen()) {
         <app-draw-tools [pen]="pen" (undo)="pad()?.undo()" (clear)="pad()?.clear()" />
       }
@@ -102,7 +106,7 @@ type BoardView = Pane | 'split' | 'focus';
         <span class="tcv_button_frame">
           <button class="tcv_reset tcv_btn tcv-freeze" [attr.data-on]="frozen() ? 1 : null"
                   [disabled]="!canFreeze()"
-                  (click)="frozen() ? resume() : freeze()"></button>
+                  (click)="ide.set(false); frozen() ? resume() : freeze()"></button>
         </span>
       </span>
     </ng-container>
@@ -553,6 +557,9 @@ type BoardView = Pane | 'split' | 'focus';
          all three at once in windows, each window showing whichever of
          them it is set to. -->
     <div view class="relative h-full w-full">
+      @if (ide() && here(); as b) {
+        <app-code-view kind="board" [id]="b._id" [title]="b.title || b._id" (closed)="ide.set(false)" />
+      }
       @if (boardTab() === 'split') {
         <div #split class="tcv-split">
           @for (w of windows; track w.slot) {
@@ -757,6 +764,9 @@ export class RoomPcb implements OnDestroy {
   openAsk = signal<LcscAsk | null>(null);
   log = signal<LogLine[]>([]);
   private timers: ReturnType<typeof setInterval>[] = [];
+
+  /** The code view: the board's source over the view (rooms/code-view.ts). */
+  ide = signal(false);
 
   constructor() {
     this.refresh();

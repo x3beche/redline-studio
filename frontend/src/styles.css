@@ -87,6 +87,13 @@
   --chart-translate: #4fa8a0;
   --chart-other:     #6b7280;
   /* Analytics series, in order: distinct from each other in this theme. */
+  /* Source code (rooms/code-view.ts): the language's words, quietly. */
+  --code-kw:   #7fb0e0;
+  --code-str:  #a9c47f;
+  --code-num:  #d8a766;
+  --code-com:  #7d848c;
+  --code-fn:   #e3c27a;
+  --code-type: #86c3ba;
   --series-1: #4a90d9;
   --series-2: #e8a735;
   --series-3: #5bb85f;
@@ -154,6 +161,13 @@
   --chart-translate: #2d7d76;
   --chart-other:     #6b7280;
   /* Analytics series, in order: distinct from each other in this theme. */
+  /* Source code (rooms/code-view.ts): the language's words, quietly. */
+  --code-kw:   #1f5fa8;
+  --code-str:  #4b7a1d;
+  --code-num:  #a0580b;
+  --code-com:  #7b8390;
+  --code-fn:   #8a5a00;
+  --code-type: #16736b;
   --series-1: #2f6fb8;
   --series-2: #c7851a;
   --series-3: #3f9444;
@@ -219,6 +233,13 @@
   --chart-translate: #4fa8a0;
   --chart-other:     #6b7280;
   /* Analytics series, in order: distinct from each other in this theme. */
+  /* Source code (rooms/code-view.ts): the language's words, quietly. */
+  --code-kw:   #7fb0e0;
+  --code-str:  #a9c47f;
+  --code-num:  #d8a766;
+  --code-com:  #7d848c;
+  --code-fn:   #e3c27a;
+  --code-type: #86c3ba;
   --series-1: #4a90d9;
   --series-2: #e8a735;
   --series-3: #5bb85f;
@@ -1702,3 +1723,23 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   max-width: min(640px, 92vw); padding: 8px 14px; font-size: 12.5px; color: var(--ink);
   background: var(--surface-2); border: 1px solid var(--warn); border-radius: 6px;
   box-shadow: 0 4px 8px var(--shadow-soft); }
+
+/* THE CODE VIEW (rooms/code-view.ts): the source behind the view, in VS
+   Code's editor, over the view - framed, with a margin, so it reads as a
+   window on top rather than a page swapped in. */
+.tcv-code { position: absolute; inset: 6px; z-index: 250; display: flex; flex-direction: column; min-height: 0;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 4px 14px var(--shadow-soft); overflow: hidden; }
+.tcv-code-bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+  border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.tcv-code-title { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.tcv-code-sub { font-size: 11px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcv-code-btn { padding: 2px 9px; font-size: 11.5px; }
+.tcv-code-btn:disabled { opacity: .45; cursor: default; }
+.tcv-code-save:not(:disabled) { background: var(--accent); color: var(--ink-bright); }
+.tcv-code-clash { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px;
+  color: var(--ink); background: var(--surface-2); border-bottom: 1px solid var(--warn); }
+.tcv-code-clash > span { flex: 1; }
+.tcv-code-editor { flex: 1; min-height: 0; }
+.tcv-code-empty { margin: 24px; font-size: 12.5px; color: var(--ink-dim); }
+.tcv-ico.tcv-ico-code { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='2' y='4' width='22' height='18' rx='1.5' fill='none' stroke='%23ddd' stroke-width='1.4'/><path d='M2,8 L24,8' stroke='%23ddd' stroke-width='1.2'/><path d='M9,11.5 L5.5,15 L9,18.5 M17,11.5 L20.5,15 L17,18.5' fill='none' stroke='%23ddd' stroke-width='1.8'/><path d='M14.5,10.5 L11.5,19.5' stroke='rgb(48,142,225)' stroke-width='2'/></svg>"); } /* theme:pigment */

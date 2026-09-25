@@ -23,6 +23,7 @@ import { Activity, Analytics, Api, Apps, Boards, CameraState, Catalog, Chat, Cha
 import { OcpViewer } from './ocp';
 import { Markdown, plain } from '../markdown';
 import { Selection } from '../selection';
+import { CodeView } from '../rooms/code-view';
 import { Auth } from '../auth';
 import { startFold, whenSettled } from '../fold';
 
@@ -38,7 +39,7 @@ type Mark =
 
 @Component({
   selector: 'app-editor',
-  imports: [DecimalPipe, Markdown, NgTemplateOutlet],
+  imports: [CodeView, DecimalPipe, Markdown, NgTemplateOutlet],
   templateUrl: './editor.html',
 })
 export class Editor implements AfterViewInit, OnDestroy {
@@ -60,6 +61,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   private caret = viewChild<ElementRef<HTMLInputElement>>('caret');
   private cadInput = viewChild<ElementRef<HTMLInputElement>>('cadInput');
   private freezeBtn = viewChild<ElementRef<HTMLElement>>('freezeBtn');
+  private ideBtn = viewChild<ElementRef<HTMLElement>>('ideBtn');
   private taskPanel = viewChild<ElementRef<HTMLElement>>('taskPanel');
   private logPanel = viewChild<ElementRef<HTMLElement>>('logPanel');
   private drawTools = viewChild<ElementRef<HTMLElement>>('drawTools');
@@ -68,6 +70,9 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   frozen = signal(false);
   saving = signal(false);
+  /** The code view: the model's source over the viewer (rooms/code-view.ts). */
+  ide = signal(false);
+  ideTop = signal(0);
   comment = signal('');
   part = signal('');
   parts = signal<string[]>([]);
@@ -158,6 +163,15 @@ export class Editor implements AfterViewInit, OnDestroy {
   private ro?: ResizeObserver;
 
   constructor() {
+    // The code view sits below the viewer's toolbar, which holds its switch.
+    effect(() => {
+      if (!this.ide()) return;
+      untracked(() => {
+        const bar = this.viewer?.toolbar, stage = this.stage().nativeElement;
+        this.ideTop.set(bar ? Math.max(0, Math.round(bar.getBoundingClientRect().bottom
+                                                     - stage.getBoundingClientRect().top) + 4) : 0);
+      });
+    });
     // A coding room picked something to be the note's Part.
     effect(() => {
       const got = this.picked.codePick();
@@ -380,6 +394,9 @@ export class Editor implements AfterViewInit, OnDestroy {
     // they are for marking up what is on screen, so they sit over it.
     const tools = this.drawTools()?.nativeElement;
     if (tools && bar && tools.parentElement !== bar) bar.insertBefore(tools, btn ?? null);
+    // The code view's switch, left of both.
+    const ide = this.ideBtn()?.nativeElement;
+    if (ide && bar && ide.parentElement !== bar) bar.insertBefore(ide, tools ?? btn ?? null);
 
     // The running task goes under the model tree, in the room the tree
     // panel was leaving empty. Always in the DOM, hidden when idle: an

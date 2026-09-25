@@ -356,6 +356,11 @@
     <!-- 8 px breathing room under the viewer, matching the top. -->
     <div #host class="absolute left-0 right-0 top-0" style="bottom: 8px"
          (pointerdown)="releaseCamera()"></div>
+    @if (ide() && activeModel()) {
+      <!-- Under the viewer's toolbar, so its switch stays in reach. -->
+      <app-code-view kind="model" [id]="activeModel()" [title]="activeModel()" [style.top.px]="ideTop()"
+                     (closed)="ide.set(false)" />
+    }
     <canvas #overlay class="absolute"
             [class.pointer-events-none]="!frozen()"
             [class.cursor-crosshair]="frozen()"
@@ -501,6 +506,16 @@
       <button (click)="clear()" class="tcv-btn tcv-draw-text">Clear</button>
     </div>
 
+    <!-- The code view's switch: in the viewer's toolbar, just left of the
+         pen (docked with it). The model's source, as an IDE shows it. -->
+    <span #ideBtn class="tcv_tooltip"
+          [attr.data-tooltip]="ide() ? 'Back to the view' : 'Code - the model source (build123d)'">
+      <span class="tcv_button_frame" [class.tcv_btn_click2]="ide()">
+        <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-code" aria-label="Code"
+               [disabled]="!activeModel() || frozen()" (click)="ide.set(!ide())">
+      </span>
+    </span>
+
     <!-- Lives in the viewer's toolbar: moved there once the viewer is up,
          and wearing the viewer's own button markup (tooltip > frame > btn)
          so it is one of that row rather than a text button bolted to its
@@ -509,7 +524,7 @@
       <span class="tcv_button_frame">
         <button class="tcv_reset tcv_btn tcv-freeze"
                 [attr.data-on]="frozen() ? 1 : null"
-                (click)="frozen() ? resume() : freeze()"
+                (click)="ide.set(false); frozen() ? resume() : freeze()"
                 [title]="frozen() ? 'let the view go'
                                   : 'hold the view and draw on it'"></button>
       </span>
