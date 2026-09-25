@@ -1,9 +1,11 @@
 {
-  "id": "spring-rate", "version": "1.0",
+  "id": "spring-rate", "version": "1.1",
   "name": "Spring Rate Calculator",
   "blurb": "spring constant from wire diameter, coils and diameter",
   "group": "mechanical",
   "rooms": ["cad"],
+  "layout": "custom",
+  "agentOmit": ["spring"],
   "keywords": ["spring", "spring rate", "spring constant", "stiffness", "compression spring", "helical spring", "coil spring", "wire diameter", "active coils", "solid length", "music wire", "shigley", "buckling", "spring index"],
   "intro": "The rate of a round-wire helical compression spring, k = d⁴G / 8D³Na, with its solid length, force and stress at solid and a buckling check. Wire strengths and allowable stresses are Shigley's (ASTM wire grades).",
   "inputs": [

@@ -1,9 +1,11 @@
 {
-  "id": "standoff-height", "version": "1.0",
+  "id": "standoff-height", "version": "1.1",
   "name": "Standoff Height Planner",
   "blurb": "standoff length from the tallest part under the board",
   "group": "mechanical",
   "rooms": ["cad", "pcb"],
+  "layout": "custom",
+  "agentOmit": ["drawing"],
   "keywords": ["standoff", "spacer", "pcb spacer", "hex standoff", "board to board", "stacking height", "mezzanine", "clearance under board", "lead protrusion", "screw length", "m3", "mounting"],
   "intro": "The shortest standoff that keeps the tallest bottom-side part (or through-hole lead) clear of the floor, rounded up to a stock length; or, for two stacked boards, the spacing their parts and board-to-board connector need. A screw length for a female-threaded standoff comes with it. Gaps and thread engagement are rules of thumb stated in the notes.",
   "inputs": [
@@ -16,6 +18,7 @@
     { "key": "upperBottom", "label": "Upper board: tallest bottom part", "type": "number", "unit": "mm", "default": "2", "when": { "key": "mode", "equals": "stack" } },
     { "key": "overlap", "label": "The tall parts may sit over each other", "type": "bool", "default": true, "when": { "key": "mode", "equals": "stack" }, "help": "Off when you know they are apart in x/y: then only the taller one counts." },
     { "key": "b2b", "label": "Board-to-board connector mated height", "type": "number", "unit": "mm", "default": "", "required": false, "when": { "key": "mode", "equals": "stack" }, "help": "Leave empty without a connector." },
+    { "key": "length", "label": "Standoff length to use", "type": "number", "unit": "mm", "default": "", "required": false, "help": "Leave empty for the shortest stock length that fits; with a board-to-board connector its height sets the spacing." },
     { "key": "gap", "label": "Air gap to keep", "type": "number", "unit": "mm", "default": "1" },
     { "key": "tol", "label": "Tolerance allowance", "type": "number", "unit": "mm", "default": "0.2", "help": "Standoff and part height tolerances together." },
     { "key": "t", "label": "Board thickness", "type": "number", "unit": "mm", "default": "1.6" },

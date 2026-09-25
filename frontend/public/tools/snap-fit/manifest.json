@@ -1,9 +1,11 @@
 {
-  "id": "snap-fit", "version": "1.0",
+  "id": "snap-fit", "version": "1.1",
   "name": "Snap-Fit Calculator",
   "blurb": "insertion force and strain of a cantilever snap hook",
   "group": "mechanical",
   "rooms": ["cad"],
+  "layout": "custom",
+  "agentOmit": ["hook"],
   "keywords": ["snap fit", "snap-fit", "snap hook", "cantilever", "clip", "latch", "undercut", "insertion force", "mating force", "strain", "plastic housing", "bayer", "retention", "lead-in angle"],
   "intro": "The strain at the root of a rectangular cantilever snap hook and the force to push it home and pull it apart, from the Bayer snap-fit design guide's cantilever equations. Material strain limits, moduli and friction are typical values.",
   "inputs": [

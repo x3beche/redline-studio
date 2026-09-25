@@ -16,7 +16,7 @@ const WASHER_T = { M2: 0.3, 'M2.5': 0.5, M3: 0.5, M4: 0.8, M5: 1.0 }; // ISO 708
 const D = { M2: 2, 'M2.5': 2.5, M3: 3, M4: 4, M5: 5 };
 const f = (v, d = 4) => fmtNum(v, d);
 
-export function run({ mode, under, leads, lowerTop, upperBottom, overlap, b2b, gap, tol, boss, t, top, screw, washer }) {
+export function run({ mode, under, leads, lowerTop, upperBottom, overlap, b2b, gap, tol, boss, t, top, screw, washer, length }) {
   const warnings = [];
   const g = gap >= 0 ? gap : 1;
   const tl = tol >= 0 ? tol : 0;
@@ -43,11 +43,20 @@ export function run({ mode, under, leads, lowerTop, upperBottom, overlap, b2b, g
     if (!LENGTHS.some((x) => Math.abs(x - b2b) < 1e-6)) warnings.push(`${f(b2b)} mm is not a stock standoff length: order a custom length, stack a spacer/washer, or pick a connector with a stock height (${LENGTHS.filter((x) => Math.abs(x - b2b) < 3).join(', ')} mm).`);
     L = b2b;
   }
+  // A length picked by hand (from the stock drawer, or any length) overrides
+  // the shortest stock one; a board-to-board connector still sets the spacing.
+  let chosen = false;
+  if (!fixed && length > 0) {
+    chosen = true;
+    L = length;
+    if (length < need - 1e-9) warnings.push(`The chosen ${f(length)} mm standoff is shorter than the ${f(need)} mm needed: the parts come within ${f(Math.max(0, length - (need - g - tl)))} mm of ${stack ? 'the other board' : 'the floor'} (${f(g)} mm asked).`);
+    if (!LENGTHS.some((x) => Math.abs(x - length) < 1e-6)) warnings.push(`${f(length)} mm is not a stock standoff length: order a custom length, or pick a stock one.`);
+  }
   if (L == null) return { warnings: [...warnings, `${f(need)} mm is longer than stock standoffs (${LENGTHS[LENGTHS.length - 1]} mm): stack two, or use a threaded rod with a sleeve.`] };
   const clear = L - (need - g - tl) ; // air left under/between the parts with the chosen length
   const values = [
     { label: 'Minimum standoff length', value: f(need), unit: 'mm', hint: why },
-    { label: fixed ? 'Standoff length (= connector height)' : 'Stock length', value: f(L), unit: 'mm', tone: clear >= g ? 'ok' : 'bad' },
+    { label: fixed ? 'Standoff length (= connector height)' : chosen ? 'Chosen length' : 'Stock length', value: f(L), unit: 'mm', tone: clear >= g - 1e-9 ? 'ok' : 'bad' },
     { label: 'Air gap with it', value: f(clear), unit: 'mm', hint: `asked ${f(g)} mm` },
   ];
   if (!stack) {
@@ -72,9 +81,18 @@ export function run({ mode, under, leads, lowerTop, upperBottom, overlap, b2b, g
   if (!sPick) warnings.push(`A ${f(L)} mm standoff leaves under ${f(0.5 * d, 2)} mm of thread for each of two ${screw} screws: use a male-female standoff with a nut, one screw right through, or a longer standoff.`);
   else if (eng < d) warnings.push(`Only ${f(eng, 3)} mm (${f(eng / d, 2)}·d) of thread per screw: enough to hold a board, but for load or vibration aim for 1.5·d in a brass or aluminium standoff (${f(1.5 * d, 3)} mm): use a longer standoff, or a male-female one.`);
   if (g < 0.5) warnings.push(`A ${f(g)} mm gap leaves no room for board bow (up to 0.75 % of the diagonal per IPC-6012) or for insulation: use at least 1 mm, more over a metal floor.`);
+  // Everything the page draws, as numbers (manifest agentOmit: "drawing").
+  const drawing = {
+    mode: stack ? 'stack' : 'floor', need, L, fixed, chosen, gap: g, tol: tl, t: bt, boss: bossH, clear,
+    under: under >= 0 ? under : 0, leads: leads >= 0 ? leads : 0, top: top >= 0 ? top : 0,
+    lowerTop: lowerTop >= 0 ? lowerTop : 0, upperBottom: upperBottom >= 0 ? upperBottom : 0, overlap: !!overlap, b2b: b2b > 0 ? b2b : null,
+    boardBottom: stack ? null : bossH + L, topHeight: stack ? null : bossH + L + bt + (top >= 0 ? top : 0), pitch: stack ? L + bt : null,
+    screw: { name: screw || 'M3', d, len: sPick || null, eng, washerT: wt, engMax, target: 1.5 * d, min: 0.5 * d },
+    stock: LENGTHS.map((x) => ({ L: x, ok: x >= need - 1e-9, air: x - (need - g - tl) })),
+  };
   const table = LENGTHS.filter((x) => x >= need - 2 && x <= need + 8).map((x) => [x, f(x - (need - g - tl)), x >= need - 1e-9 ? 'yes' : 'no', stack ? '' : f(bossH + x + bt)]);
   return {
-    values, warnings,
+    values, warnings, drawing,
     tables: [{ title: 'Nearby stock lengths', columns: ['Length (mm)', 'Air gap (mm)', 'Enough?', stack ? '' : 'Board top above floor (mm)'].filter(Boolean), rows: table.map((r) => (stack ? r.slice(0, 3) : r)) }],
     notes: [
       'Over a metal floor or chassis at a different potential, the gap is also an insulation clearance: check it against IEC 62368-1 / IEC 60664-1 for the voltage, or add an insulating sheet.',

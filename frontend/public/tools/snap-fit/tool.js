@@ -69,11 +69,43 @@ export function run({ material, shape, l, h, b, y, alpha, alpha2, mu, repeated, 
     { label: 'Root stress (approx.)', value: fmtNum(Es * 1000 * strain, 3), unit: 'MPa', hint: 'Es × strain' },
   ];
 
+  // Everything the page draws, as numbers (manifest agentOmit: "hook").
+  // The insertion stroke: the lead-in ramp lifts the hook by u * tan(a) until
+  // it has cleared the undercut, then it drags over the lip at mu * P, then it
+  // drops in. Pulling out, the retaining face does the same with a'.
+  const lip = Math.max(1.5, h); // lip thickness drawn and used for the drag plateau
+  const tIn = a > 0 && a < 90 ? y / Math.tan(a * DEG) : 0;
+  const tOut = a2 > 0 && a2 < 90 ? y / Math.tan(a2 * DEG) : 0;
+  const drag = f * P;
+  const sample = (travel, Fpeak, n) => Array.from({ length: n + 1 }, (_, i) => {
+    const u = (travel * i) / n, d = travel > 0 ? (y * i) / n : y;
+    return { u, defl: d, strain: (d * h) / (k * l * l) * 100, F: Fpeak == null ? null : (Fpeak * i) / n };
+  });
+  const push = [...sample(tIn, W, 24), { u: tIn + lip, defl: y, strain: pct, F: W == null ? null : drag, drag: true }];
+  const pull = a2 >= 90 ? [] : [...sample(tOut, R, 24), { u: tOut + lip, defl: y, strain: pct, F: R == null ? null : drag, drag: true }];
+  // Strain along the arm, as a share of the root strain (constant: falls
+  // linearly to the hook; tapered: M / h(x)^2 stays nearly level).
+  const along = Array.from({ length: 21 }, (_, i) => {
+    const xi = i / 20;
+    const hx = shape === 'tapered' ? 1 - xi / 2 : 1;
+    const r = (1 - xi) / (hx * hx);
+    return { x: xi * l, h: h * hx, strain: pct * r };
+  });
+  const hook = {
+    material, materialName: m.name, shape, l, h, b, y, k, alpha: a, alpha2: a2, mu: f, muDefault: m.mu, Es, epsPerm, epsSingle: material === 'custom' ? eps : m.eps,
+    repeated: !!repeated, fillet: 0.5 * h, strain: pct, yAllow, P, W, R, drag, stress: Es * 1000 * strain, lip, tIn, tOut, push, pull, along,
+    ok: pct <= epsPerm,
+    materials: Object.entries(MATERIALS).filter(([id]) => id !== 'custom').map(([id, x]) => ({
+      id, name: x.name, eps: x.eps * (repeated ? 0.6 : 1), es: x.es, mu: x.mu,
+      P: ((b * h * h) / 6) * (x.es * 1000) * strain / l, ok: pct <= x.eps * (repeated ? 0.6 : 1) })),
+  };
+
   // How the numbers change with the arm length: helps pick a length.
   const lens = [0.6, 0.8, 1, 1.25, 1.5, 2].map((s) => l * s);
   return {
     values,
     warnings,
+    hook,
     tables: [{
       title: `Other arm lengths (h ${fmtNum(h, 3)} mm, y ${fmtNum(y, 3)} mm)`,
       columns: ['Length', 'Strain', 'Deflection force', 'Insertion force', 'OK?'],

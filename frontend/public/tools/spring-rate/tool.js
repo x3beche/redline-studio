@@ -77,6 +77,7 @@ export function run({ material, d, dia, diaIs, coils, coilsAre, ends, L0, L1, Gc
   values.push({ label: 'Solid length', value: fmtNum(solid, 4), unit: 'mm' });
   const tables = [];
   const rows = [];
+  const draw = { free: null, work: null, pitch: null, Fs: null, tauS: null, F1: null, tau1: null, crit: null, clash: null, ys: null };
   if (L0 > 0) {
     if (L0 <= solid) {
       warnings.push(`The free length ${fmtNum(L0, 4)} mm is not longer than the solid length ${fmtNum(solid, 4)} mm: add length or remove coils.`);
@@ -85,6 +86,7 @@ export function run({ material, d, dia, diaIs, coils, coilsAre, ends, L0, L1, Gc
       const Fs = k * ys;
       const tauS = tauPerN * Fs;
       const pitch = e.pitch(L0, d, Na);
+      Object.assign(draw, { free: L0, pitch, Fs, tauS, ys, crit: (2.63 * D) / 0.5, clash: solid + 0.15 * ys });
       values.push(
         { label: 'Pitch', value: fmtNum(pitch, 4), unit: 'mm' },
         { label: 'Force at solid', value: fmtNum(Fs, 4), unit: 'N', hint: `after ${fmtNum(ys, 4)} mm` },
@@ -108,6 +110,7 @@ export function run({ material, d, dia, diaIs, coils, coilsAre, ends, L0, L1, Gc
           const y = L0 - L1;
           const F = k * y;
           const tau = tauPerN * F;
+          Object.assign(draw, { work: L1, F1: F, tau1: tau });
           values.push(
             { label: 'Working force', value: fmtNum(F, 4), unit: 'N', hint: `at ${fmtNum(L1, 4)} mm (${fmtNum(y, 4)} mm compressed)` },
             { label: 'Working stress', value: fmtNum(tau, 4), unit: 'MPa', hint: `KB ${fmtNum(KB, 4)}` },
@@ -124,9 +127,22 @@ export function run({ material, d, dia, diaIs, coils, coilsAre, ends, L0, L1, Gc
     warnings.push('Give the free length to see the solid force, stress and buckling check.');
   }
 
+  // Everything the page draws, as numbers (manifest agentOmit: "spring").
+  const spring = {
+    material: mat ? material : 'custom', materialName: mat ? mat.name : 'Custom', ends: ends in ENDS ? ends : 'sqground', endsName: e.name, extra: e.extra,
+    d, D, OD: D + d, ID: D - d, diaIs, Na, Nt, k, C, KB, G, Sut, allow, tauAllow: Sut ? allow * Sut : null, tauPerN, solid, ...draw,
+    Fallow: Sut ? (allow * Sut) / tauPerN : null,
+    wires: Object.entries(MATERIALS).map(([id, w]) => {
+      const [, A, m] = band(w.S, d);
+      const sut = A / d ** m;
+      const Gw = band(w.G, d)[1];
+      return { id, name: w.name, G: Gw, k: (d ** 4 * Gw * 1000) / (8 * D ** 3 * Na), Sut: sut, tauAllow: w.allow * sut, allow: w.allow, inRange: d >= w.range[0] && d <= w.range[1], range: w.range };
+    }),
+  };
   return {
     values,
     warnings,
+    spring,
     tables,
     notes: [
       'k = d⁴ G / (8 D³ Na), with D the mean coil diameter and Na the active coils; the end coils do not flex.',
