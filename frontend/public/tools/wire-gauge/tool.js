@@ -103,7 +103,17 @@ export function run({ current, length, voltage, drop, circuit, metal, strand, te
     { label: 'Its current rating', value: fmtNum(best.I, 3), unit: 'A', hint: methName },
     { label: 'Current density', value: fmtNum(current / best.area, 3), unit: 'A/mm²' },
   );
+  // Everything the page draws, as numbers (the sizes as calculated above).
+  const wire = {
+    current, length, voltage, drop, dvMax, aDrop, circuit: three ? 'ac3' : circuit === 'ac1' ? 'ac1' : 'dc', sizes: sizes === 'metric' ? 'metric' : 'awg',
+    metal: al ? 'al' : 'cu', strand: strand === 'flex' ? 'flex' : 'stranded', ins: ins === 'xlpe' ? 'xlpe' : 'pvc', method: METHOD[method] ? method : 'C', methName,
+    T, Ta, tmax, nG, kAmb, kGrp, kMeth, kAl, derate,
+    best: best ? all.indexOf(best) : -1, byDrop: byDrop ? all.indexOf(byDrop) : -1, byAmp: byAmp ? all.indexOf(byAmp) : -1,
+    list: all.map((s) => ({ name: s.name, area: s.area, d: Math.sqrt((4 * s.area) / Math.PI), R: s.R, dv: s.dv, pct: s.pct, loss: s.loss, I: s.I, ok: s.ok,
+      why: s.ok ? 'fits' : s.dv > dvMax ? 'drop' : 'hot' })),
+  };
   return {
+    wire,
     values,
     warnings,
     tables: [{ title: `${sizes === 'awg' ? 'AWG' : 'Metric'} sizes around the pick, ${al ? 'aluminium' : 'copper'} at ${fmtNum(T, 3)} °C`, columns: ['Size', 'mm²', 'mΩ/m', 'Drop V', 'Drop %', 'Loss W', 'Rating A', 'Fits?'], rows }],

@@ -105,7 +105,21 @@ export function run({ drill, plating, length, count, current, dtmax, layer, fill
     return [`${d} mm`, fmtNum(a * MIL2_PER_MM2, 3), fmtNum(k * Math.pow(dT, 0.44) * Math.pow(a * MIL2_PER_MM2, 0.725), 3),
       fmtNum(1 / ((K_CU * a * 1e-6) / L + (f.k * (Math.PI / 4) * (d - 2 * tp) ** 2 * 1e-6) / L), 3)];
   });
+  // Everything the page draws, as numbers (the calculation above, not a second one).
+  const via = {
+    drill, plating, tp, length, n, dT, k, layer: layer === 'internal' ? 'internal' : 'external', fill: FILLS[fill] ? fill : 'none', fillName: f.name,
+    aMm2, aMil2, iOne, iArr, I, iPer, rise, needed: I > 0 ? Math.ceil(I / iOne - 1e-9) : null,
+    tone: I > 0 ? (rise <= dT ? 'ok' : rise <= 2 * dT ? 'warn' : 'bad') : null,
+    ta, tC, rOne, rArr, drop, pDiss, rthOne, rthArr, P, dTboard: P * rthArr,
+    boardTone: P > 0 ? (P * rthArr < 10 ? 'ok' : P * rthArr < 30 ? 'warn' : 'bad') : null,
+    drills: drills.map((d) => {
+      const a = (Math.PI / 4) * (d ** 2 - (d - 2 * tp) ** 2);
+      return { d, i: k * Math.pow(dT, 0.44) * Math.pow(a * MIL2_PER_MM2, 0.725),
+        rth: 1 / ((K_CU * a * 1e-6) / L + (f.k * (Math.PI / 4) * (d - 2 * tp) ** 2 * 1e-6) / L) };
+    }),
+  };
   return {
+    via,
     values,
     warnings,
     tables: [

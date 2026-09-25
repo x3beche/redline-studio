@@ -66,13 +66,13 @@ function readNets(text) {
     return { rows: [...new Set(names)].filter((n) => !/^(unconnected-|Net-\()/.test(n)).map((n) => ({ name: n.replace(/^\//, ''), kind: null, amps: null, x: null, y: null, side: null, extra: [] })), bad, format: 'KiCad netlist' };
   }
   const rows = [];
-  for (const raw of src.split(/\r?\n/)) {
+  src.split(/\r?\n/).forEach((raw, line) => {
     const l = raw.trim();
-    if (!l || /^(#|\/\/)/.test(l)) continue;
-    if (/^(net|name)\b/i.test(l) && /kind|type|current/i.test(l)) continue; // a header row
+    if (!l || /^(#|\/\/)/.test(l)) return;
+    if (/^(net|name)\b/i.test(l) && /kind|type|current/i.test(l)) return; // a header row
     const r = parseLine(l);
-    if (r) rows.push(r); else bad.push(l);
-  }
+    if (r) rows.push({ ...r, line }); else bad.push(l);
+  });
   return { rows, bad, format: 'list' };
 }
 
@@ -126,19 +126,29 @@ export function run({ nets, method, rating, bw, bh }) {
   // Access checks from positions, when given
   const placed = [...rows].filter((r) => r.x != null);
   const access = [];
+  const issues = []; // the same problems, by pad index, for the page
   for (let i = 0; i < placed.length; i++) {
     for (let j = i + 1; j < placed.length; j++) {
       const a = placed[i], b = placed[j];
       if ((a.side || M.sides) !== (b.side || M.sides)) continue;
       const d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (d < M.pitch) access.push([`${a.name} - ${b.name}`, `${f(d)} mm apart`, d < M.pitchMin ? 'too close' : 'under preferred', `${M.name}: ${f(M.pitch)} mm preferred, ${f(M.pitchMin)} mm least`]);
+      if (d < M.pitch) {
+        access.push([`${a.name} - ${b.name}`, `${f(d)} mm apart`, d < M.pitchMin ? 'too close' : 'under preferred', `${M.name}: ${f(M.pitch)} mm preferred, ${f(M.pitchMin)} mm least`]);
+        issues.push({ type: 'pitch', i, j, d, level: d < M.pitchMin ? 'too close' : 'under preferred' });
+      }
     }
     const a = placed[i];
     if (bw > 0 && bh > 0) {
       const e = Math.min(a.x, a.y, bw - a.x, bh - a.y);
-      if (e < M.edge) access.push([a.name, `${f(e)} mm from the edge`, e < 0 ? 'off the board' : 'too near the edge', `keep ≥ ${f(M.edge)} mm`]);
+      if (e < M.edge) {
+        access.push([a.name, `${f(e)} mm from the edge`, e < 0 ? 'off the board' : 'too near the edge', `keep ≥ ${f(M.edge)} mm`]);
+        issues.push({ type: 'edge', i, e, level: e < 0 ? 'off the board' : 'too near the edge' });
+      }
     }
-    if (M.sides !== 'both' && a.side && a.side !== M.sides) access.push([a.name, `on the ${a.side}`, 'wrong side', `${M.name} probes the ${M.sides} side`]);
+    if (M.sides !== 'both' && a.side && a.side !== M.sides) {
+      access.push([a.name, `on the ${a.side}`, 'wrong side', `${M.name} probes the ${M.sides} side`]);
+      issues.push({ type: 'side', i, level: 'wrong side' });
+    }
   }
   if (access.length) warnings.push(`${access.length} probe-access problem(s) in the placed test points: see the table.`);
 
@@ -149,7 +159,19 @@ export function run({ nets, method, rating, bw, bh }) {
 
   const order = { must: 0, should: 1, optional: 2, avoid: 3 };
   plan.sort((a, b) => order[a.prio] - order[b.prio]);
+  // Everything the page draws, as numbers: the plan per net, the placed pads
+  // (with the source line each came from) and the access problems by pad.
+  const firstLine = {};
+  for (const r of rows) if (!(r.name in firstLine)) firstLine[r.name] = r.line ?? null;
+  const drawPlan = {
+    method: METHOD[method] ? method : 'bed', M, probeA, bw: bw > 0 ? bw : null, bh: bh > 0 ? bh : null, format,
+    total, gndTotal, must, missingGnd: !gndNets.length,
+    nets: plan.map((p) => ({ name: p.name, kind: p.kind, prio: p.prio, n: p.n, amps: p.amps, guessed: p.guessed, line: firstLine[p.name] ?? null })),
+    pads: placed.map((r) => ({ name: r.name, x: r.x, y: r.y, side: r.side || M.sides, sideGiven: r.side, line: r.line ?? null })),
+    issues,
+  };
   return {
+    plan: drawPlan,
     values: [
       { label: 'Nets read', value: plan.length, hint: format },
       { label: 'Test points', value: total, tone: 'ok', hint: `${must} net${must === 1 ? '' : 's'} must have one` },

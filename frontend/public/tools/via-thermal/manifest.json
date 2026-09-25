@@ -1,30 +1,164 @@
 {
-  "id": "via-thermal", "version": "1.0",
+  "id": "via-thermal", "version": "1.1",
   "name": "Via Current & Thermal",
   "blurb": "current a via array carries and its temperature rise from drill, plating and count",
   "group": "pcb",
-  "rooms": ["pcb"],
-  "keywords": ["via", "via current", "ampacity", "via array", "via stitching", "thermal via", "thermal resistance", "temperature rise", "plating", "barrel", "ipc-2221", "exposed pad", "heat sink", "via count"],
+  "layout": "custom",
+  "rooms": [
+    "pcb"
+  ],
+  "keywords": [
+    "via",
+    "via current",
+    "ampacity",
+    "via array",
+    "via stitching",
+    "thermal via",
+    "thermal resistance",
+    "temperature rise",
+    "plating",
+    "barrel",
+    "ipc-2221",
+    "exposed pad",
+    "heat sink",
+    "via count"
+  ],
   "intro": "How much current a group of plated vias carries for an allowed temperature rise, how hot it runs at your current, its resistance, and how well it conducts heat through the board. Current comes from the IPC-2221 conductor chart applied to the via's barrel wall; heat from plain conduction along copper.",
   "inputs": [
-    { "key": "drill", "label": "Drilled hole diameter", "type": "number", "unit": "mm", "default": "0.3" },
-    { "key": "plating", "label": "Barrel plating thickness", "type": "number", "unit": "µm", "default": "25",
-      "help": "IPC-6012 average: class 2 20 µm, class 3 25 µm. Budget fabs often plate ~18 µm." },
-    { "key": "length", "label": "Via length", "type": "number", "unit": "mm", "default": "1.6", "help": "Board thickness for a through via." },
-    { "key": "count", "label": "Number of vias", "type": "number", "default": "4" },
-    { "key": "current", "label": "Total current", "type": "number", "unit": "A", "default": "3" },
-    { "key": "dtmax", "label": "Allowed temperature rise", "type": "number", "unit": "°C", "default": "10" },
-    { "key": "layer", "label": "Rate as", "type": "select", "default": "external",
-      "options": [["external", "External conductor (k = 0.048)"], ["internal", "Internal conductor (k = 0.024, conservative)"]] },
-    { "key": "fill", "label": "Via fill", "type": "select", "default": "none",
-      "options": [["none", "Open (unfilled)"], ["epoxy", "Non-conductive epoxy"], ["conductive", "Conductive (silver) epoxy"], ["solder", "Filled with solder"], ["copper", "Copper filled"]] },
-    { "key": "power", "label": "Heat to move through the board", "type": "number", "unit": "W", "default": "1",
-      "help": "Optional: e.g. a regulator's loss under its thermal pad." },
-    { "key": "ambient", "label": "Board temperature", "type": "number", "unit": "°C", "default": "25" }
+    {
+      "key": "drill",
+      "label": "Drilled hole diameter",
+      "type": "number",
+      "unit": "mm",
+      "default": "0.3"
+    },
+    {
+      "key": "plating",
+      "label": "Barrel plating thickness",
+      "type": "number",
+      "unit": "µm",
+      "default": "25",
+      "help": "IPC-6012 average: class 2 20 µm, class 3 25 µm. Budget fabs often plate ~18 µm."
+    },
+    {
+      "key": "length",
+      "label": "Via length",
+      "type": "number",
+      "unit": "mm",
+      "default": "1.6",
+      "help": "Board thickness for a through via."
+    },
+    {
+      "key": "count",
+      "label": "Number of vias",
+      "type": "number",
+      "default": "4"
+    },
+    {
+      "key": "current",
+      "label": "Total current",
+      "type": "number",
+      "unit": "A",
+      "default": "3"
+    },
+    {
+      "key": "dtmax",
+      "label": "Allowed temperature rise",
+      "type": "number",
+      "unit": "°C",
+      "default": "10"
+    },
+    {
+      "key": "layer",
+      "label": "Rate as",
+      "type": "select",
+      "default": "external",
+      "options": [
+        [
+          "external",
+          "External conductor (k = 0.048)"
+        ],
+        [
+          "internal",
+          "Internal conductor (k = 0.024, conservative)"
+        ]
+      ]
+    },
+    {
+      "key": "fill",
+      "label": "Via fill",
+      "type": "select",
+      "default": "none",
+      "options": [
+        [
+          "none",
+          "Open (unfilled)"
+        ],
+        [
+          "epoxy",
+          "Non-conductive epoxy"
+        ],
+        [
+          "conductive",
+          "Conductive (silver) epoxy"
+        ],
+        [
+          "solder",
+          "Filled with solder"
+        ],
+        [
+          "copper",
+          "Copper filled"
+        ]
+      ]
+    },
+    {
+      "key": "power",
+      "label": "Heat to move through the board",
+      "type": "number",
+      "unit": "W",
+      "default": "1",
+      "help": "Optional: e.g. a regulator's loss under its thermal pad."
+    },
+    {
+      "key": "ambient",
+      "label": "Board temperature",
+      "type": "number",
+      "unit": "°C",
+      "default": "25"
+    }
   ],
   "examples": [
-    { "title": "5 A through six 0.3 mm vias", "input": { "drill": "0.3", "plating": "25", "length": "1.6", "count": "6", "current": "5", "dtmax": "10", "layer": "external", "fill": "none", "power": "0", "ambient": "25" } },
-    { "title": "Thermal pad of a 2 W regulator, 9 vias", "input": { "drill": "0.3", "plating": "20", "length": "1.6", "count": "9", "current": "0", "dtmax": "10", "layer": "external", "fill": "none", "power": "2", "ambient": "40" } }
+    {
+      "title": "5 A through six 0.3 mm vias",
+      "input": {
+        "drill": "0.3",
+        "plating": "25",
+        "length": "1.6",
+        "count": "6",
+        "current": "5",
+        "dtmax": "10",
+        "layer": "external",
+        "fill": "none",
+        "power": "0",
+        "ambient": "25"
+      }
+    },
+    {
+      "title": "Thermal pad of a 2 W regulator, 9 vias",
+      "input": {
+        "drill": "0.3",
+        "plating": "20",
+        "length": "1.6",
+        "count": "9",
+        "current": "0",
+        "dtmax": "10",
+        "layer": "external",
+        "fill": "none",
+        "power": "2",
+        "ambient": "40"
+      }
+    }
   ],
   "usage": "Give drill diameter in mm, plating in µm, via length in mm, via count, total current in A, allowed temperature rise in °C (and optionally watts of heat to conduct through the board). Returns current per via and for the array at that rise, the rise at your current, vias needed, resistance and voltage drop, and thermal resistance per via and for the array in K/W, plus tables by via count and drill size. Use it to size power-path via arrays and thermal-pad via fields.",
   "sources": [

@@ -1,30 +1,232 @@
 {
-  "id": "wire-gauge", "version": "1.0",
+  "id": "wire-gauge",
+  "version": "1.1",
   "name": "Wire Gauge Selector",
   "blurb": "cable size from current, length and allowed voltage drop",
   "group": "pcb",
-  "rooms": ["pcb", "embedded"],
-  "keywords": ["wire gauge", "awg", "cable size", "cross-section", "mm2", "voltage drop", "ampacity", "current rating", "wire resistance", "cable sizing", "harness", "iec 60364", "power cable"],
+  "layout": "custom",
+  "rooms": [
+    "pcb",
+    "embedded"
+  ],
+  "keywords": [
+    "wire gauge",
+    "awg",
+    "cable size",
+    "cross-section",
+    "mm2",
+    "voltage drop",
+    "ampacity",
+    "current rating",
+    "wire resistance",
+    "cable sizing",
+    "harness",
+    "iec 60364",
+    "power cable"
+  ],
   "intro": "The smallest wire whose voltage drop over the run stays within your limit and whose current rating (IEC 60364-5-52, method C, derated for installation, ambient and bundling) covers the load. Drop is resistive: 2 × length × current × resistance for DC and single phase.",
   "inputs": [
-    { "key": "current", "label": "Load current", "type": "number", "unit": "A", "default": "10" },
-    { "key": "length", "label": "Cable length (one way)", "type": "number", "unit": "m", "default": "5" },
-    { "key": "voltage", "label": "Supply voltage", "type": "number", "unit": "V", "default": "12" },
-    { "key": "drop", "label": "Allowed voltage drop", "type": "number", "unit": "%", "default": "3" },
-    { "key": "sizes", "label": "Sizes", "type": "select", "default": "awg", "options": [["awg", "AWG"], ["metric", "Metric mm²"]] },
-    { "key": "circuit", "label": "Circuit", "type": "select", "default": "dc", "options": [["dc", "DC (2 wires)"], ["ac1", "AC single phase"], ["ac3", "AC three phase"]] },
-    { "key": "metal", "label": "Conductor", "type": "select", "default": "cu", "options": [["cu", "Copper"], ["al", "Aluminium"]] },
-    { "key": "strand", "label": "Construction", "type": "select", "default": "stranded", "options": [["stranded", "Solid / stranded (class 1-2)"], ["flex", "Flexible (class 5-6)"]] },
-    { "key": "temp", "label": "Conductor temperature", "type": "number", "unit": "°C", "default": "50", "help": "For the resistance: 20 °C cold, 50 °C typical, 70 °C fully loaded PVC." },
-    { "key": "ins", "label": "Insulation", "type": "select", "default": "pvc", "options": [["pvc", "PVC, 70 °C"], ["xlpe", "XLPE / silicone, 90 °C"]] },
-    { "key": "method", "label": "Installed", "type": "select", "default": "C", "options": [["E", "In free air"], ["C", "Clipped to a surface"], ["B1", "In conduit / trunking"], ["A1", "In thermal insulation"]] },
-    { "key": "ambient", "label": "Ambient", "type": "number", "unit": "°C", "default": "30" },
-    { "key": "group", "label": "Loaded circuits bundled together", "type": "number", "default": "1" }
+    {
+      "key": "current",
+      "label": "Load current",
+      "type": "number",
+      "unit": "A",
+      "default": "10"
+    },
+    {
+      "key": "length",
+      "label": "Cable length (one way)",
+      "type": "number",
+      "unit": "m",
+      "default": "5"
+    },
+    {
+      "key": "voltage",
+      "label": "Supply voltage",
+      "type": "number",
+      "unit": "V",
+      "default": "12"
+    },
+    {
+      "key": "drop",
+      "label": "Allowed voltage drop",
+      "type": "number",
+      "unit": "%",
+      "default": "3"
+    },
+    {
+      "key": "sizes",
+      "label": "Sizes",
+      "type": "select",
+      "default": "awg",
+      "options": [
+        [
+          "awg",
+          "AWG"
+        ],
+        [
+          "metric",
+          "Metric mm²"
+        ]
+      ]
+    },
+    {
+      "key": "circuit",
+      "label": "Circuit",
+      "type": "select",
+      "default": "dc",
+      "options": [
+        [
+          "dc",
+          "DC (2 wires)"
+        ],
+        [
+          "ac1",
+          "AC single phase"
+        ],
+        [
+          "ac3",
+          "AC three phase"
+        ]
+      ]
+    },
+    {
+      "key": "metal",
+      "label": "Conductor",
+      "type": "select",
+      "default": "cu",
+      "options": [
+        [
+          "cu",
+          "Copper"
+        ],
+        [
+          "al",
+          "Aluminium"
+        ]
+      ]
+    },
+    {
+      "key": "strand",
+      "label": "Construction",
+      "type": "select",
+      "default": "stranded",
+      "options": [
+        [
+          "stranded",
+          "Solid / stranded (class 1-2)"
+        ],
+        [
+          "flex",
+          "Flexible (class 5-6)"
+        ]
+      ]
+    },
+    {
+      "key": "temp",
+      "label": "Conductor temperature",
+      "type": "number",
+      "unit": "°C",
+      "default": "50",
+      "help": "For the resistance: 20 °C cold, 50 °C typical, 70 °C fully loaded PVC."
+    },
+    {
+      "key": "ins",
+      "label": "Insulation",
+      "type": "select",
+      "default": "pvc",
+      "options": [
+        [
+          "pvc",
+          "PVC, 70 °C"
+        ],
+        [
+          "xlpe",
+          "XLPE / silicone, 90 °C"
+        ]
+      ]
+    },
+    {
+      "key": "method",
+      "label": "Installed",
+      "type": "select",
+      "default": "C",
+      "options": [
+        [
+          "E",
+          "In free air"
+        ],
+        [
+          "C",
+          "Clipped to a surface"
+        ],
+        [
+          "B1",
+          "In conduit / trunking"
+        ],
+        [
+          "A1",
+          "In thermal insulation"
+        ]
+      ]
+    },
+    {
+      "key": "ambient",
+      "label": "Ambient",
+      "type": "number",
+      "unit": "°C",
+      "default": "30"
+    },
+    {
+      "key": "group",
+      "label": "Loaded circuits bundled together",
+      "type": "number",
+      "default": "1"
+    }
   ],
   "examples": [
-    { "title": "12 V, 10 A pump 5 m away, 3 % drop", "input": { "current": "10", "length": "5", "voltage": "12", "drop": "3", "sizes": "awg", "circuit": "dc", "metal": "cu", "strand": "stranded", "temp": "20", "ins": "pvc", "method": "C", "ambient": "20", "group": "1" } },
-    { "title": "24 V, 3 A sensor run 20 m in trunking, metric", "input": { "current": "3", "length": "20", "voltage": "24", "drop": "5", "sizes": "metric", "circuit": "dc", "metal": "cu", "strand": "flex", "temp": "50", "ins": "pvc", "method": "B1", "ambient": "40", "group": "4" } }
+    {
+      "title": "12 V, 10 A pump 5 m away, 3 % drop",
+      "input": {
+        "current": "10",
+        "length": "5",
+        "voltage": "12",
+        "drop": "3",
+        "sizes": "awg",
+        "circuit": "dc",
+        "metal": "cu",
+        "strand": "stranded",
+        "temp": "20",
+        "ins": "pvc",
+        "method": "C",
+        "ambient": "20",
+        "group": "1"
+      }
+    },
+    {
+      "title": "24 V, 3 A sensor run 20 m in trunking, metric",
+      "input": {
+        "current": "3",
+        "length": "20",
+        "voltage": "24",
+        "drop": "5",
+        "sizes": "metric",
+        "circuit": "dc",
+        "metal": "cu",
+        "strand": "flex",
+        "temp": "50",
+        "ins": "pvc",
+        "method": "B1",
+        "ambient": "40",
+        "group": "4"
+      }
+    }
   ],
   "usage": "Give the load current (A), the one-way length (m), supply voltage (V) and allowed drop (%), the size system (awg or metric), circuit (dc, ac1, ac3), conductor, construction, conductor temperature, insulation, installation method, ambient (°C) and bundled circuit count. It returns the minimum area for the drop, the smallest size that meets both drop and current rating, its drop in V and %, cable loss in W and its derated current rating, plus a table of neighbouring sizes. Use it for harnesses, battery and supply leads and field wiring.",
-  "sources": ["IEC 60364-5-52:2009, tables B.52.4/B.52.5 (current ratings, method C), B.52.14/15 (ambient), B.52.17 (grouping), annex G (voltage drop)", "IEC 60028 (copper resistivity), IEC 60228 (conductor resistance classes)", "ASTM B258 (AWG diameters)", "Below 1.5 mm² the rating is scaled from the table as area^0.75: an estimate"]
+  "sources": [
+    "IEC 60364-5-52:2009, tables B.52.4/B.52.5 (current ratings, method C), B.52.14/15 (ambient), B.52.17 (grouping), annex G (voltage drop)",
+    "IEC 60028 (copper resistivity), IEC 60228 (conductor resistance classes)",
+    "ASTM B258 (AWG diameters)",
+    "Below 1.5 mm² the rating is scaled from the table as area^0.75: an estimate"
+  ]
 }

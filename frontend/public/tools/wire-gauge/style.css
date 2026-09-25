@@ -1,0 +1,115 @@
+/* Wire Gauge Selector: the cable run, and the conductors themselves in section. */
+:root {
+  --tool-cu: #b8702a; --tool-cu-edge: #8a4f16; --tool-al: #9aa3ab; --tool-al-edge: #6e7780;
+  --tool-pos: #c0392b; --tool-neg: #2b3440; --tool-l3: #7a5a2e;
+  --tool-jacket: #d6dde3; --tool-wall: #cfc6b2; --tool-wool: #e8d9a8;
+  --tool-v: #1f4ed8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-cu: #d99450; --tool-cu-edge: #f0b57a; --tool-al: #aab3bb; --tool-al-edge: #cfd6dc;
+    --tool-pos: #e57373; --tool-neg: #8ea0b0; --tool-l3: #c49a5a;
+    --tool-jacket: #33414d; --tool-wall: #3b3a33; --tool-wool: #4d4632;
+    --tool-v: #7d9bff;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-cu: #d99450; --tool-cu-edge: #f0b57a; --tool-al: #aab3bb; --tool-al-edge: #cfd6dc;
+  --tool-pos: #e57373; --tool-neg: #8ea0b0; --tool-l3: #c49a5a;
+  --tool-jacket: #33414d; --tool-wall: #3b3a33; --tool-wool: #4d4632;
+  --tool-v: #7d9bff;
+}
+
+.wg { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 390px); gap: 12px; align-items: start;
+  grid-template-areas: "run run" "sizes inst" "out side"; }
+.wg-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.wg-run { grid-area: run; } .wg-sizes { grid-area: sizes; } .wg-inst { grid-area: inst; }
+.wg-out { grid-area: out; min-width: 0; } .wg-out .k-out { max-height: 240px; }
+.wg-side { grid-area: side; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.wg-warns:empty { display: none; }
+@media (max-width: 900px) {
+  .wg { grid-template-columns: minmax(0, 1fr); grid-template-areas: "run" "sizes" "side" "inst" "out"; }
+}
+.wg-head { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); min-height: 38px; }
+.wg-head h2 { font-size: 12.5px; font-weight: 600; margin: 0; }
+.wg-head .sub { color: var(--ink-soft); font-size: 11.5px; }
+.wg-head .grow { flex: 1; }
+.wg-f { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--ink-soft); }
+.wg-f input { width: 52px; padding: 2px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font: 12px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); }
+.wg-f input.bad { border-color: var(--danger); }
+.wg-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.wg-seg button { border: 0; background: transparent; padding: 2px 8px; font-size: 11.5px; cursor: pointer; color: var(--ink-soft); }
+.wg-seg button + button { border-left: 1px solid var(--line); }
+.wg-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.wg-draw { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
+.wg-draw svg { display: block; width: 100%; overflow: visible; }
+.wg-foot { padding: 4px 10px 7px; color: var(--ink-soft); font-size: 11px; display: flex; gap: 4px 14px; flex-wrap: wrap; }
+.wg-foot kbd { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+.wg-rows { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line-soft); }
+.wg-rows > div { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.wg-chain { font: 11.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); padding: 6px 10px 8px; border-top: 1px solid var(--line-soft); }
+.wg-chain b { color: var(--ink); font-weight: 600; }
+.wg-chain .ok { color: var(--ok); } .wg-chain .bad { color: var(--danger); }
+.wg-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 8px 10px 0; }
+.wg-tile { border: 1px solid var(--line); border-radius: 5px; background: var(--surface); padding: 3px 3px 4px; cursor: pointer; color: var(--ink-soft);
+  font-size: 10.5px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.wg-tile svg { width: 100%; height: 44px; display: block; }
+.wg-tile:hover { border-color: var(--ink-soft); }
+.wg-tile[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent); }
+.wg-bundle { display: flex; align-items: center; gap: 8px; }
+.wg-bundle .k-btn { padding: 1px 9px; }
+
+/* drawing */
+.wg svg text { font: 11px "IBM Plex Sans", -apple-system, sans-serif; fill: var(--ink); }
+.wg svg .m { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; }
+.wg svg .sm { font-size: 9.5px; }
+.wg svg .b { font-weight: 600; }
+.wg svg .soft { fill: var(--ink-soft); }
+.wg svg .bg { fill: var(--surface); }
+.wg svg .danger { fill: var(--danger); } .wg svg .ok-t { fill: var(--ok); } .wg svg .warn-t { fill: var(--warn); } .wg svg .acc { fill: var(--accent); }
+.wg svg .cu { fill: var(--tool-cu); stroke: var(--tool-cu-edge); stroke-width: .8; }
+.wg svg .al { fill: var(--tool-al); stroke: var(--tool-al-edge); stroke-width: .8; }
+.wg svg .strand { fill: none; stroke: var(--tool-cu-edge); stroke-width: .6; opacity: .7; }
+.wg svg .jacket { fill: var(--tool-jacket); stroke: var(--line); }
+.wg svg .w-pos { stroke: var(--tool-pos); } .wg svg .w-neg { stroke: var(--tool-neg); } .wg svg .w-l3 { stroke: var(--tool-l3); }
+.wg svg .wire { fill: none; stroke-linecap: round; }
+.wg svg .core { fill: none; stroke: var(--tool-cu); stroke-linecap: round; }
+.wg svg .box { fill: var(--sunken); stroke: var(--ink-soft); stroke-width: 1.2; }
+.wg svg .term { fill: var(--surface); stroke: var(--ink-soft); }
+.wg svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.wg svg .tick { stroke: var(--line); stroke-width: 1; }
+.wg svg .axis { stroke: var(--ink-soft); stroke-width: 1; }
+.wg svg .vline { stroke: var(--tool-v); stroke-width: 2.5; fill: none; }
+.wg svg .vghost { stroke: var(--ink-soft); stroke-width: 1; fill: none; opacity: .45; }
+.wg svg .floor { stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.wg svg .below { fill: url(#wg-hatch); }
+.wg svg .hatch-l { stroke: var(--danger); stroke-opacity: .45; stroke-width: 1; }
+.wg svg .okband { fill: var(--ok); fill-opacity: var(--fill-alpha); }
+.wg svg .dim { stroke: var(--ink-soft); stroke-width: 1; fill: none; }
+.wg svg .dim-f { fill: var(--ink-soft); }
+.wg svg .arrow { fill: var(--tool-v); }
+.wg svg g.h { cursor: grab; outline: none; }
+.wg svg g.h.ew { cursor: ew-resize; } .wg svg g.h.ns { cursor: ns-resize; }
+.wg svg g.h .pill { fill: var(--accent); }
+.wg svg g.h .pill-t { fill: var(--accent-ink); font-weight: 600; }
+.wg svg g.h .ring { fill: none; stroke: none; }
+.wg svg g.h:focus-visible .ring { stroke: var(--accent); stroke-width: 2; }
+.wg svg g.h:hover .pill { opacity: .88; }
+.wg svg g.h .loadbox { fill: var(--sunken); stroke: var(--accent); stroke-width: 1.5; }
+.wg svg g.sz { cursor: pointer; outline: none; }
+.wg svg g.sz .cell { fill: transparent; stroke: transparent; }
+.wg svg g.sz:hover .cell { stroke: var(--line); }
+.wg svg g.sz.insp .cell { fill: var(--sunken); stroke: var(--ink-soft); }
+.wg svg g.sz.best .cell { stroke: var(--ok); stroke-width: 2; }
+.wg svg g.sz:focus-visible .cell { stroke: var(--accent); stroke-width: 2; }
+.wg svg .bar-bg { fill: var(--sunken); }
+.wg svg .bar-ok { fill: var(--ok); } .wg svg .bar-bad { fill: var(--danger); }
+.wg svg .lim { stroke: var(--ink); stroke-width: 1.2; }
+.wg svg .span-ok { fill: var(--ok); fill-opacity: var(--fill-alpha); stroke: var(--ok); }
+.wg svg .span-no { fill: url(#wg-hatch); }
+.wg svg .wallf { fill: var(--tool-wall); }
+.wg svg .wool { fill: var(--tool-wool); }
+.wg svg .conduit { fill: none; stroke: var(--ink-soft); stroke-width: 2; }
+.wg svg .air { stroke: var(--ink-soft); stroke-width: 1; fill: none; stroke-dasharray: 2 4; opacity: .7; }
+.wg svg .clip { fill: none; stroke: var(--ink-soft); stroke-width: 2; }
