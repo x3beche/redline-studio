@@ -340,10 +340,28 @@ export async function mount(base = './') {
   };
 
   const ex = manifest.examples?.[0];
+  // With several examples, each press loads the next one; the button says
+  // which, and its title what it shows.
+  let exIndex = -1;
+  const exampleButton = () => {
+    const list = manifest.examples || [];
+    const btn = $('button', { class: 'k-btn', title: list[0]?.title || 'Load an example' }, 'Example');
+    btn.addEventListener('click', () => {
+      exIndex = (exIndex + 1) % list.length;
+      const e = list[exIndex];
+      raw = { ...defaults(), ...structuredClone(e.input) }; store.set(KEY, raw); drawForm(); compute();
+      if (list.length > 1) {
+        btn.textContent = `Example ${exIndex + 1}/${list.length}`;
+        const next = list[(exIndex + 1) % list.length];
+        btn.title = `${e.title || ''}${e.title ? ' - ' : ''}press again for: ${next.title || 'the next example'}`;
+      }
+    });
+    return btn;
+  };
   const bar = $('header', { class: 'k-bar' },
     $('h1', { class: 'brand' }, manifest.name, $('span', {}, ` — ${manifest.blurb}`)),
     $('div', { class: 'k-actions' },
-      ex ? $('button', { class: 'k-btn', onclick: () => { raw = { ...defaults(), ...structuredClone(ex.input) }; store.set(KEY, raw); drawForm(); compute(); } }, 'Example') : null,
+      ex ? exampleButton() : null,
       $('button', { class: 'k-btn', onclick: () => { raw = defaults(); store.set(KEY, raw); drawForm(); compute(); } }, 'Reset')));
   if (manifest.layout === 'custom' && page) {
     // The tool owns the page: it lays out its own interface for what it
