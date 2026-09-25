@@ -1,0 +1,136 @@
+/* IEEE754 Float Inspector: the register page. Chrome colours from kit.css;
+   the three field colours are data and have their own light/dark values. */
+:root {
+  --tool-sign: #a23fbf;
+  --tool-exp: #c26a00;
+  --tool-frac: var(--accent);
+  --tool-on-ink: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tool-sign: #c982e0; --tool-exp: #f0a33a; --tool-on-ink: #0f151b; }
+}
+:root[data-theme="dark"] { --tool-sign: #c982e0; --tool-exp: #f0a33a; --tool-on-ink: #0f151b; }
+
+.fi-page { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "top top" "main side"; gap: 12px; align-items: start; }
+.fi-top { grid-area: top; }
+.fi-main { grid-area: main; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.fi-side { grid-area: side; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+@media (max-width: 1000px) {
+  .fi-page { grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "main" "side"; }
+}
+
+.fi-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.fi-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.fi-h { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.fi-soft { color: var(--ink-soft); fill: var(--ink-soft); }
+.fi-small { font-size: 11.5px; }
+.fi-right { margin-left: auto; }
+.fi-btns { display: flex; gap: 6px; }
+.fi-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.fi-stale .fi-main { opacity: .45; }
+
+/* top strip: the value, and the four formats drawn as their bit split */
+.fi-top { display: flex; gap: 14px; align-items: stretch; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.fi-entry { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.fi-entryrow { display: flex; gap: 6px; flex-wrap: wrap; }
+.fi-value { flex: 1 1 200px; min-width: 0; font: 500 20px "IBM Plex Mono", ui-monospace, monospace; padding: 4px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); }
+.fi-how { padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); font-size: 12px; }
+.fi-undo { white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.fi-undo:disabled { opacity: .45; cursor: default; }
+.fi-fmts { display: grid; grid-template-columns: repeat(4, minmax(92px, 1fr)); gap: 6px; flex: 2 1 460px; min-width: 0; }
+@media (max-width: 520px) { .fi-fmts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fi-fmt { display: flex; flex-direction: column; gap: 4px; align-items: stretch; text-align: left; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); cursor: pointer; min-width: 0; }
+.fi-fmt:hover { border-color: var(--ink-soft); }
+.fi-fmt[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--surface); }
+.fi-fmtname { font-weight: 600; font-size: 12.5px; }
+.fi-fmtname small { font-weight: 400; color: var(--ink-soft); font-size: 11px; }
+.fi-fmtbar { display: flex; height: 8px; gap: 1px; width: calc(var(--w) / 64 * 100%); min-width: 26%; }
+.fi-fmtbar i { display: block; border-radius: 1px; min-width: 3px; }
+.fi-fmtbar .fi-s, .fi-legend .fi-s { background: var(--tool-sign); }
+.fi-fmtbar .fi-e { background: var(--tool-exp); }
+.fi-fmtbar .fi-f { background: var(--tool-frac); }
+.fi-fmtsplit { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+
+/* the register */
+.fi-regtitle { display: inline-flex; gap: 8px; align-items: baseline; }
+.fi-regtitle b { font-size: 14px; }
+.fi-cls { font-size: 11px; padding: 0 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink-soft); }
+.fi-cls-subnormal, .fi-cls-infinity { border-color: var(--warn); color: var(--warn); }
+.fi-cls-quietNaN, .fi-cls-signallingNaN { border-color: var(--danger); color: var(--danger); }
+.fi-regwrap, .fi-linewrap, .fi-rangewrap { width: 100%; min-width: 0; }
+.fi-regsvg, .fi-linesvg, .fi-rangesvg { display: block; max-width: 100%; }
+.fi-bitno { font: 9.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.fi-bit { cursor: pointer; outline: none; }
+.fi-bit rect { stroke-width: 1.2; }
+.fi-bit.fi-s rect { fill: var(--tool-sign); stroke: var(--tool-sign); }
+.fi-bit.fi-e rect { fill: var(--tool-exp); stroke: var(--tool-exp); }
+.fi-bit.fi-f rect { fill: var(--tool-frac); stroke: var(--tool-frac); }
+.fi-bit rect { fill-opacity: .08; stroke-opacity: .55; }
+.fi-bit.is-on rect { fill-opacity: .9; stroke-opacity: 1; }
+.fi-bit:hover rect { stroke-opacity: 1; stroke-width: 2; }
+.fi-digit { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; fill: var(--ink-soft); pointer-events: none; }
+.fi-bit.is-on .fi-digit { fill: var(--tool-on-ink); }
+.fi-bit:focus-visible rect { stroke: var(--ink); stroke-width: 2.5; stroke-opacity: 1; }
+.fi-brace { fill: none; stroke-width: 1.5; }
+.fi-brace.fi-s { stroke: var(--tool-sign); } .fi-brace.fi-e { stroke: var(--tool-exp); } .fi-brace.fi-f { stroke: var(--tool-frac); }
+.fi-flabel { font: 600 12px "IBM Plex Mono", ui-monospace, monospace; }
+.fi-st, .fi-stt, .fi-flabel.fi-st { color: var(--tool-sign); fill: var(--tool-sign); }
+.fi-et, .fi-flabel.fi-et { color: var(--tool-exp); fill: var(--tool-exp); }
+.fi-ft, .fi-flabel.fi-ft { color: var(--tool-frac); fill: var(--tool-frac); }
+.fi-fsub { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.fi-eq { font: 15px "IBM Plex Mono", ui-monospace, monospace; padding: 8px 10px; margin-top: 4px; background: var(--sunken); border-radius: 4px; overflow-wrap: anywhere; }
+.fi-eq b { font-weight: 600; }
+.fi-eq .fi-st, .fi-eq .fi-et, .fi-eq .fi-ft { font-weight: 600; }
+
+/* number line */
+.fi-axis { stroke: var(--ink-soft); stroke-width: 1.2; }
+.fi-band { fill: var(--accent); fill-opacity: var(--fill-alpha); stroke: var(--accent); stroke-opacity: .5; stroke-dasharray: 3 3; }
+.fi-bandt { font-size: 11px; fill: var(--ink-soft); }
+.fi-tick { stroke-width: 2; }
+.fi-tick.fi-nb { stroke: var(--ink-soft); }
+.fi-ticklab { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.fi-ticksub { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.fi-dim { fill: none; stroke: var(--ink-soft); stroke-width: 1; }
+.fi-dimt { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.fi-typed { fill: var(--warn); }
+.fi-typedt { font: 600 11.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--warn); }
+.fi-errdim { stroke: var(--warn); stroke-width: 3; }
+.fi-stored { cursor: ew-resize; outline: none; touch-action: none; }
+.fi-smark { stroke: var(--accent); stroke-width: 2.5; }
+.fi-sdot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.fi-slab { font: 600 13px "IBM Plex Mono", ui-monospace, monospace; fill: var(--accent); }
+.fi-stored:focus-visible .fi-sdot { stroke: var(--ink); stroke-width: 3; r: 9; }
+.fi-linesvg { touch-action: none; }
+.fi-empty { font-size: 12.5px; fill: var(--ink-soft); }
+
+/* exponent scale */
+.fi-rangesvg { touch-action: none; cursor: pointer; }
+.fi-bnorm { fill: var(--ok); fill-opacity: var(--fill-alpha); stroke: var(--ok); stroke-opacity: .5; }
+.fi-bsub { fill: var(--warn); fill-opacity: .45; }
+.fi-binf { fill: var(--danger); fill-opacity: .5; }
+.fi-bandl { font-size: 11px; fill: var(--warn); }
+.fi-bandl.fi-bandinf { fill: var(--danger); }
+.fi-handle { outline: none; }
+.fi-hbox { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.fi-handle.is-sub .fi-hbox { fill: var(--warn); }
+.fi-handle.is-inf .fi-hbox { fill: var(--danger); }
+.fi-hlab { font: 600 12px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.fi-handle:focus-visible .fi-hbox { stroke: var(--ink); stroke-width: 3; }
+
+/* side */
+.fi-warns:empty, .fi-warns[hidden] { display: none; }
+.fi-warns { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 6px; padding: 6px 10px; background: var(--surface); font-size: 12.5px; }
+.fi-warns div + div { margin-top: 4px; }
+.fi-readout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; font-size: 12px; }
+.fi-readout dt { color: var(--ink-soft); }
+.fi-readout dd { margin: 0; font-family: "IBM Plex Mono", ui-monospace, monospace; min-width: 0; overflow-wrap: anywhere; }
+.fi-readout dd small { display: block; font-family: inherit; color: var(--ink-soft); font-size: 10.5px; }
+.fi-readout dd.fi-long { font-size: 11.5px; }
+.fi-tone-ok { color: var(--ok); }
+.fi-tone-warn { color: var(--warn); }
+.fi-rangetab { font-size: 11.5px; }
+.fi-notes { color: var(--ink-soft); font-size: 11.5px; }
+.fi-notes div + div { margin-top: 4px; }
+.fi-side .k-out { max-height: 260px; }
+.fi-exact { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--accent); }
+.fi-dimtbg { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }

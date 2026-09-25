@@ -1,5 +1,5 @@
 {
-  "id": "hash-checksum", "version": "1.0",
+  "id": "hash-checksum", "version": "1.1",
   "name": "Hash & Checksum Quick Tool",
   "blurb": "MD5, SHA and simple checksums of text or hex data",
   "group": "embedded",
@@ -18,5 +18,6 @@
     { "title": "Intel HEX record data (record checksum is 0x40)", "input": { "data": "10 01 00 00 21 46 01 36 01 21 47 01 36 00 7E FE 09 D2 19 01", "format": "hex", "expect": "0x40" } }
   ],
   "usage": "Give data (text, hex bytes or Base64, with format = text | hex | base64) and optionally an expected hash to compare. Returns MD5, SHA-1, SHA-256, SHA-512 as lowercase hex and CRC-32, Adler-32, Fletcher-16/32, 8/16-bit sums, two's-complement sum and XOR as 0x hex, plus which one matches the expected value. Use it to verify a firmware image digest over small data, a record checksum, or to identify an unknown checksum; for files larger than 1 MiB use sha256sum.",
-  "sources": ["RFC 1321 (MD5)", "NIST FIPS 180-4 Secure Hash Standard (SHA-1, SHA-256, SHA-512)", "RFC 1950 section 8.2 (Adler-32)", "Intel Hexadecimal Object File Format Specification rev. A (record checksum)"]
+  "sources": ["RFC 1321 (MD5)", "NIST FIPS 180-4 Secure Hash Standard (SHA-1, SHA-256, SHA-512)", "RFC 1950 section 8.2 (Adler-32)", "Intel Hexadecimal Object File Format Specification rev. A (record checksum)"],
+  "layout": "custom"
 }

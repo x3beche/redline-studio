@@ -1,5 +1,5 @@
 {
-  "id": "float-inspector", "version": "1.0",
+  "id": "float-inspector", "version": "1.1",
   "name": "IEEE754 Float Inspector",
   "blurb": "sign, exponent and mantissa bits of a float",
   "group": "embedded",
@@ -20,5 +20,6 @@
   ],
   "usage": "Give value as a decimal string (or inf / nan) or a hex bit pattern starting with 0x, and format = binary32 | binary64 | binary16 | bfloat16. Returns the bit pattern, sign, exponent field and unbiased exponent, significand, the exact stored decimal, the rounding error (absolute and relative), the ULP and next values, and the format's range. The result's bits object carries the sign/exponent/fraction bit strings. Use it to explain float precision, decode raw float registers or check a constant.",
   "sources": ["IEEE 754-2019 Standard for Floating-Point Arithmetic, sections 3.4 (binary interchange formats) and 4.3.1 (round to nearest, ties to even)", "Google / Intel BF16 (bfloat16) format description"],
-  "view": true
+  "view": true,
+  "layout": "custom"
 }

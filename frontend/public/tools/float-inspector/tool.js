@@ -185,6 +185,8 @@ export function run({ value, format, input: how }) {
   ];
   const rows = [];
   let exactText = '–';
+  // for the page's drawings: the same numbers as the values, unformatted
+  const extra = { bias, e, fracHex: '0x' + frac.toString(16).toUpperCase(), err: null, rel: null, ulp: null, toward: null, away: null, input: null };
   if (dec) {
     const ex = exactDecimal(dec.q, dec.k);
     exactText = (sign ? '-' : '') + ex.text;
@@ -198,6 +200,7 @@ export function run({ value, format, input: how }) {
       else { n = sq * rat.den - inNum * pow2(-dec.k); d = rat.den * pow2(-dec.k); }
       const err = ratToNumber(n, d);
       const rel = rat.num === 0n ? 0 : ratToNumber(babs(n * rat.den), babs(d * inNum));
+      extra.err = n === 0n ? 0 : err; extra.rel = n === 0n ? 0 : Math.abs(rel); extra.input = t;
       values.push(
         { label: 'Rounding error', value: n === 0n ? '0 (exact)' : sci(err), tone: n === 0n ? 'ok' : undefined, hint: 'stored − input' },
         { label: 'Relative error', value: n === 0n ? '0' : sci(Math.abs(rel)), hint: `limit 2^-${f.M + 1} = ${sci(2 ** -(f.M + 1))} for normals` },
@@ -207,12 +210,16 @@ export function run({ value, format, input: how }) {
     // spacing: one unit in the last place at this value
     const ulpK = e === 0 ? 1 - bias - f.M : e - bias - f.M;
     values.push({ label: 'ULP here', value: sci(2 ** ulpK), hint: 'gap to the next value' });
+    extra.ulp = 2 ** ulpK;
     const nxt = (de) => {
       let p = pattern + BigInt(de);
       const d2 = decode(Number((p >> BigInt(f.M)) & (pow2(f.E) - 1n)), p & (pow2(f.M) - 1n), f);
       return d2 ? shortestIn(d2.q, d2.k, !!sign, f) : 'Inf';
     };
     rows.push(['Next toward zero', frac === 0n && e === 0 ? '–' : nxt(-1)], ['Next away from zero', e === eMax - 1 && frac === pow2(f.M) - 1n ? 'Inf' : nxt(1)]);
+    const hexOf = (p) => '0x' + p.toString(16).toUpperCase().padStart(W / 4, '0');
+    extra.toward = frac === 0n && e === 0 ? null : { text: rows[0][1], hex: hexOf(pattern - 1n) };
+    extra.away = { text: rows[1][1], hex: hexOf(pattern + 1n) };
   }
   rows.push(
     ['Largest finite', sci(Number(pow2(f.M + 1) - 1n) * 2 ** (bias - f.M))],
@@ -238,7 +245,9 @@ export function run({ value, format, input: how }) {
       ] },
       { title: `${f.name}: neighbours and range`, columns: ['Quantity', 'Value'], rows },
     ],
-    bits: { ...bitsStr, E: f.E, M: f.M, W, hex, cls, exponent: cls === 'normal' ? e - bias : cls === 'subnormal' ? 1 - bias : null, approx: Number.isFinite(approx) ? approx : String(approx) },
+    bits: { ...bitsStr, E: f.E, M: f.M, W, hex, cls, exponent: cls === 'normal' ? e - bias : cls === 'subnormal' ? 1 - bias : null, approx: Number.isFinite(approx) ? approx : String(approx),
+      ...extra, stored: values[0].value, exact: exactText,
+      range: { max: Number(pow2(f.M + 1) - 1n) * 2 ** (bias - f.M), minNormal: 2 ** (1 - bias), minSub: 2 ** (1 - bias - f.M) } },
     notes,
   };
 }

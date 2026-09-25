@@ -100,7 +100,20 @@ const EXISTS = {
 
 const SEV = { 3: 'high', 2: 'medium', 1: 'low' };
 
-function norm(chip, t) {
+// every pin of each chip in drawing order (the same set EXISTS accepts)
+const nums = (a, b) => range(a, b);
+const port = (p, a, b) => range(a, b).map((i) => `${p}${i}`);
+export const PINS = {
+  esp32: [...nums(0, 19), 21, 22, 23, 25, 26, 27, ...nums(32, 39)],
+  esp32s3: [...nums(0, 21), ...nums(26, 48)],
+  esp32c3: nums(0, 21),
+  esp8266: nums(0, 16),
+  rp2040: [...nums(0, 29), 'QSPI_SS'],
+  stm32f103: ['BOOT0', ...port('PA', 0, 15), ...port('PB', 0, 15), ...port('PC', 13, 15), 'PD0', 'PD1'],
+  atmega328p: [...port('PB', 0, 7), ...port('PC', 0, 6), ...port('PD', 0, 7), 'ADC6', 'ADC7'],
+};
+
+export function norm(chip, t) {
   const s = String(t).trim().toUpperCase().replace(/\s+/g, '');
   if (!s) return null;
   if (chip.num) { const m = /^(GPIO|GP|IO|D)?(\d+)$/.exec(s); if (m) return Number(m[2]); }
@@ -130,7 +143,21 @@ export function run({ chip: key, pins, wifi, psram, board, show }) {
   const skipped = chip.rows.filter((r) => r.cond && !flags[r.cond]);
   if (skipped.length) notes.push(`Hidden because its condition is off: ${skipped.map((r) => `${r.kind} (${r.pins.map(label).join(', ')})`).join('; ')}.`);
   notes.push('Straps are only read at reset: a strap pin is usually fine as an output or button after boot, as long as nothing holds it at the wrong level while the chip resets.');
+  // the whole chip, pin by pin, for drawing it: which rows touch each pin
+  // (active ones set its severity; ones whose condition is off are listed apart)
+  const pinmap = {
+    chip: key in CHIPS ? key : 'esp32', name: chip.name, prefix: chip.num,
+    conds: [...new Set(chip.rows.map((r) => r.cond).filter(Boolean))],
+    rows: chip.rows.map((r) => ({ kind: r.kind, sev: r.sev, severity: SEV[r.sev], risk: r.risk, fix: r.fix, cond: r.cond || null, active: !r.cond || flags[r.cond] })),
+    pins: (PINS[key] || PINS.esp32).map((p) => {
+      const idx = chip.rows.map((r, i) => (r.pins.includes(p) ? i : -1)).filter((i) => i >= 0);
+      const on = idx.filter((i) => !chip.rows[i].cond || flags[chip.rows[i].cond]);
+      return { pin: p, label: label(p), sev: Math.max(0, ...on.map((i) => chip.rows[i].sev)), rows: on, off: idx.filter((i) => !on.includes(i)), used: mine.includes(p) };
+    }),
+    unknown: unknown.map(label),
+  };
   return {
+    pinmap,
     values: [
       { label: 'Your pins', value: mine.length },
       { label: 'Boot/flash risks', value: high, tone: high ? 'bad' : 'ok', hint: 'can stop booting or programming' },

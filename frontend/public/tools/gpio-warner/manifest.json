@@ -1,5 +1,5 @@
 {
-  "id": "gpio-warner", "version": "1.0",
+  "id": "gpio-warner", "version": "1.1",
   "name": "GPIO Restriction Warner",
   "blurb": "risks of using boot straps and special-purpose GPIOs",
   "group": "embedded",
@@ -21,5 +21,6 @@
     { "title": "Blue Pill using SWD pins and PC13", "input": { "chip": "stm32f103", "pins": "PA13, PB3, PC13, PA9, PA10, PA2", "wifi": false, "psram": false, "board": false, "show": "mine" } }
   ],
   "usage": "Give the chip (esp32, esp32s3, esp32c3, esp8266, stm32f103, rp2040, atmega328p) and the pins you plan to use as a comma list (GPIO numbers for ESP/RP2040, names like PA13 for STM32/AVR); set wifi, psram and board for the conditional limits. It returns counts of high/medium risks, your restricted pins with what to do, the full special-pin table, and a warning for every high-severity pin (boot straps, flash pins, SWD). Use it while choosing pins for a schematic or firmware.",
-  "sources": ["Espressif ESP32 datasheet §2.4 strapping pins; ESP32-WROOM-32E / WROVER-E datasheets", "Espressif ESP32-S3 datasheet §2.6, ESP32-C3 datasheet §2.4 and ESP32-C3 errata (ADC2)", "Espressif ESP8266EX datasheet and boot-mode FAQ", "ST DS5319 STM32F103x8 §3.4 and table 5; RM0008 §9.3.5", "Raspberry Pi RP2040 datasheet §2.8 and Pico datasheet", "Microchip ATmega328P datasheet §13, §28"]
+  "sources": ["Espressif ESP32 datasheet §2.4 strapping pins; ESP32-WROOM-32E / WROVER-E datasheets", "Espressif ESP32-S3 datasheet §2.6, ESP32-C3 datasheet §2.4 and ESP32-C3 errata (ADC2)", "Espressif ESP8266EX datasheet and boot-mode FAQ", "ST DS5319 STM32F103x8 §3.4 and table 5; RM0008 §9.3.5", "Raspberry Pi RP2040 datasheet §2.8 and Pico datasheet", "Microchip ATmega328P datasheet §13, §28"],
+  "layout": "custom"
 }

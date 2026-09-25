@@ -19,7 +19,7 @@ function utf8(str) {
   return out;
 }
 
-function toBytes(data, format) {
+export function toBytes(data, format) {
   const s = String(data ?? '');
   if (format === 'hex') {
     const clean = s.replace(/0x/gi, '').replace(/\\x/gi, '').replace(/[\s,;:_\-{}[\]]/g, '');
