@@ -61,3 +61,14 @@ def test_a_check_runs_offline_capped_and_as_the_user(monkeypatch):
     assert "--memory" in argv and "--user" in argv
     # The extras travel with the kind; the kind cannot be overridden by them.
     assert seen["stdin"]["pattern"] == r"\d+" and seen["stdin"]["kind"] == "regex"
+
+
+def test_tool_pages_are_revalidated_so_an_update_shows_without_a_hard_refresh():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    app = FastAPI()
+    tools_api.mount(app)
+    r = TestClient(app).get("/api/tools/files/kit/kit.js")
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "no-cache"
+    assert r.headers.get("etag")

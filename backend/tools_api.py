@@ -29,9 +29,21 @@ router = APIRouter(prefix="/api/tools")
 PAGES = Path(__file__).resolve().parent.parent / "frontend" / "public" / "tools"
 
 
+class _Revalidated(StaticFiles):
+    """Tool pages that the browser asks about every time. Without it a
+    browser keeps a tool's old kit.js or view.js for hours after an update
+    - a redesigned tool still looks the old way until a hard refresh. With
+    no-cache it checks each file's ETag, which costs a 304, not a download."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def mount(app: FastAPI) -> None:
     app.include_router(router)
-    app.mount("/api/tools/files", StaticFiles(directory=PAGES, html=True), name="tool-files")
+    app.mount("/api/tools/files", _Revalidated(directory=PAGES, html=True), name="tool-files")
 
 IMAGE = os.environ.get("X3_TOOLS_IMAGE", "redline-tools")
 KINDS = ("sql", "prisma", "ts", "openapi", "mermaid", "regex", "cron", "pdftext")
