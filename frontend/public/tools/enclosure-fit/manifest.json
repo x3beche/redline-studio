@@ -1,8 +1,10 @@
 {
-  "id": "enclosure-fit", "version": "1.0",
+  "id": "enclosure-fit", "version": "1.1",
   "name": "Enclosure Fit Checker",
   "blurb": "inner enclosure size and cut-outs from the board outline and connector heights",
   "group": "mechanical",
+  "layout": "custom",
+  "agentOmit": ["draw"],
   "rooms": ["cad", "pcb"],
   "keywords": ["enclosure", "housing", "case", "box", "cut-out", "cutout", "connector opening", "panel", "inner dimensions", "wall thickness", "standoff", "usb-c", "openscad", "clearance"],
   "intro": "The inner and outer size of a box around a board: the board outline plus a clearance to the walls, and the height of the standoffs, the board, the tallest part or connector and a gap under the lid. Each connector gets its cut-out position and size in the wall, and a check of how far its face sits behind the outer surface. Margins are common rules of thumb.",

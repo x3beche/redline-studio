@@ -1,0 +1,133 @@
+/* Chamfer & Fillet Guide: the part with its edges called out, and a loupe. */
+:root {
+  --tool-part: #5b6b7a; --tool-rec: #1f4ed8; --tool-min: #b7791f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tool-part: #8ea0b0; --tool-rec: #6d8dff; --tool-min: #e8a735; }
+}
+:root[data-theme="dark"] { --tool-part: #8ea0b0; --tool-rec: #6d8dff; --tool-min: #e8a735; }
+
+.k-page { padding: 10px 12px; }
+.cf {
+  display: grid; gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "strip strip" "part side";
+  height: calc(100vh - 62px); min-height: 640px;
+}
+.cf-strip { grid-area: strip; display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; }
+.cf-part { grid-area: part; }
+.cf-side { grid-area: side; display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; }
+.cf-side .k-outwrap { flex: 1; min-height: 140px; display: flex; flex-direction: column; }
+.cf-side .k-out { flex: 1; max-height: none; min-height: 0; }
+.cf-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; min-height: 0; }
+
+/* process thumbnails */
+.cf-procs { display: flex; gap: 4px; flex-wrap: wrap; }
+.cf-proc {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; width: 82px; padding: 4px 3px 3px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--surface); cursor: pointer; color: var(--ink-soft); font-size: 11px; line-height: 1.15;
+}
+.cf-proc svg { width: 60px; height: 30px; display: block; }
+.cf-proc:hover { border-color: var(--ink-soft); color: var(--ink); }
+.cf-proc[aria-checked="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); color: var(--ink); }
+.cf-thumb { fill: color-mix(in srgb, var(--tool-part) 30%, var(--surface)); stroke: var(--ink-soft); stroke-width: 6; stroke-linejoin: round; }
+.cf-proc[aria-checked="true"] .cf-thumb { stroke: var(--accent); }
+.cf-fields { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; margin-left: auto; padding: 4px 0; }
+.cf-num { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.cf-num input {
+  width: 54px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font: 12.5px "IBM Plex Mono", ui-monospace, monospace; text-align: right; color: var(--ink);
+}
+.cf-num input.cf-q { width: 150px; text-align: left; font-family: inherit; }
+.cf-num input.cf-bad { border-color: var(--danger); }
+
+/* the part */
+.cf-part { display: flex; flex-direction: column; overflow: hidden; }
+.cf-box { position: relative; flex: 1; min-height: 0; }
+.cf-box > svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; }
+.cf-foot { border-top: 1px solid var(--line-soft); padding: 6px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 3px; max-height: 110px; overflow: auto; }
+.cf-foot .cf-w::before { content: "! "; color: var(--warn); font-weight: 600; }
+.cf-foot .cf-n { color: var(--ink-soft); }
+
+.cf-solid { fill: color-mix(in srgb, var(--tool-part) 20%, var(--surface)); stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
+.cf-cut { fill: url(#cf-hatch); stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
+.cf-hs-bg { fill: color-mix(in srgb, var(--tool-part) 16%, var(--surface)); }
+.cf-hs-ln { stroke: color-mix(in srgb, var(--tool-part) 55%, transparent); stroke-width: 1; }
+.cf-void { fill: var(--surface); stroke: var(--ink); stroke-width: 1.4; }
+.cf-thin { fill: none; stroke: var(--ink-soft); stroke-width: 1; }
+.cf-axis { stroke: var(--ink-soft); stroke-width: .9; stroke-dasharray: 12 3 2 3; fill: none; }
+.cf-pl { stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 6 4; }
+.cf-bed { fill: color-mix(in srgb, var(--ink-soft) 30%, var(--surface)); stroke: var(--ink-soft); }
+.cf-cap { font: 500 10px "IBM Plex Sans", sans-serif; letter-spacing: .08em; fill: var(--ink-soft); }
+.cf-t { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.cf-t-soft { fill: var(--ink-soft); }
+.cf-name { font: 600 11.5px "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif; fill: var(--ink); }
+.cf-t-b { font-weight: 600; }
+.cf-t-rec { fill: var(--tool-rec); font-weight: 600; }
+.cf-t-min { fill: var(--tool-min); }
+.cf-panel-t { font: 600 12px "IBM Plex Sans", sans-serif; fill: var(--ink); }
+.cf-panel { cursor: pointer; }
+.cf-panel-bg { fill: transparent; stroke: var(--line-soft); }
+.cf-panel:hover .cf-panel-bg { stroke: var(--ink-soft); }
+
+.cf-pin { cursor: pointer; outline: none; }
+.cf-pin .cf-pin-dot { fill: var(--tool-rec); stroke: var(--surface); stroke-width: 1.5; }
+.cf-pin.cf-minor .cf-pin-dot { fill: var(--surface); stroke: var(--tool-rec); stroke-width: 1.8; }
+.cf-pin .cf-pin-n { font: 700 10px "IBM Plex Mono", ui-monospace, monospace; fill: var(--accent-ink); pointer-events: none; }
+.cf-pin.cf-minor .cf-pin-n { fill: var(--tool-rec); }
+.cf-pin .cf-lead { fill: none; stroke: var(--ink-soft); stroke-width: .8; }
+.cf-pin .cf-lbox { fill: var(--surface); stroke: var(--line); }
+.cf-pin:hover .cf-lbox { stroke: var(--ink-soft); }
+.cf-pin.cf-sel .cf-lbox { stroke: var(--accent); stroke-width: 1.6; }
+.cf-pin.cf-sel .cf-halo { fill: color-mix(in srgb, var(--accent) 22%, transparent); stroke: var(--accent); }
+.cf-pin .cf-halo { fill: transparent; stroke: none; }
+.cf-pin:focus-visible .cf-lbox { stroke: var(--accent); stroke-width: 2.4; }
+.cf-pin:focus-visible .cf-halo { stroke: var(--accent); stroke-width: 2; }
+.cf-off { opacity: .28; }
+.cf-knob { cursor: ns-resize; outline: none; }
+.cf-knob circle:first-child { fill: color-mix(in srgb, var(--accent) 18%, transparent); }
+.cf-knob circle + circle { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.cf-knob:focus-visible circle + circle { stroke-width: 3.2; }
+.cf-knob:focus-visible circle:first-child { stroke: var(--accent); stroke-width: 1.5; }
+.cf-dim { stroke: var(--ink-soft); stroke-width: .8; fill: none; }
+.cf-ah { fill: var(--ink-soft); }
+
+/* the loupe */
+.cf-loupe { display: flex; flex-direction: column; }
+.cf-lhead { padding: 8px 10px 4px; display: flex; align-items: baseline; gap: 8px; }
+.cf-lhead h2 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.cf-lhead span { font-size: 11.5px; color: var(--ink-soft); }
+.cf-lhead .cf-nav { margin-left: auto; display: flex; gap: 2px; }
+.cf-nav button { border: 1px solid var(--line); background: var(--surface); border-radius: 4px; padding: 0 7px; cursor: pointer; color: var(--ink-soft); font-size: 12px; }
+.cf-nav button:hover { color: var(--ink); border-color: var(--ink-soft); }
+.cf-lsvg { display: block; width: 100%; height: 250px; touch-action: none; user-select: none; }
+.cf-lgrid { stroke: var(--line-soft); stroke-width: 1; }
+.cf-lmat { fill: color-mix(in srgb, var(--tool-part) 26%, var(--surface)); stroke: none; }
+.cf-lrec { fill: none; stroke: var(--tool-rec); stroke-width: 2.4; }
+.cf-lmin { fill: none; stroke: var(--tool-min); stroke-width: 1.8; stroke-dasharray: 5 4; }
+.cf-lsharp { fill: none; stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 2 3; }
+.cf-ledge { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+.cf-lnums { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 4px 10px 0; font-size: 12px; align-items: baseline; }
+.cf-lnums b { font: 600 13px "IBM Plex Mono", ui-monospace, monospace; }
+.cf-lnums .cf-rec { color: var(--tool-rec); }
+.cf-lnums .cf-min { color: var(--tool-min); }
+.cf-lnums span { color: var(--ink-soft); }
+.cf-rule { padding: 6px 10px 9px; font-size: 12px; color: var(--ink-soft); }
+.cf-rule b { color: var(--ink); font-weight: 500; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px; }
+.cf-rule p { margin: 3px 0 0; color: var(--ink); }
+.cf-scrub { cursor: ew-resize; outline: none; }
+.cf-scrub rect { fill: var(--surface); stroke: var(--accent); stroke-dasharray: 3 2; }
+.cf-scrub:hover rect, .cf-scrub:focus-visible rect { stroke-dasharray: none; stroke-width: 1.8; }
+
+@media (max-width: 980px) {
+  .cf { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 520px auto; grid-template-areas: "strip" "part" "side"; height: auto; }
+  .cf-side .k-outwrap { min-height: 240px; }
+  .cf-side .k-out { max-height: 320px; }
+}
+@media (max-width: 480px) {
+  .cf-proc { width: calc(20% - 4px); min-width: 58px; font-size: 10px; }
+  .cf-proc svg { width: 44px; height: 24px; }
+  .cf { grid-template-rows: auto 300px auto; }
+  .cf-fields { margin-left: 0; }
+}

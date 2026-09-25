@@ -224,7 +224,16 @@ export function run({ process, t, depth, filter }) {
   notes.push(`Computed for t = ${mm(tt)}${procs.includes('mill') ? `, pocket depth ${mm(dd)}` : ''}. Radii are rounded up to stock tool sizes where a tool makes them.`,
     'Chamfer versus fillet: machining and printing favour chamfers (one pass, self-supporting); moulding and casting favour fillets (flow and stress).',
     'Values are design-guide recommendations, not limits of any one machine: confirm tight ones with your supplier.');
+  // Everything the page draws: each row with its sizes as numbers (mm; null
+  // where the value is an angle or a word), and the t and depth used.
+  const firstMm = (str) => { const m = String(str).match(/(\d+(?:\.\d+)?)(?=[^°]*mm|\s*\))/); return m ? Number(m[1]) : null; };
+  const draw = {
+    t: tt, depth: dd, processes: procs,
+    rows: rows.map((x) => ({ p: x.p, process: PROCESSES[x.p], f: x.r.f, key: x.r.key, rec: x.rec, min: x.min, rule: x.r.rule, why: x.r.why,
+      recMm: firstMm(x.rec), minMm: firstMm(x.min) })),
+  };
   return {
+    draw,
     values,
     warnings,
     tables: rows.length ? [{ title: process === 'all' ? 'All processes' : PROCESSES[procs[0]], columns, rows: table }] : [],

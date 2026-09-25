@@ -30,7 +30,7 @@ export function run({ bl, bw, bt, clr, wall, floor, so, top, bottom, lidgap, mar
     const z0 = String(r.z0 ?? '').trim() === '' ? 0 : parseEng(r.z0);
     const over = String(r.over ?? '').trim() === '' ? 0 : parseEng(r.over);
     if (!side || pos == null || !(w > 0) || !(h > 0) || z0 == null || over == null) { bad.push(name); return; }
-    cs.push({ name, side, pos, w, h, z0, over });
+    cs.push({ i, name, side, pos, w, h, z0, over });
   });
   if (bad.length) warnings.push(`Skipped connectors with a missing side, position, width, height, z or overhang: ${bad.join(', ')}.`);
 
@@ -44,6 +44,7 @@ export function run({ bl, bw, bt, clr, wall, floor, so, top, bottom, lidgap, mar
   const bx = wall + clr, by = wall + clr; // board origin, outer coordinates
 
   const cut = cs.map((c) => {
+    const flags = []; // what is wrong with this one, for the drawing
     const along = c.side === 'front' || c.side === 'back' ? 'x' : 'y';
     const edgeLen = along === 'x' ? bl : bw;
     const centre = (along === 'x' ? bx : by) + c.pos;
@@ -52,13 +53,13 @@ export function run({ bl, bw, bt, clr, wall, floor, so, top, bottom, lidgap, mar
     const behind = wall + clr - c.over; // >0: face is inside the outer surface by this much
     const lo = centre - cw / 2, hi = centre + cw / 2;
     const wallLo = wall, wallHi = wall + (along === 'x' ? iL : iW);
-    if (c.pos - c.w / 2 < 0 || c.pos + c.w / 2 > edgeLen) warnings.push(`${c.name} hangs past the end of the ${c.side} board edge (${f(c.pos)} ± ${f(c.w / 2)} mm on a ${f(edgeLen)} mm edge): check its position.`);
-    if (lo < wallLo || hi > wallHi) warnings.push(`${c.name}'s cut-out runs into the corner of the enclosure: move it at least ${f(Math.max(wallLo - lo, hi - wallHi) + 1, 3)} mm inward or widen the clearance.`);
-    if (zLo < floor) warnings.push(`${c.name}'s cut-out reaches the floor (bottom at ${f(zLo - floor, 3)} mm above it): raise the standoffs or make the opening a slot from the split line.`);
-    if (zHi > floor + iH) warnings.push(`${c.name}'s cut-out goes past the lid: fine for a slot at the split line, otherwise add lid gap.`);
-    if (behind > wall + 1.5) warnings.push(`${c.name}'s face sits ${f(behind, 3)} mm behind the outer surface: many plugs (USB-C overmoulds, RJ45 latches) cannot reach that deep. Reduce the clearance on that side, use a connector that overhangs the board edge, or counterbore the wall.`);
-    if (behind < -0.01) warnings.push(`${c.name} sticks ${f(-behind, 3)} mm out past the outer wall: the board cannot be lowered in from above; plan an open side or a split through the connector line.`);
-    return { ...c, along, centre, cw, ch, zLo, zHi, behind };
+    if (c.pos - c.w / 2 < 0 || c.pos + c.w / 2 > edgeLen) flags.push('edge'), warnings.push(`${c.name} hangs past the end of the ${c.side} board edge (${f(c.pos)} ± ${f(c.w / 2)} mm on a ${f(edgeLen)} mm edge): check its position.`);
+    if (lo < wallLo || hi > wallHi) flags.push('corner'), warnings.push(`${c.name}'s cut-out runs into the corner of the enclosure: move it at least ${f(Math.max(wallLo - lo, hi - wallHi) + 1, 3)} mm inward or widen the clearance.`);
+    if (zLo < floor) flags.push('floor'), warnings.push(`${c.name}'s cut-out reaches the floor (bottom at ${f(zLo - floor, 3)} mm above it): raise the standoffs or make the opening a slot from the split line.`);
+    if (zHi > floor + iH) flags.push('lid'), warnings.push(`${c.name}'s cut-out goes past the lid: fine for a slot at the split line, otherwise add lid gap.`);
+    if (behind > wall + 1.5) flags.push('deep'), warnings.push(`${c.name}'s face sits ${f(behind, 3)} mm behind the outer surface: many plugs (USB-C overmoulds, RJ45 latches) cannot reach that deep. Reduce the clearance on that side, use a connector that overhangs the board edge, or counterbore the wall.`);
+    if (behind < -0.01) flags.push('proud'), warnings.push(`${c.name} sticks ${f(-behind, 3)} mm out past the outer wall: the board cannot be lowered in from above; plan an open side or a split through the connector line.`);
+    return { ...c, along, centre, cw, ch, zLo, zHi, behind, flags };
   });
   // Overlaps on the same wall
   for (const side of Object.keys(SIDES)) {
@@ -66,7 +67,7 @@ export function run({ bl, bw, bt, clr, wall, floor, so, top, bottom, lidgap, mar
     for (let i = 1; i < on.length; i++) {
       const gap = (on[i].centre - on[i].cw / 2) - (on[i - 1].centre + on[i - 1].cw / 2);
       const zOverlap = Math.min(on[i].zHi, on[i - 1].zHi) - Math.max(on[i].zLo, on[i - 1].zLo);
-      if (gap < 1.5 && zOverlap > 0) warnings.push(`${on[i - 1].name} and ${on[i].name} leave ${f(Math.max(gap, 0), 3)} mm of wall between their cut-outs: under about 1.5 mm it breaks off; merge them into one opening or move them apart.`);
+      if (gap < 1.5 && zOverlap > 0) on[i].flags.push('web'), on[i - 1].flags.push('web'), warnings.push(`${on[i - 1].name} and ${on[i].name} leave ${f(Math.max(gap, 0), 3)} mm of wall between their cut-outs: under about 1.5 mm it breaks off; merge them into one opening or move them apart.`);
     }
   }
   const underGap = so - bottom;
@@ -93,7 +94,15 @@ export function run({ bl, bw, bt, clr, wall, floor, so, top, bottom, lidgap, mar
     '',
   ].join('\n');
 
+  // Everything the page draws, as numbers (mm, outer lower-left-bottom corner = 0).
+  const draw = {
+    bl, bw, bt, clr, wall, floor, so, top, bottom, lidgap, margin,
+    iL, iW, iH, oL, oW, oH, zb, zt, bx, by, above, connTop, underGap, volume: (iL * iW * iH) / 1000,
+    cut: cut.map(({ i, name, side, pos, w, h, z0, over, along, centre, cw, ch, zLo, zHi, behind, flags }) =>
+      ({ i, name, side, pos, w, h, z0, over, along, centre, cw, ch, zLo, zHi, behind, flags })),
+  };
   return {
+    draw,
     values: [
       { label: 'Inner size L × W × H', value: `${f(iL)}×${f(iW)}×${f(iH)}`, unit: 'mm', tone: 'ok' },
       { label: 'Outer size L × W × H', value: `${f(oL)}×${f(oW)}×${f(oH)}`, unit: 'mm' },

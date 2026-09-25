@@ -1,8 +1,10 @@
 {
-  "id": "draft-angle", "version": "1.0",
+  "id": "draft-angle", "version": "1.1",
   "name": "Draft Angle Checker",
   "blurb": "minimum draft angle for release from a mould",
   "group": "mechanical",
+  "layout": "custom",
+  "agentOmit": ["draw"],
   "rooms": ["cad"],
   "keywords": ["draft", "draft angle", "taper", "mould", "mold", "injection moulding", "die casting", "nadca", "texture", "mold-tech", "spi finish", "demoulding", "ejection", "casting", "vacuum forming"],
   "intro": "The least draft a wall needs to leave the tool, and what that draft does to the wall over its depth. Injection moulding uses the SPI-finish and Mold-Tech texture rules, die casting the NADCA draft formula; the other processes use common rules of thumb.",

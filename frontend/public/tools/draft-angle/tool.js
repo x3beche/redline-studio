@@ -105,7 +105,17 @@ export function run({ process, finish, texture, alloy, wall, depth, draft }) {
   }
 
   const angles = [0.25, 0.5, 1, 1.5, 2, 3, 5];
+  const hasDraft = draft != null && Number.isFinite(draft) && draft >= 0 && draft < 45;
+  // Everything the page draws, as numbers (degrees per side, mm).
+  const draw = {
+    process, min, rec, depth, draft: hasDraft ? draft : null,
+    offsetMin: offset(min), offsetRec: offset(rec), offsetDraft: hasDraft ? offset(draft) : null, widthDraft: hasDraft ? 2 * offset(draft) : null, widthRec: 2 * offset(rec),
+    basis,
+    verdict: hasDraft ? (draft >= rec - 1e-9 ? 'ok' : draft >= min - 1e-9 ? 'warn' : 'bad') : null,
+    ladder: angles.map((a) => ({ angle: a, offset: offset(a), enough: a >= min - 1e-9 ? (a >= rec - 1e-9 ? 'yes' : 'minimum') : 'no' })),
+  };
   return {
+    draw,
     values,
     warnings,
     tables: [{

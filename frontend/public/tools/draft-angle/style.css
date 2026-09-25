@@ -1,0 +1,133 @@
+/* Draft Angle Checker: a half-section of the moulded wall in its tool. */
+:root {
+  --tool-steel: #7d8b98; --tool-part: #1f4ed8;
+  --tool-zone-bad: #c0392b; --tool-zone-min: #b7791f; --tool-zone-ok: #2f855a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-steel: #8ea0b0; --tool-part: #6d8dff;
+    --tool-zone-bad: #e57373; --tool-zone-min: #e8a735; --tool-zone-ok: #68b36b;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-steel: #8ea0b0; --tool-part: #6d8dff;
+  --tool-zone-bad: #e57373; --tool-zone-min: #e8a735; --tool-zone-ok: #68b36b;
+}
+
+.k-page { padding: 10px 12px; }
+.da {
+  display: grid; gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  height: calc(100vh - 62px); min-height: 600px;
+}
+.da-stage, .da-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; min-height: 0; }
+.da-stage { display: flex; flex-direction: column; overflow: hidden; position: relative; }
+.da-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; }
+.da-side .k-outwrap { flex: 1; min-height: 160px; display: flex; flex-direction: column; }
+.da-side .k-out { flex: 1; max-height: none; min-height: 0; }
+.da-cap { font-size: 11.5px; font-weight: 500; color: var(--ink-soft); }
+
+/* stage head: the two numbers you can also type */
+.da-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); }
+.da-num { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.da-num input {
+  width: 58px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font: 12.5px "IBM Plex Mono", ui-monospace, monospace; text-align: right;
+}
+.da-num input.da-bad { border-color: var(--danger); }
+.da-verdict { margin-left: auto; font: 600 12.5px "IBM Plex Mono", ui-monospace, monospace; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+.da-verdict[data-v="ok"] { color: var(--ok); border-color: var(--ok); }
+.da-verdict[data-v="warn"] { color: var(--warn); border-color: var(--warn); }
+.da-verdict[data-v="bad"] { color: var(--danger); border-color: var(--danger); }
+.da-verdict[data-v="none"] { color: var(--ink-soft); }
+.da-link { border: 0; background: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0; text-decoration: underline; }
+
+.da-box { position: relative; flex: 1; min-height: 0; }
+.da-box > svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; }
+.da-foot { border-top: 1px solid var(--line-soft); padding: 6px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 3px; max-height: 128px; overflow: auto; }
+.da-foot .da-w { color: var(--ink); }
+.da-foot .da-w::before { content: "! "; color: var(--danger); font-weight: 600; }
+.da-foot .da-n { color: var(--ink-soft); }
+
+/* process list */
+.da-procs { padding: 8px; display: flex; flex-direction: column; gap: 1px; }
+.da-procs .da-cap { margin: 0 2px 4px; }
+.da-proc {
+  display: flex; align-items: baseline; gap: 8px; text-align: left; border: 0; background: transparent; cursor: pointer;
+  padding: 3px 8px; border-radius: 4px; color: var(--ink-soft); font-size: 12.5px;
+}
+.da-proc:hover { background: var(--sunken); color: var(--ink); }
+.da-proc[aria-checked="true"] { background: var(--sunken); color: var(--ink); box-shadow: inset 3px 0 0 var(--accent); }
+.da-proc small { margin-left: auto; font: 11px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+
+/* surface / alloy */
+.da-surf { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 7px; }
+.da-swatches { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+.da-sw { border: 1px solid var(--line); border-radius: 5px; background: var(--surface); padding: 3px 3px 4px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; align-items: stretch; color: var(--ink-soft); font-size: 10.5px; line-height: 1.15; }
+.da-sw svg { display: block; width: 100%; height: 30px; border-radius: 3px; }
+.da-sw:hover { border-color: var(--ink-soft); color: var(--ink); }
+.da-sw[aria-checked="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); color: var(--ink); }
+.da-sw-bg { fill: color-mix(in srgb, var(--tool-steel) 22%, var(--surface)); }
+.da-sw-ln { stroke: color-mix(in srgb, var(--tool-steel) 80%, transparent); stroke-width: .8; fill: none; }
+.da-sw-dot { fill: color-mix(in srgb, var(--tool-steel) 85%, transparent); }
+.da-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--ink-soft); }
+.da-row input[type="range"] { flex: 1; min-width: 90px; accent-color: var(--accent); }
+.da-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.da-seg button { border: 0; background: transparent; padding: 3px 9px; cursor: pointer; font-size: 12px; color: var(--ink-soft); }
+.da-seg button + button { border-left: 1px solid var(--line-soft); }
+.da-seg button:hover { background: var(--sunken); color: var(--ink); }
+.da-seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+.da-note { font-size: 12px; color: var(--ink-soft); margin: 0; }
+
+/* the drawing */
+.da-hs-bg { fill: color-mix(in srgb, var(--tool-steel) 20%, var(--surface)); }
+.da-hk-bg { fill: color-mix(in srgb, var(--tool-steel) 7%, var(--surface)); }
+.da-hs-ln { stroke: color-mix(in srgb, var(--tool-steel) 50%, transparent); stroke-width: 1; }
+.da-steel { stroke: var(--ink-soft); stroke-width: 1.2; stroke-linejoin: round; }
+.da-part { fill: color-mix(in srgb, var(--tool-part) 45%, var(--surface)); stroke: var(--tool-part); stroke-width: 1.6; stroke-linejoin: round; }
+.da-part.da-ghost { fill: none; stroke-dasharray: 5 4; opacity: .8; }
+.da-face { stroke: var(--tool-part); stroke-width: 3; fill: none; stroke-linecap: round; }
+.da-face.da-bad { stroke: var(--danger); }
+.da-face.da-warn { stroke: var(--warn); }
+.da-axis { stroke: var(--ink-soft); stroke-width: .8; stroke-dasharray: 12 3 2 3; }
+.da-pl { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 6 4; }
+.da-vert { stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 3 3; }
+.da-zone-bad { fill: color-mix(in srgb, var(--tool-zone-bad) calc(var(--fill-alpha) * 100%), transparent); }
+.da-zone-min { fill: color-mix(in srgb, var(--tool-zone-min) calc(var(--fill-alpha) * 110%), transparent); }
+.da-zone-ok { fill: color-mix(in srgb, var(--tool-zone-ok) calc(var(--fill-alpha) * 80%), transparent); }
+.da-zl-bad { stroke: var(--tool-zone-bad); } .da-zl-min { stroke: var(--tool-zone-min); } .da-zl-ok { stroke: var(--tool-zone-ok); }
+.da-zline { stroke-width: 1.2; }
+.da-t { font: 11.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.da-t-soft { fill: var(--ink-soft); }
+.da-t-b { font-weight: 600; }
+.da-t-bad { fill: var(--danger); } .da-t-min { fill: var(--warn); } .da-t-ok { fill: var(--ok); }
+.da-t-part { fill: var(--tool-part); font-weight: 600; }
+.da-t-big { font: 600 15px "IBM Plex Mono", ui-monospace, monospace; }
+.da-dim { stroke: var(--ink-soft); stroke-width: .8; fill: none; }
+.da-ah { fill: var(--ink-soft); }
+.da-pull { fill: var(--ink-soft); }
+.da-tick { cursor: pointer; outline: none; }
+.da-tick line { stroke-width: 1.4; }
+.da-tick rect { fill: transparent; }
+.da-tick:hover text, .da-tick:focus-visible text { text-decoration: underline; }
+.da-tick:focus-visible rect { stroke: var(--accent); stroke-width: 1.5; }
+.da-knob { cursor: ew-resize; outline: none; }
+.da-knob.da-v { cursor: ns-resize; }
+.da-knob circle.da-kh { fill: color-mix(in srgb, var(--accent) 18%, transparent); stroke: none; }
+.da-knob circle.da-kd { fill: var(--surface); stroke: var(--accent); stroke-width: 2.2; }
+.da-knob.da-empty circle.da-kd { stroke-dasharray: 3 2; }
+.da-knob:hover circle.da-kh, .da-knob.da-drag circle.da-kh { fill: color-mix(in srgb, var(--accent) 30%, transparent); }
+.da-knob:focus-visible circle.da-kd { stroke-width: 3.2; }
+.da-knob:focus-visible circle.da-kh { stroke: var(--accent); stroke-width: 1.5; }
+.da-rough { fill: none; stroke: var(--tool-part); stroke-width: 1; }
+
+@media (max-width: 900px) {
+  .da { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .da-stage { height: 560px; }
+  .da-side .k-outwrap { min-height: 240px; }
+  .da-side .k-out { max-height: 320px; }
+}
+@media (max-width: 420px) {
+  .da-stage { height: 620px; }
+  .da-swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

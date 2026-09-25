@@ -1,8 +1,10 @@
 {
-  "id": "chamfer-fillet", "version": "1.0",
+  "id": "chamfer-fillet", "version": "1.1",
   "name": "Chamfer & Fillet Guide",
   "blurb": "recommended chamfers and radii by manufacturing process",
   "group": "mechanical",
+  "layout": "custom",
+  "agentOmit": ["draw"],
   "rooms": ["cad"],
   "keywords": ["chamfer", "fillet", "radius", "edge break", "corner radius", "round", "bevel", "dfm", "design for manufacturing", "cnc", "injection molding", "sheet metal bend radius", "3d printing"],
   "intro": "Which edges to chamfer, which corners to round, and by how much, for the process that makes the part. Values follow published design guides (Covestro/Bayer, NADCA, ISO 13715, CNC and printing service guides); rules that scale with wall thickness or pocket depth are computed from your numbers.",
