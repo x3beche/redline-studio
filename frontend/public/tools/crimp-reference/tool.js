@@ -103,7 +103,19 @@ export function run({ wire, category, filter }) {
 
   const rows = matches.map((r) => [r.kind, r.part, r.fit, r.lo === r.hi ? fmtNum(r.lo, 3) : `${fmtNum(r.lo, 3)}-${fmtNum(r.hi, 3)}`, r.awgText, r.amps == null ? '–' : r.amps, r.note || '']);
 
+  const shown = (r) => (cat === 'all' || r.kind.toLowerCase().startsWith(cat)) && (!q || [r.kind, r.part, r.fit, r.note].join(' ').toLowerCase().includes(q));
   return {
+    crimp: {
+      area: a, given: w.given, awg: w.awg ?? null, nearestAwg: awgName(awg), nearestAwgArea: awgArea(awg),
+      diameter: Math.sqrt((4 * a) / Math.PI),
+      ferrule: fer ? { mm2: fer[0], colour: fer[1], pin: fer[2] } : null,
+      insulated: ins ? { lo: ins[0], hi: ins[1], colour: ins[2], use: ins[3] } : null,
+      category: cat, filter: q,
+      catalog: all.map((r, i) => ({ id: i, kind: r.kind, part: r.part, fit: r.fit, lo: r.lo, hi: r.hi, mLo: r.mLo, mHi: r.mHi,
+        awgText: r.awgText, amps: r.amps, note: r.note || '', fits: !!fits(r), shown: shown(r) })),
+      matches: matches.length,
+      awgTicks: GAUGES.map((n) => ({ awg: awgName(n), area: awgArea(n) })),
+    },
     values: [
       { label: 'Wire', value: w.given, hint: w.awg != null ? `${fmtNum(a, 3)} mm²` : `nearest ${awgName(awg)} AWG (${fmtNum(awgArea(awg), 3)} mm²)` },
       { label: 'Ferrule', value: fer ? `${fmtNum(fer[0], 3)} mm² ${fer[1]}` : '–', hint: fer ? `${fer[2]} mm pin: strip ${fer[2]} mm` : 'none that size', tone: fer ? 'ok' : undefined },

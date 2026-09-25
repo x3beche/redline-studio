@@ -42,6 +42,15 @@ export function spacing(v, c) {
 
 const mil = (mm) => fmtNum(mm / 0.0254, 3);
 
+/** The highest peak voltage a gap of g mm is enough for in column c (0 when none). */
+export function maxVoltage(g, c) {
+  const top = TABLE[TABLE.length - 1][c + 1];
+  if (g >= top - 1e-9) return 500 + (g - top) / PER_VOLT[c];
+  let v = 0;
+  for (const r of TABLE) { if (r[c + 1] <= g + 1e-9) v = r[0]; else break; }
+  return v;
+}
+
 export function run({ voltage, kind, category, actual }) {
   const warnings = [];
   if (!(voltage >= 0)) return { warnings: ['Give the working voltage between the two conductors in volts, e.g. 48.'] };
@@ -68,7 +77,16 @@ export function run({ voltage, kind, category, actual }) {
   const row = COLS.map((c, i) => [c[0], c[1], fmtNum(spacing(vpk, i), 3), mil(spacing(vpk, i))]);
   const full = TABLE.map((r, i) => [BANDS[i], ...r.slice(1).map((x) => fmtNum(x, 3))]);
   full.push(['> 500 (+ mm/V)', ...PER_VOLT.map((x) => `+${x}`)]);
+  const gap = actual > 0 ? actual : null;
   return {
+    spacing: {
+      voltage, kind: kind === 'rms' ? 'rms' : 'dc', vpk, band, col: COLS[ci][0], colName: COLS[ci][1], need,
+      actual: gap, ok: gap == null ? null : gap >= need - 1e-9, diff: gap == null ? null : gap - need,
+      maxV: gap == null ? null : maxVoltage(gap, ci),
+      hazardous: kind === 'rms' ? vpk > 42.4 : vpk > 60,
+      cols: COLS.map((c, i) => ({ code: c[0], name: c[1], mm: spacing(vpk, i), maxV: gap == null ? null : maxVoltage(gap, i) })),
+      bands: TABLE.map((r) => r[0]), table: TABLE.map((r) => r.slice(1)), perVolt: PER_VOLT,
+    },
     values,
     warnings,
     tables: [

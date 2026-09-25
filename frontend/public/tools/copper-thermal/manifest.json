@@ -3,6 +3,7 @@
   "name": "Copper Area Thermal",
   "blurb": "temperature rise of a power part from the copper area under it",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["copper pour", "thermal pad", "heat spreading", "pcb heatsink", "theta ja", "θja", "junction temperature", "dpak", "sot-223", "exposed pad", "thermal resistance", "copper area", "temperature rise"],
   "intro": "Treats the copper around the part as a round fin: heat spreads out through the copper and leaves both board faces by convection and radiation. It answers the junction temperature for a given area, and the area needed to stay under the limit. The bare FR4 around the pour is ignored, so the answer errs on the warm side.",

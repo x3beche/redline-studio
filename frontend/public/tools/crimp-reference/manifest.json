@@ -3,6 +3,7 @@
   "name": "Terminal Block & Crimp Reference",
   "blurb": "terminal blocks and crimp sizes for a wire cross-section",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["crimp", "ferrule", "wire end sleeve", "terminal block", "screw terminal", "din rail", "ring terminal", "spade", "cable lug", "jst", "molex", "awg", "mm2", "wire to board", "din 46228"],
   "intro": "Give a wire size (mm² or AWG) and get the ferrule (DIN 46228-4 colour and pin length), the insulated terminal colour, lugs, and the PCB, DIN-rail and wire-to-board crimp connectors whose rated wire range includes it. Ranges and currents are typical catalogue values (Phoenix Contact, JST, Molex, Anderson): confirm on the part's data sheet.",

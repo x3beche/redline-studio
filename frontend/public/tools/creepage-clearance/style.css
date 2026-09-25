@@ -1,0 +1,140 @@
+/* Creepage & Clearance: the coupon, the gap up close, table 6-1 as a staircase. */
+:root {
+  --tool-fr4: #d9e1d4; --tool-fr4-edge: #b4c2ad; --tool-cu: #c47a33;
+  --tool-mask: #2f8a4f; --tool-coat: #7a6fd0; --tool-body: #39424b; --tool-lead: #8d99a4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-fr4: #1b2a21; --tool-fr4-edge: #2c4033; --tool-cu: #d08a46;
+    --tool-mask: #3fae68; --tool-coat: #9d93f0; --tool-body: #0d1216; --tool-lead: #7d8995;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-fr4: #1b2a21; --tool-fr4-edge: #2c4033; --tool-cu: #d08a46;
+  --tool-mask: #3fae68; --tool-coat: #9d93f0; --tool-body: #0d1216; --tool-lead: #7d8995;
+}
+
+.k-page { padding: 10px 12px; }
+.cc {
+  display: grid; gap: 10px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(280px, 330px);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas: "top top top" "coupon coupon coupon" "close stair outs";
+  height: calc(100vh - 62px); min-height: 640px;
+}
+.cc-top { grid-area: top; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.cc-coupon { grid-area: coupon; }
+.cc-close { grid-area: close; }
+.cc-stair { grid-area: stair; }
+.cc-outs { grid-area: outs; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.cc-outs .k-outwrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.cc-outs .k-out { flex: 1 1 auto; max-height: none; min-height: 120px; }
+
+.cc-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.cc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 7px 10px 0; flex-wrap: wrap; }
+.cc-cap { font-size: 12px; font-weight: 500; color: var(--ink); }
+.cc-sub { font-size: 11.5px; color: var(--ink-soft); }
+.cc-box { position: relative; flex: 1 1 auto; min-height: 0; }
+.cc-close .cc-box, .cc-stair .cc-box { min-height: 260px; }
+.cc-close .cc-box > svg, .cc-stair .cc-box > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cc-coupon-svg { display: block; width: 100%; }
+
+.cc-num { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); }
+.cc-num input { width: 70px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; text-align: right; }
+.cc-big input { width: 78px; font-size: 15px; font-weight: 600; }
+.cc-gapnum { margin-left: auto; }
+.cc-peak { font: 12px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+.cc-seg, .cc-presets { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; background: var(--surface); }
+.cc-seg button, .cc-presets button { border: 0; background: transparent; padding: 4px 9px; cursor: pointer; font-size: 12px; color: var(--ink-soft);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; }
+.cc-seg button + button, .cc-presets button + button { border-left: 1px solid var(--line-soft); }
+.cc-seg button:hover, .cc-presets button:hover { background: var(--sunken); color: var(--ink); }
+.cc-seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+.cc-presets button[aria-pressed="true"] { background: var(--sunken); color: var(--ink); box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* the drawn board */
+.cc-fr4 { fill: var(--tool-fr4); stroke: var(--tool-fr4-edge); }
+.cc-cu { fill: var(--tool-cu); }
+.cc-mask { fill: var(--tool-mask); fill-opacity: .55; }
+.cc-coat { fill: var(--tool-coat); fill-opacity: .28; stroke: var(--tool-coat); stroke-opacity: .7; }
+.cc-body { fill: var(--tool-body); stroke: var(--ink-soft); stroke-width: 1; }
+.cc-lead { fill: none; stroke: var(--tool-lead); stroke-linejoin: round; }
+.cc-mtn { fill: none; stroke: var(--ink-soft); stroke-width: 1.2; stroke-linejoin: round; }
+.cc-small { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+
+/* coupon stations */
+.cc-station { cursor: pointer; outline: none; }
+.cc-st-bg { fill: transparent; stroke: transparent; stroke-width: 1.5; }
+.cc-station:hover .cc-st-bg { fill: var(--sunken); }
+.cc-station.cc-sel .cc-st-bg { fill: var(--sunken); stroke: var(--accent); }
+.cc-station:focus-visible .cc-st-bg { stroke: var(--accent); stroke-width: 2.5; }
+.cc-code { font: 600 12.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.cc-need { font: 600 12.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.cc-sel .cc-code, .cc-sel .cc-need { fill: var(--accent); }
+.cc-name { font-size: 11.5px; fill: var(--ink-soft); }
+.cc-verdict { font: 11px "IBM Plex Mono", ui-monospace, monospace; }
+.cc-verdict.cc-ok { fill: var(--ok); } .cc-verdict.cc-bad { fill: var(--danger); }
+.cc-dimln { fill: none; stroke: var(--ink-soft); stroke-width: 1; }
+
+/* close-up */
+.cc-keep { stroke: none; }
+.cc-hatch-ln { stroke-width: 1.4; }
+.cc-hatch-ln.cc-ok { stroke: var(--ok); stroke-opacity: .45; } .cc-hatch-ln.cc-bad { stroke: var(--danger); stroke-opacity: .6; }
+.cc-keep-edge { stroke-width: 1.5; stroke-dasharray: 5 3; }
+.cc-keep-edge.cc-ok { stroke: var(--ok); } .cc-keep-edge.cc-bad { stroke: var(--danger); }
+.cc-dim { fill: none; stroke: var(--ink-soft); stroke-width: 1; }
+.cc-dim.cc-ok { stroke: var(--ok); } .cc-dim.cc-bad { stroke: var(--danger); }
+.cc-dim-t { font: 600 12.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.cc-dim-t.cc-ok { fill: var(--ok); } .cc-dim-t.cc-bad { fill: var(--danger); } .cc-dim-t.cc-soft { fill: var(--ink-soft); font-weight: 400; }
+.cc-pot { font: 12px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.cc-handle { cursor: ew-resize; outline: none; touch-action: none; }
+.cc-handle-hit { fill: transparent; }
+.cc-handle-arr { fill: var(--accent); stroke: var(--accent); stroke-width: 1.5; }
+.cc-handle:hover .cc-handle-hit, .cc-handle:focus-visible .cc-handle-hit { fill: var(--accent); fill-opacity: .12; stroke: var(--accent); stroke-dasharray: 3 3; }
+.cc-badge { font: 600 11.5px "IBM Plex Mono", ui-monospace, monospace; padding: 1px 7px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink-soft); }
+.cc-badge.cc-ok { color: var(--ok); border-color: var(--ok); } .cc-badge.cc-bad { color: var(--danger); border-color: var(--danger); }
+.cc-close-svg, .cc-stair-svg { touch-action: none; }
+.cc-warns { border-top: 1px solid var(--warn); border-left: 3px solid var(--warn); padding: 5px 10px; font-size: 12px; max-height: 110px; overflow: auto; }
+.cc-warns div + div { margin-top: 3px; }
+.cc-warns[hidden] { display: none; }
+
+/* staircase */
+.cc-grid { stroke: var(--line-soft); stroke-width: 1; }
+.cc-tick { font: 10px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.cc-selv { stroke: var(--warn); stroke-dasharray: 3 3; stroke-width: 1; }
+.cc-under { fill: var(--danger); fill-opacity: .08; }
+.cc-step { fill: none; stroke: var(--accent); stroke-width: 2.4; }
+.cc-step-o { fill: none; stroke: var(--ink-soft); stroke-opacity: .45; stroke-width: 1.2; }
+.cc-step-hit { fill: none; stroke: transparent; stroke-width: 9; cursor: pointer; }
+.cc-other:hover .cc-step-o { stroke-opacity: 1; stroke: var(--ink); }
+.cc-endlbl { font: 10px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.cc-endlbl.cc-sel-t { fill: var(--accent); font-weight: 600; }
+.cc-hit { fill: transparent; }
+.cc-vcur { cursor: ew-resize; outline: none; }
+.cc-vline { stroke: var(--ink); stroke-width: 1.2; }
+.cc-vknob { fill: var(--ink); }
+.cc-gcur { cursor: ns-resize; outline: none; }
+.cc-gline { stroke-width: 1.4; stroke-dasharray: 6 3; }
+.cc-gcur.cc-ok .cc-gline, .cc-gcur.cc-ok .cc-gknob { stroke: var(--ok); fill: var(--ok); }
+.cc-gcur.cc-bad .cc-gline, .cc-gcur.cc-bad .cc-gknob { stroke: var(--danger); fill: var(--danger); }
+.cc-vcur:focus-visible .cc-vline, .cc-gcur:focus-visible .cc-gline { stroke-width: 3; }
+.cc-vcur:focus-visible .cc-vknob, .cc-gcur:focus-visible .cc-gknob { stroke: var(--accent); stroke-width: 2; }
+.cc-pt { stroke: var(--surface); stroke-width: 2; }
+.cc-pt.cc-ok { fill: var(--ok); } .cc-pt.cc-bad { fill: var(--danger); }
+.cc-needpt { fill: var(--accent); }
+.cc-needt { font: 600 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--accent); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.cc-maxpt { fill: var(--surface); stroke: var(--ink); stroke-width: 1.5; }
+.cc-maxt { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+
+@media (max-width: 1100px) {
+  .cc { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto 380px auto;
+    grid-template-areas: "top top" "coupon coupon" "close stair" "outs outs"; height: auto; min-height: 0; }
+  .cc-gapnum { margin-left: 0; }
+}
+@media (max-width: 700px) {
+  .k-page { padding: 8px; }
+  .cc { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 340px 320px auto;
+    grid-template-areas: "top" "coupon" "close" "stair" "outs"; gap: 8px; }
+  .cc-presets button { padding: 4px 6px; }
+}

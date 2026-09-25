@@ -3,6 +3,7 @@
   "name": "Creepage & Clearance",
   "blurb": "minimum conductor spacing for a working voltage per IPC-2221, as a table",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["creepage", "clearance", "conductor spacing", "high voltage", "ipc-2221", "table 6-1", "isolation", "mains", "trace spacing", "electrical spacing", "conformal coating", "altitude", "hv"],
   "intro": "The minimum spacing between two conductors at a given voltage, from IPC-2221B table 6-1, for every location (internal, external bare, under mask, coated, component leads) and altitude. It checks your gap against it; it is functional spacing, not a safety-agency creepage rating.",

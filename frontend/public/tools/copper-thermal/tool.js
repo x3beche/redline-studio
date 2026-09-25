@@ -41,7 +41,38 @@ function theta(p, ta, area, pad, oz, layers, air) {
     if (Math.abs(next - dTs) < 0.01) { dTs = next; break; }
     dTs = 0.5 * dTs + 0.5 * next;
   }
-  return { th, eta, hc, hr, hSum, dTs };
+  return { th, eta, hc, hr, hSum, dTs, m: Math.sqrt(hSum / (K_CU * t)), R, r0 };
+}
+
+// Modified Bessel functions, exponentially scaled (Abramowitz & Stegun 9.8.1-9.8.8):
+// i0s(x) = I0(x)·e^-x, i1s(x) = I1(x)·e^-x, k0s(x) = K0(x)·e^x, k1s(x) = K1(x)·e^x.
+function i0s(x) {
+  if (x < 3.75) { const t = (x / 3.75) ** 2; return Math.exp(-x) * (1 + t * (3.5156229 + t * (3.0899424 + t * (1.2067492 + t * (0.2659732 + t * (0.0360768 + t * 0.0045813)))))); }
+  const t = 3.75 / x;
+  return (0.39894228 + t * (0.01328592 + t * (0.00225319 + t * (-0.00157565 + t * (0.00916281 + t * (-0.02057706 + t * (0.02635537 + t * (-0.01647633 + t * 0.00392377)))))))) / Math.sqrt(x);
+}
+function i1s(x) {
+  if (x < 3.75) { const t = (x / 3.75) ** 2; return Math.exp(-x) * x * (0.5 + t * (0.87890594 + t * (0.51498869 + t * (0.15084934 + t * (0.02658733 + t * (0.00301532 + t * 0.00032411)))))); }
+  const t = 3.75 / x;
+  return (0.39894228 + t * (-0.03988024 + t * (-0.00362018 + t * (0.00163801 + t * (-0.01031555 + t * (0.02282967 + t * (-0.02895312 + t * (0.01787654 - t * 0.00420059)))))))) / Math.sqrt(x);
+}
+function k0s(x) {
+  if (x <= 2) { const t = (x / 2) ** 2; return Math.exp(x) * (-Math.log(x / 2) * i0s(x) * Math.exp(x) - 0.57721566 + t * (0.4227842 + t * (0.23069756 + t * (0.0348859 + t * (0.00262698 + t * (0.0001075 + t * 0.0000074)))))); }
+  const t = 2 / x;
+  return (1.25331414 + t * (-0.07832358 + t * (0.02189568 + t * (-0.01062446 + t * (0.00587872 + t * (-0.0025154 + t * 0.00053208)))))) / Math.sqrt(x);
+}
+function k1s(x) {
+  if (x <= 2) { const t = (x / 2) ** 2; return Math.exp(x) * (x * Math.log(x / 2) * i1s(x) * Math.exp(x) + 1 + t * (0.15443144 + t * (-0.67278579 + t * (-0.18156897 + t * (-0.01919402 + t * (-0.00110404 - t * 0.00004686)))))) / x; }
+  const t = 2 / x;
+  return (1.25331414 + t * (0.23498619 + t * (-0.0365562 + t * (0.01504268 + t * (-0.00780353 + t * (0.00325614 - t * 0.00068245)))))) / Math.sqrt(x);
+}
+/** Temperature rise at radius r over the rise at the pad edge r0, for a round fin of radius R
+ *  with an insulated rim (Incropera eq. 3.95), in scaled form so large m·R cannot overflow. */
+function finShape(m, r0, R, r) {
+  const a = m * r0, b = m * R, x = m * Math.max(r0, Math.min(r, R));
+  const f = (y) => Math.exp(y - 2 * b) * i0s(y) * k1s(b) + Math.exp(-y) * i1s(b) * k0s(y);
+  const v = f(x) / f(a);
+  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1;
 }
 
 export function run({ p, ta, area, pad, oz, layers, tjc, tjmax, air }) {
@@ -88,10 +119,33 @@ export function run({ p, ta, area, pad, oz, layers, tjc, tjmax, air }) {
   }
   if (r.eta < 0.4) warnings.push(`Fin efficiency is only ${Math.round(r.eta * 100)} %: the far copper barely helps. Thicker copper or more stitched layers help more than more area.`);
 
+  // For the page's drawing: the temperature across the pour (round fin of the
+  // same area) and a finer sweep of junction temperature against area.
+  const prof = [];
+  for (let i = 0; i <= 24; i++) {
+    const rr = r.r0 + (r.R - r.r0) * (i / 24);
+    prof.push([rr * 1e3, ta + (tBoard - ta) * finShape(r.m, r.r0, r.R, rr)]);
+  }
+  const fine = [];
+  const a0 = Math.max(pad, 20), a1 = Math.max(20000, area * 1.5);
+  for (let i = 0; i <= 40; i++) {
+    const a = a0 * Math.pow(a1 / a0, i / 40);
+    const q = at(p, a);
+    fine.push([a, ta + p * (q.th + rjc)]);
+  }
+
   const sweep = [50, 100, 200, 400, 645, 1000, 1500, 2500, 5000, 10000].filter((a) => a >= pad);
   const pts = sweep.map((a) => { const q = at(p, a); return { a, th: q.th, tj: ta + p * (q.th + rjc), eta: q.eta }; });
 
   return {
+    thermal: {
+      p, ta, area, pad, oz: ozN, layers: nL, air: vAir, tjc: rjc, tjmax: tmax,
+      thetaCa: r.th, thetaJa: r.th + rjc, tBoard, tj, margin, tone: tone || 'ok',
+      tEdge: prof[prof.length - 1][1], tMean: ta + r.eta * (tBoard - ta),
+      pMax, aNeed: Number.isFinite(aNeed) ? aNeed : aNeed == null ? null : 'none',
+      eta: r.eta, hConv: r.hc, hRad: r.hr, radius: r.R * 1e3, padRadius: r.r0 * 1e3,
+      copperUm: nL * ozN * T_OZ * 1e6, profile: prof, curve: fine,
+    },
     values: [
       { label: 'Copper to ambient θ', value: fmtNum(r.th, 3), unit: '°C/W' },
       { label: 'Junction to ambient θ', value: fmtNum(r.th + rjc, 3), unit: '°C/W' },
