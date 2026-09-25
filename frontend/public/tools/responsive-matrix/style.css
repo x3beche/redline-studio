@@ -1,0 +1,115 @@
+/* Responsive Preview Matrix: the width rail and the frames. Chrome colours from
+   kit.css; data colours as --tool-* below, light and dark. */
+:root {
+  --tool-phone: rgba(15, 157, 138, 0.06);
+  --tool-tablet: rgba(217, 119, 6, 0.06);
+  --tool-desktop: rgba(31, 78, 216, 0.05);
+  --tool-probe: #a23fbf;
+  --tool-over: rgba(192, 57, 43, 0.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tool-phone: rgba(60, 199, 179, 0.045); --tool-tablet: rgba(240, 163, 58, 0.04); --tool-desktop: rgba(109, 141, 255, 0.05);
+    --tool-probe: #c982e0; --tool-over: rgba(229, 115, 115, 0.18); }
+}
+:root[data-theme="dark"] { --tool-phone: rgba(60, 199, 179, 0.045); --tool-tablet: rgba(240, 163, 58, 0.04); --tool-desktop: rgba(109, 141, 255, 0.05);
+  --tool-probe: #c982e0; --tool-over: rgba(229, 115, 115, 0.18); }
+
+.rm-root { padding: 12px 14px 16px; }
+.rm { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.rm-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); gap: 12px; align-items: start; }
+.rm-left, .rm-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+@media (max-width: 1000px) {
+  .rm-cols { display: flex; flex-direction: column; }
+  .rm-left, .rm-side { display: contents; }
+  .rm-probebox { order: 1; } .rm-matrix { order: 2; } .rm-warns { order: 3; } .rm-out { order: 4; } .rm-notes { order: 5; }
+}
+@media (max-width: 760px) { .rm-root { padding: 10px; } }
+[hidden] { display: none !important; }
+
+.rm-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-width: 0; }
+.rm-phead { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.rm-h { font-size: 11.5px; font-weight: 600; color: var(--ink); text-transform: uppercase; letter-spacing: .06em; }
+.rm-sub { font-size: 11.5px; color: var(--ink-soft); }
+.rm-empty { font-size: 12px; color: var(--ink-soft); padding: 12px 2px; }
+
+/* ---- address bar ---- */
+.rm-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+.rm-lock { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
+.rm-url { flex: 1 1 260px; min-width: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--sunken); color: var(--ink);
+  font: 12.5px "IBM Plex Mono", ui-monospace, monospace; }
+.rm-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.rm-seg button { border: 0; background: var(--surface); padding: 3px 9px; font-size: 12px; cursor: pointer; color: var(--ink-soft); }
+.rm-seg button + button { border-left: 1px solid var(--line); }
+.rm-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.rm-fld { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.rm-fld i { font-style: normal; }
+.rm-sel { padding: 3px 4px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); font-size: 12px; }
+.rm-num { width: 58px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); color: var(--ink);
+  font: 12.5px "IBM Plex Mono", ui-monospace, monospace; }
+
+/* ---- rail ---- */
+.rm-rail { display: block; width: 100%; touch-action: none; user-select: none; cursor: crosshair; }
+.rm-zone-phone { fill: var(--tool-phone); } .rm-zone-tablet { fill: var(--tool-tablet); } .rm-zone-desktop { fill: var(--tool-desktop); }
+.rm-zonetxt { font-size: 10.5px; fill: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.rm-wcag { stroke: var(--ink-soft); stroke-dasharray: 2 3; }
+.rm-wcagtxt { font-size: 10px; fill: var(--ink-soft); }
+.rm-axis { stroke: var(--ink-soft); stroke-width: 1.5; }
+.rm-tick { stroke: var(--ink-soft); }
+.rm-ticktxt { font: 10px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.rm-hit { fill: transparent; }
+.rm-flag { cursor: ew-resize; }
+.rm-flag:focus { outline: none; }
+.rm-flag:focus-visible .rm-flagbg { stroke: var(--accent); stroke-width: 2; }
+.rm-pole { stroke: var(--ink-soft); stroke-width: 1.5; }
+.rm-flagbg { fill: var(--surface); stroke: var(--line); }
+.rm-flagtxt { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.rm-dot { fill: var(--ink-soft); }
+.rm-st-ok .rm-dot { fill: var(--ok); } .rm-st-ok .rm-pole { stroke: var(--ok); }
+.rm-st-overflow .rm-dot { fill: var(--danger); } .rm-st-overflow .rm-pole { stroke: var(--danger); } .rm-st-overflow .rm-flagbg { stroke: var(--danger); }
+.rm-st-blocked .rm-dot { fill: var(--warn); }
+.rm-hatch-bg { fill: var(--tool-over); }
+.rm-hatch-ln { stroke: var(--danger); stroke-width: 1.5; }
+.rm-overbar { stroke: var(--danger); stroke-width: .75; }
+.rm-overtxt { font: 600 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--danger); }
+.rm-probe { cursor: ew-resize; }
+.rm-probe:focus { outline: none; }
+.rm-probe:focus-visible .rm-probetab { stroke: var(--ink); stroke-width: 2; }
+.rm-probeline { stroke: var(--tool-probe); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.rm-probehead, .rm-probetab { fill: var(--tool-probe); }
+.rm-probetxt { font: 600 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--surface); }
+
+/* ---- probe ---- */
+.rm-probebox .rm-phead .k-btn { margin-left: auto; }
+.rm-pstat { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.rm-pstat.rm-bad { color: var(--danger); } .rm-pstat.rm-good { color: var(--ok); } .rm-pstat.rm-warnc { color: var(--warn); }
+.rm-pstage { position: relative; display: flex; overflow: hidden; }
+.rm-pclip { overflow: hidden; border: 1px solid var(--tool-probe); border-radius: 4px; background: var(--sunken); flex: none; }
+.rm-pframe { border: 0; transform-origin: 0 0; background: #fff; pointer-events: none; display: block; }
+.rm-pover { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, var(--tool-over) 0 4px, transparent 4px 8px); border: 1px dashed var(--danger); border-left: 0; }
+
+/* ---- matrix ---- */
+.rm-grid { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; min-height: 120px; }
+.rm-cell { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 100%; }
+.rm-chead { display: flex; flex-wrap: wrap; gap: 3px 6px; align-items: center; font-size: 11.5px; color: var(--ink-soft); }
+.rm-chead b { color: var(--ink); font-weight: 600; }
+.rm-dims { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; }
+.rm-badge { font-size: 10.5px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink-soft); white-space: nowrap; }
+.rm-b-ok { color: var(--ok); border-color: var(--ok); }
+.rm-b-overflow { color: var(--danger); border-color: var(--danger); }
+.rm-b-blocked { color: var(--warn); border-color: var(--warn); }
+.rm-frow { display: flex; align-items: flex-start; }
+.rm-box { overflow: hidden; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); flex: none; }
+.rm-cell[data-st="ok"] .rm-box { border-color: var(--ok); }
+.rm-cell[data-st="overflow"] .rm-box { border-color: var(--danger); border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.rm-box iframe { border: 0; transform-origin: 0 0; background: #fff; pointer-events: none; display: block; }
+.rm-overflow { flex: none; position: relative; background: repeating-linear-gradient(45deg, var(--tool-over) 0 4px, transparent 4px 8px);
+  border: 1px dashed var(--danger); border-left: 0; border-radius: 0 4px 4px 0; }
+.rm-overflow span { position: absolute; top: 3px; left: 3px; font: 600 10px "IBM Plex Mono", ui-monospace, monospace; color: var(--danger); white-space: nowrap; }
+.rm-culprits { font-size: 11px; color: var(--danger); max-width: 100%; }
+.rm-culprits code { font-size: 10.5px; overflow-wrap: anywhere; }
+
+.rm-warns { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 4px; padding: 5px 9px; font-size: 12px; background: var(--surface); }
+.rm-warns div + div { margin-top: 3px; }
+.rm-notes { font-size: 12px; color: var(--ink-soft); }
+.rm-notes summary { cursor: pointer; }
+.rm-notes p { margin: 4px 0; }

@@ -374,7 +374,38 @@ export function run({ html, find, query, nth }) {
           : name ? `screen.getByText(${js(name.slice(0, 60))})` : '// no accessible name: add a label or data-testid');
   }
   if (problems.length) warnings.push(...problems.slice(0, 2).map((p) => `HTML: ${p}`));
+
+  // For the page only (manifest agentOmit): the parsed tree, every candidate's
+  // matches and each token's stability, so the page can draw what run() found.
+  const MAXN = 600;
+  const depthOf = (e) => { let d = 0; for (let p = e.parent; p && p.tag !== '#root'; p = p.parent) d++; return d; };
+  const lineIdx = new Map();
+  const onLine = (e) => {
+    if (['html', 'head', 'body'].includes(e.tag)) return 0;
+    const k = e.line; const n = (lineIdx.get(k) || 0) + 1; lineIdx.set(k, n); return n;
+  };
+  const tokKind = (t) => (tokenRisk(t) ? 'bad' : tokenSoft(t).pen ? 'soft' : 'ok');
+  const tokWhy = (t) => tokenRisk(t) || tokenSoft(t).why || '';
+  const SHOW = [...TEST_ATTRS, 'name', 'type', 'for', 'role', 'aria-label', 'placeholder', 'href', 'alt', 'title'];
+  const dom = {
+    nodes: els.slice(0, MAXN).map((e) => ({
+      tag: e.tag, depth: depthOf(e), parent: e.parent && e.parent.tag !== '#root' ? e.parent.idx : -1, line: e.line, nth: onLine(e),
+      id: e.attrs.id != null ? { v: e.attrs.id, k: tokKind(e.attrs.id), why: tokWhy(e.attrs.id) } : null,
+      cls: classes(e).map((c) => ({ v: c, k: tokKind(c), why: tokWhy(c) })),
+      attrs: SHOW.filter((a) => e.attrs[a] != null).map((a) => [a, String(e.attrs[a]).slice(0, 40), TEST_ATTRS.includes(a) ? 'test' : '']),
+      text: norm(e.children.filter((c) => c.type === 'text').map((c) => c.value).join(' ')).slice(0, 48),
+    })),
+    total: els.length,
+    target: target.idx,
+    found: found.map((e) => e.idx),
+    nth: Math.min(k, found.length),
+    best: best ? best.sel : null,
+    cands: cands.slice(0, 24).map((c) => ({ sel: c.sel, kind: c.kind, n: c.n, unique: c.unique, score: Math.max(0, Math.min(100, Math.round(c.score))), why: c.why || '',
+      hits: (queryAll(els, c.sel) || []).slice(0, 80).map((e) => e.idx) })),
+    role, name: name ? name.slice(0, 60) : '',
+  };
   return {
+    dom,
     values: [
       { label: 'Best selector', value: best ? best.sel : '–', tone: best ? (best.score >= 50 ? 'ok' : 'warn') : 'bad' },
       { label: 'Stability', value: best ? `${Math.max(0, Math.min(100, Math.round(best.score)))} / 100` : '–', hint: best ? best.kind : '' },

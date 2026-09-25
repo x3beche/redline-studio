@@ -83,5 +83,12 @@ export function run(input) {
     tables: [{ title: 'Breakpoints', columns: ['Name', 'Size', 'Class', 'Media query', 'Overflow', 'Culprits'], rows }],
     texts: [{ title: 'Media queries', body: css, lang: 'css' }, { title: 'Playwright', body: pw, lang: 'js' }, { title: 'Overflow finder', body: finder, lang: 'js' }],
     breakpoints: bps.map(([name, width, height]) => ({ name, width, height })),
+    // For the page only (manifest agentOmit): each width's measured state, drawn on the rail.
+    rail: bps.map(([name, width, height]) => {
+      const r = rep.get(width);
+      const culprits = r?.rest ? [...r.rest.matchAll(/(\S+?)\((\d+)\)/g)].map((m) => ({ sel: m[1], right: Number(m[2]) })) : [];
+      return { name, width, height, cls: cls(width), query: width === minW ? 'base styles' : `(min-width: ${width}px)`,
+        status: r ? r.status : 'unmeasured', sw: r?.sw ?? null, over: r && r.status === 'overflow' ? (r.sw ?? width) - width : 0, culprits };
+    }),
   };
 }

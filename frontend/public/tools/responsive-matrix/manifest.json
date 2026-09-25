@@ -1,8 +1,10 @@
 {
-  "id": "responsive-matrix", "version": "1.0",
+  "id": "responsive-matrix", "version": "1.1",
   "name": "Responsive Preview Matrix",
   "blurb": "one page at several breakpoints side by side, with overflow flagged",
   "group": "web",
+  "layout": "custom",
+  "agentOmit": ["rail"],
   "rooms": [
     "web",
     "mobile"

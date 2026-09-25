@@ -1,8 +1,10 @@
 {
-  "id": "shadow-radius", "version": "1.0",
+  "id": "shadow-radius", "version": "1.1",
   "name": "Shadow & Radius Studio",
   "blurb": "layered shadows and radii tuned visually, as one CSS line",
   "group": "web",
+  "layout": "custom",
+  "agentOmit": ["stage"],
   "rooms": ["web"],
   "keywords": ["box-shadow", "shadow", "elevation", "drop shadow", "layered shadow", "border-radius", "rounded corners", "nested radius", "css", "card", "depth", "design tokens"],
   "intro": "Builds a soft, layered box-shadow (several shadows doubling in size, after Josh Comeau's method) and a border-radius, with a live preview you can click to aim the light. Also gives the concentric inner radius for a nested element (outer radius minus padding) and an elevation scale.",

@@ -77,7 +77,8 @@ export function run({ distance, layers: nIn, angle, softness, spread, opacity, c
   if (rad > 0 && pad > 0 && rad < pad) warnings.push(`The outer radius (${rad} px) is smaller than the padding (${pad} px): an inner element can only be square (0 px) to stay concentric.`);
   if (/^(0|#0{3}|#0{6}|black)$/i.test(String(color).trim())) warnings.push('Pure black shadows look grey and dirty on coloured backgrounds; tint the shadow with the background hue (e.g. hsl(220 40% 10%)).');
 
-  const scale = [0.25, 0.5, 1, 2, 4].map((k, i) => `  --shadow-${i + 1}: ${layers({ distance: distance * k, n: Math.max(1, Math.min(n, i + 2)), angle: ang, softness: soft, spread: sp * k, alpha: 1 - (1 - opacity) ** (1 / Math.max(1, Math.min(n, i + 2))), rgb, inset }).css};`);
+  const levels = [0.25, 0.5, 1, 2, 4].map((k, i) => ({ name: `--shadow-${i + 1}`, distance: r2(distance * k), css: layers({ distance: distance * k, n: Math.max(1, Math.min(n, i + 2)), angle: ang, softness: soft, spread: sp * k, alpha: 1 - (1 - opacity) ** (1 / Math.max(1, Math.min(n, i + 2))), rgb, inset }).css }));
+  const scale = levels.map((l) => `  ${l.name}: ${l.css};`);
   const line = `box-shadow: ${main.css}; border-radius: ${pxs(rad)};`;
   return {
     values: [
@@ -100,5 +101,7 @@ export function run({ distance, layers: nIn, angle, softness, spread, opacity, c
       'The Scale output keeps these settings and steps the distance by 2x per level, for elevation tokens.',
     ],
     drawing: { shadow: main.css, radius: rad, inner, padding: pad, angle: ang, distance },
+    // For the page only (manifest agentOmit): the layers, reach and scale it draws.
+    stage: { layers: main.list, alpha, reach: ext, rgb, softness: soft, spread: sp, opacity, n, inset: !!inset, levels },
   };
 }
