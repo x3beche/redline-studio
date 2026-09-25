@@ -1,5 +1,7 @@
 {
-  "id": "screen-flow", "version": "1.0",
+  "id": "screen-flow",
+  "version": "1.1",
+  "layout": "custom",
   "name": "Screen Flow Mapper",
   "blurb": "screen-to-screen transitions as a diagram and a navigation graph",
   "group": "mobile",

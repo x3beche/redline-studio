@@ -31,6 +31,10 @@ const DEVICES = {
   'android-plain': { name: 'Android, no cutout', os: 'android', w: 1080 / 3, h: 2400 / 3, s: 3, top: 24, cut: null, r: 0 },
 };
 
+const SHORT = { 'iphone-se': 'SE', 'iphone-8plus': '8 Plus', 'iphone-11pro': 'X · 11 Pro', 'iphone-11': 'XR · 11', 'iphone-13mini': '13 mini',
+  'iphone-14': '14', 'iphone-14plus': '14 Plus', 'iphone-15': '15 · 16', 'iphone-15max': '15 Plus', 'iphone-16pro': '16 Pro', 'iphone-16promax': '16 Pro Max',
+  'ipad-11': 'iPad 11"', 'pixel-7': 'Pixel 7', 'pixel-8pro': 'Pixel 8 Pro', 'galaxy-s23': 'S23 · S24', 'galaxy-s24u': 'S24 Ultra', 'android-plain': 'Plain' };
+
 export function run({ device, orientation, androidNav, cw, ch, cs, ctop, cbottom, cleft, cright, ccut }) {
   const warnings = [], notes = [];
   let d;
@@ -128,5 +132,7 @@ export function run({ device, orientation, androidNav, cw, ch, cs, ctop, cbottom
     ] }],
     texts: [{ title: 'CSS', body: css + '\n', lang: 'css' }, { title: d.os === 'android' ? 'Android' : 'iOS', body: nativeCode + '\n' }],
     drawing: { W, H, scale: d.s, unit, top, bottom, left, right, status, cut, homeInd, nav, r: d.r || 0, land, name: d.name },
+    // every preset in portrait, for the page's to-scale device shelf
+    lineup: Object.entries(DEVICES).map(([id, x]) => ({ id, name: x.name, short: SHORT[id] || x.name, os: x.os, w: x.w, h: x.h, s: x.s, r: x.r || 0, cut: x.cut ? { ...x.cut } : null })),
   };
 }

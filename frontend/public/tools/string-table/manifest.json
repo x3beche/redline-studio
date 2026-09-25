@@ -1,5 +1,10 @@
 {
-  "id": "string-table", "version": "1.0",
+  "id": "string-table",
+  "version": "1.1",
+  "layout": "custom",
+  "agentOmit": [
+    "sheet"
+  ],
   "name": "String Table Editor",
   "blurb": "multilingual strings in a table, out as resource files",
   "group": "mobile",
@@ -122,5 +127,6 @@
     "Apple, String Resources Programming Guide / Localizable.strings file format",
     "Application Resource Bundle (ARB) specification, github.com/google/app-resource-bundle",
     "RFC 4180 (CSV quoting)"
-  ]
+  ],
+  "view": true
 }

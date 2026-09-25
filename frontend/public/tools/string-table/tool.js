@@ -115,11 +115,14 @@ export function run({ table, format, base, missing, nestKeys }) {
   const strings = [];
   const seen = new Map();
   const problems = [];
+  // the same problems per sheet row (and language, when it is one cell's), for the page's grid
+  const issues = [];
+  const note = (line, lang, text) => issues.push({ line, lang, text });
   for (const r of data.slice(1)) {
     const key = (r.cells[keyCol] ?? '').trim();
-    if (!key) { problems.push([r.line, '(no key)', 'row has no key; skipped']); continue; }
-    if (r.cells.length > header.length) problems.push([r.line, key, `${r.cells.length} cells but ${header.length} columns: an unquoted "${delim === '\t' ? 'tab' : delim}" inside a value? Quote the value.`]);
-    if (seen.has(key)) { problems.push([r.line, key, `duplicate key (first on line ${seen.get(key)}); the later row wins`]); strings.splice(strings.findIndex((s) => s.key === key), 1); }
+    if (!key) { problems.push([r.line, '(no key)', 'row has no key; skipped']); note(r.line, null, 'row has no key; skipped'); continue; }
+    if (r.cells.length > header.length) { problems.push([r.line, key, `${r.cells.length} cells but ${header.length} columns: an unquoted "${delim === '\t' ? 'tab' : delim}" inside a value? Quote the value.`]); note(r.line, null, problems[problems.length - 1][2]); }
+    if (seen.has(key)) { problems.push([r.line, key, `duplicate key (first on line ${seen.get(key)}); the later row wins`]); note(r.line, null, problems[problems.length - 1][2]); note(seen.get(key), null, `duplicate key: replaced by the row on line ${r.line}`); strings.splice(strings.findIndex((s) => s.key === key), 1); }
     seen.set(key, r.line);
     const vals = {};
     for (const { h, i } of langCols) vals[h] = r.cells[i] ?? '';
@@ -131,19 +134,19 @@ export function run({ table, format, base, missing, nestKeys }) {
   const javaId = /^[A-Za-z_][A-Za-z0-9_]*$/;
   const dartId = /^[a-z][A-Za-z0-9_]*$/;
   for (const s of strings) {
-    if (format === 'android' && !javaId.test(s.key)) problems.push([s.line, s.key, `not a valid Android resource name; use letters, digits and _ (e.g. ${s.key.replace(/[^A-Za-z0-9_]/g, '_').replace(/^(\d)/, '_$1')})`]);
-    if (format === 'arb' && !dartId.test(s.key)) problems.push([s.line, s.key, 'ARB/Flutter keys must be Dart identifiers starting with a lowercase letter (camelCase)']);
+    if (format === 'android' && !javaId.test(s.key)) { problems.push([s.line, s.key, `not a valid Android resource name; use letters, digits and _ (e.g. ${s.key.replace(/[^A-Za-z0-9_]/g, '_').replace(/^(\d)/, '_$1')})`]); note(s.line, '@key', problems[problems.length - 1][2]); }
+    if (format === 'arb' && !dartId.test(s.key)) { problems.push([s.line, s.key, 'ARB/Flutter keys must be Dart identifiers starting with a lowercase letter (camelCase)']); note(s.line, '@key', problems[problems.length - 1][2]); }
     const bv = s.vals[baseCol.h];
-    if (format === 'arb' && placeholders(bv).some((p) => p.startsWith('%'))) problems.push([s.line, s.key, 'printf placeholders (%s, %1$d) are not read by Flutter gen-l10n: use {name} and describe it in the base ARB']);
-    if (!bv.trim()) problems.push([s.line, s.key, `no ${baseCol.h} (base) text: every other language falls back to this`]);
+    if (format === 'arb' && placeholders(bv).some((p) => p.startsWith('%'))) { problems.push([s.line, s.key, 'printf placeholders (%s, %1$d) are not read by Flutter gen-l10n: use {name} and describe it in the base ARB']); note(s.line, baseCol.h, problems[problems.length - 1][2]); }
+    if (!bv.trim()) { problems.push([s.line, s.key, `no ${baseCol.h} (base) text: every other language falls back to this`]); note(s.line, baseCol.h, problems[problems.length - 1][2]); }
     const bp = placeholders(bv);
-    if (format === 'android' && bp.filter((p) => /^%[a-zA-Z]$/.test(p)).length > 1) problems.push([s.line, s.key, 'several non-positional placeholders: Android needs %1$s, %2$d... so translators can reorder them']);
+    if (format === 'android' && bp.filter((p) => /^%[a-zA-Z]$/.test(p)).length > 1) { problems.push([s.line, s.key, 'several non-positional placeholders: Android needs %1$s, %2$d... so translators can reorder them']); note(s.line, baseCol.h, problems[problems.length - 1][2]); }
     for (const { h } of langCols) {
       if (h === baseCol.h) continue;
       const v = s.vals[h];
       if (!v.trim()) continue;
       const p = placeholders(v);
-      if (!sameBag(bp, p)) problems.push([s.line, s.key, `${h} placeholders ${p.join(' ') || 'none'} differ from ${baseCol.h} ${bp.join(' ') || 'none'}: the app can crash or show the wrong value`]);
+      if (!sameBag(bp, p)) { problems.push([s.line, s.key, `${h} placeholders ${p.join(' ') || 'none'} differ from ${baseCol.h} ${bp.join(' ') || 'none'}: the app can crash or show the wrong value`]); note(s.line, h, problems[problems.length - 1][2]); }
     }
   }
 
@@ -225,5 +228,23 @@ export function run({ table, format, base, missing, nestKeys }) {
   if (format === 'ios') notes.push('iOS: %s is written as %@ (NSString). Save the files as UTF-8; missing keys fall back to the development language.');
   if (format === 'arb') notes.push('Flutter gen-l10n reads the base (template) ARB for descriptions and placeholders; the others only need the translated values.');
   notes.push('Plurals (Android <plurals>, iOS .stringsdict, ICU plural) are not generated: keep them as separate rows or write them by hand.');
-  return { values, tables, texts, warnings, notes };
+  // Every sheet row as typed, for the page's grid: cells, lengths against the
+  // base text, placeholders and the problems found in it.
+  const baseLen = (r) => (r.cells[baseCol.i] ?? '').length;
+  const sheet = {
+    delim, header, keyCol, commentCol, base: baseCol.h, langs: langCols.map((l) => ({ lang: l.h, col: l.i })),
+    coverage,
+    rows: data.slice(1).map((r) => {
+      const key = (r.cells[keyCol] ?? '').trim();
+      const cells = header.map((_, i) => r.cells[i] ?? '');
+      const used = strings.find((s) => s.key === key)?.line === r.line;
+      const cellInfo = {};
+      for (const { h, i } of langCols) {
+        const v = r.cells[i] ?? '';
+        cellInfo[h] = { len: v.length, ratio: h !== baseCol.h && v.trim() && baseLen(r) ? v.length / baseLen(r) : null, ph: placeholders(v), missing: !v.trim() };
+      }
+      return { line: r.line, key, cells, extra: r.cells.slice(header.length), used, cell: cellInfo, issues: issues.filter((x) => x.line === r.line).map(({ lang, text }) => ({ lang, text })) };
+    }),
+  };
+  return { values, tables, texts, warnings, notes, sheet };
 }
