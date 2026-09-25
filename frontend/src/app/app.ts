@@ -6,12 +6,13 @@ import { RoomCoding } from './rooms/coding';
 import { RoomPcb } from './rooms/pcb';
 import { RoomTools } from './tools/room';
 import { QuickNote, RoomNotes } from './rooms/notes';
+import { Palette } from './palette';
 import { Auth, SignIn, UserChip } from './auth';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, RoomNotes, QuickNote, SignIn, UserChip],
+  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, RoomNotes, QuickNote, Palette, SignIn, UserChip],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -87,6 +88,8 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
 </app-editor>
 <!-- Alt+N anywhere: a note, without leaving the room. -->
 <app-quick-note />
+<!-- Ctrl+K anywhere: go to anything, do anything, search everything. -->
+<app-palette />
 } @else if (auth.state()) {
   <app-sign-in />
 }`,

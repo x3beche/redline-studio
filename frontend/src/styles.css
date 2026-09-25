@@ -1920,3 +1920,25 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-pics-r { right: 6px; }
 /* The colour the changed pixels are painted in, read by the canvas. */
 .tcv-pics-canvas { max-width: 100%; max-height: 72vh; border: 1px solid var(--line); color: var(--danger); }
+
+/* THE COMMAND PALETTE (app/palette.ts): Ctrl+K, over everything. */
+.tcv-pal-back { position: fixed; inset: 0; z-index: 800; display: flex; justify-content: center; align-items: flex-start;
+  padding-top: 11vh; background: var(--overlay-rest); }
+.tcv-pal { width: min(680px, 94vw); max-height: 70vh; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 14px 40px var(--shadow-soft); }
+.tcv-pal-input { flex: none; padding: 13px 16px; font-size: 14.5px; color: var(--ink); background: none; border: 0;
+  border-bottom: 1px solid var(--line); outline: none; }
+.tcv-pal-list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0 6px; }
+.tcv-pal-group { padding: 8px 16px 3px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); }
+.tcv-pal-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 16px; text-align: left;
+  background: none; border: 0; cursor: pointer; color: var(--ink); }
+.tcv-pal-item[data-on] { background: var(--accent-deep); color: var(--ink-bright); }
+.tcv-pal-icon { flex: none; width: 22px; text-align: center; font-size: 12px; color: var(--ink-dim); }
+.tcv-pal-item[data-on] .tcv-pal-icon, .tcv-pal-item[data-on] .tcv-pal-hint { color: var(--ink-bright); }
+.tcv-pal-label { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.tcv-pal-hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px;
+  color: var(--ink-dim); }
+.tcv-pal-keys { flex: none; padding: 0 5px; font: inherit; font-size: 10.5px; color: var(--ink-dim);
+  border: 1px solid var(--line); border-radius: 3px; }
+.tcv-pal-empty { margin: 14px 16px; font-size: 12.5px; color: var(--ink-dim); }
+.tcv-pal-foot { flex: none; padding: 6px 16px; font-size: 10.5px; color: var(--ink-dim); border-top: 1px solid var(--line); }

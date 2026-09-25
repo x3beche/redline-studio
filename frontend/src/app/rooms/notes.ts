@@ -218,7 +218,6 @@ export class NoteCompose {
 @Component({
   selector: 'app-quick-note',
   imports: [NoteCompose],
-  host: { '(document:keydown)': 'key($event)' },
   template: `
 @if (api.quick()) {
   <div class="tcv-quick-back" (click)="api.quick.set(false)">
@@ -243,6 +242,8 @@ export class QuickNote {
       c.kept = n => { this.last.set(n.title || n.text.slice(0, 60)); setTimeout(() => this.api.quick.set(false), 700); };
       untracked(() => c.focus());
     });
+    // Before the code editor or any room can take it.
+    window.addEventListener('keydown', e => this.key(e), true);
   }
 
   key(e: KeyboardEvent) {
@@ -427,6 +428,14 @@ export class RoomNotes implements OnDestroy {
       const c = this.compose();
       c.kept = n => this.openId.set(n.id);
       untracked(() => c.focus());
+    });
+    // A note picked in the command palette.
+    effect(() => {
+      const w = this.picked.want();
+      if (w?.what === 'note' && w.arg) untracked(() => {
+        this.picked.want.set(null);
+        this.q.set(''); this.tag.set(''); this.only.set(''); this.openId.set(w.arg!);
+      });
     });
     // Leaving a note mid-edit keeps what was typed.
     effect(() => { this.openId(); untracked(() => this.done()); });

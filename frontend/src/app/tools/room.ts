@@ -1,6 +1,7 @@
-import { Component, HostListener, Type, computed, effect, signal, viewChild, ElementRef } from '@angular/core';
+import { Component, HostListener, Type, computed, effect, inject, signal, untracked, viewChild, ElementRef } from '@angular/core';
 import { NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
 import { COMPONENTS, GROUPS, NARROW, ROOMS, ToolInfo } from './registry';
+import { Selection } from '../selection';
 import { ToolFrame } from './frame';
 
 const KEY = 'x3.tool';
@@ -145,6 +146,7 @@ function score(t: ToolInfo, words: string[]): number {
 </div>`,
 })
 export class RoomTools {
+  private picked = inject(Selection);
   readonly groups = GROUPS;
   readonly rooms = ROOMS;
   private searchBox = viewChild<ElementRef<HTMLInputElement>>('search');
@@ -191,6 +193,12 @@ export class RoomTools {
       if (loader) loader().then(c => { if (this.here() === t) this.component.set(c); });
     });
     effect(() => { this.query(); this.room(); this.cursor.set(0); });
+    // A tool picked in the command palette (app/palette.ts).
+    effect(() => {
+      const w = this.picked.want();
+      const t = w?.what === 'tool' && w.arg ? this.byId().get(w.arg) : null;
+      if (t) untracked(() => { this.picked.want.set(null); this.pick(t); });
+    });
   }
 
   inGroup(g: string): ToolInfo[] { return this.all().filter(t => t.group === g); }

@@ -358,7 +358,7 @@
          (pointerdown)="releaseCamera()"></div>
     @if (ide() && activeModel()) {
       <!-- Under the viewer's toolbar, so its switch stays in reach. -->
-      <app-code-view kind="model" [id]="activeModel()" [title]="activeModel()" [style.top.px]="ideTop()"
+      <app-code-view kind="model" [id]="activeModel()" [title]="activeModel()" [style.top.px]="ideTop()" [line]="ideLine()"
                      (closed)="ide.set(false)" />
     }
     <canvas #overlay class="absolute"

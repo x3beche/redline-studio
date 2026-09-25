@@ -77,6 +77,10 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** The code view: the model's source over the viewer (rooms/code-view.ts). */
   ide = signal(false);
   ideTop = signal(0);
+  /** The line the code view should open at (a search's), once. */
+  ideLine = signal<number | null>(null);
+  /** The last palette ask this room acted on - each is acted on once. */
+  private handled = 0;
   /** The note whose changes are open (rooms/changes.ts). */
   changesOf = signal<Revision | null>(null);
   changeSum(r: Revision) {
@@ -182,6 +186,32 @@ export class Editor implements AfterViewInit, OnDestroy {
   private ro?: ResizeObserver;
 
   constructor() {
+    // What the command palette asks of this room. Whoever acts on an ask
+    // clears it, so none is left for a room that opens later.
+    effect(() => {
+      const w = this.picked.want();
+      if (!w || w.n <= this.handled) return;
+      untracked(() => {
+        const tree = this.catalog();
+        const done = () => { this.handled = w.n; this.picked.want.set(null); };
+        if (w.what === 'model' && w.arg && tree) {
+          const m = this.findModel(tree, w.arg);
+          if (m) { this.pickModel(m); done(); }
+        } else if (this.picked.room() !== 'cad') {
+          return;
+        } else if (w.what === 'code-line' && w.arg) {
+          const [id, line] = w.arg.split('#');
+          const m = tree && this.findModel(tree, id);
+          if (m && this.activeModel() !== id) this.openModel(m);
+          this.ideLine.set(+line || null);
+          this.ide.set(false);
+          setTimeout(() => this.ide.set(true));
+          done();
+        } else if (w.what === 'code') { this.ide.set(!this.ide()); done(); }
+        else if (w.what === 'release' && this.activeModel()) { this.releasing.set(true); done(); }
+        else if (w.what === 'drawing') { this.openDrawing(); done(); }
+      });
+    });
     // The model on screen, for whoever else needs to know (a quick note).
     effect(() => { const id = this.activeModel(); untracked(() => this.picked.model.set(id || null)); });
     // The code view sits below the viewer's toolbar, which holds its switch.

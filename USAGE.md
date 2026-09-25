@@ -913,6 +913,13 @@ keys, pin, edit (it saves as you type), 🎙 to dictate where the browser
 can listen, and **Send to agent** hands a note to a room's agent as a
 message in its thread.
 
+**Ctrl+K** anywhere opens one box to go to anything and do anything: the
+rooms; every model, board and app by name; every tool; the actions of the
+room you are in (show the code, release, technical drawing, build the
+board, a new note); and, as you type, what the server finds - code lines
+(opened at that line), notes, chats, revisions and parts. Arrows move,
+Enter opens, Esc closes. It works inside the code editor too.
+
 **What a note changed.** When an agent works a note, Redline keeps every
 source in the project as it was when the agent started and as it was when
 it finished. The note's card then carries a chip with the lines added and

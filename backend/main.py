@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import (access, actors, ato, auth, changes, notes, release, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (access, actors, ato, auth, changes, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
 from . import tools_api
@@ -1907,6 +1907,14 @@ async def chat_history(limit: int = 200, room: str | None = None):
     """The thread, oldest first - one room's, or all of them. The page
     polls its room's with the health."""
     return await chat.history(db(), limit, room)
+
+
+# ---------------- one search box ----------------
+@app.get("/api/search")
+async def search_everything(q: str = ""):
+    """Code lines, notes, chats, revisions and parts that match - the Ctrl+K
+    palette's half that the page cannot know by itself."""
+    return await search.everything(db(), q[:200])
 
 
 # ---------------- releases ----------------

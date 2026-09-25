@@ -226,6 +226,8 @@ export class CodeView implements OnDestroy {
   /** The model's or board's id: opened in a tab, with its project on the left. */
   id = input.required<string>();
   title = input('');
+  /** A line to go to once the file is open (from a search). */
+  line = input<number | null>(null);
   closed = output<void>();
   /** Saved: the room may want to show the build is out of date. */
   saved = output<void>();
@@ -367,6 +369,12 @@ export class CodeView implements OnDestroy {
     this.error.set(null);
     this.editor.setModel(t.model);
     if (t.view) this.editor.restoreViewState(t.view);
+    const line = this.line();
+    if (line && t.id === this.id() && !was) {
+      this.editor.revealLineInCenter(line);
+      this.editor.setSelection({ startLineNumber: line, startColumn: 1, endLineNumber: line,
+                                 endColumn: t.model.getLineMaxColumn(line) });
+    }
     this.editor.focus();
     this.current.set(t);
   }

@@ -14,6 +14,13 @@ export class Selection {
    *  catalog can change rooms by opening something. */
   room = signal<Workspace['id']>('cad');
 
+  /** Something asked of whichever room can do it - the command palette's
+   *  way in (app/palette.ts): open a model, show its code at a line, pack
+   *  a release, look up a part. `n` makes the same ask twice count. */
+  want = signal<{ what: string; arg?: string; n: number } | null>(null);
+  private asks = 0;
+  ask(what: string, arg?: string) { this.want.set({ what, arg, n: ++this.asks }); }
+
   /** The model open in the 3D room, by id - so a quick note knows it. */
   model = signal<string | null>(null);
 

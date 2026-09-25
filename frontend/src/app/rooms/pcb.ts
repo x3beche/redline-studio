@@ -565,7 +565,7 @@ type BoardView = Pane | 'split' | 'focus';
         <app-releases [project]="projectOf(b)" (closed)="releasing.set(false)" />
       }
       @if (ide() && here(); as b) {
-        <app-code-view kind="board" [id]="b._id" [title]="b.title || b._id" (closed)="ide.set(false)" />
+        <app-code-view kind="board" [id]="b._id" [title]="b.title || b._id" [line]="ideLine()" (closed)="ide.set(false)" />
       }
       @if (boardTab() === 'split') {
         <div #split class="tcv-split">
@@ -776,9 +776,32 @@ export class RoomPcb implements OnDestroy {
   ide = signal(false);
   /** The releases of the board's project (rooms/releases.ts). */
   releasing = signal(false);
+  /** The line the code view should open at (a search's), once. */
+  ideLine = signal<number | null>(null);
+  /** The last palette ask this room acted on - each is acted on once. */
+  private handled = 0;
   projectOf(b: BoardEntry) { return ((b as BoardEntry & { folder?: string }).folder || b._id).split('/')[0]; }
 
   constructor() {
+    // What the command palette asks of this room.
+    effect(() => {
+      const w = this.picked.want();
+      if (!w || w.n <= this.handled || untracked(() => this.picked.room()) !== 'pcb') return;
+      untracked(() => {
+        this.handled = w.n;
+        if (['code', 'code-line', 'release', 'build', 'part'].includes(w.what)) this.picked.want.set(null);
+        if (w.what === 'code') this.ide.set(!this.ide());
+        else if (w.what === 'code-line' && w.arg) {
+          const [id, line] = w.arg.split('#');
+          if (this.here()?._id !== id) this.picked.openBoard(id);
+          this.ideLine.set(+line || null);
+          this.ide.set(false);
+          setTimeout(() => this.ide.set(true), this.here()?._id === id ? 0 : 1200);
+        } else if (w.what === 'release' && this.here()) this.releasing.set(true);
+        else if (w.what === 'build' && this.here() && !this.building()) this.build();
+        else if (w.what === 'part' && w.arg) { this.side.set('parts'); this.term.set(w.arg); this.look(); }
+      });
+    });
     this.refresh();
     this.drawer();
     this.tick();
