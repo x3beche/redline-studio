@@ -1,0 +1,139 @@
+/* Crystal Load: the Pierce oscillator drawn as a circuit, the pulling ruler under it. */
+:root {
+  --tool-cap: #c2410c; --tool-xtal: #0f9d8a; --tool-stray: #a23fbf; --tool-mcu: #26313b; --tool-mcu-ink: #e9eef3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tool-cap: #f0a33a; --tool-xtal: #3cc7b3; --tool-stray: #c982e0; --tool-mcu: #0b1116; --tool-mcu-ink: #dfe7ee; }
+}
+:root[data-theme="dark"] { --tool-cap: #f0a33a; --tool-xtal: #3cc7b3; --tool-stray: #c982e0; --tool-mcu: #0b1116; --tool-mcu-ink: #dfe7ee; }
+
+.k-page { padding: 10px 12px; }
+.xo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 12px; align-items: start; }
+.xo-stage { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.xo-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); min-height: 38px; }
+.xo-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.xo-sub { color: var(--ink-soft); font-size: 11.5px; }
+.xo-grow { flex: 1; }
+.xo-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.xo-seg button { border: 0; background: transparent; padding: 2px 9px; font: 11.5px "IBM Plex Mono", ui-monospace, monospace; cursor: pointer; color: var(--ink-soft); }
+.xo-seg button + button { border-left: 1px solid var(--line); }
+.xo-seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+.xo-seg button:hover:not([aria-checked="true"]) { background: var(--sunken); color: var(--ink); }
+
+.xo-draw { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
+.xo-draw svg { display: block; width: 100%; overflow: visible; }
+.xo-over { position: absolute; inset: 0; pointer-events: none; }
+.xo-f { position: absolute; pointer-events: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+.xo-f input, .xo-f select { padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; background: var(--sunken); color: var(--ink);
+  font: 11.5px "IBM Plex Mono", ui-monospace, monospace; }
+.xo-f input { width: 54px; text-align: right; }
+.xo-f input.bad { border-color: var(--danger); }
+.xo-f.stray > span:first-child { color: var(--tool-stray); font-weight: 600; }
+.xo-f.on-mcu { color: color-mix(in srgb, var(--tool-mcu-ink) 75%, transparent); }
+.xo-f.on-mcu input, .xo-f.on-mcu select { background: color-mix(in srgb, var(--tool-mcu-ink) 10%, var(--tool-mcu)); color: var(--tool-mcu-ink);
+  border-color: color-mix(in srgb, var(--tool-mcu-ink) 25%, transparent); }
+.xo-foot { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 5px 10px 7px; border-top: 1px solid var(--line-soft); color: var(--ink-soft); font-size: 11px; }
+.xo-foot kbd { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+.xo-rulerhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 7px 10px 0; border-top: 1px solid var(--line-soft); }
+.xo-rulerhead h3 { margin: 0; font-size: 12px; font-weight: 600; }
+.xo-chain { font: 12px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); }
+.xo-chain .soft { color: var(--ink-soft); }
+.xo-chain .bad { color: var(--danger); font-weight: 600; }
+.xo-chain .warn { color: var(--warn); font-weight: 600; }
+
+.xo-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.xo-warns:empty { display: none; }
+.xo-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+.xo-card h3 { margin: 0 0 6px; font-size: 11.5px; font-weight: 500; color: var(--ink-soft); }
+.xo-bom { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px; margin: 0; }
+.xo-bom dt { color: var(--ink-soft); }
+.xo-bom dd { margin: 0; font: 500 12.5px "IBM Plex Mono", ui-monospace, monospace; text-align: right; }
+.xo-notes { color: var(--ink-soft); font-size: 11.5px; }
+.xo-notes div + div { margin-top: 4px; }
+.xo-side .k-out { max-height: 300px; }
+
+@media (max-width: 980px) {
+  .xo { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) { .k-page { padding: 8px; } }
+
+/* drawing */
+.xo svg text { font: 11px "IBM Plex Sans", -apple-system, sans-serif; fill: var(--ink); }
+.xo svg .m { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.xo svg .soft { fill: var(--ink-soft); }
+.xo svg .b { font-weight: 600; }
+.xo svg .sm { font-size: 9.5px; }
+.xo svg .lg { font-size: 15px; }
+.xo svg .danger { fill: var(--danger); }
+.xo svg .warn-t { fill: var(--warn); }
+.xo svg .ok-t { fill: var(--ok); }
+.xo svg .wire { stroke: var(--ink); stroke-width: 1.6; fill: none; }
+.xo svg .gnd { stroke: var(--ink-soft); stroke-width: 1.6; fill: none; }
+.xo svg .node { fill: var(--ink); }
+.xo svg .mcu { fill: var(--tool-mcu); stroke: var(--line); }
+.xo svg .mcu-t { fill: var(--tool-mcu-ink); }
+.xo svg .mcu-soft { fill: var(--tool-mcu-ink); opacity: .65; }
+.xo svg .mcu-wire { stroke: var(--tool-mcu-ink); stroke-width: 1.4; fill: none; opacity: .85; }
+.xo svg .mcu-res { fill: var(--tool-mcu); stroke: var(--tool-mcu-ink); stroke-width: 1.2; opacity: .85; }
+.xo svg .pin { fill: var(--ink-soft); }
+.xo svg .inv { fill: var(--tool-mcu); stroke: var(--tool-mcu-ink); stroke-width: 1.5; }
+.xo svg .inv.bad { stroke: var(--danger); stroke-width: 2.2; }
+.xo svg .g-track { fill: color-mix(in srgb, var(--tool-mcu-ink) 12%, transparent); }
+.xo svg .g-fill { fill: var(--ok); }
+.xo svg .g-fill.warn { fill: var(--warn); }
+.xo svg .g-fill.bad { fill: var(--danger); }
+.xo svg .g-lim { stroke: var(--tool-mcu-ink); stroke-width: 1.5; }
+.xo svg .xtal-body { fill: color-mix(in srgb, var(--tool-xtal) 22%, var(--surface)); stroke: var(--tool-xtal); stroke-width: 2; }
+.xo svg .xtal-plate { stroke: var(--tool-xtal); stroke-width: 3; }
+.xo svg .xtal-t { fill: var(--tool-xtal); }
+.xo svg .eq-box { fill: color-mix(in srgb, var(--tool-xtal) 7%, var(--surface)); stroke: var(--tool-xtal); stroke-width: 1; stroke-dasharray: 4 3; }
+.xo svg .eq-lead { stroke: var(--tool-xtal); stroke-width: 1; stroke-dasharray: 2 3; fill: none; }
+.xo svg .eq-w { stroke: var(--ink-soft); stroke-width: 1.3; fill: none; }
+.xo svg .eq-part { fill: var(--surface); stroke: var(--ink-soft); stroke-width: 1.3; }
+.xo svg .cap-plate { stroke: var(--tool-cap); stroke-width: 3.2; }
+.xo svg .cap-plate.bad { stroke: var(--danger); }
+.xo svg g.cap { cursor: ns-resize; outline: none; }
+.xo svg g.cap .hit { fill: transparent; }
+.xo svg g.cap .ring { fill: none; stroke: none; }
+.xo svg g.cap:hover .hit { fill: color-mix(in srgb, var(--tool-cap) 8%, transparent); }
+.xo svg g.cap:focus-visible .ring { stroke: var(--accent); stroke-width: 2; }
+.xo svg .cap-v { fill: var(--tool-cap); font-weight: 600; }
+.xo svg g.step { cursor: pointer; }
+.xo svg g.step path { fill: var(--ink-soft); }
+.xo svg g.step rect { fill: transparent; }
+.xo svg g.step:hover path { fill: var(--accent); }
+.xo svg .stray-w { stroke: var(--tool-stray); stroke-width: 1.4; stroke-dasharray: 4 3; fill: none; }
+.xo svg .stray-plate { stroke: var(--tool-stray); stroke-width: 2.6; stroke-dasharray: 3 2; }
+.xo svg g.stray { cursor: ew-resize; outline: none; }
+.xo svg g.stray .hit { fill: transparent; }
+.xo svg g.stray:hover .hit { fill: color-mix(in srgb, var(--tool-stray) 9%, transparent); }
+.xo svg g.stray .ring { fill: none; stroke: none; }
+.xo svg g.stray:focus-visible .ring { stroke: var(--accent); stroke-width: 2; }
+.xo svg .stray-t { fill: var(--tool-stray); font-weight: 600; }
+.xo svg .lbl-bg { fill: var(--surface); }
+.xo svg .sum-cap { fill: var(--tool-cap); }
+.xo svg .sum-stray { fill: var(--tool-stray); }
+.xo svg .sum-track { fill: var(--sunken); }
+.xo svg .target { stroke: var(--ink); stroke-width: 1.5; }
+.xo svg .bad-x { stroke: var(--danger); stroke-width: 2; }
+
+/* ruler */
+.xo svg .axis { stroke: var(--ink-soft); stroke-width: 1; }
+.xo svg .tick { stroke: var(--line); stroke-width: 1; }
+.xo svg .band { fill: var(--ok); fill-opacity: var(--fill-alpha); }
+.xo svg .band-e { stroke: var(--ok); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.xo svg .zero { stroke: var(--ink); stroke-width: 1.5; }
+.xo svg g.cand { cursor: pointer; outline: none; }
+.xo svg g.cand .stem { stroke: var(--line); stroke-width: 1.2; }
+.xo svg g.cand .chip { fill: var(--surface); stroke: var(--line); }
+.xo svg g.cand:hover .chip { stroke: var(--ink-soft); }
+.xo svg g.cand:focus-visible .chip { stroke: var(--accent); stroke-width: 2; }
+.xo svg g.cand.on .chip { fill: var(--accent); stroke: var(--accent); }
+.xo svg g.cand.on .chip-t { fill: var(--accent-ink); font-weight: 600; }
+.xo svg g.cand.on .stem { stroke: var(--accent); stroke-width: 2; }
+.xo svg g.cand.on.warn .chip { fill: var(--warn); stroke: var(--warn); }
+.xo svg g.cand.on.warn .stem { stroke: var(--warn); }
+.xo svg g.cand .dot { fill: var(--ink-soft); }
+.xo svg g.cand.on .dot { fill: var(--accent); }
+.xo svg g.cand.on.warn .dot { fill: var(--warn); }
+.xo svg .near-mk { fill: var(--ok); }

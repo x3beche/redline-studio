@@ -106,7 +106,10 @@ export function run({ vdd, ripple, istep, pins, freg, fmax, pkg, lmount, derate,
     ],
     plot: {
       target: r4(zt), f: fs.map(r4), z: zs.map(r4),
-      parts: plan.map(({ k, n }) => ({ label: `${n} × ${fmtEng(k.c, 'F')} ${k.pkg}`, n, c: r4(k.ceff), l: r4(k.l), esr: r4(k.esr) })),
+      parts: plan.map(({ k, n }) => ({ label: `${n} × ${fmtEng(k.c, 'F')} ${k.pkg}`, n, c: r4(k.ceff), l: r4(k.l), esr: r4(k.esr),
+        cNom: r4(k.c), pkg: k.pkg, srf: r4(k.srf), polymer: !!k.polymer })),
+      worst: { f: r4(fs[jmax]), z: r4(zs[jmax]) }, met, pins: npins, lmount: r4(lm * 1e9),
+      hfCount: Math.ceil(2 * Math.PI * fh * (small[0].esl * 1e-9 + lm) / zt),
     },
     notes: [
       'Place the smallest values closest to the pins, each with its own vias to the planes; the mounting inductance is what limits the high end.',

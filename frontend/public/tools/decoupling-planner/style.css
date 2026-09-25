@@ -1,0 +1,128 @@
+/* Decoupling Planner: the spec as a sentence, the board around the IC, the impedance chart. */
+:root {
+  --tool-g0: #d97706; --tool-g1: #0f9d8a; --tool-g2: #a23fbf; --tool-g3: #2b7bb9; --tool-g4: #b8860b; --tool-g5: #c2415d;
+  --tool-board: #1d5a3a; --tool-board-line: #2f7a52; --tool-ic: #1f262d; --tool-ic-ink: #e9eef3; --tool-cu: #c8963e;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-g0: #f0a33a; --tool-g1: #3cc7b3; --tool-g2: #c982e0; --tool-g3: #5fa8e8; --tool-g4: #e0c050; --tool-g5: #ef7a92;
+    --tool-board: #123524; --tool-board-line: #1f5a3b; --tool-ic: #0b1116; --tool-ic-ink: #dfe7ee; --tool-cu: #b98a3a;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-g0: #f0a33a; --tool-g1: #3cc7b3; --tool-g2: #c982e0; --tool-g3: #5fa8e8; --tool-g4: #e0c050; --tool-g5: #ef7a92;
+  --tool-board: #123524; --tool-board-line: #1f5a3b; --tool-ic: #0b1116; --tool-ic-ink: #dfe7ee; --tool-cu: #b98a3a;
+}
+
+.k-page { padding: 10px 12px; }
+.dp { display: grid; gap: 10px; grid-template-columns: minmax(330px, 440px) minmax(0, 1fr);
+  grid-template-areas: "spec spec" "board chart" "board out"; align-items: start; }
+.dp-spec { grid-area: spec; }
+.dp-board { grid-area: board; }
+.dp-chart { grid-area: chart; }
+.dp-out { grid-area: out; min-width: 0; }
+.dp-out .k-out { max-height: 200px; }
+.dp-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.dp-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); min-height: 38px; }
+.dp-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.dp-sub { color: var(--ink-soft); font-size: 11.5px; }
+.dp-grow { flex: 1; }
+.dp-f { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.dp-f input { width: 56px; padding: 2px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); color: var(--ink);
+  font: 12.5px "IBM Plex Mono", ui-monospace, monospace; text-align: right; }
+.dp-f input.bad { border-color: var(--danger); }
+
+/* the spec sentence */
+.dp-spec { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; font-size: 13px; }
+.dp-spec .dp-f { font-size: 13px; color: var(--ink); }
+.dp-spec .dp-f input { width: 52px; font-size: 13px; }
+.dp-arrow { color: var(--ink-soft); }
+.dp-target { font: 600 14px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); padding: 2px 8px; border-radius: 4px; background: var(--sunken); border: 1px dashed var(--danger); }
+.dp-verdict { font: 500 12.5px "IBM Plex Mono", ui-monospace, monospace; padding: 2px 8px; border-radius: 4px; }
+.dp-verdict.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.dp-verdict.bad { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+
+/* board */
+.dp-bdraw { position: relative; }
+.dp-bdraw svg { display: block; width: 100%; }
+.dp-legend { display: flex; flex-direction: column; gap: 1px; padding: 4px 6px 6px; border-top: 1px solid var(--line-soft); }
+.dp-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 3px 6px; border-radius: 4px; font-size: 12px; cursor: default; }
+.dp-row:hover, .dp-row.hi, .dp-row:focus-visible { background: var(--sunken); }
+.dp-row i { width: 12px; height: 12px; border-radius: 2px; }
+.dp-row b { font: 500 12.5px "IBM Plex Mono", ui-monospace, monospace; }
+.dp-row span { color: var(--ink-soft); font: 11px "IBM Plex Mono", ui-monospace, monospace; }
+.dp-pick { padding: 6px 10px 8px; border-top: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 6px; }
+.dp-pick-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.dp-pick-row > .dp-cap { font-size: 11.5px; color: var(--ink-soft); min-width: 64px; }
+.dp-opt { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface);
+  padding: 3px 6px 2px; cursor: pointer; font-size: 10.5px; color: var(--ink-soft); min-width: 54px; }
+.dp-opt svg { display: block; }
+.dp-opt:hover { border-color: var(--ink-soft); color: var(--ink); }
+.dp-opt[aria-checked="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); color: var(--ink); }
+.dp-opt b { font: 500 11px "IBM Plex Mono", ui-monospace, monospace; }
+.dp-toggle { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); padding: 2px 9px; font-size: 12px; cursor: pointer; color: var(--ink-soft); }
+.dp-toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* chart */
+.dp-cdraw { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
+.dp-cdraw svg { display: block; width: 100%; }
+.dp-warns:empty { display: none; }
+.dp-warns { border-top: 1px solid var(--warn); padding: 5px 10px; font-size: 12px; background: color-mix(in srgb, var(--warn) 9%, var(--surface)); }
+.dp-warns div::before { content: "! "; color: var(--warn); font-weight: 600; }
+.dp-foot { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 4px 10px 6px; color: var(--ink-soft); font-size: 11px; border-top: 1px solid var(--line-soft); }
+.dp-foot kbd { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+
+@media (max-width: 960px) {
+  .dp { grid-template-columns: minmax(0, 1fr); grid-template-areas: "spec" "chart" "board" "out"; }
+}
+@media (max-width: 760px) { .k-page { padding: 8px; } .dp-spec { font-size: 12px; } }
+
+/* drawings */
+.dp svg text { font: 11px "IBM Plex Sans", -apple-system, sans-serif; fill: var(--ink); }
+.dp svg .m { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.dp svg .soft { fill: var(--ink-soft); }
+.dp svg .b { font-weight: 600; }
+.dp svg .sm { font-size: 9.5px; }
+.dp svg .danger { fill: var(--danger); }
+.dp svg .ok-t { fill: var(--ok); }
+.dp svg .lbl-bg { fill: var(--surface); }
+.dp svg .board { fill: var(--tool-board); }
+.dp svg .plane-l { stroke: var(--tool-board-line); stroke-width: 1; }
+.dp svg .ic { fill: var(--tool-ic); stroke: color-mix(in srgb, var(--tool-ic-ink) 30%, transparent); }
+.dp svg .ic-t { fill: var(--tool-ic-ink); }
+.dp svg .pin-v { fill: var(--danger); }
+.dp svg .pin-g { fill: color-mix(in srgb, var(--tool-ic-ink) 55%, transparent); }
+.dp svg .pad { fill: var(--tool-cu); }
+.dp svg .via { fill: var(--tool-board); stroke: var(--tool-cu); stroke-width: 1.2; }
+.dp svg g.grp { transition: opacity .12s; }
+.dp svg.focus g.grp:not(.hi), .dp svg.focus .pc:not(.hi) { opacity: .25; }
+.dp svg g.ictl { cursor: pointer; }
+.dp svg g.ictl rect { fill: color-mix(in srgb, var(--tool-ic-ink) 12%, var(--tool-ic)); stroke: color-mix(in srgb, var(--tool-ic-ink) 35%, transparent); }
+.dp svg g.ictl:hover rect { stroke: var(--accent); }
+.dp svg g.ictl path { stroke: var(--tool-ic-ink); stroke-width: 1.6; }
+.dp svg g.icf { outline: none; }
+.dp svg g.icf:focus-visible .ic { stroke: var(--accent); stroke-width: 2.5; }
+
+.dp svg .plot { fill: var(--sunken); stroke: var(--line); }
+.dp svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.dp svg .outband { fill: url(#dp-hatch); }
+.dp svg .hatch-l { stroke: var(--ink-soft); stroke-opacity: .28; stroke-width: 1; }
+.dp svg .forbid { fill: var(--danger); fill-opacity: calc(var(--fill-alpha) * .55); }
+.dp svg .net { fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linejoin: round; }
+.dp svg .net-bad { fill: none; stroke: var(--danger); stroke-width: 3.2; stroke-linejoin: round; }
+.dp svg .pc { fill: none; stroke-width: 1.3; stroke-dasharray: 4 3; }
+.dp svg .pc.hi { stroke-width: 2.2; stroke-dasharray: none; }
+.dp svg g.hd { outline: none; }
+.dp svg g.hd .hit { fill: transparent; }
+.dp svg g.hd.t { cursor: ns-resize; }
+.dp svg g.hd.f { cursor: ew-resize; }
+.dp svg g.hd .tline { stroke: var(--danger); stroke-width: 2; stroke-dasharray: 7 4; }
+.dp svg g.hd .fline { stroke: var(--ink); stroke-width: 1.5; }
+.dp svg g.hd .knob { fill: var(--surface); stroke-width: 2.2; }
+.dp svg g.hd.t .knob { stroke: var(--danger); }
+.dp svg g.hd.f .knob { stroke: var(--ink); }
+.dp svg g.hd:hover .knob { stroke-width: 3; }
+.dp svg g.hd .ring { fill: none; stroke: none; }
+.dp svg g.hd:focus-visible .ring { stroke: var(--accent); stroke-width: 2; }
+.dp svg .tgt-t { fill: var(--danger); font-weight: 600; }
+.dp svg .worst { fill: var(--surface); stroke-width: 2.4; }

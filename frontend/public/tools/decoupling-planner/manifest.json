@@ -3,6 +3,7 @@
   "name": "Decoupling Planner",
   "blurb": "how many decoupling capacitors and which values for an IC's supply pins and target impedance",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["decoupling", "bypass capacitor", "target impedance", "PDN", "power distribution network", "ESL", "ESR", "anti-resonance", "100nF", "MLCC", "power integrity", "supply pins", "mounting inductance", "SRF"],
   "intro": "Uses the target-impedance method: the supply may move by ripple × V when the IC's current steps by ΔI, so the network must stay below Z = V·ripple/ΔI from the regulator's bandwidth up to the highest frequency you care about. It starts with one 100 nF per supply pin and adds the capacitor that removes the most excess impedance until the curve is under the target, counting ESR, ESL and mounting inductance.",

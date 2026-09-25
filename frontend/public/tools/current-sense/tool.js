@@ -89,9 +89,23 @@ export function run({ imax, dir, vsh, vfs, bits, head, gains, vos }) {
       gg == null ? '–' : fmtEng(lsb / (gg * x), 'A'), vos > 0 ? fmtEng((vos * 1e-6) / x, 'A') : '–', x === r ? '← chosen' : ''];
   });
 
+  // The measurement chain as data, for the page's drawing (and for agents that want numbers).
+  const r4 = (v) => (v == null || !Number.isFinite(v) ? null : Number(v.toPrecision(4)));
+  const chain = {
+    imax, bi, vshMax: vshV, r, vsFull: r4(vsFull), gain: r4(g), gNeed: r4(gNeed), gains: set ? [...set] : null, gainSet: GAINS[gains] === undefined ? 'ina18x' : gains,
+    vref: r4(vref), vout: r4(vout), vlo: r4(vlo), vfs, bits: nb, codes: 2 ** nb, counts, use, usedPct: r4(usedPct),
+    lsb: r4(lsb), perStep: r4(perStep), p: r4(p), rating: r4(rating), size: size ? size[0] : null, sizeW: size ? size[1] : null,
+    vos: vos > 0 ? vos : null, offI: r4(offI), over: vout > vfs,
+    neighbours: SHUNTS.filter((x) => x <= r * 2.51 && x >= r / 2.51).map((x) => {
+      const gg = set ? ([...set].reverse().find((y) => y <= (use * vspan) / (imax * x) * 1.0001) ?? null) : (use * vspan) / (imax * x);
+      return { r: x, mv: r4(imax * x * 1000), p: r4(imax * imax * x), gain: gg == null ? null : r4(gg), perStep: gg == null ? null : r4(lsb / (gg * x)), offI: vos > 0 ? r4((vos * 1e-6) / x) : null };
+    }),
+  };
+
   return {
     values,
     warnings,
+    chain,
     tables: [{ title: 'Neighbouring shunt values', columns: ['Shunt', 'mV at Imax', 'Power', 'Gain', 'A per step', 'Offset error', ''], rows }],
     notes: [
       'Use a 4-terminal (Kelvin) layout: route the sense lines from the inner edges of the shunt pads, as a pair.',

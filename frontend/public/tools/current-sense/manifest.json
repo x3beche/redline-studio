@@ -3,6 +3,7 @@
   "name": "Current Sense Designer",
   "blurb": "shunt value, its power and the amplifier gain for a range and an ADC input",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb", "embedded"],
   "keywords": ["current sense", "shunt", "sense resistor", "current shunt amplifier", "csa", "ina180", "ina181", "ina240", "ina219", "adc", "gain", "low-side", "high-side", "milliohm"],
   "intro": "Chooses the largest standard shunt that keeps the sense voltage under your limit, then the largest amplifier gain that keeps full current inside the ADC range (with headroom). It reports the shunt's dissipation, the resolution per ADC step and the error the amplifier's offset adds.",

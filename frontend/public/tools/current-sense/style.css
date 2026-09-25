@@ -1,0 +1,128 @@
+/* Current Sense: the signal chain, each stage above its own scale. */
+:root {
+  --tool-amp: #d97706; --tool-mv: #a23fbf; --tool-v: var(--accent); --tool-pad: #8a96a3; --tool-body: #26313b; --tool-body-ink: #e9eef3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tool-amp: #f0a33a; --tool-mv: #c982e0; --tool-pad: #9aa7b3; --tool-body: #0b1116; --tool-body-ink: #dfe7ee; }
+}
+:root[data-theme="dark"] { --tool-amp: #f0a33a; --tool-mv: #c982e0; --tool-pad: #9aa7b3; --tool-body: #0b1116; --tool-body-ink: #dfe7ee; }
+
+.k-page { padding: 10px 12px; }
+.cs { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); grid-template-areas: "chain chain" "shunts out"; }
+.cs-chain { grid-area: chain; }
+.cs-shunts { grid-area: shunts; }
+.cs-out { grid-area: out; min-width: 0; }
+.cs-out .k-out { max-height: 190px; }
+.cs-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.cs-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); min-height: 38px; }
+.cs-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.cs-sub { color: var(--ink-soft); font-size: 11.5px; }
+.cs-grow { flex: 1; }
+.cs-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.cs-seg button { border: 0; background: transparent; padding: 2px 9px; font-size: 11.5px; cursor: pointer; color: var(--ink-soft); white-space: nowrap; }
+.cs-seg button + button { border-left: 1px solid var(--line); }
+.cs-seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+.cs-seg button:hover:not([aria-checked="true"]) { background: var(--sunken); color: var(--ink); }
+.cs-lab { font-size: 11.5px; color: var(--ink-soft); }
+
+.cs-draw { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
+.cs-draw svg { display: block; width: 100%; overflow: visible; }
+.cs-over { position: absolute; inset: 0; pointer-events: none; }
+.cs-f { position: absolute; pointer-events: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
+.cs-f input { width: 50px; padding: 1px 4px; border: 1px solid var(--line); border-radius: 3px; background: var(--sunken); color: var(--ink);
+  font: 11.5px "IBM Plex Mono", ui-monospace, monospace; text-align: right; }
+.cs-f input.bad { border-color: var(--danger); }
+.cs-f.on-body { color: color-mix(in srgb, var(--tool-body-ink) 70%, transparent); }
+.cs-f.on-body input { background: color-mix(in srgb, var(--tool-body-ink) 10%, var(--tool-body)); color: var(--tool-body-ink); border-color: color-mix(in srgb, var(--tool-body-ink) 25%, transparent); }
+.cs-flow { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 10px; padding: 6px 10px 8px; border-top: 1px solid var(--line-soft); }
+.cs-flow[hidden] { display: none; }
+.cs-flow .cs-f { position: static; }
+.cs-flow .cs-f.on-body { color: var(--ink-soft); }
+.cs-flow .cs-f.on-body input { background: var(--sunken); color: var(--ink); border-color: var(--line); }
+.cs-warns:empty { display: none; }
+.cs-warns { border-top: 1px solid var(--warn); padding: 5px 10px; font-size: 12px; background: color-mix(in srgb, var(--warn) 9%, var(--surface)); border-radius: 0 0 6px 6px; }
+.cs-warns div::before { content: "! "; color: var(--warn); font-weight: 600; }
+.cs-foot { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 4px 10px 6px; color: var(--ink-soft); font-size: 11px; border-top: 1px solid var(--line-soft); }
+.cs-foot kbd { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+
+/* shunt choices */
+.cs-list { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(104px, 1fr); gap: 6px; padding: 8px 10px 10px; overflow-x: auto; }
+.cs-opt { display: flex; flex-direction: column; gap: 3px; align-items: stretch; text-align: left; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--surface); padding: 6px 7px; cursor: pointer; min-width: 0; font-size: 11px; color: var(--ink-soft); }
+.cs-opt .top { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; }
+.cs-notes { padding: 6px 10px 9px; border-top: 1px solid var(--line-soft); color: var(--ink-soft); font-size: 11.5px; }
+.cs-notes div + div { margin-top: 3px; }
+.cs-opt:hover { border-color: var(--ink-soft); }
+.cs-opt[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.cs-opt b { font: 600 13px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); }
+.cs-opt .m { font: 10px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-opt .bar { height: 5px; border-radius: 2px; background: var(--sunken); overflow: hidden; }
+.cs-opt .bar i { display: block; height: 100%; }
+.cs-opt .bar.p i { background: var(--tool-amp); }
+.cs-opt .bar.res i { background: var(--tool-v); }
+.cs-opt.over { opacity: .55; }
+.cs-key { display: flex; gap: 12px; padding: 0 10px 8px; font-size: 11px; color: var(--ink-soft); flex-wrap: wrap; }
+.cs-key i { display: inline-block; width: 12px; height: 5px; border-radius: 2px; margin-right: 4px; vertical-align: 1px; }
+
+@media (max-width: 900px) {
+  .cs { grid-template-columns: minmax(0, 1fr); grid-template-areas: "chain" "shunts" "out"; }
+}
+@media (max-width: 760px) { .k-page { padding: 8px; } }
+
+/* drawing */
+.cs svg text { font: 11px "IBM Plex Sans", -apple-system, sans-serif; fill: var(--ink); }
+.cs svg .m { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.cs svg .soft { fill: var(--ink-soft); }
+.cs svg .b { font-weight: 600; }
+.cs svg .sm { font-size: 9.5px; }
+.cs svg .lg { font-size: 16px; }
+.cs svg .danger { fill: var(--danger); }
+.cs svg .lbl-bg { fill: var(--surface); }
+.cs svg .wire { stroke: var(--ink); stroke-width: 2.4; fill: none; }
+.cs svg .wire-i { stroke: var(--tool-amp); stroke-width: 3; fill: none; }
+.cs svg .sense { stroke: var(--tool-mv); stroke-width: 1.6; fill: none; }
+.cs svg .sig { stroke: var(--tool-v); stroke-width: 2; fill: none; }
+.cs svg .src { fill: var(--surface); stroke: var(--tool-amp); stroke-width: 2; }
+.cs svg .arrow-i { fill: var(--tool-amp); }
+.cs svg .i-t { fill: var(--tool-amp); }
+.cs svg .mv-t { fill: var(--tool-mv); }
+.cs svg .v-t { fill: var(--tool-v); }
+.cs svg .pad { fill: var(--tool-pad); }
+.cs svg .body { fill: var(--tool-body); stroke: var(--line); }
+.cs svg .body-t { fill: var(--tool-body-ink); }
+.cs svg .elem { fill: var(--tool-amp); }
+.cs svg .amp { fill: var(--tool-body); stroke: var(--tool-body-ink); stroke-width: 1.5; }
+.cs svg .adc { fill: var(--tool-body); stroke: var(--line); }
+.cs svg .gnd { stroke: var(--ink-soft); stroke-width: 1.5; }
+.cs svg g.gchip rect { fill: var(--surface); stroke: var(--line); }
+.cs svg g.gchip text { fill: var(--ink-soft); }
+.cs svg g.gchip.on rect { fill: var(--tool-amp); stroke: var(--tool-amp); }
+.cs svg g.gchip.on text { fill: var(--accent-ink); font-weight: 600; }
+.cs svg g.gchip.too rect { stroke-dasharray: 3 2; }
+.cs svg g.gchip.too text { text-decoration: line-through; }
+
+.cs svg .axis { stroke: var(--ink-soft); stroke-width: 1.5; }
+.cs svg .tick { stroke: var(--ink-soft); stroke-width: 1; }
+.cs svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.cs svg .rib { fill: var(--tool-v); fill-opacity: calc(var(--fill-alpha) * .5); }
+.cs svg .rib-e { stroke: var(--tool-v); stroke-width: 1.2; fill: none; opacity: .8; }
+.cs svg .rib-z { stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 4 3; fill: none; }
+.cs svg .over { fill: var(--danger); fill-opacity: calc(var(--fill-alpha) * .8); }
+.cs svg .over-e { stroke: var(--danger); stroke-width: 1.5; }
+.cs svg .spare { fill: var(--ok); fill-opacity: calc(var(--fill-alpha) * .7); }
+.cs svg .mark { stroke: var(--ink); stroke-width: 2; }
+.cs svg .mark-d { fill: var(--ink); }
+.cs svg .off { fill: var(--tool-mv); fill-opacity: .55; }
+.cs svg g.hd { cursor: ns-resize; outline: none; }
+.cs svg g.hd .hit { fill: transparent; }
+.cs svg g.hd .knob { stroke: var(--surface); stroke-width: 2; }
+.cs svg g.hd.i .knob { fill: var(--tool-amp); }
+.cs svg g.hd.mv .knob { fill: var(--tool-mv); }
+.cs svg g.hd.use .knob { fill: var(--ok); }
+.cs svg g.hd .line { stroke-width: 2; }
+.cs svg g.hd.i .line { stroke: var(--tool-amp); }
+.cs svg g.hd.mv .line { stroke: var(--tool-mv); stroke-dasharray: 5 3; }
+.cs svg g.hd.use .line { stroke: var(--ok); stroke-dasharray: 5 3; }
+.cs svg g.hd .ring { fill: none; stroke: none; }
+.cs svg g.hd:focus-visible .ring { stroke: var(--accent); stroke-width: 2; }
+.cs svg g.hd:hover .knob { stroke: var(--ink); }

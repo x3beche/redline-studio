@@ -16,7 +16,7 @@ function ladder(series) {
   return out; // pF, 0.1 … 820
 }
 
-export function run({ cl, cs, series, f, esr, c0, cm, gspec, gmode }) {
+export function run({ cl, cs, series, f, esr, c0, cm, gspec, gmode, cfit }) {
   const warnings = [];
   if (!(cl > 0)) return { warnings: ['Give the crystal load capacitance CL in pF, from the crystal datasheet (e.g. 12).'] };
   const stray = cs >= 0 ? cs : 0;
@@ -25,11 +25,15 @@ export function run({ cl, cs, series, f, esr, c0, cm, gspec, gmode }) {
   const values = [];
   if (!(cExact > 0)) {
     return { values: [{ label: 'Each capacitor', value: 'none possible', tone: 'bad' }],
+      osc: { cl, cs: stray, cExact, impossible: true, series: SER[series] ? series : 'E12' },
       warnings: [`The stray capacitance (${fmtNum(stray)} pF) already reaches CL (${fmtNum(cl)} pF): pick a crystal with a higher CL, or shorten the traces.`] };
   }
   const lad = ladder(SER[series] || E12);
-  const near = lad.reduce((b, x) => (Math.abs(x - cExact) < Math.abs(b - cExact) ? x : b), lad[0]);
-  const idx = lad.indexOf(near);
+  const nearest = lad.reduce((b, x) => (Math.abs(x - cExact) < Math.abs(b - cExact) ? x : b), lad[0]);
+  // cfit: a capacitor the designer picked instead of the nearest standard value (optional).
+  const chosen = cfit > 0;
+  const near = chosen ? cfit : nearest;
+  const idx = lad.indexOf(lad.reduce((b, x) => (Math.abs(Math.log(x / near)) < Math.abs(Math.log(b / near)) ? x : b), lad[0]));
   const clOf = (c) => c / 2 + stray;
 
   const hasF = f > 0, hasC0 = c0 >= 0 && c0 != null, hasCm = cm > 0;
@@ -39,7 +43,8 @@ export function run({ cl, cs, series, f, esr, c0, cm, gspec, gmode }) {
 
   values.push(
     { label: 'Each capacitor (exact)', value: fmtEng(cExact * 1e-12, 'F') },
-    { label: `Fit (${series || 'E12'}, C0G/NP0)`, value: fmtEng(near * 1e-12, 'F'), tone: 'ok' },
+    { label: chosen ? 'Fitted (your choice, C0G/NP0)' : `Fit (${series || 'E12'}, C0G/NP0)`, value: fmtEng(near * 1e-12, 'F'), tone: 'ok',
+      hint: chosen && near !== nearest ? `nearest ${series || 'E12'}: ${fmtEng(nearest * 1e-12, 'F')}` : undefined },
     { label: 'CL obtained', value: fmtNum(clA, 4), unit: 'pF', hint: `target ${fmtNum(cl, 4)} pF` },
   );
   if (errPpm != null) values.push({ label: 'Frequency error from CL', value: `${errPpm >= 0 ? '+' : ''}${fmtNum(errPpm, 2)}`, unit: 'ppm',
@@ -48,7 +53,7 @@ export function run({ cl, cs, series, f, esr, c0, cm, gspec, gmode }) {
   if (errPpm != null && Math.abs(errPpm) > 10) warnings.push(`The standard value pulls the frequency ${fmtNum(errPpm, 2)} ppm; try the ${series === 'E24' ? 'neighbouring' : 'E24'} values in the table or a series with finer steps.`);
 
   // start-up margin
-  let gcrit = null;
+  let gcrit = null, ratio = null, gain = null;
   if (hasF && esr > 0 && hasC0) {
     const w = 2 * Math.PI * f;
     gcrit = 4 * esr * w * w * Math.pow((c0 + cl) * 1e-12, 2); // A/V, with the datasheet CL
@@ -56,12 +61,12 @@ export function run({ cl, cs, series, f, esr, c0, cm, gspec, gmode }) {
     values.push({ label: 'gm,crit', value: fmtNum(gUA, 3), unit: 'µA/V', hint: `ESR ${fmtEng(esr, 'Ω')}, C0 + CL ${fmtNum(c0 + cl, 3)} pF` });
     if (gspec > 0) {
       if (gmode === 'gm') {
-        const gain = gspec / gUA;
+        gain = gspec / gUA;
         const ok = gain >= 5;
         values.push({ label: 'Gain margin gm / gm,crit', value: fmtNum(gain, 3), tone: ok ? 'ok' : 'bad', hint: 'needs ≥ 5' });
         if (!ok) warnings.push(`Gain margin ${fmtNum(gain, 2)} is under 5: the oscillator may not start over temperature. Use a crystal with lower ESR or lower CL, or a stronger drive setting.`);
       } else {
-        const ratio = gUA / gspec;
+        ratio = gUA / gspec;
         const ok = ratio <= 1;
         values.push({ label: 'gm,crit / Gm_crit_max', value: `${fmtNum(ratio * 100, 3)} %`, tone: ok ? (ratio > 0.8 ? 'warn' : 'ok') : 'bad', hint: 'must be ≤ 100 %' });
         if (!ok) warnings.push(`gm,crit ${fmtNum(gUA, 3)} µA/V exceeds the MCU's Gm_crit_max ${fmtNum(gspec, 3)} µA/V: the oscillator may not start. Pick a crystal with lower ESR or lower CL, or a higher drive level.`);
@@ -77,9 +82,32 @@ export function run({ cl, cs, series, f, esr, c0, cm, gspec, gmode }) {
     rows.push([fmtEng(c * 1e-12, 'F'), fmtNum(clOf(c), 4), p == null ? '–' : `${p >= 0 ? '+' : ''}${fmtNum(p, 2)}`, c === near ? '← fit' : '']);
   }
 
+  // The oscillator as data, for the page's drawing (and for agents that want numbers, not text).
+  const r4 = (v) => (v == null || !Number.isFinite(v) ? null : Number(v.toPrecision(4)));
+  const band = (p) => { // CL obtained that pulls the frequency by p ppm
+    if (!(hasCm && hasC0)) return null;
+    const inv = p / 1e6 / (cm * 1e-3 / 2) + 1 / (c0 + cl);
+    return inv > 0 ? r4(1 / inv - c0) : null;
+  };
+  const around = [];
+  for (let i = Math.max(0, idx - 4); i <= Math.min(lad.length - 1, idx + 4); i++) {
+    const c = lad[i];
+    around.push({ c, cl: r4(clOf(c)), ppm: r4(ppm(c)), nearest: c === nearest });
+  }
+  const osc = {
+    cl, cs: stray, series: SER[series] ? series : 'E12', cExact: r4(cExact), cFit: near, chosen, nearest,
+    cSeries: r4(near / 2), clA: r4(clA), ppm: r4(errPpm), fActual: errPpm != null && hasF ? f * (1 + errPpm / 1e6) : null,
+    band: [band(-10), band(10)], ladder: around,
+    f: hasF ? f : null, esr: esr > 0 ? esr : null, c0: hasC0 ? c0 : null, cm: hasCm ? cm : null,
+    gcrit: gcrit == null ? null : r4(gcrit * 1e6), gspec: gspec > 0 ? gspec : null, gmode: gmode === 'gm' ? 'gm' : 'gmcritmax',
+    ratio: r4(ratio), gain: r4(gain),
+    startOk: gcrit == null || !(gspec > 0) ? null : gmode === 'gm' ? gain >= 5 : ratio <= 1,
+  };
+
   return {
     values,
     warnings,
+    osc,
     tables: [{ title: 'Standard values near the exact one', columns: ['Each capacitor', 'CL obtained pF', 'Error ppm', ''], rows }],
     notes: [
       'Use C0G/NP0 capacitors: X7R/X5R drift with temperature and voltage and move the frequency.',
