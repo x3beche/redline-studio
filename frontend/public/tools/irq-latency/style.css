@@ -1,0 +1,78 @@
+/* Interrupt Latency Budget: the worst case drawn as a schedule. */
+.irq { --tool-c0: #1f4ed8; --tool-c1: #d97706; --tool-c2: #0f9d8a; --tool-c3: #a23fbf; --tool-c4: #b4482a; --tool-c5: #4d7c0f; --tool-c6: #0e7490; --tool-c7: #be185d;
+  --tool-main: #c8d2db; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .irq {
+  --tool-c0: #6d8dff; --tool-c1: #f0a33a; --tool-c2: #3cc7b3; --tool-c3: #c982e0; --tool-c4: #e8876a; --tool-c5: #9ccc5a; --tool-c6: #4cc3dc; --tool-c7: #ef6fa8;
+  --tool-main: #2b3945; } }
+:root[data-theme="dark"] .irq { --tool-c0: #6d8dff; --tool-c1: #f0a33a; --tool-c2: #3cc7b3; --tool-c3: #c982e0; --tool-c4: #e8876a; --tool-c5: #9ccc5a; --tool-c6: #4cc3dc; --tool-c7: #ef6fa8;
+  --tool-main: #2b3945; }
+
+.k-page { padding: 12px 14px 16px; }
+.irq { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.irq-mono, .irq input, .irq select { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+/* the core: one line of settings */
+.irq-core { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; }
+.irq-core label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ink-soft); min-width: 0; }
+.irq-core input, .irq-core select, .irq-insp input { padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); color: var(--ink); font-size: 12.5px; min-width: 0; }
+.irq-core input { width: 84px; }
+.irq-core input.bad, .irq-insp input.bad { border-color: var(--danger); }
+.irq-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.irq-seg button { border: 0; background: var(--sunken); padding: 3px 10px; font-size: 12px; cursor: pointer; color: var(--ink-soft); }
+.irq-seg button + button { border-left: 1px solid var(--line); }
+.irq-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.irq-core .irq-ov { margin-left: auto; font-size: 11.5px; color: var(--ink-soft); align-self: center; }
+.irq-core .irq-ov b { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); }
+
+.irq-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.irq-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); }
+.irq-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.irq-sub { font-size: 11.5px; color: var(--ink-soft); }
+.irq-sub b { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); }
+.irq-sub b.bad { color: var(--danger); } .irq-sub b.warn { color: var(--warn); } .irq-sub b.ok { color: var(--ok); }
+.irq-head .irq-right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+
+.irq-svg { display: block; width: 100%; user-select: none; -webkit-user-select: none; }
+.irq-svg text { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.irq-svg text.soft { fill: var(--ink-soft); }
+.irq-svg text.small { font-size: 10px; }
+.irq-svg text.name { font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif; font-size: 12px; }
+.irq-svg text.bad { fill: var(--danger); } .irq-svg text.warn { fill: var(--warn); }
+.irq-svg .lane { cursor: pointer; }
+.irq-svg .hdl { cursor: ew-resize; touch-action: none; }
+.irq-svg .hdl-v { cursor: ns-resize; touch-action: none; }
+.irq-svg .hdl:focus, .irq-svg .hdl-v:focus, .irq-svg .lane:focus { outline: none; }
+.irq-svg .hdl:focus-visible .ring, .irq-svg .hdl-v:focus-visible .ring { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 2; }
+.irq-svg .lane:focus-visible .lanebg { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.irq-svg .seg { cursor: pointer; }
+
+.irq-help { padding: 5px 10px 8px; font-size: 11.5px; color: var(--ink-soft); border-top: 1px solid var(--line-soft); }
+.irq-help kbd { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 0 3px; }
+
+.irq-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 10px; align-items: start; }
+@media (max-width: 1080px) { .irq-grid { grid-template-columns: minmax(0, 1fr); } }
+.irq-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+/* the selected interrupt */
+.irq-insp { padding: 8px 10px 10px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; }
+.irq-insp label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ink-soft); min-width: 0; }
+.irq-insp label.wide { grid-column: 1 / -1; }
+.irq-insp .row { display: flex; gap: 4px; }
+.irq-insp .row input { flex: 1; width: 0; }
+.irq-insp .k-btn { padding: 1px 8px; }
+.irq-figs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line-soft); border-top: 1px solid var(--line-soft); }
+.irq-fig { background: var(--surface); padding: 5px 9px; min-width: 0; }
+.irq-fig span { display: block; font-size: 10.5px; color: var(--ink-soft); }
+.irq-fig b { display: block; font: 500 13.5px "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.irq-fig b small { font-size: 10.5px; color: var(--ink-soft); font-weight: 400; }
+.irq-fig.bad b { color: var(--danger); } .irq-fig.warn b { color: var(--warn); } .irq-fig.ok b { color: var(--ok); }
+.irq-verdict { padding: 6px 10px; font-size: 12px; border-top: 1px solid var(--line-soft); }
+.irq-verdict.bad { color: var(--danger); } .irq-verdict.warn { color: var(--warn); } .irq-verdict.ok { color: var(--ok); }
+
+.irq-warns { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 6px; padding: 6px 10px; background: var(--surface); font-size: 12px; }
+.irq-warns div + div { margin-top: 4px; }
+.irq-warns:empty { display: none; }
+.irq-notes { font-size: 11.5px; color: var(--ink-soft); padding: 0 2px; }
+.irq-notes summary { cursor: pointer; }
+.irq-notes div { margin-top: 4px; }
+.irq .k-out { max-height: 220px; }

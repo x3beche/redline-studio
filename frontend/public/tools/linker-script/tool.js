@@ -24,13 +24,13 @@ const ident = (n) => n.replace(/^\./, '').replace(/[^A-Za-z0-9_]/g, '_');
 export function run({ regions: regIn, flash: flashName, ram: ramName, stack, heap, entry, extra, cpp }) {
   const warnings = [], notes = [];
   const regions = [];
-  for (const r of regIn || []) {
+  for (const [row, r] of (regIn || []).entries()) {
     const name = String(r.name ?? '').trim();
     if (!name) continue;
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) { warnings.push(`Region name "${name}" is not a valid ld identifier: use letters, digits and _.`); continue; }
     const origin = parseSize(r.origin), length = parseSize(r.length);
     if (origin == null || !(length > 0)) { warnings.push(`Region ${name}: give the origin as 0x... and the length as 512K or 0x... . Row skipped.`); continue; }
-    regions.push({ name, attr: String(r.attr || 'rwx').trim() || 'rwx', origin, length });
+    regions.push({ name, attr: String(r.attr || 'rwx').trim() || 'rwx', origin, length, row });
   }
   if (!regions.length) return { warnings: [...warnings, 'Add the memory regions: at least a flash and a RAM.'] };
   for (let i = 0; i < regions.length; i++) for (let j = i + 1; j < regions.length; j++) {
@@ -57,13 +57,13 @@ export function run({ regions: regIn, flash: flashName, ram: ramName, stack, hea
   else if (reserve > R.length * 0.75) warnings.push(`Stack + heap take ${Math.round((reserve / R.length) * 100)} % of ${R.name}, leaving ${kb(R.length - reserve)} for .data and .bss.`);
 
   const ex = [];
-  for (const e of extra || []) {
+  for (const [row, e] of (extra || []).entries()) {
     const name = String(e.name ?? '').trim();
     if (!name) continue;
     const reg = byName(e.region);
     if (!reg) { warnings.push(`Section ${name}: no region "${e.region}". Add the region or fix its name.`); continue; }
     const sec = name.startsWith('.') ? name : `.${name}`;
-    ex.push({ sec, id: ident(sec), reg, kind: e.kind || 'zero' });
+    ex.push({ sec, id: ident(sec), reg, kind: e.kind || 'zero', row });
   }
 
   const W = Math.max(...regions.map((r) => r.name.length));
@@ -116,7 +116,38 @@ export function run({ regions: regIn, flash: flashName, ram: ramName, stack, hea
   if (ex.some((x) => x.kind === 'noload')) notes.push('NOLOAD sections are neither copied nor zeroed: their contents survive a reset (useful for a crash log or boot flags) and start as garbage after power-up.');
   notes.push(`Stack and heap are a reservation check: ._user_heap_stack makes the link fail if ${kb(reserve)} does not fit after .data and .bss; the stack itself grows down from _estack.`);
 
+  // The map the page draws: regions by address, what each one holds in
+  // link order, and the stack/heap reservation (runtime picture: the heap
+  // grows up after .bss, the stack down from _estack).
+  const overlapsOf = (a) => regions.filter((b) => b !== a && a.origin < b.origin + b.length && b.origin < a.origin + a.length).map((b) => b.name);
+  const holds = (r) => {
+    const out = [];
+    if (r === F) {
+      out.push({ name: '.isr_vector', what: 'vectors' }, { name: '.text', what: 'code' }, { name: '.rodata', what: 'const' });
+      if (cpp) out.push({ name: '.ARM.exidx, .init_array', what: 'cpp' });
+      for (const e of ex.filter((x) => x.kind === 'rom' && x.reg === F)) out.push({ name: e.sec, what: 'extra', kind: e.kind, row: e.row });
+      out.push({ name: '.data', what: 'image', of: R.name, symbol: '_sidata' });
+      for (const e of ex.filter((x) => x.kind === 'init')) out.push({ name: e.sec, what: 'image', of: e.reg.name, symbol: `_si${e.id}`, row: e.row, kind: 'init' });
+    }
+    if (r === R) out.push({ name: '.data', what: 'data', symbol: '_sdata', from: F.name }, { name: '.bss', what: 'bss', symbol: '_sbss' });
+    for (const e of ex.filter((x) => x.reg === r && !(x.kind === 'rom' && r === F))) {
+      out.push({ name: e.sec, what: 'extra', kind: e.kind, row: e.row, symbol: `_s${e.id}`, from: e.kind === 'init' ? F.name : null });
+    }
+    return out;
+  };
+  const map = {
+    code: F.name, data: R.name, estack, estackAligned: estack % 8 === 0, stack: st, heap: hp,
+    stackBlock: Math.ceil(st / 8) * 8, heapBlock: Math.ceil(hp / 8) * 8, stackLimitHex: hex(Math.max(0, estack - Math.ceil(st / 8) * 8)), reserve, free: R.length - reserve, fits: reserve <= R.length, share: reserve / R.length,
+    regions: [...regions].sort((a, b) => a.origin - b.origin).map((r) => ({
+      name: r.name, attr: r.attr, origin: r.origin, length: r.length, end: r.origin + r.length, row: r.row,
+      originHex: hex(r.origin), endHex: hex(r.origin + r.length), lengthText: lenText(r.length), size: kb(r.length),
+      role: r === F && r === R ? 'both' : r === F ? 'code' : r === R ? 'data' : 'other', exec: /x/i.test(r.attr),
+      vtorBad: r === F && r.origin % 512 !== 0, overlaps: overlapsOf(r), holds: holds(r),
+    })),
+  };
+
   return {
+    map,
     values: [
       { label: '_estack', value: hex(estack), hint: `top of ${R.name}` },
       { label: 'Code region', value: F.name, hint: `${hex(F.origin)}, ${kb(F.length)}` },

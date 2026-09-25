@@ -1,8 +1,9 @@
 {
-  "id": "log-format", "version": "1.0",
+  "id": "log-format", "version": "1.1",
   "name": "Log Format Designer",
   "blurb": "a compact embedded log format and its parser code",
   "group": "embedded",
+  "layout": "custom",
   "rooms": ["embedded"],
   "keywords": ["logging", "binary log", "deferred formatting", "defmt", "dictionary logging", "trace", "printf", "cobs", "log parser", "uart bandwidth", "timestamp", "log level", "telemetry"],
   "intro": "Designs a binary log record in which the device sends only a message id, level, timestamp and raw arguments while the format strings stay on the host (the idea behind defmt and Zephyr dictionary logging). It sizes every message against its printf text, gives the UART load of both, and generates the C encoder and a Python decoder.",

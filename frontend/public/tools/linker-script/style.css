@@ -1,0 +1,66 @@
+/* Linker Script Helper: the memory map is the interface. */
+.lds { --tool-code: #3a5bd0; --tool-data: #0f9d8a; --tool-bss: #b7791f; --tool-noload: #a23fbf; --tool-rom: #5b6b7a;
+  --tool-heap: #4d8a2f; --tool-stack: #c2410c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lds {
+  --tool-code: #7d98ff; --tool-data: #3cc7b3; --tool-bss: #e8a735; --tool-noload: #c982e0; --tool-rom: #8ea0b0;
+  --tool-heap: #8fcf6a; --tool-stack: #f08a5d; } }
+:root[data-theme="dark"] .lds { --tool-code: #7d98ff; --tool-data: #3cc7b3; --tool-bss: #e8a735; --tool-noload: #c982e0; --tool-rom: #8ea0b0;
+  --tool-heap: #8fcf6a; --tool-stack: #f08a5d; }
+
+.k-page { padding: 12px 14px 16px; }
+.lds { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 520px); gap: 10px; align-items: start; min-width: 0; }
+@media (max-width: 1100px) { .lds { grid-template-columns: minmax(0, 1fr); } }
+.lds-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.lds input, .lds select { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+.lds-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.lds-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); }
+.lds-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.lds-sub { font-size: 11.5px; color: var(--ink-soft); }
+.lds-sub b { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); }
+.lds-sub b.bad { color: var(--danger); } .lds-sub b.warn { color: var(--warn); }
+.lds-head .lds-right { margin-left: auto; display: flex; gap: 6px; }
+
+.lds-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 12px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); }
+.lds-bar label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ink-soft); }
+.lds-bar label.chk { flex-direction: row; align-items: center; gap: 5px; font-size: 12px; color: var(--ink); padding-bottom: 4px; }
+.lds-bar input[type="text"], .lds-ed input, .lds-ed select { padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); color: var(--ink); font-size: 12.5px; min-width: 0; }
+.lds-bar input[type="text"] { width: 96px; }
+.lds-bar input.wide { width: 130px; }
+.lds-bar input.bad, .lds-ed input.bad { border-color: var(--danger); }
+.lds-bar .lds-right { margin-left: auto; display: flex; gap: 6px; }
+
+.lds-svg { display: block; width: 100%; user-select: none; -webkit-user-select: none; }
+.lds-svg text { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.lds-svg text.soft { fill: var(--ink-soft); }
+.lds-svg text.small { font-size: 10px; }
+.lds-svg text.big { font-size: 13px; font-weight: 600; }
+.lds-svg text.bad { fill: var(--danger); } .lds-svg text.warn { fill: var(--warn); }
+.lds-svg .hdl { cursor: ns-resize; touch-action: none; }
+.lds-svg .chip { cursor: grab; touch-action: none; }
+.lds-svg .sel { cursor: pointer; }
+.lds-svg .hdl:focus, .lds-svg .chip:focus, .lds-svg .sel:focus { outline: none; }
+.lds-svg .hdl:focus-visible .ring, .lds-svg .chip:focus-visible .ring, .lds-svg .sel:focus-visible .ring { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 2; }
+.lds-svg .drop .ring { stroke: var(--accent); stroke-width: 2.5; }
+.lds-help { padding: 5px 10px 8px; font-size: 11.5px; color: var(--ink-soft); border-top: 1px solid var(--line-soft); }
+.lds-help kbd { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 0 3px; }
+
+.lds-ed { padding: 8px 10px 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px 10px; align-items: end; }
+.lds-ed label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ink-soft); min-width: 0; }
+.lds-ed .acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.lds-ed .acts .push { margin-left: auto; }
+.lds-ed .note { grid-column: 1 / -1; font-size: 11.5px; color: var(--ink-soft); }
+.lds-kinds { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.lds-kinds button { border: 0; background: var(--sunken); padding: 3px 9px; font: 12px "IBM Plex Mono", ui-monospace, monospace; cursor: pointer; color: var(--ink-soft); }
+.lds-kinds button + button { border-left: 1px solid var(--line); }
+.lds-kinds button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.k-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+.lds-warns { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 6px; padding: 6px 10px; background: var(--surface); font-size: 12px; }
+.lds-warns div + div { margin-top: 4px; }
+.lds-warns:empty { display: none; }
+.lds-notes { font-size: 11.5px; color: var(--ink-soft); padding: 0 2px; }
+.lds-notes summary { cursor: pointer; }
+.lds-notes div { margin-top: 4px; }
+.lds .k-out { max-height: 620px; }
+@media (max-width: 1100px) { .lds .k-out { max-height: 360px; } }

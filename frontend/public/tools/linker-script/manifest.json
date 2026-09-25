@@ -1,8 +1,9 @@
 {
-  "id": "linker-script", "version": "1.0",
+  "id": "linker-script", "version": "1.1",
   "name": "Linker Script Helper",
   "blurb": "a linker script from sections and memory regions in a form",
   "group": "embedded",
+  "layout": "custom",
   "rooms": ["embedded"],
   "keywords": ["linker script", "ld script", ".ld", "gnu ld", "MEMORY block", "SECTIONS", "_estack", "ccmram", "noload", "AT>", "LOADADDR", "stack size", "heap size", "cortex-m", "stm32 linker"],
   "intro": "Writes a GNU ld linker script for a Cortex-M part in the layout STM32CubeIDE and CMSIS startup files expect: vectors and code in flash, .data run in RAM and loaded from flash, .bss zeroed, a stack and heap reservation, and extra sections (CCM RAM, backup RAM, no-init) with the start-up code they need. It checks region overlaps, alignment and whether the stack and heap fit.",

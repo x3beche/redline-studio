@@ -1,8 +1,9 @@
 {
-  "id": "irq-latency", "version": "1.0",
+  "id": "irq-latency", "version": "1.1",
   "name": "Interrupt Latency Budget",
   "blurb": "CPU load and miss risk from interrupt rates and handler times",
   "group": "embedded",
+  "layout": "custom",
   "rooms": ["embedded"],
   "keywords": ["interrupt latency", "isr", "irq", "cpu load", "interrupt load", "handler time", "missed interrupt", "overrun", "response time", "exception entry", "tail chaining", "cortex-m", "critical section", "interrupt budget", "worst case"],
   "intro": "Adds the core's exception entry/exit cycles to each handler, sums the CPU time interrupts take, and runs a worst-case response-time analysis (Joseph & Pandya; blocking from a disabled-interrupt section and from lower-priority handlers already running) to show which interrupt can miss its deadline or lose an event because the next one arrives while it is still pending.",

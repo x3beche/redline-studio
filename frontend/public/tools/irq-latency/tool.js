@@ -28,6 +28,8 @@ export function run({ fclk, core, entry, ws, mode, crit, irqs }) {
     const hp = list.filter((y) => y !== x && y.prio <= x.prio);        // preempt, or tie (served first in the worst case)
     const lp = list.filter((y) => y.prio > x.prio);
     x.B = Math.max(B0, mode === 'flat' ? 0 : Math.max(0, ...lp.map((y) => y.C)));
+    const lpMax = mode === 'flat' ? null : lp.reduce((a, y) => (!a || y.C > a.C ? y : a), null);
+    x.blocker = lpMax && lpMax.C > B0 ? lpMax.k : x.B > 0 ? -1 : null;   // -1 = the interrupts-off section
     const Uhp = hp.reduce((a, y) => a + y.C / y.T, 0);
     let R = x.B + x.C, ok = true;
     if (Uhp >= 1) ok = false;
@@ -46,6 +48,42 @@ export function run({ fclk, core, entry, ws, mode, crit, irqs }) {
     x.miss = x.R > x.D;
     x.load = x.C / x.T;
   }
+  // The worst case of each interrupt as a schedule (what the fixed point above
+  // adds up): the blocker runs first, every higher-or-equal interrupt fires at
+  // t = 0 and then once per period, the interrupt itself runs last.
+  const trace = (x) => {
+    const hp = list.filter((y) => y !== x && y.prio <= x.prio).sort((a, b) => a.prio - b.prio || a.k - b.k);
+    const horizon = Number.isFinite(x.R) ? x.R : Math.max(x.D, x.T) * 1.5;
+    const segs = [], releases = {};
+    if (x.B > 0) segs.push({ k: x.blocker, t0: 0, t1: Math.min(x.B, horizon), kind: 'block' });
+    const jobs = [];
+    for (const y of hp) {
+      releases[y.k] = [];
+      for (let m = 0; m * y.T < horizon - 1e-9 && m < 400; m++) { releases[y.k].push(m * y.T); jobs.push({ y, r: m * y.T, left: y.C }); }
+    }
+    const self = { y: x, r: 0, left: x.C };
+    let t = Math.min(x.B, horizon);
+    for (let guard = 0; guard < 4000 && t < horizon - 1e-9; guard++) {
+      const ready = jobs.filter((j) => j.left > 1e-12 && j.r <= t + 1e-12);
+      const run = ready[0] || (self.left > 1e-12 ? self : null);
+      const nextRel = Math.min(...jobs.filter((j) => j.r > t + 1e-12).map((j) => j.r), Infinity);
+      if (!run) { if (!Number.isFinite(nextRel)) break; t = nextRel; continue; }
+      const t1 = Math.min(t + run.left, nextRel, horizon);
+      const last = segs[segs.length - 1];
+      if (last && last.k === run.y.k && last.kind !== 'block' && Math.abs(last.t1 - t) < 1e-9) last.t1 = t1;
+      else segs.push({ k: run.y.k, t0: t, t1, kind: run === self ? 'self' : 'run' });
+      run.left -= t1 - t;
+      t = t1;
+      if (run === self && self.left <= 1e-12) break;
+    }
+    return { horizon, segs: segs.map((g) => ({ ...g, t0: +g.t0.toFixed(6), t1: +g.t1.toFixed(6) })), releases, done: self.left <= 1e-9 ? +t.toFixed(6) : null };
+  };
+  const drawing = {
+    mode, fclk, ovCycles, ov, U, crit: B0,
+    irqs: list.map((x) => ({ k: x.k, name: x.name, prio: x.prio, rate: x.rate, T: x.T, h: x.h, C: x.C, D: x.D, B: x.B, blocker: x.blocker,
+      R: Number.isFinite(x.R) ? x.R : null, start: Number.isFinite(x.start) ? x.start : null, slack: Number.isFinite(x.slack) ? x.slack : null,
+      load: x.load, ovLoad: ov / x.T, lost: x.lost, miss: x.miss, tight: !x.lost && !x.miss && x.slack < 0.2 * x.D, trace: trace(x) })),
+  };
   const byPrio = [...list].sort((a, b) => a.prio - b.prio || a.k - b.k);
   const fmtUs = (v) => (Number.isFinite(v) ? fmtNum(v, 4) : 'unbounded');
   const rows = byPrio.map((x) => [x.name, x.prio, fmtEng(x.rate, 'Hz'), fmtNum(x.C, 4), `${fmtNum(x.load * 100, 3)} %`, fmtUs(x.start), fmtUs(x.R), fmtNum(x.D, 4),
@@ -73,7 +111,7 @@ export function run({ fclk, core, entry, ws, mode, crit, irqs }) {
   if (core === 'm4f') notes.push('Cortex-M4F/M7: the 29/27 cycles include lazy FP stacking, paid only when the handler (or the interrupted code) uses the FPU.');
   if (mode === 'flat') notes.push('Flat mode: every interrupt waits for all others (they cannot preempt), so the response times are long but no handler is ever interrupted.');
   return {
-    values, warnings, notes,
+    values, warnings, notes, drawing,
     tables: [{ title: 'Per interrupt, most urgent first (times in µs)', columns: ['Interrupt', 'Prio', 'Rate', 'C incl. overhead', 'Load', 'Worst start', 'Worst response', 'Deadline', 'Slack', 'Verdict'], rows }],
     charts: [{ title: 'Worst-case response against deadline (µs)', type: 'bars', x: byPrio.map((x) => x.name.length > 14 ? x.name.slice(0, 13) + '…' : x.name),
       series: [{ name: 'worst response', y: byPrio.map((x) => (Number.isFinite(x.R) ? Number(x.R.toFixed(3)) : null)) }, { name: 'deadline', y: byPrio.map((x) => Number(x.D.toFixed(3))) }] }],

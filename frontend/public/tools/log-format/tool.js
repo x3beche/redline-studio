@@ -54,6 +54,7 @@ export function run({ messages, levels, ts, framing, check, baud }) {
 
   const seen = new Set();
   const msgs = rows.map((r, id) => {
+    const row = (messages || []).indexOf(r);
     let name = snake(r.name || `msg${id}`);
     if (seen.has(name)) { warnings.push(`Two messages are called "${name}"; the second is renamed ${name}_${id}.`); name = `${name}_${id}`; }
     seen.add(name);
@@ -66,7 +67,7 @@ export function run({ messages, levels, ts, framing, check, baud }) {
     if (holes !== args.length) warnings.push(`${name}: the text has ${holes} {} placeholder(s) but ${args.length} argument(s). Make them match or the host prints it wrong.`);
     let rate = Number(String(r.rate ?? '').trim());
     if (!Number.isFinite(rate) || rate < 0) { if (String(r.rate ?? '').trim()) warnings.push(`${name}: rate "${r.rate}" is not a number; 0 is used.`); rate = 0; }
-    return { id, name, text, args, rate };
+    return { id, name, text, args, rate, row, holes };
   });
 
   const idBits = Math.max(1, Math.ceil(Math.log2(msgs.length)));
@@ -164,10 +165,10 @@ export function run({ messages, levels, ts, framing, check, baud }) {
     '    lv = (LEVELS[lvl] if lvl < len(LEVELS) else str(lvl)) + " " if LEVELS else ""', '    ts = f"[{t:>10}] " if t is not None else ""', '    return ts + lv + text.format(*args)', '',
     'if __name__ == "__main__":', '    data = open(sys.argv[1], "rb").read() if len(sys.argv) > 1 else sys.stdin.buffer.read()', '    for rec in records(data):', '        print(decode(rec))', '');
 
-  // An example record: the first message with arguments 1, 2, 3 … at t = 1000.
-  const m0 = msgs[0];
-  const rec = [];
+  // An example record: a message with arguments 1, 2, 3 … at t = 1000.
   const lvl = L.bits ? L.names.indexOf('INFO') : 0;
+  const record = (m0) => {
+  const rec = [];
   const h = (lvl << idBits) | m0.id;
   rec.push(h & 0xFF); if (hdrBytes === 2) rec.push(h >> 8);
   const dv = new DataView(new ArrayBuffer(8));
@@ -186,6 +187,33 @@ export function run({ messages, levels, ts, framing, check, baud }) {
   if (check === 'crc16') { const cc = crc16(rec); rec.push(cc & 0xFF, cc >> 8); }
   const wire = framing === 'cobs' ? [...cobs(rec), 0] : framing === 'sync' ? [0xA5, rec.length, ...rec] : rec;
   const exArgs = m0.args.map((t, i) => (t === 'f32' || t === 'f64' ? i + 1.5 : t === 'bool' ? 'true' : i + 1));
+  return { rec, wire, exArgs, h };
+  };
+  const m0 = msgs[0];
+  const { wire, exArgs } = record(m0);
+
+  // The record of every message byte by byte, for the page to draw: the
+  // fields in wire order (COBS keeps each byte in place, one code byte ahead
+  // of it) with the example bytes.
+  const layout = {
+    idBits, levelBits: L.bits, levelNames: L.names, exampleLevel: L.bits ? L.names[lvl] : null, hdrBytes, tsSize: T.size, tsUnit: T.unit, tsType: T.c,
+    tsWrap: T.wrap, crcBytes, framing, check, levels, ts, baud: baud > 0 ? baud : null, capacity: baud > 0 ? baud / 10 : null,
+    binBps, txtBps, loadBin: baud > 0 ? (binBps * 10) / baud : null, loadTxt: baud > 0 ? (txtBps * 10) / baud : null,
+    saving: txtBps > 0 ? txtBps / Math.max(binBps, 1e-9) : null,
+    messages: msgs.map((m) => {
+      const r = record(m);
+      const fields = [];
+      if (framing === 'cobs') fields.push({ kind: 'cobs', bytes: 1 + Math.floor(m.inner / 254), label: 'COBS' });
+      if (framing === 'sync') fields.push({ kind: 'sync', bytes: 1, label: 'sync' }, { kind: 'len', bytes: 1, label: 'len' });
+      fields.push({ kind: 'hdr', bytes: hdrBytes, label: 'header' });
+      if (T.size) fields.push({ kind: 'ts', bytes: T.size, label: `time ${T.unit}` });
+      m.args.forEach((t, i) => fields.push({ kind: 'arg', bytes: TYPES[t].size, label: t, type: t, i }));
+      if (crcBytes) fields.push({ kind: 'crc', bytes: crcBytes, label: check === 'crc8' ? 'CRC-8' : 'CRC-16' });
+      if (framing === 'cobs') fields.push({ kind: 'delim', bytes: 1, label: '00' });
+      return { id: m.id, row: m.row, name: m.name, text: m.text, args: m.args, holes: m.holes, rate: m.rate, payload: m.payload, inner: m.inner, wire: m.wire, txt: m.txt,
+        binBps: m.wire * m.rate, txtBps: m.txt * m.rate, fields, header: r.h, record: r.rec, bytes: r.wire, exArgs: r.exArgs };
+    }),
+  };
 
   notes.push(`Header: ${L.bits ? `level in the top ${L.bits} bits, ` : ''}message id in the low ${idBits} bit${idBits > 1 ? 's' : ''}; then the timestamp, then the arguments little-endian, packed with no padding${crcBytes ? `, then the CRC (${crcBytes} B)` : ''}.`);
   notes.push('Text size assumes each argument printed at its widest (u16 as 5 digits, f32 as 10 characters) plus a "[  1234.567] " stamp and CR LF.');
@@ -194,6 +222,7 @@ export function run({ messages, levels, ts, framing, check, baud }) {
   return {
     values,
     warnings,
+    layout,
     tables: [
       { title: 'Record layout', columns: ['Field', 'Bytes', 'Content'],
         rows: [
