@@ -1,24 +1,51 @@
 {
-  "id": "units", "version": "1.0",
+  "id": "units",
+  "version": "1.1",
   "name": "Units & Numbers",
-  "blurb": "mm, mil and inch; hex, decimal and binary; UART baud and timer periods",
+  "blurb": "every engineering unit (pressure, torque, dBm, AWG, °F…), hex and binary, UART baud and timer PSC/ARR",
   "group": "embedded",
   "rooms": [
     "embedded",
-    "pcb"
+    "pcb",
+    "cad"
   ],
   "keywords": [
     "unit",
+    "units",
     "convert",
+    "conversion",
+    "unit converter",
     "mil",
     "inch",
     "mm",
+    "psi",
+    "bar",
+    "torque",
+    "N·m",
+    "lbf",
+    "kgf",
+    "pressure",
+    "temperature",
+    "fahrenheit",
+    "celsius",
+    "dBm",
+    "dB",
+    "AWG",
+    "kcmil",
+    "mAh",
+    "Wh",
+    "BTU",
+    "horsepower",
+    "rpm",
+    "ppm",
+    "gauss",
+    "KiB",
+    "baud",
     "hex",
     "binary",
     "decimal",
     "two's complement",
     "uart",
-    "baud",
     "brr",
     "timer",
     "prescaler",
@@ -26,7 +53,7 @@
     "arr",
     "pwm"
   ],
-  "intro": "One conversion at a time: a length in mm, mil, inch and µm; an integer in decimal, hex, binary and octal with its two's complement; an STM32/ESP32 UART divider and its baud error; an STM32 timer's PSC and ARR for a frequency. The same arithmetic as the app's Units & Numbers calculator.",
+  "intro": "Type anything - 25 psi to bar, 3.3 mils, -40 °F, Δ10 °C in °F, 2000 mAh @ 3.7 V to Wh, 24 AWG, 0 dBm, 4k7, 0x3F - and see it in every unit of its quantity: 44 quantities and over 400 units (length, area with AWG and kcmil, volume, mass, density, force, torque, pressure, energy, power with dBm, speed, acceleration, flow, viscosity, time, frequency and rpm, temperature and temperature difference, thermal resistance and conductivity, voltage with dBV/dBu, current, resistance, capacitance, inductance, charge and mAh, resistivity, magnetic units, data size and rate, ratios, ppm and dB, light, screen and type). Also: an integer in decimal, hex, binary and octal with its two's complement; an STM32/ESP32 UART divider and its baud error; an STM32 timer's PSC and ARR for a frequency.",
   "inputs": [
     {
       "key": "mode",
@@ -34,6 +61,10 @@
       "type": "select",
       "default": "length",
       "options": [
+        [
+          "convert",
+          "Any unit (free text)"
+        ],
         [
           "length",
           "Length: mm, mil, inch"
@@ -220,6 +251,151 @@
         "key": "mode",
         "equals": "timer"
       }
+    },
+    {
+      "key": "q",
+      "label": "Question",
+      "type": "text",
+      "default": "",
+      "placeholder": "25 psi to bar",
+      "wide": true,
+      "help": "A value and a unit, optionally 'to' another unit: 25 psi to bar, 3 1/2 in, 5'11\", 24 AWG, 4k7, Δ10 °C in °F, 2000 mAh @ 3.7 V to Wh. 0x3F, 0b1010 or '255 in hex' give the number-bases answer.",
+      "when": {
+        "key": "mode",
+        "equals": "convert"
+      }
+    },
+    {
+      "key": "to",
+      "label": "Into",
+      "type": "text",
+      "default": "",
+      "placeholder": "bar",
+      "help": "Optional target unit (the same as writing 'to bar' in the question).",
+      "when": {
+        "key": "mode",
+        "equals": "convert"
+      }
+    },
+    {
+      "key": "unit",
+      "label": "Unit when none is written",
+      "type": "text",
+      "default": "",
+      "placeholder": "mm",
+      "when": {
+        "key": "mode",
+        "equals": "convert"
+      }
+    },
+    {
+      "key": "digits",
+      "label": "Significant figures",
+      "type": "select",
+      "default": "6",
+      "options": [
+        [
+          "3",
+          "3"
+        ],
+        [
+          "4",
+          "4"
+        ],
+        [
+          "5",
+          "5"
+        ],
+        [
+          "6",
+          "6"
+        ],
+        [
+          "7",
+          "7"
+        ],
+        [
+          "8",
+          "8"
+        ],
+        [
+          "9",
+          "9"
+        ],
+        [
+          "10",
+          "10"
+        ],
+        [
+          "12",
+          "12"
+        ]
+      ],
+      "when": {
+        "key": "mode",
+        "equals": "convert"
+      }
+    },
+    {
+      "key": "notation",
+      "label": "Notation",
+      "type": "select",
+      "default": "auto",
+      "options": [
+        [
+          "auto",
+          "Auto"
+        ],
+        [
+          "eng",
+          "Engineering (10³ steps)"
+        ],
+        [
+          "sci",
+          "Scientific"
+        ],
+        [
+          "plain",
+          "Plain"
+        ]
+      ],
+      "when": {
+        "key": "mode",
+        "equals": "convert"
+      }
+    },
+    {
+      "key": "volts",
+      "label": "Battery voltage (mAh ↔ Wh)",
+      "type": "number",
+      "unit": "V",
+      "default": "3.7",
+      "when": {
+        "key": "mode",
+        "equals": "convert"
+      }
+    },
+    {
+      "key": "ohms",
+      "label": "Impedance (dBm ↔ V)",
+      "type": "number",
+      "unit": "Ω",
+      "default": "50",
+      "when": {
+        "key": "mode",
+        "equals": "convert"
+      }
+    },
+    {
+      "key": "dpi",
+      "label": "Screen density (px)",
+      "type": "number",
+      "unit": "dpi",
+      "default": "96",
+      "when": {
+        "key": "mode",
+        "equals": "convert"
+      }
     }
   ],
   "examples": [
@@ -239,13 +415,45 @@
         "num_base": "dec",
         "width": "16"
       }
+    },
+    {
+      "title": "25 psi in bar, and in every pressure unit",
+      "input": {
+        "mode": "convert",
+        "q": "25 psi to bar"
+      }
+    },
+    {
+      "title": "A 2000 mAh cell at 3.7 V in Wh",
+      "input": {
+        "mode": "convert",
+        "q": "2000 mAh @ 3.7 V to Wh"
+      }
+    },
+    {
+      "title": "A 10 °C rise in °F (a difference, not a temperature)",
+      "input": {
+        "mode": "convert",
+        "q": "Δ10 °C in °F"
+      }
     }
   ],
-  "usage": "Set mode to length, bases, uart or timer and fill only that mode's inputs. length: len_value with len_unit (mm, mil, in, um) returns the length in all four units. bases: num_text written in num_base (dec, hex, bin, oct) with width 8/16/32/64 returns decimal, hex, binary, octal, the signed value, bits set and highest bit. uart: uart_clk in Hz and baud return BRR (= clock / baud, rounded), the actual baud and its error in %; timer: tim_clk and tim_f in Hz with arr_bits 16 or 32 return PSC, ARR, the actual frequency and its error.",
+  "usage": "For any unit conversion give q as free text: a value and a unit, optionally 'to <unit>' (or the to input): '25 psi to bar', '3.3 mils to mm', '-40 °F', 'Δ10 °C in °F' (Δ or 'difference' for a temperature difference), '2000 mAh @ 3.7 V to Wh' (@ sets volts, ohms or dpi), '24 AWG', '0 dBm' (ohms gives volts into that load), '4k7', '5\\'11\"'. mode may be left out (or convert). It returns values (the asked-for unit first, value as plain text), tables[0] with the value in every unit of the quantity, a Related table (period and wavelength, wire diameter, V into the impedance, Wh at the voltage...), notes with the exact definitions used and how an ambiguous symbol was read, and warnings for anything not understood; digits (significant figures) and notation (auto, eng, sci, plain) shape the numbers. Older modes, unchanged: length: len_value with len_unit (mm, mil, in, um) returns the length in all four units. bases: num_text written in num_base (dec, hex, bin, oct) with width 8/16/32/64 returns decimal, hex, binary, octal, the signed value, bits set and highest bit (q = '0x3F' does the same). uart: uart_clk in Hz and baud return BRR (= clock / baud, rounded), the actual baud and its error in %; timer: tim_clk and tim_f in Hz with arr_bits 16 or 32 return PSC, ARR, the actual frequency and its error.",
   "sources": [
     "Inch-millimetre: 1 in = 25.4 mm exactly (international yard and pound agreement, 1959)",
     "STM32 reference manuals (e.g. RM0090): USART baud rate generation, BRR = fCK / baud with 16x oversampling; timer update rate = fCK / ((PSC + 1)(ARR + 1))",
-    "Espressif ESP32 Technical Reference Manual, UART baud rate generation"
+    "Espressif ESP32 Technical Reference Manual, UART baud rate generation",
+    "BIPM SI Brochure, 9th ed. (2019): SI units and prefixes, e = 1.602176634e-19 C, c = 299792458 m/s",
+    "NIST SP 811 (2008) Appendix B: factors for US customary, imperial, CGS and industry units (1 lbf = 4.4482216152605 N, 1 psi = 6894.757293168 Pa, 1 BTU(IT) = 1055.05585262 J, cal(th) = 4.184 J)",
+    "Standard gravity gn = 9.80665 m/s^2 (3rd CGPM, 1901): kgf, lbf, water and mercury columns",
+    "IEC 80000-13: decimal (kB) and binary (KiB) prefixes",
+    "ASTM B258: AWG diameter = 0.005 in x 92^((36 - n)/39)",
+    "IEC 60050 / ITU-R V.574: dBm, dBW, dBV, dBu (0 dBu = sqrt(0.6) V)",
+    "IACS (1913): 100 % IACS = 58 MS/m"
   ],
-  "native": true
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "view"
+  ]
 }

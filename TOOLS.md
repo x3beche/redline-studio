@@ -174,7 +174,7 @@ agents, the most used, and every tool nobody used.
 | **Stepper Motor Calculator** · MCP | `stepper-calc` | pulse frequency and torque from step angle, microstepping and speed | Embedded, 3D |
 | **Struct Packing Visualizer** · MCP | `struct-packing` | alignment of struct members and the padding bytes wasted | Embedded |
 | **Task Timing Planner** · MCP | `task-timing` | scheduling conflicts of periodic tasks from period and duration | Embedded |
-| **Units & Numbers** · MCP | `units` | mm, mil and inch; hex, decimal and binary; UART baud and timer periods | Embedded, PCB |
+| **Units & Numbers** · MCP | `units` | every engineering unit (pressure, torque, dBm, AWG, °F…), hex and binary, UART baud and timer PSC/ARR | Embedded, PCB, 3D |
 | **Watchdog Planner** · MCP | `watchdog-planner` | a safe watchdog period and feed points from the longest task | Embedded |
 
 ### Mechanical & 3D
@@ -305,7 +305,7 @@ frontend/src/app/tools/
   room.ts, room.css    the tab: search, filters, favourites, the list, the tool
   registry.ts          groups, rooms, and the tools that are Angular components
   frame.ts             frames a page and dresses it in the app's colours
-  units/ trace-width/ resistor/     the three Angular calculators
+  trace-width/ resistor/            the two Angular calculators
 backend/tools_api.py   catalog, manual, run, find, usage, project records, checks
 backend/tool_router.py the picker
 ```

@@ -50,12 +50,11 @@ export interface ToolInfo {
 }
 
 /** `wide` fills the room (a drawing surface); `narrow` keeps a form's width. */
-export const NARROW = new Set(['units', 'trace-width', 'resistor']);
+export const NARROW = new Set(['trace-width', 'resistor']);
 
 /** Tools with a component of their own, by id. */
 export const COMPONENTS: Record<string, () => Promise<Type<unknown>>> = {
   'grid-sketch': () => import('./grid-sketch/grid-sketch').then(m => m.GridSketch),
-  'units': () => import('./units/units').then(m => m.UnitsTool),
   'trace-width': () => import('./trace-width/trace-width').then(m => m.TraceWidthTool),
   'resistor': () => import('./resistor/resistor').then(m => m.ResistorTool),
   'screenshot-annotator': () => import('./screenshot-annotator/screenshot-annotator').then(m => m.ScreenshotAnnotator),
