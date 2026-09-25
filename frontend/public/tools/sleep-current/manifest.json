@@ -1,5 +1,5 @@
 {
-  "id": "sleep-current", "version": "1.0",
+  "id": "sleep-current", "agentOmit": ["drawing"], "version": "1.1",
   "name": "Sleep Current Profiler",
   "blurb": "average current from sleep and wake times and currents",
   "group": "embedded",
@@ -36,6 +36,7 @@
         { "name": "Advertising, 3 channels", "i": "8m", "t": "1.2m", "every": "1" } ] } }
   ],
   "usage": "Give the wake-up period in seconds, the sleep current in A, and the active states as a table of {name, i (A), t (s), every (run once per N wake-ups)}, plus the supply in volts. It returns the average current, the duty cycle, charge per period and per day (mAh/day), average power and energy per day, and each state's share of the average. Feed the average current into the battery life estimator.",
+  "layout": "custom",
   "sources": [
     "I_avg = [Σ I_k · t_k / N_k + I_sleep · (T − Σ t_k / N_k)] / T: charge balance over one period (definition), the same method as TI application report SWRA349 'Coin cells and peak current draw'"
   ]

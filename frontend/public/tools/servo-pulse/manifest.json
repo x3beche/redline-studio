@@ -1,5 +1,5 @@
 {
-  "id": "servo-pulse", "version": "1.0",
+  "id": "servo-pulse", "agentOmit": ["drawing"], "version": "1.1",
   "name": "Servo Pulse Mapper",
   "blurb": "angle range to pulse width, with calibration values",
   "group": "embedded",
@@ -23,5 +23,6 @@
     { "title": "Digital servo at 333 Hz, ±60° calibrated", "input": { "a1": "-60", "p1": "900", "a2": "60", "p2": "2100", "amin": "-60", "amax": "60", "target": "20", "frame": "333", "tclk": "2M", "step": "10" } }
   ],
   "usage": "Give two calibration points (angle in degrees and the pulse in µs that produced it), the allowed angle range, the target angle, the frame rate in Hz and the timer counter clock in Hz. It returns the pulse width in µs for the target, µs per degree, the timer period (ARR+1) and compare value, the duty cycle, the angle resolution one timer tick gives, and a table of angle-to-pulse values. Use it to write a servo angle-to-CCR function or to check a timer setup.",
+  "layout": "custom",
   "sources": ["RC servo convention: 1.0-2.0 ms pulse, 1.5 ms centre, repeated every 20 ms (50 Hz); many servos travel further on 0.5-2.5 ms", "Linear two-point calibration (straight line through two measured points)"]
 }

@@ -1,5 +1,5 @@
 {
-  "id": "spi-modes", "version": "1.0",
+  "id": "spi-modes", "agentOmit": ["parts"], "version": "1.1",
   "name": "SPI Mode Reference",
   "blurb": "CPOL/CPHA combinations with timing diagrams",
   "group": "embedded",
@@ -20,5 +20,6 @@
   ],
   "usage": "Give mode as all, 0, 1, 2 or 3, an optional part-name filter (device), and optionally a MOSI and MISO byte in hex plus bit order (msb or lsb) for the diagram. Returns CPOL, CPHA, idle level, sample and shift edges, the register/constant spelling for Linux, Arduino, ESP-IDF, Zephyr, STM32, AVR, PIC, SAM, TI and NXP, and the matching parts with the modes their datasheets allow. result.drawing holds the bit sequences the diagram is drawn from.",
   "sources": ["Motorola/Freescale SPI Block Guide V03.06 (S12SPIV3), CPOL/CPHA definition", "Linux include/uapi/linux/spi/spi.h (SPI_MODE_0..3)", "ST RM0090 §28.3 (SPI_CR1 CPOL/CPHA), Microchip PIC18 MSSP (CKP/CKE), Atmel SAM3X SPI_CSR (NCPHA), TI MSP430 eUSCI (UCCKPH)", "Part datasheets for the device modes (Analog Devices ADXL345, Bosch BME280, Maxim MAX31855, ST LIS3DH, Winbond W25Q128 and others)"],
-  "view": true
+  "view": true,
+  "layout": "custom"
 }

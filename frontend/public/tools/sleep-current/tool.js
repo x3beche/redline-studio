@@ -16,7 +16,7 @@ export function run({ period, isleep, states, vbat }) {
     if (!is && !ts) return;
     const i = parseEng(is), t = parseEng(ts), n = es ? parseEng(es) : 1;
     if (i == null || t == null || n == null || i < 0 || t < 0 || !(n >= 1)) { bad.push(`${name} (${is || '–'} A, ${ts || '–'} s, every ${es || '1'})`); return; }
-    rows.push({ name, i, t, n });
+    rows.push({ name, i, t, n, idx });
   });
   if (bad.length) warnings.push(`Skipped, not readable: ${bad.join('; ')}. Current in A (5m), time in s (2m), every = a whole number ≥ 1.`);
   const tAct = rows.reduce((a, r) => a + r.t / r.n, 0);
@@ -54,7 +54,19 @@ export function run({ period, isleep, states, vbat }) {
     const i = (parts.reduce((a, p) => a + p.q, 0) + isleep * ts) / T;
     return [fmtEng(T, 's'), fmtEng(i, 'A'), fmtNum(i * 86400 / 3.6, 4), T < tWorst ? 'too short' : ''];
   });
+  // What the page draws, as plain numbers: each state (idx = its row in the
+  // states table), the sleep, and the average at other periods.
+  const drawing = {
+    period, isleep, tSleep, tAct, tWorst, duty, iavg, qTotal, perDay, v,
+    parts: parts.map((p) => ({ name: p.name, idx: p.idx, i: p.i, t: p.t, n: p.n, q: p.q, avg: p.q / period, share: share(p.q) })),
+    sleep: { q: qSleep, avg: qSleep / period, share: share(qSleep) },
+    sweep: [...new Set([1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 900, 1800, 3600, period])].sort((a, b) => a - b).map((T) => {
+      const ts = Math.max(0, T - tAct);
+      return { T, i: (parts.reduce((a, p) => a + p.q, 0) + isleep * ts) / T, ok: T >= tWorst };
+    }),
+  };
   return {
+    drawing,
     values,
     warnings,
     charts: [{ title: 'Share of the average current', type: 'bars', x: [...parts.map((p) => p.name), 'Sleep'],

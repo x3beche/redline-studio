@@ -28,6 +28,10 @@ export function run({ a1, p1, a2, p2, amin, amax, target, frame, tclk, step }) {
     { label: 'Centre of range', value: fmtNum(pulse((lo + hi) / 2), 5), unit: 'µs', hint: `${fmtNum((lo + hi) / 2, 4)}°` },
   ];
   const tables = [];
+  // What the page draws: the line, the range, the target and where the pulse
+  // leaves 500…2500 µs, as plain numbers (the values above are text).
+  const drawing = { a1, p1, a2, p2, k, lo, hi, target: target ?? t, t, clamped, pw, pmin, pmax,
+    a500: a1 + (500 - p1) / k, a2500: a1 + (2500 - p1) / k };
   const notes = ['Angles are measured the way you calibrated them; reverse the direction by swapping the two pulses.',
     'Most analog servos have a 2-8 µs dead band: steps smaller than that do not move the horn.'];
   if (frame > 0) {
@@ -38,6 +42,7 @@ export function run({ a1, p1, a2, p2, amin, amax, target, frame, tclk, step }) {
     if (frame > 60) notes.push(`${fmtNum(frame, 4)} Hz is only for digital servos; an analog servo expects about 50 Hz and may overheat or jitter faster.`);
     if (tclk > 0) {
       const counts = tclk / frame;
+      Object.assign(drawing, { frame, period, duty, tclk, counts: Math.round(counts), cmp: Math.round(pw * 1e-6 * tclk), tick: 1e6 / tclk, degPerTick: (1e6 / tclk) / Math.abs(k) });
       const cmp = Math.round(pw * 1e-6 * tclk);
       const tick = 1e6 / tclk;
       values.push(
@@ -50,6 +55,9 @@ export function run({ a1, p1, a2, p2, amin, amax, target, frame, tclk, step }) {
       const n = Math.abs(hi - lo) / (step > 0 ? step : 15);
       const s = step > 0 && n <= 200 ? step : Math.max(1, Math.abs(hi - lo) / 12);
       const rows = [];
+      drawing.rows = [];
+      for (let a = lo; a <= hi + 1e-9; a += s) drawing.rows.push({ a, p: pulse(a) });
+      if (drawing.rows.length && Math.abs(drawing.rows.at(-1).a - hi) > 1e-6) drawing.rows.push({ a: hi, p: pulse(hi) });
       for (let a = lo; a <= hi + 1e-9; a += s) rows.push([`${fmtNum(a, 4)}°`, fmtNum(pulse(a), 5), fmtNum(Math.round(pulse(a) * 1e-6 * tclk), 8), fmtNum(pulse(a) / period * 100, 4)]);
       if (rows.length && Math.abs(rows.at(-1)[0].replace('°', '') - hi) > 1e-6) rows.push([`${fmtNum(hi, 4)}°`, fmtNum(pulse(hi), 5), fmtNum(Math.round(pulse(hi) * 1e-6 * tclk), 8), fmtNum(pulse(hi) / period * 100, 4)]);
       tables.push({ title: 'Angle to pulse', columns: ['Angle', 'Pulse µs', 'Compare', 'Duty %'], rows });
@@ -57,8 +65,9 @@ export function run({ a1, p1, a2, p2, amin, amax, target, frame, tclk, step }) {
         `#define SERVO_ARR       ${Math.round(counts) - 1}u\n#define SERVO_MIN_DEG   ${fmtNum(lo, 6)}f\n#define SERVO_MAX_DEG   ${fmtNum(hi, 6)}f\n\n` +
         `static inline uint32_t servo_ccr(float deg)\n{\n    if (deg < SERVO_MIN_DEG) deg = SERVO_MIN_DEG;\n    if (deg > SERVO_MAX_DEG) deg = SERVO_MAX_DEG;\n` +
         `    float us = ${fmtNum(p1, 6)}f + (deg - (${fmtNum(a1, 6)}f)) * ${fmtNum(k, 6)}f;\n    return (uint32_t)(us * ${fmtNum(tclk / 1e6, 6)}f + 0.5f);   /* timer ticks per µs */\n}\n`;
-      return { values, warnings, tables, notes, texts: [{ title: 'C', body: c, lang: 'c' }] };
+      return { values, warnings, tables, notes, drawing, texts: [{ title: 'C', body: c, lang: 'c' }] };
     }
   } else warnings.push('Give the frame rate in Hz (50 for most servos) to get the timer values.');
-  return { values, warnings, tables, notes };
+  if (frame > 0) Object.assign(drawing, { frame, period: 1e6 / frame, duty: pw / (1e6 / frame) });
+  return { values, warnings, tables, notes, drawing };
 }

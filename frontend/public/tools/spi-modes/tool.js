@@ -105,6 +105,8 @@ export function run({ mode, device, mosi, miso, order }) {
     rows: devs.map(([n, ms, note]) => [n, ms.join(', '), note]) });
 
   return {
+    // Every part the filter matches, whatever the mode: the page's part list.
+    parts: DEVICES.filter(([name]) => !q || name.toLowerCase().includes(q)).map(([name, ms, note]) => ({ name, modes: ms, note })),
     values,
     warnings,
     tables,
