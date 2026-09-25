@@ -1,0 +1,164 @@
+/* Thermal Expansion: a thermometer to drag, the part in its housing growing
+   with it, and a CTE ruler to pick the two materials on. */
+:root {
+  --tool-part: #1f4ed8; --tool-mate: #b45309; --tool-hot: #c2410c; --tool-cold: #0369a1;
+  --tool-part-fill: color-mix(in srgb, var(--tool-part) 16%, var(--surface));
+  --tool-mate-fill: color-mix(in srgb, var(--tool-mate) 14%, var(--surface));
+  --tool-bad-fill: color-mix(in srgb, var(--danger) 30%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-part: #7d9bff; --tool-mate: #f0a33a; --tool-hot: #fb8a5a; --tool-cold: #5cc0f0;
+    --tool-part-fill: color-mix(in srgb, var(--tool-part) 22%, var(--surface));
+    --tool-mate-fill: color-mix(in srgb, var(--tool-mate) 18%, var(--surface));
+    --tool-bad-fill: color-mix(in srgb, var(--danger) 38%, transparent);
+  }
+}
+:root[data-theme="dark"] {
+  --tool-part: #7d9bff; --tool-mate: #f0a33a; --tool-hot: #fb8a5a; --tool-cold: #5cc0f0;
+  --tool-part-fill: color-mix(in srgb, var(--tool-part) 22%, var(--surface));
+  --tool-mate-fill: color-mix(in srgb, var(--tool-mate) 18%, var(--surface));
+  --tool-bad-fill: color-mix(in srgb, var(--danger) 38%, transparent);
+}
+
+.k-page { padding: 10px 12px; }
+.te {
+  display: grid; gap: 10px;
+  grid-template-columns: 236px minmax(0, 1fr) 320px;
+  grid-template-rows: minmax(360px, 1fr) auto;
+  grid-template-areas: "thermo stage side" "thermo ruler side";
+  height: calc(100vh - 62px); min-height: 640px;
+}
+.te-thermo { grid-area: thermo; }
+.te-stage { grid-area: stage; }
+.te-ruler { grid-area: ruler; }
+.te-side { grid-area: side; }
+.te-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; min-height: 0; position: relative; }
+.te-cap { font-size: 11.5px; color: var(--ink-soft); }
+.te-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 7px 10px 5px; }
+.te-head .te-cap { margin-right: auto; }
+
+/* thermometer + gap/T plot */
+.te-thermo { display: flex; flex-direction: column; }
+.te-thermo svg { flex: 1; min-height: 0; display: block; width: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+.te-tfields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px 10px 4px; border-top: 1px solid var(--line-soft); }
+.te-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 10px 8px; }
+.te-chips span { font-size: 11px; color: var(--ink-soft); margin-right: 2px; align-self: center; }
+.te-chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); border-radius: 10px; padding: 0 7px;
+  font: 11px "IBM Plex Mono", ui-monospace, monospace; cursor: pointer; }
+.te-chip:hover { color: var(--ink); border-color: var(--ink-soft); }
+.te-chip[aria-pressed="true"] { background: var(--sunken); color: var(--ink); border-color: var(--ink-soft); }
+.te-num { display: flex; flex-direction: column; gap: 1px; font-size: 11px; color: var(--ink-soft); min-width: 0; }
+.te-num input { width: 100%; min-width: 0; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  color: var(--ink); font: 12.5px "IBM Plex Mono", ui-monospace, monospace; text-align: right; }
+
+/* the assembly */
+.te-stage { display: flex; flex-direction: column; }
+.te-stage .te-box { position: relative; flex: 1; min-height: 0; }
+.te-stage svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+.te-pick { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.te-pick select { max-width: 190px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); color: var(--ink); font-size: 12px; }
+.te-pick i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.te-pick.part i { background: var(--tool-part); } .te-pick.mate i { background: var(--tool-mate); }
+.te-custom { display: inline-flex; gap: 6px; }
+.te-custom[hidden] { display: none; }
+.te-custom .te-num { flex-direction: row; align-items: center; gap: 4px; }
+.te-custom .te-num input { width: 58px; }
+.te-onfig { position: absolute; width: 74px; padding: 1px 4px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface);
+  color: var(--ink); font: 12px "IBM Plex Mono", ui-monospace, monospace; text-align: right; transform: translate(-50%, -50%); }
+.te-onfig:hover { border-color: var(--ink-soft); }
+.te-onfig[hidden] { display: none; }
+.te-foot { position: absolute; left: 10px; bottom: 6px; font-size: 11px; color: var(--ink-soft); pointer-events: none; }
+.te-empty[hidden] { display: none; }
+.te-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-soft); font-size: 13px; padding: 20px; text-align: center; }
+
+/* svg classes */
+.te-grid { stroke: var(--line-soft); stroke-width: 1; }
+.te-axis { fill: var(--ink-soft); font: 10.5px "IBM Plex Mono", ui-monospace, monospace; }
+.te-lbl { fill: var(--ink); font: 12px "IBM Plex Mono", ui-monospace, monospace; }
+.te-lbl-s { fill: var(--ink-soft); font: 11px "IBM Plex Mono", ui-monospace, monospace; }
+.te-lbl-b { fill: var(--ink); font: 600 13px "IBM Plex Mono", ui-monospace, monospace; }
+.te-dim { stroke: var(--ink-soft); stroke-width: 1; fill: none; }
+.te-dimhead { fill: var(--ink-soft); }
+.te-tube { fill: var(--sunken); stroke: var(--line); stroke-width: 1; }
+.te-liq-hot { fill: var(--tool-hot); } .te-liq-cold { fill: var(--tool-cold); }
+.te-h { cursor: ns-resize; outline: none; }
+.te-h:focus-visible .te-hring { stroke: var(--accent); stroke-width: 2.5; }
+.te-hring { fill: var(--surface); stroke: var(--ink); stroke-width: 1.5; }
+.te-h.t2 .te-hring { fill: var(--ink); }
+.te-closed { fill: var(--tool-bad-fill); }
+.te-curve { fill: none; stroke: var(--tool-mate); stroke-width: 2; }
+.te-curve.part { stroke: var(--tool-part); }
+.te-zero { stroke: var(--danger); stroke-width: 1; stroke-dasharray: 3 3; }
+.te-tline { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 2 3; }
+.te-part { fill: var(--tool-part-fill); stroke: var(--tool-part); stroke-width: 1.5; }
+.te-mate { fill: url(#te-hatch); stroke: var(--tool-mate); stroke-width: 1.5; }
+.te-hatch-bg { fill: var(--tool-mate-fill); } .te-hatch-ln { stroke: var(--tool-mate); stroke-width: 0.8; opacity: .55; }
+.te-ghost { fill: none; stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 4 3; }
+.te-inter { fill: url(#te-bad); stroke: var(--danger); stroke-width: 1.5; }
+.te-bad-bg { fill: var(--tool-bad-fill); } .te-bad-ln { stroke: var(--danger); stroke-width: 1; }
+.te-grow { stroke: var(--tool-part); stroke-width: 2; fill: none; }
+.te-grow.mate { stroke: var(--tool-mate); }
+.te-arrow-p { fill: var(--tool-part); } .te-arrow-m { fill: var(--tool-mate); }
+.te-gapdim { stroke: var(--ok); stroke-width: 1.5; }
+.te-gapdim.bad { stroke: var(--danger); } .te-gapdim.warn { stroke: var(--warn); }
+.te-ok-t { fill: var(--ok); } .te-bad-t { fill: var(--danger); } .te-warn-t { fill: var(--warn); }
+.te-part-t { fill: var(--tool-part); } .te-mate-t { fill: var(--tool-mate); }
+.te-lever { cursor: ew-resize; outline: none; }
+.te-lever rect { fill: transparent; }
+.te-lever:focus-visible .te-leverline { stroke: var(--accent); stroke-width: 3; }
+.te-leverline { stroke: var(--tool-part); stroke-width: 1.5; }
+
+/* CTE ruler */
+.te-ruler svg { display: block; width: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+.te-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.te-seg button { border: 0; background: transparent; padding: 2px 9px; font-size: 12px; cursor: pointer; color: var(--ink-soft); }
+.te-seg button + button { border-left: 1px solid var(--line); }
+.te-seg button[aria-pressed="true"] { background: var(--sunken); color: var(--ink); font-weight: 600; }
+.te-mat { cursor: pointer; }
+.te-mat text { fill: var(--ink-soft); font: 10.5px "IBM Plex Sans", sans-serif; }
+.te-mat line { stroke: var(--line); }
+.te-mat:hover text { fill: var(--ink); }
+.te-mat.is-part text { fill: var(--tool-part); font-weight: 600; }
+.te-mat.is-mate text { fill: var(--tool-mate); font-weight: 600; }
+.te-ptr { cursor: ew-resize; outline: none; }
+.te-ptr:focus-visible path { stroke: var(--accent); stroke-width: 2.5; }
+.te-ptr.part path { fill: var(--tool-part); stroke: var(--surface); }
+.te-ptr.mate path { fill: var(--tool-mate); stroke: var(--surface); }
+.te-scale { stroke: var(--ink-soft); stroke-width: 1; }
+.te-brk { stroke: var(--ink); stroke-width: 1; fill: none; }
+
+/* side */
+.te-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.te-read { padding: 8px 12px 10px; }
+.te-big { font: 600 30px/1.1 "IBM Plex Mono", ui-monospace, monospace; margin: 2px 0 2px; }
+.te-big small { font-size: 14px; font-weight: 400; color: var(--ink-soft); margin-left: 4px; }
+.te-big.ok { color: var(--ok); } .te-big.warn { color: var(--warn); } .te-big.bad { color: var(--danger); }
+.te-sub { font-size: 11.5px; color: var(--ink-soft); }
+.te-dl { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin: 8px 0 0; font-size: 12px; }
+.te-dl dt { color: var(--ink-soft); }
+.te-dl dd { margin: 0; text-align: right; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.te-dl dd small { color: var(--ink-soft); }
+.te-dl .sep { grid-column: 1 / -1; border-top: 1px solid var(--line-soft); margin: 3px 0; }
+.te-stress { margin-top: 8px; }
+.te-stress svg { display: block; width: 100%; height: 40px; }
+.te-sbar { fill: var(--sunken); } .te-sval { fill: var(--tool-part); } .te-sval.over { fill: var(--danger); } .te-sval.half { fill: var(--warn); }
+.te-sy { stroke: var(--danger); stroke-width: 2; }
+.te-warns { display: flex; flex-direction: column; gap: 4px; }
+.te-warns div { border-left: 3px solid var(--warn); background: var(--surface); padding: 4px 8px; font-size: 12px; border-radius: 0 4px 4px 0; }
+.te-warns div.bad { border-left-color: var(--danger); }
+.te-side .k-outwrap { flex: 1; min-height: 160px; display: flex; flex-direction: column; }
+.te-side .k-out { flex: 1; max-height: none; min-height: 0; }
+
+@media (max-width: 1180px) {
+  .te { grid-template-columns: 216px minmax(0, 1fr); grid-template-rows: minmax(380px, 60vh) auto auto;
+    grid-template-areas: "thermo stage" "thermo ruler" "side side"; height: auto; }
+  .te-side { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
+  .te-side .k-out { max-height: 320px; }
+}
+@media (max-width: 700px) {
+  .te { grid-template-columns: minmax(0, 1fr); grid-template-rows: 400px 380px auto auto;
+    grid-template-areas: "stage" "thermo" "ruler" "side"; min-height: 0; }
+  .te-side { display: flex; align-items: stretch; }
+  .te-pick select { max-width: 150px; }
+}

@@ -118,8 +118,19 @@ export function run({ thread, engagement, filter }) {
     `${key}_clearance = ${r3(med)};  // ${inch ? 'close fit' : 'ISO 273 medium'}`,
   ].join('\n');
 
+  // For the page's drawing only (manifest agentOmit): the chosen thread's
+  // geometry and every thread of both systems for the drill index.
+  const fOk = (r) => !f || r.name.toLowerCase().includes(f) || r.family.toLowerCase().includes(f);
+  const draw = {
+    sel: { name: t.name, family: t.family, inch, D: t.D, P: t.P, tpi: t.tpi, tap: t.tap, tapLabel: t.tapLabel, minor: t.minor,
+      H: 0.866025 * t.P, pctTap: pct(t.D, t.tap, t.P), e: eUse, drill: drillForE,
+      band: [t.D - (77 / 76.98) * t.P, t.D - (65 / 76.98) * t.P],
+      clear: t.clear, clearLabels: t.clearLabels, clearNames: t.clearNames || null, clearUse: inch ? 0 : 1 },
+    list: [...METRIC.map(metricInfo), ...UNIFIED.map(unifiedInfo)].map((r) => ({ name: r.name, family: r.family, D: r.D, P: r.P, tpi: r.tpi, tap: r.tap,
+      tapLabel: r.tapLabel, match: fOk(r) })),
+  };
   return {
-    values,
+    values, draw,
     tables: [table],
     texts: [{ title: 'CAD variables', body: cad + '\n', lang: 'scad' }],
     warnings,

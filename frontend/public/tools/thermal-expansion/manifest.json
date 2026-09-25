@@ -1,8 +1,10 @@
 {
-  "id": "thermal-expansion", "version": "1.0",
+  "id": "thermal-expansion", "version": "1.1",
   "name": "Thermal Expansion Calculator",
   "blurb": "dimension change of a part over a temperature change",
   "group": "mechanical",
+  "layout": "custom",
+  "agentOmit": ["draw"],
   "rooms": [
     "cad",
     "pcb"

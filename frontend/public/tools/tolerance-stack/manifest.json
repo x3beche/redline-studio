@@ -1,8 +1,10 @@
 {
-  "id": "tolerance-stack", "version": "1.0",
+  "id": "tolerance-stack", "version": "1.1",
   "name": "Tolerance Stack-Up",
   "blurb": "worst-case and statistical sum of a chain of dimensions",
   "group": "mechanical",
+  "layout": "custom",
+  "agentOmit": ["draw"],
   "rooms": ["cad"],
   "keywords": ["tolerance stack", "stack-up", "stackup", "tolerance analysis", "worst case", "rss", "root sum square", "statistical tolerancing", "gap analysis", "dimension chain", "tolerance loop", "assembly fit", "gd&t"],
   "intro": "Enter the dimensions of a one-dimensional loop with their tolerances and whether each adds to or takes from the result (for example a gap). It returns the worst-case and root-sum-square (RSS) range, which dimension contributes most, and checks the result against your limits.",

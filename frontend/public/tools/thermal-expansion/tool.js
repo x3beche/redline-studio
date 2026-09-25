@@ -97,8 +97,28 @@ export function run({ length, material, cte, emod, t1, t2, mate, gap }) {
   // The chart's x axis is by index: evenly spaced temperatures keep the lines straight.
   const lo = Math.min(-40, t1, t2), hi = Math.max(125, t1, t2);
   const cT = Array.from({ length: 12 }, (_, i) => Number(fmtNum(lo + ((hi - lo) * i) / 11, 3)));
+  // For the page's drawing only (manifest agentOmit): the part, the housing and
+  // the gap over a temperature sweep, so every drawn number comes from here.
+  const dA = mm ? mm[1] - a : 0;
+  const hasGap = !!mm && gap != null && gap >= 0;
+  const rLo = Math.floor(Math.min(-60, t1 - 10, t2 - 10) / 10) * 10, rHi = Math.ceil(Math.max(160, t1 + 10, t2 + 10) / 10) * 10;
+  const sweep = Array.from({ length: 61 }, (_, i) => {
+    const T = rLo + ((rHi - rLo) * i) / 60;
+    const d1 = a * 1e-6 * length * (T - t1), d2 = mm ? mm[1] * 1e-6 * length * (T - t1) : null;
+    return { T, d1, d2, g: hasGap ? gap + d2 - d1 : null };
+  });
+  const closeAt = hasGap && dA !== 0 ? t1 - gap / (dA * 1e-6 * length) : null;
+  const draw = {
+    L: length, t1, t2, dT, range: [rLo, rHi],
+    part: { key: material, name, a, E, sy, dL, Lt2: length + dL, strain: a * dT },
+    mate: mm ? { key: mate, name: mm[0], a: mm[1], dL: mm[1] * 1e-6 * length * dT } : null,
+    dAlpha: dA, rel: mm ? mm[1] * 1e-6 * length * dT - dL : null,
+    gap: hasGap ? gap : null, gap2: hasGap ? gap + (mm[1] - a) * 1e-6 * length * dT : null, closeAt,
+    stress: E ? E * 1e3 * a * 1e-6 * Math.abs(dT) : null,
+    area: 2 * a * dT * 1e-4, volume: 3 * a * dT * 1e-4, sweep,
+  };
   return {
-    values, tables, warnings,
+    values, tables, warnings, draw,
     charts: [{ title: 'ΔL against temperature (µm)', type: 'line', x: cT, series: [
       { name, y: cT.map((T) => a * length * (T - t1) * 1e-3) },
       ...(mm ? [{ name: mm[0], y: cT.map((T) => mm[1] * length * (T - t1) * 1e-3) }] : [])], xLabel: '°C', yLabel: 'µm' }],

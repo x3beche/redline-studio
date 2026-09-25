@@ -34,7 +34,7 @@ export function run({ dims, lsl, usl, unit }) {
     if (a + b < 0) { warnings.push(`Row "${name}": the tolerance band is negative; the row is skipped.`); return; }
     if (a < 0 && -a > b) warnings.push(`Row "${name}": the + tolerance is negative, check the signs.`);
     const s = String(r.dir || '+').trim().startsWith('-') || String(r.dir).trim().startsWith('−') ? -1 : 1;
-    rows.push({ name, N, a, b, s, m: N + (a - b) / 2, t: (a + b) / 2 });
+    rows.push({ name, N, a, b, s, m: N + (a - b) / 2, t: (a + b) / 2, i });
   });
   if (!rows.length) return { warnings: [...warnings, 'Add at least one dimension: name, nominal, + tolerance, − tolerance and direction (+ adds to the gap, − takes from it).'] };
 
@@ -51,6 +51,7 @@ export function run({ dims, lsl, usl, unit }) {
     { label: 'Modified RSS (x1.5)', value: `${f4(mean - mrss)} … ${f4(mean + mrss)}`, unit: u, hint: pm(mrss) },
   ];
 
+  let lim = null;
   if (lsl != null && usl != null && lsl > usl) warnings.push('The lower limit is above the upper limit: swap them.');
   if (lsl != null || usl != null) {
     const wcOk = (lsl == null || mean - wc >= lsl - 1e-12) && (usl == null || mean + wc <= usl + 1e-12);
@@ -61,6 +62,9 @@ export function run({ dims, lsl, usl, unit }) {
       if (lsl != null) out += Phi((lsl - mean) / sigma);
       if (usl != null) out += 1 - Phi((usl - mean) / sigma);
     } else out = (lsl != null && mean < lsl) || (usl != null && mean > usl) ? 1 : 0;
+    lim = { wcOk, rsOk, out, sigma,
+      outLo: lsl != null ? (sigma > 0 ? Phi((lsl - mean) / sigma) : (mean < lsl ? 1 : 0)) : 0,
+      outHi: usl != null ? (sigma > 0 ? 1 - Phi((usl - mean) / sigma) : (mean > usl ? 1 : 0)) : 0 };
     const spec = `${lsl != null ? f4(lsl) : '−∞'} … ${usl != null ? f4(usl) : '+∞'} ${u}`;
     values.push(
       { label: 'Worst case vs limits', value: wcOk ? 'passes' : 'fails', tone: wcOk ? 'ok' : 'bad', hint: spec },
@@ -74,8 +78,29 @@ export function run({ dims, lsl, usl, unit }) {
 
   const tbl = rows.map((r) => [r.name, r.s > 0 ? '+' : '−', f4(r.N), `+${f4(r.a)} / −${f4(r.b)}`, f4(r.m), pm(r.t),
     `${fmtNum(wc > 0 ? (100 * r.t) / wc : 0, 3)} %`, `${fmtNum((100 * r.t * r.t) / (rss * rss || 1), 3)} %`]);
+  // For the page's drawing only (manifest agentOmit): the chain with its running
+  // positions, the result's ranges and the RSS normal curve.
+  let pos = 0;
+  const sigma = rss / 3;
+  const span = wc > 0 ? wc : Math.max(Math.abs(mean) * 0.01, 1e-3);
+  let xlo = mean - span, xhi = mean + span;
+  if (lsl != null) xlo = Math.min(xlo, lsl); if (usl != null) xhi = Math.max(xhi, usl);
+  const padX = (xhi - xlo) * 0.12 || 1; xlo -= padX; xhi += padX;
+  const draw = {
+    unit: u, nominal, mean, wc, rss, mrss, sigma, lsl: lsl ?? null, usl: usl ?? null, lim,
+    rows: rows.map((r) => {
+      const start = pos; pos += r.s * r.N;
+      return { i: r.i, name: r.name, N: r.N, a: r.a, b: r.b, s: r.s, m: r.m, t: r.t, start, end: pos,
+        wcShare: wc > 0 ? (100 * r.t) / wc : 0, rssShare: rss > 0 ? (100 * r.t * r.t) / (rss * rss) : 0 };
+    }),
+    xRange: [xlo, xhi],
+    curve: sigma > 0 ? Array.from({ length: 161 }, (_, k) => {
+      const x = xlo + ((xhi - xlo) * k) / 160;
+      return [x, Math.exp(-0.5 * ((x - mean) / sigma) ** 2) / (sigma * Math.sqrt(2 * Math.PI))];
+    }) : null,
+  };
   return {
-    values,
+    values, draw,
     tables: [{ title: 'The chain', columns: ['Dimension', 'Dir', 'Nominal', 'Tolerance', 'Mean', 'Half band', 'Share, worst case', 'Share, RSS'], rows: tbl }],
     charts: [{ title: 'Contribution of each dimension', type: 'bars', x: rows.map((r) => r.name),
       series: [{ name: 'Worst case %', y: rows.map((r) => (100 * r.t) / wc || 0) }, { name: 'RSS %', y: rows.map((r) => (100 * r.t * r.t) / (rss * rss) || 0) }],
