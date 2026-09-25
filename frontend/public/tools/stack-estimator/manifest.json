@@ -1,41 +1,220 @@
 {
-  "id": "stack-estimator", "version": "1.0",
+  "id": "stack-estimator",
+  "version": "1.1",
   "name": "Stack Usage Estimator",
   "blurb": "worst-case stack from call depth and locals",
   "group": "embedded",
-  "rooms": ["embedded"],
-  "keywords": ["stack usage", "stack size", "stack overflow", "call graph", "fstack-usage", ".su file", "worst case stack", "stack depth", "interrupt nesting", "exception frame", "_Min_Stack_Size", "task stack", "high-water mark"],
+  "rooms": [
+    "embedded"
+  ],
+  "keywords": [
+    "stack usage",
+    "stack size",
+    "stack overflow",
+    "call graph",
+    "fstack-usage",
+    ".su file",
+    "worst case stack",
+    "stack depth",
+    "interrupt nesting",
+    "exception frame",
+    "_Min_Stack_Size",
+    "task stack",
+    "high-water mark"
+  ],
   "intro": "Finds the deepest path through your call graph (each function's frame, including saved registers and locals, as GCC's -fstack-usage reports it), adds one exception frame and the deepest handler for every interrupt preemption level that can nest, and a safety margin. Frames can be typed in or pasted from .su files; recursion and missing frames are reported because they make the estimate too low.",
   "inputs": [
-    { "key": "arch", "label": "Architecture", "type": "select", "default": "cm",
-      "options": [["cm", "Cortex-M, no FPU (36 B per interrupt)"], ["cmfpu", "Cortex-M4F/M7, FPU used (108 B)"], ["avr", "AVR (2 B)"], ["riscv", "RISC-V (0 B, saved in the prologue)"]] },
-    { "key": "entry", "label": "Entry function", "type": "text", "default": "main", "help": "main, or a task function for an RTOS task stack." },
-    { "key": "funcs", "label": "Functions", "type": "table", "help": "Frame in bytes (blank = take it from the .su data); calls separated by spaces or commas.",
-      "columns": [{ "key": "name", "label": "Function" }, { "key": "frame", "label": "Frame B" }, { "key": "calls", "label": "Calls" }],
+    {
+      "key": "arch",
+      "label": "Architecture",
+      "type": "select",
+      "default": "cm",
+      "options": [
+        [
+          "cm",
+          "Cortex-M, no FPU (36 B per interrupt)"
+        ],
+        [
+          "cmfpu",
+          "Cortex-M4F/M7, FPU used (108 B)"
+        ],
+        [
+          "avr",
+          "AVR (2 B)"
+        ],
+        [
+          "riscv",
+          "RISC-V (0 B, saved in the prologue)"
+        ]
+      ]
+    },
+    {
+      "key": "entry",
+      "label": "Entry function",
+      "type": "text",
+      "default": "main",
+      "help": "main, or a task function for an RTOS task stack."
+    },
+    {
+      "key": "funcs",
+      "label": "Functions",
+      "type": "table",
+      "help": "Frame in bytes (blank = take it from the .su data); calls separated by spaces or commas.",
+      "columns": [
+        {
+          "key": "name",
+          "label": "Function"
+        },
+        {
+          "key": "frame",
+          "label": "Frame B"
+        },
+        {
+          "key": "calls",
+          "label": "Calls"
+        }
+      ],
       "default": [
-        { "name": "main", "frame": "24", "calls": "app_init loop" },
-        { "name": "app_init", "frame": "16", "calls": "HAL_Init sensor_init" },
-        { "name": "sensor_init", "frame": "32", "calls": "i2c_read" },
-        { "name": "loop", "frame": "32", "calls": "read_sensor process printf" },
-        { "name": "read_sensor", "frame": "40", "calls": "i2c_read" },
-        { "name": "i2c_read", "frame": "24", "calls": "HAL_I2C_Master_Receive" },
-        { "name": "process", "frame": "96", "calls": "filter" },
-        { "name": "printf", "frame": "", "calls": "_vfprintf_r" },
-        { "name": "USART1_IRQHandler", "frame": "8", "calls": "HAL_UART_IRQHandler" },
-        { "name": "TIM2_IRQHandler", "frame": "24", "calls": "" },
-        { "name": "SysTick_Handler", "frame": "8", "calls": "HAL_IncTick" }] },
-    { "key": "su", "label": ".su data (optional)", "type": "textarea", "rows": 6,
+        {
+          "name": "main",
+          "frame": "24",
+          "calls": "app_init loop"
+        },
+        {
+          "name": "app_init",
+          "frame": "16",
+          "calls": "HAL_Init sensor_init"
+        },
+        {
+          "name": "sensor_init",
+          "frame": "32",
+          "calls": "i2c_read"
+        },
+        {
+          "name": "loop",
+          "frame": "32",
+          "calls": "read_sensor process printf"
+        },
+        {
+          "name": "read_sensor",
+          "frame": "40",
+          "calls": "i2c_read"
+        },
+        {
+          "name": "i2c_read",
+          "frame": "24",
+          "calls": "HAL_I2C_Master_Receive"
+        },
+        {
+          "name": "process",
+          "frame": "96",
+          "calls": "filter"
+        },
+        {
+          "name": "printf",
+          "frame": "",
+          "calls": "_vfprintf_r"
+        },
+        {
+          "name": "USART1_IRQHandler",
+          "frame": "8",
+          "calls": "HAL_UART_IRQHandler"
+        },
+        {
+          "name": "TIM2_IRQHandler",
+          "frame": "24",
+          "calls": ""
+        },
+        {
+          "name": "SysTick_Handler",
+          "frame": "8",
+          "calls": "HAL_IncTick"
+        }
+      ]
+    },
+    {
+      "key": "su",
+      "label": ".su data (optional)",
+      "type": "textarea",
+      "rows": 6,
       "default": "stm32f4xx_hal.c:112:19:HAL_Init\t8\tstatic\nstm32f4xx_hal_i2c.c:1204:19:HAL_I2C_Master_Receive\t48\tstatic\nstm32f4xx_hal_uart.c:2101:6:HAL_UART_IRQHandler\t40\tstatic\nstm32f4xx_hal.c:322:13:HAL_IncTick\t0\tstatic\nfilter.c:18:7:filter\t128\tstatic\nprintf.c:25:1:printf\t64\tstatic\nvfprintf.c:861:1:_vfprintf_r\t600\tstatic",
-      "placeholder": "cat build/*.su  (GCC -fstack-usage)" },
-    { "key": "isrs", "label": "Interrupts", "type": "table", "help": "Level = preemption priority; handlers on the same level cannot nest.",
-      "columns": [{ "key": "name", "label": "Handler" }, { "key": "level", "label": "Level" }],
-      "default": [{ "name": "TIM2_IRQHandler", "level": "2" }, { "name": "USART1_IRQHandler", "level": "5" }, { "name": "SysTick_Handler", "level": "15" }] },
-    { "key": "margin", "label": "Safety margin", "type": "number", "unit": "%", "default": "25" }
+      "placeholder": "cat build/*.su  (GCC -fstack-usage)"
+    },
+    {
+      "key": "isrs",
+      "label": "Interrupts",
+      "type": "table",
+      "help": "Level = preemption priority; handlers on the same level cannot nest.",
+      "columns": [
+        {
+          "key": "name",
+          "label": "Handler"
+        },
+        {
+          "key": "level",
+          "label": "Level"
+        }
+      ],
+      "default": [
+        {
+          "name": "TIM2_IRQHandler",
+          "level": "2"
+        },
+        {
+          "name": "USART1_IRQHandler",
+          "level": "5"
+        },
+        {
+          "name": "SysTick_Handler",
+          "level": "15"
+        }
+      ]
+    },
+    {
+      "key": "margin",
+      "label": "Safety margin",
+      "type": "number",
+      "unit": "%",
+      "default": "25"
+    }
   ],
   "examples": [
-    { "title": "STM32 superloop with printf and three interrupts", "input": { "arch": "cm", "entry": "main", "margin": "25" } },
-    { "title": "RTOS task stack, FPU on, from .su data only", "input": { "arch": "cmfpu", "entry": "sensor_task", "funcs": [{ "name": "sensor_task", "frame": "", "calls": "bme280_read vTaskDelay" }, { "name": "bme280_read", "frame": "", "calls": "compensate" }], "su": "sensor.c:40:6:sensor_task\t56\tstatic\nbme280.c:120:9:bme280_read\t72\tstatic\nbme280.c:88:14:compensate\t48\tstatic\ntasks.c:1210:6:vTaskDelay\t24\tstatic", "isrs": [], "margin": "30" } }
+    {
+      "title": "STM32 superloop with printf and three interrupts",
+      "input": {
+        "arch": "cm",
+        "entry": "main",
+        "margin": "25"
+      }
+    },
+    {
+      "title": "RTOS task stack, FPU on, from .su data only",
+      "input": {
+        "arch": "cmfpu",
+        "entry": "sensor_task",
+        "funcs": [
+          {
+            "name": "sensor_task",
+            "frame": "",
+            "calls": "bme280_read vTaskDelay"
+          },
+          {
+            "name": "bme280_read",
+            "frame": "",
+            "calls": "compensate"
+          }
+        ],
+        "su": "sensor.c:40:6:sensor_task\t56\tstatic\nbme280.c:120:9:bme280_read\t72\tstatic\nbme280.c:88:14:compensate\t48\tstatic\ntasks.c:1210:6:vTaskDelay\t24\tstatic",
+        "isrs": [],
+        "margin": "30"
+      }
+    }
   ],
   "usage": "Give the architecture (cm, cmfpu, avr, riscv), the entry function, a function table {name, frame bytes (blank = from .su), calls as a space list}, optional pasted GCC .su lines, interrupts {handler, preemption level} and a margin in %. It returns the deepest path from the entry in bytes with the path itself, the nested-interrupt load, the worst case and the recommended stack size (rounded to 8, with hex), and warnings for recursion, dynamic frames and functions with no known frame (which make the estimate a lower bound).",
-  "sources": ["GCC manual §3.11 -fstack-usage (.su format)", "Arm Armv7-M ARM B1.5.7 exception entry stack frame (8 words, 26 with FP context) and CCR.STKALIGN", "Longest-path worst-case stack analysis (as in GCC -fcallgraph-info / puncover / avstack), rule of thumb margin 20-30 %"]
+  "sources": [
+    "GCC manual §3.11 -fstack-usage (.su format)",
+    "Arm Armv7-M ARM B1.5.7 exception entry stack frame (8 words, 26 with FP context) and CCR.STKALIGN",
+    "Longest-path worst-case stack analysis (as in GCC -fcallgraph-info / puncover / avstack), rule of thumb margin 20-30 %"
+  ],
+  "layout": "custom"
 }

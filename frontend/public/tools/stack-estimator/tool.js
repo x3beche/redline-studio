@@ -85,6 +85,7 @@ export function run({ arch, entry, funcs, su, isrs, margin }) {
   // interrupts: one per level, levels nest
   const levels = new Map();
   const isrRows = [];
+  const isrDraw = [];   // for the page's drawing
   for (const i of isrs || []) {
     const name = String(i.name ?? '').trim();
     if (!name) continue;
@@ -95,6 +96,7 @@ export function run({ arch, entry, funcs, su, isrs, margin }) {
     const tot = w.bytes + A.frame;
     const key = Number.isFinite(lv) ? lv : 0;
     isrRows.push([name, key, w.bytes, A.frame, tot, w.path.map((p) => p.name).join(' → ') || name]);
+    isrDraw.push({ name, level: key, bytes: w.bytes, total: tot, known: g.has(name), path: w.path.map((p) => ({ name: p.name, frame: p.frame })) });
     if (!levels.has(key) || levels.get(key).tot < tot) levels.set(key, { name, tot });
   }
   const isrSum = [...levels.values()].reduce((s, x) => s + x.tot, 0);
@@ -111,6 +113,22 @@ export function run({ arch, entry, funcs, su, isrs, margin }) {
     'Check the result on hardware too: fill the stack with a pattern (0xA5) at start-up and read the high-water mark after a stress run.');
   if (arch === 'cm' || arch === 'cmfpu') notes.push('With an RTOS on Cortex-M, interrupts run on the main stack (MSP): size each task stack with its own entry and without the interrupt load, and the MSP with the interrupt load only.');
 
+  const recList = [...rec];
+  // For the page's drawing: every function with its own worst path below it,
+  // and the interrupts with the one per level that nests. Computed after the
+  // warnings above, so it cannot change them.
+  const nodes = [...g.entries()].map(([name, n]) => {
+    const w = worst(name);
+    return { name, frame: n.frame, calls: n.calls, worst: w.bytes, fromSu: suMap.has(name) && !(funcs || []).some((f) => String(f.name ?? '').trim() === name && String(f.frame ?? '').trim() !== '') };
+  });
+  const stack = {
+    arch: arch in ARCH ? arch : 'cm', excFrame: A.frame, entry: ent,
+    main: { bytes: main.bytes, path: main.path.map((p) => ({ name: p.name, frame: p.frame })) },
+    isrs: isrDraw.map((r) => ({ ...r, nests: levels.get(r.level)?.name === r.name })),
+    isrSum, total, margin: mg, recommended: rec8,
+    nodes, unknown: unk, recursion: recList, lowerBound: !!(unk.length || recList.length),
+  };
+
   let cum = 0;
   const pathRows = main.path.map((p) => { cum += p.frame ?? 0; return [p.name, p.frame == null ? '? (0)' : String(p.frame), String(cum)]; });
   return {
@@ -125,6 +143,6 @@ export function run({ arch, entry, funcs, su, isrs, margin }) {
       ...(isrRows.length ? [{ title: 'Interrupts (the largest per level nests)', columns: ['Interrupt', 'Level', 'Handler path (B)', 'Exception frame (B)', 'Total (B)', 'Deepest path'],
         rows: isrRows.sort((a, b) => a[1] - b[1]).map((r) => r.map(String)) }] : []),
     ],
-    warnings, notes,
+    warnings, notes, stack,
   };
 }

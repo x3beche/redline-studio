@@ -541,6 +541,10 @@ export function run({ code, abi: abiKey, pack, which }) {
     tables: [{ title: `${title} on ${abi.name}`, columns: ['Offset', 'Size', 'Member', 'Type', 'Align', 'Padding'], rows }],
     texts,
     notes,
-    layout: { title, size: L.size, align: L.align, padding: padTotal, rowBytes: abi.word, cells: cells.map(({ bitfield, ...c }) => c), reorderedSize: re ? re.size : null },
+    layout: { title, size: L.size, align: L.align, padding: padTotal, rowBytes: abi.word, cells: cells.map(({ bitfield, ...c }) => c), reorderedSize: re ? re.size : null,
+      kind: def.kind, tail: L.tail, isUnion: L.isUnion,
+      members: byOffset.map((r) => ({ name: r.name, type: r.type, offset: r.offset, size: r.size, align: r.align, pad: r.pad, bits: r.bits || null })),
+      reordered: re ? re.order.map((r) => ({ name: r.name, offset: r.newOffset, size: r.size, align: r.align })) : null,
+      structs: parsed.defs.map((d) => d.tag || Object.entries(parsed.typedefs).find(([, t]) => t.type.def === d)?.[0] || null).filter(Boolean) },
   };
 }

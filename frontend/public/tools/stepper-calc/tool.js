@@ -61,6 +61,10 @@ export function run(inp) {
     'Plan the load at no more than 50-70 % of the available torque: steppers lose steps without warning.',
   ];
   let curve = null;
+  // For the page's drawing: the numbers it places on the motor, the curve and the pulse train.
+  const motor = { step, n, full, perRev, microAngle: step / n, rps, rpm: speedRpm, fstep, period: fstep > 0 ? 1 / fstep : null, fel,
+    linear, lead: linear ? lead : null, stepsPerMm: linear ? perRev / lead : null, fmaxHz: fmax > 0 ? fmax * 1e3 : null,
+    fmaxRpm: fmax > 0 ? (fmax * 1e3 / perRev) * 60 : null, hzPerRpm: perRev / 60, motorOk };
   if (!motorOk) {
     warnings.push('Give holding torque, rated and driver current, inductance, resistance and supply to estimate torque at speed.');
   } else {
@@ -98,6 +102,9 @@ export function run(inp) {
     if (n >= 32) notes.push(`At 1/${n} one microstep only holds ${fmtNum(tinc, 3)} N·m: finer microstepping gives smoothness, not proportionally better positioning accuracy.`);
     const top = Math.max(rps * 1.5, corner * 3, 1);
     const xs = Array.from({ length: 25 }, (_, i) => (top * i) / 24);
+    const topD = Math.max(rps * 1.25, zero * 1.12, corner * 1.5, 1e-3);
+    Object.assign(motor, { hold, torque: here.t, current: here.i, frac, cornerRpm: corner * 60, zeroRpm: zero * 60, tinc, mf,
+      points: Array.from({ length: 121 }, (_, i) => { const r = (topD * i) / 120; return [r * 60, tAt(r).t]; }) });
     curve = { title: 'Estimated torque against speed', type: 'line', x: xs.map((r) => Math.round(r * 60)),
       series: [{ name: 'torque N·m', y: xs.map((r) => Number(tAt(r).t.toFixed(4))) }], xLabel: 'rpm', yLabel: 'N·m' };
   }
@@ -107,5 +114,5 @@ export function run(inp) {
     rows: [1, 2, 4, 8, 16, 32, 64, 128, 256].map((m) => [m === 1 ? 'full' : `1/${m}`, fmtNum(full * m, 6), fmtEng(rps * full * m, 'Hz'),
       linear ? fmtEng(lead / (full * m) * 1e-3, 'm') : `${fmtNum(step / m, 4)}°`]),
   };
-  return { values, warnings, charts: curve ? [curve] : [], tables: [table], notes };
+  return { values, warnings, charts: curve ? [curve] : [], tables: [table], notes, motor };
 }

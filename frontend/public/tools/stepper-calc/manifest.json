@@ -1,8 +1,9 @@
 {
-  "id": "stepper-calc", "version": "1.0",
+  "id": "stepper-calc", "version": "1.1",
   "name": "Stepper Motor Calculator",
   "blurb": "pulse frequency and torque from step angle, microstepping and speed",
   "group": "embedded",
+  "layout": "custom",
   "rooms": ["embedded", "cad"],
   "keywords": ["stepper", "stepper motor", "step rate", "pulse frequency", "microstepping", "microstep", "steps per mm", "rpm", "pull-out torque", "corner speed", "nema 17", "lead screw", "back-emf", "a4988", "tmc2209"],
   "intro": "Turns a speed (rpm, or mm/s through a lead screw or belt) into the STEP pulse frequency and resolution, and estimates the torque left at that speed from a first-order phase model: the supply must drive the rated current through the winding's resistance, inductance and back-EMF. The datasheet pull-out curve always wins over this estimate.",
