@@ -1,5 +1,6 @@
 {
-  "id": "layout-mapper", "version": "1.0",
+  "id": "layout-mapper",
+  "version": "1.1",
   "name": "Layout Inspector Mapper",
   "blurb": "a region of a screen mapped to its view in a uiautomator dump",
   "group": "mobile",
@@ -101,5 +102,9 @@
     "Android Developers: Espresso ViewMatchers; UI Automator BySelector",
     "Appium UiAutomator2 driver locator strategies (id, accessibility id, -android uiautomator, xpath)",
     "Intersection over union for box matching (Everingham et al., PASCAL VOC)"
+  ],
+  "layout": "custom",
+  "agentOmit": [
+    "view"
   ]
 }

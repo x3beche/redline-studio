@@ -1,5 +1,6 @@
 {
-  "id": "dp-px-converter", "version": "1.0",
+  "id": "dp-px-converter",
+  "version": "1.1",
   "name": "DP / PX / DPI Converter",
   "blurb": "sizes across density buckets and the asset sizes to export",
   "group": "mobile",
@@ -193,5 +194,9 @@
     "Apple Human Interface Guidelines, Images (scale factors @2x, @3x)",
     "Material Design 3, Window size classes (compact < 600 dp, medium < 840 dp)",
     "Android DisplayMetrics density constants"
+  ],
+  "layout": "custom",
+  "agentOmit": [
+    "view"
   ]
 }

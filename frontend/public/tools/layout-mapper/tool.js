@@ -87,7 +87,8 @@ export function run({ dump, x, y, w, h, shotWidth }) {
       return { n, score: inter / (ra + n.area - inter || 1) };
     }).filter((s) => s.score > 0).sort((a, b) => b.score - a.score || b.n.depth - a.n.depth);
   }
-  if (!scored.length) return { values: [{ label: 'Screen (device px)', value: `${devW}×${devH}` }, { label: 'Nodes', value: nodes.length }], warnings: [...warnings, 'No view lies at that place.'] };
+  if (!scored.length) return { values: [{ label: 'Screen (device px)', value: `${devW}×${devH}` }, { label: 'Nodes', value: nodes.length }], warnings: [...warnings, 'No view lies at that place.'],
+    view: { devW, devH, scale, isPoint, rect: R, nodes: nodes.map((n) => ({ i: n.i, parent: n.parent, depth: n.depth, cls: short(n.cls), id: idName(n.id), text: n.text, desc: n.desc, clickable: n.clickable, x1: n.x1, y1: n.y1, x2: n.x2, y2: n.y2 })), best: null, act: null, chain: [], tap: null, candidates: [] } };
 
   const best = scored[0].n;
   // The node a test would act on: itself if clickable, else the nearest clickable ancestor.
@@ -148,5 +149,15 @@ export function run({ dump, x, y, w, h, shotWidth }) {
   ];
   notes.push(`${nodes.length} nodes read${pkgs.length ? ` from ${pkgs.join(', ')}` : ''}. Bounds are device pixels, right and bottom edges exclusive.`);
   notes.push('A uiautomator dump sees only accessibility nodes: Compose and custom-drawn views appear as one node unless they expose semantics.');
-  return { values, tables, texts, warnings, notes };
+  // For the page's drawing only (manifest agentOmit): the parsed screen and the match.
+  const chainIdx = [];
+  for (let k = best; k; k = k.parent != null ? nodes[k.parent] : null) chainIdx.unshift(k.i);
+  const view = {
+    devW, devH, scale, isPoint, rect: R,
+    nodes: nodes.map((n) => ({ i: n.i, parent: n.parent, depth: n.depth, cls: short(n.cls), id: idName(n.id), text: n.text, desc: n.desc,
+      clickable: n.clickable, x1: n.x1, y1: n.y1, x2: n.x2, y2: n.y2 })),
+    best: best.i, act: act ? act.i : null, chain: chainIdx, tap: { x: cx, y: cy },
+    candidates: scored.slice(0, 8).map(({ n, score }) => ({ i: n.i, score })),
+  };
+  return { values, tables, texts, warnings, notes, view };
 }

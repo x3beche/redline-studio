@@ -82,8 +82,17 @@ export function run({ value, unit, density, customDpi, screenW, screenH, diagona
   notes.push('iOS points and CSS pixels are treated as equal to dp: design tools and mobile browsers use them that way (devicePixelRatio = dpi/160 on Android). Physically an iPhone point is about 1/153-1/163 in.');
   if (unit === 'sp') notes.push('sp follow the user\'s font size linearly here; Android 14 and later scale large text (over about 20 sp) less than linearly, up to 200 %.');
   notes.push('Physical size uses the density bucket (1 dp = 1/160 in); on a real panel it differs by the ratio of its ppi to the logical density.');
+  // For the page's drawing only (manifest agentOmit): the same numbers, structured.
+  const view = {
+    value, unit, dp, px, dpi, scale, fs, mm: inch * 25.4, density, physPpi,
+    toUnit: dp > 0 ? value / dp : ({ dp: 1, sp: 1 / fs, px: scale, pt: 1, css: 1, in: 1 / 160, mm: 25.4 / 160 })[unit],
+    buckets: BUCKETS.map((b) => ({ key: b.key, dpi: b.dpi, scale: b.dpi / 160, px: dp * b.dpi / 160 })),
+    ios: [1, 2, 3].map((s) => ({ key: `@${s}x`, scale: s, px: dp * s })),
+    logical: LOGICAL,
+    screen: density === 'device' ? { w: screenW, h: screenH, diagonal, wDp: Math.min(screenW, screenH) / scale, hDp: Math.max(screenW, screenH) / scale } : null,
+  };
   return {
-    values, warnings, notes,
+    values, warnings, notes, view,
     tables: [
       { title: `${fmtNum(dp, 4)} dp in every Android density`, columns: ['Bucket', 'dpi', 'Scale', 'px', 'Rounded', 'Resource folder'], rows },
       { title: `${fmtNum(dp, 4)} pt on iOS`, columns: ['Scale', 'px', 'Rounded', 'Devices'], rows: ios },

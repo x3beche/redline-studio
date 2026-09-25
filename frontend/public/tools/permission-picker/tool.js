@@ -83,13 +83,13 @@ export function run(input) {
   if (hi < lo) return { warnings: [`targetSdk (${hi}) must be at least minSdk (${lo}).`] };
   if (hi < 34) warnings.push(`targetSdk ${hi}: Google Play requires targeting a recent API level (35 from August 2025 for new apps and updates). Some lines below only matter once you raise it.`);
   const chosen = Object.keys(FEATURES).filter((k) => input[k]);
-  if (!chosen.length) return { warnings: ['Tick the features the app uses.'] };
+  if (!chosen.length) return { warnings: ['Tick the features the app uses.'], view: { lo, hi, android: platform !== 'ios', ios: platform !== 'android', perms: [], above: [], below: [], iosKeys: [], modes: [], features: Object.fromEntries(Object.entries(FEATURES).map(([k, f]) => [k, { label: f.label, on: false }])) } };
   const doAndroid = platform !== 'ios', doIos = platform !== 'android';
 
   // --- Android: merge by permission name; a line with no max wins over one with a max ---
-  const perms = new Map(), uses = new Set(), rows = [];
+  const perms = new Map(), uses = new Set(), rows = [], dropped = [];
   const addPerm = (p, feat) => {
-    if (p.max && p.max < lo) return; // below the app's minSdk: never used
+    if (p.max && p.max < lo) { dropped.push({ ...p, feats: [feat] }); return; } // below the app's minSdk: never used
     const old = perms.get(p.name);
     if (!old) perms.set(p.name, { ...p, feats: [feat] });
     else {
@@ -172,7 +172,17 @@ export function run(input) {
   if (doIos) notes.push(...iosNotes.map((n) => `iOS - ${n}.`));
   notes.push('Declare only what the app uses: every runtime permission is a dialog the user can refuse, and store reviews ask about each one.');
   notes.push('A missing purpose string makes iOS terminate the app the first time it touches that resource; a vague one gets the build rejected in review.');
+  // For the page's drawing only (manifest agentOmit): the lines with their API ranges.
+  const vp = (p) => ({ name: p.name, type: p.type, min: p.min ?? null, max: p.max ?? null, feats: [...p.feats], note: p.note || '', attrs: p.attrs || '' });
+  const view = {
+    lo, hi, android: doAndroid, ios: doIos,
+    perms: list.map(vp), above: skippedHigh.map(vp), below: dropped.map(vp),
+    iosKeys: doIos ? [...keys].map(([key, why]) => ({ key, why, feats: chosen.map((k) => FEATURES[k]).filter((f) => f.ios.some(([x]) => x === key)).map((f) => f.label) })) : [],
+    modes: doIos ? [...modes] : [],
+    features: Object.fromEntries(Object.entries(FEATURES).map(([k, f]) => [k, { label: f.label, on: !!input[k] }])),
+  };
   return {
+    view,
     values: [
       ...(doAndroid ? [{ label: 'Android permissions', value: list.length, hint: `for API ${lo}-${hi}` },
         { label: 'Runtime (asked)', value: runtime.length, tone: runtime.length > 4 ? 'warn' : undefined, hint: special.length ? `+ ${special.length} special` : '' }] : []),
