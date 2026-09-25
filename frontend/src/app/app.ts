@@ -117,9 +117,9 @@ export class App {
         const usd = t.llm_usd ?? 0;
         const money = usd >= 1000 ? `$${(usd / 1000).toFixed(1)}k` : `$${Math.round(usd)}`;
         const mins = d?.computed_at ? Math.round((Date.now() - Date.parse(d.computed_at)) / 60000) : null;
-        const ago = mins === null ? '' : mins < 1 ? ' · just now' : mins < 60 ? ` · ${mins} min ago` : ` · ${Math.round(mins / 60)} h ago`;
+        const ago = mins === null ? '' : mins < 1 ? ' · now' : mins < 60 ? ` · ${mins}m` : ` · ${Math.round(mins / 60)}h`;
         this.brief.set({
-          text: `${money} · ${t.notes ?? 0} revisions${ago}`,
+          text: `${money} · ${t.notes ?? 0} rev${ago}`,
           title: `Last 7 days: $${usd.toFixed(2)} of LLM work, ${t.notes ?? 0} revisions, ${t.runs ?? 0} runs`
                + (d?.took_ms != null ? ` - worked out in ${d.took_ms} ms` : ''),
         });

@@ -29,7 +29,7 @@ DEFAULT = "default"
 SCOPED = frozenset({
     "models", "folders", "uploads", "revisions", "runs", "chat", "questions",
     "activity", "boards", "apps", "settings", "board_runs", "item_history",
-    "weekly_reports", "audit", "compute_jobs", "analytics", "scratch", "notes",
+    "weekly_reports", "audit", "compute_jobs", "analytics", "scratch", "notes", "releases",
     "tool_usage", "tool_data",
 })
 

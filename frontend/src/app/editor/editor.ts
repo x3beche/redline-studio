@@ -24,6 +24,7 @@ import { OcpViewer } from './ocp';
 import { Markdown, plain } from '../markdown';
 import { Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
+import { Releases } from '../rooms/releases';
 import { Auth } from '../auth';
 import { startFold, whenSettled } from '../fold';
 
@@ -39,7 +40,7 @@ type Mark =
 
 @Component({
   selector: 'app-editor',
-  imports: [CodeView, DecimalPipe, Markdown, NgTemplateOutlet],
+  imports: [CodeView, DecimalPipe, Markdown, NgTemplateOutlet, Releases],
   templateUrl: './editor.html',
 })
 export class Editor implements AfterViewInit, OnDestroy {
@@ -62,6 +63,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   private cadInput = viewChild<ElementRef<HTMLInputElement>>('cadInput');
   private freezeBtn = viewChild<ElementRef<HTMLElement>>('freezeBtn');
   private ideBtn = viewChild<ElementRef<HTMLElement>>('ideBtn');
+  private releaseBtn = viewChild<ElementRef<HTMLElement>>('releaseBtn');
+  private drawingBtn = viewChild<ElementRef<HTMLElement>>('drawingBtn');
   private taskPanel = viewChild<ElementRef<HTMLElement>>('taskPanel');
   private logPanel = viewChild<ElementRef<HTMLElement>>('logPanel');
   private drawTools = viewChild<ElementRef<HTMLElement>>('drawTools');
@@ -73,6 +76,14 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** The code view: the model's source over the viewer (rooms/code-view.ts). */
   ide = signal(false);
   ideTop = signal(0);
+  /** The releases of the model's project (rooms/releases.ts). */
+  releasing = signal(false);
+
+  /** The model's technical drawing, made from its STEP, in a tab of its own. */
+  openDrawing() {
+    const id = this.activeModel();
+    if (id) window.open(`/api/models/${id}/drawing.pdf`, '_blank');
+  }
   comment = signal('');
   part = signal('');
   parts = signal<string[]>([]);
@@ -399,6 +410,10 @@ export class Editor implements AfterViewInit, OnDestroy {
     // The code view's switch, left of both.
     const ide = this.ideBtn()?.nativeElement;
     if (ide && bar && ide.parentElement !== bar) bar.insertBefore(ide, tools ?? btn ?? null);
+    // Release and the technical drawing, before the code view's switch.
+    for (const el of [this.releaseBtn()?.nativeElement, this.drawingBtn()?.nativeElement]) {
+      if (el && bar && el.parentElement !== bar) bar.insertBefore(el, ide ?? tools ?? btn ?? null);
+    }
 
     // The running task goes under the model tree, in the room the tree
     // panel was leaving empty. Always in the DOM, hidden when idle: an

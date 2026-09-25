@@ -11,6 +11,7 @@ import { Selection } from '../selection';
 import { NgTemplateOutlet } from '@angular/common';
 import { Board3d } from './board3d';
 import { CodeView } from './code-view';
+import { Releases } from './releases';
 import { Drawing } from './drawing';
 import { RoomFrame, ToolButton } from './frame';
 import { RulesForm } from './rules-form';
@@ -35,7 +36,7 @@ type BoardView = Pane | 'split' | 'focus';
  */
 @Component({
   selector: 'app-room-pcb',
-  imports: [Board3d, CodeView, Drawing, DrawTools, MiniBars, MiniColumns, NgTemplateOutlet,
+  imports: [Board3d, CodeView, Drawing, DrawTools, Releases, MiniBars, MiniColumns, NgTemplateOutlet,
             RoomFrame, RulesForm, Sketchpad, ToolButton],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
@@ -96,6 +97,9 @@ type BoardView = Pane | 'split' | 'focus';
                 [tip]="building() ? 'Building…' : 'Build - source, schematic, place, route, DRC'"
                 [on]="building()" [disabled]="building() || frozen() || !here()"
                 (press)="build()" />
+      <!-- The project packed for a fab: Gerbers, BOM, pick-and-place, PDFs, STEP. -->
+      <app-tool icon="tcv-ico-release" tip="Release - pack the project for manufacturing"
+                [disabled]="!here()" (press)="releasing.set(true)" />
       <!-- The board's source, as an IDE shows it, over the view. -->
       <app-tool icon="tcv-ico-code" [tip]="ide() ? 'Back to the view' : 'Code - the board source (atopile)'"
                 [on]="ide()" [disabled]="!here() || frozen()" (press)="ide.set(!ide())" />
@@ -557,6 +561,9 @@ type BoardView = Pane | 'split' | 'focus';
          all three at once in windows, each window showing whichever of
          them it is set to. -->
     <div view class="relative h-full w-full">
+      @if (releasing() && here(); as b) {
+        <app-releases [project]="projectOf(b)" (closed)="releasing.set(false)" />
+      }
       @if (ide() && here(); as b) {
         <app-code-view kind="board" [id]="b._id" [title]="b.title || b._id" (closed)="ide.set(false)" />
       }
@@ -767,6 +774,9 @@ export class RoomPcb implements OnDestroy {
 
   /** The code view: the board's source over the view (rooms/code-view.ts). */
   ide = signal(false);
+  /** The releases of the board's project (rooms/releases.ts). */
+  releasing = signal(false);
+  projectOf(b: BoardEntry) { return ((b as BoardEntry & { folder?: string }).folder || b._id).split('/')[0]; }
 
   constructor() {
     this.refresh();

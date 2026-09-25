@@ -913,6 +913,25 @@ keys, pin, edit (it saves as you type), 🎙 to dictate where the browser
 can listen, and **Send to agent** hands a note to a room's agent as a
 message in its thread.
 
+**Releases.** The box button in the 3D and PCB toolbars packs the
+project as it stands into one zip, under a tag you choose (v1.0, v1.1 -
+the next one is suggested), kept for good and never overwritten:
+
+- each board: Gerbers and drill files zipped as a fab takes them; BOM and
+  pick-and-place in JLCPCB's columns; a BOM with LCSC's price, stock and
+  Basic/Extended class per line and the cost of a board's parts; the
+  schematic and assembly drawing as PDF; the board as STEP; its DRC/ERC;
+- each model: STEP, STL and a dimensioned technical drawing (PDF);
+- every model's and board's source as it was, README.md and manifest.json.
+
+It is made in the background (a few minutes - large assemblies take the
+longest to draw); the window shows its log, then **Download**. What could
+not be made is listed rather than failing the release. The drawing button
+beside it opens one model's technical drawing on its own: front, top and
+right views with hidden edges dashed, an isometric view, overall sizes,
+a standard scale and a title block, on A3. Drawings are made in their own
+container (redline-draw; `./start.sh` builds it the first time).
+
 **Forgot the password** (or the address)? On the machine itself:
 `.venv/bin/python tools/account.py list` shows every account, and
 `.venv/bin/python tools/account.py reset <email>` prints a link, good for an

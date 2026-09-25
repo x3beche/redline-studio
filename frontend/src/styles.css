@@ -1782,6 +1782,10 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 
 /* A number beside a tab's name - how many tools - said quietly. */
 .tcv-tab-count { margin-left: 4px; font-size: 10.5px; font-weight: 400; color: var(--ink-dim); opacity: .7; }
+/* A tab's name stays on one line; where the row runs short, the quiet
+   figures beside Analytics go first (they are on its tooltip too). */
+.tcv-tab { white-space: nowrap; }
+@media (max-width: 1700px) { .tcv-tab-end .tcv-tab-count { display: none; } }
 
 /* NOTES (rooms/notes.ts): write and it is kept - a list to find them on the
    left, the box to write in and the open note on the right. */
@@ -1865,3 +1869,26 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-quick-head { display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; color: var(--ink); }
 .tcv-quick-head span { font-size: 11px; color: var(--ink-dim); }
 .tcv-quick-kept { margin: 0; font-size: 12px; color: var(--ok); }
+
+/* Release: a box with its lid and an arrow out; drawing: a sheet with a
+   dimension line. The viewer's inks, as the other icons. */
+.tcv-ico.tcv-ico-release { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><path d='M3,9 L13,4 L23,9 L23,19 L13,24 L3,19 Z' fill='none' stroke='%23ddd' stroke-width='1.4'/><path d='M3,9 L13,14 L23,9 M13,14 L13,24' fill='none' stroke='%23ddd' stroke-width='1.3'/><path d='M3,9 L13,14 L13,24 L3,19 Z' fill='rgb(48,142,225)' stroke='%23ddd' stroke-width='1.2'/><path d='M18,2 L18,8 M15.5,5.5 L18,8 L20.5,5.5' fill='none' stroke='%23ddd' stroke-width='1.5'/></svg>"); } /* theme:pigment */
+.tcv-ico.tcv-ico-drawing { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='3' y='3' width='20' height='20' rx='1' fill='none' stroke='%23ddd' stroke-width='1.4'/><rect x='7' y='7' width='9' height='7' fill='rgb(48,142,225)' stroke='%23ddd' stroke-width='1.2'/><path d='M7,18 L16,18 M7,16.5 L7,19.5 M16,16.5 L16,19.5 M19,7 L19,14' fill='none' stroke='%23ddd' stroke-width='1.1'/><path d='M3,20 L23,20' stroke='%23ddd' stroke-width='0.8'/></svg>"); } /* theme:pigment */
+/* The releases dialog. */
+.tcv-rel { width: min(760px, 94vw); }
+.tcv-rel-new { display: flex; gap: 6px; }
+.tcv-rel-new input { padding: 6px 8px; font-size: 12.5px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 5px; outline: none; }
+.tcv-rel-new input:focus { border-color: var(--accent); }
+.tcv-rel-tag { width: 90px; }
+.tcv-rel-notes { flex: 1; }
+.tcv-rel-row { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.tcv-rel-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tcv-rel-actions { flex: none; display: flex; align-items: flex-start; gap: 6px; }
+.tcv-rel-actions a { text-decoration: none; }
+.tcv-rel-notes-text { font-size: 12px; color: var(--ink); }
+.tcv-rel-problems { font-size: 11px; color: var(--warn); }
+.tcv-rel-problems summary { cursor: pointer; }
+.tcv-rel-log { margin: 4px 0 0; padding: 6px 8px; max-height: 140px; overflow: auto; font-size: 10.5px; line-height: 1.45;
+  color: var(--ink-dim); background: var(--surface); border-radius: 4px; white-space: pre-wrap; }
+.tcv-rel-row[data-status="failed"] .tcv-role { color: var(--danger); border-color: var(--danger); }

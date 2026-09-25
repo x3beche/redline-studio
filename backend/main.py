@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import (access, actors, ato, auth, notes, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (access, actors, ato, auth, notes, release, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
 from . import tools_api
@@ -1811,6 +1811,13 @@ async def _start_sampler():
     if MONGODB_URI:
         asyncio.create_task(insights.sampler(db))
 
+        async def _tidy_releases():
+            try:
+                await release.abandoned(db().raw)      # every workspace's
+            except Exception:
+                pass
+        asyncio.create_task(_tidy_releases())
+
 
 @app.get("/api/insights")
 async def get_insights(range: str = "24h"):
@@ -1878,6 +1885,75 @@ async def chat_history(limit: int = 200, room: str | None = None):
     """The thread, oldest first - one room's, or all of them. The page
     polls its room's with the health."""
     return await chat.history(db(), limit, room)
+
+
+# ---------------- releases ----------------
+class ReleaseIn(BaseModel):
+    project: str = Field(min_length=1, max_length=80)
+    tag: str = Field(min_length=1, max_length=32)
+    notes: str = Field(default="", max_length=4000)
+
+
+def _release_out(d: dict) -> dict:
+    return {**{k: v for k, v in d.items() if k not in ("_id", "workspace_id", "zip_id")}, "id": d["_id"]}
+
+
+@app.get("/api/releases")
+async def releases(project: str | None = None):
+    return [_release_out(d) for d in await release.listing(db(), project)]
+
+
+@app.post("/api/releases")
+async def release_make(body: ReleaseIn):
+    """Pack a project as it stands under a tag - made in the background."""
+    try:
+        doc = await release.make(db(), body.project, body.tag, body.notes, actors.current())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    await actors.audit(db(), "release", f"{body.project} {body.tag}")
+    return _release_out(doc)
+
+
+@app.get("/api/releases/{rid}")
+async def release_one(rid: str):
+    doc = await db()[release.COLL].find_one({"_id": rid})
+    if not doc:
+        raise HTTPException(404, rid)
+    return _release_out(doc)
+
+
+@app.get("/api/releases/{rid}/download")
+async def release_download(rid: str):
+    try:
+        name, data = await release.download(db(), rid)
+    except KeyError as exc:
+        raise HTTPException(404, "no such release, or it is not ready") from exc
+    return Response(data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@app.delete("/api/releases/{rid}")
+async def release_delete(rid: str):
+    if not await release.remove(db(), rid):
+        raise HTTPException(404, rid)
+    return {"deleted": rid}
+
+
+@app.get("/api/models/{model_id:path}/drawing.pdf")
+async def model_drawing(model_id: str):
+    """A dimensioned technical drawing of a model (made from its STEP, in
+    the drawing container; kept per STEP)."""
+    try:
+        pdf = await release.model_drawing(db(), model_id)
+    except KeyError as exc:
+        raise HTTPException(404, model_id) from exc
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(500, str(exc)) from exc
+    name = model_id.split("/")[-1]
+    return Response(pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{name}-drawing.pdf"'})
 
 
 # ---------------- notes ----------------

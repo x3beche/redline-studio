@@ -41,6 +41,13 @@ fi
 
 # Model data comes from the database; nothing is written to disk.
 
+# --- Container images the app runs work in (nothing installed on the machine) ---
+# The technical drawings' image (docker/draw) - built once, in the background.
+if command -v docker >/dev/null && ! docker image inspect redline-draw >/dev/null 2>&1; then
+  say "building the drawing image (redline-draw) in the background"
+  (docker build -q -t redline-draw -f docker/draw/Dockerfile docker/draw >/dev/null 2>&1 &)
+fi
+
 # --- Stop anything already listening ---
 for port in "$API_PORT" "$WEB_PORT"; do
   pid="$(ss -ltnp 2>/dev/null | grep ":$port " | grep -oP 'pid=\K[0-9]+' | head -1 || true)"

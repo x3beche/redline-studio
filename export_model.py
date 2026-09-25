@@ -5,6 +5,7 @@
 Source and output directories are supplied from outside so the backend can run
 this script in a temporary directory and store the result in the database.
 Module contract: TITLE (optional), PARTS (required), NAMES (optional).
+A STEP of PARTS is written to exports/ too, unless the model wrote one.
 """
 
 from __future__ import annotations
@@ -40,7 +41,26 @@ def export(models_dir: Path, assets_dir: Path, name: str) -> Path:
     out = assets_dir / f"{name}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(envelope))
+    step_of(parts, name)
     return out
+
+
+def step_of(parts, name: str) -> None:
+    """A STEP of the model, for releases and drawings, unless its script
+    wrote its own into exports/ (the build keeps what is there). Never
+    fails the build: the viewer's payload is what a build is for."""
+    exports = Path("exports")
+    if not exports.is_dir() or any(exports.glob("*.step")) or any(exports.glob("*.stp")):
+        return
+    try:
+        from build123d import Compound, Shape, export_step
+        shapes = [p for p in parts if isinstance(p, Shape)]
+        if not shapes:
+            return
+        whole = shapes[0] if len(shapes) == 1 else Compound(children=shapes)
+        export_step(whole, str(exports / f"{name.split('__')[-1]}.step"))
+    except Exception as exc:                         # noqa: BLE001
+        print(f"no STEP written: {type(exc).__name__}: {exc}")
 
 
 def main() -> None:

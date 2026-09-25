@@ -96,6 +96,8 @@ _RULES: list[tuple[str, str, str]] = [
     ("PATCH", "/api/notes/{}", "draw"),
     ("DELETE", "/api/notes/{}", "draw"),
     ("POST", "/api/notes/{}/send", "draw"),
+    # releases: making one runs the builds' outputs; downloading is looking
+    ("POST", "/api/releases", "run"),
     # talking with the agents
     ("POST", "/api/chat", "draw"),
     ("POST", "/api/questions", "draw"),

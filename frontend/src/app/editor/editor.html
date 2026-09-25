@@ -506,6 +506,24 @@
       <button (click)="clear()" class="tcv-btn tcv-draw-text">Clear</button>
     </div>
 
+    <!-- The project's releases, and this model's technical drawing: in the
+         viewer's toolbar, before the code view's switch. -->
+    <span #releaseBtn class="tcv_tooltip" data-tooltip="Release - pack the project for manufacturing">
+      <span class="tcv_button_frame">
+        <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-release" aria-label="Release"
+               [disabled]="!activeModel()" (click)="releasing.set(true)">
+      </span>
+    </span>
+    <span #drawingBtn class="tcv_tooltip" data-tooltip="Technical drawing - dimensioned views, as PDF">
+      <span class="tcv_button_frame">
+        <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-drawing" aria-label="Technical drawing"
+               [disabled]="!activeModel()" (click)="openDrawing()">
+      </span>
+    </span>
+    @if (releasing() && activeModel()) {
+      <app-releases [project]="activeModel().split('/')[0]" (closed)="releasing.set(false)" />
+    }
+
     <!-- The code view's switch: in the viewer's toolbar, just left of the
          pen (docked with it). The model's source, as an IDE shows it. -->
     <span #ideBtn class="tcv_tooltip"
