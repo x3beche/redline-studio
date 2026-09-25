@@ -30,6 +30,9 @@ const SWATCH: Record<Theme, string[]> = { // theme:pigment
   light: ['#eceef1', '#f6f7f9', '#232a31', '#1d6fb8'], // theme:pigment
   oled: ['#000', '#0a0c0e', '#d8dde3', '#4a9be0'], // theme:pigment
   'github-dark': ['#0d1117', '#161b22', '#e6edf3', '#2f81f7'], // theme:pigment
+  'atom-one-dark': ['#282c34', '#21252b', '#abb2bf', '#c678dd'], // theme:pigment
+  'one-dark-pro': ['#282c34', '#21252b', '#abb2bf', '#4d78cc'], // theme:pigment
+  'vscode-dark': ['#1f1f1f', '#181818', '#cccccc', '#0078d4'], // theme:pigment
 };
 
 interface Shortcut { keys: string[]; what: string }

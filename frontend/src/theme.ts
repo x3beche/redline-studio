@@ -6,11 +6,15 @@
  *  an unknown name falls back to the default rather than leaving the page
  *  with half a palette.
  */
-export const THEMES = ['default', 'light', 'oled', 'github-dark'] as const;
+export const THEMES = ['default', 'light', 'oled', 'github-dark', 'atom-one-dark', 'one-dark-pro', 'vscode-dark'] as const;
+
+/** The ones drawn on a light ground: a board's drawings get light inks. */
+export const LIGHT_THEMES: ReadonlySet<string> = new Set(['light']);
 
 /** What each is called where one is chosen. */
 export const THEME_NAMES: Record<Theme, string> = {
   default: 'Redline dark', light: 'Light', oled: 'OLED black', 'github-dark': 'GitHub Dark',
+  'atom-one-dark': 'Atom One Dark', 'one-dark-pro': 'One Dark Pro', 'vscode-dark': 'VS Code Dark',
 };
 export type Theme = (typeof THEMES)[number];
 

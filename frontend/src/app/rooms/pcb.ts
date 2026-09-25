@@ -12,6 +12,8 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Board3d } from './board3d';
 import { CodeView } from './code-view';
 import { Releases } from './releases';
+import { Prefs } from '../preferences';
+import { LIGHT_THEMES } from '../../theme';
 import { Drawing } from './drawing';
 import { RoomFrame, ToolButton } from './frame';
 import { RulesForm } from './rules-form';
@@ -675,6 +677,7 @@ type BoardView = Pane | 'split' | 'focus';
 export class RoomPcb implements OnDestroy {
   private api = inject(Boards);
   private picked = inject(Selection);
+  private prefs = inject(Prefs);
   private activity = inject(Activity);
   /** Read by the template for the preview URLs. */
   store = inject(Parts);
@@ -1177,7 +1180,10 @@ export class RoomPcb implements OnDestroy {
 
   /** A drawing or a KiCad file of the open board. */
   file(name: string, stamp?: string | null): string {
-    return this.api.file(this.here()?._id ?? '', name, stamp ?? undefined);
+    const url = this.api.file(this.here()?._id ?? '', name, stamp ?? undefined);
+    // On a light theme the drawings come with inks that show on white.
+    return name.endsWith('.svg') && LIGHT_THEMES.has(this.prefs.theme())
+      ? url + (url.includes('?') ? '&' : '?') + 'light=1' : url;
   }
 
   routeTitle(): string {

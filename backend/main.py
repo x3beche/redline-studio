@@ -1028,18 +1028,42 @@ async def layout_board(bid: str):
     return out
 
 
+# A board's drawings are made for a dark board. On a light theme the page
+# asks for them with ?light=1 and gets the same drawing with the inks that
+# vanish on white darkened - silkscreen, pad and hole white, the edge -
+# as KiCad's own light theme draws them. Copper keeps its colour.
+LIGHT_INKS = {
+    # the layout: F.Cu, B.Cu, pads and holes, silkscreen, edge cuts, the board
+    "C83434": "B42A2A", "D864FF": "8E3FD6", "FFFFFF": "3A4048", "F2EDA1": "1F2328",
+    "D0D2CD": "5B6068", "000000": "F6F7F9",
+    # the schematic: outlines, pin numbers, names, labels, bodies, wires, the page
+    "D66060": "A83232", "AA7878": "7A4A4A", "5CC8C8": "13737A", "E6E6E6": "2A2F36",
+    "261A1A": "FFF8EC", "6E6EF0": "3434B8", "48C774": "1E7E44", "111111": "FFFFFF",
+}
+
+
+def _light(svg: bytes) -> bytes:
+    import re
+    text = svg.decode("utf-8", errors="replace")
+    ink = lambda m: m.group(1) + "#" + LIGHT_INKS.get(m.group(2).upper(), m.group(2))  # noqa: E731
+    text = re.sub(r'((?:fill|stroke)(?::|=")\s*)#([0-9a-fA-F]{6})', ink, text)
+    return text.encode()
+
+
 @app.get("/api/boards/{bid}/layout.svg")
-async def board_layout(bid: str):
+async def board_layout(bid: str, light: bool = False):
     try:
         raw = await store.get_artifact(db(), bid, "layout", ato.BOARDS)
     except KeyError:
         raise HTTPException(404, "no layout yet")
+    if light:
+        raw = _light(raw)
     return Response(raw, media_type="image/svg+xml",
                     headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/api/boards/{bid}/{which}.svg")
-async def board_drawing(bid: str, which: str):
+async def board_drawing(bid: str, which: str, light: bool = False):
     """The other drawings of a board: `tracks` (the copper without the
     ground pour), `bottom` (the back, seen from below) and `schematic`."""
     artifact = {"tracks": "tracks", "bottom": "bottom",
@@ -1050,6 +1074,8 @@ async def board_drawing(bid: str, which: str):
         raw = await store.get_artifact(db(), bid, artifact, ato.BOARDS)
     except KeyError:
         raise HTTPException(404, f"no {which} drawing yet")
+    if light:
+        raw = _light(raw)
     return Response(raw, media_type="image/svg+xml",
                     headers={"Cache-Control": "public, max-age=31536000, immutable"})
 

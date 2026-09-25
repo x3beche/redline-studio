@@ -47,3 +47,12 @@ def test_making_a_release_needs_an_editor_downloading_does_not():
     assert access.allowed("editor", access.action("POST", "/api/releases"))
     assert not access.allowed("reviewer", access.action("POST", "/api/releases"))
     assert access.allowed("viewer", access.action("GET", "/api/releases/x/download"))
+
+
+def test_a_board_drawing_on_a_light_ground_gets_inks_that_show():
+    from backend.main import _light
+    svg = b'<path style="fill:#F2EDA1;stroke:#c83434" /><rect fill="#111111"/>'
+    out = _light(svg).decode()
+    assert "fill:#1F2328" in out            # silkscreen darkened
+    assert "stroke:#B42A2A" in out          # copper keeps its colour, a shade deeper
+    assert 'fill="#FFFFFF"' in out          # the schematic's page goes white
