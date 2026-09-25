@@ -101,6 +101,57 @@ async function verify(alg, key, keyEnc, signingInput, sig) {
   }
 }
 
+// Where each top-level member of a JSON object sits in its base64url text:
+// [{key, c0, c1}] as character offsets into the encoded part (4 characters
+// carry 3 bytes, so a member's bytes b0..b1 are characters b0/3*4..b1/3*4).
+// Only for the page, which lights up a claim's characters in the token.
+function memberRanges(text, encLen) {
+  const out = [];
+  let i = 0;
+  const ws = () => { while (i < text.length && ' \t\n\r'.includes(text[i])) i++; };
+  const str = () => { i++; while (i < text.length && text[i] !== '"') { if (text[i] === '\\') i++; i++; } i++; };
+  const skip = () => {
+    ws();
+    if (text[i] === '"') return str();
+    if (text[i] === '{' || text[i] === '[') {
+      let depth = 0;
+      while (i < text.length) {
+        const c = text[i];
+        if (c === '"') { str(); continue; }
+        if (c === '{' || c === '[') depth++;
+        if (c === '}' || c === ']') { depth--; if (depth === 0) { i++; return; } }
+        i++;
+      }
+      return;
+    }
+    while (i < text.length && !',}] \t\n\r'.includes(text[i])) i++;
+  };
+  const bytes = (n) => new TextEncoder().encode(text.slice(0, n)).length;
+  ws();
+  if (text[i] !== '{') return out;
+  i++;
+  for (let guard = 0; guard < 500; guard++) {
+    ws();
+    if (text[i] !== '"') break;
+    const s0 = i; str();
+    let key = '';
+    try { key = JSON.parse(text.slice(s0, i)); } catch { break; }
+    ws(); if (text[i] !== ':') break; i++;
+    skip();
+    const b0 = bytes(s0), b1 = bytes(i);
+    out.push({ key, c0: Math.floor(b0 / 3) * 4, c1: Math.min(encLen, Math.ceil(b1 / 3) * 4) });
+    ws();
+    if (text[i] === ',') { i++; continue; }
+    break;
+  }
+  return out;
+}
+function segment(name, enc) {
+  const d = b64decode(enc);
+  const text = d.bytes ? utf8(d.bytes).text : null;
+  return { name, enc, text, ranges: text != null ? memberRanges(text, enc.length) : [] };
+}
+
 export async function run({ token, mode, at, key, keyEnc }) {
   const warnings = [];
   let t = String(token ?? '').trim().replace(/^(authorization:\s*)?bearer\s+/i, '').replace(/^["']|["']$/g, '');
@@ -121,6 +172,7 @@ export async function run({ token, mode, at, key, keyEnc }) {
     texts.push({ title: 'Hex dump', body: hexdump(d.bytes), lang: 'text' });
     const variant = /[-_]/.test(t) ? 'base64url' : /[+/]/.test(t) ? 'base64' : 'either alphabet';
     return {
+      segments: { kind: 'base64', enc: t.replace(/\s+/g, ''), hex: hex(d.bytes, 384), bytes: d.bytes.length },
       values: [
         { label: 'Decoded', value: `${d.bytes.length} bytes`, hint: variant },
         { label: 'Content', value: json != null ? 'JSON' : printable ? 'UTF-8 text' : 'binary', tone: 'ok' },
@@ -150,7 +202,7 @@ export async function run({ token, mode, at, key, keyEnc }) {
   if (parts.length === 5) {
     warnings.push('This is an encrypted JWE: the payload cannot be read without the recipient\'s private key.');
     values.push({ label: 'Type', value: 'JWE (encrypted)', hint: `enc ${header.enc || '?'}` });
-    return { values, tables, texts, warnings };
+    return { values, tables, texts, warnings, segments: { kind: 'jwe', parts: [segment('header', parts[0]), ...parts.slice(1).map((p, i) => ({ name: ['key', 'iv', 'ciphertext', 'tag'][i], enc: p, text: null, ranges: [] }))] } };
   }
   if (alg === 'none') warnings.push('alg "none": the token is unsigned and anyone can forge it. A server must reject it.');
   if (header.jku || header.x5u) warnings.push('The header points to a key URL (jku/x5u): a server must only fetch keys from URLs it trusts, or an attacker picks the key.');
@@ -219,6 +271,7 @@ export async function run({ token, mode, at, key, keyEnc }) {
       'Decoding is not verifying: anyone can read and re-encode a JWT. Trust claims only after the signature checks out with the issuer\'s key.',
       now == null ? 'Give a check time to see whether the token is expired then; the drawing marks your clock\'s now.' : 'Times are compared without clock-skew leeway; servers usually allow 30-120 s.',
     ],
+    segments: { kind: 'jwt', parts: [segment('header', parts[0]), segment('payload', parts[1]), { name: 'signature', enc: parts[2], text: null, ranges: [], bytes: sig.length, want, hex: sig.length ? hex(sig, 132) : '' }] },
     times: payload && typeof payload === 'object' ? { iat: payload.iat ?? null, nbf: payload.nbf ?? null, exp: payload.exp ?? null, check: Number.isFinite(now) ? now : null } : null,
   };
 }

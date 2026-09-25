@@ -139,11 +139,26 @@ export function run(input) {
 
   const gens = Array.from({ length: devices }, (_, d) => makeDevice(input, d));
   const rows = [], lines = [];
+  // The page's drawing: every field's values per device and step, and each
+  // message, for the first 16 devices (agentOmit: agents get the texts).
+  const SD = Math.min(devices, 16);
+  const series = {
+    t: [], shown: SD, devices, ids: Array.from({ length: SD }, (_, d) => deviceId(input, d)),
+    topics: Array.from({ length: SD }, (_, d) => topicFor(input, d)),
+    fields: fields.map((f) => ({ name: f.name, kind: f.kind, lo: Math.min(f.min, f.max), hi: Math.max(f.min, f.max), v: Array.from({ length: SD }, () => []) })),
+    payloads: Array.from({ length: SD }, () => []),
+  };
   let bytes = 0, count = 0;
   for (let k = 0; k < steps; k++) {
     const t = start + k * interval * 1000;
+    series.t.push(new Date(t).toISOString());
     for (let d = 0; d < devices; d++) {
-      const payload = encode(input, gens[d].next(t));
+      const obj = gens[d].next(t);
+      const payload = encode(input, obj);
+      if (d < SD) {
+        series.fields.forEach((f) => f.v[d].push(obj[f.name]));
+        series.payloads[d].push(payload);
+      }
       const tp = topicFor(input, d);
       bytes += utf8len(payload) + utf8len(tp); count += 1;
       if (rows.length < 40) rows.push([new Date(t).toISOString().slice(11, 19), tp, payload]);
@@ -190,6 +205,7 @@ export function run(input) {
     ...lines.map((l) => { const i = l.indexOf(' '); return `mosquitto_pub -h ${host} -p 1883 -q ${input.qos === '1' ? 1 : 0}${input.retain ? ' -r' : ''} -t '${l.slice(0, i)}' -m '${l.slice(i + 1).replace(/'/g, "'\\''")}'`; }),
     ''].join('\n');
   return {
+    series,
     values, warnings, notes: [...notes,
       'The same seed gives the same values every time, so a dashboard test can be repeated; change the seed for a new run.',
       'Live publishing (in the app) uses QoS 0 from the browser; the script uses the QoS you chose.',

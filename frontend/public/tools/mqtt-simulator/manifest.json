@@ -1,8 +1,10 @@
 {
-  "id": "mqtt-simulator", "version": "1.0",
+  "id": "mqtt-simulator", "version": "1.1",
   "name": "MQTT Message Simulator",
   "blurb": "fake telemetry messages to test an IoT dashboard",
   "group": "web",
+  "layout": "custom",
+  "agentOmit": ["series"],
   "rooms": [
     "web",
     "embedded"

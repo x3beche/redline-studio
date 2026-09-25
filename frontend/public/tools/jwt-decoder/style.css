@@ -1,0 +1,147 @@
+/* JWT & Base64 Decoder: the token strip, its parts laid open, its life as a ruler.
+   Colours from kit.css; the part colours are this tool's own. */
+:root {
+  --tool-hdr: #c2410c;   /* header part */
+  --tool-pay: #7c3aed;   /* payload part */
+  --tool-sig: #0e7490;   /* signature part */
+  --tool-b64: #1f4ed8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tool-hdr: #fb8c5a; --tool-pay: #b69cff; --tool-sig: #3cc7d6; --tool-b64: #8aa4ff; }
+}
+:root[data-theme="dark"] { --tool-hdr: #fb8c5a; --tool-pay: #b69cff; --tool-sig: #3cc7d6; --tool-b64: #8aa4ff; }
+
+.p-h { --pc: var(--tool-hdr); }
+.p-p { --pc: var(--tool-pay); }
+.p-s { --pc: var(--tool-sig); }
+.p-b { --pc: var(--tool-b64); }
+.p-x { --pc: var(--ink-soft); }
+
+.jw-page { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.jw-panel, .jw-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.jw-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.jw-h { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.jw-soft { color: var(--ink-soft); }
+.jw-small { font-size: 11.5px; }
+.jw-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.jw-grow { flex: 1 1 auto; }
+.jw-bad { color: var(--danger); }
+.jw-warn:empty { display: none; }
+.jw-warn { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 4px; padding: 5px 9px; margin-top: 8px; font-size: 12px; }
+.jw-warn div + div { margin-top: 3px; }
+
+.jw-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.jw-seg button { border: 0; background: var(--surface); padding: 2px 10px; font-size: 12px; cursor: pointer; color: var(--ink-soft); }
+.jw-seg button + button { border-left: 1px solid var(--line); }
+.jw-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.jw-seg-s button { padding: 0 7px; font-size: 11px; }
+
+/* ---- the token strip */
+.jw-legend { display: inline-flex; gap: 12px; flex-wrap: wrap; font: 11.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+.jw-lg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--pc); margin-right: 5px; vertical-align: -1px; }
+.jw-tok { position: relative; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); }
+.jw-tok:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.jw-back, .jw-ta { font: 15px/24px "IBM Plex Mono", ui-monospace, monospace; padding: 10px 12px; margin: 0;
+  white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere; letter-spacing: .01em; }
+.jw-back { min-height: 72px; color: var(--ink); pointer-events: none; }
+.jw-ta { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; resize: none; background: transparent; color: transparent;
+  caret-color: var(--ink); outline: none; overflow: hidden; }
+.jw-ta::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: transparent; }
+.jw-part, .p-b { color: var(--pc); transition: opacity .12s; }
+.jw-part.is-dim { opacity: .28; }
+.jw-dot { color: var(--ink); font-weight: 700; background: var(--line); border-radius: 2px; }
+.jw-lead { color: var(--ink-soft); text-decoration: line-through; }
+.jw-mark { background: var(--pc, var(--accent)); color: var(--surface); border-radius: 2px; }
+.p-b .jw-mark, .jw-mark { color: var(--surface); }
+
+/* ---- the parts laid open */
+.jw-parts { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr) minmax(0, 1.1fr); gap: 12px; align-items: start; }
+.jw-parts.is-b64 { grid-template-columns: minmax(0, 1fr); }
+.jw-parts:empty { display: none; }
+.jw-card { border-top: 3px solid var(--pc); padding-top: 8px; }
+.jw-chead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.jw-swatch { width: 10px; height: 10px; border-radius: 2px; background: var(--pc); }
+.jw-ct { font-weight: 600; font-size: 13px; }
+.jw-rows { display: flex; flex-direction: column; }
+.jw-row { display: grid; grid-template-columns: minmax(44px, auto) minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 10px;
+  text-align: left; width: 100%; border: 0; border-top: 1px solid var(--line-soft); background: none; padding: 4px 4px; cursor: default; }
+.jw-row:first-child { border-top: 0; }
+.jw-row:hover, .jw-row:focus-visible { background: color-mix(in srgb, var(--pc) 13%, transparent); }
+.jw-row:focus-visible { outline-offset: -2px; }
+.jw-k { font: 600 12.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--pc); grid-row: 1 / span 2; }
+.jw-v { font: 12.5px "IBM Plex Mono", ui-monospace, monospace; overflow-wrap: anywhere; }
+.jw-v b { font-weight: 600; }
+.jw-m { font-size: 11px; color: var(--ink-soft); }
+.jw-badge { font: 600 11.5px "IBM Plex Mono", ui-monospace, monospace; padding: 1px 8px; border-radius: 9px; border: 1px solid currentColor; }
+.t-ok { color: var(--ok); } .t-warn { color: var(--warn); } .t-bad { color: var(--danger); } .t-none { color: var(--ink-soft); }
+
+/* signature bytes */
+.jw-sigline { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; font-size: 12px; }
+.jw-bytes { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; margin-bottom: 6px; }
+.jw-bytes.is-small { grid-template-columns: repeat(32, minmax(0, 1fr)); gap: 2px; }
+.jw-bytes i { font: normal 10.5px/18px "IBM Plex Mono", ui-monospace, monospace; text-align: center; height: 18px; border-radius: 2px;
+  background: color-mix(in srgb, var(--pc) 22%, transparent); color: var(--ink); overflow: hidden; }
+.jw-bytes.is-small i { height: 8px; }
+.jw-bytes i.is-missing { background: none; outline: 1px dashed var(--danger); outline-offset: -1px; }
+.jw-bytes i.is-extra { background: color-mix(in srgb, var(--danger) 40%, transparent); }
+.jw-keyhead { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; }
+.jw-key { width: 100%; resize: vertical; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font: 12px "IBM Plex Mono", ui-monospace, monospace; }
+
+/* base64 groups */
+.jw-kv { display: inline-flex; gap: 5px; align-items: baseline; font-size: 12px; margin-left: 10px; }
+.jw-kv b { font: 600 12px "IBM Plex Mono", ui-monospace, monospace; }
+.jw-groups { display: flex; flex-wrap: wrap; gap: 4px; }
+.jw-grp { display: flex; flex-direction: column; align-items: center; gap: 1px; border: 1px solid var(--line-soft); border-radius: 4px; background: var(--sunken);
+  padding: 3px 5px; cursor: default; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.jw-grp:hover, .jw-grp:focus-visible { border-color: var(--pc); background: color-mix(in srgb, var(--pc) 13%, transparent); }
+.jw-gc { font-size: 13px; color: var(--pc); letter-spacing: .04em; }
+.jw-gb { font-size: 11px; }
+.jw-ga { font-size: 11px; color: var(--ink-soft); white-space: pre; }
+
+/* ---- lifetime ruler + outputs */
+.jw-bottom { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.jw-bottom.no-life { grid-template-columns: minmax(0, 1fr); }
+.jw-verdict { display: inline-flex; gap: 8px; align-items: baseline; font-size: 12px; }
+.jw-atl { font-size: 12px; }
+.jw-atin { width: 190px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); font: 12px "IBM Plex Mono", ui-monospace, monospace; }
+.jw-ruler { touch-action: none; cursor: ew-resize; user-select: none; min-height: 150px; }
+.jw-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.jw-svg .b-ok { fill: var(--ok); fill-opacity: var(--fill-alpha); }
+.jw-svg .b-pre { fill: var(--warn); fill-opacity: calc(var(--fill-alpha) * .6); }
+.jw-svg .b-exp { fill: var(--danger); fill-opacity: calc(var(--fill-alpha) * .7); }
+.jw-svg .l-band { font: 600 11px "IBM Plex Sans", sans-serif; fill: var(--ok); letter-spacing: .06em; text-transform: uppercase; }
+.jw-svg .l-exp { fill: var(--danger); } .jw-svg .l-pre { fill: var(--warn); }
+.jw-svg .tick { stroke: var(--line); }
+.jw-svg .l-tick { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.jw-svg line.m-iat { stroke: var(--ink-soft); stroke-width: 1.5; }
+.jw-svg line.m-exp { stroke: var(--danger); stroke-width: 2; }
+.jw-svg .l-mark { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.jw-svg .l-mark.m-exp { fill: var(--danger); }
+.jw-svg .m-now { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.jw-svg .l-now { font: 10px "IBM Plex Sans", sans-serif; fill: var(--accent); }
+.jw-handle { cursor: ew-resize; outline: none; }
+.jw-handle .h-line { stroke: currentColor; stroke-width: 2; }
+.jw-handle .h-knob { fill: var(--surface); stroke: currentColor; stroke-width: 2.5; }
+.jw-handle .h-lab { fill: currentColor; }
+.jw-handle .h-txt { font: 600 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--surface); }
+.jw-handle:focus-visible .h-knob { stroke-width: 4; }
+.jw-handle:focus-visible .h-lab { stroke: var(--accent); stroke-width: 2; }
+.jw-rfoot { display: flex; gap: 8px 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; font-size: 11.5px; margin-top: 4px; }
+.jw-quick { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.jw-q { border: 1px solid var(--line); background: var(--sunken); border-radius: 10px; padding: 0 8px; font: 11.5px "IBM Plex Mono", ui-monospace, monospace; cursor: pointer; }
+.jw-q:hover { border-color: var(--ink-soft); }
+.jw-out .k-out { max-height: 300px; }
+
+@media (max-width: 1100px) {
+  .jw-parts { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .jw-parts > .p-p { grid-column: 1 / -1; grid-row: 1; }
+  .jw-bottom { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .jw-parts { grid-template-columns: minmax(0, 1fr); }
+  .jw-parts > .p-p { grid-row: auto; }
+  .jw-back, .jw-ta { font-size: 13px; line-height: 20px; }
+  .jw-atl { width: 100%; }
+  .jw-atin { width: 100%; }
+}

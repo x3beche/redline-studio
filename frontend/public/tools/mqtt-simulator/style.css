@@ -1,0 +1,154 @@
+/* MQTT Message Simulator: broker bar, channel rack with message tape, fleet at the side.
+   Colours from kit.css; device colours are this tool's own. */
+:root {
+  --tool-d0: #1f4ed8; --tool-d1: #d97706; --tool-d2: #0f9d8a; --tool-d3: #a23fbf;
+  --tool-d4: #c2410c; --tool-d5: #0369a1; --tool-d6: #65a30d; --tool-d7: #be185d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-d0: #7d98ff; --tool-d1: #f0a33a; --tool-d2: #3cc7b3; --tool-d3: #c982e0;
+    --tool-d4: #fb8c5a; --tool-d5: #4fb3ea; --tool-d6: #9ad04b; --tool-d7: #f06aa6;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-d0: #7d98ff; --tool-d1: #f0a33a; --tool-d2: #3cc7b3; --tool-d3: #c982e0;
+  --tool-d4: #fb8c5a; --tool-d5: #4fb3ea; --tool-d6: #9ad04b; --tool-d7: #f06aa6;
+}
+.d0 { --dc: var(--tool-d0); } .d1 { --dc: var(--tool-d1); } .d2 { --dc: var(--tool-d2); } .d3 { --dc: var(--tool-d3); }
+.d4 { --dc: var(--tool-d4); } .d5 { --dc: var(--tool-d5); } .d6 { --dc: var(--tool-d6); } .d7 { --dc: var(--tool-d7); }
+
+.mq-page { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.mq-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.mq-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.mq-h { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.mq-soft { color: var(--ink-soft); }
+.mq-small { font-size: 11.5px; }
+.mq-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.mq-ok { color: var(--ok); }
+.mq-grow { flex: 1 1 auto; }
+.mq-in { padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); font: 12.5px "IBM Plex Mono", ui-monospace, monospace; min-width: 0; }
+select.mq-in { font-family: inherit; }
+.mq-lbl { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.mq-lbl .mq-in { color: var(--ink); }
+.mq-cb { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
+.mq-num { width: 64px; }
+.mq-dec { width: 34px; }
+.mq-pre { width: 90px; }
+.mq-start { width: 190px; }
+.mq-warn:empty { display: none; }
+.mq-warn { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 4px; padding: 5px 9px; font-size: 12px; background: var(--surface); }
+.mq-warn div + div { margin-top: 3px; }
+.mq-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.mq-seg button { border: 0; background: var(--surface); padding: 2px 10px; font-size: 12px; cursor: pointer; color: var(--ink-soft); }
+.mq-seg button + button { border-left: 1px solid var(--line); }
+.mq-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+/* ---- broker bar */
+.mq-barrow { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; }
+.mq-bar2 { margin-top: 6px; }
+.mq-lbl.mq-grow { flex: 1 1 260px; } .mq-lbl.mq-grow2 { flex: 1.3 1 260px; }
+.mq-lbl.mq-grow .mq-in, .mq-lbl.mq-grow2 .mq-in { flex: 1 1 auto; width: 100%; }
+.mq-livebox { display: inline-flex; align-items: center; gap: 8px; }
+.mq-live { min-width: 150px; }
+.mq-live:disabled { opacity: .55; cursor: not-allowed; }
+.mq-lamp { width: 10px; height: 10px; border-radius: 50%; background: var(--line); box-shadow: 0 0 0 2px var(--line-soft); }
+.mq-lamp.is-connecting { background: var(--warn); }
+.mq-lamp.is-running { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 30%, transparent); }
+.mq-login summary { cursor: pointer; font-size: 11.5px; color: var(--ink-soft); }
+.mq-loginrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.mq-loginrow .mq-in { width: 130px; }
+.mq-log { margin: 6px 0 0; font-size: 11px; color: var(--ink-soft); white-space: pre-wrap; word-break: break-all; max-height: 60px; overflow: auto; }
+
+/* ---- body */
+.mq-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); gap: 12px; align-items: start; }
+.mq-left { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.mq-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.mq-side .k-out { max-height: 260px; white-space: pre; word-break: normal; }
+
+/* channels */
+.mq-add { font-size: 12px; }
+.mq-rack { display: flex; flex-direction: column; min-width: 0; touch-action: none; }
+.mq-ch { border-top: 1px solid var(--line-soft); padding: 6px 0 2px; }
+.mq-ch:first-child { border-top: 0; padding-top: 0; }
+.mq-ch.is-hl .mq-fname { border-color: var(--accent); }
+.mq-chead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
+.mq-fname { width: 120px; font-weight: 600; }
+.mq-kind { width: 88px; }
+.mq-opts { width: 150px; }
+.mq-del { border: 0; background: none; color: var(--ink-soft); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; border-radius: 3px; }
+.mq-del:hover { color: var(--danger); background: var(--sunken); }
+.mq-plotwrap { min-width: 0; }
+.mq-plot, .mq-tapesvg, .mq-axsvg { display: block; overflow: visible; }
+.mq-plot .col { fill: transparent; cursor: pointer; }
+.mq-plot .col:hover { fill: var(--sunken); }
+.mq-plot .col.is-cur { fill: color-mix(in srgb, var(--accent) 7%, transparent); }
+.mq-plot .band { fill: var(--ok); fill-opacity: calc(var(--fill-alpha) * .5); pointer-events: none; }
+.mq-plot .tr { fill: none; stroke: var(--dc); stroke-width: 1.3; opacity: .45; pointer-events: none; stroke-linejoin: round; }
+.mq-plot .tr.is-cur { stroke-width: 2.4; opacity: 1; }
+.mq-plot .pt { fill: var(--dc); pointer-events: none; }
+.mq-plot .pt.cur { stroke: var(--surface); stroke-width: 2; }
+.mq-plot .vlab { font: 600 11.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; pointer-events: none; }
+.mq-plot .ylab, .mq-tapesvg .ylab { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.mq-tapesvg .ylab.is-cur { fill: var(--ink); font-weight: 600; }
+.hnd { cursor: ns-resize; outline: none; }
+.hnd .hl { stroke: var(--ok); stroke-width: 1.2; stroke-dasharray: 5 3; }
+.hnd .hl.is-p { stroke: var(--accent); }
+.hnd .hb { fill: var(--sunken); stroke: var(--line); }
+.hnd .ht { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.hnd .hk { fill: var(--surface); stroke: var(--ok); stroke-width: 2; }
+.hnd:hover .hb, .hnd:focus-visible .hb { stroke: var(--accent); stroke-width: 2; }
+.hnd:focus-visible .hl { stroke: var(--accent); stroke-width: 2; }
+.mq-axis { border-top: 1px solid var(--line); margin-top: 2px; }
+.mq-axsvg .xlab { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.mq-axsvg .xlab.is-cur { fill: var(--accent); font-weight: 600; }
+.mq-empty { padding: 20px 0; font-size: 12.5px; }
+
+/* message tape */
+.mq-tapehead { margin: 10px 0 4px; }
+.mq-tape { outline: none; border-radius: 4px; }
+.mq-tape:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mq-tapesvg .cell { fill: var(--dc); fill-opacity: .22; cursor: pointer; }
+.mq-tapesvg .cell.is-dev { fill-opacity: .5; }
+.mq-tapesvg .cell.is-step { fill-opacity: .5; }
+.mq-tapesvg .cell:hover { fill-opacity: .75; }
+.mq-tapesvg .cell.is-cur { fill-opacity: 1; stroke: var(--ink); stroke-width: 1.5; }
+
+/* fleet */
+.mq-frow { display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; font-size: 12px; }
+.mq-stepper { display: inline-flex; align-items: center; gap: 3px; }
+.mq-stepper .k-btn { padding: 1px 8px; }
+.mq-stepper .mq-num { width: 48px; text-align: center; }
+.mq-devs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+.mq-dev { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 0 8px 0 6px;
+  font: 11.5px "IBM Plex Mono", ui-monospace, monospace; cursor: pointer; }
+span.mq-dev { cursor: default; border: 0; padding: 0; }
+.mq-dev i { width: 8px; height: 8px; border-radius: 50%; background: var(--dc); }
+.mq-dev[aria-selected="true"] { border-color: var(--dc); box-shadow: inset 0 0 0 1px var(--dc); font-weight: 600; }
+.mq-dice { font-size: 11.5px; }
+.mq-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; border-top: 1px solid var(--line-soft); padding-top: 8px; }
+.mq-stat span { display: block; font-size: 11px; }
+.mq-stat b { font: 600 14px "IBM Plex Mono", ui-monospace, monospace; }
+.mq-stat em { display: block; font-style: normal; font-size: 10.5px; color: var(--ink-soft); }
+
+/* inspector */
+.mq-inshead { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.mq-payload { margin: 0; font: 12px/1.5 "IBM Plex Mono", ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; background: var(--sunken); border-radius: 4px; padding: 6px 8px; }
+.mq-itopic { color: var(--accent); margin-bottom: 4px; font-weight: 600; }
+.mq-kv { display: inline; border-radius: 2px; }
+.mq-kv.is-hl { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.mq-kv b { font-weight: 500; color: var(--ink); }
+.mq-iline { color: var(--ink); }
+.mq-isize { margin-top: 4px; font-family: "IBM Plex Sans", sans-serif; }
+
+@media (max-width: 1060px) {
+  .mq-body { grid-template-columns: minmax(0, 1fr); }
+  .mq-side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .mq-side > .k-outwrap { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .mq-side { display: flex; }
+  .mq-live { min-width: 0; }
+  .mq-fname { width: 100px; }
+  .mq-start { width: 100%; }
+}
+.mq-page [hidden] { display: none !important; }

@@ -1,8 +1,10 @@
 {
-  "id": "json-to-ts", "version": "1.0",
+  "id": "json-to-ts", "version": "1.1",
   "name": "JSON to TypeScript",
   "blurb": "type definitions and a validation schema from sample JSON",
   "group": "web",
+  "layout": "custom",
+  "agentOmit": ["shape"],
   "rooms": ["web", "mobile"],
   "keywords": ["json", "typescript", "types", "interface", "type definition", "zod", "json schema", "schema", "validation", "quicktype", "infer types", "api response", "dto", "ndjson"],
   "intro": "Infers types from pasted JSON (one document, an array of samples, or NDJSON) and writes TypeScript interfaces, a Zod schema and a JSON Schema 2020-12. Samples are merged: a key missing from some objects becomes optional, a null makes T | null, and ISO dates, e-mails, UUIDs and URLs get a format.",
@@ -11,6 +13,7 @@
       "default": "{\n  \"id\": \"6f1c2d3e-8a4b-4c5d-9e6f-7a8b9c0d1e2f\",\n  \"name\": \"Ada Lovelace\",\n  \"email\": \"ada@example.com\",\n  \"createdAt\": \"2026-03-14T09:26:53Z\",\n  \"age\": 36,\n  \"score\": 97.5,\n  \"active\": true,\n  \"manager\": null,\n  \"tags\": [\"admin\", \"beta\"],\n  \"address\": { \"street\": \"12 St James's Square\", \"city\": \"London\", \"zip\": \"SW1Y 4JH\" },\n  \"orders\": [\n    { \"orderId\": 1001, \"total\": 25.9, \"items\": 2 },\n    { \"orderId\": 1002, \"total\": 12, \"items\": 1, \"coupon\": \"SPRING\" }\n  ]\n}",
       "placeholder": "{ \"id\": 1, ... }  or  [ {...}, {...} ]  or one object per line" },
     { "key": "rootName", "label": "Root type name", "type": "text", "default": "User" },
+    { "key": "names", "label": "Rename types", "type": "text", "default": "", "placeholder": "Order=PurchaseOrder, Address=PostalAddress", "help": "Inferred name = new name, comma separated. The root is named by Root type name." },
     { "key": "declare", "label": "Declare as", "type": "select", "default": "interface", "options": [["interface", "interface"], ["type", "type alias"]] },
     { "key": "nulls", "label": "Null values", "type": "select", "default": "union", "options": [["union", "T | null"], ["optional", "Optional field (field?: T)"]] },
     { "key": "exportKw", "label": "Export every type", "type": "bool", "default": true }
@@ -19,6 +22,6 @@
     { "title": "A user record with nested orders", "input": { "rootName": "User", "declare": "interface", "nulls": "union", "exportKw": true } },
     { "title": "An NDJSON event log with varying fields", "input": { "json": "{\"ts\":\"2026-05-01T10:00:00Z\",\"level\":\"info\",\"msg\":\"boot\"}\n{\"ts\":\"2026-05-01T10:00:02Z\",\"level\":\"warn\",\"msg\":\"low battery\",\"vbat\":3.41}\n{\"ts\":\"2026-05-01T10:00:05Z\",\"level\":\"error\",\"msg\":\"sensor timeout\",\"code\":17,\"sensor\":null}", "rootName": "LogEvent", "declare": "type", "nulls": "union", "exportKw": true } }
   ],
-  "usage": "Give json as text (a JSON document, an array of sample objects, or NDJSON), rootName, declare (interface or type), nulls (union or optional) and exportKw. Returns texts 'TypeScript', 'Zod' (v3) and 'JSON Schema' (2020-12), counts of types, fields and optional fields, and a table of the named types. Invalid JSON returns a warning with line and column. Give several samples to learn which fields are optional.",
+  "usage": "Give json as text (a JSON document, an array of sample objects, or NDJSON), rootName, optionally names (Order=PurchaseOrder, ... to rename inferred types), declare (interface or type), nulls (union or optional) and exportKw. Returns texts 'TypeScript', 'Zod' (v3) and 'JSON Schema' (2020-12), counts of types, fields and optional fields, and a table of the named types. Invalid JSON returns a warning with line and column. Give several samples to learn which fields are optional.",
   "sources": ["TypeScript Handbook (interfaces, optional properties, union types)", "Zod v3 documentation (z.object, .optional, .nullable, string formats)", "JSON Schema draft 2020-12 core and validation (type, $defs, format)", "RFC 3339 (date-time), RFC 4122 (UUID)"]
 }

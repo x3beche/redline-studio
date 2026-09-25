@@ -1,8 +1,10 @@
 {
-  "id": "jwt-decoder", "version": "1.0",
+  "id": "jwt-decoder", "version": "1.1",
   "name": "JWT & Base64 Decoder",
   "blurb": "decode a token and show its expiry and signature fields",
   "group": "web",
+  "layout": "custom",
+  "agentOmit": ["segments"],
   "rooms": ["web"],
   "keywords": ["jwt", "json web token", "jwe", "bearer token", "decode", "base64", "base64url", "claims", "exp", "expiry", "signature", "verify", "hs256", "rs256", "oauth"],
   "intro": "Splits a JWT into header, claims and signature (RFC 7519/7515), explains each registered claim, shows iat/nbf/exp as UTC dates and whether the token is valid at a check time, checks the signature length for its algorithm and, given a secret or public key, verifies it with WebCrypto in the page. Anything else is decoded as base64 or base64url into JSON, text or a hex dump.",

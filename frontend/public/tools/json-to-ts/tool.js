@@ -25,6 +25,9 @@ const fmtOf = (s) => Object.keys(FMT).find((k) => FMT[k].test(s)) || null;
 const blank = () => ({});
 function infer(v) {
   const t = blank();
+  // A few example values per leaf, for the page's type map only: never part
+  // of a shape's signature and never in the generated code.
+  if (v !== null && typeof v !== 'object') t.ex = [typeof v === 'string' && v.length > 48 ? v.slice(0, 47) + '…' : v];
   if (v === null) t.nul = true;
   else if (Array.isArray(v)) { t.arr = v.reduce((a, x) => merge(a, infer(x)), blank()); t.arrLen = [v.length]; }
   else if (typeof v === 'object') {
@@ -41,6 +44,7 @@ function infer(v) {
 }
 function merge(a, b) {
   const t = { ...a };
+  if (b.ex) { const ex = [...(a.ex || [])]; for (const x of b.ex) if (ex.length < 3 && !ex.includes(x)) ex.push(x); t.ex = ex; }
   if (b.nul) t.nul = true;
   if (b.bool) t.bool = true;
   if (b.num) t.num = a.num ? { int: a.num.int && b.num.int } : b.num;
@@ -125,7 +129,17 @@ function locate(src) {
 
 const ident = (k) => (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(k) ? k : JSON.stringify(k));
 
-export function run({ json, rootName, declare, nulls, exportKw }) {
+// "Order=PurchaseOrder, Address=PostalAddress": new names for inferred types.
+function parseNames(txt) {
+  const m = new Map();
+  for (const part of String(txt ?? '').split(/[,;\n]+/)) {
+    const [a, b] = part.split('=').map((x) => (x || '').trim());
+    if (a && b) m.set(pascal(a), pascal(b));
+  }
+  return m;
+}
+
+export function run({ json, rootName, declare, nulls, exportKw, names: renames }) {
   const warnings = [];
   const text = String(json ?? '').trim();
   if (!text) return { warnings: ['Paste a JSON sample: an object, an array of objects, or one JSON object per line.'] };
@@ -158,13 +172,21 @@ export function run({ json, rootName, declare, nulls, exportKw }) {
   const named = []; // {name, node}
   const sig = new Map(); // shape signature -> name
   const used = new Set();
-  const shape = (t) => JSON.stringify(t, (k, v) => (v instanceof Map ? [...v.entries()].map(([kk, e]) => [kk, e.n === undefined ? e : { t: e.t, o: e.n }]) : v));
+  const rename = parseNames(renames);
+  const auto = new Map(); // final name -> the name inference gave it
+  const shape = (t) => JSON.stringify(t, (k, v) => (k === 'ex' ? undefined : v instanceof Map ? [...v.entries()].map(([kk, e]) => [kk, e.n === undefined ? e : { t: e.t, o: e.n }]) : v));
   const nameFor = (t, hint) => {
     const s = shape(t.obj);
     if (sig.has(s)) return sig.get(s);
     let nm = pascal(hint), k = 2;
     while (used.has(nm)) nm = pascal(hint) + k++;
-    used.add(nm); sig.set(s, nm);
+    const was = nm;
+    if (rename.has(was) && t !== root) {
+      const want = rename.get(was);
+      nm = want; k = 2;
+      while (used.has(nm)) nm = want + k++;
+    }
+    used.add(nm); sig.set(s, nm); auto.set(nm, was);
     named.push({ name: nm, node: t });
     return nm;
   };
@@ -263,7 +285,32 @@ export function run({ json, rootName, declare, nulls, exportKw }) {
   for (const { name, node } of named) for (const [k, e] of node.obj.keys) if (e.t.nul && !e.t.str && !e.t.num && !e.t.bool && !e.t.obj && !e.t.arr && !e.t.rec) onlyNull.push(`${name}.${k}`);
   if (onlyNull.length) warnings.push(`Only ever null in the sample: ${onlyNull.slice(0, 8).join(', ')}${onlyNull.length > 8 ? '…' : ''}. Their real type is unknown, so they are typed null; add a sample where they have a value.`);
   const nObj = named.length;
+  // The type map the page draws: every named type with its fields, how often
+  // each field was seen, and which named types a field points to.
+  const refsOf = (t, acc = []) => {
+    if (t.obj && names.get(t) && !acc.includes(names.get(t))) acc.push(names.get(t));
+    if (t.arr) refsOf(t.arr, acc);
+    if (t.rec) refsOf(t.rec, acc);
+    return acc;
+  };
+  const leafEx = (t) => {
+    if (t.ex) return t.ex;
+    if (t.arr) return leafEx(t.arr);
+    return [];
+  };
+  const shapeOut = [...named].reverse().map(({ name, node }) => ({
+    name, auto: auto.get(name) || name, root: node === root || node === root.arr || node === root.rec, seen: node.obj.n,
+    fields: [...node.obj.keys].map(([k, e]) => ({
+      key: k,
+      type: !nullable && e.t.nul ? ts({ ...e.t, nul: false }) : ts(e.t),
+      opt: e.n < node.obj.n || (!nullable && !!e.t.nul),
+      missing: e.n < node.obj.n,
+      nul: !!e.t.nul, fmt: e.t.str?.fmt || e.t.arr?.str?.fmt || null,
+      seen: e.n, of: node.obj.n, refs: refsOf(e.t), ex: leafEx(e.t).map((x) => (typeof x === 'string' ? JSON.stringify(x) : String(x))),
+    })),
+  }));
   return {
+    shape: { read: how, types: shapeOut, rootAlias: root.obj ? null : `${alias} = ${ts(root)}`, depth, fields, optional },
     values: [
       { label: 'Read as', value: how[0], hint: how[1] },
       { label: 'Types', value: nObj, hint: 'named object types' },
