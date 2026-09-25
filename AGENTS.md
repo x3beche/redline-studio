@@ -165,6 +165,18 @@ Answer in the thread rather than in your terminal. Nothing in here changes
 a model by itself: if they ask for something, do it and then say what you
 did.
 
+## What your work changed is kept
+
+`start` and `finish` record every model's and board's source in the
+note's project, before and after; the card then shows the files you
+changed side by side. Nothing to do for it - but it is what the person
+reads, so change what the note asks for and not more.
+
+The person can edit a source too, in the code view (the `</>` button).
+**Read the source again right before you save it** - `source` / `board
+source` - rather than saving over a copy you read at the start of the
+note, or their edit is lost.
+
 ## Say who you are
 
 Set `X3_AGENT` to your name before running `tools/revisions.py` - the room

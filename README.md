@@ -2,10 +2,12 @@
 
 # Redline
 
-**Open a parametric CAD model in the browser, freeze an angle, draw on it,
-leave a revision note.** All project data lives in MongoDB.
+**One place to design hardware with agents: parametric 3D, circuit boards,
+firmware, web and mobile.** Freeze a view, draw on it, leave a note - an
+agent picks it up, changes the source, rebuilds, and shows you what changed.
+All project data lives in MongoDB.
 
-[Install](INSTALL.md) · [Usage](USAGE.md) · [Tools](TOOLS.md) · [For language models](AGENTS.md)
+[Install](INSTALL.md) · [Usage](USAGE.md) · [Tools](TOOLS.md) · [Accounts](docs/ACCOUNTS.md) · [For language models](AGENTS.md)
 
 </div>
 
@@ -58,7 +60,7 @@ Zero clash on its own means nothing — a plug 18 mm away in open air also
 clashes with nothing. The second line is the one that matters: a probe the
 size of the socket cavity, grown slightly, has to *hit* the shroud around it.
 
-## Four rooms, one loop
+## Five rooms, one loop
 
 The loop under this is not about geometry. Source lives in a database as
 text you can change a constant in; it is built into something you can look
@@ -69,16 +71,17 @@ as well as a solid does.
 
 | | |
 |---|---|
-| **3D Drawing** | parametric solids — this is what is built |
+| **3D Drawing** | parametric solids in build123d - this is what is built |
 | **PCB Design** | atopile for the circuit, LCSC for the parts, KiCad in a container for the board |
-| **Web Programming** | a page while it runs: draw on it, the change arrives as a diff, the tests are the check |
 | **Embedded Programming** | STM32 and ESP32 firmware: what the build made of the source, the change as a diff, programmed by the agent |
+| **Web Programming** | a page while it runs: draw on it, the change arrives as a diff, the tests are the check |
 | **Mobile Programming** | an app on an emulated phone, redlined the way a page is |
-| **Analyze** | what all of it cost, across every revision rather than one card at a time |
+| **Notes** | what you jot down while working - Enter keeps it, Alt+N from anywhere |
+| **Tools** | 175 engineering calculators and sketch pads, most of them runnable by agents too |
+| **Analytics** | what all of it cost and used: LLM money and tokens, the machine and its energy, builds, storage, per project |
 
-All but Analyze are built, and they share one layout - the 3D room's -
-so a board, a page and a phone are looked at the same way. Analyze is a
-tab with the groundwork written down, and says so.
+The five design rooms share one layout - the 3D room's - so a board, a
+page and a phone are looked at the same way.
 
 ![A board in the PCB room: atopile for the circuit, KiCad for the board](docs/pcb-room.png)
 
@@ -111,6 +114,81 @@ run, its own log and, for the three programming rooms, its own Docker
 image, so nothing a project needs is installed on the machine itself.
 The queue is also an MCP server (`.mcp.json`), for any agent that
 speaks it. [AGENTS.md](AGENTS.md) has the details.
+
+## Everything in one box
+
+**Ctrl+K**, anywhere: every model, board, app and tool by name, the room's
+actions (show the code, release, technical drawing, build the board, a new
+note, a theme), and, as you type, code lines (opened at that line), notes,
+chats, revisions and parts.
+
+![Ctrl+K: models, tools and code lines for "stand"](docs/palette.png)
+
+## The code, as an IDE
+
+The `</>` button beside the pen opens the source behind the view in VS
+Code's editor (Monaco): the project's files on the left with the ones the
+open file imports marked, a tab per file, Ctrl+click on an import to open
+it, search, folding, the minimap. Editors can change it and save
+(Ctrl+S); if an agent saved in between, nothing is written over - you are
+asked.
+
+![The station assembly in the code view: its project on the left, its imports marked](docs/code-view.png)
+
+## What a note changed
+
+When an agent works a note, every source in the project is kept as it was
+before and after. The note's card then says `+12 −3`, and opens each
+changed file side by side - and the picture it was drawn on against the one
+taken after: side by side, with a slider, or with the changed pixels
+painted in.
+
+![A note's changes: the file before and after, side by side](docs/changes.png)
+
+## Releases for manufacturing
+
+One press packs a project as it stands into a zip kept under a tag
+(`v1.0`, `v1.1`...), never overwritten, to download exactly as it was:
+each board's **Gerbers and drill files**, **BOM and pick-and-place in
+JLCPCB's columns**, a **BOM priced from LCSC** (price, stock, Basic or
+Extended, the cost of a board), schematic and assembly PDFs, STEP and its
+DRC/ERC; each model's **STEP, STL and a dimensioned technical drawing**;
+and every source as it was. KiCad and the drawings run in their own
+containers.
+
+<img src="docs/technical-drawing.png" alt="A technical drawing made from a model: three views, an isometric, overall sizes, a title block" width="720">
+
+## Notes that take no time
+
+Type and press Enter: the first line is the title, `#tags` file it,
+`@controller` points at a board, `- [ ]` lines are boxes to tick. **Alt+N**
+opens a small box over any room and keeps the note with the room and the
+model or board that was open. A note can be handed to a room's agent as a
+message.
+
+![The Notes room: search, tags, to-dos, a note with its boxes ticked](docs/notes.png)
+
+## Themes, languages, shortcuts
+
+Twenty-six themes over the whole window - the 3D backdrop and the code
+editor included: Redline's own, Light, OLED black, GitHub, Atom One Dark,
+One Dark Pro, VS Code, Dracula, Tokyo Night, Catppuccin, Nord, Monokai,
+Gruvbox, Solarized, Material Palenight, Night Owl, Ayu, Rosé Pine,
+Kanagawa, Synthwave '84 and High Contrast. On a light theme the boards are
+drawn on white too. The interface speaks English or Türkçe; **?** shows
+the keyboard shortcuts.
+
+![Every theme on the same model](docs/themes.png)
+
+## People, roles and workspaces
+
+Local mode needs no sign-in. Switched on, it has accounts, invitation
+links, five roles (owner, admin, editor, reviewer, viewer - a reviewer
+draws and comments but does not queue, build or delete), separate
+workspaces with the same names in each, and agent tokens so an agent
+works through the API without the database password. Every delete and
+change of state is in an audit trail. [docs/ACCOUNTS.md](docs/ACCOUNTS.md)
+says how to run it and how to get back in.
 
 ## How it goes
 
@@ -157,9 +235,11 @@ honest substitute.
 | Model | Python 3.12 + [build123d](https://github.com/gumyr/build123d) (OpenCascade) |
 | Tessellation | `ocp_vscode` / `ocp-viewer-core` |
 | Viewer | [three-cad-viewer](https://github.com/bernhard-42/three-cad-viewer) 5.0.6 — the very viewer the VS Code extension uses |
-| Frontend | Angular 20 + Tailwind CSS 4, themeable down to the last colour |
+| Frontend | Angular 20 + Tailwind CSS 4, themeable down to the last colour; Monaco for code |
 | Service | FastAPI + Uvicorn |
 | Data | MongoDB + GridFS |
+| Boards | atopile, KiCad 9 and Freerouting in a container |
+| Everything heavy | Docker: KiCad, the drawings, each coding room, the tools' checks - limited to a share of the machine |
 
 Models can be built from other models, so an assembly is just a module that
 imports its parts and positions them. The fit is then checked in code rather
@@ -176,6 +256,8 @@ length and clash volumes on every build:
 | **[USAGE.md](USAGE.md)** | day-to-day use, the model contract, assemblies, importing CAD, the API, and the traps this codebase has already fallen into |
 | **[TOOLS.md](TOOLS.md)** | the Tools tab: what each calculator does, and how to add a tool |
 | **[AGENTS.md](AGENTS.md)** | the short version, written for a language model opening this repository |
+| **[docs/ACCOUNTS.md](docs/ACCOUNTS.md)** | sign-in, members and roles, agent tokens, a forgotten password, the office network |
+| **[docs/USERS-PLAN.md](docs/USERS-PLAN.md)** | how the user system was built, phase by phase, and what was verified |
 
 ## License
 

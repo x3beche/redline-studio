@@ -916,12 +916,16 @@ message in its thread.
 **Preferences** - your name's menu at the top right (or ⚙ there when
 nobody signs in), Ctrl+K, or **?** for the shortcuts page:
 
-- **Theme**: Redline dark, Light, OLED black, GitHub Dark, Atom One Dark,
-  One Dark Pro, VS Code Dark. It covers the whole window - panels, the 3D
+- **Theme**: twenty-six, dark and light - Redline dark, Light, OLED black,
+  GitHub Dark and Light, Atom One Dark, One Dark Pro, VS Code Dark and
+  Light, Dracula, Tokyo Night, Catppuccin Mocha and Latte, Nord, Monokai,
+  Gruvbox Dark and Light, Solarized Dark and Light, Material Palenight,
+  Night Owl, Ayu Mirage, Rosé Pine, Kanagawa, Synthwave '84, High
+  Contrast. It covers the whole window - panels, the 3D
   backdrop (dark in the dark themes, black in OLED), the viewer's own chrome
-  and the code editor, which changes at once. In Light the boards are drawn
-  on white too, with inks that show there, and the coding rooms' previews
-  sit on a light ground.
+  and the code editor, which changes at once. On the light ones the boards
+  are drawn on white too, with inks that show there, and the coding rooms'
+  previews sit on a light ground.
 - **Language**: English or Türkçe - the tabs, the side columns, the menus,
   Notes, the palette, the code and change views, releases. Names of models,
   boards, parts and code are never translated; a room not yet translated

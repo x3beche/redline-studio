@@ -37,6 +37,11 @@ the API key are read by the **backend only** and never reach the browser.
 | `X3_WATTS_GPU` | the card's rated limit | assumed power of the GPU while it is busy; nvidia-smi reports no live draw on many cards |
 | `X3_KWH_PRICE` | — | electricity price in USD/kWh; unset means the card shows energy and no money |
 | `X3_TRANSCRIPTS` | `-mnt-ssd-3d-arena*` | which agent transcript folders the token analytics read |
+| `X3_AUTH` | `off` | `on` asks for a sign-in; see [docs/ACCOUNTS.md](docs/ACCOUNTS.md) |
+| `X3_TOKEN` | — | the agents' shared token when sign-in is on (made in the app, kept only here) |
+| `X3_WEB_HOST` | `127.0.0.1` | `0.0.0.0` opens the page (`./start.sh`) to the local network; the API stays on the machine |
+| `X3_BOX_CPUS` / `X3_BOX_MEMORY` / `X3_BOX_PIDS` | half the cores / 40 % of RAM up to 12g / 4096 | how much of the machine one build container may take |
+| `X3_DRAW_IMAGE` | `redline-draw` | the image technical drawings are made in |
 
 ## The board room
 
@@ -117,13 +122,33 @@ an ST-Link for an STM32, the serial port for an ESP32.
 `X3_WEB_IMAGE`, `X3_EMBEDDED_IMAGE` and `X3_MOBILE_IMAGE` name other
 images. Without an image, a room still opens and says which one to build.
 
+## Releases and technical drawings
+
+A release's KiCad outputs are made in `redline-kicad`; the technical
+drawings in their own small image, which `./start.sh` builds the first
+time (in the background) if it is missing:
+
+```bash
+docker build -t redline-draw -f docker/draw/Dockerfile docker/draw
+```
+
+| image | size | what is in it |
+|---|---|---|
+| `redline-draw` | 1.3 GB | Python 3.12, build123d (hidden-line projection), fpdf2 |
+
+Without it a release still goes out, and says the drawings could not be
+made. Release zips are kept in the database and, for speed, in
+`.cache/releases`.
+
 ## Themes
 
-`?theme=light`, `?theme=oled` or `?theme=default` in the URL, or set
-`x3.theme` in the browser's local storage. A theme is a complete set of
-tokens in `frontend/src/styles.css`; adding one means copying the default
-block and changing the values, and the tests will say if anything is
-missing.
+Twenty-six, chosen under your name > **Preferences** (or ⚙, or Ctrl+K),
+or `?theme=github-dark` and the like in the URL; the choice is kept in the
+browser (`x3.theme`). A theme is a complete set of tokens in
+`frontend/src/styles.css` and its name in `frontend/src/theme.ts` (light
+ones also in `LIGHT_THEMES`, so boards are drawn with light inks); adding
+one means copying a block and changing the values, and the tests will say
+if anything is missing.
 
 ## Where the data lives
 
