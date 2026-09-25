@@ -1,5 +1,5 @@
 {
-  "id": "stencil-aperture",
+  "id": "stencil-aperture", "version": "1.0",
   "name": "Stencil Aperture Calculator",
   "blurb": "solder paste aperture and area/aspect ratio from pad size and stencil thickness",
   "group": "pcb",

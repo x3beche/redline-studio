@@ -1,5 +1,5 @@
 {
-  "id": "layer-advisor",
+  "id": "layer-advisor", "version": "1.0",
   "name": "Layer Assignment Advisor",
   "blurb": "signal, power and ground distribution for a layer count",
   "group": "pcb",

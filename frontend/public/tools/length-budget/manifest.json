@@ -1,5 +1,5 @@
 {
-  "id": "length-budget",
+  "id": "length-budget", "version": "1.0",
   "name": "Length Matching Budget",
   "blurb": "maximum length mismatch for a bus speed, in ps and mm",
   "group": "pcb",

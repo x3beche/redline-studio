@@ -1,5 +1,5 @@
 {
-  "id": "mounting-holes",
+  "id": "mounting-holes", "version": "1.0",
   "name": "Mounting Hole Planner",
   "blurb": "keep-out on the board from hole size, standoff and screw",
   "group": "pcb",

@@ -1,5 +1,5 @@
 {
-  "id": "pcb-weight",
+  "id": "pcb-weight", "version": "1.0",
   "name": "PCB Weight & CoG",
   "blurb": "mass and centre of gravity of board, copper and parts",
   "group": "pcb",

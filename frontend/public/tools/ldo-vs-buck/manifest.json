@@ -1,5 +1,5 @@
 {
-  "id": "ldo-vs-buck",
+  "id": "ldo-vs-buck", "version": "1.0",
   "name": "LDO vs Buck Advisor",
   "blurb": "efficiency, heat and noise of an LDO against a buck, side by side",
   "group": "pcb",

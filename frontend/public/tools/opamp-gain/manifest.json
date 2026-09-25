@@ -1,5 +1,5 @@
 {
-  "id": "opamp-gain",
+  "id": "opamp-gain", "version": "1.0",
   "name": "Op-Amp Gain Tool",
   "blurb": "gain, offset and bandwidth of inverting and non-inverting stages",
   "group": "pcb",

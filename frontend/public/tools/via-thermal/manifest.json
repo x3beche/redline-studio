@@ -1,5 +1,5 @@
 {
-  "id": "via-thermal",
+  "id": "via-thermal", "version": "1.0",
   "name": "Via Current & Thermal",
   "blurb": "current a via array carries and its temperature rise from drill, plating and count",
   "group": "pcb",

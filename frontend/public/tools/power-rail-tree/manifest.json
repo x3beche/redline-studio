@@ -1,5 +1,5 @@
 {
-  "id": "power-rail-tree",
+  "id": "power-rail-tree", "version": "1.0",
   "name": "Power Rail Tree",
   "blurb": "supply rails as a tree with each branch's current budget and total power",
   "group": "pcb",

@@ -1,5 +1,5 @@
 {
-  "id": "part-alternatives",
+  "id": "part-alternatives", "version": "1.0",
   "name": "Part Alternative Finder",
   "blurb": "alternatives for a part in stock, with basic/extended class compared",
   "group": "pcb",

@@ -1,5 +1,5 @@
 {
-  "id": "silkscreen-check",
+  "id": "silkscreen-check", "version": "1.0",
   "name": "Silkscreen Legibility Check",
   "blurb": "whether text height and stroke width are under a fab's minimum",
   "group": "pcb",

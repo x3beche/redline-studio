@@ -1,5 +1,5 @@
 {
-  "id": "rc-lc-filter",
+  "id": "rc-lc-filter", "version": "1.0",
   "name": "RC / LC Filter Designer",
   "blurb": "component values from a cutoff frequency, with the magnitude response drawn",
   "group": "pcb",

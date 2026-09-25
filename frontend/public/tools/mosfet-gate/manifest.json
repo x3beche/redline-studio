@@ -1,5 +1,5 @@
 {
-  "id": "mosfet-gate",
+  "id": "mosfet-gate", "version": "1.0",
   "name": "MOSFET Gate Drive Check",
   "blurb": "switching loss and driver adequacy from gate charge, drive current and frequency",
   "group": "pcb",
