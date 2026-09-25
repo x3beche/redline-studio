@@ -185,6 +185,7 @@ function headerRoles(line) {
 
 function parsePins(lines, unparsed) {
   const pins = [];
+  const ranges = [];
   let tables = 0;
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
@@ -249,11 +250,27 @@ function parsePins(lines, unparsed) {
       const d = [...above.filter((f) => f.kind === 'desc').map((f) => f.text), r.desc, ...below.filter((f) => f.kind === 'desc').map((f) => f.text)];
       const p = [...above.filter((f) => f.kind === 'pins').map((f) => f.text), r.pin, ...below.filter((f) => f.kind === 'pins').map((f) => f.text)];
       pins.push({ pin: p.join(' ').replace(/\s*,\s*/g, ',').replace(/,+$/, '').replace(/\s+/g, '') || '–', name: r.name,
-        type: r.type.replace(/^[—–-]$/, '–'), description: clean(d.filter(Boolean).join(' ')), line: r.j + 1 });
+        type: r.type.replace(/^[—–-]$/, '–'), description: clean(d.filter(Boolean).join(' ')), line: r.j + 1,
+        more: (r.frags || []).map((f) => f.j + 1) });
     }
+    ranges.push([i + 1, j]);
     i = j - 1;
   }
-  return { pins, tables };
+  return { pins, tables, ranges };
+}
+
+/** Power, ground, input, output, bidirectional, no-connect or other - by the type column, else the name. */
+function pinKind(name, type, desc = '') {
+  const t = norm(type).toUpperCase(), n = norm(name).toUpperCase();
+  const supply = /^(input |power )?supply\b|\bsupply (input|voltage|pin)\b|^power input/i.test(norm(desc));
+  if (/^(NC|DNC|N\.?C\.?)$/.test(n) || t === 'NC') return 'nc';
+  if (/^(G|GND|GROUND)$/.test(t) || /^(GND|VSS|AGND|PGND|DGND|EP|PAD|THERMAL)/.test(n)) return 'gnd';
+  if (/^(P|PWR|POWER|SUPPLY|S)$/.test(t) || (supply && /^(I|P|—|–|-|)$/.test(t)) || /^(V(CC|DD|IN|BAT|SYS|BUS|IO|REF|OUT)?|AVDD|DVDD|PVIN|VM)\b/.test(n) && !t) return 'pwr';
+  if (/^(I\/O|IO|B|BIDIR(ECTIONAL)?)$/.test(t)) return 'io';
+  if (/^(I|DI|AI|INPUT|PU|PD)$/.test(t)) return 'in';
+  if (/^(O|DO|AO|OD|OC|OUTPUT)$/.test(t)) return 'out';
+  if (/^(A|ANALOG)$/.test(t)) return 'an';
+  return 'other';
 }
 
 const csvCell = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
@@ -270,11 +287,13 @@ export function run({ text, part, what }) {
   const tables = [];
   const values = [];
   let amr = [], pins = [];
+  const regions = [];
 
   if (want !== 'pins') {
     const secs = findSections(lines, /absolute\s+maximum\s+ratings?/i, END_AMR, 70);
     let header = true;
     for (const [a, b] of secs) {
+      regions.push({ kind: 'absmax', from: a + 1, to: b });
       const r = parseAbsMax(lines, a, b, unparsed);
       amr.push(...r.rows); header = header && r.header;
     }
@@ -293,6 +312,7 @@ export function run({ text, part, what }) {
   }
   if (want !== 'absmax') {
     const r = parsePins(lines, unparsed);
+    for (const [a, b] of r.ranges) regions.push({ kind: 'pins', from: a, to: b });
     // One pin, one row: the same table repeated on two pages is merged.
     const seen = new Map();
     for (const p of r.pins) {
@@ -328,7 +348,18 @@ export function run({ text, part, what }) {
   const csv = [];
   if (amr.length) csv.push('parameter,condition,min,max,unit', ...amr.map((r) => [r.parameter, r.condition, r.min, r.max, r.unit].map(csvCell).join(',')), '');
   if (pins.length) csv.push('pin,name,type,description', ...pins.map((p) => [p.pin, p.name, p.type, p.description].map(csvCell).join(',')));
+  // For the page's drawing only (manifest agentOmit): every row with its
+  // source line, the table regions and the lines not read, and a kind per pin.
+  const sheet = {
+    part: name,
+    lineCount: lines.length,
+    regions,
+    absmax: amr.map(({ parameter, condition, min, max, unit, line }) => ({ parameter, condition: condition || '', min, max, unit: unit || '', line })),
+    pins: pins.map(({ pin, name: n, type, description, line, more }) => ({ pin, name: n, type: type || '', description, line, more: more || [], kind: pinKind(n, type, description) })),
+    unparsed: unparsed.map(([n, t]) => ({ line: n, text: t })),
+  };
   return {
+    sheet,
     values,
     tables,
     texts: [

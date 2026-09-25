@@ -1,5 +1,5 @@
 {
-  "id": "datasheet-extractor", "version": "1.0",
+  "id": "datasheet-extractor", "version": "1.1",
   "name": "Datasheet Snippet Extractor",
   "blurb": "pinout and absolute maximum tables from a PDF into structured data",
   "group": "project",
@@ -82,5 +82,7 @@
     "Poppler pdftotext -layout (keeps the column layout as spaces)",
     "Table reading: layout heuristic (header column positions, 2+ space cell breaks); JEDEC JEP184-style absolute maximum ratings semantics: stress limits, not operating conditions"
   ],
-  "view": true
+  "view": true,
+  "layout": "custom",
+  "agentOmit": ["sheet"]
 }

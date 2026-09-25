@@ -27,40 +27,43 @@ function idParts(id) {
 
 export function run({ decisions, filter, status }) {
   const rows = (Array.isArray(decisions) ? decisions : []).filter((r) => Object.values(r || {}).some((v) => norm(v)));
+  // Where each kept row sits in the input (empty rows are skipped): the page edits by it.
+  const rawIdx = (Array.isArray(decisions) ? decisions : []).map((r, k) => [r, k]).filter(([r]) => Object.values(r || {}).some((v) => norm(v))).map(([, k]) => k);
   const warnings = [];
   const notes = [];
   if (!rows.length) return { warnings: ['No decisions yet: add a row per decision (ID, date, title, status, context, decision).'] };
 
   const byId = new Map();
   const recs = [];
+  const warn = (rec, msg) => { warnings.push(msg); (rec.issues ||= []).push(msg); };
   rows.forEach((r, i) => {
     const id = norm(r.id);
     const where = id || `row ${i + 1}`;
     const st = STATUSES.includes(norm(r.status)) ? norm(r.status) : 'proposed';
     const rec = { i, id: id || `(row ${i + 1})`, date: norm(r.date), title: norm(r.title), status: st, context: norm(r.context),
       decision: norm(r.decision), alternatives: norm(r.alternatives), consequences: norm(r.consequences), by: norm(r.superseded_by) };
-    if (!id) warnings.push(`Row ${i + 1} ("${rec.title.slice(0, 40)}") has no ID: number it (ADR-004) so others can cite it.`);
-    else if (byId.has(key(id))) warnings.push(`${id} is used twice: every decision needs its own ID; renumber the newer one.`);
+    if (!id) warn(rec, `Row ${i + 1} ("${rec.title.slice(0, 40)}") has no ID: number it (ADR-004) so others can cite it.`);
+    else if (byId.has(key(id))) warn(rec, `${id} is used twice: every decision needs its own ID; renumber the newer one.`);
     else byId.set(key(id), rec);
-    if (!rec.title) warnings.push(`${where} has no title: name the decision in a few words ("Buck converter for 3V3").`);
-    if (!rec.decision && st !== 'proposed') warnings.push(`${where} is ${st} but does not say what was decided: fill in Decision.`);
-    if (rec.date && !isoDate(rec.date)) warnings.push(`${where}: date "${rec.date}" is not a valid YYYY-MM-DD date (ISO 8601); write e.g. 2026-09-24 so the log sorts.`);
+    if (!rec.title) warn(rec, `${where} has no title: name the decision in a few words ("Buck converter for 3V3").`);
+    if (!rec.decision && st !== 'proposed') warn(rec, `${where} is ${st} but does not say what was decided: fill in Decision.`);
+    if (rec.date && !isoDate(rec.date)) warn(rec, `${where}: date "${rec.date}" is not a valid YYYY-MM-DD date (ISO 8601); write e.g. 2026-09-24 so the log sorts.`);
     recs.push(rec);
   });
 
   // ---- the supersede chain ----
   for (const r of recs) {
     if (r.status === 'superseded') {
-      if (!r.by) warnings.push(`${r.id} is superseded but does not say by what: put the newer ADR's ID in "Superseded by".`);
-      else if (!byId.has(key(r.by))) warnings.push(`${r.id} is superseded by ${r.by}, which is not in the log: add ${r.by} or fix the ID.`);
-      else if (key(r.by) === key(r.id)) warnings.push(`${r.id} says it supersedes itself.`);
+      if (!r.by) warn(r, `${r.id} is superseded but does not say by what: put the newer ADR's ID in "Superseded by".`);
+      else if (!byId.has(key(r.by))) warn(r, `${r.id} is superseded by ${r.by}, which is not in the log: add ${r.by} or fix the ID.`);
+      else if (key(r.by) === key(r.id)) warn(r, `${r.id} says it supersedes itself.`);
       else {
         const nu = byId.get(key(r.by));
-        if (r.date && nu.date && isoDate(r.date) && isoDate(nu.date) && nu.date < r.date) warnings.push(`${r.id} (${r.date}) is superseded by ${nu.id}, dated earlier (${nu.date}): check the dates.`);
-        if (nu.status === 'rejected') warnings.push(`${r.id} is superseded by ${nu.id}, which was rejected: the old decision still stands unless something else replaced it.`);
+        if (r.date && nu.date && isoDate(r.date) && isoDate(nu.date) && nu.date < r.date) warn(r, `${r.id} (${r.date}) is superseded by ${nu.id}, dated earlier (${nu.date}): check the dates.`);
+        if (nu.status === 'rejected') warn(r, `${r.id} is superseded by ${nu.id}, which was rejected: the old decision still stands unless something else replaced it.`);
       }
     } else if (r.by) {
-      warnings.push(`${r.id} names a successor (${r.by}) but its status is ${r.status}: set it to superseded, or clear the field.`);
+      warn(r, `${r.id} names a successor (${r.by}) but its status is ${r.status}: set it to superseded, or clear the field.`);
     }
   }
   // A loop A -> B -> A means no decision is current.
@@ -88,6 +91,7 @@ export function run({ decisions, filter, status }) {
     if (!r.consequences && r.status !== 'proposed') miss.push('consequences (what gets easier or harder)');
     if (!r.date) miss.push('date');
     if (miss.length) quality.push([r.id, r.title || '–', miss.join('; ')]);
+    r.missing = miss.map((m) => m.split(' ')[0]);
   }
 
   // ---- what to show ----
@@ -125,7 +129,17 @@ export function run({ decisions, filter, status }) {
   if (!shown.length) notes.push(f ? `Nothing matches "${filter}".` : `No ${want} decisions.`);
   notes.push('Do not rewrite an accepted decision: add a new record and mark the old one superseded, so the reason for the change stays readable.');
 
+  // For the page's drawing only (manifest agentOmit): each record as read,
+  // with its row, what it is missing, its problems, and whether it is shown.
+  const shownSet = new Set(shown);
+  const adr = {
+    next,
+    records: recs.map((r) => ({ row: rawIdx[r.i], id: r.id, date: isoDate(r.date), rawDate: r.date, title: r.title, status: r.status, by: r.by,
+      has: { context: !!r.context, decision: !!r.decision, alternatives: !!r.alternatives, consequences: !!r.consequences },
+      missing: r.missing || [], issues: r.issues || [], shown: shownSet.has(r) })),
+  };
   return {
+    adr,
     values: [
       { label: 'Decisions', value: recs.length },
       { label: 'Accepted', value: count('accepted'), tone: 'ok' },

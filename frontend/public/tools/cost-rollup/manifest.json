@@ -1,5 +1,5 @@
 {
-  "id": "cost-rollup", "version": "1.0",
+  "id": "cost-rollup", "version": "1.1",
   "name": "Total Cost Roll-Up",
   "blurb": "PCB, BOM, assembly, enclosure and cable cost per unit at a quantity",
   "group": "project",
@@ -321,5 +321,7 @@
   "sources": [
     "Ulrich & Eppinger, Product Design and Development, ch. 13 Design for Manufacturing (unit cost = components + assembly + overhead; amortized tooling)",
     "Rule of thumb: SMT attrition 1-5 % for small reeled parts; placement pricing per component from typical PCBA quotes"
-  ]
+  ],
+  "layout": "custom",
+  "agentOmit": ["cost"]
 }

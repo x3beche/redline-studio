@@ -1,5 +1,5 @@
 {
-  "id": "decision-log", "version": "1.0",
+  "id": "decision-log", "version": "1.1",
   "name": "Decision Log (ADR)",
   "blurb": "short records of why a part or topology was chosen",
   "group": "project",
@@ -37,5 +37,7 @@
   ],
   "usage": "Pass `decisions` as rows {id, date (YYYY-MM-DD), title, status: proposed|accepted|rejected|deprecated|superseded, context, decision, alternatives, consequences, superseded_by}; `status` filters (all, active, or one status) and `filter` searches every field. It returns the index table, the records missing context/alternatives/consequences, the next free ID and all records as Markdown ADRs, with warnings for duplicate IDs, bad dates and broken or looping superseded-by links. Read the project's log with the MCP tool tool_data (id decision-log) before proposing a part or topology change, and add a record (data {decisions: [...]}) when you make one.",
   "sources": ["Michael Nygard, \"Documenting Architecture Decisions\" (2011) - the ADR form", "MADR - Markdown Any Decision Records (adr.github.io/madr): considered options", "ISO 8601-1:2019 calendar dates (YYYY-MM-DD)"],
-  "view": true
+  "view": true,
+  "layout": "custom",
+  "agentOmit": ["adr"]
 }

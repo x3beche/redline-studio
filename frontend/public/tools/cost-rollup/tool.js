@@ -73,7 +73,7 @@ export function run(input) {
     if (bad.length) { warnings.push(`BOM "${part}": ${bad.map(([k]) => k).join(', ')} is not a number ≥ 0; the line was skipped.`); return; }
     if (per == null || price == null) { warnings.push(`BOM "${part}" needs both qty per unit and unit price; skipped.`); return; }
     if (attr != null && attr > 50) warnings.push(`BOM "${part}": ${attr} % attrition is unusual (1-5 % is typical); check it is a percentage.`);
-    bom.push({ part, per, price, moq: moq ?? 0, attr: (attr ?? 0) / 100 });
+    bom.push({ part, per, price, moq: moq ?? 0, attr: (attr ?? 0) / 100, row: i });
   });
 
   const R = rollup(qty, p, bom);
@@ -115,5 +115,23 @@ export function run(input) {
     series: [{ name: `${cur} per unit`, y: R.cat.filter((c) => c.total > 0).map((c) => +per(c).toFixed(4)) }] }];
   notes.push('Unit prices are held fixed across quantities; real quotes drop at price breaks, so the other-quantity rows are an upper bound above this order and a lower bound below it.');
   notes.push('Not included: overhead, margin, certification, warranty reserve and currency risk.');
-  return { values, tables, charts, warnings, notes };
+  // For the page's drawing only (manifest agentOmit): the categories and BOM
+  // lines at this order, and the per-unit stack on a log grid of quantities.
+  const KEYS = ['pcb', 'bom', 'asm', 'enc', 'cable', 'test', 'freight'];
+  const grid = [];
+  for (let e = 0; e <= 72; e++) grid.push(Math.round(10 ** (e / 12)));
+  const qsCurve = [...new Set([...grid, qty])].sort((a, b) => a - b);
+  const cost = {
+    cur, qty, built: R.built, yieldPct: y, amortize: amort, perUnit: shown, total: R.total, once: R.once, variable: R.variable,
+    bomTotal, excess,
+    cats: R.cat.map((c, i) => ({ key: KEYS[i], name: c.name, variable: c.variable, once: c.once, total: c.total,
+      perUnit: per(c), perUnitOnce: amort ? c.once / qty : 0, share: (amort ? c.total : c.variable) / (base || 1) })),
+    lines: R.lines.map((l) => ({ row: l.row, part: l.part, per: l.per, price: l.price, moq: l.moq, attrPct: l.attr * 100,
+      used: l.used, need: Math.ceil(l.need - 1e-9), buy: l.buy, cost: l.cost, excess: l.excess, perUnit: l.cost / qty })),
+    curve: qsCurve.map((q) => {
+      const r = rollup(q, p, bom);
+      return { q, perUnit: amort ? r.perUnit : r.perUnitVar, v: r.cat.map((c) => c.variable / q), o: r.cat.map((c) => (amort ? c.once / q : 0)) };
+    }),
+  };
+  return { values, tables, charts, warnings, notes, cost };
 }
