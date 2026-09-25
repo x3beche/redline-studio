@@ -52,6 +52,7 @@ export function run({ topo, fc, r, c, align, series }) {
   const values = [];
   let built, exact;
   const isRC = T.startsWith('rc');
+  let peak = 0, fixed = null, parts = [];
 
   if (isRC) {
     if (c > 0) {
@@ -59,6 +60,8 @@ export function run({ topo, fc, r, c, align, series }) {
       const Rs = standard(R, rs), Cs = c;
       exact = { R, C: c };
       built = { fc: 1 / (TWO_PI * Rs * Cs), R: Rs, C: Cs };
+      fixed = 'C';
+      parts = [{ ref: 'R', exact: R, std: Rs, series: series || 'E24' }, { ref: 'C', exact: c, std: Cs, series: 'fixed', fixed: true }];
       values.push({ label: 'R (exact)', value: fmtEng(R, 'Ω') }, { label: `R (${series || 'E24'})`, value: fmtEng(Rs, 'Ω'), tone: 'ok' },
         { label: 'C (fixed)', value: fmtEng(Cs, 'F') });
       if (R < 100) warnings.push(`R is only ${fmtEng(R, 'Ω')}: the source must drive that load; a smaller C gives a friendlier R.`);
@@ -68,6 +71,8 @@ export function run({ topo, fc, r, c, align, series }) {
       const Rs = standard(r, rs), Cs = standard(C, E12);
       exact = { R: r, C };
       built = { fc: 1 / (TWO_PI * Rs * Cs), R: Rs, C: Cs };
+      fixed = 'R';
+      parts = [{ ref: 'R', exact: r, std: Rs, series: series || 'E24', fixed: true }, { ref: 'C', exact: C, std: Cs, series: 'E12' }];
       values.push({ label: 'C (exact)', value: fmtEng(C, 'F') }, { label: 'C (E12)', value: fmtEng(Cs, 'F'), tone: 'ok' },
         { label: `R (${series || 'E24'})`, value: fmtEng(Rs, 'Ω') });
       if (C < 10e-12) warnings.push(`C is only ${fmtEng(C, 'F')}: comparable to stray and input capacitance. Use a larger R or accept a lower cutoff.`);
@@ -90,7 +95,8 @@ export function run({ topo, fc, r, c, align, series }) {
       { label: 'Q with standard parts', value: fmtNum(built.q, 3), hint: `${al.name} target ${fmtNum(al.q, 3)}` },
       { label: 'Impedance √(L/C)', value: fmtEng(Math.sqrt(Ls / Cs), 'Ω') },
     );
-    const peak = built.q > Math.SQRT1_2 ? db(1 / ((1 / built.q) * Math.sqrt(1 - 1 / (4 * built.q * built.q)))) : 0;
+    parts = [{ ref: 'L', exact: L, std: Ls, series: 'E12' }, { ref: 'C', exact: C, std: Cs, series: 'E12' }, { ref: 'R', exact: r, std: r, series: 'load', fixed: true }];
+    peak = built.q > Math.SQRT1_2 ? db(1 / ((1 / built.q) * Math.sqrt(1 - 1 / (4 * built.q * built.q)))) : 0;
     values.push({ label: 'Peaking', value: fmtNum(peak, 2), unit: 'dB', tone: peak > 3 ? 'bad' : peak > 0.5 ? 'warn' : 'ok' });
     if (peak > 3) warnings.push(`${fmtNum(peak, 2)} dB peaking near ${fmtEng(built.f0, 'Hz')}: add damping (a series R with the C, or a lower load resistance).`);
     if (L > 0.1) warnings.push(`L is ${fmtEng(L, 'H')}: impractical. At this frequency and load use an RC or active filter instead.`);
@@ -112,6 +118,22 @@ export function run({ topo, fc, r, c, align, series }) {
   const mults = [0.01, 0.1, 0.5, 1, 2, 10, 100];
   const rows = mults.map((m) => { const q = resp(T, m * fc, built); return [`${m} × fc`, fmtEng(m * fc, 'Hz'), fmtNum(db(q.mag), 3), fmtNum(q.deg, 3)]; });
   const slope = isRC ? 20 : 40;
+  // The same response, denser and wider (0.001·fc … 1000·fc, 30 points a
+  // decade), for pages that draw it: the numbers a drawing shows.
+  const curve = { f: [], db: [], deg: [] };
+  for (let k = 0; k <= 180; k++) {
+    const fx = fc * Math.pow(10, -3 + k / 30), q = resp(T, fx, built);
+    curve.f.push(Number(fx.toPrecision(6))); curve.db.push(Number(db(q.mag).toFixed(3))); curve.deg.push(Number(q.deg.toFixed(2)));
+  }
+  const marks = mults.map((m) => { const q = resp(T, m * fc, built); return { m, f: m * fc, db: db(q.mag), deg: q.deg }; });
+  const al = isRC ? null : (ALIGN[align] || ALIGN.butterworth);
+  const design = {
+    topo: T, order: isRC ? 1 : 2, fcTarget: fc, fcBuilt: built.fc, errPct: err, fixed, parts, slope,
+    q: isRC ? null : built.q, qTarget: al ? al.q : null, align: al ? al.name : null,
+    f0: isRC ? null : built.f0, z: isRC ? null : Math.sqrt(built.L / built.C), peakDb: peak,
+    peakF: peak > 0 ? (T === 'lc-lp' ? built.f0 * Math.sqrt(1 - 1 / (2 * built.q * built.q)) : built.f0 / Math.sqrt(1 - 1 / (2 * built.q * built.q))) : null,
+    curve, marks,
+  };
 
   return {
     values,
@@ -120,6 +142,7 @@ export function run({ topo, fc, r, c, align, series }) {
       xLabel: 'frequency (log steps)', yLabel: 'gain, dB' }],
     tables: [{ title: 'Gain and phase with standard values', columns: ['Point', 'Frequency', 'Gain dB', 'Phase °'], rows }],
     exact,
+    design,
     notes: [
       `Beyond the cutoff the response falls ${slope} dB per decade (${slope / 20 * 6} dB per octave).`,
       isRC ? 'Assumes a source impedance well below R and a load impedance well above R (or buffer the output).'

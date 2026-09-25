@@ -1,9 +1,10 @@
 {
-  "id": "rc-lc-filter", "version": "1.0",
+  "id": "rc-lc-filter", "version": "1.1",
   "name": "RC / LC Filter Designer",
   "blurb": "component values from a cutoff frequency, with the magnitude response drawn",
   "group": "pcb",
   "rooms": ["pcb"],
+  "layout": "custom",
   "keywords": ["rc filter", "lc filter", "low-pass", "high-pass", "cutoff frequency", "corner frequency", "-3 db", "butterworth", "bessel", "bode", "anti-aliasing", "emi filter", "second order"],
   "intro": "Gives R and C (first-order RC) or L and C (second-order LC into a resistive load R) so the −3 dB point lands on the cutoff you ask for, then snaps them to standard values and draws the response those values really give. For LC the alignment sets Q; the −3 dB point is kept at the cutoff for every alignment.",
   "inputs": [

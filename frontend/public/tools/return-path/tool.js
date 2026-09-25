@@ -66,6 +66,8 @@ export function run({ scenario, filter, tr, er, z0, thick, drill, dist, nvias, h
   ];
 
   const kind = c[5];
+  // the same numbers, structured, for a page that draws them
+  const path = { scenario: c[0], kind, severity: c[4], title: c[1], what: c[2], fix: c[3], fk, lam, pitch };
   if (kind === 'via' || kind === 'cap') {
     const ok = thick > 0 && drill > 0 && dist > 0 && z0 > 0;
     if (!ok) warnings.push('Give board thickness, via drill, via distance and trace impedance (all above zero) to size the return via.');
@@ -86,6 +88,7 @@ export function run({ scenario, filter, tr, er, z0, thick, drill, dist, nvias, h
         // Closest two vias can practically sit: 0.15 mm rings and a 0.15 mm gap.
         const sMin = (drill + 0.45) * 1e-3;
         const reach = sMax >= sMin;
+        Object.assign(path, { loopL: L, x: X, frac, sMax, sMin, reach, within: reach ? Math.min(sMax, pitch) : null, perVia, need, n });
         values.push(
           { label: kind === 'cap' ? 'Via-to-capacitor loop' : 'Signal/return via loop', value: fmtEng(L, 'H'), hint: `${fmtNum(dist, 3)} mm apart, ${fmtNum(thick, 3)} mm long` },
           { label: 'Its reactance at knee', value: fmtNum(X, 3), unit: 'Ω', tone: frac <= 0.1 ? 'ok' : frac <= 0.2 ? 'warn' : 'bad', hint: `${fmtNum(frac * 100, 2)} % of ${fmtNum(z0, 3)} Ω` },
@@ -101,6 +104,7 @@ export function run({ scenario, filter, tr, er, z0, thick, drill, dist, nvias, h
   if (kind === 'edge') {
     if (!(h > 0)) warnings.push('Give the dielectric height from the trace to its plane in mm.');
     else {
+      path.keep3 = 3 * h; path.keep5 = 5 * h;
       values.push({ label: 'Keep inside plane edge', value: fmtNum(3 * h, 3), unit: 'mm', hint: `3 h; 5 h = ${fmtNum(5 * h, 3)} mm is better` });
       if (clearance >= 0 && clearance < 3 * h) warnings.push(`The trace is ${fmtNum(clearance, 3)} mm from the plane edge, under 3 × ${fmtNum(h, 3)} mm: move it inward or extend the plane.`);
       else if (clearance >= 0) values.push({ label: 'Your clearance', value: fmtNum(clearance, 3), unit: 'mm', tone: clearance >= 5 * h ? 'ok' : 'warn' });
@@ -124,5 +128,6 @@ export function run({ scenario, filter, tr, er, z0, thick, drill, dist, nvias, h
       { title: q ? `Return-path cases matching "${filter}"` : 'All return-path cases', columns: ['Situation', 'Return current', 'Fix', 'Severity'], rows },
     ],
     notes,
+    path,
   };
 }

@@ -1,9 +1,10 @@
 {
-  "id": "return-path", "version": "1.0",
+  "id": "return-path", "version": "1.1",
   "name": "Return Path Checker",
   "blurb": "return-path problems of layer changes and the stitching vias they need",
   "group": "pcb",
   "rooms": ["pcb"],
+  "layout": "custom",
   "keywords": ["return path", "return current", "stitching via", "ground via", "layer change", "via transition", "reference plane", "split plane", "plane gap", "slot", "stitching capacitor", "emc", "signal integrity", "loop inductance"],
   "intro": "Pick the situation a trace is in: the table says what its return current does and the fix. For layer changes it sizes the return via or capacitor so the via loop stays under 10 % of the trace impedance at the edge's knee frequency (0.5 / rise time), and gives the λ/20 stitching pitch.",
   "inputs": [

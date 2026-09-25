@@ -1,11 +1,12 @@
 {
-  "id": "rule-diff", "version": "1.0",
+  "id": "rule-diff", "version": "1.1",
   "name": "Design Rule Diff",
   "blurb": "two rule sets compared side by side",
   "group": "pcb",
   "rooms": [
     "pcb"
   ],
+  "layout": "custom",
   "keywords": [
     "design rules",
     "drc",

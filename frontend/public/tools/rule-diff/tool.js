@@ -44,6 +44,7 @@ function flatten(obj, prefix, out) {
 
 export function parse(src) {
   const text = String(src || '').trim();
+  const base = String(src || '').indexOf(text);   // value offsets below are into src
   const entries = [], bad = [];
   if (!text) return { entries, bad, format: 'empty' };
   if (/^[{[]/.test(text)) {
@@ -63,25 +64,33 @@ export function parse(src) {
       const cons = [...block.matchAll(/\(\s*constraint\s+(\w+)((?:\s*\(\s*(?:min|opt|max)\s+[^)]+\))*)/g)];
       if (!cons.length) bad.push(`rule "${name}": no constraint with a min/opt/max`);
       for (const c of cons) {
+        const tail = i + c.index + c[0].length - c[2].length;   // where c[2] starts in text
         for (const b of c[2].matchAll(/\(\s*(min|opt|max)\s+([^)]+)\)/g)) {
           const where = [cond && `if ${cond}`, layer && `on ${layer}`].filter(Boolean).join(' ');
-          entries.push([`${c[1]}.${b[1]}${where ? ` [${where}]` : ''}`, value(b[2]), name]);
+          const raw = b[2].replace(/\s+$/, '');
+          entries.push([`${c[1]}.${b[1]}${where ? ` [${where}]` : ''}`, value(b[2]), name, { at: base + tail + b.index + b[0].indexOf(b[2]), len: raw.length }]);
         }
       }
       re.lastIndex = end;
     }
     return { entries, bad, format: 'KiCad rules' };
   }
+  let off = 0;
   for (const line of text.split(/\r?\n/)) {
+    const lineAt = base + off;
+    off += line.length + 1;
     const l = line.trim();
     if (!l || /^(#|\/\/|;|\[)/.test(l)) continue;
     const m = /^([A-Za-z_][\w.\- ]*?)\s*(?:=|:|\s)\s*(.+)$/.exec(l);
     if (!m) { bad.push(l); continue; }
     const key = m[1].trim(), rest = m[2].trim().replace(/[;,]$/, '');
+    const restAt = lineAt + line.indexOf(l) + l.length - m[2].length + (m[2].length - m[2].trimStart().length);
     const parts = rest.split(/\s+/);
     // Eagle packs several values in one line: mdWireWire = 8mil 8mil 8mil
-    if (parts.length > 1 && parts.every((p) => value(p).unit)) parts.forEach((p, i) => entries.push([`${key}[${i + 1}]`, value(p)]));
-    else entries.push([key, value(rest)]);
+    if (parts.length > 1 && parts.every((p) => value(p).unit)) {
+      let from = 0;
+      parts.forEach((p, i) => { const k = rest.indexOf(p, from); from = k + p.length; entries.push([`${key}[${i + 1}]`, value(p), undefined, { at: restAt + k, len: p.length }]); });
+    } else entries.push([key, value(rest), undefined, { at: restAt, len: rest.length }]);
   }
   return { entries, bad, format: 'key = value' };
 }
@@ -102,7 +111,8 @@ export function run({ a, b, nameA, nameB, tol, only }) {
   const warnings = [];
   const eps = tol >= 0 ? tol : 0.001;
   const mapA = new Map(), mapB = new Map();
-  const dupe = (map, e, side) => { let k = e[0]; if (map.has(k)) k = `${k} (${e[2] || 'again'})`; map.set(k, e[1]); return side; };
+  const where = { A: new Map(), B: new Map() };   // key -> {at, len, rule}: where each value sits in its text
+  const dupe = (map, e, side) => { let k = e[0]; if (map.has(k)) k = `${k} (${e[2] || 'again'})`; map.set(k, e[1]); if (e[3]) where[side].set(k, { ...e[3], rule: e[2] }); return side; };
   A.entries.forEach((e) => dupe(mapA, e, 'A'));
   B.entries.forEach((e) => dupe(mapB, e, 'B'));
   if (!A.entries.length) warnings.push(`Nothing read from ${la}: paste a rule set (JSON, KiCad .kicad_dru, or key = value lines).`);
@@ -113,7 +123,9 @@ export function run({ a, b, nameA, nameB, tol, only }) {
   const keys = [...mapA.keys(), ...[...mapB.keys()].filter((k) => !mapA.has(k))];
   const counts = { same: 0, changed: 0, onlyA: 0, onlyB: 0 };
   const rows = [];
+  const all = [];   // every rule, structured, for a page that draws them
   const show = (v) => (v == null ? '–' : v.unit ? `${f(v.num)} mm` : v.text);
+  const side = (v, w) => (v == null ? null : { text: v.text, num: v.num ?? null, mm: !!v.unit, at: w?.at ?? null, len: w?.len ?? null, rule: w?.rule ?? null });
   for (const k of keys) {
     const va = mapA.get(k), vb = mapB.get(k);
     let state, delta = '', mean = '';
@@ -129,6 +141,9 @@ export function run({ a, b, nameA, nameB, tol, only }) {
       }
     } else if (va.text === vb.text) { state = 'same'; counts.same++; }
     else { state = 'changed'; counts.changed++; }
+    all.push({ key: k, a: side(va, where.A.get(k)), b: side(vb, where.B.get(k)),
+      state: state === 'same' ? 'same' : state === 'changed' ? 'changed' : !va ? 'onlyB' : 'onlyA',
+      delta: va?.num != null && vb?.num != null ? vb.num - va.num : null, deltaText: delta, meaning: mean });
     if (only && state === 'same') continue;
     rows.push([k, show(va), show(vb), delta, state, mean]);
   }
@@ -147,6 +162,7 @@ export function run({ a, b, nameA, nameB, tol, only }) {
     warnings,
     tables: [{ title: only ? 'Differences' : 'All rules', columns: ['Rule', la, lb, 'Δ', 'State', 'Meaning'], rows: rows.length ? rows : [[empty ? '(nothing to compare)' : '(no differences)', '', '', '', '', '']] }],
     texts: [{ title: 'Change list', body: empty ? 'Nothing to compare yet: both sides need a rule set.\n' : report.length ? `${la} -> ${lb}, ${diff} difference(s):\n${report.join('\n')}\n` : `${la} and ${lb} are the same (within ${f(eps)}).\n` }],
+    diff: { nameA: la, nameB: lb, formatA: A.format, formatB: B.format, eps, counts, rules: all },
     notes: ['Lengths with a unit are compared in mm; bare numbers are compared as written, so give both sides in the same unit.',
       '"Stricter" means a bigger minimum (or a smaller maximum): fewer boards pass it, and it needs a better fab.'],
   };
