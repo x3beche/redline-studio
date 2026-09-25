@@ -3,9 +3,10 @@
   "name": "Capacitor Derating",
   "blurb": "real capacitance of an MLCC under DC bias and temperature",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["MLCC", "DC bias", "derating", "effective capacitance", "X5R", "X7R", "C0G", "NP0", "Y5V", "voltage coefficient", "temperature coefficient", "aging", "ceramic capacitor", "capacitance loss"],
-  "intro": "A class II ceramic (X5R, X7R, Y5V) loses much of its capacitance under DC bias, and more in small packages. This estimates the remaining capacitance from the electric field across one dielectric layer, the dielectric's temperature curve and aging. It is an engineering estimate: check the final part against the maker's measured curve.",
+  "intro": "A class II ceramic (X5R, X7R, Y5V) loses much of its capacitance under DC bias, and more in small packages. This estimates the remaining capacitance from the electric field across one dielectric layer (its thickness set by the rated voltage, capped by what the package volume allows for the value), the dielectric's temperature curve and aging. It is an engineering estimate: check the final part against the maker's measured curve.",
   "inputs": [
     { "key": "cnom", "label": "Nominal capacitance", "type": "number", "unit": "F", "default": "10u" },
     { "key": "vrated", "label": "Rated voltage", "type": "number", "unit": "V", "default": "10" },
@@ -17,12 +18,14 @@
     { "key": "temp", "label": "Temperature", "type": "number", "unit": "°C", "default": "25" },
     { "key": "tol", "label": "Tolerance", "type": "select", "default": "10", "options": [["5", "±5 % (J)"], ["10", "±10 % (K)"], ["20", "±20 % (M)"]] },
     { "key": "years", "label": "Age since last reflow", "type": "number", "unit": "years", "default": "1",
-      "help": "Class II parts lose a few % per decade of hours; reflow resets it. 0 ignores aging." }
+      "help": "Class II parts lose a few % per decade of hours; reflow resets it. 0 ignores aging." },
+    { "key": "need", "label": "Capacitance you need (optional)", "type": "number", "unit": "F", "default": "", "required": false,
+      "help": "The effective value the circuit needs; the result says whether this part, typically and worst case, still has it." }
   ],
   "examples": [
     { "title": "10 µF 10 V X5R 0603 on a 5 V rail", "input": { "cnom": "10u", "vrated": "10", "pkg": "0603", "diel": "X5R", "vbias": "5", "temp": "25", "tol": "10", "years": "1" } },
     { "title": "4.7 µF 50 V X7R 1206 on 24 V at 85 °C", "input": { "cnom": "4.7u", "vrated": "50", "pkg": "1206", "diel": "X7R", "vbias": "24", "temp": "85", "tol": "10", "years": "5" } }
   ],
-  "usage": "Give the nominal capacitance in farads (engineering notation like 10u), rated voltage, package (0201...2220), dielectric (C0G, X5R, X7R, X6S, X7S, X8R, Y5V), DC bias in volts, temperature in °C, tolerance and age in years. It returns the typical effective capacitance, its fraction of nominal, a worst case with tolerance and the temperature code's full band, and a curve of capacitance against bias. Use it to size output and decoupling capacitors; the numbers are a model estimate, typically within 15-20 percentage points of the maker's curves.",
-  "sources": ["EIA-198 / EIA RS-198 temperature characteristic codes (X7R ±15 % from -55 to 125 °C, etc.)", "Murata and TDK DC-bias application notes (capacitance loss rises with the field across the layer)", "Model: layer thickness d ≈ sqrt(ε0·εr·V_active / C), C(E)/C0 = 1 / (1 + (E/E50)^k), fitted to published curves (rule of thumb)"]
+  "usage": "Give the nominal capacitance in farads (engineering notation like 10u), rated voltage, package (0201...2220), dielectric (C0G, X5R, X7R, X6S, X7S, X8R, Y5V), DC bias in volts, temperature in °C, tolerance and age in years. A higher rated voltage in the same package gives thicker layers and less loss, until the package volume caps the layer thickness. It returns the typical effective capacitance, the layer thickness and whether the rating or the volume sets it, its fraction of nominal, a worst case with tolerance and the temperature code's full band, and a curve of capacitance against bias. Optionally give the capacitance you need (farads) to get a pass/fail against it. Use it to size output and decoupling capacitors; the numbers are a model estimate, typically within 15-20 percentage points of the maker's curves.",
+  "sources": ["EIA-198 / EIA RS-198 temperature characteristic codes (X7R ±15 % from -55 to 125 °C, etc.)", "Murata and TDK DC-bias application notes (capacitance loss rises with the field across the layer)", "Model: layer thickness d = min(V_rated / 8 V/µm, sqrt(ε0·εr·V_active / C)), C(E)/C0 = 1 / (1 + (E/E50)^k), fitted to published curves (rule of thumb)"]
 }

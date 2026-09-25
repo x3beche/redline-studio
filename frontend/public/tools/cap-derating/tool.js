@@ -2,7 +2,13 @@
 //
 // DC bias: BaTiO3 permittivity falls with the electric field E across one dielectric layer.
 //   A stack of N layers of thickness d in an active volume V: C ≈ ε0·εr·V / d²
-//   so d ≈ sqrt(ε0·εr·V / C)   and   E = V_bias / d.
+//   so d ≈ sqrt(ε0·εr·V / C): the thickest layer the package volume allows for this C.
+//   A part is also designed for its rating: its layers are about V_rated / E_design thick
+//   (E_design = 8 V/µm, rule of thumb for BME class II parts). The layer is the thinner of the two:
+//   d = min(V_rated / E_design, sqrt(ε0·εr·V / C)), and E = V_bias / d. So a lower rating in the same
+//   package means thinner layers and more loss, up to the point where the volume caps the thickness.
+//   E_design was chosen so parts whose layers are limited by the volume (all that the earlier,
+//   volume-only model covered, including both manifest examples) keep their earlier numbers.
 //   Remaining fraction  C(E)/C0 = 1 / (1 + (E/E50)^k)   - a logistic fitted by hand to the
 //   Murata / TDK published DC-bias curves (rule of thumb, typically within about 15-20 points of the measured percentage).
 // Temperature: typical curves (rough, from maker datasheets) and the EIA-198 code band for the
@@ -12,6 +18,7 @@ import { fmtEng, fmtNum } from '../kit/eng.js';
 
 const EPS0 = 8.854e-12;
 const ACTIVE = 0.5; // fraction of the body that is active dielectric (electrode overlap)
+const E_DESIGN = 8; // V/µm: the field across one layer at the rated voltage (rule of thumb)
 
 // Body size in mm: length, width, typical maximum height of the high-capacitance parts.
 const PKG = {
@@ -47,7 +54,16 @@ function interp(curve, t) {
   return b[1] + (b[1] - a[1]) * (t - b[0]) / (b[0] - a[0]);
 }
 
-export function run({ cnom, vrated, pkg, diel, vbias, temp, tol, years }) {
+// What you need against what is left: a value, and a warning when even the typical falls short.
+function needCheck(need, ceff, worst, values, warnings) {
+  if (!(need > 0)) return;
+  values.push({ label: 'Against what you need', value: `${fmtNum(ceff / need * 100, 3)} %`, tone: worst >= need ? 'ok' : ceff >= need ? 'warn' : 'bad',
+    hint: `typical ${fmtEng(ceff, 'F')} for ${fmtEng(need, 'F')}; worst case ${fmtNum(worst / need * 100, 3)} %` });
+  if (ceff < need) warnings.push(`Typically ${fmtEng(ceff, 'F')} is left, less than the ${fmtEng(need, 'F')} you need: put parts in parallel, or pick a larger package or a higher rating.`);
+  else if (worst < need) warnings.push(`The typical ${fmtEng(ceff, 'F')} meets the ${fmtEng(need, 'F')} you need, but the worst case (${fmtEng(worst, 'F')}) does not.`);
+}
+
+export function run({ cnom, vrated, pkg, diel, vbias, temp, tol, years, need }) {
   const warnings = [];
   if (!(cnom > 0)) return { warnings: ['Give the nominal capacitance, e.g. 10u for 10 µF.'] };
   const d = DIEL[diel] || DIEL.X5R;
@@ -66,20 +82,28 @@ export function run({ cnom, vrated, pkg, diel, vbias, temp, tol, years }) {
     const dT = (t - 25) * d.ppm * 1e-6;
     const worst = cnom * (1 - tolF - Math.abs(dT));
     if (cnom > 0.12e-6) warnings.push('C0G parts above about 0.1 µF are rare and large: check the value.');
+    const values = [
+      { label: 'Effective capacitance', value: fmtEng(cnom, 'F'), tone: 'ok', hint: '100 % of nominal' },
+      { label: 'Worst case', value: fmtEng(worst, 'F'), hint: `-${fmtNum(tolF * 100, 2)} % tolerance, ±30 ppm/°C` },
+      { label: 'Bias effect', value: 'none', hint: 'class I dielectric' },
+    ];
+    needCheck(need, cnom, worst, values, warnings);
     return {
-      values: [
-        { label: 'Effective capacitance', value: fmtEng(cnom, 'F'), tone: 'ok', hint: '100 % of nominal' },
-        { label: 'Worst case', value: fmtEng(worst, 'F'), hint: `-${fmtNum(tolF * 100, 2)} % tolerance, ±30 ppm/°C` },
-        { label: 'Bias effect', value: 'none', hint: 'class I dielectric' },
-      ],
+      values,
+      // Plain numbers for the page's drawing.
+      model: { cls: 1, cnom, ceff: cnom, worst, frac: 1, fBias: 1, fTemp: 1, fAge: 1, tolF, dUm: null, field: 0, vbias: vb, temp: t, pkg, diel,
+        body: PKG[pkg] || PKG['0603'], band: d.band, tcurve: [[d.band[2], 1 + (d.band[2] - 25) * d.ppm * 1e-6], [d.band[3], 1 + (d.band[3] - 25) * d.ppm * 1e-6]],
+        curve: [[0, 1], [Math.max(vrated > 0 ? vrated : 0, vb, 1), 1]] },
       warnings,
       notes: ['C0G (NP0) is a class I dielectric: no DC-bias or aging loss, ±30 ppm/°C from -55 to 125 °C.'],
     };
   }
 
   const vol = pl * pw * ph * 1e-9 * ACTIVE; // m³
-  const dLayer = Math.sqrt(EPS0 * d.er * vol / cnom); // m
-  const dUm = dLayer * 1e6;
+  const dVolUm = Math.sqrt(EPS0 * d.er * vol / cnom) * 1e6; // µm, what the volume allows
+  const dRateUm = vrated > 0 ? vrated / E_DESIGN : Infinity; // µm, what the rating calls for
+  const dUm = Math.min(dVolUm, dRateUm);
+  const limitBy = dRateUm < dVolUm ? 'rating' : 'volume';
   const biasFrac = (v) => 1 / (1 + Math.pow((v / dUm) / d.e50, d.k));
   const fBias = biasFrac(vb);
   const fTemp = 1 + interp(d.curve, t);
@@ -89,8 +113,8 @@ export function run({ cnom, vrated, pkg, diel, vbias, temp, tol, years }) {
   const worst = cnom * (1 - tolF) * fBias * (1 + d.band[0]) * fAge;
   const frac = ceff / cnom;
 
-  if (dUm < 0.3) warnings.push(`${fmtEng(cnom, 'F')} is more than ${pkg} parts usually hold: check the package or the value.`);
-  if (dUm > 60) warnings.push(`${fmtEng(cnom, 'F')} is very small for a class II part in ${pkg}: the model is meant for 1 nF and up. Such parts barely lose capacitance with bias.`);
+  if (dVolUm < 0.3) warnings.push(`${fmtEng(cnom, 'F')} is more than ${pkg} parts usually hold: check the package or the value.`);
+  if (dVolUm > 60) warnings.push(`${fmtEng(cnom, 'F')} is very small for a class II part in ${pkg}: the model is meant for 1 nF and up. Such parts barely lose capacitance with bias.`);
   if (frac < 0.3) warnings.push(`Only ${fmtNum(frac * 100, 2)} % of the nominal is left. Use a larger package or a higher voltage rating (both give thicker layers), or put more capacitors in parallel.`);
   else if (frac < 0.5) warnings.push(`Less than half of the nominal is left (${fmtNum(frac * 100, 2)} %): size the design with ${fmtEng(ceff, 'F')}, not ${fmtEng(cnom, 'F')}.`);
 
@@ -111,20 +135,29 @@ export function run({ cnom, vrated, pkg, diel, vbias, temp, tol, years }) {
     return [`${fmtNum(v, 3)} V`, fmtNum((v / dUm), 3), fmtEng(cnom * f * fTemp * fAge, 'F'), `${fmtNum(f * fTemp * fAge * 100, 3)} %`];
   });
 
-  return {
-    values: [
+  const values = [
       { label: 'Effective capacitance', value: fmtEng(ceff, 'F'), tone: frac < 0.3 ? 'bad' : frac < 0.5 ? 'warn' : 'ok', hint: `${fmtNum(frac * 100, 3)} % of nominal` },
       { label: 'Worst case', value: fmtEng(worst, 'F'), hint: `-${fmtNum(tolF * 100, 2)} % tolerance and ${fmtNum(d.band[0] * 100, 3)} % ${diel} band` },
       { label: 'DC-bias factor', value: `${fmtNum(fBias * 100, 3)} %`, hint: `field ${fmtNum(vb / dUm, 3)} V/µm` },
       { label: 'Temperature factor', value: `${fmtNum(fTemp * 100, 3)} %`, hint: `typical ${diel} at ${fmtNum(t, 3)} °C` },
       { label: 'Aging factor', value: `${fmtNum(fAge * 100, 3)} %`, hint: yrs ? `${fmtNum(yrs, 3)} years, ${fmtNum(d.aging * 100, 2)} %/decade` : 'not counted' },
-      { label: 'Estimated layer thickness', value: fmtNum(dUm, 3), unit: 'µm', hint: 'model estimate' },
-    ],
+      { label: 'Estimated layer thickness', value: fmtNum(dUm, 3), unit: 'µm', hint: limitBy === 'rating'
+        ? `set by the ${fmtNum(vrated, 3)} V rating (the volume would allow ${fmtNum(dVolUm, 3)} µm)`
+        : `set by the ${pkg} volume${Number.isFinite(dRateUm) ? ` (the rating alone would give ${fmtNum(dRateUm, 3)} µm)` : ''}` },
+  ];
+  needCheck(need, ceff, worst, values, warnings);
+  return {
+    values,
+    // Plain numbers for the page's drawing: the factors, the body and both curves.
+    model: { cls: 2, cnom, ceff, worst, frac, fBias, fTemp, fAge, tolF, dUm, dVolUm, dRateUm: Number.isFinite(dRateUm) ? dRateUm : null, limitBy, field: vb / dUm, vbias: vb, temp: t, pkg, diel,
+      body: [pl, pw, ph], band: d.band, tcurve: d.curve.map(([tc, y]) => [tc, 1 + y]),
+      curve: Array.from({ length: 41 }, (_, i) => { const v = (vmax * i) / 40; return [v, biasFrac(v) * fTemp * fAge]; }) },
     warnings,
     charts: [chart],
     tables: [{ title: 'Capacitance at other bias voltages', columns: ['DC bias', 'Field (V/µm)', 'Capacitance', 'Of nominal'], rows }],
     notes: [
       'The loss follows the field across one layer: the same capacitance in a larger package, or with a higher rating in the same package, keeps more of its value.',
+      `Layer thickness is the thinner of rated voltage ÷ ${E_DESIGN} V/µm and what the package volume allows for this capacitance: a higher rating helps until the volume caps the layer (here ${limitBy === 'rating' ? `the rating sets it; up to about ${fmtNum(dVolUm * E_DESIGN, 3)} V rating would still help` : 'the volume sets it, so a higher rating in this package does not help in the model'}).`,
       'The model assumes the typical maximum chip height for the package and half its volume active; thin (low-profile) parts lose more.',
       'Temperature and bias effects are multiplied; in real parts they interact somewhat. AC ripple of more than about 0.5 Vrms also lowers the value.',
       'For a final design, compare with the maker\'s measured curve (Murata SimSurfing, TDK SEAT, KEMET K-SIM).',
