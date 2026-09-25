@@ -44,6 +44,8 @@ export interface ToolInfo {
   src: string | null;
   native: boolean;
   runnable: boolean;
+  /** The date and time its newest file changed, e.g. 2026.09.25-14.32. */
+  version?: string;
   uses: number;
 }
 

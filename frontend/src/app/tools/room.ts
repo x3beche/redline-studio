@@ -98,17 +98,20 @@ function score(t: ToolInfo, words: string[]): number {
 
   <ng-template #item let-t let-hot="hot">
     <div class="tcv-tools-item" [attr.data-on]="t.id === here()?.id ? 1 : null" [attr.data-hot]="hot ? 1 : null">
-      <button class="tcv-tools-open" (click)="pick(t)" [title]="t.blurb">
-        <span class="tcv-menu-name">{{ t.name }}
-          @if (t.runnable) {
-            <span class="tcv-tools-mcp" title="Agents can run this tool through the MCP server (run_tool)">MCP</span>
-          }
-        </span>
-        <span class="tcv-menu-blurb">{{ t.blurb }}</span>
-      </button>
-      <button class="tcv-tools-star" [attr.data-on]="favs().includes(t.id) ? 1 : null"
-              (click)="fav(t)" [attr.aria-label]="(favs().includes(t.id) ? 'Unstar ' : 'Star ') + t.name"
-              [title]="favs().includes(t.id) ? 'Remove from favourites' : 'Add to favourites'">★</button>
+      <!-- Name, then its version, then MCP, then the star - always in that order. -->
+      <div class="tcv-tools-top">
+        <button class="tcv-tools-open" (click)="pick(t)" [title]="t.blurb">
+          <span class="tcv-menu-name">{{ t.name }}</span>
+        </button>
+        @if (t.version) { <span class="tcv-tools-ver" [title]="'version ' + t.version + ' - when its files last changed'">v{{ t.version.slice(5) }}</span> }
+        @if (t.runnable) {
+          <span class="tcv-tools-mcp" title="Agents can run this tool through the MCP server (run_tool)">MCP</span>
+        }
+        <button class="tcv-tools-star" [attr.data-on]="favs().includes(t.id) ? 1 : null"
+                (click)="fav(t)" [attr.aria-label]="(favs().includes(t.id) ? 'Unstar ' : 'Star ') + t.name"
+                [title]="favs().includes(t.id) ? 'Remove from favourites' : 'Add to favourites'">★</button>
+      </div>
+      <span class="tcv-menu-blurb tcv-tools-blurb" (click)="pick(t)">{{ t.blurb }}</span>
     </div>
   </ng-template>
 
@@ -116,13 +119,15 @@ function score(t: ToolInfo, words: string[]): number {
     @if (here(); as t) {
       <header class="tcv-tools-head">
         <span class="tcv-label" style="color: var(--ink)">{{ t.name }}</span>
+        @if (t.version) { <span class="tcv-tools-ver" title="when this tool's files last changed">v{{ t.version }}</span> }
+        @if (t.runnable) { <span class="tcv-tools-mcp" title="Agents can run this tool through the MCP server (run_tool)">MCP</span> }
+        <button class="tcv-tools-star" [attr.data-on]="favs().includes(t.id) ? 1 : null" (click)="fav(t)"
+                [attr.aria-label]="favs().includes(t.id) ? 'Unstar' : 'Star'"
+                [title]="favs().includes(t.id) ? 'Remove from favourites' : 'Add to favourites'">★</button>
         <span class="truncate text-[11px]" style="color: var(--ink-dim)">{{ t.blurb }}</span>
         <span class="tcv-tools-meta">
-          @if (t.runnable) { <span title="Agents can run this tool through the MCP server (run_tool)">MCP</span> }
           @if (t.uses) { <span>{{ t.uses }} uses · 30 days</span> }
         </span>
-        <button class="tcv-tools-star" [attr.data-on]="favs().includes(t.id) ? 1 : null" (click)="fav(t)"
-                [attr.aria-label]="favs().includes(t.id) ? 'Unstar' : 'Star'">★</button>
       </header>
       <div class="tcv-tools-stage" [attr.data-size]="narrow(t) ? 'narrow' : 'wide'">
         @if (component(); as c) {
