@@ -69,9 +69,19 @@ export function run({ iface, vline, absmax, level, filter }) {
   const rows = IF.filter((r) => !q || r.slice(1).join(' ').toLowerCase().includes(q))
     .map((r) => [r[0] === row[0] ? `▶ ${r[1]}` : r[1], r[2], `≥\u00a0${f(r[4])}\u00a0V`, cap(r[5]).replace(/ /g, '\u00a0'), r[6], r[8]]);
   if (q && !rows.length) warnings.push(`No interface matches "${filter}". Try a shorter word, e.g. usb, can, eth.`);
+  const lvl = LEVEL[level] ? Number(level) : 4;
+  const esd = {
+    id: row[0], name, speed, vl, vline: vline > 0 ? vline : null, vmax, vrwm0, vrwm, cmax, pol, note, parts,
+    absmax: absmax > 0 ? absmax : null, margin: absmax > 0 ? absmax - vrwm : null,
+    level: lvl, kv, ipk, i30, i60: kv,
+    bidirectional: /bi/.test(pol), rail: /rail/.test(pol),
+    levels: Object.entries(LEVEL).map(([l, k]) => ({ level: Number(l), kv: k, ipk: 3.75 * k, i30: 2 * k, i60: k })),
+    list: IF.map((r) => ({ id: r[0], vrwm: r[4], cmax: r[5], match: !q || r.slice(1).join(' ').toLowerCase().includes(q) })),
+  };
   return {
     values,
     warnings,
+    esd,
     tables: [{ title: q ? `Interfaces matching "${filter}"` : 'All interfaces', columns: ['Interface', 'Speed', 'VRWM', 'C per line', 'Polarity', 'Example parts'], rows }],
     notes: [
       `${name}: ${note}`,

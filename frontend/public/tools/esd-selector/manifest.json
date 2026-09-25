@@ -3,6 +3,7 @@
   "name": "ESD Protection Selector",
   "blurb": "TVS diode selection criteria by interface and line speed",
   "group": "pcb",
+  "layout": "custom",
   "rooms": [
     "pcb"
   ],

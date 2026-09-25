@@ -3,6 +3,7 @@
   "name": "Fuse & Polyfuse Selector",
   "blurb": "fuse rating from normal current and fault scenario",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["fuse", "polyfuse", "ptc", "resettable fuse", "pptc", "fuse rating", "derating", "i2t", "inrush", "melting integral", "overcurrent protection", "slow blow", "time delay", "fast acting", "breaking capacity"],
   "intro": "A fuse rating from the normal current (75 % derating, re-rated for temperature), checked against the inrush pulse's I²t and against the fault current that has to blow it. Method: Littelfuse Fuseology selection guide; PTCs sized on hold current at temperature.",

@@ -1,0 +1,197 @@
+/* ESD Protection Selector: the line's path, the clamp window, the interface map. */
+:root {
+  --tool-line: #1f4ed8; --tool-tvs: #0f9d8a; --tool-zap: #d97706; --tool-win: #2f855a;
+  --tool-swing: color-mix(in srgb, var(--tool-line) 12%, transparent);
+  --tool-ic: #26313b; --tool-ic-ink: #e9eef3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-line: #6d8dff; --tool-tvs: #3cc7b3; --tool-zap: #f0a33a; --tool-win: #68b36b;
+    --tool-swing: color-mix(in srgb, var(--tool-line) 16%, transparent);
+    --tool-ic: #0b1116; --tool-ic-ink: #dfe7ee;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-line: #6d8dff; --tool-tvs: #3cc7b3; --tool-zap: #f0a33a; --tool-win: #68b36b;
+  --tool-swing: color-mix(in srgb, var(--tool-line) 16%, transparent);
+  --tool-ic: #0b1116; --tool-ic-ink: #dfe7ee;
+}
+:root[data-theme="light"] { --tool-line: #1f4ed8; --tool-tvs: #0f9d8a; --tool-zap: #d97706; --tool-win: #2f855a; --tool-ic: #26313b; --tool-ic-ink: #e9eef3; }
+
+.k-page { padding: 10px 12px; }
+.esd {
+  display: grid; gap: 10px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 320px;
+  grid-template-rows: auto 150px minmax(360px, 1fr);
+  grid-template-areas: "top top top" "path map side" "iv map side";
+  height: calc(100vh - 62px); min-height: 640px;
+}
+.esd-top { grid-area: top; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.esd-path { grid-area: path; }
+.esd-iv { grid-area: iv; }
+.esd-map { grid-area: map; }
+.esd-side { grid-area: side; display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; }
+.esd-grow { flex: 1; }
+
+.esd-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.esd-head { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); }
+.esd-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.esd-sub { color: var(--ink-soft); font-size: 11.5px; }
+.esd-box { position: relative; flex: 1; min-height: 0; touch-action: none; user-select: none; -webkit-user-select: none; }
+.esd-box > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.esd-pick, .esd-num { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); }
+.esd-pick select, .esd-pick input, .esd-num input {
+  padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font: 12.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink);
+}
+.esd-pick select { max-width: 280px; }
+.esd-filter input { width: 150px; }
+.esd-num input { width: 84px; text-align: right; }
+
+.esd-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.esd-seg button { border: 0; background: transparent; padding: 2px 8px; cursor: pointer; color: var(--ink-soft); font: 11.5px "IBM Plex Mono", ui-monospace, monospace; }
+.esd-seg button + button { border-left: 1px solid var(--line-soft); }
+.esd-seg button:hover { background: var(--sunken); color: var(--ink); }
+.esd-seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+
+.esd-warns:empty { display: none; }
+.esd-warns { border-top: 1px solid var(--warn); padding: 5px 10px; font-size: 12px; background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+.esd-warns div::before { content: "! "; color: var(--warn); font-weight: 600; }
+.esd-warns div + div { margin-top: 3px; }
+
+/* side */
+.esd-pulse { flex: 0 0 190px; }
+.esd-parts { flex: 0 0 auto; padding: 8px 10px; }
+.esd-side .k-outwrap { flex: 1; min-height: 130px; display: flex; flex-direction: column; }
+.esd-side .k-out { flex: 1; max-height: none; min-height: 0; }
+.esd-fhead { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.esd-fhead b { font-size: 12.5px; }
+.esd-fhead span { color: var(--ink-soft); font: 11.5px "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; }
+.esd-facts dl { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; margin: 0 0 6px; font-size: 12px; }
+.esd-facts dt { color: var(--ink-soft); }
+.esd-facts dd { margin: 0; text-align: right; font: 500 12.5px "IBM Plex Mono", ui-monospace, monospace; }
+.esd-note { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 6px; }
+.esd-partsl { font-size: 12px; border-top: 1px solid var(--line-soft); padding-top: 5px; }
+.esd-partsl span { display: block; font-size: 11px; color: var(--ink-soft); }
+.esd-partsl b { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; }
+
+/* drawing: shared */
+.esd svg text { font: 11px "IBM Plex Sans", -apple-system, sans-serif; fill: var(--ink); }
+.esd svg .esd-ax { font: 10px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.esd svg .esd-t { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; }
+.esd svg .esd-b { font-weight: 600; }
+.esd svg .esd-sm { font-size: 10px; }
+.esd svg .esd-soft { fill: var(--ink-soft); }
+.esd-grid { stroke: var(--line-soft); stroke-width: 1; }
+.esd-axis { stroke: var(--ink-soft); stroke-width: 1; }
+.esd-ar { fill: var(--ink-soft); }
+
+/* path */
+.esd-conn { fill: var(--sunken); stroke: var(--ink-soft); stroke-width: 1.2; }
+.esd-pin { fill: var(--tool-line); }
+.esd-pin-o { fill: color-mix(in srgb, var(--ink-soft) 50%, transparent); }
+.esd-line { stroke: var(--tool-line); stroke-width: 3; }
+.esd-node { fill: var(--tool-line); }
+.esd-wire { stroke: var(--tool-tvs); stroke-width: 2; }
+.esd-tvs { fill: color-mix(in srgb, var(--tool-tvs) 25%, var(--surface)); stroke: var(--tool-tvs); stroke-width: 1.6; stroke-linejoin: round; }
+.esd-tvs-bar { stroke: var(--tool-tvs); stroke-width: 2; fill: none; }
+.esd svg .esd-tvs-t { fill: var(--tool-tvs); }
+.esd-gnd { stroke: var(--ink-soft); stroke-width: 1.6; fill: none; }
+.esd-ic { fill: var(--tool-ic); stroke: var(--line); }
+.esd svg .esd-ic-t { fill: var(--tool-ic-ink); }
+.esd svg .esd-ic-q { fill: var(--warn); }
+.esd-zap { fill: none; stroke: var(--tool-zap); stroke-width: 2.2; stroke-linejoin: round; }
+.esd-zap-h { fill: var(--tool-zap); }
+.esd svg .esd-zap-t { fill: var(--tool-zap); }
+.esd-flow { stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 4 3; fill: none; }
+
+/* window */
+.esd-swing { fill: var(--tool-swing); }
+.esd-dead { fill: url(#esd-hatch); }
+.esd-hatch-l { stroke: var(--danger); stroke-opacity: .35; stroke-width: 1.2; }
+.esd-peak { stroke: var(--tool-zap); stroke-width: 1; stroke-dasharray: 2 3; }
+.esd-lvl { cursor: pointer; outline: none; }
+.esd-lvl-bg { fill: transparent; }
+.esd-lvl:hover .esd-lvl-bg { fill: var(--sunken); }
+.esd-lvl.on .esd-lvl-bg { fill: color-mix(in srgb, var(--tool-zap) 18%, transparent); }
+.esd svg .esd-lvl.on .esd-lvl-t { fill: var(--tool-zap); font-weight: 600; }
+.esd-win { fill: color-mix(in srgb, var(--tool-win) 30%, transparent); stroke: var(--tool-win); stroke-width: 1.4; }
+.esd-win.open { stroke-dasharray: 5 3; fill: color-mix(in srgb, var(--tool-win) 14%, transparent); }
+.esd-win.bad { fill: color-mix(in srgb, var(--danger) 30%, transparent); stroke: var(--danger); }
+.esd svg .esd-win-t { fill: var(--tool-win); }
+.esd svg .esd-bad-t { fill: var(--danger); }
+.esd-curve { fill: none; stroke: var(--tool-tvs); stroke-width: 2.2; stroke-linejoin: round; }
+.esd-curve.bad { stroke: var(--danger); stroke-dasharray: 6 4; }
+.esd-cdot { fill: var(--surface); stroke: var(--tool-tvs); stroke-width: 2.2; }
+.esd-cdot.bad { stroke: var(--danger); }
+.esd-vrwm { stroke: var(--tool-line); stroke-width: 2; }
+.esd svg .esd-vrwm-t { fill: var(--tool-line); }
+.esd-h { cursor: ew-resize; outline: none; }
+.esd-hit { fill: transparent; }
+.esd-h-ln { stroke-width: 1.6; stroke-dasharray: 5 3; }
+.esd-h-line .esd-h-ln { stroke: var(--tool-line); }
+.esd-h-line .esd-h-cap { fill: var(--tool-line); }
+.esd-h-abs .esd-h-ln { stroke: var(--danger); stroke-dasharray: none; stroke-width: 2; }
+.esd-h-abs .esd-h-cap { fill: var(--danger); }
+.esd svg .esd-h-t { fill: var(--accent-ink); font-size: 10.5px; }
+.esd-h.ghost .esd-h-ln { stroke: var(--ink-soft); stroke-dasharray: 3 4; stroke-width: 1.2; }
+.esd-h.ghost .esd-h-cap { fill: var(--surface); stroke: var(--ink-soft); stroke-dasharray: 3 2; }
+.esd svg .esd-h.ghost .esd-h-t { fill: var(--ink-soft); }
+.esd-h:hover .esd-h-cap, .esd-h:focus-visible .esd-h-cap { stroke: var(--ink); stroke-width: 2; }
+.esd-h:focus-visible .esd-h-ln { stroke-width: 3; }
+
+/* map */
+.esd-zone.z0 { fill: color-mix(in srgb, var(--danger) 7%, transparent); }
+.esd-zone.z1 { fill: color-mix(in srgb, var(--warn) 7%, transparent); }
+.esd-zone.z2 { fill: transparent; }
+.esd-zone.z3 { fill: var(--sunken); }
+.esd-pts { outline: none; }
+.esd-pts:focus-visible .esd-pt.on .esd-pill { stroke: var(--ink); stroke-width: 2; }
+.esd-pt { cursor: pointer; }
+.esd-pt .esd-dot { fill: var(--ink-soft); }
+.esd-pt .esd-pill { fill: var(--surface); stroke: var(--line); }
+.esd svg .esd-pill-t { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.esd-lead { stroke: var(--line); stroke-width: 1; }
+.esd-pt:hover .esd-pill { stroke: var(--accent); }
+.esd-pt.on .esd-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.esd-pt.on .esd-pill { fill: var(--accent); stroke: var(--accent); }
+.esd svg .esd-pt.on .esd-pill-t { fill: var(--accent-ink); font-weight: 600; }
+.esd-pt.dim { opacity: .28; }
+.esd-move { stroke: var(--tool-zap); stroke-width: 1.5; stroke-dasharray: 3 2; fill: none; }
+.esd-mine { fill: var(--tool-zap); stroke: var(--surface); stroke-width: 2; }
+.esd svg .esd-mine-t { fill: var(--tool-zap); }
+
+/* pulse */
+.esd-wave { fill: none; stroke: var(--tool-zap); stroke-width: 2; }
+.esd-wave.ghost { stroke: var(--line); stroke-width: 1; }
+.esd-wave-fill { fill: color-mix(in srgb, var(--tool-zap) 14%, transparent); }
+.esd-pulse .esd-cdot { stroke: var(--tool-zap); }
+
+/* medium: the side goes under */
+@media (max-width: 1280px) {
+  .esd {
+    height: auto; min-height: 0;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-rows: auto 150px 440px auto;
+    grid-template-areas: "top top" "path map" "iv map" "side side";
+  }
+  .esd-side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr); align-items: stretch; }
+  .esd-pulse { min-height: 190px; }
+  .esd-side .k-out { max-height: 300px; }
+}
+@media (max-width: 760px) {
+  .k-page { padding: 8px; }
+  .esd {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 150px 400px 440px auto;
+    grid-template-areas: "top" "path" "iv" "map" "side";
+    gap: 8px;
+  }
+  .esd-side { display: flex; }
+  .esd-pick select { max-width: 100%; }
+  .esd-pick { flex: 1 1 100%; }
+  .esd-pick select, .esd-pick input { flex: 1; min-width: 0; width: auto; }
+  .esd-grow { display: none; }
+}
+.esd-hitc { fill: transparent; }

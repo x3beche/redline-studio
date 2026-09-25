@@ -79,14 +79,29 @@ export function run({ type, inom, vcirc, temp, wave, ipk, tp, pulses, ifault }) 
 
   // A table: the rating at other temperatures
   const temps = [0, 25, 40, 60, 85];
+  const kts = [], mins = [], stds = [];
   const rows = temps.map((tc) => {
     const k = ptc ? Math.min(1.3, Math.max(0.2, 1 - 0.0065 * (tc - 25))) : Math.min(1, Math.max(0.5, 1 - 0.0025 * (tc - 25)));
     const m = ptc ? inom / k : inom / (0.75 * k);
+    kts.push(k); mins.push(m); stds.push(list.find((x) => x >= m * 0.9999) ?? null);
     return [`${tc} °C`, f(k, 3), f(m), f(list.find((x) => x >= m * 0.9999) ?? NaN)];
   });
+  const ref = pick ? (ptc ? 2 * pick : pick) : null;
+  const ratio = ifault > 0 && ref ? ifault / ref : null;
+  const fuse = {
+    type: ptc ? 'ptc' : type === 'slow' ? 'slow' : 'fast', ptc, inom, vcirc: vcirc > 0 ? vcirc : null, temp: T, kT, minRating, pick, list,
+    wave: shape ? wave : 'none', ipk: ipk > 0 ? ipk : null, tp: tp > 0 ? tp : null, i2t, needI2t, factor, pulses: Number(pulses) || 100000,
+    ifault: ifault > 0 ? ifault : null, ratio,
+    tone: ratio == null ? null : ratio >= (type === 'slow' ? 10 : 5) ? 'ok' : ratio >= 2 ? 'warn' : 'bad',
+    trip: ptc && pick ? 2 * pick : null,
+    // UL 248-14 opening points, x the rating: 135 % within 60 min, 200 % within 2 min
+    ul: ptc ? [] : [{ x: 1.35, t: 3600 }, { x: 2, t: 120 }],
+    temps: temps.map((tc, i) => ({ t: tc, kT: kts[i], min: mins[i], std: stds[i] })),
+  };
   return {
     values,
     warnings,
+    fuse,
     tables: [{ title: 'The same load at other temperatures', columns: ['Ambient', 'K_T', ptc ? 'Min hold A' : 'Min rating A', 'Standard A'], rows }],
     notes: [
       ptc ? 'PTC: hold current = carries it forever; trip current = always trips; in between it may or may not. The PTC adds resistance (and voltage drop) and stays hot and high-resistance until the power is removed.'

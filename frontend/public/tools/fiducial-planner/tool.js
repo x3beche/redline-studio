@@ -81,6 +81,14 @@ export function run({ w, h, place, rail, nfid, fd, clear, fe, nhole, hd, he, fin
   if (nF === 2) warnings.push('Two diagonal fiducials cannot tell the board from itself turned 180°: use three, or move one off the diagonal by a few mm.');
   if (!(fine >= 0)) fine = 0;
 
+  // Per mark, what is wrong with it, for the drawing to show on the mark.
+  const flags = (m, isFid) => {
+    const off = !inFrame(m);
+    const edge = isFid && !onRails && Math.min(m.x, W - m.x, m.y, H - m.y) - m.keep / 2 < CONVEYOR;
+    const overlap = isFid && fids.some((o) => o !== m && Math.hypot(o.x - m.x, o.y - m.y) < clear);
+    const rail = onRails && m.keep > r + 1e-9;
+    return { off, edge, overlap, rail, bad: off || edge || overlap || rail };
+  };
   const xs = fids.map((f) => f.x), ys = fids.map((f) => f.y);
   const spanX = Math.max(...xs) - Math.min(...xs), spanY = Math.max(...ys) - Math.min(...ys);
   const local = Math.round(fine) * 2;
@@ -108,6 +116,11 @@ export function run({ w, h, place, rail, nfid, fd, clear, fe, nhole, hd, he, fin
       local ? `Local fiducials: two per fine-pitch part (pitch ≤ 0.5 mm, BGA), on the part's diagonal just outside its courtyard, same size and clear area.` : 'No local fiducials needed without fine-pitch parts.',
       'Edge and hole distances here are rules of thumb: the assembler\'s own panel spec wins.',
     ],
-    drawing: { W, H, board: { x: 0, y: boardY, w, h }, rails: onRails ? r : 0, fids, holes },
+    drawing: {
+      W, H, board: { x: 0, y: boardY, w, h }, rails: onRails ? r : 0,
+      fids: fids.map((m) => ({ ...m, ...flags(m, true) })), holes: holes.map((m) => ({ ...m, ...flags(m, false) })),
+      conveyor: onRails ? 0 : CONVEYOR, holeRing: HOLE_RING, fe: fEdge, he: hEdge, fd, clear, hd: hDia, hKeep,
+      minClear: 3 * fd, local, fine: Math.round(fine), spanX, spanY,
+    },
   };
 }
