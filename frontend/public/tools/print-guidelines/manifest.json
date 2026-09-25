@@ -1,9 +1,11 @@
 {
-  "id": "print-guidelines", "version": "1.0",
+  "id": "print-guidelines", "version": "1.1",
   "name": "Print Guideline Checker",
   "blurb": "wall, bridge and overhang values checked for a print process",
   "group": "mechanical",
   "rooms": ["cad"],
+  "layout": "custom",
+  "agentOmit": ["coupon"],
   "keywords": ["3d printing", "design for additive", "dfam", "fdm", "sla", "resin", "sls", "mjf", "minimum wall thickness", "overhang angle", "bridge length", "hole size", "clearance", "escape hole", "print tolerance"],
   "intro": "Enter the thinnest wall, longest bridge, steepest overhang and the other critical features of a part; each is checked against the typical published limit of the chosen process (Hubs, Formlabs and HP design guides; FDM limits scale with the nozzle). Leave a value empty to skip it.",
   "inputs": [

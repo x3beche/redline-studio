@@ -1,0 +1,159 @@
+/* Shrinkage Compensator: the shrinkage ranges and the contraction rule. */
+:root {
+  --tool-part: #0f9d8a; --tool-make: #d97706; --tool-spread: #a23fbf;
+  --tool-rule: color-mix(in srgb, #d9b26a 30%, var(--surface));
+  --tool-rule-shrink: color-mix(in srgb, #d97706 20%, var(--surface));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-part: #3cc7b3; --tool-make: #f0a33a; --tool-spread: #c982e0;
+    --tool-rule: color-mix(in srgb, #d9b26a 14%, var(--surface));
+    --tool-rule-shrink: color-mix(in srgb, #f0a33a 14%, var(--surface));
+  }
+}
+:root[data-theme="dark"] {
+  --tool-part: #3cc7b3; --tool-make: #f0a33a; --tool-spread: #c982e0;
+  --tool-rule: color-mix(in srgb, #d9b26a 14%, var(--surface));
+  --tool-rule-shrink: color-mix(in srgb, #f0a33a 14%, var(--surface));
+}
+
+.k-page { padding: 10px 12px; }
+.sk {
+  display: grid; gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 350px);
+  grid-template-areas: "top top" "main side";
+  grid-template-rows: auto minmax(0, 1fr);
+  height: calc(100vh - 62px); min-height: 680px;
+}
+.sk-top { grid-area: top; display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
+.sk-main { grid-area: main; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; overflow: auto; }
+.sk-side { grid-area: side; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+.sk-cap { font-size: 11.5px; font-weight: 500; color: var(--ink-soft); }
+.sk-hint { font-size: 11.5px; color: var(--ink-soft); }
+.sk-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.sk-head { display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); }
+.sk-head .sk-seg { margin-left: auto; }
+.sk-svgwrap svg { display: block; width: 100%; }
+.sk-chart-svg { touch-action: none; user-select: none; -webkit-user-select: none; }
+
+.sk-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; background: var(--surface); }
+.sk-seg button { border: 0; background: transparent; padding: 4px 10px; cursor: pointer; font-size: 12.5px; color: var(--ink-soft); white-space: nowrap; }
+.sk-seg button + button { border-left: 1px solid var(--line-soft); }
+.sk-seg button:hover { background: var(--sunken); color: var(--ink); }
+.sk-seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+.sk-mfields { display: flex; gap: 10px; flex-wrap: wrap; }
+.sk-num { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.sk-num[hidden] { display: none; }
+.sk-num input, .sk-lane input {
+  width: 66px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink);
+  font: 12.5px "IBM Plex Mono", ui-monospace, monospace; text-align: right;
+}
+.sk-num input:focus, .sk-lane input:focus { border-color: var(--accent); outline: none; }
+.sk-read { margin-left: auto; display: flex; gap: 4px 18px; flex-wrap: wrap; }
+.sk-rd { display: flex; flex-direction: column; line-height: 1.2; }
+.sk-rd small { font-size: 11px; color: var(--ink-soft); max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk-rd b { font: 600 18px "IBM Plex Mono", ui-monospace, monospace; }
+.sk-rd:first-child b { color: var(--tool-make); font-size: 22px; }
+.sk-rd-warn b { color: var(--warn); }
+
+/* chart */
+.sk-t { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.sk-soft { fill: var(--ink-soft); }
+.sk-strong { font-weight: 600; font-size: 12px; }
+.sk-glab { fill: var(--ink-soft); font-family: "IBM Plex Sans", sans-serif; font-size: 11.5px; }
+.sk-grid { stroke: var(--line-soft); }
+.sk-sep { stroke: var(--line-soft); }
+.sk-bar { cursor: pointer; outline: none; }
+.sk-bar-r { fill: color-mix(in srgb, var(--ink-soft) 16%, var(--surface)); stroke: color-mix(in srgb, var(--ink-soft) 55%, transparent); }
+.sk-bar-t { fill: var(--ink); font-size: 10.5px; pointer-events: none; }
+.sk-bar:hover .sk-bar-r { stroke: var(--ink); }
+.sk-bar:focus-visible .sk-bar-r { stroke: var(--accent); stroke-width: 2; }
+.sk-on .sk-bar-r { fill: color-mix(in srgb, var(--accent) 35%, var(--surface)); stroke: var(--accent); stroke-width: 1.5; }
+.sk-on .sk-bar-t { font-weight: 600; }
+.sk-bar-out { fill: var(--ink-soft); }
+.sk-on .sk-bar-out { fill: var(--accent); }
+.sk-ref { opacity: .6; }
+.sk-range { fill: color-mix(in srgb, var(--accent) 10%, transparent); }
+.sk-mark { stroke: var(--accent); stroke-width: 2; }
+.sk-mark-tag { fill: var(--accent); }
+.sk-mark-t { fill: var(--accent-ink); font-weight: 600; }
+.sk-handle { cursor: grab; outline: none; }
+.sk-handle:active { cursor: grabbing; }
+.sk-hit { fill: transparent; }
+.sk-handle:focus-visible .sk-hit { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 2; }
+.sk-handle:focus-visible .sk-mark-tag { stroke: var(--ink); stroke-width: 2; }
+.sk-test-des { fill: none; stroke: var(--ink-soft); stroke-dasharray: 5 3; }
+.sk-test-meas { fill: color-mix(in srgb, var(--tool-part) 30%, var(--surface)); stroke: var(--tool-part); stroke-width: 1.5; }
+.sk-cal-beam { fill: color-mix(in srgb, var(--ink-soft) 25%, var(--surface)); stroke: var(--ink-soft); }
+.sk-cal-jaw { fill: color-mix(in srgb, var(--ink-soft) 40%, var(--surface)); stroke: var(--ink-soft); }
+.sk-cal-move { fill: color-mix(in srgb, var(--accent) 40%, var(--surface)); stroke: var(--accent); }
+.sk-handle:hover .sk-cal-move, .sk-handle:focus-visible .sk-cal-move { stroke-width: 2.5; }
+.sk-des-line { stroke: var(--ink-soft); stroke-dasharray: 2 2; }
+
+/* the rule */
+.sk-rule { display: flex; flex-direction: column; }
+.sk-rulebox { padding: 8px 10px 4px; }
+.sk-row { display: grid; grid-template-columns: 138px minmax(0, 1fr) 76px 86px 66px 24px; gap: 8px; align-items: center; }
+.sk-rrow { align-items: end; }
+.sk-rlab { font-size: 12px; font-weight: 600; display: flex; flex-direction: column; line-height: 1.2; }
+.sk-rlab small { font-weight: 400; color: var(--ink-soft); font-size: 11px; }
+.sk-rsvg { min-width: 0; }
+.sk-rsvg svg { display: block; width: 100%; }
+.sk-ruler { height: 30px; }
+.sk-colh { font-size: 11px; color: var(--ink-soft); text-align: right; padding-bottom: 4px; }
+.sk-foot { grid-column: 3 / 7; align-self: center; }
+.sk-rule-body { fill: var(--tool-rule); stroke: color-mix(in srgb, var(--ink-soft) 50%, transparent); }
+.sk-rule-shrink { fill: var(--tool-rule-shrink); }
+.sk-tick { stroke: var(--ink); stroke-width: 1; }
+.sk-rule-n { font-size: 10px; }
+.sk-lanes { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; }
+.sk-lane { border-bottom: 1px dashed var(--line-soft); padding: 1px 0; }
+.sk-lane .sk-name { width: 100%; text-align: left; font-family: "IBM Plex Sans", sans-serif; }
+.sk-lane .sk-size { width: 100%; }
+.sk-lane-svg { height: 34px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.sk-make { font: 600 13px "IBM Plex Mono", ui-monospace, monospace; text-align: right; color: var(--tool-make); }
+.sk-added { font: 12px "IBM Plex Mono", ui-monospace, monospace; text-align: right; color: var(--ink-soft); }
+.sk-part { fill: color-mix(in srgb, var(--tool-part) 40%, var(--surface)); stroke: var(--tool-part); stroke-width: 1; }
+.sk-extra { fill: var(--tool-make); }
+.sk-makeo { fill: none; stroke: var(--tool-make); stroke-width: 1.2; stroke-dasharray: 4 2; }
+.sk-spread { fill: color-mix(in srgb, var(--tool-spread) 22%, transparent); }
+.sk-spread-w { stroke: var(--tool-spread); stroke-width: 2; }
+.sk-in { font-size: 11px; fill: var(--ink); }
+.sk-grip { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+.sk-handle:hover .sk-grip, .sk-handle:focus-visible .sk-grip { stroke: var(--accent); }
+.sk-x { border: 0; background: transparent; color: var(--ink-soft); cursor: pointer; font-size: 15px; border-radius: 3px; }
+.sk-x:hover { color: var(--ink); background: var(--sunken); }
+.sk-addrow { border: 1px dashed var(--line); background: transparent; color: var(--ink-soft); border-radius: 5px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+.sk-addrow:hover { color: var(--accent); border-color: var(--accent); }
+.sk-key { font-size: 11px; color: var(--ink-soft); }
+.sk-key i { display: inline-block; width: 12px; height: 9px; margin-right: 4px; vertical-align: -1px; border-radius: 2px; }
+.sk-k-part { background: color-mix(in srgb, var(--tool-part) 40%, var(--surface)); border: 1px solid var(--tool-part); }
+.sk-k-make { background: var(--tool-make); }
+.sk-k-spread { background: color-mix(in srgb, var(--tool-spread) 35%, transparent); border-bottom: 2px solid var(--tool-spread); }
+.sk-foothint { padding: 2px 10px 8px; }
+
+.sk-warns { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 6px; padding: 6px 10px; background: var(--surface); font-size: 12.5px; }
+.sk-warns div + div { margin-top: 3px; }
+.sk-warns[hidden] { display: none; }
+.sk-notes { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12px; color: var(--ink-soft); display: flex; flex-direction: column; gap: 5px; }
+.sk-notes:empty { display: none; }
+.sk-out { flex: 1; min-height: 160px; display: flex; flex-direction: column; }
+.sk-out .k-outwrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.sk-out .k-out { flex: 1; max-height: none; min-height: 100px; }
+
+@media (max-width: 1100px) {
+  .sk { grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "main" "side"; grid-template-rows: none; height: auto; min-height: 0; }
+  .sk-main { overflow: visible; }
+  .sk-out .k-out { max-height: 340px; }
+  .sk-read { margin-left: 0; }
+}
+@media (max-width: 640px) {
+  .k-page { padding: 8px; }
+  .sk-row { grid-template-columns: minmax(0, 1fr) 70px 80px 24px; }
+  .sk-row > .sk-rsvg { grid-column: 1 / -1; grid-row: 2; }
+  .sk-rrow > .sk-rlab { grid-column: 1 / -1; flex-direction: row; gap: 6px; align-items: baseline; }
+  .sk-rrow .sk-colh, .sk-rrow > div:empty { display: none; }
+  .sk-lane > .sk-added { display: none; }
+  .sk-lane { grid-template-columns: minmax(0, 1fr) 70px 80px 24px; }
+  .sk-foot { grid-column: 1 / -1; grid-row: 3; }
+}

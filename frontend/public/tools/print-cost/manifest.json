@@ -1,9 +1,11 @@
 {
-  "id": "print-cost", "version": "1.0",
+  "id": "print-cost", "version": "1.1",
   "name": "Print Time & Cost",
   "blurb": "print time and cost from volume, infill and material price",
   "group": "mechanical",
   "rooms": ["cad"],
+  "layout": "custom",
+  "agentOmit": ["job"],
   "keywords": ["3d print cost", "print time", "fdm", "filament", "filament usage", "grams", "infill", "slicer estimate", "material cost", "machine hour", "quote", "volumetric flow"],
   "intro": "Estimates an FDM print's filament mass, time and cost from the part volume (and surface area if you have it), the walls, infill and print settings. It is a first-order model (shell + infill, time = volume / effective flow), typically within ±25 % of a slicer.",
   "inputs": [

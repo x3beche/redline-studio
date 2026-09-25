@@ -49,12 +49,18 @@ export function run({ mode, material, shrink, design, measured, dims }) {
     { label: 'Approximation 1 + s', value: fmtNum(1 + s, 6), hint: `low by ${fmtNum((k - 1 - s) * 1000, 3)} mm per metre` },
   ];
   const rows = [];
+  // For the page's contraction rule (omitted for agents): every dimension as numbers, the range, the materials.
+  const rule = { mode: mode === 'measured' || mode === 'custom' ? mode : 'material', material: MATERIALS[material] ? material : 'abs',
+    sMin: smin, sMax: smax, sNom, k, approx: 1 + s, label, dims: [],
+    test: mode === 'measured' ? { design, measured } : null,
+    materials: Object.entries(MATERIALS).map(([key, m]) => ({ key, name: m[0], min: m[1], max: m[2], group: m[3] })) };
   (dims || []).forEach((r, i) => {
     const name = String(r.name || `#${i + 1}`).trim() || `#${i + 1}`;
     if (String(r.size ?? '').trim() === '') return;
     const v = parseEng(r.size);
     if (v == null || !(v > 0)) { warnings.push(`"${name}": the size "${r.size}" is not a positive number; skipped.`); return; }
     const mould = v * k;
+    rule.dims.push({ index: i, name, part: v, mould, added: mould - v, lo: mould * (1 - smax / 100), hi: mould * (1 - smin / 100) });
     const row = [name, fmtNum(v, 6), fmtNum(r3(mould), 7), `+${fmtNum(r3(mould - v), 5)}`];
     if (smax > smin) {
       const lo = mould * (1 - smax / 100), hi = mould * (1 - smin / 100);
@@ -72,6 +78,7 @@ export function run({ mode, material, shrink, design, measured, dims }) {
     if (spread > 0.1) warnings.push(`The material's shrinkage range alone moves a ${fmtNum(big)} mm dimension by ± ${fmtNum(r3(spread), 3)} mm: for tight tolerances, mould a first shot, measure, and correct the tool ("steel safe").`);
   }
   return {
+    rule,
     values,
     tables: [{ title: 'Corrected dimensions (scaled at the mid shrinkage)', columns, rows }],
     warnings,

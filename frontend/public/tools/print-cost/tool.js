@@ -61,7 +61,24 @@ export function run(i) {
     { label: 'Nominal flow', value: `${fmtNum(m.flow, 3)} mm³/s`, hint: `effective ${fmtNum(m.flow * eff, 3)}` },
   ];
   const rows = [10, 15, 20, 30, 50, 100].map((p) => { const q = model(p / 100); return [`${p} %`, hm(q.time), `${fmtNum(q.mass, 3)} g`, money(q.total, cur)]; });
+  // For the page's drawings (omitted for agents): the whole model, and time, mass and cost across infill.
+  const failure = Math.max(0, i.failure || 0);
+  const job = {
+    material: i.material in DENSITY ? i.material : 'pla', materialName: mname, density: rho, currency: cur,
+    volume: i.volume, area: A / 100, areaEstimated: estArea, side: Math.cbrt(V),
+    infill: infill * 100, walls: i.walls, line: i.line, layer: i.layer, speed: i.speed, efficiency: eff * 100, support: support * 100,
+    wallThickness: i.walls * i.line, infillSpacing: infill > 0 ? (2 * i.line) / infill : null,
+    shell: m.shell / 1000, infillVolume: ((V - m.shell) * infill) / 1000, supportVolume: (V * support) / 1000, printed: m.printed / 1000,
+    shellShare: (100 * Math.min(V, m.shell)) / V, solid: m.shell >= V - 1e-6,
+    mass: m.mass, filamentLength: m.printed / (Math.PI * 0.875 * 0.875) / 1000, spoolShare: m.mass / 1000,
+    flow: m.flow, effectiveFlow: m.flow * eff, flowLimit: 15, flowTypical: 10,
+    time: m.time, hours: m.time / 3600, timeText: hm(m.time), layers: Math.max(1, Math.round(Math.cbrt(V) / i.layer)),
+    price: i.price, rate: i.rate || 0, power: i.power || 0, kwh: i.kwh || 0, failure, energyKwh: (m.time / 3600) * ((i.power || 0) / 1000),
+    cost: { material: m.material, machine: m.machine, energy: m.energy, margin: m.total - (m.material + m.machine + m.energy), total: m.total },
+    sweep: Array.from({ length: 21 }, (_, k) => { const q = model(k / 20); return { infill: k * 5, time: q.time, mass: q.mass, total: q.total }; }),
+  };
   return {
+    job,
     values,
     tables: [{ title: 'Other infill settings', columns: ['Infill', 'Time', 'Material', 'Total cost'], rows }],
     warnings,

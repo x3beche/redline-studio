@@ -42,10 +42,23 @@ export function run(input) {
   const rows = [];
   let pass = 0, marginal = 0, fail = 0, checked = 0;
   const open = [];
+  // For the page's coupon drawing (omitted for agents): every check with its verdict, and how the
+  // same value would fare on each process.
+  const judge = (sense, v, lim) => {
+    if (lim == null) return 'none';
+    const ok = sense === 'min' ? v >= lim - 1e-9 : v <= lim + 1e-9;
+    const near = ok && (sense === 'min' ? v < lim * 1.25 : v > lim * 0.8);
+    return !ok ? 'fail' : near ? 'limit' : 'pass';
+  };
+  const coupon = { process: PROC[process] ? process : 'fdm', name: p.name, nozzle: process === 'fdm' ? (n || 0.4) : null, checks: [] };
   for (const [key, label, unit, sense, why] of CHECKS) {
     const lim = p[key];
     const v = input[key];
-    if (v != null && (v < 0 || (key === 'overhang' && v > 90))) { warnings.push(`${label}: ${fmtNum(v)} ${unit} is not a valid value${key === 'overhang' ? ' (0° = vertical wall, 90° = flat ceiling)' : ''}.`); continue; }
+    const byProcess = Object.fromEntries(Object.keys(PROC).map((k) => { const q = PROC[k](k === 'fdm' ? (n || 0.4) : 0.4); return [k, { limit: q[key] == null ? null : r2(q[key]), verdict: v == null || v < 0 ? null : judge(sense, v, q[key]) }]; }));
+    const bad = v != null && (v < 0 || (key === 'overhang' && v > 90));
+    coupon.checks.push({ key, label, unit, sense, why, value: v ?? null, limit: lim == null ? null : r2(lim), exactLimit: lim ?? null,
+      verdict: bad ? 'invalid' : v == null ? (lim == null ? 'none' : 'skip') : lim == null ? 'none' : judge(sense, v, lim), byProcess });
+    if (bad) { warnings.push(`${label}: ${fmtNum(v)} ${unit} is not a valid value${key === 'overhang' ? ' (0° = vertical wall, 90° = flat ceiling)' : ''}.`); continue; }
     if (lim == null) {
       if (v != null && key !== 'escape') rows.push([label, `${fmtNum(v)} ${unit}`, 'no limit', 'ok, self-supporting']);
       if (key === 'escape' && v != null) rows.push([label, `${fmtNum(v)} ${unit}`, 'not needed', 'ok, FDM parts are not hollowed']);
@@ -70,10 +83,13 @@ export function run(input) {
     else {
       const tol = Math.max(p.tol[0] * size, p.tol[1]);
       values.push({ label: 'Expected tolerance', value: `± ${fmtNum(r2(tol))} mm`, hint: `on ${fmtNum(size)} mm: ±${fmtNum(p.tol[0] * 100)} %, at least ±${fmtNum(p.tol[1])} mm` });
+      coupon.tolerance = { size, tol: r2(tol), pct: p.tol[0] * 100, min: p.tol[1], knee: p.tol[1] / p.tol[0] };
     }
   }
   const lim = (k, u) => (p[k] == null ? 'none' : `${fmtNum(r2(p[k]))} ${u}`);
+  coupon.counts = { pass, marginal, fail, checked };
   return {
+    coupon,
     values,
     tables: [
       { title: `Your part against ${p.name}`, columns: ['Check', 'Your value', 'Guideline', 'Result'], rows },

@@ -1,9 +1,11 @@
 {
-  "id": "shrinkage", "version": "1.0",
+  "id": "shrinkage", "version": "1.1",
   "name": "Shrinkage Compensator",
   "blurb": "corrected dimension for a material's shrinkage",
   "group": "mechanical",
   "rooms": ["cad"],
+  "layout": "custom",
+  "agentOmit": ["rule"],
   "keywords": ["shrinkage", "shrink", "mould shrinkage", "mold shrinkage", "shrink allowance", "pattern allowance", "casting", "injection moulding", "scale factor", "3d print scaling", "calibration", "dimensional compensation", "clay shrinkage"],
   "intro": "Gives the size to make a mould, pattern or print so the part shrinks to the size you want: mould = part / (1 - s). Take s from a material's typical range (moulding, casting, FDM, clay), give it directly, or measure it on a test piece.",
   "inputs": [
