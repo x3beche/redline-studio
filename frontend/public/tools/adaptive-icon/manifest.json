@@ -1,5 +1,5 @@
 {
-  "id": "adaptive-icon", "version": "1.0",
+  "id": "adaptive-icon", "version": "1.1",
   "name": "Adaptive Icon Composer",
   "blurb": "foreground and background layers with mask previews",
   "group": "mobile",
@@ -162,5 +162,6 @@
     "W3C WCAG 2.2 contrast ratio (used as a legibility guide for the logo)",
     "Google Play, app icon specification (512 × 512 px)"
   ],
-  "view": true
+  "view": true,
+  "layout": "custom"
 }

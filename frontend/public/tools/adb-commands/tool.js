@@ -140,8 +140,12 @@ export function run({ category, filter, pkg, activity, serial, apk, url, ip, avd
     .map((c) => ({ ...c, cmd: fill(c.cmd), note: fill(c.note) }))
     .filter((c) => words.every((w) => `${c.cat} ${c.task} ${c.cmd} ${c.note}`.toLowerCase().includes(w)));
 
+  // How many commands each topic has for these words, whatever topic is chosen
+  // (the page puts these counts on the parts of the device it draws).
+  const topics = Object.fromEntries(CATEGORIES.map((k) => [k, COMMANDS.filter((c) => c.cat === k)
+    .filter((c) => { const f = { ...c, cmd: fill(c.cmd), note: fill(c.note) }; return words.every((w) => `${f.cat} ${f.task} ${f.cmd} ${f.note}`.toLowerCase().includes(w)); }).length]));
   if (!hits.length) {
-    return { values: [{ label: 'Matching commands', value: 0, tone: 'warn' }],
+    return { values: [{ label: 'Matching commands', value: 0, tone: 'warn' }], topics,
       warnings: [...warnings, `Nothing matches "${clean(filter)}"${cat !== 'all' ? ` in ${cat}` : ''}: try one word (log, install, tap, proxy) or the topic All.`] };
   }
   const byCat = CATEGORIES.map((k) => [k, hits.filter((h) => h.cat === k).length]).filter(([, n]) => n);
@@ -160,6 +164,6 @@ export function run({ category, filter, pkg, activity, serial, apk, url, ip, avd
     ],
     tables: [{ title: cat === 'all' ? 'Commands' : `${cat[0].toUpperCase()}${cat.slice(1)} commands`, columns: ['Topic', 'Task', 'Command', 'Note'], rows: hits.map((h) => [h.cat, h.task, h.cmd, h.note]) }],
     texts: [{ title: 'Shell script', body: script, lang: 'bash' }],
-    warnings, notes,
+    warnings, notes, topics,
   };
 }

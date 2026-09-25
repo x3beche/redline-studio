@@ -81,6 +81,6 @@ export function run({ bg, bgStyle, bg2, fgKind, glyph, fg, size, shape }) {
       { title: 'Background SVG', body: bgSvg, lang: 'svg' },
       ...(fgSvg ? [{ title: 'Foreground SVG', body: fgSvg, lang: 'svg' }] : []),
     ],
-    drawing: { bg: B.hex, bg2: grad ? B2.hex : null, fg: F ? F.hex : null, kind: fgKind, text, size: sz, safeR, view: 72, canvas: 108, fits },
+    drawing: { bg: B.hex, bg2: grad ? B2.hex : null, fg: F ? F.hex : null, kind: fgKind, text, size: sz, safeR, view: 72, canvas: 108, fits, round, reach, maxSize, contrast: crWorst },
   };
 }

@@ -104,7 +104,21 @@ export function run({ kind, scheme, host, path, params, fragment, pkg, bundle, t
     ...q.map(([k, v]) => [`Parameter ${k}`, v, `${encSeg(k)}=${encSeg(v)}`]),
     ...(frag ? [['Fragment', frag, encFrag]] : []),
   ];
+  // The link part by part, typed and encoded, and what each app-side matcher
+  // checks: for the page's drawing (agentOmit).
+  const usedSegs = !https && !h && segs.length && segs[0] ? segs.slice(1) : segs;
+  const parts = {
+    url, https, scheme: sch, host: h, authority: tryDecode(authority), authorityEnc: authority, hostFromPath: !https && !h && !!authority,
+    path: usedSegs.filter((x, i) => x || i < usedSegs.length - 1 || usedSegs.length === 1).map((x) => ({ typed: x, enc: encSeg(x) })),
+    pathEnc: restPath || encPath,
+    query: q.map(([k, v]) => ({ key: k, value: v, keyEnc: encSeg(k), valueEnc: encSeg(v) })),
+    fragment: frag ? { typed: frag, enc: encSeg(frag) } : null,
+    filter: { scheme: sch, host: https || h ? h : tryDecode(authority), pathPrefix: first || null, autoVerify: https },
+    ios: https ? { appID: `${T}.${B || 'com.example.app'}`, components: first ? `${first}/*` : '/*', teamSet: !!String(team || '').trim() } : { urlScheme: sch, bundle: B || 'com.example.app' },
+    pkg: P, bundle: B,
+  };
   return {
+    parts,
     values: [
       { label: 'Deep link', value: url, tone: warnings.length ? 'warn' : 'ok' },
       { label: 'Length', value: url.length, unit: 'chars' },

@@ -1,5 +1,5 @@
 {
-  "id": "deep-link", "version": "1.0",
+  "id": "deep-link", "version": "1.1",
   "name": "Deep Link Builder",
   "blurb": "a deep link from scheme and parameters, with the emulator test command",
   "group": "mobile",
@@ -165,5 +165,9 @@
     "Android Developers, Create deep links to app content; Test deep links (adb shell am start); Verify Android App Links (assetlinks.json, pm verify-app-links)",
     "Apple Developer, Defining a custom URL scheme for your app; Supporting universal links in your app (apple-app-site-association); xcrun simctl openurl",
     "Chrome for Android, Android Intents with Chrome (intent: URLs)"
-  ]
+  ],
+  "agentOmit": [
+    "parts"
+  ],
+  "layout": "custom"
 }

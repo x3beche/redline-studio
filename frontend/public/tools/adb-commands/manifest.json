@@ -1,5 +1,5 @@
 {
-  "id": "adb-commands", "version": "1.0",
+  "id": "adb-commands", "version": "1.1",
   "name": "ADB Command Palette",
   "blurb": "common emulator and device commands, ready to copy",
   "group": "mobile",
@@ -186,5 +186,9 @@
     "Android Developers: Android Debug Bridge (adb), developer.android.com/tools/adb",
     "Android Developers: Logcat command-line tool; Start the emulator from the command line; Send emulator console commands",
     "AOSP shell tools am, pm, wm, input, settings, dumpsys, cmd (help output of each)"
-  ]
+  ],
+  "agentOmit": [
+    "topics"
+  ],
+  "layout": "custom"
 }
