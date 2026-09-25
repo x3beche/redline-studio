@@ -122,6 +122,10 @@ export function run({ mode, bytes, offset, value, type }) {
     const le = write(p.v, t, [...Array(T.size).keys()].reverse());
     const be = write(p.v, t, [...Array(T.size).keys()]);
     return {
+      // The bytes behind the table, for the page's drawing: the value's big-endian
+      // bytes (most significant first) and where each order puts them.
+      layout: { type: t, name: T.name, size: T.size, value: read(be, t), be,
+        orders: orders.map(([n, o]) => ({ name: n, perm: o, bytes: write(p.v, t, o) })) },
       values: [
         { label: `${T.name} value`, value: read(be, t) },
         { label: 'In memory on ARM / x86 (little endian)', value: hb(le), tone: 'ok' },
@@ -150,6 +154,18 @@ export function run({ mode, bytes, offset, value, type }) {
     const cells = ords.map(([, o]) => read(o.map((i) => w[i]), t));
     rows.push([T.name, cells[1], cells[0], cells[2] ?? '', cells[3] ?? '']);
   }
+  // The reads behind the table, for the page's drawing: for each size that
+  // fits, each order's permutation (out[i] = window[perm[i]], most significant
+  // first), the bytes it gives and the values of each type of that size.
+  const reads = [1, 2, 4, 8].filter((n) => n <= b.length).map((n) => {
+    const w = b.slice(0, n);
+    const ts = Object.entries(TYPES).filter(([, T]) => T.size === n);
+    const ords = n === 1 ? [['Single byte', [0]]] : ORDERS[n];
+    return { size: n, orders: ords.map(([name, o]) => {
+      const bytesO = o.map((i) => w[i]);
+      return { name, perm: o, bytes: bytesO, values: Object.fromEntries(ts.map(([t]) => [t, read(bytesO, t)])) };
+    }) };
+  });
   const values = [
     { label: 'Bytes read', value: `${b.length}${off ? ` from offset ${off}` : ''}`, hint: hb(b.slice(0, 8)) + (b.length > 8 ? ' …' : '') },
   ];
@@ -172,6 +188,7 @@ export function run({ mode, bytes, offset, value, type }) {
   const notes = ['Word swap (CDAB) is how many Modbus devices send 32-bit floats and longs in two registers, low word first.',
     'Bytes are given in address / reception order: the first byte is at the lowest address or arrived first.'];
   return {
+    inspect: { bytes: all, offset: off, reads },
     values,
     warnings,
     tables: [{ title: 'The bytes as each type', columns: ['Type', 'Little endian', 'Big endian', 'Word swap', 'Byte swap'], rows }],

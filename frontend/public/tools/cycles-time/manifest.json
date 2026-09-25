@@ -1,5 +1,5 @@
 {
-  "id": "cycles-time", "version": "1.0",
+  "id": "cycles-time", "version": "1.1",
   "name": "Cycle to Time Converter",
   "blurb": "instruction cycles to microseconds and back at a clock",
   "group": "embedded",
@@ -25,5 +25,6 @@
   "sources": [
     "t = N × CPC / fclk: definition; PIC instruction cycle = Fosc/4 (Microchip PIC16/PIC18 datasheets), 8051 machine cycle = 12 clocks (Intel MCS-51 manual)",
     "Timer period = (PSC + 1)(ARR + 1) / f_timer: STM32 reference manuals (general-purpose timers); AVR prescalers 1/8/64/256/1024: ATmega328P datasheet, Timer/Counter1"
-  ]
+  ],
+  "layout": "custom"
 }

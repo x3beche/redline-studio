@@ -1,5 +1,5 @@
 {
-  "id": "debounce-time", "version": "1.0",
+  "id": "debounce-time", "version": "1.1",
   "name": "Debounce Time Calculator",
   "blurb": "debounce time for a button type and sampling period",
   "group": "embedded",
@@ -23,5 +23,6 @@
     "J. Ganssle, 'A Guide to Debouncing' (2008): 18 switches measured, mean bounce 1.6 ms, worst 6.2 ms apart from outliers; counter and shift-register debouncers; RC + Schmitt formula R = −t / (C ln(Vth/Vdd))",
     "Switch bounce maxima: Omron B3F tactile switch datasheet (5 ms max), Alps EC11 encoder datasheet (chattering), typical relay and reed switch datasheets; rule of thumb for the other types",
     "Response limit: rule of thumb, under about 50 ms feels instant to a user"
-  ]
+  ],
+  "layout": "custom"
 }

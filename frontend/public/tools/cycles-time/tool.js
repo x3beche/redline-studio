@@ -73,14 +73,20 @@ export function run({ dir, fclk, cycles, time, cpc, loop }) {
   // Timers.
   const ticks = t * fclk;
   const kinds = [['8-bit, AVR prescalers', 8, AVR], ['16-bit, AVR prescalers', 16, AVR], ['16-bit, any prescaler (STM32 PSC)', 16, null], ['32-bit, any prescaler', 32, null]];
+  const timers = [];
   const trows = kinds.map(([name, bits, pres]) => {
     const f = timerFit(ticks, bits, pres);
-    if (!f) return [name, '–', '–', ticks < 0.5 ? 'too short' : 'too long', '–'];
+    if (!f) { timers.push({ name, bits, fit: null, why: ticks < 0.5 ? 'too short' : 'too long' }); return [name, '–', '–', ticks < 0.5 ? 'too short' : 'too long', '–']; }
     const act = (f.p * f.c) / fclk;
-    return [name, String(f.p), String(f.c - 1), fmtEng(act, 's', 5), `${Math.abs(act - t) < 1e-9 * t ? '0' : fmtNum(((act - t) / t) * 100, 3)} %`];
+    const err = `${Math.abs(act - t) < 1e-9 * t ? '0' : fmtNum(((act - t) / t) * 100, 3)} %`;
+    timers.push({ name, bits, fit: { prescaler: f.p, count: f.c, reload: f.c - 1, actual: act, error: err } });
+    return [name, String(f.p), String(f.c - 1), fmtEng(act, 's', 5), err];
   });
   const crow = CLOCKS.map((c) => [fmtEng(c, 'Hz'), fmtEng((N * k) / c, 's', 4), fmtNum((t * c) / k, 6)]);
   return {
+    // The numbers behind the values, for the page's drawing.
+    timing: { dir: dir === 't2c' ? 't2c' : 'c2t', fclk, cpc: k, cycles: N, whole, time: t, tclk: 1 / fclk, tcyc, loop: loop > 0 ? loop : null, passes, timers,
+      clocks: CLOCKS.map((c) => ({ fclk: c, time: (N * k) / c, cycles: (t * c) / k })) },
     values,
     warnings,
     tables: [

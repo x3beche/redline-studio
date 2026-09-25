@@ -1,5 +1,5 @@
 {
-  "id": "endianness", "version": "1.0",
+  "id": "endianness", "version": "1.1",
   "name": "Endianness Inspector",
   "blurb": "the same bytes read as little and big endian side by side",
   "group": "embedded",
@@ -22,5 +22,6 @@
     { "title": "An int32 sent over the network", "input": { "mode": "value", "type": "i32", "value": "-1000" } }
   ],
   "usage": "mode = bytes: give hex bytes in address order (and an optional byte offset); returns each integer and float type read little endian, big endian, word swapped (CDAB) and byte swapped (BADC). mode = value: give a type (u8..i64, f32, f64) and a value (decimal, 0x hex, 0b binary, or a float); returns its bytes in every order with a C initializer. Use it to decode a hex dump, a Modbus register pair or a packet field.",
-  "sources": ["ECMAScript DataView (IEEE 754 binary32/binary64, two's complement integers)", "Modbus Application Protocol V1.1b3 (registers big endian; 32-bit word order is vendor-specific)", "RFC 1700 / RFC 791 network byte order (big endian)"]
+  "sources": ["ECMAScript DataView (IEEE 754 binary32/binary64, two's complement integers)", "Modbus Application Protocol V1.1b3 (registers big endian; 32-bit word order is vendor-specific)", "RFC 1700 / RFC 791 network byte order (big endian)"],
+  "layout": "custom"
 }

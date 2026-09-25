@@ -92,6 +92,13 @@ export function run({ type, bounce, ts, margin, vdd }) {
       '}'] : []),
   ].join('\n');
   return {
+    // The numbers behind the values, for the page's drawing.
+    debounce: { type: SWITCHES[type] || type === 'custom' ? type : 'tact', name: sw.name, typ: sw.typ, bounce: sw.max, src: sw.src, ts, margin: m, window: win,
+      N, time: tDeb, response: resp, glitch, regBits, mask: regBits ? mask : null, rc: rStd ? { r: rStd, c: C } : null,
+      switches: Object.entries(SWITCHES).map(([k, s]) => {
+        const n = Math.max(2, Math.ceil((s.max * m) / ts - 1e-9));
+        return { key: k, name: s.name, typ: s.typ, bounce: s.max, N: n, time: n * ts, response: s.max + n * ts, src: s.src };
+      }) },
     values,
     warnings,
     tables: [{ title: 'Every switch type at this sampling period and margin',
