@@ -1,5 +1,5 @@
 {
-  "id": "req-test-matrix", "version": "1.0",
+  "id": "req-test-matrix", "version": "1.1",
   "name": "Requirement ↔ Test Matrix",
   "blurb": "each requirement matched with the test that proves it, gaps shown",
   "group": "project",
@@ -46,5 +46,7 @@
   ],
   "usage": "Pass `reqs` as rows {id, text, priority: must|should|could, method: test|analysis|inspection|demonstration} and `tests` as rows {id, name, covers: 'REQ-01, REQ-02', result: 'not run'|pass|fail|blocked}. It returns coverage and verified percentages, the matrix with a status per requirement (no evidence, failing, blocked, not run, partly run, verified), a requirement x test grid when there are 12 tests or fewer, a Markdown matrix, and warnings for must-have gaps, failures, unknown IDs and tests that cover nothing. The project's lists are read or written with the MCP tool tool_data (id req-test-matrix, data {reqs: [...], tests: [...]}).",
   "sources": ["ISO/IEC/IEEE 29148:2018 Systems and software engineering - Requirements engineering (bidirectional traceability, verification)", "INCOSE Systems Engineering Handbook, 5th ed. - verification methods: inspection, analysis, demonstration, test"],
-  "view": true
+  "view": true,
+  "layout": "custom",
+  "agentOmit": ["trace"]
 }

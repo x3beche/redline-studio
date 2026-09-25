@@ -115,7 +115,28 @@ export function run({ reqs, tests, show }) {
   notes.push('Covered = at least one verification points at the requirement; verified = every one of them passed.',
     'A requirement whose method is inspection, analysis or demonstration still needs a record in the Tests list (an inspection report, a calculation) to count as covered.');
 
+  // For the page's drawing only (agents do not get it: manifest agentOmit):
+  // both lists with their row in the input, and every link between them.
+  const tIn = Array.isArray(tests) ? tests : [], rIn = Array.isArray(reqs) ? reqs : [];
+  const tRows = tIn.map((t, i) => i).filter((i) => tIn[i] && (norm(tIn[i].id) || norm(tIn[i].name) || norm(tIn[i].covers)));
+  const rRow = new Map();
+  rIn.forEach((r, i) => { if (r && norm(r.id) && !rRow.has(idKey(r.id))) rRow.set(idKey(r.id), i); });
+  const trace = {
+    show: filter,
+    reqs: all.map((r) => ({ id: r.id, text: r.text, priority: r.priority, method: r.method, status: r.status,
+      tests: r.tests.map((t) => t.id), row: rRow.get(idKey(r.id)), shown: pick(r) })),
+    unnamed: rIn.map((r, i) => (r && !norm(r.id) && norm(r.text) ? { row: i, text: norm(r.text) } : null)).filter(Boolean),
+    tests: tRows.map((row, i) => {
+      const t = tIn[row];
+      const list = refs(t.covers);
+      return { id: norm(t.id) || `row ${i + 1}`, name: norm(t.name), row, hasId: !!norm(t.id),
+        result: RESULTS.includes(norm(t.result)) ? norm(t.result) : 'not run',
+        covers: list.filter((x) => req.has(idKey(x))).map((x) => req.get(idKey(x)).id),
+        unknown: list.filter((x) => !req.has(idKey(x))) };
+    }),
+  };
   return {
+    trace,
     values: [
       { label: 'Requirements', value: n },
       { label: 'Covered', value: pct(covered), hint: `${covered} of ${n}`, tone: gaps.length ? 'warn' : 'ok' },

@@ -1,5 +1,5 @@
 {
-  "id": "redline-history", "version": "1.0",
+  "id": "redline-history", "version": "1.1",
   "name": "Redline History Diff",
   "blurb": "every note that landed on the same area over time, with outcomes",
   "group": "project",
@@ -24,5 +24,7 @@
   ],
   "usage": "Pass `notes` as a JSON array of revision notes (the app's GET /api/revisions and /api/revisions?archived=true: id, created_at, kind, model, part, status, summary or comment, camera.target or target). `by` chooses what counts as the same area (auto, part, place, model), `radius` in mm joins nearby camera targets, `min` is the repeat threshold and `area` picks the timeline to show. It returns the areas marked repeatedly with applied/rejected/open counts and 'came back' notes (a new note after an applied fix), plus one area's timeline with note IDs. Use it before changing a spot to see what was already tried there.",
   "sources": ["Redline revision records (the app's /api/revisions)", "Grouping by camera target within a radius: rule of thumb (the orbit camera is centred on what is being marked)"],
-  "view": true
+  "view": true,
+  "layout": "custom",
+  "agentOmit": ["history"]
 }

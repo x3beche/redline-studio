@@ -158,7 +158,25 @@ export function run({ notes, room, by, radius, min, area }) {
     mode === 'model' ? 'Grouped by model only.' : `Grouped by model and part; notes without a part by camera target within ${r} mm of the area's first note (an approximation of the marked spot).`,
     '"Came back" counts notes that follow an applied note in the same area. A camera aimed at the whole model (its centre) gathers unrelated notes into one area: lower the radius or group by part to split them.',
   ];
+  // For the page's drawing only (agents do not get it: manifest agentOmit):
+  // every area with its notes, the most marked first, and the rooms read.
+  const hotSet = new Set(hot);
+  const ordered = [...hot, ...areas.filter((x) => !hotSet.has(x))
+    .sort((x, y) => y.notes.length - x.notes.length || (y.notes.at(-1).created || '').localeCompare(x.notes.at(-1).created || ''))];
+  const rooms = {};
+  for (const n of all) rooms[n.room] = (rooms[n.room] || 0) + 1;
+  const history = {
+    mode, radius: r, min: minRepeat, room: want || 'all', focus: focus ? focus.key : null, rooms,
+    areas: ordered.map((a) => ({
+      key: a.key, model: a.model, part: a.notes.find((n) => n.part)?.part || null, seed: a.seed,
+      hot: a.notes.length >= minRepeat, count: a.notes.length,
+      applied: a.applied, rejected: a.rejected, open: a.open, back: a.back,
+      notes: a.notes.map((n) => ({ id: n.id, created: n.created, room: n.room, status: n.status,
+        text: short(n.text, 240), back: !!n.back, target: n.target })),
+    })),
+  };
   return {
+    history,
     values: [
       { label: 'Notes', value: notesIn.length, hint: want ? `${want} only` : ((k) => `${k} room${k === 1 ? '' : 's'}`)(new Set(notesIn.map((n) => n.room)).size) },
       { label: 'Areas', value: areas.length },
