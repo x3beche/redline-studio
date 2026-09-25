@@ -55,8 +55,21 @@ export function run({ bw, bh, pw, ph, method, gap, rails, rail, qty }) {
     { label: 'Array outline (rails included)', value: `${fmtNum(best.aw, 4)} × ${fmtNum(best.ah, 4)} mm`, hint: `boards fill ${fmtNum(arrUtil * 100, 3)} % of it` },
     { label: 'Gap between boards', value: fmtNum(g, 3), unit: 'mm', hint: m.name },
   ];
+  // result.plan: the same figures as plain numbers for the page (and agents), with
+  // what the leftover strips are and how much more panel the next column or row needs.
+  const other = best.rot ? a : b;
+  const plan = {
+    n: best.n, cols: best.cols, rows: best.rows, rot: best.rot, bw: best.bw, bh: best.bh, gap: g, rx, ry,
+    util, waste: 1 - util, wasteArea: panelArea - best.n * boardArea, aw: best.aw, ah: best.ah, arrUtil,
+    restW: pw - best.aw, restH: ph - best.ah,
+    moreCol: (best.cols + 1) * best.bw + best.cols * g + 2 * rx - pw,
+    moreRow: (best.rows + 1) * best.bh + best.rows * g + 2 * ry - ph,
+    alt: { cols: other.cols, rows: other.rows, n: other.n, bw: other.bw, bh: other.bh, util: (other.n * boardArea) / panelArea, aw: other.aw, ah: other.ah },
+    qty: qty > 0 ? qty : null, panels: null, spare: null,
+  };
   if (qty > 0) {
     const panels = Math.ceil(qty / best.n);
+    plan.panels = panels; plan.spare = panels * best.n - qty;
     values.push({ label: `Panels for ${fmtNum(qty, 6)} boards`, value: panels, hint: `${panels * best.n - qty} spare boards` });
   }
   const rows = [
@@ -74,6 +87,7 @@ export function run({ bw, bh, pw, ph, method, gap, rails, rail, qty }) {
     warnings,
     tables: [{ title: 'Both orientations', columns: ['Orientation', 'Columns', 'Rows', 'Boards', 'Used %', 'Array mm'], rows }],
     layout: { pw, ph, rx, ry, gap: g, cols: best.cols, rows: best.rows, bw: best.bw, bh: best.bh, method: method in METHODS ? method : 'vscore' },
+    plan,
     notes,
   };
 }

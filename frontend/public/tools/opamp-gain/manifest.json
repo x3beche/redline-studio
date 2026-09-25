@@ -1,5 +1,6 @@
 {
-  "id": "opamp-gain", "version": "1.0",
+  "id": "opamp-gain",
+  "version": "1.1",
   "name": "Op-Amp Gain Tool",
   "blurb": "gain, offset and bandwidth of inverting and non-inverting stages",
   "group": "pcb",
@@ -7,35 +8,32 @@
   "keywords": ["op-amp", "opamp", "operational amplifier", "gain", "inverting", "non-inverting", "noise gain", "gbw", "gain bandwidth", "bandwidth", "offset voltage", "bias current", "slew rate", "full-power bandwidth", "feedback resistor"],
   "intro": "For a voltage-feedback op-amp with a single-pole response: the signal gain, the noise gain 1 + Rf/Rg that sets bandwidth (GBW / noise gain) and multiplies the offset, the output offset from Vos and bias currents, and the slew-rate limit for your signal. Give a target gain to get a standard feedback resistor.",
   "inputs": [
-    { "key": "cfg", "label": "Configuration", "type": "select", "default": "noninv",
-      "options": [["noninv", "Non-inverting (G = 1 + Rf/Rg)"], ["inv", "Inverting (G = −Rf/Rg)"]] },
-    { "key": "rf", "label": "Feedback resistor Rf", "type": "number", "unit": "Ω", "default": "10k" },
-    { "key": "rg", "label": "Gain resistor Rg (inverting: input resistor)", "type": "number", "unit": "Ω", "default": "1k" },
-    { "key": "target", "label": "Target gain (optional)", "type": "number", "unit": "V/V", "default": "", "required": false,
-      "help": "Signed for inverting (−4.7). Gives the standard Rf for your Rg." },
-    { "key": "series", "label": "Resistor series", "type": "select", "default": "E96", "options": ["E12", "E24", "E96"] },
-    { "key": "gbw", "label": "Gain-bandwidth product", "type": "number", "unit": "Hz", "default": "1M" },
-    { "key": "sr", "label": "Slew rate", "type": "number", "unit": "V/µs", "default": "0.5" },
-    { "key": "vos", "label": "Input offset voltage (max)", "type": "number", "unit": "µV", "default": "500" },
-    { "key": "ib", "label": "Input bias current", "type": "number", "unit": "nA", "default": "20" },
-    { "key": "ios", "label": "Input offset current", "type": "number", "unit": "nA", "default": "2" },
-    { "key": "rp", "label": "Resistance at + input", "type": "number", "unit": "Ω", "default": "0",
-      "help": "Non-inverting: the source resistance. Inverting: the resistor from + to ground (Rf‖Rg cancels bias current)." },
-    { "key": "vin", "label": "Input signal, peak", "type": "number", "unit": "V", "default": "0.2" },
-    { "key": "fsig", "label": "Highest signal frequency", "type": "number", "unit": "Hz", "default": "10k" },
-    { "key": "vpos", "label": "Supply V+", "type": "number", "unit": "V", "default": "5" },
-    { "key": "vneg", "label": "Supply V−", "type": "number", "unit": "V", "default": "-5" },
-    { "key": "swing", "label": "Output headroom to each rail", "type": "number", "unit": "V", "default": "1.5",
-      "help": "Rail-to-rail output ≈ 0.05–0.2 V; classic op-amps 1.5–2 V." }
+    {"key": "cfg", "label": "Configuration", "type": "select", "default": "noninv", "options": [["noninv", "Non-inverting (G = 1 + Rf/Rg)"], ["inv", "Inverting (G = −Rf/Rg)"]]},
+    {"key": "rf", "label": "Feedback resistor Rf", "type": "number", "unit": "Ω", "default": "10k"},
+    {"key": "rg", "label": "Gain resistor Rg (inverting: input resistor)", "type": "number", "unit": "Ω", "default": "1k"},
+    {"key": "target", "label": "Target gain (optional)", "type": "number", "unit": "V/V", "default": "", "required": false, "help": "Signed for inverting (−4.7). Gives the standard Rf for your Rg."},
+    {"key": "series", "label": "Resistor series", "type": "select", "default": "E96", "options": ["E12", "E24", "E96"]},
+    {"key": "gbw", "label": "Gain-bandwidth product", "type": "number", "unit": "Hz", "default": "1M"},
+    {"key": "sr", "label": "Slew rate", "type": "number", "unit": "V/µs", "default": "0.5"},
+    {"key": "vos", "label": "Input offset voltage (max)", "type": "number", "unit": "µV", "default": "500"},
+    {"key": "ib", "label": "Input bias current", "type": "number", "unit": "nA", "default": "20"},
+    {"key": "ios", "label": "Input offset current", "type": "number", "unit": "nA", "default": "2"},
+    {"key": "rp", "label": "Resistance at + input", "type": "number", "unit": "Ω", "default": "0", "help": "Non-inverting: the source resistance. Inverting: the resistor from + to ground (Rf‖Rg cancels bias current)."},
+    {"key": "vin", "label": "Input signal, peak", "type": "number", "unit": "V", "default": "0.2"},
+    {"key": "fsig", "label": "Highest signal frequency", "type": "number", "unit": "Hz", "default": "10k"},
+    {"key": "vpos", "label": "Supply V+", "type": "number", "unit": "V", "default": "5"},
+    {"key": "vneg", "label": "Supply V−", "type": "number", "unit": "V", "default": "-5"},
+    {"key": "swing", "label": "Output headroom to each rail", "type": "number", "unit": "V", "default": "1.5", "help": "Rail-to-rail output ≈ 0.05–0.2 V; classic op-amps 1.5–2 V."}
   ],
   "examples": [
-    { "title": "×11 non-inverting stage with a 1 MHz op-amp on ±5 V", "input": { "cfg": "noninv", "rf": "10k", "rg": "1k", "target": "", "series": "E96", "gbw": "1M", "sr": "0.5", "vos": "500", "ib": "20", "ios": "2", "rp": "0", "vin": "0.2", "fsig": "10k", "vpos": "5", "vneg": "-5", "swing": "1.5" } },
-    { "title": "Inverting gain −4.7 from a 10 kΩ input, rail-to-rail CMOS op-amp", "input": { "cfg": "inv", "rf": "47k", "rg": "10k", "target": "-4.7", "series": "E96", "gbw": "10M", "sr": "5", "vos": "100", "ib": "0.001", "ios": "0.001", "rp": "0", "vin": "0.5", "fsig": "50k", "vpos": "5", "vneg": "0", "swing": "0.1" } }
+    {"title": "×11 non-inverting stage with a 1 MHz op-amp on ±5 V", "input": {"cfg": "noninv", "rf": "10k", "rg": "1k", "target": "", "series": "E96", "gbw": "1M", "sr": "0.5", "vos": "500", "ib": "20", "ios": "2", "rp": "0", "vin": "0.2", "fsig": "10k", "vpos": "5", "vneg": "-5", "swing": "1.5"}},
+    {"title": "Inverting gain −4.7 from a 10 kΩ input, rail-to-rail CMOS op-amp", "input": {"cfg": "inv", "rf": "47k", "rg": "10k", "target": "-4.7", "series": "E96", "gbw": "10M", "sr": "5", "vos": "100", "ib": "0.001", "ios": "0.001", "rp": "0", "vin": "0.5", "fsig": "50k", "vpos": "5", "vneg": "0", "swing": "0.1"}}
   ],
-  "usage": "Give cfg (noninv or inv), Rf and Rg in ohms, optionally a target gain (signed for inverting) and the resistor series, the op-amp's GBW in Hz, slew rate in V/µs, Vos in µV, bias and offset currents in nA, the resistance at the + input in ohms, the input peak voltage in V, the highest signal frequency in Hz, the supply rails in V and the output headroom in V. It returns signal and noise gain, the −3 dB bandwidth, gain error and phase at the signal frequency, the worst-case output offset split into its causes, the full-power bandwidth, whether the output clips, and a standard Rf for the target gain. Use it to size or check a simple op-amp gain stage.",
+  "usage": "Give cfg (noninv or inv), Rf and Rg in ohms, optionally a target gain (signed for inverting) and the resistor series, the op-amp's GBW in Hz, slew rate in V/µs, Vos in µV, bias and offset currents in nA, the resistance at the + input in ohms, the input peak voltage in V, the highest signal frequency in Hz, the supply rails in V and the output headroom in V. It returns signal and noise gain, the −3 dB bandwidth, gain error and phase at the signal frequency, the worst-case output offset split into its causes, the full-power bandwidth, whether the output clips, and a standard Rf for the target gain; result.stage holds the same figures as plain numbers, with the Bode data (closed-loop and open-loop gain against frequency). Use it to size or check a simple op-amp gain stage.",
   "sources": [
     "G = 1 + Rf/Rg (non-inverting), −Rf/Rg (inverting); noise gain NG = 1 + Rf/Rg; f−3dB = GBW/NG for a single-pole, voltage-feedback op-amp - Analog Devices MT-033 'Voltage feedback op amp gain and bandwidth'",
     "Output offset = NG·Vos + Ib·(Rf − NG·Rp) + ½·Ios·(Rf + NG·Rp); Rp = Rf‖Rg cancels the bias term - Analog Devices MT-037 'Op amp input offset voltage' and MT-038 'Op amp input bias current'",
     "Full-power bandwidth = SR / (2π·Vout,peak) - TI SLOA011 'Understanding operational amplifier specifications'"
-  ]
+  ],
+  "layout": "custom"
 }

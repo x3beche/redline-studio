@@ -1,0 +1,159 @@
+/* Op-Amp Gain: the stage on a bench - schematic, scope, Bode plot. */
+:root {
+  --tool-in: #0f8a7a;          /* input trace and signal marker */
+  --tool-out: var(--accent);   /* output trace, closed loop */
+  --tool-res: #e9edf1;         /* resistor body */
+  --tool-scr: #f6f8fa;         /* scope screen */
+  --tool-off-vos: #5b6b7a; --tool-off-ib: #d97706; --tool-off-ios: #a23fbf;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-in: #3cc7b3; --tool-res: #22303b; --tool-scr: #0c1217;
+    --tool-off-vos: #8ea0b0; --tool-off-ib: #f0a33a; --tool-off-ios: #c982e0;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-in: #3cc7b3; --tool-res: #22303b; --tool-scr: #0c1217;
+  --tool-off-vos: #8ea0b0; --tool-off-ib: #f0a33a; --tool-off-ios: #c982e0;
+}
+
+.og { display: grid; gap: 12px; min-width: 0;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-areas: "sch scope" "sch bode" "warn side"; }
+.og-sch { grid-area: sch; display: flex; flex-direction: column; }
+.og-scope { grid-area: scope; } .og-bode { grid-area: bode; }
+.og-warn { grid-area: warn; } .og-side { grid-area: side; }
+.og-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.og-head { display: flex; align-items: baseline; gap: 6px 12px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+.og-head h2, .og-warn h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.og-tip { font-size: 11.5px; color: var(--ink-soft); }
+.og-box { position: relative; min-width: 0; }
+.og-schbox { flex: 1 1 auto; height: clamp(420px, calc(100vh - 170px), 640px); }
+.og-scbox { height: clamp(210px, calc(50vh - 110px), 330px); }
+.og-bdbox { height: clamp(200px, calc(50vh - 120px), 320px); }
+.og-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+
+.og-target { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; padding: 7px 10px; border-top: 1px solid var(--line-soft); font-size: 12px; }
+.og-target label { color: var(--ink-soft); }
+.og-u { color: var(--ink-soft); }
+.og-in { width: 72px; min-width: 0; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; }
+.og-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.og-seg button { border: 0; background: transparent; padding: 2px 8px; cursor: pointer; font-size: 11.5px; color: var(--ink-soft); }
+.og-seg button + button { border-left: 1px solid var(--line); }
+.og-seg button[aria-pressed="true"] { background: var(--sunken); color: var(--ink); font-weight: 600; }
+.og-cands { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+.og-hint { color: var(--ink-soft); font-size: 11.5px; }
+.og-chip { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 1px 8px; font-size: 12px; cursor: pointer;
+  font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.og-chip small { color: var(--ink-soft); font-size: 10.5px; }
+.og-chip:hover { border-color: var(--ink-soft); }
+.og-chip[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+.og-edit { position: absolute; width: 90px; z-index: 2; box-shadow: 0 0 0 2px var(--accent); }
+.og-editu { position: absolute; z-index: 2; font-size: 11px; color: var(--ink-soft); background: var(--surface); padding: 0 3px; }
+
+.og-warn { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 6px; padding: 7px 10px; font-size: 12px; min-width: 0; align-self: start; }
+.og-warn h2 { margin-bottom: 4px; }
+.og-wl + .og-wl { margin-top: 4px; }
+.og-okl { color: var(--ok); }
+.og-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.og-side .k-out { max-height: 260px; }
+.og-notes { font-size: 11.5px; color: var(--ink-soft); }
+.og-notes summary { cursor: pointer; }
+.og-notes div { margin-top: 3px; }
+
+/* --- SVG --- */
+.og-svg text { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.og-svg .og-big { font-size: 22px; font-weight: 500; fill: var(--ink); }
+.og-svg .og-bigu { font-size: 13px; fill: var(--ink-soft); }
+.og-svg .og-sub { font-size: 11.5px; }
+.og-svg .og-rn, .og-svg .og-dl, .og-svg .og-note { font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif; font-size: 11px; }
+.og-w { fill: none; stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
+.og-dot { fill: var(--ink); }
+.og-term { fill: var(--surface); stroke: var(--ink); stroke-width: 1.4; }
+.og-r { fill: var(--tool-res); stroke: var(--ink); stroke-width: 1.4; }
+.og-r.off { stroke-dasharray: 3 3; fill: none; stroke: var(--ink-soft); }
+.og-r.w, .og-amp.w { stroke: var(--warn); stroke-width: 2.2; }
+.og-amp { fill: var(--sunken); stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+.og-svg .og-pin { font-size: 15px; fill: var(--ink); font-weight: 600; }
+.og-src { fill: var(--surface); stroke: var(--tool-in); stroke-width: 1.6; }
+.og-sine { fill: none; stroke: var(--tool-in); stroke-width: 1.6; }
+.og-sep { stroke: var(--line-soft); }
+.og-svg .og-val { font-size: 12px; fill: var(--ink); font-weight: 600; }
+.og-svg .og-val.ok { fill: var(--ok); } .og-svg .og-val.bad { fill: var(--danger); }
+.og-off.vos { fill: var(--tool-off-vos); } .og-off.ib { fill: var(--tool-off-ib); } .og-off.ios { fill: var(--tool-off-ios); }
+.og-svg .og-lg { font-size: 10.5px; }
+.og-wm circle { fill: var(--warn); }
+.og-svg .og-wm text { fill: var(--surface); font-weight: 700; font-size: 11px; font-family: "IBM Plex Sans", sans-serif; }
+
+/* scrubbable values */
+.og-sc { cursor: ew-resize; outline: none; }
+.og-sc .og-scbg { fill: var(--sunken); stroke: var(--line); stroke-width: 1; }
+.og-svg .og-sc .og-scv { fill: var(--ink); font-size: 11.5px; }
+.og-sc.res .og-scbg { fill: var(--surface); }
+.og-sc:hover .og-scbg { stroke: var(--accent); }
+.og-sc:focus-visible .og-scbg, .og-sc.on .og-scbg { stroke: var(--accent); stroke-width: 2; }
+.og-sc.w .og-scbg { stroke: var(--warn); stroke-width: 1.6; }
+.og-swap, .og-sugg { cursor: pointer; outline: none; }
+.og-swbg { fill: var(--surface); stroke: var(--accent); stroke-width: 1.4; }
+.og-svg .og-swap text { fill: var(--accent); font-size: 14px; font-family: "IBM Plex Sans", sans-serif; }
+.og-swap:hover .og-swbg { fill: var(--sunken); }
+.og-swap:focus-visible .og-swbg, .og-sugg:focus-visible rect { stroke-width: 2.5; }
+.og-sugg rect { fill: var(--surface); stroke: var(--ok); stroke-dasharray: 3 2; }
+.og-svg .og-sugg text { fill: var(--ok); font-size: 10.5px; }
+.og-sugg:hover rect { fill: var(--sunken); }
+
+/* scope and bode */
+.og-scr { fill: var(--tool-scr); stroke: var(--line); }
+.og-grat { stroke: var(--line-soft); stroke-width: 1; }
+.og-grat.z { stroke: var(--line); }
+.og-svg .og-ax { font-size: 10.5px; }
+.og-hr { fill: var(--warn); fill-opacity: calc(var(--fill-alpha) * .7); }
+.og-rail { stroke: var(--ink); stroke-width: 1.6; }
+.og-lim { stroke: var(--warn); stroke-width: 1.2; stroke-dasharray: 5 3; }
+.og-mid { stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 1 3; }
+.og-svg .og-rl { font-size: 10.5px; fill: var(--ink); }
+
+polyline.og-vin { fill: none; stroke: var(--tool-in); stroke-width: 1.4; stroke-dasharray: 4 2; }
+.og-out { fill: none; stroke: var(--tool-out); stroke-width: 2.2; stroke-linejoin: round; }
+.og-out.clip, .og-out.slew { stroke: var(--danger); stroke-width: 2.6; }
+.og-svg .og-tl { font-size: 11px; paint-order: stroke; stroke: var(--tool-scr); stroke-width: 3px; stroke-linejoin: round; }
+.og-bode .og-svg .og-tl { stroke: var(--surface); }
+.og-svg .og-tl.out, .og-svg .og-tl.acc { fill: var(--tool-out); }
+.og-svg .og-tl.in { fill: var(--tool-in); }
+.og-svg .og-tl.bad { fill: var(--danger); }
+.og-knob { fill: var(--accent); stroke: var(--surface); stroke-width: 1.5; }
+.og-knob.in { fill: var(--tool-in); }
+.og-cl { fill: none; stroke: var(--tool-out); stroke-width: 2.4; }
+.og-ol { fill: none; stroke: var(--ink-soft); stroke-width: 1.4; stroke-dasharray: 6 4; }
+.og-ng { stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 1 3; }
+.og-bw { fill: var(--surface); stroke: var(--tool-out); stroke-width: 2; }
+.og-fs { stroke: var(--tool-in); stroke-width: 1.6; }
+.og-fsk { fill: var(--tool-in); }
+.og-slew { fill: var(--danger); fill-opacity: calc(var(--fill-alpha) * .45); }
+.og-svg .og-empty { font-family: "IBM Plex Sans", sans-serif; font-size: 12px; }
+
+.og-h { outline: none; }
+.og-h.ns { cursor: ns-resize; } .og-h.ew { cursor: ew-resize; }
+.og-h .hit { fill: transparent; }
+.og-h .hitl { fill: none; stroke: transparent; stroke-width: 16; }
+.og-h .ring { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 3 2; opacity: 0; }
+.og-h polyline.ring { stroke-width: 7; stroke-opacity: .35; stroke-dasharray: none; }
+.og-h:hover .ring { opacity: .6; }
+.og-h:focus-visible .ring, .og-h.on .ring { opacity: 1; }
+.og-h:hover .og-ol { stroke: var(--accent); }
+
+@media (max-width: 1100px) {
+  .og { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "sch sch" "scope bode" "warn side"; }
+  .og-schbox { height: 440px; }
+  .og-scbox, .og-bdbox { height: 260px; }
+}
+@media (max-width: 700px) {
+  .og { grid-template-columns: minmax(0, 1fr); grid-template-areas: "sch" "scope" "bode" "warn" "side"; }
+  .og-schbox { height: 470px; }
+  .og-tip { display: none; }
+}
+
+.og-lead { stroke: var(--ink-soft); stroke-width: 1; fill: none; }
+.og-lgbg { fill: var(--tool-scr); fill-opacity: .85; }

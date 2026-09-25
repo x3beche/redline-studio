@@ -1,5 +1,6 @@
 {
-  "id": "package-explorer", "version": "1.0",
+  "id": "package-explorer",
+  "version": "1.1",
   "name": "Package Dimension Explorer",
   "blurb": "physical sizes of packages from 0201 to QFN, compared to scale",
   "group": "pcb",
@@ -7,19 +8,19 @@
   "keywords": ["package size", "footprint size", "0201", "0402", "0603", "chip size", "SOT-23", "SOIC", "QFN", "BGA", "to scale", "dimensions", "outline", "body size", "metric code"],
   "intro": "Draws the top view of common SMD packages, from 01005 chips to a 17 mm BGA, all at one scale, and lists their nominal body size, height, size with leads and pitch. Add your own block (length × width) to see what fits.",
   "inputs": [
-    { "key": "group", "label": "Show", "type": "select", "default": "all",
-      "options": [["all", "All packages"], ["chip", "Passive chips (01005-2512)"], ["discrete", "Diodes and transistors"], ["ic", "IC packages"]] },
-    { "key": "filter", "label": "Only these", "type": "text", "default": "0201, 0402, 0603, 0805, 1206, SOT-23, SOIC-8, QFN-32",
-      "help": "Names or parts of names, separated by commas. Empty shows the whole group.", "wide": true },
-    { "key": "sort", "label": "Order", "type": "select", "default": "area", "options": [["area", "By size"], ["list", "As listed"]] },
-    { "key": "custom", "label": "Your own block", "type": "text", "default": "", "placeholder": "5x4 or 5x4x1 (mm)",
-      "help": "Length × width (× height) in mm, drawn dashed, e.g. a module or a connector." }
+    {"key": "group", "label": "Show", "type": "select", "default": "all", "options": [["all", "All packages"], ["chip", "Passive chips (01005-2512)"], ["discrete", "Diodes and transistors"], ["ic", "IC packages"]]},
+    {"key": "filter", "label": "Only these", "type": "text", "default": "0201, 0402, 0603, 0805, 1206, SOT-23, SOIC-8, QFN-32", "help": "Names or parts of names, separated by commas; a name in double quotes matches only that package (\"SOT-23\" without SOT-23-6). Empty shows the whole group.", "wide": true},
+    {"key": "sort", "label": "Order", "type": "select", "default": "area", "options": [["area", "By size"], ["list", "As listed"]]},
+    {"key": "custom", "label": "Your own block", "type": "text", "default": "", "placeholder": "5x4 or 5x4x1 (mm)", "help": "Length × width (× height) in mm, drawn dashed, e.g. a module or a connector."}
   ],
   "examples": [
-    { "title": "Everyday passives and ICs", "input": { "group": "all", "filter": "0201, 0402, 0603, 0805, 1206, SOT-23, SOIC-8, QFN-32", "sort": "area", "custom": "" } },
-    { "title": "All IC packages against a 10 × 8 mm module", "input": { "group": "ic", "filter": "", "sort": "area", "custom": "10x8" } }
+    {"title": "Everyday passives and ICs", "input": {"group": "all", "filter": "0201, 0402, 0603, 0805, 1206, SOT-23, SOIC-8, QFN-32", "sort": "area", "custom": ""}},
+    {"title": "All IC packages against a 10 × 8 mm module", "input": {"group": "ic", "filter": "", "sort": "area", "custom": "10x8"}}
   ],
-  "usage": "Give group (all, chip, discrete, ic), an optional comma-separated filter of package names (e.g. '0402, SOT-23, QFN'), sort (area or list) and optionally a custom block 'LxW' or 'LxWxH' in mm. It returns each package's nominal body size, height, size with leads, pitch, pin count, area and area relative to 0603, and result.shapes with the outline geometry the drawing uses. Use it to compare sizes or pick the smallest package that suits assembly.",
-  "sources": ["EIA-198 / IEC 60115 chip sizes (inch and metric codes)", "JEDEC MS-012, MO-153, MO-187, MO-220, TO-236, TO-261, TO-252 and DO-214 outlines (nominal values)"],
-  "view": true
+  "usage": "Give group (all, chip, discrete, ic), an optional comma-separated filter of package names (e.g. '0402, SOT-23, QFN'), sort (area or list) and optionally a custom block 'LxW' or 'LxWxH' in mm. It returns each package's nominal body size, height, size with leads, pitch, pin count, area and area relative to 0603, and result.shapes with the outline geometry the drawing uses (with pitch, pins and metric code), plus result.catalogue listing every package known. A filter term in double quotes matches one exact name. Use it to compare sizes or pick the smallest package that suits assembly.",
+  "sources": [
+    "EIA-198 / IEC 60115 chip sizes (inch and metric codes)",
+    "JEDEC MS-012, MO-153, MO-187, MO-220, TO-236, TO-261, TO-252 and DO-214 outlines (nominal values)"
+  ],
+  "layout": "custom"
 }

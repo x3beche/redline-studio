@@ -59,8 +59,14 @@ export function run({ group, filter, sort, custom }) {
   const warnings = [];
   const q = String(filter || '').trim().toLowerCase();
   const terms = q.split(/[,;]+/).map((t) => t.trim()).filter(Boolean);
+  // A term in double quotes is one exact name ("SOT-23" without SOT-23-6); plain terms match any part of a name.
+  const hit = (p, t) => {
+    const id = p.id.toLowerCase();
+    if (/^".*"$/.test(t)) { const e = t.slice(1, -1).trim(); return id === e || id.replace(/ \(.*\)$/, '') === e; }
+    return id.includes(t) || (/m$/.test(t) && (p.metric || '').toLowerCase() === t);
+  };
   let list = PK.filter((p) => (group === 'all' || !group || p.cat === group)
-    && (!terms.length || terms.some((t) => p.id.toLowerCase().includes(t) || (/m$/.test(t) && (p.metric || '').toLowerCase() === t))));
+    && (!terms.length || terms.some((t) => hit(p, t))));
   // A custom body from the user, e.g. "5x4" or "5 x 4 x 1": drawn as a plain block for comparison.
   const cm = /^\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)(?:\s*[x×*]\s*(\d+(?:\.\d+)?))?\s*$/i.exec(String(custom || ''));
   if (String(custom || '').trim() && !cm) warnings.push(`"${custom}" is not a size: write it as length x width in mm, e.g. 5x4 or 5x4x1.`);
@@ -72,7 +78,8 @@ export function run({ group, filter, sort, custom }) {
   if (!list.length) return { warnings: [`Nothing matches "${filter}". Try 0402, SOT, QFN or leave the filter empty.`] };
   const shapes = list.map((p) => {
     const [sx, sy] = overall(p);
-    return { id: p.id, cat: p.cat, bx: p.bx, by: p.by, sx, sy, h: p.h, term: p.term || 0, leads: p.leads || [], ep: p.ep || undefined, balls: p.balls || undefined, area: Number((sx * sy).toFixed(3)) };
+    return { id: p.id, cat: p.cat, bx: p.bx, by: p.by, sx, sy, h: p.h, term: p.term || 0, leads: p.leads || [], ep: p.ep || undefined, balls: p.balls || undefined, area: Number((sx * sy).toFixed(3)),
+      metric: p.metric || undefined, pitch: p.p || undefined, pins: p.pins ?? undefined, vs0603: Number(((sx * sy) / (REF.bx * REF.by)).toFixed(3)) };
   });
   if (sort === 'area') shapes.sort((a, b) => a.area - b.area);
   const refArea = REF.bx * REF.by;
@@ -93,6 +100,8 @@ export function run({ group, filter, sort, custom }) {
     warnings,
     tables: [{ title: 'Nominal dimensions (mm)', columns: ['Package', 'Body', 'Height', 'With leads', 'Pitch', 'Pins', 'Area mm²', 'vs 0603'], rows }],
     shapes,
+    // every package the tool knows, for picking (the filter narrows shapes to these)
+    catalogue: PK.map((p) => ({ id: p.id, cat: p.cat, metric: p.metric || undefined })),
     notes: [
       'Nominal sizes; each maker\'s outline differs by a few tenths of a millimetre, and heights vary a lot (thin QFNs, tall MLCCs).',
       'Chip sizes are the inch codes (EIA); the metric code is in brackets. 0402 inch is 1005 metric, not 0402 metric.',
