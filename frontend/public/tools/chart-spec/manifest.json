@@ -1,8 +1,9 @@
 {
-  "id": "chart-spec", "version": "1.0",
+  "id": "chart-spec", "version": "1.1",
   "name": "Chart Spec Builder",
   "blurb": "axes, series and scales chosen into a chart configuration",
   "group": "web",
+  "layout": "custom",
   "rooms": ["web"],
   "keywords": ["chart", "graph", "plot", "visualization", "dataviz", "vega-lite", "chart.js", "echarts", "axis", "scale", "log scale", "zero baseline", "bar vs line", "which chart", "encoding"],
   "intro": "Describe your fields (type, range, number of categories) and the question; it picks the chart, the x/y/colour encodings and the scales (time, band, linear from zero or fitted, log) by Cleveland & McGill's encoding ranking and Few's chart-per-question guidance, explains each decision, and writes the Vega-Lite, Chart.js and ECharts configuration.",

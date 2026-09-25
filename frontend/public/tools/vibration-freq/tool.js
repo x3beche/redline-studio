@@ -36,7 +36,16 @@ const BEAMS = {
 
 const f4 = (v) => fmtNum(v, 4);
 
-export function run(inp) {
+// The length (mm) at which f(L) falls to fTarget; f falls as L grows.
+function spanFor(fOfL, fTarget) {
+  let lo = 1e-5, hi = 1e3;
+  if (!(fOfL(lo) > fTarget)) return 0;
+  if (fOfL(hi) > fTarget) return null;
+  for (let i = 0; i < 80; i++) { const mid = Math.sqrt(lo * hi); if (fOfL(mid) > fTarget) lo = mid; else hi = mid; }
+  return lo * 1000;
+}
+
+export function run(inp, nested = false) {
   const { shape, section, material, len, width, thick, dia, inner, E: Ec, rho: rhoc, nu: nuc, mass, target } = inp;
   const warnings = [];
   const notes = [];
@@ -49,6 +58,7 @@ export function run(inp) {
   const isPlate = shape === 'plate';
 
   let f1, modes = [], massBody, extra = [], fOfL;
+  let modeF = [], plateModes = null, massUsed = false;   // for the page's drawing (view)
   if (isPlate) {
     if (!(width > 0) || !(thick > 0)) return { warnings: ['Give the plate width and thickness in mm.'] };
     const a = L, b = width / 1000, h = thick / 1000;
@@ -60,6 +70,8 @@ export function run(inp) {
     for (let i = 1; i <= 3; i++) for (let j = 1; j <= 3; j++) list.push({ i, j, f: fmn(i, j) });
     list.sort((x, y) => x.f - y.f);
     modes = list.slice(0, 5).map((x) => [`(${x.i},${x.j})`, `${x.i} × ${x.j} half-waves`, f4(x.f)]);
+    plateModes = list.slice(0, 5);
+    modeF = plateModes.map((x) => x.f);
     f1 = list[0].f;
     fOfL = (Lx) => fmn(1, 1, Lx);
     extra.push({ label: 'Flexural rigidity D', value: f4(D), unit: 'N·m' });
@@ -84,6 +96,7 @@ export function run(inp) {
     massBody = rho * A * L;
     const beamF = (lam, Lx) => ((lam ** 2) / (2 * Math.PI * Lx ** 2)) * Math.sqrt((E * I) / (rho * A));
     modes = bm.lam.map((lam, i) => [`${i + 1}`, `λ = ${f4(lam)}`, f4(beamF(lam, L))]);
+    modeF = bm.lam.map((lam) => beamF(lam, L));
     f1 = beamF(bm.lam[0], L);
     fOfL = (Lx) => beamF(bm.lam[0], Lx);
     if (M > 0) {
@@ -95,6 +108,7 @@ export function run(inp) {
         f1 = fm(L);
         fOfL = fm;
         modes[0][2] = `${f4(f1)} (with mass)`;
+        modeF[0] = f1; massUsed = true;
         notes.push(`With the ${f4(mass)} g mass at the ${bm.at}: Rayleigh estimate, k = ${bm.k}EI/L³, effective beam mass ${bm.c} m. Higher modes are for the bare beam.`);
       }
     }
@@ -127,5 +141,14 @@ export function run(inp) {
     tables: [{ title: 'Modes', columns: ['Mode', isPlate ? 'Shape' : 'Eigenvalue', 'Frequency (Hz)'], rows: modes }],
     charts: [{ title: `First frequency against ${isPlate ? 'plate length' : 'span'}`, type: 'line', x: xs.map((x) => fmtNum(x, 3)), series: [{ name: 'f1', y: ys }], xLabel: 'length (mm)', yLabel: 'f1 (Hz)' }],
     notes,
+    // Only for the page's drawing (manifest agentOmit): the same numbers as above, unformatted.
+    view: {
+      f1, target: target > 0 ? target : 0, modes: modeF, plate: plateModes, massG: massBody * 1000, sag,
+      sweep: { x: xs, y: ys }, spanFor: target > 0 ? { twice: spanFor(fOfL, 2 * target), root2: spanFor(fOfL, Math.SQRT2 * target) } : null, withMass: massUsed, at: isPlate ? 'smeared' : (BEAMS[shape] || BEAMS.cantilever).at,
+      material: m.name, E: m.E, rho: m.rho, nu: m.nu,
+      // f1 of the same part in every listed material, for the material ladder.
+      byMaterial: nested ? null : Object.entries(MATERIALS).map(([key, mm]) => ({ key, name: mm.name, E: mm.E, rho: mm.rho,
+        f1: key === material ? f1 : run({ ...inp, material: key }, true).view?.f1 ?? null })),
+    },
   };
 }

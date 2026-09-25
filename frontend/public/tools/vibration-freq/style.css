@@ -1,0 +1,208 @@
+/* Vibration Frequency: the part, ringing, is the interface. */
+:root {
+  --tool-metal: #9aa7b4; --tool-metal-edge: #5f6d7a;
+  --tool-pcb: #2f7d4f; --tool-mass: #b7791f;
+  --tool-curve: #1f4ed8; --tool-mode: #0f9d8a;
+  --tool-pos: #d97706; --tool-neg: #1f4ed8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-metal: #6c7a88; --tool-metal-edge: #aab7c4;
+    --tool-pcb: #3f9a63; --tool-mass: #e8a735;
+    --tool-curve: #7d9bff; --tool-mode: #3cc7b3;
+    --tool-pos: #f0a33a; --tool-neg: #7d9bff;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-metal: #6c7a88; --tool-metal-edge: #aab7c4;
+  --tool-pcb: #3f9a63; --tool-mass: #e8a735;
+  --tool-curve: #7d9bff; --tool-mode: #3cc7b3;
+  --tool-pos: #f0a33a; --tool-neg: #7d9bff;
+}
+
+.vf { display: grid; gap: 12px; align-items: start;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-areas: "left read" "out out"; }
+.vf-left { grid-area: left; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.vf-read { grid-area: read; align-self: stretch; } .vf-outcol { grid-area: out; }
+@media (max-width: 980px) {
+  .vf { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "read" "out"; }
+}
+.vf-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+
+.vf-head { display: flex; align-items: center; gap: 8px 14px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+.vf-sup { display: flex; gap: 4px; flex-wrap: wrap; }
+.vf-supb { display: flex; align-items: center; gap: 6px; padding: 3px 9px 3px 5px; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--surface); cursor: pointer; font-size: 12px; color: var(--ink-soft); }
+.vf-supb svg { width: 40px; height: 24px; flex: none; }
+.vf-supb:hover { border-color: var(--ink-soft); }
+.vf-supb[aria-checked="true"] { border-color: var(--accent); color: var(--ink); background: var(--sunken); box-shadow: inset 0 0 0 1px var(--accent); }
+.vf-supb .pb { fill: var(--tool-metal); stroke: var(--tool-metal-edge); stroke-width: .6; }
+.vf-supb .pp { fill: var(--tool-pcb); opacity: .6; }
+.vf-supb .pw { fill: none; stroke: var(--ink-soft); stroke-width: 1.2; }
+.vf-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.vf-seg[hidden] { display: none; }
+.vf-seg button { border: 0; background: transparent; padding: 3px 10px; cursor: pointer; font-size: 12px; color: var(--ink-soft); }
+.vf-seg button[aria-pressed="true"] { background: var(--sunken); color: var(--ink); font-weight: 500; }
+.vf-seg button + button { border-left: 1px solid var(--line); }
+.vf-anim { margin-left: auto; border: 1px solid var(--line); background: var(--surface); border-radius: 5px; padding: 3px 10px; font-size: 12px; cursor: pointer; color: var(--ink-soft); }
+.vf-anim[aria-pressed="true"] { color: var(--ink); border-color: var(--tool-mode); }
+.vf-anim::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: var(--line); vertical-align: 1px; }
+.vf-anim[aria-pressed="true"]::before { background: var(--tool-mode); }
+
+.vf-stage-box { position: relative; height: clamp(300px, calc(100vh - 372px), 600px); min-width: 0; }
+.vf-stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+.vf-hint { padding: 4px 10px; font-size: 11.5px; color: var(--ink-soft); border-top: 1px solid var(--line-soft); }
+.vf-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px 10px; padding: 7px 10px 9px; border-top: 1px solid var(--line-soft); }
+.vf-f { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vf-f[hidden] { display: none; }
+.vf-f span { font-size: 11px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vf-f small { opacity: .8; }
+.vf-f input { width: 100%; min-width: 0; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; }
+.vf-f input.bad { border-color: var(--danger); }
+
+/* stage drawing */
+.vf-stage text, .vf-ruler text, .vf-sec text { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.vf-stage .vf-empty { font-family: "IBM Plex Sans", sans-serif; font-size: 13px; }
+.vf-stage .gr { stroke: var(--line-soft); stroke-width: 1; }
+.vf-stage .gr.g1 { stroke: var(--line); }
+.vf-stage .ax { font-size: 10.5px; }
+.vf-stage .axl, .vf-ruler .axl { stroke: var(--ink-soft); stroke-width: 1; }
+.vf-stage .tick, .vf-ruler .tick { stroke: var(--ink-soft); stroke-width: 1; }
+.vf-stage .cap { font-family: "IBM Plex Sans", sans-serif; font-size: 11px; }
+.vf-stage .cv { fill: none; stroke: var(--tool-curve); stroke-width: 2; }
+.vf-stage .cvp { fill: var(--tool-curve); }
+.vf-stage .now { stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 3 3; }
+.vf-stage .nowp { fill: var(--surface); stroke: var(--tool-curve); stroke-width: 2.5; }
+.vf-stage .nowt { fill: var(--ink); font-size: 12px; font-weight: 500; }
+.vf-stage .nowp.ok { stroke: var(--ok); } .vf-stage .nowp.warn { stroke: var(--warn); } .vf-stage .nowp.bad { stroke: var(--danger); }
+.vf-stage .nowt.ok { fill: var(--ok); } .vf-stage .nowt.warn { fill: var(--warn); } .vf-stage .nowt.bad { fill: var(--danger); }
+.z-bad { fill: var(--danger); fill-opacity: calc(var(--fill-alpha) * .9); }
+.z-warn { fill: var(--warn); fill-opacity: calc(var(--fill-alpha) * .8); }
+.z-ok { fill: var(--ok); fill-opacity: calc(var(--fill-alpha) * .6); }
+.vf-stage .tl { stroke: var(--danger); stroke-width: 1; stroke-dasharray: 5 3; }
+.vf-stage .zl { font-family: "IBM Plex Sans", sans-serif; font-size: 11px; fill: var(--warn); }
+.vf-stage .zl.zb { fill: var(--danger); }
+.vf-stage .spl { stroke: var(--ok); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.vf-stage .spt { fill: var(--ok); font-size: 11px; }
+.vf-stage .halo, .vf-sec .halo { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+
+.vf-stage .wall { fill: none; stroke: var(--ink-soft); stroke-width: 1.5; }
+.vf-stage .sup { fill: var(--sunken); stroke: var(--ink-soft); stroke-width: 1.3; }
+.vf-stage .gnd { stroke: var(--ink-soft); stroke-width: 1.3; }
+.vf-stage .cord { stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 3 2; fill: none; }
+.vf-stage .env { fill: none; stroke: var(--tool-mode); stroke-width: 1; stroke-dasharray: 3 3; opacity: .8; }
+.vf-stage .rest { stroke: var(--line); stroke-width: 1; stroke-dasharray: 6 4; }
+.vf-stage .beam { fill: var(--tool-metal); stroke: var(--tool-metal-edge); stroke-width: 1; }
+.vf-stage .node { fill: var(--surface); stroke: var(--tool-mode); stroke-width: 2; }
+.vf-stage .mass { fill: var(--tool-mass); stroke: var(--ink); stroke-width: .8; stroke-opacity: .4; }
+.vf-stage .mass.ghost { fill: transparent; stroke: var(--tool-mass); stroke-dasharray: 3 2; stroke-opacity: 1; }
+.vf-stage .ml { fill: var(--ink); font-size: 11.5px; }
+.vf-stage .dim { stroke: var(--ink-soft); stroke-width: 1; fill: none; }
+.vf-stage .ext { stroke: var(--ink-soft); stroke-width: .7; stroke-dasharray: 2 3; opacity: .7; }
+.vf-stage .dimt, .vf-sec .dimt { fill: var(--ink); font-size: 11.5px; }
+.vf-stage .rail { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 1 5; stroke-linecap: round; opacity: .7; }
+.vf-stage .railt { font-size: 10.5px; fill: var(--ink-soft); opacity: .8; }
+.vf-stage .ex, .vf-stage .dimt .ex { fill: var(--ink-soft); font-size: 10.5px; }
+.vf-stage .modet { fill: var(--tool-mode); font-size: 11.5px; font-weight: 500; }
+.vf-stage .pcb { fill: var(--tool-pcb); fill-opacity: .22; }
+.vf-stage .pedge { fill: none; stroke: var(--tool-pcb); stroke-width: 1.5; stroke-dasharray: 6 3; }
+.vf-stage .sst { fill: var(--ink-soft); opacity: .7; }
+.vf-stage .cp { fill: var(--tool-pos); }
+.vf-stage .cn { fill: var(--tool-neg); }
+.vf-stage .nodal { stroke: var(--ink); stroke-width: 1.2; stroke-dasharray: 5 4; opacity: .7; }
+.vf-stage .wmark circle { fill: var(--warn); }
+.vf-stage .wmark text { fill: var(--surface); font-weight: 700; }
+.vf-stage .wmark .wmt { fill: var(--warn); font-weight: 400; }
+
+/* handles */
+.vf-h { cursor: grab; outline: none; }
+.vf-h[data-kind="ns"] { cursor: ns-resize; }
+.vf-h[data-kind="ew"] { cursor: ew-resize; }
+.vf-h .hit, .vf-h .hitc { fill: transparent; }
+.vf-h .ring { fill: none; stroke: var(--accent); stroke-width: 2; opacity: 0; }
+.vf-h:hover .ring { opacity: .45; }
+.vf-h:focus-visible .ring { opacity: 1; }
+.vf-h .knob { fill: var(--surface); stroke: var(--accent); stroke-width: 2.5; }
+.vf-h:focus-visible .knob { stroke-width: 4; }
+.vf-h .grip { fill: var(--accent); stroke: var(--accent); stroke-width: 1.5; fill-opacity: 1; }
+.vf-h path.grip { fill: none; }
+.vf-h .gripc { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.vf-h:focus-visible .gripc { stroke-width: 3.5; }
+.vf-stage.dragging, .vf-stage.dragging .vf-h { cursor: grabbing; }
+
+/* ruler */
+.vf-rhead { display: flex; align-items: baseline; gap: 6px 12px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+.vf-rhead h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.vf-rhead span { font-size: 11.5px; color: var(--ink-soft); }
+.vf-ruler-box { position: relative; height: 118px; }
+.vf-ruler { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair; }
+.vf-ruler .hitbar { fill: transparent; }
+.vf-ruler .ax { font-size: 10.5px; }
+.vf-ruler .mode { cursor: pointer; outline: none; }
+.vf-ruler .mode .hit { fill: transparent; }
+.vf-ruler .mode line { stroke: var(--tool-mode); stroke-width: 1.5; }
+.vf-ruler .mode circle { fill: var(--surface); stroke: var(--tool-mode); stroke-width: 2; }
+.vf-ruler .mode text { fill: var(--ink); font-size: 11.5px; }
+.vf-ruler .mode.sel circle { fill: var(--tool-mode); }
+.vf-ruler .mode.sel text { font-weight: 600; }
+.vf-ruler .mode.ok circle { stroke: var(--ok); } .vf-ruler .mode.warn circle { stroke: var(--warn); } .vf-ruler .mode.bad circle { stroke: var(--danger); }
+.vf-ruler .mode.sel.ok circle { fill: var(--ok); } .vf-ruler .mode.sel.warn circle { fill: var(--warn); } .vf-ruler .mode.sel.bad circle { fill: var(--danger); }
+.vf-ruler .mode:focus-visible circle { stroke: var(--accent); stroke-width: 4; }
+.vf-ruler .exc { cursor: ew-resize; }
+.vf-ruler .exm { fill: var(--danger); }
+.vf-ruler .exl { stroke: var(--danger); stroke-width: 1.5; }
+.vf-ruler .ext { fill: var(--danger); font-size: 11.5px; }
+.vf-ruler .exc.off .exm { fill: var(--ink-soft); } .vf-ruler .exc.off .exl { stroke: var(--ink-soft); } .vf-ruler .exc.off .ext { fill: var(--ink-soft); }
+.vf-ruler .exc:focus-visible .exm { stroke: var(--accent); stroke-width: 3; }
+
+/* read-out */
+.vf-read { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.vf-big { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-family: "IBM Plex Mono", ui-monospace, monospace; line-height: 1; }
+.vf-big .vf-lab { flex-basis: 100%; font: 11.5px "IBM Plex Sans", sans-serif; color: var(--ink-soft); margin-bottom: 4px; }
+.vf-big b { font-size: 46px; font-weight: 500; letter-spacing: -0.02em; }
+.vf-big i { font-style: normal; font-size: 20px; color: var(--ink-soft); }
+.vf-big.ok b { color: var(--ok); } .vf-big.warn b { color: var(--warn); } .vf-big.bad b { color: var(--danger); }
+.vf-verdict { font-size: 12px; color: var(--ink-soft); min-height: 1.3em; }
+.vf-verdict b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; color: var(--ink); }
+.vf-verdict.ok b { color: var(--ok); } .vf-verdict.warn b { color: var(--warn); } .vf-verdict.bad b { color: var(--danger); }
+.vf-sec-box { border: 1px solid var(--line-soft); border-radius: 5px; background: var(--sunken); }
+.vf-sec { width: 100%; height: 150px; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+.vf-sec .metal { fill: var(--tool-metal); stroke: var(--tool-metal-edge); stroke-width: 1; }
+.vf-sec .pcbs { fill: var(--tool-pcb); fill-opacity: .55; stroke: var(--tool-pcb); }
+.vf-sec .brk { fill: none; stroke: var(--ink-soft); stroke-width: 1; }
+.vf-sec .hole { fill: var(--sunken); stroke: var(--tool-metal-edge); stroke-width: 1; }
+.vf-sec .na { stroke: var(--tool-mode); stroke-width: 1; stroke-dasharray: 8 3 2 3; }
+.vf-sec .bend { fill: none; stroke: var(--ink-soft); stroke-width: 1.2; }
+.vf-sec .lab { font-family: "IBM Plex Sans", sans-serif; font-size: 10.5px; }
+.vf-dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; font-size: 12px; }
+.vf-dl dt { color: var(--ink-soft); }
+.vf-dl dd { margin: 0; font-family: "IBM Plex Mono", ui-monospace, monospace; text-align: right; }
+.vf-dl dd small { color: var(--ink-soft); font-size: 10.5px; }
+.vf-warns { display: flex; flex-direction: column; gap: 5px; }
+.vf-warns div { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 5px; padding: 5px 8px; font-size: 12px; }
+.vf-warns:empty { display: none; }
+
+/* material ladder: one row per material, bar = f1 of this part in it */
+.vf-ladhead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line-soft); padding-top: 8px; font-size: 12px; }
+.vf-ladhead span { font-size: 11px; color: var(--ink-soft); }
+.vf-ladder { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
+.vf-mat { display: grid; grid-template-columns: 70px minmax(0, 1fr) 48px; align-items: center; gap: 6px; padding: 1px 4px;
+  border: 1px solid transparent; border-radius: 4px; background: transparent; cursor: pointer; min-width: 0; color: var(--ink-soft); text-align: left; }
+.vf-mat:hover { border-color: var(--line); }
+.vf-mat.sel { border-color: var(--accent); background: var(--sunken); color: var(--ink); }
+.vf-mat .mn { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vf-mat .mb { position: relative; height: 11px; }
+.vf-mat .mf { position: absolute; left: 0; top: 1px; bottom: 1px; width: calc(var(--f) * 100%); background: var(--tool-curve); border-radius: 0 2px 2px 0; opacity: .6; }
+.vf-mat.sel .mf { opacity: 1; }
+.vf-mat.ok .mf { background: var(--ok); } .vf-mat.warn .mf { background: var(--warn); } .vf-mat.bad .mf { background: var(--danger); }
+.vf-mat .mt { position: absolute; top: -2px; bottom: -2px; left: calc(var(--thr) * 100%); border-left: 1px dashed var(--ink-soft); z-index: 1; }
+.vf-mat .mv { font: 11px "IBM Plex Mono", ui-monospace, monospace; text-align: right; color: var(--ink); }
+
+
+.vf-outcol { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.vf-outcol .k-out { max-height: 220px; }
+.vf-notes { font-size: 11.5px; color: var(--ink-soft); }
+.vf-notes summary { cursor: pointer; }
+.vf-notes div + div { margin-top: 3px; }

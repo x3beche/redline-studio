@@ -1,8 +1,10 @@
 {
-  "id": "a11y-audit", "version": "1.0",
+  "id": "a11y-audit", "version": "1.1",
   "name": "Accessibility Audit Lite",
   "blurb": "contrast, focus order and missing labels in pasted HTML",
   "group": "web",
+  "layout": "custom",
+  "agentOmit": ["view"],
   "rooms": [
     "web",
     "mobile"

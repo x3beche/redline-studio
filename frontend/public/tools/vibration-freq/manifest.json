@@ -1,8 +1,10 @@
 {
-  "id": "vibration-freq", "version": "1.0",
+  "id": "vibration-freq", "version": "1.1",
   "name": "Vibration Frequency Estimator",
   "blurb": "rough first natural frequency from geometry and material",
   "group": "mechanical",
+  "layout": "custom",
+  "agentOmit": ["view"],
   "rooms": ["cad"],
   "keywords": ["natural frequency", "resonance", "vibration", "modal", "eigenfrequency", "cantilever", "beam", "plate", "pcb vibration", "stiffness", "rayleigh", "octave rule", "fn", "hz"],
   "intro": "The first natural frequency of a beam (cantilever, simply supported, fixed or free) or a simply supported plate such as a PCB, from its size and material, with an optional point or component mass. Closed-form Euler-Bernoulli and thin-plate formulas (Blevins, Leissa); good for a first check before FEA.",

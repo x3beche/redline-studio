@@ -352,21 +352,21 @@ export function run({ html, textColor, pageBg, level }) {
   const unresolved = new Set();
   const compute = (el) => {
     if (comp.has(el)) return comp.get(el);
-    const p = el.parent && el.parent.tag !== '#root' ? compute(el.parent) : { fg: baseFg, bg: { ...baseBg, a: 1 }, px: 16, bold: false };
+    const p = el.parent && el.parent.tag !== '#root' ? compute(el.parent) : { fg: baseFg, bg: { ...baseBg, a: 1 }, px: 16, bold: false, fgRaw: null };
     const st = ownStyle(el, rules);
     let bg = p.bg;
     const bgRaw = st['background-color'] ?? (st.background && /^(#|rgb|hsl|[a-z]+$)/i.test(st.background.trim()) ? st.background.trim().split(/\s+/)[0] : undefined);
     if (bgRaw != null) { const c = parseColor(bgRaw); if (c) bg = over(c, p.bg); else unresolved.add(`background ${bgRaw}`); }
     else if (st.background && /gradient|url\(/.test(st.background)) unresolved.add('background images/gradients');
-    let fg = p.fg;
-    if (st.color != null) { const c = parseColor(st.color); if (c) fg = c; else unresolved.add(`color ${st.color}`); }
+    let fg = p.fg, fgRaw = p.fgRaw;
+    if (st.color != null) { const c = parseColor(st.color); if (c) { fg = c; fgRaw = st.color.replace(/\s*!important$/i, '').trim(); } else unresolved.add(`color ${st.color}`); }
     let px = HEAD_SIZE[el.tag] ?? p.px;
     if (el.tag === 'small') px = p.px * 0.833;
     if (st['font-size']) { const v = fontPx(st['font-size'], p.px); if (v) px = v; }
     let bold = p.bold || /^(h[1-6]|b|strong|th)$/.test(el.tag);
     const fw = st['font-weight'];
     if (fw) bold = fw === 'bold' || fw === 'bolder' || parseInt(fw, 10) >= 700;
-    const r = { fg, bg, px, bold };
+    const r = { fg, bg, px, bold, fgRaw };
     comp.set(el, r); return r;
   };
   const pairs = [];
@@ -382,7 +382,8 @@ export function run({ html, textColor, pageBg, level }) {
     const large = c.px >= 24 || (c.bold && c.px >= 18.66);
     const need = AAA ? (large ? 4.5 : 7) : (large ? 3 : 4.5);
     const disabled = 'disabled' in el.attrs || (el.parent && 'disabled' in el.parent.attrs);
-    pairs.push({ el, text: own || `placeholder: ${ph}`, fg: hex(fg), bg: hex(c.bg), r, need, large, ok: r >= need || disabled, disabled });
+    pairs.push({ el, text: own || `placeholder: ${ph}`, fg: hex(fg), bg: hex(c.bg), r, need, large, ok: r >= need || disabled, disabled,
+      fgRaw: c.fgRaw, px: c.px, bold: c.bold, fix: r < need && !disabled ? fixColour(fg, c.bg, need) : null });
     if (r < need && !disabled) add(r < need * 0.75 ? 'error' : 'warning', `Low contrast ${r.toFixed(2)}:1 (needs ${need}:1)`, AAA ? '1.4.6' : '1.4.3', el,
       `${hex(fg)} on ${hex(c.bg)}, ${large ? 'large' : 'normal'} text (${Math.round(c.px * 10) / 10} px${c.bold ? ' bold' : ''}): "${(own || ph).slice(0, 40)}".`,
       `Darken the text or lighten the background until the ratio is at least ${need}:1.`);
@@ -397,6 +398,53 @@ export function run({ html, textColor, pageBg, level }) {
   issues.sort((a, b) => sevOrder[a.sev] - sevOrder[b.sev] || (a.el?.line ?? 0) - (b.el?.line ?? 0));
 
   const failing = pairs.filter((p) => !p.ok);
+  // For the page's drawing only (manifest agentOmit): the tree as a reader
+  // meets it, the issues tied to their elements, the Tab path, the colours.
+  const issueIx = new Map();
+  issues.forEach((it, k) => { if (it.el) { if (!issueIx.has(it.el)) issueIx.set(it.el, []); issueIx.get(it.el).push(k); } });
+  const pairIx = new Map(pairs.map((p, k) => [p.el, k]));
+  const tabIx = new Map(ordered.map((e, k) => [e, k + 1]));
+  const LAND = { nav: 'navigation', main: 'main', header: 'banner', footer: 'contentinfo', aside: 'complementary', form: 'form', section: 'region', dialog: 'dialog', ul: 'list', ol: 'list', table: 'table', fieldset: 'group' };
+  const blocks = [];
+  const walk = (node, depth, loose) => {
+    let at = node.line;
+    for (const c of node.children) {
+      if (c.type === 'text') {
+        // text lying loose in a landmark (after a checkbox, say) gets its own row
+        const t = norm(c.value);
+        if (loose && t) blocks.push({ i: null, line: at, tag: '#text', depth, land: null, text: t.slice(0, 80), hidden: !!hiddenAncestor(node),
+          type: null, role: null, tabindex: null, name: null, onclick: false, el: '', tab: null, issues: [], pair: pairIx.has(node) ? pairIx.get(node) : null });
+        continue;
+      }
+      const el = c;
+      at = el.line;
+      if (['head', 'script', 'style', 'template', 'title', 'meta', 'link', 'br', 'option', 'svg'].includes(el.tag)) continue;
+      const hid = !!hiddenAncestor(el);
+      const own = norm(el.children.filter((k) => k.type === 'text').map((k) => k.value).join(' '));
+      const interactive = FOCUSABLE(el) || el.attrs.onclick != null || ['button', 'a', 'input', 'select', 'textarea'].includes(el.tag) || el.attrs.role === 'button';
+      const land = LAND[el.tag] || (el.attrs.role && ['navigation', 'main', 'banner', 'contentinfo', 'region', 'dialog', 'group', 'list', 'form'].includes(el.attrs.role) ? el.attrs.role : null);
+      const top = el.tag === 'html' || el.tag === 'body';
+      const keep = !top && (interactive || land || /^h[1-6]$/.test(el.tag) || ['img', 'iframe', 'video', 'audio', 'label', 'li'].includes(el.tag) || own || issueIx.has(el));
+      if (keep) {
+        blocks.push({ i: el.idx, line: el.line, tag: el.tag, depth, land, text: land ? '' : own.slice(0, 80), hidden: hid,
+          type: (el.attrs.type || '').toLowerCase() || null, role: el.attrs.role || null, tabindex: el.attrs.tabindex ?? null,
+          name: interactive || el.tag === 'img' ? nameOf(el, byId, labelsFor).name : null, onclick: el.attrs.onclick != null,
+          el: short(el), tab: tabIx.get(el) ?? null, issues: issueIx.get(el) || [], pair: !land && pairIx.has(el) ? pairIx.get(el) : null });
+      }
+      const nest = keep && (land || interactive || el.tag === 'label' || el.tag === 'li') && elKids(el).length > 0;
+      walk(el, nest ? depth + 1 : depth, (keep && !!land) || (top && el.tag === 'body'));
+    }
+  };
+  walk({ children: els.filter((e) => !e.parent || e.parent.tag === '#root'), line: 1 }, 0, false);
+  const view = {
+    blocks,
+    issues: issues.map((it) => ({ sev: it.sev, rule: it.rule, wcag: it.wcag, line: it.el ? it.el.line : null, el: it.el ? it.el.idx : null, what: it.el ? short(it.el) : 'CSS', why: it.why, fix: it.fix })),
+    pairs: pairs.map((p) => ({ el: p.el.idx, line: p.el.line, text: p.text.slice(0, 60), fg: p.fg, bg: p.bg, r: p.r, need: p.need, large: p.large, ok: p.ok, disabled: !!p.disabled, fgRaw: p.fgRaw, px: p.px, bold: p.bold, fix: p.fix })),
+    order: ordered.map((e) => e.idx),
+    level: AAA ? 'AAA' : 'AA', errors, warnings: warns,
+    doc: { lang: htmlEl ? norm(htmlEl.attrs.lang) || null : undefined, title: norm(textOf(els.find((e) => e.tag === 'title') || { children: [] })) || null },
+  };
+
   return {
     values: [
       { label: 'Errors', value: errors, tone: errors ? 'bad' : 'ok' },
@@ -420,5 +468,18 @@ export function run({ html, textColor, pageBg, level }) {
       'Focus order is the browser\'s: positive tabindex first (ascending), then everything else in source order. CSS reordering (flex order, grid) is not seen.',
       '4.1.1 (Parsing) is obsolete in WCAG 2.2; duplicate ids still break label and ARIA references.',
     ],
+    view,
   };
+}
+
+// The nearest colour of the same hue that reaches the ratio: the text is
+// moved toward black on a light background, toward white on a dark one.
+function fixColour(fg, bg, need) {
+  const toward = lum(bg) > 0.18 ? { r: 0, g: 0, b: 0 } : { r: 255, g: 255, b: 255 };
+  for (let t = 0.01; t <= 1.0001; t += 0.01) {
+    const c = { r: fg.r + (toward.r - fg.r) * t, g: fg.g + (toward.g - fg.g) * t, b: fg.b + (toward.b - fg.b) * t, a: 1 };
+    const h = hex(c), back = parseColor(h);
+    if (ratio(back, bg) >= need) return { hex: h, ratio: ratio(back, bg) };
+  }
+  return null;
 }
