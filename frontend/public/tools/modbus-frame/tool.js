@@ -6,7 +6,9 @@
 //   8-bit sum — ibid. §2.5.2.2, §6.2.1.
 // TCP ADU: MBAP header (transaction id, protocol id 0, length = unit id + PDU,
 //   unit id) + PDU — Modbus Messaging on TCP/IP V1.0b §3.1.3.
-// RTU timing: 11 bits per character; t3.5 = 3.5 characters, fixed at 1.75 ms
+// Serial character: RTU 11 bits (start + 8 data + even parity + stop, 8E1), ASCII
+//   10 bits (start + 7 data + parity + stop, 7E1) — Serial Line V1.02 §2.5.1.1, §2.5.2.1.
+// RTU timing: t3.5 = 3.5 characters, fixed at 1.75 ms
 //   above 19200 baud (Serial Line §2.5.1.1).
 import { fmtEng, fmtNum } from '../kit/eng.js';
 
@@ -80,11 +82,13 @@ export function run({ mode, slave, fc, address, addrStyle, quantity, values, tid
   const fields = [];
   const push16 = (v, label, meaning) => { pdu.push((v >> 8) & 0xFF, v & 0xFF); fields.push([label, `${h2((v >> 8) & 0xFF)} ${h2(v & 0xFF)}`, meaning]); };
   let respLen = 0; // response PDU length
+  let count = 1;   // items addressed: coils or registers
   if (f <= 4) {
     if (!(q >= 1 && q <= F.maxQ)) return { warnings: [`${F.name} takes a quantity of 1–${F.maxQ}; ${quantity} is outside it.`] };
     push16(a, 'Start address', `${a} (${F.table} ${a + (F.ref || 1)} in PLC numbering)`);
     push16(q, 'Quantity', `${q} ${F.table}${q > 1 ? 's' : ''}`);
     respLen = 2 + (f <= 2 ? Math.ceil(q / 8) : 2 * q);
+    count = q;
     if (a + q > 0x10000) warnings.push('Start address + quantity runs past 65535.');
   } else if (f === 5) {
     const v = nums.length ? nums[0] : 1;
@@ -104,6 +108,7 @@ export function run({ mode, slave, fc, address, addrStyle, quantity, values, tid
     if (!bits.length) return { warnings: ['Give the coil states in Values, e.g. 1 0 1 1.'] };
     if (bits.length > F.maxQ) return { warnings: [`Write Multiple Coils takes at most ${F.maxQ} coils.`] };
     const bc = Math.ceil(bits.length / 8);
+    count = bits.length;
     push16(a, 'Start address', String(a));
     push16(bits.length, 'Quantity', `${bits.length} coils`);
     pdu.push(bc); fields.push(['Byte count', h2(bc), String(bc)]);
@@ -120,6 +125,7 @@ export function run({ mode, slave, fc, address, addrStyle, quantity, values, tid
     });
     push16(a, 'Start address', String(a));
     push16(regs.length, 'Quantity', `${regs.length} registers`);
+    count = regs.length;
     pdu.push(regs.length * 2); fields.push(['Byte count', h2(regs.length * 2), String(regs.length * 2)]);
     for (const r of regs) pdu.push((r >> 8) & 0xFF, r & 0xFF);
     fields.push(['Register values', regs.map((r) => hx(r)).join(' '), 'big-endian, high byte first']);
@@ -165,13 +171,17 @@ export function run({ mode, slave, fc, address, addrStyle, quantity, values, tid
       const c = crc16(bytes.slice(0, -2));
       values.push({ label: 'CRC-16/MODBUS', value: hx(c), hint: `sent ${h2(c & 0xFF)} ${h2(c >> 8)}` });
     }
-    if (m !== 'tcp' && baud > 0) {
-      const tc = 11 / baud; // start + 8 data + parity (or 2nd stop) + stop
-      const t35 = baud > 19200 ? 1.75e-3 : 3.5 * tc, t15 = baud > 19200 ? 0.75e-3 : 1.5 * tc;
-      values.push({ label: 'Request on the wire', value: fmtEng(bytes.length * tc, 's'), hint: `${fmtNum(baud, 6)} baud, 11 bits/char` });
+    const serial = m !== 'tcp' && baud > 0;
+    const bits = m === 'ascii' ? 10 : 11; // RTU 8E1: start + 8 data + parity + stop; ASCII 7E1: start + 7 data + parity + stop
+    const tc = serial ? bits / baud : null;
+    // t3.5 / t1.5 frame RTU only; ASCII frames are delimited by ':' and CR LF
+    const t35 = serial && m === 'rtu' ? (baud > 19200 ? 1.75e-3 : 3.5 * tc) : null, t15 = serial && m === 'rtu' ? (baud > 19200 ? 0.75e-3 : 1.5 * tc) : null;
+    if (serial) {
+      values.push({ label: 'Request on the wire', value: fmtEng(bytes.length * tc, 's'), hint: `${fmtNum(baud, 6)} baud, ${bits} bits/char` });
       values.push({ label: 'Response on the wire', value: fmtEng(respBytes * tc, 's') });
       if (m === 'rtu') values.push({ label: 't3.5 frame gap', value: fmtEng(t35, 's'), hint: 'silence that ends a frame' }, { label: 't1.5 char gap', value: fmtEng(t15, 's'), hint: 'longest gap inside a frame' });
     }
+    if (m === 'ascii') notes.push('ASCII mode sends 7 data bits: 10 bits per character, 7E1 (start, 7 data, even parity, stop), or 7N2 without parity (Modbus over Serial Line V1.02 §2.5.2.1). Frames are delimited by \':\' and CR LF, not by silences.');
     if (refNote) notes.push(refNote);
     notes.push('Registers are big-endian on the wire. 32-bit values span two registers and their word order is device-specific.');
     const texts = [
@@ -179,6 +189,19 @@ export function run({ mode, slave, fc, address, addrStyle, quantity, values, tid
       { title: 'C array', lang: 'c', body: `static const uint8_t modbus_req[${bytes.length}] = { ${bytes.map((b) => '0x' + h2(b)).join(', ')} };\n` },
       { title: 'Python', lang: 'python', body: `req = bytes.fromhex("${bytes.map(h2).join(' ')}")\n` },
     ];
-    return { values, warnings, tables: [{ title: `${m.toUpperCase()} frame`, columns: ['Bytes (hex)'], rows: [[frameText]] }, { title: `${m.toUpperCase()} frame, field by field`, columns: ['Field', 'Bytes', 'Meaning'], rows }], texts, notes };
+    // The frame for a drawing: the bytes on the wire, each field's byte count
+    // (in ASCII mode, binary bytes before hex encoding) and the line timing.
+    const frame = {
+      mode: m, bytes, fc: f, func: F.name, table: F.table, ref: F.ref || 1, maxQ: F.maxQ || 1,
+      address: a, count, unit, respBytes,
+      fields: rows.map(([label, hexText, meaning]) => {
+        const tok = String(hexText).split(' ').filter(Boolean);
+        return { label, hex: hexText, meaning, n: tok[0]?.startsWith('0x') ? tok.length * 2 : tok.length };
+      }),
+      baud: serial ? baud : null, charTime: tc, t35, t15,
+      bitsPerChar: serial ? bits : null, dataBits: m === 'ascii' ? 7 : 8,
+      reqTime: serial ? bytes.length * tc : null, respTime: serial ? respBytes * tc : null,
+    };
+    return { frame, values, warnings, tables: [{ title: `${m.toUpperCase()} frame`, columns: ['Bytes (hex)'], rows: [[frameText]] }, { title: `${m.toUpperCase()} frame, field by field`, columns: ['Field', 'Bytes', 'Meaning'], rows }], texts, notes };
   }
 }

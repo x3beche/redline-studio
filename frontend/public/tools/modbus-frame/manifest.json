@@ -1,5 +1,5 @@
 {
-  "id": "modbus-frame", "version": "1.0",
+  "id": "modbus-frame", "version": "1.1",
   "name": "Modbus Frame Builder",
   "blurb": "an RTU/TCP frame with its CRC from function code and registers",
   "group": "embedded",
@@ -25,5 +25,6 @@
     { "title": "Write 3 registers over TCP to unit 17 at 40108", "input": { "mode": "tcp", "slave": "17", "fc": "16", "addrStyle": "plc", "address": "40108", "quantity": "3", "values": "10, 0x0102, -1", "tid": "7" } }
   ],
   "usage": "Give mode (rtu, tcp or ascii), slave id 0–247, function code fc (1, 2, 3, 4, 5, 6, 15, 16), addrStyle pdu (0-based as sent) or plc (40001 = holding register 0), the start address, the quantity for reads and a comma-separated values list for writes, plus tid for TCP and baud for serial. Returns the frame in hex, a field-by-field table, the CRC or LRC, the expected response length and wire times, and the frame as a C array and Python bytes. Use it to build a test request or to check a device's frames byte for byte.",
-  "sources": ["Modbus Application Protocol Specification V1.1b3, §6 (function codes 01–06, 15, 16)", "Modbus over Serial Line Specification V1.02, §2.5 (RTU/ASCII framing, t3.5), §6.2 (CRC and LRC)", "Modbus Messaging on TCP/IP Implementation Guide V1.0b, §3.1.3 (MBAP header)"]
+  "sources": ["Modbus Application Protocol Specification V1.1b3, §6 (function codes 01–06, 15, 16)", "Modbus over Serial Line Specification V1.02, §2.5 (RTU/ASCII framing, t3.5), §6.2 (CRC and LRC)", "Modbus Messaging on TCP/IP Implementation Guide V1.0b, §3.1.3 (MBAP header)"],
+  "layout": "custom"
 }
