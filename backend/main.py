@@ -1515,6 +1515,35 @@ async def invite_accept(key: str, body: AcceptIn, request: Request, response: Re
     return {"user": {"id": user["_id"], "name": user.get("name"), "email": user["email"]}, "role": role}
 
 
+@app.get("/api/reset/{key}")
+async def reset_page(key: str):
+    """Which account a password-reset link is for - open, the link is the key."""
+    info = await auth.reset_info(db(), key) if auth.enabled() else None
+    if not info:
+        raise HTTPException(404, "this link has expired or was used - make a new one")
+    return info
+
+
+class ResetIn(BaseModel):
+    password: str = Field(min_length=1, max_length=400)
+
+
+@app.post("/api/reset/{key}")
+async def reset_password(key: str, body: ResetIn, request: Request, response: Response):
+    if not auth.enabled():
+        raise HTTPException(400, "sign-in is off (X3_AUTH)")
+    try:
+        user, ws = await auth.use_reset(db(), key, body.password)
+    except (ValueError, PermissionError, LookupError) as exc:
+        raise _refused(exc) from exc
+    token = await auth.create_session(db(), user, ws, request.headers.get("user-agent", ""),
+                                      request.client.host if request.client else "")
+    _set_cookie(response, request, token)
+    who = {"type": "user", "id": user["_id"], "name": user.get("name") or user["email"]}
+    await actors.audit(db(), "password", user["email"], {"how": "reset link"}, actor=who)
+    return {"user": {"id": user["_id"], "name": user.get("name"), "email": user["email"]}}
+
+
 @app.get("/api/audit")
 async def audit_trail(limit: int = 200):
     """Who deleted, changed or reset what, newest first."""

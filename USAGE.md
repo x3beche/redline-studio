@@ -888,6 +888,12 @@ password, and everything it does is under the name you gave it. **Take
 back** stops it at once. An agent's token is an editor unless you choose
 reviewer (it reads and writes nothing) or viewer.
 
+**Forgot the password** (or the address)? On the machine itself:
+`.venv/bin/python tools/account.py list` shows every account, and
+`.venv/bin/python tools/account.py reset <email>` prints a link, good for an
+hour and one use, where you choose a new password; it signs you out
+everywhere else.
+
 **Members and roles.** Owners and admins have **Members** in the same
 menu. Invite someone with their email address and a role; you get a link
 to send them (Redline sends no email), good for a week and for one use.

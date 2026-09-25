@@ -87,7 +87,7 @@ def test_signed_out_reaches_only_signing_in():
     for method, path in routes():
         act = access.action(method, path)
         open_ = access.allowed(None, act)
-        assert open_ == (path.startswith(("/api/auth/", "/api/invite/")) or path == "/api/health"), (method, path)
+        assert open_ == (path.startswith(("/api/auth/", "/api/invite/", "/api/reset/")) or path == "/api/health"), (method, path)
 
 
 def test_the_tool_pages_are_for_looking():

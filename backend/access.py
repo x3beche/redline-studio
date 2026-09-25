@@ -69,6 +69,7 @@ _RULES: list[tuple[str, str, str]] = [
     # signing in, and an invitation's own page
     ("*", "/api/auth/.*", NONE),
     ("*", "/api/invite/.*", NONE),
+    ("*", "/api/reset/.*", NONE),
     ("GET", "/api/health", NONE),
     # the people and the agents
     ("*", "/api/members(/.*)?", "members"),

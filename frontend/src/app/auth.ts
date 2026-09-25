@@ -115,7 +115,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 <div class="tcv-signin-wrap">
   <form class="tcv-signin" (submit)="$event.preventDefault(); go()">
     <div class="tcv-signin-brand">Redl<span class="brand-i">i</span>ne</div>
-    @if (invite(); as inv) {
+    @if (resetFor(); as r) {
+      <p class="tcv-signin-lead">Choose a new password for <b>{{ r }}</b>. You are signed in with it at once,
+        and signed out everywhere else.</p>
+    } @else if (resetGone(); as g) {
+      <p class="tcv-signin-error" role="alert">{{ g }}</p>
+      <p class="tcv-signin-lead">Sign in, or make a new link on the machine: <code>tools/account.py reset</code>.</p>
+    } @else if (invite(); as inv) {
       <p class="tcv-signin-lead">{{ inv.by || 'Someone' }} invited you to <b>{{ inv.workspace }}</b> as
         <b>{{ inv.role }}</b>{{ about(inv.role) }}.
         {{ inv.has_account ? 'Sign in with your password to join.' : 'Choose a name and a password to join.' }}</p>
@@ -133,7 +139,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     } @else {
       <p class="tcv-signin-lead">Sign in to continue.</p>
     }
-    @if (!invite()) {
+    @if (!invite() && !resetFor()) {
       <label>Email<input type="email" [value]="email()" (input)="email.set($any($event.target).value)"
                          autocomplete="username" required></label>
     }
@@ -142,12 +148,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     @if (newPassword()) { <p class="tcv-signin-hint">At least 10 characters.</p> }
     @if (error(); as e) { <p class="tcv-signin-error" role="alert">{{ e }}</p> }
     <button class="tcv-btn tcv-btn-accent" type="submit" [disabled]="busy()">
-      {{ busy() ? '…' : invite() ? 'Join' : setup() ? 'Make the account' : 'Sign in' }}</button>
+      {{ busy() ? '…' : resetFor() ? 'Set the password' : invite() ? 'Join' : setup() ? 'Make the account' : 'Sign in' }}</button>
   </form>
 </div>`,
 })
 export class SignIn {
   private auth = inject(Auth);
+  private http = inject(HttpClient);
   email = signal('');
   name = signal('');
   password = signal('');
@@ -158,10 +165,21 @@ export class SignIn {
   private key = new URLSearchParams(location.search).get('invite');
   invite = signal<Invite | null>(null);
   inviteGone = signal<string | null>(null);
-  newPassword = () => this.invite() ? !this.invite()!.has_account : this.setup();
+  /** A password-reset link: /?reset=<key> (tools/account.py reset). */
+  private resetKey = new URLSearchParams(location.search).get('reset');
+  resetFor = signal<string | null>(null);
+  resetGone = signal<string | null>(null);
+  newPassword = () => this.resetFor() ? true : this.invite() ? !this.invite()!.has_account : this.setup();
   about = (role: string) => { const a = this.auth.state()?.about?.[role]; return a ? ` - ${a}` : ''; };
 
   constructor() {
+    if (this.resetKey) {
+      this.http.get<{ email: string }>(`/api/reset/${encodeURIComponent(this.resetKey)}`).subscribe({
+        next: r => this.resetFor.set(r.email),
+        error: (e: HttpErrorResponse) => this.resetGone.set(
+          typeof e.error?.detail === 'string' ? e.error.detail : 'this link cannot be opened'),
+      });
+    }
     if (this.key) {
       this.auth.invite(this.key).subscribe({
         next: i => this.invite.set(i),
@@ -175,7 +193,9 @@ export class SignIn {
     this.busy.set(true);
     this.error.set('');
     const inv = this.invite();
-    const call = inv && this.key
+    const call = this.resetFor() && this.resetKey
+      ? this.http.post<{ user: Me }>(`/api/reset/${encodeURIComponent(this.resetKey)}`, { password: this.password() })
+      : inv && this.key
       ? this.auth.accept(this.key, this.name(), this.password())
       : this.setup()
       ? this.auth.setup(this.email(), this.name(), this.password())
@@ -184,7 +204,7 @@ export class SignIn {
       next: () => {
         this.busy.set(false); this.password.set('');
         // The link has done its work: off the address bar.
-        if (this.key) history.replaceState(null, '', location.pathname);
+        if (this.key || this.resetKey) history.replaceState(null, '', location.pathname);
         this.auth.load();
       },
       error: (e: HttpErrorResponse) => {

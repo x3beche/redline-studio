@@ -34,6 +34,8 @@ WORKSPACES = "workspaces"
 MEMBERS = "memberships"
 INVITES = "invites"
 INVITE_DAYS = 7
+RESETS = "password_resets"
+RESET_MINUTES = 60
 
 COOKIE = "redline_session"
 CSRF_HEADER = "x-redline-csrf"
@@ -43,7 +45,7 @@ SESSION_DAYS = 30
 # to sign in, and to make the first account.
 OPEN = {"/api/health", "/api/auth/state", "/api/auth/login", "/api/auth/setup"}
 # ... and an invitation's page, and accepting it: the link is the key.
-OPEN_PREFIX = ("/api/invite/",)
+OPEN_PREFIX = ("/api/invite/", "/api/reset/")
 
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -486,3 +488,49 @@ async def open_workspace(raw_db, token: str | None, user_id: str, ws: str) -> No
         raise LookupError("you are not a member of that workspace")
     await raw_db[SESSIONS].update_one({"_id": _digest(token or "")}, {"$set": {"workspace": ws}})
     forget_sessions()
+
+
+# ---------------------------------------------------------------- forgotten passwords
+
+async def create_reset(raw_db, email: str) -> tuple[str, dict]:
+    """A one-use link, good for an hour, that sets a new password for one
+    account. Made on the machine itself (tools/account.py): whoever can run
+    that can reach the database anyway. The key is kept as its SHA-256."""
+    email = (email or "").strip().lower()
+    u = await raw_db[USERS].find_one({"email": email}, {"_id": 1, "email": 1})
+    if not u:
+        raise LookupError(f"no account for {email}")
+    key = secrets.token_urlsafe(24)
+    await raw_db[RESETS].delete_many({"user": u["_id"]})          # one at a time
+    doc = {"_id": _digest(key), "user": u["_id"], "email": u["email"], "created_at": _now(),
+           "expires": _now() + timedelta(minutes=RESET_MINUTES)}
+    await raw_db[RESETS].insert_one(doc)
+    return key, doc
+
+
+async def reset_info(raw_db, key: str) -> dict | None:
+    r = await raw_db[RESETS].find_one({"_id": _digest(key or "")})
+    if not r or r["expires"].replace(tzinfo=timezone.utc) <= _now():
+        return None
+    return {"email": r["email"]}
+
+
+async def use_reset(raw_db, key: str, password: str) -> tuple[dict, str]:
+    """Set the new password; every other session of the account ends.
+    Returns the user and the workspace to sign in to."""
+    r = await raw_db[RESETS].find_one({"_id": _digest(key or "")})
+    if not r or r["expires"].replace(tzinfo=timezone.utc) <= _now():
+        raise LookupError("this link has expired or was used - make a new one")
+    problem = password_problem(password or "")
+    if problem:
+        raise ValueError(problem)
+    await raw_db[USERS].update_one({"_id": r["user"]}, {"$set": {"pw": hash_password(password)}})
+    await raw_db[SESSIONS].delete_many({"user": r["user"]})
+    await raw_db[RESETS].delete_one({"_id": r["_id"]})
+    forget_sessions()
+    cleared(r["email"])
+    u = await raw_db[USERS].find_one({"_id": r["user"]})
+    m = await raw_db[MEMBERS].find_one({"user": r["user"]})
+    if not m:
+        raise PermissionError("the password is set, but the account is in no workspace")
+    return u, m["workspace"]
