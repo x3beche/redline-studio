@@ -1,8 +1,9 @@
 {
-  "id": "flash-partitions", "version": "1.0",
+  "id": "flash-partitions", "version": "1.1",
   "name": "Flash Partition Planner",
   "blurb": "OTA, NVS and filesystem partitions sized, with a partition table",
   "group": "embedded",
+  "layout": "custom",
   "rooms": ["embedded"],
   "keywords": ["partition table", "partitions.csv", "esp32", "esp-idf", "ota", "ota_0", "factory", "nvs", "otadata", "littlefs", "spiffs", "fatfs", "coredump", "flash layout", "flash map"],
   "intro": "Lays out an ESP-IDF partition table: NVS, otadata, PHY data, the app slots sized from your image plus headroom (64 KiB aligned), an optional core dump and a filesystem that takes the rest. Rules follow the ESP-IDF Partition Tables and OTA guides; the result is a partitions.csv with explicit offsets.",

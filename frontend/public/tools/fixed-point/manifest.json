@@ -1,8 +1,9 @@
 {
-  "id": "fixed-point", "version": "1.0",
+  "id": "fixed-point", "version": "1.1",
   "name": "Fixed-Point Converter",
   "blurb": "a decimal value in a Q format and the precision lost",
   "group": "embedded",
+  "layout": "custom",
   "rooms": ["embedded"],
   "keywords": ["fixed point", "fixed-point", "q format", "q15", "q31", "q7", "q16.16", "qm.n", "fractional", "dsp", "cmsis-dsp", "scaling", "resolution", "lsb", "saturation"],
   "intro": "Converts a decimal value to a Q-format integer (or a stored integer back to its value) for any word length and number of fraction bits, with the rounding error, resolution and range. Formats are named both ways: TI Qm.n (m without the sign bit) and ARM Qm.n (m with it).",

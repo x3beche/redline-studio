@@ -143,6 +143,24 @@ export function run({ direction, value, raw: rawText, signed: sgn, bits, frac, r
     ``,
     `${T} k = ${res.raw};   /* ${g(res.rep)} */`,
   ].join('\n');
+  // the numbers a drawing of the word and the number line needs: the stored
+  // integer's neighbours on the Q grid, the range, the same value in the
+  // common formats with their parameters
+  const near = [];
+  for (let j = -6; j <= 6; j++) {
+    const r = res.raw + j;
+    if (r >= lo && r <= hi) near.push({ raw: r, value: r * lsb });
+  }
+  const fixed = {
+    W, n, signed, intBits, ti, arm, ctype: T, direction: direction === 'fromq' ? 'fromq' : 'toq',
+    x, raw: res.raw, hex: hexOf(res.raw, W), rep: res.rep, err, errLsb: err / lsb, over: res.over,
+    lsb, lo, hi, min: lo * lsb, max: hi * lsb, digits: n * Math.log10(2), near,
+    rounding: direction === 'fromq' ? null : rounding, overflow: direction === 'fromq' ? null : overflow,
+    common: common.map(([name, w, f, s], i) => {
+      const c = convert(x, w, f, s, rounding, 'saturate');
+      return { name, W: w, n: f, signed: s, raw: c.raw, hex: rows[i][2], rep: c.rep, err: c.rep - x, errLsb: (c.rep - x) / pow2(-f), over: c.over };
+    }),
+  };
   return {
     values,
     warnings,
@@ -153,5 +171,6 @@ export function run({ direction, value, raw: rawText, signed: sgn, bits, frac, r
       'Multiplying Qa.b by Qc.d gives Q(a+c).(b+d) in a double-width word; adding needs the same fraction bits on both sides.',
       `Scale factor 2^${n} = ${scaleText}. Floor is what an arithmetic right shift does; truncate is a C cast; nearest is lround().`,
     ],
+    fixed,
   };
 }

@@ -129,7 +129,8 @@ export function run({ chip, flash, ota, image, headroom, appMode, nvs, nvsKeys, 
   const map = [
     { name: 'bootloader', offset: C.boot, size: pt - C.boot, kind: 'boot' },
     { name: 'partition table', offset: pt, size: SECTOR, kind: 'boot' },
-    ...parts.map((p) => ({ name: p.name, offset: p.offset, size: p.size, kind: p.type === 'app' ? 'app' : p.sub === 'littlefs' || p.sub === 'spiffs' || p.sub === 'fat' ? 'fs' : 'data' })),
+    ...parts.map((p) => ({ name: p.name, offset: p.offset, size: p.size, kind: p.type === 'app' ? 'app' : p.sub === 'littlefs' || p.sub === 'spiffs' || p.sub === 'fat' ? 'fs' : 'data',
+      type: p.type, sub: p.sub, flags: p.flags, gap: p.gap })),
   ];
   return {
     values,
@@ -147,6 +148,7 @@ export function run({ chip, flash, ota, image, headroom, appMode, nvs, nvsKeys, 
       `Image size = the size of build/<project>.bin (idf.py size prints it); headroom ${h} % is added before rounding up to 64 KiB.`,
       ...notes2,
     ],
-    map: { flash: FLASH, parts: map },
+    map: { flash: FLASH, parts: map, chip: C.name, table: pt, end, free, gaps, image: image * KB, appSize, fill, want, headroom: h, slots: slots.length,
+      fs: fsPart ? { name: fsPart.name, sub: fsPart.sub, size: fsPart.size, rest: !fsFixed } : null },
   };
 }

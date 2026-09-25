@@ -1,0 +1,152 @@
+/* Firmware Size Diff: two firmware images side by side. Colours from kit.css
+   and the --tool-* data colours below (regions of the image). */
+:root {
+  --tool-text: #4f6fae;     /* code */
+  --tool-rodata: #2f9488;   /* constants */
+  --tool-data: #8a63b8;     /* initialised data */
+  --tool-bss: #7d8a97;      /* zeroed RAM */
+  --tool-other: #a3a08e;
+  --tool-up: var(--warn);   /* grew / new */
+  --tool-dn: var(--ok);     /* shrank / gone */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tool-text: #6f8fd6; --tool-rodata: #3cbfae; --tool-data: #b08ae0; --tool-bss: #8c9aa8; --tool-other: #b8b49c; }
+}
+:root[data-theme="dark"] { --tool-text: #6f8fd6; --tool-rodata: #3cbfae; --tool-data: #b08ae0; --tool-bss: #8c9aa8; --tool-other: #b8b49c; }
+
+.fsd-page { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.fsd-page > * { min-width: 0; }
+.fsd-builds, .fsd-out, .fsd-notes { grid-column: 1 / -1; }
+@media (max-width: 1080px) { .fsd-page { grid-template-columns: minmax(0, 1fr); } }
+
+.fsd-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.fsd-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.fsd-h { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.fsd-soft { color: var(--ink-soft); }
+.fsd-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.fsd-headnums { display: flex; gap: 14px; margin-left: auto; font-size: 12px; color: var(--ink-soft); }
+.fsd-headnums b { font: 600 13px "IBM Plex Mono", ui-monospace, monospace; }
+.fsd-t-up { color: var(--tool-up); fill: var(--tool-up); }
+.fsd-t-dn { color: var(--tool-dn); fill: var(--tool-dn); }
+.fsd-t-0 { color: var(--ink-soft); fill: var(--ink-soft); }
+
+/* builds strip */
+.fsd-builds { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: start; }
+@media (max-width: 700px) { .fsd-builds { grid-template-columns: minmax(0, 1fr); } .fsd-swap { justify-self: center; } }
+.fsd-build { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0; }
+.fsd-build.fsd-drop { border-color: var(--accent); border-style: dashed; }
+.fsd-bhead { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.fsd-bhead b { font-size: 13px; }
+.fsd-tag { font: 600 10px "IBM Plex Mono", ui-monospace, monospace; padding: 1px 5px; border-radius: 3px; background: var(--sunken); color: var(--ink-soft); border: 1px solid var(--line); }
+.fsd-after .fsd-tag { color: var(--ink); border-color: var(--ink-soft); }
+.fsd-meta { font: 12px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.fsd-grow { flex: 1; }
+.fsd-src { display: block; width: 100%; margin-top: 6px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font: 12px/1.4 "IBM Plex Mono", ui-monospace, monospace; resize: vertical; }
+
+.fsd-src[hidden] { display: none; }
+.fsd-swap { align-self: center; padding: 3px 9px; font-size: 14px; }
+
+/* drawing */
+.fsd-warns:not(:empty) { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 4px; padding: 5px 9px; margin-bottom: 6px; font-size: 12px; }
+.fsd-warns div + div { margin-top: 2px; }
+.fsd-svgwrap { width: 100%; min-height: 200px; }
+.fsd-svg { display: block; touch-action: manipulation; user-select: none; }
+.fsd-empty { padding: 60px 20px; text-align: center; color: var(--ink-soft); border: 1px dashed var(--line); border-radius: 6px; }
+.fsd-colh { font: 600 13px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.fsd-colk { fill: var(--ink-soft); font-weight: 600; letter-spacing: .06em; }
+.fsd-colsub { font: 600 12px "IBM Plex Mono", ui-monospace, monospace; }
+
+.fsd-blk { stroke: var(--surface); stroke-width: .6; cursor: pointer; fill-opacity: .78; }
+.fsd-r-text { fill: var(--tool-text); background: var(--tool-text); }
+.fsd-r-rodata { fill: var(--tool-rodata); background: var(--tool-rodata); }
+.fsd-r-data { fill: var(--tool-data); background: var(--tool-data); }
+.fsd-r-bss { fill: var(--tool-bss); background: var(--tool-bss); }
+.fsd-r-other { fill: var(--tool-other); background: var(--tool-other); }
+.fsd-blk.fsd-hot, .fsd-blk.fsd-on { fill-opacity: 1; stroke: var(--ink); stroke-width: 1.5; }
+
+.fsd-rib { fill: var(--ink-soft); fill-opacity: .10; cursor: pointer; stroke: none; }
+.fsd-rib.fsd-rep.fsd-grew, .fsd-rib.fsd-rep.fsd-added { fill: var(--tool-up); fill-opacity: .34; }
+.fsd-rib.fsd-rep.fsd-shrank, .fsd-rib.fsd-rep.fsd-removed { fill: var(--tool-dn); fill-opacity: .34; }
+.fsd-rib.fsd-grew, .fsd-rib.fsd-added { fill: var(--tool-up); }
+.fsd-rib.fsd-shrank, .fsd-rib.fsd-removed { fill: var(--tool-dn); }
+.fsd-rib.fsd-hot { fill-opacity: .55; }
+.fsd-rib.fsd-on { fill-opacity: .7; stroke: var(--ink); stroke-width: 1; }
+.fsd-ribbons:has(.fsd-on) .fsd-rib:not(.fsd-on) { fill-opacity: .07; }
+
+.fsd-lab { font: 11.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); cursor: pointer; }
+.fsd-lab.fsd-hot, .fsd-lab.fsd-lon { font-weight: 700; }
+.fsd-labn { fill: var(--ink-soft); }
+.fsd-labd { font-weight: 600; }
+.fsd-br { fill: none; stroke-width: 1.4; }
+.fsd-br-flash { stroke: var(--ink-soft); fill: var(--ink-soft); }
+.fsd-br-RAM { stroke: var(--accent); fill: var(--accent); }
+path.fsd-br-flash, path.fsd-br-RAM { fill: none; }
+.fsd-brt { font: 600 10.5px "IBM Plex Mono", ui-monospace, monospace; stroke: none; }
+
+.fsd-selbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 30px; padding: 5px 8px; margin-top: 6px;
+  background: var(--sunken); border-radius: 4px; font-size: 12.5px; }
+.fsd-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.fsd-clear { margin-left: auto; }
+.fsd-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font: 12px "IBM Plex Mono", ui-monospace, monospace; }
+.fsd-lg { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.fsd-lg b { font-weight: 600; }
+.fsd-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.fsd-sw-grew { background: var(--tool-up); opacity: .6; }
+.fsd-sw-shrank { background: var(--tool-dn); opacity: .6; }
+
+/* change list */
+.fsd-colhead, .fsd-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) 62px 100px 52px minmax(120px, 1.15fr); gap: 6px; align-items: center; }
+.fsd-colhead { font-size: 11px; color: var(--ink-soft); padding: 0 6px 4px; border-bottom: 1px solid var(--line); }
+.fsd-r { text-align: right; }
+.fsd-axis { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px; align-items: end; }
+.fsd-axl, .fsd-axr { font-size: 10.5px; }
+.fsd-axis > .fsd-axl, .fsd-axis > .fsd-axr { display: none; }
+.fsd-ruler { position: relative; height: 30px; border-bottom: 1px solid var(--ink-soft); cursor: col-resize; touch-action: none; grid-column: 1 / -1; }
+.fsd-tick { position: absolute; bottom: 0; transform: translateX(-50%); font: 9.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); padding-bottom: 1px; pointer-events: none; }
+.fsd-tick::after { content: ""; position: absolute; left: 50%; bottom: -1px; height: 4px; border-left: 1px solid var(--ink-soft); }
+.fsd-fence { position: absolute; top: 0; transform: translateX(-50%); padding: 0 5px; height: 16px; border-radius: 3px; border: 1px solid var(--warn);
+  background: var(--warn); color: var(--paper); font: 600 10.5px "IBM Plex Mono", ui-monospace, monospace; cursor: ew-resize; touch-action: none; line-height: 14px; }
+.fsd-fence::after { content: ""; position: absolute; left: 50%; top: 15px; height: 15px; border-left: 2px solid var(--warn); }
+.fsd-fenceL { position: absolute; top: 12px; bottom: -1px; border-left: 2px solid var(--warn); pointer-events: none; }
+
+.fsd-rows { max-height: 560px; overflow-y: auto; overflow-x: hidden; position: relative; }
+.fsd-row { padding: 3px 6px; border-bottom: 1px solid var(--line-soft); cursor: pointer; font-size: 12.5px; }
+.fsd-row:hover { background: var(--sunken); }
+.fsd-row.fsd-on { background: var(--sunken); box-shadow: inset 3px 0 0 var(--accent); }
+.fsd-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fsd-g { font: 700 11px "IBM Plex Mono", ui-monospace, monospace; text-align: center; }
+.fsd-g.fsd-added, .fsd-g.fsd-grew { color: var(--tool-up); }
+.fsd-g.fsd-removed, .fsd-g.fsd-shrank { color: var(--tool-dn); }
+.fsd-name { font-family: "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fsd-name small { color: var(--ink-soft); }
+.fsd-reg { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--ink-soft); }
+.fsd-on2 { font: 11.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); white-space: nowrap; }
+.fsd-bar { position: relative; height: 18px; }
+.fsd-bar::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: 1px solid var(--line); }
+.fsd-bar::after { content: ""; position: absolute; top: -3px; bottom: -3px; left: calc(50% - var(--fence) * 50%); width: calc(var(--fence) * 100%);
+  border-left: 1px dashed var(--warn); border-right: 1px dashed var(--warn); background: color-mix(in srgb, var(--warn) 7%, transparent); pointer-events: none; }
+.fsd-fill { position: absolute; top: 4px; height: 10px; border-radius: 2px; }
+.fsd-up { background: var(--tool-up); }
+.fsd-dn { background: var(--tool-dn); }
+.fsd-dv { font: 600 11.5px "IBM Plex Mono", ui-monospace, monospace; text-align: right; white-space: nowrap; }
+.fsd-bar em { position: absolute; top: 1px; font: normal 600 11px "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; }
+.fsd-row.fsd-cut { opacity: .55; }
+.fsd-row.fsd-cut .fsd-fill { opacity: .5; }
+.fsd-row.fsd-below { opacity: .38; }
+.fsd-row.fsd-below .fsd-fill { opacity: .35; }
+.fsd-cutbar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; margin: 2px 0; border: 1px dashed var(--accent); border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface)); color: var(--ink); font-size: 12px; cursor: ns-resize; touch-action: none; user-select: none; }
+.fsd-cutbar b { color: var(--accent); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.fsd-cutbar.fsd-dragging { border-style: solid; }
+.fsd-grip { color: var(--accent); letter-spacing: -2px; font-weight: 700; }
+.fsd-same { padding: 6px; font-size: 12px; color: var(--ink-soft); }
+.fsd-hint { margin-top: 6px; font-size: 11.5px; color: var(--ink-soft); }
+.fsd-notes { color: var(--ink-soft); font-size: 12px; }
+.fsd-notes div + div { margin-top: 2px; }
+
+@media (max-width: 560px) {
+  .fsd-colhead, .fsd-row { grid-template-columns: 14px minmax(0, 1fr) 48px 84px; }
+  .fsd-colhead > :nth-child(3), .fsd-row > .fsd-reg, .fsd-colhead > :nth-child(4), .fsd-row > .fsd-on2 { display: none; }
+  .fsd-headnums { margin-left: 0; }
+}

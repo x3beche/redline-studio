@@ -196,5 +196,14 @@ export function run({ before, after, top, minDelta }) {
     ],
     texts: [{ title: 'Markdown', body: `Size change: ${fmtB(tot.neu - tot.old)} bytes total${known ? `, flash ${fmtB(flash.neu - flash.old)}, RAM ${fmtB(ram.neu - ram.old)}` : ''}.\n\n${md}\n` }],
     notes,
+    // every symbol of both builds with its region, for a drawing of the two
+    // images side by side (the tables above keep only the top changes)
+    diff: {
+      formats: { old: A.format, new: B.format },
+      total: { old: tot.old, new: tot.neu }, flash: { old: flash.old, new: flash.neu }, ram: { old: ram.old, new: ram.neu }, minDelta: minD, top: N, changed: changed.length,
+      regions: regions.map(([region, o, n]) => ({ region, old: o, new: n, d: n - o })),
+      symbols: all.map((x) => ({ name: x.name, region: x.region, old: x.old, new: x.neu, d: x.d, status: x.status, dup: x.dup }))
+        .sort((a, b) => Math.abs(b.d) - Math.abs(a.d) || a.name.localeCompare(b.name)),
+    },
   };
 }
