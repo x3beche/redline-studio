@@ -1,5 +1,5 @@
 import { ToolsUsage } from './tools-usage';
-import { NgTemplateOutlet } from '@angular/common';
+import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { AuditRow, BoardRunRow, InsightSeries, Insights, InsightsApi, ProjectDetail, ProjectItem } from '../api';
 import { Markdown } from '../markdown';
@@ -18,7 +18,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
  */
 @Component({
   selector: 'app-room-analyze',
-  imports: [BarList, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage],
+  imports: [BarList, DecimalPipe, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage],
   template: `
 <div class="tcv-room tcv-dash absolute inset-0 flex min-h-0 flex-col">
   <header class="tcv-dash-bar">
@@ -38,7 +38,11 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
     </select>
     <span class="flex-1"></span>
     @if (data(); as d) {
-      <span class="tcv-dash-meta">{{ stepLabel(d.range.step) }} · updated {{ updated() }}</span>
+      <!-- When the figures were worked out, how long that took, and when the
+           next reading is due. -->
+      <span class="tcv-dash-meta">{{ stepLabel(d.range.step) }} · updated {{ updated() }}
+        @if (d.took_ms != null) { · took {{ d.took_ms | number }} ms }
+        · {{ nextIn() === null ? 'no auto refresh' : loading() ? 'refreshing…' : 'next in ' + nextIn() + ' s' }}</span>
     }
     <select class="tcv-field px-1.5 py-0.5 text-[11.5px]" [value]="every()"
             (change)="setEvery(+$any($event.target).value)" title="refresh on its own">
@@ -746,7 +750,13 @@ export class RoomAnalyze implements OnDestroy {
     this.api.audit(100).subscribe({ next: a => this.auditRows.set(a) });
     this.arm();
   }
-  ngOnDestroy() { clearInterval(this.timer); clearTimeout(this.again); }
+  /** A clock for the "next in" countdown, and when the next reading is due. */
+  private now = signal(Date.now());
+  private nextAt = signal(0);
+  private tick = setInterval(() => this.now.set(Date.now()), 1000);
+  nextIn = computed(() => this.every() ? Math.max(0, Math.round((this.nextAt() - this.now()) / 1000)) : null);
+
+  ngOnDestroy() { clearInterval(this.timer); clearTimeout(this.again); clearInterval(this.tick); }
 
   private again?: ReturnType<typeof setTimeout>;
 
@@ -769,7 +779,11 @@ export class RoomAnalyze implements OnDestroy {
   }
   private arm() {
     clearInterval(this.timer);
-    if (this.every()) this.timer = setInterval(() => this.load(), this.every() * 1000);
+    this.nextAt.set(Date.now() + this.every() * 1000);
+    if (this.every()) this.timer = setInterval(() => {
+      this.nextAt.set(Date.now() + this.every() * 1000);
+      this.load();
+    }, this.every() * 1000);
   }
   /** The range as whole days, for panels that count by day (1 for the short ones). */
   rangeDays(): number {

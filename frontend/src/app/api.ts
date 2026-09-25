@@ -937,6 +937,8 @@ export interface Insights {
   range: { since: string; until: string; step: number };
   /** When the server worked it out, and whether a newer one is on its way. */
   computed_at?: string; stale?: boolean; age_s?: number; shape?: number;
+  /** How long the server took to work the figures out. */
+  took_ms?: number;
   llm: { calls: number; cost_usd: number; unpriced_calls: number;
          tokens: Record<string, number>;
          cost_by_provider: InsightSeries; cost_by_model: InsightSeries; tokens_by_type: InsightSeries;

@@ -1774,3 +1774,6 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-code-x:hover { background: var(--hover); color: var(--ink); }
 .tcv-code-empty { margin: 24px; font-size: 12.5px; color: var(--ink-dim); }
 .tcv-ico.tcv-ico-code { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='2' y='4' width='22' height='18' rx='1.5' fill='none' stroke='%23ddd' stroke-width='1.4'/><path d='M2,8 L24,8' stroke='%23ddd' stroke-width='1.2'/><path d='M9,11.5 L5.5,15 L9,18.5 M17,11.5 L20.5,15 L17,18.5' fill='none' stroke='%23ddd' stroke-width='1.8'/><path d='M14.5,10.5 L11.5,19.5' stroke='rgb(48,142,225)' stroke-width='2'/></svg>"); } /* theme:pigment */
+
+/* A number beside a tab's name - how many tools - said quietly. */
+.tcv-tab-count { margin-left: 4px; font-size: 10.5px; font-weight: 400; color: var(--ink-dim); opacity: .7; }

@@ -780,9 +780,13 @@ def _recall(key: str) -> tuple[float, dict] | None:
 async def _work_out(db, key: str, span) -> dict:
     # The agents' transcripts are read into llm_calls by the sampler, once a
     # minute, in the background - never in front of a request.
+    import time
+    t0 = time.perf_counter()
     since, until = await span()
     data = await overview(db, since, until)
     data["computed_at"] = datetime.now(timezone.utc).isoformat()
+    # How long working the figures out took: shown beside "updated".
+    data["took_ms"] = round((time.perf_counter() - t0) * 1000)
     data["shape"] = SHAPE
     _remember(key, data)
     return data

@@ -99,7 +99,11 @@ function score(t: ToolInfo, words: string[]): number {
   <ng-template #item let-t let-hot="hot">
     <div class="tcv-tools-item" [attr.data-on]="t.id === here()?.id ? 1 : null" [attr.data-hot]="hot ? 1 : null">
       <button class="tcv-tools-open" (click)="pick(t)" [title]="t.blurb">
-        <span class="tcv-menu-name">{{ t.name }}</span>
+        <span class="tcv-menu-name">{{ t.name }}
+          @if (t.runnable) {
+            <span class="tcv-tools-mcp" title="Agents can run this tool through the MCP server (run_tool)">MCP</span>
+          }
+        </span>
         <span class="tcv-menu-blurb">{{ t.blurb }}</span>
       </button>
       <button class="tcv-tools-star" [attr.data-on]="favs().includes(t.id) ? 1 : null"

@@ -57,3 +57,8 @@
 .tcv-tools-scroll:hover, .tcv-tools-stage *:hover {
   scrollbar-color: var(--tcv-scrollbar-hover) transparent;
 }
+
+/* In the list: the tools an agent can run through the MCP server. */
+.tcv-tools-mcp { display: inline-block; margin-left: 6px; padding: 0 4px; font-size: 9px; font-weight: 700;
+  letter-spacing: .06em; line-height: 14px; vertical-align: 1px; border-radius: 3px;
+  color: var(--accent); border: 1px solid var(--accent); opacity: .85; }

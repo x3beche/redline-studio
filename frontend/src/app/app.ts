@@ -1,4 +1,4 @@
-import { Component, effect, inject } from '@angular/core';
+import { Component, effect, inject, signal, untracked } from '@angular/core';
 import { Editor } from './editor/editor';
 import { Selection } from './selection';
 import { RoomAnalyze } from './rooms/analyze';
@@ -42,7 +42,10 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
       <button (click)="open(w.id)" class="tcv-tab tcv-tab-tools"
               [attr.data-on]="here() === w.id ? 1 : null"
               [attr.aria-current]="here() === w.id ? 'page' : null"
-              [title]="w.blurb">{{ w.label }}</button>
+              [title]="w.blurb">{{ w.label }}
+        <!-- How many tools there are, quietly, beside the name. -->
+        @if (toolCount(); as n) { <span class="tcv-tab-count">{{ n }}</span> }
+      </button>
     }
     @if (analytics; as w) {
       <button (click)="open(w.id)" class="tcv-tab tcv-tab-end"
@@ -83,6 +86,15 @@ export class App {
   /** The rooms you work in, left; Tools and Analytics at the right end. */
   rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools');
   toolsTab = WORKSPACES.find(w => w.id === 'tools');
+  /** The number of tools in the Tools tab's catalog, for its label. */
+  toolCount = signal<number | null>(null);
+  private countTools = effect(() => {
+    if (!this.auth.signedIn()) return;
+    untracked(() => fetch('/api/tools/catalog', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { tools?: unknown[] } | null) => this.toolCount.set(d?.tools?.length ?? null))
+      .catch(() => { /* the tab is still the tab without its number */ }));
+  });
   analytics = WORKSPACES.find(w => w.id === 'analyze');
   /** Shared, because the catalog changes rooms by opening a file. */
   here = this.picked.room;
