@@ -446,9 +446,16 @@ export class Members {
   template: `
 @if (auth.state(); as s) {
   @if (s.mode === 'on' && s.user; as u) {
-    <button class="tcv-tab tcv-user" (click)="toggle()" [title]="u.email ?? u.name">
-      <span class="tcv-user-dot">{{ initial(u.name) }}</span>{{ u.name }}
-      <span class="tcv-user-ws">{{ s.workspace_name ?? s.workspace }}</span>
+    <!-- Who you are, and where: your name over the workspace and your
+         role in it. The caret says it opens. -->
+    <button class="tcv-user" (click)="toggle()" [attr.data-on]="open() ? 1 : null"
+            [title]="(u.email ?? u.name) + ' - ' + (s.role ?? '') + ' in ' + (s.workspace_name ?? s.workspace)">
+      <span class="tcv-user-dot">{{ initial(u.name) }}</span>
+      <span class="tcv-user-text">
+        <span class="tcv-user-name">{{ u.name }}</span>
+        <span class="tcv-user-ws">{{ s.workspace_name ?? s.workspace }} · {{ s.role }}</span>
+      </span>
+      <svg class="tcv-user-caret" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg>
     </button>
     @if (open()) {
       <div class="tcv-menu tcv-user-menu" (mouseleave)="open.set(false)">
