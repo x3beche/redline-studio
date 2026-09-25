@@ -1,5 +1,5 @@
 {
-  "id": "mass-cog", "version": "1.0",
+  "id": "mass-cog", "version": "1.1",
   "name": "Mass & CoG from Volume",
   "blurb": "mass and centre of gravity from volumes and materials",
   "group": "mechanical",
@@ -268,6 +268,8 @@
     }
   ],
   "usage": "Give a table of parts: name, material (one of the listed names) or a density in g/cm³, volume in the chosen unit (negative to remove material), quantity and centroid x, y, z in mm. It returns the total mass in g or kg, the CoG coordinates in mm, net volume, average density, a per-part mass table and point-mass moments of inertia about the CoG. Use it to balance a design, place a handle or foot, or estimate shipping weight from CAD volumes.",
+  "layout": "custom",
+  "agentOmit": ["drawing"],
   "sources": [
     "Centre of mass r = Σ m_i r_i / Σ m_i and the parallel-axis theorem: any statics / dynamics textbook (e.g. Meriam & Kraige, Engineering Mechanics)",
     "Densities: MatWeb typical values; populated PCB and Li-ion cell densities are rule-of-thumb averages"

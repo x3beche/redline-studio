@@ -1,5 +1,5 @@
 {
-  "id": "material-table", "version": "1.0",
+  "id": "material-table", "version": "1.1",
   "name": "Material Property Table",
   "blurb": "density, modulus, yield strength and expansion of materials compared",
   "group": "mechanical",
@@ -464,6 +464,11 @@
         ]
       ]
     }
+    ,
+    { "key": "xprop", "label": "Chart across", "type": "select", "default": "rho", "options": [["rho", "Density"], ["E", "Young's modulus"], ["sy", "Yield strength"], ["uts", "Tensile strength"], ["cte", "Thermal expansion"], ["k", "Thermal conductivity"], ["spE", "Specific stiffness E/ρ"], ["spS", "Specific strength Sy/ρ"]],
+      "help": "The property on the chart's horizontal axis (log scale). Only the page's chart uses it." },
+    { "key": "yprop", "label": "Chart up", "type": "select", "default": "E", "options": [["rho", "Density"], ["E", "Young's modulus"], ["sy", "Yield strength"], ["uts", "Tensile strength"], ["cte", "Thermal expansion"], ["k", "Thermal conductivity"], ["spE", "Specific stiffness E/ρ"], ["spS", "Specific strength Sy/ρ"]],
+      "help": "The property on the chart's vertical axis (log scale). Only the page's chart uses it." }
   ],
   "examples": [
     {
@@ -488,6 +493,8 @@
     }
   ],
   "usage": "Pick a category (all, metal, plastic, electronics, ceramic, composite), an optional text filter, a sort key (name, rho, E, sy, uts, cte, k, spE, spS), a material id for focus and optionally one for compare. It returns the focus material's density (g/cm³), modulus (GPa), yield and tensile strength (MPa), CTE (ppm/K) and conductivity (W/m·K), a comparison table with ratios, and the filtered table. Use it to choose a material or to look up a value for another calculation.",
+  "layout": "custom",
+  "agentOmit": ["points"],
   "sources": [
     "MatWeb material property data (typical values)",
     "ASM Handbook vol. 2 (non-ferrous) and ASM Metals Handbook desk edition",

@@ -44,7 +44,7 @@ export function run({ unit, infill, parts }) {
   const warnings = [];
   const toCm3 = VOL[unit] || VOL.mm3;
   const rows = Array.isArray(parts) ? parts : [];
-  const good = [], bad = [];
+  const good = [], bad = [], badRows = [];
   rows.forEach((r, i) => {
     const name = String(r.name || '').trim() || `Row ${i + 1}`;
     const V = parseEng(r.volume);
@@ -53,18 +53,19 @@ export function run({ unit, infill, parts }) {
     const own = String(r.density ?? '').trim() === '' ? null : parseEng(r.density);
     const rho = own ?? DENSITY[r.material];
     if (V == null || qty == null || !(qty >= 0) || !(rho > 0) || [r.x, r.y, r.z].some((c) => String(c ?? '').trim() !== '' && parseEng(c) == null)) {
-      bad.push(name); return;
+      bad.push(name); badRows.push(i); return;
     }
     let factor = 1;
     // FDM prints are not solid: the infill fraction scales the mass of printed plastics.
     if (infill < 100 && own == null && ['PLA', 'PETG', 'ABS', 'TPU'].includes(r.material)) factor = infill / 100;
     const m = rho * V * toCm3 * qty * factor; // g
-    good.push({ name, V: V * qty, rho, m, x, y, z, qty, factor, mat: own != null ? `ρ ${f(own)}` : r.material });
+    good.push({ row: i, name, V: V * qty, rho, m, x, y, z, qty, factor, mat: own != null ? `ρ ${f(own)}` : r.material });
   });
   if (bad.length) warnings.push(`Skipped rows with a missing or non-numeric volume, quantity, coordinate or density (or no material): ${bad.join(', ')}.`);
-  if (!good.length) return { warnings: [...warnings, 'Add at least one part with a volume and a material.'] };
+  if (!good.length) return { warnings: [...warnings, 'Add at least one part with a volume and a material.'], drawing: { parts: [], badRows } };
   const M = good.reduce((s, p) => s + p.m, 0);
-  if (!(M > 0)) return { warnings: [...warnings, 'The total mass is zero or negative: the removed volumes (negative rows) are bigger than the solid ones. Check the signs.'] };
+  if (!(M > 0)) return { warnings: [...warnings, 'The total mass is zero or negative: the removed volumes (negative rows) are bigger than the solid ones. Check the signs.'],
+    drawing: { parts: good.map(({ row, name, m, x, y, z }) => ({ row, name, m, x, y, z })), badRows } };
   const cog = ['x', 'y', 'z'].map((k) => good.reduce((s, p) => s + p.m * p[k], 0) / M);
   const [cx, cy, cz] = cog;
   // Point-mass inertia about the CoG, g·mm² -> kg·m² (1e-9)
@@ -102,6 +103,15 @@ export function run({ unit, infill, parts }) {
       },
     ],
     texts: [{ title: 'Summary', body: `Mass ${massStr}\nCoG (${f(cx)}, ${f(cy)}, ${f(cz)}) mm\n` + good.map((p) => `${p.name}: ${f(p.m)} g at (${f(p.x)}, ${f(p.y)}, ${f(p.z)})`).join('\n') + '\n' }],
+    // For the page's drawing only (manifest agentOmit): each part where it sits,
+    // the CoG and the radii of gyration about it.
+    drawing: {
+      M, cog, badRows, infill,
+      parts: good.map((p) => ({ row: p.row, name: p.name, m: p.m, x: p.x, y: p.y, z: p.z, rho: p.rho, V: p.V, qty: p.qty, factor: p.factor, share: p.m / M })),
+      k: { x: Math.sqrt(Math.max(0, I.xx) / M), y: Math.sqrt(Math.max(0, I.yy) / M), z: Math.sqrt(Math.max(0, I.zz) / M) },
+      I: { xx: I.xx * 1e-3, yy: I.yy * 1e-3, zz: I.zz * 1e-3 },
+      Vcm3: Vt * toCm3, rhoAvg: M / (Vt * toCm3),
+    },
     notes: [
       'Each row is a lumped mass at its centroid: give a group of identical parts (qty) the centroid of the whole group.',
       'Negative volumes remove material (holes, pockets) at their own centroid.',

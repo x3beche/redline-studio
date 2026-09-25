@@ -1,5 +1,5 @@
 {
-  "id": "knurl-pattern", "version": "1.0",
+  "id": "knurl-pattern", "version": "1.1",
   "name": "Knurl & Grip Pattern",
   "blurb": "grip pattern parameters and CAD code",
   "group": "mechanical",
@@ -30,5 +30,5 @@
     "ANSI/ASME B94.6 Knurling (whole number of teeth on the blank: N = P x D)",
     "Rule of thumb: form-knurl blank about half a pitch under the finished diameter"
   ],
-  "view": true
+  "layout": "custom"
 }

@@ -103,8 +103,12 @@ export function run({ category, filter, sort, focus, compare }) {
     title: COLS[key], type: 'bars', x: rows.map((m) => m.name.replace(/ \(.*\)$/, '')),
     series: [{ name: COLS[key], y: rows.map((m) => (m[key] == null ? NaN : Number(f(m[key])))) }],
   }] : [];
+  // For the page's chart only (manifest agentOmit): every material with its
+  // derived values, and whether the category and filter keep it.
+  const kept = new Set(rows.map((m) => m.id));
+  const points = all.map((m) => ({ ...m, shown: kept.has(m.id) }));
   return {
-    values, tables, charts, warnings,
+    values, tables, charts, warnings, points,
     notes: [
       'Typical room-temperature values for the named condition. Strength varies with temper, thickness and supplier: design with certified minimums (e.g. EN 573/755, ASTM B221) and a safety factor.',
       'Plastics: modulus and strength fall steeply with temperature and (for nylon) with moisture; 3D-printed parts are weaker across layers (often 50-70 % of the in-layer value).',

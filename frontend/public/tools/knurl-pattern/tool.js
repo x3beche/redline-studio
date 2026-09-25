@@ -113,6 +113,14 @@ export function run({ pattern, d, len, pitch, beta, depth, process }) {
       'Tooth count is rounded so the circumference holds a whole number of teeth; that is what lets a formed knurl track and a CAD pattern close.',
       process === 'printed' ? 'Printed grips: print the axis vertical so the ridges run across layers; diamond pitch of 1.2-2 mm grips well with bare hands.' : 'Machined: cut knurls (on a knurl cutting tool) need no blank correction; formed (rolled) knurls raise the crests, so turn the blank about half a pitch under.',
     ],
-    drawing: { d, len, N, beta: b, hands, depth: h, root },
+    // For the page's drawing only: every number it shows comes from here.
+    drawing: {
+      d, len, N, beta: b, hands, depth: h, root, process, pattern: pattern in PATTERNS ? pattern : 'diamond',
+      pNom, pAuto, pAct, pc, pcNom, full, err, lead, twistDeg, blank, dExact, auto: pitch === 'auto',
+      pitches: [...DIN_PITCHES, 2, 2.5].map((p) => {
+        const n = Math.max(3, Math.round((Math.PI * d) / (p / cos)));
+        return { p, N: n, pAct: (Math.PI * d * cos) / n, err: (((Math.PI * d * cos) / n - p) / p) * 100 };
+      }),
+    },
   };
 }
