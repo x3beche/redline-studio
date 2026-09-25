@@ -82,12 +82,14 @@ function complex(sel, errs) {
   const t = sel.trim();
   let spec = [0, 0, 0];
   const parts = [];
-  const push = (text, kind, s) => { parts.push({ text, kind, adds: s }); spec = add(spec, s); };
+  let at = 0;   // where the current part starts in the selector (for the page's drawing)
+  const push = (text, kind, s) => { parts.push({ text, kind, adds: s, at: [at, at + text.length] }); spec = add(spec, s); };
   if (!t) { errs.push('empty selector'); return { spec, parts }; }
   let i = 0;
   while (i < t.length) {
     const ch = t[i];
     if (/\s/.test(ch)) { i++; continue; }
+    at = i;
     if (ch === '>' || ch === '+' || ch === '~') { i++; continue; }
     if (ch === '|' && t[i + 1] === '|') { i += 2; continue; }
     if (ch === '*') {
@@ -163,7 +165,16 @@ function analyse(text) {
   const errs = [];
   const raw = String(text || '').trim().replace(/\s*\{[\s\S]*$/, '');   // allow a pasted rule "sel { … }"
   if (!raw) return { errs: ['empty'], list: [], spec: [0, 0, 0] };
-  const list = splitList(raw).map((sel) => ({ sel, ...complex(sel, errs) }));
+  // Offsets of each listed selector in the text as typed, so the page can
+  // mark every part where it stands.
+  const lead = String(text || '').length - String(text || '').trimStart().length;
+  let pos = 0;
+  const list = splitList(raw).map((sel) => {
+    const off = raw.indexOf(sel, pos); pos = off + sel.length;
+    const r = complex(sel, errs);
+    for (const p of r.parts) p.at = [p.at[0] + off + lead, p.at[1] + off + lead];
+    return { sel, ...r };
+  });
   const best = list.reduce((a, b) => (cmp(b.spec, a.spec) > 0 ? b : a), list[0]);
   return { errs, list, spec: best.spec, best };
 }
@@ -180,18 +191,19 @@ export function run({ a, b, importantA, importantB, bLater }) {
     if (X.list.some((x) => x.parts.some((p) => p.text === '&'))) warnings.push(`Selector ${n} uses "&": in nested CSS it counts as :is(parent selector); add the parent's specificity by hand.`);
   }
 
-  let winner, why;
+  let winner, why, decided;
   const c = cmp(A.spec, B.spec);
   if (importantA !== importantB) {
-    winner = importantA ? 'A' : 'B';
+    winner = importantA ? 'A' : 'B'; decided = 'important';
     why = `${winner} has !important, which beats any specificity of a normal declaration.`;
   } else if (c !== 0) {
     winner = c > 0 ? 'A' : 'B';
     const k = A.spec[0] !== B.spec[0] ? 0 : A.spec[1] !== B.spec[1] ? 1 : 2;
+    decided = ['ids', 'classes', 'types'][k];
     const what = ['IDs', 'classes, attributes and pseudo-classes', 'types and pseudo-elements'][k];
     why = `${winner} has more ${what} (${(c > 0 ? A : B).spec[k]} against ${(c > 0 ? B : A).spec[k]})${k > 0 ? `, and the columns before it are equal` : ''}${importantA ? '; both are !important' : ''}.`;
   } else {
-    winner = bLater ? 'B' : 'A';
+    winner = bLater ? 'B' : 'A'; decided = 'order';
     why = `Equal specificity ${str(A.spec)}${importantA ? ' and both !important' : ''}: the one later in the stylesheet wins, which is ${winner}.`;
   }
 
@@ -212,5 +224,11 @@ export function run({ a, b, importantA, importantB, bLater }) {
       'Compare left to right: one ID beats any number of classes; one class beats any number of types. Combinators and * add nothing.',
       'Before specificity the cascade checks origin, !important, cascade layers (@layer: unlayered normal styles beat layered ones) and @scope proximity; inline style="" beats every selector.',
     ],
+    // For the page only (manifest agentOmit): every part with where it stands in the text.
+    drawing: {
+      winner, decided, why,
+      a: { spec: A.spec, errors: A.errs, best: A.best ? A.list.indexOf(A.best) : -1, list: A.list.map((x) => ({ sel: x.sel, spec: x.spec, parts: x.parts })) },
+      b: { spec: B.spec, errors: B.errs, best: B.best ? B.list.indexOf(B.best) : -1, list: B.list.map((x) => ({ sel: x.sel, spec: x.spec, parts: x.parts })) },
+    },
   };
 }

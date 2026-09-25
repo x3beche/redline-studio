@@ -1,8 +1,10 @@
 {
-  "id": "css-specificity", "version": "1.0",
+  "id": "css-specificity", "version": "1.1",
   "name": "CSS Specificity Calculator",
   "blurb": "which of two selectors wins, and why",
   "group": "web",
+  "layout": "custom",
+  "agentOmit": ["drawing"],
   "rooms": ["web"],
   "keywords": ["css", "specificity", "selector", "cascade", "which rule wins", "important", "!important", ":is", ":where", ":not", ":has", "id class type", "override", "style conflict"],
   "intro": "Counts IDs, classes and types for two selectors, including :is(), :not(), :has(), :where() and :nth-child(… of S), and says which one wins, by !important, specificity or source order. Counting follows Selectors Level 4; the order of checks follows CSS Cascading Level 5.",

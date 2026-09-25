@@ -1,8 +1,10 @@
 {
-  "id": "flexbox-playground", "version": "1.0",
+  "id": "flexbox-playground", "version": "1.1",
   "name": "Flexbox Playground",
   "blurb": "try alignment properties and see the result and code",
   "group": "web",
+  "layout": "custom",
+  "agentOmit": ["flexLines"],
   "rooms": ["web"],
   "keywords": ["flexbox", "flex", "css layout", "justify-content", "align-items", "align-content", "align-self", "flex-grow", "flex-shrink", "flex-basis", "flex-wrap", "gap", "centering"],
   "intro": "Set the container's direction, wrapping and alignment and a few boxes' sizes and flex factors; the browser lays them out live and the tool computes the same positions with the CSS Flexbox algorithm, says which properties currently do nothing, and prints the CSS.",

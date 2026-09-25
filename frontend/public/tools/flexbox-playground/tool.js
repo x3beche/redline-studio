@@ -188,5 +188,8 @@ export function run({ direction, wrap, justify, alignItems, alignContent, gap, w
     texts: [{ title: 'CSS', body: css, lang: 'css' }],
     notes,
     drawing: { width: W, height: H, direction, wrap, justify, alignItems, alignContent, gap: g, items: list.map((it) => ({ i: it.i, w: it.w, h: it.h, grow: it.grow, shrink: it.shrink, order: it.order, self: it.self })), boxes: out },
+    // For the page only (manifest agentOmit): each line's leftover main-axis space and its
+    // logical cross position (from the cross-start edge), and the cross space left over.
+    flexLines: { lines: lines.map((l) => ({ items: l.map((it) => it.i), free: r1(l.free), pos: r1(l.pos), cross: r1(l.cross) })), crossFree: r1(crossFree) },
   };
 }

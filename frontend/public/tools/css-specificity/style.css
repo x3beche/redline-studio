@@ -1,0 +1,168 @@
+/* CSS Specificity: the stylesheet is the interface, the cascade its gates. */
+:root {
+  --tool-id: #8b3fc9; --tool-cls: #0f8a7a; --tool-typ: #a16207;
+  --tool-ra: #1f4ed8; --tool-rb: #d0386a;
+  --tool-code: #f7f9fb;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-id: #c38cf0; --tool-cls: #3cc7b3; --tool-typ: #e0b04a;
+    --tool-ra: #6d8dff; --tool-rb: #f07aa0;
+    --tool-code: #121a21;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-id: #c38cf0; --tool-cls: #3cc7b3; --tool-typ: #e0b04a;
+  --tool-ra: #6d8dff; --tool-rb: #f07aa0;
+  --tool-code: #121a21;
+}
+
+.cs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 420px); gap: 12px; align-items: start; }
+.cs-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cs .c-id { color: var(--tool-id); } .cs .c-cls { color: var(--tool-cls); } .cs .c-typ { color: var(--tool-typ); }
+.cs .c-zero { color: var(--ink-soft); } .cs .c-mix { color: var(--ink); }
+.cs-mono, .cs-code, .cs-trip, .cs-gv, .cs-imp { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+/* ---- the stylesheet ---- */
+.cs-sheet { background: var(--tool-code); border: 1px solid var(--line); border-radius: 6px; min-width: 0; display: flex; flex-direction: column; }
+.cs-sheet-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--surface); border-radius: 6px 6px 0 0; }
+.cs-file { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; padding: 2px 8px; border: 1px solid var(--line); border-bottom-color: transparent; border-radius: 4px 4px 0 0; background: var(--tool-code); margin-bottom: -7px; padding-bottom: 6px; }
+.cs-legend { display: flex; align-items: center; gap: 4px 6px; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-soft); }
+.cs-legend i { display: inline-block; width: 12px; height: 5px; border: 2px solid currentColor; border-top: 0; margin-left: 6px; }
+.cs-legend i.c-zero { border-style: dashed; }
+.cs-ex { margin-left: auto; display: flex; gap: 5px; align-items: center; flex-wrap: wrap; font-size: 11.5px; color: var(--ink-soft); }
+.cs-chip { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 0 8px; font-size: 11.5px; cursor: pointer; color: var(--ink-soft); }
+.cs-chip:hover { border-color: var(--ink-soft); color: var(--ink); }
+
+.cs-code { padding: 18px 18px 8px; font-size: clamp(16px, 1.65vw, 24px); min-width: 0; flex: 1; }
+.cs-rule { position: relative; border-left: 3px solid var(--tool-ra); padding: 4px 0 6px 12px; background: var(--tool-code); border-radius: 0 4px 4px 0; transition: opacity .15s; }
+.cs-rule.cs-b { border-left-color: var(--tool-rb); }
+.cs-rule.dragging { z-index: 2; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); background: var(--surface); }
+.cs-between { height: 14px; }
+.cs-rule-head { display: flex; align-items: center; gap: 8px; font: 12px "IBM Plex Sans", system-ui, sans-serif; color: var(--ink-soft); }
+.cs-grip { border: 1px solid transparent; background: transparent; color: var(--ink-soft); cursor: grab; font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; touch-action: none; margin-left: -8px; }
+.cs-grip:hover { border-color: var(--line); color: var(--ink); }
+.cs-grip:active { cursor: grabbing; }
+.cs-badge { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; background: var(--tool-ra); color: var(--paper); font: 700 12px "IBM Plex Sans", system-ui, sans-serif; flex: none; }
+.cs-b .cs-badge, .cs-badge.b { background: var(--tool-rb); }
+.cs-spec { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.cs-trip { font-size: 22px; color: var(--ink-soft); letter-spacing: .02em; }
+.cs-trip b { font-weight: 600; padding: 0 1px; border-radius: 3px; }
+.cs-trip b.key { outline: 2px solid currentColor; outline-offset: 1px; }
+.cs-trip em { font-style: normal; margin-right: 4px; }
+.cs-wins, .cs-loses { font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--ok); color: var(--ok); font-weight: 500; }
+.cs-loses { border-color: var(--line); color: var(--ink-soft); }
+
+.cs-selline { display: flex; align-items: flex-start; gap: 8px; margin-top: 2px; }
+.cs-brace { color: var(--ink-soft); line-height: 3; flex: none; }
+.cs-ed { position: relative; flex: 1; min-width: 0; }
+.cs-back, .cs-ta { font: inherit; line-height: 3; padding: 0 6px; margin: 0; border: 1px solid transparent; border-radius: 4px;
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; letter-spacing: 0; tab-size: 2; }
+.cs-back { position: absolute; inset: 0; color: var(--ink-soft); pointer-events: none; overflow: hidden; }
+.cs-ta { position: relative; display: block; width: 100%; resize: none; overflow: hidden; background: transparent; color: transparent;
+  caret-color: var(--ink); border-color: var(--line-soft); min-height: 3em; }
+.cs-ta:hover { border-color: var(--line); }
+.cs-ta:focus { outline: none; border-color: var(--accent); }
+.cs-ta:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cs-ta.bad { border-color: var(--danger); border-style: dashed; }
+.cs-ta::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); color: transparent; }
+.cs-part { font-weight: 500; }
+.cs-part.c-id { font-weight: 600; }
+.cs-part.dim { opacity: .55; }
+.cs-marks { position: absolute; inset: 0; pointer-events: none; }
+.cs-mark { position: absolute; height: 17px; padding: 0; border: 0; background: transparent; pointer-events: auto; cursor: pointer; border-radius: 2px; }
+.cs-mark::before { content: ''; position: absolute; left: 1px; right: 1px; top: 0; height: 4px; border: 2px solid currentColor; border-top: 0; border-radius: 0 0 2px 2px; }
+.cs-mark.c-zero::before { border-style: dashed; }
+.cs-mark span { position: absolute; top: 5px; left: 50%; transform: translateX(-50%); font: 600 11px/1 "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; }
+.cs-mark:hover::before { border-width: 3px; border-top: 0; }
+.cs-mark:hover span { text-decoration: underline; }
+.cs-mark.dim { opacity: .5; }
+
+.cs-decl { display: flex; align-items: baseline; gap: 4px 12px; padding-left: 28px; font-size: .78em; line-height: 2; flex-wrap: wrap; }
+.cs-keep { display: inline-flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.cs-k { color: var(--ink); }
+.cs-v { color: var(--ink-soft); }
+.cs-sw { display: inline-block; width: 11px; height: 11px; border-radius: 2px; background: var(--tool-ra); margin: 0 5px 0 2px; vertical-align: -1px; border: 1px solid var(--line); }
+.cs-b .cs-sw { background: var(--tool-rb); }
+.cs-imp { border: 1px dashed var(--line); background: transparent; color: var(--ink-soft); border-radius: 4px; padding: 0 6px; cursor: pointer; font-size: 14px; opacity: .75; }
+.cs-imp:hover { opacity: 1; border-color: var(--ink-soft); }
+.cs-imp[aria-pressed="true"] { border: 1px solid var(--danger); color: var(--danger); opacity: 1; font-weight: 600; }
+.cs-semi { color: var(--ink-soft); margin-left: -6px; }
+.cs-over { font: 11.5px "IBM Plex Sans", system-ui, sans-serif; color: var(--ink-soft); }
+.cs-rule.lost .cs-prop { text-decoration: line-through; text-decoration-thickness: 1.5px; color: var(--ink-soft); }
+.cs-rule.lost .cs-sw { opacity: .45; }
+.cs-close { color: var(--ink-soft); line-height: 1.6; }
+.cs-comment { margin-top: 10px; font-size: 13px; color: var(--ink-soft); font-style: italic; line-height: 1.5; }
+
+.cs-warns:empty { display: none; }
+.cs-warns { margin: 0 14px 8px; border: 1px solid var(--warn); border-left-width: 3px; border-radius: 5px; padding: 5px 10px; font-size: 12px; background: var(--surface); }
+.cs-warns div + div { margin-top: 3px; }
+.cs-info { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; padding: 6px 14px 7px; border-top: 1px solid var(--line-soft); font-size: 12px; min-height: 35px; }
+.cs-info code { font: 600 14px "IBM Plex Mono", ui-monospace, monospace; }
+.cs-info > span:not(.cs-badge) { color: var(--ink-soft); }
+.cs-info b { font: 500 12.5px "IBM Plex Mono", ui-monospace, monospace; }
+.cs-info em { margin-left: auto; font-style: normal; color: var(--ink-soft); font-size: 11px; }
+.cs-hint { min-height: 35px; padding: 7px 14px 9px; border-top: 1px solid var(--line-soft); font-size: 11.5px; color: var(--ink-soft); }
+.cs-hint code, .cs-hint kbd { font: 11px "IBM Plex Mono", ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; background: var(--surface); }
+
+/* ---- cascade gates ---- */
+.cs-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cs-casc { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.cs-casc-head { display: flex; align-items: baseline; gap: 8px; padding: 7px 12px; border-bottom: 1px solid var(--line-soft); font-size: 12px; color: var(--ink-soft); flex-wrap: wrap; }
+.cs-casc-head b { color: var(--ink); font-size: 12.5px; }
+.cs-gates { padding: 4px 8px 6px; position: relative; }
+.cs-gate { display: grid; grid-template-columns: minmax(0, 1fr) 84px 16px 84px 78px; align-items: center; gap: 4px; padding: 6px 6px; border-radius: 5px; position: relative; }
+.cs-gate + .cs-gate:not(.cs-gh)::before { content: ''; position: absolute; left: 50%; top: -3px; width: 0; height: 0; }
+.cs-gh { padding-bottom: 0; }
+.cs-gh .cs-gv { justify-content: center; }
+.cs-gn b { display: block; font-size: 12.5px; font-weight: 500; }
+.cs-gn span { display: block; font: 10.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-gv { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cs-gv > b { font-size: 20px; font-weight: 600; min-width: 14px; text-align: right; }
+.cs-pips { display: flex; flex-wrap: wrap; gap: 2px; max-width: 58px; align-items: center; }
+.cs-pips i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.cs-pips small { font-size: 10px; color: var(--ink-soft); }
+.cs-cmp { text-align: center; color: var(--ink-soft); font: 600 14px "IBM Plex Mono", ui-monospace, monospace; }
+.cs-gbtn { border: 1px solid var(--line); background: var(--sunken); border-radius: 4px; padding: 1px 6px; cursor: pointer; font: 12px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); width: 100%; }
+.cs-gbtn:hover { border-color: var(--ink-soft); }
+.cs-gbtn[aria-pressed="true"] { border-color: var(--danger); color: var(--danger); }
+.cs-gd { font-size: 11px; text-align: right; }
+.cs-tie { color: var(--ink-soft); }
+.cs-skip { color: var(--ink-soft); opacity: .7; }
+.cs-dec { color: var(--ok); font-weight: 600; }
+.cs-gate.key { background: var(--sunken); box-shadow: inset 0 0 0 1.5px var(--ok); }
+.cs-gate.skip { opacity: .42; }
+.cs-gate.tie .cs-gv > b { opacity: .8; }
+.cs-gv.win > b, .cs-gv.win .cs-gbtn { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.cs-gv.win .cs-gbtn { border-color: var(--ok); }
+
+.cs-verdict { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-top: 1px solid var(--line-soft); }
+.cs-verdict .cs-badge { width: 34px; height: 34px; font-size: 18px; border-radius: 6px; }
+.cs-verdict b { font-size: 15px; }
+.cs-verdict div > span { color: var(--ink-soft); font-size: 12px; }
+.cs-verdict p { margin: 3px 0 0; font-size: 12px; color: var(--ink-soft); }
+.cs-preview { display: flex; align-items: center; gap: 10px; padding: 8px 12px 10px; border-top: 1px dashed var(--line-soft); flex-wrap: wrap; }
+.cs-pv-lab { font-size: 11px; color: var(--ink-soft); }
+.cs-pv-el { font: 600 15px "IBM Plex Mono", ui-monospace, monospace; padding: 2px 10px; border-radius: 4px; background: var(--sunken); }
+.cs-pv-el.w-a { color: var(--tool-ra); } .cs-pv-el.w-b { color: var(--tool-rb); }
+
+.cs .k-out { max-height: 200px; }
+.cs-notes { font-size: 12px; color: var(--ink-soft); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; }
+.cs-notes b { color: var(--ink); font-weight: 500; font-size: 12px; }
+.cs-notes p { margin: 5px 0 0; }
+.cs-info[hidden], .cs-hint[hidden] { display: none; }
+
+@media (max-width: 980px) {
+  .cs { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .cs-code { font-size: 16px; padding: 10px 8px 6px; }
+  .cs-decl { padding-left: 10px; font-size: 14px; }
+  .cs-keep { gap: 5px; }
+  .cs-trip { font-size: 18px; }
+  .cs-gate { grid-template-columns: minmax(0, 1fr) 64px 12px 64px; }
+  .cs-gd { grid-column: 1 / -1; text-align: left; margin-top: -4px; }
+  .cs-gd:has(.cs-skip), .cs-gd:has(.cs-tie) { display: none; }
+  .cs-pips { max-width: 30px; }
+  .cs-ex { margin-left: 0; }
+}
