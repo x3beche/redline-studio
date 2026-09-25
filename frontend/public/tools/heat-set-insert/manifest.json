@@ -1,9 +1,11 @@
 {
-  "id": "heat-set-insert", "version": "1.0",
+  "id": "heat-set-insert", "version": "1.1",
   "name": "Heat-Set Insert Sizer",
   "blurb": "boss hole diameter and wall thickness for an insert",
   "group": "mechanical",
   "rooms": ["cad"],
+  "layout": "custom",
+  "agentOmit": ["draw"],
   "keywords": ["heat-set insert", "heat set", "threaded insert", "brass insert", "thermal insert", "ruthex", "boss", "boss diameter", "wall thickness", "3d print thread", "melt-in insert", "knurled insert", "pull-out"],
   "intro": "Gives the hole diameter and depth to model for a tapered brass heat-set insert, and the boss around it: at least 1.6 x, better 2 x the insert's outer diameter (thermoplastic boss guides). It checks your boss and, for FDM, how many perimeters fit in the wall.",
   "inputs": [

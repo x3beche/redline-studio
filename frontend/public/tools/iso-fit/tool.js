@@ -129,8 +129,26 @@ export function run({ size, fit }) {
     const c = evalFit(size, parseFit(name));
     return [name, what, `${fmtDev(c.h.ES)} / ${fmtDev(c.h.EI)}`, `${fmtDev(c.s.es)} / ${fmtDev(c.s.ei)}`, `${fmtDev(c.min)} … ${fmtDev(c.max)}`, c.type];
   });
+  // For the page's drawing only (agentOmit): every letter at the chosen grades,
+  // every grade of the chosen letters, and the preferred fits' zones.
+  const zoneH = (L, g) => { const z = hole(L, g, size); return z.error ? null : [z.EI, z.ES]; };
+  const zoneS = (l, g) => { const z = shaft(l, g, size); return z.error ? null : [z.ei, z.es]; };
+  const GR = [4, 5, 6, 7, 8, 9, 10, 11, 12];
+  const chart = {
+    size, bounds: B13, bounds23: B23, step: [idx(B13, size) > 0 ? B13[idx(B13, size) - 1] : 0, B13[idx(B13, size)]],
+    hole: { letter: f.hl, grade: f.hn, zone: [h.EI, h.ES], limits: [mm4(size + h.EI / 1000), mm4(size + h.ES / 1000)] },
+    shaft: { letter: f.sl, grade: f.sn, zone: [s.ei, s.es], limits: [mm4(size + s.ei / 1000), mm4(size + s.es / 1000)] },
+    min, max, mean: (max + min) / 2, type,
+    it: GR.map((g) => ({ grade: g, it: itOf(g, size) })),
+    holeLetters: LETTERS.map((l) => ({ letter: l.toUpperCase(), zone: zoneH(l.toUpperCase(), f.hn) })),
+    shaftLetters: LETTERS.map((l) => ({ letter: l, zone: zoneS(l, f.sn) })),
+    holeGrades: GR.map((g) => ({ grade: g, zone: zoneH(f.hl, g) })),
+    shaftGrades: GR.map((g) => ({ grade: g, zone: zoneS(f.sl, g) })),
+    preferred: COMMON.map(([name, use]) => { const c = evalFit(size, parseFit(name)); return { name, use, hole: [c.h.EI, c.h.ES], shaft: [c.s.ei, c.s.es], min: c.min, max: c.max, type: c.type }; }),
+  };
   return {
     values,
+    chart,
     drawing: { size, hole: [h.EI, h.ES], shaft: [s.ei, s.es], holeName: `${f.hl}${f.hn}`, shaftName: `${f.sl}${f.sn}`, type },
     tables: [{ title: `Preferred hole-basis fits at Ø${size} mm (deviations and clearance in µm)`, columns: ['Fit', 'Use', 'Hole', 'Shaft', 'Clearance min … max', 'Type'], rows }],
     warnings,

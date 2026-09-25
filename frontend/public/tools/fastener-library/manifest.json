@@ -1,9 +1,11 @@
 {
-  "id": "fastener-library", "version": "1.0",
+  "id": "fastener-library", "version": "1.1",
   "name": "Fastener Library",
   "blurb": "screw, nut and washer sizes by head type, with CAD variables",
   "group": "mechanical",
   "rooms": ["cad"],
+  "layout": "custom",
+  "agentOmit": ["draw"],
   "keywords": ["screw", "bolt", "nut", "washer", "socket head cap", "din 912", "iso 4762", "button head", "countersunk", "pan head", "hex head", "nyloc", "counterbore", "nut trap", "screw length"],
   "intro": "Pick a metric size and head type and get the head, nut and washer dimensions from the ISO/DIN standards, the clearance hole and counterbore or countersink, the screw length to order for your grip, and the numbers as CAD variables.",
   "inputs": [

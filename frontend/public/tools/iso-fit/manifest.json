@@ -1,5 +1,5 @@
 {
-  "id": "iso-fit", "version": "1.0",
+  "id": "iso-fit", "version": "1.1",
   "name": "Clearance Fit Calculator",
   "blurb": "actual clearance or interference of an ISO fit such as H7/g6",
   "group": "mechanical",
@@ -7,6 +7,8 @@
   "keywords": ["iso fit", "iso 286", "limits and fits", "h7", "g6", "clearance fit", "interference fit", "press fit", "transition fit", "shaft tolerance", "hole tolerance", "bearing fit", "it grade", "fundamental deviation"],
   "intro": "Give a nominal size and a fit like H7/g6: it returns the hole and shaft limits from ISO 286-1 and the smallest and largest clearance (or interference) that can occur, with the preferred fits at that size for comparison.",
   "view": true,
+  "layout": "custom",
+  "agentOmit": ["chart"],
   "inputs": [
     { "key": "size", "label": "Nominal size", "type": "number", "unit": "mm", "default": "25" },
     { "key": "fit", "label": "Fit (hole/shaft)", "type": "text", "default": "H7/g6", "placeholder": "H7/g6, H7/p6, G7/h6",

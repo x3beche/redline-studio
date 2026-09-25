@@ -146,8 +146,28 @@ export function run({ size, head, nut, washer, grip, material }) {
   if (washer) cad.push(v('washer_id', wd1), v('washer_od', wd2), v('washer_h', wh));
   if (thread && pick != null) cad.push(v('tap_drill', d - p, 'D - P'));
 
+  // Geometry for the page's drawing (agentOmit: agents get the same numbers in values and texts).
+  const wUnder = washer && h.seat !== 'countersink';
+  const draw = {
+    size: s, head: headKey, headName: h.name, seatKind: h.seat, d, p, dk, k, drive, clear: CLEAR[s],
+    seat: { kind: seat.kind, d: r2(seat.d), depth: r2(seat.depth), angle: seat.angle || null },
+    sizes: SIZES.map((x) => ({ size: x, d: D[x], clear: CLEAR[x], made: !!h.data[x] })),
+    nut: nutRow ? { kind: nut === 'nyloc' && NYLOC_H[s] ? 'nyloc' : 'hex', s: nutRow.s, e: nutRow.e, h: nutRow.h, trap: r2(nutRow.s + 0.2),
+      trapCorners: r2((nutRow.s + 0.2) / Math.cos(Math.PI / 6)), trapDepth: r2(nutRow.h + 0.2), plainH: NUT[s][1] } : null,
+    washer: washer ? { d1: wd1, d2: wd2, h: wh, underHead: wUnder, underNut: !!nutRow } : null,
+    grip: g > 0 ? g : null, need: need != null ? r2(need) : null, pick,
+    lengthFrom: headKey === 'countersunk' ? 'overall' : 'under head',
+    lengths: LENGTHS,
+    material: nutRow ? null : (ENGAGE[material] || ENGAGE.steel)[1],
+    engageFactor: nutRow ? null : (ENGAGE[material] || ENGAGE.steel)[0],
+    thread: thread && pick != null ? (() => { const into = pick - (need - thread.eng); return { eng: r2(thread.eng), into: r2(into), tapDepth: r2(into + 2 * p), drillDepth: r2(into + 5 * p), tapDrill: r2(d - p), deep: into > 3 * d }; })() : null,
+    protrusion: nutRow && pick != null ? r2(pick - (g + (wUnder ? wh : 0) + (washer ? wh : 0) + nutRow.h)) : null,
+    flushProblem: headKey === 'countersunk' && g > 0 && g < k,
+  };
+
   return {
     values,
+    draw,
     tables: [{ title: `${h.name}: all sizes (mm)`, columns: ['Size', 'Pitch', headKey === 'hex' ? 'Head AF' : 'Head Ø', 'Head h', 'Drive', 'Clearance', seat.kind === 'countersink' ? 'Countersink' : 'Counterbore', 'Nut AF / h', 'Washer d1/d2/h'], rows }],
     texts: [{ title: 'CAD variables', body: cad.join('\n') + '\n', lang: 'scad' }],
     warnings,

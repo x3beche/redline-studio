@@ -27,13 +27,15 @@ const MATERIALS = {
 };
 
 const r2 = (v) => Math.round(v * 100) / 100;
+const insertList = () => Object.entries(INSERTS).map(([k, [n, o, l, hh]]) => ({ key: k, name: n, od: o, length: l, hole: hh }));
+const materialList = () => Object.entries(MATERIALS).map(([k, [n, t]]) => ({ key: k, name: n, temp: t }));
 const mm = (v) => `${fmtNum(r2(v))} mm`;
 
 export function run({ insert, od, length, process, material, boss, line }) {
   const warnings = [];
   let name, OD, L, hole, fromSheet = true;
   if (insert === 'custom') {
-    if (!(od > 0) || !(length > 0)) return { warnings: ['Give the insert outer (knurl) diameter and length in mm, e.g. 4.6 and 5.7.'] };
+    if (!(od > 0) || !(length > 0)) return { warnings: ['Give the insert outer (knurl) diameter and length in mm, e.g. 4.6 and 5.7.'], draw: { partial: true, inserts: insertList(), materials: materialList() } };
     [name, OD, L] = ['Custom insert', od, length];
     hole = OD - 0.6; fromSheet = false;
     if (OD < 2.5 || OD > 16) warnings.push(`An insert of Ø ${mm(OD)} is outside the 2.5-16 mm range the hole rule is based on: take the hole from the insert's data sheet.`);
@@ -76,9 +78,24 @@ export function run({ insert, od, length, process, material, boss, line }) {
   }
   if (L > 3 * OD) warnings.push('An insert longer than 3 x its OD is unusual: check the values.');
 
+  // Geometry for the page's drawing (agentOmit: the same numbers are in values).
+  const lines = process === 'fdm' && line > 0 && wall != null ? wall / line : null;
+  const draw = {
+    key: insert === 'custom' ? 'custom' : (INSERTS[insert] ? insert : 'm3'), name, od: OD, length: L, hole, depth, fromSheet,
+    bossMin: r2(bossMin), bossRec: r2(bossRec), boss: boss > 0 ? boss : null, wall: wall != null ? r2(wall) : null,
+    wallMin: r2((bossMin - hole) / 2), wallRec: r2((bossRec - hole) / 2),
+    tone: wall == null ? null : boss >= bossRec - 1e-9 ? 'ok' : boss >= bossMin - 1e-9 ? 'warn' : 'bad',
+    process: process === 'moulded' ? 'moulded' : 'fdm', line: process === 'fdm' && line > 0 ? line : null,
+    lines: lines != null ? r2(lines) : null, walls: lines != null ? Math.max(3, Math.ceil(lines - 1e-9)) : null,
+    linesTone: lines == null ? null : lines >= 4 ? 'ok' : lines >= 3 ? 'warn' : 'bad',
+    material: mat[0], temp: mat[1],
+    materials: materialList(),
+    inserts: insertList(),
+  };
   const rows = Object.values(INSERTS).map(([n, o, l, h]) => [n, fmtNum(o), fmtNum(l), fmtNum(h), fmtNum(l + 1), fmtNum(r2(1.6 * o)), fmtNum(r2(2 * o))]);
   return {
     values,
+    draw,
     tables: [{ title: 'Common heat-set inserts (mm, typical tapered brass inserts)', columns: ['Thread', 'Insert OD', 'Length', 'Hole Ø', 'Hole depth', 'Boss Ø min', 'Boss Ø rec.'], rows }],
     texts: [{ title: 'CAD variables', lang: 'scad', body: [
       `// ${name} heat-set insert, mm`,
