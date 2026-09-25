@@ -44,6 +44,9 @@ const unknown = Object.keys(given).filter((k) => !(manifest.inputs || []).some((
 try {
   const tool = await import(pathToFileURL(join(root, id, 'tool.js')).href);
   const result = await tool.run(input);
+  // Fields that only feed the page's drawing (the manifest's agentOmit) are
+  // left out for agents: they are large and say nothing the rest does not.
+  for (const k of manifest.agentOmit || []) delete result[k];
   if (problems.length || unknown.length) {
     result.warnings = [...problems, ...unknown.map((k) => `unknown input ${k} ignored`), ...(result.warnings || [])];
   }

@@ -342,6 +342,9 @@ Make a folder `frontend/public/tools/<id>/`; `i2c-pullup/` is the reference.
    `ctx.outputs` (the Prompt/JSON panel) to place. `ctx.set(key, value)`
    changes an input, `ctx.onResult(fn)` gets every new result; every number
    drawn comes from `run()`'s result. See the head of `kit/kit.js`.
+   Result fields that only feed the drawing and are large (a whole package's
+   pins, a curve's points) can be listed in the manifest's `agentOmit`:
+   `run_tool` leaves them out for agents; the page still gets them.
 5. **`view.js`** with `view()` only, when a drawing under the standard form helps: `export function view(el, result,
    input)`, colours only from the CSS variables. Put the drawing's numbers
    in the result too - agents never see the view.
