@@ -1,0 +1,173 @@
+/* MOSFET Gate Drive Check: the switching edge is the interface. */
+:root {
+  --tool-vgs: #1f4ed8; --tool-vds: #c96a00; --tool-id: #0f8f7e; --tool-loss: #c0392b; --tool-other: #9b36b8;
+  --tool-band-i: rgba(15, 143, 126, .10); --tool-band-v: rgba(201, 106, 0, .10);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-vgs: #7d9bff; --tool-vds: #f0a33a; --tool-id: #3cc7b3; --tool-loss: #ef7a6d; --tool-other: #cf8ae6;
+    --tool-band-i: rgba(60, 199, 179, .12); --tool-band-v: rgba(240, 163, 58, .12);
+  }
+}
+:root[data-theme="dark"] {
+  --tool-vgs: #7d9bff; --tool-vds: #f0a33a; --tool-id: #3cc7b3; --tool-loss: #ef7a6d; --tool-other: #cf8ae6;
+  --tool-band-i: rgba(60, 199, 179, .12); --tool-band-v: rgba(240, 163, 58, .12);
+}
+
+.mg { display: grid; gap: 10px; min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) 320px;
+  grid-template-rows: 200px minmax(250px, 1fr) 200px;
+  grid-template-areas: "drv drv side" "qg edge side" "qg per side";
+  height: max(700px, calc(100vh - 72px)); }
+.mg-drv { grid-area: drv; } .mg-qg { grid-area: qg; } .mg-edge { grid-area: edge; } .mg-per { grid-area: per; } .mg-side { grid-area: side; }
+.mg-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; display: flex; flex-direction: column; }
+.mg-head { display: flex; align-items: baseline; gap: 4px 12px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+.mg-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.mg-hint { font-size: 11.5px; color: var(--ink-soft); }
+.mg-box { position: relative; flex: 1 1 auto; min-height: 0; }
+.mg-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+
+.mg-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+.mg-loss { padding: 10px 12px; gap: 6px; }
+.mg-lab { font-size: 11.5px; color: var(--ink-soft); }
+.mg-big { font: 500 38px/1 "IBM Plex Mono", ui-monospace, monospace; letter-spacing: -0.02em; }
+.mg-bar { display: flex; height: 12px; border-radius: 2px; overflow: hidden; background: var(--sunken); }
+.mg-bar i { display: block; height: 100%; }
+.lb-on { background: var(--tool-id); } .lb-off { background: var(--tool-vds); } .lb-cond { background: var(--ink-soft); }
+.mg-leg { display: flex; gap: 10px; flex-wrap: wrap; font: 11px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+.mg-leg i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.mg-dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 4px 0 0; padding-top: 7px; border-top: 1px solid var(--line-soft); font-size: 12px; }
+.mg-dl dt { color: var(--ink-soft); }
+.mg-dl dd { margin: 0; text-align: right; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.mg-dl dd small { display: block; font-size: 10.5px; color: var(--ink-soft); }
+.mg-dl dd.t-ok { color: var(--ok); } .mg-dl dd.t-warn { color: var(--warn); } .mg-dl dd.t-bad { color: var(--danger); }
+.mg-warns { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 6px; padding: 6px 10px; background: var(--surface); font-size: 12px; }
+.mg-warns div + div { margin-top: 4px; }
+.mg-warns:empty { display: none; }
+.mg-all { padding: 0; }
+.mg-all summary { cursor: pointer; padding: 7px 10px; font-size: 12px; color: var(--ink-soft); }
+.mg-all[open] summary { border-bottom: 1px solid var(--line-soft); }
+.mg-all .k-form { border: 0; padding: 8px 10px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); background: transparent; }
+.mg-side .k-outwrap { flex: 1 1 0; min-height: 150px; display: flex; flex-direction: column; }
+.mg-side .k-out { flex: 1 1 0; max-height: none; min-height: 0; }
+.mg-notes { font-size: 11.5px; color: var(--ink-soft); }
+.mg-notes summary { cursor: pointer; }
+.mg-notes div { margin-top: 3px; }
+
+/* SVG */
+.mg-svg text { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); }
+.mg-svg .lbl { font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif; font-size: 11.5px; fill: var(--ink-soft); }
+.mg-svg .small { font-size: calc(10.5px * var(--fk, 1)); font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif; }
+.mg-svg .small.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.mg-svg .halo { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.mg-svg .grid { stroke: var(--line-soft); stroke-width: 1; }
+.mg-svg .tick { font-size: 10.5px; }
+.mg-svg .wire { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+.mg-svg .wire.dash { stroke-dasharray: 3 3; stroke: var(--ink-soft); }
+.mg-svg .res, .mg-svg .ind, .mg-svg .cap { fill: none; stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
+.mg-svg .arr { fill: var(--ink); }
+.mg-svg .blk { fill: var(--sunken); stroke: var(--line); }
+.mg-svg .pkg { fill: none; stroke: var(--line); stroke-dasharray: 5 4; }
+.mg-svg .sw { stroke: var(--ink-soft); fill: var(--surface); }
+.mg-svg .sw.on { stroke: var(--tool-id); } .mg-svg .sw.off { stroke: var(--tool-vds); }
+.mg-svg .iarr { fill: none; stroke-width: 1.6; }
+.mg-svg .iarr.on { stroke: var(--tool-vgs); } .mg-svg .iarr.off { stroke: var(--tool-vgs); stroke-dasharray: 4 2; }
+.mg-svg .ival { fill: var(--tool-vgs); font-size: calc(11.5px * var(--fk, 1)); }
+.mg-svg .cbox { fill: var(--surface); stroke: var(--line); }
+.mg-svg .cbox.w { stroke: var(--warn); stroke-width: 1.6; }
+.mg-svg .ct { fill: var(--ink); font-size: calc(11.5px * var(--fk, 1)); }
+.mg-svg .eq { fill: var(--ink-soft); font-size: 11.5px; }
+.mg-svg .eq .eqh { fill: var(--ink); font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif; font-weight: 600; font-size: 11.5px; }
+.mg-svg .eq .eqb { fill: var(--tool-vgs); }
+.mg-svg .vtbox { fill: var(--surface); stroke: var(--line); }
+.mg-h:hover .vtbox, .mg-h:focus-visible .vtbox, .mg-h.on .vtbox { stroke: var(--accent); }
+
+.mg-svg .band-i { fill: var(--tool-band-i); } .mg-svg .band-v { fill: var(--tool-band-v); }
+.mg-svg .lvl { stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 3 4; }
+.mg-svg .drvl { stroke: var(--tool-vgs); opacity: .6; }
+.mg-svg .vthl { stroke: var(--ink); stroke-dasharray: 6 3; }
+.mg-svg .lvt { font-size: 11px; fill: var(--ink-soft); }
+.mg-svg .vtt { fill: var(--ink); }
+.mg-svg .curve { fill: none; stroke: var(--tool-vgs); stroke-width: 2.2; stroke-linejoin: round; }
+.mg-svg .curve.hot-i { stroke: var(--tool-id); stroke-width: 3.5; }
+.mg-svg .curve.hot-v { stroke: var(--tool-vds); stroke-width: 3.5; }
+.mg-svg .ann { fill: var(--ink); font-size: 11px; }
+.mg-svg .rs.r0 { fill: var(--sunken); stroke: var(--line); }
+.mg-svg .rs.ri { fill: var(--tool-id); } .mg-svg .rs.rv { fill: var(--tool-vds); }
+.mg-svg .rt { font-size: 10.5px; }
+.mg-svg .brace { fill: none; stroke: var(--ink); stroke-width: 1; }
+
+.mg-svg .base { stroke: var(--line); stroke-width: 1; }
+.mg-svg .pane { font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif; font-size: 12px; font-weight: 600; fill: var(--ink); }
+.mg-svg .pane .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 400; }
+.mg-svg .pane .soft { fill: var(--ink-soft); font-weight: 400; font-size: 11px; }
+.mg-svg .rowl { font-size: 11px; font-weight: 600; }
+.mg-svg .rowl.vgs, .mg-svg .vt.vgs { fill: var(--tool-vgs); }
+.mg-svg .rowl.vds, .mg-svg .vt.vds { fill: var(--tool-vds); }
+.mg-svg .rowl.id, .mg-svg .vt.id { fill: var(--tool-id); }
+.mg-svg .rowl.loss { fill: var(--tool-loss); }
+.mg-svg .vt.other { fill: var(--tool-other); }
+.mg-svg .guide { stroke: var(--line); stroke-dasharray: 2 3; }
+.mg-svg .gl { font-size: 10px; }
+.mg-svg .gl.badt { fill: var(--danger); }
+.mg-svg .ph { font-size: 10px; fill: var(--ink-soft); }
+.mg-svg .w { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.mg-svg .w.vgs { stroke: var(--tool-vgs); } .mg-svg .w.vds { stroke: var(--tool-vds); } .mg-svg .w.id { stroke: var(--tool-id); }
+.mg-svg .w.dash { stroke-dasharray: 4 3; opacity: .7; }
+.mg-svg .w.other { stroke: var(--tool-other); stroke-width: 1.4; stroke-dasharray: 5 2; }
+.mg-svg .w.other.bad { stroke: var(--danger); stroke-dasharray: none; stroke-width: 2; }
+.mg-svg .pw { fill: var(--tool-loss); fill-opacity: .28; stroke: var(--tool-loss); stroke-width: 1.2; }
+.mg-svg .etxt { fill: var(--tool-loss); font-size: 11px; }
+.mg-svg .dim { stroke: var(--ink-soft); fill: none; }
+.mg-svg .scale { stroke: var(--ink); stroke-width: 1.5; fill: none; }
+
+.mg-svg .per-bg { fill: var(--sunken); }
+.mg-svg .edgebar { fill: var(--tool-loss); fill-opacity: .5; }
+.mg-svg .full { stroke: var(--ink-soft); stroke-dasharray: 2 2; }
+.mg-svg .full.bad { stroke: var(--danger); stroke-dasharray: none; stroke-width: 1.5; }
+.mg-svg .fl { fill: none; stroke-width: 1.8; }
+.mg-svg .fl.sw { stroke: var(--tool-vds); } .mg-svg .fl.cond { stroke: var(--ink-soft); stroke-dasharray: 4 3; } .mg-svg .fl.tot { stroke: var(--tool-loss); stroke-width: 2.2; }
+.mg-svg .lg { font-size: 10.5px; }
+.mg-svg .lg.sw { fill: var(--tool-vds); } .mg-svg .lg.tot { fill: var(--tool-loss); }
+.mg-svg .fline { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 3 2; }
+.mg-svg .ftag { fill: var(--ink); font-size: 11.5px; }
+
+.mg-svg .wmark circle { fill: var(--warn); }
+.mg-svg .wmark text { fill: var(--surface); font-weight: 700; font-size: 11px; }
+
+/* handles */
+.mg-h { outline: none; cursor: grab; }
+.mg-h.ew { cursor: ew-resize; } .mg-h.ns { cursor: ns-resize; } .mg-h.xy { cursor: move; }
+.mg-h .hit { fill: transparent; }
+.mg-h .grip { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.mg-h rect.grip { stroke: none; opacity: .7; }
+.mg-h .grip.dotp { fill: var(--tool-loss); }
+.mg-h .ring { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 3 2; opacity: 0; }
+.mg-h:hover .ring { opacity: .5; }
+.mg-h:focus-visible .ring, .mg-h.on .ring { opacity: 1; }
+.mg-h:hover rect.grip, .mg-h.on rect.grip { opacity: 1; }
+.mg-h.chip:hover .cbox, .mg-h.chip:focus-visible .cbox, .mg-h.chip.on .cbox { stroke: var(--accent); }
+.mg-h.chip .cbox { stroke-dasharray: none; }
+.mg-h.chip .ct::after { content: ''; }
+
+@media (max-width: 1180px) {
+  .mg { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); height: auto;
+    grid-template-rows: 200px 380px 210px auto;
+    grid-template-areas: "drv drv" "qg edge" "qg per" "side side"; }
+  .mg-side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .mg-side .k-outwrap { min-height: 260px; }
+}
+@media (max-width: 760px) {
+  .mg { grid-template-columns: minmax(0, 1fr); grid-template-rows: none;
+    grid-template-areas: "drv" "qg" "edge" "per" "side"; }
+  .mg-sch-box { height: 150px; flex: none; }
+  .mg-qg-box { height: 320px; flex: none; }
+  .mg-ed-box { height: 460px; flex: none; }
+  .mg-pe-box { height: 250px; flex: none; }
+  .mg-side { display: flex; }
+  .mg-hint { display: none; }
+  .mg-big { font-size: 32px; }
+}
+
+/* an invalid input: the last valid state stays, dimmed; the warning says why */
+.mg.stale .mg-qg .mg-box, .mg.stale .mg-edge .mg-box, .mg.stale .mg-per .mg-box { opacity: .35; }

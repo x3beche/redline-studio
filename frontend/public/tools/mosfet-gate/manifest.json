@@ -1,8 +1,9 @@
 {
-  "id": "mosfet-gate", "version": "1.0",
+  "id": "mosfet-gate", "version": "1.1",
   "name": "MOSFET Gate Drive Check",
   "blurb": "switching loss and driver adequacy from gate charge, drive current and frequency",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["mosfet", "gate driver", "gate charge", "qg", "qgd", "miller plateau", "switching loss", "conduction loss", "gate resistor", "rise time", "dv/dt", "half-bridge", "pwm", "power loss"],
   "intro": "Uses the gate-charge method: the drain voltage and current swing while the gate charges Qgs2 + Qgd at the plateau, with the gate current set by the driver, the gate resistors and the plateau voltage. It gives the transition times, switching, conduction and gate-drive losses, and flags a weak driver, a slow edge or a Miller turn-on risk. Hard-switched inductive load assumed.",

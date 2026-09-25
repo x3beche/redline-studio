@@ -82,6 +82,16 @@ export function run(i) {
       xLabel: 'switching frequency', yLabel: 'loss, W' }],
     tables: [{ title: 'At other frequencies (same driver and gate resistor)', columns: ['Frequency', 'Switching', 'Conduction', 'Total', 'Gate drive', 'Edges / period'],
       rows: sweep.map((s) => [fmtEng(s.fx, 'Hz'), fmtEng(s.ps, 'W'), fmtEng(pCond, 'W'), fmtEng(s.tot, 'W'), fmtEng(s.pg, 'W'), `${fmtNum(s.share * 100, 3)} %`]) }],
+    // Raw numbers for the page's drawing (SI units); the same values as above.
+    drawing: {
+      vbus, id, f, T, D, vdrv, vpl, vth: Vth, rgi: Rgi, rg: Rg,
+      qg: QG, qgs: QGS, qgd: QGD, qgs2, qsw, rSrc, rSnk, rOn, rOff, igOn, igOff,
+      tOn, tOff, tOnI: qgs2 / igOn, tOnV: QGD / igOn, tOffV: QGD / igOff, tOffI: qgs2 / igOff,
+      eOn: 0.5 * vbus * id * tOn, eOff: 0.5 * vbus * id * tOff,
+      pSwOn: 0.5 * vbus * id * tOn * f, pSwOff: 0.5 * vbus * id * tOff * f,
+      pSw, pCond, pGate, pDrv, iAvg, dvdt, share, tFull, minOn, vInd, crss: crss > 0 ? crss * 1e-12 : null,
+      sweep: sweep.map((s) => ({ f: s.fx, sw: s.ps, cond: pCond, total: s.tot, gate: s.pg, share: s.share })),
+    },
     notes: [
       'Plateau gate current is held constant through the transition; real drivers act more like resistors near their rails, so times can be 10–30 % longer.',
       'Not included: reverse-recovery loss of the opposite diode, Coss charge loss (½·Coss·V²·f) and ringing; add them for hard-switched bridges above ~100 kHz.',

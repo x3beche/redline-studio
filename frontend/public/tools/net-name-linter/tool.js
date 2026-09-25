@@ -122,43 +122,49 @@ export function run({ nets, convention, activeLowStyle, voltageStyle, maxLen }) 
   const renames = [];
   let unnamed = 0;
   const bad = new Set();
-  const add = (n, problem, fix) => { issues.push([n, problem, fix]); bad.add(n); };
+  const per = new Map(); // full name -> {codes, problems, fix} for the page's drawing
+  const add = (n, problem, fix, cs = []) => {
+    issues.push([n, problem, fix]); bad.add(n);
+    const p = per.get(n) || { codes: [], problems: [], fixes: [] };
+    p.codes.push(...cs); p.problems.push(problem); p.fixes.push(fix); per.set(n, p);
+  };
 
   for (const x of info) {
     if (x.auto) { unnamed++; continue; }
-    const probs = [];
+    const probs = [], codes = [];
     let core = x.core;
-    if (/\s/.test(core)) { probs.push('contains spaces'); core = core.replace(/\s+/g, '_'); }
-    if (/[,;:'"()<>{}|\\*?]/.test(core)) { probs.push('has characters CAD/CAM exports reject'); core = core.replace(/[,;:'"()<>{}|\\*?]+/g, '_'); }
-    if (/[[\]]/.test(core.replace(/\[\d+\]$/, ''))) { probs.push('brackets that are not a bus index'); core = core.replace(/[[\]]/g, '_'); }
+    if (/\s/.test(core)) { (codes.push('space'), probs).push('contains spaces'); core = core.replace(/\s+/g, '_'); }
+    if (/[,;:'"()<>{}|\\*?]/.test(core)) { (codes.push('chars'), probs).push('has characters CAD/CAM exports reject'); core = core.replace(/[,;:'"()<>{}|\\*?]+/g, '_'); }
+    if (/[[\]]/.test(core.replace(/\[\d+\]$/, ''))) { (codes.push('brackets'), probs).push('brackets that are not a bus index'); core = core.replace(/[[\]]/g, '_'); }
     const vs = voltStyle(core);
     if (vs && ((vPref === 'V' && vs === 'dot') || (vPref === 'dot' && vs === 'V'))) {
-      probs.push(`voltage written ${vs === 'dot' ? '3.3V' : '3V3'} style; the design uses ${vPref === 'V' ? '3V3' : '3.3V'}`);
+      (codes.push('volt'), probs).push(`voltage written ${vs === 'dot' ? '3.3V' : '3V3'} style; the design uses ${vPref === 'V' ? '3V3' : '3.3V'}`);
       core = vPref === 'V' ? toV(core) : toDot(core);
     }
     const sign = /^[+-]/.test(core) ? core[0] : '';   // +3V3, -12V keep their sign
     let body = core.slice(sign.length);
-    if (/[-.]/.test(body.replace(/\d+\.\d+V/gi, ''))) { probs.push("'-' or '.' as a word separator; use '_'"); body = body.replace(/(\d+\.\d+V)|[-.]/gi, (m, v) => v || '_'); }
+    if (/[-.]/.test(body.replace(/\d+\.\d+V/gi, ''))) { (codes.push('sep'), probs).push("'-' or '.' as a word separator; use '_'"); body = body.replace(/(\d+\.\d+V)|[-.]/gi, (m, v) => v || '_'); }
     body = body.replace(/_+/g, '_').replace(/^_|_$/g, '') || body;
     core = sign + body;
     const letters = core.replace(/\d+V\d+|\d+\.\d+V/gi, '').replace(/[^A-Za-z]/g, '');
-    if (conv === 'upper' && letters !== letters.toUpperCase()) { probs.push('lower-case letters; the convention is UPPER_SNAKE'); core = core.toUpperCase(); }
-    if (conv === 'lower' && letters !== letters.toLowerCase()) { probs.push('upper-case letters; the convention is lower_snake'); core = core.toLowerCase(); }
+    if (conv === 'upper' && letters !== letters.toUpperCase()) { (codes.push('case'), probs).push('lower-case letters; the convention is UPPER_SNAKE'); core = core.toUpperCase(); }
+    if (conv === 'lower' && letters !== letters.toLowerCase()) { (codes.push('case'), probs).push('upper-case letters; the convention is lower_snake'); core = core.toLowerCase(); }
     let fixed = core;
     if (x.al) {
-      if (x.al.style !== alPref) probs.push(`active-low written ${x.al.style === '~{}' ? '~{X}' : x.al.style === 'n' ? 'nX' : 'X' + x.al.style}; the design uses ${alPref === '~{}' ? '~{X}' : alPref === 'n' ? 'nX' : 'X' + alPref}`);
+      if (x.al.style !== alPref) (codes.push('al'), probs).push(`active-low written ${x.al.style === '~{}' ? '~{X}' : x.al.style === 'n' ? 'nX' : 'X' + x.al.style}; the design uses ${alPref === '~{}' ? '~{X}' : alPref === 'n' ? 'nX' : 'X' + alPref}`);
       fixed = AL_STYLES[alPref](core);
       if (alPref === '_N' && conv === 'lower') fixed = `${core}_n`;
     }
     if (x.d) {
-      if (!x.d.has) probs.push(`differential pair without its ${x.d.pn === 'P' ? 'N' : 'P'} half`);
-      if (x.d.style !== dPref) probs.push(`pair suffix ${x.d.style} while most pairs use ${dPref}`);
+      if (!x.d.has) (codes.push('half'), probs).push(`differential pair without its ${x.d.pn === 'P' ? 'N' : 'P'} half`);
+      if (x.d.style !== dPref) (codes.push('pairstyle'), probs).push(`pair suffix ${x.d.style} while most pairs use ${dPref}`);
       const want = DIFF.find((d) => d.style === dPref).sfx(x.d.pn);
       fixed = core + (conv === 'lower' ? want.toLowerCase() : want);
     }
-    if (x.base.length > limit) probs.push(`${x.base.length} characters, over the ${limit} limit`);
+    if (x.base.length > limit) (codes.push('len'), probs).push(`${x.base.length} characters, over the ${limit} limit`);
     if (probs.length) {
-      add(x.full, probs.join('; '), fixed !== x.base ? x.pre + fixed : x.base.length > limit ? '(shorten by hand)' : x.d && !x.d.has ? `(add ${x.d.core}${DIFF.find((d) => d.style === x.d.style).sfx(x.d.pn === 'P' ? 'N' : 'P')})` : '–');
+      x.fixed = fixed !== x.base ? x.pre + fixed : null;
+      add(x.full, probs.join('; '), fixed !== x.base ? x.pre + fixed : x.base.length > limit ? '(shorten by hand)' : x.d && !x.d.has ? `(add ${x.d.core}${DIFF.find((d) => d.style === x.d.style).sfx(x.d.pn === 'P' ? 'N' : 'P')})` : '–', codes);
       if (fixed !== x.base) renames.push(`${x.full} -> ${x.pre + fixed}`);
     }
   }
@@ -171,20 +177,23 @@ export function run({ nets, convention, activeLowStyle, voltageStyle, maxLen }) 
     if (!m || /\d+V\d*$/i.test(x.base)) continue;
     const style = m[2].startsWith('[') ? 'X[0]' : m[2].startsWith('_') ? 'X_0' : 'X0';
     (buses[m[1].toUpperCase()] ||= []).push({ full: x.full, style });
+    x.bus = m[1].toUpperCase();
   }
   for (const [b, list] of Object.entries(buses)) {
     const styles = new Set(list.map((l) => l.style));
     if (list.length > 1 && styles.size > 1) {
       const pref = majority(list.reduce((c, l) => ((c[l.style] = (c[l.style] || 0) + 1), c), {}));
-      for (const l of list) if (l.style !== pref) add(l.full, `bus ${b} mixes index styles (${[...styles].join(', ')}); most members use ${pref}`, '(match the bus)');
+      for (const l of list) if (l.style !== pref) add(l.full, `bus ${b} mixes index styles (${[...styles].join(', ')}); most members use ${pref}`, '(match the bus)', ['bus']);
     }
   }
 
   // Same net spelled more than one way.
   const groups = {};
   for (const x of info) if (!x.auto) (groups[dupKey(x.base)] ||= []).push(x.full);
+  const dupOf = new Map();
+  for (const [key, list] of Object.entries(groups)) if (list.length > 1) for (const n of list) dupOf.set(n, key);
   for (const list of Object.values(groups)) {
-    if (list.length > 1) for (const n of list) add(n, `looks like the same net as ${list.filter((o) => o !== n).join(', ')}: two names split one net in the netlist`, '(merge, or rename one)');
+    if (list.length > 1) for (const n of list) add(n, `looks like the same net as ${list.filter((o) => o !== n).join(', ')}: two names split one net in the netlist`, '(merge, or rename one)', ['dup']);
   }
 
   if (unread.length) warnings.push(`${unread.length} line(s) could not be read as a net name: ${unread.slice(0, 5).join(' | ')}`);
@@ -206,6 +215,26 @@ export function run({ nets, convention, activeLowStyle, voltageStyle, maxLen }) 
     warnings,
     tables: [{ title: issues.length ? 'Inconsistent nets' : 'No issues found', columns: ['Net', 'Problem', 'Suggested name'], rows: issues }],
     texts: renames.length ? [{ title: 'Renames', body: renames.join('\n') + '\n' }] : [],
+    // Per-net data for the page's net map (the same checks as the table above).
+    drawing: {
+      source, limit, conv, alPref, vPref, dPref,
+      habits: { case: caseCount, activeLow: alCount, voltage: vCount, pairs: dCount },
+      counts: { read: names.length, clean, bad: bad.size, unnamed },
+      nets: info.map((x) => {
+        const p = per.get(x.full);
+        const power = !x.auto && !x.d && (/^[+-]?\d/.test(x.core) || !!voltStyle(x.core) || /^(A|D|P|S)?GND|^(VBAT|VBUS|VCC|VDD|VSS|VEE|VIN|VREF|VSYS|VMOT|VPP)/i.test(x.core));
+        const kind = x.auto ? 'auto' : x.d ? 'pair' : power ? 'power' : x.bus ? 'bus' : 'signal';
+        const nm = (x.fixed ? x.fixed.slice(x.pre.length) : x.core).replace(/^n(?=[A-Z])/, '');
+        const fam = kind === 'signal' && /^[A-Za-z][A-Za-z0-9]{0,7}[_-]/.test(nm) ? nm.split(/[_-]/)[0].toUpperCase() : null;
+        return {
+          name: x.full, pre: x.pre, base: x.base, kind, family: fam,
+          pair: x.d ? { core: x.d.core, pn: x.d.pn, style: x.d.style, partner: x.d.has } : null,
+          activeLow: x.al ? x.al.style : null, voltage: voltStyle(x.core), bus: x.bus || null, dup: dupOf.get(x.full) || null,
+          codes: p ? [...new Set(p.codes)] : [], problems: p ? p.problems : [], fix: x.fixed || null,
+          advice: p ? p.fixes.filter((f) => /^\(/.test(f)) : [],
+        };
+      }),
+    },
     notes: [
       "'Auto' settings follow the design's majority habit, so a single outlier is flagged rather than the whole design.",
       "A name ending in _N counts as a differential-pair half only when its _P partner exists; otherwise it is an active-low signal.",

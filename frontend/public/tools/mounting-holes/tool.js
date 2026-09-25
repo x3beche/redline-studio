@@ -37,10 +37,12 @@ const STANDOFF = {
   hex: { M2: 4, 'M2.5': 5, M3: 5.5, M4: 7, M5: 8, M6: 10, '#2-56': 0.1875 * IN, '#4-40': 0.1875 * IN, '#6-32': 0.25 * IN },
   round: { M2: 4, 'M2.5': 5, M3: 6, M4: 8, M5: 9, M6: 10, '#2-56': 0.1875 * IN, '#4-40': 0.1875 * IN, '#6-32': 0.25 * IN },
 };
+// Nominal major diameter, mm (for the drawing only).
+const NOMINAL = { M2: 2, 'M2.5': 2.5, M3: 3, M4: 4, M5: 5, M6: 6, '#2-56': 0.086 * IN, '#4-40': 0.112 * IN, '#6-32': 0.138 * IN };
 const up = (v, step = 0.1) => Math.ceil(v / step - 1e-9) * step;
 const f = (v) => fmtNum(v, 3);
 
-export function run({ screw, fit, head, washer, standoff, sd, plated, cu, tool, t }) {
+export function run({ screw, fit, head, washer, standoff, sd, plated, cu, tool, t, ex, ey }) {
   const warnings = [];
   const holes = HOLE[screw] || HOLE.M3;
   if (!HOLE[screw]) screw = 'M3';
@@ -77,6 +79,13 @@ export function run({ screw, fit, head, washer, standoff, sd, plated, cu, tool, 
   if (cu < 0.2) warnings.push(`${f(cu)} mm between the screw metal and other copper is tight: the screw can shift in its clearance hole and the head with it. Use 0.5 mm or more.`);
   if (plated === 'pth' && (pad - drill) / 2 < 0.15) warnings.push('The annular ring is under 0.15 mm: make the pad bigger.');
 
+  // Optional placement: the hole centre's distance from two board edges.
+  const edgeMin = up(edge);
+  const placed = ex > 0 || ey > 0;
+  const short = [];
+  if (ex > 0 && ex < edgeMin - 1e-9) short.push(`${f(ex)} mm from the first edge`);
+  if (ey > 0 && ey < edgeMin - 1e-9) short.push(`${f(ey)} mm from the second edge`);
+  if (short.length) warnings.push(`The hole sits ${short.join(' and ')}, closer than the ${f(edgeMin)} mm minimum: the head or standoff overhangs the edge or the web beside the hole is too thin. Move it in.`);
   const kicad = `MountingHole_${f(drill)}mm_${screw.replace('#', 'No')}${plated === 'pth' ? '_Pad' : ''}`;
   const values = [
     { label: 'Drill (clearance hole)', value: f(drill), unit: 'mm', hint: `${screw}, ${['fine', 'medium', 'coarse'][fi]}${plated === 'pth' ? ', finished size' : ''}`, tone: 'ok' },
@@ -85,6 +94,7 @@ export function run({ screw, fit, head, washer, standoff, sd, plated, cu, tool, 
     { label: 'Part keep-out', value: f(up(partKeep)), unit: 'mm', hint: `dia., + 2 x ${f(tool)} tool margin` },
     { label: 'Hole centre to board edge', value: f(up(edge)), unit: 'mm', hint: 'at least' },
     { label: 'Head / washer', value: topD ? f(topD) : '–', unit: topD ? 'mm' : '', hint: [headName !== 'none' ? `${headName} head ${f(headD)}` : '', washD ? `washer ${f(washD)}` : ''].filter(Boolean).join(', ') || 'none' },
+    ...(placed ? [{ label: 'Placed from the edges', value: `${ex > 0 ? f(ex) : '–'} × ${ey > 0 ? f(ey) : '–'}`, unit: 'mm', hint: `minimum ${f(edgeMin)}`, tone: short.length ? 'bad' : 'ok' }] : []),
     { label: 'Standoff', value: soAC ? f(soAC) : '–', unit: soAC ? 'mm' : '', hint: soAC ? (standoff === 'round' ? 'outside diameter' : `across corners (AF ${f(soAF)})`) : 'none' },
   ];
   const rows = Object.keys(HOLE).map((k) => [k, ...HOLE[k].map((v) => (v == null ? '–' : f(v))), f(HEAD.pan[k]), f(HEAD.socket[k]), WASHER[k] ? f(WASHER[k]) : '–', f(STANDOFF.hex[k])]);
@@ -105,6 +115,10 @@ export function run({ screw, fit, head, washer, standoff, sd, plated, cu, tool, 
       'The keep-outs apply to both sides: the head (or washer) sits on one side, the standoff on the other, so the larger one sets the ring.',
       'Plated holes: the fab drills bigger and plates down to the finished size you give. A grounded pad is usually repeated on both layers, often with a ring of small vias.',
     ],
-    drawing: { drill, pad, metal: metalOrPad, cuKeep: up(cuKeep), partKeep: up(partKeep), headD: topD, standoff: soAC },
+    drawing: { drill, pad, metal: metalOrPad, cuKeep: up(cuKeep), partKeep: up(partKeep), headD: topD, standoff: soAC,
+      edge: edgeMin, ex: ex > 0 ? ex : null, ey: ey > 0 ? ey : null, tooClose: short.length > 0,
+      screw, d: NOMINAL[screw], fit: ['fine', 'medium', 'coarse'][fi], head: headName, headOnly: headD, washer: washD,
+      standoffShape: soAC ? (standoff === 'round' ? 'round' : 'hex') : 'none', standoffAF: soAF, plated: plated === 'pth', t, cu, tool,
+      screws: Object.keys(HOLE).map((k) => ({ screw: k, drill: HOLE[k][fi] ?? HOLE[k][1], nominal: NOMINAL[k] })) },
   };
 }

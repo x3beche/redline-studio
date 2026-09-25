@@ -1,8 +1,9 @@
 {
-  "id": "mounting-holes", "version": "1.0",
+  "id": "mounting-holes", "version": "1.1",
   "name": "Mounting Hole Planner",
   "blurb": "keep-out on the board from hole size, standoff and screw",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb", "cad"],
   "keywords": ["mounting hole", "screw hole", "clearance hole", "standoff", "spacer", "keep-out", "keepout", "m3", "m2.5", "4-40", "iso 273", "washer", "screw head", "npth", "pth"],
   "intro": "The drill, pad and keep-out rings around a mounting hole from the screw, its head or washer and the standoff under it. Clearance holes are ISO 273 (metric) or the close/free-fit drill chart (inch); head and washer sizes are the ISO / ASME nominal maxima.",
@@ -24,13 +25,17 @@
       "help": "Gap from the metal (head, washer, standoff) to other copper." },
     { "key": "tool", "label": "Tool / part margin", "type": "number", "unit": "mm", "default": "1",
       "help": "Extra room all round for the screwdriver or nut driver and for part tolerances." },
-    { "key": "t", "label": "Board thickness", "type": "number", "unit": "mm", "default": "1.6" }
+    { "key": "t", "label": "Board thickness", "type": "number", "unit": "mm", "default": "1.6" },
+    { "key": "ex", "label": "Placed: centre to first board edge", "type": "number", "unit": "mm", "default": "", "required": false,
+      "help": "Optional: checks the placement against the minimum edge distance." },
+    { "key": "ey", "label": "Placed: centre to second board edge", "type": "number", "unit": "mm", "default": "", "required": false,
+      "help": "Optional: for a hole in a corner, the distance to the other edge." }
   ],
   "examples": [
     { "title": "M3 pan head on a 5.5 mm hex standoff, isolated", "input": { "screw": "M3", "fit": "medium", "head": "pan", "washer": false, "standoff": "hex", "sd": "", "plated": "npth", "cu": "0.5", "tool": "1", "t": "1.6" } },
     { "title": "#4-40 with washer, grounded plated hole", "input": { "screw": "#4-40", "fit": "medium", "head": "pan", "washer": true, "standoff": "hex", "sd": "", "plated": "pth", "cu": "0.5", "tool": "1", "t": "1.6" } }
   ],
-  "usage": "Pick the screw (M2-M6 or #2-56/#4-40/#6-32), the clearance class, head type, washer and standoff; sizes in mm. It returns the drill diameter, the pad diameter for a plated hole, the copper keep-out and component keep-out diameters, and the minimum distance from the hole centre to the board edge. Use it when placing mounting holes or making a mounting-hole footprint.",
+  "usage": "Pick the screw (M2-M6 or #2-56/#4-40/#6-32), the clearance class, head type, washer and standoff; sizes in mm. Optionally give where the hole is placed (ex, ey: centre to the board edges, mm) to check it against the minimum edge distance. It returns the drill diameter, the pad diameter for a plated hole, the copper keep-out and component keep-out diameters, and the minimum distance from the hole centre to the board edge. Use it when placing mounting holes or making a mounting-hole footprint.",
   "sources": ["ISO 273 clearance holes for bolts and screws", "Machinery's Handbook close / free fit drill chart (inch screws)", "ISO 7045, ISO 4762, ISO 7380, ISO 7089 nominal head and washer diameters", "ASME B18.6.3 / B18.3 inch head diameters", "Keep-out margins and edge distance: rule of thumb"],
   "view": true
 }

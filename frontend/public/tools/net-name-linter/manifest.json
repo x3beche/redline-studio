@@ -1,8 +1,9 @@
 {
-  "id": "net-name-linter", "version": "1.0",
+  "id": "net-name-linter", "version": "1.1",
   "name": "Net Naming Linter",
   "blurb": "checks net names against a convention and lists the inconsistent ones",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["net names", "netlist", "naming convention", "lint", "schematic review", "active low", "diff pair suffix", "bus index", "power net", "3V3", "kicad", "duplicate nets", "rename"],
   "intro": "Paste net names (one per line) or a KiCad .net netlist. It checks case, separators, illegal characters, voltage style (3V3 vs 3.3V), active-low style (nRESET, RESET_N, RESET#, ~{RESET}), differential-pair suffixes and partners, bus index style and names that split one net two ways, and suggests renames.",
