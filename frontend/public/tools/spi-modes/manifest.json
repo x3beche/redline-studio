@@ -1,5 +1,5 @@
 {
-  "id": "spi-modes",
+  "id": "spi-modes", "version": "1.0",
   "name": "SPI Mode Reference",
   "blurb": "CPOL/CPHA combinations with timing diagrams",
   "group": "embedded",

@@ -1,5 +1,5 @@
 {
-  "id": "dp-px-converter",
+  "id": "dp-px-converter", "version": "1.0",
   "name": "DP / PX / DPI Converter",
   "blurb": "sizes across density buckets and the asset sizes to export",
   "group": "mobile",

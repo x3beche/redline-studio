@@ -1,5 +1,5 @@
 {
-  "id": "gpio-warner",
+  "id": "gpio-warner", "version": "1.0",
   "name": "GPIO Restriction Warner",
   "blurb": "risks of using boot straps and special-purpose GPIOs",
   "group": "embedded",

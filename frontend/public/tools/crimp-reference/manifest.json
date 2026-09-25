@@ -1,5 +1,5 @@
 {
-  "id": "crimp-reference",
+  "id": "crimp-reference", "version": "1.1",
   "name": "Terminal Block & Crimp Reference",
   "blurb": "terminal blocks and crimp sizes for a wire cross-section",
   "group": "pcb",

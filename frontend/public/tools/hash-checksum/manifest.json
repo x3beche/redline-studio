@@ -1,5 +1,5 @@
 {
-  "id": "hash-checksum",
+  "id": "hash-checksum", "version": "1.0",
   "name": "Hash & Checksum Quick Tool",
   "blurb": "MD5, SHA and simple checksums of text or hex data",
   "group": "embedded",

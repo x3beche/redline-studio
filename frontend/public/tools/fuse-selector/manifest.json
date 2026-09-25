@@ -1,5 +1,5 @@
 {
-  "id": "fuse-selector",
+  "id": "fuse-selector", "version": "1.1",
   "name": "Fuse & Polyfuse Selector",
   "blurb": "fuse rating from normal current and fault scenario",
   "group": "pcb",

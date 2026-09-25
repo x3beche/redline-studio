@@ -1,5 +1,5 @@
 {
-  "id": "i2c-address-map",
+  "id": "i2c-address-map", "version": "1.0",
   "name": "I2C Address Map",
   "blurb": "devices on a bus by address, with conflicts and alternative addresses",
   "group": "embedded",

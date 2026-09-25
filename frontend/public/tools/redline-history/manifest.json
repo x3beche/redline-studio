@@ -1,5 +1,5 @@
 {
-  "id": "redline-history",
+  "id": "redline-history", "version": "1.0",
   "name": "Redline History Diff",
   "blurb": "every note that landed on the same area over time, with outcomes",
   "group": "project",

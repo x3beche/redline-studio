@@ -1,5 +1,5 @@
 {
-  "id": "shrinkage",
+  "id": "shrinkage", "version": "1.0",
   "name": "Shrinkage Compensator",
   "blurb": "corrected dimension for a material's shrinkage",
   "group": "mechanical",

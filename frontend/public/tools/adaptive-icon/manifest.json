@@ -1,5 +1,5 @@
 {
-  "id": "adaptive-icon",
+  "id": "adaptive-icon", "version": "1.0",
   "name": "Adaptive Icon Composer",
   "blurb": "foreground and background layers with mask previews",
   "group": "mobile",

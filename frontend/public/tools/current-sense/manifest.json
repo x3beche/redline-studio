@@ -1,5 +1,5 @@
 {
-  "id": "current-sense",
+  "id": "current-sense", "version": "1.1",
   "name": "Current Sense Designer",
   "blurb": "shunt value, its power and the amplifier gain for a range and an ADC input",
   "group": "pcb",

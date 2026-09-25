@@ -1,5 +1,5 @@
 {
-  "id": "decision-log",
+  "id": "decision-log", "version": "1.0",
   "name": "Decision Log (ADR)",
   "blurb": "short records of why a part or topology was chosen",
   "group": "project",

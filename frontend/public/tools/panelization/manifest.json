@@ -1,5 +1,5 @@
 {
-  "id": "panelization",
+  "id": "panelization", "version": "1.0",
   "name": "Panelization Planner",
   "blurb": "how many boards fit a panel with V-cut or mouse-bite margins, and the waste",
   "group": "pcb",

@@ -1,5 +1,5 @@
 {
-  "id": "queue-inspector",
+  "id": "queue-inspector", "version": "1.0",
   "name": "Agent Queue Inspector",
   "blurb": "queued work by time, room and success rate, with the stuck step",
   "group": "project",

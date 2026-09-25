@@ -1,5 +1,5 @@
 {
-  "id": "chart-spec",
+  "id": "chart-spec", "version": "1.0",
   "name": "Chart Spec Builder",
   "blurb": "axes, series and scales chosen into a chart configuration",
   "group": "web",

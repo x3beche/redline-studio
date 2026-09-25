@@ -1,5 +1,5 @@
 {
-  "id": "copper-thermal",
+  "id": "copper-thermal", "version": "1.1",
   "name": "Copper Area Thermal",
   "blurb": "temperature rise of a power part from the copper area under it",
   "group": "pcb",

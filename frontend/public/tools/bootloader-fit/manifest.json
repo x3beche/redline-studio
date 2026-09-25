@@ -1,5 +1,5 @@
 {
-  "id": "bootloader-fit",
+  "id": "bootloader-fit", "version": "1.0",
   "name": "Bootloader Size Check",
   "blurb": "whether application and bootloader regions fit",
   "group": "embedded",

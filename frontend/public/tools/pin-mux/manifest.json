@@ -1,5 +1,5 @@
 {
-  "id": "pin-mux",
+  "id": "pin-mux", "version": "1.0",
   "name": "Pin Mux Explorer",
   "blurb": "a pin's alternate functions on an MCU and the conflicts",
   "group": "embedded",

@@ -1,5 +1,5 @@
 {
-  "id": "battery-life",
+  "id": "battery-life", "version": "1.0",
   "name": "Battery Life Estimator",
   "blurb": "run time in days from average current and battery capacity",
   "group": "embedded",

@@ -1,5 +1,5 @@
 {
-  "id": "irq-latency",
+  "id": "irq-latency", "version": "1.0",
   "name": "Interrupt Latency Budget",
   "blurb": "CPU load and miss risk from interrupt rates and handler times",
   "group": "embedded",

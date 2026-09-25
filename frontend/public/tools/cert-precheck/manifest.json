@@ -1,5 +1,5 @@
 {
-  "id": "cert-precheck",
+  "id": "cert-precheck", "version": "1.0",
   "name": "Certification Pre-Check",
   "blurb": "typical gaps before CE/FCC (filtering, grounding, labels) as a checklist",
   "group": "project",

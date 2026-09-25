@@ -1,5 +1,5 @@
 {
-  "id": "net-name-linter",
+  "id": "net-name-linter", "version": "1.0",
   "name": "Net Naming Linter",
   "blurb": "checks net names against a convention and lists the inconsistent ones",
   "group": "pcb",

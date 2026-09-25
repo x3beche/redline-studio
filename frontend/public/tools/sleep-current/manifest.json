@@ -1,5 +1,5 @@
 {
-  "id": "sleep-current",
+  "id": "sleep-current", "version": "1.0",
   "name": "Sleep Current Profiler",
   "blurb": "average current from sleep and wake times and currents",
   "group": "embedded",

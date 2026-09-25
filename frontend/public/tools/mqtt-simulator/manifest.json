@@ -1,5 +1,5 @@
 {
-  "id": "mqtt-simulator",
+  "id": "mqtt-simulator", "version": "1.0",
   "name": "MQTT Message Simulator",
   "blurb": "fake telemetry messages to test an IoT dashboard",
   "group": "web",

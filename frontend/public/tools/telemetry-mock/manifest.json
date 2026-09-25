@@ -1,5 +1,5 @@
 {
-  "id": "telemetry-mock",
+  "id": "telemetry-mock", "version": "1.0",
   "name": "Telemetry Mock Generator",
   "blurb": "realistic sensor time series with noise, drift and faults",
   "group": "web",

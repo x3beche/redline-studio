@@ -1,5 +1,5 @@
 {
-  "id": "permission-picker",
+  "id": "permission-picker", "version": "1.0",
   "name": "Permission Picker",
   "blurb": "the permissions and manifest lines a feature set needs",
   "group": "mobile",

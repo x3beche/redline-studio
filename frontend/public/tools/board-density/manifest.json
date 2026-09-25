@@ -1,5 +1,5 @@
 {
-  "id": "board-density",
+  "id": "board-density", "version": "1.1",
   "name": "Board Density Estimator",
   "blurb": "density class and routing difficulty from part count and area",
   "group": "pcb",

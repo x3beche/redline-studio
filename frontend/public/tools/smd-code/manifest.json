@@ -1,5 +1,5 @@
 {
-  "id": "smd-code",
+  "id": "smd-code", "version": "1.0",
   "name": "SMD Code Decoder",
   "blurb": "resistor and capacitor markings (103, 4R7, EIA-96) to their values",
   "group": "pcb",

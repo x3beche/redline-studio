@@ -1,5 +1,5 @@
 {
-  "id": "diffpair-match",
+  "id": "diffpair-match", "version": "1.1",
   "name": "Differential Pair Matcher",
   "blurb": "length-matching tolerance for USB, Ethernet, HDMI and similar pairs",
   "group": "pcb",

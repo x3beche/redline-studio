@@ -1,5 +1,5 @@
 {
-  "id": "flash-partitions",
+  "id": "flash-partitions", "version": "1.0",
   "name": "Flash Partition Planner",
   "blurb": "OTA, NVS and filesystem partitions sized, with a partition table",
   "group": "embedded",

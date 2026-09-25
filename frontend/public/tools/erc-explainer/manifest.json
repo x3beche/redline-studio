@@ -1,5 +1,5 @@
 {
-  "id": "erc-explainer",
+  "id": "erc-explainer", "version": "1.1",
   "name": "ERC Rule Explainer",
   "blurb": "what an ERC error means and its usual fix, in plain words",
   "group": "pcb",

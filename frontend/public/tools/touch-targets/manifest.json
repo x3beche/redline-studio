@@ -1,5 +1,5 @@
 {
-  "id": "touch-targets",
+  "id": "touch-targets", "version": "1.0",
   "name": "Touch Target Checker",
   "blurb": "touch targets under the minimum size in a layout",
   "group": "mobile",

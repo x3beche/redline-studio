@@ -1,5 +1,5 @@
 {
-  "id": "iso-fit",
+  "id": "iso-fit", "version": "1.0",
   "name": "Clearance Fit Calculator",
   "blurb": "actual clearance or interference of an ISO fit such as H7/g6",
   "group": "mechanical",

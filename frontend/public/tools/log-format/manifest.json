@@ -1,5 +1,5 @@
 {
-  "id": "log-format",
+  "id": "log-format", "version": "1.0",
   "name": "Log Format Designer",
   "blurb": "a compact embedded log format and its parser code",
   "group": "embedded",

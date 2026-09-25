@@ -1,5 +1,5 @@
 {
-  "id": "pid-playground",
+  "id": "pid-playground", "version": "1.0",
   "name": "PID Tuning Playground",
   "blurb": "a simple plant's step response live as the gains move",
   "group": "embedded",

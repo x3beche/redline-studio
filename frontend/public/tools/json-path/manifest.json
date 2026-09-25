@@ -1,5 +1,5 @@
 {
-  "id": "json-path",
+  "id": "json-path", "version": "1.0",
   "name": "JSON Path Explorer",
   "blurb": "walk a large JSON and copy the access path of a field",
   "group": "web",

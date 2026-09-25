@@ -1,5 +1,5 @@
 {
-  "id": "hex-dump-decoder",
+  "id": "hex-dump-decoder", "version": "1.0",
   "name": "Hex Dump Decoder",
   "blurb": "captured raw bytes split into frames for a chosen protocol",
   "group": "embedded",

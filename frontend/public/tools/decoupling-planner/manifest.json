@@ -1,5 +1,5 @@
 {
-  "id": "decoupling-planner",
+  "id": "decoupling-planner", "version": "1.1",
   "name": "Decoupling Planner",
   "blurb": "how many decoupling capacitors and which values for an IC's supply pins and target impedance",
   "group": "pcb",

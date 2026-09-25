@@ -1,5 +1,5 @@
 {
-  "id": "chamfer-fillet",
+  "id": "chamfer-fillet", "version": "1.0",
   "name": "Chamfer & Fillet Guide",
   "blurb": "recommended chamfers and radii by manufacturing process",
   "group": "mechanical",

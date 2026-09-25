@@ -1,5 +1,5 @@
 {
-  "id": "string-table",
+  "id": "string-table", "version": "1.0",
   "name": "String Table Editor",
   "blurb": "multilingual strings in a table, out as resource files",
   "group": "mobile",

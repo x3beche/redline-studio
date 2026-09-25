@@ -1,5 +1,5 @@
 {
-  "id": "sensor-calibration",
+  "id": "sensor-calibration", "version": "1.0",
   "name": "Sensor Calibration Fit",
   "blurb": "linear calibration coefficients from two or more readings",
   "group": "embedded",

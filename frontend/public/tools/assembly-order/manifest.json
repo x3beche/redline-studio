@@ -1,5 +1,5 @@
 {
-  "id": "assembly-order",
+  "id": "assembly-order", "version": "1.0",
   "name": "Assembly Order Planner",
   "blurb": "assembly order and access needs as a step list",
   "group": "mechanical",

@@ -1,5 +1,5 @@
 {
-  "id": "context-packer",
+  "id": "context-packer", "version": "1.0",
   "name": "Context Packer",
   "blurb": "pack code, logs and notes into one well-built prompt",
   "group": "code",

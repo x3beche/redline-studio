@@ -1,5 +1,5 @@
 {
-  "id": "float-inspector",
+  "id": "float-inspector", "version": "1.0",
   "name": "IEEE754 Float Inspector",
   "blurb": "sign, exponent and mantissa bits of a float",
   "group": "embedded",

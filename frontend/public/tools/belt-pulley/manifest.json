@@ -1,5 +1,5 @@
 {
-  "id": "belt-pulley",
+  "id": "belt-pulley", "version": "1.0",
   "name": "Belt & Pulley Calculator",
   "blurb": "belt length and ratio from pulley diameters and centre distance",
   "group": "mechanical",

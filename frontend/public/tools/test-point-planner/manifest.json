@@ -1,5 +1,5 @@
 {
-  "id": "test-point-planner",
+  "id": "test-point-planner", "version": "1.0",
   "name": "Test Point Planner",
   "blurb": "test point list for critical nets and probe access checks",
   "group": "pcb",

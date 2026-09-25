@@ -1,5 +1,5 @@
 {
-  "id": "http-tester",
+  "id": "http-tester", "version": "1.0",
   "name": "HTTP Request Tester",
   "blurb": "send a request and see headers, timing and the response",
   "group": "web",

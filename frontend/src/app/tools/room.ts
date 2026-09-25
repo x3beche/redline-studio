@@ -103,7 +103,7 @@ function score(t: ToolInfo, words: string[]): number {
         <button class="tcv-tools-open" (click)="pick(t)" [title]="t.blurb">
           <span class="tcv-menu-name">{{ t.name }}</span>
         </button>
-        @if (t.version) { <span class="tcv-tools-ver" [title]="'version ' + t.version + ' - when its files last changed'">v{{ t.version.slice(5) }}</span> }
+        @if (t.version) { <span class="tcv-tools-ver" title="the tool's version: 1.0 as first made, up one step with each update">v{{ t.version }}</span> }
         @if (t.runnable) {
           <span class="tcv-tools-mcp" title="Agents can run this tool through the MCP server (run_tool)">MCP</span>
         }
@@ -119,7 +119,7 @@ function score(t: ToolInfo, words: string[]): number {
     @if (here(); as t) {
       <header class="tcv-tools-head">
         <span class="tcv-label" style="color: var(--ink)">{{ t.name }}</span>
-        @if (t.version) { <span class="tcv-tools-ver" title="when this tool's files last changed">v{{ t.version }}</span> }
+        @if (t.version) { <span class="tcv-tools-ver" title="the tool's version: 1.0 as first made, up one step with each update">v{{ t.version }}</span> }
         @if (t.runnable) { <span class="tcv-tools-mcp" title="Agents can run this tool through the MCP server (run_tool)">MCP</span> }
         <button class="tcv-tools-star" [attr.data-on]="favs().includes(t.id) ? 1 : null" (click)="fav(t)"
                 [attr.aria-label]="favs().includes(t.id) ? 'Unstar' : 'Star'"

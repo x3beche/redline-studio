@@ -44,7 +44,7 @@ export interface ToolInfo {
   src: string | null;
   native: boolean;
   runnable: boolean;
-  /** The date and time its newest file changed, e.g. 2026.09.25-14.32. */
+  /** Its version from the manifest: 1.0 as first made, 1.1, 1.2... with updates. */
   version?: string;
   uses: number;
 }

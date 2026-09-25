@@ -1,5 +1,5 @@
 {
-  "id": "enclosure-fit",
+  "id": "enclosure-fit", "version": "1.0",
   "name": "Enclosure Fit Checker",
   "blurb": "inner enclosure size and cut-outs from the board outline and connector heights",
   "group": "mechanical",

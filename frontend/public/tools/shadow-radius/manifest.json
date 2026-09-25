@@ -1,5 +1,5 @@
 {
-  "id": "shadow-radius",
+  "id": "shadow-radius", "version": "1.0",
   "name": "Shadow & Radius Studio",
   "blurb": "layered shadows and radii tuned visually, as one CSS line",
   "group": "web",

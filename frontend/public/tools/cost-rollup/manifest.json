@@ -1,5 +1,5 @@
 {
-  "id": "cost-rollup",
+  "id": "cost-rollup", "version": "1.0",
   "name": "Total Cost Roll-Up",
   "blurb": "PCB, BOM, assembly, enclosure and cable cost per unit at a quantity",
   "group": "project",

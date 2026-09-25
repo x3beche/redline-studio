@@ -1,5 +1,5 @@
 {
-  "id": "adc-resolution",
+  "id": "adc-resolution", "version": "1.0",
   "name": "ADC Resolution Calculator",
   "blurb": "LSB size from reference and bits, and the oversampling gain",
   "group": "embedded",

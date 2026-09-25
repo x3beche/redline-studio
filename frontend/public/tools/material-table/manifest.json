@@ -1,5 +1,5 @@
 {
-  "id": "material-table",
+  "id": "material-table", "version": "1.0",
   "name": "Material Property Table",
   "blurb": "density, modulus, yield strength and expansion of materials compared",
   "group": "mechanical",

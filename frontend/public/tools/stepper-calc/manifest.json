@@ -1,5 +1,5 @@
 {
-  "id": "stepper-calc",
+  "id": "stepper-calc", "version": "1.0",
   "name": "Stepper Motor Calculator",
   "blurb": "pulse frequency and torque from step angle, microstepping and speed",
   "group": "embedded",

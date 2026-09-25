@@ -1,5 +1,5 @@
 {
-  "id": "struct-packing",
+  "id": "struct-packing", "version": "1.0",
   "name": "Struct Packing Visualizer",
   "blurb": "alignment of struct members and the padding bytes wasted",
   "group": "embedded",

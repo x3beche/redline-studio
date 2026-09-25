@@ -1,5 +1,5 @@
 {
-  "id": "modbus-frame",
+  "id": "modbus-frame", "version": "1.0",
   "name": "Modbus Frame Builder",
   "blurb": "an RTU/TCP frame with its CRC from function code and registers",
   "group": "embedded",

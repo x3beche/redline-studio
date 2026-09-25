@@ -1,5 +1,5 @@
 {
-  "id": "cap-derating",
+  "id": "cap-derating", "version": "1.1",
   "name": "Capacitor Derating",
   "blurb": "real capacitance of an MLCC under DC bias and temperature",
   "group": "pcb",

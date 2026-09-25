@@ -1,5 +1,5 @@
 {
-  "id": "jwt-decoder",
+  "id": "jwt-decoder", "version": "1.0",
   "name": "JWT & Base64 Decoder",
   "blurb": "decode a token and show its expiry and signature fields",
   "group": "web",

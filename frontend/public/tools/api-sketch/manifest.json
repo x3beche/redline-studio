@@ -1,5 +1,5 @@
 {
-  "id": "api-sketch",
+  "id": "api-sketch", "version": "1.0",
   "name": "API Sketch",
   "blurb": "define endpoints, get OpenAPI, curl and a TypeScript client",
   "group": "code",

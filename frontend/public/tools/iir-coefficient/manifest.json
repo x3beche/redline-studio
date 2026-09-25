@@ -1,5 +1,5 @@
 {
-  "id": "iir-coefficient",
+  "id": "iir-coefficient", "version": "1.0",
   "name": "EMA / IIR Coefficient Tool",
   "blurb": "smoothing coefficient from a cutoff frequency, with the response drawn",
   "group": "embedded",

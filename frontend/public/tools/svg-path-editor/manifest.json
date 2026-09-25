@@ -1,5 +1,5 @@
 {
-  "id": "svg-path-editor",
+  "id": "svg-path-editor", "version": "1.0",
   "name": "SVG Path Editor",
   "blurb": "edit a path node by node and trim needless decimals",
   "group": "web",

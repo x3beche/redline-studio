@@ -1,5 +1,5 @@
 {
-  "id": "beam-deflection",
+  "id": "beam-deflection", "version": "1.0",
   "name": "Beam Deflection Calculator",
   "blurb": "deflection and maximum stress of a simple beam under load",
   "group": "mechanical",

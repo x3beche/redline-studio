@@ -1,5 +1,5 @@
 {
-  "id": "json-diff",
+  "id": "json-diff", "version": "1.0",
   "name": "JSON Diff Viewer",
   "blurb": "two responses compared by line and by field",
   "group": "web",

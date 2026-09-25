@@ -1,5 +1,5 @@
 {
-  "id": "safe-area",
+  "id": "safe-area", "version": "1.0",
   "name": "Safe Area Overlay",
   "blurb": "notch, status bar and navigation bar areas over a screenshot",
   "group": "mobile",

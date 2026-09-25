@@ -1,5 +1,5 @@
 {
-  "id": "fastener-library",
+  "id": "fastener-library", "version": "1.0",
   "name": "Fastener Library",
   "blurb": "screw, nut and washer sizes by head type, with CAD variables",
   "group": "mechanical",

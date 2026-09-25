@@ -1,5 +1,5 @@
 {
-  "id": "print-cost",
+  "id": "print-cost", "version": "1.0",
   "name": "Print Time & Cost",
   "blurb": "print time and cost from volume, infill and material price",
   "group": "mechanical",

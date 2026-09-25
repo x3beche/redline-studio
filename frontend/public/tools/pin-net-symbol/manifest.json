@@ -1,5 +1,5 @@
 {
-  "id": "pin-net-symbol",
+  "id": "pin-net-symbol", "version": "1.0",
   "name": "Pin-to-Net-to-Symbol Mapper",
   "blurb": "trace an MCU pin to its PCB net and its firmware symbol",
   "group": "project",

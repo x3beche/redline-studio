@@ -1,5 +1,5 @@
 {
-  "id": "firmware-size-diff",
+  "id": "firmware-size-diff", "version": "1.0",
   "name": "Firmware Size Diff",
   "blurb": "symbol-by-symbol size change between two builds, largest first",
   "group": "embedded",

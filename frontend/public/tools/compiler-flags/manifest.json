@@ -1,5 +1,5 @@
 {
-  "id": "compiler-flags",
+  "id": "compiler-flags", "version": "1.0",
   "name": "Compiler Flag Explainer",
   "blurb": "size and speed effect of the optimisation flags in a build log",
   "group": "embedded",

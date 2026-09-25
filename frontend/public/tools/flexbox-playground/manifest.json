@@ -1,5 +1,5 @@
 {
-  "id": "flexbox-playground",
+  "id": "flexbox-playground", "version": "1.0",
   "name": "Flexbox Playground",
   "blurb": "try alignment properties and see the result and code",
   "group": "web",

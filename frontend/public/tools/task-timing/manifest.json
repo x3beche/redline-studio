@@ -1,5 +1,5 @@
 {
-  "id": "task-timing",
+  "id": "task-timing", "version": "1.0",
   "name": "Task Timing Planner",
   "blurb": "scheduling conflicts of periodic tasks from period and duration",
   "group": "embedded",

@@ -1,5 +1,5 @@
 {
-  "id": "return-path",
+  "id": "return-path", "version": "1.0",
   "name": "Return Path Checker",
   "blurb": "return-path problems of layer changes and the stitching vias they need",
   "group": "pcb",

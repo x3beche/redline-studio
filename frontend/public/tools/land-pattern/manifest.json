@@ -1,5 +1,5 @@
 {
-  "id": "land-pattern",
+  "id": "land-pattern", "version": "1.1",
   "name": "Land Pattern Reference",
   "blurb": "IPC-7351 pad sizes and courtyard for common packages",
   "group": "pcb",

@@ -1,5 +1,5 @@
 {
-  "id": "antenna-length",
+  "id": "antenna-length", "version": "1.1",
   "name": "Antenna Length Calculator",
   "blurb": "quarter-wave antenna length and keep-out for a frequency",
   "group": "pcb",

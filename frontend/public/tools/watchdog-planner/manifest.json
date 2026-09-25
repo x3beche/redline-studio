@@ -1,5 +1,5 @@
 {
-  "id": "watchdog-planner",
+  "id": "watchdog-planner", "version": "1.0",
   "name": "Watchdog Planner",
   "blurb": "a safe watchdog period and feed points from the longest task",
   "group": "embedded",

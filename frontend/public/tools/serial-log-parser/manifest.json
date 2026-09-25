@@ -1,5 +1,5 @@
 {
-  "id": "serial-log-parser",
+  "id": "serial-log-parser", "version": "1.0",
   "name": "NMEA / Serial Log Parser",
   "blurb": "a serial log parsed line by line into a table of fields",
   "group": "embedded",

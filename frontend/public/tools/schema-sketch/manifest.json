@@ -1,5 +1,5 @@
 {
-  "id": "schema-sketch",
+  "id": "schema-sketch", "version": "1.0",
   "name": "Schema Sketch",
   "blurb": "draw tables and relations, get SQL, Prisma and Mermaid",
   "group": "code",

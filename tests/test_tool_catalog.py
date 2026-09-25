@@ -138,3 +138,10 @@ def test_every_tool_request_that_writes_carries_the_csrf_header():
                 if "X-Redline-CSRF" not in window:
                     bad.append(f"{f.relative_to(PAGES.parent)}:{text[:m.start()].count(chr(10)) + 1}")
     assert not bad, "writes to the API without X-Redline-CSRF: " + ", ".join(bad)
+
+
+@pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
+def test_every_tool_has_a_version(path):
+    """1.0 as first made, one minor step per update (shown next to the name)."""
+    import re
+    assert re.fullmatch(r"\d+\.\d+", str(load(path).get("version", ""))), "version like 1.0"

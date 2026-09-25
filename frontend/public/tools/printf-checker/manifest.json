@@ -1,5 +1,5 @@
 {
-  "id": "printf-checker",
+  "id": "printf-checker", "version": "1.0",
   "name": "printf Format Checker",
   "blurb": "whether a format string matches its argument types",
   "group": "embedded",

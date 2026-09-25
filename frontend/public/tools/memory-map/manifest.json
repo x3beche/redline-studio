@@ -1,5 +1,5 @@
 {
-  "id": "memory-map",
+  "id": "memory-map", "version": "1.0",
   "name": "Memory Map Viewer",
   "blurb": "flash and RAM region use as a scaled strip",
   "group": "embedded",

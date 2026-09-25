@@ -1,5 +1,5 @@
 {
-  "id": "responsive-matrix",
+  "id": "responsive-matrix", "version": "1.0",
   "name": "Responsive Preview Matrix",
   "blurb": "one page at several breakpoints side by side, with overflow flagged",
   "group": "web",

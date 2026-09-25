@@ -1,5 +1,5 @@
 {
-  "id": "stack-estimator",
+  "id": "stack-estimator", "version": "1.0",
   "name": "Stack Usage Estimator",
   "blurb": "worst-case stack from call depth and locals",
   "group": "embedded",

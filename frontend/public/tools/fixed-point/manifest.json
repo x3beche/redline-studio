@@ -1,5 +1,5 @@
 {
-  "id": "fixed-point",
+  "id": "fixed-point", "version": "1.0",
   "name": "Fixed-Point Converter",
   "blurb": "a decimal value in a Q format and the precision lost",
   "group": "embedded",

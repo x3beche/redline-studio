@@ -1,5 +1,5 @@
 {
-  "id": "tolerance-stack",
+  "id": "tolerance-stack", "version": "1.0",
   "name": "Tolerance Stack-Up",
   "blurb": "worst-case and statistical sum of a chain of dimensions",
   "group": "mechanical",

@@ -1,5 +1,5 @@
 {
-  "id": "grid-sketch",
+  "id": "grid-sketch", "version": "1.0",
   "name": "Grid Sketch",
   "blurb": "draw a layout on a grid, copy it as a prompt, CSS or JSON",
   "group": "web",

@@ -1,5 +1,5 @@
 {
-  "id": "mass-cog",
+  "id": "mass-cog", "version": "1.0",
   "name": "Mass & CoG from Volume",
   "blurb": "mass and centre of gravity from volumes and materials",
   "group": "mechanical",

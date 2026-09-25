@@ -1,5 +1,5 @@
 {
-  "id": "req-test-matrix",
+  "id": "req-test-matrix", "version": "1.0",
   "name": "Requirement ↔ Test Matrix",
   "blurb": "each requirement matched with the test that proves it, gaps shown",
   "group": "project",

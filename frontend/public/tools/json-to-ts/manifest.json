@@ -1,5 +1,5 @@
 {
-  "id": "json-to-ts",
+  "id": "json-to-ts", "version": "1.0",
   "name": "JSON to TypeScript",
   "blurb": "type definitions and a validation schema from sample JSON",
   "group": "web",

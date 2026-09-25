@@ -1,5 +1,5 @@
 {
-  "id": "project-constants",
+  "id": "project-constants", "version": "1.0",
   "name": "Project Constants",
   "blurb": "board size, supply voltages and mechanical references kept in one place",
   "group": "project",

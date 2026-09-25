@@ -1,5 +1,5 @@
 {
-  "id": "flow-mermaid",
+  "id": "flow-mermaid", "version": "1.0",
   "name": "Flow to Mermaid",
   "blurb": "draw a flowchart with boxes and arrows, get Mermaid code",
   "group": "code",

@@ -1,5 +1,5 @@
 {
-  "id": "assembly-cost",
+  "id": "assembly-cost", "version": "1.1",
   "name": "Assembly Cost Estimator",
   "blurb": "assembly cost from unique parts, placements and extended-part fees",
   "group": "pcb",

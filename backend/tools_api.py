@@ -151,9 +151,6 @@ def catalog() -> list[dict]:
         stamp = max([x.stat().st_mtime_ns for x in f.parent.iterdir() if x.is_file()]
                     + [x.stat().st_mtime_ns for x in (PAGES / "kit").iterdir() if x.is_file()])
         version = format(stamp // 1_000_000, "x")
-        # The same moment as people read it: the tool's version is the date
-        # and time its newest file (or the kit) changed, in local time.
-        label = datetime.fromtimestamp(stamp / 1e9).strftime("%Y.%m.%d-%H.%M")
         tools.append({
             "id": tid, "name": m.get("name", tid), "blurb": m.get("blurb", ""),
             "group": m.get("group", "code"), "rooms": m.get("rooms") or [],
@@ -161,7 +158,9 @@ def catalog() -> list[dict]:
             # Where the page is: a kit tool's folder, an older single page, or
             # an Angular calculator (the app knows those by id).
             "src": m.get("page") or (f"/api/tools/files/{tid}/?v={version}" if runnable else None),
-            "version": label,
+            # The tool's own version, kept in its manifest: 1.0 as first
+            # made, one step up with each update (1.1, 1.2...).
+            "version": str(m.get("version") or "1.0"),
             "native": bool(m.get("native")),
             "runnable": runnable,
         })

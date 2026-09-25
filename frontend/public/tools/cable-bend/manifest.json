@@ -1,5 +1,5 @@
 {
-  "id": "cable-bend",
+  "id": "cable-bend", "version": "1.0",
   "name": "Cable Bend Radius",
   "blurb": "minimum bend radius and clearance for a cable",
   "group": "mechanical",

@@ -1,5 +1,5 @@
 {
-  "id": "gear-calc",
+  "id": "gear-calc", "version": "1.1",
   "name": "Gear Calculator",
   "blurb": "pitch and outside diameter and centre distance from module and teeth",
   "group": "mechanical",

@@ -1,5 +1,5 @@
 {
-  "id": "heat-set-insert",
+  "id": "heat-set-insert", "version": "1.0",
   "name": "Heat-Set Insert Sizer",
   "blurb": "boss hole diameter and wall thickness for an insert",
   "group": "mechanical",

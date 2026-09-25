@@ -1,5 +1,5 @@
 {
-  "id": "change-impact",
+  "id": "change-impact", "version": "1.0",
   "name": "Change Impact Estimator",
   "blurb": "which rooms a change touches, from dependencies",
   "group": "project",

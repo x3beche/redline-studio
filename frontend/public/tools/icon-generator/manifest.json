@@ -1,5 +1,5 @@
 {
-  "id": "icon-generator",
+  "id": "icon-generator", "version": "1.0",
   "name": "Icon & Favicon Generator",
   "blurb": "every icon size and the manifest entries from one image",
   "group": "web",

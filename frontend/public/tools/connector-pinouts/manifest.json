@@ -1,5 +1,5 @@
 {
-  "id": "connector-pinouts",
+  "id": "connector-pinouts", "version": "1.1",
   "name": "Connector Pinout Library",
   "blurb": "pin maps of USB-C, SWD, JTAG, JST, IDC and other common connectors",
   "group": "pcb",

@@ -1,5 +1,5 @@
 {
-  "id": "vibration-freq",
+  "id": "vibration-freq", "version": "1.0",
   "name": "Vibration Frequency Estimator",
   "blurb": "rough first natural frequency from geometry and material",
   "group": "mechanical",

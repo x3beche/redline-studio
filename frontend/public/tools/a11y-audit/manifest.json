@@ -1,5 +1,5 @@
 {
-  "id": "a11y-audit",
+  "id": "a11y-audit", "version": "1.0",
   "name": "Accessibility Audit Lite",
   "blurb": "contrast, focus order and missing labels in pasted HTML",
   "group": "web",

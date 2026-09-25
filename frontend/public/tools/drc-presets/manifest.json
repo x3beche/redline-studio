@@ -1,5 +1,5 @@
 {
-  "id": "drc-presets",
+  "id": "drc-presets", "version": "1.1",
   "name": "DRC Rule Preset Builder",
   "blurb": "track, space and drill rules from a fab's capabilities, ready for the Rules tab",
   "group": "pcb",

@@ -1,5 +1,5 @@
 {
-  "id": "snap-fit",
+  "id": "snap-fit", "version": "1.0",
   "name": "Snap-Fit Calculator",
   "blurb": "insertion force and strain of a cantilever snap hook",
   "group": "mechanical",

@@ -1,5 +1,5 @@
 {
-  "id": "print-guidelines",
+  "id": "print-guidelines", "version": "1.0",
   "name": "Print Guideline Checker",
   "blurb": "wall, bridge and overhang values checked for a print process",
   "group": "mechanical",

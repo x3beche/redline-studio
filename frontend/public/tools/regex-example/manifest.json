@@ -1,5 +1,5 @@
 {
-  "id": "regex-example",
+  "id": "regex-example", "version": "1.0",
   "name": "Regex by Example",
   "blurb": "pick what should match in a text and get the regex, explained",
   "group": "code",

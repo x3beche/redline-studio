@@ -1,5 +1,5 @@
 {
-  "id": "stock-risk",
+  "id": "stock-risk", "version": "1.0",
   "name": "Stock Risk Scanner",
   "blurb": "ranks single-source and low-stock parts in a BOM by risk",
   "group": "pcb",

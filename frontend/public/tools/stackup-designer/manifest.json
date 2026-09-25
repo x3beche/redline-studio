@@ -1,5 +1,5 @@
 {
-  "id": "stackup-designer",
+  "id": "stackup-designer", "version": "1.0",
   "name": "Stackup Designer",
   "blurb": "pick layer order, dielectric thickness and copper weight; see board thickness and impedance targets",
   "group": "pcb",

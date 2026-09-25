@@ -1,5 +1,5 @@
 {
-  "id": "impedance-calc",
+  "id": "impedance-calc", "version": "1.1",
   "name": "Impedance Calculator",
   "blurb": "characteristic impedance of microstrip, stripline and differential pairs from the stackup",
   "group": "pcb",

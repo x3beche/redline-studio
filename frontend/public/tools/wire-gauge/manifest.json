@@ -1,5 +1,5 @@
 {
-  "id": "wire-gauge",
+  "id": "wire-gauge", "version": "1.0",
   "name": "Wire Gauge Selector",
   "blurb": "cable size from current, length and allowed voltage drop",
   "group": "pcb",

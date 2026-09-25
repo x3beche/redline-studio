@@ -1,5 +1,5 @@
 {
-  "id": "bitfield-editor",
+  "id": "bitfield-editor", "version": "1.0",
   "name": "Register Bitfield Editor",
   "blurb": "toggle bits of a hex value and read each field's meaning",
   "group": "embedded",

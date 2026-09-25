@@ -1,5 +1,5 @@
 {
-  "id": "naming-enforcer",
+  "id": "naming-enforcer", "version": "1.0",
   "name": "Naming Convention Enforcer",
   "blurb": "nets, symbols, parts and files checked against one naming rule",
   "group": "project",

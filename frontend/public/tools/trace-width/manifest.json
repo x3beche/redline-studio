@@ -1,5 +1,5 @@
 {
-  "id": "trace-width",
+  "id": "trace-width", "version": "1.0",
   "name": "Trace Width",
   "blurb": "how wide a track must be for a current, by IPC-2221, and what it drops",
   "group": "pcb",

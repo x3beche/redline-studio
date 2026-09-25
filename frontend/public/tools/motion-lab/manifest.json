@@ -1,5 +1,5 @@
 {
-  "id": "motion-lab",
+  "id": "motion-lab", "version": "1.0",
   "name": "Motion Lab",
   "blurb": "shape an easing curve and timing, take it as CSS or JS",
   "group": "web",

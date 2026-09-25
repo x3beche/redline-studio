@@ -1,5 +1,5 @@
 {
-  "id": "standoff-height",
+  "id": "standoff-height", "version": "1.0",
   "name": "Standoff Height Planner",
   "blurb": "standoff length from the tallest part under the board",
   "group": "mechanical",

@@ -1,5 +1,5 @@
 {
-  "id": "clock-tree",
+  "id": "clock-tree", "version": "1.0",
   "name": "Clock Tree Planner",
   "blurb": "PLL settings and peripheral clocks from a crystal frequency",
   "group": "embedded",

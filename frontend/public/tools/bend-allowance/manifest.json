@@ -1,5 +1,5 @@
 {
-  "id": "bend-allowance",
+  "id": "bend-allowance", "version": "1.0",
   "name": "Sheet Metal Bend Allowance",
   "blurb": "flat length from K-factor and bend radius",
   "group": "mechanical",

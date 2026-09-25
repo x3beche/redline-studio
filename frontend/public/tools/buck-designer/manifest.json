@@ -1,5 +1,5 @@
 {
-  "id": "buck-designer",
+  "id": "buck-designer", "version": "1.1",
   "name": "Buck Converter Designer",
   "blurb": "inductor, output capacitor and ripple for a buck converter",
   "group": "pcb",

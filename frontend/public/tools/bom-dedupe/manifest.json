@@ -1,5 +1,5 @@
 {
-  "id": "bom-dedupe",
+  "id": "bom-dedupe", "version": "1.1",
   "name": "BOM Deduplicator",
   "blurb": "merges spellings of the same part and produces a consolidated BOM",
   "group": "pcb",

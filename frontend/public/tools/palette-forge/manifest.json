@@ -1,5 +1,5 @@
 {
-  "id": "palette-forge",
+  "id": "palette-forge", "version": "1.0",
   "name": "Palette Forge",
   "blurb": "one colour into an accessible palette and light/dark tokens",
   "group": "web",

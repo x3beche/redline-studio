@@ -1,5 +1,5 @@
 {
-  "id": "fiducial-planner",
+  "id": "fiducial-planner", "version": "1.1",
   "name": "Fiducial & Tooling Planner",
   "blurb": "fiducial and tooling-hole placement for assembly",
   "group": "pcb",

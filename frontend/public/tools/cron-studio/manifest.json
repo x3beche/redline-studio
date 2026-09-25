@@ -1,5 +1,5 @@
 {
-  "id": "cron-studio",
+  "id": "cron-studio", "version": "1.0",
   "name": "Cron Studio",
   "blurb": "build a cron expression, see when it next runs",
   "group": "code",

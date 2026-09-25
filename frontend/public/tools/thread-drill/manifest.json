@@ -1,5 +1,5 @@
 {
-  "id": "thread-drill",
+  "id": "thread-drill", "version": "1.0",
   "name": "Thread & Tap Drill Chart",
   "blurb": "tap drill and clearance hole sizes for a thread",
   "group": "mechanical",

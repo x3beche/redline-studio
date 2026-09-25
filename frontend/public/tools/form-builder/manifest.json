@@ -1,5 +1,5 @@
 {
-  "id": "form-builder",
+  "id": "form-builder", "version": "1.0",
   "name": "Form Builder",
   "blurb": "build a form with its rules, get Zod, types and a React component",
   "group": "web",

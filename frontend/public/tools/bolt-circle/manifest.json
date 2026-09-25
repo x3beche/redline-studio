@@ -1,5 +1,5 @@
 {
-  "id": "bolt-circle",
+  "id": "bolt-circle", "version": "1.0",
   "name": "Bolt Circle Generator",
   "blurb": "hole coordinates and CAD code from count and diameter",
   "group": "mechanical",

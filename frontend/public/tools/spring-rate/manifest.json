@@ -1,5 +1,5 @@
 {
-  "id": "spring-rate",
+  "id": "spring-rate", "version": "1.0",
   "name": "Spring Rate Calculator",
   "blurb": "spring constant from wire diameter, coils and diameter",
   "group": "mechanical",

@@ -1,5 +1,5 @@
 {
-  "id": "deep-link",
+  "id": "deep-link", "version": "1.0",
   "name": "Deep Link Builder",
   "blurb": "a deep link from scheme and parameters, with the emulator test command",
   "group": "mobile",

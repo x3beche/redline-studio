@@ -1,5 +1,5 @@
 {
-  "id": "linker-script",
+  "id": "linker-script", "version": "1.0",
   "name": "Linker Script Helper",
   "blurb": "a linker script from sections and memory regions in a form",
   "group": "embedded",

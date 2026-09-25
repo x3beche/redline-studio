@@ -1,5 +1,5 @@
 {
-  "id": "endianness",
+  "id": "endianness", "version": "1.0",
   "name": "Endianness Inspector",
   "blurb": "the same bytes read as little and big endian side by side",
   "group": "embedded",

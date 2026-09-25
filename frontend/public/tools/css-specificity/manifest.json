@@ -1,5 +1,5 @@
 {
-  "id": "css-specificity",
+  "id": "css-specificity", "version": "1.0",
   "name": "CSS Specificity Calculator",
   "blurb": "which of two selectors wins, and why",
   "group": "web",

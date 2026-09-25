@@ -1,5 +1,5 @@
 {
-  "id": "thermal-expansion",
+  "id": "thermal-expansion", "version": "1.0",
   "name": "Thermal Expansion Calculator",
   "blurb": "dimension change of a part over a temperature change",
   "group": "mechanical",

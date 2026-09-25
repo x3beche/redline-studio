@@ -1,5 +1,5 @@
 {
-  "id": "nvic-planner",
+  "id": "nvic-planner", "version": "1.0",
   "name": "NVIC Priority Planner",
   "blurb": "interrupt priorities in order, with preemption conflicts",
   "group": "embedded",

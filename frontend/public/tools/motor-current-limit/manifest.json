@@ -1,5 +1,5 @@
 {
-  "id": "motor-current-limit",
+  "id": "motor-current-limit", "version": "1.0",
   "name": "Motor Driver Current Limit",
   "blurb": "current limit and reference voltage from the sense resistor",
   "group": "embedded",

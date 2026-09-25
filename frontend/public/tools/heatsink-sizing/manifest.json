@@ -1,5 +1,5 @@
 {
-  "id": "heatsink-sizing",
+  "id": "heatsink-sizing", "version": "1.1",
   "name": "Heat Sink Sizing",
   "blurb": "required thermal resistance and heat sink size from power and ambient",
   "group": "pcb",

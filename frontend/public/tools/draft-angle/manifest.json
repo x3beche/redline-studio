@@ -1,5 +1,5 @@
 {
-  "id": "draft-angle",
+  "id": "draft-angle", "version": "1.0",
   "name": "Draft Angle Checker",
   "blurb": "minimum draft angle for release from a mould",
   "group": "mechanical",

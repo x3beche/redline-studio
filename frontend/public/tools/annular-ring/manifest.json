@@ -1,5 +1,5 @@
 {
-  "id": "annular-ring",
+  "id": "annular-ring", "version": "1.1",
   "name": "Annular Ring Checker",
   "blurb": "whether the ring left around a drill is safe for a fab's tolerance",
   "group": "pcb",

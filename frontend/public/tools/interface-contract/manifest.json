@@ -1,5 +1,5 @@
 {
-  "id": "interface-contract",
+  "id": "interface-contract", "version": "1.0",
   "name": "Interface Contract",
   "blurb": "GPIO map, I2C addresses and voltage levels defined once for every room",
   "group": "project",

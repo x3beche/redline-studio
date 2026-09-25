@@ -1,5 +1,5 @@
 {
-  "id": "package-explorer",
+  "id": "package-explorer", "version": "1.0",
   "name": "Package Dimension Explorer",
   "blurb": "physical sizes of packages from 0201 to QFN, compared to scale",
   "group": "pcb",

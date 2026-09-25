@@ -1,5 +1,5 @@
 {
-  "id": "debounce-time",
+  "id": "debounce-time", "version": "1.0",
   "name": "Debounce Time Calculator",
   "blurb": "debounce time for a button type and sampling period",
   "group": "embedded",

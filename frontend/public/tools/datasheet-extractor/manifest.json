@@ -1,5 +1,5 @@
 {
-  "id": "datasheet-extractor",
+  "id": "datasheet-extractor", "version": "1.0",
   "name": "Datasheet Snippet Extractor",
   "blurb": "pinout and absolute maximum tables from a PDF into structured data",
   "group": "project",

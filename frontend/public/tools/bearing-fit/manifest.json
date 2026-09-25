@@ -1,5 +1,5 @@
 {
-  "id": "bearing-fit",
+  "id": "bearing-fit", "version": "1.0",
   "name": "Bearing Fit Advisor",
   "blurb": "shaft and housing tolerances for a bearing's bore and outside diameter",
   "group": "mechanical",

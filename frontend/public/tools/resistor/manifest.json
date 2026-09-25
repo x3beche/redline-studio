@@ -1,5 +1,5 @@
 {
-  "id": "resistor",
+  "id": "resistor", "version": "1.0",
   "name": "Resistor & LED",
   "blurb": "Ohm's law, an LED's series resistor, a divider from standard values",
   "group": "pcb",

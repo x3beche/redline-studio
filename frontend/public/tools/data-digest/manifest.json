@@ -1,5 +1,5 @@
 {
-  "id": "data-digest",
+  "id": "data-digest", "version": "1.0",
   "name": "Data Digest",
   "blurb": "profile a large CSV or JSON into a compact brief for an LLM",
   "group": "code",

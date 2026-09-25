@@ -1,5 +1,5 @@
 {
-  "id": "layout-mapper",
+  "id": "layout-mapper", "version": "1.0",
   "name": "Layout Inspector Mapper",
   "blurb": "a region of a screen mapped to its view in a uiautomator dump",
   "group": "mobile",

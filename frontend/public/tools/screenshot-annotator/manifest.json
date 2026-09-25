@@ -1,5 +1,5 @@
 {
-  "id": "screenshot-annotator",
+  "id": "screenshot-annotator", "version": "1.0",
   "name": "Screenshot Annotator",
   "blurb": "mark up a screenshot and turn the marks into a fix list",
   "group": "web",

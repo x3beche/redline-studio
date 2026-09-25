@@ -1,5 +1,5 @@
 {
-  "id": "servo-pulse",
+  "id": "servo-pulse", "version": "1.0",
   "name": "Servo Pulse Mapper",
   "blurb": "angle range to pulse width, with calibration values",
   "group": "embedded",

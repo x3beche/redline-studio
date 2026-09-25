@@ -1,5 +1,5 @@
 {
-  "id": "adb-commands",
+  "id": "adb-commands", "version": "1.0",
   "name": "ADB Command Palette",
   "blurb": "common emulator and device commands, ready to copy",
   "group": "mobile",
