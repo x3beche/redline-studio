@@ -99,7 +99,10 @@ const pick = (rows, d) => (rows.find(([u]) => d <= u) || rows[rows.length - 1])[
 const sg = (v) => `${v > 0 ? '+' : ''}${Number(v.toFixed(1))}`;
 const um = (v) => `${sg(v)} µm`;
 
-export function run({ d, D, rotating, load, type, housing, slide }) {
+const SHAFTS = ['g6', 'h6', 'h5', 'j5', 'j6', 'js5', 'js6', 'k5', 'k6', 'm5', 'm6', 'n6', 'p6'];
+const HOLES = ['G7', 'H7', 'H8', 'J7', 'JS7', 'K7', 'M7', 'N7', 'P7'];
+
+export function run({ d, D, rotating, load, type, housing, slide, shaft_cls, hole_cls }) {
   const warnings = [];
   const notes = [];
   if (!(d > 0) || !(D > 0)) return { warnings: ['Give the bearing bore d and outside diameter D in mm (e.g. 6204: 20 and 47).'] };
@@ -130,6 +133,17 @@ export function run({ d, D, rotating, load, type, housing, slide }) {
     if (slide) notes.push('The outer ring of the floating (non-locating) bearing must slide axially as the shaft grows with heat: H7, or G7 for easy sliding.');
   }
 
+  // A class chosen by hand (the page's fit diagrams) replaces the recommendation.
+  const recShaft = shaft, recHole = hole;
+  if (shaft_cls && SHAFTS.includes(shaft_cls) && shaft_cls !== shaft) {
+    shaft = shaft_cls;
+    notes.push(`Shaft class ${shaft} chosen by hand; the tables recommend ${recShaft} for this case.`);
+  }
+  if (hole_cls && HOLES.includes(hole_cls) && hole_cls !== hole) {
+    hole = hole_cls;
+    notes.push(`Housing class ${hole} chosen by hand; the tables recommend ${recHole} for this case.`);
+  }
+
   const sd = shaftDev(shaft, d);
   const hd = holeDev(hole, D);
   const bd = bearingDev(BORE, d);
@@ -144,17 +158,17 @@ export function run({ d, D, rotating, load, type, housing, slide }) {
 
   const lim = (n, v) => `${(n + v[0] / 1000).toFixed(3)} – ${(n + v[1] / 1000).toFixed(3)} mm`;
   const values = [
-    { label: 'Shaft tolerance', value: shaft, tone: 'ok', hint: `Ø${d}: ${lim(d, sd)} (${um(sd[0])} / ${um(sd[1])})` },
+    { label: 'Shaft tolerance', value: shaft, tone: shaft === recShaft ? 'ok' : 'warn', hint: `Ø${d}: ${lim(d, sd)} (${um(sd[0])} / ${um(sd[1])})` },
     { label: 'Fit on shaft', value: fitWord(shMin, shMax, 'interference', 'clearance'),
       hint: `${shMax >= 0 ? `${um(shMax)} max interference` : `${um(-shMax)} min clearance`}, ${shMin >= 0 ? `${um(shMin)} min interference` : `${um(-shMin)} max clearance`}` },
-    { label: 'Housing tolerance', value: hole, tone: 'ok', hint: `Ø${D}: ${lim(D, hd)} (${um(hd[0])} / ${um(hd[1])})` },
+    { label: 'Housing tolerance', value: hole, tone: hole === recHole ? 'ok' : 'warn', hint: `Ø${D}: ${lim(D, hd)} (${um(hd[0])} / ${um(hd[1])})` },
     { label: 'Fit in housing', value: fitWord(hoMin, hoMax, 'clearance', 'interference'),
       hint: `${hoMax >= 0 ? `${um(hoMax)} max clearance` : `${um(-hoMax)} min interference`}, ${hoMin >= 0 ? `${um(hoMin)} min clearance` : `${um(-hoMin)} max interference`}` },
   ];
 
   // Alternatives: the neighbouring classes, so a designer can move one step.
-  const shafts = ['g6', 'h6', 'h5', 'j5', 'j6', 'js5', 'js6', 'k5', 'k6', 'm5', 'm6', 'n6', 'p6'];
-  const holes = ['G7', 'H7', 'H8', 'J7', 'JS7', 'K7', 'M7', 'N7', 'P7'];
+  const shafts = SHAFTS;
+  const holes = HOLES;
   const shaftRows = shafts.map((c) => {
     const v = shaftDev(c, d);
     const hi = v[1] - bd, lo = v[0];
@@ -174,7 +188,17 @@ export function run({ d, D, rotating, load, type, housing, slide }) {
     'Load classes: light P ≤ 0.05 C, normal 0.05-0.1 C, heavy over 0.1 C (P equivalent load, C dynamic load rating).',
   );
 
+  // The same numbers as data, for a page that draws the seats and their zones.
+  const fit = {
+    d, D, type: t, rotating: ['outer', 'indeterminate'].includes(rotating) ? rotating : 'inner', load: ld, housing: housing === 'split' ? 'split' : 'solid', slide: !!slide,
+    shaft, hole, recShaft, recHole, bore: [bd, 0], od: [od, 0], shaftDev: sd, holeDev: hd,
+    shaftFit: [shMin, shMax], housingFit: [hoMin, hoMax],
+    shaftKind: fitWord(shMin, shMax, 'interference', 'clearance'), housingKind: fitWord(hoMin, hoMax, 'clearance', 'interference'),
+    shafts: shafts.map((c) => { const v = shaftDev(c, d); return { cls: c, dev: v, fit: [v[0], v[1] - bd], kind: fitWord(v[0], v[1] - bd, 'interference', 'clearance') }; }),
+    holes: holes.map((c) => { const v = holeDev(c, D); return { cls: c, dev: v, fit: [v[0], v[1] - od], kind: fitWord(v[0], v[1] - od, 'clearance', 'interference') }; }),
+  };
   return {
+    fit,
     values,
     warnings,
     tables: [

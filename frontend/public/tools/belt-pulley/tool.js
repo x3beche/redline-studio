@@ -10,7 +10,7 @@
 import { fmtNum } from '../kit/eng.js';
 
 // pitch mm, pitch-line differential mm (Gates / Optibelt tables).
-const PROFILES = {
+export const PROFILES = {
   gt2: { name: 'GT2 2 mm', p: 2, pld: 0.254 },
   gt3: { name: 'GT2 3 mm (GT3)', p: 3, pld: 0.381 },
   htd3: { name: 'HTD 3M', p: 3, pld: 0.381 },
@@ -116,7 +116,24 @@ export function run({ kind, d1, d2, z1, z2, mode, C, L, teeth, rpm }) {
     );
   }
 
+  // The same numbers as data, for a page that draws the drive itself.
+  const drive = {
+    kind: prof ? kind : 'diameter', profile: prof ? { ...prof } : null, mode: mode === 'centre' ? 'centre' : 'length',
+    a, b, z1: prof ? z1 : null, z2: prof ? z2 : null, c, len, approx, phi, wrap, wrapLarge: 360 - wrap, ratio,
+    small: a <= b ? 1 : 2, minC: (large - small) / 2, touchC: (a + b) / 2,
+    rpm: rpm > 0 ? rpm : null, n2: rpm > 0 ? rpm / ratio : null, v: rpm > 0 ? (Math.PI * a * rpm) / 60000 : null,
+    teeth: prof ? len / prof.p : null, mesh: prof ? (Math.min(z1, z2) * wrap) / 360 : null,
+    od: prof ? [a - 2 * prof.pld, b - 2 * prof.pld] : null,
+    belts: prof ? (() => {
+      const bt = len / prof.p, n0 = Math.round(bt);
+      return [-3, -2, -1, 0, 1, 2, 3].map((k) => n0 + k).filter((n) => n > 0).map((n) => {
+        const cc = centreFor(n * prof.p, small, large);
+        return { n, len: n * prof.p, c: cc };
+      });
+    })() : null,
+  };
   return {
+    drive,
     values,
     warnings,
     tables,

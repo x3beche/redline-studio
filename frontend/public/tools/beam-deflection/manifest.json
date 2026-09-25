@@ -1,8 +1,9 @@
 {
-  "id": "beam-deflection", "version": "1.0",
+  "id": "beam-deflection", "version": "1.1",
   "name": "Beam Deflection Calculator",
   "blurb": "deflection and maximum stress of a simple beam under load",
   "group": "mechanical",
+  "layout": "custom",
   "rooms": ["cad"],
   "keywords": ["beam", "deflection", "bending", "bending stress", "cantilever", "simply supported", "fixed beam", "moment of inertia", "second moment of area", "udl", "point load", "sag", "stiffness", "roark", "section modulus"],
   "intro": "How far a straight beam bends and how hard it is stressed, for a cantilever, a simply supported or a fixed-fixed beam under a point load or a uniform load. Closed-form Euler-Bernoulli cases from Roark's table 8.1; self weight can be added.",

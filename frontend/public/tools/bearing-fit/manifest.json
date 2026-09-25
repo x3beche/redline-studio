@@ -1,8 +1,9 @@
 {
-  "id": "bearing-fit", "version": "1.0",
+  "id": "bearing-fit", "version": "1.1",
   "name": "Bearing Fit Advisor",
   "blurb": "shaft and housing tolerances for a bearing's bore and outside diameter",
   "group": "mechanical",
+  "layout": "custom",
   "rooms": ["cad"],
   "keywords": ["bearing fit", "ball bearing", "roller bearing", "shaft tolerance", "housing tolerance", "iso 286", "k5", "k6", "h7", "j6", "interference fit", "press fit", "iso 492", "bore", "seat"],
   "intro": "Which ISO 286 tolerance class to put on the shaft and in the housing for a radial ball or roller bearing, and the interference or clearance it makes with the bearing's ISO 492 tolerances. The choice follows the SKF / NSK general tables: the ring that turns relative to the load gets the interference.",
@@ -17,7 +18,13 @@
       "options": [["light", "Light (P ≤ 0.05 C)"], ["normal", "Normal (0.05-0.1 C)"], ["heavy", "Heavy or shock (> 0.1 C)"]] },
     { "key": "housing", "label": "Housing", "type": "select", "default": "solid",
       "options": [["solid", "Solid (one piece)"], ["split", "Split (plummer block)"]] },
-    { "key": "slide", "label": "Stationary ring must slide axially (floating bearing)", "type": "bool", "default": false }
+    { "key": "slide", "label": "Stationary ring must slide axially (floating bearing)", "type": "bool", "default": false },
+    { "key": "shaft_cls", "label": "Shaft class", "type": "select", "default": "", "required": false,
+      "options": [["", "Recommended"], ["g6", "g6"], ["h6", "h6"], ["h5", "h5"], ["j5", "j5"], ["j6", "j6"], ["js5", "js5"], ["js6", "js6"], ["k5", "k5"], ["k6", "k6"], ["m5", "m5"], ["m6", "m6"], ["n6", "n6"], ["p6", "p6"]],
+      "help": "Leave on Recommended, or pick a class to see the fit it makes." },
+    { "key": "hole_cls", "label": "Housing class", "type": "select", "default": "", "required": false,
+      "options": [["", "Recommended"], ["G7", "G7"], ["H7", "H7"], ["H8", "H8"], ["J7", "J7"], ["JS7", "JS7"], ["K7", "K7"], ["M7", "M7"], ["N7", "N7"], ["P7", "P7"]],
+      "help": "Leave on Recommended, or pick a class to see the fit it makes." }
   ],
   "examples": [
     { "title": "6204 on a motor shaft, normal load", "input": { "d": "20", "D": "47", "type": "ball", "rotating": "inner", "load": "normal", "housing": "solid", "slide": false } },

@@ -1,8 +1,9 @@
 {
-  "id": "belt-pulley", "version": "1.0",
+  "id": "belt-pulley", "version": "1.1",
   "name": "Belt & Pulley Calculator",
   "blurb": "belt length and ratio from pulley diameters and centre distance",
   "group": "mechanical",
+  "layout": "custom",
   "rooms": ["cad"],
   "keywords": ["belt", "pulley", "belt length", "centre distance", "center distance", "timing belt", "gt2", "htd", "v-belt", "speed ratio", "wrap angle", "teeth in mesh", "pitch diameter", "idler", "drive"],
   "intro": "The pitch length of an open belt around two pulleys and the speed ratio, or the centre distance for a belt you already have. Exact open-belt geometry; for timing belts it works in teeth and lists the closed belts nearest your layout.",

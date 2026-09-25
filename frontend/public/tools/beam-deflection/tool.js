@@ -15,7 +15,7 @@
 // Bending stress sigma = M c / I.
 import { fmtNum } from '../kit/eng.js';
 
-const MATERIALS = {
+export const MATERIALS = {
   s235: { name: 'Steel S235', E: 210, fy: 235, rho: 7850 },
   s355: { name: 'Steel S355', E: 210, fy: 355, rho: 7850 },
   ss304: { name: 'Stainless 304', E: 193, fy: 215, rho: 8000 },
@@ -165,7 +165,16 @@ export function run(input) {
   if (L / (2 * s.c) < 5) warnings.push('The beam is short for its depth (L/h under 5): shear deflection, not included here, becomes significant.');
 
   const xs = Array.from({ length: 41 }, (_, i) => (L * i) / 40);
+  // The same numbers as data, for a page that draws the beam itself.
+  const at = (x) => [x, parts.reduce((acc, p) => acc + p.y(x), 0), parts.reduce((acc, p) => acc + p.M(x), 0)];
+  const beam = {
+    support: sup, load: load === 'udl' ? 'udl' : 'point', L, a: pos, P: load === 'udl' ? null : P, w: load === 'udl' ? w : null, wself,
+    E: Ey, fy: fyy > 0 ? fyy : null, material: m.name, I: s.I, c: s.c, A: s.A, section: s.name, EI,
+    yMax, xAt, mMax, xM, R, sigma, sf, ratio, limit: lim, effL, yAllow: effL / lim,
+    curve: Array.from({ length: 121 }, (_, i) => at((L * i) / 120)),
+  };
   return {
+    beam,
     values,
     warnings,
     charts: [{
