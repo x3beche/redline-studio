@@ -130,11 +130,13 @@ export function run({ rails }) {
     vin: Number.isFinite(n.vin) ? n.vin : null, vout: Number.isFinite(n.vout) ? n.vout : null,
     iout: n.iout, iin: n.iin, pout: Number.isFinite(n.pout) ? n.pout : null, loss: n.loss,
     limit: n.limit ?? null, use: n.use, eff: n.type === 'switcher' ? n.etaUsed : null,
+    row: n.row - 1, load: n.load, pin: Number.isFinite(n.pin) ? n.pin : null, pload: Number.isFinite(n.vout) ? n.vout * n.load : null,
   }));
 
   return {
     values,
     warnings,
+    totals: { pIn, pLoad, pLoss, eff: pIn > 0 ? pLoad / pIn : null },
     tables: [{
       title: 'Per branch (depth-first; indent = level)',
       columns: ['Node', 'Type', 'V', 'I out', 'I in', 'P out', 'Loss', 'Rating', 'Use'],

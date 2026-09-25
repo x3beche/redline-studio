@@ -1,8 +1,9 @@
 {
-  "id": "pcb-weight", "version": "1.0",
+  "id": "pcb-weight", "version": "1.1",
   "name": "PCB Weight & CoG",
   "blurb": "mass and centre of gravity of board, copper and parts",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb", "cad"],
   "keywords": ["pcb weight", "board mass", "centre of gravity", "center of gravity", "cog", "copper weight", "laminate density", "fr-4 density", "assembly mass", "balance", "vibration", "shipping weight", "enclosure"],
   "intro": "Mass of the bare board (laminate, copper by oz and coverage, solder mask) plus the parts you list, and the centre of gravity in x, y and z as the mass-weighted average position. Densities come from the laminate data sheets; 1 oz copper is 305 g/m².",

@@ -1,8 +1,9 @@
 {
-  "id": "power-rail-tree", "version": "1.0",
+  "id": "power-rail-tree", "version": "1.1",
   "name": "Power Rail Tree",
   "blurb": "supply rails as a tree with each branch's current budget and total power",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb", "embedded"],
   "keywords": ["power tree", "power budget", "current budget", "rail", "supply tree", "ldo", "buck", "regulator", "efficiency", "power dissipation", "pdn", "power distribution"],
   "intro": "List each source, regulator and load with the rail it hangs from. Currents are summed from the leaves up: an LDO draws its output current from its parent, a switcher draws Vout·Iout/(η·Vin), so every branch shows its current, its loss and how close it is to its rating.",

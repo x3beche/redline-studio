@@ -96,7 +96,15 @@ export function run(input) {
   } else values.push({ label: 'Best alternative', value: '–', tone: 'bad' });
 
   const top = scored.slice(0, 12);
+  // The same ranking as numbers, for a drawing: nothing here is computed twice.
+  const ranked = scored.map((r, k) => ({ rank: k + 1, i: r.i, lcsc: r.lcsc, mpn: r.mpn, maker: r.maker, pkg: r.pkg, fam: r.fam,
+    pkgFit: r.pkgFit, sameMpn: !!r.sameMpn, inStock: r.inStock, stock: r.stock, price: r.price, cls: r.cls, eff: r.eff,
+    fee: feeFor(r.cls), cost: r.cost, verdict: r.verdict, best: r === best }));
+  const order = { qty, boards, per, fee, assume, origClass, origFam, origPrice, origFee: feeFor(origClass), origCost,
+    origLcsc: String(input.orig_lcsc || '').trim(), origMpn: String(input.orig_mpn || '').trim(), origPackage: String(input.orig_package || '').trim(),
+    origStock: Number.isFinite(input.orig_stock) ? input.orig_stock : null };
   return {
+    ranked, order,
     values, warnings, notes: [...notes,
       'Rank: enough stock, then footprint fit, then the same MPN (a true second source), then no loading fee, then order cost.',
       '"same family" means the package names differ only in suffix (SOT-223 vs SOT-223-3L): check tab and pin order on both datasheets.',

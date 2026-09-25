@@ -52,7 +52,7 @@ export function run({ width, height, thick, material, layers, outerOz, innerOz, 
     const bottom = String(r.side).toLowerCase().startsWith('b');
     const z = bottom ? -hh / 2 : thick + hh / 2;
     if (x < 0 || x > width || y < 0 || y > height) warnings.push(`${name} at (${fmtNum(x, 4)}, ${fmtNum(y, 4)}) mm is off the ${fmtNum(width, 4)} × ${fmtNum(height, 4)} mm board: check its position (origin is the lower-left corner).`);
-    good.push({ ref: name, m, x, y, z, h: hh, side: bottom ? 'bottom' : 'top' });
+    good.push({ i, ref: name, m, x, y, z, h: hh, side: bottom ? 'bottom' : 'top' });
   });
   if (bad.length) warnings.push(`Skipped rows with a missing or non-numeric mass, x, y or height: ${bad.join(', ')}.`);
 
@@ -92,6 +92,9 @@ export function run({ width, height, thick, material, layers, outerOz, innerOz, 
       'The board is taken as a full rectangle: holes and cut-outs are not subtracted (a few % high for a drilled board). Plating and surface finish add under 1 %.',
       'Group many small parts into one row at their centroid (e.g. all passives ≈ 0.001-0.01 g each).',
       `Laminate density: ${mat.src}.`],
-    drawing: { w: width, h: height, parts: good.map((p) => ({ ref: p.ref, x: p.x, y: p.y, m: p.m, side: p.side })), cog: { x: cog.x, y: cog.y } },
+    drawing: { w: width, h: height, t: thick, total, board, lam, cu, mask: mk, partsMass,
+      parts: good.map((p) => ({ i: p.i, ref: p.ref, x: p.x, y: p.y, z: p.z, h: p.h, m: p.m, side: p.side, share: p.m / total,
+        off: p.x < 0 || p.x > width || p.y < 0 || p.y > height, heavyBottom: p.m >= 5 && p.side === 'bottom' })),
+      skipped: bad, cog: { x: cog.x, y: cog.y, z: cog.z }, offset: Math.hypot(dx, dy), offCentre: off > 0.15 },
   };
 }
