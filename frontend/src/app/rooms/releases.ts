@@ -2,6 +2,7 @@ import { Component, OnDestroy, effect, inject, input, output, signal, untracked 
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DecimalPipe } from '@angular/common';
 import { Auth } from '../auth';
+import { T } from '../i18n';
 
 /** Releases: a project packed as it stands, under a tag, to make
  *  (backend/release.py). The list of what was released - each one kept
@@ -17,7 +18,7 @@ interface Release {
 
 @Component({
   selector: 'app-releases',
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, T],
   template: `
 <div class="tcv-tokens-back" (click)="closed.emit()">
   <div class="tcv-tokens tcv-rel" (click)="$event.stopPropagation()" role="dialog" aria-label="Releases">
@@ -32,7 +33,7 @@ interface Release {
                maxlength="32" aria-label="Tag">
         <input class="tcv-rel-notes" placeholder="What changed in this one (optional)" [value]="notes()"
                (input)="notes.set($any($event.target).value)" maxlength="4000" aria-label="Notes">
-        <button class="tcv-btn tcv-btn-accent" type="submit" [disabled]="!tag().trim() || busy()">Release</button>
+        <button class="tcv-btn tcv-btn-accent" type="submit" [disabled]="!tag().trim() || busy()">{{ 'Release' | t }}</button>
       </form>
     } @else {
       <p class="tcv-menu-blurb">{{ auth.why('run') }}</p>
@@ -64,13 +65,13 @@ interface Release {
         </div>
         <div class="tcv-rel-actions">
           @if (r.status === 'ready') {
-            <a class="tcv-btn tcv-btn-accent" [href]="'/api/releases/' + r.id + '/download'" download>Download</a>
+            <a class="tcv-btn tcv-btn-accent" [href]="'/api/releases/' + r.id + '/download'" download>{{ 'Download' | t }}</a>
           }
-          @if (auth.can('delete')) { <button class="tcv-btn" (click)="remove(r)">Delete</button> }
+          @if (auth.can('delete')) { <button class="tcv-btn" (click)="remove(r)">{{ 'Delete' | t }}</button> }
         </div>
       </div>
     } @empty { <p>No releases of {{ project() }} yet.</p> }
-    <div class="tcv-tokens-end"><button class="tcv-btn" (click)="closed.emit()">Close</button></div>
+    <div class="tcv-tokens-end"><button class="tcv-btn" (click)="closed.emit()">{{ 'Close' | t }}</button></div>
   </div>
 </div>`,
 })

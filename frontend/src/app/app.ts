@@ -7,12 +7,14 @@ import { RoomPcb } from './rooms/pcb';
 import { RoomTools } from './tools/room';
 import { QuickNote, RoomNotes } from './rooms/notes';
 import { Palette } from './palette';
+import { Preferences } from './preferences';
+import { T } from './i18n';
 import { Auth, SignIn, UserChip } from './auth';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, RoomNotes, QuickNote, Palette, SignIn, UserChip],
+  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, RoomNotes, QuickNote, Palette, Preferences, SignIn, T, UserChip],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -32,7 +34,7 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
               [attr.data-on]="here() === w.id ? 1 : null"
               [attr.aria-current]="here() === w.id ? 'page' : null"
               [title]="w.blurb">
-        {{ w.label }}
+        {{ w.label | t }}
         @if (!w.ready) { <span class="tcv-tab-soon">soon</span> }
       </button>
     }
@@ -44,13 +46,13 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
       <button (click)="open(w.id)" class="tcv-tab tcv-tab-notes"
               [attr.data-on]="here() === w.id ? 1 : null"
               [attr.aria-current]="here() === w.id ? 'page' : null"
-              [title]="w.blurb + ' (Alt+N)'">{{ w.label }}</button>
+              [title]="w.blurb + ' (Alt+N)'">{{ w.label | t }}</button>
     }
     @if (toolsTab; as w) {
       <button (click)="open(w.id)" class="tcv-tab tcv-tab-tools"
               [attr.data-on]="here() === w.id ? 1 : null"
               [attr.aria-current]="here() === w.id ? 'page' : null"
-              [title]="w.blurb">{{ w.label }}
+              [title]="w.blurb">{{ w.label | t }}
         <!-- How many tools there are, quietly, beside the name. -->
         @if (toolCount(); as n) { <span class="tcv-tab-count">{{ n }}</span> }
       </button>
@@ -59,7 +61,7 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
       <button (click)="open(w.id)" class="tcv-tab tcv-tab-end"
               [attr.data-on]="here() === w.id ? 1 : null"
               [attr.aria-current]="here() === w.id ? 'page' : null"
-              [title]="brief()?.title ?? w.blurb">{{ w.label }}
+              [title]="brief()?.title ?? w.blurb">{{ w.label | t }}
         <!-- The week in a few words, quietly: spend, notes, how fresh. -->
         @if (brief(); as b) { <span class="tcv-tab-count">{{ b.text }}</span> }
       </button>
@@ -90,6 +92,8 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
 <app-quick-note />
 <!-- Ctrl+K anywhere: go to anything, do anything, search everything. -->
 <app-palette />
+<!-- Theme, language, shortcuts ("?"). -->
+<app-preferences />
 } @else if (auth.state()) {
   <app-sign-in />
 }`,

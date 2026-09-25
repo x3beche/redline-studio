@@ -913,6 +913,19 @@ keys, pin, edit (it saves as you type), 🎙 to dictate where the browser
 can listen, and **Send to agent** hands a note to a room's agent as a
 message in its thread.
 
+**Preferences** - your name's menu at the top right (or ⚙ there when
+nobody signs in), Ctrl+K, or **?** for the shortcuts page:
+
+- **Theme**: Redline dark, Light, OLED black, GitHub Dark. It covers the
+  whole window - panels, the 3D backdrop (dark in GitHub Dark and black in
+  OLED), the viewer's own chrome and the code editor, which changes at once.
+- **Language**: English or Türkçe - the tabs, the side columns, the menus,
+  Notes, the palette, the code and change views, releases. Names of models,
+  boards, parts and code are never translated; a room not yet translated
+  reads in English.
+- **Keyboard shortcuts**: Ctrl+K, Alt+N, ?, Esc; Ctrl+S, Ctrl+F and
+  Ctrl+click in the code; Enter, Shift+Enter, / and the arrows in Notes.
+
 **Ctrl+K** anywhere opens one box to go to anything and do anything: the
 rooms; every model, board and app by name; every tool; the actions of the
 room you are in (show the code, release, technical drawing, build the

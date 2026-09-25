@@ -5,6 +5,9 @@ import { Catalog, FolderNode } from './api';
 import { Selection } from './selection';
 import { WORKSPACES } from './workspaces';
 import { NotesApi } from './rooms/notes';
+import { Prefs } from './preferences';
+import { THEMES, THEME_NAMES } from '../theme';
+import { LANG, LANGS, T, setLang, t } from './i18n';
 
 /** Ctrl+K: one box to go anywhere and do anything.
  *
@@ -45,20 +48,21 @@ function score(text: string, ws: string[]): number {
 
 @Component({
   selector: 'app-palette',
+  imports: [T],
   template: `
 @if (open()) {
   <div class="tcv-pal-back" (click)="close()">
     <div class="tcv-pal" (click)="$event.stopPropagation()" role="dialog" aria-label="Command palette">
-      <input #box class="tcv-pal-input" placeholder="Go to a model, board, tool or room - search code, notes, chats, parts - or type an action"
+      <input #box class="tcv-pal-input" [placeholder]="'Go to a model, board, tool or room - search code, notes, chats, parts - or type an action' | t"
              [value]="q()" (input)="q.set($any($event.target).value)" (keydown)="nav($event)" aria-label="Search">
       <div class="tcv-pal-list" #list>
         @for (g of grouped(); track g.name) {
-          <div class="tcv-pal-group">{{ g.name }}</div>
+          <div class="tcv-pal-group">{{ g.name | t }}</div>
           @for (it of g.items; track it.i) {
             <button class="tcv-pal-item" [attr.data-on]="it.i === cursor() ? 1 : null" (mouseenter)="cursor.set(it.i)"
                     (click)="go(it.item)">
               <span class="tcv-pal-icon">{{ it.item.icon }}</span>
-              <span class="tcv-pal-label">{{ it.item.label }}</span>
+              <span class="tcv-pal-label">{{ it.item.label | t }}</span>
               @if (it.item.hint) { <span class="tcv-pal-hint">{{ it.item.hint }}</span> }
               @if (it.item.keys) { <kbd class="tcv-pal-keys">{{ it.item.keys }}</kbd> }
             </button>
@@ -67,7 +71,7 @@ function score(text: string, ws: string[]): number {
           <p class="tcv-pal-empty">{{ searching() ? 'looking…' : 'Nothing matches.' }}</p>
         }
       </div>
-      <div class="tcv-pal-foot">↑↓ to move · Enter to open · Esc to close
+      <div class="tcv-pal-foot">{{ '↑↓ to move · Enter to open · Esc to close' | t }}
         @if (searching()) { <span> · searching code, notes, chats…</span> }</div>
     </div>
   </div>
@@ -79,6 +83,7 @@ export class Palette {
   private catalog = inject(Catalog);
   private picked = inject(Selection);
   private notes = inject(NotesApi);
+  private prefs = inject(Prefs);
   private box = viewChild<ElementRef<HTMLInputElement>>('box');
   private list = viewChild<ElementRef<HTMLElement>>('list');
 
@@ -113,7 +118,12 @@ export class Palette {
     const room = this.picked.room();
     const out: Item[] = [
       { group: 'Actions', icon: '✎', label: 'New note', hint: 'from anywhere', keys: 'Alt+N', run: () => this.notes.quick.set(true) },
-      { group: 'Actions', icon: '⌨', label: 'Keyboard shortcuts', keys: '?', run: () => this.picked.ask('shortcuts') },
+      { group: 'Actions', icon: '⌨', label: 'Keyboard shortcuts', keys: '?', run: () => this.prefs.open.set('shortcuts') },
+      { group: 'Actions', icon: '⚙', label: 'Preferences', hint: 'theme, language, shortcuts', run: () => this.prefs.open.set('appearance') },
+      ...THEMES.map(th => ({ group: 'Actions', icon: '◐', label: `Theme: ${THEME_NAMES[th]}`,
+                             hint: this.prefs.theme() === th ? 'on' : '', run: () => this.prefs.wear(th) })),
+      ...LANGS.map(l => ({ group: 'Actions', icon: 'A', label: `Language: ${l.name}`,
+                           hint: LANG() === l.id ? 'on' : '', run: () => setLang(l.id) })),
     ];
     if (room === 'cad' || room === 'pcb') {
       out.push(
@@ -171,9 +181,12 @@ export class Palette {
   items = computed<Item[]>(() => {
     const ws = words(this.q());
     const local = [...this.actions(), ...this.places()];
-    if (!ws.length) return [...this.actions(), ...local.filter(i => i.group === 'Rooms')];
+    // Nothing typed: the room's own actions and the rooms; themes and
+    // languages wait to be asked for.
+    if (!ws.length) return [...this.actions().filter(i => !/^(Theme|Language): /.test(i.label)),
+                            ...local.filter(i => i.group === 'Rooms')];
     // Actions only when they match; then a small lead over names that match as well.
-    const ranked = local.map(i => ({ i, s: score(`${i.label} ${i.hint ?? ''}`, ws) }))
+    const ranked = local.map(i => ({ i, s: score(`${i.label} ${t(i.label)} ${i.hint ?? ''}`, ws) }))
       .filter(x => x.s > 0).map(x => ({ ...x, s: x.s + (x.i.group === 'Actions' ? 3 : 0) }))
       .sort((a, b) => b.s - a.s).slice(0, 40).map(x => x.i);
     return [...ranked, ...this.found()];

@@ -26,6 +26,7 @@ import { Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
 import { Releases } from '../rooms/releases';
 import { Changes } from '../rooms/changes';
+import { T } from '../i18n';
 import { Auth } from '../auth';
 import { startFold, whenSettled } from '../fold';
 
@@ -41,7 +42,7 @@ type Mark =
 
 @Component({
   selector: 'app-editor',
-  imports: [Changes, CodeView, DecimalPipe, Markdown, NgTemplateOutlet, Releases],
+  imports: [Changes, CodeView, DecimalPipe, Markdown, NgTemplateOutlet, Releases, T],
   templateUrl: './editor.html',
 })
 export class Editor implements AfterViewInit, OnDestroy {

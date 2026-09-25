@@ -69,10 +69,10 @@
       <!-- Create actions get their own row so the wordmark keeps full width. -->
       <div class="flex gap-1 px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
         <button (click)="newModel('')" class="tcv-btn flex-1" title="create a model">
-          + Model
+          + {{ 'Model' | t }}
         </button>
         <button (click)="newFolder('')" class="tcv-btn flex-1" title="create a folder">
-          + Folder
+          + {{ 'Folder' | t }}
         </button>
         <button (click)="pickCad()" class="tcv-btn flex-1"
                 title="bring in a STEP / IGES / BREP / STL file">
@@ -107,8 +107,8 @@
       <!-- versions -->
       <div class="px-3 py-2" style="border-top: 1px solid var(--line)">
         <div class="mb-1 flex items-center justify-between">
-          <span class="tcv-label">Versions ({{ versions().length }})</span>
-          <button (click)="takeSnapshot()" class="tcv-btn px-1.5 py-0.5 text-[11px]">snapshot</button>
+          <span class="tcv-label">{{ 'Versions' | t }} ({{ versions().length }})</span>
+          <button (click)="takeSnapshot()" class="tcv-btn px-1.5 py-0.5 text-[11px]">{{ 'snapshot' | t }}</button>
         </div>
         <ul class="tcv-scroll max-h-28 overflow-y-auto">
           @for (v of versions(); track v._id) {
@@ -616,7 +616,7 @@
     @if (!queueShut()) {
 
     <div class="px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
-      <label class="tcv-label mb-1 block">Part</label>
+      <label class="tcv-label mb-1 block">{{ 'Part' | t }}</label>
       <!-- Whatever the room on screen is made of: a model's parts come
            from the viewer, a board's from its netlist. The question is
            the same one either way - which bit of this is this about? -->
@@ -631,7 +631,7 @@
         }
       </select>
 
-      <label class="tcv-label mb-1 block">Comment</label>
+      <label class="tcv-label mb-1 block">{{ 'Comment' | t }}</label>
       <textarea rows="3" [value]="comment()"
                 (input)="comment.set($any($event.target).value)"
                 placeholder="e.g. chamfer this corner, 2 mm"
@@ -640,7 +640,7 @@
            note is saved as an English request, so the summary and everything
            downstream read the same way. What was typed is kept alongside. -->
       <label class="mt-2 flex items-center gap-1.5">
-        <span class="tcv-label min-w-0 flex-1 truncate">auto english</span>
+        <span class="tcv-label min-w-0 flex-1 truncate">{{ 'Auto English' | t }}</span>
         <button (click)="toggleAutoTranslate()" class="tcv-switch"
                 [attr.data-on]="autoTranslate() ? 1 : null"
                 [attr.aria-pressed]="autoTranslate()"
@@ -648,7 +648,7 @@
       </label>
       <button (click)="save()" [disabled]="saving()"
               class="tcv-btn tcv-btn-accent mt-2 w-full py-1.5">
-        {{ saving() ? 'saving…' : 'Save as draft' }}
+        {{ (saving() ? 'saving…' : 'Save as draft') | t }}
       </button>
       <p class="mt-1 text-[11px]" style="color: var(--ink-dim)">
         {{ picked.room() === 'pcb'
@@ -667,7 +667,7 @@
          and the heading wrapped mid-phrase, which read as a fault. -->
     <div class="px-2 pb-1 pt-1.5">
       <div class="tcv-label truncate">
-        {{ notesTitle() }} ({{ roomRevisions().length }})
+        {{ notesTitle() | t }} ({{ roomRevisions().length }})
         @if (roomQueued()) {
           <span style="color: var(--accent)"> · {{ roomQueued() }} queued</span>
         }
@@ -681,7 +681,7 @@
         <button (click)="refresh()" class="tcv-chip px-1.5 py-0" title="refresh">↻</button>
         <!-- Same shape as the switch in the form above: label, then switch. -->
         <label class="ml-auto flex items-center gap-1.5">
-          <span class="tcv-label">auto archive</span>
+          <span class="tcv-label">{{ 'Auto archive' | t }}</span>
           <button (click)="toggleAutoArchive()" class="tcv-switch"
                   [attr.data-on]="autoArchive() ? 1 : null"
                   [attr.aria-pressed]="autoArchive()"
@@ -705,8 +705,8 @@
         }
       } @empty {
         <li class="text-[11px]" style="color: var(--ink-dim)">
-          {{ picked.room() === 'pcb' ? 'No notes on boards yet.'
-             : codeRoom() ? 'No notes on code yet.' : 'No revisions yet.' }}
+          {{ (picked.room() === 'pcb' ? 'No notes on boards yet.'
+             : codeRoom() ? 'No notes on code yet.' : 'No revisions yet.') | t }}
         </li>
       }
     </ul>
@@ -719,7 +719,7 @@
     <div class="mt-auto shrink-0" style="border-top: 1px solid var(--line)">
       <div class="flex items-center gap-2 px-2 py-1">
         <button (click)="toggleChat()" class="tcv-chip">
-          {{ chatOpen() ? '▾' : '▸' }} ask the agent
+          {{ chatOpen() ? '▾' : '▸' }} {{ 'ask the agent' | t }}
         </button>
         @if (unreadSaid(); as n) {
           <span class="mono text-[10px]" style="color: var(--warn)"
@@ -731,7 +731,7 @@
              the agent to be idle. It stops nothing by itself: whether the
              build under way is worth abandoning is the agent's call. -->
         <label class="ml-auto flex items-center gap-1.5">
-          <span class="tcv-label">urgent</span>
+          <span class="tcv-label">{{ 'Urgent' | t }}</span>
           <button (click)="urgent.set(!urgent())" class="tcv-switch"
                   [attr.data-on]="urgent() ? 1 : null"
                   [attr.aria-pressed]="urgent()"
@@ -776,11 +776,11 @@
           <textarea rows="2" [value]="saying()"
                     (input)="saying.set($any($event.target).value)"
                     (keydown)="sayKey($event)"
-                    placeholder="message the agent…"
+                    [placeholder]="'message the agent…' | t"
                     class="tcv-field min-w-0 flex-1 resize-none p-1.5"></textarea>
           <button (click)="say()" class="tcv-btn tcv-btn-accent shrink-0 px-2"
                   [style.border-color]="urgent() ? 'var(--pen)' : null"
-                  title="enter sends, shift+enter for a new line">send</button>
+                  title="enter sends, shift+enter for a new line">{{ 'send' | t }}</button>
         </div>
       }
     </div>
@@ -1273,24 +1273,24 @@
               } @else {
                 <button (click)="cycle(r)" [class]="nextClass(r.status)" [disabled]="!!cycleWhy(r)"
                         [title]="cycleWhy(r) ?? 'draft → queued → applied → draft'">
-                  {{ nextLabel(r.status) }}
+                  {{ nextLabel(r.status) | t }}
                 </button>
                 <button (click)="startEdit(r)" class="tcv-chip"
-                        title="edit the text (the drawing stays as it is)">edit</button>
+                        title="edit the text (the drawing stays as it is)">{{ 'edit' | t }}</button>
               }
               <!-- What the work changed: the files side by side, and the pictures. -->
               @if (r.changes?.length || r.image_after_bytes) {
                 <button (click)="changesOf.set(r)" class="tcv-chip"
                         [title]="r.changes?.length ? 'what this note changed, file by file, and the pictures' : 'the picture before against the one after'">
-                  @if (changeSum(r); as c) { <span class="tcv-diff-add">+{{ c.added }}</span> <span class="tcv-diff-del">−{{ c.removed }}</span> } @else { compare }
+                  @if (changeSum(r); as c) { <span class="tcv-diff-add">+{{ c.added }}</span> <span class="tcv-diff-del">−{{ c.removed }}</span> } @else { {{ 'compare' | t }} }
                 </button>
               }
               <button (click)="archive(r)" class="tcv-chip" [disabled]="!auth.can('edit')"
                       [title]="auth.why('edit') ?? (r.archived ? 'restore from archive' : 'archive')">
-                {{ r.archived ? 'restore' : 'archive' }}
+                {{ (r.archived ? 'restore' : 'archive') | t }}
               </button>
               <button (click)="remove(r)" class="tcv-chip tcv-chip-danger ml-auto" [disabled]="!auth.can('delete')"
-                      [title]="auth.why('delete') ?? 'delete permanently'">delete</button>
+                      [title]="auth.why('delete') ?? 'delete permanently'">{{ 'delete' | t }}</button>
             </div>
             }
             }

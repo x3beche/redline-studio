@@ -6,7 +6,12 @@
  *  an unknown name falls back to the default rather than leaving the page
  *  with half a palette.
  */
-export const THEMES = ['default', 'light', 'oled'] as const;
+export const THEMES = ['default', 'light', 'oled', 'github-dark'] as const;
+
+/** What each is called where one is chosen. */
+export const THEME_NAMES: Record<Theme, string> = {
+  default: 'Redline dark', light: 'Light', oled: 'OLED black', 'github-dark': 'GitHub Dark',
+};
 export type Theme = (typeof THEMES)[number];
 
 const KEY = 'x3.theme';

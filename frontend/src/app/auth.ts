@@ -1,6 +1,8 @@
 import { Component, Injectable, inject, output, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { catchError, throwError } from 'rxjs';
+import { T } from './i18n';
+import { Prefs } from './preferences';
 
 /** Signing in, on the page's side (backend/auth.py).
  *
@@ -441,10 +443,14 @@ export class Members {
 /** Who is signed in, and signing out - only when sign-in is on. */
 @Component({
   selector: 'app-user-chip',
-  imports: [AgentTokens, Members],
+  imports: [AgentTokens, Members, T],
   host: { class: 'relative flex items-center' },
   template: `
 @if (auth.state(); as s) {
+  @if (s.mode !== 'on') {
+    <!-- Nobody signs in on this machine: the preferences on their own. -->
+    <button class="tcv-user tcv-user-gear" (click)="prefs.open.set('appearance')" [title]="'Preferences' | t">⚙</button>
+  }
   @if (s.mode === 'on' && s.user; as u) {
     <!-- Who you are, and where: your name over the workspace and your
          role in it. The caret says it opens. -->
@@ -462,7 +468,7 @@ export class Members {
         <div class="tcv-menu-item"><span class="tcv-menu-name">{{ u.name }}</span>
           <span class="tcv-menu-blurb">{{ u.email }} · {{ s.role }} in {{ s.workspace_name ?? s.workspace }}</span></div>
         @if (spaces().length > 1) {
-          <div class="tcv-menu-head">Workspaces</div>
+          <div class="tcv-menu-head">{{ 'Workspaces' | t }}</div>
           @for (w of spaces(); track w.id) {
             <button class="tcv-menu-item" (click)="openSpace(w.id)" [disabled]="w.id === s.workspace">
               <span class="tcv-menu-name">{{ w.name }}@if (w.id === s.workspace) { <span class="tcv-role">here</span> }</span>
@@ -471,21 +477,24 @@ export class Members {
         }
         @if (auth.can('members')) {
           <button class="tcv-menu-item" (click)="open.set(false); making.set(true)">
-            <span class="tcv-menu-name">New workspace</span>
+            <span class="tcv-menu-name">{{ 'New workspace' | t }}</span>
             <span class="tcv-menu-blurb">Its own projects, members and agents - nothing shared with this one</span></button>
         }
         @if (auth.can('members')) {
           <button class="tcv-menu-item" (click)="open.set(false); members.set(true)">
-            <span class="tcv-menu-name">Members</span>
-            <span class="tcv-menu-blurb">Invite people and set what each may do</span></button>
+            <span class="tcv-menu-name">{{ 'Members' | t }}</span>
+            <span class="tcv-menu-blurb">{{ 'Invite people and set what each may do' | t }}</span></button>
         }
         @if (auth.can('tokens')) {
           <button class="tcv-menu-item" (click)="open.set(false); tokens.set(true)">
-            <span class="tcv-menu-name">Agent tokens</span>
+            <span class="tcv-menu-name">{{ 'Agent tokens' | t }}</span>
             <span class="tcv-menu-blurb">Let an agent work here without the database password</span></button>
         }
+        <button class="tcv-menu-item" (click)="open.set(false); prefs.open.set('appearance')">
+          <span class="tcv-menu-name">{{ 'Preferences' | t }}</span>
+          <span class="tcv-menu-blurb">{{ 'Theme, language, keyboard shortcuts' | t }}</span></button>
         <button class="tcv-menu-item" (click)="open.set(false); auth.logout()">
-          <span class="tcv-menu-name">Sign out</span></button>
+          <span class="tcv-menu-name">{{ 'Sign out' | t }}</span></button>
       </div>
     }
     @if (tokens()) { <app-agent-tokens (closed)="tokens.set(false)"/> }
@@ -512,6 +521,7 @@ export class Members {
 })
 export class UserChip {
   auth = inject(Auth);
+  prefs = inject(Prefs);
   private http = inject(HttpClient);
   open = signal(false);
   tokens = signal(false);

@@ -35,7 +35,7 @@ COLOUR = re.compile(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(\s*\d")
 EXEMPT = "theme:pigment"
 
 DEFAULT = ":root {"
-THEME_HEAD = re.compile(r':root\[data-theme="([a-z]+)"\]\s*\{')
+THEME_HEAD = re.compile(r':root\[data-theme="([a-z-]+)"\]\s*\{')
 
 
 def blocks(css: str) -> dict[str, str]:

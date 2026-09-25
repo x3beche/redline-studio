@@ -4,6 +4,7 @@ import {
 import { HttpClient } from '@angular/common/http';
 import type * as Monaco from 'monaco-editor';
 import { loadMonaco, redlineTheme } from './code-view';
+import { T } from '../i18n';
 
 /** What an agent's work on a note changed (backend/changes.py): each file
  *  before and after, side by side in VS Code's diff view, and the picture
@@ -23,11 +24,12 @@ type PicMode = 'side' | 'slider' | 'diff';
 
 @Component({
   selector: 'app-changes',
+  imports: [T],
   template: `
 <div class="tcv-tokens-back" (click)="closed.emit()">
   <div class="tcv-changes" (click)="$event.stopPropagation()" role="dialog" aria-label="What this note changed">
     <header class="tcv-changes-head">
-      <b>What this note changed</b>
+      <b>{{ 'What this note changed' | t }}</b>
       <span class="tcv-code-sub">{{ title() }}</span>
       <span class="grow"></span>
       @if (detail(); as d) {
@@ -35,13 +37,13 @@ type PicMode = 'side' | 'slider' | 'diff';
           · <span class="tcv-diff-add">+{{ total().added }}</span> <span class="tcv-diff-del">−{{ total().removed }}</span></span>
       }
       @if (pick() !== 'pictures') {
-        <button class="tcv-btn tcv-code-btn" (click)="side.set(!side())">{{ side() ? 'Inline' : 'Side by side' }}</button>
+        <button class="tcv-btn tcv-code-btn" (click)="side.set(!side())">{{ (side() ? 'Inline' : 'Side by side') | t }}</button>
       }
       <button class="tcv-btn tcv-code-btn" (click)="closed.emit()" title="Close">✕</button>
     </header>
     <div class="tcv-changes-main">
       <nav class="tcv-code-tree" aria-label="Changed files">
-        <div class="tcv-code-tree-head">Changed</div>
+        <div class="tcv-code-tree-head">{{ 'Changed' | t }}</div>
         @for (f of detail()?.files ?? []; track f.kind + f.id; let i = $index) {
           <button class="tcv-code-node tcv-code-file" [attr.data-on]="pick() === i ? 1 : null" (click)="pick.set(i)"
                   [title]="f.id">
@@ -60,7 +62,7 @@ type PicMode = 'side' | 'slider' | 'diff';
           @if (d.pictures.before || d.pictures.after) {
             <button class="tcv-code-node tcv-code-file" [attr.data-on]="pick() === 'pictures' ? 1 : null"
                     (click)="pick.set('pictures')">
-              <span class="tcv-code-ext">img</span><span class="tcv-code-label">Before and after</span></button>
+              <span class="tcv-code-ext">img</span><span class="tcv-code-label">{{ 'Before and after' | t }}</span></button>
           }
         }
       </nav>
@@ -69,7 +71,7 @@ type PicMode = 'side' | 'slider' | 'diff';
         @if (pick() === 'pictures') {
           <div class="tcv-pics-bar">
             @for (m of modes; track m.id) {
-              <button class="tcv-notes-chip" [attr.data-on]="mode() === m.id ? 1 : null" (click)="mode.set(m.id)">{{ m.label }}</button>
+              <button class="tcv-notes-chip" [attr.data-on]="mode() === m.id ? 1 : null" (click)="mode.set(m.id)">{{ m.label | t }}</button>
             }
             @if (mode() === 'diff') { <span class="tcv-code-sub">{{ diffNote() }}</span> }
           </div>

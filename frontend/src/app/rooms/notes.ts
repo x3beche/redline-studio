@@ -5,6 +5,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { toHtml } from '../markdown';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
+import { T } from '../i18n';
 
 /** Notes: what you jot down while working, without a form to fill.
  *
@@ -140,21 +141,22 @@ class Dictation {
  *  keeps it (Shift+Enter for a new line), and the box is ready again. */
 @Component({
   selector: 'app-note-compose',
+  imports: [T],
   template: `
 <div class="tcv-note-compose" [attr.data-focus]="focused() ? 1 : null">
-  <textarea #box rows="1" [value]="text()" [placeholder]="placeholder"
+  <textarea #box rows="1" [value]="text()" [placeholder]="placeholder | t"
             (input)="text.set($any($event.target).value); grow()"
             (focus)="focused.set(true)" (blur)="focused.set(false)"
             (keydown)="key($event)"></textarea>
   <div class="tcv-note-compose-bar">
-    <span class="tcv-note-hint">{{ hint() }}</span>
+    <span class="tcv-note-hint">{{ hint() | t }}</span>
     <span class="grow"></span>
     @if (dict.supported) {
       <button class="tcv-note-icon" [attr.data-on]="dict.on() ? 1 : null" (click)="dictate()"
               [title]="dict.on() ? 'Stop listening' : 'Speak the note'" aria-label="Dictate">🎙</button>
     }
     <button class="tcv-btn tcv-note-keep" [disabled]="!text().trim() || busy()" (click)="keep()">
-      {{ busy() ? '…' : 'Keep' }} <kbd>↵</kbd></button>
+      {{ busy() ? '…' : ('Keep' | t) }} <kbd>↵</kbd></button>
   </div>
 </div>`,
 })
@@ -217,12 +219,12 @@ export class NoteCompose {
 /** Alt+N, anywhere: a small box over the room, and back to work. */
 @Component({
   selector: 'app-quick-note',
-  imports: [NoteCompose],
+  imports: [NoteCompose, T],
   template: `
 @if (api.quick()) {
   <div class="tcv-quick-back" (click)="api.quick.set(false)">
     <div class="tcv-quick" (click)="$event.stopPropagation()" role="dialog" aria-label="Quick note">
-      <div class="tcv-quick-head"><b>Quick note</b><span>Esc to close · it is kept in Notes</span></div>
+      <div class="tcv-quick-head"><b>{{ 'Quick note' | t }}</b><span>{{ 'Esc to close · it is kept in Notes' | t }}</span></div>
       <app-note-compose #c />
       @if (last(); as l) { <p class="tcv-quick-kept">Kept: {{ l }}</p> }
     </div>
@@ -261,20 +263,20 @@ export class QuickNote {
 /** The Notes room. */
 @Component({
   selector: 'app-room-notes',
-  imports: [NoteCompose],
+  imports: [NoteCompose, T],
   host: { '(document:keydown)': 'key($event)' },
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
   <!-- LEFT: find a note -->
   <aside class="tcv-notes-side">
     <div class="tcv-notes-find">
-      <input #search class="tcv-notes-search" placeholder="Search notes   /" [value]="q()"
+      <input #search class="tcv-notes-search" [placeholder]="'Search notes   /' | t" [value]="q()"
              (input)="q.set($any($event.target).value)" (keydown.escape)="q.set(''); $any($event.target).blur()">
     </div>
     <div class="tcv-notes-filters">
       @for (f of filters; track f.id) {
         <button class="tcv-notes-chip" [attr.data-on]="only() === f.id ? 1 : null" (click)="only.set(f.id)">
-          {{ f.label }}</button>
+          {{ f.label | t }}</button>
       }
     </div>
     @if (tags().length) {
@@ -287,12 +289,12 @@ export class QuickNote {
     }
     <div class="tcv-notes-list">
       @for (g of groups(); track g.name) {
-        <div class="tcv-notes-group">{{ g.name }}</div>
+        <div class="tcv-notes-group">{{ g.name | t }}</div>
         @for (n of g.notes; track n.id) {
           <button class="tcv-notes-item" [attr.data-on]="n.id === openId() ? 1 : null" (click)="openId.set(n.id)">
             <span class="tcv-notes-item-top">
               @if (n.pinned) { <span class="tcv-notes-pin" title="Pinned">●</span> }
-              <span class="tcv-notes-item-title">{{ n.title || 'Untitled' }}</span>
+              <span class="tcv-notes-item-title">{{ n.title || ('Untitled' | t) }}</span>
               <span class="tcv-notes-item-when">{{ when(n.updated_at) }}</span>
             </span>
             <span class="tcv-notes-item-snip">{{ snippet(n) }}</span>
@@ -332,14 +334,14 @@ export class QuickNote {
           @if (saving()) { <span class="tcv-note-meta">saving…</span> }
           <button class="tcv-note-icon" [attr.data-on]="n.pinned ? 1 : null" (click)="pin(n)"
                   [title]="n.pinned ? 'Unpin' : 'Pin to the top'">📌</button>
-          <button class="tcv-btn tcv-note-btn" (click)="editing() ? done() : edit(n)">{{ editing() ? 'Done' : 'Edit' }}</button>
+          <button class="tcv-btn tcv-note-btn" (click)="editing() ? done() : edit(n)">{{ (editing() ? 'Done' : 'Edit') | t }}</button>
           <select class="tcv-note-send" (change)="send(n, $any($event.target).value); $any($event.target).value = ''"
                   title="Hand this note to a room's agent">
-            <option value="">Send to agent…</option>
+            <option value="">{{ 'Send to agent…' | t }}</option>
             @for (r of agentRooms; track r) { <option [value]="r">{{ roomName(r) }}</option> }
           </select>
-          <button class="tcv-btn tcv-note-btn" (click)="copy(n)">{{ copied() ? 'Copied' : 'Copy' }}</button>
-          <button class="tcv-btn tcv-note-btn" (click)="remove(n)">Delete</button>
+          <button class="tcv-btn tcv-note-btn" (click)="copy(n)">{{ (copied() ? 'Copied' : 'Copy') | t }}</button>
+          <button class="tcv-btn tcv-note-btn" (click)="remove(n)">{{ 'Delete' | t }}</button>
         </header>
         @if (flash(); as f) { <p class="tcv-note-flash">{{ f }}</p> }
         @if (editing()) {

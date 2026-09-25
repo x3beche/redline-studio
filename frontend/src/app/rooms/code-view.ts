@@ -6,6 +6,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import type * as Monaco from 'monaco-editor';
 import { Auth } from '../auth';
 import { Catalog, FolderNode } from '../api';
+import { T } from '../i18n';
 
 /** The source behind what is on screen, in VS Code's editor (Monaco): the
  *  3D room's models are build123d (Python), the PCB room's boards atopile.
@@ -146,7 +147,7 @@ const key = (kind: CodeKind, id: string) => `${kind}:${id}`;
 
 @Component({
   selector: 'app-code-view',
-  imports: [NgTemplateOutlet],
+  imports: [NgTemplateOutlet, T],
   host: { class: 'tcv-code' },
   template: `
 <div class="tcv-code-bar">
@@ -156,15 +157,15 @@ const key = (kind: CodeKind, id: string) => `${kind}:${id}`;
   <span class="tcv-code-sub">{{ current()?.kind === 'board' ? 'atopile' : 'build123d · Python' }}</span>
   @if (canEdit()) {
     <button class="tcv-btn tcv-code-btn" [class.tcv-code-save]="current()?.dirty" [disabled]="!current()?.dirty || saving()"
-            (click)="save()" title="Save (Ctrl+S)">{{ saving() ? 'Saving…' : 'Save' }}</button>
+            (click)="save()" title="Save (Ctrl+S)">{{ saving() ? 'Saving…' : ('Save' | t) }}</button>
   }
-  <button class="tcv-btn tcv-code-btn" (click)="copy()">{{ copied() ? 'Copied' : 'Copy' }}</button>
+  <button class="tcv-btn tcv-code-btn" (click)="copy()">{{ (copied() ? 'Copied' : 'Copy') | t }}</button>
   <button class="tcv-btn tcv-code-btn" (click)="close()" title="Back to the view">✕</button>
 </div>
 <div class="tcv-code-main">
   <!-- EXPLORER: the project's folders and files; a dot marks what the open file uses. -->
   <nav class="tcv-code-tree" aria-label="Project files">
-    <div class="tcv-code-tree-head">Explorer</div>
+    <div class="tcv-code-tree-head">{{ 'Explorer' | t }}</div>
     @if (project(); as root) {
       <ng-container *ngTemplateOutlet="dir; context: { $implicit: root, depth: 0 }" />
     } @else {

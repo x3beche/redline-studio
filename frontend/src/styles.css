@@ -207,11 +207,12 @@
   --shadow-soft:  rgba(0, 0, 0, .6);
   --shadow-hard:  rgba(0, 0, 0, .75);
 
-  --view-top:     #f4f7fb;
-  --view-mid:     #dfe7f1;
-  --view-bottom:  #ccd7e6;
-  --draw-label:   rgba(255, 255, 255, .9);
-  --shot-bg:      #fff;
+  /* The 3D backdrop black as well - darker than GitHub's, near-black to black. */
+  --view-top:     #0b0c0e;
+  --view-mid:     #050506;
+  --view-bottom:  #000;
+  --draw-label:   rgba(10, 12, 14, .92);
+  --shot-bg:      #000;
   --pcb-bg:       #111;
   --preview-bg:   #000;
   --diff-add:     rgba(79, 138, 79, .22);
@@ -250,13 +251,88 @@
   --series-8: #8a9a5b;
 }
 
+:root[data-theme="github-dark"] {
+  /* GitHub's dark theme (Primer), the one VS Code and github.com wear -
+     over the whole application, the 3D backdrop and the code included. */
+  --surface:      #0d1117;
+  --surface-2:    #161b22;
+  --hover:        #21262d;
+  --pressed:      #30363d;
+  --line:         #30363d;
+
+  --ink:          #e6edf3;
+  --ink-dim:      #8d96a0;
+  --ink-bright:   #ffffff;
+  --ink-on-accent: #ffffff;
+  --ink-on-warn:  #1c1300;
+
+  --accent:       #2f81f7;
+  --accent-deep:  #1f3a5f;
+  --warn:         #d29922;
+  --danger:       #f85149;
+  --ok:           #3fb950;
+
+  --pen:          #ff2d3f;
+  --pen-wash:     rgba(255, 45, 63, .08);
+
+  --scrim:        rgba(1, 4, 9, .9);
+  --shade:        rgba(1, 4, 9, .85);
+  --shadow-soft:  rgba(1, 4, 9, .55);
+  --shadow-hard:  rgba(1, 4, 9, .75);
+
+  /* The 3D backdrop goes dark with the rest: this theme is the whole window. */
+  --view-top:     #1c2128;
+  --view-mid:     #161b22;
+  --view-bottom:  #0d1117;
+  --draw-label:   rgba(22, 27, 34, .92);
+  --shot-bg:      #0d1117;
+  --pcb-bg:       #010409;
+  --preview-bg:   #010409;
+  --diff-add:     rgba(46, 160, 67, .18);
+  --diff-del:     rgba(248, 81, 73, .18);
+  --diff-hunk:    rgba(56, 139, 253, .12);
+  --switch-knob: #e6edf3;
+  --overlay:      rgba(13, 17, 23, .72);
+  --overlay-rest: rgba(1, 4, 9, .3);
+  --tooltip-bg:   #1f3a5f;
+  --scroll-thumb: rgba(110, 118, 129, .35);
+  --scroll-hover: rgba(110, 118, 129, .55);
+  --scroll-active: rgba(110, 118, 129, .75);
+
+  --chart-work:      #2f81f7;
+  --chart-build:     #3fb950;
+  --chart-progress:  #d29922;
+  --chart-reply:     #a371f7;
+  --chart-summary:   #f78166;
+  --chart-translate: #39c5cf;
+  --chart-other:     #6e7681;
+  /* Code in GitHub's own colours. */
+  --code-kw:   #ff7b72;
+  --code-str:  #a5d6ff;
+  --code-num:  #79c0ff;
+  --code-com:  #8b949e;
+  --code-fn:   #d2a8ff;
+  --code-type: #ffa657;
+  --series-1: #2f81f7;
+  --series-2: #d29922;
+  --series-3: #3fb950;
+  --series-4: #db61a2;
+  --series-5: #39c5cf;
+  --series-6: #f85149;
+  --series-7: #a371f7;
+  --series-8: #8b949e;
+}
+
 /* The viewer keeps its own palette in --tcv-* and picks a set from the
    class on its root, so it painted its panels dark whatever theme was on.
    Binding the variables to our tokens is one rule instead of fighting it
    selector by selector - and it means a new theme reaches the third-party
    chrome in the middle of the screen for free. Its axis and LED colours
    are not here: those belong to the 3D content, like the drawing pens. */
-.tcv_cad_viewer, .tcv-frame {
+/* Also the page itself and whatever the viewer tags data-theme="dark" -
+   it paints <body> with its own grey from there, and its stylesheet is
+   injected after ours, so these selectors are the more specific ones. */
+.tcv_cad_viewer, .tcv-frame, :root body, :root [data-theme] {
   --tcv-font-color: var(--ink);
   --tcv-bg-color: var(--surface);
   --tcv-bg-highlight-color: var(--hover);
@@ -1942,3 +2018,24 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   border: 1px solid var(--line); border-radius: 3px; }
 .tcv-pal-empty { margin: 14px 16px; font-size: 12.5px; color: var(--ink-dim); }
 .tcv-pal-foot { flex: none; padding: 6px 16px; font-size: 10.5px; color: var(--ink-dim); border-top: 1px solid var(--line); }
+
+/* PREFERENCES (app/preferences.ts): the theme, the language, the shortcuts. */
+.tcv-user-gear { justify-content: center; width: 28px; padding: 0; font-size: 15px; color: var(--ink-dim); }
+.tcv-prefs { width: min(620px, 94vw); }
+.tcv-prefs-tabs { display: flex; gap: 6px; }
+.tcv-prefs-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.tcv-prefs-theme { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px; font-size: 12px;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.tcv-prefs-theme:hover { border-color: var(--ink-dim); }
+.tcv-prefs-theme[data-on] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.tcv-prefs-swatch { display: flex; width: 100%; height: 34px; overflow: hidden; border-radius: 4px; border: 1px solid var(--line); }
+.tcv-prefs-swatch i { flex: 1; }
+.tcv-prefs-swatch i:nth-child(3), .tcv-prefs-swatch i:nth-child(4) { flex: .45; }
+.tcv-prefs-flag { font-size: 18px; font-weight: 700; color: var(--accent); }
+.tcv-prefs-group { margin-top: 6px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); }
+.tcv-prefs-key { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 12.5px; color: var(--ink);
+  border-bottom: 1px solid var(--line); }
+.tcv-prefs-key > span:first-child { flex: 1; }
+.tcv-prefs-keys { display: flex; gap: 4px; }
+.tcv-prefs-keys kbd { min-width: 22px; padding: 1px 6px; font: inherit; font-size: 11px; text-align: center; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; }
