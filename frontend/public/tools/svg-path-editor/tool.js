@@ -207,6 +207,7 @@ export function serialize(segs, opts = {}) {
   // 2. write each segment absolute or relative, with shorthands
   let out = '';
   let prevLetter = '';
+  const pieces = []; // what each segment added to the string, for the page's tape
   walk(rs, (s, p, q, prev, idx) => {
     let c = s.c, a = s.a;
     if (shorthand && c === 'L') {
@@ -240,11 +241,13 @@ export function serialize(segs, opts = {}) {
     else if (mode === 'absolute') chosen = abs;
     else if (mode === 'relative') chosen = rel;
     else chosen = write(rel).length < write(abs).length ? rel : abs;
-    out += write(chosen);
+    const piece = write(chosen);
+    pieces.push({ seg: idx, text: piece, rel: chosen.L !== chosen.L.toUpperCase(), c: chosen.L });
+    out += piece;
     prevLetter = chosen.L === 'M' ? 'M' : chosen.L === 'm' ? 'm' : chosen.L;
     // after an explicit M the next implicit letter is L, so remember M/m specially
   });
-  return { d: out, rounded: rs };
+  return { d: out, rounded: rs, pieces };
 }
 
 /** Nodes for the table and the drawing: endpoints and control points. */
@@ -274,6 +277,28 @@ export function moveNode(segs, seg, slot, x, y) {
   return out;
 }
 
+/** Each segment on its own as an absolute path (S -> C, T -> Q, H/V/Z -> L), for highlighting. */
+function segPaths(segs) {
+  const out = [];
+  primeT(segs);
+  walk(segs, (s, p, q, prev) => {
+    const P = (x, y) => `${+x.toFixed(6)} ${+y.toFixed(6)}`;
+    let d = `M${P(p.x, p.y)}`;
+    if (s.c === 'M') d = `M${P(q.x, q.y)}`;
+    else if (s.c === 'C') d += `C${P(s.a[0], s.a[1])} ${P(s.a[2], s.a[3])} ${P(q.x, q.y)}`;
+    else if (s.c === 'S') {
+      let c1x = p.x, c1y = p.y;
+      if (prev && (prev.c === 'C' || prev.c === 'S')) { const k = prev.a.length; c1x = 2 * p.x - prev.a[k - 4]; c1y = 2 * p.y - prev.a[k - 3]; }
+      d += `C${P(c1x, c1y)} ${P(s.a[0], s.a[1])} ${P(q.x, q.y)}`;
+    } else if (s.c === 'Q') d += `Q${P(s.a[0], s.a[1])} ${P(q.x, q.y)}`;
+    else if (s.c === 'T') { const c = tCache.get(s) || [p.x, p.y]; d += `Q${P(c[0], c[1])} ${P(q.x, q.y)}`; }
+    else if (s.c === 'A') d += `A${s.a[0]} ${s.a[1]} ${s.a[2]} ${s.a[3]} ${s.a[4]} ${P(q.x, q.y)}`;
+    else d += `L${P(q.x, q.y)}`;
+    out.push(d);
+  });
+  return out;
+}
+
 const DECS = { keep: null, 0: 0, 1: 1, 2: 2, 3: 3, 4: 4 };
 
 export function run({ d, decimals, mode, compact, shorthand, tx, ty, scale }) {
@@ -289,7 +314,7 @@ export function run({ d, decimals, mode, compact, shorthand, tx, ty, scale }) {
   const sc = scale == null ? 1 : scale;
   if (sc === 0) warnings.push('Scale is 0: every point collapses to one. Use 1 for no scaling.');
   const opts = { mode, dec, compact: !!compact, shorthand: !!shorthand, tx: tx || 0, ty: ty || 0, scale: sc || 1 };
-  const { d: outD, rounded } = serialize(segs, opts);
+  const { d: outD, rounded, pieces } = serialize(segs, opts);
   const plain = serialize(segs, { ...opts, dec: null, mode: 'absolute', compact: false, shorthand: false });
 
   primeT(segs); primeT(rounded);
@@ -303,6 +328,16 @@ export function run({ d, decimals, mode, compact, shorthand, tx, ty, scale }) {
   const size = Math.max(box.w, box.h) * Math.abs(opts.scale);
   if (size > 0 && shift > size * 0.01) warnings.push(`Rounding moves a node by ${fmtNum(shift, 3)} units, over 1 % of the ${fmtNum(size, 3)}-unit drawing: keep more decimals.`);
   const before = text.length, after = outD.length;
+  // The same path at every precision: characters and the largest node shift.
+  const n0t = n0.map((a) => [a.x * opts.scale + opts.tx, a.y * opts.scale + opts.ty]);
+  const ladder = ['0', '1', '2', '3', '4', 'keep'].map((key) => {
+    const dk = DECS[key];
+    const r = serialize(segs, { ...opts, dec: dk });
+    primeT(r.rounded);
+    let sh = 0;
+    nodesOf(r.rounded).forEach((b, k) => { const a = n0t[k]; if (a) sh = Math.max(sh, Math.hypot(b.x - a[0], b.y - a[1])); });
+    return { decimals: key, chars: r.d.length, shift: Number(sh.toPrecision(4)), over: size > 0 && sh > size * 0.01 };
+  });
   const subpaths = segs.filter((s) => s.c === 'M').length;
   const cmdName = { M: 'move', L: 'line', H: 'horizontal', V: 'vertical', C: 'cubic', S: 'smooth cubic', Q: 'quadratic', T: 'smooth quad', A: 'arc', Z: 'close' };
   const rows = [];
@@ -339,6 +374,27 @@ export function run({ d, decimals, mode, compact, shorthand, tx, ty, scale }) {
     // For the drawing and for agents: absolute segments of the input (before translate/scale).
     segments: segs.map((s) => ({ c: s.c, a: s.a })),
     box,
+    ladder,
+    // Only for the page's drawing (agentOmit): nodes before and after rounding
+    // in output units, and what each segment wrote into the output string.
+    drawing: {
+      nodes: n0.map((a, k) => {
+        const b = n1[k] || a;
+        const o = { seg: a.seg, slot: a.slot, kind: a.kind, x: a.x, y: a.y,
+          ox: a.x * opts.scale + opts.tx, oy: a.y * opts.scale + opts.ty, rx: b.x, ry: b.y };
+        if (a.ax != null) { o.ax = a.ax * opts.scale + opts.tx; o.ay = a.ay * opts.scale + opts.ty; }
+        if (a.bx != null) { o.bx = a.bx * opts.scale + opts.tx; o.by = a.by * opts.scale + opts.ty; }
+        o.shift = Math.hypot(o.rx - o.ox, o.ry - o.oy);
+        return o;
+      }),
+      pieces,
+      cmds: segs.map((s) => s.c),
+      segD: segPaths(segs),
+      outBox: { x: box.x * opts.scale + opts.tx, y: box.y * opts.scale + opts.ty, w: box.w * Math.abs(opts.scale), h: box.h * Math.abs(opts.scale) },
+      fullD: plain.d,
+      size, shift, before, after, dec,
+      transform: { tx: opts.tx, ty: opts.ty, scale: opts.scale },
+    },
     options: { mode: opts.mode, dec, compact: opts.compact, shorthand: opts.shorthand },
   };
 }

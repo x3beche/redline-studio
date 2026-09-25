@@ -1,38 +1,289 @@
 {
-  "id": "telemetry-mock", "version": "1.0",
+  "id": "telemetry-mock",
+  "version": "1.1",
   "name": "Telemetry Mock Generator",
   "blurb": "realistic sensor time series with noise, drift and faults",
   "group": "web",
-  "rooms": ["web", "embedded"],
-  "keywords": ["telemetry", "mock data", "fake data", "sensor data", "time series", "iot", "noise", "drift", "random walk", "dropout", "spike", "stuck sensor", "csv", "ndjson", "influx line protocol"],
+  "rooms": [
+    "web",
+    "embedded"
+  ],
+  "keywords": [
+    "telemetry",
+    "mock data",
+    "fake data",
+    "sensor data",
+    "time series",
+    "iot",
+    "noise",
+    "drift",
+    "random walk",
+    "dropout",
+    "spike",
+    "stuck sensor",
+    "csv",
+    "ndjson",
+    "influx line protocol"
+  ],
   "intro": "Makes a seeded sensor time series from an explicit model: base + daily cycle + linear drift + random-walk wander + white noise, clipped to the sensor's range and quantised to its resolution, with spikes, dropouts, a stuck-at run and an offset step injected. Presets use typical datasheet resolution and noise; blank fields take the preset's value.",
   "inputs": [
-    { "key": "sensor", "label": "Sensor", "type": "select", "default": "temperature",
-      "options": [["temperature", "Temperature (°C)"], ["humidity", "Humidity (%RH)"], ["pressure", "Pressure (hPa)"], ["battery", "Battery (V)"], ["current", "Current (mA)"], ["co2", "CO2 (ppm)"], ["accel", "Accelerometer z (g)"], ["custom", "Custom"]] },
-    { "key": "interval", "label": "Sample interval", "type": "number", "unit": "s", "default": "60" },
-    { "key": "count", "label": "Samples", "type": "number", "default": "1440", "help": "Up to 20000. 1440 at 60 s is one day." },
-    { "key": "start", "label": "Start time (UTC)", "type": "text", "default": "2026-01-01T00:00:00Z" },
-    { "key": "base", "label": "Base value", "type": "number", "default": "", "placeholder": "preset", "required": false },
-    { "key": "amp", "label": "Cycle amplitude", "type": "number", "default": "", "placeholder": "preset", "required": false },
-    { "key": "period", "label": "Cycle period", "type": "number", "unit": "h", "default": "24" },
-    { "key": "drift", "label": "Drift", "type": "number", "unit": "per h", "default": "", "placeholder": "preset", "required": false },
-    { "key": "wander", "label": "Wander (random walk)", "type": "number", "unit": "σ per √h", "default": "", "placeholder": "preset", "required": false },
-    { "key": "noise", "label": "Noise", "type": "number", "unit": "σ", "default": "", "placeholder": "preset", "required": false },
-    { "key": "quant", "label": "Resolution", "type": "number", "default": "", "placeholder": "preset", "required": false, "help": "The LSB step; 0 for none." },
-    { "key": "spikes", "label": "Spikes", "type": "number", "unit": "% of samples", "default": "0.3" },
-    { "key": "dropouts", "label": "Dropouts", "type": "number", "unit": "% of samples", "default": "1" },
-    { "key": "stuck", "label": "Stuck-at run", "type": "number", "unit": "samples", "default": "30", "help": "The sensor repeats one value this long; 0 for none." },
-    { "key": "step", "label": "Offset step at mid-series", "type": "number", "default": "0", "help": "A recalibration or swapped probe; 0 for none." },
-    { "key": "seed", "label": "Seed", "type": "number", "default": "42" },
-    { "key": "format", "label": "Output format", "type": "select", "default": "csv",
-      "options": [["csv", "CSV"], ["json", "JSON array"], ["ndjson", "NDJSON (one object per line)"], ["influx", "InfluxDB line protocol"]] },
-    { "key": "field", "label": "Field name", "type": "text", "default": "", "placeholder": "preset, e.g. temperature" },
-    { "key": "device", "label": "Device id", "type": "text", "default": "dev-01" }
+    {
+      "key": "sensor",
+      "label": "Sensor",
+      "type": "select",
+      "default": "temperature",
+      "options": [
+        [
+          "temperature",
+          "Temperature (°C)"
+        ],
+        [
+          "humidity",
+          "Humidity (%RH)"
+        ],
+        [
+          "pressure",
+          "Pressure (hPa)"
+        ],
+        [
+          "battery",
+          "Battery (V)"
+        ],
+        [
+          "current",
+          "Current (mA)"
+        ],
+        [
+          "co2",
+          "CO2 (ppm)"
+        ],
+        [
+          "accel",
+          "Accelerometer z (g)"
+        ],
+        [
+          "custom",
+          "Custom"
+        ]
+      ]
+    },
+    {
+      "key": "interval",
+      "label": "Sample interval",
+      "type": "number",
+      "unit": "s",
+      "default": "60"
+    },
+    {
+      "key": "count",
+      "label": "Samples",
+      "type": "number",
+      "default": "1440",
+      "help": "Up to 20000. 1440 at 60 s is one day."
+    },
+    {
+      "key": "start",
+      "label": "Start time (UTC)",
+      "type": "text",
+      "default": "2026-01-01T00:00:00Z"
+    },
+    {
+      "key": "base",
+      "label": "Base value",
+      "type": "number",
+      "default": "",
+      "placeholder": "preset",
+      "required": false
+    },
+    {
+      "key": "amp",
+      "label": "Cycle amplitude",
+      "type": "number",
+      "default": "",
+      "placeholder": "preset",
+      "required": false
+    },
+    {
+      "key": "period",
+      "label": "Cycle period",
+      "type": "number",
+      "unit": "h",
+      "default": "24"
+    },
+    {
+      "key": "drift",
+      "label": "Drift",
+      "type": "number",
+      "unit": "per h",
+      "default": "",
+      "placeholder": "preset",
+      "required": false
+    },
+    {
+      "key": "wander",
+      "label": "Wander (random walk)",
+      "type": "number",
+      "unit": "σ per √h",
+      "default": "",
+      "placeholder": "preset",
+      "required": false
+    },
+    {
+      "key": "noise",
+      "label": "Noise",
+      "type": "number",
+      "unit": "σ",
+      "default": "",
+      "placeholder": "preset",
+      "required": false
+    },
+    {
+      "key": "quant",
+      "label": "Resolution",
+      "type": "number",
+      "default": "",
+      "placeholder": "preset",
+      "required": false,
+      "help": "The LSB step; 0 for none."
+    },
+    {
+      "key": "spikes",
+      "label": "Spikes",
+      "type": "number",
+      "unit": "% of samples",
+      "default": "0.3"
+    },
+    {
+      "key": "dropouts",
+      "label": "Dropouts",
+      "type": "number",
+      "unit": "% of samples",
+      "default": "1"
+    },
+    {
+      "key": "stuck",
+      "label": "Stuck-at run",
+      "type": "number",
+      "unit": "samples",
+      "default": "30",
+      "help": "The sensor repeats one value this long; 0 for none."
+    },
+    {
+      "key": "stuckAt",
+      "label": "Stuck run starts at",
+      "type": "number",
+      "unit": "% of series",
+      "default": "",
+      "placeholder": "seeded",
+      "required": false,
+      "help": "Blank: a seeded place between 20 and 80 %."
+    },
+    {
+      "key": "step",
+      "label": "Offset step at mid-series",
+      "type": "number",
+      "default": "0",
+      "help": "A recalibration or swapped probe; 0 for none."
+    },
+    {
+      "key": "stepAt",
+      "label": "Step at",
+      "type": "number",
+      "unit": "% of series",
+      "default": "",
+      "placeholder": "50",
+      "required": false,
+      "help": "Blank: mid-series."
+    },
+    {
+      "key": "seed",
+      "label": "Seed",
+      "type": "number",
+      "default": "42"
+    },
+    {
+      "key": "format",
+      "label": "Output format",
+      "type": "select",
+      "default": "csv",
+      "options": [
+        [
+          "csv",
+          "CSV"
+        ],
+        [
+          "json",
+          "JSON array"
+        ],
+        [
+          "ndjson",
+          "NDJSON (one object per line)"
+        ],
+        [
+          "influx",
+          "InfluxDB line protocol"
+        ]
+      ]
+    },
+    {
+      "key": "field",
+      "label": "Field name",
+      "type": "text",
+      "default": "",
+      "placeholder": "preset, e.g. temperature"
+    },
+    {
+      "key": "device",
+      "label": "Device id",
+      "type": "text",
+      "default": "dev-01"
+    }
   ],
   "examples": [
-    { "title": "A day of room temperature at 1/min with faults", "input": { "sensor": "temperature", "interval": "60", "count": "1440", "start": "2026-01-01T00:00:00Z", "period": "24", "spikes": "0.3", "dropouts": "1", "stuck": "30", "step": "0", "seed": "42", "format": "csv", "device": "dev-01" } },
-    { "title": "A week of battery drain every 10 min, as NDJSON", "input": { "sensor": "battery", "interval": "600", "count": "1008", "start": "2026-03-01T00:00:00Z", "period": "24", "spikes": "0", "dropouts": "2", "stuck": "0", "step": "0", "seed": "7", "format": "ndjson", "device": "node-17" } }
+    {
+      "title": "A day of room temperature at 1/min with faults",
+      "input": {
+        "sensor": "temperature",
+        "interval": "60",
+        "count": "1440",
+        "start": "2026-01-01T00:00:00Z",
+        "period": "24",
+        "spikes": "0.3",
+        "dropouts": "1",
+        "stuck": "30",
+        "step": "0",
+        "seed": "42",
+        "format": "csv",
+        "device": "dev-01"
+      }
+    },
+    {
+      "title": "A week of battery drain every 10 min, as NDJSON",
+      "input": {
+        "sensor": "battery",
+        "interval": "600",
+        "count": "1008",
+        "start": "2026-03-01T00:00:00Z",
+        "period": "24",
+        "spikes": "0",
+        "dropouts": "2",
+        "stuck": "0",
+        "step": "0",
+        "seed": "7",
+        "format": "ndjson",
+        "device": "node-17"
+      }
+    }
   ],
-  "usage": "Give sensor (a preset), interval in seconds, count of samples, start as an ISO UTC time, and optionally base, amp, period (h), drift (per hour), wander (σ per √h), noise (σ) and quant (resolution) in the sensor's unit (blank = preset); faults as spikes and dropouts in % of samples, stuck (samples) and step (offset); seed; format csv, json, ndjson or influx. Returns the data as a text output, summary statistics, a fault log and a chart. Use it for dashboard, parser and alerting test fixtures.",
-  "sources": ["Signal model: rule of thumb (deterministic cycle + drift + random walk + white noise, as in sensor error models, e.g. IEEE Std 952 for inertial sensors)", "Preset resolution and noise from datasheets: Maxim DS18B20, Sensirion SHT31 and SCD30, Bosch BMP280, a 12-bit ±8 g accelerometer", "mulberry32 PRNG (T. Ettinger) and the Box-Muller transform", "InfluxDB line protocol reference"]
+  "usage": "Give sensor (a preset), interval in seconds, count of samples, start as an ISO UTC time, and optionally base, amp, period (h), drift (per hour), wander (σ per √h), noise (σ) and quant (resolution) in the sensor's unit (blank = preset); faults as spikes and dropouts in % of samples, stuck (samples) with optional stuckAt (% of the series, blank = seeded), step (offset) with optional stepAt (% of the series, blank = mid); seed; format csv, json, ndjson or influx. Returns the data as a text output, summary statistics, a fault log and a chart. Use it for dashboard, parser and alerting test fixtures.",
+  "sources": [
+    "Signal model: rule of thumb (deterministic cycle + drift + random walk + white noise, as in sensor error models, e.g. IEEE Std 952 for inertial sensors)",
+    "Preset resolution and noise from datasheets: Maxim DS18B20, Sensirion SHT31 and SCD30, Bosch BMP280, a 12-bit ±8 g accelerometer",
+    "mulberry32 PRNG (T. Ettinger) and the Box-Muller transform",
+    "InfluxDB line protocol reference"
+  ],
+  "layout": "custom",
+  "agentOmit": [
+    "drawing"
+  ]
 }

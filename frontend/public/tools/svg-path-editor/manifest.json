@@ -1,5 +1,5 @@
 {
-  "id": "svg-path-editor", "version": "1.0",
+  "id": "svg-path-editor", "version": "1.1",
   "name": "SVG Path Editor",
   "blurb": "edit a path node by node and trim needless decimals",
   "group": "web",
@@ -23,7 +23,9 @@
     { "title": "An exported 24 px alert icon with six decimals", "input": { "decimals": "1", "mode": "shortest", "compact": true, "shorthand": true, "tx": "0", "ty": "0", "scale": "1" } },
     { "title": "Scale a 100-unit logo path down to a 24 px icon", "input": { "d": "M10 80 C 40 10, 65 10, 95 80 S 150 150, 180 80", "decimals": "2", "mode": "shortest", "compact": true, "shorthand": true, "tx": "0", "ty": "0", "scale": "0.1333" } }
   ],
-  "usage": "Give d as the path data string (or a whole <path> element), decimals as 0-4 or keep, mode as shortest, relative or absolute, and optional translate tx/ty and uniform scale. Returns the rewritten path (texts 'Path' and 'Element' with a fitted viewBox), characters before and after, bounding box, sampled length, the largest node shift rounding caused, and a node table; result.segments holds the absolute segments. Use it to shrink icon paths or check what precision a path can lose.",
+  "usage": "Give d as the path data string (or a whole <path> element), decimals as 0-4 or keep, mode as shortest, relative or absolute, and optional translate tx/ty and uniform scale. Returns the rewritten path (texts 'Path' and 'Element' with a fitted viewBox), characters before and after, bounding box, sampled length, the largest node shift rounding caused, and a node table; result.segments holds the absolute segments and result.ladder the characters and largest node shift at every decimals setting. Use it to shrink icon paths or check what precision a path can lose.",
   "sources": ["W3C SVG 1.1 section 8.3 (path data grammar) and appendix F.6.5-F.6.6 (arc endpoint to centre conversion)", "SVGO convertPathData plugin (the shortest-of-relative/absolute idea)"],
-  "view": true
+  "view": true,
+  "layout": "custom",
+  "agentOmit": ["drawing"]
 }

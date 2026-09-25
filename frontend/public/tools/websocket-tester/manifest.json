@@ -1,5 +1,6 @@
 {
-  "id": "websocket-tester", "version": "1.0",
+  "id": "websocket-tester",
+  "version": "1.1",
   "name": "WebSocket Echo Tester",
   "blurb": "open a socket, send messages and list replies with timestamps",
   "group": "web",
@@ -87,5 +88,9 @@
     "RFC 6455 The WebSocket Protocol: sections 3 (URIs), 4.1 (subprotocol tokens), 5.2 (framing), 7.4.1 (close codes)",
     "WHATWG WebSockets Standard (browser API, mixed content)"
   ],
-  "view": true
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "drawing"
+  ]
 }

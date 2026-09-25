@@ -70,13 +70,14 @@ export function run(input) {
     let note = '';
     if (e.dir === '<-') {
       const i = pending.findIndex((s) => s.text === e.text && s.t <= e.t);
-      if (i >= 0) { const d = e.t - pending[i].t; rtts.push(d); note = `echo, ${d} ms`; pending.splice(i, 1); }
+      if (i >= 0) { const d = e.t - pending[i].t; rtts.push(d); note = `echo, ${d} ms`; e.pair = ev.indexOf(pending[i]); e.rtt = d; pending.splice(i, 1); }
       else note = 'not an echo';
     }
     if (e.dir === '**') {
       const c = /close\D*(\d{4})/i.exec(e.text);
-      if (c) note = CLOSE[c[1]] || (Number(c[1]) >= 4000 ? 'application-defined code' : '');
+      if (c) { note = CLOSE[c[1]] || (Number(c[1]) >= 4000 ? 'application-defined code' : ''); e.code = Number(c[1]); }
     }
+    e.note = note;
     rows.push([`+${e.t - t0} ms`, { '->': 'sent', '<-': 'received', '**': 'event' }[e.dir], e.text.length > 160 ? e.text.slice(0, 160) + '…' : e.text, note]);
   }
   const opened = ev.find((e) => e.dir === '**' && /^open/i.test(e.text));
@@ -111,7 +112,34 @@ export function run(input) {
     '',
   ].join('\n');
   const cli = `# websocat (https://github.com/vi/websocat): type a line, see the reply\nwebsocat${protos.length ? ` --protocol ${protos.join(',')}` : ''} ${String(input.url || '').trim()}\n`;
+  // For the page's drawing only (agentOmit): every event with its frame, the
+  // messages to send, and the URL in parts.
+  const frameOf = (text, dir) => {
+    const n = utf8len(text), masked = dir === '->';
+    const extBytes = n > 65535 ? 8 : n > 125 ? 2 : 0;
+    return { payload: n, fin: 1, opcode: 1, masked, len7: n > 65535 ? 127 : n > 125 ? 126 : n, ext: extBytes ? n : null, extBytes,
+      header: 2 + extBytes + (masked ? 4 : 0), total: n + 2 + extBytes + (masked ? 4 : 0) };
+  };
+  const json = (m) => (/^\s*[[{]/.test(m) ? (badJson.includes(m) ? 'bad' : 'ok') : 'no');
+  const drawing = {
+    url: parsed ? { ok: !problems.length, scheme: parsed.protocol.replace(':', ''), host: parsed.hostname, port: parsed.port,
+      path: parsed.pathname, query: parsed.search, hash: parsed.hash, tls: parsed.protocol === 'wss:' } : { ok: false },
+    protocols: protos,
+    outbox: out.map((m) => ({ text: m, json: json(m), frame: frameOf(m, '->'), echoFrame: frameOf(m, '<-') })),
+    events: ev.map((e) => {
+      const o = { t: e.t - t0, dir: e.dir, text: e.text, note: e.note || '' };
+      if (e.dir !== '**') o.frame = frameOf(e.text, e.dir);
+      if (e.pair != null) { o.pair = e.pair; o.rtt = e.rtt; }
+      if (e.code != null) o.code = e.code;
+      if (e.dir === '**') o.kind = (/^(connect|open|close|error)/i.exec(e.text) || [, 'event'])[1].toLowerCase();
+      return o;
+    }),
+    t0: ev.length ? new Date(t0).toISOString() : null,
+    handshake: opened && connecting ? opened.t - connecting.t : null,
+    unread,
+  };
   return {
+    drawing,
     values, warnings,
     notes: [...notes,
       'In the app, Connect opens the socket from this page; the transcript is written into the Transcript field so the results and the Prompt see it.',

@@ -63,8 +63,13 @@ export function run(input) {
   const rnd = mulberry32(seed);
   const span = p.max - p.min < 1e8 ? p.max - p.min : Math.max(1, Math.abs(amp) * 4 + noise * 20);
   const spikeMag = Math.max(10 * noise, 0.05 * Math.min(span, Math.abs(amp) * 4 + noise * 40 || span));
-  const stuckAt = stuckN ? Math.floor(n * (0.2 + 0.6 * rnd())) : -1;
-  const stepAt = step ? Math.floor(n / 2) : -1;
+  // Where the stuck run and the step sit: given as % of the series, or (blank)
+  // the stuck run at a seeded place and the step at mid-series. The seeded draw
+  // is made either way, so placing the run by hand leaves the rest unchanged.
+  const at = (pct, dflt) => (pct == null || !Number.isFinite(pct) ? dflt : Math.max(0, Math.min(n - 1, Math.floor((n * pct) / 100))));
+  const stuckSeeded = stuckN ? Math.floor(n * (0.2 + 0.6 * rnd())) : -1;
+  const stuckK = stuckN ? at(input.stuckAt, stuckSeeded) : -1;
+  const stepAt = step ? at(input.stepAt, Math.floor(n / 2)) : -1;
 
   const hours = (k) => (k * dt) / 3600;
   const rows = []; // [ms, value|null, truth]
@@ -78,9 +83,9 @@ export function run(input) {
     let v = truth + noise * gauss(rnd);
     const u = rnd();
     let kind = null;
-    if (stuckAt >= 0 && k >= stuckAt && k < stuckAt + stuckN) {
+    if (stuckK >= 0 && k >= stuckK && k < stuckK + stuckN) {
       if (held == null) held = v;
-      v = held; kind = k === stuckAt ? `stuck for ${stuckN} samples` : null;
+      v = held; kind = k === stuckK ? `stuck for ${stuckN} samples` : null;
     } else if (u < spikePct / 100) {
       v += (rnd() < 0.5 ? -1 : 1) * spikeMag * (1 + rnd()); kind = 'spike';
     } else if (u < (spikePct + dropPct) / 100) {
@@ -126,7 +131,22 @@ export function run(input) {
     { label: 'Faults', value: faults.length, hint: `${faults.filter((x) => x[2] === 'spike').length} spikes, ${faults.filter((x) => x[2] === 'dropout').length} dropouts`, tone: faults.length ? 'warn' : 'ok' },
   ];
   if (body.length > 2e6) warnings.push(`The output is ${fmtNum(body.length / 1e6, 3)} MB: copy may be slow. Use fewer samples.`);
+  const r6 = (v) => (v == null ? null : Number(v.toFixed(Math.min(8, dec + 3))));
+  const drawing = {
+    label: p.label, unit: p.unit, field, dec,
+    range: p.max - p.min < 1e8 ? [p.min, p.max] : null,
+    base, amp, period, drift, wander, noise, quant, spikeMag,
+    t0, dt, n, durH, seed,
+    stuckAt: stuckK, stuckN, stuckPlaced: stuckN > 0 && input.stuckAt != null && Number.isFinite(input.stuckAt),
+    stepAt, step,
+    reported: rows.map((r) => (r[1] == null ? null : Number(f(r[1])))),
+    truth: rows.map((r) => r6(r[2])),
+    faults: faults.map((x) => [x[0], /^stuck/.test(x[2]) ? 'stuck' : /^offset/.test(x[2]) ? 'step' : x[2]]),
+    clipped, mean: got.length ? mean : null, sd: got.length ? sd : null,
+    lo: got.length ? Math.min(...got) : null, hi: got.length ? Math.max(...got) : null,
+  };
   return {
+    drawing,
     values,
     charts: [{ title: `${p.label}${unitTxt ? ' (' + p.unit + ')' : ''}${m > 1 ? `, every ${m}th sample` : ''}`, type: 'line',
       x: idx.map((k) => { const h = hours(k); return durH >= 48 ? `${fmtNum(h / 24, 3)} d` : `${fmtNum(h, 3)} h`; }),
