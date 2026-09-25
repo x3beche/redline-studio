@@ -1,12 +1,20 @@
 import {
-  Component, ElementRef, OnDestroy, effect, inject, input, output, signal, untracked, viewChild,
+  Component, ElementRef, OnDestroy, computed, effect, inject, input, output, signal, untracked, viewChild,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import type * as Monaco from 'monaco-editor';
 import { Auth } from '../auth';
+import { Catalog, FolderNode } from '../api';
 
 /** The source behind what is on screen, in VS Code's editor (Monaco): the
  *  3D room's models are build123d (Python), the PCB room's boards atopile.
+ *
+ *  Each item in the catalog is one file, but a project is many: an
+ *  assembly imports its parts (`from stand import ...`). So, as in an IDE,
+ *  the project's folder tree is on the left - the files the open one uses
+ *  are marked - and each file opens in a tab of its own; Ctrl+click on an
+ *  import opens the file it names.
  *
  *  Editing writes the source straight back - Ctrl+S or Save - and marks
  *  the model or board changed; Build rebuilds it. A save carries the
@@ -121,37 +129,101 @@ function redlineTheme(m: MonacoApi): string {
 
 interface Read { source: string; rev: string; stale?: boolean }
 
+/** One open file. Mutable: `touch()` tells the template it changed. */
+interface Tab {
+  kind: CodeKind; id: string; name: string;
+  model: Monaco.editor.ITextModel;
+  rev: string; savedAt: number; stale: boolean; dirty: boolean;
+  view: Monaco.editor.ICodeEditorViewState | null;
+  theirs: Read | null; clash: string | null; status: string;
+}
+
+/** A file in the project tree. */
+interface TreeFile { kind: CodeKind; id: string; label: string }
+interface TreeDir { name: string; path: string; dirs: TreeDir[]; files: TreeFile[] }
+
+const key = (kind: CodeKind, id: string) => `${kind}:${id}`;
+
 @Component({
   selector: 'app-code-view',
+  imports: [NgTemplateOutlet],
   host: { class: 'tcv-code' },
   template: `
 <div class="tcv-code-bar">
-  <span class="tcv-code-title">{{ title() || id() }}</span>
-  <span class="tcv-code-sub">{{ status() }}</span>
+  <span class="tcv-code-title">{{ project()?.path ? project()!.name : (title() || id()) }}</span>
+  <span class="tcv-code-sub">{{ current()?.status }}</span>
   <span class="grow"></span>
-  <span class="tcv-code-sub">{{ kind() === 'board' ? 'atopile' : 'build123d · Python' }}</span>
+  <span class="tcv-code-sub">{{ current()?.kind === 'board' ? 'atopile' : 'build123d · Python' }}</span>
   @if (canEdit()) {
-    <button class="tcv-btn tcv-code-btn" [class.tcv-code-save]="dirty()" [disabled]="!dirty() || saving()"
+    <button class="tcv-btn tcv-code-btn" [class.tcv-code-save]="current()?.dirty" [disabled]="!current()?.dirty || saving()"
             (click)="save()" title="Save (Ctrl+S)">{{ saving() ? 'Saving…' : 'Save' }}</button>
   }
   <button class="tcv-btn tcv-code-btn" (click)="copy()">{{ copied() ? 'Copied' : 'Copy' }}</button>
   <button class="tcv-btn tcv-code-btn" (click)="close()" title="Back to the view">✕</button>
 </div>
-@if (clash(); as c) {
-  <div class="tcv-code-clash" role="alert">
-    <span>{{ c }}</span>
-    <button class="tcv-btn tcv-code-btn" (click)="takeTheirs()">Load theirs (drop my edits)</button>
-    <button class="tcv-btn tcv-code-btn" (click)="save(true)">Save mine over it</button>
+<div class="tcv-code-main">
+  <!-- EXPLORER: the project's folders and files; a dot marks what the open file uses. -->
+  <nav class="tcv-code-tree" aria-label="Project files">
+    <div class="tcv-code-tree-head">Explorer</div>
+    @if (project(); as root) {
+      <ng-container *ngTemplateOutlet="dir; context: { $implicit: root, depth: 0 }" />
+    } @else {
+      <p class="tcv-code-tree-empty">reading the project…</p>
+    }
+  </nav>
+  <div class="tcv-code-pane">
+    <div class="tcv-code-tabs" role="tablist">
+      @for (t of tabs(); track t.kind + t.id) {
+        <div class="tcv-code-tab" role="tab" [attr.data-on]="t === current() ? 1 : null"
+             [attr.aria-selected]="t === current()" (click)="activate(t)" (auxclick)="closeTab(t, $event)" [title]="t.id">
+          <span>{{ t.name }}</span>
+          @if (t.dirty) { <span class="tcv-code-dot" title="unsaved"></span> }
+          <button class="tcv-code-x" (click)="closeTab(t, $event)" aria-label="Close">×</button>
+        </div>
+      }
+    </div>
+    @if (current()?.clash; as c) {
+      <div class="tcv-code-clash" role="alert">
+        <span>{{ c }}</span>
+        <button class="tcv-btn tcv-code-btn" (click)="takeTheirs()">Load theirs (drop my edits)</button>
+        <button class="tcv-btn tcv-code-btn" (click)="save(true)">Save mine over it</button>
+      </div>
+    }
+    @if (error(); as e) { <p class="tcv-code-empty">{{ e }}</p> }
+    <div #host class="tcv-code-editor" [hidden]="!!error() && !tabs().length"></div>
   </div>
-}
-@if (error(); as e) { <p class="tcv-code-empty">{{ e }}</p> }
-<div #host class="tcv-code-editor" [hidden]="!!error()"></div>`,
+</div>
+
+<ng-template #dir let-d let-depth="depth">
+  @if (depth > 0) {
+    <button class="tcv-code-node tcv-code-folder" [style.padding-left.px]="4 + (depth - 1) * 12"
+            (click)="toggle(d.path)">
+      <span class="tcv-code-caret">{{ shut().has(d.path) ? '▸' : '▾' }}</span>{{ d.name }}
+    </button>
+  }
+  @if (!shut().has(d.path)) {
+    @for (sub of d.dirs; track sub.path) {
+      <ng-container *ngTemplateOutlet="dir; context: { $implicit: sub, depth: depth + 1 }" />
+    }
+    @for (f of d.files; track f.kind + f.id) {
+      <button class="tcv-code-node tcv-code-file" [style.padding-left.px]="16 + depth * 12"
+              [attr.data-on]="current()?.id === f.id && current()?.kind === f.kind ? 1 : null"
+              [attr.data-used]="uses().has(f.id) ? 1 : null"
+              [title]="uses().has(f.id) ? f.id + ' - used by ' + current()?.name : f.id"
+              (click)="openFile(f.kind, f.id)">
+        <span class="tcv-code-ext" [attr.data-kind]="f.kind">{{ f.kind === 'board' ? 'ato' : 'py' }}</span><span class="tcv-code-label">{{ f.label }}</span>
+        @if (uses().has(f.id)) { <span class="tcv-code-used"></span> }
+      </button>
+    }
+  }
+</ng-template>`,
 })
 export class CodeView implements OnDestroy {
   private http = inject(HttpClient);
   private auth = inject(Auth);
+  private catalog = inject(Catalog);
   kind = input.required<CodeKind>();
-  /** The model's or board's id. */
+  /** The model's or board's id: opened in a tab, with its project on the left. */
   id = input.required<string>();
   title = input('');
   closed = output<void>();
@@ -161,153 +233,258 @@ export class CodeView implements OnDestroy {
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private m: MonacoApi | null = null;
   private editor: Monaco.editor.IStandaloneCodeEditor | null = null;
-  /** The version the text in the editor started from, and the model
-   *  version it was at then - what "unsaved" is measured against. */
-  private rev = '';
-  private savedAt = 0;
   private poll?: ReturnType<typeof setInterval>;
 
-  status = signal('reading…');
+  tabs = signal<Tab[]>([]);
+  current = signal<Tab | null>(null);
   error = signal<string | null>(null);
-  dirty = signal(false);
   saving = signal(false);
   copied = signal(false);
-  clash = signal<string | null>(null);
-  private theirs: Read | null = null;
+  project = signal<TreeDir | null>(null);
+  /** Folders folded shut in the tree. */
+  shut = signal(new Set<string>());
+  /** Model name (the last part of its id) -> id, for imports. */
+  private byName = new Map<string, string>();
   canEdit = () => this.auth.can('edit');
+
+  /** What the open file imports, as model ids: marked in the tree. */
+  uses = computed(() => {
+    const t = this.current();
+    this.tabs();                            // re-read after an edit
+    const out = new Set<string>();
+    if (!t || t.kind !== 'model') return out;
+    for (const name of imports(t.model.getValue())) {
+      const id = this.byName.get(name);
+      if (id && id !== t.id) out.add(id);
+    }
+    return out;
+  });
 
   constructor() {
     effect(() => {
       const id = this.id(), kind = this.kind();
-      untracked(() => void this.open(kind, id));
+      untracked(() => void this.start(kind, id));
     });
   }
 
-  private url() {
-    return this.kind() === 'board' ? `/api/boards/${this.id()}` : `/api/models/${this.id()}`;
-  }
+  private touch() { this.tabs.set([...this.tabs()]); }
 
-  private read() {
-    const path = this.kind() === 'board' ? this.url() : `${this.url()}/source`;
-    return this.http.get<Read>(path);
-  }
-
-  private async open(kind: CodeKind, id: string) {
+  private async start(kind: CodeKind, id: string) {
     this.error.set(null);
-    this.clash.set(null);
-    this.status.set('reading…');
-    let m: MonacoApi;
-    try { m = this.m = await loadMonaco(); } catch (e) { this.error.set((e as Error).message); return; }
-    this.read().subscribe({
+    try { this.m = await loadMonaco(); } catch (e) { this.error.set((e as Error).message); return; }
+    if (!this.editor) {
+      this.editor = this.m.editor.create(this.host().nativeElement, {
+        model: null, theme: redlineTheme(this.m), readOnly: !this.canEdit(), automaticLayout: true,
+        minimap: { enabled: true }, fontSize: 13, tabSize: 4, insertSpaces: true,
+        fontFamily: 'ui-monospace, "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace',
+        scrollBeyondLastLine: false, renderWhitespace: 'selection', bracketPairColorization: { enabled: true },
+      });
+      this.editor.addCommand(this.m.KeyMod.CtrlCmd | this.m.KeyCode.KeyS, () => this.save());
+      // Ctrl+click on an import opens the file it names.
+      this.editor.onMouseDown(e => {
+        if (!(e.event.ctrlKey || e.event.metaKey) || !e.target.position) return;
+        const model = this.editor!.getModel();
+        const word = model?.getWordAtPosition(e.target.position)?.word;
+        const line = model?.getLineContent(e.target.position.lineNumber) ?? '';
+        const target = word && /^\s*(from|import)\s/.test(line) ? this.byName.get(word) : undefined;
+        if (target) { e.event.preventDefault(); void this.openFile('model', target); }
+      });
+      this.poll = setInterval(() => this.check(), 10_000);
+    }
+    this.readTree(kind, id);
+    await this.openFile(kind, id);
+  }
+
+  /** The catalog, cut down to the project the file is in. */
+  private readTree(kind: CodeKind, id: string) {
+    this.catalog.tree().subscribe({
+      next: root => {
+        const top = root as FolderNode & { boards?: { id: string; name?: string }[] };
+        this.byName.clear();
+        const build = (n: typeof top): TreeDir => {
+          for (const mm of n.models) this.byName.set(mm.name, mm.id);
+          return {
+            name: n.name, path: n.path,
+            dirs: (n.folders as (typeof top)[]).map(build),
+            files: [
+              ...n.models.map(mm => ({ kind: 'model' as const, id: mm.id, label: `${mm.name}.py` })),
+              ...(n.boards ?? []).map(b => ({ kind: 'board' as const, id: b.id, label: `${b.id}.ato` })),
+            ],
+          };
+        };
+        const all = build(top);
+        const holds = (d: TreeDir): boolean =>
+          d.files.some(f => f.kind === kind && f.id === id) || d.dirs.some(holds);
+        this.project.set(all.dirs.find(holds) ?? all);
+        this.touch();
+      },
+    });
+  }
+
+  private url(kind: CodeKind, id: string) {
+    return kind === 'board' ? `/api/boards/${id}` : `/api/models/${id}`;
+  }
+
+  private read(kind: CodeKind, id: string) {
+    return this.http.get<Read>(kind === 'board' ? this.url(kind, id) : `${this.url(kind, id)}/source`);
+  }
+
+  async openFile(kind: CodeKind, id: string) {
+    const open = this.tabs().find(t => t.kind === kind && t.id === id);
+    if (open) { this.activate(open); return; }
+    this.read(kind, id).subscribe({
       next: d => {
-        if (this.id() !== id) return;
-        this.show(m, kind, d);
-        clearInterval(this.poll);
-        this.poll = setInterval(() => this.check(), 10_000);
+        if (!this.m || this.tabs().some(t => t.kind === kind && t.id === id)) return;
+        const model = this.m.editor.createModel(d.source, kind === 'board' ? 'atopile' : 'python',
+                                                this.m.Uri.parse(`redline:///${key(kind, id)}`));
+        const tab: Tab = {
+          kind, id, name: `${id.split('/').pop()}.${kind === 'board' ? 'ato' : 'py'}`, model,
+          rev: d.rev, savedAt: model.getAlternativeVersionId(), stale: !!d.stale, dirty: false,
+          view: null, theirs: null, clash: null, status: '',
+        };
+        tab.status = this.describe(tab);
+        model.onDidChangeContent(() => {
+          const dirty = model.getAlternativeVersionId() !== tab.savedAt;
+          if (dirty !== tab.dirty) { tab.dirty = dirty; this.touch(); }
+        });
+        this.tabs.set([...this.tabs(), tab]);
+        this.activate(tab);
       },
       error: (e: HttpErrorResponse) => this.error.set(
         typeof e.error?.detail === 'string' ? e.error.detail : 'the source could not be read'),
     });
   }
 
-  private show(m: MonacoApi, kind: CodeKind, d: Read) {
-    const lang = kind === 'board' ? 'atopile' : 'python';
-    if (!this.editor) {
-      this.editor = m.editor.create(this.host().nativeElement, {
-        value: d.source, language: lang, theme: redlineTheme(m),
-        readOnly: !this.canEdit(), automaticLayout: true, minimap: { enabled: true },
-        fontFamily: 'ui-monospace, "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace',
-        fontSize: 13, tabSize: 4, insertSpaces: true, scrollBeyondLastLine: false,
-        renderWhitespace: 'selection', bracketPairColorization: { enabled: true },
-      });
-      this.editor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => this.save());
-      this.editor.onDidChangeModelContent(() => this.markDirty());
-    } else {
-      const model = this.editor.getModel()!;
-      m.editor.setModelLanguage(model, lang);
-      const view = this.editor.saveViewState();
-      model.setValue(d.source);
-      if (view) this.editor.restoreViewState(view);
+  private describe(t: Tab): string {
+    if (!this.canEdit()) return `read-only - ${this.auth.why('edit') ?? ''}`;
+    return t.stale ? 'changed since the last build - Build to see it' : 'up to date with the build';
+  }
+
+  activate(t: Tab) {
+    const was = this.current();
+    if (was === t || !this.editor) return;
+    if (was) was.view = this.editor.saveViewState();
+    this.error.set(null);
+    this.editor.setModel(t.model);
+    if (t.view) this.editor.restoreViewState(t.view);
+    this.editor.focus();
+    this.current.set(t);
+  }
+
+  closeTab(t: Tab, ev?: Event) {
+    ev?.stopPropagation();
+    if (t.dirty && !confirm(`${t.name} has unsaved changes. Close it anyway?`)) return;
+    const rest = this.tabs().filter(x => x !== t);
+    if (this.current() === t) {
+      const i = this.tabs().indexOf(t);
+      const next = rest[Math.min(i, rest.length - 1)] ?? null;
+      this.current.set(null);
+      if (next) this.activate(next); else this.editor?.setModel(null);
     }
-    this.rev = d.rev;
-    this.savedAt = this.editor.getModel()!.getAlternativeVersionId();
-    this.markDirty();
-    this.status.set(this.canEdit()
-      ? (d.stale ? 'changed since the last build - Build to see it' : 'up to date with the build')
-      : `read-only - ${this.auth.why('edit') ?? ''}`);
+    this.tabs.set(rest);
+    t.model.dispose();
+    if (!rest.length) this.closed.emit();
   }
 
-  private markDirty() {
-    const model = this.editor?.getModel();
-    this.dirty.set(!!model && model.getAlternativeVersionId() !== this.savedAt);
+  toggle(path: string) {
+    const s = new Set(this.shut());
+    if (s.has(path)) s.delete(path); else s.add(path);
+    this.shut.set(s);
   }
 
-  /** Every ten seconds: has an agent saved a newer version? Shown at once
-   *  if nothing is being typed here; otherwise the person decides. */
+  /** Every ten seconds, each open file: has someone saved a newer version?
+   *  Shown at once where nothing is being typed; otherwise asked. */
   private check() {
-    if (document.hidden || this.saving() || !this.m) return;
-    this.read().subscribe({
-      next: d => {
-        if (d.rev === this.rev) return;
-        if (!this.dirty()) { this.show(this.m!, this.kind(), d); return; }
-        this.theirs = d;
-        this.clash.set('Someone else - an agent, most likely - saved a newer version while you were editing.');
-      },
-    });
+    if (document.hidden || this.saving()) return;
+    for (const t of this.tabs()) {
+      this.read(t.kind, t.id).subscribe({
+        next: d => {
+          if (d.rev === t.rev || t.model.isDisposed()) return;
+          if (!t.dirty) { this.load(t, d); return; }
+          t.theirs = d;
+          t.clash = 'Someone else - an agent, most likely - saved a newer version while you were editing.';
+          this.touch();
+        },
+      });
+    }
+  }
+
+  private load(t: Tab, d: Read) {
+    const view = this.current() === t ? this.editor?.saveViewState() : null;
+    t.model.setValue(d.source);
+    if (view) this.editor?.restoreViewState(view);
+    t.rev = d.rev; t.stale = !!d.stale;
+    t.savedAt = t.model.getAlternativeVersionId(); t.dirty = false;
+    t.theirs = null; t.clash = null;
+    t.status = this.describe(t);
+    this.touch();
   }
 
   save(force = false) {
-    const text = this.editor?.getValue();
-    if (text === undefined || this.saving() || (!this.dirty() && !force)) return;
+    const t = this.current();
+    if (!t || this.saving() || (!t.dirty && !force)) return;
     this.saving.set(true);
-    const body = { source: text, if_match: force && this.theirs ? this.theirs.rev : this.rev };
-    this.http.put<{ rev: string }>(this.url(), body).subscribe({
+    const body = { source: t.model.getValue(), if_match: force && t.theirs ? t.theirs.rev : t.rev };
+    this.http.put<{ rev: string }>(this.url(t.kind, t.id), body).subscribe({
       next: r => {
         this.saving.set(false);
-        this.clash.set(null);
-        this.theirs = null;
-        this.rev = r.rev;
-        this.savedAt = this.editor!.getModel()!.getAlternativeVersionId();
-        this.markDirty();
-        this.status.set('saved - Build to see it');
+        t.rev = r.rev; t.stale = true; t.theirs = null; t.clash = null;
+        t.savedAt = t.model.getAlternativeVersionId(); t.dirty = false;
+        t.status = 'saved - Build to see it';
+        this.touch();
         this.saved.emit();
       },
       error: (e: HttpErrorResponse) => {
         this.saving.set(false);
         if (e.status === 409) {
-          this.read().subscribe(d => {
-            this.theirs = d;
-            this.clash.set('Not saved: someone else saved a newer version while you were editing.');
+          this.read(t.kind, t.id).subscribe(d => {
+            t.theirs = d;
+            t.clash = 'Not saved: someone else saved a newer version while you were editing.';
+            this.touch();
           });
           return;
         }
         const d = e.error?.detail;
-        this.status.set('not saved - ' + (typeof d === 'string' ? d : 'that did not work'));
+        t.status = 'not saved - ' + (typeof d === 'string' ? d : 'that did not work');
+        this.touch();
       },
     });
   }
 
   takeTheirs() {
-    if (this.theirs && this.m) this.show(this.m, this.kind(), this.theirs);
-    this.theirs = null;
-    this.clash.set(null);
+    const t = this.current();
+    if (t?.theirs) this.load(t, t.theirs);
   }
 
   copy() {
-    navigator.clipboard?.writeText(this.editor?.getValue() ?? '').then(() => {
+    navigator.clipboard?.writeText(this.current()?.model.getValue() ?? '').then(() => {
       this.copied.set(true);
       setTimeout(() => this.copied.set(false), 1500);
     });
   }
 
   close() {
-    if (this.dirty() && !confirm('You have unsaved changes. Close without saving?')) return;
+    const dirty = this.tabs().filter(t => t.dirty).map(t => t.name);
+    if (dirty.length && !confirm(`Unsaved changes in ${dirty.join(', ')}. Close without saving?`)) return;
     this.closed.emit();
   }
 
   ngOnDestroy() {
     clearInterval(this.poll);
-    this.editor?.getModel()?.dispose();
+    for (const t of this.tabs()) t.model.dispose();
     this.editor?.dispose();
   }
+}
+
+/** The module names a Python file imports: `import stand`, `from stand import X`. */
+function imports(source: string): string[] {
+  const out: string[] = [];
+  // One line at a time ([ \t], not \s): `import a as A` must not run on into the next line.
+  for (const m of source.matchAll(/^[ \t]*(?:from[ \t]+([\w.]+)[ \t]+import|import[ \t]+([\w., \t]+))/gm)) {
+    for (const name of (m[1] ?? m[2] ?? '').split(',')) {
+      const n = name.trim().split(/\s+/)[0]?.split('.').pop();
+      if (n) out.push(n);
+    }
+  }
+  return out;
 }

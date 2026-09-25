@@ -1741,5 +1741,36 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   color: var(--ink); background: var(--surface-2); border-bottom: 1px solid var(--warn); }
 .tcv-code-clash > span { flex: 1; }
 .tcv-code-editor { flex: 1; min-height: 0; }
+.tcv-code-main { flex: 1; min-height: 0; display: flex; }
+.tcv-code-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* The explorer: the project's folders and files, as in VS Code. */
+.tcv-code-tree { flex: none; width: 210px; overflow-x: hidden; overflow-y: auto; padding-bottom: 8px; background: var(--surface-2);
+  border-right: 1px solid var(--line); }
+.tcv-code-tree-head { padding: 7px 10px 5px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-dim); }
+.tcv-code-tree-empty { margin: 8px 10px; font-size: 11.5px; color: var(--ink-dim); }
+.tcv-code-node { display: flex; align-items: center; gap: 5px; width: 100%; padding: 3px 8px; font-size: 12px;
+  text-align: left; color: var(--ink); background: none; border: 0; cursor: pointer; white-space: nowrap; }
+.tcv-code-node:hover { background: var(--hover); }
+.tcv-code-folder { font-weight: 600; color: var(--ink-dim); }
+.tcv-code-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tcv-code-caret { width: 10px; font-size: 10px; }
+.tcv-code-file[data-on] { background: var(--accent-deep); color: var(--ink-bright); }
+.tcv-code-ext { flex: none; min-width: 20px; font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+  color: var(--code-kw); }
+.tcv-code-ext[data-kind="board"] { color: var(--code-num); }
+/* What the open file imports: a dot, and its name a little brighter. */
+.tcv-code-used { flex: none; width: 6px; height: 6px; margin-left: auto; border-radius: 50%; background: var(--accent); }
+.tcv-code-file[data-used] { color: var(--ink); font-weight: 600; }
+/* The tabs over the editor. */
+.tcv-code-tabs { flex: none; display: flex; overflow-x: auto; background: var(--surface-2);
+  border-bottom: 1px solid var(--line); }
+.tcv-code-tab { flex: none; display: flex; align-items: center; gap: 6px; padding: 5px 6px 5px 12px; font-size: 12px;
+  color: var(--ink-dim); border-right: 1px solid var(--line); cursor: pointer; }
+.tcv-code-tab[data-on] { color: var(--ink); background: var(--surface); box-shadow: inset 0 2px 0 var(--accent); }
+.tcv-code-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
+.tcv-code-x { width: 18px; height: 18px; font-size: 14px; line-height: 1; color: var(--ink-dim); background: none;
+  border: 0; border-radius: 3px; cursor: pointer; }
+.tcv-code-x:hover { background: var(--hover); color: var(--ink); }
 .tcv-code-empty { margin: 24px; font-size: 12.5px; color: var(--ink-dim); }
 .tcv-ico.tcv-ico-code { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='2' y='4' width='22' height='18' rx='1.5' fill='none' stroke='%23ddd' stroke-width='1.4'/><path d='M2,8 L24,8' stroke='%23ddd' stroke-width='1.2'/><path d='M9,11.5 L5.5,15 L9,18.5 M17,11.5 L20.5,15 L17,18.5' fill='none' stroke='%23ddd' stroke-width='1.8'/><path d='M14.5,10.5 L11.5,19.5' stroke='rgb(48,142,225)' stroke-width='2'/></svg>"); } /* theme:pigment */

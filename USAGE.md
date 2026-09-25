@@ -893,7 +893,10 @@ office network - is in [docs/ACCOUNTS.md](docs/ACCOUNTS.md).
 
 **Code.** In the 3D and PCB rooms, the `</>` button just left of the pen
 opens the source behind the view - the model's build123d, the board's
-atopile - in VS Code's editor (Monaco): search, folding, the minimap.
+atopile - in VS Code's editor (Monaco): search, folding, the minimap. On
+the left, the project's folders and files: a file opens in a tab of its
+own, and a dot marks the files the open one imports (an assembly its
+parts). Ctrl+click on an import line opens that file.
 Editors and up can change it and save (Ctrl+S or **Save**); the model or
 board is then marked changed, and **Build** rebuilds it. If an agent
 saved while you were typing, nothing is written over: you are asked to
