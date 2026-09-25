@@ -9,6 +9,12 @@
 // Captured response format (what view.js writes):
 //   line 1   "<status> <status text>"   or   "ERROR <message>"
 //   "# timing total=<ms> ttfb=<ms> [dns=<ms> connect=<ms> tls=<ms> download=<ms>]"   (optional)
+//   Units: a bare number or an "ms" suffix is milliseconds, each phase its own
+//   duration (what view.js writes). An "s" suffix or curl's own names
+//   (time_total, time_starttransfer, time_namelookup, time_connect,
+//   time_appconnect) are seconds counted from the start, as curl -w prints
+//   them; the phases are turned into durations. The timing line may also come
+//   last, after the body, where curl -w puts it.
 //   header lines "name: value", a blank line, then the body.
 
 const FORBIDDEN = ['accept-charset', 'accept-encoding', 'access-control-request-headers', 'access-control-request-method', 'connection',
@@ -35,6 +41,35 @@ export function parseHeaders(text) {
 }
 
 const hasBody = (m) => !['GET', 'HEAD'].includes(m);
+
+// One or more "# timing k=v ..." texts -> durations in ms, plus warnings.
+const CURL_KEYS = { time_total: 'total', time_starttransfer: 'ttfb', time_namelookup: 'dns', time_connect: 'connect', time_appconnect: 'tls' };
+export function parseTiming(texts) {
+  const raw = {}, fromStart = {}, warnings = [];
+  for (const t of texts) {
+    for (const [, k0, v, unit] of t.matchAll(/([A-Za-z_]+)=(-?[\d.]+(?:e[-+]?\d+)?)(ms|s)?\b/gi)) {
+      const curlName = CURL_KEYS[k0.toLowerCase()];
+      const k = curlName || k0.toLowerCase();
+      const n = Number(v);
+      if (!Number.isFinite(n)) continue;
+      const secs = !!curlName || (unit || '').toLowerCase() === 's';
+      raw[k] = secs ? n * 1000 : n;
+      fromStart[k] = secs;
+    }
+  }
+  const timing = { ...raw };
+  // curl's dns / connect / tls are moments from the start: turn them into phase durations.
+  if (fromStart.connect && raw.connect != null) timing.connect = raw.connect - (raw.dns ?? 0);
+  if (fromStart.tls && raw.tls != null) timing.tls = raw.tls > 0 ? raw.tls - (raw.connect ?? 0) : 0;
+  if (timing.total != null) {
+    if (timing.total < 0.1) warnings.push(`The timing says total=${+timing.total.toPrecision(3)} ms, under 0.1 ms: that is not a real network round trip. A bare number means milliseconds; if it was seconds (curl prints seconds), write it with an s: total=${raw.total}s.`);
+    else if (timing.total < 1 && !fromStart.total) warnings.push(`The timing says total=${+timing.total.toPrecision(3)} ms, under 1 ms: only a request to this same machine is that fast. A bare number means milliseconds; if it was seconds, write total=${raw.total}s.`);
+    else if (timing.total > 600000) warnings.push(`The timing says the request took ${Math.round(timing.total / 1000)} s: more than 10 minutes. If the numbers were milliseconds, drop the s suffix or write ms.`);
+    if (timing.ttfb != null && timing.ttfb > timing.total + 0.5) warnings.push(`The timing has the first byte (${Math.round(timing.ttfb)} ms) after the total (${Math.round(timing.total)} ms): check the units of the timing line.`);
+  }
+  if (['dns', 'connect', 'tls', 'ttfb', 'download'].some((k) => timing[k] < 0)) warnings.push('A timing phase came out negative: the timing values do not fit together; check their units.');
+  return { timing, warnings };
+}
 const sq = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
 
 export function run(input) {
@@ -71,6 +106,25 @@ export function run(input) {
     else if (!['accept', 'accept-language', 'content-language'].includes(n)) why.push(`header ${k}`);
   }
   const cross = !relative;
+  // For the page's drawing: every header line with what a browser does with it.
+  const reqHeaders = [];
+  for (const [i, raw] of String(input.headers || '').split(/\r?\n/).entries()) {
+    const l = raw.trim();
+    if (!l) continue;
+    const off = l.startsWith('#');
+    const m = /^#?\s*([!#$%&'*+\-.^_`|~0-9A-Za-z]+)\s*:\s*(.*)$/.exec(l);
+    if (!m) { reqHeaders.push({ line: i + 1, text: l, off, kind: off ? 'off' : 'bad', note: off ? 'comment' : 'not "Name: value": left out' }); continue; }
+    const n = m[1].toLowerCase();
+    let kind = 'safe', note = 'CORS-safelisted';
+    if (off) { kind = 'off'; note = 'switched off'; }
+    else if (FORBIDDEN.includes(n) || /^(proxy-|sec-)/.test(n)) { kind = 'forbidden'; note = 'forbidden: the browser drops it'; }
+    else if (n === 'content-type') {
+      const t = m[2].split(';')[0].trim().toLowerCase();
+      if (!SAFE_CT.includes(t)) { kind = cross ? 'preflight' : 'custom'; note = cross ? 'not a safelisted type: preflight' : 'not safelisted (same origin: no preflight)'; }
+    } else if (!['accept', 'accept-language', 'content-language'].includes(n)) { kind = cross ? 'preflight' : 'custom'; note = cross ? 'custom header: preflight' : 'custom (same origin: no preflight)'; }
+    reqHeaders.push({ line: i + 1, name: m[1], value: m[2], off, kind, note });
+  }
+  let respInfo = null;
 
   // ---- captured response ----
   const resp = String(input.response || '');
@@ -84,13 +138,14 @@ export function run(input) {
     const first = lines[0].trim();
     if (/^ERROR\b/i.test(first)) {
       values.push({ label: 'Result', value: 'no response', tone: 'bad', hint: first.slice(6, 80) });
+      respInfo = { error: first.slice(6) };
       warnings.push(`The request failed before any response: ${first.slice(6)}. In a browser that is almost always CORS (the server does not answer Access-Control-Allow-Origin for this page's origin), mixed content (http:// from an https page), DNS or a refused connection (the browser does not say which; the DevTools console does). Try the curl command: if curl works, it is CORS - allow the app's origin on the server.`);
     } else {
       const sm = /^(?:HTTP\/[\d.]+\s+)?(\d{3})\s*(.*)$/.exec(first);
       if (!sm) warnings.push('The captured response does not start with a status line ("200 OK").');
       const status = sm ? Number(sm[1]) : 0;
       let i = 1;
-      const timing = {};
+      const timingText = [];
       const rh = [];
       for (; i < lines.length; i++) {
         const l = lines[i];
@@ -98,11 +153,24 @@ export function run(input) {
         const rd = /^#\s*redirected to\s+(\S+)/i.exec(l.trim());
         if (rd) { notes.push(`The request was redirected; the final URL was ${rd[1]}.`); continue; }
         const tm = /^#\s*timing\s+(.*)$/i.exec(l.trim());
-        if (tm) { for (const [, k, v] of tm[1].matchAll(/(\w+)=([\d.]+)/g)) timing[k] = Number(v); continue; }
+        if (tm) { timingText.push(tm[1]); continue; }
         const hm = /^([^:\s]+)\s*:\s*(.*)$/.exec(l);
         if (hm) rh.push([hm[1].toLowerCase(), hm[2]]);
       }
-      const rbody = lines.slice(i).join('\n');
+      // curl -w writes its timing line after the body: take it from there too.
+      let rest = lines.slice(i);
+      for (;;) {
+        let j = rest.length - 1;
+        while (j >= 0 && /^\s*$/.test(rest[j])) j--;
+        const tm = j >= 0 ? /^#\s*timing\s+(.*)$/i.exec(rest[j].trim()) : null;
+        if (!tm) break;
+        timingText.unshift(tm[1]);
+        rest = rest.slice(0, j);
+        while (rest.length && /^\s*$/.test(rest[rest.length - 1])) rest.pop();
+      }
+      const rbody = rest.join('\n');
+      const { timing, warnings: tw } = parseTiming(timingText);
+      warnings.push(...tw);
       const H = (n) => (rh.find(([k]) => k === n) || [])[1];
       const cls = Math.floor(status / 100);
       values.push({ label: 'Status', value: status ? `${status} ${sm[2] || ''}`.trim() : '–', tone: cls === 2 || cls === 3 ? 'ok' : cls >= 4 ? 'bad' : undefined, hint: (STATUS[status] && STATUS[status] !== sm[2] ? STATUS[status] : '') || REASON[cls] || '' });
@@ -124,6 +192,17 @@ export function run(input) {
       checks.push(['nosniff', H('x-content-type-options') || 'missing']);
       if (/html/i.test(H('content-type') || '')) checks.push(['CSP', H('content-security-policy') ? 'set' : 'missing']);
       tables.push({ title: 'What the headers say', columns: ['Check', 'Finding'], rows: checks });
+      const CHK = { CORS: ['access-control-allow-origin'], Caching: ['cache-control', 'expires'], Validator: ['etag', 'last-modified'], Compression: ['content-encoding'],
+        HSTS: ['strict-transport-security'], nosniff: ['x-content-type-options'], CSP: ['content-security-policy'] };
+      let pretty = rbody;
+      if (/json/i.test(H('content-type') || '') || /^\s*[[{]/.test(rbody)) { try { pretty = JSON.stringify(JSON.parse(rbody), null, 2); } catch { /* as is */ } }
+      respInfo = {
+        status, statusText: sm ? (sm[2] || '') : '', cls, meaning: STATUS[status] || REASON[cls] || '', timing, size,
+        contentType: (H('content-type') || '').split(';')[0], encoding: H('content-encoding') || '',
+        headers: rh.map(([k, v]) => ({ name: k, value: v, check: Object.keys(CHK).find((c) => CHK[c].includes(k)) || null })),
+        checks: checks.map(([k, f]) => ({ check: k, finding: f, present: (CHK[k] || []).some((h) => H(h) != null) || (k === 'CORS' && !cross) })),
+        body: pretty.length > 20000 ? pretty.slice(0, 20000) + '\n…' : pretty,
+      };
       tables.push({ title: `Response headers (${rh.length})`, columns: ['Header', 'Value'], rows: rh.map(([k, v]) => [k, v.length > 120 ? v.slice(0, 120) + '…' : v]) });
       if (cross && rh.length && rh.every(([k]) => ['cache-control', 'content-language', 'content-length', 'content-type', 'expires', 'last-modified', 'pragma'].includes(k))) {
         notes.push('Only the CORS-safelisted response headers are visible to the page for a cross-origin request unless the server lists others in Access-Control-Expose-Headers; curl shows them all.');
@@ -151,8 +230,10 @@ export function run(input) {
   const rawReq = `${method} ${pathq} HTTP/1.1\r\nHost: ${host}\r\n${headers.map(([k, v]) => `${k}: ${v}\r\n`).join('')}${bodyOk ? `Content-Length: ${new TextEncoder().encode(body).length}\r\n` : ''}\r\n${bodyOk ? body : ''}`.replace(/\r/g, '');
   if (cross && why.length) notes.push(`From a browser this request is preflighted (${why.join(', ')}): the server must answer OPTIONS with Access-Control-Allow-Origin, -Methods and -Headers, or the real request is never sent.`);
   notes.push('Relative URLs (/api/…) go to this app; in curl they are written against the API at 127.0.0.1:8001.');
+  const drawing = { method, url, relative, cross, host: relative ? 'this app' : parsed?.host || '', path: relative ? url : (parsed ? parsed.pathname + parsed.search : ''),
+    preflight: cross && why.length > 0, why, headers: reqHeaders, bodyIgnored: !!(body.trim() && !hasBody(method)), bodyBytes: new TextEncoder().encode(body).length, response: respInfo };
   return {
-    values, warnings, notes, tables,
+    values, warnings, notes, tables, drawing,
     texts: [{ title: 'curl', body: curl, lang: 'sh' }, { title: 'fetch', body: fetchJs, lang: 'js' }, { title: 'Raw request', body: rawReq + '\n', lang: 'http' }],
   };
 }

@@ -1,8 +1,10 @@
 {
-  "id": "http-tester", "version": "1.0",
+  "id": "http-tester", "version": "1.1",
   "name": "HTTP Request Tester",
   "blurb": "send a request and see headers, timing and the response",
   "group": "web",
+  "layout": "custom",
+  "agentOmit": ["drawing"],
   "rooms": [
     "web",
     "embedded"
@@ -91,7 +93,8 @@
       "type": "textarea",
       "rows": 6,
       "default": "",
-      "placeholder": "200 OK\ncontent-type: application/json\n\n{\"ok\":true}"
+      "placeholder": "200 OK\ncontent-type: application/json\n\n{\"ok\":true}",
+      "help": "Status line, headers, a blank line, the body (curl -i output works). Timing goes on a line '# timing total=412 ttfb=388': a bare number is milliseconds (412ms works too); a value ending in s is seconds, as curl -w prints it (total=0.412s)."
     }
   ],
   "examples": [
@@ -116,7 +119,7 @@
       }
     }
   ],
-  "usage": "Give method, url (absolute http(s) or a /path on the app), headers as 'Name: value' lines, an optional body and optionally a captured response (first line '<status> <text>' or 'ERROR <message>', optional '# timing total=<ms> ttfb=<ms>', header lines, blank line, body - curl -i output also works). It returns request checks (forbidden headers, body on GET, invalid JSON), the CORS preflight prediction, the status with its meaning, timing, body size, header findings (CORS, caching, compression, HSTS) and curl/fetch/raw-HTTP texts. run() sends nothing: agents run the curl text themselves and paste the output into response.",
+  "usage": "Give method, url (absolute http(s) or a /path on the app), headers as 'Name: value' lines, an optional body and optionally a captured response (first line '<status> <text>' or 'ERROR <message>', optional '# timing total=<ms> ttfb=<ms>' where a bare number is milliseconds and a value with an s suffix (or curl's time_* names) is seconds as curl -w prints them, header lines, blank line, body - curl -i output also works, with the timing line after the body). It returns request checks (forbidden headers, body on GET, invalid JSON), the CORS preflight prediction, the status with its meaning, timing, body size, header findings (CORS, caching, compression, HSTS) and curl/fetch/raw-HTTP texts. run() sends nothing: agents run the curl text themselves and paste the output into response.",
   "sources": [
     "WHATWG Fetch Standard: forbidden request-header names, CORS-safelisted methods/headers, CORS preflight",
     "RFC 9110 HTTP Semantics (status codes)",
