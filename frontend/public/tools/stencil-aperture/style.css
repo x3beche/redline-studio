@@ -1,0 +1,121 @@
+/* Stencil Aperture: the aperture opened out, its section, the foils. */
+:root {
+  --tool-paste: #7d8790; --tool-copper: #b8702e; --tool-foil: #9aa7b3; --tool-wall: #6a7885;
+  --tool-board: #2f6b4a; --tool-paste-ink: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-paste: #aeb7bf; --tool-copper: #d9904f; --tool-foil: #5f6d79; --tool-wall: #8a99a6; --tool-board: #2a5a40; --tool-paste-ink: #0f151b;
+  }
+}
+:root[data-theme="dark"] { --tool-paste: #aeb7bf; --tool-copper: #d9904f; --tool-foil: #5f6d79; --tool-wall: #8a99a6; --tool-board: #2a5a40; --tool-paste-ink: #0f151b; }
+
+.k-page { padding: 10px 12px; }
+.sa {
+  display: grid; gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 460px);
+  grid-template-rows: auto minmax(0, 1fr);
+  height: calc(100vh - 62px); min-height: 640px;
+}
+.sa-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.sa-l, .sa-r { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+.sa-net { flex: 1; }
+.sa-sec { flex: 1.1; }
+.sa-foil { flex: 1; }
+.sa-out { min-width: 0; flex: none; }
+.sa-out .k-out { max-height: 150px; }
+
+.sa-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.sa-net { min-height: 360px; }
+.sa-sec { min-height: 190px; }
+.sa-foil { min-height: 170px; }
+.sa-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; padding: 6px 10px; font-size: 11.5px; color: var(--ink-soft); border-bottom: 1px solid var(--line-soft); }
+.sa-head b { color: var(--ink); font-weight: 600; font-size: 12px; }
+.sa-hint { padding: 4px 10px 6px; font-size: 11px; color: var(--ink-soft); border-top: 1px solid var(--line-soft); }
+.sa-box { position: relative; flex: 1; min-height: 0; }
+.sa-box > svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; }
+
+.sa-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; background: var(--surface); }
+.sa-seg button { border: 0; background: transparent; padding: 4px 11px; cursor: pointer; font-size: 12.5px; color: var(--ink-soft); }
+.sa-seg button + button { border-left: 1px solid var(--line-soft); }
+.sa-seg button:hover { background: var(--sunken); color: var(--ink); }
+.sa-seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+.sa-fields { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.sa-num { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.sa-num[hidden] { display: none; }
+.sa-num input { width: 58px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; text-align: right; }
+.sa-num small { font-size: 11px; }
+
+
+.sa-warns { flex: none; background: var(--surface); border: 1px solid var(--warn); border-left-width: 3px; border-radius: 6px; padding: 6px 10px; font-size: 12px; align-self: start; }
+.sa-warns[hidden] { display: none; }
+.sa-warns div + div { margin-top: 3px; }
+
+/* drawing */
+.sa-grid line { stroke: var(--line-soft); stroke-width: 1; }
+.sa-t { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); pointer-events: none; }
+.sa-t.soft { fill: var(--ink-soft); }
+.sa-t.bad { fill: var(--danger); font-weight: 600; }
+.sa-t.warn { fill: var(--warn); }
+.sa-t.ok { fill: var(--ok); }
+.sa-t.cu { fill: var(--tool-copper); }
+.sa-t.in { fill: var(--tool-paste-ink); font-weight: 600; }
+.sa-t.in.soft { font-weight: 400; opacity: .85; }
+.sa-big { font: 600 26px "IBM Plex Mono", ui-monospace, monospace; }
+.sa-big.ok { fill: var(--ok); } .sa-big.warn { fill: var(--warn); } .sa-big.bad { fill: var(--danger); }
+.sa-pad { fill: color-mix(in srgb, var(--tool-copper) 16%, transparent); stroke: var(--tool-copper); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.sa-open { fill: var(--tool-paste); stroke: var(--ink); stroke-width: 1.2; }
+.sa-flap { fill: color-mix(in srgb, var(--tool-wall) 30%, var(--surface)); stroke: var(--tool-wall); stroke-width: 1; }
+.sa-flap.warn { fill: color-mix(in srgb, var(--warn) 22%, var(--surface)); stroke: var(--warn); }
+.sa-flap.bad { fill: color-mix(in srgb, var(--danger) 22%, var(--surface)); stroke: var(--danger); }
+.sa-flaphatch { pointer-events: none; }
+.sa-hatchline { stroke: var(--tool-wall); stroke-width: 1; opacity: .55; }
+.sa-ghost path, .sa-ghost-r { fill: none; stroke: var(--warn); stroke-width: 1.3; stroke-dasharray: 4 3; }
+.sa-lead { fill: none; stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 2 3; }
+.sa-dim line { stroke: var(--ink-soft); stroke-width: 1; }
+
+.sa-board { fill: var(--tool-board); opacity: .55; }
+.sa-cu { fill: var(--tool-copper); }
+.sa-foilsec { fill: var(--tool-foil); stroke: var(--tool-wall); stroke-width: 1; }
+.sa-foilsec.bad { stroke: var(--danger); stroke-width: 2; }
+.sa-paste { fill: var(--tool-paste); stroke: var(--ink-soft); stroke-width: 1; }
+.sa-limit { stroke: var(--warn); stroke-width: 1.4; stroke-dasharray: 5 3; }
+.sa-t.on { fill: var(--ink-soft); }
+
+.sa-band.bad { fill: var(--danger); opacity: .13; }
+.sa-band.warn { fill: var(--warn); opacity: .16; }
+.sa-gl { stroke: var(--line-soft); stroke-width: 1; }
+.sa-ax { font: 10px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); pointer-events: none; }
+.sa-curve { fill: none; stroke: var(--ink-soft); stroke-width: 1.5; }
+.sa-cur { stroke: var(--accent); stroke-width: 1.5; }
+.sa-foildot { cursor: pointer; outline: none; }
+.sa-foildot .hit { fill: transparent; }
+.sa-foildot .dot { stroke-width: 2; }
+.sa-foildot.ok .dot { fill: var(--ok); stroke: var(--surface); }
+.sa-foildot.bad .dot { fill: var(--surface); stroke: var(--danger); }
+.sa-foildot:hover .dot, .sa-foildot:focus-visible .dot { stroke: var(--accent); stroke-width: 3; }
+.sa-foildot.on .dot { stroke: var(--accent); }
+
+.sa-pill { font: 600 11.5px "IBM Plex Mono", ui-monospace, monospace; padding: 0 6px; border-radius: 3px; border: 1px solid currentColor; }
+.sa-pill.ok { color: var(--ok); } .sa-pill.bad { color: var(--danger); }
+
+/* handles */
+.sa-h { cursor: grab; outline: none; }
+.sa-h .hit { fill: transparent; }
+.sa-h .knob { fill: var(--surface); stroke: var(--accent); stroke-width: 2.5; }
+.sa-h.cu .knob { stroke: var(--tool-copper); }
+.sa-h.ap .knob { stroke: var(--ink); }
+.sa-h.bad .knob { stroke: var(--danger); }
+.sa-h:hover .knob { stroke-width: 3.5; }
+.sa-h:focus-visible .hit { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 2; }
+.dragging, .dragging .sa-h { cursor: grabbing; }
+
+@media (max-width: 900px) {
+  .sa { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; height: auto; min-height: 0; }
+  .sa-net { height: 460px; min-height: 0; flex: none; }
+  .sa-sec { height: 210px; flex: none; }
+  .sa-foil { height: 200px; flex: none; }
+  .sa-out .k-out { max-height: 260px; }
+}
+@media (max-width: 480px) { .sa-net { height: 440px; } .sa-num input { width: 50px; } }

@@ -1,0 +1,151 @@
+/* Schematic Symbol Checklist: the symbol on its library sheet, with balloons. */
+:root {
+  --tool-sheet: #fbfaf5; --tool-dot: #c9ced4; --tool-body: #fff6d8; --tool-body-line: #8a2a2a; --tool-pin: #8a2a2a;
+  --tool-sym-ink: #1d2733; --tool-pin-num: #5b6b7a; --tool-type: #0f7a6c; --tool-stamp: #2f855a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tool-sheet: #131b22; --tool-dot: #2a3742; --tool-body: #2a2618; --tool-body-line: #e0827a; --tool-pin: #e0827a;
+    --tool-sym-ink: #e4ebf1; --tool-pin-num: #8ea0b0; --tool-type: #3cc7b3; --tool-stamp: #68b36b;
+  }
+}
+:root[data-theme="dark"] {
+  --tool-sheet: #131b22; --tool-dot: #2a3742; --tool-body: #2a2618; --tool-body-line: #e0827a; --tool-pin: #e0827a;
+  --tool-sym-ink: #e4ebf1; --tool-pin-num: #8ea0b0; --tool-type: #3cc7b3; --tool-stamp: #68b36b;
+}
+
+.k-page { padding: 10px 12px; }
+.sc {
+  display: grid; gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  grid-template-rows: auto minmax(0, 1fr);
+  height: calc(100vh - 62px); min-height: 600px;
+}
+.sc-bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.sc-cap { font-size: 12px; color: var(--ink-soft); }
+.sc-sp { flex: 1; }
+.sc-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; background: var(--surface); }
+.sc-seg button { border: 0; background: transparent; padding: 4px 11px; cursor: pointer; font-size: 12.5px; color: var(--ink-soft); }
+.sc-seg button + button { border-left: 1px solid var(--line-soft); }
+.sc-seg button:hover { background: var(--sunken); color: var(--ink); }
+.sc-seg button[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+.sc-tog { border: 1px solid var(--line); border-radius: 5px; background: var(--surface); padding: 4px 10px; font-size: 12.5px; color: var(--ink-soft); cursor: pointer; }
+.sc-tog:hover { color: var(--ink); }
+.sc-tog[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent); }
+.sc-tog[aria-pressed="true"]::before { content: "✓ "; color: var(--accent); }
+
+.sc-sheet { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.sc-svgwrap { flex: 1; min-height: 0; position: relative; }
+.sc-svg { position: absolute; inset: 0; width: 100%; height: 100%; user-select: none; touch-action: manipulation; }
+.sc-note { padding: 6px 12px; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--ink-soft); min-height: 32px; }
+.sc-note b { color: var(--ink); font-weight: 600; }
+.sc-note.block { box-shadow: inset 3px 0 0 var(--danger); } .sc-note.block b { color: var(--danger); }
+.sc-note.open { box-shadow: inset 3px 0 0 var(--warn); }
+.sc-note.done { box-shadow: inset 3px 0 0 var(--ok); }
+
+/* sheet */
+.sc-paper { fill: var(--tool-sheet); }
+.sc-dot { fill: var(--tool-dot); }
+.sc-frame { fill: none; stroke: var(--line); stroke-width: 1; }
+.sc-body { fill: var(--tool-body); stroke: var(--tool-body-line); stroke-width: 2; }
+.sc-plate { fill: none; stroke: var(--tool-body-line); stroke-width: 4; }
+.sc-plus { font: 600 18px "IBM Plex Mono", ui-monospace, monospace; fill: var(--tool-sym-ink); }
+.sc-pin { stroke: var(--tool-pin); stroke-width: 2; }
+.sc-pin.nc { stroke-dasharray: 5 3; }
+.sc-end { fill: var(--tool-sheet); stroke: var(--tool-pin); stroke-width: 1.2; }
+.sc-x { stroke: var(--accent); stroke-width: 2; }
+.sc-ghost { stroke: var(--ink-soft); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.sc-num { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--tool-pin-num); }
+.sc-type { font: 8.5px "IBM Plex Sans", sans-serif; fill: var(--tool-type); letter-spacing: .02em; }
+.sc-name { font: 11.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--tool-sym-ink); }
+.sc-ref { font: 600 14px "IBM Plex Mono", ui-monospace, monospace; fill: var(--tool-sym-ink); }
+.sc-val { font: 12px "IBM Plex Mono", ui-monospace, monospace; fill: var(--tool-sym-ink); }
+.sc-pin1 { fill: var(--tool-sym-ink); }
+.sc-origin { fill: none; stroke: var(--accent); stroke-width: 1.3; }
+.sc-soft { font: 10.5px "IBM Plex Sans", sans-serif; fill: var(--ink-soft); }
+.sc-h { font: 600 11px "IBM Plex Sans", sans-serif; fill: var(--ink-soft); letter-spacing: .06em; text-transform: uppercase; }
+.sc-tab { fill: var(--surface); stroke: var(--tool-body-line); stroke-width: 1; }
+.sc-tab.on { fill: var(--tool-body); stroke-width: 2; }
+.sc-tabt { font: 600 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--tool-sym-ink); }
+.sc-contact { fill: var(--tool-pin-num); opacity: .6; }
+.sc-field { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+.sc-fk { font: 10px "IBM Plex Sans", sans-serif; fill: var(--ink-soft); }
+.sc-fv { font: 11.5px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.sc-fv.bad { fill: var(--danger); } .sc-fv.ok { fill: var(--ok); }
+.sc-title rect { fill: var(--surface); stroke: var(--ink-soft); stroke-width: 1.2; }
+.sc-title line { stroke: var(--ink-soft); stroke-width: 1; }
+.sc-big { font: 600 28px "IBM Plex Mono", ui-monospace, monospace; }
+.sc-big.ok { fill: var(--ok); } .sc-big.warn { fill: var(--warn); } .sc-big.bad { fill: var(--danger); }
+.sc-ptrk { fill: var(--sunken); }
+.sc-pbar.ok { fill: var(--ok); } .sc-pbar.warn { fill: var(--warn); } .sc-pbar.bad { fill: var(--danger); }
+
+/* spots: the places a check is about */
+.sc-spot { fill: transparent; stroke: transparent; stroke-width: 1.5; cursor: pointer; }
+.sc-spot:hover, .sc-spot.is-hot { stroke-dasharray: 4 3; }
+.sc-spot.open.is-hot, .sc-spot.open:hover { stroke: var(--warn); fill: var(--warn); fill-opacity: .1; }
+.sc-spot.block.is-hot, .sc-spot.block:hover { stroke: var(--danger); fill: var(--danger); fill-opacity: .1; }
+.sc-spot.done.is-hot, .sc-spot.done:hover { stroke: var(--ok); fill: var(--ok); fill-opacity: .1; }
+
+/* balloons */
+.sc-b { cursor: pointer; outline: none; }
+.sc-b .ring { fill: var(--tool-sheet); stroke-width: 1.8; }
+.sc-b .n { font: 600 11px "IBM Plex Mono", ui-monospace, monospace; pointer-events: none; }
+.sc-b .lead { fill: none; stroke-width: 1; }
+.sc-b .tip { stroke: none; }
+.sc-b.open .ring, .sc-b.open .lead { stroke: var(--warn); } .sc-b.open .tip, .sc-b.open .n { fill: var(--warn); }
+.sc-b.block .ring, .sc-b.block .lead { stroke: var(--danger); } .sc-b.block .tip, .sc-b.block .n { fill: var(--danger); }
+.sc-b.block .ring { fill: color-mix(in srgb, var(--danger) 14%, var(--tool-sheet)); }
+.sc-b.done .ring { fill: var(--ok); stroke: var(--ok); } .sc-b.done .n { fill: var(--tool-sheet); }
+.sc-b.done .lead { stroke: var(--ok); opacity: .45; } .sc-b.done .tip { fill: var(--ok); opacity: .6; }
+.sc-b:hover .ring, .sc-b.is-hot .ring { stroke-width: 3; }
+.sc-b.is-hot .lead { stroke-width: 2; opacity: 1; }
+.sc-b:focus-visible .ring { stroke: var(--accent); stroke-width: 3; }
+
+.sc-stamp { cursor: pointer; }
+.sc-stamp .frame { fill: transparent; stroke: var(--ink-soft); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.sc-stamp .st1 { font: 700 13px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink-soft); letter-spacing: .08em; }
+.sc-stamp .st2 { font: 11px "IBM Plex Sans", sans-serif; fill: var(--ink-soft); }
+.sc-stamp.done .frame { stroke: var(--tool-stamp); stroke-width: 2.5; stroke-dasharray: none; fill: var(--tool-stamp); fill-opacity: .08; }
+.sc-stamp.done .st1 { fill: var(--tool-stamp); }
+.sc-stamp.done .st2 { font-weight: 700; fill: var(--tool-stamp); letter-spacing: .2em; }
+.sc-stamp:hover .frame, .sc-stamp.is-hot .frame { stroke-width: 2.5; }
+
+/* the list */
+.sc-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.sc-prog { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
+.sc-ph b { font: 600 18px "IBM Plex Mono", ui-monospace, monospace; }
+.sc-ph b.ok { color: var(--ok); } .sc-ph b.warn { color: var(--warn); } .sc-ph b.bad { color: var(--danger); }
+.sc-ph span { font-size: 12px; color: var(--ink-soft); }
+.sc-pb { height: 6px; background: var(--sunken); border-radius: 3px; overflow: hidden; }
+.sc-pb i { display: block; height: 100%; }
+.sc-pb i.ok { background: var(--ok); } .sc-pb i.warn { background: var(--warn); } .sc-pb i.bad { background: var(--danger); }
+.sc-block { font-size: 11.5px; color: var(--danger); }
+.sc-okmsg { font-size: 11.5px; color: var(--ok); }
+.sc-list { flex: 1; min-height: 120px; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 0; }
+.sc-grp + .sc-grp { border-top: 1px solid var(--line-soft); }
+.sc-gh { display: flex; justify-content: space-between; padding: 6px 10px 2px; font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .05em; }
+.sc-gh b { font-weight: 600; }
+.sc-gh span { font-family: "IBM Plex Mono", ui-monospace, monospace; text-transform: none; }
+.sc-gh span.ok { color: var(--ok); }
+.sc-row { display: grid; grid-template-columns: 18px 1fr; gap: 0 6px; padding: 3px 10px; align-items: start; font-size: 12px; }
+.sc-row input { margin: 2px 0 0; accent-color: var(--ok); }
+.sc-row label { cursor: pointer; display: flex; gap: 6px; }
+.sc-n { font: 600 10.5px "IBM Plex Mono", ui-monospace, monospace; min-width: 20px; height: 17px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--warn); color: var(--warn); flex: none; }
+.sc-row.block .sc-n { border-color: var(--danger); color: var(--danger); }
+.sc-row.done .sc-n { background: var(--ok); border-color: var(--ok); color: var(--surface); }
+.sc-row.done .w { color: var(--ink-soft); }
+.sc-why { grid-column: 2; font-size: 11px; color: var(--ink-soft); display: none; padding: 1px 0 3px 26px; }
+.sc-row.is-hot { background: var(--sunken); }
+.sc-row.is-hot .sc-why, .sc-row.block .sc-why { display: block; }
+.sc-row.block.is-hot .sc-why, .sc-row.block .sc-why { color: var(--danger); }
+.sc-out { min-width: 0; }
+.sc-out .k-out { max-height: 140px; }
+
+@media (max-width: 900px) {
+  .sc { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; height: auto; min-height: 0; }
+  .sc-sheet { overflow-x: auto; }
+  .sc-svgwrap { flex: none; height: auto; min-width: 640px; aspect-ratio: 960 / 640; }
+  .sc-list { max-height: none; overflow: visible; }
+  .sc-note { position: sticky; left: 0; }
+}

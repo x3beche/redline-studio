@@ -1,8 +1,9 @@
 {
-  "id": "stencil-aperture", "version": "1.0",
+  "id": "stencil-aperture", "version": "1.1",
   "name": "Stencil Aperture Calculator",
   "blurb": "solder paste aperture and area/aspect ratio from pad size and stencil thickness",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["stencil", "solder paste", "aperture", "area ratio", "aspect ratio", "IPC-7525", "foil thickness", "paste release", "paste volume", "SMT", "reduction", "fine pitch", "window pane"],
   "intro": "Paste only leaves the stencil cleanly when the aperture walls are small compared with its opening. This checks the IPC-7525 area ratio (at least 0.66) and aspect ratio (at least 1.5) of the aperture made from your pad, and finds the thickest foil that still prints it.",

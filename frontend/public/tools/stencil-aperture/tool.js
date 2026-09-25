@@ -59,15 +59,27 @@ export function run({ shape, padL, padW, reduce, thick, count }) {
     { label: 'Aperture area', value: fmtNum(g.area, 3), unit: 'mm²' },
   ];
 
-  const rows = FOILS.map((f) => {
+  const foils = FOILS.map((f) => {
     const q = ratios(g, f / 1000);
-    const ok = q.area >= AR_MIN && q.aspect >= ASPECT_MIN;
-    return [`${f} µm`, fmtNum(q.area, 3), fmtNum(q.aspect, 3), fmtNum(g.area * f, 3) + ' nL', ok ? 'yes' : 'no'];
+    return { t: f, area: q.area, aspect: q.aspect, vol: g.area * f, ok: q.area >= AR_MIN && q.aspect >= ASPECT_MIN };
   });
+  const rows = foils.map((q) => [`${q.t} µm`, fmtNum(q.area, 3), fmtNum(q.aspect, 3), fmtNum(q.vol, 3) + ' nL', q.ok ? 'yes' : 'no']);
+
+  // Everything the page draws, as numbers (mm, µm, nL): the aperture, its
+  // walls at this foil, the limits, and the standard foils.
+  const stencil = {
+    shape: round ? 'round' : 'rect', padL, padW: round ? padL : padW, pct,
+    l: g.l, w: g.w, area: g.area, perim: g.perim, wallArea: g.perim * t, thick,
+    areaRatio: r.area, aspect: r.aspect, areaOk, aspectOk, marginal: areaOk && r.area < 0.7,
+    tMax: tMax * 1000, tMaxArea: tMaxArea * 1000, tMaxAspect: tMaxAspect * 1000,
+    limitBy: tMaxArea < tMaxAspect ? 'area' : 'aspect',
+    vol: vol * 1000, count: n, volTotal: vol * 1000 * n, arMin: AR_MIN, aspectMin: ASPECT_MIN, foils,
+  };
 
   return {
     values,
     warnings,
+    stencil,
     tables: [{ title: 'This aperture on other foils', columns: ['Foil', 'Area ratio', 'Aspect ratio', 'Paste volume', 'Prints?'], rows }],
     notes: [
       'Area ratio = opening area / aperture wall area; aspect ratio = narrowest opening / foil thickness (IPC-7525B 3.2).',

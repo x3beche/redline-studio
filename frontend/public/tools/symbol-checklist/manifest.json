@@ -1,8 +1,9 @@
 {
-  "id": "symbol-checklist", "version": "1.0",
+  "id": "symbol-checklist", "version": "1.1",
   "name": "Schematic Symbol Checklist",
   "blurb": "pin types, names and electrical properties to check on a new symbol",
   "group": "pcb",
+  "layout": "custom",
   "rooms": [
     "pcb"
   ],

@@ -31,7 +31,7 @@ function detectDelim(line) {
   const best = Object.entries(c).sort((a, b) => b[1] - a[1])[0];
   return best[1] ? best[0] : ',';
 }
-function splitRow(line, d) {
+export function splitRow(line, d) {
   const out = []; let cur = '', q = false;
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
@@ -104,7 +104,9 @@ function lifeOf(s) {
 
 export function run({ bom, builds, coverage }) {
   const warnings = [];
-  const lines = String(bom || '').split(/\r?\n/).filter((l) => l.trim() && !/^\s*#/.test(l));
+  const allLines = String(bom || '').split(/\r?\n/);
+  const srcLine = [];   // index of each kept line in the text as typed
+  const lines = allLines.filter((l, i) => { const keep = l.trim() && !/^\s*#/.test(l); if (keep) srcLine.push(i); return keep; });
   if (!lines.length) return { warnings: ['Paste a BOM with a header row: MPN, Qty and at least one of Stock, Sources, Lead time, Lifecycle.'] };
   if (!(builds > 0)) return { warnings: ['Give the number of boards to build, e.g. 100.'] };
   const cov = coverage > 0 ? coverage : 3;
@@ -141,22 +143,24 @@ export function run({ bom, builds, coverage }) {
     const generic = !mpn && ['R', 'C', 'L', 'FB', 'RN'].includes(kind);
 
     const reasons = [];
+    const pts = { life: 0, src: 0, stock: 0, lead: 0 };
     let score = 0;
     const life = lifeOf(get('life'));
-    score += life.pts; if (life.pts >= 25) reasons.push(life.label);
-    if (src == null) { if (!generic) { score += 10; reasons.push('sources unknown'); } }
-    else if (src <= 1) { score += 25; reasons.push('single source'); }
-    else if (src === 2) { score += 10; reasons.push('two sources'); }
+    score += life.pts; pts.life = life.pts; if (life.pts >= 25) reasons.push(life.label);
+    if (src == null) { if (!generic) { score += 10; pts.src = 10; reasons.push('sources unknown'); } }
+    else if (src <= 1) { score += 25; pts.src = 25; reasons.push('single source'); }
+    else if (src === 2) { score += 10; pts.src = 10; reasons.push('two sources'); }
     const need = qty * builds;
-    if (stock == null) { score += 10; reasons.push('stock unknown'); }
-    else if (stock <= 0) { score += 35; reasons.push('out of stock'); }
-    else if (stock < need) { score += 30; reasons.push(`stock ${stock} < need ${need}`); }
-    else if (stock < cov * need) { score += 15; reasons.push(`stock under ${cov}× need`); }
-    if (lead != null && lead > 26) { score += 15; reasons.push(`lead time ${Math.round(lead)} wk`); }
-    else if (lead != null && lead > 12) { score += 8; reasons.push(`lead time ${Math.round(lead)} wk`); }
+    if (stock == null) { score += 10; pts.stock = 10; reasons.push('stock unknown'); }
+    else if (stock <= 0) { score += 35; pts.stock = 35; reasons.push('out of stock'); }
+    else if (stock < need) { score += 30; pts.stock = 30; reasons.push(`stock ${stock} < need ${need}`); }
+    else if (stock < cov * need) { score += 15; pts.stock = 15; reasons.push(`stock under ${cov}× need`); }
+    if (lead != null && lead > 26) { score += 15; pts.lead = 15; reasons.push(`lead time ${Math.round(lead)} wk`); }
+    else if (lead != null && lead > 12) { score += 8; pts.lead = 8; reasons.push(`lead time ${Math.round(lead)} wk`); }
     score = Math.min(100, score);
     parts.push({ name: mpn || (value ? `${value} (no MPN)` : `${refs[0]}${refs.length > 1 ? '…' + refs[refs.length - 1] : ''} (no MPN)`), mfr: get('mfr'), refs, qty, need, stock, lead, src, generic, life: life.label, score, reasons,
-      level: score >= 50 ? 'High' : score >= 25 ? 'Medium' : 'Low' });
+      level: score >= 50 ? 'High' : score >= 25 ? 'Medium' : 'Low',
+      pts, lifeRaw: get('life'), line: srcLine[hi + i + 1], cov: stock == null || !need ? null : stock / need });
   });
   if (!parts.length) return { warnings: ['No part lines under the header.'] };
   if (unread.length) warnings.push(`Some cells could not be read and were treated as unknown: ${unread.slice(0, 5).join('; ')}${unread.length > 5 ? ' …' : ''}`);
@@ -171,7 +175,16 @@ export function run({ bom, builds, coverage }) {
     p.need, p.stock == null ? '?' : p.stock, fmtCov(p), p.src == null ? (p.generic ? 'generic' : '?') : p.src, p.life, p.reasons.join('; ') || 'no flags']);
   if (nH) warnings.push(`${nH} high-risk part(s). Start with ${top.name}: ${top.reasons.join(', ')}. Buy ahead, qualify a second source, or design it out.`);
   const ch = parts.slice(0, 12);
+  // Everything the page draws, as numbers: each part with its score split by
+  // factor and the line of the BOM text it came from, and the column layout
+  // so the page can write a changed cell back.
+  const stockView = {
+    builds, cov, delim, headerLine: srcLine[hi], columns: map,
+    counts: { parts: parts.length, high: nH, medium: nM, low: parts.length - nH - nM, single, short },
+    parts: parts.map((p, i) => ({ rank: i + 1, ...p })),
+  };
   return {
+    stock: stockView,
     values: [
       { label: 'Parts scanned', value: String(parts.length), hint: `for ${builds} board(s)` },
       { label: 'High risk', value: String(nH), tone: nH ? 'bad' : 'ok' },

@@ -53,7 +53,15 @@ export function run(input) {
   const warnings = [];
   const blockers = ['p_count', 'p_numbers', 'f_fp', 'p_ep', 'p_hidden'].filter((k) => open.some((it) => it[0] === k));
   if (blockers.length) warnings.push(`Do not use the symbol yet - open: ${blockers.map((k) => ITEMS.find((it) => it[0] === k)[2]).join('; ')}. These put wrong or missing connections on the board.`);
+  // Everything the page draws: each live check with its state, in list order.
+  const symbol = {
+    kind, multi: !!input.multi, ep: !!input.ep, pct, done: done.length, total: live.length, notApplicable: ITEMS.length - live.length,
+    items: live.map((it) => ({ key: it[0], group: it[1], what: it[2], why: it[3], done: !!input[it[0]], blocker: blockers.includes(it[0]) })),
+    groups: byGroup.filter((g) => g[2] !== 'n/a').map(([g, d, st]) => ({ group: g, count: d, done: st === 'done' })),
+    blockers,
+  };
   return {
+    symbol,
     values: [
       { label: 'Progress', value: `${pct} %`, tone: pct === 100 ? 'ok' : pct >= 70 ? 'warn' : 'bad' },
       { label: 'Done', value: `${done.length} / ${live.length}` },
