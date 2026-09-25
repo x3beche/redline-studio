@@ -4,7 +4,7 @@
 // named in its `src`. Pin 1 and the view (looking into the receptacle vs at
 // the header) are stated per connector, because that is where mistakes happen.
 
-const CONNECTORS = {
+export const CONNECTORS = {
   usbc: {
     name: 'USB Type-C receptacle (24 pins, full-featured)', pitch: '0.5 mm, two rows A/B',
     view: 'Receptacle front view: row A runs A1…A12 and row B runs the other way, so B12 sits opposite A1 (that is what makes the plug reversible).',
@@ -183,6 +183,36 @@ const CONNECTORS = {
     pins: [['1', 'DAT2', 'SD: data 2; SPI: not used'], ['2', 'CD/DAT3', 'SD: data 3 / card detect; SPI: CS'], ['3', 'CMD', 'SD: command; SPI: DI (MOSI)'], ['4', 'VDD', '2.7–3.6 V'], ['5', 'CLK', 'Clock (SCLK)'], ['6', 'VSS', 'Ground'], ['7', 'DAT0', 'SD: data 0; SPI: DO (MISO)'], ['8', 'DAT1', 'SD: data 1; SPI: not used']],
     notes: ['10–100 kΩ pull-ups on CMD and DAT0–3 (the card has a 50 kΩ on DAT3).'],
   },
+};
+
+// Where each pin sits on the face, for the page's drawing: rows of pin positions as the
+// connector's `view` describes it (row 0 at the top, left to right; '' is an empty position).
+// An entry like 'A1/B12' in `pins` covers both positions. `shape` picks the outline;
+// `note` says where the drawing is less certain than the table.
+const seq = (a, b, step = 1) => Array.from({ length: Math.floor((b - a) / step) + 1 }, (_, i) => String(a + i * step));
+export const FACES = {
+  usbc: { shape: 'usbc', family: 'USB', rows: [seq(1, 12).map((n) => `A${n}`), seq(1, 12).reverse().map((n) => `B${n}`)] },
+  usbc2: { shape: 'usbc', family: 'USB', rows: [['A1', '', '', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', '', '', 'A12'], ['B12', '', '', 'B9', 'B8', 'B7', 'B6', 'B5', 'B4', '', '', 'B1']] },
+  usba: { shape: 'usba', family: 'USB', rows: [seq(1, 4), seq(5, 9)],
+    note: 'The SuperSpeed contacts (5-9) sit deeper in the receptacle; they are drawn in number order: check their order on the part drawing.' },
+  usbmicro: { shape: 'micro', family: 'USB', rows: [seq(1, 5)] },
+  swd10: { shape: 'header', family: 'Debug', rows: [seq(1, 9, 2), seq(2, 10, 2)], missing: ['7'] },
+  jtag20: { shape: 'boxed', family: 'Debug', rows: [seq(1, 19, 2), seq(2, 20, 2)] },
+  tc2030: { shape: 'pads', family: 'Debug', rows: [['1', '2', '3'], ['6', '5', '4']],
+    note: 'Pads numbered round the footprint (1-2-3, then 4-5-6 back along the other row) as on the Tag-Connect drawing: check against the footprint you place.' },
+  avrisp: { shape: 'header', family: 'Debug', rows: [seq(1, 5, 2), seq(2, 6, 2)] },
+  ftdi6: { shape: 'wire', family: 'Serial and I2C', rows: [seq(1, 6)], wires: ['black', 'brown', 'red', 'orange', 'yellow', 'green'] },
+  qwiic: { shape: 'jst', family: 'Serial and I2C', rows: [seq(1, 4)], wires: ['black', 'red', 'blue', 'yellow'] },
+  grove: { shape: 'jst', family: 'Serial and I2C', rows: [seq(1, 4)], wires: ['yellow', 'white', 'red', 'black'] },
+  rpi40: { shape: 'header', family: 'Boards', rows: [seq(2, 40, 2), seq(1, 39, 2)] },
+  pmod: { shape: 'header', family: 'Boards', rows: [seq(1, 6), seq(7, 12)],
+    note: 'Drawn with pin 1 at the left of the top row; which end pin 1 is on depends on the part: check the square pad or the marking.' },
+  rj45: { shape: 'rj45', family: 'Network and legacy', rows: [seq(1, 8)] },
+  db9rs232: { shape: 'dsub', family: 'Network and legacy', rows: [seq(1, 5), seq(6, 9)] },
+  db9can: { shape: 'dsub', family: 'Network and legacy', rows: [seq(1, 5), seq(6, 9)] },
+  hdmi: { shape: 'hdmi', family: 'Video and storage', rows: [seq(1, 19, 2), seq(2, 18, 2)],
+    note: 'Odd pins on one row, even on the other, staggered; which row is on top depends on the receptacle.' },
+  microsd: { shape: 'sd', family: 'Video and storage', rows: [seq(1, 8)] },
 };
 
 // Generic families whose pin numbers carry no standard meaning: answer the

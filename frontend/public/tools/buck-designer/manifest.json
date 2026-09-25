@@ -3,6 +3,7 @@
   "name": "Buck Converter Designer",
   "blurb": "inductor, output capacitor and ripple for a buck converter",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb"],
   "keywords": ["buck", "step-down", "DC-DC", "SMPS", "inductor", "ripple current", "output capacitor", "duty cycle", "switching regulator", "ESR", "load transient", "input capacitor", "SLVA477"],
   "intro": "Sizes the power stage of a synchronous buck in continuous conduction: the inductor from the ripple current you allow at the highest input voltage, and the output capacitance for both the ripple and a load step. Formulas from TI SLVA477B plus the energy balance for load release.",

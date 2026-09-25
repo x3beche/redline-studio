@@ -3,6 +3,7 @@
   "name": "Connector Pinout Library",
   "blurb": "pin maps of USB-C, SWD, JTAG, JST, IDC and other common connectors",
   "group": "pcb",
+  "layout": "custom",
   "rooms": ["pcb", "embedded"],
   "keywords": ["pinout", "pin map", "usb-c", "type-c", "swd", "jtag", "debug header", "qwiic", "stemma qt", "raspberry pi gpio", "rj45", "db9", "hdmi", "microsd", "tag-connect"],
   "intro": "Pin maps of common board connectors, transcribed from each connector's standard or owner document, with the view (which side pin 1 is seen from) stated. Pick a connector, or search all of them for a signal name.",

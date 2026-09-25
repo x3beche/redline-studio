@@ -96,8 +96,18 @@ export function run({ vinmin, vinmax, vout, iout, fsw, ripple, vripple, istep, v
     xs.push(Number((t * 1e6).toPrecision(3))); ys.push(Number(y.toPrecision(4)));
   }
 
+  // The same numbers as plain values, for the page's drawing (the schematic and the waveforms).
+  const limits = { ripple: cRipple, release: cRelease, apply: cApply, loop: cLoop };
+  const stage = {
+    vinmin: vmin, vinmax: vmax, vout, iout, fsw, eta, ripple: r, lCalc, L, dmin, dmax, dIL, ipk, isat: ipk * 1.2, irms,
+    dVout, dI, dV, esrMax, cOut, cOutBy: Object.keys(limits).find((k) => limits[k] === cOut), limits, fc,
+    vrippleCap: dIL / (8 * fsw * cOut), icinRms, cIn, dWorst, tonAtMax, tonmin: tmin, dcm: dIL / 2,
+    perVin: vins.map((vin) => { const d = vout / (vin * eta), di = rippleAt(vin); return { vin, d, dIL: di, ipk: iout + di / 2, ton: d / fsw }; }),
+  };
+
   return {
     values,
+    stage,
     warnings,
     charts: [{ title: `Inductor current at ${fmtNum(vmax, 3)} V in`, type: 'line', x: xs, series: [{ name: 'iL', y: ys }], xLabel: 'time (µs)', yLabel: 'current (A)' }],
     tables: [
