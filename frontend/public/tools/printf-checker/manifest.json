@@ -1,8 +1,9 @@
 {
-  "id": "printf-checker", "version": "1.0",
+  "id": "printf-checker", "version": "1.1",
   "name": "printf Format Checker",
   "blurb": "whether a format string matches its argument types",
   "group": "embedded",
+  "layout": "custom",
   "rooms": ["embedded"],
   "keywords": ["printf", "format string", "wformat", "format specifier", "conversion", "%lu", "%d", "PRIu32", "inttypes", "snprintf", "uint32_t", "size_t %zu", "ESP_LOGI", "printk", "type mismatch"],
   "intro": "Finds the printf-style calls in pasted C code and checks every conversion against its argument's type after the default argument promotions, using the integer sizes and stdint typedefs of the chosen target (uint32_t is unsigned long on arm-none-eabi but unsigned int on Linux). Types come from the declarations in the code, a declarations box, casts and literals; an argument can also be written as a bare type name.",

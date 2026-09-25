@@ -45,73 +45,111 @@ const TYPES = {
     row: (f) => [`${f[1]}/${f[0]}`, { '00': 'error', '01': 'warning', '02': 'notice', '07': 'user' }[f[2]] ?? f[2], f.slice(3).join(',')] },
 };
 
+// Raw field names (after the address), with a category the page colours by:
+// t time, p position, q fix quality, s satellites, v speed/course, x other.
+const NAMES = {
+  GGA: [['UTC', 't'], ['Latitude', 'p'], ['N/S', 'p'], ['Longitude', 'p'], ['E/W', 'p'], ['Fix quality', 'q'], ['Satellites used', 's'], ['HDOP', 'q'], ['Altitude', 'p'], ['Altitude unit', 'x'], ['Geoid separation', 'p'], ['Separation unit', 'x'], ['Diff age', 'q'], ['Diff station', 'q']],
+  RMC: [['UTC', 't'], ['Status', 'q'], ['Latitude', 'p'], ['N/S', 'p'], ['Longitude', 'p'], ['E/W', 'p'], ['Speed, knots', 'v'], ['Course, true', 'v'], ['Date', 't'], ['Magnetic variation', 'x'], ['Variation E/W', 'x'], ['Mode', 'q'], ['Nav status', 'q']],
+  GSA: [['Mode', 'q'], ['Fix type', 'q'], ...Array.from({ length: 12 }, (_, i) => [`Satellite ${i + 1}`, 's']), ['PDOP', 'q'], ['HDOP', 'q'], ['VDOP', 'q'], ['System ID', 'x']],
+  GSV: [['Messages', 'x'], ['Message no.', 'x'], ['Satellites in view', 's'], ...Array.from({ length: 4 }, (_, i) => [['PRN', 's'], ['Elevation °', 's'], ['Azimuth °', 's'], ['C/N0 dB-Hz', 's']].map(([nm, c]) => [`${nm} (${i + 1})`, c])).flat(), ['Signal ID', 'x']],
+  VTG: [['Course, true', 'v'], ['T', 'x'], ['Course, magnetic', 'v'], ['M', 'x'], ['Speed, knots', 'v'], ['N', 'x'], ['Speed, km/h', 'v'], ['K', 'x'], ['Mode', 'q']],
+  GLL: [['Latitude', 'p'], ['N/S', 'p'], ['Longitude', 'p'], ['E/W', 'p'], ['UTC', 't'], ['Status', 'q'], ['Mode', 'q']],
+  ZDA: [['UTC', 't'], ['Day', 't'], ['Month', 't'], ['Year', 't'], ['Zone hours', 't'], ['Zone minutes', 't']],
+  TXT: [['Messages', 'x'], ['Message no.', 'x'], ['Text type', 'x'], ['Text', 'x']],
+};
+function describe(type, f) {
+  const names = NAMES[type] || [];
+  return f.map((raw, k) => ({ name: names[k]?.[0] ?? `Field ${k + 1}`, cat: names[k]?.[1] ?? 'x', raw }));
+}
+
 function nmeaChecksum(body) { let c = 0; for (let i = 0; i < body.length; i++) c ^= body.charCodeAt(i); return c; }
 
 function parseNmea(lines) {
-  const byType = {}, problems = [], other = [];
+  const byType = {}, problems = [], other = [], seen = [];
   let ok = 0, badCs = 0, noCs = 0;
   const stats = { lat: null, lon: null, alt: null, sats: null, hdop: null, fix: null, t0: null, t1: null, maxKn: null, talkers: new Set() };
   lines.forEach((raw, i) => {
     const line = raw.replace(/\s+$/, '');
     if (!line.trim()) return;
     const at = line.search(/[$!][A-Z]{2}[A-Z0-9]{2,4},/);
-    if (at < 0) { other.push([i + 1, line.slice(0, 80), 'not an NMEA sentence']); return; }
+    if (at < 0) { other.push([i + 1, line.slice(0, 80), 'not an NMEA sentence']); seen.push({ n: i + 1, text: line, kind: 'other' }); return; }
     let s = line.slice(at);
     // a second '$' on the line means two sentences ran together (lost CR LF)
     const again = s.indexOf('$', 1);
     if (again > 0) { problems.push([i + 1, s.slice(0, 80), 'two sentences on one line; only the first is read']); s = s.slice(0, again); }
+    const entry = { n: i + 1, text: line, at, end: at + s.length, twin: again > 0 };
+    seen.push(entry);
     const star = s.lastIndexOf('*');
     let body = s.slice(1);
     if (star > 0) {
       body = s.slice(1, star);
       const want = s.slice(star + 1, star + 3);
       const got = nmeaChecksum(body);
+      Object.assign(entry, { star: at + star, want, got: got.toString(16).toUpperCase().padStart(2, '0') });
       if (!/^[0-9A-F]{2}$/i.test(want) || parseInt(want, 16) !== got) {
         badCs++;
+        const bf = s.slice(1, star).split(',');
+        const ba = bf.shift();
+        Object.assign(entry, { kind: 'badcs', addr: ba, fields: describe(ba.startsWith('P') ? ba : ba.slice(2), bf) });
         problems.push([i + 1, s.slice(0, 80), `checksum ${want || '(none)'} ≠ computed ${got.toString(16).toUpperCase().padStart(2, '0')}`]);
         return;
       }
-    } else { noCs++; problems.push([i + 1, s.slice(0, 80), 'no checksum (accepted, unverified)']); }
+    } else { noCs++; problems.push([i + 1, s.slice(0, 80), 'no checksum (accepted, unverified)']); entry.kind = 'nocs'; }
     const f = body.split(',');
     const addr = f.shift();
     const talker = addr.startsWith('P') ? addr.slice(0, 1) : addr.slice(0, 2);
     const type = addr.startsWith('P') ? addr : addr.slice(2);
     stats.talkers.add(talker);
     ok++;
+    entry.kind ||= 'ok';
+    Object.assign(entry, { addr, talker, type, fields: describe(type, f) });
+    if (TYPES[type]) entry.decoded = TYPES[type].cols.slice(2).map((c, k) => [c, TYPES[type].row(f)[k]]);
     const T = TYPES[type];
     if (!byType[type]) byType[type] = { rows: [], count: 0, generic: !T };
     const g = byType[type];
     g.count++;
     if (g.rows.length < MAXROWS) g.rows.push([i + 1, talker, ...(T ? T.row(f) : [f.join(', ')])]);
+    if (type === 'GSV') {
+      entry.gsv = { total: n(f[0]), msg: n(f[1]), inView: n(f[2]), sats: [] };
+      for (let k = 3; k + 3 < f.length + 1 && k < 19; k += 4) if (f[k]) entry.gsv.sats.push({ prn: f[k], el: n(f[k + 1]), az: n(f[k + 2]), snr: n(f[k + 3]) });
+    }
+    if (type === 'GSA') entry.used = f.slice(2, 14).filter(Boolean);
+    if (type === 'GLL' && f[5] === 'A') {
+      const la = latlon(f[0], f[1]), lo = latlon(f[2], f[3]);
+      if (la != null && lo != null) entry.pos = { lat: la, lon: lo };
+    }
     if (type === 'GGA') {
       const la = latlon(f[1], f[2]), lo = latlon(f[3], f[4]);
-      if (la != null && lo != null && f[5] !== '0') { stats.lat = la; stats.lon = lo; stats.alt = n(f[8]); }
+      if (la != null && lo != null && f[5] !== '0') { stats.lat = la; stats.lon = lo; stats.alt = n(f[8]); entry.pos = { lat: la, lon: lo, alt: n(f[8]) }; }
       stats.sats = n(f[6]); stats.hdop = n(f[7]); stats.fix = FIXQ[f[5]] ?? f[5];
     }
     if (type === 'RMC' && f[1] === 'A') {
       const la = latlon(f[2], f[3]), lo = latlon(f[4], f[5]);
-      if (la != null && lo != null) { stats.lat = la; stats.lon = lo; }
+      if (la != null && lo != null) { stats.lat = la; stats.lon = lo; entry.pos = { lat: la, lon: lo, kn: n(f[6]) }; }
       if (n(f[6]) != null) stats.maxKn = Math.max(stats.maxKn ?? 0, n(f[6]));
     }
     const t = ['GGA', 'RMC', 'ZDA'].includes(type) ? f[0] : type === 'GLL' ? f[4] : null;
-    if (t && /^\d{6}/.test(t)) { stats.t0 ??= time(t); stats.t1 = time(t); }
+    if (t && /^\d{6}/.test(t)) { stats.t0 ??= time(t); stats.t1 = time(t); entry.utc = time(t); }
   });
-  return { byType, problems, other, ok, badCs, noCs, stats };
+  return { byType, problems, other, ok, badCs, noCs, stats, seen };
 }
 
 // ---------- generic ----------
 const isNum = (v) => v !== '' && Number.isFinite(Number(v));
 function statsTable(columns, rows) {
   const out = [];
+  out.num = [];
   columns.forEach((c, k) => {
     const vals = rows.map((r) => r[k]).filter(isNum).map(Number);
     if (vals.length < 1) return;
     const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
     out.push([c, vals.length, fmtNum(Math.min(...vals), 5), fmtNum(Math.max(...vals), 5), fmtNum(mean, 5)]);
+    out.num.push({ name: c, col: k, count: vals.length, min: Math.min(...vals), max: Math.max(...vals), mean });
   });
   return out;
 }
 function parseCsv(lines) {
+  const idx = lines.map((l, i) => (l.trim() ? i + 1 : 0)).filter(Boolean);
   const ls = lines.filter((l) => l.trim());
   if (!ls.length) return null;
   const first = ls[0];
@@ -120,13 +158,14 @@ function parseCsv(lines) {
   const r0 = split(first);
   const header = r0.some((x) => x && !isNum(x)) && ls.length > 1 && split(ls[1]).some(isNum);
   const columns = header ? r0 : r0.map((_, k) => `col${k + 1}`);
-  const rows = [], problems = [];
+  const rows = [], problems = [], lineNo = [];
   ls.slice(header ? 1 : 0).forEach((l, k) => {
     const r = split(l);
-    if (r.length !== columns.length) problems.push([k + (header ? 2 : 1), l.slice(0, 80), `${r.length} fields, header has ${columns.length}`]);
+    lineNo.push(idx[k + (header ? 1 : 0)]);
+    if (r.length !== columns.length) problems.push([idx[k + (header ? 1 : 0)], l.slice(0, 80), `${r.length} fields, header has ${columns.length}`]);
     rows.push(columns.map((_, j) => r[j] ?? ''));
   });
-  return { columns, rows, problems, delim };
+  return { columns, rows, problems, delim, lineNo, headerLine: header ? idx[0] : null };
 }
 function parseKv(lines) {
   const cols = [], rows = [], problems = [];
@@ -185,7 +224,8 @@ export function run({ log, mode }) {
     const gga = r.byType.GGA;
     const texts = gga ? [{ title: 'Track CSV', body: ['line,utc,lat,lon,fix,sats,hdop,alt_m', ...gga.rows.map((x) => [x[0], x[2], x[3], x[4], x[5], x[6], x[7], x[8]].map(csvCell).join(','))].join('\n') + '\n' }] : [];
     notes.push('Positions are decimal degrees from ddmm.mmmm; south and west are negative. Sentences without a checksum are accepted but counted as problems.');
-    return { values, warnings, tables, texts, notes };
+    const parsed = { mode: 'nmea', lines: r.seen, total: lines.length };
+    return { values, warnings, tables, texts, notes, parsed };
   }
 
   const r = m === 'kv' ? parseKv(lines) : parseCsv(lines);
@@ -198,7 +238,15 @@ export function run({ log, mode }) {
   if (st.length) tables.push({ title: 'Numeric fields', columns: ['Field', 'Count', 'Min', 'Max', 'Mean'], rows: st });
   if (r.problems.length) tables.push({ title: 'Problems', columns: ['Line', 'Text', 'Why'], rows: r.problems.slice(0, MAXROWS) });
   if (m === 'csv') notes.push(`Delimiter "${r.delim === '\t' ? 'tab' : r.delim}", ${r.columns.length} columns${r.columns[0] === 'col1' ? ', no header row' : ''}.`);
+  // the same rows for the page: line numbers, cells, the numeric fields' ranges
+  const probLines = new Set(r.problems.map((p) => p[0]));
+  const parsed = m === 'kv'
+    ? { mode: 'kv', columns: r.columns.slice(1), rows: r.rows.map((x) => ({ n: x[0], cells: x.slice(1) })), numeric: st.num,
+      lines: lines.map((l, i) => ({ n: i + 1, text: l, kind: !l.trim() ? 'blank' : probLines.has(i + 1) ? 'other' : 'row' })).filter((x) => x.kind !== 'blank'), total: lines.length }
+    : { mode: 'csv', columns: r.columns, rows: r.rows.map((x, k) => ({ n: r.lineNo[k], cells: x })), numeric: st.num, delim: r.delim, headerLine: r.headerLine,
+      lines: lines.map((l, i) => ({ n: i + 1, text: l, kind: !l.trim() ? 'blank' : i + 1 === r.headerLine ? 'header' : probLines.has(i + 1) ? 'other' : 'row' })).filter((x) => x.kind !== 'blank'), total: lines.length };
   return {
+    parsed,
     values: [{ label: 'Rows', value: r.rows.length, tone: 'ok' }, { label: 'Fields', value: r.columns.length }, { label: 'Numeric fields', value: st.length }, { label: 'Problem lines', value: r.problems.length, tone: r.problems.length ? 'warn' : 'ok' }],
     warnings, tables,
     texts: [{ title: 'CSV', body: [r.columns.map(csvCell).join(','), ...r.rows.map((x) => x.map(csvCell).join(','))].join('\n') + '\n' }],

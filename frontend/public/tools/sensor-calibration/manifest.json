@@ -1,8 +1,9 @@
 {
-  "id": "sensor-calibration", "version": "1.0",
+  "id": "sensor-calibration", "version": "1.1",
   "name": "Sensor Calibration Fit",
   "blurb": "linear calibration coefficients from two or more readings",
   "group": "embedded",
+  "layout": "custom",
   "rooms": ["embedded"],
   "keywords": ["calibration", "linear fit", "least squares", "regression", "gain", "offset", "slope", "intercept", "two-point calibration", "adc counts", "scaling", "fixed point", "residual", "r squared", "sensor"],
   "intro": "Enter raw readings next to what a reference instrument said. Two points give the exact line through them; three or more give the least-squares line y = gain · raw + offset, with the residual at every point so you can see whether a straight line is good enough.",

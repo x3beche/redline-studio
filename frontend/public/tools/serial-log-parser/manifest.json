@@ -1,8 +1,9 @@
 {
-  "id": "serial-log-parser", "version": "1.0",
+  "id": "serial-log-parser", "version": "1.1",
   "name": "NMEA / Serial Log Parser",
   "blurb": "a serial log parsed line by line into a table of fields",
   "group": "embedded",
+  "layout": "custom",
   "rooms": ["embedded"],
   "keywords": ["nmea", "nmea 0183", "gps", "gnss", "gga", "rmc", "gsv", "checksum", "serial log", "uart log", "csv", "key value", "telemetry", "parse", "latitude longitude"],
   "intro": "Parses a pasted serial log line by line. NMEA 0183 sentences are checksum-verified and decoded field by field (GGA, RMC, GSA, GSV, VTG, GLL, ZDA, TXT; other types listed raw), with the last fix and time span summarised. Other logs are read as CSV or key=value lines with per-field min/max/mean. Timestamps and debug text before a '$' are skipped.",

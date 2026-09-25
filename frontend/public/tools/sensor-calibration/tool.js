@@ -111,7 +111,19 @@ export function run({ points, rawUnit, refUnit, probe, scale, shift }) {
     '}',
   ].join('\n');
 
+  // The same numbers, unformatted, for the page's plot (result.cal).
+  const probeAcc = probe != null ? probe * G + O + (bits ? q / 2 : 0) : null;
+  const cal = {
+    n, gain, offset, inverse: gain ? 1 / gain : null, inverseOffset: gain ? -offset / gain : null, r2: n > 2 ? r2 : null, rms, se, maxRes, span,
+    linLimit: 0.01 * span, units: { raw: ru, ref: yu }, xmin, xmax,
+    points: pts.map((p, i) => ({ row: p.row, x: p.x, y: p.y, fit: fit(p.x), res: res[i], fixed: fixed(p.x) })),
+    probe: probe ?? null, probeOut: probe != null ? gain * probe + offset : null,
+    extrapolated: probe != null && (probe < xmin - 0.1 * (xmax - xmin) || probe > xmax + 0.1 * (xmax - xmin)),
+    fixed: { G, O, bits, scale: sc, itype, wide, peak, fixErr, acc: probeAcc, out: probe != null ? fixed(probe) : null },
+  };
+
   return {
+    cal,
     values,
     warnings,
     charts: [{ title: 'Residual at each point', type: 'bars', x: pts.map((p) => fmtNum(p.x, 5)),

@@ -8,7 +8,7 @@
 // ('warning'); signedness only is -Wformat-signedness ('note').
 
 // ---------------- targets ----------------
-const TARGETS = {
+export const TARGETS = {
   arm: { name: 'arm-none-eabi / ESP-IDF 5 (32-bit MCU, newlib)', int: 4, long: 4, ptr: 4, ld: 8, dbl: 8,
     td: { int8_t: 'signed char', uint8_t: 'unsigned char', int16_t: 'short', uint16_t: 'unsigned short', int32_t: 'long', uint32_t: 'unsigned long',
       int64_t: 'long long', uint64_t: 'unsigned long long', size_t: 'unsigned int', ssize_t: 'int', ptrdiff_t: 'int', intptr_t: 'int', uintptr_t: 'unsigned int',
@@ -440,7 +440,12 @@ export function run({ code, decls, target, extra }) {
   const clean = stripComments(src);
   const lineOf = (idx) => clean.slice(0, idx).split('\n').length;
 
-  const rows = [], problems = [];
+  const rows = [], problems = [], callsOut = [];
+  // the same checks, structured for the page: one entry per call, its format
+  // split into literal text and conversions, one item per checked argument
+  const sizeOfT = (t) => (t && t !== '?' ? sizeOf(t, T) : null);
+  let cur = null;
+  const item = (o) => { cur.items.push(o); return cur.items.length - 1; };
   let calls = 0, convs = 0, errs = 0, warns = 0, unknowns = 0, info = 0;
   const unread = [];
   let usesFloat = false, usesLL = false;
@@ -461,7 +466,10 @@ export function run({ code, decls, target, extra }) {
     if (fmtArg == null) { unread.push(`line ${line}: ${name}() has no format argument at position ${fi + 1}`); continue; }
     const fmt = formatText(fmtArg, T);
     const label = `${name} (line ${line})`;
+    cur = { name, line, fmtSrc: fmtArg, fmt, fi, args: sp.args.slice(fi + 1), items: [], segs: [] };
+    callsOut.push(cur);
     if (fmt == null) {
+      item({ kind: 'nonliteral', spec: '(format)', expr: fmtArg, sev: 'warning', why: 'the format is not a string literal, so it cannot be checked; a user-controlled format is a security hole (-Wformat-security)', fix: `${name}("%s", …)` });
       rows.push([label, '(format)', fmtArg.slice(0, 32), '–', 'string literal', 'warning: format is not a literal, cannot be checked (-Wformat-security)']);
       problems.push(`${label}: the format is not a string literal (${fmtArg.slice(0, 40)}), so it cannot be checked, and a user-controlled format is a security hole (-Wformat-security). Use ${name}("%s", ${fmtArg.slice(0, 20)}).`);
       warns++;
@@ -471,29 +479,39 @@ export function run({ code, decls, target, extra }) {
     let ai = 0;
     const take = () => ({ expr: rest[ai++] });
     SPEC.lastIndex = 0;
-    let s;
+    let s, lastEnd = 0;
     while ((s = SPEC.exec(fmt))) {
       const [whole, pos, , width, prec, len, conv] = s;
-      if (conv === '%' && !pos && !width && prec == null && !len) continue;
+      if (s.index > lastEnd) cur.segs.push({ text: fmt.slice(lastEnd, s.index) });
+      lastEnd = s.index + whole.length;
+      if (conv === '%' && !pos && !width && prec == null && !len) { cur.segs.push({ text: '%%' }); continue; }
+      const seg = { spec: whole, items: [] };
+      cur.segs.push(seg);
+      const it = (o) => { seg.items.push(item({ spec: whole, ...o })); };
       convs++;
-      if (pos) { problems.push(`${label}: positional argument ${whole} is POSIX, not C; newlib-nano and avr-libc do not support it.`); warns++; continue; }
+      if (pos) {
+        it({ kind: 'positional', sev: 'warning', why: 'positional arguments are POSIX, not C; newlib-nano and avr-libc do not support them' }); problems.push(`${label}: positional argument ${whole} is POSIX, not C; newlib-nano and avr-libc do not support it.`); warns++; continue; }
       if (!conv || !'diouxXfFeEgGaAcspn'.includes(conv) || (len === 'L' && !'fFeEgGaA'.includes(conv))) {
         rows.push([label, whole, '–', '–', '–', 'error: not a valid conversion']); errs++;
+        it({ kind: 'invalid', sev: 'error', why: 'not a valid conversion' });
         problems.push(`${label}: "${whole}" is not a valid conversion.`); continue;
       }
       if ('fFeEgGaA'.includes(conv)) usesFloat = true;
       if (len === 'll' && 'diouxX'.includes(conv)) usesLL = true;
       for (const star of [width === '*' ? 'width' : null, prec === '*' ? 'precision' : null].filter(Boolean)) {
         const { expr } = take();
-        if (expr == null) { rows.push([label, `* (${star})`, '(missing)', '–', 'int', 'error']); errs++; problems.push(`${label}: the * ${star} in ${whole} has no argument.`); continue; }
+        if (expr == null) { it({ kind: 'star', star, expected: 'int', readBytes: T.int, sev: 'error', why: `the * ${star} has no argument` }); rows.push([label, `* (${star})`, '(missing)', '–', 'int', 'error']); errs++; problems.push(`${label}: the * ${star} in ${whole} has no argument.`); continue; }
         const at = exprType(expr, env);
         const v = judge({ cat: 'int', t: 'int' }, at, T);
+        it({ kind: 'star', star, expr, type: at ? at.name : null, t: at?.t ?? null, promoted: at && at.t !== '?' ? promote(at.t, T) : null, expected: 'int',
+          argBytes: at && at.t !== '?' ? sizeOfT(promote(at.t, T)) : null, readBytes: T.int, sev: v.sev, why: v.why || null });
         rows.push([label, `* (${star})`, expr, at ? at.name : '?', 'int', v.sev === 'ok' ? 'ok' : `${v.sev}: ${v.why}`]);
         if (v.sev === 'error') errs++; else if (v.sev === 'warning') warns++; else if (v.sev === 'unknown') unknowns++;
       }
       const exp = expected(len, conv, T);
       const { expr } = take();
       if (expr == null) {
+        it({ kind: 'conv', conv, expected: exp.t, readBytes: sizeOfT(exp.t), sev: 'error', why: 'no argument: printf reads whatever is in the next register or on the stack', missing: true });
         rows.push([label, whole, '(missing)', '–', exp.t, 'error: no argument']); errs++;
         problems.push(`${label}: ${whole} has no argument: printf reads whatever is in the next register or on the stack.`); continue;
       }
@@ -502,6 +520,8 @@ export function run({ code, decls, target, extra }) {
       let verdict = v.sev === 'ok' ? 'ok' : `${v.sev}: ${v.why}`;
       const fix = v.sev === 'error' || v.sev === 'warning' ? fixFor(at, conv, T) : null;
       if (fix && v.sev !== 'unknown') verdict += ` → use ${fix}`;
+      it({ kind: 'conv', conv, expr, type: at ? at.name : null, t: at?.t ?? null, promoted: at && at.t !== '?' ? promote(at.t, T) : null, expected: exp.t,
+        argBytes: at && at.t !== '?' ? sizeOfT(promote(at.t, T)) : null, readBytes: sizeOfT(exp.t), sev: v.sev, why: v.why || null, fix: fix && v.sev !== 'unknown' ? fix : null });
       if (at?.member) verdict += ' (member looked up by name)';
       rows.push([label, whole, expr.length > 32 ? expr.slice(0, 30) + '…' : expr, at ? at.name + (at.t !== '?' && at.name.replace(/\s|const|volatile/g, '') !== at.t && !at.name.startsWith(at.t) ? ` = ${at.t.replace('*', ' *')}` : '') : '?', exp.t.replace('*', ' *'), verdict]);
       if (v.sev === 'error') { errs++; problems.push(`${label}: ${whole} with ${expr}: ${v.why}${fix ? `. Use ${fix}` : ''}.`); }
@@ -510,7 +530,12 @@ export function run({ code, decls, target, extra }) {
       else if (v.sev === 'note') info++;
       if (conv === 'n') problems.push(`${label}: %n writes the count into memory; it is a classic exploit vector and many embedded libcs ignore it.`);
     }
+    if (fmt.length > lastEnd) cur.segs.push({ text: fmt.slice(lastEnd) });
     if (ai < rest.length) {
+      for (const expr of rest.slice(ai)) {
+        const at = exprType(expr, env);
+        item({ kind: 'extra', expr, type: at ? at.name : null, t: at?.t ?? null, argBytes: at && at.t !== '?' ? sizeOfT(promote(at.t, T)) : null, sev: 'warning', why: 'more arguments than conversions (-Wformat-extra-args): a conversion is probably missing' });
+      }
       rows.push([label, '(none)', rest.slice(ai).join(', ').slice(0, 32), '–', '–', `warning: ${rest.length - ai} extra argument(s), ignored`]);
       warns++; problems.push(`${label}: ${rest.length - ai} more argument(s) than conversions (-Wformat-extra-args): a conversion is probably missing.`);
     }
@@ -535,6 +560,7 @@ export function run({ code, decls, target, extra }) {
     { label: 'Target', value: { arm: 'arm-none-eabi', ilp32: '32-bit Linux', lp64: 'LP64', llp64: 'Win64', avr: 'AVR' }[target] || 'arm-none-eabi', hint: T.name },
   ];
   return {
+    calls: callsOut, target: { id: TARGETS[target] ? target : 'arm', name: T.name, int: T.int, long: T.long, ptr: T.ptr, dbl: T.dbl, ld: T.ld },
     values, warnings, notes,
     tables: [{ title: 'Conversions and their arguments', columns: ['Call', 'Conversion', 'Argument', 'Its type', 'Expected', 'Verdict'], rows }],
     texts: problems.length ? [{ title: 'Problems', body: problems.join('\n') + '\n' }] : [],
