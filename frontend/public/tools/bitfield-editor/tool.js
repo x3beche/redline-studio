@@ -7,7 +7,7 @@
 //   STM32F4 USART_CR1:   RM0090 §30.6.4
 //   default custom example: BME280 ctrl_meas (0xF4), Bosch BME280 datasheet §5.4.5
 
-const PRESETS = {
+export const PRESETS = {
   aircr: { name: 'SCB->AIRCR (Cortex-M)', width: 32, value: '0xFA050300', fields: `VECTKEY 31:16 0x05FA=write key 0xFA05=read value
 ENDIANNESS 15 0=little 1=big
 PRIGROUP 10:8 0=7.1 group.sub split 3=4 bits group (STM32 GROUP_4) 4=3.1 5=2.2 6=1.3 7=0.4
@@ -130,8 +130,8 @@ export function run({ preset, width: wIn, value, flip, fields: ftext }) {
     ],
     tables: rows.length ? [{ title: 'Fields', columns: ['Field', 'Bits', 'Value', 'Hex', 'Binary', 'Meaning'], rows }] : [],
     texts: fields.length ? [{ title: 'C', lang: 'c', body: `${macros}\n\n/* this value from its fields */\n#define ${pre}_VALUE  (${set.join(' | ') || '0UL'})  /* ${hex(v, width)} */\n` }] : [],
-    bits, width, hexValue: hex(v, width),
-    fields: fields.map((f) => ({ name: f.name, msb: f.msb, lsb: f.lsb, value: f.value, meaning: f.meaning })),
+    bits, width, hexValue: hex(v, width), value: v, before, loose,
+    fields: fields.map((f) => ({ name: f.name, msb: f.msb, lsb: f.lsb, value: f.value, meaning: f.meaning, desc: f.desc, codes: f.meanings })),
     warnings, notes: [...notes, 'Click a bit in the drawing to flip it; agents give bit numbers in "Flip bits".'],
   };
 }

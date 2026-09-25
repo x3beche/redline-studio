@@ -71,9 +71,27 @@ export function run({ chem, cap, np, iavg, ipeak, usable, sd, shelf }) {
     const hr = Math.min(life(cu, i * 1e3, isdMa), hShelf);
     return [fmtEng(i, 'A'), fmtT(hr), fmtNum(hr / 24, 4), c.cont != null && i / n > c.cont ? 'over rating' : ''];
   });
+  // The same numbers for the drawing: where the charge goes, and run time
+  // against average current (12 points a decade, 10 nA … 10 A).
+  const used = Math.min(cu, (iMa + isdMa) * h);
+  const curve = [];
+  for (let k = 0; k <= 108; k++) {
+    const i = 1e-8 * 10 ** (k / 12);
+    curve.push({ i, h: Math.min(life(cu, i * 1e3, isdMa), hShelf), raw: life(cu, i * 1e3, isdMa) });
+  }
+  const battery = {
+    chem: chem in CHEM || chem === 'custom' ? chem : 'cr2032', name: c.name, v: c.v, capCell, typical: c.cap, n, usable: u, capTot, cu,
+    iavg, ipeak: ipeak > 0 ? ipeak : 0, isd: isdMa / 1e3, sdPct: c.sd, shelfYears: c.shelf,
+    h, hRaw, hShelf, hNoSd, limit, energyWh: c.v ? (cu * c.v) / 1000 : null,
+    budget: { load: iMa * h, selfDischarge: isdMa * h, left: Math.max(0, cu - used), reserve: capTot - cu },
+    rated: c.rated != null ? c.rated * n : null, cont: c.cont != null ? c.cont * n : null, pulse: c.pulse != null ? c.pulse * n : null,
+    runText: fmtT(h), curve,
+    chems: Object.entries(CHEM).map(([id, x]) => ({ id, name: x.name, v: x.v, cap: x.cap, sd: x.sd, shelf: x.shelf })),
+  };
   return {
     values,
     warnings,
+    battery,
     tables: [{ title: 'Run time at other average currents', columns: ['Average current', 'Run time', 'Days', ''], rows }],
     notes: [
       ...(c.note ? [c.note] : []),

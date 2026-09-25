@@ -8,6 +8,15 @@
 //   white noise falls by sqrt(OSR), SNR rises by 10 log10(OSR) dB      [SiLabs AN118, AVR121]
 import { fmtEng, fmtNum } from '../kit/eng.js';
 
+// Error function (Abramowitz & Stegun 7.1.26, |error| < 1.5e-7), for the code
+// probabilities the noise gives: P(code c) = Phi((c+1) LSB - vin) - Phi(c LSB - vin).
+const erf = (x) => {
+  const t = 1 / (1 + 0.3275911 * Math.abs(x));
+  const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return x < 0 ? -y : y;
+};
+const Phi = (z) => 0.5 * (1 + erf(z / Math.SQRT2));
+
 const hex = (code, bits) => {
   const b = Math.max(1, Math.round(bits));
   const u = code < 0 ? BigInt(2) ** BigInt(b) + BigInt(code) : BigInt(code);
@@ -37,8 +46,8 @@ export function run({ vref, bits, range, vin, noise, fs, osr }) {
   // The code for vin: straight binary (unipolar) or two's complement (bipolar),
   // truncating (floor) as most SAR ADCs do; clipped at the ends of the range.
   let code = '–', codeHex = '–', clipped = false, vq = null;
+  const lo = bip ? -(levels / 2) : 0, hi = bip ? levels / 2 - 1 : levels - 1;
   if (vin != null) {
-    const lo = bip ? -(levels / 2) : 0, hi = bip ? levels / 2 - 1 : levels - 1;
     let c = Math.floor(vin / lsb);
     if (c < lo || c > hi) { clipped = true; c = Math.min(hi, Math.max(lo, c)); }
     code = String(c); codeHex = hex(c, N); vq = c * lsb;
@@ -85,6 +94,25 @@ export function run({ vref, bits, range, vin, noise, fs, osr }) {
     );
   }
 
+  // Which codes a single conversion returns with this noise (floor quantiser,
+  // clipped at the ends), when the spread is narrow enough to list.
+  let hist = null;
+  if (vin != null) {
+    if (!(sigma > 0)) hist = [{ code: Number(code), p: 1 }];
+    else {
+      const c0 = Math.floor((vin - 4.5 * sigma) / lsb), c1 = Math.floor((vin + 4.5 * sigma) / lsb);
+      if (c1 - c0 <= 160) {
+        const m = new Map();
+        for (let c = c0; c <= c1; c++) {
+          const p = Phi(((c + 1) * lsb - vin) / sigma) - Phi((c * lsb - vin) / sigma);
+          const k = Math.min(hi, Math.max(lo, c));
+          m.set(k, (m.get(k) || 0) + p);
+        }
+        hist = [...m].map(([c, p]) => ({ code: c, p })).filter((e) => e.p >= 5e-4);
+      }
+    }
+  }
+
   const rows = [8, 10, 12, 14, 16, 18, 20, 24].map((b) => {
     const l = fsr / 2 ** b;
     return [`${b}`, fmtEng(l, 'V'), (2 ** b).toLocaleString('en-US'), fmtNum(6.02 * b + 1.76, 4) + ' dB', b === N ? '← this ADC' : ''];
@@ -96,6 +124,12 @@ export function run({ vref, bits, range, vin, noise, fs, osr }) {
   return {
     values,
     warnings,
+    // The same numbers for a drawing (the page draws the staircase from these).
+    adc: {
+      N, bip, vref, fsr, lsb, levels, lo, hi, vin: vin ?? null, code: vin != null ? Number(code) : null, codeHex, vq, clipped,
+      sigma, qn, ditherLsb, ppLsb: (6.6 * sigma) / lsb, nfBits, effBits, snrIdeal, hist,
+      R, extra, whole, outBits, outLsb, fs: fs > 0 ? fs : null, outRate, dithered, snrOs, enobOs: enobOf(totalOs),
+    },
     tables: [
       { title: 'The same span at other resolutions', columns: ['Bits', 'LSB', 'Levels', 'Ideal SNR', ''], rows },
       { title: 'Oversampling: what each ratio buys', columns: ['OSR', 'Extra bits', 'Result bits', 'LSB', 'Output rate'], rows: osRows },

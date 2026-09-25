@@ -1,5 +1,5 @@
 {
-  "id": "adc-resolution", "version": "1.0",
+  "id": "adc-resolution", "version": "1.1",
   "name": "ADC Resolution Calculator",
   "blurb": "LSB size from reference and bits, and the oversampling gain",
   "group": "embedded",
@@ -27,5 +27,6 @@
     "LSB = FSR / 2^N and ideal SNR = 6.02 N + 1.76 dB: Analog Devices MT-001 'Taking the Mystery out of the Infamous Formula SNR = 6.02N + 1.76dB'",
     "Oversampling and decimation, OSR = 4^n for n extra bits: Silicon Labs AN118, Microchip (Atmel) AVR121",
     "ENOB = (SNR − 1.76) / 6.02: Analog Devices MT-003; noise-free resolution from RMS noise (peak-to-peak = 6.6 × RMS): Analog Devices MT-229"
-  ]
+  ],
+  "layout": "custom"
 }

@@ -1,5 +1,5 @@
 {
-  "id": "battery-life", "version": "1.0",
+  "id": "battery-life", "version": "1.1",
   "name": "Battery Life Estimator",
   "blurb": "run time in days from average current and battery capacity",
   "group": "embedded",
@@ -26,5 +26,6 @@
     "Battery University BU-802b 'What does elevated self-discharge do?' (self-discharge by chemistry)",
     "Energizer CR2032 / CR2450, E91 alkaline and L91 lithium product datasheets (capacity, drain limits); Tadiran / Saft ER14505 datasheets (Li-SOCl2)",
     "Usable-fraction derating: rule of thumb"
-  ]
+  ],
+  "layout": "custom"
 }

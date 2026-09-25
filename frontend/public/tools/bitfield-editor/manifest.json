@@ -1,5 +1,5 @@
 {
-  "id": "bitfield-editor", "version": "1.0",
+  "id": "bitfield-editor", "version": "1.1",
   "name": "Register Bitfield Editor",
   "blurb": "toggle bits of a hex value and read each field's meaning",
   "group": "embedded",
@@ -23,5 +23,6 @@
   ],
   "usage": "Give the value (0x hex, 0b binary or decimal), the width (8/16/32) and a field list (one per line: NAME msb:lsb then code=meaning pairs), or a preset (aircr, tccr1b, usartcr1); optionally bit numbers to flip. It returns the value in hex, decimal and binary, a table of each field's value and meaning, result.bits and result.fields, warnings for set bits outside any field and overlapping fields, and C _Pos/_Msk macros. Use it to decode a register dump or to compose a value to write.",
   "sources": ["Field extraction: value = (reg >> lsb) & (2^width - 1); macro style from Arm CMSIS-Core", "Arm Armv7-M ARM B3.2.6 (AIRCR)", "Microchip ATmega328P datasheet §15.11.2 (TCCR1B)", "ST RM0090 §30.6.4 (USART_CR1)", "Bosch BME280 datasheet §5.4.5 (ctrl_meas)"],
-  "view": true
+  "view": true,
+  "layout": "custom"
 }
