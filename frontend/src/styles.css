@@ -3068,8 +3068,9 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
    middle column ends, with Tools just before it. */
 .tcv-tab-end {
   margin-left: auto;
-  /* ...but never under Tools, when the right column is folded to a rail. */
-  margin-right: max(calc(var(--layout-queue-w, 300px) + 8px), 76px);
+  /* ...but never under the user chip, when the right column is folded to a
+     rail: the chip's measured width (app.ts) plus a gap. */
+  margin-right: max(calc(var(--layout-queue-w, 300px) + 8px), calc(var(--layout-user-w, 64px) + 14px));
   transition: margin-right .2s cubic-bezier(.4, 0, .2, 1);
 }
 /* Tools stands just before Analytics, and takes the free space instead. */

@@ -1,4 +1,4 @@
-import { Component, effect, inject, signal, untracked } from '@angular/core';
+import { Component, ElementRef, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { Editor } from './editor/editor';
 import { Selection } from './selection';
 import { RoomAnalyze } from './rooms/analyze';
@@ -66,8 +66,10 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
         @if (brief(); as b) { <span class="tcv-tab-count">{{ b.text }}</span> }
       </button>
     }
-    <!-- Who is signed in, over the right-hand column; nothing in local mode. -->
-    <app-user-chip class="tcv-user-end" />
+    <!-- Who is signed in, over the right-hand column; nothing in local mode.
+         Its width is measured (--layout-user-w) so the tabs keep clear of it
+         when that column is folded to a rail. -->
+    <app-user-chip #chip class="tcv-user-end" />
   </header>
 
   <!-- The 3D room stays mounted whichever tab is on. Its viewer holds a
@@ -100,6 +102,19 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
 })
 export class App {
   private picked = inject(Selection);
+  /** The user chip's width, handed to the header as --layout-user-w: with
+   *  the right column folded, Analytics has to stop short of the chip
+   *  rather than of the rail, or the two print over each other. */
+  private chip = viewChild('chip', { read: ElementRef });
+  private chipWidth = effect(onCleanup => {
+    const el = this.chip()?.nativeElement as HTMLElement | undefined;
+    const header = el?.parentElement;
+    if (!el || !header) return;
+    const ro = new ResizeObserver(() =>
+      header.style.setProperty('--layout-user-w', `${Math.ceil(el.getBoundingClientRect().width)}px`));
+    ro.observe(el);
+    onCleanup(() => ro.disconnect());
+  });
   /** Whether sign-in is on, and who is signed in (auth.ts). */
   auth = inject(Auth);
   tabs = WORKSPACES;
