@@ -21,6 +21,65 @@ dependencies and starts both servers with live reload:
 For a single-server production build, `./start.sh --build` compiles the UI and
 serves it from `:8000` alone.
 
+## On Windows
+
+Run it inside WSL 2, not on Windows itself. On Windows 11, Smart App Control
+blocks OpenCascade's unsigned DLL, and build123d fails on import with *"An
+Application Control policy has blocked this file"*; `start.sh` and
+`tools/capped.sh` are Linux scripts besides.
+
+```powershell
+wsl --install -d Ubuntu-24.04      # admin PowerShell, then restart - not shut down
+```
+
+Inside Ubuntu, Node 20.19+ has to come from NodeSource (apt's is older), and
+the checkout belongs in the Linux home rather than under `/mnt/c`: npm and the
+file watchers are many times slower across that boundary.
+
+```bash
+sudo apt install -y python3-venv python3-dev build-essential libgl1 libglib2.0-0 libxrender1
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs
+```
+
+The UI is then at <http://127.0.0.1:4200> in a Windows browser as usual.
+Anything already listening on `:8000` on the Windows side takes the port
+first and the API cannot be reached; stop it before `start.sh`.
+
+**Atlas refuses a new machine** with `TLSV1_ALERT_INTERNAL_ERROR` rather than
+an authentication error. Add its public IP under Network Access. A home
+connection's IP changes now and then; the same error means it has.
+
+WSL stops its VM a while after the last terminal closes, and whatever runs
+inside stops with it. To keep the servers up, put this in
+`%UserProfile%\.wslconfig` and run `wsl --shutdown` once:
+
+```ini
+[general]
+instanceIdleTimeout=-1
+
+[wsl2]
+vmIdleTimeout=-1
+```
+
+## In containers, still live
+
+`compose.dev.yml` runs the same two servers as `start.sh`, with no Python or
+Node on the machine. The checkout is mounted, not copied: an edit reloads
+the API or the page at once, and packages are reinstalled only when
+`requirements.txt` or `package-lock.json` changes. `--build` is needed only
+when a file in `docker/dev/` does.
+
+```bash
+export DOCKER_GID=$(getent group docker | cut -d: -f3)   # the API starts KiCad and the rooms
+docker compose -f compose.dev.yml up -d                 # UI :4200, API :8000
+docker compose -f compose.dev.yml logs -f
+docker compose -f compose.dev.yml down
+```
+
+`API_PORT=8010` in front moves the API, as with `start.sh`. The two are
+interchangeable - run one or the other, not both. The first start installs
+build123d into a volume and takes a few minutes.
+
 ## Configuration
 
 Everything is read from `.env`, which is git-ignored. The connection string and

@@ -1,0 +1,64 @@
+# Development servers in containers, with live reload - the same two
+# processes ./start.sh runs, without Python or Node on the machine.
+#
+#   docker compose -f compose.dev.yml up            # UI :4200, API :8000
+#   API_PORT=8010 docker compose -f compose.dev.yml up
+#   docker compose -f compose.dev.yml down
+#
+# Nothing is copied into an image. The checkout is mounted at the path it has
+# on the host, so an edit is picked up at once (uvicorn --reload, ng serve).
+# Packages live in volumes and are reinstalled only when requirements.txt or
+# package-lock.json changes: `build` is needed only if a Dockerfile changes.
+#
+# Host networking keeps every address as it is under start.sh: the page's
+# proxy reaches the API on 127.0.0.1, and Windows reaches both through WSL.
+#
+# The API starts KiCad and the room images next to itself through the host's
+# Docker socket. It hands them paths under the checkout and /tmp, which is
+# why both are mounted at the same place on both sides.
+
+x-app: &app
+  network_mode: host
+  restart: unless-stopped
+  working_dir: ${PWD}
+  environment: &env
+    APP: ${PWD}
+    API_PORT: ${API_PORT:-8000}
+
+services:
+  api:
+    <<: *app
+    build:
+      context: docker/dev
+      dockerfile: backend.Dockerfile
+      args: { UID: "${UID:-1000}", GID: "${GID:-1000}" }
+    image: redline-dev-api
+    command: ["bash", "docker/dev/backend.sh"]
+    # the docker group's id on the host, so the API may use its socket:
+    # getent group docker | cut -d: -f3
+    group_add: ["${DOCKER_GID:-108}"]
+    volumes:
+      - .:${PWD}
+      - /tmp:/tmp
+      - /var/run/docker.sock:/var/run/docker.sock
+      - venv:/venv
+
+  web:
+    <<: *app
+    build:
+      context: docker/dev
+      dockerfile: frontend.Dockerfile
+      args: { APP: "${PWD}" }
+    image: redline-dev-web
+    command: ["bash", "docker/dev/frontend.sh"]
+    environment:
+      <<: *env
+      WEB_PORT: ${WEB_PORT:-4200}
+      WEB_HOST: ${X3_WEB_HOST:-127.0.0.1}
+    volumes:
+      - .:${PWD}
+      - node_modules:${PWD}/frontend/node_modules
+
+volumes:
+  venv:
+  node_modules:

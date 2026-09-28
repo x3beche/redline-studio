@@ -204,9 +204,11 @@ def test_what_a_meter_watched_separately_is_added_to_the_job():
 
 
 # ---------------- the GPU ----------------
-def test_gpu_seconds_add_up_and_reach_the_energy():
+def test_gpu_seconds_add_up_and_reach_the_energy(monkeypatch):
     """A render is drawn by the card; counting only its CPU left the
     expensive half out."""
+    # a rate of its own, so a machine with no card (WSL, CI) still has one
+    monkeypatch.setattr(compute, "_WATTS_GPU", 150.0)
     rows = [job("render", cpu=20.0), dict(job("render", cpu=4.0),
                                           _id="r2", gpu_s=6.0)]
     rows[0]["gpu_s"] = 4.0
