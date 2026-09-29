@@ -66,6 +66,11 @@ app.include_router(sim_api.router)
 # a STEP, or another tool's design file.
 from .imports import api as imports_api  # noqa: E402
 app.include_router(imports_api.router)
+# The Embedded room's views: the firmware's files, what the build made, a real board.
+from .embedded import build as emb_build, device as emb_device, files as emb_files  # noqa: E402
+app.include_router(emb_files.router)
+app.include_router(emb_build.router)
+app.include_router(emb_device.router)
 
 
 def _raw_db():

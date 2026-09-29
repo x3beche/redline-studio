@@ -116,6 +116,10 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/tools/(check|run)", "run"),
     # the virtual board: running it is running; linking an app to a board edits the app
     ("POST", "/api/sim/{}/(start|stop|reset|act|uart)", "run"),
+    # the Embedded room: writing a firmware's files is editing it; the
+    # board on the desk - flashing it, its serial port - is running it
+    ("PUT", "/api/embedded/{}/files(/.*)?", "edit"),
+    ("POST", "/api/embedded/{}/(flash|serial)(/.*)?", "run"),
     # bringing a board in makes a board
     ("POST", "/api/boards/import", "edit"),
     ("POST", "/api/tools/(find|usage)", "view"),

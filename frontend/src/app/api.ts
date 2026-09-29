@@ -768,6 +768,12 @@ export class Activity {
 // ---------------- code projects ----------------
 /** A running interface: its checkout, where it is served, and the command
  *  whose exit code says it still works. */
+/** A symbol from a firmware build, as the Embedded room lists it. */
+export interface FwSymbol {
+  name: string; size: number; where: 'flash' | 'ram' | 'both';
+  file: string | null; line: number | null;
+}
+
 export interface AppEntry {
   _id: string;
   title: string;

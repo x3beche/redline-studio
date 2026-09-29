@@ -6,17 +6,19 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { forkJoin } from 'rxjs';
 import {
   Activity, AppCompute, AppDiff, AppEntry, AppShot, AppStatus, Api, Apps,
-  DomHit, Health, LogLine, McuInfo, McuPeripheral, McuPin, Revision, SystemInfo, TestRun,
-} from '../api';
+  DomHit, Health, LogLine, McuInfo, McuPeripheral, McuPin, Revision, SystemInfo, TestRun, FwSymbol } from '../api';
 import { T, t } from '../i18n';
 import { CodeDraft, Selection } from '../selection';
 import { RoomFrame, ToolButton } from './frame';
 import { Mark, extent, paint } from './sketch';
 import { DrawTools, PenState } from './sketchpad';
 import { SimView } from './sim-view';
+import { CodeView } from './code-view';
+import { FwBuild } from './fw-build';
+import { FwDevice } from './fw-device';
 
 type Platform = 'web' | 'embedded' | 'mobile';
-type View = 'live' | 'diff' | 'sim';
+type View = 'live' | 'diff' | 'sim' | 'device';
 type Side = 'check' | 'server' | 'machine' | 'mcu';
 
 /** The sizes a page is looked at. A note is drawn at one of them and the
@@ -27,11 +29,6 @@ const VIEWPORTS: { key: string; w: number; h: number; icon: string; tip: string 
   { key: 'phone', w: 390, h: 844, icon: 'tcv-ico-phone', tip: 'Phone - 390 × 844' },
 ];
 
-/** A symbol from the firmware, as the view lists it. */
-interface FwSymbol {
-  name: string; size: number; where: 'flash' | 'ram' | 'both';
-  file: string | null; line: number | null;
-}
 interface FwData {
   regions: { name: string; used: number; size: number; pct: number }[];
   symbols: FwSymbol[];
@@ -60,7 +57,7 @@ interface FwData {
  */
 @Component({
   selector: 'app-room-coding',
-  imports: [RoomFrame, ToolButton, DrawTools, SimView, T],
+  imports: [RoomFrame, ToolButton, DrawTools, SimView, CodeView, FwBuild, FwDevice, T],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
@@ -84,6 +81,8 @@ interface FwData {
       @if (platform() === 'embedded') {
         <app-tool icon="tcv-ico-model" tip="Simulate - the firmware running on its board"
                   [on]="view() === 'sim'" (press)="setView('sim')" />
+        <app-tool icon="tcv-ico-device" tip="Device - a real board: flash it, and its serial port"
+                  [on]="view() === 'device'" (press)="setView('device')" />
       }
       @if (platform() === 'web') {
         <span class="tcv_separator"></span>
@@ -139,6 +138,11 @@ interface FwData {
     <!-- The pen, at the toolbar's end as in every room. Firmware has no
          screen to draw on, so its notes are written about what is picked. -->
     <ng-container ngProjectAs="[barEnd]">
+      @if (platform() === 'embedded') {
+        <!-- The firmware's source, as the 3D and PCB rooms show theirs. -->
+        <app-tool icon="tcv-ico-code" [tip]="ide() ? 'Back to the view' : 'Code - the firmware source'"
+                  [on]="ide()" (press)="ide.set(!ide())" />
+      }
       @if (platform() !== 'embedded') {
         @if (frozen()) {
           <app-draw-tools [pen]="pen" (undo)="undo()" (clear)="clear()" />
@@ -387,6 +391,9 @@ interface FwData {
 
     <!-- THE VIEW -->
     <div view class="relative h-full w-full overflow-hidden rounded">
+      @if (ide() && platform() === 'embedded') {
+        <app-code-view kind="app" [id]="here()!._id" [title]="here()!.title" (closed)="ide.set(false)" />
+      }
       @if (view() === 'diff') {
         <!-- THE CHANGE: the working tree against HEAD, or one note's own
              change - only the files that moved since it was drawn, so
@@ -465,61 +472,13 @@ interface FwData {
         } @placeholder {
           <p class="p-3 text-[12px]" style="color: var(--ink-dim)">loading the simulator…</p>
         }
+      } @else if (platform() === 'embedded' && view() === 'device') {
+        <!-- A REAL BOARD: its port, flashing it, its serial monitor (fw-device.ts). -->
+        <app-fw-device [app]="here()!" />
       } @else if (platform() === 'embedded') {
-        <!-- THE FIRMWARE, AS BUILT
-             Memory per region, then what fills it, file by file. A click
-             on a function or a table makes it the note's Part. -->
-        <div class="tcv-scroll h-full overflow-auto p-3" style="background: var(--surface)">
-          @if (fw(); as d) {
-            <div class="mb-3">
-              @for (r of d.regions; track r.name) {
-                <div class="tcv-fw-region">
-                  <span class="mono">{{ r.name }}</span>
-                  <span class="tcv-fw-track"><span [style.width.%]="r.pct"></span></span>
-                  <span class="mono tcv-fw-num">
-                    {{ kb(r.used) }} / {{ kb(r.size) }} · {{ r.pct.toFixed(2) }}%
-                    @if (grew(r); as g) {
-                      <b [style.color]="g > 0 ? 'var(--warn)' : 'var(--ok)'">{{ g > 0 ? '+' : '−' }}{{ kb(abs(g)) }}</b>
-                    }
-                  </span>
-                </div>
-              } @empty {
-                <p style="color: var(--ink-dim)">The build printed no memory map (link with -Wl,--print-memory-usage).</p>
-              }
-            </div>
-            <div class="grid gap-4" style="grid-template-columns: 1fr 1fr">
-              @for (col of fwColumns(); track col.label) {
-                <section>
-                  <h3 class="tcv-label mb-1.5">{{ col.label }} · {{ kb(col.total) }}</h3>
-                  @for (f of col.files; track f.file) {
-                    <div class="tcv-fw-file">
-                      <div class="tcv-fw-fname mono">
-                        <span class="truncate" [title]="f.file">{{ f.file }}</span><span>{{ kb(f.total) }}</span>
-                      </div>
-                      <div class="tcv-fw-syms">
-                        @for (s of f.syms; track s.name) {
-                          <button class="tcv-fw-sym mono" [style.flex-grow]="s.size"
-                                  [attr.data-on]="pickedSym() === s.name ? 1 : null"
-                                  [title]="s.name + ' · ' + kb(s.size) + (s.file ? ' · ' + s.file + ':' + s.line : '')"
-                                  (click)="pickSymbol(s)">{{ s.name }}</button>
-                        }
-                      </div>
-                    </div>
-                  }
-                </section>
-              }
-            </div>
-          } @else {
-            <div class="flex h-full items-center justify-center">
-              <p class="max-w-md text-center text-[12px] leading-relaxed" style="color: var(--ink-dim)">
-                Not built yet. The agent builds {{ here()!.title }} for the {{ targetName() }} in the
-                Embedded Programming container, and what the build makes of the source
-                shows here: memory per region, and the largest functions and tables with
-                their files. Pick one and write the note about it.
-              </p>
-            </div>
-          }
-        </div>
+        <!-- THE FIRMWARE, AS BUILT: what fills flash, and what changed (fw-build.ts).
+             A function or a table picked there becomes the note's Part. -->
+        <app-fw-build [app]="here()!" (picked)="pickSymbol($event)" />
       } @else {
         <!-- THE LIVE THING: a page in a frame at its real size, scaled into
              the view; or the phone's own screen, a picture every second
@@ -635,6 +594,8 @@ export class RoomCoding implements OnInit, OnDestroy {
   note = signal('');
 
   view = signal<View>('live');
+  /** The firmware's source open over the view (code-view.ts), as in the 3D and PCB rooms. */
+  ide = signal(false);
   side = signal<Side>('check');
   route = signal('/');
   viewport = signal(VIEWPORTS[0]);
@@ -696,7 +657,7 @@ export class RoomCoding implements OnInit, OnDestroy {
     const p = this.platform();
     this.tabNames.server = p === 'embedded' ? 'Build' : 'Server';
     const v = RoomCoding.recall(p, 'view', 'live');
-    this.view.set(v === 'diff' ? 'diff' : v === 'sim' && p === 'embedded' ? 'sim' : 'live');
+    this.view.set(v === 'diff' ? 'diff' : (v === 'sim' || v === 'device') && p === 'embedded' ? v : 'live');
     const side = RoomCoding.recall(p, 'side', 'check') as Side;
     this.side.set(this.sideTabs().includes(side) ? side : this.sideTabs()[0]);
     this.refresh();

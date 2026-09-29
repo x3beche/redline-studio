@@ -27,7 +27,7 @@ import { LIGHT_THEMES } from '../../theme';
  *  Monaco is large, so it is loaded the first time a code view opens and
  *  not before (served as-is from /monaco/vs, angular.json).
  */
-export type CodeKind = 'model' | 'board';
+export type CodeKind = 'model' | 'board' | 'app';
 
 type MonacoApi = typeof Monaco;
 let loading: Promise<MonacoApi> | null = null;
