@@ -62,12 +62,14 @@ if [ "${1:-}" = "--build" ]; then
   say "building the UI"
   (cd frontend && npx ng build)
   say "http://127.0.0.1:$API_PORT"
-  exec "$PY" -m uvicorn backend.main:app --host 127.0.0.1 --port "$API_PORT"
+  exec "$PY" -m uvicorn backend.main:app --host 127.0.0.1 --port "$API_PORT" --timeout-graceful-shutdown 3
 fi
 
 say "FastAPI  http://127.0.0.1:$API_PORT  (--reload)"
+# A reload waits for open connections to close, and the simulator's live
+# stream never does: without a limit the API hung until the tab was shut.
 "$PY" -m uvicorn backend.main:app --host 127.0.0.1 --port "$API_PORT" --reload \
-      --reload-dir backend &
+      --reload-dir backend --timeout-graceful-shutdown 3 &
 
 say "Angular  http://$WEB_HOST:$WEB_PORT  (hot reload)"
 (cd frontend && npx ng serve --port "$WEB_PORT" --host "$WEB_HOST")
