@@ -1,0 +1,413 @@
+{
+  "id": "subagent-hooks-builder",
+  "version": "1.0",
+  "name": "Subagent & Hooks Builder",
+  "blurb": "Claude Code subagent files and settings.json hooks built from forms, with their events and matchers drawn",
+  "group": "ai",
+  "rooms": [
+    "web",
+    "embedded",
+    "mobile",
+    "pcb",
+    "cad"
+  ],
+  "keywords": [
+    "claude code hooks",
+    "settings.json",
+    "PreToolUse",
+    "PostToolUse",
+    "Stop hook",
+    "SessionStart",
+    "UserPromptSubmit",
+    "hook matcher",
+    "hook exit code",
+    "subagent",
+    "custom agent",
+    ".claude/agents",
+    "agent frontmatter",
+    "tools allowlist",
+    "hook timeout",
+    "merge settings",
+    "lifecycle",
+    "guardrail hook"
+  ],
+  "intro": "Two builders. Hooks: rows of event, matcher, command and timeout, placed on the Claude Code session lifecycle, linted (matchers that never match, hot-path hooks without a timeout, unquoted variables, relative paths, Stop loops) and merged into a pasted settings.json without touching its other keys. Subagent: a .claude/agents/<name>.md with name, description, tools and model, and the line the main agent sees. Event and exit-code semantics are from the Claude Code docs as of 2026-09 (verify).",
+  "inputs": [
+    {
+      "key": "mode",
+      "label": "Build",
+      "type": "select",
+      "default": "hooks",
+      "options": [
+        [
+          "hooks",
+          "Hooks (settings.json)"
+        ],
+        [
+          "subagent",
+          "Subagent (.claude/agents/*.md)"
+        ]
+      ]
+    },
+    {
+      "key": "hooks",
+      "label": "Hooks",
+      "type": "table",
+      "when": {
+        "key": "mode",
+        "equals": "hooks"
+      },
+      "columns": [
+        {
+          "key": "event",
+          "label": "Event",
+          "type": "select",
+          "options": [
+            "SessionStart",
+            "UserPromptSubmit",
+            "PreToolUse",
+            "PermissionRequest",
+            "PostToolUse",
+            "PostToolUseFailure",
+            "SubagentStart",
+            "SubagentStop",
+            "Notification",
+            "Stop",
+            "PreCompact",
+            "SessionEnd"
+          ]
+        },
+        {
+          "key": "matcher",
+          "label": "Matcher"
+        },
+        {
+          "key": "command",
+          "label": "Command"
+        },
+        {
+          "key": "timeout",
+          "label": "Timeout s"
+        }
+      ],
+      "default": [
+        {
+          "event": "SessionStart",
+          "matcher": "startup",
+          "command": "cat \"$CLAUDE_PROJECT_DIR\"/.claude/context/today.md",
+          "timeout": "5"
+        },
+        {
+          "event": "UserPromptSubmit",
+          "matcher": "",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/add-branch-context.sh",
+          "timeout": "5"
+        },
+        {
+          "event": "PreToolUse",
+          "matcher": "Bash",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-bash.py",
+          "timeout": "10"
+        },
+        {
+          "event": "PostToolUse",
+          "matcher": "Edit|Write",
+          "command": "jq -r '.tool_input.file_path' | xargs npx prettier --write",
+          "timeout": ""
+        },
+        {
+          "event": "PostToolUse",
+          "matcher": "bash",
+          "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/log-command.sh",
+          "timeout": "5"
+        },
+        {
+          "event": "Notification",
+          "matcher": "",
+          "command": "notify-send 'Claude Code' 'Waiting for you'",
+          "timeout": "5"
+        },
+        {
+          "event": "Stop",
+          "matcher": "",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/require-green-tests.sh",
+          "timeout": "180"
+        }
+      ],
+      "help": "One hook per row. Matcher: a tool name, A|B, a regex, or empty for all (tool events); startup|resume... for SessionStart."
+    },
+    {
+      "key": "existing",
+      "label": "Existing settings.json",
+      "type": "textarea",
+      "rows": 8,
+      "default": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(npm run lint)\",\n      \"Bash(git diff:*)\"\n    ],\n    \"deny\": [\n      \"Read(./.env)\"\n    ]\n  },\n  \"env\": {\n    \"FORCE_COLOR\": \"1\"\n  },\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"\\\"$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/guard-bash.py\",\n            \"timeout\": 10\n          }\n        ]\n      }\n    ]\n  }\n}",
+      "required": false,
+      "when": {
+        "key": "mode",
+        "equals": "hooks"
+      },
+      "help": "Paste the current file to get it back with the hooks merged in, other keys untouched. Empty = hooks section only."
+    },
+    {
+      "key": "hooksTarget",
+      "label": "Settings file",
+      "type": "select",
+      "default": "project",
+      "when": {
+        "key": "mode",
+        "equals": "hooks"
+      },
+      "options": [
+        [
+          "project",
+          ".claude/settings.json (shared)"
+        ],
+        [
+          "local",
+          ".claude/settings.local.json (just you)"
+        ],
+        [
+          "user",
+          "~/.claude/settings.json (all projects)"
+        ]
+      ]
+    },
+    {
+      "key": "agentName",
+      "label": "Agent name",
+      "type": "text",
+      "default": "firmware-reviewer",
+      "when": {
+        "key": "mode",
+        "equals": "subagent"
+      }
+    },
+    {
+      "key": "agentDescription",
+      "label": "Description",
+      "type": "textarea",
+      "rows": 3,
+      "default": "Reviews changed STM32/FreeRTOS C code for ISR safety, blocking calls, volatile misuse, stack growth and unchecked HAL errors. Use proactively after editing files under firmware/ and before committing.",
+      "when": {
+        "key": "mode",
+        "equals": "subagent"
+      }
+    },
+    {
+      "key": "agentTools",
+      "label": "Tools",
+      "type": "text",
+      "default": "Read, Grep, Glob, Bash",
+      "required": false,
+      "when": {
+        "key": "mode",
+        "equals": "subagent"
+      },
+      "help": "Comma-separated; empty = inherits all tools (verify)."
+    },
+    {
+      "key": "agentModel",
+      "label": "Model",
+      "type": "select",
+      "default": "sonnet",
+      "options": [
+        "inherit",
+        "sonnet",
+        "opus",
+        "haiku"
+      ],
+      "when": {
+        "key": "mode",
+        "equals": "subagent"
+      }
+    },
+    {
+      "key": "agentColor",
+      "label": "Colour",
+      "type": "select",
+      "default": "orange",
+      "options": [
+        [
+          "",
+          "none"
+        ],
+        "red",
+        "blue",
+        "green",
+        "yellow",
+        "purple",
+        "orange",
+        "pink",
+        "cyan"
+      ],
+      "when": {
+        "key": "mode",
+        "equals": "subagent"
+      }
+    },
+    {
+      "key": "agentScope",
+      "label": "Where",
+      "type": "select",
+      "default": "project",
+      "options": [
+        [
+          "project",
+          ".claude/agents (project)"
+        ],
+        [
+          "user",
+          "~/.claude/agents (personal)"
+        ]
+      ],
+      "when": {
+        "key": "mode",
+        "equals": "subagent"
+      }
+    },
+    {
+      "key": "agentPrompt",
+      "label": "System prompt",
+      "type": "textarea",
+      "rows": 12,
+      "default": "You are the firmware reviewer for an STM32 codebase written in C11 with FreeRTOS.\n\nWhen invoked:\n1. Run `git diff --merge-base origin/main` to see what changed; review only those hunks.\n2. For each changed function, check: ISR-safe calls only inside interrupt handlers, no blocking calls with interrupts disabled, volatile on memory shared with ISRs, stack use of new locals over 256 bytes, and missing error checks on HAL_* return values.\n3. Open the headers a change depends on before judging it; do not guess register names.\n\nReturn a list ordered by severity. Each item: file:line, the defect in one sentence, why it fails on the target, and the smallest fix. End with \"No findings\" if there are none. Do not edit files.",
+      "when": {
+        "key": "mode",
+        "equals": "subagent"
+      }
+    }
+  ],
+  "examples": [
+    {
+      "title": "Hooks for a firmware repo, merged into an existing settings.json",
+      "input": {
+        "mode": "hooks",
+        "hooks": [
+          {
+            "event": "SessionStart",
+            "matcher": "startup",
+            "command": "cat \"$CLAUDE_PROJECT_DIR\"/.claude/context/today.md",
+            "timeout": "5"
+          },
+          {
+            "event": "UserPromptSubmit",
+            "matcher": "",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/add-branch-context.sh",
+            "timeout": "5"
+          },
+          {
+            "event": "PreToolUse",
+            "matcher": "Bash",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-bash.py",
+            "timeout": "10"
+          },
+          {
+            "event": "PostToolUse",
+            "matcher": "Edit|Write",
+            "command": "jq -r '.tool_input.file_path' | xargs npx prettier --write",
+            "timeout": ""
+          },
+          {
+            "event": "PostToolUse",
+            "matcher": "bash",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/log-command.sh",
+            "timeout": "5"
+          },
+          {
+            "event": "Notification",
+            "matcher": "",
+            "command": "notify-send 'Claude Code' 'Waiting for you'",
+            "timeout": "5"
+          },
+          {
+            "event": "Stop",
+            "matcher": "",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/require-green-tests.sh",
+            "timeout": "180"
+          }
+        ],
+        "existing": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(npm run lint)\",\n      \"Bash(git diff:*)\"\n    ],\n    \"deny\": [\n      \"Read(./.env)\"\n    ]\n  },\n  \"env\": {\n    \"FORCE_COLOR\": \"1\"\n  },\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"\\\"$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/guard-bash.py\",\n            \"timeout\": 10\n          }\n        ]\n      }\n    ]\n  }\n}",
+        "hooksTarget": "project",
+        "agentName": "firmware-reviewer",
+        "agentDescription": "Reviews changed STM32/FreeRTOS C code for ISR safety, blocking calls, volatile misuse, stack growth and unchecked HAL errors. Use proactively after editing files under firmware/ and before committing.",
+        "agentTools": "Read, Grep, Glob, Bash",
+        "agentModel": "sonnet",
+        "agentColor": "orange",
+        "agentScope": "project",
+        "agentPrompt": "You are the firmware reviewer for an STM32 codebase written in C11 with FreeRTOS.\n\nWhen invoked:\n1. Run `git diff --merge-base origin/main` to see what changed; review only those hunks.\n2. For each changed function, check: ISR-safe calls only inside interrupt handlers, no blocking calls with interrupts disabled, volatile on memory shared with ISRs, stack use of new locals over 256 bytes, and missing error checks on HAL_* return values.\n3. Open the headers a change depends on before judging it; do not guess register names.\n\nReturn a list ordered by severity. Each item: file:line, the defect in one sentence, why it fails on the target, and the smallest fix. End with \"No findings\" if there are none. Do not edit files."
+      }
+    },
+    {
+      "title": "A first-draft reviewer subagent: bad name, vague description, write tools",
+      "input": {
+        "mode": "subagent",
+        "hooks": [
+          {
+            "event": "SessionStart",
+            "matcher": "startup",
+            "command": "cat \"$CLAUDE_PROJECT_DIR\"/.claude/context/today.md",
+            "timeout": "5"
+          },
+          {
+            "event": "UserPromptSubmit",
+            "matcher": "",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/add-branch-context.sh",
+            "timeout": "5"
+          },
+          {
+            "event": "PreToolUse",
+            "matcher": "Bash",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-bash.py",
+            "timeout": "10"
+          },
+          {
+            "event": "PostToolUse",
+            "matcher": "Edit|Write",
+            "command": "jq -r '.tool_input.file_path' | xargs npx prettier --write",
+            "timeout": ""
+          },
+          {
+            "event": "PostToolUse",
+            "matcher": "bash",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/log-command.sh",
+            "timeout": "5"
+          },
+          {
+            "event": "Notification",
+            "matcher": "",
+            "command": "notify-send 'Claude Code' 'Waiting for you'",
+            "timeout": "5"
+          },
+          {
+            "event": "Stop",
+            "matcher": "",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/require-green-tests.sh",
+            "timeout": "180"
+          }
+        ],
+        "existing": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(npm run lint)\",\n      \"Bash(git diff:*)\"\n    ],\n    \"deny\": [\n      \"Read(./.env)\"\n    ]\n  },\n  \"env\": {\n    \"FORCE_COLOR\": \"1\"\n  },\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"\\\"$CLAUDE_PROJECT_DIR\\\"/.claude/hooks/guard-bash.py\",\n            \"timeout\": 10\n          }\n        ]\n      }\n    ]\n  }\n}",
+        "hooksTarget": "project",
+        "agentName": "Code Reviewer",
+        "agentDescription": "Reviews code.",
+        "agentTools": "Read, Grep, Edit, Write, bash",
+        "agentModel": "inherit",
+        "agentColor": "",
+        "agentScope": "user",
+        "agentPrompt": "You are a helpful assistant that reviews code."
+      }
+    }
+  ],
+  "usage": "Set mode 'hooks' with hooks [{event, matcher, command, timeout}] (events: SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, PostToolUse, PostToolUseFailure, SubagentStart, SubagentStop, Notification, Stop, PreCompact, SessionEnd), optionally existing (settings.json text) and hooksTarget; it returns 'Merged <file>' (existing keys kept, duplicate commands skipped) and 'Hooks section' JSON, a table of hooks with what exit 2 means for each, and lint. Or mode 'subagent' with agentName, agentDescription, agentTools, agentModel, agentColor, agentScope, agentPrompt; it returns the .md file, a shell snippet and the listing line, with lint. Use it to add guard/format/notify hooks or a focused subagent without breaking settings.json.",
+  "sources": [
+    "Anthropic, Claude Code docs: Hooks reference and Get started with hooks (events, matchers, stdin JSON, exit codes 0/2/other, hookSpecificOutput, default 60 s timeout, $CLAUDE_PROJECT_DIR) - read 2026-09, verify",
+    "Anthropic, Claude Code docs: Subagents (.claude/agents/*.md, frontmatter name/description/tools/model, inheriting tools when omitted) - read 2026-09, verify",
+    "Anthropic, Claude Code docs: Settings (settings.json locations and precedence) - verify",
+    "POSIX shell word splitting (unquoted parameter expansion)"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "lifecycle"
+  ]
+}

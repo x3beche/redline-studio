@@ -1,0 +1,214 @@
+{
+  "id": "skill-builder",
+  "version": "1.0",
+  "name": "Skill Builder",
+  "blurb": "a Claude Code SKILL.md with its name, description and trigger words, plus the folder layout",
+  "group": "ai",
+  "rooms": [
+    "web",
+    "embedded",
+    "mobile",
+    "pcb",
+    "cad"
+  ],
+  "keywords": [
+    "SKILL.md",
+    "claude code skill",
+    "agent skills",
+    "skill frontmatter",
+    "skill description",
+    "trigger words",
+    "allowed-tools",
+    "skill folder",
+    "skill template",
+    "progressive disclosure",
+    "references folder",
+    "scripts folder",
+    "custom skill",
+    "slash command",
+    "skill lint",
+    "anthropic skills"
+  ],
+  "intro": "Builds a SKILL.md (YAML frontmatter with name, description and allowed-tools, then When to use, Steps, Files and Notes) and the folder around it, lints both against the Claude Code and Agent Skills docs as of 2026-09 (marked verify), and scores test messages against the description with a word-overlap heuristic to show whether it would plausibly trigger.",
+  "inputs": [
+    {
+      "key": "name",
+      "label": "Name",
+      "type": "text",
+      "default": "stm32-flash",
+      "help": "lowercase-kebab; also the folder name"
+    },
+    {
+      "key": "description",
+      "label": "Description",
+      "type": "textarea",
+      "rows": 5,
+      "default": "Builds, flashes and verifies STM32 firmware over ST-LINK with OpenOCD, then reads back the reset cause. Use when the user asks to flash, program, burn or upload firmware to a board, or when a flash fails with \"init mode failed\" or \"target not halted\". Triggers on: \"flash the board\", \"program the MCU\", \"st-link\", \"openocd\", \"karta yükle\", \"flash et\".",
+      "help": "What it does and when to use it, with the phrases users say. Max 1024 characters (verify)."
+    },
+    {
+      "key": "allowedTools",
+      "label": "allowed-tools",
+      "type": "text",
+      "default": "Bash(cmake:*), Bash(st-info:*), Bash(scripts/flash.sh:*), Read, Grep",
+      "required": false,
+      "help": "Comma-separated; Bash(cmd:*) narrows Bash to one command. Empty = none."
+    },
+    {
+      "key": "scope",
+      "label": "Where it lives",
+      "type": "select",
+      "default": "project",
+      "options": [
+        [
+          "project",
+          ".claude/skills (project)"
+        ],
+        [
+          "personal",
+          "~/.claude/skills (personal)"
+        ],
+        [
+          "plugin",
+          "<plugin>/skills (plugin)"
+        ]
+      ]
+    },
+    {
+      "key": "whenToUse",
+      "label": "When to use",
+      "type": "textarea",
+      "rows": 4,
+      "default": "The user wants new firmware on a connected STM32 board (Nucleo or a custom board on SWD).\nA flash or verify step failed and the OpenOCD output needs reading.\nNot for: building without a board (run the build preset), or J-Link probes (use the jlink-flash skill).",
+      "required": false
+    },
+    {
+      "key": "steps",
+      "label": "Steps",
+      "type": "textarea",
+      "rows": 6,
+      "default": "Build the release preset: `cmake --preset release && cmake --build build/release`.\nCheck that a probe is attached with `st-info --probe`; stop and tell the user if none is listed.\nFlash and verify with `scripts/flash.sh build/release/app.elf` (OpenOCD program, verify, reset).\nIf OpenOCD fails, find the error text in references/openocd-errors.md and apply its fix, at most twice.\nRead the reset cause from the serial log and report it with the flash result.",
+      "required": false,
+      "help": "One step per line; numbered for you."
+    },
+    {
+      "key": "notes",
+      "label": "Notes",
+      "type": "textarea",
+      "rows": 3,
+      "default": "Never mass-erase unless the user says so: it wipes the calibration page at 0x0807F800.\nEach board's OpenOCD target config is listed in references/boards.md.\nKeep the OpenOCD log under /home/emir/flash-logs/ for the bug report.",
+      "required": false
+    },
+    {
+      "key": "files",
+      "label": "Files in the skill folder",
+      "type": "table",
+      "columns": [
+        {
+          "key": "path",
+          "label": "Path"
+        },
+        {
+          "key": "purpose",
+          "label": "Purpose"
+        }
+      ],
+      "default": [
+        {
+          "path": "scripts/flash.sh",
+          "purpose": "OpenOCD program + verify + reset for one ELF"
+        },
+        {
+          "path": "references/openocd-errors.md",
+          "purpose": "error text -> cause -> fix"
+        },
+        {
+          "path": "references/boards.md",
+          "purpose": "board -> OpenOCD interface and target cfg"
+        }
+      ]
+    },
+    {
+      "key": "tests",
+      "label": "Trigger tests",
+      "type": "textarea",
+      "rows": 6,
+      "default": "+ flash the new build to the nucleo board\n+ şu firmware'i karta yükle\n+ openocd says target not halted, can you fix it\n+ program the MCU and tell me why it reset\n- write a unit test for the ring buffer\n- what is the baud rate for USART2 on PA2",
+      "required": false,
+      "help": "One user message per line: + should load the skill, - should not."
+    },
+    {
+      "key": "threshold",
+      "label": "Trigger threshold",
+      "type": "number",
+      "default": 0.35,
+      "help": "Heuristic score (0-1) at which a message counts as loading the skill."
+    }
+  ],
+  "examples": [
+    {
+      "title": "Flash STM32 firmware with OpenOCD (English and Turkish triggers)",
+      "input": {
+        "name": "stm32-flash",
+        "description": "Builds, flashes and verifies STM32 firmware over ST-LINK with OpenOCD, then reads back the reset cause. Use when the user asks to flash, program, burn or upload firmware to a board, or when a flash fails with \"init mode failed\" or \"target not halted\". Triggers on: \"flash the board\", \"program the MCU\", \"st-link\", \"openocd\", \"karta yükle\", \"flash et\".",
+        "allowedTools": "Bash(cmake:*), Bash(st-info:*), Bash(scripts/flash.sh:*), Read, Grep",
+        "scope": "project",
+        "whenToUse": "The user wants new firmware on a connected STM32 board (Nucleo or a custom board on SWD).\nA flash or verify step failed and the OpenOCD output needs reading.\nNot for: building without a board (run the build preset), or J-Link probes (use the jlink-flash skill).",
+        "steps": "Build the release preset: `cmake --preset release && cmake --build build/release`.\nCheck that a probe is attached with `st-info --probe`; stop and tell the user if none is listed.\nFlash and verify with `scripts/flash.sh build/release/app.elf` (OpenOCD program, verify, reset).\nIf OpenOCD fails, find the error text in references/openocd-errors.md and apply its fix, at most twice.\nRead the reset cause from the serial log and report it with the flash result.",
+        "notes": "Never mass-erase unless the user says so: it wipes the calibration page at 0x0807F800.\nEach board's OpenOCD target config is listed in references/boards.md.\nKeep the OpenOCD log under /home/emir/flash-logs/ for the bug report.",
+        "files": [
+          {
+            "path": "scripts/flash.sh",
+            "purpose": "OpenOCD program + verify + reset for one ELF"
+          },
+          {
+            "path": "references/openocd-errors.md",
+            "purpose": "error text -> cause -> fix"
+          },
+          {
+            "path": "references/boards.md",
+            "purpose": "board -> OpenOCD interface and target cfg"
+          }
+        ],
+        "tests": "+ flash the new build to the nucleo board\n+ şu firmware'i karta yükle\n+ openocd says target not halted, can you fix it\n+ program the MCU and tell me why it reset\n- write a unit test for the ring buffer\n- what is the baud rate for USART2 on PA2",
+        "threshold": 0.35
+      }
+    },
+    {
+      "title": "A weak first draft: vague name, first-person description, open Bash, Windows path, deep references",
+      "input": {
+        "name": "PDF Helper",
+        "description": "I can help you with PDFs.",
+        "allowedTools": "Bash, read",
+        "scope": "personal",
+        "whenToUse": "",
+        "steps": "Run python C:\\tools\\pdf\\extract.py on the file\nCheck references/forms/fields/acroform.md for forms",
+        "notes": "",
+        "files": [
+          {
+            "path": "scripts/extract.py",
+            "purpose": "text and tables out of a PDF"
+          },
+          {
+            "path": "references/forms/fields/acroform.md",
+            "purpose": "AcroForm field types"
+          }
+        ],
+        "tests": "+ pull the tables out of this invoice.pdf\n+ fill in this PDF form\n- summarise this Word document",
+        "threshold": 0.35
+      }
+    }
+  ],
+  "usage": "Give name (kebab), description (what + when + quoted trigger phrases), allowedTools (comma list, Bash(cmd:*) patterns), scope (project/personal/plugin), whenToUse, steps (one per line), notes, files [{path, purpose}] under scripts/ references/ assets/, tests (lines '+ message' should trigger, '- message' should not) and threshold. Returns texts 'SKILL.md' and 'Create folder (sh)' (mkdir + heredoc), a lint table (name format/length, description length/when-clause/person, open Bash, unknown tools, body length, absolute and backslash paths, files referenced but missing) and a trigger-test table with heuristic scores. Use it to write a new skill or to check why an existing one does not trigger.",
+  "sources": [
+    "Anthropic, Agent Skills overview and best practices (docs.claude.com, read 2026-09): name <=64 chars lowercase/digits/hyphens, no reserved words; description <=1024 chars, third person, what + when; SKILL.md body under 500 lines; references one level deep; forward slashes - verify",
+    "Anthropic, Claude Code docs: Skills (locations .claude/skills, ~/.claude/skills, plugin skills; allowed-tools) - read 2026-09, verify",
+    "Claude Code permission rule syntax: Tool or Tool(specifier), Bash(cmd:*) prefix match - verify",
+    "Trigger score: a word-overlap heuristic written for this tool, not the model's selection"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "skill"
+  ]
+}

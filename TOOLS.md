@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-215 tools. **MCP** marks the ones agents can run with `run_tool`.
+218 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -293,6 +293,7 @@ agents, the most used, and every tool nobody used.
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
 | **Chunking Planner** · MCP | `chunking-planner` | a document split into chunks by headings, sentences or tokens, with size, overlap and the chunks drawn on the text | Web, Embedded, Mobile, PCB, 3D |
+| **CLAUDE.md / AGENTS.md Linter** · MCP | `agent-md-linter` | an agent instruction file checked for contradictions, bloat, vague rules and stale paths | Web, Embedded, Mobile, PCB, 3D |
 | **Context Packer** | `context-packer` | pack code, logs and notes into one well-built prompt | Web, Embedded, Mobile, PCB, 3D |
 | **Conversation & Agent Trace Viewer** · MCP | `trace-viewer` | a chat or agent transcript split into turns and tool calls, with tokens per turn and where the context grew | Web, Embedded, Mobile, PCB, 3D |
 | **Data Digest** | `data-digest` | profile a large CSV or JSON into a compact brief for an LLM | Web, Embedded |
@@ -306,7 +307,9 @@ agents, the most used, and every tool nobody used.
 | **Prompt Eval Grid** · MCP | `prompt-eval-grid` | test inputs run against prompt variants on a real model, each answer scored by rules or a judge, in one grid | Web, Embedded, Mobile, PCB, 3D |
 | **Prompt Template & Variables** · MCP | `prompt-template` | a prompt template with {{variables}} filled from a table or CSV, every rendered prompt previewed and missing values caught | Web, Embedded, Mobile, PCB, 3D |
 | **Retrieval Tester** · MCP | `retrieval-tester` | which chunks of your documents a query retrieves, ranked by BM25, with the matching words shown | Web, Embedded, Mobile, PCB, 3D |
+| **Skill Builder** · MCP | `skill-builder` | a Claude Code SKILL.md with its name, description and trigger words, plus the folder layout | Web, Embedded, Mobile, PCB, 3D |
 | **Structured Output Validator** · MCP | `output-validator` | a model's JSON answer checked against a schema, broken JSON repaired, and every error shown where it is | Web, Embedded, Mobile, PCB, 3D |
+| **Subagent & Hooks Builder** · MCP | `subagent-hooks-builder` | Claude Code subagent files and settings.json hooks built from forms, with their events and matchers drawn | Web, Embedded, Mobile, PCB, 3D |
 | **Token Counter & Context Budget** · MCP | `token-budget` | tokens in a text counted and fitted against model context windows, with the room left for the answer | Web, Embedded, Mobile, PCB, 3D |
 | **Tool / Function Schema Builder** · MCP | `tool-schema` | a tool's parameters defined visually and written out as JSON Schema for Anthropic, OpenAI and MCP tool definitions | Web, Embedded, Mobile, PCB, 3D |
 

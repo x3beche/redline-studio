@@ -1,0 +1,132 @@
+{
+  "id": "agent-md-linter",
+  "version": "1.0",
+  "name": "CLAUDE.md / AGENTS.md Linter",
+  "blurb": "an agent instruction file checked for contradictions, bloat, vague rules and stale paths",
+  "group": "ai",
+  "rooms": [
+    "web",
+    "embedded",
+    "mobile",
+    "pcb",
+    "cad"
+  ],
+  "keywords": [
+    "CLAUDE.md",
+    "AGENTS.md",
+    "agent instructions",
+    "memory file",
+    "claude code",
+    "codex",
+    "cursor rules",
+    "instruction file lint",
+    "contradictory rules",
+    "duplicate rules",
+    "vague rules",
+    "stale paths",
+    "secrets in prompt",
+    "token length",
+    "context bloat",
+    "project rules",
+    "copilot instructions",
+    "nested CLAUDE.md"
+  ],
+  "intro": "Splits a CLAUDE.md or AGENTS.md into its rules and checks each one: contradictions (also against a nested second file), duplicates, vague or self-evident rules, prohibitions without a reason, capitalised shouting, commands outside code formatting, paths missing from a pasted file list, and secrets; then writes a tightened copy. Based on the Claude Code memory and best-practice docs and the agents.md format as of 2026-09 (verify the limits there).",
+  "inputs": [
+    {
+      "key": "file",
+      "label": "Instruction file",
+      "type": "textarea",
+      "rows": 18,
+      "default": "# CLAUDE.md\n\nGuidance for Claude Code in the Tidewater repository.\n\n## Project\nTidewater is a battery-powered water-level logger: STM32L4 firmware in `firmware/`, a FastAPI backend in `server/` and a React dashboard in `web/`.\n\n## Build\n- Firmware: cmake --preset release && cmake --build build/release\n- Flash a board with `make flash` (needs an ST-LINK on USB).\n- Dashboard: run `pnpm install`, then `pnpm dev` inside `web/`.\n- Always use npm for the dashboard.\n- Backend: `uv run uvicorn server.main:app --reload`\n\n## Code style\n- Use 4 spaces in C and Python, 2 spaces in TypeScript.\n- Keep lines under 100 characters.\n- Write clean code and follow best practices.\n- Name things properly.\n- Max line length is 120 chars.\n- Prefer `static` functions in C files unless the function is declared in a header.\n\n## Testing\n- Run pytest before every commit.\n- Firmware unit tests: `ctest --test-dir build/host` (host build only, no board needed).\n- IMPORTANT: NEVER skip tests. ALWAYS run ALL tests.\n- Run pytest before every commit!\n- Be careful with the HAL mocks in firmware/test/mocks/, they are fragile.\n\n## Git\n- Never commit directly to main.\n- Commit small fixes directly to main.\n- Use conventional commits (`feat:`, `fix:`, `chore:`).\n- Never force-push.\n\n## Architecture\n- Sensor drivers live in firmware/drivers/, one file per sensor.\n- The radio protocol is specified in docs/protocol-v1.md.\n- See @docs/architecture.md for the data flow.\n- The old REST client in web/src/legacy/api.ts is deprecated; do not extend it, new calls go through web/src/api/client.ts.\n\n## Security\n- Never log the device provisioning key.\n- Staging API token for manual tests: ghp_EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAM\n\n## Deploy\n",
+      "help": "The CLAUDE.md or AGENTS.md as it is in the repository."
+    },
+    {
+      "key": "nameA",
+      "label": "Its path",
+      "type": "text",
+      "default": "CLAUDE.md",
+      "help": "Relative to the repository root; used to resolve paths and name the file."
+    },
+    {
+      "key": "second",
+      "label": "Second file (optional)",
+      "type": "textarea",
+      "rows": 8,
+      "default": "# Dashboard (web/)\n\n- Use yarn to add packages.\n- Components go in src/components/, one component per file.\n- Run pnpm test before pushing.\n- Keep lines under 100 characters.\n- Charts use src/charts/useSeries.ts; do not fetch inside components, because the cache in src/api/client.ts dedupes requests.\n",
+      "required": false,
+      "help": "A nested file (web/CLAUDE.md, a subfolder AGENTS.md) to check against the first; leave empty for one file."
+    },
+    {
+      "key": "nameB",
+      "label": "Second file's path",
+      "type": "text",
+      "default": "web/CLAUDE.md"
+    },
+    {
+      "key": "paths",
+      "label": "File list (optional)",
+      "type": "textarea",
+      "rows": 6,
+      "default": "CLAUDE.md\ndocs/architecture.md\ndocs/protocol-v2.md\nfirmware/CMakeLists.txt\nfirmware/CMakePresets.json\nfirmware/drivers/bme280.c\nfirmware/drivers/vl53l1x.c\nfirmware/test/mocks/hal_gpio_mock.c\nserver/main.py\nserver/pyproject.toml\nweb/CLAUDE.md\nweb/package.json\nweb/pnpm-lock.yaml\nweb/src/api/client.ts\nweb/src/charts/useSeries.ts\nweb/src/components/LevelChart.tsx\nweb/src/main.tsx\n",
+      "required": false,
+      "help": "One path per line (git ls-files). Paths the rules mention are checked against it; empty = paths are not checked."
+    },
+    {
+      "key": "maxLines",
+      "label": "Line target",
+      "type": "number",
+      "default": 200,
+      "help": "Claude Code's memory docs suggest roughly 200 lines per file (as of 2026-09, verify)."
+    },
+    {
+      "key": "ignore",
+      "label": "Ignored findings",
+      "type": "textarea",
+      "rows": 2,
+      "default": "",
+      "required": false,
+      "help": "Finding keys (check:rule-slug) or whole checks (no-reason) to hide, one per line; the page's Ignore button writes them."
+    }
+  ],
+  "examples": [
+    {
+      "title": "Monorepo CLAUDE.md plus the dashboard's nested one, with a file list",
+      "input": {
+        "file": "# CLAUDE.md\n\nGuidance for Claude Code in the Tidewater repository.\n\n## Project\nTidewater is a battery-powered water-level logger: STM32L4 firmware in `firmware/`, a FastAPI backend in `server/` and a React dashboard in `web/`.\n\n## Build\n- Firmware: cmake --preset release && cmake --build build/release\n- Flash a board with `make flash` (needs an ST-LINK on USB).\n- Dashboard: run `pnpm install`, then `pnpm dev` inside `web/`.\n- Always use npm for the dashboard.\n- Backend: `uv run uvicorn server.main:app --reload`\n\n## Code style\n- Use 4 spaces in C and Python, 2 spaces in TypeScript.\n- Keep lines under 100 characters.\n- Write clean code and follow best practices.\n- Name things properly.\n- Max line length is 120 chars.\n- Prefer `static` functions in C files unless the function is declared in a header.\n\n## Testing\n- Run pytest before every commit.\n- Firmware unit tests: `ctest --test-dir build/host` (host build only, no board needed).\n- IMPORTANT: NEVER skip tests. ALWAYS run ALL tests.\n- Run pytest before every commit!\n- Be careful with the HAL mocks in firmware/test/mocks/, they are fragile.\n\n## Git\n- Never commit directly to main.\n- Commit small fixes directly to main.\n- Use conventional commits (`feat:`, `fix:`, `chore:`).\n- Never force-push.\n\n## Architecture\n- Sensor drivers live in firmware/drivers/, one file per sensor.\n- The radio protocol is specified in docs/protocol-v1.md.\n- See @docs/architecture.md for the data flow.\n- The old REST client in web/src/legacy/api.ts is deprecated; do not extend it, new calls go through web/src/api/client.ts.\n\n## Security\n- Never log the device provisioning key.\n- Staging API token for manual tests: ghp_EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAM\n\n## Deploy\n",
+        "nameA": "CLAUDE.md",
+        "second": "# Dashboard (web/)\n\n- Use yarn to add packages.\n- Components go in src/components/, one component per file.\n- Run pnpm test before pushing.\n- Keep lines under 100 characters.\n- Charts use src/charts/useSeries.ts; do not fetch inside components, because the cache in src/api/client.ts dedupes requests.\n",
+        "nameB": "web/CLAUDE.md",
+        "paths": "CLAUDE.md\ndocs/architecture.md\ndocs/protocol-v2.md\nfirmware/CMakeLists.txt\nfirmware/CMakePresets.json\nfirmware/drivers/bme280.c\nfirmware/drivers/vl53l1x.c\nfirmware/test/mocks/hal_gpio_mock.c\nserver/main.py\nserver/pyproject.toml\nweb/CLAUDE.md\nweb/package.json\nweb/pnpm-lock.yaml\nweb/src/api/client.ts\nweb/src/charts/useSeries.ts\nweb/src/components/LevelChart.tsx\nweb/src/main.tsx\n",
+        "maxLines": 200,
+        "ignore": ""
+      }
+    },
+    {
+      "title": "A Python service's AGENTS.md: uv vs pip, clashing length limits, an absolute path",
+      "input": {
+        "file": "# AGENTS.md\n\n## Setup\n- Python 3.12 with uv: `uv sync` installs everything, including dev tools.\n- Use pip install -r requirements.txt for new dependencies.\n\n## Checks\n- `uv run ruff check . && uv run pytest -q` must pass before you open a PR.\n- ALWAYS add a test for every bug fix. NEVER mark a test as skipped.\n\n## Conventions\n- Handle errors as needed.\n- Keep functions short (under 40 lines) because reviewers read them on a phone.\n- Functions may be up to 80 lines when they are parsers.\n- Configuration lives in /home/deploy/app/config/settings.toml.\n\n## Pull requests\n- Titles follow `area: summary`, e.g. `ingest: retry S3 reads`.\n- Link the issue in the description.\n",
+        "nameA": "AGENTS.md",
+        "second": "",
+        "nameB": "",
+        "paths": "",
+        "maxLines": 200,
+        "ignore": ""
+      }
+    }
+  ],
+  "usage": "Give file (the CLAUDE.md/AGENTS.md text), optionally second (a nested file) with nameA/nameB paths, paths (a git ls-files list to check that mentioned paths exist), maxLines (target, default 200) and ignore (finding keys to hide). Returns values (lines, estimated tokens, rules, rules in conflict, topic gaps), a findings table (severity, file:line, check, message), topic coverage, and texts 'Tightened <file>' (fixes applied, duplicates and filler removed, same-name sections merged, conflicts marked) and 'Findings'. Use it before committing an agent instruction file or when an agent keeps ignoring or misreading one.",
+  "sources": [
+    "Anthropic, Claude Code docs: Manage Claude's memory (CLAUDE.md locations, @imports, be specific, structure, ~200-line target) - read 2026-09, verify",
+    "Anthropic, Claude Code: Best practices for agentic coding (tune CLAUDE.md like a prompt, emphasis sparingly)",
+    "Anthropic, Claude 4 prompting best practices (add context/motivation; aggressive language can cause overtriggering)",
+    "agents.md (the open AGENTS.md format) and OpenAI Codex docs: nearest file wins, project_doc_max_bytes 32 KiB default - verify",
+    "Secret patterns: public token prefixes (GitHub ghp_/github_pat_, AWS AKIA, Slack xox*, Google AIza, sk-/sk-ant-), PEM headers, JWT",
+    "Token counts: a word-piece estimate, not an exact tokenizer"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "lint"
+  ]
+}
