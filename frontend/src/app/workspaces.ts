@@ -67,7 +67,7 @@ export const WORKSPACES: Workspace[] = [
   },
   {
     id: 'tools',
-    label: 'Tools',
+    label: 'Basic Tools',
     blurb: 'Small calculators and sketch pads for any room: units, track '
          + 'widths, resistors, a layout grid.',
     ready: true,

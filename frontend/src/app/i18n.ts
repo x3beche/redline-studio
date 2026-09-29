@@ -33,7 +33,9 @@ const TR: Record<string, string> = {
   // the tabs
   '3D Drawing': '3D Çizim', 'PCB Design': 'PCB Tasarım', 'Embedded Programming': 'Gömülü Programlama',
   'Web Programming': 'Web Programlama', 'Mobile Programming': 'Mobil Programlama', 'Notes': 'Notlar',
-  'Tools': 'Araçlar', 'Analytics': 'Analitik',
+  'Tools': 'Araçlar', 'Basic Tools': 'Temel Araçlar', 'Analytics': 'Analitik',
+  'Analytics, preferences': 'Analitik, tercihler',
+  'LLM spend, the machine, energy, the work in each room': 'LLM harcaması, makine, enerji, her odadaki iş',
   // the side columns
   'Part': 'Parça', 'Comment': 'Yorum', 'Save as draft': 'Taslak olarak kaydet', 'Auto English': 'Otomatik İngilizce',
   'Revisions': 'Revizyonlar', 'Board notes': 'Kart notları', 'ask the agent': 'ajana sor', 'Urgent': 'Acil',

@@ -1,4 +1,5 @@
-import { Component, Injectable, inject, output, signal } from '@angular/core';
+import { Component, Injectable, inject, input, output, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { catchError, throwError } from 'rxjs';
 import { T } from './i18n';
@@ -443,13 +444,22 @@ export class Members {
 /** Who is signed in, and signing out - only when sign-in is on. */
 @Component({
   selector: 'app-user-chip',
-  imports: [AgentTokens, Members, T],
+  imports: [AgentTokens, Members, NgTemplateOutlet, T],
   host: { class: 'relative flex items-center' },
   template: `
 @if (auth.state(); as s) {
   @if (s.mode !== 'on') {
-    <!-- Nobody signs in on this machine: the preferences on their own. -->
-    <button class="tcv-user tcv-user-gear" (click)="prefs.open.set('appearance')" [title]="'Preferences' | t">⚙</button>
+    <!-- Nobody signs in on this machine: a gear, with the same menu's
+         Analytics and Preferences. -->
+    <button class="tcv-user tcv-user-gear" (click)="toggle()" [attr.data-on]="open() ? 1 : null" [title]="'Analytics, preferences' | t">⚙</button>
+    @if (open()) {
+      <div class="tcv-menu tcv-user-menu" (mouseleave)="open.set(false)">
+        <ng-container *ngTemplateOutlet="analyticsItem" />
+        <button class="tcv-menu-item" (click)="open.set(false); prefs.open.set('appearance')">
+          <span class="tcv-menu-name">{{ 'Preferences' | t }}</span>
+          <span class="tcv-menu-blurb">{{ 'Theme, language, keyboard shortcuts' | t }}</span></button>
+      </div>
+    }
   }
   @if (s.mode === 'on' && s.user; as u) {
     <!-- Who you are, and where: your name over the workspace and your
@@ -465,6 +475,7 @@ export class Members {
     </button>
     @if (open()) {
       <div class="tcv-menu tcv-user-menu" (mouseleave)="open.set(false)">
+        <ng-container *ngTemplateOutlet="analyticsItem" />
         <div class="tcv-menu-item"><span class="tcv-menu-name">{{ u.name }}</span>
           <span class="tcv-menu-blurb">{{ u.email }} · {{ s.role }} in {{ s.workspace_name ?? s.workspace }}</span></div>
         @if (spaces().length > 1) {
@@ -517,11 +528,27 @@ export class Members {
       </div>
     }
   }
-}`,
+}
+<!-- Analytics: first in the menu, a chart beside it so it reads as the
+     place for figures, and the last seven days in a few words. -->
+<ng-template #analyticsItem>
+  <button class="tcv-menu-item tcv-menu-analytics" [attr.data-on]="inAnalytics() ? 1 : null"
+          (click)="open.set(false); analytics.emit()" [title]="brief()?.title ?? ''">
+    <span class="tcv-menu-name">
+      <svg class="tcv-menu-chart" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M2 14h12" /><rect x="3" y="8" width="2.4" height="5" rx=".4" /><rect x="6.8" y="5" width="2.4" height="8" rx=".4" />
+        <rect x="10.6" y="2" width="2.4" height="11" rx=".4" /></svg>
+      {{ 'Analytics' | t }}</span>
+    <span class="tcv-menu-blurb">{{ brief()?.text ?? ('LLM spend, the machine, energy, the work in each room' | t) }}</span></button>
+</ng-template>`,
 })
 export class UserChip {
   auth = inject(Auth);
   prefs = inject(Prefs);
+  /** The last seven days in a few words, from the shell (app.ts). */
+  brief = input<{ text: string; title: string } | null>(null);
+  inAnalytics = input(false);
+  analytics = output<void>();
   private http = inject(HttpClient);
   open = signal(false);
   tokens = signal(false);

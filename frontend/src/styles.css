@@ -3249,10 +3249,8 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 
 /* A number beside a tab's name - how many tools - said quietly. */
 .tcv-tab-count { margin-left: 4px; font-size: 10.5px; font-weight: 400; color: var(--ink-dim); opacity: .7; }
-/* A tab's name stays on one line; where the row runs short, the quiet
-   figures beside Analytics go first (they are on its tooltip too). */
+/* A tab's name stays on one line. */
 .tcv-tab { white-space: nowrap; }
-@media (max-width: 1700px) { .tcv-tab-end .tcv-tab-count { display: none; } }
 
 /* NOTES (rooms/notes.ts): write and it is kept - a list to find them on the
    left, the box to write in and the open note on the right. */
@@ -3430,3 +3428,12 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-prefs-keys { display: flex; gap: 4px; }
 .tcv-prefs-keys kbd { min-width: 22px; padding: 1px 6px; font: inherit; font-size: 11px; text-align: center; color: var(--ink);
   background: var(--surface); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; }
+
+/* Analytics, first in the menu under your name (app/auth.ts): a chart
+   beside its name, and a line under it before the rest of the menu. */
+.tcv-user-menu .tcv-menu-analytics { border-bottom: 1px solid var(--line); border-radius: 4px 4px 0 0; margin-bottom: 2px; }
+.tcv-user-menu .tcv-menu-analytics[data-on] { background: var(--accent-deep); }
+.tcv-menu-analytics .tcv-menu-name { display: flex; align-items: center; gap: 6px; }
+.tcv-menu-chart { width: 14px; height: 14px; flex: none; }
+.tcv-menu-chart rect { fill: var(--accent); }
+.tcv-menu-chart path { fill: none; stroke: var(--ink-dim); stroke-width: 1.2; stroke-linecap: round; }
