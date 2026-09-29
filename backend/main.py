@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import (access, actors, ato, auth, changes, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (access, actors, ato, auth, changes, convert, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
 from . import tools_api
@@ -1217,6 +1217,14 @@ async def run_board(bid: str):
     await say(f"{bid}: running the pipeline - build, schematic, place, route, DRC",
               "work", room="pcb")
     out["build"] = await build_board(bid)
+    # A board converted from an import: is the build still that circuit?
+    eq = await convert.check(db(), bid)
+    if eq is not None:
+        out["equivalence"] = eq
+        await say(f"{bid}: against the imported netlist - "
+                  + ("the same circuit" if eq["equivalent"] else
+                     f"{eq['nets']['only_imported']} imported nets differ"),
+                  "info" if eq["equivalent"] else "warn", room="pcb")
     out["schematic"] = await draw_schematic(bid)
     out["layout"] = await layout_board(bid)
     took = round(_time.monotonic() - t0, 1)
@@ -1232,6 +1240,50 @@ async def run_board(bid: str):
     except Exception:
         LOG.exception("could not record the board run")
     return out
+
+
+class ConvertIn(BaseModel):
+    bom: str | None = Field(default=None, max_length=2_000_000)     # a BOM CSV, as text
+    picks: dict[str, str | dict] | None = None                    # ref -> C-number
+
+
+@app.post("/api/boards/{bid}/convert")
+async def convert_board(bid: str, body: ConvertIn):
+    """Write an imported board as atopile source, build it, and check the
+    build against the imported netlist (backend/convert.py). Run again
+    with a BOM and its part numbers replace the guesses."""
+    async def tell(text: str, level: str = "info") -> None:
+        await say(text, level, room="pcb")
+    try:
+        out = await convert.run(db(), bid, body.bom.encode() if body.bom else None,
+                                body.picks, tell)
+    except KeyError:
+        raise HTTPException(404, bid)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except lcsc.Refused as exc:
+        await say(f"{bid}: LCSC is cooling off - {exc}", "warn", room="pcb")
+        raise HTTPException(503, f"LCSC is cooling off, run it again later: {exc}")
+    await actors.audit(db(), "convert", f"board {bid}", {"status": out.get("status")})
+    return out
+
+
+class HoldIn(BaseModel):
+    placement: bool
+
+
+@app.put("/api/boards/{bid}/hold")
+async def hold_board(bid: str, body: HoldIn):
+    """Keep a converted board's layout (the default) or let the placer
+    lay it out afresh on the next run."""
+    got = await db()[ato.BOARDS].update_one(
+        {"_id": bid, "hold": {"$ne": None}}, {"$set": {"hold.placement": body.placement}})
+    if not got.matched_count:
+        raise HTTPException(404, f"{bid} has no layout to hold")
+    await say(f"{bid}: " + ("placement held as imported" if body.placement
+                            else "placement let go - the next run lays the board out afresh"),
+              "info", room="pcb")
+    return {"board": bid, "placement": body.placement}
 
 
 @app.get("/api/boards/{bid}/board.glb")

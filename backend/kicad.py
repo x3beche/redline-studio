@@ -93,6 +93,54 @@ def module_of(component: dict) -> str:
     return inner.split(".", 1)[0] if "." in inner else ""
 
 
+MARGIN = 20.0            # where a held board's corner goes on KiCad's page, mm
+
+
+def to_page(box, x: float, y: float) -> list[float]:
+    """A point in the Gerbers' frame (mm, y up) on KiCad's page (y down),
+    the board's top-left corner at MARGIN, MARGIN."""
+    x0, _y0, _x1, y1 = box
+    return [round(x - x0 + MARGIN, 5), round(y1 - y + MARGIN, 5)]
+
+
+async def held_plan(db, board_id: str, hold: dict | None) -> dict | None:
+    """What the placer needs to put a board back the way it was: each
+    part's pads and centre, and the outline, on KiCad's page.
+
+    A board converted from an import is marked `hold` (backend/convert.py)
+    with the Gerbers' outline; where its parts sat is the import's own
+    `pads` and `placement`. Anything else - a board Redline designed, or a
+    held board someone let go (`hold.placement` false) - is packed as
+    usual, and this says None.
+    """
+    if not hold or not hold.get("placement") or not hold.get("outline"):
+        return None
+    outline = hold["outline"]
+    box = outline["box"]
+    pads = json.loads(await store.get_artifact(db, board_id, "pads", ato.BOARDS))
+    try:
+        placed = json.loads(await store.get_artifact(db, board_id, "placement", ato.BOARDS))
+    except KeyError:
+        placed = {"parts": []}
+    parts: dict[str, dict] = {}
+    for p in pads:
+        parts.setdefault(p["ref"], {"pads": {}})["pads"].setdefault(
+            str(p["pin"]), to_page(box, p["x"], p["y"]))
+    for p in placed.get("parts", []):
+        entry = parts.setdefault(p["ref"], {"pads": {}})
+        # The placement is kept from the board's lower-left corner.
+        entry["at"] = to_page(box, p["x"] + box[0], p["y"] + box[1])
+        entry["rot"] = p.get("rot") or 0
+        entry["side"] = p.get("side") or "top"
+    for ref, entry in parts.items():
+        if "at" not in entry and entry["pads"]:
+            pts = list(entry["pads"].values())
+            entry["at"] = [sum(q[0] for q in pts) / len(pts), sum(q[1] for q in pts) / len(pts)]
+    loops = [[{k: [to_page(box, *pt) for pt in v] for k, v in piece.items()} for piece in loop]
+             for loop in outline["loops"]]
+    return {"parts": parts, "outline": loops}
+
+
 class NoDocker(RuntimeError):
     """Raised when the container is not there, with what to do about it."""
 
@@ -246,6 +294,12 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                 for c in graph.get("components", [])],
             "nets": graph.get("nets", []),
         }
+        # A board converted from an import keeps the layout its maker gave
+        # it: the placer puts every part back instead of packing it again.
+        held = await held_plan(db, board_id, ((await db[ato.BOARDS].find_one(
+            {"_id": board_id}, {"hold": 1})) or {}).get("hold"))
+        if held:
+            plan["hold"] = held
 
         meter = compute.Meter()
 
@@ -446,7 +500,12 @@ async def render(db, board_id: str, route: bool = True) -> dict:
             {"$set": {"layout": {"placed": placed.get("placed"),
                                  "missing": placed.get("missing") or [],
                                  "size_mm": placed.get("size_mm"),
-                                 "at": store.now()},
+                                 "at": store.now(),
+                                 # A held board: how close every part came
+                                 # to where the import had it.
+                                 **{k: placed[k] for k in ("held", "held_worst_mm",
+                                                           "held_off", "held_by_centre")
+                                    if k in placed}},
                       "route": routed, "drc": drc_report}})
         return {"board": board_id, "svg_bytes": len(svg),
                 "glb_bytes": len(glb) if glb else 0,

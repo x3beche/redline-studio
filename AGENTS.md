@@ -191,7 +191,8 @@ links an app to its board and keeps hand corrections. Nothing of the
 application is changed for the simulator. Contract: backend/sim/SPEC.md.
 
 An **imported** board (`kind: imported`) has no atopile source: it was
-made from Gerbers, a netlist, a STEP. Don't try to build or edit it.
+made from Gerbers, a netlist, a STEP. Don't try to build or edit it -
+convert it first (below, *Converting an imported board*).
 
 ## Say who you are
 
@@ -353,6 +354,44 @@ speed, and say so if someone asks for anything faster.
 
 A part is chosen by its LCSC number (`mpn = "C25744"` on the component).
 Then `done <id>` as usual.
+
+### Converting an imported board
+
+```bash
+.venv/bin/python tools/revisions.py board convert <id>                  # parts, source, build, check
+.venv/bin/python tools/revisions.py board convert <id> --part U5=C14267 --why "CH340G: XI/XO, UD+/UD-"
+.venv/bin/python tools/revisions.py board convert <id> --bom bom.csv    # a BOM replaces the guesses
+.venv/bin/python tools/revisions.py board convert <id> --run            # then the whole pipeline
+.venv/bin/python tools/revisions.py board hold <id> off                 # let the placer redo the layout
+```
+
+`backend/convert.py` writes the atopile: one component per part number
+from the part's EasyEDA symbol, every multi-pad net of the import under
+its own name (`override_net_name`), every pad by its number, every
+designator kept (`designator = "U2"`), parts grouped into modules by who
+shares nets with which chip. It builds the source and compares the
+netlist with the import's as sets of (ref, pad) pairs; the board stops
+being `imported` only when they are equivalent. `board run` repeats the
+comparison on every build - a difference after a note is the note's
+change, and should be one you meant.
+
+Where the parts come from, in order: the BOM's LCSC number; a pick
+(`--part`, kept on the board); `backend/passives.json` for R and C by
+size (value from the BOM, else a placeholder); a search by the
+footprint's name that only accepts a part whose EasyEDA footprint has
+that exact name. Anything else is **unresolved** and the command says
+which designator needs a `--part`. Choose it the way *Designing a board
+from a description* says - read the nets on its pads, `part find`,
+`part pins` - and check the report's `land` column: the part's own
+footprint is laid over the board's pads, and more than a few hundredths
+of a millimetre means a different land pattern. **Every part not from a
+BOM is marked `GUESSED`** in the source and the report; say which ones
+when you report, and never present a guess as the board's real part.
+
+Do not fix the design while converting - a net that looks wrong is kept
+and listed under findings. The layout is held (placer puts each part
+where its pads were; the Gerber outline is the edge); routing, the pour
+and DRC are the pipeline's.
 
 ## Code notes
 

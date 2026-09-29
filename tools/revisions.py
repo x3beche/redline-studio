@@ -385,6 +385,32 @@ async def cmd_board(args):
         print(f"{bid}: build, schematic, place, route, pour, DRC - a minute or so")
         out = call(f"/api/boards/{bid}/run", "POST", {}, timeout=1800)
         _print_board(out)
+    elif args.what == "convert":
+        # An imported board written as atopile, built, and checked against
+        # the import. Parts nothing else settles are picked with --part
+        # (kept on the board); a BOM given now replaces the guesses.
+        picks = {}
+        if args.picks:
+            picks.update(_json.loads(Path(args.picks).read_text()))
+        for item in args.part or []:
+            refs, _, code = item.partition("=")
+            if not code:
+                sys.exit(f"--part {item}: REF=C12345 (or R1,R2=C12345)")
+            for ref in refs.split(","):
+                picks[ref.strip()] = {"lcsc": code.strip(),
+                                      "why": args.why or "picked by hand, not from a BOM"}
+        body = {"picks": picks or None,
+                "bom": Path(args.bom).read_text(errors="replace") if args.bom else None}
+        print(f"{bid}: converting to atopile - parts, source, build, the netlist checked "
+              "(LCSC lookups wait their turn: minutes on a first run)")
+        out = call(f"/api/boards/{bid}/convert", "POST", body, timeout=3600)
+        _print_convert(out)
+        if args.run and out.get("status") == "converted":
+            print(f"{bid}: build, schematic, place (held), route, pour, DRC")
+            _print_board(call(f"/api/boards/{bid}/run", "POST", {}, timeout=3600))
+    elif args.what == "hold":
+        want = (args.file or "on").lower() in ("on", "yes", "true", "1")
+        print(call(f"/api/boards/{bid}/hold", "PUT", {"placement": want}))
     else:                                        # show
         doc = next((b for b in call("/api/boards") if b["_id"] == bid), None)
         if not doc:
@@ -392,6 +418,57 @@ async def cmd_board(args):
         _print_board({"schematic": doc.get("schematic") or {},
                       "layout": {**(doc.get("layout") or {}),
                                  "route": doc.get("route"), "drc": doc.get("drc")}})
+
+
+def _print_convert(out: dict) -> None:
+    print(f"  status     {out.get('status')}")
+    parts = out.get("parts") or []
+    guessed = [p for p in parts if p.get("guessed")]
+    print(f"  parts      {len(parts)}: {len(parts) - len(guessed)} settled, "
+          f"{len(guessed)} GUESSED" + (f" (BOM {out['bom']})" if out.get("bom") else " (no BOM)"))
+    by_how: dict = {}
+    for p in guessed:
+        by_how.setdefault(p["how"], []).append(p["ref"])
+    for how, refs in by_how.items():
+        print(f"             {how}: {', '.join(refs)}")
+    for p in parts:
+        if p["how"] not in ("placeholder", "bom-value"):
+            land = p.get("land") or {}
+            print(f"    {p['ref']:12} {p['lcsc'] or '-':10} {p['how']:7} {p['component']:28} "
+                  f"land {land.get('worst_mm', '-')} mm"
+                  + (f", pins added {','.join(p['added_pins'])}" if p.get("added_pins") else ""))
+    for x in out.get("unresolved") or []:
+        print(f"  UNRESOLVED {x}")
+    for x in out.get("problems") or []:
+        print(f"  problem    {x}")
+    for x in out.get("findings") or []:
+        print(f"  finding    {x}")
+    if out.get("modules"):
+        print(f"  modules    " + "; ".join(f"{m} ({len(r)})" for m, r in out["modules"].items()))
+    if out.get("open_pins") is not None:
+        print(f"  open pins  {len(out['open_pins'])} pads on no net stay unconnected")
+    if out.get("outline"):
+        o = out["outline"]
+        print(f"  outline    {'closed' if o.get('closed') else 'NOT closed'}, "
+              f"{o.get('strokes')} strokes, ends joined up to {o.get('joined_mm')} mm")
+    if out.get("build_error"):
+        print("  build      FAILED\n" + out["build_error"])
+    eq = out.get("equivalence")
+    if eq:
+        _print_equivalence(eq)
+
+
+def _print_equivalence(eq: dict) -> None:
+    n, p = eq["nets"], eq["parts"]
+    print(f"  netlist    {'EQUIVALENT' if eq['equivalent'] else 'NOT EQUIVALENT'} to the import: "
+          f"parts {p['built']}/{p['imported']}, nets {n['same']}/{n['imported']} identical, "
+          f"pads joined {eq['pads_joined']['built']}/{eq['pads_joined']['imported']}")
+    for d in eq.get("differences") or []:
+        print(f"             differs: {d}")
+    if p.get("missing") or p.get("extra"):
+        print(f"             parts missing {p['missing']}, extra {p['extra']}")
+    if eq.get("renamed"):
+        print(f"             renamed: {', '.join(eq['renamed'][:10])}")
 
 
 def _print_board(out: dict) -> None:
@@ -417,6 +494,12 @@ def _print_board(out: dict) -> None:
         print(f"             {x[:150]}")
     for u in d.get("unconnected_examples") or []:
         print(f"             unconnected: {u}")
+    if lay.get("held"):
+        print(f"  held       every part where the import had it: worst pad "
+              f"{lay.get('held_worst_mm')} mm off" + (f"; by centre only: {', '.join(lay['held_by_centre'])}"
+                                                    if lay.get("held_by_centre") else ""))
+    if out.get("equivalence"):
+        _print_equivalence(out["equivalence"])
 
 
 async def cmd_ask(args):
@@ -1263,15 +1346,26 @@ def main() -> None:
     s.set_defaults(fn=cmd_part)
     s = sub.add_parser("board", help="a board: its source, and the whole pipeline")
     s.add_argument("what", choices=["run", "show", "source", "save", "rules",
-                                    "rules-save", "rules-schema"],
+                                    "rules-save", "rules-schema", "convert", "hold"],
                    help="run: build, schematic, place, route, DRC; show: where it "
                         "stands; source/save: read or write its atopile; rules: "
                         "the routing rules as JSON (to a file if given); "
                         "rules-save: write them back, checked; rules-schema: "
-                        "what every rule field is")
+                        "what every rule field is; convert: an imported board "
+                        "to atopile, built and checked; hold <id> on|off: keep a "
+                        "converted board's layout, or let the placer redo it")
     s.add_argument("board", nargs="?")
     s.add_argument("file", nargs="?", help="for save: the .ato file; for rules / "
-                                           "rules-save: the JSON file")
+                                           "rules-save: the JSON file; for hold: on|off")
+    s.add_argument("--bom", help="convert: a BOM CSV (Designator, Footprint, Value, "
+                                 "LCSC Part) - replaces guessed parts")
+    s.add_argument("--part", action="append", metavar="REF=C12345",
+                   help="convert: choose a part for a designator (R1,R2=C... for "
+                        "several); kept on the board, marked GUESSED")
+    s.add_argument("--picks", help="convert: a JSON file of ref -> {lcsc, why}")
+    s.add_argument("--why", help="convert: the reason written beside --part picks")
+    s.add_argument("--run", action="store_true",
+                   help="convert: then run the whole pipeline")
     s.set_defaults(fn=cmd_board)
     s = sub.add_parser("wait", help="block until a revision is queued")
     s.add_argument("--every", type=int, default=30,

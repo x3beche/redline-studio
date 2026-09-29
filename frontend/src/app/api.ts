@@ -439,6 +439,26 @@ export interface BoardEntry {
   building?: boolean;
   build_secs?: number;
   artifacts?: Record<string, { bytes: number; at: string }>;
+  kind?: string;
+  /** An imported board written as atopile (backend/convert.py). */
+  convert?: BoardConversion | null;
+}
+
+/** How an imported board came to have source: which parts were guessed,
+ *  and whether the build is the imported circuit. */
+export interface BoardConversion {
+  status: 'converted' | 'needs parts' | 'build failed' | 'not equivalent' | 'building';
+  bom: string | null;
+  guessed: string[];
+  unresolved: string[];
+  findings: string[];
+  problems?: string[];
+  equivalence?: {
+    equivalent: boolean;
+    parts: { imported: number; built: number; missing: string[]; extra: string[] };
+    nets: { imported: number; built: number; same: number; only_imported: number; only_built: number };
+    pads_joined: { imported: number; built: number };
+  };
 }
 
 /** What came of placing a board: how much of it could be drawn, and what
@@ -525,6 +545,11 @@ export class Boards {
   /** The whole of it: build, schematic, place, route, pour, DRC. */
   run(id: string): Observable<unknown> {
     return this.http.post(`/api/boards/${id}/run`, {});
+  }
+  /** An imported board to atopile source, built and checked against the
+   *  import; with a BOM CSV (as text) its part numbers replace guesses. */
+  convert(id: string, bom?: string): Observable<BoardConversion> {
+    return this.http.post<BoardConversion>(`/api/boards/${id}/convert`, { bom: bom ?? null });
   }
   rules(id: string): Observable<RulesRead> {
     return this.http.get<RulesRead>(`/api/boards/${id}/rules`);

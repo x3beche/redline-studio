@@ -123,6 +123,12 @@ class Board:
         (x0, y0), (x1, y1) = bounds
         return x0, y0, x1, y1
 
+    def outline_path(self) -> dict | None:
+        """The outline as the strokes it was drawn with, joined into
+        closed loops - see `outline_loops`."""
+        layer = self.layers.get("outline")
+        return outline_loops(layer) if layer is not None else None
+
     # ---- drawing ----
 
     def _objects(self, layer, fg: str, bg: str) -> str:
@@ -316,3 +322,140 @@ def layer_pages(board: Board, title: str) -> str:
             "header{display:flex;justify-content:space-between;border-bottom:1px solid #999;"
             "padding-bottom:2mm;margin-bottom:3mm}.fig{flex:1;min-height:0}"
             "svg{width:100%;height:100%}</style></head><body>" + body + "</body></html>")
+
+
+# ---- the outline as a shape ---------------------------------------------
+
+def outline_loops(layer) -> dict:
+    """The outline layer's lines and arcs as closed loops, in mm, y up.
+
+    A Gerber outline is drawn with a pen, and a drawing only has to look
+    closed: EasyEDA's for the demo board has a 0.127 mm gap in its left
+    edge, an edge that runs 0.127 mm past the corner arc it meets, and
+    three strokes lying on top of each other along the top - all inside
+    the 0.254 mm pen, so nobody sees them. A board file needs the edge as
+    one closed line. So strokes on the same line are merged, ends closer
+    than the pen are joined (to an arc's end where there is one - an arc
+    is the shape that was meant), and the pieces chained. Nothing is moved
+    further than the pen is wide; how far is reported.
+
+        {"loops": [[{"line": [[x, y], [x, y]]} | {"arc": [start, mid, end]}, ...]],
+         "closed": bool, "joined_mm": 0.127, "strokes": 16, "box": [x0, y0, x1, y1]}
+    """
+    from gerbonara import graphic_objects as go
+    from gerbonara.utils import MM
+
+    lines, arcs, pen = [], [], 0.0
+    for obj in layer.objects:
+        if not isinstance(obj, (go.Line, go.Arc)):
+            continue
+        o = obj.converted(MM)
+        try:
+            pen = max(pen, obj.aperture.equivalent_width(MM))
+        except Exception:                                        # noqa: BLE001
+            pass
+        if isinstance(o, go.Line):
+            if math.dist((o.x1, o.y1), (o.x2, o.y2)) > 1e-6:
+                lines.append(((o.x1, o.y1), (o.x2, o.y2)))
+        else:
+            cx, cy = o.x1 + o.cx, o.y1 + o.cy
+            a0 = math.atan2(o.y1 - cy, o.x1 - cx)
+            a1 = math.atan2(o.y2 - cy, o.x2 - cx)
+            sweep = (a1 - a0) % (2 * math.pi)
+            if o.clockwise:
+                sweep -= 2 * math.pi
+            r = math.dist((cx, cy), (o.x1, o.y1))
+            mid = (cx + r * math.cos(a0 + sweep / 2), cy + r * math.sin(a0 + sweep / 2))
+            arcs.append(((o.x1, o.y1), mid, (o.x2, o.y2)))
+    tol = max(pen, 0.05) + 1e-6
+    strokes = len(lines) + len(arcs)
+
+    # 1. Strokes on one line become one stroke: their spans unioned, gaps
+    #    under the pen bridged.
+    merged: list[tuple] = []
+    todo = list(lines)
+    while todo:
+        (ax, ay), (bx, by) = todo.pop(0)
+        length = math.dist((ax, ay), (bx, by))
+        dx, dy = (bx - ax) / length, (by - ay) / length
+
+        def on_line(p):
+            return abs((p[0] - ax) * dy - (p[1] - ay) * dx) <= tol
+
+        spans = [(0.0, length)]
+        rest = []
+        for seg in todo:
+            p, q = seg
+            ex, ey = q[0] - p[0], q[1] - p[1]
+            n = math.hypot(ex, ey)
+            if on_line(p) and on_line(q) and abs(ex / n * dy - ey / n * dx) < 1e-3:
+                t0 = (p[0] - ax) * dx + (p[1] - ay) * dy
+                t1 = (q[0] - ax) * dx + (q[1] - ay) * dy
+                spans.append((min(t0, t1), max(t0, t1)))
+            else:
+                rest.append(seg)
+        todo = rest
+        spans.sort()
+        joined = [list(spans[0])]
+        for s0, s1 in spans[1:]:
+            if s0 <= joined[-1][1] + tol:
+                joined[-1][1] = max(joined[-1][1], s1)
+            else:
+                joined.append([s0, s1])
+        for s0, s1 in joined:
+            merged.append(((ax + dx * s0, ay + dy * s0), (ax + dx * s1, ay + dy * s1)))
+
+    # 2. Ends that nearly meet, meet - at an arc's end if one is among them.
+    ends = [(p, True) for a in arcs for p in (a[0], a[2])] + \
+           [(p, False) for seg in merged for p in seg]
+    groups: list[list] = []
+    for p, is_arc in ends:
+        home = next((g for g in groups if any(math.dist(p, q) <= tol for q, _ in g)), None)
+        if home is None:
+            groups.append([(p, is_arc)])
+        else:
+            home.append((p, is_arc))
+    snapped, moved = {}, 0.0
+    for g in groups:
+        anchors = [q for q, a in g if a] or [q for q, _ in g]
+        at = (sum(q[0] for q in anchors) / len(anchors), sum(q[1] for q in anchors) / len(anchors))
+        for q, _ in g:
+            snapped[q] = at
+            moved = max(moved, math.dist(q, at))
+
+    pieces = [{"line": [snapped[a], snapped[b]]} for a, b in merged
+              if math.dist(snapped[a], snapped[b]) > 1e-6] + \
+             [{"arc": [snapped[a], m, snapped[b]]} for a, m, b in arcs]
+
+    # 3. Chained into loops, each piece turned to follow the last.
+    def ends_of(piece):
+        pts = piece.get("line") or piece.get("arc")
+        return pts[0], pts[-1]
+
+    loops, closed = [], True
+    left = list(pieces)
+    while left:
+        loop = [left.pop(0)]
+        start, cur = ends_of(loop[0])
+        while True:
+            nxt = next((pc for pc in left if cur in ends_of(pc)), None)
+            if nxt is None:
+                break
+            left.remove(nxt)
+            s, e = ends_of(nxt)
+            if e == cur:
+                key = "line" if "line" in nxt else "arc"
+                nxt = {key: list(reversed(nxt[key]))}
+                s, e = e, s
+            loop.append(nxt)
+            cur = e
+            if cur == start:
+                break
+        closed = closed and cur == start
+        loops.append([{k: [[round(x, 5), round(y, 5)] for x, y in v] for k, v in pc.items()}
+                      for pc in loop])
+    xs = [p[0] for lp in loops for pc in lp for p in next(iter(pc.values()))]
+    ys = [p[1] for lp in loops for pc in lp for p in next(iter(pc.values()))]
+    return {"loops": loops, "closed": closed and bool(loops), "joined_mm": round(moved, 3),
+            "strokes": strokes, "pen_mm": round(pen, 3),
+            "box": [min(xs), min(ys), max(xs), max(ys)] if xs else None}

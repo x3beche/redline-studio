@@ -949,6 +949,38 @@ STEP (the 3D board), or a KiCad/EasyEDA/Altium/Eagle board file. It says
 what it found and which file would give what is missing. An imported
 board is shown like any other, without Build and Code.
 
+**Converting an imported board to code.** *Convert to code* (the
+schematic-file button, on an imported board) writes the board as atopile
+so it can be changed and rebuilt like one Redline made. The same thing
+from a terminal: `revisions.py board convert <id>`.
+
+- **Nets and designators are the import's.** Every net joining two pads
+  or more is one net in the source under its own name (`3.3V`, `BAT+`),
+  each pad wired by its number on the footprint, each part keeping its
+  designator. The source is built straight away and its netlist compared
+  with the imported one pad by pad; the board becomes a normal board
+  (Build and Code on) only when the two are the same circuit. Every later
+  run compares again and says so in the log.
+- **Parts are marked when guessed.** Without a BOM nobody knows what was
+  bought: a resistor or capacitor is sized from its footprint (or its
+  pads) and given a placeholder value from `backend/passives.json`, other
+  parts are found by their footprint's name on LCSC or picked by hand
+  (`--part U5=C14267`). Every one is marked `GUESSED` in the source and
+  listed in the report, with how far its footprint lies from the board's
+  pads. A BOM CSV (Designator, Footprint, Value, LCSC Part) replaces the
+  guesses: press the button again on the converted board and choose the
+  file, or `board convert <id> --bom bom.csv`.
+- **The layout is kept.** The board is *held*: the placer puts every part
+  back where its pads were in the import and draws the Gerber outline
+  (its strokes joined into one closed edge), instead of laying the board
+  out again. Routing is redone by the pipeline, to the board's rules.
+  `board hold <id> off` lets the placer lay it out afresh.
+- **Nothing is fixed.** A net that looks wrong - three LEDs' cathodes on a
+  net that goes nowhere - is kept as it is and listed as a finding.
+- **The import stays.** Its netlist and drawings are kept on the board as
+  `imported_graph`, `imported_layout`, `imported_model3d` and so on, with
+  the uploaded files (`sources.zip`) and the import's account.
+
 **Simulating firmware on its board.** In the Embedded room, *Simulate*
 runs the firmware in an emulator - QEMU for ESP32, Renode for STM32 - on
 the board it is linked to, shown in 3D: LEDs glow, an OLED shows what the

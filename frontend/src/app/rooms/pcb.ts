@@ -120,6 +120,18 @@ type BoardView = Pane | 'split' | 'focus';
       <app-tool icon="tcv-ico-code" [tip]="imported() ? 'An imported board has no atopile source'
                        : ide() ? 'Back to the view' : 'Code - the board source (atopile)'"
                 [on]="ide()" [disabled]="!here() || frozen() || imported()" (press)="ide.set(!ide())" />
+      <!-- An imported board has no source: this writes it (atopile, every
+           net as imported, guessed parts marked), builds it and checks
+           the build against the import. With a BOM, the guesses go. -->
+      @if (imported() || converted()) {
+        <app-tool icon="tcv-ico-schfile"
+                  [tip]="converting() ? 'Converting…' : imported()
+                         ? 'Convert to code - write this board as atopile, build it, check it against the import'
+                         : 'Convert again with a BOM - its part numbers replace the guessed parts'"
+                  [on]="converting()" [disabled]="converting() || frozen() || !here()"
+                  (press)="imported() ? convert() : bomPick.click()" />
+        <input #bomPick type="file" accept=".csv,text/csv" hidden (change)="convertWithBom(bomPick)" />
+      }
       @if (frozen()) {
         <app-draw-tools [pen]="pen" (undo)="pad()?.undo()" (clear)="pad()?.clear()" />
       }
@@ -865,6 +877,44 @@ export class RoomPcb implements OnDestroy {
     return (this.here() as (BoardEntry & { kind?: string }) | null)?.kind === 'imported';
   }
   readonly importedNote = 'Not in what was imported - the import dialog said which file would bring it.';
+
+  /** Imported once, now a board with source (backend/convert.py). */
+  converted(): boolean {
+    return !this.imported() && !!(this.here() as BoardEntry | null)?.convert;
+  }
+  converting = signal(false);
+
+  /** Write the imported board as atopile, build it, check it. The answer
+   *  goes in the files note; the whole account is in the room's log. */
+  convert(bom?: string) {
+    const b = this.here();
+    if (!b || this.converting()) return;
+    this.converting.set(true);
+    this.note.set('converting - LCSC lookups can take minutes on a first run');
+    this.api.convert(b._id, bom).subscribe({
+      next: c => {
+        this.converting.set(false);
+        const eq = c.equivalence;
+        this.note.set(c.status === 'converted'
+          ? `converted: ${eq?.parts.built} parts, ${eq?.nets.same} nets identical to the import`
+            + ` · ${c.guessed.length} parts guessed` + (c.bom ? '' : ' (no BOM)')
+          : c.status === 'needs parts'
+            ? `${c.unresolved.length} parts need choosing: ${c.unresolved[0]}`
+            : `${c.status} - see the log`);
+        this.refresh();
+      },
+      error: e => {
+        this.converting.set(false);
+        this.note.set(String(e?.error?.detail ?? 'the conversion failed - see the log').slice(0, 160));
+      },
+    });
+  }
+
+  convertWithBom(input: HTMLInputElement) {
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) file.text().then(text => this.convert(text));
+  }
 
   /** A KiCad board file to download: a built board's, or an imported design's. */
   hasPcb(): boolean {

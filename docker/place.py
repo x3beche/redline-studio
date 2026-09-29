@@ -666,8 +666,109 @@ def steady(path: str, salt: int) -> int:
     return done
 
 
+def draw_edges(board, loops) -> tuple[float, float, float, float]:
+    """A given outline - lines and arcs, in mm - on Edge.Cuts. Returns its
+    box."""
+    xs, ys = [], []
+    for loop in loops:
+        for piece in loop:
+            shape = pcbnew.PCB_SHAPE(board)
+            if "arc" in piece:
+                a, m, b = piece["arc"]
+                shape.SetShape(pcbnew.SHAPE_T_ARC)
+                shape.SetArcGeometry(at(*a), at(*m), at(*b))
+                pts = [a, m, b]
+            else:
+                a, b = piece["line"]
+                shape.SetShape(pcbnew.SHAPE_T_SEGMENT)
+                shape.SetStart(at(*a))
+                shape.SetEnd(at(*b))
+                pts = [a, b]
+            shape.SetLayer(pcbnew.Edge_Cuts)
+            shape.SetWidth(int(0.1 * MM))
+            board.Add(shape)
+            xs += [p[0] for p in pts]
+            ys += [p[1] for p in pts]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def pad_spots(fp) -> dict:
+    """A placed footprint's pads: number -> centres in mm. A number can
+    name several pads (a connector's shell)."""
+    out = {}
+    for pad in fp.Pads():
+        if pad.GetNumber():
+            p = pad.GetPosition()
+            out.setdefault(pad.GetNumber(), []).append((p.x / MM, p.y / MM))
+    return out
+
+
+def hold(fp, want) -> dict:
+    """Put a footprint where the board it came from had it.
+
+    `want` is {"pads": {number: [x, y]}, "at": [x, y], "rot": deg, "side"}
+    in the board's own millimetres. Where two pads or more can be told
+    apart by number, the footprint is turned and moved so its pads lie on
+    those - measured, the same way `face` measures a turn: the best turn
+    by least squares, tried both ways round since which way KiCad counts
+    an angle is not worth being wrong about, then the shift that centres
+    the pads on theirs. Where they cannot, the part goes to the given
+    centre and angle. Says how far its worst pad is from where it was.
+    """
+    if want.get("side") == "bottom":
+        fp.Flip(fp.GetPosition(), False)
+    fp.SetOrientationDegrees(0)
+    fp.SetPosition(at(0, 0))
+    targets = {k: tuple(v) for k, v in (want.get("pads") or {}).items()}
+    mine = pad_spots(fp)
+    pairs = [(mine[k][0], targets[k]) for k in targets if len(mine.get(k, [])) == 1]
+
+    def worst():
+        spots = pad_spots(fp)
+        dist = [min(math.dist(p, q) for p in spots[k]) for k, q in targets.items() if k in spots]
+        return max(dist) if dist else None
+
+    if len(pairs) < 2:
+        fp.SetOrientationDegrees(float(want.get("rot") or 0))
+        fp.SetPosition(at(*want["at"]))
+        return {"how": "centre", "worst_mm": worst()}
+
+    def fit(src, dst):
+        n = len(src)
+        sx, sy = sum(p[0] for p in src) / n, sum(p[1] for p in src) / n
+        dx, dy = sum(p[0] for p in dst) / n, sum(p[1] for p in dst) / n
+        a = b = 0.0
+        for (x0, y0), (x1, y1) in zip(src, dst):
+            x0, y0, x1, y1 = x0 - sx, y0 - sy, x1 - dx, y1 - dy
+            a += x0 * x1 + y0 * y1
+            b += x0 * y1 - y0 * x1
+        return math.degrees(math.atan2(b, a))
+
+    turn = fit([p for p, _ in pairs], [q for _, q in pairs])
+    best = None
+    for angle in (turn, -turn):
+        fp.SetOrientationDegrees(round(angle, 3) % 360)
+        fp.SetPosition(at(0, 0))
+        spots = pad_spots(fp)
+        keys = [k for k in targets if len(spots.get(k, [])) == 1]
+        got = [spots[k][0] for k in keys]
+        dst = [targets[k] for k in keys]
+        mx = sum(p[0] for p in dst) / len(dst) - sum(p[0] for p in got) / len(got)
+        my = sum(p[1] for p in dst) / len(dst) - sum(p[1] for p in got) / len(got)
+        fp.SetPosition(at(mx, my))
+        w = worst()
+        if best is None or w < best[0]:
+            best = (w, angle, (mx, my))
+    w, angle, (mx, my) = best
+    fp.SetOrientationDegrees(round(angle, 3) % 360)
+    fp.SetPosition(at(mx, my))
+    return {"how": "pads", "worst_mm": round(w, 4)}
+
+
 def main() -> int:
     plan = json.load(sys.stdin)
+    if plan.get("hold"):
+        return main_held(plan)
     board = pcbnew.BOARD()
 
     # Nets first: a pad can only be put on a net the board already knows.
@@ -871,6 +972,86 @@ def main() -> int:
                "uuids": steadied, "trimmed_mm": trimmed,
                "hanging_over_mm": hanging,
                "attempts_available": len(TRIALS),
+               "size_mm": [round(x1 - x0, 2), round(y1 - y0, 2)],
+               "texts_beside": nudged, "texts_moved_in": escaped,
+               "nets": len(nets), "out": out}, sys.stdout)
+    return 0
+
+
+def main_held(plan) -> int:
+    """A board whose layout is already decided - one converted from an
+    import. Every part goes where it was, the outline is the one given,
+    and nothing is packed, turned to face an edge or trimmed: the person
+    made this board, and placing it again would be making another.
+
+        plan["hold"] = {"parts": {ref: {"pads": {...}, "at": [x, y],
+                                        "rot": deg, "side": "top"}},
+                        "outline": [[{"line": ...} | {"arc": ...}, ...]]}
+    """
+    board = pcbnew.BOARD()
+    nets = {}
+    for net in plan.get("nets", []):
+        name = net.get("name") or ""
+        if name and name not in nets:
+            item = pcbnew.NETINFO_ITEM(board, name)
+            board.Add(item)
+            nets[name] = item
+    where = {(n["ref"], str(n["pin"])): net["name"]
+             for net in plan.get("nets", [])
+             for n in net.get("nodes", []) if net.get("name")}
+    held = plan["hold"]
+    placed, missing, off, unheld, by_centre = 0, [], {}, [], []
+    for comp in plan.get("components", []):
+        path = Path(comp["footprint"])
+        fp = pcbnew.FootprintLoad(str(path.parent), path.stem)
+        if fp is None:
+            missing.append(f"{comp.get('ref')} ({path.stem})")
+            continue
+        fp.SetReference(comp.get("ref") or "U?")
+        if comp.get("value"):
+            fp.SetValue(str(comp["value"]))
+        want = held["parts"].get(comp.get("ref"))
+        if want is None:
+            unheld.append(comp.get("ref"))
+            fp.SetPosition(at(0, 0))
+        else:
+            got = hold(fp, want)
+            if got["how"] == "centre":
+                by_centre.append(comp["ref"])
+            if got["worst_mm"] is not None:
+                off[comp["ref"]] = got["worst_mm"]
+        # Pegs, as `put` does for a packed board.
+        for pad in fp.Pads():
+            if pad.GetAttribute() == pcbnew.PAD_ATTRIB_PTH and not pad.GetNumber():
+                drill, size = pad.GetDrillSize(), pad.GetSize()
+                if min(size.x, size.y) <= min(drill.x, drill.y):
+                    pad.SetAttribute(pcbnew.PAD_ATTRIB_NPTH)
+                    pad.SetSize(drill)
+            name = where.get((comp.get("ref"), pad.GetNumber()))
+            if name and name in nets:
+                pad.SetNet(nets[name])
+        board.Add(fp)
+        placed += 1
+
+    x0, y0, x1, y1 = draw_edges(board, held["outline"])
+    nudged = label(board, plan.get("gap", 0.8), (x0, y0, x1, y1))
+    escaped = keep_inside(board, x0, y0, x1, y1)
+    out = plan.get("out", "/work/board.kicad_pcb")
+    salt = int(plan.get("salt", plan.get("attempt", 0)))
+    pcbnew.SaveBoard(out, board)
+    steadied = steady(out, salt)
+    pcbnew.SaveBoard(out, pcbnew.LoadBoard(out))
+    worst = max(off.values(), default=None)
+    json.dump({"placed": placed, "missing": missing, "attempt": int(plan.get("attempt", 0)),
+               "salt": salt, "uuids": steadied, "held": True,
+               # How far each part's pads are from where the imported board
+               # had them: the proof that the layout was kept.
+               "held_worst_mm": worst,
+               "held_off": {r: v for r, v in sorted(off.items(), key=lambda kv: -kv[1])
+                            if v > 0.05},
+               # Parts with too few numbered pads to fit, put by centre and angle.
+               "held_by_centre": by_centre,
+               "not_held": unheld, "attempts_available": 1,
                "size_mm": [round(x1 - x0, 2), round(y1 - y0, 2)],
                "texts_beside": nudged, "texts_moved_in": escaped,
                "nets": len(nets), "out": out}, sys.stdout)
