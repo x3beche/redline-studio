@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-200 tools. **MCP** marks the ones agents can run with `run_tool`.
+203 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -294,6 +294,9 @@ agents, the most used, and every tool nobody used.
 |---|---|---|---|
 | **Context Packer** | `context-packer` | pack code, logs and notes into one well-built prompt | Web, Embedded, Mobile, PCB, 3D |
 | **Data Digest** | `data-digest` | profile a large CSV or JSON into a compact brief for an LLM | Web, Embedded |
+| **LLM Cost Calculator** · MCP | `llm-cost` | monthly cost of a model workload from tokens per call, calls per day, caching and batch discounts | Web, Embedded, Mobile, PCB, 3D |
+| **Prompt Caching Planner** · MCP | `prompt-caching` | a prompt's parts ordered for provider prompt caching, with the cache breakpoints and the saving per call | Web, Embedded, Mobile, PCB, 3D |
+| **Tool / Function Schema Builder** · MCP | `tool-schema` | a tool's parameters defined visually and written out as JSON Schema for Anthropic, OpenAI and MCP tool definitions | Web, Embedded, Mobile, PCB, 3D |
 
 ### Project
 

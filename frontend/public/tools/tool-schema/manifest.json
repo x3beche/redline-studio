@@ -1,0 +1,43 @@
+{
+  "id": "tool-schema", "version": "1.0",
+  "name": "Tool / Function Schema Builder",
+  "blurb": "a tool's parameters defined visually and written out as JSON Schema for Anthropic, OpenAI and MCP tool definitions",
+  "group": "ai",
+  "rooms": ["web", "embedded", "mobile", "pcb", "cad"],
+  "keywords": ["tool use", "function calling", "json schema", "input_schema", "parameters", "inputSchema", "mcp tool", "openai function", "anthropic tools", "strict mode", "structured outputs", "additionalProperties", "tool definition", "schema validator", "typescript to json schema", "python to json schema", "lint tool description", "agent tools"],
+  "intro": "Builds a tool's parameters as a tree (types, required, descriptions, enums, ranges, patterns), writes the same tool out as an Anthropic tools[] entry, an OpenAI function tool (with strict-mode rewriting) and an MCP tool, validates an example call against it, and lints what makes models call tools badly. Paste an existing JSON Schema or a simple TypeScript or Python signature to start. Provider rules as of 2026-09 - check them against each provider's docs.",
+  "inputs": [
+    { "key": "name", "label": "Tool name", "type": "text", "default": "search_parts" },
+    { "key": "description", "label": "Tool description", "type": "textarea", "rows": 3,
+      "default": "Search the component library for electronic parts by keywords and filters. Returns up to `limit` matches with MPN, manufacturer, package, stock and unit price. Use it before adding a part to a BOM; it does not answer datasheet questions." },
+    { "key": "source", "label": "Parameters from", "type": "select", "default": "schema", "options": [["schema", "JSON Schema (below)"], ["typescript", "TypeScript signature"], ["python", "Python signature"]] },
+    { "key": "schema", "label": "Parameters (JSON Schema)", "type": "textarea", "rows": 14, "when": { "key": "source", "equals": "schema" },
+      "default": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"query\": { \"type\": \"string\", \"description\": \"Free-text keywords, e.g. '10k 0603 resistor' or an MPN.\", \"minLength\": 2 },\n    \"category\": { \"type\": \"string\", \"enum\": [\"resistor\", \"capacitor\", \"inductor\", \"ic\", \"connector\"], \"description\": \"Part family to search in.\" },\n    \"package\": { \"type\": \"string\", \"description\": \"Footprint name such as 0603 or SOT-23.\" },\n    \"in_stock\": { \"type\": \"boolean\", \"default\": true, \"description\": \"Only parts the distributor has in stock.\" },\n    \"limit\": { \"type\": \"integer\", \"minimum\": 1, \"maximum\": 50, \"default\": 10, \"description\": \"How many matches to return.\" },\n    \"filters\": { \"type\": \"object\", \"description\": \"Electrical limits the part must meet.\", \"properties\": {\n      \"tolerance_pct\": { \"type\": \"number\", \"maximum\": 20 },\n      \"voltage_min\": { \"type\": \"number\", \"description\": \"Minimum rated voltage in volts.\" } } },\n    \"tags\": { \"type\": \"array\", \"items\": { \"type\": \"string\" }, \"maxItems\": 5 }\n  },\n  \"required\": [\"query\"]\n}\n",
+      "help": "The parameters object (type: object). A whole Anthropic, OpenAI or MCP tool definition pasted here is read too." },
+    { "key": "signature", "label": "Signature", "type": "textarea", "rows": 10, "when": { "key": "source", "in": ["typescript", "python"] },
+      "default": "/** Search the component library. */\nfunction searchParts(\n  /** Free-text keywords or an MPN. */\n  query: string,\n  /** Part family to search in. */\n  category?: \"resistor\" | \"capacitor\" | \"ic\",\n  /** How many matches to return. */\n  limit: number = 10,\n  tags?: string[],\n): Promise<Part[]>",
+      "help": "One TypeScript function (or interface / type literal) or one Python def with type hints; JSDoc comments and a Google-style Args: docstring become descriptions." },
+    { "key": "strict", "label": "Strict mode (schema-valid arguments guaranteed)", "type": "bool", "default": true },
+    { "key": "example", "label": "Example call (arguments JSON)", "type": "textarea", "rows": 6,
+      "default": "{\n  \"query\": \"10k 0603\",\n  \"category\": \"resistors\",\n  \"limit\": 80,\n  \"filters\": { \"tolerance_pct\": 1 }\n}\n",
+      "help": "The arguments a model might send; they are checked against the schema." }
+  ],
+  "examples": [
+    { "title": "A parts-search tool with an enum, ranges and a nested filter object", "input": {} },
+    { "title": "From a Python signature with a docstring", "input": {
+      "name": "set_gpio", "description": "Drive one GPIO pin on the test fixture high or low, or read it back. Returns the level measured after the change.",
+      "source": "python",
+      "signature": "def set_gpio(pin: int, level: Literal[\"high\", \"low\", \"read\"], pull: Optional[str] = None, hold_ms: float = 0.0) -> dict:\n    \"\"\"Drive or read a fixture pin.\n\n    Args:\n        pin: GPIO number on the fixture header (0-39).\n        level: high or low drives the pin; read leaves it as input.\n        pull: Pull resistor, up or down.\n        hold_ms: How long to hold the level before returning.\n    \"\"\"",
+      "strict": true, "example": "{\"pin\": 12, \"level\": \"high\"}" } }
+  ],
+  "usage": "Give the tool `name` and `description`, the parameters as `schema` (a JSON Schema object, or a whole Anthropic/OpenAI/MCP tool definition) or set `source` to typescript or python and give `signature`, `strict` (true or false) and an `example` arguments JSON. It returns the three tool definitions as texts (Anthropic tools[] entry with input_schema, OpenAI function tool with parameters rewritten for strict mode, MCP tool with inputSchema), a parameter table, the example's validation errors by path, and lint warnings (missing or thin descriptions, vague names, enums without meanings, optional parameters under OpenAI strict, deep nesting, too many parameters). Use it to write or review a tool before giving it to a model.",
+  "sources": [
+    "JSON Schema 2020-12 Validation (json-schema.org): type, enum, required, properties, additionalProperties, items, minimum/maximum, minLength/maxLength, pattern, minItems/maxItems, format",
+    "Anthropic docs 'Tool use' and 'Structured outputs' (platform.claude.com/docs): tools[] {name, description, input_schema}, name ^[a-zA-Z0-9_-]{1,64}$, strict: true needs additionalProperties false; numeric and string-length constraints unsupported under strict (the SDKs move them into the description) - as of 2026-09, verify",
+    "OpenAI docs 'Function calling' and 'Structured Outputs' (platform.openai.com/docs): {type: function, function: {name, description, parameters, strict}}; strict needs every property in required (optional as a union with null) and additionalProperties false on every object - remembered at build time, verify",
+    "Model Context Protocol specification, Tools (modelcontextprotocol.io/specification): {name, title?, description, inputSchema} with inputSchema of type object"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": ["tree"]
+}

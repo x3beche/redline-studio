@@ -1,0 +1,62 @@
+{
+  "id": "prompt-caching", "version": "1.0",
+  "name": "Prompt Caching Planner",
+  "blurb": "a prompt's parts ordered for provider prompt caching, with the cache breakpoints and the saving per call",
+  "group": "ai",
+  "rooms": ["web", "embedded", "mobile", "pcb", "cad"],
+  "keywords": ["prompt caching", "cache_control", "cache breakpoint", "ephemeral", "cache hit", "cache miss", "prefix cache", "ttl", "5 minute cache", "1 hour cache", "cache read", "cache write", "context caching", "openai prompt caching", "gemini context caching", "prompt order", "prompt layout", "cache savings", "anthropic"],
+  "intro": "Lays a prompt out as parts from stable to volatile, places the cache breakpoints, replays a trace of calls against the provider's caching rules (Anthropic cache_control breakpoints, OpenAI automatic prefix caching, Gemini explicit context caching) and says which parts are read from cache, written or re-sent, and what that saves per call and per month. Rules and prices are a dated snapshot (2026-09): check them against the provider's documentation.",
+  "inputs": [
+    { "key": "parts", "label": "Prompt parts, in prompt order", "type": "table", "columns": [
+        { "key": "name", "label": "Part", "default": "New part" },
+        { "key": "tokens", "label": "Tokens", "default": "500" },
+        { "key": "changes", "label": "Changes", "type": "select", "options": ["never", "per day", "per user", "per call"], "default": "never" },
+        { "key": "bp", "label": "Breakpoint after", "type": "select", "options": ["no", "yes"], "default": "no" }
+      ],
+      "default": [
+        { "name": "Tool definitions", "tokens": "2400", "changes": "never", "bp": "no" },
+        { "name": "System prompt", "tokens": "1800", "changes": "never", "bp": "no" },
+        { "name": "Current date and time", "tokens": "30", "changes": "per call", "bp": "no" },
+        { "name": "Product manual (retrieved)", "tokens": "6500", "changes": "per day", "bp": "yes" },
+        { "name": "Customer profile", "tokens": "450", "changes": "per user", "bp": "yes" },
+        { "name": "Conversation history", "tokens": "2200", "changes": "per call", "bp": "no" },
+        { "name": "User message", "tokens": "120", "changes": "per call", "bp": "no" }
+      ],
+      "help": "Changes: how often the part's text differs between calls (per user = the same for one user's calls). Breakpoint after = a cache_control marker on the part's last block (Anthropic, at most 4; Gemini uses the last one as the explicit cache boundary; OpenAI ignores them and caches automatically)." },
+    { "key": "model", "label": "Model", "type": "select", "default": "claude-sonnet-5-5", "options": [
+        ["claude-opus-5-5", "Anthropic - Claude Opus 5.5"], ["claude-sonnet-5-5", "Anthropic - Claude Sonnet 5.5"], ["claude-haiku-4-5", "Anthropic - Claude Haiku 4.5"],
+        ["claude-fable-5-1", "Anthropic - Claude Fable 5.1"], ["claude-sonnet-4-6", "Anthropic - Claude Sonnet 4.6"],
+        ["gpt-5", "OpenAI - GPT-5 (automatic)"], ["gpt-5-mini", "OpenAI - GPT-5 mini (automatic)"],
+        ["gemini-2.5-pro", "Google - Gemini 2.5 Pro (explicit cache)"], ["gemini-2.5-flash", "Google - Gemini 2.5 Flash (explicit cache)"] ] },
+    { "key": "ttl", "label": "Cache lifetime", "type": "select", "default": "5m", "options": [["5m", "5 minutes"], ["1h", "1 hour"], ["24h", "24 hours"]],
+      "help": "Anthropic: 5m (write 1.25x input) or 1h (write 2x), refreshed by each read. OpenAI: 5m = in-memory retention (5-10 min idle), 24h = extended retention where the model offers it. Gemini: the explicit cache's TTL, billed as storage per hour." },
+    { "key": "calls", "label": "Call trace (minute and user per line)", "type": "textarea", "rows": 8,
+      "default": "0 A\n0.4 A\n1.1 B\n2 A\n2.6 C\n3.5 B\n6 A\n9.5 C\n10 C\n11 A\n18 B\n18.6 B\n19 A\n26 C\n33 A\n33.5 A\n34 B\n41 C\n47 A\n48 B\n55 A\n56 C",
+      "help": "One call per line: the start minute and a user id. Calls of the same user share their per-user parts." },
+    { "key": "calls_day", "label": "Calls per day (for the monthly figure)", "type": "number", "default": 20000 },
+    { "key": "days", "label": "Days per month", "type": "number", "default": 30 }
+  ],
+  "examples": [
+    { "title": "A support assistant with a timestamp above the retrieved manual (the prefix breaks every call)", "input": {} },
+    { "title": "The same prompt re-ordered stable to volatile, 1-hour TTL", "input": {
+      "parts": [
+        { "name": "Tool definitions", "tokens": "2400", "changes": "never", "bp": "no" },
+        { "name": "System prompt", "tokens": "1800", "changes": "never", "bp": "yes" },
+        { "name": "Product manual (retrieved)", "tokens": "6500", "changes": "per day", "bp": "yes" },
+        { "name": "Customer profile", "tokens": "450", "changes": "per user", "bp": "yes" },
+        { "name": "Current date and time", "tokens": "30", "changes": "per call", "bp": "no" },
+        { "name": "Conversation history", "tokens": "2200", "changes": "per call", "bp": "no" },
+        { "name": "User message", "tokens": "120", "changes": "per call", "bp": "no" } ],
+      "ttl": "1h" } }
+  ],
+  "usage": "Give `parts` in prompt order as rows {name, tokens, changes: never|per day|per user|per call, bp: yes|no (a cache breakpoint after the part)}, the `model` (Claude, GPT-5 or Gemini ids from the options), the cache `ttl` (5m, 1h, 24h) and a `calls` trace (one 'minute user' per line). It replays the trace under that provider's caching rules and returns per-call hits, reads and writes, the cost per call with and without caching, the monthly saving at `calls_day`, warnings for a volatile part above stable ones, timestamp- or ID-like parts, prefixes under the model's minimum and misplaced breakpoints, a suggested stable-to-volatile order, the ordered layout and an Anthropic Messages JSON skeleton with cache_control placed. Rules and prices are dated (2026-09) and must be checked at the provider's docs.",
+  "sources": [
+    "Anthropic docs 'Prompt caching' (platform.claude.com/docs/en/build-with-claude/prompt-caching): cache_control {type: ephemeral, ttl 5m|1h}, at most 4 breakpoints, prefix order tools -> system -> messages, minimum cacheable length per model (512 on Opus 5.5 / Sonnet 5.5 / Fable 5.1, 1024 on Sonnet 4.6, 4096 on Haiku 4.5), write 1.25x (5 min) or 2x (1 h) input, reads per model ($0.20 Opus 5.5 and Sonnet 5.5, $0.25 Fable 5.1, 0.1x otherwise), reads refresh the TTL - as cached by the Claude API reference on 2026-09-25",
+    "OpenAI 'Prompt caching' guide (platform.openai.com/docs/guides/prompt-caching): automatic for prompts of 1024 tokens or more, hits in 128-token increments, no write fee, entries kept 5-10 minutes idle (extended 24 h retention on some models) - remembered at build time, not verified",
+    "Google 'Context caching' (ai.google.dev/gemini-api/docs/caching): explicit caches with a TTL (default 1 h), minimum size per model, reads at the cached-token rate plus storage per million tokens per hour - numbers remembered at build time, not verified",
+    "Hit model: a breakpoint's cache key is the exact text of every part before it; a part's text changes as its 'changes' column says; the longest live breakpoint prefix is read, later breakpoints are written"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": ["trace"]
+}

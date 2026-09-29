@@ -1,0 +1,77 @@
+{
+  "id": "llm-cost", "version": "1.0",
+  "name": "LLM Cost Calculator",
+  "blurb": "monthly cost of a model workload from tokens per call, calls per day, caching and batch discounts",
+  "group": "ai",
+  "rooms": ["web", "embedded", "mobile", "pcb", "cad"],
+  "keywords": ["llm cost", "api cost", "token price", "price per million tokens", "MTok", "monthly bill", "budget", "prompt caching", "cache read", "cache write", "batch discount", "batch api", "claude pricing", "openai pricing", "gemini pricing", "deepseek", "openrouter", "model comparison", "cost per call", "break-even"],
+  "intro": "Prices one workload (calls per day, input and output tokens per call, the cached share of the input, batch or not) on every model in an editable price table, as input, output, cache-write and cache-read dollars per month, and says at what cache hit rate caching starts to pay. The prices are a dated snapshot (2026-09): check each against the provider's pricing page before quoting a number.",
+  "inputs": [
+    { "key": "workload", "label": "Workload", "type": "table", "columns": [
+        { "key": "name", "label": "Name", "default": "New job" },
+        { "key": "calls", "label": "Calls/day", "default": "1000" },
+        { "key": "input", "label": "Input tok/call", "default": "2000" },
+        { "key": "output", "label": "Output tok/call", "default": "300" },
+        { "key": "cached", "label": "Cached share %", "default": "0" },
+        { "key": "batch", "label": "Batch", "type": "select", "options": ["no", "yes"], "default": "no" }
+      ],
+      "default": [
+        { "name": "Support chat", "calls": "4000", "input": "3200", "output": "350", "cached": "75", "batch": "no" },
+        { "name": "Nightly ticket summaries", "calls": "1200", "input": "9000", "output": "600", "cached": "0", "batch": "yes" },
+        { "name": "Code review bot", "calls": "300", "input": "24000", "output": "1200", "cached": "60", "batch": "no" }
+      ],
+      "help": "Cached share: the part of each call's input that is a repeated prefix (system prompt, tools, documents) and can be served from the provider's cache." },
+    { "key": "hit", "label": "Cache hit rate", "type": "number", "unit": "%", "default": 90,
+      "help": "Of the calls that carry the cached prefix, how many find it warm. Misses pay the cache-write price (Anthropic 1.25x input for 5 min) or plain input." },
+    { "key": "scale_calls", "label": "Calls/day multiplier", "type": "number", "default": 1, "help": "Sensitivity: scales every workload's calls per day (0.1 to 10)." },
+    { "key": "scale_out", "label": "Output tokens multiplier", "type": "number", "default": 1, "help": "Sensitivity: scales every workload's output tokens (0.25 to 4)." },
+    { "key": "days", "label": "Days per month", "type": "number", "default": 30 },
+    { "key": "focus", "label": "Model in focus", "type": "text", "default": "claude-sonnet-5-5", "help": "The model whose per-workload breakdown is shown." },
+    { "key": "prices", "label": "Price table ($ per million tokens, as of 2026-09)", "type": "table", "columns": [
+        { "key": "model", "label": "Model", "default": "my-model" },
+        { "key": "provider", "label": "Provider", "default": "Other" },
+        { "key": "in", "label": "Input", "default": "1" },
+        { "key": "out", "label": "Output", "default": "4" },
+        { "key": "cw", "label": "Cache write", "default": "" },
+        { "key": "cr", "label": "Cache read", "default": "" },
+        { "key": "batch", "label": "Batch -%", "default": "0" },
+        { "key": "on", "label": "Compare", "type": "select", "options": ["yes", "no"], "default": "yes" }
+      ],
+      "default": [
+        { "model": "claude-fable-5-1", "provider": "Anthropic", "in": "10", "out": "50", "cw": "12.5", "cr": "0.25", "batch": "50", "on": "no" },
+        { "model": "claude-opus-5-5", "provider": "Anthropic", "in": "4", "out": "20", "cw": "5", "cr": "0.2", "batch": "50", "on": "yes" },
+        { "model": "claude-sonnet-5-5", "provider": "Anthropic", "in": "2", "out": "10", "cw": "2.5", "cr": "0.2", "batch": "50", "on": "yes" },
+        { "model": "claude-haiku-4-5", "provider": "Anthropic", "in": "1", "out": "5", "cw": "1.25", "cr": "0.1", "batch": "50", "on": "yes" },
+        { "model": "gpt-5", "provider": "OpenAI", "in": "1.25", "out": "10", "cw": "", "cr": "0.125", "batch": "50", "on": "yes" },
+        { "model": "gpt-5-mini", "provider": "OpenAI", "in": "0.25", "out": "2", "cw": "", "cr": "0.025", "batch": "50", "on": "yes" },
+        { "model": "gpt-5-nano", "provider": "OpenAI", "in": "0.05", "out": "0.4", "cw": "", "cr": "0.005", "batch": "50", "on": "no" },
+        { "model": "gemini-2.5-pro", "provider": "Google", "in": "1.25", "out": "10", "cw": "", "cr": "0.125", "batch": "50", "on": "yes" },
+        { "model": "gemini-2.5-flash", "provider": "Google", "in": "0.3", "out": "2.5", "cw": "", "cr": "0.03", "batch": "50", "on": "yes" },
+        { "model": "gemini-3-pro-preview", "provider": "Google", "in": "2", "out": "12", "cw": "", "cr": "0.2", "batch": "50", "on": "no" },
+        { "model": "deepseek-chat (V3.2)", "provider": "DeepSeek", "in": "0.28", "out": "0.42", "cw": "", "cr": "0.028", "batch": "0", "on": "yes" },
+        { "model": "llama-3.3-70b-instruct", "provider": "OpenRouter", "in": "0.13", "out": "0.4", "cw": "", "cr": "", "batch": "0", "on": "yes" },
+        { "model": "qwen3-235b-a22b", "provider": "OpenRouter", "in": "0.2", "out": "0.6", "cw": "", "cr": "", "batch": "0", "on": "no" },
+        { "model": "gpt-oss-120b", "provider": "OpenRouter", "in": "0.1", "out": "0.5", "cw": "", "cr": "", "batch": "0", "on": "yes" },
+        { "model": "kimi-k2", "provider": "OpenRouter", "in": "0.6", "out": "2.5", "cw": "", "cr": "", "batch": "0", "on": "no" }
+      ],
+      "help": "Cache write empty = no write premium (the miss pays plain input). Cache read empty = the model has no prompt caching. Batch -% = the discount for the provider's batch API. Verify every row at the provider's pricing page." }
+  ],
+  "examples": [
+    { "title": "A support bot, a nightly batch and a code-review bot across the price table", "input": {} },
+    { "title": "One RAG endpoint at 20k calls a day, 85% of a 12k-token prompt cached", "input": {
+      "workload": [ { "name": "RAG answers", "calls": "20000", "input": "12000", "output": "450", "cached": "85", "batch": "no" } ],
+      "hit": 80, "focus": "claude-haiku-4-5" } }
+  ],
+  "usage": "Give `workload` rows {name, calls (per day), input and output (tokens per call), cached (percent of the input that is a cacheable prefix), batch (yes/no)}, the cache `hit` rate in percent, optional multipliers `scale_calls` and `scale_out`, `days` per month and `focus` (a model id). It returns the monthly cost of the whole workload on every model with Compare=yes in `prices` (input, output, cache write, cache read, total, per call, rank), the focus model per workload, the hit rate above which caching pays per model, a CSV and a one-paragraph summary. Prices are a dated 2026-09 snapshot that the caller must check against the provider's page; pass your own `prices` rows to override.",
+  "sources": [
+    "Anthropic pricing (claude.com/pricing, docs 'Prompt caching' and 'Batch processing'): cache write 1.25x input for the 5-minute TTL, 2x for 1 hour; cache read per model; batch 50% - rates as cached by the Claude API reference on 2026-09-25",
+    "OpenAI API pricing page (openai.com/api/pricing) and 'Prompt caching' guide: automatic caching, no write premium, cached-input rate; Batch API 50% - numbers remembered at build time, not verified",
+    "Google Gemini API pricing (ai.google.dev/gemini-api/docs/pricing): context caching rate, batch 50%; cache storage per hour is not modelled - numbers remembered at build time, not verified",
+    "DeepSeek API pricing (api-docs.deepseek.com/quick_start/pricing): cache hit and miss input rates - remembered, not verified",
+    "OpenRouter model pages (openrouter.ai/models): open-weight models, price varies by upstream provider - remembered, not verified",
+    "Formula: cost = calls x (uncached input x in + prefix x hit x read + prefix x miss x write + output x out) / 1e6, x (1 - batch discount) for batch rows; break-even hit rate = (write - in) / (write - read)"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": ["plot"]
+}
