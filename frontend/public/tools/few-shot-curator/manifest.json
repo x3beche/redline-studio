@@ -1,0 +1,197 @@
+{
+ "id": "few-shot-curator",
+ "version": "1.0",
+ "name": "Few-shot Example Curator",
+ "blurb": "few-shot examples balanced by label, deduplicated, ordered and fitted to a token budget",
+ "group": "ai",
+ "rooms": [
+  "web",
+  "embedded",
+  "mobile",
+  "pcb",
+  "cad"
+ ],
+ "keywords": [
+  "few-shot",
+  "few shot examples",
+  "in-context examples",
+  "prompt examples",
+  "shots",
+  "example selection",
+  "label balance",
+  "deduplicate examples",
+  "near duplicate",
+  "jaccard",
+  "data leakage",
+  "test leak",
+  "jsonl",
+  "chat messages",
+  "xml examples",
+  "token budget",
+  "classification prompt"
+ ],
+ "intro": "Picks and orders few-shot examples from a pool: labels read from the outputs, near-duplicates found by the Jaccard index of character 5-gram shingles, contradictions (same input, different output) and leaks of the test input flagged, then a balanced, diverse (max-min distance), shortest-first or recent-last selection fitted to an estimated token budget.",
+ "inputs": [
+  {
+   "key": "examples",
+   "label": "Examples",
+   "type": "textarea",
+   "rows": 12,
+   "default": "{\"input\": \"Board resets when the modem starts transmitting; 3V3 rail dips to 2.9 V on the scope during TX bursts.\", \"output\": \"hardware\"}\n{\"input\": \"UART3 overrun (ORE) after enabling the URC parser in the RX interrupt handler.\", \"output\": \"firmware\"}\n{\"input\": \"Yocto build fails: do_compile for u-boot-imx, 'fatal error: openssl/evp.h: No such file or directory'.\", \"output\": \"build\"}\n{\"input\": \"SIM card not detected after hot-plug; SIM_DET pin floats, no pull-up fitted (R118 DNP).\", \"output\": \"hardware\"}\n{\"input\": \"Which AT command sets the modem's RI pin behaviour for URCs?\", \"output\": \"question\"}\n{\"input\": \"Ethernet PHY link drops at 100 Mbit; 25 MHz crystal load caps are 22 pF instead of 12 pF.\", \"output\": \"hardware\"}\n{\"input\": \"HardFault in HAL_UART_IRQHandler after 40 minutes; stacked PC points into the ring buffer write.\", \"output\": \"firmware\"}\n{\"input\": \"Board resets when modem starts transmitting, the 3.3V rail drops to 2.9V on the scope in TX bursts.\", \"output\": \"hardware\"}\n{\"input\": \"USB enumeration fails on some hosts; D+ and D- are swapped at the connector on rev B.\", \"output\": \"hardware\"}\n{\"input\": \"CMake: arm-none-eabi-gcc not found when building in the CI container, works locally.\", \"output\": \"build\"}\n{\"input\": \"Watchdog resets the MCU right after PDP deactivation; the task blocks in HAL_UART_Transmit.\", \"output\": \"firmware\"}\n{\"input\": \"LED D4 is dim; series resistor is 4.7k, datasheet asks for 470 ohm at 5 mA.\", \"output\": \"hardware\"}\n{\"input\": \"Watchdog resets the MCU right after PDP deactivation; the task blocks in HAL_UART_Transmit.\", \"output\": \"hardware\"}\n{\"input\": \"Can the EG25-G run on 3.3 V directly or does VBAT need 3.8 V?\", \"output\": \"question\"}\n{\"input\": \"ADC readings on PA0 jump by 40 LSB when the buck converter switches; no RC filter on the input.\", \"output\": \"hardware\"}\n{\"input\": \"Linker error: region FLASH overflowed by 1840 bytes after enabling printf float support.\", \"output\": \"build\"}\n{\"input\": \"OTA update leaves the device in the bootloader; the image CRC is checked over the wrong length.\", \"output\": \"firmware\"}\n{\"input\": \"Enclosure screw boss cracks when torqued to 0.6 Nm; PLA print at 20 % infill.\", \"output\": \"hardware\"}",
+   "help": "JSONL ({\"input\": ..., \"output\": ...} or chat {\"messages\": [...]}) per line, CSV with input,output columns, or Input: / Output: blocks."
+  },
+  {
+   "key": "format",
+   "label": "Format",
+   "type": "select",
+   "default": "auto",
+   "options": [
+    [
+     "auto",
+     "Detect"
+    ],
+    [
+     "jsonl",
+     "JSONL"
+    ],
+    [
+     "csv",
+     "CSV"
+    ],
+    [
+     "blocks",
+     "Input:/Output: blocks"
+    ]
+   ]
+  },
+  {
+   "key": "labelField",
+   "label": "Label field",
+   "type": "text",
+   "default": "",
+   "placeholder": "category",
+   "help": "For JSON outputs: which field is the label. Empty: the output itself when short, or a label/category/class field."
+  },
+  {
+   "key": "relabel",
+   "label": "Relabel",
+   "type": "text",
+   "default": "",
+   "placeholder": "13=firmware, 4=hardware",
+   "help": "Example number = label; the label menu on each card writes this."
+  },
+  {
+   "key": "strategy",
+   "label": "Strategy",
+   "type": "select",
+   "default": "balanced",
+   "options": [
+    [
+     "balanced",
+     "Balanced per label"
+    ],
+    [
+     "diverse",
+     "Diverse (max-min distance)"
+    ],
+    [
+     "shortest",
+     "Shortest first"
+    ],
+    [
+     "recent",
+     "Recent last"
+    ],
+    [
+     "manual",
+     "Manual (picks)"
+    ]
+   ]
+  },
+  {
+   "key": "k",
+   "label": "Examples wanted",
+   "type": "number",
+   "default": 8
+  },
+  {
+   "key": "budget",
+   "label": "Token budget",
+   "type": "number",
+   "unit": "tokens",
+   "default": 320,
+   "help": "0 = no limit."
+  },
+  {
+   "key": "picks",
+   "label": "Manual picks, in order",
+   "type": "text",
+   "default": "",
+   "placeholder": "3, 1, 7",
+   "when": {
+    "key": "strategy",
+    "equals": "manual"
+   }
+  },
+  {
+   "key": "dup",
+   "label": "Near-duplicate threshold",
+   "type": "number",
+   "default": 0.45,
+   "help": "Jaccard of character 5-grams; unrelated inputs score under 0.15, paraphrases 0.4-0.6."
+  },
+  {
+   "key": "test",
+   "label": "Test input(s)",
+   "type": "textarea",
+   "rows": 3,
+   "default": "After an OTA update the device stays in the bootloader; CRC of the image is computed over the wrong length.",
+   "help": "The input the prompt will be used on (several: separate with a blank line) - to catch examples that leak it."
+  }
+ ],
+ "examples": [
+  {
+   "title": "Firmware issue triage: skewed labels, a paraphrase, a contradiction and a leaked test case",
+   "input": {
+    "examples": "{\"input\": \"Board resets when the modem starts transmitting; 3V3 rail dips to 2.9 V on the scope during TX bursts.\", \"output\": \"hardware\"}\n{\"input\": \"UART3 overrun (ORE) after enabling the URC parser in the RX interrupt handler.\", \"output\": \"firmware\"}\n{\"input\": \"Yocto build fails: do_compile for u-boot-imx, 'fatal error: openssl/evp.h: No such file or directory'.\", \"output\": \"build\"}\n{\"input\": \"SIM card not detected after hot-plug; SIM_DET pin floats, no pull-up fitted (R118 DNP).\", \"output\": \"hardware\"}\n{\"input\": \"Which AT command sets the modem's RI pin behaviour for URCs?\", \"output\": \"question\"}\n{\"input\": \"Ethernet PHY link drops at 100 Mbit; 25 MHz crystal load caps are 22 pF instead of 12 pF.\", \"output\": \"hardware\"}\n{\"input\": \"HardFault in HAL_UART_IRQHandler after 40 minutes; stacked PC points into the ring buffer write.\", \"output\": \"firmware\"}\n{\"input\": \"Board resets when modem starts transmitting, the 3.3V rail drops to 2.9V on the scope in TX bursts.\", \"output\": \"hardware\"}\n{\"input\": \"USB enumeration fails on some hosts; D+ and D- are swapped at the connector on rev B.\", \"output\": \"hardware\"}\n{\"input\": \"CMake: arm-none-eabi-gcc not found when building in the CI container, works locally.\", \"output\": \"build\"}\n{\"input\": \"Watchdog resets the MCU right after PDP deactivation; the task blocks in HAL_UART_Transmit.\", \"output\": \"firmware\"}\n{\"input\": \"LED D4 is dim; series resistor is 4.7k, datasheet asks for 470 ohm at 5 mA.\", \"output\": \"hardware\"}\n{\"input\": \"Watchdog resets the MCU right after PDP deactivation; the task blocks in HAL_UART_Transmit.\", \"output\": \"hardware\"}\n{\"input\": \"Can the EG25-G run on 3.3 V directly or does VBAT need 3.8 V?\", \"output\": \"question\"}\n{\"input\": \"ADC readings on PA0 jump by 40 LSB when the buck converter switches; no RC filter on the input.\", \"output\": \"hardware\"}\n{\"input\": \"Linker error: region FLASH overflowed by 1840 bytes after enabling printf float support.\", \"output\": \"build\"}\n{\"input\": \"OTA update leaves the device in the bootloader; the image CRC is checked over the wrong length.\", \"output\": \"firmware\"}\n{\"input\": \"Enclosure screw boss cracks when torqued to 0.6 Nm; PLA print at 20 % infill.\", \"output\": \"hardware\"}",
+    "format": "auto",
+    "labelField": "",
+    "relabel": "",
+    "strategy": "balanced",
+    "k": 8,
+    "budget": 320,
+    "picks": "",
+    "dup": 0.45,
+    "test": "After an OTA update the device stays in the bootloader; CRC of the image is computed over the wrong length."
+   }
+  },
+  {
+   "title": "App-store feedback in CSV with JSON outputs, labelled by the category field, diverse picks",
+   "input": {
+    "examples": "input,output\n\"The app logs me out every time I rotate the phone\",\"{\"\"category\"\": \"\"bug\"\", \"\"area\"\": \"\"auth\"\"}\"\n\"Please add dark mode to the settings screen\",\"{\"\"category\"\": \"\"feature\"\", \"\"area\"\": \"\"ui\"\"}\"\n\"Crash on launch after updating to 4.2 on Android 14\",\"{\"\"category\"\": \"\"bug\"\", \"\"area\"\": \"\"startup\"\"}\"\n\"How do I export my data as CSV?\",\"{\"\"category\"\": \"\"question\"\", \"\"area\"\": \"\"data\"\"}\"\n\"App crashes on launch since the 4.2 update (Android 14)\",\"{\"\"category\"\": \"\"bug\"\", \"\"area\"\": \"\"startup\"\"}\"\n\"Would love a widget for the home screen\",\"{\"\"category\"\": \"\"feature\"\", \"\"area\"\": \"\"ui\"\"}\"\n\"Push notifications arrive twice on iOS 18\",\"{\"\"category\"\": \"\"bug\"\", \"\"area\"\": \"\"notifications\"\"}\"\n\"Is there a way to change the language to Turkish?\",\"{\"\"category\"\": \"\"question\"\", \"\"area\"\": \"\"settings\"\"}\"\n\"Sync stalls at 99 % with a large photo library\",\"{\"\"category\"\": \"\"bug\"\", \"\"area\"\": \"\"sync\"\"}\"\n\"Add an option to schedule reports weekly\",\"{\"\"category\"\": \"\"feature\"\", \"\"area\"\": \"\"reports\"\"}\"",
+    "format": "auto",
+    "labelField": "category",
+    "relabel": "",
+    "strategy": "diverse",
+    "k": 5,
+    "budget": 0,
+    "picks": "",
+    "dup": 0.45,
+    "test": "The app crashes when I open the camera on Android 14"
+   }
+  }
+ ],
+ "usage": "Give the example pool (JSONL, CSV or Input:/Output: blocks), optionally the label field of JSON outputs, relabels (13=firmware), a strategy (balanced, diverse, shortest, recent or manual with picks \"3,1,7\"), how many examples, a token budget and the test input. It returns the chosen examples in order as an XML block, chat messages and JSONL, a pool table with near-duplicates, contradictions and test leaks, and warnings for label skew, missing labels, uniform lengths and recency bias. Use it when assembling a few-shot prompt from labelled data.",
+ "sources": [
+  "A. Broder, \"On the resemblance and containment of documents\" (1997): shingling and the Jaccard index",
+  "T. Gonzalez, \"Clustering to minimize the maximum intercluster distance\" (1985): greedy max-min (farthest-point) selection",
+  "Z. Zhao et al., \"Calibrate Before Use: Improving Few-Shot Performance of Language Models\" (ICML 2021): majority-label and recency bias in few-shot prompts",
+  "Anthropic prompt engineering guide: wrap examples in <example> tags, make them diverse and relevant",
+  "Token counts: the o200k_base-shaped estimator in estimate.js (see token-budget)"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "draw"
+ ]
+}

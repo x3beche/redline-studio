@@ -1,0 +1,446 @@
+{
+ "id": "token-budget",
+ "version": "1.0",
+ "name": "Token Counter & Context Budget",
+ "blurb": "tokens in a text counted and fitted against model context windows, with the room left for the answer",
+ "group": "ai",
+ "rooms": [
+  "web",
+  "embedded",
+  "mobile",
+  "pcb",
+  "cad"
+ ],
+ "keywords": [
+  "token counter",
+  "token count",
+  "context window",
+  "context length",
+  "context budget",
+  "max tokens",
+  "max output",
+  "prompt size",
+  "tiktoken",
+  "o200k_base",
+  "cl100k_base",
+  "llm tokens",
+  "will it fit",
+  "prompt too long",
+  "context overflow",
+  "count_tokens",
+  "rag budget",
+  "reserved output"
+ ],
+ "intro": "Estimates how many tokens a prompt made of labelled parts takes and whether it fits each model's context window with room left for the answer. Counts are estimates from a split identical to o200k_base's pre-tokenizer and cost tables fitted to the real o200k_base and cl100k_base vocabularies (±7-18 % measured); model limits are a dated table to check against the provider.",
+ "inputs": [
+  {
+   "key": "parts",
+   "label": "Prompt parts",
+   "type": "textarea",
+   "rows": 16,
+   "default": "=== system ===\nYou are a firmware support engineer for the Redline modem board (STM32F407 + Quectel EG25-G).\nAnswer from the logs and documents provided. Quote the log line you rely on.\nIf the documents do not say, say so; do not guess register values or AT command syntax.\nAnswer in English, short paragraphs, code in fenced blocks.\n\n=== tools ===\n[{\"name\":\"read_register\",\"description\":\"Read a 32-bit peripheral register over SWD and return it in hex.\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"address\":{\"type\":\"string\",\"description\":\"Hex address, e.g. 0x40011000\"}},\"required\":[\"address\"]}},\n {\"name\":\"send_at\",\"description\":\"Send one AT command to the modem UART and return the reply lines until OK or ERROR.\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"cmd\":{\"type\":\"string\"},\"timeout_ms\":{\"type\":\"integer\",\"default\":3000}},\"required\":[\"cmd\"]}},\n {\"name\":\"search_docs\",\"description\":\"Full-text search over the board's datasheets and app notes; returns the 5 best passages.\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}}]\n\n=== history ×18 ===\nUser: The modem drops off the bus roughly every 40 minutes; the watchdog then resets the MCU. Log attached below.\nAssistant: The reset follows \"+QIURC: \\\"pdpdeact\\\",1\" by 212 ms, and the UART RX ring buffer shows an overrun (ORE set in USART3->SR = 0x000000E8) just before it. The PDP deactivation is the carrier's; the reset is ours: the handler blocks in HAL_UART_Transmit while RX overruns. Try moving the URC parser out of the ISR and enable the RX DMA in circular mode.\n\n=== retrieved documents ×56 ===\n[EG25-G AT Commands Manual v2.0, §2.21 AT+QCFG=\"urc/ri/ring\"] The RI behaviour when a URC is reported can be configured: \"pulse\" (default) pulls RI low for 120 ms, \"always\" keeps it low until the host reads the URC, \"auto\" returns it high after the URC is read. When the host MCU sleeps, use \"pulse\" with a GPIO wake-up on the falling edge, otherwise URCs that arrive during a UART baud switch can be lost. The setting is saved to NVM with AT&W and survives a reset. Example: AT+QCFG=\"urc/ri/other\",\"pulse\",120 then AT&W.\n[RM0090 §30.6.1 USART_SR] Bit 3 ORE: overrun error. Set by hardware when the word currently being received in the shift register is ready to be transferred into the RDR register while RXNE=1. An interrupt is generated if RXNEIE=1 in USART_CR1. Cleared by a software sequence (a read to USART_SR followed by a read to USART_DR). When ORE is set the RDR content is not lost but the shift register is overwritten.\n[Board app note AN-07, UART design] Run the modem UART at 115200 baud 8N1 with hardware flow control (RTS/CTS on PB14/PB13). Do not print debug text from the RX interrupt; a 60-byte printf at 115200 blocks for 5.2 ms, longer than three received characters.\n\n=== modem log uart3_2026-09-28.txt = 110k ===\n(attached separately: 41 minutes of URC and debug output, ~110k tokens by tiktoken o200k_base)\n\n=== question ===\nGiven the log and the documents, why does the watchdog reset follow the PDP deactivation, and what is the smallest firmware change that stops it? Include the register evidence.\n",
+   "help": "Start each part with a line like === system ===. \"=== history ×20 ===\" counts the text 20 times; \"=== log = 40k ===\" is a part of a known size (o200k tokens) without its text. The kind (system, tools, examples, history, documents, question) is read from the name."
+  },
+  {
+   "key": "reserve",
+   "label": "Reserved for the answer",
+   "type": "number",
+   "unit": "tokens",
+   "default": 8192,
+   "help": "max_tokens you will ask for; capped at each model's max output."
+  },
+  {
+   "key": "basis",
+   "label": "Fit on",
+   "type": "select",
+   "default": "high",
+   "options": [
+    [
+     "high",
+     "High end of the estimate (safe)"
+    ],
+    [
+     "estimate",
+     "The estimate itself"
+    ]
+   ]
+  },
+  {
+   "key": "target",
+   "label": "Model to plan cuts for",
+   "type": "text",
+   "default": "GPT-4o",
+   "help": "A model name from the table (or part of one); the first model that does not fit when empty."
+  },
+  {
+   "key": "models",
+   "label": "Models (limits as of 2026-09, verify)",
+   "type": "table",
+   "default": [
+    {
+     "name": "Claude Opus 5.5",
+     "ctx": "1000000",
+     "out": "128000",
+     "enc": "o200k",
+     "factor": "1.3",
+     "mode": "shared"
+    },
+    {
+     "name": "Claude Sonnet 5.5",
+     "ctx": "1000000",
+     "out": "128000",
+     "enc": "o200k",
+     "factor": "1.3",
+     "mode": "shared"
+    },
+    {
+     "name": "Claude Haiku 4.5",
+     "ctx": "200000",
+     "out": "64000",
+     "enc": "o200k",
+     "factor": "1.2",
+     "mode": "shared"
+    },
+    {
+     "name": "GPT-5",
+     "ctx": "400000",
+     "out": "128000",
+     "enc": "o200k",
+     "factor": "1",
+     "mode": "shared"
+    },
+    {
+     "name": "GPT-4.1",
+     "ctx": "1047576",
+     "out": "32768",
+     "enc": "o200k",
+     "factor": "1",
+     "mode": "shared"
+    },
+    {
+     "name": "GPT-4o",
+     "ctx": "128000",
+     "out": "16384",
+     "enc": "o200k",
+     "factor": "1",
+     "mode": "shared"
+    },
+    {
+     "name": "Gemini 2.5 Pro",
+     "ctx": "1048576",
+     "out": "65536",
+     "enc": "o200k",
+     "factor": "1.1",
+     "mode": "separate"
+    },
+    {
+     "name": "Gemini 2.5 Flash",
+     "ctx": "1048576",
+     "out": "65536",
+     "enc": "o200k",
+     "factor": "1.1",
+     "mode": "separate"
+    },
+    {
+     "name": "Llama 3.3 70B",
+     "ctx": "131072",
+     "out": "8192",
+     "enc": "cl100k",
+     "factor": "1",
+     "mode": "shared"
+    },
+    {
+     "name": "DeepSeek V3.x",
+     "ctx": "131072",
+     "out": "8192",
+     "enc": "cl100k",
+     "factor": "1",
+     "mode": "shared"
+    },
+    {
+     "name": "Qwen3 235B-A22B",
+     "ctx": "262144",
+     "out": "32768",
+     "enc": "cl100k",
+     "factor": "1",
+     "mode": "shared"
+    },
+    {
+     "name": "Mistral Large",
+     "ctx": "131072",
+     "out": "8192",
+     "enc": "cl100k",
+     "factor": "1",
+     "mode": "shared"
+    }
+   ],
+   "columns": [
+    {
+     "key": "name",
+     "label": "Model"
+    },
+    {
+     "key": "ctx",
+     "label": "Context window"
+    },
+    {
+     "key": "out",
+     "label": "Max output"
+    },
+    {
+     "key": "enc",
+     "label": "Estimate from",
+     "type": "select",
+     "options": [
+      "o200k",
+      "cl100k"
+     ],
+     "default": "o200k"
+    },
+    {
+     "key": "factor",
+     "label": "Factor",
+     "default": "1"
+    },
+    {
+     "key": "mode",
+     "label": "Window",
+     "type": "select",
+     "options": [
+      "shared",
+      "separate"
+     ],
+     "default": "shared"
+    }
+   ]
+  }
+ ],
+ "examples": [
+  {
+   "title": "Modem support prompt with RAG chunks and a 110k log: over on 128k models",
+   "input": {
+    "parts": "=== system ===\nYou are a firmware support engineer for the Redline modem board (STM32F407 + Quectel EG25-G).\nAnswer from the logs and documents provided. Quote the log line you rely on.\nIf the documents do not say, say so; do not guess register values or AT command syntax.\nAnswer in English, short paragraphs, code in fenced blocks.\n\n=== tools ===\n[{\"name\":\"read_register\",\"description\":\"Read a 32-bit peripheral register over SWD and return it in hex.\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"address\":{\"type\":\"string\",\"description\":\"Hex address, e.g. 0x40011000\"}},\"required\":[\"address\"]}},\n {\"name\":\"send_at\",\"description\":\"Send one AT command to the modem UART and return the reply lines until OK or ERROR.\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"cmd\":{\"type\":\"string\"},\"timeout_ms\":{\"type\":\"integer\",\"default\":3000}},\"required\":[\"cmd\"]}},\n {\"name\":\"search_docs\",\"description\":\"Full-text search over the board's datasheets and app notes; returns the 5 best passages.\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"}},\"required\":[\"query\"]}}]\n\n=== history ×18 ===\nUser: The modem drops off the bus roughly every 40 minutes; the watchdog then resets the MCU. Log attached below.\nAssistant: The reset follows \"+QIURC: \\\"pdpdeact\\\",1\" by 212 ms, and the UART RX ring buffer shows an overrun (ORE set in USART3->SR = 0x000000E8) just before it. The PDP deactivation is the carrier's; the reset is ours: the handler blocks in HAL_UART_Transmit while RX overruns. Try moving the URC parser out of the ISR and enable the RX DMA in circular mode.\n\n=== retrieved documents ×56 ===\n[EG25-G AT Commands Manual v2.0, §2.21 AT+QCFG=\"urc/ri/ring\"] The RI behaviour when a URC is reported can be configured: \"pulse\" (default) pulls RI low for 120 ms, \"always\" keeps it low until the host reads the URC, \"auto\" returns it high after the URC is read. When the host MCU sleeps, use \"pulse\" with a GPIO wake-up on the falling edge, otherwise URCs that arrive during a UART baud switch can be lost. The setting is saved to NVM with AT&W and survives a reset. Example: AT+QCFG=\"urc/ri/other\",\"pulse\",120 then AT&W.\n[RM0090 §30.6.1 USART_SR] Bit 3 ORE: overrun error. Set by hardware when the word currently being received in the shift register is ready to be transferred into the RDR register while RXNE=1. An interrupt is generated if RXNEIE=1 in USART_CR1. Cleared by a software sequence (a read to USART_SR followed by a read to USART_DR). When ORE is set the RDR content is not lost but the shift register is overwritten.\n[Board app note AN-07, UART design] Run the modem UART at 115200 baud 8N1 with hardware flow control (RTS/CTS on PB14/PB13). Do not print debug text from the RX interrupt; a 60-byte printf at 115200 blocks for 5.2 ms, longer than three received characters.\n\n=== modem log uart3_2026-09-28.txt = 110k ===\n(attached separately: 41 minutes of URC and debug output, ~110k tokens by tiktoken o200k_base)\n\n=== question ===\nGiven the log and the documents, why does the watchdog reset follow the PDP deactivation, and what is the smallest firmware change that stops it? Include the register evidence.\n",
+    "reserve": 8192,
+    "basis": "high",
+    "target": "GPT-4o",
+    "models": [
+     {
+      "name": "Claude Opus 5.5",
+      "ctx": "1000000",
+      "out": "128000",
+      "enc": "o200k",
+      "factor": "1.3",
+      "mode": "shared"
+     },
+     {
+      "name": "Claude Sonnet 5.5",
+      "ctx": "1000000",
+      "out": "128000",
+      "enc": "o200k",
+      "factor": "1.3",
+      "mode": "shared"
+     },
+     {
+      "name": "Claude Haiku 4.5",
+      "ctx": "200000",
+      "out": "64000",
+      "enc": "o200k",
+      "factor": "1.2",
+      "mode": "shared"
+     },
+     {
+      "name": "GPT-5",
+      "ctx": "400000",
+      "out": "128000",
+      "enc": "o200k",
+      "factor": "1",
+      "mode": "shared"
+     },
+     {
+      "name": "GPT-4.1",
+      "ctx": "1047576",
+      "out": "32768",
+      "enc": "o200k",
+      "factor": "1",
+      "mode": "shared"
+     },
+     {
+      "name": "GPT-4o",
+      "ctx": "128000",
+      "out": "16384",
+      "enc": "o200k",
+      "factor": "1",
+      "mode": "shared"
+     },
+     {
+      "name": "Gemini 2.5 Pro",
+      "ctx": "1048576",
+      "out": "65536",
+      "enc": "o200k",
+      "factor": "1.1",
+      "mode": "separate"
+     },
+     {
+      "name": "Gemini 2.5 Flash",
+      "ctx": "1048576",
+      "out": "65536",
+      "enc": "o200k",
+      "factor": "1.1",
+      "mode": "separate"
+     },
+     {
+      "name": "Llama 3.3 70B",
+      "ctx": "131072",
+      "out": "8192",
+      "enc": "cl100k",
+      "factor": "1",
+      "mode": "shared"
+     },
+     {
+      "name": "DeepSeek V3.x",
+      "ctx": "131072",
+      "out": "8192",
+      "enc": "cl100k",
+      "factor": "1",
+      "mode": "shared"
+     },
+     {
+      "name": "Qwen3 235B-A22B",
+      "ctx": "262144",
+      "out": "32768",
+      "enc": "cl100k",
+      "factor": "1",
+      "mode": "shared"
+     },
+     {
+      "name": "Mistral Large",
+      "ctx": "131072",
+      "out": "8192",
+      "enc": "cl100k",
+      "factor": "1",
+      "mode": "shared"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Code review of a 64k diff on Claude Haiku 4.5 with 16k reserved",
+   "input": {
+    "parts": "=== system ===\nYou review pull requests for an embedded Linux BSP (Yocto, kernel 6.6, U-Boot 2024.01).\nFlag real defects first: locking, error paths, DT bindings that do not match the driver, and anything that breaks the boot.\nBe brief; one bullet per finding with file:line.\n\n=== examples ×6 ===\nInput: +\tret = clk_prepare_enable(priv->clk);\n+\tif (ret)\n+\t\treturn ret;\n+\tret = regmap_write(priv->map, REG_CTRL, CTRL_EN);\nOutput: drivers/foo/foo.c:212 - if regmap_write fails the clock stays enabled; add clk_disable_unprepare on the error path or use devm_clk_get_enabled.\n\n=== diff (git diff origin/main...HEAD) = 64k ===\n(the full diff: 38 files, +2140 / -611 lines)\n\n=== question ===\nReview this diff. List defects by severity, then nits. Say which findings you are unsure about.\n",
+    "reserve": 16000,
+    "basis": "high",
+    "target": "Claude Haiku 4.5",
+    "models": [
+     {
+      "name": "Claude Opus 5.5",
+      "ctx": "1000000",
+      "out": "128000",
+      "enc": "o200k",
+      "factor": "1.3",
+      "mode": "shared"
+     },
+     {
+      "name": "Claude Sonnet 5.5",
+      "ctx": "1000000",
+      "out": "128000",
+      "enc": "o200k",
+      "factor": "1.3",
+      "mode": "shared"
+     },
+     {
+      "name": "Claude Haiku 4.5",
+      "ctx": "200000",
+      "out": "64000",
+      "enc": "o200k",
+      "factor": "1.2",
+      "mode": "shared"
+     },
+     {
+      "name": "GPT-5",
+      "ctx": "400000",
+      "out": "128000",
+      "enc": "o200k",
+      "factor": "1",
+      "mode": "shared"
+     },
+     {
+      "name": "GPT-4.1",
+      "ctx": "1047576",
+      "out": "32768",
+      "enc": "o200k",
+      "factor": "1",
+      "mode": "shared"
+     },
+     {
+      "name": "GPT-4o",
+      "ctx": "128000",
+      "out": "16384",
+      "enc": "o200k",
+      "factor": "1",
+      "mode": "shared"
+     },
+     {
+      "name": "Gemini 2.5 Pro",
+      "ctx": "1048576",
+      "out": "65536",
+      "enc": "o200k",
+      "factor": "1.1",
+      "mode": "separate"
+     },
+     {
+      "name": "Gemini 2.5 Flash",
+      "ctx": "1048576",
+      "out": "65536",
+      "enc": "o200k",
+      "factor": "1.1",
+      "mode": "separate"
+     },
+     {
+      "name": "Llama 3.3 70B",
+      "ctx": "131072",
+      "out": "8192",
+      "enc": "cl100k",
+      "factor": "1",
+      "mode": "shared"
+     },
+     {
+      "name": "DeepSeek V3.x",
+      "ctx": "131072",
+      "out": "8192",
+      "enc": "cl100k",
+      "factor": "1",
+      "mode": "shared"
+     },
+     {
+      "name": "Qwen3 235B-A22B",
+      "ctx": "262144",
+      "out": "32768",
+      "enc": "cl100k",
+      "factor": "1",
+      "mode": "shared"
+     },
+     {
+      "name": "Mistral Large",
+      "ctx": "131072",
+      "out": "8192",
+      "enc": "cl100k",
+      "factor": "1",
+      "mode": "shared"
+     }
+    ]
+   }
+  }
+ ],
+ "usage": "Give the prompt as parts (textarea; lines \"=== name ===\" start a part, \"×N\" repeats it, \"= 40k\" gives a known size), the tokens reserved for the answer, and optionally a target model and an edited model table {name, ctx, out, enc: o200k|cl100k, factor, mode: shared|separate}. It returns the estimated tokens per part (o200k and cl100k), per model the input tokens, whether it fits, the room left for the answer, what to cut first for the target, and a markdown budget table. Use it before sending a long prompt or planning a RAG/context budget; counts are estimates, not a tokenizer.",
+ "sources": [
+  "tiktoken (MIT) o200k_base / cl100k_base pre-tokenizer patterns; cost tables fitted 2026-09-29 against the real vocab files (exact BPE counts) over ~420 kB of prose, code, logs and 9 languages",
+  "Anthropic Claude model table (context window, max output) as cached 2026-09-25; Anthropic docs: Opus 4.7+ tokenizer uses ~1.0-1.35x the tokens of the earlier one; /v1/messages/count_tokens for exact counts",
+  "OpenAI, Google Gemini, Meta Llama, DeepSeek, Qwen and Mistral model pages for window and output limits - as remembered, as of 2026-09, not verified: check before relying on them",
+  "OpenAI cookbook \"How to count tokens with tiktoken\" (per-message framing overhead)"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "draw"
+ ]
+}
