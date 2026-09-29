@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://redline.local/sim/messages.schema.json",
+  "title": "Virtual board message (SPEC.md section 1)",
+  "description": "One JSON object per line. Unknown fields are allowed and ignored.",
+  "oneOf": [
+    {"$ref": "#/$defs/pin"}, {"$ref": "#/$defs/pwm"}, {"$ref": "#/$defs/adc"},
+    {"$ref": "#/$defs/freq"}, {"$ref": "#/$defs/i2c"}, {"$ref": "#/$defs/spi"},
+    {"$ref": "#/$defs/uart"}, {"$ref": "#/$defs/reply"}
+  ],
+  "$defs": {
+    "time":  {"type": "integer", "minimum": 0, "description": "emulator virtual time, microseconds"},
+    "pinName": {"type": "string", "minLength": 1, "description": "the MCU's own pin name: GPIO18, PA6"},
+    "hex":   {"type": "string", "pattern": "^([0-9a-fA-F]{2})*$"},
+    "txnId": {"type": ["integer", "string"]},
+    "busName": {"type": "string", "minLength": 1},
+    "byteCount": {"type": "integer", "minimum": 0},
+
+    "pin": {"type": "object", "required": ["type", "pin", "level"], "properties": {
+      "type": {"const": "pin"}, "t": {"$ref": "#/$defs/time"},
+      "pin": {"$ref": "#/$defs/pinName"}, "level": {"type": "integer", "enum": [0, 1]}}},
+    "pwm": {"type": "object", "required": ["type", "pin", "duty", "hz"], "properties": {
+      "type": {"const": "pwm"}, "t": {"$ref": "#/$defs/time"}, "pin": {"$ref": "#/$defs/pinName"},
+      "duty": {"type": "number", "minimum": 0, "maximum": 1},
+      "hz": {"type": "number", "minimum": 0}}},
+    "adc": {"type": "object", "required": ["type", "pin", "volts"], "properties": {
+      "type": {"const": "adc"}, "t": {"$ref": "#/$defs/time"}, "pin": {"$ref": "#/$defs/pinName"},
+      "volts": {"type": "number"}}},
+    "freq": {"type": "object", "required": ["type", "pin", "hz"], "properties": {
+      "type": {"const": "freq"}, "t": {"$ref": "#/$defs/time"}, "pin": {"$ref": "#/$defs/pinName"},
+      "hz": {"type": "number", "minimum": 0}}},
+    "i2c": {"type": "object", "required": ["type", "id", "bus", "addr", "write", "read"], "properties": {
+      "type": {"const": "i2c"}, "t": {"$ref": "#/$defs/time"}, "id": {"$ref": "#/$defs/txnId"},
+      "bus": {"$ref": "#/$defs/busName"}, "addr": {"type": "integer", "minimum": 0, "maximum": 127},
+      "write": {"$ref": "#/$defs/hex"}, "read": {"$ref": "#/$defs/byteCount"}}},
+    "spi": {"type": "object", "required": ["type", "id", "bus", "cs", "write", "read"], "properties": {
+      "type": {"const": "spi"}, "t": {"$ref": "#/$defs/time"}, "id": {"$ref": "#/$defs/txnId"},
+      "bus": {"$ref": "#/$defs/busName"}, "cs": {"$ref": "#/$defs/pinName"},
+      "write": {"$ref": "#/$defs/hex"}, "read": {"$ref": "#/$defs/byteCount"}}},
+    "uart": {"type": "object", "required": ["type", "port", "data"], "properties": {
+      "type": {"const": "uart"}, "t": {"$ref": "#/$defs/time"},
+      "port": {"type": "string", "pattern": "^U(S)?ART\\d+$"}, "data": {"type": "string"}}},
+    "reply": {"type": "object", "required": ["type", "id", "data", "ack"], "properties": {
+      "type": {"const": "reply"}, "t": {"$ref": "#/$defs/time"}, "id": {"$ref": "#/$defs/txnId"},
+      "data": {"$ref": "#/$defs/hex"}, "ack": {"type": "boolean"}}}
+  }
+}

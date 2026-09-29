@@ -1,0 +1,77 @@
+# The virtual board's parts (SPEC section 3). Most models are a block plus
+# options; `code:` only where there is real behaviour.
+#
+# match   - any rule that fits picks the model (first model wins):
+#             lcsc:      LCSC numbers found in the component's part/value
+#             footprint: regex on the footprint
+#             text:      regex on "ref value footprint part"
+# roles   - {role: [pads to try]}; board.describe follows each pad's net to
+#           the MCU (through at most one series resistor) and writes
+#           sim.json `pins: {role: MCU pin}`
+# view    - hints for the page (data, not chrome)
+
+mcus:        # the simulated MCU, found the same way
+  - family: esp32
+    emulator: qemu-esp32
+    match: {lcsc: [C701342, C82899], text: 'ESP32-WROOM-32'}
+  - family: stm32f0
+    emulator: renode
+    match: {text: 'STM32F0\d\d'}
+
+series: '^R\d+$'   # the one passive allowed between a part and the MCU: a 2-pad resistor
+
+models:
+  led:
+    block: light
+    match: {footprint: 'LED0603|LED0805|LED-SMD', text: '^LED\d*\s'}
+    roles: {A: [A, '2', '+'], K: [K, '1', '-']}   # wired on K: lit by a 0
+    view: {glow: '#ff3b30'}
+
+  button:
+    block: press
+    pull: up
+    match: {footprint: 'SW-SMD|TS-?\d|TS36CA'}
+    roles: {'1': ['1', '2', '3', '4', A, B]}
+    view: {kind: pushbutton}
+
+  potentiometer:
+    block: level
+    min: 0
+    max: 100
+    value: 50
+    unit: '%'
+    volts: [0.0, 3.3]
+    match: {text: '(?i)^RV\d+\s|potentiometer|RK09'}
+    roles: {W: ['2', W]}
+    view: {kind: knob}
+
+  fan:
+    block: motor
+    max_rpm: 3000
+    tau: 0.5
+    pulses_per_rev: 2
+    match: {text: '(?i)\bfan\b'}
+    roles: {pwm: ['4', PWM], tach: ['3', TACH]}   # 4-pin PC fan: GND 12V TACH PWM
+    view: {kind: fan}
+
+  tmp102:
+    block: regs
+    bus: i2c
+    addr: 72
+    match: {text: 'TMP102'}
+    roles: {SDA: [SDA, '6'], SCL: [SCL, '1']}
+    sliders: {temperature: {min: -40, max: 125, value: 25, unit: C}}
+    regs:
+      0: {from: temperature, scale: 0.0625, bits: 12, shift: 4, signed: true, bytes: 2}
+      1: {value: 0x60A0, bytes: 2}    # configuration
+      2: {value: 0x4B00, bytes: 2}    # T low, 75 C
+      3: {value: 0x5000, bytes: 2}    # T high, 80 C
+    view: {kind: sensor}
+
+  ssd1306:
+    code: backend.sim.ssd1306.SSD1306
+    bus: i2c
+    addr: 60
+    match: {text: '(?i)OLED|SSD1306'}
+    roles: {SDA: [SDA, '4'], SCL: [SCL, '3']}   # 4-pin module: GND VCC SCL SDA
+    view: {kind: screen, pixel: '#8fd3ff'}
