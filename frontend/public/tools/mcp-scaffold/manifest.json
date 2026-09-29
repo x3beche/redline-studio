@@ -1,0 +1,555 @@
+{
+  "id": "mcp-scaffold",
+  "version": "1.0",
+  "name": "MCP Server Scaffold",
+  "blurb": "an MCP server skeleton in Python or TypeScript from the tools, resources and prompts you describe",
+  "group": "ai",
+  "rooms": [
+    "web",
+    "embedded",
+    "mobile",
+    "pcb",
+    "cad"
+  ],
+  "keywords": [
+    "mcp",
+    "model context protocol",
+    "mcp server",
+    "fastmcp",
+    "mcpserver",
+    "mcp sdk",
+    "@modelcontextprotocol/sdk",
+    "tool annotations",
+    "claude mcp add",
+    ".mcp.json",
+    "claude desktop config",
+    "stdio",
+    "streamable http",
+    "zod schema",
+    "agent tools",
+    "scaffold",
+    "boilerplate"
+  ],
+  "intro": "Writes an MCP server skeleton from the tools (with typed, described parameters and annotations), resources (URIs and URI templates) and prompts you define: Python on the official mcp SDK (2.x MCPServer or 1.x FastMCP) or TypeScript on @modelcontextprotocol/sdk (McpServer with zod schemas), over stdio or Streamable HTTP, with package files, a README and the Claude Code and Claude Desktop config. It lints what the model will read: names, missing descriptions, and state-changing tools not marked destructive.",
+  "inputs": [
+    {
+      "key": "name",
+      "label": "Server name",
+      "type": "text",
+      "default": "bench-lab",
+      "help": "Lower case, - or _; becomes the config key."
+    },
+    {
+      "key": "description",
+      "label": "Server description",
+      "type": "text",
+      "wide": true,
+      "default": "Drives the lab bench: serial console, power supply and SWD probe of the device under test."
+    },
+    {
+      "key": "language",
+      "label": "Language",
+      "type": "select",
+      "default": "python",
+      "options": [
+        [
+          "python",
+          "Python"
+        ],
+        [
+          "typescript",
+          "TypeScript"
+        ]
+      ]
+    },
+    {
+      "key": "py_sdk",
+      "label": "Python SDK",
+      "type": "select",
+      "default": "v2",
+      "options": [
+        [
+          "v2",
+          "mcp 2.x (MCPServer)"
+        ],
+        [
+          "v1",
+          "mcp 1.x (FastMCP)"
+        ]
+      ],
+      "when": {
+        "key": "language",
+        "equals": "python"
+      }
+    },
+    {
+      "key": "transport",
+      "label": "Transport",
+      "type": "select",
+      "default": "stdio",
+      "options": [
+        [
+          "stdio",
+          "stdio"
+        ],
+        [
+          "http",
+          "Streamable HTTP"
+        ]
+      ]
+    },
+    {
+      "key": "port",
+      "label": "HTTP port",
+      "type": "number",
+      "default": 8000,
+      "when": {
+        "key": "transport",
+        "equals": "http"
+      }
+    },
+    {
+      "key": "tools",
+      "label": "Tools",
+      "type": "table",
+      "default": [
+        {
+          "name": "read_serial",
+          "description": "Read text from a serial port for a number of seconds and return it. Use it to capture the boot log of the device under test.",
+          "annotation": "read-only"
+        },
+        {
+          "name": "set_psu_voltage",
+          "description": "Set the output voltage of one bench power supply channel. The output stays enabled.",
+          "annotation": "idempotent"
+        },
+        {
+          "name": "erase_flash",
+          "description": "Erase the target's flash through the SWD probe.",
+          "annotation": "none"
+        },
+        {
+          "name": "scopeCapture",
+          "description": "Scope screenshot",
+          "annotation": "read-only"
+        }
+      ],
+      "columns": [
+        {
+          "key": "name",
+          "label": "Name"
+        },
+        {
+          "key": "description",
+          "label": "Description"
+        },
+        {
+          "key": "annotation",
+          "label": "Annotation",
+          "type": "select",
+          "options": [
+            "none",
+            "read-only",
+            "destructive",
+            "idempotent",
+            "open-world"
+          ],
+          "default": "none"
+        }
+      ]
+    },
+    {
+      "key": "params",
+      "label": "Tool parameters",
+      "type": "table",
+      "default": [
+        {
+          "tool": "read_serial",
+          "name": "port",
+          "type": "string",
+          "required": "yes",
+          "description": "Serial device, e.g. /dev/ttyUSB0",
+          "values": ""
+        },
+        {
+          "tool": "read_serial",
+          "name": "baud",
+          "type": "integer",
+          "required": "no",
+          "description": "Baud rate",
+          "values": "115200"
+        },
+        {
+          "tool": "read_serial",
+          "name": "seconds",
+          "type": "number",
+          "required": "no",
+          "description": "How long to listen, in seconds",
+          "values": "5"
+        },
+        {
+          "tool": "set_psu_voltage",
+          "name": "channel",
+          "type": "enum",
+          "required": "yes",
+          "description": "Output channel",
+          "values": "CH1, CH2, CH3"
+        },
+        {
+          "tool": "set_psu_voltage",
+          "name": "volts",
+          "type": "number",
+          "required": "yes",
+          "description": "Output voltage in volts (0 to 30)",
+          "values": ""
+        },
+        {
+          "tool": "erase_flash",
+          "name": "target",
+          "type": "string",
+          "required": "yes",
+          "description": "Probe target name, e.g. stm32f405rg",
+          "values": ""
+        },
+        {
+          "tool": "erase_flash",
+          "name": "mass_erase",
+          "type": "boolean",
+          "required": "no",
+          "description": "Erase every sector, not only the application region",
+          "values": "false"
+        },
+        {
+          "tool": "scopeCapture",
+          "name": "channel",
+          "type": "integer",
+          "required": "yes",
+          "description": "",
+          "values": ""
+        }
+      ],
+      "help": "One row per parameter; Values = enum values (comma-separated) or the default of an optional one.",
+      "columns": [
+        {
+          "key": "tool",
+          "label": "Tool"
+        },
+        {
+          "key": "name",
+          "label": "Name"
+        },
+        {
+          "key": "type",
+          "label": "Type",
+          "type": "select",
+          "options": [
+            "string",
+            "integer",
+            "number",
+            "boolean",
+            "enum",
+            "string[]",
+            "number[]"
+          ],
+          "default": "string"
+        },
+        {
+          "key": "required",
+          "label": "Required",
+          "type": "select",
+          "options": [
+            "yes",
+            "no"
+          ],
+          "default": "yes"
+        },
+        {
+          "key": "description",
+          "label": "Description"
+        },
+        {
+          "key": "values",
+          "label": "Values / default"
+        }
+      ]
+    },
+    {
+      "key": "resources",
+      "label": "Resources",
+      "type": "table",
+      "default": [
+        {
+          "uri": "bench://instruments",
+          "name": "instruments",
+          "description": "Instruments on the bench with their VISA addresses",
+          "mime": "application/json"
+        },
+        {
+          "uri": "logs://{run_id}",
+          "name": "run_log",
+          "description": "Serial log of one test run",
+          "mime": "text/plain"
+        }
+      ],
+      "help": "URI or URI template with {name} variables.",
+      "columns": [
+        {
+          "key": "uri",
+          "label": "URI"
+        },
+        {
+          "key": "name",
+          "label": "Name"
+        },
+        {
+          "key": "description",
+          "label": "Description"
+        },
+        {
+          "key": "mime",
+          "label": "MIME type"
+        }
+      ]
+    },
+    {
+      "key": "prompts",
+      "label": "Prompts",
+      "type": "table",
+      "default": [
+        {
+          "name": "triage_uart_log",
+          "description": "Explain a boot log and suggest the next measurement",
+          "args": "log, symptom?",
+          "text": "Here is a UART boot log from the device under test:\n\n{log}\n\nReported symptom: {symptom}\nFind the first line that shows a fault and suggest one measurement that would confirm it."
+        }
+      ],
+      "help": "Args comma-separated, ? = optional; use {arg} in the text.",
+      "columns": [
+        {
+          "key": "name",
+          "label": "Name"
+        },
+        {
+          "key": "description",
+          "label": "Description"
+        },
+        {
+          "key": "args",
+          "label": "Args"
+        },
+        {
+          "key": "text",
+          "label": "Text"
+        }
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "title": "Lab bench server in Python over stdio (with lint findings)",
+      "input": {
+        "name": "bench-lab",
+        "description": "Drives the lab bench: serial console, power supply and SWD probe of the device under test.",
+        "language": "python",
+        "py_sdk": "v2",
+        "transport": "stdio",
+        "port": 8000,
+        "tools": [
+          {
+            "name": "read_serial",
+            "description": "Read text from a serial port for a number of seconds and return it. Use it to capture the boot log of the device under test.",
+            "annotation": "read-only"
+          },
+          {
+            "name": "set_psu_voltage",
+            "description": "Set the output voltage of one bench power supply channel. The output stays enabled.",
+            "annotation": "idempotent"
+          },
+          {
+            "name": "erase_flash",
+            "description": "Erase the target's flash through the SWD probe.",
+            "annotation": "none"
+          },
+          {
+            "name": "scopeCapture",
+            "description": "Scope screenshot",
+            "annotation": "read-only"
+          }
+        ],
+        "params": [
+          {
+            "tool": "read_serial",
+            "name": "port",
+            "type": "string",
+            "required": "yes",
+            "description": "Serial device, e.g. /dev/ttyUSB0",
+            "values": ""
+          },
+          {
+            "tool": "read_serial",
+            "name": "baud",
+            "type": "integer",
+            "required": "no",
+            "description": "Baud rate",
+            "values": "115200"
+          },
+          {
+            "tool": "read_serial",
+            "name": "seconds",
+            "type": "number",
+            "required": "no",
+            "description": "How long to listen, in seconds",
+            "values": "5"
+          },
+          {
+            "tool": "set_psu_voltage",
+            "name": "channel",
+            "type": "enum",
+            "required": "yes",
+            "description": "Output channel",
+            "values": "CH1, CH2, CH3"
+          },
+          {
+            "tool": "set_psu_voltage",
+            "name": "volts",
+            "type": "number",
+            "required": "yes",
+            "description": "Output voltage in volts (0 to 30)",
+            "values": ""
+          },
+          {
+            "tool": "erase_flash",
+            "name": "target",
+            "type": "string",
+            "required": "yes",
+            "description": "Probe target name, e.g. stm32f405rg",
+            "values": ""
+          },
+          {
+            "tool": "erase_flash",
+            "name": "mass_erase",
+            "type": "boolean",
+            "required": "no",
+            "description": "Erase every sector, not only the application region",
+            "values": "false"
+          },
+          {
+            "tool": "scopeCapture",
+            "name": "channel",
+            "type": "integer",
+            "required": "yes",
+            "description": "",
+            "values": ""
+          }
+        ],
+        "resources": [
+          {
+            "uri": "bench://instruments",
+            "name": "instruments",
+            "description": "Instruments on the bench with their VISA addresses",
+            "mime": "application/json"
+          },
+          {
+            "uri": "logs://{run_id}",
+            "name": "run_log",
+            "description": "Serial log of one test run",
+            "mime": "text/plain"
+          }
+        ],
+        "prompts": [
+          {
+            "name": "triage_uart_log",
+            "description": "Explain a boot log and suggest the next measurement",
+            "args": "log, symptom?",
+            "text": "Here is a UART boot log from the device under test:\n\n{log}\n\nReported symptom: {symptom}\nFind the first line that shows a fault and suggest one measurement that would confirm it."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Docs search in TypeScript over Streamable HTTP",
+      "input": {
+        "name": "docs-search",
+        "description": "Searches the team's engineering docs and returns matching sections with their source links.",
+        "language": "typescript",
+        "transport": "http",
+        "port": 3001,
+        "tools": [
+          {
+            "name": "search_docs",
+            "description": "Full-text search over the engineering docs. Returns up to `limit` sections with title, path and a snippet.",
+            "annotation": "read-only"
+          },
+          {
+            "name": "delete-page",
+            "description": "Delete a docs page by path.",
+            "annotation": "none"
+          }
+        ],
+        "params": [
+          {
+            "tool": "search_docs",
+            "name": "query",
+            "type": "string",
+            "required": "yes",
+            "description": "Words to search for",
+            "values": ""
+          },
+          {
+            "tool": "search_docs",
+            "name": "limit",
+            "type": "integer",
+            "required": "no",
+            "description": "Maximum number of sections",
+            "values": "10"
+          },
+          {
+            "tool": "search_docs",
+            "name": "spaces",
+            "type": "string[]",
+            "required": "no",
+            "description": "Only these doc spaces",
+            "values": ""
+          },
+          {
+            "tool": "delete-page",
+            "name": "path",
+            "type": "string",
+            "required": "yes",
+            "description": "Page path, e.g. hw/power/pmic.md",
+            "values": ""
+          }
+        ],
+        "resources": [
+          {
+            "uri": "docs://{path}",
+            "name": "page",
+            "description": "One docs page as Markdown",
+            "mime": "text/markdown"
+          }
+        ],
+        "prompts": [
+          {
+            "name": "summarize_page",
+            "description": "Summarize a docs page for a design review",
+            "args": "path, audience?",
+            "text": "Summarize the page {path} for {audience} in five bullet points."
+          }
+        ]
+      }
+    }
+  ],
+  "usage": "Give name, description, language (python|typescript), py_sdk (v2|v1), transport (stdio|http) and port, and tables: tools {name, description, annotation none|read-only|destructive|idempotent|open-world}, params {tool, name, type string|integer|number|boolean|enum|string[]|number[], required yes|no, description, values = enum list or default}, resources {uri, name, description, mime}, prompts {name, description, args 'a, b?', text with {a}}. It returns the source file, package files, README.md, 'Client config' (.mcp.json, claude mcp add, Claude Desktop) and a lint table. SDK versions are as of 2026-09; check before pinning.",
+  "sources": [
+    "Model Context Protocol specification (modelcontextprotocol.io/specification): tools, resources, prompts, tool annotations, stdio and Streamable HTTP transports",
+    "MCP Python SDK README and API (py.sdk.modelcontextprotocol.io), mcp 2.2.0 on PyPI: MCPServer, v1 FastMCP",
+    "MCP TypeScript SDK README and type declarations, @modelcontextprotocol/sdk 1.31.0 on npm: McpServer.registerTool/registerResource/registerPrompt, StreamableHTTPServerTransport, createMcpExpressApp",
+    "Claude Code docs: claude mcp add, .mcp.json; Claude Desktop claude_desktop_config.json",
+    "Anthropic Messages API: tool name pattern ^[a-zA-Z0-9_-]{1,64}$"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "view"
+  ]
+}

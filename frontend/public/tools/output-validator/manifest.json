@@ -1,0 +1,147 @@
+{
+  "id": "output-validator",
+  "version": "1.0",
+  "name": "Structured Output Validator",
+  "blurb": "a model's JSON answer checked against a schema, broken JSON repaired, and every error shown where it is",
+  "group": "ai",
+  "rooms": [
+    "web",
+    "embedded",
+    "mobile",
+    "pcb",
+    "cad"
+  ],
+  "keywords": [
+    "json schema",
+    "structured output",
+    "validate json",
+    "repair json",
+    "fix broken json",
+    "llm output",
+    "json mode",
+    "trailing comma",
+    "truncated json",
+    "json pointer",
+    "retry prompt",
+    "schema validation",
+    "2020-12",
+    "tool call arguments",
+    "function calling",
+    "jsonrepair",
+    "ajv"
+  ],
+  "intro": "Repairs the usual ways a model breaks JSON (fences and prose, comments, single quotes, bare keys, trailing or missing commas, Python literals, NaN, a cut-off tail) as steps you can switch off, parses the result strictly (RFC 8259) with every value's place kept, and checks it against a JSON Schema draft 2020-12 subset. Each repair and each schema error is marked where it is in the text, and a retry prompt tells the model exactly what to fix.",
+  "inputs": [
+    {
+      "key": "output",
+      "label": "Model output",
+      "type": "textarea",
+      "rows": 14,
+      "default": "Sure! Here is the extracted data for the part:\n\n```json\n{\n  // from DS8626 rev 9, page 1\n  \"part_number\": \"STM32F405RGT6\",\n  \"manufacturer\": 'STMicroelectronics',\n  \"package\": \"LQFP-64\",\n  pins: \"64\",\n  \"supply\": {\"min\": 1.8, \"max\": 3.6, \"unit\": \"V\",},\n  \"temp_c\": {\"min\": -40, \"max\": 85, \"unit\": \"°C\"},\n  \"interfaces\": [\n    {\"kind\": \"UART\", \"count\": 6},\n    {\"kind\": \"SPI\", \"count\": 3},\n    {\"kind\": \"I2C\", \"count\": 3},\n    {\"kind\": \"CAN\", \"count\": 2},\n    {\"kind\": \"USB OTG\", \"count\": 2}\n  ],\n  \"flash_kb\": 1024,\n  \"has_fpu\": True,\n  \"confidence\": NaN,\n  \"notes\": \"Also in LQFP100 and UFBGA176.\"\n}\n```\n\nLet me know if you need anything else!",
+      "help": "The model's reply as it came back: prose, fences and all."
+    },
+    {
+      "key": "schema",
+      "label": "JSON Schema",
+      "type": "textarea",
+      "rows": 14,
+      "default": "{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \"title\": \"Part extracted from a datasheet\",\n  \"type\": \"object\",\n  \"required\": [\n    \"part_number\",\n    \"manufacturer\",\n    \"package\",\n    \"pins\",\n    \"supply\",\n    \"interfaces\",\n    \"confidence\"\n  ],\n  \"additionalProperties\": false,\n  \"properties\": {\n    \"part_number\": {\n      \"type\": \"string\",\n      \"pattern\": \"^[A-Z0-9][A-Z0-9-]{3,}$\"\n    },\n    \"manufacturer\": {\n      \"type\": \"string\",\n      \"minLength\": 2\n    },\n    \"package\": {\n      \"enum\": [\n        \"LQFP48\",\n        \"LQFP64\",\n        \"LQFP100\",\n        \"QFN32\",\n        \"QFN48\",\n        \"UFBGA176\",\n        \"WLCSP49\"\n      ]\n    },\n    \"pins\": {\n      \"type\": \"integer\",\n      \"minimum\": 1,\n      \"maximum\": 1024\n    },\n    \"supply\": {\n      \"$ref\": \"#/$defs/range\"\n    },\n    \"temp_c\": {\n      \"$ref\": \"#/$defs/range\"\n    },\n    \"interfaces\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"$ref\": \"#/$defs/iface\"\n      },\n      \"minItems\": 1,\n      \"uniqueItems\": true\n    },\n    \"flash_kb\": {\n      \"type\": [\n        \"integer\",\n        \"null\"\n      ],\n      \"minimum\": 0\n    },\n    \"confidence\": {\n      \"type\": \"number\",\n      \"minimum\": 0,\n      \"maximum\": 1\n    },\n    \"notes\": {\n      \"type\": \"string\",\n      \"maxLength\": 200\n    }\n  },\n  \"$defs\": {\n    \"range\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"min\",\n        \"max\"\n      ],\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"min\": {\n          \"type\": \"number\"\n        },\n        \"max\": {\n          \"type\": \"number\"\n        },\n        \"unit\": {\n          \"enum\": [\n            \"V\",\n            \"°C\"\n          ]\n        }\n      }\n    },\n    \"iface\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"kind\",\n        \"count\"\n      ],\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"kind\": {\n          \"enum\": [\n            \"UART\",\n            \"SPI\",\n            \"I2C\",\n            \"CAN\",\n            \"USB\",\n            \"ETH\",\n            \"SDIO\"\n          ]\n        },\n        \"count\": {\n          \"type\": \"integer\",\n          \"minimum\": 1\n        }\n      }\n    }\n  }\n}",
+      "help": "Draft 2020-12 subset; local $ref to #/$defs/... Leave empty to only repair and parse."
+    },
+    {
+      "key": "fences",
+      "label": "Strip prose and ``` fences",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "comments",
+      "label": "Remove comments",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "quotes",
+      "label": "Single quotes to double",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "keys",
+      "label": "Quote bare keys",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "escapes",
+      "label": "Escape raw newlines, fix bad escapes",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "commas",
+      "label": "Drop trailing commas",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "missing",
+      "label": "Insert missing commas",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "literals",
+      "label": "Python True/False/None",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "nonfinite",
+      "label": "NaN/Infinity/undefined to null, fix +1 .5 1.",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "truncated",
+      "label": "Close a truncated tail",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "retry_schema",
+      "label": "Put the schema in the retry prompt",
+      "type": "bool",
+      "default": false
+    }
+  ],
+  "examples": [
+    {
+      "title": "Datasheet extraction: fenced, commented, Python literals, enum and type errors",
+      "input": {
+        "output": "Sure! Here is the extracted data for the part:\n\n```json\n{\n  // from DS8626 rev 9, page 1\n  \"part_number\": \"STM32F405RGT6\",\n  \"manufacturer\": 'STMicroelectronics',\n  \"package\": \"LQFP-64\",\n  pins: \"64\",\n  \"supply\": {\"min\": 1.8, \"max\": 3.6, \"unit\": \"V\",},\n  \"temp_c\": {\"min\": -40, \"max\": 85, \"unit\": \"°C\"},\n  \"interfaces\": [\n    {\"kind\": \"UART\", \"count\": 6},\n    {\"kind\": \"SPI\", \"count\": 3},\n    {\"kind\": \"I2C\", \"count\": 3},\n    {\"kind\": \"CAN\", \"count\": 2},\n    {\"kind\": \"USB OTG\", \"count\": 2}\n  ],\n  \"flash_kb\": 1024,\n  \"has_fpu\": True,\n  \"confidence\": NaN,\n  \"notes\": \"Also in LQFP100 and UFBGA176.\"\n}\n```\n\nLet me know if you need anything else!",
+        "schema": "{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \"title\": \"Part extracted from a datasheet\",\n  \"type\": \"object\",\n  \"required\": [\n    \"part_number\",\n    \"manufacturer\",\n    \"package\",\n    \"pins\",\n    \"supply\",\n    \"interfaces\",\n    \"confidence\"\n  ],\n  \"additionalProperties\": false,\n  \"properties\": {\n    \"part_number\": {\n      \"type\": \"string\",\n      \"pattern\": \"^[A-Z0-9][A-Z0-9-]{3,}$\"\n    },\n    \"manufacturer\": {\n      \"type\": \"string\",\n      \"minLength\": 2\n    },\n    \"package\": {\n      \"enum\": [\n        \"LQFP48\",\n        \"LQFP64\",\n        \"LQFP100\",\n        \"QFN32\",\n        \"QFN48\",\n        \"UFBGA176\",\n        \"WLCSP49\"\n      ]\n    },\n    \"pins\": {\n      \"type\": \"integer\",\n      \"minimum\": 1,\n      \"maximum\": 1024\n    },\n    \"supply\": {\n      \"$ref\": \"#/$defs/range\"\n    },\n    \"temp_c\": {\n      \"$ref\": \"#/$defs/range\"\n    },\n    \"interfaces\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"$ref\": \"#/$defs/iface\"\n      },\n      \"minItems\": 1,\n      \"uniqueItems\": true\n    },\n    \"flash_kb\": {\n      \"type\": [\n        \"integer\",\n        \"null\"\n      ],\n      \"minimum\": 0\n    },\n    \"confidence\": {\n      \"type\": \"number\",\n      \"minimum\": 0,\n      \"maximum\": 1\n    },\n    \"notes\": {\n      \"type\": \"string\",\n      \"maxLength\": 200\n    }\n  },\n  \"$defs\": {\n    \"range\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"min\",\n        \"max\"\n      ],\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"min\": {\n          \"type\": \"number\"\n        },\n        \"max\": {\n          \"type\": \"number\"\n        },\n        \"unit\": {\n          \"enum\": [\n            \"V\",\n            \"°C\"\n          ]\n        }\n      }\n    },\n    \"iface\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"kind\",\n        \"count\"\n      ],\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"kind\": {\n          \"enum\": [\n            \"UART\",\n            \"SPI\",\n            \"I2C\",\n            \"CAN\",\n            \"USB\",\n            \"ETH\",\n            \"SDIO\"\n          ]\n        },\n        \"count\": {\n          \"type\": \"integer\",\n          \"minimum\": 1\n        }\n      }\n    }\n  }\n}"
+      }
+    },
+    {
+      "title": "Tool plan cut off at max_tokens, oneOf steps, a missing comma",
+      "input": {
+        "output": "{\"summary\": \"Power-cycle the modem, then read VBAT\", \"steps\": [\n  {\"op\": \"gpio\", \"pin\": \"PB12\", \"level\": 0},\n  {\"op\": \"delay\", \"ms\": 500},\n  {\"op\": \"gpio\", \"pin\": \"PB12\", \"level\": 1}\n  {\"op\": \"delay\", \"ms\": 2500.5},\n  {\"op\": \"read_adc\", \"channel\": 18, \"samples\": 16},\n  {\"op\": \"gpio\", \"pin\": \"PB16\", \"level\": None},\n  {\"op\": \"read_adc\", \"chan",
+        "schema": "{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \"type\": \"object\",\n  \"required\": [\n    \"summary\",\n    \"steps\"\n  ],\n  \"additionalProperties\": false,\n  \"properties\": {\n    \"summary\": {\n      \"type\": \"string\",\n      \"maxLength\": 120\n    },\n    \"steps\": {\n      \"type\": \"array\",\n      \"minItems\": 1,\n      \"maxItems\": 8,\n      \"items\": {\n        \"oneOf\": [\n          {\n            \"$ref\": \"#/$defs/gpio\"\n          },\n          {\n            \"$ref\": \"#/$defs/delay\"\n          },\n          {\n            \"$ref\": \"#/$defs/read_adc\"\n          }\n        ]\n      }\n    }\n  },\n  \"$defs\": {\n    \"gpio\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"op\",\n        \"pin\",\n        \"level\"\n      ],\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"op\": {\n          \"const\": \"gpio\"\n        },\n        \"pin\": {\n          \"type\": \"string\",\n          \"pattern\": \"^P[A-K](1[0-5]|[0-9])$\"\n        },\n        \"level\": {\n          \"enum\": [\n            0,\n            1\n          ]\n        }\n      }\n    },\n    \"delay\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"op\",\n        \"ms\"\n      ],\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"op\": {\n          \"const\": \"delay\"\n        },\n        \"ms\": {\n          \"type\": \"integer\",\n          \"minimum\": 1,\n          \"maximum\": 10000\n        }\n      }\n    },\n    \"read_adc\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"op\",\n        \"channel\"\n      ],\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"op\": {\n          \"const\": \"read_adc\"\n        },\n        \"channel\": {\n          \"type\": \"integer\",\n          \"minimum\": 0,\n          \"maximum\": 18\n        },\n        \"samples\": {\n          \"type\": \"integer\",\n          \"minimum\": 1,\n          \"maximum\": 64\n        }\n      }\n    }\n  }\n}",
+        "retry_schema": true
+      }
+    }
+  ],
+  "usage": "Give `output` (the model's raw reply) and `schema` (a JSON Schema; draft 2020-12 keywords incl. type, properties, required, items/prefixItems, enum, const, min/max, minLength/maxLength, pattern, additionalProperties, oneOf/anyOf/allOf/not, if/then/else, local $ref). Repair steps are bools, all on by default. It returns a verdict, the repairs made (step, line, was, now), schema errors with JSON Pointers, line numbers and suggested fixes, and texts 'Repaired JSON', 'Errors' (JSON list) and 'Retry prompt' to send back to the model. Use it on any model output that must be machine-read, before trusting it.",
+  "sources": [
+    "RFC 8259 The JavaScript Object Notation (JSON) Data Interchange Format",
+    "RFC 6901 JSON Pointer",
+    "JSON Schema Core and Validation, draft 2020-12 (json-schema.org/draft/2020-12): applicators §10, validation keywords §6, format as annotation §7.2.1",
+    "ECMA-262 regular expressions (pattern, with the u flag)"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "view"
+  ]
+}

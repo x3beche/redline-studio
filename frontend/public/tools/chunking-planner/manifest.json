@@ -1,0 +1,168 @@
+{
+  "id": "chunking-planner",
+  "version": "1.0",
+  "name": "Chunking Planner",
+  "blurb": "a document split into chunks by headings, sentences or tokens, with size, overlap and the chunks drawn on the text",
+  "group": "ai",
+  "rooms": [
+    "web",
+    "embedded",
+    "mobile",
+    "pcb",
+    "cad"
+  ],
+  "keywords": [
+    "chunking",
+    "chunk size",
+    "overlap",
+    "rag",
+    "retrieval augmented generation",
+    "text splitter",
+    "recursive character splitter",
+    "markdown header splitter",
+    "sentence splitter",
+    "embeddings",
+    "embedding cost",
+    "vector database",
+    "jsonl",
+    "token count",
+    "document chunks",
+    "code splitter"
+  ],
+  "intro": "Splits a document the way a RAG pipeline will: fixed token windows, a recursive separator splitter, Markdown heading sections (with the header path as metadata), sentences, or code definitions, with the size and overlap you set. It draws every chunk on the text, flags chunks that cut a code block or table, heading-only chunks, oversize pieces and tiny tails, and estimates tokens and the embedding cost. Token counts are estimates, not a real tokenizer.",
+  "inputs": [
+    {
+      "key": "text",
+      "label": "Document",
+      "type": "textarea",
+      "rows": 16,
+      "default": "# Bootloader update guide\n\nThis guide covers updating the field bootloader on the SB-40 sensor bridge. Read it completely before touching a unit in the field: a failed bootloader write leaves the board unable to start, and recovery needs the SWD header, which is under the potting on revision C boards.\n\n## Before you start\n\nYou need a USB-C cable, the `sbtool` CLI version 2.4 or newer, and a charged battery (above 3.7 V). The update takes about 40 seconds. Do not update while the unit is logging; stop the logger first with `sbtool log stop`.\n\nCheck the current version with `sbtool info`. Units shipped before March 2025 run bootloader 1.x and must go to 2.0 first; skipping straight to 2.2 is refused by the image header check.\n\n## Update procedure\n\n### 1. Put the unit in DFU mode\n\nHold the SET button, then plug in USB. The status LED blinks amber twice per second when the bootloader is waiting. If it stays solid green, the application started instead: unplug and try again, holding SET longer.\n\n### 2. Write the new image\n\n```sh\nsbtool dfu list\nsbtool dfu write --slot boot --verify sb40-boot-2.2.0.bin\nsbtool dfu reset\n```\n\nThe write erases sector 0 first. If power drops between the erase and the end of the write, the unit will not boot. The `--verify` flag reads the image back and compares its CRC-32 before the reset.\n\n### 3. Confirm\n\nAfter the reset the LED blinks green once. Run `sbtool info` again and check that the bootloader field reads 2.2.0 and the image CRC matches the release notes.\n\n## Error codes\n\n| Code | Meaning | What to do |\n|------|---------|------------|\n| E10 | Image header invalid | Download the image again; check the SHA-256 |\n| E11 | Version step not allowed | Update to 2.0 first |\n| E20 | Flash erase failed | Retry once; if it repeats, return the unit |\n| E21 | Verify mismatch | Retry the write; do not reset |\n| E30 | Battery too low | Charge above 3.7 V |\n\n## Recovery over SWD\n\nWhen the unit no longer enumerates over USB, the bootloader is damaged. Remove the potting over the SWD header (revision C) or use the test pads (revision D). Connect a probe and write the factory image:\n\n```sh\nopenocd -f interface/stlink.cfg -f target/stm32l4x.cfg \\\n  -c \"program sb40-factory-2.2.0.hex verify reset exit\"\n```\n\nAfter recovery the unit has factory calibration only. Run the calibration step from the service manual before returning it to the field.\n",
+      "help": "Markdown, plain text or code, as it will be indexed."
+    },
+    {
+      "key": "strategy",
+      "label": "Strategy",
+      "type": "select",
+      "default": "recursive",
+      "options": [
+        [
+          "tokens",
+          "Fixed token windows"
+        ],
+        [
+          "recursive",
+          "Recursive separators"
+        ],
+        [
+          "headings",
+          "Markdown headings"
+        ],
+        [
+          "sentences",
+          "Sentences"
+        ],
+        [
+          "code",
+          "Code definitions"
+        ]
+      ]
+    },
+    {
+      "key": "size",
+      "label": "Chunk size",
+      "type": "number",
+      "default": 100,
+      "help": "In the unit below."
+    },
+    {
+      "key": "overlap",
+      "label": "Overlap",
+      "type": "number",
+      "default": 20,
+      "help": "Carried from the end of one chunk into the next."
+    },
+    {
+      "key": "unit",
+      "label": "Size unit",
+      "type": "select",
+      "default": "tokens",
+      "options": [
+        [
+          "tokens",
+          "tokens (estimated)"
+        ],
+        [
+          "chars",
+          "characters"
+        ]
+      ]
+    },
+    {
+      "key": "separators",
+      "label": "Separators",
+      "type": "text",
+      "default": "\\n\\n|\\n|. | ",
+      "help": "Recursive splitter, in order, split by |; \\n = newline.",
+      "when": {
+        "key": "strategy",
+        "in": [
+          "recursive",
+          "headings"
+        ]
+      }
+    },
+    {
+      "key": "keep_headers",
+      "label": "Prepend the header path to each chunk's embed text",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "price",
+      "label": "Embedding price",
+      "type": "number",
+      "unit": "$ / MTok",
+      "default": 0.02,
+      "help": "Example as of 2026-09; check the provider's price page."
+    }
+  ],
+  "examples": [
+    {
+      "title": "Bootloader guide (Markdown), recursive 100 tokens, 20 overlap: a table gets cut",
+      "input": {
+        "text": "# Bootloader update guide\n\nThis guide covers updating the field bootloader on the SB-40 sensor bridge. Read it completely before touching a unit in the field: a failed bootloader write leaves the board unable to start, and recovery needs the SWD header, which is under the potting on revision C boards.\n\n## Before you start\n\nYou need a USB-C cable, the `sbtool` CLI version 2.4 or newer, and a charged battery (above 3.7 V). The update takes about 40 seconds. Do not update while the unit is logging; stop the logger first with `sbtool log stop`.\n\nCheck the current version with `sbtool info`. Units shipped before March 2025 run bootloader 1.x and must go to 2.0 first; skipping straight to 2.2 is refused by the image header check.\n\n## Update procedure\n\n### 1. Put the unit in DFU mode\n\nHold the SET button, then plug in USB. The status LED blinks amber twice per second when the bootloader is waiting. If it stays solid green, the application started instead: unplug and try again, holding SET longer.\n\n### 2. Write the new image\n\n```sh\nsbtool dfu list\nsbtool dfu write --slot boot --verify sb40-boot-2.2.0.bin\nsbtool dfu reset\n```\n\nThe write erases sector 0 first. If power drops between the erase and the end of the write, the unit will not boot. The `--verify` flag reads the image back and compares its CRC-32 before the reset.\n\n### 3. Confirm\n\nAfter the reset the LED blinks green once. Run `sbtool info` again and check that the bootloader field reads 2.2.0 and the image CRC matches the release notes.\n\n## Error codes\n\n| Code | Meaning | What to do |\n|------|---------|------------|\n| E10 | Image header invalid | Download the image again; check the SHA-256 |\n| E11 | Version step not allowed | Update to 2.0 first |\n| E20 | Flash erase failed | Retry once; if it repeats, return the unit |\n| E21 | Verify mismatch | Retry the write; do not reset |\n| E30 | Battery too low | Charge above 3.7 V |\n\n## Recovery over SWD\n\nWhen the unit no longer enumerates over USB, the bootloader is damaged. Remove the potting over the SWD header (revision C) or use the test pads (revision D). Connect a probe and write the factory image:\n\n```sh\nopenocd -f interface/stlink.cfg -f target/stm32l4x.cfg \\\n  -c \"program sb40-factory-2.2.0.hex verify reset exit\"\n```\n\nAfter recovery the unit has factory calibration only. Run the calibration step from the service manual before returning it to the field.\n",
+        "strategy": "recursive",
+        "size": 100,
+        "overlap": 20,
+        "unit": "tokens",
+        "separators": "\\n\\n|\\n|. | ",
+        "keep_headers": false,
+        "price": 0.02
+      }
+    },
+    {
+      "title": "Python module split by definitions, 120 tokens, no overlap",
+      "input": {
+        "text": "\"\"\"Serial log capture for the SB-40 test rig.\"\"\"\nimport re\nimport time\nfrom dataclasses import dataclass\n\nimport serial\n\nBOOT_BANNER = re.compile(r\"^SB40 boot (\\d+\\.\\d+\\.\\d+)\")\nFAULT = re.compile(r\"(HardFault|WDT reset|E\\d{2})\")\n\n\n@dataclass\nclass Capture:\n    port: str\n    baud: int = 115200\n    lines: list[str] | None = None\n\n    def version(self) -> str | None:\n        \"\"\"Bootloader version from the banner, if it was captured.\"\"\"\n        for line in self.lines or []:\n            m = BOOT_BANNER.match(line)\n            if m:\n                return m.group(1)\n        return None\n\n\ndef open_port(port: str, baud: int = 115200) -> serial.Serial:\n    \"\"\"Open the rig's USB-serial adapter with a short read timeout.\"\"\"\n    return serial.Serial(port, baud, timeout=0.2)\n\n\ndef capture(port: str, seconds: float = 5.0, baud: int = 115200) -> Capture:\n    \"\"\"Read lines for `seconds` and return them with the port settings.\"\"\"\n    cap = Capture(port, baud, [])\n    with open_port(port, baud) as ser:\n        end = time.monotonic() + seconds\n        while time.monotonic() < end:\n            raw = ser.readline()\n            if raw:\n                cap.lines.append(raw.decode(\"utf-8\", \"replace\").rstrip())\n    return cap\n\n\ndef first_fault(cap: Capture) -> tuple[int, str] | None:\n    \"\"\"Line number and text of the first fault marker, or None.\"\"\"\n    for n, line in enumerate(cap.lines or [], start=1):\n        if FAULT.search(line):\n            return n, line\n    return None\n\n\nclass Rig:\n    \"\"\"The bench rig: one serial port and a power relay on GPIO 17.\"\"\"\n\n    def __init__(self, port: str):\n        self.port = port\n\n    def power_cycle(self, off_s: float = 1.0) -> None:\n        \"\"\"Switch the DUT off for off_s seconds, then on again.\"\"\"\n        raise NotImplementedError\n\n    def boot_log(self, seconds: float = 8.0) -> Capture:\n        \"\"\"Power-cycle the DUT and capture its boot log.\"\"\"\n        self.power_cycle()\n        return capture(self.port, seconds)\n",
+        "strategy": "code",
+        "size": 120,
+        "overlap": 0,
+        "unit": "tokens",
+        "separators": "",
+        "keep_headers": false,
+        "price": 0.02
+      }
+    }
+  ],
+  "usage": "Give `text` (the document), `strategy` (tokens|recursive|headings|sentences|code), `size` and `overlap` (in `unit`: tokens or chars), `separators` for recursive ('|'-separated, \\n for newline), `keep_headers` and `price` ($ per million tokens). It returns the chunk count and size spread, estimated tokens embedded and cost, a size histogram, a table of chunks (lines, size, header path, findings), warnings for chunks that cut code blocks or tables, heading-only chunks, oversize pieces and tiny tails, and 'Chunks JSONL' ({id, text, start, end, lines, tokens_est, header_path, strategy}). Use it to choose a chunking setup before indexing.",
+  "sources": [
+    "LangChain text splitter documentation (RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter, TokenTextSplitter): behaviour described, code written independently",
+    "CommonMark 0.31 §4.2 ATX headings, §4.5 fenced code blocks; GFM tables extension",
+    "tiktoken cl100k_base pre-tokenization pattern (for the token estimate heuristic)"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "view"
+  ]
+}
