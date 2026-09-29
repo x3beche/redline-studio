@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-211 tools. **MCP** marks the ones agents can run with `run_tool`.
+212 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -297,6 +297,7 @@ agents, the most used, and every tool nobody used.
 | **Data Digest** | `data-digest` | profile a large CSV or JSON into a compact brief for an LLM | Web, Embedded |
 | **Few-shot Example Curator** · MCP | `few-shot-curator` | few-shot examples balanced by label, deduplicated, ordered and fitted to a token budget | Web, Embedded, Mobile, PCB, 3D |
 | **LLM Cost Calculator** · MCP | `llm-cost` | monthly cost of a model workload from tokens per call, calls per day, caching and batch discounts | Web, Embedded, Mobile, PCB, 3D |
+| **PII & Secret Redactor** · MCP | `pii-redactor` | personal data and secrets found in text and replaced with placeholders before it goes to a model, with a map to put them back | Web, Embedded, Mobile, PCB, 3D |
 | **Prompt Anatomy Builder** · MCP | `prompt-anatomy` | a prompt split into role, context, task, constraints, examples and output format, with what is missing or unclear flagged | Web, Embedded, Mobile, PCB, 3D |
 | **Prompt Caching Planner** · MCP | `prompt-caching` | a prompt's parts ordered for provider prompt caching, with the cache breakpoints and the saving per call | Web, Embedded, Mobile, PCB, 3D |
 | **Prompt Diff & History** · MCP | `prompt-diff` | two versions of a prompt compared word by word with the token change, and versions kept per project | Web, Embedded, Mobile, PCB, 3D |

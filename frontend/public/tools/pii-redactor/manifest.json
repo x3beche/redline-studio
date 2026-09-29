@@ -1,0 +1,181 @@
+{
+ "id": "pii-redactor",
+ "version": "1.0",
+ "name": "PII & Secret Redactor",
+ "blurb": "personal data and secrets found in text and replaced with placeholders before it goes to a model, with a map to put them back",
+ "group": "ai",
+ "rooms": [
+  "web",
+  "embedded",
+  "mobile",
+  "pcb",
+  "cad"
+ ],
+ "keywords": [
+  "pii",
+  "redact",
+  "redaction",
+  "anonymize",
+  "mask secrets",
+  "secret scanner",
+  "api key leak",
+  "kvkk",
+  "gdpr",
+  "tc kimlik",
+  "iban",
+  "credit card luhn",
+  "email phone",
+  "jwt",
+  "private key",
+  "placeholder",
+  "de-identify",
+  "sanitize logs",
+  "restore placeholders"
+ ],
+ "intro": "Finds personal data and secrets in text, logs or code with documented patterns and checksums (Luhn, IBAN mod-97, TC Kimlik No, E.164, vendor key prefixes, Shannon entropy) and replaces them with placeholders; a map puts the values back into the model's answer. Runs locally: nothing is sent anywhere.",
+ "inputs": [
+  {
+   "key": "text",
+   "label": "Text to check",
+   "type": "textarea",
+   "rows": 14,
+   "default": "Subject: Modem board RMA #4471 - customer cannot reach the MQTT broker\n\nFrom: Ayşe Yılmaz <ayse.yilmaz@example.com.tr>\nPhone: +90 532 123 45 67 (mobile), office 0212 555 01 23\nCustomer ID (TC Kimlik No): 10000000146\nRefund to IBAN: TR33 0006 1005 1978 6457 8413 26\nCard on file: 4111 1111 1111 1111 (exp 08/27)\n\nNotes from Mehmet Demir (support):\nThe unit at 203.0.113.7 (public) keeps dropping; LAN side is 10.20.1.15, MAC 00:1A:2B:3C:4D:5E,\nIPv6 2001:db8:85a3::8a2e:370:7334. Firmware 2.4.1 build 7f3c9e1.\n\n--- device config dump ---\nmqtt.url=mqtts://fleet_app:Hx7!pQ2r9w@broker.redline.local:8883/telemetry\nmqtt.client_id=rl-eg25-0142\naws_access_key_id = AKIAIOSFODNN7EXAMPLE\naws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\nGITHUB_TOKEN=ghp_EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMP\ndb_password: \"Tr4nsf0rm!2026\"\napi_key: ${FLEET_API_KEY}\n\n--- log excerpt ---\n2026-09-28T14:02:11Z INFO  auth: bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c accepted\n2026-09-28T14:02:12Z WARN  mqtt: reconnect #3 after 30 s, session 9fK2xQ7mZp4Lw8Rt1Vb6Nc3Hy5Ja0Ds\n2026-09-28T14:02:13Z ERROR tls: handshake failed with broker.redline.local:8883\n\n-----BEGIN OPENSSH PRIVATE KEY-----\nEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLE\nEXAMPLE0KEY0BODY0NOT0A0REAL0KEY0EXAMPLE0KEY0BODY0NOT0A0REAL0KEY0EXAMPL\n-----END OPENSSH PRIVATE KEY-----\n"
+  },
+  {
+   "key": "names",
+   "label": "Names to find",
+   "type": "textarea",
+   "rows": 3,
+   "default": "Ayşe Yılmaz\nMehmet Demir",
+   "help": "One per line. Names are only found from this list."
+  },
+  {
+   "key": "style",
+   "label": "Placeholder",
+   "type": "select",
+   "default": "tag",
+   "options": [
+    [
+     "tag",
+     "<EMAIL_1>"
+    ],
+    [
+     "bracket",
+     "[EMAIL_1]"
+    ],
+    [
+     "redacted",
+     "[REDACTED] (not reversible)"
+    ],
+    [
+     "hash",
+     "<EMAIL_1a2b3c4d> (FNV-1a of the value)"
+    ]
+   ]
+  },
+  {
+   "key": "off",
+   "label": "Types left as is",
+   "type": "text",
+   "default": "",
+   "placeholder": "IPV4, MAC",
+   "help": "Comma-separated type names: EMAIL, PHONE, TCKN, IBAN, CARD, IPV4, IPV6, MAC, URL_CRED, JWT, API_KEY, PRIVATE_KEY, PASSWORD, NAME, SECRET, CUSTOM."
+  },
+  {
+   "key": "keep",
+   "label": "Values left as is",
+   "type": "textarea",
+   "rows": 2,
+   "default": "",
+   "help": "One per line: exact values not to redact (clicking a highlight does this)."
+  },
+  {
+   "key": "extra",
+   "label": "Also redact",
+   "type": "textarea",
+   "rows": 2,
+   "default": "",
+   "help": "One per line: strings to redact wherever they appear (selecting text on the page does this)."
+  },
+  {
+   "key": "entropy",
+   "label": "Entropy threshold",
+   "type": "number",
+   "unit": "bits/char",
+   "default": 4,
+   "help": "For unlabelled tokens of 20+ characters with letters and digits; random base64 is ~5-6, English words ~3-4."
+  },
+  {
+   "key": "mode",
+   "label": "Mode",
+   "type": "select",
+   "default": "redact",
+   "options": [
+    [
+     "redact",
+     "Redact"
+    ],
+    [
+     "restore",
+     "Restore values into an answer"
+    ]
+   ]
+  },
+  {
+   "key": "answer",
+   "label": "Model answer (restore)",
+   "type": "textarea",
+   "rows": 6,
+   "default": "",
+   "when": {
+    "key": "mode",
+    "equals": "restore"
+   }
+  }
+ ],
+ "examples": [
+  {
+   "title": "Support ticket with a device config and log: IDs, IBAN, card, keys, JWT, SSH key",
+   "input": {
+    "text": "Subject: Modem board RMA #4471 - customer cannot reach the MQTT broker\n\nFrom: Ayşe Yılmaz <ayse.yilmaz@example.com.tr>\nPhone: +90 532 123 45 67 (mobile), office 0212 555 01 23\nCustomer ID (TC Kimlik No): 10000000146\nRefund to IBAN: TR33 0006 1005 1978 6457 8413 26\nCard on file: 4111 1111 1111 1111 (exp 08/27)\n\nNotes from Mehmet Demir (support):\nThe unit at 203.0.113.7 (public) keeps dropping; LAN side is 10.20.1.15, MAC 00:1A:2B:3C:4D:5E,\nIPv6 2001:db8:85a3::8a2e:370:7334. Firmware 2.4.1 build 7f3c9e1.\n\n--- device config dump ---\nmqtt.url=mqtts://fleet_app:Hx7!pQ2r9w@broker.redline.local:8883/telemetry\nmqtt.client_id=rl-eg25-0142\naws_access_key_id = AKIAIOSFODNN7EXAMPLE\naws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\nGITHUB_TOKEN=ghp_EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE0EXAMP\ndb_password: \"Tr4nsf0rm!2026\"\napi_key: ${FLEET_API_KEY}\n\n--- log excerpt ---\n2026-09-28T14:02:11Z INFO  auth: bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c accepted\n2026-09-28T14:02:12Z WARN  mqtt: reconnect #3 after 30 s, session 9fK2xQ7mZp4Lw8Rt1Vb6Nc3Hy5Ja0Ds\n2026-09-28T14:02:13Z ERROR tls: handshake failed with broker.redline.local:8883\n\n-----BEGIN OPENSSH PRIVATE KEY-----\nEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLE\nEXAMPLE0KEY0BODY0NOT0A0REAL0KEY0EXAMPLE0KEY0BODY0NOT0A0REAL0KEY0EXAMPL\n-----END OPENSSH PRIVATE KEY-----\n",
+    "names": "Ayşe Yılmaz\nMehmet Demir",
+    "style": "tag",
+    "off": "",
+    "keep": "",
+    "extra": "",
+    "entropy": 4,
+    "mode": "redact",
+    "answer": ""
+   }
+  },
+  {
+   "title": "Restore a model answer written against a redacted Stripe traceback",
+   "input": {
+    "text": "Traceback (most recent call last):\n  File \"/srv/app/billing/sync.py\", line 88, in push_invoice\n    resp = client.post(url, json=payload, headers={\"Authorization\": f\"Bearer {token}\"})\nrequests.exceptions.HTTPError: 401 Client Error: Unauthorized for url: https://api.stripe.com/v1/invoices\n\npayload = {\"customer_email\": \"j.keller@example.de\", \"iban\": \"DE89 3704 0044 0532 0130 00\", \"amount\": 12900}\ntoken = \"sk_test_EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE\"\nenv: STRIPE_WEBHOOK_SECRET=whsec_EXAMPLE0EXAMPLE0EXAMPLE0EXAMPLE\nhost 172.16.4.21 -> 52.94.236.248",
+    "names": "",
+    "style": "tag",
+    "off": "IPV4",
+    "keep": "",
+    "extra": "",
+    "entropy": 4,
+    "mode": "restore",
+    "answer": "The 401 comes from <API_KEY_1>: it is a test-mode key, but the webhook secret <PASSWORD_1> and the invoice belong to the live account.\n1. Rotate <API_KEY_1> (it was printed in the traceback).\n2. Retry the invoice for <EMAIL_1>; the IBAN <IBAN_1> is fine.\n3. Tell <EMAIL_2> once the retry succeeds."
+   }
+  }
+ ],
+ "usage": "Give the text, optionally a list of names, the placeholder style (tag, bracket, redacted, hash), types to leave (off) and exact values to keep or extra strings to redact. It returns the redacted text, a findings table with masked values, counts per type, and the placeholder->value map (sensitive: keep it local). With mode=restore and the model's answer it returns the answer with the real values put back and flags placeholders the map does not know. Use it before pasting logs, tickets or configs into a model.",
+ "sources": [
+  "ISO/IEC 7812-1 (Luhn check digit, issuer identification numbers)",
+  "ISO 13616-1 IBAN (mod 97-10 per ISO 7064) and the SWIFT IBAN Registry lengths",
+  "T.C. kimlik numarası check-digit algorithm (NVİ, as published)",
+  "ITU-T E.164 numbering; BTK national numbering plan (TR 05xx mobile, 0[2-4]xx landline)",
+  "RFC 4291 §2.2 IPv6 text form; RFC 1918 / RFC 5737 address ranges; RFC 3986 §3.2.1 userinfo; RFC 7519 JWT; RFC 7468 PEM",
+  "Vendor key formats as documented by AWS (AKIA/ASIA access key IDs), GitHub (token prefixes), Slack, Stripe, Google, Anthropic, OpenAI and OpenRouter",
+  "Shannon entropy H = -Σ p log2 p over the token's characters; FNV-1a 32-bit (Fowler-Noll-Vo) for hash placeholders"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "draw"
+ ]
+}
