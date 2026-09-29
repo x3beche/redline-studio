@@ -1,0 +1,142 @@
+{
+ "id": "retrieval-tester",
+ "version": "1.0",
+ "name": "Retrieval Tester",
+ "blurb": "which chunks of your documents a query retrieves, ranked by BM25, with the matching words shown",
+ "group": "ai",
+ "rooms": [
+  "web",
+  "embedded",
+  "mobile",
+  "pcb",
+  "cad"
+ ],
+ "keywords": [
+  "rag",
+  "retrieval",
+  "bm25",
+  "search",
+  "ranking",
+  "chunks",
+  "recall@k",
+  "mrr",
+  "keyword search",
+  "okapi",
+  "lexical search",
+  "hybrid search",
+  "stemming",
+  "stopwords",
+  "retrieval evaluation",
+  "knowledge base",
+  "embedding",
+  "tf-idf"
+ ],
+ "intro": "Indexes pasted chunks with Okapi BM25 (k1 and b adjustable, optional stemming and stopwords) and shows, for each query, which chunks come back in what order, how much each query word contributed, and - when expected chunk ids are given - recall@k and MRR. Lexical only: embeddings are not computed.",
+ "inputs": [
+  {
+   "key": "docs",
+   "label": "Documents / chunks",
+   "type": "textarea",
+   "rows": 14,
+   "default": "# Firmware update over USB DFU {#dfu-update}\nHold BOOT0 high and press RESET to enter the ROM DFU bootloader. The board enumerates as \"STM32 BOOTLOADER\" (0483:df11). Flash the signed image with dfu-util -a 0 -s 0x08000000:leave -D gw-fw.bin. The :leave suffix restarts the board into the new firmware when flashing is done.\n\n## Over-the-air updates (A/B slots) {#ota-ab}\nOTA downloads the new image into the inactive slot while the gateway keeps running. After the SHA-256 and ECDSA signature check passes, the bootloader swaps slots on the next reboot. If the new firmware does not confirm itself within 3 boots, the bootloader rolls back to the previous slot.\n\n## Boot loop recovery {#boot-loop}\nWhen the status LED blinks red three times and the board resets every few seconds, the application is crashing before it confirms the slot. Wait for the automatic rollback after 3 attempts, or hold the USER button for 10 s during power-up to force the factory image.\n\n## Watchdog timeout {#watchdog}\nThe independent watchdog (IWDG) is started by the bootloader with a 4 s timeout and cannot be stopped. The main loop must refresh it; a task blocked on a mutex or a long flash erase without refresh causes a watchdog reset, logged as RST_CAUSE=IWDG after reboot.\n\n## Serial console settings {#uart-console}\nThe debug console is on USART2 (pins PA2/PA3) at 115200 baud, 8N1, no flow control. Log lines start with a millisecond timestamp. Use the command `log level debug` to raise the verbosity until the next reboot.\n\n## Sleep modes and power consumption {#power}\nIn Stop 2 mode with the radio off the board draws 4.2 uA from the battery; with LoRa receive windows every 60 s the average is 38 uA. A 2400 mAh cell lasts about 5 years at that rate. USB power keeps the MCU in Run mode.\n\n## LED codes {#led-codes}\nGreen steady: connected. Green blinking: joining the network. Amber: firmware update in progress, do not remove power. Red, three blinks then reset: boot failure (see boot loop recovery). Red steady: hardware fault, check the log.\n\n## Factory reset {#factory-reset}\nHold the USER button for 10 s while the gateway is running. Configuration, Wi-Fi credentials and certificates are erased; the firmware image is kept. The LED blinks amber while the configuration partition is erased.\n\n## Wi-Fi provisioning {#wifi-provisioning}\nOn first boot, or after a factory reset, the gateway opens a BLE provisioning service for 5 minutes. Use the mobile app to send the SSID and passphrase. WPA3-Personal and WPA2-Personal are supported; enterprise (802.1X) networks are not.\n\n## Certificate rotation {#cert-rotation}\nDevice certificates expire after 397 days. The gateway requests a new certificate 30 days before expiry over the provisioning API and stores it in the secure element (ATECC608B). Rotation fails if the clock is wrong; check NTP first.\n\n## CAN bus termination {#can-termination}\nBoth ends of the CAN bus need a 120 ohm terminator. Set DIP switch 2 to ON on the gateway if it is at the end of the bus. Measure between CAN_H and CAN_L with power off: 60 ohm means both terminators are present.\n\n## Log levels and remote logs {#logging}\nLevels are error, warn, info and debug. Remote logging sends warn and above to the syslog server configured in the cloud console. Debug logs are only kept in RAM and are lost on reboot.\n\n## Cihazın sıfırlanması ve güncelleme {#tr-guncelleme}\nCihaz sürekli yeniden başlıyorsa uygulama yazılımı çöküyor olabilir. Üç denemeden sonra önyükleyici eski yazılıma otomatik olarak geri döner. Güncelleme sırasında kehribar ışık yanarken cihazın gücünü kesmeyin.\n\n## Pil ömrü {#tr-pil}\nPil ömrü radyo kullanımına bağlıdır. Uyku modunda cihaz 4,2 uA çeker; her dakika dinleme penceresi açılırsa ortalama akım 38 uA olur ve 2400 mAh pil yaklaşık beş yıl dayanır.\n",
+   "help": "Markdown (each #, ## or ### heading starts a chunk; id = the heading slug or an explicit {#id}), plain paragraphs, or JSONL / a JSON array with id and text (as Chunking Planner writes)."
+  },
+  {
+   "key": "queries",
+   "label": "Queries",
+   "type": "textarea",
+   "rows": 8,
+   "default": "how do I flash new firmware over USB => dfu-update\nupdate rolled back to the previous version => ota-ab, boot-loop\ndevice keeps restarting every few seconds => boot-loop, tr-guncelleme\nRST_CAUSE IWDG after reboot => watchdog\nwhat baud rate is the console => uart-console\nbattery lasts how many years => power, tr-pil\ncihaz sürekli yeniden başlıyor => tr-guncelleme, boot-loop\nconnect to an enterprise wifi network => wifi-provisioning\nterminating resistor value => can-termination",
+   "help": "One per line. Optional expected chunk ids after =>, comma separated. # starts a comment."
+  },
+  {
+   "key": "k1",
+   "label": "k1 (term frequency saturation)",
+   "type": "number",
+   "default": 1.2,
+   "help": "0 = only presence counts; 1.2-2.0 is usual (Lucene default 1.2)."
+  },
+  {
+   "key": "b",
+   "label": "b (length normalisation)",
+   "type": "number",
+   "default": 0.75,
+   "help": "0 = chunk length ignored, 1 = fully normalised (Lucene default 0.75)."
+  },
+  {
+   "key": "stem",
+   "label": "Stemming",
+   "type": "select",
+   "default": "en+tr",
+   "options": [
+    [
+     "none",
+     "None"
+    ],
+    [
+     "en",
+     "English (light)"
+    ],
+    [
+     "tr",
+     "Turkish (light)"
+    ],
+    [
+     "en+tr",
+     "English + Turkish by letters"
+    ]
+   ]
+  },
+  {
+   "key": "stopwords",
+   "label": "Remove stopwords (English + Turkish)",
+   "type": "bool",
+   "default": true
+  },
+  {
+   "key": "topk",
+   "label": "k for recall@k",
+   "type": "number",
+   "default": 3
+  }
+ ],
+ "examples": [
+  {
+   "title": "Gateway manual, English and Turkish chunks, with expected ids",
+   "input": {
+    "docs": "# Firmware update over USB DFU {#dfu-update}\nHold BOOT0 high and press RESET to enter the ROM DFU bootloader. The board enumerates as \"STM32 BOOTLOADER\" (0483:df11). Flash the signed image with dfu-util -a 0 -s 0x08000000:leave -D gw-fw.bin. The :leave suffix restarts the board into the new firmware when flashing is done.\n\n## Over-the-air updates (A/B slots) {#ota-ab}\nOTA downloads the new image into the inactive slot while the gateway keeps running. After the SHA-256 and ECDSA signature check passes, the bootloader swaps slots on the next reboot. If the new firmware does not confirm itself within 3 boots, the bootloader rolls back to the previous slot.\n\n## Boot loop recovery {#boot-loop}\nWhen the status LED blinks red three times and the board resets every few seconds, the application is crashing before it confirms the slot. Wait for the automatic rollback after 3 attempts, or hold the USER button for 10 s during power-up to force the factory image.\n\n## Watchdog timeout {#watchdog}\nThe independent watchdog (IWDG) is started by the bootloader with a 4 s timeout and cannot be stopped. The main loop must refresh it; a task blocked on a mutex or a long flash erase without refresh causes a watchdog reset, logged as RST_CAUSE=IWDG after reboot.\n\n## Serial console settings {#uart-console}\nThe debug console is on USART2 (pins PA2/PA3) at 115200 baud, 8N1, no flow control. Log lines start with a millisecond timestamp. Use the command `log level debug` to raise the verbosity until the next reboot.\n\n## Sleep modes and power consumption {#power}\nIn Stop 2 mode with the radio off the board draws 4.2 uA from the battery; with LoRa receive windows every 60 s the average is 38 uA. A 2400 mAh cell lasts about 5 years at that rate. USB power keeps the MCU in Run mode.\n\n## LED codes {#led-codes}\nGreen steady: connected. Green blinking: joining the network. Amber: firmware update in progress, do not remove power. Red, three blinks then reset: boot failure (see boot loop recovery). Red steady: hardware fault, check the log.\n\n## Factory reset {#factory-reset}\nHold the USER button for 10 s while the gateway is running. Configuration, Wi-Fi credentials and certificates are erased; the firmware image is kept. The LED blinks amber while the configuration partition is erased.\n\n## Wi-Fi provisioning {#wifi-provisioning}\nOn first boot, or after a factory reset, the gateway opens a BLE provisioning service for 5 minutes. Use the mobile app to send the SSID and passphrase. WPA3-Personal and WPA2-Personal are supported; enterprise (802.1X) networks are not.\n\n## Certificate rotation {#cert-rotation}\nDevice certificates expire after 397 days. The gateway requests a new certificate 30 days before expiry over the provisioning API and stores it in the secure element (ATECC608B). Rotation fails if the clock is wrong; check NTP first.\n\n## CAN bus termination {#can-termination}\nBoth ends of the CAN bus need a 120 ohm terminator. Set DIP switch 2 to ON on the gateway if it is at the end of the bus. Measure between CAN_H and CAN_L with power off: 60 ohm means both terminators are present.\n\n## Log levels and remote logs {#logging}\nLevels are error, warn, info and debug. Remote logging sends warn and above to the syslog server configured in the cloud console. Debug logs are only kept in RAM and are lost on reboot.\n\n## Cihazın sıfırlanması ve güncelleme {#tr-guncelleme}\nCihaz sürekli yeniden başlıyorsa uygulama yazılımı çöküyor olabilir. Üç denemeden sonra önyükleyici eski yazılıma otomatik olarak geri döner. Güncelleme sırasında kehribar ışık yanarken cihazın gücünü kesmeyin.\n\n## Pil ömrü {#tr-pil}\nPil ömrü radyo kullanımına bağlıdır. Uyku modunda cihaz 4,2 uA çeker; her dakika dinleme penceresi açılırsa ortalama akım 38 uA olur ve 2400 mAh pil yaklaşık beş yıl dayanır.\n",
+    "queries": "how do I flash new firmware over USB => dfu-update\nupdate rolled back to the previous version => ota-ab, boot-loop\ndevice keeps restarting every few seconds => boot-loop, tr-guncelleme\nRST_CAUSE IWDG after reboot => watchdog\nwhat baud rate is the console => uart-console\nbattery lasts how many years => power, tr-pil\ncihaz sürekli yeniden başlıyor => tr-guncelleme, boot-loop\nconnect to an enterprise wifi network => wifi-provisioning\nterminating resistor value => can-termination",
+    "k1": 1.2,
+    "b": 0.75,
+    "stem": "en+tr",
+    "stopwords": true,
+    "topk": 3
+   }
+  },
+  {
+   "title": "API docs as JSONL chunks, no stemming, k1 = 1.5",
+   "input": {
+    "docs": "{\"id\": \"api-auth-01\", \"title\": \"Authentication\", \"text\": \"All requests need an Authorization: Bearer token. Tokens are issued by POST /v1/oauth/token with client credentials and expire after 3600 seconds.\"}\n{\"id\": \"api-auth-02\", \"title\": \"Token refresh\", \"text\": \"Refresh a token before it expires; a request with an expired token returns 401 with error=invalid_token. There is no refresh token for client credentials: request a new token.\"}\n{\"id\": \"api-rate-01\", \"title\": \"Rate limits\", \"text\": \"Each API key may make 600 requests per minute. Above that the API returns 429 Too Many Requests with a Retry-After header in seconds.\"}\n{\"id\": \"api-pag-01\", \"title\": \"Pagination\", \"text\": \"List endpoints return at most 100 items. Pass the next_cursor value from the response as ?cursor= to get the next page; an empty next_cursor means the last page.\"}\n{\"id\": \"api-err-01\", \"title\": \"Errors\", \"text\": \"Errors are JSON objects with code, message and request_id. Quote the request_id when contacting support.\"}\n{\"id\": \"api-web-01\", \"title\": \"Webhooks\", \"text\": \"Webhook deliveries are signed with HMAC-SHA256 of the raw body using the endpoint secret; the signature is in the X-Signature header. Retries back off for up to 24 hours.\"}\n{\"id\": \"api-dev-01\", \"title\": \"Devices\", \"text\": \"GET /v1/devices lists devices; filter by status=online or by tag. PATCH /v1/devices/{id} changes the name and tags.\"}",
+    "queries": "why do I get 401 invalid_token => api-auth-02\ntoo many requests error => api-rate-01\nhow to get the next page of devices => api-pag-01\nverify webhook signature => api-web-01\nwhat should I send support => api-err-01",
+    "k1": 1.5,
+    "b": 0.75,
+    "stem": "none",
+    "stopwords": true,
+    "topk": 2
+   }
+  }
+ ],
+ "usage": "Give docs (Markdown with headings, paragraphs, or JSONL/JSON with id and text), queries (one per line, optional `=> expected-id, ...`), k1, b, stem (none, en, tr, en+tr), stopwords and topk. Returns per query the top-k chunk ids with BM25 scores, the first rank of an expected chunk, recall@k and MRR over the queries, warnings for queries that match nothing and odd chunk sizes, and the rankings as JSONL. Use it to check a RAG corpus's chunking and query wording before adding embeddings, or to see why a chunk is not found.",
+ "sources": [
+  "S. Robertson, H. Zaragoza, 'The Probabilistic Relevance Framework: BM25 and Beyond', Foundations and Trends in Information Retrieval 3(4), 2009 (eq. 3.15)",
+  "Apache Lucene BM25Similarity documentation (IDF = ln(1 + (N - n + 0.5)/(n + 0.5)), defaults k1 = 1.2, b = 0.75)",
+  "Manning, Raghavan, Schutze, 'Introduction to Information Retrieval' (2008) ch. 8.4 (MRR) and 8.3 (recall)",
+  "Cormack, Clarke, Buettcher, 'Reciprocal Rank Fusion outperforms Condorcet and individual rank learning methods', SIGIR 2009 (hybrid note)",
+  "Stemmers and stopword lists: light suffix strippers written for this tool, not Porter/Snowball"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "bm25"
+ ]
+}

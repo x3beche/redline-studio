@@ -1,0 +1,142 @@
+{
+ "id": "prompt-eval-grid",
+ "version": "1.0",
+ "name": "Prompt Eval Grid",
+ "blurb": "test inputs run against prompt variants on a real model, each answer scored by rules or a judge, in one grid",
+ "group": "ai",
+ "rooms": [
+  "web",
+  "embedded",
+  "mobile",
+  "pcb",
+  "cad"
+ ],
+ "keywords": [
+  "prompt evaluation",
+  "eval",
+  "evals",
+  "prompt testing",
+  "a/b test prompts",
+  "llm judge",
+  "llm-as-a-judge",
+  "rubric",
+  "regression test",
+  "json schema",
+  "structured output",
+  "prompt variants",
+  "test cases",
+  "pass rate",
+  "model comparison",
+  "promptfoo"
+ ],
+ "intro": "Runs every test case through every prompt variant on a real model (in the app), then scores each answer with rule checks - contains, regex, valid JSON, a JSON Schema subset, length, equals expected - and an optional LLM-judge rubric, and shows pass rates, cost and latency per variant.",
+ "inputs": [
+  {
+   "key": "variants",
+   "label": "Prompt variants",
+   "type": "textarea",
+   "rows": 12,
+   "default": "### plain\nExtract the part from this BOM line as JSON with the keys mpn, manufacturer, qty and refdes.\n\n{{input}}\n\n### strict\nYou convert one line of a bill of materials to JSON. Output only a JSON object: no prose, no code fence.\nKeys: mpn (the manufacturer part number exactly as written), manufacturer (string or null), qty (integer), refdes (array of reference designators, ranges expanded: R14-R16 -> R14, R15, R16).\nIf the line names a part and then a replacement, use the replacement.\n---\n{{input}}\n\n### few-shot\nYou convert one line of a bill of materials to JSON. Output only a JSON object with the keys mpn, manufacturer, qty, refdes. Expand designator ranges; qty is the number of designators.\n---\nExample:\nC1-C3 1uF 0402 Samsung CL05A105KA5NQNC\n{\"mpn\":\"CL05A105KA5NQNC\",\"manufacturer\":\"Samsung\",\"qty\":3,\"refdes\":[\"C1\",\"C2\",\"C3\"]}\n\nNow this line:\n{{input}}\n",
+   "help": "Each starts with ### name. A line --- splits the system prompt (above) from the user message (below). {{input}} is replaced by the case input, {{expected}} by its expected text."
+  },
+  {
+   "key": "cases",
+   "label": "Test cases",
+   "type": "textarea",
+   "rows": 12,
+   "default": "### r-range resistor with a designator range\nR12, R14-R16 | 10k 1% 0402 | Yageo RC0402FR-0710KL\nexpected: RC0402FR-0710KL\n\n### c-pair two capacitors\nC3,C7 100nF X7R 0603 50V Murata GRM188R71H104KA93D\nexpected: GRM188R71H104KA93D\n\n### mcu single IC with a note\nU4 STM32G431CBU6 (ST), UFQFPN48, program before assembly\nexpected: STM32G431CBU6\n\n### usb connector\nJ1 USB-C receptacle 16p, GCT USB4105-GF-A, qty 1\nexpected: USB4105-GF-A\n\n### led-sub part replaced in the line\nD1-D3 LED green 0603 Kingbright APHHS1005ZGC -> use APTD1608LZGCK (EOL)\nexpected: APTD1608LZGCK\ncheck: not_contains: APHHS1005ZGC\n",
+   "help": "Each starts with ### id (and an optional title). The rest is the input, except lines starting expected: and check:."
+  },
+  {
+   "key": "checks",
+   "label": "Checks for every case",
+   "type": "textarea",
+   "rows": 5,
+   "default": "json\nschema: {\"type\":\"object\",\"required\":[\"mpn\",\"manufacturer\",\"qty\",\"refdes\"],\"properties\":{\"mpn\":{\"type\":\"string\",\"minLength\":3},\"manufacturer\":{\"type\":[\"string\",\"null\"]},\"qty\":{\"type\":\"integer\",\"minimum\":1},\"refdes\":{\"type\":\"array\",\"minItems\":1,\"items\":{\"type\":\"string\",\"pattern\":\"^[A-Z]+[0-9]+$\"}}},\"additionalProperties\":false}\ncontains_expected\nmax_chars: 400\n",
+   "help": "One per line: contains: x, not_contains: x, starts_with: x, regex: /p/i, not_regex: /p/, json, schema: {...}, max_chars: N, max_words: N, equals_expected, contains_expected, judge: N."
+  },
+  {
+   "key": "judge",
+   "label": "Judge rubric (empty = no judge)",
+   "type": "textarea",
+   "rows": 3,
+   "default": "refdes must list every designator on the line with ranges expanded (R14-R16 -> R14, R15, R16), and qty must equal the number of designators. Score 5 only if both hold; 3 if one of them is off by one; 1 if refdes still contains a range.",
+   "help": "With a rubric each answer is also sent to the judge model, which replies with a 1-5 score and a reason."
+  },
+  {
+   "key": "judgePass",
+   "label": "Judge pass mark (1-5)",
+   "type": "number",
+   "default": 4
+  },
+  {
+   "key": "model",
+   "label": "Model",
+   "type": "text",
+   "default": "",
+   "help": "Empty = the server's default model. The page lists the models the server offers."
+  },
+  {
+   "key": "temperature",
+   "label": "Temperature",
+   "type": "number",
+   "default": 0.2
+  },
+  {
+   "key": "maxTokens",
+   "label": "Max answer tokens",
+   "type": "number",
+   "default": 300
+  },
+  {
+   "key": "answers",
+   "label": "Answers (JSONL, filled by Run)",
+   "type": "textarea",
+   "rows": 6,
+   "default": "{\"variant\": \"plain\", \"case\": \"r-range\", \"text\": \"Here is the JSON:\\n```json\\n{\\\"mpn\\\": \\\"RC0402FR-0710KL\\\", \\\"manufacturer\\\": \\\"Yageo\\\", \\\"qty\\\": 2, \\\"refdes\\\": [\\\"R12\\\", \\\"R14-R16\\\"]}\\n```\", \"ms\": 1310, \"prompt_tokens\": 58, \"completion_tokens\": 52, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 1, \"reason\": \"refdes keeps the range R14-R16 and qty 2 does not match four designators.\"}}\n{\"variant\": \"plain\", \"case\": \"c-pair\", \"text\": \"```json\\n{\\\"mpn\\\": \\\"GRM188R71H104KA93D\\\", \\\"manufacturer\\\": \\\"Murata\\\", \\\"qty\\\": 2, \\\"refdes\\\": [\\\"C3\\\", \\\"C7\\\"]}\\n```\", \"ms\": 1120, \"prompt_tokens\": 52, \"completion_tokens\": 40, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Both designators listed and qty is 2.\"}}\n{\"variant\": \"plain\", \"case\": \"mcu\", \"text\": \"{\\\"mpn\\\": \\\"STM32G431CBU6\\\", \\\"manufacturer\\\": \\\"ST\\\", \\\"qty\\\": 1, \\\"refdes\\\": [\\\"U4\\\"], \\\"package\\\": \\\"UFQFPN48\\\"}\", \"ms\": 980, \"prompt_tokens\": 50, \"completion_tokens\": 38, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"One designator, qty 1.\"}}\n{\"variant\": \"plain\", \"case\": \"usb\", \"text\": \"```json\\n{\\\"mpn\\\": \\\"USB4105-GF-A\\\", \\\"manufacturer\\\": \\\"GCT\\\", \\\"qty\\\": 1, \\\"refdes\\\": [\\\"J1\\\"]}\\n```\", \"ms\": 1050, \"prompt_tokens\": 54, \"completion_tokens\": 37, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"plain\", \"case\": \"led-sub\", \"text\": \"{\\\"mpn\\\": \\\"APHHS1005ZGC\\\", \\\"manufacturer\\\": \\\"Kingbright\\\", \\\"qty\\\": 3, \\\"refdes\\\": [\\\"D1\\\", \\\"D2\\\", \\\"D3\\\"], \\\"note\\\": \\\"use APTD1608LZGCK (EOL)\\\"}\", \"ms\": 1240, \"prompt_tokens\": 56, \"completion_tokens\": 55, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Range expanded and qty 3.\"}}\n{\"variant\": \"strict\", \"case\": \"r-range\", \"text\": \"{\\\"mpn\\\":\\\"RC0402FR-0710KL\\\",\\\"manufacturer\\\":\\\"Yageo\\\",\\\"qty\\\":4,\\\"refdes\\\":[\\\"R12\\\",\\\"R14\\\",\\\"R15\\\",\\\"R16\\\"]}\", \"ms\": 890, \"prompt_tokens\": 171, \"completion_tokens\": 41, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"All four designators and qty 4.\"}}\n{\"variant\": \"strict\", \"case\": \"c-pair\", \"text\": \"{\\\"mpn\\\":\\\"GRM188R71H104KA93D\\\",\\\"manufacturer\\\":\\\"Murata\\\",\\\"qty\\\":2,\\\"refdes\\\":[\\\"C3\\\",\\\"C7\\\"]}\", \"ms\": 760, \"prompt_tokens\": 165, \"completion_tokens\": 34, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"strict\", \"case\": \"mcu\", \"text\": \"{\\\"mpn\\\":\\\"STM32G431CBU6\\\",\\\"manufacturer\\\":\\\"STMicroelectronics\\\",\\\"qty\\\":1,\\\"refdes\\\":[\\\"U4\\\"]}\", \"ms\": 810, \"prompt_tokens\": 168, \"completion_tokens\": 33, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"strict\", \"case\": \"usb\", \"text\": \"{\\\"mpn\\\":\\\"USB4105-GF-A\\\",\\\"manufacturer\\\":\\\"GCT\\\",\\\"qty\\\":1,\\\"refdes\\\":[\\\"J1\\\"]}\", \"ms\": 700, \"prompt_tokens\": 166, \"completion_tokens\": 29, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"strict\", \"case\": \"led-sub\", \"text\": \"{\\\"mpn\\\":\\\"APTD1608LZGCK\\\",\\\"manufacturer\\\":\\\"Kingbright\\\",\\\"qty\\\":3,\\\"refdes\\\":[\\\"D1\\\",\\\"D2\\\",\\\"D3\\\"]}\", \"ms\": 840, \"prompt_tokens\": 172, \"completion_tokens\": 36, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Replacement used, range expanded.\"}}\n{\"variant\": \"few-shot\", \"case\": \"r-range\", \"text\": \"{\\\"mpn\\\":\\\"RC0402FR-0710KL\\\",\\\"manufacturer\\\":\\\"Yageo\\\",\\\"qty\\\":3,\\\"refdes\\\":[\\\"R12\\\",\\\"R14\\\",\\\"R15\\\",\\\"R16\\\"]}\", \"ms\": 720, \"prompt_tokens\": 139, \"completion_tokens\": 40, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 3, \"reason\": \"refdes has four designators but qty says 3.\"}}\n{\"variant\": \"few-shot\", \"case\": \"c-pair\", \"text\": \"{\\\"mpn\\\":\\\"GRM188R71H104KA93D\\\",\\\"manufacturer\\\":\\\"Murata\\\",\\\"qty\\\":2,\\\"refdes\\\":[\\\"C3\\\",\\\"C7\\\"]}\", \"ms\": 650, \"prompt_tokens\": 133, \"completion_tokens\": 33, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"few-shot\", \"case\": \"mcu\", \"text\": \"{\\\"mpn\\\":\\\"STM32G431CBU6\\\",\\\"manufacturer\\\":\\\"ST\\\",\\\"qty\\\":1,\\\"refdes\\\":[\\\"U4\\\"]}\", \"ms\": 610, \"prompt_tokens\": 131, \"completion_tokens\": 30, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"few-shot\", \"case\": \"usb\", \"text\": \"{\\\"mpn\\\":\\\"USB4105-GF-A\\\",\\\"manufacturer\\\":\\\"GCT\\\",\\\"qty\\\":1,\\\"refdes\\\":[\\\"J1\\\"]}\", \"ms\": 600, \"prompt_tokens\": 134, \"completion_tokens\": 29, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"few-shot\", \"case\": \"led-sub\", \"text\": \"{\\\"mpn\\\":\\\"APHHS1005ZGC\\\",\\\"manufacturer\\\":\\\"Kingbright\\\",\\\"qty\\\":3,\\\"refdes\\\":[\\\"D1\\\",\\\"D2\\\",\\\"D3\\\"]}\", \"ms\": 680, \"prompt_tokens\": 140, \"completion_tokens\": 35, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Range expanded and qty 3.\"}}",
+   "help": "One JSON object per line: variant, case, text, and optionally ms, prompt_tokens, completion_tokens, cost, model, error, judge {score, reason} or judge_text. The page writes these when it runs; an agent can pass its own."
+  }
+ ],
+ "examples": [
+  {
+   "title": "BOM line to JSON: 3 prompt variants x 5 cases, schema checks and a judge (sample answers)",
+   "input": {
+    "variants": "### plain\nExtract the part from this BOM line as JSON with the keys mpn, manufacturer, qty and refdes.\n\n{{input}}\n\n### strict\nYou convert one line of a bill of materials to JSON. Output only a JSON object: no prose, no code fence.\nKeys: mpn (the manufacturer part number exactly as written), manufacturer (string or null), qty (integer), refdes (array of reference designators, ranges expanded: R14-R16 -> R14, R15, R16).\nIf the line names a part and then a replacement, use the replacement.\n---\n{{input}}\n\n### few-shot\nYou convert one line of a bill of materials to JSON. Output only a JSON object with the keys mpn, manufacturer, qty, refdes. Expand designator ranges; qty is the number of designators.\n---\nExample:\nC1-C3 1uF 0402 Samsung CL05A105KA5NQNC\n{\"mpn\":\"CL05A105KA5NQNC\",\"manufacturer\":\"Samsung\",\"qty\":3,\"refdes\":[\"C1\",\"C2\",\"C3\"]}\n\nNow this line:\n{{input}}\n",
+    "cases": "### r-range resistor with a designator range\nR12, R14-R16 | 10k 1% 0402 | Yageo RC0402FR-0710KL\nexpected: RC0402FR-0710KL\n\n### c-pair two capacitors\nC3,C7 100nF X7R 0603 50V Murata GRM188R71H104KA93D\nexpected: GRM188R71H104KA93D\n\n### mcu single IC with a note\nU4 STM32G431CBU6 (ST), UFQFPN48, program before assembly\nexpected: STM32G431CBU6\n\n### usb connector\nJ1 USB-C receptacle 16p, GCT USB4105-GF-A, qty 1\nexpected: USB4105-GF-A\n\n### led-sub part replaced in the line\nD1-D3 LED green 0603 Kingbright APHHS1005ZGC -> use APTD1608LZGCK (EOL)\nexpected: APTD1608LZGCK\ncheck: not_contains: APHHS1005ZGC\n",
+    "checks": "json\nschema: {\"type\":\"object\",\"required\":[\"mpn\",\"manufacturer\",\"qty\",\"refdes\"],\"properties\":{\"mpn\":{\"type\":\"string\",\"minLength\":3},\"manufacturer\":{\"type\":[\"string\",\"null\"]},\"qty\":{\"type\":\"integer\",\"minimum\":1},\"refdes\":{\"type\":\"array\",\"minItems\":1,\"items\":{\"type\":\"string\",\"pattern\":\"^[A-Z]+[0-9]+$\"}}},\"additionalProperties\":false}\ncontains_expected\nmax_chars: 400\n",
+    "judge": "refdes must list every designator on the line with ranges expanded (R14-R16 -> R14, R15, R16), and qty must equal the number of designators. Score 5 only if both hold; 3 if one of them is off by one; 1 if refdes still contains a range.",
+    "judgePass": 4,
+    "model": "",
+    "temperature": 0.2,
+    "maxTokens": 300,
+    "answers": "{\"variant\": \"plain\", \"case\": \"r-range\", \"text\": \"Here is the JSON:\\n```json\\n{\\\"mpn\\\": \\\"RC0402FR-0710KL\\\", \\\"manufacturer\\\": \\\"Yageo\\\", \\\"qty\\\": 2, \\\"refdes\\\": [\\\"R12\\\", \\\"R14-R16\\\"]}\\n```\", \"ms\": 1310, \"prompt_tokens\": 58, \"completion_tokens\": 52, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 1, \"reason\": \"refdes keeps the range R14-R16 and qty 2 does not match four designators.\"}}\n{\"variant\": \"plain\", \"case\": \"c-pair\", \"text\": \"```json\\n{\\\"mpn\\\": \\\"GRM188R71H104KA93D\\\", \\\"manufacturer\\\": \\\"Murata\\\", \\\"qty\\\": 2, \\\"refdes\\\": [\\\"C3\\\", \\\"C7\\\"]}\\n```\", \"ms\": 1120, \"prompt_tokens\": 52, \"completion_tokens\": 40, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Both designators listed and qty is 2.\"}}\n{\"variant\": \"plain\", \"case\": \"mcu\", \"text\": \"{\\\"mpn\\\": \\\"STM32G431CBU6\\\", \\\"manufacturer\\\": \\\"ST\\\", \\\"qty\\\": 1, \\\"refdes\\\": [\\\"U4\\\"], \\\"package\\\": \\\"UFQFPN48\\\"}\", \"ms\": 980, \"prompt_tokens\": 50, \"completion_tokens\": 38, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"One designator, qty 1.\"}}\n{\"variant\": \"plain\", \"case\": \"usb\", \"text\": \"```json\\n{\\\"mpn\\\": \\\"USB4105-GF-A\\\", \\\"manufacturer\\\": \\\"GCT\\\", \\\"qty\\\": 1, \\\"refdes\\\": [\\\"J1\\\"]}\\n```\", \"ms\": 1050, \"prompt_tokens\": 54, \"completion_tokens\": 37, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"plain\", \"case\": \"led-sub\", \"text\": \"{\\\"mpn\\\": \\\"APHHS1005ZGC\\\", \\\"manufacturer\\\": \\\"Kingbright\\\", \\\"qty\\\": 3, \\\"refdes\\\": [\\\"D1\\\", \\\"D2\\\", \\\"D3\\\"], \\\"note\\\": \\\"use APTD1608LZGCK (EOL)\\\"}\", \"ms\": 1240, \"prompt_tokens\": 56, \"completion_tokens\": 55, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Range expanded and qty 3.\"}}\n{\"variant\": \"strict\", \"case\": \"r-range\", \"text\": \"{\\\"mpn\\\":\\\"RC0402FR-0710KL\\\",\\\"manufacturer\\\":\\\"Yageo\\\",\\\"qty\\\":4,\\\"refdes\\\":[\\\"R12\\\",\\\"R14\\\",\\\"R15\\\",\\\"R16\\\"]}\", \"ms\": 890, \"prompt_tokens\": 171, \"completion_tokens\": 41, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"All four designators and qty 4.\"}}\n{\"variant\": \"strict\", \"case\": \"c-pair\", \"text\": \"{\\\"mpn\\\":\\\"GRM188R71H104KA93D\\\",\\\"manufacturer\\\":\\\"Murata\\\",\\\"qty\\\":2,\\\"refdes\\\":[\\\"C3\\\",\\\"C7\\\"]}\", \"ms\": 760, \"prompt_tokens\": 165, \"completion_tokens\": 34, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"strict\", \"case\": \"mcu\", \"text\": \"{\\\"mpn\\\":\\\"STM32G431CBU6\\\",\\\"manufacturer\\\":\\\"STMicroelectronics\\\",\\\"qty\\\":1,\\\"refdes\\\":[\\\"U4\\\"]}\", \"ms\": 810, \"prompt_tokens\": 168, \"completion_tokens\": 33, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"strict\", \"case\": \"usb\", \"text\": \"{\\\"mpn\\\":\\\"USB4105-GF-A\\\",\\\"manufacturer\\\":\\\"GCT\\\",\\\"qty\\\":1,\\\"refdes\\\":[\\\"J1\\\"]}\", \"ms\": 700, \"prompt_tokens\": 166, \"completion_tokens\": 29, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"strict\", \"case\": \"led-sub\", \"text\": \"{\\\"mpn\\\":\\\"APTD1608LZGCK\\\",\\\"manufacturer\\\":\\\"Kingbright\\\",\\\"qty\\\":3,\\\"refdes\\\":[\\\"D1\\\",\\\"D2\\\",\\\"D3\\\"]}\", \"ms\": 840, \"prompt_tokens\": 172, \"completion_tokens\": 36, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Replacement used, range expanded.\"}}\n{\"variant\": \"few-shot\", \"case\": \"r-range\", \"text\": \"{\\\"mpn\\\":\\\"RC0402FR-0710KL\\\",\\\"manufacturer\\\":\\\"Yageo\\\",\\\"qty\\\":3,\\\"refdes\\\":[\\\"R12\\\",\\\"R14\\\",\\\"R15\\\",\\\"R16\\\"]}\", \"ms\": 720, \"prompt_tokens\": 139, \"completion_tokens\": 40, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 3, \"reason\": \"refdes has four designators but qty says 3.\"}}\n{\"variant\": \"few-shot\", \"case\": \"c-pair\", \"text\": \"{\\\"mpn\\\":\\\"GRM188R71H104KA93D\\\",\\\"manufacturer\\\":\\\"Murata\\\",\\\"qty\\\":2,\\\"refdes\\\":[\\\"C3\\\",\\\"C7\\\"]}\", \"ms\": 650, \"prompt_tokens\": 133, \"completion_tokens\": 33, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"few-shot\", \"case\": \"mcu\", \"text\": \"{\\\"mpn\\\":\\\"STM32G431CBU6\\\",\\\"manufacturer\\\":\\\"ST\\\",\\\"qty\\\":1,\\\"refdes\\\":[\\\"U4\\\"]}\", \"ms\": 610, \"prompt_tokens\": 131, \"completion_tokens\": 30, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"few-shot\", \"case\": \"usb\", \"text\": \"{\\\"mpn\\\":\\\"USB4105-GF-A\\\",\\\"manufacturer\\\":\\\"GCT\\\",\\\"qty\\\":1,\\\"refdes\\\":[\\\"J1\\\"]}\", \"ms\": 600, \"prompt_tokens\": 134, \"completion_tokens\": 29, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Correct.\"}}\n{\"variant\": \"few-shot\", \"case\": \"led-sub\", \"text\": \"{\\\"mpn\\\":\\\"APHHS1005ZGC\\\",\\\"manufacturer\\\":\\\"Kingbright\\\",\\\"qty\\\":3,\\\"refdes\\\":[\\\"D1\\\",\\\"D2\\\",\\\"D3\\\"]}\", \"ms\": 680, \"prompt_tokens\": 140, \"completion_tokens\": 35, \"model\": \"sample\", \"sample\": true, \"judge\": {\"score\": 5, \"reason\": \"Range expanded and qty 3.\"}}"
+   }
+  },
+  {
+   "title": "Support ticket triage: 2 variants x 4 cases, equals_expected, no answers yet",
+   "input": {
+    "variants": "### short\nClassify this support message as one of: bug, question, feature, billing. Answer with the label only.\n\n{{input}}\n\n### reasoned\nYou triage support messages for a firmware product. Labels: bug (something broke or behaves wrongly), question (how-to), feature (a request for something new), billing (invoices, plans, refunds).\nAnswer with exactly one label in lower case and nothing else.\n---\n{{input}}\n",
+    "cases": "### m1\nAfter updating to 2.4.1 the gateway reboots every few minutes.\nexpected: bug\n\n### m2\nHow do I change the LoRa region to AS923?\nexpected: question\n\n### m3\nCould you add MQTT over WebSockets?\nexpected: feature\n\n### m4\nI was charged twice for March.\nexpected: billing\n",
+    "checks": "equals_expected\nmax_words: 1",
+    "judge": "",
+    "judgePass": 4,
+    "model": "",
+    "temperature": 0,
+    "maxTokens": 10,
+    "answers": ""
+   }
+  }
+ ],
+ "usage": "Give variants (### name blocks, --- between system and user, {{input}} placeholder), cases (### id blocks with optional expected: and check: lines), checks (one per line), an optional judge rubric and judgePass, and answers as JSONL {variant, case, text, ...} that you already obtained. It never calls a model: it returns the per-variant pass rates, a case x variant grid of checks passed, the failed checks with reasons, cost/latency totals from the answers' usage, CSV and JSONL exports, and warnings about the set-up (missing {{input}}, bad regex or schema, stale answers). With no answers it validates the set-up and lists the cells to run.",
+ "sources": [
+  "JSON Schema 2020-12 Validation vocabulary (type, enum, const, required, properties, additionalProperties, items, minItems/maxItems, minLength/maxLength, pattern, minimum/maximum) - a subset, implemented here",
+  "Zheng et al., 'Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena', NeurIPS 2023 (judge biases; why rule checks come first)",
+  "Redline /api/tools/llm (backend/tools_llm.py): the model call, its limits and the usage it reports",
+  "FNV-1a hash (Fowler, Noll, Vo) for spotting answers made from an older prompt"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "grid"
+ ]
+}

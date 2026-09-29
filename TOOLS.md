@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-203 tools. **MCP** marks the ones agents can run with `run_tool`.
+206 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -293,9 +293,12 @@ agents, the most used, and every tool nobody used.
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
 | **Context Packer** | `context-packer` | pack code, logs and notes into one well-built prompt | Web, Embedded, Mobile, PCB, 3D |
+| **Conversation & Agent Trace Viewer** · MCP | `trace-viewer` | a chat or agent transcript split into turns and tool calls, with tokens per turn and where the context grew | Web, Embedded, Mobile, PCB, 3D |
 | **Data Digest** | `data-digest` | profile a large CSV or JSON into a compact brief for an LLM | Web, Embedded |
 | **LLM Cost Calculator** · MCP | `llm-cost` | monthly cost of a model workload from tokens per call, calls per day, caching and batch discounts | Web, Embedded, Mobile, PCB, 3D |
 | **Prompt Caching Planner** · MCP | `prompt-caching` | a prompt's parts ordered for provider prompt caching, with the cache breakpoints and the saving per call | Web, Embedded, Mobile, PCB, 3D |
+| **Prompt Eval Grid** · MCP | `prompt-eval-grid` | test inputs run against prompt variants on a real model, each answer scored by rules or a judge, in one grid | Web, Embedded, Mobile, PCB, 3D |
+| **Retrieval Tester** · MCP | `retrieval-tester` | which chunks of your documents a query retrieves, ranked by BM25, with the matching words shown | Web, Embedded, Mobile, PCB, 3D |
 | **Tool / Function Schema Builder** · MCP | `tool-schema` | a tool's parameters defined visually and written out as JSON Schema for Anthropic, OpenAI and MCP tool definitions | Web, Embedded, Mobile, PCB, 3D |
 
 ### Project
