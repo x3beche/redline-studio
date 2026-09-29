@@ -1,0 +1,238 @@
+{
+ "id": "wic-layout",
+ "version": "1.0",
+ "name": "WIC Partition Layout",
+ "blurb": "a .wks kickstart and rootfs size for an SD card or eMMC, drawn to scale",
+ "group": "embedded",
+ "rooms": [
+  "embedded"
+ ],
+ "layout": "custom",
+ "view": true,
+ "agentOmit": [
+  "layout"
+ ],
+ "keywords": [
+  "wic",
+  "wks",
+  "kickstart",
+  "partition layout",
+  "sd card image",
+  "emmc layout",
+  "rootfs size",
+  "IMAGE_ROOTFS_SIZE",
+  "IMAGE_OVERHEAD_FACTOR",
+  "IMAGE_ROOTFS_EXTRA_SPACE",
+  "--fixed-size",
+  "--align",
+  "rawcopy",
+  "bootimg-partition",
+  "imx-boot offset",
+  "A/B rootfs",
+  "erase block alignment",
+  "yocto image size",
+  "gpt msdos"
+ ],
+ "intro": "Lays out a wic .wks the way wic itself does (poky scarthgap scripts/lib/wic: ksparser units and defaults, the source plugins' size rules, direct.py placement) on a device of real size, with bitbake's ROOTFS_SIZE from image.bbclass. It flags overlaps, a raw bootloader pushed off its ROM offset, a rootfs larger than its --fixed-size, an image too big for the device and partitions off the erase-block grid.",
+ "inputs": [
+  {
+   "key": "wks",
+   "label": "Kickstart (.wks)",
+   "type": "textarea",
+   "rows": 9,
+   "default": "# i.MX8M Mini eMMC: imx-boot raw at 33K (ROM offset), boot, A/B rootfs, data\n# after meta-freescale imx-imx-boot-bootpart.wks.in\npart u-boot --source rawcopy --sourceparams=\"file=imx-boot\" --ondisk mmcblk2 --no-table --align 33\npart /boot --source bootimg-partition --ondisk mmcblk2 --fstype=vfat --label boot --active --align 8192 --size 64\npart / --source rootfs --ondisk mmcblk2 --fstype=ext4 --label rootfsA --align 8192 --fixed-size 1536\npart --source rootfs --ondisk mmcblk2 --fstype=ext4 --label rootfsB --align 8192 --fixed-size 1536\npart /data --ondisk mmcblk2 --fstype=ext4 --label data --align 8192 --size 512\nbootloader --ptable msdos\n",
+   "help": "part / bootloader lines as in a .wks or .wks.in (${...} left unexpanded is read as text)."
+  },
+  {
+   "key": "device",
+   "label": "Device",
+   "type": "select",
+   "default": "emmc8",
+   "options": [
+    [
+     "sd4",
+     "SD 4 GB"
+    ],
+    [
+     "sd8",
+     "SD 8 GB"
+    ],
+    [
+     "sd16",
+     "SD 16 GB"
+    ],
+    [
+     "sd32",
+     "SD 32 GB"
+    ],
+    [
+     "emmc4",
+     "eMMC 4 GB"
+    ],
+    [
+     "emmc8",
+     "eMMC 8 GB"
+    ],
+    [
+     "emmc16",
+     "eMMC 16 GB"
+    ],
+    [
+     "emmc32",
+     "eMMC 32 GB"
+    ],
+    [
+     "custom",
+     "Custom size"
+    ]
+   ]
+  },
+  {
+   "key": "diskSize",
+   "label": "Device size",
+   "type": "text",
+   "default": "16G",
+   "placeholder": "7580M or 16G",
+   "when": {
+    "key": "device",
+    "equals": "custom"
+   }
+  },
+  {
+   "key": "erase",
+   "label": "Erase block / AU",
+   "type": "text",
+   "default": "4M",
+   "help": "eMMC erase group (often 512K) or SD allocation unit (often 4M)."
+  },
+  {
+   "key": "rootfsDu",
+   "label": "Rootfs files (du -ks IMAGE_ROOTFS)",
+   "type": "number",
+   "unit": "KiB",
+   "default": 612352
+  },
+  {
+   "key": "imageRootfsSize",
+   "label": "IMAGE_ROOTFS_SIZE",
+   "type": "number",
+   "unit": "KiB",
+   "default": 65536
+  },
+  {
+   "key": "overhead",
+   "label": "IMAGE_OVERHEAD_FACTOR",
+   "type": "number",
+   "default": 1.3
+  },
+  {
+   "key": "extraSpace",
+   "label": "IMAGE_ROOTFS_EXTRA_SPACE",
+   "type": "number",
+   "unit": "KiB",
+   "default": 0
+  },
+  {
+   "key": "alignment",
+   "label": "IMAGE_ROOTFS_ALIGNMENT",
+   "type": "number",
+   "unit": "KiB",
+   "default": 1
+  },
+  {
+   "key": "maxSize",
+   "label": "IMAGE_ROOTFS_MAXSIZE",
+   "type": "number",
+   "unit": "KiB",
+   "default": 0,
+   "help": "0 = not set."
+  },
+  {
+   "key": "content",
+   "label": "Content sizes",
+   "type": "table",
+   "help": "Sizes wic takes from files: the rawcopy file, IMAGE_BOOT_FILES. Match by mount point, label, part-name or sourceparams file.",
+   "columns": [
+    {
+     "key": "part",
+     "label": "Partition"
+    },
+    {
+     "key": "size",
+     "label": "Size (K/M)"
+    }
+   ],
+   "default": [
+    {
+     "part": "imx-boot",
+     "size": "1950K"
+    },
+    {
+     "part": "/boot",
+     "size": "34M"
+    }
+   ]
+  }
+ ],
+ "examples": [
+  {
+   "title": "i.MX8M Mini eMMC with A/B rootfs and a data partition",
+   "input": {
+    "wks": "# i.MX8M Mini eMMC: imx-boot raw at 33K (ROM offset), boot, A/B rootfs, data\n# after meta-freescale imx-imx-boot-bootpart.wks.in\npart u-boot --source rawcopy --sourceparams=\"file=imx-boot\" --ondisk mmcblk2 --no-table --align 33\npart /boot --source bootimg-partition --ondisk mmcblk2 --fstype=vfat --label boot --active --align 8192 --size 64\npart / --source rootfs --ondisk mmcblk2 --fstype=ext4 --label rootfsA --align 8192 --fixed-size 1536\npart --source rootfs --ondisk mmcblk2 --fstype=ext4 --label rootfsB --align 8192 --fixed-size 1536\npart /data --ondisk mmcblk2 --fstype=ext4 --label data --align 8192 --size 512\nbootloader --ptable msdos\n",
+    "device": "emmc8",
+    "erase": "4M",
+    "rootfsDu": 612352,
+    "imageRootfsSize": 65536,
+    "overhead": 1.3,
+    "extraSpace": 0,
+    "alignment": 1,
+    "maxSize": 0,
+    "content": [
+     {
+      "part": "imx-boot",
+      "size": "1950K"
+     },
+     {
+      "part": "/boot",
+      "size": "34M"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Rockchip GPT eMMC with idbloader at 32K and u-boot.itb at 8M",
+   "input": {
+    "wks": "# Rockchip eMMC: idbloader.img at sector 64 (32K), u-boot.itb at sector 16384 (8M)\npart loader1 --part-name=loader1 --offset 32K --fixed-size 4000K --source rawcopy --sourceparams=\"file=idbloader.img\"\npart v_storage --part-name=v_storage --offset 4032K --fixed-size 32K\npart loader2 --part-name=loader2 --offset 8M --fixed-size 4M --source rawcopy --sourceparams=\"file=u-boot.itb\"\npart /boot --part-name=boot --source bootimg-partition --fstype=vfat --label boot --active --align 16384 --size 64\npart / --part-name=root --source rootfs --fstype=ext4 --label root --align 16384\nbootloader --ptable gpt\n",
+    "device": "emmc16",
+    "erase": "512K",
+    "rootfsDu": 402000,
+    "imageRootfsSize": 65536,
+    "overhead": 1.3,
+    "extraSpace": 0,
+    "alignment": 1,
+    "maxSize": 0,
+    "content": [
+     {
+      "part": "idbloader.img",
+      "size": "180K"
+     },
+     {
+      "part": "u-boot.itb",
+      "size": "1100K"
+     },
+     {
+      "part": "/boot",
+      "size": "40M"
+     }
+    ]
+   }
+  }
+ ],
+ "usage": "Give the .wks text (wks), a device preset or custom size, the erase block, the rootfs du in KiB with the IMAGE_ROOTFS_* variables, and content sizes for rawcopy files and boot files (table part/size). It returns every partition's start, size and end in the Layout table and text, the image size, free space, bitbake's ROOTFS_SIZE, and warnings for overlaps, raw bootloaders pushed off their ROM offset, rootfs larger than --fixed-size, options wic rejects, and misaligned partitions. Use it to size a .wks before building or to check why a wic image does not fit or boot.",
+ "sources": [
+  "poky scarthgap 5.0 scripts/lib/wic/ksparser.py (sizetype, defaults 10M/1.3), partition.py (get_rootfs_size, prepare_rootfs), plugins/source/rawcopy.py, bootimg-efi.py, plugins/imager/direct.py (layout_partitions, MBR 1 / GPT 34 sectors)",
+  "poky meta/classes-recipe/image.bbclass get_rootfs_size(); bitbake.conf IMAGE_ROOTFS_SIZE ??= 65536, IMAGE_OVERHEAD_FACTOR ?= 1.3",
+  "meta-freescale imx-imx-boot-bootpart.wks.in (33K); i.MX8M Plus reference manual boot chapter (32K); Rockchip boot flow wiki (sector 64 / 16384)",
+  "JEDEC JESD84-B51 EXT_CSD HC_ERASE_GRP_SIZE; SD Physical Layer spec AU_SIZE"
+ ]
+}

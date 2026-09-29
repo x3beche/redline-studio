@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-187 tools. **MCP** marks the ones agents can run with `run_tool`.
+190 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -146,6 +146,7 @@ agents, the most used, and every tool nobody used.
 | **Clock Tree Planner** · MCP | `clock-tree` | PLL settings and peripheral clocks from a crystal frequency | Embedded |
 | **Compiler Flag Explainer** · MCP | `compiler-flags` | size and speed effect of the optimisation flags in a build log | Embedded |
 | **CRC Calculator** · MCP | `crc-calc` | CRC-8/16/32 with polynomial, init and reflection settings | Embedded |
+| **CVE Check Viewer** · MCP | `cve-check-viewer` | cve-check JSON output per package: unpatched, patched and ignored CVEs, with scores | Embedded |
 | **Cycle to Time Converter** · MCP | `cycles-time` | instruction cycles to microseconds and back at a clock | Embedded |
 | **Debounce Time Calculator** · MCP | `debounce-time` | debounce time for a button type and sampling period | Embedded |
 | **Device Tree Explorer** · MCP | `device-tree-explorer` | a DTS with its includes merged into one tree, phandles resolved, addresses translated and conflicts found | Embedded |
@@ -163,6 +164,7 @@ agents, the most used, and every tool nobody used.
 | **Interrupt Latency Budget** · MCP | `irq-latency` | CPU load and miss risk from interrupt rates and handler times | Embedded |
 | **Kernel Oops Decoder** · MCP | `kernel-oops-decoder` | a Linux oops or panic taken apart: the cause, the faulting function, the call trace and the taint flags | Embedded |
 | **Layer & Release Map** · MCP | `layer-release-map` | Yocto releases with their LTS and end-of-life dates, and a bblayers stack checked for compatibility | Embedded |
+| **License Manifest Viewer** · MCP | `license-manifest` | packages in an image grouped by license, with GPLv3 and other copyleft flagged | Embedded |
 | **Linker Script Helper** · MCP | `linker-script` | a linker script from sections and memory regions in a form | Embedded |
 | **Linux GPIO Number Converter** · MCP | `linux-gpio-number` | a SoC pin name to its gpiochip, line offset, legacy sysfs number and libgpiod commands | Embedded |
 | **Log Format Designer** · MCP | `log-format` | a compact embedded log format and its parser code | Embedded |
@@ -188,6 +190,7 @@ agents, the most used, and every tool nobody used.
 | **U-Boot Env & bootargs Builder** · MCP | `uboot-env` | bootcmd and kernel bootargs built and explained, and the CRC'd environment image made | Embedded |
 | **Units & Numbers** · MCP | `units` | every engineering unit (pressure, torque, dBm, AWG, °F…), hex and binary, UART baud and timer PSC/ARR | Embedded, PCB, 3D |
 | **Watchdog Planner** · MCP | `watchdog-planner` | a safe watchdog period and feed points from the longest task | Embedded |
+| **WIC Partition Layout** · MCP | `wic-layout` | a .wks kickstart and rootfs size for an SD card or eMMC, drawn to scale | Embedded |
 
 ### Mechanical & 3D
 
