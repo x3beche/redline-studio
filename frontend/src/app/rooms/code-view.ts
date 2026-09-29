@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Observable, map } from 'rxjs';
 import type * as Monaco from 'monaco-editor';
 import { Auth } from '../auth';
 import { Catalog, FolderNode } from '../api';
@@ -23,6 +24,13 @@ import { LIGHT_THEMES } from '../../theme';
  *  version it started from, so if an agent saved in between the server
  *  refuses rather than laying one over the other, and the person chooses.
  *  Changes that come in while nothing is typed here are simply shown.
+ *
+ *  A firmware (kind 'app', the Embedded room) is the other shape: not a
+ *  record in the database but a directory in a git checkout. Its files come
+ *  from /api/embedded/<app>/files - the firmware's own directory and the
+ *  shared ones its build reaches (../common) - each with its git mark, and
+ *  a save writes the file on disk. Ctrl+click on an #include opens the
+ *  header, looked for beside the file and then in the include directories.
  *
  *  Monaco is large, so it is loaded the first time a code view opens and
  *  not before (served as-is from /monaco/vs, angular.json).
@@ -141,7 +149,15 @@ interface Tab {
 }
 
 /** A file in the project tree. */
-interface TreeFile { kind: CodeKind; id: string; label: string }
+interface TreeFile { kind: CodeKind; id: string; label: string; git?: GitMark | null }
+type GitMark = 'modified' | 'untracked' | 'staged';
+
+/** A firmware's files, from /api/embedded/<app>/files. */
+interface AppFiles {
+  root: string; project: string; includes: string[]; open: string | null;
+  files: { path: string; git: GitMark | null; language: string }[];
+}
+interface AppRead { text: string; hash: string; stale?: boolean }
 interface TreeDir { name: string; path: string; dirs: TreeDir[]; files: TreeFile[] }
 
 const key = (kind: CodeKind, id: string) => `${kind}:${id}`;
@@ -150,12 +166,20 @@ const key = (kind: CodeKind, id: string) => `${kind}:${id}`;
   selector: 'app-code-view',
   imports: [NgTemplateOutlet, T],
   host: { class: 'tcv-code' },
+  // The git letter beside a firmware's file: quiet, like the "used" dot.
+  styles: [`
+    .tcv-code-git { flex: none; margin-left: auto; padding-left: 4px; font-size: 9.5px; font-weight: 700;
+      color: var(--code-str); opacity: .85; }
+    .tcv-code-used + .tcv-code-git { margin-left: 0; }
+    .tcv-code-git[data-git="untracked"] { color: var(--code-type); }
+    .tcv-code-git[data-git="staged"] { color: var(--code-num); }
+  `],
   template: `
 <div class="tcv-code-bar">
   <span class="tcv-code-title">{{ project()?.path ? project()!.name : (title() || id()) }}</span>
   <span class="tcv-code-sub">{{ current()?.status }}</span>
   <span class="grow"></span>
-  <span class="tcv-code-sub">{{ current()?.kind === 'board' ? 'atopile' : 'build123d · Python' }}</span>
+  <span class="tcv-code-sub">{{ current()?.kind === 'board' ? 'atopile' : current()?.kind === 'app' ? langName(current()!.model.getLanguageId(), current()!.name) : 'build123d · Python' }}</span>
   @if (canEdit()) {
     <button class="tcv-btn tcv-code-btn" [class.tcv-code-save]="current()?.dirty" [disabled]="!current()?.dirty || saving()"
             (click)="save()" title="Save (Ctrl+S)">{{ saving() ? 'Saving…' : ('Save' | t) }}</button>
@@ -213,8 +237,9 @@ const key = (kind: CodeKind, id: string) => `${kind}:${id}`;
               [attr.data-used]="uses().has(f.id) ? 1 : null"
               [title]="uses().has(f.id) ? f.id + ' - used by ' + current()?.name : f.id"
               (click)="openFile(f.kind, f.id)">
-        <span class="tcv-code-ext" [attr.data-kind]="f.kind">{{ f.kind === 'board' ? 'ato' : 'py' }}</span><span class="tcv-code-label">{{ f.label }}</span>
+        <span class="tcv-code-ext" [attr.data-kind]="f.kind">{{ f.kind === 'board' ? 'ato' : f.kind === 'app' ? ext(f.label) : 'py' }}</span><span class="tcv-code-label">{{ f.label }}</span>
         @if (uses().has(f.id)) { <span class="tcv-code-used"></span> }
+        @if (f.git) { <span class="tcv-code-git" [attr.data-git]="f.git" [title]="f.git">{{ letter(f.git) }}</span> }
       </button>
     }
   }
@@ -249,6 +274,10 @@ export class CodeView implements OnDestroy {
   shut = signal(new Set<string>());
   /** Model name (the last part of its id) -> id, for imports. */
   private byName = new Map<string, string>();
+  /** A firmware's files by path, and the directories its build includes from. */
+  private appPaths = new Set<string>();
+  private appIncludes: string[] = [];
+  letter(g: GitMark): string { return g === 'untracked' ? 'U' : g === 'staged' ? 'S' : 'M'; }
   canEdit = () => this.auth.can('edit');
 
   /** What the open file imports, as model ids: marked in the tree. */
@@ -256,6 +285,13 @@ export class CodeView implements OnDestroy {
     const t = this.current();
     this.tabs();                            // re-read after an edit
     const out = new Set<string>();
+    if (t?.kind === 'app') {
+      for (const inc of includes(t.model.getValue())) {
+        const p = this.resolveInclude(t.id, inc);
+        if (p && p !== t.id) out.add(p);
+      }
+      return out;
+    }
     if (!t || t.kind !== 'model') return out;
     for (const name of imports(t.model.getValue())) {
       const id = this.byName.get(name);
@@ -290,13 +326,83 @@ export class CodeView implements OnDestroy {
         const model = this.editor!.getModel();
         const word = model?.getWordAtPosition(e.target.position)?.word;
         const line = model?.getLineContent(e.target.position.lineNumber) ?? '';
+        if (this.current()?.kind === 'app') {
+          const inc = /^\s*#\s*include\s*[<"]([^">]+)[">]/.exec(line)?.[1];
+          const hit = inc ? this.resolveInclude(this.current()!.id, inc) : null;
+          if (hit) { e.event.preventDefault(); void this.openFile('app', hit); }
+          return;
+        }
         const target = word && /^\s*(from|import)\s/.test(line) ? this.byName.get(word) : undefined;
         if (target) { e.event.preventDefault(); void this.openFile('model', target); }
       });
       this.poll = setInterval(() => this.check(), 10_000);
     }
+    if (kind === 'app') { this.readAppTree(id); return; }
     this.readTree(kind, id);
     await this.openFile(kind, id);
+  }
+
+  /** A firmware's files, as the same tree; then its main source opens. */
+  private readAppTree(app: string) {
+    this.http.get<AppFiles>(`/api/embedded/${encodeURIComponent(app)}/files`).subscribe({
+      next: r => {
+        this.appPaths = new Set(r.files.map(f => f.path));
+        this.appIncludes = r.includes;
+        const root: TreeDir = { name: r.root, path: '', dirs: [], files: [] };
+        for (const f of r.files) {
+          const parts = f.path.split('/');
+          let d = root;
+          for (const part of parts.slice(0, -1)) {
+            const path = d.path ? `${d.path}/${part}` : part;
+            let sub = d.dirs.find(x => x.name === part);
+            if (!sub) { sub = { name: part, path, dirs: [], files: [] }; d.dirs.push(sub); }
+            d = sub;
+          }
+          d.files.push({ kind: 'app', id: f.path, label: parts[parts.length - 1], git: f.git });
+        }
+        this.project.set(root);
+        this.touch();
+        const first = r.open;
+        if (first && !this.tabs().length) void this.openFile('app', first);
+        else if (!first) this.error.set('this firmware has no files to show');
+      },
+      error: (e: HttpErrorResponse) => this.error.set(
+        typeof e.error?.detail === 'string' ? e.error.detail : 'the firmware\'s files could not be read'),
+    });
+  }
+
+  /** `#include "x.h"` from `from`: beside it, then in the include directories, then anywhere. */
+  private resolveInclude(from: string, inc: string): string | null {
+    const norm = (p: string) => {
+      const out: string[] = [];
+      for (const s of p.split('/')) {
+        if (s === '..') out.pop(); else if (s && s !== '.') out.push(s);
+      }
+      return out.join('/');
+    };
+    const dir = from.includes('/') ? from.slice(0, from.lastIndexOf('/')) : '';
+    for (const base of [dir, ...this.appIncludes]) {
+      const p = norm(base ? `${base}/${inc}` : inc);
+      if (this.appPaths.has(p)) return p;
+    }
+    const tail = '/' + norm(inc);
+    for (const p of this.appPaths) if (p.endsWith(tail)) return p;
+    return null;
+  }
+
+  /** The extension a firmware's file shows in the tree (CMakeLists.txt: cmake). */
+  ext(name: string): string {
+    if (/^CMakeLists\.txt$|\.cmake$/i.test(name)) return 'cmk';
+    if (/^(GNU)?makefile$/i.test(name)) return 'mk';
+    const i = name.lastIndexOf('.');
+    return i > 0 ? name.slice(i + 1, i + 4) : '·';
+  }
+
+  langName(lang: string, name: string): string {
+    if (lang === 'cpp') return /\.(c|h)$/.test(name) ? 'C' : 'C++';
+    if (/^CMakeLists\.txt$|\.cmake$/i.test(name)) return 'CMake';
+    return ({ python: 'Python', json: 'JSON', yaml: 'YAML', markdown: 'Markdown' } as Record<string, string>)[lang]
+      ?? 'text';
   }
 
   /** The catalog, cut down to the project the file is in. */
@@ -326,10 +432,17 @@ export class CodeView implements OnDestroy {
   }
 
   private url(kind: CodeKind, id: string) {
+    if (kind === 'app') {
+      return `/api/embedded/${encodeURIComponent(this.id())}/files/${id.split('/').map(encodeURIComponent).join('/')}`;
+    }
     return kind === 'board' ? `/api/boards/${id}` : `/api/models/${id}`;
   }
 
-  private read(kind: CodeKind, id: string) {
+  private read(kind: CodeKind, id: string): Observable<Read> {
+    if (kind === 'app') {
+      return this.http.get<AppRead>(this.url(kind, id))
+        .pipe(map(d => ({ source: d.text, rev: d.hash, stale: d.stale })));
+    }
     return this.http.get<Read>(kind === 'board' ? this.url(kind, id) : `${this.url(kind, id)}/source`);
   }
 
@@ -339,10 +452,11 @@ export class CodeView implements OnDestroy {
     this.read(kind, id).subscribe({
       next: d => {
         if (!this.m || this.tabs().some(t => t.kind === kind && t.id === id)) return;
-        const model = this.m.editor.createModel(d.source, kind === 'board' ? 'atopile' : 'python',
-                                                this.m.Uri.parse(`redline:///${key(kind, id)}`));
+        const lang = kind === 'board' ? 'atopile' : kind === 'app' ? appLanguage(id) : 'python';
+        const uri = kind === 'app' ? `redline:///app/${encodeURIComponent(this.id())}/${id}` : `redline:///${key(kind, id)}`;
+        const model = this.m.editor.createModel(d.source, lang, this.m.Uri.parse(uri));
         const tab: Tab = {
-          kind, id, name: `${id.split('/').pop()}.${kind === 'board' ? 'ato' : 'py'}`, model,
+          kind, id, name: kind === 'app' ? id.split('/').pop()! : `${id.split('/').pop()}.${kind === 'board' ? 'ato' : 'py'}`, model,
           rev: d.rev, savedAt: model.getAlternativeVersionId(), stale: !!d.stale, dirty: false,
           view: null, theirs: null, clash: null, status: '',
         };
@@ -372,7 +486,7 @@ export class CodeView implements OnDestroy {
     this.editor.setModel(t.model);
     if (t.view) this.editor.restoreViewState(t.view);
     const line = this.line();
-    if (line && t.id === this.id() && !was) {
+    if (line && (t.id === this.id() || t.kind === 'app') && !was) {
       this.editor.revealLineInCenter(line);
       this.editor.setSelection({ startLineNumber: line, startColumn: 1, endLineNumber: line,
                                  endColumn: t.model.getLineMaxColumn(line) });
@@ -434,11 +548,14 @@ export class CodeView implements OnDestroy {
     const t = this.current();
     if (!t || this.saving() || (!t.dirty && !force)) return;
     this.saving.set(true);
-    const body = { source: t.model.getValue(), if_match: force && t.theirs ? t.theirs.rev : t.rev };
-    this.http.put<{ rev: string }>(this.url(t.kind, t.id), body).subscribe({
+    const base = force && t.theirs ? t.theirs.rev : t.rev;
+    const body = t.kind === 'app' ? { text: t.model.getValue(), base_hash: base }
+                                  : { source: t.model.getValue(), if_match: base };
+    this.http.put<{ rev?: string; hash?: string }>(this.url(t.kind, t.id), body).subscribe({
       next: r => {
         this.saving.set(false);
-        t.rev = r.rev; t.stale = true; t.theirs = null; t.clash = null;
+        t.rev = (r.rev ?? r.hash)!;
+        if (t.kind === 'app') this.refreshGit(); t.stale = true; t.theirs = null; t.clash = null;
         t.savedAt = t.model.getAlternativeVersionId(); t.dirty = false;
         t.status = 'saved - Build to see it';
         this.touch();
@@ -457,6 +574,18 @@ export class CodeView implements OnDestroy {
         const d = e.error?.detail;
         t.status = 'not saved - ' + (typeof d === 'string' ? d : 'that did not work');
         this.touch();
+      },
+    });
+  }
+
+  /** After a firmware save: the git marks in the tree, read again. */
+  private refreshGit() {
+    this.http.get<AppFiles>(`/api/embedded/${encodeURIComponent(this.id())}/files`).subscribe({
+      next: r => {
+        const marks = new Map(r.files.map(f => [f.path, f.git]));
+        const walk = (d: TreeDir) => { for (const f of d.files) f.git = marks.get(f.id) ?? null; d.dirs.forEach(walk); };
+        const root = this.project();
+        if (root) { walk(root); this.project.set({ ...root }); }
       },
     });
   }
@@ -484,6 +613,19 @@ export class CodeView implements OnDestroy {
     for (const t of this.tabs()) t.model.dispose();
     this.editor?.dispose();
   }
+}
+
+/** Monaco's language for a firmware's file, by its extension. */
+function appLanguage(path: string): string {
+  const e = path.slice(path.lastIndexOf('.') + 1).toLowerCase();
+  if (['c', 'h', 'cpp', 'hpp', 'cc', 'cxx', 'hh', 'ino'].includes(e)) return 'cpp';
+  return ({ py: 'python', json: 'json', yaml: 'yaml', yml: 'yaml', md: 'markdown' } as Record<string, string>)[e]
+    ?? 'plaintext';
+}
+
+/** What a C file includes: `#include "x.h"` and `<x.h>`. */
+function includes(source: string): string[] {
+  return [...source.matchAll(/^[ \t]*#[ \t]*include[ \t]*[<"]([^">\n]+)[">]/gm)].map(m => m[1]);
 }
 
 /** The module names a Python file imports: `import stand`, `from stand import X`. */
