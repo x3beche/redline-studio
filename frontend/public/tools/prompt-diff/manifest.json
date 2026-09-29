@@ -1,0 +1,109 @@
+{
+  "id": "prompt-diff",
+  "version": "1.0",
+  "name": "Prompt Diff & History",
+  "blurb": "two versions of a prompt compared word by word with the token change, and versions kept per project",
+  "group": "ai",
+  "rooms": [
+    "web",
+    "embedded",
+    "mobile",
+    "pcb",
+    "cad"
+  ],
+  "keywords": [
+    "prompt diff",
+    "diff",
+    "compare prompts",
+    "prompt versions",
+    "prompt history",
+    "version control",
+    "changelog",
+    "word diff",
+    "unified diff",
+    "prompt regression",
+    "system prompt change",
+    "tokens",
+    "llm",
+    "prompt review",
+    "what changed"
+  ],
+  "intro": "Compares two versions of a prompt sentence by sentence and word by word (moved sentences found as moves), gives the token change per section and says which instructions, rules (modal verbs, limits), examples and output-format lines changed; keeps the versions with a note on why each changed.",
+  "inputs": [
+    {
+      "key": "history",
+      "label": "Versions (JSON)",
+      "type": "textarea",
+      "rows": 10,
+      "default": "[\n {\n  \"label\": \"v1 first draft\",\n  \"at\": \"2026-09-02 10:14\",\n  \"note\": \"Quick prompt for the on-call bot.\",\n  \"text\": \"You are a firmware expert. Look at the boot log and tell me why the board resets. Be detailed.\\n\\n{{log}}\\n\"\n },\n {\n  \"label\": \"v2 format\",\n  \"at\": \"2026-09-05 16:40\",\n  \"note\": \"Answers wandered; asked for a numbered answer and tagged the log.\",\n  \"text\": \"You are a senior embedded firmware engineer reviewing boot problems on STM32H7 boards running FreeRTOS.\\n\\nLook at the boot log and find out why the board resets. Be detailed.\\n\\n<log>\\n{{log}}\\n</log>\\n\\nAnswer with:\\n1. The most likely cause, quoting the log line.\\n2. The next measurement to confirm it.\\n\"\n },\n {\n  \"label\": \"v3 log first\",\n  \"at\": \"2026-09-11 09:05\",\n  \"note\": \"Long logs buried the question: log first, task last, explicit rules.\",\n  \"text\": \"You are a senior embedded firmware engineer reviewing boot problems on STM32H7 boards running FreeRTOS. The readers are the on-call team, who need a first place to look, not a full analysis.\\n\\n<log>\\n{{log}}\\n</log>\\n\\nRules:\\n- Quote the exact log line you rely on.\\n- Never guess register values; say \\\"not in the log\\\" instead.\\n- You must keep the answer under 120 words.\\n\\nFind out why the board resets, using only the log above.\\n\\nAnswer with:\\n1. The most likely cause, quoting the log line.\\n2. The next measurement to confirm it.\\n\"\n },\n {\n  \"label\": \"v4 fault decode\",\n  \"at\": \"2026-09-24 14:30\",\n  \"note\": \"On-call wanted shorter answers and a confidence; HardFault logs need CFSR decoded first.\",\n  \"text\": \"You are a senior embedded firmware engineer reviewing boot problems on STM32H7 boards running FreeRTOS. The readers are the on-call team, who need a first place to look, not a full analysis.\\n\\n<log>\\n{{log}}\\n</log>\\n\\nRules:\\n- Quote the exact log line you rely on.\\n- If the log shows a HardFault, decode CFSR before anything else.\\n- Never guess register values; say \\\"not in the log\\\" instead.\\n- You should keep the answer under 80 words.\\n\\nFind out why the board resets, using only the log above.\\n\\nAnswer with:\\n1. The most likely cause, quoting the log line.\\n2. The next measurement to confirm it.\\n3. Your confidence: high, medium or low.\\n\\nExample:\\n1. Stack overflow in logWriter: \\\"stack high-water mark 12 words\\\".\\n2. Raise the logWriter stack to 1 KiB and watch the high-water mark.\\n3. Confidence: medium.\\n\"\n }\n]",
+      "help": "A list of versions, oldest first: [{\"label\", \"at\", \"note\", \"text\"}]. In the app the page keeps it in the project record."
+    },
+    {
+      "key": "from",
+      "label": "Compare version (A)",
+      "type": "number",
+      "default": "3",
+      "required": false,
+      "help": "1-based index into the versions; empty = the one before the last."
+    },
+    {
+      "key": "to",
+      "label": "With version (B)",
+      "type": "number",
+      "default": "4",
+      "required": false,
+      "help": "1-based; empty = the last."
+    },
+    {
+      "key": "left",
+      "label": "Or: old text",
+      "type": "textarea",
+      "rows": 4,
+      "default": "",
+      "required": false,
+      "help": "Given together with the new text, these two are compared instead of the versions."
+    },
+    {
+      "key": "right",
+      "label": "Or: new text",
+      "type": "textarea",
+      "rows": 4,
+      "default": "",
+      "required": false
+    }
+  ],
+  "examples": [
+    {
+      "title": "Boot-log review prompt, v3 against v4 (a rule weakened, a limit cut, an example added)",
+      "input": {
+        "history": "[{\"label\": \"v1 first draft\", \"at\": \"2026-09-02 10:14\", \"note\": \"Quick prompt for the on-call bot.\", \"text\": \"You are a firmware expert. Look at the boot log and tell me why the board resets. Be detailed.\\n\\n{{log}}\\n\"}, {\"label\": \"v2 format\", \"at\": \"2026-09-05 16:40\", \"note\": \"Answers wandered; asked for a numbered answer and tagged the log.\", \"text\": \"You are a senior embedded firmware engineer reviewing boot problems on STM32H7 boards running FreeRTOS.\\n\\nLook at the boot log and find out why the board resets. Be detailed.\\n\\n<log>\\n{{log}}\\n</log>\\n\\nAnswer with:\\n1. The most likely cause, quoting the log line.\\n2. The next measurement to confirm it.\\n\"}, {\"label\": \"v3 log first\", \"at\": \"2026-09-11 09:05\", \"note\": \"Long logs buried the question: log first, task last, explicit rules.\", \"text\": \"You are a senior embedded firmware engineer reviewing boot problems on STM32H7 boards running FreeRTOS. The readers are the on-call team, who need a first place to look, not a full analysis.\\n\\n<log>\\n{{log}}\\n</log>\\n\\nRules:\\n- Quote the exact log line you rely on.\\n- Never guess register values; say \\\"not in the log\\\" instead.\\n- You must keep the answer under 120 words.\\n\\nFind out why the board resets, using only the log above.\\n\\nAnswer with:\\n1. The most likely cause, quoting the log line.\\n2. The next measurement to confirm it.\\n\"}, {\"label\": \"v4 fault decode\", \"at\": \"2026-09-24 14:30\", \"note\": \"On-call wanted shorter answers and a confidence; HardFault logs need CFSR decoded first.\", \"text\": \"You are a senior embedded firmware engineer reviewing boot problems on STM32H7 boards running FreeRTOS. The readers are the on-call team, who need a first place to look, not a full analysis.\\n\\n<log>\\n{{log}}\\n</log>\\n\\nRules:\\n- Quote the exact log line you rely on.\\n- If the log shows a HardFault, decode CFSR before anything else.\\n- Never guess register values; say \\\"not in the log\\\" instead.\\n- You should keep the answer under 80 words.\\n\\nFind out why the board resets, using only the log above.\\n\\nAnswer with:\\n1. The most likely cause, quoting the log line.\\n2. The next measurement to confirm it.\\n3. Your confidence: high, medium or low.\\n\\nExample:\\n1. Stack overflow in logWriter: \\\"stack high-water mark 12 words\\\".\\n2. Raise the logWriter stack to 1 KiB and watch the high-water mark.\\n3. Confidence: medium.\\n\"}]",
+        "from": "3",
+        "to": "4",
+        "left": "",
+        "right": ""
+      }
+    },
+    {
+      "title": "Two texts directly: a diff-summary prompt made into a release-note prompt",
+      "input": {
+        "history": "",
+        "from": "",
+        "to": "",
+        "left": "Summarize the diff below in one sentence. Do not mention file names.\n\n<diff>\n{{diff}}\n</diff>\n",
+        "right": "Summarize the diff below in at most two sentences for a release note. Mention a file name only when the change is limited to it.\n\n<diff>\n{{diff}}\n</diff>\n\nStart with the user-visible effect.\n"
+      }
+    }
+  ],
+  "usage": "Give left and right (two prompt texts) to compare them directly, or history (a JSON list of {label, at, note, text}, oldest first) with from and to (1-based indices; empty = the last two). Returns token counts before/after (estimates), words added/removed, sentences changed/added/removed/moved, a 'what changed' table (instruction added/removed/reworded, rule changed with the modal verbs or numbers before and after, example changed, moved), tokens per section, the version list, a unified diff (GNU diff -u format) and a Markdown changelog of the whole history. Use it when reviewing a prompt change, writing its commit message or explaining a behaviour change after a prompt edit.",
+  "sources": [
+    "GNU diffutils manual, 'Unified Format' (diff -u hunks and headers)",
+    "Hunt & McIlroy, 'An Algorithm for Differential File Comparison' (1976), and Myers, 'An O(ND) Difference Algorithm and Its Variations' (1986): longest-common-subsequence alignment",
+    "RFC 2119 (MUST, SHOULD, MAY) for the strength of modal verbs in rules",
+    "Token estimate: chars/4 rule of thumb and a word-piece heuristic; not an exact tokenizer"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "diff"
+  ]
+}

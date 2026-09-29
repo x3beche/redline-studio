@@ -1,0 +1,122 @@
+{
+  "id": "prompt-template",
+  "version": "1.0",
+  "name": "Prompt Template & Variables",
+  "blurb": "a prompt template with {{variables}} filled from a table or CSV, every rendered prompt previewed and missing values caught",
+  "group": "ai",
+  "rooms": [
+    "web",
+    "embedded",
+    "mobile",
+    "pcb",
+    "cad"
+  ],
+  "keywords": [
+    "prompt template",
+    "template",
+    "variables",
+    "placeholders",
+    "mustache",
+    "handlebars",
+    "jinja",
+    "csv",
+    "tsv",
+    "json",
+    "batch prompts",
+    "jsonl",
+    "messages",
+    "fill",
+    "mail merge",
+    "llm",
+    "dataset",
+    "eval set",
+    "tokens"
+  ],
+  "intro": "Renders a prompt template once per data row (CSV, TSV or a JSON array) with a small Mustache/Handlebars subset, and shows every rendered prompt with its token estimate, the values that are missing or empty, the columns never used and the rows over a token limit.",
+  "inputs": [
+    {
+      "key": "template",
+      "label": "Template",
+      "type": "textarea",
+      "rows": 14,
+      "default": "You are a support engineer for the {{product}} data logger. Summarize the customer report below for the {{team|firmware}} team in at most {{max_words|120}} words.\n\nCustomer: {{customer}} ({{tier|standard}} support)\n{{#if log}}\n<log>\n{{log}}\n</log>\n{{/if}}\n<report>\n{{report}}\n</report>\n{{#if known_issues}}\n\nKnown issues to rule out first:\n{{#each known_issues}}\n- {{.}}\n{{/each}}\n{{/if}}\n\nStart with the most likely cause, then the next step for {{owner}}.\n",
+      "help": "{{name}}, {{name|default}}, {{#if name}}…{{else}}…{{/if}}, {{#unless name}}, {{#each list}}…{{.}}…{{/each}}, {{@index}}, {{! comment}}."
+    },
+    {
+      "key": "data",
+      "label": "Data (CSV, TSV or JSON array)",
+      "type": "textarea",
+      "rows": 8,
+      "default": "ticket,product,customer,tier,report,log,known_issues,assignee,region\nT-4411,DL-200,Acme Water,gold,\"Logger stops writing to the SD card after about 3 days; only a power cycle brings it back.\",\"E (259200123) sdmmc: CMD25 timeout\nE (259200130) log: write failed -5 (EIO)\",SD card wear; FAT not synced on brown-out,M. Kaya,EU\nT-4412,DL-200,Northwind Farms,,\"Battery drains in 2 weeks instead of the rated 6 months. Units are outdoors, -5 to 10 C.\",,Sleep current with GPS on; Modem PSM not granted by the network,J. Ortiz,US\nT-4415,GW-10,Baltic Ports,platinum,\"Gateway reboots every few hours since the 2.4 update. Sometimes it comes back with the wrong time and uploads fail with TLS errors until NTP syncs again. We have 40 units on site and the harbour authority needs the data for the monthly report, so this is urgent.\",\"[03:12:44.871] wdt: task net_rx starved 8000 ms\n[03:12:44.871] wdt: reset\n[00:00:00.212] rtc: invalid, using build time 2026-06-12 14:02\n[00:00:01.904] tls: cert not yet valid (notBefore 2026-08-01)\n[00:00:02.330] mqtt: connect failed -0x2700\n[00:00:31.018] ntp: synced, offset +7 d 3 h\",Watchdog on net_rx; RTC battery; Certificate validity vs RTC,M. Kaya,EU\nT-4419,GW-10,Kestrel Labs,standard,,,,A. Chen,APAC\n",
+      "help": "First line = column names for CSV/TSV. Quoted cells may hold commas and line breaks."
+    },
+    {
+      "key": "mapping",
+      "label": "Variable to column",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "help": "\"variable = column\" pairs separated by ; or new lines. A variable with no mapping uses the column of the same name; \"variable =\" unbinds it."
+    },
+    {
+      "key": "system",
+      "label": "System message",
+      "type": "textarea",
+      "rows": 2,
+      "default": "You write for firmware engineers. Plain text, no Markdown headings.",
+      "required": false
+    },
+    {
+      "key": "limit",
+      "label": "Token limit per prompt",
+      "type": "number",
+      "default": "250",
+      "required": false,
+      "help": "Rows whose rendered prompt (with the system message) exceeds it are flagged. Empty = no limit."
+    },
+    {
+      "key": "listSep",
+      "label": "List separator in cells",
+      "type": "text",
+      "default": ";",
+      "help": "How a CSV cell used by {{#each}} is split into items."
+    }
+  ],
+  "examples": [
+    {
+      "title": "Commit classifier over a TSV of commit messages",
+      "input": {
+        "template": "Classify this commit message for the {{repo}} changelog.\n\n<commit>\n{{message}}\n</commit>\n\nAnswer with one word: feat, fix, docs, refactor or chore.",
+        "data": "repo\tmessage\nfirmware-dl200\tsd: retry CMD25 once on timeout before failing the write\nfirmware-dl200\tdocs: describe the brown-out FAT sync in README\nfirmware-gw10\tnet: move net_rx watchdog kick into the socket poll loop\n",
+        "mapping": "",
+        "system": "",
+        "limit": "200",
+        "listSep": ";"
+      }
+    },
+    {
+      "title": "Pin review from a JSON array with nested pin lists",
+      "input": {
+        "template": "Review this pin assignment for the {{board}} board.\n{{#each pins}}\n{{@number}}. {{pin}} -> {{signal}}{{#if note}} ({{note}}){{/if}}\n{{/each}}\nList conflicts with the {{mcu}} alternate functions, one per line.",
+        "data": "[\n {\n  \"board\": \"DL-200 rev C\",\n  \"mcu\": \"STM32G431\",\n  \"pins\": [\n   {\n    \"pin\": \"PA2\",\n    \"signal\": \"USART2_TX\"\n   },\n   {\n    \"pin\": \"PA3\",\n    \"signal\": \"USART2_RX\"\n   },\n   {\n    \"pin\": \"PB6\",\n    \"signal\": \"I2C1_SCL\",\n    \"note\": \"shared with the RTC\"\n   }\n  ]\n },\n {\n  \"board\": \"GW-10 rev A\",\n  \"mcu\": \"STM32H723\",\n  \"pins\": [\n   {\n    \"pin\": \"PD8\",\n    \"signal\": \"USART3_TX\"\n   },\n   {\n    \"pin\": \"PC10\",\n    \"signal\": \"SDMMC1_D2\"\n   }\n  ]\n }\n]",
+        "mapping": "",
+        "system": "You are a hardware reviewer.",
+        "limit": "300",
+        "listSep": ";"
+      }
+    }
+  ],
+  "usage": "Give template (Mustache-like: {{x}}, {{x|default}}, {{#if}}/{{else}}, {{#unless}}, {{#each}} with {{.}} and {{@index}}), data (CSV/TSV with a header row, or a JSON array of objects), optionally mapping (\"variable = column\"), system (a system message), limit (tokens) and listSep. Returns the variables and the column each is bound to, per-row token estimates and status, findings (template syntax errors, variables no column provides, empty values per row, unused columns, rows over the limit), the rendered prompts as JSONL in chat messages format, and Python and JavaScript code equivalent to the template. Use it to build a batch or eval set from a spreadsheet, or to check a template before running it over data.",
+  "sources": [
+    "mustache(5) - Logic-less templates, mustache.github.io/mustache.5.html (variables, sections, comments, standalone tags)",
+    "Handlebars.js guide, Built-in helpers: #if, #unless, #each, @index (handlebarsjs.com)",
+    "RFC 4180, Common Format and MIME Type for CSV Files",
+    "OpenAI Batch API / fine-tuning JSONL chat format ({\"messages\": [{\"role\", \"content\"}]}), platform.openai.com docs",
+    "Token estimate: chars/4 rule of thumb and a word-piece heuristic; not an exact tokenizer"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "render"
+  ]
+}
