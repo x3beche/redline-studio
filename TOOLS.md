@@ -362,7 +362,8 @@ editors rather than calculations.
 ## The tools image: checks, offline
 
 Some tools write something that can be tried for real: SQL, a Prisma schema,
-TypeScript, an OpenAPI document, Mermaid, a regex, a cron schedule. One Docker
+TypeScript, an OpenAPI document, Mermaid, a regex, a cron schedule, a device
+tree, a U-Boot environment. One Docker
 image, `redline-tools`, tries all of them - offline, nothing installed on the
 host. Build it once (it lands in Docker's data root, `/mnt/ssd/docker`):
 
@@ -372,7 +373,9 @@ docker build -f docker/tools/tools.Dockerfile -t redline-tools docker/tools
 
 It holds PostgreSQL 16, Node 22 with TypeScript 5, zod 3, react 19,
 react-hook-form 7 and Prisma 7, mermaid-cli with Chrome, Python with the
-OpenAPI validator and croniter, and PCRE2. Its first two layers are the Web
+OpenAPI validator and croniter, PCRE2, poppler, and for embedded Linux dtc
+(`kind: dts`, overlays with `overlay: true`) and u-boot-tools (`kind: ubootenv`
+makes the CRC'd environment image with mkenvimage). Its first two layers are the Web
 Programming image's own, so the two share them on disk.
 
 | Tool | Its **Check** does |

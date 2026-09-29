@@ -58,6 +58,15 @@ RUN npm init -y >/dev/null \
  && npx prisma --version >/dev/null \
  && npm cache clean --force
 
+# Embedded Linux: dtc compiles and decompiles device trees and overlays;
+# u-boot-tools makes U-Boot environment images (mkenvimage) and makes and
+# reads FIT/legacy images (mkimage, dumpimage). apt needs a
+# writable /tmp, which the steps above leave without its sticky 1777.
+RUN chmod 1777 /tmp && apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      device-tree-compiler u-boot-tools \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY check.py /opt/tools/check.py
 COPY puppeteer.json /opt/tools/puppeteer.json
 RUN useradd -m -u 1000 -o tool 2>/dev/null || true

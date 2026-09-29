@@ -8,7 +8,7 @@ One JSON object in on stdin, one out on stdout:
 `ok` false with `errors` is a finding about the input; a crash of the
 checker itself says so in `errors` too, with `internal: true`.
 
-Kinds: sql, prisma, ts, openapi, mermaid, regex, cron.
+Kinds: sql, prisma, ts, openapi, mermaid, regex, cron, pdftext, dts, ubootenv.
 """
 
 from __future__ import annotations
@@ -255,8 +255,65 @@ def check_pdftext(req: dict, work: Path) -> dict:
             "notes": [f"pdftotext -layout, {len([p for p in pages if p.strip()])} page(s)"]}
 
 
+# ---------------- a device tree, compiled by dtc ----------------
+DTC_MSG = re.compile(r"^(Error|Warning)[^:]*:\s*(?:[^:\s]+\.dtsi?:(\d+)(?:\.\d+(?:-[\d.]+)?)?:?\s*)?(.*)$")
+
+
+def check_dts(req: dict, work: Path) -> dict:
+    """Compile a DTS (or an overlay) with dtc and give its errors and warnings
+    by line, and the tree dtc makes of it, written back out as DTS.
+    `includes` ({name: text}) are placed beside it for /include/ and #include-
+    free trees; `overlay` true compiles with -@ as overlays need."""
+    src = work / "in.dts"
+    src.write_text(req.get("input", ""))
+    for name, text in (req.get("includes") or {}).items():
+        if "/" in name or name.startswith("."):
+            return {"ok": False, "errors": [{"message": f"include name {name!r} must be a plain file name"}]}
+        (work / name).write_text(text)
+    flags = ["-@"] if req.get("overlay") else []
+    out = run(["dtc", "-I", "dts", "-O", "dts", *flags, "-i", str(work), "-o", str(work / "out.dts"), str(src)], timeout=30)
+    errors, warnings = [], []
+    for ln in lines_of(out.stderr):
+        m = DTC_MSG.match(ln.strip())
+        item = {"message": (m.group(3) if m else ln).strip()}
+        if m and m.group(2):
+            item["line"] = int(m.group(2))
+        (warnings if m and m.group(1) == "Warning" else errors).append(item)
+    ok = out.returncode == 0
+    if not ok and not errors:
+        errors.append({"message": out.stderr.strip()[:400] or f"dtc exit {out.returncode}"})
+    res = {"ok": ok, "errors": [] if ok else errors, "warnings": warnings,
+           "notes": [run(["dtc", "--version"]).stdout.strip()]}
+    if ok:
+        res["output"] = (work / "out.dts").read_text(errors="replace")
+    return res
+
+
+# ---------------- a U-Boot environment image, made by mkenvimage ----------------
+def check_ubootenv(req: dict, work: Path) -> dict:
+    """Make the binary environment U-Boot reads (CRC32, and the flag byte of a
+    redundant one) from `name=value` lines, the way mkenvimage does, and give
+    it back as hex along with the CRC."""
+    text = req.get("input", "")
+    size = str(req.get("size", "0x2000"))
+    try:
+        n = int(size, 0)
+    except ValueError:
+        return {"ok": False, "errors": [{"message": f"size {size!r} is not a number"}]}
+    (work / "env.txt").write_text(text if text.endswith("\n") else text + "\n")
+    args = ["mkenvimage", "-s", str(n)] + (["-r"] if req.get("redundant") else []) \
+        + (["-b"] if req.get("big_endian") else [])
+    out = run([*args, "-o", str(work / "env.bin"), str(work / "env.txt")], timeout=20)
+    if out.returncode:
+        return {"ok": False, "errors": [{"message": out.stderr.strip()[:400] or "mkenvimage failed"}]}
+    data = (work / "env.bin").read_bytes()
+    return {"ok": True, "errors": [], "size": len(data), "crc": data[:4].hex(),
+            "head": data[:256].hex(), "notes": ["mkenvimage (u-boot-tools)"]}
+
+
 KINDS = {"pdftext": check_pdftext, "sql": check_sql, "prisma": check_prisma, "ts": check_ts, "openapi": check_openapi,
-         "mermaid": check_mermaid, "regex": check_regex, "cron": check_cron}
+         "mermaid": check_mermaid, "regex": check_regex, "cron": check_cron,
+         "dts": check_dts, "ubootenv": check_ubootenv}
 
 
 def main() -> None:

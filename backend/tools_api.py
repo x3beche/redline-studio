@@ -46,7 +46,7 @@ def mount(app: FastAPI) -> None:
     app.mount("/api/tools/files", _Revalidated(directory=PAGES, html=True), name="tool-files")
 
 IMAGE = os.environ.get("X3_TOOLS_IMAGE", "redline-tools")
-KINDS = ("sql", "prisma", "ts", "openapi", "mermaid", "regex", "cron", "pdftext")
+KINDS = ("sql", "prisma", "ts", "openapi", "mermaid", "regex", "cron", "pdftext", "dts", "ubootenv")
 BUILD = "docker build -f docker/tools/tools.Dockerfile -t redline-tools docker/tools"
 LIMIT = 400_000                  # characters: a check is for a tool's output, not a dump
 PDF_LIMIT = 20_000_000           # a datasheet PDF, as base64
