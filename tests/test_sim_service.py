@@ -156,6 +156,10 @@ def test_firmware_dir_follows_the_build_command():
     assert service.firmware_dir(app) == Path("/r/firmware/esp32")
     assert service.firmware_dir({"repo": "/r", "build": "make -j4"}) == Path("/r")
     assert service.firmware_dir({**app, "sim_firmware": "other"}) == Path("/r/firmware/other")
+    # cmake names the source with -S; `ninja -C $BUILD` is the output directory.
+    stm = {"repo": "/r", "cwd": "firmware",
+           "build": "cmake -S stm32 -B $BUILD -G Ninja && ninja -C $BUILD"}
+    assert service.firmware_dir(stm) == Path("/r/firmware/stm32")
 
 
 def test_merge_keeps_hand_corrections():

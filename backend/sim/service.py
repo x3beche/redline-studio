@@ -56,7 +56,8 @@ class SimError(Exception):
 def firmware_dir(app: dict) -> Path:
     """Where the firmware project is: the Embedded room's workdir
     (repo/cwd, backend/apps.workdir), then the build command's `-C <dir>`
-    (`idf.py -C esp32 -B $BUILD build`, `make -C fw`), or `sim_firmware`."""
+    (`idf.py -C esp32 -B $BUILD build`, `make -C fw`, `cmake -S stm32`),
+    or `sim_firmware`."""
     base = Path(app["repo"]) / (app.get("cwd") or "")
     if app.get("sim_firmware"):
         return base / app["sim_firmware"]
@@ -65,7 +66,9 @@ def firmware_dir(app: dict) -> Path:
     except ValueError:
         args = []
     for i, a in enumerate(args):
-        if a in ("-C", "--project-dir", "--directory") and i + 1 < len(args):
+        # `-S` is cmake's source; a `-C $BUILD` (`ninja -C $BUILD`) is the output, not the project.
+        if a in ("-C", "-S", "--project-dir", "--directory") and i + 1 < len(args) \
+                and "$BUILD" not in args[i + 1]:
             return base / args[i + 1]
         for flag in ("--project-dir=", "--directory="):
             if a.startswith(flag):

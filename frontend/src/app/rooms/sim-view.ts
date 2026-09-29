@@ -375,7 +375,7 @@ function refRange(refs: string[]): string {
     <!-- The MCU's serial port. -->
     <div class="uart">
       <h3 class="tcv-label">
-        <span>UART0</span>
+        <span>{{ console() }}</span>
         <button class="clear" (click)="clear()" [disabled]="!uart().length">{{ 'clear' | t }}</button>
       </h3>
       <pre #log class="log">@for (l of uart(); track $index) {<span [class]="l.cls">{{ l.text }}</span>}</pre>
@@ -521,6 +521,9 @@ export class SimView implements OnDestroy {
     }
     return out.filter(e => e.data);
   });
+  /** The console: the port the firmware writes to (an ESP32's UART0, an
+   *  STM32F0's USART1), so what is typed reaches the same port. */
+  console = computed(() => this.snap().uart.find(l => l.dir === 'out')?.port ?? 'UART0');
   private static mark(e: UartLine) { return `\u0001${e.port}${e.dir}\u0002`; }
   private static flat(lines: UartLine[]) { return lines.map(e => SimView.mark(e) + e.data).join(''); }
 
@@ -668,7 +671,7 @@ export class SimView implements OnDestroy {
   send(input: HTMLInputElement) {
     const text = input.value;
     input.value = '';
-    this.http.post(`/api/sim/${encodeURIComponent(this.app())}/uart`, { port: 'UART0', data: text + '\r\n' })
+    this.http.post(`/api/sim/${encodeURIComponent(this.app())}/uart`, { port: this.console(), data: text + '\r\n' })
       .subscribe({ error: e => this.note.set(this.why(e)) });
   }
 

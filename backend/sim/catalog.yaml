@@ -17,7 +17,7 @@ mcus:        # the simulated MCU, found the same way
     symbol: C82899      # pin names when the board carries no part number: every WROOM-32 shares one pinout
   - family: stm32f0
     emulator: renode
-    match: {text: 'STM32F0\d\d'}
+    match: {lcsc: [C2969989], text: 'STM32F0\d\d'}   # C2969989: STM32F042F6P6TR, how an atopile build names it
 
 series: '^R\d+$'   # the one passive allowed between a part and the MCU: a 2-pad resistor
 
