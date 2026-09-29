@@ -374,3 +374,28 @@ def test_an_encoder_footprint_is_not_a_button():
     assert name == "encoder"
     comp = {"ref": "SW1", "footprint": "SW-SMD_TS36CA", "value": "", "part": ""}
     assert next(k for k, m in CATALOG["models"].items() if simboard._matches(comp, m["match"])) == "button"
+
+
+def test_the_clock_keeps_the_emulators_pace(monkeypatch):
+    """An emulator at half speed: between its messages, the parts' time
+    moves at half speed too, not at the wall clock's."""
+    import time as _time
+    import backend.sim.runtime as rt
+    monkeypatch.setattr(rt, "TICK_S", 0.01)
+    start = _time.monotonic()
+
+    class Slow:
+        async def start(self, firmware, board): pass
+        async def events(self):
+            for i in range(8):                      # 100 ms of wall per 50 ms of virtual time
+                await asyncio.sleep(0.1)
+                yield {"type": "pwm", "t": 50_000 * (i + 1), "pin": "GPIO18", "duty": 0.5, "hz": 25000}
+            await asyncio.sleep(0.5)                 # then silence
+        async def send(self, msg): pass
+        async def stop(self): pass
+
+    board = Board({"mcu": {"family": "esp32"}, "parts": [
+        {"ref": "FAN", "model": "fan", "pins": {"pwm": "GPIO18", "tach": "GPIO19"}}]})
+    asyncio.run(board.run(Slow(), None))
+    wall_us = (_time.monotonic() - start) * 1e6
+    assert 400_000 * 0.9 < board.t < wall_us * 0.75    # ~0.65 s at half pace, well short of the wall's ~1.3 s

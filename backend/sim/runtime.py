@@ -101,12 +101,16 @@ class Board:
         # one PWM write must not stop until the next message. The emulators
         # run close to real time, so between messages the clock is the last
         # message's time plus the wall time since it.
-        seen = {"t": self.t, "at": time.monotonic()}
+        # Emulators do not keep real time - Renode ran one firmware at 0.44x,
+        # QEMU slower than real time too - so the gaps are filled at the rate
+        # the emulator is measured to run, never past what it has reached by
+        # that rate.
+        seen = {"t": self.t, "at": time.monotonic(), "rate": 1.0, "t0": None, "at0": None}
 
         async def clock():
             while True:
                 await asyncio.sleep(TICK_S)
-                self.tick(seen["t"] + int((time.monotonic() - seen["at"]) * 1e6))
+                self.tick(seen["t"] + int((time.monotonic() - seen["at"]) * 1e6 * seen["rate"]))
 
         await adapter.start(firmware, self.sim)
         sender = asyncio.create_task(pump())
@@ -115,7 +119,12 @@ class Board:
         try:
             async for msg in adapter.events():
                 if "t" in msg:
-                    seen["t"], seen["at"] = int(msg["t"]), time.monotonic()
+                    now, t = time.monotonic(), int(msg["t"])
+                    if seen["t0"] is None:
+                        seen["t0"], seen["at0"] = t, now
+                    elif now - seen["at0"] > 0.5 and t > seen["t0"]:
+                        seen["rate"] = min(2.0, max(0.02, (t - seen["t0"]) / 1e6 / (now - seen["at0"])))
+                    seen["t"], seen["at"] = t, now
                 self.handle(msg)
                 await asyncio.sleep(0)       # let the reply go out before the next event
         finally:
