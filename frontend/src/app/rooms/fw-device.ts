@@ -164,7 +164,7 @@ function store(key: string, value?: string): string | null {
     @container (max-width: 860px) {
       .dev { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-content: start;
              overflow-x: hidden; overflow-y: auto; }
-      .mid { grid-column: 1 / -1; grid-row: 1; height: max(300px, 52vh); border-bottom: 1px solid var(--line); }
+      .mid { grid-column: 1 / -1; grid-row: 1; height: clamp(200px, 36vh, 380px); border-bottom: 1px solid var(--line); }
       .left, .right { width: auto; overflow: visible; }
       .left { border-right: 1px solid var(--line); }
       .right { border-left: 0; }
