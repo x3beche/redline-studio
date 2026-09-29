@@ -1,0 +1,273 @@
+{
+ "id": "dt-overlay-builder",
+ "version": "1.0",
+ "name": "DT Overlay Builder",
+ "blurb": "a device tree overlay fragment to enable, add or change nodes on a base tree",
+ "group": "embedded",
+ "rooms": [
+  "embedded"
+ ],
+ "keywords": [
+  "device tree overlay",
+  "dtbo",
+  "dtoverlay",
+  "/plugin/",
+  "fragment@0",
+  "__overlay__",
+  "config.txt",
+  "fdt apply",
+  "fdtoverlays",
+  "extlinux",
+  "dts",
+  "dtc -@",
+  "raspberry pi overlay",
+  "enable i2c",
+  "spi device tree",
+  "add i2c device",
+  "status okay",
+  "yocto overlay",
+  "KERNEL_DEVICETREE"
+ ],
+ "intro": "Builds a device tree overlay against a pasted base tree: pick the target node, set its status and properties, add I2C, SPI, LED or UART child nodes from templates, and get the /plugin/ source in both the &label and fragment@N/__overlay__ forms with the line that loads it. It checks the target exists, bus cells, I2C reserved and duplicate addresses, chip selects already taken (spidev), missing compatibles and undefined phandle labels.",
+ "inputs": [
+  {
+   "key": "base",
+   "label": "Base tree (DTS)",
+   "type": "textarea",
+   "rows": 10,
+   "default": "/dts-v1/;\n/* Raspberry Pi 4 Model B, trimmed from bcm2711-rpi-4-b.dts (dtc -I dtb -O dts) */\n/ {\n\tcompatible = \"raspberrypi,4-model-b\", \"brcm,bcm2711\";\n\tmodel = \"Raspberry Pi 4 Model B\";\n\t#address-cells = <2>;\n\t#size-cells = <1>;\n\n\taliases {\n\t\tserial0 = &uart0;\n\t\ti2c1 = &i2c1;\n\t\tspi0 = &spi0;\n\t};\n\n\tsoc {\n\t\tcompatible = \"simple-bus\";\n\t\t#address-cells = <1>;\n\t\t#size-cells = <1>;\n\t\tranges = <0x7e000000 0x0 0xfe000000 0x1800000>;\n\n\t\tgpio: gpio@7e200000 {\n\t\t\tcompatible = \"brcm,bcm2711-gpio\";\n\t\t\treg = <0x7e200000 0xb4>;\n\t\t\tgpio-controller;\n\t\t\t#gpio-cells = <2>;\n\t\t\tinterrupt-controller;\n\t\t\t#interrupt-cells = <2>;\n\n\t\t\ti2c1_pins: i2c1 {\n\t\t\t\tbrcm,pins = <2 3>;\n\t\t\t\tbrcm,function = <4>;\n\t\t\t};\n\t\t\tspi0_pins: spi0_pins {\n\t\t\t\tbrcm,pins = <9 10 11>;\n\t\t\t\tbrcm,function = <4>;\n\t\t\t};\n\t\t\tspi0_cs_pins: spi0_cs_pins {\n\t\t\t\tbrcm,pins = <8 7>;\n\t\t\t\tbrcm,function = <1>;\n\t\t\t};\n\t\t\tuart1_pins: uart1_pins {\n\t\t\t\tbrcm,pins = <14 15>;\n\t\t\t\tbrcm,function = <2>;\n\t\t\t};\n\t\t};\n\n\t\tuart0: serial@7e201000 {\n\t\t\tcompatible = \"arm,pl011\", \"arm,primecell\";\n\t\t\treg = <0x7e201000 0x200>;\n\t\t\tstatus = \"okay\";\n\n\t\t\tbluetooth {\n\t\t\t\tcompatible = \"brcm,bcm43438-bt\";\n\t\t\t\tmax-speed = <3000000>;\n\t\t\t\tshutdown-gpios = <&expgpio 0 GPIO_ACTIVE_HIGH>;\n\t\t\t};\n\t\t};\n\n\t\tspi0: spi@7e204000 {\n\t\t\tcompatible = \"brcm,bcm2835-spi\";\n\t\t\treg = <0x7e204000 0x200>;\n\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <0>;\n\t\t\tpinctrl-names = \"default\";\n\t\t\tpinctrl-0 = <&spi0_pins &spi0_cs_pins>;\n\t\t\tcs-gpios = <&gpio 8 GPIO_ACTIVE_LOW>, <&gpio 7 GPIO_ACTIVE_LOW>;\n\t\t\tstatus = \"disabled\";\n\n\t\t\tspidev0: spidev@0 {\n\t\t\t\tcompatible = \"spidev\";\n\t\t\t\treg = <0>;\n\t\t\t\tspi-max-frequency = <125000000>;\n\t\t\t};\n\t\t\tspidev1: spidev@1 {\n\t\t\t\tcompatible = \"spidev\";\n\t\t\t\treg = <1>;\n\t\t\t\tspi-max-frequency = <125000000>;\n\t\t\t};\n\t\t};\n\n\t\tuart1: serial@7e215040 {\n\t\t\tcompatible = \"brcm,bcm2835-aux-uart\";\n\t\t\treg = <0x7e215040 0x40>;\n\t\t\tpinctrl-names = \"default\";\n\t\t\tpinctrl-0 = <&uart1_pins>;\n\t\t\tstatus = \"disabled\";\n\t\t};\n\n\t\tpwm: pwm@7e20c000 {\n\t\t\tcompatible = \"brcm,bcm2835-pwm\";\n\t\t\treg = <0x7e20c000 0x28>;\n\t\t\t#pwm-cells = <2>;\n\t\t\tstatus = \"disabled\";\n\t\t};\n\n\t\ti2c1: i2c@7e804000 {\n\t\t\tcompatible = \"brcm,bcm2835-i2c\";\n\t\t\treg = <0x7e804000 0x1000>;\n\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <0>;\n\t\t\tpinctrl-names = \"default\";\n\t\t\tpinctrl-0 = <&i2c1_pins>;\n\t\t\tclock-frequency = <100000>;\n\t\t\tstatus = \"disabled\";\n\t\t};\n\t};\n\n\texpgpio: gpio {\n\t\tcompatible = \"raspberrypi,firmware-gpio\";\n\t\tgpio-controller;\n\t\t#gpio-cells = <2>;\n\t};\n\n\tvdd_3v3_reg: fixed-regulator {\n\t\tcompatible = \"regulator-fixed\";\n\t\tregulator-name = \"3v3\";\n\t\tregulator-min-microvolt = <3300000>;\n\t\tregulator-max-microvolt = <3300000>;\n\t\tregulator-always-on;\n\t};\n\n\tleds: leds {\n\t\tcompatible = \"gpio-leds\";\n\n\t\tled_act: led-act {\n\t\t\tlabel = \"ACT\";\n\t\t\tgpios = <&gpio 42 GPIO_ACTIVE_HIGH>;\n\t\t\tlinux,default-trigger = \"mmc0\";\n\t\t};\n\t};\n};\n",
+   "help": "The board's tree, merged: dtc -I dtb -O dts of its .dtb, or /proc/device-tree via dtc -I fs."
+  },
+  {
+   "key": "target",
+   "label": "Target",
+   "type": "text",
+   "default": "&i2c1",
+   "placeholder": "&i2c1 or /soc/i2c@7e804000",
+   "help": "A label (&i2c1) or a path (&{/soc/i2c@7e804000}); &{/} for the root."
+  },
+  {
+   "key": "status",
+   "label": "Target status",
+   "type": "select",
+   "default": "okay",
+   "options": [
+    [
+     "keep",
+     "Keep as in base"
+    ],
+    [
+     "okay",
+     "okay"
+    ],
+    [
+     "disabled",
+     "disabled"
+    ]
+   ]
+  },
+  {
+   "key": "props",
+   "label": "Properties to set",
+   "type": "table",
+   "columns": [
+    {
+     "key": "name",
+     "label": "Property"
+    },
+    {
+     "key": "value",
+     "label": "Value"
+    }
+   ],
+   "default": [
+    {
+     "name": "clock-frequency",
+     "value": "400000"
+    }
+   ],
+   "help": "Values in DTS (<1 2>, \"text\", &label) or a bare number (becomes <n>) or text (becomes \"text\")."
+  },
+  {
+   "key": "children",
+   "label": "Child nodes to add",
+   "type": "table",
+   "columns": [
+    {
+     "key": "kind",
+     "label": "Kind",
+     "type": "select",
+     "options": [
+      "i2c",
+      "spi",
+      "gpio-led",
+      "pwm-led",
+      "uart",
+      "custom"
+     ],
+     "default": "i2c"
+    },
+    {
+     "key": "name",
+     "label": "Name"
+    },
+    {
+     "key": "compatible",
+     "label": "Compatible"
+    },
+    {
+     "key": "addr",
+     "label": "Address / CS / line"
+    },
+    {
+     "key": "param",
+     "label": "Hz / trigger / period / baud"
+    },
+    {
+     "key": "ref",
+     "label": "Controller label"
+    },
+    {
+     "key": "extra",
+     "label": "Extra properties"
+    }
+   ],
+   "default": [
+    {
+     "kind": "i2c",
+     "name": "bme280",
+     "compatible": "bosch,bme280",
+     "addr": "0x76",
+     "param": "",
+     "ref": "",
+     "extra": ""
+    }
+   ],
+   "help": "i2c: addr = 7-bit address; spi: addr = chip select, param = spi-max-frequency; gpio-led: addr = line (\"17 low\" for active-low), param = trigger, ref = GPIO controller; pwm-led: addr = channel, param = period ns, ref = PWM controller; uart: param = current-speed; extra: \"k = v; flag\"."
+  },
+  {
+   "key": "alsoDisable",
+   "label": "Also disable",
+   "type": "text",
+   "default": "",
+   "placeholder": "spidev0",
+   "help": "Labels to set to disabled in extra fragments (e.g. the spidev on the CS you take)."
+  },
+  {
+   "key": "alsoEnable",
+   "label": "Also enable",
+   "type": "text",
+   "default": "",
+   "placeholder": "pwm"
+  },
+  {
+   "key": "name",
+   "label": "Overlay name",
+   "type": "text",
+   "default": "bme280-i2c1"
+  },
+  {
+   "key": "compat",
+   "label": "Root compatible (fragment form)",
+   "type": "text",
+   "default": "brcm,bcm2711",
+   "help": "Raspberry Pi overlays carry the SoC compatible; leave empty for others."
+  },
+  {
+   "key": "loader",
+   "label": "Loaded by",
+   "type": "select",
+   "default": "rpi",
+   "options": [
+    [
+     "rpi",
+     "Raspberry Pi config.txt"
+    ],
+    [
+     "uboot",
+     "U-Boot fdt apply"
+    ],
+    [
+     "extlinux",
+     "extlinux.conf fdtoverlays"
+    ],
+    [
+     "yocto",
+     "Yocto recipe"
+    ]
+   ]
+  }
+ ],
+ "examples": [
+  {
+   "title": "BME280 on the Raspberry Pi 4's I2C1 at 400 kHz",
+   "input": {
+    "base": "/dts-v1/;\n/* Raspberry Pi 4 Model B, trimmed from bcm2711-rpi-4-b.dts (dtc -I dtb -O dts) */\n/ {\n\tcompatible = \"raspberrypi,4-model-b\", \"brcm,bcm2711\";\n\tmodel = \"Raspberry Pi 4 Model B\";\n\t#address-cells = <2>;\n\t#size-cells = <1>;\n\n\taliases {\n\t\tserial0 = &uart0;\n\t\ti2c1 = &i2c1;\n\t\tspi0 = &spi0;\n\t};\n\n\tsoc {\n\t\tcompatible = \"simple-bus\";\n\t\t#address-cells = <1>;\n\t\t#size-cells = <1>;\n\t\tranges = <0x7e000000 0x0 0xfe000000 0x1800000>;\n\n\t\tgpio: gpio@7e200000 {\n\t\t\tcompatible = \"brcm,bcm2711-gpio\";\n\t\t\treg = <0x7e200000 0xb4>;\n\t\t\tgpio-controller;\n\t\t\t#gpio-cells = <2>;\n\t\t\tinterrupt-controller;\n\t\t\t#interrupt-cells = <2>;\n\n\t\t\ti2c1_pins: i2c1 {\n\t\t\t\tbrcm,pins = <2 3>;\n\t\t\t\tbrcm,function = <4>;\n\t\t\t};\n\t\t\tspi0_pins: spi0_pins {\n\t\t\t\tbrcm,pins = <9 10 11>;\n\t\t\t\tbrcm,function = <4>;\n\t\t\t};\n\t\t\tspi0_cs_pins: spi0_cs_pins {\n\t\t\t\tbrcm,pins = <8 7>;\n\t\t\t\tbrcm,function = <1>;\n\t\t\t};\n\t\t\tuart1_pins: uart1_pins {\n\t\t\t\tbrcm,pins = <14 15>;\n\t\t\t\tbrcm,function = <2>;\n\t\t\t};\n\t\t};\n\n\t\tuart0: serial@7e201000 {\n\t\t\tcompatible = \"arm,pl011\", \"arm,primecell\";\n\t\t\treg = <0x7e201000 0x200>;\n\t\t\tstatus = \"okay\";\n\n\t\t\tbluetooth {\n\t\t\t\tcompatible = \"brcm,bcm43438-bt\";\n\t\t\t\tmax-speed = <3000000>;\n\t\t\t\tshutdown-gpios = <&expgpio 0 GPIO_ACTIVE_HIGH>;\n\t\t\t};\n\t\t};\n\n\t\tspi0: spi@7e204000 {\n\t\t\tcompatible = \"brcm,bcm2835-spi\";\n\t\t\treg = <0x7e204000 0x200>;\n\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <0>;\n\t\t\tpinctrl-names = \"default\";\n\t\t\tpinctrl-0 = <&spi0_pins &spi0_cs_pins>;\n\t\t\tcs-gpios = <&gpio 8 GPIO_ACTIVE_LOW>, <&gpio 7 GPIO_ACTIVE_LOW>;\n\t\t\tstatus = \"disabled\";\n\n\t\t\tspidev0: spidev@0 {\n\t\t\t\tcompatible = \"spidev\";\n\t\t\t\treg = <0>;\n\t\t\t\tspi-max-frequency = <125000000>;\n\t\t\t};\n\t\t\tspidev1: spidev@1 {\n\t\t\t\tcompatible = \"spidev\";\n\t\t\t\treg = <1>;\n\t\t\t\tspi-max-frequency = <125000000>;\n\t\t\t};\n\t\t};\n\n\t\tuart1: serial@7e215040 {\n\t\t\tcompatible = \"brcm,bcm2835-aux-uart\";\n\t\t\treg = <0x7e215040 0x40>;\n\t\t\tpinctrl-names = \"default\";\n\t\t\tpinctrl-0 = <&uart1_pins>;\n\t\t\tstatus = \"disabled\";\n\t\t};\n\n\t\tpwm: pwm@7e20c000 {\n\t\t\tcompatible = \"brcm,bcm2835-pwm\";\n\t\t\treg = <0x7e20c000 0x28>;\n\t\t\t#pwm-cells = <2>;\n\t\t\tstatus = \"disabled\";\n\t\t};\n\n\t\ti2c1: i2c@7e804000 {\n\t\t\tcompatible = \"brcm,bcm2835-i2c\";\n\t\t\treg = <0x7e804000 0x1000>;\n\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <0>;\n\t\t\tpinctrl-names = \"default\";\n\t\t\tpinctrl-0 = <&i2c1_pins>;\n\t\t\tclock-frequency = <100000>;\n\t\t\tstatus = \"disabled\";\n\t\t};\n\t};\n\n\texpgpio: gpio {\n\t\tcompatible = \"raspberrypi,firmware-gpio\";\n\t\tgpio-controller;\n\t\t#gpio-cells = <2>;\n\t};\n\n\tvdd_3v3_reg: fixed-regulator {\n\t\tcompatible = \"regulator-fixed\";\n\t\tregulator-name = \"3v3\";\n\t\tregulator-min-microvolt = <3300000>;\n\t\tregulator-max-microvolt = <3300000>;\n\t\tregulator-always-on;\n\t};\n\n\tleds: leds {\n\t\tcompatible = \"gpio-leds\";\n\n\t\tled_act: led-act {\n\t\t\tlabel = \"ACT\";\n\t\t\tgpios = <&gpio 42 GPIO_ACTIVE_HIGH>;\n\t\t\tlinux,default-trigger = \"mmc0\";\n\t\t};\n\t};\n};\n",
+    "target": "&i2c1",
+    "status": "okay",
+    "props": [
+     {
+      "name": "clock-frequency",
+      "value": "400000"
+     }
+    ],
+    "children": [
+     {
+      "kind": "i2c",
+      "name": "bme280",
+      "compatible": "bosch,bme280",
+      "addr": "0x76",
+      "param": "",
+      "ref": "",
+      "extra": ""
+     }
+    ],
+    "alsoDisable": "",
+    "alsoEnable": "",
+    "name": "bme280-i2c1",
+    "compat": "brcm,bcm2711",
+    "loader": "rpi"
+   }
+  },
+  {
+   "title": "MCP3008 ADC on SPI0 CS0, taking over from spidev0",
+   "input": {
+    "base": "/dts-v1/;\n/* Raspberry Pi 4 Model B, trimmed from bcm2711-rpi-4-b.dts (dtc -I dtb -O dts) */\n/ {\n\tcompatible = \"raspberrypi,4-model-b\", \"brcm,bcm2711\";\n\tmodel = \"Raspberry Pi 4 Model B\";\n\t#address-cells = <2>;\n\t#size-cells = <1>;\n\n\taliases {\n\t\tserial0 = &uart0;\n\t\ti2c1 = &i2c1;\n\t\tspi0 = &spi0;\n\t};\n\n\tsoc {\n\t\tcompatible = \"simple-bus\";\n\t\t#address-cells = <1>;\n\t\t#size-cells = <1>;\n\t\tranges = <0x7e000000 0x0 0xfe000000 0x1800000>;\n\n\t\tgpio: gpio@7e200000 {\n\t\t\tcompatible = \"brcm,bcm2711-gpio\";\n\t\t\treg = <0x7e200000 0xb4>;\n\t\t\tgpio-controller;\n\t\t\t#gpio-cells = <2>;\n\t\t\tinterrupt-controller;\n\t\t\t#interrupt-cells = <2>;\n\n\t\t\ti2c1_pins: i2c1 {\n\t\t\t\tbrcm,pins = <2 3>;\n\t\t\t\tbrcm,function = <4>;\n\t\t\t};\n\t\t\tspi0_pins: spi0_pins {\n\t\t\t\tbrcm,pins = <9 10 11>;\n\t\t\t\tbrcm,function = <4>;\n\t\t\t};\n\t\t\tspi0_cs_pins: spi0_cs_pins {\n\t\t\t\tbrcm,pins = <8 7>;\n\t\t\t\tbrcm,function = <1>;\n\t\t\t};\n\t\t\tuart1_pins: uart1_pins {\n\t\t\t\tbrcm,pins = <14 15>;\n\t\t\t\tbrcm,function = <2>;\n\t\t\t};\n\t\t};\n\n\t\tuart0: serial@7e201000 {\n\t\t\tcompatible = \"arm,pl011\", \"arm,primecell\";\n\t\t\treg = <0x7e201000 0x200>;\n\t\t\tstatus = \"okay\";\n\n\t\t\tbluetooth {\n\t\t\t\tcompatible = \"brcm,bcm43438-bt\";\n\t\t\t\tmax-speed = <3000000>;\n\t\t\t\tshutdown-gpios = <&expgpio 0 GPIO_ACTIVE_HIGH>;\n\t\t\t};\n\t\t};\n\n\t\tspi0: spi@7e204000 {\n\t\t\tcompatible = \"brcm,bcm2835-spi\";\n\t\t\treg = <0x7e204000 0x200>;\n\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <0>;\n\t\t\tpinctrl-names = \"default\";\n\t\t\tpinctrl-0 = <&spi0_pins &spi0_cs_pins>;\n\t\t\tcs-gpios = <&gpio 8 GPIO_ACTIVE_LOW>, <&gpio 7 GPIO_ACTIVE_LOW>;\n\t\t\tstatus = \"disabled\";\n\n\t\t\tspidev0: spidev@0 {\n\t\t\t\tcompatible = \"spidev\";\n\t\t\t\treg = <0>;\n\t\t\t\tspi-max-frequency = <125000000>;\n\t\t\t};\n\t\t\tspidev1: spidev@1 {\n\t\t\t\tcompatible = \"spidev\";\n\t\t\t\treg = <1>;\n\t\t\t\tspi-max-frequency = <125000000>;\n\t\t\t};\n\t\t};\n\n\t\tuart1: serial@7e215040 {\n\t\t\tcompatible = \"brcm,bcm2835-aux-uart\";\n\t\t\treg = <0x7e215040 0x40>;\n\t\t\tpinctrl-names = \"default\";\n\t\t\tpinctrl-0 = <&uart1_pins>;\n\t\t\tstatus = \"disabled\";\n\t\t};\n\n\t\tpwm: pwm@7e20c000 {\n\t\t\tcompatible = \"brcm,bcm2835-pwm\";\n\t\t\treg = <0x7e20c000 0x28>;\n\t\t\t#pwm-cells = <2>;\n\t\t\tstatus = \"disabled\";\n\t\t};\n\n\t\ti2c1: i2c@7e804000 {\n\t\t\tcompatible = \"brcm,bcm2835-i2c\";\n\t\t\treg = <0x7e804000 0x1000>;\n\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <0>;\n\t\t\tpinctrl-names = \"default\";\n\t\t\tpinctrl-0 = <&i2c1_pins>;\n\t\t\tclock-frequency = <100000>;\n\t\t\tstatus = \"disabled\";\n\t\t};\n\t};\n\n\texpgpio: gpio {\n\t\tcompatible = \"raspberrypi,firmware-gpio\";\n\t\tgpio-controller;\n\t\t#gpio-cells = <2>;\n\t};\n\n\tvdd_3v3_reg: fixed-regulator {\n\t\tcompatible = \"regulator-fixed\";\n\t\tregulator-name = \"3v3\";\n\t\tregulator-min-microvolt = <3300000>;\n\t\tregulator-max-microvolt = <3300000>;\n\t\tregulator-always-on;\n\t};\n\n\tleds: leds {\n\t\tcompatible = \"gpio-leds\";\n\n\t\tled_act: led-act {\n\t\t\tlabel = \"ACT\";\n\t\t\tgpios = <&gpio 42 GPIO_ACTIVE_HIGH>;\n\t\t\tlinux,default-trigger = \"mmc0\";\n\t\t};\n\t};\n};\n",
+    "target": "&spi0",
+    "status": "okay",
+    "props": [],
+    "children": [
+     {
+      "kind": "spi",
+      "name": "adc",
+      "compatible": "microchip,mcp3008",
+      "addr": "0",
+      "param": "1000000",
+      "ref": "",
+      "extra": "vref-supply = <&vdd_3v3_reg>"
+     }
+    ],
+    "alsoDisable": "spidev0",
+    "alsoEnable": "",
+    "name": "mcp3008-spi0",
+    "compat": "brcm,bcm2711",
+    "loader": "rpi"
+   }
+  }
+ ],
+ "usage": "Give base (the board's merged DTS), target (&label or /path), status (keep/okay/disabled), props [{name, value}], children [{kind: i2c|spi|gpio-led|pwm-led|uart|custom, name, compatible, addr, param, ref, extra}], optional alsoDisable/alsoEnable label lists, the overlay name and loader (rpi/uboot/extlinux/yocto). It returns the overlay source in texts 'Overlay (&label form)' and 'Overlay (fragment form)' with macros expanded to numbers (dtc has no preprocessor), 'Load it' with the commands, a fragment table, and warnings for an unknown target, wrong bus cells, reserved or taken I2C addresses and chip selects, missing compatibles and labels the base does not define. Use it to write an overlay for a board you have the DTS of.",
+ "sources": [
+  "Linux Documentation/devicetree/overlay-notes.rst; dtc Documentation/dt-object-internal.txt (fragment/__overlay__, __fixups__, __symbols__)",
+  "Devicetree Specification v0.4 \u00a72.2.1 node names, \u00a72.3.5 #address-cells/#size-cells",
+  "NXP UM10204 I2C-bus specification rev. 7, table 4 (reserved addresses); include/dt-bindings/i2c/i2c.h I2C_TEN_BIT_ADDRESS",
+  "Documentation/devicetree/bindings/spi/spi-peripheral-props.yaml, spi-controller.yaml (reg = CS, num-cs, cs-gpios)",
+  "bindings/leds/leds-gpio.yaml, leds-pwm.yaml; include/dt-bindings/gpio/gpio.h, interrupt-controller/irq.h, pwm/pwm.h (macro values)",
+  "Raspberry Pi documentation, 'Device Trees, overlays and parameters' (config.txt dtoverlay=, dtoverlay command)",
+  "U-Boot doc/usage/fdt_overlays.rst (fdt apply) and doc/develop/distro.rst (extlinux fdtoverlays)"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "view"
+ ]
+}

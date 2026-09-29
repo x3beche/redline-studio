@@ -1,0 +1,99 @@
+/* Linux GPIO Number Converter: the banks of pins are the interface. */
+.lgn { --tool-v5: #c0392b; --tool-v3: #d97706; --tool-gnd: #3b4652; --tool-hdr: #0f9d8a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lgn { --tool-v5: #e57373; --tool-v3: #f0a33a; --tool-gnd: #6c7c8b; --tool-hdr: #3cc7b3; } }
+:root[data-theme="dark"] .lgn { --tool-v5: #e57373; --tool-v3: #f0a33a; --tool-gnd: #6c7c8b; --tool-hdr: #3cc7b3; }
+
+.k-page { padding: 12px 14px 16px; }
+.lgn { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 440px); grid-template-rows: auto 1fr;
+  grid-template-areas: "grid pin" "grid out"; gap: 10px; align-items: start; min-width: 0; }
+.lgn-gridarea { grid-area: grid; } .lgn-pincard { grid-area: pin; } .lgn-outarea { grid-area: out; }
+@media (max-width: 1100px) { .lgn { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "pin" "grid" "out"; } }
+.lgn-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.lgn .soft { color: var(--ink-soft); }
+
+.lgn-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.lgn-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); }
+.lgn-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.lgn-sub { font-size: 11.5px; color: var(--ink-soft); }
+
+.lgn-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 14px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); }
+.lgn-f { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ink-soft); min-width: 0; }
+.lgn-f[hidden] { display: none; }
+.lgn-right { margin-left: auto; }
+.lgn-bar select, .lgn-bar input { padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); color: var(--ink);
+  font: 12.5px "IBM Plex Mono", ui-monospace, monospace; min-width: 0; height: 26px; }
+.lgn-bar select { font-family: inherit; max-width: 250px; }
+.lgn-bar input.narrow { width: 88px; }
+.lgn-bar input.wide { width: 220px; }
+@media (max-width: 520px) { .lgn-bar input.wide { width: 100%; } .lgn-f:has(input.wide) { flex: 1 1 100%; } .lgn-right { margin-left: 0; } .lgn-bar select { max-width: 100%; } }
+.lgn-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; height: 26px; }
+.lgn-seg button { border: 0; background: var(--sunken); padding: 0 9px; font-size: 12px; cursor: pointer; color: var(--ink-soft); white-space: nowrap; }
+.lgn-seg button + button { border-left: 1px solid var(--line); }
+.lgn-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+/* ---------- banks ---------- */
+.lgn-board { padding: 8px 10px 4px; overflow-x: auto; }
+.lgn-banks { display: flex; flex-direction: column; gap: 3px; }
+.lgn-bank { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 8px; align-items: center; padding: 4px 6px; border-radius: 5px; border: 1px solid transparent; }
+.lgn-bank.here { border-color: var(--line); background: var(--sunken); }
+@media (max-width: 620px) { .lgn-bank { grid-template-columns: minmax(0, 1fr); gap: 3px; } .lgn-bhead { flex-direction: row !important; flex-wrap: wrap; gap: 2px 8px !important; } }
+.lgn-bhead { display: flex; flex-direction: column; gap: 0; font: 11px "IBM Plex Mono", ui-monospace, monospace; line-height: 1.35; min-width: 0; }
+.lgn-bhead b { font-size: 13px; font-weight: 600; }
+.lgn-groups { display: flex; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.lgn-grp { display: flex; flex-direction: column; gap: 1px; }
+.lgn-gtag { font: 10px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); padding-left: 1px; }
+.lgn-cells { display: flex; flex-wrap: wrap; gap: 3px; }
+.lgn-cell { width: 32px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: var(--surface);
+  font: 11px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.lgn-cell:hover { border-color: var(--ink-soft); }
+.lgn-cell.nb { color: var(--ink-soft); background: repeating-linear-gradient(45deg, transparent 0 4px, var(--line-soft) 4px 6px); border-style: dashed; }
+.lgn-cell.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.lgn-cell.on.nb { background: var(--warn); border-color: var(--warn); border-style: solid; color: var(--paper); }
+.lgn-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 620px) { .lgn-cell { width: 31px; height: 25px; font-size: 10.5px; } }
+
+.lgn-hover { padding: 4px 12px 2px; font: 11.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink); min-height: 20px; }
+.lgn-help { padding: 3px 10px 8px; font-size: 11.5px; color: var(--ink-soft); }
+.lgn-help kbd { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 0 3px; }
+
+/* ---------- Raspberry Pi header ---------- */
+.lgn-pi { display: flex; flex-direction: column; gap: 6px; }
+.lgn-pihead { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 12px; margin-top: 4px; }
+.lgn-hdr { display: flex; flex-direction: column; gap: 2px; align-self: center; width: min(100%, 560px); }
+.lgn-hrow { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.lgn-hl, .lgn-hr { display: grid; align-items: center; gap: 5px; min-width: 0; }
+.lgn-hl { grid-template-columns: minmax(0, 1fr) 20px 34px; padding-right: 3px; border-right: 2px solid var(--line); }
+.lgn-hr { grid-template-columns: 34px 20px minmax(0, 1fr); padding-left: 3px; }
+.lgn-hl .lgn-plab { text-align: right; }
+.lgn-plab { font: 11px "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lgn-plab b { font-weight: 600; }
+.lgn-plab .soft { margin: 0 5px; }
+.lgn-hl .lgn-plab .soft { margin: 0 5px; }
+.lgn-pnum { font: 10px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); text-align: center; }
+.lgn-cell.hp { width: 34px; height: 24px; border-radius: 12px; }
+.lgn-cell.pwr { cursor: default; border-width: 2px; }
+.lgn-cell.pwr.gnd { background: var(--tool-gnd); border-color: var(--tool-gnd); }
+.lgn-cell.pwr.v5 { background: var(--tool-v5); border-color: var(--tool-v5); }
+.lgn-cell.pwr.v3 { background: var(--tool-v3); border-color: var(--tool-v3); }
+.lgn-plab.pwr.gnd b { color: var(--ink-soft); } .lgn-plab.pwr.v5 b { color: var(--tool-v5); } .lgn-plab.pwr.v3 b { color: var(--tool-v3); }
+.lgn-strip .lgn-cell.onhdr { border-color: var(--tool-hdr); border-width: 2px; }
+.lgn-strip .lgn-cell.on { border-color: var(--accent); }
+@media (max-width: 520px) { .lgn-plab .soft { display: none; } }
+
+/* ---------- selected pin chain ---------- */
+.lgn-chain { padding: 10px; display: flex; flex-direction: column; gap: 0; }
+.lgn-step { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 5px; padding: 5px 9px; background: var(--sunken); display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.lgn-step.warn { border-left-color: var(--warn); } .lgn-step.bad { border-left-color: var(--danger); }
+.lgn-step .k { flex-basis: 100%; font-size: 10.5px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.lgn-step b { font: 600 17px "IBM Plex Mono", ui-monospace, monospace; word-break: break-all; }
+.lgn-step .m { font: 12px "IBM Plex Mono", ui-monospace, monospace; }
+.lgn-step .hint { flex-basis: 100%; font-size: 11px; color: var(--ink-soft); }
+.lgn-arrow { text-align: center; color: var(--ink-soft); line-height: 14px; font-size: 12px; }
+
+.lgn-warns { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 6px; padding: 6px 10px; background: var(--surface); font-size: 12px; }
+.lgn-warns div + div { margin-top: 4px; }
+.lgn-warns:empty { display: none; }
+.lgn-notes { font-size: 11.5px; color: var(--ink-soft); padding: 0 2px; }
+.lgn-notes summary { cursor: pointer; }
+.lgn-notes div { margin-top: 4px; }
+.lgn .k-out { max-height: 380px; }

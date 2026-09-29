@@ -1,0 +1,29 @@
+{
+  "id": "linux-gpio-number", "version": "1.0",
+  "name": "Linux GPIO Number Converter",
+  "blurb": "a SoC pin name to its gpiochip, line offset, legacy sysfs number and libgpiod commands",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["gpio number", "gpiochip", "line offset", "sysfs gpio", "/sys/class/gpio", "libgpiod", "gpioget", "gpioset", "gpioinfo", "gpio base", "i.MX GPIO1_IO05", "Rockchip GPIO3_B4", "Allwinner PA10", "BCM GPIO17", "raspberry pi header pin", "AM335x gpio1_28", "STM32MP1 PA13", "gpios = <&gpio", "embedded linux gpio", "yocto gpio"],
+  "intro": "Turns a SoC pin name (GPIO1_IO05, gpio1_28, PH5, GPIO3_B4, PA13, GPIO17 or a Raspberry Pi header pin) into the /dev/gpiochip it sits on, its line offset, the legacy sysfs number (chip base + offset) and the libgpiod v1/v2, sysfs and device-tree lines, from each SoC family's Linux driver numbering. It also works backwards from a sysfs number or chip:line.",
+  "inputs": [
+    { "key": "soc", "label": "SoC", "type": "select", "default": "imx6q",
+      "options": [["imx6q", "NXP i.MX6 Quad/DualLite"], ["imx6ul", "NXP i.MX6UL/ULL"], ["imx7d", "NXP i.MX7Dual"], ["imx8mm", "NXP i.MX8M Mini"], ["am335x", "TI AM335x (BeagleBone)"], ["h3", "Allwinner H3/H5"], ["a64", "Allwinner A64"], ["rk3399", "Rockchip RK3399"], ["rk3568", "Rockchip RK3566/RK3568"], ["rk3588", "Rockchip RK3588"], ["bcm2835", "Raspberry Pi 1/2/3/Zero"], ["bcm2711", "Raspberry Pi 4"], ["bcm2712", "Raspberry Pi 5"], ["stm32mp15", "ST STM32MP15x"]] },
+    { "key": "pin", "label": "Pin", "type": "text", "default": "GPIO4_IO20", "placeholder": "GPIO1_IO05, PH5, GPIO3_B4, GPIO17, pin 11, 117 or 3:20",
+      "help": "A pin name, a legacy sysfs number, chip:line, or on a Raspberry Pi a header pin (pin 11)." },
+    { "key": "kernel", "label": "Raspberry Pi kernel", "type": "select", "default": "new", "options": [["new", "6.6 and newer"], ["old", "6.1 and older"]],
+      "when": { "key": "soc", "in": ["bcm2835", "bcm2711", "bcm2712"] } },
+    { "key": "base", "label": "Chip sysfs base", "type": "text", "default": "", "placeholder": "empty = default",
+      "help": "From /sys/class/gpio/gpiochip*/base on your board, when it differs from the historical default." },
+    { "key": "active", "label": "Polarity", "type": "select", "default": "high", "options": [["high", "Active high"], ["low", "Active low"]] }
+  ],
+  "examples": [
+    { "title": "i.MX6Q GPIO4_IO20 (a user LED)", "input": { "soc": "imx6q", "pin": "GPIO4_IO20", "kernel": "new", "base": "", "active": "high" } },
+    { "title": "Raspberry Pi 5, header pin 11, active-low button", "input": { "soc": "bcm2712", "pin": "pin 11", "kernel": "new", "base": "", "active": "low" } }
+  ],
+  "usage": "Give soc (imx6q, imx6ul, imx7d, imx8mm, am335x, h3, a64, rk3399, rk3568, rk3588, bcm2835, bcm2711, bcm2712, stm32mp15) and pin: a name in the SoC's own form (GPIO1_IO05, gpio1_28, PH5, GPIO3_B4, PA13, GPIO17), a legacy sysfs number, chip:line, or a Pi header pin ('pin 11'); optionally the chip's real sysfs base, the Pi kernel (new = 6.6+) and polarity. Returns the /dev/gpiochipN and label, line offset, sysfs number, the DT gpios specifier, a table of the SoC's chips, and texts with libgpiod v2/v1/sysfs commands and a DT snippet. Use it before writing a gpioset line, a sysfs export or a gpios property for a named pin.",
+  "sources": ["Linux Documentation/userspace-api/gpio/sysfs.rst and chardev.rst; drivers/gpio/gpiolib.c (GPIO_DYNAMIC_BASE 512 since 6.2)", "drivers/gpio/gpio-mxc.c, gpio-omap.c, gpio-rockchip.c; drivers/pinctrl/sunxi/pinctrl-sunxi.h (PL_BASE 352); drivers/pinctrl/stm32/pinctrl-stm32.c and stm32mp151.dtsi gpio-ranges", "include/dt-bindings/gpio/gpio.h, include/dt-bindings/pinctrl/rockchip.h", "NXP i.MX6DQ/6UL/8MM reference manuals (GPIO bank sizes), Allwinner H3/A64 manuals (port pin counts)", "Raspberry Pi documentation (40-pin header, BCM numbering); sysfs bases 0/512 and 399/571 as seen on Raspberry Pi OS kernels 6.1/6.6", "libgpiod v1 and v2 tool man pages (gpioget, gpioset, gpioinfo, gpiomon)"],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": ["grid"]
+}

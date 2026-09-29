@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-181 tools. **MCP** marks the ones agents can run with `run_tool`.
+184 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -147,6 +147,8 @@ agents, the most used, and every tool nobody used.
 | **CRC Calculator** · MCP | `crc-calc` | CRC-8/16/32 with polynomial, init and reflection settings | Embedded |
 | **Cycle to Time Converter** · MCP | `cycles-time` | instruction cycles to microseconds and back at a clock | Embedded |
 | **Debounce Time Calculator** · MCP | `debounce-time` | debounce time for a button type and sampling period | Embedded |
+| **Device Tree Explorer** · MCP | `device-tree-explorer` | a DTS with its includes merged into one tree, phandles resolved, addresses translated and conflicts found | Embedded |
+| **DT Overlay Builder** · MCP | `dt-overlay-builder` | a device tree overlay fragment to enable, add or change nodes on a base tree | Embedded |
 | **EMA / IIR Coefficient Tool** · MCP | `iir-coefficient` | smoothing coefficient from a cutoff frequency, with the response drawn | Embedded |
 | **Endianness Inspector** · MCP | `endianness` | the same bytes read as little and big endian side by side | Embedded |
 | **Firmware Size Diff** · MCP | `firmware-size-diff` | symbol-by-symbol size change between two builds, largest first | Embedded |
@@ -160,6 +162,7 @@ agents, the most used, and every tool nobody used.
 | **Interrupt Latency Budget** · MCP | `irq-latency` | CPU load and miss risk from interrupt rates and handler times | Embedded |
 | **Layer & Release Map** · MCP | `layer-release-map` | Yocto releases with their LTS and end-of-life dates, and a bblayers stack checked for compatibility | Embedded |
 | **Linker Script Helper** · MCP | `linker-script` | a linker script from sections and memory regions in a form | Embedded |
+| **Linux GPIO Number Converter** · MCP | `linux-gpio-number` | a SoC pin name to its gpiochip, line offset, legacy sysfs number and libgpiod commands | Embedded |
 | **Log Format Designer** · MCP | `log-format` | a compact embedded log format and its parser code | Embedded |
 | **Memory Map Viewer** · MCP | `memory-map` | flash and RAM region use as a scaled strip | Embedded |
 | **Modbus Frame Builder** · MCP | `modbus-frame` | an RTU/TCP frame with its CRC from function code and registers | Embedded |

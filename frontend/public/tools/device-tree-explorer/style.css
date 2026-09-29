@@ -1,0 +1,196 @@
+/* Device Tree Explorer: the tree, the address map and the node are the interface. */
+.dte { --tool-dev: var(--tool-s0); --tool-bus: var(--tool-s2); --tool-mem: var(--tool-s3); --tool-lab: #7a4fb5; --tool-hl: rgba(31, 78, 216, 0.10); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dte { --tool-lab: #c3a0f0; --tool-hl: rgba(109, 141, 255, 0.16); } }
+:root[data-theme="dark"] .dte { --tool-lab: #c3a0f0; --tool-hl: rgba(109, 141, 255, 0.16); }
+
+.k-page { padding: 10px 12px 16px; }
+.dte { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dte-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; display: flex; flex-direction: column; }
+.dte-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); }
+.dte-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.dte-sub { font-size: 11.5px; color: var(--ink-soft); }
+.dte-sub b.bad { color: var(--danger); font-weight: 500; }
+.dte-right { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; }
+.dte-soft { color: var(--ink-soft); }
+.dte-none { padding: 12px; color: var(--ink-soft); font-size: 12px; }
+.dte-mini { padding: 1px 8px; font-size: 11.5px; }
+.dte-help { padding: 4px 10px 6px; font-size: 11px; color: var(--ink-soft); border-top: 1px solid var(--line-soft); }
+.dte-help kbd { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 0 3px; margin-right: 2px; }
+.dte code, .dte-tree, .dte-props, .dte-editor, .dte-gutter, .dte-loc, .dte-map text { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+/* ---- layout ---- */
+.dte-main { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(260px, 0.9fr) minmax(360px, 1.25fr); gap: 10px; align-items: stretch; min-width: 0; }
+.dte-main > .dte-card { height: min(640px, calc(100vh - 150px)); min-height: 440px; }
+.dte-lower { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr); gap: 10px; align-items: start; min-width: 0; }
+.dte-outcol { min-width: 0; }
+.dte-outcol .k-out { max-height: 420px; }
+@media (max-width: 1180px) {
+  .dte-main { grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.2fr); }
+  .dte-mapcard { grid-column: 1 / -1; grid-row: 2; }
+  .dte-main > .dte-mapcard { height: auto; min-height: 0; }
+  .dte-mapcard .dte-mapscroll { max-height: 520px; }
+  .dte-lower { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .dte-main { grid-template-columns: minmax(0, 1fr); }
+  .dte-main > .dte-card { height: auto; min-height: 0; }
+  .dte-treecard .dte-tree { max-height: 360px; }
+  .dte-inspcard { order: -1; }
+  .dte-treecard { order: -2; }
+  .dte-mapcard { grid-row: auto; }
+}
+
+/* ---- findings ---- */
+.dte-counts { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.dte-count { border: 1px solid var(--line); background: var(--sunken); border-radius: 10px; padding: 0 8px; font-size: 11.5px; cursor: pointer; color: var(--ink); display: inline-flex; align-items: center; gap: 5px; }
+.dte-count[aria-pressed="false"] { opacity: .5; background: transparent; }
+.dte-count i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.dte-count.error i, .dte-frow.error .dte-dot { background: var(--danger); }
+.dte-count.warn i, .dte-frow.warn .dte-dot { background: var(--warn); }
+.dte-count.info i, .dte-frow.info .dte-dot { background: var(--ink-soft); }
+.dte-flist { max-height: 148px; overflow: auto; padding: 3px 0; }
+.dte-frow { display: grid; grid-template-columns: 10px minmax(118px, max-content) minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 2px 10px; font-size: 12px; }
+.dte-frow.cur { background: var(--tool-hl); }
+.dte-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; align-self: center; }
+.dte-fmsg { all: unset; cursor: pointer; min-width: 0; overflow-wrap: anywhere; }
+.dte-fmsg:hover { text-decoration: underline; text-decoration-color: var(--line); }
+.dte-fmsg:focus-visible { outline: 2px solid var(--accent); }
+.dte-fnodes { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 760px) { .dte-frow { grid-template-columns: 10px minmax(0, 1fr); } .dte-frow .dte-loc { grid-column: 2; } .dte-frow .dte-fmsg, .dte-frow .dte-fnodes { grid-column: 2; justify-content: flex-start; } }
+.dte-loc { all: unset; cursor: pointer; font-size: 11px; color: var(--accent); white-space: nowrap; }
+.dte-loc:hover { text-decoration: underline; }
+.dte-loc:focus-visible, .dte-nlink:focus-visible, .dte-crumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
+.dte-loc.small { font-size: 10.5px; }
+.dte-nlink { all: unset; cursor: pointer; color: var(--accent); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: inherit; }
+.dte-nlink:hover { text-decoration: underline; }
+.dte-nlink.off { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--line); }
+.dte-fnodes .dte-nlink { font-size: 11px; background: var(--sunken); border-radius: 3px; padding: 0 4px; }
+.dte-undef { color: var(--danger); text-decoration: wavy underline; }
+
+/* ---- tree ---- */
+.dte-bar { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+.dte-search { flex: 1 1 140px; min-width: 0; padding: 3px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); font-size: 12px; }
+.dte-chk { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; }
+.dte-tree { flex: 1 1 auto; overflow: auto; padding: 4px 0; font-size: 12px; min-height: 0; }
+.dte-row { display: flex; align-items: center; gap: 5px; padding: 1px 8px 1px calc(6px + var(--d) * 14px); white-space: nowrap; cursor: pointer; line-height: 20px; border-left: 2px solid transparent; }
+.dte-row:hover { background: var(--sunken); }
+.dte-row.sel { background: var(--tool-hl); border-left-color: var(--accent); }
+.dte-row:focus { outline: none; }
+.dte-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dte-row.off .dte-nm, .dte-row.off .dte-lab, .dte-row.off .dte-cpu { opacity: .45; }
+.dte-tw { width: 12px; flex: 0 0 12px; color: var(--ink-soft); font-size: 10px; text-align: center; }
+.dte-lab { color: var(--tool-lab); font-size: 11.5px; }
+.dte-lab.big { font: 500 13px "IBM Plex Mono", ui-monospace, monospace; }
+.dte-nm { font-weight: 500; }
+.dte-unit { color: var(--ink-soft); font-weight: 400; }
+.dte-st { font-size: 10.5px; color: var(--ink-soft); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; line-height: 15px; }
+.dte-st.bad { color: var(--warn); border-color: var(--warn); }
+.dte-badge { font-size: 10px; min-width: 16px; text-align: center; border-radius: 8px; padding: 0 4px; line-height: 15px; color: var(--paper); font-weight: 600; }
+.dte-badge.error { background: var(--danger); }
+.dte-badge.warn { background: var(--warn); }
+.dte-badge.info { background: var(--ink-soft); }
+.dte-cpu { margin-left: auto; padding-left: 10px; font-size: 10.5px; color: var(--ink-soft); }
+
+/* ---- map ---- */
+.dte-mapscroll { flex: 1 1 auto; overflow: auto; min-height: 0; }
+.dte-map { display: block; width: 100%; user-select: none; -webkit-user-select: none; }
+.dte-map text { font-size: 11px; fill: var(--ink); }
+.dte-map text.addr { font-size: 10.5px; fill: var(--ink-soft); }
+.dte-map text.soft, .dte-map tspan.soft { fill: var(--ink-soft); }
+.dte-map text.small { font-size: 10px; }
+.dte-map tspan.b { font-weight: 600; }
+.dte-map .dte-tick { stroke: var(--line); }
+.dte-map .dte-zig { fill: none; stroke: var(--line); stroke-width: 1.2; }
+.dte-blk { cursor: pointer; }
+.dte-blk:focus { outline: none; }
+.dte-fill { fill-opacity: var(--fill-alpha); stroke: none; }
+.dte-fill.dev { fill: var(--tool-dev); }
+.dte-fill.bus { fill: var(--tool-bus); fill-opacity: calc(var(--fill-alpha) * 0.45); }
+.dte-fill.mem { fill: var(--tool-mem); }
+.dte-blk .ring { fill: none; stroke: var(--line); stroke-width: 1; }
+.dte-blk.off .dte-fill { fill: var(--sunken); fill-opacity: 1; }
+.dte-blk.off text { opacity: .6; }
+.dte-blk.bad .ring { stroke: var(--danger); stroke-width: 1.6; }
+.dte-blk:hover .ring { stroke: var(--ink-soft); }
+.dte-blk.sel .ring { stroke: var(--accent); stroke-width: 2.2; }
+.dte-blk:focus-visible .ring { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 2; }
+
+/* ---- inspector ---- */
+.dte-insp { display: flex; flex-direction: column; min-height: 0; overflow: auto; flex: 1 1 auto; }
+.dte-ihead { padding: 8px 10px 7px; border-bottom: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 4px; }
+.dte-ititle { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dte-ititle h2 { margin: 0; font: 600 14px "IBM Plex Mono", ui-monospace, monospace; overflow-wrap: anywhere; }
+.dte-ititle .k-btn { margin-left: auto; }
+.dte-pill { font-size: 11px; border-radius: 9px; padding: 0 8px; line-height: 17px; border: 1px solid; }
+.dte-pill.ok { color: var(--ok); border-color: var(--ok); }
+.dte-pill.off { color: var(--ink-soft); border-color: var(--line); }
+.dte-crumbs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1px; font: 11px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+.dte-crumb { all: unset; cursor: pointer; color: var(--ink-soft); }
+.dte-crumb:hover { color: var(--accent); }
+.dte-crumb.cur { color: var(--ink); }
+.dte-crumbs .sep { padding: 0 1px; }
+.dte-ihead .dte-sub { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.dte-ihead code { font-size: 11.5px; color: var(--ink); }
+.dte-ifind { padding: 5px 0; border-bottom: 1px solid var(--line-soft); }
+.dte-ifind .dte-frow { grid-template-columns: 10px max-content minmax(0, 1fr); }
+.dte-tablewrap { overflow-x: auto; }
+.dte-props { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dte-props thead th { text-align: left; font: 500 11px "IBM Plex Sans", sans-serif; color: var(--ink-soft); padding: 5px 8px 3px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); }
+.dte-props tbody th { text-align: left; font-weight: 500; vertical-align: top; padding: 4px 8px; white-space: nowrap; color: var(--ink); }
+.dte-props td { vertical-align: top; padding: 4px 8px; border-bottom: 1px solid var(--line-soft); }
+.dte-props tbody th { border-bottom: 1px solid var(--line-soft); }
+.dte-props tr.del th, .dte-props tr.del .dte-val { color: var(--ink-soft); text-decoration: line-through; }
+.dte-val { overflow-wrap: anywhere; }
+.dte-val.okay { color: var(--ok); }
+.dte-val.disabled { color: var(--ink-soft); }
+.dte-del { font-style: italic; }
+.dte-xl { font-size: 11px; color: var(--ink); margin-top: 2px; overflow-wrap: anywhere; }
+.dte-xl.bad { color: var(--danger); }
+.dte-xl b { font-weight: 600; }
+.dte-arrow { color: var(--ink-soft); }
+.dte-hist { font-size: 11px; color: var(--ink-soft); margin-top: 2px; overflow-wrap: anywhere; }
+.dte-hist s { text-decoration-color: var(--ink-soft); }
+.dte-where { white-space: nowrap; margin-top: 1px; font-weight: 400; }
+.dte-pn { overflow-wrap: anywhere; white-space: normal; }
+.dte-props tbody th { width: 38%; max-width: 220px; }
+.dte .k-out { tab-size: 4; -moz-tab-size: 4; }
+.dte-map .dte-gapbg { fill: var(--surface); }
+.dte-ovr { display: inline-block; margin-left: 5px; font-size: 10px; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 0 3px; line-height: 13px; }
+.dte-block { padding: 7px 10px; border-top: 1px solid var(--line-soft); }
+.dte-bt { font-size: 11px; color: var(--ink-soft); margin-bottom: 4px; }
+.dte-links { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; }
+.dte-pins { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11.5px; }
+.dte-pin { background: var(--sunken); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 6px; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.dte-pin.bad { border-color: var(--danger); color: var(--danger); }
+.dte-pin .dte-nlink { font-size: 11px; }
+
+/* ---- sources ---- */
+.dte-tabs { display: flex; gap: 2px; flex-wrap: wrap; padding: 5px 8px 0; border-bottom: 1px solid var(--line-soft); align-items: flex-end; }
+.dte-tabs .k-btn { margin: 0 0 4px 4px; }
+.dte-tab { border: 1px solid transparent; border-bottom: 0; background: transparent; border-radius: 4px 4px 0 0; padding: 4px 9px; font: 12px "IBM Plex Mono", ui-monospace, monospace; cursor: pointer; color: var(--ink-soft); display: inline-flex; gap: 6px; align-items: center; }
+.dte-tab[aria-selected="true"] { background: var(--sunken); border-color: var(--line-soft); color: var(--ink); }
+.dte-tab.unused { opacity: .6; }
+.dte-kind { font-size: 9.5px; text-transform: uppercase; letter-spacing: .03em; border-radius: 3px; padding: 0 3px; border: 1px solid var(--line); color: var(--ink-soft); }
+.dte-kind.overlay { color: var(--tool-lab); border-color: var(--tool-lab); }
+.dte-filebar { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 5px 10px; font-size: 11.5px; color: var(--ink-soft); background: var(--sunken); }
+.dte-filebar label { display: inline-flex; gap: 5px; align-items: center; }
+.dte-filebar input, .dte-filebar select { padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); font: 12px "IBM Plex Mono", ui-monospace, monospace; }
+.dte-name { width: 190px; max-width: 48vw; }
+.dte-edwrap { display: grid; grid-template-columns: auto minmax(0, 1fr); height: 380px; border-top: 1px solid var(--line-soft); background: var(--sunken); }
+.dte-gutter { margin: 0; padding: 6px 6px 6px 8px; overflow: hidden; text-align: right; color: var(--ink-soft); font-size: 12px; line-height: 18px; user-select: none; border-right: 1px solid var(--line-soft); min-width: 42px; opacity: .8; }
+.dte-gutter span { display: block; height: 18px; white-space: pre; }
+.dte-gutter .m { opacity: 1; font-weight: 700; }
+.dte-gutter .m.error { color: var(--paper); background: var(--danger); border-radius: 2px; }
+.dte-gutter .m.warn { color: var(--paper); background: var(--warn); border-radius: 2px; }
+.dte-gutter .m.info { color: var(--ink); }
+.dte-editor { margin: 0; border: 0; resize: none; padding: 6px 8px; font-size: 12px; line-height: 18px; background: var(--sunken); color: var(--ink); tab-size: 4; -moz-tab-size: 4; white-space: pre; overflow: auto; min-width: 0; }
+.dte-editor:focus { outline: none; }
+.dte-editor:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.dte-dtc:empty { display: none; }
+.dte-dtc { padding: 6px 10px 8px; border-top: 1px solid var(--line-soft); font-size: 12px; display: flex; flex-direction: column; gap: 5px; }
+.dte-dtcr.ok b { color: var(--ok); }
+.dte-dtcr.bad b { color: var(--danger); }
+.dte-dtce { font: 11.5px "IBM Plex Mono", ui-monospace, monospace; margin: 2px 0 0 12px; overflow-wrap: anywhere; }
+.dte-dtce.warn { color: var(--warn); }
+@media (max-width: 760px) { .dte-edwrap { height: 300px; } }
+@media (max-width: 760px) { .dte-ifind .dte-frow { grid-template-columns: 10px minmax(0, 1fr); } .dte-ifind .dte-frow > :nth-child(n+3) { grid-column: 2; } }

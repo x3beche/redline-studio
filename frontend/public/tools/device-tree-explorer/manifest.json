@@ -1,0 +1,146 @@
+{
+ "id": "device-tree-explorer",
+ "version": "1.0",
+ "name": "Device Tree Explorer",
+ "blurb": "a DTS with its includes merged into one tree, phandles resolved, addresses translated and conflicts found",
+ "group": "embedded",
+ "rooms": [
+  "embedded"
+ ],
+ "keywords": [
+  "device tree",
+  "devicetree",
+  "dts",
+  "dtsi",
+  "dtso",
+  "overlay",
+  "dtc",
+  "phandle",
+  "label",
+  "ranges",
+  "address translation",
+  "#address-cells",
+  "reg",
+  "pinctrl",
+  "pinmux",
+  "status okay",
+  "linux dt",
+  "fdt",
+  "yocto",
+  "u-boot"
+ ],
+ "intro": "Merges a board .dts with its #include'd .dtsi files and overlays the way cpp, dtc and fdt apply do, and shows the resulting tree: every property with the file that set it and what it overrode, phandle references as links, and each reg translated through the parents' ranges to a CPU physical address. It flags overlapping regions, two devices on one I2C/SPI address, pins muxed twice, undefined labels, wrong cell counts and okay nodes under a disabled parent.",
+ "inputs": [
+  {
+   "key": "main_name",
+   "label": "Main file name",
+   "type": "text",
+   "default": "acme-gateway.dts",
+   "help": "The board .dts; #include \"x.dtsi\" finds the extra file named x.dtsi."
+  },
+  {
+   "key": "dts",
+   "label": "Main .dts",
+   "type": "textarea",
+   "rows": 14,
+   "default": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Acme Gateway rev B: AM3352, 512 MB DDR3, eMMC, RS-485 on UART1,\n * sensors on I2C2, SPI NOR on McSPI0.\n */\n/dts-v1/;\n\n#include \"am33xx.dtsi\"\n\n/ {\n\tmodel = \"Acme Gateway rev B\";\n\tcompatible = \"acme,gateway-b\", \"ti,am33xx\";\n\n\tchosen {\n\t\tstdout-path = &uart0;\n\t};\n\n\tmemory@80000000 {\n\t\tdevice_type = \"memory\";\n\t\treg = <0x80000000 0x20000000>; /* 512 MB */\n\t};\n\n\tleds {\n\t\tcompatible = \"gpio-leds\";\n\t\tpinctrl-names = \"default\";\n\t\tpinctrl-0 = <&led_pins>;\n\n\t\tled-status {\n\t\t\tlabel = \"gateway:green:status\";\n\t\t\tgpios = <&gpio1 21 GPIO_ACTIVE_HIGH>;\n\t\t\tlinux,default-trigger = \"heartbeat\";\n\t\t};\n\t};\n};\n\n&am33xx_pinmux {\n\tuart0_pins: uart0-pins {\n\t\tpinctrl-single,pins = <\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART0_RXD, PIN_INPUT_PULLUP, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART0_TXD, PIN_OUTPUT_PULLDOWN, MUX_MODE0)\n\t\t>;\n\t};\n\n\t/* RS-485 with hardware flow control: RTS drives the transceiver DE */\n\tuart1_pins: uart1-pins {\n\t\tpinctrl-single,pins = <\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART1_RXD, PIN_INPUT_PULLUP, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART1_TXD, PIN_OUTPUT_PULLDOWN, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART1_CTSN, PIN_INPUT, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART1_RTSN, PIN_OUTPUT, MUX_MODE0)\n\t\t>;\n\t};\n\n\t/* I2C2 on the UART1 flow-control balls, mode 3 (as on BeagleBone P9.19/P9.20) */\n\ti2c2_pins: i2c2-pins {\n\t\tpinctrl-single,pins = <\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART1_CTSN, PIN_INPUT_PULLUP, MUX_MODE3)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART1_RTSN, PIN_INPUT_PULLUP, MUX_MODE3)\n\t\t>;\n\t};\n\n\tspi0_pins: spi0-pins {\n\t\tpinctrl-single,pins = <\n\t\t\tAM33XX_PADCONF(AM335X_PIN_SPI0_SCLK, PIN_INPUT, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_SPI0_D0, PIN_INPUT_PULLUP, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_SPI0_D1, PIN_OUTPUT, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_SPI0_CS0, PIN_OUTPUT, MUX_MODE0)\n\t\t>;\n\t};\n\n\tled_pins: led-pins {\n\t\tpinctrl-single,pins = <\n\t\t\tAM33XX_PADCONF(AM335X_PIN_GPMC_A5, PIN_OUTPUT, MUX_MODE7)\n\t\t>;\n\t};\n};\n\n&uart0 {\n\tpinctrl-names = \"default\";\n\tpinctrl-0 = <&uart0_pins>;\n\tstatus = \"okay\";\n};\n\n&uart1 {\n\tpinctrl-names = \"default\";\n\tpinctrl-0 = <&uart1_pins>;\n\tlinux,rs485-enabled-at-boot-time;\n\tstatus = \"okay\";\n};\n\n&i2c2 {\n\tpinctrl-names = \"default\";\n\tpinctrl-0 = <&i2c2_pins>;\n\tclock-frequency = <100000>;\n\tstatus = \"okay\";\n\n\teeprom@50 {\n\t\tcompatible = \"atmel,24c256\";\n\t\treg = <0x50>;\n\t\tpagesize = <64>;\n\t};\n\n\trtc@68 {\n\t\tcompatible = \"dallas,ds1339\";\n\t\treg = <0x68>;\n\t};\n\n\ttemp@48 {\n\t\tcompatible = \"adi,adt7410\";\n\t\treg = <0x49>;\n\t};\n\n\t/* second board-ID EEPROM, straps left at default */\n\tboard-id@50 {\n\t\tcompatible = \"atmel,24c02\";\n\t\treg = <0x50>;\n\t};\n};\n\n&i2c1 {\n\ttouchscreen@38 {\n\t\tcompatible = \"edt,edt-ft5306\";\n\t\treg = <0x38>;\n\t\tinterrupt-parent = <&gpio3>;\n\t\tinterrupts = <19 IRQ_TYPE_EDGE_FALLING>;\n\t\tstatus = \"okay\";\n\t};\n};\n\n&spi0 {\n\tpinctrl-names = \"default\";\n\tpinctrl-0 = <&spi0_pins>;\n\tstatus = \"okay\";\n\n\tflash@0 {\n\t\tcompatible = \"jedec,spi-nor\";\n\t\treg = <0>;\n\t\tspi-max-frequency = <24000000>;\n\t};\n};\n\n&mmc1 {\n\tbus-width = <8>;\n\tnon-removable;\n\tvmmc-supply = <&vmmcsd_fixed>;\n\tstatus = \"okay\";\n};\n\n/* the external DS1339 keeps time; the SoC RTC is not wired */\n/delete-node/ &rtc;\n"
+  },
+  {
+   "key": "files",
+   "label": "Included files and overlays",
+   "type": "table",
+   "default": [
+    {
+     "name": "am33xx.dtsi",
+     "kind": "include",
+     "text": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * AM33xx SoC (trimmed): the buses and peripherals a board file uses.\n * Addresses from the AM335x TRM (SPRUH73) memory map, chapter 2.\n */\n#include <dt-bindings/gpio/gpio.h>\n#include <dt-bindings/pinctrl/am33xx.h>\n#include <dt-bindings/interrupt-controller/irq.h>\n\n/ {\n\tcompatible = \"ti,am33xx\";\n\tinterrupt-parent = <&intc>;\n\t#address-cells = <1>;\n\t#size-cells = <1>;\n\n\taliases {\n\t\tserial0 = &uart0;\n\t\tserial1 = &uart1;\n\t\ti2c0 = &i2c0;\n\t};\n\n\tcpus {\n\t\t#address-cells = <1>;\n\t\t#size-cells = <0>;\n\t\tcpu0: cpu@0 {\n\t\t\tcompatible = \"arm,cortex-a8\";\n\t\t\tdevice_type = \"cpu\";\n\t\t\treg = <0>;\n\t\t};\n\t};\n\n\tmemory@80000000 {\n\t\tdevice_type = \"memory\";\n\t\treg = <0x80000000 0x10000000>; /* 256 MB */\n\t};\n\n\tocp: ocp {\n\t\tcompatible = \"simple-pm-bus\";\n\t\t#address-cells = <1>;\n\t\t#size-cells = <1>;\n\t\tranges;\n\n\t\tintc: interrupt-controller@48200000 {\n\t\t\tcompatible = \"ti,am33xx-intc\";\n\t\t\tinterrupt-controller;\n\t\t\t#interrupt-cells = <1>;\n\t\t\treg = <0x48200000 0x1000>;\n\t\t};\n\n\t\tocmcram: sram@40300000 {\n\t\t\tcompatible = \"mmio-sram\";\n\t\t\treg = <0x40300000 0x10000>; /* 64 KB */\n\t\t};\n\n\t\tl4_wkup: interconnect@44c00000 {\n\t\t\tcompatible = \"simple-bus\";\n\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <1>;\n\t\t\tranges = <0x0 0x44c00000 0x280000>;\n\n\t\t\tgpio0: gpio@207000 {\n\t\t\t\tcompatible = \"ti,omap4-gpio\";\n\t\t\t\treg = <0x207000 0x1000>;\n\t\t\t\tinterrupts = <96>;\n\t\t\t\tgpio-controller;\n\t\t\t\t#gpio-cells = <2>;\n\t\t\t\tinterrupt-controller;\n\t\t\t\t#interrupt-cells = <2>;\n\t\t\t};\n\n\t\t\tuart0: serial@209000 {\n\t\t\t\tcompatible = \"ti,am3352-uart\", \"ti,omap3-uart\";\n\t\t\t\treg = <0x209000 0x2000>;\n\t\t\t\tinterrupts = <72>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\ti2c0: i2c@20b000 {\n\t\t\t\tcompatible = \"ti,omap4-i2c\";\n\t\t\t\t#address-cells = <1>;\n\t\t\t\t#size-cells = <0>;\n\t\t\t\treg = <0x20b000 0x1000>;\n\t\t\t\tinterrupts = <70>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\tam33xx_pinmux: pinmux@210800 {\n\t\t\t\tcompatible = \"pinctrl-single\";\n\t\t\t\treg = <0x210800 0x238>;\n\t\t\t\t#pinctrl-cells = <2>;\n\t\t\t\tpinctrl-single,register-width = <32>;\n\t\t\t\tpinctrl-single,function-mask = <0x7f>;\n\t\t\t};\n\n\t\t\trtc: rtc@23e000 {\n\t\t\t\tcompatible = \"ti,am3352-rtc\", \"ti,da830-rtc\";\n\t\t\t\treg = <0x23e000 0x1000>;\n\t\t\t\tinterrupts = <75 76>;\n\t\t\t};\n\t\t};\n\n\t\tl4_per: interconnect@48000000 {\n\t\t\tcompatible = \"simple-bus\";\n\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <1>;\n\t\t\tranges = <0x0 0x48000000 0x400000>;\n\n\t\t\tuart1: serial@22000 {\n\t\t\t\tcompatible = \"ti,am3352-uart\", \"ti,omap3-uart\";\n\t\t\t\treg = <0x22000 0x1000>;\n\t\t\t\tinterrupts = <73>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\ti2c1: i2c@2a000 {\n\t\t\t\tcompatible = \"ti,omap4-i2c\";\n\t\t\t\t#address-cells = <1>;\n\t\t\t\t#size-cells = <0>;\n\t\t\t\treg = <0x2a000 0x1000>;\n\t\t\t\tinterrupts = <71>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\tspi0: spi@30000 {\n\t\t\t\tcompatible = \"ti,omap4-mcspi\";\n\t\t\t\t#address-cells = <1>;\n\t\t\t\t#size-cells = <0>;\n\t\t\t\treg = <0x30000 0x400>;\n\t\t\t\tinterrupts = <65>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\tgpio1: gpio@4c000 {\n\t\t\t\tcompatible = \"ti,omap4-gpio\";\n\t\t\t\treg = <0x4c000 0x1000>;\n\t\t\t\tinterrupts = <98>;\n\t\t\t\tgpio-controller;\n\t\t\t\t#gpio-cells = <2>;\n\t\t\t\tinterrupt-controller;\n\t\t\t\t#interrupt-cells = <2>;\n\t\t\t};\n\n\t\t\tmmc1: mmc@60000 {\n\t\t\t\tcompatible = \"ti,omap4-hsmmc\";\n\t\t\t\treg = <0x60000 0x1000>;\n\t\t\t\tinterrupts = <64>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\ti2c2: i2c@19c000 {\n\t\t\t\tcompatible = \"ti,omap4-i2c\";\n\t\t\t\t#address-cells = <1>;\n\t\t\t\t#size-cells = <0>;\n\t\t\t\treg = <0x19c000 0x1000>;\n\t\t\t\tinterrupts = <30>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\tgpio2: gpio@1ac000 {\n\t\t\t\tcompatible = \"ti,omap4-gpio\";\n\t\t\t\treg = <0x1ac000 0x1000>;\n\t\t\t\tinterrupts = <32>;\n\t\t\t\tgpio-controller;\n\t\t\t\t#gpio-cells = <2>;\n\t\t\t\tinterrupt-controller;\n\t\t\t\t#interrupt-cells = <2>;\n\t\t\t};\n\n\t\t\tgpio3: gpio@1ae000 {\n\t\t\t\tcompatible = \"ti,omap4-gpio\";\n\t\t\t\treg = <0x1ae000 0x1000>;\n\t\t\t\tinterrupts = <62>;\n\t\t\t\tgpio-controller;\n\t\t\t\t#gpio-cells = <2>;\n\t\t\t\tinterrupt-controller;\n\t\t\t\t#interrupt-cells = <2>;\n\t\t\t};\n\n\t\t\tepwmss1: epwmss@302000 {\n\t\t\t\tcompatible = \"ti,am33xx-pwmss\";\n\t\t\t\treg = <0x302000 0x10>;\n\t\t\t\t#address-cells = <1>;\n\t\t\t\t#size-cells = <1>;\n\t\t\t\tranges = <0x0 0x302000 0x1000>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\t\t};\n\t};\n};\n"
+    },
+    {
+     "name": "acme-pwm.dtso",
+     "kind": "overlay",
+     "text": "// Fan PWM and a status buzzer on EPWMSS1 (applied by U-Boot: fdt apply)\n/dts-v1/;\n/plugin/;\n\n&epwmss1 {\n\tstatus = \"okay\";\n\n\tecap1: pwm@100 {\n\t\tcompatible = \"ti,am3352-ecap\";\n\t\t#pwm-cells = <3>;\n\t\treg = <0x100 0x180>;\n\t};\n\n\tehrpwm1: pwm@200 {\n\t\tcompatible = \"ti,am3352-ehrpwm\";\n\t\t#pwm-cells = <3>;\n\t\treg = <0x200 0x80>;\n\t};\n};\n\n&uart1 {\n\t/delete-property/ linux,rs485-enabled-at-boot-time;\n};\n"
+    }
+   ],
+   "help": "One row per file: its name as the #include writes it, include or overlay, and its text. Overlays are applied in row order.",
+   "columns": [
+    {
+     "key": "name",
+     "label": "Name"
+    },
+    {
+     "key": "kind",
+     "label": "Kind",
+     "type": "select",
+     "options": [
+      "include",
+      "overlay"
+     ],
+     "default": "include"
+    },
+    {
+     "key": "text",
+     "label": "Text"
+    }
+   ]
+  },
+  {
+   "key": "node",
+   "label": "Node to inspect",
+   "type": "text",
+   "default": "uart1",
+   "placeholder": "uart1, &i2c2 or /ocp/serial@...",
+   "help": "A label, a path or a node name: its merged properties and their history come back as a table."
+  }
+ ],
+ "examples": [
+  {
+   "title": "AM335x gateway: board .dts + SoC .dtsi + PWM overlay (pin conflict, overlap, undefined label)",
+   "input": {
+    "main_name": "acme-gateway.dts",
+    "dts": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Acme Gateway rev B: AM3352, 512 MB DDR3, eMMC, RS-485 on UART1,\n * sensors on I2C2, SPI NOR on McSPI0.\n */\n/dts-v1/;\n\n#include \"am33xx.dtsi\"\n\n/ {\n\tmodel = \"Acme Gateway rev B\";\n\tcompatible = \"acme,gateway-b\", \"ti,am33xx\";\n\n\tchosen {\n\t\tstdout-path = &uart0;\n\t};\n\n\tmemory@80000000 {\n\t\tdevice_type = \"memory\";\n\t\treg = <0x80000000 0x20000000>; /* 512 MB */\n\t};\n\n\tleds {\n\t\tcompatible = \"gpio-leds\";\n\t\tpinctrl-names = \"default\";\n\t\tpinctrl-0 = <&led_pins>;\n\n\t\tled-status {\n\t\t\tlabel = \"gateway:green:status\";\n\t\t\tgpios = <&gpio1 21 GPIO_ACTIVE_HIGH>;\n\t\t\tlinux,default-trigger = \"heartbeat\";\n\t\t};\n\t};\n};\n\n&am33xx_pinmux {\n\tuart0_pins: uart0-pins {\n\t\tpinctrl-single,pins = <\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART0_RXD, PIN_INPUT_PULLUP, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART0_TXD, PIN_OUTPUT_PULLDOWN, MUX_MODE0)\n\t\t>;\n\t};\n\n\t/* RS-485 with hardware flow control: RTS drives the transceiver DE */\n\tuart1_pins: uart1-pins {\n\t\tpinctrl-single,pins = <\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART1_RXD, PIN_INPUT_PULLUP, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART1_TXD, PIN_OUTPUT_PULLDOWN, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART1_CTSN, PIN_INPUT, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART1_RTSN, PIN_OUTPUT, MUX_MODE0)\n\t\t>;\n\t};\n\n\t/* I2C2 on the UART1 flow-control balls, mode 3 (as on BeagleBone P9.19/P9.20) */\n\ti2c2_pins: i2c2-pins {\n\t\tpinctrl-single,pins = <\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART1_CTSN, PIN_INPUT_PULLUP, MUX_MODE3)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_UART1_RTSN, PIN_INPUT_PULLUP, MUX_MODE3)\n\t\t>;\n\t};\n\n\tspi0_pins: spi0-pins {\n\t\tpinctrl-single,pins = <\n\t\t\tAM33XX_PADCONF(AM335X_PIN_SPI0_SCLK, PIN_INPUT, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_SPI0_D0, PIN_INPUT_PULLUP, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_SPI0_D1, PIN_OUTPUT, MUX_MODE0)\n\t\t\tAM33XX_PADCONF(AM335X_PIN_SPI0_CS0, PIN_OUTPUT, MUX_MODE0)\n\t\t>;\n\t};\n\n\tled_pins: led-pins {\n\t\tpinctrl-single,pins = <\n\t\t\tAM33XX_PADCONF(AM335X_PIN_GPMC_A5, PIN_OUTPUT, MUX_MODE7)\n\t\t>;\n\t};\n};\n\n&uart0 {\n\tpinctrl-names = \"default\";\n\tpinctrl-0 = <&uart0_pins>;\n\tstatus = \"okay\";\n};\n\n&uart1 {\n\tpinctrl-names = \"default\";\n\tpinctrl-0 = <&uart1_pins>;\n\tlinux,rs485-enabled-at-boot-time;\n\tstatus = \"okay\";\n};\n\n&i2c2 {\n\tpinctrl-names = \"default\";\n\tpinctrl-0 = <&i2c2_pins>;\n\tclock-frequency = <100000>;\n\tstatus = \"okay\";\n\n\teeprom@50 {\n\t\tcompatible = \"atmel,24c256\";\n\t\treg = <0x50>;\n\t\tpagesize = <64>;\n\t};\n\n\trtc@68 {\n\t\tcompatible = \"dallas,ds1339\";\n\t\treg = <0x68>;\n\t};\n\n\ttemp@48 {\n\t\tcompatible = \"adi,adt7410\";\n\t\treg = <0x49>;\n\t};\n\n\t/* second board-ID EEPROM, straps left at default */\n\tboard-id@50 {\n\t\tcompatible = \"atmel,24c02\";\n\t\treg = <0x50>;\n\t};\n};\n\n&i2c1 {\n\ttouchscreen@38 {\n\t\tcompatible = \"edt,edt-ft5306\";\n\t\treg = <0x38>;\n\t\tinterrupt-parent = <&gpio3>;\n\t\tinterrupts = <19 IRQ_TYPE_EDGE_FALLING>;\n\t\tstatus = \"okay\";\n\t};\n};\n\n&spi0 {\n\tpinctrl-names = \"default\";\n\tpinctrl-0 = <&spi0_pins>;\n\tstatus = \"okay\";\n\n\tflash@0 {\n\t\tcompatible = \"jedec,spi-nor\";\n\t\treg = <0>;\n\t\tspi-max-frequency = <24000000>;\n\t};\n};\n\n&mmc1 {\n\tbus-width = <8>;\n\tnon-removable;\n\tvmmc-supply = <&vmmcsd_fixed>;\n\tstatus = \"okay\";\n};\n\n/* the external DS1339 keeps time; the SoC RTC is not wired */\n/delete-node/ &rtc;\n",
+    "files": [
+     {
+      "name": "am33xx.dtsi",
+      "kind": "include",
+      "text": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * AM33xx SoC (trimmed): the buses and peripherals a board file uses.\n * Addresses from the AM335x TRM (SPRUH73) memory map, chapter 2.\n */\n#include <dt-bindings/gpio/gpio.h>\n#include <dt-bindings/pinctrl/am33xx.h>\n#include <dt-bindings/interrupt-controller/irq.h>\n\n/ {\n\tcompatible = \"ti,am33xx\";\n\tinterrupt-parent = <&intc>;\n\t#address-cells = <1>;\n\t#size-cells = <1>;\n\n\taliases {\n\t\tserial0 = &uart0;\n\t\tserial1 = &uart1;\n\t\ti2c0 = &i2c0;\n\t};\n\n\tcpus {\n\t\t#address-cells = <1>;\n\t\t#size-cells = <0>;\n\t\tcpu0: cpu@0 {\n\t\t\tcompatible = \"arm,cortex-a8\";\n\t\t\tdevice_type = \"cpu\";\n\t\t\treg = <0>;\n\t\t};\n\t};\n\n\tmemory@80000000 {\n\t\tdevice_type = \"memory\";\n\t\treg = <0x80000000 0x10000000>; /* 256 MB */\n\t};\n\n\tocp: ocp {\n\t\tcompatible = \"simple-pm-bus\";\n\t\t#address-cells = <1>;\n\t\t#size-cells = <1>;\n\t\tranges;\n\n\t\tintc: interrupt-controller@48200000 {\n\t\t\tcompatible = \"ti,am33xx-intc\";\n\t\t\tinterrupt-controller;\n\t\t\t#interrupt-cells = <1>;\n\t\t\treg = <0x48200000 0x1000>;\n\t\t};\n\n\t\tocmcram: sram@40300000 {\n\t\t\tcompatible = \"mmio-sram\";\n\t\t\treg = <0x40300000 0x10000>; /* 64 KB */\n\t\t};\n\n\t\tl4_wkup: interconnect@44c00000 {\n\t\t\tcompatible = \"simple-bus\";\n\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <1>;\n\t\t\tranges = <0x0 0x44c00000 0x280000>;\n\n\t\t\tgpio0: gpio@207000 {\n\t\t\t\tcompatible = \"ti,omap4-gpio\";\n\t\t\t\treg = <0x207000 0x1000>;\n\t\t\t\tinterrupts = <96>;\n\t\t\t\tgpio-controller;\n\t\t\t\t#gpio-cells = <2>;\n\t\t\t\tinterrupt-controller;\n\t\t\t\t#interrupt-cells = <2>;\n\t\t\t};\n\n\t\t\tuart0: serial@209000 {\n\t\t\t\tcompatible = \"ti,am3352-uart\", \"ti,omap3-uart\";\n\t\t\t\treg = <0x209000 0x2000>;\n\t\t\t\tinterrupts = <72>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\ti2c0: i2c@20b000 {\n\t\t\t\tcompatible = \"ti,omap4-i2c\";\n\t\t\t\t#address-cells = <1>;\n\t\t\t\t#size-cells = <0>;\n\t\t\t\treg = <0x20b000 0x1000>;\n\t\t\t\tinterrupts = <70>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\tam33xx_pinmux: pinmux@210800 {\n\t\t\t\tcompatible = \"pinctrl-single\";\n\t\t\t\treg = <0x210800 0x238>;\n\t\t\t\t#pinctrl-cells = <2>;\n\t\t\t\tpinctrl-single,register-width = <32>;\n\t\t\t\tpinctrl-single,function-mask = <0x7f>;\n\t\t\t};\n\n\t\t\trtc: rtc@23e000 {\n\t\t\t\tcompatible = \"ti,am3352-rtc\", \"ti,da830-rtc\";\n\t\t\t\treg = <0x23e000 0x1000>;\n\t\t\t\tinterrupts = <75 76>;\n\t\t\t};\n\t\t};\n\n\t\tl4_per: interconnect@48000000 {\n\t\t\tcompatible = \"simple-bus\";\n\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <1>;\n\t\t\tranges = <0x0 0x48000000 0x400000>;\n\n\t\t\tuart1: serial@22000 {\n\t\t\t\tcompatible = \"ti,am3352-uart\", \"ti,omap3-uart\";\n\t\t\t\treg = <0x22000 0x1000>;\n\t\t\t\tinterrupts = <73>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\ti2c1: i2c@2a000 {\n\t\t\t\tcompatible = \"ti,omap4-i2c\";\n\t\t\t\t#address-cells = <1>;\n\t\t\t\t#size-cells = <0>;\n\t\t\t\treg = <0x2a000 0x1000>;\n\t\t\t\tinterrupts = <71>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\tspi0: spi@30000 {\n\t\t\t\tcompatible = \"ti,omap4-mcspi\";\n\t\t\t\t#address-cells = <1>;\n\t\t\t\t#size-cells = <0>;\n\t\t\t\treg = <0x30000 0x400>;\n\t\t\t\tinterrupts = <65>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\tgpio1: gpio@4c000 {\n\t\t\t\tcompatible = \"ti,omap4-gpio\";\n\t\t\t\treg = <0x4c000 0x1000>;\n\t\t\t\tinterrupts = <98>;\n\t\t\t\tgpio-controller;\n\t\t\t\t#gpio-cells = <2>;\n\t\t\t\tinterrupt-controller;\n\t\t\t\t#interrupt-cells = <2>;\n\t\t\t};\n\n\t\t\tmmc1: mmc@60000 {\n\t\t\t\tcompatible = \"ti,omap4-hsmmc\";\n\t\t\t\treg = <0x60000 0x1000>;\n\t\t\t\tinterrupts = <64>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\ti2c2: i2c@19c000 {\n\t\t\t\tcompatible = \"ti,omap4-i2c\";\n\t\t\t\t#address-cells = <1>;\n\t\t\t\t#size-cells = <0>;\n\t\t\t\treg = <0x19c000 0x1000>;\n\t\t\t\tinterrupts = <30>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\tgpio2: gpio@1ac000 {\n\t\t\t\tcompatible = \"ti,omap4-gpio\";\n\t\t\t\treg = <0x1ac000 0x1000>;\n\t\t\t\tinterrupts = <32>;\n\t\t\t\tgpio-controller;\n\t\t\t\t#gpio-cells = <2>;\n\t\t\t\tinterrupt-controller;\n\t\t\t\t#interrupt-cells = <2>;\n\t\t\t};\n\n\t\t\tgpio3: gpio@1ae000 {\n\t\t\t\tcompatible = \"ti,omap4-gpio\";\n\t\t\t\treg = <0x1ae000 0x1000>;\n\t\t\t\tinterrupts = <62>;\n\t\t\t\tgpio-controller;\n\t\t\t\t#gpio-cells = <2>;\n\t\t\t\tinterrupt-controller;\n\t\t\t\t#interrupt-cells = <2>;\n\t\t\t};\n\n\t\t\tepwmss1: epwmss@302000 {\n\t\t\t\tcompatible = \"ti,am33xx-pwmss\";\n\t\t\t\treg = <0x302000 0x10>;\n\t\t\t\t#address-cells = <1>;\n\t\t\t\t#size-cells = <1>;\n\t\t\t\tranges = <0x0 0x302000 0x1000>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\t\t};\n\t};\n};\n"
+     },
+     {
+      "name": "acme-pwm.dtso",
+      "kind": "overlay",
+      "text": "// Fan PWM and a status buzzer on EPWMSS1 (applied by U-Boot: fdt apply)\n/dts-v1/;\n/plugin/;\n\n&epwmss1 {\n\tstatus = \"okay\";\n\n\tecap1: pwm@100 {\n\t\tcompatible = \"ti,am3352-ecap\";\n\t\t#pwm-cells = <3>;\n\t\treg = <0x100 0x180>;\n\t};\n\n\tehrpwm1: pwm@200 {\n\t\tcompatible = \"ti,am3352-ehrpwm\";\n\t\t#pwm-cells = <3>;\n\t\treg = <0x200 0x80>;\n\t};\n};\n\n&uart1 {\n\t/delete-property/ linux,rs485-enabled-at-boot-time;\n};\n"
+     }
+    ],
+    "node": "uart1"
+   }
+  },
+  {
+   "title": "i.MX8M Mini sensor hub: 2-cell root, ranges window, i2c bus without #size-cells",
+   "input": {
+    "main_name": "sensor-hub.dts",
+    "dts": "/dts-v1/;\n\n#include \"imx8mm-mini.dtsi\"\n\n/ {\n\tmodel = \"Sensor Hub (i.MX8M Mini, 2 GB)\";\n\tcompatible = \"acme,sensor-hub\", \"fsl,imx8mm\";\n\n\tchosen {\n\t\tstdout-path = &uart2;\n\t};\n\n\tmemory@40000000 {\n\t\treg = <0x0 0x40000000 0 0x80000000>;\n\t};\n};\n\n&{/soc@0/bus@30800000/serial@30890000} {\n\tstatus = \"okay\";\n};\n\n&i2c3 {\n\tclock-frequency = <400000>;\n\tstatus = \"okay\";\n\n\tpmic@4b {\n\t\tcompatible = \"rohm,bd71847\";\n\t\treg = <0x4b>;\n\t\tinterrupt-parent = <&gpio1>;\n\t\tinterrupts = <3 IRQ_TYPE_LEVEL_LOW>;\n\t};\n\n\timu@6a {\n\t\tcompatible = \"st,ism330dhcx\";\n\t\treg = <0x6a>;\n\t\tinterrupt-parent = <&gpio1>;\n\t\tinterrupts = <7 IRQ_TYPE_EDGE_RISING>;\n\t};\n};\n\n/* no Cortex-M4 firmware on this board: give the RAM back to Linux */\n/delete-node/ &m4_reserved;\n",
+    "files": [
+     {
+      "name": "imx8mm-mini.dtsi",
+      "kind": "include",
+      "text": "// i.MX8M Mini (trimmed): 2-cell addresses at the root, AIPS buses below.\n// Addresses from the i.MX 8M Mini reference manual, memory map chapter.\n#include <dt-bindings/gpio/gpio.h>\n#include <dt-bindings/interrupt-controller/arm-gic.h>\n#include <dt-bindings/interrupt-controller/irq.h>\n\n/ {\n\tinterrupt-parent = <&gic>;\n\t#address-cells = <2>;\n\t#size-cells = <2>;\n\n\tmemory@40000000 {\n\t\tdevice_type = \"memory\";\n\t\treg = <0x0 0x40000000 0 0x80000000>;\n\t};\n\n\treserved-memory {\n\t\t#address-cells = <2>;\n\t\t#size-cells = <2>;\n\t\tranges;\n\n\t\tlinux,cma {\n\t\t\tcompatible = \"shared-dma-pool\";\n\t\t\treusable;\n\t\t\tsize = <0 0x28000000>;\n\t\t};\n\n\t\tm4_reserved: m4@b8000000 {\n\t\t\tno-map;\n\t\t\treg = <0 0xb8000000 0 0x1000000>;\n\t\t};\n\t};\n\n\tsoc: soc@0 {\n\t\tcompatible = \"fsl,imx8mm-soc\", \"simple-bus\";\n\t\t#address-cells = <1>;\n\t\t#size-cells = <1>;\n\t\tranges = <0x0 0x0 0x0 0x3e000000>;\n\n\t\taips1: bus@30000000 {\n\t\t\tcompatible = \"fsl,aips-bus\", \"simple-bus\";\n\t\t\treg = <0x30000000 0x400000>;\n\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <1>;\n\t\t\tranges;\n\n\t\t\tgpio1: gpio@30200000 {\n\t\t\t\tcompatible = \"fsl,imx8mm-gpio\", \"fsl,imx35-gpio\";\n\t\t\t\treg = <0x30200000 0x10000>;\n\t\t\t\tinterrupts = <GIC_SPI 64 IRQ_TYPE_LEVEL_HIGH>,\n\t\t\t\t\t     <GIC_SPI 65 IRQ_TYPE_LEVEL_HIGH>;\n\t\t\t\tgpio-controller;\n\t\t\t\t#gpio-cells = <2>;\n\t\t\t\tinterrupt-controller;\n\t\t\t\t#interrupt-cells = <2>;\n\t\t\t};\n\n\t\t\tiomuxc: pinctrl@30330000 {\n\t\t\t\tcompatible = \"fsl,imx8mm-iomuxc\";\n\t\t\t\treg = <0x30330000 0x10000>;\n\t\t\t};\n\t\t};\n\n\t\taips3: bus@30800000 {\n\t\t\tcompatible = \"fsl,aips-bus\", \"simple-bus\";\n\t\t\treg = <0x30800000 0x400000>;\n\t\t\t#address-cells = <1>;\n\t\t\t#size-cells = <1>;\n\t\t\tranges = <0x305f0000 0x305f0000 0x400000>;\n\n\t\t\tuart2: serial@30890000 {\n\t\t\t\tcompatible = \"fsl,imx8mm-uart\", \"fsl,imx6q-uart\";\n\t\t\t\treg = <0x30890000 0x10000>;\n\t\t\t\tinterrupts = <GIC_SPI 27 IRQ_TYPE_LEVEL_HIGH>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\n\t\t\ti2c3: i2c@30a40000 {\n\t\t\t\tcompatible = \"fsl,imx8mm-i2c\", \"fsl,imx21-i2c\";\n\t\t\t\t#address-cells = <1>;\n\t\t\t\treg = <0x30a40000 0x10000>;\n\t\t\t\tinterrupts = <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>;\n\t\t\t\tstatus = \"disabled\";\n\t\t\t};\n\t\t};\n\n\t\tgic: interrupt-controller@38800000 {\n\t\t\tcompatible = \"arm,gic-v3\";\n\t\t\treg = <0x38800000 0x10000>, <0x38880000 0xc0000>;\n\t\t\t#interrupt-cells = <3>;\n\t\t\tinterrupt-controller;\n\t\t};\n\t};\n};\n"
+     }
+    ],
+    "node": "i2c3"
+   }
+  }
+ ],
+ "usage": "Give the main .dts text (dts) and its file name (main_name), every .dtsi it includes and any overlays as files [{name, kind: include|overlay, text}], and optionally node (a label or path) to inspect. It returns counts, a Findings table (overlapping reg, duplicate I2C/SPI addresses, pins muxed by two enabled devices, undefined labels, #cells mismatches, ranges misses, okay nodes under disabled parents), the CPU physical address map, the chosen node's merged properties with which file set each one, and the whole merged tree as DTS text. Use it to review a board device tree before building, or to find which file really sets a property.",
+ "sources": [
+  "Devicetree Specification v0.4 (devicetree.org): §2.3.4 status, §2.3.5 #address-cells/#size-cells defaults, §2.3.6 reg, §2.3.8 ranges, §2.4 interrupts",
+  "dtc sources: dtc-lexer.l, dtc-parser.y (grammar), checks.c (unit_address_vs_reg, simple_bus_reg, avoid_default_addr_size)",
+  "Linux Documentation/devicetree/bindings: pinctrl/pinctrl-single.txt, pinctrl/fsl,imx-pinctrl.txt, gpio/gpio.txt",
+  "Linux include/dt-bindings headers (gpio.h, irq.h, arm-gic.h, pinctrl/omap.h, am33xx.h, rockchip.h, stm32-pinfunc.h) bundled unchanged",
+  "Linux Documentation/devicetree/overlay-notes.rst (fragment/__overlay__ and &label sugar)",
+  "AM335x TRM SPRUH73 memory map; i.MX 8M Mini reference manual memory map (example addresses)"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "view"
+ ]
+}
