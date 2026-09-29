@@ -269,6 +269,31 @@ def test_runtime_run_pumps_adapter():
     assert [(m["id"], m["ack"]) for m in a.sent if m["type"] == "reply"] == [(1, True), (2, False)]
 
 
+
+def test_runtime_seen_records_what_the_firmware_used():
+    b = Board(SIM, CATALOG)
+    assert b.snapshot()["seen"]["inputs"] == {"GPIO0": {"kind": "pin", "level": 1}}   # the button's pull-up
+    b.handle({"type": "pin", "t": 10, "pin": "GPIO2", "level": 1})
+    b.handle({"type": "pin", "t": 20, "pin": "GPIO2", "level": 0})
+    b.handle({"type": "pin", "t": 30, "pin": "GPIO2", "level": 0})
+    b.handle({"type": "pwm", "t": 40, "pin": "GPIO18", "duty": 0.5, "hz": 25000})
+    b.handle({"type": "pwm", "t": 50, "pin": "GPIO18", "duty": 0.75, "hz": 25000})
+    for i in range(3):
+        b.handle(i2c("00af", 0, addr=60, id=20 + i, t=60 + i))
+    b.handle(i2c("00", 1, addr=0x50, id=30, t=70))            # nobody there: still counted
+    b.handle({"type": "uart", "t": 80, "port": "UART0", "data": "boot\n"})
+    b.write_uart("UART0", "hi\n")
+    b.handle({"type": "pwm", "t": 10_000_000, "pin": "GPIO18", "duty": 0.75, "hz": 25000})
+    seen = b.snapshot()["seen"]
+    assert seen["pins"]["GPIO2"] == {"level": 0, "changes": 1}
+    assert seen["pwm"] == {"GPIO18": {"duty": 0.75, "hz": 25000}}
+    assert seen["bus"] == [{"kind": "i2c", "bus": "I2C0", "addr": 60, "n": 3},
+                           {"kind": "i2c", "bus": "I2C0", "addr": 80, "n": 1}]
+    assert seen["uart"] == {"UART0": {"out": 5, "in": 3}}
+    assert seen["inputs"]["GPIO19"]["kind"] == "freq"          # the fan's tachometer
+    b.act("SW1", {"press": True})
+    assert b.snapshot()["seen"]["inputs"]["GPIO0"] == {"kind": "pin", "level": 0}
+
 # -- sim.json from a netlist ---------------------------------------------------
 
 GRAPH = {

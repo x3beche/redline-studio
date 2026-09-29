@@ -16,7 +16,7 @@ import subprocess
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
-from . import apps, compute, firmware, phone, sandbox, store, webshot
+from . import apps, compute, firmware, mcuinfo, phone, sandbox, store, webshot
 
 router = APIRouter(prefix="/api/apps")
 
@@ -537,6 +537,17 @@ async def firmware_page(aid: str):
         data = {}
     return Response(firmware.page(a.get("title") or aid, data),
                     media_type="text/html")
+
+
+@router.get("/{aid}/mcu")
+async def app_mcu(aid: str):
+    """The MCU panel: the chip, its memory as built, the time a millisecond
+    holds, its peripherals and pins and which of them the firmware uses,
+    each figure with where it was read (backend/mcuinfo.py)."""
+    a = await _app(aid)
+    if (a.get("platform") or "web") != "embedded":
+        raise HTTPException(400, f"{aid} is not firmware")
+    return await mcuinfo.info(_db(), a)
 
 
 @router.get("/{aid}/build-log")

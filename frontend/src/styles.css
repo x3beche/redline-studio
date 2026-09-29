@@ -2878,6 +2878,46 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
               border-radius: 2px; background: var(--accent-deep); color: var(--ink); cursor: pointer; }
 .tcv-fw-sym:hover { outline: 1px solid var(--accent); }
 .tcv-fw-sym[data-on="1"] { background: var(--pen); color: var(--ink-bright); }
+/* The Embedded room's MCU panel: the chip, its memory as built, the time
+   a millisecond holds, peripherals and pins with what the firmware uses. */
+.tcv-mcu { font-size: 11px; line-height: 1.4; color: var(--ink); }
+.tcv-mcu section { padding: 4px 0 7px; border-bottom: 1px solid var(--line); }
+.tcv-mcu section:last-of-type { border-bottom: 0; }
+.tcv-mcu .tcv-label { margin: 0 0 3px; }
+.tcv-mcu .dim { color: var(--ink-dim); }
+.tcv-mcu [title] { cursor: help; }
+.tcv-mcu-chip { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-bottom: 2px; }
+.tcv-mcu-chip b { font-size: 13px; color: var(--ink-bright); }
+.tcv-mcu-chip span { color: var(--ink-dim); font-size: 10px; min-width: 0; }
+.tcv-mcu-kv { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 1px 8px; margin: 0; }
+.tcv-mcu-kv dt { color: var(--ink-dim); }
+.tcv-mcu-kv dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcv-mcu-region { margin: 3px 0 5px; }
+.tcv-mcu-strip { height: 7px; margin-top: 2px; border-radius: 2px; overflow: hidden;
+                 background: var(--surface-2); outline: 1px solid var(--line); }
+.tcv-mcu-strip > span { display: block; height: 100%; min-width: 1px; background: var(--accent); }
+.tcv-mcu-strip > span.hot, .tcv-mcu b.hot { background: var(--warn); color: var(--warn); }
+.tcv-mcu-strip > span.hot { color: inherit; }
+.tcv-mcu-free { font-size: 10px; }
+.tcv-mcu-sub { margin-top: 5px; color: var(--ink-dim); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.tcv-mcu-row { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
+.tcv-mcu p { margin: 1px 0; }
+.tcv-mcu-per { padding: 1px 0; }
+.tcv-mcu-per.idle { opacity: .55; }
+.tcv-mcu-per .on { color: var(--ok); }
+.tcv-mcu-detail { color: var(--ink-dim); font-size: 10px; padding-left: 8px;
+                  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tcv-mcu-pin { display: grid; grid-template-columns: 50px 58px minmax(0, 1fr); column-gap: 6px;
+               align-items: baseline; padding: 1px 2px; border-radius: 3px; }
+.tcv-mcu-pin.nonet { grid-template-columns: 76px minmax(0, 1fr); }
+.tcv-mcu-pin.nonet .tags { grid-column: 2 / 3; }
+.tcv-mcu-pin.warn { background: var(--surface-2); }
+.tcv-mcu-pin.warn .pin { color: var(--warn); }
+.tcv-mcu-pin .tags { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 3px; margin: 1px 0 2px; }
+.tcv-mcu-tag { font-size: 9.5px; padding: 0 4px; border-radius: 3px; border: 1px solid var(--line); color: var(--ink-dim); }
+.tcv-mcu-tag.warn { border-color: var(--warn); color: var(--warn); }
+.tcv-mcu-note { font-size: 10px; }
+.tcv-mcu-src { margin-top: 6px !important; font-size: 10px; }
 /* A note's before and after, side by side over its diff. */
 .tcv-shot { position: relative; display: flex; align-items: center; justify-content: center;
             height: 170px; overflow: hidden; border-radius: 4px;

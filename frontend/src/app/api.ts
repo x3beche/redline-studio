@@ -790,6 +790,48 @@ export interface AppEntry {
   flashed?: { at: string; ok: boolean; target: string; port: string | null } | null;
 }
 
+/** The Embedded room's MCU panel (backend/mcuinfo.py). Every figure has
+ *  a source beside it: where it was read. */
+export interface McuCaution { level: 'warn' | 'info'; text: string; why: string; src: string }
+export interface McuRole { part: string; model: string; role: string; kind: string; bus?: string | null; addr?: number | null }
+export interface McuPeripheral {
+  kind: string; have: number; have_src: string; detail: string[];
+  linked: boolean | null; linked_src: string | null;
+  used: number | null; board: string[]; used_instances?: string[];
+}
+export interface McuPin {
+  pin: string; pad: string; net: string | null; parts: string[]; roles: McuRole[];
+  cautions: McuCaution[]; signals: string[]; alias?: string; alias_src?: string;
+}
+export interface McuSeen {
+  state: string; t: number;
+  pins: Record<string, { level: number; changes: number }>;
+  pwm: Record<string, { duty: number; hz: number }>;
+  inputs: Record<string, { kind: 'pin' | 'adc' | 'freq'; level?: number; volts?: number; hz?: number }>;
+  bus: { kind: string; bus: string; addr: number | string; n: number }[];
+  uart: Record<string, { out: number; in: number }>;
+}
+export interface McuInfo {
+  app: string; target: 'esp32' | 'stm32'; board: string | null;
+  chip: {
+    name: string | null; core: string | null; cores: number | null; fpu?: boolean;
+    mhz: number | null; max_mhz: number | null; flash_bytes: number | null; ram_bytes: number | null;
+    package: string | null; volts?: [number, number] | null; source: Partial<Record<string, string>>;
+  };
+  memory: { name: string; used: number; total: number; free: number; pct: number; src: string }[];
+  top: { name: string; size: number; where: string; file: string | null; line: number | null }[];
+  time: {
+    mhz: number | null; cycles_per_ms: number | null; tick_hz: number | null; tick_ms: number | null;
+    cycles_per_tick?: number; source: Partial<Record<string, string>>;
+  };
+  peripherals: McuPeripheral[];
+  pins: McuPin[];
+  seen: McuSeen | null;
+  warnings: string[];
+  sources: string[];
+  missing: string[];
+}
+
 export interface FirmwareBuild {
   at: string;
   ok: boolean;
@@ -875,6 +917,10 @@ export class Apps {
   boards(): Observable<{ kind: string; name: string; port?: string; usb?: string }[]> {
     return this.http.get<{ kind: string; name: string; port?: string; usb?: string }[]>(
       '/api/apps/hardware/boards');
+  }
+  /** The chip, its memory and time budget, and what the firmware uses. */
+  mcu(id: string): Observable<McuInfo> {
+    return this.http.get<McuInfo>(`/api/apps/${id}/mcu`);
   }
   buildLog(id: string): Observable<{ lines: string[] }> {
     return this.http.get<{ lines: string[] }>(`/api/apps/${id}/build-log`);

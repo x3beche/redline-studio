@@ -92,6 +92,21 @@ const TR: Record<string, string> = {
   'Before and after': 'Önce ve sonra', 'Side by side': 'Yan yana', 'Inline': 'Satır içi', 'Slider': 'Kaydırıcı',
   'What changed': 'Ne değişti', 'Changed': 'Değişenler', 'Explorer': 'Gezgin', 'Save': 'Kaydet',
   'Load theirs (drop my edits)': 'Onlarınkini yükle (benimkiler gitsin)', 'Save mine over it': 'Benimkini üstüne kaydet',
+  // the MCU panel (Embedded Programming)
+  'Chip': 'Çip', 'Core': 'Çekirdek', 'core': 'çekirdek', 'cores': 'çekirdek', 'Clock': 'Saat', 'max': 'en çok',
+  'Flash': 'Flash', 'Supply': 'Besleme', 'Memory': 'Bellek', 'used': 'kullanılan', 'free': 'boş',
+  'Build once to see memory.': 'Belleği görmek için bir kez derleyin.', 'Largest': 'En büyükler',
+  'a library': 'bir kütüphane', 'Time budget': 'Zaman bütçesi', 'cycles per ms': 'çevrim / ms',
+  'per core': 'çekirdek başına', 'In 1 µs:': '1 µs içinde:', 'cycles': 'çevrim', 'FreeRTOS tick': 'FreeRTOS tik',
+  'Tick': 'Tik', 'cycles per tick': 'çevrim / tik', 'Build once to see the clock.': 'Saati görmek için bir kez derleyin.',
+  'Peripherals': 'Çevre birimleri', 'have': 'var', 'pin': 'pin', 'pins': 'pin', 'linked': 'bağlı',
+  'nothing links or wires it': 'ne kodda ne kartta kullanılıyor', 'Pins': 'Pinler', 'pad': 'ayak',
+  'on the net': 'aynı nette', 'Not linked to a board: the pins of the chip and their signals.':
+    'Bir karta bağlı değil: çipin pinleri ve sinyalleri.',
+  'Link the app to a board to see what each pin drives.': 'Her pinin neyi sürdüğünü görmek için uygulamayı bir karta bağlayın.',
+  'Seen in simulation': 'Simülasyonda görülen', 'transfers': 'aktarım', 'out': 'çıkış', 'in': 'giriş',
+  'changes': 'değişim', 'Nothing yet.': 'Henüz bir şey yok.', 'Not known yet': 'Henüz bilinmeyen',
+  'Sources': 'Kaynaklar', 'hover a figure': 'bir değerin üstüne gelin', 'reading the chip…': 'çip okunuyor…',
 };
 
 export function t(text: string): string {

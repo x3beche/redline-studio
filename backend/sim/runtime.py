@@ -21,12 +21,63 @@ log = logging.getLogger(__name__)
 TICK_S = 0.05                        # how often time moves between the MCU's messages
 
 
+class Seen:
+    """What the firmware has done with the MCU's pins and buses so far: the
+    last level of each pin it drove, each PWM's duty and frequency, each bus
+    address with how many transactions, and what the parts fed back (pin
+    levels, ADC volts, frequencies). A few dicts, one entry per pin or
+    address - never a log."""
+
+    def __init__(self):
+        self.pins: dict = {}                 # pin -> {"level", "changes"}
+        self.pwm: dict = {}                  # pin -> {"duty", "hz"}
+        self.bus: dict = {}                  # (kind, bus, addr|cs) -> transactions
+        self.inputs: dict = {}               # pin -> {"kind", "level"|"volts"|"hz"}
+        self.uart: dict = {}                 # port -> {"out": chars, "in": chars}
+
+    def out(self, msg: dict) -> None:
+        """A message from the MCU."""
+        kind = msg.get("type")
+        if kind == "pin":
+            was = self.pins.get(msg["pin"])
+            changes = (was["changes"] + (was["level"] != msg["level"])) if was else 0
+            self.pins[msg["pin"]] = {"level": msg["level"], "changes": changes}
+        elif kind == "pwm":
+            self.pwm[msg["pin"]] = {"duty": msg["duty"], "hz": msg["hz"]}
+        elif kind in ("i2c", "spi"):
+            key = (kind, msg["bus"], msg["addr" if kind == "i2c" else "cs"])
+            self.bus[key] = self.bus.get(key, 0) + 1
+        elif kind == "uart":
+            u = self.uart.setdefault(msg["port"], {"out": 0, "in": 0})
+            u["out"] += len(msg.get("data") or "")
+
+    def into(self, msg: dict) -> None:
+        """A message for the MCU: what a part put on a pin, or typed text."""
+        kind = msg.get("type")
+        if kind == "pin":
+            self.inputs[msg["pin"]] = {"kind": "pin", "level": msg["level"]}
+        elif kind == "adc":
+            self.inputs[msg["pin"]] = {"kind": "adc", "volts": msg["volts"]}
+        elif kind == "freq":
+            self.inputs[msg["pin"]] = {"kind": "freq", "hz": msg["hz"]}
+        elif kind == "uart":
+            u = self.uart.setdefault(msg["port"], {"out": 0, "in": 0})
+            u["in"] += len(msg.get("data") or "")
+
+    def view(self) -> dict:
+        return {"pins": dict(self.pins), "pwm": dict(self.pwm), "inputs": dict(self.inputs),
+                "bus": [{"kind": k, "bus": b, "addr": a, "n": n}
+                        for (k, b, a), n in sorted(self.bus.items(), key=str)],
+                "uart": {p: dict(u) for p, u in self.uart.items()}}
+
+
 class Board:
     def __init__(self, sim: dict, catalog: dict | None = None):
         self.sim, self.catalog = sim, catalog or load_catalog()
         self.outbox: list[dict] = []
         self.uart: list[dict] = []           # transcript: {"t", "port", "dir": "out"|"in", "data"}
         self.t = 0
+        self.seen = Seen()                   # what the firmware has used, for the MCU panel
         self._kick: asyncio.Event | None = None
         self.parts, self.by_pin, self.by_addr = {}, defaultdict(list), {}
         for entry in sim.get("parts", []):
@@ -40,6 +91,7 @@ class Board:
                 self.by_pin[pin].append(part)
 
     def _emit(self, msg: dict) -> None:
+        self.seen.into(msg)
         self.outbox.append(msg)
         if self._kick:
             self._kick.set()
@@ -52,6 +104,7 @@ class Board:
             return
         if "t" in msg:
             self.tick(msg["t"])
+        self.seen.out(msg)
         kind = msg["type"]
         if kind in ("pin", "pwm"):
             for part in self.by_pin.get(msg["pin"], []):
@@ -84,7 +137,7 @@ class Board:
 
     def snapshot(self) -> dict:
         return {"t": self.t, "parts": {ref: p.view() for ref, p in self.parts.items()},
-                "uart": list(self.uart)}
+                "uart": list(self.uart), "seen": self.seen.view()}
 
     async def run(self, adapter, firmware) -> None:
         """Pump the adapter's events into the board and the board's outbox into the adapter."""

@@ -6,8 +6,9 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { forkJoin } from 'rxjs';
 import {
   Activity, AppCompute, AppDiff, AppEntry, AppShot, AppStatus, Api, Apps,
-  DomHit, Health, LogLine, Revision, SystemInfo, TestRun,
+  DomHit, Health, LogLine, McuInfo, McuPeripheral, McuPin, Revision, SystemInfo, TestRun,
 } from '../api';
+import { T, t } from '../i18n';
 import { CodeDraft, Selection } from '../selection';
 import { RoomFrame, ToolButton } from './frame';
 import { Mark, extent, paint } from './sketch';
@@ -16,7 +17,7 @@ import { SimView } from './sim-view';
 
 type Platform = 'web' | 'embedded' | 'mobile';
 type View = 'live' | 'diff' | 'sim';
-type Side = 'check' | 'server' | 'boards' | 'machine';
+type Side = 'check' | 'server' | 'machine' | 'mcu';
 
 /** The sizes a page is looked at. A note is drawn at one of them and the
  *  after shot is taken at the same one. */
@@ -59,7 +60,7 @@ interface FwData {
  */
 @Component({
   selector: 'app-room-coding',
-  imports: [RoomFrame, ToolButton, DrawTools, SimView],
+  imports: [RoomFrame, ToolButton, DrawTools, SimView, T],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
@@ -203,31 +204,156 @@ interface FwData {
             }
           </div>
         }
-        @case ('boards') {
-          <!-- What is plugged in that firmware could go to: an ST-Link for
-               the STM32, a serial port for the ESP32. The agent programs it. -->
-          <div class="tcv-scroll min-h-0 flex-1 overflow-y-auto p-2">
-            @for (b of boards(); track b.name + (b.port ?? b.usb)) {
-              <div class="mb-1.5 rounded px-2 py-1.5" style="background: var(--surface-2)">
-                <div class="flex items-center gap-2">
-                  <span class="mono rounded px-1 text-[10px] uppercase"
-                        style="background: var(--accent-deep); color: var(--ink)">{{ b.kind }}</span>
-                  <span class="min-w-0 truncate" style="color: var(--ink)" [title]="b.name">{{ b.name }}</span>
+        @case ('mcu') {
+          <!-- THE MCU: the chip, what the build made of its memory, how much
+               computing a millisecond holds, its peripherals and pins and
+               which of them the firmware uses. Every figure says on hover
+               where it was read (backend/mcuinfo.py). -->
+          <div class="tcv-scroll tcv-mcu min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
+            @if (mcu(); as m) {
+              <section>
+                <h3 class="tcv-label">{{ 'Chip' | t }}</h3>
+                <div class="tcv-mcu-chip">
+                  <b class="mono" [title]="m.chip.source['name'] ?? ''">{{ m.chip.name ?? '?' }}</b>
+                  @if (m.chip.package) {
+                    <span class="mono truncate" [title]="m.chip.package + '\\n— ' + (m.chip.source['package'] ?? '')">{{ m.chip.package }}</span>
+                  }
                 </div>
-                <div class="mono mt-0.5 text-[10px]" style="color: var(--ink-dim)">{{ b.port ?? b.usb }}</div>
-              </div>
-            } @empty {
-              <p class="leading-relaxed" style="color: var(--ink-dim)">
-                Nothing plugged in. An STM32 is programmed through an ST-Link on
-                its SWD header, an ESP32 over its USB serial port - plug either in
-                and it shows here.
-              </p>
-            }
-            @if (here()!.flashed; as f) {
-              <p class="mono mt-2 pt-2" style="border-top: 1px solid var(--line); color: var(--ink-dim)">
-                last programmed {{ f.at.slice(0, 16).replace('T', ' ') }} ·
-                <span [style.color]="f.ok ? 'var(--ok)' : 'var(--danger)'">{{ f.ok ? 'verified' : 'failed' }}</span>
-              </p>
+                <dl class="tcv-mcu-kv">
+                  <dt>{{ 'Core' | t }}</dt>
+                  <dd [title]="(m.chip.source['core'] ?? '') + '\\n' + (m.chip.source['cores'] ?? '')">
+                    {{ m.chip.core ?? '?' }}@if (m.chip.cores) { · {{ m.chip.cores }} {{ (m.chip.cores === 1 ? 'core' : 'cores') | t }} }@if (m.chip.fpu) { · FPU }
+                  </dd>
+                  <dt>{{ 'Clock' | t }}</dt>
+                  <dd [title]="(m.chip.source['mhz'] ?? '') + '\\n' + (m.chip.source['max_mhz'] ?? '')">
+                    {{ mhz(m.chip.mhz) }}@if (m.chip.max_mhz && m.chip.max_mhz !== m.chip.mhz) {{{ ' ' }}<span class="dim">· {{ 'max' | t }} {{ mhz(m.chip.max_mhz) }}</span> }
+                  </dd>
+                  <dt>{{ 'Flash' | t }}</dt>
+                  <dd [title]="m.chip.source['flash_bytes'] ?? ''">{{ kib(m.chip.flash_bytes) }}</dd>
+                  <dt>RAM</dt>
+                  <dd [title]="m.chip.source['ram_bytes'] ?? ''">{{ kib(m.chip.ram_bytes) }}</dd>
+                  @if (m.chip.volts; as v) {
+                    <dt>{{ 'Supply' | t }}</dt>
+                    <dd [title]="m.chip.source['core'] ?? ''">{{ v[0] }}–{{ v[1] }} V</dd>
+                  }
+                </dl>
+              </section>
+
+              <section>
+                <h3 class="tcv-label">{{ 'Memory' | t }}</h3>
+                @for (r of m.memory; track r.name) {
+                  <div class="tcv-mcu-region" [title]="r.name + ': ' + num(r.used) + ' B ' + ('used' | t) + ', ' + num(r.free) + ' B ' + ('free' | t) + ' / ' + num(r.total) + ' B\\n— ' + r.src">
+                    <div class="flex justify-between gap-2">
+                      <span class="mono truncate">{{ r.name }}</span>
+                      <span class="mono dim shrink-0">{{ kib(r.used) }} / {{ kib(r.total) }} · <b [class.hot]="r.pct >= 80">{{ r.pct.toFixed(1) }}%</b></span>
+                    </div>
+                    <div class="tcv-mcu-strip" [style.width.%]="stripWidth(r.total)">
+                      <span [style.width.%]="r.pct" [class.hot]="r.pct >= 80"></span>
+                    </div>
+                    <div class="mono dim tcv-mcu-free">{{ kib(r.free) }} {{ 'free' | t }}</div>
+                  </div>
+                } @empty {
+                  <p class="dim">{{ 'Build once to see memory.' | t }}</p>
+                }
+                @if (m.top.length) {
+                  <div class="tcv-mcu-sub">{{ 'Largest' | t }}</div>
+                  @for (s of m.top.slice(0, 6); track s.name) {
+                    <div class="tcv-mcu-row mono" [title]="s.name + (s.file ? '\\n' + s.file + ':' + s.line : '\\n' + ('a library' | t))">
+                      <span class="truncate">{{ s.name }}</span><span class="dim shrink-0">{{ kib(s.size) }} {{ s.where === 'ram' ? 'RAM' : s.where === 'both' ? 'flash+RAM' : 'flash' }}</span>
+                    </div>
+                  }
+                }
+              </section>
+
+              <section>
+                <h3 class="tcv-label">{{ 'Time budget' | t }}</h3>
+                @if (m.time.mhz) {
+                  <p [title]="m.time.source['mhz'] ?? ''">
+                    <b class="mono">{{ mhz(m.time.mhz) }}</b>: <b class="mono">{{ num(m.time.cycles_per_ms) }}</b> {{ 'cycles per ms' | t }}@if (m.chip.cores && m.chip.cores > 1) {{{ ' ' }}<span class="dim">({{ 'per core' | t }}, × {{ m.chip.cores }})</span> }
+                  </p>
+                  <p class="dim">{{ 'In 1 µs:' | t }} {{ num(m.time.mhz) }} {{ 'cycles' | t }}</p>
+                }
+                @if (m.time.tick_hz) {
+                  <p [title]="m.time.source['tick_hz'] ?? ''">
+                    {{ (m.target === 'esp32' ? 'FreeRTOS tick' : 'Tick') | t }} <b class="mono">{{ m.time.tick_ms }} ms</b>{{ ' ' }}<span class="dim">({{ m.time.tick_hz }} Hz)</span>@if (m.time.cycles_per_tick) { · {{ num(m.time.cycles_per_tick) }} {{ 'cycles per tick' | t }} }
+                  </p>
+                }
+                @if (!m.time.mhz && !m.time.tick_hz) { <p class="dim">{{ 'Build once to see the clock.' | t }}</p> }
+              </section>
+
+              <section>
+                <h3 class="tcv-label">{{ 'Peripherals' | t }} <span class="dim">· {{ 'have' | t }} / {{ 'used' | t }}</span></h3>
+                @for (r of mcuPeripherals(); track r.kind) {
+                  <div class="tcv-mcu-per" [class.idle]="!inUse(r)">
+                    <div class="tcv-mcu-row">
+                      <span class="truncate" [title]="r.have_src">{{ r.kind }}</span>
+                      <span class="mono shrink-0">
+                        <span [title]="r.have_src">{{ r.have }}</span>
+                        <span class="dim"> / </span>
+                        <span [class.on]="inUse(r)" [title]="usedTip(r)">{{ usedCell(r) }}</span>
+                      </span>
+                    </div>
+                    @if (inUse(r) && r.board.length) {
+                      <div class="tcv-mcu-detail mono" [title]="r.board.join('\\n')">{{ r.board.join(' · ') }}</div>
+                    } @else if (r.detail.length && r.detail[0] && (inUse(r) || r.detail[0].includes(' '))) {
+                      <div class="tcv-mcu-detail" [title]="r.have_src">{{ r.detail.join(' · ') }}</div>
+                    }
+                  </div>
+                }
+              </section>
+
+              <section>
+                <h3 class="tcv-label">{{ 'Pins' | t }}
+                  @if (m.board) { <span class="dim">· {{ m.board }}</span> }</h3>
+                @if (!m.board && m.pins.length) {
+                  <p class="dim mb-1">{{ 'Not linked to a board: the pins of the chip and their signals.' | t }}</p>
+                }
+                @for (p of m.pins; track p.pin + p.pad) {
+                  <div class="tcv-mcu-pin" [class.warn]="pinWarn(p)" [class.nonet]="!p.net">
+                    <span class="mono pin" [title]="(p.alias ? p.alias + ' = ' + p.pin + ' (' + p.alias_src + ')\\n' : '') + ('pad' | t) + ' ' + p.pad + (p.signals.length ? '\\n' + p.signals.join(', ') : '')">{{ p.pin }}</span>
+                    @if (p.net) { <span class="mono dim net truncate" [title]="p.net">{{ p.net }}</span> }
+                    <span class="does truncate" [title]="pinDoes(p) + (p.parts.length ? '\\n' + ('on the net' | t) + ': ' + p.parts.join(', ') : '')">{{ pinDoes(p) }}</span>
+                    @if (p.cautions.length) {
+                      <span class="tags">
+                        @for (c of p.cautions; track c.text) {
+                          <span class="tcv-mcu-tag" [class.warn]="c.level === 'warn'" [title]="cautionTip(c)">{{ c.text }}</span>
+                        }
+                      </span>
+                    }
+                  </div>
+                } @empty {
+                  <p class="dim">{{ 'Link the app to a board to see what each pin drives.' | t }}</p>
+                }
+              </section>
+
+              @if (m.seen; as s) {
+                <section>
+                  <h3 class="tcv-label">{{ 'Seen in simulation' | t }} <span class="dim">· {{ (s.t / 1e6).toFixed(1) }} s</span></h3>
+                  @for (x of seenPins(); track x.pin) {
+                    <div class="tcv-mcu-row mono"><span>{{ x.pin }}</span><span class="dim">{{ x.text }}</span></div>
+                  }
+                  @for (b of s.bus; track b.kind + b.bus + b.addr) {
+                    <div class="tcv-mcu-row mono"><span>{{ b.bus }} {{ busAddr(b.addr) }}</span><span class="dim">{{ num(b.n) }} {{ 'transfers' | t }}</span></div>
+                  }
+                  @for (u of uartPorts(); track u.port) {
+                    <div class="tcv-mcu-row mono"><span>{{ u.port }}</span><span class="dim">{{ 'out' | t }} {{ num(u.out) }} B · {{ 'in' | t }} {{ num(u.in) }} B</span></div>
+                  }
+                  @if (!seenPins().length && !s.bus.length && !uartPorts().length) {
+                    <p class="dim">{{ 'Nothing yet.' | t }}</p>
+                  }
+                </section>
+              }
+
+              @if (m.missing.length || m.warnings.length) {
+                <section class="dim">
+                  <h3 class="tcv-label">{{ 'Not known yet' | t }}</h3>
+                  @for (x of m.missing; track x) { <p class="tcv-mcu-note">{{ x }}</p> }
+                  @for (x of m.warnings; track x) { <p class="tcv-mcu-note">{{ x }}</p> }
+                </section>
+              }
+              <p class="tcv-mcu-src dim" [title]="m.sources.join('\\n')">{{ 'Sources' | t }}: {{ m.sources.length }} · {{ 'hover a figure' | t }}</p>
+            } @else {
+              <p class="dim">{{ mcuWait() | t }}</p>
             }
           </div>
         }
@@ -516,7 +642,7 @@ export class RoomCoding implements OnInit, OnDestroy {
   /** Whether this page is itself the one being previewed. */
   readonly framed = window !== window.top;
   readonly pen = new PenState();
-  readonly tabNames = { check: 'Check', server: 'Server', boards: 'Boards', machine: 'Machine' };
+  readonly tabNames = { check: 'Check', server: 'Server', machine: 'Machine', mcu: 'MCU' };
 
   all = signal<AppEntry[]>([]);
   here = signal<AppEntry | null>(null);
@@ -556,7 +682,9 @@ export class RoomCoding implements OnInit, OnDestroy {
   serverLines = signal<string[]>([]);
 
   fw = signal<FwData | null>(null);
-  boards = signal<{ kind: string; name: string; port?: string; usb?: string }[]>([]);
+  /** The MCU panel: the chip and what the firmware makes of it. */
+  mcu = signal<McuInfo | null>(null);
+  mcuWait = signal('reading the chip…');
   pickedSym = signal<string | null>(null);
 
   phoneUp = signal(false);
@@ -571,10 +699,11 @@ export class RoomCoding implements OnInit, OnDestroy {
     r => r.kind === this.platform() && r.model === this.here()?._id));
   diffNote = computed(() => this.notes().find(r => r.id === this.diffOf()) ?? null);
 
-  /** The tabs down the left: the check, what the machine printed, the
-   *  boards for firmware, and what it all cost. */
+  /** The tabs down the left: the check, what the machine printed and what
+   *  it all cost. Firmware has one panel instead: the MCU - the chip, its
+   *  memory and time, and what the firmware uses of it. */
   sideTabs = computed<readonly Side[]>(() => this.platform() === 'embedded'
-    ? ['check', 'server', 'boards', 'machine'] : ['check', 'server', 'machine']);
+    ? ['mcu'] : ['check', 'server', 'machine']);
 
   /** Not in the constructor: the platform is an input, and reading it
    *  before the room is initialised throws and takes the shell with it. */
@@ -584,7 +713,7 @@ export class RoomCoding implements OnInit, OnDestroy {
     const v = RoomCoding.recall(p, 'view', 'live');
     this.view.set(v === 'diff' ? 'diff' : v === 'sim' && p === 'embedded' ? 'sim' : 'live');
     const side = RoomCoding.recall(p, 'side', 'check') as Side;
-    this.side.set(this.sideTabs().includes(side) ? side : 'check');
+    this.side.set(this.sideTabs().includes(side) ? side : this.sideTabs()[0]);
     this.refresh();
     this.tick();
     this.timers.push(setInterval(() => this.tick(), 3000));
@@ -752,6 +881,8 @@ export class RoomCoding implements OnInit, OnDestroy {
     this.tests.set(null);
     this.status.set(null);
     this.fw.set(null);
+    this.mcu.set(null);
+    this.mcuWait.set('reading the chip…');
     this.pickedSym.set(null);
     this.slowTick();
     this.loadDiff();
@@ -841,7 +972,102 @@ export class RoomCoding implements OnInit, OnDestroy {
     const a = this.here();
     if (!a || this.platform() !== 'embedded') return;
     this.apps.firmware(a._id).subscribe({ next: d => this.fw.set(d as FwData | null) });
-    this.apps.boards().subscribe({ next: b => this.boards.set(b) });
+    this.loadMcu();
+  }
+
+  // ---- the MCU panel ----
+
+  private loadMcu() {
+    const a = this.here();
+    if (!a || this.platform() !== 'embedded') return;
+    this.apps.mcu(a._id).subscribe({
+      next: m => { if (this.here()?._id === m.app) this.mcu.set(m); },
+      error: e => this.mcuWait.set(this.why(e)),
+    });
+  }
+
+  /** Peripherals the firmware uses first, then what the chip has spare. */
+  mcuPeripherals = computed<McuPeripheral[]>(() => {
+    const rows = this.mcu()?.peripherals ?? [];
+    const busy = (r: McuPeripheral) => this.inUse(r) ? 0 : 1;
+    return [...rows].sort((x, y) => busy(x) - busy(y));
+  });
+
+  inUse(r: McuPeripheral): boolean {
+    return !!(r.linked || r.used || r.used_instances?.length);
+  }
+
+  usedCell(r: McuPeripheral): string {
+    if (r.used_instances?.length) return r.used_instances.join(', ');
+    if (r.used) return `${r.used} ${t(r.used === 1 ? 'pin' : 'pins')}`;
+    if (r.linked) return t('linked');
+    return r.linked === false ? '–' : '?';
+  }
+
+  usedTip(r: McuPeripheral): string {
+    return [r.linked_src, ...r.board].filter(Boolean).join('\n') || t('nothing links or wires it');
+  }
+
+  /** The strips' lengths: by the square root of each region's size, so an
+   *  8 KB region is still seen next to a 4 MB one. */
+  stripWidth(total: number): number {
+    const max = Math.max(...(this.mcu()?.memory ?? []).map(r => r.total), 1);
+    return Math.max(22, 100 * Math.sqrt(total / max));
+  }
+
+  pinDoes(p: McuPin): string {
+    if (p.roles.length) {
+      return p.roles.map(r => r.part + (r.role !== '1' ? ' ' + r.role : '')
+        + (r.addr != null ? ` @0x${Number(r.addr).toString(16).toUpperCase().padStart(2, '0')}` : '')).join(', ');
+    }
+    if (p.parts.length) return p.parts.join(', ');
+    return p.signals.slice(0, 3).join(' ') + (p.signals.length > 3 ? ' …' : '');
+  }
+
+  cautionTip(c: { why: string; src: string }): string { return `${c.why}\n— ${c.src}`; }
+
+  pinWarn(p: McuPin): boolean { return p.cautions.some(c => c.level === 'warn'); }
+
+  /** 160000 as "160 000": the digits an engineer counts. */
+  num(n: number | null | undefined): string {
+    if (n == null) return '–';
+    return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  }
+
+  kib(n: number | null | undefined): string {
+    if (n == null) return '–';
+    if (n >= 1024 * 1024 && n % (1024 * 1024) === 0) return `${n / 1024 / 1024} MB`;
+    return n >= 1024 ? `${(n / 1024).toFixed(n >= 100 * 1024 ? 0 : 1)} KB` : `${n} B`;
+  }
+
+  mhz(n: number | null | undefined): string {
+    return n == null ? '–' : `${Number.isInteger(n) ? n : n.toFixed(2)} MHz`;
+  }
+
+  seenPins(): { pin: string; text: string }[] {
+    const s = this.mcu()?.seen;
+    if (!s) return [];
+    const out: { pin: string; text: string }[] = [];
+    for (const [pin, v] of Object.entries(s.pwm)) {
+      out.push({ pin, text: `PWM ${(100 * v.duty).toFixed(0)}% · ${v.hz >= 1000 ? (v.hz / 1000).toFixed(v.hz % 1000 ? 1 : 0) + ' kHz' : v.hz + ' Hz'}` });
+    }
+    for (const [pin, v] of Object.entries(s.pins)) {
+      if (!(pin in s.pwm)) out.push({ pin, text: `${t('out')} ${v.level} · ${v.changes} ${t('changes')}` });
+    }
+    for (const [pin, v] of Object.entries(s.inputs)) {
+      out.push({ pin, text: v.kind === 'adc' ? `ADC ${v.volts?.toFixed(2)} V`
+        : v.kind === 'freq' ? `${t('in')} ${v.hz} Hz` : `${t('in')} ${v.level}` });
+    }
+    return out.sort((x, y) => x.pin.localeCompare(y.pin, 'en', { numeric: true }));
+  }
+
+  busAddr(a: number | string): string {
+    return typeof a === 'number' ? '0x' + a.toString(16).toUpperCase().padStart(2, '0') : a;
+  }
+
+  uartPorts(): { port: string; out: number; in: number }[] {
+    const u = this.mcu()?.seen?.uart ?? {};
+    return Object.entries(u).map(([port, v]) => ({ port, ...v }));
   }
 
   /** Flash and RAM, file by file, largest first: where the bytes went. */
@@ -1111,6 +1337,7 @@ export class RoomCoding implements OnInit, OnDestroy {
     this.health.system().subscribe({ next: s => this.sys.set(s) });
     this.activity.lines(60, this.platform()).subscribe({ next: rows => this.log.set(rows) });
     const a = this.here();
+    if (a && this.platform() === 'embedded' && (this.view() === 'sim' || this.mcu()?.seen)) this.loadMcu();
     if (a && this.side() === 'server') {
       const src = this.platform() === 'embedded' ? this.apps.buildLog(a._id)
                                                  : this.apps.serverLog(a._id);
@@ -1132,9 +1359,7 @@ export class RoomCoding implements OnInit, OnDestroy {
         if (st.booted && (!was || this.phoneFor !== a._id)) this.showOnPhone();
       } });
     }
-    if (this.platform() === 'embedded') {
-      this.apps.boards().subscribe({ next: b => this.boards.set(b) });
-    }
+    if (this.platform() === 'embedded' && this.view() !== 'sim') this.loadMcu();
     // A build or a test run the agent made since: the room follows it.
     this.apps.one(a._id).subscribe({ next: fresh => {
       if (fresh.firmware?.at !== a.firmware?.at) { this.here.set(fresh); this.loadFirmware(); }
