@@ -59,6 +59,9 @@ tools_api.mount(app)
 # And the agents' way in to their database work (users phase 4).
 from . import agent_api  # noqa: E402
 app.include_router(agent_api.router)
+# The virtual board: a board's firmware in an emulator, its parts as models.
+from .sim import api as sim_api  # noqa: E402
+app.include_router(sim_api.router)
 
 
 def _raw_db():

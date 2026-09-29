@@ -12,9 +12,10 @@ import { CodeDraft, Selection } from '../selection';
 import { RoomFrame, ToolButton } from './frame';
 import { Mark, extent, paint } from './sketch';
 import { DrawTools, PenState } from './sketchpad';
+import { SimView } from './sim-view';
 
 type Platform = 'web' | 'embedded' | 'mobile';
-type View = 'live' | 'diff';
+type View = 'live' | 'diff' | 'sim';
 type Side = 'check' | 'server' | 'boards' | 'machine';
 
 /** The sizes a page is looked at. A note is drawn at one of them and the
@@ -58,7 +59,7 @@ interface FwData {
  */
 @Component({
   selector: 'app-room-coding',
-  imports: [RoomFrame, ToolButton, DrawTools],
+  imports: [RoomFrame, ToolButton, DrawTools, SimView],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
@@ -79,6 +80,10 @@ interface FwData {
                 [on]="view() === 'live'" (press)="setView('live')" />
       <app-tool icon="tcv-ico-diff" tip="Diff - the change, and a note's before and after"
                 [on]="view() === 'diff'" [disabled]="frozen()" (press)="setView('diff')" />
+      @if (platform() === 'embedded') {
+        <app-tool icon="tcv-ico-model" tip="Simulate - the firmware running on its board"
+                  [on]="view() === 'sim'" (press)="setView('sim')" />
+      }
       @if (platform() === 'web') {
         <span class="tcv_separator"></span>
         @for (v of viewports; track v.key) {
@@ -341,6 +346,14 @@ interface FwData {
             }
           </div>
         </div>
+      } @else if (platform() === 'embedded' && view() === 'sim') {
+        <!-- THE FIRMWARE, RUNNING on its virtual board (sim-view.ts). -->
+        <!-- Deferred: it brings three.js, which the other views do without. -->
+        @defer (on immediate) {
+          <app-sim-view [app]="here()!._id" />
+        } @placeholder {
+          <p class="p-3 text-[12px]" style="color: var(--ink-dim)">loading the simulator…</p>
+        }
       } @else if (platform() === 'embedded') {
         <!-- THE FIRMWARE, AS BUILT
              Memory per region, then what fills it, file by file. A click
@@ -568,7 +581,8 @@ export class RoomCoding implements OnInit, OnDestroy {
   ngOnInit() {
     const p = this.platform();
     this.tabNames.server = p === 'embedded' ? 'Build' : 'Server';
-    this.view.set(RoomCoding.recall(p, 'view', 'live') === 'diff' ? 'diff' : 'live');
+    const v = RoomCoding.recall(p, 'view', 'live');
+    this.view.set(v === 'diff' ? 'diff' : v === 'sim' && p === 'embedded' ? 'sim' : 'live');
     const side = RoomCoding.recall(p, 'side', 'check') as Side;
     this.side.set(this.sideTabs().includes(side) ? side : 'check');
     this.refresh();

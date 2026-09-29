@@ -36,6 +36,13 @@ and the elements under the marks:
     python tools/revisions.py code diff <id>     what changed since it was drawn
     python tools/revisions.py code test <id>     the project's test command
     python tools/revisions.py code done <id>     tests, after shot, then applied
+
+Firmware on its virtual board (backend/sim), headless:
+
+    python tools/revisions.py sim run <app> --for 5 [--press REF[@s]] [--uart TEXT[@s]]
+                                  [--set REF=V] [--shot REF=out.png] [--sim FILE]
+    python tools/revisions.py sim show <app>           the sim.json it would run
+    python tools/revisions.py sim link <app> <board>   which board the firmware runs on
 """
 
 from __future__ import annotations
@@ -1051,6 +1058,150 @@ async def cmd_code(args):
         await _code_done(db, doc)
 
 
+# ---------------- the virtual board ----------------
+def _at(text: str) -> tuple[str, float | None]:
+    """'SW1@2.5' -> ('SW1', 2.5); a trailing @ that is not a number stays text."""
+    head, sep, tail = text.rpartition("@")
+    if sep and head:
+        try:
+            return head, float(tail)
+        except ValueError:
+            pass
+    return text, None
+
+
+def sim_plan(args) -> list[tuple[float, str, object]]:
+    """What `sim run` does and when, from its arguments, in time order:
+    (seconds after boot, "act"|"uart", (ref, action) | text). A press
+    without a time is at 1 s; it is let go 0.2 s later."""
+    plan: list[tuple[float, str, object]] = []
+    for p in args.press or []:
+        ref, at = _at(p)
+        at = 1.0 if at is None else at
+        plan += [(at, "act", (ref, {"press": True})), (at + 0.2, "act", (ref, {"press": False}))]
+    for u in args.uart or []:
+        text, at = _at(u)
+        text = text.encode().decode("unicode_escape")
+        if not text.endswith(("\n", "\r")):
+            text += "\r\n"
+        plan.append((0.5 if at is None else at, "uart", text))
+    for s in args.set or []:
+        body, at = _at(s)
+        if "=" not in body:
+            raise ValueError(f"--set {s}: REF=VALUE or REF.slider=VALUE")
+        target, value = body.split("=", 1)
+        ref, _, key = target.partition(".")
+        try:
+            num = float(value)
+        except ValueError:
+            raise ValueError(f"--set {s}: {value!r} is not a number") from None
+        plan.append((0.0 if at is None else at, "act", (ref, {key or "value": num})))
+    for sh in args.shot or []:
+        if "=" not in sh:
+            raise ValueError(f"--shot {sh}: REF=out.png")
+    if any(at > args.for_s for at, _, _ in plan):
+        raise ValueError(f"something is planned after the run ends ({args.for_s:g} s)")
+    return sorted(plan, key=lambda x: x[0])
+
+
+async def cmd_sim(args):
+    """The firmware on its virtual board, headless, through the same
+    service the Embedded room uses (backend/sim/service.py)."""
+    from backend.sim import service
+    from backend.sim.parts import load_catalog
+
+    db = connect()
+    over = json.loads(Path(args.sim).read_text()) if args.sim else None
+    if args.what == "link":
+        if not args.unlink and not (args.board or over):
+            sys.exit("sim link <app> <board> [--sim FILE] | --unlink")
+        change = {k: v for k, v in (("board", args.board), ("sim", over)) if v is not None}
+        if args.unlink:
+            await db.apps.update_one({"_id": args.app}, {"$unset": {"board": "", "sim": ""}})
+            print(f"{args.app}: unlinked")
+        else:
+            if args.board and not await db.boards.find_one({"_id": args.board}, {"_id": 1}):
+                sys.exit(f"no board {args.board}")
+            await db.apps.update_one({"_id": args.app}, {"$set": change})
+            print(f"{args.app}: linked {', '.join(change)}")
+        return
+    try:
+        plan = sim_plan(args)
+        got = await service.resolve(db, args.app, args.board, over)
+    except (ValueError, service.SimError) as exc:
+        sys.exit(f"sim: {exc}")
+    for w in got["warnings"]:
+        print(f"warning: {w}")
+    if args.what == "show":
+        print(json.dumps(got["sim"], indent=1))
+        print(f"firmware: {got['firmware']}")
+        return
+    sims = service.Sims(max_sessions=1, idle_s=1e9, uart_keep=1_000_000)
+    try:
+        s = await sims.launch(args.app, got["sim"], got["firmware"], board_id=got["board"],
+                              warnings=got["warnings"])
+    except service.SimError as exc:
+        sys.exit(f"sim: {exc}")
+    print(f"{args.app} on {got['board'] or 'its own sim.json'}: {len(s.board.parts)} parts, "
+          f"firmware {got['firmware']} - building and booting…")
+    sys.stdout.flush()
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + args.boot_timeout
+    while s.state in ("starting", "building") and loop.time() < deadline:
+        await asyncio.sleep(0.2)
+    failed = None
+    if s.state != "running":
+        failed = s.error or f"not running after {args.boot_timeout:g} s ({s.state})"
+    else:
+        t0 = loop.time()
+        try:
+            for at, kind, what in plan:
+                await asyncio.sleep(max(0.0, t0 + at - loop.time()))
+                if s.state != "running":
+                    break
+                if kind == "uart":
+                    s.uart("UART0", what)
+                else:
+                    s.act(*what)
+            await asyncio.sleep(max(0.0, t0 + args.for_s - loop.time()))
+        except service.SimError as exc:
+            failed = str(exc)
+        if s.state != "running" and not failed:
+            failed = s.error or s.state
+    snap = s.snapshot()
+    await sims.stop(args.app)
+    catalog = load_catalog()
+    print(f"\nat t = {snap['t'] / 1e6:.2f} s (virtual)")
+    for ref, view in snap["parts"].items():
+        model = next((p["model"] for p in got["sim"]["parts"] if p["ref"] == ref), "?")
+        print(f"  {ref:<8} {model:<12} {service.describe_view(view)}")
+    import re as _re
+    print("\nUART:")
+    runs: list[dict] = []
+    for e in s.board.uart:                       # all of it, not the page's tail
+        if runs and runs[-1]["port"] == e["port"] and runs[-1]["dir"] == e["dir"]:
+            runs[-1]["data"] += e["data"]
+        else:
+            runs.append(dict(e))
+    for e in runs:
+        e["data"] = _re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", e["data"])
+        mark = ">" if e["dir"] == "in" else " "
+        for line in e["data"].splitlines() or [""]:
+            print(f"  {mark} {e['port']} | {line}")
+    for sh in args.shot or []:
+        ref, out = sh.split("=", 1)
+        view = snap["parts"].get(ref) or {}
+        if "screen" not in view:
+            failed = failed or f"--shot {ref}: not a part with a screen"
+            continue
+        pixel = ((catalog["models"].get(next((p["model"] for p in got["sim"]["parts"] if p["ref"] == ref), ""), {})
+                  .get("view") or {}).get("pixel") or "#8fd3ff").lstrip("#")
+        Path(out).write_bytes(service.screen_png(view, on=tuple(bytes.fromhex(pixel[:6]))))
+        print(f"wrote {out}")
+    if failed:
+        sys.exit(f"sim failed: {failed}")
+
+
 def main() -> None:
     # The repo's .env, before anything reads the environment: the token
     # (X3_TOKEN) is needed by the API-backed commands - `board ...` - as
@@ -1201,6 +1352,27 @@ def main() -> None:
     s.add_argument("--force", action="store_true", help="replace hand-written ones")
     s.add_argument("--limit", type=int, default=0)
     s.set_defaults(fn=cmd_summaries)
+    s = sub.add_parser("sim", help="run firmware on its virtual board, headless")
+    s.add_argument("what", choices=["run", "show", "link"],
+                   help="run: build, boot, act, print the parts and the UART; "
+                        "show: the sim.json it would run; link: which board the app runs on")
+    s.add_argument("app")
+    s.add_argument("board", nargs="?", help="link: the board; run/show: a board for this run only")
+    s.add_argument("--for", dest="for_s", type=float, default=5.0,
+                   help="seconds to run after boot (default 5)")
+    s.add_argument("--press", action="append", metavar="REF[@SEC]",
+                   help="press a button at SEC after boot (default 1), let go 0.2 s later")
+    s.add_argument("--uart", action="append", metavar="TEXT[@SEC]",
+                   help="type TEXT into UART0 (a line end is added; \\n escapes work)")
+    s.add_argument("--set", action="append", metavar="REF[.SLIDER]=VALUE[@SEC]",
+                   help="set a slider: a potentiometer's value, a sensor's reading")
+    s.add_argument("--shot", action="append", metavar="REF=out.png",
+                   help="write a display's picture at the end")
+    s.add_argument("--sim", help="a sim.json with corrections (with \"replace\": true, the whole thing)")
+    s.add_argument("--unlink", action="store_true", help="link: take the board off the app")
+    s.add_argument("--boot-timeout", type=float, default=900,
+                   help="seconds to wait for the build and boot (default 900)")
+    s.set_defaults(fn=cmd_sim)
     args = ap.parse_args()
     # Everything this command writes is the agent's, named by X3_AGENT.
     from backend import actors

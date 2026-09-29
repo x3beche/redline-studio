@@ -3,8 +3,9 @@ import {
   viewChild,
 } from '@angular/core';
 import {
-  AmbientLight, Box3, Color, DirectionalLight, Object3D, PerspectiveCamera,
-  Scene, Vector3, WebGLRenderer,
+  AmbientLight, Box3, CanvasTexture, Color, DirectionalLight, Material, Mesh,
+  MeshBasicMaterial, NearestFilter, Object3D, PerspectiveCamera, PlaneGeometry,
+  Quaternion, Raycaster, Scene, Vector2, Vector3, WebGLRenderer,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -94,6 +95,7 @@ export class Board3d implements AfterViewInit, OnDestroy {
 
     const tick = () => {
       this.frame = requestAnimationFrame(tick);
+      this.turn();
       this.controls?.update();
       if (this.renderer && this.scene && this.camera) {
         this.renderer.render(this.scene, this.camera);
@@ -103,6 +105,12 @@ export class Board3d implements AfterViewInit, OnDestroy {
 
     this.started = true;
     if (this.src()) this.load(this.src());
+
+    // Parts that take a click (the simulator's buttons): caught before the
+    // orbit controls see the pointer, so pressing one does not turn the board.
+    box.addEventListener('pointerdown', this.pointerDown, { capture: true });
+    box.addEventListener('pointermove', this.pointerMove);
+    window.addEventListener('pointerup', this.pointerUp);
   }
 
   /** What is on screen, as a picture the size of the box. Rendered and
@@ -121,6 +129,11 @@ export class Board3d implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    const box = this.host().nativeElement;
+    box.removeEventListener('pointerdown', this.pointerDown, { capture: true });
+    box.removeEventListener('pointermove', this.pointerMove);
+    window.removeEventListener('pointerup', this.pointerUp);
+    for (const f of this.faces.values()) (f.material as MeshBasicMaterial).map?.dispose();
     cancelAnimationFrame(this.frame);
     this.ro?.disconnect();
     this.controls?.dispose();
@@ -164,9 +177,16 @@ export class Board3d implements AfterViewInit, OnDestroy {
       this.scene.remove(child);
     }
     this.scene.add(object);
+    this.model = object;
+    // What was lit, pictured or spinning belonged to the model that left.
+    for (const f of this.faces.values()) (f.material as MeshBasicMaterial).map?.dispose();
+    this.faces.clear();
+    this.spinning.clear();
+    this.lit.clear();
     this.touched = false;
     this.frame_the(object);
     this.note.set('');
+    this.loaded.update(n => n + 1);
   }
 
   /** Measure what came in, then put the camera on it. */
@@ -228,6 +248,165 @@ export class Board3d implements AfterViewInit, OnDestroy {
     this.controls.target.copy(middle);
     this.controls.update();
   }
+
+  // ---- live parts: what the simulator shows on the board ----
+  // Every board GLB names its nodes by reference designator (SPEC §5), so a
+  // part is found by its ref and lit, pictured or turned where it stands.
+
+  /** Bumped each time a model reaches the screen: whatever is drawn on
+   *  its parts has to be drawn again on the new one. */
+  loaded = signal(0);
+  private model?: Object3D;
+  private lit = new Map<string, Mesh[]>();
+  private faces = new Map<string, Mesh>();
+  private spinning = new Map<string, { rps: number; centre: Vector3; last: number }>();
+  private pickNames: ReadonlySet<string> = new Set();
+  private pickCb?: (name: string, down: boolean) => void;
+  private held_down: string | null = null;
+  private ray = new Raycaster();
+
+  /** The node with this name in the loaded model (a ref: `U2`, `LED3`). */
+  node(name: string): Object3D | undefined {
+    return this.model?.getObjectByName(name) ?? undefined;
+  }
+
+  /** Make a part glow: `strength` 0..1 of `color`. 0 puts its own
+   *  material back. Returns whether the part is in the model. */
+  glow(name: string, color: string | number, strength: number): boolean {
+    const node = this.node(name);
+    if (!node) return false;
+    let meshes = this.lit.get(name);
+    if (!meshes) {
+      meshes = [];
+      node.traverse(o => {
+        const m = o as Mesh;
+        if (!m.isMesh) return;
+        // Materials are shared between parts: each lit mesh gets its own copy.
+        m.userData['simOwn'] = m.material;
+        m.material = Array.isArray(m.material) ? m.material.map(x => x.clone()) : m.material.clone();
+        meshes!.push(m);
+      });
+      this.lit.set(name, meshes);
+    }
+    const on = Math.max(0, Math.min(1, strength));
+    for (const m of meshes) {
+      for (const mat of (Array.isArray(m.material) ? m.material : [m.material]) as Material[]) {
+        const e = mat as Material & { emissive?: Color; emissiveIntensity?: number };
+        if (!e.emissive) continue;
+        e.emissive.set(on > 0 ? color : 0x000000);
+        e.emissiveIntensity = on * 2.5;
+      }
+    }
+    return true;
+  }
+
+  /** A picture on the part's top face - a display's screen. The same
+   *  canvas again updates it; null takes it off. */
+  face(name: string, canvas: HTMLCanvasElement | null): boolean {
+    const had = this.faces.get(name);
+    if (!canvas) {
+      if (had) { had.removeFromParent(); (had.material as MeshBasicMaterial).map?.dispose(); this.faces.delete(name); }
+      return true;
+    }
+    if (had) {
+      const map = (had.material as MeshBasicMaterial).map!;
+      if (map.image !== canvas) map.image = canvas;
+      map.needsUpdate = true;
+      return true;
+    }
+    const node = this.node(name);
+    if (!node || !this.scene) return false;
+    const box = new Box3().setFromObject(node);
+    if (box.isEmpty()) return false;
+    const size = box.getSize(new Vector3());
+    const wide = size.x >= size.z;
+    // The picture's long side along the part's long side.
+    const w = (wide ? size.x : size.z) * 0.9;
+    const h = Math.min((wide ? size.z : size.x) * 0.9, w * canvas.height / canvas.width);
+    const tex = new CanvasTexture(canvas);
+    tex.magFilter = NearestFilter;
+    const plane = new Mesh(new PlaneGeometry(w, h),
+                           new MeshBasicMaterial({ map: tex, toneMapped: false }));
+    plane.rotation.x = -Math.PI / 2;
+    if (!wide) plane.rotation.z = Math.PI / 2;
+    const c = box.getCenter(new Vector3());
+    plane.position.set(c.x, box.max.y + size.y * 0.02 + 1e-4, c.z);
+    this.scene.add(plane);
+    this.faces.set(name, plane);
+    return true;
+  }
+
+  /** Turn a part about its own vertical axis, `rps` turns a second (0 stops it). */
+  spin(name: string, rps: number) {
+    const had = this.spinning.get(name);
+    if (!rps) { this.spinning.delete(name); return; }
+    if (had) { had.rps = rps; return; }
+    const node = this.node(name);
+    if (!node) return;
+    const centre = new Box3().setFromObject(node).getCenter(new Vector3());
+    node.parent?.worldToLocal(centre);
+    this.spinning.set(name, { rps, centre, last: performance.now() });
+  }
+
+  private turn() {
+    if (!this.spinning.size) return;
+    const now = performance.now();
+    const q = new Quaternion();
+    const axis = new Vector3();
+    const pq = new Quaternion();
+    for (const [name, s] of this.spinning) {
+      const node = this.node(name);
+      if (!node) continue;
+      const angle = ((now - s.last) / 1000) * s.rps * Math.PI * 2;
+      s.last = now;
+      // Up in the parent's own axes, about the part's middle.
+      node.parent?.getWorldQuaternion(pq);
+      axis.set(0, 1, 0).applyQuaternion(pq.invert());
+      q.setFromAxisAngle(axis, angle);
+      node.position.sub(s.centre).applyQuaternion(q).add(s.centre);
+      node.quaternion.premultiply(q);
+    }
+  }
+
+  /** Which parts take a press, and what to tell when one is pressed and let go. */
+  pickable(names: ReadonlySet<string>, cb: (name: string, down: boolean) => void) {
+    this.pickNames = names;
+    this.pickCb = cb;
+  }
+
+  private hit(ev: PointerEvent): string | null {
+    if (!this.pickNames.size || !this.camera || !this.renderer) return null;
+    const r = this.renderer.domElement.getBoundingClientRect();
+    this.ray.setFromCamera(new Vector2(((ev.clientX - r.left) / r.width) * 2 - 1,
+                                       -((ev.clientY - r.top) / r.height) * 2 + 1), this.camera);
+    const nodes = [...this.pickNames].map(n => this.node(n)).filter((n): n is Object3D => !!n);
+    const first = this.ray.intersectObjects(nodes, true)[0];
+    for (let o: Object3D | null = first?.object ?? null; o; o = o.parent) {
+      if (this.pickNames.has(o.name)) return o.name;
+    }
+    return null;
+  }
+
+  private pointerDown = (ev: PointerEvent) => {
+    const name = this.hit(ev);
+    if (!name || !this.controls) return;
+    this.controls.enabled = false;
+    this.held_down = name;
+    this.pickCb?.(name, true);
+  };
+
+  private pointerUp = () => {
+    if (!this.held_down) return;
+    const name = this.held_down;
+    this.held_down = null;
+    if (this.controls) this.controls.enabled = true;
+    this.pickCb?.(name, false);
+  };
+
+  private pointerMove = (ev: PointerEvent) => {
+    if (!this.pickNames.size || ev.buttons) return;
+    this.host().nativeElement.style.cursor = this.hit(ev) ? 'pointer' : '';
+  };
 
   /** The backdrop follows the theme; the board brings its own colours. */
   background(css: string) {

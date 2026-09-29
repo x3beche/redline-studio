@@ -114,6 +114,8 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/apps/phone/boot", "run"),
     ("POST", "/api/apps/shots/{}/under", "run"),
     ("POST", "/api/tools/(check|run)", "run"),
+    # the virtual board: running it is running; linking an app to a board edits the app
+    ("POST", "/api/sim/{}/(start|stop|reset|act|uart)", "run"),
     ("POST", "/api/tools/(find|usage)", "view"),
     # the workspace's settings
     ("PUT", "/api/settings", "settings"),

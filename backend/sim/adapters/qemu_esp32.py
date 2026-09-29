@@ -27,6 +27,8 @@ import socket
 import uuid
 from pathlib import Path
 
+from ... import limits
+
 log = logging.getLogger(__name__)
 
 IMAGE = "redline-code-embedded"
@@ -86,6 +88,10 @@ async def _run(args: list[str], timeout: float) -> tuple[int, str]:
     except asyncio.TimeoutError:
         proc.kill()
         raise TimeoutError(f"{args[0]} {args[1]}: no result in {timeout:.0f}s") from None
+    except asyncio.CancelledError:
+        # A session stopped mid-build: the build stops with it.
+        proc.kill()
+        raise
     return proc.returncode, out.decode(errors="replace")
 
 
@@ -118,7 +124,7 @@ class QemuEsp32:
         return self.cache / hashlib.sha1(str(project.resolve()).encode()).hexdigest()[:12]
 
     def _docker(self, *mounts: str) -> list[str]:
-        args = ["docker", "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp"]
+        args = ["docker", "run", "--rm", *limits.box(), "--user", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp"]
         for m in mounts:
             args += ["-v", m]
         return args + [self.image]
@@ -169,7 +175,10 @@ class QemuEsp32:
         self.container = f"redline-sim-{uuid.uuid4().hex[:10]}"
         serial = "tcp:127.0.0.1:{},server=on,wait=on"
         code, text = await _run([
+            # One emulated ESP32 needs a core and little memory; the box's
+            # limits are for builds.
             "docker", "run", "--rm", "-d", "--name", self.container, "--network", "host",
+            "--cpus", "1", "--memory", "512m", "--pids-limit", "256",
             "-v", f"{flash.parent}:/fw:ro", "--entrypoint", QEMU, self.image,
             "-M", self.machine, "-m", "4M", "-display", "none", "-nic", "none",
             "-drive", f"file=/fw/{flash.name},if=mtd,format=raw,snapshot=on",
@@ -232,6 +241,9 @@ class QemuEsp32:
             yield msg
 
     async def send(self, msg: dict) -> None:
+        bridge = getattr(self, "_bridge", None)
+        if bridge is None or getattr(bridge, "is_closing", lambda: False)():
+            return                          # stopped: nothing to say it to
         kind = msg.get("type")
         if kind == "uart":
             if msg.get("port", "UART0") != "UART0":
