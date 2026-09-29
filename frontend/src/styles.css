@@ -3132,7 +3132,9 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-signin button { padding: 8px; font-size: 13px; margin-top: 4px; }
 /* Centred in the tab row: as much room above the chip as below, and clear
    of the panel's top edge. */
-.tcv-user-end { position: absolute; right: 0; top: 0; bottom: 6px; display: flex; align-items: center; }
+/* Above the open tab (400), so its menu drops over the tab row rather than
+   under whichever tab is open; below the dialogs (500 and up). */
+.tcv-user-end { position: absolute; right: 0; top: 0; bottom: 6px; display: flex; align-items: center; z-index: 450; }
 /* Who is signed in, and where: a round initial, the name over the
    workspace and role, a caret. Quiet until hovered or open. */
 .tcv-user { display: flex; align-items: center; gap: 8px; max-width: 240px; height: 24px; padding: 0 8px 0 2px;
