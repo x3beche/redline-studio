@@ -170,6 +170,7 @@ async def build(db, app: dict) -> dict:
     # The build command names its output directory as $BUILD, so it is
     # Redline's and not the project's.
     cmd = app["build"].replace("$BUILD", str(out_dir))
+    started = __import__("time").time()
     rc, log, job = await sandbox.run(
         "embedded", ["bash", "-c", cmd], repo=app["repo"],
         workdir=apps.workdir(app), timeout=900)
@@ -205,6 +206,11 @@ async def build(db, app: dict) -> dict:
                     if rc3 == 0:
                         regions = parse_idf_size(out3)
             before = (app.get("firmware") or {}).get("summary")
+            if not regions and (before or {}).get("regions") and \
+                    elf.stat().st_mtime < started:
+                # Nothing to relink, so the linker said nothing: the image
+                # is the one the last build measured.
+                regions = before["regions"]
             summary = summarise(regions, symbols)
             result.update(elf=str(elf.relative_to(out_dir)), summary=summary,
                           before=before)
@@ -212,6 +218,12 @@ async def build(db, app: dict) -> dict:
                 {"regions": regions, "symbols": symbols[:600],
                  "summary": summary, "before": before,
                  "at": result["at"]}).encode(), collection=apps.APPS)
+            # What fills flash, by owner, archive, file and function, and
+            # a line of it on the app's history (the build view).
+            sizes = await record_sizes(db, app, out_dir, elf, nm if rc2 == 0 else "",
+                                       symbols, regions, result["at"])
+            if sizes:
+                summary["groups"] = sizes["groups"]
     await db[apps.APPS].update_one(
         {"_id": app["_id"]},
         {"$set": {"firmware": {k: v for k, v in result.items() if k != "log"},
@@ -376,3 +388,346 @@ section:last-child .sym{{background:#4d3b5e}}
 {"".join(bar(r) for r in regions) or '<p>no memory map in the build output - link with -Wl,--print-memory-usage</p>'}
 <div class="cols">{column({"flash", "both"}, "flash")}{column({"ram", "both"}, "RAM")}</div>
 </body></html>"""
+
+
+# ---------------- what fills flash ----------------
+# The build view (backend/embedded/build.py, rooms/fw-build.ts) draws the
+# image as the bytes it is made of: whose code, which library, which file,
+# which function. Three owners:
+#   yours      - the project's own sources
+#   framework  - ESP-IDF's components, a vendor HAL, CubeMX's startup
+#   runtime    - the C library, libgcc, libstdc++: the compiler's own
+# ESP32 is read from esp-idf-size's raw report (the link map, archive by
+# archive); STM32 from nm -l, each symbol by the file it was compiled from.
+GROUPS = ("yours", "framework", "runtime")
+RUNTIME_LIB = re.compile(r"(?:^|/)lib(?:c|m|g|gcc|gcov|stdc\+\+|supc\+\+|nosys|gloss|atomic"
+                         r"|c_nano|g_nano|stdc\+\+_nano|supc\+\+_nano)\.a$")
+RUNTIME_SRC = re.compile(r"/(?:newlib|libgcc|libgloss|libstdc\+\+-v3|libsupc\+\+|picolibc)/")
+VENDOR = re.compile(r"(?:^|/)(?:Drivers|Middlewares|CMSIS|[A-Za-z0-9]+_HAL_Driver)/"
+                    r"|(?:^|/)(?:startup_|system_stm32)[^/]*$"
+                    r"|_hal(?:_[a-z0-9]+)?\.c$|_ll_[a-z0-9]+\.c$")
+# Sections that take RAM and nothing in the image: zeroed, reserved.
+NOLOAD = re.compile(r"bss|noinit|reserved|heap|stack", re.I)
+STRINGS = "(constant strings)"
+KEEP_SYMBOLS = 40          # per file; the rest folded into one block
+HISTORY = 10               # build summaries kept on the app
+
+
+def _json_tail(text: str) -> dict:
+    try:
+        return json.loads(text[text.index("{"):])
+    except (ValueError, json.JSONDecodeError):
+        return {}
+
+
+def _idf_symbol(name: str) -> str:
+    """An input section as esp-idf-size names it, as a person would:
+    a function's literal pool joins the function, the linker's merged
+    string pool is strings, an unnamed section says it is one."""
+    if name.startswith(".literal."):
+        return name[len(".literal."):] + "()"
+    if re.search(r"\.str1\.\d+$", name):
+        return STRINGS
+    if name.startswith("."):
+        return "(unnamed sections)"
+    return name
+
+
+def parse_idf_raw(text: str) -> list[dict]:
+    """esp-idf-size --format raw: memory type > section > archive > object
+    file > symbol. What goes into the flash image, one row per symbol of
+    each object file (its padding as "(padding)")."""
+    data = _json_tail(text)
+    rows: dict[tuple[str, str, str], int] = {}
+    for mem in (data.get("memory_types") or {}).values():
+        for sname, sec in (mem.get("sections") or {}).items():
+            if NOLOAD.search(sname):
+                continue
+            for aname, arch in (sec.get("archives") or {}).items():
+                for oname, obj in (arch.get("object_files") or {}).items():
+                    got = 0
+                    for sym, s in (obj.get("symbols") or {}).items():
+                        n = int(s.get("size") or 0)
+                        if n:
+                            k = (aname, oname, _idf_symbol(sym))
+                            rows[k] = rows.get(k, 0) + n
+                            got += n
+                    rest = int(obj.get("size") or 0) - got
+                    if rest > 0:
+                        k = (aname, oname, "(padding)")
+                        rows[k] = rows.get(k, 0) + rest
+    return [{"archive": a, "object": o, "symbol": s, "size": n}
+            for (a, o, s), n in rows.items()]
+
+
+def idf_components(build: Path, repo: str | Path) -> dict[str, str]:
+    """The project's own components, archive (relative to the build
+    directory) -> component directory, from project_description.json."""
+    try:
+        desc = json.loads((Path(build) / "project_description.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    repo = str(Path(repo).resolve())
+    out = {}
+    for info in (desc.get("build_component_info") or {}).values():
+        d, f = str(info.get("dir") or ""), str(info.get("file") or "")
+        if f and (d == repo or d.startswith(repo + "/")):
+            try:
+                out[os.path.relpath(f, build)] = d
+            except ValueError:
+                pass
+    return out
+
+
+def idf_group(archive: str, mine: dict[str, str]) -> str:
+    if archive in mine:
+        return "yours"
+    if RUNTIME_LIB.search(archive):
+        return "runtime"
+    return "framework"
+
+
+def idf_rows(raw: list[dict], mine: dict[str, str], symbols: list[dict],
+             repo: str | Path) -> list[dict]:
+    """esp-idf-size's rows, each with its owner, its source file where it
+    is the project's, and the line nm found for the function."""
+    repo = Path(repo).resolve()
+    where = {s["name"]: s for s in symbols if s.get("file")}
+    by_base: dict[str, str] = {}
+    for s in symbols:
+        if s.get("file"):
+            by_base.setdefault(os.path.basename(s["file"]), s["file"])
+    out = []
+    for r in raw:
+        a, o, name = r["archive"], r["object"], r["symbol"]
+        group = idf_group(a, mine)
+        base = re.sub(r"\.(c|cc|cpp|cxx|S|s)?\.?obj$|\.o$", lambda m: "." + m.group(1)
+                      if m.group(1) else "", o)
+        base = re.sub(r"^lib\w+_a-", "", base)       # newlib's libc_a-vfprintf.o
+        src = None
+        if group == "yours":
+            src = by_base.get(base)
+            if not src:
+                hit = next(iter(sorted(Path(mine[a]).rglob(base))), None) \
+                    if base and mine.get(a) else None
+                src = str(hit.resolve().relative_to(repo)) if hit and \
+                    hit.resolve().is_relative_to(repo) else None
+        if name == STRINGS:
+            # One pool for the whole program, filed under whichever object
+            # the linker met first: nobody's in particular.
+            group, a, o, src = "framework", STRINGS, "merged by the linker", None
+        sym = where.get(name[:-2] if name.endswith("()") else name)
+        if a.startswith("/"):
+            a = os.path.normpath(a)                  # the toolchain's bin/../lib/...
+        out.append({"group": group, "archive": a,
+                    "archive_label": os.path.basename(a) if a != STRINGS else a,
+                    "file": src or o, "file_label": os.path.basename(src) if src
+                    else base or o, "symbol": name, "size": r["size"],
+                    "src": sym["file"] if sym and group == "yours" else None,
+                    "line": sym["line"] if sym and group == "yours" else None})
+    return out
+
+
+def parse_nm_paths(text: str) -> list[dict]:
+    """nm -S -l with every path kept, absolute, and aliases (one address,
+    several names: the weak IRQ handlers) counted once."""
+    seen: set[str] = set()
+    out = []
+    for line in text.splitlines():
+        m = NM.match(line)
+        if not m:
+            continue
+        size, kind = int(m.group(2), 16), m.group(3)
+        if not size or kind not in FLASH_TYPES | BOTH_TYPES:
+            continue
+        if m.group(1) in seen:
+            continue
+        seen.add(m.group(1))
+        out.append({"name": m.group(4), "size": size, "type": kind,
+                    "path": os.path.normpath(m.group(5)) if m.group(5) else None,
+                    "line": int(m.group(6)) if m.group(6) else None})
+    return out
+
+
+def _runtime_lib(path: str | None) -> str:
+    if not path:
+        return "C runtime"
+    if "/libgcc/" in path:
+        return "libgcc"
+    if "/libgloss/" in path:
+        return "libnosys"
+    if "libstdc++" in path or "libsupc++" in path:
+        return "libstdc++"
+    m = re.search(r"/newlib/(libc|libm)/", path)
+    return m.group(1) if m else "C runtime"
+
+
+def nm_rows(nm: list[dict], repo: str | Path) -> list[dict]:
+    """nm's symbols, each with its owner: a file in the project is yours
+    (a vendor's HAL or CubeMX's startup in it is framework); the compiler's
+    own libraries are runtime, and so is what has no file at all."""
+    repo = str(Path(repo).resolve())
+    out = []
+    for s in nm:
+        p, rel = s["path"], None
+        if p and (p == repo or p.startswith(repo + "/")):
+            rel = p[len(repo) + 1:]
+        if rel:
+            group = "framework" if VENDOR.search(rel) else "yours"
+            archive = os.path.dirname(rel) or "."
+            file, label = rel, os.path.basename(rel)
+        elif p and not RUNTIME_SRC.search(p) and "gcc" not in p:
+            group, archive = "framework", os.path.dirname(p)
+            file, label = p, os.path.basename(p)
+        else:
+            group = "runtime"
+            archive = _runtime_lib(p)
+            tail = re.search(r"/(?:newlib|libgcc|libgloss)/(.+)$", p or "")
+            file = tail.group(1) if tail else (os.path.basename(p) if p else "(no source)")
+            label = os.path.basename(file)
+        out.append({"group": group, "archive": archive,
+                    "archive_label": archive if rel else os.path.basename(archive) or archive,
+                    "file": file, "file_label": label, "symbol": s["name"],
+                    "size": s["size"], "src": rel if group == "yours" else None,
+                    "line": s["line"] if rel and group == "yours" else None})
+    return out
+
+
+def size_tree(rows: list[dict]) -> dict:
+    """Rows into flash > owner > archive > file > symbol, each node with
+    its bytes, largest first; a file's small symbols folded into one."""
+    root: dict = {"name": "flash", "kind": "root", "size": 0, "children": {}}
+    for r in rows:
+        g = root["children"].setdefault(r["group"], {
+            "name": r["group"], "kind": "group", "size": 0, "children": {}})
+        a = g["children"].setdefault(r["archive"], {
+            "name": r["archive_label"], "path": r["archive"], "kind": "archive",
+            "size": 0, "children": {}})
+        f = a["children"].setdefault(r["file"], {
+            "name": r["file_label"], "path": r["file"], "kind": "file",
+            "size": 0, "children": {}})
+        s = f["children"].setdefault(r["symbol"], {
+            "name": r["symbol"], "kind": "symbol", "size": 0,
+            "file": r.get("src"), "line": r.get("line")})
+        for node in (root, g, a, f, s):
+            node["size"] += r["size"]
+
+    def finish(node: dict) -> dict:
+        kids = sorted(node.get("children", {}).values(), key=lambda n: -n["size"])
+        if node["kind"] == "file" and len(kids) > KEEP_SYMBOLS:
+            rest = kids[KEEP_SYMBOLS:]
+            kids = kids[:KEEP_SYMBOLS] + [{
+                "name": f"{len(rest)} more", "kind": "rest", "size": sum(k["size"] for k in rest),
+                "file": None, "line": None}]
+        if "children" in node:
+            node["children"] = [finish(k) for k in kids]
+        return node
+
+    finish(root)
+    order = {g: i for i, g in enumerate(GROUPS)}
+    root["children"].sort(key=lambda n: order.get(n["name"], 9))
+    return root
+
+
+def sizes_from(rows: list[dict], tool: str) -> dict:
+    """What the build view is given: the tree, and the lists beside it."""
+    tree = size_tree(rows)
+    groups = {g: 0 for g in GROUPS}
+    for n in tree["children"]:
+        groups[n["name"]] = n["size"]
+    archives = [{"name": a["name"], "path": a["path"], "group": g["name"], "size": a["size"]}
+                for g in tree["children"] for a in g["children"]]
+    archives.sort(key=lambda a: -a["size"])
+    files = []
+    top = []
+    for g in tree["children"]:
+        for a in g["children"]:
+            for f in a["children"]:
+                if g["name"] == "yours":
+                    files.append({"name": f["name"], "path": f["path"], "archive": a["name"],
+                                  "size": f["size"]})
+                    top += [{"name": s["name"], "size": s["size"], "file": s.get("file"),
+                             "line": s.get("line")} for s in f["children"] if s["kind"] == "symbol"]
+    files.sort(key=lambda f: -f["size"])
+    top.sort(key=lambda s: -s["size"])
+    return {"tool": tool, "total": tree["size"], "groups": groups,
+            "tree": tree, "archives": archives, "files": files, "top": top[:30]}
+
+
+def history_entry(at: str, sizes: dict | None, regions: list[dict],
+                  commit: str | None = None) -> dict:
+    """One build, in a line: what the size change compares."""
+    return {"at": at, "commit": commit, "total": (sizes or {}).get("total"),
+            "groups": (sizes or {}).get("groups"),
+            "regions": [{"name": r["name"], "used": r["used"], "size": r["size"]}
+                        for r in regions]}
+
+
+def push_history(history: list[dict] | None, entry: dict, keep: int = HISTORY) -> list[dict]:
+    return [*(history or []), entry][-keep:]
+
+
+def linker_rest(rows: list[dict], regions: list[dict]) -> list[dict]:
+    """What the FLASH region holds beyond the symbols nm sizes: alignment,
+    the init tables, .data's copy - the linker's, filed with the runtime."""
+    used = next((r["used"] for r in regions if r["name"].upper() == "FLASH"), 0)
+    rest = used - sum(r["size"] for r in rows)
+    if rest <= 0:
+        return rows
+    return [*rows, {"group": "runtime", "archive": "linker", "archive_label": "linker",
+                    "file": "(padding, tables)", "file_label": "(padding, tables)",
+                    "symbol": "(padding, tables)", "size": rest, "src": None, "line": None}]
+
+
+async def _flash_sizes(app: dict, out_dir: Path, elf: Path, nm_text: str,
+                       symbols: list[dict], regions: list[dict]) -> dict | None:
+    """What fills flash, owner by owner. None when it cannot be read; the
+    build is still a build."""
+    if target_of(app) == "esp32":
+        mp = elf.with_suffix(".map")
+        if not mp.exists():
+            found = sorted(out_dir.glob("*.map"))
+            mp = found[0] if found else mp
+        if not mp.exists():
+            return None
+        rc, out, _ = await sandbox.run(
+            "embedded", ["bash", "-c",
+                         f'python -m esp_idf_size --ng --format raw "{mp}" 2>/dev/null'],
+            repo=app["repo"], workdir=apps.workdir(app), timeout=300)
+        raw = parse_idf_raw(out) if rc == 0 else []
+        if not raw:
+            return None
+        return sizes_from(idf_rows(raw, idf_components(out_dir, app["repo"]), symbols,
+                                   app["repo"]), "esp-idf-size")
+    rows = nm_rows(parse_nm_paths(nm_text), app["repo"])
+    return sizes_from(linker_rest(rows, regions), "nm") if rows else None
+
+
+async def _head(repo: str) -> str | None:
+    import asyncio
+    try:
+        p = await asyncio.create_subprocess_exec(
+            "git", "-C", repo, "rev-parse", "--short", "HEAD",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        out, _ = await p.communicate()
+        return out.decode().strip() or None if p.returncode == 0 else None
+    except OSError:
+        return None
+
+
+async def record_sizes(db, app: dict, out_dir: Path, elf: Path, nm_text: str,
+                       symbols: list[dict], regions: list[dict], at: str) -> dict | None:
+    """After a good build: what fills flash into its own artifact, and a
+    line of it onto the app's short history."""
+    try:
+        sizes = await _flash_sizes(app, out_dir, elf, nm_text, symbols, regions)
+    except Exception:                                # noqa: BLE001
+        sizes = None
+    if sizes:
+        sizes["at"] = at
+        await store.put_artifact(db, app["_id"], "fw-sizes", json.dumps(sizes).encode(),
+                                 collection=apps.APPS)
+    entry = history_entry(at, sizes, regions, await _head(app["repo"]))
+    await db[apps.APPS].update_one({"_id": app["_id"]}, {"$push": {
+        "firmware_history": {"$each": [entry], "$slice": -HISTORY}}})
+    return sizes

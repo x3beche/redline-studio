@@ -1,0 +1,20 @@
+{
+ "build_component_info": {
+  "esp_app_format": {
+   "dir": "/opt/esp/idf/components/esp_app_format",
+   "file": "@BUILD@/esp-idf/esp_app_format/libesp_app_format.a"
+  },
+  "freertos": {
+   "dir": "/opt/esp/idf/components/freertos",
+   "file": "@BUILD@/esp-idf/freertos/libfreertos.a"
+  },
+  "main": {
+   "dir": "@REPO@/firmware/demoboard/main",
+   "file": "@BUILD@/esp-idf/main/libmain.a"
+  },
+  "newlib": {
+   "dir": "/opt/esp/idf/components/newlib",
+   "file": "@BUILD@/esp-idf/newlib/libnewlib.a"
+  }
+ }
+}
