@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-190 tools. **MCP** marks the ones agents can run with `run_tool`.
+191 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -186,6 +186,7 @@ agents, the most used, and every tool nobody used.
 | **Stack Usage Estimator** · MCP | `stack-estimator` | worst-case stack from call depth and locals | Embedded |
 | **Stepper Motor Calculator** · MCP | `stepper-calc` | pulse frequency and torque from step angle, microstepping and speed | Embedded, 3D |
 | **Struct Packing Visualizer** · MCP | `struct-packing` | alignment of struct members and the padding bytes wasted | Embedded |
+| **SVD Register Browser** · MCP | `svd-browser` | a CMSIS-SVD file browsed: peripherals, registers and fields, and a register value decoded against it | Embedded |
 | **Task Timing Planner** · MCP | `task-timing` | scheduling conflicts of periodic tasks from period and duration | Embedded |
 | **U-Boot Env & bootargs Builder** · MCP | `uboot-env` | bootcmd and kernel bootargs built and explained, and the CRC'd environment image made | Embedded |
 | **Units & Numbers** · MCP | `units` | every engineering unit (pressure, torque, dBm, AWG, °F…), hex and binary, UART baud and timer PSC/ARR | Embedded, PCB, 3D |
