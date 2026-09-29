@@ -84,6 +84,10 @@ const TR: Record<string, string> = {
   'Go to a model, board, tool or room - search code, notes, chats, parts - or type an action':
     'Model, kart, araç ya da odaya git - kodda, notlarda, sohbetlerde, parçalarda ara - ya da bir işlem yaz',
   // releases, changes, code
+  'This firmware is not linked to a board yet.': 'Bu firmware henüz bir karta bağlı değil.',
+  'Which board does it run on? The simulator finds its parts from that board.': 'Hangi kartta çalışıyor? Simülatör parçaları o karttan bulur.',
+  'Link': 'Bağla',
+  'A board that already runs another firmware is usually the right one only if that firmware is this one under another name.': 'Başka bir firmware\'in çalıştığı kart, genelde yalnızca o firmware bununla aynıysa doğru seçimdir.',
   'Release': 'Paketle', 'Download': 'İndir', 'What this note changed': 'Bu not neyi değiştirdi',
   'Before and after': 'Önce ve sonra', 'Side by side': 'Yan yana', 'Inline': 'Satır içi', 'Slider': 'Kaydırıcı',
   'What changed': 'Ne değişti', 'Changed': 'Değişenler', 'Explorer': 'Gezgin', 'Save': 'Kaydet',

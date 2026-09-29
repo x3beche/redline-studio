@@ -55,6 +55,7 @@ def _public(a: dict) -> dict:
     last = a.get("last_test")
     return {"_id": a["_id"], "title": a.get("title") or a["_id"],
             "platform": a.get("platform") or "web", "folder": a.get("folder", ""),
+            "board": a.get("board"),
             "repo": a.get("repo"), "cwd": a.get("cwd") or "",
             "url": a.get("url"), "dev": a.get("dev"), "test": a.get("test"),
             "routes": a.get("routes") or ["/"],

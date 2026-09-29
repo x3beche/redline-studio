@@ -4,6 +4,7 @@ import {
 } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Board3d } from './board3d';
+import { T } from '../i18n';
 
 /** A part's view, as the simulator sends it (backend/sim/parts.py). */
 interface PartView {
@@ -50,11 +51,17 @@ const RPM_TO_RPS = 1 / 600;
  */
 @Component({
   selector: 'app-sim-view',
-  imports: [Board3d],
+  imports: [Board3d, T],
   styles: [`
     :host { display: block; height: 100%; }
     .sim { display: flex; height: 100%; min-height: 0; gap: 4px; background: var(--surface); }
     .stage { position: relative; flex: 1; min-width: 0; }
+    .link { display: flex; flex-direction: column; gap: 8px; max-width: 420px; padding: 14px 16px; text-align: left;
+      border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--ink); font-size: 12.5px; }
+    .link span { color: var(--ink-dim); line-height: 1.45; }
+    .link .pick { display: flex; gap: 6px; }
+    .link select { flex: 1; min-width: 0; }
+    .link .hint { font-size: 11px; }
     .why { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
            padding: 24px; text-align: center; font-size: 12px; line-height: 1.6; color: var(--ink-dim); }
     .side { width: 270px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0;
@@ -98,10 +105,23 @@ const RPM_TO_RPS = 1 / 600;
       <div class="why">
         @if (!info()) { reading the board… }
         @else if (!info()!.board) {
-          This firmware is not linked to a board, so there is nothing to run it on.
-          Link the board it runs on and the simulator builds sim.json from its netlist:
-          POST /api/sim/{{ app() }}/link with {{ '{' }}"board": "&lt;board id&gt;"{{ '}' }},
-          or tools/revisions.py sim link {{ app() }} &lt;board&gt;.
+          <!-- No board yet: pick it here. The parts come from its netlist. -->
+          <div class="link">
+            <b>{{ 'This firmware is not linked to a board yet.' | t }}</b>
+            <span>{{ 'Which board does it run on? The simulator finds its parts from that board.' | t }}</span>
+            <div class="pick">
+              <select class="tcv-field px-1.5 py-1" #pick>
+                @for (b of boards(); track b.id) {
+                  <option [value]="b.id">{{ b.title }}{{ b.users.length ? ' - ' + b.users.join(', ') : '' }}</option>
+                }
+              </select>
+              <button class="tcv-btn tcv-btn-accent px-2" [disabled]="busy() || !boards().length"
+                      (click)="linkTo(pick.value)">{{ 'Link' | t }}</button>
+            </div>
+            @if (someTaken()) {
+              <span class="hint">{{ 'A board that already runs another firmware is usually the right one only if that firmware is this one under another name.' | t }}</span>
+            }
+          </div>
         } @else {
           Board {{ info()!.board }} has no 3D model yet. Lay it out in the PCB room
           (the placed board is exported as board.glb) and it shows here; the parts
@@ -220,7 +240,8 @@ export class SimView implements OnDestroy {
   });
 
   problems = computed(() => {
-    const out = [...(this.info()?.errors ?? [])];
+    // Not linked yet: the picker says it, not an error.
+    const out = this.info() && !this.info()!.board ? [] : [...(this.info()?.errors ?? [])];
     const s = this.snap();
     if (s.error && (s.state === 'failed' || s.state === 'stopped')) out.push(s.error);
     if (this.note()) out.push(this.note());
@@ -294,6 +315,34 @@ export class SimView implements OnDestroy {
       this.snap.set(s);
       // A run started or ended somewhere else: its sim.json may differ.
       if (was !== s.state && (s.state === 'running' || was === 'idle')) this.reload();
+    });
+  }
+
+  /** The boards to pick from, and which firmware already runs on each. */
+  boards = signal<{ id: string; title: string; users: string[] }[]>([]);
+  someTaken = computed(() => this.boards().some(b => b.users.length > 0));
+  private loadBoards = effect(() => {
+    const i = this.info();
+    if (!i || i.board) return;
+    untracked(() => this.http.get<{ _id?: string; id?: string; title?: string }[]>('/api/boards').subscribe(list =>
+      this.http.get<{ _id?: string; id?: string; title?: string; board?: string | null; platform?: string }[]>('/api/apps')
+        .subscribe({
+          next: apps => this.boards.set(list.map(b => {
+            const id = (b._id ?? b.id)!;
+            return { id, title: b.title || id,
+                     users: apps.filter(a => a.board === id).map(a => a.title || (a._id ?? a.id)!) };
+          })),
+          error: () => this.boards.set(list.map(b => ({ id: (b._id ?? b.id)!, title: b.title || (b._id ?? b.id)!, users: [] }))),
+        })));
+  });
+
+  linkTo(board: string) {
+    if (!board) return;
+    this.busy.set(true);
+    this.note.set('');
+    this.http.post(`/api/sim/${encodeURIComponent(this.app())}/link`, { board }).subscribe({
+      next: () => { this.busy.set(false); this.reload(); },
+      error: e => { this.busy.set(false); this.note.set(this.why(e)); },
     });
   }
 

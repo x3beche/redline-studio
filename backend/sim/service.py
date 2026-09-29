@@ -143,10 +143,9 @@ async def resolve(db, app_id: str, board: str | None = None, sim: dict | None = 
     if not bid and not (over and over.get("replace")):
         ids = [d["_id"] async for d in db[ato.BOARDS].find({}, {"_id": 1})]
         raise SimError(
-            f"{app_id} has no board linked, so there is nothing to run the firmware on. "
-            f"Link the board it runs on: POST /api/sim/{app_id}/link {{\"board\": \"<id>\"}} "
-            f"or `tools/revisions.py sim link {app_id} <board>`"
-            + (f" - boards: {', '.join(ids)}" if ids else ""), 409)
+            f"{app_id} is not linked to a board yet - pick the board it runs on "
+            f"(tools/revisions.py sim link {app_id} <board>)"
+            + (f"; boards: {', '.join(ids)}" if ids else ""), 409)
     if bid:
         doc = await db[ato.BOARDS].find_one({"_id": bid}, {"artifacts": 1})
         if not doc:
