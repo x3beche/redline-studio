@@ -393,7 +393,8 @@ editors rather than calculations.
 
 The AI & prompts tools draft prompts offline; a few (Prompt Eval Grid) also
 run one for real. They call `POST /api/tools/llm` (`backend/tools_llm.py`)
-with `{messages: [{role, content}], model?, max_tokens, temperature, tool}`
+with `{messages: [{role, content}], model?, max_tokens, temperature, reasoning?, tool}`
+(reasoning is off unless asked for, so the answer gets every token)
 and get `{text, model, ms, usage}`. The call leaves from the server with the
 OpenRouter key from `.env`; the page never sees it. `GET /api/tools/llm` says
 whether a key is set, which models are offered (`X3_TOOLS_MODELS`, comma

@@ -61,6 +61,7 @@ class LlmIn(BaseModel):
     model: str | None = None
     max_tokens: int = Field(400, ge=1, le=MAX_ANSWER)
     temperature: float = Field(0.2, ge=0, le=1.5)
+    reasoning: bool = False                       # off: the answer gets every token asked for
     tool: str = Field("", max_length=64)          # which tool asked, for the usage log
 
 
@@ -87,7 +88,7 @@ async def call(body: LlmIn) -> dict:
 
     payload = {"model": model, "messages": [m.model_dump() for m in body.messages],
                "max_tokens": body.max_tokens, "temperature": body.temperature,
-               "usage": {"include": True}}
+               "reasoning": {"enabled": body.reasoning}, "usage": {"include": True}}
     t0 = time.monotonic()
     async with _gate:
         try:
