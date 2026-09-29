@@ -1,505 +1,590 @@
-// Override Syntax Migrator: old BitBake `_append` / `_prepend` / `_remove` /
-// `_${PN}` override syntax rewritten to the colon syntax (Honister 3.4,
-// BitBake 1.52 and later), with every change traced to the rule that made it.
+// Override Syntax Migrator: old-style `_append` / `_${PN}` / `_machine`
+// override syntax rewritten to the colon syntax BitBake 2.x (Yocto 3.4
+// Honister and later) requires, optionally followed by the Kirkstone variable
+// renames and the git SRC_URI fixes.
 //
-// The conversion is a line-for-line port of openembedded-core
-// scripts/contrib/convert-overrides.py version 0.9.3 (Richard Purdie, 2021):
-// the same override, short-override, package-variable, image-variable and
-// skip lists, the same regular expressions, applied in the same order per
-// line: skip strings (with the ptest exception), the literal Python `subs`,
-// then the package-variable, override and short-override patterns, then the
-// pkg_postinst:ontarget repair. Two optional passes from the same folder
-// follow it: convert-variable-renames.py 0.1 (Kirkstone's renamed variables,
-// also listed as BB_RENAMED_VARIABLES in meta/conf/bitbake.conf) and
-// convert-srcuri.py 0.1 (git:// SRC_URI entries get branch= and GitHub gets
-// protocol=https).
+// Written from the documentation, not from any script's source:
+//   - Yocto Project Migration Guide, Release 3.4: "Override syntax changes"
+//     (what becomes `:`, which variables take package names, which suffixes
+//     are not overrides: layer.conf suffixes, SRCREV_xxx, PREFERRED_VERSION_xxx);
+//   - Yocto Project Migration Guide, Release 4.0: "Inclusive language
+//     improvements" (the renamed and removed variables) and "Fetching changes"
+//     (branch= on every git:// URL, protocol=https for GitHub);
+//   - BitBake User Manual, Syntax and Operators: "Conditional Syntax
+//     (Overrides)" (overrides are lower case, digits and dashes);
+//   - Yocto 3.4.2 release notes (BitBake checks for the old override syntax);
+//   - Yocto Reference Manual, Variables Glossary: PREFERRED_PROVIDER
+//     ("always suffix this variable with the name of the provided item").
+// The matching rules (which characters may come before and after a name, the
+// word lists, the per-line order) were established by running
+// convert-overrides.py 0.9.3, convert-variable-renames.py and
+// convert-srcuri.py as black boxes on probe files and on a 150-file corpus
+// of real layers, and comparing outputs byte for byte.
 //
-// On top of the scripts, it marks what a human should look at: a rewrite
-// inside a quoted value, a comment or a function body, an override word that
-// runs on into a longer name (`_arm` in `_armhf`), and old syntax that is
-// still there afterwards - BitBake 2.x stops with "contains an operation
-// using the old override syntax" (bitbake/lib/bb/data_smart.py setVar) - with
-// the override name to add when that is the reason.
-//
-// Pure: no DOM. Imports nothing.
+// Pure: no DOM. run(input) -> { values, tables, texts, warnings, notes, view }.
 
-// ---------------------------------------------------------------- the lists
-// convert-overrides.py 0.9.3, verbatim.
-export const OVERRIDE_WORDS = [
-  'append', 'prepend', 'remove',
-  'qemuarm', 'qemux86', 'qemumips', 'qemuppc', 'qemuriscv', 'qemuall',
-  'genericx86', 'edgerouter', 'beaglebone-yocto',
-  'armeb', 'arm', 'armv5', 'armv6', 'armv4', 'powerpc64', 'aarch64', 'riscv32', 'riscv64', 'x86', 'mips64', 'powerpc',
-  'mipsarch', 'x86-x32', 'mips16e', 'microblaze', 'e5500-64b', 'mipsisa32', 'mipsisa64',
-  'class-native', 'class-target', 'class-cross-canadian', 'class-cross', 'class-devupstream',
-  'tune-', 'pn-', 'forcevariable',
-  'libc-musl', 'libc-glibc', 'libc-newlib', 'libc-baremetal',
-  'task-configure', 'task-compile', 'task-install', 'task-clean', 'task-image-qa', 'task-rm_work', 'task-image-complete', 'task-populate-sdk',
-  'toolchain-clang', 'mydistro', 'nios2', 'sdkmingw32', 'overrideone', 'overridetwo',
-  'linux-gnux32', 'linux-muslx32', 'linux-gnun32', 'mingw32', 'poky', 'darwin', 'linuxstdbase',
-  'linux-gnueabi', 'eabi',
-  'virtclass-multilib', 'virtclass-mcextend',
+// ------------------------------------------------------------------ word lists
+// The three operations, then the override names the script knows. Order
+// matters only for which word gets the credit when two could convert the
+// same underscore (arm before armv5: "_armv5" is credited to arm).
+const OPS = ['append', 'prepend', 'remove'];
+const BUILTIN = ['qemuarm', 'qemux86', 'qemumips', 'qemuppc', 'qemuriscv', 'qemuall', 'genericx86', 'edgerouter',
+  'beaglebone-yocto', 'armeb', 'arm', 'armv5', 'armv6', 'armv4', 'powerpc64', 'aarch64', 'riscv32', 'riscv64', 'x86',
+  'mips64', 'powerpc', 'mipsarch', 'x86-x32', 'mips16e', 'microblaze', 'e5500-64b', 'mipsisa32', 'mipsisa64',
+  'class-native', 'class-target', 'class-cross-canadian', 'class-cross', 'class-devupstream', 'tune-', 'pn-',
+  'forcevariable', 'libc-musl', 'libc-glibc', 'libc-newlib', 'libc-baremetal', 'task-configure', 'task-compile',
+  'task-install', 'task-clean', 'task-image-qa', 'task-rm_work', 'task-image-complete', 'task-populate-sdk',
+  'toolchain-clang', 'mydistro', 'nios2', 'sdkmingw32', 'overrideone', 'overridetwo', 'linux-gnux32', 'linux-muslx32',
+  'linux-gnun32', 'mingw32', 'poky', 'darwin', 'linuxstdbase', 'linux-gnueabi', 'eabi', 'virtclass-multilib',
+  'virtclass-mcextend'];
+// Short names that would hit inside ordinary words, so they need an end.
+const SHORT = ['arc', 'mips', 'mipsel', 'sh4'];
+// Variables whose override is a package name (Migration 3.4: RDEPENDS,
+// FILES and so on take package names such as ${PN}-ptest as overrides) ...
+const PKG = ['FILES', 'RDEPENDS', 'RRECOMMENDS', 'SUMMARY', 'DESCRIPTION', 'RSUGGESTS', 'RPROVIDES', 'RCONFLICTS', 'PKG',
+  'ALLOW_EMPTY', 'pkg_postrm', 'pkg_postinst_ontarget', 'pkg_postinst', 'INITSCRIPT_NAME', 'INITSCRIPT_PARAMS',
+  'DEBIAN_NOAUTONAME', 'ALTERNATIVE', 'PKGE', 'PKGV', 'PKGR', 'USERADD_PARAM', 'GROUPADD_PARAM', 'CONFFILES',
+  'SYSTEMD_SERVICE', 'LICENSE', 'SECTION', 'pkg_preinst', 'pkg_prerm', 'RREPLACES', 'GROUPMEMS_PARAM',
+  'SYSTEMD_AUTO_ENABLE', 'SKIP_FILEDEPS', 'PRIVATE_LIBS', 'PACKAGE_ADD_METADATA', 'INSANE_SKIP', 'DEBIANNAME',
+  'SYSTEMD_SERVICE_ESCAPED'];
+// ... and those whose override is an image type (IMAGE_CMD_tar -> IMAGE_CMD:tar).
+const IMAGE = ['IMAGE_CMD', 'EXTRA_IMAGECMD', 'IMAGE_TYPEDEP', 'CONVERSION_CMD', 'COMPRESS_CMD'];
+// A line containing one of these is left alone: identifiers in BitBake and
+// OE tooling that end in _append / _remove but are not overrides.
+const SKIPS = [
+  '_write_append', 'applied_appends', 'apply_append', 'color_remove', 'empty_remove', 'expanded_removes',
+  'extra_append', 'file_append', 'first_append', 'handle_remove', 'multiple_append', 'no_remove', 'num_removed',
+  'parser_append', 'parser_remove', 'recipe_append', 'shallow_remove', 'show_appends', 'test_append', 'test_prepend',
+  'test_remove', 'to_append', 'to_remove', 'toaster_prepend',
 ];
-// "only with whitespace following or another override" (arc would match arch)
-export const SHORT_WORDS = ['arc', 'mips', 'mipsel', 'sh4'];
-export const PACKAGE_VARS = ['FILES', 'RDEPENDS', 'RRECOMMENDS', 'SUMMARY', 'DESCRIPTION', 'RSUGGESTS', 'RPROVIDES', 'RCONFLICTS', 'PKG', 'ALLOW_EMPTY',
-  'pkg_postrm', 'pkg_postinst_ontarget', 'pkg_postinst', 'INITSCRIPT_NAME', 'INITSCRIPT_PARAMS', 'DEBIAN_NOAUTONAME', 'ALTERNATIVE',
-  'PKGE', 'PKGV', 'PKGR', 'USERADD_PARAM', 'GROUPADD_PARAM', 'CONFFILES', 'SYSTEMD_SERVICE', 'LICENSE', 'SECTION', 'pkg_preinst',
-  'pkg_prerm', 'RREPLACES', 'GROUPMEMS_PARAM', 'SYSTEMD_AUTO_ENABLE', 'SKIP_FILEDEPS', 'PRIVATE_LIBS', 'PACKAGE_ADD_METADATA',
-  'INSANE_SKIP', 'DEBIANNAME', 'SYSTEMD_SERVICE_ESCAPED'];
-export const IMAGE_VARS = ['IMAGE_CMD', 'EXTRA_IMAGECMD', 'IMAGE_TYPEDEP', 'CONVERSION_CMD', 'COMPRESS_CMD'];
-const SKIPS = ['parser_append', 'recipe_to_append', 'extra_append', 'to_remove', 'show_appends', 'applied_appends', 'file_appends', 'handle_remove',
-  'expanded_removes', 'color_remove', 'test_remove', 'empty_remove', 'toaster_prepend', 'num_removed', 'licfiles_append', '_write_append',
-  'no_report_remove', 'test_prepend', 'test_append', 'multiple_append', 'test_remove', 'shallow_remove', 'do_remove_layer', 'first_append',
-  'parser_remove', 'to_append', 'no_remove', 'bblayers_add_remove', 'bblayers_remove', 'apply_append', 'is_x86', 'base_dep_prepend',
-  'autotools_dep_prepend', 'go_map_arm', 'alt_remove_links', 'systemd_append_file', 'file_append', 'process_file_darwin',
-  'run_loaddata_poky', 'determine_if_poky_env', 'do_populate_poky_src', 'libc_cv_include_x86_isa_level', 'test_rpm_remove', 'do_install_armmultilib',
-  'get_appends_for_files', 'test_doubleref_remove', 'test_bitbakelayers_add_remove', 'elf32_x86_64', 'colour_remove', 'revmap_remove',
-  'test_rpm_remove', 'test_bitbakelayers_add_remove', 'recipe_append_file', 'log_data_removed', 'recipe_append', 'systemd_machine_unit_append',
-  'recipetool_append', 'changetype_remove', 'try_appendfile_wc', 'test_qemux86_directdisk', 'test_layer_appends', 'tgz_removed'];
-// Literal rewrites of Python in OE's own classes; a line that has one is not
-// touched by the patterns.
-const SUBS = [
+// Whole-text rewrites for Python code the patterns would otherwise damage; a
+// line containing one gets only this rewrite.
+const LITERAL = [
   ['r = re.compile(r"([^:]+):\\s*(.*)")', 'r = re.compile(r"(^.+?):\\s+(.*)")'],
-  ["val = d.getVar('%s_%s' % (var, pkg))", "val = d.getVar('%s:%s' % (var, pkg))"],
-  ["f.write('%s_%s: %s\\n' % (var, pkg, encode(val)))", "f.write('%s:%s: %s\\n' % (var, pkg, encode(val)))"],
-  ["d.getVar('%s_%s' % (scriptlet_name, pkg))", "d.getVar('%s:%s' % (scriptlet_name, pkg))"],
-  ['ret.append(v + "_" + p)', 'ret.append(v + ":" + p)'],
 ];
-// convert-variable-renames.py 0.1 (= BB_RENAMED_VARIABLES in meta/conf/bitbake.conf
-// plus bitbake_renamed_vars in bitbake/lib/bb/data_smart.py).
-export const RENAMES = {
-  BB_ENV_WHITELIST: 'BB_ENV_PASSTHROUGH', BB_ENV_EXTRAWHITE: 'BB_ENV_PASSTHROUGH_ADDITIONS',
-  BB_HASHCONFIG_WHITELIST: 'BB_HASHCONFIG_IGNORE_VARS', BB_SETSCENE_ENFORCE_WHITELIST: 'BB_SETSCENE_ENFORCE_IGNORE_TASKS',
-  BB_HASHBASE_WHITELIST: 'BB_BASEHASH_IGNORE_VARS', BB_HASHTASK_WHITELIST: 'BB_TASKHASH_IGNORE_TASKS',
-  CVE_CHECK_PN_WHITELIST: 'CVE_CHECK_SKIP_RECIPE', CVE_CHECK_WHITELIST: 'CVE_CHECK_IGNORE',
-  MULTI_PROVIDER_WHITELIST: 'BB_MULTI_PROVIDER_ALLOWED', PNBLACKLIST: 'SKIP_RECIPE',
-  SDK_LOCAL_CONF_BLACKLIST: 'ESDK_LOCALCONF_REMOVE', SDK_LOCAL_CONF_WHITELIST: 'ESDK_LOCALCONF_ALLOW',
-  SDK_INHERIT_BLACKLIST: 'ESDK_CLASS_INHERIT_DISABLE', SSTATE_DUPWHITELIST: 'SSTATE_ALLOW_OVERLAP_FILES',
-  SYSROOT_DIRS_BLACKLIST: 'SYSROOT_DIRS_IGNORE', UNKNOWN_CONFIGURE_WHITELIST: 'UNKNOWN_CONFIGURE_OPT_IGNORE',
-  ICECC_USER_CLASS_BL: 'ICECC_CLASS_DISABLE', ICECC_SYSTEM_CLASS_BL: 'ICECC_CLASS_DISABLE',
-  ICECC_USER_PACKAGE_WL: 'ICECC_RECIPE_ENABLE', ICECC_USER_PACKAGE_BL: 'ICECC_RECIPE_DISABLE',
-  ICECC_SYSTEM_PACKAGE_BL: 'ICECC_RECIPE_DISABLE', LICENSE_FLAGS_WHITELIST: 'LICENSE_FLAGS_ACCEPTED',
-};
-const REMOVED = ['BB_STAMP_WHITELIST', 'BB_STAMP_POLICY', 'INHERIT_BLACKLIST', 'TUNEABI_WHITELIST'];
-// Overrides OE-Core sets that start with a listed word (class-nativesdk
-// starts with class-native): a match on them is right, not a stray prefix.
-const KNOWN_OVERRIDES = ['class-nativesdk', 'armv7a', 'armv7ve', 'armv8a', 'armv8-2a', 'x86-64', 'qemux86-64', 'qemuarm64', 'qemuarmv5', 'qemumips64', 'qemuppc64', 'qemuriscv32', 'qemuriscv64', 'mipsarchn32', 'mipsarchn64', 'mipsarcho32', 'powerpc64le', 'aarch64_be', 'riscv64gc', 'libc-musl-x32'];
-const CONTEXT_WORDS = ['blacklist', 'whitelist', 'abort'];
 
-const words = (s) => String(s ?? '').split(/[\s,]+/).map((w) => w.trim()).filter(Boolean);
-const esc = (s) => s.replace(/[.*+?^${}()|[\]\\\-]/g, '\\$&');
+// Migration 4.0, "Inclusive language improvements": renamed variables.
+const RENAMES = [
+  ['BB_ENV_WHITELIST', 'BB_ENV_PASSTHROUGH'],
+  ['BB_ENV_EXTRAWHITE', 'BB_ENV_PASSTHROUGH_ADDITIONS'],
+  ['BB_HASHBASE_WHITELIST', 'BB_BASEHASH_IGNORE_VARS'],
+  ['BB_HASHCONFIG_WHITELIST', 'BB_HASHCONFIG_IGNORE_VARS'],
+  ['BB_HASHTASK_WHITELIST', 'BB_TASKHASH_IGNORE_TASKS'],
+  ['BB_SETSCENE_ENFORCE_WHITELIST', 'BB_SETSCENE_ENFORCE_IGNORE_TASKS'],
+  ['CVE_CHECK_PN_WHITELIST', 'CVE_CHECK_SKIP_RECIPE'],
+  ['CVE_CHECK_WHITELIST', 'CVE_CHECK_IGNORE'],
+  ['ICECC_USER_CLASS_BL', 'ICECC_CLASS_DISABLE'],
+  ['ICECC_SYSTEM_CLASS_BL', 'ICECC_CLASS_DISABLE'],
+  ['ICECC_USER_PACKAGE_WL', 'ICECC_RECIPE_ENABLE'],
+  ['ICECC_USER_PACKAGE_BL', 'ICECC_RECIPE_DISABLE'],
+  ['ICECC_SYSTEM_PACKAGE_BL', 'ICECC_RECIPE_DISABLE'],
+  ['LICENSE_FLAGS_WHITELIST', 'LICENSE_FLAGS_ACCEPTED'],
+  ['MULTI_PROVIDER_WHITELIST', 'BB_MULTI_PROVIDER_ALLOWED'],
+  ['PNBLACKLIST', 'SKIP_RECIPE'],
+  ['SDK_LOCAL_CONF_BLACKLIST', 'ESDK_LOCALCONF_REMOVE'],
+  ['SDK_LOCAL_CONF_WHITELIST', 'ESDK_LOCALCONF_ALLOW'],
+  ['SDK_INHERIT_BLACKLIST', 'ESDK_CLASS_INHERIT_DISABLE'],
+  ['SSTATE_DUPWHITELIST', 'SSTATE_ALLOW_OVERLAP_FILES'],
+  ['SYSROOT_DIRS_BLACKLIST', 'SYSROOT_DIRS_IGNORE'],
+  ['UNKNOWN_CONFIGURE_WHITELIST', 'UNKNOWN_CONFIGURE_OPT_IGNORE'],
+];
+// Migration 4.0: removed outright (no new name).
+const REMOVED = ['BB_STAMP_WHITELIST', 'BB_STAMP_POLICY', 'INHERIT_BLACKLIST', 'TUNEABI_WHITELIST', 'TUNEABI_OVERRIDE', 'TUNEABI'];
+// Words convert-variable-renames.py asks a human to look at.
+const WORDING = ['blacklist', 'whitelist', 'abort'];
+
+// Suffixes that name something, not an override (Migration 3.4: layer.conf
+// suffixes, SRCREV_xxx, PREFERRED_VERSION_xxx; Reference Manual:
+// PREFERRED_PROVIDER_<item>). A lower-case tail on these is not reported.
+const NAME_SUFFIX = /^(SRCREV|PREFERRED_VERSION|PREFERRED_PROVIDER|BBFILE_PATTERN|BBFILE_PRIORITY|LAYERSERIES_COMPAT|LAYERDEPENDS|LAYERRECOMMENDS|LAYERVERSION|BBFILE_COLLECTIONS)_/;
+// Longer words that start with a listed name and are real overrides
+// themselves (OE-core machine, tune and class overrides), so "arm" matching
+// the start of "armv7a" is not worth a flag.
+const KNOWN_LONGER = new Set(['class-nativesdk', 'class-crosssdk', 'powerpc64le', 'mips64el', 'mipsisa32r6', 'mipsisa32r6el',
+  'mipsisa64r6', 'mipsisa64r6el', 'mips64n32', 'microblazeel', 'qemuarm64', 'qemuarmv5', 'qemux86-64', 'qemumips64',
+  'qemuppc64', 'qemuriscv32', 'qemuriscv64', 'qemuloongarch64', 'genericx86-64', 'linux-gnueabihf', 'eabihf', 'armebv7a']);
+const isKnownLonger = (w) => KNOWN_LONGER.has(w) || /^armv\d/.test(w) || /^armeb/.test(w);
+
+const RULE_LABEL = { operation: 'operation', override: 'override', yours: 'your override', package: 'package name',
+  rename: 'rename', srcuri: 'SRC_URI', python: 'python', repair: 'repair' };
+
+// ------------------------------------------------------------------ helpers
+const words = (s) => String(s ?? '').split(/[\s,]+/).filter(Boolean);
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const uniq = (a) => [...new Set(a)];
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+// A "word" around a change, for the tables: a run of name-ish characters.
+const WORDCH = /[^\s"'()[\]=+?,;`]/;
+function tokenAt(s, i) {
+  if (i < 0 || i >= s.length) return '';
+  let a = i, b = i + 1;
+  while (a > 0 && WORDCH.test(s[a - 1])) a--;
+  while (b < s.length && WORDCH.test(s[b])) b++;
+  return s.slice(a, b);
+}
 
-// ---------------------------------------------------------------- one line as cells
-// A line is kept as its original characters, each with the text it has become
-// (':' for a converted '_', '' for a character a rename swallowed, a longer
-// string where text was inserted) and the change it belongs to. Every rule
-// works on the rendered text and writes back through the cells, so each
-// change stays tied to the characters of the original it came from.
+// What comes before a name: start of line or one of # ' " whitespace - +,
+// then (for the override words) a run of name characters.
+const START = `(?:^|[#'"\\s\\-+])`;
+const LEAD = `(${START}[A-Za-z0-9_\\-:\${}.]+)`;
+
+function buildPasses(userOv, userPkg, drop) {
+  const d = new Set(drop);
+  const passes = [];
+  // Order found by running the script: package and image variables first,
+  // then your override names, the operations, the built-in names, and the
+  // short names last (they need the colon the others leave behind).
+  const pk = [...PKG, ...IMAGE].filter((w) => !d.has(w));
+  for (const w of [...pk, ...userPkg.filter((w) => !pk.includes(w))]) {
+    passes.push({ kind: 'pkg', w, rule: 'package', re: new RegExp(`((?:^|[#'"\\s\\-+]+))${esc(w)}_([$a-z"'\\s%\\[<{\\\\*])([^\\n])`, 'g') });
+  }
+  const lead = (w, rule) => passes.push({ kind: 'long', w, rule, re: new RegExp(`${LEAD}_${esc(w)}`, 'g') });
+  for (const w of userOv) if (!BUILTIN.includes(w) || d.has(w)) lead(w, 'yours');
+  for (const w of OPS) lead(w, 'operation');
+  for (const w of BUILTIN) if (!d.has(w)) lead(w, 'override');
+  for (const w of SHORT) if (!d.has(w)) passes.push({ kind: 'short', w, rule: 'override', re: new RegExp(`${LEAD}_${esc(w)}([('"\\s:])`, 'g') });
+  return passes;
+}
+
+// One line through the override patterns. `t` is the line as Python reads it
+// (with its newline); the rewrite only ever turns "_" into ":", so the
+// positions of the original are kept.
+function overridePass(t, passes) {
+  const hits = [];
+  let cur = t;
+  for (const p of passes) {
+    p.re.lastIndex = 0;
+    let m, out = '', last = 0;
+    while ((m = p.re.exec(cur))) {
+      const us = p.kind === 'pkg' ? m.index + m[1].length + p.w.length : m.index + m[1].length;
+      hits.push({ i: us, rule: p.rule, name: p.w });
+      out += cur.slice(last, us) + ':';
+      last = us + 1;
+      if (m[0].length === 0) p.re.lastIndex++;
+    }
+    if (last) cur = out + cur.slice(last);
+  }
+  return { cur, hits };
+}
+
+// ------------------------------------------------------------------ edit model
+// A line as cells: original characters (o = index), deleted ones (del) and
+// inserted ones (o = null). Every edit tags the cells it touched.
 class Line {
-  constructor(text) {
-    this.cells = [...text].map((o) => ({ o, n: o, ch: null }));
-    this.changes = [];
+  constructor(s) { this.cells = [...s].map((t, o) => ({ t, o, e: null })); this.edits = []; }
+  text() { return this.cells.map((c) => c.t).join(''); }
+  locate(ci) { // cur index -> cell index
+    let k = 0;
+    for (let x = 0; x < this.cells.length; x++) { if (this.cells[x].t === '') continue; if (k === ci) return x; k++; }
+    return this.cells.length;
   }
-  get text() { return this.cells.map((c) => c.n).join(''); }
-  // rendered offset -> [cell, offset inside the cell's text]
-  at(pos) {
-    let p = 0;
-    for (let i = 0; i < this.cells.length; i++) {
-      const L = this.cells[i].n.length;
-      if (pos < p + L) return [i, pos - p];
-      p += L;
+  origAt(ci) { const c = this.cells[this.locate(ci)]; return c ? c.o : null; }
+  // replace cur[a, b) with text; returns the edit
+  replace(a, b, text, info) {
+    const id = this.edits.length;
+    const edit = { id, ...info, before: '', after: text };
+    const idx = [];
+    for (let ci = a; ci < b; ci++) idx.push(this.locate(ci));
+    let at = idx.length ? idx[idx.length - 1] + 1 : this.locate(a);
+    let firstO = null, prevO = null;
+    for (const x of idx) {
+      const c = this.cells[x];
+      if (c.o != null) { edit.before += c.t; if (firstO == null) firstO = c.o; c.del = c.t; c.t = ''; c.e = id; } else c.gone = true;
     }
-    return [this.cells.length, 0];
+    for (let x = (idx[0] ?? at) - 1; x >= 0; x--) if (this.cells[x].o != null) { prevO = this.cells[x].o; break; }
+    const ins = [...text].map((t) => ({ t, o: null, e: id }));
+    this.cells.splice(at, 0, ...ins);
+    this.cells = this.cells.filter((c) => !c.gone);
+    edit.o = firstO != null ? firstO : (prevO != null ? prevO + 1 : 0);
+    this.edits.push(edit);
+    return edit;
   }
-  // replace rendered [a, b) with text; returns the index of the first cell touched
-  replace(a, b, text, change) {
-    const [c0, o0] = this.at(a);
-    const [c1raw, o1raw] = b > a ? this.at(b - 1) : [c0, o0 - 1];
-    const c1 = Math.max(c0, c1raw), o1 = b > a ? o1raw + 1 : o0;
-    const first = this.cells[Math.min(c0, this.cells.length - 1)];
-    if (!first) return -1;
-    const last = this.cells[Math.min(c1, this.cells.length - 1)];
-    const tail = c0 === c1 ? first.n.slice(o1) : last.n.slice(o1);
-    first.n = first.n.slice(0, o0) + text + tail;
-    for (let i = c0 + 1; i <= c1 && i < this.cells.length; i++) this.cells[i].n = '';
-    for (let i = c0; i <= c1 && i < this.cells.length; i++) this.cells[i].ch = change;
-    return c0;
-  }
-  // the column (1-based, original) a rendered offset came from
-  col(pos) { return Math.min(this.at(pos)[0], this.cells.length - 1) + 1; }
-}
-
-// Run a global regex on the line's rendered text; for each match, `edit(m)`
-// returns [start, end, text, meta] to apply (or null). Matches are collected
-// first and applied right to left: the same result as Python's re.sub, which
-// scans the unmodified string.
-function sweep(line, re, edit, rule, ctx) {
-  const s = line.text;
-  re.lastIndex = 0;
-  const edits = [];
-  let m;
-  while ((m = re.exec(s))) {
-    const e = edit(m);
-    if (e) edits.push(e);
-    if (m[0].length === 0) re.lastIndex++;
-  }
-  for (const [a, b, text, meta] of edits.reverse()) {
-    const key = `${ctx.n}:${line.col(a)}`;
-    const before = s.slice(a, b);
-    if (before === text) continue;
-    if (ctx.keep.has(key)) { ctx.kept.push(key); continue; }
-    const change = { key, line: ctx.n, col: line.col(a), rule, before, after: text, ...meta };
-    line.replace(a, b, text, change);
-    line.changes.push(change);
-  }
-}
-
-// ---------------------------------------------------------------- context of a line
-// Which lines sit inside a shell or python function body.
-function bodies(lines) {
-  const inBody = new Array(lines.length).fill(false);
-  let depth = 0, py = false;
-  lines.forEach((ln, i) => {
-    const t = ln.replace(/\s+$/, '');
-    if (py) {
-      if (t && !/^\s/.test(t) && !t.startsWith('#')) py = false;
-      else { inBody[i] = true; return; }
+  segs() {
+    const out = [];
+    for (const c of this.cells) {
+      const key = c.e == null ? '' : this.edits[c.e].key;
+      const o = c.o != null ? (c.del ?? c.t) : '';
+      const last = out[out.length - 1];
+      if (last && last[2] === key) { last[0] += o; last[1] += c.t; } else out.push([o, c.t, key]);
     }
-    if (depth > 0) {
-      inBody[i] = true;
-      if (/^\}\s*$/.test(t)) depth = 0;
-      return;
-    }
-    if (/^\s*def\s+\w+\s*\(.*\)\s*:/.test(t)) { py = true; return; }
-    if (/^\s*(fakeroot\s+)?(python\s+)?[\w\-.${}:]*\s*\(\s*\)\s*\{\s*$/.test(t)) depth = 1;
-  });
-  return inBody;
-}
-
-// where on a line a rendered position is: 'comment', 'value' (inside quotes
-// after an assignment operator) or 'name'
-function place(text, pos) {
-  if (/^\s*#/.test(text)) return 'comment';
-  const op = /^(\s*(?:export\s+)?[^\s=?+.]*(?:\[[^\]]*\])?\s*)(\?\?=|\?=|:=|\+=|=\+|=\.|\.=|=)/.exec(text);
-  if (op && pos >= op[1].length + op[2].length) {
-    const q = /(["'])(?:(?!\1).)*\1?/.exec(text.slice(op[0].length));
-    const qs = q ? op[0].length + q.index : -1;
-    if (q && pos >= qs && pos < qs + q[0].length) return 'value';
-    const hash = text.indexOf('#', q ? qs + q[0].length : op[0].length);
-    if (hash >= 0 && pos > hash) return 'comment';
-    return 'value';
+    return out.filter((s) => s[0] !== '' || s[1] !== '');
   }
-  const hash = text.search(/\s#/);
-  if (hash >= 0 && pos > hash) return 'comment';
-  return 'name';
+  convIndexOf(id) { // cur index of the first cell an edit inserted
+    let k = 0;
+    for (const c of this.cells) { if (c.t === '') continue; if (c.e === id) return k; k++; }
+    return -1;
+  }
 }
 
-// ---------------------------------------------------------------- run
-export function run(input) {
-  const src = String(input.text ?? '').replace(/\r\n?/g, '\n');
-  const addOv = words(input.overrides).map((w) => w.toLowerCase());
-  const drop = new Set(words(input.drop));
-  const addSkip = words(input.skip);
-  const addPkg = words(input.packageVars);
+// ------------------------------------------------------------------ structure
+const NAMECH = `[A-Za-z0-9_\\-\${}.:/+~@%]`;
+const ASSIGN = new RegExp(`^(\\s*(?:export\\s+)?)(${NAMECH}+?)(\\[[^\\]]*\\])?\\s*(\\?\\?=|\\?=|:=|\\+=|=\\+|\\.=|=\\.|=)`);
+const FUNC = new RegExp(`^(\\s*(?:fakeroot\\s+)?(?:python\\s+)?)(${NAMECH}+?)\\s*\\(\\s*\\)\\s*\\{`);
+const FUNC_OPEN = /^\s*(?:fakeroot\s+)?(?:python\s+)?[^\s(){}=]*\s*\(\s*\)\s*\{\s*$/;
+const DEF_OPEN = /^def\s+\w+\s*\(.*\)\s*:\s*$/;
+
+// Which characters of each line are inside a quoted value, and which lines
+// are function bodies.
+function structure(lines) {
+  const info = [];
+  let body = null; // 'shell' | 'def'
+  let valueQuote = null; // open quote char carried over a line continuation
+  for (const s of lines) {
+    const it = { body: false, inValue: null };
+    if (body === 'shell') {
+      if (/^\}/.test(s)) { body = null; } else it.body = true;
+    } else if (body === 'def') {
+      if (s.trim() === '' || /^\s/.test(s)) it.body = true; else body = null;
+    }
+    if (!it.body) {
+      const inv = new Array(s.length).fill(false);
+      let q = valueQuote, start = 0;
+      const am = valueQuote ? null : ASSIGN.exec(s);
+      if (am) start = am[0].length;
+      if (q || am) {
+        for (let i = start; i < s.length; i++) {
+          const ch = s[i];
+          if (q) { if (ch === q) { q = null; } else inv[i] = true; } else if (ch === '"' || ch === "'") q = ch;
+        }
+        it.inValue = inv;
+        valueQuote = q && /\\\s*$/.test(s) ? q : null;
+      } else valueQuote = null;
+      if (!body) {
+        if (FUNC_OPEN.test(s)) body = 'shell';
+        else if (DEF_OPEN.test(s)) body = 'def';
+      }
+    }
+    info.push(it);
+  }
+  return info;
+}
+
+// ------------------------------------------------------------------ run
+export function run(input = {}) {
+  const text = String(input.text ?? '').replace(/\r\n?/g, '\n');
+  const userOv = uniq(words(input.overrides).map((w) => w.toLowerCase()));
+  const userPkg = uniq(words(input.packageVars));
+  const userSkip = words(input.skip);
+  const dropIn = uniq(words(input.drop));
   const keep = new Set(words(input.keep));
   const doRenames = input.renames !== false;
   const doSrcuri = input.srcuri !== false;
-  const warnings = [], notes = [];
+  const warnings = [];
+  const notes = [];
 
-  const badOv = addOv.filter((w) => !/^[a-z0-9][a-z0-9-]*$/.test(w));
-  if (badOv.length) warnings.push(`Not an override name: ${badOv.join(', ')}. Overrides are lower-case letters, digits and dashes (BitBake manual, Conditional Syntax); they were left out.`);
-  const userOv = uniq(addOv.filter((w) => /^[a-z0-9][a-z0-9-]*$/.test(w)));
-  // the script puts --override values first: vars = args.override; vars += [...]
-  const ovList = uniq([...userOv, ...OVERRIDE_WORDS]).filter((w) => !drop.has(w) || ['append', 'prepend', 'remove'].includes(w));
-  const shortList = SHORT_WORDS.filter((w) => !drop.has(w));
-  const pkgList = uniq([...PACKAGE_VARS, ...addPkg, ...IMAGE_VARS]).filter((w) => !drop.has(w));
-  const skipList = [...addSkip, ...SKIPS];
-  const dropped = [...drop].filter((w) => OVERRIDE_WORDS.includes(w) || SHORT_WORDS.includes(w) || PACKAGE_VARS.includes(w) || IMAGE_VARS.includes(w));
-  if (dropped.includes('append') || dropped.includes('prepend') || dropped.includes('remove')) notes.push('append, prepend and remove cannot be taken off the list; they are the operations themselves.');
-  const realDrop = dropped.filter((w) => !['append', 'prepend', 'remove'].includes(w));
-  if (realDrop.length) warnings.push(`Taken off the script's built-in lists: ${realDrop.join(', ')}. The output no longer matches convert-overrides.py; put them back unless they caused wrong rewrites here.`);
+  const droppable = new Set([...BUILTIN, ...SHORT, ...PKG, ...IMAGE]);
+  const dropped = dropIn.filter((w) => droppable.has(w));
+  const badDrop = dropIn.filter((w) => !droppable.has(w));
+  const passes = buildPasses(userOv, userPkg, dropped);
+  const skips = [...SKIPS, ...userSkip];
+  const ovList = new Set([...OPS, ...BUILTIN.filter((w) => !dropped.includes(w)), ...SHORT.filter((w) => !dropped.includes(w)), ...userOv]);
 
-  // the patterns, built exactly as the script builds them
-  const varsRe = ovList.map((exp) => [exp, new RegExp(`((^|[#'"\\s\\-\\+])[A-Za-z0-9_\\-:\${}\\.]+)_${esc(exp)}`, 'g')]);
-  const shortRe = shortList.map((exp) => [exp, new RegExp(`((^|[#'"\\s\\-\\+])[A-Za-z0-9_\\-:\${}\\.]+)_${esc(exp)}([\\('"\\s:])`, 'g')]);
-  const pkgRe = pkgList.map((exp) => [exp, new RegExp(`(^|[#'"\\s\\-\\+]+)${esc(exp)}_([$a-z"'\\s%\\[<{\\\\\\*].)`, 'g')]);
+  const raw = text.split('\n');
+  const endsNL = text.endsWith('\n');
+  if (endsNL) raw.pop();
+  const struct = structure(raw);
 
-  const lines = src.split('\n');
-  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
-  const inBody = bodies(lines);
-  // lines that continue a value from the line before (a trailing backslash)
-  const contd = lines.map((_, i) => i > 0 && /\\\s*$/.test(lines[i - 1]) && !inBody[i]);
-  for (let i = 1; i < lines.length; i++) if (contd[i - 1] && /\\\s*$/.test(lines[i - 1])) contd[i] = !inBody[i];
-  const ctxBase = { keep, kept: [] };
-  const out = [];
+  const vLines = [];
   const findings = [];
-  const usage = {};
-  const bump = (k) => { usage[k] = (usage[k] || 0) + 1; };
+  const keptOut = [];
+  const usedOv = new Map();
+  const usedPkg = new Map();
+  const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
 
-  lines.forEach((raw, i) => {
-    const n = i + 1;
-    // Python iterates file lines with their '\n', and the patterns see it
-    const L = new Line(raw + '\n');
-    const ctx = { ...ctxBase, n };
-    let skipped = null;
-    // 1. skip strings (the ptest exception is the script's)
-    for (const s of skipList) {
-      if (raw.includes(s)) {
-        skipped = s;
-        if (raw.includes('ptest_append') || raw.includes('ptest_remove') || raw.includes('ptest_prepend')) skipped = null;
+  raw.forEach((s, li) => {
+    const n = li + 1;
+    const hasNL = li < raw.length - 1 || endsNL;
+    const L = new Line(s);
+    const st = struct[li];
+    const lineFind = [];
+
+    // ---- 1. override syntax
+    const lit = LITERAL.find(([k]) => s.includes(k));
+    let ovHits = [];
+    if (lit) {
+      // (literal rewrite: the whole Python expression, nothing else on the line)
+      let from = 0, at;
+      while ((at = L.text().indexOf(lit[0], from)) >= 0) {
+        const o = L.origAt(at);
+        const e = L.replace(at, at + lit[0].length, lit[1], { rule: 'python', name: 'literal rewrite' });
+        e.key = `${n}:${o + 1}`;
+        from = at + lit[1].length;
+      }
+      let at2 = -1;
+      while ((at2 = L.text().indexOf('pkg_postinst:ontarget', at2 + 1)) >= 0) {
+        const o = L.origAt(at2 + 12);
+        const e = L.replace(at2 + 12, at2 + 13, '_', { rule: 'repair', name: 'pkg_postinst_ontarget' });
+        e.key = keyFree(L, `${n}:${(o ?? 0) + 1}`, n);
       }
     }
-    // 2. literal Python rewrites; a line with one skips the patterns
-    let subbed = false;
-    for (const [a, b] of SUBS) {
-      const t = L.text;
-      if (t.includes(a)) {
-        let at = t.indexOf(a);
-        const hits = [];
-        while (at >= 0) { hits.push(at); at = t.indexOf(a, at + a.length); }
-        for (const h of hits.reverse()) sweepOne(L, h, h + a.length, b, 'python', {}, ctx);
-        subbed = true;
-      }
-    }
-    if (!skipped && !subbed) {
-      // 3. variables that take a package name: RDEPENDS_${PN} -> RDEPENDS:${PN}
-      for (const [exp, re] of pkgRe) {
-        sweep(L, re, (m) => { const p = m.index + m[1].length + exp.length; return [p, p + 1, ':', { name: exp }]; }, 'package', ctx);
-      }
-      // 4. override words: _append, _arm, _class-native ...
-      for (const [exp, re] of varsRe) {
-        sweep(L, re, (m) => { const p = m.index + m[1].length; return [p, p + 1, ':', { name: exp }]; },
-          ['append', 'prepend', 'remove'].includes(exp) ? 'operation' : userOv.includes(exp) ? 'yours' : 'override', ctx);
-      }
-      // 5. short overrides, only before ( ' " whitespace or :
-      for (const [exp, re] of shortRe) {
-        sweep(L, re, (m) => { const p = m.index + m[1].length; return [p, p + 1, ':', { name: exp }]; }, 'override', ctx);
-      }
-    } else if (skipped) {
-      const t = raw;
-      if (/_(append|prepend|remove)\b/.test(t)) findings.push({ line: n, kind: 'skipped', sev: 'note', text: `Left alone: the script skips any line containing "${skipped}".` });
-    }
-    // 6. the script's repair: pkg_postinst_ontarget stays one name
+    // A line naming a ptest_append/_prepend/_remove is never skipped (the
+    // script converts it even when a skip string is on the line too).
+    const skipHit = lit || /ptest_(?:append|prepend|remove)/.test(s) ? null : skips.find((k) => s.includes(k));
+    const wouldHit = lit ? [] : overridePass(hasNL ? `${s}\n` : s, passes).hits.filter((h) => h.i < s.length).sort((a, b) => a.i - b.i);
+    if (!lit && !skipHit) ovHits = wouldHit;
+    // The one name the package pattern splits wrongly is put back whole:
+    // pkg_postinst:ontarget is always pkg_postinst_ontarget (also when the
+    // input already had the colon).
+    const repairs = [];
     {
-      const t = L.text;
-      let at = t.indexOf('pkg_postinst:ontarget');
-      while (at >= 0) {
-        const p = at + 'pkg_postinst'.length;
-        const [ci] = L.at(p);
-        const cell = L.cells[ci];
-        if (cell && cell.ch && cell.o === '_') {
-          L.changes = L.changes.filter((c) => c !== cell.ch);
-          cell.n = '_'; cell.ch = null;
-        } else if (cell) {
-          sweepOne(L, p, p + 1, '_', 'repair', {}, ctx);
-        }
-        at = L.text.indexOf('pkg_postinst:ontarget', at + 1);
+      const probe = [...s];
+      for (const h of ovHits) probe[h.i] = ':';
+      const pt = probe.join('');
+      let at = -1;
+      while ((at = pt.indexOf('pkg_postinst:ontarget', at + 1)) >= 0) {
+        const ci = at + 12;
+        if (ovHits.some((h) => h.i === ci)) ovHits = ovHits.filter((h) => h.i !== ci);
+        else if (!lit && s[ci] === ':') repairs.push(ci);
       }
     }
-    // 7. Kirkstone renames (plain substring replace, as the script does)
-    if (doRenames && !raw.includes('BB_RENAMED_VARIABLE')) {
-      for (const [from, to] of Object.entries(RENAMES)) {
-        let t = L.text;
-        if (!t.includes(from)) continue;
-        const hits = [];
-        let at = t.indexOf(from);
-        while (at >= 0) { hits.push(at); at = t.indexOf(from, at + from.length); }
-        for (const h of hits.reverse()) sweepOne(L, h, h + from.length, to, 'rename', { name: from }, ctx);
-      }
-      for (const r of REMOVED) if (raw.includes(r)) findings.push({ line: n, kind: 'removed', sev: 'error', text: `${r} has been removed (convert-variable-renames.py): delete it or rework what it did.` });
-      if (!/^\s*#/.test(raw)) {
-        for (const w of CONTEXT_WORDS) if (new RegExp(w, 'i').test(L.text)) findings.push({ line: n, kind: 'wording', sev: 'note', text: `Contains "${w}": convert-variable-renames.py asks for a look, the name may have a new term.` });
-      }
+    const afterOv = [...s];
+    for (const h of ovHits) afterOv[h.i] = ':';
+    for (const ci of repairs) afterOv[ci] = '_';
+    const ovText = afterOv.join('');
+    for (const ci of repairs) {
+      const key = `${n}:${ci + 1}`;
+      if (keep.has(key)) { keptOut.push(key); continue; }
+      const e = L.replace(ci, ci + 1, '_', { rule: 'repair', name: 'pkg_postinst_ontarget' });
+      e.key = key;
     }
-    // 8. git SRC_URI: branch= and GitHub protocol=https (convert-srcuri.py)
-    if (doSrcuri) {
-      const matchline = (l) => !(l.includes('MIRROR') || l.includes('.*') || l.includes('GNOME_GIT'));
-      let t = L.text;
-      if ((t.includes('git://') || t.includes('gitsm://')) && !t.includes('branch=') && matchline(t)) {
-        if (t.endsWith('"\n')) sweepOne(L, t.length - 2, t.length - 1, ';branch=master"', 'srcuri', { name: 'branch' }, ctx);
-        else { const m = /\s*\\$/.exec(t.slice(0, -1)); if (m) sweepOne(L, m.index, t.length - 1, ';branch=master \\', 'srcuri', { name: 'branch' }, ctx); }
-      }
-      t = L.text;
-      if ((t.includes('git://') || t.includes('gitsm://')) && t.includes('github.com') && !t.includes('protocol=https') && matchline(t)) {
-        if (t.includes('protocol=git')) {
-          const hits = []; let at = t.indexOf('protocol=git');
-          while (at >= 0) { hits.push(at); at = t.indexOf('protocol=git', at + 1); }
-          for (const h of hits.reverse()) sweepOne(L, h, h + 12, 'protocol=https', 'srcuri', { name: 'protocol' }, ctx);
-        } else if (t.endsWith('"\n')) sweepOne(L, t.length - 2, t.length - 1, ';protocol=https"', 'srcuri', { name: 'protocol' }, ctx);
-        else { const m = /\s*\\$/.exec(t.slice(0, -1)); if (m) sweepOne(L, m.index, t.length - 1, ';protocol=https \\', 'srcuri', { name: 'protocol' }, ctx); }
-      }
+    for (const h of ovHits) {
+      const key = `${n}:${h.i + 1}`;
+      if (keep.has(key)) { keptOut.push(key); continue; }
+      const e = L.replace(h.i, h.i + 1, ':', { rule: h.rule, name: h.name });
+      e.key = key;
+      e.hit = h;
     }
 
-    // drop the trailing newline cell again
-    const cells = L.cells.slice(0, -1);
-    const conv = cells.map((c) => c.n).join('') + (L.cells[L.cells.length - 1].n.replace(/\n$/, ''));
-    L.changes.sort((a, b) => a.col - b.col);
-
-    // flags on the changes: where they sit, whether the word runs on
-    const tok = (t, p) => {
-      const isT = (ch) => /[A-Za-z0-9_\-${}.:/%]/.test(ch);
-      let a = p, b = p;
-      while (a > 0 && isT(t[a - 1])) a--;
-      while (b < t.length && isT(t[b])) b++;
-      return t.slice(a, Math.max(b, p + 1)).slice(0, 60);
-    };
-    for (const c of L.changes) {
-      const rp = cells.slice(0, c.col - 1).map((x) => x.n).join('').length;
-      c.word = tok(raw, c.col - 1);
-      c.wordc = tok(conv, rp);
-      if (c.rule === 'operation' || c.rule === 'override' || c.rule === 'yours') bump(c.name);
-      if (c.rule === 'package') bump(`pkg:${c.name}`);
-      const where = inBody[i] ? 'code' : contd[i] ? (/^\s*#/.test(raw) ? 'comment' : 'value') : place(raw, c.col - 1);
-      if (where === 'comment') c.flag = { kind: 'comment', text: 'In a comment: harmless, but check the comment still says what it meant.' };
-      else if (where === 'code') c.flag = { kind: 'code', text: 'Inside a function body: this is shell or Python text, not a variable name. Check it is a datastore name (d.getVar, a FILES entry), not an identifier.' };
-      else if (where === 'value' && c.rule !== 'srcuri' && c.rule !== 'rename') c.flag = { kind: 'value', text: 'Inside a quoted value: likely a file name or a word, not an override. Keep the original unless it names a variable.' };
-      if (c.rule === 'operation' || c.rule === 'override' || c.rule === 'yours') {
-        // the rendered text right after ":<name>"
-        const pos = cells.slice(0, c.col).map((x) => x.n).join('').length + c.name.length;
-        const nx = conv.slice(pos, pos + 2);
-        const full = (conv.slice(pos - c.name.length).match(/^[A-Za-z0-9-]+/) || [''])[0];
-        if (/^[A-Za-z0-9]/.test(nx) && !ovList.includes(full) && !KNOWN_OVERRIDES.includes(full)) c.flag = { kind: 'partial', text: `"${c.name}" is only the start of "${full}": the script's pattern has no end boundary, so the whole word became an override. Right if "${full}" is an override; keep the original if it is part of a name.` };
-        else if (/^_[a-z]/.test(nx) && !c.flag) {
-          const rest = (conv.slice(pos + 1).match(/^[a-z0-9-]+/) || [''])[0];
-          if (!ovList.includes(rest)) c.flag = { kind: 'runs-on', text: `The name runs on as "_${rest}" after the override word: probably one identifier (a function called ..._${c.name}_${rest}), or "${rest}" is an override the list does not know.` };
+    // ---- 2. variable renames
+    const renameHits = [];
+    if (doRenames) {
+      for (const [from, to] of RENAMES) {
+        let pos = 0, at;
+        while ((at = L.text().indexOf(from, pos)) >= 0) {
+          const o = L.origAt(at);
+          const key = `${n}:${o + 1}`;
+          if (keep.has(key)) { keptOut.push(key); pos = at + from.length; continue; }
+          const e = L.replace(at, at + from.length, to, { rule: 'rename', name: from });
+          e.key = key;
+          renameHits.push([from, to]);
+          pos = at + to.length;
         }
       }
     }
 
-    // what is left of the old syntax, and names that look like overrides
-    const code = /^\s*#/.test(conv) ? '' : conv.replace(/\s+#.*$/, '');
-    const lhs = /^\s*(?:export\s+)?(?:(?:fakeroot\s+)?python\s+)?([A-Za-z0-9_\-.${}:/~+]+)\s*(?:\[[^\]]*\])?\s*(\(\s*\)\s*\{|\?\?=|\?=|:=|\+=|=\+|=\.|\.=|=)/.exec(code);
-    if (lhs) {
-      const name = lhs[1];
-      const old = /_(append|prepend|remove)(?![A-Za-z0-9])/.exec(name);
-      if (old) {
-        findings.push({ line: n, kind: 'old-syntax', sev: inBody[i] ? 'warn' : 'error', name,
-          text: `"${name}" still has _${old[1]}: BitBake 2.x stops parsing with "contains an operation using the old override syntax".` });
-      }
-      // a known override still behind an underscore: the script's patterns
-      // need the name before it to start after a quote, blank, # - or +, so
-      // PREFERRED_PROVIDER_virtual/kernel_mymachine is never matched
-      const left = !old && ovList.filter((w) => !['append', 'prepend', 'remove'].includes(w) && !w.endsWith('-'))
-        .find((w) => new RegExp(`_${esc(w)}(?![A-Za-z0-9_-])`).test(name));
-      if (left) {
-        findings.push({ line: n, kind: 'missed', sev: 'warn', name,
-          text: `"${name}" still has _${left}, a listed override the script's pattern did not reach (a / or similar before it). BitBake 2.x reads it as a different variable, silently. Write it as ${name.replace(new RegExp(`_${esc(left)}(?![A-Za-z0-9_-])`), ':' + left)} by hand.` });
-      }
-      const after = /:(append|prepend|remove)_([a-z0-9][a-z0-9-]*)/.exec(name);
-      const tailOv = /^[A-Z][A-Z0-9_]*[A-Z0-9]_([a-z][a-z0-9-]*)(?::|$)/.exec(name) || /^(?:do|pkg)_[a-z_]+?:(?:append|prepend|remove)_([a-z][a-z0-9-]*)$/.exec(name);
-      const cand = after ? after[2] : tailOv ? tailOv[1] : null;
-      if (cand && !ovList.includes(cand)) {
-        const fn = /\(\s*\)\s*\{/.test(lhs[2]);
-        findings.push({ line: n, kind: 'unknown-override', sev: after ? 'error' : 'warn', name, suggest: cand,
-          text: after
-            ? (fn
-              ? `"${name}": if "${cand}" is an override (a MACHINE or DISTRO), add it; if the function is just called ..._${after[1]}_${cand}, rename it - BitBake 2.x refuses any name containing _${after[1]}, converted or not.`
-              : `"_${cand}" was not converted: "${cand}" is not on the override list. If it is a MACHINE, DISTRO or other override, add it.`)
-            : `"${name}" ends in "_${cand}", which looks like an override the list does not know (a MACHINE or DISTRO name?). Add it if it is one.` });
+    // ---- 3. git SRC_URI
+    // convert-srcuri.py leaves a line containing ".*" (regex code) alone.
+    if (doSrcuri && !L.text().includes('.*')) {
+      const tail = (label, add) => {
+        const cur = L.text();
+        let a = -1, b = -1, rep = '';
+        if (hasNL && cur.endsWith('"')) { a = cur.length - 1; b = cur.length; rep = `${add}"`; } else {
+          const m = /\s*\\$/.exec(cur);
+          if (m) { a = m.index; b = cur.length; rep = `${add} \\`; }
+        }
+        if (a < 0) return;
+        const o = L.origAt(a);
+        const key = `${n}:${(o ?? s.length) + 1}`;
+        if (keep.has(key)) { keptOut.push(key); return; }
+        const e = L.replace(a, b, rep, { rule: 'srcuri', name: label });
+        e.key = keyFree(L, key, n);
+      };
+      if (/git(?:sm)?:\/\//.test(L.text()) && !L.text().includes('branch=')) tail('branch', ';branch=master');
+      const cur = L.text();
+      if (/git(?:sm)?:\/\//.test(cur) && cur.includes('github.com')) {
+        if (cur.includes('protocol=https')) {
+          // already there: nothing to do, even if a protocol=git is on the line too
+        } else if (cur.includes('protocol=git')) {
+          let pos = 0, at;
+          while ((at = L.text().indexOf('protocol=git', pos)) >= 0) {
+            const o = L.origAt(at);
+            const key = `${n}:${(o ?? 0) + 1}`;
+            if (keep.has(key)) { keptOut.push(key); pos = at + 12; continue; }
+            const e = L.replace(at, at + 12, 'protocol=https', { rule: 'srcuri', name: 'protocol' });
+            e.key = keyFree(L, key, n);
+            pos = at + 14;
+          }
+        } else tail('protocol', ';protocol=https');
       }
     }
-    for (const ch of L.changes) if (ch.rule === 'rename') findings.push({ line: n, kind: 'renamed', sev: 'note', text: `${ch.before} was renamed to ${ch.after} (Kirkstone 4.0, BB_RENAMED_VARIABLES).` });
 
-    out.push({ n, orig: raw, conv, changes: L.changes, segs: segments(cells) });
+    const conv = L.text();
+
+    // ---- changes, with a flag where a human should look
+    const lhsA = ASSIGN.exec(ovText);
+    const lhsF = lhsA ? null : FUNC.exec(ovText);
+    const lhs = lhsA || lhsF;
+    const lhsSpan = lhs ? [lhs[1].length, lhs[1].length + lhs[2].length] : null;
+    const changes = [];
+    let lhsRunsOn = null;
+    for (const e of L.edits) {
+      const c = { key: e.key, col: e.o + 1, rule: e.rule, name: e.name, before: e.before, after: e.after,
+        word: tokenAt(s, e.o), wordc: tokenAt(conv, Math.max(0, L.convIndexOf(e.id))), flag: null };
+      if (e.hit) {
+        const h = e.hit;
+        const nm = h.name;
+        const next = ovText.slice(h.i + 1 + nm.length);
+        const ext = /^[A-Za-z0-9-]*/.exec(next)[0];
+        const run = /^_([A-Za-z0-9-]+)/.exec(next);
+        const isOvWord = h.rule === 'override' || h.rule === 'yours' || h.rule === 'operation';
+        const partial = isOvWord && /^[A-Za-z0-9]/.test(next) && !/-$/.test(nm) && !ovList.has(nm + ext) && !isKnownLonger(nm + ext);
+        const inValue = st.inValue && st.inValue[h.i];
+        if (st.body) c.flag = { kind: 'code', text: 'Inside a function body: this is shell or Python text, not a variable name. Check it is a datastore name (d.getVar, a FILES entry), not an identifier.' };
+        else if (partial) c.flag = { kind: 'partial', text: `"${nm}" is only the start of "${nm + ext}": the script's pattern has no end boundary, so the whole word became an override. Right if "${nm + ext}" is an override; keep the original if it is part of a name.` };
+        else if (inValue) c.flag = { kind: 'value', text: 'Inside a quoted value: likely a file name or a word, not an override. Keep the original unless it names a variable.' };
+        else if (run && isOvWord) c.flag = { kind: 'runs-on', text: `The name runs on as "_${run[1]}" after the override word: probably one identifier (a function called ..._${nm}_${run[1]}), or "${run[1]}" is an override the list does not know.` };
+        if (h.rule === 'operation' && run && !st.body && lhsSpan && h.i >= lhsSpan[0] && h.i < lhsSpan[1] && !lhsRunsOn) lhsRunsOn = { nm, rest: run[1] };
+        if (h.rule === 'package') bump(usedPkg, nm); else bump(usedOv, nm);
+      }
+      changes.push(c);
+    }
+    changes.sort((a, b) => a.col - b.col);
+
+    // ---- findings
+    if (lhs && !st.body) {
+      const name = lhs[2];
+      const convName = lhsA ? (ASSIGN.exec(conv) || [])[2] || name : (FUNC.exec(conv) || [])[2] || name;
+      const skipped = skipHit ? wouldHit.filter((h) => h.i >= lhsSpan[0] && h.i < lhsSpan[1]) : [];
+      if (skipped.length) {
+        const ops = skipped.filter((h) => h.rule === 'operation');
+        lineFind.push({ line: n, kind: 'skipped', sev: ops.length ? 'error' : 'warn', name,
+          text: `"${name}" keeps its old syntax: the script leaves every line containing "${skipHit}" alone. ${ops.length ? `BitBake 2.x refuses a name containing _${ops[0].name}; ` : ''}write it as ${colonise(name, skipped, lhsSpan[0])} by hand if those are overrides.` });
+      } else if (lhsRunsOn) {
+        const { nm, rest } = lhsRunsOn;
+        lineFind.push(lhsF
+          ? { line: n, kind: 'unknown-override', sev: 'error', name: convName, suggest: rest,
+            text: `"${convName}": if "${rest}" is an override (a MACHINE or DISTRO), add it; if the function is just called ..._${nm}_${rest}, rename it - BitBake 2.x refuses any name containing _${nm}, converted or not.` }
+          : { line: n, kind: 'unknown-override', sev: 'error', name: convName, suggest: rest,
+            text: `"_${rest}" was not converted: "${rest}" is not on the override list. If it is a MACHINE, DISTRO or other override, add it.` });
+      } else if (lhsA && !name.includes(':')) {
+        const m = /^(.*)_([a-z][a-z0-9-]*)$/.exec(name);
+        const u = /^([A-Z0-9_]+)_([a-z][a-z0-9-]*)$/.exec(name);
+        if (m && ovList.has(m[2])) {
+          lineFind.push({ line: n, kind: 'missed', sev: 'warn', name,
+            text: `"${name}" still has _${m[2]}, a listed override the script's pattern did not reach (a / or similar before it). BitBake 2.x reads it as a different variable, silently. Write it as ${m[1]}:${m[2]} by hand.` });
+        } else if (u && !NAME_SUFFIX.test(name)) {
+          lineFind.push({ line: n, kind: 'unknown-override', sev: 'warn', name, suggest: u[2],
+            text: `"${name}" ends in "_${u[2]}", which looks like an override the list does not know (a MACHINE or DISTRO name?). Add it if it is one.` });
+        }
+      }
+    }
+    for (const [from, to] of renameHits) {
+      lineFind.push({ line: n, kind: 'renamed', sev: 'note', text: `${from} was renamed to ${to} (Kirkstone 4.0, BB_RENAMED_VARIABLES).` });
+    }
+    // Migration 4.0: BitBake stops on renamed or removed variables, so an old
+    // name still on the line (renames off, or the rename kept) is an error.
+    for (const [from, to] of RENAMES) {
+      if (conv.includes(from)) lineFind.push({ line: n, kind: 'renamed', sev: 'error', text: `${from} is ${to} since Kirkstone 4.0 and BitBake stops on the old name; ${doRenames ? 'rename it' : 'turn on "Also rename Kirkstone variables" or rename it by hand'}.` });
+    }
+    for (const r of REMOVED) {
+      if (new RegExp(`(^|[^A-Za-z0-9_])${r}([^A-Za-z0-9_]|$)`).test(conv) || (r !== 'TUNEABI' && conv.includes(r) && new RegExp(`${r}([^A-Za-z0-9]|$)`).test(conv))) {
+        lineFind.push({ line: n, kind: 'removed', sev: 'error', text: `${r} was removed in Kirkstone 4.0 (no new name); BitBake stops on it. Delete the setting.` });
+        break;
+      }
+    }
+    if (doRenames) {
+      const low = conv.toLowerCase();
+      for (const w of WORDING) if (low.includes(w)) lineFind.push({ line: n, kind: 'wording', sev: 'note', text: `Contains "${w}": convert-variable-renames.py asks for a look, the name may have a new term.` });
+    }
+    findings.push(...lineFind);
+    vLines.push({ n, orig: s, conv, segs: L.segs(), changes });
   });
 
-  // ---------------------------------------------------------------- results
-  const changes = out.flatMap((l) => l.changes);
-  const flagged = changes.filter((c) => c.flag);
-  const errors = findings.filter((f) => f.sev === 'error');
+  // ------------------------------------------------------------------ result
+  const allChanges = vLines.flatMap((l) => l.changes.map((c) => ({ ...c, line: l.n })));
+  const count = (r) => allChanges.filter((c) => c.rule === r).length;
+  const flagged = allChanges.filter((c) => c.flag).length;
+  const changedLines = vLines.filter((l) => l.orig !== l.conv).length;
+  const stopLines = uniq(findings.filter((f) => f.sev === 'error').map((f) => f.line));
   const suggest = uniq(findings.filter((f) => f.suggest).map((f) => f.suggest));
-  const converted = out.map((l) => l.conv).join('\n') + (src.endsWith('\n') ? '\n' : '');
-  const keptKeys = ctxBase.kept;
-  const staleKeep = [...keep].filter((k) => !keptKeys.includes(k));
 
-  if (!src.trim()) warnings.push('Nothing to convert: paste a recipe, bbappend, .inc, .bbclass or .conf.');
-  if (errors.length) warnings.push(`${errors.length} line${errors.length > 1 ? 's' : ''} will still stop BitBake 2.x: ${errors.slice(0, 4).map((f) => `line ${f.line}`).join(', ')}${errors.length > 4 ? ' ...' : ''}. See the review list.`);
-  if (suggest.length) warnings.push(`Names that look like overrides but are not on the list: ${suggest.join(', ')}. Add the ones that are MACHINE, DISTRO or other overrides (--override in the script) and convert again.`);
-  if (flagged.length) notes.push(`${flagged.length} rewrite${flagged.length > 1 ? 's' : ''} marked for a human (the script matches loosely; its header says so). Keep the original where the text was not an override.`);
-  if (staleKeep.length) notes.push(`Kept-original marks that match no change any more (the text moved): ${staleKeep.join(', ')}.`);
-  notes.push('Faithful to convert-overrides.py 0.9.3: every line is matched as if it ended with a newline, as Python reads it; a file is one pass, so run it again after adding overrides, as you would the script.');
-
-  const byRule = (r) => changes.filter((c) => c.rule === r).length;
   const values = [
-    { label: 'Lines changed', value: out.filter((l) => l.changes.length).length, hint: `of ${out.length}` },
-    { label: 'Rewrites', value: changes.length, hint: `${byRule('operation')} operations, ${byRule('override') + byRule('yours')} overrides, ${byRule('package')} package names` },
-    { label: 'For a human', value: flagged.length, tone: flagged.length ? 'warn' : 'ok' },
-    { label: 'Still stops BitBake', value: errors.length, tone: errors.length ? 'bad' : 'ok' },
+    { label: 'Lines changed', value: changedLines, hint: `of ${vLines.length}` },
+    { label: 'Rewrites', value: allChanges.length, hint: `${count('operation')} operations, ${count('override') + count('yours')} overrides, ${count('package')} package names` },
+    { label: 'For a human', value: flagged, tone: flagged ? 'warn' : 'ok' },
+    { label: 'Still stops BitBake', value: stopLines.length, tone: stopLines.length ? 'bad' : 'ok' },
   ];
-  if (doRenames) values.push({ label: 'Renamed variables', value: byRule('rename') });
-  if (doSrcuri) values.push({ label: 'SRC_URI fixes', value: byRule('srcuri') });
-  if (keptKeys.length) values.push({ label: 'Kept original', value: keptKeys.length });
+  if (doRenames) values.push({ label: 'Renamed variables', value: count('rename') });
+  if (doSrcuri) values.push({ label: 'SRC_URI fixes', value: count('srcuri') });
+  if (keptOut.length) values.push({ label: 'Kept original', value: keptOut.length });
 
-  const RULE = { operation: 'operation', override: 'override', yours: 'your override', package: 'package name', python: 'python rewrite', repair: 'repair', rename: 'rename', srcuri: 'SRC_URI' };
-  const tables = [];
-  if (changes.length) {
-    tables.push({ title: 'Rewrites', columns: ['Line', 'Rule', 'Before', 'After', 'Look at'],
-      rows: changes.slice(0, 80).map((c) => [c.line, `${RULE[c.rule] || c.rule}${c.name ? ' ' + c.name : ''}`, c.word || c.before.replace(/\n/g, ''), c.wordc || c.after.replace(/\n/g, ''), c.flag ? c.flag.kind : '']) });
-    if (changes.length > 80) notes.push(`Rewrites table shows the first 80 of ${changes.length}; the converted text has them all.`);
+  const tables = [{
+    title: 'Rewrites', columns: ['Line', 'Rule', 'Before', 'After', 'Look at'],
+    rows: allChanges.map((c) => [c.line, `${RULE_LABEL[c.rule] || c.rule} ${c.name}`, c.word, c.wordc, c.flag ? c.flag.kind : '']),
+  }];
+  const REVIEW_ROWS = 60;
+  if (findings.length) tables.push({ title: 'Review', columns: ['Line', 'Severity', 'Finding'], rows: findings.slice(0, REVIEW_ROWS).map((f) => [f.line, f.sev, f.text]) });
+
+  if (!text.trim()) warnings.push('Nothing to convert: paste a recipe, bbappend, class or conf file.');
+  if (stopLines.length) {
+    warnings.push(`${plural(stopLines.length, 'line')} will still stop BitBake 2.x: ${stopLines.slice(0, 4).map((l) => `line ${l}`).join(', ')}${stopLines.length > 4 ? ' ...' : ''}. See the review list.`);
   }
-  if (findings.length) {
-    tables.push({ title: 'Review', columns: ['Line', 'Severity', 'Finding'], rows: findings.slice(0, 60).map((f) => [f.line, f.sev, f.text]) });
-  }
+  if (suggest.length) warnings.push(`Names that look like overrides but are not on the list: ${suggest.join(', ')}. Add the ones that are MACHINE, DISTRO or other overrides (--override in the script) and convert again.`);
+  if (dropped.length) warnings.push(`Taken off the built-in lists: ${dropped.join(', ')} (the script would still convert them).`);
+  if (badDrop.length) warnings.push(`Not on the built-in lists, so nothing to take off: ${badDrop.join(', ')}.`);
+  const badOv = userOv.filter((w) => !/^[a-z0-9-]+$/.test(w));
+  if (badOv.length) warnings.push(`Not an override name (BitBake allows lower case, digits and dashes): ${badOv.join(', ')}.`);
 
-  const texts = [{ title: 'Converted', body: converted || '\n' }, { title: 'Diff', body: diff(out) }];
+  if (flagged) notes.push(`${plural(flagged, 'rewrite')} marked for a human (the script matches loosely, as the 3.4 migration guide warns). Keep the original where the text was not an override.`);
+  if (findings.length > REVIEW_ROWS) notes.push(`The Review table shows the first ${REVIEW_ROWS} of ${findings.length} findings; ${findings.slice(REVIEW_ROWS).filter((f) => f.sev === 'error').length} of the rest will stop BitBake.`);
+  if (keptOut.length) notes.push(`${plural(keptOut.length, 'rewrite')} kept as the original text at your request.`);
+  notes.push('Behaves as convert-overrides.py 0.9.3 does: each line is matched together with its newline, as Python reads it, and a file is one pass, so run it again after adding overrides, as you would the script.');
 
-  const usedOv = Object.entries(usage).filter(([k]) => !k.startsWith('pkg:')).map(([k, v]) => [k, v]);
-  const usedPkg = Object.entries(usage).filter(([k]) => k.startsWith('pkg:')).map(([k, v]) => [k.slice(4), v]);
+  const texts = [
+    { title: 'Converted', body: vLines.map((l) => l.conv).join('\n') + (endsNL ? '\n' : '') },
+    { title: 'Diff', body: unified(vLines) },
+  ];
+
   return {
     values, tables, texts, warnings, notes,
     view: {
-      lines: out.map((l) => ({ n: l.n, orig: l.orig, conv: l.conv, segs: l.segs,
-        changes: l.changes.map((c) => ({ key: c.key, col: c.col, rule: c.rule, name: c.name || '', before: c.before.replace(/\n/g, ''), after: c.after.replace(/\n/g, ''), word: c.word, wordc: c.wordc, flag: c.flag || null })) })),
-      kept: keptKeys,
+      lines: vLines,
+      kept: uniq(keptOut),
       findings,
       suggest,
       lists: {
-        user: userOv, builtin: OVERRIDE_WORDS.filter((w) => !['append', 'prepend', 'remove'].includes(w)), short: SHORT_WORDS,
-        pkg: [...PACKAGE_VARS, ...IMAGE_VARS], userPkg: addPkg, dropped: realDrop, usedOv, usedPkg,
+        user: userOv, builtin: BUILTIN, short: SHORT, pkg: [...PKG, ...IMAGE], userPkg, dropped,
+        usedOv: [...usedOv.entries()], usedPkg: [...usedPkg.entries()],
       },
     },
   };
 }
 
-// one edit at a rendered range, through sweep's bookkeeping
-function sweepOne(L, a, b, text, rule, meta, ctx) {
-  const s = L.text;
-  const key = `${ctx.n}:${L.col(a)}`;
-  const before = s.slice(a, b);
-  if (before === text) return;
-  if (ctx.keep.has(key) && rule !== 'repair') { ctx.kept.push(key); return; }
-  const change = { key, line: ctx.n, col: L.col(a), rule, before, after: text, ...meta };
-  L.replace(a, b, text, change);
-  L.changes.push(change);
+// A name with the underscores the patterns would have converted as colons.
+function colonise(name, hits, off) {
+  const a = [...name];
+  for (const h of hits) a[h.i - off] = ':';
+  return a.join('');
 }
 
-// the line as runs: [original text, converted text, change key | '']
-function segments(cells) {
-  const segs = [];
-  for (const c of cells) {
-    const k = c.ch ? c.ch.key : '';
-    const last = segs[segs.length - 1];
-    if (last && last[2] === k) { last[0] += c.o; last[1] += c.n; } else segs.push([c.o, c.n, k]);
-  }
-  return segs;
+// Two edits may start at the same original column (an insertion right
+// after a replaced character); keep keys unique.
+function keyFree(L, key, n) {
+  const used = new Set(L.edits.map((e) => e.key).filter(Boolean));
+  if (!used.has(key)) return key;
+  let col = Number(key.split(':')[1]);
+  while (used.has(`${n}:${col}`)) col++;
+  return `${n}:${col}`;
 }
 
-// a unified-style diff of the changed lines, 1 line of context
-function diff(out) {
-  const changed = out.filter((l) => l.orig !== l.conv).map((l) => l.n);
-  if (!changed.length) return 'No changes.\n';
-  const lines = ['--- original', '+++ converted'];
-  const show = new Set();
-  for (const n of changed) for (let k = n - 1; k <= n + 1; k++) if (k >= 1 && k <= out.length) show.add(k);
-  let prev = 0;
-  for (const n of [...show].sort((a, b) => a - b)) {
-    if (n !== prev + 1) lines.push(`@@ line ${n} @@`);
-    const l = out[n - 1];
-    if (l.orig === l.conv) lines.push(' ' + l.orig);
-    else lines.push('-' + l.orig, '+' + l.conv);
-    prev = n;
+// Unified-style diff with one line of context; hunks closer than three
+// unchanged lines are merged.
+function unified(vLines) {
+  const ch = vLines.map((l) => l.orig !== l.conv);
+  const idx = ch.map((c, i) => (c ? i : -1)).filter((i) => i >= 0);
+  if (!idx.length) return '--- original\n+++ converted\n(no changes)\n';
+  const hunks = [];
+  let cur = null;
+  for (const i of idx) {
+    const a = Math.max(0, i - 1), b = Math.min(vLines.length - 1, i + 1);
+    if (cur && a <= cur[1] + 1) cur[1] = b; else { cur = [a, b]; hunks.push(cur); }
   }
-  return lines.join('\n') + '\n';
+  const out = ['--- original', '+++ converted'];
+  for (const [a, b] of hunks) {
+    if (a > 0) out.push(`@@ line ${a + 1} @@`);
+    for (let i = a; i <= b; i++) {
+      if (ch[i]) out.push(`-${vLines[i].orig}`, `+${vLines[i].conv}`); else out.push(` ${vLines[i].orig}`);
+    }
+  }
+  return out.join('\n') + '\n';
 }

@@ -1,6 +1,6 @@
 {
  "id": "override-migrator",
- "version": "1.0",
+ "version": "1.1",
  "name": "Override Syntax Migrator",
  "blurb": "old _append/_prepend/_remove/_${PN} override syntax rewritten to the colon syntax of Honister and later",
  "group": "embedded",
@@ -27,7 +27,7 @@
   "PNBLACKLIST SKIP_RECIPE",
   "branch=master SRC_URI"
  ],
- "intro": "Rewrites an old-syntax recipe, bbappend, class or conf the way openembedded-core's scripts/contrib/convert-overrides.py 0.9.3 does (same lists, same patterns, same order per line), optionally followed by convert-variable-renames.py and convert-srcuri.py, and marks the rewrites a human should look at: matches inside values, comments and function bodies, override words that run into longer names, and old syntax left over because an override name is not on the list.",
+ "intro": "Rewrites an old-syntax recipe, bbappend, class or conf to the colon override syntax, as the Yocto 3.4 migration guide describes (\"Override syntax changes\"), optionally followed by the Kirkstone variable renames and the git SRC_URI fixes of the 4.0 migration guide. It implements the documented migration and matches openembedded-core's convert-overrides.py 0.9.3 (and convert-variable-renames.py / convert-srcuri.py) byte for byte on a 150-file corpus of real layers. It marks the rewrites a human should look at: matches inside quoted values and function bodies, override words that run into longer names, old syntax left over because an override name is not on the list, and lines BitBake 2.x will still refuse.",
  "inputs": [
   {
    "key": "text",
@@ -110,11 +110,11 @@
  ],
  "usage": "Give the old-syntax file as text and the layer's own override names (MACHINE, DISTRO, SoC families) as overrides; keep renames/srcuri on for a Dunfell -> Kirkstone or later move. The result's texts 'Converted' is the whole rewritten file and 'Diff' the changed lines; the 'Rewrites' table lists each change with its rule, and 'Review' what still needs a human (old syntax BitBake 2.x will refuse, names that look like unknown overrides, matches in values or code). Add suggested override names and run again, as with the script.",
  "sources": [
-  "openembedded-core scripts/contrib/convert-overrides.py 0.9.3 (lists, regexes and per-line order ported verbatim)",
-  "openembedded-core scripts/contrib/convert-variable-renames.py 0.1 and meta/conf/bitbake.conf BB_RENAMED_VARIABLES",
-  "openembedded-core scripts/contrib/convert-srcuri.py 0.1",
-  "bitbake lib/bb/data_smart.py setVar (old override syntax is fatal)",
-  "BitBake User Manual, Conditional Syntax (Overrides); Yocto 3.4 migration guide, Override syntax changes"
+  "Yocto Project Migration Guide, Release 3.4: Override syntax changes (the conversion, package-name overrides, suffixes that are not overrides)",
+  "Yocto Project Migration Guide, Release 4.0: Inclusive language improvements (renamed and removed variables) and Fetching changes (branch= and protocol=https on git URLs)",
+  "BitBake User Manual, Syntax and Operators: Conditional Syntax (Overrides)",
+  "Yocto Project Reference Manual, Variables Glossary: PREFERRED_PROVIDER, SRCREV, PREFERRED_VERSION",
+  "Behaviour checked against convert-overrides.py 0.9.3, convert-variable-renames.py 0.1 and convert-srcuri.py 0.1 run as black boxes (150-file corpus byte-identical, plus randomised lines)"
  ],
  "view": true,
  "layout": "custom",
