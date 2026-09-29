@@ -1,0 +1,101 @@
+{
+ "id": "yocto-build-errors",
+ "version": "1.0",
+ "name": "Build Error & QA Explainer",
+ "blurb": "a failed BitBake task log or QA warning classified, with the cause and the fix",
+ "group": "embedded",
+ "rooms": [
+  "embedded"
+ ],
+ "keywords": [
+  "bitbake error",
+  "yocto build failed",
+  "QA Issue",
+  "insane.bbclass",
+  "installed-vs-shipped",
+  "ldflags GNU_HASH",
+  "already-stripped",
+  "file-rdeps",
+  "LIC_FILES_CHKSUM",
+  "checksum mismatch",
+  "SRCREV not found",
+  "Nothing PROVIDES",
+  "log.do_compile",
+  "do_rootfs conflict",
+  "DEPENDS missing header",
+  "host contamination",
+  "cc1plus killed OOM",
+  "openembedded",
+  "poky",
+  "INSANE_SKIP"
+ ],
+ "intro": "Paste a BitBake console log or a task log (log.do_fetch, log.do_compile, log.do_package_qa...). Every decisive line is matched against a rule table built from the messages BitBake and OE-Core print (fetch2, taskdata, insane.bbclass, sstate): fetch failures, missing DEPENDS, host contamination, the insane.bbclass QA checks, do_rootfs conflicts, signature errors and OOM. Each finding says what failed, why, and the recipe lines that fix it, in the override syntax of the release in the log.",
+ "view": true,
+ "layout": "custom",
+ "inputs": [
+  {
+   "key": "log",
+   "label": "BitBake log",
+   "type": "textarea",
+   "rows": 18,
+   "default": "Loading cache: 100% |############################################| Time: 0:00:01\nLoaded 1893 entries from dependency cache.\nParsing recipes: 100% |##########################################| Time: 0:00:03\nParsing of 1276 .bb files complete (1273 cached, 3 parsed). 1894 targets, 71 skipped, 0 masked, 0 errors.\nNOTE: Resolving any missing task queue dependencies\n\nBuild Configuration:\nBB_VERSION           = \"2.8.0\"\nBUILD_SYS            = \"x86_64-linux\"\nNATIVELSBSTRING      = \"ubuntu-22.04\"\nTARGET_SYS           = \"aarch64-poky-linux\"\nMACHINE              = \"acme-imx8mm\"\nDISTRO               = \"poky\"\nDISTRO_VERSION       = \"5.0.12\"\nTUNE_FEATURES        = \"aarch64 armv8a crc crypto cortexa53\"\nTARGET_FPU           = \"\"\nmeta\nmeta-poky\nmeta-yocto-bsp       = \"scarthgap:3f1c2e9b0a7d5c4e8f6a2b1c9d0e7f3a5b6c8d2e\"\nmeta-oe\nmeta-python\nmeta-networking      = \"scarthgap:9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b\"\nmeta-acme            = \"main:4f1c2e9d8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d\"\n\nSstate summary: Wanted 412 Local 398 Mirrors 0 Missed 14 Current 1204 (96% match, 99% complete)\nRemoving 6 stale sstate objects for arch cortexa53: 100% |#######| Time: 0:00:00\nNOTE: Executing Tasks\nWARNING: acme-sensord-1.4.2-r0 do_fetch: Failed to fetch URL https://downloads.acme.example/sensord/sensord-1.4.2.tar.gz, attempting MIRRORS if available\nERROR: acme-sensord-1.4.2-r0 do_fetch: Checksum mismatch!\nFile: '/work/build/downloads/sensord-1.4.2.tar.gz' has sha256 checksum 'e3b98a4da31a127d4bde6e43033f66ba274cab0eb7eb1c70ec41402bf6273dd8' when '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08' was expected\nIf this change is expected (e.g. you have upgraded to a new version without updating the checksums) then you can use these lines within the recipe:\nSRC_URI[sha256sum] = \"e3b98a4da31a127d4bde6e43033f66ba274cab0eb7eb1c70ec41402bf6273dd8\"\nOtherwise you should retry the download and/or check with upstream to determine if the file has become corrupted or otherwise unexpectedly modified.\nERROR: acme-sensord-1.4.2-r0 do_fetch: Bitbake Fetcher Error: ChecksumError('Checksum mismatch!', 'https://downloads.acme.example/sensord/sensord-1.4.2.tar.gz')\nERROR: Logfile of failure stored in: /work/build/tmp/work/cortexa53-poky-linux/acme-sensord/1.4.2/temp/log.do_fetch.48213\nERROR: Task (/work/layers/meta-acme/recipes-acme/acme-sensord/acme-sensord_1.4.2.bb:do_fetch) failed with exit code '1'\nERROR: acme-gateway-2.1.0-r0 do_compile: oe_runmake failed\nERROR: acme-gateway-2.1.0-r0 do_compile: ExecutionError('/work/build/tmp/work/cortexa53-poky-linux/acme-gateway/2.1.0/temp/run.do_compile.51877', 1, None, None)\nERROR: Logfile of failure stored in: /work/build/tmp/work/cortexa53-poky-linux/acme-gateway/2.1.0/temp/log.do_compile.51877\nLog data follows:\n| DEBUG: Executing shell function do_compile\n| NOTE: make -j 16 -l 52 CC=aarch64-poky-linux-gcc  -mcpu=cortex-a53+crc+crypto -fstack-protector-strong  -O2 -D_FORTIFY_SOURCE=2 -Wformat -Wformat-security -Werror=format-security --sysroot=/work/build/tmp/work/cortexa53-poky-linux/acme-gateway/2.1.0/recipe-sysroot\n| aarch64-poky-linux-gcc -mcpu=cortex-a53+crc+crypto --sysroot=/work/build/tmp/work/cortexa53-poky-linux/acme-gateway/2.1.0/recipe-sysroot -O2 -pipe -g -Iinclude -c src/mqtt.c -o src/mqtt.o\n| aarch64-poky-linux-gcc -mcpu=cortex-a53+crc+crypto --sysroot=/work/build/tmp/work/cortexa53-poky-linux/acme-gateway/2.1.0/recipe-sysroot -O2 -pipe -g -Iinclude -c src/tls.c -o src/tls.o\n| src/tls.c:14:10: fatal error: openssl/ssl.h: No such file or directory\n|    14 | #include <openssl/ssl.h>\n|       |          ^~~~~~~~~~~~~~~\n| compilation terminated.\n| make: *** [Makefile:38: src/tls.o] Error 1\n| ERROR: oe_runmake failed\n| WARNING: exit code 1 from a shell command.\nERROR: Task (/work/layers/meta-acme/recipes-acme/acme-gateway/acme-gateway_2.1.0.bb:do_compile) failed with exit code '1'\nERROR: acme-tools-0.9-r0 do_package: QA Issue: acme-tools: Files/directories were installed but not shipped in any package:\n  /usr/share/acme\n  /usr/share/acme/calib.json\n  /usr/share/acme/profiles.d\n  /usr/share/acme/profiles.d/default.conf\n  /usr/lib/systemd/system/acme-tools.service\nPlease set FILES such that these items are packaged. Alternatively if they are unneeded, avoid installing them or delete them within do_install.\nacme-tools: 5 installed and not shipped files. [installed-vs-shipped]\nERROR: acme-tools-0.9-r0 do_package: Fatal QA errors were found, failing task.\nERROR: Logfile of failure stored in: /work/build/tmp/work/cortexa53-poky-linux/acme-tools/0.9/temp/log.do_package.52110\nERROR: Task (/work/layers/meta-acme/recipes-acme/acme-tools/acme-tools_0.9.bb:do_package) failed with exit code '1'\nWARNING: libacme-1.2.0-r0 do_package: QA Issue: File '/usr/bin/acmectl' from libacme was already stripped, this will prevent future debugging! [already-stripped]\nERROR: libacme-1.2.0-r0 do_package_qa: QA Issue: File /usr/lib/libacme.so.1.2.0 in package libacme doesn't have GNU_HASH (didn't pass LDFLAGS?) [ldflags]\nERROR: libacme-1.2.0-r0 do_package_qa: QA Issue: /usr/bin/acme-report contained in package libacme-tools requires /bin/bash, but no providers found in RDEPENDS:libacme-tools? [file-rdeps]\nERROR: libacme-1.2.0-r0 do_package_qa: Fatal QA errors were found, failing task.\nERROR: Logfile of failure stored in: /work/build/tmp/work/cortexa53-poky-linux/libacme/1.2.0/temp/log.do_package_qa.52688\nERROR: Task (/work/layers/meta-acme/recipes-acme/libacme/libacme_1.2.0.bb:do_package_qa) failed with exit code '1'\nNOTE: Tasks Summary: Attempted 3288 tasks of which 3270 didn't need to be rerun and 4 failed.\n\nSummary: 4 tasks failed:\n  /work/layers/meta-acme/recipes-acme/acme-sensord/acme-sensord_1.4.2.bb:do_fetch\n  /work/layers/meta-acme/recipes-acme/acme-gateway/acme-gateway_2.1.0.bb:do_compile\n  /work/layers/meta-acme/recipes-acme/acme-tools/acme-tools_0.9.bb:do_package\n  /work/layers/meta-acme/recipes-acme/libacme/libacme_1.2.0.bb:do_package_qa\nSummary: There were 2 WARNING messages.\nSummary: There were 13 ERROR messages, returning a non-zero exit code.\n",
+   "help": "The bitbake console output, or tmp/work/<arch>/<recipe>/<ver>/temp/log.do_<task>. ANSI colours and CI timestamps are removed."
+  },
+  {
+   "key": "syntax",
+   "label": "Override syntax of the fixes",
+   "type": "select",
+   "default": "auto",
+   "options": [
+    [
+     "auto",
+     "auto (from the log)"
+    ],
+    [
+     "colon",
+     "FILES:${PN} (3.4 honister and later)"
+    ],
+    [
+     "underscore",
+     "FILES_${PN} (3.3 and older)"
+    ]
+   ]
+  },
+  {
+   "key": "warnings",
+   "label": "Explain warnings too",
+   "type": "bool",
+   "default": true,
+   "help": "Off: only ERROR lines become findings."
+  }
+ ],
+ "examples": [
+  {
+   "title": "log.do_compile of nodejs killed by the OOM killer",
+   "input": {
+    "log": "DEBUG: Executing python function extend_recipe_sysroot\nNOTE: Direct dependencies are ['virtual:native:/work/poky/meta/recipes-devtools/python/python3_3.12.4.bb:do_populate_sysroot', '/work/poky/meta/recipes-devtools/gcc/gcc-cross_13.3.bb:do_populate_sysroot']\nDEBUG: Python function extend_recipe_sysroot finished\nDEBUG: Executing shell function do_compile\nNOTE: make -j 32 -l 52\nmake -C out/Release BUILDTYPE=Release V=1\ng++ -o /work/build/tmp/work/cortexa72-poky-linux/nodejs/20.13.1/node-v20.13.1/out/Release/obj.target/v8_base_without_compiler/deps/v8/src/compiler/turboshaft/recreate-schedule.o ../deps/v8/src/compiler/turboshaft/recreate-schedule.cc '-DV8_GYP_BUILD' -O3 -fno-omit-frame-pointer -fno-rtti -fno-exceptions -std=gnu++17\naarch64-poky-linux-g++: fatal error: Killed signal terminated program cc1plus\ncompilation terminated.\nmake[1]: *** [tools/v8_gypfiles/v8_base_without_compiler.target.mk:1321: /work/build/tmp/work/cortexa72-poky-linux/nodejs/20.13.1/node-v20.13.1/out/Release/obj.target/v8_base_without_compiler/deps/v8/src/compiler/turboshaft/recreate-schedule.o] Error 1\nmake[1]: *** Waiting for unfinished jobs....\naarch64-poky-linux-g++: fatal error: Killed signal terminated program cc1plus\ncompilation terminated.\nmake: *** [Makefile:134: node] Error 2\nERROR: oe_runmake failed\nWARNING: exit code 1 from a shell command.\n",
+    "syntax": "auto",
+    "warnings": true
+   }
+  },
+  {
+   "title": "Missing RPROVIDES and a do_rootfs file conflict (dnf)",
+   "input": {
+    "log": "NOTE: Executing Tasks\nERROR: Nothing RPROVIDES 'python3-paho-mqtt' (but /work/layers/meta-acme/recipes-acme/acme-cloud/acme-cloud_3.0.bb RDEPENDS on or otherwise requires it)\nNOTE: Runtime target 'python3-paho-mqtt' is unbuildable, removing...\nMissing or unbuildable dependency chain was: ['python3-paho-mqtt']\nNOTE: Runtime target 'acme-cloud' is unbuildable, removing...\nERROR: acme-image-1.0-r0 do_rootfs: Could not invoke dnf. Command '/work/build/tmp/work/acme_imx8mm-poky-linux/acme-image/1.0/recipe-sysroot-native/usr/bin/dnf -v --rpmverbosity=info -y -c /work/build/tmp/work/acme_imx8mm-poky-linux/acme-image/1.0/rootfs/etc/dnf/dnf.conf install acme-config base-files busybox netbase' returned 1:\nError: Transaction test error:\n  file /etc/acme/acme.conf conflicts between attempted installs of acme-config-1.0-r0.cortexa53 and acme-tools-0.9-r0.cortexa53\nERROR: Logfile of failure stored in: /work/build/tmp/work/acme_imx8mm-poky-linux/acme-image/1.0/temp/log.do_rootfs.60311\nERROR: Task (/work/layers/meta-acme/recipes-core/images/acme-image.bb:do_rootfs) failed with exit code '1'\n",
+    "syntax": "auto",
+    "warnings": true
+   }
+  }
+ ],
+ "usage": "Pass the log text in `log` (console output or a temp/log.do_* file); `syntax` auto picks FILES:${PN} or FILES_${PN} from DISTRO_VERSION in the log; `warnings` false ignores WARNING lines. Returns a Findings table (level, kind/QA check, recipe, task, log line, one-line finding), a Failed tasks table, and texts 'Fixes' (per finding: what, why, the exact recipe/local.conf lines, the Yocto doc section) and 'Decisive lines'. Use it on any failed bitbake run before editing recipes; unclassified failures are listed with the task log to read.",
+ "sources": [
+  "Yocto Project Reference Manual, 'QA Error and Warning Messages' (ref-manual/qa-checks) and the insane class (ref-manual/classes, ERROR_QA / WARN_QA)",
+  "OE-Core meta/classes-global/insane.bbclass, meta/lib/oe/package.py, meta/lib/oe/qa.py (message texts, check names; read from a scarthgap checkout)",
+  "BitBake lib/bb/fetch2/__init__.py and git.py (Checksum mismatch, Unable to find revision, BB_NO_NETWORK), lib/bb/taskdata.py (Nothing PROVIDES), lib/bb/siggen.py (Taskhash mismatch)",
+  "OE-Core meta/classes-global/sstate.bbclass (shared area), meta/lib/oe/package_manager (do_rootfs messages)",
+  "GCC 10 and GCC 14 porting notes (-fno-common, implicit-function-declaration); header/pkg-config to recipe maps are OE-Core/meta-oe recipe names, a starting point to confirm with oe-pkgdata-util"
+ ],
+ "agentOmit": [
+  "view"
+ ]
+}

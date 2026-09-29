@@ -1,0 +1,228 @@
+{
+  "id": "buildhistory-diff",
+  "version": "1.0",
+  "name": "Buildhistory Diff",
+  "blurb": "package and image size changes between two builds from buildhistory, largest first",
+  "group": "embedded",
+  "rooms": [
+    "embedded"
+  ],
+  "keywords": [
+    "buildhistory",
+    "buildhistory-diff",
+    "yocto",
+    "bitbake",
+    "openembedded",
+    "image size",
+    "rootfs size",
+    "installed-package-sizes.txt",
+    "installed-package-info.txt",
+    "files-in-image.txt",
+    "installed-packages.txt",
+    "image-info.txt",
+    "IMAGESIZE",
+    "PKGSIZE",
+    "package diff",
+    "size regression",
+    "image bloat",
+    "version changes",
+    "poky"
+  ],
+  "intro": "Compares two Yocto builds of one image from the files buildhistory writes (installed-package-sizes/info, installed-packages, files-in-image, image-info): which packages were added, removed, upgraded or grew, by how much, and which files moved. Formats and the 10% reporting threshold follow poky's buildhistory.bbclass and buildhistory_analysis.py.",
+  "inputs": [
+    {
+      "key": "before",
+      "label": "Build A (before): package files",
+      "type": "textarea",
+      "rows": 8,
+      "help": "installed-package-info.txt, installed-package-sizes.txt, installed-packages.txt, installed-package-names.txt and/or image-info.txt; several may be pasted together.",
+      "default": "kernel-image-zimage-5.15.71 kernel-image-zimage linux-yocto 5.15.71+gitAUTOINC+b5b2d5e9f0_c21e6e8dc2 5140\nlibcrypto3 libcrypto openssl 3.0.8 3312\nacme-gateway acme-gateway acme-gateway 1.8.2 2140\nlibstdc++6 libstdc++ gcc-runtime 11.3.0 1888\nlibc6 glibc glibc 2.35 1356\nlibsqlite3-0 sqlite3 sqlite3 3.38.5 1296\nmtd-utils mtd-utils mtd-utils 2.1.4 648\niproute2-ip iproute2-ip iproute2 5.17.0 640\nudev eudev eudev 3.2.10 612\nlibssl3 libssl openssl 3.0.8 612\nbusybox busybox busybox 1.35.0 612\ndbus dbus dbus 1.14.0 548\nlibcurl4 libcurl curl 7.82.0 420\nlibext2fs2 libext2fs e2fsprogs 1.46.5 412\niptables iptables iptables 1.8.7 412\nlibncursesw5 ncurses-libncursesw ncurses 6.3+20220423 336\nlibmount1 util-linux-libmount util-linux 2.37.4 336\nmosquitto mosquitto mosquitto 2.0.14 304\nlibdbus-1-3 dbus-lib dbus 1.14.0 276\nlibreadline8 readline readline 8.1.2 272\nlibblkid1 util-linux-libblkid util-linux 2.37.4 272\ndropbear dropbear dropbear 2020.81 244\ncurl curl curl 7.82.0 236\nca-certificates ca-certificates ca-certificates 20211016 216\ntzdata-core tzdata-core tzdata 2022a 156\ne2fsprogs-mke2fs e2fsprogs-mke2fs e2fsprogs 1.46.5 148\nutil-linux-mount util-linux-mount util-linux 2.37.4 132\nlibudev1 libudev eudev 3.2.10 120\nsysvinit sysvinit sysvinit 3.01 112\nlibmosquitto1 libmosquitto1 mosquitto 2.0.14 96\nlibgpiod-tools libgpiod-tools libgpiod 1.6.3 92\nlibz1 zlib zlib 1.2.12 88\nlibgcc1 libgcc libgcc 11.3.0 72\nnetbase netbase netbase 6.4 56\nlibgpiod2 libgpiod libgpiod 1.6.3 48\nu-boot-fw-utils u-boot-fw-utils u-boot-fw-utils 2022.01 40\nbase-files base-files base-files 3.0.14 28\nkernel-module-g-serial-5.15.71 kernel-module-g-serial linux-yocto 5.15.71+gitAUTOINC+b5b2d5e9f0_c21e6e8dc2 24\ninitscripts initscripts initscripts 1.0 24\nkernel-module-spidev-5.15.71 kernel-module-spidev linux-yocto 5.15.71+gitAUTOINC+b5b2d5e9f0_c21e6e8dc2 20\nacme-config acme-config acme-gateway 1.8.2 12\nbusybox-udhcpc busybox-udhcpc busybox 1.35.0 4\nbusybox-syslog busybox-syslog busybox 1.35.0 4\n"
+    },
+    {
+      "key": "after",
+      "label": "Build B (after): package files",
+      "type": "textarea",
+      "rows": 8,
+      "default": "kernel-image-zimage-5.15.120 kernel-image-zimage linux-yocto 5.15.120+gitAUTOINC+7f5b3e1a44_2e7d49f1c8 5212\npython3-core python3-core python3 3.10.13 3964\nlibcrypto3 libcrypto openssl 3.0.12 3338\nlibstdc++-dev libstdc++-dev gcc-runtime 11.4.0 3208\nlibpython3.10-1.0 libpython3 python3 3.10.13 3080\nacme-gateway acme-gateway acme-gateway 1.9.0 2688\nlibstdc++6 libstdc++ gcc-runtime 11.4.0 1892\nlibc6 glibc glibc 2.35 1360\nstrace strace strace 5.16 1340\nlibsqlite3-0 sqlite3 sqlite3 3.38.5 1296\nopenssh-sshd openssh-sshd openssh 9.0p1 848\nopenssh-ssh openssh-ssh openssh 9.0p1 716\nmtd-utils mtd-utils mtd-utils 2.1.4 648\niproute2-ip iproute2-ip iproute2 5.17.0 640\nbusybox busybox busybox 1.35.0 640\nlibssl3 libssl openssl 3.0.12 618\nudev eudev eudev 3.2.10 612\ndbus dbus dbus 1.14.8 552\npython3-pyserial python3-pyserial python3-pyserial 3.5 512\nlibcurl4 libcurl curl 7.82.0 436\nopenssh-keygen openssh-keygen openssh 9.0p1 428\nlibext2fs2 libext2fs e2fsprogs 1.46.5 412\niptables iptables iptables 1.8.7 412\nlibncursesw5 ncurses-libncursesw ncurses 6.3+20220423 336\nlibmount1 util-linux-libmount util-linux 2.37.4 336\nmosquitto mosquitto mosquitto 2.0.18 316\nlibdbus-1-3 dbus-lib dbus 1.14.8 280\nlibreadline8 readline readline 8.1.2 272\nlibblkid1 util-linux-libblkid util-linux 2.37.4 272\ncurl curl curl 7.82.0 236\nca-certificates ca-certificates ca-certificates 20240203 232\ntzdata-core tzdata-core tzdata 2023c 160\ne2fsprogs-mke2fs e2fsprogs-mke2fs e2fsprogs 1.46.5 148\nutil-linux-mount util-linux-mount util-linux 2.37.4 132\npython3-json python3-json python3 3.10.13 132\nopenssh-scp openssh-scp openssh 9.0p1 120\nlibudev1 libudev eudev 3.2.10 120\nsysvinit sysvinit sysvinit 3.01 112\nlibmosquitto1 libmosquitto1 mosquitto 2.0.18 100\nlibgpiod-tools libgpiod-tools libgpiod 1.6.2 90\nlibz1 zlib zlib 1.2.13 88\nlibgcc1 libgcc libgcc 11.4.0 72\nnetbase netbase netbase 6.4 56\nlibgpiod2 libgpiod libgpiod 1.6.2 46\nu-boot-fw-utils u-boot-fw-utils u-boot-fw-utils 2022.01 40\nlibffi8 libffi libffi 3.4.2 40\nbase-files base-files base-files 3.0.14 28\nkernel-module-g-serial-5.15.120 kernel-module-g-serial linux-yocto 5.15.120+gitAUTOINC+7f5b3e1a44_2e7d49f1c8 24\ninitscripts initscripts initscripts 1.0 24\nkernel-module-spidev-5.15.120 kernel-module-spidev linux-yocto 5.15.120+gitAUTOINC+7f5b3e1a44_2e7d49f1c8 20\nacme-config acme-config acme-gateway 1.9.0 12\nbusybox-udhcpc busybox-udhcpc busybox 1.35.0 4\nbusybox-syslog busybox-syslog busybox 1.35.0 4\n"
+    },
+    {
+      "key": "filesBefore",
+      "label": "Build A files-in-image.txt (optional)",
+      "type": "textarea",
+      "rows": 6,
+      "default": "drwxr-xr-x root       root             4096 ./bin\n-rwxr-xr-x root       root           624124 ./bin/busybox.nosuid\n-rwsr-xr-x root       root            52232 ./bin/busybox.suid\nlrwxrwxrwx root       root               19 ./bin/ls -> /bin/busybox.nosuid\nlrwxrwxrwx root       root               17 ./bin/mount -> /bin/busybox.suid\nlrwxrwxrwx root       root               19 ./bin/sh -> /bin/busybox.nosuid\ndrwxr-xr-x root       root             4096 ./boot\nlrwxrwxrwx root       root               19 ./boot/zImage -> zImage-5.15.71\n-rw-r--r-- root       root          5263360 ./boot/zImage-5.15.71\ndrwxr-xr-x root       root             4096 ./etc\n-rw-r--r-- root       root              412 ./etc/acme/gateway.conf\n-rw-r--r-- root       root             1024 ./etc/fstab\n-rwxr-xr-x root       root             1536 ./etc/init.d/dropbear\n-rw-r--r-- root       root             2112 ./etc/mosquitto/mosquitto.conf\n-rw-r--r-- root       root           205740 ./etc/ssl/certs/ca-certificates.crt\ndrwxr-xr-x root       root             4096 ./lib\n-rwxr-xr-x root       root           176436 ./lib/ld-linux-armhf.so.3\n-rwxr-xr-x root       root          1296384 ./lib/libc.so.6\n-rw-r--r-- root       root            19872 ./lib/modules/5.15.71/kernel/drivers/spi/spidev.ko\n-rw-r--r-- root       root            24460 ./lib/modules/5.15.71/kernel/drivers/usb/gadget/function/usb_f_serial.ko\n-rw-r--r-- root       root            81244 ./lib/modules/5.15.71/modules.dep\ndrwxr-xr-x root       root             4096 ./usr\n-rwxr-xr-x root       root          2186716 ./usr/bin/acme-gateway\n-rwxr-xr-x root       root           240912 ./usr/bin/curl\nlrwxrwxrwx root       root               17 ./usr/bin/dbclient -> /usr/sbin/dropbear\n-rwxr-xr-x root       root          3387524 ./usr/lib/libcrypto.so.3\n-rwxr-xr-x root       root           428212 ./usr/lib/libcurl.so.4.8.0\n-rwxr-xr-x root       root            47764 ./usr/lib/libgpiod.so.2.2.2\n-rwxr-xr-x root       root          1325040 ./usr/lib/libsqlite3.so.0.8.6\n-rwxr-xr-x root       root           624780 ./usr/lib/libssl.so.3\n-rwxr-xr-x root       root          1930120 ./usr/lib/libstdc++.so.6.0.29\n-rwxr-xr-x root       root           241388 ./usr/sbin/dropbear\n-rwxr-xr-x root       root           309660 ./usr/sbin/mosquitto\n"
+    },
+    {
+      "key": "filesAfter",
+      "label": "Build B files-in-image.txt (optional)",
+      "type": "textarea",
+      "rows": 6,
+      "default": "drwxr-xr-x root       root             4096 ./bin\n-rwxr-xr-x root       root           653388 ./bin/busybox.nosuid\n-rwsr-xr-x root       root            52232 ./bin/busybox.suid\nlrwxrwxrwx root       root               19 ./bin/ls -> /bin/busybox.nosuid\nlrwxrwxrwx root       root               17 ./bin/mount -> /bin/busybox.suid\nlrwxrwxrwx root       root               19 ./bin/sh -> /bin/busybox.nosuid\ndrwxr-xr-x root       root             4096 ./boot\nlrwxrwxrwx root       root               19 ./boot/zImage -> zImage-5.15.120\n-rw-r--r-- root       root          5337088 ./boot/zImage-5.15.120\ndrwxr-xr-x root       root             4096 ./etc\n-rw-rw-rw- root       root              512 ./etc/acme/device-id\n-rw-r--r-- root       root              436 ./etc/acme/gateway.conf\n-rw-r--r-- root       root             1024 ./etc/fstab\n-rwxr-xr-x root       root             2584 ./etc/init.d/sshd\n-rw-r--r-- root       root             2346 ./etc/mosquitto/mosquitto.conf\n-rw-r--r-- root       root             3214 ./etc/ssh/sshd_config\n-rw-r--r-- root       root           221516 ./etc/ssl/certs/ca-certificates.crt\ndrwxr-xr-x root       root             4096 ./lib\n-rwxr-xr-x root       root           176436 ./lib/ld-linux-armhf.so.3\n-rwxr-xr-x root       root          1296384 ./lib/libc.so.6\n-rw-r--r-- root       root            19872 ./lib/modules/5.15.120/kernel/drivers/spi/spidev.ko\n-rw-r--r-- root       root            24460 ./lib/modules/5.15.120/kernel/drivers/usb/gadget/function/usb_f_serial.ko\n-rw-r--r-- root       root            81960 ./lib/modules/5.15.120/modules.dep\ndrwxr-xr-x root       root             4096 ./usr\n-rwxr-xr-x root       root          2748212 ./usr/bin/acme-gateway\n-rwxr-xr-x root       root           240912 ./usr/bin/curl\nlrwxrwxrwx root       root               10 ./usr/bin/python3 -> python3.10\n-rwxr-xr-x root       root            13612 ./usr/bin/python3.10\n-rwxr-xr-x root       root           121308 ./usr/bin/scp\n-rwxr-xr-x root       root           729364 ./usr/bin/ssh\n-rwxr-xr-x root       root           436880 ./usr/bin/ssh-keygen\n-rwxr-xr-x root       root          1371620 ./usr/bin/strace\n-rwxr-xr-x root       root          3414212 ./usr/lib/libcrypto.so.3\n-rwxr-xr-x root       root           444372 ./usr/lib/libcurl.so.4.8.0\n-rwxr-xr-x root       root            45716 ./usr/lib/libgpiod.so.2.2.2\n-rwxr-xr-x root       root          3153424 ./usr/lib/libpython3.10.so.1.0\n-rwxr-xr-x root       root          1325040 ./usr/lib/libsqlite3.so.0.8.6\n-rwxr-xr-x root       root           631012 ./usr/lib/libssl.so.3\n-rw-r--r-- root       root          2876310 ./usr/lib/libstdc++.a\n-rwxr-xr-x root       root          1934356 ./usr/lib/libstdc++.so.6.0.29\n-rw-r--r-- root       root            61644 ./usr/lib/python3.10/json/decoder.py\n-rw-r--r-- root       root            98212 ./usr/lib/python3.10/os.py\n-rw-r--r-- root       root           312804 ./usr/lib/python3.10/site-packages/serial/serialposix.py\n-rwxr-xr-x root       root           322012 ./usr/sbin/mosquitto\n-rwxr-xr-x root       root           865928 ./usr/sbin/sshd\n"
+    },
+    {
+      "key": "by",
+      "label": "Rows are",
+      "type": "select",
+      "options": [
+        [
+          "auto",
+          "auto (packages if given)"
+        ],
+        [
+          "packages",
+          "packages"
+        ],
+        [
+          "dirs",
+          "directories (files-in-image)"
+        ]
+      ],
+      "default": "auto"
+    },
+    {
+      "key": "depth",
+      "label": "Directory depth",
+      "type": "select",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "default": "2",
+      "when": {
+        "key": "by",
+        "equals": "dirs"
+      }
+    },
+    {
+      "key": "show",
+      "label": "Show",
+      "type": "select",
+      "options": [
+        [
+          "changed",
+          "all changes"
+        ],
+        [
+          "added",
+          "added"
+        ],
+        [
+          "removed",
+          "removed"
+        ],
+        [
+          "version",
+          "version changes"
+        ],
+        [
+          "size",
+          "size changes"
+        ],
+        [
+          "all",
+          "everything, unchanged too"
+        ]
+      ],
+      "default": "changed"
+    },
+    {
+      "key": "sort",
+      "label": "Sort",
+      "type": "select",
+      "options": [
+        [
+          "abs",
+          "largest change"
+        ],
+        [
+          "growth",
+          "most growth"
+        ],
+        [
+          "shrink",
+          "most shrink"
+        ],
+        [
+          "name",
+          "name"
+        ],
+        [
+          "after",
+          "size in B"
+        ]
+      ],
+      "default": "abs"
+    },
+    {
+      "key": "top",
+      "label": "Rows drawn",
+      "type": "number",
+      "default": 18,
+      "help": "The rest are summed into one row."
+    },
+    {
+      "key": "minKiB",
+      "label": "Min change",
+      "type": "number",
+      "unit": "KiB",
+      "default": 0,
+      "help": "Hide size-only changes smaller than this."
+    },
+    {
+      "key": "focus",
+      "label": "Package in focus",
+      "type": "text",
+      "default": "",
+      "help": "Its versions, sizes and matching files; empty = the largest change."
+    }
+  ],
+  "examples": [
+    {
+      "title": "Kirkstone point-release bump: openssh replaces dropbear, python3 and a -dev package creep in (installed-package-info.txt + files-in-image.txt)",
+      "input": {
+        "before": "kernel-image-zimage-5.15.71 kernel-image-zimage linux-yocto 5.15.71+gitAUTOINC+b5b2d5e9f0_c21e6e8dc2 5140\nlibcrypto3 libcrypto openssl 3.0.8 3312\nacme-gateway acme-gateway acme-gateway 1.8.2 2140\nlibstdc++6 libstdc++ gcc-runtime 11.3.0 1888\nlibc6 glibc glibc 2.35 1356\nlibsqlite3-0 sqlite3 sqlite3 3.38.5 1296\nmtd-utils mtd-utils mtd-utils 2.1.4 648\niproute2-ip iproute2-ip iproute2 5.17.0 640\nudev eudev eudev 3.2.10 612\nlibssl3 libssl openssl 3.0.8 612\nbusybox busybox busybox 1.35.0 612\ndbus dbus dbus 1.14.0 548\nlibcurl4 libcurl curl 7.82.0 420\nlibext2fs2 libext2fs e2fsprogs 1.46.5 412\niptables iptables iptables 1.8.7 412\nlibncursesw5 ncurses-libncursesw ncurses 6.3+20220423 336\nlibmount1 util-linux-libmount util-linux 2.37.4 336\nmosquitto mosquitto mosquitto 2.0.14 304\nlibdbus-1-3 dbus-lib dbus 1.14.0 276\nlibreadline8 readline readline 8.1.2 272\nlibblkid1 util-linux-libblkid util-linux 2.37.4 272\ndropbear dropbear dropbear 2020.81 244\ncurl curl curl 7.82.0 236\nca-certificates ca-certificates ca-certificates 20211016 216\ntzdata-core tzdata-core tzdata 2022a 156\ne2fsprogs-mke2fs e2fsprogs-mke2fs e2fsprogs 1.46.5 148\nutil-linux-mount util-linux-mount util-linux 2.37.4 132\nlibudev1 libudev eudev 3.2.10 120\nsysvinit sysvinit sysvinit 3.01 112\nlibmosquitto1 libmosquitto1 mosquitto 2.0.14 96\nlibgpiod-tools libgpiod-tools libgpiod 1.6.3 92\nlibz1 zlib zlib 1.2.12 88\nlibgcc1 libgcc libgcc 11.3.0 72\nnetbase netbase netbase 6.4 56\nlibgpiod2 libgpiod libgpiod 1.6.3 48\nu-boot-fw-utils u-boot-fw-utils u-boot-fw-utils 2022.01 40\nbase-files base-files base-files 3.0.14 28\nkernel-module-g-serial-5.15.71 kernel-module-g-serial linux-yocto 5.15.71+gitAUTOINC+b5b2d5e9f0_c21e6e8dc2 24\ninitscripts initscripts initscripts 1.0 24\nkernel-module-spidev-5.15.71 kernel-module-spidev linux-yocto 5.15.71+gitAUTOINC+b5b2d5e9f0_c21e6e8dc2 20\nacme-config acme-config acme-gateway 1.8.2 12\nbusybox-udhcpc busybox-udhcpc busybox 1.35.0 4\nbusybox-syslog busybox-syslog busybox 1.35.0 4\n",
+        "after": "kernel-image-zimage-5.15.120 kernel-image-zimage linux-yocto 5.15.120+gitAUTOINC+7f5b3e1a44_2e7d49f1c8 5212\npython3-core python3-core python3 3.10.13 3964\nlibcrypto3 libcrypto openssl 3.0.12 3338\nlibstdc++-dev libstdc++-dev gcc-runtime 11.4.0 3208\nlibpython3.10-1.0 libpython3 python3 3.10.13 3080\nacme-gateway acme-gateway acme-gateway 1.9.0 2688\nlibstdc++6 libstdc++ gcc-runtime 11.4.0 1892\nlibc6 glibc glibc 2.35 1360\nstrace strace strace 5.16 1340\nlibsqlite3-0 sqlite3 sqlite3 3.38.5 1296\nopenssh-sshd openssh-sshd openssh 9.0p1 848\nopenssh-ssh openssh-ssh openssh 9.0p1 716\nmtd-utils mtd-utils mtd-utils 2.1.4 648\niproute2-ip iproute2-ip iproute2 5.17.0 640\nbusybox busybox busybox 1.35.0 640\nlibssl3 libssl openssl 3.0.12 618\nudev eudev eudev 3.2.10 612\ndbus dbus dbus 1.14.8 552\npython3-pyserial python3-pyserial python3-pyserial 3.5 512\nlibcurl4 libcurl curl 7.82.0 436\nopenssh-keygen openssh-keygen openssh 9.0p1 428\nlibext2fs2 libext2fs e2fsprogs 1.46.5 412\niptables iptables iptables 1.8.7 412\nlibncursesw5 ncurses-libncursesw ncurses 6.3+20220423 336\nlibmount1 util-linux-libmount util-linux 2.37.4 336\nmosquitto mosquitto mosquitto 2.0.18 316\nlibdbus-1-3 dbus-lib dbus 1.14.8 280\nlibreadline8 readline readline 8.1.2 272\nlibblkid1 util-linux-libblkid util-linux 2.37.4 272\ncurl curl curl 7.82.0 236\nca-certificates ca-certificates ca-certificates 20240203 232\ntzdata-core tzdata-core tzdata 2023c 160\ne2fsprogs-mke2fs e2fsprogs-mke2fs e2fsprogs 1.46.5 148\nutil-linux-mount util-linux-mount util-linux 2.37.4 132\npython3-json python3-json python3 3.10.13 132\nopenssh-scp openssh-scp openssh 9.0p1 120\nlibudev1 libudev eudev 3.2.10 120\nsysvinit sysvinit sysvinit 3.01 112\nlibmosquitto1 libmosquitto1 mosquitto 2.0.18 100\nlibgpiod-tools libgpiod-tools libgpiod 1.6.2 90\nlibz1 zlib zlib 1.2.13 88\nlibgcc1 libgcc libgcc 11.4.0 72\nnetbase netbase netbase 6.4 56\nlibgpiod2 libgpiod libgpiod 1.6.2 46\nu-boot-fw-utils u-boot-fw-utils u-boot-fw-utils 2022.01 40\nlibffi8 libffi libffi 3.4.2 40\nbase-files base-files base-files 3.0.14 28\nkernel-module-g-serial-5.15.120 kernel-module-g-serial linux-yocto 5.15.120+gitAUTOINC+7f5b3e1a44_2e7d49f1c8 24\ninitscripts initscripts initscripts 1.0 24\nkernel-module-spidev-5.15.120 kernel-module-spidev linux-yocto 5.15.120+gitAUTOINC+7f5b3e1a44_2e7d49f1c8 20\nacme-config acme-config acme-gateway 1.9.0 12\nbusybox-udhcpc busybox-udhcpc busybox 1.35.0 4\nbusybox-syslog busybox-syslog busybox 1.35.0 4\n",
+        "filesBefore": "drwxr-xr-x root       root             4096 ./bin\n-rwxr-xr-x root       root           624124 ./bin/busybox.nosuid\n-rwsr-xr-x root       root            52232 ./bin/busybox.suid\nlrwxrwxrwx root       root               19 ./bin/ls -> /bin/busybox.nosuid\nlrwxrwxrwx root       root               17 ./bin/mount -> /bin/busybox.suid\nlrwxrwxrwx root       root               19 ./bin/sh -> /bin/busybox.nosuid\ndrwxr-xr-x root       root             4096 ./boot\nlrwxrwxrwx root       root               19 ./boot/zImage -> zImage-5.15.71\n-rw-r--r-- root       root          5263360 ./boot/zImage-5.15.71\ndrwxr-xr-x root       root             4096 ./etc\n-rw-r--r-- root       root              412 ./etc/acme/gateway.conf\n-rw-r--r-- root       root             1024 ./etc/fstab\n-rwxr-xr-x root       root             1536 ./etc/init.d/dropbear\n-rw-r--r-- root       root             2112 ./etc/mosquitto/mosquitto.conf\n-rw-r--r-- root       root           205740 ./etc/ssl/certs/ca-certificates.crt\ndrwxr-xr-x root       root             4096 ./lib\n-rwxr-xr-x root       root           176436 ./lib/ld-linux-armhf.so.3\n-rwxr-xr-x root       root          1296384 ./lib/libc.so.6\n-rw-r--r-- root       root            19872 ./lib/modules/5.15.71/kernel/drivers/spi/spidev.ko\n-rw-r--r-- root       root            24460 ./lib/modules/5.15.71/kernel/drivers/usb/gadget/function/usb_f_serial.ko\n-rw-r--r-- root       root            81244 ./lib/modules/5.15.71/modules.dep\ndrwxr-xr-x root       root             4096 ./usr\n-rwxr-xr-x root       root          2186716 ./usr/bin/acme-gateway\n-rwxr-xr-x root       root           240912 ./usr/bin/curl\nlrwxrwxrwx root       root               17 ./usr/bin/dbclient -> /usr/sbin/dropbear\n-rwxr-xr-x root       root          3387524 ./usr/lib/libcrypto.so.3\n-rwxr-xr-x root       root           428212 ./usr/lib/libcurl.so.4.8.0\n-rwxr-xr-x root       root            47764 ./usr/lib/libgpiod.so.2.2.2\n-rwxr-xr-x root       root          1325040 ./usr/lib/libsqlite3.so.0.8.6\n-rwxr-xr-x root       root           624780 ./usr/lib/libssl.so.3\n-rwxr-xr-x root       root          1930120 ./usr/lib/libstdc++.so.6.0.29\n-rwxr-xr-x root       root           241388 ./usr/sbin/dropbear\n-rwxr-xr-x root       root           309660 ./usr/sbin/mosquitto\n",
+        "filesAfter": "drwxr-xr-x root       root             4096 ./bin\n-rwxr-xr-x root       root           653388 ./bin/busybox.nosuid\n-rwsr-xr-x root       root            52232 ./bin/busybox.suid\nlrwxrwxrwx root       root               19 ./bin/ls -> /bin/busybox.nosuid\nlrwxrwxrwx root       root               17 ./bin/mount -> /bin/busybox.suid\nlrwxrwxrwx root       root               19 ./bin/sh -> /bin/busybox.nosuid\ndrwxr-xr-x root       root             4096 ./boot\nlrwxrwxrwx root       root               19 ./boot/zImage -> zImage-5.15.120\n-rw-r--r-- root       root          5337088 ./boot/zImage-5.15.120\ndrwxr-xr-x root       root             4096 ./etc\n-rw-rw-rw- root       root              512 ./etc/acme/device-id\n-rw-r--r-- root       root              436 ./etc/acme/gateway.conf\n-rw-r--r-- root       root             1024 ./etc/fstab\n-rwxr-xr-x root       root             2584 ./etc/init.d/sshd\n-rw-r--r-- root       root             2346 ./etc/mosquitto/mosquitto.conf\n-rw-r--r-- root       root             3214 ./etc/ssh/sshd_config\n-rw-r--r-- root       root           221516 ./etc/ssl/certs/ca-certificates.crt\ndrwxr-xr-x root       root             4096 ./lib\n-rwxr-xr-x root       root           176436 ./lib/ld-linux-armhf.so.3\n-rwxr-xr-x root       root          1296384 ./lib/libc.so.6\n-rw-r--r-- root       root            19872 ./lib/modules/5.15.120/kernel/drivers/spi/spidev.ko\n-rw-r--r-- root       root            24460 ./lib/modules/5.15.120/kernel/drivers/usb/gadget/function/usb_f_serial.ko\n-rw-r--r-- root       root            81960 ./lib/modules/5.15.120/modules.dep\ndrwxr-xr-x root       root             4096 ./usr\n-rwxr-xr-x root       root          2748212 ./usr/bin/acme-gateway\n-rwxr-xr-x root       root           240912 ./usr/bin/curl\nlrwxrwxrwx root       root               10 ./usr/bin/python3 -> python3.10\n-rwxr-xr-x root       root            13612 ./usr/bin/python3.10\n-rwxr-xr-x root       root           121308 ./usr/bin/scp\n-rwxr-xr-x root       root           729364 ./usr/bin/ssh\n-rwxr-xr-x root       root           436880 ./usr/bin/ssh-keygen\n-rwxr-xr-x root       root          1371620 ./usr/bin/strace\n-rwxr-xr-x root       root          3414212 ./usr/lib/libcrypto.so.3\n-rwxr-xr-x root       root           444372 ./usr/lib/libcurl.so.4.8.0\n-rwxr-xr-x root       root            45716 ./usr/lib/libgpiod.so.2.2.2\n-rwxr-xr-x root       root          3153424 ./usr/lib/libpython3.10.so.1.0\n-rwxr-xr-x root       root          1325040 ./usr/lib/libsqlite3.so.0.8.6\n-rwxr-xr-x root       root           631012 ./usr/lib/libssl.so.3\n-rw-r--r-- root       root          2876310 ./usr/lib/libstdc++.a\n-rwxr-xr-x root       root          1934356 ./usr/lib/libstdc++.so.6.0.29\n-rw-r--r-- root       root            61644 ./usr/lib/python3.10/json/decoder.py\n-rw-r--r-- root       root            98212 ./usr/lib/python3.10/os.py\n-rw-r--r-- root       root           312804 ./usr/lib/python3.10/site-packages/serial/serialposix.py\n-rwxr-xr-x root       root           322012 ./usr/sbin/mosquitto\n-rwxr-xr-x root       root           865928 ./usr/sbin/sshd\n",
+        "by": "auto",
+        "show": "changed",
+        "sort": "abs",
+        "top": 18,
+        "minKiB": 0,
+        "depth": 2,
+        "focus": ""
+      }
+    },
+    {
+      "title": "Trimming a minimal image: installed-package-sizes.txt and image-info.txt only",
+      "input": {
+        "before": "11456\tKiB\tkernel-image-bzimage-6.6.23\n4512\tKiB\tlibcrypto3\n3964\tKiB\tpython3-core\n3380\tKiB\tlibpython3.12-1.0\n3144\tKiB\tvim\n2096\tKiB\tkernel-module-xfs-6.6.23\n1864\tKiB\tkernel-module-btrfs-6.6.23\n1624\tKiB\tperl\n1540\tKiB\tsqlite3\n1356\tKiB\tlibc6\n1284\tKiB\tbash\n760\tKiB\tlibssl3\n720\tKiB\topenssl-bin\n612\tKiB\tudev\n588\tKiB\tbusybox\n512\tKiB\tkernel-module-nfs-6.6.23\n336\tKiB\tlibncursesw5\n336\tKiB\tlibmount1\n272\tKiB\tlibblkid1\n272\tKiB\tlibreadline8\n112\tKiB\tvim-common\n112\tKiB\tsysvinit\n96\tKiB\tlibkmod2\n88\tKiB\tlibz1\n56\tKiB\tnetbase\n44\tKiB\tncurses-terminfo-base\n28\tKiB\tbase-files\n0\tKiB\tpackagegroup-core-boot\nDISTRO = poky\nDISTRO_VERSION = 5.0.3\nIMAGE_FEATURES = debug-tweaks ssh-server-openssh tools-debug\nIMAGE_LINGUAS = \nIMAGESIZE = 52340\n",
+        "after": "9728\tKiB\tkernel-image-bzimage-6.6.23\n4512\tKiB\tlibcrypto3\n1356\tKiB\tlibc6\n760\tKiB\tlibssl3\n612\tKiB\tudev\n604\tKiB\tbusybox\n336\tKiB\tlibmount1\n272\tKiB\tlibblkid1\n112\tKiB\tsysvinit\n96\tKiB\tlibkmod2\n88\tKiB\tlibz1\n56\tKiB\tnetbase\n44\tKiB\tncurses-terminfo-base\n28\tKiB\tbase-files\n0\tKiB\tpackagegroup-core-boot\nDISTRO = poky\nDISTRO_VERSION = 5.0.3\nIMAGE_FEATURES = read-only-rootfs ssh-server-dropbear\nIMAGE_LINGUAS = \nIMAGESIZE = 31872\n",
+        "filesBefore": "",
+        "filesAfter": "",
+        "by": "auto",
+        "show": "changed",
+        "sort": "abs",
+        "top": 18,
+        "minKiB": 0,
+        "depth": 2,
+        "focus": ""
+      }
+    }
+  ],
+  "usage": "Pass `before` and `after` as the text of the same buildhistory file(s) from two builds (images/<machine>/<libc>/<image>/installed-package-info.txt is best: versions and sizes; installed-package-sizes.txt, installed-packages.txt, installed-package-names.txt and image-info.txt also read, one format per line), and optionally `filesBefore`/`filesAfter` as files-in-image.txt. It returns totals and the size change, counts of added/removed/upgraded/downgraded packages, a table of the largest changes with versions, the largest file changes, changed image-info variables, a buildhistory-diff style report text, and warnings for >10% growth, -dev/-dbg packages added, version downgrades, new setuid or world-writable files. Use `by: dirs` to compare two files-in-image.txt by directory, `focus` to get one package's matching files.",
+  "sources": [
+    "poky meta/classes/buildhistory.bbclass (kirkstone): buildhistory_get_installed, buildhistory_list_files, image-info.txt",
+    "poky meta/lib/oe/buildhistory_analysis.py: monitor_numeric_threshold = 10, numeric_removal name pairing, compare_file_lists",
+    "poky scripts/oe-pkgdata-util read-value: PKGSIZE bytes rounded to KiB",
+    "Yocto Project Development Tasks Manual, 'Maintaining Build Output Quality' (buildhistory)",
+    "dpkg lib/dpkg/version.c verrevcmp (version order)"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "draw"
+  ]
+}

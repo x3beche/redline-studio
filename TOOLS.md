@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-175 tools. **MCP** marks the ones agents can run with `run_tool`.
+178 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -138,6 +138,8 @@ agents, the most used, and every tool nobody used.
 | **ADC Resolution Calculator** · MCP | `adc-resolution` | LSB size from reference and bits, and the oversampling gain | Embedded |
 | **Battery Life Estimator** · MCP | `battery-life` | run time in days from average current and battery capacity | Embedded, PCB |
 | **Bootloader Size Check** · MCP | `bootloader-fit` | whether application and bootloader regions fit | Embedded |
+| **Build Error & QA Explainer** · MCP | `yocto-build-errors` | a failed BitBake task log or QA warning classified, with the cause and the fix | Embedded |
+| **Buildhistory Diff** · MCP | `buildhistory-diff` | package and image size changes between two builds from buildhistory, largest first | Embedded |
 | **CAN Bit Timing Calculator** · MCP | `can-bit-timing` | segment values and sample point from a clock and bit rate | Embedded |
 | **Clock Tree Planner** · MCP | `clock-tree` | PLL settings and peripheral clocks from a crystal frequency | Embedded |
 | **Compiler Flag Explainer** · MCP | `compiler-flags` | size and speed effect of the optimisation flags in a build log | Embedded |
@@ -155,6 +157,7 @@ agents, the most used, and every tool nobody used.
 | **I2C Address Map** · MCP | `i2c-address-map` | devices on a bus by address, with conflicts and alternative addresses | Embedded, PCB |
 | **IEEE754 Float Inspector** · MCP | `float-inspector` | sign, exponent and mantissa bits of a float | Embedded |
 | **Interrupt Latency Budget** · MCP | `irq-latency` | CPU load and miss risk from interrupt rates and handler times | Embedded |
+| **Layer & Release Map** · MCP | `layer-release-map` | Yocto releases with their LTS and end-of-life dates, and a bblayers stack checked for compatibility | Embedded |
 | **Linker Script Helper** · MCP | `linker-script` | a linker script from sections and memory regions in a form | Embedded |
 | **Log Format Designer** · MCP | `log-format` | a compact embedded log format and its parser code | Embedded |
 | **Memory Map Viewer** · MCP | `memory-map` | flash and RAM region use as a scaled strip | Embedded |

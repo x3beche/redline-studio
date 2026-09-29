@@ -1,0 +1,156 @@
+{
+ "id": "layer-release-map",
+ "version": "1.0",
+ "name": "Layer & Release Map",
+ "blurb": "Yocto releases with their LTS and end-of-life dates, and a bblayers stack checked for compatibility",
+ "group": "embedded",
+ "rooms": [
+  "embedded"
+ ],
+ "layout": "custom",
+ "view": true,
+ "agentOmit": [
+  "map"
+ ],
+ "keywords": [
+  "yocto",
+  "yocto releases",
+  "bitbake",
+  "bblayers.conf",
+  "layer.conf",
+  "LAYERSERIES_COMPAT",
+  "LAYERDEPENDS",
+  "BBFILE_PRIORITY",
+  "BBFILE_COLLECTIONS",
+  "LAYERSERIES_CORENAMES",
+  "LTS",
+  "end of life",
+  "EOL",
+  "scarthgap",
+  "kirkstone",
+  "wrynose",
+  "layer compatibility",
+  "openembedded",
+  "poky",
+  "migration"
+ ],
+ "intro": "Draws the Yocto release line (release, LTS, end of life, as of Sep 2026) and your bblayers.conf as a stack by BBFILE_PRIORITY with LAYERDEPENDS arrows, and runs the checks BitBake itself makes when it reads the layers: LAYERSERIES_COMPAT against the core's series, missing or wrong-version dependencies, duplicate collections, unset patterns, priority ties.",
+ "inputs": [
+  {
+   "key": "target",
+   "label": "Target release",
+   "type": "select",
+   "default": "auto",
+   "options": [
+    [
+     "auto",
+     "auto (the core layer's series)"
+    ],
+    [
+     "dunfell",
+     "dunfell"
+    ],
+    [
+     "gatesgarth",
+     "gatesgarth"
+    ],
+    [
+     "hardknott",
+     "hardknott"
+    ],
+    [
+     "honister",
+     "honister"
+    ],
+    [
+     "kirkstone",
+     "kirkstone"
+    ],
+    [
+     "langdale",
+     "langdale"
+    ],
+    [
+     "mickledore",
+     "mickledore"
+    ],
+    [
+     "nanbield",
+     "nanbield"
+    ],
+    [
+     "scarthgap",
+     "scarthgap"
+    ],
+    [
+     "styhead",
+     "styhead"
+    ],
+    [
+     "walnascar",
+     "walnascar"
+    ],
+    [
+     "whinlatter",
+     "whinlatter"
+    ],
+    [
+     "wrynose",
+     "wrynose"
+    ]
+   ],
+   "help": "The release you build on or plan to move to; auto takes LAYERSERIES_CORENAMES from the core layer."
+  },
+  {
+   "key": "bblayers",
+   "label": "bblayers.conf",
+   "type": "textarea",
+   "rows": 14,
+   "default": "# POKY_BBLAYERS_CONF_VERSION is increased each time build/conf/bblayers.conf\n# changes incompatibly\nPOKY_BBLAYERS_CONF_VERSION = \"2\"\n\nBBPATH = \"${TOPDIR}\"\nBBFILES ?= \"\"\n\nBSPDIR = \"${TOPDIR}/..\"\n\nBBLAYERS_NXP ?= \" \\\n  ${BSPDIR}/layers/meta-toradex-nxp \\\n  ${BSPDIR}/layers/meta-freescale \\\n  ${BSPDIR}/layers/meta-freescale-3rdparty \\\n\"\n\nBBLAYERS ?= \" \\\n  ${BSPDIR}/layers/openembedded-core/meta \\\n  ${BSPDIR}/layers/meta-yocto/meta-poky \\\n  ${BBLAYERS_NXP} \\\n  ${BSPDIR}/layers/meta-arm/meta-arm-toolchain \\\n  ${BSPDIR}/layers/meta-arm/meta-arm \\\n  ${BSPDIR}/layers/meta-toradex-bsp-common \\\n  ${BSPDIR}/layers/meta-openembedded/meta-oe \\\n  ${BSPDIR}/layers/meta-openembedded/meta-python \\\n  ${BSPDIR}/layers/meta-openembedded/meta-networking \\\n  ${BSPDIR}/layers/meta-freescale-distro \\\n  ${BSPDIR}/layers/meta-qt5 \\\n  ${BSPDIR}/layers/meta-clang \\\n  ${BSPDIR}/layers/meta-mycompany \\\n\"\n",
+   "help": "build/conf/bblayers.conf as it is; variables set in the file are expanded."
+  },
+  {
+   "key": "layerconfs",
+   "label": "layer.conf files",
+   "type": "textarea",
+   "rows": 18,
+   "default": "==> layers/openembedded-core/meta/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"core\"\nBBFILE_PATTERN_core = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_core = \"5\"\nLAYERSERIES_CORENAMES = \"scarthgap\"\nLAYERVERSION_core = \"15\"\nLAYERSERIES_COMPAT_core = \"scarthgap\"\n\n==> layers/meta-yocto/meta-poky/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"yocto\"\nBBFILE_PATTERN_yocto = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_yocto = \"5\"\nLAYERDEPENDS_yocto = \"core\"\nLAYERSERIES_COMPAT_yocto = \"scarthgap\"\n\n==> layers/meta-openembedded/meta-oe/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"openembedded-layer\"\nBBFILE_PATTERN_openembedded-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_openembedded-layer = \"5\"\nLAYERVERSION_openembedded-layer = \"1\"\nLAYERDEPENDS_openembedded-layer = \"core\"\nLAYERSERIES_COMPAT_openembedded-layer = \"scarthgap\"\n\n==> layers/meta-openembedded/meta-python/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"meta-python\"\nBBFILE_PATTERN_meta-python = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_meta-python = \"5\"\nLAYERVERSION_meta-python = \"1\"\nLAYERDEPENDS_meta-python = \"core (>= 12) openembedded-layer\"\nLAYERSERIES_COMPAT_meta-python = \"scarthgap\"\n\n==> layers/meta-openembedded/meta-networking/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"networking-layer\"\nBBFILE_PATTERN_networking-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_networking-layer = \"5\"\nLAYERVERSION_networking-layer = \"1\"\nLAYERDEPENDS_networking-layer = \"core meta-python openembedded-layer\"\nLAYERSERIES_COMPAT_networking-layer = \"scarthgap\"\n\n==> layers/meta-arm/meta-arm-toolchain/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"arm-toolchain\"\nBBFILE_PATTERN_arm-toolchain = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_arm-toolchain = \"5\"\nLAYERDEPENDS_arm-toolchain = \"core\"\nLAYERSERIES_COMPAT_arm-toolchain = \"nanbield scarthgap\"\n\n==> layers/meta-arm/meta-arm/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"meta-arm\"\nBBFILE_PATTERN_meta-arm = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_meta-arm = \"5\"\nLAYERDEPENDS_meta-arm = \" \\\n    core \\\n    arm-toolchain \\\n\"\nLAYERSERIES_COMPAT_meta-arm = \"nanbield scarthgap\"\n\n==> layers/meta-freescale/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"freescale-layer\"\nBBFILE_PATTERN_freescale-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_freescale-layer = \"5\"\nLAYERDEPENDS_freescale-layer = \"core\"\nLAYERSERIES_COMPAT_freescale-layer = \"kirkstone langdale mickledore nanbield scarthgap\"\n\n==> layers/meta-freescale-3rdparty/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"freescale-3rdparty\"\nBBFILE_PATTERN_freescale-3rdparty = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_freescale-3rdparty = \"4\"\nLAYERDEPENDS_freescale-3rdparty = \"core freescale-layer\"\nLAYERSERIES_COMPAT_freescale-3rdparty = \"kirkstone langdale mickledore nanbield scarthgap\"\n\n==> layers/meta-freescale-distro/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"freescale-distro\"\nBBFILE_PATTERN_freescale-distro = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_freescale-distro = \"4\"\nLAYERDEPENDS_freescale-distro = \"core yocto\"\nLAYERSERIES_COMPAT_freescale-distro = \"langdale mickledore nanbield scarthgap\"\n\n==> layers/meta-toradex-bsp-common/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"toradex-bsp-common-layer\"\nBBFILE_PATTERN_toradex-bsp-common-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_toradex-bsp-common-layer = \"23\"\nLAYERDEPENDS_toradex-bsp-common-layer = \"core\"\nLAYERSERIES_COMPAT_toradex-bsp-common-layer = \"nanbield scarthgap\"\n\n==> layers/meta-toradex-nxp/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"toradex-nxp-layer\"\nBBFILE_PATTERN_toradex-nxp-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_toradex-nxp-layer = \"22\"\nLAYERDEPENDS_toradex-nxp-layer = \" \\\n    core \\\n    freescale-layer \\\n    freescale-3rdparty \\\n    toradex-bsp-common-layer \\\n\"\nLAYERSERIES_COMPAT_toradex-nxp-layer = \"nanbield scarthgap\"\n\n==> layers/meta-qt5/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"qt5-layer\"\nBBFILE_PATTERN_qt5-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_qt5-layer = \"7\"\nLAYERDEPENDS_qt5-layer = \"core openembedded-layer\"\nLAYERSERIES_COMPAT_qt5-layer = \"dunfell gatesgarth hardknott honister kirkstone langdale mickledore nanbield scarthgap\"\n\n==> layers/meta-clang/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"clang-layer\"\nBBFILE_PATTERN_clang-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_clang-layer = \"7\"\nLAYERDEPENDS_clang-layer = \"core\"\nLAYERSERIES_COMPAT_clang-layer = \"nanbield scarthgap\"\n\n==> layers/meta-mycompany/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"mycompany-layer\"\nBBFILE_PATTERN_mycompany-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_mycompany-layer = \"7\"\nLAYERDEPENDS_mycompany-layer = \"core openembedded-layer swupdate\"\nLAYERSERIES_COMPAT_mycompany-layer = \"kirkstone\"",
+   "help": "Each layer's conf/layer.conf, each after a line ==> path/conf/layer.conf <== (what `tail -n +1 layers/*/conf/layer.conf layers/*/*/conf/layer.conf` prints)."
+  },
+  {
+   "key": "off",
+   "label": "Excluded layers (what-if)",
+   "type": "text",
+   "default": "",
+   "placeholder": "meta-clang, meta-qt5",
+   "help": "Layer folder names left out of BBLAYERS to see what breaks."
+  }
+ ],
+ "examples": [
+  {
+   "title": "Scarthgap i.MX BSP stack with a company layer not yet ported",
+   "input": {
+    "target": "auto",
+    "bblayers": "# POKY_BBLAYERS_CONF_VERSION is increased each time build/conf/bblayers.conf\n# changes incompatibly\nPOKY_BBLAYERS_CONF_VERSION = \"2\"\n\nBBPATH = \"${TOPDIR}\"\nBBFILES ?= \"\"\n\nBSPDIR = \"${TOPDIR}/..\"\n\nBBLAYERS_NXP ?= \" \\\n  ${BSPDIR}/layers/meta-toradex-nxp \\\n  ${BSPDIR}/layers/meta-freescale \\\n  ${BSPDIR}/layers/meta-freescale-3rdparty \\\n\"\n\nBBLAYERS ?= \" \\\n  ${BSPDIR}/layers/openembedded-core/meta \\\n  ${BSPDIR}/layers/meta-yocto/meta-poky \\\n  ${BBLAYERS_NXP} \\\n  ${BSPDIR}/layers/meta-arm/meta-arm-toolchain \\\n  ${BSPDIR}/layers/meta-arm/meta-arm \\\n  ${BSPDIR}/layers/meta-toradex-bsp-common \\\n  ${BSPDIR}/layers/meta-openembedded/meta-oe \\\n  ${BSPDIR}/layers/meta-openembedded/meta-python \\\n  ${BSPDIR}/layers/meta-openembedded/meta-networking \\\n  ${BSPDIR}/layers/meta-freescale-distro \\\n  ${BSPDIR}/layers/meta-qt5 \\\n  ${BSPDIR}/layers/meta-clang \\\n  ${BSPDIR}/layers/meta-mycompany \\\n\"\n",
+    "layerconfs": "==> layers/openembedded-core/meta/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"core\"\nBBFILE_PATTERN_core = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_core = \"5\"\nLAYERSERIES_CORENAMES = \"scarthgap\"\nLAYERVERSION_core = \"15\"\nLAYERSERIES_COMPAT_core = \"scarthgap\"\n\n==> layers/meta-yocto/meta-poky/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"yocto\"\nBBFILE_PATTERN_yocto = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_yocto = \"5\"\nLAYERDEPENDS_yocto = \"core\"\nLAYERSERIES_COMPAT_yocto = \"scarthgap\"\n\n==> layers/meta-openembedded/meta-oe/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"openembedded-layer\"\nBBFILE_PATTERN_openembedded-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_openembedded-layer = \"5\"\nLAYERVERSION_openembedded-layer = \"1\"\nLAYERDEPENDS_openembedded-layer = \"core\"\nLAYERSERIES_COMPAT_openembedded-layer = \"scarthgap\"\n\n==> layers/meta-openembedded/meta-python/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"meta-python\"\nBBFILE_PATTERN_meta-python = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_meta-python = \"5\"\nLAYERVERSION_meta-python = \"1\"\nLAYERDEPENDS_meta-python = \"core (>= 12) openembedded-layer\"\nLAYERSERIES_COMPAT_meta-python = \"scarthgap\"\n\n==> layers/meta-openembedded/meta-networking/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"networking-layer\"\nBBFILE_PATTERN_networking-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_networking-layer = \"5\"\nLAYERVERSION_networking-layer = \"1\"\nLAYERDEPENDS_networking-layer = \"core meta-python openembedded-layer\"\nLAYERSERIES_COMPAT_networking-layer = \"scarthgap\"\n\n==> layers/meta-arm/meta-arm-toolchain/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"arm-toolchain\"\nBBFILE_PATTERN_arm-toolchain = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_arm-toolchain = \"5\"\nLAYERDEPENDS_arm-toolchain = \"core\"\nLAYERSERIES_COMPAT_arm-toolchain = \"nanbield scarthgap\"\n\n==> layers/meta-arm/meta-arm/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"meta-arm\"\nBBFILE_PATTERN_meta-arm = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_meta-arm = \"5\"\nLAYERDEPENDS_meta-arm = \" \\\n    core \\\n    arm-toolchain \\\n\"\nLAYERSERIES_COMPAT_meta-arm = \"nanbield scarthgap\"\n\n==> layers/meta-freescale/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"freescale-layer\"\nBBFILE_PATTERN_freescale-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_freescale-layer = \"5\"\nLAYERDEPENDS_freescale-layer = \"core\"\nLAYERSERIES_COMPAT_freescale-layer = \"kirkstone langdale mickledore nanbield scarthgap\"\n\n==> layers/meta-freescale-3rdparty/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"freescale-3rdparty\"\nBBFILE_PATTERN_freescale-3rdparty = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_freescale-3rdparty = \"4\"\nLAYERDEPENDS_freescale-3rdparty = \"core freescale-layer\"\nLAYERSERIES_COMPAT_freescale-3rdparty = \"kirkstone langdale mickledore nanbield scarthgap\"\n\n==> layers/meta-freescale-distro/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"freescale-distro\"\nBBFILE_PATTERN_freescale-distro = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_freescale-distro = \"4\"\nLAYERDEPENDS_freescale-distro = \"core yocto\"\nLAYERSERIES_COMPAT_freescale-distro = \"langdale mickledore nanbield scarthgap\"\n\n==> layers/meta-toradex-bsp-common/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"toradex-bsp-common-layer\"\nBBFILE_PATTERN_toradex-bsp-common-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_toradex-bsp-common-layer = \"23\"\nLAYERDEPENDS_toradex-bsp-common-layer = \"core\"\nLAYERSERIES_COMPAT_toradex-bsp-common-layer = \"nanbield scarthgap\"\n\n==> layers/meta-toradex-nxp/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"toradex-nxp-layer\"\nBBFILE_PATTERN_toradex-nxp-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_toradex-nxp-layer = \"22\"\nLAYERDEPENDS_toradex-nxp-layer = \" \\\n    core \\\n    freescale-layer \\\n    freescale-3rdparty \\\n    toradex-bsp-common-layer \\\n\"\nLAYERSERIES_COMPAT_toradex-nxp-layer = \"nanbield scarthgap\"\n\n==> layers/meta-qt5/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"qt5-layer\"\nBBFILE_PATTERN_qt5-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_qt5-layer = \"7\"\nLAYERDEPENDS_qt5-layer = \"core openembedded-layer\"\nLAYERSERIES_COMPAT_qt5-layer = \"dunfell gatesgarth hardknott honister kirkstone langdale mickledore nanbield scarthgap\"\n\n==> layers/meta-clang/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"clang-layer\"\nBBFILE_PATTERN_clang-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_clang-layer = \"7\"\nLAYERDEPENDS_clang-layer = \"core\"\nLAYERSERIES_COMPAT_clang-layer = \"nanbield scarthgap\"\n\n==> layers/meta-mycompany/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"mycompany-layer\"\nBBFILE_PATTERN_mycompany-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_mycompany-layer = \"7\"\nLAYERDEPENDS_mycompany-layer = \"core openembedded-layer swupdate\"\nLAYERSERIES_COMPAT_mycompany-layer = \"kirkstone\"",
+    "off": ""
+   }
+  },
+  {
+   "title": "Kirkstone STM32MP product planning the move to scarthgap",
+   "input": {
+    "target": "scarthgap",
+    "bblayers": "BBPATH = \"${TOPDIR}\"\nBBFILES ?= \"\"\n\nBBLAYERS ?= \" \\\n  /work/poky/meta \\\n  /work/poky/meta-poky \\\n  /work/meta-openembedded/meta-oe \\\n  /work/meta-openembedded/meta-python \\\n  /work/meta-swupdate \\\n  /work/meta-st/meta-st-stm32mp \\\n  # /work/meta-rauc \\\n  /work/meta-product \\\n\"\n",
+    "layerconfs": "==> /work/poky/meta/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"core\"\nBBFILE_PATTERN_core = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_core = \"5\"\nLAYERSERIES_CORENAMES = \"kirkstone\"\nLAYERVERSION_core = \"14\"\nLAYERSERIES_COMPAT_core = \"kirkstone\"\n\n==> /work/poky/meta-poky/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"yocto\"\nBBFILE_PATTERN_yocto = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_yocto = \"5\"\nLAYERDEPENDS_yocto = \"core\"\nLAYERSERIES_COMPAT_yocto = \"kirkstone\"\n\n==> /work/meta-openembedded/meta-oe/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"openembedded-layer\"\nBBFILE_PATTERN_openembedded-layer = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_openembedded-layer = \"6\"\nLAYERVERSION_openembedded-layer = \"1\"\nLAYERDEPENDS_openembedded-layer = \"core\"\nLAYERSERIES_COMPAT_openembedded-layer = \"kirkstone\"\n\n==> /work/meta-openembedded/meta-python/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"meta-python\"\nBBFILE_PATTERN_meta-python = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_meta-python = \"7\"\nLAYERDEPENDS_meta-python = \"core openembedded-layer\"\nLAYERSERIES_COMPAT_meta-python = \"kirkstone\"\n\n==> /work/meta-swupdate/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"swupdate\"\nBBFILE_PATTERN_swupdate = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_swupdate = \"6\"\nLAYERDEPENDS_swupdate = \"core\"\nLAYERSERIES_COMPAT_swupdate = \"kirkstone langdale mickledore nanbield\"\n\n==> /work/meta-st/meta-st-stm32mp/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"stm-st-stm32mp\"\nBBFILE_PATTERN_stm-st-stm32mp = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_stm-st-stm32mp = \"6\"\nLAYERDEPENDS_stm-st-stm32mp = \"core openembedded-layer\"\nLAYERSERIES_COMPAT_stm-st-stm32mp = \"kirkstone\"\n\n==> /work/meta-rauc/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"rauc\"\nBBFILE_PATTERN_rauc = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_rauc = \"6\"\nLAYERDEPENDS_rauc = \"core\"\nLAYERSERIES_COMPAT_rauc = \"kirkstone langdale mickledore nanbield scarthgap\"\n\n==> /work/meta-product/conf/layer.conf <==\nBBPATH .= \":${LAYERDIR}\"\nBBFILES += \"${LAYERDIR}/recipes-*/*/*.bb ${LAYERDIR}/recipes-*/*/*.bbappend\"\nBBFILE_COLLECTIONS += \"product\"\nBBFILE_PATTERN_product = \"^${LAYERDIR}/\"\nBBFILE_PRIORITY_product = \"9\"\nLAYERDEPENDS_product = \"core openembedded-layer swupdate stm-st-stm32mp\"\nLAYERSERIES_COMPAT_product = \"${LAYERSERIES_COMPAT_core}\"",
+    "off": ""
+   }
+  }
+ ],
+ "usage": "Give bblayers (the bblayers.conf text), layerconfs (every layer's conf/layer.conf, each preceded by a line '==> path/conf/layer.conf <=='), optionally target (a codename such as scarthgap, or auto for the core layer's LAYERSERIES_CORENAMES) and off (comma-separated layer folder names to leave out). It returns the target release's LTS/EOL status, the stack by priority with each layer's declared series and dependencies, a release table, and warnings phrased as BitBake's own errors with the fix. Use it before a build to catch layer-compatibility and dependency errors, or to see which layers already declare a release you plan to move to.",
+ "sources": [
+  "bitbake/lib/bb/cookerdata.py (LAYERSERIES_CORENAMES / LAYERSERIES_COMPAT check, duplicated BBFILE_COLLECTIONS) and cooker.py handleCollections() (LAYERDEPENDS, LAYERVERSION, BBFILE_PRIORITY, BBFILE_PATTERN), bitbake 2.8 (scarthgap)",
+  "bitbake/lib/bb/parse/parse_py/ConfHandler.py (line continuation and comment rules)",
+  "Yocto Project Reference Manual, 'Yocto Project Releases and the Stable Release Process' (LTS every two years for four years; stable releases seven months; Kirkstone to May 2026, Scarthgap to April 2028)",
+  "wiki.yoctoproject.org/wiki/Releases for release months; data as of 2026-09, entries marked planned or estimated need checking there"
+ ]
+}

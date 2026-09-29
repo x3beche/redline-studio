@@ -1,0 +1,123 @@
+/* Build Error & QA Explainer: the log is the interface. */
+.ybe { --tool-e: var(--danger); --tool-w: var(--warn); --tool-tint-e: color-mix(in srgb, var(--danger) 13%, transparent);
+  --tool-tint-w: color-mix(in srgb, var(--warn) 13%, transparent); --tool-ctx: color-mix(in srgb, var(--ink-soft) 9%, transparent);
+  --tool-on-e: color-mix(in srgb, var(--danger) 24%, transparent); --tool-on-w: color-mix(in srgb, var(--warn) 26%, transparent);
+  --tool-piped: color-mix(in srgb, var(--sunken) 60%, transparent);
+  display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.k-page { padding: 12px 14px 16px; }
+.ybe-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(340px, 1fr); gap: 10px; align-items: start; min-width: 0; }
+@media (max-width: 1060px) { .ybe-grid { grid-template-columns: minmax(0, 1fr); } }
+.ybe-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.ybe-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.ybe-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); }
+.ybe-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.ybe-sub { font-size: 11.5px; color: var(--ink-soft); }
+.ybe-sub b { color: var(--ink); font-weight: 600; } .ybe-sub b.bad { color: var(--danger); }
+
+/* ---- strip ---- */
+.ybe-strip { display: flex; flex-direction: column; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; min-width: 0; }
+.ybe-build { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 11.5px; }
+.ybe-kv i { font-style: normal; color: var(--ink-soft); margin-right: 5px; }
+.ybe-kv b { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; }
+.ybe-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px; }
+.ybe-lbl { font-size: 11px; color: var(--ink-soft); margin-right: 2px; }
+.ybe-lbl.gap { margin-left: 10px; }
+.ybe-task { display: inline-flex; align-items: baseline; gap: 5px; padding: 2px 8px 2px 6px; border: 1px solid var(--danger); border-radius: 4px; background: var(--tool-tint-e); cursor: pointer; font-size: 12px; }
+.ybe-task .x { color: var(--danger); font-size: 10px; }
+.ybe-task b { font: 500 12px "IBM Plex Mono", ui-monospace, monospace; }
+.ybe-task span { font: 11.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+.ybe-task em { font-style: normal; font-weight: 600; font-size: 11px; color: var(--danger); }
+.ybe-task em.none { color: var(--warn); font-weight: 400; }
+.ybe-kind { padding: 2px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; font-size: 11.5px; }
+.ybe-kind small { color: var(--ink-soft); font: 11px "IBM Plex Mono", ui-monospace, monospace; }
+.ybe-kind.bad { border-left: 3px solid var(--danger); } .ybe-kind.warn { border-left: 3px solid var(--warn); }
+.ybe-kind[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.ybe-kind[aria-pressed="true"] small { color: var(--accent-ink); }
+
+/* ---- log ---- */
+.ybe-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); }
+.ybe-bar select { padding: 2px 4px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); font-size: 12px; max-width: 100%; }
+.ybe-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.ybe-nav { margin-left: auto; display: inline-flex; gap: 4px; }
+.k-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.ybe-body { position: relative; height: calc(100vh - 205px); min-height: 380px; max-height: 1100px; }
+@media (max-width: 1060px) { .ybe-body { height: 62vh; min-height: 300px; } }
+.ybe-scroll { position: absolute; inset: 0 12px 0 0; overflow: auto; font: 12px/1.5 "IBM Plex Mono", ui-monospace, monospace; }
+.ybe-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ybe-ta { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; border: 0; padding: 6px 10px; background: var(--sunken); color: var(--ink);
+  font: 12px/1.5 "IBM Plex Mono", ui-monospace, monospace; white-space: pre; }
+.ybe-lines { min-width: max-content; padding: 2px 0 12px; }
+.ybe-ln { display: grid; grid-template-columns: 44px 34px auto; align-items: start; border-left: 3px solid transparent; }
+.ybe-ln .no { text-align: right; padding-right: 6px; color: var(--ink-soft); opacity: .7; user-select: none; }
+.ybe-ln .mk { user-select: none; }
+.ybe-ln .tx { white-space: pre; padding-right: 14px; }
+.ybe-ln.piped { background: var(--tool-piped); }
+.ybe-ln.lv-e .tx { color: var(--danger); }
+.ybe-ln.lv-w .tx { color: var(--warn); }
+.ybe-ln.lv-n .tx, .ybe-ln.lv-d .tx { color: var(--ink-soft); }
+.ybe-ln.r-ctx { background: var(--tool-ctx); }
+.ybe-ln.r-dec.sev-e { background: var(--tool-tint-e); border-left-color: var(--danger); cursor: pointer; }
+.ybe-ln.r-dec.sev-w { background: var(--tool-tint-w); border-left-color: var(--warn); cursor: pointer; }
+.ybe-ln.r-ctx[data-f] { cursor: pointer; }
+.ybe-ln.on.r-dec.sev-e { background: var(--tool-on-e); }
+.ybe-ln.on.r-dec.sev-w { background: var(--tool-on-w); }
+.ybe-ln.on.r-ctx { border-left-color: color-mix(in srgb, var(--ink-soft) 60%, transparent); background: color-mix(in srgb, var(--ink-soft) 15%, transparent); }
+.ybe-ln.on .tx { color: var(--ink); }
+.ybe-ln.on.r-dec .tx { font-weight: 600; }
+.ybe-badge { font: 600 10.5px "IBM Plex Mono", ui-monospace, monospace; padding: 0 4px; margin-top: 1px; border-radius: 3px; border: 0; cursor: pointer; line-height: 16px;
+  background: var(--danger); color: var(--paper); }
+.sev-w .ybe-badge { background: var(--warn); }
+.ybe-fold { display: block; width: 100%; text-align: left; padding: 1px 0 1px 50px; border: 0; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line);
+  background: transparent; color: var(--ink-soft); font: 11px "IBM Plex Mono", ui-monospace, monospace; cursor: pointer; }
+.ybe-fold:hover { color: var(--accent); }
+.ybe-ruler { position: absolute; top: 0; right: 0; bottom: 0; width: 10px; background: var(--sunken); border-left: 1px solid var(--line-soft); }
+.ybe-tick { position: absolute; left: 1px; right: 1px; height: 4px; min-height: 3px; border: 0; padding: 0; border-radius: 1px; cursor: pointer; }
+.ybe-tick.sev-e { background: var(--danger); } .ybe-tick.sev-w { background: var(--warn); }
+.ybe-tick.on { left: -3px; right: -1px; height: 6px; outline: 1px solid var(--ink); }
+.ybe-drop { position: absolute; inset: 6px; border: 2px dashed var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--accent); font-weight: 600; pointer-events: none; }
+.ybe-drop[hidden] { display: none; }
+
+/* ---- findings ---- */
+.ybe-warns { margin: 8px 10px 0; border: 1px solid var(--warn); border-left-width: 3px; border-radius: 5px; padding: 5px 9px; font-size: 12px; }
+.ybe-warns:empty { display: none; }
+.ybe-warns div + div { margin-top: 3px; }
+.ybe-list { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 10px; }
+.ybe-f { border: 1px solid var(--line); border-left: 3px solid var(--danger); border-radius: 5px; padding: 6px 9px; cursor: pointer; background: var(--surface); min-width: 0; }
+.ybe-f.sev-w { border-left-color: var(--warn); }
+.ybe-f.unk { border-style: dashed; border-left-style: solid; }
+.ybe-f:hover { border-color: var(--ink-soft); }
+.ybe-f.open { cursor: default; box-shadow: 0 0 0 1px var(--ink-soft) inset; background: var(--paper); }
+.ybe-f:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ybe-fh { display: flex; align-items: baseline; gap: 7px; }
+.ybe-num { font: 600 11.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--danger); }
+.sev-w .ybe-num { color: var(--warn); }
+.ybe-title { font-size: 13px; font-weight: 600; }
+.ybe-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 8px; margin-top: 2px; font-size: 11.5px; }
+.ybe-sev { text-transform: uppercase; font-size: 10px; font-weight: 600; letter-spacing: .03em; color: var(--danger); }
+.ybe-sev.warning { color: var(--warn); }
+.ybe-check { font: 11.5px "IBM Plex Mono", ui-monospace, monospace; background: var(--sunken); padding: 0 5px; border-radius: 3px; }
+.ybe-rt { font: 11.5px "IBM Plex Mono", ui-monospace, monospace; }
+.ybe-rt i { font-style: normal; color: var(--ink-soft); }
+.ybe-ref { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 11.5px; text-decoration: underline; text-underline-offset: 2px; }
+.ybe-what { margin: 4px 0 0; font-size: 12.5px; overflow-wrap: anywhere; }
+.ybe-f:not(.open) .ybe-what { color: var(--ink-soft); display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.ybe-why { margin: 5px 0 0; font-size: 12px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.ybe-why b { color: var(--ink); font-weight: 600; }
+.ybe-fixwrap { margin-top: 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); min-width: 0; }
+.ybe-fixbar { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 2px 8px; border-bottom: 1px solid var(--line-soft); font-size: 11px; color: var(--ink-soft); }
+.ybe-copy { padding: 1px 8px; font-size: 11px; }
+.ybe-fix { margin: 0; padding: 6px 8px; font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+.ybe-doc { display: inline-block; margin-top: 6px; font-size: 11.5px; color: var(--accent); }
+.ybe-empty { color: var(--ink-soft); font-size: 12px; padding: 6px 2px; }
+.ybe-notes { font-size: 11.5px; color: var(--ink-soft); padding: 0 2px; }
+.ybe-notes summary { cursor: pointer; }
+.ybe-notes div { margin-top: 4px; }
+.ybe .k-out { max-height: 360px; }
+@media (max-width: 520px) {
+  .k-page { padding: 8px; }
+  .ybe-ln { grid-template-columns: 34px 30px auto; }
+  .ybe-grid { grid-template-columns: minmax(0, 1fr); }
+  .ybe-grid > .ybe-col { min-width: 0; }
+}
