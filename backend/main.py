@@ -62,6 +62,10 @@ app.include_router(agent_api.router)
 # The virtual board: a board's firmware in an emulator, its parts as models.
 from .sim import api as sim_api  # noqa: E402
 app.include_router(sim_api.router)
+# A board brought in from outside: Gerbers, drills, a probe netlist, a BOM,
+# a STEP, or another tool's design file.
+from .imports import api as imports_api  # noqa: E402
+app.include_router(imports_api.router)
 
 
 def _raw_db():

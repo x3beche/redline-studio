@@ -18,6 +18,7 @@ import { Drawing } from './drawing';
 import { RoomFrame, ToolButton } from './frame';
 import { RulesForm } from './rules-form';
 import { DrawTools, PenState, Sketchpad } from './sketchpad';
+import { ImportBoard } from './import-board';
 import { MiniBars, MiniColumns } from './minicharts';
 
 type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'analytics';
@@ -38,14 +39,23 @@ type BoardView = Pane | 'split' | 'focus';
  */
 @Component({
   selector: 'app-room-pcb',
-  imports: [Board3d, CodeView, Drawing, DrawTools, Releases, MiniBars, MiniColumns, NgTemplateOutlet,
+  imports: [Board3d, CodeView, Drawing, DrawTools, ImportBoard, Releases, MiniBars, MiniColumns, NgTemplateOutlet,
             RoomFrame, RulesForm, Sketchpad, ToolButton],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
+  <!-- Import: a board from Gerbers, a fab zip, a STEP or a design file
+       (rooms/import-board.ts, backend/imports). Over the room, so it can
+       be reached with no board open. -->
+  @if (importing()) {
+    <app-import-board [initialProject]="here() ? projectOf(here()!) : ''"
+                      (closed)="importing.set(false)" (opened)="importing.set(false)" />
+  }
   @if (!here()) {
     <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
-      Pick a board in the catalog - a <b>.pcb</b> opens here.
+      Pick a board in the catalog - a <b>.pcb</b> opens here - or
+      <button class="tcv-chip" (click)="importing.set(true)">import one</button>
+      from Gerbers, a STEP or a design file.
     </p>
   } @else {
 
@@ -96,15 +106,20 @@ type BoardView = Pane | 'split' | 'focus';
       <!-- The whole pipeline, as the agent runs it: build the source, draw
            the schematic, place, route to the rules, pour, DRC. -->
       <app-tool icon="tcv-ico-build"
-                [tip]="building() ? 'Building…' : 'Build - source, schematic, place, route, DRC'"
-                [on]="building()" [disabled]="building() || frozen() || !here()"
+                [tip]="imported() ? 'An imported board has no source to build'
+                       : building() ? 'Building…' : 'Build - source, schematic, place, route, DRC'"
+                [on]="building()" [disabled]="building() || frozen() || !here() || imported()"
                 (press)="build()" />
+      <!-- A board from outside: Gerbers, a fab zip, a STEP, a design file. -->
+      <app-tool icon="tcv-ico-open" tip="Import - a board from Gerbers, a fab zip, a STEP or a design file"
+                [on]="importing()" [disabled]="frozen()" (press)="importing.set(true)" />
       <!-- The project packed for a fab: Gerbers, BOM, pick-and-place, PDFs, STEP. -->
       <app-tool icon="tcv-ico-release" tip="Release - pack the project for manufacturing"
                 [disabled]="!here()" (press)="releasing.set(true)" />
       <!-- The board's source, as an IDE shows it, over the view. -->
-      <app-tool icon="tcv-ico-code" [tip]="ide() ? 'Back to the view' : 'Code - the board source (atopile)'"
-                [on]="ide()" [disabled]="!here() || frozen()" (press)="ide.set(!ide())" />
+      <app-tool icon="tcv-ico-code" [tip]="imported() ? 'An imported board has no atopile source'
+                       : ide() ? 'Back to the view' : 'Code - the board source (atopile)'"
+                [on]="ide()" [disabled]="!here() || frozen() || imported()" (press)="ide.set(!ide())" />
       @if (frozen()) {
         <app-draw-tools [pen]="pen" (undo)="pad()?.undo()" (clear)="pad()?.clear()" />
       }
@@ -499,8 +514,13 @@ type BoardView = Pane | 'split' | 'focus';
             <span [style.color]="building() ? 'var(--accent)' : null" [title]="here()?.route ? routeTitle() : ''">
               {{ building() ? 'building…' : here()?.route ? 'routed' : hasLayout() ? 'placed · not routed' : 'not built' }}
             </span>
-            <a [attr.href]="hasLayout() ? file('board.kicad_pcb') : null" [class.off]="!hasLayout()"
+            <a [attr.href]="hasPcb() ? file('board.kicad_pcb') : null" [class.off]="!hasPcb()"
                title="the layout, to open in KiCad">.kicad_pcb</a>
+            @if (imported()) {
+              <a [attr.href]="here()?.artifacts?.['layers_pdf'] ? '/api/boards/import/files/' + here()!._id + '/layers.pdf' : null"
+                 [class.off]="!here()?.artifacts?.['layers_pdf']" target="_blank" rel="noreferrer"
+                 title="every layer, a page each">.pdf</a>
+            }
             <a [attr.href]="here()?.schematic ? file('board.kicad_sch') : null" [class.off]="!here()?.schematic"
                title="the schematic, for KiCad">.kicad_sch</a>
             <a [attr.href]="has3d() ? modelUrl() : null" [class.off]="!has3d()"
@@ -645,14 +665,14 @@ type BoardView = Pane | 'split' | 'focus';
                        [geometry]="here()?.route ? geo() : null" [mirror]="view() === 'back'"
                        [side]="view() === 'back' ? 'B' : 'all'" />
         } @else {
-          <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
+          <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ imported() ? importedNote : notYet }}</p>
         }
       }
       @case ('schematic') {
         @if (here()?.schematic; as sch) {
           <app-drawing #flat [src]="file('schematic.svg', sch.at)" [controls]="own" />
         } @else {
-          <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
+          <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ imported() ? importedNote : notYet }}</p>
         }
       }
       @case ('3d') {
@@ -667,7 +687,7 @@ type BoardView = Pane | 'split' | 'focus';
             }
           </div>
         } @else {
-          <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ notYet }}</p>
+          <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ imported() ? importedNote : notYet }}</p>
         }
       }
     }
@@ -793,7 +813,7 @@ export class RoomPcb implements OnDestroy {
       untracked(() => {
         this.handled = w.n;
         if (['code', 'code-line', 'release', 'build', 'part'].includes(w.what)) this.picked.want.set(null);
-        if (w.what === 'code') this.ide.set(!this.ide());
+        if (w.what === 'code') { if (!this.imported()) this.ide.set(!this.ide()); }
         else if (w.what === 'code-line' && w.arg) {
           const [id, line] = w.arg.split('#');
           if (this.here()?._id !== id) this.picked.openBoard(id);
@@ -801,7 +821,7 @@ export class RoomPcb implements OnDestroy {
           this.ide.set(false);
           setTimeout(() => this.ide.set(true), this.here()?._id === id ? 0 : 1200);
         } else if (w.what === 'release' && this.here()) this.releasing.set(true);
-        else if (w.what === 'build' && this.here() && !this.building()) this.build();
+        else if (w.what === 'build' && this.here() && !this.building() && !this.imported()) this.build();
         else if (w.what === 'part' && w.arg) { this.side.set('parts'); this.term.set(w.arg); this.look(); }
       });
     });
@@ -836,6 +856,21 @@ export class RoomPcb implements OnDestroy {
   // ---- the pipeline ----
 
   building = signal(false);
+  /** The import dialog (rooms/import-board.ts). */
+  importing = signal(false);
+
+  /** A board brought in from outside (SPEC §5): no atopile source, so
+   *  nothing to build or edit - the room shows what came with it. */
+  imported(): boolean {
+    return (this.here() as (BoardEntry & { kind?: string }) | null)?.kind === 'imported';
+  }
+  readonly importedNote = 'Not in what was imported - the import dialog said which file would bring it.';
+
+  /** A KiCad board file to download: a built board's, or an imported design's. */
+  hasPcb(): boolean {
+    const a = this.here()?.artifacts ?? {};
+    return this.hasLayout() && (!this.imported() || !!a['pcb'] || !!a['routed']);
+  }
 
   /** Build it the whole way through, the same run the agent does - never
    *  a step on its own - and show what came of it. */
