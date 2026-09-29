@@ -1,0 +1,148 @@
+/* OTA A/B Update Planner: the storage strip and the update sequence are the interface. */
+.ota { --tool-raw: #8494a3; --tool-boot: #b7791f; --tool-root: #1f4ed8; --tool-data: #0f9d8a; --tool-other: #8e3fb0;
+  --tool-client: #1f4ed8; --tool-boot-l: #b7791f; --tool-user: #2f855a; --tool-fill: 0.16; --tool-cur: rgba(31, 78, 216, 0.08); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ota {
+  --tool-raw: #6f8192; --tool-boot: #e8a735; --tool-root: #6d8dff; --tool-data: #3cc7b3; --tool-other: #c982e0;
+  --tool-client: #6d8dff; --tool-boot-l: #e8a735; --tool-user: #68b36b; --tool-fill: 0.24; --tool-cur: rgba(109, 141, 255, 0.12); } }
+:root[data-theme="dark"] .ota { --tool-raw: #6f8192; --tool-boot: #e8a735; --tool-root: #6d8dff; --tool-data: #3cc7b3; --tool-other: #c982e0;
+  --tool-client: #6d8dff; --tool-boot-l: #e8a735; --tool-user: #68b36b; --tool-fill: 0.24; --tool-cur: rgba(109, 141, 255, 0.12); }
+
+.k-page { padding: 12px 14px 16px; }
+.ota { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ota-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 460px); gap: 10px; align-items: start; }
+@media (max-width: 1120px) { .ota-grid { grid-template-columns: minmax(0, 1fr); } }
+.ota-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ota .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.ota kbd { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 0 3px; margin: 0 1px; }
+.c-bad { color: var(--danger); } .c-warn { color: var(--warn); } .c-ok { color: var(--ok); }
+.hint { font-size: 11.5px; color: var(--ink-soft); }
+
+.ota-top { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; }
+.ota-top .grp { display: flex; flex-wrap: wrap; gap: 8px; }
+.fl { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ink-soft); }
+.ota input[type="text"], .ota select { padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); color: var(--ink); font-size: 12px; min-width: 0; }
+.ota input.dev { width: 130px; } .ota input.short { width: 84px; } .ota input.tiny { width: 52px; } .ota input.mid { width: 150px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg button { border: 0; background: var(--sunken); color: var(--ink-soft); padding: 4px 11px; font-size: 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+.ota-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.ota-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); }
+.ota-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; }
+.ota-head .sub { font-size: 11.5px; color: var(--ink-soft); }
+.ota-head .sub b { color: var(--ink); } .ota-head .sub b.c-bad { color: var(--danger); } .ota-head .sub b.c-warn { color: var(--warn); } .ota-head .sub b.c-ok { color: var(--ok); }
+.ota-help { padding: 5px 10px 8px; font-size: 11.5px; color: var(--ink-soft); border-top: 1px solid var(--line-soft); }
+
+/* strip */
+.ota-stripwrap { padding: 4px 10px 0; }
+.ota-strip { display: block; width: 100%; user-select: none; -webkit-user-select: none; overflow: visible; }
+.ota-strip text { font: 11px "IBM Plex Mono", ui-monospace, monospace; fill: var(--ink); }
+.ota-strip text.small { font-size: 10px; } .ota-strip text.soft { fill: var(--ink-soft); } .ota-strip text.bad { fill: var(--danger); }
+.part { cursor: pointer; }
+.part .pb { stroke: var(--surface); stroke-width: 1.5; }
+.part.r-raw .pb { stroke: var(--line); }
+.hatch-bg { fill: var(--sunken); } .hatch-ln { stroke: var(--tool-raw); stroke-width: 1.5; opacity: .45; }
+.part.r-boot .pb { fill: color-mix(in srgb, var(--tool-boot) calc(var(--tool-fill) * 100%), var(--surface)); }
+.part.r-root .pb { fill: color-mix(in srgb, var(--tool-root) calc(var(--tool-fill) * 100%), var(--surface)); }
+.part.r-data .pb { fill: color-mix(in srgb, var(--tool-data) calc(var(--tool-fill) * 100%), var(--surface)); }
+.part.r-other .pb { fill: color-mix(in srgb, var(--tool-other) calc(var(--tool-fill) * 100%), var(--surface)); }
+.part .pn { font-weight: 600; }
+.part .slot { font: 700 22px "IBM Plex Sans", sans-serif; fill: var(--tool-root); opacity: .55; }
+.part.r-boot .slot { fill: var(--tool-boot); }
+.part .img { fill: var(--tool-root); opacity: .38; }
+.part .img.over { fill: var(--danger); opacity: .55; }
+.part .imgt { fill: var(--ink); }
+.part .growth { stroke: var(--ink-soft); stroke-dasharray: 3 2; stroke-width: 1.2; }
+.part .writing { stroke: var(--warn); stroke-width: 2; stroke-dasharray: 5 3; }
+.write-ln { stroke: var(--warn); stroke-width: 2; opacity: .35; }
+.part .running { fill: none; stroke: var(--ok); stroke-width: 3; }
+.run-mk { fill: var(--ok); }
+.ota-strip text.run-t { fill: var(--ok); font-weight: 600; }
+.ota-strip text.write-t { fill: var(--warn); font-weight: 600; }
+.part .ring, .hdl .ring { fill: none; stroke: none; }
+.part.sel .ring { stroke: var(--accent); stroke-width: 2.5; }
+.part:focus, .hdl:focus, .imk:focus { outline: none; }
+.part:focus-visible .ring, .hdl:focus-visible .ring { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 2; }
+.seg-free { fill: none; stroke: var(--line); stroke-dasharray: 4 3; }
+.hdl { cursor: ew-resize; touch-action: none; }
+.hdl .hit { fill: transparent; }
+.hdl .grip { stroke: var(--ink-soft); stroke-width: 2.5; stroke-linecap: round; opacity: .55; }
+.hdl:hover .grip, .hdl:focus-visible .grip { stroke: var(--accent); opacity: 1; }
+.imk { cursor: ew-resize; touch-action: none; }
+.imk .hit { fill: transparent; }
+.imk-p { fill: var(--tool-root); }
+.imk:focus-visible .imk-p { stroke: var(--accent); stroke-width: 2; }
+.ota-strip text.imk-t { fill: var(--tool-root); }
+.env-mk { stroke: var(--tool-boot); stroke-width: 1.5; }
+.ota-strip text.env-t { fill: var(--tool-boot); }
+
+.ota-imgrow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 12px; padding: 6px 10px 8px; }
+.ota-imgrow .fl { flex-direction: row; align-items: center; gap: 5px; }
+.chk { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink); }
+.u-env { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ota.no-uboot .u-env { display: none; }
+.ota-insp { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 10px; padding: 7px 10px; border-top: 1px solid var(--line-soft); min-height: 40px; }
+.ota-insp label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--ink-soft); }
+.ota-insp .push { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
+.ota-insp > b { align-self: center; font-size: 12px; }
+
+/* sequence */
+.ota-seqbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); }
+.ota-seqbar .limit { display: inline-flex; align-items: center; gap: 5px; }
+.ota-seqbar .limit .lab { font-size: 11px; color: var(--ink-soft); }
+.ota-seqbar .limit b { min-width: 18px; text-align: center; }
+.ota-seqbar .nav { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.ota-seqbar .pos { font-size: 11.5px; color: var(--ink-soft); }
+.ota-seqwrap { max-height: 470px; overflow: auto; }
+.ota-seq { display: grid; grid-template-columns: 28px repeat(3, minmax(128px, 1fr)) repeat(var(--nvars), minmax(58px, auto)); min-width: calc(28px + 3 * 128px + var(--nvars) * 70px); font-size: 12px; }
+.ota-seq .row { display: contents; }
+.ota-seq .row > span { padding: 4px 6px; border-bottom: 1px solid var(--line-soft); min-width: 0; }
+.ota-seq .row.hd > span { position: sticky; top: 0; z-index: 1; background: var(--sunken); font-size: 11px; color: var(--ink-soft); border-bottom: 1px solid var(--line); font-weight: 500; }
+.ota-seq .row:not(.hd) { cursor: pointer; }
+.ota-seq .row.cur > span { background: var(--tool-cur); }
+.ota-seq .row:focus { outline: none; }
+.ota-seq .row:focus-visible > span.n { box-shadow: inset 3px 0 0 var(--accent); }
+.ota-seq .n { color: var(--ink-soft); text-align: right; }
+.ota-seq .lane { border-left: 1px dashed var(--line); }
+.lane-h.l-client { color: var(--tool-client) !important; } .lane-h.l-boot { color: var(--tool-boot-l) !important; } .lane-h.l-user { color: var(--tool-user) !important; }
+.ota-seq .card { display: flex; flex-direction: column; gap: 1px; padding: 3px 7px; border-radius: 4px; border: 1px solid var(--line); border-left-width: 3px; background: var(--surface); min-width: 0; }
+.l-client .card { border-left-color: var(--tool-client); } .l-boot .card { border-left-color: var(--tool-boot-l); } .l-user .card { border-left-color: var(--tool-user); }
+.ota-seq .card.k-fail { border-color: var(--danger); border-left-color: var(--danger); }
+.ota-seq .card.k-rollback { border-style: solid; background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+.ota-seq .card b { font-weight: 600; font-size: 11.5px; }
+.ota-seq .dt { font-size: 10.5px; color: var(--ink-soft); line-height: 1.3; }
+.ota-seq .row.cur .dt { color: var(--ink); }
+.ota-seq .row:not(.cur) .dt { display: none; }
+.ota-seq .pw { grid-column: 2 / span 3; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; color: var(--ink-soft);
+  background-image: linear-gradient(90deg, var(--line) 50%, transparent 0); background-size: 8px 1px; background-repeat: repeat-x; background-position: 0 50%; }
+.ota-seq .pw b { background: var(--surface); padding: 0 6px; font-size: 11px; font-weight: 600; color: var(--ink); }
+.ota-seq .row.k-fail .pw b { color: var(--danger); }
+.ota-seq .row.cur .pw b { background: transparent; }
+.ota-seq .pw .dt { background: var(--surface); padding: 0 4px; }
+.ota-seq .row.cur .pw .dt { background: transparent; }
+.ota-seq .val { font-size: 11.5px; text-align: center; white-space: nowrap; border-left: 1px solid var(--line-soft); }
+.ota-seq .val.chg { color: var(--accent); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+.ota-seq .var { text-align: center; border-left: 1px solid var(--line-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.ota-seq .lane-h.all { display: none; }
+@media (max-width: 700px) {
+  /* narrow: the three lanes fold into one column, the card's colour says who acts */
+  .ota-seq { grid-template-columns: 24px minmax(150px, 1fr) repeat(var(--nvars), minmax(44px, auto)); min-width: calc(24px + 150px + var(--nvars) * 50px); }
+  .ota-seq .lane-h:not(.all) { display: none; }
+  .ota-seq .lane-h.all { display: block; }
+  .ota-seq .lane:empty { display: none; }
+  .ota-seq .pw { grid-column: 2 / span 1; }
+  .ota-seq .val { font-size: 11px; padding: 4px 3px; }
+}
+
+/* checks */
+.ota-card.find .flist { list-style: none; margin: 0; padding: 4px 0; max-height: 300px; overflow: auto; }
+.flist li { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 6px; align-items: start; padding: 4px 10px; font-size: 12px; border-left: 3px solid transparent; }
+.flist li.error { border-left-color: var(--danger); } .flist li.warn { border-left-color: var(--warn); } .flist li.note { border-left-color: var(--line); }
+.flist .sv { font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-soft); padding-top: 1px; }
+.flist li.error .sv { color: var(--danger); } .flist li.warn .sv { color: var(--warn); }
+.flist .go { padding: 0 6px; font-size: 11px; }
+.ota-card.find .ok { padding: 10px; color: var(--ok); font-size: 12px; }
+.ota .k-out { max-height: 520px; }
+@media (max-width: 1120px) { .ota .k-out { max-height: 380px; } }
+@media (max-width: 480px) { .flist li { grid-template-columns: minmax(0, 1fr) auto; } .flist .sv { display: none; } .u-env { margin-left: 0; } }

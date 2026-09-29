@@ -1,0 +1,388 @@
+{
+ "id": "ota-ab-planner",
+ "version": "1.0",
+ "name": "OTA A/B Update Planner",
+ "blurb": "A/B slots, boot counting and rollback for RAUC, SWUpdate or Mender, with their config files",
+ "group": "embedded",
+ "rooms": [
+  "embedded"
+ ],
+ "keywords": [
+  "ota",
+  "a/b update",
+  "dual copy",
+  "rauc",
+  "swupdate",
+  "mender",
+  "rollback",
+  "bootcount",
+  "bootlimit",
+  "altbootcmd",
+  "upgrade_available",
+  "BOOT_ORDER",
+  "mark-good",
+  "sw-description",
+  "system.conf",
+  "fw_env.config",
+  "bootchooser",
+  "partition layout",
+  "redundant environment"
+ ],
+ "intro": "Plans an A/B (dual-copy) update: lays out the storage with its bootloader area, two slots and a data partition, walks the update's state machine step by step (install, switch, boot counting, confirm or roll back) with the variables each actor writes, and writes the configuration for RAUC, SWUpdate or Mender on U-Boot, GRUB or barebox, from each project's documented integration.",
+ "inputs": [
+  {
+   "key": "framework",
+   "label": "Update framework",
+   "type": "select",
+   "options": [
+    [
+     "rauc",
+     "RAUC"
+    ],
+    [
+     "swupdate",
+     "SWUpdate"
+    ],
+    [
+     "mender",
+     "Mender"
+    ]
+   ],
+   "default": "rauc"
+  },
+  {
+   "key": "bootloader",
+   "label": "Bootloader",
+   "type": "select",
+   "options": [
+    [
+     "uboot",
+     "U-Boot"
+    ],
+    [
+     "grub",
+     "GRUB"
+    ],
+    [
+     "barebox",
+     "barebox"
+    ]
+   ],
+   "default": "uboot"
+  },
+  {
+   "key": "device",
+   "label": "Storage device",
+   "type": "text",
+   "default": "/dev/mmcblk2",
+   "help": "Linux name; partitions become <device>p1, p2 ..."
+  },
+  {
+   "key": "storageSize",
+   "label": "Storage size",
+   "type": "text",
+   "default": "7456M",
+   "help": "User area, e.g. 7456M for an 8 GB eMMC."
+  },
+  {
+   "key": "align",
+   "label": "Partition alignment",
+   "type": "text",
+   "default": "8M"
+  },
+  {
+   "key": "parts",
+   "label": "Partitions",
+   "type": "table",
+   "columns": [
+    {
+     "key": "name",
+     "label": "Name"
+    },
+    {
+     "key": "role",
+     "label": "Role",
+     "type": "select",
+     "options": [
+      "raw",
+      "boot",
+      "rootfs",
+      "data",
+      "other"
+     ],
+     "default": "other"
+    },
+    {
+     "key": "slot",
+     "label": "Slot",
+     "type": "select",
+     "options": [
+      "-",
+      "A",
+      "B"
+     ],
+     "default": "-"
+    },
+    {
+     "key": "size",
+     "label": "Size",
+     "default": "64M"
+    },
+    {
+     "key": "fs",
+     "label": "FS",
+     "type": "select",
+     "options": [
+      "raw",
+      "ext4",
+      "vfat",
+      "squashfs",
+      "erofs",
+      "f2fs",
+      "ubifs"
+     ],
+     "default": "ext4"
+    }
+   ],
+   "default": [
+    {
+     "name": "bootloader",
+     "role": "raw",
+     "slot": "-",
+     "size": "8M",
+     "fs": "raw"
+    },
+    {
+     "name": "rootfs_a",
+     "role": "rootfs",
+     "slot": "A",
+     "size": "1536M",
+     "fs": "ext4"
+    },
+    {
+     "name": "rootfs_b",
+     "role": "rootfs",
+     "slot": "B",
+     "size": "1536M",
+     "fs": "ext4"
+    },
+    {
+     "name": "data",
+     "role": "data",
+     "slot": "-",
+     "size": "*",
+     "fs": "ext4"
+    }
+   ],
+   "help": "In disk order. raw = bootloader area without a partition; * as size takes the rest."
+  },
+  {
+   "key": "imageSize",
+   "label": "Rootfs image size",
+   "type": "text",
+   "default": "1180M"
+  },
+  {
+   "key": "growth",
+   "label": "Growth to plan for",
+   "type": "number",
+   "unit": "%",
+   "default": 30
+  },
+  {
+   "key": "bootlimit",
+   "label": "Boot attempts before rollback",
+   "type": "number",
+   "default": 3
+  },
+  {
+   "key": "envRedundant",
+   "label": "Redundant U-Boot environment",
+   "type": "bool",
+   "default": true,
+   "when": {
+    "key": "bootloader",
+    "equals": "uboot"
+   }
+  },
+  {
+   "key": "envOffset",
+   "label": "U-Boot env offset",
+   "type": "text",
+   "default": "0x400000",
+   "when": {
+    "key": "bootloader",
+    "equals": "uboot"
+   }
+  },
+  {
+   "key": "envSize",
+   "label": "U-Boot env size",
+   "type": "text",
+   "default": "0x4000",
+   "when": {
+    "key": "bootloader",
+    "equals": "uboot"
+   }
+  },
+  {
+   "key": "compatible",
+   "label": "Compatible / device type",
+   "type": "text",
+   "default": "acme-gw-imx8mm"
+  },
+  {
+   "key": "version",
+   "label": "Release version",
+   "type": "text",
+   "default": "2.4.0"
+  },
+  {
+   "key": "scenario",
+   "label": "Scenario to walk",
+   "type": "select",
+   "options": [
+    [
+     "ok",
+     "update succeeds"
+    ],
+    [
+     "panic",
+     "new slot panics"
+    ],
+    [
+     "health",
+     "health check fails"
+    ]
+   ],
+   "default": "panic"
+  }
+ ],
+ "examples": [
+  {
+   "title": "RAUC + U-Boot on an 8 GB eMMC, new image panics, rollback after 3 tries",
+   "input": {
+    "framework": "rauc",
+    "bootloader": "uboot",
+    "device": "/dev/mmcblk2",
+    "storageSize": "7456M",
+    "align": "8M",
+    "parts": [
+     {
+      "name": "bootloader",
+      "role": "raw",
+      "slot": "-",
+      "size": "8M",
+      "fs": "raw"
+     },
+     {
+      "name": "rootfs_a",
+      "role": "rootfs",
+      "slot": "A",
+      "size": "1536M",
+      "fs": "ext4"
+     },
+     {
+      "name": "rootfs_b",
+      "role": "rootfs",
+      "slot": "B",
+      "size": "1536M",
+      "fs": "ext4"
+     },
+     {
+      "name": "data",
+      "role": "data",
+      "slot": "-",
+      "size": "*",
+      "fs": "ext4"
+     }
+    ],
+    "imageSize": "1180M",
+    "growth": 30,
+    "bootlimit": 3,
+    "envRedundant": true,
+    "envOffset": "0x400000",
+    "envSize": "0x4000",
+    "compatible": "acme-gw-imx8mm",
+    "version": "2.4.0",
+    "scenario": "panic"
+   }
+  },
+  {
+   "title": "SWUpdate + U-Boot with boot partitions and a squashfs rootfs, health check fails",
+   "input": {
+    "framework": "swupdate",
+    "bootloader": "uboot",
+    "device": "/dev/mmcblk0",
+    "storageSize": "3728M",
+    "align": "4M",
+    "parts": [
+     {
+      "name": "bootloader",
+      "role": "raw",
+      "slot": "-",
+      "size": "16M",
+      "fs": "raw"
+     },
+     {
+      "name": "boot_a",
+      "role": "boot",
+      "slot": "A",
+      "size": "64M",
+      "fs": "vfat"
+     },
+     {
+      "name": "boot_b",
+      "role": "boot",
+      "slot": "B",
+      "size": "64M",
+      "fs": "vfat"
+     },
+     {
+      "name": "rootfs_a",
+      "role": "rootfs",
+      "slot": "A",
+      "size": "768M",
+      "fs": "squashfs"
+     },
+     {
+      "name": "rootfs_b",
+      "role": "rootfs",
+      "slot": "B",
+      "size": "768M",
+      "fs": "squashfs"
+     },
+     {
+      "name": "data",
+      "role": "data",
+      "slot": "-",
+      "size": "*",
+      "fs": "ext4"
+     }
+    ],
+    "imageSize": "610M",
+    "growth": 20,
+    "bootlimit": 2,
+    "envRedundant": false,
+    "envOffset": "0x400000",
+    "envSize": "0x2000",
+    "compatible": "acme-hmi-am62",
+    "version": "1.7.3",
+    "scenario": "health"
+   }
+  }
+ ],
+ "usage": "Give framework (rauc|swupdate|mender), bootloader (uboot|grub|barebox), the storage device and size, alignment, the partitions in disk order ({name, role raw|boot|rootfs|data|other, slot -|A|B, size like 1536M or *, fs}), the rootfs image size and growth %, the boot-attempt limit, the U-Boot environment (redundant, offset, size), the compatible string, version and a scenario (ok|panic|health). It returns the computed layout (device paths, offsets), the update steps with the boot-counting variables after each, warnings (no boot limit, no data partition, image larger than a slot, A/B mismatch, single environment copy, unsupported combinations) and the files: system.conf/manifest, sw-description, Mender local.conf, U-Boot boot script or environment, grub.cfg, barebox bootchooser settings, fw_env.config, a confirm service and a wks layout.",
+ "sources": [
+  "RAUC documentation: Integration (U-Boot BOOT_ORDER / BOOT_x_LEFT, GRUB ORDER / x_OK / x_TRY, barebox bootchooser) and Reference (system.conf, manifest)",
+  "SWUpdate documentation: sw-description syntax (software collections, -e selection, bootenv) and bootloader interface",
+  "U-Boot doc: boot count limit (bootcount, bootlimit, altbootcmd, CONFIG_BOOTCOUNT_ENV with upgrade_available)",
+  "Mender documentation: Yocto Project variables (MENDER_STORAGE_*, MENDER_*_PART_SIZE_MB, MENDER_PARTITION_ALIGNMENT) and bootloader integration",
+  "barebox documentation: bootchooser and the state framework"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "draw"
+ ]
+}

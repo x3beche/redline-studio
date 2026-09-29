@@ -1,0 +1,215 @@
+{
+ "id": "systemd-udev-builder",
+ "version": "1.0",
+ "name": "systemd Unit & udev Rule Builder",
+ "blurb": "a systemd service checked and drawn with its dependencies, and a udev rule written from udevadm info",
+ "group": "embedded",
+ "rooms": [
+  "embedded"
+ ],
+ "keywords": [
+  "systemd",
+  "service file",
+  "unit file",
+  ".service",
+  "systemctl enable",
+  "After Wants Requires",
+  "network-online.target",
+  "WantedBy",
+  "Type=forking",
+  "Type=notify",
+  "Restart=always",
+  "hardening",
+  "ProtectSystem",
+  "PrivateDevices",
+  "udev rule",
+  "udevadm info -a",
+  "SYMLINK",
+  "ATTRS idVendor",
+  "SYSTEMD_WANTS",
+  "/etc/udev/rules.d"
+ ],
+ "intro": "Checks a systemd .service file against systemd.service(5), systemd.unit(5), systemd.exec(5) and systemd.special(7) and draws where it sits in the boot (ordering, what it pulls in, what pulls it in); or turns `udevadm info -a` output into a udev rule, enforcing udev(7)'s rule that all parent keys match one parent device.",
+ "inputs": [
+  {
+   "key": "mode",
+   "label": "Mode",
+   "type": "select",
+   "options": [
+    [
+     "unit",
+     "systemd unit"
+    ],
+    [
+     "udev",
+     "udev rule"
+    ]
+   ],
+   "default": "unit"
+  },
+  {
+   "key": "unitName",
+   "label": "Unit file name",
+   "type": "text",
+   "default": "sensor-bridge.service",
+   "when": {
+    "key": "mode",
+    "equals": "unit"
+   }
+  },
+  {
+   "key": "unit",
+   "label": "Unit file",
+   "type": "textarea",
+   "rows": 14,
+   "default": "[Unit]\nDescription=Sensor bridge (Modbus RTU to MQTT)\nDocumentation=https://git.example.com/acme/sensor-bridge\nAfter=network.target mosquitto.service\nWants=mosquitto.service\n\n[Service]\nType=simple\nUser=sensor\nGroup=dialout\nExecStart=/usr/bin/sensor-bridge --port /dev/ttyUSB0 --broker localhost:1883\nRestart=always\nStartLimitIntervalSec=60\nNoNewPrivileges=yes\nPrivateTmp=yes\nProtectSystem=full\nPrivateDevices=yes\n\n[Install]\nWantedBy=multi-user.target\n",
+   "when": {
+    "key": "mode",
+    "equals": "unit"
+   }
+  },
+  {
+   "key": "udevInfo",
+   "label": "udevadm info -a output",
+   "type": "textarea",
+   "rows": 14,
+   "default": "\nUdevadm info starts with the device specified by the devpath and then\nwalks up the chain of parent devices. It prints for every device\nfound, all possible attributes in the udev rules key format.\nA rule to match, can be composed by the attributes of the device\nand the attributes from one single parent device.\n\n  looking at device '/devices/platform/soc@0/32c00000.bus/32e50000.usb/ci_hdrc.1/usb1/1-1/1-1.2/1-1.2:1.0/ttyUSB0/tty/ttyUSB0':\n    KERNEL==\"ttyUSB0\"\n    SUBSYSTEM==\"tty\"\n    DRIVER==\"\"\n    ATTR{power/async}==\"disabled\"\n    ATTR{power/control}==\"auto\"\n    ATTR{power/runtime_status}==\"unsupported\"\n\n  looking at parent device '/devices/platform/soc@0/32c00000.bus/32e50000.usb/ci_hdrc.1/usb1/1-1/1-1.2/1-1.2:1.0/ttyUSB0':\n    KERNELS==\"ttyUSB0\"\n    SUBSYSTEMS==\"usb-serial\"\n    DRIVERS==\"ftdi_sio\"\n    ATTRS{event_char}==\"0\"\n    ATTRS{latency_timer}==\"16\"\n    ATTRS{port_number}==\"0\"\n\n  looking at parent device '/devices/platform/soc@0/32c00000.bus/32e50000.usb/ci_hdrc.1/usb1/1-1/1-1.2/1-1.2:1.0':\n    KERNELS==\"1-1.2:1.0\"\n    SUBSYSTEMS==\"usb\"\n    DRIVERS==\"ftdi_sio\"\n    ATTRS{authorized}==\"1\"\n    ATTRS{bAlternateSetting}==\" 0\"\n    ATTRS{bInterfaceClass}==\"ff\"\n    ATTRS{bInterfaceNumber}==\"00\"\n    ATTRS{bInterfaceProtocol}==\"ff\"\n    ATTRS{bInterfaceSubClass}==\"ff\"\n    ATTRS{bNumEndpoints}==\"02\"\n    ATTRS{interface}==\"FT232R USB UART\"\n    ATTRS{supports_autosuspend}==\"1\"\n\n  looking at parent device '/devices/platform/soc@0/32c00000.bus/32e50000.usb/ci_hdrc.1/usb1/1-1/1-1.2':\n    KERNELS==\"1-1.2\"\n    SUBSYSTEMS==\"usb\"\n    DRIVERS==\"usb\"\n    ATTRS{authorized}==\"1\"\n    ATTRS{avoid_reset_quirk}==\"0\"\n    ATTRS{bConfigurationValue}==\"1\"\n    ATTRS{bDeviceClass}==\"00\"\n    ATTRS{bMaxPower}==\"90mA\"\n    ATTRS{bNumInterfaces}==\" 1\"\n    ATTRS{bcdDevice}==\"0600\"\n    ATTRS{busnum}==\"1\"\n    ATTRS{devnum}==\"4\"\n    ATTRS{devpath}==\"1.2\"\n    ATTRS{idProduct}==\"6001\"\n    ATTRS{idVendor}==\"0403\"\n    ATTRS{manufacturer}==\"FTDI\"\n    ATTRS{maxchild}==\"0\"\n    ATTRS{product}==\"FT232R USB UART\"\n    ATTRS{removable}==\"removable\"\n    ATTRS{serial}==\"A10K3XQZ\"\n    ATTRS{speed}==\"12\"\n    ATTRS{urbnum}==\"17\"\n    ATTRS{version}==\" 2.00\"\n\n  looking at parent device '/devices/platform/soc@0/32c00000.bus/32e50000.usb/ci_hdrc.1/usb1/1-1':\n    KERNELS==\"1-1\"\n    SUBSYSTEMS==\"usb\"\n    DRIVERS==\"usb\"\n    ATTRS{bDeviceClass}==\"09\"\n    ATTRS{bMaxPower}==\"2mA\"\n    ATTRS{busnum}==\"1\"\n    ATTRS{devnum}==\"2\"\n    ATTRS{devpath}==\"1\"\n    ATTRS{idProduct}==\"2514\"\n    ATTRS{idVendor}==\"0424\"\n    ATTRS{maxchild}==\"4\"\n    ATTRS{speed}==\"480\"\n    ATTRS{version}==\" 2.00\"\n\n  looking at parent device '/devices/platform/soc@0/32c00000.bus/32e50000.usb/ci_hdrc.1/usb1':\n    KERNELS==\"usb1\"\n    SUBSYSTEMS==\"usb\"\n    DRIVERS==\"usb\"\n    ATTRS{idProduct}==\"0002\"\n    ATTRS{idVendor}==\"1d6b\"\n    ATTRS{manufacturer}==\"Linux 6.6.23-imx8mm ehci_hcd\"\n    ATTRS{product}==\"EHCI Host Controller\"\n    ATTRS{serial}==\"ci_hdrc.1\"\n    ATTRS{speed}==\"480\"\n\n  looking at parent device '/devices/platform/soc@0/32c00000.bus/32e50000.usb/ci_hdrc.1':\n    KERNELS==\"ci_hdrc.1\"\n    SUBSYSTEMS==\"platform\"\n    DRIVERS==\"ci_hdrc\"\n    ATTRS{driver_override}==\"(null)\"\n    ATTRS{role}==\"host\"\n\n  looking at parent device '/devices/platform/soc@0/32c00000.bus/32e50000.usb':\n    KERNELS==\"32e50000.usb\"\n    SUBSYSTEMS==\"platform\"\n    DRIVERS==\"imx_usb\"\n    ATTRS{driver_override}==\"(null)\"\n\n  looking at parent device '/devices/platform/soc@0/32c00000.bus':\n    KERNELS==\"32c00000.bus\"\n    SUBSYSTEMS==\"platform\"\n    DRIVERS==\"simple-pm-bus\"\n    ATTRS{driver_override}==\"(null)\"\n\n  looking at parent device '/devices/platform/soc@0':\n    KERNELS==\"soc@0\"\n    SUBSYSTEMS==\"platform\"\n    DRIVERS==\"\"\n    ATTRS{driver_override}==\"(null)\"\n\n  looking at parent device '/devices/platform':\n    KERNELS==\"platform\"\n    SUBSYSTEMS==\"\"\n    DRIVERS==\"\"\n",
+   "when": {
+    "key": "mode",
+    "equals": "udev"
+   },
+   "help": "udevadm info -a -n /dev/ttyUSB0"
+  },
+  {
+   "key": "udevPick",
+   "label": "Match keys",
+   "type": "textarea",
+   "rows": 4,
+   "default": "SUBSYSTEM==\"tty\"\nATTRS{idVendor}==\"0403\"\nATTRS{idProduct}==\"6001\"\nATTRS{serial}==\"A10K3XQZ\"",
+   "when": {
+    "key": "mode",
+    "equals": "udev"
+   },
+   "help": "One KEY==\"value\" per line, as udev writes them; the page picks them from the chain."
+  },
+  {
+   "key": "symlink",
+   "label": "SYMLINK",
+   "type": "text",
+   "default": "sensor-rs485",
+   "when": {
+    "key": "mode",
+    "equals": "udev"
+   }
+  },
+  {
+   "key": "perm",
+   "label": "MODE",
+   "type": "text",
+   "default": "0660",
+   "when": {
+    "key": "mode",
+    "equals": "udev"
+   }
+  },
+  {
+   "key": "group",
+   "label": "GROUP",
+   "type": "text",
+   "default": "dialout",
+   "when": {
+    "key": "mode",
+    "equals": "udev"
+   }
+  },
+  {
+   "key": "owner",
+   "label": "OWNER",
+   "type": "text",
+   "default": "",
+   "when": {
+    "key": "mode",
+    "equals": "udev"
+   }
+  },
+  {
+   "key": "tagSystemd",
+   "label": "TAG+=\"systemd\" (a .device unit for services)",
+   "type": "bool",
+   "default": true,
+   "when": {
+    "key": "mode",
+    "equals": "udev"
+   }
+  },
+  {
+   "key": "wants",
+   "label": "ENV{SYSTEMD_WANTS}",
+   "type": "text",
+   "default": "",
+   "placeholder": "sensor-bridge.service",
+   "when": {
+    "key": "mode",
+    "equals": "udev"
+   }
+  },
+  {
+   "key": "actionAdd",
+   "label": "Only on ACTION==\"add\"",
+   "type": "bool",
+   "default": false,
+   "when": {
+    "key": "mode",
+    "equals": "udev"
+   }
+  },
+  {
+   "key": "ruleFile",
+   "label": "Rules file",
+   "type": "text",
+   "default": "99-sensor-rs485.rules",
+   "when": {
+    "key": "mode",
+    "equals": "udev"
+   }
+  }
+ ],
+ "examples": [
+  {
+   "title": "Modbus-to-MQTT bridge service with a sandbox that hides its serial port",
+   "input": {
+    "mode": "unit",
+    "unitName": "sensor-bridge.service",
+    "unit": "[Unit]\nDescription=Sensor bridge (Modbus RTU to MQTT)\nDocumentation=https://git.example.com/acme/sensor-bridge\nAfter=network.target mosquitto.service\nWants=mosquitto.service\n\n[Service]\nType=simple\nUser=sensor\nGroup=dialout\nExecStart=/usr/bin/sensor-bridge --port /dev/ttyUSB0 --broker localhost:1883\nRestart=always\nStartLimitIntervalSec=60\nNoNewPrivileges=yes\nPrivateTmp=yes\nProtectSystem=full\nPrivateDevices=yes\n\n[Install]\nWantedBy=multi-user.target\n"
+   }
+  },
+  {
+   "title": "udev rule: a stable /dev/stlink-vcp for an ST-Link virtual COM port that starts a service",
+   "input": {
+    "mode": "udev",
+    "udevInfo": "  looking at device '/devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2:1.0/ttyACM0/tty/ttyACM0':\n    KERNEL==\"ttyACM0\"\n    SUBSYSTEM==\"tty\"\n    DRIVER==\"\"\n\n  looking at parent device '/devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2:1.0':\n    KERNELS==\"3-2:1.0\"\n    SUBSYSTEMS==\"usb\"\n    DRIVERS==\"cdc_acm\"\n    ATTRS{bInterfaceClass}==\"02\"\n    ATTRS{bInterfaceNumber}==\"00\"\n    ATTRS{bInterfaceSubClass}==\"02\"\n    ATTRS{interface}==\"ST-Link VCP Ctrl\"\n\n  looking at parent device '/devices/pci0000:00/0000:00:14.0/usb3/3-2':\n    KERNELS==\"3-2\"\n    SUBSYSTEMS==\"usb\"\n    DRIVERS==\"usb\"\n    ATTRS{busnum}==\"3\"\n    ATTRS{devnum}==\"7\"\n    ATTRS{devpath}==\"2\"\n    ATTRS{idProduct}==\"374b\"\n    ATTRS{idVendor}==\"0483\"\n    ATTRS{manufacturer}==\"STMicroelectronics\"\n    ATTRS{product}==\"STM32 STLink\"\n    ATTRS{serial}==\"066DFF485151717867174030\"\n    ATTRS{speed}==\"12\"\n\n  looking at parent device '/devices/pci0000:00/0000:00:14.0/usb3':\n    KERNELS==\"usb3\"\n    SUBSYSTEMS==\"usb\"\n    DRIVERS==\"usb\"\n    ATTRS{idProduct}==\"0002\"\n    ATTRS{idVendor}==\"1d6b\"\n    ATTRS{product}==\"xHCI Host Controller\"\n\n  looking at parent device '/devices/pci0000:00/0000:00:14.0':\n    KERNELS==\"0000:00:14.0\"\n    SUBSYSTEMS==\"pci\"\n    DRIVERS==\"xhci_hcd\"\n    ATTRS{vendor}==\"0x8086\"\n    ATTRS{device}==\"0x7ae0\"\n\n  looking at parent device '/devices/pci0000:00':\n    KERNELS==\"pci0000:00\"\n    SUBSYSTEMS==\"\"\n    DRIVERS==\"\"\n",
+    "udevPick": "SUBSYSTEM==\"tty\"\nATTRS{idVendor}==\"0483\"\nATTRS{idProduct}==\"374b\"\nATTRS{serial}==\"066DFF485151717867174030\"",
+    "symlink": "stlink-vcp",
+    "perm": "0660",
+    "group": "dialout",
+    "owner": "",
+    "tagSystemd": true,
+    "wants": "flash-agent.service",
+    "actionAdd": false,
+    "ruleFile": "70-stlink.rules"
+   }
+  }
+ ],
+ "usage": "mode 'unit': give unitName and the unit file text in unit; it returns findings (errors, warnings, notes with line numbers) - wrong-section keys, ExecStart problems, Type/Restart combinations systemd refuses, After= without Wants=, network.target vs network-online.target, BindsTo without After, a missing [Install], PrivateDevices hiding a /dev node the program opens - the hardening switches that are on, a dependency table and the cleaned unit plus install/verify commands. mode 'udev': give udevInfo (udevadm info -a output), udevPick (KEY==\"value\" lines) and the assignments (symlink, perm (MODE), group, owner, tagSystemd, wants, actionAdd, ruleFile); it returns the rule file, where each key matches in the chain, errors when parent keys come from different parents or match nothing, and the reload/trigger/test commands.",
+ "sources": [
+  "systemd.unit(5), systemd.service(5), systemd.exec(5), systemd.special(7), bootup(7) - freedesktop.org manual pages",
+  "udev(7) and udevadm(8) - rule keys, matching against one parent device, SYMLINK, TAG, SYSTEMD_WANTS",
+  "systemd.device(5) - TAG+=\"systemd\" and SYSTEMD_WANTS",
+  "Yocto Project reference manual: systemd class (SYSTEMD_SERVICE, SYSTEMD_AUTO_ENABLE)"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "draw"
+ ]
+}

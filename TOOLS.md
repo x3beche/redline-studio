@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-197 tools. **MCP** marks the ones agents can run with `run_tool`.
+200 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -166,6 +166,7 @@ agents, the most used, and every tool nobody used.
 | **I2C Address Map** · MCP | `i2c-address-map` | devices on a bus by address, with conflicts and alternative addresses | Embedded, PCB |
 | **IEEE754 Float Inspector** · MCP | `float-inspector` | sign, exponent and mantissa bits of a float | Embedded |
 | **Interrupt Latency Budget** · MCP | `irq-latency` | CPU load and miss risk from interrupt rates and handler times | Embedded |
+| **Kconfig Diff** · MCP | `kconfig-diff` | two kernel or U-Boot .config files compared, and the difference written as a config fragment | Embedded |
 | **Kernel Oops Decoder** · MCP | `kernel-oops-decoder` | a Linux oops or panic taken apart: the cause, the faulting function, the call trace and the taint flags | Embedded |
 | **Layer & Release Map** · MCP | `layer-release-map` | Yocto releases with their LTS and end-of-life dates, and a bblayers stack checked for compatibility | Embedded |
 | **License Manifest Viewer** · MCP | `license-manifest` | packages in an image grouped by license, with GPLv3 and other copyleft flagged | Embedded |
@@ -178,6 +179,7 @@ agents, the most used, and every tool nobody used.
 | **MPU Region Planner** · MCP | `mpu-region-planner` | Cortex-M MPU regions laid out on the memory map with sizes, alignment, subregions and attributes | Embedded |
 | **NMEA / Serial Log Parser** · MCP | `serial-log-parser` | a serial log parsed line by line into a table of fields | Embedded |
 | **NVIC Priority Planner** · MCP | `nvic-planner` | interrupt priorities in order, with preemption conflicts | Embedded |
+| **OTA A/B Update Planner** · MCP | `ota-ab-planner` | A/B slots, boot counting and rollback for RAUC, SWUpdate or Mender, with their config files | Embedded |
 | **Override Syntax Migrator** · MCP | `override-migrator` | old _append/_prepend/_remove/_${PN} override syntax rewritten to the colon syntax of Honister and later | Embedded |
 | **PID Tuning Playground** · MCP | `pid-playground` | a simple plant's step response live as the gains move | Embedded |
 | **Pin Mux Explorer** · MCP | `pin-mux` | a pin's alternate functions on an MCU and the conflicts | Embedded, PCB |
@@ -193,6 +195,7 @@ agents, the most used, and every tool nobody used.
 | **Stepper Motor Calculator** · MCP | `stepper-calc` | pulse frequency and torque from step angle, microstepping and speed | Embedded, 3D |
 | **Struct Packing Visualizer** · MCP | `struct-packing` | alignment of struct members and the padding bytes wasted | Embedded |
 | **SVD Register Browser** · MCP | `svd-browser` | a CMSIS-SVD file browsed: peripherals, registers and fields, and a register value decoded against it | Embedded |
+| **systemd Unit & udev Rule Builder** · MCP | `systemd-udev-builder` | a systemd service checked and drawn with its dependencies, and a udev rule written from udevadm info | Embedded |
 | **Task Timing Planner** · MCP | `task-timing` | scheduling conflicts of periodic tasks from period and duration | Embedded |
 | **U-Boot Env & bootargs Builder** · MCP | `uboot-env` | bootcmd and kernel bootargs built and explained, and the CRC'd environment image made | Embedded |
 | **Units & Numbers** · MCP | `units` | every engineering unit (pressure, torque, dBm, AWG, °F…), hex and binary, UART baud and timer PSC/ARR | Embedded, PCB, 3D |

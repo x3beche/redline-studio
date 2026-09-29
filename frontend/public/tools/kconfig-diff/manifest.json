@@ -1,0 +1,142 @@
+{
+ "id": "kconfig-diff",
+ "version": "1.0",
+ "name": "Kconfig Diff",
+ "blurb": "two kernel or U-Boot .config files compared, and the difference written as a config fragment",
+ "group": "embedded",
+ "rooms": [
+  "embedded"
+ ],
+ "keywords": [
+  "kconfig",
+  "kernel config",
+  "config diff",
+  "diffconfig",
+  ".config",
+  "defconfig",
+  "savedefconfig",
+  "config fragment",
+  ".cfg fragment",
+  "merge_config.sh",
+  "kernel_configcheck",
+  "linux-yocto",
+  "u-boot config",
+  "menuconfig",
+  "olddefconfig",
+  "SRC_URI cfg",
+  "tristate",
+  "y m n",
+  "is not set",
+  "buildroot config"
+ ],
+ "intro": "Compares two Kconfig files (kernel, U-Boot, Buildroot or BusyBox .config or defconfig) symbol by symbol, grouped by subsystem, and writes the chosen changes as a fragment for SRC_URI. It reads the files the way scripts/kconfig/confdata.c writes them, tells a symbol that is off from one that is not visible, and a full .config from a defconfig, and flags fragment lines that olddefconfig is likely to drop.",
+ "inputs": [
+  {
+   "key": "a",
+   "label": "Config A (before)",
+   "type": "textarea",
+   "rows": 10,
+   "default": "#\n# Automatically generated file; DO NOT EDIT.\n# Linux/arm64 6.6.23 Kernel Configuration\n#\nCONFIG_CC_VERSION_TEXT=\"aarch64-poky-linux-gcc (GCC) 13.2.0\"\nCONFIG_CC_IS_GCC=y\nCONFIG_GCC_VERSION=130200\nCONFIG_LOCALVERSION=\"-imx8mm\"\n# CONFIG_LOCALVERSION_AUTO is not set\nCONFIG_DEFAULT_HOSTNAME=\"(none)\"\nCONFIG_SYSVIPC=y\nCONFIG_POSIX_MQUEUE=y\nCONFIG_NO_HZ_IDLE=y\nCONFIG_HIGH_RES_TIMERS=y\nCONFIG_PREEMPT_VOLUNTARY=y\n# CONFIG_PREEMPT is not set\nCONFIG_IKCONFIG=y\nCONFIG_IKCONFIG_PROC=y\nCONFIG_LOG_BUF_SHIFT=17\nCONFIG_CGROUPS=y\nCONFIG_MEMCG=y\nCONFIG_NAMESPACES=y\nCONFIG_BLK_DEV_INITRD=y\nCONFIG_ARCH_MXC=y\nCONFIG_SOC_IMX8M=y\nCONFIG_HZ_250=y\n# CONFIG_HZ_1000 is not set\nCONFIG_HZ=250\nCONFIG_CMDLINE=\"\"\nCONFIG_MODULES=y\nCONFIG_MODULE_UNLOAD=y\nCONFIG_NET=y\nCONFIG_PACKET=y\nCONFIG_UNIX=y\nCONFIG_INET=y\nCONFIG_IPV6=y\n# CONFIG_NETFILTER is not set\n# CONFIG_CAN is not set\nCONFIG_BT=m\nCONFIG_BT_HCIUART=m\nCONFIG_BT_HCIUART_BCM=y\nCONFIG_CFG80211=y\nCONFIG_MAC80211=y\nCONFIG_WLAN=y\nCONFIG_BRCMFMAC=m\nCONFIG_FEC=y\nCONFIG_USB_SUPPORT=y\nCONFIG_USB=y\nCONFIG_USB_EHCI_HCD=y\nCONFIG_USB_CHIPIDEA=y\nCONFIG_USB_CHIPIDEA_UDC=y\nCONFIG_USB_CHIPIDEA_HOST=y\nCONFIG_USB_STORAGE=y\nCONFIG_USB_SERIAL=m\nCONFIG_USB_SERIAL_FTDI_SIO=m\nCONFIG_USB_GADGET=y\n# CONFIG_USB_CONFIGFS is not set\n# CONFIG_USB_ETH is not set\nCONFIG_I2C=y\nCONFIG_I2C_IMX=y\nCONFIG_SPI=y\nCONFIG_SPI_IMX=y\nCONFIG_GPIOLIB=y\nCONFIG_GPIO_MXC=y\nCONFIG_WATCHDOG=y\n# CONFIG_WATCHDOG_NOWAYOUT is not set\nCONFIG_IMX2_WDT=y\nCONFIG_MMC=y\nCONFIG_MMC_SDHCI=y\nCONFIG_MMC_SDHCI_ESDHC_IMX=y\nCONFIG_DRM=y\nCONFIG_DRM_ETNAVIV=m\nCONFIG_DRM_PANEL_SIMPLE=y\nCONFIG_SND=y\nCONFIG_SND_SOC=y\nCONFIG_SND_SOC_FSL_SAI=y\nCONFIG_EXT4_FS=y\nCONFIG_SQUASHFS=y\nCONFIG_OVERLAY_FS=m\nCONFIG_VFAT_FS=y\nCONFIG_NFS_FS=y\nCONFIG_ROOT_NFS=y\nCONFIG_CRYPTO_SHA256=y\nCONFIG_DEBUG_INFO_DWARF5=y\n# CONFIG_DEBUG_INFO_NONE is not set\nCONFIG_DEBUG_FS=y\nCONFIG_MAGIC_SYSRQ=y\n",
+   "help": ".config or defconfig; # CONFIG_X is not set lines count as n."
+  },
+  {
+   "key": "b",
+   "label": "Config B (after)",
+   "type": "textarea",
+   "rows": 10,
+   "default": "#\n# Automatically generated file; DO NOT EDIT.\n# Linux/arm64 6.6.23 Kernel Configuration\n#\nCONFIG_CC_VERSION_TEXT=\"aarch64-poky-linux-gcc (GCC) 13.3.0\"\nCONFIG_CC_IS_GCC=y\nCONFIG_GCC_VERSION=130300\nCONFIG_LOCALVERSION=\"-imx8mm-prod\"\n# CONFIG_LOCALVERSION_AUTO is not set\nCONFIG_DEFAULT_HOSTNAME=\"(none)\"\nCONFIG_SYSVIPC=y\nCONFIG_POSIX_MQUEUE=y\nCONFIG_NO_HZ_IDLE=y\nCONFIG_HIGH_RES_TIMERS=y\n# CONFIG_PREEMPT_VOLUNTARY is not set\nCONFIG_PREEMPT=y\nCONFIG_IKCONFIG=y\n# CONFIG_IKCONFIG_PROC is not set\nCONFIG_LOG_BUF_SHIFT=18\nCONFIG_CGROUPS=y\nCONFIG_MEMCG=y\nCONFIG_NAMESPACES=y\nCONFIG_BLK_DEV_INITRD=y\nCONFIG_ARCH_MXC=y\nCONFIG_SOC_IMX8M=y\n# CONFIG_HZ_250 is not set\nCONFIG_HZ_1000=y\nCONFIG_HZ=1000\nCONFIG_CMDLINE=\"console=ttymxc1,115200 quiet\"\nCONFIG_MODULES=y\nCONFIG_MODULE_UNLOAD=y\nCONFIG_NET=y\nCONFIG_PACKET=y\nCONFIG_UNIX=y\nCONFIG_INET=y\nCONFIG_IPV6=y\n# CONFIG_NETFILTER is not set\nCONFIG_CAN=m\nCONFIG_CAN_RAW=m\nCONFIG_CAN_FLEXCAN=m\n# CONFIG_BT is not set\nCONFIG_CFG80211=y\nCONFIG_MAC80211=y\nCONFIG_WLAN=y\nCONFIG_BRCMFMAC=m\nCONFIG_FEC=y\nCONFIG_USB_SUPPORT=y\nCONFIG_USB=y\nCONFIG_USB_EHCI_HCD=y\nCONFIG_USB_CHIPIDEA=y\nCONFIG_USB_CHIPIDEA_UDC=y\nCONFIG_USB_CHIPIDEA_HOST=y\nCONFIG_USB_STORAGE=y\nCONFIG_USB_SERIAL=y\nCONFIG_USB_SERIAL_FTDI_SIO=y\nCONFIG_USB_GADGET=y\nCONFIG_USB_CONFIGFS=y\nCONFIG_USB_CONFIGFS_ECM=y\nCONFIG_USB_CONFIGFS_ACM=y\n# CONFIG_USB_ETH is not set\nCONFIG_I2C=y\nCONFIG_I2C_IMX=y\nCONFIG_SPI=y\nCONFIG_SPI_IMX=y\nCONFIG_GPIOLIB=y\nCONFIG_GPIO_MXC=y\nCONFIG_WATCHDOG=y\nCONFIG_WATCHDOG_NOWAYOUT=y\nCONFIG_IMX2_WDT=y\nCONFIG_MMC=y\nCONFIG_MMC_SDHCI=y\nCONFIG_MMC_SDHCI_ESDHC_IMX=y\nCONFIG_DRM=y\nCONFIG_DRM_ETNAVIV=y\nCONFIG_DRM_PANEL_SIMPLE=y\nCONFIG_SND=y\nCONFIG_SND_SOC=y\nCONFIG_SND_SOC_FSL_SAI=y\nCONFIG_EXT4_FS=y\nCONFIG_SQUASHFS=y\nCONFIG_SQUASHFS_XZ=y\nCONFIG_OVERLAY_FS=y\nCONFIG_VFAT_FS=y\n# CONFIG_NFS_FS is not set\nCONFIG_CRYPTO_SHA256=y\n# CONFIG_DEBUG_INFO_DWARF5 is not set\nCONFIG_DEBUG_INFO_NONE=y\n# CONFIG_DEBUG_FS is not set\nCONFIG_MAGIC_SYSRQ=y\n"
+  },
+  {
+   "key": "kindA",
+   "label": "A is",
+   "type": "select",
+   "options": [
+    [
+     "auto",
+     "auto-detect"
+    ],
+    [
+     "full",
+     "full .config"
+    ],
+    [
+     "defconfig",
+     "defconfig"
+    ]
+   ],
+   "default": "auto",
+   "help": "A symbol missing from a full .config is not visible (off); missing from a defconfig it is at its default."
+  },
+  {
+   "key": "kindB",
+   "label": "B is",
+   "type": "select",
+   "options": [
+    [
+     "auto",
+     "auto-detect"
+    ],
+    [
+     "full",
+     "full .config"
+    ],
+    [
+     "defconfig",
+     "defconfig"
+    ]
+   ],
+   "default": "auto"
+  },
+  {
+   "key": "picks",
+   "label": "Fragment overrides",
+   "type": "text",
+   "default": "",
+   "placeholder": "-LOG_BUF_SHIFT +ROOT_NFS",
+   "help": "-SYM leaves a change out of the fragment, +SYM puts in one that is out by default (dropped, default, toolchain)."
+  },
+  {
+   "key": "name",
+   "label": "Fragment file name",
+   "type": "text",
+   "default": "changes.cfg"
+  }
+ ],
+ "examples": [
+  {
+   "title": "linux-yocto i.MX8M Mini: development .config against the production one",
+   "input": {
+    "a": "#\n# Automatically generated file; DO NOT EDIT.\n# Linux/arm64 6.6.23 Kernel Configuration\n#\nCONFIG_CC_VERSION_TEXT=\"aarch64-poky-linux-gcc (GCC) 13.2.0\"\nCONFIG_CC_IS_GCC=y\nCONFIG_GCC_VERSION=130200\nCONFIG_LOCALVERSION=\"-imx8mm\"\n# CONFIG_LOCALVERSION_AUTO is not set\nCONFIG_DEFAULT_HOSTNAME=\"(none)\"\nCONFIG_SYSVIPC=y\nCONFIG_POSIX_MQUEUE=y\nCONFIG_NO_HZ_IDLE=y\nCONFIG_HIGH_RES_TIMERS=y\nCONFIG_PREEMPT_VOLUNTARY=y\n# CONFIG_PREEMPT is not set\nCONFIG_IKCONFIG=y\nCONFIG_IKCONFIG_PROC=y\nCONFIG_LOG_BUF_SHIFT=17\nCONFIG_CGROUPS=y\nCONFIG_MEMCG=y\nCONFIG_NAMESPACES=y\nCONFIG_BLK_DEV_INITRD=y\nCONFIG_ARCH_MXC=y\nCONFIG_SOC_IMX8M=y\nCONFIG_HZ_250=y\n# CONFIG_HZ_1000 is not set\nCONFIG_HZ=250\nCONFIG_CMDLINE=\"\"\nCONFIG_MODULES=y\nCONFIG_MODULE_UNLOAD=y\nCONFIG_NET=y\nCONFIG_PACKET=y\nCONFIG_UNIX=y\nCONFIG_INET=y\nCONFIG_IPV6=y\n# CONFIG_NETFILTER is not set\n# CONFIG_CAN is not set\nCONFIG_BT=m\nCONFIG_BT_HCIUART=m\nCONFIG_BT_HCIUART_BCM=y\nCONFIG_CFG80211=y\nCONFIG_MAC80211=y\nCONFIG_WLAN=y\nCONFIG_BRCMFMAC=m\nCONFIG_FEC=y\nCONFIG_USB_SUPPORT=y\nCONFIG_USB=y\nCONFIG_USB_EHCI_HCD=y\nCONFIG_USB_CHIPIDEA=y\nCONFIG_USB_CHIPIDEA_UDC=y\nCONFIG_USB_CHIPIDEA_HOST=y\nCONFIG_USB_STORAGE=y\nCONFIG_USB_SERIAL=m\nCONFIG_USB_SERIAL_FTDI_SIO=m\nCONFIG_USB_GADGET=y\n# CONFIG_USB_CONFIGFS is not set\n# CONFIG_USB_ETH is not set\nCONFIG_I2C=y\nCONFIG_I2C_IMX=y\nCONFIG_SPI=y\nCONFIG_SPI_IMX=y\nCONFIG_GPIOLIB=y\nCONFIG_GPIO_MXC=y\nCONFIG_WATCHDOG=y\n# CONFIG_WATCHDOG_NOWAYOUT is not set\nCONFIG_IMX2_WDT=y\nCONFIG_MMC=y\nCONFIG_MMC_SDHCI=y\nCONFIG_MMC_SDHCI_ESDHC_IMX=y\nCONFIG_DRM=y\nCONFIG_DRM_ETNAVIV=m\nCONFIG_DRM_PANEL_SIMPLE=y\nCONFIG_SND=y\nCONFIG_SND_SOC=y\nCONFIG_SND_SOC_FSL_SAI=y\nCONFIG_EXT4_FS=y\nCONFIG_SQUASHFS=y\nCONFIG_OVERLAY_FS=m\nCONFIG_VFAT_FS=y\nCONFIG_NFS_FS=y\nCONFIG_ROOT_NFS=y\nCONFIG_CRYPTO_SHA256=y\nCONFIG_DEBUG_INFO_DWARF5=y\n# CONFIG_DEBUG_INFO_NONE is not set\nCONFIG_DEBUG_FS=y\nCONFIG_MAGIC_SYSRQ=y\n",
+    "b": "#\n# Automatically generated file; DO NOT EDIT.\n# Linux/arm64 6.6.23 Kernel Configuration\n#\nCONFIG_CC_VERSION_TEXT=\"aarch64-poky-linux-gcc (GCC) 13.3.0\"\nCONFIG_CC_IS_GCC=y\nCONFIG_GCC_VERSION=130300\nCONFIG_LOCALVERSION=\"-imx8mm-prod\"\n# CONFIG_LOCALVERSION_AUTO is not set\nCONFIG_DEFAULT_HOSTNAME=\"(none)\"\nCONFIG_SYSVIPC=y\nCONFIG_POSIX_MQUEUE=y\nCONFIG_NO_HZ_IDLE=y\nCONFIG_HIGH_RES_TIMERS=y\n# CONFIG_PREEMPT_VOLUNTARY is not set\nCONFIG_PREEMPT=y\nCONFIG_IKCONFIG=y\n# CONFIG_IKCONFIG_PROC is not set\nCONFIG_LOG_BUF_SHIFT=18\nCONFIG_CGROUPS=y\nCONFIG_MEMCG=y\nCONFIG_NAMESPACES=y\nCONFIG_BLK_DEV_INITRD=y\nCONFIG_ARCH_MXC=y\nCONFIG_SOC_IMX8M=y\n# CONFIG_HZ_250 is not set\nCONFIG_HZ_1000=y\nCONFIG_HZ=1000\nCONFIG_CMDLINE=\"console=ttymxc1,115200 quiet\"\nCONFIG_MODULES=y\nCONFIG_MODULE_UNLOAD=y\nCONFIG_NET=y\nCONFIG_PACKET=y\nCONFIG_UNIX=y\nCONFIG_INET=y\nCONFIG_IPV6=y\n# CONFIG_NETFILTER is not set\nCONFIG_CAN=m\nCONFIG_CAN_RAW=m\nCONFIG_CAN_FLEXCAN=m\n# CONFIG_BT is not set\nCONFIG_CFG80211=y\nCONFIG_MAC80211=y\nCONFIG_WLAN=y\nCONFIG_BRCMFMAC=m\nCONFIG_FEC=y\nCONFIG_USB_SUPPORT=y\nCONFIG_USB=y\nCONFIG_USB_EHCI_HCD=y\nCONFIG_USB_CHIPIDEA=y\nCONFIG_USB_CHIPIDEA_UDC=y\nCONFIG_USB_CHIPIDEA_HOST=y\nCONFIG_USB_STORAGE=y\nCONFIG_USB_SERIAL=y\nCONFIG_USB_SERIAL_FTDI_SIO=y\nCONFIG_USB_GADGET=y\nCONFIG_USB_CONFIGFS=y\nCONFIG_USB_CONFIGFS_ECM=y\nCONFIG_USB_CONFIGFS_ACM=y\n# CONFIG_USB_ETH is not set\nCONFIG_I2C=y\nCONFIG_I2C_IMX=y\nCONFIG_SPI=y\nCONFIG_SPI_IMX=y\nCONFIG_GPIOLIB=y\nCONFIG_GPIO_MXC=y\nCONFIG_WATCHDOG=y\nCONFIG_WATCHDOG_NOWAYOUT=y\nCONFIG_IMX2_WDT=y\nCONFIG_MMC=y\nCONFIG_MMC_SDHCI=y\nCONFIG_MMC_SDHCI_ESDHC_IMX=y\nCONFIG_DRM=y\nCONFIG_DRM_ETNAVIV=y\nCONFIG_DRM_PANEL_SIMPLE=y\nCONFIG_SND=y\nCONFIG_SND_SOC=y\nCONFIG_SND_SOC_FSL_SAI=y\nCONFIG_EXT4_FS=y\nCONFIG_SQUASHFS=y\nCONFIG_SQUASHFS_XZ=y\nCONFIG_OVERLAY_FS=y\nCONFIG_VFAT_FS=y\n# CONFIG_NFS_FS is not set\nCONFIG_CRYPTO_SHA256=y\n# CONFIG_DEBUG_INFO_DWARF5 is not set\nCONFIG_DEBUG_INFO_NONE=y\n# CONFIG_DEBUG_FS is not set\nCONFIG_MAGIC_SYSRQ=y\n",
+    "kindA": "auto",
+    "kindB": "auto",
+    "picks": "",
+    "name": "production.cfg"
+   }
+  },
+  {
+   "title": "U-Boot: EVK defconfig against a board defconfig with boot counting",
+   "input": {
+    "a": "CONFIG_ARM=y\nCONFIG_ARCH_IMX8M=y\nCONFIG_TEXT_BASE=0x40200000\nCONFIG_SYS_MALLOC_LEN=0x2000000\nCONFIG_SYS_MALLOC_F_LEN=0x10000\nCONFIG_SPL_GPIO=y\nCONFIG_SPL_LIBCOMMON_SUPPORT=y\nCONFIG_SPL_LIBGENERIC_SUPPORT=y\nCONFIG_ENV_SIZE=0x4000\nCONFIG_ENV_OFFSET=0x400000\nCONFIG_DM_GPIO=y\nCONFIG_DEFAULT_DEVICE_TREE=\"imx8mm-evk\"\nCONFIG_TARGET_IMX8MM_EVK=y\nCONFIG_SYS_MONITOR_LEN=524288\nCONFIG_SPL_MMC=y\nCONFIG_SPL_SERIAL=y\nCONFIG_SPL_DRIVERS_MISC=y\nCONFIG_SPL=y\nCONFIG_ENV_OFFSET_REDUND=0x3F0000\nCONFIG_SYS_LOAD_ADDR=0x40480000\nCONFIG_FIT=y\nCONFIG_FIT_EXTERNAL_OFFSET=0x3000\nCONFIG_SPL_LOAD_FIT=y\nCONFIG_OF_SYSTEM_SETUP=y\nCONFIG_SYS_CBSIZE=2048\nCONFIG_SYS_PBSIZE=2074\nCONFIG_BOARD_LATE_INIT=y\nCONFIG_SPL_BOARD_INIT=y\nCONFIG_SPL_BOOTROM_SUPPORT=y\nCONFIG_SYS_PROMPT=\"u-boot=> \"\n# CONFIG_CMD_EXPORTENV is not set\n# CONFIG_CMD_IMPORTENV is not set\nCONFIG_CMD_ERASEENV=y\n# CONFIG_CMD_CRC32 is not set\nCONFIG_CMD_CLK=y\nCONFIG_CMD_FUSE=y\nCONFIG_CMD_GPIO=y\nCONFIG_CMD_I2C=y\nCONFIG_CMD_MMC=y\nCONFIG_CMD_CACHE=y\nCONFIG_CMD_REGULATOR=y\nCONFIG_CMD_EXT4_WRITE=y\nCONFIG_OF_CONTROL=y\nCONFIG_SPL_OF_CONTROL=y\nCONFIG_ENV_OVERWRITE=y\nCONFIG_ENV_IS_IN_MMC=y\nCONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG=y\nCONFIG_SYS_MMC_ENV_DEV=1\nCONFIG_USE_ETHPRIME=y\nCONFIG_ETHPRIME=\"FEC\"\nCONFIG_SPL_DM=y\nCONFIG_CLK_COMPOSITE_CCF=y\nCONFIG_CLK_IMX8MM=y\nCONFIG_MXC_GPIO=y\nCONFIG_DM_I2C=y\nCONFIG_SUPPORT_EMMC_BOOT=y\nCONFIG_MMC_IO_VOLTAGE=y\nCONFIG_MMC_UHS_SUPPORT=y\nCONFIG_MMC_HS400_ES_SUPPORT=y\nCONFIG_MMC_HS400_SUPPORT=y\nCONFIG_FSL_USDHC=y\nCONFIG_PHYLIB=y\nCONFIG_PHY_ATHEROS=y\nCONFIG_DM_ETH=y\nCONFIG_FEC_MXC=y\nCONFIG_MII=y\nCONFIG_PINCTRL=y\nCONFIG_PINCTRL_IMX8M=y\nCONFIG_DM_REGULATOR=y\nCONFIG_DM_REGULATOR_FIXED=y\nCONFIG_MXC_UART=y\nCONFIG_SYSRESET=y\nCONFIG_SYSRESET_PSCI=y\nCONFIG_SYSRESET_WATCHDOG=y\nCONFIG_DM_THERMAL=y\nCONFIG_IMX_WATCHDOG=y\n",
+    "b": "CONFIG_ARM=y\nCONFIG_ARCH_IMX8M=y\nCONFIG_TEXT_BASE=0x40200000\nCONFIG_SYS_MALLOC_LEN=0x2000000\nCONFIG_SYS_MALLOC_F_LEN=0x10000\nCONFIG_SPL_GPIO=y\nCONFIG_ENV_SIZE=0x4000\nCONFIG_ENV_OFFSET=0x400000\nCONFIG_DM_GPIO=y\nCONFIG_DEFAULT_DEVICE_TREE=\"imx8mm-acme-gw\"\nCONFIG_TARGET_IMX8MM_EVK=y\nCONFIG_SPL_MMC=y\nCONFIG_SPL_SERIAL=y\nCONFIG_SPL=y\nCONFIG_ENV_OFFSET_REDUND=0x3F0000\nCONFIG_SYS_REDUNDAND_ENVIRONMENT=y\nCONFIG_SYS_LOAD_ADDR=0x40480000\nCONFIG_FIT=y\nCONFIG_SPL_LOAD_FIT=y\nCONFIG_BOOTDELAY=0\nCONFIG_BOOTCOMMAND=\"run distro_bootcmd\"\nCONFIG_SYS_PROMPT=\"u-boot=> \"\nCONFIG_BOOTCOUNT_LIMIT=y\nCONFIG_BOOTCOUNT_ENV=y\n# CONFIG_CMD_EXPORTENV is not set\n# CONFIG_CMD_IMPORTENV is not set\nCONFIG_CMD_ERASEENV=y\n# CONFIG_CMD_CRC32 is not set\nCONFIG_CMD_CLK=y\nCONFIG_CMD_FUSE=y\nCONFIG_CMD_GPIO=y\nCONFIG_CMD_I2C=y\nCONFIG_CMD_MMC=y\n# CONFIG_CMD_NET is not set\nCONFIG_CMD_BOOTCOUNT=y\nCONFIG_OF_CONTROL=y\nCONFIG_ENV_IS_IN_MMC=y\nCONFIG_SYS_MMC_ENV_DEV=2\nCONFIG_SPL_DM=y\nCONFIG_CLK_IMX8MM=y\nCONFIG_MXC_GPIO=y\nCONFIG_DM_I2C=y\nCONFIG_SUPPORT_EMMC_BOOT=y\nCONFIG_FSL_USDHC=y\n# CONFIG_FEC_MXC is not set\nCONFIG_PINCTRL=y\nCONFIG_PINCTRL_IMX8M=y\nCONFIG_MXC_UART=y\nCONFIG_SYSRESET=y\nCONFIG_IMX_WATCHDOG=y\nCONFIG_WATCHDOG_TIMEOUT_MSECS=30000\n",
+    "kindA": "auto",
+    "kindB": "auto",
+    "picks": "+CMD_EXT4_WRITE",
+    "name": "bootcount.cfg"
+   }
+  }
+ ],
+ "usage": "Give a (the old config) and b (the new one) as the text of two .config or defconfig files; kindA/kindB say whether each is a full .config or a defconfig (auto guesses from the header and the number of 'is not set' lines); picks adds (+SYM) or removes (-SYM) symbols from the fragment. It returns counts, a table of every difference with its group, both values, the kind of change (added, removed, y -> m, m -> y, changed, dropped by a dependency, default, toolchain), whether it is in the fragment and a risk note, and texts: the fragment file, the scripts/diffconfig listing and the bbappend lines with the commands to verify. Use it to turn 'what did menuconfig change' into a reviewable .cfg for a Yocto kernel or U-Boot recipe.",
+ "sources": [
+  "Linux scripts/kconfig/confdata.c (the .config line format, # CONFIG_X is not set)",
+  "Linux scripts/kconfig/merge_config.sh and scripts/diffconfig",
+  "Documentation/kbuild/kconfig-language.rst (visibility, depends on, select, choice)",
+  "Yocto Project Linux Kernel Development Manual: configuration fragments, kernel_configcheck",
+  "poky meta/classes-recipe/uboot-config / u-boot-configure.inc (*.cfg fragments merged for U-Boot)"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "draw"
+ ]
+}
