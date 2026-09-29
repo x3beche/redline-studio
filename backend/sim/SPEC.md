@@ -107,3 +107,30 @@ Generated from the PCB room's netlist; can be corrected by hand.
 The MCU's pin names come from its LCSC symbol (the numbers in the netlist
 are package pins). Which part is which model comes from the catalog's
 `match` (LCSC number or footprint pattern).
+
+## 5. Integration (boards, apps, the page)
+
+- **A board's netlist** is the `graph` artifact of a board (collection
+  `boards`), the same shape whether it was built from atopile or imported:
+  `{"components": [{"ref","value","footprint","part","where"}],
+  "nets": [{"name","code","nodes": [{"ref","pin"}]}]}` where `pin` is the
+  package pad number as a string ("8" for pad 8 of U2).
+- **An imported board** is a `boards` document with `"kind": "imported"`
+  and no atopile source. Its artifacts are the same names a built board
+  has - `graph`, `layout` (front SVG), `bottom`, `tracks` (optional),
+  `schematic_svg` (optional), `model3d` (GLB) - so the PCB room shows it
+  unchanged.
+- **3D nodes are named by reference designator** in every board GLB
+  (`U2`, `LED3`, `OLED_MODULE`), so the page can light a LED or put the
+  OLED's picture on the part that has that ref.
+- **A firmware app knows its board**: the `apps` document of an embedded
+  app carries `"board": "<board id>"`. The simulator builds sim.json from
+  that board's graph with `board.describe()`; hand corrections are kept on
+  the app as `"sim": {...}` and win over what describe() found.
+- **HTTP** lives in routers, one per area, each `backend/<area>/api.py`
+  exposing `router = APIRouter()`; main.py only includes them. Sim:
+  `/api/sim/...`; board import: `/api/boards/import...`.
+- **The page** gets simulator state as Server-Sent Events
+  (`GET /api/sim/<session>/events`: `snapshot` events with
+  `Board.snapshot()`), and sends actions with POSTs (`act`, `uart`,
+  `start`, `stop`).
