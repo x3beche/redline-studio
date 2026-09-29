@@ -232,7 +232,45 @@ class Screen(Part):
         return {"screen": {"w": self.w, "h": self.h, "bits": base64.b64encode(bytes(out)).decode()}}
 
 
-BLOCKS = {"light": Light, "press": Press, "level": Level, "motor": Motor, "regs": Regs, "screen": Screen}
+class Quad(Part):
+    """A quadrature encoder: {"turn": n} steps it n detents (negative the
+    other way), {"press": bool} is its push switch. Pins A and B idle high
+    (pull-ups); clockwise, A falls first, and a detent is one whole cycle
+    of four states, one every `step_us` of virtual time."""
+
+    CW = [(0, 1), (0, 0), (1, 0), (1, 1)]
+    CCW = [(1, 0), (0, 0), (0, 1), (1, 1)]
+
+    def __init__(self, ref, spec, emit):
+        super().__init__(ref, spec, emit)
+        self.position, self.pressed, self.queue, self.next_t, self.t = 0, False, [], 0, 0
+        for role in ("A", "B", "S"):
+            if role in self.pins:
+                self.emit({"type": "pin", "pin": self.pins[role], "level": 1})
+
+    def act(self, action):
+        if "turn" in action:
+            n = int(action["turn"])
+            self.queue += (self.CW if n > 0 else self.CCW) * abs(n)
+            self.position += n
+        if "press" in action and "S" in self.pins and bool(action["press"]) != self.pressed:
+            self.pressed = bool(action["press"])
+            self.emit({"type": "pin", "pin": self.pins["S"], "level": int(not self.pressed)})
+
+    def tick(self, t_us):
+        self.t = t_us
+        if self.queue and t_us >= self.next_t:
+            a, b = self.queue.pop(0)
+            self.emit({"type": "pin", "pin": self.pins["A"], "level": a})
+            self.emit({"type": "pin", "pin": self.pins["B"], "level": b})
+            self.next_t = t_us + int(self.spec.get("step_us", 3000))
+
+    def view(self):
+        return {"position": self.position, "pressed": self.pressed}
+
+
+BLOCKS = {"light": Light, "press": Press, "level": Level, "motor": Motor, "regs": Regs, "screen": Screen,
+          "quad": Quad}
 
 
 def make_part(ref: str, spec: dict, emit) -> Part:

@@ -27,6 +27,14 @@ models:
     roles: {A: [A, '2', '+'], K: [K, '1', '-']}   # wired on K: lit by a 0
     view: {glow: '#ff3b30'}
 
+  # Before `button`: an encoder's footprint is an SW-SMD too.
+  encoder:
+    block: quad
+    step_us: 3000
+    match: {footprint: 'SIQ-02|EC1[12]|ENCODER|ROTARY', text: '(?i)encoder'}
+    roles: {A: [A], B: [B], S: [S, SW]}
+    view: {kind: knob}
+
   button:
     block: press
     pull: up

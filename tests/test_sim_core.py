@@ -350,3 +350,27 @@ def test_time_moves_while_the_firmware_is_quiet(monkeypatch):
     asyncio.run(board.run(Quiet(), None))
     assert board.snapshot()["parts"]["FAN"]["rpm"] > 500
     assert any(m["type"] == "freq" and m["pin"] == "GPIO19" and m["hz"] > 10 for m in sent)
+
+
+def test_encoder_turns_as_quadrature():
+    sent = []
+    enc = make_part("U1", {**CATALOG["models"]["encoder"], "pins": {"A": "GPIO32", "B": "GPIO33", "S": "GPIO4"}},
+                    sent.append)
+    assert {(m["pin"], m["level"]) for m in sent} == {("GPIO32", 1), ("GPIO33", 1), ("GPIO4", 1)}
+    sent.clear()
+    enc.act({"turn": 1})
+    for t in range(0, 20000, 1000):
+        enc.tick(t)
+    states = [(sent[i]["level"], sent[i + 1]["level"]) for i in range(0, len(sent), 2)]
+    assert states == [(0, 1), (0, 0), (1, 0), (1, 1)]           # clockwise: A falls first
+    enc.act({"press": True})
+    assert sent[-1] == {"type": "pin", "pin": "GPIO4", "level": 0}
+    assert enc.view() == {"position": 1, "pressed": True}
+
+
+def test_an_encoder_footprint_is_not_a_button():
+    comp = {"ref": "U1", "footprint": "SW-SMD_SIQ-02FVS3_1", "value": "", "part": ""}
+    name = next(k for k, m in CATALOG["models"].items() if simboard._matches(comp, m["match"]))
+    assert name == "encoder"
+    comp = {"ref": "SW1", "footprint": "SW-SMD_TS36CA", "value": "", "part": ""}
+    assert next(k for k, m in CATALOG["models"].items() if simboard._matches(comp, m["match"])) == "button"
