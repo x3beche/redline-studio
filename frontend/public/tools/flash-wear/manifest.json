@@ -1,0 +1,214 @@
+{
+  "id": "flash-wear",
+  "version": "1.0",
+  "name": "Flash & EEPROM Wear Lifetime",
+  "blurb": "how long flash, EEPROM emulation or a log area lasts at a write rate, with wear levelling",
+  "group": "embedded",
+  "rooms": [
+    "embedded"
+  ],
+  "keywords": [
+    "flash wear",
+    "endurance",
+    "erase cycles",
+    "wear levelling",
+    "wear leveling",
+    "eeprom emulation",
+    "an3969",
+    "an4894",
+    "littlefs",
+    "circular log",
+    "flash lifetime",
+    "write amplification",
+    "nand",
+    "emmc",
+    "spi nor",
+    "data retention",
+    "tbw",
+    "p/e cycles"
+  ],
+  "intro": "Counts how many record writes an area survives before its busiest sector reaches the rated erase cycles - in place, as a circular log, as ST EEPROM emulation, under littlefs or behind an eMMC/SSD controller - and turns that into years at your write interval, with the formula and what each change buys.",
+  "inputs": [
+    {
+      "key": "tech",
+      "label": "Technology",
+      "type": "select",
+      "default": "mcu",
+      "options": [
+        [
+          "mcu",
+          "MCU internal flash (10k)"
+        ],
+        [
+          "mcueeprom",
+          "MCU data EEPROM L0/L1 (100k)"
+        ],
+        [
+          "eeprom",
+          "External EEPROM (1M)"
+        ],
+        [
+          "nor",
+          "SPI NOR flash (100k)"
+        ],
+        [
+          "slc",
+          "NAND SLC (60k)"
+        ],
+        [
+          "mlc",
+          "NAND MLC (3k)"
+        ],
+        [
+          "emmc",
+          "eMMC MLC/TLC (3k)"
+        ]
+      ]
+    },
+    {
+      "key": "endurance",
+      "label": "Erase cycles (endurance)",
+      "type": "number",
+      "default": "10k",
+      "required": false,
+      "help": "From the datasheet; empty = the technology's typical value."
+    },
+    {
+      "key": "eraseSize",
+      "label": "Erase unit (page/sector/block)",
+      "type": "number",
+      "unit": "B",
+      "default": "2048"
+    },
+    {
+      "key": "areaSize",
+      "label": "Area size",
+      "type": "number",
+      "unit": "B",
+      "default": "8192"
+    },
+    {
+      "key": "recordSize",
+      "label": "Bytes per write",
+      "type": "number",
+      "unit": "B",
+      "default": "8",
+      "help": "One record / EEPROM element as stored (address + data + CRC)."
+    },
+    {
+      "key": "interval",
+      "label": "Write interval",
+      "type": "number",
+      "unit": "s",
+      "default": "5"
+    },
+    {
+      "key": "scheme",
+      "label": "Wear levelling",
+      "type": "select",
+      "default": "eeprom",
+      "options": [
+        [
+          "none",
+          "In place (no levelling)"
+        ],
+        [
+          "circular",
+          "Circular log"
+        ],
+        [
+          "eeprom",
+          "EEPROM emulation (AN3969/AN4894)"
+        ],
+        [
+          "littlefs",
+          "littlefs (dynamic, free blocks)"
+        ],
+        [
+          "ftl",
+          "Device FTL (eMMC/SD/SSD, static)"
+        ]
+      ]
+    },
+    {
+      "key": "variables",
+      "label": "Live variables",
+      "type": "number",
+      "default": "50",
+      "when": {
+        "key": "scheme",
+        "equals": "eeprom"
+      },
+      "help": "Distinct variables copied on every page transfer."
+    },
+    {
+      "key": "fill",
+      "label": "Area filled with static data",
+      "type": "number",
+      "unit": "%",
+      "default": "50",
+      "when": {
+        "key": "scheme",
+        "equals": "littlefs"
+      }
+    },
+    {
+      "key": "wa",
+      "label": "Write amplification",
+      "type": "number",
+      "default": "1"
+    },
+    {
+      "key": "target",
+      "label": "Target lifetime",
+      "type": "number",
+      "unit": "years",
+      "default": "10"
+    }
+  ],
+  "examples": [
+    {
+      "title": "STM32L4 EEPROM emulation: 4 x 2 KiB pages, 50 variables, a write every 5 s",
+      "input": {
+        "tech": "mcu",
+        "endurance": "10k",
+        "eraseSize": "2048",
+        "areaSize": "8192",
+        "recordSize": "8",
+        "interval": "5",
+        "scheme": "eeprom",
+        "variables": "50",
+        "wa": "1",
+        "target": "10"
+      }
+    },
+    {
+      "title": "Data logger on a 16 MiB SPI NOR with littlefs, 64-byte records every 10 s, half full",
+      "input": {
+        "tech": "nor",
+        "endurance": "100k",
+        "eraseSize": "4096",
+        "areaSize": "16777216",
+        "recordSize": "64",
+        "interval": "10",
+        "scheme": "littlefs",
+        "fill": "50",
+        "wa": "3",
+        "target": "10"
+      }
+    }
+  ],
+  "usage": "Give tech, endurance (cycles; empty = typical), eraseSize, areaSize and recordSize in bytes, interval in seconds between writes, scheme (none, circular, eeprom, littlefs, ftl) with variables (eeprom) or fill % (littlefs), wa (write amplification) and target years. Returns the lifetime, writes to wear-out, how many sectors actually wear, erases per day, a sensitivity table (interval, area, record size, WA, endurance) and the formula with the numbers filled in. Use it to size an EEPROM-emulation area, a log partition or a write rate before it ships.",
+  "sources": [
+    "ST AN3969 'EEPROM emulation in STM32F40x/STM32F41x microcontrollers' (page transfer, two-page scheme)",
+    "ST AN4894 'EEPROM emulation techniques and software for STM32 microcontrollers' (element format, N pages, cycling capability)",
+    "littlefs DESIGN.md, 'Wear leveling' (dynamic wear levelling over free blocks, block_cycles)",
+    "JEDEC JESD84-B51 eMMC (device-managed wear levelling, EXT_CSD life time estimation)",
+    "Datasheets for typical endurance: STM32F407 (10 kcycles, retention vs cycles), Winbond W25Q128JV (100 kcycles, 20 years), Microchip 24LC256 (1 Mcycles)"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "map"
+  ]
+}

@@ -1,0 +1,131 @@
+{
+  "id": "dma-stream-planner",
+  "version": "1.0",
+  "name": "DMA Stream Planner",
+  "blurb": "peripherals assigned to DMA streams and channels on an STM32, with the conflicts shown",
+  "group": "embedded",
+  "rooms": [
+    "embedded"
+  ],
+  "keywords": [
+    "dma",
+    "dma stream",
+    "dma channel",
+    "chsel",
+    "cselr",
+    "dmamux",
+    "gpdma",
+    "dma request",
+    "stream conflict",
+    "dma mapping",
+    "stm32 dma",
+    "hal dma init",
+    "cubemx dma",
+    "memory to memory",
+    "rm0090",
+    "stm32f4 dma",
+    "dma priority",
+    "request mapping"
+  ],
+  "intro": "Places the DMA requests you need on the streams or channels that are actually wired to them - from the request tables in ST's reference manuals, as stored in STM32CubeMX's device database - finds the clashes and the requests that cannot be placed, and writes the CubeMX list, HAL init code and IRQ handlers.",
+  "inputs": [
+    {
+      "key": "family",
+      "label": "MCU family",
+      "type": "select",
+      "default": "f407",
+      "options": [
+        [
+          "f407",
+          "STM32F405/407 - DMA1/2, 8 streams x 8 channels"
+        ],
+        [
+          "f746",
+          "STM32F74x/75x - DMA1/2, 8 streams x 8 channels"
+        ],
+        [
+          "f103md",
+          "STM32F103 x8/xB - DMA1, 7 channels"
+        ],
+        [
+          "f103hd",
+          "STM32F103 xC-xE - DMA1 7 + DMA2 5 channels"
+        ],
+        [
+          "f072",
+          "STM32F07x - DMA1, 7 channels"
+        ],
+        [
+          "l073",
+          "STM32L07x/08x - DMA1 with CSELR"
+        ],
+        [
+          "l476",
+          "STM32L47x/48x - DMA1/2 with CSELR"
+        ],
+        [
+          "g474",
+          "STM32G47x - DMAMUX, 2 x 8 channels"
+        ],
+        [
+          "h743",
+          "STM32H743/753 - DMAMUX1, 2 x 8 streams"
+        ],
+        [
+          "l4r5",
+          "STM32L4R/L4S - DMAMUX, 2 x 7 channels"
+        ],
+        [
+          "u575",
+          "STM32U575/585 - GPDMA1, 16 channels"
+        ]
+      ]
+    },
+    {
+      "key": "requests",
+      "label": "Requests",
+      "type": "textarea",
+      "rows": 10,
+      "default": "USART2_RX high\nUSART2_TX\nI2C1_RX\nI2C1_TX\nSPI2_TX medium\nDAC1\nSPI1_RX veryhigh\nSPI1_TX veryhigh\nADC1 high\nSDIO medium",
+      "help": "One per line: NAME [low|medium|high|veryhigh] [@DMA2_S3]. @ pins it to that stream/channel; without it the solver picks. MEMTOMEM for a memory-to-memory stream. Timer events may be named alone (TIM2_UP)."
+    },
+    {
+      "key": "solve",
+      "label": "Auto-assign unpinned requests",
+      "type": "bool",
+      "default": true
+    }
+  ],
+  "examples": [
+    {
+      "title": "F407 board: UARTs, I2C, SPI, DAC and ADC - DAC1 and USART2_RX both need DMA1 Stream5",
+      "input": {
+        "family": "f407",
+        "requests": "USART2_RX high\nUSART2_TX\nI2C1_RX\nI2C1_TX\nSPI2_TX medium\nDAC1\nSPI1_RX veryhigh\nSPI1_TX veryhigh\nADC1 high\nSDIO medium",
+        "solve": true
+      }
+    },
+    {
+      "title": "STM32L476: two UARTs, SPI2, ADC1 and a timer, one pinned by hand",
+      "input": {
+        "family": "l476",
+        "requests": "USART1_RX high\nUSART1_TX\nUSART2_RX high\nUSART2_TX\nSPI2_RX veryhigh @DMA1_C4\nSPI2_TX veryhigh\nADC1 medium\nTIM2_UP",
+        "solve": true
+      }
+    }
+  ],
+  "usage": "Give family (f407, f746, f103md, f103hd, f072, l073, l476, g474, h743, l4r5, u575) and requests, one per line as NAME [priority] [@DMA2_S3] (names as in the reference manual: USART2_RX, SPI1_TX, ADC1, TIM2_UP, MEMTOMEM). Returns the placement table (stream/channel, CHSEL or request selector, priority, IRQ, status), warnings for clashes, unknown names and requests that cannot be placed with who holds their streams, and texts with the CubeMX list, HAL_DMA_Init code and IRQ handlers. Use it before writing DMA init code or when a peripheral's DMA 'does nothing' because another one owns its stream.",
+  "sources": [
+    "ST RM0090 \u00a710.3.3 and Tables 42/43 (STM32F405/407 DMA1/DMA2 request mapping, arbitration)",
+    "ST RM0385 \u00a78 (STM32F74x/75x DMA request mapping)",
+    "ST RM0008 \u00a713.3 and Tables 78/79 (STM32F10x DMA1/DMA2 requests)",
+    "ST RM0091 \u00a710 (STM32F0x1/x2/x8 DMA), RM0367 \u00a711 (STM32L0x3 DMA/CSELR), RM0351 \u00a711 (STM32L4x5/x6 DMA/CSELR)",
+    "ST RM0440 (G4), RM0432 (L4+), RM0433 (H742/743/753) DMAMUX request tables; RM0456 \u00a717 (U5 GPDMA)",
+    "STM32CubeMX device database db/mcu/IP/DMA-*_Modes.xml, GPDMA-STM32U5_dma3_Cube_Modes.xml and NVIC-*_Modes.xml (request lines, CHSEL/CSELR values, IRQ names), filtered by each part's peripherals"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "grid"
+  ]
+}

@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-191 tools. **MCP** marks the ones agents can run with `run_tool`.
+194 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -150,11 +150,13 @@ agents, the most used, and every tool nobody used.
 | **Cycle to Time Converter** · MCP | `cycles-time` | instruction cycles to microseconds and back at a clock | Embedded |
 | **Debounce Time Calculator** · MCP | `debounce-time` | debounce time for a button type and sampling period | Embedded |
 | **Device Tree Explorer** · MCP | `device-tree-explorer` | a DTS with its includes merged into one tree, phandles resolved, addresses translated and conflicts found | Embedded |
+| **DMA Stream Planner** · MCP | `dma-stream-planner` | peripherals assigned to DMA streams and channels on an STM32, with the conflicts shown | Embedded |
 | **DT Overlay Builder** · MCP | `dt-overlay-builder` | a device tree overlay fragment to enable, add or change nodes on a base tree | Embedded |
 | **EMA / IIR Coefficient Tool** · MCP | `iir-coefficient` | smoothing coefficient from a cutoff frequency, with the response drawn | Embedded |
 | **Endianness Inspector** · MCP | `endianness` | the same bytes read as little and big endian side by side | Embedded |
 | **Firmware Size Diff** · MCP | `firmware-size-diff` | symbol-by-symbol size change between two builds, largest first | Embedded |
 | **Fixed-Point Converter** · MCP | `fixed-point` | a decimal value in a Q format and the precision lost | Embedded |
+| **Flash & EEPROM Wear Lifetime** · MCP | `flash-wear` | how long flash, EEPROM emulation or a log area lasts at a write rate, with wear levelling | Embedded |
 | **Flash Partition Planner** · MCP | `flash-partitions` | OTA, NVS and filesystem partitions sized, with a partition table | Embedded |
 | **GPIO Restriction Warner** · MCP | `gpio-warner` | risks of using boot straps and special-purpose GPIOs | Embedded, PCB |
 | **Hash & Checksum Quick Tool** · MCP | `hash-checksum` | MD5, SHA and simple checksums of text or hex data | Embedded, Web |
@@ -177,6 +179,7 @@ agents, the most used, and every tool nobody used.
 | **PID Tuning Playground** · MCP | `pid-playground` | a simple plant's step response live as the gains move | Embedded |
 | **Pin Mux Explorer** · MCP | `pin-mux` | a pin's alternate functions on an MCU and the conflicts | Embedded, PCB |
 | **printf Format Checker** · MCP | `printf-checker` | whether a format string matches its argument types | Embedded |
+| **PWM & Dead-time Calculator** · MCP | `pwm-deadtime` | timer PSC/ARR for a PWM frequency and resolution, and the dead-time register for a half bridge | Embedded |
 | **Recipe Builder & Linter** · MCP | `recipe-builder` | a BitBake recipe from source, license, build system and packaging choices, with the common mistakes caught | Embedded |
 | **Register Bitfield Editor** · MCP | `bitfield-editor` | toggle bits of a hex value and read each field's meaning | Embedded |
 | **Sensor Calibration Fit** · MCP | `sensor-calibration` | linear calibration coefficients from two or more readings | Embedded |

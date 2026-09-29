@@ -1,0 +1,230 @@
+{
+  "id": "pwm-deadtime",
+  "version": "1.0",
+  "name": "PWM & Dead-time Calculator",
+  "blurb": "timer PSC/ARR for a PWM frequency and resolution, and the dead-time register for a half bridge",
+  "group": "embedded",
+  "rooms": [
+    "embedded"
+  ],
+  "keywords": [
+    "pwm",
+    "dead time",
+    "deadtime",
+    "dtg",
+    "bdtr",
+    "tim1",
+    "tim8",
+    "advanced timer",
+    "half bridge",
+    "complementary pwm",
+    "prescaler",
+    "psc",
+    "arr",
+    "ccr",
+    "center aligned",
+    "pwm resolution",
+    "shoot-through",
+    "motor control",
+    "gate driver"
+  ],
+  "intro": "Picks PSC and ARR for a PWM frequency with the most duty resolution, gives CCR for the duty, and encodes the dead time into TIMx_BDTR.DTG with its real value, per the STM32 reference manuals' formulas; optionally suggests the dead time from MOSFET and driver delays (Infineon AN2007-04).",
+  "inputs": [
+    {
+      "key": "fclk",
+      "label": "Timer clock",
+      "type": "number",
+      "unit": "Hz",
+      "default": "168M",
+      "help": "TIM1/TIM8 kernel clock: APB2 timer clock (x2 when the APB2 prescaler is not 1). F407: 168 MHz, F103: 72 MHz, G474: 170 MHz."
+    },
+    {
+      "key": "freq",
+      "label": "PWM frequency",
+      "type": "number",
+      "unit": "Hz",
+      "default": "20k"
+    },
+    {
+      "key": "mode",
+      "label": "Alignment",
+      "type": "select",
+      "default": "center",
+      "options": [
+        [
+          "center",
+          "Center-aligned (CMS = 01)"
+        ],
+        [
+          "edge",
+          "Edge-aligned (up-counting)"
+        ]
+      ]
+    },
+    {
+      "key": "duty",
+      "label": "Duty",
+      "type": "number",
+      "unit": "%",
+      "default": "40"
+    },
+    {
+      "key": "deadtime",
+      "label": "Dead time",
+      "type": "number",
+      "unit": "ns",
+      "default": "500"
+    },
+    {
+      "key": "ckd",
+      "label": "Clock division CKD",
+      "type": "select",
+      "default": "auto",
+      "options": [
+        [
+          "auto",
+          "Auto (smallest that reaches the dead time)"
+        ],
+        [
+          "1",
+          "/1"
+        ],
+        [
+          "2",
+          "/2"
+        ],
+        [
+          "4",
+          "/4"
+        ]
+      ]
+    },
+    {
+      "key": "complementary",
+      "label": "Complementary outputs (OCx + OCxN)",
+      "type": "bool",
+      "default": true
+    },
+    {
+      "key": "width",
+      "label": "Counter width",
+      "type": "select",
+      "default": "16",
+      "options": [
+        [
+          "16",
+          "16-bit (TIM1/TIM8)"
+        ],
+        [
+          "32",
+          "32-bit"
+        ]
+      ]
+    },
+    {
+      "key": "psc",
+      "label": "Prescaler (PSC)",
+      "type": "number",
+      "default": "",
+      "required": false,
+      "help": "Empty = the smallest PSC, for the most resolution."
+    },
+    {
+      "key": "suggest",
+      "label": "Suggest dead time from switch timings",
+      "type": "bool",
+      "default": false
+    },
+    {
+      "key": "tdoff",
+      "label": "MOSFET td(off) max",
+      "type": "number",
+      "unit": "ns",
+      "default": "120",
+      "when": {
+        "key": "suggest",
+        "equals": true
+      }
+    },
+    {
+      "key": "tdon",
+      "label": "MOSFET td(on) min",
+      "type": "number",
+      "unit": "ns",
+      "default": "20",
+      "when": {
+        "key": "suggest",
+        "equals": true
+      }
+    },
+    {
+      "key": "tpdmax",
+      "label": "Driver propagation max",
+      "type": "number",
+      "unit": "ns",
+      "default": "300",
+      "when": {
+        "key": "suggest",
+        "equals": true
+      }
+    },
+    {
+      "key": "tpdmin",
+      "label": "Driver propagation min",
+      "type": "number",
+      "unit": "ns",
+      "default": "100",
+      "when": {
+        "key": "suggest",
+        "equals": true
+      }
+    }
+  ],
+  "examples": [
+    {
+      "title": "STM32F407 TIM1, 20 kHz center-aligned motor PWM, 500 ns dead time",
+      "input": {
+        "fclk": "168M",
+        "freq": "20k",
+        "mode": "center",
+        "duty": "40",
+        "deadtime": "500",
+        "ckd": "auto",
+        "complementary": true,
+        "width": "16",
+        "psc": "",
+        "suggest": false
+      }
+    },
+    {
+      "title": "STM32F103 TIM1, 16 kHz edge-aligned, dead time from IR2110 + MOSFET timings",
+      "input": {
+        "fclk": "72M",
+        "freq": "16k",
+        "mode": "edge",
+        "duty": "50",
+        "deadtime": "400",
+        "ckd": "auto",
+        "complementary": true,
+        "width": "16",
+        "psc": "",
+        "suggest": true,
+        "tdoff": "55",
+        "tdon": "15",
+        "tpdmax": "150",
+        "tpdmin": "94"
+      }
+    }
+  ],
+  "usage": "Give fclk (timer clock, Hz), freq (Hz), mode (center|edge), duty (%), deadtime (ns), ckd (auto|1|2|4), complementary, width (16|32), optionally psc to fix the prescaler, and suggest with tdoff/tdon/tpdmax/tpdmin (ns) to derive the dead time. Returns PSC, ARR, CCR1, actual frequency and error, duty resolution in bits, DTG and BDTR with the real dead time, high/low-side on times, nearby PSC/ARR alternatives, HAL init code and raw register writes; warnings when a pulse vanishes inside the dead time or the resolution is poor. Use it when setting up half-bridge or motor PWM on an STM32 advanced timer.",
+  "sources": [
+    "ST RM0090 \u00a717.3.10 (PWM mode), \u00a717.3.13 (complementary outputs and dead-time insertion), \u00a717.4.1 (CR1.CKD, CMS), \u00a717.4.18 (TIMx_BDTR.DTG encoding)",
+    "ST RM0008 \u00a714.3.10-14.3.11 and \u00a714.4.18 (STM32F1 TIM1/TIM8, same encoding)",
+    "Infineon AN2007-04, 'How to calculate and minimize the dead time requirement for IGBTs properly' (dead time = ((td_off,max - td_on,min) + (t_pdd,max - t_pdd,min)) x 1.2)"
+  ],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": [
+    "wave"
+  ]
+}
