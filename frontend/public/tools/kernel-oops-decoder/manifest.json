@@ -1,0 +1,139 @@
+{
+ "id": "kernel-oops-decoder",
+ "version": "1.0",
+ "name": "Kernel Oops Decoder",
+ "blurb": "a Linux oops or panic taken apart: the cause, the faulting function, the call trace and the taint flags",
+ "group": "embedded",
+ "layout": "custom",
+ "view": true,
+ "rooms": [
+  "embedded"
+ ],
+ "keywords": [
+  "kernel oops",
+  "kernel panic",
+  "NULL pointer dereference",
+  "Unable to handle kernel paging request",
+  "call trace",
+  "ESR",
+  "ESR_EL1",
+  "data abort",
+  "tainted",
+  "taint flags",
+  "faddr2line",
+  "decode_stacktrace",
+  "BUG:",
+  "WARNING",
+  "soft lockup",
+  "hung task",
+  "general protection fault",
+  "dmesg crash",
+  "arm64 fault"
+ ],
+ "intro": "Reads an oops, BUG, WARNING, lockup or panic as the kernel prints it (ARM, ARM64, x86_64, RISC-V) and says what failed and where: the kind and fault address, the faulting function, the call stack, the registers that hold NULL or the fault address, the arm64 ESR / x86 page fault code / ARM FSR / RISC-V cause decoded bit by bit, the faulting instruction from the Code: line (arm64, ARM) and the taint letters per tainted-kernels.rst.",
+ "inputs": [
+  {
+   "key": "oops",
+   "label": "Oops text",
+   "type": "textarea",
+   "rows": 14,
+   "default": "[   12.438150] mydrv 30a40000.i2c:sensor@48: probing, irq 57\n[   12.445210] Unable to handle kernel NULL pointer dereference at virtual address 0000000000000018\n[   12.454083] Mem abort info:\n[   12.456883]   ESR = 0x0000000096000005\n[   12.460643]   EC = 0x25: DABT (current EL), IL = 32 bits\n[   12.465965]   SET = 0, FnV = 0\n[   12.469025]   EA = 0, S1PTW = 0\n[   12.472176]   FSC = 0x05: level 1 translation fault\n[   12.477063] Data abort info:\n[   12.479949]   ISV = 0, ISS = 0x00000005\n[   12.483791]   CM = 0, WnR = 0\n[   12.486766] user pgtable: 4k pages, 39-bit VAs, pgdp=00000000452d1000\n[   12.493218] [0000000000000018] pgd=0000000000000000, p4d=0000000000000000, pud=0000000000000000\n[   12.501940] Internal error: Oops: 0000000096000005 [#1] PREEMPT SMP\n[   12.508216] Modules linked in: mydrv(O) snd_soc_fsl_sai imx_pcm_dma caam_jr caamhash_desc caamalg_desc crypto_engine rng_core authenc libdes crct10dif_ce fsl_imx8_ddr_perf\n[   12.524033] CPU: 2 PID: 214 Comm: kworker/u8:3 Tainted: G           O       6.1.55-yocto-standard #1\n[   12.533177] Hardware name: NXP i.MX8MPlus EVK board (DT)\n[   12.538500] Workqueue: events_unbound deferred_probe_work_func\n[   12.544341] pstate: 60000005 (nZCv daif -PAN -UAO -TCO -DIT -SSBS BTYPE=--)\n[   12.551316] pc : mydrv_read_config+0x2c/0xa0 [mydrv]\n[   12.556313] lr : mydrv_probe+0x98/0x1f0 [mydrv]\n[   12.560862] sp : ffff80000a2b3b50\n[   12.564173] x29: ffff80000a2b3b50 x28: 0000000000000000 x27: ffff0000c0a1e010\n[   12.571324] x26: ffff800009a61000 x25: 0000000000000000 x24: ffff0000c2ab4c80\n[   12.578475] x23: ffff800009e0e2a8 x22: ffff0000c1f3a000 x21: ffff0000c1f3a0c0\n[   12.585626] x20: ffff0000c2ab4c80 x19: 0000000000000000 x18: 0000000000000000\n[   12.592777] x17: 0000000000000000 x16: ffff8000080a5c34 x15: 0000000000000000\n[   12.599928] x14: 0000000000000001 x13: 0000000000000000 x12: ffff0000c0e8b9c0\n[   12.607079] x11: 0000000000000040 x10: ffff800009b3e6c8 x9 : ffff800008d25f48\n[   12.614230] x8 : ffff0000c1f3a0e8 x7 : 0000000000000000 x6 : 000000000000003f\n[   12.621381] x5 : 0000000000000040 x4 : 0000000000000000 x3 : 0000000000000000\n[   12.628532] x2 : 0000000000000000 x1 : 0000000000000001 x0 : ffff0000c1f3a000\n[   12.635683] Call trace:\n[   12.638128]  mydrv_read_config+0x2c/0xa0 [mydrv]\n[   12.642762]  mydrv_probe+0x98/0x1f0 [mydrv]\n[   12.646964]  i2c_device_probe+0x10c/0x350\n[   12.650982]  really_probe+0xc0/0x3dc\n[   12.654571]  __driver_probe_device+0x7c/0x160\n[   12.658937]  driver_probe_device+0x40/0x110\n[   12.663129]  __device_attach_driver+0xa4/0x130\n[   12.667581]  bus_for_each_drv+0x70/0xd0\n[   12.671425]  __device_attach+0xa0/0x1b0\n[   12.675269]  device_initial_probe+0x14/0x20\n[   12.679462]  bus_probe_device+0x9c/0xa4\n[   12.683306]  deferred_probe_work_func+0x88/0xc0\n[   12.687844]  process_one_work+0x1d0/0x320\n[   12.691862]  worker_thread+0x70/0x440\n[   12.695533]  kthread+0x10c/0x110\n[   12.698770]  ret_from_fork+0x10/0x20\n[   12.702352] Code: f9400fe0 aa0103f4 f9404c13 52800021 (b9401a60) \n[   12.708454] ---[ end trace 0000000000000000 ]---",
+   "help": "dmesg, serial console or journal text; timestamps and syslog prefixes are fine."
+  },
+  {
+   "key": "arch",
+   "label": "Architecture",
+   "type": "select",
+   "default": "auto",
+   "options": [
+    [
+     "auto",
+     "Auto-detect"
+    ],
+    [
+     "arm64",
+     "ARM64 (AArch64)"
+    ],
+    [
+     "arm",
+     "ARM (32-bit)"
+    ],
+    [
+     "x86_64",
+     "x86_64"
+    ],
+    [
+     "riscv",
+     "RISC-V"
+    ]
+   ]
+  },
+  {
+   "key": "code",
+   "label": "Fault code override (hex)",
+   "type": "text",
+   "default": "",
+   "placeholder": "0x96000045",
+   "help": "Decode this ESR / #PF code / FSR / scause instead of the log's value (to see what a bit means)."
+  },
+  {
+   "key": "vmlinux",
+   "label": "vmlinux path",
+   "type": "text",
+   "default": "vmlinux",
+   "help": "Used in the commands."
+  },
+  {
+   "key": "moddir",
+   "label": "Modules directory",
+   "type": "text",
+   "default": "",
+   "placeholder": "path/to/modules",
+   "help": "Where the .ko files with debug info are; used in the commands."
+  },
+  {
+   "key": "cross",
+   "label": "Cross prefix",
+   "type": "text",
+   "default": "auto",
+   "help": "CROSS_COMPILE for the commands: auto from the architecture, none, or e.g. aarch64-poky-linux-."
+  }
+ ],
+ "examples": [
+  {
+   "title": "arm64 i.MX8MP: NULL dereference in an out-of-tree I2C driver's probe",
+   "input": {
+    "oops": "[   12.438150] mydrv 30a40000.i2c:sensor@48: probing, irq 57\n[   12.445210] Unable to handle kernel NULL pointer dereference at virtual address 0000000000000018\n[   12.454083] Mem abort info:\n[   12.456883]   ESR = 0x0000000096000005\n[   12.460643]   EC = 0x25: DABT (current EL), IL = 32 bits\n[   12.465965]   SET = 0, FnV = 0\n[   12.469025]   EA = 0, S1PTW = 0\n[   12.472176]   FSC = 0x05: level 1 translation fault\n[   12.477063] Data abort info:\n[   12.479949]   ISV = 0, ISS = 0x00000005\n[   12.483791]   CM = 0, WnR = 0\n[   12.486766] user pgtable: 4k pages, 39-bit VAs, pgdp=00000000452d1000\n[   12.493218] [0000000000000018] pgd=0000000000000000, p4d=0000000000000000, pud=0000000000000000\n[   12.501940] Internal error: Oops: 0000000096000005 [#1] PREEMPT SMP\n[   12.508216] Modules linked in: mydrv(O) snd_soc_fsl_sai imx_pcm_dma caam_jr caamhash_desc caamalg_desc crypto_engine rng_core authenc libdes crct10dif_ce fsl_imx8_ddr_perf\n[   12.524033] CPU: 2 PID: 214 Comm: kworker/u8:3 Tainted: G           O       6.1.55-yocto-standard #1\n[   12.533177] Hardware name: NXP i.MX8MPlus EVK board (DT)\n[   12.538500] Workqueue: events_unbound deferred_probe_work_func\n[   12.544341] pstate: 60000005 (nZCv daif -PAN -UAO -TCO -DIT -SSBS BTYPE=--)\n[   12.551316] pc : mydrv_read_config+0x2c/0xa0 [mydrv]\n[   12.556313] lr : mydrv_probe+0x98/0x1f0 [mydrv]\n[   12.560862] sp : ffff80000a2b3b50\n[   12.564173] x29: ffff80000a2b3b50 x28: 0000000000000000 x27: ffff0000c0a1e010\n[   12.571324] x26: ffff800009a61000 x25: 0000000000000000 x24: ffff0000c2ab4c80\n[   12.578475] x23: ffff800009e0e2a8 x22: ffff0000c1f3a000 x21: ffff0000c1f3a0c0\n[   12.585626] x20: ffff0000c2ab4c80 x19: 0000000000000000 x18: 0000000000000000\n[   12.592777] x17: 0000000000000000 x16: ffff8000080a5c34 x15: 0000000000000000\n[   12.599928] x14: 0000000000000001 x13: 0000000000000000 x12: ffff0000c0e8b9c0\n[   12.607079] x11: 0000000000000040 x10: ffff800009b3e6c8 x9 : ffff800008d25f48\n[   12.614230] x8 : ffff0000c1f3a0e8 x7 : 0000000000000000 x6 : 000000000000003f\n[   12.621381] x5 : 0000000000000040 x4 : 0000000000000000 x3 : 0000000000000000\n[   12.628532] x2 : 0000000000000000 x1 : 0000000000000001 x0 : ffff0000c1f3a000\n[   12.635683] Call trace:\n[   12.638128]  mydrv_read_config+0x2c/0xa0 [mydrv]\n[   12.642762]  mydrv_probe+0x98/0x1f0 [mydrv]\n[   12.646964]  i2c_device_probe+0x10c/0x350\n[   12.650982]  really_probe+0xc0/0x3dc\n[   12.654571]  __driver_probe_device+0x7c/0x160\n[   12.658937]  driver_probe_device+0x40/0x110\n[   12.663129]  __device_attach_driver+0xa4/0x130\n[   12.667581]  bus_for_each_drv+0x70/0xd0\n[   12.671425]  __device_attach+0xa0/0x1b0\n[   12.675269]  device_initial_probe+0x14/0x20\n[   12.679462]  bus_probe_device+0x9c/0xa4\n[   12.683306]  deferred_probe_work_func+0x88/0xc0\n[   12.687844]  process_one_work+0x1d0/0x320\n[   12.691862]  worker_thread+0x70/0x440\n[   12.695533]  kthread+0x10c/0x110\n[   12.698770]  ret_from_fork+0x10/0x20\n[   12.702352] Code: f9400fe0 aa0103f4 f9404c13 52800021 (b9401a60) \n[   12.708454] ---[ end trace 0000000000000000 ]---",
+    "arch": "auto",
+    "code": "",
+    "vmlinux": "vmlinux",
+    "moddir": "",
+    "cross": "aarch64-poky-linux-"
+   }
+  },
+  {
+   "title": "x86_64: general protection fault on list poison (use after list_del)",
+   "input": {
+    "oops": "[ 8123.401122] general protection fault, probably for non-canonical address 0xdead000000000108: 0000 [#1] PREEMPT SMP NOPTI\n[ 8123.401130] CPU: 3 PID: 1187 Comm: kworker/3:2 Tainted: G        W  OE      6.5.0-28-generic #29~22.04.1-Ubuntu\n[ 8123.401135] Hardware name: Dell Inc. OptiPlex 7070/0YNVJG, BIOS 1.22.0 03/14/2023\n[ 8123.401137] Workqueue: events acq_rx_work [acqdrv]\n[ 8123.401145] RIP: 0010:acq_buf_release+0x2b/0x90 [acqdrv]\n[ 8123.401152] Code: 0f 1f 44 00 00 55 48 89 e5 53 48 89 fb 48 8b 47 08 48 8b 57 10 <48> 89 50 08 48 89 02 48 b8 00 01 00 00 00 00 ad de 48 89 43 08\n[ 8123.401156] RSP: 0018:ffffb3c2c1a7fdc8 EFLAGS: 00010246\n[ 8123.401160] RAX: dead000000000100 RBX: ffff9e4a8b6f3c00 RCX: 0000000000000000\n[ 8123.401162] RDX: dead000000000122 RSI: 0000000000000246 RDI: ffff9e4a8b6f3c00\n[ 8123.401164] RBP: ffffb3c2c1a7fdd8 R08: 0000000000000000 R09: ffffb3c2c1a7fcd0\n[ 8123.401166] R10: 0000000000000001 R11: 0000000000000000 R12: ffff9e4a8b6f3c00\n[ 8123.401168] R13: ffff9e4a84d21000 R14: ffff9e4a84d210c8 R15: ffff9e4a8b6f3c28\n[ 8123.401170] FS:  0000000000000000(0000) GS:ffff9e51df6c0000(0000) knlGS:0000000000000000\n[ 8123.401173] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033\n[ 8123.401175] CR2: 00007f3a5c0021f8 CR3: 0000000160a10005 CR4: 00000000003706e0\n[ 8123.401177] Call Trace:\n[ 8123.401179]  <TASK>\n[ 8123.401181]  ? show_regs+0x6d/0x80\n[ 8123.401187]  ? die_addr+0x37/0xa0\n[ 8123.401191]  ? exc_general_protection+0x1db/0x480\n[ 8123.401197]  ? asm_exc_general_protection+0x27/0x30\n[ 8123.401201]  ? acq_buf_release+0x2b/0x90 [acqdrv]\n[ 8123.401208]  acq_rx_complete+0x5e/0x120 [acqdrv]\n[ 8123.401214]  acq_rx_work+0x9c/0x1b0 [acqdrv]\n[ 8123.401219]  process_one_work+0x223/0x440\n[ 8123.401224]  worker_thread+0x4d/0x3f0\n[ 8123.401228]  ? __pfx_worker_thread+0x10/0x10\n[ 8123.401231]  kthread+0xf2/0x120\n[ 8123.401235]  ? __pfx_kthread+0x10/0x10\n[ 8123.401238]  ret_from_fork+0x47/0x70\n[ 8123.401241]  ? __pfx_kthread+0x10/0x10\n[ 8123.401244]  ret_from_fork_asm+0x1b/0x30\n[ 8123.401248]  </TASK>\n[ 8123.401249] Modules linked in: acqdrv(OE) snd_hda_codec_realtek snd_hda_intel i915 drm_buddy e1000e xhci_pci\n[ 8123.401290] ---[ end trace 0000000000000000 ]---",
+    "arch": "auto",
+    "code": "",
+    "vmlinux": "vmlinux",
+    "moddir": "/lib/modules/6.5.0-28-generic/updates",
+    "cross": "auto"
+   }
+  }
+ ],
+ "usage": "Give oops = the kernel's text (from the first report line through 'end trace'); arch = auto unless detection is wrong; code = a hex ESR/#PF/FSR/scause to decode instead of the log's. It returns the kind, faulting function, fault address, access type, CPU/PID/comm, kernel version, the call stack table (faulting frame first, unreliable and fault-path frames marked), the registers holding NULL / the fault address / the base of the faulting access, the fault syndrome fields, the taint flags, and texts: Commands (decode_stacktrace.sh, faddr2line, gdb, decodecode), Summary and the decoded Code: line. Use it to triage a crash log before opening the source.",
+ "sources": [
+  "Linux Documentation/admin-guide/tainted-kernels.rst (taint letters and bits)",
+  "Linux Documentation/admin-guide/bug-hunting.rst and scripts/decode_stacktrace.sh, scripts/faddr2line, scripts/decodecode",
+  "Arm Architecture Reference Manual for A-profile, ESR_EL1 (EC, ISS for data/instruction aborts, DFSC/IFSC); arch/arm64/include/asm/esr.h, brk-imm.h; esr_class_str[] in arch/arm64/kernel/traps.c",
+  "Arm ARM A64 load/store encodings (LDR/STR immediate, LDUR, LDP/STP) for the Code: line",
+  "arch/x86/include/asm/trap_pf.h (page fault error code bits)",
+  "arch/arm/mm/fsr-2level.c fsr_info[] (ARM short-descriptor FSR)",
+  "RISC-V Privileged Architecture v1.12, Table 4.2 (scause exception codes)"
+ ],
+ "agentOmit": [
+  "draw"
+ ]
+}

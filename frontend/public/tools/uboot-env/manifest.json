@@ -1,0 +1,210 @@
+{
+ "id": "uboot-env",
+ "version": "1.0",
+ "name": "U-Boot Env & bootargs Builder",
+ "blurb": "bootcmd and kernel bootargs built and explained, and the CRC'd environment image made",
+ "group": "embedded",
+ "rooms": [
+  "embedded"
+ ],
+ "layout": "custom",
+ "view": true,
+ "keywords": [
+  "u-boot",
+  "uboot",
+  "printenv",
+  "fw_printenv",
+  "fw_setenv",
+  "bootcmd",
+  "bootargs",
+  "kernel command line",
+  "cmdline",
+  "mkenvimage",
+  "uboot.env",
+  "fw_env.config",
+  "libubootenv",
+  "env crc",
+  "redundant environment",
+  "booti bootz bootm",
+  "load address overlap",
+  "fdt_addr",
+  "rootwait",
+  "rauc.slot"
+ ],
+ "intro": "Runs a pasted printenv the way U-Boot's shell would (run, setenv, if/else, &&/||, test, setexpr, loads, booti/bootz/bootm) and shows the boot path, the kernel command line argument by argument with where each one comes from, undefined variables, and the load addresses against the image sizes (overlaps, booti relocation, zImage decompression). It also builds the environment image as mkenvimage does (zlib CRC32 over the data area, 0xff padding) and the fw_env.config line.",
+ "inputs": [
+  {
+   "key": "env",
+   "label": "printenv / fw_printenv",
+   "type": "textarea",
+   "rows": 14,
+   "default": "baudrate=115200\nboard_name=EVK\nboot_fit=no\nbootcmd=mmc dev ${mmcdev}; if mmc rescan; then if run loadbootscript; then run bootscript; else if run loadimage; then run mmcboot; else run netboot; fi; fi; fi;\nbootdelay=2\nbootscript=echo Running bootscript from mmc ...; source\nconsole=ttymxc1,115200\nethprime=FEC\nfdt_addr=0x43000000\nfdt_high=0xffffffffffffffff\nfdtfile=imx8mm-evk.dtb\nimage=Image\ninitrd_addr=0x43800000\ninitrd_high=0xffffffffffffffff\nip_dyn=yes\njh_clk=\nloadaddr=0x40480000\nloadbootscript=fatload mmc ${mmcdev}:${mmcpart} ${loadaddr} ${script};\nloadfdt=fatload mmc ${mmcdev}:${mmcpart} ${fdt_addr} ${fdtfile}\nloadimage=fatload mmc ${mmcdev}:${mmcpart} ${loadaddr} ${image}\nmmcargs=setenv bootargs ${jh_clk} console=${console} root=${mmcroot} ${optargs}\nmmcautodetect=yes\nmmcboot=echo Booting from mmc ...; run mmcargs; if test ${boot_fit} = yes || test ${boot_fit} = try; then bootm ${loadaddr}; else if run loadfdt; then booti ${loadaddr} - ${fdt_addr}; else echo WARN: Cannot load the DT; fi; fi;\nmmcdev=1\nmmcpart=1\nmmcroot=/dev/mmcblk1p2 rootwait rw\nnetargs=setenv bootargs ${jh_clk} console=${console} root=/dev/nfs ip=dhcp nfsroot=${serverip}:${nfsroot},v3,tcp\nnetboot=echo Booting from net ...; run netargs; if test ${ip_dyn} = yes; then setenv get_cmd dhcp; else setenv get_cmd tftp; fi; ${get_cmd} ${loadaddr} ${image}; if test ${boot_fit} = yes || test ${boot_fit} = try; then bootm ${loadaddr}; else if ${get_cmd} ${fdt_addr} ${fdtfile}; then booti ${loadaddr} - ${fdt_addr}; else echo WARN: Cannot load the DT; fi; fi;\nnfsroot=/srv/nfs/imx8mm\nscript=boot.scr\nserial#=0b1a2c3d4e5f6071\nsoc_type=imx8mm\nEnvironment size: 1622/16380 bytes",
+   "help": "One name=value per line; U-Boot prompts and the 'Environment size' line are fine."
+  },
+  {
+   "key": "entry",
+   "label": "Script to run",
+   "type": "text",
+   "default": "bootcmd",
+   "help": "Usually bootcmd; any script variable (netboot, bootcmd_mfg) to follow that path."
+  },
+  {
+   "key": "picks",
+   "label": "Branch picks",
+   "type": "text",
+   "default": "",
+   "placeholder": "bootcmd#2=then, mmcboot#1=else",
+   "help": "Override an if: <variable>#<n-th if>=then|elifN|else."
+  },
+  {
+   "key": "arch",
+   "label": "Architecture",
+   "type": "select",
+   "default": "auto",
+   "options": [
+    [
+     "auto",
+     "Auto (from booti / bootz)"
+    ],
+    [
+     "arm64",
+     "arm64 (booti)"
+    ],
+    [
+     "arm",
+     "arm 32-bit (bootz)"
+    ],
+    [
+     "riscv",
+     "RISC-V"
+    ]
+   ]
+  },
+  {
+   "key": "ram_base",
+   "label": "RAM start",
+   "type": "text",
+   "default": "0x40000000"
+  },
+  {
+   "key": "ram_size",
+   "label": "RAM size",
+   "type": "text",
+   "default": "2G"
+  },
+  {
+   "key": "kernel_size",
+   "label": "Kernel image size",
+   "type": "text",
+   "default": "28M",
+   "help": "Image / zImage / FIT as loaded; for arm64 the header's image_size."
+  },
+  {
+   "key": "fdt_size",
+   "label": "DT size",
+   "type": "text",
+   "default": "64K"
+  },
+  {
+   "key": "initrd_size",
+   "label": "initrd size",
+   "type": "text",
+   "default": "0"
+  },
+  {
+   "key": "env_size",
+   "label": "Env size",
+   "type": "text",
+   "default": "0x4000",
+   "help": "CONFIG_ENV_SIZE"
+  },
+  {
+   "key": "redundant",
+   "label": "Redundant environment",
+   "type": "bool",
+   "default": false
+  },
+  {
+   "key": "env_dev",
+   "label": "Env device (Linux)",
+   "type": "text",
+   "default": "/dev/mmcblk2"
+  },
+  {
+   "key": "env_offset",
+   "label": "Env offset",
+   "type": "text",
+   "default": "0x400000"
+  },
+  {
+   "key": "env_offset2",
+   "label": "Redundant copy offset",
+   "type": "text",
+   "default": "0x404000",
+   "when": {
+    "key": "redundant",
+    "equals": true
+   }
+  },
+  {
+   "key": "env_sector",
+   "label": "Erase sector (MTD)",
+   "type": "text",
+   "default": "",
+   "placeholder": "0x10000"
+  }
+ ],
+ "examples": [
+  {
+   "title": "i.MX8M Mini EVK: eMMC boot with booti, an undefined ${optargs}",
+   "input": {
+    "env": "baudrate=115200\nboard_name=EVK\nboot_fit=no\nbootcmd=mmc dev ${mmcdev}; if mmc rescan; then if run loadbootscript; then run bootscript; else if run loadimage; then run mmcboot; else run netboot; fi; fi; fi;\nbootdelay=2\nbootscript=echo Running bootscript from mmc ...; source\nconsole=ttymxc1,115200\nethprime=FEC\nfdt_addr=0x43000000\nfdt_high=0xffffffffffffffff\nfdtfile=imx8mm-evk.dtb\nimage=Image\ninitrd_addr=0x43800000\ninitrd_high=0xffffffffffffffff\nip_dyn=yes\njh_clk=\nloadaddr=0x40480000\nloadbootscript=fatload mmc ${mmcdev}:${mmcpart} ${loadaddr} ${script};\nloadfdt=fatload mmc ${mmcdev}:${mmcpart} ${fdt_addr} ${fdtfile}\nloadimage=fatload mmc ${mmcdev}:${mmcpart} ${loadaddr} ${image}\nmmcargs=setenv bootargs ${jh_clk} console=${console} root=${mmcroot} ${optargs}\nmmcautodetect=yes\nmmcboot=echo Booting from mmc ...; run mmcargs; if test ${boot_fit} = yes || test ${boot_fit} = try; then bootm ${loadaddr}; else if run loadfdt; then booti ${loadaddr} - ${fdt_addr}; else echo WARN: Cannot load the DT; fi; fi;\nmmcdev=1\nmmcpart=1\nmmcroot=/dev/mmcblk1p2 rootwait rw\nnetargs=setenv bootargs ${jh_clk} console=${console} root=/dev/nfs ip=dhcp nfsroot=${serverip}:${nfsroot},v3,tcp\nnetboot=echo Booting from net ...; run netargs; if test ${ip_dyn} = yes; then setenv get_cmd dhcp; else setenv get_cmd tftp; fi; ${get_cmd} ${loadaddr} ${image}; if test ${boot_fit} = yes || test ${boot_fit} = try; then bootm ${loadaddr}; else if ${get_cmd} ${fdt_addr} ${fdtfile}; then booti ${loadaddr} - ${fdt_addr}; else echo WARN: Cannot load the DT; fi; fi;\nnfsroot=/srv/nfs/imx8mm\nscript=boot.scr\nserial#=0b1a2c3d4e5f6071\nsoc_type=imx8mm\nEnvironment size: 1622/16380 bytes",
+    "entry": "bootcmd",
+    "picks": "",
+    "arch": "auto",
+    "ram_base": "0x40000000",
+    "ram_size": "2G",
+    "kernel_size": "28M",
+    "fdt_size": "64K",
+    "initrd_size": "0",
+    "env_size": "0x4000",
+    "redundant": false,
+    "env_dev": "/dev/mmcblk2",
+    "env_offset": "0x400000",
+    "env_offset2": "0x404000",
+    "env_sector": ""
+   }
+  },
+  {
+   "title": "i.MX6ULL RAUC A/B with bootz: DTB inside the decompressed kernel, redundant env on SPI-NOR",
+   "input": {
+    "env": "BOOT_A_LEFT=3\nBOOT_B_LEFT=3\nbaudrate=115200\nbootcmd=run rauc_select; run boot_slot\nbootdelay=0\nboot_slot=run loadk && run loadfdt && run setargs && bootz ${kernel_addr_r} - ${fdt_addr_r}\nfdt_addr_r=0x81000000\nfdt_high=0xffffffff\nfdtfile=imx6ull-gateway.dtb\nkernel_addr_r=0x80800000\nloadfdt=ext4load mmc 1:${rootpart} ${fdt_addr_r} /boot/${fdtfile}\nloadk=ext4load mmc 1:${rootpart} ${kernel_addr_r} /boot/zImage\nramdisk_addr_r=0x83100000\nrauc_select=if test ${BOOT_A_LEFT} -gt 0; then setexpr BOOT_A_LEFT ${BOOT_A_LEFT} - 1; setenv rauc_slot A; setenv rootpart 2; elif test ${BOOT_B_LEFT} -gt 0; then setexpr BOOT_B_LEFT ${BOOT_B_LEFT} - 1; setenv rauc_slot B; setenv rootpart 3; else echo No bootable slot; reset; fi; saveenv\nsetargs=setenv bootargs console=ttymxc0,115200 root=/dev/mmcblk1p${rootpart} rootfstype=ext4 ro rauc.slot=${rauc_slot} panic=5 quiet loglevel=7\nsoc_type=imx6ull",
+    "entry": "bootcmd",
+    "picks": "",
+    "arch": "auto",
+    "ram_base": "0x80000000",
+    "ram_size": "512M",
+    "kernel_size": "7M",
+    "fdt_size": "48K",
+    "initrd_size": "0",
+    "env_size": "0x2000",
+    "redundant": true,
+    "env_dev": "/dev/mtd2",
+    "env_offset": "0x0",
+    "env_offset2": "0x10000",
+    "env_sector": "0x10000"
+   }
+  }
+ ],
+ "usage": "Give env (printenv or fw_printenv text), optionally entry (the script to follow, default bootcmd) and picks to force if-branches ('mmcboot#1=else'), RAM start/size and the kernel/DT/initrd sizes for the load map, and env_size/redundant/env_dev/env_offset for the image. It returns the boot path table (each load, test and the boot command, expanded), the kernel command line with each argument's meaning and source variable, the load map with overlaps, undefined variables, the env CRC32 and used bytes, and texts: the command line, the mkenvimage input with the image's first bytes, and fw_env.config plus matching U-Boot CONFIG_ENV_* lines. Use it to explain or fix a board's boot environment, build bootargs, or make/check a uboot.env image.",
+ "sources": [
+  "U-Boot docs: usage/cmd (run, setenv, test, setexpr, load, booti, bootz, bootm), usage/environment, tools/mkenvimage.c, include/env.h (env_t: crc, flags, data), lib/crc32.c (zlib CRC32)",
+  "U-Boot arch/arm/lib/image.c booti_setup() (2 MiB relocation), boot/image-fdt.c boot_relocate_fdt() (fdt_high)",
+  "Linux Documentation/admin-guide/kernel-parameters.txt, Documentation/arch/arm/booting.rst, Documentation/arch/arm64/booting.rst, init/main.c",
+  "libubootenv fw_env.config format; RAUC documentation (rauc.slot, integration with U-Boot)",
+  "NXP i.MX8M Mini EVK default environment (include/configs/imx8mm_evk.h) for the first example"
+ ],
+ "agentOmit": [
+  "uboot"
+ ]
+}

@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-184 tools. **MCP** marks the ones agents can run with `run_tool`.
+187 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -138,6 +138,7 @@ agents, the most used, and every tool nobody used.
 | **ADC Resolution Calculator** · MCP | `adc-resolution` | LSB size from reference and bits, and the oversampling gain | Embedded |
 | **Battery Life Estimator** · MCP | `battery-life` | run time in days from average current and battery capacity | Embedded, PCB |
 | **BitBake Variable Resolver** · MCP | `bitbake-vars` | the final value of a BitBake variable from its assignments, overrides and :append/:remove, step by step | Embedded |
+| **Boot Log Timeline** · MCP | `boot-log-timeline` | a boot log or systemd-analyze output split into stages on a timeline, slowest first | Embedded |
 | **Bootloader Size Check** · MCP | `bootloader-fit` | whether application and bootloader regions fit | Embedded |
 | **Build Error & QA Explainer** · MCP | `yocto-build-errors` | a failed BitBake task log or QA warning classified, with the cause and the fix | Embedded |
 | **Buildhistory Diff** · MCP | `buildhistory-diff` | package and image size changes between two builds from buildhistory, largest first | Embedded |
@@ -160,6 +161,7 @@ agents, the most used, and every tool nobody used.
 | **I2C Address Map** · MCP | `i2c-address-map` | devices on a bus by address, with conflicts and alternative addresses | Embedded, PCB |
 | **IEEE754 Float Inspector** · MCP | `float-inspector` | sign, exponent and mantissa bits of a float | Embedded |
 | **Interrupt Latency Budget** · MCP | `irq-latency` | CPU load and miss risk from interrupt rates and handler times | Embedded |
+| **Kernel Oops Decoder** · MCP | `kernel-oops-decoder` | a Linux oops or panic taken apart: the cause, the faulting function, the call trace and the taint flags | Embedded |
 | **Layer & Release Map** · MCP | `layer-release-map` | Yocto releases with their LTS and end-of-life dates, and a bblayers stack checked for compatibility | Embedded |
 | **Linker Script Helper** · MCP | `linker-script` | a linker script from sections and memory regions in a form | Embedded |
 | **Linux GPIO Number Converter** · MCP | `linux-gpio-number` | a SoC pin name to its gpiochip, line offset, legacy sysfs number and libgpiod commands | Embedded |
@@ -183,6 +185,7 @@ agents, the most used, and every tool nobody used.
 | **Stepper Motor Calculator** · MCP | `stepper-calc` | pulse frequency and torque from step angle, microstepping and speed | Embedded, 3D |
 | **Struct Packing Visualizer** · MCP | `struct-packing` | alignment of struct members and the padding bytes wasted | Embedded |
 | **Task Timing Planner** · MCP | `task-timing` | scheduling conflicts of periodic tasks from period and duration | Embedded |
+| **U-Boot Env & bootargs Builder** · MCP | `uboot-env` | bootcmd and kernel bootargs built and explained, and the CRC'd environment image made | Embedded |
 | **Units & Numbers** · MCP | `units` | every engineering unit (pressure, torque, dBm, AWG, °F…), hex and binary, UART baud and timer PSC/ARR | Embedded, PCB, 3D |
 | **Watchdog Planner** · MCP | `watchdog-planner` | a safe watchdog period and feed points from the longest task | Embedded |
 
