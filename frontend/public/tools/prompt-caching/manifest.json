@@ -3,7 +3,7 @@
   "name": "Prompt Caching Planner",
   "blurb": "a prompt's parts ordered for provider prompt caching, with the cache breakpoints and the saving per call",
   "group": "ai",
-  "rooms": ["web", "embedded", "mobile", "pcb", "cad"],
+  "rooms": ["ai"],
   "keywords": ["prompt caching", "cache_control", "cache breakpoint", "ephemeral", "cache hit", "cache miss", "prefix cache", "ttl", "5 minute cache", "1 hour cache", "cache read", "cache write", "context caching", "openai prompt caching", "gemini context caching", "prompt order", "prompt layout", "cache savings", "anthropic"],
   "intro": "Lays a prompt out as parts from stable to volatile, places the cache breakpoints, replays a trace of calls against the provider's caching rules (Anthropic cache_control breakpoints, OpenAI automatic prefix caching, Gemini explicit context caching) and says which parts are read from cache, written or re-sent, and what that saves per call and per month. Rules and prices are a dated snapshot (2026-09): check them against the provider's documentation.",
   "inputs": [

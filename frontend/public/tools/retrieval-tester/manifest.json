@@ -4,13 +4,7 @@
  "name": "Retrieval Tester",
  "blurb": "which chunks of your documents a query retrieves, ranked by BM25, with the matching words shown",
  "group": "ai",
- "rooms": [
-  "web",
-  "embedded",
-  "mobile",
-  "pcb",
-  "cad"
- ],
+ "rooms": ["ai"],
  "keywords": [
   "rag",
   "retrieval",

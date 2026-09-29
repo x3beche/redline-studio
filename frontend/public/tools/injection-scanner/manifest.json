@@ -4,13 +4,7 @@
  "name": "Prompt Injection Scanner",
  "blurb": "where untrusted text enters a prompt, what could leak, and the defenses in place, with a probe list",
  "group": "ai",
- "rooms": [
-  "web",
-  "embedded",
-  "mobile",
-  "pcb",
-  "cad"
- ],
+ "rooms": ["ai"],
  "keywords": [
   "prompt injection",
   "indirect prompt injection",

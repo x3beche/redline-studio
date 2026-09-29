@@ -4,13 +4,7 @@
   "name": "CLAUDE.md / AGENTS.md Linter",
   "blurb": "an agent instruction file checked for contradictions, bloat, vague rules and stale paths",
   "group": "ai",
-  "rooms": [
-    "web",
-    "embedded",
-    "mobile",
-    "pcb",
-    "cad"
-  ],
+  "rooms": ["ai"],
   "keywords": [
     "CLAUDE.md",
     "AGENTS.md",

@@ -4,13 +4,7 @@
  "name": "Fine-tune Dataset Validator",
  "blurb": "a chat-format JSONL training set checked for format errors, duplicates, length and balance",
  "group": "ai",
- "rooms": [
-  "web",
-  "embedded",
-  "mobile",
-  "pcb",
-  "cad"
- ],
+ "rooms": ["ai"],
  "keywords": [
   "fine-tuning",
   "fine tune",

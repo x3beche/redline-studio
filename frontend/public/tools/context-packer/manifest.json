@@ -3,13 +3,7 @@
   "name": "Context Packer",
   "blurb": "pack code, logs and notes into one well-built prompt",
   "group": "ai",
-  "rooms": [
-    "web",
-    "embedded",
-    "mobile",
-    "pcb",
-    "cad"
-  ],
+  "rooms": ["ai"],
   "keywords": [
     "prompt",
     "context",

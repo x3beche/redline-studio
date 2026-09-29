@@ -3,10 +3,7 @@
   "name": "Data Digest",
   "blurb": "profile a large CSV or JSON into a compact brief for an LLM",
   "group": "ai",
-  "rooms": [
-    "web",
-    "embedded"
-  ],
+  "rooms": ["ai"],
   "keywords": [
     "csv",
     "json",

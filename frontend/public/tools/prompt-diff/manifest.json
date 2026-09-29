@@ -4,13 +4,7 @@
   "name": "Prompt Diff & History",
   "blurb": "two versions of a prompt compared word by word with the token change, and versions kept per project",
   "group": "ai",
-  "rooms": [
-    "web",
-    "embedded",
-    "mobile",
-    "pcb",
-    "cad"
-  ],
+  "rooms": ["ai"],
   "keywords": [
     "prompt diff",
     "diff",

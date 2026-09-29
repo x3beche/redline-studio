@@ -4,13 +4,7 @@
  "name": "Few-shot Example Curator",
  "blurb": "few-shot examples balanced by label, deduplicated, ordered and fitted to a token budget",
  "group": "ai",
- "rooms": [
-  "web",
-  "embedded",
-  "mobile",
-  "pcb",
-  "cad"
- ],
+ "rooms": ["ai"],
  "keywords": [
   "few-shot",
   "few shot examples",

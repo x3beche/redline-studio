@@ -4,13 +4,7 @@
   "name": "Subagent & Hooks Builder",
   "blurb": "Claude Code subagent files and settings.json hooks built from forms, with their events and matchers drawn",
   "group": "ai",
-  "rooms": [
-    "web",
-    "embedded",
-    "mobile",
-    "pcb",
-    "cad"
-  ],
+  "rooms": ["ai"],
   "keywords": [
     "claude code hooks",
     "settings.json",

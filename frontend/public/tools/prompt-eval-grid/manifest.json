@@ -4,13 +4,7 @@
  "name": "Prompt Eval Grid",
  "blurb": "test inputs run against prompt variants on a real model, each answer scored by rules or a judge, in one grid",
  "group": "ai",
- "rooms": [
-  "web",
-  "embedded",
-  "mobile",
-  "pcb",
-  "cad"
- ],
+ "rooms": ["ai"],
  "keywords": [
   "prompt evaluation",
   "eval",

@@ -4,13 +4,7 @@
  "name": "PII & Secret Redactor",
  "blurb": "personal data and secrets found in text and replaced with placeholders before it goes to a model, with a map to put them back",
  "group": "ai",
- "rooms": [
-  "web",
-  "embedded",
-  "mobile",
-  "pcb",
-  "cad"
- ],
+ "rooms": ["ai"],
  "keywords": [
   "pii",
   "redact",

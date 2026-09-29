@@ -4,13 +4,7 @@
  "name": "Sampling Parameters Explorer",
  "blurb": "how temperature, top-p, top-k and penalties reshape a next-token distribution, drawn",
  "group": "ai",
- "rooms": [
-  "web",
-  "embedded",
-  "mobile",
-  "pcb",
-  "cad"
- ],
+ "rooms": ["ai"],
  "keywords": [
   "temperature",
   "top-p",

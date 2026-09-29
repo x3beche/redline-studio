@@ -4,13 +4,7 @@
   "name": "Structured Output Validator",
   "blurb": "a model's JSON answer checked against a schema, broken JSON repaired, and every error shown where it is",
   "group": "ai",
-  "rooms": [
-    "web",
-    "embedded",
-    "mobile",
-    "pcb",
-    "cad"
-  ],
+  "rooms": ["ai"],
   "keywords": [
     "json schema",
     "structured output",

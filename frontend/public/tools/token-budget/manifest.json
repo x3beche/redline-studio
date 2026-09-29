@@ -4,13 +4,7 @@
  "name": "Token Counter & Context Budget",
  "blurb": "tokens in a text counted and fitted against model context windows, with the room left for the answer",
  "group": "ai",
- "rooms": [
-  "web",
-  "embedded",
-  "mobile",
-  "pcb",
-  "cad"
- ],
+ "rooms": ["ai"],
  "keywords": [
   "token counter",
   "token count",

@@ -4,13 +4,7 @@
  "name": "Conversation & Agent Trace Viewer",
  "blurb": "a chat or agent transcript split into turns and tool calls, with tokens per turn and where the context grew",
  "group": "ai",
- "rooms": [
-  "web",
-  "embedded",
-  "mobile",
-  "pcb",
-  "cad"
- ],
+ "rooms": ["ai"],
  "keywords": [
   "trace",
   "transcript",

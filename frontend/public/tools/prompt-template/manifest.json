@@ -4,13 +4,7 @@
   "name": "Prompt Template & Variables",
   "blurb": "a prompt template with {{variables}} filled from a table or CSV, every rendered prompt previewed and missing values caught",
   "group": "ai",
-  "rooms": [
-    "web",
-    "embedded",
-    "mobile",
-    "pcb",
-    "cad"
-  ],
+  "rooms": ["ai"],
   "keywords": [
     "prompt template",
     "template",

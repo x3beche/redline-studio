@@ -4,13 +4,7 @@
   "name": "MCP Server Scaffold",
   "blurb": "an MCP server skeleton in Python or TypeScript from the tools, resources and prompts you describe",
   "group": "ai",
-  "rooms": [
-    "web",
-    "embedded",
-    "mobile",
-    "pcb",
-    "cad"
-  ],
+  "rooms": ["ai"],
   "keywords": [
     "mcp",
     "model context protocol",

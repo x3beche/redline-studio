@@ -4,13 +4,7 @@
   "name": "Skill Builder",
   "blurb": "a Claude Code SKILL.md with its name, description and trigger words, plus the folder layout",
   "group": "ai",
-  "rooms": [
-    "web",
-    "embedded",
-    "mobile",
-    "pcb",
-    "cad"
-  ],
+  "rooms": ["ai"],
   "keywords": [
     "SKILL.md",
     "claude code skill",

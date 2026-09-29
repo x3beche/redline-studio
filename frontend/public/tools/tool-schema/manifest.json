@@ -3,7 +3,7 @@
   "name": "Tool / Function Schema Builder",
   "blurb": "a tool's parameters defined visually and written out as JSON Schema for Anthropic, OpenAI and MCP tool definitions",
   "group": "ai",
-  "rooms": ["web", "embedded", "mobile", "pcb", "cad"],
+  "rooms": ["ai"],
   "keywords": ["tool use", "function calling", "json schema", "input_schema", "parameters", "inputSchema", "mcp tool", "openai function", "anthropic tools", "strict mode", "structured outputs", "additionalProperties", "tool definition", "schema validator", "typescript to json schema", "python to json schema", "lint tool description", "agent tools"],
   "intro": "Builds a tool's parameters as a tree (types, required, descriptions, enums, ranges, patterns), writes the same tool out as an Anthropic tools[] entry, an OpenAI function tool (with strict-mode rewriting) and an MCP tool, validates an example call against it, and lints what makes models call tools badly. Paste an existing JSON Schema or a simple TypeScript or Python signature to start. Provider rules as of 2026-09 - check them against each provider's docs.",
   "inputs": [

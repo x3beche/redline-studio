@@ -4,13 +4,7 @@
   "name": "Prompt Anatomy Builder",
   "blurb": "a prompt split into role, context, task, constraints, examples and output format, with what is missing or unclear flagged",
   "group": "ai",
-  "rooms": [
-    "web",
-    "embedded",
-    "mobile",
-    "pcb",
-    "cad"
-  ],
+  "rooms": ["ai"],
   "keywords": [
     "prompt",
     "prompt engineering",

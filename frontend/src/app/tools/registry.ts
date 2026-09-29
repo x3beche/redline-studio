@@ -30,6 +30,7 @@ export const ROOMS: { id: string; label: string }[] = [
   { id: 'cad', label: '3D' },
   { id: 'web', label: 'Web' },
   { id: 'mobile', label: 'Mobile' },
+  { id: 'ai', label: 'AI' },
   { id: 'analyze', label: 'Analytics' },
 ];
 

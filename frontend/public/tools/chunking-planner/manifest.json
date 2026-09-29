@@ -4,13 +4,7 @@
   "name": "Chunking Planner",
   "blurb": "a document split into chunks by headings, sentences or tokens, with size, overlap and the chunks drawn on the text",
   "group": "ai",
-  "rooms": [
-    "web",
-    "embedded",
-    "mobile",
-    "pcb",
-    "cad"
-  ],
+  "rooms": ["ai"],
   "keywords": [
     "chunking",
     "chunk size",

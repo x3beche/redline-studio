@@ -3,7 +3,7 @@
   "name": "LLM Cost Calculator",
   "blurb": "monthly cost of a model workload from tokens per call, calls per day, caching and batch discounts",
   "group": "ai",
-  "rooms": ["web", "embedded", "mobile", "pcb", "cad"],
+  "rooms": ["ai"],
   "keywords": ["llm cost", "api cost", "token price", "price per million tokens", "MTok", "monthly bill", "budget", "prompt caching", "cache read", "cache write", "batch discount", "batch api", "claude pricing", "openai pricing", "gemini pricing", "deepseek", "openrouter", "model comparison", "cost per call", "break-even"],
   "intro": "Prices one workload (calls per day, input and output tokens per call, the cached share of the input, batch or not) on every model in an editable price table, as input, output, cache-write and cache-read dollars per month, and says at what cache hit rate caching starts to pay. The prices are a dated snapshot (2026-09): check each against the provider's pricing page before quoting a number.",
   "inputs": [

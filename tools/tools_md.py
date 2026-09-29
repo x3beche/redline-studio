@@ -22,7 +22,7 @@ DOC = ROOT / "TOOLS.md"
 GROUPS = [("pcb", "PCB & electronics"), ("embedded", "Embedded"), ("mechanical", "Mechanical & 3D"),
           ("web", "Web & design"), ("mobile", "Mobile"), ("code", "Code & data"), ("ai", "AI & prompts"),
           ("project", "Project")]
-ROOMS = {"pcb": "PCB", "embedded": "Embedded", "cad": "3D", "web": "Web", "mobile": "Mobile",
+ROOMS = {"pcb": "PCB", "embedded": "Embedded", "cad": "3D", "web": "Web", "mobile": "Mobile", "ai": "AI",
          "analyze": "Analytics", "all": "all"}
 
 
