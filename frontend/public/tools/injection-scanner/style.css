@@ -1,0 +1,146 @@
+/* Prompt Injection Scanner: the trust diagram is the interface. */
+:root { --tool-trusted: var(--ok); --tool-private: var(--tool-s3); --tool-semi: var(--warn); --tool-untrusted: var(--danger); --tool-tint: 10%; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --tool-tint: 16%; } }
+:root[data-theme="dark"] { --tool-tint: 16%; }
+:root[data-theme="light"] { --tool-tint: 10%; }
+
+.k-page { padding: 12px 14px 16px; }
+.ij { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 10px; align-items: start; min-width: 0; }
+.ij-main, .ij-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ij-side { position: sticky; top: 10px; max-height: calc(100vh - 20px); }
+.ij-findcard { display: flex; flex-direction: column; min-height: 0; max-height: calc(100vh - 20px); }
+.ij-finds { overflow: auto; min-height: 0; }
+@media (max-width: 1100px) {
+  .ij { display: flex; flex-direction: column; align-items: stretch; }
+  .ij-main, .ij-side { display: contents; }
+  .ij-side { position: static; max-height: none; }
+  .ij-findcard { max-height: none; order: 3; }
+  .ij-summary { order: 1; } .ij-warns { order: 2; } .ij-diacard { order: 2; } .ij-probecard { order: 4; } .ij-edit { order: 5; } .ij-notes { order: 6; } .ij-out { order: 7; }
+}
+.ij-card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.ij-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; padding: 7px 10px; border-bottom: 1px solid var(--line-soft); }
+.ij-head h2 { margin: 0; font-size: 12.5px; font-weight: 600; display: inline; }
+.ij-sub { font-size: 11.5px; color: var(--ink-soft); }
+.ij-lab { font-size: 11.5px; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 6px; }
+.ij-empty { padding: 10px; color: var(--ink-soft); font-size: 12px; }
+.ij-in { min-width: 0; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); color: var(--ink); font-size: 12px; max-width: 240px; }
+.k-btn:disabled { opacity: .5; cursor: default; }
+.ij-legend { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--ink-soft); }
+.ij-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.ij-legend .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.sw.t-trusted { background: var(--tool-trusted); } .sw.t-private { background: var(--tool-private); } .sw.t-semi { background: var(--tool-semi); } .sw.t-untrusted { background: var(--tool-untrusted); }
+.sw.risk { height: 3px; background: var(--danger); }
+
+/* summary strip */
+.ij-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.ij-stat { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; min-width: 0; }
+.ij-stat span { display: block; font-size: 11px; color: var(--ink-soft); }
+.ij-stat b { display: block; font: 500 15px "IBM Plex Mono", ui-monospace, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ij-stat small { display: block; font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ij-stat.tone-bad { border-left: 3px solid var(--danger); } .ij-stat.tone-bad b { color: var(--danger); }
+.ij-stat.tone-warn { border-left: 3px solid var(--warn); } .ij-stat.tone-ok { border-left: 3px solid var(--ok); }
+.ij-warns:empty { display: none; }
+.ij-warns { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 6px; padding: 6px 10px; background: var(--surface); font-size: 12px; }
+.ij-notes { color: var(--ink-soft); font-size: 12px; } .ij-notes div + div { margin-top: 3px; }
+
+/* diagram */
+.ij-diawrap { position: relative; padding: 10px; }
+.ij-arrows { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 1; }
+.ij-diagram { display: grid; grid-template-columns: minmax(0, 1fr) 120px minmax(170px, 230px); gap: 0 44px; align-items: center; position: relative; }
+@media (max-width: 760px) { .ij-diagram { grid-template-columns: minmax(0, 1fr); gap: 10px; } }
+.ij-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ij-colp, .ij-colc { align-self: start; }
+.ij-coltitle { font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.ij-layer { border: 1px solid var(--line); border-left: 4px solid var(--tool-trusted); border-radius: 5px; background: var(--sunken); min-width: 0; position: relative; z-index: 2; }
+.ij-layer.z-private { border-left-color: var(--tool-private); }
+.ij-layer.z-semi { border-left-color: var(--tool-semi); }
+.ij-layer.z-untrusted { border-left-color: var(--tool-untrusted); }
+.ij-lhead { display: flex; align-items: center; gap: 8px; padding: 3px 8px; border-bottom: 1px solid var(--line-soft); font-size: 11.5px; }
+.ij-lhead b { text-transform: uppercase; font-size: 10.5px; letter-spacing: .05em; }
+.ij-zone { margin-left: auto; color: var(--ink-soft); font-size: 10.5px; }
+.ij-lines { padding: 4px 8px 6px; font: 11.5px/1.55 "IBM Plex Mono", ui-monospace, monospace; }
+.ij-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.55em; }
+.ij-line.tag .ij-t { color: var(--accent); }
+.ij-line.secret .ij-badge { margin-right: 5px; }
+.ij-line.secret { background: color-mix(in srgb, var(--danger) var(--tool-tint), transparent); }
+.ij-t { color: var(--ink-soft); white-space: pre; }
+.ij-slot { display: inline-flex; align-items: center; gap: 4px; padding: 0 5px; margin: 1px 0; border-radius: 4px; border: 1px solid; cursor: pointer; font: 600 11.5px "IBM Plex Mono", ui-monospace, monospace; vertical-align: middle; }
+.ij-slot small { font: 400 10px "IBM Plex Sans", sans-serif; opacity: .85; }
+.ij-slot.t-trusted { color: var(--tool-trusted); border-color: var(--tool-trusted); background: color-mix(in srgb, var(--tool-trusted) var(--tool-tint), transparent); }
+.ij-slot.t-private { color: var(--tool-private); border-color: var(--tool-private); background: color-mix(in srgb, var(--tool-private) var(--tool-tint), transparent); }
+.ij-slot.t-semi { color: var(--tool-semi); border-color: var(--tool-semi); background: color-mix(in srgb, var(--tool-semi) var(--tool-tint), transparent); }
+.ij-slot.t-untrusted { color: var(--tool-untrusted); border-color: var(--tool-untrusted); background: color-mix(in srgb, var(--tool-untrusted) var(--tool-tint), transparent); }
+.ij-slot:not(.delim) { border-style: dashed; }
+.ij-slot:hover { filter: brightness(1.1); }
+
+.ij-model { border: 2px solid var(--ink-soft); border-radius: 8px; padding: 10px 8px; text-align: center; display: flex; flex-direction: column; gap: 2px; background: var(--surface); font-size: 11px; color: var(--ink-soft); position: relative; z-index: 2; }
+.ij-model b { font-size: 14px; color: var(--ink); }
+.ij-cap { border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; background: var(--sunken); text-align: left; cursor: pointer; font-size: 12px; min-width: 0; position: relative; z-index: 2; }
+.ij-cap.priv { cursor: default; border-left: 4px solid var(--tool-private); }
+.ij-cap.risky { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
+.ij-cap:hover:not(.priv) { border-color: var(--ink-soft); }
+.ij-caph { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ij-caph b { font: 600 12px "IBM Plex Mono", ui-monospace, monospace; overflow-wrap: anywhere; }
+.ij-capb { color: var(--ink-soft); font-size: 11px; }
+.ij-appr { font-size: 10.5px; padding: 0 5px; border-radius: 8px; border: 1px solid var(--line); }
+.ij-appr.auto { color: var(--warn); border-color: var(--warn); }
+.ij-appr.confirm { color: var(--ok); border-color: var(--ok); }
+
+.ij-arrow { fill: none; stroke-width: 1.6; opacity: .85; }
+.ij-arrow.in.t-untrusted, .ij-arrow.stub.t-untrusted { stroke: var(--tool-untrusted); }
+.ij-arrow.in.t-semi, .ij-arrow.stub.t-semi { stroke: var(--tool-semi); }
+.ij-arrow.stub.t-private, .ij-arrow.priv { stroke: var(--tool-private); }
+.ij-arrow.stub { stroke-dasharray: 2 3; stroke-width: 1.2; }
+.ij-arrow.out { stroke: var(--ink-soft); stroke-dasharray: 4 3; }
+.ij-arrow.risk { stroke: var(--danger); stroke-width: 2.6; opacity: 1; }
+.ij-ah.in { fill: var(--tool-untrusted); } .ij-ah.out { fill: var(--ink-soft); } .ij-ah.risk { fill: var(--danger); } .ij-ah.priv { fill: var(--tool-private); }
+
+.ij-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; border: 0; font: 600 10.5px "IBM Plex Mono", ui-monospace, monospace; cursor: pointer; color: var(--accent-ink); flex: none; }
+.ij-badge.sev-high { background: var(--danger); } .ij-badge.sev-medium { background: var(--warn); } .ij-badge.sev-low { background: var(--ink-soft); }
+.ij-badge.sel { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+/* findings */
+.ij-find { border-bottom: 1px solid var(--line-soft); border-left: 3px solid transparent; }
+.ij-find.sev-high { border-left-color: var(--danger); } .ij-find.sev-medium { border-left-color: var(--warn); } .ij-find.sev-low { border-left-color: var(--line); }
+.ij-find.sel { background: var(--sunken); }
+.ij-fhead { display: flex; align-items: flex-start; gap: 7px; width: 100%; text-align: left; border: 0; background: none; padding: 6px 9px; cursor: pointer; font-size: 12px; }
+.ij-fhead b { font-weight: 500; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ij-sev { font-size: 10.5px; color: var(--ink-soft); }
+.ij-sev.sev-high { color: var(--danger); } .ij-sev.sev-medium { color: var(--warn); }
+.ij-fbody { padding: 0 10px 9px 33px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.ij-fbody p { margin: 0; }
+.ij-fix { color: var(--ink); }
+.ij-rule { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+
+/* probes */
+.ij-runrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px; }
+.ij-prog { font: 11.5px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); }
+.ij-status { padding: 0 10px 7px; font-size: 11.5px; color: var(--ink-soft); }
+.ij-status.warn { color: var(--warn); } .ij-status.ok { color: var(--ok); }
+.ij-status:empty { display: none; }
+.ij-probes { border-top: 1px solid var(--line-soft); }
+.ij-probe { border-bottom: 1px solid var(--line-soft); }
+.ij-probe:last-child { border-bottom: 0; }
+.ij-phead { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; text-align: left; padding: 5px 10px; cursor: pointer; font-size: 12px; flex-wrap: wrap; }
+.ij-phead code { font-size: 11px; color: var(--ink-soft); }
+.ij-ptitle { flex: 1 1 200px; min-width: 0; }
+.ij-cat { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; padding: 0 6px; border-radius: 3px; background: var(--sunken); border: 1px solid var(--line); min-width: 84px; text-align: center; }
+.ij-pill { font-size: 11px; padding: 0 8px; border-radius: 9px; border: 1px solid var(--line); color: var(--ink-soft); min-width: 70px; text-align: center; }
+.ij-pill.st-pass { color: var(--ok); border-color: var(--ok); }
+.ij-pill.st-fail { color: var(--accent-ink); background: var(--danger); border-color: var(--danger); }
+.ij-pill.st-error { color: var(--warn); border-color: var(--warn); }
+.ij-probe.open { background: var(--sunken); }
+.ij-pbody { padding: 0 10px 9px; display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
+.ij-pre { margin: 0; padding: 6px 8px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 4px; white-space: pre-wrap; word-break: break-word; font-size: 11.5px; max-height: 220px; overflow: auto; }
+.ij-why.st-fail { color: var(--danger); } .ij-why.st-pass { color: var(--ok); }
+.ij-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* edit */
+.ij-edit > summary { cursor: pointer; list-style: revert; }
+.ij-edit[open] > summary { border-bottom: 1px solid var(--line-soft); }
+.ij-editbody .k-form { border: 0; border-radius: 0; }
+@media (max-width: 760px) {
+  .ij-line { white-space: normal; overflow-wrap: anywhere; }
+  .ij-t { white-space: pre-wrap; }
+  .ij-stat small { white-space: normal; }
+}

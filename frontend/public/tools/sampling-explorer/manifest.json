@@ -1,0 +1,210 @@
+{
+ "id": "sampling-explorer",
+ "version": "1.0",
+ "name": "Sampling Parameters Explorer",
+ "blurb": "how temperature, top-p, top-k and penalties reshape a next-token distribution, drawn",
+ "group": "ai",
+ "rooms": [
+  "web",
+  "embedded",
+  "mobile",
+  "pcb",
+  "cad"
+ ],
+ "keywords": [
+  "temperature",
+  "top-p",
+  "top_p",
+  "nucleus sampling",
+  "top-k",
+  "min-p",
+  "repetition penalty",
+  "presence penalty",
+  "frequency penalty",
+  "logits",
+  "logprobs",
+  "softmax",
+  "entropy",
+  "perplexity",
+  "decoding",
+  "sampler order",
+  "llama.cpp sampling",
+  "vllm sampling params",
+  "greedy decoding",
+  "generation settings"
+ ],
+ "intro": "Takes a next-token logit vector (built-in examples or your own logits/logprobs) and applies penalties, temperature, top-k, top-p and min-p in a chosen order, using the published formulas (CTRL, OpenAI penalties, Holtzman nucleus, min-p paper), then draws N seeded samples from the result.",
+ "inputs": [
+  {
+   "key": "preset",
+   "label": "Distribution",
+   "type": "select",
+   "default": "creative",
+   "options": [
+    [
+     "factual",
+     "Factual answer (capital of Australia)"
+    ],
+    [
+     "creative",
+     "Creative word (a letter smelled of ...)"
+    ],
+    [
+     "code",
+     "Code token (for loop bound)"
+    ],
+    [
+     "custom",
+     "My own logits / logprobs"
+    ]
+   ]
+  },
+  {
+   "key": "logits",
+   "label": "Logits or logprobs",
+   "type": "textarea",
+   "rows": 8,
+   "when": {
+    "key": "preset",
+    "equals": "custom"
+   },
+   "default": "\" Paris\": 18.2\n\" the\": 14.9\n\" a\": 13.1\n\" located\": 12.7\n\" France\": 11.8\n\" Lyon\": 10.4\n\" not\": 10.1\n\" called\": 9.2",
+   "help": "One per line: \"token\": value (quotes keep leading spaces, or write ␣ for a space). Or paste JSON: {token: value}, [{token, logprob}] or an OpenAI logprobs block (top_logprobs)."
+  },
+  {
+   "key": "history",
+   "label": "Context so far (for penalties)",
+   "type": "textarea",
+   "rows": 3,
+   "default": "",
+   "help": "The text already in the context. Candidates found in it are penalised by their count. Empty = the example's own prompt. Or lines token: count."
+  },
+  {
+   "key": "temperature",
+   "label": "Temperature",
+   "type": "number",
+   "default": 0.9,
+   "help": "0 = greedy."
+  },
+  {
+   "key": "topK",
+   "label": "top-k",
+   "type": "number",
+   "default": 40,
+   "help": "0 = off."
+  },
+  {
+   "key": "topP",
+   "label": "top-p",
+   "type": "number",
+   "default": 0.9,
+   "help": "1 = off."
+  },
+  {
+   "key": "minP",
+   "label": "min-p",
+   "type": "number",
+   "default": 0.05,
+   "help": "0 = off; keeps p >= min_p x p_max."
+  },
+  {
+   "key": "presence",
+   "label": "Presence penalty",
+   "type": "number",
+   "default": 0.4
+  },
+  {
+   "key": "frequency",
+   "label": "Frequency penalty",
+   "type": "number",
+   "default": 0.3
+  },
+  {
+   "key": "repetition",
+   "label": "Repetition penalty",
+   "type": "number",
+   "default": 1.0,
+   "help": "1 = off; HF / llama.cpp / vLLM style divisor."
+  },
+  {
+   "key": "order",
+   "label": "Order of operations",
+   "type": "select",
+   "default": "temp-first",
+   "options": [
+    [
+     "temp-first",
+     "penalties, temperature, top-k, top-p, min-p (HF, vLLM)"
+    ],
+    [
+     "temp-last",
+     "penalties, top-k, top-p, min-p, temperature (llama.cpp)"
+    ]
+   ]
+  },
+  {
+   "key": "samples",
+   "label": "Samples to draw",
+   "type": "number",
+   "default": 200
+  },
+  {
+   "key": "seed",
+   "label": "Seed",
+   "type": "number",
+   "default": 42
+  }
+ ],
+ "examples": [
+  {
+   "title": "Factual answer at llama.cpp defaults: temperature 0.8, top-k 40, top-p 0.95, min-p 0.05, temperature last",
+   "input": {
+    "preset": "factual",
+    "history": "",
+    "temperature": 0.8,
+    "topK": 40,
+    "topP": 0.95,
+    "minP": 0.05,
+    "presence": 0,
+    "frequency": 0,
+    "repetition": 1,
+    "order": "temp-last",
+    "samples": 500,
+    "seed": 7
+   }
+  },
+  {
+   "title": "Code token with a strong repetition penalty: the correct loop bound n gets demoted",
+   "input": {
+    "preset": "code",
+    "history": "",
+    "temperature": 0.7,
+    "topK": 0,
+    "topP": 0.95,
+    "minP": 0,
+    "presence": 0,
+    "frequency": 0,
+    "repetition": 1.5,
+    "order": "temp-first",
+    "samples": 300,
+    "seed": 42
+   }
+  }
+ ],
+ "usage": "Give preset (factual, creative, code, or custom with logits as \"token\": value lines or JSON logprobs), optionally history (context text whose tokens get penalised), temperature, topK (0 off), topP (1 off), minP (0 off), presence, frequency, repetition (1 off), order (temp-first = HF/vLLM, temp-last = llama.cpp), samples and seed. Returns how many tokens survive, the top token and its probability, entropy and effective choices before and after, the mass the filters cut, a per-token table with the stage that cut each token and seeded sample counts, and the settings written for OpenAI, Anthropic, vLLM, llama.cpp and HF. Use it to explain or choose sampling settings; provider defaults are dated and must be verified.",
+ "sources": [
+  "Holtzman et al., 'The Curious Case of Neural Text Degeneration', ICLR 2020 (top-p / nucleus sampling)",
+  "Fan, Lewis, Dauphin, 'Hierarchical Neural Story Generation', ACL 2018 (top-k sampling)",
+  "Nguyen et al., 'Turning Up the Heat: Min-p Sampling for Creative and Coherent LLM Outputs', 2024",
+  "Keskar et al., 'CTRL: A Conditional Transformer Language Model', 2019, sec. 4.1 (repetition penalty); HF transformers RepetitionPenaltyLogitsProcessor",
+  "OpenAI API reference: temperature, top_p, presence_penalty, frequency_penalty and the documented penalty formula",
+  "Anthropic Messages API reference: temperature, top_p, top_k",
+  "vLLM SamplingParams docs; llama.cpp tools/main README and common/arg.cpp (sampler chain defaults) - defaults as of 2026-09, to be verified",
+  "mulberry32 PRNG (Tommy Ettinger, public domain)"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "draw"
+ ]
+}
