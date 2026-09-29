@@ -209,151 +209,136 @@ interface FwData {
                computing a millisecond holds, its peripherals and pins and
                which of them the firmware uses. Every figure says on hover
                where it was read (backend/mcuinfo.py). -->
-          <div class="tcv-scroll tcv-mcu min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
+          <div class="tcv-scroll tcv-mcu min-h-0 flex-1 overflow-y-auto">
             @if (mcu(); as m) {
+              <!-- The chip: its name, then four figures in equal tiles. -->
               <section>
-                <h3 class="tcv-label">{{ 'Chip' | t }}</h3>
-                <div class="tcv-mcu-chip">
-                  <b class="mono" [title]="m.chip.source['name'] ?? ''">{{ m.chip.name ?? '?' }}</b>
-                  @if (m.chip.package) {
-                    <span class="mono truncate" [title]="m.chip.package + '\\n— ' + (m.chip.source['package'] ?? '')">{{ m.chip.package }}</span>
-                  }
+                <div class="tcv-mcu-name">
+                  <b [title]="m.chip.source['name'] ?? ''">{{ m.chip.name ?? '?' }}</b>
+                  @if (m.chip.package) { <span [title]="m.chip.package + '\n— ' + (m.chip.source['package'] ?? '')">{{ chipPackage(m.chip.package) }}</span> }
                 </div>
-                <dl class="tcv-mcu-kv">
-                  <dt>{{ 'Core' | t }}</dt>
-                  <dd [title]="(m.chip.source['core'] ?? '') + '\\n' + (m.chip.source['cores'] ?? '')">
-                    {{ m.chip.core ?? '?' }}@if (m.chip.cores) { · {{ m.chip.cores }} {{ (m.chip.cores === 1 ? 'core' : 'cores') | t }} }@if (m.chip.fpu) { · FPU }
-                  </dd>
-                  <dt>{{ 'Clock' | t }}</dt>
-                  <dd [title]="(m.chip.source['mhz'] ?? '') + '\\n' + (m.chip.source['max_mhz'] ?? '')">
-                    {{ mhz(m.chip.mhz) }}@if (m.chip.max_mhz && m.chip.max_mhz !== m.chip.mhz) {{{ ' ' }}<span class="dim">· {{ 'max' | t }} {{ mhz(m.chip.max_mhz) }}</span> }
-                  </dd>
-                  <dt>{{ 'Flash' | t }}</dt>
-                  <dd [title]="m.chip.source['flash_bytes'] ?? ''">{{ kib(m.chip.flash_bytes) }}</dd>
-                  <dt>RAM</dt>
-                  <dd [title]="m.chip.source['ram_bytes'] ?? ''">{{ kib(m.chip.ram_bytes) }}</dd>
-                  @if (m.chip.volts; as v) {
-                    <dt>{{ 'Supply' | t }}</dt>
-                    <dd [title]="m.chip.source['core'] ?? ''">{{ v[0] }}–{{ v[1] }} V</dd>
-                  }
-                </dl>
+                <div class="tcv-mcu-tiles">
+                  <div [title]="(m.chip.source['mhz'] ?? '') + '\n' + (m.chip.source['max_mhz'] ?? '')">
+                    <span>{{ 'Clock' | t }}</span><b>{{ mhz(m.chip.mhz) }}</b>
+                    <em>@if (m.chip.max_mhz && m.chip.max_mhz !== m.chip.mhz) { {{ 'max' | t }} {{ mhz(m.chip.max_mhz) }} }</em>
+                  </div>
+                  <div [title]="(m.chip.source['core'] ?? '') + '\n' + (m.chip.source['cores'] ?? '')">
+                    <span>{{ 'Cores' | t }}</span><b>{{ m.chip.cores ?? '?' }}</b>
+                    <em>{{ m.chip.core ?? '' }}@if (m.chip.fpu) { · FPU }</em>
+                  </div>
+                  <div [title]="m.chip.source['flash_bytes'] ?? ''">
+                    <span>{{ 'Flash' | t }}</span><b>{{ kib(m.chip.flash_bytes) }}</b><em>{{ memPct('flash') }}</em>
+                  </div>
+                  <div [title]="m.chip.source['ram_bytes'] ?? ''">
+                    <span>RAM</span><b>{{ kib(m.chip.ram_bytes) }}</b><em>{{ memPct('ram') }}</em>
+                  </div>
+                </div>
               </section>
 
+              <!-- Memory as built: one bar each, all the same length. -->
               <section>
                 <h3 class="tcv-label">{{ 'Memory' | t }}</h3>
                 @for (r of m.memory; track r.name) {
-                  <div class="tcv-mcu-region" [title]="r.name + ': ' + num(r.used) + ' B ' + ('used' | t) + ', ' + num(r.free) + ' B ' + ('free' | t) + ' / ' + num(r.total) + ' B\\n— ' + r.src">
-                    <div class="flex justify-between gap-2">
-                      <span class="mono truncate">{{ r.name }}</span>
-                      <span class="mono dim shrink-0">{{ kib(r.used) }} / {{ kib(r.total) }} · <b [class.hot]="r.pct >= 80">{{ r.pct.toFixed(1) }}%</b></span>
-                    </div>
-                    <div class="tcv-mcu-strip" [style.width.%]="stripWidth(r.total)">
-                      <span [style.width.%]="r.pct" [class.hot]="r.pct >= 80"></span>
-                    </div>
-                    <div class="mono dim tcv-mcu-free">{{ kib(r.free) }} {{ 'free' | t }}</div>
+                  <div class="tcv-mcu-mem" [title]="r.name + ': ' + num(r.used) + ' B ' + ('used' | t) + ', ' + num(r.free) + ' B ' + ('free' | t) + ' / ' + num(r.total) + ' B\n— ' + r.src">
+                    <span class="n">{{ r.name }}</span>
+                    <span class="v">{{ kib(r.used) }} / {{ kib(r.total) }}</span>
+                    <span class="p" [attr.data-level]="level(r.pct)">{{ r.pct < 10 ? r.pct.toFixed(1) : r.pct.toFixed(0) }}%</span>
+                    <span class="bar"><i [style.width.%]="r.pct" [attr.data-level]="level(r.pct)"></i></span>
                   </div>
                 } @empty {
-                  <p class="dim">{{ 'Build once to see memory.' | t }}</p>
+                  <p class="tcv-mcu-empty">{{ 'Build once to see memory.' | t }}</p>
                 }
                 @if (m.top.length) {
-                  <div class="tcv-mcu-sub">{{ 'Largest' | t }}</div>
-                  @for (s of m.top.slice(0, 6); track s.name) {
-                    <div class="tcv-mcu-row mono" [title]="s.name + (s.file ? '\\n' + s.file + ':' + s.line : '\\n' + ('a library' | t))">
-                      <span class="truncate">{{ s.name }}</span><span class="dim shrink-0">{{ kib(s.size) }} {{ s.where === 'ram' ? 'RAM' : s.where === 'both' ? 'flash+RAM' : 'flash' }}</span>
-                    </div>
-                  }
+                  <details class="tcv-mcu-more">
+                    <summary>{{ 'What fills it' | t }}</summary>
+                    @for (s of m.top.slice(0, 8); track s.name) {
+                      <div class="tcv-mcu-line" [title]="s.name + (s.file ? '\n' + s.file + ':' + s.line : '\n' + ('a library' | t))">
+                        <span class="n">{{ s.name }}</span><span class="v">{{ kib(s.size) }}</span>
+                      </div>
+                    }
+                  </details>
                 }
               </section>
 
+              <!-- How much computing a millisecond holds. -->
               <section>
                 <h3 class="tcv-label">{{ 'Time budget' | t }}</h3>
-                @if (m.time.mhz) {
-                  <p [title]="m.time.source['mhz'] ?? ''">
-                    <b class="mono">{{ mhz(m.time.mhz) }}</b>: <b class="mono">{{ num(m.time.cycles_per_ms) }}</b> {{ 'cycles per ms' | t }}@if (m.chip.cores && m.chip.cores > 1) {{{ ' ' }}<span class="dim">({{ 'per core' | t }}, × {{ m.chip.cores }})</span> }
-                  </p>
-                  <p class="dim">{{ 'In 1 µs:' | t }} {{ num(m.time.mhz) }} {{ 'cycles' | t }}</p>
-                }
-                @if (m.time.tick_hz) {
-                  <p [title]="m.time.source['tick_hz'] ?? ''">
-                    {{ (m.target === 'esp32' ? 'FreeRTOS tick' : 'Tick') | t }} <b class="mono">{{ m.time.tick_ms }} ms</b>{{ ' ' }}<span class="dim">({{ m.time.tick_hz }} Hz)</span>@if (m.time.cycles_per_tick) { · {{ num(m.time.cycles_per_tick) }} {{ 'cycles per tick' | t }} }
-                  </p>
-                }
-                @if (!m.time.mhz && !m.time.tick_hz) { <p class="dim">{{ 'Build once to see the clock.' | t }}</p> }
-              </section>
-
-              <section>
-                <h3 class="tcv-label">{{ 'Peripherals' | t }} <span class="dim">· {{ 'have' | t }} / {{ 'used' | t }}</span></h3>
-                @for (r of mcuPeripherals(); track r.kind) {
-                  <div class="tcv-mcu-per" [class.idle]="!inUse(r)">
-                    <div class="tcv-mcu-row">
-                      <span class="truncate" [title]="r.have_src">{{ r.kind }}</span>
-                      <span class="mono shrink-0">
-                        <span [title]="r.have_src">{{ r.have }}</span>
-                        <span class="dim"> / </span>
-                        <span [class.on]="inUse(r)" [title]="usedTip(r)">{{ usedCell(r) }}</span>
-                      </span>
-                    </div>
-                    @if (inUse(r) && r.board.length) {
-                      <div class="tcv-mcu-detail mono" [title]="r.board.join('\\n')">{{ r.board.join(' · ') }}</div>
-                    } @else if (r.detail.length && r.detail[0] && (inUse(r) || r.detail[0].includes(' '))) {
-                      <div class="tcv-mcu-detail" [title]="r.have_src">{{ r.detail.join(' · ') }}</div>
-                    }
+                @if (m.time.mhz || m.time.tick_hz) {
+                  <div class="tcv-mcu-line" [title]="m.time.source['mhz'] ?? ''">
+                    <span class="n">{{ 'Cycles per ms' | t }}</span>
+                    <span class="v strong">{{ num(m.time.cycles_per_ms) }}@if (m.chip.cores && m.chip.cores > 1) { × {{ m.chip.cores }} }</span>
                   </div>
+                  @if (m.time.tick_hz) {
+                    <div class="tcv-mcu-line" [title]="m.time.source['tick_hz'] ?? ''">
+                      <span class="n">{{ (m.target === 'esp32' ? 'FreeRTOS tick' : 'Tick') | t }}</span>
+                      <span class="v strong">{{ m.time.tick_ms }} ms</span>
+                    </div>
+                  }
+                } @else {
+                  <p class="tcv-mcu-empty">{{ 'Build once to see the clock.' | t }}</p>
                 }
               </section>
 
+              <!-- What the firmware uses, and in one line what it does not. -->
               <section>
-                <h3 class="tcv-label">{{ 'Pins' | t }}
-                  @if (m.board) { <span class="dim">· {{ m.board }}</span> }</h3>
-                @if (!m.board && m.pins.length) {
-                  <p class="dim mb-1">{{ 'Not linked to a board: the pins of the chip and their signals.' | t }}</p>
-                }
-                @for (p of m.pins; track p.pin + p.pad) {
-                  <div class="tcv-mcu-pin" [class.warn]="pinWarn(p)" [class.nonet]="!p.net">
-                    <span class="mono pin" [title]="(p.alias ? p.alias + ' = ' + p.pin + ' (' + p.alias_src + ')\\n' : '') + ('pad' | t) + ' ' + p.pad + (p.signals.length ? '\\n' + p.signals.join(', ') : '')">{{ p.pin }}</span>
-                    @if (p.net) { <span class="mono dim net truncate" [title]="p.net">{{ p.net }}</span> }
-                    <span class="does truncate" [title]="pinDoes(p) + (p.parts.length ? '\\n' + ('on the net' | t) + ': ' + p.parts.join(', ') : '')">{{ pinDoes(p) }}</span>
-                    @if (p.cautions.length) {
-                      <span class="tags">
-                        @for (c of p.cautions; track c.text) {
-                          <span class="tcv-mcu-tag" [class.warn]="c.level === 'warn'" [title]="cautionTip(c)">{{ c.text }}</span>
-                        }
-                      </span>
-                    }
+                <h3 class="tcv-label">{{ 'Peripherals in use' | t }}</h3>
+                @for (r of perUsed(); track r.kind) {
+                  <div class="tcv-mcu-per">
+                    <div class="tcv-mcu-line">
+                      <span class="n strong" [title]="r.have_src">{{ r.kind }}</span>
+                      <span class="v" [title]="usedTip(r)">{{ usage(r) }}</span>
+                    </div>
+                    @if (r.board.length) { <div class="d" [title]="r.board.join('\n')">{{ r.board.join(' · ') }}</div> }
                   </div>
                 } @empty {
-                  <p class="dim">{{ 'Link the app to a board to see what each pin drives.' | t }}</p>
+                  <p class="tcv-mcu-empty">{{ 'Link the app to a board, or build it, to see what it uses.' | t }}</p>
                 }
+                @if (perIdle().length) {
+                  <p class="tcv-mcu-idle" [title]="'On the chip, not used by this firmware' | t">
+                    {{ 'Also on the chip' | t }}: {{ idleLine() }}
+                  </p>
+                }
+              </section>
+
+              <!-- Pins: folded; the count and the cautions say whether to open it. -->
+              <section>
+                <details class="tcv-mcu-more">
+                  <summary>{{ 'Pins' | t }} <span>{{ m.pins.length }}@if (pinWarnings()) { · <b class="warn">{{ pinWarnings() }} {{ 'to check' | t }}</b> }</span></summary>
+                  @if (!m.board && m.pins.length) { <p class="tcv-mcu-empty">{{ 'Not linked to a board: the pins of the chip and their signals.' | t }}</p> }
+                  @for (p of m.pins; track p.pin + p.pad) {
+                    <div class="tcv-mcu-pin" [attr.data-warn]="pinWarn(p) ? 1 : null"
+                         [title]="(p.net ? p.net + '\n' : '') + pinDoes(p) + (p.cautions.length ? '\n\n' + cautionsTip(p) : '')">
+                      <span class="pin">{{ p.pin }}</span>
+                      <span class="does">{{ pinDoes(p) || p.net || '—' }}</span>
+                      @if (p.cautions.length) { <span class="flag" [attr.data-warn]="pinWarn(p) ? 1 : null">{{ p.cautions[0].text }}@if (p.cautions.length > 1) { +{{ p.cautions.length - 1 }} }</span> }
+                    </div>
+                  }
+                </details>
               </section>
 
               @if (m.seen; as s) {
                 <section>
-                  <h3 class="tcv-label">{{ 'Seen in simulation' | t }} <span class="dim">· {{ (s.t / 1e6).toFixed(1) }} s</span></h3>
+                  <h3 class="tcv-label">{{ 'In the simulation' | t }} <span class="tcv-mcu-aside">{{ (s.t / 1e6).toFixed(1) }} s</span></h3>
                   @for (x of seenPins(); track x.pin) {
-                    <div class="tcv-mcu-row mono"><span>{{ x.pin }}</span><span class="dim">{{ x.text }}</span></div>
+                    <div class="tcv-mcu-line"><span class="n">{{ x.pin }}</span><span class="v">{{ x.text }}</span></div>
                   }
                   @for (b of s.bus; track b.kind + b.bus + b.addr) {
-                    <div class="tcv-mcu-row mono"><span>{{ b.bus }} {{ busAddr(b.addr) }}</span><span class="dim">{{ num(b.n) }} {{ 'transfers' | t }}</span></div>
+                    <div class="tcv-mcu-line"><span class="n">{{ b.bus }} {{ busAddr(b.addr) }}</span><span class="v">{{ num(b.n) }} {{ 'transfers' | t }}</span></div>
                   }
                   @for (u of uartPorts(); track u.port) {
-                    <div class="tcv-mcu-row mono"><span>{{ u.port }}</span><span class="dim">{{ 'out' | t }} {{ num(u.out) }} B · {{ 'in' | t }} {{ num(u.in) }} B</span></div>
+                    <div class="tcv-mcu-line"><span class="n">{{ u.port }}</span><span class="v">↑ {{ num(u.out) }} B · ↓ {{ num(u.in) }} B</span></div>
                   }
-                  @if (!seenPins().length && !s.bus.length && !uartPorts().length) {
-                    <p class="dim">{{ 'Nothing yet.' | t }}</p>
-                  }
+                  @if (!seenPins().length && !s.bus.length && !uartPorts().length) { <p class="tcv-mcu-empty">{{ 'Nothing yet.' | t }}</p> }
                 </section>
               }
 
               @if (m.missing.length || m.warnings.length) {
-                <section class="dim">
-                  <h3 class="tcv-label">{{ 'Not known yet' | t }}</h3>
-                  @for (x of m.missing; track x) { <p class="tcv-mcu-note">{{ x }}</p> }
-                  @for (x of m.warnings; track x) { <p class="tcv-mcu-note">{{ x }}</p> }
+                <section>
+                  @for (x of m.missing.concat(m.warnings); track x) { <p class="tcv-mcu-empty">{{ x }}</p> }
                 </section>
               }
-              <p class="tcv-mcu-src dim" [title]="m.sources.join('\\n')">{{ 'Sources' | t }}: {{ m.sources.length }} · {{ 'hover a figure' | t }}</p>
             } @else {
-              <p class="dim">{{ mcuWait() | t }}</p>
+              <p class="tcv-mcu-empty" style="padding: 10px">{{ mcuWait() | t }}</p>
             }
           </div>
         }
@@ -987,6 +972,21 @@ export class RoomCoding implements OnInit, OnDestroy {
   }
 
   /** Peripherals the firmware uses first, then what the chip has spare. */
+  perUsed = computed(() => this.mcuPeripherals().filter(r => this.inUse(r)));
+  perIdle = computed(() => this.mcuPeripherals().filter(r => !this.inUse(r)));
+  idleLine = computed(() => this.perIdle().map(r => `${r.kind} ${r.have}`).join(' · '));
+  pinWarnings = computed(() => (this.mcu()?.pins ?? []).filter(p => this.pinWarn(p)).length);
+  /** 0-60 calm, to 85 getting full, past it tight. */
+  level(pct: number): string { return pct >= 85 ? 'hot' : pct >= 60 ? 'warm' : 'ok'; }
+  /** How full flash or RAM is, from the regions the build reported. */
+  memPct(kind: 'flash' | 'ram'): string {
+    const rs = (this.mcu()?.memory ?? []).filter(r => /flash|rom/i.test(r.name) === (kind === 'flash'));
+    const used = rs.reduce((a, r) => a + r.used, 0), total = rs.reduce((a, r) => a + r.total, 0);
+    return total ? `${Math.round((used / total) * 100)}% ${t('used')}` : '';
+  }
+  /** A module's footprint name, without the library's prefixes. */
+  chipPackage(p: string): string { return p.replace(/^.*?(ESP32|STM32)/i, '$1').replace(/_/g, ' '); }
+  cautionsTip(p: McuPin): string { return p.cautions.map(c => this.cautionTip(c)).join('\n\n'); }
   mcuPeripherals = computed<McuPeripheral[]>(() => {
     const rows = this.mcu()?.peripherals ?? [];
     const busy = (r: McuPeripheral) => this.inUse(r) ? 0 : 1;
@@ -995,6 +995,18 @@ export class RoomCoding implements OnInit, OnDestroy {
 
   inUse(r: McuPeripheral): boolean {
     return !!(r.linked || r.used || r.used_instances?.length);
+  }
+
+  /** What is used of what the chip has, counted in the peripheral's own
+   *  unit: pins for GPIO, channels for PWM and ADC, controllers for buses. */
+  usage(r: McuPeripheral): string {
+    const k = r.kind.toUpperCase();
+    const unit = /GPIO/.test(k) ? 'pins' : /PWM|LEDC|ADC|DAC|TOUCH/.test(k) ? 'channels' : '';
+    if (unit) return `${r.used ?? r.used_instances?.length ?? 0} / ${r.have} ${t(unit)}`;
+    const buses = new Set(r.board.map(b => /\b(I2C|SPI|UART|USART|I2S|TWAI|CAN)\d\b/i.exec(b)?.[0]).filter(Boolean));
+    const n = r.used_instances?.length || buses.size;
+    if (n) return `${n} / ${r.have}`;
+    return r.linked ? `${t('in firmware')} · ${r.have}` : `– / ${r.have}`;
   }
 
   usedCell(r: McuPeripheral): string {
