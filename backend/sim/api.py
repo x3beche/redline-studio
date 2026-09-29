@@ -23,6 +23,27 @@ from . import service
 from .parts import load_catalog
 
 router = APIRouter()
+
+
+@router.on_event("startup")
+async def _clear_orphans() -> None:
+    """Sessions live in this process, so any emulator container left from
+    before it started (a reload, a restart) belongs to nobody - and keeps a
+    core and half a gigabyte busy. Both adapters name theirs redline-sim-*."""
+    import asyncio
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "ps", "-q", "--filter", "name=^redline-sim-",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        out, _ = await asyncio.wait_for(proc.communicate(), 10)
+        ids = out.decode().split()
+        if ids:
+            rm = await asyncio.create_subprocess_exec(
+                "docker", "rm", "-f", *ids,
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+            await asyncio.wait_for(rm.wait(), 30)
+    except (OSError, asyncio.TimeoutError):
+        pass                                 # no Docker: nothing was left running either
 SIMS = service.SIMS
 EVERY_S = 0.05                     # at most 20 snapshots a second
 KEEPALIVE_S = 15
