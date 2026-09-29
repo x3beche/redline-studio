@@ -203,6 +203,19 @@ export class Board3d implements AfterViewInit, OnDestroy {
   /** Which way the camera looks from: over one corner, tilted down. */
   private static readonly EYE = new Vector3(0.42, 0.62, 0.66).normalize();
 
+  /** The direction the camera looks from now: EYE until `look` says otherwise. */
+  private eye = Board3d.EYE;
+
+  /** Seen from a named side, the whole model in shot: `fit` is the usual
+   *  corner view, `top` straight down, `front` from the front edge, a
+   *  little above it. Framed again when the window changes, as on load. */
+  look(side: 'fit' | 'top' | 'front') {
+    this.eye = side === 'top' ? new Vector3(0, 1, 0.0001).normalize()
+      : side === 'front' ? new Vector3(0, 0.3, 1).normalize() : Board3d.EYE;
+    this.touched = false;
+    this.place_camera();
+  }
+
   /** Put the camera where the whole board is in shot, from above and to
    *  one side - which is how a board is photographed.
    *
@@ -219,7 +232,7 @@ export class Board3d implements AfterViewInit, OnDestroy {
     const reach = this.held.getSize(new Vector3()).length() / 2;
 
     // The camera's own axes, for the direction it will look from.
-    const eye = Board3d.EYE;
+    const eye = this.eye;
     const right = new Vector3().crossVectors(eye, new Vector3(0, 1, 0))
       .normalize();
     const above = new Vector3().crossVectors(right, eye).normalize();
