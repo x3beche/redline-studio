@@ -1,0 +1,464 @@
+{
+ "id": "mpu-region-planner",
+ "version": "1.0",
+ "name": "MPU Region Planner",
+ "blurb": "Cortex-M MPU regions laid out on the memory map with sizes, alignment, subregions and attributes",
+ "group": "embedded",
+ "rooms": [
+  "embedded"
+ ],
+ "keywords": [
+  "mpu",
+  "memory protection unit",
+  "mpu region",
+  "RBAR",
+  "RASR",
+  "RLAR",
+  "MAIR",
+  "subregion",
+  "SRD",
+  "PMSAv7",
+  "PMSAv8",
+  "execute never",
+  "XN",
+  "stack guard",
+  "TEX C B",
+  "cacheable",
+  "ARM_MPU_Load",
+  "memmanage",
+  "PRIVDEFENA",
+  "cortex-m7 cache"
+ ],
+ "intro": "Lays the MPU regions over the part's memory map, shows which region wins at every address (on Armv7-M the higher number wins; on Armv8-M an overlap faults), and writes the RBAR/RASR (or RBAR/RLAR + MAIR) values and the CMSIS ARM_MPU_* code. It checks the Armv7-M power-of-two size and alignment rules, subregions, executable RAM, cacheable peripherals and a missing stack guard. Based on the Armv7-M and Armv8-M Architecture Reference Manuals and CMSIS-Core.",
+ "inputs": [
+  {
+   "key": "device",
+   "label": "Part",
+   "type": "select",
+   "default": "stm32f407",
+   "options": [
+    [
+     "stm32f407",
+     "STM32F407 (M4, 8 regions)"
+    ],
+    [
+     "stm32h743",
+     "STM32H743 (M7, 16 regions)"
+    ],
+    [
+     "stm32l552",
+     "STM32L552 (M33, 8 regions)"
+    ],
+    [
+     "custom",
+     "Custom memory map"
+    ]
+   ]
+  },
+  {
+   "key": "arch",
+   "label": "MPU architecture",
+   "type": "select",
+   "default": "v7m",
+   "options": [
+    [
+     "v7m",
+     "Armv7-M (M3/M4/M7)"
+    ],
+    [
+     "v8m",
+     "Armv8-M (M23/M33/M55)"
+    ]
+   ],
+   "when": {
+    "key": "device",
+    "equals": "custom"
+   }
+  },
+  {
+   "key": "regionCount",
+   "label": "Regions (MPU_TYPE.DREGION)",
+   "type": "number",
+   "default": "8",
+   "when": {
+    "key": "device",
+    "equals": "custom"
+   }
+  },
+  {
+   "key": "areas",
+   "label": "Memory areas",
+   "type": "table",
+   "when": {
+    "key": "device",
+    "equals": "custom"
+   },
+   "help": "From the datasheet memory map. Kind drives the checks (executable RAM, cacheable peripherals).",
+   "columns": [
+    {
+     "key": "name",
+     "label": "Name"
+    },
+    {
+     "key": "base",
+     "label": "Base"
+    },
+    {
+     "key": "size",
+     "label": "Size"
+    },
+    {
+     "key": "kind",
+     "label": "Kind",
+     "type": "select",
+     "options": [
+      "flash",
+      "ram",
+      "periph",
+      "ext"
+     ],
+     "default": "ram"
+    }
+   ],
+   "default": [
+    {
+     "name": "Flash",
+     "base": "0x00000000",
+     "size": "512K",
+     "kind": "flash"
+    },
+    {
+     "name": "SRAM",
+     "base": "0x20000000",
+     "size": "64K",
+     "kind": "ram"
+    },
+    {
+     "name": "Peripherals",
+     "base": "0x40000000",
+     "size": "512M",
+     "kind": "periph"
+    }
+   ]
+  },
+  {
+   "key": "regions",
+   "label": "Regions (row = region number; higher wins on Armv7-M)",
+   "type": "table",
+   "columns": [
+    {
+     "key": "name",
+     "label": "Name"
+    },
+    {
+     "key": "base",
+     "label": "Base"
+    },
+    {
+     "key": "size",
+     "label": "Size"
+    },
+    {
+     "key": "ap",
+     "label": "Access",
+     "type": "select",
+     "options": [
+      "none",
+      "priv-rw",
+      "priv-rw-user-ro",
+      "rw",
+      "priv-ro",
+      "ro"
+     ],
+     "default": "rw"
+    },
+    {
+     "key": "xn",
+     "label": "XN",
+     "type": "select",
+     "options": [
+      "yes",
+      "no"
+     ],
+     "default": "yes"
+    },
+    {
+     "key": "type",
+     "label": "Type",
+     "type": "select",
+     "options": [
+      "normal-wbwa",
+      "normal-wb",
+      "normal-wt",
+      "normal-nc",
+      "device",
+      "strongly-ordered"
+     ],
+     "default": "normal-wbwa"
+    },
+    {
+     "key": "s",
+     "label": "Shareable",
+     "type": "select",
+     "options": [
+      "no",
+      "yes"
+     ],
+     "default": "no"
+    },
+    {
+     "key": "srd",
+     "label": "SRD",
+     "default": "0x00"
+    },
+    {
+     "key": "en",
+     "label": "Enabled",
+     "type": "select",
+     "options": [
+      "yes",
+      "no"
+     ],
+     "default": "yes"
+    }
+   ],
+   "default": [
+    {
+     "name": "Flash",
+     "base": "0x08000000",
+     "size": "1M",
+     "ap": "ro",
+     "xn": "no",
+     "type": "normal-wt",
+     "s": "no",
+     "srd": "0x00",
+     "en": "yes"
+    },
+    {
+     "name": "SRAM",
+     "base": "0x20000000",
+     "size": "128K",
+     "ap": "rw",
+     "xn": "no",
+     "type": "normal-wbwa",
+     "s": "yes",
+     "srd": "0x00",
+     "en": "yes"
+    },
+    {
+     "name": "Peripherals",
+     "base": "0x40000000",
+     "size": "512M",
+     "ap": "rw",
+     "xn": "yes",
+     "type": "device",
+     "s": "yes",
+     "srd": "0x00",
+     "en": "yes"
+    },
+    {
+     "name": "CCM RAM",
+     "base": "0x10000000",
+     "size": "64K",
+     "ap": "rw",
+     "xn": "yes",
+     "type": "normal-wbwa",
+     "s": "no",
+     "srd": "0x00",
+     "en": "yes"
+    },
+    {
+     "name": "NULL guard",
+     "base": "0x00000000",
+     "size": "1K",
+     "ap": "none",
+     "xn": "yes",
+     "type": "strongly-ordered",
+     "s": "yes",
+     "srd": "0x00",
+     "en": "yes"
+    },
+    {
+     "name": "MSP guard",
+     "base": "0x2001F7E0",
+     "size": "32",
+     "ap": "none",
+     "xn": "yes",
+     "type": "normal-wbwa",
+     "s": "yes",
+     "srd": "0x00",
+     "en": "yes"
+    }
+   ],
+   "help": "Access: none, priv-rw, priv-rw-user-ro, rw, priv-ro, ro. SRD = subregion disable mask (Armv7-M, regions of 256 B or more)."
+  },
+  {
+   "key": "privdefena",
+   "label": "PRIVDEFENA (default map for privileged code)",
+   "type": "bool",
+   "default": true
+  },
+  {
+   "key": "hfnmiena",
+   "label": "HFNMIENA (MPU on in HardFault/NMI)",
+   "type": "bool",
+   "default": false
+  }
+ ],
+ "examples": [
+  {
+   "title": "STM32F407: flash RO, SRAM, peripherals as Device, NULL and main-stack guards",
+   "input": {
+    "device": "stm32f407",
+    "regions": [
+     {
+      "name": "Flash",
+      "base": "0x08000000",
+      "size": "1M",
+      "ap": "ro",
+      "xn": "no",
+      "type": "normal-wt",
+      "s": "no",
+      "srd": "0x00",
+      "en": "yes"
+     },
+     {
+      "name": "SRAM",
+      "base": "0x20000000",
+      "size": "128K",
+      "ap": "rw",
+      "xn": "no",
+      "type": "normal-wbwa",
+      "s": "yes",
+      "srd": "0x00",
+      "en": "yes"
+     },
+     {
+      "name": "Peripherals",
+      "base": "0x40000000",
+      "size": "512M",
+      "ap": "rw",
+      "xn": "yes",
+      "type": "device",
+      "s": "yes",
+      "srd": "0x00",
+      "en": "yes"
+     },
+     {
+      "name": "CCM RAM",
+      "base": "0x10000000",
+      "size": "64K",
+      "ap": "rw",
+      "xn": "yes",
+      "type": "normal-wbwa",
+      "s": "no",
+      "srd": "0x00",
+      "en": "yes"
+     },
+     {
+      "name": "NULL guard",
+      "base": "0x00000000",
+      "size": "1K",
+      "ap": "none",
+      "xn": "yes",
+      "type": "strongly-ordered",
+      "s": "yes",
+      "srd": "0x00",
+      "en": "yes"
+     },
+     {
+      "name": "MSP guard",
+      "base": "0x2001F7E0",
+      "size": "32",
+      "ap": "none",
+      "xn": "yes",
+      "type": "normal-wbwa",
+      "s": "yes",
+      "srd": "0x00",
+      "en": "yes"
+     }
+    ],
+    "privdefena": true,
+    "hfnmiena": false
+   }
+  },
+  {
+   "title": "STM32L552 (Armv8-M): a stack guard that overlaps SRAM1 - an overlap that faults on v8-M",
+   "input": {
+    "device": "stm32l552",
+    "regions": [
+     {
+      "name": "Flash",
+      "base": "0x08000000",
+      "size": "512K",
+      "ap": "ro",
+      "xn": "no",
+      "type": "normal-wt",
+      "s": "no",
+      "srd": "",
+      "en": "yes"
+     },
+     {
+      "name": "SRAM1",
+      "base": "0x20000000",
+      "size": "192K",
+      "ap": "rw",
+      "xn": "yes",
+      "type": "normal-wbwa",
+      "s": "no",
+      "srd": "",
+      "en": "yes"
+     },
+     {
+      "name": "SRAM2 (retained)",
+      "base": "0x20030000",
+      "size": "64K",
+      "ap": "rw",
+      "xn": "yes",
+      "type": "normal-nc",
+      "s": "no",
+      "srd": "",
+      "en": "yes"
+     },
+     {
+      "name": "Peripherals",
+      "base": "0x40000000",
+      "size": "512M",
+      "ap": "rw",
+      "xn": "yes",
+      "type": "device",
+      "s": "no",
+      "srd": "",
+      "en": "yes"
+     },
+     {
+      "name": "Task stack guard",
+      "base": "0x20007F00",
+      "size": "256",
+      "ap": "priv-ro",
+      "xn": "yes",
+      "type": "normal-wbwa",
+      "s": "no",
+      "srd": "",
+      "en": "yes"
+     }
+    ],
+    "privdefena": true,
+    "hfnmiena": false
+   }
+  }
+ ],
+ "usage": "Give the part (stm32f407, stm32h743, stm32l552, or custom with arch v7m/v8m, regionCount and areas {name, base, size, kind: flash|ram|periph|ext}), the regions in region-number order {name, base (0x hex), size (32, 1K, 128K, 2M, 4G), ap: none|priv-rw|priv-rw-user-ro|rw|priv-ro|ro, xn yes/no, type: normal-wbwa|normal-wb|normal-wt|normal-nc|device|strongly-ordered, s yes/no, srd 0x00-0xFF, en yes/no} and PRIVDEFENA/HFNMIENA. It returns the RBAR/RASR (Armv7-M) or RBAR/RLAR and MAIR0/1 (Armv8-M) values per region, the effective access at every address range, warnings (size/alignment, overlaps, executable RAM, cacheable peripherals, no stack guard, M7 shareable-not-cached) and CMSIS mpu_init() code (texts).",
+ "sources": [
+  "Arm Armv7-M Architecture Reference Manual (DDI 0403E) B3.5 Protected Memory System Architecture PMSAv7: RBAR, RASR, SRD, AP Table B3-15, TEX/C/B Table B3-13, overlap priority",
+  "Arm Armv8-M Architecture Reference Manual (DDI 0553) PMSAv8: RBAR, RLAR, MAIR0/1, overlapping regions fault",
+  "Arm CMSIS-Core mpu_armv7.h / mpu_armv8.h (ARM_MPU_RBAR, ARM_MPU_RASR, ARM_MPU_RLAR, ARM_MPU_ATTR, ARM_MPU_Load)",
+  "Arm Cortex-M7 TRM (shareable Normal memory not cached unless CACR.SIWT)",
+  "ST AN4838 Managing memory protection unit in STM32 MCUs; RM0090, RM0433, RM0438 memory maps"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "view"
+ ]
+}

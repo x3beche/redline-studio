@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-194 tools. **MCP** marks the ones agents can run with `run_tool`.
+197 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -158,7 +158,9 @@ agents, the most used, and every tool nobody used.
 | **Fixed-Point Converter** · MCP | `fixed-point` | a decimal value in a Q format and the precision lost | Embedded |
 | **Flash & EEPROM Wear Lifetime** · MCP | `flash-wear` | how long flash, EEPROM emulation or a log area lasts at a write rate, with wear levelling | Embedded |
 | **Flash Partition Planner** · MCP | `flash-partitions` | OTA, NVS and filesystem partitions sized, with a partition table | Embedded |
+| **FreeRTOS Config & Heap Sizer** · MCP | `freertos-config` | FreeRTOSConfig.h choices explained and the heap needed for tasks, queues and timers | Embedded |
 | **GPIO Restriction Warner** · MCP | `gpio-warner` | risks of using boot straps and special-purpose GPIOs | Embedded, PCB |
+| **HardFault Decoder** · MCP | `hardfault-decoder` | Cortex-M CFSR, HFSR, MMFAR and BFAR decoded, the stacked frame read, and the likely cause named | Embedded |
 | **Hash & Checksum Quick Tool** · MCP | `hash-checksum` | MD5, SHA and simple checksums of text or hex data | Embedded, Web |
 | **Hex Dump Decoder** · MCP | `hex-dump-decoder` | captured raw bytes split into frames for a chosen protocol | Embedded |
 | **I2C Address Map** · MCP | `i2c-address-map` | devices on a bus by address, with conflicts and alternative addresses | Embedded, PCB |
@@ -173,6 +175,7 @@ agents, the most used, and every tool nobody used.
 | **Memory Map Viewer** · MCP | `memory-map` | flash and RAM region use as a scaled strip | Embedded |
 | **Modbus Frame Builder** · MCP | `modbus-frame` | an RTU/TCP frame with its CRC from function code and registers | Embedded |
 | **Motor Driver Current Limit** · MCP | `motor-current-limit` | current limit and reference voltage from the sense resistor | Embedded, PCB |
+| **MPU Region Planner** · MCP | `mpu-region-planner` | Cortex-M MPU regions laid out on the memory map with sizes, alignment, subregions and attributes | Embedded |
 | **NMEA / Serial Log Parser** · MCP | `serial-log-parser` | a serial log parsed line by line into a table of fields | Embedded |
 | **NVIC Priority Planner** · MCP | `nvic-planner` | interrupt priorities in order, with preemption conflicts | Embedded |
 | **Override Syntax Migrator** · MCP | `override-migrator` | old _append/_prepend/_remove/_${PN} override syntax rewritten to the colon syntax of Honister and later | Embedded |

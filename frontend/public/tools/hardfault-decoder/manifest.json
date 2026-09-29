@@ -1,0 +1,37 @@
+{
+  "id": "hardfault-decoder", "version": "1.0",
+  "name": "HardFault Decoder",
+  "blurb": "Cortex-M CFSR, HFSR, MMFAR and BFAR decoded, the stacked frame read, and the likely cause named",
+  "group": "embedded",
+  "rooms": ["embedded"],
+  "keywords": ["hardfault", "hard fault", "CFSR", "HFSR", "MMFAR", "BFAR", "EXC_RETURN", "stacked PC", "exception frame", "bus fault", "usage fault", "memmanage", "IMPRECISERR", "PRECISERR", "INVSTATE", "UNDEFINSTR", "STKOF", "addr2line", "cortex-m crash", "fault handler"],
+  "intro": "Decodes the Cortex-M fault status registers bit by bit (Armv7-M and Armv8-M names), reads the exception frame the core pushed, and names the likely cause: which address was bad, whether the stacked PC is the faulting instruction, and the addr2line command to find the line. Based on the Armv6-M, Armv7-M and Armv8-M Architecture Reference Manuals.",
+  "inputs": [
+    { "key": "core", "label": "Core", "type": "select", "default": "m4",
+      "options": [["m0", "Cortex-M0 (Armv6-M)"], ["m0plus", "Cortex-M0+ (Armv6-M)"], ["m3", "Cortex-M3 (Armv7-M)"], ["m4", "Cortex-M4 (Armv7E-M, FPU)"], ["m7", "Cortex-M7 (Armv7E-M, FPU)"], ["m23", "Cortex-M23 (Armv8-M Baseline)"], ["m33", "Cortex-M33 (Armv8-M Mainline)"], ["m55", "Cortex-M55 (Armv8.1-M)"]] },
+    { "key": "cfsr", "label": "CFSR", "type": "text", "default": "0x00008200", "placeholder": "0xE000ED28", "help": "Hex. Empty = taken from the paste." },
+    { "key": "hfsr", "label": "HFSR", "type": "text", "default": "0x40000000", "placeholder": "0xE000ED2C" },
+    { "key": "mmfar", "label": "MMFAR", "type": "text", "default": "0x20020010", "placeholder": "0xE000ED34" },
+    { "key": "bfar", "label": "BFAR", "type": "text", "default": "0x20020010", "placeholder": "0xE000ED38" },
+    { "key": "excReturn", "label": "EXC_RETURN (LR in the handler)", "type": "text", "default": "0xFFFFFFFD", "placeholder": "0xFFFFFFFD" },
+    { "key": "sp", "label": "Frame address (SP)", "type": "text", "default": "", "placeholder": "PSP or MSP; empty = from the dump", "help": "The SP that EXC_RETURN names, where the frame starts." },
+    { "key": "frame", "label": "Stacked frame, dump or fault printout", "type": "textarea", "rows": 7,
+      "default": "(gdb) x/8wx $psp\n0x20001f48 <ucHeap+7912>:\t0x20020000\t0x00000010\t0x00000000\t0x20001fa0\n0x20001f58 <ucHeap+7928>:\t0x00000000\t0x08001a37\t0x08001b6c\t0x21000000",
+      "placeholder": "R0 = 0x... (a handler printout) or 0x20001f48: 0x... 0x... (a memory dump at SP)",
+      "help": "8 words (26 with an FP frame) in the order R0 R1 R2 R3 R12 LR PC xPSR; named lines like CFSR = 0x... fill the empty fields." },
+    { "key": "elf", "label": "ELF file", "type": "text", "default": "build/firmware.elf", "help": "For the addr2line and objdump commands." },
+    { "key": "dfsr", "label": "DFSR", "type": "text", "default": "", "placeholder": "0xE000ED30 (optional)" },
+    { "key": "afsr", "label": "AFSR", "type": "text", "default": "", "placeholder": "0xE000ED3C (optional)" },
+    { "key": "sfsr", "label": "SFSR", "type": "text", "default": "", "placeholder": "0xE000EDE4", "when": { "key": "core", "in": ["m23", "m33", "m55"] } },
+    { "key": "sfar", "label": "SFAR", "type": "text", "default": "", "placeholder": "0xE000EDE8", "when": { "key": "core", "in": ["m23", "m33", "m55"] } }
+  ],
+  "examples": [
+    { "title": "STM32F4: precise bus fault 16 bytes past the end of 128 KiB SRAM, escalated to HardFault", "input": { "core": "m4", "cfsr": "0x00008200", "hfsr": "0x40000000", "mmfar": "0x20020010", "bfar": "0x20020010", "excReturn": "0xFFFFFFFD", "sp": "", "frame": "(gdb) x/8wx $psp\n0x20001f48 <ucHeap+7912>:\t0x20020000\t0x00000010\t0x00000000\t0x20001fa0\n0x20001f58 <ucHeap+7928>:\t0x00000000\t0x08001a37\t0x08001b6c\t0x21000000", "elf": "build/firmware.elf" } },
+    { "title": "STM32H7: imprecise bus fault inside an ISR, extended FP frame, from a handler printout", "input": { "core": "m7", "cfsr": "", "hfsr": "", "mmfar": "", "bfar": "", "excReturn": "", "sp": "", "frame": "[HardFault]\nCFSR  = 0x00000400\nHFSR  = 0x40000000\nMMFAR = 0xE000EDF8  BFAR = 0xE000EDF8\nEXC_RETURN = 0xFFFFFFE1  MSP = 0x2001FF70\nR0  = 0x58024400  R1 = 0x00000001  R2 = 0x40011000  R3 = 0x0000FFFF\nR12 = 0x00000000  LR = 0x08004A1B  PC = 0x08004A52  xPSR = 0x21000025", "elf": "build/h7app.elf" } }
+  ],
+  "usage": "Give the core, the fault registers as hex (cfsr, hfsr, mmfar, bfar, excReturn = LR on handler entry; dfsr/afsr/sfsr/sfar optional) and in `frame` the stacked words at SP (8, or 26 with an FP frame) or a pasted handler printout (NAME = 0x... lines fill empty register fields) or a gdb/OpenOCD memory dump. It returns the likely cause with its reasoning, where the fault happened (thread/handler, MSP/PSP, which IRQ), whether BFAR/MMFAR are valid, whether the stacked PC is the faulting instruction, tables of set bits and the frame, and addr2line/objdump/gdb commands. Use it on any Cortex-M HardFault, MemManage, BusFault or UsageFault.",
+  "sources": ["Arm Armv7-M Architecture Reference Manual (DDI 0403E) B3.2.15-B3.2.18 CFSR/HFSR/MMFAR/BFAR, C1.6.1 DFSR, B1.5.6-B1.5.8 exception entry, frame and EXC_RETURN, B3.1 default memory map", "Arm Armv8-M Architecture Reference Manual (DDI 0553) CFSR.STKOF, SFSR/SFAR, EXC_RETURN S/DCRS/FType/Mode/SPSEL/ES", "Arm Armv6-M Architecture Reference Manual (DDI 0419): no configurable fault status registers", "Arm CMSIS-Core core_cm4.h, core_cm33.h (SCB_CFSR_*, SCB_HFSR_* bit positions)", "Cortex-M3 and Cortex-M4 TRMs: MMFAR and BFAR share one register; ACTLR.DISDEFWBUF"],
+  "view": true,
+  "layout": "custom",
+  "agentOmit": ["view"]
+}
