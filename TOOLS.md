@@ -278,17 +278,22 @@ agents, the most used, and every tool nobody used.
 | **String Table Editor** · MCP | `string-table` | multilingual strings in a table, out as resource files | Mobile, Web |
 | **Touch Target Checker** · MCP | `touch-targets` | touch targets under the minimum size in a layout | Mobile |
 
-### Code, data & prompts
+### Code & data
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
 | **API Sketch** | `api-sketch` | define endpoints, get OpenAPI, curl and a TypeScript client | Web, Mobile |
-| **Context Packer** | `context-packer` | pack code, logs and notes into one well-built prompt | Web, Embedded, Mobile, PCB, 3D |
 | **Cron Studio** | `cron-studio` | build a cron expression, see when it next runs | Web, Embedded |
-| **Data Digest** | `data-digest` | profile a large CSV or JSON into a compact brief for an LLM | Web, Embedded |
 | **Flow to Mermaid** | `flow-mermaid` | draw a flowchart with boxes and arrows, get Mermaid code | Web, Embedded, Mobile |
 | **Regex by Example** | `regex-example` | pick what should match in a text and get the regex, explained | Web, Embedded |
 | **Schema Sketch** | `schema-sketch` | draw tables and relations, get SQL, Prisma and Mermaid | Web, Mobile |
+
+### AI & prompts
+
+| Tool | id | What it answers | Rooms |
+|---|---|---|---|
+| **Context Packer** | `context-packer` | pack code, logs and notes into one well-built prompt | Web, Embedded, Mobile, PCB, 3D |
+| **Data Digest** | `data-digest` | profile a large CSV or JSON into a compact brief for an LLM | Web, Embedded |
 
 ### Project
 
@@ -383,6 +388,20 @@ its folder a manifest with `"page": "tools/<name>.html"`), or an Angular
 component under `src/app/tools/` (add it to `COMPONENTS` in `registry.ts`,
 and `"native": true` in its manifest) - still work, for tools that are
 editors rather than calculations.
+
+## Model calls from a tool page
+
+The AI & prompts tools draft prompts offline; a few (Prompt Eval Grid) also
+run one for real. They call `POST /api/tools/llm` (`backend/tools_llm.py`)
+with `{messages: [{role, content}], model?, max_tokens, temperature, tool}`
+and get `{text, model, ms, usage}`. The call leaves from the server with the
+OpenRouter key from `.env`; the page never sees it. `GET /api/tools/llm` says
+whether a key is set, which models are offered (`X3_TOOLS_MODELS`, comma
+separated, else the app's default model) and the limits: 60,000 characters
+in, 2,000 tokens out, 60 calls a minute, 4 at a time. Every call is counted
+in Analytics with the app's other model calls (surface `tools`, kind
+`tool-llm:<tool id>`). Writes carry the `X-Redline-CSRF: 1` header like
+every other.
 
 ## The tools image: checks, offline
 

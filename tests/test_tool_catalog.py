@@ -21,7 +21,7 @@ PAGES = tools_api.PAGES
 MANIFESTS = sorted(PAGES.glob("*/manifest.json"))
 KIT = [m.parent for m in MANIFESTS if (m.parent / "tool.js").exists()]
 TYPES = {"number", "text", "textarea", "select", "bool", "table"}
-GROUPS = {"pcb", "embedded", "mechanical", "web", "mobile", "code", "project"}
+GROUPS = {"pcb", "embedded", "mechanical", "web", "mobile", "code", "ai", "project"}
 
 
 def load(path: Path) -> dict:

@@ -9,7 +9,7 @@ import { Type } from '@angular/core';
  *  are Angular components or hand-written pages are loaded through the
  *  components below, only when first opened.
  */
-export type ToolGroup = 'pcb' | 'embedded' | 'mechanical' | 'web' | 'mobile' | 'code' | 'project';
+export type ToolGroup = 'pcb' | 'embedded' | 'mechanical' | 'web' | 'mobile' | 'code' | 'ai' | 'project';
 
 /** The list's headings, in order. */
 export const GROUPS: { id: ToolGroup; label: string }[] = [
@@ -18,7 +18,8 @@ export const GROUPS: { id: ToolGroup; label: string }[] = [
   { id: 'mechanical', label: 'Mechanical & 3D' },
   { id: 'web', label: 'Web & design' },
   { id: 'mobile', label: 'Mobile' },
-  { id: 'code', label: 'Code, data & prompts' },
+  { id: 'code', label: 'Code & data' },
+  { id: 'ai', label: 'AI & prompts' },
   { id: 'project', label: 'Project' },
 ];
 

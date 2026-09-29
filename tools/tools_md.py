@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES = ROOT / "frontend" / "public" / "tools"
 DOC = ROOT / "TOOLS.md"
 GROUPS = [("pcb", "PCB & electronics"), ("embedded", "Embedded"), ("mechanical", "Mechanical & 3D"),
-          ("web", "Web & design"), ("mobile", "Mobile"), ("code", "Code, data & prompts"),
+          ("web", "Web & design"), ("mobile", "Mobile"), ("code", "Code & data"), ("ai", "AI & prompts"),
           ("project", "Project")]
 ROOMS = {"pcb": "PCB", "embedded": "Embedded", "cad": "3D", "web": "Web", "mobile": "Mobile",
          "analyze": "Analytics", "all": "all"}

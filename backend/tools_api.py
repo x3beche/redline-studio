@@ -42,7 +42,9 @@ class _Revalidated(StaticFiles):
 
 
 def mount(app: FastAPI) -> None:
+    from . import tools_llm
     app.include_router(router)
+    app.include_router(tools_llm.router)
     app.mount("/api/tools/files", _Revalidated(directory=PAGES, html=True), name="tool-files")
 
 IMAGE = os.environ.get("X3_TOOLS_IMAGE", "redline-tools")
