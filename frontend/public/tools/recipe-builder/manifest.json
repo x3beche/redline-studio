@@ -1,0 +1,405 @@
+{
+ "id": "recipe-builder",
+ "version": "1.0",
+ "name": "Recipe Builder & Linter",
+ "blurb": "a BitBake recipe from source, license, build system and packaging choices, with the common mistakes caught",
+ "group": "embedded",
+ "layout": "custom",
+ "view": true,
+ "rooms": [
+  "embedded"
+ ],
+ "keywords": [
+  "bitbake recipe",
+  ".bb",
+  "yocto recipe",
+  "openembedded",
+  "recipe lint",
+  "LIC_FILES_CHKSUM",
+  "SRC_URI",
+  "SRCREV",
+  "AUTOREV",
+  "do_install",
+  "SYSTEMD_SERVICE",
+  "inherit cmake",
+  "installed-vs-shipped",
+  "pkgvarcheck",
+  "old override syntax",
+  "bbappend",
+  "devtool",
+  "recipetool",
+  "poky"
+ ],
+ "intro": "Writes a BitBake recipe from a few choices (source, licence, build class, systemd unit, run-time dependencies) or reads a pasted .bb, splits it into header, fetch, build, install and packaging, and checks it against the rules oe-core enforces: insane.bbclass QA checks, the git fetcher warnings, the ${D} and path-variable conventions and the release-specific S / UNPACKDIR / SRCPV rules.",
+ "inputs": [
+  {
+   "key": "mode",
+   "label": "Mode",
+   "type": "select",
+   "options": [
+    [
+     "build",
+     "Build from choices"
+    ],
+    [
+     "lint",
+     "Lint a pasted .bb"
+    ]
+   ],
+   "default": "build"
+  },
+  {
+   "key": "release",
+   "label": "Yocto release",
+   "type": "select",
+   "options": [
+    [
+     "kirkstone",
+     "kirkstone (4.0)"
+    ],
+    [
+     "scarthgap",
+     "scarthgap (5.0)"
+    ],
+    [
+     "walnascar",
+     "walnascar (5.2) or later"
+    ]
+   ],
+   "default": "scarthgap",
+   "help": "Changes S for git, SRCPV and UNPACKDIR rules."
+  },
+  {
+   "key": "pn",
+   "label": "Recipe name (PN)",
+   "type": "text",
+   "default": "sensord",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "pv",
+   "label": "Version (PV)",
+   "type": "text",
+   "default": "1.4.2",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "summary",
+   "label": "SUMMARY",
+   "type": "text",
+   "default": "Sensor daemon publishing GPIO and I2C readings over MQTT",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "homepage",
+   "label": "HOMEPAGE",
+   "type": "text",
+   "default": "https://github.com/acme-embedded/sensord",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "license",
+   "label": "LICENSE",
+   "type": "text",
+   "default": "MIT",
+   "help": "SPDX expression, or CLOSED.",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "licfile",
+   "label": "Licence file in the source",
+   "type": "text",
+   "default": "LICENSE",
+   "help": "Empty = the common-licenses copy.",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "licmd5",
+   "label": "md5 of the licence file",
+   "type": "text",
+   "default": "3b83ef96387f14655fc854ddc3c6bd57",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "source",
+   "label": "Source",
+   "type": "select",
+   "options": [
+    [
+     "git",
+     "git repository"
+    ],
+    [
+     "tarball",
+     "release tarball"
+    ],
+    [
+     "local",
+     "files in the layer"
+    ]
+   ],
+   "default": "git",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "url",
+   "label": "Repository / tarball URL",
+   "type": "text",
+   "default": "https://github.com/acme-embedded/sensord.git",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "branch",
+   "label": "Branch",
+   "type": "text",
+   "default": "main",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "srcrev",
+   "label": "SRCREV",
+   "type": "text",
+   "default": "9f2c41d7e0b8a35c6d14e2f7a90b3c58d1e6f024",
+   "help": "40-hex commit, or ${AUTOREV}.",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "sha256",
+   "label": "Tarball sha256",
+   "type": "text",
+   "default": "",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "files",
+   "label": "Local files",
+   "type": "text",
+   "default": "main.c Makefile",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "buildsys",
+   "label": "Build system",
+   "type": "select",
+   "options": [
+    [
+     "cmake",
+     "CMake"
+    ],
+    [
+     "meson",
+     "Meson"
+    ],
+    [
+     "autotools",
+     "Autotools"
+    ],
+    [
+     "setuptools3",
+     "Python setuptools"
+    ],
+    [
+     "go-mod",
+     "Go module"
+    ],
+    [
+     "cargo",
+     "Cargo"
+    ],
+    [
+     "module",
+     "Kernel module"
+    ],
+    [
+     "make",
+     "Plain Makefile"
+    ]
+   ],
+   "default": "cmake",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "pkgconfig",
+   "label": "inherit pkgconfig",
+   "type": "bool",
+   "default": true,
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "confargs",
+   "label": "Configure arguments",
+   "type": "text",
+   "default": "-DSENSORD_WITH_MQTT=ON -DSENSORD_TESTS=OFF",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "depends",
+   "label": "DEPENDS (build time)",
+   "type": "text",
+   "default": "libgpiod mosquitto",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "rdepends",
+   "label": "RDEPENDS:${PN} (run time)",
+   "type": "text",
+   "default": "",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "binaries",
+   "label": "Programs to install (Makefile)",
+   "type": "text",
+   "default": "",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "service",
+   "label": "systemd unit",
+   "type": "text",
+   "default": "sensord.service",
+   "help": "Empty = no service.",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "conffile",
+   "label": "Config file for /etc",
+   "type": "text",
+   "default": "sensord.conf",
+   "when": {
+    "key": "mode",
+    "equals": "build"
+   }
+  },
+  {
+   "key": "bbname",
+   "label": "File name",
+   "type": "text",
+   "default": "gpio-monitor_1.0.bb",
+   "when": {
+    "key": "mode",
+    "equals": "lint"
+   }
+  },
+  {
+   "key": "bb",
+   "label": "Recipe (.bb)",
+   "type": "textarea",
+   "rows": 14,
+   "default": "# gpio-monitor_1.0.bb - watches the door and relay GPIOs\nDESCRIPTION = \"GPIO monitor daemon for the ACME gateway\"\nLICENSE = \"GPLv2\"\n\nSRC_URI = \"git://github.com/acme-embedded/gpio-monitor.git \\\n           file://gpio-monitor.service \\\n           file://gpio-monitor.conf \\\n          \"\nSRCREV = \"${AUTOREV}\"\n\nDEPENDS = \"libgpiod\"\nRDEPENDS_${PN} = \"libgpiod-tools\"\n\ndo_compile() {\n    gcc -o gpio-monitor main.c gpio.c -lgpiod\n}\n\ndo_install() {\n    install -m 0755 gpio-monitor ${D}/usr/bin/gpio-monitor\n    install -d ${D}${systemd_system_unitdir}\n    install -m 0644 ${WORKDIR}/gpio-monitor.service ${D}${systemd_system_unitdir}\n    install -m 0644 ${WORKDIR}/gpio-monitor.conf /etc/gpio-monitor.conf\n    install -d ${D}/opt/gpio-monitor\n    cp -r ${S}/scripts ${D}/opt/gpio-monitor/\n}\n\nSYSTEMD_SERVICE_${PN} = \"gpio-monitor.service\"\nCFLAGS:append = \"-DUSE_LIBGPIOD_V2\"\n",
+   "when": {
+    "key": "mode",
+    "equals": "lint"
+   }
+  }
+ ],
+ "examples": [
+  {
+   "title": "Lint a hand-written recipe with the classic mistakes (scarthgap)",
+   "input": {
+    "mode": "lint",
+    "release": "scarthgap",
+    "bbname": "gpio-monitor_1.0.bb",
+    "bb": "# gpio-monitor_1.0.bb - watches the door and relay GPIOs\nDESCRIPTION = \"GPIO monitor daemon for the ACME gateway\"\nLICENSE = \"GPLv2\"\n\nSRC_URI = \"git://github.com/acme-embedded/gpio-monitor.git \\\n           file://gpio-monitor.service \\\n           file://gpio-monitor.conf \\\n          \"\nSRCREV = \"${AUTOREV}\"\n\nDEPENDS = \"libgpiod\"\nRDEPENDS_${PN} = \"libgpiod-tools\"\n\ndo_compile() {\n    gcc -o gpio-monitor main.c gpio.c -lgpiod\n}\n\ndo_install() {\n    install -m 0755 gpio-monitor ${D}/usr/bin/gpio-monitor\n    install -d ${D}${systemd_system_unitdir}\n    install -m 0644 ${WORKDIR}/gpio-monitor.service ${D}${systemd_system_unitdir}\n    install -m 0644 ${WORKDIR}/gpio-monitor.conf /etc/gpio-monitor.conf\n    install -d ${D}/opt/gpio-monitor\n    cp -r ${S}/scripts ${D}/opt/gpio-monitor/\n}\n\nSYSTEMD_SERVICE_${PN} = \"gpio-monitor.service\"\nCFLAGS:append = \"-DUSE_LIBGPIOD_V2\"\n"
+   }
+  },
+  {
+   "title": "Build an Autotools tarball recipe for kirkstone (checksum still to fill)",
+   "input": {
+    "mode": "build",
+    "release": "kirkstone",
+    "pn": "libmodbus",
+    "pv": "3.1.10",
+    "summary": "A Modbus library for Linux, Mac OS X, FreeBSD and Windows",
+    "homepage": "https://libmodbus.org",
+    "license": "LGPL-2.1-or-later",
+    "licfile": "COPYING.LESSER",
+    "licmd5": "4fbd65380cdd255951079008b364516c",
+    "source": "tarball",
+    "url": "https://github.com/stephane/libmodbus/releases/download/v3.1.10/libmodbus-3.1.10.tar.gz",
+    "branch": "",
+    "srcrev": "",
+    "sha256": "",
+    "buildsys": "autotools",
+    "pkgconfig": true,
+    "confargs": "--without-documentation",
+    "depends": "",
+    "rdepends": "",
+    "service": "",
+    "conffile": ""
+   }
+  }
+ ],
+ "usage": "mode \"lint\": give bb (the recipe text) and bbname (name_version.bb) - returns the findings table (line, part, severity, check, message, fix label), counts, and a \"Fixed recipe\" text with every one-click fix applied. mode \"build\": give pn, pv, summary, license, licfile+licmd5, source (git|tarball|local) with url/branch/srcrev or sha256, buildsys (cmake|meson|autotools|setuptools3|go-mod|cargo|module|make), depends, rdepends, service, conffile - returns the .bb text and lints it. Set release (kirkstone|scarthgap|walnascar); checksums and upstream files are not verified.",
+ "sources": [
+  "openembedded-core scarthgap: meta/conf/bitbake.conf (S, path variables, FILES:${PN}, SRCREV ??= \"INVALID\", SRCPV)",
+  "meta/classes-global/insane.bbclass (WARN_QA/ERROR_QA, license-checksum, src-uri-bad, pkgvarcheck, expanded-d, installed-vs-shipped, host-user-contaminated, ldflags, uppercase-pn)",
+  "meta/classes-global/base.bbclass, package.bbclass package_setup_pkgv, meta/lib/oe/license.py obsolete_license_list, meta/conf/licenses.conf SPDXLICENSEMAP, meta/files/common-licenses md5",
+  "meta/classes-recipe/systemd.bbclass, cmake.bbclass, meson.bbclass, go.bbclass, module.bbclass",
+  "bitbake 2.8: lib/bb/fetch2/git.py (branch, protocol), lib/bb/fetch2/__init__.py (BB_STRICT_CHECKSUM), lib/bb/data_smart.py (old override syntax fatal), lib/bb/parse/ast.py",
+  "openembedded-core kirkstone bitbake.conf (SRCPV); Yocto 5.2 migration notes for UNPACKDIR and S (not verified against a local tree)"
+ ],
+ "agentOmit": [
+  "anatomy"
+ ]
+}

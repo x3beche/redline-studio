@@ -72,7 +72,7 @@ agents, the most used, and every tool nobody used.
 ## The tools
 
 <!-- catalog:start -->
-178 tools. **MCP** marks the ones agents can run with `run_tool`.
+181 tools. **MCP** marks the ones agents can run with `run_tool`.
 
 ### PCB & electronics
 
@@ -137,6 +137,7 @@ agents, the most used, and every tool nobody used.
 |---|---|---|---|
 | **ADC Resolution Calculator** · MCP | `adc-resolution` | LSB size from reference and bits, and the oversampling gain | Embedded |
 | **Battery Life Estimator** · MCP | `battery-life` | run time in days from average current and battery capacity | Embedded, PCB |
+| **BitBake Variable Resolver** · MCP | `bitbake-vars` | the final value of a BitBake variable from its assignments, overrides and :append/:remove, step by step | Embedded |
 | **Bootloader Size Check** · MCP | `bootloader-fit` | whether application and bootloader regions fit | Embedded |
 | **Build Error & QA Explainer** · MCP | `yocto-build-errors` | a failed BitBake task log or QA warning classified, with the cause and the fix | Embedded |
 | **Buildhistory Diff** · MCP | `buildhistory-diff` | package and image size changes between two builds from buildhistory, largest first | Embedded |
@@ -165,9 +166,11 @@ agents, the most used, and every tool nobody used.
 | **Motor Driver Current Limit** · MCP | `motor-current-limit` | current limit and reference voltage from the sense resistor | Embedded, PCB |
 | **NMEA / Serial Log Parser** · MCP | `serial-log-parser` | a serial log parsed line by line into a table of fields | Embedded |
 | **NVIC Priority Planner** · MCP | `nvic-planner` | interrupt priorities in order, with preemption conflicts | Embedded |
+| **Override Syntax Migrator** · MCP | `override-migrator` | old _append/_prepend/_remove/_${PN} override syntax rewritten to the colon syntax of Honister and later | Embedded |
 | **PID Tuning Playground** · MCP | `pid-playground` | a simple plant's step response live as the gains move | Embedded |
 | **Pin Mux Explorer** · MCP | `pin-mux` | a pin's alternate functions on an MCU and the conflicts | Embedded, PCB |
 | **printf Format Checker** · MCP | `printf-checker` | whether a format string matches its argument types | Embedded |
+| **Recipe Builder & Linter** · MCP | `recipe-builder` | a BitBake recipe from source, license, build system and packaging choices, with the common mistakes caught | Embedded |
 | **Register Bitfield Editor** · MCP | `bitfield-editor` | toggle bits of a hex value and read each field's meaning | Embedded |
 | **Sensor Calibration Fit** · MCP | `sensor-calibration` | linear calibration coefficients from two or more readings | Embedded |
 | **Servo Pulse Mapper** · MCP | `servo-pulse` | angle range to pulse width, with calibration values | Embedded |

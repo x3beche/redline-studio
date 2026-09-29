@@ -1,0 +1,135 @@
+{
+ "id": "bitbake-vars",
+ "version": "1.0",
+ "name": "BitBake Variable Resolver",
+ "blurb": "the final value of a BitBake variable from its assignments, overrides and :append/:remove, step by step",
+ "group": "embedded",
+ "layout": "custom",
+ "view": true,
+ "rooms": [
+  "embedded"
+ ],
+ "keywords": [
+  "bitbake",
+  "yocto",
+  "openembedded",
+  "variable",
+  "override",
+  "OVERRIDES",
+  ":append",
+  ":prepend",
+  ":remove",
+  "?=",
+  "??=",
+  "weak default",
+  ":=",
+  "immediate expansion",
+  "bitbake -e",
+  "variable history",
+  "DISTRO_FEATURES",
+  "local.conf",
+  "bbappend",
+  "MACHINEOVERRIDES"
+ ],
+ "intro": "Evaluates pasted conf, recipe and bbappend lines the way the BitBake datastore does: = ?= ??= := += =+ .= =. in parse order, then override selection by OVERRIDES, :append, :prepend, ${} expansion and :remove when the value is read. Each character of the result is traced to the line that wrote it.",
+ "inputs": [
+  {
+   "key": "text",
+   "label": "Lines in parse order",
+   "type": "textarea",
+   "rows": 14,
+   "default": "# file: build/conf/local.conf\nMACHINE ??= \"imx6ullevk\"\nDISTRO ?= \"poky\"\nDISTRO_FEATURES += \"pam\"\nDISTRO_FEATURES:append = \" systemd usrmerge\"\nDISTRO_FEATURES:remove = \"x11 3g nfc\"\nDISTRO_FEATURES:append:mx6ull-nxp-bsp = \" ${IMX_EXTRA_FEATURES}\"\nIMX_EXTRA_FEATURES = \"wifi bluetooth\"\nVIRTUAL-RUNTIME_init_manager = \"systemd\"\n\n# file: meta-poky/conf/distro/poky.conf\nDISTRO_NAME = \"Poky (Yocto Project Reference Distro)\"\nPOKY_DEFAULT_DISTRO_FEATURES = \"opengl ptest multiarch wayland vulkan\"\nDISTRO_FEATURES ?= \"${DISTRO_FEATURES_DEFAULT} ${POKY_DEFAULT_DISTRO_FEATURES}\"\n\n# file: meta/conf/distro/include/default-distrovars.inc\nDISTRO_FEATURES_DEFAULT:remove:riscv32 = \"seccomp\"\nDISTRO_FEATURES_DEFAULT ?= \"acl alsa bluetooth debuginfod ext2 ipv4 ipv6 pcmcia usbgadget usbhost wifi xattr nfs zeroconf pci 3g nfc x11 vfat seccomp\"\nDISTRO_FEATURES ?= \"${DISTRO_FEATURES_DEFAULT}\"\n",
+   "help": "Mark files with '# file: path' or '==> path <==', or paste grep -n output (path:line:text). Order = parse order: local.conf, machine, distro, then recipe, then bbappends."
+  },
+  {
+   "key": "var",
+   "label": "Variable",
+   "type": "text",
+   "default": "DISTRO_FEATURES",
+   "placeholder": "DISTRO_FEATURES",
+   "help": "Empty = the variable with the most lines."
+  },
+  {
+   "key": "overrides",
+   "label": "OVERRIDES",
+   "type": "text",
+   "default": "linux-gnueabi:arm:pn-${PN}:layer-core:armv7ve:use-nxp-bsp:imx-generic-bsp:imx-nxp-bsp:imxfbdev:imxpxp:imxepdc:mx6-generic-bsp:mx6-nxp-bsp:mx6ul-generic-bsp:mx6ul-nxp-bsp:mx6ull-generic-bsp:mx6ull-nxp-bsp:mx6ull:${MACHINE}:${DISTRO}:class-target:libc-glibc:forcevariable",
+   "wide": true,
+   "help": "From bitbake -e <recipe> | grep ^OVERRIDES=. Later entries have higher priority. ${MACHINE} ${DISTRO} ${PN} are expanded. Used unless the lines set OVERRIDES."
+  },
+  {
+   "key": "machine",
+   "label": "MACHINE",
+   "type": "text",
+   "default": "imx6ullevk",
+   "help": "Used if the lines do not set it."
+  },
+  {
+   "key": "distro",
+   "label": "DISTRO",
+   "type": "text",
+   "default": "poky"
+  },
+  {
+   "key": "pn",
+   "label": "PN",
+   "type": "text",
+   "default": "core-image-minimal"
+  },
+  {
+   "key": "off",
+   "label": "Overrides switched off",
+   "type": "text",
+   "default": "",
+   "placeholder": "mx6ull:class-target",
+   "help": "Colon-separated, taken out of OVERRIDES for a what-if."
+  },
+  {
+   "key": "add",
+   "label": "Overrides added",
+   "type": "text",
+   "default": "",
+   "placeholder": "qemuall",
+   "help": "Colon-separated, added at the end (highest priority)."
+  }
+ ],
+ "examples": [
+  {
+   "title": "DISTRO_FEATURES += in local.conf wipes the distro defaults",
+   "input": {
+    "text": "# file: build/conf/local.conf\nMACHINE ??= \"imx6ullevk\"\nDISTRO ?= \"poky\"\nDISTRO_FEATURES += \"pam\"\nDISTRO_FEATURES:append = \" systemd usrmerge\"\nDISTRO_FEATURES:remove = \"x11 3g nfc\"\nDISTRO_FEATURES:append:mx6ull-nxp-bsp = \" ${IMX_EXTRA_FEATURES}\"\nIMX_EXTRA_FEATURES = \"wifi bluetooth\"\nVIRTUAL-RUNTIME_init_manager = \"systemd\"\n\n# file: meta-poky/conf/distro/poky.conf\nDISTRO_NAME = \"Poky (Yocto Project Reference Distro)\"\nPOKY_DEFAULT_DISTRO_FEATURES = \"opengl ptest multiarch wayland vulkan\"\nDISTRO_FEATURES ?= \"${DISTRO_FEATURES_DEFAULT} ${POKY_DEFAULT_DISTRO_FEATURES}\"\n\n# file: meta/conf/distro/include/default-distrovars.inc\nDISTRO_FEATURES_DEFAULT:remove:riscv32 = \"seccomp\"\nDISTRO_FEATURES_DEFAULT ?= \"acl alsa bluetooth debuginfod ext2 ipv4 ipv6 pcmcia usbgadget usbhost wifi xattr nfs zeroconf pci 3g nfc x11 vfat seccomp\"\nDISTRO_FEATURES ?= \"${DISTRO_FEATURES_DEFAULT}\"\n",
+    "var": "DISTRO_FEATURES",
+    "overrides": "linux-gnueabi:arm:pn-${PN}:layer-core:armv7ve:use-nxp-bsp:imx-generic-bsp:imx-nxp-bsp:imxfbdev:imxpxp:imxepdc:mx6-generic-bsp:mx6-nxp-bsp:mx6ul-generic-bsp:mx6ul-nxp-bsp:mx6ull-generic-bsp:mx6ull-nxp-bsp:mx6ull:${MACHINE}:${DISTRO}:class-target:libc-glibc:forcevariable",
+    "machine": "imx6ullevk",
+    "distro": "poky",
+    "pn": "core-image-minimal",
+    "off": "",
+    "add": ""
+   }
+  },
+  {
+   "title": "linux-yocto KERNEL_FEATURES and KBRANCH with a bbappend, qemuarm (grep -n paste)",
+   "input": {
+    "text": "meta/recipes-kernel/linux/linux-yocto_6.6.bb:1:KBRANCH ?= \"v6.6/standard/base\"\nmeta/recipes-kernel/linux/linux-yocto_6.6.bb:10:KBRANCH:qemuarm  ?= \"v6.6/standard/arm-versatile-926ejs\"\nmeta/recipes-kernel/linux/linux-yocto_6.6.bb:11:KBRANCH:qemuarm64 ?= \"v6.6/standard/qemuarm64\"\nmeta/recipes-kernel/linux/linux-yocto_6.6.bb:17:KBRANCH:qemux86-64 ?= \"v6.6/standard/base\"\nmeta/recipes-kernel/linux/linux-yocto_6.6.bb:59:KERNEL_EXTRA_FEATURES ?= \"features/netfilter/netfilter.scc\"\nmeta/recipes-kernel/linux/linux-yocto_6.6.bb:60:KERNEL_FEATURES:append = \" ${KERNEL_EXTRA_FEATURES}\"\nmeta/recipes-kernel/linux/linux-yocto_6.6.bb:61:KERNEL_FEATURES:append:qemuall=\" cfg/virtio.scc features/drm-bochs/drm-bochs.scc cfg/net/mdio.scc\"\nmeta/recipes-kernel/linux/linux-yocto_6.6.bb:63:KERNEL_FEATURES:append:qemux86-64=\" cfg/sound.scc cfg/paravirt_kvm.scc\"\nmeta/recipes-kernel/linux/linux-yocto_6.6.bb:65:KERNEL_FEATURES:append = \" ${@bb.utils.contains(\"DISTRO_FEATURES\", \"ptest\", \" features/scsi/scsi-debug.scc\", \"\", d)}\"\nmeta-myboard/recipes-kernel/linux/linux-yocto_%.bbappend:1:FILESEXTRAPATHS:prepend := \"${THISDIR}/files:\"\nmeta-myboard/recipes-kernel/linux/linux-yocto_%.bbappend:2:SRC_URI += \"file://can.cfg file://0001-arm-dts-add-mcp2515.patch\"\nmeta-myboard/recipes-kernel/linux/linux-yocto_%.bbappend:3:KBRANCH:qemuarm = \"v6.6/standard/base\"\nmeta-myboard/recipes-kernel/linux/linux-yocto_%.bbappend:4:KERNEL_FEATURES:append = \"features/can/can.scc\"\nmeta-myboard/recipes-kernel/linux/linux-yocto_%.bbappend:5:KERNEL_FEATURES:remove = \"cfg/net/mdio.scc\"\n",
+    "var": "KERNEL_FEATURES",
+    "overrides": "linux-gnueabi:arm:pn-${PN}:layer-core:armv5:qemuall:${MACHINE}:${DISTRO}:class-target:libc-glibc:forcevariable",
+    "machine": "qemuarm",
+    "distro": "poky",
+    "pn": "linux-yocto",
+    "off": "",
+    "add": ""
+   }
+  }
+ ],
+ "usage": "Give text: the assignment lines in parse order with file markers ('# file: path' or grep -n 'path:line:text'), var: the variable to resolve, overrides: the OVERRIDES string (later = higher priority; ${MACHINE} ${DISTRO} ${PN} filled from machine/distro/pn), and optionally off/add to switch overrides for a what-if. Returns the final value, which override variant won, the evaluation table (each line's effect and the value after it, then the getVar steps: override choice, :append, :prepend, expansion, :remove), a bitbake -e style history, and warnings for the classic mistakes (+= before ?= defaults, :append without a leading space, old _append syntax, bad operator combinations). Use it to explain why a variable has the value it has without running bitbake.",
+ "sources": [
+  "bitbake 2.8 lib/bb/data_smart.py (setVar, getVarFlag, _setvar_update_overrides, need_overrides, expandWithRefs)",
+  "bitbake 2.8 lib/bb/parse/ast.py DataNode.eval and parse_py/ConfHandler.py __config_regexp__",
+  "bitbake 2.8 lib/bb/data.py expandKeys",
+  "BitBake User Manual, Syntax and Operators and Conditional Syntax (Overrides), bitbake-user-manual-metadata.rst",
+  "openembedded-core meta/conf/bitbake.conf (parse order of local.conf, machine and distro conf; OVERRIDES)"
+ ],
+ "agentOmit": [
+  "eval"
+ ]
+}

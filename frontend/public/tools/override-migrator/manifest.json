@@ -1,0 +1,124 @@
+{
+ "id": "override-migrator",
+ "version": "1.0",
+ "name": "Override Syntax Migrator",
+ "blurb": "old _append/_prepend/_remove/_${PN} override syntax rewritten to the colon syntax of Honister and later",
+ "group": "embedded",
+ "rooms": [
+  "embedded"
+ ],
+ "keywords": [
+  "override syntax",
+  "honister",
+  "kirkstone",
+  "convert-overrides.py",
+  "_append",
+  ":append",
+  "_prepend",
+  "_remove",
+  "RDEPENDS_${PN}",
+  "RDEPENDS:${PN}",
+  "FILES_${PN}",
+  "yocto migration",
+  "dunfell to kirkstone",
+  "bbappend",
+  "bitbake old override syntax",
+  "variable renames",
+  "PNBLACKLIST SKIP_RECIPE",
+  "branch=master SRC_URI"
+ ],
+ "intro": "Rewrites an old-syntax recipe, bbappend, class or conf the way openembedded-core's scripts/contrib/convert-overrides.py 0.9.3 does (same lists, same patterns, same order per line), optionally followed by convert-variable-renames.py and convert-srcuri.py, and marks the rewrites a human should look at: matches inside values, comments and function bodies, override words that run into longer names, and old syntax left over because an override name is not on the list.",
+ "inputs": [
+  {
+   "key": "text",
+   "label": "Recipe, bbappend, .inc, .bbclass or .conf",
+   "type": "textarea",
+   "rows": 14,
+   "default": "# meta-acme/recipes-core/acme-agent/acme-agent_1.4.bb  (dunfell 3.1)\nSUMMARY = \"ACME field agent\"\nLICENSE = \"MIT\"\nLIC_FILES_CHKSUM = \"file://LICENSE;md5=0835ade698e0bcf8506ecda2f7b4f302\"\n\nSRC_URI = \"git://github.com/acme/agent.git;protocol=git \\\n           file://acme-agent.service \\\n           file://0001-fix_x86.patch \\\n\"\nSRC_URI_append_imx6ull-acme = \" file://board.conf\"\nSRCREV = \"4f1c2d0b9a8e7f6d5c4b3a291807f6e5d4c3b2a1\"\nS = \"${WORKDIR}/git\"\n\ninherit cmake systemd\n\nDEPENDS_append = \" openssl\"\nDEPENDS_remove_libc-musl = \"libexecinfo\"\nEXTRA_OECMAKE_prepend_acmeboard = \"-DACME_BOARD=ON \"\nEXTRA_APPEND_FLAGS = \"-O2\"\nTUNE_CCARGS_append_armhf = \" -mfloat-abi=hard\"\nCFLAGS_append_arm = \" -mfpu=neon\"\n\nSYSTEMD_SERVICE_${PN} = \"acme-agent.service\"\nRDEPENDS_${PN} += \"bash ${PN}-conf\"\nRDEPENDS_${PN}_append_class-target = \" iproute2\"\nFILES_${PN}-conf = \"${sysconfdir}/acme\"\nFILES_${PN}-dev_append = \" ${libdir}/cmake\"\nINSANE_SKIP_${PN} += \"ldflags\"\nPNBLACKLIST[acme-legacy] = \"replaced by acme-agent\"\n\ndo_install_append() {\n    install -d ${D}${systemd_system_unitdir}\n    install -m 0644 ${WORKDIR}/acme-agent.service ${D}${systemd_system_unitdir}\n}\n\ndo_install_append_imx6ull-acme() {\n    install -m 0644 ${WORKDIR}/board.conf ${D}${sysconfdir}/acme/\n}\n\npython do_check_append_list() {\n    for p in (d.getVar('PACKAGES') or '').split():\n        if d.getVar('RDEPENDS_%s' % p):\n            bb.note(\"pkg %s has runtime deps\" % p)\n}\naddtask check_append_list after do_install\n\npkg_postinst_ontarget_${PN}() {\n    systemctl enable acme-agent\n}\n"
+  },
+  {
+   "key": "overrides",
+   "label": "Your override names",
+   "type": "text",
+   "default": "imx6ull-acme",
+   "placeholder": "mymachine mydistro",
+   "help": "MACHINE, DISTRO, SoC family and other overrides your layers use; the script's --override."
+  },
+  {
+   "key": "packageVars",
+   "label": "Extra package variables",
+   "type": "text",
+   "default": "",
+   "placeholder": "MY_PKG_VAR",
+   "help": "Variables that take a package name as override; the script's --package-vars."
+  },
+  {
+   "key": "skip",
+   "label": "Extra skip strings",
+   "type": "text",
+   "default": "",
+   "help": "A line containing one is left alone; the script's --skip."
+  },
+  {
+   "key": "drop",
+   "label": "Taken off the built-in lists",
+   "type": "text",
+   "default": "",
+   "help": "Built-in override or package names not to use here (deviates from the script)."
+  },
+  {
+   "key": "keep",
+   "label": "Rewrites kept original",
+   "type": "text",
+   "default": "",
+   "help": "line:column of rewrites to reject, as the page marks them."
+  },
+  {
+   "key": "renames",
+   "label": "Also rename Kirkstone variables",
+   "type": "bool",
+   "default": true,
+   "help": "convert-variable-renames.py: PNBLACKLIST -> SKIP_RECIPE, *_WHITELIST -> ..."
+  },
+  {
+   "key": "srcuri",
+   "label": "Also fix git SRC_URI (branch=, protocol=https)",
+   "type": "bool",
+   "default": true,
+   "help": "convert-srcuri.py"
+  }
+ ],
+ "examples": [
+  {
+   "title": "Dunfell recipe with a board override, python code and a patch name",
+   "input": {
+    "text": "# meta-acme/recipes-core/acme-agent/acme-agent_1.4.bb  (dunfell 3.1)\nSUMMARY = \"ACME field agent\"\nLICENSE = \"MIT\"\nLIC_FILES_CHKSUM = \"file://LICENSE;md5=0835ade698e0bcf8506ecda2f7b4f302\"\n\nSRC_URI = \"git://github.com/acme/agent.git;protocol=git \\\n           file://acme-agent.service \\\n           file://0001-fix_x86.patch \\\n\"\nSRC_URI_append_imx6ull-acme = \" file://board.conf\"\nSRCREV = \"4f1c2d0b9a8e7f6d5c4b3a291807f6e5d4c3b2a1\"\nS = \"${WORKDIR}/git\"\n\ninherit cmake systemd\n\nDEPENDS_append = \" openssl\"\nDEPENDS_remove_libc-musl = \"libexecinfo\"\nEXTRA_OECMAKE_prepend_acmeboard = \"-DACME_BOARD=ON \"\nEXTRA_APPEND_FLAGS = \"-O2\"\nTUNE_CCARGS_append_armhf = \" -mfloat-abi=hard\"\nCFLAGS_append_arm = \" -mfpu=neon\"\n\nSYSTEMD_SERVICE_${PN} = \"acme-agent.service\"\nRDEPENDS_${PN} += \"bash ${PN}-conf\"\nRDEPENDS_${PN}_append_class-target = \" iproute2\"\nFILES_${PN}-conf = \"${sysconfdir}/acme\"\nFILES_${PN}-dev_append = \" ${libdir}/cmake\"\nINSANE_SKIP_${PN} += \"ldflags\"\nPNBLACKLIST[acme-legacy] = \"replaced by acme-agent\"\n\ndo_install_append() {\n    install -d ${D}${systemd_system_unitdir}\n    install -m 0644 ${WORKDIR}/acme-agent.service ${D}${systemd_system_unitdir}\n}\n\ndo_install_append_imx6ull-acme() {\n    install -m 0644 ${WORKDIR}/board.conf ${D}${sysconfdir}/acme/\n}\n\npython do_check_append_list() {\n    for p in (d.getVar('PACKAGES') or '').split():\n        if d.getVar('RDEPENDS_%s' % p):\n            bb.note(\"pkg %s has runtime deps\" % p)\n}\naddtask check_append_list after do_install\n\npkg_postinst_ontarget_${PN}() {\n    systemctl enable acme-agent\n}\n",
+    "overrides": "imx6ull-acme acmeboard",
+    "renames": true,
+    "srcuri": true
+   }
+  },
+  {
+   "title": "Dunfell local.conf for an i.MX8M Mini build",
+   "input": {
+    "text": "# conf/local.conf from a dunfell build directory\nMACHINE ??= \"imx8mm-evk\"\nDISTRO ?= \"fsl-imx-xwayland\"\nBB_ENV_EXTRAWHITE_append = \" ACME_TOKEN\"\nLICENSE_FLAGS_WHITELIST = \"commercial\"\nIMAGE_INSTALL_append = \" htop acme-agent\"\nIMAGE_INSTALL_remove = \"packagegroup-core-x11-sato\"\nIMAGE_FSTYPES_imx8mm-evk = \"wic.bz2 tar.bz2\"\nEXTRA_IMAGE_FEATURES_append_mx8 = \" debug-tweaks\"\nDISTRO_FEATURES_remove = \"x11 wayland\"\nKERNEL_DEVICETREE_imx8mm-evk += \"freescale/imx8mm-acme.dtb\"\nPREFERRED_PROVIDER_virtual/kernel_imx8mm-evk = \"linux-imx\"\nSSTATE_DUPWHITELIST += \"${DEPLOY_DIR_IMAGE}/\"\n",
+    "overrides": "imx8mm-evk mx8",
+    "renames": true,
+    "srcuri": true
+   }
+  }
+ ],
+ "usage": "Give the old-syntax file as text and the layer's own override names (MACHINE, DISTRO, SoC families) as overrides; keep renames/srcuri on for a Dunfell -> Kirkstone or later move. The result's texts 'Converted' is the whole rewritten file and 'Diff' the changed lines; the 'Rewrites' table lists each change with its rule, and 'Review' what still needs a human (old syntax BitBake 2.x will refuse, names that look like unknown overrides, matches in values or code). Add suggested override names and run again, as with the script.",
+ "sources": [
+  "openembedded-core scripts/contrib/convert-overrides.py 0.9.3 (lists, regexes and per-line order ported verbatim)",
+  "openembedded-core scripts/contrib/convert-variable-renames.py 0.1 and meta/conf/bitbake.conf BB_RENAMED_VARIABLES",
+  "openembedded-core scripts/contrib/convert-srcuri.py 0.1",
+  "bitbake lib/bb/data_smart.py setVar (old override syntax is fatal)",
+  "BitBake User Manual, Conditional Syntax (Overrides); Yocto 3.4 migration guide, Override syntax changes"
+ ],
+ "view": true,
+ "layout": "custom",
+ "agentOmit": [
+  "view"
+ ]
+}

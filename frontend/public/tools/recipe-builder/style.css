@@ -1,0 +1,161 @@
+/* Recipe Builder & Linter: the recipe's anatomy is the interface. */
+.rb { --tool-header: #3a5bd0; --tool-fetch: #0f8f7e; --tool-build: #b86e0b; --tool-install: #8a3fb8; --tool-package: #2f7d45; --tool-other: #6b7a88;
+  --tool-code: #fbfcfd; --tool-note: #5b6b7a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rb {
+  --tool-header: #7d98ff; --tool-fetch: #3cc7b3; --tool-build: #e8a735; --tool-install: #c982e0; --tool-package: #68b36b; --tool-other: #8ea0b0;
+  --tool-code: #0c1217; --tool-note: #8ea0b0; } }
+:root[data-theme="dark"] .rb { --tool-header: #7d98ff; --tool-fetch: #3cc7b3; --tool-build: #e8a735; --tool-install: #c982e0; --tool-package: #68b36b;
+  --tool-other: #8ea0b0; --tool-code: #0c1217; --tool-note: #8ea0b0; }
+
+.k-page { padding: 10px 14px 16px; }
+.rb { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.rb input, .rb textarea { color: var(--ink); }
+.c-error { color: var(--danger); } .c-warn { color: var(--warn); } .c-ok { color: var(--ok); } .c-info { color: var(--tool-note); }
+
+/* top bar */
+.rb-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+.rb-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; background: var(--sunken); flex-wrap: nowrap; }
+.rb-seg.wrap { flex-wrap: wrap; }
+.rb-seg button { border: 0; background: transparent; padding: 3px 10px; font-size: 12px; cursor: pointer; color: var(--ink-soft); white-space: nowrap; }
+.rb-seg button + button { border-left: 1px solid var(--line); }
+.rb-seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+.rb-mode button { padding: 4px 14px; font-size: 12.5px; }
+.rb-rel { flex-wrap: wrap; min-width: 0; max-width: 100%; display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-soft); }
+.rb-counts { display: flex; gap: 12px; font-size: 12px; }
+.rb-counts b { font: 600 13px "IBM Plex Mono", ui-monospace, monospace; }
+.rb-acts { margin-left: auto; display: flex; gap: 6px; }
+.rb-acts .k-btn:disabled { opacity: .55; cursor: default; }
+
+/* the two columns */
+.rb-grid { display: grid; gap: 10px; align-items: start; min-width: 0; }
+.rb-grid[data-mode="build"] { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+.rb-grid[data-mode="lint"] { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+@media (max-width: 1060px) { .rb-grid[data-mode] { grid-template-columns: minmax(0, 1fr); } }
+.rb-left, .rb-right { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.rb-grid[data-mode="build"] .rb-right { position: sticky; top: 8px; }
+.rb-grid[data-mode="build"] .rb-right .k-out { max-height: calc(100vh - 150px); min-height: 300px; }
+.rb-grid[data-mode="lint"] .rb-left { position: sticky; top: 8px; }
+@media (max-width: 1060px) { .rb-grid .rb-left, .rb-grid .rb-right { position: static; } }
+
+/* anatomy */
+.rb-anat { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rb-file { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; font: 12.5px "IBM Plex Mono", ui-monospace, monospace; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+.rb-fname { font-weight: 600; }
+.rb-fhint { font-family: "IBM Plex Sans", sans-serif; font-size: 11px; margin-left: 6px; }
+.rb-pv { margin-left: auto; display: inline-flex; align-items: center; }
+.rb-lbl { color: var(--ink-soft); font-size: 11.5px; }
+.rb-lit { color: var(--ink-soft); white-space: pre; }
+
+.rb-block { display: grid; grid-template-columns: 5px minmax(0, 1fr); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; min-width: 0; }
+.rb-block[hidden] { display: none; }
+.rb-rail { background: var(--line-soft); transition: background .2s; }
+.rb-block.b-header { --bc: var(--tool-header); } .rb-block.b-fetch { --bc: var(--tool-fetch); } .rb-block.b-build { --bc: var(--tool-build); }
+.rb-block.b-install { --bc: var(--tool-install); } .rb-block.b-package { --bc: var(--tool-package); } .rb-block.b-other { --bc: var(--tool-other); }
+.rb-block[data-state="ok"] .rb-rail, .rb-block[data-state="warn"] .rb-rail { background: var(--bc); }
+.rb-block[data-state="bad"] .rb-rail { background: repeating-linear-gradient(180deg, var(--bc) 0 6px, transparent 6px 10px); }
+.rb-block[data-state="ok"] { border-color: color-mix(in srgb, var(--bc) 45%, var(--line)); }
+.rb-bbody { min-width: 0; padding: 6px 10px 8px; display: flex; flex-direction: column; gap: 5px; }
+.rb-bhead { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.rb-bhead h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--bc); }
+.rb-what { font-size: 11.5px; color: var(--ink-soft); }
+.rb-bhead > .rb-seg, .rb-hx { margin-left: auto; }
+.rb-hx { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; justify-content: flex-end; }
+.rb-chk { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.rb-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: none; }
+.rb-dot.ok { background: var(--ok); } .rb-dot.warn { background: var(--warn); } .rb-dot.bad { background: var(--danger); }
+
+.rb-parts { display: flex; flex-wrap: wrap; gap: 4px; }
+.rb-part { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; font-size: 11px; background: var(--paper); min-width: 0; }
+.rb-part i { width: 7px; height: 7px; border-radius: 2px; border: 1.5px solid var(--bc); flex: none; }
+.rb-part b { font: 600 11px "IBM Plex Mono", ui-monospace, monospace; }
+.rb-part em { font-style: normal; color: var(--ink-soft); font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.rb-part.set { border-color: color-mix(in srgb, var(--bc) 50%, var(--line)); background: color-mix(in srgb, var(--bc) 10%, var(--surface)); }
+.rb-part.set i { background: var(--bc); }
+.rb-part.auto i { border-style: dashed; }
+.rb-part.missing { border-color: var(--danger); } .rb-part.missing i { border-color: var(--danger); } .rb-part.missing em { color: var(--danger); }
+.rb-part.optional { opacity: .6; } .rb-part.optional i { border-color: var(--line); }
+
+/* slot rows: the recipe text with the values typed into it */
+.rb-rows { display: flex; flex-direction: column; gap: 2px; }
+.rb-rows:empty { display: none; }
+.rb-row { border-left: 3px solid var(--line-soft); padding-left: 6px; }
+.rb-row.filled { border-left-color: var(--bc); }
+.rb-row { font: 12.5px/22px "IBM Plex Mono", ui-monospace, monospace; min-width: 0; }
+.rb-code { display: inline-flex; flex-wrap: wrap; align-items: baseline; row-gap: 2px; max-width: 100%; }
+.rb-slot { font: inherit; border: 0; border-bottom: 1.5px solid var(--bc); background: color-mix(in srgb, var(--bc) 8%, transparent); padding: 0 3px; border-radius: 3px 3px 0 0;
+  min-width: 4ch; max-width: 100%; color: var(--ink); }
+.rb-slot.mono-sm { font-size: 11.5px; }
+.rb-slot:hover { background: color-mix(in srgb, var(--bc) 15%, transparent); }
+.rb-slot:focus { outline: none; background: var(--sunken); box-shadow: 0 0 0 2px var(--accent); }
+.rb-slot::placeholder { color: var(--ink-soft); opacity: .7; font-style: italic; }
+.rb-mini { margin-left: 6px; font: 10.5px "IBM Plex Mono", ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); padding: 0 5px; cursor: pointer; color: var(--ink-soft); }
+.rb-mini:hover { color: var(--ink); border-color: var(--ink-soft); }
+.rb-file .rb-slot { --bc: var(--accent); }
+
+.rb-gen { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.rb-gen:empty { display: none; }
+.rb-genh { font-size: 10.5px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; margin-top: 3px; }
+.rb-cl { font: 12px/18px "IBM Plex Mono", ui-monospace, monospace; white-space: pre; overflow-x: auto; padding: 1px 6px; border-radius: 3px; min-width: 0; }
+.rb-cl.gen { color: var(--ink-soft); background: var(--sunken); }
+.rb-cl[role="button"] { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 6px; cursor: pointer; background: var(--sunken); }
+.rb-cl[role="button"]:hover { box-shadow: inset 2px 0 0 var(--bc); }
+.rb-cl.sel { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--sunken)); }
+.rb-cl .rb-n { color: var(--ink-soft); text-align: right; }
+.rb-cl .rb-t { overflow-x: auto; }
+
+/* pinned findings */
+.rb-pins { display: flex; flex-direction: column; gap: 3px; }
+.rb-pins:empty { display: none; }
+.rb-pin { border: 1px solid var(--line); border-left: 3px solid var(--tool-note); border-radius: 0 4px 4px 0; padding: 3px 7px 4px; background: var(--surface); font-size: 12px; margin-left: 12px; position: relative; }
+.rb-pin::before { content: ""; position: absolute; left: -12px; top: 10px; width: 9px; border-top: 1px dashed var(--line); }
+.rb-pin.error { border-left-color: var(--danger); } .rb-pin.warn { border-left-color: var(--warn); }
+.rb-pin.sel { box-shadow: 0 0 0 2px var(--accent); }
+.rb-pmain { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.rb-msg { flex: 1 1 200px; min-width: 0; }
+.rb-ln { font: 11px "IBM Plex Mono", ui-monospace, monospace; border: 0; background: var(--sunken); border-radius: 3px; padding: 0 4px; cursor: pointer; color: var(--ink-soft); }
+.rb-ln:hover { color: var(--ink); }
+.rb-fix { font-size: 11.5px; padding: 1px 8px; border-color: var(--accent); color: var(--accent); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.rb-fix:hover { background: var(--accent); color: var(--accent-ink); }
+.rb-why { color: var(--ink-soft); font-size: 11.5px; margin-top: 2px; }
+.rb-src { font: 10.5px "IBM Plex Mono", ui-monospace, monospace; opacity: .85; }
+i.sv { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; background: var(--tool-note); }
+i.sv.error { background: var(--danger); } i.sv.warn { background: var(--warn); } i.sv.info { background: var(--tool-note); }
+
+/* the editor (lint mode) */
+.rb-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.rb-phead { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+.rb-phead h2 { margin: 0; font-size: 13px; }
+.rb-name { flex: 1 1 160px; min-width: 0; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--sunken); font: 12.5px "IBM Plex Mono", ui-monospace, monospace; }
+.rb-edscroll { max-height: calc(100vh - 170px); min-height: 260px; overflow-y: auto; background: var(--tool-code); border-radius: 0 0 6px 6px; }
+@media (max-width: 1060px) { .rb-edscroll { max-height: 520px; } }
+.rb-ed { display: grid; grid-template-columns: 50px minmax(0, 1fr); }
+.rb-gut { font: 12.5px/19px "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-soft); padding: 10px 0; user-select: none; }
+.rb-gut .g { height: 19px; display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding-right: 7px; border-left: 4px solid transparent; }
+.rb-gut .g.b-header { border-left-color: var(--tool-header); } .rb-gut .g.b-fetch { border-left-color: var(--tool-fetch); } .rb-gut .g.b-build { border-left-color: var(--tool-build); }
+.rb-gut .g.b-install { border-left-color: var(--tool-install); } .rb-gut .g.b-package { border-left-color: var(--tool-package); } .rb-gut .g.b-other { border-left-color: var(--tool-other); }
+.rb-gut .g.sel { color: var(--ink); font-weight: 600; }
+.rb-edwrap { position: relative; min-width: 0; overflow: hidden; }
+.rb-hl, .rb-ta { font: 12.5px/19px "IBM Plex Mono", ui-monospace, monospace; padding: 10px 10px; margin: 0; white-space: pre; tab-size: 4; }
+.rb-hl { position: absolute; left: 0; top: 0; min-width: 100%; pointer-events: none; color: transparent; }
+.rb-hl .ln { display: block; height: 19px; }
+.rb-hl .ln.f-error { background: color-mix(in srgb, var(--danger) 13%, transparent); }
+.rb-hl .ln.f-warn { background: color-mix(in srgb, var(--warn) 13%, transparent); }
+.rb-hl .ln.f-info { background: color-mix(in srgb, var(--tool-note) 10%, transparent); }
+.rb-hl .ln.sel { box-shadow: inset 0 0 0 1px var(--accent); }
+.rb-ta { position: relative; display: block; width: 100%; border: 0; background: transparent; resize: none; overflow-x: auto; overflow-y: hidden; outline: none; caret-color: var(--ink); }
+.rb-ta:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+
+.rb-notes { font-size: 11.5px; color: var(--ink-soft); display: flex; flex-direction: column; gap: 2px; }
+.rb .k-outwrap { min-width: 0; }
+.rb .k-out { white-space: pre; word-break: normal; }
+
+@media (max-width: 560px) {
+  .k-page { padding: 8px; }
+  .rb-acts { margin-left: 0; }
+  .rb-seg { flex-wrap: wrap; max-width: 100%; }
+  .rb-mode button { padding: 4px 9px; }
+  .rb-pin { margin-left: 4px; } .rb-pin::before { display: none; }
+  .rb-bhead > .rb-seg, .rb-hx { margin-left: 0; }
+  .rb-part em { max-width: 150px; }
+}
