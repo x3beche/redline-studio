@@ -177,6 +177,22 @@ The person can edit a source too, in the code view (the `</>` button).
 source` - rather than saving over a copy you read at the start of the
 note, or their edit is lost.
 
+## Running firmware on its board
+
+`revisions.py sim run <app> --for 8 --press SW1@3 --uart "status@6" --shot
+OLED_MODULE=oled.png` builds the app's firmware, runs it on its linked
+board in the emulator (QEMU for ESP32, Renode for STM32), presses, types
+and reads back what every part shows - LED glow, fan rpm, the OLED as a
+PNG (read it). Use it to check firmware before calling it done. `sim show
+<app>` prints the board as the simulator sees it, with warnings: take
+them seriously, they are usually the board's own mistakes (a LED whose
+other end goes nowhere). `sim link <app> <board> [--sim fix.json]`
+links an app to its board and keeps hand corrections. Nothing of the
+application is changed for the simulator. Contract: backend/sim/SPEC.md.
+
+An **imported** board (`kind: imported`) has no atopile source: it was
+made from Gerbers, a netlist, a STEP. Don't try to build or edit it.
+
 ## Say who you are
 
 Set `X3_AGENT` to your name before running `tools/revisions.py` - the room

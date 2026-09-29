@@ -58,7 +58,7 @@ class Light(Part):
 
     def on(self, msg):
         on = msg["level"] if msg["type"] == "pin" else msg["duty"] if msg["type"] == "pwm" else None
-        if on is not None:
+        if on is not None and not self.spec.get("dead"):    # wired to nothing: never lit
             self.glow = float(1 - on if self.low else on)
 
     def view(self):

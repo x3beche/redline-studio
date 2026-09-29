@@ -3,7 +3,7 @@ import {
   viewChild,
 } from '@angular/core';
 import {
-  AmbientLight, Box3, CanvasTexture, Color, DirectionalLight, Material, Mesh,
+  AmbientLight, Box3, BoxGeometry, CanvasTexture, Color, DirectionalLight, Material, Mesh,
   MeshBasicMaterial, NearestFilter, Object3D, PerspectiveCamera, PlaneGeometry,
   Quaternion, Raycaster, Scene, Vector2, Vector3, WebGLRenderer,
 } from 'three';
@@ -259,6 +259,8 @@ export class Board3d implements AfterViewInit, OnDestroy {
   private model?: Object3D;
   private lit = new Map<string, Mesh[]>();
   private faces = new Map<string, Mesh>();
+  /** Display modules drawn onto headers (face with a module). */
+  private modules = new Map<string, Object3D>();
   private spinning = new Map<string, { rps: number; centre: Vector3; last: number }>();
   private pickNames: ReadonlySet<string> = new Set();
   private pickCb?: (name: string, down: boolean) => void;
@@ -302,10 +304,63 @@ export class Board3d implements AfterViewInit, OnDestroy {
 
   /** A picture on the part's top face - a display's screen. The same
    *  canvas again updates it; null takes it off. */
-  face(name: string, canvas: HTMLCanvasElement | null): boolean {
+  /** A display module on a header: `module` gives its size in mm (the
+   *  catalog's view hint). When the part in the model is only the header
+   *  it plugs into - a board's STEP rarely carries the module - the module
+   *  is drawn on it, its size scaled by the header's own pin pitch, set off
+   *  towards the middle of the board, and the picture goes on its glass. */
+  face(name: string, canvas: HTMLCanvasElement | null,
+       module?: { w: number; h: number; glass: number[]; active: number[]; pins: number; pitch: number }): boolean {
+    if (canvas && module && !this.faces.has(name) && this.moduleOn(name, canvas, module)) return true;
+    return this.plainFace(name, canvas);
+  }
+
+  private moduleOn(name: string, canvas: HTMLCanvasElement,
+                   m: { w: number; h: number; glass: number[]; active: number[]; pins: number; pitch: number }): boolean {
+    const node = this.node(name);
+    if (!node || !this.scene) return false;
+    const box = new Box3().setFromObject(node);
+    if (box.isEmpty()) return false;
+    const size = box.getSize(new Vector3());
+    const along = size.x >= size.z;                       // the header's row
+    const long = along ? size.x : size.z;
+    const mm = long / (m.pins * m.pitch);                 // scene units per millimetre
+    if (!(mm > 0) || long > m.w * mm * 0.8) return false; // the part is already the module
+    const c = box.getCenter(new Vector3());
+    // Towards the middle of the board, across the row.
+    const mid = new Box3().setFromObject(this.scene).getCenter(new Vector3());
+    const sign = along ? Math.sign(mid.z - c.z) || 1 : Math.sign(mid.x - c.x) || 1;
+    const off = (m.h / 2 - m.pitch / 2) * mm * sign;
+    const top = box.max.y + 0.3 * mm;
+    const group = new Object3D();
+    const slab = (w: number, h: number, t: number, colour: number, y: number) => {
+      const mesh = new Mesh(new BoxGeometry(w * mm, t * mm, h * mm), new MeshBasicMaterial({ color: colour }));
+      mesh.position.y = y;
+      group.add(mesh);
+    };
+    slab(m.w, m.h, 1.2, 0x1d3f7a, top + 0.6 * mm);                        // theme:pigment - the module's board
+    slab(m.glass[0], m.glass[1], 1.4, 0x0b0b0d, top + 1.9 * mm);          // theme:pigment - its glass
+    const tex = new CanvasTexture(canvas);
+    tex.magFilter = NearestFilter;
+    const pic = new Mesh(new PlaneGeometry(m.active[0] * mm, m.active[1] * mm),
+                         new MeshBasicMaterial({ map: tex, toneMapped: false }));
+    pic.rotation.x = -Math.PI / 2;
+    pic.position.y = top + 2.61 * mm;
+    group.add(pic);
+    group.position.set(along ? c.x : c.x + off, 0, along ? c.z + off : c.z);
+    if (!along) group.rotation.y = Math.PI / 2;
+    this.scene.add(group);
+    this.faces.set(name, pic);
+    this.modules.set(name, group);
+    return true;
+  }
+
+  private plainFace(name: string, canvas: HTMLCanvasElement | null): boolean {
     const had = this.faces.get(name);
     if (!canvas) {
       if (had) { had.removeFromParent(); (had.material as MeshBasicMaterial).map?.dispose(); this.faces.delete(name); }
+      this.modules.get(name)?.removeFromParent();
+      this.modules.delete(name);
       return true;
     }
     if (had) {

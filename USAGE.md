@@ -940,6 +940,25 @@ board, a new note); and, as you type, what the server finds - code lines
 (opened at that line), notes, chats, revisions and parts. Arrows move,
 Enter opens, Esc closes. It works inside the code editor too.
 
+**Importing a board.** *Import* in the PCB room takes a zip or files from
+another tool and makes a board of them: Gerbers and drills (drawn front,
+back and tracks, a layer PDF, the outline and a drill table), EasyEDA
+Pro's `FlyingProbeTesting.json` (every part's place and every net), a BOM
+or pick-and-place CSV (values, part numbers, footprints), the assembled
+STEP (the 3D board), or a KiCad/EasyEDA/Altium/Eagle board file. It says
+what it found and which file would give what is missing. An imported
+board is shown like any other, without Build and Code.
+
+**Simulating firmware on its board.** In the Embedded room, *Simulate*
+runs the firmware in an emulator - QEMU for ESP32, Renode for STM32 - on
+the board it is linked to, shown in 3D: LEDs glow, an OLED shows what the
+firmware draws (a module is drawn on its header when the board's model
+has only the header), fans turn, buttons press when clicked, and analog
+parts have sliders; the UART is a console. The parts come from the
+board's netlist and the catalog (`backend/sim/catalog.yaml`), so the same
+OLED or LED model works on any board and any MCU. Link an app to its
+board with `revisions.py sim link <app> <board>`.
+
 **What a note changed.** When an agent works a note, Redline keeps every
 source in the project as it was when the agent started and as it was when
 it finished. The note's card then carries a chip with the lines added and

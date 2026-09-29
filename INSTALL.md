@@ -199,6 +199,17 @@ Without it a release still goes out, and says the drawings could not be
 made. Release zips are kept in the database and, for speed, in
 `.cache/releases`.
 
+## The simulator
+
+The Embedded room's *Simulate* runs ESP32 firmware in Espressif's QEMU,
+which is already in `redline-code-embedded`, and STM32 firmware in Renode:
+
+```bash
+docker pull antmicro/renode:latest
+```
+
+Without Renode, STM32 boards say so and ESP32 boards still run.
+
 ## Themes
 
 Twenty-six, chosen under your name > **Preferences** (or ⚙, or Ctrl+K),

@@ -71,7 +71,8 @@ const RPM_TO_RPS = 1 / 600;
     .msg.warn { color: var(--warn); }
     .parts { overflow: auto; padding: 2px 6px; max-height: 45%; flex-shrink: 0; }
     .part { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--line); }
-    .ref { width: 44px; flex-shrink: 0; font-weight: 600; }
+    .ref { width: 76px; flex-shrink: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .skipped summary { padding: 4px 0; cursor: pointer; color: var(--ink-dim); }
     .kind { width: 58px; flex-shrink: 0; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; }
     .read { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; }
     .meter { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
@@ -172,10 +173,16 @@ const RPM_TO_RPS = 1 / 600;
       } @empty {
         @if (info()?.sim) { <p class="py-1" style="color: var(--ink-dim)">no part on this board has a model</p> }
       }
-      @for (s of info()?.sim?.skipped ?? []; track s.ref) {
-        <div class="part" style="color: var(--ink-dim)" [title]="s.why">
-          <span class="ref mono">{{ s.ref }}</span><span class="read">{{ s.why }}</span>
-        </div>
+      @if (info()?.sim?.skipped?.length) {
+        <!-- What is not simulated, folded: a board is mostly passives. -->
+        <details class="skipped">
+          <summary>{{ info()!.sim!.skipped!.length }} parts not simulated</summary>
+          @for (s of info()?.sim?.skipped ?? []; track s.ref) {
+            <div class="part" style="color: var(--ink-dim)" [title]="s.why">
+              <span class="ref mono">{{ s.ref }}</span><span class="read">{{ s.why }}</span>
+            </div>
+          }
+        </details>
       }
     </div>
 
@@ -353,7 +360,8 @@ export class SimView implements OnDestroy {
       if (m.block === 'light') b.glow(ref, m.view['glow'] ?? 0xffffff, v.glow ?? 0);
       else if (m.block === 'motor') b.spin(ref, (v.rpm ?? 0) * RPM_TO_RPS);
       else if (m.block === 'press') buttons.add(ref);
-      if (v.screen) b.face(ref, this.screen(ref, v.screen, m.view['pixel']));
+      if (v.screen) b.face(ref, this.screen(ref, v.screen, m.view['pixel']),
+                             m.view['module'] as unknown as Parameters<Board3d['face']>[2]);
     }
     b.pickable(buttons, (ref, down) => this.press(ref, down));
   }

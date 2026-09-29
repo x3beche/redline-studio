@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 
 LCSC = re.compile(r"\bC\d{3,}\b")
+GROUND = re.compile(r"(?i)^(a|d|p)?gnd\w*$|^vss$|^0v$|^ground$")
+SUPPLY = re.compile(r"(?i)^(\+?\d+(\.\d+)?v\d*|\d+v\d+|vcc\w*|vdd\w*|v3v3|3v3|vbus|vbat|vin|bat\+)$")
 POWER = re.compile(r"(?i)(^|[-_/.+])(gnd|agnd|vcc|vdd|vbus|vin|3v3|5v|12v|hv|lv)($|[-_/.])")  # rails: never followed through a resistor
 
 
@@ -49,6 +51,8 @@ def describe(graph: dict, mcu_pins: dict, catalog: dict) -> dict:
            "parts": [], "skipped": []}
 
     def on_mcu(net):
+        if net is None or GROUND.match(net) or SUPPLY.match(net) or POWER.match(net):
+            return None                          # the MCU's own supply is no signal
         pad = next((str(n["pin"]) for n in nodes.get(net, []) if n["ref"] == mcu_ref), None)
         return None if pad is None else mcu_pins.get(pad, pad)
 
@@ -88,6 +92,21 @@ def describe(graph: dict, mcu_pins: dict, catalog: dict) -> dict:
             if hit:
                 pins[role] = hit
         entry = {"ref": ref, "model": name}
+        if model.get("polar") and pins:
+            # A LED's ends by what the other one reaches, not by pad
+            # numbers - LCSC parts put the anode on pad 1 or pad 2. Other end
+            # on ground: the MCU drives the anode; on a supply: the cathode.
+            hit = next(iter(pins.values()))
+            here = next(p for p, n in mine.items() if reach(n, ref) == hit)
+            far = next((n for p, n in mine.items() if p != here), None)
+            if far and SUPPLY.match(far):
+                pins = {"K": hit}
+            else:
+                pins = {"A": hit}
+                if not (far and GROUND.match(far)):
+                    entry["dead"] = (f"its other end is on net {far}, which reaches neither ground "
+                                     f"nor a supply - it cannot light on the real board")
+                    out.setdefault("warnings", []).append(f"{ref}: {entry['dead']}")
         if model.get("bus") == "i2c":
             if not {"SDA", "SCL"} <= pins.keys():
                 out["skipped"].append({"ref": ref, "why": f"{name}: SDA/SCL not wired to the MCU"})

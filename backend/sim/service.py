@@ -163,6 +163,13 @@ async def resolve(db, app_id: str, board: str | None = None, sim: dict | None = 
             mcu = _mcu_component(graph, catalog)
             pins: dict = {}
             code = next(iter(simboard.LCSC.findall(simboard._text(mcu))), None) if mcu else None
+            if mcu and not code:
+                # No part number on the board (an import without a BOM): the
+                # catalog names a symbol for the family's shared pinout.
+                entry = next((m for m in catalog.get("mcus", []) if simboard._matches(mcu, m["match"])), {})
+                code = entry.get("symbol")
+                if code:
+                    warnings.append(f"{mcu['ref']} has no part number; its pin names are {code}'s")
             if code:
                 try:
                     pins = await simboard.mcu_pin_names(db, code)

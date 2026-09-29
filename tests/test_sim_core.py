@@ -399,3 +399,26 @@ def test_the_clock_keeps_the_emulators_pace(monkeypatch):
     asyncio.run(board.run(Slow(), None))
     wall_us = (_time.monotonic() - start) * 1e6
     assert 400_000 * 0.9 < board.t < wall_us * 0.75    # ~0.65 s at half pace, well short of the wall's ~1.3 s
+
+
+def _led_board(other_net):
+    return {"components": [
+        {"ref": "U2", "footprint": "WIFIM-SMD_ESP32-WROOM-32-N4", "value": "", "part": ""},
+        {"ref": "R19", "footprint": "R0603", "value": "", "part": ""},
+        {"ref": "LED2", "footprint": "LED0805_RED", "value": "", "part": ""}],
+        "nets": [{"name": "LED2", "nodes": [{"ref": "U2", "pin": "11"}, {"ref": "R19", "pin": "2"}]},
+                 {"name": "LED2_1", "nodes": [{"ref": "R19", "pin": "1"}, {"ref": "LED2", "pin": "1"}]},
+                 {"name": other_net, "nodes": [{"ref": "LED2", "pin": "2"}, {"ref": "C1", "pin": "1"}]}]}
+
+
+def test_a_led_is_polarised_by_its_wiring_not_its_pad_numbers():
+    pins = {"11": "GPIO26"}
+    on_ground = simboard.describe(_led_board("GND"), pins, CATALOG)["parts"][0]
+    assert on_ground["pins"] == {"A": "GPIO26"} and "dead" not in on_ground        # pad 1 is the anode here
+    on_supply = simboard.describe(_led_board("3.3V"), pins, CATALOG)["parts"][0]
+    assert on_supply["pins"] == {"K": "GPIO26"}
+    floating = simboard.describe(_led_board("LED2_2"), pins, CATALOG)
+    assert "cannot light" in floating["parts"][0]["dead"] and floating["warnings"]
+    led = make_part("LED2", {**CATALOG["models"]["led"], **floating["parts"][0]}, lambda m: None)
+    led.on({"type": "pin", "pin": "GPIO26", "level": 1})
+    assert led.view()["glow"] == 0

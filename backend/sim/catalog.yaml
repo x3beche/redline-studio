@@ -14,6 +14,7 @@ mcus:        # the simulated MCU, found the same way
   - family: esp32
     emulator: qemu-esp32
     match: {lcsc: [C701342, C82899], text: 'ESP32-WROOM-32'}
+    symbol: C82899      # pin names when the board carries no part number: every WROOM-32 shares one pinout
   - family: stm32f0
     emulator: renode
     match: {text: 'STM32F0\d\d'}
@@ -25,6 +26,7 @@ models:
     block: light
     match: {footprint: 'LED0603|LED0805|LED-SMD', text: '^LED\d*\s'}
     roles: {A: [A, '2', '+'], K: [K, '1', '-']}   # wired on K: lit by a 0
+    polar: true         # which end is which from the wiring, not the pad numbers: they differ by part
     view: {glow: '#ff3b30'}
 
   # Before `button`: an encoder's footprint is an SW-SMD too.
@@ -39,7 +41,7 @@ models:
     block: press
     pull: up
     match: {footprint: 'SW-SMD|TS-?\d|TS36CA'}
-    roles: {'1': ['1', '2', '3', '4', A, B]}
+    roles: {'1': ['1', '2', '3', '4', A, B, C, D]}
     view: {kind: pushbutton}
 
   potentiometer:
@@ -82,4 +84,6 @@ models:
     addr: 60
     match: {text: '(?i)OLED|SSD1306'}
     roles: {SDA: [SDA, '4'], SCL: [SCL, '3']}   # 4-pin module: GND VCC SCL SDA
-    view: {kind: screen, pixel: '#8fd3ff'}
+    view: {kind: screen, pixel: '#8fd3ff',
+           # a 0.96" module, in mm: board, glass, active area; the header it plugs into
+           module: {w: 27.3, h: 27.8, glass: [26.7, 19.3], active: [21.74, 10.86], pins: 4, pitch: 2.54}}
