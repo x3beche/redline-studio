@@ -75,16 +75,63 @@ _WATTS_GPU: float | None = None
 RAPL = Path("/sys/class/powercap/intel-rapl:0/energy_uj")
 
 
+# A Prometheus that scrapes node_exporter's RAPL collector (X3_RAPL_PROMETHEUS,
+# e.g. http://192.168.1.15:9090): node_exporter runs as root and reads the
+# counter this process may not. Its energy is accumulated here as a counter
+# of our own - rate over the last minute times the time since the last read -
+# so the hardware counter's wrap (every hour or so at 60 W) never shows.
+_PROM_ACC: float | None = None
+_PROM_AT: float | None = None
+
+
+def _rapl_from_prometheus() -> int | None:
+    global _PROM_ACC, _PROM_AT
+    import json
+    import time
+    import urllib.parse
+    import urllib.request
+    base = os.environ.get("X3_RAPL_PROMETHEUS", "").strip().rstrip("/")
+    if not base:
+        return None
+
+    def ask(q: str) -> float | None:
+        url = f"{base}/api/v1/query?" + urllib.parse.urlencode({"query": q})
+        try:
+            with urllib.request.urlopen(url, timeout=2) as r:
+                res = json.loads(r.read())["data"]["result"]
+            return float(res[0]["value"][1]) if res else None
+        except (OSError, ValueError, KeyError, IndexError):
+            return None
+
+    now = time.time()
+    if _PROM_ACC is None:
+        joules = ask("sum(node_rapl_package_joules_total)")
+        if joules is None:
+            return None
+        _PROM_ACC, _PROM_AT = joules * 1e6, now
+        return int(_PROM_ACC)
+    dt = now - (_PROM_AT or now)
+    if dt >= 1:
+        watts = ask("sum(rate(node_rapl_package_joules_total[1m]))")
+        if watts is None:
+            return None
+        _PROM_ACC += watts * dt * 1e6
+        _PROM_AT = now
+    return int(_PROM_ACC)
+
+
 def rapl_uj() -> int | None:
     """Package energy in microjoules, or None where it cannot be read.
 
     Root-only on most kernels since 2020. Read anyway: on a host that allows
     it the run window gets a measured figure instead of an assumed one.
+    Failing that, a Prometheus scraping node_exporter's RAPL collector
+    (X3_RAPL_PROMETHEUS) - measured all the same, to within its 15 s scrape.
     """
     try:
         return int(RAPL.read_text())
     except (OSError, ValueError):
-        return None
+        return _rapl_from_prometheus()
 
 
 def machine_cpu() -> dict | None:

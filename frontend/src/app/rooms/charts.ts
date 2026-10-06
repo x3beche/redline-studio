@@ -126,7 +126,15 @@ export class TimeChart implements AfterViewInit, OnDestroy {
   /** Buckets to mark as unusual. */
   marks = input<number[]>([]);
 
-  readonly L = 46; readonly R = 8; readonly T = 8; readonly B = 18;
+  readonly R = 8; readonly T = 8; readonly B = 18;
+  /** The left margin: room for the longest y label ("250.0 Wh" did not fit
+   *  in a fixed 46 px and lost its first digits), never less than 46. */
+  private left = computed(() => {
+    const m = this.max(), f = this.f();
+    const longest = Math.max(...[0, 0.25, 0.5, 0.75, 1].map(k => f(m * k).length));
+    return Math.max(46, Math.round(longest * 6.2 + 12));
+  });
+  get L(): number { return this.left(); }
   private box = viewChild.required<ElementRef<HTMLDivElement>>('box');
   private ro?: ResizeObserver;
   w = signal(0);
@@ -297,7 +305,7 @@ export class BarList {
   selector: 'app-donut',
   host: { class: 'block' },
   template: `
-<div class="flex items-center gap-4">
+<div class="flex flex-wrap items-center gap-4">
   <svg viewBox="0 0 42 42" class="h-[120px] w-[120px] shrink-0 -rotate-90">
     <circle cx="21" cy="21" r="15.9" fill="none" class="tcv-dn-track" stroke-width="6" />
     @for (a of arcs(); track a.name) {
@@ -307,7 +315,9 @@ export class BarList {
       </circle>
     }
   </svg>
-  <div class="min-w-0 flex-1 text-[11.5px]">
+  <!-- At least wide enough for a name: in a narrow panel the legend goes
+       under the ring instead of squeezing the names to one letter. -->
+  <div class="min-w-[11rem] flex-1 text-[11.5px]">
     @for (a of arcs(); track a.name) {
       <div class="flex items-center gap-1.5 leading-relaxed">
         <span class="tcv-ch-dot" [style.background]="a.c"></span>

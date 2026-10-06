@@ -3048,7 +3048,7 @@ section > .tcv-mcu-more summary { text-transform: uppercase; }
   padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2);
 }
 .tcv-dash-title { font-size: 13px; font-weight: 600; color: var(--ink); margin-right: 6px; }
-.tcv-dash-seg { display: flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.tcv-dash-seg { display: flex; flex-shrink: 0; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
 .tcv-dash-seg button {
   padding: 3px 10px; font-size: 11.5px; color: var(--ink-dim); background: transparent;
   border: 0; border-right: 1px solid var(--line); cursor: pointer;
@@ -3056,7 +3056,8 @@ section > .tcv-mcu-more summary { text-transform: uppercase; }
 .tcv-dash-seg button:last-child { border-right: 0; }
 .tcv-dash-seg button:hover { color: var(--ink); background: var(--hover); }
 .tcv-dash-seg button[data-on] { color: var(--ink-bright); background: var(--accent-deep); }
-.tcv-dash-meta { font-size: 11px; color: var(--ink-dim); }
+/* The range buttons keep their width; when the bar is short this gives way. */
+.tcv-dash-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ink-dim); }
 .tcv-dash-body { padding: 4px 12px 16px; }
 .tcv-dash-note { padding: 16px 4px; font-size: 12px; color: var(--ink-dim); }
 .tcv-dash-row {

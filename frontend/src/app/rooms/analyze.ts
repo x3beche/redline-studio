@@ -932,7 +932,8 @@ export class RoomAnalyze implements OnDestroy {
     if (!e) return '';
     return e.basis === 'measured' ? 'Measured from the CPU package counter.'
       : `Estimated: busy CPU time at ${e.watts_per_core} W per core, plus the GPU at its power limit while busy. `
-        + 'Allowing this user to read /sys/class/powercap/intel-rapl:0/energy_uj makes it measured.';
+        + 'Allowing this user to read /sys/class/powercap/intel-rapl:0/energy_uj makes it measured, '
+        + 'or X3_RAPL_PROMETHEUS pointing at a Prometheus that scrapes node_exporter\'s RAPL collector.';
   });
 
   /** A series per room, called by the room's name rather than its id. */
