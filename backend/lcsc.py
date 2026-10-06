@@ -784,9 +784,22 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
                                              {}, None)
             return done.returncode, (done.stdout + done.stderr)
 
+        # With --use-cache easyeda2kicad keeps the component it read in
+        # .easyeda_cache/ - which is where the 3D model's placement is, and
+        # what seat_model() needs later. One already on disk from a
+        # preview is handed to it, so it is the same data either way.
+        ee_cache = tmp / ".easyeda_cache"
+        ee_cache.mkdir()
+        seen = LOOK / lcsc / "component.json"
+        try:
+            if seen.exists():
+                shutil.copy(seen, ee_cache / f"{lcsc}.json")
+        except OSError:
+            pass
         rc, log = await _polite(
             "download", lcsc, f"easyeda2kicad --lcsc_id {lcsc} --footprint --3d",
             download, [TOOL, "--lcsc_id", lcsc, "--footprint", "--3d",
+                       "--use-cache",
                        "--output", str(tmp / "lib")], tmp, weight=3)
         pretty = list((tmp / "lib.pretty").glob("*.kicad_mod")) \
             if (tmp / "lib.pretty").exists() else []
@@ -824,10 +837,107 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
                 doc["model_name"] = hit.stem
                 doc["model_kind"] = suffix.lstrip(".")
                 break
+
+        component = None
+        try:
+            raw = (ee_cache / f"{lcsc}.json").read_bytes()
+            component = json.loads(raw.decode(errors="replace")).get("result")
+            if component and not seen.exists():
+                _keep_file(lcsc, "component.json", raw)
+        except (OSError, ValueError, AttributeError):
+            pass
+        if doc.get("model_kind"):
+            try:
+                await seat_model(db, lcsc, component)
+            except (LookupError, ValueError, OSError, RuntimeError):
+                pass                 # unseated is how it was; not a failed fetch
         return await db[PARTS].find_one({"_id": lcsc}) or doc
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _keep_file(lcsc: str, name: str, blob: bytes) -> None:
+    try:
+        path = LOOK / lcsc.strip() / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".part")
+        tmp.write_bytes(blob)
+        tmp.replace(path)
+    except OSError:
+        pass
+
+
+# ---- seating the 3D model on its pads --------------------------------------
+#
+# easyeda2kicad writes every footprint's model offset as 0,0,0 and bakes
+# the real placement into the WRL only; the board is drawn from the STEP,
+# so bodies stood millimetres off their pads (backend/modelseat.py). The
+# offset is worked out from the stored model and EasyEDA's own placement
+# and written into the stored footprint, once per part.
+
+async def seat_model(db, lcsc: str, component: dict | None = None) -> dict:
+    """Set the stored footprint's model offset so the body sits on its pads.
+
+    `component` is EasyEDA's record of the part; without it the one on disk
+    is used, and only when that is missing is EasyEDA asked - politely, and
+    through the proxy when the proxy is set to always (`_component`).
+    Nothing is downloaded again: the model is the one already stored.
+    Says what it did: {"lcsc", "status", "offset", "was"}.
+    """
+    from . import modelseat
+
+    doc = await db[PARTS].find_one({"_id": lcsc}, {"footprint": 1})
+    text = (doc or {}).get("footprint") or ""
+    out = {"lcsc": lcsc, "status": "", "offset": None,
+           "was": modelseat.offset_of(text)}
+    if not text:
+        out["status"] = "not in the drawer"
+        return out
+    if not modelseat.has_model(text):
+        out["status"] = "footprint names no model"
+        return out
+    got = await model_of(db, lcsc)
+    if not got:
+        out["status"] = "no model stored"
+        return out
+    if component is None:
+        component = await _component(lcsc)
+    blob, kind = got
+    loop = asyncio.get_running_loop()
+    # OpenCascade reading a STEP is seconds of CPU: off the event loop.
+    done = await loop.run_in_executor(None, modelseat.seated, text, blob,
+                                      kind, component)
+    if not done:
+        out["status"] = "no placement to go on"
+        return out
+    new_text, offset = done
+    out["offset"] = offset
+    await db[PARTS].update_one(
+        {"_id": lcsc},
+        {"$set": {"footprint": new_text, "model_offset": list(offset),
+                  "model_seated": modelseat.VERSION}})
+    out["status"] = "seated" if new_text != text else "already seated"
+    return out
+
+
+async def seat_all(db, ids: list[str] | None = None, progress=None) -> list[dict]:
+    """seat_model() for the given parts, or every part in the drawer."""
+    if not ids:
+        ids = [d["_id"] async for d in db[PARTS].find({}, {"_id": 1})]
+    rows = []
+    for i, lcsc in enumerate(ids, 1):
+        try:
+            row = await seat_model(db, lcsc)
+        except Refused:
+            raise
+        except (LookupError, ValueError, OSError, RuntimeError) as exc:
+            row = {"lcsc": lcsc, "status": f"left as it was - {exc}",
+                   "offset": None, "was": None}
+        rows.append(row)
+        if progress:
+            progress(i, len(ids), row)
+    return rows
 
 
 async def model_of(db, lcsc: str) -> tuple[bytes, str] | None:

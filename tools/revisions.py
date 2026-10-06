@@ -282,6 +282,27 @@ async def cmd_part(args):
             except (RuntimeError, ValueError, OSError) as exc:
                 print(f"[{i}/{len(codes)}] {code}: could not be fetched - {exc}")
         return
+    if args.what == "seat":
+        # The model offsets of parts already in the drawer: worked out from
+        # the stored model and EasyEDA's placement, nothing downloaded
+        # again. A part whose EasyEDA record is not on disk is asked for
+        # once, through the same budget (and proxy) as everything else.
+        lcsc.PATIENT.set(True)
+        sys.stdout.reconfigure(line_buffering=True)
+        db = connect()
+        ids = [] if args.args == ["all"] else list(dict.fromkeys(args.args))
+
+        def show(i, n, row):
+            off = row.get("offset")
+            was = row.get("was")
+            fmt = lambda v: "(" + " ".join(f"{x:.3f}" for x in v) + ")" if v else "-"
+            print(f"[{i}/{n}] {row['lcsc']}: {row['status']}"
+                  + (f"  {fmt(was)} -> {fmt(off)}" if off is not None else ""))
+        try:
+            await lcsc.seat_all(db, ids, progress=show)
+        except lcsc.Refused as exc:
+            sys.exit(f"{exc} - run it again later; what was seated stays seated")
+        return
     if args.what == "passive":
         if len(args.args) != 3:
             sys.exit("passive KIND VALUE SIZE, e.g. passive R 10k 0402")
@@ -1410,12 +1431,14 @@ def main() -> None:
                    help="withdraw the question after N seconds; 0 waits")
     s.set_defaults(fn=cmd_ask)
     s = sub.add_parser("part", help="parts from LCSC, for writing a board")
-    s.add_argument("what", choices=["find", "pins", "ato", "passive", "keep"],
+    s.add_argument("what", choices=["find", "pins", "ato", "passive", "keep", "seat"],
                    help="find: ranked search; pins: a part's pinout; "
                         "ato: component blocks to paste into a board; "
                         "passive: R/C by value and size, e.g. R 10k 0402; "
                         "keep: fetch footprints and models ahead of a layout, "
-                        "waiting out LCSC's budget")
+                        "waiting out LCSC's budget; "
+                        "seat C... | all: put stored parts' 3D bodies on their "
+                        "pads (rewrites the footprint's model offset)")
     s.add_argument("args", nargs="+",
                    help="a search for find, LCSC numbers (C...) for pins/ato, "
                         "KIND VALUE SIZE for passive")

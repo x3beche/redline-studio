@@ -19,6 +19,8 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -32,6 +34,84 @@ PORT = 9411
 # create a GPU command buffer on hybrid Intel + NVIDIA machines.
 FLAGS = ["--headless=new", "--ignore-gpu-blocklist", "--use-angle=gl",
          "--no-first-run", "--disable-gpu-sandbox"]
+
+
+# Where a browser is looked for, in order. REDLINE_CHROME names one outright
+# (a path, a command on PATH, or "docker" for the container below); then
+# whatever is installed; then a headless Chromium in a container, which is
+# what a machine with no browser of its own has. It used to be
+# "google-chrome" and nothing else, and a box with Chromium - or none -
+# failed with FileNotFoundError before it had looked anywhere.
+NAMES = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+         "chrome")
+PLACES = ("/opt/google/chrome/chrome", "/usr/bin/google-chrome",
+          "/usr/bin/chromium", "/usr/bin/chromium-browser", "/snap/bin/chromium",
+          "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+IMAGE = os.environ.get("REDLINE_CHROME_IMAGE", "zenika/alpine-chrome:with-puppeteer")
+# In the container there is no GPU: WebGL goes through SwiftShader, and
+# there is no user namespace for Chrome's sandbox.
+DOCKER_FLAGS = ["--headless=new", "--no-first-run", "--no-sandbox",
+                "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
+                "--disable-dev-shm-usage"]
+
+
+class NoBrowser(RuntimeError):
+    pass
+
+
+def _image_there(image: str) -> bool:
+    if not shutil.which("docker"):
+        return False
+    try:
+        return subprocess.run(["docker", "image", "inspect", image],
+                              capture_output=True, timeout=20).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def find_browser(env: dict | None = None, which=shutil.which,
+                 exists=os.path.exists, image_there=_image_there) -> tuple[str, str]:
+    """("local", path) for an installed browser, ("docker", image) for the
+    container. Raises NoBrowser naming everything it tried."""
+    env = os.environ if env is None else env
+    want = (env.get("REDLINE_CHROME") or "").strip()
+    if want:
+        if want == "docker" or want.startswith("docker:"):
+            image = want.partition(":")[2] or IMAGE
+            if image_there(image):
+                return "docker", image
+            raise NoBrowser(f"REDLINE_CHROME={want}: no docker image {image}")
+        got = which(want) or (want if exists(want) else None)
+        if got:
+            return "local", got
+        raise NoBrowser(f"REDLINE_CHROME={want}: not found")
+    for name in NAMES:
+        got = which(name)
+        if got:
+            return "local", got
+    for place in PLACES:
+        if exists(place):
+            return "local", place
+    if image_there(IMAGE):
+        return "docker", IMAGE
+    raise NoBrowser("no browser: tried " + ", ".join(NAMES) + " on PATH, "
+                    + ", ".join(PLACES) + f", and the docker image {IMAGE}. "
+                    "Install Chrome/Chromium, or set REDLINE_CHROME to one.")
+
+
+def browser_argv(found: tuple[str, str], port: int, width: int, height: int,
+                 profile: str, url: str, name: str) -> list[str]:
+    how, what = found
+    tail = [f"--remote-debugging-port={port}", f"--window-size={width},{height}"]
+    if how == "docker":
+        # Host network: the page is on 127.0.0.1:4200 and the DevTools port
+        # has to be reachable on the host's 127.0.0.1 too. The profile lives
+        # and dies in the container.
+        return ["docker", "run", "--rm", "--name", name, "--network", "host",
+                "--shm-size", "1g", "--entrypoint", "chromium-browser", what,
+                *DOCKER_FLAGS, *tail, "--remote-debugging-address=127.0.0.1",
+                "--user-data-dir=/tmp/profile", url]
+    return [what, *FLAGS, *tail, f"--user-data-dir={profile}", url]
 
 
 def _ink(png: bytes) -> float:
@@ -59,11 +139,15 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
            camera: str | None = None, only: str | None = None) -> Path:
     from websockets.sync.client import connect
 
+    try:
+        found = find_browser()
+    except NoBrowser as exc:
+        sys.exit(str(exc))
     profile = tempfile.mkdtemp(prefix="x3render-")
+    name = f"x3render-{os.getpid()}"
+    url = (f"{WEB}/?{'model=' + revision.split(':', 1)[1] if revision.startswith('model:') else 'rev=' + revision}")
     chrome = subprocess.Popen(
-        ["google-chrome", *FLAGS, f"--remote-debugging-port={PORT}",
-         f"--window-size={width},{height}", f"--user-data-dir={profile}",
-         f"{WEB}/?{'model=' + revision.split(':', 1)[1] if revision.startswith('model:') else 'rev=' + revision}"],
+        browser_argv(found, PORT, width, height, profile, url, name),
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from backend import compute
@@ -80,7 +164,8 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
             except Exception:
                 time.sleep(0.5)
         if page is None:
-            sys.exit("chrome did not start; is the dev server up?")
+            sys.exit(f"chrome ({found[0]}: {found[1]}) did not start; "
+                     "is the dev server up?")
 
         ws = connect(page["webSocketDebuggerUrl"], max_size=80_000_000)
         seq = [0]
@@ -208,7 +293,9 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
             chrome.wait(10)
         except subprocess.TimeoutExpired:
             chrome.kill()
-        import shutil
+        if found[0] == "docker":
+            # Killing the docker client does not always stop the container.
+            subprocess.run(["docker", "rm", "-f", name], capture_output=True)
         shutil.rmtree(profile, ignore_errors=True)
 
 
