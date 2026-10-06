@@ -96,6 +96,12 @@ _RULES: list[tuple[str, str, str]] = [
     ("PATCH", "/api/notes/{}", "draw"),
     ("DELETE", "/api/notes/{}", "draw"),
     ("POST", "/api/notes/{}/send", "draw"),
+    # files: bringing one in, or pointing an agent at it, is like writing a
+    # note; the route keeps deleting someone else's to those who may delete
+    ("POST", "/api/files", "draw"),
+    ("PATCH", "/api/files/{}", "draw"),
+    ("DELETE", "/api/files/{}", "draw"),
+    ("POST", "/api/files/{}/send", "draw"),
     # releases: making one runs the builds' outputs; downloading is looking
     ("POST", "/api/releases", "run"),
     # talking with the agents

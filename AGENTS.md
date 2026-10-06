@@ -504,6 +504,25 @@ already looked at come from disk without asking. Every ask - yours, the
 page's - is written down and shown in the board room's **lcsc** tab.
 When `find` says it is cooling off, wait; do not loop on it.
 
+## Files people upload
+
+The **Files** tab is where a person drops what the work needs and the app
+has no other place for: a BOM for a board that came in as bare Gerbers, a
+pick-and-place file, a datasheet, a photo. Each file keeps who brought it
+and the board it is for; a BOM is recognised by its header row. "Send to
+agent" puts a line in a room's thread with the file's id and the command
+that fetches it - that line is information, not a queued note.
+
+```bash
+.venv/bin/python tools/revisions.py files --board <id>        # what was uploaded for a board
+.venv/bin/python tools/revisions.py files get <file-id> -o bom.csv
+.venv/bin/python tools/revisions.py board convert <id> --bom bom.csv --run
+.venv/bin/python tools/revisions.py files put out.pdf --board <id> --note "..."   # give one back
+```
+
+Before guessing parts for an imported board, look here: a BOM someone
+uploaded replaces every guess.
+
 ## Only `queued` items are work
 
 | Status | Meaning |
@@ -534,6 +553,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py finish <id>          # close that note's run
 .venv/bin/python tools/revisions.py after <id>           # the "after" picture
 .venv/bin/python tools/revisions.py usage [--full]       # what the work cost
+.venv/bin/python tools/revisions.py files [get <id>|put <file>]  # the Files tab
 .venv/bin/python tools/revisions.py code show|diff|test|done <id>        # code notes
 .venv/bin/python tools/revisions.py code serve|build|flash <app>          # in the room's container
 .venv/bin/python tools/render.py <id> [--camera=…|--only PART]

@@ -37,6 +37,13 @@ and the elements under the marks:
     python tools/revisions.py code test <id>     the project's test command
     python tools/revisions.py code done <id>     tests, after shot, then applied
 
+Files people uploaded in the Files tab - a BOM, a pick-and-place file, a
+datasheet (backend/files.py); through the server, like `board`:
+
+    python tools/revisions.py files [--board B] [--kind bom] [-q TEXT]   list them
+    python tools/revisions.py files get <id> [-o PATH]                   write one to disk
+    python tools/revisions.py files put <path> [--board B] [--note TEXT] keep one there
+
 Firmware on its virtual board (backend/sim), headless:
 
     python tools/revisions.py sim run <app> --for 5 [--press REF[@s]] [--uart TEXT[@s]]
@@ -1285,6 +1292,69 @@ async def cmd_sim(args):
         sys.exit(f"sim failed: {failed}")
 
 
+async def cmd_files(args):
+    """The Files tab, from the command line. Through the server (it keeps the
+    bytes in GridFS and knows the workspace), with the agents' token."""
+    import json as _json
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+    import uuid
+
+    from backend import actors
+
+    base = os.environ.get("X3_API", "http://localhost:8000")
+    auth = {"Authorization": f"Bearer {os.environ['X3_TOKEN']}"} if os.environ.get("X3_TOKEN") else {}
+
+    def call(path: str, method: str = "GET", data: bytes | None = None, ctype: str | None = None) -> bytes:
+        req = urllib.request.Request(base + path, method=method, data=data,
+                                     headers={**actors.header_for_agent(), **auth,
+                                              **({"content-type": ctype} if ctype else {})})
+        try:
+            with urllib.request.urlopen(req, timeout=300) as r:
+                return r.read()
+        except urllib.error.HTTPError as exc:
+            sys.exit(f"{method} {path}: {exc.code} {exc.read().decode(errors='replace')[:800]}")
+        except urllib.error.URLError as exc:
+            sys.exit(f"the server is not answering at {base} ({exc.reason}) - start.sh")
+
+    if args.what == "list":
+        q = urllib.parse.urlencode({k: v for k, v in (("board", args.board), ("kind", args.kind), ("q", args.q)) if v})
+        rows = _json.loads(call("/api/files" + (f"?{q}" if q else "")))
+        if not rows:
+            print("no files")
+        for d in rows:
+            ctx = d.get("context") or {}
+            at = ctx.get("board") or ctx.get("model") or ctx.get("app") or ctx.get("room") or "-"
+            who = (d.get("by") or {}).get("name") or "?"
+            print(f"{d['id']}  {d['kind']:<10} {d['bytes'] // 1024:>7} kB  {d['created_at'][:16]}  "
+                  f"{at:<24} {d['name']}  ({who})" + (f"\n{'':14}{d['note']}" if d.get("note") else ""))
+    elif args.what == "get":
+        if not args.target:
+            sys.exit("files get needs a file id (files list)")
+        meta = {d["id"]: d for d in _json.loads(call("/api/files"))}.get(args.target)
+        data = call(f"/api/files/{args.target}")
+        out = Path(args.out or (meta or {}).get("name") or args.target)
+        out.write_bytes(data)
+        print(f"wrote {out} ({len(data)} bytes)" + (f" - a {meta['kind']}" if meta else ""))
+    elif args.what == "put":
+        src = Path(args.target or "")
+        if not src.is_file():
+            sys.exit(f"files put needs a file: {src}")
+        ctx = {"room": os.environ.get("X3_ROOM", "pcb" if args.board else "cad"),
+               **({"board": args.board} if args.board else {})}
+        b = uuid.uuid4().hex
+        parts = [("context", _json.dumps(ctx).encode(), None), ("note", (args.note or "").encode(), None)]
+        body = b"".join(
+            f"--{b}\r\nContent-Disposition: form-data; name=\"{n}\"\r\n\r\n".encode() + v + b"\r\n"
+            for n, v, _ in parts)
+        body += (f"--{b}\r\nContent-Disposition: form-data; name=\"upload\"; filename=\"{src.name}\"\r\n"
+                 f"Content-Type: application/octet-stream\r\n\r\n").encode() + src.read_bytes() + f"\r\n--{b}--\r\n".encode()
+        got = _json.loads(call("/api/files", "POST", body, f"multipart/form-data; boundary={b}"))
+        for d in got:
+            print(f"kept {d['name']} as {d['id']} ({d['kind']}, {d['bytes']} bytes)")
+
+
 def main() -> None:
     # The repo's .env, before anything reads the environment: the token
     # (X3_TOKEN) is needed by the API-backed commands - `board ...` - as
@@ -1378,6 +1448,16 @@ def main() -> None:
     s.add_argument("--room", choices=["cad", "pcb", "web", "embedded", "mobile"],
                    help="only this room's notes and thread; default: every room")
     s.set_defaults(fn=cmd_wait)
+    s = sub.add_parser("files", help="the Files tab: what people uploaded (a BOM, a datasheet...)")
+    s.add_argument("what", nargs="?", default="list", choices=["list", "get", "put"],
+                   help="list (the default), get <id> [-o PATH], put <path>")
+    s.add_argument("target", nargs="?", help="get: the file's id; put: the file to upload")
+    s.add_argument("-o", "--out", help="get: where to write it (default: its own name)")
+    s.add_argument("--board", help="list: only this board's; put: link it to this board")
+    s.add_argument("--kind", help="list: only this kind (bom, pick-place, pdf, image...)")
+    s.add_argument("-q", help="list: search the names and notes")
+    s.add_argument("--note", help="put: a line about the file")
+    s.set_defaults(fn=cmd_files)
     s = sub.add_parser("show"); s.add_argument("id"); s.add_argument("-o", "--out")
     s.set_defaults(fn=cmd_show)
     s = sub.add_parser("done"); s.add_argument("id"); s.set_defaults(fn=cmd_done)

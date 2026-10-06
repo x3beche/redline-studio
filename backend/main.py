@@ -16,14 +16,14 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
-from . import (access, actors, ato, auth, changes, convert, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (access, actors, ato, auth, changes, convert, files, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
 from . import tools_api
@@ -2145,6 +2145,111 @@ async def notes_send(nid: str, body: NoteSend):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     await db()[notes.COLL].update_one({"_id": nid}, {"$set": {"sent": {"room": body.room, "at": notes._now()}}})
+    return {"sent": body.room, "message": line}
+
+
+# ---------------- files ----------------
+# Anything the work needs that is not a model or a board: a BOM, a
+# pick-and-place file, a datasheet, a photo (backend/files.py).
+def _file_out(d: dict) -> dict:
+    return {**{k: v for k, v in d.items() if k not in ("_id", "workspace_id", "gridfs_id")}, "id": d["_id"]}
+
+
+@app.get("/api/files")
+async def files_list(q: str = "", kind: str = "", board: str = ""):
+    return [_file_out(d) for d in await files.listing(db(), q=q, kind=kind, board=board)]
+
+
+@app.post("/api/files")
+async def files_upload(upload: list[UploadFile] = File(...), context: str = Form(""), note: str = Form("")):
+    """One or more files, kept as they came. `context` is JSON - the room and
+    the board, model or app open there - and comes along with each."""
+    try:
+        raw = json.loads(context) if context else {}
+    except ValueError:
+        raw = {}
+    ctx = {k: str(v)[:200] for k, v in (raw if isinstance(raw, dict) else {}).items()
+           if k in ("room", "model", "board", "app") and v}
+    out = []
+    for f in upload:
+        # Read it in pieces, so a file over the limit is refused before all
+        # of it sits in memory.
+        chunks, size = [], 0
+        while chunk := await f.read(1 << 20):
+            size += len(chunk)
+            if size > files.MAX_BYTES:
+                raise HTTPException(413, f"{f.filename}: larger than {files.MAX_BYTES // (1024 * 1024)} MB")
+            chunks.append(chunk)
+        try:
+            doc = await files.put(db(), f.filename or "file", b"".join(chunks), f.content_type,
+                                  ctx, actors.current(), note)
+        except ValueError as exc:
+            raise HTTPException(400, f"{f.filename}: {exc}") from exc
+        out.append(_file_out(doc))
+    names = ", ".join(d["name"] for d in out)
+    await push_activity(ActivityIn(text=f"uploaded {names}"[:500], level="done",
+                                   room=ctx.get("room") if ctx.get("room") in ("cad", "pcb", "web", "embedded", "mobile") else "cad"))
+    return out
+
+
+@app.get("/api/files/{fid}")
+async def files_download(fid: str, inline: bool = False):
+    import re
+    from urllib.parse import quote
+    try:
+        doc, data = await files.get(db(), fid)
+    except KeyError as exc:
+        raise HTTPException(404, fid) from exc
+    how = "inline" if inline else "attachment"
+    ascii_name = re.sub(r'[^A-Za-z0-9._-]', "_", doc["name"])
+    return Response(data, media_type=doc.get("content_type") or "application/octet-stream",
+                    headers={"Content-Disposition": f"{how}; filename=\"{ascii_name}\"; "
+                                                    f"filename*=UTF-8''{quote(doc['name'])}",
+                             "Cache-Control": "private, max-age=3600"})
+
+
+class FilePatch(BaseModel):
+    note: str | None = Field(default=None, max_length=2000)
+    board: str | None = Field(default=None, max_length=200)
+
+
+@app.patch("/api/files/{fid}")
+async def files_update(fid: str, body: FilePatch):
+    doc = await files.update(db(), fid, body.note, body.board)
+    if not doc:
+        raise HTTPException(404, fid)
+    return _file_out(doc)
+
+
+@app.delete("/api/files/{fid}")
+async def files_delete(fid: str):
+    doc = await db()[files.COLL].find_one({"_id": fid}, {"by": 1, "name": 1})
+    if not doc:
+        raise HTTPException(404, fid)
+    # Your own, always; someone else's, only if you may delete (as notes).
+    if (doc.get("by") or {}).get("id") != actors.current().get("id") and not access.allowed(access.current(), "delete"):
+        raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
+    await files.remove(db(), fid)
+    await actors.audit(db(), "delete", f"file {doc.get('name')}", {"id": fid})
+    return {"deleted": fid}
+
+
+class FileSend(BaseModel):
+    room: str = Field(pattern="^(cad|pcb|web|embedded|mobile)$")
+
+
+@app.post("/api/files/{fid}/send")
+async def files_send(fid: str, body: FileSend):
+    """Point a room's agent at a file: a line in that room's thread saying
+    what it is and how to fetch it."""
+    doc = await db()[files.COLL].find_one({"_id": fid})
+    if not doc:
+        raise HTTPException(404, fid)
+    try:
+        line = await chat.post(db(), files.as_message(doc)[:4000], room=body.room)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    await db()[files.COLL].update_one({"_id": fid}, {"$set": {"sent": {"room": body.room, "at": files._now()}}})
     return {"sent": body.room, "message": line}
 
 
