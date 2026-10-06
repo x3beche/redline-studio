@@ -298,7 +298,7 @@ import render  # noqa: E402
 
 def test_render_finds_the_token_without_saying_it(tmp_path):
     env = tmp_path / ".env"
-    env.write_text('X3_TOKEN="rlat_old"\nREDLINE_TOKEN=rlat_new\n')
+    env.write_text('OTHER="x"\nREDLINE_TOKEN=rlat_new\n')
     assert render.agent_token({}, env) == "rlat_new"
     assert render.agent_token({"REDLINE_TOKEN": "rlat_env"}, env) == "rlat_env"
     assert render.agent_token({}, tmp_path / "missing") is None

@@ -52,7 +52,7 @@ interface ProxyUsage {
 }
 
 type Mode = 'off' | 'fallback' | 'always';
-const LAST_TEST = 'x3.settings.proxy.lastTest';
+const LAST_TEST = 'redline.settings.proxy.lastTest';
 const PERIODS = [{ days: 1, label: '24h' }, { days: 7, label: '7d' }, { days: 30, label: '30d' }];
 const HEALTH = [0, 5, 15, 30, 60, 180, 1440];
 const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + ' s' : Math.round(v) + ' ms';
@@ -446,13 +446,13 @@ export class ProxySettingsPanel {
     try { return JSON.parse(localStorage.getItem(LAST_TEST) ?? 'null'); } catch { return null; }
   }
   private readDays(): number {
-    try { return Number(localStorage.getItem('x3.settings.proxy.days')) || 7; } catch { return 7; }
+    try { return Number(localStorage.getItem('redline.settings.proxy.days')) || 7; } catch { return 7; }
   }
   setDays(d: number) {
     if (d === this.days()) return;
     this.u.set(null);
     this.days.set(d);
-    try { localStorage.setItem('x3.settings.proxy.days', String(d)); } catch { /* private window */ }
+    try { localStorage.setItem('redline.settings.proxy.days', String(d)); } catch { /* private window */ }
   }
 
   pct(n: number, of: number) { return of ? Math.round(100 * n / of) + '%' : '–'; }

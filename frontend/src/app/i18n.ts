@@ -10,7 +10,7 @@ import { Pipe, PipeTransform, signal } from '@angular/core';
 export type Lang = 'en' | 'tr';
 export const LANGS: { id: Lang; name: string }[] = [{ id: 'en', name: 'English' }, { id: 'tr', name: 'Türkçe' }];
 
-const KEY = 'x3.lang';
+const KEY = 'redline.lang';
 
 function read(): Lang {
   try {

@@ -68,7 +68,6 @@ def connect():
     from motor.motor_asyncio import AsyncIOMotorClient
 
     load_dotenv(ROOT / ".env")
-    from backend import envnames as _envnames; _envnames.adopt()
     # REDLINE_TRANSPORT=api: the database through the server, with this agent's
     # token (REDLINE_TOKEN) - no connection string needed (tools/remote_db.py).
     # Anything else: straight to MongoDB, as before.
@@ -1015,7 +1014,6 @@ def main() -> None:
     # well as by the database ones. What the shell already set wins.
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env")
-    from backend import envnames as _envnames; _envnames.adopt()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)

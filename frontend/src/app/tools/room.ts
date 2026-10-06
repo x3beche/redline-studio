@@ -4,9 +4,9 @@ import { COMPONENTS, GROUPS, NARROW, ROOMS, ToolInfo } from './registry';
 import { Selection } from '../selection';
 import { ToolFrame } from './frame';
 
-const KEY = 'x3.tool';
-const FAVS = 'x3.tools.favs';
-const RECENT = 'x3.tools.recent';
+const KEY = 'redline.tool';
+const FAVS = 'redline.tools.favs';
+const RECENT = 'redline.tools.recent';
 
 function load<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback; } catch { return fallback; }
@@ -158,7 +158,7 @@ export class RoomTools {
   onlyFavs = signal(false);
   favs = signal<string[]>(load(FAVS, []));
   recent = signal<string[]>(load(RECENT, []));
-  closed = signal<string[]>(load('x3.tools.closed', []));
+  closed = signal<string[]>(load('redline.tools.closed', []));
   cursor = signal(0);
   private id = signal<string>(load(KEY, 'i2c-pullup'));
 
@@ -221,7 +221,7 @@ export class RoomTools {
 
   toggle(g: string) {
     this.closed.update(c => (c.includes(g) ? c.filter(x => x !== g) : [...c, g]));
-    save('x3.tools.closed', this.closed());
+    save('redline.tools.closed', this.closed());
   }
 
   /** In the search box: arrows move through the results, Enter opens. */

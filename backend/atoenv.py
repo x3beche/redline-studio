@@ -11,7 +11,7 @@ runs them with the venv's site-packages on its path.
 
 In order, for easyeda2kicad:
 
-1. REDLINE_EASYEDA (old name X3_EASYEDA), if it can actually start: a
+1. REDLINE_EASYEDA, if it can actually start: a
    binary, or a script whose `#!` interpreter exists;
 2. the atopile environment's Python, `-m easyeda2kicad`: REDLINE_ATO_PYTHON
    if it exists, else the venv's own `bin/python`, else a same-version

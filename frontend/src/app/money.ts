@@ -9,7 +9,7 @@ import { Auth } from './auth';
  *  The exchange rates come from the server (/api/fx - frankfurter.dev,
  *  refreshed there every hour), read at start, every hour, and when the
  *  tab comes back after more than an hour away. The display currency is
- *  this browser's own choice if it made one ("x3.currency"), else the
+ *  this browser's own choice if it made one ("redline.currency"), else the
  *  workspace's default (/api/costs display_currency), else dollars.
  *
  *  The state is in plain signals at module level, so the helpers below
@@ -64,8 +64,8 @@ export interface Costs {
 export type CostsPatch = Partial<Pick<Costs, 'display_currency' | 'subscriptions' | 'electricity' | 'proxy' | 'other'>>
   & { budgets?: Partial<Record<BudgetKind, Budget | null>> };
 
-const OVERRIDE_KEY = 'x3.currency';
-const FX_KEY = 'x3.fx';
+const OVERRIDE_KEY = 'redline.currency';
+const FX_KEY = 'redline.fx';
 const HOUR = 3600_000;
 /** The currencies most people here want, first in every list. */
 export const COMMON = ['USD', 'EUR', 'TRY', 'GBP'];

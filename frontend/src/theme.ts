@@ -38,7 +38,7 @@ export const THEME_NAMES: Record<Theme, string> = {
 };
 export type Theme = (typeof THEMES)[number];
 
-const KEY = 'x3.theme';
+const KEY = 'redline.theme';
 
 export function currentTheme(): Theme {
   // The URL wins, so a theme can be tried - or a screenshot taken - without

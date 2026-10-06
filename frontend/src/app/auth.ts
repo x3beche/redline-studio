@@ -247,7 +247,7 @@ export interface AgentToken {
     @if (made(); as m) {
       <div class="tcv-tokens-once">
         <span>The token for <b>{{ m.name }}</b>. It is shown this once - copy it now. Give the agent these lines:</span>
-        <code>X3_TRANSPORT=api<br>X3_API={{ origin }}<br>X3_TOKEN={{ m.token }}</code>
+        <code>REDLINE_TRANSPORT=api<br>REDLINE_API={{ origin }}<br>REDLINE_TOKEN={{ m.token }}</code>
         <div class="tcv-tokens-end"><button class="tcv-btn" (click)="copy(m.token)">{{ copied() ? 'Copied' : 'Copy the lines' }}</button></div>
       </div>
     }
@@ -302,7 +302,7 @@ export class AgentTokens {
   }
 
   copy(token: string) {
-    navigator.clipboard?.writeText(`X3_TRANSPORT=api\nX3_API=${this.origin}\nX3_TOKEN=${token}\n`)
+    navigator.clipboard?.writeText(`REDLINE_TRANSPORT=api\nREDLINE_API=${this.origin}\nREDLINE_TOKEN=${token}\n`)
       .then(() => this.copied.set(true), () => this.error.set('the browser would not copy - select the lines instead'));
   }
 
@@ -575,7 +575,7 @@ export class UserChip {
     this.http.post('/api/workspaces/' + encodeURIComponent(id) + '/open', {}).subscribe({
       next: () => {
         try {
-          Object.keys(localStorage).filter(k => k.startsWith('x3.analytics.data.'))
+          Object.keys(localStorage).filter(k => k.startsWith('redline.analytics.data.'))
             .forEach(k => localStorage.removeItem(k));
         } catch { /* private window */ }
         location.reload();

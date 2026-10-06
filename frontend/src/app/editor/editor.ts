@@ -1141,10 +1141,10 @@ export class Editor implements AfterViewInit, OnDestroy {
   // the default angle. The open model and the camera are kept in this
   // browser - they are about this window, not about the project, so they do
   // not belong in the database.
-  private static SEEN = 'x3.lastView';
+  private static SEEN = 'redline.lastView';
   /** What was open and what was folded away. One key rather than five:
    *  it is all the same question - how this window was left. */
-  private static PANELS = 'x3.panels';
+  private static PANELS = 'redline.panels';
 
   private panels(): Record<string, unknown> {
     try {

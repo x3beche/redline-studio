@@ -106,7 +106,7 @@ export class RoomFrame implements AfterViewInit, OnDestroy {
 
   constructor() {
     effect(() => {
-      try { this.logOpen.set(localStorage.getItem(`x3.${this.room()}.log`) !== ''); }
+      try { this.logOpen.set(localStorage.getItem(`redline.${this.room()}.log`) !== ''); }
       catch { /* private window */ }
     });
     // A new last line scrolls the band down to it; reading back up is not
@@ -123,7 +123,7 @@ export class RoomFrame implements AfterViewInit, OnDestroy {
 
   toggleLog() {
     this.logOpen.update(v => !v);
-    try { localStorage.setItem(`x3.${this.room()}.log`, this.logOpen() ? '1' : ''); }
+    try { localStorage.setItem(`redline.${this.room()}.log`, this.logOpen() ? '1' : ''); }
     catch { /* private window */ }
     if (this.logOpen()) setTimeout(() => this.scrollLog(), 30);
   }

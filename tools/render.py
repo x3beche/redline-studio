@@ -59,10 +59,10 @@ def browser_argv(found: tuple[str, str], port: int, width: int, height: int,
 # or in the address - and ended when the picture is taken.
 
 def agent_token(env: dict | None = None, dotenv: Path | None = None) -> str | None:
-    """The agents' token: REDLINE_TOKEN (or the old X3_TOKEN), else the
+    """The agents' token: REDLINE_TOKEN, else the
     repo's .env."""
     env = os.environ if env is None else env
-    for k in ("REDLINE_TOKEN", "X3_TOKEN"):
+    for k in ("REDLINE_TOKEN",):
         if (env.get(k) or "").strip():
             return env[k].strip()
     dotenv = dotenv or Path(__file__).resolve().parent.parent / ".env"
@@ -70,7 +70,7 @@ def agent_token(env: dict | None = None, dotenv: Path | None = None) -> str | No
         lines = dotenv.read_text().splitlines()
     except OSError:
         return None
-    for want in ("REDLINE_TOKEN=", "X3_TOKEN="):
+    for want in ("REDLINE_TOKEN=",):
         for line in lines:
             if line.startswith(want):
                 value = line.split("=", 1)[1].strip().strip('"').strip("'")

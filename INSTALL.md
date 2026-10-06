@@ -84,8 +84,7 @@ build123d into a volume and takes a few minutes.
 
 Everything is read from `.env`, which is git-ignored. The connection string and
 the API key are read by the **backend only** and never reach the browser.
-Redline's own settings are named `REDLINE_*`; an older `.env` with the first
-names (`X3_*`, and `X3_AUTH` for `REDLINE_REQUIRE_SIGNIN`) keeps working.
+Redline's own settings are all named `REDLINE_*`.
 
 | Variable | Default | What it does |
 |---|---|---|
@@ -179,7 +178,7 @@ made. Release zips are kept in the database and, for speed, in
 
 Twenty-six, chosen under your name > **Preferences** (or ⚙, or Ctrl+K),
 or `?theme=github-dark` and the like in the URL; the choice is kept in the
-browser (`x3.theme`). A theme is a complete set of tokens in
+browser (`redline.theme`). A theme is a complete set of tokens in
 `frontend/src/styles.css` and its name in `frontend/src/theme.ts` (light
 ones also in `LIGHT_THEMES`, so boards are drawn with light inks); adding
 one means copying a block and changing the values, and the tests will say

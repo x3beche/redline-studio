@@ -13,7 +13,7 @@
 #   REDLINE_BUILD_MEM=12G tools/capped.sh ...      # raise it for one run
 set -euo pipefail
 
-LIMIT="${REDLINE_BUILD_MEM:-${X3_BUILD_MEM:-10G}}"
+LIMIT="${REDLINE_BUILD_MEM:-10G}"
 
 if command -v systemd-run >/dev/null 2>&1 &&
    systemd-run --user --scope -q -p MemoryMax="$LIMIT" true >/dev/null 2>&1; then

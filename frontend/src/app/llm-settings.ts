@@ -159,8 +159,8 @@ export class LlmUsagePanel {
   readonly periods = PERIODS;
   /** Display names, from the settings above. */
   names = signal<Record<string, string>>({ commandcode: 'Command Code', openrouter: 'OpenRouter' });
-  provider = signal<string>(load('x3.settings.llm.provider', 'openrouter'));
-  days = signal<number>(load('x3.settings.llm.days', 30));
+  provider = signal<string>(load('redline.settings.llm.provider', 'openrouter'));
+  days = signal<number>(load('redline.settings.llm.days', 30));
   u = signal<LlmUsage | null>(null);
   allRecent = signal(false);
   err = signal<string | null>(null);
@@ -177,8 +177,8 @@ export class LlmUsagePanel {
     });
   }
 
-  setProvider(p: string) { this.provider.set(p); keep('x3.settings.llm.provider', p); }
-  setDays(d: number) { this.days.set(d); keep('x3.settings.llm.days', d); }
+  setProvider(p: string) { this.provider.set(p); keep('redline.settings.llm.provider', p); }
+  setDays(d: number) { this.days.set(d); keep('redline.settings.llm.days', d); }
   perCall(n: number, calls: number) { return fmt.count(Math.round(n / calls)); }
   perDay(n: number) { return fmt.count(n / Math.max(1, this.days())); }
   /** Dollars from the server in the display currency, a tiny amount still as a figure. */

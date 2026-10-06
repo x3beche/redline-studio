@@ -118,12 +118,3 @@ def test_sign_in_is_off_unless_asked_for(monkeypatch):
     assert auth.enabled()
     monkeypatch.setenv("REDLINE_REQUIRE_SIGNIN", "false")
     assert not auth.enabled()
-
-
-def test_the_old_names_still_work():
-    from backend import envnames
-    env = {"X3_AUTH": "on", "X3_TOKEN": "rlat_x", "REDLINE_AGENT": "new", "X3_AGENT": "old"}
-    envnames.adopt(env)
-    assert env["REDLINE_REQUIRE_SIGNIN"] == "on"
-    assert env["REDLINE_TOKEN"] == "rlat_x"
-    assert env["REDLINE_AGENT"] == "new"          # the new name wins

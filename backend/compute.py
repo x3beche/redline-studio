@@ -429,8 +429,6 @@ def record_sync(root, kind: str, **row) -> None:
         from motor.motor_asyncio import AsyncIOMotorClient
 
         load_dotenv(Path(root) / ".env")
-        from . import envnames
-        envnames.adopt()
         uri = _os.getenv("MONGODB_URI", "").strip()
         if not uri:
             return

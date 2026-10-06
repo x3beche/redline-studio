@@ -46,7 +46,7 @@ away, and that is all. There is no clearing it from the page.
 
 What you fold away stays folded. The log, the thread under the queue, the
 two side columns and every folder in the catalog come back the way you
-left them — the window remembers its own shape in `x3.panels`, per
+left them — the window remembers its own shape in `redline.panels`, per
 browser, and nothing about it reaches the database.
 
 A single button on the card cycles the status: draft → queued → applied →
@@ -105,7 +105,7 @@ being built, so a module can import the parts it is made of:
 
 ```python
 import os
-os.environ["REDLINE_IMPORT_ONLY"] = os.environ["X3_IMPORT_ONLY"] = "1"   # parts must not run their own exports (older parts read X3_)
+os.environ["REDLINE_IMPORT_ONLY"] = "1"      # parts must not run their own exports
 import fan_pro as F
 import stand as D
 
@@ -578,7 +578,7 @@ defines is used.
 ?theme=default      what it has always looked like
 ```
 
-The URL wins for a single look; `localStorage['x3.theme']` is what the
+The URL wins for a single look; `localStorage['redline.theme']` is what the
 browser remembers. The viewer in the middle of the screen keeps its own
 palette in `--tcv-*` variables, and those are bound to the same tokens, so
 a new theme reaches the third-party chrome without touching it.

@@ -1085,7 +1085,7 @@ export class RoomPcb implements OnDestroy {
     return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
   }
 
-  private static KEY = 'x3.pcb.';
+  private static KEY = 'redline.pcb.';
 
   /** A remembered value, if it is still one of the choices - a tab that
    *  no longer exists is not a reason to show nothing. */

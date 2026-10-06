@@ -28,8 +28,6 @@ from pydantic import BaseModel, Field
 # (ato's REDLINE_ATO, lcsc's REDLINE_EASYEDA and REDLINE_LCSC_GAP), and reading them
 # first left .env's values unseen - the defaults won wherever they differed.
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-from . import envnames  # noqa: E402
-envnames.adopt()                       # an older .env's X3_ names
 
 from . import (access, actors, ato, auth, changes, convert, files, jobs, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
@@ -41,7 +39,6 @@ ROOT = Path(__file__).resolve().parent.parent
 EXPORT_SCRIPT = ROOT / "export_model.py"
 
 load_dotenv(ROOT / ".env")
-envnames.adopt()
 MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
 MONGODB_DB = os.getenv("MONGODB_DB", "redline")
 QUOTA_MB = float(os.getenv("STORAGE_QUOTA_MB", "512"))
@@ -223,7 +220,7 @@ from pathlib import Path
 
 from build123d import *
 
-STANDALONE = "1" not in (os.environ.get("REDLINE_IMPORT_ONLY"), os.environ.get("X3_IMPORT_ONLY"))
+STANDALONE = os.environ.get("REDLINE_IMPORT_ONLY") != "1"
 ROOT = Path(__file__).resolve().parent.parent   # uploads land here
 SRC = ROOT / "{filename}"
 

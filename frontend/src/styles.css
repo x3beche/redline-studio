@@ -16,7 +16,7 @@
    The default is what the application has always looked like: the values
    are lifted from three-cad-viewer's own CSS, so the third-party viewer in
    the middle of the screen speaks the same language as the panels around
-   it. Pick another with ?theme=light, or set `x3.theme` in localStorage.
+   it. Pick another with ?theme=light, or set `redline.theme` in localStorage.
 
    One thing deliberately does NOT live here: the drawing pens. A mark's
    colour is written into the revision and printed into the picture, so it

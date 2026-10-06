@@ -112,14 +112,11 @@ API = os.environ.get("REDLINE_API", "http://127.0.0.1:8000")
 def _token_from_env_file() -> None:
     """With sign-in on, the agents' token (REDLINE_TOKEN) - from the repo's .env
     when the MCP client did not pass it. Only that one line is read."""
-    for k in ("AGENT", "TOKEN", "API"):                # the old X3_ names still work
-        if os.environ.get("X3_" + k) and not os.environ.get("REDLINE_" + k):
-            os.environ["REDLINE_" + k] = os.environ["X3_" + k]
     if os.environ.get("REDLINE_TOKEN"):
         return
     try:
         for line in (ROOT / ".env").read_text().splitlines():
-            if line.startswith(("REDLINE_TOKEN=", "X3_TOKEN=")):
+            if line.startswith("REDLINE_TOKEN="):
                 os.environ["REDLINE_TOKEN"] = line.split("=", 1)[1].strip().strip('"')
     except OSError:
         pass

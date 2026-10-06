@@ -76,7 +76,7 @@ export const WORKSPACES: Workspace[] = [
   },
 ];
 
-const KEY = 'x3.workspace';
+const KEY = 'redline.workspace';
 
 export function currentWorkspace(): Workspace['id'] {
   const asked = new URLSearchParams(location.search).get('ws');

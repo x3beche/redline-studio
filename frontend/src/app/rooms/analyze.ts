@@ -1041,7 +1041,7 @@ export class RoomAnalyze implements OnDestroy {
     return e.basis === 'measured' ? 'Measured from the CPU package counter.'
       : `Estimated: busy CPU time at ${e.watts_per_core} W per core, plus the GPU at its power limit while busy. `
         + 'Allowing this user to read /sys/class/powercap/intel-rapl:0/energy_uj makes it measured, '
-        + 'or X3_RAPL_PROMETHEUS pointing at a Prometheus that scrapes node_exporter\'s RAPL collector.';
+        + 'or REDLINE_RAPL_PROMETHEUS pointing at a Prometheus that scrapes node_exporter\'s RAPL collector.';
   });
 
   /** A series per room, called by the room's name rather than its id. */
@@ -1061,10 +1061,10 @@ export class RoomAnalyze implements OnDestroy {
 }
 
 function recall(key: string, fallback: string): string {
-  try { return localStorage.getItem('x3.analytics.' + key) ?? fallback; } catch { return fallback; }
+  try { return localStorage.getItem('redline.analytics.' + key) ?? fallback; } catch { return fallback; }
 }
 function keep(key: string, value: string) {
-  try { localStorage.setItem('x3.analytics.' + key, value); } catch { /* private window */ }
+  try { localStorage.setItem('redline.analytics.' + key, value); } catch { /* private window */ }
 }
 
 /** The shape of the answer this page reads; one kept in another shape is
@@ -1073,10 +1073,10 @@ const SHAPE = 3;
 
 function kept(range: string): Insights | null {
   try {
-    const d = JSON.parse(localStorage.getItem('x3.analytics.data.' + range) ?? 'null');
+    const d = JSON.parse(localStorage.getItem('redline.analytics.data.' + range) ?? 'null');
     return d?.shape === SHAPE ? d : null;
   } catch { return null; }
 }
 function keepData(range: string, d: Insights) {
-  try { localStorage.setItem('x3.analytics.data.' + range, JSON.stringify(d)); } catch { /* full or private */ }
+  try { localStorage.setItem('redline.analytics.data.' + range, JSON.stringify(d)); } catch { /* full or private */ }
 }

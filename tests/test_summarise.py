@@ -168,13 +168,13 @@ async def test_missing_key_is_an_error(monkeypatch):
 
 
 def test_cost_over_budget_warns(caplog):
-    with caplog.at_level("WARNING", logger="x3.summarise"):
+    with caplog.at_level("WARNING", logger="redline.summarise"):
         S._report_usage({"usage": {"cost": S.BUDGET_USD * 2}})
     assert "over the" in caplog.text
 
 
 def test_cost_within_budget_is_quiet(caplog):
-    with caplog.at_level("WARNING", logger="x3.summarise"):
+    with caplog.at_level("WARNING", logger="redline.summarise"):
         S._report_usage({"usage": {"cost": 0.0002}})
     assert "over the" not in caplog.text
 
