@@ -40,9 +40,20 @@ CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude"))
 
 # Which transcript folders belong to this project. Claude Code names the
 # folder after the working directory with the slashes turned into dashes.
-# By default the folders of agents working in this checkout (or below it).
+# Every project folder is read, sub-agents' transcripts included, and a
+# line counts when its working directory is this checkout (or below it):
+# a session started elsewhere that works here - with agents of its own -
+# is this project's work too; one elsewhere is not.
 _CHECKOUT = Path(__file__).resolve().parent.parent
-PROJECT_GLOB = os.environ.get("REDLINE_TRANSCRIPTS", str(_CHECKOUT).replace("/", "-") + "*")
+PROJECT_GLOB = os.environ.get("REDLINE_TRANSCRIPTS", "*")
+WORK_DIR = os.environ.get("REDLINE_TRANSCRIPTS_CWD", str(_CHECKOUT)).rstrip("/")
+
+
+def _here(entry: dict) -> bool:
+    cwd = (entry.get("cwd") or "").rstrip("/")
+    if not WORK_DIR or not cwd:            # a line that does not say where it was
+        return True
+    return cwd == WORK_DIR or cwd.startswith(WORK_DIR + "/")
 
 # USD per million tokens. "list" means published; "assumed" means we put the
 # model in its family's tier because no public rate was to hand - the card
@@ -93,7 +104,7 @@ def transcripts() -> list[Path]:
     if not root.exists():
         return []
     return sorted(p for d in root.glob(PROJECT_GLOB) if d.is_dir()
-                  for p in d.glob("*.jsonl"))
+                  for p in d.rglob("*.jsonl"))
 
 
 # What a request was for. The usage belongs to a whole assistant turn, and
@@ -133,7 +144,7 @@ def _row(entry: dict) -> dict | None:
     """One transcript line -> one call row, or None if it carries no usage."""
     msg = entry.get("message") or {}
     use = msg.get("usage")
-    if not use or entry.get("type") != "assistant":
+    if not use or entry.get("type") != "assistant" or not _here(entry):
         return None
     req = entry.get("requestId")
     if not req:

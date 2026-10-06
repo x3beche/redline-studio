@@ -178,3 +178,14 @@ def test_kinds_split_by_what_the_money_went_on():
                           "2026-09-22T08:01:30+00:00")
     assert {k["kind"] for k in out["kinds"]} == {"work", "progress", "build"}
     assert sum(k["cost_usd"] for k in out["kinds"]) == pytest.approx(1.5)
+
+
+def test_only_lines_worked_in_this_checkout_count(monkeypatch):
+    monkeypatch.setattr(usage, "WORK_DIR", "/w/redline")
+    e = entry("req_9", "2026-09-22T08:00:00Z")
+    e["cwd"] = "/w/redline/frontend"
+    assert usage._row(e) is not None
+    e["cwd"] = "/w/redline-other"
+    assert usage._row(e) is None
+    e["cwd"] = "/home/someone"
+    assert usage._row(e) is None
