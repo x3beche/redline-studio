@@ -17,6 +17,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from datetime import datetime, timedelta, timezone
@@ -30,7 +31,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 from . import envnames  # noqa: E402
 envnames.adopt()                       # an older .env's X3_ names
 
-from . import (access, actors, ato, auth, changes, convert, files, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (access, actors, ato, auth, changes, convert, files, jobs, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
 from . import tools_api
@@ -147,7 +148,10 @@ async def stats():
 
 @app.get("/api/system")
 async def system():
-    return sysinfo.snapshot()
+    # Off the event loop: it asks nvidia-smi (up to 3 s) where there is one,
+    # and the page asks this every few seconds.
+    import asyncio
+    return await asyncio.to_thread(sysinfo.snapshot)
 
 
 # ---------------- catalog ----------------
@@ -1036,8 +1040,14 @@ async def build_board(bid: str):
 
 
 @app.post("/api/boards/{bid}/layout")
-async def layout_board(bid: str):
-    """Place the built netlist and draw it. KiCad runs in a container."""
+async def layout_board(bid: str, detach: bool = False):
+    """Place the built netlist and draw it. KiCad runs in a container, the
+    work in a process of its own (backend/jobs.py): `detach=1` answers at
+    once with the job to follow, without it the request waits for it."""
+    return await _as_job("layout", bid, {}, detach)
+
+
+async def _layout_board(bid: str):
     await say(f"{bid}: placing - fetching parts, then KiCad", "work", room="pcb")
     try:
         out = await kicad.render(db(), bid)
@@ -1224,10 +1234,19 @@ async def save_board_rules(bid: str, body: RulesIn):
 
 
 @app.post("/api/boards/{bid}/run")
-async def run_board(bid: str):
+async def run_board(bid: str, detach: bool = False):
     """The whole of it, in order: build the source, draw the schematic,
     place, route, pour, check. What a change to a board goes through,
-    every time - so nothing downstream is ever older than the source."""
+    every time - so nothing downstream is ever older than the source.
+
+    Minutes of KiCad and Freerouting, so it runs as a job of its own
+    (backend/jobs.py) that a reload of the API does not stop or wait for.
+    `detach=1`: answered at once (202) with the job; follow it at
+    GET /api/boards/{bid}/jobs/{job}. Without it the request waits."""
+    return await _as_job("run", bid, {}, detach)
+
+
+async def _run_board(bid: str):
     import time as _time
 
     t0 = _time.monotonic()
@@ -1244,7 +1263,7 @@ async def run_board(bid: str):
                      f"{eq['nets']['only_imported']} imported nets differ"),
                   "info" if eq["equivalent"] else "warn", room="pcb")
     out["schematic"] = await draw_schematic(bid)
-    out["layout"] = await layout_board(bid)
+    out["layout"] = await _layout_board(bid)
     took = round(_time.monotonic() - t0, 1)
     drc = (out["layout"] or {}).get("drc") or {}
     route = (out["layout"] or {}).get("route") or {}
@@ -1266,10 +1285,15 @@ class ConvertIn(BaseModel):
 
 
 @app.post("/api/boards/{bid}/convert")
-async def convert_board(bid: str, body: ConvertIn):
+async def convert_board(bid: str, body: ConvertIn, detach: bool = False):
     """Write an imported board as atopile source, build it, and check the
     build against the imported netlist (backend/convert.py). Run again
-    with a BOM and its part numbers replace the guesses."""
+    with a BOM and its part numbers replace the guesses. A job, as a run
+    is (`detach=1` answers at once)."""
+    return await _as_job("convert", bid, body.model_dump(), detach)
+
+
+async def _convert_board(bid: str, body: ConvertIn):
     async def tell(text: str, level: str = "info") -> None:
         await say(text, level, room="pcb")
     try:
@@ -1284,6 +1308,63 @@ async def convert_board(bid: str, body: ConvertIn):
         raise HTTPException(503, f"LCSC is cooling off, run it again later: {exc}")
     await actors.audit(db(), "convert", f"board {bid}", {"status": out.get("status")})
     return out
+
+
+# ---------------- the long steps, as jobs (backend/jobs.py) ----------------
+async def job_step(kind: str, bid: str, body: dict):
+    """The work of one job, in the job's own process."""
+    if kind == "run":
+        return await _run_board(bid)
+    if kind == "layout":
+        return await _layout_board(bid)
+    if kind == "convert":
+        return await _convert_board(bid, ConvertIn(**body))
+    raise HTTPException(400, f"no such job: {kind}")
+
+
+async def _as_job(kind: str, bid: str, body: dict, detach: bool):
+    """Start `kind` on a board as a job; answer with the job (detached) or,
+    once it is done, with what the step itself would have answered."""
+    from fastapi.responses import JSONResponse
+
+    if not await db()[ato.BOARDS].find_one({"_id": bid}, {"_id": 1}):
+        raise HTTPException(404, bid)
+    try:
+        job = await jobs.start(db().raw, kind, bid, body, workspace=scope.current(),
+                               actor=actors.CURRENT.get(), role=access.ROLE.get(),
+                               who=lcsc.WHO.get())
+    except jobs.Busy as exc:
+        raise HTTPException(409, {"detail": str(exc) + " - wait for it, or follow it with "
+                                  f"GET /api/boards/{bid}/jobs/{exc.job['_id']}",
+                                  "job": exc.job["_id"]})
+    except OSError as exc:
+        raise HTTPException(500, f"{bid}: the {kind} could not be started: {exc}")
+    if detach:
+        return JSONResponse(jsonable_encoder(jobs.view(job)), status_code=202)
+    done = await jobs.wait(db().raw, job["_id"])
+    if done.get("status") == "done":
+        return jobs.result(done)
+    raise HTTPException(done.get("code") or 500, done.get("detail"))
+
+
+async def _own_job(bid: str, job: str) -> dict:
+    doc = await jobs.get(db().raw, job)
+    if not doc or doc.get("board") != bid or doc.get("workspace") != scope.current():
+        raise HTTPException(404, f"no job {job} on {bid}")
+    return doc
+
+
+@app.get("/api/boards/{bid}/jobs")
+async def board_jobs(bid: str, limit: int = 10):
+    """The board's latest jobs, newest first, without their results."""
+    return await jobs.latest(db().raw, bid, scope.current(), max(1, min(limit, 50)))
+
+
+@app.get("/api/boards/{bid}/jobs/{job}")
+async def board_job(bid: str, job: str):
+    """One job: running, done (with what the step answered), failed (with
+    the status and detail it would have answered) or lost."""
+    return jobs.view(await _own_job(bid, job))
 
 
 class HoldIn(BaseModel):
@@ -1347,6 +1428,11 @@ async def _who_acts(request, call_next):
         if not auth.csrf_ok(request.method, request.headers):
             return JSONResponse({"detail": "that change did not come from the app"}, status_code=403)
         who, ws, role = got["user"], got["workspace"], got["role"]
+        # A headless browser's page session reads, and nothing else.
+        if got.get("page") and not access.page_allowed(request.method, request.url.path,
+                                                       dict(request.query_params)):
+            return JSONResponse({"detail": "a page session only looks", "refused": "page",
+                                 "role": role}, status_code=403)
     elif auth.enabled():
         role = None                     # signed out: only the open routes answer
     # What the request is, and whether the role may (backend/access.py).
@@ -1476,6 +1562,33 @@ async def auth_login(body: LoginIn, request: Request, response: Response):
     await actors.audit(db(), "sign-in", email, None,
                        actor={"type": "user", "id": user["_id"], "name": user.get("name") or email})
     return {"user": {"id": user["_id"], "name": user.get("name"), "email": user["email"]}}
+
+
+@app.post("/api/auth/page-session")
+async def auth_page_session(request: Request):
+    """Trade an agent's token for a page session: a cookie a headless
+    browser (tools/render.py) can show the app with. Read-only, minutes
+    long, in the token's workspace (backend/auth.py, page sessions).
+
+    Only a bearer token buys one - not a person's cookie, and not another
+    page session. The value comes back in the body, once, for the caller to
+    hand its own browser; it is not set as a cookie on this response."""
+    if not auth.enabled():
+        raise HTTPException(400, "sign-in is off (REDLINE_REQUIRE_SIGNIN): the page needs no session")
+    token = auth.bearer(request.headers)
+    agent = await auth.token_agent(db(), token) if token else None
+    if not agent:
+        raise HTTPException(401, "a page session is traded for an agent token (Authorization: Bearer)")
+    value, expires = await auth.create_page_session(
+        db(), agent["workspace"], agent["actor"], token_id=agent["actor"]["token"],
+        room=agent.get("room"))
+    from fastapi.responses import JSONResponse
+    await actors.audit(db(), "page-session", agent["actor"]["name"],
+                       {"expires": expires.isoformat()}, actor=agent["actor"])
+    return JSONResponse(
+        {"cookie": auth.COOKIE, "value": value, "expires": expires.timestamp(),
+         "role": auth.PAGE_ROLE, "workspace": agent["workspace"]},
+        headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/auth/logout")
@@ -1941,6 +2054,11 @@ async def _start_sampler():
     if MONGODB_URI:
         asyncio.create_task(insights.sampler(db))
         try:
+            # The trash of the Command Code room empties itself after 30 days.
+            await cc_chat.ensure_indexes(db().raw)       # the database itself: one index for every workspace
+        except Exception as exc:                       # noqa: BLE001 - the trash still works, only fuller
+            LOG.warning("Command Code trash index not made: %s", exc)
+        try:
             await llm.load(db())                       # the keys and the model each job uses
             from . import netmeter
             netmeter.bind(db)                          # every proxied byte, counted on the wire
@@ -1950,6 +2068,8 @@ async def _start_sampler():
             asyncio.create_task(netproxy.health_loop())
             await fx.load(db())                        # the last exchange rates kept
             asyncio.create_task(fx.loop(db))           # and Frankfurter's, every hour
+            from . import budgets
+            asyncio.create_task(budgets.loop(lambda: db().raw))   # the month's budgets, and their alerts
         except Exception as exc:                       # noqa: BLE001 - .env keys still work
             LOG.warning("LLM / proxy settings not read: %s", exc)
 

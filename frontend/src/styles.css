@@ -3575,6 +3575,15 @@ section > .tcv-mcu-more summary { text-transform: uppercase; }
 
 /* PREFERENCES (app/preferences.ts): the theme, the language, the shortcuts. */
 .tcv-user-gear { justify-content: center; width: 28px; padding: 0; font-size: 15px; color: var(--ink-dim); }
+/* The spend chip beside the user chip (auth.ts): the month against its budget. */
+.tcv-spend { display: inline-flex; align-items: center; gap: 5px; height: 22px; margin-right: 6px; padding: 0 7px;
+  font: 500 11px 'IBM Plex Mono', ui-monospace, monospace; white-space: nowrap; color: var(--ink-dim);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px; cursor: pointer; }
+.tcv-spend:hover { color: var(--ink); border-color: var(--ink-dim); }
+.tcv-spend svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+.tcv-spend[data-state="warn"] { color: var(--ink-on-warn); background: var(--warn); border-color: var(--warn); }
+.tcv-spend[data-state="over"] { color: var(--ink-bright); background: var(--danger); border-color: var(--danger); }
+@media (max-width: 640px) { .tcv-spend-text { display: none; } .tcv-spend { padding: 0 5px; } }
 .tcv-prefs { width: min(760px, 94vw); }
 .tcv-prefs-tabs { display: flex; gap: 6px; }
 .tcv-prefs-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
@@ -3813,6 +3822,24 @@ section > .tcv-mcu-more summary { text-transform: uppercase; }
 .tcv-cc-item:hover .tcv-cc-itemacts, .tcv-cc-item:focus-within .tcv-cc-itemacts { display: inline-flex; }
 .tcv-cc-itemacts .tcv-cc-ib { min-width: 28px; height: 28px; padding: 0 6px; }
 .tcv-cc-listempty { margin: 18px 10px; font-size: 12px; line-height: 1.5; color: var(--ink-dim); text-align: center; }
+/* The trash: rows that are on their way out - quieter titles, who threw
+   them away and when they go for good; the last few days in the warning
+   colour. Asked inline before anything is deleted for good. */
+.tcv-cc-trashnote { margin: 4px 8px 2px; font-size: 11px; line-height: 1.45; color: var(--ink-dim); }
+.tcv-cc-item[data-trash] { cursor: default; }
+.tcv-cc-item[data-trash] .tcv-cc-itemtitle { font-weight: 500; color: var(--ink-dim); }
+.tcv-cc-gone { display: flex; flex-wrap: wrap; column-gap: 4px; min-width: 0; white-space: normal; }
+.tcv-cc-gone > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.tcv-cc-purge { flex: none; }
+.tcv-cc-purge[data-soon] { color: var(--warn); }
+.tcv-cc-ask { display: flex; flex-direction: column; gap: 8px; padding: 9px 10px; font-size: 12px; line-height: 1.45;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: inset 2px 0 0 var(--danger); }
+.tcv-cc-askacts { display: flex; justify-content: flex-end; gap: 6px; }
+.tcv-cc-askgo { height: 28px; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--danger); background: none;
+  border: 1px solid var(--danger); border-radius: 6px; cursor: pointer; }
+.tcv-cc-askgo:hover { background: var(--hover); }
+.tcv-cc-askgo:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* ---- the conversation: header ------------------------------------------- */
 .tcv-cc-main { position: relative; padding: 0; gap: 0; overflow: hidden; }
@@ -3981,6 +4008,8 @@ section > .tcv-mcu-more summary { text-transform: uppercase; }
   .tcv-cc-tools, .tcv-cc-meta { opacity: 1; }
   .tcv-cc-codecopy { opacity: 1; }
   .tcv-cc-item .tcv-cc-itemacts { display: none; }
+  /* A trashed row cannot be opened, so its Restore / Delete forever stay. */
+  .tcv-cc-item[data-trash] .tcv-cc-itemacts { position: static; display: inline-flex; flex: none; transform: none; box-shadow: none; }
 }
 
 /* ---- narrow middle column (the app's side panels take the room) --------- */
@@ -4007,6 +4036,8 @@ section > .tcv-mcu-more summary { text-transform: uppercase; }
   .tcv-cc-newbtn { height: 42px; }
   .tcv-cc-search input { height: 40px; }
   .tcv-cc-seg button { min-height: 36px; }
+  .tcv-cc-seg button { padding: 4px 8px; }
+  .tcv-cc-askgo, .tcv-cc-ask .tcv-cc-textbtn { min-height: 36px; }
   .tcv-cc-item { min-height: 58px; }
   .tcv-cc-col { padding: 14px 12px 18px; gap: 18px; }
   .tcv-cc-row { gap: 8px; }

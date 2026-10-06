@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Observable, catchError, filter, map, of, switchMap, take, throwError, timer } from 'rxjs';
+import type { BudgetStatus } from './money';
 
 /** Who did something: the person, or one of the agents. */
 export interface Actor { type: 'user' | 'agent'; id: string; name: string }
@@ -389,10 +390,17 @@ export interface BoardRules {
   classes: NetClass[];
   pairs: DiffPair[];
   board: { layers: number; min_track: number; min_clearance: number;
-           min_via: number; min_drill: number };
+           min_via: number; min_drill: number; min_edge?: number };
   pours: Pour[];
   route: { passes: number };
   edited: boolean;
+}
+
+/** A long board step running apart from the API (backend/jobs.py). */
+export interface BoardJob {
+  job: string; kind: string; board: string;
+  status: 'running' | 'done' | 'failed' | 'lost';
+  result?: unknown; code?: number; detail?: unknown;
 }
 
 /** One rule field, as the server describes it (backend/rules.py SCHEMA). */
@@ -540,16 +548,37 @@ export class Boards {
   }
   /** Place the built netlist and draw it. KiCad runs in a container. */
   layout(id: string): Observable<BoardLayout> {
-    return this.http.post<BoardLayout>(`/api/boards/${id}/layout`, {});
+    return this.job<BoardLayout>(id, 'layout', {});
   }
   /** The whole of it: build, schematic, place, route, pour, DRC. */
   run(id: string): Observable<unknown> {
-    return this.http.post(`/api/boards/${id}/run`, {});
+    return this.job<unknown>(id, 'run', {});
   }
   /** An imported board to atopile source, built and checked against the
    *  import; with a BOM CSV (as text) its part numbers replace guesses. */
   convert(id: string, bom?: string): Observable<BoardConversion> {
-    return this.http.post<BoardConversion>(`/api/boards/${id}/convert`, { bom: bom ?? null });
+    return this.job<BoardConversion>(id, 'convert', { bom: bom ?? null });
+  }
+  /** A long board step as a job (backend/jobs.py): started detached, then
+   *  followed until it is done - so the request never holds the server, and
+   *  a reload of it in between is only a pause. Fails the way the step's own
+   *  request would have, with its status and `detail`. */
+  private job<T>(id: string, step: 'run' | 'convert' | 'layout', body: unknown): Observable<T> {
+    const detail = (d: unknown) => (d && typeof d === 'object' && 'detail' in d ? (d as { detail: unknown }).detail : d);
+    return this.http.post<BoardJob>(`/api/boards/${id}/${step}?detach=1`, body).pipe(
+      catchError((e: HttpErrorResponse) => throwError(() => new HttpErrorResponse({
+        error: { ...(e.error ?? {}), detail: detail(e.error?.detail) }, status: e.status, statusText: e.statusText }))),
+      switchMap(started => timer(1500, 2500).pipe(
+        switchMap(() => this.http.get<BoardJob>(`/api/boards/${id}/jobs/${started.job}`).pipe(
+          // The server restarting under a reload: the job is not, ask again.
+          catchError((e: HttpErrorResponse) => e.status === 0 || e.status >= 502 ? of(null) : throwError(() => e)))),
+        filter((j): j is BoardJob => !!j && j.status !== 'running'),
+        take(1),
+        map(j => {
+          if (j.status === 'done') return j.result as T;
+          throw new HttpErrorResponse({ error: { detail: detail(j.detail) ?? `the ${step} was ${j.status}` },
+                                        status: j.code ?? 500, statusText: j.status });
+        }))));
   }
   rules(id: string): Observable<RulesRead> {
     return this.http.get<RulesRead>(`/api/boards/${id}/rules`);
@@ -1097,6 +1126,8 @@ export interface Insights {
   fx?: { display_currency: string; rates: Record<string, number>; date: string | null };
   /** What running Redline cost over the range, in dollars (Settings > Costs & currency). */
   costs?: InsightCosts;
+  /** This calendar month's budgets (UTC), whatever the range. */
+  budget_status?: BudgetStatus;
 }
 
 export interface InsightCosts {

@@ -66,6 +66,10 @@ NONE = "none"
 # (method, path pattern, action), first match wins. Patterns are matched
 # against the whole path; {x} is one path segment.
 _RULES: list[tuple[str, str, str]] = [
+    # a headless browser's page session, traded for an agent's token: the
+    # token has to be good (any token role may look); the route itself
+    # takes nothing but a bearer token (backend/auth.py, page sessions)
+    ("POST", "/api/auth/page-session", "view"),
     # signing in, and an invitation's own page
     ("*", "/api/auth/.*", NONE),
     ("*", "/api/invite/.*", NONE),
@@ -104,8 +108,10 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/files/{}/send", "draw"),
     # the Command Code room: talking is like writing a note; the routes keep
     # deleting someone else's conversation, or line, to those who may delete
-    # (bulk delete, a line, an edit or a regenerated answer that drops others')
-    ("POST", "/api/cc/chats(/{}/(messages|regenerate)|/bulk-delete)?", "draw"),
+    # (bulk delete, a line, an edit or a regenerated answer that drops others');
+    # the trash likewise: restoring or dropping for good one's own is a
+    # reviewer's, anyone else's needs "delete" (cc_chat.py checks)
+    ("POST", "/api/cc/chats(/{}/(messages|regenerate|restore)|/bulk-delete|/bulk-restore|/empty-trash)?", "draw"),
     ("PATCH", "/api/cc/chats/{}", "draw"),
     ("DELETE", "/api/cc/chats/{}(/messages/{})?", "draw"),
     # LLM settings: the keys and the models are the workspace's settings
@@ -170,6 +176,23 @@ def action(method: str, path: str, query: dict | None = None) -> str:
 
 def allowed(role: str | None, act: str) -> bool:
     return act == NONE or act in CAN.get(role or "", frozenset())
+
+
+# What a page session (a headless browser taking a picture) may send: it
+# reads. Not even the few writes a viewer may make - opening another
+# workspace, the agents' way in - and nothing a person signs in or out with
+# but leaving.
+PAGE_METHODS = ("GET", "HEAD")
+
+
+def page_allowed(method: str, path: str, query: dict | None = None) -> bool:
+    """Whether a page session may make this request. Stricter than
+    allowed("viewer", ...): looking, and only by GET or HEAD."""
+    if method == "OPTIONS":
+        return True
+    if method == "POST" and path == "/api/auth/logout":
+        return True
+    return method in PAGE_METHODS and action(method, path, query) in ("view", NONE)
 
 
 def can(role: str | None) -> list[str]:

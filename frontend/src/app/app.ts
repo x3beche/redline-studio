@@ -11,7 +11,8 @@ import { RoomCommandCode } from './rooms/commandcode';
 import { Palette } from './palette';
 import { Prefs, RoomSettings } from './preferences';
 import { T } from './i18n';
-import { Money, money, moneyShort } from './money';
+import { BudgetStatus, Money, money, moneyShort } from './money';
+import { budgetTip } from './budget-bars';
 import { Auth, SignIn, UserChip } from './auth';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 import { TopBar, TopbarFit } from './topbar';
@@ -68,7 +69,7 @@ import { TopbarMore } from './topbar-more';
          Its width is measured (--layout-user-w) so the tabs keep clear of it
          when that column is folded to a rail. -->
     <!-- Analytics is the first thing in its menu, with the week in a few words. -->
-    <app-user-chip #chip class="tcv-user-end" [brief]="brief()" [inAnalytics]="here() === 'analyze'"
+    <app-user-chip #chip class="tcv-user-end" [brief]="brief()" [spend]="spend()" [inAnalytics]="here() === 'analyze'"
                    (analytics)="open('analyze')" />
   </header>
 
@@ -146,6 +147,25 @@ export class App {
            + (b.took != null ? ` - worked out in ${b.took} ms` : ''),
     };
   });
+  /** The month's budgets (backend/budgets.py), from the same answer. */
+  private budgets = signal<BudgetStatus | null>(null);
+  /** The spend chip beside your name: the month so far against the total
+   *  budget (or the budget closest to its limit), in the warning colour from
+   *  its threshold and the danger colour past 100%. Only with a budget set. */
+  spend = computed(() => {
+    const b = this.budgets();
+    const items = (b?.items ?? []).filter(i => !i.error);
+    if (!b || !items.length) return null;
+    // The worst one: over, then near its limit; the total first among equals.
+    const rank = (i: { state: string; kind: string; ratio: number | null }) =>
+      (i.state === 'over' ? 2 : i.state === 'warn' ? 1 : 0) * 10 + (i.kind === 'total' ? 1 : 0) + Math.min(i.ratio ?? 0, 9) / 10;
+    const one = [...items].sort((x, y) => rank(y) - rank(x))[0];
+    const state = one.state;
+    return {
+      text: `${moneyShort(one.spent_usd)} / ${moneyShort(one.budget_usd)}`, state,
+      title: `${b.month} (UTC), ${Math.max(0, Math.round(b.days_left))} days left\n` + items.map(budgetTip).join('\n'),
+    };
+  });
   private briefTimer?: ReturnType<typeof setInterval>;
   private readBrief = effect(() => {
     clearInterval(this.briefTimer);
@@ -153,7 +173,8 @@ export class App {
     const read = () => fetch('/api/insights?range=7d', { credentials: 'same-origin' })
       .then(r => r.ok ? r.json() : null)
       .then((d: { now_totals?: { llm_usd?: number; notes?: number; runs?: number }; computed_at?: string;
-                  took_ms?: number } | null) => {
+                  took_ms?: number; budget_status?: BudgetStatus } | null) => {
+        if (d) this.budgets.set(d.budget_status ?? null);
         const t = d?.now_totals;
         if (!t) return;
         const mins = d?.computed_at ? Math.round((Date.now() - Date.parse(d.computed_at)) / 60000) : null;
