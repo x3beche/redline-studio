@@ -2963,11 +2963,15 @@ section > .tcv-mcu-more summary { text-transform: uppercase; }
 /* Scrollbars in a room's frame are the 3D tree's: thin, a faint thumb on
    no track, brighter under the mouse - the viewer's own tcv_scroller rule
    and its colours, so the column reads the same in every room. */
-.tcv-frame, .tcv-frame * {
+/* The same in the rooms that sit in the middle column on their own -
+   Command Code's conversation, and the list beside Notes, Command Code
+   and Files. */
+.tcv-frame, .tcv-frame *,
+.tcv-cc-main, .tcv-cc-main *, .tcv-notes-side, .tcv-notes-side *, .tcv-notes-main, .tcv-notes-main * {
   scrollbar-width: thin;
   scrollbar-color: var(--tcv-scrollbar-thumb) transparent;
 }
-.tcv-frame *:hover {
+.tcv-frame *:hover, .tcv-cc-main *:hover, .tcv-notes-side *:hover, .tcv-notes-main:hover, .tcv-notes-main *:hover {
   scrollbar-color: var(--tcv-scrollbar-hover) transparent;
 }
 
