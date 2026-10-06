@@ -197,17 +197,37 @@ def _via() -> bool:
     return bool(getattr(_NET, "via", False))
 
 
+def _session() -> str | None:
+    return getattr(_NET, "session", None)
+
+
 def _through(via: bool, fn, *args):
+    """Run one request on this thread, directly or through the proxy. Through
+    the proxy it gets a session of its own - a new exit address, held for
+    this lookup - and, when asked, that address is looked up afterwards.
+    Returns (result, meta); an exception carries its meta as `.net_meta`."""
+    from . import netproxy
+    meta: dict = {}
     _NET.via = via
+    _NET.session = netproxy.new_session() if via else None
+    meta["session"] = _NET.session
     try:
-        return fn(*args)
+        out = fn(*args)
+    except Exception as exc:
+        meta["exit"] = netproxy.exit_info(_NET.session) if via else None
+        exc.net_meta = meta
+        raise
+    else:
+        meta["exit"] = netproxy.exit_info(_NET.session) if via else None
+        return out, meta
     finally:
         _NET.via = False
+        _NET.session = None
 
 
 def _open(req, timeout: float):
     from . import netproxy
-    return netproxy.opener(_via()).open(req, timeout=timeout)
+    return netproxy.opener(_via(), _session()).open(req, timeout=timeout)
 
 
 async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
@@ -256,23 +276,36 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
 
     loop = asyncio.get_running_loop()
     always = netproxy.mode() == "always"
+
+    def note(via: str, t0: float, *, status=None, size=0, error=None, meta=None, attempt="first"):
+        """The ask in the journal (the page's list) and in the proxy log (Settings > Proxy)."""
+        ms = (_time.monotonic() - t0) * 1000
+        _record(kind, target, "net", url=url, via=via, status=status, ms=ms, size=size, error=error)
+        netproxy.log({"kind": kind, "target": target, "via": via, "status": status, "ms": round(ms),
+                      "bytes": size, "error": error, "attempt": attempt, "who": WHO.get(),
+                      "session": (meta or {}).get("session"), "exit": (meta or {}).get("exit")})
+
+    async def attempt(via_proxy: bool):
+        return await loop.run_in_executor(None, _through, via_proxy, fn, *args)
+
     via = "proxy" if always else "direct"
+    how = "first"
     t0 = _time.monotonic()
     try:
         try:
-            out = await loop.run_in_executor(None, _through, always, fn, *args)
+            out, meta = await attempt(always)
         except urllib.error.HTTPError as first:
             # Turned away at this address: with a fallback proxy set, the
             # same ask goes once more through it before anyone cools off.
             if first.code not in (403, 429) or always or netproxy.mode() != "fallback":
                 raise
-            _record(kind, target, "net", url=url, status=first.code, via="direct",
-                    ms=(_time.monotonic() - t0) * 1000, error="refused here - asking through the proxy")
-            via = "proxy"
+            note("direct", t0, status=first.code, error="refused here - asking through the proxy",
+                 meta=getattr(first, "net_meta", None))
+            via, how = "proxy", "fallback"
             t0 = _time.monotonic()
-            out = await loop.run_in_executor(None, _through, True, fn, *args)
+            out, meta = await attempt(True)
     except urllib.error.HTTPError as exc:
-        ms = (_time.monotonic() - t0) * 1000
+        meta = getattr(exc, "net_meta", None)
         if exc.code in (403, 429):
             why = f"EasyEDA said {exc.code} to {kind} {target}"
 
@@ -280,26 +313,24 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
                 st["refused_until"] = _time.time() + COOL_OFF
                 st["refused_why"] = why
             await asyncio.get_running_loop().run_in_executor(None, _locked, refuse)
-            _record(kind, target, "net", url=url, via=via, status=exc.code, ms=ms,
-                    error=f"refused - nobody asks again for {COOL_OFF // 60} min")
+            note(via, t0, status=exc.code, meta=meta, attempt=how,
+                 error=f"refused - nobody asks again for {COOL_OFF // 60} min")
             raise Refused(f"{why}; not asking again for {COOL_OFF // 60} minutes") from exc
-        _record(kind, target, "net", url=url, via=via, status=exc.code, ms=ms, error=str(exc))
+        note(via, t0, status=exc.code, error=str(exc), meta=meta, attempt=how)
         raise
     except Exception as exc:
-        _record(kind, target, "net", url=url, via=via, ms=(_time.monotonic() - t0) * 1000,
-                error=f"{type(exc).__name__}: {exc}"[:200])
+        note(via, t0, error=f"{type(exc).__name__}: {exc}"[:200], meta=getattr(exc, "net_meta", None), attempt=how)
         raise
-    ms = (_time.monotonic() - t0) * 1000
     if isinstance(out, tuple):
         # A download reports (return code, log): a failed one is written
         # down as failed, not as a 200 it never got.
         rc, log = out
-        _record(kind, target, "net", url=url, via=via, status=200 if rc == 0 else None,
-                ms=ms, error=None if rc == 0 else log.strip()[-200:])
+        note(via, t0, status=200 if rc == 0 else None, meta=meta, attempt=how,
+             error=None if rc == 0 else log.strip()[-200:])
         return out
     size = len(out) if isinstance(out, (bytes, bytearray)) else \
         len(json.dumps(out)) if out is not None else 0
-    _record(kind, target, "net", url=url, status=200, ms=ms, size=size)
+    note(via, t0, status=200, size=size, meta=meta, attempt=how)
     return out
 
 
@@ -746,7 +777,7 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
             import subprocess
             from . import netproxy
             done = subprocess.run(argv, cwd=str(cwd), capture_output=True,
-                                  text=True, timeout=TIMEOUT, env=netproxy.env(_via()))
+                                  text=True, timeout=TIMEOUT, env=netproxy.env(_via(), _session()))
             if done.returncode != 0 and "403" in (done.stdout + done.stderr):
                 import urllib.error
                 raise urllib.error.HTTPError("easyeda2kicad", 403, "refused",

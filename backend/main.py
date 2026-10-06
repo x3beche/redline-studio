@@ -1936,7 +1936,12 @@ async def _start_sampler():
         asyncio.create_task(insights.sampler(db))
         try:
             await llm.load(db())                       # the keys and the model each job uses
+            from . import netmeter
+            netmeter.bind(db)                          # every proxied byte, counted on the wire
+            await netmeter.start()
             await netproxy.load(db())                  # the EasyEDA proxy, if one is set
+            netproxy.bind(db)                          # its log, for Settings > Proxy
+            asyncio.create_task(netproxy.health_loop())
         except Exception as exc:                       # noqa: BLE001 - .env keys still work
             LOG.warning("LLM / proxy settings not read: %s", exc)
 

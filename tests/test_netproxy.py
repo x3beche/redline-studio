@@ -11,7 +11,7 @@ import pytest
 from backend import lcsc, netproxy
 
 PROXY = {"enabled": True, "mode": "fallback", "scheme": "http", "host": "gw.example", "port": 2334,
-         "username": "user-zone-custom", "password": "p@ss/word"}
+         "username": "user-zone-custom", "password": "p@ss/word", "identify_exit": False}
 
 
 @pytest.fixture(autouse=True)
@@ -27,6 +27,8 @@ def run(coro):
 
 def test_the_url_quotes_the_credentials():
     assert netproxy.url(PROXY) == "http://user-zone-custom:p%40ss%2Fword@gw.example:2334"
+    # a session and a country ride in the username, the 2Captcha way
+    assert netproxy.username({**PROXY, "country": "DE"}, "rl1") == "user-zone-custom-region-de-session-rl1"
     assert netproxy.url({"host": "gw.example"}) is None          # no port: no proxy
 
 
@@ -47,8 +49,8 @@ def test_the_page_never_sees_the_password(monkeypatch):
 def test_a_tool_gets_the_proxy_only_when_asked(monkeypatch):
     monkeypatch.setattr(netproxy, "_conf", dict(PROXY))
     base = {"PATH": "/bin", "HTTPS_PROXY": "http://somewhere-else"}
-    assert "HTTPS_PROXY" not in netproxy.env(False, base)            # direct: nothing leaks in
-    assert netproxy.env(True, base)["HTTPS_PROXY"].endswith("@gw.example:2334")
+    assert "HTTPS_PROXY" not in netproxy.env(False, None, base)      # direct: nothing leaks in
+    assert netproxy.env(True, None, base)["HTTPS_PROXY"].endswith("@gw.example:2334")
 
 
 def _refused_here_fine_there(seen):
