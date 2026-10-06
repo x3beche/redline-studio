@@ -330,8 +330,8 @@ async def find(body: FindIn) -> dict:
             from . import usage as _usage
             import uuid
             await _usage.record_call(
-                _db(), _id=f"or:{uuid.uuid4().hex[:16]}", provider="openrouter",
-                surface="tools", kind="tool-router", model=tool_router.summarise.MODEL,
+                _db(), _id=f"or:{uuid.uuid4().hex[:16]}", provider=used.get("provider") or "openrouter",
+                surface="tools", kind="tool-router", model=used.get("model") or tool_router.summarise.MODEL,
                 input=used.get("prompt_tokens") or 0, output=used.get("completion_tokens") or 0,
                 cache_read=0, cache_write=0, thinking=0, cost_usd=used.get("cost"),
                 cost_basis="billed", revision=None)

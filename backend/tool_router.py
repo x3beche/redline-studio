@@ -113,14 +113,14 @@ async def pick(task: str, catalog: list[dict], limit: int = 3,
     if room:
         task = f"{task}\n(The agent works in the {room} room.)"
     ids = {t["id"] for t in catalog}
-    if not summarise.api_key():
+    if not summarise.api_key("router"):
         return {"picks": keyword_picks(task, catalog, limit), "method": "keywords",
                 "tools_seen": len(catalog), "reason": "no model key configured"}
     index, seen = index_for(task, catalog)
     messages = [{"role": "system", "content": SYSTEM},
                 {"role": "user", "content": f"Tools:\n{index}\n\nTask:\n{task}\n\nJSON:"}]
     try:
-        payload = await summarise._post(messages, max_tokens=ANSWER)
+        payload = await summarise._post(messages, max_tokens=ANSWER, job="router")
         text = payload["choices"][0]["message"]["content"] or ""
         m = re.search(r"\{.*\}", text, re.S)
         picks = json.loads(m.group(0)).get("picks", []) if m else []

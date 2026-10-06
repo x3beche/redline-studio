@@ -20,9 +20,10 @@ import re
 
 log = logging.getLogger("x3.summarise")
 
-ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
+# Which provider and model: backend/llm.py, chosen in Preferences > LLM settings.
+# MODEL is the default the summary job starts with.
 MODEL = "deepseek/deepseek-v4.1-flash"
-TIMEOUT = 15.0
+TIMEOUT = 30.0
 MAX_TOKENS = 60
 TEMPERATURE = 0.2
 RETRIES = 2                 # on top of the first try
@@ -123,8 +124,10 @@ def build_messages(comment: str, png: bytes | None,
             {"role": "user", "content": content}]
 
 
-def api_key() -> str | None:
-    return os.environ.get("OPENROUTER_API_KEY") or None
+def api_key(job: str = "summary") -> str | None:
+    """The key of the provider this job is set to use (backend/llm.py)."""
+    from . import llm
+    return llm.key(llm.route(job)[0])
 
 
 # Notes get written in whatever language comes to hand, while the model
@@ -141,36 +144,34 @@ TRANSLATE_PROMPT = (
 TRANSLATE_TOKENS = 400
 
 
-async def _post(messages: list[dict], max_tokens: int = MAX_TOKENS) -> dict:
-    import httpx
+async def _post(messages: list[dict], max_tokens: int = MAX_TOKENS, job: str = "summary") -> dict:
+    """One call for a job, to whichever provider and model it is set to use
+    (Preferences > LLM settings, backend/llm.py). The usage that comes back
+    says which, so the bill names the right vendor."""
+    from . import llm
 
-    key = api_key()
-    if not key:
-        raise RuntimeError("OPENROUTER_API_KEY is not set")
-    body = {"model": MODEL, "messages": messages, "max_tokens": max_tokens,
-            "temperature": TEMPERATURE, "reasoning": {"enabled": False},
-            "usage": {"include": True}}
+    if not api_key(job):
+        prov = llm.route(job)[0]
+        raise RuntimeError(f"no {llm.PROVIDERS[prov]['name']} API key for the {job} job "
+                           f"(Preferences > LLM settings, or {llm.PROVIDERS[prov]['env']} in .env)")
     delay = 1.0
     last: Exception | None = None
     for attempt in range(RETRIES + 1):
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-                r = await client.post(
-                    ENDPOINT, json=body,
-                    headers={"Authorization": f"Bearer {key}",
-                             "Content-Type": "application/json"})
-            if r.status_code == 429 or r.status_code >= 500:
-                raise RuntimeError(f"HTTP {r.status_code}: {r.text[:160]}")
-            r.raise_for_status()
-            return r.json()
+            payload = await llm.complete(messages, job=job, max_tokens=max_tokens,
+                                         temperature=TEMPERATURE, reasoning=False, timeout=TIMEOUT)
+            payload.setdefault("usage", {})
+            payload["usage"] = {**(payload["usage"] or {}), "provider": payload["provider"],
+                                "model": payload["model"]}
+            return payload
         except Exception as exc:                      # noqa: BLE001 - retry any
             last = exc
             if attempt == RETRIES:
                 break
-            log.warning("summarise attempt %d failed: %s", attempt + 1, exc)
+            log.warning("%s attempt %d failed: %s", job, attempt + 1, exc)
             await asyncio.sleep(delay)
             delay *= 2
-    raise RuntimeError(f"summarise failed after {RETRIES + 1} tries: {last}")
+    raise RuntimeError(f"{job} failed after {RETRIES + 1} tries: {last}")
 
 
 def _report_usage(payload: dict) -> dict:
@@ -223,7 +224,7 @@ async def translate(text: str) -> tuple[str, dict]:
         return "", {}
     payload = await _post(
         [{"role": "system", "content": TRANSLATE_PROMPT},
-         {"role": "user", "content": text}], max_tokens=TRANSLATE_TOKENS)
+         {"role": "user", "content": text}], max_tokens=TRANSLATE_TOKENS, job="translate")
     usage = _report_usage(payload)
     out = clean(payload["choices"][0]["message"]["content"] or "")
     return (out or text), usage

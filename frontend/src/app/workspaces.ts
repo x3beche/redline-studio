@@ -10,7 +10,7 @@
  *  ones not finished say what they will be rather than pretending.
  */
 export interface Workspace {
-  id: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' | 'notes' | 'files' | 'tools' | 'analyze';
+  id: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' | 'notes' | 'commandcode' | 'files' | 'tools' | 'analyze';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
@@ -63,6 +63,13 @@ export const WORKSPACES: Workspace[] = [
     label: 'Notes',
     blurb: 'What you jot down while working: Enter keeps it, Alt+N from anywhere; '
          + '#tags, @boards, to-dos to tick, and a note can go to an agent.',
+    ready: true,
+  },
+  {
+    id: 'commandcode',
+    label: 'Command Code',
+    blurb: 'Talk with a model, together: every conversation is shared with the workspace, '
+         + 'and each one keeps its own model.',
     ready: true,
   },
   {

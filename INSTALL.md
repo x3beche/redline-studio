@@ -90,6 +90,7 @@ the API key are read by the **backend only** and never reach the browser.
 | `MONGODB_URI` | — | required; the database is the source of truth |
 | `MONGODB_DB` | `assets_3d` | database name |
 | `OPENROUTER_API_KEY` | — | card summaries and the English translation; without it a card simply has neither |
+| `COMMANDCODE_API_KEY` | — | Command Code's models, for the Command Code room or any job. Both keys can instead be saved in **Preferences > LLM settings**, where each job also picks its provider and model |
 | `X3_BUILD_MEM` | `10G` | memory ceiling a build may use before the kernel kills it |
 | `X3_CACHE` | `.cache/artifacts` | where generated artifacts are kept on disk |
 | `X3_WATTS_PER_CORE` | `8.0` | assumed power of one busy core, for the energy figure on a revision card |

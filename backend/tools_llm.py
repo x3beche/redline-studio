@@ -30,12 +30,18 @@ PER_MINUTE = 60                 # calls, the whole server
 CONCURRENT = 4
 
 
+def options() -> list[tuple[str, str]]:
+    """(provider, model) a tool page may ask for: the "tools" job's choice
+    (Preferences > LLM settings) first, then X3_TOOLS_MODELS (comma
+    separated OpenRouter models)."""
+    from . import llm
+    first = llm.route("tools")
+    extra = [("openrouter", m.strip()) for m in os.environ.get("X3_TOOLS_MODELS", "").split(",") if m.strip()]
+    return [first] + [o for o in extra if o != first]
+
+
 def models() -> list[str]:
-    """The models a tool page may ask for: X3_TOOLS_MODELS (comma separated),
-    or the app's own default model."""
-    raw = os.environ.get("X3_TOOLS_MODELS", "")
-    listed = [m.strip() for m in raw.split(",") if m.strip()]
-    return listed or [summarise.MODEL]
+    return [m for _, m in options()]
 
 
 _calls: deque[float] = deque()
@@ -67,7 +73,7 @@ class LlmIn(BaseModel):
 
 @router.get("")
 async def status() -> dict:
-    return {"available": bool(summarise.api_key()), "models": models(),
+    return {"available": bool(summarise.api_key("tools")), "models": models(),
             "default": models()[0], "max_input_chars": MAX_INPUT_CHARS,
             "max_tokens": MAX_ANSWER, "per_minute": PER_MINUTE}
 
@@ -75,33 +81,26 @@ async def status() -> dict:
 @router.post("")
 async def call(body: LlmIn) -> dict:
     """{text, model, ms, usage: {prompt_tokens, completion_tokens, cost}}"""
-    key = summarise.api_key()
-    if not key:
-        raise HTTPException(503, "no model key is configured on the server (OPENROUTER_API_KEY)")
+    from . import llm
+
     model = body.model or models()[0]
-    if model not in models():
+    provider = dict((m, p) for p, m in reversed(options())).get(model)
+    if not provider:
         raise HTTPException(400, f"model {model!r} is not offered; one of {', '.join(models())}")
+    if not llm.key(provider):
+        raise HTTPException(503, f"no {llm.PROVIDERS[provider]['name']} API key is configured on the server")
     if sum(len(m.content) for m in body.messages) > MAX_INPUT_CHARS:
         raise HTTPException(413, f"the messages are over {MAX_INPUT_CHARS} characters together")
     _admit()
-    import httpx
-
-    payload = {"model": model, "messages": [m.model_dump() for m in body.messages],
-               "max_tokens": body.max_tokens, "temperature": body.temperature,
-               "reasoning": {"enabled": body.reasoning}, "usage": {"include": True}}
     t0 = time.monotonic()
     async with _gate:
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-                r = await client.post(summarise.ENDPOINT, json=payload,
-                                      headers={"Authorization": f"Bearer {key}",
-                                               "Content-Type": "application/json"})
-        except httpx.HTTPError as exc:
+            data = await llm.complete([m.model_dump() for m in body.messages], provider=provider, model=model,
+                                      max_tokens=body.max_tokens, temperature=body.temperature,
+                                      reasoning=body.reasoning, timeout=TIMEOUT)
+        except Exception as exc:                       # noqa: BLE001
             raise HTTPException(502, f"the model did not answer: {exc}"[:300]) from exc
     ms = round((time.monotonic() - t0) * 1000)
-    if r.status_code >= 400:
-        raise HTTPException(502, f"the model provider answered HTTP {r.status_code}: {r.text[:200]}")
-    data = r.json()
     try:
         text = data["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError) as exc:
@@ -111,7 +110,7 @@ async def call(body: LlmIn) -> dict:
         from . import usage as _usage
         from .tools_api import _db
         await _usage.record_call(
-            _db(), _id=f"or:{uuid.uuid4().hex[:16]}", provider="openrouter",
+            _db(), _id=f"or:{uuid.uuid4().hex[:16]}", provider=provider,
             surface="tools", kind=f"tool-llm:{body.tool}" if body.tool else "tool-llm", model=model,
             input=used.get("prompt_tokens") or 0, output=used.get("completion_tokens") or 0,
             cache_read=0, cache_write=0, thinking=0, cost_usd=used.get("cost"),

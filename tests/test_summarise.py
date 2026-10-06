@@ -182,7 +182,7 @@ def test_cost_within_budget_is_quiet(caplog):
 # ---- translation ----
 @pytest.mark.asyncio
 async def test_translate_returns_the_english_and_the_usage(monkeypatch):
-    async def fake(messages, max_tokens=60):
+    async def fake(messages, max_tokens=60, job="summary"):
         assert messages[0]["role"] == "system"
         assert "English" in messages[0]["content"]
         assert messages[1]["content"] == "yuvayi 2 mm kucult"
@@ -199,7 +199,7 @@ async def test_translate_returns_the_english_and_the_usage(monkeypatch):
 async def test_translate_keeps_the_original_when_the_model_says_nothing(monkeypatch):
     # Losing what someone just typed because a translator returned blank is
     # the one outcome this must never have.
-    async def fake(messages, max_tokens=60):
+    async def fake(messages, max_tokens=60, job="summary"):
         return {"choices": [{"message": {"content": "  "}}], "usage": {}}
 
     monkeypatch.setattr(S, "_post", fake)

@@ -7,6 +7,7 @@ import { RoomPcb } from './rooms/pcb';
 import { RoomTools } from './tools/room';
 import { QuickNote, RoomNotes } from './rooms/notes';
 import { RoomFiles } from './rooms/files';
+import { RoomCommandCode } from './rooms/commandcode';
 import { Palette } from './palette';
 import { Preferences } from './preferences';
 import { T } from './i18n';
@@ -15,7 +16,7 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, RoomNotes, RoomFiles, QuickNote, Palette, Preferences, SignIn, T, UserChip],
+  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, Preferences, SignIn, T, UserChip],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -39,7 +40,7 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
         @if (!w.ready) { <span class="tcv-tab-soon">soon</span> }
       </button>
     }
-    <!-- Apart from the rooms you work in: Notes, Files and Basic Tools, Basic
+    <!-- Apart from the rooms you work in: Notes, Command Code, Files and Basic Tools, Basic
          Tools closing the middle column - its right edge on the edge of the
          right-hand column, which it follows when that folds. Analytics is
          in the menu under your name (auth.ts). -->
@@ -48,6 +49,12 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
               [attr.data-on]="here() === w.id ? 1 : null"
               [attr.aria-current]="here() === w.id ? 'page' : null"
               [title]="w.blurb + ' (Alt+N)'">{{ w.label | t }}</button>
+    }
+    @if (ccTab; as w) {
+      <button (click)="open(w.id)" class="tcv-tab tcv-tab-cc"
+              [attr.data-on]="here() === w.id ? 1 : null"
+              [attr.aria-current]="here() === w.id ? 'page' : null"
+              [title]="w.blurb">{{ w.label | t }}</button>
     }
     @if (filesTab; as w) {
       <button (click)="open(w.id)" class="tcv-tab tcv-tab-files"
@@ -85,6 +92,7 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
       @case ('embedded') { <app-room-coding platform="embedded" /> }
       @case ('mobile') { <app-room-coding platform="mobile" /> }
       @case ('notes') { <app-room-notes /> }
+      @case ('commandcode') { <app-room-commandcode /> }
       @case ('files') { <app-room-files /> }
       @case ('tools') { <app-room-tools /> }
       @case ('analyze') { <app-room-analyze /> }
@@ -119,9 +127,10 @@ export class App {
   /** Whether sign-in is on, and who is signed in (auth.ts). */
   auth = inject(Auth);
   tabs = WORKSPACES;
-  /** The rooms you work in, left; Notes, Files and Basic Tools at the right end. */
-  rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'files');
+  /** The rooms you work in, left; Notes, Command Code, Files and Basic Tools at the right end. */
+  rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'files' && w.id !== 'commandcode');
   notesTab = WORKSPACES.find(w => w.id === 'notes');
+  ccTab = WORKSPACES.find(w => w.id === 'commandcode');
   filesTab = WORKSPACES.find(w => w.id === 'files');
   toolsTab = WORKSPACES.find(w => w.id === 'tools');
   /** A few words from Analytics for its menu entry: the last seven days' LLM

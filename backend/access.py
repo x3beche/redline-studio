@@ -102,6 +102,14 @@ _RULES: list[tuple[str, str, str]] = [
     ("PATCH", "/api/files/{}", "draw"),
     ("DELETE", "/api/files/{}", "draw"),
     ("POST", "/api/files/{}/send", "draw"),
+    # the Command Code room: talking is like writing a note; the route keeps
+    # deleting someone else's conversation to those who may delete
+    ("POST", "/api/cc/chats(/{}/messages)?", "draw"),
+    ("PATCH", "/api/cc/chats/{}", "draw"),
+    ("DELETE", "/api/cc/chats/{}", "draw"),
+    # LLM settings: the keys and the models are the workspace's settings
+    ("PUT", "/api/llm/settings", "settings"),
+    ("POST", "/api/llm/test", "settings"),
     # releases: making one runs the builds' outputs; downloading is looking
     ("POST", "/api/releases", "run"),
     # talking with the agents

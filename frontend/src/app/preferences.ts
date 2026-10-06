@@ -2,12 +2,14 @@ import { Component, Injectable, inject, signal } from '@angular/core';
 import { LIGHT_THEMES, THEMES, THEME_NAMES, Theme, currentTheme, setTheme } from '../theme';
 import { LANG, LANGS, Lang, T, setLang } from './i18n';
 import { redlineTheme } from './rooms/code-view';
+import { LlmSettingsPanel } from './llm-settings';
 
-/** Preferences: the theme, the language, and the keyboard shortcuts.
- *  Per browser - they are about the person at this screen. Opened from
+/** Preferences: the theme, the language, the keyboard shortcuts - per
+ *  browser, about the person at this screen - and the LLM settings, which
+ *  are the server's (llm-settings.ts). Opened from
  *  the user menu, from Ctrl+K, and with "?" (the shortcuts page).
  */
-export type PrefsTab = 'appearance' | 'language' | 'shortcuts';
+export type PrefsTab = 'appearance' | 'language' | 'llm' | 'shortcuts';
 
 @Injectable({ providedIn: 'root' })
 export class Prefs {
@@ -58,7 +60,7 @@ interface Shortcut { keys: string[]; what: string }
 
 @Component({
   selector: 'app-preferences',
-  imports: [T],
+  imports: [T, LlmSettingsPanel],
   host: { '(document:keydown)': 'key($event)' },
   template: `
 @if (prefs.open(); as tab) {
@@ -99,6 +101,7 @@ interface Shortcut { keys: string[]; what: string }
             }
           </div>
         }
+        @case ('llm') { <app-llm-settings /> }
         @case ('shortcuts') {
           @for (g of shortcuts; track g.group) {
             <div class="tcv-prefs-group">{{ g.group | t }}</div>
@@ -128,7 +131,7 @@ export class Preferences {
   readonly lang = LANG;
   readonly tabs: { id: PrefsTab; label: string }[] = [
     { id: 'appearance', label: 'Appearance' }, { id: 'language', label: 'Language' },
-    { id: 'shortcuts', label: 'Keyboard shortcuts' }];
+    { id: 'llm', label: 'LLM settings' }, { id: 'shortcuts', label: 'Keyboard shortcuts' }];
   readonly shortcuts: { group: string; items: Shortcut[] }[] = [
     { group: 'Anywhere', items: [
       { keys: ['Ctrl', 'K'], what: 'Open the command palette: go anywhere, do anything, search everything' },

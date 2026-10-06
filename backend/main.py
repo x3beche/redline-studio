@@ -71,6 +71,11 @@ from .embedded import build as emb_build, device as emb_device, files as emb_fil
 app.include_router(emb_files.router)
 app.include_router(emb_build.router)
 app.include_router(emb_device.router)
+# Which model does which job, the keys (Preferences > LLM settings), and
+# the Command Code room's conversations.
+from . import cc_chat, llm, llm_api  # noqa: E402
+app.include_router(llm_api.router)
+app.include_router(cc_chat.router)
 
 
 def _raw_db():
@@ -638,8 +643,8 @@ async def _log_openrouter(rid: str, used: dict, surface: str,
 
     try:
         await usage.record_call(
-            db(), _id=f"or:{uuid.uuid4().hex[:16]}", provider="openrouter",
-            surface=surface, kind=kind, model=summarise.MODEL,
+            db(), _id=f"or:{uuid.uuid4().hex[:16]}", provider=used.get("provider") or "openrouter",
+            surface=surface, kind=kind, model=used.get("model") or summarise.MODEL,
             input=used.get("prompt_tokens") or 0,
             output=used.get("completion_tokens") or 0,
             cache_read=0, cache_write=0, thinking=0,
@@ -1922,6 +1927,10 @@ async def _start_sampler():
     import asyncio
     if MONGODB_URI:
         asyncio.create_task(insights.sampler(db))
+        try:
+            await llm.load(db())                       # the keys and the model each job uses
+        except Exception as exc:                       # noqa: BLE001 - .env keys still work
+            LOG.warning("LLM settings not read: %s", exc)
 
         async def _tidy_releases():
             try:
