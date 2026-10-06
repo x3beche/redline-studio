@@ -2,6 +2,7 @@ import {
   AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject,
   signal, untracked, viewChild,
 } from '@angular/core';
+import { money } from '../money';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 const SEED = `"""__NAME__ - a build123d model."""
 
@@ -1125,11 +1126,9 @@ export class Editor implements AfterViewInit, OnDestroy {
     return String(v);
   }
 
+  /** Dollars from the server, in the display currency (money.ts). */
   usd(n: number | null | undefined): string {
-    if (n == null) return '-';
-    if (n >= 1) return '$' + n.toFixed(2);
-    if (n >= 0.01) return '$' + n.toFixed(3);
-    return '$' + n.toFixed(5);
+    return n == null ? '-' : money(n);
   }
 
   // ---- where you left off ----

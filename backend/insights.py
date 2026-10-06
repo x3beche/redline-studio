@@ -801,7 +801,7 @@ def _refresh(db, key: str, span) -> None:
 
 # Bumped whenever the shape of the answer changes, so an answer kept in the
 # old shape is never served to a page that expects the new one.
-SHAPE = 3
+SHAPE = 4
 
 
 async def overview_cached(db, key: str, span) -> dict:
@@ -1088,6 +1088,14 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         subscription["saved_usd"] = round(llm["cost_usd"] - plan * months, 2)
         subscription["ratio"] = round(llm["cost_usd"] / (plan * months), 2) if plan * months else None
 
+    # ---- everything the range cost, from Settings > Costs, and the rates to show it in
+    from . import costs as costs_mod, fx
+    costs_block = await costs_mod.summary(db, since, until, llm_list_usd=llm["cost_usd"],
+                                    machine_kwh=machine["wh"] / 1000)
+    rates = fx.public()
+    fx_block = {"display_currency": costs_block["display_currency"], "rates": rates["rates"],
+                "date": rates["date"], "stale": rates["stale"]}
+
     # ---- build health: failures per kind, and how long builds take per model
     health: dict[str, dict] = defaultdict(lambda: {"jobs": 0, "failed": 0, "wall": []})
     per_model: dict[str, list] = defaultdict(list)
@@ -1355,7 +1363,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         "lcsc": {"by_source": lcsc_by_source.out(), "totals": dict(lcsc_tot)},
         "lead_times": lead_times, "questions": question_log, "cache": rnd(cache) | {
             "by_model": cache["by_model"], "hit_series": cache["hit_series"]},
-        "subscription": subscription, "builds": builds, "note_costs": note_costs,
+        "subscription": subscription, "costs": costs_block, "fx": fx_block, "builds": builds, "note_costs": note_costs,
         "api": api, "board_quality": board_quality,
         "loops": {"jobs": loops[:15], "reruns": sorted(reruns, key=lambda x: -x["runs"])[:15]},
         "waste": waste, "uptime": uptime, "db_latency": db_latency, "growth": growth,
@@ -1371,9 +1379,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
 # ---------------------------------------------------------------- settings
 
 async def set_kwh_price(db, price: float | None) -> None:
-    await db.settings.update_one({"_id": scope.key(store.SETTINGS_ID)},
-                                 {"$set": {"kwh_price": price}}, upsert=True)
-    forget()
+    await set_settings(db, {"kwh_price": price})
 
 
 def forget() -> None:
@@ -1400,24 +1406,44 @@ SETTING_KEYS = ("kwh_price", "plan_usd_month", "plan_name")
 
 
 async def settings(db) -> dict:
-    """The room's own settings: electricity price and the subscription."""
-    s = await db.settings.find_one({"_id": scope.key(store.SETTINGS_ID)}, dict.fromkeys(SETTING_KEYS, 1)) or {}
-    out = {k: s.get(k) for k in SETTING_KEYS}
-    if out["kwh_price"] is None:
-        out["kwh_price"] = compute.KWH_PRICE
-    return out
+    """The room's own settings, in dollars, from Settings > Costs: the
+    electricity price and the subscriptions that pay for model work."""
+    from . import costs
+    d = costs.derived(await costs.get(db))
+    kwh = d["electricity_per_kwh"]
+    return {"kwh_price": kwh if kwh is not None else compute.KWH_PRICE,
+            "plan_usd_month": d["llm_subscriptions_per_month"], "plan_name": d["llm_plan_names"]}
 
 
 async def set_settings(db, patch: dict) -> None:
-    await db.settings.update_one({"_id": scope.key(store.SETTINGS_ID)}, {"$set": patch}, upsert=True)
-    forget()
+    """The room's old way of setting them (dollars): kept, written into the costs."""
+    from . import costs
+    doc = await costs.get(db)
+    out: dict = {}
+    if "kwh_price" in patch:
+        out["electricity"] = ({"amount": patch["kwh_price"], "currency": "USD"}
+                              if patch["kwh_price"] is not None else None)
+    if "plan_usd_month" in patch or "plan_name" in patch:
+        subs = [dict(r) for r in doc.get("subscriptions") or []]
+        llm = next((r for r in subs if r.get("covers") == "llm"), None)
+        amount = patch.get("plan_usd_month", llm["amount"] if llm else None)
+        if amount is None:
+            subs = [r for r in subs if r is not llm]
+        else:
+            if llm is None:
+                llm = {"name": "Subscription", "currency": "USD", "period": "month", "covers": "llm"}
+                subs.insert(0, llm)
+            if "plan_usd_month" in patch:
+                llm.update(amount=patch["plan_usd_month"], currency="USD", period="month")
+            if patch.get("plan_name"):
+                llm["name"] = patch["plan_name"]
+        out["subscriptions"] = subs
+    await costs.put(db, out)
 
 
 async def kwh_price(db) -> float | None:
-    """What a kilowatt-hour costs: set in the room, else the environment."""
-    s = await db.settings.find_one({"_id": scope.key(store.SETTINGS_ID)}, {"kwh_price": 1}) or {}
-    v = s.get("kwh_price")
-    return float(v) if v is not None else compute.KWH_PRICE
+    """What a kilowatt-hour costs, in dollars: Settings > Costs, else the environment."""
+    return (await settings(db))["kwh_price"]
 
 
 def parse_range(rng: str, now: datetime | None = None) -> tuple[datetime, datetime]:

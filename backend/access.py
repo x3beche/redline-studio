@@ -111,6 +111,8 @@ _RULES: list[tuple[str, str, str]] = [
     ("PUT", "/api/llm/settings", "settings"),
     ("POST", "/api/llm/test", "settings"),
     ("PUT", "/api/proxy/settings", "settings"),
+    ("PUT", "/api/costs", "settings"),
+    ("POST", "/api/fx/refresh", "settings"),
     ("POST", "/api/proxy/test", "settings"),
     # releases: making one runs the builds' outputs; downloading is looking
     ("POST", "/api/releases", "run"),

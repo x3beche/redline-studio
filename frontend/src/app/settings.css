@@ -253,3 +253,50 @@ select.st-in { cursor: pointer; }
   color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
 }
 .st-card .st-list-body { padding: 4px 0; }
+
+/* ---- costs & currency (costs-settings.ts) ------------------------ */
+.st-split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 12px; align-items: start; }
+@media (max-width: 1100px) { .st-split { grid-template-columns: minmax(0, 1fr); } }
+.st-readout { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-height: 25px; padding: 3px 0; }
+.st-readout .st-more { margin: 0; }
+.st-fx-name { margin-left: 7px; }
+.st-fx-wrap { container-type: inline-size; }
+@container (max-width: 560px) { .st-fx-name { display: none; } }
+/* A list of costs: one grid row each, folding onto two lines when narrow. */
+.st-lines { container-type: inline-size; }
+.st-line {
+  display: grid; align-items: center; gap: 6px 8px; padding: 5px 10px; border-top: 1px solid var(--line);
+  grid-template-columns: minmax(120px, 1.3fr) 92px 78px auto minmax(90px, 1fr) 92px 22px;
+}
+.st-lines-covers .st-line { grid-template-columns: minmax(120px, 1.3fr) 92px 78px auto auto minmax(90px, 1fr) 92px 22px; }
+.st-line:first-child { border-top: 0; }
+.st-line-head { padding-top: 4px; padding-bottom: 4px; }
+.st-line-head > span { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; }
+.st-line .r { text-align: right; }
+.st-line .st-in { width: 100%; padding: 3px 6px; }
+.st-line .st-num { text-align: right; }
+.st-l-month { text-align: right; font-size: 12px; white-space: nowrap; }
+.st-l-month small { display: block; font-size: 10px; color: var(--ink-dim); }
+@container (max-width: 860px) {
+  .st-line, .st-lines-covers .st-line { grid-template-columns: minmax(0, 1fr) 92px 78px 92px 22px; }
+  .st-line-head { display: none; }
+  .st-line .st-l-period { grid-row: 2; grid-column: 1; justify-self: start; }
+  .st-line .st-l-covers { grid-row: 2; grid-column: 2 / span 2; justify-self: start; }
+  .st-line .st-l-note { grid-row: 2; grid-column: 2 / -1; }
+  .st-lines-covers .st-line .st-l-note { grid-column: 4 / -1; }
+}
+.st-x {
+  width: 22px; height: 22px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: none;
+  font-size: 14px; line-height: 1; color: var(--ink-dim); cursor: pointer;
+}
+.st-x:hover { color: var(--danger); border-color: var(--line); background: var(--hover); }
+.st-fx td { padding: 3px 8px; }
+.st-fx tr.st-fx-on td { background: var(--surface-2); }
+.st-fx tr.st-fx-on td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+.st-conv { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 10px; background: var(--surface-2); border-radius: 5px; }
+.st-conv input.st-in { width: 110px; text-align: right; background: var(--surface); }
+.st-conv select.st-in { background: var(--surface); }
+.st-conv-out { margin-left: auto; font-size: 15px; color: var(--ink-bright); }
+.st-prices { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 8px; }
+.st-prices .st-num { width: 110px; text-align: right; }
+.st-prices .st-in { background: var(--surface); }

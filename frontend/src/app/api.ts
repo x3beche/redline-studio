@@ -1093,6 +1093,19 @@ export interface Insights {
   now_totals: Record<string, number>;
   weekly: { at: string; week: string; text: string }[];
   project_detail: Record<string, ProjectDetail>;
+  /** The rates the figures were read against (money.ts converts on screen). */
+  fx?: { display_currency: string; rates: Record<string, number>; date: string | null };
+  /** What running Redline cost over the range, in dollars (Settings > Costs & currency). */
+  costs?: InsightCosts;
+}
+
+export interface InsightCosts {
+  /** The range's length in months, for the prorated subscriptions. */
+  months: number;
+  items: { name: string; kind: 'subscription' | 'electricity' | 'proxy' | 'other' | 'llm_list' | string;
+           usd: number; detail?: string }[];
+  subscriptions_usd: number; other_usd: number; electricity_usd: number | null; proxy_usd: number | null;
+  proxy_gb: number | null; total_usd: number; llm_list_usd: number;
 }
 
 export interface ProjectItem {

@@ -5,6 +5,8 @@ import { Auth } from './auth';
 import { T, t } from './i18n';
 import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 import { when } from './llm-settings';
+import { CURRENCY, Money, money as shown, moneyIn, toUsd } from './money';
+import { Prefs } from './preferences';
 
 /** Settings > Proxy: a second way out for EasyEDA's part lookups
  *  (backend/netproxy.py). Only those go through it - the model providers
@@ -149,9 +151,14 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
         <label class="st-f"><span>{{ 'Country' | t }} <span class="st-dim">· {{ '2 letters, empty = anywhere' | t }}</span></span>
           <input class="st-in" maxlength="2" [value]="country()" [disabled]="!canEdit" [placeholder]="'Anywhere' | t"
                  (input)="country.set($any($event.target).value)"></label>
-        <label class="st-f"><span>{{ 'Price per GB (USD)' | t }}</span>
-          <input class="st-in" type="number" step="0.01" min="0" [value]="price()" [disabled]="!canEdit" placeholder="3.99"
-                 (input)="price.set($any($event.target).value)"></label>
+        <div class="st-f"><span>{{ 'Price per GB' | t }}</span>
+          <span class="st-readout">
+            @if (proxyPrice(); as pp) {
+              <b class="mono">{{ inCur(pp.amount, pp.currency) }}</b>
+              @if (pp.currency !== cur()) { <span class="st-dim mono">≈ {{ shownUsd(toUsd(pp.amount, pp.currency)) }}</span> }
+            } @else { <span class="st-dim">{{ 'not set' | t }}</span> }
+            <button class="st-more" (click)="prefs.tab.set('costs')">{{ 'Edit in Settings > Costs' | t }} →</button>
+          </span></div>
         <label class="st-f"><span>{{ 'Health check' | t }}</span>
           <select class="st-in" [disabled]="!canEdit" (change)="save({ health_minutes: +$any($event.target).value })">
             @for (m of health; track m) {
@@ -259,7 +266,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
             <small>{{ pct(us.totals.failed, us.totals.lookups) }}</small></div>
           @if (us.cost; as c) {
             <div class="st-tile" [title]="c.note"><span>{{ 'Estimated cost' | t }}</span><b>{{ money(c.usd) }}</b>
-              <small>{{ c.bytes != null ? f.bytes(c.bytes) : gb(c.gb) }} · {{ '$' + c.price_per_gb }}/GB</small></div>
+              <small>{{ c.bytes != null ? f.bytes(c.bytes) : gb(c.gb) }} · {{ money(c.price_per_gb) }}/GB</small></div>
           }
         </div>
         @if (us.totals.lookups) {
@@ -382,7 +389,14 @@ export class ProxySettingsPanel {
   user = signal('');
   pass = signal('');
   country = signal('');
-  price = signal<string | number>('');
+  /** The price of proxy traffic is one of the costs now (Settings > Costs & currency). */
+  private moneyState = inject(Money);
+  readonly prefs = inject(Prefs);
+  proxyPrice = computed(() => this.moneyState.costs()?.proxy ?? null);
+  readonly cur = CURRENCY;
+  readonly inCur = moneyIn;
+  readonly toUsd = toUsd;
+  shownUsd(v: number | null) { return v == null ? '–' : shown(v); }
   busy = signal(false);
   testing = signal(false);
   exits = signal<{ exits: Exit[]; rotates: boolean } | null>(null);
@@ -445,7 +459,8 @@ export class ProxySettingsPanel {
   pct1(v: number | null | undefined) { return v == null ? '–' : (100 * v).toFixed(v === 1 ? 0 : 1) + '%'; }
   rateTone(v: number | null | undefined) { return v == null ? 'dim' : v >= 0.9 ? 'ok' : v >= 0.5 ? 'warn' : 'danger'; }
   msOr(v: number | null | undefined) { return v == null ? '–' : ms(v); }
-  money(v: number) { return v > 0 && v < 0.001 ? '$' + v.toPrecision(2) : fmt.money(v); }
+  /** Dollars from the server, in the display currency (money.ts). */
+  money(v: number) { return shown(v); }
   gb(v: number) { return v >= 0.1 ? v.toFixed(2) + ' GB' : fmt.bytes(Math.round(v * 1e9)); }
   tone(source: string) {
     return source === 'refused' ? 'warn' : source === 'failed' || source === 'error' ? 'danger'
@@ -476,7 +491,6 @@ export class ProxySettingsPanel {
     this.user.set(d.username);
     this.pass.set('');
     this.country.set(d.country ?? '');
-    this.price.set(d.price_per_gb ?? '');
   }
 
   setMode(m: Mode) {
@@ -491,8 +505,6 @@ export class ProxySettingsPanel {
     if (this.pass()) body['password'] = this.pass();
     const d = this.data();
     if (d && 'country' in d) body['country'] = this.country().trim().toUpperCase();
-    const price = Number(this.price());
-    if (d && 'price_per_gb' in d && this.price() !== '' && price >= 0) body['price_per_gb'] = price;
     this.save(body);
   }
 

@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DecimalPipe } from '@angular/common';
 import { Auth } from '../auth';
 import { T } from '../i18n';
+import { money } from '../money';
 
 /** Releases: a project packed as it stands, under a tag, to make
  *  (backend/release.py). The list of what was released - each one kept
@@ -51,7 +52,7 @@ interface Release {
           @if (r.notes) { <span class="tcv-rel-notes-text">{{ r.notes }}</span> }
           @for (b of r.summary?.boards ?? []; track b.id) {
             @if (b.bom) {
-              <span class="tcv-menu-blurb">{{ b.id }}: {{ b.bom.parts }} parts · \${{ b.bom.total_usd | number: '1.2-2' }} a board
+              <span class="tcv-menu-blurb">{{ b.id }}: {{ b.bom.parts }} parts · {{ money(b.bom.total_usd) }} a board
                 @if (b.bom.unpriced.length) { ({{ b.bom.unpriced.length }} not priced) }</span>
             }
           }
@@ -76,6 +77,7 @@ interface Release {
 </div>`,
 })
 export class Releases implements OnDestroy {
+  readonly money = money;
   private http = inject(HttpClient);
   auth = inject(Auth);
   project = input.required<string>();
