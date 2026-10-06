@@ -406,8 +406,12 @@ async def cmd_board(args):
             for ref in refs.split(","):
                 picks[ref.strip()] = {"lcsc": code.strip(),
                                       "why": args.why or "picked by hand, not from a BOM"}
+        # Decoded the way the parser decodes a BOM in an upload: EasyEDA
+        # writes UTF-16, which read as UTF-8 reached the server as noise and
+        # left every part a guess.
+        from backend.imports.parts import _text as table_text
         body = {"picks": picks or None,
-                "bom": Path(args.bom).read_text(errors="replace") if args.bom else None}
+                "bom": table_text(Path(args.bom).read_bytes()) if args.bom else None}
         print(f"{bid}: converting to atopile - parts, source, build, the netlist checked "
               "(LCSC lookups wait their turn: minutes on a first run)")
         out = call(f"/api/boards/{bid}/convert", "POST", body, timeout=3600)

@@ -53,3 +53,13 @@ def test_reviewers_bring_files_viewers_do_not():
         a = access.action(m, p)
         assert access.allowed("reviewer", a) and not access.allowed("viewer", a)
     assert access.allowed("viewer", access.action("GET", "/api/files/f1"))
+
+
+def test_an_easyeda_bom_survives_the_trip_to_the_server():
+    """`board convert --bom` sends the BOM as text: EasyEDA's UTF-16 has to
+    be decoded as UTF-16, or every row is noise and every part a guess."""
+    from backend.imports.parts import _text, parse_bom
+    raw = ("No.\tQuantity\tComment\tDesignator\tFootprint\tSupplier Part\n"
+           "1\t1\tSIQ-02FVS3\tU1\tSW-SMD_SIQ-02FVS3_1\tC2925423\n").encode("utf-16")
+    sent = _text(raw).encode()            # what the server gets and encodes again
+    assert parse_bom(sent)["U1"]["part"] == "C2925423"
