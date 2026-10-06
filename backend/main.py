@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from . import (access, actors, ato, auth, changes, convert, files, jobs, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
-               schematic, store, summarise, sysinfo, usage, versions)
+               schematic, store, summarise, sysinfo, usage, versions, links, board3d)
 from . import tools_api
 
 LOG = logging.getLogger("redline.api")
@@ -330,7 +330,20 @@ async def put_model(model_id: str, body: ModelIn):
         raise HTTPException(400, str(exc)) from exc
     if body.if_match:
         await actors.audit(db(), "edit", f"model {model_id}", {"how": "code view"})
-    return {**{k: doc[k] for k in ("_id", "title", "ready", "stale", "sha256", "error")}, "rev": _rev(body.source)}
+    prop = doc.get("propagation") or {}
+    await _say_propagation(model_id, prop)
+    return {**{k: doc[k] for k in ("_id", "title", "ready", "stale", "sha256", "error")},
+            "rev": _rev(body.source), "version": doc.get("version"),
+            "queued": prop.get("queued", []), "cycles": prop.get("cycles", [])}
+
+
+async def _say_propagation(what: str, prop: dict, room: str = "cad") -> None:
+    """In the log: what a change set off."""
+    if prop.get("queued"):
+        await say(f"{what} changed (v{prop.get('version')}): rebuilding "
+                  + ", ".join(prop["queued"]), "work", room=room)
+    for c in prop.get("cycles") or []:
+        await say("import cycle, not built: " + " -> ".join(c + c[:1]), "error", room=room)
 
 
 @app.post("/api/models/{model_id:path}/move")
@@ -341,6 +354,7 @@ async def move_model(model_id: str, folder: str = ""):
         raise HTTPException(404, str(exc)) from exc
     except (ValueError, FileExistsError) as exc:
         raise HTTPException(400, str(exc)) from exc
+    await links.reindex(db())          # `import stand` may mean something else now
     return {"from": model_id, "to": new_id}
 
 
@@ -355,7 +369,98 @@ async def drop_model(model_id: str, force: bool = False):
         await store.delete_model(db(), model_id)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
+    await links.reindex(db())
     return {"deleted": model_id, "was_imported_by": users}
+
+
+# ---------------- components: what uses what (backend/links.py) ----------------
+@app.get("/api/components")
+async def list_components():
+    """Everything a model can import, for the 3D room's Insert picker:
+    every .3d model and every .pcb board, with the line that imports it."""
+    g = await links.load(db())
+    out = []
+    for k, info in sorted(g.nodes.items(), key=lambda kv: (kv[1]["kind"], kv[1]["title"].lower())):
+        mod = links.module_for(info["kind"], info["id"], g.table)
+        alias = "B" if info["kind"] == "board" else (mod or "m")[:1].upper()
+        out.append({"kind": info["kind"], "id": info["id"], "title": info["title"],
+                    "version": info.get("version"), "module": mod,
+                    "ready": info.get("ready", True),
+                    "line": f"import {mod} as {alias}" if mod and mod.isidentifier() else None,
+                    "used_by": [links.split(d)[1] for d in g.used_by(k)]})
+    return out
+
+
+@app.get("/api/models/{model_id:path}/links")
+async def model_links(model_id: str):
+    """One model as a component: what it uses (at which version, and
+    which version its last build had), who uses it, the rebuild a change
+    set off, any cycle it is in, and numbers it copies from a component
+    instead of reading them."""
+    d = db()
+    doc = await d.models.find_one({"_id": model_id}, {"source": 1, "built": 1, "link": 1,
+                                                      "version": 1, "pins": 1})
+    if not doc:
+        raise HTTPException(404, model_id)
+    g = await links.load(d)
+    k = links.key("model", model_id)
+    now = links.against(g, k)
+    built = doc.get("built") or {}
+    against = built.get("against") or {}
+    uses = []
+    for u in g.uses.get(k, []):
+        info = g.nodes.get(u) or {}
+        uses.append({"kind": info.get("kind"), "id": info.get("id"), "title": info.get("title"),
+                     "module": links.module_for(info.get("kind"), info.get("id"), g.table),
+                     "version": info.get("version"),
+                     "built_against": (against.get(u) or {}).get("version"),
+                     "pinned": (doc.get("pins") or {}).get(u)})
+    exports = {}
+    for u in g.uses.get(k, []):
+        kind, cid = links.split(u)
+        mod = links.module_for(kind, cid, g.table) or cid
+        if kind == "model":
+            exports[mod] = links.model_exports(g.nodes[u].get("source") or "")
+        else:
+            try:
+                exports[mod] = links.board_exports(json.loads(
+                    await store.get_artifact(d, cid, "board3d", ato.BOARDS)))
+            except KeyError:
+                pass
+    cycles = [[links.split(x)[1] for x in c] for c in g.cycles() if k in c]
+    return {"id": model_id, "version": doc.get("version") or 1,
+            "uses": uses,
+            "used_by": [{"id": links.split(x)[1], "title": g.nodes[x]["title"]} for x in g.used_by(k)],
+            "dependents": [links.split(x)[1] for x in g.dependents(k)],
+            "built": {"at": built.get("at"), "hash": built.get("hash"),
+                      "current": bool(built.get("hash")) and built.get("hash") == now["hash"]},
+            "link": doc.get("link"), "cycles": cycles, "pins": doc.get("pins") or {},
+            "copied": links.copied_numbers(doc.get("source") or "", exports)}
+
+
+class PinIn(BaseModel):
+    component: str = Field(pattern=r"^(model|board):.+")
+    version: int | None = None          # None: follow the latest again
+
+
+@app.post("/api/models/{model_id:path}/pins")
+async def pin_component(model_id: str, body: PinIn):
+    """Use one component at a fixed version (Fusion's "break link"), or
+    follow its latest again. A pinned component's changes do not travel
+    to this model."""
+    d = db()
+    if body.version is None:
+        got = await d.models.update_one({"_id": model_id}, {"$unset": {f"pins.{body.component}": ""}})
+    else:
+        kind, cid = links.split(body.component)
+        if not await links.version_of(d, kind, cid, body.version):
+            raise HTTPException(404, f"{body.component} v{body.version} is not kept")
+        got = await d.models.update_one({"_id": model_id},
+                                        {"$set": {f"pins.{body.component}": body.version}})
+    if not got.matched_count:
+        raise HTTPException(404, model_id)
+    await d.models.update_one({"_id": model_id}, {"$set": {"stale": True}})
+    return {"model": model_id, "component": body.component, "version": body.version}
 
 
 @app.post("/api/models/{model_id:path}/build")
@@ -977,7 +1082,9 @@ async def save_board(bid: str, body: BoardIn):
         patch["title"] = body.title
     if body.entry:
         patch["entry"] = body.entry
-    await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": patch}, upsert=True)
+    got = await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": patch}, upsert=True)
+    if getattr(got, "upserted_id", None) is not None:
+        await links.reindex(db())       # a new name a model can import
     if body.if_match:
         await actors.audit(db(), "edit", f"board {bid}", {"how": "code view"})
     return {"id": bid, "saved": True, "rev": _rev(body.source)}
@@ -1044,6 +1151,15 @@ async def _layout_board(bid: str):
               + f" - {out.get('parts_from_lcsc', 0)} from LCSC", "done", room="pcb")
     for trouble in (out.get("part_trouble") or [])[:4]:
         await say(f"{bid}: {trouble[:160]}", "warn", room="pcb")
+    comp = out.get("component")
+    if comp:
+        # The board as a component: a new version only when the 3D changed,
+        # and then every model that imports it is rebuilt (backend/links.py).
+        await say(f"{bid}: 3D component v{comp.get('version')}"
+                  + (" - new, the models that use it rebuild" if comp.get("changed") else " - unchanged"),
+                  "done", room="pcb")
+        if comp.get("queued"):
+            await _say_propagation(bid, comp, room="cad")
     return out
 
 
@@ -1107,6 +1223,14 @@ async def board_file(bid: str, kind: str):
         # This route is registered first and would otherwise swallow the
         # 3D model's own.
         return await board_model(bid)
+    if kind in ("step", "stl"):
+        # The board as a component (backend/board3d.py), to take away.
+        try:
+            raw = await store.get_artifact(db(), bid, kind, ato.BOARDS)
+        except KeyError:
+            raise HTTPException(404, f"no {kind} yet - lay the board out first")
+        return Response(raw, media_type="model/step" if kind == "step" else "model/stl", headers={
+            "Content-Disposition": f'attachment; filename="{bid}.{kind}"'})
     if kind == "kicad_sch":
         names = ["schematic"]
     elif kind == "kicad_pcb":
@@ -2015,14 +2139,103 @@ async def board_graph(bid: str):
 
 
 @app.delete("/api/boards/{bid}")
-async def drop_board(bid: str):
+async def drop_board(bid: str, force: bool = False):
+    # A board is a component too: a model that imports it would break.
+    users = await links.users_of(db(), "board", bid)
+    if users and not force:
+        raise HTTPException(
+            409, f"{bid} is imported by {', '.join(users)}; "
+                 "deleting it breaks their build. Pass force=true to go ahead.")
     res = await db()[ato.BOARDS].delete_one({"_id": bid})
     if not res.deleted_count:
         raise HTTPException(404, bid)
     # Written down: a board went missing once with nothing to say when or
     # how, and a deletion is the one change there is no undoing.
     await say(f"{bid}: deleted", "warn", room="pcb")
-    return {"id": bid, "deleted": True}
+    async for v in db()[links.VERSIONS].find({"kind": "board", "component": bid}, {"step": 1}):
+        try:
+            await store.bucket(db(), "model_files").delete(v["step"]["gridfs_id"])
+        except Exception:                                   # noqa: BLE001
+            pass
+    await db()[links.VERSIONS].delete_many({"kind": "board", "component": bid})
+    await links.reindex(db())
+    return {"id": bid, "deleted": True, "was_imported_by": users}
+
+
+@app.get("/api/boards/{bid}/component")
+async def board_component(bid: str):
+    """The board as a 3D component: its version, the named data a model
+    reads (`import <module> as B`), and who uses it."""
+    d = db()
+    doc = await d[ato.BOARDS].find_one({"_id": bid}, {"component": 1, "title": 1})
+    if not doc:
+        raise HTTPException(404, bid)
+    try:
+        data = json.loads(await store.get_artifact(d, bid, "board3d", ato.BOARDS))
+    except KeyError:
+        data = None
+    g = await links.load(d)
+    k = links.key("board", bid)
+    mod = links.module_for("board", bid, g.table)
+    return {"board": bid, "title": doc.get("title") or bid, "component": doc.get("component"),
+            "module": mod, "line": f"import {mod} as B" if mod else None,
+            "data": data,
+            "used_by": [{"id": links.split(x)[1], "title": g.nodes[x]["title"],
+                         "link": None} for x in g.used_by(k)],
+            "dependents": [links.split(x)[1] for x in g.dependents(k)]}
+
+
+@app.post("/api/boards/{bid}/component")
+async def refresh_board_component(bid: str):
+    """Make the board's 3D component from its current layout without
+    placing or routing again (a layout does this on its own). Refused
+    while a job runs on the board: it reads what the job is writing."""
+    running = await db().raw[jobs.JOBS].find_one(
+        {"board": bid, "workspace": scope.current(), "status": "running"})
+    if running and jobs.alive(running):
+        raise HTTPException(409, f"{bid}: a {running.get('kind')} is running - its layout makes the component")
+    try:
+        out = await kicad.refresh_component(db(), bid)
+    except kicad.NoDocker as exc:
+        raise HTTPException(503, str(exc))
+    except KeyError as exc:
+        raise HTTPException(404, str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(400, str(exc))
+    await say(f"{bid}: 3D component v{out.get('version')}"
+              + (" (new)" if out.get("changed") else " (unchanged)"), "done", room="pcb")
+    await _say_propagation(bid, out)
+    return out
+
+
+@app.get("/api/boards/{bid}/module.py")
+async def board_module(bid: str):
+    """The module a 3D model imports this board by, as the build writes it."""
+    d = db()
+    doc = await d[ato.BOARDS].find_one({"_id": bid}, {"component": 1, "title": 1})
+    comp = (doc or {}).get("component") or {}
+    if not comp.get("digest"):
+        raise HTTPException(404, "no 3D yet - lay the board out first")
+    data = json.loads(await store.get_artifact(d, bid, "board3d", ato.BOARDS))
+    text = board3d.module_source(bid, doc.get("title") or bid, data, comp.get("version") or 1,
+                                 comp["digest"], f"{bid}.step")
+    return Response(text, media_type="text/x-python")
+
+
+async def _link_build(d, model_id: str):
+    """A rebuild a change elsewhere set off, said in the log either way."""
+    link = ((await d.models.find_one({"_id": model_id}, {"link": 1})) or {}).get("link") or {}
+    b = link.get("because") or {}
+    why = f"{b.get('title') or b.get('id')} v{b.get('version')}"
+    await say(f"{model_id}: rebuilding because {why} changed", "work")
+    try:
+        out = await build.build(d, model_id, EXPORT_SCRIPT)
+    except Exception as exc:
+        await say(f"{model_id}: broke after {why} changed - {str(exc).splitlines()[-1][:200] if str(exc) else type(exc).__name__}",
+                  "error")
+        raise
+    await say(f"{model_id}: rebuilt against {why}", "done")
+    return out
 
 
 # ---------------- analytics ----------------
@@ -2032,6 +2245,8 @@ async def _start_sampler():
     import asyncio
     if MONGODB_URI:
         asyncio.create_task(insights.sampler(db))
+        # Changes travelling to what uses them (backend/links.py).
+        asyncio.create_task(links.loop(lambda: db().raw, _link_build))
         try:
             # The trash of the Command Code room empties itself after 30 days.
             await cc_chat.ensure_indexes(db().raw)       # the database itself: one index for every workspace

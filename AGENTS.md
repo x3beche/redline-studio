@@ -553,6 +553,46 @@ NAMES = ["housing", "impeller", "pins"]   # names in the tree
 Models are parametric: when a dimension is requested, change the constant —
 do not rewrite the geometry by hand.
 
+## Components: reuse is importing, never copying
+
+Every `.3d` model and every `.pcb` board is a **component**. A design that
+needs one imports it; it never copies its geometry, and never retypes a
+number the component already names. Change the component and every design
+that uses it is rebuilt by the server, in order (backend/links.py).
+
+```python
+import os
+os.environ["REDLINE_IMPORT_ONLY"] = "1"      # imported parts skip their own exports
+import stand as D                             # a 3D model: by its bare name
+import demoboard_gerber_zip as B              # a board: its id with - and / as _
+
+base = B.part                                 # the board with its parts (STEP)
+for h in B.HOLES:                             # Hole(x, y, d, plated, ref)
+    ...                                       # a standoff at h.x, h.y, not at 3.2, 4.0
+lid_z = B.THICKNESS + B.KEEPOUT["top"] + 1.0  # not 1.6 + 15.1 + 1.0
+```
+
+- A board's module is generated from its last layout: `part` (STEP, read on
+  first use), `simple` (slab + one box per part, fast), `SIZE`, `THICKNESS`,
+  `OUTLINE`, `CUTOUTS`, `HOLES`, `DRILLS`, `CONNECTORS` / `EDGE_PARTS`
+  (`edge`, `along`, `overhang`, `height`, `box`), `BODIES`, `KEEPOUT`,
+  `HEIGHT_MAP`, `keepout(clearance)`. Frame: mm, origin at the outline's
+  lower-left corner, +Z out of the top, board bottom at z = 0.
+  `GET /api/boards/<id>/module.py` shows it; `pcb_<name>` is the same module
+  when a model already has the plain name.
+- A board with no 3D yet gets one from its next layout or run, or at once
+  from `POST /api/boards/<id>/component` (no re-routing).
+- Do not make a second "3D model of the board". The `.pcb` is the component.
+- Never paste a part's geometry into another model to tweak it. If a variant
+  is needed, give the part a parameter and import it.
+- `GET /api/models/<id>/links` lists what a model uses, who uses it, the
+  rebuild a change set off and **copied numbers** - literals in the source
+  that a component it imports already names. Clear those before finishing.
+- Deleting a component something imports is refused (409) for models and
+  boards alike; `force=true` is the person's call, not yours.
+- A dependent can pin a component version (`POST /api/models/<id>/pins
+  {"component": "board:<id>", "version": 3}`, `null` to follow again).
+
 ## Silent failures
 
 Traps already hit in this codebase:

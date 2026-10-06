@@ -48,3 +48,12 @@ The note is about a model; its source is in MongoDB, not on disk.
 constant, not the geometry. Check with a measurement in code that raises,
 then `revisions.py after <id>` renders the same camera: read that picture
 against the drawing. See AGENTS.md: Model contract, Silent failures.
+
+
+Reuse is importing: another model is `import stand as D`, a board is
+`import <board_id_with_underscores> as B` (`B.part`, `B.HOLES`,
+`B.THICKNESS`, `B.CONNECTORS`...). Never copy a component's geometry or
+retype its numbers - read them from the import, so the server can rebuild
+this model when the component changes. Before finishing, check
+`GET /api/models/<id>/links` for `copied` numbers and a `failed` link.
+See AGENTS.md: Components.

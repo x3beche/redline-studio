@@ -98,40 +98,103 @@ if hit and hit.volume > 0.05:
 Builds print their own measurements, so a regression shows up as a number
 changing rather than as a picture looking slightly wrong.
 
-## Assemblies
+## Components and assemblies
 
-Every model's source is written into the build directory, not just the one
-being built, so a module can import the parts it is made of:
+Every `.3d` model and every `.pcb` board is a **component**, the way a part is
+in Fusion 360: designed once, used everywhere by reference. A model uses one
+by importing it, and changing it changes every model that uses it.
 
 ```python
 import os
 os.environ["REDLINE_IMPORT_ONLY"] = "1"      # parts must not run their own exports
-import fan_pro as F
+import fan_pro as F                           # a model, by its bare name
 import stand as D
+import demoboard_gerber_zip as B              # a board, by its id (- and / become _)
 
-PARTS = place(F.PARTS, ...) + place(D.PARTS, ...)
+PARTS = place(F.PARTS, ...) + place(D.PARTS, ...) + [B.part]
 ```
 
 Guard exports and the `show()` call in each part with `if STANDALONE:`
 (`STANDALONE = os.environ.get("REDLINE_IMPORT_ONLY") != "1"`), or importing one will
 drop its STEP and STL into the assembly's output.
 
-Share the numbers rather than copying them. When the station tilts the fan
-module, the tilt lives in one file and the other reads it:
+**Insert component** in the viewer's toolbar lists every model and board with
+the line that imports it, and puts that line in the source.
+
+### A board is a component
+
+There is no separate "3D model of the board" to export and keep in step. Every
+layout or run of a board also writes, as artifacts of the board itself:
+
+| | |
+|---|---|
+| `board.step` | the board and its parts, `kicad-cli pcb export step` (no copper, mask or silkscreen; vias not cut) |
+| `board.glb`  | as before, what the PCB room's 3D tab shows |
+| `board.stl`  | the GLB's triangles, in the STEP's frame |
+| named data   | outline, cutouts, thickness, mounting holes, drills, connectors and edge parts, each part's box, keepout and a height map |
+
+The PCB room's **3D** tab shows the board with its version, the import line,
+the three downloads and who uses it. In the catalog it stays one `.pcb`.
+
+A model that imports the board gets a generated module:
+
+```python
+B.part            # the STEP, read only when used (a 30 MB board takes ~13 s)
+B.simple          # the slab with its holes and a box per part: instant
+B.SIZE, B.THICKNESS, B.OUTLINE, B.CUTOUTS
+B.HOLES           # [Hole(x, y, d, plated, ref)] - mounting holes
+B.CONNECTORS      # [Edge(ref, value, edge, along, overhang, height, box, ...)]
+B.EDGE_PARTS, B.BODIES, B.KEEPOUT, B.HEIGHT_MAP, B.keepout(clearance=0.5)
+B.VERSION         # the board's 3D version this build used
+```
+
+The frame is the board's own: millimetres, origin at the outline's lower-left
+corner, +Z out of the top copper, the bottom face at z = 0. A part whose only
+model is a mesh (WRL) cannot go into a STEP; the GLB has it, and `B.part`
+stands a box of its size in for it (`B.APPROXIMATE` lists them).
+
+A board laid out before this existed gets its component from its next layout,
+or at once from `POST /api/boards/<id>/component`, which exports it from the
+layout as it is.
+
+### Changes travel
+
+What a model uses is read from its `import` lines (with Python's own parser)
+and kept on it as `uses`. When a model is saved with a different source, or a
+board's layout gives a different 3D, every model that uses it - directly or
+through another - is marked stale and rebuilt by the server, a few seconds
+later (a burst of saves is one rebuild), in dependency order, one at a time
+(`REDLINE_LINK_BUILDS`), under the same memory ceiling as any build. While it
+runs the catalog says *updating…* and the model's Links card says *updating
+because demoboard v12 changed*; if the change breaks it, the card shows the
+error and what depends on it waits. An import cycle is reported, not built.
+
+Each build records what it was built against: *built against demoboard v12*,
+and *now v13* when that is no longer the latest. A model can pin a component
+at a version (`POST /api/models/<id>/pins`), and that component's changes then
+stop at it - Fusion's "break link".
+
+### Share the numbers, never copy them
+
+When the station tilts the fan module, the tilt lives in one file and the
+other reads it:
 
 ```python
 TILT = B.TILT        # not a second 18.0 that can drift from the first
 ```
 
 Two copies of a number is how the plug ended up modelled 19 mm away from the
-socket it plugs into.
+socket it plugs into. The Links card lists **copied numbers**: literals in a
+model that a component it imports already names (`1.6` where `B.THICKNESS` is
+meant).
 
-An assembly imports the parts it is made of, so deleting one of those parts
-breaks its build the next time it runs, with a traceback and no clue why. The
-server checks who imports a model before removing it and refuses:
+### Deleting a component
+
+Deleting a model or a board that something imports breaks that build the next
+time it runs, so the server refuses:
 
 ```
-base is imported by station; deleting it breaks their build.
+demoboard-gerber-zip is imported by zz_tray; deleting it breaks their build.
 ```
 
 The UI offers the override rather than hiding it.

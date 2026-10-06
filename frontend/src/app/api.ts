@@ -203,10 +203,66 @@ export interface ModelEntry {
   build_started: string | null;
   /** Seconds the last successful build of this model took. */
   build_secs: number | null;
+  /** The model as a component (backend/links.py): its version, what it
+   *  imports, who imports it, and a rebuild a change elsewhere set off. */
+  version?: number;
+  uses?: ComponentUse[];
+  used_by?: ComponentRef[];
+  link?: LinkState | null;
+  built_hash?: string | null;
+}
+/** A component one model imports, at the version it is now and the one
+ *  the model's last build had. */
+export interface ComponentUse {
+  kind: 'model' | 'board'; id: string; title: string; module?: string | null;
+  version?: number | null; built_against?: number | null; pinned?: number | null;
+}
+export interface ComponentRef { kind?: 'model' | 'board'; id: string; title: string }
+/** A rebuild set off by a change elsewhere. */
+export interface LinkState {
+  state: 'queued' | 'building' | 'done' | 'failed' | 'blocked' | 'cycle';
+  because?: { kind: 'model' | 'board'; id: string; title: string; version?: number | null };
+  error?: string; cycle?: string[]; at?: string; done_at?: string;
+}
+export interface BoardNode {
+  id: string; name: string; title: string; kind: 'pcb';
+  ready: boolean; stale: boolean; building: boolean; build_secs?: number | null;
+  laid_out: boolean;
+  /** The board as a 3D component: its version and who imports it. */
+  version?: number; module?: string | null; has_3d?: boolean; used_by?: ComponentRef[];
 }
 export interface FolderNode {
   name: string; path: string;
-  folders: FolderNode[]; models: ModelEntry[];
+  folders: FolderNode[]; models: ModelEntry[]; boards?: BoardNode[];
+}
+/** Anything a model can import: the Insert picker's rows. */
+export interface ComponentRow {
+  kind: 'model' | 'board'; id: string; title: string; version: number | null;
+  module: string | null; ready: boolean; line: string | null; used_by: string[];
+}
+/** One model as a component, for its links panel. */
+export interface ModelLinks {
+  id: string; version: number;
+  uses: ComponentUse[]; used_by: ComponentRef[]; dependents: string[];
+  built: { at: string | null; hash: string | null; current: boolean };
+  link: LinkState | null; cycles: string[][]; pins: Record<string, number>;
+  copied: { line: number; value: number; names: string[]; text: string }[];
+}
+/** A board's 3D component: version and the named data a model reads. */
+export interface BoardComponent {
+  board: string; title: string; module: string | null; line: string | null;
+  component: { version: number; digest: string; at: string; step_bytes?: number;
+               summary?: { size: number[]; thickness: number; holes: number; connectors: number;
+                           approximate: string[] } } | null;
+  data: {
+    size: number[]; thickness: number;
+    holes: { x: number; y: number; d: number; ref: string }[];
+    connectors: { ref: string; value: string; edge: string | null; along: number | null;
+                  height: number; overhang: number | null }[];
+    keepout: { top: number; bottom: number; bounds: number[] };
+    approximate: string[];
+  } | null;
+  used_by: ComponentRef[]; dependents: string[];
 }
 
 // ---------------- version history ----------------
@@ -260,6 +316,28 @@ export class Catalog {
   /** force replaces the refusal when another model imports this one. */
   dropModel(id: string, force = false): Observable<unknown> {
     return this.http.delete(`/api/models/${id}${force ? '?force=true' : ''}`);
+  }
+
+  /** Everything a model can import, models and boards alike. */
+  components(): Observable<ComponentRow[]> {
+    return this.http.get<ComponentRow[]>('/api/components');
+  }
+
+  links(id: string): Observable<ModelLinks> {
+    return this.http.get<ModelLinks>(`/api/models/${id}/links`);
+  }
+
+  /** Use a component at a fixed version, or (null) follow it again. */
+  pin(id: string, component: string, version: number | null): Observable<unknown> {
+    return this.http.post(`/api/models/${id}/pins`, { component, version });
+  }
+
+  source(id: string): Observable<{ source: string; rev: string }> {
+    return this.http.get<{ source: string; rev: string }>(`/api/models/${id}/source`);
+  }
+
+  saveSource(id: string, source: string, ifMatch: string): Observable<{ rev: string }> {
+    return this.http.put<{ rev: string }>(`/api/models/${id}`, { source, if_match: ifMatch });
   }
 
   dropFolder(path: string): Observable<unknown> {
@@ -427,6 +505,11 @@ export interface BoardEntry {
   kind?: string;
   /** An imported board written as atopile (backend/convert.py). */
   convert?: BoardConversion | null;
+  /** The board as a 3D component: a new version with every layout that
+   *  changes its STEP or named data (backend/board3d.py). */
+  component?: { version: number; digest: string; at: string; module?: string;
+                summary?: { size: number[]; thickness: number; holes: number; connectors: number;
+                            approximate: string[] } } | null;
 }
 
 /** How an imported board came to have source: which parts were guessed,
@@ -595,8 +678,12 @@ export class Boards {
     return this.http.post(
       `/api/boards/${id}/move?folder=${encodeURIComponent(folder)}`, {});
   }
-  drop(id: string): Observable<unknown> {
-    return this.http.delete(`/api/boards/${id}`);
+  drop(id: string, force = false): Observable<unknown> {
+    return this.http.delete(`/api/boards/${id}${force ? '?force=true' : ''}`);
+  }
+  /** The board as a 3D component. */
+  component(id: string): Observable<BoardComponent> {
+    return this.http.get<BoardComponent>(`/api/boards/${id}/component`);
   }
   graph(id: string, stamp?: string): Observable<BoardGraph> {
     return this.http.get<BoardGraph>(

@@ -521,6 +521,27 @@
       <button (click)="clear()" class="tcv-btn tcv-draw-text">Clear</button>
     </div>
 
+    <!-- Insert a component: any .3d model or .pcb board, by its import
+         line. Reuse is importing, never copying geometry or numbers. -->
+    <span #insertBtn class="tcv_tooltip" data-tooltip="Insert component - import a .3d model or a .pcb board">
+      <span class="tcv_button_frame" [class.tcv_btn_click2]="inserting()">
+        <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-insert" aria-label="Insert component"
+               [disabled]="!activeModel() || frozen() || !auth.can('edit')" (click)="inserting.set(!inserting())">
+      </span>
+    </span>
+    @if (inserting() && activeModel()) {
+      <app-component-picker [model]="activeModel()" [top]="viewTop() + 12"
+                            (picked)="insertComponent($event)" (closed)="inserting.set(false)" />
+    }
+    <!-- The open model as a component: what it uses, who uses it, and a
+         rebuild a change elsewhere set off, with its error if it broke. -->
+    @if (activeModel() && !ide() && !frozen()) {
+      <div class="pointer-events-none absolute right-3 z-20"
+           [style.top.px]="viewTop() + 44 + (notice() ? 84 : 0) + (focused() ? 230 : 0)">
+        <app-links-card [id]="activeModel()" [stamp]="linkStamp()" />
+      </div>
+    }
+
     <!-- The project's releases, and this model's technical drawing: in the
          viewer's toolbar, before the code view's switch. -->
     <span #releaseBtn class="tcv_tooltip" data-tooltip="Release - pack the project for manufacturing">
@@ -859,6 +880,9 @@
         }
         @if (!b.ready) { <span style="color: var(--warn)" title="not built yet"> ·</span> }
         @else if (b.stale) { <span style="color: var(--warn)" title="source changed, rebuild"> *</span> }
+        @if (b.used_by?.length) {
+          <span class="tcv-link-badge" [title]="'3D v' + b.version + ' - used in ' + names(b.used_by)">in {{ b.used_by!.length }}</span>
+        }
       </span>
       <!-- The same two controls a model has. A board is a file in the same
            tree; it would be strange for one to be movable and the other
@@ -907,6 +931,23 @@
         }
         @if (!m.data) { <span style="color: var(--warn)" title="not built yet"> ·</span> }
         @else if (m.stale) { <span style="color: var(--warn)" title="source changed, rebuild"> *</span> }
+        <!-- A change to something it uses is rebuilding it, or broke it. -->
+        @if (m.link?.state === 'queued' || m.link?.state === 'building') {
+          @if (!m.building) {
+            <span class="ml-1 shrink-0 text-[10px]" style="color: var(--accent)"
+                  [title]="'updating because ' + m.link?.because?.title + ' changed'">updating…</span>
+          }
+        } @else if (m.link?.state === 'failed' || m.link?.state === 'blocked' || m.link?.state === 'cycle') {
+          <span class="ml-1 shrink-0 text-[10px]" style="color: var(--danger)"
+                [title]="(m.link?.because ? m.link?.because?.title + ' changed: ' : '') + (m.link?.error ?? '')">
+            {{ m.link?.state === 'cycle' ? 'cycle' : 'broke' }}</span>
+        }
+        @if (m.uses?.length) {
+          <span class="tcv-link-badge" [title]="'uses ' + names(m.uses)">uses {{ m.uses!.length }}</span>
+        }
+        @if (m.used_by?.length) {
+          <span class="tcv-link-badge" [title]="'used in ' + names(m.used_by)">in {{ m.used_by!.length }}</span>
+        }
       </span>
       <span class="ml-1 flex shrink-0 gap-1.5 text-[11px]"
             [class.opacity-0]="moving()?.id !== m.id"

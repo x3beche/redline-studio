@@ -3,7 +3,11 @@
 Collections
     folders        {_id: path, name, parent}
     models         {_id: path, folder, name, title, source, sha256, updated_at,
-                    artifacts: {viewer|step|stl: {gridfs_id, bytes, sha256}}}
+                    artifacts: {viewer|step|stl: {gridfs_id, bytes, sha256}},
+                    version, uses, built, link, pins}       (backend/links.py)
+    boards         ... component: {version, digest, module, ...},
+                    artifacts.step|board3d|stl              (backend/board3d.py)
+    component_versions  a copy of each version a pin can point at
     revisions      {..., image: {gridfs_id, bytes}}
     model_versions version history (versions.py)
 
@@ -221,10 +225,20 @@ async def save_model(db, model_id: str, source: str) -> dict:
     existing = await db.models.find_one({"_id": model_id})
     if existing:
         doc["artifacts"] = existing.get("artifacts", {})
-        doc["stale"] = existing.get("sha256") != doc["sha256"]
+        doc["stale"] = existing.get("sha256") != doc["sha256"] or bool(existing.get("stale"))
+        # What the model is as a component - its version, its pins, what
+        # its last build used, a rebuild in flight - outlives a save.
+        for k in ("version", "pins", "built", "link", "build_secs"):
+            if k in existing:
+                doc[k] = existing[k]
     else:
         doc["artifacts"], doc["stale"] = {}, True
     await db.models.replace_one({"_id": model_id}, doc, upsert=True)
+    # A new version, and every model that uses this one marked stale and
+    # queued for a rebuild (backend/links.py).
+    from . import links
+    doc["propagation"] = await links.model_saved(db, model_id, existing, doc)
+    doc["version"] = doc["propagation"]["version"]
     return doc
 
 
@@ -252,22 +266,12 @@ async def move_model(db, model_id: str, folder: str) -> str:
 async def importers_of(db, model_id: str) -> list[str]:
     """Models whose source imports this one.
 
-    An assembly says `import base`, and the build writes every model's
-    source next to it. Deleting a part therefore breaks the assembly the
-    next time it is built, with a traceback and no clue why.
+    An assembly says `import base`; deleting the part breaks the assembly
+    the next time it is built, with a traceback and no clue why. Read from
+    the imports themselves (backend/links.py), not by searching the text.
     """
-    name = model_id.rpartition("/")[2]
-    flat = model_id.replace("/", "__")
-    patterns = [re.compile(rf"^\s*(?:import\s+{re.escape(n)}\b"
-                           rf"|from\s+{re.escape(n)}\s+import\b)", re.M)
-                for n in {name, flat}]
-    found = []
-    async for other in db.models.find({}, {"source": 1}):
-        if other["_id"] == model_id or not other.get("source"):
-            continue
-        if any(p.search(other["source"]) for p in patterns):
-            found.append(str(other["_id"]))
-    return sorted(found)
+    from . import links
+    return await links.users_of(db, "model", model_id)
 
 
 async def delete_model(db, model_id: str) -> None:
@@ -281,6 +285,8 @@ async def delete_model(db, model_id: str) -> None:
         except Exception:
             pass
     await db.models.delete_one({"_id": model_id})
+    # And the copies of its versions that pins could have pointed at.
+    await db.component_versions.delete_many({"kind": "model", "component": model_id})
 
 
 # Generated artifacts are big - a viewer payload runs to tens of megabytes -
@@ -398,6 +404,38 @@ async def catalog(db) -> dict:
     models = [m async for m in db.models.find({}, {"source": 0})]
     boards = [b async for b in db.boards.find({}, {"source": 0})]
 
+    # Who uses whom, from what each model's imports were last read as
+    # (backend/links.py keeps `uses` current on every save and rename).
+    used_by: dict[str, list[dict]] = {}
+    for m in models:
+        for u in m.get("uses") or []:
+            used_by.setdefault(f"{u['kind']}:{u['id']}", []).append(
+                {"kind": "model", "id": m["_id"], "title": m.get("title", m["name"])})
+    titles = {f"model:{m['_id']}": m.get("title", m["name"]) for m in models}
+    titles.update({f"board:{b['_id']}": b.get("title") or b["_id"] for b in boards})
+    versions = {f"model:{m['_id']}": m.get("version") or 1 for m in models}
+    versions.update({f"board:{b['_id']}": (b.get("component") or {}).get("version") or 0
+                     for b in boards})
+
+    def uses_of(m: dict) -> list[dict]:
+        built = ((m.get("built") or {}).get("against") or {})
+        out = []
+        for u in m.get("uses") or []:
+            k = f"{u['kind']}:{u['id']}"
+            got = built.get(k) or {}
+            out.append({"kind": u["kind"], "id": u["id"], "module": u.get("module"),
+                        "title": titles.get(k, u["id"]), "version": versions.get(k),
+                        "built_against": got.get("version"),
+                        "pinned": (m.get("pins") or {}).get(k)})
+        return out
+
+    def link_of(m: dict) -> dict | None:
+        link = m.get("link")
+        if not link:
+            return None
+        return {k: link.get(k) for k in ("state", "because", "error", "cycle", "at", "done_at")
+                if link.get(k) is not None}
+
     def node(path: str, name: str) -> dict:
         return {
             "name": name, "path": path,
@@ -415,6 +453,11 @@ async def catalog(db) -> dict:
                     "building": bool(b.get("building")),
                     "build_secs": b.get("build_secs"),
                     "laid_out": bool((b.get("layout") or {}).get("at")),
+                    # The board as a component: its 3D version, and who uses it.
+                    "version": (b.get("component") or {}).get("version") or 0,
+                    "module": (b.get("component") or {}).get("module"),
+                    "has_3d": bool((b.get("artifacts") or {}).get("step")),
+                    "used_by": used_by.get(f"board:{b['_id']}", []),
                 } for b in boards if b.get("folder", "") == path),
                 key=lambda e: e["title"]),
             "models": sorted(
@@ -434,6 +477,13 @@ async def catalog(db) -> dict:
                     # can show progress against something real.
                     "build_secs": m.get("build_secs"),
                     "kind": "3d",
+                    # The model as a component: its version, what it uses,
+                    # who uses it, and a rebuild a change elsewhere started.
+                    "version": m.get("version") or 1,
+                    "uses": uses_of(m),
+                    "used_by": used_by.get(f"model:{m['_id']}", []),
+                    "link": link_of(m),
+                    "built_hash": (m.get("built") or {}).get("hash"),
                 } for m in models if m.get("folder", "") == path),
                 key=lambda e: e["title"]),
         }

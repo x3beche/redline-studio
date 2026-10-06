@@ -19,12 +19,13 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Activity, Analytics, Api, Boards, CameraState, Catalog, Chat, ChatLine, Health, LogLine, Question, Questions, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
+import { Activity, Analytics, Api, Boards, CameraState, Catalog, Chat, ChatLine, Health, LogLine, Question, Questions, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion, ComponentRow,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer } from './ocp';
 import { Markdown, plain } from '../markdown';
 import { Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
+import { ComponentPicker, LinksCard, insertImport } from '../rooms/links';
 import { Releases } from '../rooms/releases';
 import { Changes } from '../rooms/changes';
 import { T } from '../i18n';
@@ -43,7 +44,7 @@ type Mark =
 
 @Component({
   selector: 'app-editor',
-  imports: [Changes, CodeView, DecimalPipe, Markdown, NgTemplateOutlet, Releases, T],
+  imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, Markdown, NgTemplateOutlet, Releases, T],
   templateUrl: './editor.html',
 })
 export class Editor implements AfterViewInit, OnDestroy {
@@ -67,6 +68,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   private ideBtn = viewChild<ElementRef<HTMLElement>>('ideBtn');
   private releaseBtn = viewChild<ElementRef<HTMLElement>>('releaseBtn');
   private drawingBtn = viewChild<ElementRef<HTMLElement>>('drawingBtn');
+  private insertBtn = viewChild<ElementRef<HTMLElement>>('insertBtn');
+  private codeView = viewChild(CodeView);
   private taskPanel = viewChild<ElementRef<HTMLElement>>('taskPanel');
   private logPanel = viewChild<ElementRef<HTMLElement>>('logPanel');
   private drawTools = viewChild<ElementRef<HTMLElement>>('drawTools');
@@ -445,7 +448,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     const ide = this.ideBtn()?.nativeElement;
     if (ide && bar && ide.parentElement !== bar) bar.insertBefore(ide, tools ?? btn ?? null);
     // Release and the technical drawing, before the code view's switch.
-    for (const el of [this.releaseBtn()?.nativeElement, this.drawingBtn()?.nativeElement]) {
+    for (const el of [this.insertBtn()?.nativeElement, this.releaseBtn()?.nativeElement,
+                      this.drawingBtn()?.nativeElement]) {
       if (el && bar && el.parentElement !== bar) bar.insertBefore(el, ide ?? tools ?? btn ?? null);
     }
 
@@ -800,7 +804,9 @@ export class Editor implements AfterViewInit, OnDestroy {
       const live = this.findModel(t, this.activeModel());
       if (live?.built_at && live.built_at !== this.builtAt) {
         this.builtAt = live.built_at;      // claim it so the poll fires once
-        this.flash('model rebuilt, reloading');
+        // Rebuilt on its own because something it uses changed: say what.
+        const why = live.link?.state === 'done' ? live.link.because : null;
+        this.flash(why ? `rebuilt because ${why.title} changed, reloading` : 'model rebuilt, reloading');
         this.openModel(live);
       }
     });
@@ -998,19 +1004,95 @@ export class Editor implements AfterViewInit, OnDestroy {
         if (this.openedBoard() === b.id) this.picked.board.set(null);
         this.loadCatalog();
       },
-      error: e => this.flash(e.error?.detail ?? 'could not delete'),
+      error: e => {
+        // 409: a model imports this board. Say so and offer the override.
+        if (e.status === 409) this.forcing.set({ board: b, why: e.error?.detail ?? 'still in use' });
+        else this.flash(e.error?.detail ?? 'could not delete');
+      },
     });
   }
 
-  forcing = signal<{ model: ModelEntry; why: string } | null>(null);
+  forcing = signal<{ model?: ModelEntry; board?: { id: string; title: string }; why: string } | null>(null);
 
   forceDelete() {
     const f = this.forcing();
     if (!f) return;
     this.forcing.set(null);
-    this.cat.dropModel(f.model.id, true).subscribe({
-      next: () => this.afterDelete(f.model),
+    if (f.board) {
+      const b = f.board;
+      this.boards.drop(b.id, true).subscribe({
+        next: () => {
+          this.flash(b.title + ' deleted');
+          if (this.openedBoard() === b.id) this.picked.board.set(null);
+          this.loadCatalog();
+        },
+        error: e => this.flash(e.error?.detail ?? 'could not delete'),
+      });
+      return;
+    }
+    if (!f.model) return;
+    const m = f.model;
+    this.cat.dropModel(m.id, true).subscribe({
+      next: () => this.afterDelete(m),
       error: e => this.flash(e.error?.detail ?? 'could not delete'),
+    });
+  }
+
+  // ---- components: insert one, and what the open model uses ----
+  /** The Insert picker is open. */
+  inserting = signal(false);
+
+  /** The open model's catalog entry, for its links card. */
+  activeEntry = computed(() => {
+    const t = this.catalog(), id = this.activeModel();
+    return t && id ? this.findModel(t, id) : null;
+  });
+  /** Read the links card again when any of this moves. */
+  linkStamp = computed(() => {
+    const m = this.activeEntry();
+    return m ? [m.version, m.link?.state, m.link?.at, m.built_at, m.built_hash, m.uses?.length,
+                m.used_by?.length].join('|') : '';
+  });
+
+  names(refs: { title: string }[] | undefined): string {
+    return (refs ?? []).map(r => r.title).join(', ');
+  }
+
+  /** A component into the open model: its import line, put where imports go.
+   *  Into the code view if it is open (an edit, saved with the rest);
+   *  otherwise saved straight away and shown in the code view. */
+  insertComponent(r: ComponentRow) {
+    this.inserting.set(false);
+    const id = this.activeModel();
+    if (!id || !r.line) return;
+    const withAlias = (source: string) => {
+      const m = /^import (\S+) as (\w+)$/.exec(r.line!);
+      if (!m) return r.line!;
+      let alias = m[2], n = 2;
+      while (new RegExp(`\\bas ${alias}\\b|^${alias}\\s*=`, 'm').test(source)) alias = m[2] + n++;
+      return `import ${m[1]} as ${alias}`;
+    };
+    const cv = this.codeView();
+    if (this.ide() && cv) {
+      const got = cv.insertLine(id, withAlias);
+      if (got) { this.flash(`added "${got}" - save to keep it`); return; }
+    }
+    this.cat.source(id).subscribe({
+      next: s => {
+        const line = withAlias(s.source);
+        const got = insertImport(s.source, line);
+        if (!got) { this.flash(r.title + ' is imported already'); return; }
+        this.cat.saveSource(id, got.source, s.rev).subscribe({
+          next: () => {
+            this.flash(`added "${line}" - use its names, never copy them`);
+            this.ideLine.set(got.at);
+            this.ide.set(true);
+            this.loadCatalog();
+          },
+          error: e => this.flash(e.error?.detail?.detail ?? e.error?.detail ?? 'not saved'),
+        });
+      },
+      error: e => this.flash(e.error?.detail ?? 'the source could not be read'),
     });
   }
 

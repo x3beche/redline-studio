@@ -4,7 +4,7 @@ import {
 } from '@angular/core';
 import { money } from '../money';
 import {
-  Activity, BoardEntry, BoardGeometry, BoardStats, BoardGraph, BoardLayout, BoardRules,
+  Activity, BoardComponent, BoardEntry, BoardGeometry, BoardStats, BoardGraph, BoardLayout, BoardRules,
   Boards, LcscAsk, LcscJournal, LogLine, PartHeld, PartHit,
   PartPreview, Parts, RuleSchema,
 } from '../api';
@@ -692,11 +692,65 @@ type BoardView = Pane | 'split' | 'focus';
         @if (has3d()) {
           <!-- Fetched when it is first shown. three.js and a glTF loader
                are a third of a megabyte, and no use in any other room. -->
-          <div class="h-full w-full overflow-hidden rounded" style="background: var(--surface-2)">
+          <div class="relative h-full w-full overflow-hidden rounded" style="background: var(--surface-2)">
             @defer (on viewport) {
               <app-board-3d #model [src]="modelUrl()" />
             } @placeholder {
               <p class="p-3 text-[12px]" style="color: var(--ink-dim)">bringing the viewer in…</p>
+            }
+            <!-- The board is a component: this is the 3D a model imports
+                 (backend/board3d.py) - no second document, no export step. -->
+            @if (!frozen() && !own) {
+              <div class="tcv-card absolute bottom-2 left-2 max-w-[22rem] p-0 text-[11px]"
+                   style="box-shadow: 0 6px 20px var(--shadow-soft)">
+                <div class="flex items-center gap-2 px-2 py-1" style="border-bottom: 1px solid var(--line)">
+                  <span class="tcv-label">3D component</span>
+                  @if (here()?.component; as c) {
+                    <span class="font-mono text-[10px]" style="color: var(--ink-dim)"
+                          [title]="'made by the layout of ' + c.at.slice(0, 16).replace('T', ' ')">v{{ c.version }}</span>
+                  }
+                  <span class="tcv-files ml-auto" style="margin-bottom: 0">
+                    <a [attr.href]="hasStep() ? file('board.step') : null" [class.off]="!hasStep()"
+                       title="the board with its parts, as STEP - for any CAD tool">.step</a>
+                    <a [attr.href]="has3d() ? modelUrl() : null" [class.off]="!has3d()" download
+                       title="the board as KiCad renders it, glTF">.glb</a>
+                    <a [attr.href]="hasStl() ? file('board.stl') : null" [class.off]="!hasStl()"
+                       title="the board's triangles, in the same frame as the STEP">.stl</a>
+                  </span>
+                </div>
+                @if (comp(); as c) {
+                  <div class="px-2 py-1.5 leading-snug">
+                    @if (c.line) {
+                      <div class="flex items-center gap-1">
+                        <code class="min-w-0 flex-1 truncate font-mono text-[10px]" [title]="c.line">{{ c.line }}</code>
+                        <button class="tcv-chip px-1.5 py-0 text-[10px]" (click)="copyLine(c.line)"
+                                title="the line a 3D model imports this board with">{{ copiedLine() ? 'copied' : 'copy' }}</button>
+                      </div>
+                    }
+                    @if (c.data; as d) {
+                      <div class="mt-1" style="color: var(--ink-dim)">
+                        {{ d.size[0].toFixed(1) }} × {{ d.size[1].toFixed(1) }} × {{ d.thickness }} mm ·
+                        {{ d.holes.length }} holes · {{ d.connectors.length }} connectors ·
+                        {{ d.keepout.top.toFixed(1) }} mm up, {{ d.keepout.bottom.toFixed(1) }} down
+                      </div>
+                      @if (d.approximate.length) {
+                        <div class="text-[10px]" style="color: var(--ink-dim)"
+                             title="their only 3D model is a mesh, which STEP cannot hold">
+                          a box stands in for {{ d.approximate.join(', ') }} in B.part (mesh-only model)
+                        </div>
+                      }
+                    } @else {
+                      <div style="color: var(--ink-dim)">the next layout makes its STEP and named data</div>
+                    }
+                    <div class="mt-1">
+                      <span class="tcv-label mr-1">used in</span>
+                      @for (u of c.used_by; track u.id; let last = $last) {
+                        <span [title]="u.id">{{ u.title }}{{ last ? '' : ', ' }}</span>
+                      } @empty { <span style="color: var(--ink-dim)">nothing yet</span> }
+                    </div>
+                  </div>
+                }
+              </div>
             }
           </div>
         } @else {
@@ -849,6 +903,18 @@ export class RoomPcb implements OnDestroy {
     effect(() => {
       const n = this.picked.boardFiled();
       if (n !== filed) { filed = n; untracked(() => this.resume()); }
+    });
+    // The board as a component, read again when a layout makes a new version.
+    effect(() => {
+      const id = this.here()?._id, v = this.here()?.component?.version;
+      untracked(() => {
+        if (!id) { this.comp.set(null); return; }
+        this.api.component(id).subscribe({
+          next: c => { if (this.here()?._id === id) this.comp.set(c); },
+          error: () => this.comp.set(null),
+        });
+      });
+      void v;
     });
     // Opened from the catalog: the tree is shared, so the room follows
     // what was clicked rather than keeping a list beside it.
@@ -1397,6 +1463,20 @@ export class RoomPcb implements OnDestroy {
 
   has3d(): boolean {
     return !!this.here()?.artifacts?.['model3d'];
+  }
+
+  hasStep(): boolean { return !!this.here()?.artifacts?.['step']; }
+  hasStl(): boolean { return !!this.here()?.artifacts?.['stl']; }
+
+  /** The board as a component: its import line, named data, who uses it. */
+  comp = signal<BoardComponent | null>(null);
+  copiedLine = signal(false);
+
+  copyLine(line: string) {
+    navigator.clipboard?.writeText(line).then(() => {
+      this.copiedLine.set(true);
+      setTimeout(() => this.copiedLine.set(false), 1500);
+    });
   }
 
   modelUrl(): string {

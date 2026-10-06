@@ -20,6 +20,7 @@ board is before somebody lays it out, and all the source alone can say.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -151,6 +152,64 @@ async def held_plan(db, board_id: str, hold: dict | None) -> dict | None:
     return {"parts": parts, "outline": loops,
             "holes": [{"at": to_page(box, h["x"], h["y"]), "d": h["d"],
                        "plated": bool(h.get("plated"))} for h in holes]}
+
+
+BOARD3D = HERE / "docker" / "board3d.py"
+
+
+async def component_of(work: Path, board_id: str, glb: bytes | None):
+    """The board's STEP, named data and STL, from the routed board in
+    `work` (its 3D models still in work/3d, where the footprints point).
+
+    STEP options: the board body and every part's own STEP, without the
+    copper, mask and silkscreen - a component is for fitting things round,
+    and the copper made the file several times larger and slow to open in
+    a 3D design. Vias are not cut (thousands of holes nobody fits a screw
+    through); `--subst-models` uses a STEP where a footprint names a WRL
+    and one of the same name exists. The origin is the outline's
+    lower-left corner, the frame backend/board3d.py describes.
+    """
+    from . import board3d
+    shutil.copy(BOARD3D, work / "board3d.py")
+    rc, text = await _run(_docker(work, "--entrypoint", "python3", IMAGE,
+                                  "/work/board3d.py", "/work/board.kicad_pcb"), work)
+    if rc != 0:
+        raise RuntimeError("reading the board failed:\n" + text[-600:])
+    info = json.loads(text[text.index("{"):text.rindex("}") + 1])
+    x0, _y0, _x1, y1 = info["box"]
+    name = f"{board_id.replace('/', '__')}.step"
+    rc, log = await _run(
+        _docker(work, "-e", "KICAD9_3DMODEL_DIR=/usr/share/kicad/3dmodels", IMAGE,
+                "pcb", "export", "step", "--output", name, "--force", "--subst-models",
+                "--no-dnp", "--user-origin", f"{x0}x{y1}mm", "board.kicad_pcb"), work)
+    if rc != 0 or not (work / name).exists():
+        raise RuntimeError("the STEP export failed:\n" + log[-600:])
+    step = (work / name).read_bytes()
+    frame = board3d.frame_of(info)
+    boxes = await asyncio.to_thread(board3d.glb_boxes, glb, frame) if glb else {}
+    data = board3d.describe(info, boxes)
+    stl = await asyncio.to_thread(board3d.glb_stl, glb, frame) if glb else None
+    return step, data, stl, design_digest(work, info, data)
+
+
+def design_digest(work: Path, info: dict, data: dict) -> str:
+    """What the STEP is made of, as one hash: every footprint where it is
+    and which way, its 3D model's file, offset and turn, the outline and
+    the named data. Not the STEP's own bytes - KiCad writes the same board
+    with its entities in a different order each time, and a dependent
+    would be rebuilt after every layout for nothing."""
+    from . import modelseat
+    pcb = (work / "board.kicad_pcb").read_text(errors="replace")
+    seats = {f["ref"]: [f["model"], f["offset"], f["rotation"]]
+             for f in modelseat.board_footprints(pcb)}
+    files = {}
+    for path in sorted((work / "3d").glob("*")) if (work / "3d").is_dir() else []:
+        files[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    feet = sorted([f["ref"], f["footprint"], f["x"], f["y"], f.get("angle"), f.get("side"),
+                   seats.get(f["ref"])] for f in info.get("footprints") or [])
+    blob = json.dumps({"feet": feet, "files": files, "outline": info.get("outline"),
+                       "thickness": info.get("thickness"), "data": data}, sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()
 
 
 class NoDocker(RuntimeError):
@@ -497,6 +556,16 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                 glb, _added = await asyncio.to_thread(
                     modelseat.add_meshes, glb, (work / "board.kicad_pcb").read_text(), wrl_only)
 
+        # The board as a component (backend/board3d.py): a STEP of it with
+        # its parts, its named data and an STL, in the board's own frame.
+        # Best effort like the GLB - a board that will not export still
+        # has its layout.
+        component = None
+        try:
+            component = await component_of(work, board_id, glb)
+        except Exception as exc:                            # noqa: BLE001 - said, not fatal
+            part_trouble = [*part_trouble, f"3D component not made: {str(exc)[:300]}"]
+
         job = meter.stop()
         try:
             await compute.record(db, "layout",
@@ -525,6 +594,16 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         if glb:
             await store.put_artifact(db, board_id, "model3d", glb,
                                      collection=ato.BOARDS)
+        linked = None
+        if component:
+            from . import links
+            step, data, stl, digest = component
+            try:
+                linked = await links.board_component(
+                    db, board_id, step, data, stl, digest=digest,
+                    glb_digest=hashlib.sha256(glb).hexdigest() if glb else "")
+            except Exception as exc:                        # noqa: BLE001 - the layout stands
+                part_trouble = [*part_trouble, f"3D component not stored: {str(exc)[:300]}"]
         routed = None
         if route_report:
             routed = {k: route_report.get(k) for k in
@@ -546,6 +625,49 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         return {"board": board_id, "svg_bytes": len(svg),
                 "glb_bytes": len(glb) if glb else 0,
                 "parts_from_lcsc": len(parts), "part_trouble": part_trouble,
+                "component": {k: linked[k] for k in ("version", "changed", "queued")
+                              if k in linked} if linked else None,
                 **placed, "route": routed, "drc": drc_report}
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+async def refresh_component(db, board_id: str) -> dict:
+    """The board's 3D component from the board as it is - the routed
+    layout, or the placed one - without placing or routing it again: for a
+    board laid out before boards were components, or after the export
+    itself changed. The same export a layout ends with."""
+    if not await available():
+        raise NoDocker(f"the KiCad container ({IMAGE}) is not built")
+    pcb = None
+    for name in ("routed", "pcb"):
+        try:
+            pcb = await store.get_artifact(db, board_id, name, ato.BOARDS)
+            break
+        except KeyError:
+            continue
+    if pcb is None:
+        raise KeyError(f"{board_id} has no layout yet")
+    try:
+        glb = await store.get_artifact(db, board_id, "model3d", ato.BOARDS)
+    except KeyError:
+        glb = None
+    work = Path(tempfile.mkdtemp(prefix="x3pcb-"))
+    try:
+        (work / "3d").mkdir()
+        text = pcb.decode("utf-8", errors="replace")
+        (work / "board.kicad_pcb").write_text(text)
+        # The layout pointed every LCSC part at /work/3d/<number>.<kind>;
+        # the same files go back where it looked.
+        for lcsc_id, kind in sorted(set(re.findall(r'\(model "/work/3d/(C\d+)\.(\w+)"', text))):
+            got = await lcsc.model_of(db, lcsc_id)
+            if got:
+                (work / "3d" / f"{lcsc_id}.{got[1]}").write_bytes(got[0])
+        step, data, stl, digest = await component_of(work, board_id, glb)
+        from . import links
+        out = await links.board_component(
+            db, board_id, step, data, stl, digest=digest,
+            glb_digest=hashlib.sha256(glb).hexdigest() if glb else "")
+        return {"board": board_id, "step_bytes": len(step), **out}
     finally:
         shutil.rmtree(work, ignore_errors=True)

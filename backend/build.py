@@ -49,36 +49,6 @@ async def _watch_for_stop(db, model_id: str, proc, since: str) -> str | None:
             return asked
 
 
-def _reachable(source: str, others: list[dict]) -> list[str]:
-    """The sources this build can actually run: the model's own, and those
-    of the models it imports, and so on down.
-
-    An assembly imports its parts by their bare name, and any of them may
-    open an uploaded STEP. Everything else in the catalog is written to
-    the build directory so an import resolves, but it is never executed -
-    so a file only that mentions is a file this build does not need.
-    """
-    by_name: dict[str, dict] = {}
-    for other in others:
-        for key in (str(other["_id"]), other.get("name") or ""):
-            if key:
-                by_name.setdefault(key, other)
-
-    out, seen = [source], set()
-    queue = [source]
-    while queue:
-        text = queue.pop()
-        for name, other in by_name.items():
-            if name in seen or name not in text:
-                continue
-            seen.add(name)
-            body = other.get("source") or ""
-            if body:
-                out.append(body)
-                queue.append(body)
-    return out
-
-
 async def build(db, model_id: str, script: Path) -> dict:
     doc = await db.models.find_one({"_id": model_id})
     if not doc:
@@ -135,7 +105,11 @@ async def build(db, model_id: str, script: Path) -> dict:
         # either of them, which on this link is six minutes before any
         # geometry runs. A name that is not in any source cannot be opened
         # by one.
-        reachable = _reachable(doc["source"], others)
+        # The components it uses, by its imports (backend/links.py): boards
+        # as generated modules with their STEP, pinned parts at their pin.
+        from . import links
+        linked = await links.prepare(db, model_id, models_dir, tmp)
+        reachable = [doc["source"], *linked["sources"]]
         async for up in db.uploads.find({}):
             name = str(up["_id"])
             if not any(name in src for src in reachable):
@@ -211,7 +185,15 @@ async def build(db, model_id: str, script: Path) -> dict:
                 stored[label] = await store.put_artifact(
                     db, model_id, label, path.read_bytes())
 
-        return {"model": model_id,
+        # What it was built against, so the page can say "built against
+        # demoboard v12" - and tell when that is no longer the latest.
+        patch = {"built": {"at": store.now(), "version": doc.get("version") or 1,
+                           "against": linked["against"],
+                           "hash": linked["hash"]}}
+        if (doc.get("link") or {}).get("state") in ("failed", "blocked"):
+            patch["link.state"] = "done"
+        await db.models.update_one({"_id": model_id}, {"$set": patch})
+        return {"model": model_id, "built_against": linked["hash"],
                 "artifacts": {k: v["bytes"] for k, v in stored.items()},
                 "log": "\n".join(log[-4:])}
     finally:

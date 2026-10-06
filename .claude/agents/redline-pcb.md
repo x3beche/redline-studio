@@ -49,3 +49,12 @@ pipeline - build, schematic, place, route, check. Parts come from
 LCSC is asked gently. Check the netlist for the connections that matter
 in code, and DRC/ERC must be clean. See AGENTS.md: Board notes, Designing
 a board from a description.
+
+
+The board is also a 3D component: every layout writes its STEP and named
+data (outline, thickness, holes, connectors, keepout) and the 3D models
+that `import` the board are rebuilt on their own. Never make a separate 3D
+model of a board, and never copy its numbers into one. A layout that moves
+a connector or a hole changes those models - say so in the note's report
+(`GET /api/boards/<id>/component` lists who uses the board). See AGENTS.md:
+Components.
