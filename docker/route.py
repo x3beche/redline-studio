@@ -51,6 +51,12 @@ def pad_limits(board) -> dict:
             if not net:
                 continue
             size = pad.GetSize()
+            if pad.GetShape() == pcbnew.PAD_SHAPE_CUSTOM:
+                # A custom pad's size is only its anchor - an exposed pad
+                # drawn as a polygon read as 0.005 mm wide. Its outline is
+                # the pad.
+                box = pad.GetBoundingBox()
+                size = pcbnew.VECTOR2I(box.GetWidth(), box.GetHeight())
             short = round(min(size.x, size.y) / MM, 3)
             if short > 0 and (net not in out or short < out[net]["width"]):
                 out[net] = {"width": short,
