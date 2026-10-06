@@ -82,3 +82,111 @@ async def test(body: TestIn) -> dict:
     await llm.record(_db(), provider=body.provider, model=body.model, surface="settings",
                      kind="llm-test", used=d.get("usage") or {})
     return {"ok": True, "answer": text[:80], "ms": round((time.monotonic() - t0) * 1000)}
+
+
+# ---------------- usage, for Settings > LLM ----------------
+
+def _buckets(days: int) -> tuple[int, int, int, float]:
+    """(step, t0, n, since) for a period of `days`: hourly up to two days, daily beyond."""
+    import math
+    import time as _t
+    step = 3600 if days <= 2 else 86400
+    now = _t.time()
+    t0 = int((now - days * 86400) // step * step)
+    n = max(1, math.ceil((now - t0) / step))
+    return step, t0, n, now - days * 86400
+
+
+def _series(names: list[str], n: int) -> dict[str, list]:
+    return {k: [0] * n for k in names}
+
+
+_account_cache: dict[str, tuple[float, dict | None]] = {}
+
+
+async def _openrouter_account() -> dict | None:
+    """OpenRouter's own figures for the key: used, limit, remaining (USD)."""
+    import time as _t
+    import httpx
+    hit = _account_cache.get("openrouter")
+    if hit and _t.time() - hit[0] < 60:
+        return hit[1]
+    key = llm.key("openrouter")
+    out = None
+    if key:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                r = await client.get(llm.PROVIDERS["openrouter"]["base"] + "/key",
+                                     headers={"Authorization": f"Bearer {key}"})
+            if r.status_code < 400:
+                d = r.json().get("data") or {}
+                out = {k: d.get(k) for k in ("label", "usage", "limit", "limit_remaining", "is_free_tier")}
+        except Exception:                              # noqa: BLE001 - the page shows the rest
+            out = None
+    _account_cache["openrouter"] = (_t.time(), out)
+    return out
+
+
+@router.get("/usage")
+async def usage(provider: str, days: int = 30) -> dict:
+    """What the app asked of one provider: calls, tokens and money over time,
+    by job and by model (from the usage log every call writes to)."""
+    from datetime import datetime, timezone
+
+    from . import usage as _usage
+
+    if provider not in llm.PROVIDERS:
+        raise HTTPException(400, f"unknown provider {provider!r}")
+    days = max(1, min(days, 90))
+    step, t0, n, since = _buckets(days)
+    since_iso = datetime.fromtimestamp(since, timezone.utc).isoformat()
+    raw = _db().raw if getattr(type(_db()), "SCOPED", False) else _db()
+    rows = [r async for r in raw[_usage.CALLS].find(
+        {"provider": provider, "at": {"$gte": since_iso}},
+        {"_id": 0, "at": 1, "kind": 1, "model": 1, "input": 1, "output": 1, "cost_usd": 1}).sort("at", 1)]
+
+    kinds = sorted({r.get("kind") or "?" for r in rows})
+    models = sorted({r.get("model") or "?" for r in rows})
+    calls, cost = _series(kinds, n), {m: [None] * n for m in models}
+    tokens = _series(["input", "output"], n)
+    by_model: dict[str, dict] = {}
+    by_kind: dict[str, dict] = {}
+    totals = {"calls": 0, "input": 0, "output": 0, "cost_usd": None, "unpriced_calls": 0}
+    for r in rows:
+        try:
+            ts = datetime.fromisoformat(r["at"]).timestamp()
+        except (KeyError, ValueError, TypeError):
+            continue
+        i = min(n - 1, max(0, int((ts - t0) // step)))
+        kind, model = r.get("kind") or "?", r.get("model") or "?"
+        inp, out, usd = r.get("input") or 0, r.get("output") or 0, r.get("cost_usd")
+        calls[kind][i] += 1
+        tokens["input"][i] += inp
+        tokens["output"][i] += out
+        totals["calls"] += 1
+        totals["input"] += inp
+        totals["output"] += out
+        if usd is None:
+            totals["unpriced_calls"] += 1
+        else:
+            cost[model][i] = (cost[model][i] or 0) + usd
+            totals["cost_usd"] = (totals["cost_usd"] or 0) + usd
+        for table, name in ((by_model, model), (by_kind, kind)):
+            row = table.setdefault(name, {"name": name, "calls": 0, "input": 0, "output": 0, "cost_usd": None})
+            row["calls"] += 1
+            row["input"] += inp
+            row["output"] += out
+            if usd is not None:
+                row["cost_usd"] = (row["cost_usd"] or 0) + usd
+
+    def td(series: dict) -> dict:
+        return {"t0": t0, "step": step, "n": n, "series": [{"name": k, "values": v} for k, v in series.items()]}
+
+    recent = [{k: r.get(k) for k in ("at", "kind", "model", "input", "output", "cost_usd")}
+              for r in reversed(rows[-25:])]
+    return {"provider": provider, "days": days, "step": step, "totals": totals,
+            "calls": td(calls), "tokens": td(tokens), "cost": td(cost),
+            "by_model": sorted(by_model.values(), key=lambda x: -x["calls"]),
+            "by_kind": sorted(by_kind.values(), key=lambda x: -x["calls"]),
+            "recent": recent,
+            "account": await _openrouter_account() if provider == "openrouter" else None}

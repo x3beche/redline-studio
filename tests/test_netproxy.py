@@ -81,3 +81,18 @@ def test_always_sends_every_lookup_through_it(monkeypatch):
     seen = []
     run(lcsc._polite("search", "x", "u", lambda url: seen.append(lcsc._via()) or {}, "u"))
     assert seen == [True]
+
+
+def test_usage_counts_each_way_and_what_the_proxy_carried(monkeypatch):
+    lcsc._record("component", "C1", "net", status=200, size=1000, via="direct")
+    lcsc._record("component", "C2", "net", status=200, size=500, via="proxy")
+    lcsc._record("component", "C3", "net", status=403, via="direct")
+    lcsc._record("download", "C4", "refused", error="budget")
+    lcsc._record("component", "C5", "disk", size=10)
+    lcsc._record("search", "x", "wait", error="waiting")                 # not an ask
+    out = run(netproxy.usage(days=1))
+    t = out["totals"]
+    assert (t["lookups"], t["direct"], t["proxy"], t["refused"], t["disk"]) == (4, 1, 1, 2, 1)
+    assert (t["bytes_direct"], t["bytes_proxy"]) == (1000, 500)
+    assert {s["name"] for s in out["lookups"]["series"]} == {"direct", "proxy", "refused", "failed"}
+    assert out["recent"][0]["target"] == "x"

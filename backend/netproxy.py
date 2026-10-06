@@ -151,3 +151,66 @@ async def test() -> dict:
         except Exception as exc:                       # noqa: BLE001
             out.append({"ok": False, "error": str(exc)[:300], "ms": round((time.monotonic() - t0) * 1000)})
     return {"exits": out, "rotates": len({e.get("ip") for e in out if e.get("ok")}) > 1}
+
+
+@router.get("/usage")
+async def usage(days: int = 7) -> dict:
+    """The EasyEDA lookups over time - direct, through the proxy, refused,
+    failed - and the bytes each way (what a proxy provider bills), from the
+    request journal lcsc.py keeps."""
+    import math
+    from datetime import datetime
+
+    from . import lcsc
+
+    days = max(1, min(days, 30))
+    step = 3600 if days <= 2 else 86400
+    now = time.time()
+    t0 = int((now - days * 86400) // step * step)
+    n = max(1, math.ceil((now - t0) / step))
+    names = ("direct", "proxy", "refused", "failed")
+    lookups = {k: [0] * n for k in names}
+    traffic = {k: [0] * n for k in ("direct", "proxy")}
+    totals = {"lookups": 0, "direct": 0, "proxy": 0, "refused": 0, "failed": 0, "disk": 0,
+              "bytes_direct": 0, "bytes_proxy": 0}
+    kinds: dict[str, int] = {}
+    rows = lcsc.journal(100_000)
+    for r in rows:
+        try:
+            ts = datetime.fromisoformat(r["at"]).timestamp()
+        except (KeyError, ValueError, TypeError):
+            continue
+        if ts < t0:
+            continue
+        i = min(n - 1, int((ts - t0) // step))
+        src = r.get("source")
+        if src == "disk":
+            totals["disk"] += 1
+            continue
+        if src not in ("net", "refused"):
+            continue                                   # "wait" lines are not asks
+        totals["lookups"] += 1
+        kinds[r.get("kind") or "?"] = kinds.get(r.get("kind") or "?", 0) + 1
+        via = r.get("via") or "direct"
+        status = r.get("status")
+        if src == "refused" or status in (403, 429):
+            what = "refused"
+        elif status == 200:
+            what = via
+        else:
+            what = "failed"
+        lookups[what][i] += 1
+        totals[what] += 1
+        if src == "net":
+            traffic[via][i] += r.get("bytes") or 0
+            totals[f"bytes_{via}"] += r.get("bytes") or 0
+
+    def td(series: dict) -> dict:
+        return {"t0": t0, "step": step, "n": n, "series": [{"name": k, "values": v} for k, v in series.items()]}
+
+    st = lcsc.state()
+    return {"days": days, "step": step, "totals": totals, "lookups": td(lookups), "bytes": td(traffic),
+            "by_kind": sorted(({"name": k, "n": v} for k, v in kinds.items()), key=lambda x: -x["n"]),
+            "recent": [{k: r.get(k) for k in ("at", "who", "kind", "target", "source", "status", "via", "ms", "bytes", "error")}
+                       for r in rows[:30]],
+            "state": {**st, "asks_in_window": st.get("used")}}

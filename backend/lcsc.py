@@ -148,12 +148,15 @@ def state() -> dict:
 
 def _record(kind: str, target: str, source: str, *, url: str = "",
             status: int | None = None, ms: float = 0, size: int = 0,
-            error: str | None = None) -> None:
-    """One line in the journal. Never fails the request it describes."""
+            error: str | None = None, via: str | None = None) -> None:
+    """One line in the journal. Never fails the request it describes.
+    `via`: "direct" or "proxy" for an ask that went out (netproxy.py)."""
     row = {"at": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
            "who": WHO.get(), "kind": kind, "target": target, "source": source,
            "url": url, "status": status, "ms": round(ms), "bytes": size,
            "error": error}
+    if via:
+        row["via"] = via
     try:
         _, lock_path, journal = _files()
         with open(lock_path, "a+") as lock:
@@ -253,6 +256,7 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
 
     loop = asyncio.get_running_loop()
     always = netproxy.mode() == "always"
+    via = "proxy" if always else "direct"
     t0 = _time.monotonic()
     try:
         try:
@@ -262,8 +266,9 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
             # same ask goes once more through it before anyone cools off.
             if first.code not in (403, 429) or always or netproxy.mode() != "fallback":
                 raise
-            _record(kind, target, "net", url=url, status=first.code,
+            _record(kind, target, "net", url=url, status=first.code, via="direct",
                     ms=(_time.monotonic() - t0) * 1000, error="refused here - asking through the proxy")
+            via = "proxy"
             t0 = _time.monotonic()
             out = await loop.run_in_executor(None, _through, True, fn, *args)
     except urllib.error.HTTPError as exc:
@@ -275,13 +280,13 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
                 st["refused_until"] = _time.time() + COOL_OFF
                 st["refused_why"] = why
             await asyncio.get_running_loop().run_in_executor(None, _locked, refuse)
-            _record(kind, target, "net", url=url, status=exc.code, ms=ms,
+            _record(kind, target, "net", url=url, via=via, status=exc.code, ms=ms,
                     error=f"refused - nobody asks again for {COOL_OFF // 60} min")
             raise Refused(f"{why}; not asking again for {COOL_OFF // 60} minutes") from exc
-        _record(kind, target, "net", url=url, status=exc.code, ms=ms, error=str(exc))
+        _record(kind, target, "net", url=url, via=via, status=exc.code, ms=ms, error=str(exc))
         raise
     except Exception as exc:
-        _record(kind, target, "net", url=url, ms=(_time.monotonic() - t0) * 1000,
+        _record(kind, target, "net", url=url, via=via, ms=(_time.monotonic() - t0) * 1000,
                 error=f"{type(exc).__name__}: {exc}"[:200])
         raise
     ms = (_time.monotonic() - t0) * 1000
@@ -289,7 +294,7 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
         # A download reports (return code, log): a failed one is written
         # down as failed, not as a 200 it never got.
         rc, log = out
-        _record(kind, target, "net", url=url, status=200 if rc == 0 else None,
+        _record(kind, target, "net", url=url, via=via, status=200 if rc == 0 else None,
                 ms=ms, error=None if rc == 0 else log.strip()[-200:])
         return out
     size = len(out) if isinstance(out, (bytes, bytearray)) else \
