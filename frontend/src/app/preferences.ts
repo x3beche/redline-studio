@@ -6,14 +6,17 @@ import { PALETTE } from './rooms/charts';
 import { redlineTheme } from './rooms/code-view';
 import { LlmSettingsPanel } from './llm-settings';
 import { ProxySettingsPanel } from './proxy-settings';
+import { CostsSettingsPanel } from './costs-settings';
+import { CURRENCY } from './money';
 
 /** Settings, a tab of its own: the theme, the language and the keyboard
  *  shortcuts - per browser, about the person at this screen - and the
  *  server's: the LLM keys and models (llm-settings.ts) and the proxy for
- *  the part lookups (proxy-settings.ts). Opened from
+ *  the part lookups (proxy-settings.ts), and what things cost and in which
+ *  currency (costs-settings.ts). Opened from
  *  the user menu, from Ctrl+K, and with "?" (the shortcuts page).
  */
-export type PrefsTab = 'appearance' | 'language' | 'llm' | 'proxy' | 'shortcuts';
+export type PrefsTab = 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'shortcuts';
 
 @Injectable({ providedIn: 'root' })
 export class Prefs {
@@ -82,7 +85,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, LlmSettingsPanel, ProxySettingsPanel],
+  imports: [T, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -214,6 +217,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
         }
         @case ('llm') { <app-llm-settings /> }
         @case ('proxy') { <app-proxy-settings /> }
+        @case ('costs') { <app-costs-settings /> }
         @case ('shortcuts') {
           <div class="st-page">
             <div class="st-row">
@@ -275,11 +279,13 @@ export class RoomSettings {
         blurb: 'Keys, which model does each job, and what they used.' },
       { id: 'proxy', label: 'Proxy', about: 'a second way out for EasyEDA lookups', ico: '⇄',
         blurb: 'A second way out for the part lookups, and the traffic it carried.' },
+      { id: 'costs', label: 'Costs & currency', about: 'subscriptions, electricity, exchange rates', ico: '¤',
+        blurb: 'What Redline costs to run, and the currency money is shown in.' },
     ] },
   ];
   item = computed(() => this.nav.flatMap(g => g.items).find(x => x.id === this.prefs.tab()) ?? null);
   label(id: PrefsTab) { return this.nav.flatMap(g => g.items).find(x => x.id === id)?.label ?? id; }
-  server(id: PrefsTab) { return id === 'llm' || id === 'proxy'; }
+  server(id: PrefsTab) { return id === 'llm' || id === 'proxy' || id === 'costs'; }
   isLight(t: Theme) { return LIGHT_THEMES.has(t); }
   langName = computed(() => LANGS.find(l => l.id === this.lang())?.name ?? this.lang());
   /** The figure beside each section in the list. */
@@ -287,6 +293,7 @@ export class RoomSettings {
     if (id === 'appearance') return this.names[this.prefs.theme()];
     if (id === 'language') return this.lang().toUpperCase();
     if (id === 'shortcuts') return String(this.shortcutCount());
+    if (id === 'costs') return CURRENCY();
     return null;
   }
   readonly shortcuts: { group: string; items: Shortcut[] }[] = [

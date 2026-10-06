@@ -2,6 +2,7 @@ import {
   Component, ElementRef, OnDestroy, effect, inject, signal, untracked, viewChild,
   viewChildren,
 } from '@angular/core';
+import { money } from '../money';
 import {
   Activity, BoardEntry, BoardGeometry, BoardStats, BoardGraph, BoardLayout, BoardRules,
   Boards, LcscAsk, LcscJournal, LogLine, PartHeld, PartHit,
@@ -571,7 +572,7 @@ type BoardView = Pane | 'split' | 'focus';
                 <span>BOM</span>
                 <b [title]="'unit price × quantity over the ' + m.priced + ' of ' + m.lines
                             + ' part numbers LCSC has already been asked about'">
-                  {{ m.priced ? '$' + m.cost_usd.toFixed(2) : '–' }} · {{ m.priced }}/{{ m.lines }}</b>
+                  {{ m.priced ? money(m.cost_usd) : '–' }} · {{ m.priced }}/{{ m.lines }}</b>
                 <span>JLC</span>
                 <b title="Basic: no loading fee. Extended: a feeder fee per assembly run.">
                   {{ m.basic }}B · <span [style.color]="m.extended ? 'var(--warn)' : null">{{ m.extended }}E</span></b>
@@ -1076,9 +1077,8 @@ export class RoomPcb implements OnDestroy {
     this.store.drop(part.lcsc).subscribe({ next: () => this.drawer() });
   }
 
-  money(p: number | null): string {
-    return p == null ? '–' : p < 0.01 ? `$${p.toFixed(4)}` : `$${p.toFixed(2)}`;
-  }
+  /** A price in dollars, in the display currency (money.ts). */
+  money(p: number | null): string { return p == null ? '–' : money(p); }
 
   countOf(n: number | null): string {
     if (!n) return 'none';

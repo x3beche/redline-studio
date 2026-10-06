@@ -471,6 +471,13 @@ async def _log_usage(days: int, t0: int, step: int, n: int) -> dict:
                "since": hours[0]["_id"] if hours else None,
                "payload_bytes": latency["proxy"]["bytes"]}
     price = float(_conf.get("price_per_gb", 3.99) or 0)
+    if _db_getter is not None:                         # Settings > Costs, in whatever currency it was typed
+        try:
+            from . import costs
+            got = costs.derived(await costs.get(_db_getter()))["proxy_per_gb"]
+            price = got if got is not None else price
+        except Exception:                              # noqa: BLE001
+            pass
     gb = (m_up + m_down) / 1e9
     cost = {"gb": round(gb, 9), "bytes": m_up + m_down, "price_per_gb": price, "usd": round(gb * price, 6),
             "note": "measured on the wire between this machine and the proxy (both directions, TLS and "

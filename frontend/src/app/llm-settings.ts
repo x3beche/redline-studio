@@ -2,6 +2,7 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Auth } from './auth';
 import { T, t } from './i18n';
+import { money as shown } from './money';
 import type { LlmModel } from './rooms/commandcode';
 import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 
@@ -180,8 +181,8 @@ export class LlmUsagePanel {
   setDays(d: number) { this.days.set(d); keep('x3.settings.llm.days', d); }
   perCall(n: number, calls: number) { return fmt.count(Math.round(n / calls)); }
   perDay(n: number) { return fmt.count(n / Math.max(1, this.days())); }
-  /** Dollars, and a tiny amount still as a figure rather than $0.0000. */
-  money = (v: number | null | undefined): string => v == null ? '–' : v > 0 && v < 0.001 ? '$' + v.toPrecision(2) : fmt.money(v);
+  /** Dollars from the server in the display currency, a tiny amount still as a figure. */
+  money = (v: number | null | undefined): string => v == null ? '–' : shown(v);
   usedPct(a: NonNullable<LlmUsage['account']>) { return a.limit ? Math.min(100, 100 * a.usage / a.limit) : 0; }
   priced(d: LlmUsage) { return d.totals.cost_usd != null && d.totals.cost_usd > 0; }
   rows(list: UsageRow[], key: 'calls' | 'cost_usd'): Row[] {

@@ -1,6 +1,7 @@
 import {
   Component, ElementRef, OnDestroy, computed, input, signal, viewChild, AfterViewInit,
 } from '@angular/core';
+import { money } from '../money';
 
 /** Charts for the Analytics room, drawn as SVG in the app's own colours.
  *
@@ -21,8 +22,9 @@ export function color(i: number): string { return PALETTE[i % PALETTE.length]; }
 
 export type Fmt = (v: number) => string;
 export const fmt = {
-  money: (v: number) => v >= 1000 ? `$${Math.round(v).toLocaleString('en-US')}`
-    : v >= 1 ? `$${v.toFixed(2)}` : v > 0 ? `$${v.toFixed(v < 0.01 ? 4 : 3)}` : '$0',
+  /** Dollars from the server, in the display currency (money.ts) - reading
+   *  its signals, so a template that shows it follows a change of currency. */
+  money: (v: number) => money(v),
   count: (v: number) => v >= 1e9 ? (v / 1e9).toFixed(2) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M'
     : v >= 1e4 ? (v / 1e3).toFixed(1) + 'k' : String(Math.round(v * 100) / 100),
   bytes: (v: number) => v >= 1e12 ? (v / 1e12).toFixed(2) + ' TB' : v >= 1e9 ? (v / 1e9).toFixed(2) + ' GB'

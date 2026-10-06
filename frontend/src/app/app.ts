@@ -1,4 +1,4 @@
-import { Component, ElementRef, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { Editor } from './editor/editor';
 import { Selection } from './selection';
 import { RoomAnalyze } from './rooms/analyze';
@@ -11,6 +11,7 @@ import { RoomCommandCode } from './rooms/commandcode';
 import { Palette } from './palette';
 import { Prefs, RoomSettings } from './preferences';
 import { T } from './i18n';
+import { Money, money, moneyShort } from './money';
 import { Auth, SignIn, UserChip } from './auth';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 
@@ -133,6 +134,8 @@ export class App {
   });
   /** Whether sign-in is on, and who is signed in (auth.ts). */
   auth = inject(Auth);
+  /** The exchange rates and the costs, read from the start (money.ts). */
+  private fxAndCosts = inject(Money);
   tabs = WORKSPACES;
   /** The rooms you work in, left; Notes, Command Code, Files and Basic Tools at the right end. */
   rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'files' && w.id !== 'commandcode' && w.id !== 'settings');
@@ -144,7 +147,19 @@ export class App {
   /** A few words from Analytics for its menu entry: the last seven days' LLM
    *  spend and notes, and how long ago the figures were worked out. The
    *  server keeps them cached, so asking once a minute costs nothing. */
-  brief = signal<{ text: string; title: string } | null>(null);
+  private briefData = signal<{ usd: number; notes: number; runs: number; mins: number | null;
+                               took: number | null } | null>(null);
+  /** In the display currency, so it follows a change of currency at once. */
+  brief = computed(() => {
+    const b = this.briefData();
+    if (!b) return null;
+    const ago = b.mins === null ? '' : b.mins < 1 ? ' · now' : b.mins < 60 ? ` · ${b.mins}m` : ` · ${Math.round(b.mins / 60)}h`;
+    return {
+      text: `${moneyShort(b.usd)} · ${b.notes} rev${ago}`,
+      title: `Last 7 days: ${money(b.usd)} of LLM work, ${b.notes} revisions, ${b.runs} runs`
+           + (b.took != null ? ` - worked out in ${b.took} ms` : ''),
+    };
+  });
   private briefTimer?: ReturnType<typeof setInterval>;
   private readBrief = effect(() => {
     clearInterval(this.briefTimer);
@@ -155,15 +170,9 @@ export class App {
                   took_ms?: number } | null) => {
         const t = d?.now_totals;
         if (!t) return;
-        const usd = t.llm_usd ?? 0;
-        const money = usd >= 1000 ? `$${(usd / 1000).toFixed(1)}k` : `$${Math.round(usd)}`;
         const mins = d?.computed_at ? Math.round((Date.now() - Date.parse(d.computed_at)) / 60000) : null;
-        const ago = mins === null ? '' : mins < 1 ? ' · now' : mins < 60 ? ` · ${mins}m` : ` · ${Math.round(mins / 60)}h`;
-        this.brief.set({
-          text: `${money} · ${t.notes ?? 0} rev${ago}`,
-          title: `Last 7 days: $${usd.toFixed(2)} of LLM work, ${t.notes ?? 0} revisions, ${t.runs ?? 0} runs`
-               + (d?.took_ms != null ? ` - worked out in ${d.took_ms} ms` : ''),
-        });
+        this.briefData.set({ usd: t.llm_usd ?? 0, notes: t.notes ?? 0, runs: t.runs ?? 0, mins,
+                             took: d?.took_ms ?? null });
       })
       .catch(() => { /* the tab is still the tab without its figures */ });
     untracked(() => { void read(); this.briefTimer = setInterval(read, 60_000); });

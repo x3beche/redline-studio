@@ -1,7 +1,9 @@
 import { ToolsUsage } from './tools-usage';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
-import { AuditRow, BoardRunRow, InsightSeries, Insights, InsightsApi, ProjectDetail, ProjectItem } from '../api';
+import { AuditRow, BoardRunRow, InsightCosts, InsightSeries, Insights, InsightsApi, ProjectDetail, ProjectItem } from '../api';
+import { Money, currencies, currencyName, money, moneyIn, setOverride } from '../money';
+import { Prefs } from '../preferences';
 import { Markdown } from '../markdown';
 import { BarList, Donut, Fmt, Row, Spark, TimeChart, fmt } from './charts';
 
@@ -34,6 +36,14 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
       <option value="" [selected]="!project()">All projects</option>
       @for (p of projectNames(); track p) {
         <option [value]="p" [selected]="project() === p">{{ p }}</option>
+      }
+    </select>
+    <!-- The currency amounts are shown in: this browser's own, or the default. -->
+    <select class="tcv-field px-1.5 py-0.5 text-[11.5px]" style="max-width: 130px" (change)="setCurrency($any($event.target).value)"
+            title="the currency amounts are shown in - for this browser; the default is set in Settings > Costs & currency">
+      <option value="" [selected]="!cash.override()">Default ({{ cash.defaultCurrency() }})</option>
+      @for (c of curList(); track c) {
+        <option [value]="c" [selected]="cash.override() === c" [title]="curLabel(c)">{{ curLabel(c) }}</option>
       }
     </select>
     <span class="flex-1"></span>
@@ -170,7 +180,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
           <em>{{ d.energy.machine_kwh ? 'whole machine' : 'jobs only' }} · {{ d.energy.basis }}</em></div>
         <div class="tcv-stat c2"><span>Electricity</span>
           <b>{{ elecCost() == null ? '–' : f.money(elecCost()!) }}</b>
-          <em>{{ d.energy.kwh_price == null ? 'set a price per kWh below' : '$' + d.energy.kwh_price + ' per kWh' }}</em></div>
+          <em>{{ d.energy.kwh_price == null ? 'set a price per kWh in Settings' : f.money(d.energy.kwh_price) + ' per kWh' }}</em></div>
         <div class="tcv-stat c2"><span>Notes</span><b>{{ notesIn() }}</b>
           <em>{{ d.work.status['applied'] || 0 }} applied · {{ d.work.status['queued'] || 0 }} queued</em>
           @if (delta(d, 'notes'); as dl) { <i class="tcv-delta" [attr.data-up]="dl.up ? 1 : null">{{ dl.text }}</i> }</div>
@@ -189,7 +199,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
           <em>{{ d.lcsc.totals['net'] || 0 }} sent · {{ d.lcsc.totals['refused'] || 0 }} refused</em></div>
         <div class="tcv-stat c3"><span>Subscription saved</span>
           <b>{{ d.subscription.saved_usd == null ? '–' : f.money(d.subscription.saved_usd) }}</b>
-          <em>{{ d.subscription.plan_usd == null ? 'set your plan under Costs & savings'
+          <em>{{ d.subscription.plan_usd == null ? 'add your plan in Settings > Costs & currency'
                  : f.money(d.subscription.plan_usd) + ' paid for ' + f.money(d.subscription.list_usd) + ' of work' }}</em></div>
         <div class="tcv-stat c3"><span>Cache</span>
           <b>{{ d.cache.hit_ratio == null ? '–' : (d.cache.hit_ratio * 100).toFixed(1) + '%' }}</b>
@@ -200,6 +210,55 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
         <div class="tcv-stat c3"><span>API</span><b>{{ f.count(d.api.requests) }}</b>
           <em>requests · {{ d.api.errors }} errors · slowest {{ d.api.routes[0]?.route ?? '–' }}</em></div>
       </div>
+    }
+
+    <!-- COSTS: what running Redline cost over the range (Settings > Costs & currency) -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'running', title: 'Costs', sub: 'what running Redline cost over the range, in ' + cash.currency() }" />
+    @if (open('running')) {
+      @if (d.costs; as c) {
+        <div class="tcv-dash-grid">
+          <div class="tcv-stat c2"><span>Total cost</span><b>{{ f.money(c.total_usd) }}</b>
+            <em>subscriptions, electricity, proxy, other · {{ c.months.toFixed(2) }} months</em></div>
+          <div class="tcv-stat c2"><span>Subscriptions</span><b>{{ f.money(c.subscriptions_usd) }}</b>
+            <em>prorated over the range · {{ f.money(costMonthUsd('subscriptions')) }} a month</em></div>
+          <div class="tcv-stat c2"><span>Electricity</span>
+            <b>{{ c.electricity_usd == null ? '–' : f.money(c.electricity_usd) }}</b>
+            <em>{{ c.electricity_usd == null ? 'no price per kWh set' : f.wh((d.energy.machine_kwh || d.energy.jobs_kwh) * 1000) + ' at ' + f.money(d.energy.kwh_price ?? 0) + '/kWh' }}</em></div>
+          <div class="tcv-stat c2"><span>Proxy traffic</span>
+            <b>{{ c.proxy_usd == null ? '–' : f.money(c.proxy_usd) }}</b>
+            <em>{{ c.proxy_gb == null ? 'no traffic counted' : gbText(c.proxy_gb) }}{{ proxyPriceText() }}</em></div>
+          <div class="tcv-stat c2"><span>Other</span><b>{{ f.money(c.other_usd) }}</b>
+            <em>recurring costs, prorated · {{ f.money(costMonthUsd('other')) }} a month</em></div>
+          <div class="tcv-stat c2"><span>LLM work</span><b>{{ f.money(c.llm_list_usd) }}</b>
+            <em>at API list prices · {{ d.subscription.plan_usd == null ? 'no plan covers it' : f.money(d.subscription.plan_usd) + ' paid' }}</em>
+            @if (d.subscription.plan_usd != null && c.llm_list_usd > d.subscription.plan_usd) {
+              <i class="tcv-delta">saved {{ f.money(c.llm_list_usd - d.subscription.plan_usd) }}</i>
+            }</div>
+          <section class="tcv-panel-d c4"><h3>Where it went
+              <button class="tcv-dl" (click)="editCosts()">Edit in Settings</button></h3>
+            @if (costRows(c).length) { <app-donut [rows]="costRows(c)" [f]="f.money" /> }
+            @else { <p class="tcv-dash-dim">Nothing paid in this range yet - add the subscriptions and prices in Settings &gt; Costs &amp; currency.</p> }</section>
+          <section class="tcv-panel-d c8"><h3>Every cost in the range
+              <span class="tcv-dash-dim">in {{ cash.currency() }}{{ d.fx?.date ? ' · rates of ' + d.fx?.date : '' }}</span>
+              <button class="tcv-dl" (click)="dl('costs', c.items)">CSV</button></h3>
+            <table class="tcv-dash-table">
+              <thead><tr><th>cost</th><th>kind</th><th>how</th><th class="r">in range</th></tr></thead>
+              <tbody>
+                @for (it of c.items; track $index) {
+                  <tr [class.tcv-dash-dim]="it.kind === 'llm_list'"><td [title]="it.name">{{ it.name }}</td>
+                    <td>{{ kindName(it.kind) }}</td><td class="tcv-dash-dim" [title]="it.detail ?? ''">{{ it.detail || '–' }}</td>
+                    <td class="r mono">{{ f.money(it.usd) }}</td></tr>
+                } @empty { <tr><td colspan="4" class="tcv-dash-dim">no costs set - Settings &gt; Costs &amp; currency</td></tr> }
+              </tbody>
+              @if (c.items.length) {
+                <tfoot><tr><td colspan="3"><b>paid in this range</b></td><td class="r mono"><b>{{ f.money(c.total_usd) }}</b></td></tr></tfoot>
+              }
+            </table></section>
+        </div>
+      } @else {
+        <p class="tcv-dash-note">The server does not report costs for this range yet.
+          <button class="tcv-dl" (click)="editCosts()">Settings &gt; Costs &amp; currency</button></p>
+      }
     }
 
     <!-- LLMS -->
@@ -241,14 +300,14 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
     <ng-container *ngTemplateOutlet="head; context: { id: 'costs', title: 'Costs & savings', sub: 'the subscription against list prices, what the cache saves, what a note costs' }" />
     @if (open('costs')) {
       <div class="tcv-dash-grid">
-        <section class="tcv-panel-d c4"><h3>Subscription</h3>
-          <div class="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5 text-[12px]">
+        <section class="tcv-panel-d c4"><h3>Subscription
+            <button class="tcv-dl" (click)="editCosts()" title="the plans are kept in Settings > Costs & currency">Edit in Settings</button></h3>
+          <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-[12px]">
             <span class="tcv-dash-dim">plan</span>
-            <input [value]="d.subscription.plan_name ?? ''" placeholder="e.g. Claude Max" (change)="setPlanName($any($event.target).value)"
-                   class="tcv-field px-1.5 py-1">
-            <span class="tcv-dash-dim">$ a month</span>
-            <input type="number" min="0" step="1" [value]="d.subscription.plan_usd_month ?? ''" placeholder="e.g. 200"
-                   (change)="setPlan($any($event.target).value)" class="tcv-field px-1.5 py-1 text-right mono">
+            <span class="truncate">{{ planName(d) }}</span>
+            <span class="tcv-dash-dim">a month</span>
+            <span class="mono">{{ d.subscription.plan_usd_month == null ? '–' : f.money(d.subscription.plan_usd_month) }}
+              @if (planOwn(); as own) { <span class="tcv-dash-dim">· {{ own }}</span> }</span>
           </div>
           @if (d.subscription.plan_usd != null) {
             <app-bar-list class="mt-3 block" [rows]="[{ name: 'at API list prices', value: d.subscription.list_usd },
@@ -257,8 +316,8 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
               @if (d.subscription.ratio) { - the work would have cost {{ d.subscription.ratio }}× the plan. }</p>
             <p class="tcv-dash-dim mt-1">The plan is prorated over the range ({{ d.subscription.months.toFixed(2) }} months).</p>
           } @else {
-            <p class="tcv-dash-dim mt-3 leading-snug">Enter what you pay each month and this compares it with what the same
-              work would have cost on the API.</p>
+            <p class="tcv-dash-dim mt-3 leading-snug">Add what you pay for your plans in Settings &gt; Costs &amp; currency - in any
+              currency - and this compares it with what the same work would have cost on the API.</p>
           }
         </section>
         <section class="tcv-panel-d c4"><h3>Cache by model
@@ -313,12 +372,12 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
           </table>
           @if (d.compute.failed) { <p class="tcv-dash-dim mt-1">{{ d.compute.failed }} of them failed</p> }
         </section>
-        <section class="tcv-panel-d c4"><h3>Electricity price</h3>
-          <div class="flex items-center gap-2">
-            <span class="tcv-dash-dim">$</span>
-            <input type="number" step="0.01" min="0" [value]="d.energy.kwh_price ?? ''" placeholder="e.g. 0.25"
-                   (change)="setPrice($any($event.target).value)" class="tcv-field w-24 px-1.5 py-1 text-right mono">
+        <section class="tcv-panel-d c4"><h3>Electricity price
+            <button class="tcv-dl" (click)="editCosts()" title="the price is kept in Settings > Costs & currency">Edit in Settings</button></h3>
+          <div class="flex items-baseline gap-2 text-[12px]">
+            <b class="mono text-[15px]">{{ d.energy.kwh_price == null ? '–' : f.money(d.energy.kwh_price) }}</b>
             <span class="tcv-dash-dim">per kWh</span>
+            @if (elecOwn(); as own) { <span class="tcv-dash-dim mono">· {{ own }}</span> }
           </div>
           <p class="tcv-dash-dim mt-2 leading-snug">{{ powerNote() }}</p>
           <div class="mt-2 text-[12px]">Now: {{ d.machine.now.cpu.load.toFixed(0) }}% CPU ·
@@ -839,11 +898,46 @@ export class RoomAnalyze implements OnDestroy {
     return k.length ? k.map(([n, c]) => `${c} ${n}`).join(' · ') : 'none';
   }
 
-  setPrice(v: string) { this.save({ kwh_price: v === '' ? null : Math.max(0, +v) }); }
-  setPlan(v: string) { this.save({ plan_usd_month: v === '' ? null : Math.max(0, +v) }); }
-  setPlanName(v: string) { this.save({ plan_name: v.trim() || null }); }
-  private save(patch: Parameters<InsightsApi['setSettings']>[0]) {
-    this.api.setSettings(patch).subscribe({ next: () => this.load() });
+  // ---- money: the display currency and the costs (money.ts) ----
+  readonly cash = inject(Money);
+  private prefs = inject(Prefs);
+  curList = computed(() => currencies());
+  curLabel(c: string) { const n = currencyName(c); return n && n !== c ? `${c} · ${n}` : c; }
+  setCurrency(c: string) { setOverride(c || null); }
+  /** The plans, the prices and the rest are edited in Settings. */
+  editCosts() { this.prefs.open.set('costs'); }
+  private llmPlans = computed(() => (this.cash.costs()?.subscriptions ?? []).filter(x => x.covers === 'llm'));
+  planName(d: Insights): string {
+    const names = this.llmPlans().map(x => x.name).filter(Boolean);
+    return names.length ? names.join(' + ') : d.subscription.plan_name || 'not set';
+  }
+  /** The plan as it was typed, when that is another currency: "200 USD a month". */
+  planOwn = computed(() => {
+    const p = this.llmPlans();
+    if (p.length !== 1 || p[0].currency === this.cash.currency()) return null;
+    return moneyIn(p[0].amount, p[0].currency) + (p[0].period === 'year' ? ' a year' : ' a month');
+  });
+  elecOwn = computed(() => {
+    const e = this.cash.costs()?.electricity;
+    return e && e.currency !== this.cash.currency() ? moneyIn(e.amount, e.currency) + ' per kWh' : null;
+  });
+  proxyPriceText = computed(() => {
+    const u = this.cash.costs()?.usd.proxy_per_gb;
+    return u == null ? '' : ' at ' + money(u) + '/GB';
+  });
+  costMonthUsd(k: 'subscriptions' | 'other'): number {
+    const u = this.cash.costs()?.usd;
+    return (k === 'subscriptions' ? u?.subscriptions_per_month : u?.other_per_month) ?? 0;
+  }
+  gbText(gb: number) { return gb >= 0.1 ? gb.toFixed(2) + ' GB' : fmt.bytes(Math.round(gb * 1e9)); }
+  kindName(k: string) {
+    return ({ subscription: 'subscription', electricity: 'electricity', proxy: 'proxy traffic', other: 'other',
+              llm_list: 'LLM work at list prices' } as Record<string, string>)[k] ?? k;
+  }
+  /** What was paid, by item - the list-price LLM work is a comparison, not a cost. */
+  costRows(c: InsightCosts): Row[] {
+    return c.items.filter(i => i.kind !== 'llm_list' && i.usd > 0)
+      .map(i => ({ name: i.name, value: i.usd })).sort((a, b) => b.value - a.value);
   }
 
   readonly ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + ' s' : Math.round(v) + ' ms';

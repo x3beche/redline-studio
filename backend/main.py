@@ -83,6 +83,9 @@ app.include_router(llm_api.router)
 app.include_router(cc_chat.router)
 # Settings > Proxy: a second way out for the EasyEDA part lookups.
 app.include_router(netproxy.router)
+from . import costs as costs_api, fx  # noqa: E402
+app.include_router(fx.router)
+app.include_router(costs_api.router)
 
 
 def _raw_db():
@@ -1942,6 +1945,8 @@ async def _start_sampler():
             await netproxy.load(db())                  # the EasyEDA proxy, if one is set
             netproxy.bind(db)                          # its log, for Settings > Proxy
             asyncio.create_task(netproxy.health_loop())
+            await fx.load(db())                        # the last exchange rates kept
+            asyncio.create_task(fx.loop(db))           # and Frankfurter's, every hour
         except Exception as exc:                       # noqa: BLE001 - .env keys still work
             LOG.warning("LLM / proxy settings not read: %s", exc)
 
