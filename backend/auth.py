@@ -1,9 +1,10 @@
 """Signing in: accounts, passwords and sessions.
 
-Off by default. `X3_AUTH=off` (or unset) is local mode: nobody signs in,
-every request is the local user in the default workspace - the app as it
-has always been on this machine. `X3_AUTH=on` asks every API request for a
-session, except the few that sign in.
+Off by default. `REDLINE_REQUIRE_SIGNIN=false` (or unset) is local mode:
+nobody signs in, every request is the local user in the default workspace -
+for one person on their own machine. `REDLINE_REQUIRE_SIGNIN=true` asks
+every API request for a session, except the few that sign in. (The old
+name, `REDLINE_REQUIRE_SIGNIN=true`, still works.)
 
 Passwords are hashed with scrypt from the standard library (no new
 dependency), salted per account. A session is a random token held by the
@@ -51,7 +52,7 @@ EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def enabled() -> bool:
-    return os.environ.get("X3_AUTH", "off").strip().lower() in ("on", "1", "true", "yes")
+    return os.environ.get("REDLINE_REQUIRE_SIGNIN", "false").strip().lower() in ("on", "1", "true", "yes")
 
 
 # ---------------------------------------------------------------- passwords

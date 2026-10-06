@@ -24,7 +24,7 @@ from pathlib import PurePosixPath
 
 COLL = "files"
 BUCKET = "user_files"
-MAX_BYTES = int(float(os.getenv("X3_FILE_MAX_MB", "200")) * 1024 * 1024)
+MAX_BYTES = int(float(os.getenv("REDLINE_FILE_MAX_MB", "200")) * 1024 * 1024)
 
 KINDS = ("bom", "pick-place", "gerber", "drill", "step", "mesh", "image", "pdf",
          "table", "archive", "text", "other")
@@ -112,7 +112,7 @@ async def put(db, name: str, data: bytes, content_type: str | None, context: dic
     if not data:
         raise ValueError("the file is empty")
     if len(data) > MAX_BYTES:
-        raise ValueError(f"larger than {MAX_BYTES // (1024 * 1024)} MB (X3_FILE_MAX_MB)")
+        raise ValueError(f"larger than {MAX_BYTES // (1024 * 1024)} MB (REDLINE_FILE_MAX_MB)")
     name = clean_name(name)
     fid = await _bucket(db).upload_from_stream(name, data)
     doc = {"_id": secrets.token_hex(6), "name": name, "bytes": len(data),

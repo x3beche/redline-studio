@@ -26,7 +26,7 @@ from . import ato, kicad, lcsc, limits, store
 HERE = Path(__file__).resolve().parent.parent
 GENERATOR = HERE / "tools" / "schematic_gen.py"
 THEME = HERE / "docker" / "redline-dark.json"
-PYTHON = os.environ.get("X3_ATO_PYTHON", str(HERE.parent.parent / ".venv-ato" / "bin" / "python"))
+PYTHON = os.environ.get("REDLINE_ATO_PYTHON", str(HERE.parent.parent / ".venv-ato" / "bin" / "python"))
 DEVICE = HERE / ".cache" / "kicad" / "Device.kicad_sym"
 
 # ERC findings that are about the project's set-up rather than the design:

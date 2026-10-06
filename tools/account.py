@@ -27,10 +27,11 @@ def _db():
     from dotenv import load_dotenv
     from motor.motor_asyncio import AsyncIOMotorClient
     load_dotenv(ROOT / ".env")
+    from backend import envnames as _envnames; _envnames.adopt()
     uri = os.getenv("MONGODB_URI", "").strip()
     if not uri:
         sys.exit("MONGODB_URI is not set (.env)")
-    return AsyncIOMotorClient(uri)[os.getenv("MONGODB_DB", "assets_3d")]
+    return AsyncIOMotorClient(uri)[os.getenv("MONGODB_DB", "redline")]
 
 
 async def _list() -> None:

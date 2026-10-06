@@ -157,7 +157,7 @@ Asked for on 2026-09-24:
   own in 2e593cb.
 - **The example projects are iot-fan's** - dashboard, phone app, and the
   controller firmware for the Controller board's STM32F042 and for an
-  ESP32 - in /mnt/ssd/3d-arena/projects/iot-fan. Redline itself is no
+  ESP32 - in a checkout of their own. Redline itself is no
   longer a project in these rooms.
 - **All rooms share one layout**, the 3D room's (rooms/frame.ts).
 - **One main agent, one sub-agent per tab.** The main agent waits on the
@@ -170,7 +170,7 @@ Asked for on 2026-09-24:
   dependency): queue by room, show a note, start, log, finish, done,
   chat, say, ask - the same operations as revisions.py.
 
-Run end to end on 2026-09-24, with Docker's storage on /mnt/ssd (web image
+Run end to end on 2026-09-24, with Docker's storage on a separate disk (web image
 1.23 GB, mobile 5.09 GB, embedded 12.1 GB - Espressif's base is most of it):
 
 - Web: the iot-fan dashboard served from its container, frozen in 3.0 s,

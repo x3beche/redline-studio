@@ -24,7 +24,7 @@ for this:
 A typical call: `find_tool {task: "pull-ups for a 400 kHz I2C bus with three
 sensors"}` → `i2c-pullup` with its manual → `run_tool {id: "i2c-pullup",
 input: {vdd: "3.3", mode: "fast", cb: "120"}}`. Read the `warnings` - they
-say when a formula is outside its range or a result is unsafe. Set `X3_AGENT`
+say when a formula is outside its range or a result is unsafe. Set `REDLINE_AGENT`
 to your name; it is sent with every call and shows in the usage.
 
 Interactive tools (Grid Sketch, Screenshot Annotator, the editors) have a
@@ -418,7 +418,7 @@ with `{messages: [{role, content}], model?, max_tokens, temperature, reasoning?,
 (reasoning is off unless asked for, so the answer gets every token)
 and get `{text, model, ms, usage}`. The call leaves from the server with the
 OpenRouter key from `.env`; the page never sees it. `GET /api/tools/llm` says
-whether a key is set, which models are offered (`X3_TOOLS_MODELS`, comma
+whether a key is set, which models are offered (`REDLINE_TOOLS_MODELS`, comma
 separated, else the app's default model) and the limits: 60,000 characters
 in, 2,000 tokens out, 60 calls a minute, 4 at a time. Every call is counted
 in Analytics with the app's other model calls (surface `tools`, kind
@@ -431,7 +431,7 @@ Some tools write something that can be tried for real: SQL, a Prisma schema,
 TypeScript, an OpenAPI document, Mermaid, a regex, a cron schedule, a device
 tree, a U-Boot environment. One Docker
 image, `redline-tools`, tries all of them - offline, nothing installed on the
-host. Build it once (it lands in Docker's data root, `/mnt/ssd/docker`):
+host. Build it once (it lands in Docker's data root):
 
 ```bash
 docker build -f docker/tools/tools.Dockerfile -t redline-tools docker/tools

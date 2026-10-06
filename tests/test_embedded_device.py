@@ -92,7 +92,7 @@ def _fake_sys(tmp_path, monkeypatch):
     (ttys / "ttyUSB0" / "device").symlink_to(iface)
     (ttys / "ttyS0").mkdir()          # the machine's own UART: not on USB, not listed
     monkeypatch.setattr(device, "SYS", root)
-    monkeypatch.delenv("X3_SERIAL_EXTRA", raising=False)
+    monkeypatch.delenv("REDLINE_SERIAL_EXTRA", raising=False)
 
 
 def test_ports_name_what_is_plugged_in(tmp_path, monkeypatch):
@@ -128,7 +128,7 @@ def test_extra_ports_come_from_the_environment(tmp_path, monkeypatch):
     _fake_sys(tmp_path, monkeypatch)
     f = tmp_path / "pty"
     f.write_text("")
-    monkeypatch.setenv("X3_SERIAL_EXTRA", f"{f},/does/not/exist")
+    monkeypatch.setenv("REDLINE_SERIAL_EXTRA", f"{f},/does/not/exist")
     ids = [p["id"] for p in device.list_ports()]
     assert str(f) in ids and "/does/not/exist" not in ids
 
@@ -243,7 +243,7 @@ def test_monitor_lets_go_while_paused():
 def test_stream_route_over_a_pty(monkeypatch):
     master, slave = os.openpty()
     path = os.ttyname(slave)
-    monkeypatch.setenv("X3_SERIAL_EXTRA", path)
+    monkeypatch.setenv("REDLINE_SERIAL_EXTRA", path)
     monkeypatch.setattr(device, "SYS", device.Path("/nonexistent"))
     monkeypatch.setattr(device, "HUB", device.Hub(idle_s=0.1))
     import threading

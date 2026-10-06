@@ -29,9 +29,9 @@ ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".cache"
 
 IMAGES = {
-    "web": os.environ.get("X3_WEB_IMAGE", "redline-code-web"),
-    "embedded": os.environ.get("X3_EMBEDDED_IMAGE", "redline-code-embedded"),
-    "mobile": os.environ.get("X3_MOBILE_IMAGE", "redline-code-mobile"),
+    "web": os.environ.get("REDLINE_WEB_IMAGE", "redline-code-web"),
+    "embedded": os.environ.get("REDLINE_EMBEDDED_IMAGE", "redline-code-embedded"),
+    "mobile": os.environ.get("REDLINE_MOBILE_IMAGE", "redline-code-mobile"),
 }
 DOCKERFILES = {k: f"docker/code/{k}.Dockerfile" for k in IMAGES}
 

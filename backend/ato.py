@@ -40,7 +40,7 @@ TIMEOUT = 600
 # KiCad stack of its own, and the CAD venv has build123d in it. One of them
 # was going to lose.
 ATO = os.environ.get(
-    "X3_ATO", str(Path(__file__).resolve().parent.parent.parent.parent
+    "REDLINE_ATO", str(Path(__file__).resolve().parent.parent.parent.parent
                   / ".venv-ato" / "bin" / "ato"))
 
 PROJECT = """ato-version: ^0.2.0
@@ -183,7 +183,7 @@ async def build(db, board_id: str) -> dict:
     if not Path(ATO).exists():
         raise RuntimeError(
             f"atopile is not installed at {ATO}. It lives in its own "
-            f"environment; set X3_ATO to point at another.")
+            f"environment; set REDLINE_ATO to point at another.")
 
     started = time.monotonic()
     started_at = store.now()

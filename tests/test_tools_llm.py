@@ -32,7 +32,7 @@ def test_no_key_is_a_clear_503(monkeypatch):
 
 def test_only_offered_models_and_capped_input(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-not-real")
-    monkeypatch.setenv("X3_TOOLS_MODELS", "a/one,b/two")
+    monkeypatch.setenv("REDLINE_TOOLS_MODELS", "a/one,b/two")
     with pytest.raises(HTTPException) as e:
         call(model="c/three")
     assert e.value.status_code == 400 and "a/one" in e.value.detail

@@ -29,7 +29,7 @@ from pathlib import Path
 
 from . import ato, compute, lcsc, limits, rules, store
 
-IMAGE = os.environ.get("X3_KICAD_IMAGE", "redline-kicad")
+IMAGE = os.environ.get("REDLINE_KICAD_IMAGE", "redline-kicad")
 HERE = Path(__file__).resolve().parent.parent
 PLACER = HERE / "docker" / "place.py"
 ROUTER = HERE / "docker" / "route.py"

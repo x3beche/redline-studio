@@ -3,10 +3,10 @@
 `tools/revisions.py` and the backend code it calls talk to what they think
 is a Motor database: `db.revisions.find_one(...)`, `db["runs"].update_one`,
 cursors with `.sort()` and `async for`, GridFS buckets through
-`store.bucket()`. With `X3_TRANSPORT=api` they get this instead - the same
+`store.bucket()`. With `REDLINE_TRANSPORT=api` they get this instead - the same
 surface, but every operation is one request to the server's
 `/api/agent/db` (and `/api/agent/files/...` for stored files), carrying the
-agent's token (`X3_TOKEN`).
+agent's token (`REDLINE_TOKEN`).
 
 So an agent needs no MongoDB connection string: the server holds it, and
 applies the workspace, the agent's name and the audit trail to everything
@@ -30,9 +30,9 @@ class Remote:
         headers = {"content-type": "application/json", "X-Redline-CSRF": "1"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
-        # The command line is always an agent - named by X3_AGENT, or plain
+        # The command line is always an agent - named by REDLINE_AGENT, or plain
         # "agent". With a token the server takes the name from the token.
-        name = os.environ.get("X3_AGENT", "").strip() or "agent"
+        name = os.environ.get("REDLINE_AGENT", "").strip() or "agent"
         headers["X-Redline-Actor"] = f"agent:{name}"
         self.client = httpx.AsyncClient(base_url=self.base, headers=headers, timeout=600)
 
@@ -40,7 +40,7 @@ class Remote:
         body = json_util.dumps({"coll": coll, "op": op, "args": args})
         r = await self.client.post("/api/agent/db", content=body)
         if r.status_code == 401:
-            raise SystemExit(f"{self.base} wants an agent token: set X3_TOKEN to one made under "
+            raise SystemExit(f"{self.base} wants an agent token: set REDLINE_TOKEN to one made under "
                              "your name in the app (user menu > Agent tokens)")
         if r.status_code >= 400:
             raise RuntimeError(f"{op} on {coll}: {r.status_code} {r.text[:300]}")
@@ -164,7 +164,7 @@ class Bucket:
 
 
 class RemoteDb:
-    """What connect() returns with X3_TRANSPORT=api."""
+    """What connect() returns with REDLINE_TRANSPORT=api."""
 
     REMOTE = True        # store.bucket() asks this of the class
 

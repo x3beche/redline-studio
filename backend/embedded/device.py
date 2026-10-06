@@ -136,7 +136,7 @@ def list_ports() -> list[dict]:
 
     kind "serial": a tty, id its /dev path - what the monitor opens and an
     ESP32 is flashed through. kind "probe": an SWD probe, id "usb:<bus>" -
-    what an STM32 is flashed through. X3_SERIAL_EXTRA (comma separated
+    what an STM32 is flashed through. REDLINE_SERIAL_EXTRA (comma separated
     paths) adds ports that are not on USB, a pty for trying things out."""
     out: list[dict] = []
     by_id: dict[str, str] = {}
@@ -166,7 +166,7 @@ def list_ports() -> list[dict]:
         if (vid, pid) in PROBES or vid == "1366":
             out.append({"id": f"usb:{dev.name}", "kind": "probe", "path": None,
                         **_describe(dev), "by_id": None, "access": True})
-    for extra in filter(None, (os.environ.get("X3_SERIAL_EXTRA") or "").split(",")):
+    for extra in filter(None, (os.environ.get("REDLINE_SERIAL_EXTRA") or "").split(",")):
         extra = extra.strip()
         if extra and Path(extra).exists() and extra not in {p["id"] for p in out}:
             out.append({"id": extra, "kind": "serial", "path": extra, "usb": None,

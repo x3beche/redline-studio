@@ -119,14 +119,17 @@ API = os.environ.get("REDLINE_API", "http://127.0.0.1:8000")
 
 
 def _token_from_env_file() -> None:
-    """With sign-in on, the agents' token (X3_TOKEN) - from the repo's .env
+    """With sign-in on, the agents' token (REDLINE_TOKEN) - from the repo's .env
     when the MCP client did not pass it. Only that one line is read."""
-    if os.environ.get("X3_TOKEN"):
+    for k in ("AGENT", "TOKEN", "API"):                # the old X3_ names still work
+        if os.environ.get("X3_" + k) and not os.environ.get("REDLINE_" + k):
+            os.environ["REDLINE_" + k] = os.environ["X3_" + k]
+    if os.environ.get("REDLINE_TOKEN"):
         return
     try:
         for line in (ROOT / ".env").read_text().splitlines():
-            if line.startswith("X3_TOKEN="):
-                os.environ["X3_TOKEN"] = line.split("=", 1)[1].strip().strip('"')
+            if line.startswith(("REDLINE_TOKEN=", "X3_TOKEN=")):
+                os.environ["REDLINE_TOKEN"] = line.split("=", 1)[1].strip().strip('"')
     except OSError:
         pass
 
@@ -179,10 +182,10 @@ def http(method: str, path: str, body: dict | None) -> tuple[bool, str]:
                                  data=json.dumps(body).encode() if body is not None else None,
                                  headers={"Content-Type": "application/json",
                                           # who is asking, for the tools' usage and the audit
-                                          "X-Redline-Actor": "agent:" + os.environ.get("X3_AGENT", "agent"),
+                                          "X-Redline-Actor": "agent:" + os.environ.get("REDLINE_AGENT", "agent"),
                                           # with sign-in on, the agent's token (users phase 4)
-                                          **({"Authorization": "Bearer " + os.environ["X3_TOKEN"]}
-                                             if os.environ.get("X3_TOKEN") else {})})
+                                          **({"Authorization": "Bearer " + os.environ["REDLINE_TOKEN"]}
+                                             if os.environ.get("REDLINE_TOKEN") else {})})
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
             return True, r.read().decode()

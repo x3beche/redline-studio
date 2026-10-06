@@ -162,8 +162,8 @@ Changes to the plan these make:
 ### Phase 1 - attribution (done)
 
 `backend/actors.py`: the actor of every request - the local user (named by
-`X3_LOCAL_USER`, default "you") or the agent named in the `X-Redline-Actor`
-header - and of every command-line run (the agent named by `X3_AGENT`). New
+`REDLINE_LOCAL_USER`, default "you") or the agent named in the `X-Redline-Actor`
+header - and of every command-line run (the agent named by `REDLINE_AGENT`). New
 notes carry `created_by`, status changes `status_by`, edits `edited_by`,
 thread lines `by`, questions `asked_by` and `answered_by`, runs and log lines
 `by`. Every DELETE, PATCH and settings or rules change is written to `audit`
@@ -200,7 +200,7 @@ two workspaces cannot both have a model called `iot-fan/station`. Phase 5
 
 ### Phase 3 - signing in (done)
 
-`backend/auth.py`, `frontend/src/app/auth.ts`. `X3_AUTH` in `.env`: off (the
+`backend/auth.py`, `frontend/src/app/auth.ts`. `REDLINE_REQUIRE_SIGNIN` in `.env`: off (the
 default) is local mode, exactly the app as before; on asks every API
 request for a session except `/api/auth/state`, `/login`, `/setup` and
 `/api/health`. Accounts are email and password, hashed with scrypt from the
@@ -217,7 +217,7 @@ audit trail. The page shows the sign-in card when signed out, and the
 signed-in user at the far right of the top bar with *Sign out*.
 
 No new secret: session tokens are random and stored hashed, so there is
-nothing for `.env` beyond `X3_AUTH`.
+nothing for `.env` beyond `REDLINE_REQUIRE_SIGNIN`.
 
 Verified on a separate server with sign-in on and a throw-away database
 (dropped afterwards): 401 without a session; the first account, then a
@@ -246,7 +246,7 @@ the *Agent tokens* dialog in the user menu (`frontend/src/app/auth.ts`).
   sign-in mode; a wrong or taken-back token is a 401. Bearer requests
   need no CSRF header (no cookie is involved).
 - **The database, through the server.** `revisions.py` with
-  `X3_TRANSPORT=api` gets `RemoteDb` from `connect()` instead of Motor:
+  `REDLINE_TRANSPORT=api` gets `RemoteDb` from `connect()` instead of Motor:
   the same calls, each one a `POST /api/agent/db` (stored files:
   `/api/agent/files/{bucket}`). The server runs it on the scoped database,
   so the workspace applies. Open to agents: the workspace's collections
@@ -354,7 +354,7 @@ machine is reached from the office network only; sign-in on.
 - **Container limits** (`backend/limits.py`): every container the coding
   rooms and the PCB room start gets `--cpus`, `--memory`, `--pids-limit` -
   by default half the cores, 40 % of the memory up to 12g, 4096 processes
-  (`X3_BOX_*` in `.env`). Seen inside one: 14 cores, 12 GB, 4096.
+  (`REDLINE_BOX_*` in `.env`). Seen inside one: 14 cores, 12 GB, 4096.
 - **Same names in two workspaces** (`scope.Ids`): the default workspace's
   documents keep their names exactly; another workspace's text names are
   stored with its suffix (`controller@customer-a`), added and removed in

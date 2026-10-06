@@ -1,13 +1,13 @@
-# --- gizli ---
+# --- secrets ---
 .env
 
-# --- uretilen veri (start.sh yeniden olusturur) ---
+# --- generated data (start.sh makes it again) ---
 assets/
 exports/
 views/
 revisions/
 
-# --- ortamlar ---
+# --- environments ---
 .venv
 venv
 __pycache__/
@@ -16,9 +16,9 @@ node_modules/
 frontend/dist/
 frontend/.angular/
 
-# --- editor / isletim sistemi ---
+# --- editor / operating system ---
 .DS_Store
 *.swp
 
-# --- yerel artifact onbellegi ---
+# --- local artifact cache ---
 .cache/

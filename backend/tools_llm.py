@@ -32,11 +32,11 @@ CONCURRENT = 4
 
 def options() -> list[tuple[str, str]]:
     """(provider, model) a tool page may ask for: the "tools" job's choice
-    (Preferences > LLM settings) first, then X3_TOOLS_MODELS (comma
+    (Preferences > LLM settings) first, then REDLINE_TOOLS_MODELS (comma
     separated OpenRouter models)."""
     from . import llm
     first = llm.route("tools")
-    extra = [("openrouter", m.strip()) for m in os.environ.get("X3_TOOLS_MODELS", "").split(",") if m.strip()]
+    extra = [("openrouter", m.strip()) for m in os.environ.get("REDLINE_TOOLS_MODELS", "").split(",") if m.strip()]
     return [first] + [o for o in extra if o != first]
 
 

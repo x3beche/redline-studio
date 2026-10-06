@@ -5,6 +5,6 @@ FROM node:22-bookworm-slim
 
 # The volume takes this directory's owner the first time it is created,
 # so npm can write it as the unprivileged `node` user (uid 1000).
-ARG APP=/home/emirp/x3-studios-asset-manager
+ARG APP=/app
 RUN mkdir -p $APP/frontend/node_modules && chown -R node:node $APP
 USER node

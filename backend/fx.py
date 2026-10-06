@@ -15,7 +15,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-log = logging.getLogger("x3.fx")
+log = logging.getLogger("redline.fx")
 
 COLL = "fx_rates"                  # machine-wide: "latest", and one document per date
 SOURCE = "frankfurter.dev"

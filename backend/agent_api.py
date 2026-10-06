@@ -1,6 +1,6 @@
 """The agents' way in: their database work, through the API.
 
-`tools/revisions.py` with `X3_TRANSPORT=api` (tools/remote_db.py) sends
+`tools/revisions.py` with `REDLINE_TRANSPORT=api` (tools/remote_db.py) sends
 each database operation here instead of to MongoDB. Every one runs on the
 request's scoped database (backend/scope.py) - so an agent sees and writes
 only its workspace - as the agent the token names (backend/actors.py), and

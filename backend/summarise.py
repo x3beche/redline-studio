@@ -18,7 +18,7 @@ import logging
 import os
 import re
 
-log = logging.getLogger("x3.summarise")
+log = logging.getLogger("redline.summarise")
 
 # Which provider and model: backend/llm.py, chosen in Preferences > LLM settings.
 # MODEL is the default the summary job starts with.

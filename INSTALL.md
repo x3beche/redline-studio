@@ -84,24 +84,26 @@ build123d into a volume and takes a few minutes.
 
 Everything is read from `.env`, which is git-ignored. The connection string and
 the API key are read by the **backend only** and never reach the browser.
+Redline's own settings are named `REDLINE_*`; an older `.env` with the first
+names (`X3_*`, and `X3_AUTH` for `REDLINE_REQUIRE_SIGNIN`) keeps working.
 
 | Variable | Default | What it does |
 |---|---|---|
 | `MONGODB_URI` | — | required; the database is the source of truth |
-| `MONGODB_DB` | `assets_3d` | database name |
+| `MONGODB_DB` | `redline` | database name |
 | `OPENROUTER_API_KEY` | — | card summaries and the English translation; without it a card simply has neither |
 | `COMMANDCODE_API_KEY` | — | Command Code's models, for the Command Code room or any job. Both keys can instead be saved in **Preferences > LLM settings**, where each job also picks its provider and model |
-| `X3_BUILD_MEM` | `10G` | memory ceiling a build may use before the kernel kills it |
-| `X3_CACHE` | `.cache/artifacts` | where generated artifacts are kept on disk |
-| `X3_WATTS_PER_CORE` | `8.0` | assumed power of one busy core, for the energy figure on a revision card |
-| `X3_WATTS_GPU` | the card's rated limit | assumed power of the GPU while it is busy; nvidia-smi reports no live draw on many cards |
-| `X3_KWH_PRICE` | — | electricity price in USD/kWh; unset means the card shows energy and no money |
-| `X3_TRANSCRIPTS` | `-mnt-ssd-3d-arena*` | which agent transcript folders the token analytics read |
-| `X3_AUTH` | `off` | `on` asks for a sign-in; see [docs/ACCOUNTS.md](docs/ACCOUNTS.md) |
-| `X3_TOKEN` | — | the agents' shared token when sign-in is on (made in the app, kept only here) |
-| `X3_WEB_HOST` | `127.0.0.1` | `0.0.0.0` opens the page (`./start.sh`) to the local network; the API stays on the machine |
-| `X3_BOX_CPUS` / `X3_BOX_MEMORY` / `X3_BOX_PIDS` | half the cores / 40 % of RAM up to 12g / 4096 | how much of the machine one build container may take |
-| `X3_DRAW_IMAGE` | `redline-draw` | the image technical drawings are made in |
+| `REDLINE_BUILD_MEM` | `10G` | memory ceiling a build may use before the kernel kills it |
+| `REDLINE_CACHE` | `.cache/artifacts` | where generated artifacts are kept on disk |
+| `REDLINE_WATTS_PER_CORE` | `8.0` | assumed power of one busy core, for the energy figure on a revision card |
+| `REDLINE_WATTS_GPU` | the card's rated limit | assumed power of the GPU while it is busy; nvidia-smi reports no live draw on many cards |
+| `REDLINE_KWH_PRICE` | — | electricity price in USD/kWh; unset means the card shows energy and no money |
+| `REDLINE_TRANSCRIPTS` | this checkout's path, in Claude Code's folder naming (`-home-you-redline-studio*`) | which agent transcript folders the token analytics read |
+| `REDLINE_REQUIRE_SIGNIN` | `false` | `true` asks for a sign-in (old name `REDLINE_REQUIRE_SIGNIN` still works); see [docs/ACCOUNTS.md](docs/ACCOUNTS.md) |
+| `REDLINE_TOKEN` | — | the agents' shared token when sign-in is on (made in the app, kept only here) |
+| `REDLINE_WEB_HOST` | `127.0.0.1` | `0.0.0.0` opens the page (`./start.sh`) to the local network; the API stays on the machine |
+| `REDLINE_BOX_CPUS` / `REDLINE_BOX_MEMORY` / `REDLINE_BOX_PIDS` | half the cores / 40 % of RAM up to 12g / 4096 | how much of the machine one build container may take |
+| `REDLINE_DRAW_IMAGE` | `redline-draw` | the image technical drawings are made in |
 
 ## The board room
 
@@ -114,7 +116,7 @@ stack of its own, and this project's environment has build123d in it:
 python3 -m venv .venv-ato && .venv-ato/bin/pip install atopile easyeda2kicad kiutils
 ```
 
-`X3_ATO` and `X3_EASYEDA` point at the two binaries if they live somewhere
+`REDLINE_ATO` and `REDLINE_EASYEDA` point at the two binaries if they live somewhere
 else. Note that pip will give you atopile 0.2 on Python 3.12: 0.15 needs
 3.14, and its part picking wants an atopile account, so 0.2 is what this
 uses.
@@ -128,7 +130,7 @@ which is built for Java 25 and will not start on 21:
 docker build -f docker/kicad.Dockerfile -t redline-kicad .
 ```
 
-`X3_KICAD_IMAGE` names another image. Without it the room still builds and
+`REDLINE_KICAD_IMAGE` names another image. Without it the room still builds and
 shows the circuit; it just cannot place or draw the board, and says so.
 
 Footprints and 3D models come from LCSC by part number, through EasyEDA's
@@ -157,10 +159,9 @@ docker build -f docker/code/mobile.Dockerfile   -t redline-code-mobile   docker/
 | `redline-code-mobile` | 5.1 GB | the Android SDK and an emulated Pixel 7 (Android 14, Play Store image), Node |
 
 Built in parallel they took 167, 277 and 217 seconds here. They are
-large: keep Docker's storage on a disk with room for them. On this
-machine it lives on `/mnt/ssd` (`"data-root": "/mnt/ssd/docker"` in
-`/etc/docker/daemon.json`) - the system disk filled up the first time
-they were built on it.
+large: keep Docker's storage on a disk with room for them - if the system
+disk is small, move it with `"data-root": "/path/on/a/big/disk/docker"` in
+`/etc/docker/daemon.json`.
 
 The Tools tab's checks - SQL in PostgreSQL, Prisma, TypeScript, OpenAPI,
 Mermaid, regex engines, cron - run in one more image, offline. It is
@@ -179,7 +180,7 @@ seconds, and it is left running as the container `redline-phone`. A board
 is programmed through the Embedded image with the device passed through:
 an ST-Link for an STM32, the serial port for an ESP32.
 
-`X3_WEB_IMAGE`, `X3_EMBEDDED_IMAGE` and `X3_MOBILE_IMAGE` name other
+`REDLINE_WEB_IMAGE`, `REDLINE_EMBEDDED_IMAGE` and `REDLINE_MOBILE_IMAGE` name other
 images. Without an image, a room still opens and says which one to build.
 
 ## Releases and technical drawings
@@ -256,7 +257,7 @@ and the process has to be killed by hand.
 
 ```bash
 tools/capped.sh .venv/bin/python export_model.py thing
-X3_BUILD_MEM=12G tools/capped.sh ...      # raise it for one run
+REDLINE_BUILD_MEM=12G tools/capped.sh ...      # raise it for one run
 ```
 
 With a `systemd` user scope available it uses `MemoryMax` with swap disabled,

@@ -5,14 +5,14 @@ from backend import actors, chat, questions
 
 
 def test_the_header_names_the_agent_and_anything_else_is_the_person(monkeypatch):
-    monkeypatch.setenv("X3_LOCAL_USER", "Emir")
+    monkeypatch.setenv("REDLINE_LOCAL_USER", "Emir")
     assert actors.from_header("agent:pcb") == {"type": "agent", "id": "pcb", "name": "pcb"}
     assert actors.from_header(None) == {"type": "user", "id": "local", "name": "Emir"}
     assert actors.from_header("someone")["type"] == "user"
 
 
 def test_the_command_line_says_which_agent(monkeypatch):
-    monkeypatch.setenv("X3_AGENT", "pcb room")
+    monkeypatch.setenv("REDLINE_AGENT", "pcb room")
     assert actors.header_for_agent() == {"X-Redline-Actor": "agent:pcb room"}
 
 

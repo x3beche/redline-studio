@@ -1,8 +1,8 @@
 """Who is doing something: a person or an agent, and a record of what.
 
 Until sign-in exists there is one person - the local user, named in .env
-as X3_LOCAL_USER (default "you") - and the agents, which say who they are:
-the command line sets its actor to the agent named in X3_AGENT (default
+as REDLINE_LOCAL_USER (default "you") - and the agents, which say who they are:
+the command line sets its actor to the agent named in REDLINE_AGENT (default
 "agent"), and its calls to the API carry the same name in the
 X-Redline-Actor header. Everything written from then on carries an actor -
 notes, thread lines, answers, runs, log lines - and every delete or change
@@ -23,12 +23,12 @@ HEADER = "x-redline-actor"
 
 
 def local_user() -> dict:
-    name = os.environ.get("X3_LOCAL_USER", "you").strip() or "you"
+    name = os.environ.get("REDLINE_LOCAL_USER", "you").strip() or "you"
     return {"type": "user", "id": "local", "name": name}
 
 
 def agent(name: str | None = None) -> dict:
-    name = (name or os.environ.get("X3_AGENT", "agent")).strip() or "agent"
+    name = (name or os.environ.get("REDLINE_AGENT", "agent")).strip() or "agent"
     return {"type": "agent", "id": name, "name": name}
 
 

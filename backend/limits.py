@@ -6,9 +6,9 @@ without end, a test that eats memory - takes the whole machine, the app
 with it. Each container gets at most half the cores, a share of the
 memory and a cap on processes. `.env` can change them:
 
-    X3_BOX_CPUS=8        cores (fractions allowed, 1.5)
-    X3_BOX_MEMORY=12g    memory, Docker's units (512m, 12g)
-    X3_BOX_PIDS=4096     processes and threads
+    REDLINE_BOX_CPUS=8        cores (fractions allowed, 1.5)
+    REDLINE_BOX_MEMORY=12g    memory, Docker's units (512m, 12g)
+    REDLINE_BOX_PIDS=4096     processes and threads
 
 The phone emulator is not limited here: it is one long-running machine of
 its own, sized in backend/phone.py.
@@ -34,6 +34,6 @@ def _default_memory() -> str:
 
 def box() -> list[str]:
     """The `docker run` options that keep one container to its share."""
-    return ["--cpus", os.environ.get("X3_BOX_CPUS", "").strip() or _default_cpus(),
-            "--memory", os.environ.get("X3_BOX_MEMORY", "").strip() or _default_memory(),
-            "--pids-limit", os.environ.get("X3_BOX_PIDS", "").strip() or "4096"]
+    return ["--cpus", os.environ.get("REDLINE_BOX_CPUS", "").strip() or _default_cpus(),
+            "--memory", os.environ.get("REDLINE_BOX_MEMORY", "").strip() or _default_memory(),
+            "--pids-limit", os.environ.get("REDLINE_BOX_PIDS", "").strip() or "4096"]

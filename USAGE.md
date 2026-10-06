@@ -106,7 +106,7 @@ being built, so a module can import the parts it is made of:
 
 ```python
 import os
-os.environ["X3_IMPORT_ONLY"] = "1"      # parts must not run their own exports
+os.environ["REDLINE_IMPORT_ONLY"] = "1"      # parts must not run their own exports
 import fan_pro as F
 import stand as D
 
@@ -114,7 +114,7 @@ PARTS = place(F.PARTS, ...) + place(D.PARTS, ...)
 ```
 
 Guard exports and the `show()` call in each part with `if STANDALONE:`
-(`STANDALONE = os.environ.get("X3_IMPORT_ONLY") != "1"`), or importing one will
+(`STANDALONE = os.environ.get("REDLINE_IMPORT_ONLY") != "1"`), or importing one will
 drop its STEP and STL into the assembly's output.
 
 Share the numbers rather than copying them. When the station tilts the fan
@@ -358,8 +358,8 @@ and a part number that does not exist says so the same way.
 Redlining a running program. A project is a git checkout: where it is
 served, how it is built, and the command whose exit code says it still
 works. The example projects are **iot-fan**'s - the dashboard, the phone
-app and the controller firmware for the fan in the 3D room, in
-`/mnt/ssd/3d-arena/projects/iot-fan`.
+app and the controller firmware for the fan in the 3D room, kept in a
+checkout of their own (`~/projects/iot-fan` below).
 
 Nothing runs on the machine itself. Each room has its own Docker image
 (see [INSTALL](INSTALL.md)): a page is served and photographed in
@@ -424,7 +424,7 @@ A project is registered through the API:
 ```bash
 curl -X PUT localhost:8000/api/apps/iot-fan-web -H 'content-type: application/json' -d '{
   "title": "iot-fan dashboard", "platform": "web", "folder": "iot-fan",
-  "repo": "/mnt/ssd/3d-arena/projects/iot-fan", "cwd": "web",
+  "repo": "/home/you/projects/iot-fan", "cwd": "web",
   "url": "http://127.0.0.1:5173", "dev": "node server.js", "test": "node --test"}'
 ```
 
@@ -710,7 +710,7 @@ read; core-seconds times an assumed per-core wattage is the substitute, and the
 figure carries "assumed" the way the token prices do. The GPU's rate is the
 card's own rated limit, which is an upper bound on what it was pulling while
 it was busy — an upper bound that says so beats a middle figure that was
-invented. `X3_WATTS_PER_CORE`, `X3_WATTS_GPU` and `X3_KWH_PRICE` tune it. On a host where the counter *is* readable the same code
+invented. `REDLINE_WATTS_PER_CORE`, `REDLINE_WATTS_GPU` and `REDLINE_KWH_PRICE` tune it. On a host where the counter *is* readable the same code
 reports "measured" instead.
 
 ```bash
@@ -873,8 +873,8 @@ range as JSON.
 ## Signing in
 
 Off by default: on this machine nobody signs in, and notes, thread lines
-and changes are written as *you* (`X3_LOCAL_USER` in `.env`). Set
-`X3_AUTH=on` in `.env` and restart to ask for a sign-in: the first visit
+and changes are written as *you* (`REDLINE_LOCAL_USER` in `.env`). Set
+`REDLINE_REQUIRE_SIGNIN=true` in `.env` and restart to ask for a sign-in: the first visit
 offers to make the first account, which owns the workspace; after that
 the page asks for email and password, and your name at the far right of the
 top bar has **Sign out**. Every delete and change - by you or an agent - is
@@ -882,7 +882,7 @@ in Analytics under **Recent changes**.
 
 With sign-in on, an agent needs a token. Open your name > **Agent
 tokens**, name the agent and press **Make token**: the three lines shown
-(`X3_TRANSPORT=api`, `X3_API=...`, `X3_TOKEN=...`) go into the agent's
+(`REDLINE_TRANSPORT=api`, `REDLINE_API=...`, `REDLINE_TOKEN=...`) go into the agent's
 environment, and appear only this once. The agent then needs no database
 password, and everything it does is under the name you gave it. **Take
 back** stops it at once. An agent's token is an editor unless you choose

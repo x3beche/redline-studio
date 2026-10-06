@@ -192,8 +192,8 @@ async def build(db, model_id: str, script: Path) -> dict:
         if proc.returncode in (-9, 137):
             raise MemoryError(
                 f"{model_id}: build exceeded the memory ceiling "
-                f"({os.environ.get('X3_BUILD_MEM', '10G')}) and was killed. "
-                "Simplify the model, or raise X3_BUILD_MEM for this server.")
+                f"({os.environ.get('REDLINE_BUILD_MEM', '10G')}) and was killed. "
+                "Simplify the model, or raise REDLINE_BUILD_MEM for this server.")
         if proc.returncode != 0:
             raise RuntimeError("\n".join(log[-8:]) or "build failed")
 

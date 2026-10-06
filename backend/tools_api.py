@@ -47,7 +47,7 @@ def mount(app: FastAPI) -> None:
     app.include_router(tools_llm.router)
     app.mount("/api/tools/files", _Revalidated(directory=PAGES, html=True), name="tool-files")
 
-IMAGE = os.environ.get("X3_TOOLS_IMAGE", "redline-tools")
+IMAGE = os.environ.get("REDLINE_TOOLS_IMAGE", "redline-tools")
 KINDS = ("sql", "prisma", "ts", "openapi", "mermaid", "regex", "cron", "pdftext", "dts", "ubootenv")
 BUILD = "docker build -f docker/tools/tools.Dockerfile -t redline-tools docker/tools"
 LIMIT = 400_000                  # characters: a check is for a tool's output, not a dump

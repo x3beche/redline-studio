@@ -1,7 +1,7 @@
 # Accounts and sign-in: how to run them, and how to get back in
 
 What to do on the machine that runs Redline when sign-in is on
-(`X3_AUTH=on` in `.env`). Nothing private belongs in this file - no
+(`REDLINE_REQUIRE_SIGNIN=true` in `.env`). Nothing private belongs in this file - no
 addresses, passwords, links or tokens; the repository is public.
 
 ## Forgot the password, or the address
@@ -39,17 +39,17 @@ address>:4200`.
 
 ## The agents
 
-The agents on the machine share one token, `X3_TOKEN` in `.env`, made for
+The agents on the machine share one token, `REDLINE_TOKEN` in `.env`, made for
 them when sign-in was switched on (named "local agents", role editor).
-`tools/revisions.py` and the MCP server read it from `.env`; `X3_AGENT`
+`tools/revisions.py` and the MCP server read it from `.env`; `REDLINE_AGENT`
 still names each agent. To replace it: your name > **Agent tokens** > make
-a new one, put it in `.env` as `X3_TOKEN=...`, then **Take back** the old
+a new one, put it in `.env` as `REDLINE_TOKEN=...`, then **Take back** the old
 one. A command that says it "wants an agent token" means this line is
 missing or the token was taken back.
 
 ## The office network
 
-- `X3_WEB_HOST=0.0.0.0` in `.env`, then `./start.sh`: the page (port 4200)
+- `REDLINE_WEB_HOST=0.0.0.0` in `.env`, then `./start.sh`: the page (port 4200)
   opens to the network; the API (8000) stays on the machine behind it.
 - Make the owner's account before opening it - otherwise whoever visits
   first becomes the owner.
@@ -58,6 +58,6 @@ missing or the token was taken back.
 
 ## Turning sign-in off again
 
-`X3_AUTH=off` in `.env` and restart (`./start.sh`): local mode, no
+`REDLINE_REQUIRE_SIGNIN=false` in `.env` and restart (`./start.sh`): local mode, no
 sign-in, everything done as the local user - the accounts stay in the
 database for when it is switched back on.

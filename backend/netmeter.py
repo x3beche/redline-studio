@@ -24,7 +24,7 @@ import re
 import time
 from datetime import datetime, timezone
 
-log = logging.getLogger("x3.netmeter")
+log = logging.getLogger("redline.netmeter")
 
 TRAFFIC = "proxy_traffic"          # hourly totals: _id "YYYY-MM-DDTHH", up, down, conns, hosts.{host}.{up,down,conns}
 HEAD_MAX = 64 * 1024

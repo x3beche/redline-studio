@@ -290,7 +290,7 @@ async def delete_model(db, model_id: str) -> None:
 # written, so the compressed bytes live on disk under the GridFS id and the
 # database keeps the backup.
 CACHE = Path(os.environ.get(
-    "X3_CACHE", Path(__file__).resolve().parent.parent / ".cache" / "artifacts"))
+    "REDLINE_CACHE", Path(__file__).resolve().parent.parent / ".cache" / "artifacts"))
 
 
 async def put_artifact(db, model_id: str, label: str, data: bytes,

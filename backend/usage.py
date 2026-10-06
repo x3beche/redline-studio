@@ -40,7 +40,9 @@ CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude"))
 
 # Which transcript folders belong to this project. Claude Code names the
 # folder after the working directory with the slashes turned into dashes.
-PROJECT_GLOB = os.environ.get("X3_TRANSCRIPTS", "-mnt-ssd-3d-arena*")
+# By default the folders of agents working in this checkout (or below it).
+_CHECKOUT = Path(__file__).resolve().parent.parent
+PROJECT_GLOB = os.environ.get("REDLINE_TRANSCRIPTS", str(_CHECKOUT).replace("/", "-") + "*")
 
 # USD per million tokens. "list" means published; "assumed" means we put the
 # model in its family's tier because no public rate was to hand - the card

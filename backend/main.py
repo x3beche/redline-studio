@@ -24,23 +24,26 @@ from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field
 
 # .env before the modules below: some read their settings when imported
-# (ato's X3_ATO, lcsc's X3_EASYEDA and X3_LCSC_GAP), and reading them
+# (ato's REDLINE_ATO, lcsc's REDLINE_EASYEDA and REDLINE_LCSC_GAP), and reading them
 # first left .env's values unseen - the defaults won wherever they differed.
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+from . import envnames  # noqa: E402
+envnames.adopt()                       # an older .env's X3_ names
 
 from . import (access, actors, ato, auth, changes, convert, files, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
 from . import tools_api
 
-LOG = logging.getLogger("x3.api")
+LOG = logging.getLogger("redline.api")
 
 ROOT = Path(__file__).resolve().parent.parent
 EXPORT_SCRIPT = ROOT / "export_model.py"
 
 load_dotenv(ROOT / ".env")
+envnames.adopt()
 MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
-MONGODB_DB = os.getenv("MONGODB_DB", "assets_3d")
+MONGODB_DB = os.getenv("MONGODB_DB", "redline")
 QUOTA_MB = float(os.getenv("STORAGE_QUOTA_MB", "512"))
 
 # draft  : the user is still writing, models do not see it
@@ -227,7 +230,7 @@ from pathlib import Path
 
 from build123d import *
 
-STANDALONE = os.environ.get("X3_IMPORT_ONLY") != "1"
+STANDALONE = os.environ.get("REDLINE_IMPORT_ONLY") != "1"
 ROOT = Path(__file__).resolve().parent.parent   # uploads land here
 SRC = ROOT / "{filename}"
 
@@ -1330,7 +1333,7 @@ async def _who_acts(request, call_next):
             return JSONResponse({"detail": "that agent token is unknown or revoked"}, status_code=401)
         who, ws, role = agent["actor"], agent["workspace"], agent["role"]
         # One token can serve several agents on one machine: each still says
-        # who it is (X3_AGENT), within what the token allows.
+        # who it is (REDLINE_AGENT), within what the token allows.
         named = actors.from_header(request.headers.get(actors.HEADER))
         if named["type"] == "agent" and named["name"] != "agent":
             who = {**who, "id": named["id"], "name": named["name"]}
@@ -1439,7 +1442,7 @@ async def auth_state(request: Request):
 async def auth_setup(body: SetupIn, request: Request, response: Response):
     """The first account, while there is none; it owns the workspace."""
     if not auth.enabled():
-        raise HTTPException(400, "sign-in is off (X3_AUTH)")
+        raise HTTPException(400, "sign-in is off (REDLINE_REQUIRE_SIGNIN)")
     try:
         user = await auth.make_first_user(db(), body.email, body.name, body.password)
     except ValueError as exc:
@@ -1457,7 +1460,7 @@ async def auth_setup(body: SetupIn, request: Request, response: Response):
 @app.post("/api/auth/login")
 async def auth_login(body: LoginIn, request: Request, response: Response):
     if not auth.enabled():
-        raise HTTPException(400, "sign-in is off (X3_AUTH)")
+        raise HTTPException(400, "sign-in is off (REDLINE_REQUIRE_SIGNIN)")
     email = body.email.strip().lower()
     if auth.locked_out(email):
         raise HTTPException(429, "too many tries - wait a quarter of an hour")
@@ -1526,7 +1529,7 @@ async def revoke_agent_token(token_id: str):
 # ---------------- workspaces ----------------
 def _signed_in_person() -> dict:
     if not auth.enabled():
-        raise HTTPException(400, "workspaces need sign-in (X3_AUTH=on)")
+        raise HTTPException(400, "workspaces need sign-in (REDLINE_REQUIRE_SIGNIN=true)")
     who = actors.current()
     if who.get("type") != "user":
         raise HTTPException(403, "an agent works in its token's workspace")
@@ -1644,7 +1647,7 @@ async def cancel_invite(invite_id: str):
 async def invite_page(key: str):
     """What an invitation link's page shows - open, the link is the key."""
     if not auth.enabled():
-        raise HTTPException(400, "sign-in is off (X3_AUTH)")
+        raise HTTPException(400, "sign-in is off (REDLINE_REQUIRE_SIGNIN)")
     info = await auth.invite_info(db(), key)
     if not info:
         raise HTTPException(404, "this invitation has expired or was taken back - ask for a new one")
@@ -1659,7 +1662,7 @@ class AcceptIn(BaseModel):
 @app.post("/api/invite/{key}/accept")
 async def invite_accept(key: str, body: AcceptIn, request: Request, response: Response):
     if not auth.enabled():
-        raise HTTPException(400, "sign-in is off (X3_AUTH)")
+        raise HTTPException(400, "sign-in is off (REDLINE_REQUIRE_SIGNIN)")
     try:
         user, ws, role = await auth.accept_invite(db(), key, body.name, body.password)
     except (ValueError, PermissionError, LookupError) as exc:
@@ -1688,7 +1691,7 @@ class ResetIn(BaseModel):
 @app.post("/api/reset/{key}")
 async def reset_password(key: str, body: ResetIn, request: Request, response: Response):
     if not auth.enabled():
-        raise HTTPException(400, "sign-in is off (X3_AUTH)")
+        raise HTTPException(400, "sign-in is off (REDLINE_REQUIRE_SIGNIN)")
     try:
         user, ws = await auth.use_reset(db(), key, body.password)
     except (ValueError, PermissionError, LookupError) as exc:

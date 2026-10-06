@@ -39,14 +39,14 @@ COLL = "releases"
 BUCKET = "releases"
 TAG = re.compile(r"^[\w][\w.\-]{0,31}$")
 ROOT = Path(__file__).resolve().parent.parent
-DRAW_IMAGE = os.environ.get("X3_DRAW_IMAGE", "redline-draw")
+DRAW_IMAGE = os.environ.get("REDLINE_DRAW_IMAGE", "redline-draw")
 DRAW_TIMEOUT = 300
 DRAWINGS = ROOT / ".cache" / "drawings"
 # The zips on disk as well as in the database: the database is far away,
 # and thirty megabytes from it is minutes; from disk it is at once.
 ZIPS = ROOT / ".cache" / "releases"
 # Drawings made side by side: a large assembly takes minutes on one core.
-DRAW_AT_ONCE = int(os.environ.get("X3_DRAW_AT_ONCE", "3"))
+DRAW_AT_ONCE = int(os.environ.get("REDLINE_DRAW_AT_ONCE", "3"))
 
 _RUNNING: dict[str, asyncio.Task] = {}
 

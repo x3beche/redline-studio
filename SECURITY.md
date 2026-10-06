@@ -29,7 +29,7 @@ a reverse proxy with TLS. Problems worth reporting include:
   (`--network none`, memory cap) or on the host
 - cross-site requests that change something without the app's own page
 
-Out of scope: running with `X3_AUTH=off` (local mode trusts everyone who
+Out of scope: running with `REDLINE_REQUIRE_SIGNIN=false` (local mode trusts everyone who
 can reach the port, by design), denial of service on a single-user box,
 and findings that need shell access to the machine already.
 
@@ -57,7 +57,7 @@ and findings that need shell access to the machine already.
 
 - Keep `.env` out of git (it is in `.gitignore`); `.env.example` holds
   placeholders only.
-- Set `X3_AUTH=on` on anything reachable from another machine, and serve
+- Set `REDLINE_REQUIRE_SIGNIN=true` on anything reachable from another machine, and serve
   it over HTTPS.
 - Do not expose MongoDB to the internet; bind it to the host or a private
   network and give it its own user and password.

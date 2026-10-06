@@ -28,7 +28,7 @@ import os
 import time
 from typing import AsyncIterator
 
-log = logging.getLogger("x3.llm")
+log = logging.getLogger("redline.llm")
 
 COLL = "llm_settings"          # machine-wide, like the keys: not per workspace
 DOC_ID = "llm"

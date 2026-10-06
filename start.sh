@@ -14,9 +14,9 @@ PY="$VENV/bin/python"
 export API_PORT="${API_PORT:-8000}"
 WEB_PORT="${WEB_PORT:-4200}"
 # Who can open the page: this machine only (the default), or the office
-# network with X3_WEB_HOST=0.0.0.0 in .env. The API stays on this machine
+# network with REDLINE_WEB_HOST=0.0.0.0 in .env. The API stays on this machine
 # either way - the page's server passes the page's requests on to it.
-WEB_HOST="${X3_WEB_HOST:-$(grep -E '^X3_WEB_HOST=' .env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' || true)}"
+WEB_HOST="${REDLINE_WEB_HOST:-${X3_WEB_HOST:-$(grep -E '^(REDLINE|X3)_WEB_HOST=' .env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' || true)}}"
 WEB_HOST="${WEB_HOST:-127.0.0.1}"
 
 say() { printf '\033[1;36m> %s\033[0m\n' "$*"; }

@@ -18,7 +18,7 @@ Every number is read, never remembered, and says where it was read:
 - The project's configuration: the build's `config/sdkconfig.json`, else
   the project's `sdkconfig` / `sdkconfig.defaults` (CPU MHz, FreeRTOS tick,
   flash size).
-- STM32: STM32CubeMX's device database (X3_CUBEMX_DB): core, frequency,
+- STM32: STM32CubeMX's device database (REDLINE_CUBEMX_DB): core, frequency,
   flash, RAM, package, peripheral instances and every pin's signals.
 - The build: memory regions and symbols as backend/firmware.py stored
   them, and the ELF's symbol names (nm, in the Embedded image) for which
@@ -43,7 +43,7 @@ from . import apps, firmware, sandbox, store
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".cache" / "mcu"
-CUBEMX_DB = Path(os.getenv("X3_CUBEMX_DB", str(Path.home() / "STM32CubeMX" / "db")))
+CUBEMX_DB = Path(os.getenv("REDLINE_CUBEMX_DB", str(Path.home() / "STM32CubeMX" / "db")))
 IDF = "/opt/esp/idf"
 ESP_TARGETS = ("esp32", "esp32s2", "esp32s3", "esp32c2", "esp32c3", "esp32c5", "esp32c6",
                "esp32c61", "esp32h2", "esp32p4")
@@ -810,7 +810,7 @@ async def info(db, app: dict) -> dict:
         part, part_src = _stm_part(app, board, project, data)
         xml = cubemx_file(part) if part else None
         if not CUBEMX_DB.is_dir():
-            missing.append(f"chip: STM32CubeMX database not found at {CUBEMX_DB} (set X3_CUBEMX_DB)")
+            missing.append(f"chip: STM32CubeMX database not found at {CUBEMX_DB} (set REDLINE_CUBEMX_DB)")
         elif not part:
             missing.append("chip: no STM32 part number found (board, project files or title)")
         elif not xml:

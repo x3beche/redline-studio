@@ -58,14 +58,14 @@ HZ = os.sysconf("SC_CLK_TCK")
 
 # USD per kWh. Unset means the card shows energy and no money, the same way
 # an unpriced model shows tokens and no money.
-_price = os.environ.get("X3_KWH_PRICE")
+_price = os.environ.get("REDLINE_KWH_PRICE")
 KWH_PRICE: float | None = float(_price) if _price else None
 
 # Watts one busy core costs. The default is this machine's package power
 # under an all-core load divided by its cores; it is a guess about the
 # outside world, like the token rate card, and says so.
-WATTS_PER_CORE = float(os.environ.get("X3_WATTS_PER_CORE", 8.0))
-WATTS_BASIS = ("measured" if os.environ.get("X3_WATTS_PER_CORE")
+WATTS_PER_CORE = float(os.environ.get("REDLINE_WATTS_PER_CORE", 8.0))
+WATTS_BASIS = ("measured" if os.environ.get("REDLINE_WATTS_PER_CORE")
                else "assumed")
 
 # Filled on first use: asking the driver costs a subprocess, and a machine
@@ -75,8 +75,8 @@ _WATTS_GPU: float | None = None
 RAPL = Path("/sys/class/powercap/intel-rapl:0/energy_uj")
 
 
-# A Prometheus that scrapes node_exporter's RAPL collector (X3_RAPL_PROMETHEUS,
-# e.g. http://192.168.1.15:9090): node_exporter runs as root and reads the
+# A Prometheus that scrapes node_exporter's RAPL collector (REDLINE_RAPL_PROMETHEUS,
+# e.g. http://prometheus:9090): node_exporter runs as root and reads the
 # counter this process may not. Its energy is accumulated here as a counter
 # of our own - rate over the last minute times the time since the last read -
 # so the hardware counter's wrap (every hour or so at 60 W) never shows.
@@ -90,7 +90,7 @@ def _rapl_from_prometheus() -> int | None:
     import time
     import urllib.parse
     import urllib.request
-    base = os.environ.get("X3_RAPL_PROMETHEUS", "").strip().rstrip("/")
+    base = os.environ.get("REDLINE_RAPL_PROMETHEUS", "").strip().rstrip("/")
     if not base:
         return None
 
@@ -126,7 +126,7 @@ def rapl_uj() -> int | None:
     Root-only on most kernels since 2020. Read anyway: on a host that allows
     it the run window gets a measured figure instead of an assumed one.
     Failing that, a Prometheus scraping node_exporter's RAPL collector
-    (X3_RAPL_PROMETHEUS) - measured all the same, to within its 15 s scrape.
+    (REDLINE_RAPL_PROMETHEUS) - measured all the same, to within its 15 s scrape.
     """
     try:
         return int(RAPL.read_text())
@@ -190,7 +190,7 @@ def energy(core_s: float, measured_wh: float | None = None,
 # so the limit is what there is: an upper bound on what it was pulling
 # while it was busy, which is honest as long as it says so.
 def _gpu_watts() -> float | None:
-    told = os.environ.get("X3_WATTS_GPU")
+    told = os.environ.get("REDLINE_WATTS_GPU")
     if told:
         return float(told)
     out = _nvidia("--query-gpu=power.limit", "--format=csv,noheader,nounits")
@@ -429,12 +429,14 @@ def record_sync(root, kind: str, **row) -> None:
         from motor.motor_asyncio import AsyncIOMotorClient
 
         load_dotenv(Path(root) / ".env")
+        from . import envnames
+        envnames.adopt()
         uri = _os.getenv("MONGODB_URI", "").strip()
         if not uri:
             return
 
         async def go():
-            db = AsyncIOMotorClient(uri)[_os.getenv("MONGODB_DB", "assets_3d")]
+            db = AsyncIOMotorClient(uri)[_os.getenv("MONGODB_DB", "redline")]
             await record(db, kind, await current_revision(db), **row)
 
         asyncio.run(go())
@@ -476,7 +478,7 @@ async def current_revision(db, room: str | None = None) -> str | None:
     closed, so there is no current run to read, and the only thing that knows
     which revision that render belongs to is the command that started it.
     """
-    told = os.environ.get("X3_REVISION")
+    told = os.environ.get("REDLINE_REVISION")
     if told:
         return told
     run = await db.runs.find_one({"_id": run_key(room)})

@@ -3,7 +3,7 @@ from backend import kicad, limits, sandbox
 
 
 def test_defaults_are_a_share_of_the_machine(monkeypatch):
-    for k in ("X3_BOX_CPUS", "X3_BOX_MEMORY", "X3_BOX_PIDS"):
+    for k in ("REDLINE_BOX_CPUS", "REDLINE_BOX_MEMORY", "REDLINE_BOX_PIDS"):
         monkeypatch.delenv(k, raising=False)
     box = limits.box()
     assert box[0::2] == ["--cpus", "--memory", "--pids-limit"]
@@ -11,9 +11,9 @@ def test_defaults_are_a_share_of_the_machine(monkeypatch):
 
 
 def test_env_overrides(monkeypatch):
-    monkeypatch.setenv("X3_BOX_CPUS", "1.5")
-    monkeypatch.setenv("X3_BOX_MEMORY", "512m")
-    monkeypatch.setenv("X3_BOX_PIDS", "64")
+    monkeypatch.setenv("REDLINE_BOX_CPUS", "1.5")
+    monkeypatch.setenv("REDLINE_BOX_MEMORY", "512m")
+    monkeypatch.setenv("REDLINE_BOX_PIDS", "64")
     assert limits.box() == ["--cpus", "1.5", "--memory", "512m", "--pids-limit", "64"]
 
 

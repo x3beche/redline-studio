@@ -38,7 +38,7 @@ AGENT = "Mozilla/5.0 (compatible; redline/1.0; board room)"
 
 # Lives with atopile, in its own environment.
 TOOL = os.environ.get(
-    "X3_EASYEDA", str(Path(__file__).resolve().parent.parent.parent.parent
+    "REDLINE_EASYEDA", str(Path(__file__).resolve().parent.parent.parent.parent
                       / ".venv-ato" / "bin" / "easyeda2kicad"))
 
 LCSC_ID = re.compile(r"^C\d{3,10}$")
@@ -88,14 +88,14 @@ import fcntl
 import sys
 import time as _time
 
-GAP = float(os.environ.get("X3_LCSC_GAP", "2.5"))        # seconds between asks
+GAP = float(os.environ.get("REDLINE_LCSC_GAP", "2.5"))        # seconds between asks
 COOL_OFF = 600                                           # after being refused
 # Spacing alone does not keep EasyEDA happy. The journal's two refusals:
 # 42 searches in 71 s, and 35 asks spread over 220 s - one every 6 s. So
 # it is a count, not a rate, and asks are budgeted: this many in any
 # window this long, across every process, then nothing is sent until the
 # window moves on.
-BUDGET = int(os.environ.get("X3_LCSC_BUDGET", "25"))
+BUDGET = int(os.environ.get("REDLINE_LCSC_BUDGET", "25"))
 WINDOW = 300
 KEEP_LINES = 1000                                        # journal length
 
@@ -399,7 +399,7 @@ SVGS = "https://easyeda.com/api/products/{}/svgs"
 OBJ = "https://modules.easyeda.com/3dmodel/{}"
 
 LOOK = Path(os.environ.get(
-    "X3_LCSC_CACHE",
+    "REDLINE_LCSC_CACHE",
     Path(__file__).resolve().parent.parent / ".cache" / "lcsc"))
 
 # EasyEDA's own numbering for the two drawings it keeps per part.

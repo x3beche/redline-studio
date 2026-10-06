@@ -83,17 +83,18 @@ def connect():
     from motor.motor_asyncio import AsyncIOMotorClient
 
     load_dotenv(ROOT / ".env")
-    # X3_TRANSPORT=api: the database through the server, with this agent's
-    # token (X3_TOKEN) - no connection string needed (tools/remote_db.py).
+    from backend import envnames as _envnames; _envnames.adopt()
+    # REDLINE_TRANSPORT=api: the database through the server, with this agent's
+    # token (REDLINE_TOKEN) - no connection string needed (tools/remote_db.py).
     # Anything else: straight to MongoDB, as before.
-    if os.getenv("X3_TRANSPORT", "").strip().lower() == "api":
+    if os.getenv("REDLINE_TRANSPORT", "").strip().lower() == "api":
         sys.path.insert(0, str(ROOT / "tools"))
         from remote_db import RemoteDb
-        return RemoteDb(os.getenv("X3_API", "http://localhost:8000"), os.getenv("X3_TOKEN") or None)
+        return RemoteDb(os.getenv("REDLINE_API", "http://localhost:8000"), os.getenv("REDLINE_TOKEN") or None)
     uri = os.getenv("MONGODB_URI", "").strip()
     if not uri:
         sys.exit("MONGODB_URI is not set (.env)")
-    return AsyncIOMotorClient(uri)[os.getenv("MONGODB_DB", "assets_3d")]
+    return AsyncIOMotorClient(uri)[os.getenv("MONGODB_DB", "redline")]
 
 
 async def cmd_queue(args):
@@ -341,7 +342,7 @@ async def cmd_board(args):
 
     from backend import actors
 
-    base = os.environ.get("X3_API", "http://localhost:8000")
+    base = os.environ.get("REDLINE_API", "http://localhost:8000")
 
     def call(path: str, method: str = "GET", body: dict | None = None,
              timeout: int = 60):
@@ -349,7 +350,7 @@ async def cmd_board(args):
             base + path, method=method,
             data=_json.dumps(body).encode() if body is not None else None,
             headers={"content-type": "application/json", **actors.header_for_agent(),
-                     **({"Authorization": f"Bearer {os.environ['X3_TOKEN']}"} if os.environ.get("X3_TOKEN") else {})})
+                     **({"Authorization": f"Bearer {os.environ['REDLINE_TOKEN']}"} if os.environ.get("REDLINE_TOKEN") else {})})
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 raw = r.read()
@@ -793,7 +794,7 @@ async def _after_shot(db, rid: str, width: int = 1200, height: int = 800,
         *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
         # The run is already closed by the time the after shot is taken, so
         # the render cannot look up which revision it is for.
-        env={**os.environ, "X3_REVISION": rid})
+        env={**os.environ, "REDLINE_REVISION": rid})
     log, _ = await proc.communicate()
     if proc.returncode != 0 or not out.exists():
         raise SystemExit("render failed: " + log.decode(errors="replace")[-400:])
@@ -1307,8 +1308,8 @@ async def cmd_files(args):
 
     from backend import actors
 
-    base = os.environ.get("X3_API", "http://localhost:8000")
-    auth = {"Authorization": f"Bearer {os.environ['X3_TOKEN']}"} if os.environ.get("X3_TOKEN") else {}
+    base = os.environ.get("REDLINE_API", "http://localhost:8000")
+    auth = {"Authorization": f"Bearer {os.environ['REDLINE_TOKEN']}"} if os.environ.get("REDLINE_TOKEN") else {}
 
     def call(path: str, method: str = "GET", data: bytes | None = None, ctype: str | None = None) -> bytes:
         req = urllib.request.Request(base + path, method=method, data=data,
@@ -1345,7 +1346,7 @@ async def cmd_files(args):
         src = Path(args.target or "")
         if not src.is_file():
             sys.exit(f"files put needs a file: {src}")
-        ctx = {"room": os.environ.get("X3_ROOM", "pcb" if args.board else "cad"),
+        ctx = {"room": os.environ.get("REDLINE_ROOM", "pcb" if args.board else "cad"),
                **({"board": args.board} if args.board else {})}
         b = uuid.uuid4().hex
         parts = [("context", _json.dumps(ctx).encode(), None), ("note", (args.note or "").encode(), None)]
@@ -1361,10 +1362,11 @@ async def cmd_files(args):
 
 def main() -> None:
     # The repo's .env, before anything reads the environment: the token
-    # (X3_TOKEN) is needed by the API-backed commands - `board ...` - as
+    # (REDLINE_TOKEN) is needed by the API-backed commands - `board ...` - as
     # well as by the database ones. What the shell already set wins.
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env")
+    from backend import envnames as _envnames; _envnames.adopt()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1552,7 +1554,7 @@ def main() -> None:
                    help="seconds to wait for the build and boot (default 900)")
     s.set_defaults(fn=cmd_sim)
     args = ap.parse_args()
-    # Everything this command writes is the agent's, named by X3_AGENT.
+    # Everything this command writes is the agent's, named by REDLINE_AGENT.
     from backend import actors
     actors.CURRENT.set(actors.agent())
     asyncio.run(args.fn(args))

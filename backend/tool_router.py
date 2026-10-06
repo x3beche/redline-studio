@@ -21,7 +21,7 @@ from collections import Counter
 
 from . import summarise
 
-log = logging.getLogger("x3.tool_router")
+log = logging.getLogger("redline.tool_router")
 
 CONTEXT = 8192            # tokens: the whole request, prompt and answer
 ANSWER = 300              # tokens kept for the model's answer
