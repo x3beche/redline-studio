@@ -481,11 +481,23 @@ def modules(parts: list[Part], graph: dict, pads: dict) -> dict[str, list[str]]:
     groups: dict[str, list[str]] = defaultdict(list)
     for r in refs:
         groups[owner.get(r, "")].append(r)
+    # A heart nothing joined - an ESD chip, a header, an encoder - is a
+    # block of one; it goes in with whoever it shares most nets with.
+    for h in hearts:
+        if groups.get(h) != [h]:
+            continue
+        mine = local[h]
+        best = max((g for g in groups if g and g != h and groups[g]),
+                   key=lambda g: (len(mine & {n for r in groups[g] for n in local[r]}), -len(g)),
+                   default=None)
+        if best and mine & {n for r in groups[best] for n in local[r]}:
+            groups[best].append(h)
+            del groups[h]
 
     named: dict[str, list[str]] = {}
     for heart, rs in sorted(groups.items(), key=lambda kv: (kv[0] == "", kv[0])):
         if not heart:
-            named["loose"] = rs
+            named["rails"] = rs          # parts on nothing but the rails
             continue
         nets = {n for r in rs for n in local[r]}
         score = {name: sum(1 for n in nets if re.search(rx, n, re.I)) for name, rx in FUNCTIONS}
@@ -671,7 +683,7 @@ def write(title: str, parts: list[Part], graph: dict, pads: dict, origin: str,
                 lines.append(f"    {mod_names[g]}.{net_ident[n]} ~ {net_ident[n]}")
     source = "\n".join(lines) + "\n"
     return source, {"modules": {mod_names[g]: refs for g, refs in groups.items()},
-                    "nets": len(net_names), "open_pins": open_pins, "guessed": guessed_n}
+                    "nets": len(net_names), "open_pins": open_pins, "guessed_count": guessed_n}
 
 
 def _pad_order(pad: str):

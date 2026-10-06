@@ -185,7 +185,7 @@ def test_the_source_keeps_designators_net_names_and_marks_guesses(parts_on_disk)
     assert 'override_net_name = "3.3V"' in source
     assert 'override_net_name = "OUT+"' in source
     assert "GUESSED" in source
-    assert info["guessed"] == 6
+    assert info["guessed_count"] == 6
     # Single-pad nets are unconnected pins, not nets.
     assert "NET_9" not in source and sorted(info["open_pins"]) == ["LED2.1", "LED3.1"]
 
