@@ -14,10 +14,12 @@ import { T } from './i18n';
 import { Money, money, moneyShort } from './money';
 import { Auth, SignIn, UserChip } from './auth';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
+import { TopBar, TopbarFit } from './topbar';
+import { TopbarMore } from './topbar-more';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, SignIn, T, UserChip],
+  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, SignIn, T, UserChip, TopbarFit, TopbarMore],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -31,54 +33,36 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
 @if (auth.refused(); as m) { <div class="tcv-refused" role="alert">{{ m }}</div> }
 @if (auth.signedIn()) {
 <app-editor>
-  <header tabs class="relative flex shrink-0 items-center gap-1">
-    @for (w of rooms; track w.id) {
-      <button (click)="open(w.id)" class="tcv-tab"
-              [attr.data-on]="here() === w.id ? 1 : null"
-              [attr.aria-current]="here() === w.id ? 'page' : null"
-              [title]="w.blurb">
-        {{ w.label | t }}
-        @if (!w.ready) { <span class="tcv-tab-soon">soon</span> }
-      </button>
-    }
-    <!-- Apart from the rooms you work in: Notes, Command Code, Files and Basic Tools, Basic
-         Tools closing the middle column - its right edge on the edge of the
-         right-hand column, which it follows when that folds. Analytics is
+  <header tabs topbarFit class="relative flex shrink-0 items-center gap-1">
+    <!-- The tabs in the order chosen in Settings > Top bar (topbar.ts): by
+         default the rooms you work in, then - pushed right by the gap -
+         Notes, Command Code, Files and Basic Tools, closing the middle
+         column. What is hidden, or does not fit, is under More. Analytics is
          in the menu under your name (auth.ts). -->
-    @if (notesTab; as w) {
-      <button (click)="open(w.id)" class="tcv-tab tcv-tab-notes"
-              [attr.data-on]="here() === w.id ? 1 : null"
-              [attr.aria-current]="here() === w.id ? 'page' : null"
-              [title]="w.blurb + ' (Alt+N)'">{{ w.label | t }}</button>
-    }
-    @if (ccTab; as w) {
-      <button (click)="open(w.id)" class="tcv-tab tcv-tab-cc"
-              [attr.data-on]="here() === w.id ? 1 : null"
-              [attr.aria-current]="here() === w.id ? 'page' : null"
-              [title]="w.blurb">{{ w.label | t }}</button>
-    }
-    @if (filesTab; as w) {
-      <button (click)="open(w.id)" class="tcv-tab tcv-tab-files"
-              [attr.data-on]="here() === w.id ? 1 : null"
-              [attr.aria-current]="here() === w.id ? 'page' : null"
-              [title]="w.blurb">{{ w.label | t }}</button>
-    }
-    @if (toolsTab; as w) {
-      <button (click)="open(w.id)" class="tcv-tab tcv-tab-tools"
-              [attr.data-on]="here() === w.id ? 1 : null"
-              [attr.aria-current]="here() === w.id ? 'page' : null"
-              [title]="w.blurb">{{ w.label | t }}
+    @for (b of bar.inBar(); track b.id) {
+      <button (click)="open(b.ws.id)" class="tcv-tab" [class.tb-push]="b.push" [class.tb-iconic]="!bar.text(b.ws)"
+              [attr.data-tb]="b.id"
+              [attr.data-on]="here() === b.id ? 1 : null"
+              [attr.aria-current]="here() === b.id ? 'page' : null"
+              [attr.aria-label]="bar.text(b.ws) ? null : (b.ws.label | t)"
+              [title]="bar.text(b.ws) ? bar.title(b.ws) : (b.ws.label | t) + ' - ' + bar.title(b.ws)">
+        @if (bar.showIcon()) { <svg class="tb-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="bar.icon(b.id)"/></svg> }
+        {{ bar.text(b.ws) | t }}
+        @if (!b.ws.ready) { <span class="tcv-tab-soon">soon</span> }
         <!-- How many tools there are, quietly, beside the name. -->
-        @if (toolCount(); as n) { <span class="tcv-tab-count">{{ n }}</span> }
+        @if (b.id === 'tools' && bar.text(b.ws)) { @if (toolCount(); as n) { <span class="tcv-tab-count">{{ n }}</span> } }
       </button>
     }
+    <app-topbar-more />
     <!-- Settings: the theme and the language for this browser, the LLM
          keys and the proxy for the server - a tab, not a menu item. -->
     @if (settingsTab; as w) {
-      <button (click)="open(w.id)" class="tcv-tab tcv-tab-settings tcv-tab-end"
+      <button (click)="open(w.id)" class="tcv-tab tcv-tab-settings tcv-tab-end" [class.tb-tight]="bar.tight()"
+              [class.tb-iconic]="bar.display() === 'icon'"
               [attr.data-on]="here() === w.id ? 1 : null"
               [attr.aria-current]="here() === w.id ? 'page' : null"
-              [title]="w.blurb">⚙ {{ w.label | t }}</button>
+              [attr.aria-label]="w.label | t"
+              [title]="w.blurb">⚙@if (bar.display() !== 'icon') { <span class="tb-settings-name"> {{ w.label | t }}</span>}</button>
     }
     <!-- Who is signed in, over the right-hand column; nothing in local mode.
          Its width is measured (--layout-user-w) so the tabs keep clear of it
@@ -137,6 +121,8 @@ export class App {
   /** The exchange rates and the costs, read from the start (money.ts). */
   private fxAndCosts = inject(Money);
   tabs = WORKSPACES;
+  /** The top bar's tabs, in the order and the look chosen (topbar.ts). */
+  bar = inject(TopBar);
   /** The rooms you work in, left; Notes, Command Code, Files and Basic Tools at the right end. */
   rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'files' && w.id !== 'commandcode' && w.id !== 'settings');
   notesTab = WORKSPACES.find(w => w.id === 'notes');

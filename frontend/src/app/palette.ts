@@ -121,6 +121,7 @@ export class Palette {
       { group: 'Actions', icon: '⌨', label: 'Keyboard shortcuts', keys: '?', run: () => this.prefs.open.set('shortcuts') },
       { group: 'Actions', icon: '⚙', label: 'Settings', hint: 'theme, language, shortcuts, LLM, proxy', run: () => this.prefs.open.set('appearance') },
       { group: 'Actions', icon: '⚙', label: 'LLM settings', hint: 'API keys, and which model does what', run: () => this.prefs.open.set('llm') },
+      { group: 'Actions', icon: '⚙', label: 'Top bar settings', hint: 'order and visibility of the tabs', run: () => this.prefs.open.set('topbar') },
       { group: 'Actions', icon: '⚙', label: 'Proxy settings', hint: 'a second way out for EasyEDA lookups', run: () => this.prefs.open.set('proxy') },
       ...THEMES.map(th => ({ group: 'Actions', icon: '◐', label: `Theme: ${THEME_NAMES[th]}`,
                              hint: this.prefs.theme() === th ? 'on' : '', run: () => this.prefs.wear(th) })),

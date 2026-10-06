@@ -1,0 +1,55 @@
+/* The top bar as arranged in Settings > Top bar (topbar.ts), and its More
+   menu (topbar-more.ts). Not encapsulated: the tabs are drawn by the shell
+   (app.ts) and styled here next to the rest of what is new about them. */
+
+/* No box of its own: the More button is one more item in the bar's row. */
+app-topbar-more { display: contents; }
+
+/* The first tab after the gap takes the free space, as Notes always did;
+   Settings then stands beside the last tab rather than taking it too. */
+.tcv-tab.tb-push { margin-left: auto; }
+.tcv-tab.tcv-tab-end.tb-tight { margin-left: 0; }
+
+/* A tab's drawing, in its text colour. */
+.tcv-tab .tb-ico, .tb-menu .tb-ico, .tb-prev .tb-ico {
+  display: inline-block; width: 14px; height: 14px; flex: none; vertical-align: -3px; margin-right: 5px;
+  fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.tcv-tab.tb-iconic { padding-left: 8px; padding-right: 8px; }
+.tcv-tab.tb-iconic .tb-ico { margin-right: 0; }
+
+.tb-more-dots { margin-left: 2px; letter-spacing: 0; }
+
+/* The menu: fixed to the screen under its button. */
+.tb-menu {
+  position: fixed; z-index: 460; min-width: 210px; max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 60px); overflow-y: auto;
+  display: flex; flex-direction: column; padding: 4px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2);
+  box-shadow: 0 4px 8px var(--shadow-soft);
+}
+.tb-menu-item {
+  display: flex; align-items: center; gap: 2px; padding: 6px 8px; border: 0; border-radius: 4px;
+  background: none; color: var(--ink); font-size: 12px; text-align: left; white-space: nowrap; cursor: pointer;
+}
+.tb-menu-item:hover, .tb-menu-item:focus-visible { background: var(--hover); outline: none; }
+.tb-menu-item[data-on] { background: var(--accent-deep); color: var(--ink-bright); }
+.tb-menu-item em { margin-left: auto; padding-left: 12px; font-style: normal; font-size: 10px; opacity: .85; }
+.tb-menu-head {
+  padding: 6px 8px 2px; margin-top: 2px; border-top: 1px solid var(--line);
+  font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim);
+}
+.tb-menu-head:first-child { margin-top: 0; border-top: 0; }
+.tb-menu-edit { margin-top: 2px; border-top: 1px solid var(--line); border-radius: 0 0 4px 4px; color: var(--ink-dim); }
+.tb-menu-ico { width: 14px; margin-right: 5px; text-align: center; }
+
+/* A phone: the tabs stand together (styles.css, "PHONES"), More as tall
+   as they are, and the menu's rows big enough for a thumb. */
+@media (max-width: 768px) {
+  .tcv-tab.tb-push { margin-left: 0; }
+  .tcv-mtop app-topbar-more > .tcv-tab { flex: none; min-height: 40px; }
+  .tb-menu-item { min-height: 40px; }
+  /* Settings as its gear alone: the name is in its tooltip, and the room
+     goes to a tab. */
+  .tb-settings-name { display: none; }
+}
