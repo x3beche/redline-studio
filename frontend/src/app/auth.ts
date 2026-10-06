@@ -448,6 +448,13 @@ export class Members {
   host: { class: 'relative flex items-center' },
   template: `
 @if (auth.state(); as s) {
+  <!-- The month against its budget, when one is set (app.ts): the warning
+       colour from its threshold, the danger colour past 100%. -->
+  @if (spend(); as b) {
+    <button class="tcv-spend" [attr.data-state]="b.state" [title]="b.title" (click)="analytics.emit()">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13h12M4 10.5V8M8 10.5V4.5M12 10.5V6.5"/></svg>
+      <span class="tcv-spend-text">{{ b.text }}</span></button>
+  }
   @if (s.mode !== 'on') {
     <!-- Nobody signs in on this machine: a gear, with the same menu's
          Analytics (Settings is a tab of its own). -->
@@ -541,6 +548,8 @@ export class UserChip {
   prefs = inject(Prefs);
   /** The last seven days in a few words, from the shell (app.ts). */
   brief = input<{ text: string; title: string } | null>(null);
+  /** The month's spend against its budget, from the shell; null with no budget. */
+  spend = input<{ text: string; title: string; state: string } | null>(null);
   inAnalytics = input(false);
   analytics = output<void>();
   private http = inject(HttpClient);

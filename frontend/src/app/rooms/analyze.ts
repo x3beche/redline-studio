@@ -4,6 +4,7 @@ import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { AuditRow, BoardRunRow, InsightCosts, InsightSeries, Insights, InsightsApi, ProjectDetail, ProjectItem } from '../api';
 import { Money, currencies, currencyName, money, moneyIn, setOverride } from '../money';
 import { Prefs } from '../preferences';
+import { BudgetBars } from '../budget-bars';
 import { Markdown } from '../markdown';
 import { BarList, Donut, Fmt, Row, Spark, TimeChart, fmt } from './charts';
 
@@ -20,7 +21,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
  */
 @Component({
   selector: 'app-room-analyze',
-  imports: [BarList, DecimalPipe, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage],
+  imports: [BarList, BudgetBars, DecimalPipe, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage],
   template: `
 <div class="tcv-room tcv-dash absolute inset-0 flex min-h-0 flex-col">
   <header class="tcv-dash-bar">
@@ -209,6 +210,19 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
           <em>median of {{ d.note_costs.notes }} · average {{ d.note_costs.mean == null ? '–' : f.money(d.note_costs.mean) }}</em></div>
         <div class="tcv-stat c3"><span>API</span><b>{{ f.count(d.api.requests) }}</b>
           <em>requests · {{ d.api.errors }} errors · slowest {{ d.api.routes[0]?.route ?? '–' }}</em></div>
+      </div>
+    }
+
+    <!-- BUDGET: this calendar month (UTC) against the budgets in Settings > Costs, whatever the range -->
+    <ng-container *ngTemplateOutlet="head; context: { id: 'budget', title: 'Budget', sub: budgetSub(d) }" />
+    @if (open('budget')) {
+      <div class="tcv-dash-grid">
+        <section class="tcv-panel-d c12"><h3>This month so far, and where it is heading
+            <span class="tcv-dash-dim">{{ d.budget_status?.month ?? '' }} · UTC</span>
+            <button class="tcv-dl" (click)="editCosts()">Edit in Settings</button></h3>
+          <app-budget-bars [status]="d.budget_status">
+            <p class="tcv-dash-dim">No budgets set - add a monthly budget in Settings &gt; Costs &amp; currency to see the month against it here.</p>
+          </app-budget-bars></section>
       </div>
     }
 
@@ -906,6 +920,15 @@ export class RoomAnalyze implements OnDestroy {
   setCurrency(c: string) { setOverride(c || null); }
   /** The plans, the prices and the rest are edited in Settings. */
   editCosts() { this.prefs.open.set('costs'); }
+  /** The Budget row's line: the days left, and how many budgets are near or over. */
+  budgetSub(d: Insights): string {
+    const b = d.budget_status;
+    if (!b) return 'this calendar month against the budgets';
+    const left = Math.max(0, Math.round(b.days_left));
+    const warn = b.items.filter(i => i.state === 'warn').length, over = b.items.filter(i => i.state === 'over').length;
+    const flags = [over ? `${over} over` : '', warn ? `${warn} near the limit` : ''].filter(Boolean).join(' · ');
+    return `${b.month} in UTC · ${left} days left` + (b.items.length ? ` · ${flags || 'all within budget'}` : ' · no budgets set');
+  }
   private llmPlans = computed(() => (this.cash.costs()?.subscriptions ?? []).filter(x => x.covers === 'llm'));
   planName(d: Insights): string {
     const names = this.llmPlans().map(x => x.name).filter(Boolean);

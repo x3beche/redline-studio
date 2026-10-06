@@ -326,3 +326,8 @@ select.st-in { cursor: pointer; }
   .st-table td { max-width: 180px; }
   .st-short { flex-wrap: wrap; }
 }
+
+/* ---- budgets (costs-settings.ts) --------------------------------- */
+.st-budgets { margin-bottom: 2px; }
+.st-warn-at { display: inline-flex; align-items: center; gap: 4px; }
+.st-in.st-pct { width: 56px; }

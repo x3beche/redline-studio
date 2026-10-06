@@ -2,8 +2,9 @@ import { Component, OnDestroy, computed, effect, inject, signal, untracked } fro
 import { NgTemplateOutlet } from '@angular/common';
 import { Auth } from './auth';
 import { T, t } from './i18n';
+import { BudgetBars } from './budget-bars';
 import {
-  COMMON, CURRENCY, CostLine, Costs, CostsPatch, Money, Period, Price,
+  Budget, BudgetKind, COMMON, CURRENCY, CostLine, Costs, CostsPatch, Money, Period, Price,
   convert, currencies, currencyName, money, moneyIn, setOverride, toUsd,
 } from './money';
 
@@ -22,7 +23,18 @@ interface Row {
   covers: 'llm' | 'other'; note: string;
 }
 interface PriceDraft { amount: number | null; currency: string }
-type Section = 'subscriptions' | 'other' | 'usage';
+/** A budget being edited: the warning threshold in percent, as typed. */
+interface BudgetDraft { amount: number | null; currency: string; warn: number }
+type BudgetDrafts = Record<BudgetKind, BudgetDraft>;
+type Section = 'subscriptions' | 'other' | 'usage' | 'budgets';
+const BUDGET_KINDS: BudgetKind[] = ['total', 'llm', 'electricity', 'proxy'];
+
+function budgetsOf(b: Costs['budgets'] | undefined, fallback: string): BudgetDrafts {
+  const one = (x: Budget | undefined): BudgetDraft => x
+    ? { amount: x.amount, currency: x.currency, warn: Math.round((x.warn ?? 0.8) * 100) }
+    : { amount: null, currency: fallback, warn: 80 };
+  return { total: one(b?.total), llm: one(b?.llm), electricity: one(b?.electricity), proxy: one(b?.proxy) };
+}
 
 function rowsOf(list: CostLine[] | undefined, covers: 'llm' | 'other'): Row[] {
   return (list ?? []).map(c => ({ id: c.id, name: c.name ?? '', amount: c.amount ?? null, currency: c.currency || 'USD',
@@ -37,7 +49,7 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
 
 @Component({
   selector: 'app-costs-settings',
-  imports: [NgTemplateOutlet, T],
+  imports: [BudgetBars, NgTemplateOutlet, T],
   styleUrl: './settings.css',
   template: `
 <div class="st-page">
@@ -141,6 +153,53 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
           <p class="st-hint">{{ 'No rates yet - amounts are shown in dollars until the server has read them.' | t }}</p>
         }
       </div>
+    </div>
+  </div>
+
+  <!-- Budgets: a month's limit for the total and for what is metered -->
+  <div class="st-card">
+    <div class="st-card-head"><h3>{{ 'Budgets' | t }}</h3>
+      <span class="st-sub">{{ 'a month, in any currency - the calendar month in UTC' | t }}</span>
+      <div class="st-right">
+        @if (m.costs()?.budget_status?.state; as s) {
+          @if (s !== 'ok') { <span class="st-badge" [attr.data-tone]="s === 'over' ? 'danger' : 'warn'">{{ (s === 'over' ? 'over budget' : 'near budget') | t }}</span> }
+        }
+        @if (dirty('budgets')) { <span class="st-badge" data-tone="warn">{{ 'unsaved' | t }}</span> }
+        @if (canEdit()) {
+          @if (dirty('budgets')) { <button class="tcv-btn tcv-files-btn" (click)="revert('budgets')">{{ 'Revert' | t }}</button> }
+          <button class="tcv-btn tcv-files-btn" [disabled]="!dirty('budgets') || busy() === 'budgets'" (click)="save('budgets')">{{ busy() === 'budgets' ? '…' : ('Save' | t) }}</button>
+        }
+      </div>
+    </div>
+    <div class="st-card-body">
+      <div class="st-prices st-budgets">
+        @for (k of budgetKinds; track k.id) {
+          <div class="st-key">
+            <div class="st-key-top"><b>{{ k.label | t }}</b><span class="st-sub">{{ k.about | t }}</span></div>
+            <div class="st-row">
+              <input class="st-in st-num" type="number" min="0" step="any" [disabled]="!canEdit()" [placeholder]="k.optional ? ('none' | t) : k.hint"
+                     [value]="budget(k.id).amount ?? ''" (input)="editBudget(k.id, { amount: num($any($event.target).value) })">
+              <select class="st-in" [disabled]="!canEdit()" (change)="editBudget(k.id, { currency: $any($event.target).value })">
+                @for (c of listWith(budget(k.id).currency); track c) { <option [value]="c" [selected]="c === budget(k.id).currency">{{ c }}</option> }
+              </select>
+              <span class="st-dim">/ {{ 'month' | t }}</span>
+              <label class="st-warn-at" [title]="'The bar and the top bar turn the warning colour from this share of the budget' | t">
+                <span class="st-dim">{{ 'warn at' | t }}</span>
+                <input class="st-in st-pct" type="number" min="5" max="100" step="1" [disabled]="!canEdit()"
+                       [value]="budget(k.id).warn" (input)="editBudget(k.id, { warn: num($any($event.target).value) ?? 80 })"><span class="st-dim">%</span>
+              </label>
+              <span class="st-right mono">
+                @if (budget(k.id).amount != null) { {{ money(toUsd(budget(k.id).amount!, budget(k.id).currency)) }} }
+                @else { <span class="st-dim">{{ 'not set' | t }}</span> }
+              </span>
+            </div>
+          </div>
+        }
+      </div>
+      <app-budget-bars [status]="m.costs()?.budget_status">
+        <p class="st-hint">{{ 'No budgets yet. Set a monthly budget for the total spend - and, if you like, separate ones for the LLM work at list prices, the electricity and the proxy - to see the month so far against them, where the month is heading, and a warning in the top bar near the limit.' | t }}</p>
+      </app-budget-bars>
+      <p class="st-hint">{{ 'The total is the subscriptions and other costs prorated to today, the electricity and the proxy traffic - and the LLM work at list prices when no subscription covers it. The month-end forecast keeps the fixed costs at their full month and runs the metered ones on at the month\\'s daily average, or at the last 7 days\\' rate while the month is under 7 days old or when spending has picked up. Crossing the warning and 100% each write one line in the activity log, once a month.' | t }}</p>
     </div>
   </div>
 
@@ -271,6 +330,13 @@ export class CostsSettingsPanel implements OnDestroy {
   readonly inCur = moneyIn;
   readonly convert = convert;
   readonly currencyName = currencyName;
+  readonly toUsd = toUsd;
+  readonly budgetKinds = [
+    { id: 'total' as const, label: 'Total spend', about: 'everything paid this month', hint: '500', optional: false },
+    { id: 'llm' as const, label: 'LLM work', about: 'at API list prices', hint: '1000', optional: true },
+    { id: 'electricity' as const, label: 'Electricity', about: 'the machine\'s measured energy', hint: '50', optional: true },
+    { id: 'proxy' as const, label: 'Proxy traffic', about: 'what the proxy carried', hint: '20', optional: true },
+  ];
   readonly priceKinds = [
     { id: 'electricity' as const, label: 'Electricity', about: 'what a kWh costs where the machine is', unit: 'per kWh', hint: '3' },
     { id: 'proxy' as const, label: 'Proxy traffic', about: 'what the proxy provider bills a GB', unit: 'per GB', hint: '4' },
@@ -281,8 +347,10 @@ export class CostsSettingsPanel implements OnDestroy {
   others = signal<Row[]>([]);
   elec = signal<PriceDraft>({ amount: null, currency: 'USD' });
   proxy = signal<PriceDraft>({ amount: null, currency: 'USD' });
-  private base = signal<{ subscriptions: Row[]; other: Row[]; usage: [PriceDraft, PriceDraft] }>(
-    { subscriptions: [], other: [], usage: [{ amount: null, currency: 'USD' }, { amount: null, currency: 'USD' }] });
+  budgets = signal<BudgetDrafts>(budgetsOf(undefined, 'USD'));
+  private base = signal<{ subscriptions: Row[]; other: Row[]; usage: [PriceDraft, PriceDraft]; budgets: BudgetDrafts }>(
+    { subscriptions: [], other: [], usage: [{ amount: null, currency: 'USD' }, { amount: null, currency: 'USD' }],
+      budgets: budgetsOf(undefined, 'USD') });
 
   busy = signal<Section | 'currency' | 'fx' | null>(null);
   msg = signal<string | null>(null);
@@ -304,7 +372,7 @@ export class CostsSettingsPanel implements OnDestroy {
       const c = this.m.costs();
       if (!c) return;
       untracked(() => {
-        for (const s of ['subscriptions', 'other', 'usage'] as Section[]) if (!this.dirty(s)) this.take(c, s);
+        for (const s of ['subscriptions', 'other', 'usage', 'budgets'] as Section[]) if (!this.dirty(s)) this.take(c, s);
       });
     });
   }
@@ -318,6 +386,9 @@ export class CostsSettingsPanel implements OnDestroy {
     } else if (s === 'other') {
       const r = rowsOf(c.other, 'other');
       this.others.set(r); this.base.update(b => ({ ...b, other: structuredClone(r) }));
+    } else if (s === 'budgets') {
+      const b = budgetsOf(c.budgets, d);
+      this.budgets.set(b); this.base.update(x => ({ ...x, budgets: structuredClone(b) }));
     } else {
       const e = priceOf(c.electricity, d), p = priceOf(c.proxy, d);
       this.elec.set(e); this.proxy.set(p);
@@ -329,6 +400,7 @@ export class CostsSettingsPanel implements OnDestroy {
     const b = this.base();
     if (s === 'subscriptions') return !same(kept(this.subs()), b.subscriptions);
     if (s === 'other') return !same(kept(this.others()), b.other);
+    if (s === 'budgets') return !same(this.budgets(), b.budgets);
     return !same([this.elec(), this.proxy()], b.usage);
   }
 
@@ -383,9 +455,14 @@ export class CostsSettingsPanel implements OnDestroy {
   editPrice(id: 'electricity' | 'proxy', patch: Partial<PriceDraft>) {
     (id === 'electricity' ? this.elec : this.proxy).update(p => ({ ...p, ...patch }));
   }
+  budget(k: BudgetKind) { return this.budgets()[k]; }
+  editBudget(k: BudgetKind, patch: Partial<BudgetDraft>) {
+    this.budgets.update(b => ({ ...b, [k]: { ...b[k], ...patch } }));
+  }
   revert(s: Section) {
     const b = this.base();
-    if (s === 'subscriptions') this.subs.set(structuredClone(b.subscriptions));
+    if (s === 'budgets') this.budgets.set(structuredClone(b.budgets));
+    else if (s === 'subscriptions') this.subs.set(structuredClone(b.subscriptions));
     else if (s === 'other') this.others.set(structuredClone(b.other));
     else { this.elec.set({ ...b.usage[0] }); this.proxy.set({ ...b.usage[1] }); }
   }
@@ -409,7 +486,16 @@ export class CostsSettingsPanel implements OnDestroy {
     let patch: CostsPatch;
     if (s === 'subscriptions') { const l = lines(this.subs(), true); if (!l) return; patch = { subscriptions: l }; }
     else if (s === 'other') { const l = lines(this.others(), false); if (!l) return; patch = { other: l }; }
-    else {
+    else if (s === 'budgets') {
+      const out: NonNullable<CostsPatch['budgets']> = {};
+      for (const k of BUDGET_KINDS) {
+        const b = this.budget(k);
+        if (b.amount != null && b.amount <= 0) { this.err.set(t('A budget has to be more than 0 - leave it empty for none.')); return; }
+        if (b.warn < 5 || b.warn > 100) { this.err.set(t('The warning threshold is between 5% and 100%.')); return; }
+        out[k] = b.amount == null ? null : { amount: b.amount, currency: b.currency, warn: b.warn / 100 };
+      }
+      patch = { budgets: out };
+    } else {
       if ([this.elec(), this.proxy()].some(p => p.amount != null && p.amount < 0)) { this.err.set(t('A price cannot be negative.')); return; }
       patch = { electricity: price(this.elec()), proxy: price(this.proxy()) };
     }

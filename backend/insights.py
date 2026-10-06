@@ -801,7 +801,7 @@ def _refresh(db, key: str, span) -> None:
 
 # Bumped whenever the shape of the answer changes, so an answer kept in the
 # old shape is never served to a page that expects the new one.
-SHAPE = 4
+SHAPE = 5
 
 
 async def overview_cached(db, key: str, span) -> dict:
@@ -1092,6 +1092,11 @@ async def overview(db, since: datetime, until: datetime) -> dict:
     from . import costs as costs_mod, fx
     costs_block = await costs_mod.summary(db, since, until, llm_list_usd=llm["cost_usd"],
                                     machine_kwh=machine["wh"] / 1000)
+    try:
+        from . import budgets
+        budget_block = await budgets.status(db)
+    except Exception as exc:                           # noqa: BLE001 - the room shows the rest
+        budget_block = {"items": [], "error": str(exc)[:200]}
     rates = fx.public()
     fx_block = {"display_currency": costs_block["display_currency"], "rates": rates["rates"],
                 "date": rates["date"], "stale": rates["stale"]}
@@ -1363,7 +1368,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         "lcsc": {"by_source": lcsc_by_source.out(), "totals": dict(lcsc_tot)},
         "lead_times": lead_times, "questions": question_log, "cache": rnd(cache) | {
             "by_model": cache["by_model"], "hit_series": cache["hit_series"]},
-        "subscription": subscription, "costs": costs_block, "fx": fx_block, "builds": builds, "note_costs": note_costs,
+        "subscription": subscription, "costs": costs_block, "budget_status": budget_block, "fx": fx_block, "builds": builds, "note_costs": note_costs,
         "api": api, "board_quality": board_quality,
         "loops": {"jobs": loops[:15], "reruns": sorted(reruns, key=lambda x: -x["runs"])[:15]},
         "waste": waste, "uptime": uptime, "db_latency": db_latency, "growth": growth,

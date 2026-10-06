@@ -28,8 +28,31 @@ export interface CostLine {
   covers?: 'llm' | 'other'; note?: string;
 }
 export interface Price { amount: number; currency: string }
+/** A budget a month, as typed: an amount in its own currency and the
+ *  share of it (0.8) at which it warns. */
+export type BudgetKind = 'total' | 'llm' | 'electricity' | 'proxy';
+export interface Budget { amount: number; currency: string; warn: number }
+export type BudgetState = 'ok' | 'warn' | 'over';
+/** One budget this month (backend/budgets.py): dollars, like every figure. */
+export interface BudgetItem {
+  kind: BudgetKind; name: string; amount: number; currency: string; warn: number;
+  budget_usd: number; spent_usd: number; forecast_usd: number;
+  ratio: number | null; forecast_ratio: number | null; state: BudgetState; forecast_state: BudgetState;
+  basis: 'month_avg' | 'last_7d'; basis_why: string;
+  forecast_month_avg_usd: number; forecast_last_7d_usd: number;
+  rate_month_per_day_usd: number; rate_7d_per_day_usd: number;
+  fixed_month_usd?: number; llm_included?: boolean; missing?: string; error?: string;
+}
+/** The calendar month in UTC so far, and every budget in it. */
+export interface BudgetStatus {
+  month: string; timezone: string; start: string; end: string;
+  days_in_month: number; days_elapsed: number; days_left: number; recent_days: number;
+  items: BudgetItem[]; state?: BudgetState; error?: string;
+}
 export interface Costs {
   display_currency: string;
+  budgets: Partial<Record<BudgetKind, Budget>>;
+  budget_status?: BudgetStatus;
   subscriptions: CostLine[];
   electricity: Price | null;
   proxy: Price | null;
@@ -38,7 +61,8 @@ export interface Costs {
          llm_subscriptions_per_month: number; subscriptions_per_month: number; other_per_month: number };
   fx: { date: string | null; fetched_at: string | null };
 }
-export type CostsPatch = Partial<Pick<Costs, 'display_currency' | 'subscriptions' | 'electricity' | 'proxy' | 'other'>>;
+export type CostsPatch = Partial<Pick<Costs, 'display_currency' | 'subscriptions' | 'electricity' | 'proxy' | 'other'>>
+  & { budgets?: Partial<Record<BudgetKind, Budget | null>> };
 
 const OVERRIDE_KEY = 'x3.currency';
 const FX_KEY = 'x3.fx';

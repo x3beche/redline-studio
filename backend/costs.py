@@ -20,7 +20,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from . import fx, scope, store
+from . import budgets, fx, scope, store
 
 DOC = "costs"
 MONTH_DAYS = 30.44
@@ -61,6 +61,7 @@ async def get(db) -> dict:
     doc.setdefault("other", [])
     doc.setdefault("electricity", None)
     doc.setdefault("proxy", None)
+    doc.setdefault("budgets", {})
     return doc
 
 
@@ -91,7 +92,12 @@ def derived(doc: dict) -> dict:
 
 async def public(db) -> dict:
     doc = await get(db)
-    return {**doc, "usd": derived(doc), "fx": {"date": fx.public()["date"], "fetched_at": fx.public()["fetched_at"]}}
+    try:
+        st = await budgets.status(db, doc)
+    except Exception as exc:                           # noqa: BLE001 - the costs page still opens
+        st = {"items": [], "error": str(exc)[:200]}
+    return {**doc, "usd": derived(doc), "budget_status": st,
+            "fx": {"date": fx.public()["date"], "fetched_at": fx.public()["fetched_at"]}}
 
 
 def _clean_rows(rows: list[dict], *, covers: bool) -> list[dict]:
@@ -139,6 +145,9 @@ async def put(db, patch: dict) -> dict:
         doc["electricity"] = _clean_price(patch["electricity"], "Electricity")
     if "proxy" in patch:
         doc["proxy"] = _clean_price(patch["proxy"], "Proxy traffic")
+    if "budgets" in patch:
+        doc["budgets"] = budgets.clean(patch["budgets"])
+        budgets._seen.clear()                          # ask the database again which alerts were written
     await db.settings.replace_one({"_id": _id()}, {"_id": _id(), **doc}, upsert=True)
     from . import insights
     insights.forget()                                  # the figures change with the costs
@@ -215,6 +224,13 @@ async def get_costs() -> dict:
     return await public(_db())
 
 
+@router.get("/budgets")
+async def get_budgets() -> list[dict]:
+    """The month's budgets as flat rows - for Grafana's Infinity datasource
+    (same token as /api/insights) or a script. Empty with no budgets set."""
+    return budgets.rows(await budgets.status(_db()))
+
+
 class Row(BaseModel):
     id: str | None = Field(default=None, max_length=40)
     name: str = Field(default="", max_length=80)
@@ -230,12 +246,19 @@ class Price(BaseModel):
     currency: str = Field(default="USD", min_length=3, max_length=3)
 
 
+class Budget(BaseModel):
+    amount: float | None = Field(default=None, ge=0, le=1e9)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    warn: float | None = Field(default=None, ge=0.05, le=1)
+
+
 class CostsIn(BaseModel):
     display_currency: str | None = Field(default=None, min_length=3, max_length=3)
     subscriptions: list[Row] | None = None
     other: list[Row] | None = None
     electricity: Price | None = None
     proxy: Price | None = None
+    budgets: dict[str, Budget | None] | None = None
 
 
 @router.put("")
