@@ -227,8 +227,15 @@ async def take_shot(db, a: dict, route: str, width: int, height: int) -> dict:
         if (a.get("platform") or "web") == "mobile":
             shot = await asyncio.to_thread(_phone_shot, a, route)
         else:
+            # The firmware view is this app's own page: with sign-in on,
+            # the browser needs a page session (read-only, minutes long)
+            # for whoever asked for the shot.
+            cookie = None
+            if (a.get("platform") or "web") == "embedded":
+                from . import auth
+                cookie = await auth.page_session_for_request(db)
             shot, job = await webshot.shoot_in_container(
-                _page_url(a, route), width, height)
+                _page_url(a, route), width, height, cookie=cookie)
     finally:
         if job:
             try:

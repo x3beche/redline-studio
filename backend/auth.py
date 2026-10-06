@@ -138,10 +138,15 @@ async def session_user(raw_db, token: str | None) -> dict | None:
     key = _digest(token)
     hit = _CACHE.get(key)
     if hit and time.time() - hit[0] < CACHE_S:
+        # A page session is minutes long: the cache must not outlive it.
+        if hit[1] and hit[1].get("until") and hit[1]["until"] <= time.time():
+            return None
         return hit[1]
     s = await raw_db[SESSIONS].find_one({"_id": key})
     out = None
-    if s and s["expires"].replace(tzinfo=timezone.utc) > _now():
+    if s and s.get("kind") == PAGE_KIND:
+        out = await _page_session(raw_db, s)
+    elif s and s["expires"].replace(tzinfo=timezone.utc) > _now():
         u = await raw_db[USERS].find_one({"_id": s["user"]}, {"pw": 0})
         # Still a member, and in which role: a person taken out of the
         # workspace is signed out of it.
@@ -153,6 +158,83 @@ async def session_user(raw_db, token: str | None) -> dict | None:
             await raw_db[SESSIONS].update_one({"_id": key}, {"$set": {"last_seen": _now()}})
     _CACHE[key] = (time.time(), out)
     return out
+
+
+# ---------------------------------------------------------------- page sessions
+
+# A headless browser photographing the app (tools/render.py, webshot.py)
+# is no person and has no password. It gets a page session: minted from an
+# agent's token (POST /api/auth/page-session) or by the server for the
+# person or agent who asked for the shot, and it is
+#   - short: PAGE_MINUTES, after which it signs nobody in,
+#   - read-only: a viewer, and on top of that GET/HEAD only
+#     (access.page_allowed), so not even a viewer's few POSTs,
+#   - in the workspace (and room) of whoever it came from, and only while
+#     that source is good: a revoked token, or a person taken out of the
+#     workspace, ends it at once.
+# Like every session, only its SHA-256 is stored.
+PAGE_KIND = "page"
+PAGE_MINUTES = 10
+PAGE_ROLE = "viewer"
+
+
+async def create_page_session(raw_db, workspace: str, actor: dict, *, token_id: str | None = None,
+                              user_id: str | None = None, room: str | None = None,
+                              minutes: int = PAGE_MINUTES) -> tuple[str, datetime]:
+    """A short read-only session for a headless browser. Exactly one source:
+    the agent token's id, or the user's id. Returns the cookie's value and
+    when it expires."""
+    if bool(token_id) == bool(user_id):
+        raise ValueError("a page session comes from one agent token or one person")
+    minutes = max(1, min(int(minutes), PAGE_MINUTES))
+    token = secrets.token_urlsafe(32)
+    expires = _now() + timedelta(minutes=minutes)
+    await raw_db[SESSIONS].insert_one({
+        "_id": _digest(token), "kind": PAGE_KIND, "workspace": workspace, "room": room or None,
+        "actor": {k: actor.get(k) for k in ("type", "id", "name", "token") if actor.get(k)},
+        "via_token": token_id, "user": user_id, "role": PAGE_ROLE,
+        "created_at": _now(), "last_seen": _now(), "expires": expires})
+    return token, expires
+
+
+async def page_session_for_request(raw_db) -> dict | None:
+    """A page session for whoever is asking right now, so the server's own
+    headless browser can show them one of this app's pages (webshot.py,
+    the firmware view). None with sign-in off: the page needs none.
+    Returns {name, value} for the browser's cookie jar."""
+    if not enabled():
+        return None
+    from . import actors, scope
+    who = actors.current()
+    if who.get("page"):
+        raise PermissionError("a page session does not make page sessions")
+    if who.get("type") == "agent" and who.get("token"):
+        value, _ = await create_page_session(raw_db, scope.current(), who, token_id=who["token"])
+    elif who.get("type") == "user" and who.get("id") not in (None, "local"):
+        value, _ = await create_page_session(raw_db, scope.current(), who, user_id=who["id"])
+    else:
+        raise PermissionError("nobody signed in to make a page session for")
+    return {"name": COOKIE, "value": value}
+
+
+async def _page_session(raw_db, s: dict) -> dict | None:
+    """Who a page session is, if it is still good."""
+    expires = s["expires"].replace(tzinfo=timezone.utc)
+    if expires <= _now():
+        return None
+    if s.get("via_token"):
+        t = await raw_db[TOKENS].find_one({"id": s["via_token"]})
+        if not t or t.get("revoked") or t.get("workspace") != s["workspace"]:
+            return None
+    elif s.get("user"):
+        u = await raw_db[USERS].find_one({"_id": s["user"]}, {"pw": 0})
+        m = await raw_db[MEMBERS].find_one({"user": s["user"], "workspace": s["workspace"]})
+        if not u or u.get("disabled") or not m:
+            return None
+    else:
+        return None
+    return {"user": {**s.get("actor", {}), "page": True}, "workspace": s["workspace"],
+            "room": s.get("room"), "role": PAGE_ROLE, "page": True, "until": expires.timestamp()}
 
 
 async def end_session(raw_db, token: str | None) -> None:
@@ -291,6 +373,9 @@ async def revoke_agent_token(raw_db, token_id: str, workspace: str) -> bool:
     res = await raw_db[TOKENS].update_one({"id": token_id, "workspace": workspace},
                                           {"$set": {"revoked": True, "revoked_at": _now()}})
     _TOKEN_CACHE.clear()
+    # The page sessions it minted go with it.
+    await raw_db[SESSIONS].delete_many({"kind": PAGE_KIND, "via_token": token_id})
+    forget_sessions()
     return bool(getattr(res, "matched_count", 0))
 
 

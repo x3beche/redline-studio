@@ -25,6 +25,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -36,82 +37,97 @@ FLAGS = ["--headless=new", "--ignore-gpu-blocklist", "--use-angle=gl",
          "--no-first-run", "--disable-gpu-sandbox"]
 
 
-# Where a browser is looked for, in order. REDLINE_CHROME names one outright
-# (a path, a command on PATH, or "docker" for the container below); then
-# whatever is installed; then a headless Chromium in a container, which is
-# what a machine with no browser of its own has. It used to be
-# "google-chrome" and nothing else, and a box with Chromium - or none -
-# failed with FileNotFoundError before it had looked anywhere.
-NAMES = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
-         "chrome")
-PLACES = ("/opt/google/chrome/chrome", "/usr/bin/google-chrome",
-          "/usr/bin/chromium", "/usr/bin/chromium-browser", "/snap/bin/chromium",
-          "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-IMAGE = os.environ.get("REDLINE_CHROME_IMAGE", "zenika/alpine-chrome:with-puppeteer")
-# In the container there is no GPU: WebGL goes through SwiftShader, and
-# there is no user namespace for Chrome's sandbox.
-DOCKER_FLAGS = ["--headless=new", "--no-first-run", "--no-sandbox",
-                "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
-                "--disable-dev-shm-usage"]
+# The browser lookup is shared with backend/webshot.py.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from backend import browser  # noqa: E402
+from backend.browser import IMAGE, NoBrowser, find_browser  # noqa: E402,F401
 
-
-class NoBrowser(RuntimeError):
-    pass
-
-
-def _image_there(image: str) -> bool:
-    if not shutil.which("docker"):
-        return False
-    try:
-        return subprocess.run(["docker", "image", "inspect", image],
-                              capture_output=True, timeout=20).returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        return False
-
-
-def find_browser(env: dict | None = None, which=shutil.which,
-                 exists=os.path.exists, image_there=_image_there) -> tuple[str, str]:
-    """("local", path) for an installed browser, ("docker", image) for the
-    container. Raises NoBrowser naming everything it tried."""
-    env = os.environ if env is None else env
-    want = (env.get("REDLINE_CHROME") or "").strip()
-    if want:
-        if want == "docker" or want.startswith("docker:"):
-            image = want.partition(":")[2] or IMAGE
-            if image_there(image):
-                return "docker", image
-            raise NoBrowser(f"REDLINE_CHROME={want}: no docker image {image}")
-        got = which(want) or (want if exists(want) else None)
-        if got:
-            return "local", got
-        raise NoBrowser(f"REDLINE_CHROME={want}: not found")
-    for name in NAMES:
-        got = which(name)
-        if got:
-            return "local", got
-    for place in PLACES:
-        if exists(place):
-            return "local", place
-    if image_there(IMAGE):
-        return "docker", IMAGE
-    raise NoBrowser("no browser: tried " + ", ".join(NAMES) + " on PATH, "
-                    + ", ".join(PLACES) + f", and the docker image {IMAGE}. "
-                    "Install Chrome/Chromium, or set REDLINE_CHROME to one.")
+API = os.environ.get("REDLINE_API", "http://127.0.0.1:8000")
 
 
 def browser_argv(found: tuple[str, str], port: int, width: int, height: int,
                  profile: str, url: str, name: str) -> list[str]:
-    how, what = found
-    tail = [f"--remote-debugging-port={port}", f"--window-size={width},{height}"]
-    if how == "docker":
-        # Host network: the page is on 127.0.0.1:4200 and the DevTools port
-        # has to be reachable on the host's 127.0.0.1 too. The profile lives
-        # and dies in the container.
-        return ["docker", "run", "--rm", "--name", name, "--network", "host",
-                "--shm-size", "1g", "--entrypoint", "chromium-browser", what,
-                *DOCKER_FLAGS, *tail, "--remote-debugging-address=127.0.0.1",
-                "--user-data-dir=/tmp/profile", url]
-    return [what, *FLAGS, *tail, f"--user-data-dir={profile}", url]
+    return browser.argv(found, port=port, width=width, height=height, profile=profile,
+                        url=url, name=name, flags=FLAGS)
+
+
+# ---------------- signing the browser in ----------------
+# With sign-in on, the page shows "Sign in to continue." and no canvas. The
+# browser gets a page session instead (backend/auth.py): the agents' token
+# is traded for a cookie that is read-only, minutes long and in the token's
+# workspace, handed to the browser over DevTools - never on a command line
+# or in the address - and ended when the picture is taken.
+
+def agent_token(env: dict | None = None, dotenv: Path | None = None) -> str | None:
+    """The agents' token: REDLINE_TOKEN (or the old X3_TOKEN), else the
+    repo's .env."""
+    env = os.environ if env is None else env
+    for k in ("REDLINE_TOKEN", "X3_TOKEN"):
+        if (env.get(k) or "").strip():
+            return env[k].strip()
+    dotenv = dotenv or Path(__file__).resolve().parent.parent / ".env"
+    try:
+        lines = dotenv.read_text().splitlines()
+    except OSError:
+        return None
+    for want in ("REDLINE_TOKEN=", "X3_TOKEN="):
+        for line in lines:
+            if line.startswith(want):
+                value = line.split("=", 1)[1].strip().strip('"').strip("'")
+                if value:
+                    return value
+    return None
+
+
+def _call(method: str, path: str, headers: dict | None = None, opener=urllib.request.urlopen):
+    req = urllib.request.Request(API + path, method=method, data=b"" if method == "POST" else None,
+                                 headers=headers or {})
+    with opener(req, timeout=20) as r:
+        return json.load(r)
+
+
+def page_session(token: str | None, call=_call) -> dict | None:
+    """{cookie, value, expires, ...} for the browser, or None when sign-in
+    is off and the page needs nothing. Exits with a reason - never the
+    token - when it is on and there is no way in."""
+    try:
+        mode = call("GET", "/api/auth/state").get("mode")
+    except Exception as exc:                                  # noqa: BLE001
+        sys.exit(f"the API at {API} does not answer ({type(exc).__name__}); is the dev server up?")
+    if mode != "on":
+        return None
+    if not token:
+        sys.exit("sign-in is on: set REDLINE_TOKEN to an agent token (Preferences > Agent "
+                 "tokens) so the browser can be given a page session")
+    try:
+        return call("POST", "/api/auth/page-session", {"Authorization": "Bearer " + token})
+    except urllib.error.HTTPError as exc:
+        sys.exit(f"the API would not give the browser a page session: HTTP {exc.code}")
+    except Exception as exc:                                  # noqa: BLE001
+        sys.exit(f"the API would not give the browser a page session ({type(exc).__name__})")
+
+
+def end_page_session(session: dict | None, call=_call) -> None:
+    """Sign the page session out once the picture is taken; it would
+    expire on its own in minutes anyway."""
+    if not session:
+        return
+    try:
+        call("POST", "/api/auth/logout",
+             {"Cookie": f"{session['cookie']}={session['value']}", "X-Redline-CSRF": "1"})
+    except Exception:                                         # noqa: BLE001
+        pass
+
+
+def browser_cookie(session: dict, web: str = WEB) -> dict:
+    """The DevTools cookie: the app's origin only, HttpOnly, and expiring
+    with the session."""
+    out = {"name": session["cookie"], "value": session["value"], "url": web + "/",
+           "path": "/", "httpOnly": True, "secure": web.startswith("https:"),
+           "sameSite": "Lax"}
+    if session.get("expires"):
+        out["expires"] = float(session["expires"])
+    return out
 
 
 def _ink(png: bytes) -> float:
@@ -143,13 +159,15 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
         found = find_browser()
     except NoBrowser as exc:
         sys.exit(str(exc))
+    session = page_session(agent_token())
     profile = tempfile.mkdtemp(prefix="x3render-")
     name = f"x3render-{os.getpid()}"
     url = (f"{WEB}/?{'model=' + revision.split(':', 1)[1] if revision.startswith('model:') else 'rev=' + revision}")
+    # The browser opens on a blank page: the cookie goes in first, then
+    # the app is opened, so its first request is already signed in.
     chrome = subprocess.Popen(
-        browser_argv(found, PORT, width, height, profile, url, name),
+        browser_argv(found, PORT, width, height, profile, "about:blank", name),
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from backend import compute
     meter = compute.ProcMeter(chrome.pid)
     try:
@@ -158,14 +176,12 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
             try:
                 tabs = json.load(urllib.request.urlopen(
                     f"http://127.0.0.1:{PORT}/json"))
-                page = next(t for t in tabs if t["type"] == "page"
-                            and ("rev=" in t["url"] or "model=" in t["url"]))
+                page = next(t for t in tabs if t["type"] == "page")
                 break
             except Exception:
                 time.sleep(0.5)
         if page is None:
-            sys.exit(f"chrome ({found[0]}: {found[1]}) did not start; "
-                     "is the dev server up?")
+            sys.exit(f"chrome ({found[0]}: {found[1]}) did not start")
 
         ws = connect(page["webSocketDebuggerUrl"], max_size=80_000_000)
         seq = [0]
@@ -184,6 +200,11 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
             return r.get("result", {}).get("value")
 
         send("Runtime.enable")
+        if session:
+            send("Network.enable")
+            if not send("Network.setCookie", browser_cookie(session)).get("success", True):
+                sys.exit("the browser would not take the page session's cookie")
+        send("Page.navigate", {"url": url})
         # Waiting for a canvas is not waiting for the model: the canvas exists
         # within a second, while a 50 MB payload takes the best part of a
         # minute. Every shot taken that way came out empty. Wait for the
@@ -285,17 +306,11 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
         # Read before the kill: a terminated browser takes its counters with
         # it, and its renderers are never reaped by anyone here.
         LAST_JOB.update(meter.stop())
-        chrome.terminate()
+        browser.stop(found, chrome, name)
+        end_page_session(session)
         # The profile goes with it. Every render used to leave its own
         # behind in /tmp - 150 MB each, 8.7 GB of them by the time the
         # system disk filled up on 2026-09-24.
-        try:
-            chrome.wait(10)
-        except subprocess.TimeoutExpired:
-            chrome.kill()
-        if found[0] == "docker":
-            # Killing the docker client does not always stop the container.
-            subprocess.run(["docker", "rm", "-f", name], capture_output=True)
         shutil.rmtree(profile, ignore_errors=True)
 
 

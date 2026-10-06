@@ -45,7 +45,9 @@ def test_a_viewer_only_looks():
         assert not ok or (method, path) in {
             ("POST", "/api/boards/x/rules/check"), ("POST", "/api/tools/find"),
             ("POST", "/api/tools/usage"), ("POST", "/api/agent/db"), ("POST", "/api/agent/files/x"),
-            ("DELETE", "/api/agent/files/x/x"), ("POST", "/api/workspaces/x/open")}, (method, path)
+            ("DELETE", "/api/agent/files/x/x"), ("POST", "/api/workspaces/x/open"),
+            # trading a token for a read-only page session (test_page_session.py)
+            ("POST", "/api/auth/page-session")}, (method, path)
 
 
 def test_a_reviewer_draws_but_does_not_queue_build_or_delete():
@@ -87,7 +89,10 @@ def test_signed_out_reaches_only_signing_in():
     for method, path in routes():
         act = access.action(method, path)
         open_ = access.allowed(None, act)
-        assert open_ == (path.startswith(("/api/auth/", "/api/invite/", "/api/reset/")) or path == "/api/health"), (method, path)
+        # Every sign-in route but the one that needs an agent token.
+        signing_in = path.startswith(("/api/auth/", "/api/invite/", "/api/reset/")) \
+            and path != "/api/auth/page-session"
+        assert open_ == (signing_in or path == "/api/health"), (method, path)
 
 
 def test_the_tool_pages_are_for_looking():

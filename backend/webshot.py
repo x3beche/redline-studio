@@ -16,14 +16,21 @@ from __future__ import annotations
 import base64
 import gzip
 import json
+import os
 import re
 import shutil
 import subprocess
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
+
+try:
+    from . import browser
+except ImportError:                  # run as a script in the web image, browser.py beside it
+    import browser                   # type: ignore[no-redef]
 
 ROOT = Path(__file__).resolve().parent.parent
 SHOTS = ROOT / ".cache" / "shots"
@@ -34,10 +41,15 @@ SHOTS = ROOT / ".cache" / "shots"
 # container that is already one, and /dev/shm is small in there.
 FLAGS = ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
          "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
-         "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
-         "--remote-debugging-port=0"]
-# Where this file is mounted inside the web image.
+         "--no-first-run", "--no-default-browser-check", "--hide-scrollbars"]
+# Where this file is mounted inside the web image, with the browser lookup
+# (backend/browser.py) beside it.
 IN_IMAGE = "/opt/redline/webshot.py"
+BROWSER_IN_IMAGE = "/opt/redline/browser.py"
+# A page session's cookie, when the page is this app's own (the firmware
+# view): handed over in a file only this user can read, never on a
+# command line, where `ps` and `docker inspect` would show it.
+COOKIE_IN_IMAGE = "/opt/redline/cookie.json"
 
 # Walked once per shot, inside the page. Kept compact: two thousand
 # elements with a selector each is already a few hundred kilobytes.
@@ -181,20 +193,35 @@ def _devtools_port(profile: Path, chrome: subprocess.Popen,
 
 
 async def shoot_in_container(url: str, width: int, height: int,
-                             wait: float = 25) -> tuple[dict, dict]:
+                             wait: float = 25, cookie: dict | None = None) -> tuple[dict, dict]:
     """Photograph a page with the Chrome in the Web Programming image.
 
     This file is mounted into the container and run there; it prints the
     picture and the inventory as JSON. Returns that, and what the
-    container cost the machine.
+    container cost the machine. `cookie` ({name, value}) signs the browser
+    in to this app's own pages - a page session (backend/auth.py).
     """
     from . import sandbox
 
-    rc, out, job = await sandbox.run(
-        "web", ["/opt/shoot/bin/python", IN_IMAGE, url, str(width), str(height),
-                str(wait)],
-        mounts=[(str(Path(__file__).resolve()), IN_IMAGE, "ro")],
-        extra=["--shm-size", "1g"], timeout=wait + 60)
+    here = Path(__file__).resolve().parent
+    mounts = [(str(here / "webshot.py"), IN_IMAGE, "ro"),
+              (str(here / "browser.py"), BROWSER_IN_IMAGE, "ro")]
+    cmd = ["/opt/shoot/bin/python", IN_IMAGE, url, str(width), str(height), str(wait)]
+    secret_dir = None
+    if cookie:
+        secret_dir = Path(tempfile.mkdtemp(prefix="x3shotc-"))          # 0700
+        f = secret_dir / "cookie.json"
+        fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            json.dump({"name": cookie["name"], "value": cookie["value"]}, fh)
+        mounts.append((str(f), COOKIE_IN_IMAGE, "ro"))
+        cmd += ["--cookie-file", COOKIE_IN_IMAGE]
+    try:
+        rc, out, job = await sandbox.run("web", cmd, mounts=mounts,
+                                         extra=["--shm-size", "1g"], timeout=wait + 60)
+    finally:
+        if secret_dir:
+            shutil.rmtree(secret_dir, ignore_errors=True)
     last = out.strip().splitlines()[-1] if out.strip() else ""
     if rc != 0 or not last.startswith("{"):
         raise RuntimeError(f"the web container could not photograph {url}: "
@@ -204,25 +231,47 @@ async def shoot_in_container(url: str, width: int, height: int,
     return got, job
 
 
-def shoot(url: str, width: int, height: int, wait: float = 25) -> dict:
+def page_cookie(url: str, cookie: dict) -> dict:
+    """The DevTools cookie for a page session: for the page's own origin
+    only, HttpOnly, gone with the browser's profile."""
+    p = urllib.parse.urlsplit(url)
+    return {"name": cookie["name"], "value": cookie["value"],
+            "url": f"{p.scheme}://{p.netloc}/", "path": "/", "httpOnly": True,
+            "secure": p.scheme == "https", "sameSite": "Lax"}
+
+
+def shoot(url: str, width: int, height: int, wait: float = 25,
+          cookie: dict | None = None) -> dict:
     """Open `url` at `width` x `height`, wait for it to settle, and return
-    the PNG and the element inventory. Runs inside the web image."""
+    the PNG and the element inventory. Runs inside the web image - or
+    anywhere browser.find_browser() finds one. `cookie` ({name, value})
+    is set for the page's origin before it is opened."""
+    found = browser.find_browser()
     profile = Path(tempfile.mkdtemp(prefix="x3shot-"))
+    name = f"x3shot-{os.getpid()}-{uuid.uuid4().hex[:6]}"
+    # Port 0 lets Chrome pick and write it in the profile, so two shots at
+    # once never fight over one; a container's profile is out of reach, so
+    # it is given a free one.
+    port = browser.free_port() if found[0] == "docker" else 0
     chrome = subprocess.Popen(
-        ["google-chrome", *FLAGS, f"--user-data-dir={profile}",
-         f"--window-size={width},{height}", "about:blank"],
+        browser.argv(found, port=port, width=width, height=height, profile=str(profile),
+                     url="about:blank", name=name, flags=FLAGS),
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     cdp = None
     try:
-        port = _devtools_port(profile, chrome)
+        if found[0] != "docker":
+            port = _devtools_port(profile, chrome)
         page = None
-        for _ in range(50):
-            tabs = json.load(urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/json", timeout=3))
+        for _ in range(150):
+            try:
+                tabs = json.load(urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/json", timeout=3))
+            except OSError:                           # a container still starting
+                tabs = []
             page = next((t for t in tabs if t.get("type") == "page"), None)
             if page:
                 break
-            time.sleep(0.1)
+            time.sleep(0.2)
         if not page:
             raise RuntimeError("chrome opened no page")
         cdp = Cdp(page["webSocketDebuggerUrl"])
@@ -233,6 +282,9 @@ def shoot(url: str, width: int, height: int, wait: float = 25) -> dict:
         cdp.send("Emulation.setDeviceMetricsOverride",
                  {"width": width, "height": height, "deviceScaleFactor": 1,
                   "mobile": width < 600})
+        if cookie:
+            cdp.send("Network.enable")
+            cdp.send("Network.setCookie", page_cookie(url, cookie))
         cdp.send("Page.navigate", {"url": url})
         end = time.monotonic() + wait
         seen, still = None, 0
@@ -257,11 +309,7 @@ def shoot(url: str, width: int, height: int, wait: float = 25) -> dict:
     finally:
         if cdp:
             cdp.close()
-        chrome.terminate()
-        try:
-            chrome.wait(5)
-        except subprocess.TimeoutExpired:
-            chrome.kill()
+        browser.stop(found, chrome, name)
         shutil.rmtree(profile, ignore_errors=True)
     return {"png": png, "width": width, "height": height,
             "title": inv.get("title"), "url": inv.get("url") or url,
@@ -503,7 +551,13 @@ if __name__ == "__main__":
     # of JSON out, the picture base64 in it.
     import sys
 
-    got = shoot(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]),
-                float(sys.argv[4]) if len(sys.argv) > 4 else 25)
+    args = sys.argv[1:]
+    jar = None
+    if "--cookie-file" in args:
+        i = args.index("--cookie-file")
+        jar = json.loads(Path(args[i + 1]).read_text())
+        del args[i:i + 2]
+    got = shoot(args[0], int(args[1]), int(args[2]),
+                float(args[3]) if len(args) > 3 else 25, cookie=jar)
     got["png"] = base64.b64encode(got["png"]).decode()
     print(json.dumps(got))
