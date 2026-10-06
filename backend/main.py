@@ -223,7 +223,7 @@ from pathlib import Path
 
 from build123d import *
 
-STANDALONE = os.environ.get("REDLINE_IMPORT_ONLY") != "1"
+STANDALONE = "1" not in (os.environ.get("REDLINE_IMPORT_ONLY"), os.environ.get("X3_IMPORT_ONLY"))
 ROOT = Path(__file__).resolve().parent.parent   # uploads land here
 SRC = ROOT / "{filename}"
 

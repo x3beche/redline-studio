@@ -105,7 +105,7 @@ being built, so a module can import the parts it is made of:
 
 ```python
 import os
-os.environ["REDLINE_IMPORT_ONLY"] = "1"      # parts must not run their own exports
+os.environ["REDLINE_IMPORT_ONLY"] = os.environ["X3_IMPORT_ONLY"] = "1"   # parts must not run their own exports (older parts read X3_)
 import fan_pro as F
 import stand as D
 
