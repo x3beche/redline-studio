@@ -64,8 +64,15 @@ def easyeda_symbol(component_json: str, name: str):
     from easyeda2kicad.kicad.export_kicad_symbol import ExporterSymbolKicad
 
     data = json.loads(Path(component_json).read_text())["result"]
-    text = ExporterSymbolKicad(EasyedaSymbolImporter(data).get_symbol(),
-                               version=6).export("lcsc")
+    symbol = EasyedaSymbolImporter(data).get_symbol()
+    try:
+        # The released easyeda2kicad (0.6 to 1.0) takes kicad_version=...
+        from easyeda2kicad.kicad.parameters_kicad_symbol import KicadVersion
+        exporter = ExporterSymbolKicad(symbol, kicad_version=KicadVersion.v6)
+    except (ImportError, TypeError):
+        # ... a build from its repository took version=6.
+        exporter = ExporterSymbolKicad(symbol, version=6)
+    text = exporter.export("lcsc")
     with tempfile.NamedTemporaryFile("w", suffix=".kicad_sym", delete=False) as f:
         f.write(f"(kicad_symbol_lib (version 20211014) (generator redline)\n{text}\n)")
     sym = SymbolLib.from_file(f.name).symbols[0]
