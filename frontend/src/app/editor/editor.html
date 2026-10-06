@@ -669,10 +669,6 @@
         {{ picked.room() === 'pcb'
            ? (picked.boardDraft() ? 'Saved with the frozen view and your marks on it.'
                                   : 'Saved as a note on the open board. Press the pen to draw on it.')
-           : codeRoom()
-             ? (picked.codeDraft() ? 'Saved with the frozen page and the elements under the marks.'
-                : picked.room() === 'embedded' ? 'Saved as a note on the firmware, about the function or table picked in the view.'
-                : 'Saved as a note on the project. Press the pen to draw on it.')
            : frozen() ? 'Saved with the drawing. Drafts stay invisible until queued.'
                       : 'Saved as a note. Freeze first if you want to draw on it.' }}
       </p>
@@ -721,7 +717,7 @@
       } @empty {
         <li class="text-[11px]" style="color: var(--ink-dim)">
           {{ (picked.room() === 'pcb' ? 'No notes on boards yet.'
-             : codeRoom() ? 'No notes on code yet.' : 'No revisions yet.') | t }}
+             : 'No revisions yet.') | t }}
         </li>
       }
     </ul>
@@ -877,32 +873,6 @@
                 [style.color]="deleting() === b.id ? 'var(--danger)' : 'var(--ink-dim)'"
                 [title]="deleting() === b.id ? 'click again to delete' : 'delete'">
           {{ deleting() === b.id ? 'sure?' : '×' }}
-        </button>
-      </span>
-    </div>
-  }
-  <!-- Code projects: a checkout and where it is served. The extension
-       says which coding room opens it - .web, .fw or .mobile - the way
-       .pcb says the board room. -->
-  @for (a of n.apps ?? []; track a.id) {
-    <div (click)="openApp(a); phoneShut()"
-         class="group relative flex cursor-pointer items-center justify-between rounded px-1.5 py-1"
-         [style.margin-left.px]="depth * 10"
-         [style.background]="inView(a.id, 'app') ? 'var(--accent-deep)' : 'transparent'">
-      <span class="flex min-w-0 items-baseline text-[12px]">
-        <span class="min-w-0 truncate">{{ a.title }}</span>
-        <span class="tcv-ext shrink-0">{{ a.ext }}</span>
-      </span>
-      <span class="ml-1 flex shrink-0 gap-1.5 text-[11px]"
-            [class.opacity-0]="moving()?.id !== a.id"
-            [class.group-hover:opacity-100]="true">
-        <button (click)="armMoveApp(a, $event)"
-                [style.color]="moving()?.id === a.id ? 'var(--warn)' : 'var(--ink-dim)'"
-                title="move to another folder">&#8594;</button>
-        <button (click)="armDeleteApp(a, $event)"
-                [style.color]="deleting() === a.id ? 'var(--danger)' : 'var(--ink-dim)'"
-                [title]="deleting() === a.id ? 'click again to forget it' : 'forget it (the checkout stays)'">
-          {{ deleting() === a.id ? 'sure?' : '×' }}
         </button>
       </span>
     </div>

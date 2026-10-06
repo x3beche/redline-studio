@@ -18,7 +18,7 @@
 import { dur } from './tool.js';
 
 const NS = 'http://www.w3.org/2000/svg';
-const ROOMS = ['cad', 'pcb', 'web', 'embedded', 'mobile'];
+const ROOMS = ['cad', 'pcb'];
 const LOG_LINES = 100;
 const EVERY = 30;
 const h = (tag, attrs = {}, ...kids) => {

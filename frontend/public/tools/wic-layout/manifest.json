@@ -3,10 +3,8 @@
  "version": "1.0",
  "name": "WIC Partition Layout",
  "blurb": "a .wks kickstart and rootfs size for an SD card or eMMC, drawn to scale",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "layout": "custom",
  "view": true,
  "agentOmit": [

@@ -7,10 +7,8 @@
   ],
   "name": "Safe Area Overlay",
   "blurb": "notch, status bar and navigation bar areas over a screenshot",
-  "group": "mobile",
-  "rooms": [
-    "mobile"
-  ],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": [
     "safe area",
     "safeAreaInsets",

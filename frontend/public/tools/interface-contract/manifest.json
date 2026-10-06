@@ -3,13 +3,7 @@
   "name": "Interface Contract",
   "blurb": "GPIO map, I2C addresses and voltage levels defined once for every room",
   "group": "project",
-  "rooms": [
-    "pcb",
-    "cad",
-    "web",
-    "embedded",
-    "mobile"
-  ],
+  "rooms": ["pcb", "cad"],
   "keywords": [
     "interface contract",
     "gpio map",

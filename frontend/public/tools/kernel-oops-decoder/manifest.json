@@ -3,12 +3,10 @@
  "version": "1.0",
  "name": "Kernel Oops Decoder",
  "blurb": "a Linux oops or panic taken apart: the cause, the faulting function, the call trace and the taint flags",
- "group": "embedded",
+ "group": "pcb",
  "layout": "custom",
  "view": true,
- "rooms": [
-  "embedded"
- ],
+ "rooms": ["pcb"],
  "keywords": [
   "kernel oops",
   "kernel panic",

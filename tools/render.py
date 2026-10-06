@@ -37,7 +37,7 @@ FLAGS = ["--headless=new", "--ignore-gpu-blocklist", "--use-angle=gl",
          "--no-first-run", "--disable-gpu-sandbox"]
 
 
-# The browser lookup is shared with backend/webshot.py.
+# The browser lookup lives in backend/browser.py.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from backend import browser  # noqa: E402
 from backend.browser import IMAGE, NoBrowser, find_browser  # noqa: E402,F401

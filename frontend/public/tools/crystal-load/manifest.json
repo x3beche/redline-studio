@@ -4,7 +4,7 @@
   "blurb": "load capacitors for a crystal from its CL and board stray capacitance",
   "group": "pcb",
   "layout": "custom",
-  "rooms": ["pcb", "embedded"],
+  "rooms": ["pcb"],
   "keywords": ["crystal", "xtal", "load capacitance", "cl", "pierce oscillator", "hse", "lse", "32.768 khz", "stray capacitance", "gm crit", "gain margin", "frequency pulling", "ppm", "an2867"],
   "intro": "A Pierce oscillator's two capacitors appear in series to the crystal, plus the board's stray capacitance: CL = C1·C2/(C1 + C2) + Cstray, so each capacitor is 2·(CL − Cstray). It also shows the frequency error of the standard value you fit and checks start-up margin (gm,crit) as in ST AN2867.",
   "inputs": [

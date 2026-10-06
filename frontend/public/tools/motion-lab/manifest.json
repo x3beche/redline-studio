@@ -2,11 +2,8 @@
   "id": "motion-lab", "version": "1.0",
   "name": "Motion Lab",
   "blurb": "shape an easing curve and timing, take it as CSS or JS",
-  "group": "web",
-  "rooms": [
-    "web",
-    "mobile"
-  ],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": [
     "easing",
     "animation",

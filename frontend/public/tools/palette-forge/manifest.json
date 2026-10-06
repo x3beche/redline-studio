@@ -2,11 +2,8 @@
   "id": "palette-forge", "version": "1.0",
   "name": "Palette Forge",
   "blurb": "one colour into an accessible palette and light/dark tokens",
-  "group": "web",
-  "rooms": [
-    "web",
-    "mobile"
-  ],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": [
     "palette",
     "colour",

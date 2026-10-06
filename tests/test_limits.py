@@ -1,5 +1,5 @@
 """Every build container gets its share of the machine, not all of it."""
-from backend import kicad, limits, sandbox
+from backend import kicad, limits
 
 
 def test_defaults_are_a_share_of_the_machine(monkeypatch):
@@ -19,5 +19,5 @@ def test_env_overrides(monkeypatch):
 
 def test_the_rooms_containers_are_limited():
     from pathlib import Path
-    for argv in (sandbox.argv("web", ["true"]), kicad._docker(Path("/tmp"), "img")):
-        assert "--cpus" in argv and "--memory" in argv and "--pids-limit" in argv, argv
+    argv = kicad._docker(Path("/tmp"), "img")
+    assert "--cpus" in argv and "--memory" in argv and "--pids-limit" in argv, argv

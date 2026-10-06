@@ -11,7 +11,7 @@ import { LANG, LANGS, T, setLang, t } from './i18n';
 
 /** Ctrl+K: one box to go anywhere and do anything.
  *
- *  Type, and it offers - the rooms; every model, board and app by name;
+ *  Type, and it offers - the rooms; every model and board by name;
  *  every tool; the things you can do (build, show the code, release, a
  *  technical drawing, a new note...); and, from the server, code lines,
  *  notes, chats, revisions and parts that mention what you typed. Arrows
@@ -29,7 +29,7 @@ interface Hit {
 }
 
 const ROOM_ICON: Record<string, string> = {
-  cad: '◆', pcb: '▦', embedded: '⌁', web: '◎', mobile: '▯', notes: '✎', tools: '⚒', analyze: '▤',
+  cad: '◆', pcb: '▦', notes: '✎', tools: '⚒', analyze: '▤',
 };
 
 function words(q: string) { return q.toLowerCase().split(/\s+/).filter(Boolean); }
@@ -144,13 +144,11 @@ export class Palette {
     const out: Item[] = WORKSPACES.map(w => ({
       group: 'Rooms', icon: ROOM_ICON[w.id] ?? '·', label: w.label, hint: 'room', run: () => this.picked.room.set(w.id),
     }));
-    const walk = (n: FolderNode & { boards?: { id: string; title?: string }[]; apps?: { id: string; title: string; platform: 'web' | 'embedded' | 'mobile' }[] }) => {
+    const walk = (n: FolderNode & { boards?: { id: string; title?: string }[] }) => {
       for (const m of n.models) out.push({ group: 'Models', icon: '◆', label: m.title || m.name, hint: m.id,
         run: () => { this.picked.room.set('cad'); this.picked.ask('model', m.id); } });
       for (const b of n.boards ?? []) out.push({ group: 'Boards', icon: '▦', label: b.title || b.id, hint: `${b.id}.pcb`,
         run: () => this.picked.openBoard(b.id) });
-      for (const a of n.apps ?? []) out.push({ group: 'Apps', icon: ROOM_ICON[a.platform] ?? '◎', label: a.title, hint: a.platform,
-        run: () => this.picked.openApp(a.id, a.platform) });
       for (const f of n.folders) walk(f as typeof n);
     };
     const t = this.tree();
@@ -197,7 +195,7 @@ export class Palette {
 
   grouped = computed(() => {
     const out: { name: string; items: { item: Item; i: number }[] }[] = [];
-    const order = ['Actions', 'Rooms', 'Models', 'Boards', 'Apps', 'Tools', 'In the code', 'Notes', 'Chats', 'Revisions', 'Parts'];
+    const order = ['Actions', 'Rooms', 'Models', 'Boards', 'Tools', 'In the code', 'Notes', 'Chats', 'Revisions', 'Parts'];
     const by = new Map<string, Item[]>();
     for (const it of this.items()) by.set(it.group, [...(by.get(it.group) ?? []), it]);
     let i = 0;

@@ -3,10 +3,8 @@
  "version": "1.0",
  "name": "DT Overlay Builder",
  "blurb": "a device tree overlay fragment to enable, add or change nodes on a base tree",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "keywords": [
   "device tree overlay",
   "dtbo",

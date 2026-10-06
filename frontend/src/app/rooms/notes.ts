@@ -20,17 +20,17 @@ import { T } from '../i18n';
 export interface Note {
   id: string; text: string; title: string; tags: string[]; mentions: string[];
   todo: { open: number; done: number };
-  context: { room?: string; model?: string; board?: string; app?: string };
+  context: { room?: string; model?: string; board?: string };
   pinned: boolean; by: { name?: string; id?: string };
   created_at: string; updated_at: string;
   sent?: { room: string; at: string };
 }
 
 const ROOM_NAMES: Record<string, string> = {
-  cad: '3D Drawing', pcb: 'PCB Design', embedded: 'Embedded', web: 'Web', mobile: 'Mobile',
+  cad: '3D Drawing', pcb: 'PCB Design',
   notes: 'Notes', tools: 'Tools', analyze: 'Analytics',
 };
-export const AGENT_ROOMS = ['cad', 'pcb', 'embedded', 'web', 'mobile'];
+export const AGENT_ROOMS = ['cad', 'pcb'];
 
 @Injectable({ providedIn: 'root' })
 export class NotesApi {
@@ -59,7 +59,6 @@ export class NotesApi {
       room,
       ...(room === 'cad' && this.picked.model() ? { model: this.picked.model()! } : {}),
       ...(room === 'pcb' && this.picked.board() ? { board: this.picked.board()! } : {}),
-      ...(['web', 'embedded', 'mobile'].includes(room) && this.picked.app() ? { app: this.picked.app()! } : {}),
     };
   }
 
@@ -173,7 +172,7 @@ export class NoteCompose {
 
   hint = computed(() => {
     const c = this.api.context();
-    const at = c.model ?? c.board ?? c.app;
+    const at = c.model ?? c.board;
     return at ? `kept with ${at} (${ROOM_NAMES[c.room] ?? c.room})` : `Enter keeps it · Shift+Enter new line`;
   });
 
@@ -326,7 +325,7 @@ export class QuickNote {
             @if (n.updated_at !== n.created_at) { · edited {{ when(n.updated_at) }} }
             @if (n.context.room) {
               · <button class="tcv-note-ctx" (click)="goTo(n)" title="Go back to where it was written">
-                {{ roomName(n.context.room) }}{{ n.context.model || n.context.board || n.context.app ? ': ' + (n.context.model || n.context.board || n.context.app) : '' }}</button>
+                {{ roomName(n.context.room) }}{{ n.context.model || n.context.board ? ': ' + (n.context.model || n.context.board) : '' }}</button>
             }
             @if (n.sent) { · sent to the {{ roomName(n.sent.room) }} agent }
           </span>

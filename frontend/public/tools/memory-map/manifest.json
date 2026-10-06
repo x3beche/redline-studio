@@ -2,8 +2,8 @@
   "id": "memory-map", "version": "1.1",
   "name": "Memory Map Viewer",
   "blurb": "flash and RAM region use as a scaled strip",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["memory map", "flash usage", "ram usage", "arm-none-eabi-size", "size -A", "sections", ".text", ".data", ".bss", "linker regions", "firmware size", "memory usage", "rom", "overflow"],
   "intro": "Paste the output of arm-none-eabi-size (-A for per-section addresses, or the default Berkeley line) and give the memory regions from your linker script. Each section is placed in the region its address falls in, and .data is counted twice: in RAM, and as its load copy in flash. The strips are drawn to scale.",
   "inputs": [

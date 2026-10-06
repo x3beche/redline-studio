@@ -1,9 +1,7 @@
 """Which headless browser takes the pictures, and how it is started.
 
-Shared by tools/render.py (a model, from a revision's angle) and
-backend/webshot.py (a running page). Standard library only: webshot.py is
-also mounted on its own into the Web Programming image and run there as a
-script, with this file mounted beside it.
+Used by tools/render.py (a model, from a revision's angle). Standard
+library only.
 
 Where a browser is looked for, in order. REDLINE_CHROME names one outright
 (a path, a command on PATH, or "docker" / "docker:<image>" for the

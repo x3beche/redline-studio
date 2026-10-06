@@ -456,7 +456,7 @@ async def record(db, kind: str, revision: str | None = None, **row) -> dict:
 # One run per room. The 3D room's is "current", as it always was; the others
 # have their own, because a tab's agent works in parallel with the others
 # and a single shared run let one agent's `finish` close another's.
-ROOMS = ("cad", "pcb", "web", "embedded", "mobile")
+ROOMS = ("cad", "pcb")
 
 
 def run_key(room: str | None) -> str:

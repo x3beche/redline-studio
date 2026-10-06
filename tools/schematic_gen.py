@@ -98,6 +98,30 @@ def rename(sym, nickname: str, entry: str):
     return sym
 
 
+# EasyEDA has five pin types - undefined, input, output, bidirectional,
+# power - and easyeda2kicad writes undefined as "unspecified" and power as
+# "power_in". Neither is something the symbol said: "unspecified" makes
+# KiCad warn on every wire that touches it, and with no way to say "power
+# out" no rail drawn from EasyEDA symbols can ever be driven - a
+# regulator's OUT is a power input too. Both become passive, which is
+# what KiCad calls a pin whose direction is not known; input, output and
+# bidirectional are kept as the maker typed them.
+UNTYPED = {"unspecified", "power_in"}
+
+
+def retype(sym, mode: str) -> int:
+    """Pin types for ERC: every pin passive (`mode` "passive": a
+    connector, a switch, an LED - backend/schematic.py passive_pins), or
+    only those EasyEDA left untyped. Returns how many pins were changed."""
+    changed = 0
+    for pin in pins_of(sym):
+        if mode == "passive" or pin.electricalType in UNTYPED:
+            if pin.electricalType != "passive":
+                pin.electricalType = "passive"
+                changed += 1
+    return changed
+
+
 def pins_of(sym) -> list:
     return [p for unit in sym.units for p in unit.pins]
 
@@ -208,13 +232,18 @@ def main() -> int:
     sch.uuid = _uid()
     sch.titleBlock = TitleBlock(title=plan.get("title", project))
 
-    parts, lib_seen = [], {}
+    parts, lib_seen, retyped = [], {}, 0
     for comp in plan["components"]:
         src = comp["symbol"]
         key = src.get("key") or comp["part"]
+        if src["kind"] == "easyeda" and src.get("pins") == "passive":
+            key = f"{key}_passive"
         if key not in lib_seen:
-            sym = (easyeda_symbol(src["json"], key) if src["kind"] == "easyeda"
-                   else kicad_symbol(src["lib"], src["entry"]))
+            if src["kind"] == "easyeda":
+                sym = easyeda_symbol(src["json"], key)
+                retyped += retype(sym, src.get("pins") or "as_typed")
+            else:
+                sym = kicad_symbol(src["lib"], src["entry"])
             lib_seen[key] = sym
             sch.libSymbols.append(sym)
         sym = lib_seen[key]
@@ -321,6 +350,7 @@ def main() -> int:
     sch.to_file(plan["out"])
     print(json.dumps({"parts": len(placed), "wires": wires, "labels": labels_made,
                       "no_connects": open_pins, "symbols": len(lib_seen),
+                      "pins_made_passive": retyped,
                       "size_mm": [sch.paper.width, sch.paper.height]}))
     return 0
 

@@ -3,10 +3,8 @@
  "version": "1.0",
  "name": "Boot Log Timeline",
  "blurb": "a boot log or systemd-analyze output split into stages on a timeline, slowest first",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "keywords": [
   "boot time",
   "boot log",

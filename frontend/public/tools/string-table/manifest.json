@@ -7,11 +7,8 @@
   ],
   "name": "String Table Editor",
   "blurb": "multilingual strings in a table, out as resource files",
-  "group": "mobile",
-  "rooms": [
-    "mobile",
-    "web"
-  ],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": [
     "localization",
     "l10n",

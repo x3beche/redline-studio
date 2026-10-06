@@ -2,8 +2,8 @@
   "id": "endianness", "version": "1.1",
   "name": "Endianness Inspector",
   "blurb": "the same bytes read as little and big endian side by side",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["endianness", "endian", "byte order", "little endian", "big endian", "byte swap", "word swap", "network order", "modbus float", "cdab", "htonl", "bswap", "hex to float", "hex to int"],
   "intro": "Reads the same bytes as 8 to 64-bit integers and floats in little-endian, big-endian and the two mixed orders (word swap CDAB and byte swap BADC used by Modbus and PLCs). Or write a value and get its bytes in every order.",
   "inputs": [

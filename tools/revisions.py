@@ -29,27 +29,12 @@ done goes next to it:
 
     python tools/revisions.py after <id> [--only PART]
 
-A note from one of the coding rooms (web, embedded, mobile) is a frozen page
-and the elements under the marks:
-
-    python tools/revisions.py code show <id>     the note, the page, the elements
-    python tools/revisions.py code diff <id>     what changed since it was drawn
-    python tools/revisions.py code test <id>     the project's test command
-    python tools/revisions.py code done <id>     tests, after shot, then applied
-
 Files people uploaded in the Files tab - a BOM, a pick-and-place file, a
 datasheet (backend/files.py); through the server, like `board`:
 
     python tools/revisions.py files [--board B] [--kind bom] [-q TEXT]   list them
     python tools/revisions.py files get <id> [-o PATH]                   write one to disk
     python tools/revisions.py files put <path> [--board B] [--note TEXT] keep one there
-
-Firmware on its virtual board (backend/sim), headless:
-
-    python tools/revisions.py sim run <app> --for 5 [--press REF[@s]] [--uart TEXT[@s]]
-                                  [--set REF=V] [--shot REF=out.png] [--sim FILE]
-    python tools/revisions.py sim show <app>           the sim.json it would run
-    python tools/revisions.py sim link <app> <board>   which board the firmware runs on
 """
 
 from __future__ import annotations
@@ -115,9 +100,6 @@ async def cmd_queue(args):
         # and `build` does not take a board. Say so on the first line, so
         # nobody runs the model loop on it.
         board = d.get("kind") == "pcb"
-        if d.get("kind") in CODE_KINDS:
-            _queue_code(i, d)
-            continue
         print(f"\n#{i}  {d['_id']}" + ("   [BOARD]" if board else ""))
         print(f"   note  : {d['comment']}")
         print(f"   {'board' if board else 'model'} : {d.get('model') or '-'}"
@@ -576,10 +558,15 @@ def _print_board(out: dict) -> None:
         print(f"  held       every part where the import had it: worst pad "
               f"{lay.get('held_worst_mm')} mm off" + (f"; by centre only: {', '.join(lay['held_by_centre'])}"
                                                     if lay.get("held_by_centre") else ""))
-    if lay.get("holes"):
-        print(f"  holes      {len(lay['holes'])} mounting holes from the drills: "
+    mounting = [h for h in lay.get("holes") or [] if h.get("ref")]
+    if mounting:
+        print(f"  holes      {len(mounting)} mounting holes from the drills: "
               + ", ".join(f"{h['ref']} {h['d']} mm" + (" plated" if h.get("plated") else "")
-                          for h in lay["holes"]))
+                          for h in mounting))
+    for h in lay.get("holes") or []:
+        if h.get("part"):
+            print(f"  holes      {h['d']} mm in the drills is {h['part']}'s own (its body's hole, "
+                  "where the import had it) - put in that part, not a mounting hole")
     if out.get("equivalence"):
         _print_equivalence(out["equivalence"])
 
@@ -647,11 +634,6 @@ async def cmd_done(args):
     from backend import store
 
     db = connect()
-    doc = await db.revisions.find_one({"_id": args.id})
-    if doc and doc.get("kind") in CODE_KINDS:
-        # Not done until the tests pass and the after shot is taken.
-        await _code_done(db, doc)
-        return
     patch = await store.set_status(db, args.id, "applied")
     if patch is None:
         sys.exit(f"{args.id} not found")
@@ -852,9 +834,6 @@ async def _after_shot(db, rid: str, width: int = 1200, height: int = 800,
                       only: str | None = None) -> dict:
     from backend import store
 
-    doc = await db.revisions.find_one({"_id": rid}) or {}
-    if doc.get("kind") in CODE_KINDS:
-        return await _code_after(db, doc)
     out = Path(tempfile.gettempdir()) / f"after-{rid}.png"
     argv = [sys.executable, str(ROOT / "tools" / "render.py"), rid,
             "-o", str(out), "--width", str(width), "--height", str(height)]
@@ -952,419 +931,14 @@ async def cmd_summaries(args):
           f"   total {spend:.5f} USD")
 
 
-# ---------------- code notes ----------------
-# A note on a running interface, written in the Web, Embedded or Mobile
-# room. `model` is the project's id, the drawing is a real screenshot of a
-# route at a size, and `code` says what was under the marks - selector,
-# box, and the file that renders it. The change is an edit in the
-# project's checkout, the diff is read from git, the check is its test
-# command, and the "after" is the same route at the same size again.
-CODE_KINDS = ("web", "embedded", "mobile")
-
-
-def _queue_code(i: int, d: dict) -> None:
-    code = d.get("code") or {}
-    vp = code.get("viewport") or ["?", "?"]
-    print(f"\n#{i}  {d['_id']}   [{d['kind'].upper()}]")
-    print(f"   note  : {d['comment']}")
-    print(f"   app   : {d.get('model') or '-'}    part: {d.get('part') or '-'}")
-    print(f"   page  : {code.get('route') or '/'} at {vp[0]}x{vp[1]}")
-    for e in (code.get("dom") or [])[:3]:
-        print(f"   under : {e.get('tag')} \"{(e.get('text') or '')[:30]}\"  "
-              f"{e.get('file') or '?'}")
-    print(f"   read  : python tools/revisions.py code show {d['_id']}")
-
-
-async def _code_note(db, rid: str) -> tuple[dict, dict]:
-    from backend import apps
-
-    doc = await db.revisions.find_one({"_id": rid})
-    if not doc:
-        sys.exit(f"{rid} not found")
-    if doc.get("kind") not in CODE_KINDS:
-        sys.exit(f"{rid} is a {doc.get('kind') or 'cad'} note, not a code note")
-    app = await db[apps.APPS].find_one({"_id": doc.get("model")})
-    if not app:
-        sys.exit(f"{rid}: its project {doc.get('model')} is gone")
-    return doc, app
-
-
-async def _code_show(db, args):
-    from backend import store
-
-    doc, app = await _code_note(db, args.id)
-    code = doc.get("code") or {}
-    vp = code.get("viewport") or ["?", "?"]
-    print(f"note    : {doc['comment']}")
-    print(f"status  : {doc.get('status')}    part: {doc.get('part') or '-'}")
-    print(f"project : {app['_id']}  ({app.get('platform')})  {app['repo']}"
-          + (f"  cwd {app['cwd']}" if app.get("cwd") else ""))
-    print(f"page    : {(app.get('url') or '').rstrip('/')}{code.get('route') or '/'}"
-          f"  at {vp[0]}x{vp[1]}")
-    print(f"base    : {(code.get('base') or '-')[:12]}"
-          f"   ({len(code.get('dirty') or {})} files were already uncommitted"
-          " - they are not this note's)")
-    print(f"check   : {app.get('test') or 'no test command'}")
-    dom = code.get("dom") or []
-    print(f"\nunder the marks ({len(dom)}):" if dom else "\nunder the marks: nothing mapped")
-    for e in dom:
-        x, y, w, h = e.get("box") or [0, 0, 0, 0]
-        where = e.get("file") or "?"
-        if e.get("line"):
-            where += f":{e['line']}"
-        print(f"  {e.get('tag'):8} \"{(e.get('text') or '')[:40]}\"  "
-              f"at {x},{y} {w}x{h}")
-        print(f"           {where}   ({e.get('component') or '-'})")
-        print(f"           {e.get('selector')}")
-    if (doc.get("image") or {}).get("gridfs_id"):
-        png = await store.get_shot(db, doc["image"]["gridfs_id"])
-        out = Path(args.out or tempfile.gettempdir()) / f"{args.id}.png"
-        out.write_bytes(png)
-        print(f"\nimage   : {out}   ({len(png)} bytes)")
-        print("Open it with the Read tool: the marks say which part of the "
-              "page, the list above says which element.")
-    else:
-        print("\nimage   : none - a written note about the project")
-
-
-async def _code_diff(db, args):
-    from backend import code_api
-
-    doc, _ = await _code_note(db, args.id)
-    try:
-        text, frozen = await code_api.note_patch(db, doc)
-    except (KeyError, ValueError) as exc:
-        sys.exit(str(exc))
-    if not text:
-        print("nothing has changed since this note was drawn")
-        return
-    sys.stdout.write(text)
-    if frozen:
-        print("\n(frozen when the note was done)")
-
-
-async def _code_test(db, app: dict) -> dict:
-    from backend import apps
-
-    print(f"$ {app['test']}   (in {apps.workdir(app)})")
-    sys.stdout.flush()
-    out = await apps.run_test(db, app)
-    tail = out["tail"].rstrip().splitlines()[-25:]
-    print("\n".join(tail))
-    c = ", ".join(f"{v} {k}" for k, v in out["counts"].items()) or f"exit {out['rc']}"
-    print(f"\ntests {'PASS' if out['ok'] else 'FAIL'}: {c} in {out['wall_s']:.1f} s")
-    await db.activity.insert_one(_line(
-        f"{app['_id']}: tests {'passed' if out['ok'] else 'FAILED'} - {c}",
-        "done" if out["ok"] else "error", app.get("platform") or "web"))
-    return out
-
-
-async def _code_build(db, app: dict) -> dict:
-    """Build firmware in the Embedded image, into Redline's cache."""
-    from backend import firmware
-
-    print(f"$ {app.get('build')}   (in the embedded container)")
-    sys.stdout.flush()
-    out = await firmware.build(db, app)
-    print("\n".join(out["log"].rstrip().splitlines()[-12:]))
-    s = out.get("summary") or {}
-    for r in s.get("regions", []):
-        if r["used"]:
-            print(f"  {r['name']:10} {r['used']:>9} B of {r['size']:>9} B  {r['pct']:.2f}%")
-    print(f"build {'OK' if out['ok'] else 'FAILED'} in {out.get('wall_s') or 0:.1f} s"
-          + (f", {out.get('cpu_s')} core-s" if out.get("cpu_s") else ""))
-    await db.activity.insert_one(_line(
-        f"{app['_id']}: build {'done' if out['ok'] else 'FAILED'}",
-        "done" if out["ok"] else "error", "embedded"))
-    return out
-
-
-async def _code_after(db, doc: dict) -> dict:
-    """The same route at the same size, photographed again."""
-    from backend import apps, code_api
-
-    app = await db[apps.APPS].find_one({"_id": doc.get("model")})
-    if not app:
-        raise SystemExit(f"its project {doc.get('model')} is gone")
-    code = doc.get("code") or {}
-    w, h = (code.get("viewport") or [1280, 800])[:2]
-    got = await code_api.take_shot(db, app, code.get("route") or "/", w, h)
-    out = Path(tempfile.gettempdir()) / f"after-{doc['_id']}.png"
-    out.write_bytes(got["png"])
-    from backend import store
-    shot = await store.put_shot(db, got["png"])
-    await db.revisions.update_one({"_id": doc["_id"]},
-                                  {"$set": {"image_after": shot}})
-    print(f"after shot: {out}   ({shot['bytes']} bytes, "
-          f"{code.get('route') or '/'} at {w}x{h})")
-    print("Open it with the Read tool and compare it against the drawing.")
-    return shot
-
-
-async def _code_done(db, doc: dict) -> None:
-    """Tests, then the after shot, then applied - and never the last
-    without the first two. The patch is frozen onto the note on the way,
-    so its card shows its own change after the checkout has moved on."""
-    from backend import apps, code_api, store
-
-    app = await db[apps.APPS].find_one({"_id": doc.get("model")})
-    if not app:
-        sys.exit(f"its project {doc.get('model')} is gone")
-    if app.get("platform") == "embedded":
-        # Firmware is checked by building it first: a change that does not
-        # link is not done, whatever the tests say.
-        built = await _code_build(db, app)
-        if not built["ok"]:
-            sys.exit(f"\n{doc['_id']} is not done: the firmware does not build.")
-    if app.get("test"):
-        out = await _code_test(db, app)
-        if not out["ok"]:
-            sys.exit(f"\n{doc['_id']} is not done: the tests fail. Fix them, "
-                     "or say why on their screen (revisions.py ask).")
-    else:
-        print("no test command for this project - nothing to check against")
-        out = None
-    await _code_after(db, doc)
-    text, frozen = await code_api.note_patch(db, doc)
-    if not frozen:
-        await code_api.freeze_patch(db, doc["_id"], text)
-    parsed = apps.parse(text)
-    await db.revisions.update_one({"_id": doc["_id"]}, {"$set": {
-        "code.check": None if out is None else {
-            "ok": out["ok"], "counts": out["counts"], "wall_s": out["wall_s"],
-            "at": out["at"], "command": out["command"]},
-        "code.changed": [f["path"] for f in parsed["files"]]}})
-    patch = await store.set_status(db, doc["_id"], "applied")
-    print(f"\n{doc['_id']} -> applied: {len(parsed['files'])} files, "
-          f"+{parsed['added']} -{parsed['removed']}"
-          + ("  (archived)" if patch and patch.get("archived") else ""))
-
-
 async def cmd_kind(args):
-    """Which room a revision belongs to: cad, pcb, web, embedded, mobile."""
+    """Which room a revision belongs to: cad or pcb."""
     from backend import compute
 
     doc = await connect().revisions.find_one({"_id": args.id}, {"kind": 1})
     if not doc:
         sys.exit(f"{args.id} not found")
     print(compute.room_of(doc.get("kind")))
-
-
-async def cmd_code(args):
-    """Code notes: read one, see its change, run its check, finish it."""
-    db = connect()
-    await _shout_interrupts(db)
-    if args.what == "show":
-        await _code_show(db, args)
-    elif args.what == "diff":
-        await _code_diff(db, args)
-    elif args.what == "test":
-        # A note's project, or a project by its own id.
-        from backend import apps
-        app = await db[apps.APPS].find_one({"_id": args.id})
-        if not app:
-            _, app = await _code_note(db, args.id)
-        out = await _code_test(db, app)
-        if not out["ok"]:
-            sys.exit(1)
-    elif args.what == "build":
-        # A note's project, or a project by its own id.
-        from backend import apps
-        app = await db[apps.APPS].find_one({"_id": args.id})
-        if not app:
-            _, app = await _code_note(db, args.id)
-        out = await _code_build(db, app)
-        if not out["ok"]:
-            sys.exit(1)
-    elif args.what == "serve":
-        # A project's dev server, in its tab's container, left running.
-        from backend import apps
-        app = await db[apps.APPS].find_one({"_id": args.id})
-        if not app:
-            _, app = await _code_note(db, args.id)
-        out = await asyncio.to_thread(apps.serve, app)
-        print(out)
-    elif args.what == "flash":
-        # Program the board with the last build. The room has no button.
-        from backend import apps, firmware
-        app = await db[apps.APPS].find_one({"_id": args.id})
-        if not app:
-            _, app = await _code_note(db, args.id)
-        try:
-            out = await firmware.flash(db, app, args.port)
-        except ValueError as exc:
-            sys.exit(str(exc))
-        print(out["log"])
-        print(f"programmed {out['target']} on {out['port'] or 'the probe'}: "
-              f"{'ok' if out['ok'] else 'FAILED'}")
-        if not out["ok"]:
-            sys.exit(1)
-    elif args.what == "boards":
-        from backend import firmware
-        for b in firmware.boards():
-            print(f"{b['kind']:7} {b.get('port') or b.get('usb')}  {b['name']}")
-        if not firmware.boards():
-            print("nothing plugged in")
-    elif args.what == "phone":
-        # The Mobile room's phone, started by the agent: the room has no
-        # power button, the person marks and the agent runs things.
-        from backend import phone
-        print("starting the phone (a minute or two the first time)...")
-        sys.stdout.flush()
-        st = await asyncio.to_thread(phone.boot)
-        print(f"phone up: {st}")
-        await db.activity.insert_one(_line("phone booted"
-            + (f" in {st['boot_s']} s" if st.get("boot_s") else ""), "done", "mobile"))
-    elif args.what == "after":
-        doc, _ = await _code_note(db, args.id)
-        await _code_after(db, doc)
-    elif args.what == "done":
-        doc, _ = await _code_note(db, args.id)
-        await _code_done(db, doc)
-
-
-# ---------------- the virtual board ----------------
-def _at(text: str) -> tuple[str, float | None]:
-    """'SW1@2.5' -> ('SW1', 2.5); a trailing @ that is not a number stays text."""
-    head, sep, tail = text.rpartition("@")
-    if sep and head:
-        try:
-            return head, float(tail)
-        except ValueError:
-            pass
-    return text, None
-
-
-def sim_plan(args) -> list[tuple[float, str, object]]:
-    """What `sim run` does and when, from its arguments, in time order:
-    (seconds after boot, "act"|"uart", (ref, action) | text). A press
-    without a time is at 1 s; it is let go 0.2 s later."""
-    plan: list[tuple[float, str, object]] = []
-    for p in args.press or []:
-        ref, at = _at(p)
-        at = 1.0 if at is None else at
-        plan += [(at, "act", (ref, {"press": True})), (at + 0.2, "act", (ref, {"press": False}))]
-    for u in args.uart or []:
-        text, at = _at(u)
-        text = text.encode().decode("unicode_escape")
-        if not text.endswith(("\n", "\r")):
-            text += "\r\n"
-        plan.append((0.5 if at is None else at, "uart", text))
-    for s in args.set or []:
-        body, at = _at(s)
-        if "=" not in body:
-            raise ValueError(f"--set {s}: REF=VALUE or REF.slider=VALUE")
-        target, value = body.split("=", 1)
-        ref, _, key = target.partition(".")
-        try:
-            num = float(value)
-        except ValueError:
-            raise ValueError(f"--set {s}: {value!r} is not a number") from None
-        plan.append((0.0 if at is None else at, "act", (ref, {key or "value": num})))
-    for sh in args.shot or []:
-        if "=" not in sh:
-            raise ValueError(f"--shot {sh}: REF=out.png")
-    if any(at > args.for_s for at, _, _ in plan):
-        raise ValueError(f"something is planned after the run ends ({args.for_s:g} s)")
-    return sorted(plan, key=lambda x: x[0])
-
-
-async def cmd_sim(args):
-    """The firmware on its virtual board, headless, through the same
-    service the Embedded room uses (backend/sim/service.py)."""
-    from backend.sim import service
-    from backend.sim.parts import load_catalog
-
-    db = connect()
-    over = json.loads(Path(args.sim).read_text()) if args.sim else None
-    if args.what == "link":
-        if not args.unlink and not (args.board or over):
-            sys.exit("sim link <app> <board> [--sim FILE] | --unlink")
-        change = {k: v for k, v in (("board", args.board), ("sim", over)) if v is not None}
-        if args.unlink:
-            await db.apps.update_one({"_id": args.app}, {"$unset": {"board": "", "sim": ""}})
-            print(f"{args.app}: unlinked")
-        else:
-            if args.board and not await db.boards.find_one({"_id": args.board}, {"_id": 1}):
-                sys.exit(f"no board {args.board}")
-            await db.apps.update_one({"_id": args.app}, {"$set": change})
-            print(f"{args.app}: linked {', '.join(change)}")
-        return
-    try:
-        plan = sim_plan(args)
-        got = await service.resolve(db, args.app, args.board, over)
-    except (ValueError, service.SimError) as exc:
-        sys.exit(f"sim: {exc}")
-    for w in got["warnings"]:
-        print(f"warning: {w}")
-    if args.what == "show":
-        print(json.dumps(got["sim"], indent=1))
-        print(f"firmware: {got['firmware']}")
-        return
-    sims = service.Sims(max_sessions=1, idle_s=1e9, uart_keep=1_000_000)
-    try:
-        s = await sims.launch(args.app, got["sim"], got["firmware"], board_id=got["board"],
-                              warnings=got["warnings"])
-    except service.SimError as exc:
-        sys.exit(f"sim: {exc}")
-    print(f"{args.app} on {got['board'] or 'its own sim.json'}: {len(s.board.parts)} parts, "
-          f"firmware {got['firmware']} - building and booting…")
-    sys.stdout.flush()
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + args.boot_timeout
-    while s.state in ("starting", "building") and loop.time() < deadline:
-        await asyncio.sleep(0.2)
-    failed = None
-    if s.state != "running":
-        failed = s.error or f"not running after {args.boot_timeout:g} s ({s.state})"
-    else:
-        t0 = loop.time()
-        try:
-            for at, kind, what in plan:
-                await asyncio.sleep(max(0.0, t0 + at - loop.time()))
-                if s.state != "running":
-                    break
-                if kind == "uart":
-                    s.uart("UART0", what)
-                else:
-                    s.act(*what)
-            await asyncio.sleep(max(0.0, t0 + args.for_s - loop.time()))
-        except service.SimError as exc:
-            failed = str(exc)
-        if s.state != "running" and not failed:
-            failed = s.error or s.state
-    snap = s.snapshot()
-    await sims.stop(args.app)
-    catalog = load_catalog()
-    print(f"\nat t = {snap['t'] / 1e6:.2f} s (virtual)")
-    for ref, view in snap["parts"].items():
-        model = next((p["model"] for p in got["sim"]["parts"] if p["ref"] == ref), "?")
-        print(f"  {ref:<8} {model:<12} {service.describe_view(view)}")
-    import re as _re
-    print("\nUART:")
-    runs: list[dict] = []
-    for e in s.board.uart:                       # all of it, not the page's tail
-        if runs and runs[-1]["port"] == e["port"] and runs[-1]["dir"] == e["dir"]:
-            runs[-1]["data"] += e["data"]
-        else:
-            runs.append(dict(e))
-    for e in runs:
-        e["data"] = _re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", e["data"])
-        mark = ">" if e["dir"] == "in" else " "
-        for line in e["data"].splitlines() or [""]:
-            print(f"  {mark} {e['port']} | {line}")
-    for sh in args.shot or []:
-        ref, out = sh.split("=", 1)
-        view = snap["parts"].get(ref) or {}
-        if "screen" not in view:
-            failed = failed or f"--shot {ref}: not a part with a screen"
-            continue
-        pixel = ((catalog["models"].get(next((p["model"] for p in got["sim"]["parts"] if p["ref"] == ref), ""), {})
-                  .get("view") or {}).get("pixel") or "#8fd3ff").lstrip("#")
-        Path(out).write_bytes(service.screen_png(view, on=tuple(bytes.fromhex(pixel[:6]))))
-        print(f"wrote {out}")
-    if failed:
-        sys.exit(f"sim failed: {failed}")
 
 
 async def cmd_files(args):
@@ -1400,7 +974,7 @@ async def cmd_files(args):
             print("no files")
         for d in rows:
             ctx = d.get("context") or {}
-            at = ctx.get("board") or ctx.get("model") or ctx.get("app") or ctx.get("room") or "-"
+            at = ctx.get("board") or ctx.get("model") or ctx.get("room") or "-"
             who = (d.get("by") or {}).get("name") or "?"
             print(f"{d['id']}  {d['kind']:<10} {d['bytes'] // 1024:>7} kB  {d['created_at'][:16]}  "
                   f"{at:<24} {d['name']}  ({who})" + (f"\n{'':14}{d['note']}" if d.get("note") else ""))
@@ -1441,7 +1015,7 @@ def main() -> None:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("queue")
-    s.add_argument("--room", choices=["cad", "pcb", "web", "embedded", "mobile"],
+    s.add_argument("--room", choices=["cad", "pcb"],
                    help="only this room's notes")
     s.set_defaults(fn=cmd_queue)
     s = sub.add_parser("kind", help="which room a revision belongs to")
@@ -1451,12 +1025,12 @@ def main() -> None:
     s.add_argument("--limit", type=int, default=40)
     s.add_argument("--keep-unread", action="store_true",
                    help="look without picking it up")
-    s.add_argument("--room", choices=["cad", "pcb", "web", "embedded", "mobile"],
+    s.add_argument("--room", choices=["cad", "pcb"],
                    help="only this room's thread (each tab has its own)")
     s.set_defaults(fn=cmd_chat)
     s = sub.add_parser("say", help="answer in the thread")
     s.add_argument("text")
-    s.add_argument("--room", choices=["cad", "pcb", "web", "embedded", "mobile"],
+    s.add_argument("--room", choices=["cad", "pcb"],
                    help="which room's thread; default: where the person last spoke")
     s.set_defaults(fn=cmd_say)
     s = sub.add_parser("ask", help="ask the person a question on their screen")
@@ -1523,7 +1097,7 @@ def main() -> None:
                         "session lasts")
     s.add_argument("--ignore", nargs="*",
                    help="revision ids to not count as new work")
-    s.add_argument("--room", choices=["cad", "pcb", "web", "embedded", "mobile"],
+    s.add_argument("--room", choices=["cad", "pcb"],
                    help="only this room's notes and thread; default: every room")
     s.set_defaults(fn=cmd_wait)
     s = sub.add_parser("files", help="the Files tab: what people uploaded (a BOM, a datasheet...)")
@@ -1548,9 +1122,8 @@ def main() -> None:
     s.add_argument("-l", "--level", default="info",
                    choices=["info", "work", "done", "warn", "error"])
     s.add_argument("--room", default="cad",
-                   choices=["cad", "pcb", "web", "embedded", "mobile"],
-                   help="whose log: cad for models (default), pcb for boards, "
-                        "web, embedded or mobile for a coding room")
+                   choices=["cad", "pcb"],
+                   help="whose log: cad for models (default), pcb for boards")
     s.set_defaults(fn=cmd_log)
     s = sub.add_parser("finish")
     s.add_argument("id", nargs="?",
@@ -1558,7 +1131,7 @@ def main() -> None:
                         "the shared run points at")
     s.add_argument("--failed", action="store_true")
     s.add_argument("--room", default="cad",
-                   choices=["cad", "pcb", "web", "embedded", "mobile"],
+                   choices=["cad", "pcb"],
                    help="without an id: which room's run to close")
     s.add_argument("--no-shot", action="store_true",
                    help="skip the after picture")
@@ -1577,23 +1150,6 @@ def main() -> None:
     s.add_argument("--height", type=int, default=800)
     s.add_argument("--only", help="show only this part, as in render.py")
     s.set_defaults(fn=cmd_after)
-    s = sub.add_parser("code", help="notes on a running interface: web, "
-                                    "embedded and mobile")
-    s.add_argument("what", choices=["show", "diff", "test", "build", "flash",
-                                    "boards", "serve", "phone", "after", "done"],
-                   help="show: the note, the page and the elements under the "
-                        "marks, drawing written to disk; diff: what changed "
-                        "since it was drawn; test: the project's check; "
-                        "build: firmware, in the embedded container; "
-                        "flash: program the board (STM32 or ESP32); boards: "
-                        "what is plugged in; serve: the dev server, in its "
-                        "container; phone: start the mobile room's phone; "
-                        "after: the same page again; done: test, after, then "
-                        "applied - refused while the tests fail")
-    s.add_argument("id")
-    s.add_argument("-o", "--out", help="where show writes the drawing")
-    s.add_argument("--port", help="flash: the serial port, when there is more than one")
-    s.set_defaults(fn=cmd_code)
     s = sub.add_parser("usage", help="pull LLM usage from the agent transcripts")
     s.add_argument("--full", action="store_true",
                    help="re-read every transcript from the start")
@@ -1604,27 +1160,6 @@ def main() -> None:
     s.add_argument("--force", action="store_true", help="replace hand-written ones")
     s.add_argument("--limit", type=int, default=0)
     s.set_defaults(fn=cmd_summaries)
-    s = sub.add_parser("sim", help="run firmware on its virtual board, headless")
-    s.add_argument("what", choices=["run", "show", "link"],
-                   help="run: build, boot, act, print the parts and the UART; "
-                        "show: the sim.json it would run; link: which board the app runs on")
-    s.add_argument("app")
-    s.add_argument("board", nargs="?", help="link: the board; run/show: a board for this run only")
-    s.add_argument("--for", dest="for_s", type=float, default=5.0,
-                   help="seconds to run after boot (default 5)")
-    s.add_argument("--press", action="append", metavar="REF[@SEC]",
-                   help="press a button at SEC after boot (default 1), let go 0.2 s later")
-    s.add_argument("--uart", action="append", metavar="TEXT[@SEC]",
-                   help="type TEXT into UART0 (a line end is added; \\n escapes work)")
-    s.add_argument("--set", action="append", metavar="REF[.SLIDER]=VALUE[@SEC]",
-                   help="set a slider: a potentiometer's value, a sensor's reading")
-    s.add_argument("--shot", action="append", metavar="REF=out.png",
-                   help="write a display's picture at the end")
-    s.add_argument("--sim", help="a sim.json with corrections (with \"replace\": true, the whole thing)")
-    s.add_argument("--unlink", action="store_true", help="link: take the board off the app")
-    s.add_argument("--boot-timeout", type=float, default=900,
-                   help="seconds to wait for the build and boot (default 900)")
-    s.set_defaults(fn=cmd_sim)
     args = ap.parse_args()
     # Everything this command writes is the agent's, named by REDLINE_AGENT.
     from backend import actors

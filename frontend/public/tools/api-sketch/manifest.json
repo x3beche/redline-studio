@@ -3,10 +3,7 @@
   "name": "API Sketch",
   "blurb": "define endpoints, get OpenAPI, curl and a TypeScript client",
   "group": "code",
-  "rooms": [
-    "web",
-    "mobile"
-  ],
+  "rooms": ["code"],
   "keywords": [
     "api",
     "rest",

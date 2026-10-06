@@ -2,8 +2,8 @@
   "id": "cycles-time", "version": "1.1",
   "name": "Cycle to Time Converter",
   "blurb": "instruction cycles to microseconds and back at a clock",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["cycles", "clock cycles", "instruction cycle", "cpu clock", "microseconds", "delay loop", "busy wait", "timer prescaler", "auto-reload", "arr", "psc", "fosc/4", "mhz", "execution time", "timing"],
   "intro": "Time = cycles × clocks per cycle / clock frequency, and back. It also gives the busy-wait loop count for that time and the prescaler and reload a 8-, 16- or 32-bit timer needs to count it, with the rounding error.",
   "inputs": [

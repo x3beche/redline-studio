@@ -5,10 +5,7 @@
   "group": "project",
   "layout": "custom",
   "agentOmit": ["chip"],
-  "rooms": [
-    "pcb",
-    "embedded"
-  ],
+  "rooms": ["pcb"],
   "keywords": [
     "pin map",
     "pinout",

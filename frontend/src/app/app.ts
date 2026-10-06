@@ -2,7 +2,6 @@ import { Component, ElementRef, computed, effect, inject, signal, untracked, vie
 import { Editor } from './editor/editor';
 import { Selection } from './selection';
 import { RoomAnalyze } from './rooms/analyze';
-import { RoomCoding } from './rooms/coding';
 import { RoomPcb } from './rooms/pcb';
 import { RoomTools } from './tools/room';
 import { QuickNote, RoomNotes } from './rooms/notes';
@@ -20,7 +19,7 @@ import { TopbarMore } from './topbar-more';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, SignIn, T, UserChip, TopbarFit, TopbarMore],
+  imports: [Editor, RoomPcb, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, SignIn, T, UserChip, TopbarFit, TopbarMore],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -82,9 +81,6 @@ import { TopbarMore } from './topbar-more';
   <div room class="tcv-room-slot" [class.hidden]="here() === 'cad'">
     @switch (here()) {
       @case ('pcb') { <app-room-pcb /> }
-      @case ('web') { <app-room-coding platform="web" /> }
-      @case ('embedded') { <app-room-coding platform="embedded" /> }
-      @case ('mobile') { <app-room-coding platform="mobile" /> }
       @case ('notes') { <app-room-notes /> }
       @case ('commandcode') { <app-room-commandcode /> }
       @case ('files') { <app-room-files /> }
@@ -218,10 +214,10 @@ export class App {
     // and a reload comes back to the one you were in.
     effect(() => {
       const id = this.here();
-      // Not from inside a frame. The Web room shows a running page in an
-      // iframe, and when that page is this application the two share one
-      // localStorage: the one in the frame, opening on its own room, wrote
-      // over the room the outer page was left in.
+      // Not from inside a frame: when this application is shown in an
+      // iframe the two share one localStorage, and the one in the frame,
+      // opening on its own room, wrote over the room the outer page was
+      // left in.
       if (window === window.top) rememberWorkspace(id);
       const url = new URL(location.href);
       if (id === 'cad') url.searchParams.delete('ws');

@@ -343,7 +343,7 @@ async def _sizes(db) -> dict:
 
 async def snapshot_items(db) -> None:
     """History for what only keeps its latest value: each model's built size
-    and build time, each app's firmware size and last test. A row is written
+    and build time. A row is written
     when the value's own time stamp is new, so nothing repeats."""
     from pymongo.errors import DuplicateKeyError
     rows = []
@@ -353,18 +353,6 @@ async def snapshot_items(db) -> None:
         if v.get("at"):
             rows.append({"item": m["_id"], "kind": "model_build", "at": v["at"],
                          "bytes": v.get("bytes"), "build_secs": m.get("build_secs")})
-    async for a in db.apps.find({}, {"firmware": 1, "last_test": 1}):
-        fw = a.get("firmware") or {}
-        if fw.get("at") and fw.get("summary"):
-            rows.append({"item": a["_id"], "kind": "firmware", "at": fw["at"],
-                         "flash_bytes": fw["summary"].get("flash_bytes"),
-                         "ram_bytes": fw["summary"].get("ram_bytes"), "ok": fw.get("ok")})
-        t = a.get("last_test") or {}
-        if t.get("at"):
-            counts = t.get("counts") or {}
-            rows.append({"item": a["_id"], "kind": "test", "at": t["at"], "ok": t.get("ok"),
-                         "passed": counts.get("passed", 0), "failed": counts.get("failed", 0),
-                         "wall_s": t.get("wall_s")})
     for r in rows:
         try:
             await db[HISTORY].insert_one(r)
@@ -418,7 +406,7 @@ async def _projects(db) -> tuple[dict, dict]:
 
     async def items(coll):
         return coll, [d async for d in db[coll].find({}, {"folder": 1})]
-    for coll, docs in await asyncio.gather(items("models"), items("boards"), items("apps")):
+    for coll, docs in await asyncio.gather(items("models"), items("boards")):
         for d in docs:
             owner[d["_id"]] = top(d.get("folder")) if d.get("folder") else "(no project)"
             kinds[d["_id"]] = coll[:-1]
@@ -572,7 +560,7 @@ _DOCKER: tuple[float, dict] | None = None
 
 async def docker_usage() -> dict:
     """What Docker holds: images, containers, volumes, build cache - the
-    sandboxes and the KiCad image. Asked at most every ten minutes."""
+    KiCad and drawing images. Asked at most every ten minutes."""
     import subprocess
     import time
     global _DOCKER
@@ -606,12 +594,11 @@ async def docker_usage() -> dict:
 
 
 def _project_detail(owner, kinds, revs, by_note, runs_of, job_rows, board_rows, history_rows,
-                    model_docs, board_docs, app_docs, agg, question_log, lead_rows, since, size, B) -> dict:
-    """Each project on its own: its models, boards and apps matched by id,
+                    model_docs, board_docs, agg, question_log, lead_rows, since, size, B) -> dict:
+    """Each project on its own: its models and boards matched by id,
     each with a picture, its notes, what they cost, its builds, and what it
     keeps a history of - so one project is never read off a merged total."""
-    docs = {**{d["_id"]: ("model", d) for d in model_docs}, **{d["_id"]: ("board", d) for d in board_docs},
-            **{d["_id"]: ("app", d) for d in app_docs}}
+    docs = {**{d["_id"]: ("model", d) for d in model_docs}, **{d["_id"]: ("board", d) for d in board_docs}}
     notes_of: dict[str, list[str]] = defaultdict(list)
     for rid, r in revs.items():
         if r.get("model"):
@@ -629,7 +616,7 @@ def _project_detail(owner, kinds, revs, by_note, runs_of, job_rows, board_rows, 
         secs = [(_dt(r["finished_at"]) - _dt(r["started_at"])).total_seconds()
                 for r in runs if r.get("finished_at") and r.get("started_at")]
         jobs = [j for j in job_rows if j.get("model") == item]
-        builds = [j for j in jobs if j.get("kind") in ("build", "render", "board", "layout", "test", "flash")]
+        builds = [j for j in jobs if j.get("kind") in ("build", "render", "board", "layout")]
         hist = sorted((h for h in history_rows if h.get("item") == item), key=lambda h: str(h.get("at")))
         entry = {"id": item, "kind": kind, "title": d.get("title") or item, "picture": picture,
                  "notes": len(rids), "applied": sum(1 for rid in rids if revs[rid].get("status") == "applied"),
@@ -652,13 +639,6 @@ def _project_detail(owner, kinds, revs, by_note, runs_of, job_rows, board_rows, 
                          board_runs=[{k: (v.isoformat() if isinstance(v, datetime) else v)
                                       for k, v in r.items() if k != "_id"}
                                      for r in board_rows if r.get("board") == item])
-        elif kind == "app":
-            t = d.get("last_test") or {}
-            tests = [j for j in jobs if j.get("kind") == "test"]
-            entry.update(platform=d.get("platform"), last_test_ok=t.get("ok"),
-                         last_test_counts=t.get("counts"),
-                         test_pass_rate=round(sum(1 for j in tests if not j.get("rc")) / len(tests), 3) if tests else None,
-                         tests=len(tests), firmware=(d.get("firmware") or {}).get("summary"))
         p = projects.setdefault(pr, {"name": pr, "items": [], "spend_usd": 0.0, "notes": 0,
                                      "runs": 0, "jobs": 0, "failed": 0})
         p["items"].append(entry)
@@ -801,7 +781,7 @@ def _refresh(db, key: str, span) -> None:
 
 # Bumped whenever the shape of the answer changes, so an answer kept in the
 # old shape is never served to a page that expects the new one.
-SHAPE = 5
+SHAPE = 6
 
 
 async def overview_cached(db, key: str, span) -> dict:
@@ -839,9 +819,9 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         return await db[coll].count_documents({})
 
     (projects_map, rev_rows, agg, job_rows, metric_rows, all_runs, chat_rows,
-     question_rows, prefs, dbst, coll_names, n_folders, n_models, n_boards, n_apps,
+     question_rows, prefs, dbst, coll_names, n_folders, n_models, n_boards,
      n_parts, timing_rows, board_rows, event_rows, history_rows, grid_rows, previous,
-     docker, weekly_rows, model_docs, board_docs, app_docs) = await asyncio.gather(
+     docker, weekly_rows, model_docs, board_docs) = await asyncio.gather(
         _projects(db),
         rows("revisions", {}, {"kind": 1, "model": 1, "status": 1, "created_at": 1,
                                "queued_at": 1, "summary": 1, "comment": 1, "image": 1}),
@@ -855,7 +835,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         rows("questions", {"at": {"$gte": lo, "$lte": hi}},
              {"at": 1, "answered_at": 1, "text": 1, "answer": 1, "revision": 1, "status": 1}),
         settings(db), db.command("dbstats"), db.list_collection_names(),
-        count("folders"), count("models"), count("boards"), count("apps"), count(lcsc.PARTS),
+        count("folders"), count("models"), count("boards"), count(lcsc.PARTS),
         rows(TIMINGS, {"at": {"$gte": since, "$lte": until}}),
         rows(BOARD_RUNS, {"at": {"$gte": since, "$lte": until}}, sort="at"),
         rows(EVENTS, {"at": {"$gte": since, "$lte": until}}),
@@ -867,9 +847,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         rows("models", {}, {"title": 1, "folder": 1, "artifacts.viewer.bytes": 1,
                             "artifacts.viewer.at": 1, "build_secs": 1}),
         rows("boards", {}, {"title": 1, "folder": 1, "route": 1, "drc": 1,
-                            "layout.size_mm": 1, "artifacts.layout.at": 1}),
-        rows("apps", {}, {"title": 1, "folder": 1, "platform": 1, "last_test": 1,
-                          "firmware.summary": 1, "firmware.at": 1}))
+                            "layout.size_mm": 1, "artifacts.layout.at": 1}))
     price = prefs.get("kwh_price")
     owner, kinds = projects_map
 
@@ -1270,9 +1248,9 @@ async def overview(db, since: datetime, until: datetime) -> dict:
     change = {k: (round((now_tot[k] - previous.get(k, 0)) / previous[k] * 100, 1)
                   if previous.get(k) else None) for k in now_tot}
 
-    # ---- per project: every model, board and app, matched by id
+    # ---- per project: every model and board, matched by id
     project_detail = _project_detail(owner, kinds, revs, by_note, runs_of, job_rows, board_rows,
-                                     history_rows, model_docs, board_docs, app_docs, agg,
+                                     history_rows, model_docs, board_docs, agg,
                                      question_log, lead_rows, since, size, B)
 
     # ---- storage
@@ -1297,7 +1275,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
                "disk": {"total": disk.total, "used": disk.used, "free": disk.free}}
 
     # ---- catalog, by project
-    projects: dict[str, dict] = defaultdict(lambda: {"models": 0, "boards": 0, "apps": 0,
+    projects: dict[str, dict] = defaultdict(lambda: {"models": 0, "boards": 0,
                                                      "notes": 0, "cost_usd": 0.0})
     for item, pr in owner.items():
         projects[pr][kinds[item] + "s"] += 1
@@ -1307,7 +1285,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         if pr in projects:
             projects[pr]["cost_usd"] += v["cost_usd"]
     catalog = {"folders": n_folders, "models": n_models, "boards": n_boards,
-               "apps": n_apps, "parts": n_parts,
+               "parts": n_parts,
                "notes": len(revs)}
 
     # ---- LCSC, from the journal

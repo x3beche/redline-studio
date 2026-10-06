@@ -64,10 +64,6 @@
   --draw-label:   rgba(255, 255, 255, .9);   /* the caret box on a drawing */
   --shot-bg:      #fff;                      /* behind a revision drawing */
   --pcb-bg:       #111;                      /* behind a footprint: its layers are drawn for a dark board */
-  --preview-bg:   #161616;                   /* around a running page in the coding rooms */
-  --diff-add:     rgba(92, 138, 92, .22);    /* a line a diff adds */
-  --diff-del:     rgba(204, 51, 51, .2);     /* a line it takes away */
-  --diff-hunk:    rgba(83, 160, 227, .12);   /* the @@ line between hunks */
   --switch-knob: #fff;
   --overlay:      rgba(68, 68, 68, .7);
   --overlay-rest: rgba(68, 68, 68, .14);
@@ -141,12 +137,8 @@
   --draw-label:   rgba(255, 255, 255, .92);
   --shot-bg:      #fff;
   /* Light behind the boards too: their drawings come with light inks
-     (?light=1, backend/main.py), and the coding rooms' previews match. */
+     (?light=1, backend/main.py). */
   --pcb-bg:       #f6f7f9;
-  --preview-bg:   #e4e8ed;
-  --diff-add:     rgba(61, 122, 61, .16);
-  --diff-del:     rgba(181, 42, 42, .13);
-  --diff-hunk:    rgba(29, 111, 184, .1);
   --switch-knob: #fff;
   --overlay:      rgba(236, 238, 241, .7);
   --overlay-rest: rgba(236, 238, 241, .14);
@@ -216,10 +208,6 @@
   --draw-label:   rgba(10, 12, 14, .92);
   --shot-bg:      #000;
   --pcb-bg:       #111;
-  --preview-bg:   #000;
-  --diff-add:     rgba(79, 138, 79, .22);
-  --diff-del:     rgba(204, 51, 51, .22);
-  --diff-hunk:    rgba(74, 155, 224, .12);
   --switch-knob: #e8edf2;
   --overlay:      rgba(0, 0, 0, .7);
   --overlay-rest: rgba(0, 0, 0, .14);
@@ -289,10 +277,6 @@
   --draw-label:   rgba(22, 27, 34, .92);
   --shot-bg:      #0d1117;
   --pcb-bg:       #010409;
-  --preview-bg:   #010409;
-  --diff-add:     rgba(46, 160, 67, .18);
-  --diff-del:     rgba(248, 81, 73, .18);
-  --diff-hunk:    rgba(56, 139, 253, .12);
   --switch-knob: #e6edf3;
   --overlay:      rgba(13, 17, 23, .72);
   --overlay-rest: rgba(1, 4, 9, .3);
@@ -355,10 +339,6 @@
   --draw-label: rgba(33, 37, 43, .92);
   --shot-bg: #282c34;
   --pcb-bg: #1b1e24;
-  --preview-bg: #1b1e24;
-  --diff-add: rgba(152, 195, 121, .18);
-  --diff-del: rgba(224, 108, 117, .18);
-  --diff-hunk: rgba(97, 175, 239, .12);
   --switch-knob: #dcdfe4;
   --overlay: rgba(40, 44, 52, .72);
   --overlay-rest: rgba(24, 26, 31, .3);
@@ -419,10 +399,6 @@
   --draw-label: rgba(33, 37, 43, .92);
   --shot-bg: #282c34;
   --pcb-bg: #1b1e24;
-  --preview-bg: #1b1e24;
-  --diff-add: rgba(152, 195, 121, .18);
-  --diff-del: rgba(224, 108, 117, .18);
-  --diff-hunk: rgba(97, 175, 239, .12);
   --switch-knob: #dcdfe4;
   --overlay: rgba(40, 44, 52, .72);
   --overlay-rest: rgba(24, 26, 31, .3);
@@ -482,10 +458,6 @@
   --draw-label: rgba(24, 24, 24, .92);
   --shot-bg: #1f1f1f;
   --pcb-bg: #121212;
-  --preview-bg: #121212;
-  --diff-add: rgba(46, 160, 67, .18);
-  --diff-del: rgba(248, 81, 73, .18);
-  --diff-hunk: rgba(0, 120, 212, .14);
   --switch-knob: #e8e8e8;
   --overlay: rgba(31, 31, 31, .72);
   --overlay-rest: rgba(0, 0, 0, .3);
@@ -545,10 +517,6 @@
   --draw-label: rgba(33, 34, 44, 0.92);
   --shot-bg: #282a36;
   --pcb-bg: #21222c;
-  --preview-bg: #21222c;
-  --diff-add: rgba(80, 250, 123, 0.2);
-  --diff-del: rgba(255, 85, 85, 0.2);
-  --diff-hunk: rgba(189, 147, 249, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(40, 42, 54, 0.72);
   --overlay-rest: rgba(33, 34, 44, 0.3);
@@ -608,10 +576,6 @@
   --draw-label: rgba(22, 22, 30, 0.92);
   --shot-bg: #1a1b26;
   --pcb-bg: #16161e;
-  --preview-bg: #16161e;
-  --diff-add: rgba(158, 206, 106, 0.2);
-  --diff-del: rgba(247, 118, 142, 0.2);
-  --diff-hunk: rgba(122, 162, 247, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(26, 27, 38, 0.72);
   --overlay-rest: rgba(22, 22, 30, 0.3);
@@ -671,10 +635,6 @@
   --draw-label: rgba(24, 24, 37, 0.92);
   --shot-bg: #1e1e2e;
   --pcb-bg: #181825;
-  --preview-bg: #181825;
-  --diff-add: rgba(166, 227, 161, 0.2);
-  --diff-del: rgba(243, 139, 168, 0.2);
-  --diff-hunk: rgba(137, 180, 250, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(30, 30, 46, 0.72);
   --overlay-rest: rgba(24, 24, 37, 0.3);
@@ -734,10 +694,6 @@
   --draw-label: rgba(39, 44, 54, 0.92);
   --shot-bg: #2e3440;
   --pcb-bg: #272c36;
-  --preview-bg: #272c36;
-  --diff-add: rgba(163, 190, 140, 0.2);
-  --diff-del: rgba(191, 97, 106, 0.2);
-  --diff-hunk: rgba(136, 192, 208, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(46, 52, 64, 0.72);
   --overlay-rest: rgba(39, 44, 54, 0.3);
@@ -797,10 +753,6 @@
   --draw-label: rgba(30, 31, 28, 0.92);
   --shot-bg: #272822;
   --pcb-bg: #1e1f1c;
-  --preview-bg: #1e1f1c;
-  --diff-add: rgba(166, 226, 46, 0.2);
-  --diff-del: rgba(249, 38, 114, 0.2);
-  --diff-hunk: rgba(102, 217, 239, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(39, 40, 34, 0.72);
   --overlay-rest: rgba(30, 31, 28, 0.3);
@@ -860,10 +812,6 @@
   --draw-label: rgba(29, 32, 33, 0.92);
   --shot-bg: #282828;
   --pcb-bg: #1d2021;
-  --preview-bg: #1d2021;
-  --diff-add: rgba(184, 187, 38, 0.2);
-  --diff-del: rgba(251, 73, 52, 0.2);
-  --diff-hunk: rgba(131, 165, 152, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(40, 40, 40, 0.72);
   --overlay-rest: rgba(29, 32, 33, 0.3);
@@ -923,10 +871,6 @@
   --draw-label: rgba(0, 33, 43, 0.92);
   --shot-bg: #002b36;
   --pcb-bg: #00212b;
-  --preview-bg: #00212b;
-  --diff-add: rgba(133, 153, 0, 0.2);
-  --diff-del: rgba(220, 50, 47, 0.2);
-  --diff-hunk: rgba(38, 139, 210, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(0, 43, 54, 0.72);
   --overlay-rest: rgba(0, 33, 43, 0.3);
@@ -986,10 +930,6 @@
   --draw-label: rgba(35, 38, 53, 0.92);
   --shot-bg: #292d3e;
   --pcb-bg: #232635;
-  --preview-bg: #232635;
-  --diff-add: rgba(195, 232, 141, 0.2);
-  --diff-del: rgba(240, 113, 120, 0.2);
-  --diff-hunk: rgba(130, 170, 255, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(41, 45, 62, 0.72);
   --overlay-rest: rgba(35, 38, 53, 0.3);
@@ -1049,10 +989,6 @@
   --draw-label: rgba(1, 17, 29, 0.92);
   --shot-bg: #011627;
   --pcb-bg: #01111d;
-  --preview-bg: #01111d;
-  --diff-add: rgba(173, 219, 103, 0.2);
-  --diff-del: rgba(239, 83, 80, 0.2);
-  --diff-hunk: rgba(130, 170, 255, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(1, 22, 39, 0.72);
   --overlay-rest: rgba(1, 17, 29, 0.3);
@@ -1112,10 +1048,6 @@
   --draw-label: rgba(26, 31, 41, 0.92);
   --shot-bg: #1f2430;
   --pcb-bg: #1a1f29;
-  --preview-bg: #1a1f29;
-  --diff-add: rgba(213, 255, 128, 0.2);
-  --diff-del: rgba(242, 135, 121, 0.2);
-  --diff-hunk: rgba(255, 204, 102, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(31, 36, 48, 0.72);
   --overlay-rest: rgba(26, 31, 41, 0.3);
@@ -1175,10 +1107,6 @@
   --draw-label: rgba(31, 29, 46, 0.92);
   --shot-bg: #191724;
   --pcb-bg: #1f1d2e;
-  --preview-bg: #1f1d2e;
-  --diff-add: rgba(156, 207, 216, 0.2);
-  --diff-del: rgba(235, 111, 146, 0.2);
-  --diff-hunk: rgba(196, 167, 231, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(25, 23, 36, 0.72);
   --overlay-rest: rgba(31, 29, 46, 0.3);
@@ -1238,10 +1166,6 @@
   --draw-label: rgba(22, 22, 29, 0.92);
   --shot-bg: #1f1f28;
   --pcb-bg: #16161d;
-  --preview-bg: #16161d;
-  --diff-add: rgba(152, 187, 108, 0.2);
-  --diff-del: rgba(228, 104, 118, 0.2);
-  --diff-hunk: rgba(126, 156, 216, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(31, 31, 40, 0.72);
   --overlay-rest: rgba(22, 22, 29, 0.3);
@@ -1301,10 +1225,6 @@
   --draw-label: rgba(30, 26, 43, 0.92);
   --shot-bg: #262335;
   --pcb-bg: #1e1a2b;
-  --preview-bg: #1e1a2b;
-  --diff-add: rgba(114, 241, 184, 0.2);
-  --diff-del: rgba(254, 68, 80, 0.2);
-  --diff-hunk: rgba(255, 126, 219, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(38, 35, 53, 0.72);
   --overlay-rest: rgba(30, 26, 43, 0.3);
@@ -1364,10 +1284,6 @@
   --draw-label: rgba(255, 255, 255, .92);
   --shot-bg: #ffffff;
   --pcb-bg: #f6f8fa;
-  --preview-bg: #eaeef2;
-  --diff-add: rgba(26, 127, 55, 0.2);
-  --diff-del: rgba(207, 34, 46, 0.2);
-  --diff-hunk: rgba(9, 105, 218, 0.13);
   --switch-knob: #fff;
   --overlay: rgba(255, 255, 255, 0.72);
   --overlay-rest: rgba(236, 238, 241, .14);
@@ -1427,10 +1343,6 @@
   --draw-label: rgba(255, 255, 255, .92);
   --shot-bg: #ffffff;
   --pcb-bg: #f8f8f8;
-  --preview-bg: #ebebeb;
-  --diff-add: rgba(56, 138, 52, 0.2);
-  --diff-del: rgba(229, 20, 0, 0.2);
-  --diff-hunk: rgba(0, 95, 184, 0.13);
   --switch-knob: #fff;
   --overlay: rgba(255, 255, 255, 0.72);
   --overlay-rest: rgba(236, 238, 241, .14);
@@ -1490,10 +1402,6 @@
   --draw-label: rgba(255, 255, 255, .92);
   --shot-bg: #ffffff;
   --pcb-bg: #eee8d5;
-  --preview-bg: #e8e1cb;
-  --diff-add: rgba(133, 153, 0, 0.2);
-  --diff-del: rgba(220, 50, 47, 0.2);
-  --diff-hunk: rgba(38, 139, 210, 0.13);
   --switch-knob: #fff;
   --overlay: rgba(253, 246, 227, 0.72);
   --overlay-rest: rgba(236, 238, 241, .14);
@@ -1553,10 +1461,6 @@
   --draw-label: rgba(255, 255, 255, .92);
   --shot-bg: #ffffff;
   --pcb-bg: #e6e9ef;
-  --preview-bg: #dce0e8;
-  --diff-add: rgba(64, 160, 43, 0.2);
-  --diff-del: rgba(210, 15, 57, 0.2);
-  --diff-hunk: rgba(30, 102, 245, 0.13);
   --switch-knob: #fff;
   --overlay: rgba(239, 241, 245, 0.72);
   --overlay-rest: rgba(236, 238, 241, .14);
@@ -1616,10 +1520,6 @@
   --draw-label: rgba(255, 255, 255, .92);
   --shot-bg: #ffffff;
   --pcb-bg: #f2e5bc;
-  --preview-bg: #ebdbb2;
-  --diff-add: rgba(121, 116, 14, 0.2);
-  --diff-del: rgba(157, 0, 6, 0.2);
-  --diff-hunk: rgba(7, 102, 120, 0.13);
   --switch-knob: #fff;
   --overlay: rgba(251, 241, 199, 0.72);
   --overlay-rest: rgba(236, 238, 241, .14);
@@ -1679,10 +1579,6 @@
   --draw-label: rgba(0, 0, 0, 0.92);
   --shot-bg: #000000;
   --pcb-bg: #000000;
-  --preview-bg: #000000;
-  --diff-add: rgba(137, 209, 133, 0.2);
-  --diff-del: rgba(244, 135, 113, 0.2);
-  --diff-hunk: rgba(243, 133, 24, 0.13);
   --switch-knob: #e8e8e8;
   --overlay: rgba(0, 0, 0, 0.72);
   --overlay-rest: rgba(0, 0, 0, 0.3);
@@ -2531,75 +2427,6 @@ body {
   background: var(--surface-2);
 }
 
-/* THE CODING ROOMS
-   Web, Embedded and Mobile: the same panes as the board room, and the same
-   drawing row the 3D room docks in its viewer, here under the preview's
-   head because the preview has no toolbar of its own. */
-.tcv-draw-row {
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  margin-left: 0;
-  padding: 3px 8px;
-  border-left: 0;
-  border-bottom: 1px solid var(--line);
-}
-/* A running page sits on dark, the way a board sits on black: the frame is
-   the thing looked at, and a pale surround bleeds into a pale page. */
-.tcv-preview { background: var(--preview-bg); }
-.tcv-preview-frame {
-  border: 0;
-  transform-origin: 0 0;
-  /* What a browser paints under a page that paints nothing itself. */
-  background: var(--shot-bg);
-}
-/* What a mark landed on, outlined over the picture but never into it. */
-.tcv-hit {
-  position: absolute;
-  pointer-events: none;
-  border: 1px dashed var(--accent);
-  background: var(--diff-hunk);
-}
-.tcv-diff-file {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
-  padding: 3px 8px;
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 11px;
-  color: var(--ink);
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--line);
-  cursor: pointer;
-}
-.tcv-diff-hunk {
-  padding: 1px 8px;
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 10px;
-  color: var(--ink-dim);
-  background: var(--diff-hunk);
-}
-.tcv-diff-line {
-  display: flex;
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--ink);
-}
-.tcv-diff-line[data-k="+"] { background: var(--diff-add); }
-.tcv-diff-line[data-k="-"] { background: var(--diff-del); }
-.tcv-diff-no {
-  flex-shrink: 0;
-  width: 3.2em;
-  padding-right: 6px;
-  text-align: right;
-  color: var(--ink-dim);
-  user-select: none;
-}
-.tcv-diff-text { white-space: pre-wrap; word-break: break-all; min-width: 0; }
-
 /* ONE LAYOUT FOR EVERY ROOM
    rooms/frame.ts: the 3D room's arrangement - toolbar across the top with
    the pen at its end, tabs down the left, the view beside them and the log
@@ -2620,15 +2447,6 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
-}
-.tcv-frame-status {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  padding: 0 6px;
-  font-size: 11px;
-  color: var(--ink-dim);
 }
 .tcv-frame-body {
   flex: 1 1 auto;
@@ -2841,114 +2659,9 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-focus-head:hover { background: var(--hover); }
 .tcv-focus-head span { color: var(--ink-dim); }
 .tcv-ico.tcv-ico-focus { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='2' y='3' width='22' height='20' rx='1' fill='none' stroke='%23ddd' stroke-width='1.3'/><rect x='12' y='15' width='5' height='5.5' rx='0.6' fill='rgb(48,142,225)' stroke='%23ddd' stroke-width='1'/><rect x='18' y='15' width='4.5' height='5.5' rx='0.6' fill='rgb(48,142,225)' stroke='%23ddd' stroke-width='1'/></svg>"); } /* theme:pigment */
-/* A phone's screen sits in a phone: rounded, with a bezel of the room's own
-   line colour, so a tall picture in a wide pane reads as a device. */
-.tcv-phone {
-  border: 6px solid var(--surface-2);
-  border-radius: 22px;
-  overflow: hidden;
-  box-sizing: content-box;
-}
-
-/* The programming rooms' toolbar icons, in the viewer's own language like
-   the board room's: 26 px, a #ddd outline, its blue for the key part, and
-   red and green where a diff has colours of its own. */
-.tcv-ico.tcv-ico-page { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='2.5' y='3.5' width='21' height='19' rx='1.5' fill='none' stroke='%23ddd' stroke-width='1.5'/><path d='M2.5,8 L23.5,8' fill='none' stroke='%23ddd' stroke-width='1.5'/><rect x='6' y='11' width='14' height='8' rx='0.8' fill='rgb(48,142,225)' stroke='%23ddd' stroke-width='1'/></svg>"); } /* theme:pigment */
-.tcv-ico.tcv-ico-phone { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='7' y='2' width='12' height='22' rx='2.5' fill='none' stroke='%23ddd' stroke-width='1.5'/><rect x='9' y='5' width='8' height='14' rx='0.6' fill='rgb(48,142,225)'/><path d='M12,21.2 L14,21.2' fill='none' stroke='%23ddd' stroke-width='1.5'/></svg>"); } /* theme:pigment */
-.tcv-ico.tcv-ico-chip { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><path d='M10,3 L10,6 M16,3 L16,6 M10,20 L10,23 M16,20 L16,23 M3,10 L6,10 M3,16 L6,16 M20,10 L23,10 M20,16 L23,16' fill='none' stroke='%23ddd' stroke-width='1.7'/><rect x='6' y='6' width='14' height='14' rx='2' fill='none' stroke='%23ddd' stroke-width='1.5'/><rect x='9.5' y='9.5' width='7' height='7' rx='1' fill='rgb(48,142,225)'/></svg>"); } /* theme:pigment */
-.tcv-ico.tcv-ico-diff { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='2.5' y='3.5' width='21' height='19' rx='1.5' fill='none' stroke='%23ddd' stroke-width='1.5'/><path d='M13,3.5 L13,22.5' stroke='%23ddd' stroke-width='1.2'/><path d='M5.5,8.5 L10,8.5 M5.5,13 L9,13 M5.5,17.5 L10,17.5 M16,8.5 L20.5,8.5 M16,17.5 L19.5,17.5' fill='none' stroke='%23ddd' stroke-width='1.4'/><path d='M15.5,13 L20.5,13' fill='none' stroke='rgb(48,142,225)' stroke-width='2.4'/></svg>"); } /* theme:pigment */
-.tcv-ico.tcv-ico-device { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='3' y='7' width='14' height='12' rx='1.5' fill='none' stroke='%23ddd' stroke-width='1.5'/><rect x='6.5' y='10.5' width='7' height='5' rx='0.8' fill='rgb(48,142,225)'/><path d='M17,13 L20,13 C22,13 23,12 23,10 L23,6' fill='none' stroke='%23ddd' stroke-width='1.5'/><rect x='21.2' y='3' width='3.6' height='3.5' rx='0.6' fill='none' stroke='%23ddd' stroke-width='1.3'/></svg>"); } /* theme:pigment */
-.tcv-ico.tcv-ico-desktop { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='2.5' y='4' width='21' height='14' rx='1.2' fill='none' stroke='%23ddd' stroke-width='1.5'/><rect x='5' y='6.5' width='16' height='9' fill='rgb(48,142,225)'/><path d='M10,22 L16,22 M13,18 L13,22' fill='none' stroke='%23ddd' stroke-width='1.5'/></svg>"); } /* theme:pigment */
-.tcv-ico.tcv-ico-tablet { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><rect x='5' y='2.5' width='16' height='21' rx='2' fill='none' stroke='%23ddd' stroke-width='1.5'/><rect x='7.5' y='5' width='11' height='14' fill='rgb(48,142,225)'/><path d='M12,21 L14,21' fill='none' stroke='%23ddd' stroke-width='1.5'/></svg>"); } /* theme:pigment */
-.tcv-ico.tcv-ico-reload { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><path d='M21.5,13 A8.5,8.5 0 1 1 18.5,6.5' fill='none' stroke='%23ddd' stroke-width='1.8'/><path d='M14.5,6 L19.5,6 L19.5,1' fill='none' stroke='rgb(48,142,225)' stroke-width='2'/></svg>"); } /* theme:pigment */
+/* The board room's Import icon, in the viewer's own language: 26 px, a
+   #ddd outline, its blue for the key part. */
 .tcv-ico.tcv-ico-open { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><path d='M20,14.5 L20,21.5 A1,1 0 0 1 19,22.5 L4.5,22.5 A1,1 0 0 1 3.5,21.5 L3.5,7 A1,1 0 0 1 4.5,6 L11.5,6' fill='none' stroke='%23ddd' stroke-width='1.5'/><path d='M15,3.5 L22.5,3.5 L22.5,11 M22.5,3.5 L12,14' fill='none' stroke='rgb(48,142,225)' stroke-width='2'/></svg>"); } /* theme:pigment */
-.tcv-ico.tcv-ico-elf { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26' stroke-linejoin='round' stroke-linecap='round'><path d='M13,3 L13,16 M7.5,11 L13,16.5 L18.5,11' fill='none' stroke='rgb(48,142,225)' stroke-width='2'/><path d='M4,21.5 L22,21.5' fill='none' stroke='%23ddd' stroke-width='1.8'/></svg>"); } /* theme:pigment */
-
-/* The firmware, as built: memory per region, then what fills it. */
-.tcv-fw-region { display: flex; align-items: center; gap: 10px; margin: 3px 0; font-size: 11px; }
-.tcv-fw-region > span:first-child { width: 72px; color: var(--ink); }
-.tcv-fw-track { flex: 1; height: 8px; border-radius: 3px; overflow: hidden; background: var(--surface-2); }
-.tcv-fw-track > span { display: block; height: 100%; background: var(--accent); }
-.tcv-fw-num { width: 230px; text-align: right; color: var(--ink-dim); }
-.tcv-fw-file { margin-bottom: 7px; }
-.tcv-fw-fname { display: flex; justify-content: space-between; gap: 8px; font-size: 10px;
-                color: var(--ink-dim); margin-bottom: 2px; }
-.tcv-fw-syms { display: flex; gap: 2px; height: 20px; }
-.tcv-fw-sym { min-width: 4px; flex-basis: 0; overflow: hidden; white-space: nowrap;
-              text-overflow: ellipsis; padding: 0 4px; font-size: 10px; text-align: left;
-              border-radius: 2px; background: var(--accent-deep); color: var(--ink); cursor: pointer; }
-.tcv-fw-sym:hover { outline: 1px solid var(--accent); }
-.tcv-fw-sym[data-on="1"] { background: var(--pen); color: var(--ink-bright); }
-/* The Embedded room's MCU panel (rooms/coding.ts): the chip in four
-   tiles, then memory, time, peripherals, pins - one type scale (12/11/10),
-   figures in the mono face and right-aligned, sections like the queue's. */
-.tcv-mcu { font-size: 11px; line-height: 1.45; color: var(--ink); }
-.tcv-mcu section { padding: 10px 10px 11px; border-bottom: 1px solid var(--line); }
-.tcv-mcu section:last-child { border-bottom: 0; }
-.tcv-mcu .tcv-label { display: flex; justify-content: space-between; margin: 0 0 7px; }
-.tcv-mcu [title] { cursor: default; }
-.tcv-mcu-aside { color: var(--ink-dim); font-family: 'IBM Plex Mono', ui-monospace, monospace; text-transform: none; }
-.tcv-mcu-empty { margin: 0; color: var(--ink-dim); font-size: 11px; }
-.tcv-mcu-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-bottom: 9px; }
-.tcv-mcu-name b { font-size: 14px; font-weight: 600; color: var(--ink-bright); }
-.tcv-mcu-name span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 10.5px; color: var(--ink-dim); }
-.tcv-mcu-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.tcv-mcu-tiles > div { display: flex; flex-direction: column; min-width: 0; padding: 6px 8px;
-  border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); }
-.tcv-mcu-tiles span { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-dim); }
-.tcv-mcu-tiles b { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 14px; font-weight: 600;
-  color: var(--ink-bright); line-height: 1.3; }
-.tcv-mcu-tiles em { min-height: 14px; font-style: normal; font-size: 10px; color: var(--ink-dim);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A memory region: name, amount and share on one line, a bar under it. */
-.tcv-mcu-mem { display: grid; grid-template-columns: minmax(0, 1fr) auto 38px; column-gap: 8px; row-gap: 3px;
-  align-items: baseline; margin-bottom: 8px; }
-.tcv-mcu-mem .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tcv-mcu-mem .v { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px; color: var(--ink-dim); }
-.tcv-mcu-mem .p { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px; text-align: right; }
-.tcv-mcu-mem .bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; overflow: hidden; background: var(--surface-2); }
-.tcv-mcu-mem .bar i { display: block; height: 100%; min-width: 2px; border-radius: 2px; background: var(--accent); }
-.tcv-mcu [data-level="warm"] { color: var(--warn); }
-.tcv-mcu [data-level="hot"] { color: var(--danger); }
-.tcv-mcu .bar i[data-level="warm"] { background: var(--warn); }
-.tcv-mcu .bar i[data-level="hot"] { background: var(--danger); }
-/* A label and its figure. */
-.tcv-mcu-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; min-width: 0; padding: 1px 0; }
-.tcv-mcu-line .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tcv-mcu-line .v { flex: none; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px; color: var(--ink-dim); }
-.tcv-mcu .strong { color: var(--ink); font-weight: 600; }
-.tcv-mcu-per { padding: 3px 0; }
-.tcv-mcu-per + .tcv-mcu-per { border-top: 1px dashed var(--line); }
-.tcv-mcu-per .d { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px; color: var(--ink-dim);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tcv-mcu-idle { margin: 8px 0 0; font-size: 10.5px; color: var(--ink-dim); line-height: 1.5; }
-/* Folded lists: a summary line that says what is inside. */
-.tcv-mcu-more summary { display: flex; align-items: baseline; cursor: pointer; list-style: none;
-  font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: .04em; }
-.tcv-mcu-more summary::-webkit-details-marker { display: none; }
-.tcv-mcu-more summary::before { content: '▸'; margin-right: 5px; }
-.tcv-mcu-more[open] summary::before { content: '▾'; }
-.tcv-mcu-more summary span { margin-left: auto; text-transform: none; letter-spacing: 0;
-  font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px; }
-.tcv-mcu-more summary .warn { color: var(--warn); font-weight: 500; }
-.tcv-mcu-more[open] summary { margin-bottom: 6px; }
-section > .tcv-mcu-more summary { text-transform: uppercase; }
-.tcv-mcu-mem + .tcv-mcu-more { margin-top: 2px; }
-.tcv-mcu-pin { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline;
-  padding: 2px 0; border-top: 1px solid var(--line); }
-.tcv-mcu-pin .pin { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px; }
-.tcv-mcu-pin .does { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-dim); }
-.tcv-mcu-pin .flag { font-size: 10px; color: var(--ink-dim); white-space: nowrap; }
-.tcv-mcu-pin[data-warn] .pin, .tcv-mcu-pin .flag[data-warn] { color: var(--warn); }
-/* A note's before and after, side by side over its diff. */
-.tcv-shot { position: relative; display: flex; align-items: center; justify-content: center;
-            height: 170px; overflow: hidden; border-radius: 4px;
-            border: 1px solid var(--line); background: var(--preview-bg); }
-.tcv-shot img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.tcv-shot em { font-size: 11px; color: var(--ink-dim); }
-.tcv-shot span { position: absolute; left: 0; top: 0; padding: 0 5px; font-size: 9px;
-                 text-transform: uppercase; background: var(--surface-2); color: var(--ink-dim); }
 
 /* The running note's card, docked at the foot of a room's tab column the
    way it docks under the 3D room's tree: fixed there, whole, with the

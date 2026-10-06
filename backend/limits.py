@@ -1,6 +1,6 @@
 """How much of the machine one container may take.
 
-Builds, board runs and the coding rooms' commands each run in a Docker
+Builds, board runs and the drawings each run in a Docker
 container. Without a limit, one runaway build - a compiler that forks
 without end, a test that eats memory - takes the whole machine, the app
 with it. Each container gets at most half the cores, a share of the
@@ -9,9 +9,6 @@ memory and a cap on processes. `.env` can change them:
     REDLINE_BOX_CPUS=8        cores (fractions allowed, 1.5)
     REDLINE_BOX_MEMORY=12g    memory, Docker's units (512m, 12g)
     REDLINE_BOX_PIDS=4096     processes and threads
-
-The phone emulator is not limited here: it is one long-running machine of
-its own, sized in backend/phone.py.
 """
 
 from __future__ import annotations

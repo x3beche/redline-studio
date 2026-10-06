@@ -4,7 +4,7 @@ A BOM for a board that came in as bare Gerbers, a pick-and-place file, a
 datasheet, a photo of the bench, a STEP from a supplier. None of them is a
 model or a board on its own - they are what the work needs. They are kept
 as they came (GridFS bucket `user_files`), with who brought them, when,
-and where they were: the room, and the board, model or app open there.
+and where they were: the room, and the board or model open there.
 
 The kind is read from the name and, for tables, from the header row, so a
 BOM is recognised as one and the PCB room's agent can be pointed at it

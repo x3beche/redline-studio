@@ -2,8 +2,8 @@
   "id": "json-path", "version": "1.1",
   "name": "JSON Path Explorer",
   "blurb": "walk a large JSON and copy the access path of a field",
-  "group": "web",
-  "rooms": ["web"],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": ["json", "path", "jsonpath", "json pointer", "jq", "accessor", "find key", "nested", "api response", "explorer", "tree", "field path", "rfc 6901", "rfc 9535"],
   "intro": "Walks every node of a JSON document and lists each field's access path in the style you code in (JavaScript, JSONPath, jq, Python or JSON Pointer), filtered by key or value. Type a path in any style to read the value there; with wildcards on, array indices collapse to [*] so a large list reads as its shape.",
   "inputs": [

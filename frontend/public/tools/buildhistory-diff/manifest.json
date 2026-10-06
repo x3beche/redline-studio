@@ -3,10 +3,8 @@
   "version": "1.0",
   "name": "Buildhistory Diff",
   "blurb": "package and image size changes between two builds from buildhistory, largest first",
-  "group": "embedded",
-  "rooms": [
-    "embedded"
-  ],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": [
     "buildhistory",
     "buildhistory-diff",

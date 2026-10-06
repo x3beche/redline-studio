@@ -3,10 +3,8 @@
  "version": "1.1",
  "name": "Override Syntax Migrator",
  "blurb": "old _append/_prepend/_remove/_${PN} override syntax rewritten to the colon syntax of Honister and later",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "keywords": [
   "override syntax",
   "honister",

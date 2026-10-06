@@ -2,8 +2,8 @@
   "id": "spi-modes", "agentOmit": ["parts"], "version": "1.1",
   "name": "SPI Mode Reference",
   "blurb": "CPOL/CPHA combinations with timing diagrams",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["spi", "cpol", "cpha", "spi mode", "mode 0", "mode 3", "clock polarity", "clock phase", "sample edge", "sck", "mosi", "miso", "timing diagram", "ckp cke", "spidev"],
   "intro": "Shows what each SPI mode means (mode = 2·CPOL + CPHA, the Motorola definition used by Linux and Arduino): the idle clock level, the edge data is sampled and shifted on, a timing diagram of one byte, how each MCU family and SDK spells the setting, and the modes common parts accept.",
   "inputs": [

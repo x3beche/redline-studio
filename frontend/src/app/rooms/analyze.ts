@@ -88,7 +88,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
         }
       </div>
     }
-    <ng-container *ngTemplateOutlet="head; context: { id: 'p-items', title: 'Items', sub: 'every model, board and app in ' + pd.name + ', by id' }" />
+    <ng-container *ngTemplateOutlet="head; context: { id: 'p-items', title: 'Items', sub: 'every model and board in ' + pd.name + ', by id' }" />
     @if (open('p-items')) {
       <div class="tcv-items">
         @for (it of pd.items; track it.id) {
@@ -119,15 +119,6 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
                   <dt>size</dt><dd>{{ it.size_mm ? it.size_mm[0] + ' × ' + it.size_mm[1] + ' mm' : '–' }}</dd>
                   <dt>pipeline runs</dt><dd>{{ it.board_runs?.length || 0 }}
                     @if ((it.board_runs?.length || 0) > 1) { <app-spark [values]="boardSeries(it)" title="unrouted, run by run" /> }</dd>
-                }
-                @if (it.kind === 'app') {
-                  <dt>platform</dt><dd>{{ it.platform }}</dd>
-                  <dt>tests</dt><dd>{{ it.tests ?? 0 }} runs
-                    @if (it.test_pass_rate != null) { · {{ (it.test_pass_rate * 100).toFixed(0) }}% pass }
-                    @if (it.last_test_ok != null) { · last <span [style.color]="it.last_test_ok ? 'var(--ok)' : 'var(--danger)'">{{ it.last_test_ok ? 'passed' : 'failed' }}</span> }</dd>
-                  @if (it.firmware; as fw) {
-                    <dt>firmware</dt><dd>{{ f.bytes(fw.flash_bytes) }} flash · {{ f.bytes(fw.ram_bytes) }} RAM</dd>
-                  }
                 }
                 @if (it.history.length) {
                   <dt>history</dt><dd class="tcv-dash-dim">{{ it.history.length }} snapshots
@@ -190,7 +181,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
         <div class="tcv-stat c2"><span>Disk free</span><b>{{ f.bytes(d.storage.disk.free) }}</b>
           <em>of {{ f.bytes(d.storage.disk.total) }}</em></div>
         <div class="tcv-stat c2"><span>Projects</span><b>{{ d.catalog.projects.length }}</b>
-          <em>{{ d.catalog.models }} models · {{ d.catalog.boards }} boards · {{ d.catalog.apps }} apps</em></div>
+          <em>{{ d.catalog.models }} models · {{ d.catalog.boards }} boards</em></div>
         <div class="tcv-stat c2"><span>Agent questions</span><b>{{ d.work.questions.asked }}</b>
           <em>answered in {{ d.work.questions.avg_wait_s == null ? '–' : f.secs(d.work.questions.avg_wait_s) }} on average</em></div>
         <div class="tcv-stat c2"><span>Runs</span><b>{{ runsTotal() }}</b>
@@ -571,11 +562,11 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
         <section class="tcv-panel-d c12"><h3>Per project
             <button class="tcv-dl" (click)="dl('projects', d.catalog.projects)">CSV</button></h3>
           <table class="tcv-dash-table">
-            <thead><tr><th>project</th><th class="r">models</th><th class="r">boards</th><th class="r">apps</th><th class="r">notes</th><th class="r">LLM spend</th></tr></thead>
+            <thead><tr><th>project</th><th class="r">models</th><th class="r">boards</th><th class="r">notes</th><th class="r">LLM spend</th></tr></thead>
             <tbody>
               @for (p of d.catalog.projects; track p.name) {
                 <tr><td>{{ roomName(p.name) }}</td><td class="r mono">{{ p.models }}</td><td class="r mono">{{ p.boards }}</td>
-                  <td class="r mono">{{ p.apps }}</td><td class="r mono">{{ p.notes }}</td><td class="r mono">{{ f.money(p.cost_usd) }}</td></tr>
+                  <td class="r mono">{{ p.notes }}</td><td class="r mono">{{ f.money(p.cost_usd) }}</td></tr>
               }
             </tbody>
           </table></section>
@@ -880,7 +871,7 @@ export class RoomAnalyze implements OnDestroy {
   setProject(p: string) { this.project.set(p); keep('project', p); }
   kindsLine(pd: ProjectDetail): string {
     const n = (k: string) => pd.items.filter(i => i.kind === k).length;
-    return [`${n('model')} models`, `${n('board')} boards`, `${n('app')} apps`].join(' · ');
+    return [`${n('model')} models`, `${n('board')} boards`].join(' · ');
   }
   walls(it: ProjectItem): number[] { return (it.build_walls ?? []).filter(w => w.ok).map(w => w.wall_s ?? 0); }
   boardSeries(it: ProjectItem): (number | null)[] { return (it.board_runs ?? []).map(r => r.unrouted); }
@@ -1062,8 +1053,8 @@ export class RoomAnalyze implements OnDestroy {
     return list.map(r => ({ name: name ? name(r.name) : r.name, value: Number(r[key] ?? 0) }))
       .filter(r => r.value > 0);
   }
-  readonly roomName = (n: string) => ({ cad: '3D Drawing', pcb: 'PCB Design', web: 'Web', embedded: 'Embedded',
-    mobile: 'Mobile', '(no run)': 'outside any note', '(no note)': 'outside any note' } as Record<string, string>)[n] ?? n;
+  readonly roomName = (n: string) => ({ cad: '3D Drawing', pcb: 'PCB Design',
+    '(no run)': 'outside any note', '(no note)': 'outside any note' } as Record<string, string>)[n] ?? n;
   stepLabel(s: number) { return s < 3600 ? `${s / 60}-minute buckets` : s < 86400 ? 'hourly' : s < 604800 ? 'daily' : 'weekly'; }
   stepWord(s: number) { return s < 3600 ? `${s / 60} min` : s < 86400 ? 'hour' : s < 604800 ? 'day' : 'week'; }
   readonly money: Fmt = fmt.money;

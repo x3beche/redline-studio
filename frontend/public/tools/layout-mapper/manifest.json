@@ -3,10 +3,8 @@
   "version": "1.1",
   "name": "Layout Inspector Mapper",
   "blurb": "a region of a screen mapped to its view in a uiautomator dump",
-  "group": "mobile",
-  "rooms": [
-    "mobile"
-  ],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": [
     "uiautomator",
     "window dump",

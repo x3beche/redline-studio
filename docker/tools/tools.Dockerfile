@@ -8,9 +8,6 @@
 # document validated, Mermaid rendered, a regex run in Python and PCRE, a
 # cron schedule cross-checked. Everything is installed at build time; a
 # check runs with --network none.
-#
-# The first two layers are the Web Programming image's own, word for word,
-# so Docker shares them rather than storing them twice.
 FROM ubuntu:24.04
 
 RUN apt-get update \

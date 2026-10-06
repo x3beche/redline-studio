@@ -19,12 +19,8 @@ export interface Revision {
   view: { states: Record<string, [number, number]> | null } | null;
   part: string | null;
   model: string | null;
-  /** A board's note, a model's, or one of the coding rooms': each room
-   *  shows its own. */
+  /** A board's note or a model's: each room shows its own. */
   kind: RevisionKind;
-  /** A note on a running interface: where it was drawn and what was under
-   *  the marks. Null for the other rooms. */
-  code: CodeNote | null;
   status: RevisionStatus;
   queued_at: string | null;
   edited_at: string | null;
@@ -122,25 +118,7 @@ export interface Settings {
   auto_translate: boolean;
 }
 
-export type RevisionKind = 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile';
-
-/** One element a mark landed on, as the note keeps it. */
-export interface DomHit {
-  selector: string;
-  tag: string;
-  text: string;
-  box: [number, number, number, number];
-  component: string | null;
-  file: string | null;
-  line: number | null;
-}
-
-export interface CodeNote {
-  route: string;
-  viewport: [number, number];
-  base: string | null;
-  dom: DomHit[];
-}
+export type RevisionKind = 'cad' | 'pcb';
 
 /** draft = invisible to models; queued = in the apply queue (models read these). */
 export type RevisionStatus = 'draft' | 'queued' | 'applied' | 'rejected';
@@ -185,7 +163,6 @@ export class Api {
     camera: CameraState | null; part: string | null; model: string | null;
       view?: { states: Record<string, [number, number]> | null } | null;
       kind?: RevisionKind;
-      code?: unknown;
   }): Observable<Revision> {
     return this.http.post<Revision>('/api/revisions', body);
   }
@@ -809,228 +786,13 @@ export class Activity {
   private http = inject(HttpClient);
   /** One room's log: the 3D room's is about models, the board room's
    *  about boards. */
-  lines(limit = 120, room: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' = 'cad'): Observable<LogLine[]> {
+  lines(limit = 120, room: 'cad' | 'pcb' = 'cad'): Observable<LogLine[]> {
     return this.http.get<LogLine[]>(`/api/activity?limit=${limit}&room=${room}`);
   }
   /** The run in one room. Each room has its own, so the tabs' agents can
    *  work at once. */
   run(room: string = 'cad'): Observable<Run | null> {
     return this.http.get<Run | null>(`/api/run?room=${room}`);
-  }
-}
-
-// ---------------- code projects ----------------
-/** A running interface: its checkout, where it is served, and the command
- *  whose exit code says it still works. */
-/** A symbol from a firmware build, as the Embedded room lists it. */
-export interface FwSymbol {
-  name: string; size: number; where: 'flash' | 'ram' | 'both';
-  file: string | null; line: number | null;
-}
-
-export interface AppEntry {
-  _id: string;
-  title: string;
-  platform: 'web' | 'embedded' | 'mobile';
-  folder: string;
-  repo: string;
-  cwd: string;
-  url: string | null;
-  dev: string | null;
-  test: string | null;
-  routes: string[];
-  last_test: TestRun | null;
-  /** Firmware: how it is built, and what the last build made. */
-  build?: string | null;
-  firmware?: FirmwareBuild | null;
-  /** A phone app: its Android package; without one, url is opened in the
-   *  phone's browser. */
-  package?: string | null;
-  target?: 'stm32' | 'esp32' | null;
-  flashed?: { at: string; ok: boolean; target: string; port: string | null } | null;
-}
-
-/** The Embedded room's MCU panel (backend/mcuinfo.py). Every figure has
- *  a source beside it: where it was read. */
-export interface McuCaution { level: 'warn' | 'info'; text: string; why: string; src: string }
-export interface McuRole { part: string; model: string; role: string; kind: string; bus?: string | null; addr?: number | null }
-export interface McuPeripheral {
-  kind: string; have: number; have_src: string; detail: string[];
-  linked: boolean | null; linked_src: string | null;
-  used: number | null; board: string[]; used_instances?: string[];
-}
-export interface McuPin {
-  pin: string; pad: string; net: string | null; parts: string[]; roles: McuRole[];
-  cautions: McuCaution[]; signals: string[]; alias?: string; alias_src?: string;
-}
-export interface McuSeen {
-  state: string; t: number;
-  pins: Record<string, { level: number; changes: number }>;
-  pwm: Record<string, { duty: number; hz: number }>;
-  inputs: Record<string, { kind: 'pin' | 'adc' | 'freq'; level?: number; volts?: number; hz?: number }>;
-  bus: { kind: string; bus: string; addr: number | string; n: number }[];
-  uart: Record<string, { out: number; in: number }>;
-}
-export interface McuInfo {
-  app: string; target: 'esp32' | 'stm32'; board: string | null;
-  chip: {
-    name: string | null; core: string | null; cores: number | null; fpu?: boolean;
-    mhz: number | null; max_mhz: number | null; flash_bytes: number | null; ram_bytes: number | null;
-    package: string | null; volts?: [number, number] | null; source: Partial<Record<string, string>>;
-  };
-  memory: { name: string; used: number; total: number; free: number; pct: number; src: string }[];
-  top: { name: string; size: number; where: string; file: string | null; line: number | null }[];
-  time: {
-    mhz: number | null; cycles_per_ms: number | null; tick_hz: number | null; tick_ms: number | null;
-    cycles_per_tick?: number; source: Partial<Record<string, string>>;
-  };
-  peripherals: McuPeripheral[];
-  pins: McuPin[];
-  seen: McuSeen | null;
-  warnings: string[];
-  sources: string[];
-  missing: string[];
-}
-
-export interface FirmwareBuild {
-  at: string;
-  ok: boolean;
-  rc: number;
-  wall_s: number | null;
-  cpu_s: number | null;
-  summary?: { regions: { name: string; used: number; size: number; pct: number }[];
-              flash_bytes: number; ram_bytes: number; symbols: number };
-}
-
-export interface AppStatus {
-  up: boolean;
-  git: { head: string; short: string; branch: string; dirty: number } | null;
-  error?: string;
-}
-
-/** A frozen page: the picture inline, the element list kept server-side. */
-export interface AppShot {
-  shot: string;
-  image: string;
-  width: number;
-  height: number;
-  elements: number;
-  title: string | null;
-  base: string | null;
-  wall_s: number | null;
-}
-
-/** One line of a hunk: kind, old line number, new line number, text. */
-export type DiffLine = [' ' | '+' | '-', number | null, number | null, string];
-
-export interface DiffFile {
-  path: string;
-  status: 'modified' | 'added' | 'deleted' | 'renamed';
-  added: number;
-  removed: number;
-  binary: boolean;
-  cut: boolean;
-  hunks: { head: string; lines: DiffLine[] }[];
-}
-
-export interface AppDiff {
-  files: DiffFile[];
-  added: number;
-  removed: number;
-  cut: boolean;
-  base: string | null;
-  note: string | null;
-  frozen: boolean;
-}
-
-export interface TestRun {
-  at: string;
-  ok: boolean;
-  rc: number;
-  wall_s: number;
-  cpu_s: number | null;
-  counts: Record<string, number>;
-  command: string;
-  head: string | null;
-  tail?: string;
-  lines: number;
-  /** Whether the tree is still the one the run was made on. */
-  current?: boolean;
-}
-
-export interface AppCompute {
-  app: string;
-  jobs: BoardJob[];
-  total: { jobs: number; wall_s: number; cpu_s: number };
-}
-
-@Injectable({ providedIn: 'root' })
-export class Apps {
-  private http = inject(HttpClient);
-  list(): Observable<AppEntry[]> { return this.http.get<AppEntry[]>('/api/apps'); }
-  one(id: string): Observable<AppEntry> { return this.http.get<AppEntry>(`/api/apps/${id}`); }
-  /** The last build as data: regions, symbols with their files. */
-  firmware(id: string): Observable<unknown> {
-    return this.http.get<unknown>(`/api/apps/${id}/firmware.json`);
-  }
-  /** STM32 probes and ESP32 boards plugged into this machine. */
-  boards(): Observable<{ kind: string; name: string; port?: string; usb?: string }[]> {
-    return this.http.get<{ kind: string; name: string; port?: string; usb?: string }[]>(
-      '/api/apps/hardware/boards');
-  }
-  /** The chip, its memory and time budget, and what the firmware uses. */
-  mcu(id: string): Observable<McuInfo> {
-    return this.http.get<McuInfo>(`/api/apps/${id}/mcu`);
-  }
-  buildLog(id: string): Observable<{ lines: string[] }> {
-    return this.http.get<{ lines: string[] }>(`/api/apps/${id}/build-log`);
-  }
-  /** Bring a project up on the phone, so the live view shows it. */
-  phoneOpen(id: string, route: string): Observable<unknown> {
-    return this.http.post(`/api/apps/${id}/phone-open`, {}, { params: { route } });
-  }
-  phoneState(): Observable<{ container: boolean; booted: boolean }> {
-    return this.http.get<{ container: boolean; booted: boolean }>('/api/apps/phone/state');
-  }
-  status(id: string): Observable<AppStatus> {
-    return this.http.get<AppStatus>(`/api/apps/${id}/status`);
-  }
-  /** Start the dev server, unless something already answers. */
-  serve(id: string): Observable<{ started: boolean; up: boolean; why?: string }> {
-    return this.http.post<{ started: boolean; up: boolean; why?: string }>(
-      `/api/apps/${id}/serve`, {});
-  }
-  serverLog(id: string): Observable<{ lines: string[] }> {
-    return this.http.get<{ lines: string[] }>(`/api/apps/${id}/server-log`);
-  }
-  /** A real screenshot of a route at a size, from headless Chrome. */
-  shot(id: string, route: string, width: number, height: number): Observable<AppShot> {
-    return this.http.post<AppShot>(`/api/apps/${id}/shot`, { route, width, height });
-  }
-  /** What the marks landed on. Boxes are in the picture's own pixels. */
-  under(shot: string, marks: { box: number[]; tip: number[] | null }[]):
-      Observable<{ dom: DomHit[]; labels: string[] }> {
-    return this.http.post<{ dom: DomHit[]; labels: string[] }>(
-      `/api/apps/shots/${shot}/under`, { marks });
-  }
-  diff(id: string, note?: string | null): Observable<AppDiff> {
-    return this.http.get<AppDiff>(`/api/apps/${id}/diff`,
-      note ? { params: { note } } : {});
-  }
-  test(id: string): Observable<TestRun> {
-    return this.http.post<TestRun>(`/api/apps/${id}/test`, {});
-  }
-  lastTest(id: string): Observable<TestRun | null> {
-    return this.http.get<TestRun | null>(`/api/apps/${id}/test`);
-  }
-  compute(id: string): Observable<AppCompute> {
-    return this.http.get<AppCompute>(`/api/apps/${id}/compute`);
-  }
-  move(id: string, folder: string): Observable<unknown> {
-    return this.http.post(`/api/apps/${id}/move?folder=${encodeURIComponent(folder)}`, {});
-  }
-  drop(id: string): Observable<unknown> {
-    return this.http.delete(`/api/apps/${id}`);
   }
 }
 
@@ -1072,9 +834,9 @@ export interface Insights {
              collections: { name: string; docs: number; bytes: number; storage: number }[];
              caches: { name: string; bytes: number }[];
              disk: { total: number; used: number; free: number } };
-  catalog: { folders: number; models: number; boards: number; apps: number; parts: number;
+  catalog: { folders: number; models: number; boards: number; parts: number;
              notes: number;
-             projects: { name: string; models: number; boards: number; apps: number; notes: number;
+             projects: { name: string; models: number; boards: number; notes: number;
                          cost_usd: number }[] };
   lcsc: { by_source: InsightSeries; totals: Record<string, number> };
   lead_times: { by_room: { room: string; notes: number; writing: number | null; waiting: number | null;
@@ -1140,7 +902,7 @@ export interface InsightCosts {
 }
 
 export interface ProjectItem {
-  id: string; kind: 'model' | 'board' | 'app' | string; title: string; picture: string | null;
+  id: string; kind: 'model' | 'board' | string; title: string; picture: string | null;
   notes: number; applied: number; spend_usd: number; runs: number; run_median_s: number | null;
   jobs: number; failed: number; job_median_s: number | null;
   history: Record<string, unknown>[];
@@ -1148,9 +910,6 @@ export interface ProjectItem {
   build_walls?: { at: string; wall_s: number | null; ok: boolean }[];
   unrouted?: number | null; drc_errors?: number | null; size_mm?: number[] | null;
   board_runs?: BoardRunRow[];
-  platform?: string; last_test_ok?: boolean | null; last_test_counts?: Record<string, number> | null;
-  test_pass_rate?: number | null; tests?: number;
-  firmware?: { flash_bytes: number; ram_bytes: number } | null;
 }
 
 export interface ProjectDetail {

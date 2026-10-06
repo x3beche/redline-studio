@@ -2,8 +2,8 @@
   "id": "servo-pulse", "agentOmit": ["drawing"], "version": "1.1",
   "name": "Servo Pulse Mapper",
   "blurb": "angle range to pulse width, with calibration values",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["servo", "rc servo", "pwm", "pulse width", "1500 us", "angle to pulse", "sg90", "mg996r", "timer compare", "ccr", "arr", "prescaler", "calibration", "50 hz", "duty cycle"],
   "intro": "Maps a servo angle to its pulse width by a straight line through two calibration points you measured (or the nominal 1000/2000 µs), then turns that pulse into a timer compare value and duty cycle at your frame rate. Hobby servos are close to linear over their range; the two points take out the unit-to-unit offset and gain.",
   "inputs": [

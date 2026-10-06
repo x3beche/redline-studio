@@ -6,9 +6,9 @@
 # so a new line in requirements.txt does not need a rebuild either.
 FROM python:3.12-slim-bookworm
 
-# OpenCascade (build123d) wants GL and X libraries even headless; git for the
-# code rooms; the docker CLI so the API can start KiCad and the room images
-# next to itself through the host's socket.
+# OpenCascade (build123d) wants GL and X libraries even headless; git; the
+# docker CLI so the API can start KiCad and the drawing image next to itself
+# through the host's socket.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgl1 libglib2.0-0 libxrender1 libxext6 libsm6 libx11-6 libfontconfig1 \
         build-essential git curl ca-certificates \

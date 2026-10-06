@@ -123,8 +123,8 @@ const PROVIDERS = [{ id: 'commandcode', name: 'Command Code' }, { id: 'openroute
 const UNDO_MS = 6000;
 
 /** Line drawings, 24 units square, stroked in the text colour - the same
- *  hand as the top bar's tab icons (topbar.ts), whose PCB, firmware, 3D and
- *  Command Code drawings are reused here. */
+ *  hand as the top bar's tab icons (topbar.ts), whose PCB, 3D and Command
+ *  Code drawings are reused here. */
 const I = {
   plus: 'M12 5v14 M5 12h14',
   search: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M20 20l-4.2-4.2',

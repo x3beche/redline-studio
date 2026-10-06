@@ -3,11 +3,8 @@
   "version": "1.1",
   "name": "Telemetry Mock Generator",
   "blurb": "realistic sensor time series with noise, drift and faults",
-  "group": "web",
-  "rooms": [
-    "web",
-    "embedded"
-  ],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": [
     "telemetry",
     "mock data",

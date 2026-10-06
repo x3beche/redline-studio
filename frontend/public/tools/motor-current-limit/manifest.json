@@ -2,8 +2,8 @@
   "id": "motor-current-limit", "version": "1.1",
   "name": "Motor Driver Current Limit",
   "blurb": "current limit and reference voltage from the sense resistor",
-  "group": "embedded",
-  "rooms": ["embedded", "pcb"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["vref", "current limit", "sense resistor", "rsense", "a4988", "drv8825", "tmc2209", "tmc2208", "a4950", "drv8870", "stepper driver", "trimpot", "chopper", "itrip", "motor current"],
   "intro": "Uses each driver's datasheet equation to go from the current you want to the VREF to set (or from a measured VREF to the current you get), and checks the sense voltage, the driver's rating and the sense resistor's dissipation. The limit a chopper driver regulates is the peak coil current.",
   "inputs": [

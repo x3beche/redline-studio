@@ -3,10 +3,8 @@
  "version": "1.0",
  "name": "Device Tree Explorer",
  "blurb": "a DTS with its includes merged into one tree, phandles resolved, addresses translated and conflicts found",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "keywords": [
   "device tree",
   "devicetree",

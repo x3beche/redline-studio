@@ -3,10 +3,8 @@
  "version": "1.0",
  "name": "U-Boot Env & bootargs Builder",
  "blurb": "bootcmd and kernel bootargs built and explained, and the CRC'd environment image made",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "layout": "custom",
  "view": true,
  "keywords": [

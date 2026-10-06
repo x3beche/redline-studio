@@ -2,8 +2,8 @@
   "id": "svg-path-editor", "version": "1.1",
   "name": "SVG Path Editor",
   "blurb": "edit a path node by node and trim needless decimals",
-  "group": "web",
-  "rooms": ["web"],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": ["svg", "path", "d attribute", "path data", "minify", "optimize", "svgo", "decimals", "precision", "bezier", "nodes", "relative", "absolute", "icon", "vector"],
   "intro": "Parses a path's d attribute by the SVG path grammar, lists every node, and writes it back shorter: rounded to the decimals you choose, each segment relative or absolute (whichever is shorter), H/V shorthands, no repeated command letters. Drag a node in the drawing to move it.",
   "inputs": [

@@ -3,12 +3,10 @@
  "version": "1.1",
  "name": "BitBake Variable Resolver",
  "blurb": "the final value of a BitBake variable from its assignments, overrides and :append/:remove, step by step",
- "group": "embedded",
+ "group": "pcb",
  "layout": "custom",
  "view": true,
- "rooms": [
-  "embedded"
- ],
+ "rooms": ["pcb"],
  "keywords": [
   "bitbake",
   "yocto",

@@ -2,10 +2,8 @@
   "id": "adb-commands", "version": "1.1",
   "name": "ADB Command Palette",
   "blurb": "common emulator and device commands, ready to copy",
-  "group": "mobile",
-  "rooms": [
-    "mobile"
-  ],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": [
     "adb",
     "android debug bridge",

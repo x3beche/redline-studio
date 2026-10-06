@@ -3,10 +3,8 @@
   "version": "1.0",
   "name": "DMA Stream Planner",
   "blurb": "peripherals assigned to DMA streams and channels on an STM32, with the conflicts shown",
-  "group": "embedded",
-  "rooms": [
-    "embedded"
-  ],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": [
     "dma",
     "dma stream",

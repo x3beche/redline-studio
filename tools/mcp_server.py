@@ -34,7 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CLI = [sys.executable, str(ROOT / "tools" / "revisions.py")]
 PROTOCOL = "2025-06-18"
-ROOMS = ["cad", "pcb", "web", "embedded", "mobile"]
+ROOMS = ["cad", "pcb"]
 
 
 def _s(desc: str) -> dict:
@@ -45,16 +45,14 @@ def _s(desc: str) -> dict:
 TOOLS: dict[str, tuple] = {
     "queue": (
         "What is queued, oldest first. With a room, only that room's notes: "
-        "cad (3D models), pcb (boards), web, embedded, mobile (code).",
+        "cad (3D models) or pcb (boards).",
         {"room": {"type": "string", "enum": ROOMS,
                   "description": "only this room's queue"}},
         [], lambda a: ["queue"] + (["--room", a["room"]] if a.get("room") else [])),
     "show": (
-        "A note in full. A code note prints the page, the elements under the "
-        "marks and their files; every kind writes its drawing to disk - open "
-        "that file and look at it before doing anything.",
-        {"id": _s("revision id")}, ["id"],
-        lambda a: ["code", "show", a["id"]] if a.get("_code") else ["show", a["id"]]),
+        "A note in full. It writes its drawing to disk - open that file and "
+        "look at it before doing anything.",
+        {"id": _s("revision id")}, ["id"], lambda a: ["show", a["id"]]),
     "start": (
         "Open the run for a note: the progress bar and live cost in its room. "
         "Refuses while another note's run is open in the same room.",
@@ -76,15 +74,8 @@ TOOLS: dict[str, tuple] = {
         {"id": _s("revision id"), "failed": {"type": "boolean"}},
         ["id"], lambda a: ["finish", a["id"]] + (["--failed"] if a.get("failed") else [])),
     "done": (
-        "Mark a note applied. A code note is tested first and refused while "
-        "its tests fail, then photographed again at the same route and size.",
+        "Mark a note applied.",
         {"id": _s("revision id")}, ["id"], lambda a: ["done", a["id"]]),
-    "code_diff": (
-        "A code note's own change since it was drawn, as a unified diff.",
-        {"id": _s("revision id")}, ["id"], lambda a: ["code", "diff", a["id"]]),
-    "code_test": (
-        "Run a code note's project test command, in the tab's container.",
-        {"id": _s("revision id")}, ["id"], lambda a: ["code", "test", a["id"]]),
     "chat": (
         "Read the thread under the queue, and pick up what the person said. "
         "Each room (tab) has its own thread; with a room, only that one.",
@@ -209,19 +200,7 @@ def argv(name: str, args: dict) -> list[str]:
     for need in TOOLS[name][2]:
         if need not in args:
             raise ValueError(f"{name}: {need} is required")
-    if name == "show":
-        args = {**args, "_code": _is_code(args["id"])}
     return TOOLS[name][3](args)
-
-
-def _is_code(rid: str) -> bool:
-    """Whether a note is from a coding room, which `show` prints differently."""
-    try:
-        out = subprocess.run([*CLI, "kind", rid], capture_output=True,
-                             text=True, timeout=30)
-        return out.stdout.strip() in ("web", "embedded", "mobile")
-    except (OSError, subprocess.TimeoutExpired):
-        return False
 
 
 def call(name: str, args: dict) -> dict:

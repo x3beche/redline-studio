@@ -4,10 +4,8 @@
   "layout": "custom",
   "name": "Screen Flow Mapper",
   "blurb": "screen-to-screen transitions as a diagram and a navigation graph",
-  "group": "mobile",
-  "rooms": [
-    "mobile"
-  ],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": [
     "screen flow",
     "user flow",

@@ -13,7 +13,7 @@
 # Host networking keeps every address as it is under start.sh: the page's
 # proxy reaches the API on 127.0.0.1, and Windows reaches both through WSL.
 #
-# The API starts KiCad and the room images next to itself through the host's
+# The API starts KiCad and the drawing image next to itself through the host's
 # Docker socket. It hands them paths under the checkout and /tmp, which is
 # why both are mounted at the same place on both sides.
 

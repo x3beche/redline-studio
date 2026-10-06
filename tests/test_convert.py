@@ -330,3 +330,58 @@ def test_place_py_still_parses():
     # typo before a board run does.
     import ast
     ast.parse((Path(__file__).resolve().parent.parent / "docker" / "place.py").read_text())
+
+
+# ---- pads the footprint numbers alike ----
+
+SWITCH = {
+    "title": "FAKE-SLIDE",
+    "dataStr": {"head": {"c_para": {"Manufacturer Part": "FAKE-SLIDE"}},
+                "shape": [_pin("1", "1"), _pin("2", "2"), _pin("3", "3"), _pin("4", "4")]},
+    # Three contacts, and four mechanical legs that EasyEDA all numbers 4.
+    "packageDetail": {"title": "SW-FAKE-SLIDE", "dataStr": {"shape": [
+        _pad("1", 4000, 3000), _pad("2", 4003, 3000), _pad("3", 4006, 3000),
+        _pad("4", 3997, 2996), _pad("4", 3997, 3004), _pad("4", 4009, 2996),
+        _pad("4", 4009, 3004)]}},
+}
+
+
+def _switch_board(leg_net: bool):
+    graph, pads = board()
+    graph["components"].append({"ref": "SW1", "value": None, "footprint": "SW-FAKE-SLIDE",
+                                "part": None, "where": None})
+    graph["nets"][1]["nodes"].append({"ref": "SW1", "pin": "1"})     # 3.3V
+    graph["nets"][0]["nodes"].append({"ref": "SW1", "pin": "2"})     # GND
+    if leg_net:
+        graph["nets"][0]["nodes"].append({"ref": "SW1", "pin": "4"})
+    for num, x in (("1", 50), ("2", 50.762), ("3", 51.524), ("4", 49.238)):
+        pads.append({"ref": "SW1", "pin": num, "x": x, "y": 5, "type": "SMD"})
+    return graph, pads
+
+
+@pytest.mark.parametrize("leg_net", [False, True])
+def test_legs_numbered_alike_are_joined_only_where_the_import_joins_them(monkeypatch, leg_net):
+    got = {"C900001": CHIP, "C900002": LED, "C900003": SWITCH}
+
+    async def component(code):
+        return got[code]
+    monkeypatch.setattr(lcsc, "_component", component)
+    graph, pads = _switch_board(leg_net)
+    table = convert.pad_table(graph, pads)
+    fps = {c["ref"]: c["footprint"] for c in graph["components"]}
+    parts, unresolved = asyncio.run(convert.identify(
+        graph, table, {}, {"U1": {"lcsc": "C900001"}, "SW1": {"lcsc": "C900003"}, **LEDS}, fps))
+    assert not unresolved
+    source, info = convert.write("Demo", parts, graph, table, "Gerbers", None)
+    block = source.split("component FAKE_SLIDE:")[1].split("\ncomponent ")[0].split("\nmodule ")[0]
+    assert "signal p1 ~ pin 1" in block and "signal p2 ~ pin 2" in block
+    if leg_net:
+        # On ground in the import: the four legs are one pin on GND, as drawn.
+        assert "signal p4 ~ pin 4" in block
+        assert "SW1.4" not in info["open_pins"]
+    else:
+        # On no net: no signal, so the build leaves every leg on no net -
+        # never one net of four pads the router would have to join.
+        assert "~ pin 4" not in block and "left unconnected" in block
+        assert "SW1.4" in info["open_pins"]
+        assert ".p4 ~" not in source

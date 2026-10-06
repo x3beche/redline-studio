@@ -4,9 +4,8 @@ import type { Tool } from '../editor/editor';
  *
  *  The same seven tools as the 3D room, painted the same way - a line
  *  drawn in one room has to look like a line drawn in the other. The 3D
- *  room keeps its own copy inside the editor; this is the one the coding
- *  rooms draw with. What is new here is `extent`: a mark on a page is
- *  laid on the elements under it, so each one has to say where it is.
+ *  room keeps its own copy inside the editor; this is the one the other
+ *  rooms draw with (rooms/sketchpad.ts).
  */
 export type Pt = [number, number];
 
@@ -71,30 +70,4 @@ export function paint(ctx: CanvasRenderingContext2D, marks: Mark[],
     }
     ctx.stroke();
   }
-}
-
-/** Where a mark is, and what it points at, in the canvas's pixels.
- *
- *  A ring - rectangle, ellipse, triangle, a loop of pen - covers what it is
- *  about. An arrow and a word point: the arrow at its head, the word at
- *  where it starts. A plain line or a short stroke is taken as pointing
- *  with its end, because that is where a pen stops on the thing it means.
- */
-export function extent(m: Mark): { box: number[]; tip: number[] | null } {
-  if (m.kind === 'text') {
-    return { box: [m.at[0] - 4, m.at[1] - m.size / 2, 8, m.size], tip: [m.at[0], m.at[1]] };
-  }
-  if (m.kind === 'pen') {
-    const xs = m.pts.map(p => p[0]), ys = m.pts.map(p => p[1]);
-    const x0 = Math.min(...xs), y0 = Math.min(...ys);
-    const box = [x0, y0, Math.max(...xs) - x0, Math.max(...ys) - y0];
-    // Closed enough to be a ring: the ends meet within a fifth of its size.
-    const [sx, sy] = m.pts[0], [ex, ey] = m.pts[m.pts.length - 1];
-    const ring = Math.hypot(ex - sx, ey - sy) < 0.25 * Math.max(box[2], box[3], 1);
-    return { box, tip: ring ? null : [ex, ey] };
-  }
-  const [ax, ay] = m.a, [bx, by] = m.b;
-  const box = [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)];
-  const points = m.kind === 'arrow' || m.kind === 'line';
-  return { box, tip: points ? [bx, by] : null };
 }

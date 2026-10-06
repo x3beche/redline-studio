@@ -3,10 +3,8 @@
   "version": "1.0",
   "name": "Flash & EEPROM Wear Lifetime",
   "blurb": "how long flash, EEPROM emulation or a log area lasts at a write rate, with wear levelling",
-  "group": "embedded",
-  "rooms": [
-    "embedded"
-  ],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": [
     "flash wear",
     "endurance",

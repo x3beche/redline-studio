@@ -1,8 +1,8 @@
 # Tools
 
 The **Tools** tab: calculators, references, checkers and sketch pads that
-serve every room - PCB, embedded, mechanical, web, mobile and the project as
-a whole. It sits on the top bar just left of Analytics. Agents reach the
+serve every room - PCB and electronics (firmware-side calculators
+included), mechanical, code and design, AI, and the project as a whole. It sits on the top bar just left of Analytics. Agents reach the
 same tools over MCP.
 
 This file is the whole story of the tab. Read it when a task is about a tool
@@ -48,12 +48,12 @@ only); its calls are billed in Analytics under surface `tools`, kind
 - **Search** - press `/` anywhere in the tab. Words match names, keywords,
   descriptions and rooms; arrows move through the results, Enter opens, Esc
   clears.
-- **Filters** - ★ shows only favourites; the room chips (PCB, Embedded, 3D,
-  Web, Mobile, Analytics) show the tools for that room.
+- **Filters** - ★ shows only favourites; the room chips (PCB, 3D, Code, AI,
+  Analytics) show the tools for that room.
 - **Favourites** - the ★ beside a tool, or in its header. Favourites and the
   last few tools used are listed first.
-- **Groups** - PCB & electronics, Embedded, Mechanical & 3D, Web & design,
-  Mobile, Code, data & prompts, Project; click a heading to fold it.
+- **Groups** - PCB & electronics, Mechanical & 3D, Code, data & design,
+  AI & prompts, Project; click a heading to fold it.
 - Each tool's header shows **MCP** when agents can run it, and its uses over
   30 days.
 
@@ -78,129 +78,124 @@ agents, the most used, and every tool nobody used.
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
+| **ADC Resolution Calculator** · MCP | `adc-resolution` | LSB size from reference and bits, and the oversampling gain | PCB |
 | **Annular Ring Checker** · MCP | `annular-ring` | whether the ring left around a drill is safe for a fab's tolerance | PCB |
 | **Antenna Length Calculator** · MCP | `antenna-length` | quarter-wave antenna length and keep-out for a frequency | PCB |
 | **Assembly Cost Estimator** · MCP | `assembly-cost` | assembly cost from unique parts, placements and extended-part fees | PCB, Analytics |
+| **Battery Life Estimator** · MCP | `battery-life` | run time in days from average current and battery capacity | PCB |
+| **BitBake Variable Resolver** · MCP | `bitbake-vars` | the final value of a BitBake variable from its assignments, overrides and :append/:remove, step by step | PCB |
 | **Board Cost Estimator** · MCP | `board-cost` | estimated fabrication cost from board size, layer count, quantity and options | PCB, Analytics |
 | **Board Density Estimator** · MCP | `board-density` | density class and routing difficulty from part count and area | PCB, Analytics |
 | **BOM Deduplicator** · MCP | `bom-dedupe` | merges spellings of the same part and produces a consolidated BOM | PCB, Analytics |
+| **Boot Log Timeline** · MCP | `boot-log-timeline` | a boot log or systemd-analyze output split into stages on a timeline, slowest first | PCB |
+| **Bootloader Size Check** · MCP | `bootloader-fit` | whether application and bootloader regions fit | PCB |
 | **Buck Converter Designer** · MCP | `buck-designer` | inductor, output capacitor and ripple for a buck converter | PCB |
+| **Build Error & QA Explainer** · MCP | `yocto-build-errors` | a failed BitBake task log or QA warning classified, with the cause and the fix | PCB |
+| **Buildhistory Diff** · MCP | `buildhistory-diff` | package and image size changes between two builds from buildhistory, largest first | PCB |
+| **CAN Bit Timing Calculator** · MCP | `can-bit-timing` | segment values and sample point from a clock and bit rate | PCB |
 | **Capacitor Derating** · MCP | `cap-derating` | real capacitance of an MLCC under DC bias and temperature | PCB |
-| **Connector Pinout Library** · MCP | `connector-pinouts` | pin maps of USB-C, SWD, JTAG, JST, IDC and other common connectors | PCB, Embedded |
+| **Clock Tree Planner** · MCP | `clock-tree` | PLL settings and peripheral clocks from a crystal frequency | PCB |
+| **Compiler Flag Explainer** · MCP | `compiler-flags` | size and speed effect of the optimisation flags in a build log | PCB |
+| **Connector Pinout Library** · MCP | `connector-pinouts` | pin maps of USB-C, SWD, JTAG, JST, IDC and other common connectors | PCB |
 | **Copper Area Thermal** · MCP | `copper-thermal` | temperature rise of a power part from the copper area under it | PCB |
+| **CRC Calculator** · MCP | `crc-calc` | CRC-8/16/32 with polynomial, init and reflection settings | PCB |
 | **Creepage & Clearance** · MCP | `creepage-clearance` | minimum conductor spacing for a working voltage per IPC-2221, as a table | PCB |
-| **Crystal Load Capacitor** · MCP | `crystal-load` | load capacitors for a crystal from its CL and board stray capacitance | PCB, Embedded |
-| **Current Sense Designer** · MCP | `current-sense` | shunt value, its power and the amplifier gain for a range and an ADC input | PCB, Embedded |
+| **Crystal Load Capacitor** · MCP | `crystal-load` | load capacitors for a crystal from its CL and board stray capacitance | PCB |
+| **Current Sense Designer** · MCP | `current-sense` | shunt value, its power and the amplifier gain for a range and an ADC input | PCB |
+| **CVE Check Viewer** · MCP | `cve-check-viewer` | cve-check JSON output per package: unpatched, patched and ignored CVEs, with scores | PCB |
+| **Cycle to Time Converter** · MCP | `cycles-time` | instruction cycles to microseconds and back at a clock | PCB |
+| **Debounce Time Calculator** · MCP | `debounce-time` | debounce time for a button type and sampling period | PCB |
 | **Decoupling Planner** · MCP | `decoupling-planner` | how many decoupling capacitors and which values for an IC's supply pins and target impedance | PCB |
 | **Design Rule Diff** · MCP | `rule-diff` | two rule sets compared side by side | PCB |
+| **Device Tree Explorer** · MCP | `device-tree-explorer` | a DTS with its includes merged into one tree, phandles resolved, addresses translated and conflicts found | PCB |
 | **Differential Pair Matcher** · MCP | `diffpair-match` | length-matching tolerance for USB, Ethernet, HDMI and similar pairs | PCB |
+| **DMA Stream Planner** · MCP | `dma-stream-planner` | peripherals assigned to DMA streams and channels on an STM32, with the conflicts shown | PCB |
 | **DRC Rule Preset Builder** · MCP | `drc-presets` | track, space and drill rules from a fab's capabilities, ready for the Rules tab | PCB |
+| **DT Overlay Builder** · MCP | `dt-overlay-builder` | a device tree overlay fragment to enable, add or change nodes on a base tree | PCB |
+| **EMA / IIR Coefficient Tool** · MCP | `iir-coefficient` | smoothing coefficient from a cutoff frequency, with the response drawn | PCB |
+| **Endianness Inspector** · MCP | `endianness` | the same bytes read as little and big endian side by side | PCB |
 | **ERC Rule Explainer** · MCP | `erc-explainer` | what an ERC error means and its usual fix, in plain words | PCB |
 | **ESD Protection Selector** · MCP | `esd-selector` | TVS diode selection criteria by interface and line speed | PCB |
 | **Fiducial & Tooling Planner** · MCP | `fiducial-planner` | fiducial and tooling-hole placement for assembly | PCB |
+| **Firmware Size Diff** · MCP | `firmware-size-diff` | symbol-by-symbol size change between two builds, largest first | PCB |
+| **Fixed-Point Converter** · MCP | `fixed-point` | a decimal value in a Q format and the precision lost | PCB |
+| **Flash & EEPROM Wear Lifetime** · MCP | `flash-wear` | how long flash, EEPROM emulation or a log area lasts at a write rate, with wear levelling | PCB |
+| **Flash Partition Planner** · MCP | `flash-partitions` | OTA, NVS and filesystem partitions sized, with a partition table | PCB |
+| **FreeRTOS Config & Heap Sizer** · MCP | `freertos-config` | FreeRTOSConfig.h choices explained and the heap needed for tasks, queues and timers | PCB |
 | **Fuse & Polyfuse Selector** · MCP | `fuse-selector` | fuse rating from normal current and fault scenario | PCB |
 | **Gerber Checklist** · MCP | `gerber-checklist` | completeness of layers, drills, panel and notes before sending to fab | PCB |
+| **GPIO Restriction Warner** · MCP | `gpio-warner` | risks of using boot straps and special-purpose GPIOs | PCB |
+| **HardFault Decoder** · MCP | `hardfault-decoder` | Cortex-M CFSR, HFSR, MMFAR and BFAR decoded, the stacked frame read, and the likely cause named | PCB |
+| **Hash & Checksum Quick Tool** · MCP | `hash-checksum` | MD5, SHA and simple checksums of text or hex data | PCB |
 | **Heat Sink Sizing** · MCP | `heatsink-sizing` | required thermal resistance and heat sink size from power and ambient | PCB, 3D |
-| **I2C Pull-up Calculator** · MCP | `i2c-pullup` | the pull-up resistor range for an I2C bus from its supply, speed and capacitance | PCB, Embedded |
+| **Hex Dump Decoder** · MCP | `hex-dump-decoder` | captured raw bytes split into frames for a chosen protocol | PCB |
+| **I2C Address Map** · MCP | `i2c-address-map` | devices on a bus by address, with conflicts and alternative addresses | PCB |
+| **I2C Pull-up Calculator** · MCP | `i2c-pullup` | the pull-up resistor range for an I2C bus from its supply, speed and capacitance | PCB |
+| **IEEE754 Float Inspector** · MCP | `float-inspector` | sign, exponent and mantissa bits of a float | PCB |
 | **Impedance Calculator** · MCP | `impedance-calc` | characteristic impedance of microstrip, stripline and differential pairs from the stackup | PCB |
+| **Interrupt Latency Budget** · MCP | `irq-latency` | CPU load and miss risk from interrupt rates and handler times | PCB |
+| **Kconfig Diff** · MCP | `kconfig-diff` | two kernel or U-Boot .config files compared, and the difference written as a config fragment | PCB |
+| **Kernel Oops Decoder** · MCP | `kernel-oops-decoder` | a Linux oops or panic taken apart: the cause, the faulting function, the call trace and the taint flags | PCB |
 | **Land Pattern Reference** · MCP | `land-pattern` | IPC-7351 pad sizes and courtyard for common packages | PCB |
+| **Layer & Release Map** · MCP | `layer-release-map` | Yocto releases with their LTS and end-of-life dates, and a bblayers stack checked for compatibility | PCB |
 | **Layer Assignment Advisor** · MCP | `layer-advisor` | signal, power and ground distribution for a layer count | PCB |
 | **LDO vs Buck Advisor** · MCP | `ldo-vs-buck` | efficiency, heat and noise of an LDO against a buck, side by side | PCB |
 | **Length Matching Budget** · MCP | `length-budget` | maximum length mismatch for a bus speed, in ps and mm | PCB |
+| **License Manifest Viewer** · MCP | `license-manifest` | packages in an image grouped by license, with GPLv3 and other copyleft flagged | PCB |
+| **Linker Script Helper** · MCP | `linker-script` | a linker script from sections and memory regions in a form | PCB |
+| **Linux GPIO Number Converter** · MCP | `linux-gpio-number` | a SoC pin name to its gpiochip, line offset, legacy sysfs number and libgpiod commands | PCB |
+| **Log Format Designer** · MCP | `log-format` | a compact embedded log format and its parser code | PCB |
+| **Memory Map Viewer** · MCP | `memory-map` | flash and RAM region use as a scaled strip | PCB |
+| **Modbus Frame Builder** · MCP | `modbus-frame` | an RTU/TCP frame with its CRC from function code and registers | PCB |
 | **MOSFET Gate Drive Check** · MCP | `mosfet-gate` | switching loss and driver adequacy from gate charge, drive current and frequency | PCB |
+| **Motor Driver Current Limit** · MCP | `motor-current-limit` | current limit and reference voltage from the sense resistor | PCB |
 | **Mounting Hole Planner** · MCP | `mounting-holes` | keep-out on the board from hole size, standoff and screw | PCB, 3D |
+| **MPU Region Planner** · MCP | `mpu-region-planner` | Cortex-M MPU regions laid out on the memory map with sizes, alignment, subregions and attributes | PCB |
 | **Net Naming Linter** · MCP | `net-name-linter` | checks net names against a convention and lists the inconsistent ones | PCB |
+| **NMEA / Serial Log Parser** · MCP | `serial-log-parser` | a serial log parsed line by line into a table of fields | PCB |
+| **NVIC Priority Planner** · MCP | `nvic-planner` | interrupt priorities in order, with preemption conflicts | PCB |
 | **Op-Amp Gain Tool** · MCP | `opamp-gain` | gain, offset and bandwidth of inverting and non-inverting stages | PCB |
+| **OTA A/B Update Planner** · MCP | `ota-ab-planner` | A/B slots, boot counting and rollback for RAUC, SWUpdate or Mender, with their config files | PCB |
+| **Override Syntax Migrator** · MCP | `override-migrator` | old _append/_prepend/_remove/_${PN} override syntax rewritten to the colon syntax of Honister and later | PCB |
 | **Package Dimension Explorer** · MCP | `package-explorer` | physical sizes of packages from 0201 to QFN, compared to scale | PCB, 3D |
 | **Panelization Planner** · MCP | `panelization` | how many boards fit a panel with V-cut or mouse-bite margins, and the waste | PCB |
 | **Part Alternative Finder** · MCP | `part-alternatives` | alternatives for a part in stock, with basic/extended class compared | PCB |
 | **PCB Weight & CoG** · MCP | `pcb-weight` | mass and centre of gravity of board, copper and parts | PCB, 3D |
-| **Power Rail Tree** · MCP | `power-rail-tree` | supply rails as a tree with each branch's current budget and total power | PCB, Embedded |
+| **PID Tuning Playground** · MCP | `pid-playground` | a simple plant's step response live as the gains move | PCB |
+| **Pin Mux Explorer** · MCP | `pin-mux` | a pin's alternate functions on an MCU and the conflicts | PCB |
+| **Power Rail Tree** · MCP | `power-rail-tree` | supply rails as a tree with each branch's current budget and total power | PCB |
+| **printf Format Checker** · MCP | `printf-checker` | whether a format string matches its argument types | PCB |
+| **PWM & Dead-time Calculator** · MCP | `pwm-deadtime` | timer PSC/ARR for a PWM frequency and resolution, and the dead-time register for a half bridge | PCB |
 | **RC / LC Filter Designer** · MCP | `rc-lc-filter` | component values from a cutoff frequency, with the magnitude response drawn | PCB |
-| **Resistor & LED** · MCP | `resistor` | Ohm's law, an LED's series resistor, a divider from standard values | PCB, Embedded |
+| **Recipe Builder & Linter** · MCP | `recipe-builder` | a BitBake recipe from source, license, build system and packaging choices, with the common mistakes caught | PCB |
+| **Register Bitfield Editor** · MCP | `bitfield-editor` | toggle bits of a hex value and read each field's meaning | PCB |
+| **Resistor & LED** · MCP | `resistor` | Ohm's law, an LED's series resistor, a divider from standard values | PCB |
 | **Return Path Checker** · MCP | `return-path` | return-path problems of layer changes and the stitching vias they need | PCB |
 | **Schematic Symbol Checklist** · MCP | `symbol-checklist` | pin types, names and electrical properties to check on a new symbol | PCB |
+| **Sensor Calibration Fit** · MCP | `sensor-calibration` | linear calibration coefficients from two or more readings | PCB |
+| **Servo Pulse Mapper** · MCP | `servo-pulse` | angle range to pulse width, with calibration values | PCB |
 | **Silkscreen Legibility Check** · MCP | `silkscreen-check` | whether text height and stroke width are under a fab's minimum | PCB |
+| **Sleep Current Profiler** · MCP | `sleep-current` | average current from sleep and wake times and currents | PCB |
 | **SMD Code Decoder** · MCP | `smd-code` | resistor and capacitor markings (103, 4R7, EIA-96) to their values | PCB |
+| **SPI Mode Reference** · MCP | `spi-modes` | CPOL/CPHA combinations with timing diagrams | PCB |
+| **Stack Usage Estimator** · MCP | `stack-estimator` | worst-case stack from call depth and locals | PCB |
 | **Stackup Designer** · MCP | `stackup-designer` | pick layer order, dielectric thickness and copper weight; see board thickness and impedance targets | PCB |
 | **Stencil Aperture Calculator** · MCP | `stencil-aperture` | solder paste aperture and area/aspect ratio from pad size and stencil thickness | PCB |
+| **Stepper Motor Calculator** · MCP | `stepper-calc` | pulse frequency and torque from step angle, microstepping and speed | 3D |
 | **Stock Risk Scanner** · MCP | `stock-risk` | ranks single-source and low-stock parts in a BOM by risk | PCB, Analytics |
+| **Struct Packing Visualizer** · MCP | `struct-packing` | alignment of struct members and the padding bytes wasted | PCB |
+| **SVD Register Browser** · MCP | `svd-browser` | a CMSIS-SVD file browsed: peripherals, registers and fields, and a register value decoded against it | PCB |
+| **systemd Unit & udev Rule Builder** · MCP | `systemd-udev-builder` | a systemd service checked and drawn with its dependencies, and a udev rule written from udevadm info | PCB |
+| **Task Timing Planner** · MCP | `task-timing` | scheduling conflicts of periodic tasks from period and duration | PCB |
 | **Terminal Block & Crimp Reference** · MCP | `crimp-reference` | terminal blocks and crimp sizes for a wire cross-section | PCB |
 | **Test Point Planner** · MCP | `test-point-planner` | test point list for critical nets and probe access checks | PCB |
 | **Trace Width** · MCP | `trace-width` | how wide a track must be for a current, by IPC-2221, and what it drops | PCB |
+| **U-Boot Env & bootargs Builder** · MCP | `uboot-env` | bootcmd and kernel bootargs built and explained, and the CRC'd environment image made | PCB |
+| **Units & Numbers** · MCP | `units` | every engineering unit (pressure, torque, dBm, AWG, °F…), hex and binary, UART baud and timer PSC/ARR | PCB, 3D |
 | **Via Current & Thermal** · MCP | `via-thermal` | current a via array carries and its temperature rise from drill, plating and count | PCB |
-| **Wire Gauge Selector** · MCP | `wire-gauge` | cable size from current, length and allowed voltage drop | PCB, Embedded |
-
-### Embedded
-
-| Tool | id | What it answers | Rooms |
-|---|---|---|---|
-| **ADC Resolution Calculator** · MCP | `adc-resolution` | LSB size from reference and bits, and the oversampling gain | Embedded |
-| **Battery Life Estimator** · MCP | `battery-life` | run time in days from average current and battery capacity | Embedded, PCB |
-| **BitBake Variable Resolver** · MCP | `bitbake-vars` | the final value of a BitBake variable from its assignments, overrides and :append/:remove, step by step | Embedded |
-| **Boot Log Timeline** · MCP | `boot-log-timeline` | a boot log or systemd-analyze output split into stages on a timeline, slowest first | Embedded |
-| **Bootloader Size Check** · MCP | `bootloader-fit` | whether application and bootloader regions fit | Embedded |
-| **Build Error & QA Explainer** · MCP | `yocto-build-errors` | a failed BitBake task log or QA warning classified, with the cause and the fix | Embedded |
-| **Buildhistory Diff** · MCP | `buildhistory-diff` | package and image size changes between two builds from buildhistory, largest first | Embedded |
-| **CAN Bit Timing Calculator** · MCP | `can-bit-timing` | segment values and sample point from a clock and bit rate | Embedded |
-| **Clock Tree Planner** · MCP | `clock-tree` | PLL settings and peripheral clocks from a crystal frequency | Embedded |
-| **Compiler Flag Explainer** · MCP | `compiler-flags` | size and speed effect of the optimisation flags in a build log | Embedded |
-| **CRC Calculator** · MCP | `crc-calc` | CRC-8/16/32 with polynomial, init and reflection settings | Embedded |
-| **CVE Check Viewer** · MCP | `cve-check-viewer` | cve-check JSON output per package: unpatched, patched and ignored CVEs, with scores | Embedded |
-| **Cycle to Time Converter** · MCP | `cycles-time` | instruction cycles to microseconds and back at a clock | Embedded |
-| **Debounce Time Calculator** · MCP | `debounce-time` | debounce time for a button type and sampling period | Embedded |
-| **Device Tree Explorer** · MCP | `device-tree-explorer` | a DTS with its includes merged into one tree, phandles resolved, addresses translated and conflicts found | Embedded |
-| **DMA Stream Planner** · MCP | `dma-stream-planner` | peripherals assigned to DMA streams and channels on an STM32, with the conflicts shown | Embedded |
-| **DT Overlay Builder** · MCP | `dt-overlay-builder` | a device tree overlay fragment to enable, add or change nodes on a base tree | Embedded |
-| **EMA / IIR Coefficient Tool** · MCP | `iir-coefficient` | smoothing coefficient from a cutoff frequency, with the response drawn | Embedded |
-| **Endianness Inspector** · MCP | `endianness` | the same bytes read as little and big endian side by side | Embedded |
-| **Firmware Size Diff** · MCP | `firmware-size-diff` | symbol-by-symbol size change between two builds, largest first | Embedded |
-| **Fixed-Point Converter** · MCP | `fixed-point` | a decimal value in a Q format and the precision lost | Embedded |
-| **Flash & EEPROM Wear Lifetime** · MCP | `flash-wear` | how long flash, EEPROM emulation or a log area lasts at a write rate, with wear levelling | Embedded |
-| **Flash Partition Planner** · MCP | `flash-partitions` | OTA, NVS and filesystem partitions sized, with a partition table | Embedded |
-| **FreeRTOS Config & Heap Sizer** · MCP | `freertos-config` | FreeRTOSConfig.h choices explained and the heap needed for tasks, queues and timers | Embedded |
-| **GPIO Restriction Warner** · MCP | `gpio-warner` | risks of using boot straps and special-purpose GPIOs | Embedded, PCB |
-| **HardFault Decoder** · MCP | `hardfault-decoder` | Cortex-M CFSR, HFSR, MMFAR and BFAR decoded, the stacked frame read, and the likely cause named | Embedded |
-| **Hash & Checksum Quick Tool** · MCP | `hash-checksum` | MD5, SHA and simple checksums of text or hex data | Embedded, Web |
-| **Hex Dump Decoder** · MCP | `hex-dump-decoder` | captured raw bytes split into frames for a chosen protocol | Embedded |
-| **I2C Address Map** · MCP | `i2c-address-map` | devices on a bus by address, with conflicts and alternative addresses | Embedded, PCB |
-| **IEEE754 Float Inspector** · MCP | `float-inspector` | sign, exponent and mantissa bits of a float | Embedded |
-| **Interrupt Latency Budget** · MCP | `irq-latency` | CPU load and miss risk from interrupt rates and handler times | Embedded |
-| **Kconfig Diff** · MCP | `kconfig-diff` | two kernel or U-Boot .config files compared, and the difference written as a config fragment | Embedded |
-| **Kernel Oops Decoder** · MCP | `kernel-oops-decoder` | a Linux oops or panic taken apart: the cause, the faulting function, the call trace and the taint flags | Embedded |
-| **Layer & Release Map** · MCP | `layer-release-map` | Yocto releases with their LTS and end-of-life dates, and a bblayers stack checked for compatibility | Embedded |
-| **License Manifest Viewer** · MCP | `license-manifest` | packages in an image grouped by license, with GPLv3 and other copyleft flagged | Embedded |
-| **Linker Script Helper** · MCP | `linker-script` | a linker script from sections and memory regions in a form | Embedded |
-| **Linux GPIO Number Converter** · MCP | `linux-gpio-number` | a SoC pin name to its gpiochip, line offset, legacy sysfs number and libgpiod commands | Embedded |
-| **Log Format Designer** · MCP | `log-format` | a compact embedded log format and its parser code | Embedded |
-| **Memory Map Viewer** · MCP | `memory-map` | flash and RAM region use as a scaled strip | Embedded |
-| **Modbus Frame Builder** · MCP | `modbus-frame` | an RTU/TCP frame with its CRC from function code and registers | Embedded |
-| **Motor Driver Current Limit** · MCP | `motor-current-limit` | current limit and reference voltage from the sense resistor | Embedded, PCB |
-| **MPU Region Planner** · MCP | `mpu-region-planner` | Cortex-M MPU regions laid out on the memory map with sizes, alignment, subregions and attributes | Embedded |
-| **NMEA / Serial Log Parser** · MCP | `serial-log-parser` | a serial log parsed line by line into a table of fields | Embedded |
-| **NVIC Priority Planner** · MCP | `nvic-planner` | interrupt priorities in order, with preemption conflicts | Embedded |
-| **OTA A/B Update Planner** · MCP | `ota-ab-planner` | A/B slots, boot counting and rollback for RAUC, SWUpdate or Mender, with their config files | Embedded |
-| **Override Syntax Migrator** · MCP | `override-migrator` | old _append/_prepend/_remove/_${PN} override syntax rewritten to the colon syntax of Honister and later | Embedded |
-| **PID Tuning Playground** · MCP | `pid-playground` | a simple plant's step response live as the gains move | Embedded |
-| **Pin Mux Explorer** · MCP | `pin-mux` | a pin's alternate functions on an MCU and the conflicts | Embedded, PCB |
-| **printf Format Checker** · MCP | `printf-checker` | whether a format string matches its argument types | Embedded |
-| **PWM & Dead-time Calculator** · MCP | `pwm-deadtime` | timer PSC/ARR for a PWM frequency and resolution, and the dead-time register for a half bridge | Embedded |
-| **Recipe Builder & Linter** · MCP | `recipe-builder` | a BitBake recipe from source, license, build system and packaging choices, with the common mistakes caught | Embedded |
-| **Register Bitfield Editor** · MCP | `bitfield-editor` | toggle bits of a hex value and read each field's meaning | Embedded |
-| **Sensor Calibration Fit** · MCP | `sensor-calibration` | linear calibration coefficients from two or more readings | Embedded |
-| **Servo Pulse Mapper** · MCP | `servo-pulse` | angle range to pulse width, with calibration values | Embedded |
-| **Sleep Current Profiler** · MCP | `sleep-current` | average current from sleep and wake times and currents | Embedded |
-| **SPI Mode Reference** · MCP | `spi-modes` | CPOL/CPHA combinations with timing diagrams | Embedded |
-| **Stack Usage Estimator** · MCP | `stack-estimator` | worst-case stack from call depth and locals | Embedded |
-| **Stepper Motor Calculator** · MCP | `stepper-calc` | pulse frequency and torque from step angle, microstepping and speed | Embedded, 3D |
-| **Struct Packing Visualizer** · MCP | `struct-packing` | alignment of struct members and the padding bytes wasted | Embedded |
-| **SVD Register Browser** · MCP | `svd-browser` | a CMSIS-SVD file browsed: peripherals, registers and fields, and a register value decoded against it | Embedded |
-| **systemd Unit & udev Rule Builder** · MCP | `systemd-udev-builder` | a systemd service checked and drawn with its dependencies, and a udev rule written from udevadm info | Embedded |
-| **Task Timing Planner** · MCP | `task-timing` | scheduling conflicts of periodic tasks from period and duration | Embedded |
-| **U-Boot Env & bootargs Builder** · MCP | `uboot-env` | bootcmd and kernel bootargs built and explained, and the CRC'd environment image made | Embedded |
-| **Units & Numbers** · MCP | `units` | every engineering unit (pressure, torque, dBm, AWG, °F…), hex and binary, UART baud and timer PSC/ARR | Embedded, PCB, 3D |
-| **Watchdog Planner** · MCP | `watchdog-planner` | a safe watchdog period and feed points from the longest task | Embedded |
-| **WIC Partition Layout** · MCP | `wic-layout` | a .wks kickstart and rootfs size for an SD card or eMMC, drawn to scale | Embedded |
+| **Watchdog Planner** · MCP | `watchdog-planner` | a safe watchdog period and feed points from the longest task | PCB |
+| **WIC Partition Layout** · MCP | `wic-layout` | a .wks kickstart and rootfs size for an SD card or eMMC, drawn to scale | PCB |
+| **Wire Gauge Selector** · MCP | `wire-gauge` | cable size from current, length and allowed voltage drop | PCB |
 
 ### Mechanical & 3D
 
@@ -235,58 +230,48 @@ agents, the most used, and every tool nobody used.
 | **Tolerance Stack-Up** · MCP | `tolerance-stack` | worst-case and statistical sum of a chain of dimensions | 3D |
 | **Vibration Frequency Estimator** · MCP | `vibration-freq` | rough first natural frequency from geometry and material | 3D |
 
-### Web & design
+### Code, data & design
 
 | Tool | id | What it answers | Rooms |
 |---|---|---|---|
-| **Accessibility Audit Lite** · MCP | `a11y-audit` | contrast, focus order and missing labels in pasted HTML | Web, Mobile |
-| **Chart Spec Builder** · MCP | `chart-spec` | axes, series and scales chosen into a chart configuration | Web |
-| **CSS Specificity Calculator** · MCP | `css-specificity` | which of two selectors wins, and why | Web |
-| **DOM Selector Finder** · MCP | `selector-finder` | the shortest stable CSS selector for an element in pasted HTML | Web |
-| **Flexbox Playground** · MCP | `flexbox-playground` | try alignment properties and see the result and code | Web |
-| **Form Builder** | `form-builder` | build a form with its rules, get Zod, types and a React component | Web |
-| **Grid Sketch** | `grid-sketch` | draw a layout on a grid, copy it as a prompt, CSS or JSON | Web, Mobile |
-| **HTTP Request Tester** · MCP | `http-tester` | send a request and see headers, timing and the response | Web, Embedded |
-| **Icon & Favicon Generator** · MCP | `icon-generator` | every icon size and the manifest entries from one image | Web, Mobile |
-| **JSON Diff Viewer** · MCP | `json-diff` | two responses compared by line and by field | Web, Analytics |
-| **JSON Path Explorer** · MCP | `json-path` | walk a large JSON and copy the access path of a field | Web |
-| **JSON to TypeScript** · MCP | `json-to-ts` | type definitions and a validation schema from sample JSON | Web, Mobile |
-| **JWT & Base64 Decoder** · MCP | `jwt-decoder` | decode a token and show its expiry and signature fields | Web |
-| **Motion Lab** | `motion-lab` | shape an easing curve and timing, take it as CSS or JS | Web, Mobile |
-| **MQTT Message Simulator** · MCP | `mqtt-simulator` | fake telemetry messages to test an IoT dashboard | Web, Embedded |
-| **Palette Forge** | `palette-forge` | one colour into an accessible palette and light/dark tokens | Web, Mobile |
-| **Responsive Preview Matrix** · MCP | `responsive-matrix` | one page at several breakpoints side by side, with overflow flagged | Web, Mobile |
-| **Screenshot Annotator** | `screenshot-annotator` | mark up a screenshot and turn the marks into a fix list | Web, Mobile |
-| **Shadow & Radius Studio** · MCP | `shadow-radius` | layered shadows and radii tuned visually, as one CSS line | Web |
-| **SVG Path Editor** · MCP | `svg-path-editor` | edit a path node by node and trim needless decimals | Web |
-| **Telemetry Mock Generator** · MCP | `telemetry-mock` | realistic sensor time series with noise, drift and faults | Web, Embedded |
-| **Type Scale Generator** · MCP | `type-scale` | heading and body sizes from a base and ratio, as CSS variables | Web, Mobile |
-| **WebSocket Echo Tester** · MCP | `websocket-tester` | open a socket, send messages and list replies with timestamps | Web |
-
-### Mobile
-
-| Tool | id | What it answers | Rooms |
-|---|---|---|---|
-| **Adaptive Icon Composer** · MCP | `adaptive-icon` | foreground and background layers with mask previews | Mobile |
-| **ADB Command Palette** · MCP | `adb-commands` | common emulator and device commands, ready to copy | Mobile |
-| **Deep Link Builder** · MCP | `deep-link` | a deep link from scheme and parameters, with the emulator test command | Mobile |
-| **DP / PX / DPI Converter** · MCP | `dp-px-converter` | sizes across density buckets and the asset sizes to export | Mobile |
-| **Layout Inspector Mapper** · MCP | `layout-mapper` | a region of a screen mapped to its view in a uiautomator dump | Mobile |
-| **Permission Picker** · MCP | `permission-picker` | the permissions and manifest lines a feature set needs | Mobile |
-| **Safe Area Overlay** · MCP | `safe-area` | notch, status bar and navigation bar areas over a screenshot | Mobile |
-| **Screen Flow Mapper** · MCP | `screen-flow` | screen-to-screen transitions as a diagram and a navigation graph | Mobile |
-| **String Table Editor** · MCP | `string-table` | multilingual strings in a table, out as resource files | Mobile, Web |
-| **Touch Target Checker** · MCP | `touch-targets` | touch targets under the minimum size in a layout | Mobile |
-
-### Code & data
-
-| Tool | id | What it answers | Rooms |
-|---|---|---|---|
-| **API Sketch** | `api-sketch` | define endpoints, get OpenAPI, curl and a TypeScript client | Web, Mobile |
-| **Cron Studio** | `cron-studio` | build a cron expression, see when it next runs | Web, Embedded |
-| **Flow to Mermaid** | `flow-mermaid` | draw a flowchart with boxes and arrows, get Mermaid code | Web, Embedded, Mobile |
-| **Regex by Example** | `regex-example` | pick what should match in a text and get the regex, explained | Web, Embedded |
-| **Schema Sketch** | `schema-sketch` | draw tables and relations, get SQL, Prisma and Mermaid | Web, Mobile |
+| **Accessibility Audit Lite** · MCP | `a11y-audit` | contrast, focus order and missing labels in pasted HTML | Code |
+| **Adaptive Icon Composer** · MCP | `adaptive-icon` | foreground and background layers with mask previews | Code |
+| **ADB Command Palette** · MCP | `adb-commands` | common emulator and device commands, ready to copy | Code |
+| **API Sketch** | `api-sketch` | define endpoints, get OpenAPI, curl and a TypeScript client | Code |
+| **Chart Spec Builder** · MCP | `chart-spec` | axes, series and scales chosen into a chart configuration | Code |
+| **Cron Studio** | `cron-studio` | build a cron expression, see when it next runs | Code |
+| **CSS Specificity Calculator** · MCP | `css-specificity` | which of two selectors wins, and why | Code |
+| **Deep Link Builder** · MCP | `deep-link` | a deep link from scheme and parameters, with the emulator test command | Code |
+| **DOM Selector Finder** · MCP | `selector-finder` | the shortest stable CSS selector for an element in pasted HTML | Code |
+| **DP / PX / DPI Converter** · MCP | `dp-px-converter` | sizes across density buckets and the asset sizes to export | Code |
+| **Flexbox Playground** · MCP | `flexbox-playground` | try alignment properties and see the result and code | Code |
+| **Flow to Mermaid** | `flow-mermaid` | draw a flowchart with boxes and arrows, get Mermaid code | Code |
+| **Form Builder** | `form-builder` | build a form with its rules, get Zod, types and a React component | Code |
+| **Grid Sketch** | `grid-sketch` | draw a layout on a grid, copy it as a prompt, CSS or JSON | Code |
+| **HTTP Request Tester** · MCP | `http-tester` | send a request and see headers, timing and the response | Code |
+| **Icon & Favicon Generator** · MCP | `icon-generator` | every icon size and the manifest entries from one image | Code |
+| **JSON Diff Viewer** · MCP | `json-diff` | two responses compared by line and by field | Analytics |
+| **JSON Path Explorer** · MCP | `json-path` | walk a large JSON and copy the access path of a field | Code |
+| **JSON to TypeScript** · MCP | `json-to-ts` | type definitions and a validation schema from sample JSON | Code |
+| **JWT & Base64 Decoder** · MCP | `jwt-decoder` | decode a token and show its expiry and signature fields | Code |
+| **Layout Inspector Mapper** · MCP | `layout-mapper` | a region of a screen mapped to its view in a uiautomator dump | Code |
+| **Motion Lab** | `motion-lab` | shape an easing curve and timing, take it as CSS or JS | Code |
+| **MQTT Message Simulator** · MCP | `mqtt-simulator` | fake telemetry messages to test an IoT dashboard | Code |
+| **Palette Forge** | `palette-forge` | one colour into an accessible palette and light/dark tokens | Code |
+| **Permission Picker** · MCP | `permission-picker` | the permissions and manifest lines a feature set needs | Code |
+| **Regex by Example** | `regex-example` | pick what should match in a text and get the regex, explained | Code |
+| **Responsive Preview Matrix** · MCP | `responsive-matrix` | one page at several breakpoints side by side, with overflow flagged | Code |
+| **Safe Area Overlay** · MCP | `safe-area` | notch, status bar and navigation bar areas over a screenshot | Code |
+| **Schema Sketch** | `schema-sketch` | draw tables and relations, get SQL, Prisma and Mermaid | Code |
+| **Screen Flow Mapper** · MCP | `screen-flow` | screen-to-screen transitions as a diagram and a navigation graph | Code |
+| **Screenshot Annotator** | `screenshot-annotator` | mark up a screenshot and turn the marks into a fix list | Code |
+| **Shadow & Radius Studio** · MCP | `shadow-radius` | layered shadows and radii tuned visually, as one CSS line | Code |
+| **String Table Editor** · MCP | `string-table` | multilingual strings in a table, out as resource files | Code |
+| **SVG Path Editor** · MCP | `svg-path-editor` | edit a path node by node and trim needless decimals | Code |
+| **Telemetry Mock Generator** · MCP | `telemetry-mock` | realistic sensor time series with noise, drift and faults | Code |
+| **Touch Target Checker** · MCP | `touch-targets` | touch targets under the minimum size in a layout | Code |
+| **Type Scale Generator** · MCP | `type-scale` | heading and body sizes from a base and ratio, as CSS variables | Code |
+| **WebSocket Echo Tester** · MCP | `websocket-tester` | open a socket, send messages and list replies with timestamps | Code |
 
 ### AI & prompts
 
@@ -327,9 +312,9 @@ agents, the most used, and every tool nobody used.
 | **Decision Log (ADR)** · MCP | `decision-log` | short records of why a part or topology was chosen | Analytics |
 | **FMEA Lite** · MCP | `fmea-lite` | failure modes scored by likelihood and effect into a risk order | Analytics |
 | **Glossary & Acronym Book** · MCP | `glossary` | a project's acronyms and terms in one list | all |
-| **Interface Contract** · MCP | `interface-contract` | GPIO map, I2C addresses and voltage levels defined once for every room | PCB, 3D, Web, Embedded, Mobile |
-| **Naming Convention Enforcer** · MCP | `naming-enforcer` | nets, symbols, parts and files checked against one naming rule | PCB, 3D, Web, Embedded, Mobile |
-| **Pin-to-Net-to-Symbol Mapper** · MCP | `pin-net-symbol` | trace an MCU pin to its PCB net and its firmware symbol | PCB, Embedded |
+| **Interface Contract** · MCP | `interface-contract` | GPIO map, I2C addresses and voltage levels defined once for every room | PCB, 3D |
+| **Naming Convention Enforcer** · MCP | `naming-enforcer` | nets, symbols, parts and files checked against one naming rule | PCB, 3D |
+| **Pin-to-Net-to-Symbol Mapper** · MCP | `pin-net-symbol` | trace an MCU pin to its PCB net and its firmware symbol | PCB |
 | **Project Constants** · MCP | `project-constants` | board size, supply voltages and mechanical references kept in one place | all |
 | **Redline History Diff** · MCP | `redline-history` | every note that landed on the same area over time, with outcomes | all |
 | **Requirement ↔ Test Matrix** · MCP | `req-test-matrix` | each requirement matched with the test that proves it, gaps shown | Analytics |
@@ -370,8 +355,8 @@ path works in the production build.
 Make a folder `frontend/public/tools/<id>/`; `i2c-pullup/` is the reference.
 
 1. **`manifest.json`** - `id` (the folder's name), `name`, `blurb` (one line:
-   what it answers), `group` (`pcb`, `embedded`, `mechanical`, `web`,
-   `mobile`, `code`, `project`), `rooms`, `keywords` (8-15 - the words
+   what it answers), `group` (`pcb`, `mechanical`, `code`, `ai`,
+   `project`), `rooms`, `keywords` (8-15 - the words
    people and agents search with), `intro`, `inputs`, `examples`, `usage`
    (for agents: which inputs, in which units, what comes back), `sources`,
    and `"view": true` if there is a view.js. Input types: `number` (give
@@ -441,8 +426,7 @@ It holds PostgreSQL 16, Node 22 with TypeScript 5, zod 3, react 19,
 react-hook-form 7 and Prisma 7, mermaid-cli with Chrome, Python with the
 OpenAPI validator and croniter, PCRE2, poppler, and for embedded Linux dtc
 (`kind: dts`, overlays with `overlay: true`) and u-boot-tools (`kind: ubootenv`
-makes the CRC'd environment image with mkenvimage). Its first two layers are the Web
-Programming image's own, so the two share them on disk.
+makes the CRC'd environment image with mkenvimage).
 
 | Tool | Its **Check** does |
 |---|---|

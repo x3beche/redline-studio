@@ -2,11 +2,8 @@
   "id": "screenshot-annotator", "version": "1.0",
   "name": "Screenshot Annotator",
   "blurb": "mark up a screenshot and turn the marks into a fix list",
-  "group": "web",
-  "rooms": [
-    "web",
-    "mobile"
-  ],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": [
     "screenshot",
     "annotate",

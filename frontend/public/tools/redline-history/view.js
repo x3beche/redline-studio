@@ -55,7 +55,7 @@ const since = (a, b) => {
   return `${Math.round(d / 1440)} days later`;
 };
 const trunc = (s, n) => (s.length > n ? s.slice(0, Math.max(1, n - 1)) + '…' : s);
-const ROOMS = [['all', 'All'], ['cad', '3D'], ['pcb', 'PCB'], ['web', 'Web'], ['embedded', 'Embedded'], ['mobile', 'Mobile']];
+const ROOMS = [['all', 'All'], ['cad', '3D'], ['pcb', 'PCB']];
 const MODES = [['auto', 'Part, else spot'], ['part', 'Part'], ['place', 'Camera spot'], ['model', 'Model']];
 
 // The notes loader (the live half), kept from the tool's first view.

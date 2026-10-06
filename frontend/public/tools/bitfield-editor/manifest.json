@@ -2,8 +2,8 @@
   "id": "bitfield-editor", "version": "1.1",
   "name": "Register Bitfield Editor",
   "blurb": "toggle bits of a hex value and read each field's meaning",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["register", "bitfield", "bit field", "hex decoder", "bit mask", "_Msk", "_Pos", "flags", "binary", "toggle bits", "register map", "datasheet register", "decode hex value", "cmsis macros"],
   "intro": "Decodes a register value into named fields (value = (reg >> lsb) & mask), shows what each field's code means, flips bits when you click them, and writes CMSIS-style _Pos/_Msk macros. Describe the fields one per line as NAME msb:lsb followed by code=meaning pairs, or pick a preset register.",
   "inputs": [

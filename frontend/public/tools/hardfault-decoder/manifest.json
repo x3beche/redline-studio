@@ -2,8 +2,8 @@
   "id": "hardfault-decoder", "version": "1.0",
   "name": "HardFault Decoder",
   "blurb": "Cortex-M CFSR, HFSR, MMFAR and BFAR decoded, the stacked frame read, and the likely cause named",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["hardfault", "hard fault", "CFSR", "HFSR", "MMFAR", "BFAR", "EXC_RETURN", "stacked PC", "exception frame", "bus fault", "usage fault", "memmanage", "IMPRECISERR", "PRECISERR", "INVSTATE", "UNDEFINSTR", "STKOF", "addr2line", "cortex-m crash", "fault handler"],
   "intro": "Decodes the Cortex-M fault status registers bit by bit (Armv7-M and Armv8-M names), reads the exception frame the core pushed, and names the likely cause: which address was bad, whether the stacked PC is the faulting instruction, and the addr2line command to find the line. Based on the Armv6-M, Armv7-M and Armv8-M Architecture Reference Manuals.",
   "inputs": [

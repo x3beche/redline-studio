@@ -2,8 +2,8 @@
   "id": "pin-mux", "agentOmit": ["package"], "version": "1.1",
   "name": "Pin Mux Explorer",
   "blurb": "a pin's alternate functions on an MCU and the conflicts",
-  "group": "embedded",
-  "rooms": ["embedded", "pcb"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["pin mux", "pinmux", "alternate function", "af", "remap", "afio", "pinout", "gpio function", "funcsel", "pin conflict", "stm32f103", "blue pill", "rp2040", "atmega328p", "pin assignment"],
   "intro": "Lists what a pin can do, which pins offer a function, and checks a full pin assignment: a pin used twice, a function on a pin that does not have it, F1 peripherals whose signals need different remap settings, and special pins (debug, boot, crystal). Data is transcribed from the chips' datasheets.",
   "inputs": [

@@ -2,8 +2,8 @@
   "id": "json-diff", "version": "1.1",
   "name": "JSON Diff Viewer",
   "blurb": "two responses compared by line and by field",
-  "group": "web",
-  "rooms": ["web", "analyze"],
+  "group": "code",
+  "rooms": ["analyze"],
   "keywords": ["json", "diff", "compare", "api response", "regression", "json patch", "rfc 6902", "unified diff", "field diff", "deep equal", "snapshot", "changes", "before after"],
   "intro": "Compares two JSON documents by field (every added, removed and changed value with its path; arrays by position, by a key such as id, or as unordered sets) and by line (Myers diff of the pretty-printed text, keys optionally sorted), and writes the RFC 6902 JSON Patch from A to B. Noisy fields like timestamps can be ignored and numbers compared within a tolerance.",
   "inputs": [

@@ -28,7 +28,7 @@ DEFAULT = "default"
 # What belongs to a workspace. Everything else is the machine's, or shared.
 SCOPED = frozenset({
     "models", "folders", "uploads", "revisions", "runs", "chat", "questions",
-    "activity", "boards", "apps", "settings", "board_runs", "item_history",
+    "activity", "boards", "settings", "board_runs", "item_history",
     "weekly_reports", "audit", "compute_jobs", "analytics", "scratch", "notes", "releases", "source_blobs",
     "tool_usage", "tool_data", "files", "cc_chats",
 })

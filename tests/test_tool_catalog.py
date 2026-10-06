@@ -21,7 +21,7 @@ PAGES = tools_api.PAGES
 MANIFESTS = sorted(PAGES.glob("*/manifest.json"))
 KIT = [m.parent for m in MANIFESTS if (m.parent / "tool.js").exists()]
 TYPES = {"number", "text", "textarea", "select", "bool", "table"}
-GROUPS = {"pcb", "embedded", "mechanical", "web", "mobile", "code", "ai", "project"}
+GROUPS = {"pcb", "mechanical", "code", "ai", "project"}
 
 
 def load(path: Path) -> dict:
@@ -88,7 +88,7 @@ def fake(n: int) -> list[dict]:
     return [{"id": f"tool-{i}", "name": f"Tool {i}",
              # as long as a real blurb is at the long end (the real ones average ~80)
              "blurb": "the long description of what this imaginary engineering tool computes, and from what",
-             "rooms": ["pcb", "embedded"], "keywords": []} for i in range(n)]
+             "rooms": ["pcb", "cad"], "keywords": []} for i in range(n)]
 
 
 def test_the_picker_request_fits_a_small_models_window_however_many_tools():

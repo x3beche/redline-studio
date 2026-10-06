@@ -2,8 +2,8 @@
   "id": "task-timing", "version": "1.1",
   "name": "Task Timing Planner",
   "blurb": "scheduling conflicts of periodic tasks from period and duration",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["task scheduling", "periodic tasks", "timeline", "gantt", "super loop", "cooperative scheduler", "time-triggered", "rate monotonic", "rtos", "hyperperiod", "jitter", "deadline miss", "offset", "cpu utilisation", "wcet"],
   "intro": "Simulates periodic tasks over one hyperperiod (the least common multiple of the periods) under a cooperative run-to-completion scheduler (a super loop or time-triggered scheduler) or a preemptive fixed-priority RTOS, and shows where tasks collide, how late each one starts (jitter), which deadlines are missed, and offsets that spread the tasks apart. Priority blank = rate monotonic (shorter period first).",
   "inputs": [

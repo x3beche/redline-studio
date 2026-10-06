@@ -3,10 +3,8 @@
  "version": "1.0",
  "name": "Layer & Release Map",
  "blurb": "Yocto releases with their LTS and end-of-life dates, and a bblayers stack checked for compatibility",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "layout": "custom",
  "view": true,
  "agentOmit": [

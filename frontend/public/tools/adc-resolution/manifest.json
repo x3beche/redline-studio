@@ -2,8 +2,8 @@
   "id": "adc-resolution", "version": "1.1",
   "name": "ADC Resolution Calculator",
   "blurb": "LSB size from reference and bits, and the oversampling gain",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["adc", "analog to digital", "lsb", "resolution", "quantization", "reference voltage", "vref", "bits", "oversampling", "decimation", "enob", "snr", "noise-free bits", "counts", "code"],
   "intro": "One LSB is the reference span divided by 2^N; the code for an input voltage follows from it. Oversampling by 4^n and decimating adds n bits, but only when the input carries at least about half an LSB of noise (Silicon Labs AN118, Microchip AVR121).",
   "inputs": [

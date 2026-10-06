@@ -143,30 +143,9 @@ so a part can be found by name as well as by number. The models go into
 GridFS gzipped, not into the part document: a 9.8 MB STEP file written
 inline took ninety-nine seconds.
 
-## The programming rooms
+## The Tools tab's checks
 
-Web, Embedded and Mobile Programming run everything in Docker - a
-project's dev server, its tests, a firmware build, a phone - so nothing a
-project needs is installed on the machine. One image per room:
-
-```bash
-docker build -f docker/code/web.Dockerfile      -t redline-code-web      docker/code
-docker build -f docker/code/embedded.Dockerfile -t redline-code-embedded docker/code
-docker build -f docker/code/mobile.Dockerfile   -t redline-code-mobile   docker/code
-```
-
-| image | size | what is in it |
-|---|---|---|
-| `redline-code-web` | 1.2 GB | Chrome (to photograph pages), Node, Python |
-| `redline-code-embedded` | 12.1 GB | ESP-IDF 5.3 with its Xtensa and RISC-V compilers, arm-none-eabi, CMake, Ninja, OpenOCD, stlink |
-| `redline-code-mobile` | 5.1 GB | the Android SDK and an emulated Pixel 7 (Android 14, Play Store image), Node |
-
-Built in parallel they took 167, 277 and 217 seconds here. They are
-large: keep Docker's storage on a disk with room for them - if the system
-disk is small, move it with `"data-root": "/path/on/a/big/disk/docker"` in
-`/etc/docker/daemon.json`.
-
-The Tools tab's checks - SQL in PostgreSQL, Prisma, TypeScript, OpenAPI,
+SQL in PostgreSQL, Prisma, TypeScript, OpenAPI,
 Mermaid, regex engines, cron - run in one more image, offline. It is
 optional: without it the tools work and just show no **Check**.
 
@@ -176,15 +155,7 @@ docker build -f docker/tools/tools.Dockerfile -t redline-tools docker/tools
 
 | image | size | what is in it |
 |---|---|---|
-| `redline-tools` | 2.4 GB (1.2 GB shared with `redline-code-web`) | PostgreSQL 16, Node 22 with TypeScript, zod, react-hook-form, Prisma 7, mermaid-cli, Python with the OpenAPI validator and croniter, PCRE2 |
-
-The phone needs **KVM** (`/dev/kvm`); with it, it boots in about 45
-seconds, and it is left running as the container `redline-phone`. A board
-is programmed through the Embedded image with the device passed through:
-an ST-Link for an STM32, the serial port for an ESP32.
-
-`REDLINE_WEB_IMAGE`, `REDLINE_EMBEDDED_IMAGE` and `REDLINE_MOBILE_IMAGE` name other
-images. Without an image, a room still opens and says which one to build.
+| `redline-tools` | 2.4 GB | PostgreSQL 16, Node 22 with TypeScript, zod, react-hook-form, Prisma 7, mermaid-cli, Python with the OpenAPI validator and croniter, PCRE2 |
 
 ## Releases and technical drawings
 
@@ -203,17 +174,6 @@ docker build -t redline-draw -f docker/draw/Dockerfile docker/draw
 Without it a release still goes out, and says the drawings could not be
 made. Release zips are kept in the database and, for speed, in
 `.cache/releases`.
-
-## The simulator
-
-The Embedded room's *Simulate* runs ESP32 firmware in Espressif's QEMU,
-which is already in `redline-code-embedded`, and STM32 firmware in Renode:
-
-```bash
-docker pull antmicro/renode:latest
-```
-
-Without Renode, STM32 boards say so and ESP32 boards still run.
 
 ## Themes
 

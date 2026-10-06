@@ -33,7 +33,7 @@ ACTIONS = {
     "view": "look at the workspace",
     "draw": "draw notes, save drafts, chat and answer questions",
     "run": "queue notes and run builds",
-    "edit": "change models, boards and apps",
+    "edit": "change models and boards",
     "delete": "delete",
     "settings": "change the workspace's settings",
     "tokens": "hand out agent tokens",
@@ -135,16 +135,7 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/models/.+/build", "run"),
     ("POST", "/api/boards/{}/(build|layout|schematic|run)", "run"),
     ("POST", "/api/boards/{}/rules/check", "view"),     # a check, nothing is written
-    ("POST", "/api/apps/{}/(serve|shot|test|phone-open|build|flash)", "run"),
-    ("POST", "/api/apps/phone/boot", "run"),
-    ("POST", "/api/apps/shots/{}/under", "run"),
     ("POST", "/api/tools/(check|run)", "run"),
-    # the virtual board: running it is running; linking an app to a board edits the app
-    ("POST", "/api/sim/{}/(start|stop|reset|act|uart)", "run"),
-    # the Embedded room: writing a firmware's files is editing it; the
-    # board on the desk - flashing it, its serial port - is running it
-    ("PUT", "/api/embedded/{}/files(/.*)?", "edit"),
-    ("POST", "/api/embedded/{}/(flash|serial)(/.*)?", "run"),
     # bringing a board in makes a board
     ("POST", "/api/boards/import", "edit"),
     ("POST", "/api/tools/(find|usage)", "view"),

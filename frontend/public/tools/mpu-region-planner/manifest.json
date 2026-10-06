@@ -3,10 +3,8 @@
  "version": "1.0",
  "name": "MPU Region Planner",
  "blurb": "Cortex-M MPU regions laid out on the memory map with sizes, alignment, subregions and attributes",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "keywords": [
   "mpu",
   "memory protection unit",

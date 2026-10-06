@@ -2,8 +2,8 @@
   "id": "icon-generator", "version": "1.1",
   "name": "Icon & Favicon Generator",
   "blurb": "every icon size and the manifest entries from one image",
-  "group": "web",
-  "rooms": ["web", "mobile"],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": ["favicon", "icon", "app icon", "apple-touch-icon", "manifest", "webmanifest", "pwa", "maskable", "adaptive icon", "mipmap", "appiconset", "ico", "imagemagick", "android", "ios"],
   "intro": "Lists every icon file a web app, Android app or iOS app needs from one source image, with the logo sized to each platform's safe zone (maskable 80 % circle, Android 66 dp circle, Apple 20 px margin). It writes the HTML <link> tags, manifest entries, Android XML, iOS Contents.json and an ImageMagick script that makes the files.",
   "inputs": [

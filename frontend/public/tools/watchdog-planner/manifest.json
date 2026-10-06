@@ -2,8 +2,8 @@
   "id": "watchdog-planner", "version": "1.1",
   "name": "Watchdog Planner",
   "blurb": "a safe watchdog period and feed points from the longest task",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["watchdog", "wdt", "iwdg", "wwdg", "window watchdog", "timeout", "feed", "kick", "refresh", "reload", "prescaler", "lsi", "wcet", "reset"],
   "intro": "Finds the watchdog timeout that never fires in normal operation yet resets a hung system quickly: the worst gap between two feeds (normal feed interval + longest task + interrupt load) times a safety margin, checked at the fastest and slowest watchdog clock. It then picks the prescaler and reload for the chosen watchdog and lists where to feed.",
   "inputs": [

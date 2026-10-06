@@ -159,7 +159,7 @@ def test_ids_that_exist_once_per_workspace():
 
 # ---- no route reaches around the scope
 
-ROUTE_MODULES = ["backend/main.py", "backend/code_api.py", "backend/tools_api.py", "backend/tools_llm.py",
+ROUTE_MODULES = ["backend/main.py", "backend/tools_api.py", "backend/tools_llm.py",
                  "backend/agent_api.py"]
 
 

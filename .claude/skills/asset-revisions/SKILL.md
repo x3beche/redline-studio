@@ -30,13 +30,11 @@ disk**; both source code and generated artifacts live in the database.
 
 ## Not every queued item is a model
 
-The queue is shared by five rooms. `revisions.py queue` marks a board note
-`[BOARD]` and a programming room's note `[WEB]`, `[EMBEDDED]` or
-`[MOBILE]`; `revisions.py kind <id>` says which room any note is from.
-This skill is the model loop. Everything else goes to that room's agent
-(`redline-pcb`, `redline-web`, `redline-embedded`, `redline-mobile` in
-`.claude/agents/`) and follows AGENTS.md - a firmware note does not have
-a camera, and `build` does not take a board.
+The queue is shared by two rooms. `revisions.py queue` marks a board note
+`[BOARD]`; `revisions.py kind <id>` says which room any note is from.
+This skill is the model loop. A board note goes to the board room's agent
+(`redline-pcb` in `.claude/agents/`) and follows AGENTS.md - a board note
+does not have a camera, and `build` does not take a board.
 
 Rooms work in parallel, so close a run by its id: `finish <id>`.
 

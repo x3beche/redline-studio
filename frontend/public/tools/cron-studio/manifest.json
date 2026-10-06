@@ -3,10 +3,7 @@
   "name": "Cron Studio",
   "blurb": "build a cron expression, see when it next runs",
   "group": "code",
-  "rooms": [
-    "web",
-    "embedded"
-  ],
+  "rooms": ["code"],
   "keywords": [
     "cron",
     "schedule",

@@ -2,13 +2,10 @@
   "id": "http-tester", "version": "1.1",
   "name": "HTTP Request Tester",
   "blurb": "send a request and see headers, timing and the response",
-  "group": "web",
+  "group": "code",
   "layout": "custom",
   "agentOmit": ["drawing"],
-  "rooms": [
-    "web",
-    "embedded"
-  ],
+  "rooms": ["code"],
   "keywords": [
     "http",
     "rest",

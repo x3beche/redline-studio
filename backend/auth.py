@@ -162,7 +162,7 @@ async def session_user(raw_db, token: str | None) -> dict | None:
 
 # ---------------------------------------------------------------- page sessions
 
-# A headless browser photographing the app (tools/render.py, webshot.py)
+# A headless browser photographing the app (tools/render.py)
 # is no person and has no password. It gets a page session: minted from an
 # agent's token (POST /api/auth/page-session) or by the server for the
 # person or agent who asked for the shot, and it is
@@ -199,8 +199,8 @@ async def create_page_session(raw_db, workspace: str, actor: dict, *, token_id: 
 
 async def page_session_for_request(raw_db) -> dict | None:
     """A page session for whoever is asking right now, so the server's own
-    headless browser can show them one of this app's pages (webshot.py,
-    the firmware view). None with sign-in off: the page needs none.
+    headless browser can show them one of this app's pages. None with
+    sign-in off: the page needs none.
     Returns {name, value} for the browser's cookie jar."""
     if not enabled():
         return None

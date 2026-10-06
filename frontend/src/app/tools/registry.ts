@@ -9,16 +9,13 @@ import { Type } from '@angular/core';
  *  are Angular components or hand-written pages are loaded through the
  *  components below, only when first opened.
  */
-export type ToolGroup = 'pcb' | 'embedded' | 'mechanical' | 'web' | 'mobile' | 'code' | 'ai' | 'project';
+export type ToolGroup = 'pcb' | 'mechanical' | 'code' | 'ai' | 'project';
 
 /** The list's headings, in order. */
 export const GROUPS: { id: ToolGroup; label: string }[] = [
   { id: 'pcb', label: 'PCB & electronics' },
-  { id: 'embedded', label: 'Embedded' },
   { id: 'mechanical', label: 'Mechanical & 3D' },
-  { id: 'web', label: 'Web & design' },
-  { id: 'mobile', label: 'Mobile' },
-  { id: 'code', label: 'Code & data' },
+  { id: 'code', label: 'Code, data & design' },
   { id: 'ai', label: 'AI & prompts' },
   { id: 'project', label: 'Project' },
 ];
@@ -26,10 +23,8 @@ export const GROUPS: { id: ToolGroup; label: string }[] = [
 /** The rooms a tool can say it serves, for the filter chips. */
 export const ROOMS: { id: string; label: string }[] = [
   { id: 'pcb', label: 'PCB' },
-  { id: 'embedded', label: 'Embedded' },
   { id: 'cad', label: '3D' },
-  { id: 'web', label: 'Web' },
-  { id: 'mobile', label: 'Mobile' },
+  { id: 'code', label: 'Code' },
   { id: 'ai', label: 'AI' },
   { id: 'analyze', label: 'Analytics' },
 ];

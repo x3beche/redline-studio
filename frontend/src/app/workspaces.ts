@@ -4,13 +4,13 @@
  *  note. The loop under that room is not about geometry: source in a
  *  database, built into something you can look at, marked up, picked up by
  *  an agent, rebuilt, checked against a measurement, photographed from the
- *  same angle. A board and a running interface both fit it.
+ *  same angle. A board fits it too.
  *
  *  So the shell holds the tabs and each room is a workspace inside it. The
  *  ones not finished say what they will be rather than pretending.
  */
 export interface Workspace {
-  id: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' | 'notes' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
+  id: 'cad' | 'pcb' | 'notes' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
@@ -30,32 +30,6 @@ export const WORKSPACES: Workspace[] = [
     label: 'PCB Design',
     blurb: 'A circuit written as text, the parts fetched by part number, '
          + 'and the board placed and drawn from it.',
-    ready: true,
-  },
-  // Three coding rooms, not one. A web page, a firmware image and a phone
-  // app are the same loop - look at what runs, mark it, get a diff back,
-  // let the tests say whether it still works - over different things on
-  // screen. One component serves all three; the tab says which.
-  {
-    id: 'embedded',
-    label: 'Embedded Programming',
-    blurb: 'Firmware: what the build makes of the source - memory per region, '
-         + 'the largest functions and tables with their files - the change as '
-         + 'a diff, and the build as the check.',
-    ready: true,
-  },
-  {
-    id: 'web',
-    label: 'Web Programming',
-    blurb: 'Redlining a running page: draw on what is on screen, the change '
-         + 'arrives as a diff, and the tests are the check.',
-    ready: true,
-  },
-  {
-    id: 'mobile',
-    label: 'Mobile Programming',
-    blurb: 'A phone app on an emulated phone: draw on its screen, the change '
-         + 'arrives as a diff, the tests are the check.',
     ready: true,
   },
   {

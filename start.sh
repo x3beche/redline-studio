@@ -66,8 +66,8 @@ if [ "${1:-}" = "--build" ]; then
 fi
 
 say "FastAPI  http://127.0.0.1:$API_PORT  (--reload)"
-# A reload waits for open connections to close, and the simulator's live
-# stream never does: without a limit the API hung until the tab was shut.
+# A reload waits for open connections to close, and a live stream never
+# does: without a limit the API hung until the tab was shut.
 "$PY" -m uvicorn backend.main:app --host 127.0.0.1 --port "$API_PORT" --reload \
       --reload-dir backend --timeout-graceful-shutdown 3 &
 

@@ -2,8 +2,8 @@
   "id": "linux-gpio-number", "version": "1.0",
   "name": "Linux GPIO Number Converter",
   "blurb": "a SoC pin name to its gpiochip, line offset, legacy sysfs number and libgpiod commands",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["gpio number", "gpiochip", "line offset", "sysfs gpio", "/sys/class/gpio", "libgpiod", "gpioget", "gpioset", "gpioinfo", "gpio base", "i.MX GPIO1_IO05", "Rockchip GPIO3_B4", "Allwinner PA10", "BCM GPIO17", "raspberry pi header pin", "AM335x gpio1_28", "STM32MP1 PA13", "gpios = <&gpio", "embedded linux gpio", "yocto gpio"],
   "intro": "Turns a SoC pin name (GPIO1_IO05, gpio1_28, PH5, GPIO3_B4, PA13, GPIO17 or a Raspberry Pi header pin) into the /dev/gpiochip it sits on, its line offset, the legacy sysfs number (chip base + offset) and the libgpiod v1/v2, sysfs and device-tree lines, from each SoC family's Linux driver numbering. It also works backwards from a sysfs number or chip:line.",
   "inputs": [

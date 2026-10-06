@@ -34,7 +34,7 @@ const KEY = 'redline.topbar';
 
 /** A tab's name when the bar is short of room. Any tab not here keeps its name. */
 const SHORT: Record<string, string> = {
-  cad: '3D', pcb: 'PCB', embedded: 'Embedded', web: 'Web', mobile: 'Mobile',
+  cad: '3D', pcb: 'PCB',
   notes: 'Notes', commandcode: 'Command', files: 'Files', tools: 'Tools',
 };
 
@@ -42,9 +42,6 @@ const SHORT: Record<string, string> = {
 const ICON: Record<string, string> = {
   cad: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9',
   pcb: 'M7 7h10v10H7z M10 3v4 M14 3v4 M10 17v4 M14 17v4 M3 10h4 M3 14h4 M17 10h4 M17 14h4',
-  embedded: 'M5 8h14v8H5z M8 8V5 M12 8V5 M16 8V5 M8 16v3 M12 16v3 M16 16v3 M8.5 12h1',
-  web: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M3 12h18 M12 3c3.5 3.5 3.5 14.5 0 18 M12 3c-3.5 3.5-3.5 14.5 0 18',
-  mobile: 'M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z M11 18h2',
   notes: 'M6 3h9l4 4v14H6z M14 3v5h5 M9 12h7 M9 16h5',
   commandcode: 'M4 5h16v11h-9l-5 4v-4H4z M8 9l2.5 2L8 13 M13 13h3',
   files: 'M3 6h6l2 2h10v11H3z',

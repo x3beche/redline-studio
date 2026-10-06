@@ -2,8 +2,8 @@
   "id": "debounce-time", "version": "1.1",
   "name": "Debounce Time Calculator",
   "blurb": "debounce time for a button type and sampling period",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["debounce", "switch bounce", "contact bounce", "button", "pushbutton", "tactile switch", "reed switch", "rotary encoder", "sampling", "integrator", "shift register", "rc debounce", "schmitt trigger", "keypad", "input filter"],
   "intro": "Pick the switch; its worst-case bounce times a safety margin is the window the input must stay stable. At your sampling period that is N equal samples in a row (a counter or an N-bit shift register), which sets the delay a press sees. Bounce figures are typical datasheet maxima and Ganssle's measurements, so a rule of thumb: measure your own switch when it matters.",
   "inputs": [

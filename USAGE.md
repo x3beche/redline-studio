@@ -4,8 +4,7 @@
 
 ## The rooms
 
-Along the top: **3D Drawing**, **PCB Design**, **Web Programming**,
-**Embedded Programming**, **Mobile Programming** and **Analyze**. All but
+Along the top: **3D Drawing**, **PCB Design** and **Analyze**. All but
 Analyze are built, and every built room has the same layout - the 3D
 room's: a toolbar across the top with the pen at its end, tabs down the
 left, the view, and the room's own log under it. Analyze opens on what it
@@ -13,8 +12,8 @@ needs before it can exist. `?ws=pcb` in the URL opens a room, and the
 browser remembers the last one you were in.
 
 The left column belongs to no room. One tree holds everything: a model is
-a `.3d`, a board is a `.pcb`, a program a `.web`, `.fw` or `.mobile`, and
-clicking any of them opens the room that can show it.
+a `.3d`, a board is a `.pcb`, and clicking either opens the room that can
+show it.
 
 The 3D room stays loaded whichever tab is showing — its viewer holds a
 WebGL context and tens of megabytes of geometry, and throwing that away to
@@ -352,86 +351,6 @@ A part without an LCSC number still appears in the netlist and in the
 circuit, and is not on the board: there is no shape to place. It is named
 under the drawing — *no footprint for U3* — rather than quietly left out,
 and a part number that does not exist says so the same way.
-
-## Web, Embedded and Mobile Programming
-
-Redlining a running program. A project is a git checkout: where it is
-served, how it is built, and the command whose exit code says it still
-works. The example projects are **iot-fan**'s - the dashboard, the phone
-app and the controller firmware for the fan in the 3D room, kept in a
-checkout of their own (`~/projects/iot-fan` below).
-
-Nothing runs on the machine itself. Each room has its own Docker image
-(see [INSTALL](INSTALL.md)): a page is served and photographed in
-`redline-code-web`, firmware is built and flashed in
-`redline-code-embedded`, and the phone is an emulator in
-`redline-code-mobile`. Nor is there a button that runs anything: the
-person marks, and the agent starts servers, builds, tests and flashes.
-
-### Web Programming
-
-![The Web room: the iot-fan dashboard, live, and its tests](docs/web-room.png)
-
-The page runs in the view, in a frame at a chosen size - desktop, tablet
-or phone, from the toolbar - scaled into a dark surround so it reads as it
-renders. **The pen** takes a real screenshot of the route in the web
-container's Chrome, about three seconds, and puts the same seven drawing
-tools over it. Every mark is laid on the page's elements as it is drawn:
-a ring means the outermost element mostly inside it, an arrow the
-smallest element under its head. What it landed on is outlined over the
-picture and offered in the Part field with its file -
-`#duty "0" · public/index.html`, or `button.tcv-btn "build" ·
-rooms/pcb.ts` for an Angular component. **Save as draft** files the note
-with the picture and that list.
-
-### Embedded Programming
-
-![The Embedded room: the STM32 firmware as built, a function picked](docs/embedded-room.png)
-
-Firmware has no screen to draw on, so there is no pen here. The view is
-the firmware as built: memory per region - with how much it grew since
-the build before - and the largest functions and tables, file by file.
-Click one and it becomes the note's Part, `fan_command ·
-firmware/common/fan.c:66`, the way the board room offers its components.
-STM32 and ESP32 both: the ARM or Xtensa toolchain is chosen from the
-image itself. The **Boards** tab lists an ST-Link or an ESP32 serial port
-when one is plugged in, and the agent programs it (`code flash`).
-
-### Mobile Programming
-
-![The Mobile room: the iot-fan app on the emulated phone](docs/mobile-room.png)
-
-The view is the phone - an emulated Pixel 7 on KVM, its screen refreshed
-every second and a half, the project put on it when its room opens. The
-pen freezes the phone's own screen; a page's elements come from the
-phone's Chrome and a native app's from its view tree, both in the
-screen's pixels, so a ring round the **+** button is `#up "+" ·
-mobile/public/index.html:26`.
-
-### The diff, the check
-
-The toolbar's second button turns the view into the **diff**: the working
-tree against HEAD, or one note's own change - only the files that moved
-since it was drawn, so somebody else's uncommitted work in the same
-checkout stays out of it - with the note's before and after over it. The
-**Check** tab shows the last test run; a pass says so when the tree has
-changed since, rather than showing a green from an older one. A note is
-not done until the check passes and the after shot is taken, and the
-agent's `code done` will not mark it applied otherwise.
-
-A project is registered through the API:
-
-```bash
-curl -X PUT localhost:8000/api/apps/iot-fan-web -H 'content-type: application/json' -d '{
-  "title": "iot-fan dashboard", "platform": "web", "folder": "iot-fan",
-  "repo": "/home/you/projects/iot-fan", "cwd": "web",
-  "url": "http://127.0.0.1:5173", "dev": "node server.js", "test": "node --test"}'
-```
-
-Firmware adds `target` (`stm32` or `esp32`), `build` - with `$BUILD` for
-Redline's own output directory, never the project's tree - and `flash`
-(`$ELF`, `$BUILD`, `$PORT`). A phone app served on the web gives the url
-as the phone sees the host, `http://10.0.2.2:5174`.
 
 ## The left column
 
@@ -825,7 +744,7 @@ newer one replaces it a moment later.
   price of a kWh there and the electricity cost follows.
 - **Work** - notes written and runs finished per room, run times, the thread.
 - **Storage** - the database by collection, caches on disk, free space.
-- **Projects** - models, boards, apps, notes and LLM spend per project.
+- **Projects** - models, boards, notes and LLM spend per project.
 - **Parts supplier (LCSC)** - every request and how it was answered.
 
 - **Costs & savings** - what you pay for the subscription (enter the plan
@@ -860,11 +779,10 @@ newer one replaces it a moment later.
 - Tiles show the change against the period before, of the same length.
 
 **One project at a time.** The selector next to the range switches from all
-of the app to one project: its models, boards and apps matched by id, each
+of the app to one project: its models and boards matched by id, each
 with a picture (a board's layout, or the latest note's drawing), its notes
 and what they cost, its runs and jobs, and what it keeps a history of - a
-model's built size and build time, a board's pipeline runs, an app's tests
-and firmware size. The machine, storage, the API and Docker stay app-wide.
+model's built size and build time, a board's pipeline runs. The machine, storage, the API and Docker stay app-wide.
 
 Each row folds away; the room remembers which, the range and the project.
 Every panel has a **CSV** button, and **Export** at the top saves the whole
@@ -924,8 +842,7 @@ nobody signs in), Ctrl+K, or **?** for the shortcuts page:
   Contrast. It covers the whole window - panels, the 3D
   backdrop (dark in the dark themes, black in OLED), the viewer's own chrome
   and the code editor, which changes at once. On the light ones the boards
-  are drawn on white too, with inks that show there, and the coding rooms'
-  previews sit on a light ground.
+  are drawn on white too, with inks that show there.
 - **Language**: English or Türkçe - the tabs, the side columns, the menus,
   Notes, the palette, the code and change views, releases. Names of models,
   boards, parts and code are never translated; a room not yet translated
@@ -934,7 +851,7 @@ nobody signs in), Ctrl+K, or **?** for the shortcuts page:
   Ctrl+click in the code; Enter, Shift+Enter, / and the arrows in Notes.
 
 **Ctrl+K** anywhere opens one box to go to anything and do anything: the
-rooms; every model, board and app by name; every tool; the actions of the
+rooms; every model and board by name; every tool; the actions of the
 room you are in (show the code, release, technical drawing, build the
 board, a new note); and, as you type, what the server finds - code lines
 (opened at that line), notes, chats, revisions and parts. Arrows move,
@@ -980,16 +897,6 @@ from a terminal: `revisions.py board convert <id>`.
 - **The import stays.** Its netlist and drawings are kept on the board as
   `imported_graph`, `imported_layout`, `imported_model3d` and so on, with
   the uploaded files (`sources.zip`) and the import's account.
-
-**Simulating firmware on its board.** In the Embedded room, *Simulate*
-runs the firmware in an emulator - QEMU for ESP32, Renode for STM32 - on
-the board it is linked to, shown in 3D: LEDs glow, an OLED shows what the
-firmware draws (a module is drawn on its header when the board's model
-has only the header), fans turn, buttons press when clicked, and analog
-parts have sliders; the UART is a console. The parts come from the
-board's netlist and the catalog (`backend/sim/catalog.yaml`), so the same
-OLED or LED model works on any board and any MCU. Link an app to its
-board with `revisions.py sim link <app> <board>`.
 
 **What a note changed.** When an agent works a note, Redline keeps every
 source in the project as it was when the agent started and as it was when
@@ -1037,6 +944,6 @@ the reason on hover, and if you try anyway the reason appears at the top.
 **Workspaces.** Your name at the top shows the workspace you are in; the
 menu lists the others you belong to - click one to move there. **New
 workspace** (owners and admins) makes an empty one with its own projects,
-notes, boards, apps, members and agent tokens; the same names can be used
+notes, boards, members and agent tokens; the same names can be used
 in both, and neither sees into the other. Invite people to a workspace
 while you are in it.

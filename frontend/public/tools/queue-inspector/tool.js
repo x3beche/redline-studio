@@ -18,7 +18,7 @@
 //   success   runs finished "done" / all finished runs (from the log), and
 //             notes applied / (applied + rejected)
 
-const ROOMS = ['cad', 'pcb', 'web', 'embedded', 'mobile'];
+const ROOMS = ['cad', 'pcb'];
 const OK = new Set(['done', 'ok', 'success', 'succeeded', 'applied', 'passed']);
 const norm = (s) => String(s ?? '').trim();
 const ms = (iso) => { const t = Date.parse(norm(iso)); return Number.isFinite(t) ? t : null; };

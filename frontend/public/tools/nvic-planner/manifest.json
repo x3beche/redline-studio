@@ -2,8 +2,8 @@
   "id": "nvic-planner", "version": "1.1",
   "name": "NVIC Priority Planner",
   "blurb": "interrupt priorities in order, with preemption conflicts",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["nvic", "interrupt priority", "preemption", "subpriority", "prigroup", "irq", "isr", "cortex-m", "response time analysis", "interrupt latency", "configMAX_SYSCALL_INTERRUPT_PRIORITY", "freertos", "basepri", "deadline"],
   "intro": "Sorts your interrupts the way the Cortex-M NVIC does (group priority, then subpriority), encodes the priority bytes and PRIGROUP, and runs a worst-case response-time analysis: each handler's own time, the time it is blocked by its own group, and the time handlers above it preempt it, against its deadline. It flags shared levels, deadline-order inversions and RTOS-API calls above the FreeRTOS syscall limit.",
   "inputs": [

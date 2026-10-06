@@ -33,7 +33,6 @@ envnames.adopt()                       # an older .env's X3_ names
 
 from . import (access, actors, ato, auth, changes, convert, files, jobs, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
-from . import code_api
 from . import tools_api
 
 LOG = logging.getLogger("redline.api")
@@ -61,25 +60,15 @@ app.add_middleware(
 
 _client = None
 
-# The coding rooms keep their routes in a file of their own.
-app.include_router(code_api.router)
 # The Tools tab's catalog, checks, runs and usage, and the tool pages.
 tools_api.mount(app)
 # And the agents' way in to their database work (users phase 4).
 from . import agent_api  # noqa: E402
 app.include_router(agent_api.router)
-# The virtual board: a board's firmware in an emulator, its parts as models.
-from .sim import api as sim_api  # noqa: E402
-app.include_router(sim_api.router)
 # A board brought in from outside: Gerbers, drills, a probe netlist, a BOM,
 # a STEP, or another tool's design file.
 from .imports import api as imports_api  # noqa: E402
 app.include_router(imports_api.router)
-# The Embedded room's views: the firmware's files, what the build made, a real board.
-from .embedded import build as emb_build, device as emb_device, files as emb_files  # noqa: E402
-app.include_router(emb_files.router)
-app.include_router(emb_build.router)
-app.include_router(emb_device.router)
 # Which model does which job, the keys (Preferences > LLM settings), and
 # the Command Code room's conversations.
 from . import cc_chat, llm, llm_api, netproxy  # noqa: E402
@@ -448,7 +437,7 @@ class ActivityIn(BaseModel):
     # Which room's log this belongs in. The 3D room's log is about models
     # and the board room's about boards; one feed for both mixed a
     # tessellation in with a placement.
-    room: str = Field(default="cad", pattern="^(cad|pcb|web|embedded|mobile)$")
+    room: str = Field(default="cad", pattern="^(cad|pcb)$")
 
 
 class RunStart(BaseModel):
@@ -457,7 +446,7 @@ class RunStart(BaseModel):
     model: str | None = None
     # Whose run: each room has its own, so agents in different rooms can
     # work at once without closing each other's.
-    room: str = Field(default="cad", pattern="^(cad|pcb|web|embedded|mobile)$")
+    room: str = Field(default="cad", pattern="^(cad|pcb)$")
 
 
 async def say(text: str, level: str = "info", room: str = "cad") -> dict:
@@ -616,11 +605,7 @@ class RevisionIn(BaseModel):
     # "pcb" when the note is about a board. A board is not a model - it has
     # no camera, nothing to freeze, and `build` does not take it - so the
     # agent and the page both need to know which one they are holding.
-    kind: str | None = Field(default=None, pattern="^(cad|pcb|web|embedded|mobile)$")
-    # A note on a running interface: the route and size it was drawn at,
-    # the commit it was drawn against, and the elements under the marks.
-    # web, embedded and mobile are the three coding rooms.
-    code: dict | None = None
+    kind: str | None = Field(default=None, pattern="^(cad|pcb)$")
 
 
 def _out(d: dict) -> dict:
@@ -628,7 +613,6 @@ def _out(d: dict) -> dict:
             "camera": d.get("camera"), "part": d.get("part"), "model": d.get("model"),
             "kind": d.get("kind") or "cad",
             "view": d.get("view"),
-            "code": d.get("code"),
             "status": d.get("status", "draft"), "queued_at": d.get("queued_at"),
             "edited_at": d.get("edited_at"), "archived": bool(d.get("archived")),
             "image_bytes": (d.get("image") or {}).get("bytes", 0),
@@ -829,8 +813,6 @@ async def create_revision(body: RevisionIn):
         "image": image,
         "view": body.view,
     }
-    if body.code is not None:
-        doc["code"] = code_api.enrich(body.code)
     await d.revisions.insert_one(doc)
     schedule_note_work(rid)
     return _out(doc)
@@ -2255,7 +2237,7 @@ async def notes_tags():
 
 @app.post("/api/notes")
 async def notes_create(body: NoteIn):
-    ctx = {k: str(v)[:200] for k, v in (body.context or {}).items() if k in ("room", "model", "board", "app") and v}
+    ctx = {k: str(v)[:200] for k, v in (body.context or {}).items() if k in ("room", "model", "board") and v}
     return _note_out(await notes.create(db(), body.text, ctx, actors.current()))
 
 
@@ -2280,7 +2262,7 @@ async def notes_delete(nid: str):
 
 
 class NoteSend(BaseModel):
-    room: str = Field(pattern="^(cad|pcb|web|embedded|mobile)$")
+    room: str = Field(pattern="^(cad|pcb)$")
     urgent: bool = False
 
 
@@ -2313,13 +2295,13 @@ async def files_list(q: str = "", kind: str = "", board: str = ""):
 @app.post("/api/files")
 async def files_upload(upload: list[UploadFile] = File(...), context: str = Form(""), note: str = Form("")):
     """One or more files, kept as they came. `context` is JSON - the room and
-    the board, model or app open there - and comes along with each."""
+    the board or model open there - and comes along with each."""
     try:
         raw = json.loads(context) if context else {}
     except ValueError:
         raw = {}
     ctx = {k: str(v)[:200] for k, v in (raw if isinstance(raw, dict) else {}).items()
-           if k in ("room", "model", "board", "app") and v}
+           if k in ("room", "model", "board") and v}
     out = []
     for f in upload:
         # Read it in pieces, so a file over the limit is refused before all
@@ -2338,7 +2320,7 @@ async def files_upload(upload: list[UploadFile] = File(...), context: str = Form
         out.append(_file_out(doc))
     names = ", ".join(d["name"] for d in out)
     await push_activity(ActivityIn(text=f"uploaded {names}"[:500], level="done",
-                                   room=ctx.get("room") if ctx.get("room") in ("cad", "pcb", "web", "embedded", "mobile") else "cad"))
+                                   room=ctx.get("room") if ctx.get("room") in ("cad", "pcb") else "cad"))
     return out
 
 
@@ -2385,7 +2367,7 @@ async def files_delete(fid: str):
 
 
 class FileSend(BaseModel):
-    room: str = Field(pattern="^(cad|pcb|web|embedded|mobile)$")
+    room: str = Field(pattern="^(cad|pcb)$")
 
 
 @app.post("/api/files/{fid}/send")

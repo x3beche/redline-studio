@@ -3,10 +3,8 @@
   "layout": "custom", "agentOmit": ["specimens", "rule"],
   "name": "Touch Target Checker",
   "blurb": "touch targets under the minimum size in a layout",
-  "group": "mobile",
-  "rooms": [
-    "mobile"
-  ],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": [
     "touch target",
     "tap target",

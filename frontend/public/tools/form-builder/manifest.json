@@ -2,10 +2,8 @@
   "id": "form-builder", "version": "1.0",
   "name": "Form Builder",
   "blurb": "build a form with its rules, get Zod, types and a React component",
-  "group": "web",
-  "rooms": [
-    "web"
-  ],
+  "group": "code",
+  "rooms": ["code"],
   "keywords": [
     "form",
     "validation",

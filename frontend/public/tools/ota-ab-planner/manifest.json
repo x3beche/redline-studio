@@ -3,10 +3,8 @@
  "version": "1.0",
  "name": "OTA A/B Update Planner",
  "blurb": "A/B slots, boot counting and rollback for RAUC, SWUpdate or Mender, with their config files",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "keywords": [
   "ota",
   "a/b update",

@@ -2,8 +2,8 @@
 
 # Redline
 
-**One place to design hardware with agents: parametric 3D, circuit boards,
-firmware, web and mobile.** Freeze a view, draw on it, leave a note - an
+**One place to design hardware with agents: parametric 3D and circuit
+boards.** Freeze a view, draw on it, leave a note - an
 agent picks it up, changes the source, rebuilds, and shows you what changed.
 All project data lives in MongoDB.
 
@@ -66,22 +66,19 @@ The loop under this is not about geometry. Source lives in a database as
 text you can change a constant in; it is built into something you can look
 at; you freeze a view, mark it and leave a note; an agent picks the note
 up, edits the source, rebuilds, photographs it from the same angle and
-checks it against a measurement. A board and a running interface fit that
-as well as a solid does.
+checks it against a measurement. A board fits that as well as a solid
+does.
 
 | | |
 |---|---|
 | **3D Drawing** | parametric solids in build123d - this is what is built |
 | **PCB Design** | atopile for the circuit, LCSC for the parts, KiCad in a container for the board |
-| **Embedded Programming** | STM32 and ESP32 firmware: what the build made of the source, the change as a diff, programmed by the agent |
-| **Web Programming** | a page while it runs: draw on it, the change arrives as a diff, the tests are the check |
-| **Mobile Programming** | an app on an emulated phone, redlined the way a page is |
 | **Notes** | what you jot down while working - Enter keeps it, Alt+N from anywhere |
 | **Tools** | 175 engineering calculators and sketch pads, most of them runnable by agents too |
 | **Analytics** | what all of it cost and used: LLM money and tokens, the machine and its energy, builds, storage, per project |
 
-The five design rooms share one layout - the 3D room's - so a board, a
-page and a phone are looked at the same way.
+The two design rooms share one layout - the 3D room's - so a board is
+looked at the way a model is.
 
 ![A board in the PCB room: atopile for the circuit, KiCad for the board](docs/pcb-room.png)
 
@@ -90,34 +87,19 @@ LCSC by its number — footprint and 3D model together — and has KiCad
 place and draw it inside a container, so a gigabyte of libraries never
 lands on the machine. Out come a layer render, a model and a BOM.
 
-The programming rooms redline a program while it runs. The pen takes a
-real screenshot - of a page in a container's Chrome, of an emulated
-phone's screen - and a ring or an arrow is laid on the elements under
-it: "this button, in public/index.html", not "these pixels". Firmware has
-no screen, so its view is what the build made of the source, and a note
-is about a function picked there. Each comes back as a diff, with the
-test suite or the build as the check and the same screen afterwards as
-the after.
-
-![The Web room: the iot-fan dashboard running, and its tests](docs/web-room.png)
-
-| | |
-|---|---|
-| ![The Embedded room: STM32 firmware as built](docs/embedded-room.png) | ![The Mobile room: the app on the phone](docs/mobile-room.png) |
-
 ## Who does the work
 
 One main agent watches the queue and the thread, and hands each note to
-an agent for its room - 3D, board, web, embedded, mobile - which applies
-it, checks it and closes it. Rooms work in parallel, each with its own
-run, its own log and, for the three programming rooms, its own Docker
-image, so nothing a project needs is installed on the machine itself.
+an agent for its room - 3D or board - which applies it, checks it and
+closes it. Rooms work in parallel, each with its own run and its own log;
+KiCad and the drawings run in Docker, so nothing a project needs is
+installed on the machine itself.
 The queue is also an MCP server (`.mcp.json`), for any agent that
 speaks it. [AGENTS.md](AGENTS.md) has the details.
 
 ## Everything in one box
 
-**Ctrl+K**, anywhere: every model, board, app and tool by name, the room's
+**Ctrl+K**, anywhere: every model, board and tool by name, the room's
 actions (show the code, release, technical drawing, build the board, a new
 note, a theme), and, as you type, code lines (opened at that line), notes,
 chats, revisions and parts.
@@ -239,7 +221,7 @@ honest substitute.
 | Service | FastAPI + Uvicorn |
 | Data | MongoDB + GridFS |
 | Boards | atopile, KiCad 9 and Freerouting in a container |
-| Everything heavy | Docker: KiCad, the drawings, each coding room, the tools' checks - limited to a share of the machine |
+| Everything heavy | Docker: KiCad, the drawings, the tools' checks - limited to a share of the machine |
 
 Models can be built from other models, so an assembly is just a module that
 imports its parts and positions them. The fit is then checked in code rather

@@ -3,10 +3,8 @@
  "version": "1.0",
  "name": "systemd Unit & udev Rule Builder",
  "blurb": "a systemd service checked and drawn with its dependencies, and a udev rule written from udevadm info",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "keywords": [
   "systemd",
   "service file",

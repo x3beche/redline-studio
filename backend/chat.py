@@ -13,7 +13,7 @@ what it did.
 `seen_at` is what makes the agent's idle wait work: a message nobody has
 read yet is what brings it back, the same way a queued revision does.
 
-Each room has its own thread - `room` is cad, pcb, web, embedded or mobile.
+Each room has its own thread - `room` is cad or pcb.
 What is said about a board is not something to scroll past in the 3D room,
 and a room's agent reads its own. Rows from before rooms were the 3D room's.
 """
@@ -27,7 +27,7 @@ from . import actors
 
 CHAT = "chat"
 USER, AGENT = "user", "agent"
-ROOMS = ("cad", "pcb", "web", "embedded", "mobile")
+ROOMS = ("cad", "pcb")
 
 
 def room_of(doc: dict) -> str:

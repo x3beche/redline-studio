@@ -2,8 +2,8 @@
   "id": "pid-playground", "version": "1.1",
   "name": "PID Tuning Playground",
   "blurb": "a simple plant's step response live as the gains move",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["pid", "pi controller", "control loop", "tuning", "step response", "overshoot", "settling time", "rise time", "kp ki kd", "simc", "skogestad", "ziegler nichols", "dead time", "fopdt", "anti-windup", "motor control", "temperature control"],
   "intro": "A discrete PID controller (sampled every dt, derivative on the measurement with a filter, clamping anti-windup) closes the loop around a first-order, second-order or integrating plant with dead time. The setpoint step, and an optional load step, are simulated; rise time, overshoot and settling are measured from the curve, and SIMC and Ziegler–Nichols gains for the plant are listed for comparison.",
   "inputs": [

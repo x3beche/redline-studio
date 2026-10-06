@@ -2,12 +2,10 @@
   "id": "selector-finder", "version": "1.1",
   "name": "DOM Selector Finder",
   "blurb": "the shortest stable CSS selector for an element in pasted HTML",
-  "group": "web",
+  "group": "code",
   "layout": "custom",
   "agentOmit": ["dom"],
-  "rooms": [
-    "web"
-  ],
+  "rooms": ["code"],
   "keywords": [
     "css selector",
     "locator",

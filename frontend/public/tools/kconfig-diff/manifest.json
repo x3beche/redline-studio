@@ -3,10 +3,8 @@
  "version": "1.0",
  "name": "Kconfig Diff",
  "blurb": "two kernel or U-Boot .config files compared, and the difference written as a config fragment",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "keywords": [
   "kconfig",
   "kernel config",

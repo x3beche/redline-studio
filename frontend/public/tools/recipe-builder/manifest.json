@@ -3,12 +3,10 @@
  "version": "1.0",
  "name": "Recipe Builder & Linter",
  "blurb": "a BitBake recipe from source, license, build system and packaging choices, with the common mistakes caught",
- "group": "embedded",
+ "group": "pcb",
  "layout": "custom",
  "view": true,
- "rooms": [
-  "embedded"
- ],
+ "rooms": ["pcb"],
  "keywords": [
   "bitbake recipe",
   ".bb",

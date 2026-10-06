@@ -61,7 +61,7 @@ def test_a_reviewer_draws_but_does_not_queue_build_or_delete():
     assert not access.allowed(r, access.action("PATCH", "/api/revisions/n1", {}))
     assert not access.allowed(r, access.action("POST", "/api/boards/b/build"))
     assert not access.allowed(r, access.action("POST", "/api/models/iot-fan/case/build"))
-    assert not access.allowed(r, access.action("POST", "/api/apps/a/flash"))
+    assert not access.allowed(r, access.action("POST", "/api/boards/b/layout"))
     assert not access.allowed(r, access.action("POST", "/api/tools/run"))
     for path in ("/api/revisions/n1", "/api/boards/b", "/api/models/iot-fan/case", "/api/chat"):
         assert not access.allowed(r, access.action("DELETE", path)), path

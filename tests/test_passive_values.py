@@ -177,3 +177,70 @@ def test_every_passive_is_drawn_with_a_device_symbol(monkeypatch, tmp_path):
     assert by["L1"]["symbol"]["entry"] == "L" and by["L1"]["value"] == "1uH"
     assert by["C14"]["symbol"]["entry"] == "C" and by["C14"]["value"] == "100nF"
     assert by["U1"]["symbol"]["kind"] == "easyeda"
+
+
+# ---- pins ERC should not read a direction into ----
+
+def _tagged(pre: str, tags: list[str]):
+    data = _comp(pre)
+    data["tags"] = tags
+    return data
+
+
+@pytest.mark.parametrize("pre,tags,ref,want", [
+    ("P?", ["Pin Headers"], "J3", True),                  # the 2x8 header typed "input"
+    ("H?", ["Pin Headers"], "I2C", True),                 # a header called I2C
+    ("CN?", [], "CN1", True),
+    ("USB?", ["USB Connectors"], "USB1", True),
+    ("BT?", ["Battery Connectors"], "BT1", True),
+    ("LED?", ["Light Emitting Diodes (LED)"], "PGOD", True),   # its cathode typed "input"
+    ("SW?", ["Tactile Switches"], "RST", True),
+    ("U?", ["Battery Management ICs"], "U4", False),      # a charger chip is not a holder
+    ("U?", ["WiFi Modules"], "U2", False),
+    ("", [], "UART2", True),                              # no prefix: the designator's letters
+    ("", [], "PGOD", False),                              # ... whole: PGOD is not a P
+])
+def test_connectors_switches_and_leds_have_passive_pins(pre, tags, ref, want):
+    assert schematic.passive_pins(_tagged(pre, tags), ref) is want
+
+
+def test_the_plan_says_which_symbols_get_passive_pins(monkeypatch, tmp_path):
+    parts = {"C68234": _tagged("P?", ["Pin Headers"]),
+             "C82899": {**_tagged("U?", ["WiFi Modules"]),
+                        "dataStr": {"head": {"c_para": {"pre": "U?"}},
+                                    "shape": [_comp("U?")["dataStr"]["shape"][0]] * 3}}}
+
+    async def component(code):
+        return parts[code]
+
+    async def device():
+        return tmp_path / "Device.kicad_sym"
+    monkeypatch.setattr(lcsc, "_component", component)
+    monkeypatch.setattr(schematic, "_device_library", device)
+    graph = {"components": [{"ref": "J3", "part": "C68234"}, {"ref": "U2", "part": "C82899"}],
+             "nets": []}
+    by = {c["ref"]: c for c in asyncio.run(schematic.plan_for(graph, "t"))["components"]}
+    assert by["J3"]["symbol"]["pins"] == "passive"
+    assert by["U2"]["symbol"]["pins"] == "as_typed"
+
+
+def test_easyeda_untyped_and_power_pins_become_passive():
+    gen = pytest.importorskip("tools.schematic_gen", reason="kiutils is in the atopile env")
+
+    class Pin:
+        def __init__(self, t):
+            self.electricalType = t
+
+    class Unit:
+        def __init__(self, pins):
+            self.pins = pins
+
+    class Sym:
+        def __init__(self, types):
+            self.units = [Unit([Pin(t) for t in types])]
+    sym = Sym(["unspecified", "power_in", "input", "output", "bidirectional"])
+    assert gen.retype(sym, "as_typed") == 2
+    assert [p.electricalType for p in sym.units[0].pins] == \
+        ["passive", "passive", "input", "output", "bidirectional"]
+    hdr = Sym(["input"] * 16)
+    assert gen.retype(hdr, "passive") == 16

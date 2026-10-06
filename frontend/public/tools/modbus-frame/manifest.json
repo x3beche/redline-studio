@@ -2,8 +2,8 @@
   "id": "modbus-frame", "version": "1.1",
   "name": "Modbus Frame Builder",
   "blurb": "an RTU/TCP frame with its CRC from function code and registers",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["modbus", "rtu", "modbus tcp", "modbus ascii", "mbap", "crc16", "crc-16/modbus", "lrc", "holding register", "coil", "function code", "rs485", "request frame", "plc"],
   "intro": "Builds a Modbus request from the function code, slave, start address and values: the PDU per the Modbus Application Protocol, wrapped as RTU (with CRC-16, low byte first), ASCII (with LRC) or TCP (with the MBAP header). It also gives the expected response length and, for serial, the time on the wire and the t3.5 gap.",
   "inputs": [

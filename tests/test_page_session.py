@@ -1,9 +1,9 @@
 """Page sessions: how a headless browser is shown the app with sign-in on.
 
 tools/render.py trades the agents' token for one (POST
-/api/auth/page-session); the server makes one for whoever asks it for a
-shot of its own pages (webshot.py). Either way it is read-only, minutes
-long, in the source's workspace, and ends when its source does.
+/api/auth/page-session); the server can make one for whoever asks it for a
+shot of its own pages. Either way it is read-only, minutes long, in the
+source's workspace, and ends when its source does.
 """
 import asyncio
 import json
@@ -332,10 +332,3 @@ def test_render_never_puts_the_session_in_the_address_or_on_the_command_line():
     argv = render.browser_argv(("local", "/usr/bin/chromium"), 9411, 800, 600, "/tmp/p",
                                "about:blank", "n")
     assert "secret-value" not in json.dumps(argv)
-
-
-def test_webshot_sets_the_cookie_for_the_pages_origin_only():
-    from backend import webshot
-    c = webshot.page_cookie("http://127.0.0.1:8000/api/apps/fw/firmware.html",
-                            {"name": auth.COOKIE, "value": "v"})
-    assert c["url"] == "http://127.0.0.1:8000/" and c["httpOnly"] and c["path"] == "/"

@@ -3,7 +3,7 @@
 A note is text and nothing else to fill in. What would be fields elsewhere
 is read out of the text: the first line is its title, `#words` are its
 tags, `@names` point at models and boards, and `- [ ]` lines are to-dos.
-Where it was written - the room, and the model, board or app open there -
+Where it was written - the room, and the model or board open there -
 comes along on its own. A note can be handed to a room's agent, which
 then gets it as a message in that room's thread.
 

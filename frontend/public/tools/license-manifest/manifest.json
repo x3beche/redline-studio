@@ -3,10 +3,8 @@
  "version": "1.0",
  "name": "License Manifest Viewer",
  "blurb": "packages in an image grouped by license, with GPLv3 and other copyleft flagged",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "layout": "custom",
  "view": true,
  "agentOmit": [

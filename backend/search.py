@@ -4,7 +4,7 @@ What the Ctrl+K palette asks as you type (after two characters). Each kind
 answers a handful of its best matches: a code line with its file and line
 number, a note by its title with the matching line, a chat line with its
 room, a part from the drawer, a revision by its summary. The workspace's
-own, through the scope (backend/scope.py). Names of models, boards, apps
+own, through the scope (backend/scope.py). Names of models, boards
 and tools the page already has; it matches those itself.
 """
 

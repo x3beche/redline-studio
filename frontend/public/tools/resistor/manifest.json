@@ -3,10 +3,7 @@
   "name": "Resistor & LED",
   "blurb": "Ohm's law, an LED's series resistor, a divider from standard values",
   "group": "pcb",
-  "rooms": [
-    "pcb",
-    "embedded"
-  ],
+  "rooms": ["pcb"],
   "keywords": [
     "ohm",
     "ohm's law",

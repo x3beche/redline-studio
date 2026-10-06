@@ -3,10 +3,8 @@
   "version": "1.0",
   "name": "PWM & Dead-time Calculator",
   "blurb": "timer PSC/ARR for a PWM frequency and resolution, and the dead-time register for a half bridge",
-  "group": "embedded",
-  "rooms": [
-    "embedded"
-  ],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": [
     "pwm",
     "dead time",

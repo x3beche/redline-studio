@@ -19,10 +19,8 @@ file with the Read tool**. The comment alone is not enough: when the user says
 
 ## One main agent, one agent per room
 
-Five rooms write notes into one queue: **3D Drawing** (`cad`), **PCB
-Design** (`pcb`), and the three coding rooms **Web Programming** (`web`),
-**Embedded Programming** (`embedded`) and **Mobile Programming**
-(`mobile`). The agent opened in this repository is the **main agent**. It
+Two rooms write notes into one queue: **3D Drawing** (`cad`) and **PCB
+Design** (`pcb`). The agent opened in this repository is the **main agent**. It
 does not apply notes itself. It keeps the queue moving:
 
 1. `revisions.py wait` in the background - it returns on a queued note or
@@ -30,8 +28,7 @@ does not apply notes itself. It keeps the queue moving:
 2. `revisions.py chat` first, when something was said: the person comes
    before the queue. Answer with `say`.
 3. `revisions.py queue`, then hand each note to its room's agent with the
-   Agent tool - `redline-3d`, `redline-pcb`, `redline-web`,
-   `redline-embedded`, `redline-mobile` (`.claude/agents/`). Give it the
+   Agent tool - `redline-3d` or `redline-pcb` (`.claude/agents/`). Give it the
    revision id and nothing it can read for itself. `revisions.py kind
    <id>` says which room a note is from.
 4. Rooms run **in parallel**, one note per room at a time: every room has
@@ -132,7 +129,7 @@ at the foot of the queue column:
 again - `--keep-unread` looks without picking it up. `wait` returns on a
 message as well as on a queued revision, so the same idle loop covers both.
 
-**Each room (tab) has its own thread** - cad, pcb, web, embedded, mobile.
+**Each room (tab) has its own thread** - cad and pcb.
 `chat` shows every room's, each line tagged `[pcb]` and so on; `chat --room
 pcb` shows one. Answer in the room it was asked in: `say --room pcb "..."`.
 Without `--room`, `say` goes to the room the person last spoke in. A room's
@@ -176,19 +173,6 @@ The person can edit a source too, in the code view (the `</>` button).
 **Read the source again right before you save it** - `source` / `board
 source` - rather than saving over a copy you read at the start of the
 note, or their edit is lost.
-
-## Running firmware on its board
-
-`revisions.py sim run <app> --for 8 --press SW1@3 --uart "status@6" --shot
-OLED_MODULE=oled.png` builds the app's firmware, runs it on its linked
-board in the emulator (QEMU for ESP32, Renode for STM32), presses, types
-and reads back what every part shows - LED glow, fan rpm, the OLED as a
-PNG (read it). Use it to check firmware before calling it done. `sim show
-<app>` prints the board as the simulator sees it, with warnings: take
-them seriously, they are usually the board's own mistakes (a LED whose
-other end goes nowhere). `sim link <app> <board> [--sim fix.json]`
-links an app to its board and keeps hand corrections. Nothing of the
-application is changed for the simulator. Contract: backend/sim/SPEC.md.
 
 An **imported** board (`kind: imported`) has no atopile source: it was
 made from Gerbers, a netlist, a STEP. Don't try to build or edit it -
@@ -393,51 +377,6 @@ and listed under findings. The layout is held (placer puts each part
 where its pads were; the Gerber outline is the edge); routing, the pour
 and DRC are the pipeline's.
 
-## Code notes
-
-A queued item marked `[WEB]`, `[EMBEDDED]` or `[MOBILE]` is a note from
-one of the programming rooms. `model` is a project's id: a git checkout,
-where it is served or how it is built, and its test command. A web or
-phone note's drawing is a real screenshot of one route at one size, and
-the note carries what was under the marks - selector, box, and the file
-that renders it. A firmware note has no drawing; its `part` is the
-function or table it is about, as `fan_command · firmware/common/fan.c:66`.
-
-**Nothing runs on the host.** Every command below runs in the room's own
-Docker image - `redline-code-web`, `-embedded`, `-mobile` - with the
-checkout mounted at its own path. Do not install a compiler, a browser
-or an SDK to get around a missing image; say which image is missing.
-
-```bash
-.venv/bin/python tools/revisions.py code show <id>     # note, page, elements, drawing
-.venv/bin/python tools/revisions.py code diff <id>     # what changed since it was drawn
-.venv/bin/python tools/revisions.py code test <id>     # the project's test command
-.venv/bin/python tools/revisions.py code done <id>     # check, after shot, applied
-.venv/bin/python tools/revisions.py code serve <app>   # its dev server, in its container
-.venv/bin/python tools/revisions.py code build <app>   # firmware, into Redline's cache
-.venv/bin/python tools/revisions.py code boards x      # STM32 / ESP32 boards plugged in
-.venv/bin/python tools/revisions.py code flash <app>   # program the board
-.venv/bin/python tools/revisions.py code phone x       # start the emulated phone
-```
-
-`show` writes the drawing out: **read it**, then go to the file it names.
-Edit the project's checkout (`show` prints where it is). Files that were
-already uncommitted when the note was drawn are somebody else's work in
-progress: `show` counts them, and `code diff` leaves out what they said
-then, so the diff is yours alone.
-
-`done` is the only way a code note closes. For firmware it builds first
-and refuses a build that fails; then it runs the test command and
-**refuses while it fails**, photographs the same route at the same size
-as the after picture, freezes the patch onto the note and marks it
-applied. `done <id>` does the same for a code note, so the check cannot
-be skipped by using the older command. Say what a firmware change cost in
-flash and RAM - the build prints both.
-
-Each room has its own log and its own thread: `log --room web`,
-`chat --room web`, `say --room web` (or `embedded`, `mobile`). The room
-agents in `.claude/agents/` already know theirs.
-
 ## Designing a board from a description
 
 "STM32F042, two buttons, USB-C charging with a TP4056, a CH340G with a
@@ -554,8 +493,6 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py after <id>           # the "after" picture
 .venv/bin/python tools/revisions.py usage [--full]       # what the work cost
 .venv/bin/python tools/revisions.py files [get <id>|put <file>]  # the Files tab
-.venv/bin/python tools/revisions.py code show|diff|test|done <id>        # code notes
-.venv/bin/python tools/revisions.py code serve|build|flash <app>          # in the room's container
 .venv/bin/python tools/render.py <id> [--camera=…|--only PART]
 ```
 
@@ -584,8 +521,7 @@ them while you work so the user can follow along without reading a terminal:
 `-p` moves the bar, `-l` colours the line (`info`, `work`, `done`, `warn`,
 `error`). Each room has its own log: lines go to the 3D room's by default,
 and `--room pcb` puts them in the board room's - log board work there, so
-neither room's log is half about the other. `--room web`, `embedded` and
-`mobile` are the coding rooms'. Start a run when you pick up a revision and finish it when you are
+neither room's log is half about the other. Start a run when you pick up a revision and finish it when you are
 done; the bar stays live in between.
 
 ### Always finish by rendering from the user's angle
@@ -645,8 +581,6 @@ it and `run_tool` runs it.
 | Model source | `models` collection |
 | Generated viewer/STEP/STL | GridFS `model_files` (gzip) |
 | Revision images | GridFS `shots` |
-| Code projects | `apps` collection - a checkout, a url, a test command |
-| A done code note's patch | GridFS `model_files` (gzip), on the revision |
 | Version history | `model_versions` — source text only |
 | Build | temporary directory, removed when finished |
 

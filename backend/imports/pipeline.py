@@ -127,8 +127,8 @@ def _gerber_step(items: list[detect.Item], title: str) -> dict:
 
 
 async def _print_pdf(html: str) -> bytes | None:
-    """The printed layer set, by headless Chrome (as backend/webshot.py
-    uses it). None when there is no Chrome."""
+    """The printed layer set, by headless Chrome. None when there is no
+    Chrome."""
     chrome = shutil.which("google-chrome") or shutil.which("chromium") \
         or shutil.which("chromium-browser")
     if not chrome:

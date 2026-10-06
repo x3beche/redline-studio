@@ -2,10 +2,10 @@
   "id": "json-to-ts", "version": "1.1",
   "name": "JSON to TypeScript",
   "blurb": "type definitions and a validation schema from sample JSON",
-  "group": "web",
+  "group": "code",
   "layout": "custom",
   "agentOmit": ["shape"],
-  "rooms": ["web", "mobile"],
+  "rooms": ["code"],
   "keywords": ["json", "typescript", "types", "interface", "type definition", "zod", "json schema", "schema", "validation", "quicktype", "infer types", "api response", "dto", "ndjson"],
   "intro": "Infers types from pasted JSON (one document, an array of samples, or NDJSON) and writes TypeScript interfaces, a Zod schema and a JSON Schema 2020-12. Samples are merged: a key missing from some objects becomes optional, a null makes T | null, and ISO dates, e-mails, UUIDs and URLs get a format.",
   "inputs": [

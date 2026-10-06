@@ -2,8 +2,8 @@
   "id": "gpio-warner", "version": "1.1",
   "name": "GPIO Restriction Warner",
   "blurb": "risks of using boot straps and special-purpose GPIOs",
-  "group": "embedded",
-  "rooms": ["embedded", "pcb"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["strapping pins", "boot strap", "boot mode", "gpio0", "gpio12", "mtdi", "flash pins", "input only", "adc2 wifi", "swd pins", "jtag pins", "5v tolerant", "esp32", "esp8266", "stm32", "rp2040", "unsafe gpio"],
   "intro": "Lists the pins of a chip that are boot straps, wired to flash or PSRAM, input only, used for debug, USB or the serial bootloader, or limited in drive or voltage, and flags the ones among the pins you plan to use. Severity high means a wrong level at reset can stop the chip from booting or being programmed. Data from the chips' datasheets.",
   "inputs": [

@@ -2,8 +2,8 @@
   "id": "battery-life", "version": "1.1",
   "name": "Battery Life Estimator",
   "blurb": "run time in days from average current and battery capacity",
-  "group": "embedded",
-  "rooms": ["embedded", "pcb"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["battery life", "run time", "runtime", "mah", "capacity", "average current", "self-discharge", "coin cell", "cr2032", "alkaline", "li-ion", "lipo", "lifepo4", "nimh", "li-socl2", "derating"],
   "intro": "Run time = usable capacity / (average load + self-discharge). Usable capacity is the rated mAh times a derating for cut-off voltage, temperature and ageing; self-discharge is turned into an equivalent current from the chemistry's typical monthly loss. The result is capped by the cell's shelf life.",
   "inputs": [

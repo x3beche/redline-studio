@@ -2,8 +2,8 @@
   "id": "sleep-current", "agentOmit": ["drawing"], "version": "1.1",
   "name": "Sleep Current Profiler",
   "blurb": "average current from sleep and wake times and currents",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["sleep current", "average current", "duty cycle", "low power", "power budget", "wake time", "active current", "deep sleep", "current profile", "charge per cycle", "energy budget", "iot", "radio tx", "battery"],
   "intro": "A device wakes once per period, runs through a few active states, then sleeps for the rest. The average current is the charge of every state per period divided by the period; states that run only every Nth wake are spread over their own interval. The breakdown shows which state to optimise first.",
   "inputs": [

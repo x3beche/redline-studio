@@ -3,10 +3,8 @@
  "version": "1.0",
  "name": "Build Error & QA Explainer",
  "blurb": "a failed BitBake task log or QA warning classified, with the cause and the fix",
- "group": "embedded",
- "rooms": [
-  "embedded"
- ],
+ "group": "pcb",
+ "rooms": ["pcb"],
  "keywords": [
   "bitbake error",
   "yocto build failed",

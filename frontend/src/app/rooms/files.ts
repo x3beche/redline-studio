@@ -16,7 +16,7 @@ import { AGENT_ROOMS } from './notes';
  */
 export interface StoredFile {
   id: string; name: string; bytes: number; kind: string; content_type: string;
-  context: { room?: string; model?: string; board?: string; app?: string };
+  context: { room?: string; model?: string; board?: string };
   by: { name?: string; id?: string }; note: string; created_at: string;
   sent?: { room: string; at: string };
 }
@@ -30,7 +30,7 @@ const KIND_LABEL: Record<string, string> = {
   image: 'Image', pdf: 'PDF', table: 'Table', archive: 'Archive', text: 'Text', other: 'Other',
 };
 const ROOM_LABEL: Record<string, string> = {
-  cad: '3D Drawing', pcb: 'PCB Design', embedded: 'Embedded', web: 'Web', mobile: 'Mobile',
+  cad: '3D Drawing', pcb: 'PCB Design',
 };
 
 @Injectable({ providedIn: 'root' })

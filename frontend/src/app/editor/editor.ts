@@ -19,7 +19,7 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Activity, Analytics, Api, Apps, Boards, CameraState, Catalog, Chat, ChatLine, Health, LogLine, Question, Questions, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
+import { Activity, Analytics, Api, Boards, CameraState, Catalog, Chat, ChatLine, Health, LogLine, Question, Questions, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer } from './ocp';
 import { Markdown, plain } from '../markdown';
@@ -58,7 +58,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   private asks = inject(Questions);
   private chat = inject(Chat);
   private boards = inject(Boards);
-  private appsApi = inject(Apps);
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private overlay = viewChild.required<ElementRef<HTMLCanvasElement>>('overlay');
   private stage = viewChild.required<ElementRef<HTMLDivElement>>('stage');
@@ -224,11 +223,6 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.ideTop.set(bar ? Math.max(0, Math.round(bar.getBoundingClientRect().bottom
                                                      - stage.getBoundingClientRect().top) + 4) : 0);
       });
-    });
-    // A coding room picked something to be the note's Part.
-    effect(() => {
-      const got = this.picked.codePick();
-      if (got) untracked(() => this.part.set(got.label));
     });
     // The 3D panel is not destroyed when another room is on - its WebGL
     // context and tens of megabytes of geometry would go with it - it is
@@ -921,7 +915,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** What is in hand. A model and a board are picked up and put down the
    *  same way; where they land differs, because a model's id is its path
    *  and a board's is not. */
-  moving = signal<{ id: string; title: string; board?: boolean; app?: boolean } | null>(null);
+  moving = signal<{ id: string; title: string; board?: boolean } | null>(null);
 
   armMove(m: ModelEntry, ev: Event) {
     ev.stopPropagation();
@@ -943,13 +937,6 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!it) return;
     this.moving.set(null);
     const said = `${it.title} -> ${folder || 'root'}`;
-    if (it.app) {
-      this.appsApi.move(it.id, folder).subscribe({
-        next: () => { this.flash(said); this.loadCatalog(); },
-        error: e => this.flash(e.error?.detail ?? 'move failed'),
-      });
-      return;
-    }
     if (it.board) {
       this.boards.move(it.id, folder).subscribe({
         next: () => { this.flash(said); this.loadCatalog(); },
@@ -1599,7 +1586,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   async save() {
     if (!this.comment().trim()) { this.flash('write a comment first'); return; }
     if (this.picked.room() === 'pcb') { this.saveBoardNote(); return; }
-    if (this.codeRoom()) { this.saveCodeNote(); return; }
     if (!this.viewer) return;
     this.saving.set(true);
     // A note about a part is a valid revision; the drawing is optional.
@@ -1657,7 +1643,7 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  picture of anything on it. */
   roomRevisions(): Revision[] {
     const room = this.picked.room();
-    const want = room === 'pcb' || this.codeRoom() ? room : 'cad';
+    const want = room === 'pcb' ? room : 'cad';
     return this.revisions().filter(r => (r.kind ?? 'cad') === want);
   }
 
@@ -1745,7 +1731,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** What the Part field offers: the open board's components while the
    *  board room is on, the loaded model's parts otherwise. */
   partChoices(): string[] {
-    if (this.codeRoom()) return this.picked.codeParts();
     return this.picked.room() === 'pcb'
       ? this.picked.boardParts() : this.parts();
   }
@@ -1754,9 +1739,8 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  showing. Both can be loaded at once - the 3D room keeps its model
    *  while you are in the board room - but only one of them is what you
    *  are looking at, so only one of them is lit. */
-  inView(id: string, kind: 'model' | 'board' | 'app'): boolean {
+  inView(id: string, kind: 'model' | 'board'): boolean {
     const room = this.picked.room();
-    if (kind === 'app') return this.codeRoom() && this.picked.app() === id;
     return kind === 'board'
       ? room === 'pcb' && this.picked.board() === id
       : room === 'cad' && this.activeModel() === id;
@@ -1773,78 +1757,9 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.openModel(m);
   }
 
-  // ---- the coding rooms ----
-  // Web, embedded and mobile are one room with three tabs. A project in
-  // the tree opens the one its platform names, and a note written there
-  // carries the frozen page and the elements under the marks.
-
-  /** Whether the room on screen is one of the three coding rooms. */
-  codeRoom(): boolean {
-    const r = this.picked.room();
-    return r === 'web' || r === 'embedded' || r === 'mobile';
-  }
-
-  /** A .web, .fw or .mobile belongs to its coding room. */
-  openApp(a: { id: string; platform: 'web' | 'embedded' | 'mobile' }) {
-    this.picked.openApp(a.id, a.platform);
-  }
-
-  armMoveApp(a: { id: string; title: string }, ev: Event) {
-    ev.stopPropagation();
-    this.moving.set(this.moving()?.id === a.id
-      ? null : { id: a.id, title: a.title, app: true });
-  }
-
-  armDeleteApp(a: { id: string; title: string }, ev: Event) {
-    ev.stopPropagation();
-    clearTimeout(this.deleteTimer);
-    if (this.deleting() !== a.id) {
-      this.deleting.set(a.id);
-      this.deleteTimer = setTimeout(() => this.deleting.set(null), 4000);
-      return;
-    }
-    this.deleting.set(null);
-    this.appsApi.drop(a.id).subscribe({
-      next: () => {
-        this.flash(a.title + ' forgotten - the checkout is untouched');
-        if (this.picked.app() === a.id) this.picked.app.set(null);
-        this.loadCatalog();
-      },
-      error: e => this.flash(e.error?.detail ?? 'could not delete'),
-    });
-  }
-
-  /** A note on a running interface. The picture and the marks are the
-   *  room's; without a freeze it is a written note about the project,
-   *  which is a valid note in every room. */
-  private async saveCodeNote() {
-    const app = this.picked.app();
-    if (!app) { this.flash('open a project first'); return; }
-    this.saving.set(true);
-    const draft = this.picked.codeDraft();
-    const got = draft ? await draft() : null;
-    this.api.create({
-      comment: this.comment().trim(), image_png: got?.image_png ?? null,
-      camera: null, part: this.part() || null, model: app,
-      kind: this.picked.room() as 'web' | 'embedded' | 'mobile',
-      code: got?.code ?? null,
-    }).subscribe({
-      next: () => {
-        this.saving.set(false);
-        this.comment.set('');
-        this.part.set('');
-        this.picked.codeFiled.update(n => n + 1);
-        this.flash('note saved');
-        this.refresh();
-      },
-      error: e => { this.saving.set(false); this.flash('save failed: ' + e.status); },
-    });
-  }
-
   /** What the queue column is called in the room on screen. */
   notesTitle(): string {
     if (this.picked.room() === 'pcb') return 'Board notes';
-    if (this.codeRoom()) return 'Code notes';
     return 'Revisions';
   }
 

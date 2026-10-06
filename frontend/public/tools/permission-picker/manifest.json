@@ -3,10 +3,8 @@
  "version": "1.1",
  "name": "Permission Picker",
  "blurb": "the permissions and manifest lines a feature set needs",
- "group": "mobile",
- "rooms": [
-  "mobile"
- ],
+ "group": "code",
+ "rooms": ["code"],
  "keywords": [
   "android permissions",
   "AndroidManifest",

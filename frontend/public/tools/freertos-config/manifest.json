@@ -2,8 +2,8 @@
   "id": "freertos-config", "version": "1.0",
   "name": "FreeRTOS Config & Heap Sizer",
   "blurb": "FreeRTOSConfig.h choices explained and the heap needed for tasks, queues and timers",
-  "group": "embedded",
-  "rooms": ["embedded"],
+  "group": "pcb",
+  "rooms": ["pcb"],
   "keywords": ["freertos", "FreeRTOSConfig.h", "configTOTAL_HEAP_SIZE", "heap_4", "heap size", "rtos heap", "task stack", "configMINIMAL_STACK_SIZE", "configMAX_SYSCALL_INTERRUPT_PRIORITY", "configKERNEL_INTERRUPT_PRIORITY", "FromISR", "interrupt priority", "NVIC_PRIO_BITS", "TCB size", "queue memory", "xTaskCreate fails", "stream buffer", "software timer", "cmsis-rtos"],
   "intro": "Adds up what every xTaskCreate, queue, semaphore, event group, stream buffer and timer takes from the FreeRTOS heap - stack, TCB, storage and the heap's 8-byte block headers, with the idle and timer tasks included - checks which interrupt priorities may call the FromISR API, and writes a FreeRTOSConfig.h. Sizes are for 32-bit Cortex-M ports of FreeRTOS V10.6, from the kernel's own structs.",
   "inputs": [

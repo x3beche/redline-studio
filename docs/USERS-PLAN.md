@@ -60,7 +60,7 @@ Alternatives considered: one database per workspace (strong isolation, awkward w
 |---|---|
 | owner | everything, plus billing, delete the workspace, manage members |
 | admin | manage members and settings, everything below |
-| editor | create and edit models, boards and apps; queue notes; answer agent questions; run builds |
+| editor | create and edit models and boards; queue notes; answer agent questions; run builds |
 | reviewer | draw notes and save drafts, chat, answer questions - not queue, build or delete |
 | viewer | look, download files |
 
@@ -351,8 +351,8 @@ Decided 2026-09-24: separate workspaces are needed (e.g. one per
 customer); limits only on the build containers, no spending limits; the
 machine is reached from the office network only; sign-in on.
 
-- **Container limits** (`backend/limits.py`): every container the coding
-  rooms and the PCB room start gets `--cpus`, `--memory`, `--pids-limit` -
+- **Container limits** (`backend/limits.py`): every container the PCB
+  room and the drawings start gets `--cpus`, `--memory`, `--pids-limit` -
   by default half the cores, 40 % of the memory up to 12g, 4096 processes
   (`REDLINE_BOX_*` in `.env`). Seen inside one: 14 cores, 12 GB, 4096.
 - **Same names in two workspaces** (`scope.Ids`): the default workspace's

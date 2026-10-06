@@ -46,10 +46,7 @@
           "All rooms"
         ],
         "cad",
-        "pcb",
-        "web",
-        "embedded",
-        "mobile"
+        "pcb"
       ]
     },
     {

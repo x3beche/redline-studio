@@ -3,10 +3,7 @@
   "name": "I2C Pull-up Calculator",
   "blurb": "the pull-up resistor range for an I2C bus from its supply, speed and capacitance",
   "group": "pcb",
-  "rooms": [
-    "pcb",
-    "embedded"
-  ],
+  "rooms": ["pcb"],
   "keywords": [
     "i2c",
     "iic",
