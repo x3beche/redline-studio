@@ -2,6 +2,7 @@ import {
   Component, ElementRef, Injectable, OnDestroy, computed, effect, inject, signal, untracked, viewChild,
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
 import { NgTemplateOutlet } from '@angular/common';
 import { toHtml } from '../markdown';
 import { Auth } from '../auth';
@@ -17,7 +18,8 @@ import { T, t } from '../i18n';
  *
  *  The list: pinned on top, then by day; archived ones behind a filter;
  *  a delete waits a few seconds for "Undo" before it is sent, alone or a
- *  selection at once. A line: copied, deleted, the last one of one's own
+ *  selection at once - and then goes to the Trash, where it can be
+ *  restored for 30 days (or deleted for good) before the server drops it. A line: copied, deleted, the last one of one's own
  *  edited and sent again, the last answer written again (with another
  *  model if wished); every code block has its own copy button.
  */
@@ -31,7 +33,11 @@ export interface CcChat {
   id: string; title: string; provider: string; model: string; by: { name?: string; id?: string };
   created_at: string; updated_at: string; count: number; pinned?: boolean; archived?: boolean;
   messages?: CcMessage[]; last?: { role: string; text: string; by?: string };
+  /** In the trash: when, by whom, and when the server drops it for good. */
+  deleted_at?: string; deleted_by?: { id?: string; name?: string }; purge_at?: string; days_left?: number;
 }
+export type CcTab = 'list' | 'archived' | 'trash';
+type Many = { deleted: string[]; refused: string[]; missing: string[] };
 export interface LlmModel { id: string; name: string; context: number | null; anthropic: boolean }
 export interface CcEvent {
   type: string; text?: string; error?: string; message?: CcMessage | null; keep?: number; title?: string;
@@ -42,8 +48,9 @@ const HEADERS = { 'Content-Type': 'application/json', 'X-Redline-CSRF': '1' };
 @Injectable({ providedIn: 'root' })
 export class CcApi {
   private http = inject(HttpClient);
-  list(q = '', archived = false) {
-    return this.http.get<CcChat[]>(`/api/cc/chats?q=${encodeURIComponent(q)}&archived=${archived ? 1 : 0}`);
+  list(q = '', tab: CcTab = 'list') {
+    return this.http.get<CcChat[]>(`/api/cc/chats?q=${encodeURIComponent(q)}&archived=${tab === 'archived' ? 1 : 0}`
+                                   + (tab === 'trash' ? '&trash=1' : ''));
   }
   get(id: string) { return this.http.get<CcChat>(`/api/cc/chats/${id}`); }
   create(provider?: string, model?: string) { return this.http.post<CcChat>('/api/cc/chats', { provider, model }); }
@@ -51,9 +58,15 @@ export class CcApi {
     return this.http.patch<CcChat>(`/api/cc/chats/${id}`, p);
   }
   remove(id: string) { return this.http.delete(`/api/cc/chats/${id}`); }
-  removeMany(ids: string[]) {
-    return this.http.post<{ deleted: string[]; refused: string[]; missing: string[] }>('/api/cc/chats/bulk-delete', { ids });
+  removeMany(ids: string[]) { return this.http.post<Many>('/api/cc/chats/bulk-delete', { ids }); }
+  // The trash: back out of it, or gone for good.
+  restore(id: string) { return this.http.post<CcChat>(`/api/cc/chats/${id}/restore`, {}); }
+  restoreMany(ids: string[]) {
+    return this.http.post<{ restored: string[]; refused: string[]; missing: string[] }>('/api/cc/chats/bulk-restore', { ids });
   }
+  purge(id: string) { return this.http.delete(`/api/cc/chats/${id}?forever=1`); }
+  purgeMany(ids: string[]) { return this.http.post<Many>('/api/cc/chats/bulk-delete', { ids, forever: true }); }
+  emptyTrash() { return this.http.post<{ deleted: number; kept: number }>('/api/cc/chats/empty-trash', {}); }
   /** Deletes still waiting when the page goes: sent so they outlive it. */
   removeOnLeave(ids: string[]) {
     try {
@@ -119,6 +132,7 @@ const I = {
   archive: 'M4 4h16v4H4z M5.5 8v12h13V8 M10 12h4',
   unarchive: 'M4 4h16v4H4z M5.5 8v12h13V8 M12 18v-6 M9.5 14.5L12 12l2.5 2.5',
   trash: 'M4 7h16 M9.5 7V4h5v3 M6.5 7l.8 13h9.4l.8-13 M10 11v5.5 M14 11v5.5',
+  restore: 'M4.5 12a7.5 7.5 0 1 0 2.2-5.3 M4.5 4v5h5',
   copy: 'M9 9h11v11H9z M15 9V4H4v11h5',
   edit: 'M4 20h4L19.5 8.5l-4-4L4 16z M13.5 6.5l4 4',
   regen: 'M19.5 12a7.5 7.5 0 1 1-2.2-5.3 M19.5 4v5h-5',
@@ -148,7 +162,9 @@ const STARTERS: { icon: string; area: string; text: string }[] = [
 ];
 
 type Group = { name: string; chats: CcChat[] };
-type Toast = { text: string; undo?: () => void; ms: number };
+type Toast = { text: string; undo?: () => void; ms: number; label?: string };
+/** A question asked in the list before something cannot be undone. */
+type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
@@ -175,10 +191,15 @@ type Toast = { text: string; undo?: () => void; ms: number };
       </label>
       <div class="tcv-cc-filterrow">
         <div class="tcv-cc-seg" role="tablist">
-          <button role="tab" [class.on]="!archived()" (click)="showArchived(false)">{{ 'Conversations' | t }}</button>
-          <button role="tab" [class.on]="archived()" (click)="showArchived(true)">{{ 'Archived' | t }}</button>
+          <button role="tab" [class.on]="tab() === 'list'" (click)="showTab('list')">{{ 'Conversations' | t }}</button>
+          <button role="tab" [class.on]="tab() === 'archived'" (click)="showTab('archived')">{{ 'Archived' | t }}</button>
+          <button role="tab" data-tab="trash" [class.on]="tab() === 'trash'" (click)="showTab('trash')">{{ 'Trash' | t }}</button>
         </div>
         <span class="grow"></span>
+        @if (trash() && auth.can('draw') && shownChats().length && !selecting()) {
+          <button class="tcv-cc-ib tcv-cc-danger" data-act="empty" (click)="askEmpty()" [title]="'Empty trash' | t">
+            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" /></button>
+        }
         @if (auth.can('draw') && shownChats().length) {
           <button class="tcv-cc-ib" data-act="select" [class.on]="selecting()" (click)="toggleSelecting()" [title]="'Select several' | t">
             <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.select }" /></button>
@@ -189,23 +210,45 @@ type Toast = { text: string; undo?: () => void; ms: number };
           <label class="tcv-cc-check"><input type="checkbox" [checked]="allSelected()" [indeterminate]="someSelected()"
                  (change)="selectAll($any($event.target).checked)"> {{ selected().size }} {{ 'selected' | t }}</label>
           <span class="grow"></span>
-          <button class="tcv-cc-ib" [disabled]="!selected().size" (click)="archiveSelected()"
-                  [title]="(archived() ? 'Unarchive' : 'Archive') | t">
-            <ng-container *ngTemplateOutlet="ico; context: { $implicit: archived() ? I.unarchive : I.archive }" /></button>
-          <button class="tcv-cc-ib tcv-cc-danger" [disabled]="!selected().size" (click)="deleteSelected()" [title]="'Delete' | t">
-            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" /></button>
+          @if (trash()) {
+            <button class="tcv-cc-ib" data-act="restore-sel" [disabled]="!selected().size" (click)="restoreSelected()" [title]="'Restore' | t">
+              <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.restore }" /></button>
+            <button class="tcv-cc-ib tcv-cc-danger" data-act="purge-sel" [disabled]="!selected().size" (click)="purgeSelected()"
+                    [title]="'Delete forever' | t">
+              <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" /></button>
+          } @else {
+            <button class="tcv-cc-ib" [disabled]="!selected().size" (click)="archiveSelected()"
+                    [title]="(archived() ? 'Unarchive' : 'Archive') | t">
+              <ng-container *ngTemplateOutlet="ico; context: { $implicit: archived() ? I.unarchive : I.archive }" /></button>
+            <button class="tcv-cc-ib tcv-cc-danger" [disabled]="!selected().size" (click)="deleteSelected()" [title]="'Delete' | t">
+              <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" /></button>
+          }
           <button class="tcv-cc-ib" (click)="toggleSelecting()" [title]="'Cancel' | t">
             <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.x }" /></button>
         </div>
       }
+      @if (ask(); as a) {
+        <div class="tcv-cc-ask" role="alertdialog" [attr.aria-label]="a.text">
+          <span>{{ a.text }}</span>
+          <div class="tcv-cc-askacts">
+            <button class="tcv-cc-textbtn" (click)="ask.set(null)">{{ 'Cancel' | t }}</button>
+            <button class="tcv-cc-askgo" data-act="confirm" (click)="ask.set(null); a.go()">{{ a.label }}</button>
+          </div>
+        </div>
+      }
     </div>
     <div class="tcv-notes-list tcv-cc-list" role="list">
+      @if (trash() && shownChats().length) {
+        <p class="tcv-cc-trashnote">{{ 'Deleted conversations are kept here for 30 days, then deleted for good.' | t }}</p>
+      }
       @for (g of groups(); track g.name) {
         <div class="tcv-cc-group">{{ g.name | t }}</div>
         @for (c of g.chats; track c.id) {
           <div class="tcv-cc-item" role="listitem" tabindex="0" [attr.data-on]="c.id === openId() ? 1 : null"
+               [attr.data-trash]="c.deleted_at ? 1 : null"
                [attr.data-sel]="selected().has(c.id) ? 1 : null" (click)="pick(c, $event)" (keydown.enter)="pick(c, $event)"
-               [title]="short(c.model) + ' · ' + c.count + ' ' + ('lines' | t) + (c.by.name ? ' · ' + c.by.name : '')">
+               [title]="short(c.model) + ' · ' + c.count + ' ' + ('lines' | t) + (c.by.name ? ' · ' + c.by.name : '')
+                        + (c.deleted_at ? ' · ' + ('deleted' | t) + ' ' + stamp(c.deleted_at) : '')">
             @if (selecting()) {
               <input type="checkbox" class="tcv-cc-itemcheck" [checked]="selected().has(c.id)" (click)="$event.stopPropagation()"
                      (change)="toggleSel(c.id)" [attr.aria-label]="'Select' | t">
@@ -214,11 +257,27 @@ type Toast = { text: string; undo?: () => void; ms: number };
               <div class="tcv-cc-itemtop">
                 @if (c.pinned) { <svg class="tcv-cc-ico tcv-cc-pinmark" viewBox="0 0 24 24"><path [attr.d]="I.pin" /></svg> }
                 <span class="tcv-cc-itemtitle">{{ c.title | t }}</span>
-                <span class="tcv-cc-itemwhen">{{ when(c.updated_at) }}</span>
+                <span class="tcv-cc-itemwhen">{{ when(c.deleted_at || c.updated_at) }}</span>
               </div>
-              <div class="tcv-cc-itemsnip">{{ c.last ? (c.last.by ? c.last.by + ': ' : '') + snip(c.last.text) : ('No messages yet' | t) }}</div>
+              @if (c.deleted_at) {
+                <div class="tcv-cc-itemsnip tcv-cc-gone">
+                  <span>{{ deletedBy(c) }}</span>
+                  <span class="tcv-cc-purge" [attr.data-soon]="(c.days_left ?? 30) <= 3 ? 1 : null" [title]="c.purge_at ? stamp(c.purge_at) : ''">
+                    · {{ purgeText(c) }}</span>
+                </div>
+              } @else {
+                <div class="tcv-cc-itemsnip">{{ c.last ? (c.last.by ? c.last.by + ': ' : '') + snip(c.last.text) : ('No messages yet' | t) }}</div>
+              }
             </div>
-            @if (auth.can('draw') && !selecting()) {
+            @if (c.deleted_at && mayDelete(c) && !selecting()) {
+              <div class="tcv-cc-itemacts">
+                <button class="tcv-cc-ib" data-act="restore" (click)="restoreChats([c]); $event.stopPropagation()" [title]="'Restore' | t">
+                  <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.restore }" /></button>
+                <button class="tcv-cc-ib tcv-cc-danger" data-act="purge" (click)="askPurge([c]); $event.stopPropagation()"
+                        [title]="'Delete forever' | t">
+                  <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" /></button>
+              </div>
+            } @else if (!c.deleted_at && auth.can('draw') && !selecting()) {
               <div class="tcv-cc-itemacts">
                 <button class="tcv-cc-ib" (click)="togglePin(c); $event.stopPropagation()" [class.on]="c.pinned"
                         [title]="(c.pinned ? 'Unpin' : 'Pin') | t">
@@ -236,7 +295,8 @@ type Toast = { text: string; undo?: () => void; ms: number };
           </div>
         }
       } @empty {
-        <p class="tcv-cc-listempty">{{ (archived() ? 'No archived conversations.' : 'No conversations yet - start one.') | t }}</p>
+        <p class="tcv-cc-listempty">{{ (trash() ? 'The trash is empty.' : archived() ? 'No archived conversations.'
+                                        : 'No conversations yet - start one.') | t }}</p>
       }
     </div>
   </aside>
@@ -451,7 +511,7 @@ type Toast = { text: string; undo?: () => void; ms: number };
     @if (toast(); as tt) {
       <div class="tcv-cc-toast" role="status">
         <span>{{ tt.text }}</span>
-        @if (tt.undo) { <button class="tcv-cc-undo" (click)="tt.undo!()">{{ 'Undo' | t }}</button> }
+        @if (tt.undo) { <button class="tcv-cc-undo" (click)="tt.undo!()">{{ (tt.label || 'Undo') | t }}</button> }
         <span class="tcv-cc-toastbar" [style.animation-duration.ms]="tt.ms"></span>
       </div>
     }
@@ -501,7 +561,11 @@ export class RoomCommandCode implements OnDestroy {
     return m?.name ?? this.short(this.model() || '…');
   });
   q = signal('');
-  archived = signal(false);
+  /** Which list: the conversations, the archived ones, or the trash. */
+  tab = signal<CcTab>('list');
+  archived = computed(() => this.tab() === 'archived');
+  trash = computed(() => this.tab() === 'trash');
+  ask = signal<Ask | null>(null);
   chats = signal<CcChat[]>([]);
   openId = signal<string | null>(null);
   chat = signal<CcChat | null>(null);
@@ -541,7 +605,8 @@ export class RoomCommandCode implements OnDestroy {
   shownChats = computed(() => {
     const q = this.q().trim().toLowerCase();
     const gone = this.pending();
-    const rows = this.chats().filter(c => !gone.has(c.id) && !!c.archived === this.archived());
+    const rows = this.chats().filter(c => !gone.has(c.id)
+      && (this.trash() ? !!c.deleted_at : !c.deleted_at && !!c.archived === this.archived()));
     return q ? rows.filter(c => c.title.toLowerCase().includes(q) || (c.last?.text ?? '').toLowerCase().includes(q)) : rows;
   });
 
@@ -551,8 +616,8 @@ export class RoomCommandCode implements OnDestroy {
     const today = start.getTime(), yesterday = today - 86_400_000, week = today - 7 * 86_400_000;
     const g: Record<string, CcChat[]> = { Pinned: [], Today: [], Yesterday: [], 'Previous 7 days': [], Older: [] };
     for (const c of this.shownChats()) {
-      const at = Date.parse(c.updated_at);
-      const k = c.pinned && !this.archived() ? 'Pinned'
+      const at = Date.parse(c.deleted_at || c.updated_at);   // the trash: by when it was deleted
+      const k = c.pinned && this.tab() === 'list' ? 'Pinned'
         : at >= today ? 'Today' : at >= yesterday ? 'Yesterday' : at >= week ? 'Previous 7 days' : 'Older';
       g[k].push(c);
     }
@@ -620,8 +685,10 @@ export class RoomCommandCode implements OnDestroy {
   }
 
   refresh(openFirst = false) {
-    this.api.list('', this.archived()).subscribe({
+    const tab = this.tab();
+    this.api.list('', tab).subscribe({
       next: rows => {
+        if (this.tab() !== tab) return;                  // the tab changed meanwhile
         this.chats.set(rows);
         if (openFirst && !this.openId()) {
           const first = this.shownChats()[0];
@@ -632,10 +699,11 @@ export class RoomCommandCode implements OnDestroy {
     });
   }
 
-  showArchived(on: boolean) {
-    if (this.archived() === on) return;
-    this.archived.set(on);
+  showTab(tab: CcTab) {
+    if (this.tab() === tab) return;
+    this.tab.set(tab);
     this.selected.set(new Set());
+    this.ask.set(null);
     this.chats.set([]);
     this.refresh();
   }
@@ -650,6 +718,7 @@ export class RoomCommandCode implements OnDestroy {
   pick(c: CcChat, e: Event) {
     if (this.selecting()) { this.toggleSel(c.id); return; }
     if ((e.target as HTMLElement).closest('button, input')) return;
+    if (c.deleted_at) return;                            // restored first, then read
     this.open(c.id);
   }
 
@@ -674,7 +743,7 @@ export class RoomCommandCode implements OnDestroy {
 
   newChat(then?: (c: CcChat) => void) {
     if (this.live() || !this.auth.can('draw')) return;
-    if (this.archived()) this.showArchived(false);
+    if (this.tab() !== 'list') this.showTab('list');
     this.api.create().subscribe({
       next: c => {
         this.chats.update(l => [c, ...l]);
@@ -833,14 +902,113 @@ export class RoomCommandCode implements OnDestroy {
         if (refused.length) this.error.set(`${refused.length} ${t('not deleted - they are someone else\'s.')}`);
         done();
         this.refresh();
+        // Not gone: 30 days in the trash, one click away.
+        if (refused.length < ids.length) this.showToast(t('Moved to Trash.'), () => this.showTab('trash'), 4000, 'Show');
       },
       error: e => { this.error.set(this.msg(e)); this.pending.set(new Set()); this.refresh(); },
     });
   }
 
-  private showToast(text: string, undo?: () => void, ms = UNDO_MS) {
+  // ---- the trash: restore, or delete for good ------------------------------
+
+  /** "deletes for good in N days" - today, tomorrow, or in N days. */
+  purgeText(c: CcChat) {
+    const n = c.days_left ?? 30;
+    return n <= 0 ? t('deletes for good today') : n === 1 ? t('deletes for good tomorrow')
+      : t('deletes for good in {n} days').replace('{n}', String(n));
+  }
+
+  deletedBy(c: CcChat) {
+    const who = c.deleted_by?.id === this.me() ? t('you') : (c.deleted_by?.name || t('someone'));
+    return t('Deleted by {x}').replace('{x}', who);
+  }
+
+  private mineOf(rows: CcChat[]) {
+    const mine = rows.filter(c => this.mayDelete(c));
+    if (mine.length < rows.length) this.error.set(t('Some of these are someone else\'s - you may not delete them.'));
+    return mine;
+  }
+
+  /** Out of the trash, back in the list it came from. */
+  restoreChats(rows: CcChat[]) {
+    rows = this.mineOf(rows);
+    if (!rows.length) return;
+    const ids = rows.map(c => c.id);
+    this.chats.update(l => l.filter(c => !ids.includes(c.id)));
+    const text = rows.length === 1 ? `${t('Restored')} “${t(rows[0].title)}”` : `${rows.length} ${t('conversations restored')}`;
+    const req: Observable<unknown> = ids.length === 1 ? this.api.restore(ids[0]) : this.api.restoreMany(ids);
+    req.subscribe({
+      next: (r: unknown) => {
+        const refused = (r as { refused?: string[] })?.refused ?? [];
+        if (refused.length) this.error.set(`${refused.length} ${t('not restored - they are someone else\'s.')}`);
+        this.showToast(text, () => this.showTab(rows.every(c => c.archived) ? 'archived' : 'list'), 4000, 'Show');
+        this.refresh();
+      },
+      error: e => { this.error.set(this.msg(e)); this.refresh(); },
+    });
+  }
+
+  restoreSelected() {
+    const ids = this.selected();
+    this.restoreChats(this.shownChats().filter(c => ids.has(c.id)));
+    this.selecting.set(false);
+    this.selected.set(new Set());
+  }
+
+  /** Asked first - there is no undoing this one. */
+  askPurge(rows: CcChat[]) {
+    rows = this.mineOf(rows);
+    if (!rows.length) return;
+    const text = rows.length === 1 ? t('Delete “{x}” for good? This cannot be undone.').replace('{x}', t(rows[0].title))
+      : t('Delete {n} conversations for good? This cannot be undone.').replace('{n}', String(rows.length));
+    this.ask.set({ text, label: t('Delete forever'), go: () => this.purge(rows) });
+  }
+
+  purgeSelected() {
+    const ids = this.selected();
+    this.askPurge(this.shownChats().filter(c => ids.has(c.id)));
+    this.selecting.set(false);
+    this.selected.set(new Set());
+  }
+
+  private purge(rows: CcChat[]) {
+    const ids = rows.map(c => c.id);
+    this.chats.update(l => l.filter(c => !ids.includes(c.id)));
+    const req: Observable<unknown> = ids.length === 1 ? this.api.purge(ids[0]) : this.api.purgeMany(ids);
+    req.subscribe({
+      next: (r: unknown) => {
+        const refused = (r as { refused?: string[] })?.refused ?? [];
+        if (refused.length) this.error.set(`${refused.length} ${t('not deleted - they are someone else\'s.')}`);
+        this.showToast(t('Deleted for good.'), undefined, 2500);
+        this.refresh();
+      },
+      error: e => { this.error.set(this.msg(e)); this.refresh(); },
+    });
+  }
+
+  askEmpty() {
+    const n = this.shownChats().length;
+    if (!n) return;
+    const theirs = this.shownChats().filter(c => !this.mayDelete(c)).length;
+    const text = t('Empty the trash? {n} conversations are deleted for good.').replace('{n}', String(n - theirs))
+      + (theirs ? ' ' + t('{n} of someone else\'s stay.').replace('{n}', String(theirs)) : '');
+    this.ask.set({ text, label: t('Empty trash'), go: () => this.emptyTrash() });
+  }
+
+  private emptyTrash() {
+    this.api.emptyTrash().subscribe({
+      next: r => {
+        this.showToast(`${t('Trash emptied')} · ${r.deleted}`, undefined, 2500);
+        if (r.kept) this.error.set(`${r.kept} ${t('not deleted - they are someone else\'s.')}`);
+        this.refresh();
+      },
+      error: e => { this.error.set(this.msg(e)); this.refresh(); },
+    });
+  }
+
+  private showToast(text: string, undo?: () => void, ms = UNDO_MS, label?: string) {
     if (this.toastTimer) clearTimeout(this.toastTimer);
-    const toast: Toast = { text, ms, undo: undo && (() => { this.toast.set(null); undo(); }) };
+    const toast: Toast = { text, ms, label, undo: undo && (() => { this.toast.set(null); undo(); }) };
     this.toast.set(toast);
     this.toastTimer = setTimeout(() => { if (this.toast() === toast) this.toast.set(null); }, ms);
   }
@@ -919,6 +1087,7 @@ export class RoomCommandCode implements OnDestroy {
     } else if (e.key === 'Escape') {
       if (this.live()) { e.preventDefault(); this.stop(); }
       else if (this.menu() || this.modelPop()) { this.menu.set(false); this.modelPop.set(false); }
+      else if (this.ask()) this.ask.set(null);
       else if (this.drawer()) this.drawer.set(false);
       else if (this.selecting()) this.toggleSelecting();
     }

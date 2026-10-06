@@ -18,6 +18,14 @@ only with the "delete" right - as deleting a conversation.
 The first answer names the conversation: the "summary" job's model is
 asked for a short title, and the first line, cut short, is the fallback.
 Only while the title is still the default one.
+
+A deleted conversation goes to the trash, not away: it is marked
+(`deleted_at`, `deleted_by`) and left out of everything else - the list,
+the search, reading it, talking in it - and can be brought back for
+TRASH_DAYS days. After that the database drops it by itself (a TTL index
+that holds only the trashed ones, see `ensure_indexes`). "Delete forever"
+and "Empty trash" drop it at once. Who may: as deleting - one's own
+always, anyone else's only with the "delete" right.
 """
 
 from __future__ import annotations
@@ -27,7 +35,7 @@ import json
 import re
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -46,6 +54,12 @@ TITLE_WORDS = 6
 TITLE_CHARS = 60
 TITLE_TIMEOUT = 20.0             # seconds the summary model gets to name it
 MAX_BULK = 200
+TRASH_DAYS = 30                  # a deleted conversation can be restored for this long
+TRASH_TTL = "cc_trash_ttl"       # the index that drops it afterwards
+# Mongo's {field: None} matches a missing field, too: every conversation
+# kept before there was a trash is a live one.
+LIVE = {"deleted_at": None}
+TRASHED = {"deleted_at": {"$ne": None}}
 
 SYSTEM = (
     "You are a helpful assistant in Redline Studio, a workshop app for 3D CAD models, "
@@ -70,6 +84,24 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _utc(v) -> datetime | None:
+    """A stored time as an aware UTC datetime (Mongo hands back naive UTC)."""
+    if isinstance(v, str):
+        try:
+            v = datetime.fromisoformat(v)
+        except ValueError:
+            return None
+    if not isinstance(v, datetime):
+        return None
+    return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+
+
+def purge_at(doc: dict) -> datetime | None:
+    """When a trashed conversation is dropped for good."""
+    at = _utc(doc.get("deleted_at"))
+    return at + timedelta(days=TRASH_DAYS) if at else None
+
+
 def _mid() -> str:
     return secrets.token_hex(5)
 
@@ -79,6 +111,16 @@ def _out(doc: dict, full: bool = True) -> dict:
     o["id"] = doc["_id"]
     o["pinned"] = bool(doc.get("pinned"))
     o["archived"] = bool(doc.get("archived"))
+    gone = purge_at(doc)
+    if gone:
+        o["deleted_at"] = _utc(doc["deleted_at"]).isoformat()
+        o["purge_at"] = gone.isoformat()
+        # Whole days left, counted up: "deletes for good in 30 days" on the day.
+        left = (gone - datetime.now(timezone.utc)).total_seconds() / 86400
+        o["days_left"] = max(0, int(-(-left // 1)))
+    else:
+        o.pop("deleted_at", None)
+        o.pop("deleted_by", None)
     msgs = doc.get("messages") or []
     o["count"] = len(msgs)
     if full:
@@ -212,23 +254,65 @@ async def make_title(first: str, answer: str = "") -> tuple[str, dict]:
     return fallback_title(first), {}
 
 
+# ---- the trash: kept TRASH_DAYS days, then dropped by the database -----------
+
+async def ensure_indexes(raw) -> None:
+    """The index that empties the trash: a TTL on `deleted_at` that holds
+    only the trashed conversations (a partial index - the live ones have no
+    `deleted_at` and are never in it). One for the collection, so for every
+    workspace alike: the time is all it asks. Safe to call at every start;
+    one left with other options (another TTL) is replaced."""
+    coll = raw[COLL]
+    spec = {"name": TRASH_TTL, "expireAfterSeconds": TRASH_DAYS * 86400,
+            "partialFilterExpression": {"deleted_at": {"$type": "date"}}}
+    try:
+        await coll.create_index([("deleted_at", 1)], **spec)
+    except Exception as exc:                           # noqa: BLE001
+        if getattr(exc, "code", None) not in (85, 86):  # IndexOptionsConflict, IndexKeySpecsConflict
+            raise
+        for old in (TRASH_TTL, [("deleted_at", 1)]):
+            try:
+                await coll.drop_index(old)
+            except Exception:                          # noqa: BLE001 - not there by that name
+                pass
+        await coll.create_index([("deleted_at", 1)], **spec)
+
+
+def _gone_by() -> dict:
+    who = actors.current() or {}
+    return {"id": who.get("id"), "name": who.get("name"), "type": who.get("type")}
+
+
+async def _trash(db, cid: str) -> bool:
+    """Into the trash; False when it was not (any more) a live one."""
+    res = await db[COLL].update_one({"_id": cid, **LIVE},
+                                    {"$set": {"deleted_at": datetime.now(timezone.utc), "deleted_by": _gone_by()}})
+    return bool(getattr(res, "matched_count", 1))
+
+
 # ---- conversations ----------------------------------------------------------
 
 @router.get("/chats")
-async def list_chats(q: str = "", archived: str = "0") -> list[dict]:
+async def list_chats(q: str = "", archived: str = "0", trash: str = "0") -> list[dict]:
     """`archived`: 0 (default) leaves the archived ones out, 1 is only
-    them, all is both."""
-    query: dict = {}
+    them, all is both. `trash=1` is the trash instead - archived or not,
+    newest deleted first - and nothing else ever shows a trashed one."""
+    in_trash = trash in ("1", "true")
+    query: dict = dict(TRASHED if in_trash else LIVE)
     if q:
-        query = {"$or": [{"title": {"$regex": re.escape(q), "$options": "i"}},
-                         {"messages.content": {"$regex": re.escape(q), "$options": "i"}}]}
-    if archived in ("1", "true"):
+        query["$or"] = [{"title": {"$regex": re.escape(q), "$options": "i"}},
+                        {"messages.content": {"$regex": re.escape(q), "$options": "i"}}]
+    if not in_trash and archived in ("1", "true"):
         query["archived"] = True
-    elif archived != "all":
+    elif not in_trash and archived != "all":
         query["archived"] = {"$ne": True}
-    cur = _db()[COLL].find(query, {"messages": {"$slice": -1}}).sort(
-        [("pinned", -1), ("updated_at", -1)]).limit(300)
+    order = [("deleted_at", -1)] if in_trash else [("pinned", -1), ("updated_at", -1)]
+    cur = _db()[COLL].find(query, {"messages": {"$slice": -1}}).sort(order).limit(300)
     rows = [d async for d in cur]
+    if in_trash:
+        # The TTL monitor runs once a minute or so: past its day, it is gone.
+        now = datetime.now(timezone.utc)
+        rows = [d for d in rows if (purge_at(d) or now) > now]
     # $slice keeps the last one; the count needs the length.
     counts = {d["_id"]: d["n"] async for d in _db()[COLL].aggregate(
         [{"$project": {"n": {"$size": {"$ifNull": ["$messages", []]}}}}])}
@@ -264,6 +348,8 @@ async def create_chat(body: ChatIn) -> dict:
 
 class BulkIn(BaseModel):
     ids: list[str] = Field(min_length=1, max_length=MAX_BULK)
+    # Dropped at once instead of going to the trash (from the trash).
+    forever: bool = False
 
 
 def _mine(doc: dict) -> bool:
@@ -278,30 +364,81 @@ def _can_delete() -> bool:
 async def bulk_delete(body: BulkIn) -> dict:
     """Several conversations at once: each one as DELETE /chats/{id} would -
     one's own always, anyone else's only with the "delete" right. The ones
-    refused are named, the rest go."""
+    refused are named, the rest go - to the trash, or with `forever` (from
+    the trash) for good."""
     db = _db()
     deleted: list[str] = []
     refused: list[str] = []
     missing: list[str] = []
     can = _can_delete()
     for cid in dict.fromkeys(body.ids):
-        doc = await db[COLL].find_one({"_id": cid}, {"by": 1, "title": 1})
+        doc = await db[COLL].find_one({"_id": cid} if body.forever else {"_id": cid, **LIVE}, {"by": 1, "title": 1})
         if not doc:
             missing.append(cid)
         elif not _mine(doc) and not can:
             refused.append(cid)
         else:
-            await db[COLL].delete_one({"_id": cid})
+            if body.forever:
+                await db[COLL].delete_one({"_id": cid})
+            elif not await _trash(db, cid):
+                missing.append(cid)
+                continue
             deleted.append(cid)
             # A POST is not in the trail by itself; a delete must be.
-            await actors.audit(db, "delete", f"/api/cc/chats/{cid}", {"how": "bulk", "title": doc.get("title")})
+            await actors.audit(db, "delete", f"/api/cc/chats/{cid}",
+                               {"how": "bulk", "title": doc.get("title"),
+                                **({"forever": True} if body.forever else {"trash": True})})
     return {"deleted": deleted, "refused": refused, "missing": missing}
+
+
+async def _restore(db, cid: str) -> str:
+    """"restored", "refused" or "missing"."""
+    doc = await db[COLL].find_one({"_id": cid, **TRASHED}, {"by": 1, "title": 1})
+    if not doc:
+        return "missing"
+    if not _mine(doc) and not _can_delete():
+        return "refused"
+    res = await db[COLL].update_one({"_id": cid, **TRASHED}, {"$unset": {"deleted_at": "", "deleted_by": ""}})
+    if not getattr(res, "matched_count", 1):
+        return "missing"
+    await actors.audit(db, "restore", f"/api/cc/chats/{cid}", {"title": doc.get("title")})
+    return "restored"
+
+
+@router.post("/chats/bulk-restore")
+async def bulk_restore(body: BulkIn) -> dict:
+    """Several out of the trash at once, as POST /chats/{id}/restore would."""
+    db = _db()
+    out: dict[str, list[str]] = {"restored": [], "refused": [], "missing": []}
+    for cid in dict.fromkeys(body.ids):
+        out[await _restore(db, cid)].append(cid)
+    return out
+
+
+@router.post("/chats/empty-trash")
+async def empty_trash() -> dict:
+    """Everything in the trash dropped for good - with the "delete" right;
+    without it, one's own only (the rest stay, counted in `kept`)."""
+    db = _db()
+    can = _can_delete()
+    mine, kept = [], 0
+    async for d in db[COLL].find(TRASHED, {"by": 1}):
+        if can or _mine(d):
+            mine.append(d["_id"])
+        else:
+            kept += 1
+    n = 0
+    if mine:
+        res = await db[COLL].delete_many({"_id": {"$in": mine}, **TRASHED})
+        n = getattr(res, "deleted_count", len(mine))
+        await actors.audit(db, "delete", "/api/cc/chats/empty-trash", {"how": "empty-trash", "count": n})
+    return {"deleted": n, "kept": kept}
 
 
 @router.get("/chats/{cid}")
 async def get_chat(cid: str) -> dict:
     db = _db()
-    doc = await db[COLL].find_one({"_id": cid})
+    doc = await db[COLL].find_one({"_id": cid, **LIVE})
     if not doc:
         raise HTTPException(404, cid)
     msgs = doc.get("messages") or []
@@ -331,22 +468,41 @@ async def patch_chat(cid: str, body: ChatPatch) -> dict:
     if "title" in patch:
         patch["title"] = patch["title"].strip() or DEFAULT_TITLE
     if patch:
-        res = await _db()[COLL].update_one({"_id": cid}, {"$set": patch})
+        res = await _db()[COLL].update_one({"_id": cid, **LIVE}, {"$set": patch})
         if not getattr(res, "matched_count", 1):
             raise HTTPException(404, cid)
     return await get_chat(cid)
 
 
 @router.delete("/chats/{cid}")
-async def delete_chat(cid: str) -> dict:
-    doc = await _db()[COLL].find_one({"_id": cid}, {"by": 1})
+async def delete_chat(cid: str, forever: str = "0") -> dict:
+    """Into the trash; `forever=1` drops it for good (from the trash, or
+    straight away). The trail has it as every DELETE (main.py)."""
+    db = _db()
+    for_good = forever in ("1", "true")
+    doc = await db[COLL].find_one({"_id": cid} if for_good else {"_id": cid, **LIVE}, {"by": 1})
     if not doc:
         raise HTTPException(404, cid)
     # Your own, always; someone else's, only if you may delete (as notes).
     if not _mine(doc) and not _can_delete():
         raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
-    await _db()[COLL].delete_one({"_id": cid})
-    return {"deleted": cid}
+    if for_good:
+        await db[COLL].delete_one({"_id": cid})
+        return {"deleted": cid, "forever": True}
+    if not await _trash(db, cid):
+        raise HTTPException(404, cid)
+    return {"deleted": cid, "trash": True, "days": TRASH_DAYS}
+
+
+@router.post("/chats/{cid}/restore")
+async def restore_chat(cid: str) -> dict:
+    """Out of the trash, as it was (pinned, archived, every line)."""
+    got = await _restore(_db(), cid)
+    if got == "missing":
+        raise HTTPException(404, f"{cid} is not in the trash")
+    if got == "refused":
+        raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
+    return await get_chat(cid)
 
 
 @router.delete("/chats/{cid}/messages/{ref}")
@@ -354,7 +510,7 @@ async def delete_message(cid: str, ref: str) -> dict:
     """One line out of a conversation: one's own (or an answer to it)
     always, anyone else's only with the "delete" right."""
     db = _db()
-    doc = await db[COLL].find_one({"_id": cid})
+    doc = await db[COLL].find_one({"_id": cid, **LIVE})
     if not doc:
         raise HTTPException(404, cid)
     msgs = doc.get("messages") or []
@@ -395,7 +551,7 @@ def _sse(obj: dict) -> bytes:
 
 
 async def _load(cid: str) -> dict:
-    doc = await _db()[COLL].find_one({"_id": cid})
+    doc = await _db()[COLL].find_one({"_id": cid, **LIVE})
     if not doc:
         raise HTTPException(404, cid)
     return doc
