@@ -1,6 +1,8 @@
-import { Component, Injectable, inject, signal } from '@angular/core';
+import { Component, Injectable, computed, inject, signal } from '@angular/core';
 import { LIGHT_THEMES, THEMES, THEME_NAMES, Theme, currentTheme, setTheme } from '../theme';
-import { LANG, LANGS, Lang, T, setLang } from './i18n';
+import { LANG, LANGS, Lang, T, setLang, t } from './i18n';
+import { Auth } from './auth';
+import { PALETTE } from './rooms/charts';
 import { redlineTheme } from './rooms/code-view';
 import { LlmSettingsPanel } from './llm-settings';
 import { ProxySettingsPanel } from './proxy-settings';
@@ -76,93 +78,217 @@ const SWATCH: Record<Theme, string[]> = { // theme:pigment
 };
 
 interface Shortcut { keys: string[]; what: string }
+interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blurb: string }
 
 @Component({
   selector: 'app-room-settings',
   imports: [T, LlmSettingsPanel, ProxySettingsPanel],
+  styleUrl: './settings.css',
   template: `
-<div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
-  <aside class="tcv-notes-side">
-    <div class="tcv-notes-list tcv-settings-nav">
+<div class="tcv-room absolute inset-0 flex min-h-0">
+  <nav class="st-list" [attr.aria-label]="'Settings' | t">
+    <div class="st-list-head">
+      <b>{{ 'Settings' | t }}</b>
+      <span>{{ 'How Redline looks here, and what the server uses' | t }}</span>
+    </div>
+    <div class="st-list-scroll">
       @for (g of nav; track g.group) {
-        <div class="tcv-notes-group">{{ g.group | t }}</div>
+        <div class="st-group"><span>{{ g.group | t }}</span><span>{{ g.items.length }}</span></div>
         @for (x of g.items; track x.id) {
-          <button class="tcv-notes-item" [attr.data-on]="prefs.tab() === x.id ? 1 : null" (click)="prefs.tab.set(x.id)">
-            <span class="tcv-notes-item-top"><span class="tcv-notes-item-title">{{ x.label | t }}</span></span>
-            <span class="tcv-notes-item-snip">{{ x.about | t }}</span>
+          <button class="st-item" [attr.data-on]="prefs.tab() === x.id ? 1 : null" (click)="prefs.tab.set(x.id)">
+            <span class="st-ico" aria-hidden="true">{{ x.ico }}</span>
+            <span class="st-item-text">
+              <span class="st-item-top">
+                <span class="st-item-title">{{ x.label | t }}</span>
+                @if (meta(x.id); as m) { <span class="st-item-meta">{{ m }}</span> }
+              </span>
+              <span class="st-item-blurb">{{ x.about | t }}</span>
+            </span>
           </button>
         }
       }
     </div>
-  </aside>
-  <section class="tcv-notes-main tcv-settings-main">
-    <h2 class="tcv-settings-title">{{ label(prefs.tab()) | t }}</h2>
-    @switch (prefs.tab()) {
-      @case ('appearance') {
-        <p>{{ 'The whole window, the 3D backdrop and the code editor follow it.' | t }}</p>
-        @for (grp of groups; track grp.name) {
-        <div class="tcv-prefs-group">{{ grp.name | t }}</div>
-        <div class="tcv-prefs-themes">
-          @for (th of grp.themes; track th) {
-            <button class="tcv-prefs-theme" [attr.data-on]="prefs.theme() === th ? 1 : null" (click)="prefs.wear(th)">
-              <span class="tcv-prefs-swatch">
-                @for (c of swatch[th]; track $index) { <i [style.background]="c"></i> }
-              </span>
-              <span>{{ names[th] }}</span>
-            </button>
+  </nav>
+
+  <section class="st-body">
+    @if (item(); as x) {
+      <header class="st-head">
+        <span class="st-head-name">{{ x.label | t }}</span>
+        <span class="st-badge" [attr.data-tone]="server(x.id) ? 'accent' : null">{{ (server(x.id) ? 'server' : 'this browser') | t }}</span>
+        <span class="st-head-blurb">{{ x.blurb | t }}</span>
+        <span class="st-head-meta">
+          @if (server(x.id)) {
+            <span class="st-badge" [attr.data-tone]="canEdit ? 'ok' : 'warn'">{{ (canEdit ? 'you can change these' : 'read-only for you') | t }}</span>
+          } @else {
+            <span>{{ 'kept in this browser only' | t }}</span>
           }
-        </div>
-        }
-      }
-      @case ('language') {
-        <p>{{ 'The words Redline says. Names of models, boards, parts and code stay as they are.' | t }}</p>
-        <div class="tcv-prefs-themes">
-          @for (l of langs; track l.id) {
-            <button class="tcv-prefs-theme" [attr.data-on]="lang() === l.id ? 1 : null" (click)="setLang(l.id)">
-              <span class="tcv-prefs-flag">{{ l.id.toUpperCase() }}</span><span>{{ l.name }}</span>
-            </button>
-          }
-        </div>
-      }
-      @case ('llm') { <app-llm-settings /> }
-      @case ('proxy') { <app-proxy-settings /> }
-      @case ('shortcuts') {
-        @for (g of shortcuts; track g.group) {
-          <div class="tcv-prefs-group">{{ g.group | t }}</div>
-          @for (s of g.items; track s.what) {
-            <div class="tcv-prefs-key">
-              <span>{{ s.what | t }}</span>
-              <span class="tcv-prefs-keys">@for (k of s.keys; track $index) { <kbd>{{ k }}</kbd> }</span>
-            </div>
-          }
-        }
-      }
+        </span>
+      </header>
     }
+    <div class="st-stage">
+      @switch (prefs.tab()) {
+        @case ('appearance') {
+          <div class="st-page">
+            <div class="st-now">
+              <div class="st-mock" aria-hidden="true">
+                <div class="st-mock-bar"><i></i><i></i><i></i><span></span></div>
+                <div class="st-mock-body">
+                  <div class="st-mock-side"><i></i><i></i><i></i><i></i></div>
+                  <div class="st-mock-main">
+                    <div class="l1"></div><div class="l2"></div><div class="l2" style="width: 60%"></div>
+                    <div class="st-mock-series">@for (c of seriesVars; track c) { <i [style.background]="c"></i> }</div>
+                    <div class="st-mock-row">
+                      <span class="st-mock-btn"></span>
+                      <span class="st-mock-dot" style="background: var(--ok)"></span>
+                      <span class="st-mock-dot" style="background: var(--warn)"></span>
+                      <span class="st-mock-dot" style="background: var(--danger)"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="st-card">
+                <div class="st-card-head"><h3>{{ 'Now wearing' | t }}</h3>
+                  <span class="st-sub">{{ 'The whole window, the 3D backdrop and the code editor follow it.' | t }}</span></div>
+                <div class="st-card-body">
+                  <div class="st-tiles">
+                    <div class="st-tile wide"><span>{{ 'Theme' | t }}</span><b>{{ names[prefs.theme()] }}</b></div>
+                    <div class="st-tile"><span>{{ 'Kind' | t }}</span><b>{{ (isLight(prefs.theme()) ? 'Light' : 'Dark') | t }}</b></div>
+                    <div class="st-tile"><span>{{ 'Available' | t }}</span><b>{{ themes.length }}</b>
+                      <small>{{ groups[0].themes.length }} {{ 'dark' | t }} · {{ groups[1].themes.length }} {{ 'light' | t }}</small></div>
+                  </div>
+                  <div class="st-row">
+                    <span class="st-sec-title">{{ 'Show' | t }}</span>
+                    <div class="st-seg">
+                      @for (f of themeFilters; track f) {
+                        <button [class.on]="themeFilter() === f" (click)="themeFilter.set(f)">{{ f | t }}</button>
+                      }
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            @for (grp of groups; track grp.name) {
+              @if (themeFilter() === 'All' || themeFilter() === grp.name) {
+                <div class="st-card">
+                  <div class="st-card-head"><h3>{{ grp.name | t }}</h3><span class="st-sub">{{ grp.themes.length }} {{ 'themes' | t }}</span></div>
+                  <div class="st-card-body">
+                    <div class="st-themes">
+                      @for (th of grp.themes; track th) {
+                        <button class="st-theme" [attr.data-on]="prefs.theme() === th ? 1 : null" (click)="prefs.wear(th)">
+                          <span class="st-swatch">@for (c of swatch[th]; track $index) { <i [style.background]="c"></i> }</span>
+                          <span class="st-theme-name">{{ names[th] }}@if (prefs.theme() === th) { <em>● {{ 'on' | t }}</em> }</span>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        }
+        @case ('language') {
+          <div class="st-page">
+            <p class="st-lead">{{ 'The words Redline says. Names of models, boards, parts and code stay as they are.' | t }}</p>
+            <div class="st-card">
+              <div class="st-card-head"><h3>{{ 'Language' | t }}</h3>
+                <div class="st-right"><div class="st-seg">
+                  @for (l of langs; track l.id) { <button [class.on]="lang() === l.id" (click)="setLang(l.id)">{{ l.id.toUpperCase() }}</button> }
+                </div></div></div>
+              <div class="st-card-body">
+                <div class="st-langs">
+                  @for (l of langs; track l.id) {
+                    <button class="st-lang" [attr.data-on]="lang() === l.id ? 1 : null" (click)="setLang(l.id)">
+                      <span class="st-lang-code">{{ l.id.toUpperCase() }}</span>
+                      <span class="st-lang-text"><b>{{ l.name }}</b><span>{{ sample[l.id] }}</span></span>
+                    </button>
+                  }
+                </div>
+                <div class="st-tiles">
+                  <div class="st-tile"><span>{{ 'Speaking' | t }}</span><b>{{ langName() }}</b></div>
+                  <div class="st-tile"><span>{{ 'Kept' | t }}</span><b>{{ 'this browser' | t }}</b></div>
+                  <div class="st-tile"><span>{{ 'Never translated' | t }}</span><b>{{ 'names, code' | t }}</b></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+        @case ('llm') { <app-llm-settings /> }
+        @case ('proxy') { <app-proxy-settings /> }
+        @case ('shortcuts') {
+          <div class="st-page">
+            <div class="st-row">
+              <input class="st-in" style="width: 280px" type="search" [placeholder]="'Find a shortcut' | t"
+                     [value]="keyQuery()" (input)="keyQuery.set($any($event.target).value)">
+              <span class="st-sub">{{ shortcutCount() }} {{ 'shortcuts' | t }} · {{ 'press ? anywhere to come back here' | t }}</span>
+            </div>
+            <div class="st-keys-grid">
+              @for (g of shownShortcuts(); track g.group) {
+                <div class="st-card">
+                  <div class="st-card-head"><h3>{{ g.group | t }}</h3><span class="st-right st-sub">{{ g.items.length }}</span></div>
+                  <div class="st-list-body">
+                    @for (s of g.items; track s.what) {
+                      <div class="st-short">
+                        <span>{{ s.what | t }}</span>
+                        <span class="st-kbd">@for (k of s.keys; track $index) { <kbd>{{ k }}</kbd> }</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              } @empty {
+                <div class="st-empty">{{ 'No shortcut matches.' | t }}</div>
+              }
+            </div>
+          </div>
+        }
+      }
+    </div>
   </section>
 </div>`,
 })
 export class RoomSettings {
   prefs = inject(Prefs);
+  readonly canEdit = inject(Auth).can('settings');
   readonly themes = THEMES;
   /** Dark ones first, then the light ones. */
   readonly groups = [{ name: 'Dark', themes: THEMES.filter(t => !LIGHT_THEMES.has(t)) },
                      { name: 'Light', themes: THEMES.filter(t => LIGHT_THEMES.has(t)) }];
+  readonly themeFilters = ['All', 'Dark', 'Light'];
+  themeFilter = signal('All');
   readonly names = THEME_NAMES;
   readonly swatch = SWATCH;
+  readonly seriesVars = PALETTE;
   readonly langs = LANGS;
   readonly lang = LANG;
-  readonly nav: { group: string; items: { id: PrefsTab; label: string; about: string }[] }[] = [
+  /** A few of the app's words in each language, as each one's sample. */
+  readonly sample: Record<Lang, string> = { en: 'Save · Notes · Analytics', tr: 'Kaydet · Notlar · Analitik' };
+  readonly nav: { group: string; items: NavItem[] }[] = [
     { group: 'This browser', items: [
-      { id: 'appearance', label: 'Appearance', about: 'theme' },
-      { id: 'language', label: 'Language', about: 'English or Türkçe' },
-      { id: 'shortcuts', label: 'Keyboard shortcuts', about: 'Ctrl+K, Alt+N, ?' },
+      { id: 'appearance', label: 'Appearance', about: 'theme', ico: '◐',
+        blurb: 'Pick a theme; the whole window follows it.' },
+      { id: 'language', label: 'Language', about: 'English or Türkçe', ico: 'Aa',
+        blurb: 'Which language the interface speaks.' },
+      { id: 'shortcuts', label: 'Keyboard shortcuts', about: 'Ctrl+K, Alt+N, ?', ico: '⌘',
+        blurb: 'Every key that does something, by where it works.' },
     ] },
     { group: 'The server', items: [
-      { id: 'llm', label: 'LLM settings', about: 'API keys, and which model does what' },
-      { id: 'proxy', label: 'Proxy', about: 'a second way out for EasyEDA lookups' },
+      { id: 'llm', label: 'LLM settings', about: 'API keys, and which model does what', ico: '✦',
+        blurb: 'Keys, which model does each job, and what they used.' },
+      { id: 'proxy', label: 'Proxy', about: 'a second way out for EasyEDA lookups', ico: '⇄',
+        blurb: 'A second way out for the part lookups, and the traffic it carried.' },
     ] },
   ];
+  item = computed(() => this.nav.flatMap(g => g.items).find(x => x.id === this.prefs.tab()) ?? null);
   label(id: PrefsTab) { return this.nav.flatMap(g => g.items).find(x => x.id === id)?.label ?? id; }
+  server(id: PrefsTab) { return id === 'llm' || id === 'proxy'; }
+  isLight(t: Theme) { return LIGHT_THEMES.has(t); }
+  langName = computed(() => LANGS.find(l => l.id === this.lang())?.name ?? this.lang());
+  /** The figure beside each section in the list. */
+  meta(id: PrefsTab): string | null {
+    if (id === 'appearance') return this.names[this.prefs.theme()];
+    if (id === 'language') return this.lang().toUpperCase();
+    if (id === 'shortcuts') return String(this.shortcutCount());
+    return null;
+  }
   readonly shortcuts: { group: string; items: Shortcut[] }[] = [
     { group: 'Anywhere', items: [
       { keys: ['Ctrl', 'K'], what: 'Open the command palette: go anywhere, do anything, search everything' },
@@ -184,6 +310,19 @@ export class RoomSettings {
       { keys: ['Esc'], what: 'Finish editing' },
     ] },
   ];
+  shortcutCount() { return this.shortcuts.reduce((a, g) => a + g.items.length, 0); }
+  keyQuery = signal('');
+  /** The shortcuts whose words or keys hold every word typed, in either language. */
+  shownShortcuts = computed(() => {
+    const words = this.keyQuery().toLowerCase().split(/\s+/).filter(Boolean);
+    this.lang();
+    if (!words.length) return this.shortcuts;
+    return this.shortcuts
+      .map(g => ({ group: g.group, items: g.items.filter(s => {
+        const hay = (s.what + ' ' + t(s.what) + ' ' + s.keys.join(' ')).toLowerCase();
+        return words.every(w => hay.includes(w));
+      }) }))
+      .filter(g => g.items.length);
+  });
   setLang(l: Lang) { setLang(l); }
-
 }
