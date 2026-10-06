@@ -37,6 +37,8 @@ TIMEOUT = 90
 AGENT = "Mozilla/5.0 (compatible; redline/1.0; board room)"
 
 # Lives with atopile, in its own environment.
+# Where easyeda2kicad was looked for before backend/atoenv.py; kept for
+# anything that still reads it. The download finds it with atoenv.easyeda().
 TOOL = os.environ.get(
     "REDLINE_EASYEDA", str(Path(__file__).resolve().parent.parent.parent.parent
                       / ".venv-ato" / "bin" / "easyeda2kicad"))
@@ -643,27 +645,142 @@ async def ato_component(lcsc: str) -> str:
 PASSIVES = Path(__file__).resolve().parent / "passives.json"
 
 
+# A value as people write it: 0.1u, 100n, 100nF, 0u1, 4k7, 4.7K, 2R2, 18pf,
+# 22uF/6.3V, 10 kΩ. The number, a multiplier (or one in place of the
+# decimal point, as in 4k7), the rest of the number, then a unit and
+# anything after it (a voltage, a tolerance), which says nothing about the
+# value.
+_VALUE = re.compile(r"^\s*(\d+(?:[.,]\d+)?|[.,]\d+)\s*(meg|[pnuµμmkKMRrΩ])?(\d+)?\s*"
+                    r"(?:[FfHh]|ohms?|Ω)?(?![A-Za-z0-9])")
+_MULT = {"p": 1e-12, "n": 1e-9, "u": 1e-6, "µ": 1e-6, "μ": 1e-6, "m": 1e-3, "": 1.0,
+         "r": 1.0, "R": 1.0, "Ω": 1.0, "k": 1e3, "K": 1e3, "M": 1e6, "meg": 1e6}
+# The steps a value is written in, per kind: a capacitor in p, n and u, a
+# resistor in ohms, k and M.
+_STEPS = {"C": [(1e-6, "u"), (1e-9, "n"), (1e-12, "p")],
+          "L": [(1e-3, "m"), (1e-6, "u"), (1e-9, "n")],
+          "R": [(1e6, "M"), (1e3, "k"), (1.0, "")]}
+
+
+def _number(x: float) -> str:
+    return f"{round(x, 6):.4g}"
+
+
+def value_of(kind: str, text: str | None) -> str | None:
+    """A resistor's, capacitor's or inductor's value in the table's own
+    spelling - 0.1u, 100nF and 0u1 are all `100n`, 4k7 and 4.7K `4.7k`,
+    2R2 `2.2`, 18pf `18p` - or None when it cannot be read as one. A bare
+    number is ohms for a resistor; for a capacitor or an inductor it says
+    nothing (pF? µF?) and is not guessed at."""
+    k = (kind or "").strip().upper()[:1]
+    m = _VALUE.match((text or "").replace("\u2126", "Ω"))       # the ohm sign, as Ω
+    if not m or k not in _STEPS:
+        return None
+    whole, unit, frac = m.group(1).replace(",", "."), m.group(2) or "", m.group(3)
+    if frac:
+        if "." in whole or not unit:
+            return None
+        whole = f"{whole}.{frac}"
+    if k == "R":
+        if unit in ("p", "n", "u", "µ", "μ"):
+            return None
+    elif unit in ("", "r", "R", "Ω", "k", "K", "M", "meg"):
+        return None
+    v = float(whole) * _MULT[unit]
+    if v == 0:
+        return "0" if k == "R" else None
+    for step, name in _STEPS[k]:
+        if v >= step * 0.9995 or step == _STEPS[k][-1][0]:
+            return _number(v / step) + name
+    return None
+
+
 def passive(kind: str, value: str, size: str) -> dict | None:
     """A resistor or capacitor by value and size, from the checked table.
 
     No request at all: tools/passives.py confirmed every row against LCSC
-    by exact part number. `10k`, `10K`, `10kΩ` are the same resistor;
-    `100n`, `100nF` the same capacitor.
+    by exact part number. The value is read the way people write it
+    (`value_of`): 10k, 10K and 10kΩ are the same resistor; 100n, 100nF,
+    0.1u and 0u1 the same capacitor. A value the table does not hold is
+    None - never the nearest one.
     """
     try:
         table = json.loads(PASSIVES.read_text()).get("parts", {})
     except (OSError, ValueError):
         return None
     k = kind.strip().upper()[:1]
-    v = value.strip().replace("Ω", "").replace("ohm", "")
-    v = re.sub(r"[Ff]$", "", v)                    # 100nF -> 100n
-    v = re.sub(r"(?<=\d)K$", "k", v)               # 10K -> 10k
+    v = value_of(k, value)
     s = size.strip()
+    if v is None:
+        return None
     for key, row in table.items():
         tk, tv, ts = key.split(" ")
-        if tk == k and tv.lower() == v.lower() and ts == s:
+        if tk == k and ts == s and value_of(tk, tv) == v:
             return {"key": key, **row}
     return None
+
+
+# Resistors outside the table are UNI-ROYAL's thick-film series too, and its
+# part number spells the value (tools/passives.py): so a value the table
+# does not have can still be looked up by exact number - one ask - and
+# taken only when LCSC has exactly that part.
+RESISTOR_SERIES = {"0402": "0402WGF{}TCE", "0603": "0603WAF{}T5E", "0805": "0805W8F{}T5E"}
+
+
+def resistor_code(value: str) -> str | None:
+    """UNI-ROYAL's four-character value code: three digits and a power of
+    ten (6190 is 619 Ω, 4222 is 42.2 kΩ), J for a tenth below 100 Ω (100J
+    is 10 Ω), 0000 for a jumper. None for what it cannot spell."""
+    v = value_of("R", value)
+    if v is None:
+        return None
+    ohms = float(v[:-1]) * _MULT[v[-1]] if v[-1] in "kM" else float(v)
+    if ohms == 0:
+        return "0000"
+    if 10 <= ohms < 100:
+        tenth = round(ohms * 10)
+        return f"{tenth}J" if abs(tenth - ohms * 10) < 1e-6 and 100 <= tenth <= 999 else None
+    for exp in range(0, 7):
+        digits = ohms / 10 ** exp
+        if 100 <= round(digits, 6) <= 999 and abs(digits - round(digits)) < 1e-6:
+            return f"{round(digits)}{exp}"
+    return None
+
+
+def _found_file() -> Path:
+    LOOK.mkdir(parents=True, exist_ok=True)
+    return LOOK / "passives_found.json"
+
+
+async def find_passive(kind: str, value: str, size: str) -> dict | None:
+    """A passive the table does not hold, found on LCSC by the exact part
+    number its value spells (resistors only, for now). What is found is
+    kept beside the cache, so it is asked once. None when nothing exactly
+    that comes back - the caller then says so rather than substituting."""
+    k = kind.strip().upper()[:1]
+    v = value_of(k, value)
+    if k != "R" or v is None or size not in RESISTOR_SERIES:
+        return None
+    key = f"R {v} {size}"
+    try:
+        kept = json.loads(_found_file().read_text())
+    except (OSError, ValueError):
+        kept = {}
+    if key in kept:
+        return {"key": key, **kept[key]} if kept[key] else None
+    code = resistor_code(v)
+    if not code:
+        return None
+    mpn = RESISTOR_SERIES[size].format(code)
+    rows = await search(mpn, 5)
+    row = next((r for r in rows if (r.get("mpn") or "").upper() == mpn.upper()), None)
+    kept[key] = ({"lcsc": row["lcsc"], "mpn": row["mpn"], "package": row.get("package"),
+                  "stock": row.get("stock"), "found": "LCSC, by exact part number"}
+                 if row else None)
+    try:
+        _found_file().write_text(json.dumps(kept, indent=1, ensure_ascii=False))
+    except OSError:
+        pass
+    return {"key": key, **kept[key]} if kept[key] else None
 
 
 def passive_values() -> list[str]:
@@ -764,8 +881,14 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
         if got and got.get("footprint"):
             return got
 
-    if not Path(TOOL).exists():
-        raise RuntimeError(f"easyeda2kicad is not at {TOOL}")
+    # easyeda2kicad as it can be started here - the venv's own script in the
+    # container, its packages under a same-version Python on the host
+    # (backend/atoenv.py) - or a message that says what to set.
+    from . import atoenv
+    try:
+        tool, tool_env = atoenv.easyeda()
+    except atoenv.AtoEnvMissing as exc:
+        raise RuntimeError(str(exc)) from exc
 
     tmp = Path(tempfile.mkdtemp(prefix="x3lcsc-"))
     try:
@@ -776,8 +899,8 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
         def download(argv, cwd):
             import subprocess
             from . import netproxy
-            done = subprocess.run(argv, cwd=str(cwd), capture_output=True,
-                                  text=True, timeout=TIMEOUT, env=netproxy.env(_via(), _session()))
+            done = subprocess.run(argv, cwd=str(cwd), capture_output=True, text=True, timeout=TIMEOUT,
+                                  env={**netproxy.env(_via(), _session()), **tool_env})
             if done.returncode != 0 and "403" in (done.stdout + done.stderr):
                 import urllib.error
                 raise urllib.error.HTTPError("easyeda2kicad", 403, "refused",
@@ -798,7 +921,7 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
             pass
         rc, log = await _polite(
             "download", lcsc, f"easyeda2kicad --lcsc_id {lcsc} --footprint --3d",
-            download, [TOOL, "--lcsc_id", lcsc, "--footprint", "--3d",
+            download, [*tool, "--lcsc_id", lcsc, "--footprint", "--3d",
                        "--use-cache",
                        "--output", str(tmp / "lib")], tmp, weight=3)
         pretty = list((tmp / "lib.pretty").glob("*.kicad_mod")) \

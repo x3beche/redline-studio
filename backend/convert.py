@@ -230,27 +230,15 @@ class Part:
                 "notes": self.notes}
 
 
-def _passive_part(p: Part, kind: str, value: str | None, size: str, how: str,
-                  guessed: bool, why: str) -> bool:
-    row = lcsc.passive(kind, value or PLACEHOLDER[kind], size)
-    if not row and value is None:
-        return False
-    if not row:
-        # A value the table does not hold: the placeholder, and say so.
-        row = lcsc.passive(kind, PLACEHOLDER[kind], size)
-        if not row:
-            return False
-        why += f"; {value} is not in backend/passives.json - a placeholder stands in"
-        guessed = True
-        how = "placeholder"
+def _passive_part(p: Part, kind: str, row: dict, how: str, guessed: bool, why: str) -> None:
+    """Make `p` the passive in `row` (a passives.json row, or one found on
+    LCSC by exact part number)."""
     _, v, s = row["key"].split(" ")
     p.lcsc, p.passive, p.how, p.guessed = row["lcsc"], (kind, v, s), how, guessed
     p.why = why
     p.footprint = f"{kind}{s}"
-    p.name = f"{kind}_{re.sub(r'[^A-Za-z0-9]', '_', v)}_{s}" + (
-        "_GUESSED" if guessed and value is None else "")
+    p.name = f"{kind}_{re.sub(r'[^A-Za-z0-9]', '_', v)}_{s}" + ("_GUESSED" if guessed else "")
     p.pins = [{"number": "1", "name": "p1"}, {"number": "2", "name": "p2"}]
-    return True
 
 
 async def _patient(fn, *args):
@@ -370,15 +358,40 @@ async def identify(graph: dict, pads: dict[str, dict], bom: dict, picks: dict,
             got = await look(pick["lcsc"], ref)
             _take(p, got, "pick", True, pick.get("why") or "picked by hand, not from a BOM")
         elif kind and size:
-            value = row.get("value")
-            how = "bom-value" if value else "placeholder"
-            why = (f"{kind} {size}: value {value} from the BOM, part from backend/passives.json"
-                   if value else
-                   f"{kind} {size} from the footprint; the value is not known (no BOM) - "
-                   f"{PLACEHOLDER[kind]} is a placeholder")
-            if not _passive_part(p, kind, value, size, how, not value, why):
-                unresolved.append(f"{ref}: a {kind} {size} the passives table has no row for")
-                continue
+            value = (row.get("value") or "").strip() or None
+            if value:
+                # The BOM's value, and only that value: a part the table has,
+                # or one LCSC has under exactly the number that value spells.
+                # Anything else is said, not stood in for - an 18 pF crystal
+                # cap quietly built as 100 nF is a board that does not start.
+                canon = lcsc.value_of(kind, value)
+                got = lcsc.passive(kind, canon, size) if canon else None
+                src = "backend/passives.json"
+                if not got and canon:
+                    got = await _patient(lcsc.find_passive, kind, canon, size)
+                    src = "LCSC, by the exact part number its value spells"
+                if not got:
+                    unresolved.append(
+                        f"{ref}: {kind} {size} "
+                        + (f"{canon} (the BOM says {value!r})" if canon and canon != value
+                           else repr(value) if not canon else canon)
+                        + (" is not in backend/passives.json and LCSC has no part with exactly "
+                           "that value" if canon else
+                           " cannot be read as a value (a capacitor's needs its unit: 100n, 0.1u)")
+                        + f" - pick one (--part {ref}=C...) or add it to tools/passives.py")
+                    continue
+                _passive_part(p, kind, got, "bom-value", False,
+                              f"{kind} {size}: value {value} from the BOM"
+                              + (f" (= {canon})" if canon != value else "")
+                              + f", part {got['mpn']} from {src}")
+            else:
+                got = lcsc.passive(kind, PLACEHOLDER[kind], size)
+                if not got:
+                    unresolved.append(f"{ref}: a {kind} {size} the passives table has no row for")
+                    continue
+                _passive_part(p, kind, got, "placeholder", True,
+                              f"{kind} {size} from the footprint; the value is not known (no BOM) - "
+                              f"{PLACEHOLDER[kind]} is a placeholder")
             if not fp_name:
                 p.why += f" (size from the pads' pitch)"
         elif fp_name and _search_term(fp_name):
@@ -771,6 +784,128 @@ def outline_from(sources: bytes | None) -> dict | None:
         board.close()
 
 
+# ---------------- what the drills and the copper say ----------------
+
+HOLE_AT_PAD = 0.05            # mm: a drill hit this near a pad is that pad's hole
+
+
+def free_holes(hits: list[dict], pads: list[dict]) -> list[dict]:
+    """The holes no pad in the import's netlist owns: mounting holes, a
+    TO-220's tab hole - and a footprint's own locating pegs, which only
+    the placed footprint can tell apart (docker/place.py keeps a hole only
+    where no placed part already has one). Nothing here is a part, so none
+    of it is in the netlist or its comparison."""
+    spots = [(p["x"], p["y"]) for p in pads or [] if p.get("x") is not None]
+    out = []
+    for h in hits:
+        if any(math.dist((h["x"], h["y"]), q) <= HOLE_AT_PAD for q in spots):
+            continue
+        if any(math.dist((h["x"], h["y"]), (o["x"], o["y"])) <= HOLE_AT_PAD for o in out):
+            continue                       # the same hole in two drill files
+        out.append(dict(h))
+    return out
+
+
+def _arc_points(a, m, b, steps: int = 24) -> list[tuple]:
+    """An arc through three points, as a polyline."""
+    (ax, ay), (mx, my), (bx, by) = a, m, b
+    d = 2 * (ax * (my - by) + mx * (by - ay) + bx * (ay - my))
+    if abs(d) < 1e-12:
+        return [tuple(a), tuple(b)]
+    ux = ((ax * ax + ay * ay) * (my - by) + (mx * mx + my * my) * (by - ay)
+          + (bx * bx + by * by) * (ay - my)) / d
+    uy = ((ax * ax + ay * ay) * (bx - mx) + (mx * mx + my * my) * (ax - bx)
+          + (bx * bx + by * by) * (mx - ax)) / d
+    r = math.dist((ux, uy), a)
+    t0, tm, t1 = (math.atan2(p[1] - uy, p[0] - ux) for p in (a, m, b))
+
+    def ccw(x, y):                 # angle from t0 going counter-clockwise
+        return (y - x) % (2 * math.pi)
+    sweep = ccw(t0, t1)
+    if ccw(t0, tm) > sweep:        # the middle point says it goes the other way
+        sweep -= 2 * math.pi
+    return [(ux + r * math.cos(t0 + sweep * i / steps), uy + r * math.sin(t0 + sweep * i / steps))
+            for i in range(steps + 1)]
+
+
+def outline_segments(outline: dict | None) -> list[tuple]:
+    """The outline's loops as straight segments, arcs broken into short ones."""
+    segs = []
+    for loop in (outline or {}).get("loops") or []:
+        for piece in loop:
+            if "line" in piece:
+                a, b = piece["line"]
+                segs.append((tuple(a), tuple(b)))
+            elif "arc" in piece:
+                pts = _arc_points(*piece["arc"])
+                segs += list(zip(pts, pts[1:]))
+    return segs
+
+
+def _seg_dist(p, q, a, b) -> float:
+    """Shortest distance between segments pq and ab."""
+    def point(pt, s0, s1):
+        (x, y), (x0, y0), (x1, y1) = pt, s0, s1
+        dx, dy = x1 - x0, y1 - y0
+        L = dx * dx + dy * dy
+        t = 0.0 if L == 0 else max(0.0, min(1.0, ((x - x0) * dx + (y - y0) * dy) / L))
+        return math.dist((x, y), (x0 + t * dx, y0 + t * dy))
+
+    def cross(o, s, t):
+        return (s[0] - o[0]) * (t[1] - o[1]) - (s[1] - o[1]) * (t[0] - o[0])
+    d1, d2, d3, d4 = cross(p, q, a), cross(p, q, b), cross(a, b, p), cross(a, b, q)
+    if (d1 > 0) != (d2 > 0) and (d3 > 0) != (d4 > 0) and 0 not in (d1, d2, d3, d4):
+        return 0.0
+    return min(point(p, a, b), point(q, a, b), point(a, p, q), point(b, p, q))
+
+
+# The least copper-to-edge an import's rules start from, whatever its maker
+# did: JLCPCB's smallest track-to-outline for a routed edge.
+EDGE_FLOOR = 0.2
+
+
+def edge_clearance(strokes: list[tuple], outline: dict | None) -> float | None:
+    """How near the import's own tracks come to its edge, rounded down to
+    0.05 mm, between EDGE_FLOOR and KiCad's 0.5 mm: what the board's maker
+    held routed copper to, and so what this board's rules start from. Pads
+    are not counted - a part at the edge is the design, and DRC lets it be
+    (docker/route.py, edge_parts). None when there are no tracks to go by."""
+    from .rules import EDGE
+
+    segs = outline_segments(outline)
+    if not strokes or not segs:
+        return None
+    near = min(_seg_dist((x1, y1), (x2, y2), a, b) - w / 2
+               for x1, y1, x2, y2, w in strokes for a, b in segs)
+    return round(min(EDGE, max(EDGE_FLOOR, math.floor(round(near, 6) / 0.05) * 0.05)), 2)
+
+
+def import_geometry(sources: bytes | None, pads: list[dict], outline: dict | None) -> dict:
+    """The import's free holes and its tracks' distance from the edge, from
+    the drill files and copper the upload kept. Parsing Gerbers is seconds
+    of CPU: called off the event loop."""
+    from .imports import detect, gerbers
+
+    out = {"holes": [], "min_edge": None}
+    if not sources:
+        return out
+    try:
+        with zipfile.ZipFile(io.BytesIO(sources)) as z:
+            files = [(n, z.read(n)) for n in z.namelist() if not n.endswith("/")]
+    except zipfile.BadZipFile:
+        return out
+    items = [i for i in detect.sort_upload(files) if i.kind in (detect.GERBER, detect.DRILL)]
+    if not items:
+        return out
+    board = gerbers.Board(items)
+    try:
+        out["holes"] = free_holes(board.drill_hits(), pads)
+        out["min_edge"] = edge_clearance(board.copper_strokes(), outline)
+    finally:
+        board.close()
+    return out
+
+
 async def run(db, bid: str, bom: bytes | None = None, picks: dict | None = None,
               say=None) -> dict:
     """Convert a stored imported board, build it, and check the build.
@@ -843,7 +978,8 @@ async def run(db, bid: str, bom: bytes | None = None, picks: dict | None = None,
                    + "; ".join(unresolved[:3]), "warn")
         return report
 
-    outline = outline_from(sources)
+    import asyncio
+    outline = await asyncio.to_thread(outline_from, sources)
     origin = (doc.get("imported") or {}).get("source") or "an import"
     source, info = write(doc.get("title") or bid, parts, graph, table, origin, bom_name)
     report.update(info)
@@ -858,14 +994,31 @@ async def run(db, bid: str, bom: bytes | None = None, picks: dict | None = None,
             data = await artifact(label)
             if data is not None:
                 await store.put_artifact(db, bid, f"imported_{label}", data, collection=BOARDS)
+    shape = await asyncio.to_thread(import_geometry, sources, pads, outline)
     hold = {"placement": bool(outline and outline.get("closed") and pads),
-            "outline": outline} if outline else None
+            "outline": outline,
+            # Holes in the drill files no part's pad owns - the mounting
+            # holes - placed with the parts (docker/place.py).
+            "holes": shape["holes"]} if outline else None
     if hold and not hold["placement"]:
         report["problems"].append("the outline or the pads could not be read - the placer "
                                   "will pack the board instead of keeping its layout")
-    await db[BOARDS].update_one({"_id": bid}, {"$set": {
-        "source": source, "entry": "App", "stale": True, "saved_at": store.now(),
-        "hold": hold, "convert": {**report, "status": "building"}}})
+    report["holes"] = len(shape["holes"])
+    patch = {"source": source, "entry": "App", "stale": True, "saved_at": store.now(),
+             "hold": hold, "convert": {**report, "status": "building"}}
+    # Copper to the edge, from how near the maker's own tracks came: the
+    # rules start from it, unless a person chose one.
+    if shape["min_edge"] is not None:
+        from . import rules as rules_mod
+        report["min_edge"] = shape["min_edge"]
+        nets = sorted({n.get("name") for n in graph.get("nets", []) if n.get("name")})
+        saved = doc.get("rules")
+        chose = bool(saved and saved.get("edited") and "min_edge" in (saved.get("board") or {}))
+        if not chose:
+            merged = rules_mod.merge(saved, nets)
+            merged["board"]["min_edge"] = shape["min_edge"]
+            patch["rules"] = merged
+    await db[BOARDS].update_one({"_id": bid}, {"$set": patch})
 
     await tell(f"{bid}: source written ({len(parts)} parts, {len(report['guessed'])} guessed) "
                "- building it", "work")

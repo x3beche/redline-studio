@@ -117,7 +117,10 @@ python3 -m venv .venv-ato && .venv-ato/bin/pip install atopile easyeda2kicad kiu
 ```
 
 `REDLINE_ATO` and `REDLINE_EASYEDA` point at the two binaries if they live somewhere
-else. Note that pip will give you atopile 0.2 on Python 3.12: 0.15 needs
+else, `REDLINE_ATO_PYTHON` at the venv's Python. A `.venv-ato` made inside the API
+container has a `bin/python` that only exists there; on the host the venv's packages
+are then run by a Python of the same version instead (backend/atoenv.py), and when
+nothing works the error names what was tried. Note that pip will give you atopile 0.2 on Python 3.12: 0.15 needs
 3.14, and its part picking wants an atopile account, so 0.2 is what this
 uses.
 

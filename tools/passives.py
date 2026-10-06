@@ -39,6 +39,9 @@ RESISTORS = {
     "220": "2200", "330": "3300", "470": "4700", "1k": "1001", "1.2k": "1201",
     "2k": "2001", "2.2k": "2201", "4.7k": "4701", "5.1k": "5101",
     "10k": "1002", "20k": "2002", "47k": "4702", "100k": "1003", "1M": "1004",
+    # E96 values the boards brought in have used (DemoBoard, 2026-10-06).
+    "619": "6190", "1.1k": "1101", "2.1k": "2101", "5.6k": "5601", "12k": "1202",
+    "42.2k": "4222", "56k": "5602", "560k": "5603",
 }
 
 # Samsung MLCC, which JLCPCB stocks as Basic parts: the value is the usual
@@ -56,6 +59,10 @@ CAPACITORS = {
     ("22u", "0805"): "CL21A226MAQNNNE",
     ("100n", "0603"): "CL10B104KB8NNNC",
     ("1u", "0603"): "CL10A105KB8NNNC",
+    # Crystal load caps and bulk 0603s (DemoBoard, 2026-10-06).
+    ("18p", "0603"): "0603CG180J500NT",            # FH C0G 50 V
+    ("22u", "0603"): "CL10A226MQ8NRNC",            # X5R 6.3 V
+    ("2.2u", "0603"): "CL10A225KO8NNNC",           # X5R 16 V
 }
 
 

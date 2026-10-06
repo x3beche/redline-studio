@@ -381,6 +381,44 @@ async def cmd_board(args):
         except urllib.error.URLError as exc:
             sys.exit(f"the server is not answering at {base} ({exc.reason}) - start.sh")
 
+    def job(path: str, body: dict | None, limit: int = 3600):
+        """A long step as a job (backend/jobs.py): started, then followed
+        until it is done. A reload of the API in between is only a pause -
+        the job runs in a process of its own and the asking goes on."""
+        import time as _t
+        sep = "&" if "?" in path else "?"
+        started = call(f"{path}{sep}detach=1", "POST", body, timeout=120)
+        if not isinstance(started, dict) or "job" not in started:
+            return started                  # an older server: the answer itself
+        where = f"/api/boards/{started['board']}/jobs/{started['job']}"
+        print(f"  job        {started['job']} - follow it at {where}", flush=True)
+        t0, quiet = _t.monotonic(), 0
+        while _t.monotonic() - t0 < limit + 120:
+            _t.sleep(3)
+            req = urllib.request.Request(base + where, headers={
+                **actors.header_for_agent(),
+                **({"Authorization": f"Bearer {os.environ['REDLINE_TOKEN']}"}
+                   if os.environ.get("REDLINE_TOKEN") else {})})
+            try:
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    got = _json.loads(r.read())
+            except urllib.error.HTTPError as exc:
+                if exc.code in (502, 503, 504):
+                    continue
+                sys.exit(f"GET {where}: {exc.code} {exc.read().decode(errors='replace')[:800]}")
+            except (urllib.error.URLError, TimeoutError, ConnectionError):
+                quiet += 1                  # the API restarting: the job is not
+                if quiet % 10 == 1:
+                    print("  (the server is not answering - reloading? the job goes on)", flush=True)
+                continue
+            if got.get("status") == "running":
+                continue
+            if got.get("status") == "done":
+                return got.get("result")
+            sys.exit(f"{path}: {got.get('status')} {got.get('code')} "
+                     f"{_json.dumps(got.get('detail'), ensure_ascii=False)[:800]}")
+        sys.exit(f"{path}: still running after {limit} s - {where}")
+
     bid = args.board
     if args.what == "rules-schema":
         print(_json.dumps(call("/api/rules/schema"), indent=1, ensure_ascii=False))
@@ -412,7 +450,7 @@ async def cmd_board(args):
         print(call(f"/api/boards/{bid}", "PUT", {"source": text}))
     elif args.what == "run":
         print(f"{bid}: build, schematic, place, route, pour, DRC - a minute or so")
-        out = call(f"/api/boards/{bid}/run", "POST", {}, timeout=1800)
+        out = job(f"/api/boards/{bid}/run", {}, limit=1800)
         _print_board(out)
     elif args.what == "convert":
         # An imported board written as atopile, built, and checked against
@@ -436,11 +474,11 @@ async def cmd_board(args):
                 "bom": table_text(Path(args.bom).read_bytes()) if args.bom else None}
         print(f"{bid}: converting to atopile - parts, source, build, the netlist checked "
               "(LCSC lookups wait their turn: minutes on a first run)")
-        out = call(f"/api/boards/{bid}/convert", "POST", body, timeout=3600)
+        out = job(f"/api/boards/{bid}/convert", body, limit=3600)
         _print_convert(out)
         if args.run and out.get("status") == "converted":
             print(f"{bid}: build, schematic, place (held), route, pour, DRC")
-            _print_board(call(f"/api/boards/{bid}/run", "POST", {}, timeout=3600))
+            _print_board(job(f"/api/boards/{bid}/run", {}, limit=3600))
     elif args.what == "hold":
         want = (args.file or "on").lower() in ("on", "yes", "true", "1")
         print(call(f"/api/boards/{bid}/hold", "PUT", {"placement": want}))
@@ -484,6 +522,11 @@ def _print_convert(out: dict) -> None:
         o = out["outline"]
         print(f"  outline    {'closed' if o.get('closed') else 'NOT closed'}, "
               f"{o.get('strokes')} strokes, ends joined up to {o.get('joined_mm')} mm")
+    if out.get("holes") is not None:
+        print(f"  holes      {out['holes']} in the drills that belong to no part (placed as mounting holes)")
+    if out.get("min_edge") is not None:
+        print(f"  edge       the import's tracks keep {out['min_edge']} mm from the edge - "
+              "the rules' copper-to-edge starts there unless one was chosen")
     if out.get("build_error"):
         print("  build      FAILED\n" + out["build_error"])
     eq = out.get("equivalence")
@@ -527,10 +570,16 @@ def _print_board(out: dict) -> None:
         print(f"             {x[:150]}")
     for u in d.get("unconnected_examples") or []:
         print(f"             unconnected: {u}")
+    if d.get("edge_exempt"):
+        print(f"  edge       kept at the edge as imported (not flagged): {', '.join(d['edge_exempt'])}")
     if lay.get("held"):
         print(f"  held       every part where the import had it: worst pad "
               f"{lay.get('held_worst_mm')} mm off" + (f"; by centre only: {', '.join(lay['held_by_centre'])}"
                                                     if lay.get("held_by_centre") else ""))
+    if lay.get("holes"):
+        print(f"  holes      {len(lay['holes'])} mounting holes from the drills: "
+              + ", ".join(f"{h['ref']} {h['d']} mm" + (" plated" if h.get("plated") else "")
+                          for h in lay["holes"]))
     if out.get("equivalence"):
         _print_equivalence(out["equivalence"])
 

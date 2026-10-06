@@ -237,6 +237,47 @@ class Board:
         return {self._spot(o) for kind, f, _ in self.drills if kind == "via"
                 for o in f.objects if isinstance(o, go.Flash)}
 
+    def drill_hits(self) -> list[dict]:
+        """Every hole that is not a via, one by one: centre and diameter in
+        mm (y up), plated or not. Slots are left out - a slot is a pad's."""
+        from gerbonara import graphic_objects as go
+        from gerbonara.utils import MM
+        vias = self._via_spots()
+        out = []
+        for kind, f, _name in self.drills:
+            if kind == "via":
+                continue
+            for obj in f.objects:
+                if not isinstance(obj, go.Flash) or self._spot(obj) in vias:
+                    continue
+                try:
+                    d = round(obj.tool.equivalent_width(MM), 4)
+                except Exception:                            # noqa: BLE001
+                    continue
+                plated = obj.tool.plated if obj.tool.plated is not None else kind != "npth"
+                x, y = self._spot(obj)
+                out.append({"x": x, "y": y, "d": d, "plated": bool(plated)})
+        return out
+
+    def copper_strokes(self) -> list[tuple[float, float, float, float, float]]:
+        """The tracks on the outer copper: (x1, y1, x2, y2, width) in mm."""
+        from gerbonara import graphic_objects as go
+        from gerbonara.utils import MM
+        out = []
+        for name in ("top copper", "bottom copper"):
+            layer = self.layers.get(name)
+            if layer is None:
+                continue
+            for obj in layer.objects:
+                if isinstance(obj, go.Line) and obj.polarity_dark:
+                    try:
+                        w = obj.aperture.equivalent_width(MM)
+                    except Exception:                        # noqa: BLE001
+                        continue
+                    out.append((MM(obj.x1, obj.unit), MM(obj.y1, obj.unit),
+                                MM(obj.x2, obj.unit), MM(obj.y2, obj.unit), w))
+        return out
+
     def drill_table(self) -> list[dict]:
         """One row per tool: size, plated or not, holes and slots, file."""
         from gerbonara import graphic_objects as go

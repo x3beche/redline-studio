@@ -692,6 +692,87 @@ def draw_edges(board, loops) -> tuple[float, float, float, float]:
     return min(xs), min(ys), max(xs), max(ys)
 
 
+def edge_rule(board, plan) -> None:
+    """The board's copper-to-edge clearance (rules.py board.min_edge), so a
+    board opened by hand is checked against the edge the run used."""
+    if plan.get("min_edge") is not None:
+        board.GetDesignSettings().m_CopperEdgeClearance = int(round(float(plan["min_edge"]) * MM))
+
+
+HOLE_SAME = 0.15        # mm: a footprint's own hole this near is the drill's hole
+
+
+def mounting_hole(board, ref: str, x: float, y: float, d: float, plated: bool = False):
+    """A hole on its own, the way KiCad's MountingHole library draws one: a
+    footprint holding a single pad with no number - unplated, or plated with
+    a ring - at the drill's own diameter. Board-only, out of the BOM and the
+    position files: it is a hole, not a part."""
+    fp = pcbnew.FOOTPRINT(board)
+    name = f"MountingHole_{d:g}mm" + ("_Pad" if plated else "")
+    fp.SetFPID(pcbnew.LIB_ID("", name))
+    fp.SetReference(ref)
+    fp.SetValue(name)
+    fp.SetPosition(at(x, y))
+    pad = pcbnew.PAD(fp)
+    pad.SetShape(pcbnew.PAD_SHAPE_CIRCLE)
+    hole = int(round(d * MM))
+    pad.SetDrillSize(pcbnew.VECTOR2I(hole, hole))
+    if plated:
+        # The ring is not in the drill file; KiCad's MountingHole_*_Pad
+        # rings are about 0.4 x the hole wide on each side.
+        ring = int(round(d * 1.8 * MM))
+        pad.SetAttribute(pcbnew.PAD_ATTRIB_PTH)
+        pad.SetLayerSet(pad.PTHMask())
+        pad.SetSize(pcbnew.VECTOR2I(ring, ring))
+    else:
+        pad.SetAttribute(pcbnew.PAD_ATTRIB_NPTH)
+        pad.SetLayerSet(pad.UnplatedHoleMask())
+        pad.SetSize(pcbnew.VECTOR2I(hole, hole))
+    pad.SetPosition(at(x, y))
+    fp.Add(pad)
+    # Its courtyard: the hole and a quarter of a millimetre round it.
+    court = pcbnew.PCB_SHAPE(fp)
+    court.SetShape(pcbnew.SHAPE_T_CIRCLE)
+    court.SetLayer(pcbnew.F_CrtYd)
+    court.SetWidth(int(0.05 * MM))
+    court.SetStart(at(x, y))
+    court.SetEnd(at(x + (d * (1.8 if plated else 1.0)) / 2 + 0.25, y))
+    fp.Add(court)
+    fp.SetAttributes(pcbnew.FP_EXCLUDE_FROM_BOM | pcbnew.FP_EXCLUDE_FROM_POS_FILES
+                     | pcbnew.FP_BOARD_ONLY)
+    fp.Reference().SetVisible(False)
+    board.Add(fp)
+    return fp
+
+
+def free_holes(board, holes) -> list[dict]:
+    """The import's holes no placed footprint already has, each put in as a
+    mounting hole (H1, H2 ... after any H the board has). A footprint's own
+    locating pegs come in the drill file too; they are its, not new holes."""
+    owned = []
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if pad.GetDrillSize().x > 0:
+                p = pad.GetPosition()
+                owned.append((p.x / MM, p.y / MM))
+    taken = {fp.GetReference() for fp in board.GetFootprints()}
+    n, out = 0, []
+    for h in holes or []:
+        x, y = h["at"]
+        if any(math.dist((x, y), q) <= HOLE_SAME for q in owned):
+            continue
+        n += 1
+        while f"H{n}" in taken:
+            n += 1
+        ref = f"H{n}"
+        taken.add(ref)
+        mounting_hole(board, ref, x, y, float(h["d"]), bool(h.get("plated")))
+        owned.append((x, y))
+        out.append({"ref": ref, "at": [round(x, 4), round(y, 4)], "d": h["d"],
+                    "plated": bool(h.get("plated"))})
+    return out
+
+
 def pad_spots(fp) -> dict:
     """A placed footprint's pads: number -> centres in mm. A number can
     name several pads (a connector's shell)."""
@@ -960,6 +1041,7 @@ def main() -> int:
     nudged = label(board, gap, (x0, y0, x1, y1))
     escaped = keep_inside(board, x0, y0, x1, y1)
 
+    edge_rule(board, plan)
     pcbnew.SaveBoard(out, board)
     # Written once for KiCad to name everything, renamed, then written
     # again so KiCad itself puts the footprints in the new order - the
@@ -1033,7 +1115,11 @@ def main_held(plan) -> int:
         board.Add(fp)
         placed += 1
 
+    # The holes that belong to no part - mounting holes, a tab's hole -
+    # where the import's drills had them. Not parts: in no netlist.
+    holes = free_holes(board, held.get("holes"))
     x0, y0, x1, y1 = draw_edges(board, held["outline"])
+    edge_rule(board, plan)
     nudged = label(board, plan.get("gap", 0.8), (x0, y0, x1, y1))
     escaped = keep_inside(board, x0, y0, x1, y1)
     out = plan.get("out", "/work/board.kicad_pcb")
@@ -1054,6 +1140,7 @@ def main_held(plan) -> int:
                "not_held": unheld, "attempts_available": 1,
                "size_mm": [round(x1 - x0, 2), round(y1 - y0, 2)],
                "texts_beside": nudged, "texts_moved_in": escaped,
+               "holes": holes,
                "nets": len(nets), "out": out}, sys.stdout)
     return 0
 

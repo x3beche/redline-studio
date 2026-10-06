@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -51,11 +52,51 @@ async def _device_library() -> Path:
     return DEVICE
 
 
+# Two-pin passives by EasyEDA's designator prefix: drawn with KiCad's own
+# symbols, whose pins are passive. EasyEDA's are often typed "input", and
+# two inputs on a net with nothing driving it is an ERC error per pin.
+PASSIVE_PREFIX = {"R": "R", "C": "C", "L": "L", "FB": "FerriteBead"}
+PASSIVE_REF = re.compile(r"^(R|C|L|FB)\d+$")
+UNIT = {"R": "Ω", "C": "F", "L": "H", "FerriteBead": ""}
+
+
+def passive_entry(data: dict, pins: list[dict], ref: str) -> str | None:
+    """Which Device symbol a part is drawn with - R, C, L, FerriteBead or
+    C_Polarized - or None to keep its own. Only a part with exactly the two
+    pins 1 and 2: anything else (a resistor array, a three-terminal filter)
+    keeps its maker's symbol."""
+    numbers = sorted(p.get("number") for p in pins)
+    if numbers != ["1", "2"]:
+        return None
+    para = ((data.get("dataStr") or {}).get("head") or {}).get("c_para") or {}
+    pre = (para.get("pre") or "").strip().rstrip("?").upper()
+    entry = PASSIVE_PREFIX.get(pre)
+    if entry is None and not pre:
+        m = PASSIVE_REF.match(ref or "")
+        entry = PASSIVE_PREFIX.get(m.group(1)) if m else None
+    if entry is None:
+        return None
+    if entry == "C":
+        names = {p.get("number"): (p.get("name") or "").strip() for p in pins}
+        if "+" in names.values() or "-" in names.values():
+            # A polarised capacitor: KiCad's has + on pin 1. The other way
+            # round it keeps its own symbol rather than be drawn reversed.
+            return "C_Polarized" if names.get("1") == "+" else None
+    return entry
+
+
 async def plan_for(graph: dict, title: str) -> dict:
-    """What the generator needs: each part, its module, its symbol's source."""
+    """What the generator needs: each part, its module, its symbol's source.
+
+    Every two-pin resistor, capacitor, inductor and ferrite bead is drawn
+    with KiCad's Device symbol, whether or not it is one of
+    backend/passives.json's; the rest with the part's own EasyEDA symbol."""
     table = json.loads(lcsc.PASSIVES.read_text()).get("parts", {})
     passive = {row["lcsc"]: key for key, row in table.items()}
     device = await _device_library()
+
+    def kicad_symbol(entry: str) -> dict:
+        return {"kind": "kicad", "lib": str(device), "entry": entry, "key": f"Device_{entry}"}
 
     comps = []
     for c in graph.get("components", []):
@@ -63,16 +104,25 @@ async def plan_for(graph: dict, title: str) -> dict:
         if part in passive:
             kind, value, _size = passive[part].split(" ")
             entry = "R" if kind == "R" else "C"
-            symbol = {"kind": "kicad", "lib": str(device), "entry": entry,
-                      "key": f"Device_{entry}"}
+            symbol = kicad_symbol(entry)
             shown = value + ("Ω" if kind == "R" else "F")
         else:
             # The part's EasyEDA data, from disk if it has been looked at -
             # asking LCSC politely if not.
             data = await lcsc._component(part)
-            symbol = {"kind": "easyeda",
-                      "json": str((lcsc.LOOK / part / "component.json").resolve())}
-            shown = data.get("title") or part
+            entry = passive_entry(data, await lcsc.pins(part), c.get("ref") or "")
+            para = ((data.get("dataStr") or {}).get("head") or {}).get("c_para") or {}
+            if entry:
+                symbol = kicad_symbol(entry)
+                kind = "C" if entry.startswith("C") else "L" if entry == "L" else "R"
+                value = lcsc.value_of(kind, para.get("Value") or c.get("value") or "") \
+                    if entry != "FerriteBead" else None
+                shown = (value + UNIT[entry if entry in UNIT else "C"]) if value \
+                    else (para.get("Value") or data.get("title") or part)
+            else:
+                symbol = {"kind": "easyeda",
+                          "json": str((lcsc.LOOK / part / "component.json").resolve())}
+                shown = data.get("title") or part
         comps.append({"ref": c["ref"], "part": part, "group": kicad.module_of(c),
                       "value": shown, "footprint": c.get("footprint"),
                       "symbol": symbol})
@@ -108,9 +158,16 @@ async def draw(db, board_id: str) -> dict:
     work = Path(tempfile.mkdtemp(prefix="x3sch-"))
     try:
         plan["out"] = str(work / "board.kicad_sch")
+        # The atopile environment's Python, wherever this runs (backend/atoenv.py).
+        from . import atoenv
+        try:
+            py, py_env = atoenv.python("kiutils")
+        except atoenv.AtoEnvMissing as exc:
+            raise RuntimeError(str(exc)) from exc
         proc = await asyncio.create_subprocess_exec(
-            PYTHON, str(GENERATOR), stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+            *py, str(GENERATOR), stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+            env={**os.environ, **py_env})
         out, _ = await asyncio.wait_for(proc.communicate(json.dumps(plan).encode()), 300)
         text = out.decode(errors="replace")
         if proc.returncode != 0:

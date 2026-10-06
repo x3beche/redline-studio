@@ -22,6 +22,7 @@ not, and the rules panel says so.
 """
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -107,8 +108,57 @@ def apply_rules(board, rules) -> None:
     ds.m_MinClearance = nm(b.get("min_clearance", 0.15))
     ds.m_ViasMinSize = nm(b.get("min_via", 0.6))
     ds.m_MinThroughDrill = nm(b.get("min_drill", 0.3))
+    # Copper to the board's edge (rules.py board.min_edge). Unset, KiCad's
+    # 0.5 mm applied to every board, whatever its maker had done.
+    ds.m_CopperEdgeClearance = nm(b.get("min_edge", 0.5))
     ns.RecomputeEffectiveNetclasses()
     board.SynchronizeNetsAndNetClasses(True)
+
+
+def edge_parts(board, clearance_mm: float) -> list[str]:
+    """Parts with copper nearer the board's edge than the rule allows.
+
+    On a board kept as it was imported, those are where their maker put
+    them - a button or a USB shell flush with the edge is the design - and
+    the router never moves a pad. They are named here so DRC can let them
+    be (`edge_rules`), and only them: a track or a pour is still held to
+    the rule.
+    """
+    edges = [d.GetEffectiveShape() for d in board.GetDrawings()
+             if d.GetLayer() == pcbnew.Edge_Cuts]
+    if not edges:
+        return []
+    gap = nm(clearance_mm)
+    out = []
+    for fp in board.GetFootprints():
+        near = False
+        for pad in fp.Pads():
+            for layer in (pcbnew.F_Cu, pcbnew.B_Cu):
+                if not pad.IsOnLayer(layer):
+                    continue
+                shape = pad.GetEffectiveShape(layer)
+                if any(e.Collide(shape, gap) for e in edges):
+                    near = True
+                    break
+            if near:
+                break
+        if near:
+            out.append(fp.GetReference())
+    return sorted(out)
+
+
+def edge_rules(refs: list[str]) -> str:
+    """A custom DRC rule (board.kicad_dru, read beside the board) that lets
+    these parts' own copper sit at the edge."""
+    if not refs:
+        return ""
+    cond = " || ".join(f"A.memberOfFootprint('{r}') || B.memberOfFootprint('{r}')"
+                       for r in (x.replace("'", "") for x in refs))
+    return ("(version 1)\n"
+            "(rule \"edge: parts kept where the import had them\"\n"
+            "  (constraint edge_clearance (min 0mm))\n"
+            f"  (condition \"{cond}\")\n"
+            "  (severity ignore))\n")
 
 
 def pours(board, specs) -> int:
@@ -249,13 +299,24 @@ def main() -> int:
     board.BuildConnectivity()
     unrouted = board.GetConnectivity().GetUnconnectedCount(False)
 
-    pcbnew.SaveBoard(plan.get("out", path), board)
+    out = plan.get("out", path)
+    pcbnew.SaveBoard(out, board)
+    # A held board: the parts its maker put at the edge are let be by DRC.
+    exempt = edge_parts(board, rules.get("board", {}).get("min_edge", 0.5)) \
+        if plan.get("held") else []
+    dru = os.path.splitext(out)[0] + ".kicad_dru"
+    if exempt:
+        with open(dru, "w") as f:
+            f.write(edge_rules(exempt))
+    elif os.path.exists(dru):
+        os.remove(dru)
     shape = geometry(board)
     print(json.dumps({
         "tracks": len(tracks), "vias": len(vias),
         "length_mm": round(length, 1), "zones": zones,
         "unrouted": unrouted, "route_s": round(routed_s, 1),
         "passes": passes, "pads": pads, "geometry": shape, "log": log[-1500:],
+        "edge_exempt": exempt,
     }))
     return 0
 

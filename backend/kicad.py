@@ -138,7 +138,19 @@ async def held_plan(db, board_id: str, hold: dict | None) -> dict | None:
             entry["at"] = [sum(q[0] for q in pts) / len(pts), sum(q[1] for q in pts) / len(pts)]
     loops = [[{k: [to_page(box, *pt) for pt in v] for k, v in piece.items()} for piece in loop]
              for loop in outline["loops"]]
-    return {"parts": parts, "outline": loops}
+    # The holes no part owns, where the drills had them. A board converted
+    # before they were kept has them worked out from its upload now.
+    holes = hold.get("holes")
+    if holes is None:
+        from . import convert
+        try:
+            sources = await store.get_artifact(db, board_id, "sources", ato.BOARDS)
+        except KeyError:
+            sources = None
+        holes = (await asyncio.to_thread(convert.import_geometry, sources, pads, outline))["holes"]
+    return {"parts": parts, "outline": loops,
+            "holes": [{"at": to_page(box, h["x"], h["y"]), "d": h["d"],
+                       "plated": bool(h.get("plated"))} for h in holes]}
 
 
 class NoDocker(RuntimeError):
@@ -300,6 +312,12 @@ async def render(db, board_id: str, route: bool = True) -> dict:
             {"_id": board_id}, {"hold": 1})) or {}).get("hold"))
         if held:
             plan["hold"] = held
+        # The copper-to-edge rule on the placed board as well, so the board
+        # opened by hand is checked against the same edge as the routed one.
+        board_rules = (await db[ato.BOARDS].find_one({"_id": board_id}, {"rules": 1}) or {}).get("rules")
+        plan["min_edge"] = (rules.normalise(board_rules).get("board") or {}).get("min_edge", rules.EDGE) \
+            if board_rules else rules.EDGE
+        plan["edge_clearance"] = plan["min_edge"]        # where the packer seats a connector
 
         meter = compute.Meter()
 
@@ -369,7 +387,9 @@ async def render(db, board_id: str, route: bool = True) -> dict:
             payload = {"board": "/work/board.kicad_pcb",
                        "out": "/work/board.kicad_pcb",
                        "rules": rules.resolved(the_rules, nets),
-                       "timeout": ROUTE_TIMEOUT}
+                       "timeout": ROUTE_TIMEOUT,
+                       # Kept as imported: its parts at the edge are the design.
+                       "held": bool(held)}
 
             # `route.tries` in the rules: how many layouts to try before
             # settling. Routing the same board again is pointless -
@@ -408,6 +428,9 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                     json.dumps(route_report.pop("geometry")).encode(),
                     collection=ato.BOARDS)
             drc_report = await drc(work, "board.kicad_pcb")
+            if route_report.get("edge_exempt"):
+                # Said, so a clean edge is not mistaken for a looser rule.
+                drc_report["edge_exempt"] = route_report["edge_exempt"]
 
         rc, svg_log = await _run(
             _docker(work, IMAGE, "pcb", "export", "svg", "--output",
@@ -494,7 +517,7 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         if route_report:
             routed = {k: route_report.get(k) for k in
                       ("tracks", "vias", "length_mm", "zones", "unrouted",
-                       "route_s", "passes", "attempts")}
+                       "route_s", "passes", "attempts", "edge_exempt")}
         await db[ato.BOARDS].update_one(
             {"_id": board_id},
             {"$set": {"layout": {"placed": placed.get("placed"),
@@ -504,7 +527,8 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                                  # A held board: how close every part came
                                  # to where the import had it.
                                  **{k: placed[k] for k in ("held", "held_worst_mm",
-                                                           "held_off", "held_by_centre")
+                                                           "held_off", "held_by_centre",
+                                                           "holes")
                                     if k in placed}},
                       "route": routed, "drc": drc_report}})
         return {"board": board_id, "svg_bytes": len(svg),

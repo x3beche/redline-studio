@@ -41,6 +41,11 @@ DEFAULT = {"name": "Default", "track": 0.25, "clearance": 0.2,
 ROUTE = {"passes": 40, "tries": 3}
 POWER_CLASS = {"name": "Power", "track": 0.5, "clearance": 0.2,
                "via": 0.8, "drill": 0.4}
+# How close copper may come to the board's edge: KiCad's own default, which
+# is what every board was checked against before it was a rule. A board
+# converted from an import starts from what its maker actually did
+# (backend/convert.py, edge_clearance).
+EDGE = 0.5
 
 
 def pairs_in(nets: list[str]) -> list[tuple[str, str]]:
@@ -86,7 +91,7 @@ def derive(nets: list[str]) -> dict:
         "classes": classes,
         "pairs": diff,
         "board": {"layers": 2, "min_track": 0.15, "min_clearance": 0.15,
-                  "min_via": 0.6, "min_drill": 0.3},
+                  "min_via": 0.6, "min_drill": 0.3, "min_edge": EDGE},
         "pours": [{"net": ground, "layers": ["F.Cu", "B.Cu"], "clearance": 0.3,
                    "edge": 0.3, "connection": "solid"}] if ground else [],
         "route": dict(ROUTE),
@@ -184,6 +189,13 @@ SCHEMA = {
              "unit": "mm", "min": 0.25, "max": 2, "step": 0.05},
             {"key": "min_drill", "label": "Smallest drill", "type": "number",
              "unit": "mm", "min": 0.15, "max": 1.5, "step": 0.05},
+            {"key": "min_edge", "label": "Copper to edge", "type": "number",
+             "unit": "mm", "min": 0, "max": 5, "step": 0.05,
+             "help": "how close tracks, vias, pads and pours may come to the "
+                     "board outline (KiCad's board edge clearance). On a board "
+                     "converted from an import, a part its maker put nearer "
+                     "the edge than this - a button, a USB shell - keeps its "
+                     "place and is not flagged; everything routed is held to it"},
         ],
     },
     "route": {
@@ -220,6 +232,9 @@ def normalise(rules: dict) -> dict:
         pour.setdefault("edge", SCHEMA["pours"]["new"]["edge"])
     for key, value in ROUTE.items():
         out.setdefault("route", {}).setdefault(key, value)
+    if isinstance(out.get("board"), dict):
+        # Rules saved before the edge was a rule were held to KiCad's 0.5 mm.
+        out["board"].setdefault("min_edge", EDGE)
     out.setdefault("pairs", [])
     return out
 
