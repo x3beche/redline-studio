@@ -64,7 +64,7 @@ TIMEOUT = 60.0
 
 # The settings, read once from the database and kept here: the callers
 # (summarise, the tool pages) have no database of their own to hand.
-_conf: dict = {"keys": {}, "jobs": {}}
+_conf: dict = {"keys": {}, "jobs": {}, "off": []}
 _loaded = False
 
 
@@ -74,14 +74,18 @@ async def load(db) -> dict:
     global _conf, _loaded
     raw = db.raw if getattr(type(db), "SCOPED", False) else db
     doc = await raw[COLL].find_one({"_id": DOC_ID}) or {}
-    _conf = {"keys": dict(doc.get("keys") or {}), "jobs": dict(doc.get("jobs") or {})}
+    _conf = {"keys": dict(doc.get("keys") or {}), "jobs": dict(doc.get("jobs") or {}),
+             "off": list(doc.get("off") or [])}
     _loaded = True
     return _conf
 
 
 def key(provider: str) -> str | None:
-    """The provider's key: the one kept in the settings, else .env."""
+    """The provider's key: the one kept in the settings, else .env - unless
+    it was removed in the settings, which forgets the .env one too."""
     if provider not in PROVIDERS:
+        return None
+    if provider in _conf.get("off", []) and not _conf["keys"].get(provider):
         return None
     return (_conf["keys"].get(provider) or os.environ.get(PROVIDERS[provider]["env"]) or "").strip() or None
 
@@ -89,6 +93,8 @@ def key(provider: str) -> str | None:
 def key_source(provider: str) -> str | None:
     if _conf["keys"].get(provider):
         return "settings"
+    if provider in _conf.get("off", []):
+        return None
     if os.environ.get(PROVIDERS[provider]["env"]):
         return ".env"
     return None
@@ -117,10 +123,12 @@ def public() -> dict:
 
 
 async def save(db, keys: dict | None = None, jobs: dict | None = None) -> dict:
-    """Change keys (a string sets one, "" or None clears it) and job routes."""
+    """Change keys and job routes. A string sets a key; "" or None forgets
+    it - the saved one and the .env one both - until a new one is saved."""
     raw = db.raw if getattr(type(db), "SCOPED", False) else db
     sets: dict = {}
     unsets: dict = {}
+    off = set(_conf.get("off", []))
     for p, v in (keys or {}).items():
         if p not in PROVIDERS:
             raise ValueError(f"unknown provider {p!r}")
@@ -128,8 +136,12 @@ async def save(db, keys: dict | None = None, jobs: dict | None = None) -> dict:
             if len(v) > 400 or any(c.isspace() for c in v.strip()):
                 raise ValueError(f"{PROVIDERS[p]['name']}: that does not look like an API key")
             sets[f"keys.{p}"] = v.strip()
+            off.discard(p)
         else:
             unsets[f"keys.{p}"] = ""
+            off.add(p)
+    if keys:
+        sets["off"] = sorted(off)
     for j, r in (jobs or {}).items():
         if j not in JOBS:
             raise ValueError(f"unknown job {j!r}")

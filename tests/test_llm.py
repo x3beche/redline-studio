@@ -6,7 +6,7 @@ from backend import access, cc_chat, llm
 
 @pytest.fixture(autouse=True)
 def fresh(monkeypatch):
-    monkeypatch.setattr(llm, "_conf", {"keys": {}, "jobs": {}})
+    monkeypatch.setattr(llm, "_conf", {"keys": {}, "jobs": {}, "off": []})
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("COMMANDCODE_API_KEY", raising=False)
 
@@ -81,3 +81,12 @@ def test_settings_are_for_admins_talking_is_for_reviewers():
     for m, p in (("POST", "/api/cc/chats"), ("POST", "/api/cc/chats/c1/messages"), ("PATCH", "/api/cc/chats/c1")):
         a = access.action(m, p)
         assert access.allowed("reviewer", a) and not access.allowed("viewer", a)
+
+
+def test_removing_a_key_forgets_the_env_one_too_until_a_new_one(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-from-env-1234")
+    llm._conf["off"] = ["openrouter"]
+    assert llm.key("openrouter") is None and llm.key_source("openrouter") is None
+    assert llm.public()["providers"]["openrouter"]["set"] is False
+    llm._conf["keys"]["openrouter"] = "sk-or-new-5555"          # a new one brings it back
+    assert llm.key("openrouter") == "sk-or-new-5555"

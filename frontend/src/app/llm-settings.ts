@@ -44,9 +44,9 @@ interface LlmSettings { providers: Record<string, ProviderInfo>; jobs: Record<st
             <input class="tcv-files-note" type="password" autocomplete="off" [placeholder]="(info.set ? 'Replace the key' : 'Paste the API key') | t"
                    [value]="draft()[p] || ''" (input)="setDraft(p, $any($event.target).value)" (keydown.enter)="saveKey(p)">
             <button class="tcv-btn tcv-files-btn" [disabled]="!draft()[p]?.trim() || busy()" (click)="saveKey(p)">{{ 'Save' | t }}</button>
-            @if (info.source === 'settings') {
+            @if (info.set) {
               <button class="tcv-btn tcv-files-btn" [disabled]="busy()" (click)="clearKey(p)"
-                      [title]="'Forget the saved key (.env is used again, if it has one)' | t">{{ 'Remove' | t }}</button>
+                      [title]="'Forget this key - the one saved here and the one in .env - until a new one is saved' | t">{{ 'Remove' | t }}</button>
             }
           </div>
         }
@@ -132,7 +132,7 @@ export class LlmSettingsPanel {
   }
 
   clearKey(p: string) {
-    if (!confirm(t('Remove the saved key?'))) return;
+    if (!confirm(t('Forget this key? Jobs that use this provider stop until a new key is saved.'))) return;
     this.put({ keys: { [p]: null } }, t('Key removed.'));
   }
 
