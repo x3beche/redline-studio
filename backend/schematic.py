@@ -85,6 +85,40 @@ def passive_entry(data: dict, pins: list[dict], ref: str) -> str | None:
     return entry
 
 
+# Parts whose pins have no direction: a connector, a switch, a battery
+# holder, an LED or diode, a crystal. KiCad's own libraries type every pin
+# of these "passive"; EasyEDA's symbols often say "input" - a header's
+# sixteen pins, an LED's cathode - and ERC then reports each one as an
+# input nothing drives, which is the symbol's typing and not the circuit.
+# Known by the designator prefix the symbol gives (`pre`, else the
+# board's ref) or by LCSC's category.
+PASSIVE_PIN_PREFIX = {"J", "CN", "CON", "P", "X", "Y", "H", "HDR", "UART", "USB", "BT",
+                      "SW", "S", "K", "LED", "D", "F", "FUSE", "TP"}
+PASSIVE_PIN_CATEGORY = re.compile(
+    r"connector|header|socket|terminal|battery (?:holder|clip|contact)|switch|button|light emitting|\bleds?\b|"
+    r"diode|crystal|resonator|oscillator|fuse|relay|test point", re.I)
+
+
+def _prefix(text: str) -> str:
+    m = re.match(r"^([A-Za-z]+)", (text or "").strip().rstrip("?"))
+    return m.group(1).upper() if m else ""
+
+
+def passive_pins(data: dict, ref: str) -> bool:
+    """Is this a part whose every pin is drawn passive (above)?"""
+    tags = " ".join(data.get("tags") or [])
+    if tags and PASSIVE_PIN_CATEGORY.search(tags):
+        return True
+    para = ((data.get("dataStr") or {}).get("head") or {}).get("c_para") or {}
+    pre = _prefix(para.get("pre") or "")
+    if pre:
+        return pre in PASSIVE_PIN_PREFIX
+    # No prefix in the symbol: the board's designator, whole letters only -
+    # "PGOD" is not a "P".
+    m = re.match(r"^([A-Za-z]+)\d+$", ref or "")
+    return bool(m) and m.group(1).upper() in PASSIVE_PIN_PREFIX
+
+
 async def plan_for(graph: dict, title: str) -> dict:
     """What the generator needs: each part, its module, its symbol's source.
 
@@ -121,7 +155,11 @@ async def plan_for(graph: dict, title: str) -> dict:
                     else (para.get("Value") or data.get("title") or part)
             else:
                 symbol = {"kind": "easyeda",
-                          "json": str((lcsc.LOOK / part / "component.json").resolve())}
+                          "json": str((lcsc.LOOK / part / "component.json").resolve()),
+                          # tools/schematic_gen.py: every pin passive, or
+                          # only the ones EasyEDA could not type.
+                          "pins": "passive" if passive_pins(data, c.get("ref") or "")
+                          else "as_typed"}
                 shown = data.get("title") or part
         comps.append({"ref": c["ref"], "part": part, "group": kicad.module_of(c),
                       "value": shown, "footprint": c.get("footprint"),

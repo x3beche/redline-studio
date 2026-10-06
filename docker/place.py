@@ -745,10 +745,119 @@ def mounting_hole(board, ref: str, x: float, y: float, d: float, plated: bool = 
     return fp
 
 
-def free_holes(board, holes) -> list[dict]:
+# A part whose body lies beside its pads - a TO-220 laid flat, its tab
+# screwed down - has the import's centroid off its pads, toward the body;
+# a hole out along that line is the body's (the tab's), within this many
+# times the centroid's distance from the pads, and this much either side
+# of the pad row.
+BODY_REACH = 3.0
+BODY_SIDE = 1.0         # mm beyond the pads' own spread, across the line
+
+
+def body_hole_owner(hole: dict, parts: dict) -> str | None:
+    """Which part's original footprint a free hole is part of, judged from
+    the import alone: the part whose import centroid lies off its pads
+    (more than BODY_SIDE beyond their box - the body is not over them),
+    with the hole further out along the line from the pads' centre through
+    that centroid, no more than BODY_REACH times as far, and within the
+    pad row's width of that line. A mounting hole beside a part, or
+    behind its pads, is nobody's. None when no part claims it."""
+    hx, hy = hole["at"]
+    best = None
+    for ref, want in parts.items():
+        pts = list((want.get("pads") or {}).values())
+        if len(pts) < 2 or not want.get("at"):
+            continue
+        cx, cy = want["at"]
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        if (min(xs) - BODY_SIDE <= cx <= max(xs) + BODY_SIDE
+                and min(ys) - BODY_SIDE <= cy <= max(ys) + BODY_SIDE):
+            continue                       # body over its pads: owns no far hole
+        mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+        d = math.dist((mx, my), (cx, cy))
+        ux, uy = (cx - mx) / d, (cy - my) / d
+        t = (hx - mx) * ux + (hy - my) * uy
+        side = abs(-(hx - mx) * uy + (hy - my) * ux)
+        spread = max(abs(-(x - mx) * uy + (y - my) * ux) for x, y in pts)
+        if d < t <= BODY_REACH * d and side <= spread + BODY_SIDE:
+            if best is None or t < best[0]:
+                best = (t, ref)
+    return best[1] if best else None
+
+
+def own_hole(fp, x: float, y: float, d: float, plated: bool = False) -> None:
+    """A hole of the part's original footprint that the footprint used
+    here does not have - an upright TO-220 standing in for a lying one,
+    whose tab hole is in the drills - put into that footprint, and its
+    courtyard redrawn to take in the pads and the hole: where the part
+    lies on this board, not where the upright body would stand."""
+    pad = pcbnew.PAD(fp)
+    pad.SetShape(pcbnew.PAD_SHAPE_CIRCLE)
+    hole = int(round(d * MM))
+    pad.SetDrillSize(pcbnew.VECTOR2I(hole, hole))
+    if plated:
+        ring = int(round(d * 1.8 * MM))
+        pad.SetAttribute(pcbnew.PAD_ATTRIB_PTH)
+        pad.SetLayerSet(pad.PTHMask())
+        pad.SetSize(pcbnew.VECTOR2I(ring, ring))
+    else:
+        pad.SetAttribute(pcbnew.PAD_ATTRIB_NPTH)
+        pad.SetLayerSet(pad.UnplatedHoleMask())
+        pad.SetSize(pcbnew.VECTOR2I(hole, hole))
+    pad.SetPosition(at(x, y))
+    fp.Add(pad)
+
+    # The courtyard: a box along the line from the pads to the hole, as
+    # wide as the old courtyard (the body's width) or the pads, whichever
+    # is wider, from behind the pads to beyond the hole.
+    layer = pcbnew.B_CrtYd if fp.IsFlipped() else pcbnew.F_CrtYd
+    pads = [p for p in fp.Pads() if p.GetNumber()]
+    mx = sum(p.GetPosition().x for p in pads) / len(pads) / MM
+    my = sum(p.GetPosition().y for p in pads) / len(pads) / MM
+    L = math.dist((mx, my), (x, y)) or 1.0
+    ux, uy = (x - mx) / L, (y - my) / L
+    vx, vy = -uy, ux
+
+    def corners(box):
+        x0, y0 = box.GetX() / MM, box.GetY() / MM
+        x1, y1 = x0 + box.GetWidth() / MM, y0 + box.GetHeight() / MM
+        return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    pts = [q for p in pads for q in corners(p.GetBoundingBox())]
+    r = (d * (1.8 if plated else 1.0)) / 2
+    pts += [(x + ux * r, y + uy * r), (x + vx * r, y + vy * r), (x - vx * r, y - vy * r)]
+    old = [g for g in fp.GraphicalItems() if g.GetLayer() == layer]
+    for g in old:
+        pts += corners(g.GetBoundingBox())
+    along = [(px - mx) * ux + (py - my) * uy for px, py in pts]
+    across = [(px - mx) * vx + (py - my) * vy for px, py in pts]
+    # Behind the pads: from the pads themselves, not the old body - the
+    # old body stood across the pad row, the lying one does not.
+    pad_along = [(px - mx) * ux + (py - my) * uy
+                 for p in pads for px, py in corners(p.GetBoundingBox())]
+    a0, a1 = min(pad_along) - 0.25, max(along) + 0.25
+    c0, c1 = min(across) - 0.25, max(across) + 0.25
+    for g in old:
+        fp.Remove(g)
+    box = [(a0, c0), (a1, c0), (a1, c1), (a0, c1)]
+    ends = [(mx + a * ux + c * vx, my + a * uy + c * vy) for a, c in box]
+    for (x0, y0), (x1, y1) in zip(ends, ends[1:] + ends[:1]):
+        seg = pcbnew.PCB_SHAPE(fp)
+        seg.SetShape(pcbnew.SHAPE_T_SEGMENT)
+        seg.SetLayer(layer)
+        seg.SetWidth(int(0.05 * MM))
+        seg.SetStart(at(x0, y0))
+        seg.SetEnd(at(x1, y1))
+        fp.Add(seg)
+
+
+def free_holes(board, holes, parts: dict | None = None) -> list[dict]:
     """The import's holes no placed footprint already has, each put in as a
     mounting hole (H1, H2 ... after any H the board has). A footprint's own
-    locating pegs come in the drill file too; they are its, not new holes."""
+    locating pegs come in the drill file too; they are its, not new holes.
+    And a hole the import shows is a part's body's (body_hole_owner: a
+    lying TO-220's tab) goes into that part (own_hole), marked `part`,
+    rather than standing on the board as a mounting hole of its own.
+    `parts` is the held plan's parts, for that."""
     owned = []
     for fp in board.GetFootprints():
         for pad in fp.Pads():
@@ -760,6 +869,14 @@ def free_holes(board, holes) -> list[dict]:
     for h in holes or []:
         x, y = h["at"]
         if any(math.dist((x, y), q) <= HOLE_SAME for q in owned):
+            continue
+        owner = body_hole_owner(h, parts or {})
+        fp = board.FindFootprintByReference(owner) if owner else None
+        if fp is not None:
+            own_hole(fp, x, y, float(h["d"]), bool(h.get("plated")))
+            owned.append((x, y))
+            out.append({"part": owner, "at": [round(x, 4), round(y, 4)], "d": h["d"],
+                        "plated": bool(h.get("plated"))})
             continue
         n += 1
         while f"H{n}" in taken:
@@ -1117,7 +1234,7 @@ def main_held(plan) -> int:
 
     # The holes that belong to no part - mounting holes, a tab's hole -
     # where the import's drills had them. Not parts: in no netlist.
-    holes = free_holes(board, held.get("holes"))
+    holes = free_holes(board, held.get("holes"), held.get("parts"))
     x0, y0, x1, y1 = draw_edges(board, held["outline"])
     edge_rule(board, plan)
     nudged = label(board, plan.get("gap", 0.8), (x0, y0, x1, y1))

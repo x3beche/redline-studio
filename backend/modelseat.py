@@ -310,3 +310,181 @@ def seated(footprint: str, blob: bytes, kind: str,
         return None
     off = seat(box, rotation_of(footprint), place)
     return with_offset(footprint, off), off
+
+
+# ---- a WRL the board exporter cannot read ----------------------------------
+#
+# KiCad's STEP and GLB exports build the board in OpenCascade and take a
+# part's model only as STEP (or IGES); a WRL is for its own 3D viewer and is
+# left out without a word. Some LCSC parts come with nothing but the WRL
+# easyeda2kicad makes from EasyEDA's mesh - the demo board's Q3, a SOT-23 -
+# and were simply missing from the board's 3D model. A STEP made of the
+# WRL's triangles was 47 MB for that SOT-23, so the WRL goes into the
+# exported GLB instead, as the mesh it is: under the part's ref, placed the
+# way KiCad places a model (checked against kicad-cli's own GLB for STEP
+# parts at 0, 90 and 180 degrees, to the hundredth of a millimetre).
+
+_SHAPE = re.compile(r"Shape\s*\{")
+_COLOUR = re.compile(r"diffuseColor\s+([-\d.eE]+)\s+([-\d.eE]+)\s+([-\d.eE]+)")
+_INDEX = re.compile(r"coordIndex\s*\[([^\]]*)\]")
+
+
+def wrl_meshes(text: str) -> list[dict]:
+    """Each Shape of a WRL: its points (mm), its triangles, its colour."""
+    out = []
+    starts = [m.start() for m in _SHAPE.finditer(text)] + [len(text)]
+    for a, b in zip(starts, starts[1:]):
+        chunk = text[a:b]
+        pts_m, idx_m = _WRL_POINTS.search(chunk), _INDEX.search(chunk)
+        if not pts_m or not idx_m:
+            continue
+        pts = []
+        for triple in pts_m.group(1).split(","):
+            v = triple.split()
+            if len(v) == 3:
+                pts.append(tuple(_num(x) * WRL_UNIT for x in v))
+        tris, face = [], []
+        for tok in idx_m.group(1).replace(",", " ").split():
+            i = int(_num(tok, -1))
+            if i < 0:
+                # A polygon, fanned into triangles.
+                tris += [(face[0], face[k], face[k + 1]) for k in range(1, len(face) - 1)]
+                face = []
+            else:
+                face.append(i)
+        if len(face) >= 3:
+            tris += [(face[0], face[k], face[k + 1]) for k in range(1, len(face) - 1)]
+        tris = [t for t in tris if max(t) < len(pts)]
+        if not tris:
+            continue
+        colour = _COLOUR.search(chunk)
+        out.append({"points": pts, "triangles": tris,
+                    "colour": tuple(float(c) for c in colour.groups()) if colour else None})
+    return out
+
+
+_FP = re.compile(r'\n\t\(footprint "([^"]*)"')
+_AT = re.compile(r"\(at\s+" + _NUM + r"\s+" + _NUM + r"(?:\s+" + _NUM + r")?\s*\)")
+
+
+def board_footprints(pcb: str) -> list[dict]:
+    """Every footprint of a .kicad_pcb: name, ref, where, which way, which
+    side, and its model block's path, offset and rotation."""
+    out = []
+    starts = [m.start() for m in _FP.finditer(pcb)] + [len(pcb)]
+    for a, b in zip(starts, starts[1:]):
+        block = pcb[a:b]
+        name = _FP.match(block).group(1)
+        ref = re.search(r'\(property "Reference" "([^"]*)"', block)
+        at_ = _AT.search(block)
+        span = _model_span(block)
+        model = re.match(r'\(model\s+"?([^"\s)]*)', block[span[0]:span[1]]).group(1) if span else None
+        out.append({"name": name, "ref": ref.group(1) if ref else "",
+                    "x": float(at_.group(1)), "y": float(at_.group(2)),
+                    "angle": float(at_.group(3) or 0),
+                    "flipped": '(layer "B.Cu")' in block[:400],
+                    "model": model, "offset": offset_of(block), "rotation": rotation_of(block)})
+    return out
+
+
+def placed_points(points, fp: dict, thickness: float):
+    """A model's points (mm, its own frame) where KiCad puts them on the
+    board, in the GLB's frame: metres, X along the page, Y up, Z down the
+    page. The model is turned by its `rotate`, moved by its `offset`,
+    turned over for the bottom, turned with the footprint and put at it."""
+    import numpy as np
+    v = np.asarray(points, dtype=float) @ np.array(rotation_matrix(*fp["rotation"])).T
+    v = v + np.array(fp["offset"])
+    if fp["flipped"]:
+        v = v * np.array([1.0, -1.0, -1.0])          # over about the footprint's X
+    a = math.radians(fp["angle"])
+    c, s = math.cos(a), math.sin(a)
+    x = v[:, 0] * c - v[:, 1] * s
+    y = v[:, 0] * s + v[:, 1] * c
+    z = v[:, 2] + (0.0 if fp["flipped"] else thickness)
+    page_x, page_y = x + fp["x"], -y + fp["y"]
+    return np.stack([page_x, z, page_y], axis=1) / 1000.0
+
+
+def add_meshes(glb: bytes, pcb: str, meshes: dict[str, str]) -> tuple[bytes, list[str]]:
+    """The board's GLB with every WRL-only model put in: `meshes` is
+    footprint name (the LCSC number) -> its WRL. Returns the GLB and the
+    refs added. A part that already has a node of its own (KiCad exported
+    a STEP for it) is left alone."""
+    import json as _json
+    import struct
+
+    import numpy as np
+
+    if len(glb) < 20 or glb[:4] != b"glTF":
+        return glb, []
+    length = struct.unpack_from("<I", glb, 8)[0]
+    pos, doc, bin_ = 12, None, b""
+    while pos < length:
+        size, kind = struct.unpack_from("<II", glb, pos)
+        data = glb[pos + 8:pos + 8 + size]
+        if kind == 0x4E4F534A:
+            doc = _json.loads(data)
+        elif kind == 0x004E4942:
+            bin_ = bytes(data)
+        pos += 8 + size
+    if doc is None:
+        return glb, []
+    m = re.search(r"\(thickness\s+" + _NUM, pcb)
+    thickness = float(m.group(1)) if m else 1.6
+    have = {n.get("name") for n in doc.get("nodes", [])}
+    buf = bytearray(bin_)
+    for key in ("bufferViews", "accessors", "meshes", "materials", "nodes"):
+        doc.setdefault(key, [])
+    scene = doc["scenes"][doc.get("scene", 0)]
+    added = []
+
+    def view(data: bytes, target: int) -> int:
+        while len(buf) % 4:
+            buf.append(0)
+        doc["bufferViews"].append({"buffer": 0, "byteOffset": len(buf),
+                                   "byteLength": len(data), "target": target})
+        buf.extend(data)
+        return len(doc["bufferViews"]) - 1
+
+    for fp in board_footprints(pcb):
+        text = meshes.get(fp["name"])
+        if not text or fp["ref"] in have or not (fp["model"] or "").lower().endswith(".wrl"):
+            continue
+        prims = []
+        for shape in wrl_meshes(text):
+            pts = placed_points(shape["points"], fp, thickness).astype(np.float32)
+            idx = np.asarray(shape["triangles"], dtype=np.uint32).reshape(-1)
+            if fp["flipped"]:
+                idx = idx.reshape(-1, 3)[:, ::-1].reshape(-1)    # keep the faces facing out
+            pv = view(pts.tobytes(), 34962)
+            iv = view(idx.tobytes(), 34963)
+            doc["accessors"].append({"bufferView": pv, "componentType": 5126,
+                                     "count": len(pts), "type": "VEC3",
+                                     "min": pts.min(0).tolist(), "max": pts.max(0).tolist()})
+            doc["accessors"].append({"bufferView": iv, "componentType": 5125,
+                                     "count": int(idx.size), "type": "SCALAR"})
+            colour = list(shape["colour"] or (0.6, 0.6, 0.6))
+            doc["materials"].append({"pbrMetallicRoughness": {
+                "baseColorFactor": colour + [1.0], "metallicFactor": 0.0,
+                "roughnessFactor": 0.6}, "doubleSided": True})
+            prims.append({"attributes": {"POSITION": len(doc["accessors"]) - 2},
+                          "indices": len(doc["accessors"]) - 1,
+                          "material": len(doc["materials"]) - 1})
+        if not prims:
+            continue
+        doc["meshes"].append({"name": fp["ref"], "primitives": prims})
+        doc["nodes"].append({"name": fp["ref"], "mesh": len(doc["meshes"]) - 1})
+        scene.setdefault("nodes", []).append(len(doc["nodes"]) - 1)
+        added.append(fp["ref"])
+    if not added:
+        return glb, []
+    while len(buf) % 4:
+        buf.append(0)
+    doc.setdefault("buffers", [{}])
+    doc["buffers"][0]["byteLength"] = len(buf)
+    js = _json.dumps(doc, separators=(",", ":")).encode()
+    js += b" " * (-len(js) % 4)
+    out = (struct.pack("<II", len(js), 0x4E4F534A) + js
+           + struct.pack("<II", len(buf), 0x004E4942) + bytes(buf))
+    return struct.pack("<III", 0x46546C67, 2, 12 + len(out)) + out, added

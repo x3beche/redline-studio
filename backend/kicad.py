@@ -276,11 +276,14 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         # An LCSC footprint points at its 3D model through an environment
         # variable that means nothing here, so the path is rewritten to
         # where the container will find it.
+        wrl_only: dict[str, str] = {}      # LCSC number -> a model KiCad cannot export
         for lcsc_id, part in parts.items():
             text = part["footprint"]
             got = await lcsc.model_of(db, lcsc_id)
             if got:
                 blob, kind = got
+                if kind == "wrl":
+                    wrl_only[lcsc_id] = blob.decode("utf-8", errors="replace")
                 (models / f"{lcsc_id}.{kind}").write_bytes(blob)
                 text = re.sub(r'\(model\s+"[^"]*"',
                               f'(model "/work/3d/{lcsc_id}.{kind}"', text)
@@ -349,7 +352,10 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
             meter.watch(proc.pid)
             out, _ = await asyncio.wait_for(
-                proc.communicate(json.dumps(payload).encode()), ROUTE_TIMEOUT + 60)
+                # The board, then a round of what it left over:
+                # those alone, and the board round them (docker/route.py
+                # leftovers_first) - each Freerouting run its own timeout.
+                proc.communicate(json.dumps(payload).encode()), 4 * ROUTE_TIMEOUT + 60)
             text = out.decode(errors="replace")
             try:
                 got = json.loads(text[text.index("{"):text.rindex("}") + 1])
@@ -484,6 +490,12 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                     "--include-silkscreen", "board.kicad_pcb"), work)
         if rc == 0 and (work / "board.glb").exists():
             glb = (work / "board.glb").read_bytes()
+            if wrl_only:
+                # KiCad leaves a WRL-only part out of the GLB; its mesh goes
+                # in where KiCad would have put it (backend/modelseat.py).
+                from . import modelseat
+                glb, _added = await asyncio.to_thread(
+                    modelseat.add_meshes, glb, (work / "board.kicad_pcb").read_text(), wrl_only)
 
         job = meter.stop()
         try:
@@ -517,7 +529,7 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         if route_report:
             routed = {k: route_report.get(k) for k in
                       ("tracks", "vias", "length_mm", "zones", "unrouted",
-                       "route_s", "passes", "attempts", "edge_exempt")}
+                       "route_s", "passes", "attempts", "edge_exempt", "leftovers")}
         await db[ato.BOARDS].update_one(
             {"_id": board_id},
             {"$set": {"layout": {"placed": placed.get("placed"),

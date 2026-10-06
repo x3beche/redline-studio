@@ -284,3 +284,127 @@ def test_the_placer_puts_the_free_holes_on_a_held_board_and_packs_as_before(tmp_
     got = _place(packed, {"out": "/work/board.kicad_pcb", "components": comps, "nets": nets,
                           "min_edge": 0.3, "edge_clearance": 0.3})
     assert got["placed"] == 2 and "holes" not in got
+
+
+# ---- a hole that is a part's own: a lying TO-220's tab ----
+
+TO220_UPRIGHT = "/usr/share/kicad/footprints/Package_TO_SOT_THT.pretty/TO-220-3_Vertical.kicad_mod"
+
+
+def _body_hole_owner():
+    """place.py's body_hole_owner, without pcbnew: its source run alone."""
+    import ast
+    import math
+    src = (ROOT / "docker" / "place.py").read_text()
+    tree = ast.parse(src)
+    keep = [n for n in tree.body
+            if (isinstance(n, ast.FunctionDef) and n.name == "body_hole_owner")
+            or (isinstance(n, ast.Assign) and any(getattr(t, "id", "") in ("BODY_REACH", "BODY_SIDE")
+                                                  for t in n.targets))]
+    space = {"math": math}
+    exec(compile(ast.Module(body=keep, type_ignores=[]), "place.py", "exec"), space)
+    return space["body_hole_owner"]
+
+
+# The demo board's Q5 on KiCad's page: three pads in a row, the import's
+# centroid 6.35 mm off them toward the body, the tab hole 17.5 mm out; H2,
+# a mounting hole, 3 mm behind the pads and to the side.
+Q5 = {"pads": {"1": [106.741, 60.259], "2": [109.281, 60.259], "3": [111.821, 60.259]},
+      "at": [109.281, 53.909]}
+R1 = {"pads": {"1": [30.0, 30.0], "2": [31.65, 30.0]}, "at": [30.825, 30.0]}
+
+
+def test_the_tab_hole_is_the_lying_parts_and_a_mounting_hole_nobodys():
+    owner = _body_hole_owner()
+    parts = {"Q5": Q5, "R1": R1}
+    assert owner({"at": [109.281, 42.733]}, parts) == "Q5"          # the tab hole
+    assert owner({"at": [113.472, 63.307]}, parts) is None          # H2, behind the pads
+    assert owner({"at": [109.281, 20.0]}, parts) is None            # far beyond the body
+    assert owner({"at": [125.0, 42.733]}, parts) is None            # off to the side
+    # A part whose centroid is over its pads owns no far hole.
+    assert owner({"at": [30.825, 20.0]}, parts) is None
+
+
+@pytest.mark.skipif(not _have_kicad(), reason="no KiCad container here")
+def test_a_lying_parts_tab_hole_goes_in_the_part_and_its_courtyard_lies_with_it(tmp_path):
+    comps = [{"ref": "Q5", "value": "IRL540N", "footprint": TO220_UPRIGHT}]
+    nets = [{"name": "G", "nodes": [{"ref": "Q5", "pin": "1"}]}]
+    loop = [{"line": [[95, 35], [125, 35]]}, {"line": [[125, 35], [125, 70]]},
+            {"line": [[125, 70], [95, 70]]}, {"line": [[95, 70], [95, 35]]}]
+    work = tmp_path / "w"
+    work.mkdir()
+    got = _place(work, {"out": "/work/board.kicad_pcb", "components": comps, "nets": nets,
+                        "hold": {"parts": {"Q5": Q5}, "outline": [loop],
+                                 "holes": [{"at": [109.281, 42.733], "d": 3.302},
+                                           {"at": [113.472, 63.307], "d": 2.032}]}})
+    assert [h.get("ref") or ("part", h.get("part")) for h in got["holes"]] == [("part", "Q5"), "H1"]
+    for f in work.iterdir():
+        f.chmod(0o777)
+    subprocess.run(["docker", "run", "--rm", "-v", f"{work}:/work", "-w", "/work", kicad.IMAGE,
+                    "pcb", "drc", "--format", "json", "--severity-all", "--output", "drc.json",
+                    "board.kicad_pcb"], capture_output=True, timeout=120)
+    drc = json.loads((work / "drc.json").read_text())
+    kinds = {v["type"] for v in drc["violations"]}
+    # The upright body's courtyard reached over H2; the lying one's does not.
+    assert "courtyards_overlap" not in kinds and "malformed_courtyard" not in kinds
+    text = (work / "board.kicad_pcb").read_text()
+    q5 = text[text.index('(footprint "TO-220-3_Vertical"'):]
+    q5 = q5[:q5.index('\n\t(footprint ') if '\n\t(footprint ' in q5 else len(q5)]
+    assert '(pad "" np_thru_hole circle' in q5 and "(drill 3.302)" in q5
+
+
+# ---- what a first routing pass leaves over, routed first ----
+
+ROUTE_CHECK = r'''
+import json, sys
+sys.path.insert(0, "/work")
+import pcbnew, route
+MM = 1000000
+b = pcbnew.BOARD()
+for (x0, y0, x1, y1) in [(0, 0, 30, 0), (30, 0, 30, 15), (30, 15, 0, 15), (0, 15, 0, 0)]:
+    s = pcbnew.PCB_SHAPE(b); s.SetShape(pcbnew.SHAPE_T_SEGMENT)
+    s.SetStart(pcbnew.VECTOR2I(x0 * MM, y0 * MM)); s.SetEnd(pcbnew.VECTOR2I(x1 * MM, y1 * MM))
+    s.SetLayer(pcbnew.Edge_Cuts); s.SetWidth(int(0.1 * MM)); b.Add(s)
+nets = {}
+for name in ("A", "B"):
+    n = pcbnew.NETINFO_ITEM(b, name); b.Add(n); nets[name] = n
+for ref, x, y, net in (("A1", 5, 5, "A"), ("A2", 25, 10, "A"), ("B1", 5, 10, "B"), ("B2", 25, 5, "B")):
+    fp = pcbnew.FOOTPRINT(b); fp.SetReference(ref); fp.SetPosition(pcbnew.VECTOR2I(x * MM, y * MM))
+    fp.SetFPID(pcbnew.LIB_ID("", "TP")); fp.SetValue("TP")
+    p = pcbnew.PAD(fp); p.SetShape(pcbnew.PAD_SHAPE_CIRCLE); p.SetAttribute(pcbnew.PAD_ATTRIB_PTH)
+    p.SetLayerSet(p.PTHMask()); p.SetSize(pcbnew.VECTOR2I(int(1.6 * MM), int(1.6 * MM)))
+    p.SetDrillSize(pcbnew.VECTOR2I(int(0.8 * MM), int(0.8 * MM)))
+    p.SetNumber("1"); p.SetPosition(pcbnew.VECTOR2I(x * MM, y * MM)); p.SetNet(nets[net])
+    fp.Add(p); b.Add(fp)
+pcbnew.SaveBoard("/work/board.kicad_pcb", b)
+rules = {"classes": [{"name": "Default", "track": 0.25, "clearance": 0.2, "via": 0.6,
+                      "drill": 0.3, "nets": []}], "board": {"min_edge": 0.3}}
+done, got = route.leftovers_first("/work/board.kicad_pcb", rules, ["A"], 5, 120)
+if done is None:
+    print("FAILED", {k: v for k, v in got.items() if k != "log"}, (got.get("log") or "")[-800:])
+    sys.exit(1)
+left = route.left_unrouted("  Net 'L_SCL' (1 unrouted connection):\n  Net 'p4' (3 unrouted connections):")
+by = {}
+for t in done.GetTracks():
+    by.setdefault(t.GetNetname(), 0); by[t.GetNetname()] += 1
+print(json.dumps({"tracks": by, "unrouted": route.unrouted_count(done), "parsed": left}))
+'''
+
+
+@pytest.mark.skipif(not _have_kicad(), reason="no KiCad container here")
+def test_the_leftovers_are_routed_first_and_kept_through_the_second_pass(tmp_path):
+    work = tmp_path / "w"
+    work.mkdir()
+    shutil.copy(ROOT / "docker" / "route.py", work / "route.py")
+    (work / "check.py").write_text(ROUTE_CHECK)
+    work.chmod(0o777)
+    run = subprocess.run(["docker", "run", "--rm", "-v", f"{work}:/work", "-w", "/work",
+                          "--entrypoint", "python3", kicad.IMAGE, "/work/check.py"],
+                         capture_output=True, text=True, timeout=400)
+    assert "{" in run.stdout, run.stdout[-1500:] + run.stderr[-1500:]
+    got = json.loads(run.stdout[run.stdout.index("{"):])
+    assert got["parsed"] == ["L_SCL", "p4"]
+    # A's tracks, routed alone, survive the second pass's session (which
+    # does not carry a locked wire), and B is routed round them.
+    assert got["tracks"].get("A") and got["tracks"].get("B")
+    assert got["unrouted"] == 0

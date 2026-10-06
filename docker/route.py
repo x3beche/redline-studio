@@ -23,6 +23,7 @@ not, and the rules panel says so.
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -247,6 +248,168 @@ def geometry(board) -> dict:
             "tracks": tracks, "vias": vias, "pads": pads, "parts": parts}
 
 
+def freeroute(board, passes: int, timeout: int, stem: str = "board") -> dict:
+    """board -> DSN -> Freerouting -> SES -> board. Returns the log, the
+    nets Freerouting said it left unrouted, and an error if it failed."""
+    dsn, ses = f"/work/{stem}.dsn", f"/work/{stem}.ses"
+    if not pcbnew.ExportSpecctraDSN(board, dsn):
+        return {"error": "KiCad could not write the DSN"}
+    run = subprocess.run(
+        ["java", "-Djava.awt.headless=true", "-jar", "/opt/freerouting.jar",
+         "-de", dsn, "-do", ses, "-mp", str(passes)],
+        capture_output=True, text=True, timeout=timeout)
+    log = run.stdout + run.stderr
+    try:
+        open(ses).close()
+    except OSError:
+        return {"error": "Freerouting wrote no session", "log": log[-3000:], "rc": run.returncode}
+    if not pcbnew.ImportSpecctraSES(board, ses):
+        return {"error": "KiCad could not read the session back", "log": log[-3000:]}
+    return {"log": log, "left": left_unrouted(log)}
+
+
+def left_unrouted(log: str) -> list[str]:
+    """The nets Freerouting names as still unconnected when it stops:
+    `  Net 'L_SCL' (1 unrouted connection):`."""
+    return sorted(set(re.findall(r"Net '([^']+)' \(\d+ unrouted", log or "")))
+
+
+def unrouted_count(board) -> int:
+    board.BuildConnectivity()
+    return board.GetConnectivity().GetUnconnectedCount(False)
+
+
+def leftovers_first(path: str, rules: dict, nets: list[str], passes: int, timeout: int):
+    """Route the connections a first pass left over *before* everything
+    else, then the rest around them.
+
+    Freerouting routes in its own order, and a net routed early can wall a
+    pad in: on the demo board a ground track run straight down from the
+    header's GND pin, and the 3.3 V beside it, boxed the I2C header's SCL
+    pad in on both layers, so it was the one connection left, on every
+    try - more passes changed nothing, the router stops once its score
+    stops moving. So: the leftover nets alone on the placed board (every
+    other pad still there, on no net, as an obstacle), routed while the
+    board is empty (alone_in_turn); their tracks put back locked -
+    Freerouting routes round a locked track and leaves it be - and the
+    whole board routed round them. The caller keeps whichever came out
+    with fewer unrouted.
+    """
+    first, got = alone_in_turn(path, rules, nets, passes, timeout)
+    if got.get("error"):
+        return None, got
+
+    board = pcbnew.LoadBoard(path)
+    apply_rules(board, rules)
+    for zone in list(board.Zones()):
+        board.Remove(zone)
+    copy_tracks(board, first, locked=True)
+    got = freeroute(board, passes, timeout, "second")
+    if got.get("error"):
+        return None, got
+    # Reading a session back keeps a locked track; should a KiCad not, the
+    # leftovers' tracks go back in. Either way they are let go of after.
+    copy_tracks(board, first, locked=False)
+    for t in board.GetTracks():
+        t.SetLocked(False)
+    return board, got
+
+
+ALONE_ORDERS = 6
+# Rounds of leftovers_first after the first pass. A second round, with
+# what the first left added, was tried on the demo board: twelve minutes
+# a layout and no better (4 -> 3), so one.
+LEFTOVER_ROUNDS = 1
+
+
+def alone_in_turn(path: str, rules: dict, nets: list[str], passes: int, timeout: int):
+    """The leftover nets routed on the otherwise empty board, one at a
+    time, each round the tracks of the ones before it.
+
+    Two of them can still fight over one gap: on the demo board the I2C
+    header's SDA and SCL pads both have to pass a battery holder's peg
+    hole, one on each side of it, and routed together Freerouting sent SCL
+    the side SDA needed and SDA was left - while each alone routed. So
+    the order is tried - each net first in turn, forwards and backwards,
+    up to ALONE_ORDERS of them, a few seconds each on a board this empty -
+    and the first in which every one routes wins, else the one that left
+    fewest."""
+    orders = []
+    for k in range(len(nets)):                     # each net first once, then reversed
+        for o in (tuple(nets[k:] + nets[:k]), tuple(reversed(nets[k:] + nets[:k]))):
+            if o not in orders:
+                orders.append(o)
+    orders = orders[:ALONE_ORDERS]
+    best = None
+    for order in orders:
+        items, failed, got = [], 0, {}
+        for i, net in enumerate(order):
+            keep = set(order[:i + 1])
+            alone = pcbnew.LoadBoard(path)
+            apply_rules(alone, rules)
+            for zone in list(alone.Zones()):
+                alone.Remove(zone)
+            for fp in alone.GetFootprints():
+                for pad in fp.Pads():
+                    if pad.GetNetname() and pad.GetNetname() not in keep:
+                        pad.SetNetCode(0)
+            # The nets before this one: routed, and locked where they are.
+            copy_tracks(alone, items, locked=True)
+            got = freeroute(alone, passes, timeout, "leftovers")
+            if got.get("error"):
+                return [], got
+            items += track_data(t for t in alone.GetTracks() if t.GetNetname() == net)
+            # KiCad's count, not Freerouting's list: Freerouting names a
+            # net whose locked tracks already join it as still unrouted.
+            failed += unrouted_count(alone) > 0
+        if best is None or failed < best[0]:
+            best = (failed, items, got)
+        if not failed:
+            break
+    return best[1], best[2]
+
+
+def track_data(tracks) -> list[dict]:
+    """Tracks and vias as plain data, to outlive the board they came from."""
+    out = []
+    for t in tracks:
+        a, b = t.GetStart(), t.GetEnd()
+        via = t.GetClass() == "PCB_VIA"
+        out.append({"net": t.GetNetname(), "via": via, "layer": t.GetLayer(),
+                    "start": (a.x, a.y), "end": (b.x, b.y),
+                    "width": t.GetWidth(pcbnew.F_Cu) if via else t.GetWidth(),
+                    "drill": t.GetDrillValue() if via else 0})
+    return out
+
+
+def copy_tracks(board, items: list[dict], locked: bool) -> None:
+    """Tracks and vias (track_data) onto a board, on the nets of the same
+    names. One already there - same net, kind, layer and ends - is not
+    doubled."""
+    there = {(t.GetNetname(), t.GetClass() == "PCB_VIA", t.GetLayer(),
+              (t.GetStart().x, t.GetStart().y), (t.GetEnd().x, t.GetEnd().y))
+             for t in board.GetTracks()}
+    for t in items:
+        net = board.FindNet(t["net"])
+        if net is None or (t["net"], t["via"], t["layer"], t["start"], t["end"]) in there:
+            continue
+        if t["via"]:
+            item = pcbnew.PCB_VIA(board)
+            item.SetPosition(pcbnew.VECTOR2I(*t["start"]))
+            item.SetWidth(pcbnew.F_Cu, t["width"])
+            item.SetDrill(t["drill"])
+            item.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+        else:
+            item = pcbnew.PCB_TRACK(board)
+            item.SetStart(pcbnew.VECTOR2I(*t["start"]))
+            item.SetEnd(pcbnew.VECTOR2I(*t["end"]))
+            item.SetWidth(t["width"])
+            item.SetLayer(t["layer"])
+        item.SetNet(net)
+        item.SetLocked(locked)
+        board.Add(item)
+
+
 def main() -> int:
     plan = json.load(sys.stdin)
     path = plan["board"]
@@ -265,30 +428,44 @@ def main() -> int:
     for zone in list(board.Zones()):
         board.Remove(zone)
 
-    dsn, ses = "/work/board.dsn", "/work/board.ses"
-    if not pcbnew.ExportSpecctraDSN(board, dsn):
-        print(json.dumps({"error": "KiCad could not write the DSN"}))
-        return 1
-
     t0 = time.monotonic()
     passes = int(rules.get("route", {}).get("passes", 40))
-    run = subprocess.run(
-        ["java", "-Djava.awt.headless=true", "-jar", "/opt/freerouting.jar",
-         "-de", dsn, "-do", ses, "-mp", str(passes)],
-        capture_output=True, text=True, timeout=plan.get("timeout", 900))
-    routed_s = time.monotonic() - t0
-    log = (run.stdout + run.stderr)[-3000:]
-    try:
-        open(ses).close()
-    except OSError:
-        print(json.dumps({"error": "Freerouting wrote no session",
-                          "log": log, "rc": run.returncode}))
+    timeout = plan.get("timeout", 900)
+    got = freeroute(board, passes, timeout)
+    if got.get("error"):
+        print(json.dumps({k: v for k, v in got.items() if k != "left"}))
         return 1
+    log = got["log"][-3000:]
+    unrouted = unrouted_count(board)
 
-    if not pcbnew.ImportSpecctraSES(board, ses):
-        print(json.dumps({"error": "KiCad could not read the session back",
-                          "log": log}))
-        return 1
+    # What the first pass left: routed first, the rest round it, kept if
+    # it comes out better (leftovers_first) - and again with what that
+    # left, up to LEFTOVER_ROUNDS.
+    second = None
+    # A net that is poured afterwards is joined by the pour where its
+    # tracks are not: not a leftover to route first.
+    poured = {p.get("net") for p in (rules.get("pours") or [])} | \
+        ({rules["pour"].get("net")} if rules.get("pour") else set())
+    left = [n for n in got["left"] if n not in poured]
+    if unrouted and left and plan.get("leftovers", True):
+        second = {"nets": [], "unrouted_before": unrouted, "rounds": 0}
+        for _ in range(LEFTOVER_ROUNDS):
+            second["rounds"] += 1
+            second["nets"] = sorted(set(second["nets"]) | set(left))
+            better, again = leftovers_first(path, rules, second["nets"], passes, timeout)
+            if better is None:
+                second["error"] = again.get("error")
+                break
+            after = unrouted_count(better)
+            if after < unrouted:
+                board, unrouted = better, after
+                log = again["log"][-3000:]
+                second["kept"] = True
+            second["unrouted_after"] = unrouted
+            left = [n for n in again.get("left") or [] if n not in poured]
+            if not unrouted or not left:
+                break
+    routed_s = time.monotonic() - t0
 
     zones = pours(board, rules.get("pours")
                   or ([rules["pour"]] if rules.get("pour") else []))
@@ -296,8 +473,7 @@ def main() -> int:
     vias = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA"]
     length = sum(t.GetLength() for t in tracks) / MM
 
-    board.BuildConnectivity()
-    unrouted = board.GetConnectivity().GetUnconnectedCount(False)
+    unrouted = unrouted_count(board)
 
     out = plan.get("out", path)
     pcbnew.SaveBoard(out, board)
@@ -316,7 +492,7 @@ def main() -> int:
         "length_mm": round(length, 1), "zones": zones,
         "unrouted": unrouted, "route_s": round(routed_s, 1),
         "passes": passes, "pads": pads, "geometry": shape, "log": log[-1500:],
-        "edge_exempt": exempt,
+        "edge_exempt": exempt, "leftovers": second,
     }))
     return 0
 

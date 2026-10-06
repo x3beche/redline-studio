@@ -296,3 +296,96 @@ def test_seat_model_leaves_a_part_without_a_model(monkeypatch):
     monkeypatch.setattr(lcsc, "model_of", model_of)
     row = asyncio.run(lcsc.seat_model(FakeDb({lcsc.PARTS: parts}), "C2"))
     assert row["status"] == "footprint names no model"
+
+
+# ---- a WRL-only part, put into the board's GLB ----
+
+WRL = """#VRML V2.0 utf8
+Shape{
+    appearance Appearance { material Material { diffuseColor 0.25 0.5 0.75 } }
+    geometry IndexedFaceSet {
+        coord DEF co Coordinate { point [ 0 0 0, 0.1 0 0, 0 0.2 0, 0 0 0.04 ] }
+        coordIndex [ 0, 1, 2, -1, 0, 1, 3, -1, 0, 2, 3, 1, -1 ]
+    }
+}
+"""
+
+PCB = """(kicad_pcb (version 20240108)
+\t(general (thickness 1.6))
+\t(footprint "C518800"
+\t\t(layer "F.Cu")
+\t\t(at 50 40 90)
+\t\t(property "Reference" "Q3")
+\t\t(model "/work/3d/C518800.wrl" (offset (xyz 1 0 0)) (scale (xyz 1 1 1)) (rotate (xyz 0 0 0)))
+\t)
+\t(footprint "C82899"
+\t\t(layer "F.Cu")
+\t\t(at 10 10)
+\t\t(property "Reference" "U2")
+\t\t(model "/work/3d/C82899.step" (offset (xyz 0 0 0)) (scale (xyz 1 1 1)) (rotate (xyz 0 0 0)))
+\t)
+)
+"""
+
+
+def _glb(doc: dict, binary: bytes = b"") -> bytes:
+    import struct
+    js = json.dumps(doc).encode()
+    js += b" " * (-len(js) % 4)
+    binary += b"\0" * (-len(binary) % 4)
+    body = struct.pack("<II", len(js), 0x4E4F534A) + js
+    if binary:
+        body += struct.pack("<II", len(binary), 0x004E4942) + binary
+    return struct.pack("<III", 0x46546C67, 2, 12 + len(body)) + body
+
+
+def _read_glb(blob: bytes):
+    import struct
+    pos, doc, binary = 12, None, b""
+    while pos < len(blob):
+        size, kind = struct.unpack_from("<II", blob, pos)
+        if kind == 0x4E4F534A:
+            doc = json.loads(blob[pos + 8:pos + 8 + size])
+        else:
+            binary = blob[pos + 8:pos + 8 + size]
+        pos += 8 + size
+    return doc, binary
+
+
+def test_a_wrl_mesh_goes_into_the_glb_where_kicad_would_put_it():
+    import numpy as np
+    glb = _glb({"asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes": [0]}],
+                "nodes": [{"name": "U2"}], "buffers": [{"byteLength": 0}]})
+    out, added = ms.add_meshes(glb, PCB, {"C518800": WRL, "C82899": WRL})
+    assert added == ["Q3"]                         # U2 is a STEP: KiCad exported it
+    doc, binary = _read_glb(out)
+    node = doc["nodes"][-1]
+    assert node["name"] == "Q3" and doc["scenes"][0]["nodes"][-1] == len(doc["nodes"]) - 1
+    prim = doc["meshes"][node["mesh"]]["primitives"][0]
+    acc = doc["accessors"][prim["attributes"]["POSITION"]]
+    view = doc["bufferViews"][acc["bufferView"]]
+    pts = np.frombuffer(binary, np.float32, acc["count"] * 3, view["byteOffset"]).reshape(-1, 3)
+    # The point at the model's origin: moved 1 mm along its X by the
+    # offset, turned 90 degrees with the footprint - so 1 mm up the page -
+    # and set on the board's top: page (50, 39), 1.6 mm up.
+    assert np.allclose(pts[0] * 1000, [50, 1.6, 39], atol=1e-3)
+    # 0.2 WRL units (0.1 inch each: 0.508 mm) along the model's Y turns to
+    # the page's -X.
+    assert np.allclose(pts[2] * 1000, [50 - 0.508, 1.6, 39], atol=1e-3)
+    idx = doc["accessors"][prim["indices"]]
+    assert idx["count"] == 12                         # two triangles, and a quad fanned into two
+    colour = doc["materials"][prim["material"]]["pbrMetallicRoughness"]["baseColorFactor"]
+    assert colour == [0.25, 0.5, 0.75, 1.0]
+
+
+def test_a_part_missing_its_model_is_asked_again_but_not_every_time():
+    from backend import lcsc
+    fp = '(footprint "X" (model "/tmp/lib.3dshapes/X.wrl" (offset (xyz 0 0 0))))'
+    assert lcsc._model_worth_asking_again({"footprint": fp})
+    assert not lcsc._model_worth_asking_again({"footprint": fp, "artifacts": {"model": {"bytes": 1}}})
+    assert not lcsc._model_worth_asking_again({"footprint": '(footprint "X")'})
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    assert not lcsc._model_worth_asking_again({"footprint": fp, "model_missing_at": now})
+    assert lcsc._model_worth_asking_again({"footprint": fp,
+                                           "model_missing_at": "2020-01-01T00:00:00+00:00"})

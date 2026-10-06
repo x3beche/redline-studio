@@ -878,7 +878,7 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
 
     if not force:
         got = await db[PARTS].find_one({"_id": lcsc})
-        if got and got.get("footprint"):
+        if got and got.get("footprint") and not _model_worth_asking_again(got):
             return got
 
     # easyeda2kicad as it can be started here - the venv's own script in the
@@ -969,6 +969,11 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
                 _keep_file(lcsc, "component.json", raw)
         except (OSError, ValueError, AttributeError):
             pass
+        if not doc.get("model_kind"):
+            # Said on the part, so the next board does not ask again at once
+            # (_model_worth_asking_again).
+            await db[PARTS].update_one({"_id": lcsc},
+                                       {"$set": {"model_missing_at": doc["at"]}})
         if doc.get("model_kind"):
             try:
                 await seat_model(db, lcsc, component)
@@ -978,6 +983,30 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+# A part fetched with its footprint but without the 3D model the footprint
+# names - the model's download failed that once - was kept like that for
+# good: the demo board's U1 (C2925423) had no body in any board's 3D view,
+# and asked again it came at once. So such a part is fetched again, at most
+# once a day: EasyEDA may simply have no model for it.
+MODEL_RETRY_S = 24 * 3600
+
+
+def _model_worth_asking_again(doc: dict) -> bool:
+    if (doc.get("artifacts") or {}).get("model") or doc.get("model_step") or doc.get("model_wrl"):
+        return False
+    from . import modelseat
+    if not modelseat.has_model(doc.get("footprint") or ""):
+        return False                 # the footprint names no model: none to miss
+    last = doc.get("model_missing_at")
+    if not last:
+        return True
+    try:
+        then = datetime.fromisoformat(last)
+    except (TypeError, ValueError):
+        return True
+    return (datetime.now(timezone.utc) - then).total_seconds() > MODEL_RETRY_S
 
 
 def _keep_file(lcsc: str, name: str, blob: bytes) -> None:

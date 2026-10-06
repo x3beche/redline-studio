@@ -546,6 +546,11 @@ def _print_board(out: dict) -> None:
     print(f"  routing    {r.get('unrouted', '?')} unrouted, {r.get('tracks', '?')} segments, "
           f"{r.get('vias', '?')} vias, {r.get('length_mm', '?')} mm"
           + (f", {tried} layouts tried" if tried > 1 else ""))
+    lo = r.get("leftovers")
+    if lo:
+        print(f"  leftovers  {', '.join(lo.get('nets') or [])} routed first, then the rest: "
+              f"{lo.get('unrouted_before')} -> {lo.get('unrouted_after', '?')} unrouted"
+              + (" (kept)" if lo.get("kept") else " (first pass kept)"))
     print(f"  DRC        {d.get('error_count', '?')} errors, {d.get('unconnected', '?')} unconnected, "
           f"{d.get('warning_count', '?')} warnings")
     for x in (d.get("examples") or []) + (erc.get("examples") or []):

@@ -220,6 +220,7 @@ class Part:
         self.pins: list[dict] = []    # [{number, name}]
         self.land: dict | None = None
         self.added_pins: list[str] = []
+        self.pad_count: dict[str, int] = {}   # pad number -> pads the footprint has under it
         self.problems: list[str] = []
         self.notes: list[str] = []
 
@@ -275,6 +276,7 @@ def _take(p: Part, look: dict, how: str, guessed: bool, why: str) -> None:
     p.footprint = look["title"]
     p.name = _ident(look["mpn"])
     p.land = look["fit"]
+    p.pad_count = {k: len(v) for k, v in look["fp"].items()}
     numbers = {pin["number"] for pin in look["pins"]}
     p.pins = list(look["pins"])
     # A pad the footprint has and the symbol does not - an exposed pad, a
@@ -567,26 +569,43 @@ def write(title: str, parts: list[Part], graph: dict, pads: dict, origin: str,
     # One component block per part number. Pins that share a name share a
     # signal only where the board puts them on one net: otherwise they are
     # kept apart, so writing the block cannot join two nets.
-    blocks: dict[str, list[Part]] = defaultdict(list)
+    #
+    # A pad number the footprint gives to several pads - a switch's
+    # mechanical legs, all "4" - is one pin to atopile, and every pad under
+    # it lands on the pin's net. Where the import has that pad on no net,
+    # the pin is left out of the block altogether: the legs stay apart, on
+    # no net, as they were, instead of becoming a net nobody drew that the
+    # router then has to join. A block is per part number *and* per the
+    # pins left out, so two of the same part wired differently stay right.
+    def legs_left_open(p: Part) -> frozenset:
+        return frozenset(num for num, n in p.pad_count.items()
+                         if n > 1 and wired.get((p.ref, num)) is None)
+
+    blocks: dict[tuple, list[Part]] = defaultdict(list)
     for p in parts:
-        blocks[p.lcsc].append(p)
+        blocks[(p.lcsc, legs_left_open(p))].append(p)
     names = Names()
     signal_of: dict[tuple[str, str], str] = {}        # (ref, pad) -> signal in its block
     guessed_n = 0
     lines.append("# ---------------- parts ----------------")
-    for code, group in blocks.items():
+    for (code, left_open), group in blocks.items():
         head = group[0]
         block = names.take(head.name or _ident(code))
         for p in group:
             p.name = block
         pin_names: dict[str, list[str]] = defaultdict(list)
         for pin in head.pins:
-            pin_names[pin["name"].strip()].append(pin["number"])
+            if pin["number"] not in left_open:
+                pin_names[pin["name"].strip()].append(pin["number"])
         sig_for: dict[str, str] = {}
         taken = Names()
         body = []
         for pin in head.pins:
             raw, num = pin["name"].strip(), pin["number"]
+            if num in left_open:
+                body.append(f"    # pin {num}: {head.pad_count[num]} pads on the footprint, on no "
+                            "net in the import - left unconnected, not joined")
+                continue
             ident = _ident(lcsc._ident(raw, f"p{num}")) if raw else f"p{num}"
             same = pin_names[raw]
             one_net = len(same) > 1 and all(
