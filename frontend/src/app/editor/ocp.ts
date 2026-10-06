@@ -4,6 +4,8 @@ import type { CameraState } from '../api';
 /** OCP CAD Viewer itself (three-cad-viewer): the same version and wire
  *  format the VS Code extension uses; Python produces the payload. */
 export const TREE_W = 240;
+/** Where the layout turns into the phone's (the same width as styles.css). */
+const PHONE = '(max-width: 768px)';
 
 export class OcpViewer {
   display!: Display;
@@ -98,9 +100,14 @@ export class OcpViewer {
     // you can see. The log's height comes off first.
     const log = this.container.querySelector('.tcv-log') as HTMLElement | null;
     const logH = log ? log.offsetHeight + 8 : 0;
-    const ch = Math.max(h - chromeH - logH, 240);
+    // On a phone the tree is not beside the view but under it (styles.css,
+    // "PHONES"): the view takes the whole width and a little over half of
+    // what is left under the toolbar, the tree and the log the rest.
+    const phone = matchMedia(PHONE).matches;
+    const ch = phone ? Math.max(Math.round((h - chromeH) * 0.55), 200)
+                     : Math.max(h - chromeH - logH, 240);
 
-    let cw = Math.max(w - TREE_W, 320);
+    let cw = phone ? Math.max(w - 8, 200) : Math.max(w - TREE_W, 320);
     this.viewer.resizeCadView(cw, TREE_W, ch, false);
 
     // The viewer adds its own borders to the width it is given, so the canvas
@@ -112,7 +119,7 @@ export class OcpViewer {
     if (cell && can) {
       const over = Math.round(can.width - cell.width);
       if (Math.abs(over) > 1) {
-        cw = Math.max(cw - over, 320);
+        cw = Math.max(cw - over, phone ? 200 : 320);
         this.viewer.resizeCadView(cw, TREE_W, ch, false);
       }
     }

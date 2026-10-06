@@ -512,6 +512,24 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.remember('queue', this.queueShut());
   }
 
+  /** A phone's width: there the two side columns are drawers over the
+   *  page rather than columns beside it (styles.css, "PHONES"). */
+  static readonly PHONE = '(max-width: 768px)';
+  private phone(): boolean { return matchMedia(Editor.PHONE).matches; }
+
+  /** On a phone the catalog gives the screen back once something is
+   *  picked in it; wider, it stays as it was. */
+  phoneShut() {
+    if (this.phone() && !this.collapsed()) this.collapsed.set(true);
+  }
+
+  /** A tap beside an open drawer closes it. Not remembered: on a phone the
+   *  drawers start shut anyway. */
+  shutDrawers() {
+    this.collapsed.set(true);
+    this.queueShut.set(true);
+  }
+
   gb(n: number): string { return (n / 1e9).toFixed(1) + ' GB'; }
 
   /** Compact gauges shown while the panel is collapsed. */
@@ -1164,6 +1182,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (typeof saved['chat'] === 'boolean') this.chatOpen.set(saved['chat'] as boolean);
     if (typeof saved['catalog'] === 'boolean') this.collapsed.set(saved['catalog'] as boolean);
     if (typeof saved['queue'] === 'boolean') this.queueShut.set(saved['queue'] as boolean);
+    // A phone opens on the room, both drawers shut, whatever was left open.
+    if (this.phone()) { this.collapsed.set(true); this.queueShut.set(true); }
     if (Array.isArray(saved['folders'])) {
       this.shutFolders.set(new Set(saved['folders'] as string[]));
     }

@@ -66,3 +66,15 @@
   letter-spacing: .06em; line-height: 14px; vertical-align: 1px; border-radius: 3px;
   color: var(--accent); border: 1px solid var(--accent); opacity: .85; }
 .tcv-tools-top .tcv-tools-mcp { margin-left: 0; }
+
+/* Phones: the list over the tool, a short scrolling strip of it. */
+@media (max-width: 768px) {
+  :host > .tcv-room { flex-direction: column; }
+  .tcv-tools-body { min-height: 0; }
+  .tcv-tools-list { width: auto; max-height: 36%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .tcv-tools-item { min-height: 44px; }
+  .tcv-tools-chip { min-height: 32px; padding: 4px 10px; }
+  .tcv-tools-head { flex-wrap: wrap; padding: 6px 10px; }
+  .tcv-tools-meta { margin-left: 0; flex-wrap: wrap; white-space: normal; }
+  .tcv-tools-stage[data-size="narrow"] > * { max-width: 100%; }
+}

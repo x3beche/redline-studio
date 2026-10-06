@@ -3602,3 +3602,424 @@ section > .tcv-mcu-more summary { text-transform: uppercase; }
 .tcv-menu-chart { width: 14px; height: 14px; flex: none; }
 .tcv-menu-chart rect { fill: var(--accent); }
 .tcv-menu-chart path { fill: none; stroke: var(--ink-dim); stroke-width: 1.2; stroke-linecap: round; }
+
+/* ============================ PHONES ============================
+   Everything from here down is for a screen 768px wide or less, and only
+   that: wider, none of it applies and the application is laid out exactly
+   as above. The desktop is the instrument; this makes it usable from a
+   phone without changing it.
+
+   The shell: the catalog and the queue are drawers over the page instead
+   of columns beside it, opened by the two buttons either side of the tabs
+   (editor.html, .tcv-mtop) and closed by a tap beside them (.tcv-scrim).
+   The tabs are one row that scrolls sideways. */
+.tcv-mtop { display: contents; }
+.tcv-mnav, .tcv-scrim { display: none; }
+
+@media (max-width: 768px) {
+  .tcv-shell { gap: 0; padding: 4px; }
+  .tcv-shell aside.tcv-fold-shut { display: none; }
+  .tcv-shell aside.tcv-fold-l:not(.tcv-fold-shut),
+  .tcv-shell aside.tcv-fold:not(.tcv-fold-shut) {
+    position: fixed; top: 0; bottom: 0; z-index: 480;
+    width: min(320px, 88vw) !important; max-width: min(320px, 88vw) !important;
+    border-radius: 0; box-shadow: var(--shadow-soft);
+    transition: none;
+  }
+  .tcv-shell aside.tcv-fold-l:not(.tcv-fold-shut) { left: 0; }
+  .tcv-shell aside.tcv-fold:not(.tcv-fold-shut) { right: 0; }
+  .tcv-fold-l:not(.tcv-fold-shut) > *, .tcv-fold:not(.tcv-fold-shut) > * { min-width: 0; }
+  .tcv-scrim { display: block; position: fixed; inset: 0; z-index: 470; background: var(--shade); }
+  .tcv-edge { display: none; }
+
+  .tcv-mtop { display: flex; align-items: flex-end; gap: 2px; min-width: 0; flex: none; }
+  .tcv-mnav {
+    position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center;
+    width: 40px; height: 40px; margin-bottom: 2px; padding: 0;
+    color: var(--ink-dim); background: none; border: 1px solid transparent; border-radius: 6px; cursor: pointer;
+  }
+  .tcv-mnav svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round; }
+  .tcv-mnav[data-on] { color: var(--ink); border-color: var(--line); background: var(--surface-2); }
+  .tcv-mnav-n { position: absolute; top: 3px; right: 2px; min-width: 15px; padding: 0 3px; border-radius: 8px;
+    font: 700 9.5px/15px 'IBM Plex Mono', ui-monospace, monospace; text-align: center;
+    background: var(--accent); color: var(--ink-on-accent); }
+
+  /* The tab row: one line. What does not fit goes under More (topbar.ts
+     measures it), so the row itself does not scroll - a scrolling row would
+     clip the More menu. The chip under your name stays at its right end as
+     only its initial, and its menu is held to the screen. */
+  .tcv-mtop > header { flex: 1 1 auto; min-width: 0; }
+  .tcv-mtop > header > .tcv-tab { flex: none; min-height: 40px; }
+  .tcv-mtop > header > .tcv-tab-notes, .tcv-mtop > header > .tcv-tab-tools,
+  .tcv-mtop > header > .tcv-tab-end { margin-left: 0; margin-right: 0; }
+  .tcv-mtop > header > .tcv-user-end {
+    position: static; flex: none; align-self: stretch; margin-left: auto; padding-left: 4px;
+  }
+  .tcv-user-end .tcv-user { height: 40px; padding: 0 4px; gap: 0; }
+  .tcv-user-end .tcv-user-text, .tcv-user-end .tcv-user-caret { display: none; }
+  .tcv-user-end .tcv-user-dot { width: 28px; height: 28px; }
+  .tcv-user-end .tcv-user-gear { width: 40px; }
+  .tcv-user-menu { position: fixed; top: 48px; right: 8px; max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 60px); overflow-y: auto; }
+}
+
+/* PHONES, the rooms. */
+@media (max-width: 768px) {
+  /* Something to put a finger on: 40px at the least. */
+  .tcv-btn, button.tcv-chip, select.tcv-field, input.tcv-field:is([type="text"], [type="search"], [type="number"], :not([type])) {
+    min-height: 40px;
+  }
+  /* 16px in a field you type into, or the phone zooms the page in to read it. */
+  input:is([type="text"], [type="search"], [type="number"], [type="email"], [type="password"], [type="url"], :not([type])),
+  select, textarea { font-size: 16px !important; }
+
+  /* Notes, Command Code, Files: the list over the page, not beside it. */
+  .tcv-room:has(> .tcv-notes-side) { flex-direction: column; }
+  .tcv-room > .tcv-notes-side { width: auto; flex: none; max-height: 34%; }
+  .tcv-room > .tcv-notes-main, .tcv-room > .tcv-cc-main { flex: 1 1 0%; min-height: 0; padding: 8px 10px; }
+  .tcv-notes-item { min-height: 44px; }
+  .tcv-cc-msg[data-role="user"] { max-width: 88%; }
+  .tcv-cc-model { max-width: 100%; }
+  .tcv-cc-head { flex-wrap: wrap; }
+  .tcv-files-row { flex-wrap: wrap; }
+  .tcv-files-actions { flex-wrap: wrap; width: 100%; justify-content: flex-end; }
+  .tcv-files-opts { flex-wrap: wrap; }
+  .tcv-files-send { max-width: 100%; }
+
+  /* Analytics: the bar wraps, the grid is two across or one. */
+  .tcv-dash-bar { flex-wrap: wrap; gap: 6px 8px; padding: 6px 8px; }
+  .tcv-dash-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .tcv-dash-seg button { min-height: 36px; padding: 3px 9px; flex: none; }
+  .tcv-dash-meta { flex-basis: 100%; }
+  .tcv-dash-body { padding: 4px 8px 16px; }
+  .tcv-dash-grid { gap: 8px; }
+  .tcv-dash-grid > .c2, .tcv-dash-grid > .c3 { grid-column: span 6; }
+  .tcv-dash-grid > .c4, .tcv-dash-grid > .c5, .tcv-dash-grid > .c6,
+  .tcv-dash-grid > .c7, .tcv-dash-grid > .c8 { grid-column: span 12; }
+  .tcv-stat b { font-size: 18px; overflow-wrap: anywhere; }
+  .tcv-panel-d { overflow-x: auto; }
+  /* A table keeps its columns readable and scrolls inside its panel. */
+  .tcv-dash-table { table-layout: auto; }
+  .tcv-dash-table td { max-width: 220px; }
+  .tcv-items { grid-template-columns: minmax(0, 1fr); }
+  .tcv-dash-rowtitle { white-space: normal; }
+  .tcv-dash-row { flex-wrap: wrap; min-height: 40px; }
+}
+
+/* PHONES, the frame every room shares (rooms/frame.ts) and the 3D viewer
+   it copies: the view on top at the full width, the open tab under it, the
+   log last. The toolbar wraps onto a second line rather than scroll, so
+   the menus that drop from its buttons are not clipped. editor/ocp.ts
+   sizes the 3D canvas to match. */
+@media (max-width: 768px) {
+  .tcv_cad_toolbar { flex-wrap: wrap; row-gap: 2px; height: auto !important; }
+  .tcv-frame-bar { min-height: 0; }
+  .tcv-frame-body, .tcv_cad_body {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 55fr) minmax(0, 45fr) auto !important;
+  }
+  .tcv-frame-view { grid-area: 1 / 1 / 2 / 2; margin: 2px 0 6px; }
+  .tcv-frame-side { grid-area: 2 / 1 / 3 / 2; margin-right: 0 !important; }
+  .tcv-frame-body > .tcv-log, .tcv_cad_body > .tcv-log { grid-area: 3 / 1 / 4 / 2; }
+  .tcv-log .tcv-log-body { height: 96px; }
+  .tcv-frame-side .tcv_tab { min-height: 36px; }
+
+  .tcv_cad_body { grid-template-rows: auto minmax(0, 1fr) auto !important; }
+  .tcv_cad_view { grid-area: 1 / 1 / 2 / 2; }
+  .tcv_cad_navigation { grid-area: 2 / 1 / 3 / 2; width: 100% !important; padding-right: 0; margin-top: 6px; }
+}
+
+/* ==== COMMAND CODE, the room's own look (rooms/commandcode.ts) =============
+   Owned by the Command Code room; kept in one block at the end so it can be
+   read and changed on its own. Line icons in the top bar's hand; controls
+   and cards after the Settings pages (6px corners, a quiet --surface-2
+   well, the accent for what is on). The list as clean rows with actions on
+   hover, the conversation in a centred reading column - the person's lines
+   as tinted bubbles on the right, the model's answers full width - and a
+   composer with the model as a chip and a round send button. Phones: the
+   list is a drawer, every target 40px. */
+
+/* ---- shared bits -------------------------------------------------------- */
+.tcv-cc-ico { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round; }
+.tcv-cc-ico .fill { fill: currentColor; stroke: none; }
+.tcv-cc-dim { color: var(--ink-dim); }
+.tcv-cc-pad { margin: 0; padding: 10px; font-size: 12px; }
+/* An icon button: 32px to put a pointer on, quiet until it is wanted. */
+.tcv-cc-ib { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 32px; height: 32px; padding: 0 8px; font-size: 12px; color: var(--ink-dim); background: none;
+  border: 1px solid transparent; border-radius: 6px; cursor: pointer; transition: color .12s, background .12s, border-color .12s; }
+.tcv-cc-ib:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
+.tcv-cc-ib:active:not(:disabled) { background: var(--pressed); }
+.tcv-cc-ib:focus-visible, .tcv-cc-send:focus-visible, .tcv-cc-chip:focus-visible, .tcv-cc-newbtn:focus-visible,
+.tcv-cc-starter:focus-visible, .tcv-cc-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tcv-cc-ib:disabled { opacity: .4; cursor: not-allowed; }
+.tcv-cc-ib.on { color: var(--accent); }
+.tcv-cc-ib.tcv-cc-danger:hover:not(:disabled), .tcv-cc-ib.armed, .tcv-cc-menu .tcv-cc-danger { color: var(--danger); }
+.tcv-cc-ib.armed { border-color: var(--danger); }
+.tcv-cc-textbtn { padding: 2px 6px; font-size: 11.5px; color: var(--ink-dim); background: none; border: 0; border-radius: 4px;
+  cursor: pointer; }
+.tcv-cc-textbtn:hover { color: var(--ink); background: var(--hover); }
+.tcv-cc-kbd, .tcv-cc-hint kbd { font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; }
+/* A segmented switch, as on the Settings pages. */
+.tcv-cc-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.tcv-cc-seg button { padding: 4px 10px; font-size: 11.5px; white-space: nowrap; color: var(--ink-dim); background: var(--surface-2);
+  border: 0; cursor: pointer; }
+.tcv-cc-seg button + button { border-left: 1px solid var(--line); }
+.tcv-cc-seg button:hover { color: var(--ink); background: var(--hover); }
+.tcv-cc-seg button.on { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-cc-seg-full { display: flex; }
+.tcv-cc-seg-full button { flex: 1; }
+/* A search field with its magnifier. */
+.tcv-cc-search { position: relative; display: flex; align-items: center; }
+.tcv-cc-search .tcv-cc-ico { position: absolute; left: 9px; width: 14px; height: 14px; color: var(--ink-dim); pointer-events: none; }
+.tcv-cc-search input { width: 100%; height: 32px; padding: 0 9px 0 30px; font-size: 12.5px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; outline: none; }
+.tcv-cc-search input:focus { border-color: var(--accent); }
+
+/* ---- the list ----------------------------------------------------------- */
+.tcv-cc-side { background: var(--surface-2); }
+.tcv-cc-sidehead { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px 10px 6px; }
+.tcv-cc-newbtn { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; font-size: 13px; font-weight: 600;
+  color: var(--ink-bright); background: var(--accent-deep); border: 1px solid var(--accent); border-radius: 6px; cursor: pointer;
+  transition: background .12s, transform .06s; }
+.tcv-cc-newbtn:hover { background: var(--accent); }
+.tcv-cc-newbtn:active { transform: translateY(1px); }
+.tcv-cc-newbtn .tcv-cc-kbd { margin-left: auto; opacity: .75; font-weight: 400; }
+.tcv-cc-filterrow { display: flex; align-items: center; gap: 6px; }
+.tcv-cc-selbar { display: flex; align-items: center; gap: 2px; padding: 2px 2px 2px 8px; font-size: 12px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.tcv-cc-check { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.tcv-cc-check input, .tcv-cc-itemcheck { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.tcv-cc-list { padding: 0 6px 12px; }
+.tcv-cc-group { padding: 12px 8px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-dim); }
+.tcv-cc-item { position: relative; display: flex; align-items: center; gap: 9px; min-height: 52px; padding: 7px 10px;
+  border-radius: 6px; cursor: pointer; outline: none; }
+.tcv-cc-item + .tcv-cc-item { margin-top: 1px; }
+.tcv-cc-item:hover { background: var(--hover); }
+.tcv-cc-item[data-on] { background: var(--surface); box-shadow: inset 2px 0 0 var(--accent); }
+.tcv-cc-item[data-sel] { background: var(--pressed); }
+.tcv-cc-itemtext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tcv-cc-itemtop { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.tcv-cc-itemtitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px;
+  font-weight: 600; color: var(--ink); }
+.tcv-cc-itemwhen { flex: none; font-size: 10.5px; color: var(--ink-dim); }
+.tcv-cc-itemsnip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--ink-dim); }
+.tcv-cc-pinmark { width: 12px; height: 12px; color: var(--ink-dim); }
+.tcv-cc-itemacts { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); display: none; gap: 1px; padding: 2px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px var(--shadow-soft); }
+.tcv-cc-item:hover .tcv-cc-itemacts, .tcv-cc-item:focus-within .tcv-cc-itemacts { display: inline-flex; }
+.tcv-cc-itemacts .tcv-cc-ib { min-width: 28px; height: 28px; padding: 0 6px; }
+.tcv-cc-listempty { margin: 18px 10px; font-size: 12px; line-height: 1.5; color: var(--ink-dim); text-align: center; }
+
+/* ---- the conversation: header ------------------------------------------- */
+.tcv-cc-main { position: relative; padding: 0; gap: 0; overflow: hidden; }
+.tcv-cc-bar { flex: none; display: flex; align-items: center; gap: 6px; min-height: 48px; padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--line); }
+.tcv-cc-bar .tcv-cc-title { flex: 1; min-width: 0; height: 32px; padding: 0 8px; font-size: 14px; font-weight: 600; color: var(--ink);
+  background: none; border: 1px solid transparent; border-radius: 6px; outline: none; text-overflow: ellipsis; }
+.tcv-cc-bar .tcv-cc-title:hover { border-color: var(--line); }
+.tcv-cc-bar .tcv-cc-title:focus { border-color: var(--accent); background: var(--surface-2); }
+.tcv-cc-baracts { flex: none; display: flex; align-items: center; gap: 2px; }
+.tcv-cc-burger { display: none; }
+.tcv-cc-menuwrap { position: relative; flex: none; }
+.tcv-cc-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 220px; padding: 4px;
+  display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 10px 28px var(--shadow-hard); }
+.tcv-cc-menu button { display: flex; align-items: center; gap: 9px; min-height: 32px; padding: 0 10px; text-align: left;
+  font-size: 12.5px; color: var(--ink); background: none; border: 0; border-radius: 5px; cursor: pointer; }
+.tcv-cc-menu button .tcv-cc-ico { color: var(--ink-dim); }
+.tcv-cc-menu button:hover:not(:disabled) { background: var(--hover); }
+.tcv-cc-menu button:disabled { opacity: .45; cursor: not-allowed; }
+.tcv-cc-menu .tcv-cc-danger .tcv-cc-ico { color: var(--danger); }
+.tcv-cc-menu hr { margin: 4px 2px; border: 0; border-top: 1px solid var(--line); }
+
+/* ---- the conversation: lines -------------------------------------------- */
+.tcv-cc-scroll { display: block; padding: 0; }
+.tcv-cc-col { max-width: 820px; margin: 0 auto; padding: 18px 20px 24px; display: flex; flex-direction: column; gap: 22px;
+  min-height: 100%; box-sizing: border-box; }
+.tcv-cc-row { position: relative; display: flex; gap: 12px; align-items: flex-start; }
+.tcv-cc-row[data-role="user"] { flex-direction: row-reverse; }
+.tcv-cc-av { flex: none; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%;
+  font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--ink); background: var(--surface-2);
+  border: 1px solid var(--line); }
+.tcv-cc-av[data-me] { color: var(--ink-bright); background: var(--surface); }
+.tcv-cc-av[data-role="assistant"] { color: var(--ink-dim); }
+.tcv-cc-av .tcv-cc-ico { width: 17px; height: 17px; }
+.tcv-cc-rowmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.tcv-cc-row[data-role="user"] .tcv-cc-rowmain { align-items: flex-end; }
+.tcv-cc-rowhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; min-height: 18px; font-size: 11px;
+  color: var(--ink-dim); }
+.tcv-cc-rowhead b { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.tcv-cc-row[data-role="user"] .tcv-cc-rowhead { flex-direction: row-reverse; }
+.tcv-cc-meta { display: inline-flex; flex-wrap: wrap; gap: 8px; opacity: 0; transition: opacity .15s;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px; }
+.tcv-cc-row:hover .tcv-cc-meta { opacity: 1; }
+.tcv-cc-bubble { max-width: min(78%, 620px); padding: 9px 13px; font-size: 13.5px; line-height: 1.55; color: var(--ink);
+  white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 14px 4px 14px 14px; }
+.tcv-cc-row[data-editing] .tcv-cc-bubble { opacity: .55; border-style: dashed; }
+.tcv-cc-errline { padding: 6px 10px; font-size: 12px; color: var(--danger); background: var(--surface-2);
+  border-left: 3px solid var(--danger); border-radius: 4px; }
+/* The model's answer: Markdown that reads. */
+.tcv-cc-answer { font-size: 13.5px; line-height: 1.65; color: var(--ink); overflow-wrap: anywhere; }
+.tcv-cc-answer p { margin: 0 0 .75em; }
+.tcv-cc-answer h1, .tcv-cc-answer h2, .tcv-cc-answer h3, .tcv-cc-answer h4 { margin: 1.1em 0 .45em; line-height: 1.3;
+  color: var(--ink-bright); font-weight: 600; }
+.tcv-cc-answer h1 { font-size: 1.3em; } .tcv-cc-answer h2 { font-size: 1.18em; } .tcv-cc-answer h3 { font-size: 1.06em; }
+.tcv-cc-answer ul, .tcv-cc-answer ol { margin: 0 0 .75em; padding-left: 1.4em; }
+.tcv-cc-answer li { margin: .25em 0; }
+.tcv-cc-answer li::marker { color: var(--ink-dim); }
+.tcv-cc-answer strong { color: var(--ink-bright); }
+.tcv-cc-answer code { padding: .1em .35em; font-size: .9em; border-radius: 4px; background: var(--surface-2); }
+.tcv-cc-answer pre { position: relative; margin: .4em 0 .9em; padding: 12px 14px; font-size: 12.5px; line-height: 1.55;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+.tcv-cc-answer pre code { padding: 0; background: none; font-size: inherit; }
+.tcv-cc-answer blockquote { margin: 0 0 .75em; padding: 2px 12px; color: var(--ink-dim); border-left: 3px solid var(--line); }
+.tcv-cc-answer table { margin: 0 0 .9em; border-collapse: collapse; font-size: 12.5px; }
+.tcv-cc-answer th, .tcv-cc-answer td { padding: 5px 9px; border: 1px solid var(--line); }
+.tcv-cc-answer th { background: var(--surface-2); text-align: left; }
+.tcv-cc-answer > :last-child { margin-bottom: 0; }
+.tcv-cc-more .tcv-cc-ico { stroke-width: 3.2; }
+.tcv-cc-codecopy { position: absolute; top: 6px; right: 6px; padding: 2px 8px; font-size: 11px;
+  color: var(--ink-dim); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; cursor: pointer;
+  opacity: 0; transition: opacity .12s; }
+.tcv-cc-answer pre:hover .tcv-cc-codecopy, .tcv-cc-codecopy:focus-visible { opacity: 1; }
+.tcv-cc-codecopy:hover { color: var(--ink); background: var(--hover); }
+/* A line's small toolbar, on hover. */
+.tcv-cc-tools { display: flex; align-items: center; gap: 1px; min-height: 28px; margin-top: -2px; opacity: 0;
+  transition: opacity .12s; }
+.tcv-cc-row:hover .tcv-cc-tools, .tcv-cc-tools:focus-within { opacity: 1; }
+.tcv-cc-tools .tcv-cc-ib { min-width: 28px; height: 28px; padding: 0 6px; }
+.tcv-cc-regen { overflow: hidden; }
+.tcv-cc-regen select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.tcv-cc-dots { display: flex; gap: 4px; padding: 6px 0; }
+.tcv-cc-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-dim); animation: tcv-cc-dot 1.2s infinite ease-in-out; }
+.tcv-cc-dots i:nth-child(2) { animation-delay: .15s; }
+.tcv-cc-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes tcv-cc-dot { 0%, 80%, 100% { opacity: .25; transform: none; } 40% { opacity: 1; transform: translateY(-3px); } }
+
+/* ---- an empty conversation ---------------------------------------------- */
+.tcv-cc-hello { margin: auto 0; padding: 12px 0; text-align: center; }
+.tcv-cc-hello-mark { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px;
+  margin-bottom: 10px; color: var(--ink-dim); background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; }
+.tcv-cc-hello-mark .tcv-cc-ico { width: 24px; height: 24px; }
+.tcv-cc-hello h2 { margin: 0 0 6px; font-size: 18px; font-weight: 600; color: var(--ink-bright); }
+.tcv-cc-hello p { max-width: 460px; margin: 0 auto; font-size: 12.5px; line-height: 1.55; color: var(--ink-dim); }
+.tcv-cc-starters { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 18px; text-align: left; }
+.tcv-cc-starter { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; font-size: 12.5px; line-height: 1.45;
+  color: var(--ink); text-align: left; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px;
+  cursor: pointer; transition: border-color .12s, background .12s; }
+.tcv-cc-starter:hover { border-color: var(--ink-dim); background: var(--hover); }
+.tcv-cc-starter-area { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
+.tcv-cc-starter-area .tcv-cc-ico { width: 14px; height: 14px; }
+.tcv-cc-starter-text { color: var(--ink); }
+
+/* ---- the composer ------------------------------------------------------- */
+.tcv-cc-alert { flex: none; display: flex; align-items: center; gap: 8px; max-width: 780px; width: calc(100% - 40px);
+  margin: 0 auto 8px; padding: 2px 4px 2px 12px; font-size: 12px; color: var(--danger); background: var(--surface-2);
+  border: 1px solid var(--danger); border-radius: 6px; box-sizing: border-box; }
+.tcv-cc-alert span { flex: 1; min-width: 0; }
+.tcv-cc-composer { flex: none; display: flex; flex-direction: column; max-width: 780px; width: calc(100% - 40px);
+  margin: 0 auto 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 4px 18px var(--shadow-soft); box-sizing: border-box; transition: border-color .12s; }
+.tcv-cc-composer.focus { border-color: var(--accent); }
+.tcv-cc-composer.editing { border-color: var(--warn); }
+.tcv-cc-composer textarea { display: block; width: 100%; min-height: 46px; max-height: 260px; padding: 13px 15px 4px; resize: none;
+  font: inherit; font-size: 13.5px; line-height: 1.5; color: var(--ink); background: none; border: 0; outline: none; box-sizing: border-box; }
+.tcv-cc-composer textarea::placeholder { color: var(--ink-dim); }
+.tcv-cc-editbar { display: flex; align-items: center; gap: 7px; padding: 7px 8px 0 14px; font-size: 11.5px; color: var(--warn); }
+.tcv-cc-editbar .tcv-cc-ico { width: 14px; height: 14px; }
+.tcv-cc-compbar { display: flex; align-items: center; gap: 8px; padding: 4px 8px 8px 10px; }
+.tcv-cc-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 260px; height: 30px; padding: 0 9px 0 8px;
+  font-size: 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 15px; cursor: pointer; }
+.tcv-cc-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcv-cc-chip .tcv-cc-ico { width: 14px; height: 14px; color: var(--ink-dim); }
+.tcv-cc-chip:hover, .tcv-cc-chip.on { border-color: var(--ink-dim); background: var(--hover); }
+.tcv-cc-hint { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; color: var(--ink-dim); }
+.tcv-cc-hint kbd { padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; }
+.tcv-cc-send { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+  color: var(--ink-bright); background: var(--accent-deep); border: 1px solid var(--accent); border-radius: 50%; cursor: pointer;
+  transition: filter .12s, transform .06s, opacity .12s; }
+.tcv-cc-send:hover:not(:disabled) { background: var(--accent); }
+.tcv-cc-send:active:not(:disabled) { transform: scale(.94); }
+.tcv-cc-send:disabled { opacity: .35; cursor: not-allowed; }
+.tcv-cc-send .tcv-cc-ico { width: 17px; height: 17px; stroke-width: 2.2; }
+.tcv-cc-send.stop { color: var(--ink); background: var(--surface-2); border-color: var(--line); }
+.tcv-cc-send.stop:hover { background: var(--hover); }
+.tcv-cc-send.stop .tcv-cc-ico { width: 13px; height: 13px; }
+.tcv-cc-modelpop { position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 30; width: 340px; max-width: calc(100vw - 32px);
+  display: flex; flex-direction: column; gap: 8px; padding: 8px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; box-shadow: 0 10px 28px var(--shadow-hard); }
+.tcv-cc-modellist { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; }
+.tcv-cc-modellist button { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; text-align: left;
+  font-size: 12px; color: var(--ink); background: none; border: 0; border-radius: 5px; cursor: pointer; }
+.tcv-cc-modellist button:hover { background: var(--hover); }
+.tcv-cc-modellist button.on { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-cc-modelname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcv-cc-tag { padding: 0 5px; font-size: 10px; color: var(--ink-dim); border: 1px solid var(--line); border-radius: 3px; }
+
+/* ---- "Deleted - Undo" ---------------------------------------------------- */
+.tcv-cc-toast { position: absolute; left: 50%; bottom: 110px; z-index: 25; transform: translateX(-50%); overflow: hidden;
+  display: flex; align-items: center; gap: 12px; max-width: calc(100% - 24px); padding: 9px 12px 9px 14px; font-size: 12.5px;
+  color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px var(--shadow-hard); }
+.tcv-cc-toast > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcv-cc-undo { flex: none; height: 28px; padding: 0 10px; font-size: 12.5px; font-weight: 600; color: var(--accent); background: none;
+  border: 1px solid var(--accent); border-radius: 6px; cursor: pointer; }
+.tcv-cc-undo:hover { background: var(--accent-deep); }
+.tcv-cc-toastbar { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--accent);
+  transform-origin: left; animation: tcv-cc-shrink linear forwards; }
+@keyframes tcv-cc-shrink { to { transform: scaleX(0); } }
+.tcv-cc-scrim { display: none; }
+
+/* ---- touch: nothing to hover with, so the tools stay -------------------- */
+@media (hover: none) {
+  .tcv-cc-tools, .tcv-cc-meta { opacity: 1; }
+  .tcv-cc-codecopy { opacity: 1; }
+  .tcv-cc-item .tcv-cc-itemacts { display: none; }
+}
+
+/* ---- narrow middle column (the app's side panels take the room) --------- */
+@media (max-width: 1100px) {
+  .tcv-cc-hint { display: none; }
+}
+
+/* ---- phones: the list is a drawer, every target 40px -------------------- */
+@media (max-width: 768px) {
+  .tcv-room.tcv-cc-room > .tcv-cc-side { position: absolute; top: 4px; bottom: 4px; left: 4px; z-index: 30;
+    width: min(330px, 86vw); max-height: none; transform: translateX(calc(-100% - 12px)); transition: transform .18s ease;
+    box-shadow: 0 8px 28px var(--shadow-hard); }
+  .tcv-room.tcv-cc-room[data-drawer] > .tcv-cc-side { transform: none; }
+  .tcv-room.tcv-cc-room[data-drawer] > .tcv-cc-scrim { display: block; position: absolute; inset: 0; z-index: 29;
+    background: var(--scrim); }
+  .tcv-room.tcv-cc-room > .tcv-cc-main { flex: 1 1 0%; padding: 0; }
+  .tcv-cc-ib { min-width: 40px; height: 40px; }
+  .tcv-cc-tools .tcv-cc-ib, .tcv-cc-itemacts .tcv-cc-ib { min-width: 36px; height: 36px; }
+  .tcv-cc-burger { display: inline-flex; }
+  .tcv-cc-burger-intro { align-self: flex-start; color: var(--ink); border-color: var(--line); }
+  .tcv-cc-bar { padding: 4px 4px 4px 4px; gap: 2px; }
+  .tcv-cc-bar .tcv-cc-title { height: 40px; font-size: 15px !important; }
+  .tcv-cc-wide { display: none; }
+  .tcv-cc-newbtn { height: 42px; }
+  .tcv-cc-search input { height: 40px; }
+  .tcv-cc-seg button { min-height: 36px; }
+  .tcv-cc-item { min-height: 58px; }
+  .tcv-cc-col { padding: 14px 12px 18px; gap: 18px; }
+  .tcv-cc-row { gap: 8px; }
+  .tcv-cc-av { width: 26px; height: 26px; font-size: 10px; }
+  .tcv-cc-bubble { max-width: 88%; }
+  .tcv-cc-composer { width: calc(100% - 16px); margin-bottom: 8px; border-radius: 12px; }
+  .tcv-cc-composer textarea { padding: 11px 12px 2px; }
+  .tcv-cc-chip { height: 36px; max-width: 200px; }
+  .tcv-cc-send { width: 40px; height: 40px; }
+  .tcv-cc-starters { grid-template-columns: minmax(0, 1fr); }
+  .tcv-cc-kbd { display: none; }
+  .tcv-cc-toast { bottom: 120px; }
+  .tcv-cc-alert { width: calc(100% - 16px); }
+  .tcv-cc-modelpop { position: fixed; left: 8px; right: 8px; bottom: 80px; width: auto; }
+}
+/* ==== end COMMAND CODE ==== */

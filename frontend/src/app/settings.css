@@ -300,3 +300,29 @@ select.st-in { cursor: pointer; }
 .st-prices { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 8px; }
 .st-prices .st-num { width: 110px; text-align: right; }
 .st-prices .st-in { background: var(--surface); }
+
+/* ---- phones: the list is a row of tabs over the page ------------ */
+@media (max-width: 768px) {
+  :host > .tcv-room { flex-direction: column; }
+  .st-body { min-height: 0; }
+  .st-list { width: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .st-list-head, .st-group { display: none; }
+  .st-list-scroll { flex: none; display: flex; gap: 2px; padding: 4px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .st-item { flex: none; width: auto; align-items: center; min-height: 44px; padding: 6px 10px;
+    border-left: 0; border-bottom: 2px solid transparent; border-radius: 4px 4px 0 0; }
+  .st-item[data-on] { border-bottom-color: var(--accent); }
+  .st-item-blurb, .st-item-meta { display: none; }
+  .st-head { flex-wrap: wrap; padding: 6px 10px; }
+  .st-head-blurb { flex-basis: 100%; white-space: normal; }
+  .st-head-meta { margin-left: 0; }
+  .st-page { padding: 10px 10px 24px; }
+  .st-keys, .st-keys-grid, .st-langs { grid-template-columns: minmax(0, 1fr); }
+  .st-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .st-job { grid-template-columns: minmax(0, 1fr); }
+  .st-job-acts { justify-content: flex-start; flex-wrap: wrap; }
+  .st-seg { max-width: 100%; overflow-x: auto; min-width: 0; }
+  .st-seg button { min-height: 36px; }
+  .st-in { min-height: 40px; }
+  .st-table td { max-width: 180px; }
+  .st-short { flex-wrap: wrap; }
+}
