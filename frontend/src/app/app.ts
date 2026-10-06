@@ -9,14 +9,14 @@ import { QuickNote, RoomNotes } from './rooms/notes';
 import { RoomFiles } from './rooms/files';
 import { RoomCommandCode } from './rooms/commandcode';
 import { Palette } from './palette';
-import { Preferences } from './preferences';
+import { Prefs, RoomSettings } from './preferences';
 import { T } from './i18n';
 import { Auth, SignIn, UserChip } from './auth';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, Preferences, SignIn, T, UserChip],
+  imports: [Editor, RoomPcb, RoomCoding, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, SignIn, T, UserChip],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -63,13 +63,21 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
               [title]="w.blurb">{{ w.label | t }}</button>
     }
     @if (toolsTab; as w) {
-      <button (click)="open(w.id)" class="tcv-tab tcv-tab-tools tcv-tab-end"
+      <button (click)="open(w.id)" class="tcv-tab tcv-tab-tools"
               [attr.data-on]="here() === w.id ? 1 : null"
               [attr.aria-current]="here() === w.id ? 'page' : null"
               [title]="w.blurb">{{ w.label | t }}
         <!-- How many tools there are, quietly, beside the name. -->
         @if (toolCount(); as n) { <span class="tcv-tab-count">{{ n }}</span> }
       </button>
+    }
+    <!-- Settings: the theme and the language for this browser, the LLM
+         keys and the proxy for the server - a tab, not a menu item. -->
+    @if (settingsTab; as w) {
+      <button (click)="open(w.id)" class="tcv-tab tcv-tab-settings tcv-tab-end"
+              [attr.data-on]="here() === w.id ? 1 : null"
+              [attr.aria-current]="here() === w.id ? 'page' : null"
+              [title]="w.blurb">⚙ {{ w.label | t }}</button>
     }
     <!-- Who is signed in, over the right-hand column; nothing in local mode.
          Its width is measured (--layout-user-w) so the tabs keep clear of it
@@ -95,6 +103,7 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
       @case ('commandcode') { <app-room-commandcode /> }
       @case ('files') { <app-room-files /> }
       @case ('tools') { <app-room-tools /> }
+      @case ('settings') { <app-room-settings /> }
       @case ('analyze') { <app-room-analyze /> }
     }
   </div>
@@ -103,8 +112,6 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
 <app-quick-note />
 <!-- Ctrl+K anywhere: go to anything, do anything, search everything. -->
 <app-palette />
-<!-- Theme, language, shortcuts ("?"). -->
-<app-preferences />
 } @else if (auth.state()) {
   <app-sign-in />
 }`,
@@ -128,11 +135,12 @@ export class App {
   auth = inject(Auth);
   tabs = WORKSPACES;
   /** The rooms you work in, left; Notes, Command Code, Files and Basic Tools at the right end. */
-  rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'files' && w.id !== 'commandcode');
+  rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'files' && w.id !== 'commandcode' && w.id !== 'settings');
   notesTab = WORKSPACES.find(w => w.id === 'notes');
   ccTab = WORKSPACES.find(w => w.id === 'commandcode');
   filesTab = WORKSPACES.find(w => w.id === 'files');
   toolsTab = WORKSPACES.find(w => w.id === 'tools');
+  settingsTab = WORKSPACES.find(w => w.id === 'settings');
   /** A few words from Analytics for its menu entry: the last seven days' LLM
    *  spend and notes, and how long ago the figures were worked out. The
    *  server keeps them cached, so asking once a minute costs nothing. */
@@ -172,6 +180,19 @@ export class App {
   });
   /** Shared, because the catalog changes rooms by opening a file. */
   here = this.picked.room;
+
+  private prefs = inject(Prefs);
+  /** A section of Settings asked for (the user menu, Ctrl+K, "?"): the
+   *  Settings tab, open on it. */
+  private toSettings = effect(() => {
+    const want = this.prefs.open();
+    if (!want) return;
+    untracked(() => {
+      this.prefs.tab.set(want);
+      this.here.set('settings');
+      this.prefs.open.set(null);
+    });
+  });
 
   constructor() {
     this.auth.load();

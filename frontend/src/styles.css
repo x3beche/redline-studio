@@ -3147,6 +3147,7 @@ section > .tcv-mcu-more summary { text-transform: uppercase; }
 .tcv-tab-notes + .tcv-tab-tools, .tcv-tab-tools + .tcv-tab-end,
 .tcv-tab-notes + .tcv-tab-files, .tcv-tab-files + .tcv-tab-tools,
 .tcv-tab-notes + .tcv-tab-cc, .tcv-tab-cc + .tcv-tab-files { margin-left: 0; }
+.tcv-tab-tools + .tcv-tab-settings { margin-left: 0; }
 
 /* Analytics: a panel's download, and a question read in full. */
 .tcv-dl {
@@ -3386,6 +3387,20 @@ section > .tcv-mcu-more summary { text-transform: uppercase; }
 .tcv-cc-err { margin: 0; }
 .tcv-cc-intro { margin: auto; max-width: 460px; text-align: center; color: var(--ink-dim); font-size: 13px; line-height: 1.6; }
 .tcv-cc-intro h2 { color: var(--ink); font-size: 18px; margin: 0 0 6px; }
+/* Settings, a tab (preferences.ts): sections on the left, one on the right. */
+.tcv-settings-main { max-width: none; }
+.tcv-settings-main > * { max-width: 860px; }
+.tcv-settings-title { margin: 0 0 2px; font-size: 16px; font-weight: 600; color: var(--ink); }
+.tcv-settings-main > p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-dim); }
+/* Settings > Proxy (proxy-settings.ts). */
+.tcv-proxy-check { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink); }
+.tcv-proxy-modes { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink); }
+.tcv-proxy-modes label { display: flex; align-items: baseline; gap: 6px; }
+.tcv-proxy-modes span { color: var(--ink-dim); font-size: 11.5px; }
+.tcv-proxy-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 8px 10px; }
+.tcv-proxy-grid label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--ink-dim); }
+.tcv-proxy-hint { font-size: 11.5px !important; }
+.tcv-proxy-exits { display: flex; flex-direction: column; gap: 3px; }
 /* Preferences > LLM settings (llm-settings.ts). */
 .tcv-llm-key, .tcv-llm-job { display: flex; flex-direction: column; gap: 5px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .tcv-llm-key-name, .tcv-llm-job-name { display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; color: var(--ink); }

@@ -10,7 +10,7 @@
  *  ones not finished say what they will be rather than pretending.
  */
 export interface Workspace {
-  id: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' | 'notes' | 'commandcode' | 'files' | 'tools' | 'analyze';
+  id: 'cad' | 'pcb' | 'web' | 'embedded' | 'mobile' | 'notes' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
@@ -84,6 +84,13 @@ export const WORKSPACES: Workspace[] = [
     label: 'Basic Tools',
     blurb: 'Small calculators and sketch pads for any room: units, track '
          + 'widths, resistors, a layout grid.',
+    ready: true,
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    blurb: 'The theme, the language and the shortcuts for this browser; the LLM keys and '
+         + 'models and the proxy for the server.',
     ready: true,
   },
   {

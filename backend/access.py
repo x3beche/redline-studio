@@ -110,6 +110,8 @@ _RULES: list[tuple[str, str, str]] = [
     # LLM settings: the keys and the models are the workspace's settings
     ("PUT", "/api/llm/settings", "settings"),
     ("POST", "/api/llm/test", "settings"),
+    ("PUT", "/api/proxy/settings", "settings"),
+    ("POST", "/api/proxy/test", "settings"),
     # releases: making one runs the builds' outputs; downloading is looking
     ("POST", "/api/releases", "run"),
     # talking with the agents

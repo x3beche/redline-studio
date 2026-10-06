@@ -3,18 +3,37 @@ import { LIGHT_THEMES, THEMES, THEME_NAMES, Theme, currentTheme, setTheme } from
 import { LANG, LANGS, Lang, T, setLang } from './i18n';
 import { redlineTheme } from './rooms/code-view';
 import { LlmSettingsPanel } from './llm-settings';
+import { ProxySettingsPanel } from './proxy-settings';
 
-/** Preferences: the theme, the language, the keyboard shortcuts - per
- *  browser, about the person at this screen - and the LLM settings, which
- *  are the server's (llm-settings.ts). Opened from
+/** Settings, a tab of its own: the theme, the language and the keyboard
+ *  shortcuts - per browser, about the person at this screen - and the
+ *  server's: the LLM keys and models (llm-settings.ts) and the proxy for
+ *  the part lookups (proxy-settings.ts). Opened from
  *  the user menu, from Ctrl+K, and with "?" (the shortcuts page).
  */
-export type PrefsTab = 'appearance' | 'language' | 'llm' | 'shortcuts';
+export type PrefsTab = 'appearance' | 'language' | 'llm' | 'proxy' | 'shortcuts';
 
 @Injectable({ providedIn: 'root' })
 export class Prefs {
+  /** Ask for a section: the shell (app.ts) opens the Settings tab on it and
+   *  sets this back to null. How the user menu, the palette and "?" get there. */
   open = signal<PrefsTab | null>(null);
+  /** The section on screen in the Settings tab. */
+  tab = signal<PrefsTab>('appearance');
   theme = signal<Theme>(currentTheme());
+
+  constructor() {
+    // "?" opens the shortcuts wherever you are - unless you are typing it.
+    window.addEventListener('keydown', e => {
+      const el = e.target as HTMLElement;
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable
+        || !!el.closest?.('.monaco-editor');
+      if (e.key === '?' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        this.open.set('shortcuts');
+      }
+    }, true);
+  }
 
   wear(t: Theme) {
     this.theme.set(setTheme(t));
@@ -59,67 +78,70 @@ const SWATCH: Record<Theme, string[]> = { // theme:pigment
 interface Shortcut { keys: string[]; what: string }
 
 @Component({
-  selector: 'app-preferences',
-  imports: [T, LlmSettingsPanel],
-  host: { '(document:keydown)': 'key($event)' },
+  selector: 'app-room-settings',
+  imports: [T, LlmSettingsPanel, ProxySettingsPanel],
   template: `
-@if (prefs.open(); as tab) {
-  <div class="tcv-tokens-back" (click)="prefs.open.set(null)">
-    <div class="tcv-tokens tcv-prefs" (click)="$event.stopPropagation()" role="dialog" [attr.aria-label]="'Preferences' | t">
-      <h2>{{ 'Preferences' | t }}</h2>
-      <div class="tcv-prefs-tabs" role="tablist">
-        @for (x of tabs; track x.id) {
-          <button class="tcv-notes-chip" role="tab" [attr.data-on]="tab === x.id ? 1 : null"
-                  (click)="prefs.open.set(x.id)">{{ x.label | t }}</button>
+<div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
+  <aside class="tcv-notes-side">
+    <div class="tcv-notes-list tcv-settings-nav">
+      @for (g of nav; track g.group) {
+        <div class="tcv-notes-group">{{ g.group | t }}</div>
+        @for (x of g.items; track x.id) {
+          <button class="tcv-notes-item" [attr.data-on]="prefs.tab() === x.id ? 1 : null" (click)="prefs.tab.set(x.id)">
+            <span class="tcv-notes-item-top"><span class="tcv-notes-item-title">{{ x.label | t }}</span></span>
+            <span class="tcv-notes-item-snip">{{ x.about | t }}</span>
+          </button>
         }
-      </div>
-
-      @switch (tab) {
-        @case ('appearance') {
-          <p>{{ 'The whole window, the 3D backdrop and the code editor follow it.' | t }}</p>
-          @for (grp of groups; track grp.name) {
-          <div class="tcv-prefs-group">{{ grp.name | t }}</div>
-          <div class="tcv-prefs-themes">
-            @for (th of grp.themes; track th) {
-              <button class="tcv-prefs-theme" [attr.data-on]="prefs.theme() === th ? 1 : null" (click)="prefs.wear(th)">
-                <span class="tcv-prefs-swatch">
-                  @for (c of swatch[th]; track $index) { <i [style.background]="c"></i> }
-                </span>
-                <span>{{ names[th] }}</span>
-              </button>
-            }
-          </div>
+      }
+    </div>
+  </aside>
+  <section class="tcv-notes-main tcv-settings-main">
+    <h2 class="tcv-settings-title">{{ label(prefs.tab()) | t }}</h2>
+    @switch (prefs.tab()) {
+      @case ('appearance') {
+        <p>{{ 'The whole window, the 3D backdrop and the code editor follow it.' | t }}</p>
+        @for (grp of groups; track grp.name) {
+        <div class="tcv-prefs-group">{{ grp.name | t }}</div>
+        <div class="tcv-prefs-themes">
+          @for (th of grp.themes; track th) {
+            <button class="tcv-prefs-theme" [attr.data-on]="prefs.theme() === th ? 1 : null" (click)="prefs.wear(th)">
+              <span class="tcv-prefs-swatch">
+                @for (c of swatch[th]; track $index) { <i [style.background]="c"></i> }
+              </span>
+              <span>{{ names[th] }}</span>
+            </button>
           }
+        </div>
         }
-        @case ('language') {
-          <p>{{ 'The words Redline says. Names of models, boards, parts and code stay as they are.' | t }}</p>
-          <div class="tcv-prefs-themes">
-            @for (l of langs; track l.id) {
-              <button class="tcv-prefs-theme" [attr.data-on]="lang() === l.id ? 1 : null" (click)="setLang(l.id)">
-                <span class="tcv-prefs-flag">{{ l.id.toUpperCase() }}</span><span>{{ l.name }}</span>
-              </button>
-            }
-          </div>
-        }
-        @case ('llm') { <app-llm-settings /> }
-        @case ('shortcuts') {
-          @for (g of shortcuts; track g.group) {
-            <div class="tcv-prefs-group">{{ g.group | t }}</div>
-            @for (s of g.items; track s.what) {
-              <div class="tcv-prefs-key">
-                <span>{{ s.what | t }}</span>
-                <span class="tcv-prefs-keys">@for (k of s.keys; track $index) { <kbd>{{ k }}</kbd> }</span>
-              </div>
-            }
+      }
+      @case ('language') {
+        <p>{{ 'The words Redline says. Names of models, boards, parts and code stay as they are.' | t }}</p>
+        <div class="tcv-prefs-themes">
+          @for (l of langs; track l.id) {
+            <button class="tcv-prefs-theme" [attr.data-on]="lang() === l.id ? 1 : null" (click)="setLang(l.id)">
+              <span class="tcv-prefs-flag">{{ l.id.toUpperCase() }}</span><span>{{ l.name }}</span>
+            </button>
+          }
+        </div>
+      }
+      @case ('llm') { <app-llm-settings /> }
+      @case ('proxy') { <app-proxy-settings /> }
+      @case ('shortcuts') {
+        @for (g of shortcuts; track g.group) {
+          <div class="tcv-prefs-group">{{ g.group | t }}</div>
+          @for (s of g.items; track s.what) {
+            <div class="tcv-prefs-key">
+              <span>{{ s.what | t }}</span>
+              <span class="tcv-prefs-keys">@for (k of s.keys; track $index) { <kbd>{{ k }}</kbd> }</span>
+            </div>
           }
         }
       }
-      <div class="tcv-tokens-end"><button class="tcv-btn" (click)="prefs.open.set(null)">{{ 'Close' | t }}</button></div>
-    </div>
-  </div>
-}`,
+    }
+  </section>
+</div>`,
 })
-export class Preferences {
+export class RoomSettings {
   prefs = inject(Prefs);
   readonly themes = THEMES;
   /** Dark ones first, then the light ones. */
@@ -129,9 +151,18 @@ export class Preferences {
   readonly swatch = SWATCH;
   readonly langs = LANGS;
   readonly lang = LANG;
-  readonly tabs: { id: PrefsTab; label: string }[] = [
-    { id: 'appearance', label: 'Appearance' }, { id: 'language', label: 'Language' },
-    { id: 'llm', label: 'LLM settings' }, { id: 'shortcuts', label: 'Keyboard shortcuts' }];
+  readonly nav: { group: string; items: { id: PrefsTab; label: string; about: string }[] }[] = [
+    { group: 'This browser', items: [
+      { id: 'appearance', label: 'Appearance', about: 'theme' },
+      { id: 'language', label: 'Language', about: 'English or Türkçe' },
+      { id: 'shortcuts', label: 'Keyboard shortcuts', about: 'Ctrl+K, Alt+N, ?' },
+    ] },
+    { group: 'The server', items: [
+      { id: 'llm', label: 'LLM settings', about: 'API keys, and which model does what' },
+      { id: 'proxy', label: 'Proxy', about: 'a second way out for EasyEDA lookups' },
+    ] },
+  ];
+  label(id: PrefsTab) { return this.nav.flatMap(g => g.items).find(x => x.id === id)?.label ?? id; }
   readonly shortcuts: { group: string; items: Shortcut[] }[] = [
     { group: 'Anywhere', items: [
       { keys: ['Ctrl', 'K'], what: 'Open the command palette: go anywhere, do anything, search everything' },
@@ -155,18 +186,4 @@ export class Preferences {
   ];
   setLang(l: Lang) { setLang(l); }
 
-  constructor() {
-    // "?" opens the shortcuts wherever you are - unless you are typing it.
-    window.addEventListener('keydown', e => {
-      const el = e.target as HTMLElement;
-      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable
-        || !!el.closest?.('.monaco-editor');
-      if (e.key === '?' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        e.preventDefault();
-        this.prefs.open.set(this.prefs.open() === 'shortcuts' ? null : 'shortcuts');
-      }
-    }, true);
-  }
-
-  key(e: KeyboardEvent) { if (e.key === 'Escape' && this.prefs.open()) this.prefs.open.set(null); }
 }

@@ -450,14 +450,11 @@ export class Members {
 @if (auth.state(); as s) {
   @if (s.mode !== 'on') {
     <!-- Nobody signs in on this machine: a gear, with the same menu's
-         Analytics and Preferences. -->
-    <button class="tcv-user tcv-user-gear" (click)="toggle()" [attr.data-on]="open() ? 1 : null" [title]="'Analytics, preferences' | t">⚙</button>
+         Analytics (Settings is a tab of its own). -->
+    <button class="tcv-user tcv-user-gear" (click)="toggle()" [attr.data-on]="open() ? 1 : null" [title]="'Analytics' | t">⚙</button>
     @if (open()) {
       <div class="tcv-menu tcv-user-menu" (mouseleave)="open.set(false)">
         <ng-container *ngTemplateOutlet="analyticsItem" />
-        <button class="tcv-menu-item" (click)="open.set(false); prefs.open.set('appearance')">
-          <span class="tcv-menu-name">{{ 'Preferences' | t }}</span>
-          <span class="tcv-menu-blurb">{{ 'Theme, language, keyboard shortcuts' | t }}</span></button>
       </div>
     }
   }
@@ -501,9 +498,6 @@ export class Members {
             <span class="tcv-menu-name">{{ 'Agent tokens' | t }}</span>
             <span class="tcv-menu-blurb">Let an agent work here without the database password</span></button>
         }
-        <button class="tcv-menu-item" (click)="open.set(false); prefs.open.set('appearance')">
-          <span class="tcv-menu-name">{{ 'Preferences' | t }}</span>
-          <span class="tcv-menu-blurb">{{ 'Theme, language, keyboard shortcuts' | t }}</span></button>
         <button class="tcv-menu-item" (click)="open.set(false); auth.logout()">
           <span class="tcv-menu-name">{{ 'Sign out' | t }}</span></button>
       </div>

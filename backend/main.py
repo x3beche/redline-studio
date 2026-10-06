@@ -23,6 +23,11 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, Field
 
+# .env before the modules below: some read their settings when imported
+# (ato's X3_ATO, lcsc's X3_EASYEDA and X3_LCSC_GAP), and reading them
+# first left .env's values unseen - the defaults won wherever they differed.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
 from . import (access, actors, ato, auth, changes, convert, files, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, sysinfo, usage, versions)
 from . import code_api
@@ -73,9 +78,11 @@ app.include_router(emb_build.router)
 app.include_router(emb_device.router)
 # Which model does which job, the keys (Preferences > LLM settings), and
 # the Command Code room's conversations.
-from . import cc_chat, llm, llm_api  # noqa: E402
+from . import cc_chat, llm, llm_api, netproxy  # noqa: E402
 app.include_router(llm_api.router)
 app.include_router(cc_chat.router)
+# Settings > Proxy: a second way out for the EasyEDA part lookups.
+app.include_router(netproxy.router)
 
 
 def _raw_db():
@@ -1929,8 +1936,9 @@ async def _start_sampler():
         asyncio.create_task(insights.sampler(db))
         try:
             await llm.load(db())                       # the keys and the model each job uses
+            await netproxy.load(db())                  # the EasyEDA proxy, if one is set
         except Exception as exc:                       # noqa: BLE001 - .env keys still work
-            LOG.warning("LLM settings not read: %s", exc)
+            LOG.warning("LLM / proxy settings not read: %s", exc)
 
         async def _tidy_releases():
             try:

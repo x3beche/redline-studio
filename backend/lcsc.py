@@ -183,6 +183,30 @@ def journal(limit: int = 200) -> list[dict]:
     return out
 
 
+# Whether the request on this thread goes through the proxy (netproxy.py).
+# A thread-local, because the requests run in the executor's threads and a
+# context variable does not follow them there.
+import threading as _threading
+_NET = _threading.local()
+
+
+def _via() -> bool:
+    return bool(getattr(_NET, "via", False))
+
+
+def _through(via: bool, fn, *args):
+    _NET.via = via
+    try:
+        return fn(*args)
+    finally:
+        _NET.via = False
+
+
+def _open(req, timeout: float):
+    from . import netproxy
+    return netproxy.opener(_via()).open(req, timeout=timeout)
+
+
 async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
     """One request: its turn, the request, and a line in the journal."""
     import urllib.error
@@ -225,9 +249,23 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
     if wait:
         await asyncio.sleep(wait)
 
+    from . import netproxy
+
+    loop = asyncio.get_running_loop()
+    always = netproxy.mode() == "always"
     t0 = _time.monotonic()
     try:
-        out = await asyncio.get_running_loop().run_in_executor(None, fn, *args)
+        try:
+            out = await loop.run_in_executor(None, _through, always, fn, *args)
+        except urllib.error.HTTPError as first:
+            # Turned away at this address: with a fallback proxy set, the
+            # same ask goes once more through it before anyone cools off.
+            if first.code not in (403, 429) or always or netproxy.mode() != "fallback":
+                raise
+            _record(kind, target, "net", url=url, status=first.code,
+                    ms=(_time.monotonic() - t0) * 1000, error="refused here - asking through the proxy")
+            t0 = _time.monotonic()
+            out = await loop.run_in_executor(None, _through, True, fn, *args)
     except urllib.error.HTTPError as exc:
         ms = (_time.monotonic() - t0) * 1000
         if exc.code in (403, 429):
@@ -266,7 +304,7 @@ def _ask(url: str) -> dict:
     import urllib.request
 
     req = urllib.request.Request(url, headers={"User-Agent": AGENT})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+    with _open(req, TIMEOUT) as r:
         return json.loads(r.read().decode(errors="replace"))
 
 
@@ -338,7 +376,7 @@ def _get_bytes(url: str) -> bytes:
     if url.startswith("//"):
         url = "https:" + url
     req = urllib.request.Request(url, headers={"User-Agent": AGENT})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+    with _open(req, TIMEOUT) as r:
         return r.read()
 
 
@@ -701,8 +739,9 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
         # laying out a twenty-part board was sixty requests nobody saw.
         def download(argv, cwd):
             import subprocess
+            from . import netproxy
             done = subprocess.run(argv, cwd=str(cwd), capture_output=True,
-                                  text=True, timeout=TIMEOUT)
+                                  text=True, timeout=TIMEOUT, env=netproxy.env(_via()))
             if done.returncode != 0 and "403" in (done.stdout + done.stderr):
                 import urllib.error
                 raise urllib.error.HTTPError("easyeda2kicad", 403, "refused",

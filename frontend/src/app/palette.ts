@@ -119,7 +119,9 @@ export class Palette {
     const out: Item[] = [
       { group: 'Actions', icon: '✎', label: 'New note', hint: 'from anywhere', keys: 'Alt+N', run: () => this.notes.quick.set(true) },
       { group: 'Actions', icon: '⌨', label: 'Keyboard shortcuts', keys: '?', run: () => this.prefs.open.set('shortcuts') },
-      { group: 'Actions', icon: '⚙', label: 'Preferences', hint: 'theme, language, shortcuts', run: () => this.prefs.open.set('appearance') },
+      { group: 'Actions', icon: '⚙', label: 'Settings', hint: 'theme, language, shortcuts, LLM, proxy', run: () => this.prefs.open.set('appearance') },
+      { group: 'Actions', icon: '⚙', label: 'LLM settings', hint: 'API keys, and which model does what', run: () => this.prefs.open.set('llm') },
+      { group: 'Actions', icon: '⚙', label: 'Proxy settings', hint: 'a second way out for EasyEDA lookups', run: () => this.prefs.open.set('proxy') },
       ...THEMES.map(th => ({ group: 'Actions', icon: '◐', label: `Theme: ${THEME_NAMES[th]}`,
                              hint: this.prefs.theme() === th ? 'on' : '', run: () => this.prefs.wear(th) })),
       ...LANGS.map(l => ({ group: 'Actions', icon: 'A', label: `Language: ${l.name}`,
