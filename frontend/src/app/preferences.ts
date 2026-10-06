@@ -7,6 +7,8 @@ import { redlineTheme } from './rooms/code-view';
 import { LlmSettingsPanel } from './llm-settings';
 import { ProxySettingsPanel } from './proxy-settings';
 import { CostsSettingsPanel } from './costs-settings';
+import { TopbarSettingsPanel } from './topbar-settings';
+import { TopBar } from './topbar';
 import { CURRENCY } from './money';
 
 /** Settings, a tab of its own: the theme, the language and the keyboard
@@ -16,7 +18,7 @@ import { CURRENCY } from './money';
  *  currency (costs-settings.ts). Opened from
  *  the user menu, from Ctrl+K, and with "?" (the shortcuts page).
  */
-export type PrefsTab = 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'shortcuts';
+export type PrefsTab = 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'shortcuts' | 'topbar';
 
 @Injectable({ providedIn: 'root' })
 export class Prefs {
@@ -85,7 +87,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel],
+  imports: [T, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TopbarSettingsPanel],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -218,6 +220,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
         @case ('llm') { <app-llm-settings /> }
         @case ('proxy') { <app-proxy-settings /> }
         @case ('costs') { <app-costs-settings /> }
+        @case ('topbar') { <app-topbar-settings /> }
         @case ('shortcuts') {
           <div class="st-page">
             <div class="st-row">
@@ -252,6 +255,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 export class RoomSettings {
   prefs = inject(Prefs);
   readonly canEdit = inject(Auth).can('settings');
+  private topbar = inject(TopBar);
   readonly themes = THEMES;
   /** Dark ones first, then the light ones. */
   readonly groups = [{ name: 'Dark', themes: THEMES.filter(t => !LIGHT_THEMES.has(t)) },
@@ -271,6 +275,8 @@ export class RoomSettings {
         blurb: 'Pick a theme; the whole window follows it.' },
       { id: 'language', label: 'Language', about: 'English or Türkçe', ico: 'Aa',
         blurb: 'Which language the interface speaks.' },
+      { id: 'topbar', label: 'Top bar', about: 'order, hidden tabs, compact', ico: '▭',
+        blurb: 'Which tabs the top bar shows, in what order, and how.' },
       { id: 'shortcuts', label: 'Keyboard shortcuts', about: 'Ctrl+K, Alt+N, ?', ico: '⌘',
         blurb: 'Every key that does something, by where it works.' },
     ] },
@@ -294,6 +300,7 @@ export class RoomSettings {
     if (id === 'language') return this.lang().toUpperCase();
     if (id === 'shortcuts') return String(this.shortcutCount());
     if (id === 'costs') return CURRENCY();
+    if (id === 'topbar') { const e = this.topbar.entries().filter(x => x.id !== 'gap'); return `${e.filter(x => !x.hidden).length}/${e.length}`; }
     return null;
   }
   readonly shortcuts: { group: string; items: Shortcut[] }[] = [
@@ -315,6 +322,13 @@ export class RoomSettings {
       { keys: ['/'], what: 'Search notes' },
       { keys: ['↑', '↓'], what: 'Previous / next note' },
       { keys: ['Esc'], what: 'Finish editing' },
+    ] },
+    { group: 'In Command Code', items: [
+      { keys: ['Ctrl', 'Shift', 'O'], what: 'A new conversation (⌘+Shift+O on a Mac)' },
+      { keys: ['Enter'], what: 'Send' },
+      { keys: ['Shift', 'Enter'], what: 'A new line' },
+      { keys: ['↑'], what: 'In an empty box: edit your last message' },
+      { keys: ['Esc'], what: 'Stop the answer / cancel an edit' },
     ] },
   ];
   shortcutCount() { return this.shortcuts.reduce((a, g) => a + g.items.length, 0); }
