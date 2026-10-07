@@ -3863,3 +3863,16 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-drawer-row:hover { background: var(--hover); }
 .tcv-drawer-all { padding: 0 4px; font-size: 10px; color: var(--ink-dim); background: none; border: 0; border-radius: 3px; cursor: pointer; }
 .tcv-drawer-all:hover { color: var(--ink); background: var(--hover); }
+
+/* Working now, under the catalog. */
+.tcv-work-head { display: flex; width: 100%; align-items: center; gap: 6px; padding: 0; background: none; border: 0; cursor: pointer; color: var(--ink-dim); }
+.tcv-work-head svg { flex: none; transition: transform .12s; }
+.tcv-work-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: tcv-work-pulse 1.2s infinite ease-in-out; }
+@keyframes tcv-work-pulse { 50% { opacity: .3; } }
+.tcv-work-row { display: block; padding: 3px 4px; border-radius: 4px; }
+.tcv-work-click { cursor: pointer; }
+.tcv-work-click:hover { background: var(--hover); }
+.tcv-work-state { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ink-dim); }
+.tcv-work-state[data-state="building"], .tcv-work-state[data-state="running"] { background: var(--accent); animation: tcv-work-pulse 1.2s infinite ease-in-out; }
+.tcv-work-bar { display: block; height: 2px; margin: 3px 0 0 12px; overflow: hidden; border-radius: 1px; background: var(--surface); }
+.tcv-work-bar > span { display: block; height: 100%; background: var(--accent); transition: width .3s; }

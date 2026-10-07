@@ -42,9 +42,11 @@ type Mark =
   | { kind: Exclude<Tool, 'pen' | 'text'>; color: string; width: number; a: Pt; b: Pt }
   | { kind: 'text'; color: string; size: number; at: Pt; text: string };
 
+import { WorkNowPanel } from '../rooms/work-now';
+
 @Component({
   selector: 'app-editor',
-  imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, Markdown, NgTemplateOutlet, PinIcon, Releases, T],
+  imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, Markdown, NgTemplateOutlet, PinIcon, Releases, T, WorkNowPanel],
   templateUrl: './editor.html',
   host: { '(document:keydown.escape)': 'closeTask()' },
 })
@@ -1460,6 +1462,13 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   /** Which of the two shots the overlay is showing. */
   previewSide = signal<'before' | 'after'>('before');
+
+  /** Open a model by id (the Working now list). */
+  openById(id: string) {
+    const t = this.catalog();
+    const m = t && this.findModel(t, id);
+    if (m) this.openModel(m);
+  }
 
   /** The card being worked on, opened large from under the tree. */
   taskPopup = signal<Revision | null>(null);

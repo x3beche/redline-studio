@@ -104,6 +104,9 @@
         }
       </div>
 
+      <!-- Every build, rebuild, board job and note being worked on, now. -->
+      <app-work-now (openModel)="openById($event)" />
+
       <!-- versions -->
       <div class="px-3 py-2" style="border-top: 1px solid var(--line)">
         <div class="mb-1 flex items-center justify-between">

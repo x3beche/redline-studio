@@ -76,6 +76,8 @@ app.include_router(netproxy.router)
 from . import costs as costs_api, fx  # noqa: E402
 app.include_router(fx.router)
 app.include_router(costs_api.router)
+from . import worknow  # noqa: E402
+app.include_router(worknow.router)
 
 
 def _raw_db():
