@@ -667,6 +667,98 @@ output:
 | deeper | unchanged |" -o "taller" -o "deeper"
 ```
 
+## Telegram
+
+Settings > Telegram connects one Telegram bot to the whole server. People
+link their own chats to it, and then:
+
+- the agents' questions reach them on their phones. The options become
+  buttons, and **Reply in your own words** opens a reply box. An answer from
+  Telegram is recorded as theirs, "via Telegram", exactly as if they had
+  answered in the app. Once a question is answered anywhere, every card it
+  was sent as is edited to show the answer, and its buttons go. A question
+  comes in the person's language when they set one (`/lang tr`, or the
+  switch in their card), translated by the Reading translation job;
+- they hear about what they chose, as toggle tiles: a question (on), a note
+  applied or failed (on, with its after picture), a run starting, budget
+  warnings, a failed build, and a daily digest at 09:00 Istanbul. Each
+  message links back to the note or the model;
+- they can write back:
+
+| in the chat | what it does |
+|---|---|
+| `/note <text>` | a draft note on a model or board, picked from buttons (recent ones, the last one used first) |
+| a photo with a caption | the same, with the photo as the note's picture |
+| `/queue` | queues the last draft note made from Telegram |
+| `/ask <text>` | a line in a room's thread, the same as "ask the agent" |
+| `/status` | Working now |
+| `/lang tr` | questions in Turkish (or any ISO 639-1 code: `de`, `ja` ...; `en` for the original) |
+| `/stop` | unlinks the chat |
+| `/help` | the list |
+
+Anything else sent to the bot gets three buttons: make it a note, send it
+to the agent, or ignore it.
+
+What a person may do from Telegram is what their role allows in the app, looked
+up on every message. A viewer reads the questions but gets no buttons. A
+reviewer answers and writes notes. An editor also queues them. Someone
+taken out of the workspace is no one to the bot.
+
+### Linking your chat
+
+**Link my Telegram** gives a one-time code. It is good for ten minutes and
+can be used once, by the person who made it. It comes with a t.me link and a
+QR code: open the link (or scan the code), press **Start**, and the card turns
+green. You can also paste the code into the bot's chat, or send
+`/link <code>`. A chat is never linked any other way, not even the first one.
+A chat that sends five wrong codes in fifteen minutes is ignored until the
+tries age out. Each person has one chat; linking from another chat moves the
+link there. **Unlink**, or `/stop` in the chat, ends it. Admins see who is
+linked and can unlink anyone in the workspace.
+
+### Setting the bot up (owners and admins)
+
+The guide on the page has six steps, and each one shows whether it is done:
+
+1. **Create the bot**: send `/newbot` to [@BotFather](https://t.me/BotFather),
+   give it a display name and a username ending in `bot`. Its answer holds the
+   token. That is the only thing done in BotFather.
+2. **Paste the token.** It is checked with Telegram (getMe) before it is kept,
+   in the database only. The page shows the bot's @username and picture, and
+   only the token's last four characters.
+3. **Name and picture.** The name (up to 64 characters), description (what
+   people read before they press Start, up to 512) and short description (the
+   profile's "about" line, up to 120) are set here. They come filled with
+   Redline's own defaults, in English and Turkish, and each field has
+   **reset to default**. The default texts are what everyone sees. Any other
+   language (every ISO 639-1 code, from a search box: Deutsch · de, 日本語 · ja
+   ...) can have texts of its own, shown to people whose Telegram uses that
+   language. **Translate from default** drafts them with the Reading
+   translation job, and they are marked machine translated until edited or
+   saved. Each field shows whether it is saved on Telegram or only changed
+   here, and saving sends only what changed. The picture is any image cut to
+   a centred square and sent as a JPG, or **Use the default picture** for
+   Redline's mark. The command menu is set automatically.
+4. **How updates arrive.** Choose a **webhook** (recommended): Telegram calls
+   `https://<your address>/api/telegram/webhook`, and every call carries a
+   secret header that Redline checks. A request without it gets 401, and one
+   with the wrong secret gets 403. Or choose **long polling**: Redline asks
+   Telegram itself, with no public address, from one server only. The tile
+   shows getWebhookInfo's status.
+5. **Link people**, as above.
+6. **Send a test message** to your own chat, with a picture.
+
+The tiles at the top show whether the bot is online, the webhook status,
+how many people are linked, the messages sent and received in the last 7
+days, and the last error. Messages wait in a queue (`telegram_outbox`) that
+keeps to Telegram's rate limits and retries with backoff. What was sent and
+received is kept for 30 days (`telegram_log`).
+
+**Remove the bot** tells every linked chat, unlinks it, takes the webhook
+down, and forgets the token. With **Forget everything**, the log and the
+counters go too. The bot itself still exists on Telegram; to delete it there,
+send `/deletebot` to @BotFather.
+
 ## Themes
 
 Every colour in the window comes from a token in `styles.css`. A theme is a

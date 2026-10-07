@@ -7,6 +7,7 @@ import { redlineTheme } from './rooms/code-view';
 import { LlmSettingsPanel } from './llm-settings';
 import { ProxySettingsPanel } from './proxy-settings';
 import { CostsSettingsPanel } from './costs-settings';
+import { TelegramSettingsPanel } from './telegram-settings';
 import { TopbarSettingsPanel } from './topbar-settings';
 import { TopBar } from './topbar';
 import { CURRENCY } from './money';
@@ -18,7 +19,7 @@ import { CURRENCY } from './money';
  *  currency (costs-settings.ts). Opened from
  *  the user menu, from Ctrl+K, and with "?" (the shortcuts page).
  */
-export type PrefsTab = 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'shortcuts' | 'topbar';
+export type PrefsTab = 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'telegram' | 'shortcuts' | 'topbar';
 
 @Injectable({ providedIn: 'root' })
 export class Prefs {
@@ -87,7 +88,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TopbarSettingsPanel],
+  imports: [T, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -220,6 +221,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
         @case ('llm') { <app-llm-settings /> }
         @case ('proxy') { <app-proxy-settings /> }
         @case ('costs') { <app-costs-settings /> }
+        @case ('telegram') { <app-telegram-settings /> }
         @case ('topbar') { <app-topbar-settings /> }
         @case ('shortcuts') {
           <div class="st-page">
@@ -287,11 +289,13 @@ export class RoomSettings {
         blurb: 'A second way out for the part lookups, and the traffic it carried.' },
       { id: 'costs', label: 'Costs & currency', about: 'subscriptions, electricity, exchange rates', ico: '¤',
         blurb: 'What Redline costs to run, and the currency money is shown in.' },
+      { id: 'telegram', label: 'Telegram', about: 'notifications, questions and notes from your phone', ico: '✈',
+        blurb: 'A bot for the server: notifications, the agents\' questions, and notes from Telegram.' },
     ] },
   ];
   item = computed(() => this.nav.flatMap(g => g.items).find(x => x.id === this.prefs.tab()) ?? null);
   label(id: PrefsTab) { return this.nav.flatMap(g => g.items).find(x => x.id === id)?.label ?? id; }
-  server(id: PrefsTab) { return id === 'llm' || id === 'proxy' || id === 'costs'; }
+  server(id: PrefsTab) { return id === 'llm' || id === 'proxy' || id === 'costs' || id === 'telegram'; }
   isLight(t: Theme) { return LIGHT_THEMES.has(t); }
   langName = computed(() => LANGS.find(l => l.id === this.lang())?.name ?? this.lang());
   /** The figure beside each section in the list. */

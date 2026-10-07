@@ -287,6 +287,27 @@ Ask when the answer changes what you build. Do not ask what the drawing
 already says, and do not ask two questions where one would do. A question is
 worth a paragraph of what you measured; it is not worth a page.
 
+### Your questions reach Telegram too
+
+When the server has a Telegram bot (Settings > Telegram), each question you
+ask is also sent to the linked people who opted in. The options become
+buttons, and there is a reply box for their own words. The question is
+translated into their language if they set one. Their answer comes back
+through the same `answer` as the app's, recorded as theirs `"via":
+"telegram"`, and your `ask` command returns it like any other answer. Write
+for a phone screen:
+
+- put the question in the first line;
+- put the evidence in `-c`;
+- keep options short: a button shows about 60 characters, and longer options
+  are numbered and spelled out in the message.
+
+People can also reach you from Telegram. `/ask` and the "ask the agent"
+button post into your room's thread like the page does, and `/note`
+makes a draft note (with a photo, when they sent one) that is work only
+once it is `queued`. Nothing changes for you: read the thread and the
+queue as always.
+
 ## Board notes
 
 A queued item marked `[BOARD]` is a note on a circuit board, written in

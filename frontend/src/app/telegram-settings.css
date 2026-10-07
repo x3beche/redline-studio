@@ -1,0 +1,171 @@
+/* Settings > Telegram (telegram-settings.ts), on top of settings.css: the
+   numbered guide, the two ways updates arrive, the link card with its QR
+   code, and the notification toggles. Every colour is a theme token. */
+
+/* ---- the guide -------------------------------------------------- */
+.tg-progress { gap: 8px; font-size: 11px; color: var(--ink-dim); }
+.tg-meter { width: 120px; margin-top: 0; }
+.tg-steps { list-style: none; margin: 0; padding: 0; }
+.tg-step { border-top: 1px solid var(--line); }
+.tg-step:first-child { border-top: 0; }
+.tg-step-head {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; text-align: left;
+  background: none; border: 0; cursor: pointer; color: var(--ink);
+}
+.tg-step-head:hover { background: var(--hover); }
+.tg-num {
+  flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--surface-2);
+  font: 600 11.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim);
+}
+.tg-step[data-state="done"] .tg-num { color: var(--ok); border-color: var(--ok); }
+.tg-step[data-state="now"] .tg-num { color: var(--ink-bright); background: var(--accent-deep); border-color: var(--accent); }
+.tg-step-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tg-step-text b { font-size: 12.5px; font-weight: 500; }
+.tg-step-text span { font-size: 11px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tg-step[data-state="todo"] .tg-step-text b { color: var(--ink-dim); }
+.tg-chev { flex: none; width: 12px; font-size: 10px; color: var(--ink-dim); }
+.tg-step[data-open] { background: var(--surface); box-shadow: inset 2px 0 0 var(--accent); }
+.tg-step-body { display: flex; flex-direction: column; gap: 9px; padding: 2px 12px 12px 44px; }
+
+/* @BotFather's commands, each with a copy button */
+.tg-cmds { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px; }
+.tg-cmd { display: flex; flex-direction: column; gap: 4px; padding: 7px 9px; background: var(--surface-2); border-radius: 5px; min-width: 0; }
+.tg-cmd > span { font-size: 11px; line-height: 1.45; color: var(--ink-dim); }
+.tg-cmd-top { display: flex; align-items: center; gap: 6px; }
+.tg-cmd code { font: 600 12px 'IBM Plex Mono', ui-monospace, monospace; color: var(--accent); }
+.tg-copy {
+  margin-left: auto; flex: none; padding: 0 6px; line-height: 17px; font-size: 10.5px; color: var(--ink-dim);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 3px; cursor: pointer;
+}
+.tg-copy:hover { color: var(--ink); background: var(--hover); }
+.tg-a { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* the bot, or the person, as a card */
+.tg-bot { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface-2); border-radius: 5px; }
+.tg-ava { flex: none; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid var(--line); }
+.tg-ava-none { display: grid; place-items: center; background: var(--accent-deep); color: var(--ink-bright);
+  font: 600 16px 'IBM Plex Mono', ui-monospace, monospace; text-transform: uppercase; }
+.tg-bot-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tg-bot-text b { font-size: 13px; font-weight: 600; color: var(--ink); }
+
+/* webhook or polling: two big choices */
+.tg-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }
+.tg-choice {
+  display: flex; flex-direction: column; gap: 5px; padding: 9px 11px; text-align: left; cursor: pointer;
+  font-size: 11px; line-height: 1.45; color: var(--ink-dim);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px;
+}
+.tg-choice:hover:not(:disabled) { border-color: var(--ink-dim); }
+.tg-choice:disabled { cursor: default; }
+.tg-choice[data-on] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.tg-choice-top { display: flex; align-items: center; gap: 8px; }
+.tg-choice-top b { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.tg-url { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink); }
+
+/* ---- your Telegram, and the commands ---------------------------- */
+.tg-split { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 12px; align-items: start; }
+@media (max-width: 1100px) { .tg-split { grid-template-columns: minmax(0, 1fr); } }
+.tg-cta { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-2);
+  border: 1px dashed var(--accent-deep); border-radius: 6px; }
+.tg-cta-ico { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%;
+  background: var(--accent-deep); color: var(--ink-bright); font-size: 18px; }
+.tg-cta-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tg-cta-text b { font-size: 13px; font-weight: 600; color: var(--ink); }
+.tg-cta-text span { font-size: 11px; color: var(--ink-dim); }
+.tg-code { display: flex; align-items: flex-start; gap: 14px; padding: 10px; background: var(--surface-2); border-radius: 6px; }
+.tg-qr { flex: none; width: 148px; height: 148px; border-radius: 5px; image-rendering: pixelated; background: var(--ink-bright); }
+.tg-code-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.tg-code-big { font-size: 26px; font-weight: 600; letter-spacing: .18em; color: var(--accent); }
+
+/* ---- what I hear about: tiles that are switches ----------------- */
+.tg-toggles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.tg-toggle {
+  display: flex; flex-direction: column; gap: 4px; padding: 9px 11px; text-align: left; cursor: pointer;
+  font-size: 11px; line-height: 1.45; color: var(--ink-dim);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px;
+}
+.tg-toggle:hover:not(:disabled) { border-color: var(--ink-dim); }
+.tg-toggle:disabled { cursor: default; opacity: .7; }
+.tg-toggle[data-on] { border-color: var(--accent-deep); }
+.tg-toggle-top { display: flex; align-items: center; gap: 8px; }
+.tg-toggle-top b { flex: 1; font-size: 12.5px; font-weight: 500; color: var(--ink); }
+.tg-switch { position: relative; flex: none; width: 28px; height: 16px; border-radius: 8px; background: var(--line); transition: background .15s; }
+.tg-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--ink-dim); transition: transform .15s, background .15s; }
+.tg-toggle[data-on] .tg-switch { background: var(--accent-deep); }
+.tg-toggle[data-on] .tg-switch::after { transform: translateX(12px); background: var(--ink-bright); }
+
+@media (max-width: 768px) {
+  .tg-step-body { padding-left: 12px; }
+  .tg-code { flex-direction: column; align-items: center; }
+  .tg-cta { flex-wrap: wrap; }
+}
+
+/* ---- step 3: the bot's profile (telegram-profile.ts) ------------- */
+.tg-prof { display: flex; flex-direction: column; gap: 10px; container-type: inline-size; }
+.tg-prof-grid { display: grid; grid-template-columns: 170px minmax(0, 1fr) minmax(180px, 240px); gap: 12px; align-items: start; }
+/* The stage is narrow when the app's side panels are open: by its width,
+   not the window's. */
+@container (max-width: 980px) { .tg-prof-grid { grid-template-columns: 170px minmax(0, 1fr); } .tg-menu { grid-column: 1 / -1; } }
+@container (max-width: 640px) {
+  .tg-prof-grid { grid-template-columns: minmax(0, 1fr); }
+  .tg-photo { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .tg-photo-box { width: 96px; height: 96px; }
+}
+.tg-photo { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.tg-photo-box { width: 160px; height: 160px; border-radius: 50%; overflow: hidden; border: 1px solid var(--line);
+  background: var(--surface-2); display: grid; place-items: center; }
+.tg-photo-box img { width: 100%; height: 100%; object-fit: cover; }
+.tg-photo-none { font-size: 11px; color: var(--ink-dim); }
+.tg-file { position: relative; overflow: hidden; cursor: pointer; }
+.tg-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.tg-fields { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.tg-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tg-field-top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
+.tg-field-top b { font-size: 12px; font-weight: 500; color: var(--ink); }
+.tg-count { margin-left: auto; font-size: 10.5px; color: var(--ink-dim); }
+.tg-count[data-over] { color: var(--danger); }
+.tg-field textarea.st-in { resize: vertical; font-family: inherit; line-height: 1.45; }
+.tg-result { font-size: 11px; }
+.tg-menu { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; background: var(--surface-2); border-radius: 5px; }
+.tg-menu-row { display: flex; gap: 8px; font-size: 11px; color: var(--ink-dim); }
+.tg-menu-row code { flex: none; min-width: 58px; font: 11px 'IBM Plex Mono', ui-monospace, monospace; color: var(--accent); }
+
+/* ---- removing the bot ------------------------------------------- */
+.tg-danger { border-color: var(--danger); }
+.tg-danger .st-card-head h3 { color: var(--danger); }
+.tg-check { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink); cursor: pointer; }
+.tg-danger-btn { margin-left: auto; color: var(--danger); border-color: var(--danger); }
+
+/* ---- languages: chips, and the searchable picker (telegram-langs.ts) */
+.tg-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.tg-chip { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface-2); }
+.tg-chip button { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; font-size: 11.5px; color: var(--ink-dim);
+  background: none; border: 0; cursor: pointer; }
+.tg-chip button:hover { color: var(--ink); background: var(--hover); }
+.tg-chip[data-on] { border-color: var(--accent); }
+.tg-chip[data-on] button:first-child { color: var(--ink-bright); background: var(--accent-deep); }
+.tg-chip small { font-size: 9.5px; color: var(--warn); }
+.tg-chip-x { padding: 2px 7px !important; border-left: 1px solid var(--line) !important; }
+.tg-chip-x:hover { color: var(--danger) !important; }
+.tg-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
+.tg-lp { position: relative; display: inline-block; }
+.tg-lp-pop { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; width: 300px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px var(--shadow-soft); }
+.tg-lp-pop .st-in { width: 100%; box-sizing: border-box; }
+.tg-lp-list { max-height: 260px; overflow-y: auto; margin-top: 5px; scrollbar-width: thin; }
+.tg-lp-row { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 4px 7px; text-align: left;
+  background: none; border: 0; border-radius: 4px; cursor: pointer; color: var(--ink); font-size: 12px; }
+.tg-lp-row:hover, .tg-lp-row[data-on] { background: var(--hover); }
+.tg-lp-row span { flex: 1; min-width: 0; font-size: 11px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tg-lp-row code { font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--accent); }
+.tg-lp-none { display: block; padding: 6px; }
+.tg-tr { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 9px; font-size: 11.5px; color: var(--ink-dim);
+  border: 1px dashed var(--accent-deep); border-radius: 5px; }
+.tg-tr b { color: var(--ink); font-weight: 500; }
+.tg-tr button { margin-left: auto; }
+.tg-field-foot { display: flex; align-items: center; gap: 8px; min-height: 14px; }
+.tg-reset { margin-left: auto; padding: 0; font-size: 10.5px; color: var(--accent); background: none; border: 0; cursor: pointer; }
+.tg-reset:hover { text-decoration: underline; }

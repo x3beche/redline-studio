@@ -80,6 +80,9 @@ app.include_router(worknow.router)
 # An agent's question or thread reply, in the reader's language.
 from . import reading  # noqa: E402
 app.include_router(reading.router)
+# Settings > Telegram: the bot, people's links, the webhook (backend/tgbot/).
+from .tgbot import api as tg_api  # noqa: E402
+app.include_router(tg_api.router)
 
 
 def _raw_db():
@@ -735,8 +738,12 @@ class RevisionIn(BaseModel):
     comment: str = Field(min_length=1, max_length=4000)
     # Optional: a note about a part does not need a drawing.
     image_png: str | None = None
-    # What was on screen when the note was written: which parts were shown.
-    # The camera alone is only where it was seen from.
+    # What was on screen when the note was written: which parts were shown
+    # and, from format 2 (v: 2), the clipping planes, the viewer tab, the
+    # render, zebra and studio settings, the camera type and the canvas size
+    # (frontend api.ts NoteView). Kept as the page sends it: the page puts it
+    # back and tools/render.py checks it went in (view_hash). The camera
+    # alone is only where it was seen from.
     view: dict | None = None
     camera: dict | None = None
     part: str | None = None
@@ -2163,6 +2170,118 @@ async def drop_part(lcsc_id: str):
     return {"deleted": lcsc_id}
 
 
+# ---- adding a part from the page, step by step ----
+# The page types a C-number and watches: each step the fetch takes is
+# written onto a job it polls (GET /api/parts-add/{job}). Kept in memory:
+# a job is a minute's worth of progress lines, not a record.
+_ADDS: dict[str, dict] = {}
+
+
+class PartAddIn(BaseModel):
+    lcsc: str
+
+
+class PlaceIn(BaseModel):
+    group: str | None = None
+    branch: str | None = None
+
+
+def _add_step(job: dict, step: str, text: str) -> None:
+    import time as _t
+    job["steps"].append({"step": step, "text": text, "at": _t.time()})
+    job["step"], job["text"] = step, text
+
+
+async def _place_row(lcsc_id: str) -> dict:
+    doc = await db()[lcsc.PARTS].find_one({"_id": lcsc_id}, {"drawer_manual": 1, "drawer_llm": 1}) or {}
+    group, branch, by = lcsc.place_of(doc, lcsc._drawer_facts(lcsc_id))
+    return {"group": group, "branch": branch, "by": by,
+            "model": (doc.get("drawer_llm") or {}).get("model") if by == "llm" else None}
+
+
+async def _run_add(job: dict) -> None:
+    lcsc_id = job["lcsc"]
+    lcsc.PATIENT.set(True)                 # somebody is watching: wait for the budget, say so
+    lcsc.PROGRESS.set(lambda step, text: _add_step(job, step, text))
+    try:
+        _add_step(job, "ask", "asking LCSC…")
+        await lcsc._component(lcsc_id)
+        doc = await lcsc.fetch(db(), lcsc_id)
+        await lcsc.categorise(db(), lcsc_id)
+        place = await _place_row(lcsc_id)
+        job["place"] = place
+        job["name"] = doc.get("name")
+        job["has_3d"] = bool((doc.get("artifacts") or {}).get("model")
+                             or doc.get("model_step") or doc.get("model_wrl"))
+        _add_step(job, "done", f"placed in {place['group']} › {place['branch']}")
+        job["state"] = "done"
+        await say(f"{lcsc_id} fetched from LCSC - {doc.get('name')}"
+                  + (" with a 3D model" if job["has_3d"] else ", footprint only")
+                  + f", in {place['group']} › {place['branch']}", "done", room="pcb")
+    except LookupError as exc:
+        job["state"], job["error"] = "error", str(exc)
+    except lcsc.Refused as exc:
+        job["state"], job["error"] = "error", str(exc)
+    except (ValueError, RuntimeError, TimeoutError, OSError) as exc:
+        job["state"], job["error"] = "error", f"could not fetch it: {str(exc)[:300]}"
+    if job["state"] == "error":
+        _add_step(job, "error", job["error"])
+
+
+@app.post("/api/parts-add")
+async def part_add_start(body: PartAddIn):
+    """Start keeping a part and hand back a job to watch. One already in
+    the drawer is a job finished at once, `already` set."""
+    import asyncio as _asyncio
+    import uuid as _uuid
+    lcsc_id = (body.lcsc or "").strip().upper()
+    if not lcsc.looks_like_a_part(lcsc_id):
+        raise HTTPException(400, "not an LCSC number - they look like C25744")
+    job = {"id": _uuid.uuid4().hex[:12], "lcsc": lcsc_id, "state": "running", "steps": [],
+           "step": "", "text": "", "error": None, "place": None, "already": False}
+    got = await db()[lcsc.PARTS].find_one({"_id": lcsc_id}, {"name": 1})
+    if got:
+        job.update(state="done", already=True, name=got.get("name"), place=await _place_row(lcsc_id))
+        _add_step(job, "done", f"already in the drawer - {job['place']['group']} › {job['place']['branch']}")
+    else:
+        _ADDS[job["id"]] = job
+        job["task"] = _asyncio.create_task(_run_add(job))
+    for old in list(_ADDS)[:-50]:
+        _ADDS.pop(old, None)
+    return {k: v for k, v in job.items() if k != "task"}
+
+
+@app.get("/api/parts-add/{job_id}")
+async def part_add_status(job_id: str):
+    job = _ADDS.get(job_id)
+    if not job:
+        raise HTTPException(404, "no such add")
+    return {k: v for k, v in job.items() if k != "task"}
+
+
+@app.get("/api/parts-places")
+async def part_places():
+    """Every drawer and its branches, in the drawer's order."""
+    out: dict[str, list[str]] = {}
+    for g, b in sorted(lcsc.PLACES, key=lambda p: (lcsc.DRAWER_ORDER.index(p[0])
+                                                    if p[0] in lcsc.DRAWER_ORDER else 99, p[1])):
+        out.setdefault(g, []).append(b)
+    return [{"group": g, "branches": bs} for g, bs in out.items()]
+
+
+@app.put("/api/parts/{lcsc_id}/place")
+async def part_place(lcsc_id: str, body: PlaceIn):
+    """Put a part in a drawer by hand; it wins over the rules and the model.
+    Both empty: back to where the rules (or the model) put it."""
+    if not await db()[lcsc.PARTS].find_one({"_id": lcsc_id}, {"_id": 1}):
+        raise HTTPException(404, lcsc_id)
+    try:
+        await lcsc.set_place(db(), lcsc_id, body.group or None, body.branch or None)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return await _place_row(lcsc_id)
+
+
 @app.get("/api/boards/{bid}/analytics")
 async def board_analytics(bid: str):
     """The board room's Analytics tab: the board, its bill and its library,
@@ -2375,6 +2494,8 @@ async def _start_sampler():
             asyncio.create_task(fx.loop(db))           # and Frankfurter's, every hour
             from . import budgets
             asyncio.create_task(budgets.loop(lambda: db().raw))   # the month's budgets, and their alerts
+            from . import tgbot
+            tgbot.start(lambda: db().raw)              # Telegram: send queue, watcher, polling
         except Exception as exc:                       # noqa: BLE001 - .env keys still work
             LOG.warning("LLM / proxy settings not read: %s", exc)
 

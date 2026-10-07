@@ -44,7 +44,9 @@ SESSION_DAYS = 30
 
 # The routes a signed-out page may call: to know whether sign-in is on,
 # to sign in, and to make the first account.
-OPEN = {"/api/health", "/api/auth/state", "/api/auth/login", "/api/auth/setup"}
+OPEN = {"/api/health", "/api/auth/state", "/api/auth/login", "/api/auth/setup",
+        # Telegram's updates: no session, but the webhook's secret header (backend/tgbot/api.py)
+        "/api/telegram/webhook"}
 # ... and an invitation's page, and accepting it: the link is the key.
 OPEN_PREFIX = ("/api/invite/", "/api/reset/")
 

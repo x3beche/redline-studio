@@ -177,6 +177,39 @@ Without it a release still goes out, and says the drawings could not be
 made. Release zips are kept in the database and, for speed, in
 `.cache/releases`.
 
+## Telegram
+
+Optional. The bot is set up from the app, in Settings > Telegram, by an owner
+or admin. Nothing goes in `.env`: the token is kept in the database only
+(`telegram_settings`), and the page shows only its last four characters.
+
+1. In Telegram, send `/newbot` to [@BotFather](https://t.me/BotFather). Give it
+   a display name (`Redline`) and a username ending in `bot`
+   (`redline_studio_bot`). Its answer holds the token, `123456789:AA…`. Keep
+   it secret.
+2. Paste the token in step 2 of the guide. It is checked with getMe before it
+   is saved.
+3. Step 3 comes filled with Redline's defaults: the name, description and
+   short description in English and Turkish, and the app's mark as the
+   picture. Save them as they are, change them, or add other languages. The
+   command menu is set for you.
+4. In step 4, choose how updates arrive:
+   - **Webhook** (recommended): the app must be reachable over https.
+     Telegram calls `https://<public address>/api/telegram/webhook` with a
+     secret header that is set when you press the button. Behind a reverse
+     proxy (Nginx Proxy Manager), forward `/api/` as usual. The route needs
+     no sign-in and refuses anything without the secret (401/403).
+   - **Long polling**: no public address is needed, but only one server may
+     poll a bot at a time.
+5. Each person presses **Link my Telegram** in their own card and opens the
+   link. A chat links only with that one-time code.
+6. Send yourself a test.
+
+The packages are `python-telegram-bot` (the Bot API client) and `segno`
+(the QR code), both in `requirements.txt`; the API container installs them
+on start. **Remove the bot** on the same page disconnects it. The bot
+itself stays on Telegram until you send `/deletebot` to @BotFather.
+
 ## Themes
 
 Twenty-six, chosen under your name > **Preferences** (or ⚙, or Ctrl+K),

@@ -121,6 +121,16 @@ _RULES: list[tuple[str, str, str]] = [
     ("PUT", "/api/costs", "settings"),
     ("POST", "/api/fx/refresh", "settings"),
     ("POST", "/api/proxy/test", "settings"),
+    # Telegram (backend/tgbot/api.py): Telegram itself, with the webhook's
+    # secret header and no session; the bot is the server's settings;
+    # linking one's own chat, and what one hears about, is anyone's;
+    # unlinking someone else is managing the members
+    ("POST", "/api/telegram/webhook", NONE),
+    ("*", "/api/telegram/(link|me|me/test)", "view"),
+    ("DELETE", "/api/telegram/links/{}", "members"),
+    ("PUT", "/api/telegram/(token|mode|settings|profile|profile/photo|profile/photo/default)", "settings"),
+    ("DELETE", "/api/telegram/(bot|profile/photo|profile/lang/{})", "settings"),
+    ("POST", "/api/telegram/profile/translate", "settings"),
     # releases: making one runs the builds' outputs; downloading is looking
     ("POST", "/api/releases", "run"),
     # talking with the agents

@@ -49,7 +49,10 @@ def test_a_viewer_only_looks():
             # reading an agent's question or reply in another language (reading.py)
             ("POST", "/api/questions/x/translate"), ("POST", "/api/chat/x/translate"),
             # trading a token for a read-only page session (test_page_session.py)
-            ("POST", "/api/auth/page-session")}, (method, path)
+            ("POST", "/api/auth/page-session"),
+            # one's own Telegram link and what one hears about (backend/tgbot/api.py)
+            ("POST", "/api/telegram/link"), ("DELETE", "/api/telegram/link"), ("PUT", "/api/telegram/me"),
+            ("POST", "/api/telegram/me/test")}, (method, path)
 
 
 def test_a_reviewer_draws_but_does_not_queue_build_or_delete():
@@ -94,7 +97,8 @@ def test_signed_out_reaches_only_signing_in():
         # Every sign-in route but the one that needs an agent token.
         signing_in = path.startswith(("/api/auth/", "/api/invite/", "/api/reset/")) \
             and path != "/api/auth/page-session"
-        assert open_ == (signing_in or path == "/api/health"), (method, path)
+        # Telegram's webhook: no session; the route checks its secret header.
+        assert open_ == (signing_in or path in ("/api/health", "/api/telegram/webhook")), (method, path)
 
 
 def test_the_tool_pages_are_for_looking():
