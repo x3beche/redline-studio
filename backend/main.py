@@ -44,6 +44,7 @@ MONGODB_DB = os.getenv("MONGODB_DB", "redline")
 
 # draft  : the user is still writing, models do not see it
 # queued : in the apply queue, models read these
+STATUSES = ("draft", "queued", "applied", "rejected")   # a note's status (PATCH /api/revisions)
 ORDER = {"queued": 0, "draft": 1, "applied": 2, "rejected": 3}
 
 app = FastAPI(title="Redline API")
