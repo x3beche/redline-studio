@@ -58,6 +58,8 @@ const SWATCH: Record<Theme, string[]> = { // theme:pigment
   default: ['#444', '#333', '#ddd', '#53a0e3'], // theme:pigment
   light: ['#eceef1', '#f6f7f9', '#232a31', '#1d6fb8'], // theme:pigment
   oled: ['#000', '#0a0c0e', '#d8dde3', '#4a9be0'], // theme:pigment
+  'vercel-dark': ['#000', '#0a0a0a', '#ededed', '#0070f3'], // theme:pigment
+  'spartan-dark': ['#09090b', '#18181b', '#fafafa', '#2662d9'], // theme:pigment
   'github-dark': ['#0d1117', '#161b22', '#e6edf3', '#2f81f7'], // theme:pigment
   'atom-one-dark': ['#282c34', '#21252b', '#abb2bf', '#c678dd'], // theme:pigment
   'one-dark-pro': ['#282c34', '#21252b', '#abb2bf', '#4d78cc'], // theme:pigment

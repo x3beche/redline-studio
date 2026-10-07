@@ -5,7 +5,7 @@ import {
 import { money } from '../money';
 import {
   Activity, BoardComponent, BoardEntry, BoardGeometry, BoardStats, BoardGraph, BoardLayout, BoardRules,
-  Boards, LcscAsk, LcscJournal, LogLine, PartHeld, PartHit,
+  Boards, LogLine, PartHeld, PartHit,
   PartPreview, Parts, RuleSchema,
 } from '../api';
 import { Selection } from '../selection';
@@ -23,7 +23,8 @@ import { RoomFrame, ToolButton } from './frame';
 import { RulesForm } from './rules-form';
 import { DrawTools, PenState, Sketchpad } from './sketchpad';
 import { ImportBoard } from './import-board';
-import { MiniBars, MiniColumns } from './minicharts';
+import { BoardHealth } from './board-health';
+import { t } from '../i18n';
 import { PartsDrawer } from './parts-drawer';
 
 /** An add being watched (backend main.py /api/parts-add). */
@@ -33,7 +34,7 @@ interface PartAdd {
   place?: { group: string; branch: string; by: string } | null;
 }
 
-type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'analytics';
+type SideTab = 'parts' | 'rules' | 'health';
 type Pane = 'layout' | 'schematic' | '3d';
 type BoardView = Pane | 'split' | 'focus';
 
@@ -51,7 +52,7 @@ type BoardView = Pane | 'split' | 'focus';
  */
 @Component({
   selector: 'app-room-pcb',
-  imports: [Board3d, CodeView, PinIcon, PinnedByList, Drawing, DrawTools, ImportBoard, Releases, MiniBars, MiniColumns, NgTemplateOutlet,
+  imports: [Board3d, CodeView, PinIcon, PinnedByList, Drawing, DrawTools, ImportBoard, Releases, BoardHealth, NgTemplateOutlet,
             PartsDrawer, RoomFrame, RulesForm, Sketchpad, ToolButton],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
@@ -74,7 +75,7 @@ type BoardView = Pane | 'split' | 'focus';
   <!-- The 3D room's layout, because it is the app's one layout: the
        toolbar across the top with the pen at its end, the tabs down the
        left, the board beside them and the log under it. -->
-  <app-room-frame room="pcb" [tabs]="sideTabs" [tab]="side()" [labels]="tabNames"
+  <app-room-frame room="pcb" [tabs]="sideTabs" [tab]="side()" [labels]="tabNames()"
                   (tabChange)="setSide($any($event))" [log]="log()">
 
     <!-- THE TOOLBAR
@@ -415,160 +416,17 @@ type BoardView = Pane | 'split' | 'focus';
             <div style="color: var(--ink-dim)">build the board first - rules follow its nets</div>
           }
         </div>
-      } @else if (side() === 'checks') {
-        <!-- WHAT THE CHECKS FOUND
-             KiCad's DRC over the routed board and ERC over the schematic,
-             itemised: errors first, then warnings, then what sits inside a
-             part's own footprint or is about the project's set-up rather
-             than the design. -->
-        <div class="mono min-h-0 flex-1 overflow-auto p-2 text-[11px]">
-          @if (here()?.drc; as d) {
-            <div class="tcv-label mb-1">DRC · the board</div>
-            <div [style.color]="d.error_count ? 'var(--danger)' : 'var(--ok)'">
-              {{ d.error_count }} errors · {{ d.unconnected }} unconnected
-            </div>
-            @for (e of entries(d.errors); track e[0]) {
-              <div class="flex justify-between" style="color: var(--danger)"><span>{{ e[0] }}</span><span>{{ e[1] }}</span></div>
-            }
-            @for (x of d.examples; track x) {
-              <div class="mb-0.5 break-words leading-snug" style="color: var(--ink-dim)">· {{ x }}</div>
-            }
-            @for (u of d.unconnected_examples; track u) {
-              <div class="break-words leading-snug" style="color: var(--danger)">unconnected: {{ u }}</div>
-            }
-            <div class="mt-1" style="color: var(--ink-dim)">{{ d.warning_count }} warnings</div>
-            @for (e of entries(d.warnings); track e[0]) {
-              <div class="flex justify-between" style="color: var(--ink-dim)"><span>{{ e[0] }}</span><span>{{ e[1] }}</span></div>
-            }
-            @if (entries(d.in_footprints).length) {
-              <div class="mt-1" style="color: var(--ink-dim)"
-                   title="both ends of the finding are in the same part: the maker's land pattern, not the layout">
-                inside a part's own footprint
-              </div>
-              @for (e of entries(d.in_footprints); track e[0]) {
-                <div class="flex justify-between" style="color: var(--ink-dim)"><span>{{ e[0] }}</span><span>{{ e[1] }}</span></div>
-              }
-            }
-          } @else {
-            <div style="color: var(--ink-dim)">no DRC yet - run routes and checks the board</div>
-          }
-
-          @if (here()?.schematic?.erc; as e) {
-            <div class="tcv-label mb-1 mt-3">ERC · the schematic</div>
-            <div [style.color]="e.error_count ? 'var(--danger)' : 'var(--ok)'">
-              {{ e.error_count }} errors · {{ e.warning_count }} warnings
-            </div>
-            @for (x of entries(e.errors); track x[0]) {
-              <div class="flex justify-between" style="color: var(--danger)"><span>{{ x[0] }}</span><span>{{ x[1] }}</span></div>
-            }
-            @for (x of e.examples; track x) {
-              <div class="mb-0.5 break-words leading-snug" style="color: var(--ink-dim)">· {{ x }}</div>
-            }
-            @for (x of entries(e.warnings); track x[0]) {
-              <div class="flex justify-between" style="color: var(--ink-dim)"
-                   [title]="x[0] === 'pin_to_pin' ? 'mostly LCSC symbols whose pins are typed Unspecified' : ''">
-                <span>{{ x[0] }}</span><span>{{ x[1] }}</span>
-              </div>
-            }
-            @if (entries(e.setup).length) {
-              <div class="mt-1" style="color: var(--ink-dim)"
-                   title="the generated project has no library tables; not about the design">
-                library set-up notes
-              </div>
-              @for (x of entries(e.setup); track x[0]) {
-                <div class="flex justify-between" style="color: var(--ink-dim)"><span>{{ x[0] }}</span><span>{{ x[1] }}</span></div>
-              }
-            }
-          }
-        </div>
-      } @else if (side() === 'lcsc') {
-        <!-- EVERY ASK MADE OF LCSC, by whoever made it. These are
-             somebody else's endpoints and they turn a burst away, so what
-             the agents are doing to them is worth being able to watch. -->
-        @if (asks(); as j) {
-          <div class="mono shrink-0 px-2 pt-1 text-[10px]" style="color: var(--ink-dim)">
-            last hour: {{ j.last_hour.net }} sent · {{ j.last_hour.disk }} from disk
-            @if (j.last_hour.refused) {
-              · <span style="color: var(--danger)">{{ j.last_hour.refused }} refused</span>
-            }
-          </div>
-        }
-        <!-- The turn-taking as it stands: how far apart asks are kept,
-             and - when EasyEDA has said no - why and for how long. -->
-        @if (asks(); as j) {
-          <div class="mono flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1 text-[10px]"
-               style="border-bottom: 1px solid var(--line)">
-            @if (j.state.refused_until) {
-              <span style="color: var(--danger)">
-                cooling off · {{ coolLeft(j) }} left · {{ j.state.refused_why }}
-              </span>
-            } @else {
-              <span style="color: var(--ok)">asking</span>
-            }
-            <span style="color: var(--ink-dim)">one ask every {{ j.state.gap_s }} s</span>
-            <!-- EasyEDA refuses a count, not a rate - 35 asks over 220 s
-                 were enough - so this is the number that matters. -->
-            <span [style.color]="j.state.used >= j.state.budget ? 'var(--warn)' : 'var(--ink-dim)'">
-              {{ j.state.used }}/{{ j.state.budget }} asks in {{ j.state.window_s / 60 }} min
-            </span>
-            <span class="flex flex-wrap gap-1">
-              @for (f of askFilters; track f) {
-                <button (click)="askFilter.set(f)" class="tcv-chip px-1.5 py-0"
-                        [attr.data-on]="askFilter() === f ? 1 : null">{{ f }}</button>
-              }
-            </span>
-          </div>
-        }
-        <div class="tcv-scroll mono min-h-0 flex-1 overflow-y-auto text-[11px]">
-          @for (a of shownAsks(); track a.at + a.kind + a.target) {
-            <div (click)="openAsk.set(openAsk() === a ? null : a)"
-                 class="cursor-pointer px-2 py-0.5"
-                 [style.background]="openAsk() === a ? 'var(--accent-deep)' : null">
-              <!-- Two lines, so it reads in a narrow column: what was
-                   asked for and how it went, then when, by whom and what
-                   it cost. On one line the part number was the thing
-                   pushed off the edge. -->
-              <div class="flex items-baseline gap-1.5">
-                <span class="min-w-0 flex-1 truncate" style="color: var(--ink)"
-                      [title]="a.target">{{ a.target }}</span>
-                <span class="shrink-0" [style.color]="sourceColor(a)">
-                  {{ a.source === 'net' ? (a.status ?? 'err') : a.source }}
-                </span>
-              </div>
-              <div class="flex flex-wrap gap-x-1.5 text-[10px]" style="color: var(--ink-dim)">
-                <span style="color: var(--line)">{{ a.at.slice(11, 19) }}</span>
-                <span [style.color]="whoColor(a.who)">{{ a.who }}</span>
-                <span>{{ a.kind }}</span>
-                @if (a.source === 'net') { <span>{{ a.ms }}ms</span> }
-                @if (a.bytes) { <span>{{ size(a.bytes) }}</span> }
-              </div>
-              @if (openAsk() === a) {
-                <div class="mb-1 mt-0.5 break-all text-[10px] leading-snug"
-                     style="color: var(--ink-dim)">
-                  @if (a.url) { <div>{{ a.url }}</div> }
-                  @if (a.error) { <div style="color: var(--danger)">{{ a.error }}</div> }
-                  <div>{{ a.at }} · {{ a.who }} · {{ sourceWord(a.source) }}</div>
-                </div>
-              }
-            </div>
-          } @empty {
-            <div class="px-2 py-1" style="color: var(--ink-dim)">nothing asked yet</div>
-          }
-        </div>
-      }
-      }
-      @if (side() === 'analytics') {
-        <!-- ANALYTICS: the board at a glance, small enough to sit above
-             the agent's card while it works - the figures that say what
-             the board is, then what it is built of and how its nets run.
-             Everything is what is already known; nothing asks LCSC. -->
-        <div class="min-h-0 flex-1 overflow-y-auto px-2 py-1.5 text-[11px]">
-          <!-- Where the board stands and its files, which the toolbar used
-               to carry: routed or not, and the three files to take away. -->
-          <div class="tcv-files">
-            <span [style.color]="building() ? 'var(--accent)' : null" [title]="here()?.route ? routeTitle() : ''">
-              {{ building() ? 'building…' : here()?.route ? 'routed' : hasLayout() ? 'placed · not routed' : 'not built' }}
-            </span>
+      } @else if (side() === 'health') {
+        <!-- BOARD HEALTH (rooms/board-health.ts): ready to order or not,
+             a traffic light per check, the board in a few figures. What
+             the old Checks and Analytics tabs listed beyond that stays on
+             the board document; the files are under Advanced details. -->
+        <app-board-health class="min-h-0 flex-1" [board]="here()" [stats]="stats()"
+                          [component]="comp()" [parts]="graph()?.components ?? null"
+                          [building]="building()" [canRun]="canRun()"
+                          [canFocus]="!!here()?.route && !!geo()" [note]="note()"
+                          (rerun)="build()" (focusNet)="focusNet($event)">
+          <div advanced class="tcv-files" style="margin-bottom: 0">
             <a [attr.href]="hasPcb() ? file('board.kicad_pcb') : null" [class.off]="!hasPcb()"
                title="the layout, to open in KiCad">.kicad_pcb</a>
             @if (imported()) {
@@ -581,53 +439,8 @@ type BoardView = Pane | 'split' | 'focus';
             <a [attr.href]="has3d() ? modelUrl() : null" [class.off]="!has3d()"
                title="the 3D model">.glb</a>
           </div>
-          @if (note(); as n) {
-            <div class="tcv-files-note" [title]="n">{{ n }}</div>
-          }
-          @if (stats(); as st) {
-            <div class="tcv-stats">
-              <span>parts</span><b>{{ st.parts.components }}</b>
-              <span>nets</span><b [title]="st.parts.joins + ' pins joined'">{{ st.parts.nets ?? '–' }}</b>
-              @if (st.size.mm; as mm) {
-                <span>board</span><b title="millimetres">{{ mm[0].toFixed(1) }}×{{ mm[1].toFixed(1) }}</b>
-                <span>density</span>
-                <b [title]="st.size.area_cm2 + ' cm², parts per cm²'">{{ st.size.density ?? '–' }}/cm²</b>
-              }
-              @if (st.route; as r) {
-                <span>tracks</span><b [title]="r.vias + ' vias'">{{ r.tracks }} · {{ r.vias }}v</b>
-                <span>unrouted</span>
-                <b [style.color]="r.unrouted ? 'var(--danger)' : 'var(--ok)'">{{ r.unrouted }}</b>
-              }
-              @if (st.checks; as c) {
-                <span>DRC</span>
-                <b [style.color]="c.drc_errors ? 'var(--danger)' : 'var(--ok)'"
-                   [title]="c.drc_errors + ' errors, ' + c.drc_warnings + ' warnings, ' + c.unconnected + ' unconnected'">
-                  {{ c.drc_errors ?? '?' }} · {{ c.drc_warnings ?? '?' }}w</b>
-                <span>ERC</span>
-                <b [style.color]="c.erc_errors ? 'var(--danger)' : 'var(--ok)'">{{ c.erc_errors ?? '?' }}</b>
-              }
-              @if (st.route; as r) {
-                <span>copper</span><b>{{ r.length_mm.toFixed(0) }} mm</b>
-                <span>area</span><b>{{ st.size.area_cm2 ?? '–' }} cm²</b>
-              }
-              @if (st.bom; as m) {
-                <span>BOM</span>
-                <b [title]="'unit price × quantity over the ' + m.priced + ' of ' + m.lines
-                            + ' part numbers LCSC has already been asked about'">
-                  {{ m.priced ? money(m.cost_usd) : '–' }} · {{ m.priced }}/{{ m.lines }}</b>
-                <span>JLC</span>
-                <b title="Basic: no loading fee. Extended: a feeder fee per assembly run.">
-                  {{ m.basic }}B · <span [style.color]="m.extended ? 'var(--warn)' : null">{{ m.extended }}E</span></b>
-              }
-            </div>
-            <div class="tcv-mchart-title">parts by circuit block</div>
-            <app-mini-bars [rows]="st.blocks" />
-            <div class="tcv-mchart-title">nets by pins joined</div>
-            <app-mini-columns [rows]="st.fanout" />
-          } @else {
-            <div style="color: var(--ink-dim)">reading the board…</div>
-          }
-        </div>
+        </app-board-health>
+      }
       }
     </div>
 
@@ -879,12 +692,12 @@ export class RoomPcb implements OnDestroy {
   readonly notYet = 'Nothing yet. Ask for the change - a board note, or the '
     + 'thread under the queue - and the agent runs the pipeline: build, '
     + 'schematic, place, route, DRC.';
-  readonly sideTabs = ['parts', 'rules', 'checks', 'lcsc', 'analytics'] as const;
-  /** The LCSC tab is the parts supplier's side of things - every request
-   *  made of it and the turn-taking - so it is named for what it is. */
-  readonly tabNames = { parts: 'Parts', rules: 'Rules', checks: 'Checks', lcsc: 'Sourcing',
-                        analytics: 'Analytics' };
-  side = signal<SideTab>(RoomPcb.pick(RoomPcb.recall('side', 'parts'), this.sideTabs, 'parts'));
+  readonly sideTabs = ['parts', 'rules', 'health'] as const;
+  /** Board health replaced the Checks and Analytics tabs; a browser that
+   *  remembers one of those opens it. */
+  readonly tabNames = computed(() => ({ parts: t('Parts'), rules: t('Rules'), health: t('Board health') }));
+  side = signal<SideTab>(RoomPcb.pick(
+    RoomPcb.recall('side', 'parts').replace(/^(checks|analytics)$/, 'health'), this.sideTabs, 'parts'));
 
   /** The pen: the view held as a picture, and what is being drawn with. */
   readonly pen = new PenState();
@@ -906,12 +719,12 @@ export class RoomPcb implements OnDestroy {
   saving = signal(false);
   private checking?: ReturnType<typeof setTimeout>;
   lastLayout = signal<BoardLayout | null>(null);
-  /** The Analytics tab's figures, and whether the agent is at work in
-   *  this room - the room turns to Analytics when it starts. */
+  /** The board's figures (Board health), and whether the agent is at
+   *  work in this room - the room turns to Board health when it starts. */
   stats = signal<BoardStats | null>(null);
   busy = signal(false);
   private statsAt = 0;
-  /** The task Analytics was last opened for, so it opens once per task. */
+  /** The task Board health was last opened for, so it opens once per task. */
   private shownFor: string | null = null;
   /** The drawer of parts, and what a search in LCSC turned up. */
   held = signal<PartHeld[]>([]);
@@ -925,10 +738,6 @@ export class RoomPcb implements OnDestroy {
   /** The part whose photo would not load, so the frame is not left empty. */
   noPhoto = signal<string | null>(null);
 
-  asks = signal<LcscJournal | null>(null);
-  readonly askFilters = ['all', 'sent', 'disk', 'refused', 'agent', 'page'] as const;
-  askFilter = signal<(typeof RoomPcb.prototype.askFilters)[number]>('all');
-  openAsk = signal<LcscAsk | null>(null);
   log = signal<LogLine[]>([]);
   private timers: ReturnType<typeof setInterval>[] = [];
 
@@ -1321,72 +1130,26 @@ export class RoomPcb implements OnDestroy {
     try { localStorage.setItem(RoomPcb.KEY + key, value); } catch { /* private window */ }
   }
 
-  private readJournal() {
-    this.store.journal(300).subscribe({ next: j => this.asks.set(j) });
-  }
-
-  shownAsks(): LcscAsk[] {
-    const rows = this.asks()?.rows ?? [];
-    switch (this.askFilter()) {
-      case 'sent': return rows.filter(a => a.source === 'net');
-      case 'disk': return rows.filter(a => a.source === 'disk');
-      case 'refused': return rows.filter(a => a.source === 'refused'
-                                          || a.status === 403 || a.status === 429);
-      case 'agent': return rows.filter(a => a.who !== 'page');
-      case 'page': return rows.filter(a => a.who === 'page');
-      default: return rows;
-    }
-  }
-
-  coolLeft(j: LcscJournal): string {
-    const s = Math.max(0, Math.round((j.state.refused_until ?? 0) - j.state.now));
-    return s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`;
-  }
-
-  whoColor(who: string): string {
-    return who === 'page' ? 'var(--ink-dim)' : 'var(--accent)';
-  }
-
-  sourceColor(a: LcscAsk): string {
-    if (a.source === 'refused' || a.status === 403 || a.status === 429) return 'var(--danger)';
-    if (a.source === 'disk') return 'var(--ink-dim)';
-    if (a.source === 'wait') return 'var(--warn)';
-    return a.status === 200 ? 'var(--ok)' : 'var(--warn)';
-  }
-
-  sourceWord(s: LcscAsk['source']): string {
-    return s === 'net' ? 'sent to EasyEDA'
-      : s === 'disk' ? 'answered from disk, nothing sent'
-      : s === 'wait' ? 'an agent waiting for the budget; sent when it frees'
-      : 'not sent - cooling off, or the budget is spent';
-  }
-
-  size(bytes: number): string {
-    return bytes >= 1e6 ? (bytes / 1e6).toFixed(1) + 'M'
-      : bytes >= 1000 ? Math.round(bytes / 1000) + 'k' : bytes + 'B';
-  }
-
   /** The live half: what the machine is doing, and what has happened. */
   private tick() {
-    if (this.side() === 'lcsc') this.readJournal();
     this.activity.lines(60, 'pcb').subscribe({ next: rows => this.log.set(rows) });
     // This room's own run: while it goes, the agent's card is docked here.
     this.activity.run('pcb').subscribe({ next: r => {
       const was = this.busy();
       this.busy.set(r?.status === 'running');
       // Once per task - when it starts, or when the page is opened while it
-      // runs - the room turns to Analytics to show what is being changed.
+      // runs - the room turns to Board health to show where the board stands.
       // Only once: a tab picked by hand after that is left alone.
       const task = r?.status === 'running' ? (r.revision ?? r.started_at) : null;
       if (task && task !== this.shownFor) {
         this.shownFor = task;
-        if (this.side() !== 'analytics') this.setSide('analytics');
+        if (this.side() !== 'health') this.setSide('health');
       }
       // A run that just ended changed the board: read the figures again.
       if (was && !this.busy() && this.here()) this.readStats(this.here()!._id);
     } });
     const b = this.here();
-    if (b && this.side() === 'analytics' && Date.now() - this.statsAt > 15000) {
+    if (b && this.side() === 'health' && Date.now() - this.statsAt > 15000) {
       this.readStats(b._id);
     }
   }
@@ -1394,6 +1157,17 @@ export class RoomPcb implements OnDestroy {
   private readStats(id: string) {
     this.statsAt = Date.now();
     this.api.analytics(id).subscribe({ next: st => this.stats.set(st) });
+  }
+
+  /** Board health's "Run checks again": the same whole run as Build. */
+  canRun(): boolean {
+    return this.auth.can('run') && !this.imported() && !this.frozen() && !!this.here();
+  }
+
+  /** A net named in Board health, lit on the layout. */
+  focusNet(net: string) {
+    if (!this.showsLayout()) this.setBoardTab('layout');
+    setTimeout(() => this.flat()?.pinned.set(net), 60);
   }
 
 
@@ -1515,15 +1289,6 @@ export class RoomPcb implements OnDestroy {
       ? url + (url.includes('?') ? '&' : '?') + 'light=1' : url;
   }
 
-  routeTitle(): string {
-    const r = this.here()?.route;
-    const d = this.here()?.drc;
-    if (!r) return '';
-    return `${r.tracks} track segments, ${r.vias} vias, ${r.length_mm} mm of copper, `
-      + `routed in ${r.route_s} s; DRC ${d?.error_count ?? '?'} errors, `
-      + `${d?.warning_count ?? '?'} warnings, ${d?.unconnected ?? '?'} unconnected`;
-  }
-
   // ---- which pane goes where ----
 
   /** Whether the layout is on screen - alone, or in one of the windows. */
@@ -1570,11 +1335,6 @@ export class RoomPcb implements OnDestroy {
     this.side.set(tab);
     RoomPcb.keep('side', tab);
     if (tab === 'rules' && !this.draft()) this.loadRules();
-    if (tab === 'lcsc') this.readJournal();
-  }
-
-  entries(o: Record<string, number> | null | undefined): [string, number][] {
-    return Object.entries(o ?? {}).sort((a, b) => b[1] - a[1]);
   }
 
   // ---- the rules ----

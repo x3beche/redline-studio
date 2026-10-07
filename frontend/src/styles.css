@@ -250,6 +250,141 @@
   --series-8: #8a9a5b;
 }
 
+:root[data-theme="vercel-dark"] {
+  /* Vercel's own dark look (Geist): true black, near-black panels, quiet
+     grey hairlines, white type and Vercel blue for what is active. */
+  --surface:      #000000;
+  --surface-2:    #0a0a0a;
+  --hover:        #1a1a1a;
+  --pressed:      #262626;
+  --line:         #2e2e2e;
+
+  --ink:          #ededed;
+  --ink-dim:      #a1a1a1;
+  --ink-bright:   #ffffff;
+  --ink-on-accent: #ffffff;
+  --ink-on-warn:  #1a1200;
+
+  --accent:       #0070f3;
+  --accent-deep:  #0a1f3d;
+  --warn:         #f5a623;
+  --danger:       #ff4d4f;
+  --ok:           #45a557;
+  --ink-on-ok:    #0b0f0b;                /* text sitting on --ok (badges) */
+
+  --pen:          #ff2d3f;
+  --pen-wash:     rgba(255, 45, 63, .08);
+
+  --scrim:        rgba(0, 0, 0, .88);
+  --shade:        rgba(0, 0, 0, .82);
+  --shadow-soft:  rgba(0, 0, 0, .6);
+  --shadow-hard:  rgba(0, 0, 0, .8);
+
+  --view-top:     #1a1a1a;
+  --view-mid:     #0f0f0f;
+  --view-bottom:  #000000;
+  --draw-label:   rgba(10, 10, 10, .92);
+  --shot-bg:      #0a0a0a;
+  --pcb-bg:       #000000;
+  --switch-knob: #ededed;
+  --overlay:      rgba(0, 0, 0, .72);
+  --overlay-rest: rgba(0, 0, 0, .3);
+  --tooltip-bg:   #1a1a1a;
+  --scroll-thumb: rgba(161, 161, 161, .28);
+  --scroll-hover: rgba(161, 161, 161, .45);
+  --scroll-active: rgba(161, 161, 161, .65);
+
+  --chart-work:      #0070f3;
+  --chart-build:     #45a557;
+  --chart-progress:  #f5a623;
+  --chart-reply:     #a855f7;
+  --chart-summary:   #ff4d8d;
+  --chart-translate: #10b5bf;
+  --chart-other:     #6b6b6b;
+  /* Code in Geist's syntax colours. */
+  --code-kw:   #ff4d8d;
+  --code-str:  #62c073;
+  --code-num:  #47a8ff;
+  --code-com:  #8f8f8f;
+  --code-fn:   #c472fb;
+  --code-type: #f5a623;
+  --series-1: #0070f3;
+  --series-2: #f5a623;
+  --series-3: #45a557;
+  --series-4: #ff4d8d;
+  --series-5: #10b5bf;
+  --series-6: #ff4d4f;
+  --series-7: #a855f7;
+  --series-8: #8f8f8f;
+}
+
+:root[data-theme="spartan-dark"] {
+  /* spartan-ng's dark theme (shadcn's zinc for Angular): zinc greys, white
+     as the primary, its chart palette for series. */
+  --surface:      #09090b;
+  --surface-2:    #18181b;
+  --hover:        #27272a;
+  --pressed:      #3f3f46;
+  --line:         #27272a;
+
+  --ink:          #fafafa;
+  --ink-dim:      #a1a1aa;
+  --ink-bright:   #ffffff;
+  --ink-on-accent: #18181b;
+  --ink-on-warn:  #1c1300;
+
+  --accent:       #fafafa;
+  --accent-deep:  #27272a;
+  --warn:         #e88c30;
+  --danger:       #ef4444;
+  --ok:           #2eb88a;
+  --ink-on-ok:    #0b0f0b;                /* text sitting on --ok (badges) */
+
+  --pen:          #ff2d3f;
+  --pen-wash:     rgba(255, 45, 63, .08);
+
+  --scrim:        rgba(9, 9, 11, .88);
+  --shade:        rgba(9, 9, 11, .82);
+  --shadow-soft:  rgba(0, 0, 0, .55);
+  --shadow-hard:  rgba(0, 0, 0, .75);
+
+  --view-top:     #27272a;
+  --view-mid:     #18181b;
+  --view-bottom:  #09090b;
+  --draw-label:   rgba(24, 24, 27, .92);
+  --shot-bg:      #09090b;
+  --pcb-bg:       #09090b;
+  --switch-knob: #fafafa;
+  --overlay:      rgba(9, 9, 11, .72);
+  --overlay-rest: rgba(9, 9, 11, .3);
+  --tooltip-bg:   #27272a;
+  --scroll-thumb: rgba(161, 161, 170, .28);
+  --scroll-hover: rgba(161, 161, 170, .45);
+  --scroll-active: rgba(161, 161, 170, .65);
+
+  --chart-work:      #2662d9;
+  --chart-build:     #2eb88a;
+  --chart-progress:  #e88c30;
+  --chart-reply:     #af57db;
+  --chart-summary:   #e23670;
+  --chart-translate: #38bdf8;
+  --chart-other:     #71717a;
+  --code-kw:   #c084fc;
+  --code-str:  #86efac;
+  --code-num:  #fdba74;
+  --code-com:  #71717a;
+  --code-fn:   #93c5fd;
+  --code-type: #fcd34d;
+  --series-1: #2662d9;
+  --series-2: #e88c30;
+  --series-3: #2eb88a;
+  --series-4: #af57db;
+  --series-5: #e23670;
+  --series-6: #ef4444;
+  --series-7: #38bdf8;
+  --series-8: #a1a1aa;
+}
+
 :root[data-theme="github-dark"] {
   /* GitHub's dark theme (Primer), the one VS Code and github.com wear -
      over the whole application, the 3D backdrop and the code included. */

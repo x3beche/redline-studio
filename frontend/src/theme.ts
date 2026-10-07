@@ -6,7 +6,7 @@
  *  an unknown name falls back to the default rather than leaving the page
  *  with half a palette.
  */
-export const THEMES = ['default', 'light', 'oled', 'github-dark', 'atom-one-dark', 'one-dark-pro', 'vscode-dark',
+export const THEMES = ['default', 'light', 'oled', 'vercel-dark', 'spartan-dark', 'github-dark', 'atom-one-dark', 'one-dark-pro', 'vscode-dark',
   'dracula', 'tokyo-night', 'catppuccin-mocha', 'nord', 'monokai', 'gruvbox-dark', 'solarized-dark', 'material-palenight', 'night-owl', 'ayu-mirage', 'rose-pine', 'kanagawa', 'synthwave-84', 'github-light', 'vscode-light', 'solarized-light', 'catppuccin-latte', 'gruvbox-light', 'high-contrast'] as const;
 
 /** The ones drawn on a light ground: a board's drawings get light inks. */
@@ -14,7 +14,7 @@ export const LIGHT_THEMES: ReadonlySet<string> = new Set(['light', 'github-light
 
 /** What each is called where one is chosen. */
 export const THEME_NAMES: Record<Theme, string> = {
-  default: 'Redline dark', light: 'Light', oled: 'OLED black', 'github-dark': 'GitHub Dark',
+  default: 'Redline dark', light: 'Light', oled: 'OLED black', 'vercel-dark': 'Vercel Dark', 'spartan-dark': 'Spartan Dark', 'github-dark': 'GitHub Dark',
   'atom-one-dark': 'Atom One Dark', 'one-dark-pro': 'One Dark Pro', 'vscode-dark': 'VS Code Dark',
   'dracula': 'Dracula',
   'tokyo-night': 'Tokyo Night',
