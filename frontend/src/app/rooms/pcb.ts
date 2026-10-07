@@ -12,6 +12,8 @@ import { Selection } from '../selection';
 import { NgTemplateOutlet } from '@angular/common';
 import { Board3d } from './board3d';
 import { CodeView } from './code-view';
+import { PinIcon, PinnedByList } from './links';
+import { Auth } from '../auth';
 import { Releases } from './releases';
 import { Prefs } from '../preferences';
 import { LIGHT_THEMES } from '../../theme';
@@ -40,7 +42,7 @@ type BoardView = Pane | 'split' | 'focus';
  */
 @Component({
   selector: 'app-room-pcb',
-  imports: [Board3d, CodeView, Drawing, DrawTools, ImportBoard, Releases, MiniBars, MiniColumns, NgTemplateOutlet,
+  imports: [Board3d, CodeView, PinIcon, PinnedByList, Drawing, DrawTools, ImportBoard, Releases, MiniBars, MiniColumns, NgTemplateOutlet,
             RoomFrame, RulesForm, Sketchpad, ToolButton],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
@@ -742,12 +744,33 @@ type BoardView = Pane | 'split' | 'focus';
                     } @else {
                       <div style="color: var(--ink-dim)">the next layout makes its STEP and named data</div>
                     }
+                    @if (c.error; as e) {
+                      <div class="mt-1 truncate text-[10px]" style="color: var(--danger)"
+                           [title]="e.error">last export failed: {{ e.error.trim().split('\n').pop() }}</div>
+                    }
                     <div class="mt-1">
                       <span class="tcv-label mr-1">used in</span>
                       @for (u of c.used_by; track u.id; let last = $last) {
-                        <span [title]="u.id">{{ u.title }}{{ last ? '' : ', ' }}</span>
+                        <span [title]="u.id + (u.pinned != null ? ' - pinned at v' + u.pinned : ' - follows the latest')"
+                              >@if (u.pinned != null) {<app-pin-icon class="mr-0.5" />}{{ u.title }}{{ last ? '' : ', ' }}</span>
                       } @empty { <span style="color: var(--ink-dim)">nothing yet</span> }
                     </div>
+                    <!-- Who uses it at a fixed version, and one button to bring them up to date. -->
+                    @if (c.pinned_by?.length) {
+                      <div class="mt-1">
+                        <app-pinned-by kind="board" [id]="c.board" [rows]="c.pinned_by!" (changed)="readComponent()" />
+                      </div>
+                    }
+                    <!-- Off: a layout that leaves the 3D as it was is no new version. -->
+                    <label class="mt-1.5 flex items-center gap-1.5">
+                      <span class="min-w-0 flex-1 truncate"
+                            title="On: every layout or run makes a new version, even one that leaves the 3D as it was - so a model can pin the board as of that run. Off: only a changed 3D is a new version.">
+                        Every run is a new version</span>
+                      <button class="tcv-switch" [attr.data-on]="c.every_run ? 1 : null"
+                              [attr.aria-pressed]="!!c.every_run" [disabled]="!canEdit()"
+                              (click)="setEveryRun(!c.every_run)"
+                              aria-label="Every run is a new version"></button>
+                    </label>
                   </div>
                 }
               </div>
@@ -1471,6 +1494,29 @@ export class RoomPcb implements OnDestroy {
   /** The board as a component: its import line, named data, who uses it. */
   comp = signal<BoardComponent | null>(null);
   copiedLine = signal(false);
+
+  private auth = inject(Auth);
+  canEdit = () => this.auth.can('edit');
+
+  /** The component card, read again (a layout, a pin moved). */
+  readComponent() {
+    const id = this.here()?._id;
+    if (!id) return;
+    this.api.component(id).subscribe({
+      next: c => { if (this.here()?._id === id) this.comp.set(c); },
+      error: () => this.comp.set(null),
+    });
+  }
+
+  /** "Every run is a new version", kept on the board. */
+  setEveryRun(on: boolean) {
+    const c = this.comp(), id = this.here()?._id;
+    if (!c || !id) return;
+    this.comp.set({ ...c, every_run: on });
+    this.api.componentSettings(id, on).subscribe({
+      error: () => this.comp.set({ ...c, every_run: !on }),
+    });
+  }
 
   copyLine(line: string) {
     navigator.clipboard?.writeText(line).then(() => {

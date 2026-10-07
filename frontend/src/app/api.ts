@@ -210,6 +210,8 @@ export interface ModelEntry {
   used_by?: ComponentRef[];
   link?: LinkState | null;
   built_hash?: string | null;
+  /** How many components it uses at a fixed version (a pin). */
+  pinned?: number;
 }
 /** A component one model imports, at the version it is now and the one
  *  the model's last build had. */
@@ -221,7 +223,9 @@ export interface ComponentRef { kind?: 'model' | 'board'; id: string; title: str
 /** A rebuild set off by a change elsewhere. */
 export interface LinkState {
   state: 'queued' | 'building' | 'done' | 'failed' | 'blocked' | 'cycle';
-  because?: { kind: 'model' | 'board'; id: string; title: string; version?: number | null };
+  because?: { kind: 'model' | 'board'; id: string; title: string; version?: number | null;
+              /** Set when a pin moved rather than the component itself. */
+              pin?: 'pinned' | 'follow' };
   error?: string; cycle?: string[]; at?: string; done_at?: string;
 }
 export interface BoardNode {
@@ -239,6 +243,7 @@ export interface FolderNode {
 export interface ComponentRow {
   kind: 'model' | 'board'; id: string; title: string; version: number | null;
   module: string | null; ready: boolean; line: string | null; used_by: string[];
+  uses?: string[]; pins?: Record<string, number>; stale?: boolean; state?: string | null;
 }
 /** One model as a component, for its links panel. */
 export interface ModelLinks {
@@ -247,7 +252,21 @@ export interface ModelLinks {
   built: { at: string | null; hash: string | null; current: boolean };
   link: LinkState | null; cycles: string[][]; pins: Record<string, number>;
   copied: { line: number; value: number; names: string[]; text: string }[];
+  /** The models that use this one at a fixed version. */
+  pinned_by?: PinnedBy[];
+  stale?: boolean;
 }
+/** A model that pins a component, at which version, and whether that is
+ *  older than the latest. */
+export interface PinnedBy { id: string; title: string; version: number; latest: number | null; behind: boolean }
+/** A kept version of a component: what a pin can point at. */
+export interface ComponentVersion { version: number; at: string | null; changes: string[] }
+export interface ComponentVersions {
+  kind: 'model' | 'board'; id: string; latest: number | null;
+  versions: ComponentVersion[]; pinned_by: PinnedBy[];
+}
+/** An importable name, and the component it resolves to (the build's table). */
+export interface ModuleTarget { kind: 'model' | 'board'; id: string; title: string }
 /** A board's 3D component: version and the named data a model reads. */
 export interface BoardComponent {
   board: string; title: string; module: string | null; line: string | null;
@@ -262,7 +281,13 @@ export interface BoardComponent {
     keepout: { top: number; bottom: number; bounds: number[] };
     approximate: string[];
   } | null;
-  used_by: ComponentRef[]; dependents: string[];
+  used_by: (ComponentRef & { pinned?: number | null; state?: string | null })[];
+  dependents: string[];
+  pinned_by?: PinnedBy[];
+  /** Every layout or run is a new version, even one that leaves the 3D as it was. */
+  every_run?: boolean;
+  /** The last export that failed, and why. */
+  error?: { at: string; error: string } | null;
 }
 
 // ---------------- version history ----------------
@@ -330,6 +355,21 @@ export class Catalog {
   /** Use a component at a fixed version, or (null) follow it again. */
   pin(id: string, component: string, version: number | null): Observable<unknown> {
     return this.http.post(`/api/models/${id}/pins`, { component, version });
+  }
+
+  /** A component's kept versions, newest first, with what each changed. */
+  componentVersions(kind: 'model' | 'board', id: string): Observable<ComponentVersions> {
+    return this.http.get<ComponentVersions>(`/api/components/${kind}/${id}/versions`);
+  }
+
+  /** Every model pinned to an older version of this component, moved to its latest. */
+  updatePins(kind: 'model' | 'board', id: string): Observable<{ updated: { model: string }[] }> {
+    return this.http.post<{ updated: { model: string }[] }>(`/api/components/${kind}/${id}/update-pins`, {});
+  }
+
+  /** Every name a model can import, and what it is - the build's own table. */
+  modules(): Observable<Record<string, ModuleTarget>> {
+    return this.http.get<Record<string, ModuleTarget>>('/api/components/modules');
   }
 
   source(id: string): Observable<{ source: string; rev: string }> {
@@ -684,6 +724,10 @@ export class Boards {
   /** The board as a 3D component. */
   component(id: string): Observable<BoardComponent> {
     return this.http.get<BoardComponent>(`/api/boards/${id}/component`);
+  }
+  /** How the board's 3D component is versioned. */
+  componentSettings(id: string, everyRun: boolean): Observable<unknown> {
+    return this.http.put(`/api/boards/${id}/component/settings`, { every_run: everyRun });
   }
   graph(id: string, stamp?: string): Observable<BoardGraph> {
     return this.http.get<BoardGraph>(

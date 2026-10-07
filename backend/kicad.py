@@ -157,7 +157,20 @@ async def held_plan(db, board_id: str, hold: dict | None) -> dict | None:
 BOARD3D = HERE / "docker" / "board3d.py"
 
 
-async def component_of(work: Path, board_id: str, glb: bytes | None):
+async def library_footprints(db, board_id: str) -> dict[str, str]:
+    """Each part's footprint by its library name (`TYPE-C-SMD_...`,
+    `HDR-TH_5P-...`), from the build's netlist: the layout names a footprint
+    by its LCSC number, which says nothing about what the part is."""
+    try:
+        graph = json.loads(await store.get_artifact(db, board_id, "graph", ato.BOARDS))
+    except (KeyError, ValueError):
+        return {}
+    return {c["ref"]: str(c.get("footprint") or "").split(":")[-1]
+            for c in graph.get("components") or [] if c.get("ref")}
+
+
+async def component_of(work: Path, board_id: str, glb: bytes | None,
+                       library: dict[str, str] | None = None):
     """The board's STEP, named data and STL, from the routed board in
     `work` (its 3D models still in work/3d, where the footprints point).
 
@@ -176,6 +189,9 @@ async def component_of(work: Path, board_id: str, glb: bytes | None):
     if rc != 0:
         raise RuntimeError("reading the board failed:\n" + text[-600:])
     info = json.loads(text[text.index("{"):text.rindex("}") + 1])
+    for fp in info.get("footprints") or []:
+        if (library or {}).get(fp["ref"]):
+            fp["library"] = library[fp["ref"]]
     x0, _y0, _x1, y1 = info["box"]
     name = f"{board_id.replace('/', '__')}.step"
     rc, log = await _run(
@@ -562,9 +578,13 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         # has its layout.
         component = None
         try:
-            component = await component_of(work, board_id, glb)
+            component = await component_of(work, board_id, glb,
+                                            await library_footprints(db, board_id))
         except Exception as exc:                            # noqa: BLE001 - said, not fatal
             part_trouble = [*part_trouble, f"3D component not made: {str(exc)[:300]}"]
+            # Kept on the board, so `component show` and the card can say why.
+            await db[ato.BOARDS].update_one({"_id": board_id}, {"$set": {"component_error": {
+                "at": _now_iso(), "error": str(exc)[-1500:]}}})
 
         job = meter.stop()
         try:
@@ -647,6 +667,12 @@ async def refresh_component(db, board_id: str) -> dict:
         except KeyError:
             continue
     if pcb is None:
+        doc = await db[ato.BOARDS].find_one({"_id": board_id},
+                                            {"kind": 1, "hold": 1, "layout": 1, "imported": 1})
+        if doc and doc.get("kind") == "imported":
+            # Brought in from Gerbers and a STEP, never laid out here: the
+            # component comes from what the import kept.
+            return await imported_component(db, board_id, doc)
         raise KeyError(f"{board_id} has no layout yet")
     try:
         glb = await store.get_artifact(db, board_id, "model3d", ato.BOARDS)
@@ -663,7 +689,8 @@ async def refresh_component(db, board_id: str) -> dict:
             got = await lcsc.model_of(db, lcsc_id)
             if got:
                 (work / "3d" / f"{lcsc_id}.{got[1]}").write_bytes(got[0])
-        step, data, stl, digest = await component_of(work, board_id, glb)
+        step, data, stl, digest = await component_of(work, board_id, glb,
+                                                     await library_footprints(db, board_id))
         from . import links
         out = await links.board_component(
             db, board_id, step, data, stl, digest=digest,
@@ -671,3 +698,79 @@ async def refresh_component(db, board_id: str) -> dict:
         return {"board": board_id, "step_bytes": len(step), **out}
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
+async def imported_component(db, board_id: str, doc: dict) -> dict:
+    """An imported board's 3D component, from what the import kept: the
+    Gerbers' outline and drills, the parts' placement and pads, and the
+    GLB made from the uploaded STEP (its parts named by designator).
+
+    There is no .kicad_pcb to export a STEP from, and the uploaded STEP is
+    not kept, so the STEP here is the bare board - outline, cutouts, every
+    hole - and every part stands in `B.part` as the box of its body in the
+    GLB (all listed in `B.APPROXIMATE`). The named data - size, holes,
+    connectors, keepout, height map - is as exact as the import."""
+    from . import board3d, convert, links
+    try:
+        glb = await store.get_artifact(db, board_id, "model3d", ato.BOARDS)
+    except KeyError:
+        glb = None
+
+    async def art(name):
+        try:
+            return await store.get_artifact(db, board_id, name, ato.BOARDS)
+        except KeyError:
+            return None
+
+    pads = json.loads(await art("pads") or b"[]")
+    placement = json.loads(await art("placement") or b"{}").get("parts") or []
+    graph = json.loads(await art("imported_graph") or await art("graph") or b"{}") or {}
+    sources = await art("sources")
+    outline = (doc.get("hold") or {}).get("outline")
+    hits = await asyncio.to_thread(_drill_hits, sources)
+    info = board3d.imported_info(outline, (doc.get("layout") or {}).get("size_mm"),
+                                 pads, placement, graph.get("components") or [], hits)
+    # The assembled STEP it came with, if the uploads still have it.
+    step_src = None
+    for f in (doc.get("imported") or {}).get("files") or []:
+        if f.get("kind") == "step":
+            try:
+                step_src = await store.get_upload(db, f["file"])
+                break
+            except KeyError:
+                continue
+    step, data, stl = await asyncio.to_thread(board3d.imported_component, info, glb, step_src)
+    digest = hashlib.sha256((board3d.data_digest(data)
+                             + (hashlib.sha256(glb).hexdigest() if glb else "")).encode()).hexdigest()
+    out = await links.board_component(db, board_id, step, data, stl, digest=digest,
+                                      glb_digest=hashlib.sha256(glb).hexdigest() if glb else "")
+    return {"board": board_id, "step_bytes": len(step), "from": "import",
+            "step_from": data.get("step_from"), **out}
+
+
+def _drill_hits(sources: bytes | None) -> list[dict]:
+    """Every drilled hole the upload's drill files have (not vias), mm in
+    the Gerbers' frame."""
+    import io
+    import zipfile
+    from .imports import detect, gerbers
+    if not sources:
+        return []
+    try:
+        with zipfile.ZipFile(io.BytesIO(sources)) as z:
+            files = [(n, z.read(n)) for n in z.namelist() if not n.endswith("/")]
+    except zipfile.BadZipFile:
+        return []
+    items = [i for i in detect.sort_upload(files) if i.kind in (detect.GERBER, detect.DRILL)]
+    if not items:
+        return []
+    board = gerbers.Board(items)
+    try:
+        return board.drill_hits()
+    finally:
+        board.close()

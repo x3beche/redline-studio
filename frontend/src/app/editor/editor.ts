@@ -25,7 +25,7 @@ import { OcpViewer } from './ocp';
 import { Markdown, plain } from '../markdown';
 import { Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
-import { ComponentPicker, LinksCard, insertImport } from '../rooms/links';
+import { ComponentPicker, LinksCard, PinIcon, insertImport } from '../rooms/links';
 import { Releases } from '../rooms/releases';
 import { Changes } from '../rooms/changes';
 import { T } from '../i18n';
@@ -44,7 +44,7 @@ type Mark =
 
 @Component({
   selector: 'app-editor',
-  imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, Markdown, NgTemplateOutlet, Releases, T],
+  imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, Markdown, NgTemplateOutlet, PinIcon, Releases, T],
   templateUrl: './editor.html',
 })
 export class Editor implements AfterViewInit, OnDestroy {
@@ -806,7 +806,8 @@ export class Editor implements AfterViewInit, OnDestroy {
         this.builtAt = live.built_at;      // claim it so the poll fires once
         // Rebuilt on its own because something it uses changed: say what.
         const why = live.link?.state === 'done' ? live.link.because : null;
-        this.flash(why ? `rebuilt because ${why.title} changed, reloading` : 'model rebuilt, reloading');
+        const did = why?.pin === 'pinned' ? 'was pinned' : why?.pin === 'follow' ? 'is followed again' : 'changed';
+        this.flash(why ? `rebuilt because ${why.title} ${did}, reloading` : 'model rebuilt, reloading');
         this.openModel(live);
       }
     });
@@ -1051,7 +1052,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   linkStamp = computed(() => {
     const m = this.activeEntry();
     return m ? [m.version, m.link?.state, m.link?.at, m.built_at, m.built_hash, m.uses?.length,
-                m.used_by?.length].join('|') : '';
+                m.used_by?.length, m.pinned, (m.uses ?? []).map(u => u.version).join(',')].join('|') : '';
   });
 
   names(refs: { title: string }[] | undefined): string {

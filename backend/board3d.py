@@ -53,7 +53,8 @@ DATA_VERSION = 2          # 2: holes say how much room is above and below them
 
 # A connector by its reference: J1, P2, CN1, USB1, UART2, HDR3.
 CONNECTOR_REF = re.compile(r"^(J|P|CN|CON|CONN|USB|UART|HDR|JP)\d+$", re.I)
-CONNECTOR_WORDS = ("conn", "usb", "header", "pinheader", "jst", "terminal", "socket")
+CONNECTOR_WORDS = ("conn", "usb", "header", "pinheader", "hdr", "jst", "terminal", "socket",
+                   "type-c", "receptacle", "jack")
 # How close to the edge a part's body has to come to be an edge part, mm.
 EDGE_NEAR = 1.5
 # The height map's cell, mm.
@@ -97,9 +98,11 @@ def _local(node: dict):
     return m
 
 
-def _walk(doc: dict):
+def _walk(doc: dict, through: tuple = ()):
     """Every node with a mesh, its world matrix, and the name of the
-    top-level node it hangs under (KiCad names a part's node by its ref)."""
+    top-level node it hangs under (KiCad names a part's node by its ref).
+    A root named in `through` (an imported STEP's "PCB" assembly) is seen
+    through: its children are the top level."""
     import numpy as np
     nodes = doc.get("nodes") or []
     scene = (doc.get("scenes") or [{}])[doc.get("scene", 0)]
@@ -107,15 +110,17 @@ def _walk(doc: dict):
     def go(i, parent, owner):
         node = nodes[i]
         world = parent @ _local(node)
-        name = owner or node.get("name")
+        name = owner or (None if owner is None and node.get("name") in through
+                         and parent is ROOT else node.get("name"))
         if "mesh" in node:
             yield node["mesh"], world, name
         for c in node.get("children") or []:
             # A nameless root (KiCad's) hands each child its own name.
             yield from go(c, world, name)
 
+    ROOT = np.eye(4)
     for i in scene.get("nodes") or []:
-        yield from go(i, np.eye(4), None)
+        yield from go(i, ROOT, None)
 
 
 def _accessor(doc: dict, bin_: bytes, idx: int):
@@ -139,10 +144,11 @@ def to_board(points, frame: dict):
     """GLB points (metres, X page-x, Y up, Z page-y) in the board frame."""
     import numpy as np
     p = np.asarray(points, dtype=float) * 1000.0
-    return np.stack([p[:, 0] - frame["x0"], frame["y1"] - p[:, 2], p[:, 1]], axis=1)
+    return np.stack([p[:, 0] - frame["x0"], frame["y1"] - p[:, 2],
+                     p[:, 1] - frame.get("z0", 0.0)], axis=1)
 
 
-def glb_boxes(glb: bytes, frame: dict) -> dict[str, list[float]]:
+def glb_boxes(glb: bytes, frame: dict, through: tuple = ()) -> dict[str, list[float]]:
     """Each named node's box in the board frame: [x0, y0, z0, x1, y1, z1].
 
     From the vertices, not the accessors' min/max: a turned part's own box
@@ -153,7 +159,7 @@ def glb_boxes(glb: bytes, frame: dict) -> dict[str, list[float]]:
     if not doc:
         return {}
     out: dict[str, list[float]] = {}
-    for mesh, world, name in _walk(doc):
+    for mesh, world, name in _walk(doc, through):
         for prim in doc["meshes"][mesh].get("primitives") or []:
             pts = _accessor(doc, bin_, prim["attributes"]["POSITION"]).astype(float)
             if not len(pts):
@@ -168,14 +174,14 @@ def glb_boxes(glb: bytes, frame: dict) -> dict[str, list[float]]:
     return {k: [round(v, 3) for v in b] for k, b in out.items()}
 
 
-def glb_stl(glb: bytes, frame: dict) -> bytes:
+def glb_stl(glb: bytes, frame: dict, through: tuple = ()) -> bytes:
     """The GLB's triangles as a binary STL, in the board frame."""
     import numpy as np
     doc, bin_ = _glb_parts(glb)
     if not doc:
         return b""
     tris = []
-    for mesh, world, _name in _walk(doc):
+    for mesh, world, _name in _walk(doc, through):
         for prim in doc["meshes"][mesh].get("primitives") or []:
             if prim.get("mode", 4) != 4:
                 continue
@@ -262,7 +268,8 @@ def describe(info: dict, boxes: dict[str, list[float]]) -> dict:
         edge = min(gaps, key=gaps.get)
         near = gaps[edge] <= EDGE_NEAR
         is_conn = bool(CONNECTOR_REF.match(ref)) or any(
-            word in (fp.get("footprint", "") + " " + fp.get("value", "")).lower()
+            word in (fp.get("footprint", "") + " " + fp.get("value", "") + " "
+                     + (fp.get("library") or "")).lower()
             for word in CONNECTOR_WORDS)
         if not (near or is_conn):
             continue
@@ -518,3 +525,279 @@ def module_source(board_id: str, title: str, data: dict, version: int, digest: s
         edge_parts=[{**c, "box": tuple(c["box"])} for c in data["edge_parts"]],
         bodies=data["bodies"], keepout=data["keepout"], height_map=data["height_map"],
         approximate=data["approximate"])
+
+
+# ---------------------------------------------------------------- an imported board
+
+# What an imported STEP has besides its parts: the assembly round them,
+# and the board's layers as solids of their own (backend/imports/step3d.py).
+IMPORT_ROOT = ("PCB",)
+
+
+def _arc(a, m, b, steps: int = 12) -> list[tuple]:
+    from .convert import _arc_points
+    return _arc_points(a, m, b, steps)
+
+
+def imported_info(outline: dict | None, size: list | None, pads: list[dict],
+                  placement: list[dict], components: list[dict], hits: list[dict]) -> dict:
+    """What docker/board3d.py reads of a .kicad_pcb, made from what an
+    import kept instead: the Gerbers' outline (`hold.outline`), the drill
+    hits, the parts' placement and pads. The Gerbers' frame is y up; this
+    turns it into the page's y down, so describe() takes it unchanged."""
+    def page(x, y):
+        return [round(x, 4), round(-y, 4)]
+
+    loops: list[list[tuple]] = []
+    for loop in (outline or {}).get("loops") or []:
+        pts: list[tuple] = []
+        for piece in loop:
+            if "line" in piece:
+                seg = [tuple(p) for p in piece["line"]]
+            elif "arc" in piece:
+                seg = _arc(*piece["arc"])
+            else:
+                continue
+            for p in seg:
+                if not pts or math.dist(pts[-1], p) > 1e-4:
+                    pts.append((float(p[0]), float(p[1])))
+        if len(pts) > 2 and math.dist(pts[0], pts[-1]) < 1e-3:
+            pts.pop()
+        if len(pts) >= 3:
+            loops.append(pts)
+    if not loops:
+        w, h = (size or [100.0, 100.0])[:2]
+        loops = [[(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]]
+
+    def area(lp):
+        return abs(sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(lp, lp[1:] + lp[:1]))) / 2
+    loops.sort(key=area, reverse=True)
+    xs = [p[0] for p in loops[0]]
+    ys = [p[1] for p in loops[0]]
+    gx0, gy0 = min(xs), min(ys)
+    # The placement is kept from the outline box's lower-left corner.
+    ob = (outline or {}).get("box") or [gx0, gy0]
+
+    comps = {c.get("ref"): c for c in components if c.get("ref")}
+    by_ref: dict[str, list[dict]] = {}
+    for p in pads:
+        if p.get("x") is not None:
+            by_ref.setdefault(p["ref"], []).append(p)
+    placed = {p["ref"]: p for p in placement if p.get("ref")}
+    feet = []
+    for ref in sorted(set(placed) | set(by_ref)):
+        pl, ps = placed.get(ref), by_ref.get(ref) or []
+        if pl:
+            gx, gy = pl["x"] + ob[0], pl["y"] + ob[1]
+        else:
+            gx, gy = sum(p["x"] for p in ps) / len(ps), sum(p["y"] for p in ps) / len(ps)
+        pts = [page(p["x"], p["y"]) for p in ps] or [page(gx, gy)]
+        c = comps.get(ref) or {}
+        feet.append({"ref": ref, "value": c.get("value") or "", "footprint": c.get("footprint") or "",
+                     "x": page(gx, gy)[0], "y": page(gx, gy)[1],
+                     "angle": (pl or {}).get("rot") or 0, "side": (pl or {}).get("side") or "top",
+                     "box": [min(q[0] for q in pts), min(q[1] for q in pts),
+                             max(q[0] for q in pts), max(q[1] for q in pts)],
+                     "models": [], "pads": len(ps)})
+    holes = []
+    for h in hits:
+        if any(math.dist((h["x"], h["y"]), (o["gx"], o["gy"])) <= 0.05 for o in holes):
+            continue                       # the same hole in two drill files
+        near = min(((math.dist((h["x"], h["y"]), (p["x"], p["y"])), p["ref"])
+                    for ps in by_ref.values() for p in ps), default=(9e9, ""))
+        ref = near[1] if near[0] <= 0.1 else ""
+        holes.append({"gx": h["x"], "gy": h["y"], "d": h["d"], "plated": bool(h.get("plated")),
+                      "ref": ref, "footprint": (comps.get(ref) or {}).get("footprint") or ""})
+    holes = [{"x": page(h["gx"], h["gy"])[0], "y": page(h["gx"], h["gy"])[1],
+              **{k: v for k, v in h.items() if k not in ("gx", "gy")}} for h in holes]
+    return {"ok": True, "imported": True,
+            "outline": [{"outer": [page(*p) for p in loops[0]],
+                         "holes": [[page(*p) for p in lp] for lp in loops[1:]]}],
+            "box": [gx0, -max(ys), max(xs), -gy0],
+            "thickness": 1.6, "footprints": feet, "holes": holes}
+
+
+def imported_component(info: dict, glb: bytes | None,
+                       step_src: bytes | None = None) -> tuple[bytes, dict, bytes | None]:
+    """An imported board's STEP, named data and STL (see kicad.imported_component).
+
+    The GLB from the uploaded STEP is put in the board frame by its board
+    body: wherever the exporter had its origin, the "Board" solid's lower
+    left corner is (0, 0) and its bottom z = 0. Its height is the board's
+    thickness. Who owns a hole no pad owns: _own_free_holes.
+
+    `step_src`, the assembled STEP the board was imported with (kept in
+    the uploads), is moved into the same frame and is `B.part`. Without it
+    the STEP is the bare board and every part a box."""
+    frame = frame_of(info)
+    boxes = glb_boxes(glb, frame, IMPORT_ROOT) if glb else {}
+    board = boxes.get("Board")
+    shift = None
+    if board:
+        # The board body's lower corner in the STEP's own coordinates
+        # (glTF: X, Z-up's Z as Y, -Y as Z, metres; to_board undid that).
+        shift = (-(board[0] + frame["x0"]), -(board[1] - frame["y1"]), -board[2])
+        frame = {**frame, "x0": frame["x0"] + board[0], "y1": frame["y1"] - board[1],
+                 "z0": board[2]}
+        boxes = glb_boxes(glb, frame, IMPORT_ROOT)
+        info = {**info, "thickness": round(boxes["Board"][5] - boxes["Board"][2], 3)}
+    refs = {f["ref"] for f in info["footprints"]}
+    boxes = {k: v for k, v in boxes.items() if k in refs}
+    _own_free_holes(info, boxes)
+    data = describe(info, boxes)
+    data["from_import"] = True
+    stl = glb_stl(glb, frame, IMPORT_ROOT) if glb else None
+    if step_src and shift is not None:
+        for b in data["bodies"]:
+            b["kind"] = "step"
+        data["approximate"] = []
+        data["step_from"] = "upload"
+        return moved_step(step_src, shift), data, stl
+    # Every part stands in B.part as its box: the STEP is the bare board.
+    data["approximate"] = [b["ref"] for b in data["bodies"]]
+    for b in data["bodies"]:
+        b["kind"] = "wrl"
+    data["step_from"] = "outline"
+    return slab_step(data), data, stl
+
+
+def moved_step(step: bytes, shift: tuple[float, float, float]) -> bytes:
+    """A STEP assembly moved by `shift` (mm), its names and colours kept:
+    the assembly is put in a new one at that offset (OpenCascade's XCAF),
+    in a process of its own."""
+    import subprocess
+    import sys
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory(prefix="redline-move-") as tmp:
+        (Path(tmp) / "in.step").write_bytes(step)
+        out = subprocess.run([sys.executable, "-m", "backend.board3d", "move",
+                              str(Path(tmp) / "in.step"), str(Path(tmp) / "out.step"),
+                              *(repr(float(v)) for v in shift)],
+                             capture_output=True, text=True, timeout=900,
+                             cwd=str(Path(__file__).resolve().parent.parent))
+        got = Path(tmp) / "out.step"
+        if out.returncode != 0 or not got.exists():
+            raise RuntimeError("the uploaded STEP could not be moved into the board's frame:\n"
+                               + (out.stderr or out.stdout)[-600:])
+        return got.read_bytes()
+
+
+def _move_main(src: str, dst: str, dx: float, dy: float, dz: float) -> None:
+    from OCP.gp import gp_Trsf, gp_Vec
+    from OCP.IFSelect import IFSelect_RetDone
+    from OCP.STEPCAFControl import STEPCAFControl_Reader, STEPCAFControl_Writer
+    from OCP.STEPControl import STEPControl_AsIs
+    from OCP.TCollection import TCollection_ExtendedString
+    try:
+        from OCP.TDF import TDF_LabelSequence
+    except ImportError:                 # OCP 7.8: the sequence is a collection
+        from OCP.OCP.collections import Sequence_TDF_Label as TDF_LabelSequence
+    from OCP.TDocStd import TDocStd_Document
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.XCAFDoc import XCAFDoc_DocumentTool
+    from OCP.TDataStd import TDataStd_Name
+
+    doc = TDocStd_Document(TCollection_ExtendedString("MDTV-XCAF"))
+    reader = STEPCAFControl_Reader()
+    reader.SetNameMode(True)
+    reader.SetColorMode(True)
+    if reader.ReadFile(src) != IFSelect_RetDone or not reader.Transfer(doc):
+        raise SystemExit("not a STEP OpenCascade can read")
+    tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+    free = TDF_LabelSequence()
+    tool.GetFreeShapes(free)
+    trsf = gp_Trsf()
+    trsf.SetTranslation(gp_Vec(dx, dy, dz))
+    top = tool.NewShape()
+    TDataStd_Name.Set_s(top, TCollection_ExtendedString("board"))
+    for i in range(1, free.Length() + 1):
+        tool.AddComponent(top, free.Value(i), TopLoc_Location(trsf))
+    tool.UpdateAssemblies()
+    writer = STEPCAFControl_Writer()
+    writer.SetNameMode(True)
+    writer.SetColorMode(True)
+    writer.Transfer(doc, STEPControl_AsIs)
+    if writer.Write(dst) != IFSelect_RetDone:
+        raise SystemExit("could not write the STEP")
+
+
+def _own_free_holes(info: dict, boxes: dict[str, list[float]]) -> None:
+    """Who a hole no pad owns belongs to, in an import (no footprints to
+    say). Inside a part's pads (1 mm round them): that part's - a
+    connector's or a switch's pegs. Of the rest, holes that share their
+    diameter with another are mounting holes (a board is screwed down with
+    one size of screw); a lone size inside a part's body is that part's.
+    Whatever is left is a mounting hole too."""
+    fr = frame_of(info)
+    pads: dict[str, list[float]] = {}
+    for f in info["footprints"]:
+        if f.get("pads"):
+            (ax, ay), (bx, by) = _pt(fr, f["box"][0], f["box"][3]), _pt(fr, f["box"][2], f["box"][1])
+            pads[f["ref"]] = [ax, ay, bx, by]
+    rest = []
+    for h in info["holes"]:
+        if h["ref"]:
+            continue
+        x, y = _pt(fr, h["x"], h["y"])
+        owner = next((r for r, b in sorted(pads.items())
+                      if b[0] - 1 <= x <= b[2] + 1 and b[1] - 1 <= y <= b[3] + 1), None)
+        if owner:
+            h["ref"] = owner
+        else:
+            rest.append((h, x, y))
+    sizes: dict[float, int] = {}
+    for h, _x, _y in rest:
+        sizes[round(h["d"], 2)] = sizes.get(round(h["d"], 2), 0) + 1
+    for h, x, y in rest:
+        owner = None
+        if sizes[round(h["d"], 2)] < 2:
+            owner = next((r for r, b in sorted(boxes.items())
+                          if b[0] - 0.3 <= x <= b[3] + 0.3 and b[1] - 0.3 <= y <= b[4] + 0.3), None)
+        if owner:
+            h["ref"] = owner
+        else:
+            h["footprint"] = "MountingHole (from the drills)"
+
+
+def slab_step(data: dict) -> bytes:
+    """The bare board - outline, cutouts, holes - as STEP, made by
+    build123d in a process of its own (it is the build's library, and an
+    import holds the interpreter)."""
+    import subprocess
+    import sys
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory(prefix="redline-slab-") as tmp:
+        (Path(tmp) / "in.json").write_text(json.dumps(data))
+        out = subprocess.run([sys.executable, "-m", "backend.board3d", "slab",
+                              str(Path(tmp) / "in.json"), str(Path(tmp) / "out.step")],
+                             capture_output=True, text=True, timeout=300,
+                             cwd=str(Path(__file__).resolve().parent.parent))
+        step = Path(tmp) / "out.step"
+        if out.returncode != 0 or not step.exists():
+            raise RuntimeError("the board's STEP could not be made:\n" + (out.stderr or out.stdout)[-600:])
+        return step.read_bytes()
+
+
+def _slab_main(src: str, dst: str) -> None:
+    from build123d import Circle, Polygon, Pos, export_step, extrude
+    data = json.loads(open(src).read())
+    sk = Polygon(*[tuple(p) for p in data["outline"]], align=None)
+    for c in data["cutouts"]:
+        sk -= Polygon(*[tuple(p) for p in c], align=None)
+    for h in data["holes"] + data["drills"]:
+        sk -= Pos(h["x"], h["y"]) * Circle(h["d"] / 2)
+    slab = extrude(sk, data["thickness"])
+    slab.label = "Board"
+    export_step(slab, dst)
+
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) == 4 and sys.argv[1] == "slab":
+        _slab_main(sys.argv[2], sys.argv[3])
+    elif len(sys.argv) == 7 and sys.argv[1] == "move":
+        _move_main(sys.argv[2], sys.argv[3], *map(float, sys.argv[4:]))
+    else:
+        sys.exit("python -m backend.board3d slab in.json out.step | move in.step out.step dx dy dz")

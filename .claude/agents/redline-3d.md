@@ -55,5 +55,9 @@ Reuse is importing: another model is `import stand as D`, a board is
 `B.THICKNESS`, `B.CONNECTORS`...). Never copy a component's geometry or
 retype its numbers - read them from the import, so the server can rebuild
 this model when the component changes. Before finishing, check
-`GET /api/models/<id>/links` for `copied` numbers and a `failed` link.
-See AGENTS.md: Components.
+`revisions.py component show <model>` (MCP `component_show`) for copied
+numbers, pins and a failed rebuild. `component deps <model> --tree` is
+what a change to it rebuilds; `component pin <model> <component>
+<version|latest>` uses a component at a kept version or follows it again -
+only when the note asks for it, a pin stops later versions reaching the
+model. See AGENTS.md: Components.

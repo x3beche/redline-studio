@@ -538,7 +538,7 @@
     @if (activeModel() && !ide() && !frozen()) {
       <div class="pointer-events-none absolute right-3 z-20"
            [style.top.px]="viewTop() + 44 + (notice() ? 84 : 0) + (focused() ? 230 : 0)">
-        <app-links-card [id]="activeModel()" [stamp]="linkStamp()" />
+        <app-links-card [id]="activeModel()" [stamp]="linkStamp()" (pinned)="loadCatalog()" />
       </div>
     }
 
@@ -943,7 +943,8 @@
             {{ m.link?.state === 'cycle' ? 'cycle' : 'broke' }}</span>
         }
         @if (m.uses?.length) {
-          <span class="tcv-link-badge" [title]="'uses ' + names(m.uses)">uses {{ m.uses!.length }}</span>
+          <span class="tcv-link-badge" [title]="'uses ' + names(m.uses)
+                + (m.pinned ? ' - ' + m.pinned + ' pinned at a fixed version' : '')">@if (m.pinned) {<app-pin-icon class="mr-0.5" />}uses {{ m.uses!.length }}</span>
         }
         @if (m.used_by?.length) {
           <span class="tcv-link-badge" [title]="'used in ' + names(m.used_by)">in {{ m.used_by!.length }}</span>

@@ -1,5 +1,6 @@
 import { Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
-import { Catalog, ComponentRow, ModelLinks } from '../api';
+import { Auth } from '../auth';
+import { Catalog, ComponentRow, ComponentUse, ComponentVersions, ModelLinks, PinnedBy } from '../api';
 
 /** Where an import line goes in a model's source: after the last import
  *  at the top level, or after the docstring when there is none. Returns
@@ -90,21 +91,91 @@ export class ComponentPicker {
   }
 }
 
+/** A pin, drawn: a pushpin in the ink it is put in. */
+@Component({
+  selector: 'app-pin-icon',
+  host: { class: 'tcv-pin-ico', 'aria-hidden': 'true' },
+  template: `<svg viewBox="0 0 16 16" width="100%" height="100%" fill="none" stroke="currentColor"
+     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M5.5 2h5M6.5 2v4.2L4.5 9h7l-2-2.8V2M8 9v5"/></svg>`,
+})
+export class PinIcon {}
+
+/** The models that use a component at a fixed version (the reverse of a
+ *  pin), and one button that moves every one that is behind to the
+ *  latest. Shown on a model's Links card and on a board's 3D card. */
+@Component({
+  selector: 'app-pinned-by',
+  imports: [PinIcon],
+  template: `
+@if (rows().length) {
+  <div class="flex items-center gap-1">
+    <span class="tcv-label">pinned by</span>
+    @if (behind().length) {
+      <button class="tcv-btn tcv-btn-accent ml-auto px-1.5 py-0 text-[10px]" [disabled]="busy()"
+              (click)="updateAll()" [title]="'pin ' + behind().length + ' to v' + latest() + ' and rebuild them'">
+        {{ busy() ? 'updating…' : 'Update ' + (behind().length > 1 ? 'all ' + behind().length : '') + ' to v' + latest() }}
+      </button>
+    }
+  </div>
+  @for (p of rows(); track p.id) {
+    <div class="flex items-baseline gap-1">
+      <app-pin-icon [style.color]="p.behind ? 'var(--warn)' : 'var(--ink-dim)'" />
+      <span class="min-w-0 truncate" [title]="p.id">{{ p.title }}</span>
+      <span class="ml-auto shrink-0 font-mono text-[10px]" [style.color]="p.behind ? 'var(--warn)' : 'var(--ink-dim)'">
+        v{{ p.version }}@if (p.behind) { · latest v{{ p.latest }} }
+      </span>
+    </div>
+  }
+  @if (said(); as t) { <div class="text-[10px]" style="color: var(--ink-dim)">{{ t }}</div> }
+}`,
+})
+export class PinnedByList {
+  private cat = inject(Catalog);
+  kind = input.required<'model' | 'board'>();
+  id = input.required<string>();
+  rows = input<PinnedBy[]>([]);
+  changed = output<void>();
+  busy = signal(false);
+  said = signal('');
+  behind = computed(() => this.rows().filter(p => p.behind));
+  latest = computed(() => this.rows()[0]?.latest ?? null);
+
+  updateAll() {
+    this.busy.set(true);
+    this.cat.updatePins(this.kind(), this.id()).subscribe({
+      next: r => {
+        this.busy.set(false);
+        this.said.set(`${r.updated.length} moved to v${this.latest()} - rebuilding`);
+        this.changed.emit();
+      },
+      error: e => { this.busy.set(false); this.said.set(e.error?.detail ?? 'not updated'); },
+    });
+  }
+}
+
 /** The open model as a component: what it uses (and whether its last
- *  build had their latest), who uses it, and a rebuild a change elsewhere
- *  set off - or the error it ran into. */
+ *  build had their latest), which version of each - the latest, or one
+ *  pinned (Fusion's "break link") - who uses it and who pins it, and a
+ *  rebuild a change elsewhere set off - or the error it ran into. */
 @Component({
   selector: 'app-links-card',
+  imports: [PinIcon, PinnedByList],
   template: `
 @if (data(); as d) {
-  @if (d.uses.length || d.used_by.length || d.link || d.cycles.length) {
-  <div class="tcv-card pointer-events-auto w-72 overflow-hidden p-0 text-[11px]"
+  @if (d.uses.length || d.used_by.length || d.link || d.cycles.length || d.pinned_by?.length) {
+  <div class="tcv-card pointer-events-auto w-80 overflow-hidden p-0 text-[11px]"
        style="box-shadow: 0 6px 20px var(--shadow-soft)">
     <button class="flex w-full items-center gap-1.5 px-2 py-1 text-left"
             style="background: var(--surface); border-bottom: 1px solid var(--line)" (click)="open.set(!open())">
       <span style="color: var(--ink-dim)">{{ open() ? '▾' : '▸' }}</span>
       <span class="tcv-label">Links</span>
       <span class="font-mono text-[10px]" style="color: var(--ink-dim)">v{{ d.version }}</span>
+      @if (pinCount(); as n) {
+        <span class="flex items-center gap-0.5 text-[10px]" style="color: var(--ink-dim)"
+              [title]="n + ' component' + (n > 1 ? 's' : '') + ' used at a fixed version'">
+          <app-pin-icon />{{ n }}</span>
+      }
       @if (updating()) {
         <span class="ml-auto truncate" style="color: var(--accent)">updating…</span>
       } @else if (broken()) {
@@ -117,7 +188,8 @@ export class ComponentPicker {
       @if (l.state === 'queued' || l.state === 'building') {
         <p class="px-2 pt-1.5 leading-snug" style="color: var(--accent)">
           {{ l.state === 'building' ? 'Rebuilding' : 'Updating' }} because
-          <b>{{ l.because?.title }}</b>@if (l.because?.version) { v{{ l.because?.version }} } changed
+          <b>{{ l.because?.title }}</b>@if (l.because?.version) { v{{ l.because?.version }} }
+          {{ l.because?.pin === 'pinned' ? 'was pinned' : l.because?.pin === 'follow' ? 'follows its latest again' : 'changed' }}
         </p>
       } @else if (l.state === 'failed' || l.state === 'blocked' || l.state === 'cycle') {
         <p class="px-2 pt-1.5 leading-snug" style="color: var(--danger)">
@@ -132,7 +204,8 @@ export class ComponentPicker {
         }
       } @else if (l.state === 'done' && open()) {
         <p class="px-2 pt-1.5 leading-snug" style="color: var(--ink-dim)">
-          Rebuilt on its own when {{ l.because?.title }}@if (l.because?.version) { v{{ l.because?.version }} } changed
+          Rebuilt on its own when {{ l.because?.title }}@if (l.because?.version) { v{{ l.because?.version }} }
+          {{ l.because?.pin === 'pinned' ? 'was pinned' : l.because?.pin === 'follow' ? 'was followed again' : 'changed' }}
         </p>
       }
     }
@@ -140,18 +213,67 @@ export class ComponentPicker {
       <div class="px-2 py-1.5">
         <div class="tcv-label mb-0.5">uses</div>
         @for (u of d.uses; track u.kind + u.id) {
-          <div class="flex items-baseline gap-1">
+          <div class="flex items-center gap-1 py-px">
             <span class="min-w-0 truncate" [title]="u.id">{{ u.title }}</span>
             <span class="tcv-ext shrink-0">{{ u.kind === 'board' ? '.pcb' : '.3d' }}</span>
-            <span class="ml-auto shrink-0 font-mono text-[10px]"
-                  [style.color]="u.built_against != null && u.built_against !== u.version ? 'var(--warn)' : 'var(--ink-dim)'"
-                  [title]="u.built_against != null ? 'built against v' + u.built_against + ', latest v' + u.version : 'not built against it yet'">
-              @if (u.pinned != null) { pinned v{{ u.pinned }} }
-              @else if (u.built_against != null) { built against v{{ u.built_against }}@if (u.built_against !== u.version) { · now v{{ u.version }} } }
-              @else { v{{ u.version }} }
-            </span>
+            <!-- The version it is used at: a menu - follow the latest, or pin one. -->
+            <button class="tcv-chip ml-auto flex shrink-0 items-center gap-1 px-1.5 py-0 font-mono text-[10px]"
+                    [class.tcv-chip-accent]="u.pinned != null" [disabled]="!canEdit() || busy()"
+                    [attr.aria-expanded]="menu() === key(u)" (click)="toggle(u)"
+                    [title]="u.pinned != null ? 'pinned: later versions of ' + u.title + ' do not reach this model'
+                                              : 'follows the latest ' + u.title + ' - pick a version to pin it'">
+              @if (u.pinned != null) {
+                <app-pin-icon />
+                <span>v{{ u.pinned }}</span>
+                @if (u.version != null && u.pinned < u.version) { <span style="color: var(--ink-dim)">· latest v{{ u.version }}</span> }
+              } @else {
+                <span [style.color]="u.built_against != null && u.built_against !== u.version ? 'var(--warn)' : null">
+                  latest v{{ u.version }}@if (u.built_against != null && u.built_against !== u.version) { · built v{{ u.built_against }} }
+                </span>
+              }
+              <span style="color: var(--ink-dim)">▾</span>
+            </button>
           </div>
+          @if (u.pinned != null && u.version != null && u.pinned < u.version && menu() !== key(u)) {
+            <div class="mb-0.5 flex items-center gap-1 pl-2 text-[10px]" style="color: var(--ink-dim)">
+              <span>pinned to v{{ u.pinned }} · latest v{{ u.version }}</span>
+              <button class="tcv-btn ml-auto px-1.5 py-0 text-[10px]" [disabled]="!canEdit() || busy()"
+                      (click)="toLatest(u)" [title]="'pin ' + u.title + ' at v' + u.version + ' and rebuild'">Update to latest</button>
+            </div>
+          }
+          @if (menu() === key(u)) {
+            <div class="tcv-scroll mb-1 max-h-56 overflow-y-auto rounded py-0.5" role="menu"
+                 style="background: var(--surface-2); border: 1px solid var(--line)">
+              <button class="tcv-pin-opt" role="menuitemradio" [attr.aria-checked]="u.pinned == null"
+                      [attr.data-on]="u.pinned == null ? 1 : null" (click)="choose(u, null)">
+                <span class="tcv-pin-mark">{{ u.pinned == null ? '●' : '' }}</span>
+                <span class="min-w-0 flex-1">
+                  <b>Follow latest</b><span class="font-mono"> · v{{ u.version }}</span>
+                  <span class="block" style="color: var(--ink-dim)">every new version rebuilds this model</span>
+                </span>
+              </button>
+              @if (versions(); as vs) {
+                @for (v of vs.versions; track v.version) {
+                  <button class="tcv-pin-opt" role="menuitemradio" [attr.aria-checked]="u.pinned === v.version"
+                          [attr.data-on]="u.pinned === v.version ? 1 : null" (click)="choose(u, v.version)">
+                    <span class="tcv-pin-mark">@if (u.pinned === v.version) { <app-pin-icon /> }</span>
+                    <span class="min-w-0 flex-1">
+                      <span class="font-mono">Pin v{{ v.version }}</span>
+                      @if (v.version === vs.latest) { <span style="color: var(--ink-dim)"> (latest)</span> }
+                      <span class="float-right font-mono" style="color: var(--ink-dim)">{{ when(v.at) }}</span>
+                      <span class="block truncate" style="color: var(--ink-dim)" [title]="v.changes.join('; ')">{{ v.changes.join('; ') }}</span>
+                    </span>
+                  </button>
+                } @empty {
+                  <p class="px-2 py-1" style="color: var(--ink-dim)">no kept versions to pin yet - the next change keeps one</p>
+                }
+              } @else {
+                <p class="px-2 py-1" style="color: var(--ink-dim)">reading its versions…</p>
+              }
+            </div>
+          }
         } @empty { <div style="color: var(--ink-dim)">nothing</div> }
+        @if (said(); as t) { <div class="text-[10px]" style="color: var(--danger)">{{ t }}</div> }
         <div class="tcv-label mb-0.5 mt-1.5">used by</div>
         @for (u of d.used_by; track u.id) {
           <div class="truncate" [title]="u.id">{{ u.title }}</div>
@@ -159,6 +281,11 @@ export class ComponentPicker {
         @if (d.dependents.length > d.used_by.length) {
           <div class="mt-0.5 text-[10px]" style="color: var(--ink-dim)">
             {{ d.dependents.length }} in all, through them
+          </div>
+        }
+        @if (d.pinned_by?.length) {
+          <div class="mt-1.5">
+            <app-pinned-by kind="model" [id]="d.id" [rows]="d.pinned_by!" (changed)="reload()" />
           </div>
         }
         @if (d.copied.length) {
@@ -177,26 +304,82 @@ export class ComponentPicker {
 })
 export class LinksCard {
   private cat = inject(Catalog);
+  private auth = inject(Auth);
   id = input.required<string>();
   /** Changes when the model or its link state does: read again then. */
   stamp = input('');
+  /** A pin moved: the catalog's badges are worth reading again. */
+  pinned = output<void>();
   data = signal<ModelLinks | null>(null);
   open = signal(true);
+  /** The use whose version menu is open, as kind:id. */
+  menu = signal<string | null>(null);
+  versions = signal<ComponentVersions | null>(null);
+  busy = signal(false);
+  said = signal('');
+  canEdit = () => this.auth.can('edit');
   updating = computed(() => ['queued', 'building'].includes(this.data()?.link?.state ?? ''));
+  pinCount = computed(() => Object.keys(this.data()?.pins ?? {}).length);
   lastLine(text: string | undefined): string {
     const lines = (text ?? '').trim().split('\n').filter(x => x.trim());
     return lines[lines.length - 1] ?? '';
   }
   broken = computed(() => ['failed', 'blocked', 'cycle'].includes(this.data()?.link?.state ?? ''));
 
+  key(u: ComponentUse) { return `${u.kind}:${u.id}`; }
+  when(at: string | null): string { return (at ?? '').slice(0, 16).replace('T', ' '); }
+
   constructor() {
     effect(() => {
       const id = this.id();
       this.stamp();
       if (!id) { untracked(() => this.data.set(null)); return; }
-      untracked(() => this.cat.links(id).subscribe({
-        next: d => this.data.set(d), error: () => this.data.set(null),
-      }));
+      untracked(() => this.reload());
+    });
+  }
+
+  reload() {
+    const id = this.id();
+    this.cat.links(id).subscribe({
+      next: d => { if (this.id() === id) this.data.set(d); },
+      error: () => this.data.set(null),
+    });
+  }
+
+  toggle(u: ComponentUse) {
+    const k = this.key(u);
+    if (this.menu() === k) { this.menu.set(null); return; }
+    this.menu.set(k);
+    this.versions.set(null);
+    this.cat.componentVersions(u.kind, u.id).subscribe({
+      next: v => { if (this.menu() === k) this.versions.set(v); },
+      error: () => this.versions.set({ kind: u.kind, id: u.id, latest: u.version ?? null, versions: [], pinned_by: [] }),
+    });
+  }
+
+  /** Follow the latest (null) or pin a kept version; the server rebuilds. */
+  choose(u: ComponentUse, version: number | null) {
+    this.menu.set(null);
+    if ((u.pinned ?? null) === version) return;
+    this.pin(u, version);
+  }
+
+  /** Pinned and behind: pinned again at the latest. If the latest is not
+   *  kept (a model saved before versions were), it is followed instead. */
+  toLatest(u: ComponentUse) {
+    this.pin(u, u.version ?? null, true);
+  }
+
+  private pin(u: ComponentUse, version: number | null, orFollow = false) {
+    this.busy.set(true);
+    this.said.set('');
+    this.cat.pin(this.id(), this.key(u), version).subscribe({
+      next: () => { this.busy.set(false); this.reload(); this.pinned.emit(); },
+      error: e => {
+        if (orFollow && e.status === 404 && version != null) { this.pin(u, null); return; }
+        this.busy.set(false);
+        this.said.set(e.error?.detail ?? 'not pinned');
+      },
     });
   }
 }

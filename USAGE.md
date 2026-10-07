@@ -170,9 +170,49 @@ because demoboard v12 changed*; if the change breaks it, the card shows the
 error and what depends on it waits. An import cycle is reported, not built.
 
 Each build records what it was built against: *built against demoboard v12*,
-and *now v13* when that is no longer the latest. A model can pin a component
-at a version (`POST /api/models/<id>/pins`), and that component's changes then
-stop at it - Fusion's "break link".
+and *now v13* when that is no longer the latest.
+
+### Pinning a version
+
+Fusion's "break link": each component in a model's **Links** card has a
+version menu. *Follow latest* is the default - every new version rebuilds the
+model. Or pick one of the kept versions (each with its date and what it
+changed: `W 12 -> 14`, `holes 4 -> 6`, `J1 moved`) and the model uses that one;
+later versions stop at it. The card then says **pinned to v2 · latest v4**,
+with **Update to latest** to pin again at the newest. Changing a pin rebuilds
+the model and what uses it. In the catalog, a model with pins carries a pin in
+its badge.
+
+The other way round: a model's Links card and a board's 3D card list **pinned
+by** - the models that use this component at an older version - with one
+button that moves them all to the latest.
+
+The last eight versions of a component are kept, and any version something
+pins is kept however old.
+
+A board's 3D is a new version only when it changed - where the parts are,
+their models, the named data. A layout that leaves it as it was makes no new
+version and rebuilds nothing. The board's 3D card has **Every run is a new
+version** (off by default) for when you want to pin "the board as of that run".
+
+### From the code to the component
+
+In the code view an import of a component is a link: hover it to see what it
+is, Ctrl+click (Cmd+click) to open it - a model in the 3D room, a board in the
+PCB room. The editor's right-click menu has **Go to component** and **Open
+component's source** (a tab beside the file). Names resolve the way the build
+resolves them (`GET /api/components/modules`), so the link goes where the
+import does.
+
+### An imported board
+
+A board imported from Gerbers is a component too (`POST
+/api/boards/<id>/component`, or the agents' `component refresh`): its outline
+and holes from the Gerbers and drills, the parts where the import placed them,
+and `B.part` the STEP it was uploaded with, moved into the board frame. If the
+upload's STEP is gone, `B.part` is the bare board with a box for each part. A
+hole no pad owns is the part's whose pads it sits among (a connector's pegs);
+the rest are mounting holes.
 
 ### Share the numbers, never copy them
 

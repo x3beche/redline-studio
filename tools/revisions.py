@@ -29,6 +29,15 @@ done goes next to it:
 
     python tools/revisions.py after <id> [--only PART]
 
+Components - every model and board, as the 3D designs that import them see
+them (backend/links.py); through the server, like `board`:
+
+    python tools/revisions.py component list                      versions, uses, used by
+    python tools/revisions.py component show <id>                 data, versions, pins, state
+    python tools/revisions.py component deps <id> [--tree]        what it uses, what uses it
+    python tools/revisions.py component pin <model> <comp> <v|latest>
+    python tools/revisions.py component refresh <board>           3D component from its layout
+
 Files people uploaded in the Files tab - a BOM, a pick-and-place file, a
 datasheet (backend/files.py); through the server, like `board`:
 
@@ -470,6 +479,252 @@ async def cmd_board(args):
         _print_board({"schematic": doc.get("schematic") or {},
                       "layout": {**(doc.get("layout") or {}),
                                  "route": doc.get("route"), "drc": doc.get("drc")}})
+
+
+# ---------------------------------------------------------------- components
+
+class ApiError(SystemExit):
+    """The server said no: the command stops with its answer."""
+
+
+def api_call(path: str, method: str = "GET", body: dict | None = None, timeout: int = 60):
+    """One request to the app's API, as this agent (REDLINE_API,
+    REDLINE_TOKEN, REDLINE_AGENT): the parsed JSON, or a stop with what
+    the server said. Tests point this at the app itself."""
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    from backend import actors
+
+    base = os.environ.get("REDLINE_API", "http://localhost:8000")
+    req = urllib.request.Request(
+        base + path, method=method,
+        data=_json.dumps(body).encode() if body is not None else None,
+        headers={"content-type": "application/json", **actors.header_for_agent(),
+                 **({"Authorization": f"Bearer {os.environ['REDLINE_TOKEN']}"}
+                    if os.environ.get("REDLINE_TOKEN") else {})})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read()
+            return _json.loads(raw) if raw[:1] in (b"{", b"[") else raw.decode()
+    except urllib.error.HTTPError as exc:
+        text = exc.read().decode(errors="replace")
+        try:
+            text = _json.loads(text).get("detail", text)
+        except ValueError:
+            pass
+        raise ApiError(f"{method} {path}: {exc.code} {str(text)[:800]}")
+    except urllib.error.URLError as exc:
+        raise ApiError(f"the server is not answering at {base} ({exc.reason}) - start.sh")
+
+
+def _q(cid: str) -> str:
+    import urllib.parse
+    return urllib.parse.quote(cid, safe="/")
+
+
+def _find_component(rows: list[dict], name: str) -> dict:
+    """A component by id - `board:<id>` or `model:<id>` when both kinds
+    have it - or by the module name it is imported by."""
+    kind, _, rest = name.partition(":")
+    if kind in ("model", "board") and rest:
+        hit = [r for r in rows if r["kind"] == kind and r["id"] == rest]
+    else:
+        hit = [r for r in rows if r["id"] == name] or [r for r in rows if r.get("module") == name]
+    if not hit:
+        raise ApiError(f"no component {name} - `component list` shows them")
+    if len(hit) > 1:
+        raise ApiError(f"{name} is a model and a board: say model:{name} or board:{name}")
+    return hit[0]
+
+
+def _state(r: dict) -> str:
+    if r["kind"] == "board":
+        return "" if r.get("ready") else "no 3D yet"
+    st = r.get("state")
+    if st in ("queued", "building"):
+        return "rebuilding"
+    if st in ("failed", "blocked", "cycle"):
+        return st
+    return "stale" if r.get("stale") else ""
+
+
+def _vline(v: dict) -> str:
+    return f"v{v['version']}  {str(v.get('at') or '')[:16].replace('T', ' ')}  " + "; ".join(v.get("changes") or [])
+
+
+def cmd_component(args):
+    """Components - every .3d model and .pcb board, as the 3D designs that
+    import them see them: versions, who uses what, pins (backend/links.py).
+    Through the API with the agent's token, like `board`."""
+    rows = api_call("/api/components")
+    what = args.what
+    if what == "list":
+        print(f"{'kind':5}  {'id':40}  {'ver':>4}  {'uses':>4}  {'used by':>7}  pins  state")
+        for r in rows:
+            print(f"{r['kind']:5}  {r['id']:40}  {'v' + str(r.get('version') or 0):>4}  "
+                  f"{len(r.get('uses') or []):>4}  {len(r.get('used_by') or []):>7}  "
+                  f"{len(r.get('pins') or {}):>4}  {_state(r)}")
+        return
+    if not args.id:
+        raise ApiError(f"component {what} needs a component id")
+    r = _find_component(rows, args.id)
+    k = f"{r['kind']}:{r['id']}"
+    by_key = {f"{x['kind']}:{x['id']}": x for x in rows}
+    if what == "show":
+        _show_component(r, k)
+    elif what == "deps":
+        _print_deps(r, k, by_key, args.tree)
+    elif what == "pin":
+        if r["kind"] != "model":
+            raise ApiError("only a model pins what it uses: component pin <model> <component> <version|latest>")
+        if not args.component or not args.version:
+            raise ApiError("component pin <model> <component> <version|latest>")
+        c = _find_component(rows, args.component)
+        if args.version == "latest":
+            version = None
+        else:
+            try:
+                version = int(args.version.lstrip("v"))
+            except ValueError:
+                raise ApiError(f"{args.version}: a version number (3 or v3), or latest")
+        out = api_call(f"/api/models/{_q(r['id'])}/pins", "POST",
+                       {"component": f"{c['kind']}:{c['id']}", "version": version})
+        said = f"pinned at v{version}" if version is not None else "follows its latest"
+        if not out.get("changed"):
+            print(f"{r['id']}: {c['id']} already {said} - nothing to rebuild")
+        else:
+            print(f"{r['id']}: {c['id']} {said}"
+                  + (f" (was v{out['was']})" if out.get("was") is not None else ""))
+            if out.get("queued"):
+                print(f"  rebuilding {', '.join(out['queued'])}")
+            for cyc in out.get("cycles") or []:
+                print(f"  import cycle, not built: {' -> '.join(cyc + cyc[:1])}")
+    elif what == "refresh":
+        if r["kind"] != "board":
+            raise ApiError("refresh is for a board: its 3D component from its layout")
+        running = [j for j in api_call(f"/api/boards/{_q(r['id'])}/jobs") or []
+                   if j.get("status") == "running"]
+        if running:
+            raise ApiError(f"{r['id']}: a {running[0].get('kind')} job is running "
+                           f"({running[0].get('_id') or running[0].get('job')}) - its layout makes "
+                           "the component; try again when it is done")
+        print(f"{r['id']}: exporting the 3D component from the layout (a minute or so)", flush=True)
+        out = api_call(f"/api/boards/{_q(r['id'])}/component", "POST", {}, timeout=900)
+        print(f"  version    v{out.get('version')}" + (" (new)" if out.get("changed") else " (unchanged)")
+              + ((" - from the import: the STEP it was uploaded with, in the board's frame"
+                  if out.get("step_from") == "upload"
+                  else " - from the import: the STEP is the bare board, parts as boxes")
+                 if out.get("from") == "import" else ""))
+        print(f"  step       {out.get('step_bytes', 0) / 1e6:.1f} MB")
+        if out.get("queued"):
+            print(f"  rebuilding {', '.join(out['queued'])}")
+        _show_component(r, k, brief=True)
+
+
+def _show_component(r: dict, k: str, brief: bool = False) -> None:
+    if r["kind"] == "board":
+        c = api_call(f"/api/boards/{_q(r['id'])}/component")
+        comp = c.get("component") or {}
+        print(f"board {r['id']} - {c.get('title')}")
+        if not comp:
+            print("  no 3D yet - `component refresh` or the next layout makes it")
+        else:
+            print(f"  version    v{comp.get('version')}  {str(comp.get('at') or '')[:16].replace('T', ' ')}"
+                  + ("  (every run is a new version)" if c.get("every_run") else ""))
+            print(f"  import     {c.get('line')}")
+        if c.get("error"):
+            print(f"  last error {str(c['error'].get('at'))[:16]}: {c['error'].get('error', '')[-300:]}")
+        d = c.get("data")
+        if d:
+            print(f"  size       {d['size'][0]} x {d['size'][1]} x {d['thickness']} mm")
+            print(f"  holes      {len(d['holes'])} mounting: "
+                  + ", ".join(f"({h['x']}, {h['y']}) d{h['d']}" for h in d["holes"]))
+            print(f"  drills     {len(d.get('drills') or [])} other holes (parts' pins and pegs)")
+            print(f"  connectors {len(d['connectors'])}: "
+                  + ", ".join(f"{x['ref']}" + (f" {x['edge']} @{x['along']}" if x.get("edge") else "")
+                              + f" h{x['height']}" for x in d["connectors"]))
+            ko = d.get("keepout") or {}
+            print(f"  keepout    {ko.get('top')} mm above, {ko.get('bottom')} mm below")
+            if d.get("approximate"):
+                print(f"  boxes for  {len(d['approximate'])} parts in B.part (mesh-only or imported): "
+                      + ", ".join(d["approximate"][:12]) + (" ..." if len(d["approximate"]) > 12 else ""))
+        if brief:
+            return
+        print("  used by    " + (", ".join(u["id"] + (f" (pinned v{u['pinned']})" if u.get("pinned") else "")
+                                          + (f" [{u['state']}]" if u.get("state") else "")
+                                          for u in c.get("used_by") or []) or "nothing"))
+        pinned = c.get("pinned_by") or []
+    else:
+        c = api_call(f"/api/models/{_q(r['id'])}/links")
+        link = c.get("link") or {}
+        print(f"model {r['id']} - {r.get('title')}")
+        print(f"  version    v{c.get('version')}" + ("  (changed since its build)" if c.get("stale") else ""))
+        if link:
+            b = link.get("because") or {}
+            print(f"  rebuild    {link.get('state')} - because {b.get('title') or b.get('id')}"
+                  + (f" v{b['version']}" if b.get("version") is not None else "")
+                  + (f" ({b['pin']})" if b.get("pin") else ""))
+            if link.get("error"):
+                print(f"  last error {link['error'].strip().splitlines()[-1][:300]}")
+        print(f"  built      {'against the latest' if c['built'].get('current') else 'not against the latest'}"
+              f" ({str(c['built'].get('at') or 'never')[:16]})")
+        for cyc in c.get("cycles") or []:
+            print(f"  cycle      {' -> '.join(cyc + cyc[:1])}")
+        print("  uses       " + (", ".join(
+            f"{u['id']} v{u.get('version')}" + (f" (pinned v{u['pinned']})" if u.get("pinned") is not None else "")
+            + (f" (built against v{u['built_against']})" if u.get("built_against") not in (None, u.get("version"))
+               and u.get("pinned") is None else "")
+            for u in c.get("uses") or []) or "nothing"))
+        print("  used by    " + (", ".join(u["id"] for u in c.get("used_by") or []) or "nothing"))
+        for x in c.get("copied") or []:
+            print(f"  copied     line {x['line']}: {x['value']} is {' / '.join(x['names'])}")
+        pinned = c.get("pinned_by") or []
+    if pinned:
+        print("  pinned by  " + ", ".join(f"{p['id']} at v{p['version']}" + (" (behind)" if p.get("behind") else "")
+                                          for p in pinned))
+    vs = api_call(f"/api/components/{r['kind']}/{_q(r['id'])}/versions")
+    if vs.get("versions"):
+        print("  versions   (kept, newest first)")
+        for v in vs["versions"][:8]:
+            print("    " + _vline(v))
+
+
+def _print_deps(r: dict, k: str, by_key: dict, tree: bool) -> None:
+    def label(key_: str, pin=None) -> str:
+        x = by_key.get(key_) or {}
+        return (f"{x.get('kind', '?')}:{x.get('id', key_)} v{x.get('version') or 0}"
+                + (f" (pinned v{pin})" if pin is not None else ""))
+
+    used_by = {kk: [f"{x['kind']}:{x['id']}" for x in by_key.values() if kk in (x.get("uses") or [])]
+               for kk in by_key}
+    print(label(k))
+    if not tree:
+        pins = r.get("pins") or {}
+        print("  uses:    " + (", ".join(label(u, pins.get(u)) for u in r.get("uses") or []) or "nothing"))
+        print("  used by: " + (", ".join(label(u, (by_key[u].get("pins") or {}).get(k))
+                                         for u in used_by.get(k) or []) or "nothing"))
+        return
+
+    def down(key_: str, depth: int, seen: set) -> None:
+        pins = (by_key.get(key_) or {}).get("pins") or {}
+        for u in (by_key.get(key_) or {}).get("uses") or []:
+            print("  " * depth + "- " + label(u, pins.get(u)) + ("  (cycle)" if u in seen else ""))
+            if u not in seen:
+                down(u, depth + 1, seen | {u})
+
+    def up(key_: str, depth: int, seen: set) -> None:
+        for d in used_by.get(key_) or []:
+            pin = (by_key[d].get("pins") or {}).get(key_)
+            print("  " * depth + "+ " + label(d, pin) + ("  (cycle)" if d in seen else ""))
+            if d not in seen:
+                up(d, depth + 1, seen | {d})
+
+    print(" uses (what it is built from):")
+    down(k, 1, {k})
+    print(" used by (what rebuilds when it changes):")
+    up(k, 1, {k})
 
 
 def _print_convert(out: dict) -> None:
@@ -1092,6 +1347,20 @@ def main() -> None:
     s.add_argument("--run", action="store_true",
                    help="convert: then run the whole pipeline")
     s.set_defaults(fn=cmd_board)
+    s = sub.add_parser("component", help="components: models and boards as 3D designs import "
+                                         "them - versions, uses, pins")
+    s.add_argument("what", choices=["list", "show", "deps", "pin", "refresh"],
+                   help="list: every component with its version, uses and used-by counts; "
+                        "show <id>: versions, uses / used by, pins, state, a board's named data; "
+                        "deps <id> [--tree]: what it uses and what uses it; "
+                        "pin <model> <component> <version|latest>: use a component at a "
+                        "version, or follow its latest (rebuilds the model); "
+                        "refresh <board>: its 3D component from its layout now")
+    s.add_argument("id", nargs="?", help="a model or board id (model:<id> / board:<id> when both)")
+    s.add_argument("component", nargs="?", help="pin: the component the model uses")
+    s.add_argument("version", nargs="?", help="pin: a kept version (3 or v3), or latest")
+    s.add_argument("--tree", action="store_true", help="deps: the whole tree, both ways")
+    s.set_defaults(fn=cmd_component, sync=True)
     s = sub.add_parser("wait", help="block until a revision is queued")
     s.add_argument("--every", type=int, default=30,
                    help="seconds between checks (default 30)")
@@ -1167,6 +1436,9 @@ def main() -> None:
     # Everything this command writes is the agent's, named by REDLINE_AGENT.
     from backend import actors
     actors.CURRENT.set(actors.agent())
+    if getattr(args, "sync", False):
+        args.fn(args)
+        return
     asyncio.run(args.fn(args))
 
 

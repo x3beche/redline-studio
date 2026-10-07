@@ -483,6 +483,8 @@ async def catalog(db) -> dict:
                     "uses": uses_of(m),
                     "used_by": used_by.get(f"model:{m['_id']}", []),
                     "link": link_of(m),
+                    # Components it uses at a fixed version: the badge's pin.
+                    "pinned": len(m.get("pins") or {}),
                     "built_hash": (m.get("built") or {}).get("hash"),
                 } for m in models if m.get("folder", "") == path),
                 key=lambda e: e["title"]),

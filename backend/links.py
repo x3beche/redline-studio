@@ -59,6 +59,9 @@ DEBOUNCE = float(os.environ.get("REDLINE_LINK_DEBOUNCE", "4"))
 PARALLEL = max(1, int(os.environ.get("REDLINE_LINK_BUILDS", "1")))
 TICK = 2.0
 KEEP = 8                    # versions of a component kept besides pinned ones
+# On a board: a layout that leaves its 3D unchanged is a new version all
+# the same (off: such a layout is no version, the default).
+EVERY_RUN = "component_every_run"
 
 UPDATING = ("queued", "building")
 
@@ -130,6 +133,18 @@ def module_table(models: list[dict], boards: list[dict]) -> dict[str, tuple[str,
         table.setdefault("pcb_" + mod, ("board", str(b["_id"])))
         table.setdefault(mod, ("board", str(b["_id"])))
     return table
+
+
+def table_rows(g: "Graph") -> dict[str, dict]:
+    """The module table as the code view needs it: every name a model can
+    import, what it resolves to, and that component's title."""
+    out = {}
+    for name, (kind, cid) in sorted(g.table.items()):
+        if not name.isidentifier():
+            continue
+        info = g.nodes.get(key(kind, cid)) or {}
+        out[name] = {"kind": kind, "id": cid, "title": info.get("title") or cid}
+    return out
 
 
 def table_digest(table: dict) -> str:
@@ -396,24 +411,31 @@ async def board_component(db, board_id: str, step: bytes, data: dict, stl: bytes
     design_digest), and the change sent on."""
     digest = digest or hashlib.sha256(
         (board3d.step_digest(step) + board3d.data_digest(data)).encode()).hexdigest()
-    doc = await db[BOARDS].find_one({"_id": board_id}, {"component": 1, "title": 1}) or {}
+    doc = await db[BOARDS].find_one({"_id": board_id},
+                                    {"component": 1, "title": 1, EVERY_RUN: 1}) or {}
     comp = doc.get("component") or {}
     import json as _json
     meta_step = await store.put_artifact(db, board_id, "step", step, collection=BOARDS)
     await store.put_artifact(db, board_id, "board3d", _json.dumps(data).encode(), collection=BOARDS)
     if stl:
         await store.put_artifact(db, board_id, "stl", stl, collection=BOARDS)
-    if comp.get("digest") == digest:
+    # By default a layout that leaves the 3D as it was is not a version:
+    # nothing that uses the board would be any different. The board can
+    # say otherwise ("every run is a new version"), for pinning by run.
+    same = comp.get("digest") == digest
+    if same and not doc.get(EVERY_RUN):
+        await db[BOARDS].update_one({"_id": board_id}, {"$unset": {"component_error": ""}})
         return {"version": comp.get("version"), "changed": False, "queued": []}
     version = (comp.get("version") or 0) + 1
-    patch = {"version": version, "digest": digest, "at": store.now(),
+    patch = {"version": version, "digest": digest, "at": store.now(), "same_as_before": same,
              "module": board3d.module_name(board_id), "step_bytes": len(step),
              "data_version": board3d.DATA_VERSION, "glb": glb_digest[:16],
              "summary": {"size": data.get("size"), "thickness": data.get("thickness"),
                          "holes": len(data.get("holes") or []),
                          "connectors": len(data.get("connectors") or []),
                          "approximate": data.get("approximate") or []}}
-    await db[BOARDS].update_one({"_id": board_id}, {"$set": {"component": patch}})
+    await db[BOARDS].update_one({"_id": board_id}, {"$set": {"component": patch},
+                                                    "$unset": {"component_error": ""}})
     # A pin needs its own copy of the STEP: the artifact is replaced by the
     # next layout.
     packed = gzip.compress(step, compresslevel=6)
@@ -433,17 +455,21 @@ def _later(seconds: float) -> str:
 
 
 async def changed(db, kind: str, cid: str, version: int | None = None,
-                  g: Graph | None = None) -> dict:
+                  g: Graph | None = None, because: dict | None = None,
+                  include_self: bool = False) -> dict:
     """`kind:cid` changed: mark every dependent stale and queue its
-    rebuild. Returns what was queued and any cycle met."""
+    rebuild. Returns what was queued and any cycle met. `include_self`
+    queues `kind:cid` too (a model whose pin moved is itself rebuilt)."""
     g = g or await load(db)
     k = key(kind, cid)
     info = g.nodes.get(k) or {"title": cid}
     deps = g.dependents(k)
+    if include_self and kind == "model":
+        deps = sorted({k, *deps})
     cycles = [c for c in g.cycles() if k in c or set(c) & set(deps)]
     in_cycle = {m for c in cycles for m in c}
-    because = {"kind": kind, "id": cid, "title": info.get("title") or cid,
-               "version": version if version is not None else info.get("version")}
+    because = because or {"kind": kind, "id": cid, "title": info.get("title") or cid,
+                          "version": version if version is not None else info.get("version")}
     at, due = store.now(), _later(DEBOUNCE)
     queued = []
     for d in deps:
@@ -467,6 +493,146 @@ async def users_of(db, kind: str, cid: str) -> list[str]:
     """The models that use this component directly (ids)."""
     g = await load(db)
     return [split(d)[1] for d in g.used_by(key(kind, cid))]
+
+
+# ---------------------------------------------------------------- pins
+
+def what_changed(kind: str, prev: dict | None, row: dict) -> list[str]:
+    """A version against the one before it, in a few words a person can
+    choose a version by: the numbers that moved, parts added or gone."""
+    if prev is None:
+        return ["first version" if row.get("version") == 1 else "oldest kept"]
+    if kind == "model":
+        a, b = prev.get("source") or "", row.get("source") or ""
+        out = []
+        ea, eb = model_exports(a), model_exports(b)
+        for name in sorted(set(ea) | set(eb)):
+            if ea.get(name) != eb.get(name):
+                out.append(f"{name} {_num(ea.get(name))} -> {_num(eb.get(name))}")
+        import difflib
+        plus = minus = 0
+        for line in difflib.unified_diff(a.splitlines(), b.splitlines(), lineterm="", n=0):
+            if line.startswith("+") and not line.startswith("+++"):
+                plus += 1
+            elif line.startswith("-") and not line.startswith("---"):
+                minus += 1
+        if plus or minus:
+            out.append(f"+{plus} -{minus} lines")
+        return out[:5] or ["same source"]
+    if prev.get("digest") and prev.get("digest") == row.get("digest"):
+        return [f"same 3D as v{prev.get('version')}"]
+    da, db_ = prev.get("data") or {}, row.get("data") or {}
+    out = []
+    if da.get("size") != db_.get("size"):
+        out.append("size " + " x ".join(_num(v) for v in da.get("size") or []) + " -> "
+                   + " x ".join(_num(v) for v in db_.get("size") or []) + " mm")
+    if da.get("thickness") != db_.get("thickness"):
+        out.append(f"thickness {_num(da.get('thickness'))} -> {_num(db_.get('thickness'))}")
+    if da.get("outline") != db_.get("outline") and da.get("size") == db_.get("size"):
+        out.append("outline changed")
+    for name, label in (("holes", "holes"), ("connectors", "connectors")):
+        ra, rb = da.get(name) or [], db_.get(name) or []
+        if len(ra) != len(rb):
+            out.append(f"{label} {len(ra)} -> {len(rb)}")
+        elif name == "holes" and sorted((h["x"], h["y"], h["d"]) for h in ra) != \
+                sorted((h["x"], h["y"], h["d"]) for h in rb):
+            out.append("holes moved")
+    ba = {b["ref"]: b["box"] for b in da.get("bodies") or []}
+    bb = {b["ref"]: b["box"] for b in db_.get("bodies") or []}
+    added, gone = sorted(set(bb) - set(ba)), sorted(set(ba) - set(bb))
+    moved = sorted(r for r in set(ba) & set(bb)
+                   if max(abs(x - y) for x, y in zip(ba[r], bb[r])) > 0.05)
+    for words, refs in (("added", added), ("removed", gone), ("moved", moved)):
+        if refs:
+            out.append(f"{', '.join(refs[:4])}{' +' + str(len(refs) - 4) if len(refs) > 4 else ''} {words}")
+    return out[:5] or ["placement or models changed"]
+
+
+def _num(v) -> str:
+    if v is None:
+        return "-"
+    return f"{v:g}" if isinstance(v, (int, float)) else str(v)
+
+
+async def versions(db, kind: str, cid: str) -> list[dict]:
+    """The kept versions of a component, newest first: when, and what each
+    changed against the one before it."""
+    rows = [r async for r in db[VERSIONS].find({"kind": kind, "component": cid})]
+    rows.sort(key=lambda r: r.get("version") or 0)
+    out, prev = [], None
+    for r in rows:
+        out.append({"version": r.get("version"), "at": r.get("at"),
+                    "changes": what_changed(kind, prev, r)})
+        prev = r
+    return out[::-1]
+
+
+def pinned_by(g: Graph, k: str) -> list[dict]:
+    """Every model that pins `k`, at which version, and whether that is
+    older than the latest."""
+    latest = (g.nodes.get(k) or {}).get("version")
+    out = []
+    for d, pins in sorted(g.pins.items()):
+        if k in pins and d in g.nodes:
+            v = pins[k]
+            out.append({"id": split(d)[1], "title": g.nodes[d].get("title"), "version": v,
+                        "latest": latest, "behind": latest is not None and v is not None and v < latest})
+    return out
+
+
+class PinError(ValueError):
+    """A pin that cannot be: a component the model does not use, a version
+    no longer kept."""
+
+
+async def set_pin(db, model_id: str, component: str, version: int | None) -> dict:
+    """Use `component` at `version` in `model_id` (Fusion's "break link"),
+    or follow its latest again (None). Either way the model is rebuilt -
+    and what uses it, which builds against the model's pins too."""
+    g = await load(db)
+    k = key("model", model_id)
+    if k not in g.nodes:
+        raise KeyError(model_id)
+    if component not in g.upstream(k):
+        raise PinError(f"{model_id} does not use {component}")
+    kind, cid = split(component)
+    if version is not None and not await version_of(db, kind, cid, version):
+        raise LookupError(f"{component} v{version} is not kept")
+    was = g.pins.get(k, {}).get(component)
+    if was == version:
+        return {"model": model_id, "component": component, "version": version,
+                "changed": False, "queued": []}
+    if version is None:
+        await db.models.update_one({"_id": model_id}, {"$unset": {f"pins.{component}": ""}})
+        g.pins.setdefault(k, {}).pop(component, None)
+    else:
+        await db.models.update_one({"_id": model_id}, {"$set": {f"pins.{component}": version}})
+        g.pins.setdefault(k, {})[component] = version
+    info = g.nodes.get(component) or {}
+    because = {"kind": kind, "id": cid, "title": info.get("title") or cid,
+               "version": version if version is not None else info.get("version"),
+               "pin": "pinned" if version is not None else "follow"}
+    out = await changed(db, "model", model_id, g=g, because=because, include_self=True)
+    return {"model": model_id, "component": component, "version": version, "was": was,
+            "changed": True, **out}
+
+
+async def update_pins(db, kind: str, cid: str) -> list[dict]:
+    """Every model pinned to an older version of `kind:cid` moved to its
+    latest - still pinned, so the next version waits for them again. A
+    latest that is not kept (a model from before versions) is followed."""
+    g = await load(db)
+    k = key(kind, cid)
+    latest = (g.nodes.get(k) or {}).get("version")
+    kept = bool(latest is not None and await version_of(db, kind, cid, latest))
+    out = []
+    for row in pinned_by(g, k):
+        if not row["behind"]:
+            continue
+        got = await set_pin(db, row["id"], k, latest if kept else None)
+        out.append({"model": row["id"], "from": row["version"], "to": got["version"],
+                    "queued": got.get("queued", [])})
+    return out
 
 
 async def recover(db) -> int:

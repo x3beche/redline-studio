@@ -493,6 +493,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py after <id>           # the "after" picture
 .venv/bin/python tools/revisions.py usage [--full]       # what the work cost
 .venv/bin/python tools/revisions.py files [get <id>|put <file>]  # the Files tab
+.venv/bin/python tools/revisions.py component list|show|deps|pin|refresh ...  # components
 .venv/bin/python tools/render.py <id> [--camera=…|--only PART]
 ```
 
@@ -592,6 +593,38 @@ lid_z = B.THICKNESS + B.KEEPOUT["top"] + 1.0  # not 1.6 + 15.1 + 1.0
   boards alike; `force=true` is the person's call, not yours.
 - A dependent can pin a component version (`POST /api/models/<id>/pins
   {"component": "board:<id>", "version": 3}`, `null` to follow again).
+  Pinning or following again rebuilds the model and what uses it. The
+  person does the same from the Links card's version menu.
+
+### Component commands
+
+Through the API with the agents' token (`REDLINE_API`, `REDLINE_TOKEN`,
+`REDLINE_AGENT`), like `board ...`; the MCP server has each as a tool
+(`component_list`, `component_show`, `component_deps`, `component_pin`,
+`component_refresh`).
+
+```bash
+.venv/bin/python tools/revisions.py component list                  # every model and board: version, uses, used by, pins, state
+.venv/bin/python tools/revisions.py component show <id>             # a board's named data; uses / used by; pins; versions; last error
+.venv/bin/python tools/revisions.py component deps <id> [--tree]    # what it uses, what uses it (--tree: all the way, both ways)
+.venv/bin/python tools/revisions.py component pin <model> <component> 3       # use v3 of it
+.venv/bin/python tools/revisions.py component pin <model> <component> latest  # follow it again
+.venv/bin/python tools/revisions.py component refresh <board>       # its 3D component from its layout, now
+```
+
+An id that is both a model and a board is written `model:<id>` or
+`board:<id>`. `pin` takes only a kept version (`show` lists them with
+what each changed) and is refused for a component the model does not
+use. `refresh` is refused while a job runs on the board - its layout makes
+the component anyway - and exports from the layout as it is, without
+placing or routing. An imported board (no layout here) gets its component
+from the import: the Gerbers' outline and drills, the parts' placement,
+and the STEP it was uploaded with moved into the board's frame (without
+that STEP, the bare board with a box per part).
+
+A board's 3D is a new version only when it changed (placement, models,
+named data). The person can switch a board to "every run is a new
+version" on its 3D card; don't change that setting yourself.
 
 ## Silent failures
 

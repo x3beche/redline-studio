@@ -103,6 +103,38 @@ TOOLS: dict[str, tuple] = {
         + [x for o in a.get("options") or [] for x in ("-o", o)]
         + (["-c", a["context"]] if a.get("context") else [])
         + (["--timeout", str(a["timeout"])] if a.get("timeout") else [])),
+    # Components (backend/links.py): models and boards as the 3D designs
+    # that import them see them. Through the API with the agents' token.
+    "component_list": (
+        "Every component - each .3d model and each .pcb board a 3D design can "
+        "import - with its version, how many it uses, how many use it, its pins "
+        "and whether it is rebuilding, stale or broken.",
+        {}, [], lambda a: ["component", "list"]),
+    "component_show": (
+        "One component in full: a board's named data (size, mounting holes, "
+        "connectors, keepout), a model's uses with the versions it was built "
+        "against, who uses it and who pins it, its kept versions with what each "
+        "changed, and a rebuild's state and last error.",
+        {"id": _s("model or board id (model:<id> / board:<id> when both exist)")},
+        ["id"], lambda a: ["component", "show", a["id"]]),
+    "component_deps": (
+        "What a component uses and what uses it; with tree, the whole tree both "
+        "ways - what a change to it rebuilds.",
+        {"id": _s("model or board id"), "tree": {"type": "boolean"}},
+        ["id"], lambda a: ["component", "deps", a["id"]] + (["--tree"] if a.get("tree") else [])),
+    "component_pin": (
+        "Use a component at a fixed kept version in a model (Fusion's break "
+        "link) - its later versions then stop at this model - or 'latest' to "
+        "follow it again. The model and what uses it are rebuilt.",
+        {"model": _s("the model that uses it"), "component": _s("the model or board it uses"),
+         "version": _s("a kept version number, or latest")},
+        ["model", "component", "version"],
+        lambda a: ["component", "pin", a["model"], a["component"], str(a["version"])]),
+    "component_refresh": (
+        "Export a board's 3D component (STEP, STL, named data) from its current "
+        "layout now, without placing or routing. Refused while a job runs on the "
+        "board. Every model that imports it is rebuilt if the 3D changed.",
+        {"board": _s("board id")}, ["board"], lambda a: ["component", "refresh", a["board"]]),
 }
 
 

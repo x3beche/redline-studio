@@ -6,7 +6,8 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import type * as Monaco from 'monaco-editor';
 import { Auth } from '../auth';
-import { Catalog, FolderNode } from '../api';
+import { Catalog, FolderNode, ModuleTarget } from '../api';
+import { Selection } from '../selection';
 import { T } from '../i18n';
 import { insertImport } from './links';
 import { LIGHT_THEMES } from '../../theme';
@@ -17,8 +18,12 @@ import { LIGHT_THEMES } from '../../theme';
  *  Each item in the catalog is one file, but a project is many: an
  *  assembly imports its parts (`from stand import ...`). So, as in an IDE,
  *  the project's folder tree is on the left - the files the open one uses
- *  are marked - and each file opens in a tab of its own; Ctrl+click on an
- *  import opens the file it names.
+ *  are marked - and each file opens in a tab of its own. An import of a
+ *  component is a link: Ctrl+click (Cmd+click) - or "Go to component" in
+ *  the editor's menu - opens it where it lives, a model in the 3D room and
+ *  a board in the PCB room; "Open component's source" opens it in a tab.
+ *  Names resolve through the build's own table (/api/components/modules,
+ *  backend/links.py), so a link goes where the build's import would.
  *
  *  Editing writes the source straight back - Ctrl+S or Save - and marks
  *  the model or board changed; Build rebuilds it. A save carries the
@@ -33,6 +38,96 @@ export type CodeKind = 'model' | 'board';
 
 type MonacoApi = typeof Monaco;
 let loading: Promise<MonacoApi> | null = null;
+
+/** One imported module on a line of Python: its top-level name and the
+ *  columns (1-based, end exclusive) of the dotted name and of its alias. */
+export interface ImportSpan { module: string; start: number; end: number }
+
+/** Where the imported modules are on one line: `import a.b as B, c` gives
+ *  a (over `a.b` and over `B`) and c; `from a.b import x` gives a, over
+ *  `a.b`. Relative imports name nothing in the catalog. */
+export function importSpans(line: string): ImportSpan[] {
+  const code = line.replace(/#.*$/, '');
+  const out: ImportSpan[] = [];
+  const from = /^(\s*from\s+)([A-Za-z_][\w.]*)(\s+import\b)/.exec(code);
+  if (from) {
+    const at = from[1].length;
+    out.push({ module: from[2].split('.')[0], start: at + 1, end: at + from[2].length + 1 });
+    return out;
+  }
+  const imp = /^(\s*import\s+)(.+)$/.exec(code);
+  if (!imp) return out;
+  let at = imp[1].length;
+  for (const item of imp[2].split(',')) {
+    const m = /^(\s*)([A-Za-z_][\w.]*)(?:(\s+as\s+)([A-Za-z_]\w*))?/.exec(item);
+    if (m) {
+      const s0 = at + m[1].length;
+      const mod = m[2].split('.')[0];
+      out.push({ module: mod, start: s0 + 1, end: s0 + m[2].length + 1 });
+      if (m[4]) {
+        const a0 = s0 + m[2].length + m[3].length;
+        out.push({ module: mod, start: a0 + 1, end: a0 + m[4].length + 1 });
+      }
+    }
+    at += item.length + 1;
+  }
+  return out;
+}
+
+/** Module name -> the component it is: the build's table. Shared by the
+ *  link provider, which Monaco keeps per language, not per editor. */
+let componentTable = new Map<string, ModuleTarget>();
+/** The open code view's way of following a link. */
+let followLink: ((t: ModuleTarget) => void) | null = null;
+let linksRegistered = false;
+const LINK_SCHEME = 'redline-component';
+
+/** The component an import line names at a column, if any. */
+export function componentAt(line: string, column: number,
+                            table: Map<string, ModuleTarget> = componentTable): ModuleTarget | null {
+  for (const span of importSpans(line)) {
+    if (column >= span.start && column <= span.end) return table.get(span.module) ?? null;
+  }
+  return null;
+}
+
+/** Imports of components as links: underlined on Ctrl, a hover saying
+ *  where it goes, and a click that goes there - not to a URL. */
+function registerComponentLinks(m: MonacoApi) {
+  if (linksRegistered) return;
+  linksRegistered = true;
+  m.languages.registerLinkProvider('python', {
+    provideLinks(model) {
+      const links: Monaco.languages.ILink[] = [];
+      if (model.uri.scheme !== 'redline') return { links };
+      for (let n = 1; n <= model.getLineCount(); n++) {
+        const line = model.getLineContent(n);
+        if (!/^\s*(import|from)\s/.test(line)) continue;
+        for (const span of importSpans(line)) {
+          const t = componentTable.get(span.module);
+          if (!t) continue;
+          links.push({
+            range: new m.Range(n, span.start, n, span.end),
+            url: m.Uri.from({ scheme: LINK_SCHEME, path: `/${t.kind}/${t.id}` }),
+            tooltip: `${t.title} - open the ${t.kind === 'board' ? 'board in the PCB room' : 'model in the 3D room'}`,
+          });
+        }
+      }
+      return { links };
+    },
+  });
+  m.editor.registerLinkOpener({
+    open(uri) {
+      if (uri.scheme !== LINK_SCHEME) return false;
+      const [, kind, ...rest] = uri.path.split('/');
+      const id = rest.join('/');
+      const t = [...componentTable.values()].find(x => x.kind === kind && x.id === id)
+        ?? { kind: kind as ModuleTarget['kind'], id, title: id };
+      followLink?.(t);
+      return true;
+    },
+  });
+}
 
 export function loadMonaco(): Promise<MonacoApi> {
   const w = window as unknown as { monaco?: MonacoApi; require?: any };
@@ -226,6 +321,7 @@ export class CodeView implements OnDestroy {
   private http = inject(HttpClient);
   private auth = inject(Auth);
   private catalog = inject(Catalog);
+  private picked = inject(Selection);
   kind = input.required<CodeKind>();
   /** The model's or board's id: opened in a tab, with its project on the left. */
   id = input.required<string>();
@@ -259,12 +355,15 @@ export class CodeView implements OnDestroy {
     this.tabs();                            // re-read after an edit
     const out = new Set<string>();
     if (!t || t.kind !== 'model') return out;
+    this.table();                           // and once the build's table is in
     for (const name of imports(t.model.getValue())) {
-      const id = this.byName.get(name);
+      const id = componentTable.get(name)?.id ?? this.byName.get(name);
       if (id && id !== t.id) out.add(id);
     }
     return out;
   });
+  /** Bumped when the build's module table has been read. */
+  private table = signal(0);
 
   constructor() {
     effect(() => {
@@ -286,19 +385,59 @@ export class CodeView implements OnDestroy {
         scrollBeyondLastLine: false, renderWhitespace: 'selection', bracketPairColorization: { enabled: true },
       });
       this.editor.addCommand(this.m.KeyMod.CtrlCmd | this.m.KeyCode.KeyS, () => this.save());
-      // Ctrl+click on an import opens the file it names.
-      this.editor.onMouseDown(e => {
-        if (!(e.event.ctrlKey || e.event.metaKey) || !e.target.position) return;
-        const model = this.editor!.getModel();
-        const word = model?.getWordAtPosition(e.target.position)?.word;
-        const line = model?.getLineContent(e.target.position.lineNumber) ?? '';
-        const target = word && /^\s*(from|import)\s/.test(line) ? this.byName.get(word) : undefined;
-        if (target) { e.event.preventDefault(); void this.openFile('model', target); }
+      // An import of a component is a link (registerComponentLinks):
+      // Ctrl/Cmd+click opens the component in its room. The same from the
+      // editor's menu, and its source in a tab here.
+      registerComponentLinks(this.m);
+      followLink = t => this.goTo(t);
+      const onImport = this.editor.createContextKey<boolean>('redlineOnComponent', false);
+      this.editor.onDidChangeCursorPosition(e => onImport.set(!!this.targetAt(e.position)));
+      this.editor.addAction({
+        id: 'redline.goToComponent', label: 'Go to component',
+        contextMenuGroupId: 'navigation', contextMenuOrder: 0,
+        precondition: 'redlineOnComponent',
+        run: ed => { const t = this.targetAt(ed.getPosition()); if (t) this.goTo(t); },
+      });
+      this.editor.addAction({
+        id: 'redline.openComponentSource', label: "Open component's source",
+        contextMenuGroupId: 'navigation', contextMenuOrder: 0.1,
+        precondition: 'redlineOnComponent',
+        run: ed => { const t = this.targetAt(ed.getPosition()); if (t) void this.openFile(t.kind, t.id); },
       });
       this.poll = setInterval(() => this.check(), 10_000);
     }
+    await this.readTable();
     this.readTree(kind, id);
     await this.openFile(kind, id);
+  }
+
+  /** The build's module table: what each import name is. */
+  private readTable(): Promise<void> {
+    return new Promise(done => {
+      this.catalog.modules().subscribe({
+        next: rows => {
+          componentTable = new Map(Object.entries(rows));
+          this.table.set(this.table() + 1);
+          done();
+        },
+        error: () => done(),
+      });
+    });
+  }
+
+  /** The component the import under `pos` names, in the open file. */
+  private targetAt(pos: Monaco.IPosition | null): ModuleTarget | null {
+    const model = this.editor?.getModel();
+    if (!pos || !model || this.current()?.kind !== 'model') return null;
+    return componentAt(model.getLineContent(pos.lineNumber), pos.column);
+  }
+
+  /** Open a component where it lives: a model in the 3D room (this view
+   *  follows it there, in a tab), a board in the PCB room. */
+  goTo(t: ModuleTarget) {
+    if (t.kind === 'board') { this.picked.openBoard(t.id); return; }
+    this.picked.room.set('cad');
+    this.picked.ask('model', t.id);
   }
 
   /** The catalog, cut down to the project the file is in. */
@@ -507,6 +646,7 @@ export class CodeView implements OnDestroy {
 
   ngOnDestroy() {
     clearInterval(this.poll);
+    followLink = null;
     for (const t of this.tabs()) t.model.dispose();
     this.editor?.dispose();
   }

@@ -374,32 +374,92 @@ async def drop_model(model_id: str, force: bool = False):
 
 
 # ---------------- components: what uses what (backend/links.py) ----------------
+async def _model_states(d) -> dict[str, dict]:
+    """Each model's stale flag and its rebuild's state, for the lists."""
+    out = {}
+    async for m in d.models.find({}, {"stale": 1, "link": 1, "ready": 1, "error": 1}):
+        link = m.get("link") or {}
+        out[str(m["_id"])] = {"stale": bool(m.get("stale")), "state": link.get("state"),
+                              "error": link.get("error") or m.get("error")}
+    return out
+
+
 @app.get("/api/components")
 async def list_components():
-    """Everything a model can import, for the 3D room's Insert picker:
-    every .3d model and every .pcb board, with the line that imports it."""
-    g = await links.load(db())
+    """Everything a model can import, for the 3D room's Insert picker and
+    the agents' `component list`: every .3d model and every .pcb board,
+    with the line that imports it, what it uses and who uses it."""
+    d = db()
+    g = await links.load(d)
+    states = await _model_states(d)
     out = []
     for k, info in sorted(g.nodes.items(), key=lambda kv: (kv[1]["kind"], kv[1]["title"].lower())):
         mod = links.module_for(info["kind"], info["id"], g.table)
         alias = "B" if info["kind"] == "board" else (mod or "m")[:1].upper()
+        st = states.get(info["id"], {}) if info["kind"] == "model" else {}
         out.append({"kind": info["kind"], "id": info["id"], "title": info["title"],
                     "version": info.get("version"), "module": mod,
                     "ready": info.get("ready", True),
                     "line": f"import {mod} as {alias}" if mod and mod.isidentifier() else None,
-                    "used_by": [links.split(d)[1] for d in g.used_by(k)]})
+                    "uses": list(g.uses.get(k, [])),
+                    "pins": g.pins.get(k, {}),
+                    "stale": st.get("stale", False), "state": st.get("state"),
+                    "used_by": [links.split(x)[1] for x in g.used_by(k)]})
     return out
+
+
+@app.get("/api/components/modules")
+async def component_modules():
+    """Every name a model can import a component by, and what it is - the
+    table the build lays the modules out by (links.module_table). The code
+    view resolves an import line through it, so Ctrl+click opens what the
+    build would import."""
+    g = await links.load(db(), write_back=False)
+    return links.table_rows(g)
+
+
+@app.get("/api/components/{kind}/{cid:path}/versions")
+async def component_versions(kind: str, cid: str):
+    """The kept versions of a component, newest first, each with what it
+    changed - what a pin can point at - and who pins it."""
+    if kind not in ("model", "board"):
+        raise HTTPException(404, kind)
+    d = db()
+    g = await links.load(d, write_back=False)
+    k = links.key(kind, cid)
+    if k not in g.nodes:
+        raise HTTPException(404, cid)
+    return {"kind": kind, "id": cid, "latest": g.nodes[k].get("version"),
+            "versions": await links.versions(d, kind, cid),
+            "pinned_by": links.pinned_by(g, k)}
+
+
+@app.post("/api/components/{kind}/{cid:path}/update-pins")
+async def component_update_pins(kind: str, cid: str):
+    """Move every model pinned to an older version of this component to its
+    latest, and rebuild them."""
+    if kind not in ("model", "board"):
+        raise HTTPException(404, kind)
+    d = db()
+    try:
+        moved = await links.update_pins(d, kind, cid)
+    except (KeyError, links.PinError, LookupError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    for m in moved:
+        await say(f"{m['model']}: {cid} v{m['from']} -> "
+                  + (f"v{m['to']}" if m["to"] is not None else "latest") + ", rebuilding", "work")
+    return {"component": links.key(kind, cid), "updated": moved}
 
 
 @app.get("/api/models/{model_id:path}/links")
 async def model_links(model_id: str):
     """One model as a component: what it uses (at which version, and
-    which version its last build had), who uses it, the rebuild a change
-    set off, any cycle it is in, and numbers it copies from a component
-    instead of reading them."""
+    which version its last build had), who uses it and who pins it, the
+    rebuild a change set off, any cycle it is in, and numbers it copies
+    from a component instead of reading them."""
     d = db()
     doc = await d.models.find_one({"_id": model_id}, {"source": 1, "built": 1, "link": 1,
-                                                      "version": 1, "pins": 1})
+                                                      "version": 1, "pins": 1, "stale": 1})
     if not doc:
         raise HTTPException(404, model_id)
     g = await links.load(d)
@@ -428,10 +488,11 @@ async def model_links(model_id: str):
             except KeyError:
                 pass
     cycles = [[links.split(x)[1] for x in c] for c in g.cycles() if k in c]
-    return {"id": model_id, "version": doc.get("version") or 1,
+    return {"id": model_id, "version": doc.get("version") or 1, "stale": bool(doc.get("stale")),
             "uses": uses,
             "used_by": [{"id": links.split(x)[1], "title": g.nodes[x]["title"]} for x in g.used_by(k)],
             "dependents": [links.split(x)[1] for x in g.dependents(k)],
+            "pinned_by": links.pinned_by(g, k),
             "built": {"at": built.get("at"), "hash": built.get("hash"),
                       "current": bool(built.get("hash")) and built.get("hash") == now["hash"]},
             "link": doc.get("link"), "cycles": cycles, "pins": doc.get("pins") or {},
@@ -447,20 +508,20 @@ class PinIn(BaseModel):
 async def pin_component(model_id: str, body: PinIn):
     """Use one component at a fixed version (Fusion's "break link"), or
     follow its latest again. A pinned component's changes do not travel
-    to this model."""
-    d = db()
-    if body.version is None:
-        got = await d.models.update_one({"_id": model_id}, {"$unset": {f"pins.{body.component}": ""}})
-    else:
-        kind, cid = links.split(body.component)
-        if not await links.version_of(d, kind, cid, body.version):
-            raise HTTPException(404, f"{body.component} v{body.version} is not kept")
-        got = await d.models.update_one({"_id": model_id},
-                                        {"$set": {f"pins.{body.component}": body.version}})
-    if not got.matched_count:
-        raise HTTPException(404, model_id)
-    await d.models.update_one({"_id": model_id}, {"$set": {"stale": True}})
-    return {"model": model_id, "component": body.component, "version": body.version}
+    to this model. Either way the model, and what uses it, is rebuilt."""
+    try:
+        out = await links.set_pin(db(), model_id, body.component, body.version)
+    except KeyError as exc:
+        raise HTTPException(404, f"no model {exc}") from exc
+    except links.PinError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if out.get("changed"):
+        title = links.split(body.component)[1]
+        await say(f"{model_id}: " + (f"{title} pinned at v{body.version}" if body.version is not None
+                                     else f"{title} follows its latest again") + ", rebuilding", "work")
+    return out
 
 
 @app.post("/api/models/{model_id:path}/build")
@@ -2165,9 +2226,11 @@ async def drop_board(bid: str, force: bool = False):
 @app.get("/api/boards/{bid}/component")
 async def board_component(bid: str):
     """The board as a 3D component: its version, the named data a model
-    reads (`import <module> as B`), and who uses it."""
+    reads (`import <module> as B`), who uses it and who pins it, and its
+    version setting."""
     d = db()
-    doc = await d[ato.BOARDS].find_one({"_id": bid}, {"component": 1, "title": 1})
+    doc = await d[ato.BOARDS].find_one({"_id": bid}, {"component": 1, "title": 1,
+                                                      links.EVERY_RUN: 1, "component_error": 1})
     if not doc:
         raise HTTPException(404, bid)
     try:
@@ -2177,12 +2240,34 @@ async def board_component(bid: str):
     g = await links.load(d)
     k = links.key("board", bid)
     mod = links.module_for("board", bid, g.table)
+    states = await _model_states(d)
     return {"board": bid, "title": doc.get("title") or bid, "component": doc.get("component"),
             "module": mod, "line": f"import {mod} as B" if mod else None,
             "data": data,
+            "every_run": bool(doc.get(links.EVERY_RUN)),
+            "error": doc.get("component_error"),
             "used_by": [{"id": links.split(x)[1], "title": g.nodes[x]["title"],
-                         "link": None} for x in g.used_by(k)],
+                         "pinned": g.pins.get(x, {}).get(k),
+                         "state": states.get(links.split(x)[1], {}).get("state")}
+                        for x in g.used_by(k)],
+            "pinned_by": links.pinned_by(g, k),
             "dependents": [links.split(x)[1] for x in g.dependents(k)]}
+
+
+class ComponentSettingsIn(BaseModel):
+    every_run: bool
+
+
+@app.put("/api/boards/{bid}/component/settings")
+async def board_component_settings(bid: str, body: ComponentSettingsIn):
+    """How the board's 3D component is versioned. Off (the default): a
+    layout that leaves the 3D as it was is no new version. On: every
+    layout or run is one, so a model can pin "the board as of that run"."""
+    got = await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": {links.EVERY_RUN: body.every_run}})
+    if not got.matched_count:
+        raise HTTPException(404, bid)
+    await actors.audit(db(), "edit", f"board {bid}", {"every_run": body.every_run})
+    return {"board": bid, "every_run": body.every_run}
 
 
 @app.post("/api/boards/{bid}/component")
@@ -2199,11 +2284,17 @@ async def refresh_board_component(bid: str):
     except kicad.NoDocker as exc:
         raise HTTPException(503, str(exc))
     except KeyError as exc:
-        raise HTTPException(404, str(exc))
+        raise HTTPException(404, str(exc).strip("'\""))
     except RuntimeError as exc:
+        await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": {"component_error": {
+            "at": store.now(), "error": str(exc)[-1500:]}}})
         raise HTTPException(400, str(exc))
     await say(f"{bid}: 3D component v{out.get('version')}"
-              + (" (new)" if out.get("changed") else " (unchanged)"), "done", room="pcb")
+              + (" (new)" if out.get("changed") else " (unchanged)")
+              + ((" - from the import's own STEP" if out.get("step_from") == "upload"
+                  else " - from the import: the bare board, parts as boxes")
+                 if out.get("from") == "import" else ""),
+              "done", room="pcb")
     await _say_propagation(bid, out)
     return out
 
@@ -2227,11 +2318,13 @@ async def _link_build(d, model_id: str):
     link = ((await d.models.find_one({"_id": model_id}, {"link": 1})) or {}).get("link") or {}
     b = link.get("because") or {}
     why = f"{b.get('title') or b.get('id')} v{b.get('version')}"
-    await say(f"{model_id}: rebuilding because {why} changed", "work")
+    # A pin that moved is not the component changing.
+    did = {"pinned": "was pinned", "follow": "is followed again"}.get(b.get("pin"), "changed")
+    await say(f"{model_id}: rebuilding because {why} {did}", "work")
     try:
         out = await build.build(d, model_id, EXPORT_SCRIPT)
     except Exception as exc:
-        await say(f"{model_id}: broke after {why} changed - {str(exc).splitlines()[-1][:200] if str(exc) else type(exc).__name__}",
+        await say(f"{model_id}: broke after {why} {did} - {str(exc).splitlines()[-1][:200] if str(exc) else type(exc).__name__}",
                   "error")
         raise
     await say(f"{model_id}: rebuilt against {why}", "done")

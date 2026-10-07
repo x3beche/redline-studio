@@ -3805,3 +3805,36 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   .tcv-cc-modelpop { position: fixed; left: 8px; right: 8px; bottom: 80px; width: auto; }
 }
 /* ==== end COMMAND CODE ==== */
+
+/* A pin (a component used at a fixed version): a small pushpin, in
+   whatever ink the place it sits in has. */
+.tcv-pin-ico {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  vertical-align: -1px;
+}
+/* One choice in a component's version menu: follow the latest, or pin. */
+.tcv-pin-opt {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 3px 6px;
+  text-align: left;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.tcv-pin-opt:hover { background: var(--hover); }
+.tcv-pin-opt[data-on] { background: var(--surface); }
+.tcv-pin-opt[data-on] .tcv-pin-mark { color: var(--accent); }
+.tcv-pin-mark {
+  display: inline-flex;
+  flex: none;
+  width: 10px;
+  justify-content: center;
+  padding-top: 2px;
+  font-size: 8px;
+}

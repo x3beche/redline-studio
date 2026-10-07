@@ -56,5 +56,8 @@ data (outline, thickness, holes, connectors, keepout) and the 3D models
 that `import` the board are rebuilt on their own. Never make a separate 3D
 model of a board, and never copy its numbers into one. A layout that moves
 a connector or a hole changes those models - say so in the note's report
-(`GET /api/boards/<id>/component` lists who uses the board). See AGENTS.md:
+(`revisions.py component show <board>`, MCP `component_show`, gives its
+size, holes, connectors, who uses it and who pins an older version). A
+board with no 3D yet gets it from `component refresh <board>` without
+re-routing - never while a job runs on the board. See AGENTS.md:
 Components.
