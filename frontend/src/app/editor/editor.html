@@ -970,7 +970,7 @@
                           [attr.aria-expanded]="!isFolded(r.id)" title="fold / unfold">
                     {{ isFolded(r.id) ? '▸' : '▾' }}
                   </button>
-                  @if (r.status === 'queued') {
+                  @if (inQueue(r)) {
                     <span class="mr-1 rounded px-1.5 py-0.5 text-[10px] font-bold"
                           style="background: var(--accent); color: var(--ink-on-accent)">{{ queueIndex(r) }}</span>
                   }
@@ -984,7 +984,8 @@
                       style="background: var(--line)">arch</span>
               }
               <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase"
-                    [style.background]="badge(r.status)">{{ label(r.status) }}</span>
+                    [style.background]="badgeOf(r)"
+                    [title]="review(r) === 'done' ? 'the agent finished - look at it, then mark it applied' : review(r) === 'failed' ? 'the run failed - see the log' : ''">{{ labelOf(r) }}</span>
             </div>
             <!-- Progress stays visible when the card is folded, so it lives
                  in that card rather than in a bar detached from it. -->

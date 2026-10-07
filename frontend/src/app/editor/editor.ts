@@ -1995,16 +1995,35 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   /** Position in the queue; the list already arrives ordered by queued_at. */
   queueIndex(r: Revision): number {
-    return this.revisions().filter(x => x.status === 'queued').indexOf(r) + 1;
+    return this.revisions().filter(x => this.inQueue(x)).indexOf(r) + 1;
   }
 
   queueCount(): number {
-    return this.revisions().filter(x => x.status === 'queued').length;
+    return this.revisions().filter(x => this.inQueue(x)).length;
   }
 
   /** Queued, in the room on screen - the count beside that room's list. */
   roomQueued(): number {
-    return this.roomRevisions().filter(x => x.status === 'queued').length;
+    return this.roomRevisions().filter(x => this.inQueue(x)).length;
+  }
+
+  /** Queued and its run already ended (done or failed): it waits for a
+   *  person to look and mark it applied, not for an agent - so it is not
+   *  numbered in the queue, and says so. */
+  review(r: Revision): 'done' | 'failed' | null {
+    if (r.status !== 'queued') return null;
+    const st = r.run?.status;
+    return st === 'done' ? 'done' : st === 'failed' ? 'failed' : null;
+  }
+  inQueue(r: Revision): boolean { return r.status === 'queued' && !this.review(r); }
+
+  badgeOf(r: Revision): string {
+    const rv = this.review(r);
+    return rv === 'done' ? 'var(--ok)' : rv === 'failed' ? 'var(--danger)' : this.badge(r.status);
+  }
+  labelOf(r: Revision): string {
+    const rv = this.review(r);
+    return rv === 'done' ? 'review' : rv === 'failed' ? 'failed' : this.label(r.status);
   }
 
   badge(s: RevisionStatus): string {

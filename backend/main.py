@@ -747,8 +747,9 @@ class RevisionIn(BaseModel):
     kind: str | None = Field(default=None, pattern="^(cad|pcb)$")
 
 
-def _out(d: dict) -> dict:
+def _out(d: dict, run: dict | None = None) -> dict:
     return {"id": d["_id"], "created_at": d["created_at"], "comment": d["comment"],
+            "run": run,
             "camera": d.get("camera"), "part": d.get("part"), "model": d.get("model"),
             "kind": d.get("kind") or "cad",
             "view": d.get("view"),
@@ -972,7 +973,17 @@ async def list_revisions(status: str | None = None, archived: bool = False):
     query["archived"] = True if archived else {"$ne": True}
     rows = [d async for d in db().revisions.find(query)]
     rows.sort(key=_sort_key)
-    return [_out(d) for d in rows]
+    runs = await _runs_of([d["_id"] for d in rows if d.get("status") == "queued"])
+    return [_out(d, runs.get(d["_id"])) for d in rows]
+
+
+async def _runs_of(ids: list[str]) -> dict:
+    """How the last run of each queued note ended: a note whose run is done
+    but that nobody marked applied waits for review, it is not in the queue."""
+    if not ids:
+        return {}
+    return {r["_id"]: {"status": r.get("status"), "finished_at": r.get("finished_at")}
+            async for r in db().runs.find({"_id": {"$in": ids}}, {"status": 1, "finished_at": 1})}
 
 
 @app.get("/api/queue")
@@ -986,7 +997,8 @@ async def one_revision(rid: str):
     doc = await db().revisions.find_one({"_id": rid})
     if not doc:
         raise HTTPException(404, rid)
-    return _out(doc)
+    runs = await _runs_of([rid] if doc.get("status") == "queued" else [])
+    return _out(doc, runs.get(rid))
 
 
 @app.put("/api/revisions/{rid}/image/after")

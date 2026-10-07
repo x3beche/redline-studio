@@ -21,6 +21,9 @@ export interface Revision {
   model: string | null;
   /** A board's note or a model's: each room shows its own. */
   kind: RevisionKind;
+  /** A queued note's last run, when it has one: done or failed means it
+   *  waits for someone to mark it applied, not for an agent. */
+  run?: { status: string; finished_at?: string | null } | null;
   status: RevisionStatus;
   queued_at: string | null;
   edited_at: string | null;
