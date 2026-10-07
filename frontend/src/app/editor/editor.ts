@@ -287,6 +287,12 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.glError.set(String((e as Error)?.message ?? e));
       return;
     }
+    // The moment someone takes hold of the view, it is theirs: the
+    // re-applies of a remembered or asked-for camera below stand down
+    // instead of snapping it back under their hand.
+    for (const ev of ['pointerdown', 'wheel', 'touchstart', 'keydown'])
+      this.host().nativeElement.addEventListener(ev, () => { this.handledAt = Date.now(); },
+                                                 { capture: true, passive: true });
     // Clicking a part in the model fills the Part field on the right.
     this.viewer.onPick(name => {
       if (!name) return;
@@ -835,6 +841,8 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!m.data) { this.flash(m.name + ': build it first'); return; }
     this.builtAt = m.built_at ?? '';
     this.busy.set('loading model…');
+    const opened = Date.now();
+    const handled = () => this.handledAt >= opened;
     try {
       // Data is not on disk; it streams from the database.
       await this.viewer.load(this.cat.viewerUrl(m.id, m.built_at));
@@ -860,7 +868,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         // hold and stand down.
         for (const ms of [300, 900, 1600]) {
           setTimeout(() => {
-            if (this.heldCamera || this.pendingCamera || this.focusing) return;
+            if (handled() || this.heldCamera || this.pendingCamera || this.focusing) return;
             this.focusRevision(rev);
           }, ms);
         }
@@ -874,13 +882,14 @@ export class Editor implements AfterViewInit, OnDestroy {
         // was simply overwritten.
         const seen = this.lastView();
         if (seen?.model === m.id && seen.camera) {
+          if (!handled()) this.viewer.applyCamera(seen.camera);
           for (const ms of [300, 900, 1600]) {
             setTimeout(() => {
               // A revision's camera may have landed in between - it is the
               // one that was asked for, and the last timer to fire used to
               // stamp the remembered angle over it. That is why a rendered
               // "after" came back from a different angle than the drawing.
-              if (this.heldCamera) return;
+              if (handled() || this.heldCamera) return;
               this.viewer?.applyCamera(seen.camera!);
             }, ms);
           }
@@ -1225,6 +1234,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   // browser - they are about this window, not about the project, so they do
   // not belong in the database.
   private static SEEN = 'redline.lastView';
+  /** When the person last touched the 3D view (pointer, wheel, key). */
+  private handledAt = 0;
   /** What was open and what was folded away. One key rather than five:
    *  it is all the same question - how this window was left. */
   private static PANELS = 'redline.panels';
