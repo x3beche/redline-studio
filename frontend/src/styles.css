@@ -4278,15 +4278,17 @@ button.tcv-cc-stats:focus-visible { outline: 2px solid var(--accent); outline-of
 .tcv-cc-detail { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 15; width: max-content; max-width: min(440px, 82vw);
   padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
   visibility: hidden; opacity: 0; pointer-events: none; transition: opacity .1s, visibility 0s linear .1s; }
-.tcv-cc-row[data-role="assistant"]:hover .tcv-cc-detail { visibility: visible; opacity: 1; pointer-events: auto;
-  transition: opacity .12s .35s, visibility 0s linear .35s; }
+/* Only the stats line opens it - hovering the answer itself leaves the
+   text free to select and copy. */
+.tcv-cc-statwrap:hover .tcv-cc-detail { visibility: visible; opacity: 1; pointer-events: auto;
+  transition: opacity .12s .2s, visibility 0s linear .2s; }
 .tcv-cc-statwrap:focus-within .tcv-cc-detail, .tcv-cc-row[data-open] .tcv-cc-detail { visibility: visible; opacity: 1;
   pointer-events: auto; transition: none; }
 .tcv-cc-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 14px; margin: 0;
   font: 10.5px/1.55 'IBM Plex Mono', ui-monospace, monospace; }
 .tcv-cc-detail dt { color: var(--ink-dim); white-space: nowrap; }
 .tcv-cc-detail dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
-@media (hover: none) { .tcv-cc-row[data-role="assistant"]:hover .tcv-cc-detail { visibility: hidden; opacity: 0; }
+@media (hover: none) { .tcv-cc-statwrap:hover .tcv-cc-detail { visibility: hidden; opacity: 0; }
   .tcv-cc-row[data-role="assistant"][data-open] .tcv-cc-detail { visibility: visible; opacity: 1; }
   .tcv-cc-row:hover .tcv-cc-hovtime { display: none; } .tcv-cc-row[data-open] .tcv-cc-hovtime { display: inline; } }
 

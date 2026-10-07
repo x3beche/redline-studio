@@ -2108,6 +2108,9 @@ export class RoomCommandCode implements OnDestroy {
   toggleDetail(id: string) { this.detail.update(d => d === id ? null : id); }
   rowTap(m: CcMessage, e: Event) {
     if (!matchMedia('(hover: none)').matches) return;
+    // On a phone only a tap on the stats line opens the details; a tap on
+    // the text is for reading and selecting it.
+    if (!(e.target as HTMLElement).closest('.tcv-cc-statwrap')) return;
     if ((e.target as HTMLElement).closest('a, button, input, textarea, select, pre, summary, .tcv-cc-thinkbody')) return;
     this.toggleDetail(m.id);
   }
@@ -2428,6 +2431,12 @@ export class RoomCommandCode implements OnDestroy {
       this.logAuto = el.scrollTop;
     };
     setTimeout(() => { go(); requestAnimationFrame(go); });
+    // Opening a conversation: what renders after the first frame - maths
+    // typeset by KaTeX, pictures, code - makes it taller, so it is taken to
+    // the end again as it settles, unless the reader has scrolled up.
+    if (!follow) {
+      for (const ms of [120, 350, 800, 1600]) setTimeout(() => { if (!this.logFree) go(); }, ms);
+    }
   }
 
   /** The reader scrolled the conversation: away from its end, it stops

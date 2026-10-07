@@ -330,7 +330,16 @@ export class RoomThread {
     const el = this.log()?.nativeElement;
     if (el && onlyIfAtEnd) this.follow = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
     if (onlyIfAtEnd && !this.follow) return;
-    setTimeout(() => { const e = this.log()?.nativeElement; if (e) e.scrollTop = e.scrollHeight; });
+    const go = () => { const e = this.log()?.nativeElement; if (e) e.scrollTop = e.scrollHeight; };
+    setTimeout(go);
+    // A thread just opened grows as its lines and pictures render: back to
+    // the end as it settles, unless the reader has scrolled away from it.
+    if (!onlyIfAtEnd) {
+      for (const ms of [120, 350, 800, 1600]) setTimeout(() => {
+        const e = this.log()?.nativeElement;
+        if (e && e.scrollHeight - e.scrollTop - e.clientHeight < 400) go();
+      }, ms);
+    }
   }
 
   say() {

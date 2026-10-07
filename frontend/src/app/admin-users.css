@@ -56,3 +56,13 @@
   .ad-table .r .tcv-btn { display: none; }
   .pf-foot .tcv-btn { min-height: 40px; }
 }
+/* The person's column takes the room the others leave: a name and an
+   address read whole, not cut to four letters. */
+.ad-table td.give { width: auto; max-width: none; min-width: 150px; }
+.ad-table td:not(.give):not(.ad-wide) { white-space: nowrap; width: 1%; }
+.ad-table td.ad-wide { width: 1%; }
+.ad-table th { white-space: normal; }
+.st-table-wrap:has(.ad-table) { container-type: inline-size; }
+/* Narrow: the creation date goes first, then the last sign-in. */
+@container (max-width: 700px) { .ad-table th:nth-child(5), .ad-table td:nth-child(5) { display: none; } }
+@container (max-width: 560px) { .ad-table th:nth-child(4), .ad-table td:nth-child(4) { display: none; } }
