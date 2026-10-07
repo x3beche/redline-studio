@@ -1272,7 +1272,7 @@
                  Not in the docked panel: that card is a read-out of what is
                  happening, and the controls live with the queue. -->
             @if (!docked) {
-            <div class="mt-1.5 flex flex-nowrap items-center gap-1">
+            <div class="mt-1.5 flex flex-wrap items-center gap-1">
               @if (editing() === r.id) {
                 <button (click)="saveEdit(r)" class="tcv-chip tcv-chip-ok">save</button>
                 <button (click)="cancelEdit()" class="tcv-chip">cancel</button>
