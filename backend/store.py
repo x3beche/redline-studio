@@ -242,24 +242,52 @@ async def save_model(db, model_id: str, source: str) -> dict:
     return doc
 
 
-async def move_model(db, model_id: str, folder: str) -> str:
-    """Move a model to another folder. The id carries the path, so this is a
-    rename; revisions point at the model by id and are carried along."""
+async def move_model(db, model_id: str, folder: str, name: str | None = None) -> str:
+    """Move a model to another folder, and/or give it another name. The id
+    carries the path, so either is a rename; revisions point at the model by
+    id and are carried along, and so is what the component graph keeps
+    under its id - other models' pins on it, what their last build was
+    built against, and its kept versions. A new name is a new module name:
+    the sources that import the old one must be changed to match."""
     doc = await db.models.find_one({"_id": model_id})
     if not doc:
         raise KeyError(model_id)
     if folder and not await db.folders.find_one({"_id": folder}):
         raise ValueError(f"no such folder: {folder}")
-    new_id = f"{folder}/{doc['name']}" if folder else doc["name"]
+    name = name or doc["name"]
+    if not SAFE.match(name):
+        raise ValueError("model name may only contain letters, digits, - and _")
+    new_id = f"{folder}/{name}" if folder else name
     if new_id == model_id:
         return new_id
     if await db.models.find_one({"_id": new_id}):
         raise FileExistsError(f"{new_id} already exists")
-    doc["_id"], doc["folder"] = new_id, folder
+    doc["_id"], doc["folder"], doc["name"] = new_id, folder, name
     await db.models.insert_one(doc)
     await db.models.delete_one({"_id": model_id})
     await db.revisions.update_many({"model": model_id},
                                    {"$set": {"model": new_id}})
+    old_key, new_key = f"model:{model_id}", f"model:{new_id}"
+    async for m in db.models.find(
+            {"$or": [{f"pins.{old_key}": {"$exists": True}},
+                     {f"built.against.{old_key}": {"$exists": True}}]},
+            {"pins": 1, "built": 1}):
+        patch = {}
+        pins = dict(m.get("pins") or {})
+        if old_key in pins:
+            pins[new_key] = pins.pop(old_key)
+            patch["pins"] = pins
+        against = dict(((m.get("built") or {}).get("against")) or {})
+        if old_key in against:
+            against[new_key] = against.pop(old_key)
+            patch["built.against"] = against
+        if patch:
+            await db.models.update_one({"_id": m["_id"]}, {"$set": patch})
+    async for row in db.component_versions.find({"kind": "model", "component": model_id}):
+        await db.component_versions.delete_one({"_id": row["_id"]})
+        row["_id"] = f"{new_key}:v{row.get('version')}"
+        row["component"] = new_id
+        await db.component_versions.insert_one(row)
     return new_id
 
 

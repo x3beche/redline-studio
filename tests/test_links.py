@@ -734,3 +734,75 @@ def test_a_pinned_model_is_built_at_its_pinned_source(db, tmp_path):
     got = run(links.prepare(db, "p/tray", tmp_path, tmp_path))
     assert (tmp_path / "part.py").read_text() == "W = 2\n"
     assert got["against"]["model:p/part"]["version"] == 2 and got["against"]["model:p/part"]["pinned"]
+
+
+def test_a_legacy_default_model_queued_later_is_still_rebuilt(db, monkeypatch):
+    """A model saved before workspaces has no workspace_id. Mongo's
+    distinct() leaves a missing field out, so the loop used to look at no
+    workspace at all once its first tick was over: the station sat
+    "queued" for good after a part it uses changed."""
+    monkeypatch.setattr(links, "DEBOUNCE", 0)
+    monkeypatch.setattr(links, "TICK", 0.02)
+    real_distinct = Coll.distinct
+
+    async def mongo_distinct(self, key, q=None, **kw):     # as Mongo: no None for a missing field
+        return [v for v in await real_distinct(self, key, q, **kw) if v is not None]
+
+    monkeypatch.setattr(Coll, "distinct", mongo_distinct)
+    db["models"].rows += [model("p/a", "W = 1\n"), model("p/b", "import a\n")]
+
+    async def go():
+        builds = Builds(secs=0.01)
+        stop = asyncio.Event()
+        task = asyncio.create_task(links.loop(lambda: db, builds, stop))
+        await asyncio.sleep(0.1)                  # the first tick has come and gone
+        await links.changed(db, "model", "p/a")
+        for _ in range(100):
+            await asyncio.sleep(0.02)
+            if builds.order:
+                break
+        await asyncio.sleep(0.05)
+        stop.set()
+        await task
+        return builds
+
+    assert run(go()).order == ["p/b"]
+    row = next(r for r in db["models"].rows if r["_id"] == "p/b")
+    assert row["link"]["state"] == "done"
+
+
+@pytest.mark.asyncio
+async def test_renaming_a_model_carries_its_links_revisions_and_versions(api):
+    """A rename (move with `name`) is a new id and a new module name. What
+    the graph keeps under the old id goes with it; the sources that import
+    the old name are the person's to change, and until then they use
+    nothing by it."""
+    api["folders"].rows.append({"_id": "q", "name": "q", "parent": ""})
+    api["models"].rows += [
+        model("p/stand", "W = 1\nPARTS = []\n", ready=True, artifacts={}, version=2),
+        model("p/tray", "import stand\nPARTS = []\n", ready=True, artifacts={},
+              pins={"model:p/stand": 1},
+              built={"at": "x", "hash": "h", "against": {"model:p/stand": {"version": 1}}})]
+    api["revisions"].rows.append({"_id": "r1", "model": "p/stand"})
+    api["component_versions"].rows.append(
+        {"_id": "model:p/stand:v1", "kind": "model", "component": "p/stand", "version": 1})
+    h = {"x-redline-csrf": "1"}
+    async with client() as c:
+        r = await c.post("/api/models/p/stand/move?folder=q&name=fan_mount", headers=h)
+        assert r.status_code == 200, r.text
+        assert r.json() == {"from": "p/stand", "to": "q/fan_mount"}
+        r = await c.post("/api/models/q/fan_mount/move?folder=q&name=bad%20name", headers=h)
+        assert r.status_code == 400
+    rows = {m["_id"]: m for m in api["models"].rows}
+    assert "p/stand" not in rows
+    assert rows["q/fan_mount"]["name"] == "fan_mount" and rows["q/fan_mount"]["folder"] == "q"
+    assert rows["p/tray"]["pins"] == {"model:q/fan_mount": 1}
+    assert list(rows["p/tray"]["built"]["against"]) == ["model:q/fan_mount"]
+    assert api["revisions"].rows[0]["model"] == "q/fan_mount"
+    assert [(v["_id"], v["component"]) for v in api["component_versions"].rows] == [
+        ("model:q/fan_mount:v1", "q/fan_mount")]
+    assert rows["p/tray"]["uses"] == []            # `import stand` names nothing now
+    tray = next(m for m in api["models"].rows if m["_id"] == "p/tray")
+    tray.update(model("p/tray", "import fan_mount\nPARTS = []\n"))   # the person's edit
+    g = await links.load(api)
+    assert g.uses["model:p/tray"] == ["model:q/fan_mount"]

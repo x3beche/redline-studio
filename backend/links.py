@@ -722,7 +722,15 @@ async def loop(raw_db, builder, stop: asyncio.Event | None = None) -> None:
     while not (stop and stop.is_set()):
         try:
             raw = raw_db()
-            wss = await raw.models.distinct("workspace_id", {"link.state": {"$in": ["queued", "building"]}})
+            busy = {"link.state": {"$in": ["queued", "building"]}}
+            wss = list(await raw.models.distinct("workspace_id", busy))
+            # A model written before workspaces existed has no workspace_id
+            # and is the default workspace's (scope.keep_to) - but distinct()
+            # does not list a field that is missing, so its queued rebuild
+            # was never taken after the first tick.
+            if None not in wss and scope.DEFAULT not in wss and await raw.models.find_one(
+                    {**busy, "workspace_id": {"$exists": False}}, {"_id": 1}):
+                wss.append(None)
             for w in wss or ([None] if first else []):
                 ws = w or scope.DEFAULT
                 ctx = contextvars.copy_context()

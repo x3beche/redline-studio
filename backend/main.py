@@ -349,9 +349,11 @@ async def _say_propagation(what: str, prop: dict, room: str = "cad") -> None:
 
 
 @app.post("/api/models/{model_id:path}/move")
-async def move_model(model_id: str, folder: str = ""):
+async def move_model(model_id: str, folder: str = "", name: str | None = None):
+    """Move a model to `folder`; with `name`, rename it too (its module
+    name: the sources that import it must say the new one)."""
     try:
-        new_id = await store.move_model(db(), model_id, folder)
+        new_id = await store.move_model(db(), model_id, folder, name)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     except (ValueError, FileExistsError) as exc:
