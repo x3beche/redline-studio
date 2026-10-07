@@ -164,15 +164,17 @@ export class PinnedByList {
   template: `
 @if (data(); as d) {
   @if (d.uses.length || d.used_by.length || d.link || d.cycles.length || d.pinned_by?.length) {
-  <div class="tcv-card pointer-events-auto w-80 overflow-hidden p-0 text-[11px]"
-       style="box-shadow: 0 6px 20px var(--shadow-soft)">
-    <button class="flex w-full items-center gap-1.5 px-2 py-1 text-left"
-            style="background: var(--surface)" [style.border-bottom]="open() ? '1px solid var(--line)' : null"
-            (click)="toggleCard()" [attr.aria-expanded]="open()" [title]="open() ? 'Fold the links card' : 'Show the links card'">
-      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" style="color: var(--ink-dim); transition: transform .12s"
-           [style.transform]="open() ? 'rotate(90deg)' : null">
-        <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span class="tcv-label">Links</span>
+  <div class="tcv-card pointer-events-auto max-w-[calc(100vw-2rem)] overflow-hidden p-0 text-[11px]"
+       style="box-shadow: 0 6px 20px var(--shadow-soft)" [style.width]="open() ? '22rem' : null">
+    <!-- The same head as the PCB room's 3D component card: fold, name, version, state. -->
+    <div class="flex items-center gap-2 px-2 py-1" [style.border-bottom]="open() ? '1px solid var(--line)' : null">
+      <button class="tcv-pcb-fold" (click)="toggleCard()" [attr.aria-expanded]="open()"
+              [title]="open() ? 'Fold the links card' : 'Show the links card'">
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" [style.transform]="open() ? 'rotate(90deg)' : null">
+          <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"
+                stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="tcv-label">Links</span>
+      </button>
       <span class="font-mono text-[10px]" style="color: var(--ink-dim)">v{{ d.version }}</span>
       @if (pinCount(); as n) {
         <span class="flex items-center gap-0.5 text-[10px]" style="color: var(--ink-dim)"
@@ -186,7 +188,7 @@ export class PinnedByList {
       } @else if (d.built.hash && !d.built.current) {
         <span class="ml-auto truncate" style="color: var(--warn)">out of date</span>
       }
-    </button>
+    </div>
     @if (d.link; as l) {
       @if (l.state === 'queued' || l.state === 'building') {
         <p class="px-2 pt-1.5 leading-snug" style="color: var(--accent)">
