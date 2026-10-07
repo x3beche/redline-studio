@@ -56,7 +56,8 @@ def test_a_viewer_only_looks():
             ("POST", "/api/themes"), ("PUT", "/api/themes/x"), ("DELETE", "/api/themes/x"),
             # one's own profile: name, picture, password, sessions (profile.py)
             ("PATCH", "/api/me"), ("PUT", "/api/me/avatar"), ("DELETE", "/api/me/avatar"),
-            ("POST", "/api/me/password"), ("POST", "/api/me/sessions/revoke-others")}, (method, path)
+            ("POST", "/api/me/password"), ("POST", "/api/me/sessions/revoke-others"),
+            ("POST", "/api/client-errors")}, (method, path)
 
 
 def test_a_reviewer_draws_but_does_not_queue_build_or_delete():

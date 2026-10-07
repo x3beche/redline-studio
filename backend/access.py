@@ -87,6 +87,8 @@ _RULES: list[tuple[str, str, str]] = [
     ("*", "/api/auth/.*", NONE),
     ("*", "/api/reset/.*", NONE),
     ("GET", "/api/health", NONE),
+    # a page telling the server what broke in it (backend/client_errors.py)
+    ("POST", "/api/client-errors", "view"),
     # one's own profile (backend/profile.py): anyone signed in, and only
     # themselves - the routes take no one else's id but a picture's
     ("*", "/api/me(/.*)?", "view"),

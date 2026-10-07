@@ -86,6 +86,8 @@ app.include_router(themes_api.router)
 from .tgbot import api as tg_api  # noqa: E402
 app.include_router(tg_api.router)
 from . import profile as profile_api  # noqa: E402
+from . import client_errors  # noqa: E402
+app.include_router(client_errors.router)
 app.include_router(profile_api.router)
 # The admin panel: the accounts, for the owner and the admins.
 from . import admin as admin_api  # noqa: E402
