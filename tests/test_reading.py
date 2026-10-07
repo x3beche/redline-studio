@@ -224,3 +224,35 @@ def test_a_thread_line_uses_the_same_path(db, model):
     got = run(reading.translate_doc(db, "chat", "m1", "Turkish", ("text",), "reading:chat"))
     assert got["text"] == "TR Built: **2** parts, 0.4 mm walls."
     assert recorded[0]["kind"] == "reading:chat"
+
+
+def test_every_code_of_the_pickers_list_is_a_language_the_model_is_told_by_name():
+    """The page's picker is the app's one list (telegram-langs.ts, served
+    from backend/tgbot/languages.py) and sends codes: every one of them is
+    accepted and reaches the prompt as the language's name, not a code."""
+    from backend.tgbot import languages
+
+    for code, english, _native in languages.LANGUAGES:
+        got = reading.language(code)
+        if code == "en":
+            assert got is None                       # the original
+            continue
+        assert got == languages.english(code) and got != code, code
+        assert reading.TranslateIn(lang=code).lang == code
+        assert "{" not in reading.PROMPT.format(lang=got) and got in reading.PROMPT.format(lang=got)
+    # What the old list kept in a browser still works: names.
+    assert reading.language("Turkish") == "Turkish" and reading.language("tr") == "Turkish"
+    assert reading.lang_key(reading.language("zh")) == reading.lang_key("Chinese (Simplified)")
+
+
+def test_a_question_asked_for_by_code_is_translated_into_that_language(db, model):
+    from backend.tgbot import languages
+
+    sent, _ = model
+    got = ask(db, "nb")
+    assert got["lang"] == languages.english("nb") != "nb"
+    assert f"into {languages.english('nb')}." in sent[0][0]["content"]
+    # The same language by its old name and by its code is one translation.
+    ask(db, "de")
+    n = len(sent)
+    assert ask(db, "German")["cached"] is True and len(sent) == n

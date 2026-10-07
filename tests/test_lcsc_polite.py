@@ -150,3 +150,39 @@ def test_a_failed_download_is_not_written_down_as_a_success(monkeypatch):
     run(lcsc._polite("download", "C1234", "", lambda url: (1, "no such part"), "u"))
     row = lcsc.journal()[0]
     assert row["status"] is None and "no such part" in row["error"]
+
+
+def test_a_photo_that_is_not_served_freezes_nothing():
+    """A 403 from LCSC's image server is a picture that is not there, not
+    EasyEDA turning us away: it froze every part lookup for ten minutes."""
+    with pytest.raises(urllib.error.HTTPError):
+        run(lcsc._polite("photo", "C14663", "https://assets.lcsc.com/x.jpg", _refuse(403), "u"))
+    got = run(lcsc._polite("component", "C1", "", lambda url: {"ok": 1}, "u"))
+    assert got == {"ok": 1}
+
+
+def test_through_the_proxy_a_refusal_is_tried_from_two_more_exits(monkeypatch):
+    from backend import netproxy
+    monkeypatch.setattr(netproxy, "mode", lambda: "always")
+    calls = []
+
+    def fn(url):
+        calls.append(url)
+        if len(calls) < 3:
+            raise urllib.error.HTTPError(url, 403, "no", {}, io.BytesIO(b""))
+        return {"ok": 1}
+    monkeypatch.setattr(lcsc, "_through", lambda via, f, *a: (f(*a), {"session": f"s{len(calls)}"}))
+    assert run(lcsc._polite("component", "C2", "", fn, "u")) == {"ok": 1}
+    assert len(calls) == 3
+    # still answering: nobody cooled off
+    assert run(lcsc._polite("search", "x", "", lambda url: {"ok": 2}, "u")) == {"ok": 2}
+
+
+def test_three_refusals_through_the_proxy_do_cool_off(monkeypatch):
+    from backend import netproxy
+    monkeypatch.setattr(netproxy, "mode", lambda: "always")
+    monkeypatch.setattr(lcsc, "_through", lambda via, f, *a: (f(*a), {}))
+    with pytest.raises(lcsc.Refused):
+        run(lcsc._polite("component", "C3", "", _refuse(403), "u"))
+    with pytest.raises(lcsc.Refused):
+        run(lcsc._polite("search", "later", "", lambda url: {}, "u"))

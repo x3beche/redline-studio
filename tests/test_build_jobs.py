@@ -262,3 +262,30 @@ async def test_a_link_rebuild_is_a_build_job_and_its_result_reaches_the_queue(ap
     # And after a restart, the queue finds it by its token.
     assert (await M._link_job(M.db(), "p/tray", "tok"))["_id"] == job["_id"]
     assert await M._link_job(M.db(), "p/tray", "other") is None
+
+
+@pytest.mark.asyncio
+async def test_a_link_rebuild_lost_with_its_runner_is_queued_again_not_failed(api, monkeypatch):
+    """A container restart kills the runner; its beat goes stale. The queue
+    was waiting for it: the model is built again, not marked broken."""
+    db = api["db"]
+    old = datetime.now(timezone.utc) - timedelta(seconds=buildjobs.LOST + 5)
+    db["build_jobs"].rows.append({"_id": "gone", "model": "p/part", "workspace": "default",
+                                  "status": "running", "started_at": old, "beat": old,
+                                  "by": "link", "link_token": "tok"})
+    db["models"].rows[0]["link"] = {"state": "building", "token": "tok"}
+    said = []
+
+    async def say(text, level="info", **kw):
+        said.append((level, text))
+    monkeypatch.setattr(M, "say", say)
+    with pytest.raises(buildjobs.Lost):
+        await M._link_build(M.db(), "p/part", job="gone")
+    assert said[-1][0] == "warn" and "queued again" in said[-1][1]
+
+    sched = links.Scheduler(M._link_build)
+    g = await links.load(M.db(), write_back=False)
+    sched.adopt(M.db(), "default", "p/part", "tok", "gone", g)
+    await sched.idle()
+    link = db["models"].rows[0]["link"]
+    assert link["state"] == "queued" and "error" not in link

@@ -1,4 +1,10 @@
 @import "tailwindcss";
+/* The tools' pure halves (public/tools/<id>/tool.js: no DOM) hold regular
+   expressions, and Tailwind reads every file it finds for class names: a
+   character class like [-:./] (prompt-anatomy's LOGISH) was taken for an
+   arbitrary property and came out as `-: ./;` - the dev server's "Expected
+   identifier but found "-"" warning. They have no classes to find. */
+@source not "../public/tools/*/tool.js";
 @import "./fonts.css";
 
 /* ============================ THEME ============================
@@ -2691,28 +2697,6 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   scrollbar-color: var(--tcv-scrollbar-hover) transparent;
 }
 
-/* SMALL CHARTS (rooms/minicharts.ts): one measure each, in the accent, on
-   a quiet track; labels and values in the text colours. Thin marks with
-   rounded ends, as the analytics cards draw theirs. */
-.tcv-mchart-title { font-size: 10px; color: var(--ink-dim); margin: 8px 0 3px;
-                    text-transform: uppercase; letter-spacing: .05em; }
-.tcv-mchart-empty { font-size: 10px; color: var(--ink-dim); }
-.tcv-mbar { display: grid; grid-template-columns: 76px 1fr 54px; align-items: center;
-                         gap: 6px; height: 14px; font-size: 10px; cursor: default; }
-.tcv-mbar:hover { background: var(--hover); border-radius: 3px; }
-.tcv-mbar-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-dim); }
-.tcv-mbar-track { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
-.tcv-mbar-fill { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
-.tcv-mbar-value { text-align: right; color: var(--ink); white-space: nowrap; }
-.tcv-mbar-value b { font-weight: 600; margin-left: 3px; }
-.tcv-mcols { display: flex; gap: 4px; align-items: stretch; height: 34px; }
-.tcv-mcol { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: default; }
-.tcv-mcol:hover { background: var(--hover); border-radius: 3px; }
-.tcv-mcol-well { flex: 1; width: 60%; display: flex; align-items: flex-end; }
-.tcv-mcol-fill { display: block; width: 100%; border-radius: 3px 3px 0 0; background: var(--accent); }
-.tcv-mcol-value { font-size: 10px; color: var(--ink); }
-.tcv-mcol-label { font-size: 9px; color: var(--ink-dim); }
-
 /* THE AGENT'S ANSWER OPTIONS: stacked, whole, readable - a mark like a
    radio (or a box when several can be picked), the text in Markdown. */
 .tcv-answers { display: flex; flex-direction: column; gap: 6px; max-height: 38vh; overflow-y: auto; }
@@ -3793,6 +3777,78 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   .tcv-cc-toast { bottom: 120px; }
   .tcv-cc-alert { width: calc(100% - 16px); }
   .tcv-cc-modelpop { position: fixed; left: 8px; right: 8px; bottom: 80px; width: auto; }
+}
+/* ---- round two: @-mentions, answers watched live, search, totals ------- */
+/* A mention: a small chip in the kind's icon - in the composer before it
+   is sent (with an x), under the line once it is (opens the thing). */
+.tcv-cc-composer { position: relative; }
+.tcv-cc-picked { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 9px 12px 0; }
+.tcv-cc-mentions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; max-width: min(100%, 620px); min-width: 0; }
+.tcv-cc-mchip { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: min(240px, 100%); height: 24px; padding: 0 8px 0 6px;
+  font-size: 11.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+button.tcv-cc-mchip { cursor: pointer; }
+button.tcv-cc-mchip:hover { border-color: var(--ink-dim); background: var(--hover); }
+.tcv-cc-mchip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tcv-cc-mchip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tcv-cc-mchip .tcv-cc-ico { width: 13px; height: 13px; color: var(--accent); }
+.tcv-cc-mcut { flex: none; font-size: 10px; color: var(--warn); }
+.tcv-cc-mx { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-right: -4px;
+  padding: 0; color: var(--ink-dim); background: none; border: 0; border-radius: 50%; cursor: pointer; }
+.tcv-cc-mx:hover { color: var(--ink); background: var(--hover); }
+.tcv-cc-mx .tcv-cc-ico { width: 11px; height: 11px; color: inherit; }
+.tcv-cc-mnote { font-size: 11px; }
+/* The picker, over the composer. */
+.tcv-cc-mpop { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 8px); z-index: 30; display: flex; flex-direction: column;
+  max-width: 520px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 10px 28px var(--shadow-hard); }
+.tcv-cc-mhead { display: flex; align-items: center; gap: 7px; padding: 8px 10px; font-size: 12px; color: var(--ink-dim);
+  border-bottom: 1px solid var(--line); }
+.tcv-cc-mhead .tcv-cc-ico { color: var(--accent); }
+.tcv-cc-mlist { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; padding: 4px; }
+.tcv-cc-mlist button { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 8px; text-align: left;
+  font-size: 12.5px; color: var(--ink); background: none; border: 0; border-radius: 5px; cursor: pointer; }
+.tcv-cc-mlist button .tcv-cc-ico { color: var(--ink-dim); }
+.tcv-cc-mlist button.on { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-cc-mlist button.on .tcv-cc-ico { color: var(--ink-bright); }
+.tcv-cc-msub { flex: 0 1 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.tcv-cc-mlist button.on .tcv-cc-msub { color: var(--ink); }
+.tcv-cc-mfoot { padding: 6px 10px; font-size: 10.5px; border-top: 1px solid var(--line); }
+.tcv-cc-mfoot kbd { padding: 0 4px; font: 10px 'IBM Plex Mono', ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px; }
+/* How full the context window is: a thin bar and the count. */
+.tcv-cc-meter { flex: none; display: inline-flex; align-items: center; gap: 6px; font: 10.5px 'IBM Plex Mono', ui-monospace, monospace;
+  color: var(--ink-dim); }
+.tcv-cc-meterbar { position: relative; width: 44px; height: 4px; overflow: hidden; background: var(--line); border-radius: 2px; }
+.tcv-cc-meterbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 2px; }
+.tcv-cc-meter[data-state="warn"] .tcv-cc-meterbar i { background: var(--warn); }
+.tcv-cc-meter[data-state="warn"] { color: var(--warn); }
+.tcv-cc-meter[data-state="danger"] .tcv-cc-meterbar i { background: var(--danger); }
+.tcv-cc-meter[data-state="danger"] { color: var(--danger); }
+/* The conversation's tokens and money, in the header. */
+.tcv-cc-totals { flex: none; font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); white-space: nowrap; cursor: default; }
+/* Search: the lines found, the words marked; the one opened lit a moment. */
+.tcv-cc-witharch { font-size: 11.5px; color: var(--ink-dim); }
+.tcv-cc-hit { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 8px 10px; text-align: left; color: var(--ink);
+  background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.tcv-cc-hit + .tcv-cc-hit { margin-top: 1px; }
+.tcv-cc-hit:hover { background: var(--hover); }
+.tcv-cc-hit[data-on] { background: var(--surface); box-shadow: inset 2px 0 0 var(--accent); }
+.tcv-cc-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tcv-cc-hitsnip { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 11.5px;
+  line-height: 1.45; color: var(--ink-dim); }
+.tcv-cc-hitsnip b { font-weight: 600; color: var(--ink); }
+.tcv-cc-hitsnip mark { padding: 0 1px; color: var(--ink-bright); background: var(--accent-deep); border-radius: 2px; }
+.tcv-cc-row[data-flash] .tcv-cc-bubble, .tcv-cc-row[data-flash] .tcv-cc-answer { box-shadow: 0 0 0 2px var(--accent); }
+.tcv-cc-row[data-flash] .tcv-cc-answer { border-radius: 6px; background: var(--surface-2); }
+.tcv-cc-bubble, .tcv-cc-answer { transition: box-shadow .4s, background .4s; }
+@media (max-width: 1100px) {
+  .tcv-cc-meter > span:last-child { display: none; }
+}
+@media (max-width: 768px) {
+  .tcv-cc-totals { display: none; }
+  .tcv-cc-mchip { height: 30px; }
+  .tcv-cc-mlist button { min-height: 40px; }
+  .tcv-cc-mpop { position: fixed; left: 8px; right: 8px; bottom: 80px; max-width: none; }
+  .tcv-cc-mentions { max-width: 88%; }
 }
 /* ==== end COMMAND CODE ==== */
 

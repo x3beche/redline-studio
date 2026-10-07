@@ -155,6 +155,8 @@
 .tg-lp-pop { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; width: 300px; padding: 6px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px var(--shadow-soft); }
 .tg-lp-pop .st-in { width: 100%; box-sizing: border-box; }
+.tg-lp-pop.tg-lp-fixed { position: fixed; z-index: 60; right: auto; width: min(300px, calc(100vw - 16px)); box-sizing: border-box; }
+.tg-lp-btn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tg-lp-list { max-height: 260px; overflow-y: auto; margin-top: 5px; scrollbar-width: thin; }
 .tg-lp-row { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 4px 7px; text-align: left;
   background: none; border: 0; border-radius: 4px; cursor: pointer; color: var(--ink); font-size: 12px; }

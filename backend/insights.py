@@ -163,6 +163,54 @@ async def _llm_sums(db, lo: str, hi: str, since: datetime, size: int) -> dict:
                                                "revision", "run", "bucket_rev")}
 
 
+def note_attribution(docs: list[dict], window: dict[str, dict], runs: list[dict],
+                     lo: str, hi: str) -> dict[str, dict]:
+    """What each note in the range cost, as its card says: the frozen
+    figures of usage.for_revision - the calls of the agents that held it
+    and the sub-agents they started - with its `approximate` flag. A note is
+    in the range when its work finished in it, or is still going. One with
+    no figures kept yet falls back to the time window (`window`, every call
+    made while its run was open) and is approximate."""
+    def inside(finished, started) -> bool:
+        return lo <= finished <= hi if finished else bool(started) and started <= hi
+
+    out: dict[str, dict] = {}
+    for d in docs:
+        if not inside(d.get("finished_at"), d.get("started_at")):
+            continue
+        t, a = d.get("totals") or {}, d.get("attribution") or {}
+        out[d["_id"]] = {"calls": int(t.get("calls") or 0), "cost_usd": float(t.get("cost_usd") or 0.0),
+                         "tokens": int(t.get("billed_tokens") or 0) + int(t.get("thinking") or 0),
+                         "approximate": bool(a.get("approximate", True)),
+                         "method": a.get("method") or "window"}
+    latest: dict[str, dict] = {}
+    for r in runs:
+        rid = r.get("revision")
+        if rid and (r.get("started_at") or "") >= ((latest.get(rid) or {}).get("started_at") or ""):
+            latest[rid] = r
+    for rid, v in window.items():
+        r = latest.get(rid)
+        if rid not in out and r and inside(r.get("finished_at"), r.get("started_at")):
+            out[rid] = {**v, "approximate": True, "method": "window"}
+    return out
+
+
+def project_attribution(by_note: dict[str, dict], proj_of, llm: dict) -> dict[str, dict]:
+    """Spend per project from the notes' own figures; what no note's agent
+    made is "(no note)" - the whole range's spend less the notes'."""
+    out: dict[str, dict] = defaultdict(lambda: {"calls": 0, "cost_usd": 0.0, "approximate": False})
+    for rid, v in by_note.items():
+        p = out[proj_of(rid)]
+        p["calls"] += v["calls"]; p["cost_usd"] += v["cost_usd"]
+        p["approximate"] = p["approximate"] or bool(v.get("approximate"))
+    rest_usd = (llm.get("cost_usd") or 0.0) - sum(v["cost_usd"] for v in by_note.values())
+    rest_calls = (llm.get("calls") or 0) - sum(v["calls"] for v in by_note.values())
+    if rest_usd > 0.005 or rest_calls > 0:
+        out["(no note)"] = {"calls": max(0, rest_calls), "cost_usd": max(0.0, rest_usd),
+                            "approximate": False}
+    return out
+
+
 def _median(xs: list[float]) -> float | None:
     xs = sorted(x for x in xs if x is not None)
     if not xs:
@@ -781,7 +829,7 @@ def _refresh(db, key: str, span) -> None:
 
 # Bumped whenever the shape of the answer changes, so an answer kept in the
 # old shape is never served to a page that expects the new one.
-SHAPE = 6
+SHAPE = 7
 
 
 async def overview_cached(db, key: str, span) -> dict:
@@ -821,7 +869,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
     (projects_map, rev_rows, agg, job_rows, metric_rows, all_runs, chat_rows,
      question_rows, prefs, dbst, coll_names, n_folders, n_models, n_boards,
      n_parts, timing_rows, board_rows, event_rows, history_rows, grid_rows, previous,
-     docker, weekly_rows, model_docs, board_docs) = await asyncio.gather(
+     docker, weekly_rows, model_docs, board_docs, note_docs) = await asyncio.gather(
         _projects(db),
         rows("revisions", {}, {"kind": 1, "model": 1, "status": 1, "created_at": 1,
                                "queued_at": 1, "summary": 1, "comment": 1, "image": 1}),
@@ -847,7 +895,14 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         rows("models", {}, {"title": 1, "folder": 1, "artifacts.viewer.bytes": 1,
                             "artifacts.viewer.at": 1, "build_secs": 1}),
         rows("boards", {}, {"title": 1, "folder": 1, "route": 1, "drc": 1,
-                            "layout.size_mm": 1, "artifacts.layout.at": 1}))
+                            "layout.size_mm": 1, "artifacts.layout.at": 1}),
+        # What each note's card says it cost (backend/usage.py for_revision):
+        # those finished in the range, and those still going.
+        rows(usage.ANALYTICS, {"$or": [{"finished_at": {"$gte": lo, "$lte": hi}},
+                                       {"finished_at": None}]},
+             {"totals.calls": 1, "totals.cost_usd": 1, "totals.billed_tokens": 1,
+              "totals.thinking": 1, "attribution.approximate": 1,
+              "attribution.method": 1, "started_at": 1, "finished_at": 1}))
     price = prefs.get("kwh_price")
     owner, kinds = projects_map
 
@@ -889,6 +944,10 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         if rid:
             n = by_note.setdefault(rid, {"calls": 0, "cost_usd": 0.0, "tokens": 0})
             n["calls"] += r["calls"]; n["cost_usd"] += r["cost"]; n["tokens"] += r["tokens"]
+    # Per note, what its card says (note_attribution): the calls of the
+    # agents that held it, not everything said while it was open.
+    by_note = note_attribution(note_docs, by_note, all_runs, lo, hi)
+    by_project = project_attribution(by_note, proj_of, llm)
 
     # ---- compute jobs
     jobs = {"count": 0, "wall_s": 0.0, "cpu_s": 0.0, "wh": 0.0, "failed": 0}
@@ -1124,6 +1183,11 @@ async def overview(db, since: datetime, until: datetime) -> dict:
     note_costs = {"series": {"t0": note_cost.t0, "step": size, "n": note_cost.n,
                              "series": [{"name": k, "values": v} for k, v in note_cost.data.items()]},
                   "notes": len(finished_costs), "median": _median(finished_costs),
+                  # Notes whose agent could not be told: costed by time window.
+                  "approximate": sum(1 for rid, v in by_note.items() if v.get("approximate")
+                                     and (at := done_at.get(rid)) and since <= at <= until
+                                     and v["cost_usd"] > 0),
+                  "approximate_label": usage.APPROX_LABEL,
                   "mean": round(sum(finished_costs) / len(finished_costs), 4) if finished_costs else None}
 
     # ---- the API: which routes are slow
@@ -1311,6 +1375,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
     for rid, v in sorted(by_note.items(), key=lambda kv: -kv[1]["cost_usd"])[:10]:
         r = revs.get(rid) or {}
         top_notes.append({"id": rid, **{k: round(x, 4) if isinstance(x, float) else x for k, x in v.items()},
+                          "approximate_label": usage.APPROX_LABEL if v.get("approximate") else None,
                           "room": compute.room_of(r.get("kind")), "project": proj_of(rid)})
     note_titles = {rid: (revs[rid].get("summary") or (revs[rid].get("comment") or "")[:90])
                    for rid in by_note if rid in revs}

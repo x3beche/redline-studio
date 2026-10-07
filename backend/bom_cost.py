@@ -127,6 +127,13 @@ def _from_component(part: str) -> dict | None:
             "ts": ts, "at": _iso(ts), "source": "component"}
 
 
+def record_stock(part: str):
+    """The stock in the part's component record on disk, if any."""
+    shop = _component_facts(part).get("shop") or {}
+    st = shop.get("stock")
+    return st if isinstance(st, (int, float)) else None
+
+
 def cached_offer(part: str) -> dict | None:
     """What is known about buying a part, from disk only."""
     if not lcsc.looks_like_a_part(part):
@@ -317,6 +324,13 @@ def cost(lines: list[dict], offers: dict[str, dict | None], qty: int,
         need = line["qty"] * qty
         price, brk = unit_price(breaks, need)
         state = "no_part" if not part else stock_state(stock, need)
+        # The search and the part's own record are two LCSC listings and
+        # do not always agree: the search can say 0 where the record (a day
+        # older at most) shows thousands. Then it is "unsure", not "out" -
+        # a false alarm is worse than a question.
+        other = record_stock(part) if part and (offer or {}).get("source") == "search" else None
+        if state in ("out", "short") and isinstance(other, (int, float)) and other >= need:
+            state = "unsure"
         flags = []
         if not part:
             flags.append("no LCSC number")
@@ -325,7 +339,7 @@ def cost(lines: list[dict], offers: dict[str, dict | None], qty: int,
         if offer and offer.get("missing"):
             flags.append("LCSC does not list it")
         alts = []
-        if state in ("out", "short", "low", "unknown") or not part:
+        if state in ("out", "short", "low", "unsure", "unknown") or not part:
             alt = passive_alternative({**line, "package": (offer or {}).get("package")}, need)
             if alt:
                 alts.append(alt)
@@ -339,7 +353,7 @@ def cost(lines: list[dict], offers: dict[str, dict | None], qty: int,
             "package": (offer or {}).get("package"),
             "maker": (offer or {}).get("maker"),
             "jlc_class": jlc,
-            "stock": stock, "state": state, "need": need,
+            "stock": stock, "stock_record": other, "state": state, "need": need,
             "unit_usd": price, "break_qty": brk,
             "line_usd": round(price * line["qty"], 6) if price is not None else None,
             "breaks": breaks,
@@ -372,7 +386,7 @@ def cost(lines: list[dict], offers: dict[str, dict | None], qty: int,
         "extended_fee_usd": ext * EXTENDED_FEE_USD,
         "extended_fee_note": f"JLCPCB assembly: about ${EXTENDED_FEE_USD:g} loading fee per Extended part, once per order",
         "stock": {"out": counts["out"], "short": counts["short"], "low": counts["low"],
-                  "unknown": counts["unknown"], "no_part": counts["no_part"], "ok": counts["ok"]},
+                  "unknown": counts["unknown"], "unsure": counts["unsure"], "no_part": counts["no_part"], "ok": counts["ok"]},
         "problems": [{"refs": r["refs"], "lcsc": r["lcsc"], "state": r["state"],
                       "stock": r["stock"], "need": r["need"],
                       "has_alternatives": bool(r["alternatives"])} for r in problems],
@@ -452,8 +466,8 @@ async def find_alternatives(line: dict, need: int, limit: int = 5) -> dict:
     kept = kept_alternatives(part)
     if kept and time.time() - (kept.get("ts") or 0) < MAX_AGE:
         return kept
-    pkg = line.get("package") or ""
-    term = line.get("mpn") or " ".join(x for x in (line.get("value"), pkg) if x)
+    pkg = (line.get("package") or "").strip(" -")
+    term = search_term(line)
     if not term:
         return {"rows": [], "term": None}
     rows = await _search_raw(term, 20)
@@ -478,6 +492,21 @@ async def find_alternatives(line: dict, need: int, limit: int = 5) -> dict:
     except OSError:
         pass
     return data
+
+
+def search_term(line: dict) -> str | None:
+    """What to search for parts like this one. A value that is not the
+    part number - 1uH, 11.0592MHz, 10k - with the package finds other
+    makers' parts; an IC is its part number (other packagings, other
+    makers' copies)."""
+    value, mpn = (line.get("value") or "").strip(), (line.get("mpn") or "").strip()
+    pkg = (line.get("package") or "").strip(" -")
+    if value and value.upper() != mpn.upper() and re.search(r"\d", value) and len(value) <= 16:
+        # A resistor's value alone also finds varistors and ferrites.
+        kind = _passive_kind(line.get("footprint"))
+        word = {"R": "resistor", "C": "capacitor"}.get(kind[0]) if kind else None
+        return " ".join(x for x in (value, pkg, word) if x)
+    return mpn or (" ".join(x for x in (value, pkg) if x)) or None
 
 
 def _pkg_key(pkg: str) -> str:

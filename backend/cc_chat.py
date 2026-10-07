@@ -26,6 +26,19 @@ TRASH_DAYS days. After that the database drops it by itself (a TTL index
 that holds only the trashed ones, see `ensure_indexes`). "Delete forever"
 and "Empty trash" drop it at once. Who may: as deleting - one's own
 always, anyone else's only with the "delete" right.
+
+A line can carry @-mentions (backend/cc_context.py): models, boards, files,
+notes, drawn notes and parts, read through the workspace and handed to the
+model as a bounded context block that stays on the line (`context`, never
+sent to the page - the chips are, as `mentions`).
+
+Everyone with a conversation open sees an answer as it is written, not
+only the one who asked: GET /chats/{id}/live is a server-sent stream fed
+by the request writing the answer (`HUB`).
+
+Search (GET /search) reads every line, not only the titles, through a text
+index (`ensure_search_index`), and answers with the line it found, a
+snippet and where the words are in it.
 """
 
 from __future__ import annotations
@@ -37,11 +50,11 @@ import secrets
 import time
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import access, actors, llm
+from . import access, actors, cc_context, llm, scope
 
 router = APIRouter(prefix="/api/cc")
 
@@ -60,6 +73,7 @@ TRASH_TTL = "cc_trash_ttl"       # the index that drops it afterwards
 # kept before there was a trash is a live one.
 LIVE = {"deleted_at": None}
 TRASHED = {"deleted_at": {"$ne": None}}
+CHAT_CONTEXT = 4_000_000         # characters of mentioned context one conversation may hold
 
 SYSTEM = (
     "You are a helpful assistant in Redline Studio, a workshop app for 3D CAD models, "
@@ -124,7 +138,7 @@ def _out(doc: dict, full: bool = True) -> dict:
     msgs = doc.get("messages") or []
     o["count"] = len(msgs)
     if full:
-        o["messages"] = msgs
+        o["messages"] = [public(m) for m in msgs]
     elif msgs:
         last = msgs[-1]
         o["last"] = {"role": last["role"], "text": (last.get("content") or "")[:140],
@@ -132,10 +146,22 @@ def _out(doc: dict, full: bool = True) -> dict:
     return o
 
 
-def history(msgs: list[dict]) -> list[dict]:
+def public(m: dict) -> dict:
+    """A line as the page gets it: the context block its mentions were
+    expanded into stays here; its size goes instead."""
+    if "context" not in m and "attach" not in m:
+        return m
+    o = {k: v for k, v in m.items() if k not in ("context", "attach")}
+    o["context_chars"] = len(m.get("context") or "")
+    return o
+
+
+def history(msgs: list[dict], images: list[dict] | None = None) -> list[dict]:
     """What the model is sent: the system line, then the conversation -
     newest first until the budget, then put back in order. Names on the
-    people's lines once there is more than one person."""
+    people's lines once there is more than one person; a line's mentions,
+    as their context block, before it. `images` (OpenAI image parts) go
+    with the last line."""
     people = {(m.get("by") or {}).get("id") for m in msgs if m["role"] == "user"}
     named = len(people) > 1
     out: list[dict] = []
@@ -146,6 +172,8 @@ def history(msgs: list[dict]) -> list[dict]:
         text = m.get("content") or ""
         if named and m["role"] == "user":
             text = f"[{(m.get('by') or {}).get('name') or 'someone'}] {text}"
+        if m["role"] == "user" and m.get("context"):
+            text = m["context"] + "\n\n" + text
         used += len(text)
         if used > CONTEXT_CHARS and out:
             break
@@ -161,6 +189,8 @@ def history(msgs: list[dict]) -> list[dict]:
             merged.append(dict(m))
     while merged and merged[0]["role"] != "user":
         merged.pop(0)
+    if images and merged and merged[-1]["role"] == "user":
+        merged[-1]["content"] = [{"type": "text", "text": merged[-1]["content"]}, *images]
     return [{"role": "system", "content": SYSTEM}] + merged
 
 
@@ -278,6 +308,32 @@ async def ensure_indexes(raw) -> None:
         await coll.create_index([("deleted_at", 1)], **spec)
 
 
+SEARCH_INDEX = "cc_text"         # the titles and every line, for GET /search
+
+
+async def ensure_search_index(raw) -> None:
+    """The text index search reads: the titles (weighted up) and every
+    line's text - never the mentioned context, which is the workspace's
+    things, not the conversation. No stemming ("none"): the room speaks
+    Turkish and English in one breath. One for the collection, like the
+    trash's: the workspace is in every query (backend/scope.py), as are
+    the trash and the archive. A collection has one text index at most, so
+    one made with other fields or options is replaced. Safe at every start."""
+    coll = raw[COLL]
+    keys = [("title", "text"), ("messages.content", "text")]
+    spec = {"name": SEARCH_INDEX, "weights": {"title": 5, "messages.content": 1}, "default_language": "none"}
+    try:
+        await coll.create_index(keys, **spec)
+    except Exception as exc:                           # noqa: BLE001
+        if getattr(exc, "code", None) not in (85, 86):  # IndexOptionsConflict, IndexKeySpecsConflict
+            raise
+        info = await coll.index_information()
+        for name, ix in info.items():
+            if name == SEARCH_INDEX or any(k == "_fts" for k, _ in ix.get("key") or []):
+                await coll.drop_index(name)
+        await coll.create_index(keys, **spec)
+
+
 def _gone_by() -> dict:
     who = actors.current() or {}
     return {"id": who.get("id"), "name": who.get("name"), "type": who.get("type")}
@@ -322,6 +378,105 @@ async def list_chats(q: str = "", archived: str = "0", trash: str = "0") -> list
         o["count"] = counts.get(d["_id"], o["count"])
         out.append(o)
     return out
+
+
+SNIPPET = 200                    # characters of a line around what was found
+PER_CHAT = 3                     # lines shown from one conversation
+
+
+def terms(q: str) -> list[str]:
+    """The words a search looks for, as the text index splits them: quoted
+    phrases kept whole, "-word" (left out by the index) not highlighted."""
+    out: list[str] = []
+    for phrase, word in re.findall(r'"([^"]+)"|(\S+)', q):
+        t = (phrase or word).strip().lower()
+        if t and not t.startswith("-"):
+            t = t.strip(".,;:!?()[]{}'\"")
+            if t and t not in out:
+                out.append(t)
+    return out
+
+
+def snippet(text: str, words: list[str], width: int = SNIPPET) -> tuple[str, list[list[int]]] | None:
+    """The part of a line around the first word found, and where every word
+    found is in it ([start, end] in the snippet). None when none is in it."""
+    flat = " ".join((text or "").split())
+    low = flat.lower()
+    found = [(m.start(), m.end()) for w in words for m in re.finditer(re.escape(w), low)]
+    if not found:
+        return None
+    found.sort()
+    first = found[0][0]
+    start = max(0, min(first - width // 3, len(flat) - width))
+    end = min(len(flat), start + width)
+    pre = "…" if start > 0 else ""
+    post = "…" if end < len(flat) else ""
+    hits = [[s - start + len(pre), e - start + len(pre)] for s, e in found if s >= start and e <= end]
+    return pre + flat[start:end] + post, hits
+
+
+@router.get("/search")
+async def search(q: str = "", archived: str = "0", trash: str = "0", limit: int = 30) -> dict:
+    """Every conversation's title and lines, through the text index: the
+    lines found (up to PER_CHAT a conversation), each with its time, a
+    snippet and where the words are in it. `archived` and `trash` as for
+    the list: 0 leaves the archived out, all takes them too; trash=1 looks
+    only in the trash. Without the index (not made yet) it reads them all."""
+    q = q.strip()[:200]
+    words = terms(q)
+    if not words:
+        return {"q": q, "how": "none", "results": []}
+    in_trash = trash in ("1", "true")
+    query: dict = dict(TRASHED if in_trash else LIVE)
+    if not in_trash and archived in ("1", "true"):
+        query["archived"] = True
+    elif not in_trash and archived != "all":
+        query["archived"] = {"$ne": True}
+    limit = max(1, min(limit, 100))
+    fields = {"title": 1, "messages.id": 1, "messages.role": 1, "messages.content": 1, "messages.at": 1,
+              "messages.by": 1, "archived": 1, "pinned": 1, "updated_at": 1, "deleted_at": 1}
+    coll = _db()[COLL]
+    how = "index"
+    try:
+        cur = coll.find({**query, "$text": {"$search": q}}, {**fields, "score": {"$meta": "textScore"}}) \
+            .sort([("score", {"$meta": "textScore"})]).limit(limit)
+        rows = [d async for d in cur]
+    except Exception as exc:                           # noqa: BLE001
+        if getattr(exc, "code", None) != 27:            # IndexNotFound: read them all instead
+            raise
+        how = "scan"
+        rx = "|".join(re.escape(w) for w in words)
+        query["$or"] = [{"title": {"$regex": rx, "$options": "i"}},
+                        {"messages.content": {"$regex": rx, "$options": "i"}}]
+        cur = coll.find(query, fields).sort([("updated_at", -1)]).limit(limit)
+        rows = [d async for d in cur]
+    results: list[dict] = []
+    for d in rows:
+        chat = {"chat_id": d["_id"], "title": d.get("title") or DEFAULT_TITLE, "archived": bool(d.get("archived")),
+                "pinned": bool(d.get("pinned")), "score": round(d.get("score") or 0, 3),
+                "trashed": bool(d.get("deleted_at"))}
+        shown = 0
+        for m in reversed(d.get("messages") or []):    # newest first
+            got = snippet(m.get("content") or "", words)
+            if not got:
+                continue
+            results.append({**chat, "message_id": m.get("id"), "role": m.get("role"), "at": m.get("at"),
+                            "by": (m.get("by") or {}).get("name"), "snippet": got[0], "hits": got[1]})
+            shown += 1
+            if shown >= PER_CHAT:
+                break
+        if not shown:
+            got = snippet(chat["title"], words) or (chat["title"], [])
+            results.append({**chat, "message_id": None, "role": None, "at": d.get("updated_at"), "by": None,
+                            "snippet": got[0], "hits": got[1]})
+    return {"q": q, "how": how, "results": results}
+
+
+@router.get("/mentions")
+async def mentions(q: str = "", kind: str = "", limit: int = 40) -> list[dict]:
+    """What `@` offers in the composer: models, boards, files, notes, drawn
+    notes and parts matching `q` - this workspace's, for whoever may look."""
+    return await cc_context.candidates(_db(), q[:200], kind, max(1, min(limit, 100)))
 
 
 class ChatIn(BaseModel):
@@ -537,6 +692,11 @@ async def delete_message(cid: str, ref: str) -> dict:
 
 # ---- talking ----------------------------------------------------------------
 
+class MentionIn(BaseModel):
+    kind: str = Field(max_length=20)
+    id: str = Field(min_length=1, max_length=300)
+
+
 class SayIn(BaseModel):
     text: str = Field(min_length=1, max_length=100_000)
     provider: str | None = Field(default=None, max_length=40)
@@ -544,11 +704,17 @@ class SayIn(BaseModel):
     # Edit: this line (one's own) is replaced by `text`, and everything
     # after it goes before the answer is written again.
     edit: str | None = Field(default=None, max_length=40)
+    # @-mentions: read here, through the workspace (backend/cc_context.py).
+    mentions: list[MentionIn] = Field(default_factory=list, max_length=cc_context.MAX_MENTIONS)
+    # The page that asked, so it can tell its own answer from someone
+    # else's on the live stream.
+    client: str | None = Field(default=None, max_length=40)
 
 
 class RegenIn(BaseModel):
     provider: str | None = Field(default=None, max_length=40)
     model: str | None = Field(default=None, max_length=200)
+    client: str | None = Field(default=None, max_length=40)
 
 
 def _sse(obj: dict) -> bytes:
@@ -592,15 +758,144 @@ async def _cut(db, cid: str, msgs: list[dict], keep: int, tail: list[dict], sets
         raise HTTPException(409, "the conversation changed meanwhile - read it again and retry")
 
 
-def _stream(db, doc: dict, msgs: list[dict], provider: str, model: str, first: dict) -> StreamingResponse:
-    """Write the answer to `msgs` and keep it. Events: the first one
-    ({type: user, message, keep}: the conversation is its first `keep`
-    lines, then `message` if any), then thinking|text|error, done, and a
-    title when the conversation was named by this answer."""
-    cid = doc["_id"]
-    want_title = doc.get("title") in ("", DEFAULT_TITLE, None)
+# ---- watching an answer being written --------------------------------------
+
+class Hub:
+    """Who is watching which conversation, and the answers being written in
+    it. One per API process (the room runs in one): the request writing an
+    answer publishes each piece here, and every page with the conversation
+    open has a queue on GET /chats/{id}/live that the pieces are copied to.
+    A page that cannot keep up (its queue full) is let go - it reconnects
+    and starts again from the state, which holds the answer so far."""
+
+    QUEUE = 2000
+
+    def __init__(self):
+        self.subs: dict[str, set[asyncio.Queue]] = {}
+        self.live: dict[str, dict[str, dict]] = {}     # key -> gen -> state
+
+    def subscribe(self, key: str) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue(self.QUEUE)
+        self.subs.setdefault(key, set()).add(q)
+        return q
+
+    def unsubscribe(self, key: str, q: asyncio.Queue) -> None:
+        got = self.subs.get(key)
+        if got is not None:
+            got.discard(q)
+            if not got:
+                self.subs.pop(key, None)
+
+    def watchers(self, key: str) -> int:
+        return len(self.subs.get(key) or ())
+
+    def publish(self, key: str, ev: dict) -> None:
+        for q in list(self.subs.get(key) or ()):
+            try:
+                q.put_nowait(ev)
+            except asyncio.QueueFull:
+                self.unsubscribe(key, q)
+                try:
+                    q.get_nowait()                     # room for the goodbye
+                    q.put_nowait(None)
+                except (asyncio.QueueEmpty, asyncio.QueueFull):
+                    pass
+
+    def snapshot(self, key: str) -> list[dict]:
+        return [dict(v) for v in (self.live.get(key) or {}).values()]
+
+    def busy(self, key: str) -> bool:
+        return bool(self.live.get(key))
+
+    def begin(self, key: str, state: dict) -> None:
+        self.live.setdefault(key, {})[state["gen"]] = state
+        self.publish(key, {"type": "start", **state})
+
+    def piece(self, key: str, gen: str, kind: str, text: str) -> None:
+        st = (self.live.get(key) or {}).get(gen)
+        if st is not None:
+            if kind == "text":
+                st["text"] += text
+            else:
+                st["thinking"] = (st["thinking"] + text)[-4000:]
+        self.publish(key, {"type": kind, "gen": gen, "text": text})
+
+    def end(self, key: str, gen: str, ev: dict) -> None:
+        got = self.live.get(key) or {}
+        got.pop(gen, None)
+        if not got:
+            self.live.pop(key, None)
+        self.publish(key, {**ev, "gen": gen})
+        self.publish(key, {"type": "end", "gen": gen})
+
+
+HUB = Hub()
+LIVE_PING = 10.0                 # seconds between keep-alive comments (the page gives up after 25 s of nothing)
+LIVE_MAX = 300.0                 # an idle stream is closed (and reopened by the page) after this
+
+
+def live_key(cid: str) -> str:
+    return f"{scope.current()}:{cid}"
+
+
+@router.get("/chats/{cid}/live")
+async def live(cid: str, request: Request):
+    """The answers being written in this conversation, as they are written,
+    for everyone who has it open. Events: {type: hello, live: [...]} first
+    (the answers already under way, as far as they got), then start, text,
+    thinking, done, error, end and title, each with the `gen` it belongs
+    to. Closed after LIVE_MAX seconds with nothing under way ({type: bye});
+    the page opens it again."""
+    await _load(cid)                                   # this workspace's, and not in the trash
+    key = live_key(cid)
+    q = HUB.subscribe(key)
 
     async def events():
+        try:
+            yield _sse({"type": "hello", "live": HUB.snapshot(key), "watchers": HUB.watchers(key)})
+            opened = time.monotonic()
+            while True:
+                try:
+                    ev = await asyncio.wait_for(q.get(), LIVE_PING)
+                except asyncio.TimeoutError:
+                    if await request.is_disconnected():
+                        return
+                    if time.monotonic() - opened > LIVE_MAX and not HUB.busy(key):
+                        yield _sse({"type": "bye"})
+                        return
+                    yield b": ping\n\n"
+                    continue
+                if ev is None:                         # let go: too slow
+                    yield _sse({"type": "bye", "why": "behind"})
+                    return
+                yield _sse(ev)
+        finally:
+            HUB.unsubscribe(key, q)
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+def _stream(db, doc: dict, msgs: list[dict], provider: str, model: str, first: dict,
+            key: str | None = None, client: str | None = None, images: list[dict] | None = None) -> StreamingResponse:
+    """Write the answer to `msgs` and keep it. Events: the first one
+    ({type: user, message, keep, gen}: the conversation is its first `keep`
+    lines, then `message` if any), then thinking|text|error, done, and a
+    title when the conversation was named by this answer. The same goes to
+    everyone watching the conversation (`HUB`, under `key`)."""
+    cid = doc["_id"]
+    want_title = doc.get("title") in ("", DEFAULT_TITLE, None)
+    key = key or live_key(cid)
+    gen = _mid()
+    who = actors.current() or {}
+    first = dict(first)
+    if first.get("message"):
+        first["message"] = public(first["message"])
+
+    async def events():
+        HUB.begin(key, {"gen": gen, "client": client, "by": {"id": who.get("id"), "name": who.get("name")},
+                        "provider": provider, "model": model, "message": first.get("message"),
+                        "keep": first.get("keep"), "text": "", "thinking": "", "at": _now()})
         yield _sse(first)
         answer = {"id": _mid(), "role": "assistant", "content": "", "at": _now(),
                   "provider": provider, "model": model}
@@ -609,13 +904,15 @@ def _stream(db, doc: dict, msgs: list[dict], provider: str, model: str, first: d
         used: dict = {}
         try:
             first_text = None
-            async for piece in llm.stream(history(msgs), provider=provider, model=model, max_tokens=MAX_ANSWER):
+            async for piece in llm.stream(history(msgs, images), provider=provider, model=model, max_tokens=MAX_ANSWER):
                 if "thinking" in piece:
                     thought = time.monotonic() - t0
+                    HUB.piece(key, gen, "thinking", piece["thinking"])
                     yield _sse({"type": "thinking", "text": piece["thinking"]})
                 elif "text" in piece:
                     first_text = first_text or time.monotonic()
                     answer["content"] += piece["text"]
+                    HUB.piece(key, gen, "text", piece["text"])
                     yield _sse({"type": "text", "text": piece["text"]})
                 elif "usage" in piece:
                     used = piece["usage"] or {}
@@ -625,6 +922,7 @@ def _stream(db, doc: dict, msgs: list[dict], provider: str, model: str, first: d
             raise
         except Exception as exc:                       # noqa: BLE001
             answer["error"] = str(exc)[:500]
+            HUB.publish(key, {"type": "error", "gen": gen, "error": answer["error"]})
             yield _sse({"type": "error", "error": answer["error"]})
         finally:
             if answer.get("stopped") and not answer["content"]:
@@ -637,6 +935,11 @@ def _stream(db, doc: dict, msgs: list[dict], provider: str, model: str, first: d
             # Its own task, started before anything can be cancelled: a
             # closed tab does not leave the conversation unnamed.
             naming = asyncio.ensure_future(_name(db, cid, msgs, answer)) if want_title else None
+            if naming:
+                def told(f, key=key, gen=gen):
+                    if not f.cancelled() and not f.exception() and f.result():
+                        HUB.publish(key, {"type": "title", "gen": gen, "title": f.result()})
+                naming.add_done_callback(told)
 
             async def keep():
                 await db[COLL].update_one({"_id": cid}, {"$push": {"messages": answer},
@@ -644,7 +947,12 @@ def _stream(db, doc: dict, msgs: list[dict], provider: str, model: str, first: d
                 if used:
                     await llm.record(db, provider=provider, model=model, surface="chat", kind="cc-chat", used=used)
             # Shielded: a closed tab cancels this generator, not the saving.
-            await asyncio.shield(keep())
+            try:
+                await asyncio.shield(keep())
+            finally:
+                # Watchers hear it is done once it is kept, so a page that
+                # reads the conversation then finds the answer in it.
+                HUB.end(key, gen, {"type": "done", "message": answer})
         yield _sse({"type": "done", "message": answer})
         if naming:
             title = await asyncio.shield(naming)
@@ -685,6 +993,19 @@ async def say(cid: str, body: SayIn):
     mine = {"id": _mid(), "role": "user", "content": body.text, "at": _now(),
             "by": {"id": who.get("id"), "name": who.get("name"), "type": who.get("type")}}
     sets: dict = {"updated_at": mine["at"], "provider": provider, "model": model}
+    pics: list[dict] = []
+    if body.mentions:
+        # Read now, through this workspace: what cannot be seen is refused.
+        context, chips, pics = await cc_context.expand(db, [m.model_dump() for m in body.mentions],
+                                                       await _vision(provider, model))
+        if context:
+            held = sum(len(m.get("context") or "") for m in msgs)
+            if held + len(context) > CHAT_CONTEXT:
+                raise HTTPException(400, "this conversation holds too much mentioned context already - "
+                                         "start a new one")
+            mine.update({"context": context, "mentions": chips})
+            if pics:
+                mine["attach"] = pics
 
     if body.edit is not None:
         i = find(msgs, body.edit)
@@ -705,7 +1026,9 @@ async def say(cid: str, body: SayIn):
         await db[COLL].update_one({"_id": cid}, {"$push": {"messages": mine}, "$set": sets})
         keep = len(msgs)
     convo = msgs[:keep] + [mine]
-    return _stream(db, doc, convo, provider, model, {"type": "user", "message": mine, "keep": keep})
+    images = await cc_context.images(db, pics) if pics else None
+    return _stream(db, doc, convo, provider, model, {"type": "user", "message": mine, "keep": keep},
+                   key=live_key(cid), client=body.client, images=images)
 
 
 @router.post("/chats/{cid}/regenerate")
@@ -725,4 +1048,20 @@ async def regenerate(cid: str, body: RegenIn | None = None):
         raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
     if keep < len(msgs) or body.provider or body.model:
         await _cut(db, cid, msgs, keep, [], {"updated_at": _now(), "provider": provider, "model": model})
-    return _stream(db, doc, msgs[:keep], provider, model, {"type": "user", "message": None, "keep": keep})
+    # The question's pictures go again, if this model reads them.
+    pics = msgs[keep - 1].get("attach") or []
+    images = await cc_context.images(db, pics) if pics and await _vision(provider, model) else None
+    return _stream(db, doc, msgs[:keep], provider, model, {"type": "user", "message": None, "keep": keep},
+                   key=live_key(cid), client=body.client, images=images)
+
+
+async def _vision(provider: str, model: str) -> bool:
+    """Whether the model reads images: its row in the provider's list, else
+    its name (backend/llm.py `vision`)."""
+    try:
+        for m in await llm.models(provider):
+            if m["id"] == model:
+                return bool(m["vision"]) if "vision" in m else llm.vision(m)
+    except Exception:                                  # noqa: BLE001 - the list is a nicety
+        pass
+    return llm.vision({"id": model})

@@ -216,3 +216,24 @@ def test_a_passive_alternative_comes_from_the_table_without_asking(monkeypatch):
     alt = bom_cost.passive_alternative({"lcsc": "C9999", "value": "0.1u", "footprint": "C0603"}, 100)
     assert alt and alt["lcsc"] == "C1591"
     assert bom_cost.passive_alternative({"lcsc": "C1591", "value": "100n", "footprint": "C0603"}, 1) is None
+
+
+def test_two_listings_that_disagree_make_a_part_unsure_not_out():
+    (lcsc.LOOK / "C104").mkdir()
+    (lcsc.LOOK / "C104" / "component.json").write_text(json.dumps({"success": True, "result": {
+        "lcsc": {"price": 0.002, "stock": 9_000_000}, "dataStr": {"head": {"c_para": {}}}}}))
+    line = [{"lcsc": "C104", "refs": ["R1"], "qty": 1, "value": "10k", "footprint": "R0603"}]
+    o = {"C104": {"breaks": BREAKS, "stock": 0, "source": "search", "ts": time.time()}}
+    out = bom_cost.cost(line, o, 10)
+    assert out["lines"][0]["state"] == "unsure" and out["lines"][0]["stock_record"] == 9_000_000
+    assert out["stock"]["unsure"] == 1 and out["problems"] == []
+    # Without a record to say otherwise, out is out.
+    assert bom_cost.cost([{**line[0], "lcsc": "C105"}], {"C105": o["C104"]}, 10)["lines"][0]["state"] == "out"
+
+
+def test_the_search_term_is_value_and_package_or_the_part_number():
+    assert bom_cost.search_term({"value": "1uH", "mpn": "ABG04A20M1R0", "package": "4020"}) == "1uH 4020"
+    assert bom_cost.search_term({"value": "BQ24074RGTR", "mpn": "BQ24074RGTR", "package": "QFN-16"}) == "BQ24074RGTR"
+    assert bom_cost.search_term({"value": "OLED-0.91-128x32", "mpn": "X091", "package": "-"}) == "OLED-0.91-128x32"
+    assert bom_cost.search_term({"value": "1k", "mpn": "0603WAF1001T5E", "package": "0603",
+                                 "footprint": "R0603"}) == "1k 0603 resistor"

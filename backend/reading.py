@@ -76,6 +76,11 @@ def language(lang: str | None) -> str | None:
     raw = re.sub(r"\s+", " ", raw).strip()[:40]
     if raw.lower() in ORIGINAL:
         return None
+    # A code from the app's one list (backend/tgbot/languages.py - the page's
+    # picker sends codes): the model is told the language's name.
+    from .tgbot import languages
+    if languages.known(raw):
+        return languages.english(raw)
     return NAMES.get(raw.lower(), raw) or None
 
 

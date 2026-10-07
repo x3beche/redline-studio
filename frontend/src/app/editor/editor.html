@@ -712,7 +712,7 @@
           <span class="mono text-[10px]" style="color: var(--warn)"
                 title="said, not picked up yet">{{ n }} waiting</span>
         }
-        @if (chatOpen()) { <rl-reading-pick [compact]="true" /> }
+        @if (chatOpen()) { <rl-reading-pick [compact]="true" place="up" /> }
         <!-- The difference between "when you get a moment" and "now". An
              urgent line is reported by every command the agent runs, so it
              is read between one step and the next instead of waiting for

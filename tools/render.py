@@ -553,7 +553,7 @@ LAST_JOB: dict = {}
 def render(revision: str, out: Path, width: int | None, height: int | None, wait: int,
            camera: str | None = None, only: str | None = None,
            build_timeout: int = 1200, allow_stale: bool = False,
-           free_aspect: bool = False) -> Path:
+           free_aspect: bool = False, no_wait: bool = False) -> Path:
     from websockets.sync.client import connect
 
     try:
@@ -623,7 +623,9 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
         url, canvas_sel = page_url(rid, model), CAD_CANVAS
 
     def current() -> str:
-        return stamp(wait_built(fetch, model, build_timeout, allow_stale, find=find, check=check))
+        # --no-wait (an after shot) says so; without it, REDLINE_REVISION does (after_shot).
+        return stamp(wait_built(fetch, model, build_timeout, allow_stale, find=find, check=check,
+                                wait=False if no_wait else None))
 
     built_at = current()
     print(f"{'board' if is_board else 'model'}   : {model}  (built {built_at})")
@@ -856,12 +858,15 @@ def main() -> None:
     ap.add_argument("--allow-stale", action="store_true",
                     help="photograph the last build even though the source has "
                          "changed since and nothing is building it")
+    ap.add_argument("--no-wait", action="store_true",
+                    help="never wait for a build: shoot the build on record now "
+                         "(an after shot; REDLINE_REVISION set implies it)")
     args = ap.parse_args()
     out = Path(args.out or f"/tmp/after-{args.revision.replace(':', '-')}.png")
     t0 = time.monotonic()
     try:
         render(args.revision, out, args.width, args.height, args.wait, args.camera,
-               args.only, args.build_timeout, args.allow_stale, args.free_aspect)
+               args.only, args.build_timeout, args.allow_stale, args.free_aspect, args.no_wait)
     finally:
         # A picture costs a browser: the card shows what that came to next to
         # what the model cost in tokens. Recorded whether or not the frame

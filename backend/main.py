@@ -2405,7 +2405,8 @@ async def board_bom_alternatives(bid: str, lcsc_id: str, qty: int = 10):
     out = await _look(bom_cost.find_alternatives, line, need)
     passive = bom_cost.passive_alternative(line, need)
     rows = ([passive] if passive else []) + [r for r in out.get("rows") or []
-                                              if not passive or r["lcsc"] != passive["lcsc"]]
+                                              if (r.get("stock") or 0) >= need
+                                              and (not passive or r["lcsc"] != passive["lcsc"])]
     return {"lcsc": lcsc_id, "need": need, "term": out.get("term"), "at": out.get("at"), "rows": rows}
 
 
@@ -2579,6 +2580,10 @@ async def _link_build(d, model_id: str, job: str | None = None):
         await say(f"{model_id}: rebuilding because {why} {did}", "work")
         job = (await _start_build(d, model_id, by="link", link_token=link.get("token")))["_id"]
     done = await buildjobs.wait(d.raw, job)
+    if done.get("status") == "lost":
+        # Died with its runner, not because of the change: built again.
+        await say(f"{model_id}: the rebuild was lost ({done.get('detail')}), queued again", "warn")
+        raise buildjobs.Lost(done.get("detail") or "lost")
     if done.get("status") != "done":
         # Not marked failed: this version's own save is not what broke it
         # (build_outcome, in the runner).
@@ -2621,6 +2626,11 @@ async def _start_sampler():
             await cc_chat.ensure_indexes(db().raw)       # the database itself: one index for every workspace
         except Exception as exc:                       # noqa: BLE001 - the trash still works, only fuller
             LOG.warning("Command Code trash index not made: %s", exc)
+        try:
+            # Its search reads every line through a text index (cc_chat.search).
+            await cc_chat.ensure_search_index(db().raw)
+        except Exception as exc:                       # noqa: BLE001 - search falls back to reading them all
+            LOG.warning("Command Code search index not made: %s", exc)
         try:
             await llm.load(db())                       # the keys and the model each job uses
             from . import netmeter

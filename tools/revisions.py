@@ -1158,7 +1158,9 @@ async def _after_shot(db, rid: str, width: int | None = None, height: int | None
     # shot in the shape of its drawing (the before image's pixel size), not
     # at a fixed 1200x800: the same camera over another aspect frames
     # another picture (render.py shot_size / drawn_size).
-    argv = [sys.executable, str(ROOT / "tools" / "render.py"), rid, "-o", str(out)]
+    # An after shot never waits for a build: said, not left to render.py to
+    # infer from REDLINE_REVISION.
+    argv = [sys.executable, str(ROOT / "tools" / "render.py"), rid, "-o", str(out), "--no-wait"]
     if width:
         argv += ["--width", str(width)]
     if height:

@@ -32,9 +32,13 @@ export class Langs {
   styleUrls: ['./settings.css', './telegram-settings.css'],
   template: `
 <div class="tg-lp">
-  <button class="tcv-btn tcv-files-btn" [disabled]="disabled()" (click)="toggle()">{{ (label() || 'Add language') | t }} ▾</button>
+  <button [class]="chip() ? 'tcv-chip tg-lp-btn' : 'tcv-btn tcv-files-btn'" [class.tcv-chip-accent]="accent()"
+          [style.max-width]="narrow() ? '6.5rem' : null" [disabled]="disabled()" (click)="toggle()"
+          [attr.title]="hint() || null" [attr.aria-label]="hint() || null" aria-haspopup="listbox" [attr.aria-expanded]="open()"
+          >{{ (label() || 'Add language') | t }} ▾</button>
   @if (open()) {
-    <div class="tg-lp-pop">
+    <div class="tg-lp-pop" [class.tg-lp-fixed]="!!pos()" [style.top]="pos()?.top" [style.bottom]="pos()?.bottom"
+         [style.left]="pos()?.left">
       <input class="st-in" #q [placeholder]="'Search: Deutsch, ja, Arabic…' | t" [value]="query()" (input)="query.set($any($event.target).value)"
              (keydown.enter)="first() && pick(first()!.code)" (keydown.escape)="open.set(false)">
       <div class="tg-lp-list">
@@ -60,6 +64,18 @@ export class TgLangPicker {
   top = input<string | null>(null);
   topLabel = input<string>('');
   disabled = input(false);
+  /** As a chip among chips (the editor's reading language), accented while on. */
+  chip = input(false);
+  accent = input(false);
+  /** Narrow: the label is cut short (a header where other chips must fit). */
+  narrow = input(false);
+  /** Where the list opens: 'up' above the button (at the foot of a panel),
+   *  'right' aligned to its right edge (at the right of a header). Placed
+   *  on the page itself, kept inside the window: a narrow panel neither
+   *  clips it nor scrolls sideways to make room. */
+  place = input<string>('');
+  pos = signal<{ top: string; bottom: string; left: string } | null>(null);
+  hint = input<string>('');
   picked = output<string>();
   open = signal(false);
   query = signal('');
@@ -77,9 +93,23 @@ export class TgLangPicker {
   toggle() {
     this.open.set(!this.open());
     this.query.set('');
+    this.pos.set(this.open() && this.place() ? this.placed() : null);
     if (this.open()) setTimeout(() => (this.el.nativeElement as HTMLElement).querySelector('input')?.focus());
   }
+  private placed() {
+    const b = ((this.el.nativeElement as HTMLElement).querySelector('button') as HTMLElement).getBoundingClientRect();
+    const w = Math.min(300, window.innerWidth - 16), up = this.place().includes('up');
+    const left = this.place().includes('right') ? b.right - w : b.left;
+    return {
+      top: up ? 'auto' : `${b.bottom + 4}px`,
+      bottom: up ? `${window.innerHeight - b.top + 4}px` : 'auto',
+      left: `${Math.max(8, Math.min(left, window.innerWidth - w - 8))}px`,
+    };
+  }
   pick(code: string) { this.open.set(false); this.picked.emit(code); }
+
+  @HostListener('window:resize')
+  resized() { if (this.open()) this.open.set(false); }
 
   @HostListener('document:click', ['$event'])
   away(e: MouseEvent) { if (this.open() && !(this.el.nativeElement as HTMLElement).contains(e.target as Node)) this.open.set(false); }

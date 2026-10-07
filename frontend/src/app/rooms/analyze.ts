@@ -198,7 +198,10 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
           <em>of prompt tokens read from cache · saved {{ f.money(d.cache.saved_usd) }}</em></div>
         <div class="tcv-stat c3"><span>Cost per finished note</span>
           <b>{{ d.note_costs.median == null ? '–' : f.money(d.note_costs.median) }}</b>
-          <em>median of {{ d.note_costs.notes }} · average {{ d.note_costs.mean == null ? '–' : f.money(d.note_costs.mean) }}</em></div>
+          <em>median of {{ d.note_costs.notes }} · average {{ d.note_costs.mean == null ? '–' : f.money(d.note_costs.mean) }}
+            @if (d.note_costs.approximate) {
+              · <span [title]="d.note_costs.approximate_label ?? ''">{{ d.note_costs.approximate }} approximate</span>
+            }</em></div>
         <div class="tcv-stat c3"><span>API</span><b>{{ f.count(d.api.requests) }}</b>
           <em>requests · {{ d.api.errors }} errors · slowest {{ d.api.routes[0]?.route ?? '–' }}</em></div>
       </div>
@@ -294,7 +297,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
               @for (t of d.llm.top_notes; track t.id) {
                 <tr><td class="truncate" [title]="t.title">{{ t.title || t.id }}</td><td>{{ t.room }}</td><td>{{ t.project }}</td>
                   <td class="r mono">{{ t.calls }}</td><td class="r mono">{{ f.count(t.tokens) }}</td>
-                  <td class="r mono">{{ f.money(t.cost_usd) }}</td></tr>
+                  <td class="r mono" [title]="t.approximate_label ?? ''">{{ t.approximate ? '≈ ' : '' }}{{ f.money(t.cost_usd) }}</td></tr>
               } @empty { <tr><td colspan="6" class="tcv-dash-dim">no notes in this range</td></tr> }
             </tbody>
           </table></section>
@@ -1069,7 +1072,7 @@ function keep(key: string, value: string) {
 
 /** The shape of the answer this page reads; one kept in another shape is
  *  not shown (backend/insights.py SHAPE). */
-const SHAPE = 3;
+const SHAPE = 7;
 
 function kept(range: string): Insights | null {
   try {

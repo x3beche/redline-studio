@@ -7,6 +7,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { toHtml } from '../markdown';
 import { Auth } from '../auth';
 import { T, t } from '../i18n';
+import { Selection } from '../selection';
 
 /** The Command Code room: people talking with a model, in the open.
  *
@@ -22,9 +23,34 @@ import { T, t } from '../i18n';
  *  restored for 30 days (or deleted for good) before the server drops it. A line: copied, deleted, the last one of one's own
  *  edited and sent again, the last answer written again (with another
  *  model if wished); every code block has its own copy button.
+ *
+ *  `@` in the composer mentions a model, a board, a file, a note, a drawn
+ *  note or a part: the server reads it (as the person may see it) and the
+ *  model gets it as context; the line shows it as a chip that opens it.
+ *  Whoever has a conversation open sees an answer being written in it,
+ *  whoever asked (GET /api/cc/chats/{id}/live). The search box searches
+ *  every line on the server, and a hit opens the conversation at it.
  */
+/** Something of the workspace mentioned in a line: what the chip shows. */
+export interface CcMention {
+  kind: 'model' | 'board' | 'file' | 'note' | 'revision' | 'part'; id: string; label: string;
+  version?: string | number | null; sub?: string; chars?: number; truncated?: boolean; images?: number;
+  open?: { model?: string | null; board?: string | null; room?: string | null };
+}
+/** An answer someone else is having written, as far as it got. */
+export interface CcWatch {
+  gen: string; client?: string | null; by: { id?: string; name?: string }; model: string; provider: string;
+  message?: CcMessage | null; keep?: number; text: string; thinking: string;
+}
+/** A line the server's search found. */
+export interface CcHit {
+  chat_id: string; title: string; archived: boolean; pinned: boolean; trashed: boolean;
+  message_id: string | null; role: string | null; at: string | null; by: string | null;
+  snippet: string; hits: [number, number][];
+}
 export interface CcMessage {
   id: string; role: 'user' | 'assistant'; content: string; at: string; edited_at?: string;
+  mentions?: CcMention[]; context_chars?: number;
   by?: { id?: string; name?: string; type?: string };
   provider?: string; model?: string; ms?: number; thinking_ms?: number; error?: string; stopped?: boolean;
   usage?: { prompt_tokens?: number | null; completion_tokens?: number | null; cost?: number | null };
@@ -40,10 +66,14 @@ export type CcTab = 'list' | 'archived' | 'trash';
 type Many = { deleted: string[]; refused: string[]; missing: string[] };
 export interface LlmModel { id: string; name: string; context: number | null; anthropic: boolean;
   /** The cheap model a picker may land on by itself (backend/llm.py CHEAP). */
-  cheap?: boolean }
+  cheap?: boolean;
+  /** Reads images: a mentioned picture goes as a picture, not in words. */
+  vision?: boolean }
 export interface CcEvent {
   type: string; text?: string; error?: string; message?: CcMessage | null; keep?: number; title?: string;
+  gen?: string; live?: CcWatch[];
 }
+type MentionRef = { kind: string; id: string };
 
 const HEADERS = { 'Content-Type': 'application/json', 'X-Redline-CSRF': '1' };
 
@@ -78,27 +108,43 @@ export class CcApi {
   }
   removeMessage(id: string, mid: string) { return this.http.delete<CcChat>(`/api/cc/chats/${id}/messages/${mid}`); }
   models(provider: string) { return this.http.get<LlmModel[]>(`/api/llm/models?provider=${provider}`); }
+  /** What `@` offers: this workspace's models, boards, files, notes, drawn notes and parts. */
+  mentions(q: string) { return this.http.get<CcMention[]>(`/api/cc/mentions?q=${encodeURIComponent(q)}&limit=30`); }
+  /** Every line of every conversation, through the server's text index. */
+  search(q: string, tab: CcTab, withArchived: boolean) {
+    const archived = tab === 'archived' ? '1' : withArchived ? 'all' : '0';
+    return this.http.get<{ q: string; how: string; results: CcHit[] }>(
+      `/api/cc/search?q=${encodeURIComponent(q)}&archived=${archived}` + (tab === 'trash' ? '&trash=1' : ''));
+  }
+
+  /** The answers being written in a conversation, by anyone, as they are written. */
+  live(id: string, signal: AbortSignal, on: (ev: CcEvent) => void, beat?: () => void) {
+    return this.sse(`/api/cc/chats/${id}/live`, null, signal, on, beat);
+  }
 
   /** Send a line (or, with `edit`, replace one's own and drop what followed);
    *  the answer comes back piece by piece through `on`. */
-  say(id: string, body: { text: string; provider: string; model: string; edit?: string }, signal: AbortSignal,
+  say(id: string, body: { text: string; provider: string; model: string; edit?: string; mentions?: MentionRef[]; client?: string },
+      signal: AbortSignal,
       on: (ev: CcEvent) => void) {
     return this.sse(`/api/cc/chats/${id}/messages`, body, signal, on);
   }
 
   /** The last answer written again, with this model. */
-  regenerate(id: string, body: { provider: string; model: string }, signal: AbortSignal, on: (ev: CcEvent) => void) {
+  regenerate(id: string, body: { provider: string; model: string; client?: string }, signal: AbortSignal,
+             on: (ev: CcEvent) => void) {
     return this.sse(`/api/cc/chats/${id}/regenerate`, body, signal, on);
   }
 
-  private async sse(url: string, body: object, signal: AbortSignal, on: (ev: CcEvent) => void) {
-    const r = await fetch(url, {
+  /** `beat`: anything at all arrived, a keep-alive too - how a live stream knows it is not dead. */
+  private async sse(url: string, body: object | null, signal: AbortSignal, on: (ev: CcEvent) => void, beat?: () => void) {
+    const r = await fetch(url, body === null ? { credentials: 'same-origin', signal, headers: { Accept: 'text/event-stream' } } : {
       method: 'POST', credentials: 'same-origin', signal, headers: HEADERS, body: JSON.stringify(body),
     });
     if (!r.ok || !r.body) {
       let detail = `HTTP ${r.status}`;
       try { detail = (await r.json()).detail ?? detail; } catch { /* not json */ }
-      throw new Error(detail);
+      throw Object.assign(new Error(typeof detail === 'string' ? detail : `HTTP ${r.status}`), { status: r.status });
     }
     const reader = r.body.getReader();
     const dec = new TextDecoder();
@@ -106,6 +152,7 @@ export class CcApi {
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
+      beat?.();
       buf += dec.decode(value, { stream: true });
       let i: number;
       while ((i = buf.indexOf('\n\n')) >= 0) {
@@ -151,6 +198,15 @@ const I = {
   pcb: 'M7 7h10v10H7z M10 3v4 M14 3v4 M10 17v4 M14 17v4 M3 10h4 M3 14h4 M17 10h4 M17 14h4',
   chip: 'M5 8h14v8H5z M8 8V5 M12 8V5 M16 8V5 M8 16v3 M12 16v3 M16 16v3 M8.5 12h1',
   cad: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9',
+  at: 'M15.5 12a3.5 3.5 0 1 1-7 0a3.5 3.5 0 1 1 7 0z M15.5 12v1.3a2.6 2.6 0 0 0 5.2 0V12a8.7 8.7 0 1 0-3.4 6.9',
+  file: 'M6 3h8l4 4v14H6z M14 3v4h4',
+  note: 'M5 4h14v16H5z M8.5 9h7 M8.5 13h7 M8.5 17h4',
+};
+
+/** A mention's kind, as its icon and its name. */
+const KIND: Record<CcMention['kind'], { icon: string; name: string }> = {
+  model: { icon: I.cad, name: '3D model' }, board: { icon: I.pcb, name: 'Board' }, file: { icon: I.file, name: 'File' },
+  note: { icon: I.note, name: 'Note' }, revision: { icon: I.edit, name: 'Drawn note' }, part: { icon: I.chip, name: 'Part' },
 };
 
 /** Where to begin, for an empty conversation: the work this app is for. */
@@ -189,8 +245,13 @@ type Ask = { text: string; label: string; go: () => void };
       <label class="tcv-cc-search">
         <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.search }" />
         <input type="search" [placeholder]="'Search conversations' | t" [value]="q()"
-               (input)="q.set($any($event.target).value)" (keydown.escape)="q.set('')">
+               (input)="setQuery($any($event.target).value)" (keydown.escape)="setQuery('')">
       </label>
+      @if (q().trim() && tab() === 'list') {
+        <label class="tcv-cc-check tcv-cc-witharch">
+          <input type="checkbox" [checked]="withArchived()" (change)="withArchived.set($any($event.target).checked); runSearch()">
+          {{ 'Include archived' | t }}</label>
+      }
       <div class="tcv-cc-filterrow">
         <div class="tcv-cc-seg" role="tablist">
           <button role="tab" [class.on]="tab() === 'list'" (click)="showTab('list')">{{ 'Conversations' | t }}</button>
@@ -243,6 +304,21 @@ type Ask = { text: string; label: string; go: () => void };
       @if (trash() && shownChats().length) {
         <p class="tcv-cc-trashnote">{{ 'Deleted conversations are kept here for 30 days, then deleted for good.' | t }}</p>
       }
+      @if (hits(); as hs) {
+        <div class="tcv-cc-group">{{ 'Found in messages' | t }} · {{ hs.length }}</div>
+        @for (h of hs; track $index) {
+          <button class="tcv-cc-hit" [attr.data-on]="h.chat_id === openId() ? 1 : null" (click)="openHit(h)">
+            <span class="tcv-cc-itemtop">
+              <span class="tcv-cc-itemtitle">{{ h.title | t }}</span>
+              @if (h.archived) { <span class="tcv-cc-tag">{{ 'Archived' | t }}</span> }
+              @if (h.at) { <time class="tcv-cc-itemwhen" [title]="stamp(h.at)">{{ when(h.at) }}</time> }
+            </span>
+            <span class="tcv-cc-hitsnip">@if (h.by) {<b>{{ h.by }}: </b>}@for (seg of segments(h); track $index) {@if (seg.hit) {<mark>{{ seg.t }}</mark>} @else {<span>{{ seg.t }}</span>}}</span>
+          </button>
+        } @empty {
+          <p class="tcv-cc-listempty">{{ searching() ? ('Searching…' | t) : ('Nothing found.' | t) }}</p>
+        }
+      } @else {
       @for (g of groups(); track g.name) {
         <div class="tcv-cc-group">{{ g.name | t }}</div>
         @for (c of g.chats; track c.id) {
@@ -300,6 +376,7 @@ type Ask = { text: string; label: string; go: () => void };
         <p class="tcv-cc-listempty">{{ (trash() ? 'The trash is empty.' : archived() ? 'No archived conversations.'
                                         : 'No conversations yet - start one.') | t }}</p>
       }
+      }
     </div>
   </aside>
   <div class="tcv-cc-scrim" (click)="drawer.set(false)"></div>
@@ -312,6 +389,9 @@ type Ask = { text: string; label: string; go: () => void };
           <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.menu }" /></button>
         <input class="tcv-cc-title" [value]="c.title | t" (change)="rename($any($event.target).value)"
                (keydown.enter)="$any($event.target).blur()" [readonly]="!auth.can('draw')" [title]="'Rename' | t">
+        @if (totals(); as tt) {
+          <span class="tcv-cc-totals" [title]="tt.title">{{ tt.text }}</span>
+        }
         <div class="tcv-cc-baracts">
           @if (auth.can('draw')) {
             <button class="tcv-cc-ib tcv-cc-wide" (click)="togglePin(c)" [class.on]="c.pinned" [title]="(c.pinned ? 'Unpin' : 'Pin') | t">
@@ -352,7 +432,8 @@ type Ask = { text: string; label: string; go: () => void };
       <div class="tcv-cc-log tcv-cc-scroll" #log (click)="logClick($event)">
         <div class="tcv-cc-col">
           @for (m of messages(); track m.id; let i = $index; let last = $last) {
-            <article class="tcv-cc-row" [attr.data-role]="m.role" [attr.data-editing]="editing() === m.id ? 1 : null">
+            <article class="tcv-cc-row" [attr.data-role]="m.role" [attr.data-editing]="editing() === m.id ? 1 : null"
+                     [attr.data-mid]="m.id" [attr.data-flash]="flash() === m.id ? 1 : null">
               <div class="tcv-cc-av" [attr.data-role]="m.role" [attr.data-me]="m.by?.id === me() ? 1 : null">
                 @if (m.role === 'user') { {{ initials(m.by?.name) }} }
                 @else { <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.bot }" /> }
@@ -379,6 +460,17 @@ type Ask = { text: string; label: string; go: () => void };
                   <div class="tcv-cc-answer md" [innerHTML]="html(m.content)"></div>
                 } @else {
                   <div class="tcv-cc-bubble">{{ m.content }}</div>
+                }
+                @if (m.mentions?.length) {
+                  <div class="tcv-cc-mentions">
+                    @for (mm of m.mentions; track mm.kind + mm.id) {
+                      <button class="tcv-cc-mchip" [attr.data-kind]="mm.kind" (click)="openMention(mm)" [title]="mentionTip(mm)">
+                        <ng-container *ngTemplateOutlet="ico; context: { $implicit: kindIcon(mm.kind) }" />
+                        <span>{{ mm.label }}</span>
+                        @if (mm.truncated) { <span class="tcv-cc-mcut">{{ 'cut' | t }}</span> }
+                      </button>
+                    }
+                  </div>
                 }
                 @if (m.error) { <div class="tcv-cc-errline">{{ m.error }}</div> }
                 <div class="tcv-cc-tools" role="toolbar">
@@ -427,7 +519,20 @@ type Ask = { text: string; label: string; go: () => void };
               </div>
             </article>
           }
-          @if (!messages().length && !live()) {
+          @for (w of watch(); track w.gen) {
+            <article class="tcv-cc-row" data-role="assistant" data-watch="1">
+              <div class="tcv-cc-av" data-role="assistant"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.bot }" /></div>
+              <div class="tcv-cc-rowmain">
+                <div class="tcv-cc-rowhead"><b>{{ short(w.model) }}</b>
+                  <span class="tcv-cc-pulse">{{ asking(w) }}</span>
+                  <span class="tcv-cc-dim">· {{ w.text ? ('writing…' | t) : ('thinking…' | t) }}</span></div>
+                @if (w.thinking && !w.text) { <div class="tcv-cc-thinking">{{ tail(w.thinking) }}</div> }
+                @if (w.text) { <div class="tcv-cc-answer md" [innerHTML]="html(w.text)"></div> }
+                @else { <div class="tcv-cc-dots"><i></i><i></i><i></i></div> }
+              </div>
+            </article>
+          }
+          @if (!messages().length && !live() && !watch().length) {
             <ng-container *ngTemplateOutlet="hello" />
           }
         </div>
@@ -448,9 +553,46 @@ type Ask = { text: string; label: string; go: () => void };
               <button class="tcv-cc-textbtn" (click)="cancelEdit()">{{ 'Cancel' | t }}</button>
             </div>
           }
-          <textarea #box rows="1" [value]="text()" [placeholder]="'Write to the model…' | t"
-                    (input)="text.set($any($event.target).value); grow()" (keydown)="key($event)"
-                    (focus)="focused.set(true)" (blur)="focused.set(false)"></textarea>
+          @if (picked().length) {
+            <div class="tcv-cc-picked">
+              @for (mm of picked(); track mm.kind + mm.id) {
+                <span class="tcv-cc-mchip" [attr.data-kind]="mm.kind" [title]="mentionTip(mm)">
+                  <ng-container *ngTemplateOutlet="ico; context: { $implicit: kindIcon(mm.kind) }" />
+                  <span>{{ mm.label }}</span>
+                  <button class="tcv-cc-mx" (click)="unpick(mm)" [title]="'Remove' | t">
+                    <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.x }" /></button>
+                </span>
+              }
+              @if (picturesAsText()) {
+                <span class="tcv-cc-dim tcv-cc-mnote">{{ 'This model does not read images - pictures go as a description.' | t }}</span>
+              }
+            </div>
+          }
+          @if (mentionPop()) {
+            <div class="tcv-cc-mpop" role="listbox" (mousedown)="$event.preventDefault()">
+              <div class="tcv-cc-mhead">
+                <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.at }" />
+                <span>{{ mentionQ() || ('Mention a model, board, file, note or part' | t) }}</span>
+              </div>
+              <div class="tcv-cc-mlist">
+                @for (r of mentionRows(); track r.kind + r.id; let k = $index) {
+                  <button role="option" [class.on]="k === mentionIdx()" [attr.aria-selected]="k === mentionIdx()"
+                          (mouseenter)="mentionIdx.set(k)" (click)="pickMention(r)">
+                    <ng-container *ngTemplateOutlet="ico; context: { $implicit: kindIcon(r.kind) }" />
+                    <span class="tcv-cc-modelname">{{ r.label }}</span>
+                    <span class="tcv-cc-dim tcv-cc-msub">{{ r.sub }}</span>
+                    <span class="tcv-cc-tag">{{ kindName(r.kind) | t }}</span>
+                  </button>
+                } @empty {
+                  <p class="tcv-cc-dim tcv-cc-pad">{{ mentionBusy() ? ('Loading…' | t) : ('Nothing to mention matches.' | t) }}</p>
+                }
+              </div>
+              <div class="tcv-cc-mfoot tcv-cc-dim"><kbd>↑↓</kbd> {{ 'choose' | t }} · <kbd>↵</kbd> {{ 'add' | t }} · <kbd>Esc</kbd> {{ 'close' | t }}</div>
+            </div>
+          }
+          <textarea #box rows="1" [value]="text()" [placeholder]="'Write to the model… (@ to mention)' | t"
+                    (input)="typed($any($event.target)); grow()" (keydown)="key($event)" (click)="typed($any($event.target))"
+                    (focus)="focused.set(true)" (blur)="focused.set(false); closeMentions()"></textarea>
           <div class="tcv-cc-compbar">
             <div class="tcv-cc-menuwrap">
               <button class="tcv-cc-chip" (click)="toggleModelPop(); $event.stopPropagation()" [class.on]="modelPop()"
@@ -486,6 +628,14 @@ type Ask = { text: string; label: string; go: () => void };
                 </div>
               }
             </div>
+            <button class="tcv-cc-ib" data-act="mention" (click)="startMention()" [title]="('Mention' | t) + ' (@)'">
+              <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.at }" /></button>
+            @if (meter(); as mt) {
+              <span class="tcv-cc-meter" [attr.data-state]="mt.state" [title]="mt.title">
+                <span class="tcv-cc-meterbar"><i [style.width.%]="mt.pct"></i></span>
+                <span>{{ mt.text }}</span>
+              </span>
+            }
             <span class="tcv-cc-hint">
               <kbd>↵</kbd> {{ 'send' | t }} · <kbd>⇧↵</kbd> {{ 'new line' | t }} · <kbd>↑</kbd> {{ 'edit last' | t }}
             </span>
@@ -604,6 +754,77 @@ export class RoomCommandCode implements OnDestroy {
 
   me = computed(() => this.auth.state()?.user?.id ?? 'local');
 
+  // ---- @-mentions, answers watched live, server search (round two) ----
+  private sel = inject(Selection);
+  /** This page: its own answers come back on the live stream too, and are told apart by it. */
+  private readonly client = Math.random().toString(36).slice(2, 12);
+  /** Answers someone else is having written in the open conversation. */
+  watch = signal<CcWatch[]>([]);
+  private liveAbort: AbortController | null = null;
+  private liveFor: string | null = null;
+  private liveTimer: ReturnType<typeof setTimeout> | null = null;
+  private liveTries = 0;
+  private gone = false;
+  /** What the next line mentions, as chips in the composer. */
+  picked = signal<CcMention[]>([]);
+  mentionPop = signal(false);
+  mentionQ = signal('');
+  mentionRows = signal<CcMention[]>([]);
+  mentionIdx = signal(0);
+  mentionBusy = signal(false);
+  private mentionAt = -1;
+  private mentionSeq = 0;
+  private mentionTimer: ReturnType<typeof setTimeout> | null = null;
+  private editPicked: CcMention[] = [];
+  /** The server's search: null while nothing is typed. */
+  hits = signal<CcHit[] | null>(null);
+  searching = signal(false);
+  withArchived = signal(false);
+  private searchSeq = 0;
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The line a search hit opened, lit for a moment. */
+  flash = signal<string | null>(null);
+  modelInfo = computed(() => this.models().find(x => x.id === this.model()) ?? null);
+  /** A mention with a picture in it, and a model that reads none. */
+  picturesAsText = computed(() => !this.modelInfo()?.vision && this.picked().some(m =>
+    m.kind === 'revision' || m.kind === 'model' || (m.kind === 'file' && /^image/.test(m.sub ?? ''))));
+
+  /** Tokens and money the conversation's answers have used, from each answer's own usage. */
+  totals = computed(() => {
+    let tin = 0, tout = 0, cost = 0, priced = 0, unpriced = 0;
+    for (const m of this.messages()) {
+      if (m.role !== 'assistant' || !m.usage) continue;
+      tin += m.usage.prompt_tokens ?? 0;
+      tout += m.usage.completion_tokens ?? 0;
+      if (m.usage.cost != null) { cost += m.usage.cost; priced++; } else if (m.usage.prompt_tokens || m.usage.completion_tokens) unpriced++;
+    }
+    if (!tin && !tout) return null;
+    const title = `${t('Tokens in')}: ${tin.toLocaleString()}\n${t('Tokens out')}: ${tout.toLocaleString()}`
+      + (priced ? `\n${t('Cost')}: ${this.money(cost)} · ${priced} ${t('answers priced')}` : '')
+      + (unpriced ? `\n${unpriced} ${t('answers without a price - the provider does not say')}` : '');
+    return { text: `${this.kfmt(tin + tout)} tok` + (priced ? ` · ${this.money(cost)}` : ''), title };
+  });
+
+  /** How full the chosen model's context window is: the last answer's own
+   *  count for everything before it, the rest guessed at 4 characters a token. */
+  meter = computed(() => {
+    const ctx = this.modelInfo()?.context;
+    const msgs = this.messages();
+    if (!ctx || (!msgs.length && !this.text())) return null;
+    let used = 0, from = 0;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const u = msgs[i].usage;
+      if (msgs[i].role === 'assistant' && u?.prompt_tokens) { used = u.prompt_tokens + (u.completion_tokens ?? 0); from = i + 1; break; }
+    }
+    let chars = this.text().length;
+    for (const m of msgs.slice(from)) chars += (m.content?.length ?? 0) + (m.context_chars ?? 0);
+    used += Math.ceil(chars / 4);
+    const pct = Math.min(100, used / ctx * 100);
+    return { pct, state: pct >= 90 ? 'danger' : pct >= 70 ? 'warn' : 'ok', text: `${this.kfmt(used)} / ${this.ctx(ctx)}`,
+             title: `${t('Context window')}: ~${used.toLocaleString()} / ${ctx.toLocaleString()} tok (${pct.toFixed(1)}%)\n`
+                    + t('Counted from the last answer; the rest estimated at 4 characters a token.') };
+  });
+
   shownChats = computed(() => {
     const q = this.q().trim().toLowerCase();
     const gone = this.pending();
@@ -660,10 +881,19 @@ export class RoomCommandCode implements OnDestroy {
       this.decorate(el);
     });
     document.addEventListener('click', this.closeMenu);
+    // Whatever is open is watched: answers others are having written show as they are written.
+    effect(() => {
+      const id = this.openId();
+      untracked(() => this.connectLive(id));
+    });
   }
 
   ngOnDestroy() {
     clearInterval(this.timer);
+    this.gone = true;
+    this.connectLive(null);
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    if (this.mentionTimer) clearTimeout(this.mentionTimer);
     this.abort?.abort();
     this.observer?.disconnect();
     document.removeEventListener('click', this.closeMenu);
@@ -708,6 +938,7 @@ export class RoomCommandCode implements OnDestroy {
     this.ask.set(null);
     this.chats.set([]);
     this.refresh();
+    if (this.q().trim()) this.runSearch();
   }
 
   loadModels(p: string) {
@@ -724,7 +955,7 @@ export class RoomCommandCode implements OnDestroy {
     this.open(c.id);
   }
 
-  open(id: string) {
+  open(id: string, at?: string | null) {
     if (this.live()) return;
     this.openId.set(id);
     this.error.set(null);
@@ -736,8 +967,9 @@ export class RoomCommandCode implements OnDestroy {
         this.chat.set(c);
         this.provider.set(c.provider);
         this.model.set(c.model);
-        if (c.messages?.length) this.scroll();
-        if (!matchMedia('(hover: none)').matches) setTimeout(() => this.box()?.nativeElement.focus());
+        if (at) this.scrollTo(at);
+        else if (c.messages?.length) this.scroll();
+        if (!at && !matchMedia('(hover: none)').matches) setTimeout(() => this.box()?.nativeElement.focus());
       },
       error: e => this.error.set(this.msg(e)),
     });
@@ -773,7 +1005,7 @@ export class RoomCommandCode implements OnDestroy {
     const c = this.chat();
     if (!c) return;
     const row = this.chats().find(x => x.id === c.id);
-    if (row && row.count !== (c.messages?.length ?? 0)) {
+    if (row && row.count !== (c.messages?.length ?? 0) && !this.watch().length) {
       this.api.get(c.id).subscribe({ next: x => { if (this.openId() === x.id && !this.live()) { this.chat.set(x); this.scroll(); } }, error: () => {} });
     }
   }
@@ -1056,8 +1288,9 @@ export class RoomCommandCode implements OnDestroy {
     const id = m?.id ?? this.editableId();
     const line = this.messages().find(x => x.id === id);
     if (!id || !line || this.live()) return;
-    if (!this.editing()) this.editDraft = this.text();
+    if (!this.editing()) { this.editDraft = this.text(); this.editPicked = this.picked(); }
     this.editing.set(id);
+    this.picked.set(line.mentions ?? []);
     this.setText(line.content);
     setTimeout(() => { const el = this.box()?.nativeElement; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } });
   }
@@ -1066,7 +1299,9 @@ export class RoomCommandCode implements OnDestroy {
     if (!this.editing()) return;
     this.editing.set(null);
     this.setText(restore ? this.editDraft : '');
+    this.picked.set(restore ? this.editPicked : []);
     this.editDraft = '';
+    this.editPicked = [];
   }
 
   private setText(s: string) {
@@ -1078,6 +1313,20 @@ export class RoomCommandCode implements OnDestroy {
   // ---- keys --------------------------------------------------------------
 
   key(e: KeyboardEvent) {
+    if (this.mentionPop() && !e.isComposing) {
+      const n = this.mentionRows().length;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (n) this.mentionIdx.update(i => (i + (e.key === 'ArrowDown' ? 1 : n - 1)) % n);
+        setTimeout(() => document.querySelector('.tcv-cc-mlist button.on')?.scrollIntoView({ block: 'nearest' }));
+        return;
+      }
+      if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
+        const r = this.mentionRows()[this.mentionIdx()];
+        if (r) { e.preventDefault(); this.pickMention(r); return; }
+      }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closeMentions(); return; }
+    }
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.send(); }
     else if (e.key === 'ArrowUp' && !this.text() && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && this.editableId()) {
       e.preventDefault(); this.startEdit();
@@ -1090,7 +1339,8 @@ export class RoomCommandCode implements OnDestroy {
       e.preventDefault();
       this.newChat();
     } else if (e.key === 'Escape') {
-      if (this.live()) { e.preventDefault(); this.stop(); }
+      if (this.mentionPop()) this.closeMentions();
+      else if (this.live()) { e.preventDefault(); this.stop(); }
       else if (this.menu() || this.modelPop()) { this.menu.set(false); this.modelPop.set(false); }
       else if (this.ask()) this.ask.set(null);
       else if (this.drawer()) this.drawer.set(false);
@@ -1112,11 +1362,21 @@ export class RoomCommandCode implements OnDestroy {
     const text = this.text().trim();
     if (!c || !text || this.live() || !this.model()) return;
     const edit = this.editing() ?? undefined;
+    const picked = this.picked();
+    const mentions = picked.map(m => ({ kind: m.kind, id: m.id }));
     this.editing.set(null);
     this.editDraft = '';
+    this.editPicked = [];
+    this.picked.set([]);
+    this.closeMentions();
     this.setText('');
-    await this.run(c, (sig, on) => this.api.say(c.id, { text, provider: this.provider(), model: this.model(), edit }, sig, on),
-                   () => { if (!this.text()) this.setText(text); if (edit) this.editing.set(edit); });
+    await this.run(c, (sig, on) => this.api.say(c.id, { text, provider: this.provider(), model: this.model(), edit,
+                                                         mentions, client: this.client }, sig, on),
+                   () => {
+                     if (!this.text()) this.setText(text);
+                     if (!this.picked().length) this.picked.set(picked);
+                     if (edit) this.editing.set(edit);
+                   });
   }
 
   /** The last answer again - with the model chosen here, or with `model`. */
@@ -1125,7 +1385,8 @@ export class RoomCommandCode implements OnDestroy {
     if (!c || this.live()) return;
     if (model) this.model.set(model);
     if (!this.model()) return;
-    await this.run(c, (sig, on) => this.api.regenerate(c.id, { provider: this.provider(), model: this.model() }, sig, on));
+    await this.run(c, (sig, on) => this.api.regenerate(c.id, { provider: this.provider(), model: this.model(), client: this.client },
+                                                        sig, on));
   }
 
   private async run(c: CcChat, call: (sig: AbortSignal, on: (ev: CcEvent) => void) => Promise<void>, failed?: () => void) {
@@ -1179,6 +1440,278 @@ export class RoomCommandCode implements OnDestroy {
   }
 
   stop() { this.abort?.abort(); }
+
+  // ---- watching: answers others are having written --------------------------
+
+  /** One live stream, for the open conversation; none when nothing is open. */
+  private connectLive(id: string | null) {
+    if (id && this.liveFor === id && (this.liveAbort || this.liveTimer)) return;
+    this.liveAbort?.abort();
+    this.liveAbort = null;
+    if (this.liveTimer) clearTimeout(this.liveTimer);
+    this.liveTimer = null;
+    this.liveFor = id;
+    this.liveTries = 0;
+    this.watch.set([]);
+    if (id && !this.gone) void this.listen(id);
+  }
+
+  /** Listen until the server closes it, then again: at once after a goodbye,
+   *  later and later (1 s doubling to 30 s) while the API is away - a reload. */
+  private async listen(id: string) {
+    const ctl = new AbortController();
+    this.liveAbort = ctl;
+    this.liveTimer = null;
+    let heard = false;
+    let status = 0;
+    // The server says something every 10 s. A reload behind the dev proxy can
+    // leave the stream open and silent for ever: after 25 s of nothing it is
+    // given up and opened again.
+    let last = Date.now(), dead = false;
+    const watchdog = setInterval(() => {
+      if (Date.now() - last > 25_000) { dead = true; ctl.abort(); }
+    }, 5000);
+    try {
+      await this.api.live(id, ctl.signal, ev => { heard = true; this.liveTries = 0; this.onLive(id, ev); },
+                          () => { last = Date.now(); });
+    } catch (e) {
+      status = (e as { status?: number }).status ?? 0;
+      if ((e as Error).name === 'AbortError' && !dead) { clearInterval(watchdog); return; }
+    }
+    clearInterval(watchdog);
+    if ((ctl.signal.aborted && !dead) || this.gone || this.liveFor !== id) return;
+    if (dead) heard = false;                                  // not a goodbye: back off
+    this.liveAbort = null;
+    if (status === 404 || status === 403) return;              // gone, or not ours to watch
+    const wait = heard ? 300 : Math.min(30_000, 1000 * 2 ** Math.min(this.liveTries, 5)) * (0.75 + Math.random() / 2);
+    this.liveTries++;
+    this.liveTimer = setTimeout(() => {
+      this.liveTimer = null;
+      if (this.liveFor === id && !this.gone) void this.listen(id);
+    }, wait);
+  }
+
+  private onLive(id: string, ev: CcEvent & Partial<CcWatch>) {
+    if (this.openId() !== id) return;
+    const mine = (w: { client?: string | null }) => !!w.client && w.client === this.client;
+    switch (ev.type) {
+      case 'hello': {
+        const now = (ev.live ?? []).filter(w => !mine(w));
+        // Finished while the stream was away: read the conversation again.
+        const lost = this.watch().some(w => !now.some(x => x.gen === w.gen));
+        this.watch.set(now);
+        now.forEach(w => this.showAsked(w));
+        if (lost) this.reread(id);
+        break;
+      }
+      case 'start': {
+        if (mine(ev) || !ev.gen) return;
+        const w: CcWatch = { gen: ev.gen, client: ev.client, by: ev.by ?? {}, model: ev.model ?? '', provider: ev.provider ?? '',
+                             message: ev.message ?? null, keep: ev.keep, text: '', thinking: '' };
+        this.watch.update(l => [...l.filter(x => x.gen !== w.gen), w]);
+        this.showAsked(w);
+        this.scroll(true);
+        break;
+      }
+      case 'text': case 'thinking': {
+        const k = ev.type === 'text' ? 'text' : 'thinking';
+        if (!this.watch().some(w => w.gen === ev.gen)) return;
+        this.watch.update(l => l.map(w => w.gen === ev.gen ? { ...w, [k]: (w[k] + (ev.text ?? '')).slice(k === 'thinking' ? -4000 : 0) } : w));
+        if (k === 'text') this.scroll(true);
+        break;
+      }
+      case 'done': {
+        if (!this.watch().some(w => w.gen === ev.gen)) return;
+        this.watch.update(l => l.filter(w => w.gen !== ev.gen));
+        const m = ev.message;
+        if (m) this.chat.update(x => x && ((x.messages ?? []).some(y => y.id === m.id) ? x : { ...x, messages: [...(x.messages ?? []), m] }));
+        this.scroll(true);
+        this.refresh();
+        break;
+      }
+      case 'end':
+        this.watch.update(l => l.filter(w => w.gen !== ev.gen));
+        break;
+      case 'title':
+        if (ev.title) {
+          this.chat.update(x => x && x.id === id ? { ...x, title: ev.title! } : x);
+          this.chats.update(l => l.map(x => x.id === id ? { ...x, title: ev.title! } : x));
+        }
+        break;
+    }
+  }
+
+  /** Someone else's question, in the conversation as they sent it. */
+  private showAsked(w: CcWatch) {
+    if (this.live()) return;                                  // my own answer is being written here
+    const m = w.message;
+    this.chat.update(x => {
+      if (!x) return x;
+      const msgs = x.messages ?? [];
+      if (m && msgs.some(y => y.id === m.id)) return x;
+      return { ...x, messages: [...msgs.slice(0, w.keep ?? msgs.length), ...(m ? [m] : [])] };
+    });
+  }
+
+  private reread(id: string) {
+    this.api.get(id).subscribe({ next: x => { if (this.openId() === x.id && !this.live()) this.chat.set(x); }, error: () => {} });
+  }
+
+  /** "Ada is asking…" */
+  asking(w: CcWatch) {
+    return t('{x} is asking…').replace('{x}', w.by?.name || t('someone'));
+  }
+
+  // ---- @-mentions -----------------------------------------------------------
+
+  /** After each keystroke (or click): an "@word" just before the caret opens the picker. */
+  typed(el: HTMLTextAreaElement) {
+    this.text.set(el.value);
+    const upto = el.value.slice(0, el.selectionStart ?? el.value.length);
+    const m = /(^|\s)@([^\s@]{0,40})$/.exec(upto);
+    if (!m) { if (this.mentionPop()) this.closeMentions(); return; }
+    this.mentionAt = upto.length - m[2].length - 1;
+    if (!this.mentionPop() || this.mentionQ() !== m[2]) {
+      this.mentionQ.set(m[2]);
+      this.mentionPop.set(true);
+      this.findMentions(m[2]);
+    }
+  }
+
+  private findMentions(q: string) {
+    if (this.mentionTimer) clearTimeout(this.mentionTimer);
+    const seq = ++this.mentionSeq;
+    this.mentionBusy.set(true);
+    this.mentionTimer = setTimeout(() => this.api.mentions(q).subscribe({
+      next: rows => {
+        if (seq !== this.mentionSeq) return;
+        const have = this.picked();
+        this.mentionRows.set(rows.filter(r => !have.some(h => h.kind === r.kind && h.id === r.id)));
+        this.mentionIdx.set(0);
+        this.mentionBusy.set(false);
+      },
+      error: e => { if (seq === this.mentionSeq) { this.mentionBusy.set(false); this.error.set(this.msg(e)); } },
+    }), q ? 120 : 0);
+  }
+
+  closeMentions() {
+    this.mentionPop.set(false);
+    this.mentionAt = -1;
+    this.mentionSeq++;
+  }
+
+  /** The @ button: an @ at the caret, and the picker. */
+  startMention() {
+    const el = this.box()?.nativeElement;
+    if (!el) return;
+    const v = this.text(), at = el.selectionStart ?? v.length;
+    const lead = at > 0 && !/\s/.test(v[at - 1]) ? ' ' : '';
+    this.setText(v.slice(0, at) + lead + '@' + v.slice(at));
+    el.focus();
+    const caret = at + lead.length + 1;
+    el.setSelectionRange(caret, caret);
+    this.typed(el);
+  }
+
+  /** The "@word" typed goes; the thing picked becomes a chip. */
+  pickMention(r: CcMention) {
+    const el = this.box()?.nativeElement;
+    const v = this.text();
+    if (this.mentionAt >= 0 && el) {
+      let end = el.selectionStart ?? v.length;
+      // No double space where the "@word" was.
+      if (v[end] === ' ' && (this.mentionAt === 0 || /\s/.test(v[this.mentionAt - 1]))) end++;
+      this.setText(v.slice(0, this.mentionAt) + v.slice(end));
+      const at = this.mentionAt;
+      setTimeout(() => { el.focus(); el.setSelectionRange(at, at); });
+    }
+    this.picked.update(l => l.some(x => x.kind === r.kind && x.id === r.id) ? l : [...l, r].slice(0, 8));
+    this.closeMentions();
+  }
+
+  unpick(m: CcMention) { this.picked.update(l => l.filter(x => !(x.kind === m.kind && x.id === m.id))); }
+
+  kindIcon(k: CcMention['kind']) { return KIND[k]?.icon ?? I.note; }
+  kindName(k: CcMention['kind']) { return KIND[k]?.name ?? k; }
+
+  mentionTip(m: CcMention) {
+    const bits = [`${t(this.kindName(m.kind))} ${m.id}`];
+    if (m.version != null && m.version !== '') bits.push(`${t('version')} ${m.version}`);
+    if (m.chars) bits.push(`${m.chars.toLocaleString()} ${t('characters to the model')}` + (m.truncated ? ` (${t('cut')})` : ''));
+    if (m.images) bits.push(`${m.images} ${t('images')}`);
+    return bits.join(' · ');
+  }
+
+  /** A chip opens what it mentions, in its own room. */
+  openMention(m: CcMention) {
+    switch (m.kind) {
+      case 'model': this.sel.room.set('cad'); this.sel.ask('model', m.id); break;
+      case 'board': this.sel.openBoard(m.id); break;
+      case 'note': this.sel.room.set('notes'); this.sel.ask('note', m.id); break;
+      case 'part': this.sel.room.set('pcb'); setTimeout(() => this.sel.ask('part', m.id), 300); break;
+      case 'file': window.open(`/api/files/${encodeURIComponent(m.id)}?inline=1`, '_blank', 'noopener'); break;
+      case 'revision': {
+        const o = m.open ?? {};
+        const on = o.board || o.model;
+        if (o.room === 'pcb' && on) this.sel.openBoard(on);
+        else if (o.model) { this.sel.room.set('cad'); this.sel.ask('model', o.model); }
+        break;
+      }
+    }
+  }
+
+  // ---- search: every line, on the server ------------------------------------
+
+  setQuery(v: string) {
+    this.q.set(v);
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    if (!v.trim()) { this.searchSeq++; this.hits.set(null); this.searching.set(false); return; }
+    this.searching.set(true);
+    this.searchTimer = setTimeout(() => this.runSearch(), 250);
+  }
+
+  runSearch() {
+    const q = this.q().trim();
+    if (!q) { this.hits.set(null); return; }
+    const seq = ++this.searchSeq;
+    this.searching.set(true);
+    this.api.search(q, this.tab(), this.withArchived()).subscribe({
+      next: r => { if (seq === this.searchSeq) { this.hits.set(r.results); this.searching.set(false); } },
+      error: e => { if (seq === this.searchSeq) { this.searching.set(false); this.error.set(this.msg(e)); } },
+    });
+  }
+
+  /** A snippet in pieces: the words found, and what is between them. */
+  segments(h: CcHit) {
+    const out: { t: string; hit: boolean }[] = [];
+    let at = 0;
+    for (const [a, b] of [...h.hits].sort((x, y) => x[0] - y[0])) {
+      if (a < at) continue;
+      if (a > at) out.push({ t: h.snippet.slice(at, a), hit: false });
+      out.push({ t: h.snippet.slice(a, b), hit: true });
+      at = b;
+    }
+    if (at < h.snippet.length) out.push({ t: h.snippet.slice(at), hit: false });
+    return out;
+  }
+
+  /** The conversation, at the line found. */
+  openHit(h: CcHit) {
+    if (h.trashed) return;                                    // restored first, then read
+    this.drawer.set(false);
+    if (this.openId() === h.chat_id && this.chat()?.id === h.chat_id) { if (h.message_id) this.scrollTo(h.message_id); return; }
+    this.open(h.chat_id, h.message_id);
+  }
+
+  private scrollTo(mid: string) {
+    setTimeout(() => {
+      const el = this.logEl()?.nativeElement.querySelector(`[data-mid="${CSS.escape(mid)}"]`);
+      if (!el) return;
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      this.flash.set(mid);
+      setTimeout(() => { if (this.flash() === mid) this.flash.set(null); }, 2600);
+    }, 60);
+  }
 
   // ---- copying out -------------------------------------------------------
 
@@ -1253,6 +1786,9 @@ export class RoomCommandCode implements OnDestroy {
   tail(s: string) { return s.length > 400 ? '…' + s.slice(-400) : s; }
   short(m: string) { return m.includes('/') ? m.split('/').pop()! : m; }
   ctx(n: number) { return n >= 1_000_000 ? `${Math.round(n / 1_000_000)}M` : `${Math.round(n / 1000)}k`; }
+  kfmt(n: number) {
+    return n < 1000 ? String(n) : n < 1_000_000 ? `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k` : `${(n / 1_000_000).toFixed(1)}M`;
+  }
   /** A line's start for the list, without the Markdown marks. */
   snip(s: string) { return s.replace(/```[\w-]*/g, ' ').replace(/[#*_`>|]+/g, ' ').replace(/\s+/g, ' ').trim(); }
   initials(name?: string) {

@@ -61,6 +61,13 @@ class Busy(RuntimeError):
                          f"(job {job.get('_id')}, started {job.get('started_at')})")
 
 
+class Lost(RuntimeError):
+    """The build's runner died with it (a container restart): built again,
+    not counted as the model failing."""
+
+    later = True
+
+
 def _pid_ns() -> str | None:
     """Which process namespace this is: a pid means something only in its own."""
     try:

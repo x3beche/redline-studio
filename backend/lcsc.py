@@ -310,18 +310,44 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
         try:
             out, meta = await attempt(always)
         except urllib.error.HTTPError as first:
-            # Turned away at this address: with a fallback proxy set, the
-            # same ask goes once more through it before anyone cools off.
-            if first.code not in (403, 429) or always or netproxy.mode() != "fallback":
-                raise
-            note("direct", t0, status=first.code, error="refused here - asking through the proxy",
-                 meta=getattr(first, "net_meta", None))
-            _tell("proxy", "LCSC refused, retrying via proxy")
-            via, how = "proxy", "fallback"
-            t0 = _time.monotonic()
-            out, meta = await attempt(True)
+            # Through a rotating proxy a refusal is that exit address's: two
+            # more tries, each from a fresh one, before anybody cools off.
+            if always and first.code in (403, 429) and kind != "photo":
+                last = first
+                for n in (2, 3):
+                    note("proxy", t0, status=last.code, meta=getattr(last, "net_meta", None), attempt=how,
+                         error=f"refused at this exit - try {n} of 3 from another")
+                    _tell("proxy", f"refused at this exit, trying another ({n}/3)")
+                    t0 = _time.monotonic()
+                    how = f"retry {n}"
+                    try:
+                        out, meta = await attempt(True)
+                        break
+                    except urllib.error.HTTPError as again:
+                        if again.code not in (403, 429):
+                            raise
+                        last = again
+                else:
+                    raise last
+            else:
+                # Turned away at this address: with a fallback proxy set, the
+                # same ask goes once more through it before anyone cools off.
+                if first.code not in (403, 429) or always or netproxy.mode() != "fallback":
+                    raise
+                note("direct", t0, status=first.code, error="refused here - asking through the proxy",
+                     meta=getattr(first, "net_meta", None))
+                _tell("proxy", "LCSC refused, retrying via proxy")
+                via, how = "proxy", "fallback"
+                t0 = _time.monotonic()
+                out, meta = await attempt(True)
     except urllib.error.HTTPError as exc:
         meta = getattr(exc, "net_meta", None)
+        if exc.code in (403, 429) and kind == "photo":
+            # A product photo is LCSC's image server, not EasyEDA's API: a 403
+            # there is a picture that is not served (hotlinking, gone), and it
+            # froze every part lookup for ten minutes. No photo, nothing else.
+            note(via, t0, status=exc.code, meta=meta, attempt=how, error="photo not served")
+            raise
         if exc.code in (403, 429):
             why = f"EasyEDA said {exc.code} to {kind} {target}"
 

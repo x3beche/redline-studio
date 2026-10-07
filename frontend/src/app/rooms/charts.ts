@@ -53,7 +53,7 @@ export const fmt = {
         <text [attr.x]="L - 6" [attr.y]="t.y + 3" text-anchor="end" class="tcv-ch-tick">{{ t.label }}</text>
       }
       @for (t of xTicks(); track t.i) {
-        <text [attr.x]="t.x" [attr.y]="height() - 4" text-anchor="middle" class="tcv-ch-tick">{{ t.label }}</text>
+        <text [attr.x]="t.x" [attr.y]="height() - 4" [attr.text-anchor]="t.a" class="tcv-ch-tick">{{ t.label }}</text>
       }
       @if (kind() === 'bar') {
         @for (b of bars(); track $index) {
@@ -186,15 +186,14 @@ export class TimeChart implements AfterViewInit, OnDestroy {
     const v = this.max() * k;
     return { v, y: this.y(v), label: this.f()(v) };
   }));
-  xTicks = computed(() => {
-    const n = this.data().n, count = Math.min(6, n);
-    const out = [];
-    for (let k = 0; k < count; k++) {
-      const i = Math.round(k * (n - 1) / Math.max(1, count - 1));
-      out.push({ i, x: this.kind() === 'bar' ? this.L + this.slot() * (i + 0.5) : this.x(i), label: this.label(i) });
-    }
-    return out;
-  });
+  /** The time labels under the chart. Every `stride` buckets from the
+   *  first, as many as fit side by side at this width - and never two
+   *  closer than one label is wide. Rounding k·(n-1)/5 to a bucket put
+   *  labels one bucket apart where the series is short ("30 Sept1 Oct"),
+   *  and on a narrow chart they piled on top of each other. The ones at
+   *  the ends are anchored inward, so they are not cut off. */
+  xTicks = computed(() => xTickPlan(this.data().n, this.w(), this.L, this.R,
+    i => this.kind() === 'bar' ? this.L + this.slot() * (i + 0.5) : this.x(i), i => this.label(i)));
   bars = computed(() => {
     const out: { x: number; y: number; w: number; h: number; c: string }[] = [];
     const slot = this.slot(), bw = Math.max(1, slot * 0.72), shown = this.shown();
@@ -268,6 +267,34 @@ export class TimeChart implements AfterViewInit, OnDestroy {
       ? d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
       : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
   }
+}
+
+/** The width of a tick label: 10 px IBM Plex Mono (.tcv-ch-tick). */
+const TICK_CHAR = 6.1;
+
+export interface XTick { i: number; x: number; label: string; a: 'start' | 'middle' | 'end' }
+
+/** Where the x labels go (TimeChart.xTicks), apart from the chart so it
+ *  can be checked on its own: buckets 0, s, 2s, ... with the stride `s`
+ *  the smallest that keeps every label clear of the next. */
+export function xTickPlan(n: number, w: number, left: number, right: number,
+                          at: (i: number) => number, label: (i: number) => string): XTick[] {
+  if (n <= 0 || w <= 0) return [];
+  const wide = Math.max(...[0, n - 1].map(i => label(i).length)) * TICK_CHAR;
+  const gap = wide + 10;
+  const room = Math.max(1, w - left - right);
+  const fit = Math.max(1, Math.min(6, Math.floor(room / gap) + 1));
+  const stride = n > 1 ? Math.max(1, Math.ceil((n - 1) / Math.max(1, fit - 1))) : 1;
+  const out: XTick[] = [];
+  let last = -Infinity;
+  for (let i = 0; i < n; i += stride) {
+    const x = at(i);
+    if (x - last < gap) continue;
+    const a = x - wide / 2 < 1 ? 'start' : x + wide / 2 > w - 1 ? 'end' : 'middle';
+    out.push({ i, x: a === 'start' ? Math.max(1, x - 4) : a === 'end' ? Math.min(w - 1, x + 4) : x, label: label(i), a });
+    last = x;
+  }
+  return out;
 }
 
 /** A round number just above the largest value, so the axis reads well. */

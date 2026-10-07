@@ -784,35 +784,6 @@ export interface PartPreview {
   have: boolean;
 }
 
-/** One ask made of LCSC, as the journal wrote it down. */
-export interface LcscAsk {
-  at: string;
-  /** page (the browser), agent (command line or curl), passives (the builder). */
-  who: string;
-  /** search, component, drawings, 3d model, photo. */
-  kind: string;
-  /** The search, or the part number. */
-  target: string;
-  /** net: went to EasyEDA. disk: already here. refused: not sent, cooling
-   *  off or out of budget. wait: an agent waiting for the budget. */
-  source: 'net' | 'disk' | 'refused' | 'wait';
-  url: string;
-  status: number | null;
-  ms: number;
-  bytes: number;
-  error: string | null;
-}
-
-export interface LcscJournal {
-  state: { gap_s: number; cool_off_s: number; now: number;
-           refused_until: number | null; refused_why: string | null;
-           last_ask: number | null;
-           /** At most `budget` asks in any `window_s`; `used` so far. */
-           budget: number; window_s: number; used: number };
-  rows: LcscAsk[];
-  last_hour: { net: number; disk: number; refused: number };
-}
-
 /** A part that has been fetched and kept. */
 export interface PartHeld {
   lcsc: string;
@@ -852,10 +823,6 @@ export class Parts {
   /** A look before keeping: facts now, drawings and the model by URL. */
   preview(lcsc: string): Observable<PartPreview> {
     return this.http.get<PartPreview>(`/api/parts/${lcsc}/preview`);
-  }
-  /** Every ask made of LCSC, newest first. */
-  journal(limit = 200): Observable<LcscJournal> {
-    return this.http.get<LcscJournal>(`/api/lcsc/requests?limit=${limit}`);
   }
   file(lcsc: string, name: 'footprint.svg' | 'symbol.svg' | 'model.glb' | 'photo.jpg'): string {
     return `/api/parts/${encodeURIComponent(lcsc)}/${name}`;
@@ -993,8 +960,11 @@ export interface Insights {
          cost_by_provider: InsightSeries; cost_by_model: InsightSeries; tokens_by_type: InsightSeries;
          by_model: InsightRow[]; by_provider: InsightRow[]; by_surface: InsightRow[];
          by_room: InsightRow[]; by_project: InsightRow[];
+         /** Each note as its card costs it; `approximate` when its agent could
+          *  not be told and the time window was used (backend/insights.py). */
          top_notes: { id: string; title: string; room: string; project: string; calls: number;
-                      cost_usd: number; tokens: number }[] };
+                      cost_usd: number; tokens: number; approximate?: boolean;
+                      approximate_label?: string | null }[] };
   compute: { count: number; wall_s: number; cpu_s: number; wh: number; failed: number;
              cpu_hours_by_kind: InsightSeries;
              by_kind: { name: string; jobs: number; wall_s: number; cpu_s: number; wh: number;
@@ -1034,7 +1004,8 @@ export interface Insights {
                        median_s: number | null; max_s: number | null }[];
             model_trend: InsightSeries;
             by_model: { name: string; builds: number; median_s: number | null; max_s: number }[] };
-  note_costs: { series: InsightSeries; notes: number; median: number | null; mean: number | null };
+  note_costs: { series: InsightSeries; notes: number; median: number | null; mean: number | null;
+                approximate?: number; approximate_label?: string };
   api: { requests: number; errors: number; per_bucket: InsightSeries; latency: InsightSeries;
          routes: { route: string; count: number; avg_ms: number; p95_ms: number | null;
                    max_ms: number; errors: number }[] };

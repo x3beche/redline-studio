@@ -380,6 +380,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     clearInterval(this.healthTimer);
     clearInterval(this.costTimer);
     clearInterval(this.viewTimer);
+    clearInterval(this.clockTimer);
     removeEventListener('beforeunload', this.onLeave);
   }
 
@@ -1442,9 +1443,23 @@ export class Editor implements AfterViewInit, OnDestroy {
     return { building, queued, broken, pct, tip: names.join('\n') };
   }
 
+  /** The clock the build bars read. A template that read Date.now() got
+   *  another number on dev mode's second look at the same check - "building
+   *  50%" then 51% - and Angular threw NG0100 every time a percent moved on
+   *  between the two. A signal holds still for the whole check; the timer
+   *  moves it once a second, and only while a bar is being drawn. */
+  private clock = signal(Date.now());
+  private clockWanted = false;
+  private clockTimer = setInterval(() => {
+    if (!this.clockWanted) return;
+    this.clockWanted = false;
+    this.clock.set(Date.now());
+  }, 1000);
+
   buildPct(m: ModelEntry): number | null {
     if (!m.building || !m.build_started || !m.build_secs) return null;
-    const gone = (Date.now() - Date.parse(m.build_started)) / 1000;
+    this.clockWanted = true;
+    const gone = (this.clock() - Date.parse(m.build_started)) / 1000;
     if (!isFinite(gone) || gone < 0) return null;
     return Math.min(Math.round(gone / m.build_secs * 100), 95);
   }
