@@ -4,7 +4,7 @@ import {
 } from '@angular/core';
 import { money } from '../money';
 import {
-  Activity, BoardComponent, BoardEntry, BoardGeometry, BoardStats, BoardGraph, BoardLayout, BoardRules,
+  Activity, BoardComponent, BoardEntry, BoardGeometry, BoardSchematic, BoardStats, BoardGraph, BoardLayout, BoardRules,
   Boards, LogLine, PartHeld, PartHit,
   PartPreview, Parts, RuleSchema,
 } from '../api';
@@ -435,7 +435,7 @@ type BoardView = Pane | 'split' | 'focus';
                  title="every layer, a page each">.pdf</a>
             }
             <a [attr.href]="here()?.schematic ? file('board.kicad_sch') : null" [class.off]="!here()?.schematic"
-               title="the schematic, for KiCad">.kicad_sch</a>
+               [title]="here()?.schematic?.sheets?.length ? 'the schematic for KiCad - every sheet, zipped' : 'the schematic, for KiCad'">.kicad_sch</a>
             <a [attr.href]="has3d() ? modelUrl() : null" [class.off]="!has3d()"
                title="the 3D model">.glb</a>
           </div>
@@ -538,7 +538,29 @@ type BoardView = Pane | 'split' | 'focus';
       }
       @case ('schematic') {
         @if (here()?.schematic; as sch) {
-          <app-drawing #flat [src]="file('schematic.svg', sch.at)" [controls]="own" />
+          @if (sch.sheets?.length) {
+            <!-- Drawn in sheets: the root (the boxes), a sheet per MCU,
+                 Power, the rest. A net on two sheets carries the same
+                 global label on both. -->
+            <div class="flex h-full w-full flex-col">
+              <div class="tcv-sheets" role="tablist" aria-label="schematic sheets">
+                <button class="tcv-sheet-tab" role="tab" [attr.data-on]="sheetOf(sch) === 'root' ? 1 : null"
+                        [attr.aria-selected]="sheetOf(sch) === 'root'" (click)="pickSheet('root')"
+                        title="the root sheet: a box for each sheet">Overview</button>
+                @for (s of sch.sheets; track s.key) {
+                  <button class="tcv-sheet-tab" role="tab" [attr.data-on]="sheetOf(sch) === s.key ? 1 : null"
+                          [attr.aria-selected]="sheetOf(sch) === s.key" (click)="pickSheet(s.key)"
+                          [title]="s.parts + ' parts' + (s.kind === 'mcu' ? ' - the MCU and the parts that serve only it' : '')"
+                          [disabled]="!s.svg">{{ s.name }}<span class="tcv-sheet-count">{{ s.parts }}</span></button>
+                }
+              </div>
+              <div class="relative min-h-0 flex-1">
+                <app-drawing #flat [src]="sheetUrl(sch)" [controls]="own" />
+              </div>
+            </div>
+          } @else {
+            <app-drawing #flat [src]="file('schematic.svg', sch.at)" [controls]="own" />
+          }
         } @else {
           <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ imported() ? importedNote : notYet }}</p>
         }
@@ -1186,6 +1208,8 @@ export class RoomPcb implements OnDestroy {
     const q = new URLSearchParams(location.search);
     this.urlBoard = q.get('board');
     if (this.urlBoard) this.picked.board.set(this.urlBoard);
+    const sheet = q.get('sheet');
+    if (sheet) this.schSheet.set(sheet);
     const tab = q.get('tab');
     if (tab) this.boardTab.set(RoomPcb.pick(tab, ['layout', 'schematic', '3d', 'split', 'focus'],
                                             this.boardTab()));
@@ -1279,6 +1303,25 @@ export class RoomPcb implements OnDestroy {
       return this.file('bottom.svg', a['bottom'].at);
     }
     return this.file('layout.svg', b?.layout?.at);
+  }
+
+  /** The schematic's sheet on screen: 'root' or a sheet's key. Kept; a
+   *  board without that sheet shows its root. */
+  schSheet = signal<string>(RoomPcb.recall('sheet', 'root'));
+
+  pickSheet(key: string) {
+    this.schSheet.set(key);
+    RoomPcb.keep('sheet', key);
+  }
+
+  sheetOf(sch: BoardSchematic): string {
+    const want = this.schSheet();
+    return sch.sheets?.some(s => s.key === want && s.svg) ? want : 'root';
+  }
+
+  sheetUrl(sch: BoardSchematic): string {
+    const key = this.sheetOf(sch);
+    return key === 'root' ? this.file('schematic.svg', sch.at) : this.file(`sheets/${key}.svg`, sch.at);
   }
 
   /** A drawing or a KiCad file of the open board. */

@@ -482,6 +482,24 @@ export interface BoardSchematic {
   symbols: number; size_mm: [number, number];
   erc: BoardErc;
   at: string;
+  /** Drawn in sheets (backend/sheets.py): one per MCU, Power, Connectors &
+   *  peripherals. Empty or missing: one sheet, the whole board. */
+  sheets?: SchematicSheet[];
+  mcus?: BoardMcu[];
+}
+
+export interface SchematicSheet {
+  key: string; name: string; file: string;
+  kind: 'mcu' | 'power' | 'peripherals';
+  mcu?: string | null; refs: string[]; parts: number; global_labels: number;
+  svg: string | null;
+}
+
+/** An MCU of the board, as GET /api/boards/{id}/mcus gives it. */
+export interface BoardMcu {
+  ref: string; part: string | null; title: string; sheet: string; key: string; file: string;
+  svg: string | null;
+  pins: { number: string; name: string; net: string | null; parts: string[] }[];
 }
 
 /** A net class: how wide, how far apart, which via, and its nets. */
@@ -719,6 +737,10 @@ export class Boards {
    *  answered from the browser's cache. */
   file(id: string, name: string, stamp?: string): string {
     return `/api/boards/${id}/${name}` + (stamp ? `?v=${encodeURIComponent(stamp)}` : '');
+  }
+  /** The board's MCUs: the sheet each is drawn on and its pin map. */
+  mcus(id: string): Observable<BoardMcu[]> {
+    return this.http.get<BoardMcu[]>(`/api/boards/${encodeURIComponent(id)}/mcus`);
   }
   /** The Analytics tab's figures. Nothing in it asks LCSC. */
   analytics(id: string): Observable<BoardStats> {

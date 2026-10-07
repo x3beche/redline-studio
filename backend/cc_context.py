@@ -293,6 +293,9 @@ async def _board(db, bid: str) -> dict | None:
     erc = sch.get("erc") or {}
     if sch:
         lines.append(f"Schematic: {sch.get('parts')} parts, {sch.get('wires')} wires, {sch.get('symbols')} symbols")
+        if sch.get("sheets"):
+            lines.append("Schematic sheets: " + "; ".join(
+                f"{s.get('name')} ({s.get('parts')} parts)" for s in sch["sheets"]))
     if erc:
         lines.append(f"ERC: {erc.get('error_count')} errors, {erc.get('warning_count')} warnings; "
                      f"errors {_j(erc.get('errors') or {})}; warnings {_j(erc.get('warnings') or {})}")

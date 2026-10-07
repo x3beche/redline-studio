@@ -21,14 +21,17 @@ from __future__ import annotations
 import copy
 import json
 import math
+import re
 import sys
 import tempfile
 import uuid
 from pathlib import Path
 
-from kiutils.items.common import (Effects, Font, Justify, PageSettings, Position,
-                                  Property, Stroke, TitleBlock)
-from kiutils.items.schitems import (Connection, LocalLabel, NoConnect,
+from kiutils.items.common import (ColorRGBA, Effects, Font, Justify, PageSettings,
+                                  Position, Property, Stroke, TitleBlock)
+from kiutils.items.schitems import (Connection, GlobalLabel, HierarchicalSheet,
+                                    HierarchicalSheetProjectInstance,
+                                    HierarchicalSheetProjectPath, LocalLabel, NoConnect,
                                     SchematicSymbol, SymbolProjectInstance,
                                     SymbolProjectPath, Text)
 from kiutils.schematic import Schematic
@@ -205,7 +208,9 @@ def shortened(names: list[str]) -> dict[str, str]:
     joined by the drawing, so a name keeps its prefix unless the short form
     is used by no other net.
     """
-    cut = {n: n.split(".", 1)[1] for n in names if "." in n and not n.startswith(".")}
+    # Only a module's name is cut, never a number's point: `3.3V` stays.
+    cut = {n: n.split(".", 1)[1] for n in names
+           if re.match(r"^[A-Za-z_][A-Za-z0-9_]*\.[^.]", n)}
     counts: dict[str, int] = {}
     for n in names:
         s = cut.get(n, n)
@@ -215,25 +220,24 @@ def shortened(names: list[str]) -> dict[str, str]:
 
 # ---------------- the sheet ----------------
 
-def main() -> int:
-    plan = json.load(sys.stdin)
-    project = plan.get("project", "board")
-    names = shortened([net["name"] for net in plan["nets"] if net.get("name")])
-    nets_at = {}                                  # (ref, pin) -> net name
-    for net in plan["nets"]:
-        nodes = net.get("nodes", [])
-        if len(nodes) >= 2:
-            for n in nodes:
-                nets_at[(n["ref"], str(n["pin"]))] = names.get(net["name"], net["name"])
+def draw_sheet(comps: list[dict], nets_at: dict, global_nets: set, title: str,
+               project: str, path=None):
+    """One sheet: these parts, each pin to its net by a stub and a label.
 
+    A net that is drawn on another sheet as well gets a global label - the
+    name joins it across sheets; one that stays on this sheet a local label.
+    `path(sch)` is the sheet's instance path, which every symbol on it
+    carries: "/<root>" on a flat schematic, "/<root>/<sheet>" on a sub-sheet.
+    """
     sch = Schematic.create_new()
     sch.version = 20231120
     sch.generator = "redline"
     sch.uuid = _uid()
-    sch.titleBlock = TitleBlock(title=plan.get("title", project))
+    sch.titleBlock = TitleBlock(title=title)
+    instance_path = path(sch) if path else f"/{sch.uuid}"
 
     parts, lib_seen, retyped = [], {}, 0
-    for comp in plan["components"]:
+    for comp in comps:
         src = comp["symbol"]
         key = src.get("key") or comp["part"]
         if src["kind"] == "easyeda" and src.get("pins") == "passive":
@@ -261,8 +265,9 @@ def main() -> int:
 
     # Each module packed into a block about as wide as it is tall, the
     # blocks then packed the same way - a sheet, not a strip.
+    order = {"mcu": 0, "usb-uart": 1}
     blocks = []
-    for name in sorted(groups, key=lambda g: (g == "", g)):
+    for name in sorted(groups, key=lambda g: (order.get(g, 2), g == "", g)):
         items = sorted(groups[name], key=lambda it: (-len(pins_of(it[1])), it[0]["ref"]))
         area = sum((e[2] + GAP) * (e[3] + GAP) for *_, e in items)
         cap = max(max(e[2] for *_, e in items), math.sqrt(area) * 1.2)
@@ -278,7 +283,7 @@ def main() -> int:
         blocks.append((name, items, spots, width, y + row_h))
 
     total = sum((w + GROUP_GAP) * (h + GROUP_GAP) for *_, w, h in blocks)
-    sheet_cap = max(max(w for *_, w, _ in blocks), math.sqrt(total) * 1.5)
+    sheet_cap = max([w for *_, w, _ in blocks] + [math.sqrt(total) * 1.5])
     placed, bx, by, row_h = [], 0.0, 0.0, 0.0
     for name, items, spots, w, h in blocks:
         if bx > 0 and bx + w > sheet_cap:
@@ -300,7 +305,7 @@ def main() -> int:
     sch.paper = PageSettings(paperSize="User", width=math.ceil(right + 25.4),
                              height=math.ceil(bottom + 25.4))
 
-    wires = labels_made = open_pins = 0
+    wires = labels_made = globals_made = open_pins = 0
     for comp, sym, labels, rot, ox, oy, (ex, ey, ew, eh) in placed:
         ref = comp["ref"]
         inst = SchematicSymbol(
@@ -325,7 +330,7 @@ def main() -> int:
         inst.pins = {p.number: _uid() for p in pins_of(sym)}
         inst.instances = [SymbolProjectInstance(
             name=project, paths=[SymbolProjectPath(
-                sheetInstancePath=f"/{sch.uuid}", reference=ref, unit=1)])]
+                sheetInstancePath=instance_path, reference=ref, unit=1)])]
         sch.schematicSymbols.append(inst)
 
         for number, rx, ry, (dx, dy) in pin_points(sym, rot):
@@ -341,17 +346,110 @@ def main() -> int:
                 stroke=Stroke(width=0), uuid=_uid()))
             wires += 1
             angle = {(1, 0): 0, (0, -1): 90, (-1, 0): 180, (0, 1): 270}[(dx, dy)]
-            sch.labels.append(LocalLabel(
-                text=net, position=Position(ex_, ey_, angle),
-                effects=font(justify="left" if angle in (0, 90) else "right"),
-                uuid=_uid()))
+            effects = font(justify="left" if angle in (0, 90) else "right")
+            if net in global_nets:
+                sch.globalLabels.append(GlobalLabel(
+                    text=net, shape="passive", position=Position(ex_, ey_, angle),
+                    effects=effects, uuid=_uid()))
+                globals_made += 1
+            else:
+                sch.labels.append(LocalLabel(
+                    text=net, position=Position(ex_, ey_, angle), effects=effects,
+                    uuid=_uid()))
             labels_made += 1
 
-    sch.to_file(plan["out"])
-    print(json.dumps({"parts": len(placed), "wires": wires, "labels": labels_made,
-                      "no_connects": open_pins, "symbols": len(lib_seen),
-                      "pins_made_passive": retyped,
-                      "size_mm": [sch.paper.width, sch.paper.height]}))
+    stats = {"parts": len(placed), "wires": wires, "labels": labels_made,
+             "global_labels": globals_made, "no_connects": open_pins,
+             "symbols": len(lib_seen), "pins_made_passive": retyped,
+             "size_mm": [sch.paper.width, sch.paper.height]}
+    return sch, stats
+
+
+SHEET_W, SHEET_H = 76.2, 25.4             # a sheet's box on the root
+
+
+def main() -> int:
+    plan = json.load(sys.stdin)
+    project = plan.get("project", "board")
+    names = shortened([net["name"] for net in plan["nets"] if net.get("name")])
+    nets_at = {}                                  # (ref, pin) -> net name
+    for net in plan["nets"]:
+        nodes = net.get("nodes", [])
+        if len(nodes) >= 2:
+            for n in nodes:
+                nets_at[(n["ref"], str(n["pin"]))] = names.get(net["name"], net["name"])
+    out = Path(plan["out"])
+    title = plan.get("title", project)
+    sheets = plan.get("sheets") or []
+
+    if not sheets:
+        sch, stats = draw_sheet(plan["components"], nets_at, set(), title, project)
+        sch.to_file(str(out))
+        print(json.dumps({**stats, "sheets": []}))
+        return 0
+
+    # Hierarchical: a root holding a box per sheet. Nets on more than one
+    # sheet are joined by global labels; the boxes need no pins.
+    # Which those are is the plan's (backend/sheets.py), by the netlist's
+    # names; worked out here from where the parts are when it does not say.
+    if "global_nets" in plan:
+        global_nets = {names.get(n, n) for n in plan["global_nets"]}
+    else:
+        sheet_of = {c["ref"]: c.get("sheet") for c in plan["components"]}
+        on = {}                                    # net -> sheets it is drawn on
+        for (ref, _pin), net in nets_at.items():
+            on.setdefault(net, set()).add(sheet_of.get(ref))
+        global_nets = {n for n, s in on.items() if len(s) > 1}
+
+    root = Schematic.create_new()
+    root.version = 20231120
+    root.generator = "redline"
+    root.uuid = _uid()
+    root.titleBlock = TitleBlock(title=title)
+
+    totals = {"parts": 0, "wires": 0, "labels": 0, "global_labels": 0, "no_connects": 0,
+              "symbols": 0, "pins_made_passive": 0}
+    made, cols = [], 3
+    for i, sheet in enumerate(sheets):
+        comps = [c for c in plan["components"] if c.get("sheet") == sheet["key"]]
+        sheet_uuid = _uid()
+        sub, stats = draw_sheet(comps, nets_at, global_nets, sheet["name"], project,
+                                path=lambda _s, u=sheet_uuid: f"/{root.uuid}/{u}")
+        sub.sheetInstances = []
+        sub.to_file(str(out.parent / sheet["file"]))
+        for k in totals:
+            totals[k] += stats[k]
+
+        col, row = i % cols, i // cols
+        x = snap(25.4 + col * (SHEET_W + 25.4))
+        y = snap(25.4 + row * (SHEET_H + 25.4))
+        box = HierarchicalSheet(
+            position=Position(x, y), width=SHEET_W, height=SHEET_H,
+            stroke=Stroke(width=0.1524, type="solid"), fill=ColorRGBA(0, 0, 0, 0),
+            uuid=sheet_uuid,
+            sheetName=Property(key="Sheetname", value=sheet["name"], id=0,
+                               position=Position(x, snap(y - 0.762), 0),
+                               effects=font(1.778, justify="left")),
+            fileName=Property(key="Sheetfile", value=sheet["file"], id=1,
+                              position=Position(x, y + SHEET_H + 0.635, 0),
+                              effects=font(1.27, justify="left")))
+        box.instances = [HierarchicalSheetProjectInstance(
+            name=project, paths=[HierarchicalSheetProjectPath(
+                sheetInstancePath=f"/{root.uuid}", page=str(i + 2))])]
+        root.sheets.append(box)
+        root.texts.append(Text(text=f"{len(comps)} parts",
+                               position=Position(snap(x + 2.54), snap(y + SHEET_H / 2), 0),
+                               effects=font(1.778, justify="left"), uuid=_uid()))
+        made.append({**{k: v for k, v in sheet.items()}, **stats})
+
+    rows = (len(sheets) + cols - 1) // cols
+    root.paper = PageSettings(paperSize="User",
+                              width=math.ceil(25.4 + min(cols, len(sheets)) * (SHEET_W + 25.4)),
+                              height=math.ceil(25.4 + rows * (SHEET_H + 25.4) + 12.7))
+    root.to_file(str(out))
+    totals["symbols"] = len({c["symbol"].get("key") or c["part"] for c in plan["components"]})
+    print(json.dumps({**totals, "size_mm": [root.paper.width, root.paper.height],
+                      "sheets": made, "global_nets": sorted(global_nets)}))
     return 0
 
 

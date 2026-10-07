@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 JOBS = "board_jobs"                 # the machine's, not a workspace's: holds its workspace
-KINDS = ("run", "convert", "layout")
+KINDS = ("run", "convert", "layout", "schematic")
 ROOT = Path(__file__).resolve().parent.parent
 BEAT = 10.0                         # a runner says it is alive this often, s
 LOST = 120.0                        # a running job not heard from for this long has died

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import logging
 import os
 from pathlib import Path
@@ -1364,6 +1365,21 @@ async def board_file(bid: str, kind: str):
         return Response(raw, media_type="model/step" if kind == "step" else "model/stl", headers={
             "Content-Disposition": f'attachment; filename="{bid}.{kind}"'})
     if kind == "kicad_sch":
+        # Drawn in sheets: the root alone opens empty in KiCad, so all of
+        # them, zipped, side by side.
+        try:
+            files = json.loads(await store.get_artifact(db(), bid, "schematic_files", ato.BOARDS))
+        except KeyError:
+            files = {}
+        if len(files) > 1:
+            import io
+            import zipfile
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+                for name, text in files.items():
+                    z.writestr(f"{bid}-schematic/{name}", text)
+            return Response(buf.getvalue(), media_type="application/zip", headers={
+                "Content-Disposition": f'attachment; filename="{bid}-schematic.zip"'})
         names = ["schematic"]
     elif kind == "kicad_pcb":
         names = ["routed", "pcb"]
@@ -1379,8 +1395,47 @@ async def board_file(bid: str, kind: str):
     raise HTTPException(404, f"no {kind} yet")
 
 
+@app.get("/api/boards/{bid}/sheets/{key}.svg")
+async def board_sheet(bid: str, key: str, light: bool = False):
+    """One sheet of the board's schematic, as KiCad drew it: an MCU's
+    sheet, Power, Connectors & peripherals (backend/sheets.py). The root -
+    the boxes of the sheets - is /schematic.svg."""
+    if not re.match(r"^[a-z0-9-]{1,80}$", key):
+        raise HTTPException(404, key)
+    try:
+        raw = await store.get_artifact(db(), bid, schematic.sheet_svg_label(key), ato.BOARDS)
+    except KeyError:
+        raise HTTPException(404, f"no sheet {key}")
+    if light:
+        raw = _light(raw)
+    return Response(raw, media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.get("/api/boards/{bid}/mcus")
+async def board_mcus(bid: str):
+    """The board's programmable chips, as its schematic is drawn: each MCU,
+    the sheet it is on (and that sheet's drawing), and which net every pin
+    is on with the parts that share it - what a Firmware room starts from.
+    Empty when the board has none, or its schematic is not drawn yet."""
+    doc = await db()[ato.BOARDS].find_one({"_id": bid}, {"schematic": 1})
+    if doc is None:
+        raise HTTPException(404, bid)
+    return schematic.mcus_of(doc)
+
+
 @app.post("/api/boards/{bid}/schematic")
-async def draw_schematic(bid: str):
+async def draw_schematic(bid: str, detach: bool = False):
+    """Write the schematic from the last build, draw it, and run ERC.
+
+    `detach=1`: as a job (backend/jobs.py), answered at once - it shows in
+    Working now; the schematic alone, nothing else of the board is touched."""
+    if detach:
+        return await _as_job("schematic", bid, {}, True)
+    return await _draw_schematic(bid)
+
+
+async def _draw_schematic(bid: str):
     """Write the schematic from the last build, draw it, and run ERC."""
     await say(f"{bid}: drawing the schematic", "work", room="pcb")
     try:
@@ -1392,7 +1447,9 @@ async def draw_schematic(bid: str):
                   "error", room="pcb")
         raise HTTPException(400, str(exc))
     erc = out.get("erc", {})
-    await say(f"{bid}: schematic - {out['parts']} parts, {out['labels']} pins joined, "
+    sheets = out.get("sheets") or []
+    split = (f" on {len(sheets)} sheets ({', '.join(s['name'] for s in sheets)})" if sheets else "")
+    await say(f"{bid}: schematic - {out['parts']} parts{split}, {out['labels']} pins joined, "
               f"ERC {erc.get('error_count', '?')} errors", 
               "done" if not erc.get("error_count") else "warn", room="pcb")
     return out
@@ -1497,7 +1554,7 @@ async def _run_board(bid: str):
                   + ("the same circuit" if eq["equivalent"] else
                      f"{eq['nets']['only_imported']} imported nets differ"),
                   "info" if eq["equivalent"] else "warn", room="pcb")
-    out["schematic"] = await draw_schematic(bid)
+    out["schematic"] = await _draw_schematic(bid)
     out["layout"] = await _layout_board(bid)
     took = round(_time.monotonic() - t0, 1)
     drc = (out["layout"] or {}).get("drc") or {}
@@ -1568,6 +1625,8 @@ async def job_step(kind: str, bid: str, body: dict):
         return await _layout_board(bid)
     if kind == "convert":
         return await _convert_board(bid, ConvertIn(**body))
+    if kind == "schematic":
+        return await _draw_schematic(bid)
     raise HTTPException(400, f"no such job: {kind}")
 
 

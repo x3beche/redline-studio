@@ -222,6 +222,12 @@ async def _board(db, bid: str, out: Path, log) -> dict:
         has_sch = "schematic" in arts
         if has_sch:
             (work / "board.kicad_sch").write_bytes(await store.get_artifact(db, bid, "schematic", ato.BOARDS))
+            # A schematic drawn in sheets: the root needs its sub-sheets beside it.
+            if "schematic_files" in arts:
+                for name, text in json.loads(await store.get_artifact(
+                        db, bid, "schematic_files", ato.BOARDS)).items():
+                    if name != "board.kicad_sch" and re.match(r"^[\w.-]+\.kicad_sch$", name):
+                        (work / name).write_text(text)
         (work / "gerbers").mkdir()
         os.chmod(work / "gerbers", 0o777)
         layers = ",".join([*_copper_layers(pcb.decode(errors="replace")), "F.Paste", "B.Paste", "F.Silkscreen",

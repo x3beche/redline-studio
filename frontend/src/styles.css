@@ -2053,6 +2053,20 @@ body {
   user-select: none;
 }
 .tcv-chip:hover { background: var(--hover); color: var(--ink); }
+/* The schematic's sheets (PCB room): flat, the open one on the surface. */
+.tcv-sheets { flex: none; display: flex; gap: 2px; overflow-x: auto; padding: 0 0 6px; }
+.tcv-sheet-tab {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; font-size: 11.5px; white-space: nowrap;
+  color: var(--ink-dim); background: transparent;
+  border: 1px solid transparent; border-radius: 4px; cursor: pointer;
+  transition: color .12s, background .12s, border-color .12s;
+}
+.tcv-sheet-tab:hover { color: var(--ink); background: var(--hover); }
+.tcv-sheet-tab[data-on="1"] { color: var(--ink); background: var(--surface); border-color: var(--line); }
+.tcv-sheet-tab:disabled { opacity: .4; cursor: not-allowed; }
+.tcv-sheet-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tcv-sheet-count { font-size: 10px; color: var(--ink-dim); }
 .tcv-chip:active {
   background: var(--pressed);
   transform: translateY(1px);       /* pressed feel */
