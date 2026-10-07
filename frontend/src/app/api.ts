@@ -804,6 +804,13 @@ export interface PartHeld {
   name: string | null;
   has_3d: boolean;
   at: string;
+  /** Where it sits in the drawer (backend/lcsc.py drawer_place). */
+  group?: string;
+  branch?: string;
+  category?: string | null;
+  value?: string | null;
+  mpn?: string | null;
+  maker?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })

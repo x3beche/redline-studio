@@ -1126,6 +1126,82 @@ async def fetch_many(db, ids: list[str]) -> tuple[dict, list[str]]:
     return out, failed
 
 
+# ---------------- the drawer, sorted like one ----------------
+# A part's place in the drawer: a group and a branch in it, read from the
+# category LCSC files it under (the EasyEDA record's tags), else from its
+# designator prefix. First match wins; the order matters (an "ESD
+# Protection Device" is a diode, not "Protection" ICs).
+DRAWER: tuple[tuple[str, str, str], ...] = (
+    # (pattern on the tag, group, branch)
+    (r"capacitor|mlcc", "Passives", "Capacitors"),
+    (r"resistor", "Passives", "Resistors"),
+    (r"inductor|coil|ferrite|bead", "Passives", "Inductors"),
+    (r"light emitting|\bled\b", "Discretes", "LEDs"),
+    (r"diode|schottky|zener|\btvs\b|esd protection|rectifier", "Discretes", "Diodes"),
+    (r"mosfet|transistor|\bbjt\b|igbt", "Discretes", "Transistors"),
+    (r"crystal|oscillator|resonator", "Frequency", "Crystals & oscillators"),
+    (r"oled|lcd|display", "Displays", "Displays"),
+    (r"battery connector|battery holder", "Electromechanical", "Battery holders"),
+    (r"usb connector|pin header|female header|wire to board|connector|terminal", "Electromechanical", "Connectors"),
+    (r"switch|encoder|button", "Electromechanical", "Switches"),
+    (r"dc-dc|ldo|regulator|battery management|power management|charger|voltage reference|load switch|pmic", "ICs", "Power"),
+    (r"microcontroller|processor|\bmcu|wifi module|bluetooth|wireless|rf module", "ICs", "Microcontrollers & modules"),
+    (r"usb ic|uart|interface|can transceiver|rs-?485|level shift|bridge", "ICs", "Interface"),
+    (r"sensor", "ICs", "Sensors"),
+    (r"memory|eeprom|flash", "ICs", "Memory"),
+)
+# When the tag says nothing useful ("Pre-ordered Products", a brand name).
+PREFIX_DRAWER = {
+    "R": ("Passives", "Resistors"), "C": ("Passives", "Capacitors"), "L": ("Passives", "Inductors"),
+    "FB": ("Passives", "Inductors"), "LED": ("Discretes", "LEDs"), "D": ("Discretes", "Diodes"),
+    "Q": ("Discretes", "Transistors"), "X": ("Frequency", "Crystals & oscillators"),
+    "Y": ("Frequency", "Crystals & oscillators"), "SW": ("Electromechanical", "Switches"),
+    "J": ("Electromechanical", "Connectors"), "P": ("Electromechanical", "Connectors"),
+    "H": ("Electromechanical", "Connectors"), "CN": ("Electromechanical", "Connectors"),
+    "USB": ("Electromechanical", "Connectors"), "BT": ("Electromechanical", "Battery holders"),
+    "OLED": ("Displays", "Displays"), "LDO": ("ICs", "Power"), "U": ("ICs", "Other ICs"),
+}
+_MCU = re.compile(r"^(STM32|ESP32|ESP8266|ATMEGA|ATTINY|RP2040|CH32|GD32|NRF5|PIC\d)", re.I)
+# Parts LCSC files under nothing telling: OLED glass, rotary encoders.
+_BY_MPN_DISPLAY = re.compile(r"OLED|SSD1306|SH1106|X0\d{2}-\d{4}", re.I)
+_BY_MPN_ENCODER = re.compile(r"^(EC1[12]|SIQ-|PEC1\d|EVQ)", re.I)
+DRAWER_ORDER = ("ICs", "Passives", "Discretes", "Electromechanical", "Frequency", "Displays", "Other")
+
+
+def drawer_place(tags: list[str] | None, prefix: str | None, mpn: str | None = None) -> tuple[str, str]:
+    """(group, branch) for a part in the drawer."""
+    text = " ".join(tags or []).lower()
+    if mpn and _MCU.match(mpn):
+        return "ICs", "Microcontrollers & modules"
+    if mpn and _BY_MPN_DISPLAY.search(mpn):
+        return "Displays", "Displays"
+    if mpn and _BY_MPN_ENCODER.match(mpn):
+        return "Electromechanical", "Switches"
+    for pattern, group, branch in DRAWER:
+        if text and re.search(pattern, text):
+            return group, branch
+    pre = re.sub(r"[^A-Za-z]", "", prefix or "").upper()
+    for n in (len(pre), 3, 2, 1):
+        if pre[:n] in PREFIX_DRAWER:
+            return PREFIX_DRAWER[pre[:n]]
+    return "Other", "Other"
+
+
+def _drawer_facts(lcsc: str) -> dict:
+    """What the cached EasyEDA record says about a part: its category, its
+    designator prefix, value and manufacturer part number. Read from disk,
+    nothing asked."""
+    try:
+        raw = json.loads((LOOK / lcsc / "component.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    rec = raw.get("result", raw) if isinstance(raw, dict) else {}
+    para = ((rec.get("dataStr") or {}).get("head") or {}).get("c_para") or {}
+    return {"tags": rec.get("tags") or [], "prefix": para.get("pre"),
+            "value": para.get("Value") or para.get("value"),
+            "mpn": para.get("Manufacturer Part"), "maker": para.get("Manufacturer")}
+
+
 async def known(db) -> list[dict]:
     """What is in the drawer already.
 
@@ -1143,6 +1219,12 @@ async def known(db) -> list[dict]:
         }},
         {"$sort": {"_id": 1}},
     ])]
-    return [{"lcsc": r["_id"], "name": r.get("name"),
-             "has_3d": bool(r.get("has_3d")), "at": r.get("at")}
-            for r in rows]
+    out = []
+    for r in rows:
+        facts = _drawer_facts(r["_id"])
+        group, branch = drawer_place(facts.get("tags"), facts.get("prefix"), facts.get("mpn"))
+        out.append({"lcsc": r["_id"], "name": r.get("name"),
+                    "has_3d": bool(r.get("has_3d")), "at": r.get("at"),
+                    "group": group, "branch": branch, "category": (facts.get("tags") or [None])[0],
+                    "value": facts.get("value"), "mpn": facts.get("mpn"), "maker": facts.get("maker")})
+    return out

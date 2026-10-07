@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, OnDestroy, effect, inject, signal, untracked, viewChild,
+  Component, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild,
   viewChildren,
 } from '@angular/core';
 import { money } from '../money';
@@ -324,24 +324,65 @@ type BoardView = Pane | 'split' | 'focus';
              same thing tomorrow, and a board rebuilt ten times should not
              ask somebody else's service ten times. -->
         @if (held().length) {
-          <div class="tcv-label px-2 pb-1 pt-2">in the drawer</div>
-          @for (p of held(); track p.lcsc) {
-            <div (click)="inspect(p.lcsc)"
-                 class="group flex cursor-pointer items-center gap-2 px-2 py-1"
-                 [style.background]="seen()?.lcsc === p.lcsc ? 'var(--accent-deep)' : null">
-              <span class="mono shrink-0 text-[11px]" style="color: var(--ink)">{{ p.lcsc }}</span>
-              <span class="min-w-0 flex-1 truncate text-[11px]"
-                    style="color: var(--ink-dim)" [title]="p.name ?? ''">{{ p.name }}</span>
-              <span class="shrink-0 text-[10px]"
-                    [style.color]="p.has_3d ? 'var(--ok)' : 'var(--ink-dim)'"
-                    [title]="p.has_3d ? 'came with a 3D model'
-                                      : 'footprint only - it will not stand on the board'">
-                {{ p.has_3d ? '3d' : '2d' }}
-              </span>
-              <button (click)="forget(p, $event)"
-                      class="shrink-0 text-[11px] opacity-0 group-hover:opacity-100"
-                      style="color: var(--danger)" title="forget it">&times;</button>
-            </div>
+          <div class="flex items-center px-2 pb-1 pt-2">
+            <span class="tcv-label">in the drawer</span>
+            <span class="mono ml-1.5 text-[10px]" style="color: var(--ink-dim)">{{ held().length }}</span>
+            <button class="tcv-drawer-all ml-auto" (click)="foldDrawer(!drawerAllShut())"
+                    [title]="drawerAllShut() ? 'open every group' : 'fold every group'">
+              {{ drawerAllShut() ? 'open all' : 'fold all' }}</button>
+          </div>
+          <!-- Sorted like a drawer: a group, a branch in it, then the parts -
+               values in order where they have one. -->
+          @for (g of drawerTree(); track g.name) {
+            <button class="tcv-drawer-head" (click)="flipDrawer(g.name)" [attr.aria-expanded]="!drawerShut(g.name)">
+              <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"
+                   [style.transform]="drawerShut(g.name) ? null : 'rotate(90deg)'">
+                <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"
+                      stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>{{ g.name }}</span>
+              <span class="tcv-drawer-n">{{ g.count }}</span>
+            </button>
+            @if (!drawerShut(g.name)) {
+              @for (b of g.branches; track b.name) {
+                @if (g.branches.length > 1 || b.name !== g.name) {
+                  <button class="tcv-drawer-head tcv-drawer-branch" (click)="flipDrawer(g.name + '/' + b.name)"
+                          [attr.aria-expanded]="!drawerShut(g.name + '/' + b.name)">
+                    <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"
+                         [style.transform]="drawerShut(g.name + '/' + b.name) ? null : 'rotate(90deg)'">
+                      <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"
+                            stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span>{{ b.name }}</span>
+                    <span class="tcv-drawer-n">{{ b.parts.length }}</span>
+                  </button>
+                }
+                @if (!drawerShut(g.name + '/' + b.name)) {
+                  @for (p of b.parts; track p.lcsc) {
+                    <div (click)="inspect(p.lcsc)"
+                         class="tcv-drawer-row group"
+                         [class.tcv-drawer-deep]="g.branches.length > 1 || b.name !== g.name"
+                         [style.background]="seen()?.lcsc === p.lcsc ? 'var(--accent-deep)' : null"
+                         [title]="(p.category ?? '') + (p.maker ? ' · ' + p.maker : '')">
+                      @if (p.value) {
+                        <span class="shrink-0 text-[11px] font-semibold" style="color: var(--ink)">{{ p.value }}</span>
+                      }
+                      <span class="min-w-0 flex-1 truncate text-[11px]" style="color: var(--ink-dim)">
+                        {{ p.mpn || p.name }}@if (p.mpn && p.name) {<span class="opacity-70"> · {{ packageOf(p.name) }}</span>}
+                      </span>
+                      <span class="mono shrink-0 text-[10px]" style="color: var(--ink-dim)">{{ p.lcsc }}</span>
+                      <span class="shrink-0 text-[10px]"
+                            [style.color]="p.has_3d ? 'var(--ok)' : 'var(--ink-dim)'"
+                            [title]="p.has_3d ? 'came with a 3D model'
+                                              : 'footprint only - it will not stand on the board'">
+                        {{ p.has_3d ? '3d' : '2d' }}
+                      </span>
+                      <button (click)="forget(p, $event)"
+                              class="shrink-0 text-[11px] opacity-0 group-hover:opacity-100"
+                              style="color: var(--danger)" title="forget it">&times;</button>
+                    </div>
+                  }
+                }
+              }
+            }
           }
         }
       </div>
@@ -1092,6 +1133,60 @@ export class RoomPcb implements OnDestroy {
   }
 
   // ---- parts, from LCSC ----
+
+  /** The drawer as a tree: groups in a fixed order, branches by name, parts
+   *  by value where they have one (100n before 10u), else by part number. */
+  drawerTree = computed(() => {
+    const ORDER = ['ICs', 'Passives', 'Discretes', 'Electromechanical', 'Frequency', 'Displays', 'Other'];
+    const groups = new Map<string, Map<string, PartHeld[]>>();
+    for (const p of this.held()) {
+      const g = p.group || 'Other', b = p.branch || 'Other';
+      if (!groups.has(g)) groups.set(g, new Map());
+      const m = groups.get(g)!;
+      if (!m.has(b)) m.set(b, []);
+      m.get(b)!.push(p);
+    }
+    const rank = (g: string) => { const i = ORDER.indexOf(g); return i < 0 ? ORDER.length : i; };
+    return [...groups.entries()].sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]))
+      .map(([name, m]) => {
+        const branches = [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([bn, parts]) => ({ name: bn, parts: parts.sort((x, y) =>
+            (RoomPcb.magnitude(x.value) - RoomPcb.magnitude(y.value)) ||
+            (x.mpn || x.name || x.lcsc).localeCompare(y.mpn || y.name || y.lcsc)) }));
+        return { name, branches, count: branches.reduce((n, b) => n + b.parts.length, 0) };
+      });
+  });
+
+  /** A value as a number to sort by: 4.7kΩ, 100nF, 2.2uH, 11.0592MHz. */
+  private static magnitude(v: string | null | undefined): number {
+    const m = /([\d.]+)\s*([pnuµμmkKMG]?)/.exec(v || '');
+    if (!m) return Number.MAX_VALUE;
+    const scale: Record<string, number> = { p: 1e-12, n: 1e-9, u: 1e-6, 'µ': 1e-6, 'μ': 1e-6, m: 1e-3, k: 1e3, K: 1e3, M: 1e6, G: 1e9 };
+    return parseFloat(m[1]) * (scale[m[2]] ?? 1);
+  }
+
+  /** The package out of EasyEDA's footprint name: R0603, SOT-23-6, LQFN-56. */
+  packageOf(name: string): string { return name.split('_')[0]; }
+
+  /** Folded groups and branches, kept in this browser. */
+  private drawerClosed = signal<Set<string>>(RoomPcb.recallSet('drawer-closed'));
+  private static recallSet(key: string): Set<string> {
+    try { const v = JSON.parse(RoomPcb.recall(key, '[]')); return new Set(Array.isArray(v) ? v.map(String) : []); }
+    catch { return new Set(); }
+  }
+  drawerShut(key: string) { return this.drawerClosed().has(key); }
+  flipDrawer(key: string) {
+    const s = new Set(this.drawerClosed());
+    if (s.has(key)) s.delete(key); else s.add(key);
+    this.drawerClosed.set(s);
+    RoomPcb.keep('drawer-closed', JSON.stringify([...s]));
+  }
+  drawerAllShut = computed(() => this.drawerTree().every(g => this.drawerClosed().has(g.name)));
+  foldDrawer(shut: boolean) {
+    const s = new Set<string>(shut ? this.drawerTree().map(g => g.name) : []);
+    this.drawerClosed.set(s);
+    RoomPcb.keep('drawer-closed', JSON.stringify([...s]));
+  }
 
   private drawer() {
     this.store.held().subscribe({ next: rows => this.held.set(rows) });

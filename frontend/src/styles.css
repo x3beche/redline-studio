@@ -3850,3 +3850,16 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-clamp3 { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .tcv-fold-btn { margin-right: 4px; padding: 0 2px; color: var(--ink-dim); background: none; border: 0; border-radius: 3px; cursor: pointer; font: inherit; }
 .tcv-fold-btn:hover { color: var(--ink); background: var(--hover); }
+
+/* PCB room: the parts drawer as a tree (group > branch > part). */
+.tcv-drawer-head { display: flex; width: 100%; align-items: center; gap: 6px; padding: 4px 8px; font-size: 11px;
+  font-weight: 600; color: var(--ink); background: none; border: 0; cursor: pointer; text-align: left; }
+.tcv-drawer-head:hover { background: var(--hover); }
+.tcv-drawer-head svg { flex: none; color: var(--ink-dim); transition: transform .12s; }
+.tcv-drawer-branch { padding-left: 20px; font-weight: 500; color: var(--ink-dim); }
+.tcv-drawer-n { margin-left: auto; font-size: 10px; font-weight: 400; color: var(--ink-dim); }
+.tcv-drawer-row { display: flex; cursor: pointer; align-items: center; gap: 8px; padding: 3px 8px 3px 26px; }
+.tcv-drawer-row.tcv-drawer-deep { padding-left: 38px; }
+.tcv-drawer-row:hover { background: var(--hover); }
+.tcv-drawer-all { padding: 0 4px; font-size: 10px; color: var(--ink-dim); background: none; border: 0; border-radius: 3px; cursor: pointer; }
+.tcv-drawer-all:hover { color: var(--ink); background: var(--hover); }
