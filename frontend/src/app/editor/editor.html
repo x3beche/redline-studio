@@ -313,6 +313,39 @@
     </button>
   }
 
+  <!-- The card being worked on, large: the whole note, the live bar, what it
+       has cost so far and the run's log, while it runs. -->
+  @if (taskPopup(); as tp) {
+    @let live = runningRevision()?.id === tp.id ? runningRevision()! : tp;
+    <div (click)="closeTask()" class="fixed inset-0 flex items-center justify-center p-6"
+         style="background: var(--scrim); z-index: 1100">
+      <div class="tcv-card flex max-h-[86vh] w-[min(44rem,92vw)] flex-col overflow-hidden p-0"
+           (click)="$event.stopPropagation()" style="box-shadow: 0 12px 36px var(--shadow-hard)">
+        <div class="flex shrink-0 items-center gap-2 px-3 py-2" style="border-bottom: 1px solid var(--line)">
+          <span class="tcv-label">{{ runningRevision()?.id === live.id ? 'Working on' : 'Note' }}</span>
+          <span class="mono truncate text-[10px]" style="color: var(--ink-dim)">{{ live.id }}</span>
+          <button (click)="closeTask()" class="tcv-chip ml-auto px-1.5 py-0" title="close (Esc)">×</button>
+        </div>
+        <div class="tcv-scroll min-h-0 flex-1 overflow-y-auto p-3">
+          <ng-container *ngTemplateOutlet="revCard; context: { $implicit: live, docked: true, popup: true }" />
+          @if (runningRevision()?.id === live.id && log().length) {
+            <div class="mt-2 rounded" style="border: 1px solid var(--line)">
+              <div class="px-2 py-1 text-[10px] uppercase tracking-wide" style="color: var(--ink-dim); border-bottom: 1px solid var(--line)">log</div>
+              <div class="mono max-h-56 overflow-y-auto px-2 py-1 text-[11px]">
+                @for (l of log().slice(-60); track l._id) {
+                  <div class="flex gap-2 leading-snug">
+                    <span class="shrink-0" style="color: var(--line)">{{ l.at.slice(11, 19) }}</span>
+                    <span [style.color]="levelColor(l.level)">{{ l.text }}</span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
   <!-- enlarged revision drawing -->
   @if (preview(); as pv) {
     <div (click)="closeShot()"
@@ -976,7 +1009,7 @@
 <!-- One card, used in two places: the queue on the right and the
      panel docked in the viewer while that revision is being worked
      on. Written once so the two cannot drift apart. -->
-<ng-template #revCard let-r let-docked="docked">
+<ng-template #revCard let-r let-docked="docked" let-popup="popup">
             <div class="flex items-start justify-between gap-2">
               @if (editing() === r.id) {
                 <!-- Text only: the drawing is the record and cannot change. -->
@@ -995,12 +1028,19 @@
                          placeholder="one-line summary (leave empty to regenerate)">
                 </div>
               } @else {
+                <!-- The arrow folds; the text folds too, except on the card being
+                     worked on under the tree, where it opens the card large -
+                     there the column is narrow and the note is kept to three
+                     lines. -->
                 <p class="min-w-0 flex-1 cursor-pointer text-[12px] leading-snug"
                    [class.truncate]="isFolded(r.id)"
-                   (click)="toggleFold(r.id)" title="fold / unfold">
-                  <span class="mr-1" style="color: var(--ink-dim)">
+                   [class.tcv-clamp3]="docked && !popup && !isFolded(r.id)"
+                   (click)="docked && !popup ? openTask(r) : toggleFold(r.id)"
+                   [title]="docked && !popup ? 'open the card: the whole note, live progress, cost and log' : 'fold / unfold'">
+                  <button class="tcv-fold-btn" (click)="$event.stopPropagation(); toggleFold(r.id)"
+                          [attr.aria-expanded]="!isFolded(r.id)" title="fold / unfold">
                     {{ isFolded(r.id) ? '▸' : '▾' }}
-                  </span>
+                  </button>
                   @if (r.status === 'queued') {
                     <span class="mr-1 rounded px-1.5 py-0.5 text-[10px] font-bold"
                           style="background: var(--accent); color: var(--ink-on-accent)">{{ queueIndex(r) }}</span>

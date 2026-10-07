@@ -46,6 +46,7 @@ type Mark =
   selector: 'app-editor',
   imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, Markdown, NgTemplateOutlet, PinIcon, Releases, T],
   templateUrl: './editor.html',
+  host: { '(document:keydown.escape)': 'closeTask()' },
 })
 export class Editor implements AfterViewInit, OnDestroy {
   private api = inject(Api);
@@ -1459,6 +1460,11 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   /** Which of the two shots the overlay is showing. */
   previewSide = signal<'before' | 'after'>('before');
+
+  /** The card being worked on, opened large from under the tree. */
+  taskPopup = signal<Revision | null>(null);
+  openTask(r: Revision) { this.taskPopup.set(r); }
+  closeTask() { this.taskPopup.set(null); }
 
   openShot(r: Revision, which: 'before' | 'after' = 'before') {
     this.previewSide.set(which);
