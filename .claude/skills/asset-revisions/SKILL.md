@@ -136,6 +136,11 @@ Two flags for when that angle is not the one that shows the change:
 `--camera` starting with a minus needs `--camera=-150,...`, or argparse reads
 it as another flag.
 
+A shot with `--camera` or `--only` is a look of your own: it is written to
+`/tmp/view-<id>-<hash>.png`, never to `/tmp/after-<id>.png`, so a close-up
+cannot become the card's after picture. Only the plain shot (the note's own
+camera) is the after.
+
 The card keeps this picture as the revision's "after", beside the drawing:
 
 ```bash

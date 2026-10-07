@@ -34,6 +34,7 @@ is the canvas it was drawn on).
 
 from __future__ import annotations
 
+import hashlib
 import argparse
 import base64
 import json
@@ -862,7 +863,18 @@ def main() -> None:
                     help="never wait for a build: shoot the build on record now "
                          "(an after shot; REDLINE_REVISION set implies it)")
     args = ap.parse_args()
-    out = Path(args.out or f"/tmp/after-{args.revision.replace(':', '-')}.png")
+    # The plain shot of a note is its after picture: `finish` stores
+    # /tmp/after-<id>.png as the card's. A close-up (--camera) or a shot of
+    # some parts (--only) is a look of its own and must never land there -
+    # it would stand in for the note's picture.
+    rid = args.revision.replace(':', '-')
+    if args.out:
+        out = Path(args.out)
+    elif args.camera or args.only:
+        tag = hashlib.sha1(f"{args.camera}|{args.only}".encode()).hexdigest()[:8]
+        out = Path(f"/tmp/view-{rid}-{tag}.png")
+    else:
+        out = Path(f"/tmp/after-{rid}.png")
     t0 = time.monotonic()
     try:
         render(args.revision, out, args.width, args.height, args.wait, args.camera,
