@@ -19,9 +19,9 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Activity, Analytics, Api, Boards, CameraState, Catalog, Chat, ChatLine, LogLine, Question, Questions, Run, FolderNode, ModelEntry, ComponentRow,
+import { Activity, Analytics, Api, Boards, CameraState, NoteView, Catalog, Chat, ChatLine, LogLine, Question, Questions, Run, FolderNode, ModelEntry, ComponentRow,
          Revision, RevisionStatus } from '../api';
-import { OcpViewer } from './ocp';
+import { OcpViewer, ViewApplied, viewHash } from './ocp';
 import { Markdown, plain } from '../markdown';
 import { Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
@@ -156,6 +156,13 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  change and be stamped onto whatever loaded next. */
   private heldCamera: CameraState | null = null;
   private heldModel: string | null = null;
+  /** The held note's view: its clipping, tab, parts and render settings. */
+  private heldView: NoteView | null = null;
+  /** Whether the held note's view went in, for the headless render: it
+   *  must not photograph the unclipped model for a note drawn on a cut. */
+  private viewState: { rev: string | null; applied: boolean | null; hash: string | null;
+                       error: string | null; missing: number } =
+    { rev: null, applied: null, hash: null, error: null, missing: 0 };
   /** Where the 3D area starts inside the stage. The cards that announce
    *  something belong over the model, not over the viewer's toolbar - and
    *  the toolbar's height is not a number we get to assume. */
@@ -800,7 +807,17 @@ export class Editor implements AfterViewInit, OnDestroy {
       model: this.shown.id || null, built_at: this.shown.at || null,
       loading: this.loadingId, want: this.urlPin, pending: this.urlPinPending,
       error: this.viewError || null,
+      // The held note's view (clipping, tab, parts, render settings):
+      // which note, whether it went in and read back as stored, and the
+      // stored view's fingerprint (ocp.ts viewHash) to match against.
+      view_rev: this.viewState.rev, view_applied: this.viewState.applied,
+      view_hash: this.viewState.hash, view_error: this.viewState.error,
+      view_missing: this.viewState.missing,
     };
+    // What the viewer shows now, read back live: the render checks it again
+    // right before and after the capture, not only once after applying.
+    (window as unknown as Record<string, unknown>)['redlineViewReadback'] =
+      () => this.viewer?.readback() ?? null;
   }
 
   /** Move to the camera a revision was drawn from. If no model is loaded
@@ -828,15 +845,34 @@ export class Editor implements AfterViewInit, OnDestroy {
         if (!r.camera || !this.viewer) return;
         this.heldCamera = r.camera;
         this.heldModel = r.model ?? this.activeModel();
+        this.heldView = r.view ?? null;
         this.focused.set(r);
-        // Parts first, then the camera: the drawing was made against a
-        // particular set of them, and the same angle over a different set is
-        // a picture of something else.
-        this.viewer.applyStates(r.view?.states);
-        this.viewer.applyCamera(r.camera);
+        this.applyHeldView(r.id);
       },
       error: () => { this.focusing = false; },
     });
+  }
+
+  /** Put the held note's whole view back. Parts, clipping, the tab and the
+   *  camera type first, then the camera: the drawing was made against a
+   *  particular set of parts and a particular cut, and the same angle over
+   *  a different set, or uncut, is a picture of something else. */
+  private async applyHeldView(rid: string) {
+    const viewer = this.viewer, view = this.heldView, cam = this.heldCamera;
+    if (!viewer || !cam) return;
+    const seq = this.loadSeq;
+    this.viewState = { rev: rid, applied: false, hash: null, error: null, missing: 0 };
+    this.report();
+    let res: ViewApplied;
+    try { res = await viewer.applyView(view); }
+    catch (e) { res = { ok: false, error: String((e as Error)?.message ?? e), missing: 0 }; }
+    // Another model, or another note, took over while studio mode started.
+    if (seq !== this.loadSeq || this.heldCamera !== cam) return;
+    viewer.applyCamera(cam, view);
+    this.viewState = { rev: rid, applied: res.ok, hash: view ? viewHash(view) : null,
+                       error: res.error, missing: res.missing };
+    if (!res.ok) this.flash('view not fully restored: ' + res.error);
+    this.report();
   }
 
   // ---- catalog ----
@@ -918,8 +954,13 @@ export class Editor implements AfterViewInit, OnDestroy {
       if (this.heldModel !== m.id) {
         this.heldCamera = null;
         this.heldModel = null;
+        this.heldView = null;
         this.focused.set(null);
       }
+      // render() reset the clipping, the tab and the parts: whatever view
+      // was applied is gone with the old scene.
+      this.viewState = { rev: null, applied: null, hash: null, error: null, missing: 0 };
+      const reheld = this.heldCamera ? this.focused() : null;
       this.activeModel.set(m.id);
       this.parts.set(this.viewer.parts);
       setTimeout(() => this.sizeOverlay());
@@ -939,6 +980,14 @@ export class Editor implements AfterViewInit, OnDestroy {
             this.focusRevision(rev);
           }, ms);
         }
+      } else if (reheld) {
+        // The same model rebuilt under a held note: put its view back, cut
+        // and all, rather than leave the camera over an uncut model.
+        setTimeout(() => {
+          if (!handled() && this.heldCamera && this.focused()?.id === reheld.id) {
+            this.applyHeldView(reheld.id);
+          }
+        }, 300);
       } else {
         // Back to the angle this window was left at. Only for the model it
         // was left on: the same numbers over a different model point at
@@ -1360,6 +1409,30 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** How far along a build is, against how long this model took last time.
    *  The script reports no progress of its own, so this is an estimate and
    *  is held at 95% rather than sitting at 100% while the work goes on. */
+  /** Builds, queued rebuilds and failures anywhere under a folder - its
+   *  row says so even folded - with the average progress of the builds that
+   *  have a usual time to measure against. Null when all is quiet. */
+  folderStatus(n: FolderNode): { building: number; queued: number; broken: number; pct: number | null; tip: string } | null {
+    let building = 0, queued = 0, broken = 0;
+    const pcts: number[] = [], names: string[] = [];
+    const walk = (f: FolderNode) => {
+      for (const m of f.models) {
+        const st = m.link?.state;
+        if (m.building || st === 'building') {
+          building++; names.push(m.name + ' building');
+          const p = this.buildPct(m); if (p != null) pcts.push(p);
+        } else if (st === 'queued') { queued++; names.push(m.name + ' queued'); }
+        else if (st === 'failed' || st === 'blocked' || st === 'cycle') { broken++; names.push(m.name + ' ' + st); }
+      }
+      for (const b of f.boards ?? []) if (b.building) { building++; names.push(b.title + ' building'); }
+      f.folders.forEach(walk);
+    };
+    walk(n);
+    if (!building && !queued && !broken) return null;
+    const pct = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null;
+    return { building, queued, broken, pct, tip: names.join('\n') };
+  }
+
   buildPct(m: ModelEntry): number | null {
     if (!m.building || !m.build_started || !m.build_secs) return null;
     const gone = (Date.now() - Date.parse(m.build_started)) / 1000;
@@ -1561,7 +1634,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     const box = this.stage().nativeElement;
     this.viewer?.resize(box.clientWidth, box.clientHeight - Editor.GUTTER);
     if (this.heldCamera && this.heldModel === this.activeModel()) {
-      this.viewer?.applyCamera(this.heldCamera);
+      this.viewer?.applyCamera(this.heldCamera, this.heldView);
     }
 
     // getImage() returns the canvas only; unless the overlay sits exactly on
@@ -1590,6 +1663,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (!this.heldCamera) return;
     this.heldCamera = null;
     this.heldModel = null;
+    this.heldView = null;
     this.focused.set(null);
   }
 
@@ -1749,9 +1823,10 @@ export class Editor implements AfterViewInit, OnDestroy {
       camera: this.viewer.cameraState(), part: this.part() || null,
       model: this.activeModel() || null,
       // What was on screen, not just where it was seen from: which parts
-      // were switched off is half of the picture, and without it the "after"
-      // shot shows a different thing from the same angle.
-      view: { states: this.viewer.states() },
+      // were switched off, where the model was cut, which tab, which
+      // render settings - without them the "after" shot shows a different
+      // thing from the same angle (ocp.ts captureView).
+      view: this.viewer.captureView(),
     }).subscribe({
       next: () => {
         this.saving.set(false);

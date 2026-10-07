@@ -802,7 +802,7 @@
 <!-- folder tree, recursing into itself -->
 <ng-template #node let-n let-depth="depth">
   @if (depth > 0) {
-    <div class="group flex cursor-pointer items-center justify-between rounded px-1 py-0.5"
+    <div class="group relative flex cursor-pointer items-center justify-between rounded px-1 py-0.5"
          [style.margin-left.px]="(depth - 1) * 10"
          [style.outline]="moving() ? '1px dashed var(--accent)' : 'none'"
          (click)="moving() ? moveTo(n.path, $event) : foldFolder(n.path, $event)">
@@ -812,6 +812,20 @@
         <span class="tcv-folder-caret">{{ folded(n.path) ? '▸' : '▾' }}</span>
         {{ n.name }}
       </span>
+      <!-- What is happening anywhere under this folder, so a folded one
+           still says it: building (with the average progress), waiting
+           for a rebuild, broken. -->
+      <!-- Not on a project's own top folder: there the subfolders say it. -->
+      @if (depth > 1 && folderStatus(n); as fs) {
+        <span class="tcv-folder-status" [title]="fs.tip">
+          @if (fs.building) { <span class="tcv-fs-build">⟳ {{ fs.building }}@if (fs.pct != null) { · {{ fs.pct }}% }</span> }
+          @if (fs.queued) { <span class="tcv-fs-queue">{{ fs.queued }} queued</span> }
+          @if (fs.broken) { <span class="tcv-fs-broke">{{ fs.broken }} broke</span> }
+        </span>
+        @if (fs.building && fs.pct != null) {
+          <span class="tcv-fs-bar"><span [style.width.%]="fs.pct"></span></span>
+        }
+      }
       @if (moving()) {
         <span class="text-[11px]" style="color: var(--accent)">move here</span>
       } @else {
@@ -1062,6 +1076,15 @@
                 @if (r.part) { · {{ r.part }} }
                 @if (r.model) { · {{ r.model }} }
               </span>
+              <!-- Back to the view it was drawn on: the camera, and with it
+                   the clipping, the tab and the parts that were shown, so the
+                   model can be compared with the drawing live. -->
+              @if (r.camera && r.kind !== 'pcb' && picked.room() === 'cad') {
+                <button (click)="focusRevision(r.id)" class="tcv-chip shrink-0 px-1 py-0"
+                        title="look from where this was drawn: the same camera, clipping and parts">
+                  ⌖ view
+                </button>
+              }
               <!-- What applying this revision cost. Fetched when opened: most
                    cards are never looked at, and the roll-up is not free. -->
               <!-- Only where the numbers mean something: the card being

@@ -3845,3 +3845,11 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-card-actions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
 .tcv-card-actions > button { display: flex; justify-content: center; align-items: center; gap: 3px; min-width: 0;
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin: 0; }
+
+/* A folder row's summary of what is happening under it. */
+.tcv-folder-status { display: inline-flex; flex: none; gap: 6px; margin-left: 6px; font-size: 10px; white-space: nowrap; }
+.tcv-fs-build { color: var(--accent); }
+.tcv-fs-queue { color: var(--ink-dim); }
+.tcv-fs-broke { color: var(--danger); }
+.tcv-fs-bar { position: absolute; left: 4px; right: 4px; bottom: 0; height: 2px; overflow: hidden; border-radius: 1px; background: var(--surface); }
+.tcv-fs-bar > span { display: block; height: 100%; background: var(--accent); transition: width .3s; }
