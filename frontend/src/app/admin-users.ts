@@ -37,12 +37,12 @@ const MIN_PASSWORD = 10;
     @if (loadErr(); as e) {
       <p class="st-err">{{ e }}</p>
     } @else {
-      <div class="st-card ad-skel" aria-busy="true" [attr.aria-label]="'Loading the accounts' | t">
+      <div class="st-card um-skel" aria-busy="true" [attr.aria-label]="'Loading the accounts' | t">
         <div class="st-card-head"><i class="sk" style="width: 80px"></i><span class="st-right"><i class="sk sk-btn"></i></span></div>
         <div class="st-card-body">
-          <div class="st-tiles ad-tiles">@for (i of [1, 2, 3, 4]; track i) { <i class="sk sk-tile"></i> }</div>
+          <div class="st-tiles um-tiles">@for (i of [1, 2, 3, 4]; track i) { <i class="sk sk-tile"></i> }</div>
           @for (i of [1, 2, 3, 4]; track i) {
-            <div class="ad-skel-row"><i class="sk sk-av"></i><i class="sk" style="width: 30%"></i><i class="sk" style="width: 12%"></i><i class="sk" style="width: 14%"></i></div>
+            <div class="um-skel-row"><i class="sk sk-av"></i><i class="sk" style="width: 30%"></i><i class="sk" style="width: 12%"></i><i class="sk" style="width: 14%"></i></div>
           }
         </div>
       </div>
@@ -50,7 +50,7 @@ const MIN_PASSWORD = 10;
   } @else if (data(); as d) {
     @if (editing(); as u) {
       <!-- One account: its profile, its access, its password, its sessions. -->
-      <div class="ad-back">
+      <div class="um-back">
         <button class="tcv-btn tcv-files-btn" (click)="close()">← {{ 'All users' | t }}</button>
         <span class="st-sub">{{ u.email }}</span>
       </div>
@@ -110,8 +110,8 @@ const MIN_PASSWORD = 10;
           <div class="st-card-head"><h3>{{ 'Access' | t }}</h3>
             <span class="st-sub">{{ d.about[u.role] }}</span></div>
           <div class="st-card-body">
-            <div class="ad-line">
-              <div class="ad-line-text"><b>{{ 'Role' | t }}</b>
+            <div class="um-line">
+              <div class="um-line-text"><b>{{ 'Role' | t }}</b>
                 <span class="st-hint">{{ (u.role === 'owner' ? 'The owner stays the owner: there is one, and it cannot be demoted.' : d.my_role === 'owner' ? 'An admin runs the server\\'s settings and the users\\' accounts.' : 'Only the owner changes roles.') | t }}</span></div>
               <div class="st-seg">
                 @for (r of ['admin', 'user']; track r) {
@@ -120,8 +120,8 @@ const MIN_PASSWORD = 10;
                 }
               </div>
             </div>
-            <div class="ad-line">
-              <div class="ad-line-text"><b>{{ 'Status' | t }}</b>
+            <div class="um-line">
+              <div class="um-line-text"><b>{{ 'Status' | t }}</b>
                 <span class="st-hint">{{ 'A disabled account cannot sign in; its sessions end at once and its agent tokens stop working.' | t }}</span></div>
               @if (u.disabled) {
                 <button class="tcv-btn" [disabled]="busy()" (click)="patch(u, { disabled: false }, 'Enabled.')">{{ 'Enable' | t }}</button>
@@ -129,8 +129,8 @@ const MIN_PASSWORD = 10;
                 <button class="tcv-btn" [disabled]="busy() || u.role === 'owner' || u.me" (click)="disable(u)">{{ 'Disable' | t }}</button>
               }
             </div>
-            <div class="ad-line">
-              <div class="ad-line-text"><b>{{ 'Sessions' | t }}</b>
+            <div class="um-line">
+              <div class="um-line-text"><b>{{ 'Sessions' | t }}</b>
                 <span class="st-hint">{{ u.sessions }} {{ 'signed in now. Signing out ends every one of them, on every device.' | t }}</span></div>
               <button class="tcv-btn" [disabled]="busy() || !u.sessions" (click)="signOut(u)">{{ 'Sign out everywhere' | t }}</button>
             </div>
@@ -142,12 +142,12 @@ const MIN_PASSWORD = 10;
           <div class="st-card-head"><h3>{{ 'Reset password' | t }}</h3>
             <span class="st-sub">{{ 'A temporary password: every session ends, and they choose their own at the next sign-in.' | t }}</span></div>
           <form class="st-card-body" (submit)="$event.preventDefault(); resetPassword(u)">
-            <div class="st-grid ad-pw">
+            <div class="st-grid um-pw">
               <label class="st-f"><span>{{ 'Temporary password' | t }}</span>
                 <input class="st-in mono" type="text" autocomplete="off" spellcheck="false" [value]="pw()" (input)="pw.set($any($event.target).value); pwMsg.set('')"></label>
-              <button type="button" class="tcv-btn tcv-files-btn ad-gen" (click)="pw.set(generate())">{{ 'Generate' | t }}</button>
+              <button type="button" class="tcv-btn tcv-files-btn um-gen" (click)="pw.set(generate())">{{ 'Generate' | t }}</button>
             </div>
-            <label class="ad-check"><input type="checkbox" [checked]="pwForce()" (change)="pwForce.set($any($event.target).checked)">
+            <label class="um-check"><input type="checkbox" [checked]="pwForce()" (change)="pwForce.set($any($event.target).checked)">
               {{ 'Must change the password at the next sign-in' | t }}</label>
             <div class="pf-foot">
               @if (pwMsg(); as m) { <span [class]="pwOk() ? 'st-msg' : 'st-err'">{{ m }}</span> }
@@ -164,37 +164,37 @@ const MIN_PASSWORD = 10;
             <div class="st-card-body">
               @if (holds(); as n) {
                 <p class="st-hint">{{ delErr() }}</p>
-                <label class="ad-check"><input type="checkbox" [checked]="withData()" (change)="withData.set($any($event.target).checked)">
+                <label class="um-check"><input type="checkbox" [checked]="withData()" (change)="withData.set($any($event.target).checked)">
                   {{ 'Delete their data too' | t }} ({{ n }})</label>
               } @else if (delErr(); as e) { <p class="st-err">{{ e }}</p> }
               <div class="pf-foot">
                 <span class="st-hint">{{ 'Disabling keeps everything and can be undone.' | t }}</span>
-                <button class="tcv-btn ad-danger" [disabled]="busy() || (holds() > 0 && !withData())" (click)="remove(u)">{{ 'Delete user' | t }}</button>
+                <button class="tcv-btn um-danger" [disabled]="busy() || (holds() > 0 && !withData())" (click)="remove(u)">{{ 'Delete user' | t }}</button>
               </div>
             </div>
           </div>
         }
       }
     } @else if (adding()) {
-      <div class="ad-back">
+      <div class="um-back">
         <button class="tcv-btn tcv-files-btn" (click)="adding.set(false)">← {{ 'All users' | t }}</button>
       </div>
       <div class="st-card">
         <div class="st-card-head"><h3>{{ 'Add user' | t }}</h3>
           <span class="st-sub">{{ 'A new account starts as a user, with an empty private space of its own.' | t }}</span></div>
         <form class="st-card-body" (submit)="$event.preventDefault(); add()">
-          <div class="st-grid ad-add">
+          <div class="st-grid um-add">
             <label class="st-f"><span>{{ 'Name' | t }}</span>
               <input class="st-in" [value]="nName()" maxlength="80" autocomplete="off" (input)="nName.set($any($event.target).value)"></label>
             <label class="st-f"><span>{{ 'Email' | t }}</span>
               <input class="st-in" type="email" [value]="nEmail()" maxlength="200" autocomplete="off" (input)="nEmail.set($any($event.target).value)"></label>
             <label class="st-f"><span>{{ 'Initial password' | t }}</span>
-              <span class="ad-pw-in">
+              <span class="um-pw-in">
                 <input class="st-in mono" type="text" autocomplete="off" spellcheck="false" [value]="nPw()" (input)="nPw.set($any($event.target).value)">
                 <button type="button" class="tcv-btn tcv-files-btn" (click)="nPw.set(generate())">{{ 'Generate' | t }}</button>
               </span></label>
           </div>
-          <label class="ad-check"><input type="checkbox" [checked]="nForce()" (change)="nForce.set($any($event.target).checked)">
+          <label class="um-check"><input type="checkbox" [checked]="nForce()" (change)="nForce.set($any($event.target).checked)">
             {{ 'Must change the password at first sign-in' | t }}</label>
           <p class="st-hint">{{ 'Redline sends no email: pass the address and the password on yourself.' | t }}</p>
           <div class="pf-foot">
@@ -210,12 +210,12 @@ const MIN_PASSWORD = 10;
         <div class="st-card-head"><h3>{{ 'Users' | t }}</h3>
           <span class="st-sub">{{ d.users.length }} {{ 'accounts' | t }}</span>
           <div class="st-right">
-            <input class="st-in ad-find" type="search" [placeholder]="'Find a name or address' | t" [value]="q()" (input)="q.set($any($event.target).value)">
+            <input class="st-in um-find" type="search" [placeholder]="'Find a name or address' | t" [value]="q()" (input)="q.set($any($event.target).value)">
             <button class="tcv-btn tcv-btn-accent" (click)="startAdd()">+ {{ 'Add user' | t }}</button>
           </div>
         </div>
         <div class="st-card-body">
-          <div class="st-tiles ad-tiles">
+          <div class="st-tiles um-tiles">
             <div class="st-tile"><span>{{ 'Accounts' | t }}</span><b>{{ d.users.length }}</b></div>
             <div class="st-tile" data-tone="ok"><span>{{ 'Active' | t }}</span><b>{{ counts().active }}</b></div>
             <div class="st-tile" [attr.data-tone]="counts().disabled ? 'danger' : 'dim'"><span>{{ 'Disabled' | t }}</span><b>{{ counts().disabled }}</b></div>
@@ -227,23 +227,23 @@ const MIN_PASSWORD = 10;
              scrolling wrapper at no height at all on one screen. Each row
              flows: the person, then what they are and when they were last
              here, wrapping under the name when the stage is narrow. -->
-        <div class="ad-list">
+        <div class="um-list">
           @for (u of shown(); track u.id) {
-            <div class="ad-row" tabindex="0" (click)="open(u)" (keydown.enter)="open(u)">
-              <span class="ad-who">
+            <div class="um-row" tabindex="0" (click)="open(u)" (keydown.enter)="open(u)">
+              <span class="um-who">
                 <app-avatar [name]="u.name" [userId]="u.id" [hasPicture]="u.has_avatar" [v]="u.avatar_v" [size]="28" />
-                <span class="ad-who-text"><b>{{ u.name }}@if (u.me) { <span class="st-tag">{{ 'you' | t }}</span> }</b>
+                <span class="um-who-text"><b>{{ u.name }}@if (u.me) { <span class="st-tag">{{ 'you' | t }}</span> }</b>
                   <small>{{ u.email }}</small></span>
               </span>
-              <span class="ad-meta">
+              <span class="um-meta">
                 <span class="st-tag" [attr.data-tone]="roleTone(u.role)">{{ u.role | t }}</span>
                 @if (u.disabled) { <span class="st-tag" data-tone="danger">{{ 'disabled' | t }}</span> }
                 @else { <span class="st-tag" data-tone="ok">{{ 'active' | t }}</span> }
                 @if (u.must_change_password) { <span class="st-tag" data-tone="warn" [title]="'Must change the password at the next sign-in' | t">{{ 'new password' | t }}</span> }
-                <span class="ad-when" [title]="('Created' | t) + ' ' + day(u.created_at)">
+                <span class="um-when" [title]="('Created' | t) + ' ' + day(u.created_at)">
                   {{ 'Last sign-in' | t }}: {{ u.last_sign_in ? day(u.last_sign_in) + ' ' + time(u.last_sign_in) : '-' }}</span>
               </span>
-              <button class="tcv-btn tcv-files-btn ad-edit" (click)="$event.stopPropagation(); open(u)">{{ 'Edit' | t }}</button>
+              <button class="tcv-btn tcv-files-btn um-edit" (click)="$event.stopPropagation(); open(u)">{{ 'Edit' | t }}</button>
             </div>
           } @empty {
             <div class="st-empty">{{ 'Nobody matches.' | t }}</div>
@@ -310,8 +310,8 @@ export class AdminUsersPanel {
       if (!d?.users?.length || this.editing() || this.told) return;
       setTimeout(() => {
         const el: HTMLElement = this.host.nativeElement;
-        const rows = el.querySelectorAll('.ad-list .ad-row').length;
-        const wrap = el.querySelector('.ad-list') as HTMLElement | null;
+        const rows = el.querySelectorAll('.um-list .um-row').length;
+        const wrap = el.querySelector('.um-list') as HTMLElement | null;
         const box = wrap?.getBoundingClientRect();
         if (rows && box && box.height > 20 && wrap && getComputedStyle(wrap).display !== 'none') return;
         this.told = true;
