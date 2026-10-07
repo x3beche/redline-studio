@@ -703,7 +703,7 @@ type BoardView = Pane | 'split' | 'focus';
             <!-- The board is a component: this is the 3D a model imports
                  (backend/board3d.py) - no second document, no export step. -->
             @if (!frozen() && !own) {
-              <div class="tcv-card absolute bottom-2 left-2 max-w-[22rem] p-0 text-[11px]"
+              <div class="tcv-card absolute bottom-2 right-2 max-w-[22rem] p-0 text-[11px]"
                    style="box-shadow: 0 6px 20px var(--shadow-soft)">
                 <div class="flex items-center gap-2 px-2 py-1"
                      [style.border-bottom]="compOpen() ? '1px solid var(--line)' : null">

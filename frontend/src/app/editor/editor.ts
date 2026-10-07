@@ -133,8 +133,8 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  something belong over the model, not over the viewer's toolbar - and
    *  the toolbar's height is not a number we get to assume. */
   viewTop = signal(0);
-  /** The 3D canvas's left edge and its gap to the stage's bottom, for cards pinned to its lower left. */
-  viewLeft = signal(0);
+  /** The 3D canvas's gaps to the stage's right and bottom, for cards pinned to its lower right. */
+  viewRight = signal(0);
   viewBottom = signal(0);
   /** One revision lookup at a time, so the retries above do not each start
    *  their own and open the same model three times over. */
@@ -1515,7 +1515,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     const cad = this.viewer?.canvasRect();
     const stage = box.getBoundingClientRect();
     this.viewTop.set(cad ? Math.round(cad.top - stage.top) : 0);
-    this.viewLeft.set(cad ? Math.round(cad.left - stage.left) : 0);
+    this.viewRight.set(cad ? Math.max(0, Math.round(stage.right - cad.right)) : 0);
     this.viewBottom.set(cad ? Math.max(0, Math.round(stage.bottom - cad.bottom)) : 0);
     const w = cad ? cad.width : box.clientWidth;
     const h = cad ? cad.height : box.clientHeight;

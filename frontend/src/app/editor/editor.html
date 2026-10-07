@@ -536,9 +536,9 @@
     <!-- The open model as a component: what it uses, who uses it, and a
          rebuild a change elsewhere set off, with its error if it broke. -->
     @if (activeModel() && !ide() && !frozen()) {
-      <!-- The lower left corner of the view, as the PCB room's 3D card; it grows upwards. -->
+      <!-- The lower right corner of the view, as the PCB room's 3D card; it grows upwards. -->
       <div class="pointer-events-none absolute z-20"
-           [style.left.px]="viewLeft() + 8" [style.bottom.px]="viewBottom() + 8">
+           [style.right.px]="viewRight() + 8" [style.bottom.px]="viewBottom() + 8">
         <app-links-card [id]="activeModel()" [stamp]="linkStamp()" (pinned)="loadCatalog()" />
       </div>
     }
