@@ -3840,3 +3840,8 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-work-state[data-state="building"], .tcv-work-state[data-state="running"] { background: var(--accent); animation: tcv-work-pulse 1.2s infinite ease-in-out; }
 .tcv-work-bar { display: block; height: 2px; margin: 3px 0 0 12px; overflow: hidden; border-radius: 1px; background: var(--surface); }
 .tcv-work-bar > span { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+
+/* A note card's buttons: two full rows on six columns, every button as wide as its share. */
+.tcv-card-actions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
+.tcv-card-actions > button { display: flex; justify-content: center; align-items: center; gap: 3px; min-width: 0;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin: 0; }

@@ -1272,30 +1272,35 @@
                  Not in the docked panel: that card is a read-out of what is
                  happening, and the controls live with the queue. -->
             @if (!docked) {
-            <div class="mt-1.5 flex flex-wrap items-center gap-1">
+            <!-- Two full rows on a six-column grid, nothing left empty: the
+                 status action and edit on the first, then compare / archive /
+                 delete sharing the second (archive and delete take half each
+                 when there is nothing to compare). -->
+            <div class="tcv-card-actions">
               @if (editing() === r.id) {
-                <button (click)="saveEdit(r)" class="tcv-chip tcv-chip-ok">save</button>
-                <button (click)="cancelEdit()" class="tcv-chip">cancel</button>
+                <button (click)="saveEdit(r)" class="tcv-chip tcv-chip-ok" style="grid-column: span 3">save</button>
+                <button (click)="cancelEdit()" class="tcv-chip" style="grid-column: span 3">cancel</button>
               } @else {
-                <button (click)="cycle(r)" [class]="nextClass(r.status)" [disabled]="!!cycleWhy(r)"
+                <button (click)="cycle(r)" [class]="nextClass(r.status)" [disabled]="!!cycleWhy(r)" style="grid-column: span 4"
                         [title]="cycleWhy(r) ?? 'draft → queued → applied → draft'">
                   {{ nextLabel(r.status) | t }}
                 </button>
-                <button (click)="startEdit(r)" class="tcv-chip"
+                <button (click)="startEdit(r)" class="tcv-chip" style="grid-column: span 2"
                         title="edit the text (the drawing stays as it is)">{{ 'edit' | t }}</button>
               }
+              @let compare = !!(r.changes?.length || r.image_after_bytes);
               <!-- What the work changed: the files side by side, and the pictures. -->
-              @if (r.changes?.length || r.image_after_bytes) {
-                <button (click)="changesOf.set(r)" class="tcv-chip"
+              @if (compare) {
+                <button (click)="changesOf.set(r)" class="tcv-chip" style="grid-column: span 2"
                         [title]="r.changes?.length ? 'what this note changed, file by file, and the pictures' : 'the picture before against the one after'">
                   @if (changeSum(r); as c) { <span class="tcv-diff-add">+{{ c.added }}</span> <span class="tcv-diff-del">−{{ c.removed }}</span> } @else { {{ 'compare' | t }} }
                 </button>
               }
-              <button (click)="archive(r)" class="tcv-chip" [disabled]="!auth.can('edit')"
+              <button (click)="archive(r)" class="tcv-chip" [disabled]="!auth.can('edit')" [style.grid-column]="compare ? 'span 2' : 'span 3'"
                       [title]="auth.why('edit') ?? (r.archived ? 'restore from archive' : 'archive')">
                 {{ (r.archived ? 'restore' : 'archive') | t }}
               </button>
-              <button (click)="remove(r)" class="tcv-chip tcv-chip-danger ml-auto" [disabled]="!auth.can('delete')"
+              <button (click)="remove(r)" class="tcv-chip tcv-chip-danger" [disabled]="!auth.can('delete')" [style.grid-column]="compare ? 'span 2' : 'span 3'"
                       [title]="auth.why('delete') ?? 'delete permanently'">{{ 'delete' | t }}</button>
             </div>
             }
