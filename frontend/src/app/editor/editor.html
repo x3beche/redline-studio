@@ -356,7 +356,7 @@
            style="box-shadow: 0 8px 24px var(--shadow-hard)">
         <div class="flex items-center gap-2 px-2 py-1"
              [style.background]="nt.ok ? 'var(--ok)' : 'var(--danger)'"
-             style="color: var(--ink-bright)">
+             [style.color]="nt.ok ? 'var(--ink-on-ok)' : 'var(--ink-bright)'">
           <span class="text-[11px] font-semibold tracking-wider">
             {{ nt.ok ? 'REVISION APPLIED' : 'RUN FAILED' }}
           </span>
@@ -999,6 +999,7 @@
               }
               <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase"
                     [style.background]="badgeOf(r)"
+                    [style.color]="badgeOf(r) === 'var(--ok)' ? 'var(--ink-on-ok)' : null"
                     [title]="review(r) === 'done' ? 'the agent finished - look at it, then mark it applied' : review(r) === 'failed' ? 'the run failed - see the log' : ''">{{ labelOf(r) }}</span>
             </div>
             <!-- Progress stays visible when the card is folded, so it lives
