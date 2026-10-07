@@ -226,6 +226,15 @@ export class Editor implements AfterViewInit, OnDestroy {
   private ro?: ResizeObserver;
 
   constructor() {
+    // The note at work is fetched by itself whenever the list in view does
+    // not hold it (the archive is showing), so its card stays under the tree.
+    effect(() => {
+      const rn = this.run();
+      const rid = rn?.status === 'running' ? rn.revision : null;
+      if (!rid || this.revisions().some(r => r.id === rid)) return;
+      if (untracked(() => this.runningFetched())?.id === rid) return;
+      this.api.one(rid).subscribe({ next: r => this.runningFetched.set(r), error: () => {} });
+    });
     // What the command palette asks of this room. Whoever acts on an ask
     // clears it, so none is left for a room that opens later.
     effect(() => {
@@ -1485,8 +1494,15 @@ export class Editor implements AfterViewInit, OnDestroy {
     // Only a note of the room on screen: in the moment after a switch the
     // last room's run is still held, and its card and cost flashed up in
     // the wrong room.
-    return this.roomRevisions().find(r => r.id === rn.revision) ?? null;
+    // Not only from the list: with the archive shown the list holds archived
+    // notes only, and the note at work vanished from under the tree.
+    const held = this.runningFetched();
+    return this.roomRevisions().find(r => r.id === rn.revision)
+      ?? (held?.id === rn.revision ? held : null);
   }
+
+  /** The running note, read on its own when the list on screen lacks it. */
+  private runningFetched = signal<Revision | null>(null);
 
   private pollLiveCost() {
     const rn = this.run();
