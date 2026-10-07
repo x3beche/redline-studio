@@ -163,13 +163,16 @@ export class Board3d implements AfterViewInit, OnDestroy {
     const mine = ++this.asked;
     const current = () => mine === this.asked;
     this.note.set('loading the model…');
+    // What is in the scene, on the element, for the headless render
+    // (tools/render.py) to check before it takes the picture.
+    delete this.host().nativeElement.dataset['shown'];
     const failed = () => { if (current()) this.note.set('the model could not be read'); };
-    new GLTFLoader().load(url, gltf => { if (current()) this.show(gltf.scene); },
+    new GLTFLoader().load(url, gltf => { if (current()) this.show(gltf.scene, url); },
                           undefined, failed);
   }
 
   /** Put this in the scene in place of whatever was there. */
-  private show(object: Object3D) {
+  private show(object: Object3D, url?: string) {
     if (!this.scene) return;
     // Only the model: the lights and the camera stay.
     for (const child of [...this.scene.children]) {
@@ -186,6 +189,7 @@ export class Board3d implements AfterViewInit, OnDestroy {
     this.touched = false;
     this.frame_the(object);
     this.note.set('');
+    if (url) this.host().nativeElement.dataset['shown'] = url;
     this.loaded.update(n => n + 1);
   }
 

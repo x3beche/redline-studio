@@ -197,7 +197,6 @@ a model is built and removed as soon as the build finishes.
 | `models` | model source code, title, sha256, generated-artifact references |
 | `folders` | catalog folders |
 | `revisions` | comment, camera, visible parts, status, queue timestamp |
-| `model_versions` | version history (latest + 10), source text only |
 | `runs` | one row per revision worked on, plus `current` |
 | `activity` | the log shown at the bottom of the screen |
 | `llm_calls`, `analytics` | what each revision cost in tokens and money |
@@ -209,10 +208,6 @@ a model is built and removed as soon as the build finishes.
 | `model_files` (GridFS) | generated viewer JSON / STEP / STL, gzipped |
 | `shots` (GridFS) | revision images, before and after |
 | `uploads` (GridFS) | imported STEP / IGES / BREP / STL / 3MF |
-
-Version history deliberately stores **source code only**: viewer, STEP and STL
-are derived artifacts and are rebuilt after a rollback. That keeps history in
-kilobytes rather than megabytes.
 
 ## Builds run under a ceiling
 

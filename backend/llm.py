@@ -1,8 +1,9 @@
 """The model calls the app makes, and which provider and model each one uses.
 
 Every LLM call the server makes goes through here: the card summaries,
-the English translation, the tool pages' prompt runs, the tool finder and
-the Command Code room's conversations. Each of those is a *job*, and a
+the English translation, the tool pages' prompt runs, the tool finder,
+the reading translation of the agents' questions and the Command Code
+room's conversations. Each of those is a *job*, and a
 job names a provider and a model - chosen in Settings > LLM settings,
 kept in the database, the same for the whole server.
 
@@ -44,31 +45,36 @@ PROVIDERS = {
                     "site": "https://commandcode.ai", "priced": False},
 }
 
-# What the app asks a model to do. The defaults are what it did before
-# there was a choice; the chat defaults to Command Code's own default.
+# What the app asks a model to do. Every job defaults to the one cheap
+# model, Command Code's Qwen3.8-Flash: nothing expensive runs unless
+# somebody picks it in Settings > LLM settings.
+CHEAP = ("commandcode", "Qwen/Qwen3.8-Flash")
 JOBS = {
     "summary": {"label": "Card summaries",
                 "about": "the one-line sentence on a revision card",
-                "default": ("openrouter", "deepseek/deepseek-v4.1-flash")},
+                "default": CHEAP},
     "translate": {"label": "English translation",
                   "about": "a note written in Turkish, turned into an English request",
-                  "default": ("openrouter", "deepseek/deepseek-v4.1-flash")},
+                  "default": CHEAP},
     "tools": {"label": "Tool pages",
               "about": "running a prompt from the AI & prompts tools",
-              "default": ("openrouter", "deepseek/deepseek-v4.1-flash")},
+              "default": CHEAP},
     "router": {"label": "Tool finder",
                "about": "picking the right Basic Tool for what someone typed",
-               "default": ("openrouter", "deepseek/deepseek-v4.1-flash")},
+               "default": CHEAP},
+    "reading": {"label": "Reading translation",
+                "about": "an agent's question or reply, shown in the reader's language",
+                "default": CHEAP},
     "chat": {"label": "Command Code room",
              "about": "the model a new conversation starts with",
-             "default": ("commandcode", "xiaomi/mimo-v2.5-pro")},
+             "default": CHEAP},
 }
 
 # The usage log's `kind` of a call -> the job it did, named as in the
 # "Which model does what" list. The room's titles are written by the
 # summary job's model but belong to the room.
 KINDS = {"summary": "summary", "translate": "translate", "tool-llm": "tools",
-         "tool-router": "router", "cc-chat": "chat"}
+         "tool-router": "router", "cc-chat": "chat", "reading": "reading"}
 KIND_LABELS = {"cc-title": "Command Code room titles", "llm-test": "Settings test"}
 
 
@@ -139,7 +145,8 @@ def public() -> dict:
         prov, model = route(j)
         jobs[j] = {"label": info["label"], "about": info["about"], "provider": prov, "model": model,
                    "default": {"provider": info["default"][0], "model": info["default"][1]}}
-    return {"providers": provs, "jobs": jobs}
+    return {"providers": provs, "jobs": jobs,
+            "cheap": {"provider": CHEAP[0], "model": CHEAP[1]}}
 
 
 async def save(db, keys: dict | None = None, jobs: dict | None = None) -> dict:
@@ -204,7 +211,9 @@ async def models(provider: str) -> list[dict]:
         ends = m.get("supported_endpoints") or []
         out.append({"id": m["id"], "name": m.get("name") or m["id"],
                     "context": m.get("context_length"),
-                    "anthropic": "/messages" in ends and "/chat/completions" not in ends})
+                    "anthropic": "/messages" in ends and "/chat/completions" not in ends,
+                    # the one a picker may land on by itself; anything else is chosen
+                    "cheap": (provider, m["id"]) == CHEAP})
     out.sort(key=lambda m: m["id"].lower())
     _models_cache[provider] = (time.time(), out)
     return out

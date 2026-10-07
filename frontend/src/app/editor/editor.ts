@@ -19,7 +19,7 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Activity, Analytics, Api, Boards, CameraState, Catalog, Chat, ChatLine, Health, LogLine, Question, Questions, Run, Stats, SystemInfo, FolderNode, ModelEntry, ModelVersion, ComponentRow,
+import { Activity, Analytics, Api, Boards, CameraState, Catalog, Chat, ChatLine, LogLine, Question, Questions, Run, FolderNode, ModelEntry, ComponentRow,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer } from './ocp';
 import { Markdown, plain } from '../markdown';
@@ -43,23 +43,31 @@ type Mark =
   | { kind: 'text'; color: string; size: number; at: Pt; text: string };
 
 import { WorkNowPanel } from '../rooms/work-now';
+import { Reading, ReadingNote, ReadingPick } from './reading';
 
 @Component({
   selector: 'app-editor',
-  imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, Markdown, NgTemplateOutlet, PinIcon, Releases, T, WorkNowPanel],
+  imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, Markdown, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, WorkNowPanel],
   templateUrl: './editor.html',
   host: { '(document:keydown.escape)': 'closeTask()' },
 })
 export class Editor implements AfterViewInit, OnDestroy {
   private api = inject(Api);
   private cat = inject(Catalog);
-  private health = inject(Health);
   private activity = inject(Activity);
   /** Which room is on screen. The template reads it, so it is not private. */
   picked = inject(Selection);
   /** The role here: what the note buttons may do (backend/access.py). */
   auth = inject(Auth);
   private asks = inject(Questions);
+  /** The agent's question and replies in the reader's language (reading.ts). */
+  reading = inject(Reading);
+  /** The question on screen is translated as soon as it is there, when this
+   *  browser reads in another language; the server keeps it, so once. */
+  private readAsking = effect(() => {
+    const q = this.asking();
+    if (q && this.reading.lang()) this.reading.ensure('question', q._id);
+  });
   private chat = inject(Chat);
   private boards = inject(Boards);
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
@@ -111,16 +119,32 @@ export class Editor implements AfterViewInit, OnDestroy {
   glError = signal('');
   catalog = signal<FolderNode | null>(null);
   activeModel = signal<string>('');
-  versions = signal<ModelVersion[]>([]);
   busy = signal('');
   collapsed = signal(false);
-  stats = signal<Stats | null>(null);
   log = signal<LogLine[]>([]);
   run = signal<Run | null>(null);
   /** Whether `run` is this room's yet, after a switch of rooms. */
   runKnown = signal(false);
   logOpen = signal(true);
   private builtAt = '';
+  /** Which model `builtAt` is about. It used to be stamped at the start of
+   *  every load, so while a part was still downloading the poll compared
+   *  the assembly on screen against the part's build time, saw a
+   *  "rebuild", and reloaded the assembly over the part. */
+  private builtFor = '';
+  /** The load in flight, if any: its id, and a counter so an older load
+   *  that finishes late knows it has been overtaken. */
+  private loadingId: string | null = null;
+  private loadSeq = 0;
+  /** What is actually in the scene - set only once a load has rendered. */
+  private shown = { id: '', at: '' };
+  /** The model the address insists on: ?model=, or the model of ?rev=.
+   *  A page opened for a shot shows that model or says why it cannot - it
+   *  never falls back to whichever model happens to be first. */
+  private urlPin: string | null = null;
+  /** ?rev= without ?model=: the revision is being looked up. */
+  private urlPinPending = false;
+  private viewError = '';
   private lastRunStatus = '';
   private lastRunRoom = '';
   private pendingCamera: string | null = null;
@@ -158,7 +182,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   editText = signal('');
   editPart = signal('');
   editSummary = signal('');
-  sys = signal<SystemInfo | null>(null);
   /** What the agent is waiting on, and what is being typed back. */
   questions = signal<Question[]>([]);
   thread = signal<ChatLine[]>([]);
@@ -307,8 +330,9 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.part.set(known ?? name);
       this.flash('part: ' + (known ?? name));
     });
+    this.readUrl();
+    this.report();
     this.loadCatalog();
-    this.loadVersions();
     this.applyUrlCamera();
     this.pollHealth();
     this.loadSettings();
@@ -350,10 +374,8 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   pollHealth() {
     this.dockTask();
-    this.health.stats().subscribe({ next: v => this.stats.set(v), error: () => {} });
     this.asks.open().subscribe({ next: v => this.takeQuestions(v), error: () => {} });
     this.chat.history(this.picked.room()).subscribe({ next: v => this.takeThread(v), error: () => {} });
-    this.health.system().subscribe({ next: v => this.sys.set(v), error: () => {} });
     // The run of the room on screen: each room has its own. Switching
     // rooms is not a run finishing, so the memory of the last status is
     // per room and a switch starts it afresh.
@@ -383,7 +405,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         // from, so the result is judged from the same viewpoint.
         if (v && was === 'running' && v.status !== 'running') {
           this.showNotice(v);
-          if (v.revision) this.focusRevision(v.revision);
+          if (v.revision) this.focusRevision(v.revision, true);
         }
       },
       error: () => {},
@@ -540,9 +562,6 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.queueShut.set(true);
   }
 
-  gb(n: number): string { return (n / 1e9).toFixed(1) + ' GB'; }
-
-  /** Compact gauges shown while the panel is collapsed. */
   /** The thread, and the one line being typed into it. Scrolled to the
    *  bottom when something lands, the way the log is. */
   private takeThread(rows: ChatLine[]) {
@@ -719,30 +738,6 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
-  gauges(): { key: string; short: string; pct: number; tip: string }[] {
-    const st = this.stats(), m = this.sys();
-    const out: { key: string; short: string; pct: number; tip: string }[] = [];
-    if (st?.quota_bytes) {
-      out.push({ key: 'DB', short: 'D', pct: st.percent ?? 0,
-                 tip: `MongoDB ${this.mb(st.used_bytes)} / ${this.mb(st.quota_bytes)}`
-                    + ` · ${st.objects} docs · ${st.versions} versions`
-                    + ` · ${st.revisions['queued'] ?? 0} queued` });
-    }
-    if (m) {
-      out.push({ key: 'CPU', short: 'C', pct: m.cpu.load,
-                 tip: `${m.cpu.name} · ${m.cpu.load.toFixed(0)}% · ${m.cpu.cores}c/${m.cpu.threads}t` });
-      out.push({ key: 'RAM', short: 'R', pct: m.ram.percent,
-                 tip: `RAM ${this.gb(m.ram.used_bytes)} / ${this.gb(m.ram.total_bytes)}` });
-      if (m.gpu) {
-        out.push({ key: 'GPU', short: 'G', pct: m.gpu.util,
-                   tip: `${m.gpu.name} · ${m.gpu.util.toFixed(0)}%`
-                      + ` · ${(m.gpu.mem_used_mb / 1024).toFixed(1)}/${(m.gpu.mem_total_mb / 1024).toFixed(1)} GB`
-                      + ` · ${m.gpu.temp_c.toFixed(0)}°` });
-      }
-    }
-    return out;
-  }
-
   /** The open model's title, for the collapsed rail. With the catalog shut,
    *  which model is on screen is the one thing you can no longer see. */
   activeTitle(): string {
@@ -752,30 +747,73 @@ export class Editor implements AfterViewInit, OnDestroy {
     return hit?.title || hit?.name || id;
   }
 
-  gaugeColor(pct: number): string {
-    return pct > 85 ? 'var(--danger)' : pct > 60 ? 'var(--warn)' : 'var(--accent)';
-  }
-
   /** ?rev=<id> opens the model at that revision's camera; ?model=<id>
    *  opens a named model, which is how a shot of one is taken. */
-  private applyUrlCamera() {
+  private readUrl() {
     const q = new URLSearchParams(location.search);
-    const rev = q.get('rev');
-    if (rev) this.focusRevision(rev);
+    this.urlPin = q.get('model');
+    this.urlPinPending = !this.urlPin && !!q.get('rev');
   }
 
-  private urlModel(): string | null {
-    return new URLSearchParams(location.search).get('model');
+  private applyUrlCamera() {
+    const rev = new URLSearchParams(location.search).get('rev');
+    if (!rev) return;
+    if (!this.urlPinPending) { this.focusRevision(rev); return; }
+    // Which model the revision is about decides the first load: opening
+    // the first model in the catalog and switching afterwards left a
+    // window in which the first one could come back on top.
+    this.api.one(rev).subscribe({
+      next: r => {
+        this.urlPinPending = false;
+        // A board note: its board, in the PCB room. Nothing to pin here,
+        // and no 3D model to stand in for it.
+        if (r.kind === 'pcb') {
+          if (r.model) this.picked.openBoard(r.model);
+          this.loadCatalog();
+          return;
+        }
+        this.urlPin = r.model ?? null;
+        if (!this.urlPin) { this.failView(`revision ${rev} names no model`); return; }
+        this.pendingCamera = rev;
+        this.loadCatalog();
+      },
+      error: e => {
+        this.urlPinPending = false;
+        this.failView(`revision ${rev}: ${e?.status ?? 'not found'}`);
+      },
+    });
+  }
+
+  /** The address asked for something that cannot be shown. Said, and left
+   *  for the headless render to read - it must not photograph another model. */
+  private failView(why: string) {
+    if (this.viewError !== why) this.flash(why);
+    this.viewError = why;
+    this.report();
+  }
+
+  /** What is on screen, for the headless render (tools/render.py) to check
+   *  before it takes the picture: the model in the scene, the build it is
+   *  from, a load still under way, and anything that went wrong. */
+  private report() {
+    (window as unknown as Record<string, unknown>)['redlineView'] = {
+      model: this.shown.id || null, built_at: this.shown.at || null,
+      loading: this.loadingId, want: this.urlPin, pending: this.urlPinPending,
+      error: this.viewError || null,
+    };
   }
 
   /** Move to the camera a revision was drawn from. If no model is loaded
-   *  yet, remember it and apply once the load completes. */
-  focusRevision(id: string) {
-    if (!this.activeModel() || !this.viewer) { this.pendingCamera = id; return; }
+   *  yet, remember it and apply once the load completes. `auto`: not asked
+   *  for by anyone (a run finishing) - it may move the camera but not
+   *  switch away from a model the address pinned. */
+  focusRevision(id: string, auto = false) {
+    if (!this.activeModel() || !this.viewer) { if (!auto) this.pendingCamera = id; return; }
     this.focusing = true;
     this.api.one(id).subscribe({
       next: r => {
         this.focusing = false;
+        if (auto && this.urlPin && r.model && r.model !== this.activeModel()) return;
         // Open the model the revision is about. Only the camera was applied
         // before, so a revision on one model was shown against whichever
         // model happened to load first.
@@ -805,16 +843,30 @@ export class Editor implements AfterViewInit, OnDestroy {
   loadCatalog() {
     this.cat.tree().subscribe(t => {
       this.catalog.set(t);
+      // A load is on its way: what it brings decides what is on screen.
+      // Starting another from here is what put the wrong model under the
+      // camera - and, for the first load, restarted it every two seconds.
+      if (this.loadingId) return;
       if (!this.activeModel()) {
-        const wanted = this.urlModel() ?? this.lastView()?.model;
+        if (this.urlPinPending) return;           // the revision is being looked up
+        if (this.urlPin) {
+          const m = this.findModel(t, this.urlPin);
+          if (!m) { this.failView(`${this.urlPin}: no such model`); return; }
+          if (!m.data) { this.failView(`${m.id}: not built yet`); return; }
+          this.openModel(m);
+          return;
+        }
+        const wanted = this.lastView()?.model;
         const pick = (wanted && this.findModel(t, wanted)) || this.firstReady(t);
         if (pick) this.openModel(pick);
         return;
       }
       // A rebuild replaces the stored viewer payload. Without this the open
-      // page keeps showing the geometry it loaded the first time.
+      // page keeps showing the geometry it loaded the first time. Only the
+      // model on screen's own build counts: another model rebuilding (a
+      // linked component's dependants) is not a reason to reload anything.
       const live = this.findModel(t, this.activeModel());
-      if (live?.built_at && live.built_at !== this.builtAt) {
+      if (live && live.id === this.builtFor && live.built_at && live.built_at !== this.builtAt) {
         this.builtAt = live.built_at;      // claim it so the poll fires once
         // Rebuilt on its own because something it uses changed: say what.
         const why = live.link?.state === 'done' ? live.link.because : null;
@@ -845,13 +897,22 @@ export class Editor implements AfterViewInit, OnDestroy {
   async openModel(m: ModelEntry) {
     if (!this.viewer) return;
     if (!m.data) { this.flash(m.name + ': build it first'); return; }
-    this.builtAt = m.built_at ?? '';
+    // The newest call wins. One that finishes after a later one started
+    // leaves the scene and the state alone.
+    const seq = ++this.loadSeq;
+    const current = () => seq === this.loadSeq;
+    this.loadingId = m.id;
+    this.report();
     this.busy.set('loading model…');
     const opened = Date.now();
     const handled = () => this.handledAt >= opened;
     try {
       // Data is not on disk; it streams from the database.
-      await this.viewer.load(this.cat.viewerUrl(m.id, m.built_at));
+      if (!await this.viewer.load(this.cat.viewerUrl(m.id, m.built_at), current)) return;
+      this.builtAt = m.built_at ?? '';
+      this.builtFor = m.id;
+      this.shown = { id: m.id, at: m.built_at ?? '' };
+      if (this.urlPin && (m.id === this.urlPin || m.name === this.urlPin)) this.viewError = '';
       this.dockFreezeButton();
       // Whatever was being held belonged to the model that just left.
       if (this.heldModel !== m.id) {
@@ -903,9 +964,13 @@ export class Editor implements AfterViewInit, OnDestroy {
       }
       this.rememberView();
     } catch (e) {
+      if (!current()) return;
       this.flash('load failed: ' + (e as Error).message);
+      if (this.urlPin && !this.shown.id) this.viewError = `${m.id}: load failed`;
+    } finally {
+      if (current()) { this.loadingId = null; this.report(); }
     }
-    this.busy.set('');
+    if (current()) this.busy.set('');
   }
 
   rebuild(m: ModelEntry, ev: Event) {
@@ -1480,31 +1545,6 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.preview.set(r);
   }
   closeShot() { this.preview.set(null); }
-
-  // ---- version history ----
-  loadVersions() { this.cat.versions().subscribe({ next: v => this.versions.set(v),
-                                                   error: () => {} }); }
-
-  takeSnapshot() {
-    const note = prompt('Version note:') ?? '';
-    this.busy.set('taking snapshot…');
-    this.cat.snapshot(note).subscribe({
-      next: () => { this.busy.set(''); this.flash('version saved'); this.loadVersions(); },
-      error: e => { this.busy.set(''); this.flash(e.error?.detail ?? 'snapshot failed'); },
-    });
-  }
-
-  restore(v: ModelVersion) {
-    if (!confirm(`Roll back to ${v.short}?\nThe current state is snapshotted first.`)) return;
-    this.busy.set('restoring…');
-    this.cat.restore(v._id).subscribe({
-      next: () => { this.busy.set(''); this.flash('restored: ' + v.short);
-                    this.loadVersions(); this.loadCatalog(); },
-      error: e => { this.busy.set(''); this.flash(e.error?.detail ?? 'restore failed'); },
-    });
-  }
-
-  mb(n: number): string { return (n / 1e6).toFixed(1) + ' MB'; }
 
   /** Only offer the WebGL advice when the failure really is WebGL related. */
   isWebglError(): boolean {

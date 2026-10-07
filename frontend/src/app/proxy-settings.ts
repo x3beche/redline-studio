@@ -221,13 +221,22 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
         </div>
         @if (us.exits?.identified) {
           <div class="st-charts">
+            <!-- The top ten of each, the rest on asking: a hundred cities
+                 made this card longer than the page. -->
             <section class="st-chart c4"><h4>{{ 'Countries' | t }}</h4>
-              <app-bar-list [rows]="named(us.exits!.by_country)" [f]="f.count" /></section>
+              <app-bar-list [rows]="top(named(us.exits!.by_country))" [f]="f.count" /></section>
             <section class="st-chart c4"><h4>{{ 'Cities' | t }}</h4>
-              <app-bar-list [rows]="named(us.exits!.by_city)" [f]="f.count" /></section>
+              <app-bar-list [rows]="top(named(us.exits!.by_city))" [f]="f.count" /></section>
             <section class="st-chart c4"><h4>{{ 'Networks (ISP)' | t }}</h4>
-              <app-bar-list [rows]="named(us.exits!.by_org)" [f]="f.count" /></section>
+              <app-bar-list [rows]="top(named(us.exits!.by_org))" [f]="f.count" /></section>
           </div>
+          @if (longest(us.exits!.by_country, us.exits!.by_city, us.exits!.by_org) > TOP) {
+            <button class="st-more" (click)="exitsAll.set(!exitsAll())">
+              {{ exitsAll() ? ('Show the top 10' | t) : ('Show all' | t) }}
+              @if (!exitsAll()) { <span class="st-sub">· {{ us.exits!.by_country?.length ?? 0 }} {{ 'countries' | t }},
+                {{ us.exits!.by_city?.length ?? 0 }} {{ 'cities' | t }}, {{ us.exits!.by_org?.length ?? 0 }} {{ 'networks' | t }}</span> }
+            </button>
+          }
         }
         @if (us.latency?.series; as ls) {
           <div class="st-charts">
@@ -480,6 +489,12 @@ export class ProxySettingsPanel {
     return `${t('sent')} ${fmt.bytes(r.wire_up ?? 0)} · ${t('received')} ${fmt.bytes(r.wire_down ?? 0)}`
       + (r.exit_wire ? ` · ${t('exit look')} ${fmt.bytes(r.exit_wire)}` : '');
   }
+  /** Exits lists: the top ten until asked for all. */
+  readonly TOP = 10;
+  exitsAll = signal(false);
+  top<T>(rows: T[]): T[] { return this.exitsAll() ? rows : rows.slice(0, this.TOP); }
+  longest(...lists: (unknown[] | null | undefined)[]): number { return Math.max(0, ...lists.map(l => l?.length ?? 0)); }
+
   named(list: Named[]): Row[] {
     return list.map(k => ({ name: k.name, value: k.n })).sort((a, b) => b.value - a.value);
   }

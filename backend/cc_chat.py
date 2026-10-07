@@ -336,6 +336,11 @@ async def create_chat(body: ChatIn) -> dict:
     if body.provider:
         if body.provider not in llm.PROVIDERS:
             raise HTTPException(400, f"unknown provider {body.provider!r}")
+        if body.provider != prov and not body.model:
+            # another provider and no model named: its cheap one, or a choice
+            if body.provider != llm.CHEAP[0]:
+                raise HTTPException(400, f"choose a {llm.PROVIDERS[body.provider]['name']} model")
+            model = llm.CHEAP[1]
         prov = body.provider
     model = body.model or model
     now = _now()
@@ -559,9 +564,20 @@ async def _load(cid: str) -> dict:
 
 def _pick(doc: dict, provider: str | None, model: str | None) -> tuple[str, str]:
     provider = provider or doc.get("provider") or llm.route("chat")[0]
-    model = model or doc.get("model") or llm.route("chat")[1]
     if provider not in llm.PROVIDERS:
         raise HTTPException(400, f"unknown provider {provider!r}")
+    if not model:
+        # The conversation's own model, or the chat job's, only on their own
+        # provider; else the cheap one. Never a dearer model nobody chose.
+        jp, jm = llm.route("chat")
+        if provider == (doc.get("provider") or jp) and doc.get("model"):
+            model = doc["model"]
+        elif provider == jp:
+            model = jm
+        elif provider == llm.CHEAP[0]:
+            model = llm.CHEAP[1]
+        else:
+            raise HTTPException(400, f"choose a {llm.PROVIDERS[provider]['name']} model")
     if not llm.key(provider):
         raise HTTPException(503, llm.no_key(provider, "chat"))
     return provider, model

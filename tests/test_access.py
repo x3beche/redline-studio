@@ -46,6 +46,8 @@ def test_a_viewer_only_looks():
             ("POST", "/api/boards/x/rules/check"), ("POST", "/api/tools/find"),
             ("POST", "/api/tools/usage"), ("POST", "/api/agent/db"), ("POST", "/api/agent/files/x"),
             ("DELETE", "/api/agent/files/x/x"), ("POST", "/api/workspaces/x/open"),
+            # reading an agent's question or reply in another language (reading.py)
+            ("POST", "/api/questions/x/translate"), ("POST", "/api/chat/x/translate"),
             # trading a token for a read-only page session (test_page_session.py)
             ("POST", "/api/auth/page-session")}, (method, path)
 

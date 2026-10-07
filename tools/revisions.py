@@ -257,9 +257,24 @@ async def cmd_part(args):
         db = connect()
         codes = list(dict.fromkeys(args.args))
         for i, code in enumerate(codes, 1):
+            if getattr(args, "refresh", False):
+                # Fetched again even though it is in the drawer: EasyEDA's
+                # record asked afresh, the footprint and the 3D model
+                # downloaded, the model seated on its pads.
+                try:
+                    got = await lcsc.refresh(db, code)
+                except lcsc.Refused as exc:
+                    sys.exit(f"[{i}/{len(codes)}] {code}: {exc} - run it again later; "
+                             "what was refreshed stays refreshed")
+                except (RuntimeError, ValueError, OSError, LookupError) as exc:
+                    print(f"[{i}/{len(codes)}] {code}: could not be refreshed - {exc}")
+                    continue
+                print(f"[{i}/{len(codes)}] {code}: {got.get('name')} - {got['said']}")
+                continue
             have = await db[lcsc.PARTS].find_one({"_id": code}, {"_id": 1})
             if have:
-                print(f"[{i}/{len(codes)}] {code}: already in the drawer")
+                print(f"[{i}/{len(codes)}] {code}: already in the drawer "
+                      "(--refresh fetches it again, with its 3D model)")
                 continue
             try:
                 doc = await lcsc.fetch(db, code)
@@ -405,8 +420,12 @@ async def cmd_board(args):
                 continue
             if got.get("status") == "done":
                 return got.get("result")
+            detail = got.get("detail")
+            # A refusal written to be read (a convert that would discard
+            # hand edits names the lines): as it is, not as escaped JSON.
             sys.exit(f"{path}: {got.get('status')} {got.get('code')} "
-                     f"{_json.dumps(got.get('detail'), ensure_ascii=False)[:800]}")
+                     + (detail[:3000] if isinstance(detail, str) else
+                        _json.dumps(detail, ensure_ascii=False)[:800]))
         sys.exit(f"{path}: still running after {limit} s - {where}")
 
     bid = args.board
@@ -434,6 +453,25 @@ async def cmd_board(args):
         print(call(f"/api/boards/{bid}/rules", "PUT", {"rules": body}))
         print("saved - `board run` routes to them")
     elif args.what == "source":
+        if args.rev:
+            # A backup kept by a convert that wrote over (or merged) hand
+            # edits: its text is in source_blobs, by fingerprint.
+            async def backup():
+                db = connect()
+                doc = await db.boards.find_one({"_id": bid}, {"source_backups": 1})
+                rows = [r for r in (doc or {}).get("source_backups") or []
+                        if r["sha"].startswith(args.rev)]
+                if not rows:
+                    have = ", ".join(f"{r['rev']} ({r['at'][:19]}, {r['why']})"
+                                     for r in (doc or {}).get("source_backups") or [])
+                    sys.exit(f"{bid} has no backup {args.rev}" + (f" - it has: {have}" if have else ""))
+                blob = await db.source_blobs.find_one({"_id": rows[-1]["sha"]})
+                return (blob or {}).get("text")
+            text = await backup()
+            if text is None:
+                sys.exit(f"the text of backup {args.rev} is not kept")
+            print(text)
+            return
         print(call(f"/api/boards/{bid}")["source"])
     elif args.what == "save":
         text = Path(args.file).read_text()
@@ -461,7 +499,8 @@ async def cmd_board(args):
         # left every part a guess.
         from backend.imports.parts import _text as table_text
         body = {"picks": picks or None,
-                "bom": table_text(Path(args.bom).read_bytes()) if args.bom else None}
+                "bom": table_text(Path(args.bom).read_bytes()) if args.bom else None,
+                "force": bool(args.force), "keep_edits": bool(args.keep_edits)}
         print(f"{bid}: converting to atopile - parts, source, build, the netlist checked "
               "(LCSC lookups wait their turn: minutes on a first run)")
         out = job(f"/api/boards/{bid}/convert", body, limit=3600)
@@ -1332,12 +1371,17 @@ def main() -> None:
                         "ato: component blocks to paste into a board; "
                         "passive: R/C by value and size, e.g. R 10k 0402; "
                         "keep: fetch footprints and models ahead of a layout, "
-                        "waiting out LCSC's budget; "
+                        "waiting out LCSC's budget (--refresh: again, for parts "
+                        "already in the drawer); "
                         "seat C... | all: put stored parts' 3D bodies on their "
                         "pads (rewrites the footprint's model offset)")
     s.add_argument("args", nargs="+",
                    help="a search for find, LCSC numbers (C...) for pins/ato, "
                         "KIND VALUE SIZE for passive")
+    s.add_argument("--refresh", action="store_true",
+                   help="keep: fetch the footprint and 3D model again even for a part "
+                        "already in the drawer, and seat the model; says when "
+                        "LCSC/EasyEDA has no 3D model for it")
     s.set_defaults(fn=cmd_part)
     s = sub.add_parser("board", help="a board: its source, and the whole pipeline")
     s.add_argument("what", choices=["run", "show", "source", "save", "rules",
@@ -1361,6 +1405,14 @@ def main() -> None:
     s.add_argument("--why", help="convert: the reason written beside --part picks")
     s.add_argument("--run", action="store_true",
                    help="convert: then run the whole pipeline")
+    s.add_argument("--force", action="store_true",
+                   help="convert: write over hand edits to the source made since the last "
+                        "convert (the edited source is kept as a backup revision first)")
+    s.add_argument("--keep-edits", action="store_true",
+                   help="convert: carry hand edits over onto the new source (a three-way "
+                        "merge); refused where they conflict")
+    s.add_argument("--rev", help="source: a backup revision of the source (from a forced "
+                                 "or merged convert) instead of the current one")
     s.set_defaults(fn=cmd_board)
     s = sub.add_parser("component", help="components: models and boards as 3D designs import "
                                          "them - versions, uses, pins")

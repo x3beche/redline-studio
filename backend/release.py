@@ -60,7 +60,7 @@ def _now() -> str:
 async def drawing(step: bytes, out: Path, *, title: str, project: str, tag: str, ident: str, sha: str) -> str | None:
     """A technical drawing of a STEP, in the drawing container. None if it
     was made; otherwise why not."""
-    work = Path(tempfile.mkdtemp(prefix="x3draw-"))
+    work = Path(tempfile.mkdtemp(prefix="redline-draw-"))
     try:
         os.chmod(work, 0o777)
         (work / "model.step").write_bytes(step)
@@ -214,7 +214,7 @@ async def _board(db, bid: str, out: Path, log) -> dict:
         info["problems"].append("the source changed since the last build: this is the last built board")
     if pcb_label == "pcb":
         info["problems"].append("not routed: the placed board, without tracks")
-    work = Path(tempfile.mkdtemp(prefix="x3rel-"))
+    work = Path(tempfile.mkdtemp(prefix="redline-rel-"))
     try:
         os.chmod(work, 0o777)
         pcb = await store.get_artifact(db, bid, pcb_label, ato.BOARDS)
@@ -354,7 +354,7 @@ async def _run(db, rid: str) -> None:
     async def flush(**extra):
         await db[COLL].update_one({"_id": rid}, {"$set": {"log": lines[-200:], **extra}})
 
-    out = Path(tempfile.mkdtemp(prefix="x3release-"))
+    out = Path(tempfile.mkdtemp(prefix="redline-release-"))
     try:
         prefix = re.escape(project) + "(/|$)"
         boards = [b async for b in db[ato.BOARDS].find({"folder": {"$regex": "^" + prefix}}, {"_id": 1, "source": 1})]

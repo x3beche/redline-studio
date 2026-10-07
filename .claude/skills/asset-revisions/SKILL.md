@@ -113,12 +113,6 @@ Only `save` + `build` when the numbers are right.
 hundred solids will eat the machine's memory and freeze the desktop; the
 wrapper puts a ceiling on it so the kernel kills the build instead.
 
-You may want a snapshot before a large change:
-
-```bash
-curl -s -X POST "http://127.0.0.1:8000/api/versions?note=before%20change"
-```
-
 ### Always finish by rendering from the user's angle
 
 Every revision stores the camera it was drawn from. After rebuilding, take the
@@ -261,7 +255,7 @@ thing the next reader cannot recover.
 ## Talking to the database directly
 
 If the tool is not enough, the collections are `revisions`, `models`,
-`folders`, `model_versions`, `uploads`, `settings`, `runs` (one row per
+`folders`, `uploads`, `settings`, `runs` (one row per
 revision worked on, plus `current`), `activity` (the on-screen log),
 `llm_calls` and `analytics` (what each revision cost), `compute_jobs` (one
 row per build or render: CPU, peak memory, disk), `questions` (what the

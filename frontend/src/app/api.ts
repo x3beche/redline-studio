@@ -296,14 +296,6 @@ export interface BoardComponent {
   error?: { at: string; error: string } | null;
 }
 
-// ---------------- version history ----------------
-export interface ModelVersion {
-  _id: string; created_at: string; note: string;
-  short: string; sha256: string;
-  model_count: number; chars: number;
-  models?: { id: string; title: string; short: string; chars: number }[];
-}
-
 export interface UploadInfo { name: string; bytes: number; at: string; }
 export interface UploadResult extends UploadInfo { model: string | null; }
 
@@ -402,39 +394,15 @@ export class Catalog {
     return stamp ? `${url}?v=${encodeURIComponent(stamp)}` : url;
   }
 
-  versions(): Observable<ModelVersion[]> {
-    return this.http.get<ModelVersion[]>('/api/versions');
-  }
-
-  snapshot(note: string): Observable<ModelVersion> {
-    return this.http.post<ModelVersion>(`/api/versions?note=${encodeURIComponent(note)}`, {});
-  }
-
-  restore(id: string): Observable<unknown> {
-    return this.http.post(`/api/versions/${id}/restore`, {});
-  }
 }
 
-// ---------------- status ----------------
-export interface Stats {
-  db?: string; collections?: number; objects?: number;
-  data_bytes?: number; used_bytes: number; index_bytes?: number;
-  quota_bytes: number | null; percent?: number | null;
-  revisions: Record<string, number>; versions: number; models?: number;
-}
+// ---------------- machine (the Analytics room's "now") ----------------
 export interface SystemInfo {
   host: string; os: string;
   cpu: { name: string; cores: number; threads: number; load: number; freq_mhz: number | null };
   ram: { used_bytes: number; total_bytes: number; percent: number };
   gpu: { name: string; util: number; mem_used_mb: number;
          mem_total_mb: number; temp_c: number } | null;
-}
-
-@Injectable({ providedIn: 'root' })
-export class Health {
-  private http = inject(HttpClient);
-  stats(): Observable<Stats> { return this.http.get<Stats>('/api/stats'); }
-  system(): Observable<SystemInfo> { return this.http.get<SystemInfo>('/api/system'); }
 }
 
 // ---------------- boards ----------------
@@ -884,6 +852,10 @@ export class Chat {
   retract(id: string): Observable<unknown> {
     return this.http.delete(`/api/chat/${id}`);
   }
+  /** A line in the reader's language (backend/reading.py). */
+  translate(id: string, lang: string): Observable<Translation> {
+    return this.http.post<Translation>(`/api/chat/${id}/translate`, { lang });
+  }
 }
 
 // ---------------- questions the agent is waiting on ----------------
@@ -912,6 +884,25 @@ export class Questions {
   answer(id: string, answer: string): Observable<Question> {
     return this.http.post<Question>(`/api/questions/${id}/answer`, { answer });
   }
+  /** The question in another language (backend/reading.py). Asked once per
+   *  language; the server keeps it on the question. */
+  translate(id: string, lang: string): Observable<Translation> {
+    return this.http.post<Translation>(`/api/questions/${id}/translate`, { lang });
+  }
+}
+
+/** A question, or a line of the thread, in the reader's language. Only the
+ *  fields the thing has: a thread line has no context or options. */
+export interface Translation {
+  id: string;
+  lang: string | null;
+  text: string;
+  context?: string | null;
+  options?: string[];
+  provider?: string;
+  model?: string;
+  cached: boolean;
+  original?: boolean;
 }
 
 // ---------------- activity log and run progress ----------------

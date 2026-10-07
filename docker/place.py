@@ -35,6 +35,14 @@ import pcbnew
 MM = 1_000_000                      # KiCad works in nanometres
 
 
+def discard(container, item) -> None:
+    """Take an item off a board or a footprint and let KiCad free it.
+    `Remove()` hands it to its Python wrapper instead, and the wrapper,
+    collected, leaves KiCad 9's bindings without their types: everything
+    asked for after it is a bare SwigPyObject (docker/route.py, discard)."""
+    container.Delete(item)
+
+
 def at(x_mm: float, y_mm: float):
     return pcbnew.VECTOR2I(int(x_mm * MM), int(y_mm * MM))
 
@@ -514,7 +522,7 @@ def draw_outline(board, x0, y0, x1, y1) -> None:
 def clear_outline(board) -> None:
     for shape in list(board.GetDrawings()):
         if shape.GetLayer() == pcbnew.Edge_Cuts:
-            board.Remove(shape)
+            discard(board, shape)
 
 
 def cut_to_bodies(board, path, on_edge, bounds, clearance=0.5):
@@ -837,7 +845,7 @@ def own_hole(fp, x: float, y: float, d: float, plated: bool = False) -> None:
     a0, a1 = min(pad_along) - 0.25, max(along) + 0.25
     c0, c1 = min(across) - 0.25, max(across) + 0.25
     for g in old:
-        fp.Remove(g)
+        discard(fp, g)
     box = [(a0, c0), (a1, c0), (a1, c1), (a0, c1)]
     ends = [(mx + a * ux + c * vx, my + a * uy + c * vy) for a, c in box]
     for (x0, y0), (x1, y1) in zip(ends, ends[1:] + ends[:1]):

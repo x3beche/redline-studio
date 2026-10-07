@@ -76,10 +76,10 @@ def test_local_argv():
 
 def test_docker_argv_shares_the_host_network_and_renders_in_software():
     argv = render.browser_argv(("docker", "img"), 9411, 800, 600, "/tmp/p",
-                               "http://127.0.0.1:4200/?rev=r", "x3render-1")
+                               "http://127.0.0.1:4200/?rev=r", "redline-render-1")
     assert argv[:2] == ["docker", "run"]
     assert "--network" in argv and argv[argv.index("--network") + 1] == "host"
-    assert argv[argv.index("--name") + 1] == "x3render-1"
+    assert argv[argv.index("--name") + 1] == "redline-render-1"
     assert "--no-sandbox" in argv and "--use-angle=swiftshader" in argv
     assert "--user-data-dir=/tmp/p" not in argv        # the host path means nothing there
     assert argv[-1] == "http://127.0.0.1:4200/?rev=r"

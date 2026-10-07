@@ -422,14 +422,15 @@ _KINDS = {"component.json": "component", "svgs.json": "drawings",
           "model.obj": "3d model", "photo.jpg": "photo"}
 
 
-async def _kept(lcsc: str, name: str, url: str) -> bytes:
-    """One file about a part: from disk if it has been looked at before."""
+async def _kept(lcsc: str, name: str, url: str, fresh: bool = False) -> bytes:
+    """One file about a part: from disk if it has been looked at before
+    (`fresh`: asked again, and the copy on disk replaced)."""
     if not looks_like_a_part(lcsc):
         raise ValueError(f"{lcsc!r} is not an LCSC part number")
     path = LOOK / lcsc.strip() / name
     kind = _KINDS.get(name, name)
     try:
-        if path.exists():
+        if path.exists() and not fresh:
             blob = path.read_bytes()
             _record(kind, lcsc.strip(), "disk", size=len(blob))
             return blob
@@ -446,8 +447,8 @@ async def _kept(lcsc: str, name: str, url: str) -> bytes:
     return blob
 
 
-async def _component(lcsc: str) -> dict:
-    raw = await _kept(lcsc, "component.json", COMPONENT.format(lcsc))
+async def _component(lcsc: str, fresh: bool = False) -> dict:
+    raw = await _kept(lcsc, "component.json", COMPONENT.format(lcsc), fresh)
     body = json.loads(raw.decode(errors="replace"))
     if not body.get("success") or not body.get("result"):
         raise LookupError(f"{lcsc}: EasyEDA does not know this part")
@@ -890,7 +891,7 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
     except atoenv.AtoEnvMissing as exc:
         raise RuntimeError(str(exc)) from exc
 
-    tmp = Path(tempfile.mkdtemp(prefix="x3lcsc-"))
+    tmp = Path(tempfile.mkdtemp(prefix="redline-lcsc-"))
     try:
         # easyeda2kicad asks EasyEDA itself - the component, then the 3D
         # model twice over - so it takes its turn like any other ask, is
@@ -936,7 +937,15 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
             "footprint": fp.read_text(),
             "at": datetime.now(timezone.utc).isoformat(),
         }
-        await db[PARTS].replace_one({"_id": lcsc}, doc, upsert=True)
+        # Fetched again (force) and the model's download fails this time:
+        # the model kept from before stays, rather than the part losing
+        # its body to a bad minute. A new model below replaces it.
+        before = await db[PARTS].find_one({"_id": lcsc}) if force else None
+        kept_model = {k: before[k] for k in ("artifacts", "model_name", "model_kind",
+                                             "model_step", "model_wrl")
+                      if before and before.get(k)} \
+            if before and modelseat_has_model(doc["footprint"]) else {}
+        await db[PARTS].replace_one({"_id": lcsc}, {**doc, **kept_model}, upsert=True)
 
         # The model goes where every other generated thing goes: gzipped
         # into GridFS, with a copy on disk. An LQFP-48 is a 9.8 MB STEP,
@@ -969,6 +978,10 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
                 _keep_file(lcsc, "component.json", raw)
         except (OSError, ValueError, AttributeError):
             pass
+        if not doc.get("model_kind") and kept_model.get("model_kind"):
+            doc["model_kind"] = kept_model["model_kind"]
+            doc["model_kept"] = True
+            await db[PARTS].update_one({"_id": lcsc}, {"$set": {"model_kept_at": doc["at"]}})
         if not doc.get("model_kind"):
             # Said on the part, so the next board does not ask again at once
             # (_model_worth_asking_again).
@@ -983,6 +996,66 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def modelseat_has_model(footprint: str) -> bool:
+    from . import modelseat
+    return modelseat.has_model(footprint or "")
+
+
+async def refresh(db, lcsc: str) -> dict:
+    """A part kept in the drawer fetched again: EasyEDA's record of it asked
+    afresh (not the copy on disk), then the footprint and the 3D model
+    downloaded (fetch, force) and the model seated on its pads.
+
+    For a part kept without its body - a download that failed once, a
+    model EasyEDA added later - which `part keep` passes over ("already in
+    the drawer") and `part seat` cannot help ("no model stored"). Every
+    ask takes its turn in the budget and goes through the proxy as set.
+
+    Says what it found: {"lcsc", "name", "upstream_model", "model_name",
+    "model_kind", "seat", "said"}; `upstream_model` None is EasyEDA having
+    no 3D model for the part at all.
+    """
+    lcsc = (lcsc or "").strip()
+    if not looks_like_a_part(lcsc):
+        raise ValueError(f"{lcsc!r} is not an LCSC part number")
+    component = await _component(lcsc, fresh=True)
+    upstream, upstream_name = _model_of(component)
+    # The preview's model files belong to the record they came from.
+    for name in ("model.obj", "model.glb"):
+        try:
+            (LOOK / lcsc / name).unlink()
+        except OSError:
+            pass
+    doc = await fetch(db, lcsc, force=True)
+    has = bool((doc.get("artifacts") or {}).get("model")
+               or doc.get("model_step") or doc.get("model_wrl"))
+    out = {"lcsc": lcsc, "name": doc.get("name"), "upstream_model": upstream,
+           "upstream_name": upstream_name,
+           "model_name": doc.get("model_name") if has else None,
+           "model_kind": doc.get("model_kind") if has else None,
+           "kept_from_before": bool(doc.get("model_kept_at")) and doc.get("model_kept_at") == doc.get("at"),
+           "seat": None}
+    if has:
+        try:
+            out["seat"] = (await seat_model(db, lcsc, component))["status"]
+        except Refused:
+            raise
+        except (LookupError, ValueError, OSError, RuntimeError) as exc:
+            out["seat"] = f"not seated - {exc}"
+    if not upstream:
+        out["said"] = ("LCSC/EasyEDA has no 3D model for this part - footprint only"
+                       + (" (the model kept from before stays)" if has else ""))
+    elif not has:
+        out["said"] = (f"EasyEDA names a 3D model ({upstream_name or upstream}) but the "
+                       "download brought none - try again later")
+    elif out["kept_from_before"]:
+        out["said"] = (f"the model's download failed; the {out['model_kind']} kept from "
+                       "before stays")
+    else:
+        out["said"] = f"{out['model_kind']} model {out['model_name']}, {out['seat']}"
+    return out
 
 
 # A part fetched with its footprint but without the 3D model the footprint

@@ -37,6 +37,21 @@ def nm(mm: float) -> int:
     return int(round(mm * MM))
 
 
+def discard(container, item) -> None:
+    """Take an item off a board (or a footprint) and free it in C++.
+
+    Not `Remove()`: that hands the C++ object to its Python wrapper, and
+    when Python later collects the wrapper, KiCad 9's bindings run outside
+    KiCad lose their type table - every object asked for after that comes
+    back as a bare SwigPyObject (`board.GetTracks()`: "'SwigPyObject'
+    object is not iterable"; a bounding box with no GetX). The pipeline's
+    placed boards have no zones to take off, so only a board run by hand -
+    an imported one, with its pours - met it. `Delete()` lets the
+    container free the item, and nothing is left for Python to collect.
+    """
+    container.Delete(item)
+
+
 def pad_limits(board) -> dict:
     """The narrowest pad on each net, in mm, and whose it is.
 
@@ -302,7 +317,7 @@ def leftovers_first(path: str, rules: dict, nets: list[str], passes: int, timeou
     board = pcbnew.LoadBoard(path)
     apply_rules(board, rules)
     for zone in list(board.Zones()):
-        board.Remove(zone)
+        discard(board, zone)
     copy_tracks(board, first, locked=True)
     got = freeroute(board, passes, timeout, "second")
     if got.get("error"):
@@ -348,7 +363,7 @@ def alone_in_turn(path: str, rules: dict, nets: list[str], passes: int, timeout:
             alone = pcbnew.LoadBoard(path)
             apply_rules(alone, rules)
             for zone in list(alone.Zones()):
-                alone.Remove(zone)
+                discard(alone, zone)
             for fp in alone.GetFootprints():
                 for pad in fp.Pads():
                     if pad.GetNetname() and pad.GetNetname() not in keep:
@@ -426,7 +441,7 @@ def main() -> int:
     # The pour goes on after routing: routed into, it would stand in the
     # router's way; poured afterwards it fills around the tracks.
     for zone in list(board.Zones()):
-        board.Remove(zone)
+        discard(board, zone)
 
     t0 = time.monotonic()
     passes = int(rules.get("route", {}).get("passes", 40))

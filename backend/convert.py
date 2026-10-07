@@ -70,6 +70,175 @@ FUNCTIONS = [
 ]
 
 
+# ---------------- hand edits to a converted board's source ----------------
+#
+# A convert writes the board's whole source. Run again - with a BOM, a new
+# pick - it wrote it again, and whatever had been changed by hand since was
+# gone without a word: the demo board's SW3 got back a `signal p4 ~ pin 4`
+# the pcb agent had taken out, and its four mounting legs were one net
+# again. So what a convert writes is fingerprinted (`convert.generated`,
+# its text kept in source_blobs), and the next convert first compares the
+# stored source with it. Changed: refused, naming the lines - unless told
+# to discard them (force; the edited text is kept as a backup first) or
+# to carry them over (keep_edits: a three-way merge of last time's output,
+# the edited source and this time's output, refused where they conflict).
+
+BLOBS = "source_blobs"          # backend/changes.py keeps texts there too
+BACKUPS_KEPT = 10
+
+
+class Edited(ValueError):
+    """The stored source was changed by hand since the last convert."""
+
+    def __init__(self, message: str, changed: list[str] | None = None,
+                 conflicts: list[str] | None = None):
+        super().__init__(message)
+        self.changed = changed or []
+        self.conflicts = conflicts or []
+
+
+def _sha(text: str) -> str:
+    import hashlib
+    return hashlib.sha256((text or "").encode()).hexdigest()
+
+
+def diff_summary(before: str, after: str, limit: int = 12) -> list[str]:
+    """The lines that differ, as `line N: - old` / `line N: + new`, at most
+    `limit` of them and a count of the rest."""
+    import difflib
+    out = []
+    a, b = before.splitlines(), after.splitlines()
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+        if op == "equal":
+            continue
+        out += [f"line {i + 1}: - {a[i].strip()}" for i in range(i1, i2)]
+        out += [f"line {j + 1}: + {b[j].strip()}" for j in range(j1, j2)]
+    if len(out) > limit:
+        out = out[:limit] + [f"... and {len(out) - limit} more changed lines"]
+    return out
+
+
+def _changes(base: list[str], other: list[str]) -> list[tuple[int, int, list[str]]]:
+    import difflib
+    return [(i1, i2, other[j1:j2]) for op, i1, i2, j1, j2 in
+            difflib.SequenceMatcher(None, base, other, autojunk=False).get_opcodes()
+            if op != "equal"]
+
+
+def merge3(base: str, ours: str, theirs: str) -> tuple[str | None, list[str]]:
+    """A line-based three-way merge: `ours` (the hand-edited source) and
+    `theirs` (this convert's output), both changed from `base` (what the
+    last convert wrote). Returns the merged text, or None and the
+    conflicts: a stretch of `base` both sides changed differently, or
+    changes that touch."""
+    b = base.splitlines(keepends=True)
+    mine = [("ours", *c) for c in _changes(b, ours.splitlines(keepends=True))]
+    yours = [("theirs", *c) for c in _changes(b, theirs.splitlines(keepends=True))]
+    hunks = sorted(mine + yours, key=lambda h: (h[1], h[2]))
+    merged, conflicts, at, i = [], [], 0, 0
+    while i < len(hunks):
+        group = [hunks[i]]
+        lo, hi = hunks[i][1], hunks[i][2]
+        i += 1
+        # Hunks that overlap or touch go together.
+        while i < len(hunks) and hunks[i][1] <= hi:
+            group.append(hunks[i])
+            hi = max(hi, hunks[i][2])
+            i += 1
+        sides = {h[0] for h in group}
+        if len(sides) == 2:
+            same = (len(group) == 2 and group[0][1:] == group[1][1:])
+            if not same:
+                conflicts.append(f"line {lo + 1}"
+                                 + (f"-{hi}" if hi > lo + 1 else "")
+                                 + ": changed by hand and by the convert - "
+                                 + "; ".join(f"{h[0] if h[0] == 'theirs' else 'by hand'}: "
+                                             + (" | ".join(x.strip() for x in h[3]) or "(removed)")
+                                             for h in group)[:300])
+                continue
+            group = group[:1]
+        merged += b[at:lo]
+        # One side's hunks within the group, in order, with base between.
+        pos = lo
+        for _side, i1, i2, lines in group:
+            merged += b[pos:i1] + lines
+            pos = i2
+        merged += b[pos:hi]
+        at = hi
+    if conflicts:
+        return None, conflicts
+    merged += b[at:]
+    return "".join(merged), []
+
+
+async def hand_edits(db, doc: dict) -> dict | None:
+    """What was changed by hand in the stored source since the last convert
+    wrote it, or None if nothing was (or nothing was ever written).
+    {"base": the text the convert wrote, or None when it was not kept,
+     "changed": a short summary of the changed lines}."""
+    source = doc.get("source")
+    conv = doc.get("convert") or {}
+    if not source or not conv:
+        return None
+    gen = conv.get("generated")
+    if gen and gen.get("sha"):
+        if _sha(source) == gen["sha"]:
+            return None
+        got = await db[BLOBS].find_one({"_id": gen["sha"]})
+        base = (got or {}).get("text")
+        return {"base": base,
+                "changed": diff_summary(base, source) if base is not None else
+                [f"the source is not what the convert of {conv.get('at', '?')[:19]} wrote "
+                 f"(revision {_sha(source)[:16]}, the convert wrote {gen['sha'][:16]})"]}
+    # Converted before the output was fingerprinted: the source saved well
+    # after the convert wrote it is all there is to go on.
+    from datetime import datetime
+    try:
+        saved = datetime.fromisoformat(doc["saved_at"])
+        made = datetime.fromisoformat(conv["at"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if (saved - made).total_seconds() <= 120:
+        return None
+    return {"base": None,
+            "changed": [f"saved at {doc['saved_at'][:19]}, after the convert of "
+                        f"{conv['at'][:19]} wrote it (converted before the convert kept "
+                        "its own output, so the lines cannot be named)"]}
+
+
+def refusal(bid: str, edits: dict) -> str:
+    lines = edits["changed"]
+    return (f"{bid}: the source was edited by hand since the last convert - converting "
+            "again would write over these edits:\n"
+            + "\n".join(f"  {x}" for x in lines)
+            + "\nConvert anyway with --force (API: force=1); the edited source is kept "
+              "as a backup revision first. Or --keep-edits (API: keep_edits=1) to carry "
+              "the edits over onto the new source, where they merge cleanly.")
+
+
+async def _keep_text(db, text: str) -> str:
+    sha = _sha(text)
+    if not await db[BLOBS].find_one({"_id": sha}, {"_id": 1}):
+        try:
+            await db[BLOBS].insert_one({"_id": sha, "text": text})
+        except Exception:                          # a race: the text is there
+            pass
+    return sha
+
+
+async def backup_source(db, bid: str, text: str, why: str) -> dict:
+    """The source as it stands, kept as a backup revision on the board
+    (`source_backups`, newest last; the text in source_blobs)."""
+    from . import store
+    from .ato import BOARDS
+    sha = await _keep_text(db, text)
+    row = {"rev": sha[:16], "sha": sha, "at": store.now(), "why": why,
+           "lines": len(text.splitlines())}
+    await db[BOARDS].update_one({"_id": bid}, {"$push": {"source_backups": {
+        "$each": [row], "$slice": -BACKUPS_KEPT}}})
+    return row
+
+
 # ---------------- what the import knows ----------------
 
 def pad_table(graph: dict, pads: list[dict] | None) -> dict[str, dict[str, tuple | None]]:
@@ -926,7 +1095,7 @@ def import_geometry(sources: bytes | None, pads: list[dict], outline: dict | Non
 
 
 async def run(db, bid: str, bom: bytes | None = None, picks: dict | None = None,
-              say=None) -> dict:
+              say=None, force: bool = False, keep_edits: bool = False) -> dict:
     """Convert a stored imported board, build it, and check the build.
 
     `bom`: a BOM CSV to use from now on (kept on the board as `bom_csv`).
@@ -935,7 +1104,11 @@ async def run(db, bid: str, bom: bytes | None = None, picks: dict | None = None,
     where the BOM does not speak.
 
     Runs again on a board it already converted: the reference is still the
-    import's netlist, and a BOM given now replaces the guesses.
+    import's netlist, and a BOM given now replaces the guesses. If the
+    source was edited by hand since the last convert, `Edited` is raised
+    naming the lines, unless `force` (the edited source is kept as a
+    backup, then written over) or `keep_edits` (the edits merged onto the
+    new source; `Edited` again where they conflict).
     """
     from . import ato, store
     from .ato import BOARDS
@@ -954,6 +1127,18 @@ async def run(db, bid: str, bom: bytes | None = None, picks: dict | None = None,
     if doc.get("kind") != "imported" and not doc.get("convert"):
         raise ValueError(f"{bid} is not an imported board - it has its own source")
     arts = doc.get("artifacts") or {}
+    # Before anything is asked of LCSC: a convert that would discard hand
+    # edits stops here, at once.
+    edits = await hand_edits(db, doc)
+    if edits and not (force or keep_edits):
+        raise Edited(refusal(bid, edits), edits["changed"])
+    if edits and keep_edits and not force and edits["base"] is None:
+        raise Edited(f"{bid}: the source was edited by hand, but what the last convert "
+                     "wrote was not kept, so the edits cannot be merged:\n"
+                     + "\n".join(f"  {x}" for x in edits["changed"])
+                     + "\nConvert with --force (API: force=1) - the edited source is kept "
+                       "as a backup revision first - and make the edits again.",
+                     edits["changed"])
 
     async def artifact(label):
         try:
@@ -986,6 +1171,7 @@ async def run(db, bid: str, bom: bytes | None = None, picks: dict | None = None,
                f"{'BOM ' + bom_name if bom_name else 'no BOM'}", "work")
     parts, unresolved = await identify(graph, table, bom_rows, kept, footprints)
     report = {"at": store.now(), "bom": bom_name, "picks": kept,
+              "generated": (doc.get("convert") or {}).get("generated"),
               "parts": [p.report() for p in parts], "unresolved": unresolved,
               "guessed": sorted(p.ref for p in parts if p.guessed),
               "findings": findings(graph, table,
@@ -1001,6 +1187,32 @@ async def run(db, bid: str, bom: bytes | None = None, picks: dict | None = None,
     outline = await asyncio.to_thread(outline_from, sources)
     origin = (doc.get("imported") or {}).get("source") or "an import"
     source, info = write(doc.get("title") or bid, parts, graph, table, origin, bom_name)
+    generated = source
+    if edits:
+        if keep_edits and not force:
+            merged, conflicts = merge3(edits["base"], doc["source"], generated)
+            if merged is None:
+                raise Edited(f"{bid}: the hand edits do not merge onto the new source - "
+                             "nothing was written:\n"
+                             + "\n".join(f"  {x}" for x in conflicts[:12])
+                             + "\nEdits since the last convert:\n"
+                             + "\n".join(f"  {x}" for x in edits["changed"])
+                             + "\nConvert with --force (API: force=1) - the edited source "
+                               "is kept as a backup revision first - and make the edits again.",
+                             edits["changed"], conflicts)
+            source = merged
+        backup = await backup_source(
+            db, bid, doc["source"],
+            "hand edits, merged onto a new convert" if keep_edits and not force
+            else "hand edits, written over by a forced convert")
+        report["hand_edits"] = {"kept": "merged" if keep_edits and not force else "discarded",
+                                "backup": backup["rev"], "changed": edits["changed"]}
+        await tell(f"{bid}: the hand-edited source is kept as backup {backup['rev']} - "
+                   + ("its edits merged onto the new source" if keep_edits and not force
+                      else "written over"), "warn" if force else "info")
+    # What this convert wrote, so the next one can tell hand edits from it.
+    gsha = await _keep_text(db, generated)
+    report["generated"] = {"sha": gsha, "rev": gsha[:16], "at": store.now()}
     report.update(info)
     report["outline"] = ({k: v for k, v in outline.items() if k != "loops"}
                          if outline else None)

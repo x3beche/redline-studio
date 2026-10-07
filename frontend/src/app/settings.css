@@ -331,3 +331,8 @@ select.st-in { cursor: pointer; }
 .st-budgets { margin-bottom: 2px; }
 .st-warn-at { display: inline-flex; align-items: center; gap: 4px; }
 .st-in.st-pct { width: 56px; }
+
+/* "Show all" under a list kept to its top rows. */
+.st-more { display: block; margin: 6px auto 0; padding: 3px 10px; font-size: 11px; color: var(--ink-dim);
+  background: none; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.st-more:hover { color: var(--ink); background: var(--hover); }

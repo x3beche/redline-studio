@@ -36,7 +36,7 @@ interface WorkNow { items: WorkItem[]; recent: WorkRecent[] }
     }
   </button>
   @if (open()) {
-    <ul class="tcv-scroll mt-1 max-h-48 overflow-y-auto">
+    <ul class="tcv-scroll mt-1 max-h-[45vh] overflow-y-auto">
       @for (w of data()?.items ?? []; track w.kind + w.id) {
         <li class="tcv-work-row" [class.tcv-work-click]="w.kind !== 'board'" (click)="pick(w)"
             [title]="w.why ? 'rebuilding because ' + w.why : w.id">

@@ -964,6 +964,15 @@ export class RoomPcb implements OnDestroy {
         else if (w.what === 'part' && w.arg) { this.side.set('parts'); this.term.set(w.arg); this.look(); }
       });
     });
+    this.readUrl();
+    // What is on screen, for the headless render to check before a shot.
+    effect(() => {
+      const b = this.here();
+      (window as unknown as Record<string, unknown>)['redlineBoard'] = {
+        board: b?._id ?? null, tab: this.boardTab(), model3d: b?.artifacts?.['model3d']?.at ?? null,
+        want: this.urlBoard, error: this.boardError() || null,
+      };
+    });
     this.refresh();
     this.drawer();
     this.tick();
@@ -1377,12 +1386,37 @@ export class RoomPcb implements OnDestroy {
   }
 
 
+  /** ?board=<id> (and ?tab=layout|schematic|3d|split|focus) opens that
+   *  board in that view: how render.py takes a board note's after shot.
+   *  Taken once per page - the address keeps them while the person goes
+   *  on to other boards. A board named there that is not in the list is
+   *  said, never swapped for the first one. */
+  private static urlTaken = false;
+  private urlBoard: string | null = null;
+  boardError = signal('');
+
+  private readUrl() {
+    if (RoomPcb.urlTaken) return;
+    RoomPcb.urlTaken = true;
+    const q = new URLSearchParams(location.search);
+    this.urlBoard = q.get('board');
+    if (this.urlBoard) this.picked.board.set(this.urlBoard);
+    const tab = q.get('tab');
+    if (tab) this.boardTab.set(RoomPcb.pick(tab, ['layout', 'schematic', '3d', 'split', 'focus'],
+                                            this.boardTab()));
+  }
+
   refresh() {
     this.api.list().subscribe({
       next: rows => {
         this.boards.set(rows);
         const want = this.picked.board() ?? this.here()?._id;
         const keep = want ? rows.find(b => b._id === want) : null;
+        if (want && !keep && want === this.urlBoard) {
+          this.boardError.set(`${want}: no such board`);
+          this.note.set(this.boardError());
+          return;
+        }
         this.open(keep ?? rows.find(b => b.ready) ?? rows[0] ?? null);
       },
       error: () => this.note.set('could not read the boards'),

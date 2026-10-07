@@ -38,7 +38,9 @@ export interface CcChat {
 }
 export type CcTab = 'list' | 'archived' | 'trash';
 type Many = { deleted: string[]; refused: string[]; missing: string[] };
-export interface LlmModel { id: string; name: string; context: number | null; anthropic: boolean }
+export interface LlmModel { id: string; name: string; context: number | null; anthropic: boolean;
+  /** The cheap model a picker may land on by itself (backend/llm.py CHEAP). */
+  cheap?: boolean }
 export interface CcEvent {
   type: string; text?: string; error?: string; message?: CcMessage | null; keep?: number; title?: string;
 }
@@ -783,8 +785,11 @@ export class RoomCommandCode implements OnDestroy {
       next: m => {
         this.models.set(m);
         this.loadedProvider = p;
-        const first = m[0]?.id ?? '';
-        this.pickModel(first);
+        // Only the cheap model is picked unasked; on a provider without it
+        // the model is left for the person to choose - never the first in
+        // the list, which may be the dearest.
+        const cheap = m.find(x => x.cheap)?.id ?? '';
+        if (cheap) this.pickModel(cheap); else this.modelPop.set(true);
       },
       error: e => this.error.set(this.msg(e)),
     });

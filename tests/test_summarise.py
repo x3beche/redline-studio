@@ -150,7 +150,7 @@ async def test_retries_then_gives_up(monkeypatch):
 
     monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
     from backend import llm
-    monkeypatch.setattr(llm, "_conf", {"keys": {"openrouter": "test-key"}, "jobs": {}})
+    monkeypatch.setattr(llm, "_conf", {"keys": {"commandcode": "test-key"}, "jobs": {}})
     monkeypatch.setattr(S.asyncio, "sleep", lambda *_: _done())
 
     async def _done():
@@ -165,8 +165,8 @@ async def test_retries_then_gives_up(monkeypatch):
 async def test_missing_key_is_an_error(monkeypatch):
     from backend import llm
     monkeypatch.setattr(llm, "_conf", {"keys": {}, "jobs": {}})
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-in-env")     # never read
-    with pytest.raises(RuntimeError, match="no OpenRouter API key is saved.*Settings > LLM settings"):
+    monkeypatch.setenv("COMMANDCODE_API_KEY", "user-in-env")     # never read
+    with pytest.raises(RuntimeError, match="no Command Code API key is saved.*Settings > LLM settings"):
         await S._post([])
 
 

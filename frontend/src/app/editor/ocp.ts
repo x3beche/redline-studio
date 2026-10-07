@@ -43,13 +43,19 @@ export class OcpViewer {
     (window as unknown as Record<string, unknown>)['tcv'] = this.viewer;
   }
 
-  async load(url: string) {
+  /** Load a payload into the scene. False, with the scene untouched, when
+   *  `stillWanted` says another load has taken over while this one was
+   *  downloading: two loads in flight used to both render, and whichever
+   *  download finished last won - a big assembly reloaded by the poll
+   *  landed on top of the small part that had been asked for. */
+  async load(url: string, stillWanted: () => boolean = () => true): Promise<boolean> {
     // Fetch before clearing: a rebuild replaces the stored payload, and
     // clearing first left the scene blank for the whole download - or for
     // good, if the request failed.
     const res = await fetch(url);
     if (!res.ok) throw new Error(`viewer payload ${res.status}`);
     const envelope = await res.json();
+    if (!stillWanted()) return false;
     if (this.rendered) this.viewer.clear();
     const raw = envelope.data ?? envelope;
     // The Python envelope arrives instanced; the viewer expects it decoded.
@@ -83,6 +89,7 @@ export class OcpViewer {
       centerGrid: false,
     } as any);
     this.rendered = true;
+    return true;
   }
 
   /** Grow with the window; a fixed size caused overflow and page scroll.

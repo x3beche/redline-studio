@@ -12,6 +12,12 @@ window: the window is grown until the canvas measures what was asked for.
 Needs the dev server running (start.sh). Drives headless Chrome, waits for
 the viewer to load the model and move to the stored camera, then captures
 the canvas.
+
+The picture is of exactly the model asked for (a revision's own model, or
+model:<id>), from its current build: a build or a linked rebuild of that
+model is waited out first, the page is told which model to open, and what
+the page says is on screen is checked before and after the capture. Any
+mismatch is an error - a shot of some other model is worse than none.
 """
 
 from __future__ import annotations
@@ -145,6 +151,184 @@ def _ink(png: bytes) -> float:
     return off / len(px)
 
 
+# ---------------------------------------------------------------- which model
+# A shot taken right after a build once came back of the Base assembly
+# instead of the part the note was about: the page opened the first model
+# in the catalog, then switched to the revision's, and the two-second poll
+# reloaded the first one over it. The page no longer does that, and on top
+# of that nothing here takes it on trust.
+
+UPDATING = ("queued", "building")
+
+
+def _models(node: dict):
+    yield from node.get("models") or []
+    for f in node.get("folders") or []:
+        yield from _models(f)
+
+
+def find_entry(catalog: dict, want: str) -> dict:
+    """The catalog entry for a model id, or for a bare name if exactly one
+    model has it."""
+    models = list(_models(catalog))
+    hit = [m for m in models if m["id"] == want]
+    if not hit:
+        hit = [m for m in models if m.get("name") == want]
+    if len(hit) > 1:
+        raise SystemExit(f"{want!r} names {len(hit)} models ("
+                         + ", ".join(m["id"] for m in hit) + "); give the full id")
+    if not hit:
+        raise SystemExit(f"no model {want!r} in the catalog")
+    return hit[0]
+
+
+def build_wait(entry: dict, allow_stale: bool = False) -> str | None:
+    """Why the model cannot be photographed yet, or None when its build on
+    record is its current one. Raises when waiting would not help."""
+    link = (entry.get("link") or {}).get("state")
+    if entry.get("building"):
+        return "building"
+    if link in UPDATING:
+        why = (entry.get("link") or {}).get("because") or {}
+        return f"{link} for a linked rebuild" + (f" ({why.get('title') or why.get('id')} changed)"
+                                                 if why else "")
+    if not entry.get("data"):
+        raise SystemExit(f"{entry['id']} has never been built - nothing to photograph")
+    if entry.get("stale") and not allow_stale:
+        raise SystemExit(f"{entry['id']}: its source changed since the last build and no build "
+                         "is under way, so the picture would show the old geometry. Build it, "
+                         "or pass --allow-stale")
+    return None
+
+
+def wait_built(fetch, model: str, timeout: float, allow_stale: bool = False,
+               sleep=time.sleep, clock=time.monotonic, find=None, check=None) -> dict:
+    """Poll the catalog until `model`'s own build is done; its entry.
+    `find` and `check` default to a 3D model's; a board passes its own."""
+    find, check = find or find_entry, check or build_wait
+    t0, said = clock(), None
+    while True:
+        entry = find(fetch(), model)
+        why = check(entry, allow_stale)
+        if why is None:
+            return entry
+        if clock() - t0 > timeout:
+            raise SystemExit(f"{entry['id']} is still {why} after {timeout:.0f} s - not "
+                             "photographing an old or half-built model")
+        if why != said:
+            print(f"{entry['id']} is {why}; waiting for it")
+            said = why
+        sleep(5)
+
+
+def view_problem(view: dict | None, model: str, built_at: str | None) -> str | None:
+    """What is wrong with what the page says it shows (window.redlineView,
+    set by the editor), or None when it is `model` at build `built_at`.
+    A page that says it cannot show the model is an error, not a wait."""
+    if not isinstance(view, dict):
+        return "the page has not said what it shows yet"
+    if view.get("error"):
+        raise SystemExit(f"the page cannot show {model}: {view['error']}")
+    if view.get("pending"):
+        return "the page is still looking up the revision"
+    if view.get("loading"):
+        return f"the page is still loading {view['loading']}"
+    if view.get("model") != model:
+        return f"the page shows {view.get('model') or 'nothing'}, not {model}"
+    if built_at and view.get("built_at") != built_at:
+        return f"the page shows the build of {view.get('built_at')}, not {built_at}"
+    return None
+
+
+# ---------------------------------------------------------------- which board
+# A board note's after shot came back of a 3D-room model: the page had no
+# way to be told which board, and the editor under the PCB room drew
+# whatever model it opened first. A board is shown in the PCB room's 3D
+# view - the view board notes are drawn on - and checked the same way.
+
+def find_board(rows: list, want: str) -> dict:
+    hit = [b for b in rows if b.get("_id") == want]
+    if not hit:
+        raise SystemExit(f"no board {want!r}")
+    return {**hit[0], "id": hit[0]["_id"]}
+
+
+def board_wait(b: dict, allow_stale: bool = False) -> str | None:
+    """As build_wait, for a board: its pipeline or a linked rebuild running
+    is a wait; no 3D to show is an error."""
+    link = (b.get("link") or {}).get("state")
+    if b.get("building"):
+        return "building"
+    if link in UPDATING:
+        return f"{link} for a linked rebuild"
+    if not ((b.get("artifacts") or {}).get("model3d") or {}).get("at"):
+        raise SystemExit(f"board {b['id']} has no 3D model - nothing to photograph")
+    if b.get("stale") and not allow_stale:
+        raise SystemExit(f"board {b['id']}: its source changed since the last build and no "
+                         "build is under way. Build it, or pass --allow-stale")
+    return None
+
+
+def board_glb(board: str, at: str) -> str:
+    """The address the PCB room loads the board's 3D from (pcb.ts modelUrl)."""
+    from urllib.parse import quote
+    return f"/api/boards/{board}/board.glb?v=" + quote(at, safe="-_.!~*'()")
+
+
+def board_problem(view: dict | None, shown: str | None, board: str, at: str) -> str | None:
+    """What is wrong with what the PCB room says it shows (window.redlineBoard,
+    and the 3D view's data-shown), or None when it is `board`'s 3D at `at`."""
+    if not isinstance(view, dict):
+        return "the PCB room has not said what it shows yet"
+    if view.get("error"):
+        raise SystemExit(f"the page cannot show board {board}: {view['error']}")
+    if view.get("board") != board:
+        return f"the PCB room shows {view.get('board') or 'nothing'}, not {board}"
+    if view.get("tab") != "3d":
+        return f"the PCB room is on its {view.get('tab')} view, not 3D"
+    want = board_glb(board, at)
+    if shown != want:
+        return ("the 3D view is still loading" if not shown
+                else f"the 3D view shows {shown}, not {want}")
+    return None
+
+
+def board_url(board: str, web: str = WEB) -> str:
+    from urllib.parse import urlencode
+    return f"{web}/?{urlencode({'ws': 'pcb', 'board': board, 'tab': '3d'})}"
+
+
+def page_url(revision: str | None, model: str, web: str = WEB) -> str:
+    """The address that opens exactly `model` (and a revision's camera)."""
+    from urllib.parse import urlencode
+    q = {"rev": revision} if revision else {}
+    q["model"] = model
+    return f"{web}/?{urlencode(q)}"
+
+
+# The canvas the picture is cut from. The 3D room's viewer is always in the
+# page - the other rooms are laid over it - so a bare 'canvas' in the PCB
+# room is the hidden 3D-room model, not the board.
+CAD_CANVAS = ".tcv-stage canvas"
+BOARD_CANVAS = "app-board-3d canvas"
+
+
+def find_canvas(sel: str) -> str:
+    return f"document.querySelector({json.dumps(sel)})"
+
+
+def unclutter_js(sel: str) -> str:
+    """Hides what sits over the model and is not part of it, leaving the
+    canvas and whatever contains it alone."""
+    return ("(() => { const c = " + find_canvas(sel) + "; let n = 0;"
+            " const hide = e => { if (c && e.contains(c)) return;"
+            "   e.style.visibility = 'hidden'; n++; };"
+            " document.querySelectorAll('.tcv-card.absolute, app-links-card').forEach(hide);"
+            " for (const e of document.body.querySelectorAll('*'))"
+            "   if (getComputedStyle(e).position === 'fixed') hide(e);"
+            " return n; })()")
+
+
 # What the browser spent. The picture is the return value, so the meter's
 # reading is left here for main() to log - chrome is killed rather than
 # waited for, and nothing else in the process ever sees its time.
@@ -152,17 +336,79 @@ LAST_JOB: dict = {}
 
 
 def render(revision: str, out: Path, width: int, height: int, wait: int,
-           camera: str | None = None, only: str | None = None) -> Path:
+           camera: str | None = None, only: str | None = None,
+           build_timeout: int = 1200, allow_stale: bool = False) -> Path:
     from websockets.sync.client import connect
 
     try:
         found = find_browser()
     except NoBrowser as exc:
         sys.exit(str(exc))
-    session = page_session(agent_token())
-    profile = tempfile.mkdtemp(prefix="x3render-")
-    name = f"x3render-{os.getpid()}"
-    url = (f"{WEB}/?{'model=' + revision.split(':', 1)[1] if revision.startswith('model:') else 'rev=' + revision}")
+    token = agent_token()
+    auth = {"Authorization": "Bearer " + token} if token else {}
+
+    def catalog() -> dict:
+        try:
+            return _call("GET", "/api/catalog", auth)
+        except Exception as exc:                              # noqa: BLE001
+            raise SystemExit(f"could not read the catalog ({type(exc).__name__})")
+
+    def boards() -> list:
+        try:
+            return _call("GET", "/api/boards", auth)
+        except Exception as exc:                              # noqa: BLE001
+            raise SystemExit(f"could not read the boards ({type(exc).__name__})")
+
+    # What to show, before any browser: the revision's own model or board,
+    # or the one named (model:<id>, board:<id>).
+    rid, is_board = None, revision.startswith("board:")
+    if revision.startswith(("model:", "board:")):
+        want = revision.split(":", 1)[1]
+    else:
+        rid = revision
+        try:
+            rev_doc = _call("GET", f"/api/revisions/{rid}", auth)
+        except Exception as exc:                              # noqa: BLE001
+            raise SystemExit(f"could not read revision {rid} ({type(exc).__name__})")
+        if not rev_doc.get("model"):
+            raise SystemExit(f"revision {rid} names no model")
+        want, is_board = rev_doc["model"], rev_doc.get("kind") == "pcb"
+    # Its own build first: a shot taken while it builds, or while a linked
+    # rebuild of it is queued, is of the geometry that is about to go.
+    if is_board:
+        model = find_board(boards(), want)["id"]
+        fetch, find, check = boards, find_board, board_wait
+
+        def stamp(e: dict) -> str:
+            return e["artifacts"]["model3d"]["at"]
+        url, canvas_sel = board_url(model), BOARD_CANVAS
+    else:
+        model = find_entry(catalog(), want)["id"]
+        fetch, find, check = catalog, find_entry, build_wait
+
+        def stamp(e: dict) -> str:
+            return e["built_at"]
+        url, canvas_sel = page_url(rid, model), CAD_CANVAS
+
+    def current() -> str:
+        return stamp(wait_built(fetch, model, build_timeout, allow_stale, find=find, check=check))
+
+    built_at = current()
+    print(f"{'board' if is_board else 'model'}   : {model}  (built {built_at})")
+    CANVAS = find_canvas(canvas_sel)
+
+    def problem() -> str | None:
+        if is_board:
+            return board_problem(
+                js("window.redlineBoard || null"),
+                js("(() => { const e = document.querySelector('app-board-3d [data-shown]');"
+                   " return e ? e.dataset.shown : null; })()"),
+                model, built_at)
+        return view_problem(js("window.redlineView || null"), model, built_at)
+
+    session = page_session(token)
+    profile = tempfile.mkdtemp(prefix="redline-render-")
+    name = f"redline-render-{os.getpid()}"
     # The browser opens on a blank page: the cookie goes in first, then
     # the app is opened, so its first request is already signed in.
     chrome = subprocess.Popen(
@@ -209,13 +455,13 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
         # within a second, while a 50 MB payload takes the best part of a
         # minute. Every shot taken that way came out empty. Wait for the
         # viewer to hold a scene and for the canvas to have been laid out.
-        probe = ("(() => { const c = document.querySelector('canvas');"
+        probe = ("(() => { const c = " + CANVAS + ";"
                  " if (!c) return '0x0/0';"
                  " const n = (window.tcv && window.tcv.scene)"
                  "   ? window.tcv.scene.children.length : 0;"
                  " return c.width + 'x' + c.height + '/' + n; })()")
         seen, stable = None, 0
-        for _ in range(wait * 2):
+        for _ in range(0 if is_board else wait * 2):
             now = js(probe)
             if now == seen and now and not now.startswith("0x0"):
                 stable += 1
@@ -226,13 +472,28 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
                 seen, stable = now, 0
             time.sleep(1)
 
+        # The scene holding something is not the scene holding the right
+        # thing. Wait for the page to say it shows this model from this
+        # build; if the model is rebuilt meanwhile, the newer build is the
+        # one to wait for (the page reloads it on its own).
+        why = None
+        for i in range(wait * 2 + 60):
+            if i and i % 10 == 0:
+                built_at = current()
+            why = problem()
+            if why is None:
+                break
+            time.sleep(1)
+        else:
+            raise SystemExit(f"not photographing: {why}")
+
         # The window is not the picture. The catalog, the queue, the tree
         # column, the toolbar and the log all take their cut before the
         # canvas gets any, and it is not a fixed cut - it moves with the
         # layout. Asking for 1200x800 used to hand back a 320x394 canvas.
         # So measure what came out, give the window back the difference,
         # and check. --width and --height mean the picture now.
-        box = ("(() => { const c = document.querySelector('canvas');"
+        box = ("(() => { const c = " + CANVAS + ";"
                " const r = c.getBoundingClientRect();"
                " return JSON.stringify([r.width|0, r.height|0,"
                " innerWidth, innerHeight]); })()")
@@ -280,15 +541,30 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
         # ?rev= also pops the revision card over the top-right corner, which
         # is exactly where the model usually sits. It is not part of the model.
         # Dismissing it would release the held camera too, so only hide it.
-        js("document.querySelectorAll('.tcv-card.absolute')"
-           ".forEach(e => e.style.visibility = 'hidden')")
-        time.sleep(0.5)
+        #
+        # Nor are the Links card in the corner, or anything laid over the
+        # whole window: an agent's question arriving mid-render dimmed the
+        # entire frame behind its scrim. Hidden again before every capture,
+        # since the page can put a new one up at any moment.
+        def unclutter() -> None:
+            js(unclutter_js(canvas_sel))
+            time.sleep(0.5)
+
+        unclutter()
 
         # The signals above say the page is ready, not that the geometry is on
         # screen. Check the picture itself: a nearly uniform frame is the
         # background, so wait and take it again.
+        def on_screen(when: str) -> None:
+            why = problem()
+            if why:
+                raise SystemExit(f"not photographing ({when}): {why}")
+
         for attempt in range(3):
-            box = js("(()=>{const c=document.querySelector('canvas');"
+            if attempt:
+                unclutter()
+            on_screen("before the capture")
+            box = js("(()=>{const c=" + CANVAS + ";"
                      "const r=c.getBoundingClientRect();"
                      "return JSON.stringify([r.left|0,r.top|0,r.width|0,r.height|0])})()")
             x, y, w, h = json.loads(box)
@@ -297,6 +573,8 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
                          "clip": {"x": x, "y": y, "width": w, "height": h,
                                   "scale": 1}})
             data = base64.b64decode(shot["data"])
+            # The model could have been swapped while the frame was taken.
+            on_screen("after the capture")
             if _ink(data) > 0.02 or attempt == 2:
                 out.write_bytes(data)
                 return out
@@ -317,8 +595,8 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("revision", help="revision id, or model:<name> for a "
-                                     "plain shot of one model")
+    ap.add_argument("revision", help="revision id, or model:<name> / board:<id> for a "
+                                     "plain shot of one model or board")
     ap.add_argument("-o", "--out")
     ap.add_argument("--width", type=int, default=1400,
                     help="width of the picture itself, not of the window")
@@ -329,12 +607,17 @@ def main() -> None:
                                      "other than the stored angle")
     ap.add_argument("--only", help="show only parts whose tree path contains "
                                    "this text, e.g. kapak")
+    ap.add_argument("--build-timeout", type=int, default=1200,
+                    help="seconds to wait for the model's own build or linked rebuild")
+    ap.add_argument("--allow-stale", action="store_true",
+                    help="photograph the last build even though the source has "
+                         "changed since and nothing is building it")
     args = ap.parse_args()
     out = Path(args.out or f"/tmp/after-{args.revision.replace(':', '-')}.png")
     t0 = time.monotonic()
     try:
         render(args.revision, out, args.width, args.height, args.wait, args.camera,
-               args.only)
+               args.only, args.build_timeout, args.allow_stale)
     finally:
         # A picture costs a browser: the card shows what that came to next to
         # what the model cost in tokens. Recorded whether or not the frame

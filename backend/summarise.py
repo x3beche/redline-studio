@@ -22,7 +22,7 @@ log = logging.getLogger("redline.summarise")
 
 # Which provider and model: backend/llm.py, chosen in Settings > LLM settings.
 # MODEL is the default the summary job starts with.
-MODEL = "deepseek/deepseek-v4.1-flash"
+MODEL = "Qwen/Qwen3.8-Flash"
 TIMEOUT = 30.0
 MAX_TOKENS = 60
 TEMPERATURE = 0.2

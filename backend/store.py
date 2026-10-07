@@ -9,7 +9,6 @@ Collections
                     artifacts.step|board3d|stl              (backend/board3d.py)
     component_versions  a copy of each version a pin can point at
     revisions      {..., image: {gridfs_id, bytes}}
-    model_versions version history (versions.py)
 
 GridFS buckets
     model_files    generated viewer/step/stl files (gzipped)

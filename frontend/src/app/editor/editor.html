@@ -107,98 +107,6 @@
       <!-- Every build, rebuild, board job and note being worked on, now. -->
       <app-work-now (openModel)="openById($event)" />
 
-      <!-- versions -->
-      <div class="px-3 py-2" style="border-top: 1px solid var(--line)">
-        <div class="mb-1 flex items-center justify-between">
-          <span class="tcv-label">{{ 'Versions' | t }} ({{ versions().length }})</span>
-          <button (click)="takeSnapshot()" class="tcv-btn px-1.5 py-0.5 text-[11px]">{{ 'snapshot' | t }}</button>
-        </div>
-        <ul class="tcv-scroll max-h-28 overflow-y-auto">
-          @for (v of versions(); track v._id) {
-            <li class="flex items-center justify-between gap-1 py-0.5 text-[11px]">
-              <span class="truncate" [title]="v.note || v._id">
-                <code style="color: var(--accent)">{{ v.short }}</code>
-                <span style="color: var(--ink-dim)"> {{ v.note || v._id }}</span>
-              </span>
-              <button (click)="restore(v)" class="tcv-chip shrink-0"
-                      style="color: var(--warn)">restore</button>
-            </li>
-          } @empty {
-            <li class="text-[11px]" style="color: var(--ink-dim)">no versions</li>
-          }
-        </ul>
-      </div>
-
-      <!-- status: database + machine -->
-      <div class="px-3 py-2 text-[11px]" style="border-top: 1px solid var(--line)">
-        @if (stats(); as st) {
-          <div class="mb-1 flex items-center justify-between">
-            <span class="tcv-label">MongoDB · {{ st.db }}</span>
-            <span style="color: var(--ink-dim)">
-              {{ mb(st.used_bytes) }}@if (st.quota_bytes) { / {{ mb(st.quota_bytes) }} }
-            </span>
-          </div>
-          @if (st.percent != null) {
-            <div class="mb-1.5 h-1.5 w-full overflow-hidden rounded"
-                 style="background: var(--surface-2)">
-              <div class="h-full rounded"
-                   [style.width.%]="st.percent"
-                   [style.background]="st.percent > 85 ? 'var(--danger)'
-                                     : st.percent > 60 ? 'var(--warn)' : 'var(--accent)'"></div>
-            </div>
-          }
-          <div class="flex justify-between" style="color: var(--ink-dim)">
-            <span>{{ st.models }} models · {{ st.objects }} docs</span>
-            <span>{{ st.versions }} versions</span>
-          </div>
-          <div class="mt-0.5 flex gap-2" style="color: var(--ink-dim)">
-            <span>draft {{ st.revisions['draft'] ?? 0 }}</span>
-            <span style="color: var(--accent)">queued {{ st.revisions['queued'] ?? 0 }}</span>
-            <span>applied {{ st.revisions['applied'] ?? 0 }}</span>
-          </div>
-        }
-
-        @if (sys(); as m) {
-          <div class="mt-2 pt-2" style="border-top: 1px solid var(--line)">
-            <div class="flex justify-between">
-              <span class="truncate" [title]="m.cpu.name">CPU</span>
-              <span style="color: var(--ink-dim)">
-                {{ m.cpu.load.toFixed(0) }}% · {{ m.cpu.cores }}c/{{ m.cpu.threads }}t
-              </span>
-            </div>
-            <div class="flex justify-between">
-              <span>RAM</span>
-              <span style="color: var(--ink-dim)">
-                {{ gb(m.ram.used_bytes) }} / {{ gb(m.ram.total_bytes) }}
-              </span>
-            </div>
-            @if (m.gpu; as g) {
-              <div class="flex justify-between">
-                <span class="truncate" [title]="g.name">GPU</span>
-                <span style="color: var(--ink-dim)">
-                  {{ g.util.toFixed(0) }}% · {{ (g.mem_used_mb / 1024).toFixed(1) }}/{{ (g.mem_total_mb / 1024).toFixed(1) }} GB · {{ g.temp_c.toFixed(0) }}°
-                </span>
-              </div>
-            }
-          </div>
-        }
-      </div>
-    } @else {
-      <!-- Collapsed: one letter and a bar per gauge, the reading on hover.
-           A three-letter label with a number under it does not fit a rail
-           this narrow - the column came out looking like a broken
-           scrollbar. -->
-      <div class="tcv-rail-gauges">
-        @for (g of gauges(); track g.key) {
-          <div class="tcv-rail-gauge" [title]="g.key + ' · ' + g.tip">
-            <div class="tcv-rail-track">
-              <div class="tcv-rail-fill" [style.height.%]="g.pct"
-                   [style.background]="gaugeColor(g.pct)"></div>
-            </div>
-            <div class="tcv-rail-key">{{ g.short }}</div>
-          </div>
-        }
-      </div>
     }
   </aside>
 
@@ -237,31 +145,39 @@
       <div class="tcv-card flex max-h-[84vh] w-[min(46rem,90vw)] flex-col overflow-hidden">
         <div class="flex shrink-0 items-center gap-2 px-4 py-2.5"
              style="border-bottom: 1px solid var(--line); background: var(--pen-wash)">
-          <span class="tcv-label" style="color: var(--pen)">Agent is asking</span>
+          <span class="tcv-label" style="color: var(--pen)">{{ 'Agent is asking' | t }}</span>
           @if (questions().length > 1) {
             <span class="mono text-[11px]" style="color: var(--ink-dim)">
               1 of {{ questions().length }}
             </span>
           }
           <div class="ml-auto flex items-center gap-1.5">
+            <!-- Read it in another language (editor/reading.ts). English,
+                 the agents' own, unless this browser chose otherwise. -->
+            <rl-reading-pick />
             @if (notifyState() === 'default') {
               <button (click)="enableNotices()" class="tcv-chip"
                       title="let the browser raise a notice next time, so you
-                             do not have to watch this tab">notify me</button>
+                             do not have to watch this tab">{{ 'notify me' | t }}</button>
             }
             <button (click)="askLater()" class="tcv-chip"
                     title="put it back in the column - the agent is still
-                           waiting either way">later</button>
+                           waiting either way">{{ 'later' | t }}</button>
           </div>
         </div>
 
+        @let tq = reading.shown('question', q._id);
         <div class="min-h-0 flex-1 overflow-auto px-4 py-3">
-          <div class="md" [innerHTML]="q.text | md"></div>
+          @if (reading.lang()) {
+            <div class="mb-2 text-[11px]"><rl-reading-note kind="question" [id]="q._id" /></div>
+          }
+          <div class="md" [attr.dir]="tq ? 'auto' : null" [innerHTML]="(tq?.text ?? q.text) | md"></div>
           @if (q.context) {
             <!-- What the agent already knows, so nobody has to reconstruct
                  it. Quieter than the question itself. -->
             <div class="md mt-3 text-[12px]" style="color: var(--ink-dim)"
-                 [innerHTML]="q.context | md"></div>
+                 [attr.dir]="tq ? 'auto' : null"
+                 [innerHTML]="(tq?.context ?? q.context) | md"></div>
           }
         </div>
 
@@ -272,11 +188,13 @@
                  lead word before a colon is set in bold so the choices can
                  be told apart at a glance. -->
             <div class="tcv-answers mb-2">
-              @for (o of q.options; track o) {
+              @for (o of q.options; track o; let i = $index) {
+                <!-- Read translated, answered as the agent wrote it. -->
                 <button (click)="pickOption(q, o)" class="tcv-answer"
                         [attr.data-on]="answerPicked().has(o) ? 1 : null">
                   <span class="tcv-answer-mark" [class.tcv-answer-multi]="q.multi"></span>
-                  <span class="md min-w-0 flex-1" [innerHTML]="optionMd(o) | md"></span>
+                  <span class="md min-w-0 flex-1" [attr.dir]="tq ? 'auto' : null"
+                        [innerHTML]="optionMd(tq?.options?.[i] ?? o) | md"></span>
                 </button>
               }
             </div>
@@ -303,7 +221,7 @@
     <button (click)="openAsk()"
             class="tcv-card fixed bottom-3 right-3 flex max-w-[26rem] items-center gap-2 px-3 py-2 text-left"
             style="z-index: 900; border-color: var(--pen)">
-      <span class="tcv-label shrink-0" style="color: var(--pen)">Agent is asking</span>
+      <span class="tcv-label shrink-0" style="color: var(--pen)">{{ 'Agent is asking' | t }}</span>
       <span class="min-w-0 flex-1 truncate text-[12px]">
         {{ oneLine(waiting()[0].text) }}
       </span>
@@ -794,6 +712,7 @@
           <span class="mono text-[10px]" style="color: var(--warn)"
                 title="said, not picked up yet">{{ n }} waiting</span>
         }
+        @if (chatOpen()) { <rl-reading-pick [compact]="true" /> }
         <!-- The difference between "when you get a moment" and "now". An
              urgent line is reported by every command the agent runs, so it
              is read between one step and the next instead of waiting for
@@ -833,7 +752,14 @@
                   }
                 }
               </div>
-              <div class="md leading-snug" style="color: var(--ink)" [innerHTML]="m.text | md"></div>
+              @let tm = m.role === 'agent' ? reading.shown('chat', m._id) : null;
+              <div class="md leading-snug" style="color: var(--ink)" [attr.dir]="tm ? 'auto' : null"
+                   [innerHTML]="(tm?.text ?? m.text) | md"></div>
+              <!-- The agent's lines in the reader's language, one by one on
+                   request - a thread is long, a question is one. -->
+              @if (m.role === 'agent' && reading.lang()) {
+                <div class="text-[10px]"><rl-reading-note kind="chat" [id]="m._id" [offer]="true" /></div>
+              }
             </div>
           } @empty {
             <p style="color: var(--ink-dim)">

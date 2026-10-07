@@ -20,11 +20,12 @@ def call(**body):
 
 
 def test_status_says_whether_a_key_is_set_and_never_shows_it(monkeypatch):
-    keys(monkeypatch, openrouter="test-key-not-real")
+    keys(monkeypatch, commandcode="test-key-not-real")
     s = asyncio.run(tools_llm.status())
     assert s["available"] is True and "test-key" not in repr(s)
+    assert s["default"] == "Qwen/Qwen3.8-Flash"                     # the cheap one first
     keys(monkeypatch)
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-not-real")   # never read
+    monkeypatch.setenv("COMMANDCODE_API_KEY", "test-key-not-real")   # never read
     assert asyncio.run(tools_llm.status())["available"] is False
 
 

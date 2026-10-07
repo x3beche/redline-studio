@@ -133,7 +133,7 @@ async def _print_pdf(html: str) -> bytes | None:
         or shutil.which("chromium-browser")
     if not chrome:
         return None
-    work = Path(tempfile.mkdtemp(prefix="x3pdf-"))
+    work = Path(tempfile.mkdtemp(prefix="redline-pdf-"))
     try:
         (work / "layers.html").write_text(html)
         proc = await asyncio.create_subprocess_exec(
@@ -155,7 +155,7 @@ async def _print_pdf(html: str) -> bytes | None:
 async def _step_to_glb(data: bytes) -> dict:
     """The STEP converted in a process of its own - reading 35 MB of STEP
     holds an interpreter for seconds, and not the server's."""
-    work = Path(tempfile.mkdtemp(prefix="x3step-"))
+    work = Path(tempfile.mkdtemp(prefix="redline-step-"))
     try:
         (work / "in.step").write_bytes(data)
         proc = await asyncio.create_subprocess_exec(

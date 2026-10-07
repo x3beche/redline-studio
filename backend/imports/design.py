@@ -40,7 +40,7 @@ async def open_design(name: str, data: bytes, plugin: str | None,
     if not await kicad.available():
         raise DesignError(f"the KiCad container ({kicad.IMAGE}) is not built, so design "
                           f"files cannot be opened")
-    work = Path(tempfile.mkdtemp(prefix="x3imp-"))
+    work = Path(tempfile.mkdtemp(prefix="redline-imp-"))
     try:
         os.chmod(work, 0o777)
         (work / "in").mkdir()

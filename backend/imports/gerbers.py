@@ -60,7 +60,7 @@ class Board:
         self.inner: list[object] = []
         self.drills: list[tuple[str, object, str]] = []    # (kind, file, name)
         self.problems: list[str] = []
-        self.tmp = tempfile.TemporaryDirectory(prefix="x3imp-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="redline-imp-")
         ctx = _quiet()
         try:
             for it in items:

@@ -339,7 +339,7 @@ async def render(db, board_id: str, route: bool = True) -> dict:
     except KeyError:
         shapes = {}
 
-    work = Path(tempfile.mkdtemp(prefix="x3pcb-"))
+    work = Path(tempfile.mkdtemp(prefix="redline-pcb-"))
     try:
         pretty = work / "fp"
         pretty.mkdir()
@@ -678,7 +678,7 @@ async def refresh_component(db, board_id: str) -> dict:
         glb = await store.get_artifact(db, board_id, "model3d", ato.BOARDS)
     except KeyError:
         glb = None
-    work = Path(tempfile.mkdtemp(prefix="x3pcb-"))
+    work = Path(tempfile.mkdtemp(prefix="redline-pcb-"))
     try:
         (work / "3d").mkdir()
         text = pcb.decode("utf-8", errors="replace")
@@ -689,6 +689,13 @@ async def refresh_component(db, board_id: str) -> dict:
             got = await lcsc.model_of(db, lcsc_id)
             if got:
                 (work / "3d" / f"{lcsc_id}.{got[1]}").write_bytes(got[0])
+                if got[1] != kind:
+                    # Fetched again since the layout (`part keep --refresh`) and
+                    # now a STEP where it was a WRL: pointed at what is stored,
+                    # so the part is a body in the STEP, not a box.
+                    text = text.replace(f'(model "/work/3d/{lcsc_id}.{kind}"',
+                                        f'(model "/work/3d/{lcsc_id}.{got[1]}"')
+        (work / "board.kicad_pcb").write_text(text)
         step, data, stl, digest = await component_of(work, board_id, glb,
                                                      await library_footprints(db, board_id))
         from . import links

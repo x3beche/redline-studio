@@ -654,7 +654,6 @@ it and `run_tool` runs it.
 | Model source | `models` collection |
 | Generated viewer/STEP/STL | GridFS `model_files` (gzip) |
 | Revision images | GridFS `shots` |
-| Version history | `model_versions` — source text only |
 | Build | temporary directory, removed when finished |
 
 See `.claude/skills/asset-revisions/SKILL.md` for details.

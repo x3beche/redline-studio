@@ -71,9 +71,14 @@ async def now() -> dict:
                       "state": "building", "job": j.get("kind"),
                       "secs": _secs(j.get("started_at"), t), "expected_secs": None, "why": None})
 
-    # Notes being worked on, any room.
+    # Notes being worked on, any room. A note's run is kept twice - as the
+    # room's current run and under its own id - so once per note.
+    seen_notes: set = set()
     async for r in d.runs.find({"status": "running"}, {"title": 1, "revision": 1, "room": 1,
                                                         "percent": 1, "started_at": 1, "by": 1}):
+        if r.get("revision") in seen_notes:
+            continue
+        seen_notes.add(r.get("revision"))
         items.append({"kind": "note", "id": r.get("revision"), "title": r.get("title") or r.get("revision"),
                       "state": "running", "room": r.get("room"), "percent": r.get("percent"),
                       "secs": _secs(r.get("started_at"), t), "by": (r.get("by") or {}).get("id"),

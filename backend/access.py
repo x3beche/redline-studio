@@ -127,6 +127,10 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/chat", "draw"),
     ("POST", "/api/questions", "draw"),
     ("POST", "/api/questions/{}/answer", "draw"),
+    # an agent's question or reply in the reader's language: reading, so a
+    # viewer's - it costs a model call, once per question and language, kept
+    # on the question (backend/reading.py), as the tool finder costs one
+    ("POST", "/api/(questions|chat)/{}/translate", "view"),
     # the work itself: what the agents do, and what starts it
     ("POST", "/api/run/start", "run"),
     ("POST", "/api/run/finish", "run"),

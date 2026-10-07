@@ -1785,7 +1785,7 @@ html, body { height: 100%; overflow: hidden; }
 /* !important because the viewer injects its stylesheet at runtime, after
    ours: on order alone its rule wins every time. */
 body { user-select: text !important; }
-button, .tcv-chip, .tcv-btn, .tcv-edge, .tcv-switch, .tcv-rail-gauges,
+button, .tcv-chip, .tcv-btn, .tcv-edge, .tcv-switch,
 .tcv-label, .tcv_cad_toolbar, .tcv_cad_tabs, .tcv_cad_tree, canvas {
   user-select: none !important;
 }
@@ -2185,42 +2185,6 @@ body {
   text-transform: uppercase;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: var(--ink-dim);
-}
-
-.tcv-rail-gauges {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 11px;
-  padding: 12px 0 13px;
-}
-.tcv-rail-gauge {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  cursor: default;
-}
-.tcv-rail-track {
-  display: flex;
-  align-items: flex-end;
-  width: 8px;
-  height: 52px;
-  overflow: hidden;
-  border-radius: 4px;
-  background: var(--surface-2);
-}
-.tcv-rail-fill {
-  width: 100%;
-  border-radius: 4px;
-  transition: height .4s ease;
-}
-.tcv-rail-key {
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
   color: var(--ink-dim);
 }
 

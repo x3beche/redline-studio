@@ -10,10 +10,13 @@ def fresh(monkeypatch):
 
 
 def test_a_job_uses_its_default_until_one_is_chosen():
+    # Every job starts on the one cheap model; anything dearer is a choice.
+    assert llm.CHEAP == ("commandcode", "Qwen/Qwen3.8-Flash")
+    for job in llm.JOBS:
+        assert llm.route(job) == llm.CHEAP, job
+    llm._conf["jobs"]["summary"] = {"provider": "openrouter", "model": "deepseek/deepseek-v4.1-flash"}
     assert llm.route("summary") == ("openrouter", "deepseek/deepseek-v4.1-flash")
-    llm._conf["jobs"]["summary"] = {"provider": "commandcode", "model": "Qwen/Qwen3.8-Flash"}
-    assert llm.route("summary") == ("commandcode", "Qwen/Qwen3.8-Flash")
-    assert llm.route("chat")[0] == "commandcode"
+    assert llm.route("chat") == llm.CHEAP
 
 
 def test_keys_come_from_the_database_only_and_the_page_never_sees_them(monkeypatch):
@@ -144,3 +147,41 @@ def test_logged_kinds_are_named_like_the_jobs():
     assert llm.job_label("cc-title") == "Command Code room titles"
     assert llm.job_label("llm-test") == "Settings test"
     assert llm.job_label("something-new") == "something-new"
+
+
+def test_nothing_lands_on_a_dearer_model_unasked(monkeypatch):
+    """Only the cheap model is picked by itself: a provider switched to
+    without a model named gets the cheap one, or has to be told which."""
+    from fastapi import HTTPException
+    llm._conf["keys"].update({"openrouter": "k-or", "commandcode": "k-cc"})
+    assert llm.public()["cheap"] == {"provider": "commandcode", "model": "Qwen/Qwen3.8-Flash"}
+    chat = {"provider": "commandcode", "model": "claude-opus-5"}           # chosen, so kept
+    assert cc_chat._pick(chat, None, None) == ("commandcode", "claude-opus-5")
+    with pytest.raises(HTTPException) as e:                                # no model named
+        cc_chat._pick(chat, "openrouter", None)
+    assert e.value.status_code == 400 and "choose" in e.value.detail
+    assert cc_chat._pick({"provider": "openrouter", "model": "x/y"}, "commandcode", None) == llm.CHEAP
+    assert cc_chat._pick(chat, "openrouter", "z/cheap") == ("openrouter", "z/cheap")
+
+
+def test_the_model_list_marks_the_cheap_one(monkeypatch):
+    import asyncio
+
+    class R:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self):
+            return {"data": [{"id": "aaa/claude-opus-5"}, {"id": "Qwen/Qwen3.8-Flash"}]}
+
+    class C:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, *a, **k): return R()
+
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", C)
+    monkeypatch.setattr(llm, "_models_cache", {})
+    rows = asyncio.run(llm.models("commandcode"))
+    assert [m["id"] for m in rows if m["cheap"]] == ["Qwen/Qwen3.8-Flash"]
+    assert rows[0]["cheap"] is False                                      # the first is not it

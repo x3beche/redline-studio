@@ -284,14 +284,16 @@ export class LlmUsagePanel {
             <div class="st-job-name"><b>{{ job.label | t }}</b><span [title]="job.about | t">{{ job.about | t }}</span></div>
             <div class="st-seg">
               @for (p of providerIds; track p) {
-                <button [class.on]="p === job.provider" [disabled]="!canEdit || p === job.provider"
+                <button [class.on]="p === prov(j)" [disabled]="!canEdit || p === prov(j)"
                         (click)="setProvider(j, p)">{{ d.providers[p].name }}@if (!d.providers[p].set) { <small>{{ 'no key' | t }}</small> }</button>
               }
             </div>
             <select class="st-in" [disabled]="!canEdit" (change)="setModel(j, $any($event.target).value)">
-              @if (!inList(job.provider, job.model)) { <option [value]="job.model" selected>{{ job.model }}</option> }
-              @for (m of models()[job.provider] || []; track m.id) {
-                <option [value]="m.id" [selected]="m.id === job.model">{{ m.id }}{{ m.anthropic ? ' · Claude' : '' }}</option>
+              @if (pending()[j]) {
+                <option value="" selected disabled>{{ 'choose a model' | t }}</option>
+              } @else if (!inList(job.provider, job.model)) { <option [value]="job.model" selected>{{ job.model }}</option> }
+              @for (m of models()[prov(j)] || []; track m.id) {
+                <option [value]="m.id" [selected]="!pending()[j] && m.id === job.model">{{ m.id }}{{ m.anthropic ? ' · Claude' : '' }}</option>
               }
             </select>
             <div class="st-job-acts">
@@ -369,22 +371,40 @@ export class LlmSettingsPanel {
     this.put({ keys: { [p]: null } }, t('Key removed.'));
   }
 
+  /** A provider picked for a job whose model is still to be chosen. */
+  pending = signal<Record<string, string>>({});
+  prov(j: string) { return this.pending()[j] ?? this.data()!.jobs[j].provider; }
+
   setProvider(j: string, provider: string) {
-    // A model of the new provider: the first one, unless the job's default is there.
+    // Only a cheap model is picked unasked: the job's default when it is on
+    // this provider, else the cheap one if this provider has it. Otherwise
+    // the provider waits for a model to be chosen - never the first in the
+    // list, which may be the dearest.
     const job = this.data()!.jobs[j];
     const list = this.models()[provider] ?? [];
-    const model = job.default.provider === provider ? job.default.model : (list[0]?.id ?? '');
-    if (!model) { this.err.set(t('That provider has no models to choose from - is its key set?')); return; }
+    if (!list.length && job.default.provider !== provider) {
+      this.err.set(t('That provider has no models to choose from - is its key set?')); return;
+    }
+    const model = job.default.provider === provider ? job.default.model : (list.find(m => m.cheap)?.id ?? '');
+    if (!model) {
+      this.pending.update(x => ({ ...x, [j]: provider }));
+      this.msg.set(t('Choose a model for it - nothing is saved until you do.'));
+      return;
+    }
+    this.pending.update(({ [j]: _, ...rest }) => rest);
     this.put({ jobs: { [j]: { provider, model } } }, t('Saved.'));
   }
 
   setModel(j: string, model: string) {
-    const job = this.data()!.jobs[j];
-    this.put({ jobs: { [j]: { provider: job.provider, model } } }, t('Saved.'));
+    if (!model) return;
+    const provider = this.prov(j);
+    this.pending.update(({ [j]: _, ...rest }) => rest);
+    this.put({ jobs: { [j]: { provider, model } } }, t('Saved.'));
   }
 
   reset(j: string) {
     const job = this.data()!.jobs[j];
+    this.pending.update(({ [j]: _, ...rest }) => rest);
     this.put({ jobs: { [j]: job.default } }, t('Back to the default.'));
   }
 

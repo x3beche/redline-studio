@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from . import (access, actors, ato, auth, changes, convert, files, jobs, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
-               schematic, store, summarise, sysinfo, usage, versions, links, board3d)
+               schematic, store, summarise, usage, links, board3d)
 from . import tools_api
 
 LOG = logging.getLogger("redline.api")
@@ -41,11 +41,9 @@ EXPORT_SCRIPT = ROOT / "export_model.py"
 load_dotenv(ROOT / ".env")
 MONGODB_URI = os.getenv("MONGODB_URI", "").strip()
 MONGODB_DB = os.getenv("MONGODB_DB", "redline")
-QUOTA_MB = float(os.getenv("STORAGE_QUOTA_MB", "512"))
 
 # draft  : the user is still writing, models do not see it
 # queued : in the apply queue, models read these
-STATUSES = ("draft", "queued", "applied", "rejected")
 ORDER = {"queued": 0, "draft": 1, "applied": 2, "rejected": 3}
 
 app = FastAPI(title="Redline API")
@@ -78,6 +76,9 @@ app.include_router(fx.router)
 app.include_router(costs_api.router)
 from . import worknow  # noqa: E402
 app.include_router(worknow.router)
+# An agent's question or thread reply, in the reader's language.
+from . import reading  # noqa: E402
+app.include_router(reading.router)
 
 
 def _raw_db():
@@ -107,39 +108,6 @@ async def health():
         raise
     except Exception as exc:
         raise HTTPException(503, f"database unreachable: {exc}") from exc
-
-
-@app.get("/api/stats")
-async def stats():
-    d = db()
-    ds = await d.command("dbStats")
-    by_status = {s: await d.revisions.count_documents({"status": s}) for s in STATUSES}
-    # A freshly created database reports storageSize as 0 for a while; the
-    # logical size is always populated, so take whichever is larger.
-    used = max(int(ds.get("storageSize", 0)),
-               int(ds.get("dataSize", 0))) + int(ds.get("indexSize", 0))
-    quota = int(QUOTA_MB * 1024 * 1024)
-    return {
-        "db": ds.get("db"),
-        "collections": int(ds.get("collections", 0)),
-        "objects": int(ds.get("objects", 0)),
-        "data_bytes": int(ds.get("dataSize", 0)),
-        "used_bytes": used,
-        "index_bytes": int(ds.get("indexSize", 0)),
-        "quota_bytes": quota,
-        "percent": round(used / quota * 100, 1) if quota else None,
-        "revisions": by_status,
-        "models": await d.models.count_documents({}),
-        "versions": await d.model_versions.count_documents({}),
-    }
-
-
-@app.get("/api/system")
-async def system():
-    # Off the event loop: it asks nvidia-smi (up to 3 s) where there is one,
-    # and the page asks this every few seconds.
-    import asyncio
-    return await asyncio.to_thread(sysinfo.snapshot)
 
 
 # ---------------- catalog ----------------
@@ -562,31 +530,6 @@ async def model_file(model_id: str, label: str):
     name = model_id.rpartition("/")[2] + "." + label
     return Response(content=data, media_type="application/octet-stream",
                     headers={"Content-Disposition": f'attachment; filename="{name}"'})
-
-
-# ---------------- version history ----------------
-@app.get("/api/versions")
-async def list_versions():
-    return await versions.listing(db())
-
-
-@app.post("/api/versions")
-async def take_version(note: str = ""):
-    try:
-        doc = await versions.snapshot(db(), note)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    doc.pop("models", None)
-    doc.pop("folders", None)
-    return doc
-
-
-@app.post("/api/versions/{version_id}/restore")
-async def restore_version(version_id: str):
-    try:
-        return await versions.restore(db(), version_id)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
 
 
 # ---------------- activity log and run progress ----------------
@@ -1479,14 +1422,25 @@ async def _run_board(bid: str):
 class ConvertIn(BaseModel):
     bom: str | None = Field(default=None, max_length=2_000_000)     # a BOM CSV, as text
     picks: dict[str, str | dict] | None = None                    # ref -> C-number
+    force: bool = False           # write over hand edits (kept as a backup first)
+    keep_edits: bool = False      # merge hand edits onto the new source
 
 
 @app.post("/api/boards/{bid}/convert")
-async def convert_board(bid: str, body: ConvertIn, detach: bool = False):
+async def convert_board(bid: str, body: ConvertIn, detach: bool = False,
+                        force: bool = False, keep_edits: bool = False):
     """Write an imported board as atopile source, build it, and check the
     build against the imported netlist (backend/convert.py). Run again
     with a BOM and its part numbers replace the guesses. A job, as a run
-    is (`detach=1` answers at once)."""
+    is (`detach=1` answers at once).
+
+    A source edited by hand since the last convert is not written over:
+    409, naming the changed lines. `force=1` writes over it (the edited
+    source kept as a backup revision first); `keep_edits=1` merges the
+    edits onto the new source, 409 where they conflict. Either in the
+    query or the body."""
+    body.force = body.force or force
+    body.keep_edits = body.keep_edits or keep_edits
     return await _as_job("convert", bid, body.model_dump(), detach)
 
 
@@ -1495,9 +1449,12 @@ async def _convert_board(bid: str, body: ConvertIn):
         await say(text, level, room="pcb")
     try:
         out = await convert.run(db(), bid, body.bom.encode() if body.bom else None,
-                                body.picks, tell)
+                                body.picks, tell, force=body.force, keep_edits=body.keep_edits)
     except KeyError:
         raise HTTPException(404, bid)
+    except convert.Edited as exc:
+        await say(str(exc).splitlines()[0], "warn", room="pcb")
+        raise HTTPException(409, str(exc))
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except lcsc.Refused as exc:
@@ -2152,9 +2109,24 @@ async def part_photo(lcsc_id: str):
 
 
 @app.post("/api/parts/{lcsc_id}")
-async def add_part(lcsc_id: str, force: bool = False):
+async def add_part(lcsc_id: str, force: bool = False, refresh: bool = False):
     """Fetch one part and keep it: footprint, and the 3D model if there is
-    one. This is what makes it available to a board."""
+    one. This is what makes it available to a board.
+
+    `refresh=1`: a part already kept, fetched again - EasyEDA's record
+    asked afresh, the footprint and 3D model downloaded, the model seated
+    on its pads - and said plainly when EasyEDA has no 3D model for it."""
+    if refresh:
+        try:
+            got = await lcsc.refresh(db(), lcsc_id)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        except (RuntimeError, TimeoutError, OSError, LookupError) as exc:
+            await say(f"{lcsc_id}: could not be refreshed - {exc}", "warn", room="pcb")
+            raise HTTPException(502, str(exc))
+        await say(f"{lcsc_id} fetched again from LCSC - {got.get('name')}: {got['said']}",
+                  "done" if got.get("model_kind") else "warn", room="pcb")
+        return {**got, "has_3d": bool(got.get("model_kind"))}
     try:
         doc = await lcsc.fetch(db(), lcsc_id, force)
     except ValueError as exc:

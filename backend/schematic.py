@@ -193,7 +193,7 @@ async def draw(db, board_id: str) -> dict:
     graph = json.loads(await store.get_artifact(db, board_id, "graph", ato.BOARDS))
     plan = await plan_for(graph, (doc or {}).get("title") or board_id)
 
-    work = Path(tempfile.mkdtemp(prefix="x3sch-"))
+    work = Path(tempfile.mkdtemp(prefix="redline-sch-"))
     try:
         plan["out"] = str(work / "board.kicad_sch")
         # The atopile environment's Python, wherever this runs (backend/atoenv.py).

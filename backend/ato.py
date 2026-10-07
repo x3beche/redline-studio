@@ -191,7 +191,7 @@ async def build(db, board_id: str) -> dict:
         {"_id": board_id},
         {"$set": {"building": True, "build_started": started_at}})
 
-    tmp = Path(tempfile.mkdtemp(prefix="x3ato-"))
+    tmp = Path(tempfile.mkdtemp(prefix="redline-ato-"))
     try:
         src = tmp / "elec" / "src"
         src.mkdir(parents=True)
