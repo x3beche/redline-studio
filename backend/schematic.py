@@ -351,7 +351,24 @@ async def draw(db, board_id: str) -> dict:
     summary = {**{k: v for k, v in made.items() if k not in ("sheets", "global_nets")},
                "erc": erc, "at": store.now(), "sheets": sheets_out, "mcus": mcus}
     await db[ato.BOARDS].update_one({"_id": board_id}, {"$set": {"schematic": summary}})
+    await firmware_follows(db, board_id)
     return summary
+
+
+async def firmware_follows(db, board_id: str) -> list[dict]:
+    """Every firmware made from this board: pins.h written again where a
+    pin moved, and a build started (backend/firmware.py). Never holds up
+    the drawing."""
+    from . import firmware, fwbuild
+
+    async def build(fid: str, why: str) -> None:
+        await fwbuild.start(db, fid, by={"type": "system", "id": "schematic"}, why=why)
+
+    try:
+        return await firmware.board_changed(db, board_id, start_build=build)
+    except Exception as exc:                                    # noqa: BLE001 - the schematic stands
+        print(f"{board_id}: firmware not followed: {exc}")
+        return []
 
 
 async def _drop_artifacts(db, board_id: str, labels: list[str]) -> None:

@@ -138,6 +138,18 @@ docker build -f docker/kicad.Dockerfile -t redline-kicad .
 `REDLINE_KICAD_IMAGE` names another image. Without it the room still builds and
 shows the circuit; it just cannot place or draw the board, and says so.
 
+**PlatformIO**, for the Firmware room, in a container of its own: the ESP32
+platform, its toolchain, the Arduino core and the usual libraries are put in
+the image once (a couple of minutes, with the network), so a firmware build
+runs with `--network none`:
+
+```bash
+docker build -t redline-firmware docker/firmware
+```
+
+`REDLINE_FIRMWARE_IMAGE` names another image. Each firmware keeps its build
+cache in `.cache/firmware/`, so a build after a small change takes seconds.
+
 Footprints and 3D models come from LCSC by part number, through EasyEDA's
 public API, and are kept in the `parts` collection so a board that is
 rebuilt ten times asks once. The board room searches the same catalogue,

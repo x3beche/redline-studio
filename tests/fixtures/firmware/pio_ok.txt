@@ -1,0 +1,26 @@
+Processing esp32dev (platform: espressif32@6.13.0; board: esp32dev; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32dev.html
+PLATFORM: Espressif 32 (6.13.0) > Espressif ESP32 Dev Module
+Dependency Graph
+|-- Adafruit SSD1306 @ 2.5.17
+Building in release mode
+Compiling .pio/build/esp32dev/src/fan.cpp.o
+src/ui.cpp: In function 'void ui::draw_info()':
+src/ui.cpp:88:9: warning: unused variable 'spare' [-Wunused-variable]
+   int spare = 0;
+       ^~~~~
+src/ui.cpp:88:9: warning: unused variable 'spare' [-Wunused-variable]
+.pio/libdeps/esp32dev/Adafruit SSD1306/Adafruit_SSD1306.cpp:1004:14: warning: comparison of integer expressions of different signedness [-Wsign-compare]
+Linking .pio/build/esp32dev/firmware.elf
+Retrieving maximum program size .pio/build/esp32dev/firmware.elf
+Checking size .pio/build/esp32dev/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]   7.0% (used 22800 bytes from 327680 bytes)
+Flash: [==        ]  23.9% (used 313861 bytes from 1310720 bytes)
+Building .pio/build/esp32dev/firmware.bin
+esptool.py v4.11.0
+Creating esp32 image...
+Successfully created esp32 image.
+========================= [SUCCESS] Took 3.53 seconds =========================

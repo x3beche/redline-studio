@@ -1352,7 +1352,7 @@ def main() -> None:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("queue")
-    s.add_argument("--room", choices=["cad", "pcb"],
+    s.add_argument("--room", choices=["cad", "pcb", "firmware"],
                    help="only this room's notes")
     s.set_defaults(fn=cmd_queue)
     s = sub.add_parser("kind", help="which room a revision belongs to")
@@ -1362,12 +1362,12 @@ def main() -> None:
     s.add_argument("--limit", type=int, default=40)
     s.add_argument("--keep-unread", action="store_true",
                    help="look without picking it up")
-    s.add_argument("--room", choices=["cad", "pcb"],
+    s.add_argument("--room", choices=["cad", "pcb", "firmware"],
                    help="only this room's thread (each tab has its own)")
     s.set_defaults(fn=cmd_chat)
     s = sub.add_parser("say", help="answer in the thread")
     s.add_argument("text")
-    s.add_argument("--room", choices=["cad", "pcb"],
+    s.add_argument("--room", choices=["cad", "pcb", "firmware"],
                    help="which room's thread; default: where the person last spoke")
     s.set_defaults(fn=cmd_say)
     s = sub.add_parser("ask", help="ask the person a question on their screen")
@@ -1461,7 +1461,7 @@ def main() -> None:
                         "session lasts")
     s.add_argument("--ignore", nargs="*",
                    help="revision ids to not count as new work")
-    s.add_argument("--room", choices=["cad", "pcb"],
+    s.add_argument("--room", choices=["cad", "pcb", "firmware"],
                    help="only this room's notes and thread; default: every room")
     s.set_defaults(fn=cmd_wait)
     s = sub.add_parser("files", help="the Files tab: what people uploaded (a BOM, a datasheet...)")

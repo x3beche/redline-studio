@@ -503,6 +503,9 @@ async def catalog(db) -> dict:
     folders = [f async for f in db.folders.find({})]
     models = [m async for m in db.models.find({}, {"source": 0})]
     boards = [b async for b in db.boards.find({}, {"source": 0})]
+    # Firmware sits under its board, in the board's folder (backend/firmware.py).
+    from .firmware import COLL as FW, catalog_rows
+    fws = catalog_rows([f async for f in db[FW].find({})], {b["_id"]: b for b in boards})
 
     # Who uses whom, from what each model's imports were last read as
     # (backend/links.py keeps `uses` current on every save and rename).
@@ -560,6 +563,8 @@ async def catalog(db) -> dict:
                     "used_by": used_by.get(f"board:{b['_id']}", []),
                 } for b in boards if b.get("folder", "") == path),
                 key=lambda e: e["title"]),
+            "firmware": sorted((f for f in fws if f["folder"] == path),
+                               key=lambda f: (f["board"] or "", f["title"] or "")),
             "models": sorted(
                 ({
                     "id": m["_id"], "name": m["name"], "title": m.get("title", m["name"]),

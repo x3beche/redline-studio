@@ -214,7 +214,7 @@ export class AgentThreads {
     }
     @if (!lines().length && !asks().length) {
       <div class="tcv-cc-hello">
-        <div class="tcv-cc-hello-mark"><ng-container *ngTemplateOutlet="ico(); context: { $implicit: room() === 'pcb' ? PCB : CAD }" /></div>
+        <div class="tcv-cc-hello-mark"><ng-container *ngTemplateOutlet="ico(); context: { $implicit: room() === 'pcb' ? PCB : room() === 'firmware' ? FW : CAD }" /></div>
         <h2>{{ threads.label(room()) | t }}</h2>
         <p>{{ 'A line to the agent of this room, for anything that is not a mark on a model: move these into a folder, rename that one, what is taking so long.' | t }}</p>
       </div>
@@ -261,6 +261,7 @@ export class RoomThread {
   readonly MENU = 'M4 6h16 M4 12h16 M4 18h16';
   readonly SEND = 'M12 19V5 M6 11l6-6 6 6';
   readonly CAD = 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9';
+  readonly FW = 'M6 6h12v12H6z M3 9h3 M3 15h3 M18 9h3 M18 15h3 M10.5 9.5L8.5 12l2 2.5 M13.5 9.5l2 2.5-2 2.5';
   readonly PCB = 'M7 7h10v10H7z M10 3v4 M14 3v4 M10 17v4 M14 17v4 M3 10h4 M3 14h4 M17 10h4 M17 14h4';
 
   lines = signal<ChatLine[]>([]);

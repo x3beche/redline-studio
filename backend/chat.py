@@ -27,7 +27,7 @@ from . import actors
 
 CHAT = "chat"
 USER, AGENT = "user", "agent"
-ROOMS = ("cad", "pcb")
+ROOMS = ("cad", "pcb", "firmware")
 
 
 def room_of(doc: dict) -> str:

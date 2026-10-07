@@ -801,6 +801,52 @@
         </button>
       </span>
     </div>
+    @for (f of fwOf(n, b.id); track f.id) {
+    <div (click)="openFirmware(f); phoneShut()"
+         class="group relative flex cursor-pointer items-center justify-between rounded px-1.5 py-1"
+         [style.margin-left.px]="depth * 10 + 12"
+         [style.background]="inView(f.id, 'firmware') ? 'var(--accent-deep)' : 'transparent'"
+         [title]="f.title + ' - firmware for ' + f.mcu + ', made against board v' + f.board_version">
+      @if (f.building) {
+        <span class="tcv-building absolute inset-x-1 bottom-0 h-[2px] overflow-hidden rounded"></span>
+      }
+      <span class="flex min-w-0 items-baseline text-[12px]">
+        <span class="min-w-0 truncate">{{ f.title }}</span>
+        <span class="tcv-ext shrink-0">.fw</span>
+        @if (f.building) {
+          <span class="ml-1 shrink-0 text-[10px]" style="color: var(--accent)">building…</span>
+        } @else if (f.built === 'errors' || f.built === 'failed') {
+          <span style="color: var(--danger)" title="the last build failed"> !</span>
+        } @else if (f.changed) {
+          <span style="color: var(--warn)" title="the board changed: pins regenerated"> *</span>
+        }
+      </span>
+      <span class="tcv-link-badge shrink-0" [title]="'made against board v' + f.board_version + (f.board_now !== f.board_version ? ' - the board is at v' + f.board_now : '')">board v{{ f.board_version }}</span>
+    </div>
+    }
+  }
+  @for (f of fwLoose(n); track f.id) {
+    <div (click)="openFirmware(f); phoneShut()"
+         class="group relative flex cursor-pointer items-center justify-between rounded px-1.5 py-1"
+         [style.margin-left.px]="depth * 10 + 0"
+         [style.background]="inView(f.id, 'firmware') ? 'var(--accent-deep)' : 'transparent'"
+         [title]="f.title + ' - firmware for ' + f.mcu + ', made against board v' + f.board_version">
+      @if (f.building) {
+        <span class="tcv-building absolute inset-x-1 bottom-0 h-[2px] overflow-hidden rounded"></span>
+      }
+      <span class="flex min-w-0 items-baseline text-[12px]">
+        <span class="min-w-0 truncate">{{ f.title }}</span>
+        <span class="tcv-ext shrink-0">.fw</span>
+        @if (f.building) {
+          <span class="ml-1 shrink-0 text-[10px]" style="color: var(--accent)">building…</span>
+        } @else if (f.built === 'errors' || f.built === 'failed') {
+          <span style="color: var(--danger)" title="the last build failed"> !</span>
+        } @else if (f.changed) {
+          <span style="color: var(--warn)" title="the board changed: pins regenerated"> *</span>
+        }
+      </span>
+      <span class="tcv-link-badge shrink-0" [title]="'made against board v' + f.board_version + (f.board_now !== f.board_version ? ' - the board is at v' + f.board_now : '')">board v{{ f.board_version }}</span>
+    </div>
   }
   @for (m of n.models; track m.id) {
     <div (click)="pickModel(m); phoneShut()"

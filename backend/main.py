@@ -93,6 +93,9 @@ app.include_router(profile_api.router)
 # The admin panel: the accounts, for the owner and the admins.
 from . import admin as admin_api  # noqa: E402
 app.include_router(admin_api.router)
+# The Firmware room: a board's MCU, its code, its builds (backend/firmware.py).
+from . import firmware_api  # noqa: E402
+app.include_router(firmware_api.router)
 
 
 def _raw_db():

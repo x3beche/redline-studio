@@ -24,7 +24,7 @@ import { RulesForm } from './rules-form';
 import { DrawTools, PenState, Sketchpad } from './sketchpad';
 import { ImportBoard } from './import-board';
 import { BoardHealth } from './board-health';
-import { t } from '../i18n';
+import { T, t } from '../i18n';
 import { PartsDrawer } from './parts-drawer';
 
 /** An add being watched (backend main.py /api/parts-add). */
@@ -53,7 +53,7 @@ type BoardView = Pane | 'split' | 'focus';
 @Component({
   selector: 'app-room-pcb',
   imports: [Board3d, CodeView, PinIcon, PinnedByList, Drawing, DrawTools, ImportBoard, Releases, BoardHealth, NgTemplateOutlet,
-            PartsDrawer, RoomFrame, RulesForm, Sketchpad, ToolButton],
+            PartsDrawer, RoomFrame, RulesForm, Sketchpad, T, ToolButton],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
@@ -552,6 +552,14 @@ type BoardView = Pane | 'split' | 'focus';
                           [attr.aria-selected]="sheetOf(sch) === s.key" (click)="pickSheet(s.key)"
                           [title]="s.parts + ' parts' + (s.kind === 'mcu' ? ' - the MCU and the parts that serve only it' : '')"
                           [disabled]="!s.svg">{{ s.name }}<span class="tcv-sheet-count">{{ s.parts }}</span></button>
+                }
+                <!-- An MCU's sheet: its firmware, in the Firmware room. -->
+                @if (sheetMcu(sch); as mcu) {
+                  <button class="tcv-chip ml-auto shrink-0 self-center" (click)="firmwareFor(mcu)"
+                          [disabled]="makingFw() || (!fwOfMcu(mcu) && !auth.can('edit'))"
+                          [title]="fwOfMcu(mcu) ? 'Open the firmware of ' + mcu + ' in the Firmware room'
+                                                : 'Make a firmware for ' + mcu + ' (PlatformIO, Arduino) from this sheet'">
+                    {{ fwOfMcu(mcu) ? ('Open firmware' | t) : makingFw() ? '…' : ('Create firmware' | t) }}</button>
                 }
               </div>
               <div class="relative min-h-0 flex-1">
@@ -1319,6 +1327,39 @@ export class RoomPcb implements OnDestroy {
     return sch.sheets?.some(s => s.key === want && s.svg) ? want : 'root';
   }
 
+  /** The firmware made from this board's MCUs (rooms/firmware.ts). */
+  boardFw = signal<{ id: string; mcu: string }[]>([]);
+  makingFw = signal(false);
+  private fwFor = effect(() => {
+    const id = this.here()?._id;
+    untracked(() => {
+      this.boardFw.set([]);
+      if (!id) return;
+      this.http.get<{ id: string; mcu: string }[]>(`/api/boards/${encodeURIComponent(id)}/firmware`)
+        .subscribe({ next: rows => { if (this.here()?._id === id) this.boardFw.set(rows); }, error: () => {} });
+    });
+  });
+
+  /** The MCU whose sheet is on screen, if it is an MCU's. */
+  sheetMcu(sch: BoardSchematic): string | null {
+    const key = this.sheetOf(sch);
+    return sch.sheets?.find(s => s.key === key && s.kind === 'mcu')?.mcu ?? null;
+  }
+  fwOfMcu(mcu: string): string | null { return this.boardFw().find(f => f.mcu === mcu)?.id ?? null; }
+
+  /** Open the MCU's firmware, or make it first. */
+  firmwareFor(mcu: string) {
+    const have = this.fwOfMcu(mcu), board = this.here()?._id;
+    if (have) { this.picked.openFirmware(have); return; }
+    if (!board) return;
+    this.makingFw.set(true);
+    this.http.post<{ id: string; mcu: string }>(`/api/boards/${encodeURIComponent(board)}/firmware`, { mcu })
+      .subscribe({
+        next: f => { this.makingFw.set(false); this.boardFw.update(r => [...r, f]); this.picked.openFirmware(f.id); },
+        error: e => { this.makingFw.set(false); this.note.set(e?.error?.detail ?? 'the firmware could not be made'); },
+      });
+  }
+
   sheetUrl(sch: BoardSchematic): string {
     const key = this.sheetOf(sch);
     return key === 'root' ? this.file('schematic.svg', sch.at) : this.file(`sheets/${key}.svg`, sch.at);
@@ -1453,7 +1494,7 @@ export class RoomPcb implements OnDestroy {
   comp = signal<BoardComponent | null>(null);
   copiedLine = signal(false);
 
-  private auth = inject(Auth);
+  auth = inject(Auth);
   canEdit = () => this.auth.can('edit');
 
   /** The component card, read again (a layout, a pin moved). */

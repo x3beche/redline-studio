@@ -1,0 +1,10 @@
+Processing esp32dev (platform: espressif32@6.13.0; board: esp32dev; framework: arduino)
+Compiling .pio/build/esp32dev/src/main.cpp.o
+src/main.cpp: In function 'void loop()':
+src/main.cpp:5:14: error: 'undefined_fn' was not declared in this scope
+ void loop(){ undefined_fn(); }
+              ^~~~~~~~~~~~
+src/main.cpp:4:19: warning: unused variable 'unused' [-Wunused-variable]
+include/config.h:12:10: fatal error: missing.h: No such file or directory
+*** [.pio/build/esp32dev/src/main.cpp.o] Error 1
+========================== [FAILED] Took 1.43 seconds ==========================

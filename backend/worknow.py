@@ -71,6 +71,15 @@ async def now() -> dict:
                       "state": "building", "job": j.get("kind"),
                       "secs": _secs(j.get("started_at"), t), "expected_secs": None, "why": None})
 
+    # Firmware builds (backend/fwbuild.py), this space's.
+    from . import fwbuild
+    ws = getattr(d, "workspace", None) or "default"
+    async for j in raw[fwbuild.JOBS].find({"status": "running", "workspace": ws}):
+        items.append({"kind": "firmware", "id": j.get("firmware"), "title": j.get("title") or j.get("firmware"),
+                      "state": "building", "job": "firmware",
+                      "secs": _secs(j.get("started_at"), t), "expected_secs": None,
+                      "why": j.get("why") if j.get("why") not in (None, "asked for") else None})
+
     # Notes being worked on, any room. A note's run is kept twice - as the
     # room's current run and under its own id - so once per note.
     seen_notes: set = set()
@@ -87,7 +96,7 @@ async def now() -> dict:
     # What finished lately, so it does not just disappear.
     since = t - timedelta(minutes=RECENT_MIN)
     recent = []
-    async for j in d[compute.JOBS].find({"kind": {"$in": ["build", "layout", "run", "convert"]}},
+    async for j in d[compute.JOBS].find({"kind": {"$in": ["build", "layout", "run", "convert", "firmware"]}},
                                         {"kind": 1, "model": 1, "board": 1, "at": 1, "wall_s": 1, "rc": 1}
                                         ).sort("at", -1).limit(30):
         at = _dt(j.get("at"))

@@ -1,0 +1,5 @@
+Linking .pio/build/esp32dev/firmware.elf
+/opt/platformio/packages/toolchain-xtensa-esp32/bin/../lib/gcc/xtensa-esp32-elf/8.4.0/../../../../xtensa-esp32-elf/bin/ld: .pio/build/esp32dev/src/main.cpp.o:(.literal._Z5setupv+0x0): undefined reference to `fan_begin()'
+collect2: error: ld returned 1 exit status
+*** [.pio/build/esp32dev/firmware.elf] Error 1
+========================== [FAILED] Took 2.10 seconds ==========================

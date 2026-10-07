@@ -3,9 +3,10 @@
  *  build that ends does not just vanish (backend/worknow.py). */
 import { HttpClient } from '@angular/common/http';
 import { Component, OnDestroy, computed, inject, output, signal } from '@angular/core';
+import { Selection } from '../selection';
 
 interface WorkItem {
-  kind: 'model' | 'board' | 'note';
+  kind: 'model' | 'board' | 'note' | 'firmware';
   id: string;
   title: string;
   state: 'building' | 'queued' | 'running';
@@ -74,6 +75,7 @@ interface WorkNow { items: WorkItem[]; recent: WorkRecent[] }
 })
 export class WorkNowPanel implements OnDestroy {
   private http = inject(HttpClient);
+  private sel = inject(Selection);
   /** A model in the list was clicked: open it. */
   openModel = output<string>();
   data = signal<WorkNow | null>(null);
@@ -96,10 +98,14 @@ export class WorkNowPanel implements OnDestroy {
     try { localStorage.setItem('redline.work.panel', this.open() ? 'open' : 'folded'); } catch { /* private window */ }
   }
 
-  pick(w: WorkItem) { if (w.kind === 'model') this.openModel.emit(w.id); }
+  pick(w: WorkItem) {
+    if (w.kind === 'model') this.openModel.emit(w.id);
+    else if (w.kind === 'firmware') this.sel.openFirmware(w.id);
+  }
 
   label(w: WorkItem): string {
     if (w.kind === 'board') return `board ${w.job ?? 'job'}`;
+    if (w.kind === 'firmware') return 'firmware build';
     if (w.kind === 'note') return `note in ${w.room ?? '?'}${w.by ? ' · ' + w.by : ''}`;
     return w.state === 'queued' ? 'rebuild queued' : 'building';
   }

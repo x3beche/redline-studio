@@ -10,7 +10,7 @@
  *  ones not finished say what they will be rather than pretending.
  */
 export interface Workspace {
-  id: 'cad' | 'pcb' | 'notes' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
+  id: 'cad' | 'pcb' | 'firmware' | 'notes' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
@@ -30,6 +30,13 @@ export const WORKSPACES: Workspace[] = [
     label: 'PCB Design',
     blurb: 'A circuit written as text, the parts fetched by part number, '
          + 'and the board placed and drawn from it.',
+    ready: true,
+  },
+  {
+    id: 'firmware',
+    label: 'Firmware',
+    blurb: 'The code on a board\'s chip: its schematic sheet, the pins as nets, '
+         + 'built with PlatformIO and checked before it is flashed.',
     ready: true,
   },
   {

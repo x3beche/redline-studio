@@ -279,9 +279,14 @@ export interface BoardNode {
   /** The board as a 3D component: its version and who imports it. */
   version?: number; module?: string | null; has_3d?: boolean; used_by?: ComponentRef[];
 }
+/** A firmware in the catalog: under its board, as `<name>.fw` (backend/firmware.py). */
+export interface FirmwareNode {
+  id: string; title: string; name: string; kind: 'fw'; board: string; mcu: string; sheet: string;
+  board_version: number; board_now: number; changed: boolean; building: boolean; built: string | null;
+}
 export interface FolderNode {
   name: string; path: string;
-  folders: FolderNode[]; models: ModelEntry[]; boards?: BoardNode[];
+  folders: FolderNode[]; models: ModelEntry[]; boards?: BoardNode[]; firmware?: FirmwareNode[];
 }
 /** Anything a model can import: the Insert picker's rows. */
 export interface ComponentRow {

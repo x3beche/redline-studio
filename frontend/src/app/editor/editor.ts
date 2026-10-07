@@ -19,7 +19,7 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Activity, Analytics, Api, Boards, CameraState, NoteView, Catalog, LogLine, Question, Questions, Run, FolderNode, ModelEntry, ComponentRow,
+import { Activity, Analytics, Api, Boards, CameraState, NoteView, Catalog, LogLine, Question, Questions, Run, FolderNode, FirmwareNode, ModelEntry, ComponentRow,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer, ViewApplied, viewHash } from './ocp';
 import { Markdown, plain } from '../markdown';
@@ -1906,12 +1906,22 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  showing. Both can be loaded at once - the 3D room keeps its model
    *  while you are in the board room - but only one of them is what you
    *  are looking at, so only one of them is lit. */
-  inView(id: string, kind: 'model' | 'board'): boolean {
+  inView(id: string, kind: 'model' | 'board' | 'firmware'): boolean {
     const room = this.picked.room();
+    if (kind === 'firmware') return room === 'firmware' && this.picked.firmware() === id;
     return kind === 'board'
       ? room === 'pcb' && this.picked.board() === id
       : room === 'cad' && this.activeModel() === id;
   }
+
+  /** The firmware made from a board, shown under it (a .fw opens the Firmware room). */
+  fwOf(n: FolderNode, board: string): FirmwareNode[] { return (n.firmware ?? []).filter(f => f.board === board); }
+  /** Firmware whose board is in another folder - shown after the boards. */
+  fwLoose(n: FolderNode): FirmwareNode[] {
+    const here = new Set((n.boards ?? []).map(b => b.id));
+    return (n.firmware ?? []).filter(f => !here.has(f.board));
+  }
+  openFirmware(f: { id: string }) { this.picked.openFirmware(f.id); }
 
   /** A .pcb belongs to the board room; opening one goes there. */
   openBoard(b: { id: string }) { this.picked.openBoard(b.id); }

@@ -33,7 +33,8 @@ def test_a_room_says_its_last_line_what_waits_and_when_the_agent_wrote():
     for m, at in ((a, "01"), (b, "02"), (c, "03")):
         db.col.rows[m["_id"]]["at"] = f"2026-01-01T00:00:{at}+00:00"
     run(chat.mark_seen(db, [a["_id"]]))
-    cad, pcb = run(chat.rooms(db))
+    cad, pcb, fw = run(chat.rooms(db))
+    assert fw["room"] == "firmware" and fw["count"] == 0
     assert cad["count"] == 3 and pcb["count"] == 1
     assert cad["last"]["text"] == "stop the build" and cad["last"]["role"] == chat.USER
     assert cad["waiting"] == 1 and cad["urgent"] == 1
@@ -45,7 +46,8 @@ def test_a_line_from_before_rooms_is_the_3d_rooms():
     db = FakeDb()
     m = run(chat.post(db, "old line"))
     del db.col.rows[m["_id"]]["room"]
-    cad, pcb = run(chat.rooms(db))
+    cad, pcb, fw = run(chat.rooms(db))
+    assert fw["room"] == "firmware" and fw["count"] == 0
     assert cad["count"] == 1 and pcb["count"] == 0
 
 

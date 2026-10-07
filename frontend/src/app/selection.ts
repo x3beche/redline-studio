@@ -37,6 +37,9 @@ export class Selection {
   /** The board the PCB room should show, by id. */
   board = signal<string | null>(null);
 
+  /** The firmware the Firmware room should show, by id. */
+  firmware = signal<string | null>(null);
+
   /** The note open in the Notes room, and the file picked in the Files
    *  room, by id - so the command palette can offer "Ask Chat about this
    *  note / file". */
@@ -85,6 +88,12 @@ export class Selection {
   openBoard(id: string) {
     this.board.set(id);
     this.room.set('pcb');
+  }
+
+  /** Open a firmware (a .fw): the Firmware room, on it. */
+  openFirmware(id: string) {
+    this.firmware.set(id);
+    this.room.set('firmware');
   }
 }
 

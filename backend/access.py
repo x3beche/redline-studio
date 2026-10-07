@@ -165,6 +165,9 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/activity", "run"),
     ("POST", "/api/models/.+/build", "run"),
     ("POST", "/api/boards/{}/(build|layout|schematic|run)", "run"),
+    # firmware: a build, or pins.h written again from the board, runs
+    # something; making one or changing its code changes the design
+    ("POST", "/api/firmware/{}/(build|pins)", "run"),
     # the board's 3D component, exported again from its layout: a run's step
     ("POST", "/api/boards/{}/component", "run"),
     ("POST", "/api/boards/{}/rules/check", "view"),     # a check, nothing is written

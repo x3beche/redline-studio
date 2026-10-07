@@ -34,7 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CLI = [sys.executable, str(ROOT / "tools" / "revisions.py")]
 PROTOCOL = "2025-06-18"
-ROOMS = ["cad", "pcb"]
+ROOMS = ["cad", "pcb", "firmware"]
 
 
 def _s(desc: str) -> dict:

@@ -6,6 +6,11 @@ import { capture } from './sketchpad';
 import { whenSettled } from '../fold';
 
 type Geo = BoardGeometry;
+/** Places to mark on a drawing: its viewBox, and boxes in those units. */
+export interface DrawingMarks {
+  box: number[];
+  rects: { x: number; y: number; w: number; h: number }[];
+}
 /** What is under the mouse: one track, via or pad. */
 export type Hit =
   | { kind: 'track'; net: string; item: Geo['tracks'][number] }
@@ -102,6 +107,20 @@ export type Hit =
       </button>
     }
   }
+  <!-- Marks: boxes over places in the drawing (a net's labels on a
+       schematic sheet), in the drawing's own units. -->
+  @if (marks(); as mk) {
+    @if (mk.rects.length && ready()) {
+      <svg class="pointer-events-none absolute" style="left: 0; top: 0; overflow: visible"
+           [attr.width]="w()" [attr.height]="h()"
+           [style.transform]="'translate(' + x() + 'px,' + y() + 'px)'"
+           [attr.viewBox]="mk.box.join(' ')" preserveAspectRatio="none">
+        @for (r of mk.rects; track $index) {
+          <rect [attr.x]="r.x" [attr.y]="r.y" [attr.width]="r.w" [attr.height]="r.h" class="tcv-sch-mark" />
+        }
+      </svg>
+    }
+  }
   @if (!ready()) {
     <p class="absolute inset-x-0 top-2 text-center text-[11px]"
        style="color: var(--ink-dim)">drawing…</p>
@@ -131,6 +150,8 @@ export class Drawing implements OnDestroy {
   mirror = input(false);
   /** Which copper can be picked: the side on show, or both. */
   side = input<'F' | 'B' | 'all'>('all');
+  /** Boxes to draw over the drawing, in its viewBox's units. */
+  marks = input<DrawingMarks | null>(null);
 
   readonly Math = Math;
   hover = signal<Hit | null>(null);
@@ -232,6 +253,20 @@ export class Drawing implements OnDestroy {
   }
 
   step(k: number) { this.zoom(k); }
+
+  /** Bring a place in the drawing (in viewBox units) to the middle, at
+   *  least `zoomTo` times as close as fitted. */
+  centerOn(box: number[], r: { x: number; y: number; w: number; h: number }, zoomTo = 2.5) {
+    if (!this.ready()) return;
+    const b = this.box().nativeElement;
+    const fitW = this.natural.w * Math.min(b.clientWidth / this.natural.w, b.clientHeight / this.natural.h);
+    if (this.w() < fitW * zoomTo) this.zoom((fitW * zoomTo) / this.w());
+    const px = this.x() + ((r.x + r.w / 2 - box[0]) / box[2]) * this.w();
+    const py = this.y() + ((r.y + r.h / 2 - box[1]) / box[3]) * this.h();
+    this.x.set(this.x() + b.clientWidth / 2 - px);
+    this.y.set(this.y() + b.clientHeight / 2 - py);
+    this.fitted = false;
+  }
 
   /** What is on screen, as a picture the size of the box: the drawing
    *  where it has been moved to, at the zoom it is at. */

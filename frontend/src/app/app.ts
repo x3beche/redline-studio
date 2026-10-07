@@ -3,6 +3,7 @@ import { Editor } from './editor/editor';
 import { Selection } from './selection';
 import { RoomAnalyze } from './rooms/analyze';
 import { RoomPcb } from './rooms/pcb';
+import { RoomFirmware } from './rooms/firmware';
 import { RoomTools } from './tools/room';
 import { QuickNote, RoomNotes } from './rooms/notes';
 import { RoomFiles } from './rooms/files';
@@ -20,7 +21,7 @@ import { AgentThreads } from './rooms/agent-thread';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, SignIn, T, UserChip, TopbarFit, TopbarMore],
+  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, SignIn, T, UserChip, TopbarFit, TopbarMore],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -85,6 +86,7 @@ import { AgentThreads } from './rooms/agent-thread';
   <div room class="tcv-room-slot" [class.hidden]="here() === 'cad'">
     @switch (here()) {
       @case ('pcb') { <app-room-pcb /> }
+      @case ('firmware') { <app-room-firmware /> }
       @case ('notes') { <app-room-notes /> }
       @case ('commandcode') { <app-room-commandcode /> }
       @case ('files') { <app-room-files /> }
