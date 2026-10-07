@@ -4,8 +4,10 @@ directory, output goes back to the database. Nothing persists on disk."""
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import collections
+import contextvars
 import shutil
 import time
 import sys
@@ -20,6 +22,10 @@ TIMEOUT = 900
 # Often enough that stopping means stopping, rarely enough that a
 # four-minute boolean is not spending its time on the database.
 STOP_EVERY = 2.0
+
+# The build job this is (backend/buildjobs.py sets it in its runner): kept on
+# the model while it builds, so a job found lost clears only its own flag.
+JOB: contextvars.ContextVar[str | None] = contextvars.ContextVar("build_job", default=None)
 
 
 async def request_stop(db, model_id: str) -> bool:
@@ -65,10 +71,10 @@ async def build(db, model_id: str, script: Path) -> dict:
     # not end this one before it has drawn a breath.
     await db.models.update_one(
         {"_id": model_id},
-        {"$set": {"building": True, "build_started": started_at},
+        {"$set": {"building": True, "build_started": started_at, "build_job": JOB.get()},
          "$unset": {"stop_at": ""}})
 
-    tmp = Path(tempfile.mkdtemp(prefix="x3build-"))
+    tmp = Path(tempfile.mkdtemp(prefix="redline-build-"))
     try:
         models_dir = tmp / "models"
         models_dir.mkdir()
@@ -187,15 +193,34 @@ async def build(db, model_id: str, script: Path) -> dict:
 
         # What it was built against, so the page can say "built against
         # demoboard v12" - and tell when that is no longer the latest.
+        # And who asked: the link scheduler (with the change it was for) or
+        # somebody directly - a build asked for by hand is not "a rebuild
+        # because board v4", however recent that rebuild's reason is.
+        link = doc.get("link") or {}
+        by_link = link.get("state") == "building"
         patch = {"built": {"at": store.now(), "version": doc.get("version") or 1,
                            "against": linked["against"],
-                           "hash": linked["hash"]}}
+                           "hash": linked["hash"],
+                           "by": "link" if by_link else "request",
+                           "because": link.get("because") if by_link else None,
+                           "notes": linked.get("notes") or []}}
         if (doc.get("link") or {}).get("state") in ("failed", "blocked"):
             patch["link.state"] = "done"
         await db.models.update_one({"_id": model_id}, {"$set": patch})
+        # Which of the models it imports came from the component cache and
+        # which ran (export_model.py, backend/buildcache.py).
+        report = assets_dir / f"{flat}.cache.json"
+        try:
+            components = json.loads(report.read_text()) if report.exists() else None
+        except ValueError:
+            components = None
         return {"model": model_id, "built_against": linked["hash"],
                 "artifacts": {k: v["bytes"] for k, v in stored.items()},
-                "log": "\n".join(log[-4:])}
+                "components": components,
+                # Anything staged older than the latest - a pin, or a board
+                # that moved on mid-build - said rather than done silently.
+                "notes": linked.get("notes") or [],
+                "log": "\n".join([*(f"note: {n}" for n in linked.get("notes") or []), *log[-4:]])}
     finally:
         # Cleared however it ends: a crashed build that left the flag set
         # would show a bar that never stops. The duration is kept so the next
@@ -208,5 +233,5 @@ async def build(db, model_id: str, script: Path) -> dict:
             patch["build_secs"] = took
         await db.models.update_one(
             {"_id": model_id},
-            {"$set": patch, "$unset": {"build_started": ""}})
+            {"$set": patch, "$unset": {"build_started": "", "build_job": ""}})
         shutil.rmtree(tmp, ignore_errors=True)

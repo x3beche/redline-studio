@@ -806,3 +806,24 @@ async def test_renaming_a_model_carries_its_links_revisions_and_versions(api):
     tray.update(model("p/tray", "import fan_mount\nPARTS = []\n"))   # the person's edit
     g = await links.load(api)
     assert g.uses["model:p/tray"] == ["model:q/fan_mount"]
+
+
+def test_copied_numbers_skip_exponents_and_halves():
+    # `CAP_CLR * 2 ** 0.5` was reported as "0.5 is enclosure.BOARD_CLR".
+    exports = {"enclosure": links.model_exports("BOARD_CLR = 0.5\nWALL = 2.4\n")}
+    src = ("import enclosure\n"
+           "a = CAP_CLR * 2 ** 0.5\n"            # exponent
+           "b = pow(W, 0.5)\n"                   # exponent, as a call
+           "c = math.pow(W, -0.5)\n"
+           "d = W * 0.5\n"                       # half of something
+           "e = 0.5 * W\n"
+           "f = W / 0.5\n"
+           "g = W\ng *= 0.5\n"
+           "h = 2.4 ** 2\n"                      # a base is still a length
+           "i = W + 0.5\n"                       # a clearance is a length
+           "j = 0.5\n"
+           "k = W * 2.4\n"                       # only the half is let off
+           "m = 0.5 / W\n")                      # 0.5 divided by: kept
+    hits = links.copied_numbers(src, exports)
+    assert [(h["line"], h["value"]) for h in hits] == [
+        (10, 2.4), (11, 0.5), (12, 0.5), (13, 2.4), (14, 0.5)]

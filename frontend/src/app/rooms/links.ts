@@ -260,10 +260,12 @@ export class PinnedByList {
               @if (versions(); as vs) {
                 @for (v of vs.versions; track v.version) {
                   <button class="tcv-pin-opt" role="menuitemradio" [attr.aria-checked]="u.pinned === v.version"
-                          [attr.data-on]="u.pinned === v.version ? 1 : null" (click)="choose(u, v.version)">
+                          [attr.data-on]="u.pinned === v.version ? 1 : null" (click)="choose(u, v.version)"
+                          [disabled]="v.failed" [title]="v.failed ? 'v' + v.version + ' failed to build' + (v.error ? ': ' + v.error : '') : ''">
                     <span class="tcv-pin-mark">@if (u.pinned === v.version) { <app-pin-icon /> }</span>
                     <span class="min-w-0 flex-1">
                       <span class="font-mono">Pin v{{ v.version }}</span>
+                      @if (v.failed) { <span style="color: var(--danger)"> (build failed)</span> }
                       @if (v.version === vs.latest) { <span style="color: var(--ink-dim)"> (latest)</span> }
                       <span class="float-right font-mono" style="color: var(--ink-dim)">{{ when(v.at) }}</span>
                       <span class="block truncate" style="color: var(--ink-dim)" [title]="v.changes.join('; ')">{{ v.changes.join('; ') }}</span>

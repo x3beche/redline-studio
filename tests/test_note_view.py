@@ -210,3 +210,138 @@ def test_the_picture_has_the_canvas_shape_the_note_was_drawn_in():
     w, h, _ = render.shot_size(note_view(canvas={"w": 380, "h": 300, "aspect": 1.2667}),
                                None, None)
     assert w >= 800 and abs(w / h - 380 / 300) < 0.01
+
+
+# ---------------------------------------------------------------- an older note's shape
+# Note 20261007-102504-26cf19 was drawn before notes kept their canvas: its
+# drawing is 1028x823, and its after shot came out 1200x800 - the same
+# camera over another aspect, so the frame moved (lower and further back).
+
+def png(w, h):
+    import struct
+    import zlib
+    raw = b"".join(b"\x00" + b"\x00\x00\x00" * w for _ in range(h))
+    chunk = lambda t, d: (struct.pack(">I", len(d)) + t + d
+                          + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+def test_a_drawings_size_is_read_from_its_png_header():
+    assert render.png_size(png(1028, 823)) == (1028, 823)
+    assert render.png_size(b"GIF89a....") is None
+    assert render.png_size(b"") is None and render.png_size(None) is None
+
+
+def test_an_older_note_is_shot_in_the_shape_of_its_drawing():
+    old = {"states": {"/base/case": [1, 1]}}
+    w, h, why = render.shot_size(old, None, None, drawn=(1028, 823))
+    assert (w, h) == (1028, 823) and "drawing" in why
+    # No view at all (an even older note): the drawing still says it.
+    assert render.shot_size(None, None, None, drawn=(1028, 823))[:2] == (1028, 823)
+    # A width asked for keeps the drawing's aspect.
+    w, h, _ = render.shot_size(old, 1200, None, drawn=(1028, 823))
+    assert w == 1200 and abs(w / h - 1028 / 823) < 0.005
+    # A small drawing is scaled up the way a small canvas is, same shape.
+    w, h, why = render.shot_size(old, None, None, drawn=(380, 300))
+    assert w >= 800 and abs(w / h - 380 / 300) < 0.01 and "scaled" in why
+    # A drawing from a 2x screen is shot no larger than a canvas would be.
+    w, h, _ = render.shot_size(old, None, None, drawn=(2056, 1646))
+    assert w <= 2400 and h <= 1600 and abs(w / h - 2056 / 1646) < 0.01
+    # The note's own canvas wins over its drawing; --free-aspect over both.
+    assert render.shot_size(note_view(), None, None, drawn=(1028, 823))[:2] == (1100, 700)
+    assert render.shot_size(old, 1200, 800, free_aspect=True,
+                            drawn=(1028, 823)) == (1200, 800, None)
+    # Nothing to go on: as before.
+    assert render.shot_size(old, None, None, drawn=None) == (1400, 950, None)
+    assert render.shot_size(old, None, None, drawn=(10, 10)) == (1400, 950, None)
+
+
+def test_the_drawings_size_comes_from_the_notes_before_image(monkeypatch):
+    seen = {}
+
+    class Resp:
+        def __init__(self, data):
+            self.data = data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return self.data
+
+    def opener(req, timeout=None):
+        seen["url"], seen["auth"] = req.full_url, req.get_header("Authorization")
+        return Resp(png(1028, 823))
+
+    assert render.drawn_size(RID, {"Authorization": "Bearer t"}, opener) == (1028, 823)
+    assert seen["url"].endswith(f"/api/revisions/{RID}/image") and seen["auth"] == "Bearer t"
+
+    def broken(req, timeout=None):
+        raise OSError("down")
+    assert render.drawn_size(RID, {}, broken) is None
+
+
+def test_same_camera_same_aspect_same_frame():
+    """Why the aspect is all that matters, for both camera types the viewer
+    has (three-cad-viewer Camera): a perspective camera's fov (22 deg) is
+    vertical and fixed, its zoom is its distance; an orthographic one's
+    frustum is fitted to the shorter side and scaled by its zoom. So the
+    same position and target over the same aspect frame the same picture
+    at any pixel size - and over another aspect, another one."""
+    import math
+
+    def frame(ortho, aspect, dist=100.0, zoom=1.0, radius=50.0):
+        """Half extents (x, y) of what the camera sees at the target."""
+        if ortho:
+            # projectSize: the shorter side gets the bounding radius.
+            w, h = (radius, radius / aspect) if aspect < 1 else (radius * aspect, radius)
+            return w / zoom, h / zoom
+        h = dist * math.tan(math.radians(22 / 2))
+        return h * aspect, h
+
+    for ortho in (False, True):
+        drawn = frame(ortho, 1028 / 823)
+        assert frame(ortho, 2056 / 1646) == pytest.approx(drawn)     # same shape, bigger
+        assert frame(ortho, 1200 / 800) != pytest.approx(drawn)      # the old fixed size
+    # Perspective: the height matches at any aspect, the sides do not - a
+    # wider shot shows more to the left and right of the drawing.
+    assert frame(False, 1.5)[1] == pytest.approx(frame(False, 1028 / 823)[1])
+
+
+def test_the_after_shot_no_longer_forces_1200x800_on_an_older_note(monkeypatch, tmp_path):
+    import asyncio
+
+    from tools import revisions
+
+    argv = {}
+
+    class Proc:
+        returncode = 1
+
+        async def communicate(self):
+            return b"stopped here", None
+
+    async def spawn(*a, **kw):
+        argv["a"] = a
+        return Proc()
+
+    monkeypatch.setattr(revisions.asyncio, "create_subprocess_exec", spawn)
+    monkeypatch.setattr(revisions.tempfile, "gettempdir", lambda: str(tmp_path))
+
+    class Revs:
+        async def find_one(self, *a, **kw):
+            return {"_id": RID, "view": {"states": {}}}
+
+    class Db:
+        revisions = Revs()
+
+    with pytest.raises(SystemExit):
+        asyncio.run(revisions._after_shot(Db(), RID))
+    assert "--width" not in argv["a"] and "--height" not in argv["a"]
+    with pytest.raises(SystemExit):
+        asyncio.run(revisions._after_shot(Db(), RID, 900))
+    assert argv["a"][argv["a"].index("--width") + 1] == "900"

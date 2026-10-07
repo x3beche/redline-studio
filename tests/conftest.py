@@ -24,3 +24,20 @@ def _lcsc_elsewhere(tmp_path, monkeypatch):
     look.mkdir()
     monkeypatch.setattr(lcsc, "LOOK", look)
     monkeypatch.setattr(lcsc, "GAP", 0.0)
+
+
+@pytest.fixture(autouse=True)
+def _builds_in_process(monkeypatch):
+    """A model build is a process of its own (backend/buildjobs.py). In a
+    test its runner is a task in this process, so the build.build a test
+    stands in is the one that runs, and nothing is started for real."""
+    import asyncio
+
+    from backend import buildjobs
+
+    async def spawn(raw, job_id):
+        asyncio.create_task(buildjobs.run(raw, job_id))
+        return 0
+
+    monkeypatch.setattr(buildjobs, "spawn", spawn)
+    monkeypatch.setattr(buildjobs, "POLL", 0.02)

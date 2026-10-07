@@ -304,9 +304,12 @@ export interface ModelLinks {
  *  older than the latest. */
 export interface PinnedBy { id: string; title: string; version: number; latest: number | null; behind: boolean }
 /** A kept version of a component: what a pin can point at. */
-export interface ComponentVersion { version: number; at: string | null; changes: string[] }
+/** A kept version; `failed` when its own build failed (pins and "latest" skip it). */
+export interface ComponentVersion { version: number; at: string | null; changes: string[];
+                                    failed?: boolean; error?: string | null }
 export interface ComponentVersions {
-  kind: 'model' | 'board'; id: string; latest: number | null;
+  /** latest: the newest version that builds; newest: the newest saved. */
+  kind: 'model' | 'board'; id: string; latest: number | null; newest?: number | null;
   versions: ComponentVersion[]; pinned_by: PinnedBy[];
 }
 /** An importable name, and the component it resolves to (the build's table). */
@@ -823,6 +826,9 @@ export interface PartHeld {
   value?: string | null;
   mpn?: string | null;
   maker?: string | null;
+  /** Who put it there: LCSC's category (rules), a model, or somebody by hand. */
+  place_by?: 'rules' | 'llm' | 'manual';
+  place_model?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })

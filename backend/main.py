@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 # first left .env's values unseen - the defaults won wherever they differed.
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from . import (access, actors, ato, auth, changes, convert, files, jobs, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
+from . import (access, actors, ato, auth, buildjobs, changes, convert, files, jobs, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, usage, links, board3d)
 from . import tools_api
 
@@ -405,7 +405,11 @@ async def component_versions(kind: str, cid: str):
     k = links.key(kind, cid)
     if k not in g.nodes:
         raise HTTPException(404, cid)
-    return {"kind": kind, "id": cid, "latest": g.nodes[k].get("version"),
+    newest = g.nodes[k].get("version")
+    # "latest" is the newest version that did not fail to build; `newest`
+    # is the newest saved, failed or not.
+    return {"kind": kind, "id": cid, "latest": await store.latest_good(d, kind, cid, newest),
+            "newest": newest,
             "versions": await links.versions(d, kind, cid),
             "pinned_by": links.pinned_by(g, k)}
 
@@ -501,13 +505,75 @@ async def pin_component(model_id: str, body: PinIn):
 
 
 @app.post("/api/models/{model_id:path}/build")
-async def build_model(model_id: str):
+async def build_model(model_id: str, detach: bool = False):
+    """Build a model. The build is a process of its own (backend/buildjobs.py),
+    so a reload of the API neither stops it nor loses its result. The
+    request waits for it and answers what the build did; `detach=1`
+    answers at once (202) with the job - follow it at GET /api/build-jobs/{job}."""
+    from fastapi.responses import JSONResponse
+
+    d = db()
+    if not await d.models.find_one({"_id": model_id}, {"_id": 1}):
+        raise HTTPException(404, repr(model_id))
+    job = await _start_build(d, model_id, by="request")
+    if detach:
+        return JSONResponse(jsonable_encoder(buildjobs.view(job)), status_code=202)
+    done = await buildjobs.wait(d.raw, job["_id"])
+    if done.get("status") == "done":
+        return buildjobs.result(done)
+    raise HTTPException(done.get("code") or 500, done.get("detail"))
+
+
+async def _start_build(d, model_id: str, by: str, link_token: str | None = None) -> dict:
+    # The version this build is of, read before it starts: a save while it
+    # runs makes another version, and the outcome is this one's (the runner
+    # records it: build_outcome).
+    version = await store.current_version(d, model_id)
     try:
-        return await build.build(db(), model_id, EXPORT_SCRIPT)
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    except (ValueError, RuntimeError, TimeoutError, MemoryError) as exc:
-        raise HTTPException(500, str(exc)) from exc
+        return await buildjobs.start(d.raw, model_id, workspace=scope.current(), by=by,
+                                     link_token=link_token, version=version,
+                                     actor=actors.CURRENT.get(), role=access.ROLE.get())
+    except buildjobs.Busy as exc:
+        if by == "link":
+            raise
+        raise HTTPException(409, {"detail": str(exc) + " - wait for it, or follow it with "
+                                  f"GET /api/build-jobs/{exc.job['_id']}",
+                                  "job": exc.job["_id"]})
+    except OSError as exc:
+        raise HTTPException(500, f"{model_id}: the build could not be started: {exc}")
+
+
+async def build_outcome(d, job: dict, error: str | None) -> None:
+    """What the runner records once a build has ended (backend/buildjobs.py).
+    A saved version that does not build is kept marked failed: pins and
+    "latest" skip it, the history says so (store.version_built). A link
+    rebuild that breaks is not that version's own save breaking it."""
+    if error is not None and job.get("by") == "link":
+        return
+    await _version_outcome(d, job.get("model"), job.get("version"), error)
+
+
+@app.get("/api/build-jobs")
+async def build_jobs_list(model: str, limit: int = 10):
+    """A model's latest builds, newest first, without their results."""
+    return await buildjobs.latest(db().raw, model, scope.current(), max(1, min(limit, 50)))
+
+
+@app.get("/api/build-jobs/{job}")
+async def build_job(job: str):
+    """One build: running, done (with what the build answered), failed (with
+    the status and detail the request would have answered) or lost."""
+    doc = await buildjobs.get(db().raw, job)
+    if not doc or doc.get("workspace") != scope.current():
+        raise HTTPException(404, f"no build job {job}")
+    return buildjobs.view(doc)
+
+
+async def _version_outcome(d, model_id: str, version: int | None, error: str | None) -> None:
+    try:
+        await store.version_built(d, model_id, version, error)
+    except Exception:                                # noqa: BLE001 - never fail a build over it
+        LOG.exception("could not record how %s v%s built", model_id, version)
 
 
 @app.get("/api/models/{model_id:path}/viewer.json")
@@ -2293,6 +2359,56 @@ async def board_analytics(bid: str):
         raise HTTPException(404, bid)
 
 
+@app.get("/api/boards/{bid}/bom/cost")
+async def board_bom_cost(bid: str, refresh: int = 0, qty: int = 10, force: int = 0):
+    """What the board's parts cost at LCSC's price breaks, for 1 to 1000
+    boards and for `qty`, and which parts are out of stock or short.
+
+    Reads only what is on disk. `refresh=1` also starts fetching the
+    offers that are missing or older than a day (`force=1`: older than ten
+    minutes), one polite ask per part in the background; the answer
+    carries the run's progress under `refresh`, to be polled."""
+    from . import bom_cost
+    try:
+        lines = await bom_cost.board_lines(db(), bid)
+    except KeyError:
+        raise HTTPException(404, bid)
+    if not 1 <= qty <= 1_000_000:
+        raise HTTPException(400, "qty: 1 to 1000000 boards")
+    if refresh:
+        parts = sorted({l["lcsc"] for l in lines if l["lcsc"]})
+        bom_cost.start_refresh(bid, parts, force=bool(force))
+    offers = {l["lcsc"]: bom_cost.cached_offer(l["lcsc"]) for l in lines if l["lcsc"]}
+    out = bom_cost.cost(lines, offers, qty)
+    out["board"] = bid
+    out["refresh"] = bom_cost.public(bom_cost.job(bid))
+    out["budget"] = {k: v for k, v in lcsc.state().items()
+                     if k in ("used", "budget", "window_s", "refused_until")}
+    return out
+
+
+@app.get("/api/boards/{bid}/bom/alternatives")
+async def board_bom_alternatives(bid: str, lcsc_id: str, qty: int = 10):
+    """In-stock parts like one of the board's: one LCSC search, kept for
+    a day. Suggestions - nothing on the board changes."""
+    from . import bom_cost
+    try:
+        lines = await bom_cost.board_lines(db(), bid)
+    except KeyError:
+        raise HTTPException(404, bid)
+    line = next((l for l in lines if l["lcsc"] == lcsc_id), None)
+    if not line:
+        raise HTTPException(404, f"{lcsc_id} is not on {bid}")
+    offer = bom_cost.cached_offer(lcsc_id) or {}
+    line = {**line, "mpn": offer.get("mpn") or line.get("bom_mpn"), "package": offer.get("package")}
+    need = line["qty"] * max(1, qty)
+    out = await _look(bom_cost.find_alternatives, line, need)
+    passive = bom_cost.passive_alternative(line, need)
+    rows = ([passive] if passive else []) + [r for r in out.get("rows") or []
+                                              if not passive or r["lcsc"] != passive["lcsc"]]
+    return {"lcsc": lcsc_id, "need": need, "term": out.get("term"), "at": out.get("at"), "rows": rows}
+
+
 @app.get("/api/boards/{bid}/compute")
 async def board_compute(bid: str, limit: int = 12):
     """What building and placing this board has cost the machine.
@@ -2450,22 +2566,33 @@ async def board_module(bid: str):
     return Response(text, media_type="text/x-python")
 
 
-async def _link_build(d, model_id: str):
+async def _link_build(d, model_id: str, job: str | None = None):
     """A rebuild a change elsewhere set off, said in the log either way."""
     link = ((await d.models.find_one({"_id": model_id}, {"link": 1})) or {}).get("link") or {}
     b = link.get("because") or {}
     why = f"{b.get('title') or b.get('id')} v{b.get('version')}"
     # A pin that moved is not the component changing.
     did = {"pinned": "was pinned", "follow": "is followed again"}.get(b.get("pin"), "changed")
-    await say(f"{model_id}: rebuilding because {why} {did}", "work")
-    try:
-        out = await build.build(d, model_id, EXPORT_SCRIPT)
-    except Exception as exc:
-        await say(f"{model_id}: broke after {why} {did} - {str(exc).splitlines()[-1][:200] if str(exc) else type(exc).__name__}",
+    # A job of its own (backend/buildjobs.py); `job` is one a previous API
+    # process started, which a reload did not stop - waited for, not redone.
+    if job is None:
+        await say(f"{model_id}: rebuilding because {why} {did}", "work")
+        job = (await _start_build(d, model_id, by="link", link_token=link.get("token")))["_id"]
+    done = await buildjobs.wait(d.raw, job)
+    if done.get("status") != "done":
+        # Not marked failed: this version's own save is not what broke it
+        # (build_outcome, in the runner).
+        msg = str(done.get("detail") or done.get("status"))
+        await say(f"{model_id}: broke after {why} {did} - {msg.splitlines()[-1][:200] if msg else 'failed'}",
                   "error")
-        raise
+        raise RuntimeError(msg)
     await say(f"{model_id}: rebuilt against {why}", "done")
-    return out
+    return buildjobs.result(done)
+
+
+async def _link_job(d, model_id: str, token: str | None):
+    """A link rebuild a previous API process started (links.recover)."""
+    return await buildjobs.for_link(d.raw, model_id, scope.current(), token)
 
 
 # ---------------- analytics ----------------
@@ -2476,7 +2603,19 @@ async def _start_sampler():
     if MONGODB_URI:
         asyncio.create_task(insights.sampler(db))
         # Changes travelling to what uses them (backend/links.py).
-        asyncio.create_task(links.loop(lambda: db().raw, _link_build))
+        # Builds a reload did not stop are seen through (backend/buildjobs.py);
+        # those that died with the container are lost, and their orphaned
+        # export_model.py killed, before the queue looks at them.
+        try:
+            lost = await buildjobs.recover(db().raw)
+            killed = await buildjobs.reap_orphans(db().raw)
+            if lost or killed:
+                LOG.warning("builds lost: %s; orphaned builds killed: %s", lost,
+                            [(k["pid"], k["why"]) for k in killed])
+        except Exception as exc:                       # noqa: BLE001 - the API still starts
+            LOG.warning("build jobs not recovered: %s", exc)
+        asyncio.create_task(links.loop(lambda: db().raw, _link_build,
+                                       lookup=_link_job))
         try:
             # The trash of the Command Code room empties itself after 30 days.
             await cc_chat.ensure_indexes(db().raw)       # the database itself: one index for every workspace

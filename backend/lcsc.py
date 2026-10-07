@@ -110,6 +110,18 @@ WHO: contextvars.ContextVar[str] = contextvars.ContextVar("who", default=_DEFAUL
 # answers someone looking at it, so it says so. An agent fetching twenty
 # parts for a board would rather wait twelve minutes than get eight.
 PATIENT: contextvars.ContextVar[bool] = contextvars.ContextVar("patient", default=False)
+# Somebody watching an add from the page: each step is told to this, as
+# (step, text) - "download", "downloading footprint, symbol and 3D model…".
+PROGRESS: contextvars.ContextVar = contextvars.ContextVar("progress", default=None)
+
+
+def _tell(step: str, text: str) -> None:
+    tell = PROGRESS.get()
+    if tell:
+        try:
+            tell(step, text)
+        except Exception:                                  # noqa: BLE001 - only a progress line
+            pass
 
 
 class Refused(OSError):
@@ -257,6 +269,7 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
         if not waited:
             _record(kind, target, "wait", url=url,
                     error=f"budget spent - waiting {int(wait) + 1} s for it")
+        _tell("wait", f"budget: wait {int(wait) + 1} s")
         await asyncio.sleep(min(wait + 0.5, 30))
         waited += min(wait + 0.5, 30)
         verdict, wait = await asyncio.get_running_loop().run_in_executor(None, _locked, claim)
@@ -303,6 +316,7 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
                 raise
             note("direct", t0, status=first.code, error="refused here - asking through the proxy",
                  meta=getattr(first, "net_meta", None))
+            _tell("proxy", "LCSC refused, retrying via proxy")
             via, how = "proxy", "fallback"
             t0 = _time.monotonic()
             out, meta = await attempt(True)
@@ -920,6 +934,7 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
                 shutil.copy(seen, ee_cache / f"{lcsc}.json")
         except OSError:
             pass
+        _tell("download", "downloading footprint, symbol and 3D model…")
         rc, log = await _polite(
             "download", lcsc, f"easyeda2kicad --lcsc_id {lcsc} --footprint --3d",
             download, [*tool, "--lcsc_id", lcsc, "--footprint", "--3d",
@@ -960,6 +975,7 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
                 hit = next(iter(shapes.glob(f"*{suffix}")), None)
                 if not hit:
                     continue
+                _tell("model", f"3D model: keeping the {suffix.lstrip('.').upper()}…")
                 await store.put_artifact(db, lcsc, "model", hit.read_bytes(),
                                          collection=PARTS)
                 await db[PARTS].update_one(
@@ -987,7 +1003,10 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
             # (_model_worth_asking_again).
             await db[PARTS].update_one({"_id": lcsc},
                                        {"$set": {"model_missing_at": doc["at"]}})
+        if not doc.get("model_kind"):
+            _tell("model", "3D model: EasyEDA has none for it - footprint only")
         if doc.get("model_kind"):
+            _tell("seat", "seating the model on its pads…")
             try:
                 await seat_model(db, lcsc, component)
             except (LookupError, ValueError, OSError, RuntimeError):
@@ -1272,7 +1291,9 @@ def _drawer_facts(lcsc: str) -> dict:
     para = ((rec.get("dataStr") or {}).get("head") or {}).get("c_para") or {}
     return {"tags": rec.get("tags") or [], "prefix": para.get("pre"),
             "value": para.get("Value") or para.get("value"),
-            "mpn": para.get("Manufacturer Part"), "maker": para.get("Manufacturer")}
+            "mpn": para.get("Manufacturer Part"), "maker": para.get("Manufacturer"),
+            "description": rec.get("description") or rec.get("title") or "",
+            "package": para.get("package")}
 
 
 async def known(db) -> list[dict]:
@@ -1285,7 +1306,7 @@ async def known(db) -> list[dict]:
     """
     rows = [row async for row in db[PARTS].aggregate([
         {"$project": {
-            "name": 1, "at": 1,
+            "name": 1, "at": 1, "drawer_manual": 1, "drawer_llm": 1,
             "has_3d": {"$or": [{"$ifNull": ["$artifacts.model", False]},
                                {"$ifNull": ["$model_step", False]},
                                {"$ifNull": ["$model_wrl", False]}]},
@@ -1295,9 +1316,117 @@ async def known(db) -> list[dict]:
     out = []
     for r in rows:
         facts = _drawer_facts(r["_id"])
-        group, branch = drawer_place(facts.get("tags"), facts.get("prefix"), facts.get("mpn"))
+        group, branch, by = place_of(r, facts)
         out.append({"lcsc": r["_id"], "name": r.get("name"),
                     "has_3d": bool(r.get("has_3d")), "at": r.get("at"),
-                    "group": group, "branch": branch, "category": (facts.get("tags") or [None])[0],
+                    "group": group, "branch": branch, "place_by": by,
+                    "place_model": (r.get("drawer_llm") or {}).get("model") if by == "llm" else None, "category": (facts.get("tags") or [None])[0],
                     "value": facts.get("value"), "mpn": facts.get("mpn"), "maker": facts.get("maker")})
     return out
+
+
+# ---------------- where a part goes: rules, then a model, then a person ----------------
+# Every (group, branch) the drawer has. A place from anywhere but the rules
+# - a model's answer, somebody's choice - must be one of these.
+PLACES: tuple[tuple[str, str], ...] = tuple(dict.fromkeys(
+    [(g, b) for _, g, b in DRAWER] + list(PREFIX_DRAWER.values()) + [("Other", "Other")]))
+# What the rules land on when they know nothing: a tag like "Pre-ordered
+# Products" or a brand name, and a U? prefix. Worth asking a model about.
+UNSURE = {("Other", "Other"), ("ICs", "Other ICs")}
+CATEGORY_JOB = "part_category"
+
+
+def valid_place(group, branch) -> bool:
+    return (group, branch) in PLACES
+
+
+def place_of(doc: dict | None, facts: dict) -> tuple[str, str, str]:
+    """(group, branch, by): somebody's choice first, then the rules - and a
+    model's answer where the rules were unsure. `by` is manual, llm or rules."""
+    doc = doc or {}
+    man = doc.get("drawer_manual") or {}
+    if valid_place(man.get("group"), man.get("branch")):
+        return man["group"], man["branch"], "manual"
+    rule = drawer_place(facts.get("tags"), facts.get("prefix"), facts.get("mpn"))
+    got = doc.get("drawer_llm") or {}
+    if rule in UNSURE and valid_place(got.get("group"), got.get("branch")):
+        return got["group"], got["branch"], "llm"
+    return rule[0], rule[1], "rules"
+
+
+def _category_prompt(lcsc: str, facts: dict, name: str | None) -> list[dict]:
+    places = "\n".join(f"- {g} / {b}" for g, b in PLACES)
+    part = "\n".join(f"{k}: {v}" for k, v in (
+        ("LCSC", lcsc), ("MPN", facts.get("mpn")), ("Manufacturer", facts.get("maker")),
+        ("Description", facts.get("description")), ("Category", ", ".join(facts.get("tags") or [])),
+        ("Package", facts.get("package") or name), ("Designator prefix", facts.get("prefix"))) if v)
+    return [
+        {"role": "system", "content":
+            "You sort electronic parts into a parts drawer. Pick exactly one group and branch from "
+            "this list, spelled exactly as written:\n" + places + "\n"
+            'Answer with strict JSON only, no prose: {"group": "...", "branch": "..."}'},
+        {"role": "user", "content": part},
+    ]
+
+
+def _parse_place(text: str) -> tuple[str, str] | None:
+    m = re.search(r"\{.*\}", text or "", re.S)
+    if not m:
+        return None
+    try:
+        got = json.loads(m.group(0))
+    except ValueError:
+        return None
+    if not isinstance(got, dict):
+        return None
+    pair = (str(got.get("group", "")).strip(), str(got.get("branch", "")).strip())
+    return pair if valid_place(*pair) else None
+
+
+async def categorise(db, lcsc: str) -> dict | None:
+    """Ask a model where a part goes, once: when the rules are unsure and
+    nobody has said. The answer is kept on the part and the call counted
+    in usage; an answer outside the drawer's places is thrown away and the
+    rules stand. None when nothing was asked or nothing usable came back."""
+    from . import llm
+    doc = await db[PARTS].find_one({"_id": lcsc}, {"name": 1, "drawer_manual": 1, "drawer_llm": 1}) or {}
+    facts = _drawer_facts(lcsc)
+    if doc.get("drawer_manual") or doc.get("drawer_llm"):
+        return doc.get("drawer_llm")
+    if drawer_place(facts.get("tags"), facts.get("prefix"), facts.get("mpn")) not in UNSURE:
+        return None
+    provider, model = llm.route(CATEGORY_JOB)
+    if not llm.key(provider):
+        return None
+    _tell("llm", f"categorising with {model.split('/')[-1]}…")
+    try:
+        d = await llm.complete(_category_prompt(lcsc, facts, doc.get("name")), job=CATEGORY_JOB,
+                               max_tokens=200, temperature=0, reasoning=False, timeout=30)
+    except Exception:                                      # noqa: BLE001 - the rules stand
+        return None
+    await llm.record(db, provider=d.get("provider", provider), model=d.get("model", model),
+                     surface="parts", kind="part-category", used=d.get("usage") or {})
+    try:
+        text = d["choices"][0]["message"]["content"] or ""
+    except (KeyError, IndexError, TypeError):
+        text = ""
+    pair = _parse_place(text)
+    if not pair:
+        return None
+    got = {"group": pair[0], "branch": pair[1], "model": d.get("model", model),
+           "at": datetime.now(timezone.utc).isoformat()}
+    await db[PARTS].update_one({"_id": lcsc}, {"$set": {"drawer_llm": got}})
+    return got
+
+
+async def set_place(db, lcsc: str, group: str | None, branch: str | None) -> tuple[str, str, str]:
+    """Somebody's own choice of drawer; it wins over the rules and the
+    model. None for both clears it."""
+    if group is None and branch is None:
+        await db[PARTS].update_one({"_id": lcsc}, {"$unset": {"drawer_manual": ""}})
+    elif not valid_place(group, branch):
+        raise ValueError(f"{group} / {branch} is not a place in the drawer")
+    else:
+        await db[PARTS].update_one({"_id": lcsc}, {"$set": {"drawer_manual": {"group": group, "branch": branch}}})
+    doc = await db[PARTS].find_one({"_id": lcsc}, {"drawer_manual": 1, "drawer_llm": 1})
+    return place_of(doc, _drawer_facts(lcsc))

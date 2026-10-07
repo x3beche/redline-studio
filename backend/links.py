@@ -49,14 +49,16 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
-from . import board3d, scope, store
+from . import board3d, buildcache, scope, store
 
 LOG = logging.getLogger("redline.links")
 
 BOARDS = "boards"
 VERSIONS = "component_versions"
 DEBOUNCE = float(os.environ.get("REDLINE_LINK_DEBOUNCE", "4"))
-PARALLEL = max(1, int(os.environ.get("REDLINE_LINK_BUILDS", "1")))
+# Rebuilds at once: REDLINE_LINK_BUILDS, else what this machine has room
+# for under the build memory ceiling (3 on 32 GB / 16 threads).
+PARALLEL = max(1, int(os.environ.get("REDLINE_LINK_BUILDS") or buildcache.default_parallel()))
 TICK = 2.0
 KEEP = 8                    # versions of a component kept besides pinned ones
 # On a board: a layout that leaves its 3D unchanged is a new version all
@@ -326,10 +328,22 @@ async def reindex(db) -> Graph:
     return await load(db)
 
 
+def effective_pins(g: Graph, k: str) -> dict[str, int]:
+    """The pins a build of `k` honours: every pin of everything it uses,
+    the model's own last (they win). One module per name in a build, so a
+    part that pins the board pins it for the assembly too - which the
+    build must say, not do silently (prepare's notes)."""
+    pins: dict[str, int] = {}
+    for m in [*g.upstream(k), k]:
+        pins.update(g.pins.get(m, {}))
+    return pins
+
+
 def against(g: Graph, k: str) -> dict:
     """What a build of `k` uses, each component at its version - pinned
-    ones at their pin - and one hash over all of it."""
-    pins = g.pins.get(k, {})
+    ones at their pin, whoever in the chain pinned it - and one hash over
+    all of it."""
+    pins = effective_pins(g, k)
     rows = {}
     for u in g.upstream(k):
         info = g.nodes.get(u) or {}
@@ -556,13 +570,15 @@ def _num(v) -> str:
 
 async def versions(db, kind: str, cid: str) -> list[dict]:
     """The kept versions of a component, newest first: when, and what each
-    changed against the one before it."""
+    changed against the one before it - and whether its build failed
+    (store.version_built)."""
     rows = [r async for r in db[VERSIONS].find({"kind": kind, "component": cid})]
     rows.sort(key=lambda r: r.get("version") or 0)
     out, prev = [], None
     for r in rows:
         out.append({"version": r.get("version"), "at": r.get("at"),
-                    "changes": what_changed(kind, prev, r)})
+                    "changes": what_changed(kind, prev, r),
+                    "failed": bool(r.get("failed")), "error": r.get("error")})
         prev = r
     return out[::-1]
 
@@ -598,6 +614,8 @@ async def set_pin(db, model_id: str, component: str, version: int | None) -> dic
     kind, cid = split(component)
     if version is not None and not await version_of(db, kind, cid, version):
         raise LookupError(f"{component} v{version} is not kept")
+    if version is not None and version in await store.failed_versions(db, kind, cid):
+        raise PinError(f"{component} v{version} failed to build - pin another version")
     was = g.pins.get(k, {}).get(component)
     if was == version:
         return {"model": model_id, "component": component, "version": version,
@@ -620,14 +638,17 @@ async def set_pin(db, model_id: str, component: str, version: int | None) -> dic
 async def update_pins(db, kind: str, cid: str) -> list[dict]:
     """Every model pinned to an older version of `kind:cid` moved to its
     latest - still pinned, so the next version waits for them again. A
-    latest that is not kept (a model from before versions) is followed."""
+    latest that is not kept (a model from before versions) is followed.
+    The latest is the newest that did not fail to build."""
     g = await load(db)
     k = key(kind, cid)
-    latest = (g.nodes.get(k) or {}).get("version")
-    kept = bool(latest is not None and await version_of(db, kind, cid, latest))
+    latest = await store.latest_good(db, kind, cid, (g.nodes.get(k) or {}).get("version"))
+    if latest is None:
+        return []                       # nothing kept that builds
+    kept = bool(await version_of(db, kind, cid, latest))
     out = []
     for row in pinned_by(g, k):
-        if not row["behind"]:
+        if not row["behind"] or (row["version"] or 0) >= latest:
             continue
         got = await set_pin(db, row["id"], k, latest if kept else None)
         out.append({"model": row["id"], "from": row["version"], "to": got["version"],
@@ -635,11 +656,20 @@ async def update_pins(db, kind: str, cid: str) -> list[dict]:
     return out
 
 
-async def recover(db) -> int:
-    """After a restart: a rebuild this process had started is queued again
-    (the process that ran it is gone)."""
+async def recover(db, lookup=None, adopt: list | None = None) -> int:
+    """After a restart: a rebuild the last API process had started. Builds
+    are jobs of their own (backend/buildjobs.py) and outlive a reload:
+    `lookup(db, model_id, token)` finds the one still running, or finished
+    meanwhile, and it goes into `adopt` as (model, token, job) for the
+    scheduler to see through. One with no job - lost with the container,
+    or from a builder that ran in the API process - is queued again."""
     n = 0
-    async for m in db.models.find({"link.state": "building"}, {"_id": 1}):
+    async for m in db.models.find({"link.state": "building"}, {"_id": 1, "link": 1}):
+        token = (m.get("link") or {}).get("token")
+        job = await lookup(db, str(m["_id"]), token) if lookup else None
+        if job and adopt is not None:
+            adopt.append((str(m["_id"]), token, job["_id"]))
+            continue
         await db.models.update_one({"_id": m["_id"]}, {"$set": {
             "link.state": "queued", "link.due": store.now(), "building": False}})
         n += 1
@@ -657,7 +687,7 @@ class Scheduler:
     async def tick(self, db, ws: str = scope.DEFAULT) -> list[str]:
         """One look at one workspace's queue; the rebuilds it started."""
         queued = {str(m["_id"]): m async for m in db.models.find(
-            {"link.state": "queued"}, {"link": 1})}
+            {"link.state": "queued"}, {"link": 1, "built": 1, "version": 1})}
         if not queued:
             return []
         g = await load(db, write_back=False)
@@ -681,6 +711,15 @@ class Scheduler:
                 continue
             if any(u in waiting for u in g.upstream(k)):
                 continue                       # something it uses is not built yet
+            if self._built_already(queued[mid], g, k):
+                # A build since - asked for directly, or the rebuild that was
+                # running when this was queued - already used exactly these
+                # versions: a second one would make the same thing.
+                await db.models.update_one(
+                    {"_id": mid, "link.state": "queued", "link.token": link.get("token")},
+                    {"$set": {"link.state": "done", "link.done_at": now,
+                              "link.coalesced": True}, "$unset": {"link.error": ""}})
+                continue
             claim = await db.models.update_one(
                 {"_id": mid, "link.state": "queued", "link.token": link.get("token")},
                 {"$set": {"link.state": "building", "link.started": now}})
@@ -692,10 +731,31 @@ class Scheduler:
             started.append(mid)
         return started
 
-    async def _rebuild(self, db, mid: str, token: str | None, g: Graph) -> None:
+    @staticmethod
+    def _built_already(doc: dict, g: Graph, k: str) -> bool:
+        built = doc.get("built") or {}
+        if not built.get("hash") or built.get("version") != (g.nodes.get(k) or {}).get("version"):
+            return False
+        return built["hash"] == against(g, k)["hash"]
+
+    def adopt(self, db, ws: str, mid: str, token: str | None, job: str, g: Graph) -> None:
+        """See through a rebuild a previous API process started (recover)."""
+        task = asyncio.create_task(self._rebuild(db, mid, token, g, job=job))
+        self.running[(ws, mid)] = task
+        task.add_done_callback(lambda _t, w=ws, m=mid: self.running.pop((w, m), None))
+
+    async def _rebuild(self, db, mid: str, token: str | None, g: Graph,
+                       job: str | None = None) -> None:
         try:
-            await self.builder(db, mid)
+            # The job to wait for, when it was started before a restart.
+            await (self.builder(db, mid, job=job) if job else self.builder(db, mid))
         except Exception as exc:               # noqa: BLE001 - said on the model
+            if getattr(exc, "later", False):
+                # Being built already (somebody asked for it directly): queued
+                # again behind it, and coalesced if that build made the same.
+                await db.models.update_one({"_id": mid, "link.token": token}, {"$set": {
+                    "link.state": "queued", "link.due": _later(max(DEBOUNCE, 5))}})
+                return
             msg = f"{type(exc).__name__}: {exc}" if not str(exc) else str(exc)
             await db.models.update_one({"_id": mid, "link.token": token}, {"$set": {
                 "link.state": "failed", "link.error": msg[-1500:], "link.done_at": store.now()}})
@@ -715,8 +775,9 @@ class Scheduler:
             await asyncio.gather(*list(self.running.values()), return_exceptions=True)
 
 
-async def loop(raw_db, builder, stop: asyncio.Event | None = None) -> None:
-    """The API's propagation loop, over every workspace."""
+async def loop(raw_db, builder, stop: asyncio.Event | None = None, lookup=None) -> None:
+    """The API's propagation loop, over every workspace. `lookup`: how
+    recover finds a rebuild still running from before a restart."""
     sched = Scheduler(builder)
     first = True
     while not (stop and stop.is_set()):
@@ -737,7 +798,12 @@ async def loop(raw_db, builder, stop: asyncio.Event | None = None) -> None:
                 ctx.run(scope.WORKSPACE.set, ws)
                 sdb = scope.ScopedDb(raw, ws)
                 if first:
-                    await recover(sdb)
+                    adopt: list = []
+                    await recover(sdb, lookup, adopt)
+                    if adopt:
+                        g = await load(sdb, write_back=False)
+                        for mid, token, job in adopt:
+                            ctx.run(sched.adopt, sdb, ws, mid, token, job, g)
                 await asyncio.get_running_loop().create_task(sched.tick(sdb, ws), context=ctx)
             first = False
         except Exception:                      # noqa: BLE001 - next tick
@@ -769,15 +835,34 @@ async def write_board(db, models_dir, root, board_id: str, table: dict,
             raise NoBoard3d(f"{board_id} v{pin} is pinned but no longer kept")
         data, step, version, digest = row["data"], await version_step(db, row), pin, row["digest"]
     else:
-        if not comp.get("digest"):
-            raise NoBoard3d(f"board {board_id} has no 3D yet - lay it out (a run or a layout "
-                            "in the PCB room) and the models that use it build")
-        try:
-            data = _json.loads(await store.get_artifact(db, board_id, "board3d", BOARDS))
-            step = await store.get_artifact(db, board_id, "step", BOARDS)
-        except KeyError as exc:
-            raise NoBoard3d(f"board {board_id}: its 3D artifact is missing ({exc})") from exc
-        version, digest = comp.get("version") or 1, comp["digest"]
+        data = step = None
+        for _attempt in range(5):
+            if not comp.get("digest"):
+                raise NoBoard3d(f"board {board_id} has no 3D yet - lay it out (a run or a layout "
+                                "in the PCB room) and the models that use it build")
+            version, digest = comp.get("version") or 1, comp["digest"]
+            # The kept copy of the current version first: its data and STEP
+            # are that version's. The board's own artifacts are replaced by a
+            # new layout a moment before its version number moves on, so
+            # reading them then pairs one version's number with another's
+            # geometry (board_component).
+            row = await version_of(db, "board", board_id, version)
+            if row and row.get("digest") == digest and (row.get("step") or {}).get("gridfs_id"):
+                data, step = row["data"], await version_step(db, row)
+                break
+            try:
+                data = _json.loads(await store.get_artifact(db, board_id, "board3d", BOARDS))
+                step = await store.get_artifact(db, board_id, "step", BOARDS)
+            except KeyError as exc:
+                raise NoBoard3d(f"board {board_id}: its 3D artifact is missing ({exc})") from exc
+            # Still the version it was when we started reading: done. Else a
+            # layout landed meanwhile - read the new one.
+            again = ((await db[BOARDS].find_one({"_id": board_id}, {"component": 1}) or {})
+                     .get("component") or {})
+            if again.get("version") == comp.get("version") and again.get("digest") == digest:
+                break
+            comp = again
+            await asyncio.sleep(0.5)
     step_name = f"{board_id.replace('/', '__')}.step"
     (root / "_boards").mkdir(exist_ok=True)
     (root / "_boards" / step_name).write_bytes(step)
@@ -802,23 +887,46 @@ async def prepare(db, model_id: str, models_dir, root) -> dict:
     g = await load(db)
     k = key("model", model_id)
     closure = g.upstream(k)
-    pins: dict[str, int] = {}
-    for m in [*closure, k]:                    # the model's own pins win
-        pins.update(g.pins.get(m, {}))
-    boards = []
+    pins = effective_pins(g, k)                # the model's own pins win
+    boards, notes = [], []
     from pathlib import Path
     for u in closure:
         kind, cid = split(u)
+        info = g.nodes.get(u) or {}
+        latest, title = info.get("version"), info.get("title") or cid
+        if u in pins and pins[u] != latest:
+            # Older than the latest on purpose - said, every build, so it is
+            # never mistaken for the latest.
+            who = [split(m)[1] for m in [*closure, k] if u in g.pins.get(m, {})]
+            notes.append(f"{title} is used at v{pins[u]}, pinned by {', '.join(who)} "
+                         f"(latest v{latest})")
         if kind == "board":
-            boards.append(await write_board(db, models_dir, root, cid, g.table, pins.get(u)))
-        elif u in pins and pins[u] != g.nodes.get(u, {}).get("version"):
+            got = await write_board(db, models_dir, root, cid, g.table, pins.get(u))
+            boards.append(got)
+            if u not in pins and got["version"] != latest:
+                notes.append(f"{title} changed while this build was staged: built against "
+                             f"v{got['version']}, the catalog had v{latest}; a rebuild follows")
+        elif u in pins and pins[u] != latest:
             row = await version_of(db, "model", cid, pins[u])
             if row and row.get("source"):
                 for n, v in g.table.items():
                     if v == ("model", cid):
                         (Path(models_dir) / f"{n}.py").write_text(row["source"])
+            else:
+                notes.append(f"{title} v{pins[u]} is pinned but no longer kept: "
+                             f"built with the latest, v{latest}")
+        elif u not in pins:
+            # Following the latest skips a version whose build failed.
+            good = await store.latest_good(db, "model", cid, latest)
+            row = await version_of(db, "model", cid, good) if good not in (None, latest) else None
+            if row and row.get("source"):
+                for n, v in g.table.items():
+                    if v == ("model", cid):
+                        (Path(models_dir) / f"{n}.py").write_text(row["source"])
+                notes.append(f"{title} v{latest} failed to build: used at v{good}, "
+                             f"its latest that builds")
     sources = [g.nodes[u].get("source") or "" for u in closure if split(u)[0] == "model"]
-    return {"graph": g, "boards": boards, "sources": sources, **against(g, k)}
+    return {"graph": g, "boards": boards, "sources": sources, "notes": notes, **against(g, k)}
 
 
 # ---------------------------------------------------------------- copied numbers
@@ -874,6 +982,46 @@ def board_exports(data: dict) -> dict[str, float]:
     return {k: v for k, v in out.items() if _number(v)}
 
 
+_HALF = 0.5
+_POW = {"pow", "power"}
+
+
+def _not_lengths(tree: ast.AST) -> set[int]:
+    """Number literals that are plainly arithmetic, not dimensions: the
+    exponent of `x ** 0.5` or `pow(x, 0.5)`, and a half taken with `* 0.5`
+    or `/ 0.5`. `CAP_CLR * 2 ** 0.5` was reported as "0.5 is
+    enclosure.BOARD_CLR". Kept narrow on purpose - a 0.5 that is added or
+    subtracted is a clearance and still counts."""
+    def lit(n) -> ast.Constant | None:
+        if isinstance(n, ast.UnaryOp) and isinstance(n.op, (ast.USub, ast.UAdd)):
+            n = n.operand
+        return n if isinstance(n, ast.Constant) and _number(n.value) else None
+
+    skip: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.BinOp):
+            if isinstance(node.op, ast.Pow):
+                # The exponent is never a length; the base may be.
+                if (c := lit(node.right)) is not None:
+                    skip.add(id(c))
+            elif isinstance(node.op, (ast.Mult, ast.Div)):
+                sides = [node.left, node.right] if isinstance(node.op, ast.Mult) else [node.right]
+                for side in sides:
+                    c = lit(side)
+                    if c is not None and abs(float(c.value)) == _HALF:
+                        skip.add(id(c))
+        elif isinstance(node, ast.Call) and len(node.args) >= 2:
+            f = node.func
+            name = f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else ""
+            if name in _POW and (c := lit(node.args[1])) is not None:
+                skip.add(id(c))
+        elif isinstance(node, ast.AugAssign) and isinstance(node.op, (ast.Mult, ast.Div, ast.Pow)):
+            c = lit(node.value)
+            if c is not None and (isinstance(node.op, ast.Pow) or abs(float(c.value)) == _HALF):
+                skip.add(id(c))
+    return skip
+
+
 def copied_numbers(source: str, exports: dict[str, dict[str, float]], limit: int = 12) -> list[dict]:
     """Numbers a model writes out that a component it imports already
     names: `1.6` where `B.THICKNESS` is meant. A hint, not a rule - the
@@ -891,8 +1039,11 @@ def copied_numbers(source: str, exports: dict[str, dict[str, float]], limit: int
         return []
     lines = (source or "").splitlines()
     out, seen = [], set()
+    maths = _not_lengths(tree)
     for node in ast.walk(tree):
         if not (isinstance(node, ast.Constant) and _telling(node.value)):
+            continue
+        if id(node) in maths:
             continue
         names = by_value.get(round(float(node.value), 4))
         if not names:

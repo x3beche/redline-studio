@@ -207,11 +207,34 @@ async def delete_upload(db, name: str) -> None:
 
 
 # ---------------- models ----------------
+class SourceError(ValueError):
+    """A source that cannot even be compiled. `line` is where."""
+
+    def __init__(self, message: str, line: int | None = None):
+        super().__init__(message)
+        self.line = line
+
+
+def check_source(source: str, name: str = "<model>") -> None:
+    """The cheap check at save: compile it, never run it. A syntax error
+    used to be saved, kept as a version a pin could point at, and only
+    found by the build (enclosure v5)."""
+    try:
+        compile(source, name, "exec", dont_inherit=True)
+    except SyntaxError as exc:
+        text = (exc.text or "").strip()
+        raise SourceError(f"not saved: syntax error on line {exc.lineno}: {exc.msg}"
+                          + (f" - {text[:120]}" if text else ""), exc.lineno) from None
+    except ValueError as exc:            # null bytes, on older Pythons
+        raise SourceError(f"not saved: {exc}") from None
+
+
 async def save_model(db, model_id: str, source: str) -> dict:
     """Write or update source code. Generated artifacts go stale and are flagged."""
     folder, _, name = model_id.rpartition("/")
     if not SAFE.match(name):
         raise ValueError("model name may only contain letters, digits, - and _")
+    check_source(source, f"{model_id}.py")
     meta = read_meta(source)
     doc = {
         "_id": model_id, "folder": folder, "name": name,
@@ -239,6 +262,56 @@ async def save_model(db, model_id: str, source: str) -> dict:
     doc["propagation"] = await links.model_saved(db, model_id, existing, doc)
     doc["version"] = doc["propagation"]["version"]
     return doc
+
+
+# ---------------- versions whose build failed ----------------
+# A save makes a version (backend/links.py model_saved); whether it builds
+# is only known later. A version whose own build failed is marked on its
+# kept copy, so pins and "latest" skip it and the history says so; a later
+# build of the same version that works clears the mark.
+VERSIONS = "component_versions"
+
+
+async def current_version(db, model_id: str) -> int | None:
+    doc = await db.models.find_one({"_id": model_id}, {"version": 1})
+    return (doc.get("version") or 1) if doc else None
+
+
+async def version_built(db, model_id: str, version: int | None,
+                        error: str | None = None) -> bool:
+    """Record how the build of `model_id` at `version` went: `error` marks
+    that kept version failed, None clears the mark. False when no such
+    version is kept."""
+    if version is None:
+        return False
+    vid = f"model:{model_id}:v{version}"
+    if error is None:
+        res = await db[VERSIONS].update_one(
+            {"_id": vid}, {"$unset": {"failed": "", "error": "", "failed_at": ""}})
+    else:
+        res = await db[VERSIONS].update_one(
+            {"_id": vid}, {"$set": {"failed": True, "error": str(error)[-1500:],
+                                    "failed_at": now()}})
+    return bool(res.matched_count)
+
+
+async def failed_versions(db, kind: str, cid: str) -> set[int]:
+    """The kept versions of a component whose build failed."""
+    return {r.get("version") async for r in db[VERSIONS].find(
+        {"kind": kind, "component": cid, "failed": True}, {"version": 1})}
+
+
+async def latest_good(db, kind: str, cid: str, latest: int | None) -> int | None:
+    """The newest kept version at or below `latest` that did not fail, or
+    `latest` itself when it is not marked (or nothing is kept)."""
+    if latest is None:
+        return None
+    bad = await failed_versions(db, kind, cid)
+    if latest not in bad:
+        return latest
+    kept = sorted([r.get("version") or 0 async for r in db[VERSIONS].find(
+        {"kind": kind, "component": cid}, {"version": 1})], reverse=True)
+    return next((v for v in kept if v is not None and v < latest and v not in bad), None)
 
 
 async def move_model(db, model_id: str, folder: str, name: str | None = None) -> str:

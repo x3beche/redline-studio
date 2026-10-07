@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, OnDestroy, computed, effect, inject, signal, untracked, viewChild,
+  Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, signal, untracked, viewChild,
   viewChildren,
 } from '@angular/core';
 import { money } from '../money';
@@ -9,6 +9,7 @@ import {
   PartPreview, Parts, RuleSchema,
 } from '../api';
 import { Selection } from '../selection';
+import { HttpClient } from '@angular/common/http';
 import { NgTemplateOutlet } from '@angular/common';
 import { Board3d } from './board3d';
 import { CodeView } from './code-view';
@@ -23,6 +24,14 @@ import { RulesForm } from './rules-form';
 import { DrawTools, PenState, Sketchpad } from './sketchpad';
 import { ImportBoard } from './import-board';
 import { MiniBars, MiniColumns } from './minicharts';
+import { PartsDrawer } from './parts-drawer';
+
+/** An add being watched (backend main.py /api/parts-add). */
+interface PartAdd {
+  id?: string; lcsc: string; state: 'running' | 'done' | 'error';
+  steps: { step: string; text: string }[]; error?: string | null; already?: boolean;
+  place?: { group: string; branch: string; by: string } | null;
+}
 
 type SideTab = 'parts' | 'rules' | 'checks' | 'lcsc' | 'analytics';
 type Pane = 'layout' | 'schematic' | '3d';
@@ -43,7 +52,7 @@ type BoardView = Pane | 'split' | 'focus';
 @Component({
   selector: 'app-room-pcb',
   imports: [Board3d, CodeView, PinIcon, PinnedByList, Drawing, DrawTools, ImportBoard, Releases, MiniBars, MiniColumns, NgTemplateOutlet,
-            RoomFrame, RulesForm, Sketchpad, ToolButton],
+            PartsDrawer, RoomFrame, RulesForm, Sketchpad, ToolButton],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
@@ -156,137 +165,39 @@ type BoardView = Pane | 'split' | 'focus';
              so this is where a board gets its shapes. Searching downloads
              nothing - a search is a list to choose from. -->
 
+      <!-- ADD A PART: its LCSC number, and the fetch watched step by step
+           (POST /api/parts-add). Anything else typed is a search of LCSC,
+           each hit with its own Add. -->
       <div class="flex shrink-0 gap-1 p-2" style="border-bottom: 1px solid var(--line)">
         <input [value]="term()" (input)="term.set($any($event.target).value)"
-               (keydown.enter)="look()"
-               placeholder="C25744, or 0603 100nF"
-               class="tcv-field min-w-0 flex-1 px-1.5 py-1 text-[11px]">
-        <button (click)="look()" [disabled]="looking()"
-                class="tcv-btn shrink-0 px-2 py-0.5">
-          {{ looking() ? '…' : 'find' }}
+               (keydown.enter)="addOrLook()"
+               placeholder="C25744, or search"
+               class="tcv-field mono min-w-0 flex-1 px-1.5 py-1 text-[11px]">
+        <button (click)="addOrLook()" [disabled]="looking() || adding()?.state === 'running'"
+                class="tcv-btn tcv-btn-accent shrink-0 px-2.5 py-0.5">
+          {{ looking() ? '…' : isNumber(term()) || !term().trim() ? 'Add' : 'Search' }}
         </button>
       </div>
+
+      @if (adding(); as ad) {
+        <div class="tcv-add-progress shrink-0" [attr.data-state]="ad.state">
+          @for (st of ad.steps; track $index; let last = $last) {
+            <div class="tcv-add-step" [class.tcv-add-now]="last">
+              <span class="tcv-add-mark">{{ last ? (ad.state === 'running' ? '…' : ad.state === 'error' ? '!' : '✓')
+                                                 : ad.state === 'error' && $index === ad.steps.length - 2 ? '–' : '✓' }}</span>
+              <span>{{ st.text }}</span>
+            </div>
+          }
+          @if (ad.state !== 'running') {
+            <button class="tcv-add-close" (click)="adding.set(null)" title="dismiss">&times;</button>
+          }
+        </div>
+      }
 
       @if (partNote(); as n) {
         <p class="shrink-0 px-2 py-1 text-[11px]" style="color: var(--ink-dim)">{{ n }}</p>
       }
 
-      @if (seen() || seeing()) {
-        <!-- ONE PART, IN FULL
-             Everything that can be known about it without keeping it:
-             what it is, what it costs, its footprint, its symbol and its
-             shape, all straight from EasyEDA on the click. Kept on the
-             server's disk, so a second look is instant. -->
-        <div class="min-h-0 flex-1 overflow-auto">
-          <div class="flex items-center gap-1 px-2 py-1.5"
-               style="border-bottom: 1px solid var(--line)">
-            <button (click)="closePart()" class="tcv-chip">&larr; list</button>
-            @if (seen(); as s) {
-              <span class="mono ml-auto text-[11px]" style="color: var(--ink)">{{ s.lcsc }}</span>
-            }
-          </div>
-
-          @if (seen(); as s) {
-            <div class="p-2">
-              <div class="flex gap-2">
-                @if (s.has_photo && noPhoto() !== s.lcsc) {
-                  <!-- Gone quietly if the host will not hand it over:
-                       LCSC's own image host turns away anything that is
-                       not a browser, and a broken-image icon says less
-                       than nothing. -->
-                  <img [src]="store.file(s.lcsc, 'photo.jpg')" alt=""
-                       (error)="noPhoto.set(s.lcsc)"
-                       class="h-16 w-16 shrink-0 rounded object-contain"
-                       style="background: var(--shot-bg)">
-                }
-                <div class="min-w-0 flex-1">
-                  <div class="text-[12px] font-semibold" style="color: var(--ink)">{{ s.name }}</div>
-                  <div class="text-[11px]" style="color: var(--ink-dim)">{{ s.maker }}</div>
-                  <div class="mt-1 text-[11px] leading-snug" style="color: var(--ink-dim)">
-                    {{ s.description }}
-                  </div>
-                </div>
-              </div>
-
-              <div class="mono mt-2 grid text-[11px]"
-                   style="grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 2px">
-                <span style="color: var(--ink-dim)">package</span>
-                <span class="truncate" [title]="s.package ?? ''">{{ s.package }}</span>
-                <span style="color: var(--ink-dim)">price</span>
-                <span>{{ money(s.price) }}@if (s.min && s.min > 1) { · min {{ s.min }} }</span>
-                <span style="color: var(--ink-dim)">stock</span>
-                <span>{{ countOf(s.stock) }}</span>
-                <!-- JLCPCB assembles Basic parts without a loading fee;
-                     an Extended one costs a feeder per run. It decides
-                     between two equal parts more often than price does. -->
-                <span style="color: var(--ink-dim)">jlc</span>
-                <span [style.color]="basic(s) ? 'var(--ok)' : 'var(--warn)'"
-                      [title]="basic(s) ? 'no loading fee at JLCPCB'
-                                        : 'a feeder fee per assembly run at JLCPCB'">
-                  {{ s.jlc_class || '–' }}
-                </span>
-              </div>
-
-              <div class="mt-2 flex gap-1">
-                @if (s.have) {
-                  <span class="tcv-chip" style="color: var(--ok)">in the drawer</span>
-                } @else {
-                  <button (click)="keep(s.lcsc, $event)" [disabled]="!!fetching()"
-                          class="tcv-btn tcv-btn-accent px-2 py-0.5">
-                    {{ fetching() === s.lcsc ? 'fetching…' : '+ keep' }}
-                  </button>
-                }
-                @if (s.url) {
-                  <a [href]="s.url" target="_blank" rel="noreferrer"
-                     class="tcv-chip ml-auto">LCSC &#8599;</a>
-                }
-              </div>
-            </div>
-
-            <!-- The shape, turned the way it sits on a board. -->
-            <div class="tcv-label px-2 pt-1">3d</div>
-            <div class="mx-2 mt-1 h-44 overflow-hidden rounded"
-                 style="background: var(--surface-2)">
-              @if (s.has_model) {
-                @defer (on viewport) {
-                  <app-board-3d [src]="store.file(s.lcsc, 'model.glb')" />
-                } @placeholder {
-                  <p class="p-2 text-[11px]" style="color: var(--ink-dim)">…</p>
-                }
-              } @else {
-                <p class="p-2 text-[11px]" style="color: var(--ink-dim)">
-                  No 3D model. It will not be standing on the board.
-                </p>
-              }
-            </div>
-            @if (s.model_name) {
-              <div class="mono truncate px-2 pt-0.5 text-[10px]" style="color: var(--ink-dim)"
-                   [title]="s.model_name">{{ s.model_name }}</div>
-            }
-
-            <!-- The drawings are EasyEDA's own. Only ever through <img>,
-                 where nothing in the markup can run. -->
-            <div class="tcv-label px-2 pt-2">footprint</div>
-            <div class="mx-2 mt-1 flex h-40 items-center justify-center rounded p-2"
-                 style="background: var(--pcb-bg)">
-              <!-- Filled, not left at its own size: EasyEDA writes a
-                   footprint in millimetres, and an LQFP-48 at its natural
-                   15 mm is a stamp in the middle of the box. -->
-              <img [src]="store.file(s.lcsc, 'footprint.svg')" alt="footprint"
-                   class="h-full w-full object-contain">
-            </div>
-
-            <div class="tcv-label px-2 pt-2">symbol</div>
-            <div class="mx-2 mb-2 mt-1 flex h-56 items-center justify-center rounded p-2"
-                 style="background: var(--shot-bg)">
-              <img [src]="store.file(s.lcsc, 'symbol.svg')" alt="symbol"
-                   class="h-full w-full object-contain">
-            </div>
-          } @else {
-            <p class="p-2 text-[11px]" style="color: var(--ink-dim)">looking it up…</p>
-          }
-        </div>
-      } @else {
       <div class="min-h-0 flex-1 overflow-auto">
         <!-- What LCSC has. The number, what it is, and the two things
              that decide between two of the same part: stock and price. -->
@@ -311,10 +222,10 @@ type BoardView = Pane | 'split' | 'focus';
               <span class="shrink-0 text-[11px]" style="color: var(--ok)"
                     title="already in the drawer">kept</span>
             } @else {
-              <button (click)="keep(h.lcsc, $event)" [disabled]="!!fetching()"
+              <button (click)="keep(h.lcsc, $event)" [disabled]="adding()?.state === 'running'"
                       class="tcv-chip shrink-0"
                       title="fetch its footprint and 3D model">
-                {{ fetching() === h.lcsc ? '…' : '+' }}
+                {{ adding()?.lcsc === h.lcsc && adding()?.state === 'running' ? '…' : 'Add' }}
               </button>
             }
           </div>
@@ -322,70 +233,158 @@ type BoardView = Pane | 'split' | 'focus';
 
         <!-- The drawer. Fetched once and kept: a part number means the
              same thing tomorrow, and a board rebuilt ten times should not
-             ask somebody else's service ten times. -->
+             ask somebody else's service ten times. A cabinet of drawers,
+             one per group, each a tray of bins (rooms/parts-drawer.ts). -->
         @if (held().length) {
-          <div class="flex items-center px-2 pb-1 pt-2">
-            <span class="tcv-label">in the drawer</span>
-            <span class="mono ml-1.5 text-[10px]" style="color: var(--ink-dim)">{{ held().length }}</span>
-            <button class="tcv-drawer-all ml-auto" (click)="foldDrawer(!drawerAllShut())"
-                    [title]="drawerAllShut() ? 'open every group' : 'fold every group'">
-              {{ drawerAllShut() ? 'open all' : 'fold all' }}</button>
-          </div>
-          <!-- Sorted like a drawer: a group, a branch in it, then the parts -
-               values in order where they have one. -->
-          @for (g of drawerTree(); track g.name) {
-            <button class="tcv-drawer-head" (click)="flipDrawer(g.name)" [attr.aria-expanded]="!drawerShut(g.name)">
-              <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"
-                   [style.transform]="drawerShut(g.name) ? null : 'rotate(90deg)'">
-                <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"
-                      stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span>{{ g.name }}</span>
-              <span class="tcv-drawer-n">{{ g.count }}</span>
-            </button>
-            @if (!drawerShut(g.name)) {
-              @for (b of g.branches; track b.name) {
-                @if (g.branches.length > 1 || b.name !== g.name) {
-                  <button class="tcv-drawer-head tcv-drawer-branch" (click)="flipDrawer(g.name + '/' + b.name)"
-                          [attr.aria-expanded]="!drawerShut(g.name + '/' + b.name)">
-                    <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"
-                         [style.transform]="drawerShut(g.name + '/' + b.name) ? null : 'rotate(90deg)'">
-                      <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"
-                            stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <span>{{ b.name }}</span>
-                    <span class="tcv-drawer-n">{{ b.parts.length }}</span>
-                  </button>
-                }
-                @if (!drawerShut(g.name + '/' + b.name)) {
-                  @for (p of b.parts; track p.lcsc) {
-                    <div (click)="inspect(p.lcsc)"
-                         class="tcv-drawer-row group"
-                         [class.tcv-drawer-deep]="g.branches.length > 1 || b.name !== g.name"
-                         [style.background]="seen()?.lcsc === p.lcsc ? 'var(--accent-deep)' : null"
-                         [title]="(p.category ?? '') + (p.maker ? ' · ' + p.maker : '')">
-                      @if (p.value) {
-                        <span class="shrink-0 text-[11px] font-semibold" style="color: var(--ink)">{{ p.value }}</span>
-                      }
-                      <span class="min-w-0 flex-1 truncate text-[11px]" style="color: var(--ink-dim)">
-                        {{ p.mpn || p.name }}@if (p.mpn && p.name) {<span class="opacity-70"> · {{ packageOf(p.name) }}</span>}
-                      </span>
-                      <span class="mono shrink-0 text-[10px]" style="color: var(--ink-dim)">{{ p.lcsc }}</span>
-                      <span class="shrink-0 text-[10px]"
-                            [style.color]="p.has_3d ? 'var(--ok)' : 'var(--ink-dim)'"
-                            [title]="p.has_3d ? 'came with a 3D model'
-                                              : 'footprint only - it will not stand on the board'">
-                        {{ p.has_3d ? '3d' : '2d' }}
-                      </span>
-                      <button (click)="forget(p, $event)"
-                              class="shrink-0 text-[11px] opacity-0 group-hover:opacity-100"
-                              style="color: var(--danger)" title="forget it">&times;</button>
-                    </div>
-                  }
-                }
-              }
-            }
-          }
+          <app-parts-drawer [held]="held()" [seenLcsc]="seen()?.lcsc ?? null"
+                            [pulse]="pulse()" (inspect)="inspect($event)" (forget)="forget($event)" />
         }
       </div>
+
+      <!-- ONE PART, IN FULL, as a card over the room: what it is, what it
+           costs, which drawer it is in, its pins, its footprint, symbol
+           and shape - straight from EasyEDA, kept on the server's disk so
+           a second look is instant. Esc or a click beside it closes it. -->
+      @if (seen() || seeing()) {
+        <div (click)="closePart()" class="fixed inset-0 flex items-center justify-center p-4"
+             style="background: var(--scrim); z-index: 1100">
+          <div class="tcv-card tcv-part-modal flex max-h-[88vh] w-[min(52rem,94vw)] flex-col overflow-hidden p-0"
+               (click)="$event.stopPropagation()" role="dialog" aria-modal="true"
+               style="box-shadow: 0 12px 36px var(--shadow-hard)">
+            <div class="flex shrink-0 items-center gap-2 px-3 py-2" style="border-bottom: 1px solid var(--line)">
+              <span class="tcv-label">Part</span>
+              <span class="mono text-[11px]" style="color: var(--ink)">{{ seen()?.lcsc ?? seeing() }}</span>
+              @if (seen(); as s) {
+                <span class="min-w-0 truncate text-[11px]" style="color: var(--ink-dim)">{{ s.mpn }}</span>
+              }
+              <button (click)="closePart()" class="tcv-chip ml-auto px-1.5 py-0" title="close (Esc)">&times;</button>
+            </div>
+            <div class="tcv-scroll min-h-0 flex-1 overflow-y-auto">
+              @if (seen(); as s) {
+                <div class="tcv-part-grid">
+                  <div class="min-w-0">
+                    <div class="flex gap-2">
+                      @if (s.has_photo && noPhoto() !== s.lcsc) {
+                        <img [src]="store.file(s.lcsc, 'photo.jpg')" alt=""
+                             (error)="noPhoto.set(s.lcsc)"
+                             class="h-16 w-16 shrink-0 rounded object-contain"
+                             style="background: var(--shot-bg)">
+                      }
+                      <div class="min-w-0 flex-1">
+                        <div class="text-[13px] font-semibold" style="color: var(--ink)">{{ s.mpn || s.name }}</div>
+                        <div class="text-[11px]" style="color: var(--ink-dim)">{{ s.maker }}</div>
+                        <div class="mt-1 text-[11px] leading-snug" style="color: var(--ink-dim)">{{ s.description }}</div>
+                      </div>
+                    </div>
+
+                    <div class="mono mt-3 grid text-[11px]"
+                         style="grid-template-columns: auto 1fr; column-gap: 10px; row-gap: 3px">
+                      <span style="color: var(--ink-dim)">lcsc</span>
+                      <span>{{ s.lcsc }}</span>
+                      <span style="color: var(--ink-dim)">package</span>
+                      <span class="truncate" [title]="s.package ?? ''">{{ s.package }}</span>
+                      <span style="color: var(--ink-dim)">price</span>
+                      <span>{{ money(s.price) }}@if (s.min && s.min > 1) { · min {{ s.min }} }</span>
+                      <span style="color: var(--ink-dim)">stock</span>
+                      <span>{{ countOf(s.stock) }}</span>
+                      <!-- JLCPCB assembles Basic parts without a loading fee;
+                           an Extended one costs a feeder per run. -->
+                      <span style="color: var(--ink-dim)">jlc</span>
+                      <span [title]="basic(s) ? 'no loading fee at JLCPCB'
+                                              : 'a feeder fee per assembly run at JLCPCB'">
+                        {{ s.jlc_class || '–' }}
+                      </span>
+                      <span style="color: var(--ink-dim)">3d</span>
+                      <span>{{ s.has_model ? (s.model_name || 'yes') : 'none - footprint only' }}</span>
+                    </div>
+
+                    <!-- Which drawer: the rules, a model's pick where they
+                         were unsure, or somebody's own choice - which wins. -->
+                    @if (heldRow(s.lcsc); as h) {
+                      <div class="tcv-label mt-3">drawer</div>
+                      <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                        <select class="tcv-field px-1 py-0.5 text-[11px]"
+                                (change)="placeIt(s.lcsc, $any($event.target).value)">
+                          @for (pg of places(); track pg.group) {
+                            <optgroup [label]="pg.group">
+                              @for (b of pg.branches; track b) {
+                                <option [value]="pg.group + '/' + b" [selected]="h.group === pg.group && h.branch === b">{{ pg.group }} › {{ b }}</option>
+                              }
+                            </optgroup>
+                          }
+                        </select>
+                        <span class="tcv-chip" [title]="placeTip(h)">{{ placeBy(h) }}</span>
+                        @if (h.place_by === 'manual') {
+                          <button class="tcv-chip" (click)="placeIt(s.lcsc, null)"
+                                  title="back to where LCSC's category puts it">reset</button>
+                        }
+                      </div>
+                    }
+
+                    <div class="mt-3 flex gap-1">
+                      @if (s.have) {
+                        <span class="tcv-chip">in the drawer</span>
+                      } @else {
+                        <button (click)="keep(s.lcsc, $event)" [disabled]="adding()?.state === 'running'"
+                                class="tcv-btn tcv-btn-accent px-2 py-0.5">
+                          {{ adding()?.state === 'running' && adding()?.lcsc === s.lcsc ? 'adding…' : 'Add to the drawer' }}
+                        </button>
+                      }
+                      @if (s.url) {
+                        <a [href]="s.url" target="_blank" rel="noreferrer" class="tcv-chip ml-auto">LCSC &#8599;</a>
+                      }
+                    </div>
+
+                    <div class="tcv-label mt-3">pins @if (seenPins(); as ps) { <span class="mono">{{ ps.length }}</span> }</div>
+                    @if (seenPins(); as ps) {
+                      @if (ps.length) {
+                        <ol class="pdw-pinlist mt-1">
+                          @for (n of ps; track n.number) {
+                            <li><span class="mono pdw-pnum">{{ n.number }}</span>
+                                <span class="pdw-pname" [title]="n.name">{{ n.name === n.number ? '–' : n.name }}</span></li>
+                          }
+                        </ol>
+                      } @else {
+                        <p class="mt-1 text-[11px]" style="color: var(--ink-dim)">its symbol names no pins</p>
+                      }
+                    } @else {
+                      <p class="mt-1 text-[11px]" style="color: var(--ink-dim)">reading the pins…</p>
+                    }
+                    <!-- The drawings are EasyEDA's own. Only ever through
+                         <img>, where nothing in the markup can run. -->
+                    <div class="tcv-label mt-3">footprint</div>
+                    <div class="mt-1 flex h-40 items-center justify-center rounded p-2" style="background: var(--pcb-bg)">
+                      <img [src]="store.file(s.lcsc, 'footprint.svg')" alt="footprint" class="h-full w-full object-contain">
+                    </div>
+                  </div>
+
+                  <div class="min-w-0">
+                    <div class="tcv-label">3d</div>
+                    <div class="mt-1 h-64 overflow-hidden rounded" style="background: var(--surface)">
+                      @if (s.has_model) {
+                        @defer (on viewport) {
+                          <app-board-3d [src]="store.file(s.lcsc, 'model.glb')" />
+                        } @placeholder {
+                          <p class="p-2 text-[11px]" style="color: var(--ink-dim)">…</p>
+                        }
+                      } @else {
+                        <p class="p-2 text-[11px]" style="color: var(--ink-dim)">
+                          No 3D model. It will not be standing on the board.
+                        </p>
+                      }
+                    </div>
+                    <div class="tcv-label mt-2">symbol</div>
+                    <div class="mt-1 flex h-60 items-center justify-center rounded p-2" style="background: var(--shot-bg)">
+                      <img [src]="store.file(s.lcsc, 'symbol.svg')" alt="symbol" class="h-full w-full object-contain">
+                    </div>
+                  </div>
+                </div>
+              } @else {
+                <p class="p-3 text-[11px]" style="color: var(--ink-dim)">looking it up…</p>
+              }
+            </div>
+          </div>
+        </div>
       }
       } @else {
       @if (side() === 'rules') {
@@ -919,7 +918,6 @@ export class RoomPcb implements OnDestroy {
   hits = signal<PartHit[]>([]);
   term = signal('');
   looking = signal(false);
-  fetching = signal<string | null>(null);
   partNote = signal('');
   /** The part open in the column, and the one being looked up. */
   seen = signal<PartPreview | null>(null);
@@ -1143,60 +1141,6 @@ export class RoomPcb implements OnDestroy {
 
   // ---- parts, from LCSC ----
 
-  /** The drawer as a tree: groups in a fixed order, branches by name, parts
-   *  by value where they have one (100n before 10u), else by part number. */
-  drawerTree = computed(() => {
-    const ORDER = ['ICs', 'Passives', 'Discretes', 'Electromechanical', 'Frequency', 'Displays', 'Other'];
-    const groups = new Map<string, Map<string, PartHeld[]>>();
-    for (const p of this.held()) {
-      const g = p.group || 'Other', b = p.branch || 'Other';
-      if (!groups.has(g)) groups.set(g, new Map());
-      const m = groups.get(g)!;
-      if (!m.has(b)) m.set(b, []);
-      m.get(b)!.push(p);
-    }
-    const rank = (g: string) => { const i = ORDER.indexOf(g); return i < 0 ? ORDER.length : i; };
-    return [...groups.entries()].sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]))
-      .map(([name, m]) => {
-        const branches = [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-          .map(([bn, parts]) => ({ name: bn, parts: parts.sort((x, y) =>
-            (RoomPcb.magnitude(x.value) - RoomPcb.magnitude(y.value)) ||
-            (x.mpn || x.name || x.lcsc).localeCompare(y.mpn || y.name || y.lcsc)) }));
-        return { name, branches, count: branches.reduce((n, b) => n + b.parts.length, 0) };
-      });
-  });
-
-  /** A value as a number to sort by: 4.7kΩ, 100nF, 2.2uH, 11.0592MHz. */
-  private static magnitude(v: string | null | undefined): number {
-    const m = /([\d.]+)\s*([pnuµμmkKMG]?)/.exec(v || '');
-    if (!m) return Number.MAX_VALUE;
-    const scale: Record<string, number> = { p: 1e-12, n: 1e-9, u: 1e-6, 'µ': 1e-6, 'μ': 1e-6, m: 1e-3, k: 1e3, K: 1e3, M: 1e6, G: 1e9 };
-    return parseFloat(m[1]) * (scale[m[2]] ?? 1);
-  }
-
-  /** The package out of EasyEDA's footprint name: R0603, SOT-23-6, LQFN-56. */
-  packageOf(name: string): string { return name.split('_')[0]; }
-
-  /** Folded groups and branches, kept in this browser. */
-  private drawerClosed = signal<Set<string>>(RoomPcb.recallSet('drawer-closed'));
-  private static recallSet(key: string): Set<string> {
-    try { const v = JSON.parse(RoomPcb.recall(key, '[]')); return new Set(Array.isArray(v) ? v.map(String) : []); }
-    catch { return new Set(); }
-  }
-  drawerShut(key: string) { return this.drawerClosed().has(key); }
-  flipDrawer(key: string) {
-    const s = new Set(this.drawerClosed());
-    if (s.has(key)) s.delete(key); else s.add(key);
-    this.drawerClosed.set(s);
-    RoomPcb.keep('drawer-closed', JSON.stringify([...s]));
-  }
-  drawerAllShut = computed(() => this.drawerTree().every(g => this.drawerClosed().has(g.name)));
-  foldDrawer(shut: boolean) {
-    const s = new Set<string>(shut ? this.drawerTree().map(g => g.name) : []);
-    this.drawerClosed.set(s);
-    RoomPcb.keep('drawer-closed', JSON.stringify([...s]));
-  }
-
   private drawer() {
     this.store.held().subscribe({ next: rows => this.held.set(rows) });
   }
@@ -1228,6 +1172,15 @@ export class RoomPcb implements OnDestroy {
     if (this.seen()?.lcsc === lcsc) return;
     this.seeing.set(lcsc);
     this.seen.set(null);
+    this.seenPins.set(null);
+    if (!this.places().length) {
+      this.http.get<{ group: string; branches: string[] }[]>('/api/parts-places')
+        .subscribe({ next: p => this.places.set(p) });
+    }
+    this.http.get<{ number: string; name: string }[]>(`/api/parts/${encodeURIComponent(lcsc)}/pins`).subscribe({
+      next: p => { if (this.seeing() === lcsc) this.seenPins.set(p); },
+      error: () => { if (this.seeing() === lcsc) this.seenPins.set([]); },
+    });
     this.store.preview(lcsc).subscribe({
       next: p => { if (this.seeing() === lcsc) this.seen.set(p); },
       error: e => {
@@ -1242,6 +1195,8 @@ export class RoomPcb implements OnDestroy {
     this.seen.set(null);
     this.seeing.set(null);
   }
+  @HostListener('document:keydown.escape')
+  escape() { if (this.seen() || this.seeing()) this.closePart(); }
 
   /** JLCPCB's Basic parts carry no loading fee. */
   basic(p: PartPreview): boolean {
@@ -1249,32 +1204,88 @@ export class RoomPcb implements OnDestroy {
   }
 
   /** Keep one: its footprint, and its 3D model if it has one. That is
-   *  what puts it within reach of a board. */
+   *  what puts it within reach of a board. Watched step by step. */
   keep(lcsc: string, ev?: Event) {
     ev?.stopPropagation();
-    if (this.fetching()) return;
-    this.fetching.set(lcsc);
+    this.addPart(lcsc);
+  }
+
+  // ---- adding a part, watched (POST /api/parts-add) ----
+
+  adding = signal<PartAdd | null>(null);
+  /** The bin to show and blink once its part is added or asked for again. */
+  pulse = signal<string | null>(null);
+  private http = inject(HttpClient);
+  private addTimer?: ReturnType<typeof setTimeout>;
+
+  isNumber(t: string): boolean { return /^\s*c\d{2,}\s*$/i.test(t); }
+
+  /** A C-number is added; anything else is a search of LCSC. */
+  addOrLook() {
+    const t = this.term().trim();
+    if (!t) { this.adding.set({ lcsc: '', state: 'error', steps: [{ step: 'error', text: 'type an LCSC number - C25744' }] }); return; }
+    if (this.isNumber(t)) this.addPart(t.toUpperCase());
+    else this.look();
+  }
+
+  addPart(lcsc: string) {
+    if (this.adding()?.state === 'running') return;
     this.partNote.set('');
-    this.store.add(lcsc).subscribe({
-      next: got => {
-        this.fetching.set(null);
-        this.hits.update(rows => rows.map(
-          r => r.lcsc === lcsc ? { ...r, have: true } : r));
-        this.seen.update(s => s?.lcsc === lcsc ? { ...s, have: true } : s);
-        this.partNote.set(`${got.lcsc} kept`
-          + (got.has_3d ? ' with a 3D model' : ', footprint only'));
-        this.drawer();
-      },
-      error: e => {
-        this.fetching.set(null);
-        this.partNote.set(String(e?.error?.detail ?? 'could not fetch it')
-          .slice(0, 200));
-      },
+    this.adding.set({ lcsc, state: 'running', steps: [{ step: 'start', text: `${lcsc}: starting…` }] });
+    this.http.post<PartAdd>('/api/parts-add', { lcsc }).subscribe({
+      next: job => this.follow(job),
+      error: e => this.adding.set({ lcsc, state: 'error',
+        steps: [{ step: 'error', text: String(e?.error?.detail ?? 'the server did not answer') }] }),
     });
   }
 
-  forget(part: PartHeld, ev: Event) {
-    ev.stopPropagation();
+  private follow(job: PartAdd) {
+    this.adding.set(job);
+    clearTimeout(this.addTimer);
+    if (job.state === 'running') {
+      this.addTimer = setTimeout(() => this.http.get<PartAdd>(`/api/parts-add/${job.id}`).subscribe({
+        next: j => this.follow(j),
+        error: () => this.adding.set({ ...job, state: 'error',
+          steps: [...job.steps, { step: 'error', text: 'lost track of the add - look in the drawer' }] }),
+      }), 600);
+      return;
+    }
+    if (job.state !== 'done') return;
+    this.hits.update(rows => rows.map(r => r.lcsc === job.lcsc ? { ...r, have: true } : r));
+    this.term.set('');
+    this.store.held().subscribe({ next: rows => {
+      this.held.set(rows);
+      this.pulse.set(job.lcsc);
+      setTimeout(() => this.pulse() === job.lcsc && this.pulse.set(null), 2500);
+    } });
+    this.seen.set(null);
+    this.seeing.set(null);
+    this.inspect(job.lcsc);
+  }
+
+  // ---- the part card's drawer, and its pins ----
+
+  places = signal<{ group: string; branches: string[] }[]>([]);
+  seenPins = signal<{ number: string; name: string }[] | null>(null);
+  heldRow(lcsc: string): PartHeld | undefined { return this.held().find(p => p.lcsc === lcsc); }
+  placeBy(h: PartHeld): string {
+    return h.place_by === 'manual' ? 'set by hand' : h.place_by === 'llm' ? 'by LLM' : 'by LCSC category';
+  }
+  placeTip(h: PartHeld): string {
+    return h.place_by === 'llm' ? `LCSC's category said too little; ${h.place_model ?? 'a model'} picked it`
+      : h.place_by === 'manual' ? 'chosen here - it wins over LCSC and the model'
+      : 'from the category LCSC files it under';
+  }
+  placeIt(lcsc: string, value: string | null) {
+    const [group, branch] = value ? [value.slice(0, value.indexOf('/')), value.slice(value.indexOf('/') + 1)] : [null, null];
+    this.http.put(`/api/parts/${encodeURIComponent(lcsc)}/place`, { group, branch }).subscribe({
+      next: () => this.drawer(),
+      error: e => this.partNote.set(String(e?.error?.detail ?? 'could not move it')),
+    });
+  }
+
+  forget(part: PartHeld, ev?: Event) {
+    ev?.stopPropagation();
     this.store.drop(part.lcsc).subscribe({ next: () => this.drawer() });
   }
 

@@ -163,14 +163,48 @@ What a model uses is read from its `import` lines (with Python's own parser)
 and kept on it as `uses`. When a model is saved with a different source, or a
 board's layout gives a different 3D, every model that uses it - directly or
 through another - is marked stale and rebuilt by the server, a few seconds
-later (a burst of saves is one rebuild), in dependency order, one at a time
-(`REDLINE_LINK_BUILDS`), under the same memory ceiling as any build. While it
+later (a burst of saves is one rebuild), in dependency order, up to three at
+once on a machine with 32 GB or more (`REDLINE_LINK_BUILDS` sets the number),
+each under the same memory ceiling as any build. While it
 runs the catalog says *updating…* and the model's Links card says *updating
 because demoboard v12 changed*; if the change breaks it, the card shows the
 error and what depends on it waits. An import cycle is reported, not built.
 
 Each build records what it was built against: *built against demoboard v12*,
 and *now v13* when that is no longer the latest.
+
+### A component is its result
+
+A model another one imports is not run again in every build that uses it:
+the first build that imports it keeps its result, and later ones load it,
+the way Fusion uses a referenced component's saved body rather than
+recomputing it. A two-minute enclosure costs the lid, the caps and the base
+a second or so instead of two minutes each.
+
+What is kept is everything the module defines at top level: numbers,
+strings, lists, dicts and tuples, and build123d objects - shapes with their
+labels, colours and children, locations, planes, vectors. Its functions and
+classes are defined again from the source, so `enc.outline(1.5)` works and
+reads the kept numbers. Anything else - a lambda, an open file, an instance
+of a class the model defines - is not kept; asking for it runs the model's
+source after all, in that module, so the answer is the same, only slower.
+What the model printed and set in `os.environ` when it ran is replayed.
+
+The result is keyed on the model's text, the result of everything it
+imports (all the way down), the uploaded files and board STEPs its text
+names, and whether `REDLINE_IMPORT_ONLY` was set when it was imported - so
+a change anywhere below, a pin moved to another version, or a model
+imported standalone instead of as a part, is a different result, never a
+stale one. A model that writes files while it is being imported is not
+kept. A large STEP (a board's `B.part`, an uploaded bracket) is parsed
+once per content and read back as BREP afterwards.
+
+Results live in `.cache/build/` (`REDLINE_BUILD_CACHE`, `off` to build
+without it), pruned to 4 GB (`REDLINE_BUILD_CACHE_MAX`), least recently
+used first. With `REDLINE_BUILD_CACHE_DEBUG=1` a build says on stderr what
+it loaded, ran and kept. Rotated placements read back from the cache can
+differ from a fresh run in the last bit (OCCT re-orthogonalises a rotation
+it reads, as with BREP and STEP files).
 
 ### Pinning a version
 
@@ -872,8 +906,6 @@ station, 63.7 MB artifact
 | `GET /api/questions` · `POST /api/questions` | what the agent is waiting on; ask something |
 | `POST /api/questions/{id}/answer` · `DELETE /api/questions/{id}` | answer it; withdraw it |
 | `POST /api/usage/ingest` · `GET /api/usage/prices` | re-read the transcripts; the rate card |
-| `POST /api/versions` · `POST /api/versions/{id}/restore` | snapshot / roll back |
-| `GET /api/stats` · `GET /api/system` | database usage, CPU/RAM/GPU |
 | `POST /api/activity` · `GET /api/activity` | the log shown at the bottom |
 | `POST /api/run/start` · `POST /api/run/finish` · `GET /api/run` | the progress bar at the top |
 

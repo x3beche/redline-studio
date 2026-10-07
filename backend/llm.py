@@ -68,13 +68,17 @@ JOBS = {
     "chat": {"label": "Command Code room",
              "about": "the model a new conversation starts with",
              "default": CHEAP},
+    "part_category": {"label": "Part category",
+                      "about": "which parts drawer a new LCSC part goes in, when its own category says too little",
+                      "default": CHEAP},
 }
 
 # The usage log's `kind` of a call -> the job it did, named as in the
 # "Which model does what" list. The room's titles are written by the
 # summary job's model but belong to the room.
 KINDS = {"summary": "summary", "translate": "translate", "tool-llm": "tools",
-         "tool-router": "router", "cc-chat": "chat", "reading": "reading"}
+         "tool-router": "router", "cc-chat": "chat", "reading": "reading",
+         "part-category": "part_category"}
 KIND_LABELS = {"cc-title": "Command Code room titles", "llm-test": "Settings test"}
 
 
@@ -213,10 +217,32 @@ async def models(provider: str) -> list[dict]:
                     "context": m.get("context_length"),
                     "anthropic": "/messages" in ends and "/chat/completions" not in ends,
                     # the one a picker may land on by itself; anything else is chosen
-                    "cheap": (provider, m["id"]) == CHEAP})
+                    "cheap": (provider, m["id"]) == CHEAP,
+                    # whether it reads images (the Command Code room's @-mentions)
+                    "vision": vision(m)})
     out.sort(key=lambda m: m["id"].lower())
     _models_cache[provider] = (time.time(), out)
     return out
+
+
+# Model names that read images, for a provider whose list does not say
+# (Command Code's /models has no modalities). Guessed narrowly: a model not
+# matched here gets a text description instead of the picture.
+_VISION_NAMES = ("claude-", "gpt-4o", "gpt-4.1", "gpt-5", "gpt-6", "gemini", "vision", "omni", "-vl", "vl-",
+                 "pixtral", "llava")
+
+
+def vision(m: dict) -> bool:
+    """Whether a /models row reads images: the provider's own word when it
+    gives one (OpenRouter's architecture.input_modalities), else the name."""
+    arch = m.get("architecture") or {}
+    mods = arch.get("input_modalities")
+    if isinstance(mods, list):
+        return "image" in mods
+    if isinstance(arch.get("modality"), str):
+        return "image" in arch["modality"].split("->")[0]
+    name = str(m.get("id") or "").lower()
+    return any(k in name for k in _VISION_NAMES)
 
 
 async def _anthropic_model(provider: str, model: str) -> bool:

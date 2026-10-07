@@ -27,7 +27,9 @@ the tab are read back from the viewer itself and compared with the note,
 before and after the capture. A note drawn on a cut is never photographed
 uncut. Without --width/--height the picture is the note's own canvas size;
 with them, the note's aspect is kept (the framing depends on it) unless
---free-aspect says otherwise.
+--free-aspect says otherwise. A note from before its canvas was kept is shot
+in the shape of its own drawing (the stored before image, whose pixel size
+is the canvas it was drawn on).
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ import base64
 import json
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -211,16 +214,30 @@ def build_wait(entry: dict, allow_stale: bool = False) -> str | None:
     return None
 
 
+def after_shot() -> bool:
+    """Run as a card's "after" shot (tools/revisions.py `after` and `finish`
+    set REDLINE_REVISION): it never waits for a build. Finishing a run
+    took over five minutes waiting for a chain of linked rebuilds to land;
+    the shot of the build on record is taken at once, and says so."""
+    return bool(os.environ.get("REDLINE_REVISION"))
+
+
 def wait_built(fetch, model: str, timeout: float, allow_stale: bool = False,
-               sleep=time.sleep, clock=time.monotonic, find=None, check=None) -> dict:
+               sleep=time.sleep, clock=time.monotonic, find=None, check=None,
+               wait: bool | None = None) -> dict:
     """Poll the catalog until `model`'s own build is done; its entry.
-    `find` and `check` default to a 3D model's; a board passes its own."""
+    `find` and `check` default to a 3D model's; a board passes its own.
+    `wait` False (an after shot, by default): the build on record, now."""
     find, check = find or find_entry, check or build_wait
+    wait = (not after_shot()) if wait is None else wait
     t0, said = clock(), None
     while True:
         entry = find(fetch(), model)
         why = check(entry, allow_stale)
         if why is None:
+            return entry
+        if not wait:
+            print(f"{entry['id']} is {why}; not waiting - the shot shows its last build")
             return entry
         if clock() - t0 > timeout:
             raise SystemExit(f"{entry['id']} is still {why} after {timeout:.0f} s - not "
@@ -423,26 +440,65 @@ def view_state_problem(page: dict | None, rb, rid: str, view: dict) -> str | Non
     return "the viewer does not show the note's view: " + "; ".join(off) if off else None
 
 
-def shot_size(view, width: int | None, height: int | None,
-              free_aspect: bool = False) -> tuple[int, int, str | None]:
-    """The picture's size, and why when it is not what was asked for. The
-    framing depends on the canvas's aspect - a perspective camera's field of
-    view is vertical, an orthographic one is fitted to it - so a note that
-    knows its canvas is shot in its shape: its own size when none is asked
-    for, the asked-for width at its aspect otherwise."""
+def png_size(png: bytes | None) -> tuple[int, int] | None:
+    """(width, height) from a PNG's header, or None when it is not one."""
+    if not png or len(png) < 24 or not png.startswith(b"\x89PNG\r\n\x1a\n") \
+            or png[12:16] != b"IHDR":
+        return None
+    w, h = struct.unpack(">II", png[16:24])
+    return (w, h) if w and h else None
+
+
+def note_canvas(view) -> tuple[int, int] | None:
+    """The canvas size a note kept (format 2), or None."""
     canvas = view.get("canvas") if isinstance(view, dict) else None
     try:
         cw, ch = int(canvas["w"]), int(canvas["h"])
     except (TypeError, KeyError, ValueError):
-        cw = ch = 0
-    if cw < 50 or ch < 50 or free_aspect:
+        return None
+    return (cw, ch) if cw >= 50 and ch >= 50 else None
+
+
+# A note from before its view was kept (format 1, before 03fd1c4) has no
+# canvas size, and was shot at a fixed 1200x800. Its drawing was 1028x823:
+# the same camera over another aspect frames another picture (a perspective
+# camera's field of view is vertical, so the sides move; an orthographic
+# one is fitted to the shorter side, so everything does). The drawing
+# itself is a capture of the canvas it was made on, so its pixel size is
+# that canvas's shape.
+def drawn_size(rid: str, headers: dict | None = None,
+               opener=urllib.request.urlopen) -> tuple[int, int] | None:
+    """The pixel size of a note's stored drawing (its before image), or None."""
+    req = urllib.request.Request(f"{API}/api/revisions/{rid}/image", headers=headers or {})
+    try:
+        with opener(req, timeout=20) as r:
+            return png_size(r.read())
+    except Exception:                                         # noqa: BLE001
+        return None
+
+
+def shot_size(view, width: int | None, height: int | None,
+              free_aspect: bool = False,
+              drawn: tuple[int, int] | None = None) -> tuple[int, int, str | None]:
+    """The picture's size, and why when it is not what was asked for. The
+    framing depends on the canvas's aspect - a perspective camera's field of
+    view is vertical, an orthographic one is fitted to it - so a note that
+    knows its canvas is shot in its shape: its own size when none is asked
+    for, the asked-for width at its aspect otherwise. A note that does not
+    know it is shot in the shape of its drawing (`drawn`, the before
+    image's pixel size), the same way."""
+    size, what = note_canvas(view), "the note's canvas"
+    if size is None and drawn and drawn[0] >= 50 and drawn[1] >= 50:
+        size, what = (int(drawn[0]), int(drawn[1])), "the drawing's size"
+    if size is None or free_aspect:
         return width or 1400, height or 950, None
+    cw, ch = size
     aspect = cw / ch
     if width is None and height is None:
         # Too small a canvas makes a useless picture; too big, a slow one.
         k = min(max(1.0, 800 / cw, 500 / ch), 2400 / cw, 1600 / ch)
         w, h = round(cw * k), round(ch * k)
-        return w, h, f"the note's canvas, {cw}x{ch}" + (f" scaled to {w}x{h}" if k != 1 else "")
+        return w, h, f"{what}, {cw}x{ch}" + (f" scaled to {w}x{h}" if k != 1 else "")
     if width is None:
         w, h = round(height * aspect), height
     else:
@@ -541,7 +597,12 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
         print(f"view    : tab {note_view.get('tab') or 'tree'}, {cuts} clipping plane(s) cutting, "
               f"{'ortho' if (note_view.get('camera') or {}).get('ortho') else 'perspective'}, "
               f"hash {view_hash(note_view)}")
-    width, height, why_size = shot_size(note_view, width, height, free_aspect)
+    drawn = None
+    if rid and note_canvas(note_view) is None and not free_aspect:
+        drawn = drawn_size(rid, auth)
+        if drawn:
+            print(f"canvas  : not kept by this note; its drawing is {drawn[0]}x{drawn[1]}")
+    width, height, why_size = shot_size(note_view, width, height, free_aspect, drawn)
     if why_size:
         print(f"size    : {width}x{height} ({why_size})")
     # Its own build first: a shot taken while it builds, or while a linked
@@ -778,7 +839,7 @@ def main() -> None:
     ap.add_argument("-o", "--out")
     ap.add_argument("--width", type=int, default=None,
                     help="width of the picture itself, not of the window (default: the "
-                         "note's own canvas, else 1400)")
+                         "note's own canvas, else its drawing's size, else 1400)")
     ap.add_argument("--height", type=int, default=None,
                     help="height of the picture itself (follows the note's aspect "
                          "unless --free-aspect; default 950 without one)")

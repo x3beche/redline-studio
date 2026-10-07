@@ -1115,7 +1115,12 @@ async def cmd_save(args):
     from backend import store
 
     db = connect()
-    doc = await store.save_model(db, args.model, Path(args.file).read_text())
+    try:
+        doc = await store.save_model(db, args.model, Path(args.file).read_text())
+    except store.SourceError as exc:
+        # Compiled, not run: a syntax error is refused here, not kept as a
+        # version that only the build finds out about.
+        sys.exit(f"{args.model}: {exc}")
     print(f"{doc['_id']} saved  hash={doc['sha256'][:12]}  ready={doc['ready']}")
     print("next: python tools/revisions.py build " + args.model)
 
@@ -1128,7 +1133,17 @@ async def cmd_build(args):
     # answer. Nothing here decides for them that four minutes of booleans
     # were a waste.
     await _shout_interrupts(db)
-    res = await build.build(db, args.model, ROOT / "export_model.py")
+    from backend import store
+    # The version this build is of; how it went is kept on it, so a saved
+    # version that does not build is marked failed (pins and "latest" skip
+    # it) and one that does is cleared.
+    version = await store.current_version(db, args.model)
+    try:
+        res = await build.build(db, args.model, ROOT / "export_model.py")
+    except (ValueError, RuntimeError, TimeoutError, MemoryError) as exc:
+        await store.version_built(db, args.model, version, str(exc) or type(exc).__name__)
+        raise
+    await store.version_built(db, args.model, version)
     sizes = ", ".join(f"{k} {v/1e6:.1f}MB" for k, v in res["artifacts"].items())
     print(f"{res['model']} built: {sizes}")
 
@@ -1139,12 +1154,11 @@ async def _after_shot(db, rid: str, width: int | None = None, height: int | None
 
     out = Path(tempfile.gettempdir()) / f"after-{rid}.png"
     # No size by default: render.py then shoots the note's own canvas, whose
-    # shape decides the framing (a note from before it was kept: 1400x950).
+    # shape decides the framing. A note from before the canvas was kept is
+    # shot in the shape of its drawing (the before image's pixel size), not
+    # at a fixed 1200x800: the same camera over another aspect frames
+    # another picture (render.py shot_size / drawn_size).
     argv = [sys.executable, str(ROOT / "tools" / "render.py"), rid, "-o", str(out)]
-    if not width and not height:
-        doc = await db.revisions.find_one({"_id": rid}, {"view.canvas": 1}) or {}
-        if not (doc.get("view") or {}).get("canvas"):
-            width, height = 1200, 800       # as it always was, for an older note
     if width:
         argv += ["--width", str(width)]
     if height:
@@ -1500,7 +1514,7 @@ def main() -> None:
     s = sub.add_parser("after", help="store the after shot for a revision")
     s.add_argument("id")
     s.add_argument("--width", type=int, default=None,
-                   help="default: the note's own canvas size")
+                   help="default: the note's own canvas size, else its drawing's")
     s.add_argument("--height", type=int, default=None)
     s.add_argument("--only", help="show only this part, as in render.py")
     s.set_defaults(fn=cmd_after)

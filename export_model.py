@@ -69,9 +69,14 @@ def main() -> None:
     ap.add_argument("--models-dir", required=True, type=Path)
     ap.add_argument("--assets-dir", required=True, type=Path)
     args = ap.parse_args()
+    # Models this one imports come from the component cache when their
+    # result is kept (backend/buildcache.py); the model itself always runs.
+    from backend import buildcache
+    cache = buildcache.install(args.models_dir, args.models_dir.parent, target=args.model)
     sys.path.insert(0, str(args.models_dir))
     out = export(args.models_dir, args.assets_dir, args.model)
     print(f"{out}  {out.stat().st_size}")
+    buildcache.finish(cache, args.assets_dir / f"{args.model}.cache.json")
 
 
 if __name__ == "__main__":

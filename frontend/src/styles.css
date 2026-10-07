@@ -3880,169 +3880,97 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-fs-bar { position: absolute; left: 4px; right: 4px; bottom: 0; height: 2px; overflow: hidden; border-radius: 1px; background: var(--surface); }
 .tcv-fs-bar > span { display: block; height: 100%; background: var(--accent); transition: width .3s; }
 
-/* ==== Parts drawer: a cabinet of drawers (rooms/parts-drawer.ts) ==========
-   Every colour is a token, mixed: the light catch on an edge is the switch
-   knob's near-white, the dark under a lip is the theme's own shadow, so the
-   same rules read as depth on a dark panel and on a light one. */
+/* ==== Parts drawer (rooms/parts-drawer.ts) ===============================
+   Flat, in the app's own tones like the Settings pages: each group a plain
+   row, opening to a tray of plain cards. No depth, no drawings. */
 .pdw { padding: 6px 8px 10px; }
 .pdw-head { display: flex; align-items: center; gap: 6px; padding: 2px 0 6px; }
 .pdw-total { font-size: 10px; color: var(--ink-dim); }
+.pdw-cabinet { display: flex; flex-direction: column; gap: 4px; }
 
-.pdw-cabinet { display: flex; flex-direction: column; gap: 5px; padding: 5px; border-radius: 6px;
-  background: color-mix(in srgb, var(--surface-2) 82%, var(--shadow-hard));
-  box-shadow: inset 0 0 0 1px var(--line), inset 0 2px 5px var(--shadow-hard),
-              0 1px 0 color-mix(in srgb, var(--switch-knob) 10%, transparent); }
+.pdw-drawer { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); overflow: hidden; }
+.pdw-front { display: flex; width: 100%; align-items: center; gap: 6px; padding: 6px 8px; border: 0; cursor: pointer;
+  text-align: left; font-size: 11px; font-weight: 600; color: var(--ink); background: none; }
+.pdw-front:hover { background: var(--hover); }
+.pdw-front:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.pdw-chev { flex: none; color: var(--ink-dim); transition: transform .12s; }
+.pdw-open .pdw-chev { transform: rotate(90deg); }
+.pdw-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pdw-count { flex: none; font-size: 10px; font-weight: 400; color: var(--ink-dim); }
 
-.pdw-drawer { position: relative; }
-
-/* The front: a raised face, lit on its top edge, a recessed panel inside. */
-.pdw-front { position: relative; z-index: 1; display: flex; width: 100%; flex-direction: column; align-items: center;
-  gap: 6px; padding: 9px 10px 8px; border: 1px solid var(--line); border-radius: 4px; cursor: pointer;
-  color: var(--ink);
-  background: linear-gradient(to bottom,
-    color-mix(in srgb, var(--surface) 90%, var(--switch-knob)) 0%,
-    var(--surface) 42%,
-    color-mix(in srgb, var(--surface) 88%, var(--shadow-hard)) 100%);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--switch-knob) 22%, transparent),
-              inset 0 -1px 0 var(--shadow-soft), 0 1px 1px var(--shadow-soft), 0 2px 4px var(--shadow-soft);
-  transform-origin: 50% 100%;
-  transition: transform .32s cubic-bezier(.2, .8, .2, 1), box-shadow .32s, background-color .15s; }
-.pdw-front::before { content: ''; position: absolute; inset: 3px; border-radius: 2px; pointer-events: none;
-  box-shadow: inset 0 1px 2px var(--shadow-soft),
-              inset 0 -1px 0 color-mix(in srgb, var(--switch-knob) 12%, transparent); }
-.pdw-front:hover { background-color: var(--hover);
-  background-image: linear-gradient(to bottom,
-    color-mix(in srgb, var(--hover) 88%, var(--switch-knob)) 0%, var(--hover) 42%,
-    color-mix(in srgb, var(--hover) 88%, var(--shadow-hard)) 100%); }
-.pdw-front:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-
-/* The label holder: a little card slot with a name in it. */
-.pdw-plate { display: flex; width: 72%; min-width: 0; max-width: 200px; align-items: center; justify-content: space-between;
-  gap: 8px; padding: 3px 7px; border-radius: 2px; border: 1px solid var(--line);
-  background: var(--surface-2);
-  box-shadow: inset 0 1px 2px var(--shadow-hard), 0 1px 0 color-mix(in srgb, var(--switch-knob) 14%, transparent); }
-.pdw-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink); }
-.pdw-count { flex: none; min-width: 18px; padding: 0 4px; border-radius: 7px; text-align: center; font-size: 10px;
-  color: var(--ink-dim); background: color-mix(in srgb, var(--surface) 70%, var(--line)); }
-
-/* The pull. */
-.pdw-handle { display: block; overflow: visible; filter: drop-shadow(0 1px 1px var(--shadow-hard)); }
-.pdw-handle-post { fill: color-mix(in srgb, var(--ink-dim) 55%, var(--surface)); }
-.pdw-handle-bar { fill: color-mix(in srgb, var(--ink-dim) 78%, var(--surface)); }
-.pdw-handle-shine { fill: var(--switch-knob); opacity: .38; }
-.pdw-front:hover .pdw-handle-bar { fill: var(--ink-dim); }
-
-/* Pulled out: the front comes towards you and throws a shadow on the tray. */
-.pdw-open .pdw-front { transform: perspective(600px) translateZ(14px);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--switch-knob) 22%, transparent),
-              inset 0 -1px 0 var(--shadow-soft), 0 3px 4px var(--shadow-hard), 0 8px 14px var(--shadow-soft); }
-.pdw-open .pdw-plate { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
-
-/* The tray grows out from under the front. */
-.pdw-slide { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .34s cubic-bezier(.2, .8, .2, 1); }
+.pdw-slide { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .14s ease-out; }
 .pdw-open > .pdw-slide { grid-template-rows: 1fr; }
 .pdw-clip { min-height: 0; overflow: hidden; }
-.pdw-tray { max-height: min(58vh, 470px); overflow-y: auto; margin: -4px 3px 0; padding: 10px 6px 6px;
-  border: 1px solid var(--line); border-top: 0; border-radius: 0 0 4px 4px;
-  background: var(--surface-2);
-  box-shadow: inset 0 8px 8px -6px var(--shadow-hard), inset 1px 0 0 var(--shadow-soft), inset -1px 0 0 var(--shadow-soft);
-  transform: translateY(-12px); opacity: 0;
-  transition: transform .34s cubic-bezier(.2, .8, .2, 1), opacity .22s; }
-.pdw-open .pdw-tray { transform: none; opacity: 1; }
+.pdw-tray { max-height: min(56vh, 460px); overflow-y: auto; padding: 4px 6px 6px; border-top: 1px solid var(--line); }
 
-/* A branch is a divider across the tray. */
-.pdw-divider { display: flex; align-items: center; gap: 6px; margin: 4px 0 5px; font-size: 9.5px; font-weight: 600;
-  letter-spacing: .07em; text-transform: uppercase; color: var(--ink-dim); }
-.pdw-divider::after { content: ''; order: 1; flex: 1; height: 2px; border-radius: 1px; background: var(--line);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--switch-knob) 10%, transparent); }
-.pdw-divider .mono { order: 2; font-weight: 400; letter-spacing: 0; }
-.pdw-divider ~ .pdw-divider { margin-top: 10px; }
+.pdw-divider { display: flex; justify-content: space-between; margin: 4px 1px 3px; font-size: 10px; color: var(--ink-dim); }
+.pdw-divider ~ .pdw-divider { margin-top: 8px; }
 
-/* The bins: a pad drawing on a board, then what it is. Dense flow, so a
-   pinout opened across the tray does not leave a hole beside its bin. */
-.pdw-bins { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); grid-auto-flow: row dense; gap: 6px; }
-.pdw-bin { position: relative; display: flex; min-width: 0; flex-direction: column; padding: 4px 4px 5px; cursor: pointer;
-  border: 1px solid var(--line); border-radius: 4px; background: var(--surface);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--switch-knob) 8%, transparent) inset, 0 1px 2px var(--shadow-soft);
-  transition: border-color .12s, transform .12s; }
-.pdw-bin:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
-.pdw-bin:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.pdw-bin.pdw-seen { border-color: var(--accent); background: color-mix(in srgb, var(--accent-deep) 45%, var(--surface)); }
-.pdw-bin.pdw-expanded { border-color: var(--accent); }
+.pdw-bins { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); grid-auto-flow: row dense; gap: 4px; }
+.pdw-bin { display: flex; min-width: 0; flex-direction: column; gap: 1px; padding: 4px 6px 5px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); }
+.pdw-bin:hover { background: var(--hover); }
+.pdw-bin:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.pdw-bin.pdw-seen { border-color: var(--accent); }
+.pdw-bin.pdw-pulse { animation: pdw-pulse .5s ease-in-out 3; }
+@keyframes pdw-pulse { 50% { border-color: var(--accent); background: var(--hover); } }
 
-.pdw-thumb { position: relative; display: flex; height: 62px; align-items: center; justify-content: center;
-  padding: 7px 8px; border-radius: 2px; background: var(--pcb-bg);
-  box-shadow: inset 0 1px 3px var(--shadow-hard); }
-.pdw-thumb img { width: 100%; height: 100%; object-fit: contain; }
-.pdw-badge { position: absolute; top: 3px; left: 3px; padding: 0 3px; border-radius: 2px; font-size: 8.5px; font-weight: 700;
-  line-height: 12px; letter-spacing: .04em; color: var(--ink-dim); background: var(--surface-2); opacity: .92; }
-.pdw-badge.pdw-badge-3d { color: var(--ink-on-accent); background: var(--ok); }
-.pdw-pins { position: absolute; right: 3px; bottom: 3px; display: inline-flex; align-items: center; gap: 2px; padding: 0 3px 0 4px;
-  border: 0; border-radius: 2px; cursor: pointer; font-size: 9px; line-height: 13px; color: var(--ink-on-accent);
-  background: var(--accent); }
-.pdw-pins:hover { filter: brightness(1.1); }
-.pdw-pins svg { transition: transform .15s; }
-.pdw-expanded .pdw-pins svg { transform: rotate(180deg); }
-.pdw-forget { position: absolute; top: 2px; right: 2px; width: 15px; height: 15px; padding: 0; border: 0; border-radius: 2px;
-  cursor: pointer; font-size: 12px; line-height: 14px; color: var(--danger); background: var(--surface-2);
-  opacity: 0; transition: opacity .12s; }
+.pdw-top { display: flex; align-items: baseline; gap: 4px; }
+.pdw-value { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; font-weight: 600; color: var(--ink); }
+.pdw-forget { flex: none; padding: 0 2px; border: 0; cursor: pointer; font-size: 12px; line-height: 1;
+  color: var(--ink-dim); background: none; opacity: 0; }
+.pdw-forget:hover { color: var(--ink); }
 .pdw-bin:hover .pdw-forget, .pdw-bin:focus-within .pdw-forget { opacity: 1; }
-@media (hover: none) { .pdw-forget { opacity: .75; } }
-
-.pdw-value { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 12.5px; font-weight: 650; line-height: 15px; color: var(--ink); }
-.pdw-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; line-height: 13px; color: var(--ink-dim); }
-.pdw-meta { display: flex; gap: 4px; justify-content: space-between; margin-top: 3px; padding-top: 3px;
-  border-top: 1px dashed var(--line); font-size: 9.5px; line-height: 12px; color: var(--ink-dim); }
-.pdw-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pdw-pkg { color: var(--ink); }
-
-/* The pinout, across the tray. */
-.pdw-pinout { grid-column: 1 / -1; padding: 6px; border: 1px solid var(--accent); border-radius: 4px; background: var(--surface);
-  box-shadow: 0 2px 6px var(--shadow-soft); }
-.pdw-pinout-bar { display: flex; gap: 2px; margin-bottom: 6px; }
-.pdw-pinout-bar button { padding: 1px 6px; border: 0; border-radius: 3px; cursor: pointer; font-size: 10px;
+@media (hover: none) { .pdw-forget { opacity: 1; } }
+.pdw-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--ink-dim); }
+.pdw-meta { display: flex; align-items: center; gap: 4px; font-size: 9.5px; color: var(--ink-dim); }
+.pdw-pkg { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pdw-lcsc { flex: none; padding: 0 2px; margin: 0 -2px; border: 0; border-radius: 2px; cursor: copy;
+  font: inherit; color: var(--ink-dim); background: none; }
+.pdw-lcsc:hover { color: var(--ink); background: var(--surface); }
+.pdw-badge { flex: none; padding: 0 3px; border: 1px solid var(--line); border-radius: 2px; font-size: 8.5px; line-height: 11px; }
+.pdw-badge.pdw-badge-3d { color: var(--ink); }
+.pdw-pins { align-self: flex-start; margin-top: 2px; padding: 0; border: 0; cursor: pointer; font-size: 10px;
   color: var(--ink-dim); background: none; }
-.pdw-pinout-bar button:hover { color: var(--ink); background: var(--hover); }
-.pdw-pinout-bar button.pdw-on { color: var(--ink); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
-.pdw-note { padding: 8px 2px; font-size: 11px; color: var(--ink-dim); }
-.pdw-symbol { display: flex; height: 200px; align-items: center; justify-content: center; padding: 6px; border-radius: 3px;
-  background: var(--shot-bg); }
-.pdw-symbol img { width: 100%; height: 100%; object-fit: contain; }
+.pdw-pins:hover { color: var(--ink); }
 
-.pdw-chip { display: grid; grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr); align-items: stretch; }
-.pdw-side { margin: 0; padding: 4px 0; list-style: none; }
-.pdw-side li { display: flex; align-items: center; height: 15px; gap: 0; font-size: 10px; line-height: 15px; }
-.pdw-left li { justify-content: flex-end; }
-.pdw-pname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; color: var(--ink); }
-.pdw-pnum { position: relative; flex: none; width: 22px; font-size: 9px; text-align: center; color: var(--ink-dim);
-  border-bottom: 2px solid color-mix(in srgb, var(--ink-dim) 60%, var(--surface)); line-height: 12px; }
-.pdw-side li[data-kind="power"] .pdw-pname { color: var(--warn); }
-.pdw-side li[data-kind="power"] .pdw-pnum { border-color: var(--warn); }
-.pdw-side li[data-kind="ground"] .pdw-pname { color: var(--ink-dim); }
-.pdw-side li[data-kind="ground"] .pdw-pnum { border-color: var(--ink-dim); }
-.pdw-side li[data-kind="nc"] .pdw-pname { color: var(--ink-dim); opacity: .55; }
-.pdw-side li[data-kind="nc"] .pdw-pnum { opacity: .55; }
-.pdw-body { position: relative; display: flex; align-items: center; justify-content: center; border-radius: 3px;
-  background: color-mix(in srgb, var(--pcb-bg) 85%, var(--surface));
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--switch-knob) 14%, transparent), 0 1px 3px var(--shadow-hard); }
-.pdw-body::before { content: ''; position: absolute; top: -1px; left: 50%; width: 12px; height: 6px; margin-left: -6px;
-  border-radius: 0 0 6px 6px; background: var(--surface); }
-.pdw-body::after { content: ''; position: absolute; top: 9px; left: 6px; width: 4px; height: 4px; border-radius: 50%;
-  background: color-mix(in srgb, var(--switch-knob) 45%, transparent); }
-.pdw-body-name { writing-mode: vertical-rl; max-height: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  padding: 10px 0; font-size: 9.5px; font-weight: 600; letter-spacing: .06em;
-  color: color-mix(in srgb, var(--switch-knob) 70%, transparent); }
-.pdw-legend { display: flex; justify-content: center; gap: 10px; margin-top: 6px; font-size: 9.5px; color: var(--ink-dim); }
-.pdw-legend span::before { content: ''; display: inline-block; width: 8px; height: 2px; margin-right: 4px; vertical-align: middle;
-  background: color-mix(in srgb, var(--ink-dim) 60%, var(--surface)); }
-.pdw-legend span[data-kind="power"]::before { background: var(--warn); }
-.pdw-legend span[data-kind="ground"]::before { background: var(--ink-dim); }
-.pdw-legend span[data-kind="nc"]::before { opacity: .55; }
+.pdw-pinout { grid-column: 1 / -1; padding: 5px 6px 6px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); }
+.pdw-pinout-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 10px; color: var(--ink-dim); }
+.pdw-pinout-bar span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pdw-pinout-bar button { flex: none; padding: 0; border: 0; cursor: pointer; font-size: 10px; color: var(--ink-dim); background: none; }
+.pdw-pinout-bar button:hover { color: var(--ink); }
+.pdw-note { padding: 4px 0; font-size: 11px; color: var(--ink-dim); }
+.pdw-pinlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); column-gap: 8px; margin: 0; padding: 0; list-style: none; }
+.pdw-pinlist li { display: flex; min-width: 0; gap: 5px; font-size: 10.5px; line-height: 16px; }
+.pdw-pnum { flex: none; width: 18px; text-align: right; font-size: 9.5px; color: var(--ink-dim); }
+.pdw-pname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.pdw-pinlist li.pdw-nc .pdw-pname { color: var(--ink-dim); }
 
+/* The add box's progress, under it: one line per step, the last one live. */
+.tcv-add-progress { position: relative; padding: 5px 24px 6px 8px; border-bottom: 1px solid var(--line);
+  background: var(--surface-2); font-size: 11px; color: var(--ink-dim); }
+.tcv-add-step { display: flex; gap: 6px; line-height: 16px; }
+.tcv-add-mark { flex: none; width: 10px; text-align: center; }
+.tcv-add-step.tcv-add-now { color: var(--ink); }
+.tcv-add-progress[data-state="running"] .tcv-add-now .tcv-add-mark { animation: tcv-work-pulse 1.2s infinite ease-in-out; }
+.tcv-add-progress[data-state="error"] .tcv-add-now { color: var(--danger); }
+.tcv-add-close { position: absolute; top: 3px; right: 4px; padding: 0 4px; border: 0; cursor: pointer; font-size: 13px;
+  color: var(--ink-dim); background: none; }
+.tcv-add-close:hover { color: var(--ink); }
+
+/* The part card: facts and pins on the left, the drawings on the right. */
+.tcv-part-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 12px; }
+.tcv-part-modal .pdw-pinlist { max-height: 220px; overflow-y: auto; }
+
+@media (max-width: 768px) {
+  .tcv-part-grid { grid-template-columns: minmax(0, 1fr); }
+  .pdw-tray { max-height: 36vh; }
+  .pdw-front { padding: 9px 8px; }
+  .pdw-forget { padding: 2px 4px; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .pdw-front, .pdw-slide, .pdw-tray, .pdw-pins svg { transition: none; }
-  .pdw-open .pdw-front { transform: none; }
+  .pdw-slide, .pdw-chev { transition: none; }
+  .pdw-bin.pdw-pulse { animation: none; border-color: var(--accent); }
 }
 /* ==== end parts drawer ==================================================== */
