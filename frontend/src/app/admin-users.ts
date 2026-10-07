@@ -1,9 +1,10 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, afterRenderEffect, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, firstValueFrom } from 'rxjs';
 import { LANG, T, t } from './i18n';
 import { Auth } from './auth';
 import { Avatar } from './avatar';
+import { reportError } from './error-report';
 
 /** Settings > Admin panel: the accounts on this server (backend/admin.py),
  *  for the owner and the admins - opened from the account menu.
@@ -301,7 +302,31 @@ export class AdminUsersPanel {
              admins: all.filter(u => u.role !== 'user').length };
   });
 
-  constructor() { this.load(); }
+  private host = inject(ElementRef<HTMLElement>);
+  private told = false;
+
+  constructor() {
+    this.load();
+    // The list came but no row is on screen: tell the server what this
+    // browser made of it, once - a panel that draws for everyone else.
+    afterRenderEffect(() => {
+      const d = this.data();
+      if (!d?.users?.length || this.editing() || this.told) return;
+      setTimeout(() => {
+        const el: HTMLElement = this.host.nativeElement;
+        const rows = el.querySelectorAll('.ad-table tbody tr').length;
+        const wrap = el.querySelector('.st-table-wrap') as HTMLElement | null;
+        const box = wrap?.getBoundingClientRect();
+        if (rows && box && box.height > 20 && wrap && getComputedStyle(wrap).display !== 'none') return;
+        this.told = true;
+        reportError({ message: `admin panel: ${d.users.length} users but ${rows} rows drawn`,
+          stack: JSON.stringify({ wrap: !!wrap, display: wrap ? getComputedStyle(wrap).display : null,
+            w: box?.width, h: box?.height, vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio,
+            adding: this.adding(), q: this.q(), html: el.innerHTML.length,
+            tail: el.innerHTML.slice(-600) }) }, 'diag');
+      }, 800);
+    });
+  }
 
   async load() {
     try { this.data.set(await firstValueFrom(this.http.get<Listing>('/api/admin/users'))); }
