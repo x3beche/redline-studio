@@ -1133,13 +1133,22 @@ async def cmd_build(args):
     print(f"{res['model']} built: {sizes}")
 
 
-async def _after_shot(db, rid: str, width: int = 1200, height: int = 800,
+async def _after_shot(db, rid: str, width: int | None = None, height: int | None = None,
                       only: str | None = None) -> dict:
     from backend import store
 
     out = Path(tempfile.gettempdir()) / f"after-{rid}.png"
-    argv = [sys.executable, str(ROOT / "tools" / "render.py"), rid,
-            "-o", str(out), "--width", str(width), "--height", str(height)]
+    # No size by default: render.py then shoots the note's own canvas, whose
+    # shape decides the framing (a note from before it was kept: 1400x950).
+    argv = [sys.executable, str(ROOT / "tools" / "render.py"), rid, "-o", str(out)]
+    if not width and not height:
+        doc = await db.revisions.find_one({"_id": rid}, {"view.canvas": 1}) or {}
+        if not (doc.get("view") or {}).get("canvas"):
+            width, height = 1200, 800       # as it always was, for an older note
+    if width:
+        argv += ["--width", str(width)]
+    if height:
+        argv += ["--height", str(height)]
     if only:
         argv += ["--only", only]
     proc = await asyncio.create_subprocess_exec(
@@ -1490,8 +1499,9 @@ def main() -> None:
     s.set_defaults(fn=cmd_stop)
     s = sub.add_parser("after", help="store the after shot for a revision")
     s.add_argument("id")
-    s.add_argument("--width", type=int, default=1200)
-    s.add_argument("--height", type=int, default=800)
+    s.add_argument("--width", type=int, default=None,
+                   help="default: the note's own canvas size")
+    s.add_argument("--height", type=int, default=None)
     s.add_argument("--only", help="show only this part, as in render.py")
     s.set_defaults(fn=cmd_after)
     s = sub.add_parser("usage", help="pull LLM usage from the agent transcripts")

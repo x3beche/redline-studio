@@ -14,9 +14,10 @@ export interface Revision {
   comment: string;
   image_path: string;
   camera: CameraState | null;
-  /** Which parts were shown when the note was written. The camera alone is
-   *  only where it was seen from. */
-  view: { states: Record<string, [number, number]> | null } | null;
+  /** What was on screen when the note was written: which parts were shown
+   *  and, from format 2 on, the clipping, the tab and the render settings
+   *  (NoteView). The camera alone is only where it was seen from. */
+  view: NoteView | null;
   part: string | null;
   model: string | null;
   /** A board's note or a model's: each room shows its own. */
@@ -138,6 +139,40 @@ export interface CameraState {
   up: [number, number, number];
 }
 
+/** One of the viewer's three clipping planes as it was drawn. `slider` is
+ *  three-cad-viewer's own value: a distance from the model's bounding-box
+ *  centre. `offset` is the same plane in world terms (n . p = offset), which
+ *  is what is put back - a rebuilt model with another box keeps its cut where
+ *  it was. `enabled` is false for a plane left fully open (slider at the end
+ *  of its travel), which stays open whatever the new box. */
+export interface ClipPlaneView {
+  normal: [number, number, number];
+  slider: number;
+  offset: number;
+  center: [number, number, number];
+  enabled: boolean;
+}
+
+/** The whole view a note was drawn against (format 2). Older notes carry
+ *  only `states`. */
+export interface NoteView {
+  v?: number;
+  states: Record<string, [number, number]> | null;
+  /** The viewer's side tab: clipping, zebra and studio only show on theirs. */
+  tab?: 'tree' | 'clip' | 'zebra' | 'material' | 'studio';
+  clip?: { planes: ClipPlaneView[]; intersection: boolean; helpers: boolean;
+           caps: boolean; half: number };
+  render?: { transparent: boolean; black_edges: boolean; axes: boolean; axes0: boolean;
+             grid: [boolean, boolean, boolean]; opacity: number; edge_color: number;
+             ambient: number; direct: number; metalness: number; roughness: number };
+  zebra?: { count: number; opacity: number; direction: number;
+            color_scheme: string; mapping_mode: string };
+  studio?: Record<string, string | number | boolean>;
+  camera?: { ortho: boolean; zoom: number; quaternion: [number, number, number, number] };
+  /** The 3D canvas as drawn, in CSS pixels. Its aspect decides the framing. */
+  canvas?: { w: number; h: number; aspect: number };
+}
+
 /** The only contact point with the backend. The Atlas URI lives in FastAPI. */
 @Injectable({ providedIn: 'root' })
 export class Api {
@@ -170,7 +205,7 @@ export class Api {
   create(body: {
     comment: string; image_png: string | null;
     camera: CameraState | null; part: string | null; model: string | null;
-      view?: { states: Record<string, [number, number]> | null } | null;
+      view?: NoteView | null;
       kind?: RevisionKind;
   }): Observable<Revision> {
     return this.http.post<Revision>('/api/revisions', body);

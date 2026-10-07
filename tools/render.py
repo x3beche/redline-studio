@@ -18,6 +18,16 @@ model:<id>), from its current build: a build or a linked rebuild of that
 model is waited out first, the page is told which model to open, and what
 the page says is on screen is checked before and after the capture. Any
 mismatch is an error - a shot of some other model is worse than none.
+
+A note's view is more than its camera: where the model was clipped, which
+tab, which parts, which render settings, and the canvas's shape (frontend
+api.ts NoteView, format 2). The page puts all of it back and says so in
+window.redlineView (view_rev, view_applied, view_hash); the clipping and
+the tab are read back from the viewer itself and compared with the note,
+before and after the capture. A note drawn on a cut is never photographed
+uncut. Without --width/--height the picture is the note's own canvas size;
+with them, the note's aspect is kept (the framing depends on it) unless
+--free-aspect says otherwise.
 """
 
 from __future__ import annotations
@@ -293,6 +303,155 @@ def board_problem(view: dict | None, shown: str | None, board: str, at: str) -> 
     return None
 
 
+# ---------------------------------------------------------------- which view
+# The person cut the base assembly open, looked at the encoder wheel through
+# the case and drew on it. The after shot from the same camera over the
+# uncut model showed the outside of the case. So the whole view goes back,
+# and it is checked rather than assumed.
+
+def view_format(view) -> int:
+    """1 for a note that kept only which parts were shown, 2 for one that
+    kept the whole view."""
+    if not isinstance(view, dict):
+        return 0
+    try:
+        return int(view.get("v") or 1)
+    except (TypeError, ValueError):
+        return 1
+
+
+def _canon(x) -> str:
+    """The page's canonical form (ocp.ts viewHash): keys sorted, numbers to
+    four decimals rounded half away from zero like toFixed, strings as JSON."""
+    from decimal import ROUND_HALF_UP, Decimal
+    if x is None:
+        return "null"
+    if isinstance(x, bool):
+        return "true" if x else "false"
+    if isinstance(x, (int, float)):
+        if isinstance(x, float) and (x != x or x in (float("inf"), float("-inf"))):
+            return "null"
+        t = str(Decimal(x).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP))
+        return "0.0000" if t == "-0.0000" else t
+    if isinstance(x, str):
+        return json.dumps(x, ensure_ascii=False)
+    if isinstance(x, (list, tuple)):
+        return "[" + ",".join(_canon(v) for v in x) + "]"
+    if isinstance(x, dict):
+        return "{" + ",".join(json.dumps(str(k), ensure_ascii=False) + ":" + _canon(x[k])
+                              for k in sorted(x, key=str)) + "}"
+    return json.dumps(str(x), ensure_ascii=False)
+
+
+def view_hash(view) -> str:
+    """FNV-1a over the canonical form - the same eight hex digits the page
+    publishes as view_hash for the view it applied."""
+    h = 0x811C9DC5
+    for b in _canon(view).encode("utf-8"):
+        h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
+    return f"{h:08x}"
+
+
+def _unit(v) -> list[float]:
+    n = sum(float(c) * float(c) for c in v) ** 0.5 or 1.0
+    return [float(c) / n for c in v]
+
+
+def readback_mismatch(view: dict, rb) -> list[str]:
+    """Where what the viewer shows (window.redlineViewReadback()) differs
+    from the note's view: the tab, the camera type, each clipping plane by
+    its world position, the clip switches. Empty when it matches."""
+    if view_format(view) < 2:
+        return []
+    if not isinstance(rb, dict):
+        return ["the viewer did not say what it shows"]
+    out = []
+    tab = view.get("tab") or "tree"
+    if rb.get("tab") != tab:
+        out.append(f"the viewer is on its {rb.get('tab')} tab, not {tab}")
+    cam = view.get("camera") or {}
+    if "ortho" in cam and bool(cam["ortho"]) != bool(rb.get("ortho")):
+        out.append("the camera is " + ("orthographic" if rb.get("ortho") else "perspective")
+                   + ", the note's is not")
+    clip = view.get("clip")
+    if isinstance(clip, dict):
+        half = float(rb.get("half") or 0)
+        tol = max(1e-3, half * 1e-4)
+        got = rb.get("planes") or []
+        for i, p in enumerate((clip.get("planes") or [])[:3]):
+            if i >= len(got):
+                out.append(f"plane {i + 1} missing")
+                continue
+            g = got[i]
+            n, gn = _unit(p["normal"]), _unit(g["normal"])
+            if abs(sum(a * b for a, b in zip(n, gn)) - 1) > 1e-6:
+                out.append(f"plane {i + 1} faces {gn}, not {n}")
+            elif p.get("enabled") is False:
+                if float(g["slider"]) < half - tol:
+                    out.append(f"plane {i + 1} should be open and cuts at {g['offset']:.3f}")
+            elif abs(float(g["offset"]) - float(p["offset"])) > tol:
+                out.append(f"plane {i + 1} cuts at {float(g['offset']):.3f}, "
+                           f"not {float(p['offset']):.3f}")
+        if bool(clip.get("intersection")) != bool(rb.get("intersection")):
+            out.append("intersection mode differs")
+        if bool(clip.get("caps")) != bool(rb.get("caps")):
+            out.append("cap colours differ")
+        if rb.get("tab") == "clip" and bool(clip.get("helpers")) != bool(rb.get("helpers")):
+            out.append("plane helpers differ")
+    return out
+
+
+def view_state_problem(page: dict | None, rb, rid: str, view: dict) -> str | None:
+    """What is wrong with the note's view on the page, or None when the page
+    applied exactly this note's view and the viewer reads back as the note
+    says. A page that could not apply it is an error, not a wait."""
+    if view_format(view) < 2:
+        return None                         # an older note: its camera, as before
+    if not isinstance(page, dict):
+        return "the page has not said what it shows yet"
+    if page.get("view_rev") != rid:
+        return f"the page has not applied note {rid}'s view yet"
+    if page.get("view_error"):
+        raise SystemExit(f"the page could not apply note {rid}'s view: {page['view_error']}")
+    if page.get("view_applied") is not True:
+        return "the page is still applying the note's view"
+    want = view_hash(view)
+    if page.get("view_hash") != want:
+        raise SystemExit(f"the page applied view {page.get('view_hash')}, not note {rid}'s "
+                         f"({want})")
+    off = readback_mismatch(view, rb)
+    return "the viewer does not show the note's view: " + "; ".join(off) if off else None
+
+
+def shot_size(view, width: int | None, height: int | None,
+              free_aspect: bool = False) -> tuple[int, int, str | None]:
+    """The picture's size, and why when it is not what was asked for. The
+    framing depends on the canvas's aspect - a perspective camera's field of
+    view is vertical, an orthographic one is fitted to it - so a note that
+    knows its canvas is shot in its shape: its own size when none is asked
+    for, the asked-for width at its aspect otherwise."""
+    canvas = view.get("canvas") if isinstance(view, dict) else None
+    try:
+        cw, ch = int(canvas["w"]), int(canvas["h"])
+    except (TypeError, KeyError, ValueError):
+        cw = ch = 0
+    if cw < 50 or ch < 50 or free_aspect:
+        return width or 1400, height or 950, None
+    aspect = cw / ch
+    if width is None and height is None:
+        # Too small a canvas makes a useless picture; too big, a slow one.
+        k = min(max(1.0, 800 / cw, 500 / ch), 2400 / cw, 1600 / ch)
+        w, h = round(cw * k), round(ch * k)
+        return w, h, f"the note's canvas, {cw}x{ch}" + (f" scaled to {w}x{h}" if k != 1 else "")
+    if width is None:
+        w, h = round(height * aspect), height
+    else:
+        w, h = width, round(width / aspect)
+    why = (f"height {height} -> {h} to keep the note's aspect {aspect:.3f}"
+           if height is not None and h != height else None)
+    return w, h, why
+
+
 def board_url(board: str, web: str = WEB) -> str:
     from urllib.parse import urlencode
     return f"{web}/?{urlencode({'ws': 'pcb', 'board': board, 'tab': '3d'})}"
@@ -335,9 +494,10 @@ def unclutter_js(sel: str) -> str:
 LAST_JOB: dict = {}
 
 
-def render(revision: str, out: Path, width: int, height: int, wait: int,
+def render(revision: str, out: Path, width: int | None, height: int | None, wait: int,
            camera: str | None = None, only: str | None = None,
-           build_timeout: int = 1200, allow_stale: bool = False) -> Path:
+           build_timeout: int = 1200, allow_stale: bool = False,
+           free_aspect: bool = False) -> Path:
     from websockets.sync.client import connect
 
     try:
@@ -362,6 +522,7 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
     # What to show, before any browser: the revision's own model or board,
     # or the one named (model:<id>, board:<id>).
     rid, is_board = None, revision.startswith("board:")
+    note_view: dict | None = None
     if revision.startswith(("model:", "board:")):
         want = revision.split(":", 1)[1]
     else:
@@ -373,6 +534,16 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
         if not rev_doc.get("model"):
             raise SystemExit(f"revision {rid} names no model")
         want, is_board = rev_doc["model"], rev_doc.get("kind") == "pcb"
+        note_view = None if is_board else rev_doc.get("view")
+    if view_format(note_view) >= 2:
+        clip = note_view.get("clip") or {}
+        cuts = sum(1 for p in clip.get("planes") or [] if p.get("enabled"))
+        print(f"view    : tab {note_view.get('tab') or 'tree'}, {cuts} clipping plane(s) cutting, "
+              f"{'ortho' if (note_view.get('camera') or {}).get('ortho') else 'perspective'}, "
+              f"hash {view_hash(note_view)}")
+    width, height, why_size = shot_size(note_view, width, height, free_aspect)
+    if why_size:
+        print(f"size    : {width}x{height} ({why_size})")
     # Its own build first: a shot taken while it builds, or while a linked
     # rebuild of it is queued, is of the geometry that is about to go.
     if is_board:
@@ -404,7 +575,14 @@ def render(revision: str, out: Path, width: int, height: int, wait: int,
                 js("(() => { const e = document.querySelector('app-board-3d [data-shown]');"
                    " return e ? e.dataset.shown : null; })()"),
                 model, built_at)
-        return view_problem(js("window.redlineView || null"), model, built_at)
+        page = js("window.redlineView || null")
+        why = view_problem(page, model, built_at)
+        if why or not rid or view_format(note_view) < 2:
+            return why
+        # The note's view: applied by the page, and read back live from the
+        # viewer - not only once, when it was applied.
+        rb = js("window.redlineViewReadback ? window.redlineViewReadback() : null")
+        return view_state_problem(page, rb, rid, note_view)
 
     session = page_session(token)
     profile = tempfile.mkdtemp(prefix="redline-render-")
@@ -598,10 +776,15 @@ def main() -> None:
     ap.add_argument("revision", help="revision id, or model:<name> / board:<id> for a "
                                      "plain shot of one model or board")
     ap.add_argument("-o", "--out")
-    ap.add_argument("--width", type=int, default=1400,
-                    help="width of the picture itself, not of the window")
-    ap.add_argument("--height", type=int, default=950,
-                    help="height of the picture itself")
+    ap.add_argument("--width", type=int, default=None,
+                    help="width of the picture itself, not of the window (default: the "
+                         "note's own canvas, else 1400)")
+    ap.add_argument("--height", type=int, default=None,
+                    help="height of the picture itself (follows the note's aspect "
+                         "unless --free-aspect; default 950 without one)")
+    ap.add_argument("--free-aspect", action="store_true",
+                    help="take --width x --height as given even when the note's canvas "
+                         "had another shape (the framing will differ from the drawing)")
     ap.add_argument("--wait", type=int, default=40)
     ap.add_argument("--camera", help="px,py,pz,tx,ty,tz - look from somewhere "
                                      "other than the stored angle")
@@ -617,7 +800,7 @@ def main() -> None:
     t0 = time.monotonic()
     try:
         render(args.revision, out, args.width, args.height, args.wait, args.camera,
-               args.only, args.build_timeout, args.allow_stale)
+               args.only, args.build_timeout, args.allow_stale, args.free_aspect)
     finally:
         # A picture costs a browser: the card shows what that came to next to
         # what the model cost in tokens. Recorded whether or not the frame
