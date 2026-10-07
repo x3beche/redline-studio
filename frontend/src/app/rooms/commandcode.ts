@@ -259,6 +259,7 @@ const I = {
   x: 'M6 6l12 12 M18 6L6 18',
   bot: 'M5 8h14v10H5z M12 8V5 M9 12.5h.01 M15 12.5h.01 M9.5 15.5h5 M3 12v3 M21 12v3',
   chat: 'M4 5h16v11h-9l-5 4v-4H4z M8 9l2.5 2L8 13 M13 13h3',
+  fw: 'M6 6h12v12H6z M3 9h3 M3 15h3 M18 9h3 M18 15h3 M10.5 9.5L8.5 12l2 2.5 M13.5 9.5l2 2.5-2 2.5',
   pcb: 'M7 7h10v10H7z M10 3v4 M14 3v4 M10 17v4 M14 17v4 M3 10h4 M3 14h4 M17 10h4 M17 14h4',
   chip: 'M5 8h14v8H5z M8 8V5 M12 8V5 M16 8V5 M8 16v3 M12 16v3 M16 16v3 M8.5 12h1',
   cad: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9',
@@ -399,7 +400,7 @@ type Ask = { text: string; label: string; go: () => void };
           <div class="tcv-cc-item tcv-th-item" role="listitem" tabindex="0" [attr.data-room]="r.room"
                [attr.data-on]="sel.thread() === r.room ? 1 : null" (click)="openThread(r.room)" (keydown.enter)="openThread(r.room)"
                [title]="(threads.label(r.room) | t) + ' - ' + ('agent thread' | t)">
-            <span class="tcv-th-ico"><ng-container *ngTemplateOutlet="ico; context: { $implicit: r.room === 'pcb' ? I.pcb : I.cad }" /></span>
+            <span class="tcv-th-ico"><ng-container *ngTemplateOutlet="ico; context: { $implicit: r.room === 'pcb' ? I.pcb : r.room === 'firmware' ? I.fw : I.cad }" /></span>
             <div class="tcv-cc-itemtext">
               <div class="tcv-cc-itemtop">
                 <span class="tcv-cc-itemtitle">{{ threads.label(r.room) | t }}</span>
@@ -418,7 +419,7 @@ type Ask = { text: string; label: string; go: () => void };
       @if (hits(); as hs) {
         <div class="tcv-cc-group">{{ 'Found in messages' | t }} · {{ hs.length }}</div>
         @for (h of hs; track $index) {
-          <button class="tcv-cc-hit" [attr.data-on]="h.chat_id === openId() ? 1 : null" (click)="openHit(h)">
+          <button class="tcv-cc-hit" [attr.data-on]="!sel.thread() && h.chat_id === openId() ? 1 : null" (click)="openHit(h)">
             <span class="tcv-cc-itemtop">
               <span class="tcv-cc-itemtitle">{{ h.title | t }}</span>
               @if (h.archived) { <span class="tcv-cc-tag">{{ 'Archived' | t }}</span> }
@@ -433,7 +434,7 @@ type Ask = { text: string; label: string; go: () => void };
       @for (g of groups(); track g.name) {
         <div class="tcv-cc-group">{{ g.name | t }}</div>
         @for (c of g.chats; track c.id) {
-          <div class="tcv-cc-item" role="listitem" tabindex="0" [attr.data-on]="c.id === openId() ? 1 : null"
+          <div class="tcv-cc-item" role="listitem" tabindex="0" [attr.data-on]="!sel.thread() && c.id === openId() ? 1 : null"
                [attr.data-trash]="c.deleted_at ? 1 : null"
                [attr.data-sel]="selected().has(c.id) ? 1 : null" (click)="pick(c, $event)" (keydown.enter)="pick(c, $event)"
                [title]="short(c.model) + ' · ' + c.count + ' ' + ('lines' | t) + (c.by.name ? ' · ' + c.by.name : '')
