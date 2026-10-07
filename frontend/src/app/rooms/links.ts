@@ -167,8 +167,11 @@ export class PinnedByList {
   <div class="tcv-card pointer-events-auto w-80 overflow-hidden p-0 text-[11px]"
        style="box-shadow: 0 6px 20px var(--shadow-soft)">
     <button class="flex w-full items-center gap-1.5 px-2 py-1 text-left"
-            style="background: var(--surface); border-bottom: 1px solid var(--line)" (click)="open.set(!open())">
-      <span style="color: var(--ink-dim)">{{ open() ? '▾' : '▸' }}</span>
+            style="background: var(--surface)" [style.border-bottom]="open() ? '1px solid var(--line)' : null"
+            (click)="toggleCard()" [attr.aria-expanded]="open()" [title]="open() ? 'Fold the links card' : 'Show the links card'">
+      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" style="color: var(--ink-dim); transition: transform .12s"
+           [style.transform]="open() ? 'rotate(90deg)' : null">
+        <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span class="tcv-label">Links</span>
       <span class="font-mono text-[10px]" style="color: var(--ink-dim)">v{{ d.version }}</span>
       @if (pinCount(); as n) {
@@ -311,7 +314,15 @@ export class LinksCard {
   /** A pin moved: the catalog's badges are worth reading again. */
   pinned = output<void>();
   data = signal<ModelLinks | null>(null);
-  open = signal(true);
+  /** Open or folded, remembered in this browser. */
+  open = signal(LinksCard.recallOpen());
+  private static recallOpen(): boolean {
+    try { return localStorage.getItem('redline.links.card') !== 'folded'; } catch { return true; }
+  }
+  toggleCard() {
+    this.open.update(v => !v);
+    try { localStorage.setItem('redline.links.card', this.open() ? 'open' : 'folded'); } catch { /* private window */ }
+  }
   /** The use whose version menu is open, as kind:id. */
   menu = signal<string | null>(null);
   versions = signal<ComponentVersions | null>(null);

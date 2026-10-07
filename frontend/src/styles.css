@@ -3838,3 +3838,10 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   padding-top: 2px;
   font-size: 8px;
 }
+
+/* The 3D component card's fold (PCB room): the title is the button. */
+.tcv-pcb-fold { display: inline-flex; align-items: center; gap: 4px; margin: -2px -4px; padding: 2px 4px;
+  color: var(--ink-dim); background: none; border: 0; border-radius: 4px; cursor: pointer; }
+.tcv-pcb-fold:hover { color: var(--ink); background: var(--hover); }
+.tcv-pcb-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tcv-pcb-fold svg { transition: transform .12s; }

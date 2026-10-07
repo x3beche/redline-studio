@@ -705,8 +705,16 @@ type BoardView = Pane | 'split' | 'focus';
             @if (!frozen() && !own) {
               <div class="tcv-card absolute bottom-2 left-2 max-w-[22rem] p-0 text-[11px]"
                    style="box-shadow: 0 6px 20px var(--shadow-soft)">
-                <div class="flex items-center gap-2 px-2 py-1" style="border-bottom: 1px solid var(--line)">
-                  <span class="tcv-label">3D component</span>
+                <div class="flex items-center gap-2 px-2 py-1"
+                     [style.border-bottom]="compOpen() ? '1px solid var(--line)' : null">
+                  <button class="tcv-pcb-fold" (click)="toggleComp()" [attr.aria-expanded]="compOpen()"
+                          [title]="compOpen() ? 'Fold the 3D component card' : 'Show the 3D component card'">
+                    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"
+                         [style.transform]="compOpen() ? 'rotate(90deg)' : null">
+                      <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"
+                            stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span class="tcv-label">3D component</span>
+                  </button>
                   @if (here()?.component; as c) {
                     <span class="font-mono text-[10px]" style="color: var(--ink-dim)"
                           [title]="'made by the layout of ' + c.at.slice(0, 16).replace('T', ' ')">v{{ c.version }}</span>
@@ -720,7 +728,7 @@ type BoardView = Pane | 'split' | 'focus';
                        title="the board's triangles, in the same frame as the STEP">.stl</a>
                   </span>
                 </div>
-                @if (comp(); as c) {
+                @if (compOpen() && comp(); as c) {
                   <div class="px-2 py-1.5 leading-snug">
                     @if (c.line) {
                       <div class="flex items-center gap-1">
@@ -1185,6 +1193,13 @@ export class RoomPcb implements OnDestroy {
   private static recall(key: string, fallback: string): string {
     try { return localStorage.getItem(RoomPcb.KEY + key) ?? fallback; }
     catch { return fallback; }
+  }
+
+  /** The 3D component card over the board's 3D: open or folded, per browser. */
+  compOpen = signal(RoomPcb.recall('component-card', 'open') !== 'folded');
+  toggleComp() {
+    this.compOpen.update(v => !v);
+    RoomPcb.keep('component-card', this.compOpen() ? 'open' : 'folded');
   }
 
   private static keep(key: string, value: string) {

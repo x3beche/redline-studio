@@ -536,8 +536,9 @@
     <!-- The open model as a component: what it uses, who uses it, and a
          rebuild a change elsewhere set off, with its error if it broke. -->
     @if (activeModel() && !ide() && !frozen()) {
-      <div class="pointer-events-none absolute right-3 z-20"
-           [style.top.px]="viewTop() + 44 + (notice() ? 84 : 0) + (focused() ? 230 : 0)">
+      <!-- Lower left of the view, clear of the axes gizmo; it grows upwards. -->
+      <div class="pointer-events-none absolute z-20"
+           [style.left.px]="viewLeft() + 12" [style.bottom.px]="viewBottom() + 84">
         <app-links-card [id]="activeModel()" [stamp]="linkStamp()" (pinned)="loadCatalog()" />
       </div>
     }
