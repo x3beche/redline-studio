@@ -126,7 +126,12 @@ export class OcpViewer {
     };
     walk(shapes);
 
-    this.parts = (shapes.parts ?? []).map((p: any) => p.name);
+    // The model's own part names (NAMES). A model that uses components has
+    // them under one node each (backend/assembly.py), so the tree's top
+    // level is "Base", "Fan Module"... - not what the Part field offers.
+    this.parts = Array.isArray(envelope.names) && envelope.names.length
+      ? envelope.names.map(String)
+      : (shapes.parts ?? []).map((p: any) => p.name);
     this.viewer.render(shapes, states, {
       ambientIntensity: 1.0,
       directIntensity: 1.1,
@@ -216,6 +221,27 @@ export class OcpViewer {
   states(): Record<string, [number, number]> | null {
     const v: any = this.viewer;
     return v?.getStates ? v.getStates() : null;
+  }
+
+  /** A note's part states against this build's tree. A part the note
+   *  knew at a path the tree no longer has - "/Group/taban_kapak" from
+   *  before components were grouped, now "/Station/Base/Lid/taban_kapak" -
+   *  is found again by its own name, when exactly one part has that name. */
+  static movedPaths(states: Record<string, [number, number]>,
+                    have: Record<string, [number, number]>): Record<string, [number, number]> {
+    const byLeaf = new Map<string, string[]>();
+    for (const p of Object.keys(have)) {
+      const leaf = p.slice(p.lastIndexOf('/') + 1);
+      byLeaf.set(leaf, [...(byLeaf.get(leaf) ?? []), p]);
+    }
+    const out: Record<string, [number, number]> = {};
+    for (const [p, st] of Object.entries(states)) {
+      if (p in have) { out[p] = st; continue; }
+      const found = byLeaf.get(p.slice(p.lastIndexOf('/') + 1)) ?? [];
+      const to = found.length === 1 ? found[0] : p;
+      if (!(to in out)) out[to] = st;
+    }
+    return out;
   }
 
   applyStates(states: Record<string, [number, number]> | null | undefined) {
@@ -320,8 +346,8 @@ export class OcpViewer {
   async applyView(view: NoteView | null | undefined): Promise<ViewApplied> {
     const v: any = this.viewer;
     if (!view || !v || !this.rendered) return { ok: true, error: null, missing: 0 };
-    const states = view.states ?? {};
     const have = this.states() ?? {};
+    const states = OcpViewer.movedPaths(view.states ?? {}, have);
     const missing = Object.keys(states).filter(p => !(p in have)).length;
     if (v.setStates) {
       // One pass and one repaint, not a repaint per part.

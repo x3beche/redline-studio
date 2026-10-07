@@ -24,7 +24,8 @@ someone's import:
 The key is content-addressed: the module's own text, its name, the keys of
 every model it imports (transitively), the uploaded files and board STEPs
 its text names, REDLINE_IMPORT_ONLY at the moment it is imported, and the
-versions of Python, build123d, OCP and this file. A pinned component is
+versions of Python, build123d, OCP, this file and backend/assembly.py
+(whose component marks the kept shapes carry). A pinned component is
 written into the build directory at its pinned source, so its key - and its
 cache entry - is the pinned version's. Nothing has to be invalidated: a
 change anywhere below gives a different key.
@@ -71,7 +72,9 @@ import time
 import types
 from pathlib import Path
 
-FORMAT = 1
+# 2: shapes carry the component marks of backend/assembly.py (one node per
+# component in the viewer's tree); entries from before do not have them.
+FORMAT = 2
 ENV_FLAG = "REDLINE_IMPORT_ONLY"
 STEP_MIN = 256 * 1024             # smaller STEPs read faster than a cache lookup is worth
 LOCK_WAIT = 1800.0                # seconds a process waits for another computing the same entry
@@ -146,11 +149,16 @@ _RUNTIME: str | None = None
 
 
 def runtime() -> str:
-    """What else a result depends on: this file, Python, build123d, OCP."""
+    """What else a result depends on: this file and backend/assembly.py
+    (the component marks on its shapes), Python, build123d, OCP."""
     global _RUNTIME
     if _RUNTIME is None:
         import importlib.metadata as md
         parts = [str(FORMAT), sys.version, _sha(Path(__file__).read_bytes())[:16]]
+        # The marks a kept shape carries are made there (component grouping).
+        marks = Path(__file__).with_name("assembly.py")
+        if marks.exists():
+            parts.append(_sha(marks.read_bytes())[:16])
         for dist in ("build123d", "cadquery-ocp", "cadquery_ocp", "ocp-viewer-core"):
             try:
                 parts.append(f"{dist}={md.version(dist)}")

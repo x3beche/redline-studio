@@ -5,6 +5,8 @@
 Source and output directories are supplied from outside so the backend can run
 this script in a temporary directory and store the result in the database.
 Module contract: TITLE (optional), PARTS (required), NAMES (optional).
+Parts that came from another model or a board it imports are grouped under
+one node per component in the viewer's tree (backend/assembly.py).
 A STEP of PARTS is written to exports/ too, unless the model wrote one.
 """
 
@@ -28,7 +30,7 @@ def load(models_dir: Path, name: str):
     return module
 
 
-def export(models_dir: Path, assets_dir: Path, name: str) -> Path:
+def export(models_dir: Path, assets_dir: Path, name: str, marker=None) -> Path:
     from ocp_viewer_core.offline import _convert
 
     module = load(models_dir, name)
@@ -36,19 +38,36 @@ def export(models_dir: Path, assets_dir: Path, name: str) -> Path:
     if not parts:
         raise AttributeError(f"{name}: PARTS is not defined")
     names = getattr(module, "NAMES", None) or [f"part_{i}" for i in range(len(parts))]
+    names = [str(n) for n in names]
 
-    envelope, _ = _convert(*parts, names=names)
+    # One node per component it uses (backend/assembly.py); a model that
+    # uses none is exported flat, as it always was.
+    root = None
+    if marker is not None:
+        try:
+            from backend import assembly
+            title = getattr(module, "TITLE", None) or name.split("__")[-1]
+            root = assembly.tree(list(parts), names, str(title), marker.titles, marker.sizes)
+        except Exception as exc:                     # noqa: BLE001 - flat, then
+            print(f"note: parts not grouped ({type(exc).__name__}: {exc})")
+            root = None
+    envelope, _ = _convert(root, names=[root.label]) if root is not None \
+        else _convert(*parts, names=names)
+    # The model's own part names, whatever the tree's depth: the editor's
+    # Part field offers these.
+    envelope["names"] = names
     out = assets_dir / f"{name}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(envelope))
-    step_of(parts, name)
+    step_of(parts, name, root)
     return out
 
 
-def step_of(parts, name: str) -> None:
+def step_of(parts, name: str, root=None) -> None:
     """A STEP of the model, for releases and drawings, unless its script
     wrote its own into exports/ (the build keeps what is there). Never
-    fails the build: the viewer's payload is what a build is for."""
+    fails the build: the viewer's payload is what a build is for. With
+    components grouped it is an assembly with the same named nodes."""
     exports = Path("exports")
     if not exports.is_dir() or any(exports.glob("*.step")) or any(exports.glob("*.stp")):
         return
@@ -57,7 +76,8 @@ def step_of(parts, name: str) -> None:
         shapes = [p for p in parts if isinstance(p, Shape)]
         if not shapes:
             return
-        whole = shapes[0] if len(shapes) == 1 else Compound(children=shapes)
+        whole = root if root is not None else \
+            shapes[0] if len(shapes) == 1 else Compound(children=shapes)
         export_step(whole, str(exports / f"{name.split('__')[-1]}.step"))
     except Exception as exc:                         # noqa: BLE001
         print(f"no STEP written: {type(exc).__name__}: {exc}")
@@ -73,8 +93,12 @@ def main() -> None:
     # result is kept (backend/buildcache.py); the model itself always runs.
     from backend import buildcache
     cache = buildcache.install(args.models_dir, args.models_dir.parent, target=args.model)
+    # In front of the cache: whatever it serves, what a component made is
+    # marked as that component's (the viewer's tree groups by it).
+    from backend import assembly
+    marker = assembly.install(args.models_dir, target=args.model)
     sys.path.insert(0, str(args.models_dir))
-    out = export(args.models_dir, args.assets_dir, args.model)
+    out = export(args.models_dir, args.assets_dir, args.model, marker)
     print(f"{out}  {out.stat().st_size}")
     buildcache.finish(cache, args.assets_dir / f"{args.model}.cache.json")
 
