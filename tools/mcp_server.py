@@ -55,9 +55,14 @@ TOOLS: dict[str, tuple] = {
         {"id": _s("revision id")}, ["id"], lambda a: ["show", a["id"]]),
     "start": (
         "Open the run for a note: the progress bar and live cost in its room. "
-        "Refuses while another note's run is open in the same room.",
-        {"id": _s("revision id"), "title": _s("what you are doing, one line")},
-        ["id", "title"], lambda a: ["start", a["id"], a["title"]]),
+        "Refuses while another note's run is open in the same room, and while "
+        "this note runs under another agent - take_over hands it to you on "
+        "purpose, and the hand-over is recorded.",
+        {"id": _s("revision id"), "title": _s("what you are doing, one line"),
+         "take_over": {"type": "boolean",
+                       "description": "take the note over from the agent it runs under"}},
+        ["id", "title"], lambda a: ["start", a["id"], a["title"]]
+        + (["--take-over"] if a.get("take_over") else [])),
     "log": (
         "One line in a room's log, optionally moving its progress bar.",
         {"text": _s("the line"),

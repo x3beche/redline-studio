@@ -614,6 +614,14 @@ class RunStart(BaseModel):
     # Whose run: each room has its own, so agents in different rooms can
     # work at once without closing each other's.
     room: str = Field(default="cad", pattern="^(cad|pcb)$")
+    # A note already running under another agent is refused (409) unless
+    # this says it is being taken over on purpose; another note's run open
+    # in the room is refused unless `force`. backend/runs.py.
+    take_over: bool = False
+    force: bool = False
+    # The caller's Claude Code session, when it has one: the card's cost is
+    # attributed by it (backend/usage.py).
+    session: str | None = Field(default=None, max_length=100)
 
 
 async def say(text: str, level: str = "info", room: str = "cad") -> dict:
@@ -670,6 +678,26 @@ async def get_run(room: str = "cad"):
 async def start_run(body: RunStart):
     from datetime import datetime, timezone
 
+    if body.revision:
+        from . import runs
+        try:
+            doc, what = await runs.start(
+                db(), body.revision, body.title, body.room, actors.current(),
+                session=body.session, model=body.model,
+                take_over=body.take_over, force=body.force)
+        except runs.Busy as exc:
+            raise HTTPException(409, str(exc)) from exc
+        if what == "taken-over":
+            last = doc["taken_over"][-1]
+            await actors.audit(db(), "take-over", f"runs/{body.revision}",
+                               {"from": (last.get("from") or {}).get("name"),
+                                "to": actors.current().get("name")})
+        elif what == "started":
+            try:
+                await changes.started(db(), body.revision)  # the sources before the work
+            except Exception as exc:
+                LOG.warning("sources for %s not recorded: %s", body.revision, exc)
+        return {**doc, "outcome": what}
     key = compute.run_key(body.room)
     doc = {"_id": key, "title": body.title, "revision": body.revision,
            "model": body.model, "percent": 0.0, "status": "running",

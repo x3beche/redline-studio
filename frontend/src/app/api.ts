@@ -43,6 +43,12 @@ export interface Revision {
  *  Read from the agent's own transcripts, not estimated. */
 export interface Analytics {
   _id: string;
+  /** Whose calls these are. Normally the agent that held the note (and the
+   *  sub-agents it started); `approximate` when that agent could not be told
+   *  from the transcripts and everything in the run's time window was summed. */
+  attribution?: { method: 'agent' | 'window'; approximate: boolean; label: string | null;
+                  holders: { by: string | null; session?: string | null; agent?: string | null;
+                             since: string | null; until?: string | null; resolved: boolean }[] };
   title: string | null;
   started_at: string;
   finished_at: string | null;

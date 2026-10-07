@@ -900,40 +900,45 @@ async def cmd_done(args):
 
 
 async def cmd_start(args):
-    from backend import compute
-
-    db = connect()
     # One run per room: the 3D room's is "current", the others their own,
     # so a tab's agent can work while another room's is busy. Within a room
     # it is still one document, and re-pointing it while somebody else's
     # run is open lets their `finish` close yours: that happened, a CAD run
-    # and a code run crossing at 07:40 when there was only one.
-    from backend import compute
-    from backend import actors
+    # and a code run crossing at 07:40 when there was only one. And a note
+    # running under one agent is not another's to start: that happened too,
+    # a second agent taking a note - and runs/current - from the first.
+    # The rules are backend/runs.py's, shared with POST /api/run/start.
+    from backend import actors, compute, runs
+
+    db = connect()
     rdoc = await db.revisions.find_one({"_id": args.id}) or {}
     room = compute.room_of(rdoc.get("kind"))
-    key = compute.run_key(room)
-    cur = await db.runs.find_one({"_id": key}) or {}
-    if (cur.get("status") == "running" and cur.get("revision")
-            and cur["revision"] != args.id and not args.force):
-        sys.exit(f"another run is open: {cur['revision']} ({cur.get('title')}), "
-                 f"started {str(cur.get('started_at'))[:19]}. Wait for it, or "
-                 "--force if it is abandoned.")
-    doc = {"_id": key, "title": args.title, "revision": args.id,
-           "model": None, "percent": 0.0, "status": "running", "room": room,
-           "started_at": _now(), "finished_at": None,
-           "by": actors.agent(),
-           # The machine's busy counter at both ends of the run: the
-           # difference is what the whole box burned while this was worked
-           # on. Our own builds are a part of that, not a separate bill.
-           "cpu_start": compute.machine_cpu()}
-    await db.runs.replace_one({"_id": key}, doc, upsert=True)
-    # A second copy keyed by the revision. "current" is overwritten by the
-    # next run, and without this the window a revision was worked in - which
-    # is what the cost is measured over - would be gone the moment the next
-    # one starts.
-    await db.runs.replace_one({"_id": args.id}, {**doc, "_id": args.id},
-                              upsert=True)
+    take_over = bool(getattr(args, "take_over", False))
+    try:
+        doc, what = await runs.start(
+            db, args.id, args.title or "", room, actors.agent(),
+            # Which Claude Code session is asking; the sub-agent within it
+            # is read from the transcript later (backend/usage.py, resolve).
+            session=runs.session_from_env(), take_over=take_over,
+            force=bool(getattr(args, "force", False)),
+            # The machine's busy counter at both ends of the run: the
+            # difference is what the whole box burned while this was worked
+            # on. Our own builds are a part of that, not a separate bill.
+            extra={"cpu_start": compute.machine_cpu()})
+    except runs.Busy as exc:
+        sys.exit(str(exc))
+    me = actors.agent()["name"]
+    if what == "resumed":
+        print(f"run already yours, carrying on: {doc.get('title')}")
+        return
+    if what == "taken-over":
+        prev = (doc["taken_over"][-1].get("from") or {}).get("name") or "agent"
+        await db.activity.insert_one(_line(
+            f"taken over by {me} from {prev}: {doc.get('title')}", "warn", room))
+        await actors.audit(db, "take-over", f"runs/{args.id}",
+                           {"from": prev, "to": me})
+        print(f"run taken over from {prev}: {doc.get('title')}")
+        return
     # In the log of the room the revision belongs to.
     await db.activity.insert_one(_line(f"started: {args.title}", "work", room))
     # The sources as they are now, so what this note changes can be shown.
@@ -1130,6 +1135,16 @@ async def cmd_usage(args):
     from backend import usage
 
     db = connect()
+    if getattr(args, "reattribute", False):
+        got = await usage.reattribute(db, full=True)
+        for d in got["recomputed"]:
+            b, a = d["before"], d["after"]
+            print(f"{d['id']}: {b.get('calls')} calls {b.get('billed_tokens', 0):,} tok "
+                  f"${b.get('cost_usd', 0):.2f} -> {a['calls']} calls "
+                  f"{a['billed_tokens']:,} tok ${a['cost_usd']:.2f}")
+        print(f"recomputed {len(got['recomputed'])}, approximate "
+              f"{len(got['approximate'])}: {', '.join(got['approximate'])}")
+        return
     print(await usage.ingest(db, full=args.full))
     if args.revision:
         run = await db.runs.find_one({"_id": args.revision})
@@ -1385,9 +1400,14 @@ def main() -> None:
     s = sub.add_parser("show"); s.add_argument("id"); s.add_argument("-o", "--out")
     s.set_defaults(fn=cmd_show)
     s = sub.add_parser("done"); s.add_argument("id"); s.set_defaults(fn=cmd_done)
-    s = sub.add_parser("start"); s.add_argument("id"); s.add_argument("title")
+    s = sub.add_parser("start"); s.add_argument("id")
+    s.add_argument("title", nargs="?", default="",
+                   help="what you are doing (optional with --take-over)")
     s.add_argument("--force", action="store_true",
-                   help="take over the shared run even though another is open")
+                   help="open it even though another note's run is open in the room")
+    s.add_argument("--take-over", action="store_true", dest="take_over",
+                   help="take this note over from the agent it is running under "
+                        "(recorded: who from whom, when)")
     s.set_defaults(fn=cmd_start)
     s = sub.add_parser("log"); s.add_argument("text")
     s.add_argument("-p", "--percent", type=float)
@@ -1426,6 +1446,9 @@ def main() -> None:
     s.add_argument("--full", action="store_true",
                    help="re-read every transcript from the start")
     s.add_argument("-r", "--revision", help="also re-roll this revision's numbers")
+    s.add_argument("--reattribute", action="store_true",
+                   help="re-cost every costed note by the agent that worked it "
+                        "(notes whose agent cannot be told are marked approximate)")
     s.set_defaults(fn=cmd_usage)
     s = sub.add_parser("summaries", help="backfill the one-line card summaries")
     s.add_argument("--all", action="store_true", help="redo cards that have one")

@@ -1163,6 +1163,11 @@
                   }
                   @default {
                     @if (costOf(r.id); as a) {
+                      @if (a.attribution?.approximate) {
+                        <div class="mb-1" style="color: var(--warn)"
+                             title="the agent that worked this note could not be told from the transcripts, so every call in the run's time window is counted - other agents working then included">
+                          {{ a.attribution?.label }}</div>
+                      }
                       <!-- Two pairs to a line. One pair to a line read as a
                            list to be gone through; the panel is a dial to be
                            glanced at, and it was half again as tall as it

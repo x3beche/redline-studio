@@ -29,7 +29,8 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 CURSOR_ID = "usage_cursor"
@@ -163,7 +164,49 @@ def _row(entry: dict) -> dict | None:
             "thinking": detail.get("thinking_tokens") or 0,
             "tier": use.get("service_tier"),
             "cost_usd": usd, "cost_basis": basis,
-            "session": entry.get("sessionId")}
+            # Who made the call: the Claude Code session, and the sub-agent
+            # within it (None for the session's main thread). A note's cost
+            # is attributed by these, not by the clock (see `pick`).
+            "session": entry.get("sessionId"),
+            "agent": entry.get("agentId")}
+
+
+# `revisions.py start <rid>` in a shell command, flags before the id allowed;
+# or the MCP server's `start` tool. The line that made that tool call is how
+# a note's run learns which agent took it (`resolve`).
+_START = re.compile(r"revisions\.py\s+start\s+(?:--?[\w-]+\s+)*[\"']?([A-Za-z0-9][\w:.-]*)")
+
+
+def _starts(entry: dict) -> list[str]:
+    """The notes a transcript line's tool calls started."""
+    out = []
+    for b in (entry.get("message") or {}).get("content") or []:
+        if not (isinstance(b, dict) and b.get("type") == "tool_use"):
+            continue
+        i = b.get("input") or {}
+        name = b.get("name") or ""
+        if name == "Bash":
+            out += _START.findall(str(i.get("command") or ""))
+        elif name.startswith("mcp__") and name.endswith("__start") and i.get("id"):
+            out.append(str(i["id"]))
+    return out
+
+
+def _spawns(entry: dict) -> list[str]:
+    """Tool-use ids of the sub-agents a line started (the Agent tool)."""
+    return [b["id"] for b in (entry.get("message") or {}).get("content") or []
+            if isinstance(b, dict) and b.get("type") == "tool_use"
+            and b.get("name") in ("Agent", "Task") and b.get("id")]
+
+
+def _spawned_by(path: Path) -> str | None:
+    """For a sub-agent's transcript, the tool-use id that started it:
+    Claude Code keeps it beside the transcript in agent-<id>.meta.json."""
+    meta = path.with_name(path.name[:-len(".jsonl")] + ".meta.json")
+    try:
+        return json.loads(meta.read_text()).get("toolUseId")
+    except (OSError, ValueError, AttributeError):
+        return None
 
 
 # The transcript is only read when it can have grown. A page reload asks for
@@ -192,6 +235,8 @@ async def ingest(db, full: bool = False, force: bool = True) -> dict:
                            .get("files", {}))
     fresh, seen, scanned = [], {}, 0
     tools: dict[str, list[str]] = {}
+    starts: dict[str, list[str]] = {}
+    spawns: dict[str, list[str]] = {}
     for path in transcripts():
         key = str(path)
         start = int(cur.get(key, 0))
@@ -201,24 +246,35 @@ async def ingest(db, full: bool = False, force: bool = True) -> dict:
         with path.open("rb") as fh:
             fh.seek(start)
             data = fh.read()
-        cur[key] = start + len(data)
+        # Only whole lines: a line still being written is read next time,
+        # not skipped for good - it may be the one that says who started
+        # a note.
+        cut = data.rfind(b"\n") + 1
+        data = data[:cut]
+        cur[key] = start + cut
+        parent = _spawned_by(path) if path.parent.name == "subagents" else None
         for line in data.decode("utf-8", "replace").splitlines():
             line = line.strip()
             if not line:
                 continue
             scanned += 1
             try:
-                row = _row(json.loads(line))
+                entry = json.loads(line)
+                row = _row(entry)
             except Exception:
                 continue
             if not row:
                 continue
+            row["spawned_by"] = parent
             # A request's blocks are separate lines and the tool call can be
             # in any of them, so the tools are gathered per request and the
             # kind decided once at the end.
-            found = _tools(json.loads(line))
+            found = _tools(entry)
             if found:
                 tools.setdefault(row["_id"], []).extend(found)
+            for got, into in ((_starts(entry), starts), (_spawns(entry), spawns)):
+                if got:
+                    into.setdefault(row["_id"], []).extend(got)
             if row["_id"] not in seen:
                 seen[row["_id"]] = row
                 fresh.append(row)
@@ -232,14 +288,22 @@ async def ingest(db, full: bool = False, force: bool = True) -> dict:
         ops = []
         for r in fresh:
             kind = r.pop("kind")
+            # Who made the call is always written, so a full pass fills it
+            # in on rows ingested before it was kept.
+            ident = {k: r.pop(k) for k in ("session", "agent", "spawned_by")}
             # The numbers are written once; the kind can be refined later,
             # because a request whose tool call fell in the next chunk of the
             # file would otherwise stay filed as a plain reply.
-            patch = {"$setOnInsert": r}
+            patch = {"$setOnInsert": r, "$set": ident}
             if kind != "reply" or full:
-                patch["$set"] = {"kind": kind}
+                patch["$set"]["kind"] = kind
             else:
                 patch["$setOnInsert"] = {**r, "kind": kind}
+            add = {k: {"$each": sorted(set(v[r["_id"]]))}
+                   for k, v in (("starts", starts), ("spawns", spawns))
+                   if v.get(r["_id"])}
+            if add:
+                patch["$addToSet"] = add
             ops.append(UpdateOne({"_id": r["_id"]}, patch, upsert=True))
         res = await db[CALLS].bulk_write(ops, ordered=False)
         written = res.upserted_count
@@ -364,41 +428,226 @@ def summarise(rows: list[dict], started: str, finished: str | None) -> dict:
     }
 
 
-async def for_revision(db, rid: str, started: str,
-                       finished: str | None) -> dict:
-    """Every call that belongs to one revision.
+# ---------------- whose calls ----------------
+APPROX_LABEL = "approximate (time window)"
+# How far before a run's start its `start` tool call may be. The tool call is
+# written before the command runs, so it is never after the run's start; the
+# slack is for two clocks on one machine.
+CLAIM_BEFORE = timedelta(minutes=60)
+CLAIM_AFTER = timedelta(seconds=2)
 
-    Two ways in. Most of the work is the agent's, and the only thing tying
-    those calls to a revision is when they happened - so the run's window
-    picks them up. The card summariser is different: it runs when the card is
-    created, long before anyone starts work on it, and would fall outside
-    every window. It writes the revision id on its rows instead, and those
-    are pulled in whenever they happened.
+
+def _z(t: datetime) -> str:
+    """The transcripts' own timestamp form, so string ranges compare."""
+    return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def resolve(holders: list[dict], claims: list[dict]) -> list[dict]:
+    """Give each holder the transcript identity of the agent that started it.
+
+    `claims` are call rows whose tool call ran `start` for this note. A
+    holder's is the latest one at or just before its `since` - in its own
+    session when the session is known. Holders without one stay unresolved.
     """
-    window = {"at": {"$gte": started}}
-    if finished:
-        window["at"]["$lte"] = finished
-    rows = [r async for r in db[CALLS].find(
-        {"$or": [window, {"revision": rid}]})]
-    # A summariser row inside the window would otherwise arrive twice.
-    rows = list({r["_id"]: r for r in rows}.values())
-    return summarise(rows, started, finished)
+    out = []
+    for h in holders:
+        h = dict(h)
+        since = _parse(h.get("since"))
+        if not h.get("resolved") and since:
+            got = [c for c in claims
+                   if (t := _parse(c.get("at")))
+                   and since - CLAIM_BEFORE <= t <= since + CLAIM_AFTER
+                   and (not h.get("session") or c.get("session") == h["session"])]
+            if got:
+                c = max(got, key=lambda c: _parse(c["at"]))
+                h.update(session=c.get("session"), agent=c.get("agent"),
+                         resolved=True, claim=c["_id"])
+        out.append(h)
+    return out
 
 
-async def store(db, revision_id: str, run: dict, fresh: bool = True) -> dict:
+def pick(rows: list[dict], rid: str, holders: list[dict],
+         finished: str | None) -> tuple[list[dict], bool]:
+    """The calls that belong to one note, and whether that is exact.
+
+    A call belongs when it carries the note's id (the card summariser), or
+    when the agent holding the note made it while it held it - or a
+    sub-agent that agent started while it held it, and theirs in turn. A
+    holder whose identity is unknown falls back to everything in its
+    stretch of time, and then the answer is only approximate.
+    """
+    end = _parse(finished)
+    out = {r["_id"]: r for r in rows if r.get("revision") == rid}
+    exact = bool(holders)
+    for h in holders:
+        lo = _parse(h.get("since"))
+        hi = _parse(h.get("until")) or end
+
+        def inside(r, lo=lo, hi=hi):
+            t = _parse(r.get("at"))
+            return bool(t and lo and t >= lo and (hi is None or t <= hi))
+
+        if not h.get("resolved"):
+            exact = False
+            out.update((r["_id"], r) for r in rows if inside(r))
+            continue
+        sess = h.get("session")
+        mine = [r for r in rows if r.get("surface") == "claude-code"
+                and r.get("session") == sess and "agent" in r
+                and r.get("agent") == h.get("agent") and inside(r)]
+        spawned = {s for r in mine for s in r.get("spawns") or []}
+        seen: set[str] = set()
+        while spawned - seen:
+            seen |= spawned
+            kids = [r for r in rows if r.get("spawned_by") in spawned
+                    and r.get("session") == sess and inside(r)]
+            mine += kids
+            spawned = seen | {s for r in kids for s in r.get("spawns") or []}
+        out.update((r["_id"], r) for r in mine)
+    return list(out.values()), exact
+
+
+def derive(run: dict, claims: list[dict]) -> list[dict]:
+    """Holders for a run started before they were kept.
+
+    Such a run remembers only the last `start`: a second agent's start
+    replaced the first agent's record, though both went on working the
+    note. The transcripts still have every `start` tool call, so each agent
+    that started this note during the run - or within CLAIM_BEFORE ahead of
+    it - is a holder from its own start to the run's finish.
+    """
+    lo, hi = _parse(run.get("started_at")), _parse(run.get("finished_at"))
+    if not lo:
+        return []
+    who: dict[tuple, dict] = {}
+    for c in sorted(claims, key=lambda c: c.get("at") or ""):
+        t = _parse(c.get("at"))
+        if not t or t < lo - CLAIM_BEFORE or (hi and t > hi):
+            continue
+        k = (c.get("session"), c.get("agent"))
+        who.setdefault(k, {"by": None, "session": k[0], "agent": k[1],
+                           "since": c["at"], "until": None,
+                           "resolved": True, "claim": c["_id"]})
+    out = list(who.values())
+    # The run's own `by` names the agent whose start it recorded: the one
+    # whose claim is closest before the start.
+    mine = resolve([{"since": run.get("started_at")}], claims)[0]
+    for h in out:
+        if mine.get("resolved") and h["claim"] == mine.get("claim"):
+            h["by"] = run.get("by")
+    return out
+
+
+async def identify(db, rid: str, run: dict) -> list[dict]:
+    """The run's holders with their transcript identities, read from the
+    ingested calls when not known yet, and kept on the run once found."""
+    from . import runs
+    held = runs.holders_of(run)
+    if all(h.get("resolved") for h in held):
+        return held
+    claims = [c async for c in db[CALLS].find(
+        {"starts": rid}, {"at": 1, "session": 1, "agent": 1})]
+    got = (resolve(held, claims) if run.get("holders")
+           else derive(run, claims) or held)
+    if got != held and run.get("_id") == rid:
+        await db.runs.update_one({"_id": rid}, {"$set": {"holders": got}})
+    return got
+
+
+async def for_revision(db, rid: str, started: str,
+                       finished: str | None, run: dict | None = None) -> dict:
+    """Every call that belongs to one revision, and how sure that is.
+
+    The card summariser runs when the card is created, long before anyone
+    starts work on it; it writes the revision id on its rows, and those are
+    pulled in whenever they happened. The agent's calls are the ones its
+    own session and agent made between `start` and `finish` (`pick`) - the
+    clock alone also caught every other agent working at the same time.
+    A run whose agent cannot be told falls back to the window and says so.
+    """
+    held = await identify(db, rid, run) if run else runs_window(started)
+    if not held:
+        held = runs_window(started)
+    lo = min((_parse(h.get("since")) for h in held if h.get("since")),
+             default=_parse(started))
+    window: dict = {"at": {"$gte": _z(lo - timedelta(seconds=1)) if lo else ""}}
+    if _parse(finished):
+        window["at"]["$lte"] = _z(_parse(finished) + timedelta(seconds=1))
+    if all(h.get("resolved") for h in held):
+        window["session"] = {"$in": sorted({h.get("session") for h in held})}
+    rows = [r async for r in db[CALLS].find({"$or": [window, {"revision": rid}]})]
+    chosen, exact = pick(rows, rid, held, finished)
+    data = summarise(chosen, started, finished)
+    data["attribution"] = {
+        "method": "agent" if exact else "window",
+        "approximate": not exact,
+        "label": None if exact else APPROX_LABEL,
+        "holders": [{"by": (h.get("by") or {}).get("name"), "session": h.get("session"),
+                     "agent": h.get("agent"), "since": h.get("since"),
+                     "until": h.get("until"), "resolved": bool(h.get("resolved"))}
+                    for h in held]}
+    return data
+
+
+def runs_window(started: str | None) -> list[dict]:
+    """No run to go by: one holder nobody can name, i.e. the plain window."""
+    return [{"by": None, "since": started, "resolved": False}] if started else []
+
+
+async def store(db, revision_id: str, run: dict, fresh: bool = True,
+                keep_compute: dict | None = None) -> dict:
     """Freeze the numbers for one revision and keep them."""
     await ingest(db, force=fresh)
     data = await for_revision(db, revision_id, run.get("started_at"),
-                              run.get("finished_at"))
+                              run.get("finished_at"), run)
     # What the machine spent on the same revision - builds and renders. A
     # different bill from a different meter, so it sits in its own block
     # rather than being added to the token cost.
-    from . import compute
-    data["compute"] = await compute.for_revision(
-        db, revision_id, run.get("started_at"), run.get("finished_at"), run)
+    if keep_compute is not None:
+        data["compute"] = keep_compute
+    else:
+        from . import compute
+        data["compute"] = await compute.for_revision(
+            db, revision_id, run.get("started_at"), run.get("finished_at"), run)
     doc = {"_id": revision_id, "title": run.get("title"),
            "started_at": run.get("started_at"),
            "finished_at": run.get("finished_at"),
            "computed_at": datetime.now(timezone.utc).isoformat(), **data}
     await db[ANALYTICS].replace_one({"_id": revision_id}, doc, upsert=True)
     return doc
+
+
+async def reattribute(db, full: bool = True) -> dict:
+    """Re-cost every note already costed, by who did the work.
+
+    A note whose agent can be told from the transcripts is recomputed (its
+    machine block kept as it was); one whose cannot keeps its numbers and
+    is marked approximate, so the card can say so.
+    """
+    await ingest(db, full=full)
+    done, approx, before = [], [], {}
+    async for a in db[ANALYTICS].find({}, {"totals": 1}):
+        before[a["_id"]] = (a.get("totals") or {})
+    for rid in sorted(before):
+        run = await db.runs.find_one({"_id": rid})
+        if not run or not run.get("started_at"):
+            approx.append(rid)
+            await db[ANALYTICS].update_one({"_id": rid}, {"$set": {"attribution": {
+                "method": "window", "approximate": True, "label": APPROX_LABEL,
+                "holders": []}}})
+            continue
+        held = await identify(db, rid, run)
+        if held and all(h.get("resolved") for h in held):
+            old = await db[ANALYTICS].find_one({"_id": rid}, {"compute": 1}) or {}
+            run = await db.runs.find_one({"_id": rid}) or run
+            doc = await store(db, rid, run, fresh=False,
+                              keep_compute=old.get("compute"))
+            done.append({"id": rid, "before": before[rid], "after": doc["totals"]})
+        else:
+            approx.append(rid)
+            await db[ANALYTICS].update_one({"_id": rid}, {"$set": {"attribution": {
+                "method": "window", "approximate": True, "label": APPROX_LABEL,
+                "holders": [{"by": (h.get("by") or {}).get("name"),
+                             "since": h.get("since"), "resolved": False}
+                            for h in held]}}})
+    return {"recomputed": done, "approximate": approx}
