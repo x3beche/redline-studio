@@ -32,8 +32,36 @@ echo "> FastAPI  http://127.0.0.1:${API_PORT}  (--reload)"
      --reload --reload-dir backend --timeout-graceful-shutdown 3 &
 pid=$!
 trap 'kill -TERM "$pid" 2>/dev/null' TERM INT
+
+# The watchdog. uvicorn's reloader only starts a new worker when a file
+# changes: a worker that dies on its own (it happened: no traceback, the
+# port just stopped answering) leaves the reloader waiting and the API
+# silent until someone restarts the container. Three failed health checks
+# in a row, once it has had time to start, stop uvicorn - this script then
+# exits and Docker's restart policy (unless-stopped) brings it back.
+(
+  sleep 120
+  misses=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if curl -fsS -m 10 -o /dev/null "http://127.0.0.1:${API_PORT}/api/health"; then
+      misses=0
+    else
+      misses=$((misses + 1))
+      echo "> watchdog: /api/health did not answer ($misses/3)"
+      if [ "$misses" -ge 3 ]; then
+        echo "> watchdog: the API is not answering - stopping uvicorn so the container restarts"
+        kill -TERM "$pid" 2>/dev/null; sleep 5; kill -KILL "$pid" 2>/dev/null
+        break
+      fi
+    fi
+    sleep 20
+  done
+) &
 rc=0
 while kill -0 "$pid" 2>/dev/null; do
   if wait "$pid"; then rc=0; else rc=$?; fi
 done
+# Whatever ended uvicorn - a stop, a crash, the watchdog - the container
+# goes with it, so the restart policy can bring the API back.
+[ "$rc" = 0 ] && rc=1
 exit "$rc"
