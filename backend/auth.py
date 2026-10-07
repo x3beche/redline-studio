@@ -15,8 +15,13 @@ request would otherwise pay a round trip. Changes must carry the
 X-Redline-CSRF header, which only the app's own page sends: a page on
 another site can make the browser send the cookie, but not that header.
 
-The first account, made while there is none, owns the default workspace.
-Invitations and roles are phase 5 (docs/USERS-PLAN.md).
+Accounts have a system role (`users.role`): the **owner** - the first
+account, made at setup; there is one and it cannot be demoted, disabled or
+deleted - **admin**s, who run the server's settings and the accounts, and
+**user**s. Nobody signs themselves up: the owner and the admins add
+accounts (backend/admin.py). Each account works in a private space of its
+own (`users.space`, backend/scope.py): the owner's is "default", where the
+data from before accounts lives; anyone else starts with an empty one.
 """
 
 from __future__ import annotations
@@ -31,10 +36,6 @@ from datetime import datetime, timedelta, timezone
 
 USERS = "users"
 SESSIONS = "sessions"
-WORKSPACES = "workspaces"
-MEMBERS = "memberships"
-INVITES = "invites"
-INVITE_DAYS = 7
 RESETS = "password_resets"
 RESET_MINUTES = 60
 
@@ -47,8 +48,8 @@ SESSION_DAYS = 30
 OPEN = {"/api/health", "/api/auth/state", "/api/auth/login", "/api/auth/setup",
         # Telegram's updates: no session, but the webhook's secret header (backend/tgbot/api.py)
         "/api/telegram/webhook"}
-# ... and an invitation's page, and accepting it: the link is the key.
-OPEN_PREFIX = ("/api/invite/", "/api/reset/")
+# ... and a password-reset link's page: the link is the key.
+OPEN_PREFIX = ("/api/reset/",)
 
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -136,7 +137,8 @@ async def create_session(raw_db, user: dict, workspace: str, agent: str = "", ip
 
 
 async def session_user(raw_db, token: str | None) -> dict | None:
-    """The signed-in user and workspace for a token, or None."""
+    """The signed-in user, their private space and system role for a
+    token, or None. A disabled account signs nobody in."""
     if not token:
         return None
     key = _digest(token)
@@ -152,14 +154,14 @@ async def session_user(raw_db, token: str | None) -> dict | None:
         out = await _page_session(raw_db, s)
     elif s and s["expires"].replace(tzinfo=timezone.utc) > _now():
         u = await raw_db[USERS].find_one({"_id": s["user"]}, {"pw": 0, "avatar": 0})
-        # Still a member, and in which role: a person taken out of the
-        # workspace is signed out of it.
-        m = await raw_db[MEMBERS].find_one({"user": s["user"], "workspace": s["workspace"]})
-        if u and not u.get("disabled") and m:
+        # The account as it is now: its role and space are read from it,
+        # not from the session, so a change takes effect at once.
+        if u and not u.get("disabled"):
             out = {"user": {"type": "user", "id": u["_id"], "name": u.get("name") or u["email"],
                             "email": u["email"], "has_avatar": bool(u.get("avatar_v")),
                             "avatar_v": u.get("avatar_v")},
-                   "workspace": s["workspace"], "role": m.get("role") or "viewer"}
+                   "workspace": space_of(u), "role": role_of(u),
+                   "must_change_password": bool(u.get("must_change_password"))}
             await raw_db[SESSIONS].update_one({"_id": key}, {"$set": {"last_seen": _now()}})
     _CACHE[key] = (time.time(), out)
     return out
@@ -174,9 +176,9 @@ async def session_user(raw_db, token: str | None) -> dict | None:
 #   - short: PAGE_MINUTES, after which it signs nobody in,
 #   - read-only: a viewer, and on top of that GET/HEAD only
 #     (access.page_allowed), so not even a viewer's few POSTs,
-#   - in the workspace (and room) of whoever it came from, and only while
-#     that source is good: a revoked token, or a person taken out of the
-#     workspace, ends it at once.
+#   - in the space (and room) of whoever it came from, and only while
+#     that source is good: a revoked token, or a disabled account, ends it
+#     at once.
 # Like every session, only its SHA-256 is stored.
 PAGE_KIND = "page"
 PAGE_MINUTES = 10
@@ -229,12 +231,12 @@ async def _page_session(raw_db, s: dict) -> dict | None:
         return None
     if s.get("via_token"):
         t = await raw_db[TOKENS].find_one({"id": s["via_token"]})
-        if not t or t.get("revoked") or t.get("workspace") != s["workspace"]:
+        if not t or t.get("revoked") or token_expired(t) or t.get("workspace") != s["workspace"] \
+                or not await _maker_ok(raw_db, t):
             return None
     elif s.get("user"):
-        u = await raw_db[USERS].find_one({"_id": s["user"]}, {"pw": 0})
-        m = await raw_db[MEMBERS].find_one({"user": s["user"], "workspace": s["workspace"]})
-        if not u or u.get("disabled") or not m:
+        u = await raw_db[USERS].find_one({"_id": s["user"]}, {"pw": 0, "avatar": 0})
+        if not u or u.get("disabled") or space_of(u) != s["workspace"]:
             return None
     else:
         return None
@@ -255,8 +257,8 @@ async def any_user(raw_db) -> bool:
 
 
 async def make_first_user(raw_db, email: str, name: str, password: str) -> dict:
-    """The first account: it owns the default workspace. Refused once any
-    account exists - after that, people are invited (phase 5)."""
+    """The first account: the owner, in the default space. Refused once any
+    account exists - after that, the owner and the admins add accounts."""
     from . import scope
     email = email.strip().lower()
     if not EMAIL.match(email):
@@ -265,23 +267,15 @@ async def make_first_user(raw_db, email: str, name: str, password: str) -> dict:
     if problem:
         raise ValueError(problem)
     if await any_user(raw_db):
-        raise PermissionError("there is already an account - ask its owner for an invitation")
+        raise PermissionError("there is already an account - ask the owner or an admin to add yours")
     user = {"_id": secrets.token_hex(8), "email": email, "name": (name or "").strip()[:80] or email,
-            "pw": hash_password(password), "created_at": _now()}
+            "pw": hash_password(password), "created_at": _now(), "role": OWNER, "space": scope.DEFAULT}
     await raw_db[USERS].insert_one(user)
-    await raw_db[WORKSPACES].update_one(
-        {"_id": scope.DEFAULT},
-        {"$setOnInsert": {"name": "Redline", "created_at": _now(), "created_by": user["_id"]}},
-        upsert=True)
-    await raw_db[MEMBERS].update_one(
-        {"_id": f"{user['_id']}:{scope.DEFAULT}"},
-        {"$set": {"user": user["_id"], "workspace": scope.DEFAULT, "role": "owner", "joined": _now()}},
-        upsert=True)
     return user
 
 
 async def check_login(raw_db, email: str, password: str) -> tuple[dict, str] | None:
-    """The user and their workspace if the password is right, else None."""
+    """The user and their space if the password is right, else None."""
     email = (email or "").strip().lower()
     u = await raw_db[USERS].find_one({"email": email})
     if not u:
@@ -291,10 +285,7 @@ async def check_login(raw_db, email: str, password: str) -> tuple[dict, str] | N
         return None
     if not check_password(password or "", u["pw"]) or u.get("disabled"):
         return None
-    m = await raw_db[MEMBERS].find_one({"user": u["_id"]})
-    if not m:
-        return None          # taken out of every workspace: nothing to sign in to
-    return u, m["workspace"]
+    return u, space_of(u)
 
 
 _DUMMY: str | None = None
@@ -329,22 +320,45 @@ _TOKEN_CACHE: dict[str, tuple[float, dict | None]] = {}
 
 
 async def create_agent_token(raw_db, name: str, workspace: str, room: str | None,
-                             created_by: dict, role: str = "editor") -> tuple[str, dict]:
-    """A token for one agent, in one workspace (and room, if given), with
-    a role no higher than editor. The token itself is returned once and
-    kept only as its SHA-256."""
+                             created_by: dict, role: str = "editor",
+                             expires_days: int | None = None) -> tuple[str, dict]:
+    """A token for one agent, in one account's space (and room, if given), with
+    a role no higher than editor, and - if asked - a last day. The token
+    itself is returned once and kept only as its SHA-256."""
     from . import access
     name = (name or "").strip()[:60]
     if not name:
         raise ValueError("give the agent a name - it is what the person sees")
     if role not in access.TOKEN_ROLES:
         raise ValueError("an agent is an editor, a reviewer or a viewer")
+    if expires_days is not None and not 1 <= int(expires_days) <= 3650:
+        raise ValueError("a token lasts from 1 to 3650 days, or for good")
     token = TOKEN_PREFIX + secrets.token_urlsafe(32)
+    now = _now()
     doc = {"_id": _digest(token), "id": secrets.token_hex(6), "name": name, "workspace": workspace,
-           "room": room or None, "role": role, "created_by": created_by, "created_at": _now(),
+           "room": room or None, "role": role, "created_by": created_by, "created_at": now,
+           "expires_at": now + timedelta(days=int(expires_days)) if expires_days else None,
            "last_used": None, "revoked": False}
     await raw_db[TOKENS].insert_one(doc)
-    return token, {k: v for k, v in doc.items() if k != "_id"}
+    out = {k: v for k, v in doc.items() if k != "_id"}
+    return token, {**out, "status": token_status(out)}
+
+
+def _aware(d: datetime | None) -> datetime | None:
+    """Mongo hands datetimes back naive; they are UTC."""
+    return d.replace(tzinfo=timezone.utc) if d is not None and d.tzinfo is None else d
+
+
+def token_expired(doc: dict) -> bool:
+    exp = _aware(doc.get("expires_at"))
+    return bool(exp and exp <= _now())
+
+
+def token_status(doc: dict) -> str:
+    """active, revoked or expired - what the settings page shows."""
+    if doc.get("revoked"):
+        return "revoked"
+    return "expired" if token_expired(doc) else "active"
 
 
 async def token_agent(raw_db, token: str) -> dict | None:
@@ -355,22 +369,40 @@ async def token_agent(raw_db, token: str) -> dict | None:
     key = _digest(token)
     hit = _TOKEN_CACHE.get(key)
     if hit and time.time() - hit[0] < CACHE_S:
-        return hit[1]
+        out = hit[1]
+        # A token that ran out while it was remembered is refused all the same.
+        return None if out and out.get("expires_at") and _aware(out["expires_at"]) <= _now() else out
     doc = await raw_db[TOKENS].find_one({"_id": key})
     out = None
-    if doc and not doc.get("revoked"):
+    if doc and not doc.get("revoked") and not token_expired(doc) and await _maker_ok(raw_db, doc):
         out = {"actor": {"type": "agent", "id": doc["name"], "name": doc["name"], "token": doc["id"]},
                "workspace": doc["workspace"], "room": doc.get("room"),
                # Tokens from before roles were editors.
-               "role": doc.get("role") or "editor"}
+               "role": doc.get("role") or "editor", "expires_at": doc.get("expires_at")}
         await raw_db[TOKENS].update_one({"_id": key}, {"$set": {"last_used": _now()}})
     _TOKEN_CACHE[key] = (time.time(), out)
     return out
 
 
+async def _maker_ok(raw_db, doc: dict) -> bool:
+    """A token works only while the account that made it is enabled: a
+    disabled account's tokens stop (a deleted one's are deleted with it,
+    backend/admin.py). Tokens made in local mode, or by no one, have no
+    account to ask."""
+    by = doc.get("created_by") or {}
+    if by.get("type") != "user" or by.get("id") in (None, "", "local"):
+        return True
+    u = await raw_db[USERS].find_one({"_id": by["id"]}, {"disabled": 1})
+    return not (u and u.get("disabled"))
+
+
 async def list_agent_tokens(raw_db, workspace: str) -> list[dict]:
-    rows = [d async for d in raw_db[TOKENS].find({"workspace": workspace}, {"_id": 0})]
-    rows.sort(key=lambda d: d.get("created_at") or _now(), reverse=True)
+    """A space's tokens, newest first - never the token or its hash."""
+    rows = [{k: v for k, v in d.items() if k != "_id"}
+            async for d in raw_db[TOKENS].find({"workspace": workspace}, {"_id": 0})]
+    for r in rows:
+        r["status"] = token_status(r)
+    rows.sort(key=lambda d: _aware(d.get("created_at")) or _now(), reverse=True)
     return rows
 
 
@@ -384,202 +416,202 @@ async def revoke_agent_token(raw_db, token_id: str, workspace: str) -> bool:
     return bool(getattr(res, "matched_count", 0))
 
 
+async def delete_agent_token(raw_db, token_id: str, workspace: str) -> dict | None:
+    """Gone for good: taken back first (its page sessions end with it),
+    then the record and its usage counts removed. The audit trail keeps
+    what it did. Returns the record it was, or None if there was none."""
+    doc = await raw_db[TOKENS].find_one({"id": token_id, "workspace": workspace}, {"_id": 0})
+    if not doc:
+        return None
+    await revoke_agent_token(raw_db, token_id, workspace)
+    await raw_db[TOKENS].delete_one({"id": token_id, "workspace": workspace})
+    await raw_db[TOKEN_USAGE].delete_many({"token": token_id})
+    _TOKEN_CACHE.clear()
+    return doc
+
+
+# ---------------------------------------------------------------- agent token usage
+#
+# Every request an agent makes with its token is counted, per token and
+# day: how many, reads against writes, and by what the request was
+# (backend/access.py's actions). Counting must not slow the request, so the
+# middleware only adds to a tally in memory; a task writes the tally out a
+# few seconds later as one $inc per token and day. The days are kept half
+# a year (a TTL index on `at`).
+
+TOKEN_USAGE = "agent_token_usage"
+USAGE_KEEP_DAYS = 180
+USAGE_FLUSH_S = 5.0
+_USAGE: dict[tuple[str, str, str], dict[str, int]] = {}
+_USAGE_DB = None
+_USAGE_TASK = None
+_USAGE_INDEXED = False
+
+
+def count_usage(raw_db, token_id: str, workspace: str, method: str, act: str | None = None) -> None:
+    """One request by a token: into the tally, and a write-out scheduled.
+    No awaiting, no database: cheap enough for every request."""
+    import asyncio
+    global _USAGE_DB, _USAGE_TASK
+    day = _now().strftime("%Y-%m-%d")
+    row = _USAGE.setdefault((token_id, workspace, day), {})
+    kind = "read" if method in ("GET", "HEAD", "OPTIONS") else "write"
+    for k in ("n", kind) + ((f"acts.{act}",) if act else ()):
+        row[k] = row.get(k, 0) + 1
+    _USAGE_DB = raw_db
+    if _USAGE_TASK is None or _USAGE_TASK.done():
+        try:
+            _USAGE_TASK = asyncio.get_running_loop().create_task(_flush_later())
+        except RuntimeError:                       # no loop: the next flush takes it
+            _USAGE_TASK = None
+
+
+async def _flush_later() -> None:
+    import asyncio
+    await asyncio.sleep(USAGE_FLUSH_S)
+    await flush_usage()
+
+
+async def flush_usage(raw_db=None) -> int:
+    """Write the tally out: one upsert per token and day. Never raises."""
+    global _USAGE_INDEXED
+    db = raw_db if raw_db is not None else _USAGE_DB
+    if db is None or not _USAGE:
+        return 0
+    rows = list(_USAGE.items())
+    _USAGE.clear()
+    coll = db[TOKEN_USAGE]
+    if not _USAGE_INDEXED:
+        _USAGE_INDEXED = True
+        try:
+            await coll.create_index("at", expireAfterSeconds=USAGE_KEEP_DAYS * 86400)
+            await coll.create_index([("workspace", 1), ("day", 1)])
+        except Exception:                            # noqa: BLE001 - counting matters more
+            pass
+    for (token_id, ws, day), inc in rows:
+        try:
+            await coll.update_one(
+                {"_id": f"{token_id}:{day}"},
+                {"$inc": inc, "$set": {"token": token_id, "workspace": ws, "day": day,
+                                        "at": datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=timezone.utc)}},
+                upsert=True)
+        except Exception:                            # noqa: BLE001
+            pass
+    return len(rows)
+
+
 def bearer(headers) -> str | None:
     value = headers.get("authorization") or ""
     return value[7:].strip() if value.lower().startswith("bearer ") else None
 
 
-# ---------------------------------------------------------------- members and invitations
+# ---------------------------------------------------------------- system roles and spaces
 
 def forget_sessions() -> None:
-    """After a role change or a removal: look everyone up again."""
+    """After a role change, a disabled account or a removal: look everyone
+    (and every agent token) up again."""
     _CACHE.clear()
+    _TOKEN_CACHE.clear()
 
 
-async def members(raw_db, workspace: str) -> list[dict]:
-    rows = []
-    async for m in raw_db[MEMBERS].find({"workspace": workspace}):
-        u = await raw_db[USERS].find_one({"_id": m["user"]}, {"pw": 0, "avatar": 0}) or {}
-        rows.append({"id": m["user"], "name": u.get("name") or u.get("email") or m["user"],
-                     "email": u.get("email"), "role": m.get("role") or "viewer",
-                     "has_avatar": bool(u.get("avatar_v")), "avatar_v": u.get("avatar_v"),
-                     "joined": m.get("joined"), "invited_by": m.get("invited_by")})
-    from . import access
-    rows.sort(key=lambda r: (access.rank(r["role"]), (r["name"] or "").lower()))
-    return rows
+OWNER, ADMIN, USER = "owner", "admin", "user"
+SYSTEM_ROLES = (OWNER, ADMIN, USER)
 
 
-async def set_role(raw_db, workspace: str, user_id: str, role: str, by_role: str) -> dict:
-    """Change someone's role. Only an owner makes or unmakes owners, nobody
-    gives a role above their own, and the last owner stays one."""
-    from . import access
-    if role not in access.ROLES:
-        raise ValueError("roles: " + ", ".join(access.ROLES))
-    m = await raw_db[MEMBERS].find_one({"user": user_id, "workspace": workspace})
-    if not m:
-        raise LookupError("not a member of this workspace")
-    old = m.get("role") or "viewer"
-    if access.rank(role) < access.rank(by_role) or access.rank(old) < access.rank(by_role):
-        higher = min(role, old, key=access.rank)
-        raise PermissionError(f"as {by_role} you cannot make or change an {higher}")
-    if old == "owner" and role != "owner" and await _owners(raw_db, workspace) <= 1:
-        raise PermissionError("the workspace needs an owner - make someone else owner first")
-    await raw_db[MEMBERS].update_one({"_id": m["_id"]}, {"$set": {"role": role}})
+def role_of(u: dict | None) -> str:
+    """An account's system role; one from before roles is a user (the
+    migration makes the first account the owner)."""
+    r = (u or {}).get("role")
+    return r if r in SYSTEM_ROLES else USER
+
+
+def space_of(u: dict) -> str:
+    """The private space an account works in (backend/scope.py): the
+    owner's is the default one, everyone else's their own."""
+    from . import scope
+    if u.get("space"):
+        return u["space"]
+    return scope.DEFAULT if u.get("role") == OWNER else "u" + str(u["_id"])
+
+
+async def migrate(raw_db) -> dict:
+    """From workspaces and members to system roles - idempotent, run at
+    start-up. The owner is the account that owned the default workspace
+    (else the oldest account); it keeps the default space and its data.
+    Every other account gets a role (an admin of the default workspace
+    stays an admin, anyone else is a user) and a private space of its own.
+    The old `memberships`, `workspaces` and `invites` collections are left
+    as they were and no longer read."""
+    from . import scope
+    done = {"owner": None, "updated": 0}
+    users = [u async for u in raw_db[USERS].find({}, {"pw": 0, "avatar": 0})]
+    if not users:
+        return done
+    owner = next((u for u in users if u.get("role") == OWNER), None)
+    old_roles: dict[str, str] = {}
+    try:
+        async for m in raw_db["memberships"].find({"workspace": scope.DEFAULT}):
+            old_roles[m.get("user")] = m.get("role") or ""
+    except Exception:                                   # noqa: BLE001 - no memberships is fine
+        pass
+    if owner is None:
+        owned = [u for u in users if old_roles.get(u["_id"]) == "owner"]
+        pool = owned or users
+        owner = min(pool, key=lambda u: (_aware(u.get("created_at")) or _now(), str(u["_id"])))
+    for u in users:
+        patch: dict = {}
+        if u["_id"] == owner["_id"]:
+            if u.get("role") != OWNER:
+                patch["role"] = OWNER
+            if u.get("space") != scope.DEFAULT:
+                patch["space"] = scope.DEFAULT
+        else:
+            if u.get("role") not in (ADMIN, USER):
+                patch["role"] = ADMIN if old_roles.get(u["_id"]) in ("owner", "admin") else USER
+            if not u.get("space") or u.get("space") == scope.DEFAULT:
+                patch["space"] = "u" + str(u["_id"])
+        if patch:
+            await raw_db[USERS].update_one({"_id": u["_id"]}, {"$set": patch})
+            done["updated"] += 1
+    done["owner"] = owner["_id"]
+    if done["updated"]:
+        forget_sessions()
+    return done
+
+
+# What a session that must choose a new password may still ask for: to
+# choose it, to know who it is, and to leave.
+BEFORE_NEW_PASSWORD = frozenset({"/api/auth/new-password", "/api/auth/logout", "/api/auth/state",
+                                 "/api/me", "/api/health"})
+
+
+async def set_own_new_password(raw_db, user_id: str, password: str, keep_token: str | None) -> int:
+    """The person's own password in place of the one an admin set. Only
+    while the account is asked to change it; it must differ from that one.
+    Every other session ends. Returns how many."""
+    u = await raw_db[USERS].find_one({"_id": user_id})
+    if not u or u.get("disabled"):
+        raise PermissionError("no such account")
+    if not u.get("must_change_password"):
+        raise PermissionError("your password does not need changing here - use Settings > Profile")
+    problem = password_problem(password or "")
+    if problem:
+        raise ValueError(problem)
+    if check_password(password, u.get("pw") or ""):
+        raise ValueError("choose a password other than the one you were given")
+    await raw_db[USERS].update_one({"_id": user_id}, {"$set": {"pw": hash_password(password)},
+                                                      "$unset": {"must_change_password": ""}})
+    keep = _digest(keep_token or "")
+    res = await raw_db[SESSIONS].delete_many({"user": user_id, "_id": {"$ne": keep}})
     forget_sessions()
-    return {"id": user_id, "role": role, "was": old}
+    return int(getattr(res, "deleted_count", 0) or 0)
 
 
-async def remove_member(raw_db, workspace: str, user_id: str, by_role: str) -> None:
-    from . import access
-    m = await raw_db[MEMBERS].find_one({"user": user_id, "workspace": workspace})
-    if not m:
-        raise LookupError("not a member of this workspace")
-    role = m.get("role") or "viewer"
-    if access.rank(role) < access.rank(by_role):
-        raise PermissionError(f"only an owner can take an {role} out")
-    if role == "owner" and await _owners(raw_db, workspace) <= 1:
-        raise PermissionError("the workspace needs an owner - make someone else owner first")
-    await raw_db[MEMBERS].delete_one({"_id": m["_id"]})
-    await raw_db[SESSIONS].delete_many({"user": user_id, "workspace": workspace})
+async def end_sessions_of(raw_db, user_id: str) -> int:
+    """Sign an account out everywhere, page sessions included."""
+    res = await raw_db[SESSIONS].delete_many({"user": user_id})
     forget_sessions()
-
-
-async def _owners(raw_db, workspace: str) -> int:
-    return await raw_db[MEMBERS].count_documents({"workspace": workspace, "role": "owner"})
-
-
-async def create_invite(raw_db, workspace: str, email: str, role: str, by: dict, by_role: str) -> tuple[str, dict]:
-    """An invitation for one address, to one role, for a week. Returns the
-    key for the link once; the database keeps its SHA-256."""
-    from . import access
-    email = (email or "").strip().lower()
-    if not EMAIL.match(email):
-        raise ValueError("that does not look like an email address")
-    if role not in access.ROLES or role == "owner":
-        raise ValueError("invite as admin, editor, reviewer or viewer - make an owner from the members list")
-    if access.rank(role) < access.rank(by_role):
-        raise PermissionError(f"as {by_role} you cannot invite an {role}")
-    u = await raw_db[USERS].find_one({"email": email}, {"_id": 1})
-    if u and await raw_db[MEMBERS].find_one({"user": u["_id"], "workspace": workspace}):
-        raise ValueError("they are already a member")
-    key = secrets.token_urlsafe(24)
-    doc = {"_id": _digest(key), "id": secrets.token_hex(6), "workspace": workspace, "email": email,
-           "role": role, "by": by, "created_at": _now(), "expires": _now() + timedelta(days=INVITE_DAYS)}
-    await raw_db[INVITES].delete_many({"workspace": workspace, "email": email})     # one per address
-    await raw_db[INVITES].insert_one(doc)
-    return key, {k: v for k, v in doc.items() if k != "_id"}
-
-
-async def invites(raw_db, workspace: str) -> list[dict]:
-    rows = [d async for d in raw_db[INVITES].find({"workspace": workspace, "expires": {"$gt": _now()}},
-                                                   {"_id": 0})]
-    rows.sort(key=lambda d: d["created_at"], reverse=True)
-    return rows
-
-
-async def cancel_invite(raw_db, workspace: str, invite_id: str) -> bool:
-    res = await raw_db[INVITES].delete_one({"workspace": workspace, "id": invite_id})
-    return bool(res.deleted_count)
-
-
-async def invite_info(raw_db, key: str) -> dict | None:
-    """What the invitation's page shows: who asked, for which address and
-    role, and whether that address has an account already."""
-    inv = await raw_db[INVITES].find_one({"_id": _digest(key or "")})
-    if not inv or inv["expires"].replace(tzinfo=timezone.utc) <= _now():
-        return None
-    ws = await raw_db[WORKSPACES].find_one({"_id": inv["workspace"]}) or {}
-    return {"email": inv["email"], "role": inv["role"], "by": (inv.get("by") or {}).get("name"),
-            "workspace": ws.get("name") or inv["workspace"],
-            "has_account": bool(await raw_db[USERS].find_one({"email": inv["email"]}, {"_id": 1}))}
-
-
-async def accept_invite(raw_db, key: str, name: str, password: str) -> tuple[dict, str, str]:
-    """Join: a new account with the invited address, or - if it has one -
-    the right password for it. Returns the user, workspace and role."""
-    inv = await raw_db[INVITES].find_one({"_id": _digest(key or "")})
-    if not inv or inv["expires"].replace(tzinfo=timezone.utc) <= _now():
-        raise LookupError("this invitation has expired or was taken back - ask for a new one")
-    u = await raw_db[USERS].find_one({"email": inv["email"]})
-    if u:
-        if locked_out(inv["email"]):
-            raise PermissionError("too many tries - wait a few minutes")
-        if not check_password(password or "", u["pw"]) or u.get("disabled"):
-            failed(inv["email"])
-            raise PermissionError("that is not the password for " + inv["email"])
-    else:
-        problem = password_problem(password or "")
-        if problem:
-            raise ValueError(problem)
-        u = {"_id": secrets.token_hex(8), "email": inv["email"],
-             "name": (name or "").strip()[:80] or inv["email"], "pw": hash_password(password),
-             "created_at": _now()}
-        await raw_db[USERS].insert_one(u)
-    await raw_db[MEMBERS].update_one(
-        {"_id": f"{u['_id']}:{inv['workspace']}"},
-        {"$set": {"user": u["_id"], "workspace": inv["workspace"], "role": inv["role"],
-                  "joined": _now(), "invited_by": inv.get("by")}},
-        upsert=True)
-    await raw_db[INVITES].delete_one({"_id": inv["_id"]})
-    return u, inv["workspace"], inv["role"]
-
-
-# ---------------------------------------------------------------- workspaces
-
-async def my_workspaces(raw_db, user_id: str) -> list[dict]:
-    """The workspaces a person is in, with their role in each."""
-    out = []
-    async for m in raw_db[MEMBERS].find({"user": user_id}):
-        ws = await raw_db[WORKSPACES].find_one({"_id": m["workspace"]}) or {}
-        out.append({"id": m["workspace"], "name": ws.get("name") or m["workspace"],
-                    "role": m.get("role") or "viewer"})
-    out.sort(key=lambda w: (w["id"] != "default", w["name"].lower()))
-    return out
-
-
-async def workspace_name(raw_db, ws: str) -> str:
-    doc = await raw_db[WORKSPACES].find_one({"_id": ws}, {"name": 1}) or {}
-    return doc.get("name") or ws
-
-
-def _slug(name: str) -> str:
-    s = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:32]
-    return s or "workspace"
-
-
-async def create_workspace(raw_db, name: str, user: dict) -> dict:
-    """A new, empty workspace; whoever makes it owns it."""
-    name = (name or "").strip()[:60]
-    if not name:
-        raise ValueError("give the workspace a name")
-    base = _slug(name)
-    if base == "default":
-        base = "default-2"
-    wid, n = base, 2
-    while await raw_db[WORKSPACES].find_one({"_id": wid}, {"_id": 1}):
-        wid, n = f"{base}-{n}", n + 1
-    await raw_db[WORKSPACES].insert_one({"_id": wid, "name": name, "created_at": _now(),
-                                         "created_by": user.get("id")})
-    await raw_db[MEMBERS].update_one(
-        {"_id": f"{user['id']}:{wid}"},
-        {"$set": {"user": user["id"], "workspace": wid, "role": "owner", "joined": _now()}},
-        upsert=True)
-    return {"id": wid, "name": name, "role": "owner"}
-
-
-async def rename_workspace(raw_db, ws: str, name: str) -> None:
-    name = (name or "").strip()[:60]
-    if not name:
-        raise ValueError("give the workspace a name")
-    await raw_db[WORKSPACES].update_one({"_id": ws}, {"$set": {"name": name}}, upsert=True)
-
-
-async def open_workspace(raw_db, token: str | None, user_id: str, ws: str) -> None:
-    """Move this browser's session to another workspace the person is in."""
-    if not await raw_db[MEMBERS].find_one({"user": user_id, "workspace": ws}):
-        raise LookupError("you are not a member of that workspace")
-    await raw_db[SESSIONS].update_one({"_id": _digest(token or "")}, {"$set": {"workspace": ws}})
-    forget_sessions()
+    return int(getattr(res, "deleted_count", 0) or 0)
 
 
 # ---------------------------------------------------------------- forgotten passwords
@@ -609,7 +641,7 @@ async def reset_info(raw_db, key: str) -> dict | None:
 
 async def use_reset(raw_db, key: str, password: str) -> tuple[dict, str]:
     """Set the new password; every other session of the account ends.
-    Returns the user and the workspace to sign in to."""
+    Returns the user and the space to sign in to."""
     r = await raw_db[RESETS].find_one({"_id": _digest(key or "")})
     if not r or r["expires"].replace(tzinfo=timezone.utc) <= _now():
         raise LookupError("this link has expired or was used - make a new one")
@@ -622,7 +654,7 @@ async def use_reset(raw_db, key: str, password: str) -> tuple[dict, str]:
     forget_sessions()
     cleared(r["email"])
     u = await raw_db[USERS].find_one({"_id": r["user"]})
-    m = await raw_db[MEMBERS].find_one({"user": r["user"]})
-    if not m:
-        raise PermissionError("the password is set, but the account is in no workspace")
-    return u, m["workspace"]
+    if not u or u.get("disabled"):
+        raise PermissionError("the password is set, but the account is disabled")
+    await raw_db[USERS].update_one({"_id": u["_id"]}, {"$unset": {"must_change_password": ""}})
+    return u, space_of(u)

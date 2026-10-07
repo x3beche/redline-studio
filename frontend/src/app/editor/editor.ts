@@ -19,7 +19,7 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Activity, Analytics, Api, Boards, CameraState, NoteView, Catalog, Chat, ChatLine, LogLine, Question, Questions, Run, FolderNode, ModelEntry, ComponentRow,
+import { Activity, Analytics, Api, Boards, CameraState, NoteView, Catalog, LogLine, Question, Questions, Run, FolderNode, ModelEntry, ComponentRow,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer, ViewApplied, viewHash } from './ocp';
 import { Markdown, plain } from '../markdown';
@@ -68,7 +68,6 @@ export class Editor implements AfterViewInit, OnDestroy {
     const q = this.asking();
     if (q && this.reading.lang()) this.reading.ensure('question', q._id);
   });
-  private chat = inject(Chat);
   private boards = inject(Boards);
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private overlay = viewChild.required<ElementRef<HTMLCanvasElement>>('overlay');
@@ -85,7 +84,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   private logPanel = viewChild<ElementRef<HTMLElement>>('logPanel');
   private drawTools = viewChild<ElementRef<HTMLElement>>('drawTools');
   private logBox = viewChild<ElementRef<HTMLDivElement>>('logBox');
-  private threadBox = viewChild<ElementRef<HTMLDivElement>>('threadBox');
 
   frozen = signal(false);
   saving = signal(false);
@@ -191,13 +189,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   editSummary = signal('');
   /** What the agent is waiting on, and what is being typed back. */
   questions = signal<Question[]>([]);
-  thread = signal<ChatLine[]>([]);
-  saying = signal('');
-  /** Whether what is typed next goes as urgent: read between the agent's
-   *  steps rather than when it next looks up. Sticks, because somebody
-   *  who wants one thing seen promptly usually wants the next one too. */
-  urgent = signal(false);
-  chatOpen = signal(true);
   answerText = signal('');
   answerPicked = signal<Set<string>>(new Set());
   /** Questions put aside for a minute. They do not go away. */
@@ -310,15 +301,6 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.picked.taskSlot();
       untracked(() => this.dockTask());
     });
-    // Each tab has its own thread with the agent: a new tab shows its own
-    // at once rather than the last room's until the next poll.
-    effect(() => {
-      const room = this.picked.room();
-      untracked(() => {
-        this.thread.set([]);
-        this.chat.history(room).subscribe({ next: v => this.takeThread(v), error: () => {} });
-      });
-    });
   }
 
   async ngAfterViewInit() {
@@ -392,7 +374,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   pollHealth() {
     this.dockTask();
     this.asks.open().subscribe({ next: v => this.takeQuestions(v), error: () => {} });
-    this.chat.history(this.picked.room()).subscribe({ next: v => this.takeThread(v), error: () => {} });
     // The run of the room on screen: each room has its own. Switching
     // rooms is not a run finishing, so the memory of the last status is
     // per room and a switch starts it afresh.
@@ -579,90 +560,6 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.queueShut.set(true);
   }
 
-  /** The thread, and the one line being typed into it. Scrolled to the
-   *  bottom when something lands, the way the log is. */
-  private takeThread(rows: ChatLine[]) {
-    // Each room has its own thread. An answer that left before a switch
-    // of tabs is the old room's, and is not shown in the new one.
-    const room = this.picked.room();
-    const mine = rows.filter(r => (r.room ?? 'cad') === room);
-    if (rows.length && !mine.length) return;
-    rows = mine;
-    const grew = rows.length !== this.thread().length;
-    this.thread.set(rows);
-    if (grew) setTimeout(() => this.scrollThread(), 40);
-  }
-
-  private scrollThread() {
-    const box = this.threadBox()?.nativeElement;
-    if (box) box.scrollTop = box.scrollHeight;
-  }
-
-  say() {
-    const text = this.saying().trim();
-    if (!text) return;
-    const urgent = this.urgent();
-    // Shown straight away rather than on the next poll: two seconds of
-    // nothing looks like the message went nowhere.
-    this.thread.update(t => [...t, {
-      _id: 'local-' + Date.now(), at: new Date().toISOString(),
-      role: 'user' as const, text, urgent, seen_at: null }]);
-    this.saying.set('');
-    setTimeout(() => this.scrollThread(), 40);
-    this.chat.say(text, urgent, this.picked.room()).subscribe({
-      next: () => this.chat.history(this.picked.room()).subscribe({
-        next: v => this.takeThread(v), error: () => {} }),
-      error: () => this.flash('could not send that'),
-    });
-  }
-
-  /** Who wrote a thread line: "you", or the agent by name when it gave one. */
-  whoSaid(m: ChatLine): string {
-    if (m.role !== 'agent') return 'you';
-    const name = m.by?.name;
-    return name && name !== 'agent' ? name : 'agent';
-  }
-
-  /** Take a message back. Only offered while it is still unread, and the
-   *  server checks that again - the agent may have picked it up in the
-   *  second between the card drawing and the click. */
-  unsay(m: ChatLine) {
-    if (m.seen_at || !this.sent(m)) return;
-    this.thread.update(t => t.filter(x => x._id !== m._id));
-    this.chat.retract(m._id).subscribe({
-      next: () => this.chat.history(this.picked.room()).subscribe({
-        next: v => this.takeThread(v), error: () => {} }),
-      error: () => {
-        this.flash('too late, the agent already has it');
-        this.chat.history(this.picked.room()).subscribe({
-          next: v => this.takeThread(v), error: () => {} });
-      },
-    });
-  }
-
-  /** Whether the server has this line yet. Until it does it has only the
-   *  id this window made up, which nothing else would recognise. */
-  sent(m: ChatLine): boolean { return !m._id.startsWith('local-'); }
-
-  /** Enter sends, shift+enter keeps typing - it is a line to somebody, not
-   *  a document. */
-  sayKey(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.say(); }
-  }
-
-  /** How many of the person's lines the agent has not picked up. Zero
-   *  reads as nothing rather than as a 0. */
-  unreadSaid(): number | null {
-    const n = this.thread().filter(m => m.role === 'user' && !m.seen_at).length;
-    return n || null;
-  }
-
-  toggleChat() {
-    this.chatOpen.update(v => !v);
-    this.remember('chat', this.chatOpen());
-    if (this.chatOpen()) setTimeout(() => this.scrollThread(), 40);
-  }
-
   /** A question is the agent standing still, so it has to reach the person
    *  even when the tab is in the background: the title carries it, and the
    *  browser is asked to raise a notice once per question. */
@@ -684,7 +581,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         const n = new Notification('Redline needs an answer', {
           body: q.text.slice(0, 180), tag: q._id, icon: '/favicon.svg',
         });
-        n.onclick = () => { window.focus(); n.close(); };
+        n.onclick = () => { window.focus(); n.close(); this.openThread(q); };
       } catch { /* the browser refused; the card still shows it */ }
     }
   }
@@ -697,11 +594,22 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  a scroll bar. *Later* puts it back in the column without answering
    *  it - the agent is still waiting either way. */
   asking = computed(() =>
-    this.questions().find(q => !this.setAside().has(q._id)) ?? null);
+    this.questions().find(q => !this.setAside().has(q._id) && !this.inThread(q)) ?? null);
+
+  /** The question's room thread is open in the Chat tab: it is answered
+   *  there, in the thread, rather than in a card over it. */
+  private inThread(q: Question) {
+    return this.picked.room() === 'commandcode' && this.picked.thread() === (q.room ?? 'cad');
+  }
+
+  /** To the room's thread in the Chat tab, where the question waits too. */
+  openThread(q: Question) {
+    this.picked.openThread(q.room ?? 'cad');
+  }
 
   /** Put aside and still unanswered. The agent is waiting on these. */
   waiting = computed(() =>
-    this.questions().filter(q => this.setAside().has(q._id)));
+    this.questions().filter(q => this.setAside().has(q._id) && !this.inThread(q)));
 
   openAsk() { this.setAside.set(new Set()); }
 
@@ -1390,7 +1298,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   private restorePanels() {
     const saved = this.panels();
     if (typeof saved['log'] === 'boolean') this.logOpen.set(saved['log'] as boolean);
-    if (typeof saved['chat'] === 'boolean') this.chatOpen.set(saved['chat'] as boolean);
     if (typeof saved['catalog'] === 'boolean') this.collapsed.set(saved['catalog'] as boolean);
     if (typeof saved['queue'] === 'boolean') this.queueShut.set(saved['queue'] as boolean);
     // A phone opens on the room, both drawers shut, whatever was left open.

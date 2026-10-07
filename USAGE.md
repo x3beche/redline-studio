@@ -44,7 +44,7 @@ inside gets inspected without exporting anything.
 The log along the bottom is a record and reads as one: it can be folded
 away, and that is all. There is no clearing it from the page.
 
-What you fold away stays folded. The log, the thread under the queue, the
+What you fold away stays folded. The log, the
 two side columns and every folder in the catalog come back the way you
 left them — the window remembers its own shape in `redline.panels`, per
 browser, and nothing about it reaches the database.
@@ -300,7 +300,7 @@ module PowerIn:
 ```
 
 There are no buttons that make anything. A change to a board is asked
-for - a board note, or the thread under the queue - and the agent runs
+for - a board note, or the PCB room's thread in the Chat tab - and the agent runs
 the whole pipeline, in order, every time:
 
 1. **build** - atopile turns the source into a netlist;
@@ -516,7 +516,7 @@ resolves after `stand` moves into `parts/`.
 
 Folders fold. The caret on a folder closes it, and what is closed is
 remembered — after F5 the tree comes back the way it was left, along with
-the log and the thread under the queue.
+the log.
 
 The foot of the column carries the database usage and the machine's live CPU,
 RAM and GPU. While a revision is being worked on, the running task sits here
@@ -630,9 +630,17 @@ and freezes what the work cost onto the card.
 
 ## Talking to the agent
 
-Under the queue there is a thread, for everything that is not a mark on a
-model — moving models between folders, renaming one, why a build is taking
-so long. Enter sends, shift+enter keeps typing.
+Each room with an agent (3D Drawing, PCB Design) has a thread with it, for
+everything that is not a mark on a model — moving models between folders,
+renaming one, why a build is taking so long. The threads are pinned at the
+top of the **Chat** tab's list, under **Rooms**, in the top bar's order;
+they cannot be renamed, archived or deleted, and a number beside one (and on
+the Chat tab itself) counts what the agent wrote, or asks, that you have not
+read yet. The agent's open questions wait at the end of their room's thread
+with their answer buttons, as well as in the card that pops up over every
+room. Enter sends, shift+enter keeps typing; the language chip in the
+thread's header reads the agent in another language. Ctrl+K lists the
+threads first when it opens, the ones with something unread on top.
 
 The **urgent** switch changes when it is read, not what it does. An
 ordinary line waits until the agent next looks up, which can be the far
@@ -724,7 +732,7 @@ link their own chats to it, and then:
 | `/note <text>` | a draft note on a model or board, picked from buttons (recent ones, the last one used first) |
 | a photo with a caption | the same, with the photo as the note's picture |
 | `/queue` | queues the last draft note made from Telegram |
-| `/ask <text>` | a line in a room's thread, the same as "ask the agent" |
+| `/ask <text>` | a line in a room's thread, the same as writing in it in the Chat tab |
 | `/status` | Working now |
 | `/lang tr` | questions in Turkish (or any ISO 639-1 code: `de`, `ja` ...; `en` for the original) |
 | `/stop` | unlinks the chat |

@@ -82,11 +82,14 @@ from . import reading  # noqa: E402
 app.include_router(reading.router)
 from . import themes as themes_api  # noqa: E402
 app.include_router(themes_api.router)
-# Settings > Telegram: the bot, people's links, the webhook (backend/tgbot/).
+# Settings > Telegram: the bot, each person's own link, the webhook (backend/tgbot/).
 from .tgbot import api as tg_api  # noqa: E402
 app.include_router(tg_api.router)
 from . import profile as profile_api  # noqa: E402
 app.include_router(profile_api.router)
+# The admin panel: the accounts, for the owner and the admins.
+from . import admin as admin_api  # noqa: E402
+app.include_router(admin_api.router)
 
 
 def _raw_db():
@@ -1672,6 +1675,12 @@ async def _who_acts(request, call_next):
         if not auth.csrf_ok(request.method, request.headers):
             return JSONResponse({"detail": "that change did not come from the app"}, status_code=403)
         who, ws, role = got["user"], got["workspace"], got["role"]
+        # A password set by an admin must be changed before anything else
+        # (backend/admin.py): until then only that, and signing out, answer.
+        if got.get("must_change_password") and not got.get("page") \
+                and request.url.path not in auth.BEFORE_NEW_PASSWORD:
+            return JSONResponse({"detail": "choose a new password first", "refused": "password",
+                                 "role": role}, status_code=403)
         # A headless browser's page session reads, and nothing else.
         if got.get("page") and not access.page_allowed(request.method, request.url.path,
                                                        dict(request.query_params)):
@@ -1682,6 +1691,9 @@ async def _who_acts(request, call_next):
     # What the request is, and whether the role may (backend/access.py).
     if request.url.path.startswith("/api/"):
         act = access.action(request.method, request.url.path, dict(request.query_params))
+        if token and who.get("token"):
+            # Counted in memory, written out a few seconds later (auth.py).
+            auth.count_usage(db(), who["token"], ws, request.method, act)
         if not access.allowed(role, act):
             from fastapi.responses import JSONResponse
             return JSONResponse({"detail": access.refusal(role or "nobody", act), "refused": act,
@@ -1759,18 +1771,19 @@ async def auth_state(request: Request):
     roles = {"roles": list(access.ROLES), "about": access.ABOUT, "actions": access.ACTIONS,
              "token_roles": list(access.TOKEN_ROLES)}
     if not auth.enabled():
-        return {"mode": "off", "user": actors.local_user(), "workspace": scope.DEFAULT,
+        return {"mode": "off", "user": actors.local_user(),
                 "role": "owner", "can": access.can("owner"), **roles}
     got = await auth.session_user(db(), request.cookies.get(auth.COOKIE))
+    page = bool(got and got.get("page"))
     return {"mode": "on", "needs_setup": not await auth.any_user(db()),
-            "user": got["user"] if got else None, "workspace": got["workspace"] if got else None,
-            "workspace_name": await auth.workspace_name(db(), got["workspace"]) if got else None,
-            "role": got["role"] if got else None, "can": access.can(got["role"] if got else None), **roles}
+            "user": got["user"] if got else None,
+            "role": got["role"] if got else None, "can": access.can(got["role"] if got else None),
+            "must_change_password": bool(got and got.get("must_change_password") and not page), **roles}
 
 
 @app.post("/api/auth/setup")
 async def auth_setup(body: SetupIn, request: Request, response: Response):
-    """The first account, while there is none; it owns the workspace."""
+    """The first account, while there is none; it is the owner."""
     if not auth.enabled():
         raise HTTPException(400, "sign-in is off (REDLINE_REQUIRE_SIGNIN)")
     try:
@@ -1842,11 +1855,37 @@ async def auth_logout(request: Request, response: Response):
     return {"signed_out": True}
 
 
+class NewPasswordIn(BaseModel):
+    new: str = Field(min_length=1, max_length=400)
+
+
+@app.post("/api/auth/new-password")
+async def auth_new_password(body: NewPasswordIn, request: Request):
+    """The password an admin set, replaced by the person's own at their
+    first sign-in. Only while the account is asked to; every other session
+    of it ends, this one stays."""
+    who = actors.current()
+    if not auth.enabled() or who.get("type") != "user" or who.get("page"):
+        raise HTTPException(400, "only a signed-in person sets a new password here")
+    try:
+        ended = await auth.set_own_new_password(db().raw, who["id"], body.new,
+                                                request.cookies.get(auth.COOKIE))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await actors.audit(db(), "password", who.get("name") or who["id"],
+                       {"how": "first sign-in", "signed_out": ended})
+    return {"changed": True, "signed_out": ended}
+
+
 # ---------------- agent tokens ----------------
 class TokenIn(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     room: str | None = Field(default=None, max_length=20)
     role: str = Field(default="editor", max_length=20)
+    # None: for good; else 1..3650 days (the page offers 7, 30 and 90).
+    expires_days: int | None = Field(default=None, ge=1, le=3650)
 
 
 def _people_only():
@@ -1862,174 +1901,150 @@ async def make_agent_token(body: TokenIn):
         if access.rank(body.role) < access.rank(access.current() or "viewer"):
             raise ValueError(f"an agent cannot be more than you ({access.current()})")
         token, doc = await auth.create_agent_token(db(), body.name, scope.current(), body.room,
-                                                   actors.current(), body.role)
+                                                   actors.current(), body.role, body.expires_days)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    await actors.audit(db(), "token", body.name, {"room": body.room, "role": body.role})
-    return {"token": token, **doc}
+    await actors.audit(db(), "token", body.name, {"room": body.room, "role": body.role,
+                                                  "expires_days": body.expires_days})
+    return {"token": token, **{k: v for k, v in doc.items() if k != "workspace"}}
 
 
 @app.get("/api/agent-tokens")
 async def agent_tokens():
     _people_only()
-    return await auth.list_agent_tokens(db(), scope.current())
+    # The space is the account's own: not something to show.
+    return [{k: v for k, v in t.items() if k != "workspace"}
+            for t in await auth.list_agent_tokens(db(), scope.current())]
+
+
+def _day_keys(days: int) -> list[str]:
+    today = datetime.now(timezone.utc).date()
+    return [(today - timedelta(days=days - 1 - i)).isoformat() for i in range(days)]
+
+
+async def _usage_rows(days: int, token_id: str | None = None) -> list[dict]:
+    await auth.flush_usage(db())
+    first = _day_keys(days)[0]
+    q: dict = {"workspace": scope.current(), "day": {"$gte": first}}
+    if token_id:
+        q["token"] = token_id
+    return [d async for d in db()[auth.TOKEN_USAGE].find(q, {"_id": 0})]
+
+
+def _series(rows: list[dict], keys: list[str], field: str = "n") -> list[int]:
+    by = {}
+    for r in rows:
+        by[r["day"]] = by.get(r["day"], 0) + int(r.get(field) or 0)
+    return [by.get(k, 0) for k in keys]
+
+
+def _t0(keys: list[str]) -> int:
+    return int(datetime.fromisoformat(keys[0]).replace(tzinfo=timezone.utc).timestamp())
+
+
+@app.get("/api/agent-tokens/usage")
+async def agent_tokens_usage(days: int = 30):
+    """Requests by one's agent tokens, per day: the totals, the
+    chart and each token's figures. Counts only - no token, no hash."""
+    _people_only()
+    days = max(1, min(int(days), auth.USAGE_KEEP_DAYS))
+    keys = _day_keys(days)
+    rows = await _usage_rows(days)
+    tokens = await auth.list_agent_tokens(db(), scope.current())
+    names = {t["id"]: t["name"] for t in tokens}
+    per: dict[str, dict] = {}
+    for tid in {r["token"] for r in rows} | set(names):
+        mine = [r for r in rows if r["token"] == tid]
+        series = _series(mine, keys)
+        per[tid] = {"series": series, "today": series[-1], "d7": sum(series[-7:]), "d30": sum(series[-30:]),
+                    "read": sum(int(r.get("read") or 0) for r in mine),
+                    "write": sum(int(r.get("write") or 0) for r in mine)}
+    total = _series(rows, keys)
+    # The chart: the busiest tokens each a series, the rest together.
+    ranked = sorted((t for t in per if per[t]["d30"]), key=lambda t: -per[t]["d30"])
+    shown, rest = ranked[:6], ranked[6:]
+    series = [{"name": names.get(t, "deleted token"), "values": per[t]["series"]} for t in shown]
+    if rest:
+        series.append({"name": "others", "values": [sum(per[t]["series"][i] for t in rest) for i in range(days)]})
+    top = ranked[0] if ranked else None
+    return {"days": keys,
+            "totals": {"active": sum(1 for t in tokens if t["status"] == "active"), "tokens": len(tokens),
+                       "today": total[-1], "d7": sum(total[-7:]), "d30": sum(total[-30:]),
+                       "read": sum(int(r.get("read") or 0) for r in rows),
+                       "write": sum(int(r.get("write") or 0) for r in rows)},
+            "top": {"id": top, "name": names.get(top, "deleted token"), "d30": per[top]["d30"]} if top else None,
+            "chart": {"t0": _t0(keys), "step": 86400, "n": days, "series": series},
+            "per_token": per}
+
+
+@app.get("/api/agent-tokens/{token_id}/usage")
+async def agent_token_usage(token_id: str, days: int = 30):
+    """One token in detail: requests per day, reads against writes, by
+    action, what the audit trail has under it, and the LLM calls made for
+    it (since calls carry the token - older ones do not)."""
+    _people_only()
+    tok = next((t for t in await auth.list_agent_tokens(db(), scope.current()) if t["id"] == token_id), None)
+    if not tok:
+        raise HTTPException(404, token_id)
+    days = max(1, min(int(days), auth.USAGE_KEEP_DAYS))
+    keys = _day_keys(days)
+    rows = await _usage_rows(days, token_id)
+    acts: dict[str, int] = {}
+    for r in rows:
+        for k, v in (r.get("acts") or {}).items():
+            acts[k] = acts.get(k, 0) + int(v or 0)
+    trail = [d async for d in db()[actors.AUDIT].find({"actor.token": token_id}, {"_id": 0})
+             .sort("at", -1).limit(5000)]
+    by_action: dict[str, int] = {}
+    for a in trail:
+        by_action[a.get("action") or "?"] = by_action.get(a.get("action") or "?", 0) + 1
+    recent = [{"at": a.get("at"), "action": a.get("action"), "target": a.get("target"),
+               "who": (a.get("actor") or {}).get("name"),
+               "method": (a.get("detail") or {}).get("method") if isinstance(a.get("detail"), dict) else None}
+              for a in trail[:20]]
+    llm = {"calls": 0, "tokens": 0, "cost_usd": 0.0, "by_model": {}}
+    async for c in db()[usage.CALLS].find({"agent_token": token_id},
+                                          {"model": 1, "input": 1, "output": 1, "cost_usd": 1}):
+        llm["calls"] += 1
+        llm["tokens"] += int(c.get("input") or 0) + int(c.get("output") or 0)
+        llm["cost_usd"] += float(c.get("cost_usd") or 0)
+        m = c.get("model") or "?"
+        llm["by_model"][m] = llm["by_model"].get(m, 0) + 1
+    series = _series(rows, keys)
+    return {"id": token_id, "name": tok["name"], "days": keys,
+            "series": series, "reads": _series(rows, keys, "read"), "writes": _series(rows, keys, "write"),
+            "chart": {"t0": _t0(keys), "step": 86400, "n": days,
+                      "series": [{"name": "reads", "values": _series(rows, keys, "read")},
+                                 {"name": "writes", "values": _series(rows, keys, "write")}]},
+            "totals": {"n": sum(series), "read": sum(int(r.get("read") or 0) for r in rows),
+                       "write": sum(int(r.get("write") or 0) for r in rows)},
+            "acts": acts, "audit": {"by_action": by_action, "total": len(trail), "recent": recent},
+            "llm": llm}
 
 
 @app.delete("/api/agent-tokens/{token_id}")
-async def revoke_agent_token(token_id: str):
+async def revoke_agent_token(token_id: str, purge: bool = False):
+    """Take a token back - or, with ?purge=1, delete it for good (taken
+    back first if it was still good). Without purge, as it always was."""
     _people_only()
+    if purge:
+        doc = await auth.delete_agent_token(db(), token_id, scope.current())
+        if not doc:
+            raise HTTPException(404, token_id)
+        await actors.audit(db(), "token-delete", doc["name"],
+                           {"id": token_id, "was": auth.token_status(doc)})
+        return {"deleted": token_id}
+    tok = next((t for t in await auth.list_agent_tokens(db(), scope.current()) if t["id"] == token_id), None)
     if not await auth.revoke_agent_token(db(), token_id, scope.current()):
         raise HTTPException(404, token_id)
+    await actors.audit(db(), "token-revoke", (tok or {}).get("name") or token_id, {"id": token_id})
     return {"revoked": token_id}
 
 
-# ---------------- workspaces ----------------
-def _signed_in_person() -> dict:
-    if not auth.enabled():
-        raise HTTPException(400, "workspaces need sign-in (REDLINE_REQUIRE_SIGNIN=true)")
-    who = actors.current()
-    if who.get("type") != "user":
-        raise HTTPException(403, "an agent works in its token's workspace")
-    return who
-
-
-@app.get("/api/workspaces")
-async def workspaces():
-    who = _signed_in_person()
-    return {"current": scope.current(), "workspaces": await auth.my_workspaces(db(), who["id"])}
-
-
-class WorkspaceIn(BaseModel):
-    name: str = Field(min_length=1, max_length=60)
-
-
-@app.post("/api/workspaces")
-async def new_workspace(body: WorkspaceIn):
-    """A new, empty workspace, owned by whoever makes it."""
-    who = _signed_in_person()
-    try:
-        got = await auth.create_workspace(db(), body.name, who)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    await actors.audit(db(), "workspace", got["id"], {"name": got["name"]})
-    return got
-
-
-@app.post("/api/workspaces/{ws}/open")
-async def open_workspace(ws: str, request: Request):
-    who = _signed_in_person()
-    try:
-        await auth.open_workspace(db(), request.cookies.get(auth.COOKIE), who["id"], ws)
-    except LookupError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    return {"workspace": ws}
-
-
-@app.patch("/api/workspaces/{ws}")
-async def rename_workspace(ws: str, body: WorkspaceIn):
-    _signed_in_person()
-    if ws != scope.current():
-        raise HTTPException(400, "rename the workspace you are in")
-    try:
-        await auth.rename_workspace(db(), ws, body.name)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    return {"id": ws, "name": body.name.strip()}
-
-
-# ---------------- members and invitations ----------------
-# Owners and admins only - the middleware's role check (backend/access.py).
+# ---------------- password-reset links ----------------
 def _refused(exc: Exception) -> HTTPException:
     code = {ValueError: 400, PermissionError: 403, LookupError: 404}
     return HTTPException(next((c for t, c in code.items() if isinstance(exc, t)), 400), str(exc))
-
-
-@app.get("/api/members")
-async def list_members():
-    return {"members": await auth.members(db(), scope.current()),
-            "invites": await auth.invites(db(), scope.current())}
-
-
-class RoleIn(BaseModel):
-    role: str = Field(max_length=20)
-
-
-@app.patch("/api/members/{user_id}")
-async def change_role(user_id: str, body: RoleIn):
-    try:
-        got = await auth.set_role(db(), scope.current(), user_id, body.role, access.current() or "viewer")
-    except (ValueError, PermissionError, LookupError) as exc:
-        raise _refused(exc) from exc
-    await actors.audit(db(), "role", user_id, {"role": body.role, "was": got["was"]})
-    return got
-
-
-@app.delete("/api/members/{user_id}")
-async def take_out_member(user_id: str):
-    if user_id == actors.current().get("id"):
-        raise HTTPException(400, "you cannot take yourself out - ask another owner or admin")
-    try:
-        await auth.remove_member(db(), scope.current(), user_id, access.current() or "viewer")
-    except (ValueError, PermissionError, LookupError) as exc:
-        raise _refused(exc) from exc
-    return {"removed": user_id}
-
-
-class InviteIn(BaseModel):
-    email: str = Field(min_length=3, max_length=200)
-    role: str = Field(default="editor", max_length=20)
-
-
-@app.post("/api/invites")
-async def invite(body: InviteIn):
-    """An invitation link for one address and role, shown once. Redline
-    sends no email: the person who invites passes the link on."""
-    try:
-        key, doc = await auth.create_invite(db(), scope.current(), body.email, body.role,
-                                            actors.current(), access.current() or "viewer")
-    except (ValueError, PermissionError, LookupError) as exc:
-        raise _refused(exc) from exc
-    await actors.audit(db(), "invite", doc["email"], {"role": doc["role"]})
-    return {"key": key, **doc}
-
-
-@app.delete("/api/invites/{invite_id}")
-async def cancel_invite(invite_id: str):
-    if not await auth.cancel_invite(db(), scope.current(), invite_id):
-        raise HTTPException(404, invite_id)
-    return {"cancelled": invite_id}
-
-
-@app.get("/api/invite/{key}")
-async def invite_page(key: str):
-    """What an invitation link's page shows - open, the link is the key."""
-    if not auth.enabled():
-        raise HTTPException(400, "sign-in is off (REDLINE_REQUIRE_SIGNIN)")
-    info = await auth.invite_info(db(), key)
-    if not info:
-        raise HTTPException(404, "this invitation has expired or was taken back - ask for a new one")
-    return info
-
-
-class AcceptIn(BaseModel):
-    name: str = Field(default="", max_length=80)
-    password: str = Field(min_length=1, max_length=400)
-
-
-@app.post("/api/invite/{key}/accept")
-async def invite_accept(key: str, body: AcceptIn, request: Request, response: Response):
-    if not auth.enabled():
-        raise HTTPException(400, "sign-in is off (REDLINE_REQUIRE_SIGNIN)")
-    try:
-        user, ws, role = await auth.accept_invite(db(), key, body.name, body.password)
-    except (ValueError, PermissionError, LookupError) as exc:
-        raise _refused(exc) from exc
-    token = await auth.create_session(db(), user, ws, request.headers.get("user-agent", ""),
-                                      request.client.host if request.client else "")
-    _set_cookie(response, request, token)
-    who = {"type": "user", "id": user["_id"], "name": user.get("name") or user["email"]}
-    await actors.audit(db(), "joined", user["email"], {"role": role}, actor=who)
-    return {"user": {"id": user["_id"], "name": user.get("name"), "email": user["email"]}, "role": role}
 
 
 @app.get("/api/reset/{key}")
@@ -2616,6 +2631,14 @@ async def _start_sampler():
         # those that died with the container are lost, and their orphaned
         # export_model.py killed, before the queue looks at them.
         try:
+            # Accounts: the first one is the owner, everyone has a system
+            # role and a private space (backend/auth.py migrate) - idempotent.
+            got = await auth.migrate(db().raw)
+            if got.get("updated"):
+                LOG.warning("accounts migrated to system roles: %s updated", got["updated"])
+        except Exception as exc:                       # noqa: BLE001 - the API still starts
+            LOG.warning("accounts not migrated: %s", exc)
+        try:
             lost = await buildjobs.recover(db().raw)
             killed = await buildjobs.reap_orphans(db().raw)
             if lost or killed:
@@ -2736,6 +2759,13 @@ async def chat_history(limit: int = 200, room: str | None = None):
     """The thread, oldest first - one room's, or all of them. The page
     polls its room's with the health."""
     return await chat.history(db(), limit, room)
+
+
+@app.get("/api/chat/rooms")
+async def chat_rooms():
+    """Every room's agent thread in a few lines - the Chat tab's pinned
+    "Rooms" list and its unread counts (chat.rooms)."""
+    return await chat.rooms(db())
 
 
 # ---------------- one search box ----------------
@@ -3030,7 +3060,7 @@ class AnswerIn(BaseModel):
 @app.get("/api/questions")
 async def list_questions():
     """What the agent is waiting on. The page polls this with the health."""
-    return await questions.open_questions(db())
+    return await questions.with_rooms(db(), await questions.open_questions(db()))
 
 
 @app.post("/api/questions")

@@ -13,15 +13,18 @@ import { TopBar } from './topbar';
 import { CURRENCY } from './money';
 import { CustomThemesPanel } from './custom-themes';
 import { ProfileSettingsPanel } from './profile-settings';
+import { TokensSettingsPanel } from './tokens-settings';
+import { AdminUsersPanel } from './admin-users';
 
 /** Settings, a tab of its own: the theme, the language and the keyboard
  *  shortcuts - per browser, about the person at this screen - and the
  *  server's: the LLM keys and models (llm-settings.ts) and the proxy for
  *  the part lookups (proxy-settings.ts), and what things cost and in which
  *  currency (costs-settings.ts). Opened from
- *  the user menu, from Ctrl+K, and with "?" (the shortcuts page).
+ *  the user menu, from Ctrl+K, and with "?" (the shortcuts page). The owner
+ *  and the admins also get the admin panel: the accounts (admin-users.ts).
  */
-export type PrefsTab = 'profile' | 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'telegram' | 'shortcuts' | 'topbar';
+export type PrefsTab = 'profile' | 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'telegram' | 'tokens' | 'shortcuts' | 'topbar' | 'admin';
 
 @Injectable({ providedIn: 'root' })
 export class Prefs {
@@ -96,11 +99,12 @@ const SWATCH: Record<Theme, string[]> = { // theme:pigment
 };
 
 interface Shortcut { keys: string[]; what: string }
+/** `ico` is an SVG path on a 24 px grid, drawn as a 1.75 px line (lucide's shapes). */
 interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blurb: string }
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel],
+  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel, TokensSettingsPanel, AdminUsersPanel],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -110,11 +114,11 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
       <span>{{ 'How Redline looks here, and what the server uses' | t }}</span>
     </div>
     <div class="st-list-scroll">
-      @for (g of nav; track g.group) {
+      @for (g of shownNav(); track g.group) {
         <div class="st-group"><span>{{ g.group | t }}</span><span>{{ g.items.length }}</span></div>
         @for (x of g.items; track x.id) {
           <button class="st-item" [attr.data-on]="prefs.tab() === x.id ? 1 : null" (click)="prefs.tab.set(x.id)">
-            <span class="st-ico" aria-hidden="true">{{ x.ico }}</span>
+            <svg class="st-ico" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="x.ico"/></svg>
             <span class="st-item-text">
               <span class="st-item-top">
                 <span class="st-item-title">{{ x.label | t }}</span>
@@ -132,13 +136,15 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
     @if (item(); as x) {
       <header class="st-head">
         <span class="st-head-name">{{ x.label | t }}</span>
-        <span class="st-badge" [attr.data-tone]="server(x.id) || x.id === 'profile' ? 'accent' : null">{{ (x.id === 'profile' ? 'your account' : server(x.id) ? 'server' : 'this browser') | t }}</span>
+        <span class="st-badge" [attr.data-tone]="server(x.id) || x.id === 'profile' || x.id === 'admin' ? 'accent' : null">{{ (x.id === 'profile' ? 'your account' : x.id === 'admin' ? 'accounts' : server(x.id) ? 'server' : 'this browser') | t }}</span>
         <span class="st-head-blurb">{{ x.blurb | t }}</span>
         <span class="st-head-meta">
           @if (x.id === 'profile') {
             <span>{{ 'only you can change these' | t }}</span>
+          } @else if (x.id === 'admin') {
+            <span>{{ (auth.state()?.role === 'owner' ? 'owner: everything here' : 'admin: manages user accounts') | t }}</span>
           } @else if (server(x.id)) {
-            <span class="st-badge" [attr.data-tone]="canEdit ? 'ok' : 'warn'">{{ (canEdit ? 'you can change these' : 'read-only for you') | t }}</span>
+            <span class="st-badge" [attr.data-tone]="mayEdit(x.id) ? 'ok' : 'warn'">{{ (mayEdit(x.id) ? 'you can change these' : 'read-only for you') | t }}</span>
           } @else {
             <span>{{ 'kept in this browser only' | t }}</span>
           }
@@ -238,6 +244,8 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
         @case ('proxy') { <app-proxy-settings /> }
         @case ('costs') { <app-costs-settings /> }
         @case ('telegram') { <app-telegram-settings /> }
+        @case ('tokens') { <app-tokens-settings /> }
+        @case ('admin') { @if (auth.admin()) { <app-admin-users /> } }
         @case ('topbar') { <app-topbar-settings /> }
         @case ('shortcuts') {
           <div class="st-page">
@@ -272,7 +280,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 })
 export class RoomSettings {
   prefs = inject(Prefs);
-  private auth = inject(Auth);
+  auth = inject(Auth);
   readonly canEdit = this.auth.can('settings');
   private topbar = inject(TopBar);
   readonly themes = THEMES;
@@ -290,33 +298,43 @@ export class RoomSettings {
   readonly sample: Record<Lang, string> = { en: 'Save · Notes · Analytics', tr: 'Kaydet · Notlar · Analitik' };
   readonly nav: { group: string; items: NavItem[] }[] = [
     { group: 'You', items: [
-      { id: 'profile', label: 'Profile', about: 'name, picture, password, sessions', ico: '◉',
+      { id: 'profile', label: 'Profile', about: 'name, picture, password, sessions', ico: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8a4 4 0 1 0 0-8',
         blurb: 'Who you are here: your name and picture, your password, and where you are signed in.' },
     ] },
     { group: 'This browser', items: [
-      { id: 'appearance', label: 'Appearance', about: 'theme', ico: '◐',
+      { id: 'appearance', label: 'Appearance', about: 'theme', ico: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 3v18M12 8h6M12 12h9M12 16h6',
         blurb: 'Pick a theme; the whole window follows it.' },
-      { id: 'language', label: 'Language', about: 'English or Türkçe', ico: 'Aa',
+      { id: 'language', label: 'Language', about: 'English or Türkçe', ico: 'M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6',
         blurb: 'Which language the interface speaks.' },
-      { id: 'topbar', label: 'Top bar', about: 'order, hidden tabs, compact', ico: '▭',
+      { id: 'topbar', label: 'Top bar', about: 'order, hidden tabs, compact', ico: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM3 9h18',
         blurb: 'Which tabs the top bar shows, in what order, and how.' },
-      { id: 'shortcuts', label: 'Keyboard shortcuts', about: 'Ctrl+K, Alt+N, ?', ico: '⌘',
+      { id: 'shortcuts', label: 'Keyboard shortcuts', about: 'Ctrl+K, Alt+N, ?', ico: 'M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10',
         blurb: 'Every key that does something, by where it works.' },
     ] },
     { group: 'The server', items: [
-      { id: 'llm', label: 'LLM settings', about: 'API keys, and which model does what', ico: '✦',
+      { id: 'llm', label: 'LLM settings', about: 'API keys, and which model does what', ico: 'M7 7h10v10H7zM10 10h4v4h-4zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4',
         blurb: 'Keys, which model does each job, and what they used.' },
-      { id: 'proxy', label: 'Proxy', about: 'a second way out for EasyEDA lookups', ico: '⇄',
+      { id: 'proxy', label: 'Proxy', about: 'a second way out for EasyEDA lookups', ico: 'M8 3L4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4',
         blurb: 'A second way out for the part lookups, and the traffic it carried.' },
-      { id: 'costs', label: 'Costs & currency', about: 'subscriptions, electricity, exchange rates', ico: '¤',
+      { id: 'costs', label: 'Costs & currency', about: 'subscriptions, electricity, exchange rates', ico: 'M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM12 9.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M6 12h.01M18 12h.01',
         blurb: 'What Redline costs to run, and the currency money is shown in.' },
-      { id: 'telegram', label: 'Telegram', about: 'notifications, questions and notes from your phone', ico: '✈',
+      { id: 'telegram', label: 'Telegram', about: 'notifications, questions and notes from your phone', ico: 'M22 2L11 13M22 2l-7 20-4-9-9-4z',
         blurb: 'A bot for the server: notifications, the agents\' questions, and notes from Telegram.' },
+      { id: 'tokens', label: 'Agent tokens', about: 'let agents work here, and what they did', ico: 'M15.5 7.5l2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4M21 2l-9.6 9.6M7.5 10a5.5 5.5 0 1 0 0 11a5.5 5.5 0 1 0 0-11',
+        blurb: 'Tokens for agents and scripts: make, revoke, delete, and see what each one did.' },
+    ] },
+    { group: 'Administration', items: [
+      { id: 'admin', label: 'Admin panel', about: 'accounts, roles, passwords', ico: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 3a4 4 0 1 0 0 8a4 4 0 1 0 0-8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+        blurb: 'The accounts on this server: add people, change roles, reset passwords, disable or delete.' },
     ] },
   ];
-  item = computed(() => this.nav.flatMap(g => g.items).find(x => x.id === this.prefs.tab()) ?? null);
+  /** The admin panel is listed only for the owner and the admins. */
+  shownNav = computed(() => this.nav.filter(g => g.group !== 'Administration' || this.auth.admin()));
+  item = computed(() => this.shownNav().flatMap(g => g.items).find(x => x.id === this.prefs.tab()) ?? null);
   label(id: PrefsTab) { return this.nav.flatMap(g => g.items).find(x => x.id === id)?.label ?? id; }
-  server(id: PrefsTab) { return id === 'llm' || id === 'proxy' || id === 'costs' || id === 'telegram'; }
+  server(id: PrefsTab) { return id === 'llm' || id === 'proxy' || id === 'costs' || id === 'telegram' || id === 'tokens'; }
+  /** Agent tokens take the "tokens" permission (editors up); the rest of the server's, "settings". */
+  mayEdit(id: PrefsTab) { return id === 'tokens' ? this.auth.can('tokens') : this.canEdit; }
   isLight(t: ThemeId) { return isLightTheme(t); }
   langName = computed(() => LANGS.find(l => l.id === this.lang())?.name ?? this.lang());
   /** The figure beside each section in the list. */
@@ -349,7 +367,7 @@ export class RoomSettings {
       { keys: ['↑', '↓'], what: 'Previous / next note' },
       { keys: ['Esc'], what: 'Finish editing' },
     ] },
-    { group: 'In Command Code', items: [
+    { group: 'In Chat', items: [
       { keys: ['Ctrl', 'Shift', 'O'], what: 'A new conversation (⌘+Shift+O on a Mac)' },
       { keys: ['Enter'], what: 'Send' },
       { keys: ['Shift', 'Enter'], what: 'A new line' },

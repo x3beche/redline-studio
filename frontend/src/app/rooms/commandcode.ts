@@ -8,14 +8,17 @@ import { plain, toHtml } from '../markdown';
 import { Auth } from '../auth';
 import { T, t } from '../i18n';
 import { CcWant, Selection } from '../selection';
+import { AgentThreads, RoomThread } from './agent-thread';
 
-/** The Command Code room: people talking with a model, in the open.
+/** The Chat room (id 'commandcode', kept so old links and saved tab orders
+ *  still work): people talking with a model, in the open - and, pinned at
+ *  the top of its list, each room's thread with its agent (agent-thread.ts).
  *
  *  A conversation is the workspace's: anyone here reads it and adds to it,
  *  and each line says who wrote it. The answer streams in as it is written
  *  and is kept when it is done (backend/cc_chat.py). Each conversation
  *  keeps its own model; a new one starts with the model chosen for the
- *  Command Code room in Preferences > LLM settings.
+ *  Chat room in Preferences > LLM settings.
  *
  *  The list: pinned on top, then by day; archived ones behind a filter;
  *  a delete waits a few seconds for "Undo" before it is sent, alone or a
@@ -287,7 +290,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [T, NgTemplateOutlet],
+  imports: [T, NgTemplateOutlet, RoomThread],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)' },
   template: `
 <!-- Avatars: a person's picture, or their initials on a colour of their own
@@ -387,6 +390,28 @@ type Ask = { text: string; label: string; go: () => void };
       }
     </div>
     <div class="tcv-notes-list tcv-cc-list" role="list">
+      <!-- The rooms' agent threads: always here, always first, in the top
+           bar's order; not renamed, archived or deleted. A search narrows
+           them by name only. -->
+      @if (shownRooms().length) {
+        <div class="tcv-cc-group">{{ 'Rooms' | t }}</div>
+        @for (r of shownRooms(); track r.room) {
+          <div class="tcv-cc-item tcv-th-item" role="listitem" tabindex="0" [attr.data-room]="r.room"
+               [attr.data-on]="sel.thread() === r.room ? 1 : null" (click)="openThread(r.room)" (keydown.enter)="openThread(r.room)"
+               [title]="(threads.label(r.room) | t) + ' - ' + ('agent thread' | t)">
+            <span class="tcv-th-ico"><ng-container *ngTemplateOutlet="ico; context: { $implicit: r.room === 'pcb' ? I.pcb : I.cad }" /></span>
+            <div class="tcv-cc-itemtext">
+              <div class="tcv-cc-itemtop">
+                <span class="tcv-cc-itemtitle">{{ threads.label(r.room) | t }}</span>
+                @if (threads.unread(r.room); as n) { <span class="tcv-th-badge" [title]="'unread' | t">{{ n }}</span> }
+                @else if (r.last) { <span class="tcv-cc-itemwhen">{{ when(r.last.at) }}</span> }
+              </div>
+              <div class="tcv-cc-itemsnip">{{ r.last ? (r.last.role === 'agent' ? ('agent' | t) : (r.last.by || ('you' | t))) + ': ' + snip(r.last.text)
+                                                      : ('No messages yet' | t) }}</div>
+            </div>
+          </div>
+        }
+      }
       @if (trash() && shownChats().length) {
         <p class="tcv-cc-trashnote">{{ 'Deleted conversations are kept here for 30 days, then deleted for good.' | t }}</p>
       }
@@ -469,7 +494,9 @@ type Ask = { text: string; label: string; go: () => void };
 
   <!-- RIGHT: one conversation -->
   <section class="tcv-cc-main">
-    @if (chat(); as c) {
+    @if (sel.thread(); as room) {
+      <app-room-thread [room]="room" [userAv]="userAv" [botAv]="botAv" [ico]="ico" (menu)="drawer.set(!drawer())" />
+    } @else if (chat(); as c) {
       <header class="tcv-cc-bar">
         <button class="tcv-cc-ib tcv-cc-burger" (click)="drawer.set(!drawer())" [title]="'Conversations' | t">
           <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.menu }" /></button>
@@ -853,7 +880,7 @@ type Ask = { text: string; label: string; go: () => void };
   <div class="tcv-cc-hello">
     <div class="tcv-cc-hello-mark"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.chat }" /></div>
     <h2>{{ 'What are we building today?' | t }}</h2>
-    <p>{{ 'Ask about a board, firmware or a model. Everyone in this workspace sees the conversation and can join it.' | t }}</p>
+    <p>{{ 'Ask about a board, firmware or a model. Your conversations are private to your account.' | t }}</p>
     @if (auth.can('draw')) {
       <div class="tcv-cc-starters">
         @for (s of starters; track s.text) {
@@ -941,7 +968,20 @@ export class RoomCommandCode implements OnDestroy {
   me = computed(() => this.auth.state()?.user?.id ?? 'local');
 
   // ---- @-mentions, answers watched live, server search (round two) ----
-  private sel = inject(Selection);
+  sel = inject(Selection);
+  /** The rooms' agent threads, pinned at the top of the list. */
+  threads = inject(AgentThreads);
+  shownRooms = computed(() => {
+    const q = this.q().trim().toLowerCase();
+    return this.threads.ordered().filter(r => !q || this.threads.label(r.room).toLowerCase().includes(q)
+                                                   || t(this.threads.label(r.room)).toLowerCase().includes(q));
+  });
+  openThread(room: string) {
+    if (this.selecting()) return;
+    this.drawer.set(false);
+    this.sel.thread.set(room);
+    this.threads.markSeen(room);
+  }
   /** This page: its own answers come back on the live stream too, and are told apart by it. */
   private readonly client = Math.random().toString(36).slice(2, 12);
   /** Answers someone else is having written in the open conversation. */
@@ -1081,6 +1121,13 @@ export class RoomCommandCode implements OnDestroy {
       const id = this.openId();
       untracked(() => this.connectLive(id));
     });
+    // The room thread open is in the address (?thread=cad), so it can be linked to.
+    effect(() => {
+      const room = this.sel.thread();
+      const url = new URL(location.href);
+      if (room) url.searchParams.set('thread', room); else url.searchParams.delete('thread');
+      if (url.href !== location.href) history.replaceState(null, '', url);
+    });
     // Asked of this room by the command palette (Ctrl+K).
     effect(() => {
       const w = this.sel.cc();
@@ -1094,6 +1141,7 @@ export class RoomCommandCode implements OnDestroy {
    *  question sent at once when it was typed there - otherwise the composer
    *  waits, focused. */
   private takeWant(w: CcWant) {
+    this.sel.thread.set(null);
     if (w.action === 'last') { this.openLast(); return; }
     const go = (c: CcChat) => {
       if (this.chat()?.id !== c.id) return;
@@ -1208,6 +1256,8 @@ export class RoomCommandCode implements OnDestroy {
     if (this.selecting()) { this.toggleSel(c.id); return; }
     if ((e.target as HTMLElement).closest('button, input')) return;
     if (c.deleted_at) return;                            // restored first, then read
+    this.sel.thread.set(null);
+    if (this.openId() === c.id && this.chat()?.id === c.id) { this.drawer.set(false); return; }
     this.open(c.id);
   }
 
@@ -1236,6 +1286,7 @@ export class RoomCommandCode implements OnDestroy {
 
   newChat(then?: (c: CcChat) => void) {
     if (this.live() || !this.auth.can('draw')) return;
+    this.sel.thread.set(null);
     if (this.tab() !== 'list') this.showTab('list');
     this.api.create().subscribe({
       next: c => {
@@ -2249,6 +2300,7 @@ export class RoomCommandCode implements OnDestroy {
   /** The conversation, at the line found. */
   openHit(h: CcHit) {
     if (h.trashed) return;                                    // restored first, then read
+    this.sel.thread.set(null);
     this.drawer.set(false);
     if (this.openId() === h.chat_id && this.chat()?.id === h.chat_id) { if (h.message_id) this.scrollTo(h.message_id); return; }
     this.open(h.chat_id, h.message_id);

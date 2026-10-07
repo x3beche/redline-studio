@@ -1,7 +1,7 @@
 """Accounts, from the machine itself - for when nobody can sign in.
 
     .venv/bin/python tools/account.py list
-        every account: email, name, and role in each workspace
+        every account: email, name and role (owner, admin or user)
     .venv/bin/python tools/account.py reset <email> [--base http://127.0.0.1:4200]
         a one-use link, good for an hour, that sets a new password;
         open it in a browser and choose the password there
@@ -39,8 +39,7 @@ async def _list() -> None:
     n = 0
     async for u in db[auth.USERS].find({}, {"pw": 0}).sort("created_at", 1):
         n += 1
-        roles = [f"{m.get('role')} in {m.get('workspace')}" async for m in db[auth.MEMBERS].find({"user": u["_id"]})]
-        print(f"{u['email']:<36} {u.get('name') or '':<24} {', '.join(roles) or 'in no workspace'}"
+        print(f"{u['email']:<36} {u.get('name') or '':<24} {auth.role_of(u)}"
               + ("  (disabled)" if u.get("disabled") else ""))
     if not n:
         print("no accounts yet - the first visit to the page makes the owner's")

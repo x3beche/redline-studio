@@ -84,3 +84,17 @@ async def drop(db, qid: str) -> bool:
 
 async def get(db, qid: str) -> dict | None:
     return await db[QUESTIONS].find_one({"_id": qid})
+
+
+async def with_rooms(db, rows: list[dict]) -> list[dict]:
+    """Each question with the room whose thread it belongs in: a question
+    about a board note is the PCB room's, anything else the 3D room's -
+    the same rule a thread line without a room follows (chat.room_of)."""
+    kinds: dict[str, str | None] = {}
+    for q in rows:
+        rid = q.get("revision")
+        if rid and rid not in kinds:
+            rev = await db["revisions"].find_one({"_id": rid}, {"kind": 1})
+            kinds[rid] = (rev or {}).get("kind")
+        q["room"] = q.get("room") or ("pcb" if kinds.get(rid) == "pcb" else "cad")
+    return rows

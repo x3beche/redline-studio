@@ -434,9 +434,9 @@ def linked(db, user="u1", chat=5001, role=None, name="Ayşe", **extra):
                                  "tg": {"id": chat, "username": "ayse"}, "prefs": dict(links.PREFS),
                                  "lang": None, "blocked": False, **extra}
     if role:
-        db[auth.USERS].docs[user] = {"_id": user, "email": f"{user}@x.y", "name": name}
-        db[auth.MEMBERS].docs[f"{user}:default"] = {"_id": f"{user}:default", "user": user,
-                                                    "workspace": scope.DEFAULT, "role": role}
+        # An account with a system role, working in the link's space.
+        db[auth.USERS].docs[user] = {"_id": user, "email": f"{user}@x.y", "name": name, "role": role,
+                                     "space": scope.DEFAULT}
     return db[core.LINKS].docs[user]
 
 
@@ -615,37 +615,34 @@ def open_question(db, qid="q1", options=("FDM", "SLA"), multi=False, at=None):
                               "answered_at": None, "asked_by": {"type": "agent", "id": "a", "name": "a"}}
 
 
-def test_a_viewer_cannot_answer_or_queue_from_telegram(env, monkeypatch):
+def test_a_disabled_account_is_nobody(env, monkeypatch):
     monkeypatch.setattr(auth, "enabled", lambda: True)
     configured(env.db)
-    linked(env.db, role="viewer")
+    linked(env.db, role="user")
+    env.db[auth.USERS].docs["u1"]["disabled"] = True
     open_question(env.db)
     run(inbound.handle(env.db, button(5001, "qa:q1:0", 42)))
     assert env.db.questions.docs["q1"]["status"] == "open"
-    run(inbound.handle(env.db, text_update(5001, "/queue")))
-    run(inbound.handle(env.db, text_update(5001, "/note thicker wall")))
-    drain(env.db)
-    texts = [kw["text"] for kw in env.bot.sent("send_message")]
-    assert sum("As viewer you cannot" in t for t in texts) == 3
-
-
-def test_someone_taken_out_of_the_workspace_is_nobody(env, monkeypatch):
-    monkeypatch.setattr(auth, "enabled", lambda: True)
-    configured(env.db)
-    linked(env.db, role="editor")
-    del env.db[auth.MEMBERS].docs["u1:default"]
     run(inbound.handle(env.db, text_update(5001, "/status")))
     drain(env.db)
-    assert "no longer in that Redline workspace" in env.bot.sent("send_message")[-1]["text"]
+    assert "disabled or no longer there" in env.bot.sent("send_message")[-1]["text"]
 
 
-def test_a_reviewer_answers_but_does_not_queue(env, monkeypatch):
+def test_an_account_gone_is_nobody(env, monkeypatch):
     monkeypatch.setattr(auth, "enabled", lambda: True)
     configured(env.db)
-    linked(env.db, role="reviewer", last_note="r1")
+    linked(env.db, role="user")
+    del env.db[auth.USERS].docs["u1"]
+    run(inbound.handle(env.db, text_update(5001, "/status")))
+    drain(env.db)
+    assert "disabled or no longer there" in env.bot.sent("send_message")[-1]["text"]
+
+
+def test_a_person_answers_and_queues_from_telegram(env, monkeypatch):
+    monkeypatch.setattr(auth, "enabled", lambda: True)
+    configured(env.db)
+    linked(env.db, role="user", last_note="r1")
     env.db.revisions.docs["r1"] = {"_id": "r1", "status": "draft", "comment": "x", "created_at": "z"}
-    run(inbound.handle(env.db, text_update(5001, "/queue")))
-    assert env.db.revisions.docs["r1"]["status"] == "draft"
     open_question(env.db)
     run(inbound.handle(env.db, button(5001, "qa:q1:1", 42)))
     assert env.db.questions.docs["q1"]["answer"] == "SLA"
@@ -930,7 +927,7 @@ def test_the_page_state_has_my_link_and_no_secrets(env):
     linked(env.db, user="local")
     st = run(api.state())
     assert st["me"]["linked"] and st["me"]["username"] == "ayse"
-    assert st["linked"] == 1 and st["people"][0]["id"] == "local"
+    assert st["linked"] == 1 and "people" not in st
     blob = json.dumps(st, default=str)
     assert TOKEN not in blob and "s3cret" not in blob
 
@@ -1142,3 +1139,13 @@ def test_step_three_is_done_by_its_save_and_a_new_bot_clears_it(env):
     assert run(api.state())["profile_done"]["at"]
     run(api.put_token(api.TokenIn(token=TOKEN)))                # another bot: its profile is to do again
     assert run(api.state())["profile_done"] is None
+
+
+def test_a_question_links_to_its_rooms_thread_in_the_chat_tab():
+    """The old "ask the agent" box is gone: a question's card, and the
+    reply to /ask, open the room's thread pinned in the Chat tab."""
+    assert fmt.app_link("https://x.y/", thread="pcb") == "https://x.y/?ws=commandcode&thread=pcb"
+    q = {"_id": "q", "text": "t", "options": [], "multi": False, "room": "pcb"}
+    assert "https://x.y/?ws=commandcode&amp;thread=pcb" in fmt.question_text(None, q, None, "https://x.y", True)
+    del q["room"]
+    assert "thread=cad" in fmt.question_text(None, q, None, "https://x.y", True)

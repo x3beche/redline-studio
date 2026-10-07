@@ -147,25 +147,18 @@ function plural(n: number, one: string, many: string): string {
 
     /* the verdict */
     .bh-verdict { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 10px;
-                  padding: 10px; background: var(--surface-2); border: 1px solid var(--line);
-                  border-left: 4px solid var(--line); border-radius: 6px; }
-    .bh-verdict[data-tone="ok"] { border-left-color: var(--ok); }
-    .bh-verdict[data-tone="warn"] { border-left-color: var(--warn); }
-    .bh-verdict[data-tone="error"] { border-left-color: var(--danger); }
-    .bh-mark { grid-row: span 2; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
-               font-size: 16px; font-weight: 700; color: var(--ink-dim); background: var(--surface); }
+                  padding: 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; }
+    .bh-mark { grid-row: span 2; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+               font-size: 12px; font-weight: 700; color: var(--ink-dim); background: var(--surface); }
     .bh-verdict[data-tone="ok"] .bh-mark { background: var(--ok); color: var(--ink-on-ok); }
     .bh-verdict[data-tone="warn"] .bh-mark { background: var(--warn); color: var(--ink-on-warn); }
     .bh-verdict[data-tone="error"] .bh-mark { background: var(--danger); color: var(--surface); }
-    .bh-state { font-size: 16px; font-weight: 600; line-height: 1.2; color: var(--ink-bright); }
-    .bh-verdict[data-tone="ok"] .bh-state { color: var(--ok); }
-    .bh-verdict[data-tone="warn"] .bh-state { color: var(--warn); }
-    .bh-verdict[data-tone="error"] .bh-state { color: var(--danger); }
+    .bh-state { font-size: 13.5px; font-weight: 600; line-height: 1.2; color: var(--ink-bright); }
     .bh-when { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-size: 11px; color: var(--ink-dim); }
     .bh-when > span { min-width: 0; }
     .bh-run { margin-left: auto; flex: none; padding: 2px 8px; font-size: 11px; }
     .bh-note { padding: 5px 8px; font-size: 11px; color: var(--ink); background: var(--surface-2);
-               border-left: 3px solid var(--warn); border-radius: 4px; overflow-wrap: anywhere; }
+               border: 1px solid var(--line); border-radius: 4px; overflow-wrap: anywhere; }
 
     /* the checks */
     .bh-list { display: flex; flex-direction: column; gap: 4px; }

@@ -303,7 +303,7 @@ for a phone screen:
   are numbered and spelled out in the message.
 
 People can also reach you from Telegram. `/ask` and the "ask the agent"
-button post into your room's thread like the page does, and `/note`
+button post into your room's thread like the page's Chat tab does, and `/note`
 makes a draft note (with a photo, when they sent one) that is work only
 once it is `queued`. Nothing changes for you: read the thread and the
 queue as always.

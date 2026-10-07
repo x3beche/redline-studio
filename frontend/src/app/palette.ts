@@ -8,6 +8,7 @@ import { NotesApi } from './rooms/notes';
 import { Prefs } from './preferences';
 import { THEMES, THEME_NAMES } from '../theme';
 import { LANG, LANGS, T, setLang, t } from './i18n';
+import { AgentThreads } from './rooms/agent-thread';
 
 /** Ctrl+K: one box to go anywhere and do anything.
  *
@@ -23,11 +24,13 @@ interface Item {
   run: () => void; keys?: string;
   /** The palette stays open (it only changes what is typed). */
   keep?: boolean;
-  /** An "Ask Command Code about this …": Tab types the question here. */
+  /** An "Ask Chat about this …": Tab types the question here. */
   ask?: AskCtx;
+  /** Unread lines (a room's agent thread). */
+  badge?: number;
 }
 
-/** What "Ask Command Code about this …" attaches: the thing open on screen. */
+/** What "Ask Chat about this …" attaches: the thing open on screen. */
 interface AskCtx { label: string; what: string; mention?: NonNullable<CcWant['mention']> }
 
 /** "ask: how wide…" typed into the palette sends that question at once. */
@@ -46,7 +49,7 @@ function words(q: string) { return q.toLowerCase().split(/\s+/).filter(Boolean);
 
 /** Every word somewhere in the text; earlier and whole-word matches first.
  *  A word that is not there whole may still match the label's letters in
- *  order ("ccnew" finds "New Command Code chat"), ranked below. */
+ *  order ("nchat" finds "New chat"), ranked below. */
 function score(text: string, ws: string[], label = ''): number {
   const t = text.toLowerCase(), l = label.toLowerCase();
   let s = 0;
@@ -78,7 +81,7 @@ function subsequence(w: string, text: string): boolean {
     <div class="tcv-pal" (click)="$event.stopPropagation()" role="dialog" aria-label="Command palette">
       <div class="tcv-pal-inrow">
         @if (asking(); as a) {
-          <span class="tcv-pal-mode" [title]="a.label | t">{{ 'Ask Command Code' | t }} · {{ a.what }}</span>
+          <span class="tcv-pal-mode" [title]="a.label | t">{{ 'Ask Chat' | t }} · {{ a.what }}</span>
         }
         <input #box class="tcv-pal-input"
                [placeholder]="(asking() ? 'Type the question and press Enter - or Enter now to open it with nothing typed'
@@ -93,7 +96,8 @@ function subsequence(w: string, text: string): boolean {
                     (click)="go(it.item)">
               <span class="tcv-pal-icon">{{ it.item.icon }}</span>
               <span class="tcv-pal-label">{{ it.item.label | t }}</span>
-              @if (it.item.hint) { <span class="tcv-pal-hint">{{ it.item.hint }}</span> }
+              @if (it.item.hint) { <span class="tcv-pal-hint">{{ it.item.hint | t }}</span> }
+              @if (it.item.badge) { <span class="tcv-th-badge" [title]="'unread' | t">{{ it.item.badge }}</span> }
               @if (it.item.keys) { <kbd class="tcv-pal-keys">{{ it.item.keys }}</kbd> }
             </button>
           }
@@ -116,12 +120,13 @@ export class Palette {
   private picked = inject(Selection);
   private notes = inject(NotesApi);
   private prefs = inject(Prefs);
+  private threads = inject(AgentThreads);
   private box = viewChild<ElementRef<HTMLInputElement>>('box');
   private list = viewChild<ElementRef<HTMLElement>>('list');
 
   open = signal(false);
   q = signal('');
-  /** An "Ask Command Code about this …" chosen with Tab: the box takes the question. */
+  /** An "Ask Chat about this …" chosen with Tab: the box takes the question. */
   asking = signal<AskCtx | null>(null);
   cursor = signal(0);
   searching = signal(false);
@@ -157,6 +162,7 @@ export class Palette {
       { group: 'Actions', icon: '⚙', label: 'LLM settings', hint: 'API keys, and which model does what', run: () => this.prefs.open.set('llm') },
       { group: 'Actions', icon: '⚙', label: 'Top bar settings', hint: 'order and visibility of the tabs', run: () => this.prefs.open.set('topbar') },
       { group: 'Actions', icon: '⚙', label: 'Proxy settings', hint: 'a second way out for EasyEDA lookups', run: () => this.prefs.open.set('proxy') },
+      { group: 'Actions', icon: '⚙', label: 'Agent tokens', hint: 'tokens for agents, and what they did', run: () => this.prefs.open.set('tokens') },
       { group: 'Actions', icon: '◐', label: 'Switch theme…', hint: (THEME_NAMES as Record<string, string>)[this.prefs.theme()] ?? '', keep: true,
         run: () => this.q.set('Theme: ') },
       ...THEMES.map(th => ({ group: 'Actions', icon: '◐', label: `Theme: ${THEME_NAMES[th]}`,
@@ -176,23 +182,23 @@ export class Palette {
     return [...this.ccItems(), ...out];
   }
 
-  /** The thing open on screen that Command Code could be asked about. */
+  /** The thing open on screen that Chat could be asked about. */
   private askCtx(): AskCtx | null {
     const room = this.picked.room();
     if (room === 'cad' && this.picked.model()) {
       const id = this.picked.model()!;
       const label = this.titleOf('model', id) ?? id;
-      return { label: 'Ask Command Code about this project', what: label, mention: { kind: 'model', id, label } };
+      return { label: 'Ask Chat about this project', what: label, mention: { kind: 'model', id, label } };
     }
     if (room === 'pcb' && this.picked.board()) {
       const id = this.picked.board()!;
       const label = this.titleOf('board', id) ?? id;
-      return { label: 'Ask Command Code about this board', what: label, mention: { kind: 'board', id, label } };
+      return { label: 'Ask Chat about this board', what: label, mention: { kind: 'board', id, label } };
     }
     const note = this.picked.note();
-    if (room === 'notes' && note) return { label: 'Ask Command Code about this note', what: note.label, mention: { kind: 'note', ...note } };
+    if (room === 'notes' && note) return { label: 'Ask Chat about this note', what: note.label, mention: { kind: 'note', ...note } };
     const file = this.picked.file();
-    if (room === 'files' && file) return { label: 'Ask Command Code about this file', what: file.label, mention: { kind: 'file', ...file } };
+    if (room === 'files' && file) return { label: 'Ask Chat about this file', what: file.label, mention: { kind: 'file', ...file } };
     return null;
   }
 
@@ -201,16 +207,27 @@ export class Palette {
   }
 
   private ccItems(): Item[] {
-    if (!this.auth.can('draw')) return [{ group: 'Command Code', icon: '›_', label: 'Open last Command Code chat',
-                                         run: () => this.picked.askCc({ action: 'last' }) }];
+    if (!this.auth.can('draw')) return [{ group: 'Chat', icon: '›_', label: 'Open last chat',
+                                         run: () => this.picked.askCc({ action: 'last' }) }, ...this.threadItems()];
     const ctx = this.askCtx();
     const out: Item[] = [];
-    if (ctx) out.push({ group: 'Command Code', icon: '›_', label: ctx.label, hint: ctx.what, ask: ctx, run: () => this.ask(ctx) });
+    if (ctx) out.push({ group: 'Chat', icon: '›_', label: ctx.label, hint: ctx.what, ask: ctx, run: () => this.ask(ctx) });
     out.push(
-      { group: 'Command Code', icon: '+', label: 'New Command Code chat', keys: 'Ctrl+Shift+O',
+      { group: 'Chat', icon: '+', label: 'New chat', keys: 'Ctrl+Shift+O',
         run: () => this.picked.askCc({ action: 'new' }) },
-      { group: 'Command Code', icon: '›_', label: 'Open last Command Code chat', run: () => this.picked.askCc({ action: 'last' }) });
-    return out;
+      { group: 'Chat', icon: '›_', label: 'Open last chat', run: () => this.picked.askCc({ action: 'last' }) });
+    return [...out, ...this.threadItems()];
+  }
+
+  /** The rooms' agent threads, pinned in the Chat tab: the ones with
+   *  something unread first, otherwise in the top bar's order. */
+  private threadItems(): Item[] {
+    const rows = this.threads.ordered().map((r, i) => ({ r, i, n: this.threads.unread(r.room) }));
+    rows.sort((a, b) => (b.n ? 1 : 0) - (a.n ? 1 : 0) || a.i - b.i);
+    return rows.map(({ r, n }) => ({
+      group: 'Chat', icon: ROOM_ICON[r.room] ?? '💬', label: this.threads.label(r.room), hint: 'agent thread',
+      badge: n || undefined, run: () => this.picked.openThread(r.room),
+    }));
   }
 
   /** A model's or board's name, from the catalog tree. */
@@ -257,7 +274,7 @@ export class Palette {
         case 'note': return { group: 'Notes', icon: '✎', label: h.label, hint: h.text,
           run: () => { this.picked.room.set('notes'); this.picked.ask('note', h.id); } };
         case 'chat': return { group: 'Chats', icon: '💬', label: h.text ?? '', hint: h.label,
-          run: () => this.picked.room.set((h.room ?? 'cad') as never) };
+          run: () => this.picked.openThread(h.room ?? 'cad') };
         case 'revision': return { group: 'Revisions', icon: '✦', label: h.label, hint: h.text,
           run: () => this.picked.room.set((h.room === 'pcb' ? 'pcb' : 'cad') as never) };
         default: return { group: 'Parts', icon: '⬚', label: h.label, hint: h.text,
@@ -271,36 +288,40 @@ export class Palette {
     const a = this.asking();
     if (a) {
       const q = this.q().trim();
-      return [{ group: 'Command Code', icon: '›_', label: a.label, hint: q ? `“${q}”` : a.what, run: () => this.ask(a, q) }];
+      return [{ group: 'Chat', icon: '›_', label: a.label, hint: q ? `“${q}”` : a.what, run: () => this.ask(a, q) }];
     }
     // "ask: …" sends that question - with what is open attached, or alone.
     const m = ASK.exec(this.q());
     if (m && this.auth.can('draw')) {
       const q = m[1].trim(), ctx = this.askCtx();
       const out: Item[] = [];
-      if (ctx) out.push({ group: 'Command Code', icon: '›_', label: ctx.label, hint: q ? `“${q}”` : ctx.what, run: () => this.ask(ctx, q) });
-      out.push({ group: 'Command Code', icon: '›_', label: 'Ask Command Code', hint: q ? `“${q}”` : t('type the question after "ask:"'),
+      if (ctx) out.push({ group: 'Chat', icon: '›_', label: ctx.label, hint: q ? `“${q}”` : ctx.what, run: () => this.ask(ctx, q) });
+      out.push({ group: 'Chat', icon: '›_', label: 'Ask Chat', hint: q ? `“${q}”` : t('type the question after "ask:"'),
                  run: () => this.ask(null, q) });
       return out;
     }
     const ws = words(this.q());
     const local = [...this.actions(), ...this.places()];
-    // Nothing typed: the room's own actions and the rooms; themes and
-    // languages wait to be asked for.
+    // Nothing typed: Chat first (ask about what is open, a new chat, the
+    // last one, the rooms' agent threads), then the tabs, then the room's
+    // own actions; themes and languages wait to be asked for.
     if (!ws.length) return [...this.actions().filter(i => !/^(Theme|Language): /.test(i.label)),
                             ...local.filter(i => i.group === 'Rooms')];
-    // Actions only when they match; then a small lead over names that match as well.
+    // Ranked by how well they match; actions a small lead, Chat's a tie-break.
     const ranked = local.map(i => ({ i, s: score(`${i.label} ${t(i.label)} ${i.hint ?? ''}`, ws, `${i.label} ${t(i.label)}`) }))
-      .filter(x => x.s > 0).map(x => ({ ...x, s: x.s + (x.i.group === 'Actions' || x.i.group === 'Command Code' ? 3 : 0) }))
+      .filter(x => x.s > 0).map(x => ({ ...x, s: x.s + (x.i.group === 'Actions' ? 3 : x.i.group === 'Chat' ? 1 : 0) }))
       .sort((a, b) => b.s - a.s).slice(0, 40).map(x => x.i);
     return [...ranked, ...this.found()];
   });
 
   grouped = computed(() => {
     const out: { name: string; items: { item: Item; i: number }[] }[] = [];
-    const order = ['Command Code', 'Actions', 'Rooms', 'Models', 'Boards', 'Tools', 'In the code', 'Notes', 'Chats', 'Revisions', 'Parts'];
+    // Empty: Chat, the tabs, then the actions. Typed: a group stands where
+    // its best match does, so the best match is on top whatever it is.
+    const fixed = ['Chat', 'Rooms', 'Actions', 'Models', 'Boards', 'Tools', 'In the code', 'Notes', 'Chats', 'Revisions', 'Parts'];
     const by = new Map<string, Item[]>();
     for (const it of this.items()) by.set(it.group, [...(by.get(it.group) ?? []), it]);
+    const order = words(this.q()).length && !this.asking() ? [...by.keys()] : fixed;
     let i = 0;
     for (const g of order) {
       const list = by.get(g);
@@ -366,7 +387,7 @@ export class Palette {
       e.preventDefault();
       if (this.open()) this.close(); else this.show();
     } else if (e.key === 'Escape' && this.open()) {
-      // Not on to the room under it (the Command Code room stops an answer on Esc).
+      // Not on to the room under it (the Chat room stops an answer on Esc).
       e.stopPropagation();
       e.preventDefault();
       if (this.asking()) { this.asking.set(null); this.q.set(''); } else this.close();

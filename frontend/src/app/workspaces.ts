@@ -41,9 +41,10 @@ export const WORKSPACES: Workspace[] = [
   },
   {
     id: 'commandcode',
-    label: 'Command Code',
-    blurb: 'Talk with a model, together: every conversation is shared with the workspace, '
-         + 'and each one keeps its own model.',
+    // Shown as "Chat"; the id stays, so old links (?ws=commandcode) and
+    // saved tab orders keep working.
+    label: 'Chat',
+    blurb: 'Talk with a model - or with a room\'s agent. Your conversations are yours alone.',
     ready: true,
   },
   {

@@ -11,7 +11,7 @@ back, not even from the database. Make a new one instead - from the
 machine itself, since it needs the database:
 
 ```bash
-.venv/bin/python tools/account.py list             # every account: address, name, role in each workspace
+.venv/bin/python tools/account.py list             # every account: address, name, role
 .venv/bin/python tools/account.py reset <email>    # prints a link
 ```
 
@@ -26,16 +26,21 @@ address>:4200`.
 
 ## Who is in, and what they may do
 
-- The first account, made on the first visit, owns the workspace.
-- Everyone else is invited: your name (top right) > **Members** > an email
-  address and a role. You get a link, good for a week and one use - Redline
-  sends no email, you pass it on.
-- Roles: owner, admin, editor, reviewer, viewer (`backend/access.py`,
-  `docs/USERS-PLAN.md` phase 5). The last owner cannot be demoted; make
-  someone else owner first.
-- Separate workspaces (e.g. one per customer): your name > **New
-  workspace**. Invitations and agent tokens belong to the workspace you
-  are in.
+- The first account, made on the first visit, is the **owner**. There is
+  one owner; it cannot be demoted, disabled or deleted.
+- There is no sign-up. The owner and the **admin**s add accounts: your name
+  (top right) > **Admin panel** > **Add user** - a name, an address and a
+  first password, which the person changes when they first sign in.
+  Redline sends no email: you pass the password on.
+- Roles (`backend/access.py`): owner, admin, user. Admins run the server's
+  settings (LLM keys, proxy, Telegram bot, costs) and the users' accounts -
+  edit, disable, reset a password, sign out everywhere. Only the owner
+  changes roles and deletes accounts. Users see the server's settings
+  read-only.
+- Every account works in a private space of its own: the owner's holds the
+  data from before accounts; anyone else starts empty and nobody else sees
+  into it. Agent tokens belong to the account that made them, work in its
+  space, and stop when it is disabled.
 
 ## The agents
 

@@ -16,6 +16,7 @@ import { Auth, SignIn, UserChip } from './auth';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 import { TopBar, TopbarFit } from './topbar';
 import { TopbarMore } from './topbar-more';
+import { AgentThreads } from './rooms/agent-thread';
 
 @Component({
   selector: 'app-root',
@@ -36,7 +37,7 @@ import { TopbarMore } from './topbar-more';
   <header tabs topbarFit class="relative flex shrink-0 items-center gap-1">
     <!-- The tabs in the order chosen in Settings > Top bar (topbar.ts): by
          default the rooms you work in, then - pushed right by the gap -
-         Notes, Command Code, Files and Basic Tools, closing the middle
+         Notes, Chat, Files and Basic Tools, closing the middle
          column. What is hidden, or does not fit, is under More. Analytics is
          in the menu under your name (auth.ts). -->
     @for (b of bar.inBar(); track b.id) {
@@ -51,6 +52,9 @@ import { TopbarMore } from './topbar-more';
         @if (!b.ws.ready) { <span class="tcv-tab-soon">soon</span> }
         <!-- How many tools there are, quietly, beside the name. -->
         @if (b.id === 'tools' && bar.text(b.ws)) { @if (toolCount(); as n) { <span class="tcv-tab-count">{{ n }}</span> } }
+        <!-- Chat: what the rooms' agents wrote, or ask, that has not been read here. -->
+        @if (b.id === 'commandcode') { @if (threads.total(); as n) {
+          <span class="tcv-tab-unread" [title]="n + ' ' + ('unread in the agent threads' | t)">{{ n }}</span> } }
       </button>
     }
     <app-topbar-more />
@@ -120,7 +124,7 @@ export class App {
   tabs = WORKSPACES;
   /** The top bar's tabs, in the order and the look chosen (topbar.ts). */
   bar = inject(TopBar);
-  /** The rooms you work in, left; Notes, Command Code, Files and Basic Tools at the right end. */
+  /** The rooms you work in, left; Notes, Chat, Files and Basic Tools at the right end. */
   rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'files' && w.id !== 'commandcode' && w.id !== 'settings');
   notesTab = WORKSPACES.find(w => w.id === 'notes');
   ccTab = WORKSPACES.find(w => w.id === 'commandcode');
@@ -190,6 +194,9 @@ export class App {
       .then((d: { tools?: unknown[] } | null) => this.toolCount.set(d?.tools?.length ?? null))
       .catch(() => { /* the tab is still the tab without its number */ }));
   });
+  /** The rooms' agent threads (Chat tab): unread counts, polled while signed in. */
+  threads = inject(AgentThreads);
+  private pollThreads = effect(() => { if (this.auth.signedIn()) untracked(() => this.threads.start()); });
   /** Shared, because the catalog changes rooms by opening a file. */
   here = this.picked.room;
 
@@ -222,6 +229,8 @@ export class App {
       const url = new URL(location.href);
       if (id === 'cad') url.searchParams.delete('ws');
       else url.searchParams.set('ws', id);
+      // A room thread belongs to the Chat tab's address only.
+      if (id !== 'commandcode') url.searchParams.delete('thread');
       history.replaceState(null, '', url);
     });
   }

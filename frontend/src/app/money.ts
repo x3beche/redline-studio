@@ -10,7 +10,7 @@ import { Auth } from './auth';
  *  refreshed there every hour), read at start, every hour, and when the
  *  tab comes back after more than an hour away. The display currency is
  *  this browser's own choice if it made one ("redline.currency"), else the
- *  workspace's default (/api/costs display_currency), else dollars.
+ *  server's default (/api/costs display_currency), else dollars.
  *
  *  The state is in plain signals at module level, so the helpers below
  *  work from code without injection (the chart formatters) - and a
@@ -83,7 +83,7 @@ const cached = readFx();
 export const RATES = signal<Record<string, number>>(cached?.rates ?? { USD: 1 });
 export const NAMES = signal<Record<string, string>>(cached?.names ?? {});
 export const FX = signal<FxInfo | null>(cached);
-/** The workspace's default display currency. */
+/** The server's default display currency. */
 export const DEFAULT_CURRENCY = signal<string>('USD');
 /** This browser's own choice, or null for the default. */
 export const OVERRIDE = signal<string | null>(readOverride());
@@ -185,7 +185,7 @@ export class Money {
   readonly currency = CURRENCY;
   readonly override = OVERRIDE;
   readonly defaultCurrency = DEFAULT_CURRENCY;
-  /** The workspace's costs (/api/costs), null until read. */
+  /** The server's costs (/api/costs), null until read. */
   costs = signal<Costs | null>(null);
   costsError = signal<string | null>(null);
   private fxAt = 0;

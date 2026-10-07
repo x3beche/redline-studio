@@ -211,8 +211,9 @@ const STATE_TONE: Record<StockState, string> = {
 .bc-tile[data-tone="warn"] > b { color: var(--warn); }
 .bc-tile[data-tone="danger"] > b { color: var(--danger); }
 .bc-warn { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; padding: 4px 8px; border-radius: 5px;
-  border: 1px solid var(--line); border-left: 3px solid var(--warn); background: var(--surface-2); }
-.bc-warn[data-tone="danger"] { border-left-color: var(--danger); }
+  border: 1px solid var(--line); background: var(--surface-2); }
+.bc-warn::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); align-self: center; }
+.bc-warn[data-tone="danger"]::before { background: var(--danger); }
 .bc-note { color: var(--ink-dim); font-size: 10.5px; }
 .bc-note[data-tone="danger"] { color: var(--danger); }
 .bc-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }

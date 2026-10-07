@@ -29,7 +29,7 @@ import asyncio
 import logging
 from datetime import timedelta
 
-from .. import scope
+from .. import questions, scope
 from . import core, fmt, languages, links, outbox
 
 log = logging.getLogger("redline.telegram")
@@ -107,6 +107,10 @@ async def send_question(raw, ws: str, q: dict) -> int:
     who may answer get the options as buttons and "reply in your own
     words"; a viewer gets the card without them."""
     base = await _base(raw)
+    try:                                                # which room's thread it waits in
+        q = (await questions.with_rooms(scope.ScopedDb(raw, ws), [dict(q)]))[0]
+    except Exception:                                   # noqa: BLE001 - the link goes to the 3D room's
+        pass
     n = 0
     for link, role in await links.recipients(raw, ws, "question"):
         shown = await translated(raw, ws, q, link.get("lang"))

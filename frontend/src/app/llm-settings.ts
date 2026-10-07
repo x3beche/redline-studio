@@ -14,7 +14,7 @@ import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
  *  the page only learns whether one is set and its last four characters.
  *  This is the only place a key comes from: the server never reads one
  *  from .env or the environment.
- *  Changing anything is for the workspace's owners and admins.
+ *  Changing anything is for the owner and the admins.
  */
 interface ProviderInfo { name: string; set: boolean; hint: string | null; source: string | null; site: string }
 interface JobInfo {
@@ -225,7 +225,7 @@ export class LlmUsagePanel {
 @if (data(); as d) {
 <div class="st-page">
   <p class="st-lead">{{ 'Which model does what in Redline, and the keys it uses. The keys stay on the server: once saved, only their last four characters are shown.' | t }}</p>
-  @if (!canEdit) { <div class="st-banner">{{ 'Only the workspace\\'s owners and admins can change these.' | t }}</div> }
+  @if (!canEdit) { <div class="st-banner">{{ 'These are the server\\'s settings: only the owner and the admins can change them.' | t }}</div> }
 
   <div class="st-tiles">
     <div class="st-tile" [attr.data-tone]="keyCount() === providerIds.length ? 'ok' : 'warn'"><span>{{ 'API keys' | t }}</span>

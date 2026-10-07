@@ -4,12 +4,11 @@ The person asks for a code in Settings > Telegram (POST /api/telegram/link)
 and gets it with a t.me deep link and a QR code. The code is good for ten
 minutes and once; the database keeps only its SHA-256. Telegram sends it
 back to us as `/start <code>` when they open the link, and the chat is
-bound to that person - in the workspace they asked from.
+bound to that person - in their own private space.
 
-From then on whatever comes from that chat is that person, with their role
-in that workspace as it is *now* (looked up on every message): a viewer
-cannot answer or queue from Telegram any more than in the app, and a
-person taken out of the workspace is no one to the bot. `/stop`, or
+From then on whatever comes from that chat is that person, with their
+system role as it is *now* (looked up on every message): a disabled or
+deleted account is no one to the bot. `/stop`, or
 "Unlink" in the app, ends it.
 """
 
@@ -122,16 +121,15 @@ async def set_prefs(db, user_id: str, prefs: dict | None = None, lang: str | Non
 
 
 async def role_of(db, link: dict) -> str | None:
-    """The person's role in the link's workspace, now - None if they are no
-    longer in it, or their account is disabled. Local mode: the owner."""
+    """The person's system role now - None if their account is disabled or
+    gone, or no longer works in the link's space. Local mode: the owner."""
     if not auth.enabled():
         return "owner"
     raw = core.raw_of(db)
-    u = await raw[auth.USERS].find_one({"_id": link["_id"]}, {"pw": 0})
-    if not u or u.get("disabled"):
+    u = await raw[auth.USERS].find_one({"_id": link["_id"]}, {"pw": 0, "avatar": 0})
+    if not u or u.get("disabled") or auth.space_of(u) != ws_of(link):
         return None
-    m = await raw[auth.MEMBERS].find_one({"user": link["_id"], "workspace": link.get("workspace")})
-    return (m.get("role") or "viewer") if m else None
+    return auth.role_of(u)
 
 
 def can(role: str | None, act: str) -> bool:
@@ -153,7 +151,7 @@ def ws_of(link: dict) -> str:
 
 @contextlib.contextmanager
 def acting(link: dict, role: str):
-    """Run app code as this person, in their workspace, with their role -
+    """Run app code as this person, in their space, with their role -
     exactly as a request from their browser would."""
     t1 = actors.CURRENT.set(actor(link))
     t2 = scope.WORKSPACE.set(ws_of(link))
@@ -167,7 +165,7 @@ def acting(link: dict, role: str):
 
 
 async def recipients(db, workspace: str, pref: str) -> list[tuple[dict, str]]:
-    """The linked people of a workspace who want to hear about `pref`, with
+    """The linked people of a space (its one person) who want to hear about `pref`, with
     their role now."""
     raw = core.raw_of(db)
     out = []

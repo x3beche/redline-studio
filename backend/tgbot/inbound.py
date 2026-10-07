@@ -440,7 +440,10 @@ async def on_callback(raw, cq: dict) -> None:
         await raw[core.PENDING].delete_one({"_id": pid})
         await _ack(cq)
         await ask_agent(raw, link, role, pending["text"], arg)
-        await _close_buttons(raw, chat_id, mid, fmt.w(link, "asked", room=fmt.w(link, f"room_{arg}")), link)
+        base = (await core.settings(raw)).get("public_url")
+        url = fmt.app_link(base, thread=arg)
+        await _close_buttons(raw, chat_id, mid, fmt.w(link, "asked", room=fmt.w(link, f"room_{arg}"))
+                             + (f"\n{fmt._a(url, fmt.w(link, 'open'))}" if url else ""), link)
         return
 
     if kind == "pm":

@@ -25,7 +25,7 @@
 .tg-step-text span { font-size: 11px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tg-step[data-state="todo"] .tg-step-text b { color: var(--ink-dim); }
 .tg-chev { flex: none; width: 12px; font-size: 10px; color: var(--ink-dim); }
-.tg-step[data-open] { background: var(--surface); box-shadow: inset 2px 0 0 var(--accent); }
+.tg-step[data-open] { background: var(--surface); }
 .tg-step-body { display: flex; flex-direction: column; gap: 9px; padding: 2px 12px 12px 44px; }
 
 /* @BotFather's commands, each with a copy button */

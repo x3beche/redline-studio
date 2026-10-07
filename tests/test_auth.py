@@ -53,11 +53,12 @@ def test_short_passwords_are_refused():
     assert auth.password_problem("short") and not auth.password_problem("long enough pw")
 
 
-def test_the_first_account_owns_the_workspace_and_there_is_only_one_first():
+def test_the_first_account_is_the_owner_and_there_is_only_one_first():
     db = Db()
     u = run(auth.make_first_user(db, "Owner@Example.com", "Owner", "a long password"))
     assert u["email"] == "owner@example.com" and "pw" in u
-    assert db["memberships"].rows[0]["role"] == "owner"
+    assert u["role"] == "owner" and u["space"] == "default"
+    assert "memberships" not in db and "workspaces" not in db
     try:
         run(auth.make_first_user(db, "x@example.com", "", "another long one"))
         raise AssertionError("a second first account was made")

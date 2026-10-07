@@ -25,8 +25,8 @@ export const TOPBAR_DISPLAYS: { id: TopbarDisplay; label: string }[] = [
   { id: 'icon', label: 'Icons only' },
 ];
 
-/** The movable gap: the tabs after it stand at the right, as Notes, Command
- *  Code, Files and Basic Tools always have. One more item in the order. */
+/** The movable gap: the tabs after it stand at the right, as Notes, Chat,
+ *  Files and Basic Tools always have. One more item in the order. */
 export const GAP = 'gap';
 /** Never in the bar's lists: always shown, never moved. */
 const FIXED = new Set<string>(['settings', 'analyze']);
@@ -35,7 +35,7 @@ const KEY = 'redline.topbar';
 /** A tab's name when the bar is short of room. Any tab not here keeps its name. */
 const SHORT: Record<string, string> = {
   cad: '3D', pcb: 'PCB',
-  notes: 'Notes', commandcode: 'Command', files: 'Files', tools: 'Tools',
+  notes: 'Notes', commandcode: 'Chat', files: 'Files', tools: 'Tools',
 };
 
 /** A line drawing for each tab, 24 units square, drawn with the text colour. */

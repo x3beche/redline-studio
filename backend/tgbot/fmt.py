@@ -35,13 +35,13 @@ WORDS = {
         "bad_code": "That link code is unknown or older than 10 minutes. Make a new one in Redline → Settings → Telegram.",
         "linked": "✅ Linked. This chat is now <b>{name}</b> in Redline ({ws}, {role}).\nYou will hear about agents' questions and applied notes here. /help lists what you can do.",
         "stopped": "Unlinked. This chat is no longer connected to Redline. Link it again any time from Settings → Telegram.",
-        "no_access": "You are no longer in that Redline workspace, so the bot cannot act for you. Ask an admin, then link again.",
+        "no_access": "Your Redline account is disabled or no longer there, so the bot cannot act for you. Ask an admin, then link again.",
         "role_cant": "As {role} you cannot {what} - ask someone who is {who} or above.",
         "pick_target": "Which model or board is the note for?",
         "last_used": "↺ {t}",
         "cancel": "✕ Cancel",
         "cancelled": "Cancelled.",
-        "nothing_targets": "There are no models or boards in this workspace to put a note on.",
+        "nothing_targets": "You have no models or boards to put a note on.",
         "note_saved": "📝 Draft note saved on <b>{t}</b>.\nSend /queue to queue it for the agent.",
         "note_text_needed": "Write it as <code>/note what to change</code>, or send a photo with a caption.",
         "queued": "▶️ Queued: <b>{t}</b>. The agent picks it up from the queue.",
@@ -97,12 +97,12 @@ WORDS = {
         "bad_code": "Bu bağlantı kodu bilinmiyor ya da 10 dakikadan eski. Redline → Ayarlar → Telegram'dan yenisini al.",
         "linked": "✅ Bağlandı. Bu sohbet artık Redline'da <b>{name}</b> ({ws}, {role}).\nAjanların soruları ve uygulanan notlar buraya gelecek. /help yapabileceklerini listeler.",
         "stopped": "Bağlantı kaldırıldı. Bu sohbet artık Redline'a bağlı değil. İstediğin zaman Ayarlar → Telegram'dan yeniden bağlayabilirsin.",
-        "no_access": "Artık o Redline çalışma alanında değilsin, bot senin adına iş yapamaz. Bir yöneticiye sor, sonra yeniden bağla.",
+        "no_access": "Redline hesabın devre dışı ya da artık yok, bot senin adına iş yapamaz. Bir yöneticiye sor, sonra yeniden bağla.",
         "role_cant": "{role} olarak {what} yapamazsın - {who} ya da üstü birine sor.",
         "pick_target": "Not hangi model ya da kart için?",
         "cancel": "✕ Vazgeç",
         "cancelled": "Vazgeçildi.",
-        "nothing_targets": "Bu çalışma alanında not eklenecek model ya da kart yok.",
+        "nothing_targets": "Not eklenecek model ya da kartın yok.",
         "note_saved": "📝 Taslak not <b>{t}</b> üzerine kaydedildi.\nAjan için sıraya almak için /queue gönder.",
         "note_text_needed": "<code>/note ne değişsin</code> diye yaz ya da açıklamalı bir fotoğraf gönder.",
         "queued": "▶️ Sıraya alındı: <b>{t}</b>. Ajan sıradan alacak.",
@@ -146,11 +146,15 @@ def w(link: dict | None, key: str, **kw) -> str:
 # ---------------- links back to the app ----------------
 
 def app_link(base: str | None, *, model: str | None = None, kind: str | None = None,
-             rev: str | None = None, ws: str | None = None) -> str | None:
-    """A deep link into the app: a note on its model or board, a room."""
+             rev: str | None = None, ws: str | None = None, thread: str | None = None) -> str | None:
+    """A deep link into the app: a note on its model or board, a room, or a
+    room's agent thread (pinned in the Chat tab, whose id is still
+    "commandcode")."""
     if not base:
         return None
     base = base.rstrip("/")
+    if thread:
+        return f"{base}/?ws=commandcode&thread={quote(thread)}"
     if kind == "pcb" and model:
         return f"{base}/?ws=pcb&board={quote(model)}"
     if model:
@@ -241,7 +245,8 @@ def question_text(link: dict | None, q: dict, shown: dict | None, base: str | No
         lines.append("\n".join(f"{i + 1}. {core.esc(core.clip(o, 400))}" for i, o in enumerate(opts)))
     if not can_answer:
         lines.append(f"<i>{core.esc(w(link, 'viewer_cant', role=role or 'viewer'))}</i>")
-    url = app_link(base)
+    # The question waits in its room's thread in the Chat tab too.
+    url = app_link(base, thread=q.get("room") or "cad")
     if url:
         lines.append(_a(url, w(link, "open")))
     return "\n\n".join(x for x in lines if x)

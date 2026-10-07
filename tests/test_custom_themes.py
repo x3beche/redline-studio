@@ -1,7 +1,7 @@
-"""Themes people make (backend/themes.py): kept per workspace, checked on
-the way in, and changed or deleted only by their maker or someone who runs
-the workspace. The database is test_telegram's fake; sign-in is on, and the
-cookie says who is asking."""
+"""Themes people make (backend/themes.py): kept in each account's private
+space, checked on the way in, and changed or deleted only by their maker or
+the person whose space it is (not by one of their agents). The database is
+test_telegram's fake; sign-in is on, and the cookie says who is asking."""
 
 from __future__ import annotations
 
@@ -17,10 +17,10 @@ from test_telegram import FakeDb
 CSS = Path(__file__).resolve().parent.parent / "frontend/src/styles.css"
 
 PEOPLE = {
-    "ayse": ({"type": "user", "id": "u-ayse", "name": "Ayşe"}, "default", "viewer"),
-    "bora": ({"type": "user", "id": "u-bora", "name": "Bora"}, "default", "editor"),
-    "cem": ({"type": "user", "id": "u-cem", "name": "Cem"}, "default", "admin"),
-    "deniz": ({"type": "user", "id": "u-deniz", "name": "Deniz"}, "team2", "owner"),
+    "ayse": ({"type": "user", "id": "u-ayse", "name": "Ayşe"}, "uu-ayse", "user"),
+    # an agent working in Ayşe's space with her token
+    "bot": ({"type": "agent", "id": "bot", "name": "bot", "token": "t1"}, "uu-ayse", "editor"),
+    "deniz": ({"type": "user", "id": "u-deniz", "name": "Deniz"}, "default", "owner"),
 }
 
 GOOD = {"name": "zz Ocean", "base": "github-dark", "light": False,
@@ -72,7 +72,7 @@ def test_only_colours_are_colours(v, ok):
     assert themes.colour_ok(v) is ok
 
 
-def test_anyone_in_the_workspace_may_make_one():
+def test_anyone_may_make_one():
     for role in access.ROLES:
         for m in ("GET", "POST"):
             assert access.allowed(role, access.action(m, "/api/themes"))
@@ -86,9 +86,9 @@ def test_a_theme_is_made_listed_and_says_who_made_it(db):
     got = r.json()
     assert got["by"]["name"] == "Ayşe" and got["mine"] and got["can_edit"]
     assert got["vars"]["--accent"] == "#3fb6ff"
-    listed = as_("bora").get("/api/themes").json()
+    listed = as_("bot").get("/api/themes").json()
     assert [t["name"] for t in listed] == ["zz Ocean"]
-    assert not listed[0]["mine"] and not listed[0]["can_edit"]      # an editor, not its maker
+    assert not listed[0]["mine"] and not listed[0]["can_edit"]      # her agent, not its maker
 
 
 @pytest.mark.parametrize("patch,why", [
@@ -106,23 +106,28 @@ def test_what_is_wrong_is_refused(db, patch, why):
     assert not db["themes"].docs
 
 
-def test_only_its_maker_or_an_admin_changes_or_deletes_it(db):
+def test_only_its_maker_or_the_spaces_person_changes_or_deletes_it(db):
     tid = as_("ayse").post("/api/themes", json=GOOD).json()["id"]
-    assert as_("bora").put(f"/api/themes/{tid}", json={**GOOD, "name": "zz mine now"}).status_code == 403
-    assert as_("bora").delete(f"/api/themes/{tid}").status_code == 403
+    assert as_("bot").put(f"/api/themes/{tid}", json={**GOOD, "name": "zz mine now"}).status_code == 403
+    assert as_("bot").delete(f"/api/themes/{tid}").status_code == 403
     r = as_("ayse").put(f"/api/themes/{tid}", json={**GOOD, "name": "zz Ocean 2", "light": True})
     assert r.status_code == 200 and r.json()["name"] == "zz Ocean 2" and r.json()["light"] is True
-    assert as_("cem").get("/api/themes").json()[0]["can_edit"]          # an admin
-    assert as_("cem").delete(f"/api/themes/{tid}").status_code == 200
+    # one her agent made is hers to change all the same
+    bid = as_("bot").post("/api/themes", json={**GOOD, "name": "zz By the bot"}).json()["id"]
+    assert next(t for t in as_("ayse").get("/api/themes").json() if t["id"] == bid)["can_edit"]
+    assert as_("ayse").delete(f"/api/themes/{bid}").status_code == 200
+    assert as_("ayse").delete(f"/api/themes/{tid}").status_code == 200
     assert as_("ayse").get("/api/themes").json() == []
     assert as_("ayse").delete(f"/api/themes/{tid}").status_code == 404
 
 
-def test_a_workspace_sees_only_its_own(db):
+def test_each_account_sees_only_its_own(db):
     as_("ayse").post("/api/themes", json=GOOD)
-    as_("deniz").post("/api/themes", json={**GOOD, "name": "zz Team two"})
-    assert [t["name"] for t in as_("bora").get("/api/themes").json()] == ["zz Ocean"]
-    assert [t["name"] for t in as_("deniz").get("/api/themes").json()] == ["zz Team two"]
+    as_("deniz").post("/api/themes", json={**GOOD, "name": "zz The owner's"})
+    assert [t["name"] for t in as_("bot").get("/api/themes").json()] == ["zz Ocean"]
+    assert [t["name"] for t in as_("deniz").get("/api/themes").json()] == ["zz The owner's"]
+    tid = as_("ayse").get("/api/themes").json()[0]["id"]
+    assert as_("deniz").delete(f"/api/themes/{tid}").status_code == 404     # not even the owner
 
 
 def test_signed_out_gets_nothing(db):

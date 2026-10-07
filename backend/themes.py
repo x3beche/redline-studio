@@ -6,10 +6,9 @@ wears the base and then sets the overridden tokens on the root element, so
 whatever is not overridden comes from the base - a custom theme can never
 leave an element unstyled.
 
-They belong to the workspace (backend/scope.py), so teammates can wear
-each other's, and say who made them. Anyone who may look at the workspace
-may make one; changing or deleting one is its maker's, or an owner's or
-admin's.
+They belong to the account's private space (backend/scope.py): each
+person sees and wears their own. Changing or deleting one is its maker's,
+or the person's whose space it is.
 """
 
 from __future__ import annotations
@@ -95,9 +94,9 @@ def _db():
 
 
 def _may_change(doc: dict) -> bool:
-    """Its maker, or someone who runs the workspace."""
+    """Its maker, or the person whose space it is (not one of their agents)."""
     mine = (doc.get("by") or {}).get("id") == actors.current().get("id")
-    return mine or access.rank(access.current() or "viewer") <= access.rank("admin")
+    return mine or access.current() in access.PEOPLE
 
 
 def _out(doc: dict) -> dict:
@@ -132,7 +131,7 @@ async def create(body: ThemeIn) -> dict:
         raise HTTPException(422, str(e))
     d = _db()
     if await d[COLL].count_documents({}) >= MAX_PER_WORKSPACE:
-        raise HTTPException(409, f"this workspace already has {MAX_PER_WORKSPACE} themes")
+        raise HTTPException(409, f"you already have {MAX_PER_WORKSPACE} themes")
     now = _now()
     who = actors.current()
     doc = {"_id": secrets.token_hex(6), **doc, "by": {k: who.get(k) for k in ("type", "id", "name")},

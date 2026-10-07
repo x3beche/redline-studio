@@ -65,7 +65,7 @@ JOBS = {
     "reading": {"label": "Reading translation",
                 "about": "an agent's question or reply, shown in the reader's language",
                 "default": CHEAP},
-    "chat": {"label": "Command Code room",
+    "chat": {"label": "Chat room",
              "about": "the model a new conversation starts with",
              "default": CHEAP},
     "part_category": {"label": "Part category",
@@ -79,7 +79,7 @@ JOBS = {
 KINDS = {"summary": "summary", "translate": "translate", "tool-llm": "tools",
          "tool-router": "router", "cc-chat": "chat", "reading": "reading",
          "part-category": "part_category"}
-KIND_LABELS = {"cc-title": "Command Code room titles", "llm-test": "Settings test"}
+KIND_LABELS = {"cc-title": "Chat titles", "llm-test": "Settings test"}
 
 
 def job_label(kind: str | None) -> str:

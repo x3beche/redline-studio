@@ -1,5 +1,11 @@
 # Users in Redline - research and work plan
 
+> **Superseded (2026-10-07).** Shared workspaces, members and invitations
+> were removed. Accounts now have a system role (owner, admin, user), the
+> owner and the admins manage them in the admin panel (`backend/admin.py`),
+> and each account has a private space of its own (`backend/scope.py`).
+> See docs/ACCOUNTS.md. The plan below is kept as history.
+
 Status: **in progress** - phases 1, 2 and 3 done (2026-09-24). Decisions
 below are recorded in section 6.
 

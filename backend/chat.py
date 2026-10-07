@@ -127,3 +127,26 @@ async def last_room(db) -> str:
     """Where the person last said something - where an answer belongs."""
     rows = [d async for d in db[CHAT].find({"role": USER})]
     return room_of(max(rows, key=lambda d: d["at"])) if rows else "cad"
+
+
+async def rooms(db, agent_tail: int = 99) -> list[dict]:
+    """Every room's thread in a few lines, in ROOMS order - what the Chat
+    tab's pinned "Rooms" list shows: how long, the last line, the person's
+    lines still waiting to be picked up, and when the agent last wrote
+    (its last `agent_tail` times), so a page can count what it has not
+    read since it last looked without fetching the threads themselves."""
+    rows = [d async for d in db[CHAT].find({})]
+    out = []
+    for room in ROOMS:
+        mine = sorted((d for d in rows if room_of(d) == room), key=lambda d: d["at"])
+        agent = [d["at"] for d in mine if d.get("role") == AGENT]
+        waiting = [d for d in mine if d.get("role") == USER and not d.get("seen_at")]
+        last = mine[-1] if mine else None
+        out.append({
+            "room": room, "count": len(mine),
+            "last": ({"role": last.get("role"), "text": (last.get("text") or "")[:200], "at": last["at"],
+                      "by": (last.get("by") or {}).get("name")} if last else None),
+            "waiting": len(waiting), "urgent": sum(1 for d in waiting if d.get("urgent")),
+            "agent_at": agent[-agent_tail:] if agent_tail else [],
+        })
+    return out

@@ -4,8 +4,10 @@ sessions - the Profile page at the top of Settings (preferences.ts).
 Everyone signed in may manage themselves and nobody else: every route here
 works on the account of the session that asks, never on an id it is given
 (access.py: /api/me is "view"). The one route that takes an id is the
-picture, which anyone who shares a workspace with its owner may see - it is
-a picture and nothing else.
+picture: one's own, the person whose space is being looked at (an agent
+working there shows its notes' author), and - for the admin panel - anyone's
+to the owner and the admins. It is a picture and nothing else. The owner
+and the admins change other people's accounts in backend/admin.py.
 
 Who has no account gets a read-only page: local mode (sign-in off), an
 agent's token and a headless browser's page session. They have no
@@ -87,8 +89,6 @@ async def _user(uid: str) -> dict:
 
 async def _out(u: dict) -> dict:
     db = _db()
-    ws = scope.current()
-    m = await db[auth.MEMBERS].find_one({"user": u["_id"], "workspace": ws}) or {}
     last = u.get("last_sign_in")
     if not last:
         # From before sign-ins were written down: the newest session.
@@ -96,9 +96,8 @@ async def _out(u: dict) -> dict:
         newest = [s for s in newest if s.get("kind") != auth.PAGE_KIND and s.get("created_at")]
         last = max((s["created_at"] for s in newest), default=None)
     return {"kind": "user", "id": u["_id"], "name": u.get("name") or u["email"], "email": u["email"],
-            "role": m.get("role") or access.current(), "workspace": ws,
-            "workspace_name": await auth.workspace_name(db, ws),
-            "created_at": _iso(u.get("created_at")), "joined": _iso(m.get("joined")),
+            "role": auth.role_of(u), "about_role": access.ABOUT.get(auth.role_of(u)),
+            "created_at": _iso(u.get("created_at")),
             "last_sign_in": _iso(last), **avatar_fields(u)}
 
 
@@ -108,8 +107,7 @@ async def me():
     if kind != "user":
         who = actors.current()
         return {"kind": kind, "id": who.get("id"), "name": who.get("name") or who.get("id") or "",
-                "email": None, "role": access.current(), "workspace": scope.current(),
-                "workspace_name": await auth.workspace_name(_db(), scope.current()),
+                "email": None, "role": access.current(), "about_role": access.ABOUT.get(access.current() or ""),
                 "has_avatar": False, "avatar_v": None}
     return await _out(await _user(actors.current()["id"]))
 
@@ -223,15 +221,17 @@ async def drop_avatar():
 
 @router.get("/api/me/avatar/{user_id}")
 async def avatar(user_id: str, v: str | None = None):
-    """Someone's picture: theirs, or a person's who shares the workspace
-    being looked at. Only the picture - a 404 says nothing else."""
+    """Someone's picture: one's own, the person whose space this is, or -
+    to the owner and the admins - anyone's. Only the picture - a 404 says
+    nothing else."""
     db = _db()
     who = actors.current()
     mine = who.get("type") == "user" and who.get("id") == user_id
-    if not mine and not await db[auth.MEMBERS].find_one({"user": user_id, "workspace": scope.current()}):
+    u = await db[auth.USERS].find_one({"_id": user_id}, {"avatar": 1, "avatar_v": 1, "role": 1, "space": 1})
+    admin = who.get("type") == "user" and not who.get("page") and access.current() in ("owner", "admin")
+    if not u or not (mine or admin or auth.space_of(u) == scope.current()):
         raise HTTPException(404, "no picture")
-    u = await db[auth.USERS].find_one({"_id": user_id}, {"avatar": 1, "avatar_v": 1})
-    if not u or not u.get("avatar"):
+    if not u.get("avatar"):
         raise HTTPException(404, "no picture")
     # The URL carries the moment it changed: a new picture is a new URL.
     keep = "private, max-age=31536000, immutable" if v and str(v) == str(u.get("avatar_v")) else "private, no-cache"

@@ -11,9 +11,8 @@ import { Prefs } from './preferences';
  *
  *  A custom theme is a built-in base with some tokens changed (theme.ts
  *  wears the base, then sets the changed tokens on the root, then what
- *  follows from them). They are kept per workspace on the server
- *  (backend/themes.py), so teammates can wear each other's, and travel as
- *  JSON. The one worn is also kept whole in this browser, so the first
+ *  follows from them). They are kept in each account's private space on
+ *  the server (backend/themes.py), and travel as JSON. The one worn is also kept whole in this browser, so the first
  *  paint has it without asking the server.
  */
 
@@ -109,7 +108,7 @@ function errText(e: HttpErrorResponse): string {
 <div class="st-card ct">
   <div class="st-card-head">
     <h3>{{ 'Custom themes' | t }}</h3>
-    <span class="st-sub">{{ shown().length }} {{ 'in this workspace' | t }}</span>
+    <span class="st-sub">{{ shown().length }} {{ 'yours' | t }}</span>
     <div class="st-right">
       <button class="tcv-btn tcv-files-btn" [class.on]="importing()" (click)="importing.set(!importing()); importErr.set('')">{{ 'Import' | t }}</button>
       <button class="tcv-btn tcv-files-btn tcv-btn-accent" [disabled]="!!draft()" (click)="start()">+ {{ 'New theme' | t }}</button>
@@ -185,7 +184,7 @@ function errText(e: HttpErrorResponse): string {
               <span class="st-swatch">@for (s of swatch(c); track $index) { <i [style.background]="s"></i> }</span>
               <span class="st-theme-name"><span class="ct-ellipsis">{{ c.name }}</span>@if (prefs.theme() === 'custom:' + c.id) { <em>● {{ 'on' | t }}</em> }</span>
             </button>
-            <span class="ct-by">{{ c.mine ? ('by you' | t) : ('by' | t) + ' ' + (c.by?.name ?? '?') }} · {{ (c.light ? 'Light' : 'Dark') | t }}</span>
+            <span class="ct-by">@if (!c.mine) { {{ ('by' | t) + ' ' + (c.by?.name ?? '?') }} · }{{ (c.light ? 'Light' : 'Dark') | t }}</span>
             <span class="ct-acts">
               @if (c.can_edit) { <button (click)="edit(c)" [disabled]="!!draft()">{{ 'Edit' | t }}</button> }
               <button (click)="duplicate(c)" [disabled]="!!draft()">{{ 'Duplicate' | t }}</button>

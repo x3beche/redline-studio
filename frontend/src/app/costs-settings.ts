@@ -16,7 +16,7 @@ import {
  *  keeps them so and works the dollars out (/api/costs). Then the exchange
  *  rates the server reads from frankfurter.dev every hour, with a small
  *  table and a converter. Each card is edited as a draft and saved on its
- *  own; changing anything is for the workspace's owners and admins.
+ *  own; changing anything is for the owner and the admins.
  */
 interface Row {
   id?: string; name: string; amount: number | null; currency: string; period: Period;
@@ -54,7 +54,7 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
   template: `
 <div class="st-page">
   <p class="st-lead">{{ 'What Redline costs to run - the subscriptions, the electricity, the proxy traffic - each typed in its own currency. Analytics adds them to the work of each range, and every amount in the app is shown in the display currency.' | t }}</p>
-  @if (!canEdit()) { <div class="st-banner">{{ 'Only the workspace\\'s owners and admins can change these.' | t }}</div> }
+  @if (!canEdit()) { <div class="st-banner">{{ 'These are the server\\'s settings: only the owner and the admins can change them.' | t }}</div> }
   @if (m.costsError(); as e) {
     <div class="st-banner">{{ (e === 'not-yet' ? 'The server does not keep costs yet - the figures here are empty until it does.' : 'The costs did not load') | t }}@if (e !== 'not-yet') { ({{ e }}) }</div>
   }

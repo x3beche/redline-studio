@@ -317,6 +317,13 @@ async def record_call(db, **row) -> None:
     """Log one non-Claude-Code call, e.g. the OpenRouter card summariser."""
     row.setdefault("at", datetime.now(timezone.utc).isoformat())
     row.setdefault("kind", "summary")
+    # Made for an agent with a token: the token's, for its usage on the
+    # Agent tokens page. Calls from before this, and the agents' own
+    # transcripts, carry none.
+    from . import actors
+    tok = actors.current().get("token")
+    if tok and "agent_token" not in row:
+        row["agent_token"] = tok
     await db[CALLS].update_one({"_id": row["_id"]}, {"$setOnInsert": row},
                                upsert=True)
 

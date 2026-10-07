@@ -5,6 +5,7 @@ import { Selection } from './selection';
 import { Prefs } from './preferences';
 import { TopBar } from './topbar';
 import { Workspace } from './workspaces';
+import { AgentThreads } from './rooms/agent-thread';
 
 /** "More" at the end of the top bar: the tabs that did not fit, then the
  *  ones hidden in Settings > Top bar, so none is ever out of reach. Lit
@@ -23,7 +24,7 @@ import { Workspace } from './workspaces';
           [attr.data-on]="inMore() ? 1 : null" [attr.aria-current]="inMore() ? 'page' : null"
           aria-haspopup="menu" [attr.aria-expanded]="open()"
           [title]="inMore() ? ('More tabs' | t) + ' · ' + (here()?.label ?? '' | t) : ('More tabs' | t)"
-          (click)="toggle()">{{ 'More' | t }} <span class="tb-more-dots" aria-hidden="true">⋯</span></button>
+          (click)="toggle()">{{ 'More' | t }} <span class="tb-more-dots" aria-hidden="true">⋯</span>@if (chatUnread(); as n) {<span class="tcv-tab-unread">{{ n }}</span>}</button>
 }
 @if (open()) {
   <div class="tb-menu" role="menu" [style.top.px]="at().top" [style.left.px]="at().left" [style.right.px]="at().right" (keydown)="key($event)">
@@ -42,6 +43,7 @@ import { Workspace } from './workspaces';
           [attr.aria-current]="picked.room() === w.id ? 'page' : null" [title]="bar.title(w)" (click)="go(w)">
     <svg class="tb-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="bar.icon(w.id)"/></svg>
     <span>{{ w.label | t }}</span>
+    @if (w.id === 'commandcode' && threads.total()) { <span class="tcv-tab-unread">{{ threads.total() }}</span> }
     @if (picked.room() === w.id) { <em>● {{ 'open' | t }}</em> }
   </button>
 </ng-template>`,
@@ -49,6 +51,10 @@ import { Workspace } from './workspaces';
 export class TopbarMore implements OnDestroy {
   bar = inject(TopBar);
   picked = inject(Selection);
+  /** Chat's unread count, on More while Chat is in it (a phone's bar). */
+  threads = inject(AgentThreads);
+  chatUnread = computed(() => [...this.bar.overflow(), ...this.bar.hiddenTabs()].some(w => w.id === 'commandcode')
+    ? this.threads.total() : 0);
   private prefs = inject(Prefs);
   private host = inject(ElementRef).nativeElement as HTMLElement;
   private btn = viewChild<ElementRef<HTMLElement>>('btn');

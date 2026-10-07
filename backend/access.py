@@ -1,12 +1,18 @@
 """Who may do what: the roles, in one table.
 
 Every API request is sorted into one action - looking, drawing a note,
-running something, changing the design, deleting, the workspace's
-settings, its members, its agent tokens - by its method and path, in
+running something, changing the design, deleting, one's own settings, the
+server's settings, the accounts, agent tokens - by its method and path, in
 `action()` below. The middleware in main.py asks `allowed(role, action)`
 once per request, so no route has to remember to check, and a route added
 later falls under the rule for its method (GET looks, DELETE deletes,
 anything else changes the design) until it is listed here.
+
+A person's role is their system role (backend/auth.py): owner, admin or
+user. Each of them works in a private space of their own, so in it they may
+do all the work; what sets them apart is the server - its settings and its
+accounts are the owner's and the admins'. An agent's token carries a role
+of its own, editor at most, in the space of the account that made it.
 
 In local mode (sign-in off) the person at the machine is the owner and
 everything is allowed, as it always was.
@@ -17,7 +23,10 @@ from __future__ import annotations
 import contextvars
 import re
 
-ROLES = ("owner", "admin", "editor", "reviewer", "viewer")
+# The people's roles first (backend/auth.py SYSTEM_ROLES), then the
+# agents' (TOKEN_ROLES): lower in the list is less.
+ROLES = ("owner", "admin", "user", "editor", "reviewer", "viewer")
+PEOPLE = ("owner", "admin", "user")
 
 # The role of the request being served; the middleware sets it. Local mode:
 # the owner.
@@ -30,28 +39,32 @@ def current() -> str | None:
 
 # What each action is, in the words the page shows when one is refused.
 ACTIONS = {
-    "view": "look at the workspace",
+    "view": "look at it",
     "draw": "draw notes, save drafts, chat and answer questions",
     "run": "queue notes and run builds",
     "edit": "change models and boards",
     "delete": "delete",
-    "settings": "change the workspace's settings",
     "tokens": "hand out agent tokens",
-    "members": "invite people and change roles",
+    "space": "change your own settings",
+    "settings": "change the server's settings",
+    "users": "manage the accounts",
 }
 
+_WORK = frozenset({"view", "draw", "run", "edit", "delete", "tokens"})
 CAN: dict[str, frozenset[str]] = {
     "viewer": frozenset({"view"}),
     "reviewer": frozenset({"view", "draw"}),
-    "editor": frozenset({"view", "draw", "run", "edit", "delete", "tokens"}),
-    "admin": frozenset({"view", "draw", "run", "edit", "delete", "tokens", "settings", "members"}),
+    "editor": _WORK,
+    "user": _WORK | {"space"},
+    "admin": _WORK | {"space", "settings", "users"},
     "owner": frozenset(ACTIONS),
 }
 
-# What a role is for, in a line - the members list shows it.
+# What a role is for, in a line - the admin panel and the token page show it.
 ABOUT = {
-    "owner": "everything, including who owns the workspace",
-    "admin": "everything but ownership: members, settings, tokens",
+    "owner": "everything; the only one who changes roles and deletes accounts",
+    "admin": "the server's settings and the users' accounts",
+    "user": "their own private space: projects, notes, agents",
     "editor": "designs, queues, builds and deletes; hands out agent tokens",
     "reviewer": "draws notes and drafts, chats, answers - does not queue, build or delete",
     "viewer": "looks and downloads",
@@ -70,23 +83,18 @@ _RULES: list[tuple[str, str, str]] = [
     # token has to be good (any token role may look); the route itself
     # takes nothing but a bearer token (backend/auth.py, page sessions)
     ("POST", "/api/auth/page-session", "view"),
-    # signing in, and an invitation's own page
+    # signing in, and a password-reset link's own page
     ("*", "/api/auth/.*", NONE),
-    ("*", "/api/invite/.*", NONE),
     ("*", "/api/reset/.*", NONE),
     ("GET", "/api/health", NONE),
     # one's own profile (backend/profile.py): anyone signed in, and only
     # themselves - the routes take no one else's id but a picture's
     ("*", "/api/me(/.*)?", "view"),
-    # the people and the agents
-    ("*", "/api/members(/.*)?", "members"),
-    ("*", "/api/invites(/.*)?", "members"),
+    # the accounts (backend/admin.py): the owner and the admins; the routes
+    # keep what only the owner may do (roles, deleting) to the owner
+    ("*", "/api/admin(/.*)?", "users"),
+    # the agents
     ("*", "/api/agent-tokens(/.*)?", "tokens"),
-    # the workspaces: seeing and opening one's own, making one, naming this one
-    ("GET", "/api/workspaces", "view"),
-    ("POST", "/api/workspaces/{}/open", "view"),      # membership of the other is checked
-    ("POST", "/api/workspaces", "members"),
-    ("PATCH", "/api/workspaces/{}", "settings"),
     # the agents' way in: agent_api checks writes against the token's role
     ("*", "/api/agent/.*", "view"),
     # notes: drawing and editing one is a reviewer's; queueing it is not
@@ -119,11 +127,11 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/cc/chats(/{}/(messages|regenerate|restore|stop|queue/resume|queue/clear)|/bulk-delete|/bulk-restore|/empty-trash)?", "draw"),
     ("PATCH", "/api/cc/chats/{}(/queue/{})?", "draw"),
     ("DELETE", "/api/cc/chats/{}(/messages/{}|/queue/{})?", "draw"),
-    # custom themes (backend/themes.py): anyone in the workspace may make
-    # one; the routes keep changing or deleting someone else's to its maker,
-    # an owner or an admin
+    # custom themes (backend/themes.py): anyone may make one in their own
+    # space; the routes keep changing or deleting one to its maker or the
+    # space's person
     ("*", "/api/themes(/{})?", "view"),
-    # LLM settings: the keys and the models are the workspace's settings
+    # LLM settings: the keys and the models are the server's settings
     ("PUT", "/api/llm/settings", "settings"),
     ("POST", "/api/llm/test", "settings"),
     ("PUT", "/api/proxy/settings", "settings"),
@@ -132,11 +140,9 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/proxy/test", "settings"),
     # Telegram (backend/tgbot/api.py): Telegram itself, with the webhook's
     # secret header and no session; the bot is the server's settings;
-    # linking one's own chat, and what one hears about, is anyone's;
-    # unlinking someone else is managing the members
+    # linking one's own chat, and what one hears about, is anyone's
     ("POST", "/api/telegram/webhook", NONE),
     ("*", "/api/telegram/(link|me|me/test)", "view"),
-    ("DELETE", "/api/telegram/links/{}", "members"),
     ("PUT", "/api/telegram/(token|mode|settings|profile|profile/photo|profile/photo/default)", "settings"),
     ("DELETE", "/api/telegram/(bot|profile/photo|profile/lang/{})", "settings"),
     ("POST", "/api/telegram/profile/(translate|done)", "settings"),
@@ -164,8 +170,9 @@ _RULES: list[tuple[str, str, str]] = [
     # bringing a board in makes a board
     ("POST", "/api/boards/import", "edit"),
     ("POST", "/api/tools/(find|usage)", "view"),
-    # the workspace's settings
-    ("PUT", "/api/settings", "settings"),
+    # one's own space's settings (auto-archive, auto-translate)
+    ("PUT", "/api/settings", "space"),
+    # the server's
     ("PUT", "/api/insights/(settings|kwh-price)", "settings"),
     # by method, for everything else
     ("GET", ".*", "view"),
@@ -195,9 +202,8 @@ def allowed(role: str | None, act: str) -> bool:
 
 
 # What a page session (a headless browser taking a picture) may send: it
-# reads. Not even the few writes a viewer may make - opening another
-# workspace, the agents' way in - and nothing a person signs in or out with
-# but leaving.
+# reads. Not even the few writes a viewer may make - the agents' way in -
+# and nothing a person signs in or out with but leaving.
 PAGE_METHODS = ("GET", "HEAD")
 
 
@@ -216,7 +222,7 @@ def can(role: str | None) -> list[str]:
 
 
 def rank(role: str) -> int:
-    """Owner 0 ... viewer 4: lower is more."""
+    """Owner 0 ... viewer 5: lower is more."""
     return ROLES.index(role) if role in ROLES else len(ROLES)
 
 

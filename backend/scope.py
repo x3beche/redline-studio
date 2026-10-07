@@ -1,4 +1,10 @@
-"""Whose data this is: every read and write through one workspace.
+"""Whose data this is: every read and write through one private space.
+
+Each account has a space of its own (backend/auth.py `space_of`): the
+owner's is "default", which holds the data from before accounts; anyone
+else's starts empty and nobody else sees into it. The code calls a space a
+"workspace" (`workspace_id`, `WORKSPACE`) - the name it had when several
+people shared one; the page never shows it.
 
 The routes do not ask the database directly. `main.db()` hands them a
 `ScopedDb` for the workspace of the request, and every collection that

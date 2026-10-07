@@ -40,12 +40,11 @@ def test_a_viewer_only_looks():
             continue
         ok = access.allowed("viewer", act)
         # The few writes a viewer may make are checks and lookups that
-        # change nothing, the agents' way in (which checks its writes), and
-        # moving to another workspace they are a member of.
+        # change nothing, and the agents' way in (which checks its writes).
         assert not ok or (method, path) in {
             ("POST", "/api/boards/x/rules/check"), ("POST", "/api/tools/find"),
             ("POST", "/api/tools/usage"), ("POST", "/api/agent/db"), ("POST", "/api/agent/files/x"),
-            ("DELETE", "/api/agent/files/x/x"), ("POST", "/api/workspaces/x/open"),
+            ("DELETE", "/api/agent/files/x/x"),
             # reading an agent's question or reply in another language (reading.py)
             ("POST", "/api/questions/x/translate"), ("POST", "/api/chat/x/translate"),
             # trading a token for a read-only page session (test_page_session.py)
@@ -83,16 +82,37 @@ def test_an_editor_works_but_does_not_manage():
                          ("PUT", "/api/boards/b"), ("DELETE", "/api/boards/b"), ("POST", "/api/agent-tokens"),
                          ("PUT", "/api/tools/data/t")):
         assert access.allowed(e, access.action(method, path)), (method, path)
-    for method, path in (("GET", "/api/members"), ("POST", "/api/invites"), ("PATCH", "/api/members/u"),
-                         ("PUT", "/api/settings"), ("PUT", "/api/insights/settings")):
+    for method, path in (("GET", "/api/admin/users"), ("POST", "/api/admin/users"),
+                         ("PATCH", "/api/admin/users/u"), ("PUT", "/api/settings"),
+                         ("PUT", "/api/insights/settings"), ("PUT", "/api/llm/settings")):
         assert not access.allowed(e, access.action(method, path)), (method, path)
 
 
-def test_admins_and_owners_manage():
+def test_a_user_works_in_their_own_space_but_does_not_run_the_server():
+    u = "user"
+    for method, path in (("PATCH", "/api/revisions/n1"), ("POST", "/api/boards/b/build"),
+                         ("DELETE", "/api/boards/b"), ("POST", "/api/agent-tokens"), ("PUT", "/api/settings")):
+        assert access.allowed(u, access.action(method, path)), (method, path)
+    for method, path in (("GET", "/api/admin/users"), ("POST", "/api/admin/users"),
+                         ("DELETE", "/api/admin/users/u"), ("PUT", "/api/llm/settings"),
+                         ("PUT", "/api/proxy/settings"), ("PUT", "/api/costs"), ("PUT", "/api/telegram/token"),
+                         ("PUT", "/api/insights/settings")):
+        assert not access.allowed(u, access.action(method, path)), (method, path)
+
+
+def test_admins_and_owners_run_the_server_and_the_accounts():
     for role in ("admin", "owner"):
-        for method, path in (("GET", "/api/members"), ("POST", "/api/invites"), ("DELETE", "/api/members/u"),
-                             ("PUT", "/api/settings")):
+        for method, path in (("GET", "/api/admin/users"), ("POST", "/api/admin/users"),
+                             ("DELETE", "/api/admin/users/u"), ("PUT", "/api/settings"),
+                             ("PUT", "/api/llm/settings"), ("PUT", "/api/telegram/token")):
             assert access.allowed(role, access.action(method, path)), (role, method, path)
+
+
+def test_the_workspace_routes_are_gone():
+    from backend.main import app
+    paths = app.openapi()["paths"]
+    assert not [p for p in paths if p.startswith(("/api/members", "/api/invite", "/api/workspaces"))]
+    assert "/api/telegram/links/{user_id}" not in paths
 
 
 def test_signed_out_reaches_only_signing_in():
@@ -100,7 +120,7 @@ def test_signed_out_reaches_only_signing_in():
         act = access.action(method, path)
         open_ = access.allowed(None, act)
         # Every sign-in route but the one that needs an agent token.
-        signing_in = path.startswith(("/api/auth/", "/api/invite/", "/api/reset/")) \
+        signing_in = path.startswith(("/api/auth/", "/api/reset/")) \
             and path != "/api/auth/page-session"
         # Telegram's webhook: no session; the route checks its secret header.
         assert open_ == (signing_in or path in ("/api/health", "/api/telegram/webhook")), (method, path)
@@ -112,9 +132,9 @@ def test_the_tool_pages_are_for_looking():
 
 
 def test_agents_work_they_do_not_manage():
-    assert "owner" not in access.TOKEN_ROLES and "admin" not in access.TOKEN_ROLES
+    assert not set(access.PEOPLE) & set(access.TOKEN_ROLES)
     for role in access.TOKEN_ROLES:
-        assert "members" not in access.CAN[role] and "settings" not in access.CAN[role]
+        assert not {"users", "settings", "space"} & access.CAN[role]
 
 
 def test_a_refusal_says_who_can():

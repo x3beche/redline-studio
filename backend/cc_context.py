@@ -465,7 +465,7 @@ async def expand(db, refs: list[dict], vision: bool) -> tuple[str, list[dict], l
         seen.add((kind, rid))
         got = await resolve(db, kind, rid) if kind in KINDS and rid else None
         if not got:
-            raise HTTPException(404, f"@{kind} {rid}: not found in this workspace")
+            raise HTTPException(404, f"@{kind} {rid}: not found")
         text = got["text"]
         notes: list[str] = []
         images = got.get("images") or []

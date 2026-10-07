@@ -6,14 +6,13 @@ import { Auth } from './auth';
 import { Avatar } from './avatar';
 
 /** Settings > Profile: the person's own account (backend/profile.py) - the
- *  picture, the name and the address, the role here, the password and the
- *  sessions. Only one's own; local mode, an agent's token and a headless
+ *  picture, the name and the address, the system role (owner, admin or
+ *  user), the password and the sessions. Only one's own; local mode, an agent's token and a headless
  *  browser get it read-only, with no password or sessions to show. */
 interface Profile {
   kind: 'user' | 'local' | 'agent' | 'page';
-  id: string; name: string; email: string | null; role: string | null;
-  workspace: string; workspace_name?: string;
-  created_at?: string | null; joined?: string | null; last_sign_in?: string | null;
+  id: string; name: string; email: string | null; role: string | null; about_role?: string | null;
+  created_at?: string | null; last_sign_in?: string | null;
   has_avatar: boolean; avatar_v: number | null;
 }
 interface Session { id: string; here: boolean; device: string; created_at: string | null; last_seen: string | null }
@@ -54,7 +53,7 @@ const MIN_PASSWORD = 10;
     }
     <div class="st-card">
       <div class="st-card-head"><h3>{{ 'Profile' | t }}</h3>
-        <span class="st-sub">{{ 'What the others in the workspace see of you' | t }}</span></div>
+        <span class="st-sub">{{ 'Your name and picture, and the address you sign in with' | t }}</span></div>
       <form class="st-card-body" (submit)="$event.preventDefault(); dirty() && name().trim() && save()">
         <div class="pf-top">
           <div class="pf-pic">
@@ -90,10 +89,10 @@ const MIN_PASSWORD = 10;
             </div>
             @if (emailChanged()) { <p class="st-hint">{{ 'You sign in with this address: changing it asks for your password.' | t }}</p> }
             <div class="st-tiles pf-tiles">
-              <div class="st-tile"><span>{{ 'Role here' | t }}</span><b>{{ p.role ?? '-' }}</b>
-                <small>{{ p.workspace_name ?? p.workspace }}</small></div>
-              <div class="st-tile"><span>{{ 'Member since' | t }}</span><b>{{ day(p.joined ?? p.created_at) }}</b>
-                <small>{{ p.created_at ? ('account' | t) + ' ' + day(p.created_at) : '' }}</small></div>
+              <div class="st-tile" [title]="p.about_role ?? ''"><span>{{ 'Role' | t }}</span><b>{{ (p.role ?? '-') | t }}</b>
+                <small>{{ (p.kind === 'user' ? 'on this server' : 'of this token') | t }}</small></div>
+              <div class="st-tile"><span>{{ 'Account since' | t }}</span><b>{{ day(p.created_at) }}</b>
+                <small>{{ time(p.created_at) }}</small></div>
               <div class="st-tile"><span>{{ 'Last sign-in' | t }}</span><b>{{ day(p.last_sign_in) }}</b>
                 <small>{{ time(p.last_sign_in) }}</small></div>
               <div class="st-tile"><span>{{ 'Account' | t }}</span><b>{{ kindName(p.kind) | t }}</b>

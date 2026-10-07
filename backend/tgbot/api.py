@@ -20,7 +20,6 @@
     DELETE /api/telegram/link            unlink my chat
     PUT    /api/telegram/me              what I hear about, and in which language
     POST   /api/telegram/me/test         a test message to my chat, now
-    DELETE /api/telegram/links/{user}    unlink someone                          (members)
     POST   /api/telegram/webhook         Telegram's updates - only with the secret header
 
 Who may call which is backend/access.py's, like every route.
@@ -76,11 +75,6 @@ def _can(act: str) -> bool:
     return access.allowed(access.current(), act)
 
 
-def _ws_query(ws: str) -> dict:
-    return {"workspace": ws} if ws != scope.DEFAULT else \
-        {"$or": [{"workspace": scope.DEFAULT}, {"workspace": None}]}
-
-
 def _webhook_ok(st: dict) -> bool | None:
     if st.get("mode") != "webhook":
         return None
@@ -107,7 +101,7 @@ def _link_out(link: dict | None) -> dict:
     return {"linked": True, "chat": link.get("chat"), "username": tg.get("username"),
             "name": " ".join(x for x in [tg.get("first_name"), tg.get("last_name")] if x) or None,
             "linked_at": link.get("linked_at"), "prefs": links.prefs_of(link), "lang": link.get("lang"),
-            "blocked": bool(link.get("blocked")), "workspace": link.get("workspace")}
+            "blocked": bool(link.get("blocked"))}
 
 
 async def state() -> dict:
@@ -115,11 +109,10 @@ async def state() -> dict:
     st = await core.settings(raw)
     token = core.token_of(st)
     botinfo = st.get("bot") or {}
-    ws = scope.current()
     who = actors.current()
     mine = await links.of_user(raw, who.get("id")) if who.get("type") == "user" else None
     code = await raw[core.CODES].find_one({"user": who.get("id")}) if who.get("type") == "user" else None
-    linked = await raw[core.LINKS].count_documents(_ws_query(ws))
+    linked = await raw[core.LINKS].count_documents({})
     out = {
         "bot": {"set": bool(token), "hint": core.hint(token), "id": botinfo.get("id"),
                 "username": botinfo.get("username"), "name": botinfo.get("first_name"),
@@ -138,23 +131,14 @@ async def state() -> dict:
                                                        > core.now())},
         "prefs": PREF_INFO,
         "commands": [{"command": c, "about": a} for c, a in COMMANDS],
-        "can_edit": _can("settings"), "can_see_people": _can("settings") or _can("members"),
+        "can_edit": _can("settings"),
         "queue": await raw[core.OUTBOX].count_documents({"status": {"$in": ["pending", "sending"]}}),
         "profile": st.get("profile_state") or None,
         # step 3 is done when someone pressed its Save - not guessed from the fields
         "profile_done": st.get("profile_done") or None,
     }
-    if out["can_see_people"]:
-        people = []
-        async for link in raw[core.LINKS].find(_ws_query(ws)):
-            role = await links.role_of(raw, link)
-            tg = link.get("tg") or {}
-            people.append({"id": link["_id"], "name": link.get("name") or link["_id"], "role": role,
-                           "username": tg.get("username"), "tg_name": tg.get("first_name"),
-                           "linked_at": link.get("linked_at"), "blocked": bool(link.get("blocked")),
-                           "on": sum(1 for v in links.prefs_of(link).values() if v), "lang": link.get("lang")})
-        people.sort(key=lambda p: (access.rank(p["role"] or "viewer"), (p["name"] or "").lower()))
-        out["people"] = people
+    # Each person sees their own link only; the bot's log is the server's.
+    if out["can_edit"]:
         out["log"] = [{k: r.get(k) for k in ("at", "dir", "kind", "ok", "error", "preview", "user")}
                       async for r in raw[core.LOG].find({}).sort("at", -1).limit(25)]
     return out
@@ -625,18 +609,6 @@ async def test_me(body: TestIn) -> dict:
     after = await raw[core.OUTBOX].find_one({"_id": job["_id"]}) or {}
     return {"ok": ok, "ms": round((time.monotonic() - t0) * 1000), "error": after.get("error") if not ok else None,
             "retrying": after.get("status") == "pending"}
-
-
-@router.delete("/links/{user_id}")
-async def delete_link(user_id: str) -> dict:
-    """An admin unlinks someone in this workspace."""
-    raw = _raw()
-    link = await links.of_user(raw, user_id)
-    if not link or links.ws_of(link) != scope.current():
-        raise HTTPException(404, "no Telegram link for that person here")
-    await links.unlink(raw, user_id)
-    await actors.audit(raw, "telegram", f"link/{user_id}", {"unlinked": True})
-    return await state()
 
 
 # ---------------- Telegram's way in ----------------

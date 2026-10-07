@@ -690,7 +690,7 @@ export class RoomPcb implements OnDestroy {
   /** What an empty tab says. Nothing here makes a board: the agent runs
    *  the pipeline when a change is asked for. */
   readonly notYet = 'Nothing yet. Ask for the change - a board note, or the '
-    + 'thread under the queue - and the agent runs the pipeline: build, '
+    + 'room\'s thread in Chat - and the agent runs the pipeline: build, '
     + 'schematic, place, route, DRC.';
   readonly sideTabs = ['parts', 'rules', 'health'] as const;
   /** Board health replaced the Checks and Analytics tabs; a browser that

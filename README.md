@@ -162,13 +162,13 @@ the keyboard shortcuts.
 
 ![Every theme on the same model](docs/themes.png)
 
-## People, roles and workspaces
+## People and roles
 
-Local mode needs no sign-in. Switched on, it has accounts, invitation
-links, five roles (owner, admin, editor, reviewer, viewer - a reviewer
-draws and comments but does not queue, build or delete), separate
-workspaces with the same names in each, and agent tokens so an agent
-works through the API without the database password. Every delete and
+Local mode needs no sign-in. Switched on, it has accounts with a system
+role - the owner (the first account), admins and users - an admin panel
+where the owner and the admins add, edit, disable and reset accounts, a
+private space for every account (nobody sees another's data), and agent
+tokens so an agent works through the API without the database password. Every delete and
 change of state is in an audit trail. [docs/ACCOUNTS.md](docs/ACCOUNTS.md)
 says how to run it and how to get back in.
 

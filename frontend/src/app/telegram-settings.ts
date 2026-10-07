@@ -13,15 +13,13 @@ import { Langs, TgLangPicker } from './telegram-langs';
  *  status - create the bot with @BotFather, paste its token (checked with
  *  getMe; kept on the server, only its last four characters come back), pick
  *  how updates arrive (a webhook with a secret header, or long polling), link
- *  people, send a test. Changing it is for owners and admins.
+ *  your own chat, send a test. Changing it is for the owner and the admins.
  *
  *  Under it, everyone's own: link my Telegram (a one-time code, a t.me link
  *  and a QR code, ten minutes), what I hear about (toggle tiles), the
  *  language questions come in, and the bot's commands.
  */
 interface Pref { id: string; label: string; about: string }
-interface Person { id: string; name: string; role: string | null; username: string | null; tg_name: string | null;
-  linked_at: string | null; blocked: boolean; on: number; lang: string | null }
 interface LogRow { at: string; dir: 'in' | 'out'; kind: string; ok: boolean; error: string | null; preview: string | null; user: string | null }
 interface TgState {
   bot: { set: boolean; hint: string | null; id: number | null; username: string | null; name: string | null;
@@ -37,7 +35,7 @@ interface TgState {
   me: { linked: boolean; chat?: number; username?: string | null; name?: string | null; linked_at?: string;
         prefs?: Record<string, boolean>; lang?: string | null; blocked?: boolean; code_pending?: boolean };
   prefs: Pref[]; commands: { command: string; about: string }[];
-  can_edit: boolean; can_see_people: boolean; people?: Person[]; log?: LogRow[];
+  can_edit: boolean; log?: LogRow[];
   profile: { name: boolean; description: boolean; short_description: boolean; photo: boolean } | null;
   /** Step 3's Save was pressed (cleared by a new token). */
   profile_done?: { at: string; by?: string } | null;
@@ -66,7 +64,7 @@ const STUB: TgState = {
     { command: 'lang', about: 'the language questions come in' }, { command: 'help', about: 'what the bot can do' },
     { command: 'stop', about: 'unlink this chat' },
   ],
-  can_edit: true, can_see_people: true, people: [], log: [], profile: null,
+  can_edit: true, log: [], profile: null,
 };
 const DEFAULT_PREFS: Record<string, boolean> = { question: true, note: true, run: false, budget: false, build: false, digest: false };
 
@@ -85,7 +83,7 @@ const FATHER = [
 <div class="st-page">
   <p class="st-lead">{{ 'A Telegram bot for the whole server: the agents\\' questions reach people on their phones, and answers, notes and messages come back the same way. The token stays on the server - once saved, only its last four characters are shown.' | t }}</p>
   @if (stub()) { <div class="st-banner">{{ 'Preview - the server has no Telegram routes yet, so this shows a bot that is not set up.' | t }}</div> }
-  @if (!d.can_edit) { <div class="st-banner">{{ 'Only the workspace\\'s owners and admins can set up the bot. Linking your own Telegram is for everyone.' | t }}</div> }
+  @if (!d.can_edit) { <div class="st-banner">{{ 'Only the owner and the admins set up the bot. Linking your own Telegram is for everyone.' | t }}</div> }
 
   <div class="st-tiles">
     <div class="st-tile" [attr.data-tone]="!d.bot.set ? 'dim' : d.online?.ok === false ? 'danger' : 'ok'"><span>{{ 'Bot' | t }}</span>
@@ -208,7 +206,7 @@ const FATHER = [
                   }
                 }
                 @case (5) {
-                  <p class="st-hint">{{ 'Each person links their own chat, below in "Your Telegram": a one-time code, good for ten minutes. In Telegram, what they may do is what their role here allows - a viewer reads, a reviewer answers and writes notes, an editor also queues.' | t }}</p>
+                  <p class="st-hint">{{ 'Every account links its own chat, below in "Your Telegram": a one-time code, good for ten minutes. In Telegram they work in their own private space, as in the app; a disabled account is nobody to the bot.' | t }}</p>
                   <div class="st-row">
                     <span class="st-badge" [attr.data-tone]="d.linked ? 'ok' : null">{{ d.linked }} {{ 'linked' | t }}</span>
                     @if (!d.me.linked) { <button class="tcv-btn tcv-files-btn" [disabled]="!d.bot.set || !!busy()" (click)="makeCode()">{{ 'Link my Telegram' | t }}</button> }
@@ -316,25 +314,7 @@ const FATHER = [
     </div>
   </div>
 
-  @if (d.can_see_people) {
-    <div class="st-card">
-      <div class="st-card-head"><h3>{{ 'Linked people' | t }}</h3><span class="st-sub">{{ 'in this workspace' | t }}</span>
-        <span class="st-right st-sub mono">{{ d.people?.length ?? 0 }}</span></div>
-      @if (d.people?.length) {
-        <div class="st-table-wrap"><table class="st-table">
-          <thead><tr><th>{{ 'person' | t }}</th><th>{{ 'role' | t }}</th><th>Telegram</th><th>{{ 'linked' | t }}</th>
-            <th class="r">{{ 'notifications' | t }}</th><th></th></tr></thead>
-          <tbody>
-            @for (p of d.people; track p.id) {
-              <tr><td>{{ p.name }}</td><td><span class="st-tag" [attr.data-tone]="p.role ? null : 'danger'">{{ p.role || ('no access' | t) }}</span></td>
-                <td class="mono">{{ p.username ? '@' + p.username : p.tg_name }}@if (p.blocked) { <span class="st-tag" data-tone="warn">{{ 'blocked' | t }}</span> }</td>
-                <td class="dim mono">{{ when(p.linked_at) }}</td><td class="r mono">{{ p.on }} / {{ d.prefs.length }}</td>
-                <td class="r"><button class="st-x" [title]="'Unlink' | t" (click)="unlink(p)">×</button></td></tr>
-            }
-          </tbody></table></div>
-      } @else { <div class="st-empty">{{ 'Nobody has linked a chat yet.' | t }}</div> }
-    </div>
-
+  @if (d.can_edit) {
     <div class="st-card">
       <div class="st-card-head"><h3>{{ 'Recent traffic' | t }}</h3><span class="st-sub">{{ 'kept 30 days' | t }}</span></div>
       @if (d.log?.length) {
@@ -431,7 +411,7 @@ export class TelegramSettingsPanel implements OnDestroy {
       { title: 'Paste its token', sub: 'checked with getMe; only the last four characters are shown again' },
       { title: 'Name and picture', sub: 'name, description, short description, picture - per language, from here' },
       { title: 'Choose how updates arrive', sub: 'a webhook with a secret header, or long polling' },
-      { title: 'Link people', sub: 'each person links their own chat with a one-time code' },
+      { title: 'Link your Telegram', sub: 'every account links its own chat, with a one-time code' },
       { title: 'Send a test message', sub: 'to your own chat, with a picture' },
     ];
     return meta.map((m, i) => ({ n: i + 1, ...m, state: done[i] ? 'done' : i === first ? 'now' : 'todo' }));
@@ -513,10 +493,6 @@ export class TelegramSettingsPanel implements OnDestroy {
   unlinkMe() {
     if (!confirm(t('Unlink your Telegram? Nothing more is sent to it.'))) return;
     this.call('unlink', this.http.delete<TgState>('/api/telegram/link'), t('Unlinked.'));
-  }
-  unlink(p: Person) {
-    if (!confirm(t('Unlink this person\'s Telegram?') + ' ' + p.name)) return;
-    this.call('unlink', this.http.delete<TgState>(`/api/telegram/links/${encodeURIComponent(p.id)}`), t('Unlinked.'));
   }
   flip(id: string) { this.call('pref', this.http.put<TgState>('/api/telegram/me', { prefs: { [id]: !this.prefOn(id) } })); }
   setLang(id: string) { this.call('pref', this.http.put<TgState>('/api/telegram/me', { lang: id })); }

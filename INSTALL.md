@@ -87,7 +87,7 @@ read by the **backend only** and never reaches the browser. The model API keys
 (OpenRouter, Command Code) are **not** read from `.env` or the environment: they
 are kept in the database and typed in **Settings > LLM settings**, where each job
 also picks its provider and model. Without a key there, the jobs that need it
-(card summaries, the English translation, tool pages, the Command Code room)
+(card summaries, the English translation, tool pages, the Chat room)
 stop with a message that points there.
 Redline's own settings are all named `REDLINE_*`.
 

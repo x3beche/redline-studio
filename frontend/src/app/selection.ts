@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { Workspace } from './workspaces';
 
-/** What the command palette asks of the Command Code room. */
+/** What the command palette asks of the Chat room (id 'commandcode'). */
 export interface CcWant {
   n: number;
   action: 'new' | 'last';
@@ -38,12 +38,12 @@ export class Selection {
   board = signal<string | null>(null);
 
   /** The note open in the Notes room, and the file picked in the Files
-   *  room, by id - so the command palette can offer "Ask Command Code
-   *  about this note / file". */
+   *  room, by id - so the command palette can offer "Ask Chat about this
+   *  note / file". */
   note = signal<{ id: string; label: string } | null>(null);
   file = signal<{ id: string; label: string } | null>(null);
 
-  /** Something the Command Code room is asked to do when it is on screen
+  /** Something the Chat room is asked to do when it is on screen
    *  (app/palette.ts): a new conversation, with something of the workspace
    *  attached and perhaps the question already typed, or the last one
    *  opened. The room takes it (sets it back to null). */
@@ -51,6 +51,15 @@ export class Selection {
   private ccAsks = 0;
   askCc(w: Omit<CcWant, 'n'>) {
     this.cc.set({ ...w, n: ++this.ccAsks });
+    this.room.set('commandcode');
+  }
+
+  /** A room's agent thread to show in the Chat tab (rooms/agent-thread.ts):
+   *  'cad' or 'pcb', or null for the AI conversations. Whatever used to
+   *  open the "ask the agent" box under the queue opens this instead. */
+  thread = signal<string | null>(new URLSearchParams(location.search).get('thread'));
+  openThread(room: string) {
+    this.thread.set(room);
     this.room.set('commandcode');
   }
 

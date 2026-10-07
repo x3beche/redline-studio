@@ -1,0 +1,58 @@
+/* Settings > Admin panel (admin-users.ts), on top of settings.css and
+   profile-settings.css: a flat users table, the edit cards with each line's
+   words on the left and its control on the right, and pulsing skeleton
+   rows while the server answers. No coloured stripes on the cards. */
+.ad-back { display: flex; align-items: center; gap: 10px; }
+.ad-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ad-find { width: 200px; }
+.ad-table td { vertical-align: middle; }
+.ad-row { cursor: pointer; }
+.ad-row:hover td { background: var(--hover); }
+.ad-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ad-who > .app-avatar { flex: none; }
+.ad-who-text { display: flex; flex-direction: column; min-width: 0; }
+.ad-who-text b { font-weight: 500; color: var(--ink-bright); overflow: hidden; text-overflow: ellipsis; }
+.ad-who-text b .st-tag { margin-left: 6px; font-weight: 400; }
+.ad-who-text small { font-size: 10.5px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; }
+.ad-table td .st-tag + .st-tag { margin-left: 4px; }
+
+.ad-line { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap;
+  padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.ad-line:last-of-type { padding-bottom: 0; border-bottom: 0; }
+.ad-line-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 260px; }
+.ad-line-text b { font-weight: 500; font-size: 12px; color: var(--ink); }
+.ad-line > .tcv-btn, .ad-line > .st-seg { flex: none; min-width: 150px; justify-content: center; }
+.ad-line > .st-seg button { flex: 1; }
+
+.ad-pw { grid-template-columns: minmax(0, 320px) auto; align-items: end; justify-content: start; }
+.ad-gen { height: 28px; }
+.ad-add { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.ad-pw-in { display: flex; gap: 6px; }
+.ad-pw-in .st-in { flex: 1; min-width: 0; }
+.ad-check { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink); cursor: pointer; }
+.ad-check input { margin: 0; accent-color: var(--accent); }
+.ad-danger { color: var(--danger); border-color: var(--danger); }
+.ad-danger:hover:not(:disabled) { background: var(--danger); color: var(--surface); }
+.mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+
+.ad-skel .sk { display: block; height: 10px; border-radius: 4px; background: var(--hover);
+  animation: ad-sk 1.2s ease-in-out infinite; }
+.ad-skel .sk-btn { width: 90px; height: 24px; }
+.ad-skel .sk-tile { height: 48px; border-radius: 5px; }
+.ad-skel .sk-av { flex: none; width: 26px; height: 26px; border-radius: 50%; }
+.ad-skel-row { display: flex; align-items: center; gap: 14px; padding: 4px 0; }
+@keyframes ad-sk { 50% { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .ad-skel .sk { animation: none; } }
+
+@media (max-width: 768px) {
+  .ad-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ad-wide { display: none; }
+  .ad-find { width: 100%; }
+  .st-card-head .st-right { flex-basis: 100%; margin-left: 0; }
+  .st-card-head .st-right .tcv-btn { min-height: 36px; }
+  .ad-line > .tcv-btn, .ad-line > .st-seg { flex: 1 1 100%; min-height: 40px; }
+  .ad-pw { grid-template-columns: minmax(0, 1fr); }
+  .ad-gen { min-height: 40px; }
+  .ad-table .r .tcv-btn { display: none; }
+  .pf-foot .tcv-btn { min-height: 40px; }
+}

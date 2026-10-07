@@ -71,7 +71,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 @if (data(); as d) {
 <div class="st-page">
   <p class="st-lead">{{ 'EasyEDA turns a burst of part lookups away for a while. A proxy gives them another way out. Only the LCSC / EasyEDA lookups use it; the asking stays as polite as before.' | t }}</p>
-  @if (!canEdit) { <div class="st-banner">{{ 'Only the workspace\\'s owners and admins can change these.' | t }}</div> }
+  @if (!canEdit) { <div class="st-banner">{{ 'These are the server\\'s settings: only the owner and the admins can change them.' | t }}</div> }
 
   <!-- Status at a glance -->
   <div class="st-tiles tight">

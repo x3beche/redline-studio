@@ -143,8 +143,8 @@ def test_logged_kinds_are_named_like_the_jobs():
     assert llm.job_label("translate") == "English translation"
     assert llm.job_label("tool-llm:smoke") == "Tool pages"
     assert llm.job_label("tool-router") == "Tool finder"
-    assert llm.job_label("cc-chat") == "Command Code room"
-    assert llm.job_label("cc-title") == "Command Code room titles"
+    assert llm.job_label("cc-chat") == "Chat room"
+    assert llm.job_label("cc-title") == "Chat titles"
     assert llm.job_label("llm-test") == "Settings test"
     assert llm.job_label("something-new") == "something-new"
 

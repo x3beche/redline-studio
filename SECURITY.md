@@ -18,11 +18,11 @@ branches.
 Redline is meant to run on one machine or a small private server, behind
 a reverse proxy with TLS. Problems worth reporting include:
 
-- signing in, sessions, invitations and roles (`backend/auth.py`,
-  `backend/access.py`) - one person or agent reaching another's
-  workspace, or doing more than its role allows
-- agent tokens (`rlat_...`) being usable beyond their workspace, room or
-  role
+- signing in, sessions, the admin panel and roles (`backend/auth.py`,
+  `backend/admin.py`, `backend/access.py`) - one person or agent reaching
+  another account's private space, or doing more than its role allows
+- agent tokens (`rlat_...`) being usable beyond their account's space,
+  room or role, or after that account is disabled
 - a way to read the server's keys (LLM providers, the proxy, the
   database) from the browser or the API
 - code from a note, a tool or an upload running outside its container

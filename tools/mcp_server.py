@@ -82,7 +82,7 @@ TOOLS: dict[str, tuple] = {
         "Mark a note applied.",
         {"id": _s("revision id")}, ["id"], lambda a: ["done", a["id"]]),
     "chat": (
-        "Read the thread under the queue, and pick up what the person said. "
+        "Read the room's thread (in the Chat tab), and pick up what the person said. "
         "Each room (tab) has its own thread; with a room, only that one.",
         {"room": {"type": "string", "enum": ROOMS,
                   "description": "only this room's thread"}},

@@ -32,13 +32,12 @@ def db(monkeypatch):
     auth._CACHE.clear()
     auth._FAILS.clear()
     now = datetime.now(timezone.utc)
-    for uid, email, name, role, ws in (("u-ayse", "ayse@example.com", "Ayşe", "viewer", "default"),
-                                       ("u-bora", "bora@example.com", "Bora", "editor", "default"),
-                                       ("u-cem", "cem@example.com", "Cem", "owner", "team2")):
-        run(fake["users"].insert_one({"_id": uid, "email": email, "name": name,
+    # Each in a private space of their own (auth.space_of); Cem is an admin.
+    for uid, email, name, role in (("u-ayse", "ayse@example.com", "Ayşe", "user"),
+                                   ("u-bora", "bora@example.com", "Bora", "user"),
+                                   ("u-cem", "cem@example.com", "Cem", "admin")):
+        run(fake["users"].insert_one({"_id": uid, "email": email, "name": name, "role": role,
                                       "pw": auth.hash_password(PW), "created_at": now}))
-        run(fake["memberships"].insert_one({"_id": f"{uid}:{ws}", "user": uid, "workspace": ws,
-                                            "role": role, "joined": now}))
     tokens = (actors.CURRENT.set(actors.local_user()), scope.WORKSPACE.set(scope.DEFAULT))
     yield fake
     actors.CURRENT.reset(tokens[0])
@@ -96,7 +95,8 @@ def test_me_says_who_and_where_and_never_the_password(db):
     assert r.status_code == 200, r.text
     me = r.json()
     assert me["kind"] == "user" and me["id"] == "u-ayse" and me["email"] == "ayse@example.com"
-    assert me["role"] == "viewer" and me["has_avatar"] is False and me["last_sign_in"]
+    assert me["role"] == "user" and me["has_avatar"] is False and me["last_sign_in"]
+    assert "workspace" not in me and "workspace_name" not in me
     assert me["created_at"].endswith("+00:00")
     assert "pw" not in me and "scrypt" not in r.text
 
@@ -201,14 +201,14 @@ def test_a_picture_is_put_shown_and_taken_off(db):
     got = c.get(f"/api/me/avatar/u-ayse?v={v}")
     assert got.status_code == 200 and got.headers["content-type"] == "image/jpeg"
     assert "immutable" in got.headers["cache-control"]
-    # a teammate sees it; the members list says it is there
-    other = client(session(db, "u-bora"))
-    assert other.get(f"/api/me/avatar/u-ayse?v={v}").status_code == 200
-    rows = run(auth.members(db, "default"))
+    # another user does not see it - each account is private - but an
+    # admin does (the admin panel), and its list says it is there
+    assert client(session(db, "u-bora")).get(f"/api/me/avatar/u-ayse?v={v}").status_code == 404
+    admin = client(session(db, "u-cem"))
+    assert admin.get(f"/api/me/avatar/u-ayse?v={v}").status_code == 200
+    rows = admin.get("/api/admin/users").json()["users"]
     assert next(m for m in rows if m["id"] == "u-ayse")["has_avatar"]
     assert "avatar" not in next(m for m in rows if m["id"] == "u-ayse")
-    # someone in another workspace does not
-    assert client(session(db, "u-cem", "team2")).get("/api/me/avatar/u-ayse").status_code == 404
     assert c.delete("/api/me/avatar").status_code == 200
     assert c.get("/api/me/avatar/u-ayse").status_code == 404
     assert not c.get("/api/me").json()["has_avatar"]

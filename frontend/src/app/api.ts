@@ -884,6 +884,8 @@ export interface Question {
   revision: string | null;
   status: 'open' | 'answered' | 'dropped';
   answer: string | null;
+  /** Whose thread it belongs in: a board note's question is the PCB room's. */
+  room?: string;
 }
 
 @Injectable({ providedIn: 'root' })

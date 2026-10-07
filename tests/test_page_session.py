@@ -3,7 +3,7 @@
 tools/render.py trades the agents' token for one (POST
 /api/auth/page-session); the server can make one for whoever asks it for a
 shot of its own pages. Either way it is read-only, minutes long, in the
-source's workspace, and ends when its source does.
+source's space, and ends when its source does.
 """
 import asyncio
 import json
@@ -159,14 +159,14 @@ def test_a_token_revoked_behind_its_back_is_checked_too():
     assert run(auth.session_user(db, value)) is None
 
 
-def test_a_persons_page_session_ends_when_they_leave_the_workspace():
+def test_a_persons_page_session_ends_when_their_account_is_disabled():
     db = Db()
     u = run(auth.make_first_user(db, "o@example.com", "O", "a long password"))
     who = {"type": "user", "id": u["_id"], "name": "O"}
     value, _ = run(auth.create_page_session(db, "default", who, user_id=u["_id"]))
     got = run(auth.session_user(db, value))
     assert got["role"] == "viewer" and got["user"]["id"] == u["_id"]
-    db[auth.MEMBERS].rows.clear()
+    db[auth.USERS].rows[0]["disabled"] = True
     auth._CACHE.clear()
     assert run(auth.session_user(db, value)) is None
 
@@ -203,11 +203,11 @@ def test_a_page_session_only_reads():
     assert access.page_allowed("GET", "/api/auth/state")
     assert access.page_allowed("POST", "/api/auth/logout")           # it may end itself
     # Not the writes a viewer may make, and nothing a viewer may not see.
-    for method, path in [("POST", "/api/workspaces/x/open"), ("POST", "/api/agent/db"),
+    for method, path in [("POST", "/api/agent/db"), ("GET", "/api/admin/users"),
                          ("POST", "/api/boards/b/rules/check"), ("POST", "/api/tools/find"),
                          ("POST", "/api/auth/page-session"), ("POST", "/api/revisions"),
                          ("DELETE", "/api/notes/n"), ("PUT", "/api/settings"),
-                         ("GET", "/api/agent-tokens"), ("GET", "/api/members")]:
+                         ("GET", "/api/agent-tokens")]:
         assert not access.page_allowed(method, path), (method, path)
 
 
@@ -251,11 +251,11 @@ def test_the_endpoint_trades_a_token_for_a_read_only_cookie(app):
     value = body["value"]
     jar = {auth.COOKIE: value}
     state = client.get("/api/auth/state", cookies=jar).json()
-    assert state["role"] == "viewer" and state["workspace"] == "ws2" and state["can"] == ["view"]
+    assert state["role"] == "viewer" and state["can"] == ["view"] and not state["must_change_password"]
     # Looking gets past the gate (404: no such route, but not 401 or 403).
     assert client.get("/api/no-such-thing", cookies=jar).status_code == 404
     # Changing anything does not, even a viewer's permitted POST.
-    for path in ("/api/workspaces/default/open", "/api/revisions", "/api/auth/page-session"):
+    for path in ("/api/agent/db", "/api/revisions", "/api/auth/page-session"):
         r = client.post(path, cookies=jar, headers={"x-redline-csrf": "1"})
         assert r.status_code == 403 and r.json()["refused"] == "page", path
     assert client.get("/api/agent-tokens", cookies=jar).status_code == 403

@@ -1,0 +1,66 @@
+/* Settings > Agent tokens (tokens-settings.ts), on settings.css. */
+
+/* Making one: the fields and the button on one line, bottoms aligned. */
+.tk-new { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 8px 10px; }
+.tk-new .tk-name { flex: 1 1 220px; }
+.tk-new .st-f { min-width: 0; }
+.tk-new select.st-in { min-width: 104px; }
+.tk-new .st-seg button { padding: 4px 9px; }
+.tk-new .st-in, .tk-make { height: 26px; }
+.tk-make { flex: none; }
+
+/* The token, this once. */
+.tk-once { display: flex; flex-direction: column; gap: 8px; padding: 9px 10px; background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 5px; }
+.tk-once-top { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
+.tk-once-top b { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.tk-code { display: block; padding: 7px 9px; font: 11.5px/1.6 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-bright);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 4px; word-break: break-all; user-select: all; }
+.tk-right { margin-left: auto; }
+
+/* The list. */
+.tk-table th, .tk-table td { padding-left: 6px; padding-right: 6px; vertical-align: middle; }
+.tk-table th:first-child, .tk-table td:first-child { padding-left: 10px; }
+.tk-table th:last-child, .tk-table td:last-child { padding-right: 10px; }
+.tk-row { cursor: pointer; }
+.tk-row:hover td { background: var(--hover); }
+.tk-row[data-open] td { background: var(--surface-2); }
+.tk-row[data-off] .tk-nm { color: var(--ink-dim); font-weight: 400; }
+.tk-nm { font-weight: 500; }
+.tk-caret { display: inline-block; width: 12px; font-size: 9px; color: var(--ink-dim); transition: transform .12s; }
+.tk-row[data-open] .tk-caret { transform: rotate(90deg); color: var(--accent); }
+.tk-spark { display: inline-block; margin-right: 6px; vertical-align: middle; }
+.tk-two > span, .tk-two > small { display: block; overflow: hidden; text-overflow: ellipsis; }
+.tk-two > small { font-size: 10.5px; color: var(--ink-dim); }
+.tk-table td.tk-two { max-width: 180px; }
+/* Narrow (the stage between the side panels): the sparklines give way. */
+.tk-wrap { container-type: inline-size; }
+@container (max-width: 700px) { .tk-spark { display: none; } }
+.tk-acts { width: 1%; }
+.tk-acts > .tcv-btn + .tcv-btn { margin-left: 4px; }
+.tk-btn { padding: 1px 7px; font-size: 11px; line-height: 18px; }
+.tk-danger { color: var(--danger); }
+.tk-danger:hover:not(:disabled) { border-color: var(--danger); }
+.tk-detail-row > td { max-width: 0; padding: 0; white-space: normal; background: var(--surface-2); }
+.tk-detail { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 10px 28px; }
+.tk-detail .st-tile { background: var(--surface); }
+.tk-detail .st-chart { background: var(--surface); }
+
+/* Loading: the shapes of what comes, pulsing (as telegram-profile.ts). */
+.tk-skel { display: flex; flex-direction: column; gap: 8px; }
+.tk-skel .sk { display: block; height: 10px; border-radius: 4px; background: var(--hover);
+  animation: tk-sk 1.2s ease-in-out infinite; }
+.tk-skel .sk-tile { height: 44px; border-radius: 5px; }
+.tk-skel .sk-chart { height: 140px; border-radius: 5px; }
+.tk-skel .sk-btn { height: 20px; margin-left: auto; }
+.tk-skel-list { padding: 4px 10px 8px; gap: 0; }
+.tk-skel-row { display: flex; align-items: center; gap: 14px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.tk-skel-row:last-child { border-bottom: 0; }
+@keyframes tk-sk { 50% { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .tk-skel .sk { animation: none; } }
+
+@media (max-width: 768px) {
+  .tk-new { flex-direction: column; align-items: stretch; }
+  .tk-new .st-in, .tk-make { height: auto; min-height: 40px; }
+  .tk-detail { padding-left: 10px; }
+}
