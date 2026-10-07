@@ -57,9 +57,42 @@ function cells(line: string): string[] {
   return (m ? m[1] : line).split('|').map(c => c.trim());
 }
 
+/** Maths, lifted out before anything else reads the text.
+ *
+ *  Models write TeX: \\( \\) and $ $ inline, \\[ \\] and $$ $$ on lines of their
+ *  own. Each is swapped for a mark before the Markdown is read (so `_` and
+ *  `*` in a formula stay maths) and comes back as a span holding the escaped
+ *  TeX; typesetMath() turns those into KaTeX once they are on the page.
+ *  Code - fenced or inline - is passed over, so a `$` in a shell line is
+ *  only a dollar. A lone `$` (a price) is left alone: an inline $...$ must
+ *  hug its contents and not be followed by a digit. */
+const MATH = /(```[\s\S]*?(?:```|$)|`[^`\n]+`)|\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$(?=[^\s$])([^$\n]*?[^\s$\\])\$(?!\d)/g;
+
+function liftMath(src: string): { text: string; math: string[] } {
+  const math: string[] = [];
+  const text = src.replace(MATH, (all, code: string, dd: string, bd: string, bi: string, di: string) => {
+    if (code) return all;
+    const display = dd ?? bd;
+    const tex = (display ?? bi ?? di).trim();
+    math.push(`<span class="md-math${display !== undefined ? ' md-math-d' : ''}">${escape(tex)}</span>`);
+    const mark = `\u0001${math.length - 1}\u0001`;
+    return display !== undefined ? `\n\n${mark}\n\n` : mark;
+  });
+  return { text, math };
+}
+
 /** Markdown to HTML. */
 export function toHtml(src: string): string {
-  const lines = escape((src ?? '').replace(/\r\n?/g, '\n')).split('\n');
+  const lifted = liftMath((src ?? '').replace(/\r\n?/g, '\n'));
+  return lifted.math.length
+    ? markdown(lifted.text)
+        .replace(/<p>\u0001(\d+)\u0001<\/p>/g, (_, i: string) => lifted.math[+i])
+        .replace(/\u0001(\d+)\u0001/g, (_, i: string) => lifted.math[+i])
+    : markdown(lifted.text);
+}
+
+function markdown(src: string): string {
+  const lines = escape(src).split('\n');
   const out: string[] = [];
 
   let para: string[] = [];
@@ -168,6 +201,50 @@ export function plain(src: string): string {
     .replace(/[*_`|]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** KaTeX for the maths spans toHtml leaves, wherever they land on the page.
+ *
+ *  Angular strips the inline styles KaTeX needs from anything going
+ *  through [innerHTML], so the spans go in as plain escaped TeX and are
+ *  typeset here, after the fact: one watcher on the whole page, KaTeX
+ *  loaded the first time a formula shows up. A streaming answer re-renders
+ *  the same formulas many times, so each one's HTML is kept. */
+type Katex = typeof import('katex').default;
+let katex: Katex | null = null;
+let loading: Promise<void> | null = null;
+const typeset = new Map<string, string>();
+
+function render(root: ParentNode) {
+  const todo = root.querySelectorAll<HTMLElement>('.md-math:not(.md-done)');
+  if (!todo.length) return;
+  if (!katex) {
+    loading ??= import('katex').then(m => { katex = m.default; }).finally(() => render(document));
+    return;
+  }
+  for (const el of Array.from(todo)) {
+    const display = el.classList.contains('md-math-d');
+    const tex = el.textContent ?? '';
+    const key = (display ? 'd:' : 'i:') + tex;
+    let html = typeset.get(key);
+    if (html === undefined) {
+      html = katex.renderToString(tex, { displayMode: display, throwOnError: false, trust: false, strict: 'ignore' });
+      if (typeset.size > 2000) typeset.clear();
+      typeset.set(key, html);
+    }
+    el.innerHTML = html;
+    el.title = tex;
+    el.classList.add('md-done');
+  }
+}
+
+if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+  let queued = false;
+  new MutationObserver(() => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; render(document); });
+  }).observe(document.documentElement, { childList: true, subtree: true });
 }
 
 @Pipe({ name: 'md' })

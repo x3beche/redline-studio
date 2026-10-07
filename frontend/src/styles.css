@@ -4177,3 +4177,9 @@ button.tcv-cc-mchip:hover { border-color: var(--ink-dim); background: var(--hove
   .pdw-bin.pdw-pulse { animation: none; border-color: var(--accent); }
 }
 /* ==== end parts drawer ==================================================== */
+
+/* Maths in Markdown (markdown.ts): KaTeX typesets the spans; a formula on
+   its own line is a block that scrolls sideways rather than overflowing. */
+.md-math-d { display: block; margin: .5em 0; overflow-x: auto; overflow-y: hidden; }
+.md-math .katex { font-size: 1.08em; }
+.md-math-d .katex-display { margin: 0; }
