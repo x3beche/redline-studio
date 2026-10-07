@@ -34,7 +34,14 @@ sent to the page - the chips are, as `mentions`).
 
 Everyone with a conversation open sees an answer as it is written, not
 only the one who asked: GET /chats/{id}/live is a server-sent stream fed
-by the request writing the answer (`HUB`).
+from the answer being written (`HUB`). The answer is not written by the
+request that asked for it but by a runner of its own (backend/ccgen.py),
+which keeps it - its thinking too, whole - as far as it got in the
+database: closing the page, refreshing it or a reload of the API stops
+nothing, and whoever opens the conversation gets the answer so far and the
+rest as it comes. One answer at a time in a conversation; POST
+/chats/{id}/stop stops it (whoever asked, or anyone with the "delete"
+right).
 
 Search (GET /search) reads every line, not only the titles, through a text
 index (`ensure_search_index`), and answers with the line it found, a
@@ -54,7 +61,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import access, actors, cc_context, llm, scope
+from . import access, actors, cc_context, ccgen, llm, scope
 
 router = APIRouter(prefix="/api/cc")
 
@@ -752,8 +759,10 @@ def _pick(doc: dict, provider: str | None, model: str | None) -> tuple[str, str]
 async def _cut(db, cid: str, msgs: list[dict], keep: int, tail: list[dict], sets: dict) -> None:
     """The conversation becomes msgs[:keep] + tail - only if nobody added a
     line meanwhile (otherwise 409, and nothing changed)."""
-    res = await db[COLL].update_one({"_id": cid, "messages": {"$size": len(msgs)}},
-                                    {"$set": {"messages": msgs[:keep] + tail, **sets}})
+    query = {"_id": cid, "messages": {"$size": len(msgs)}}
+    if sets.get("gen"):
+        query["gen"] = None                            # and only while no answer is being written
+    res = await db[COLL].update_one(query, {"$set": {"messages": msgs[:keep] + tail, **sets}})
     if not getattr(res, "matched_count", 1):
         raise HTTPException(409, "the conversation changed meanwhile - read it again and retry")
 
@@ -773,6 +782,8 @@ class Hub:
     def __init__(self):
         self.subs: dict[str, set[asyncio.Queue]] = {}
         self.live: dict[str, dict[str, dict]] = {}     # key -> gen -> state
+        self.tails: dict[str, asyncio.Task] = {}       # key -> the task following its generation (`_tail`)
+        self.poked: set[str] = set()                   # keys whose task should look once more
 
     def subscribe(self, key: str) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue(self.QUEUE)
@@ -814,10 +825,8 @@ class Hub:
     def piece(self, key: str, gen: str, kind: str, text: str) -> None:
         st = (self.live.get(key) or {}).get(gen)
         if st is not None:
-            if kind == "text":
-                st["text"] += text
-            else:
-                st["thinking"] = (st["thinking"] + text)[-4000:]
+            # Whole: the thinking is shown in full, never its tail.
+            st["text" if kind == "text" else "thinking"] += text
         self.publish(key, {"type": kind, "gen": gen, "text": text})
 
     def end(self, key: str, gen: str, ev: dict) -> None:
@@ -849,6 +858,10 @@ async def live(cid: str, request: Request):
     await _load(cid)                                   # this workspace's, and not in the trash
     key = live_key(cid)
     q = HUB.subscribe(key)
+    # An answer being written by a runner this process has not followed yet
+    # (written before a reload, say): followed now, its start - with the
+    # answer so far - comes as the first event after the hello.
+    follow(cid)
 
     async def events():
         try:
@@ -876,93 +889,186 @@ async def live(cid: str, request: Request):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-def _stream(db, doc: dict, msgs: list[dict], provider: str, model: str, first: dict,
-            key: str | None = None, client: str | None = None, images: list[dict] | None = None) -> StreamingResponse:
-    """Write the answer to `msgs` and keep it. Events: the first one
-    ({type: user, message, keep, gen}: the conversation is its first `keep`
-    lines, then `message` if any), then thinking|text|error, done, and a
-    title when the conversation was named by this answer. The same goes to
-    everyone watching the conversation (`HUB`, under `key`)."""
-    cid = doc["_id"]
-    want_title = doc.get("title") in ("", DEFAULT_TITLE, None)
-    key = key or live_key(cid)
-    gen = _mid()
-    who = actors.current() or {}
+# ---- following an answer a runner is writing (backend/ccgen.py) --------------
+
+TAIL = 0.2                       # seconds between looks at the answer being written
+BUSY = "an answer is being written in this conversation - wait for it, or stop it"
+_TASKS: set[asyncio.Task] = set()  # the title waits, held so they are not collected
+
+
+def follow(cid: str) -> None:
+    """Follow the answer being written in this conversation, if there is
+    one, for everyone watching it: one task per conversation in this
+    process, which reads the generation every TAIL seconds and hands the
+    new pieces to the hub. Called when a page starts watching and when an
+    answer is started; a task already following is poked instead, so one
+    about to stop looks once more."""
+    key = live_key(cid)
+    t = HUB.tails.get(key)
+    if t is not None and not t.done():
+        HUB.poked.add(key)
+        return
+    HUB.tails[key] = asyncio.ensure_future(_tail(key, cid, _db()))
+
+
+async def _tail(key: str, cid: str, db) -> None:
+    me = asyncio.current_task()
+    gid: str | None = None
+    try:
+        while True:
+            if gid is None:
+                HUB.poked.discard(key)
+                chat = await db[COLL].find_one({"_id": cid})
+                gen = await ccgen.get(db, chat["gen"]) if chat and chat.get("gen") else None
+                if gen is None or gen.get("status") != "running":
+                    if key in HUB.poked:
+                        continue
+                    return
+                gid = gen["_id"]
+                if gid not in (HUB.live.get(key) or {}):
+                    # From where it got: a page that came late, or after a
+                    # reload, gets the answer so far in the start.
+                    HUB.begin(key, ccgen.state(gen))
+            else:
+                await asyncio.sleep(TAIL)
+                gen = await ccgen.get(db, gid)
+            if gen is None:
+                HUB.end(key, gid, {"type": "error", "error": "the answer went missing"})
+                gid = None
+                continue
+            if ccgen.dead(gen):
+                gen = await ccgen.lose(db, gen, ccgen.GONE)
+            st = (HUB.live.get(key) or {}).get(gid) or {}
+            for kind in ("thinking", "text"):
+                have, got = len(st.get(kind) or ""), gen.get(kind) or ""
+                if len(got) > have:
+                    HUB.piece(key, gid, kind, got[have:])
+            if gen.get("status") == "running":
+                continue
+            answer = gen.get("answer") or ccgen.partial(gen)
+            if gen.get("status") == "failed":
+                HUB.publish(key, {"type": "error", "gen": gid, "error": answer.get("error")})
+            # Kept by now (ccgen.finish), so a page that reads the
+            # conversation then finds the answer in it.
+            HUB.end(key, gid, {"type": "done", "message": public(answer)})
+            if gen.get("naming"):
+                task = asyncio.ensure_future(_titled(key, gid, db))
+                _TASKS.add(task)
+                task.add_done_callback(_TASKS.discard)
+            else:
+                if gen.get("title"):                   # named before this looked
+                    HUB.publish(key, {"type": "title", "gen": gid, "title": gen["title"]})
+                HUB.publish(key, {"type": "named", "gen": gid})
+            gid = None
+    finally:
+        if HUB.tails.get(key) is me:
+            HUB.tails.pop(key, None)
+
+
+async def _titled(key: str, gid: str, db) -> None:
+    """The title the runner names the conversation with, once it has."""
+    until = time.monotonic() + TITLE_TIMEOUT + 10
+    title = None
+    while time.monotonic() < until:
+        await asyncio.sleep(TAIL)
+        gen = await ccgen.get(db, gid)
+        if not gen or not gen.get("naming"):
+            title = (gen or {}).get("title")
+            break
+    if title:
+        HUB.publish(key, {"type": "title", "gen": gid, "title": title})
+    HUB.publish(key, {"type": "named", "gen": gid})
+
+
+async def _claim(db, doc: dict) -> dict:
+    """The conversation, free to answer in: 409 while an answer is being
+    written in it. A lock left by a runner that died is let go first, its
+    answer so far kept - so the conversation is read again then."""
+    if not doc.get("gen"):
+        return doc
+    if not await ccgen.free(db, doc):
+        raise HTTPException(409, BUSY)
+    return await _load(doc["_id"])
+
+
+async def _begin(db, cid: str, gen: dict, first: dict) -> StreamingResponse:
+    """Start the runner of `gen` (which holds the lock) and follow it.
+    The answer streams back as everyone watching gets it (`HUB`): the first
+    event ({type: user, message, keep, gen}: the conversation is its first
+    `keep` lines, then `message` if any), then thinking|text|error, done,
+    and a title when the conversation was named by this answer. Closing
+    this stream stops nothing: the answer is written all the same, and the
+    page that comes back follows it on GET /chats/{id}/live."""
+    key = live_key(cid)
+    gid = gen["_id"]
+    q = HUB.subscribe(key)                             # before it starts: nothing is missed
+    try:
+        await ccgen.launch(db, gen)
+    except OSError as exc:
+        HUB.unsubscribe(key, q)
+        raise HTTPException(500, f"the answer could not be started: {exc}")
+    follow(cid)
     first = dict(first)
     if first.get("message"):
         first["message"] = public(first["message"])
+    first["gen"] = gid
+    titled = bool(gen.get("want_title"))
 
     async def events():
-        HUB.begin(key, {"gen": gen, "client": client, "by": {"id": who.get("id"), "name": who.get("name")},
-                        "provider": provider, "model": model, "message": first.get("message"),
-                        "keep": first.get("keep"), "text": "", "thinking": "", "at": _now()})
-        yield _sse(first)
-        answer = {"id": _mid(), "role": "assistant", "content": "", "at": _now(),
-                  "provider": provider, "model": model}
-        t0 = time.monotonic()
-        thought = 0.0
-        used: dict = {}
         try:
-            first_text = None
-            async for piece in llm.stream(history(msgs, images), provider=provider, model=model, max_tokens=MAX_ANSWER):
-                if "thinking" in piece:
-                    thought = time.monotonic() - t0
-                    HUB.piece(key, gen, "thinking", piece["thinking"])
-                    yield _sse({"type": "thinking", "text": piece["thinking"]})
-                elif "text" in piece:
-                    first_text = first_text or time.monotonic()
-                    answer["content"] += piece["text"]
-                    HUB.piece(key, gen, "text", piece["text"])
-                    yield _sse({"type": "text", "text": piece["text"]})
-                elif "usage" in piece:
-                    used = piece["usage"] or {}
-        except (asyncio.CancelledError, GeneratorExit):
-            # Stop pressed (or the tab closed): kept as far as it got.
-            answer["stopped"] = True
-            raise
-        except Exception as exc:                       # noqa: BLE001
-            answer["error"] = str(exc)[:500]
-            HUB.publish(key, {"type": "error", "gen": gen, "error": answer["error"]})
-            yield _sse({"type": "error", "error": answer["error"]})
+            yield _sse(first)
+            while True:
+                try:
+                    ev = await asyncio.wait_for(q.get(), LIVE_PING)
+                except asyncio.TimeoutError:
+                    yield b": ping\n\n"
+                    continue
+                if ev is None:                         # let go: the page follows on /live
+                    return
+                if ev.get("gen") != gid:
+                    continue
+                kind = ev.get("type")
+                if kind == "start":
+                    for k in ("thinking", "text"):     # what was written before this one looked
+                        if ev.get(k):
+                            yield _sse({"type": k, "text": ev[k]})
+                elif kind in ("thinking", "text"):
+                    yield _sse({"type": kind, "text": ev.get("text") or ""})
+                elif kind == "error":
+                    yield _sse({"type": "error", "error": ev.get("error")})
+                elif kind == "done":
+                    yield _sse({"type": "done", "message": ev.get("message")})
+                elif kind == "title":
+                    yield _sse({"type": "title", "title": ev.get("title")})
+                elif kind == "named" or (kind == "end" and not titled):
+                    return
         finally:
-            if answer.get("stopped") and not answer["content"]:
-                answer["error"] = "stopped before the answer began"
-            # Kept whatever happened: a stopped answer stays as far as it got.
-            answer["ms"] = round((time.monotonic() - t0) * 1000)
-            if thought:
-                answer["thinking_ms"] = round(thought * 1000)
-            answer["usage"] = {k: used.get(k) for k in ("prompt_tokens", "completion_tokens", "cost")}
-            # Its own task, started before anything can be cancelled: a
-            # closed tab does not leave the conversation unnamed.
-            naming = asyncio.ensure_future(_name(db, cid, msgs, answer)) if want_title else None
-            if naming:
-                def told(f, key=key, gen=gen):
-                    if not f.cancelled() and not f.exception() and f.result():
-                        HUB.publish(key, {"type": "title", "gen": gen, "title": f.result()})
-                naming.add_done_callback(told)
-
-            async def keep():
-                await db[COLL].update_one({"_id": cid}, {"$push": {"messages": answer},
-                                                         "$set": {"updated_at": _now()}})
-                if used:
-                    await llm.record(db, provider=provider, model=model, surface="chat", kind="cc-chat", used=used)
-            # Shielded: a closed tab cancels this generator, not the saving.
-            try:
-                await asyncio.shield(keep())
-            finally:
-                # Watchers hear it is done once it is kept, so a page that
-                # reads the conversation then finds the answer in it.
-                HUB.end(key, gen, {"type": "done", "message": answer})
-        yield _sse({"type": "done", "message": answer})
-        if naming:
-            title = await asyncio.shield(naming)
-            if title:
-                yield _sse({"type": "title", "title": title})
+            HUB.unsubscribe(key, q)
 
     # X-Accel-Buffering: nginx (NPM) would otherwise hold the stream back
     # and hand it over in one piece at the end.
     return StreamingResponse(events(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@router.post("/chats/{cid}/stop")
+async def stop(cid: str) -> dict:
+    """Stop the answer being written: whoever asked for it, or anyone with
+    the "delete" right. It is kept as far as it got, marked stopped."""
+    db = _db()
+    doc = await _load(cid)
+    gid = doc.get("gen")
+    gen = await ccgen.get(db, gid) if gid else None
+    if not gen or gen.get("status") != "running":
+        await ccgen.free(db, doc)
+        return {"stopped": False, "running": False}
+    who = actors.current() or {}
+    if (gen.get("by") or {}).get("id") != who.get("id") and not _can_delete():
+        raise HTTPException(403, "only whoever asked can stop this answer - "
+                            + access.refusal(access.current() or "nobody", "delete"))
+    await ccgen.request_stop(db, gen, {"id": who.get("id"), "name": who.get("name")})
+    follow(cid)
+    return {"stopped": True, "gen": gid}
 
 
 async def _name(db, cid: str, msgs: list[dict], answer: dict) -> str | None:
@@ -983,10 +1089,12 @@ async def _name(db, cid: str, msgs: list[dict], answer: dict) -> str | None:
 @router.post("/chats/{cid}/messages")
 async def say(cid: str, body: SayIn):
     """Add a line (or, with `edit`, replace one's own line and drop what
-    followed it) and stream the answer: events {type: user|thinking|text|
-    done|error|title}."""
+    followed it) and have it answered: the answer is written by a runner of
+    its own (backend/ccgen.py), and streamed here as it is written - events
+    {type: user|thinking|text|done|error|title}. One answer at a time in a
+    conversation: 409 while one is being written."""
     db = _db()
-    doc = await _load(cid)
+    doc = await _claim(db, await _load(cid))
     msgs = doc.get("messages") or []
     provider, model = _pick(doc, body.provider, body.model)
     who = actors.current()
@@ -1018,17 +1126,28 @@ async def say(cid: str, body: SayIn):
                                 + access.refusal(access.current() or "nobody", "delete"))
         mine["edited_at"] = mine["at"]
         mine["at"] = msgs[i].get("at") or mine["at"]
-        await _cut(db, cid, msgs, i, [mine], sets)
         keep = i
     else:
         if len(msgs) >= MAX_MESSAGES:
             raise HTTPException(400, f"this conversation has {MAX_MESSAGES} lines; start a new one")
-        await db[COLL].update_one({"_id": cid}, {"$push": {"messages": mine}, "$set": sets})
         keep = len(msgs)
-    convo = msgs[:keep] + [mine]
-    images = await cc_context.images(db, pics) if pics else None
-    return _stream(db, doc, convo, provider, model, {"type": "user", "message": mine, "keep": keep},
-                   key=live_key(cid), client=body.client, images=images)
+    gen = await ccgen.new(db, cid, keep=keep, upto=keep + 1, question=mine["id"], message=public(mine),
+                          provider=provider, model=model, client=body.client, images=bool(pics),
+                          want_title=doc.get("title") in ("", DEFAULT_TITLE, None))
+    try:
+        if body.edit is not None:
+            await _cut(db, cid, msgs, keep, [mine], {**sets, "gen": gen["_id"]})
+        else:
+            # The line and the lock in one write: a second line while an
+            # answer is being written gets 409, not a second answer.
+            res = await db[COLL].update_one({"_id": cid, "gen": None},
+                                            {"$push": {"messages": mine}, "$set": {**sets, "gen": gen["_id"]}})
+            if not getattr(res, "matched_count", 1):
+                raise HTTPException(409, BUSY)
+    except HTTPException:
+        await ccgen.drop(db, gen)
+        raise
+    return await _begin(db, cid, gen, {"type": "user", "message": mine, "keep": keep})
 
 
 @router.post("/chats/{cid}/regenerate")
@@ -1038,7 +1157,7 @@ async def regenerate(cid: str, body: RegenIn | None = None):
     last question go; someone else's only with the "delete" right."""
     body = body or RegenIn()
     db = _db()
-    doc = await _load(cid)
+    doc = await _claim(db, await _load(cid))
     msgs = doc.get("messages") or []
     keep = regen_cut(msgs)
     if keep < 0:
@@ -1046,13 +1165,24 @@ async def regenerate(cid: str, body: RegenIn | None = None):
     provider, model = _pick(doc, body.provider, body.model)
     if not may_drop(msgs, list(range(keep, len(msgs))), actors.current().get("id"), _can_delete()):
         raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
-    if keep < len(msgs) or body.provider or body.model:
-        await _cut(db, cid, msgs, keep, [], {"updated_at": _now(), "provider": provider, "model": model})
     # The question's pictures go again, if this model reads them.
     pics = msgs[keep - 1].get("attach") or []
-    images = await cc_context.images(db, pics) if pics and await _vision(provider, model) else None
-    return _stream(db, doc, msgs[:keep], provider, model, {"type": "user", "message": None, "keep": keep},
-                   key=live_key(cid), client=body.client, images=images)
+    gen = await ccgen.new(db, cid, keep=keep, upto=keep, question=msgs[keep - 1].get("id"), message=None,
+                          provider=provider, model=model, client=body.client,
+                          images=bool(pics) and await _vision(provider, model),
+                          want_title=doc.get("title") in ("", DEFAULT_TITLE, None))
+    try:
+        if keep < len(msgs) or body.provider or body.model:
+            await _cut(db, cid, msgs, keep, [], {"updated_at": _now(), "provider": provider, "model": model,
+                                                 "gen": gen["_id"]})
+        else:
+            res = await db[COLL].update_one({"_id": cid, "gen": None}, {"$set": {"gen": gen["_id"]}})
+            if not getattr(res, "matched_count", 1):
+                raise HTTPException(409, BUSY)
+    except HTTPException:
+        await ccgen.drop(db, gen)
+        raise
+    return await _begin(db, cid, gen, {"type": "user", "message": None, "keep": keep})
 
 
 async def _vision(provider: str, model: str) -> bool:

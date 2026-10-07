@@ -144,6 +144,8 @@ class Coll:
                     r[k] = copy.deepcopy(v)
                 for k, v in (update.get("$push") or {}).items():
                     r.setdefault(k, []).append(copy.deepcopy(v))
+                for k in (update.get("$unset") or {}):
+                    r.pop(k, None)
                 return Res(1)
         return Res(0)
 
@@ -207,7 +209,12 @@ def line(mid, role, text, by=ME, at="2026-10-01T10:00:00+00:00"):
 
 
 def events(resp) -> list[dict]:
+    """The events a route streams; given the route's coroutine, it is run in
+    the same loop as the answer's runner (tests/conftest.py)."""
     async def go():
+        nonlocal resp
+        if asyncio.iscoroutine(resp):
+            resp = await resp
         out = []
         async for chunk in resp.body_iterator:
             for ln in (chunk.decode() if isinstance(chunk, bytes) else chunk).split("\n"):
@@ -315,7 +322,7 @@ def test_a_line_keeps_its_mentions_and_the_model_reads_them(env, monkeypatch):
     state["vision"] = True
     body = cc_chat.SayIn(text="what does the note say?", client="tab1",
                          mentions=[cc_chat.MentionIn(kind="note", id="n1"), cc_chat.MentionIn(kind="revision", id="r1")])
-    ev = events(run(cc_chat.say("c1", body)))
+    ev = events(cc_chat.say("c1", body))
     first = ev[0]
     # The page gets the chips, never the block.
     assert [m["id"] for m in first["message"]["mentions"]] == ["n1", "r1"]
@@ -331,7 +338,7 @@ def test_a_line_keeps_its_mentions_and_the_model_reads_them(env, monkeypatch):
     got = run(cc_chat.get_chat("c1"))
     assert "context" not in got["messages"][0] and got["messages"][0]["mentions"][1]["id"] == "r1"
     # A later line still has the block in the history; the picture went once.
-    ev = events(run(cc_chat.say("c1", cc_chat.SayIn(text="and then?"))))
+    ev = events(cc_chat.say("c1", cc_chat.SayIn(text="and then?")))
     assert isinstance(state["sent"][-1]["content"], str)
     assert any("PWM 25 kHz" in (m["content"] if isinstance(m["content"], str) else "") for m in state["sent"])
 
@@ -384,13 +391,9 @@ def test_every_watcher_gets_the_answer_as_it_is_written(env):
     seed_chat(raw)
     key = cc_chat.live_key("c1")
     a, b = cc_chat.HUB.subscribe(key), cc_chat.HUB.subscribe(key)
-    seen = {}
-
-    def look():
-        seen["snap"] = cc_chat.HUB.snapshot(key)
-    state["answer"] = ["Hel", look, "lo"]
+    state["answer"] = ["Hel", "lo"]
     state["who"] = YOU
-    ev = events(run(cc_chat.say("c1", cc_chat.SayIn(text="hi", client="tabY"))))
+    ev = events(cc_chat.say("c1", cc_chat.SayIn(text="hi", client="tabY")))
     got = []
     for q in (a, b):
         rows = []
@@ -399,13 +402,13 @@ def test_every_watcher_gets_the_answer_as_it_is_written(env):
         got.append(rows)
     assert got[0] == got[1]
     kinds = [e["type"] for e in got[0]]
-    assert kinds[:4] == ["start", "text", "text", "done"] and "end" in kinds
+    assert kinds[0] == "start" and set(kinds[1:-3]) <= {"text"} and kinds[-3:] == ["done", "end", "named"]
     start = got[0][0]
     assert start["client"] == "tabY" and start["by"]["name"] == "You" and start["message"]["content"] == "hi"
-    assert len({e.get("gen") for e in got[0]}) == 1 and ev[0]["type"] == "user"
-    assert got[0][3]["message"]["content"] == "Hello"
-    # Halfway through, a page that opens the conversation gets it so far.
-    assert seen["snap"][0]["text"] == "Hel" and seen["snap"][0]["by"]["id"] == "u-you"
+    assert len({e.get("gen") for e in got[0]}) == 1 and ev[0]["type"] == "user" and ev[0]["gen"] == start["gen"]
+    # The pieces, the start's included (written before the follower looked), are the answer.
+    assert start.get("text", "") + "".join(e["text"] for e in got[0] if e["type"] == "text") == "Hello"
+    assert got[0][-3]["message"]["content"] == "Hello"
     # Done: nothing is under way any more.
     assert cc_chat.HUB.snapshot(key) == [] and not cc_chat.HUB.busy(key)
     cc_chat.HUB.unsubscribe(key, a)

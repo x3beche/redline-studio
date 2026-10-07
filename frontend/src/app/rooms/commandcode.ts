@@ -53,12 +53,18 @@ export interface CcMessage {
   mentions?: CcMention[]; context_chars?: number;
   by?: { id?: string; name?: string; type?: string };
   provider?: string; model?: string; ms?: number; thinking_ms?: number; error?: string; stopped?: boolean;
+  /** The model's reasoning, whole (backend/ccgen.py keeps all of it). */
+  thinking?: string;
+  /** Its runner died with the server: kept as far as it got. */
+  interrupted?: boolean;
   usage?: { prompt_tokens?: number | null; completion_tokens?: number | null; cost?: number | null };
 }
 export interface CcChat {
   id: string; title: string; provider: string; model: string; by: { name?: string; id?: string };
   created_at: string; updated_at: string; count: number; pinned?: boolean; archived?: boolean;
   messages?: CcMessage[]; last?: { role: string; text: string; by?: string };
+  /** The answer being written in it, if any (one at a time). */
+  gen?: string | null;
   /** In the trash: when, by whom, and when the server drops it for good. */
   deleted_at?: string; deleted_by?: { id?: string; name?: string }; purge_at?: string; days_left?: number;
 }
@@ -71,7 +77,7 @@ export interface LlmModel { id: string; name: string; context: number | null; an
   vision?: boolean }
 export interface CcEvent {
   type: string; text?: string; error?: string; message?: CcMessage | null; keep?: number; title?: string;
-  gen?: string; live?: CcWatch[];
+  gen?: string; live?: CcWatch[]; thinking?: string;
 }
 type MentionRef = { kind: string; id: string };
 
@@ -129,6 +135,10 @@ export class CcApi {
       on: (ev: CcEvent) => void) {
     return this.sse(`/api/cc/chats/${id}/messages`, body, signal, on);
   }
+
+  /** Stop the answer being written in it - kept as far as it got. Closing
+   *  the page does not stop it: the server writes it to the end. */
+  stop(id: string) { return this.http.post<{ stopped: boolean; gen?: string }>(`/api/cc/chats/${id}/stop`, {}); }
 
   /** The last answer written again, with this model. */
   regenerate(id: string, body: { provider: string; model: string; client?: string }, signal: AbortSignal,
@@ -445,6 +455,7 @@ type Ask = { text: string; label: string; go: () => void };
                   <time [title]="stamp(m.at)">{{ when(m.at) }}</time>
                   @if (m.edited_at) { <span [title]="stamp(m.edited_at)">· {{ 'edited' | t }}</span> }
                   @if (m.stopped) { <span>· {{ 'stopped' | t }}</span> }
+                  @if (m.interrupted) { <span [title]="'The server restarted while it was being written.' | t">· {{ 'interrupted' | t }}</span> }
                   @if (m.role === 'assistant') {
                     <span class="tcv-cc-meta">
                       @if (m.ms) { <span>{{ secs(m.ms) }}{{ m.thinking_ms ? ' · ' + ('thought' | t) + ' ' + secs(m.thinking_ms) : '' }}</span> }
@@ -457,6 +468,9 @@ type Ask = { text: string; label: string; go: () => void };
                   }
                 </div>
                 @if (m.role === 'assistant') {
+                  @if (m.thinking) {
+                    <ng-container *ngTemplateOutlet="think; context: { $implicit: m.thinking, key: m.id, streaming: false, ms: m.thinking_ms }" />
+                  }
                   <div class="tcv-cc-answer md" [innerHTML]="html(m.content)"></div>
                 } @else {
                   <div class="tcv-cc-bubble">{{ m.content }}</div>
@@ -513,7 +527,9 @@ type Ask = { text: string; label: string; go: () => void };
                 <div class="tcv-cc-rowhead"><b>{{ short(liveModel() || model()) }}</b>
                   <span class="tcv-cc-pulse">{{ l.text ? ('writing…' | t) : ('thinking…' | t) }}</span>
                   <span class="tcv-cc-dim">· Esc {{ 'stops' | t }}</span></div>
-                @if (l.thinking && !l.text) { <div class="tcv-cc-thinking">{{ tail(l.thinking) }}</div> }
+                @if (l.thinking) {
+                  <ng-container *ngTemplateOutlet="think; context: { $implicit: l.thinking, key: 'live', streaming: !l.text }" />
+                }
                 @if (l.text) { <div class="tcv-cc-answer md" [innerHTML]="html(l.text)"></div> }
                 @else { <div class="tcv-cc-dots"><i></i><i></i><i></i></div> }
               </div>
@@ -526,7 +542,9 @@ type Ask = { text: string; label: string; go: () => void };
                 <div class="tcv-cc-rowhead"><b>{{ short(w.model) }}</b>
                   <span class="tcv-cc-pulse">{{ asking(w) }}</span>
                   <span class="tcv-cc-dim">· {{ w.text ? ('writing…' | t) : ('thinking…' | t) }}</span></div>
-                @if (w.thinking && !w.text) { <div class="tcv-cc-thinking">{{ tail(w.thinking) }}</div> }
+                @if (w.thinking) {
+                  <ng-container *ngTemplateOutlet="think; context: { $implicit: w.thinking, key: w.gen, streaming: !w.text }" />
+                }
                 @if (w.text) { <div class="tcv-cc-answer md" [innerHTML]="html(w.text)"></div> }
                 @else { <div class="tcv-cc-dots"><i></i><i></i><i></i></div> }
               </div>
@@ -640,7 +658,7 @@ type Ask = { text: string; label: string; go: () => void };
               <kbd>↵</kbd> {{ 'send' | t }} · <kbd>⇧↵</kbd> {{ 'new line' | t }} · <kbd>↑</kbd> {{ 'edit last' | t }}
             </span>
             <span class="grow"></span>
-            @if (live()) {
+            @if (live() || stoppable()) {
               <button class="tcv-cc-send stop" (click)="stop()" [title]="('Stop' | t) + ' (Esc)'">
                 <svg class="tcv-cc-ico" viewBox="0 0 24 24"><path class="fill" [attr.d]="I.stop" /></svg></button>
             } @else {
@@ -669,6 +687,20 @@ type Ask = { text: string; label: string; go: () => void };
     }
   </section>
 </div>
+
+<!-- The model's thinking, whole: open while it thinks, folded once the
+     answer begins (and opened again with a click), scrolled along with it
+     unless the reader scrolled up. -->
+<ng-template #think let-text let-key="key" let-streaming="streaming" let-ms="ms">
+  <details class="tcv-cc-think" [open]="thinkOpen(key, streaming)" (toggle)="thinkToggled(key, streaming, $event)">
+    <summary>
+      <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.chevron }" />
+      <span [class.tcv-cc-pulse]="streaming">{{ (streaming ? 'Thinking…' : 'Thinking') | t }}</span>
+      <span class="tcv-cc-dim">{{ ms ? secs(ms) + ' · ' : '' }}{{ kfmt(text.length) }} {{ 'characters' | t }}</span>
+    </summary>
+    <div class="tcv-cc-thinkbody" [attr.data-live]="streaming ? 1 : null" (scroll)="thinkScrolled($event)">{{ text }}</div>
+  </details>
+</ng-template>
 
 <ng-template #hello>
   <div class="tcv-cc-hello">
@@ -731,6 +763,8 @@ export class RoomCommandCode implements OnDestroy {
   error = signal<string | null>(null);
   live = signal<{ text: string; thinking: string } | null>(null);
   liveModel = signal('');
+  /** Thinking blocks the reader opened or folded by hand (by answer or generation). */
+  private thinkHand = signal<Map<string, boolean>>(new Map());
   /** The line being edited (its id), while the composer holds its text. */
   editing = signal<string | null>(null);
   /** A line's delete button asks once more before it deletes. */
@@ -1340,7 +1374,7 @@ export class RoomCommandCode implements OnDestroy {
       this.newChat();
     } else if (e.key === 'Escape') {
       if (this.mentionPop()) this.closeMentions();
-      else if (this.live()) { e.preventDefault(); this.stop(); }
+      else if (this.live() || this.stoppable()) { e.preventDefault(); this.stop(); }
       else if (this.menu() || this.modelPop()) { this.menu.set(false); this.modelPop.set(false); }
       else if (this.ask()) this.ask.set(null);
       else if (this.drawer()) this.drawer.set(false);
@@ -1361,6 +1395,7 @@ export class RoomCommandCode implements OnDestroy {
     const c = this.chat();
     const text = this.text().trim();
     if (!c || !text || this.live() || !this.model()) return;
+    if (this.watch().length) { this.error.set(t('An answer is being written in this conversation - wait for it, or stop it.')); return; }
     const edit = this.editing() ?? undefined;
     const picked = this.picked();
     const mentions = picked.map(m => ({ kind: m.kind, id: m.id }));
@@ -1383,6 +1418,7 @@ export class RoomCommandCode implements OnDestroy {
   async regenerate(model?: string) {
     const c = this.chat();
     if (!c || this.live()) return;
+    if (this.watch().length) { this.error.set(t('An answer is being written in this conversation - wait for it, or stop it.')); return; }
     if (model) this.model.set(model);
     if (!this.model()) return;
     await this.run(c, (sig, on) => this.api.regenerate(c.id, { provider: this.provider(), model: this.model(), client: this.client },
@@ -1395,7 +1431,8 @@ export class RoomCommandCode implements OnDestroy {
     this.liveModel.set(this.model());
     this.abort = new AbortController();
     let started = false;
-    let stopped = false;
+    let finished = false;
+    let left = false;
     try {
       await call(this.abort.signal, ev => {
         if (this.openId() !== c.id) return;
@@ -1406,13 +1443,17 @@ export class RoomCommandCode implements OnDestroy {
           this.scroll();
         } else if (ev.type === 'thinking') {
           this.live.update(l => l && { ...l, thinking: l.thinking + (ev.text ?? '') });
+          this.stickThink();
+          this.scroll(true);
         } else if (ev.type === 'text') {
           this.live.update(l => l && { ...l, text: l.text + (ev.text ?? '') });
           this.scroll(true);
         } else if (ev.type === 'error') {
           this.error.set(ev.error ?? t('The model did not answer.'));
         } else if (ev.type === 'done' && ev.message) {
-          this.chat.update(x => x && { ...x, messages: [...(x.messages ?? []), ev.message!] });
+          finished = true;
+          this.chat.update(x => x && ((x.messages ?? []).some(y => y.id === ev.message!.id) ? x
+                                      : { ...x, messages: [...(x.messages ?? []), ev.message!] }));
           this.live.set(null);
           this.scroll();
         } else if (ev.type === 'title' && ev.title) {
@@ -1421,25 +1462,69 @@ export class RoomCommandCode implements OnDestroy {
         }
       });
     } catch (e) {
-      stopped = (e as Error).name === 'AbortError';
-      if (!stopped) {
+      left = (e as Error).name === 'AbortError';
+      if (!left && !started) {
         this.error.set((e as Error).message);
-        if (!started) failed?.();
+        failed?.();
       }
+      // Cut once it had started (the API reloaded, the network dropped):
+      // the answer is still being written on the server - followed below.
     } finally {
       this.live.set(null);
       this.abort = null;
       this.refresh();
-      // A stopped answer is kept on the server as far as it got - a moment
-      // after the stop, so it is read again a little later.
-      const reread = () => this.api.get(c.id).subscribe({
+      this.api.get(c.id).subscribe({
         next: x => { if (this.openId() === x.id && !this.live()) { this.chat.set(x); this.scroll(); } }, error: () => {} });
-      reread();
-      if (stopped) setTimeout(reread, 1200);
+      // Not seen to the end here: the live stream picks it up where it is.
+      if (started && !finished && !left && this.openId() === c.id) this.relisten(c.id);
     }
   }
 
-  stop() { this.abort?.abort(); }
+  /** The answer being written that this page may stop: its own, or anyone's
+   *  with the right to delete. */
+  stoppable = computed(() => this.watch().find(w => w.by?.id === this.me() || this.auth.can('delete')) ?? null);
+
+  /** Stop the answer being written - on the server, which keeps it as far
+   *  as it got. Leaving the page does not stop it. */
+  stop() {
+    const id = this.openId();
+    if (!id || (!this.live() && !this.stoppable())) return;
+    this.api.stop(id).subscribe({ error: e => this.error.set(this.msg(e)) });
+  }
+
+  // ---- the thinking block ---------------------------------------------------
+
+  /** Open while it thinks, folded once the answer begins - unless the reader chose. */
+  thinkOpen(key: string, streaming: boolean) { return this.thinkHand().get(key) ?? streaming; }
+
+  thinkToggled(key: string, streaming: boolean, e: Event) {
+    const open = (e.target as HTMLDetailsElement).open;
+    // The page folding it by itself (the answer began) is not the reader's choice.
+    if (open === streaming && !this.thinkHand().has(key)) return;
+    this.thinkHand.update(m => new Map(m).set(key, open));
+    if (open) this.stickThink();
+  }
+
+  /** The reader scrolled up in a thinking block: it stops following. */
+  thinkScrolled(e: Event) {
+    const el = e.target as HTMLElement;
+    el.dataset['free'] = el.scrollHeight - el.scrollTop - el.clientHeight > 24 ? '1' : '';
+  }
+
+  /** Thinking blocks still being written follow their end. */
+  private stickThink() {
+    setTimeout(() => {
+      this.logEl()?.nativeElement.querySelectorAll<HTMLElement>('.tcv-cc-thinkbody[data-live]').forEach(el => {
+        if (el.dataset['free'] !== '1') el.scrollTop = el.scrollHeight;
+      });
+    });
+  }
+
+  /** The live stream again, from its hello: what is being written, as far as it got. */
+  private relisten(id: string) {
+    this.liveFor = null;
+    this.connectLive(id);
+  }
 
   // ---- watching: answers others are having written --------------------------
 
@@ -1493,7 +1578,9 @@ export class RoomCommandCode implements OnDestroy {
 
   private onLive(id: string, ev: CcEvent & Partial<CcWatch>) {
     if (this.openId() !== id) return;
-    const mine = (w: { client?: string | null }) => !!w.client && w.client === this.client;
+    // This page's own answer, while its request is still streaming it here;
+    // after a refresh (or a cut stream) it is followed like anyone's.
+    const mine = (w: { client?: string | null }) => !!w.client && w.client === this.client && !!this.live();
     switch (ev.type) {
       case 'hello': {
         const now = (ev.live ?? []).filter(w => !mine(w));
@@ -1501,23 +1588,26 @@ export class RoomCommandCode implements OnDestroy {
         const lost = this.watch().some(w => !now.some(x => x.gen === w.gen));
         this.watch.set(now);
         now.forEach(w => this.showAsked(w));
+        if (now.length) { this.stickThink(); this.scroll(true); }
         if (lost) this.reread(id);
         break;
       }
       case 'start': {
         if (mine(ev) || !ev.gen) return;
         const w: CcWatch = { gen: ev.gen, client: ev.client, by: ev.by ?? {}, model: ev.model ?? '', provider: ev.provider ?? '',
-                             message: ev.message ?? null, keep: ev.keep, text: '', thinking: '' };
+                             message: ev.message ?? null, keep: ev.keep, text: ev.text ?? '', thinking: ev.thinking ?? '' };
         this.watch.update(l => [...l.filter(x => x.gen !== w.gen), w]);
         this.showAsked(w);
         this.scroll(true);
+        if (w.thinking) this.stickThink();
         break;
       }
       case 'text': case 'thinking': {
         const k = ev.type === 'text' ? 'text' : 'thinking';
         if (!this.watch().some(w => w.gen === ev.gen)) return;
-        this.watch.update(l => l.map(w => w.gen === ev.gen ? { ...w, [k]: (w[k] + (ev.text ?? '')).slice(k === 'thinking' ? -4000 : 0) } : w));
-        if (k === 'text') this.scroll(true);
+        this.watch.update(l => l.map(w => w.gen === ev.gen ? { ...w, [k]: w[k] + (ev.text ?? '') } : w));
+        if (k === 'thinking') this.stickThink();
+        this.scroll(true);
         break;
       }
       case 'done': {
@@ -1783,7 +1873,6 @@ export class RoomCommandCode implements OnDestroy {
     }
     return out;
   }
-  tail(s: string) { return s.length > 400 ? '…' + s.slice(-400) : s; }
   short(m: string) { return m.includes('/') ? m.split('/').pop()! : m; }
   ctx(n: number) { return n >= 1_000_000 ? `${Math.round(n / 1_000_000)}M` : `${Math.round(n / 1000)}k`; }
   kfmt(n: number) {

@@ -111,9 +111,14 @@ _RULES: list[tuple[str, str, str]] = [
     # (bulk delete, a line, an edit or a regenerated answer that drops others');
     # the trash likewise: restoring or dropping for good one's own is a
     # reviewer's, anyone else's needs "delete" (cc_chat.py checks)
-    ("POST", "/api/cc/chats(/{}/(messages|regenerate|restore)|/bulk-delete|/bulk-restore|/empty-trash)?", "draw"),
+    # stopping an answer: whoever asked, or anyone who may delete (cc_chat.py checks)
+    ("POST", "/api/cc/chats(/{}/(messages|regenerate|restore|stop)|/bulk-delete|/bulk-restore|/empty-trash)?", "draw"),
     ("PATCH", "/api/cc/chats/{}", "draw"),
     ("DELETE", "/api/cc/chats/{}(/messages/{})?", "draw"),
+    # custom themes (backend/themes.py): anyone in the workspace may make
+    # one; the routes keep changing or deleting someone else's to its maker,
+    # an owner or an admin
+    ("*", "/api/themes(/{})?", "view"),
     # LLM settings: the keys and the models are the workspace's settings
     ("PUT", "/api/llm/settings", "settings"),
     ("POST", "/api/llm/test", "settings"),

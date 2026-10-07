@@ -129,10 +129,12 @@ class FakeColl:
 class FakeDb:
     def __init__(self):
         self.coll = FakeColl()
+        self.colls = {cc_chat.COLL: self.coll}
 
     def __getitem__(self, name):
-        assert name == cc_chat.COLL
-        return self.coll
+        # The conversations, and the answers being written (backend/ccgen.py).
+        assert name in (cc_chat.COLL, "cc_gens")
+        return self.colls.setdefault(name, FakeColl())
 
 
 @pytest.fixture
@@ -177,7 +179,12 @@ def run(coro):
 
 
 def events(resp) -> list[dict]:
+    """The events a route streams. Given the route's coroutine, it is run in
+    the same loop: the answer's runner is a task there (tests/conftest.py)."""
     async def go():
+        nonlocal resp
+        if asyncio.iscoroutine(resp):
+            resp = await resp
         out = []
         async for chunk in resp.body_iterator:
             for line in (chunk.decode() if isinstance(chunk, bytes) else chunk).split("\n"):
@@ -527,9 +534,12 @@ def test_deleting_an_old_line_by_its_place(env):
 def test_a_line_and_its_answer_are_kept_and_the_chat_is_named(env):
     db, state = env
     seed(db, title=cc_chat.DEFAULT_TITLE)
-    ev = events(run(cc_chat.say("c1", cc_chat.SayIn(text="power budget for the fan board?"))))
-    assert [e["type"] for e in ev] == ["user", "text", "text", "done", "title"]
-    assert ev[0]["keep"] == 0 and ev[-1]["title"] == "Board power budget"
+    ev = events(cc_chat.say("c1", cc_chat.SayIn(text="power budget for the fan board?")))
+    # The pieces come as the runner wrote them down: joined, or one by one.
+    kinds = [e["type"] for e in ev]
+    assert kinds[0] == "user" and set(kinds[1:-2]) == {"text"} and kinds[-2:] == ["done", "title"]
+    assert "".join(e["text"] for e in ev if e["type"] == "text") == "Hello there"
+    assert ev[0]["keep"] == 0 and ev[0]["gen"] and ev[-1]["title"] == "Board power budget"
     row = db.coll.rows["c1"]
     assert [m["role"] for m in row["messages"]] == ["user", "assistant"]
     assert row["messages"][1]["content"] == "Hello there"
@@ -537,7 +547,7 @@ def test_a_line_and_its_answer_are_kept_and_the_chat_is_named(env):
     assert row["title"] == "Board power budget"
     assert sorted(state["recorded"]) == ["cc-chat", "cc-title"]
     # Named once: the next line does not ask again.
-    ev = events(run(cc_chat.say("c1", cc_chat.SayIn(text="and the LEDs?"))))
+    ev = events(cc_chat.say("c1", cc_chat.SayIn(text="and the LEDs?")))
     assert "title" not in [e["type"] for e in ev] and state["title_calls"] == 1
 
 
@@ -545,10 +555,10 @@ def test_a_title_falls_back_and_never_overwrites_a_rename(env):
     db, state = env
     seed(db, title=cc_chat.DEFAULT_TITLE)
     state["title"] = RuntimeError("no model")
-    ev = events(run(cc_chat.say("c1", cc_chat.SayIn(text="How do I flash   an ESP32-S3?"))))
+    ev = events(cc_chat.say("c1", cc_chat.SayIn(text="How do I flash   an ESP32-S3?")))
     assert ev[-1] == {"type": "title", "title": "How do I flash an ESP32-S3?"}
     seed(db, "c2", title="Mine")
-    ev = events(run(cc_chat.say("c2", cc_chat.SayIn(text="hi"))))
+    ev = events(cc_chat.say("c2", cc_chat.SayIn(text="hi")))
     assert "title" not in [e["type"] for e in ev] and db.coll.rows["c2"]["title"] == "Mine"
 
 
@@ -556,7 +566,7 @@ def test_editing_my_last_line_drops_what_followed(env):
     db, state = env
     seed(db, messages=[msg("a", "user", "q1"), msg("b", "assistant", "x"),
                        msg("c", "user", "typo"), msg("d", "assistant", "y")])
-    ev = events(run(cc_chat.say("c1", cc_chat.SayIn(text="fixed", edit="c"))))
+    ev = events(cc_chat.say("c1", cc_chat.SayIn(text="fixed", edit="c")))
     assert ev[0]["keep"] == 2 and ev[0]["message"]["content"] == "fixed"
     row = db.coll.rows["c1"]["messages"]
     assert [m["content"] for m in row] == ["q1", "x", "fixed", "Hello there"]
@@ -597,8 +607,8 @@ def test_regenerate_with_another_model(env):
     db, state = env
     seed(db, messages=[msg("a", "user", "q"), msg("b", "assistant", "old")])
     state["answer"] = ["new"]
-    ev = events(run(cc_chat.regenerate("c1", cc_chat.RegenIn(model="m2"))))
-    assert ev[0] == {"type": "user", "message": None, "keep": 1}
+    ev = events(cc_chat.regenerate("c1", cc_chat.RegenIn(model="m2")))
+    assert ev[0] == {"type": "user", "message": None, "keep": 1, "gen": ev[0]["gen"]}
     row = db.coll.rows["c1"]
     assert [m["content"] for m in row["messages"]] == ["q", "new"]
     assert row["messages"][1]["model"] == "m2" and row["model"] == "m2"
@@ -616,7 +626,7 @@ def test_regenerate_needs_a_question_and_the_right_to_drop(env):
         run(cc_chat.regenerate("c2", None))
     assert e.value.status_code == 403
     state["role"] = "editor"
-    events(run(cc_chat.regenerate("c2", None)))
+    events(cc_chat.regenerate("c2", None))
     assert [m["content"] for m in db.coll.rows["c2"]["messages"]] == ["q", "Hello there"]
 
 
@@ -642,8 +652,7 @@ def test_a_stopped_answer_is_kept_and_marked(env, monkeypatch):
         raise asyncio.CancelledError
 
     monkeypatch.setattr(llm, "stream", stopped)
-    with pytest.raises(asyncio.CancelledError):
-        events(run(cc_chat.say("c1", cc_chat.SayIn(text="go on"))))
+    events(cc_chat.say("c1", cc_chat.SayIn(text="go on")))
     # The empty line was not sent; the two questions went as one.
     assert state["sent"][1:] == [{"role": "user", "content": "q\n\ngo on"}]
     last = db.coll.rows["c1"]["messages"][-1]
@@ -654,7 +663,6 @@ def test_a_stopped_answer_is_kept_and_marked(env, monkeypatch):
         yield {}
 
     monkeypatch.setattr(llm, "stream", nothing)
-    with pytest.raises(asyncio.CancelledError):
-        events(run(cc_chat.say("c1", cc_chat.SayIn(text="again"))))
+    events(cc_chat.say("c1", cc_chat.SayIn(text="again")))
     last = db.coll.rows["c1"]["messages"][-1]
     assert last["content"] == "" and last["stopped"] and last["error"] == "stopped before the answer began"

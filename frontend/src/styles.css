@@ -3751,6 +3751,18 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-cc-errline { padding: 6px 10px; font-size: 12px; color: var(--danger); background: var(--surface-2);
   border-left: 3px solid var(--danger); border-radius: 4px; }
 /* The model's answer: Markdown that reads. */
+/* The model's thinking, whole (rooms/commandcode.ts #think): a fold with a
+   scroll of its own, so a long one does not push the answer away. */
+.tcv-cc-think { margin: 0 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.tcv-cc-think > summary { display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px;
+  color: var(--ink-dim); cursor: pointer; list-style: none; user-select: none; }
+.tcv-cc-think > summary::-webkit-details-marker { display: none; }
+.tcv-cc-think > summary .tcv-cc-ico { width: 14px; height: 14px; transform: rotate(-90deg); transition: transform .15s; }
+.tcv-cc-think[open] > summary .tcv-cc-ico { transform: none; }
+.tcv-cc-think > summary .tcv-cc-dim { margin-left: auto; font-size: 11px; }
+.tcv-cc-thinkbody { max-height: min(340px, 45vh); overflow-y: auto; overscroll-behavior: contain; padding: 8px 12px 10px;
+  border-top: 1px solid var(--line); font-size: 12px; line-height: 1.55; color: var(--ink-dim); white-space: pre-wrap;
+  overflow-wrap: anywhere; }
 .tcv-cc-answer { font-size: 13.5px; line-height: 1.65; color: var(--ink); overflow-wrap: anywhere; }
 .tcv-cc-answer p { margin: 0 0 .75em; }
 .tcv-cc-answer h1, .tcv-cc-answer h2, .tcv-cc-answer h3, .tcv-cc-answer h4 { margin: 1.1em 0 .45em; line-height: 1.3;

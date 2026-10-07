@@ -80,6 +80,8 @@ app.include_router(worknow.router)
 # An agent's question or thread reply, in the reader's language.
 from . import reading  # noqa: E402
 app.include_router(reading.router)
+from . import themes as themes_api  # noqa: E402
+app.include_router(themes_api.router)
 # Settings > Telegram: the bot, people's links, the webhook (backend/tgbot/).
 from .tgbot import api as tg_api  # noqa: E402
 app.include_router(tg_api.router)
@@ -2621,6 +2623,16 @@ async def _start_sampler():
             LOG.warning("build jobs not recovered: %s", exc)
         asyncio.create_task(links.loop(lambda: db().raw, _link_build,
                                        lookup=_link_job))
+        try:
+            # Command Code answers whose runner died with the container are
+            # interrupted - kept as far as they got (backend/ccgen.py); those
+            # a reload did not stop are left to finish.
+            from . import ccgen
+            cut = await ccgen.recover(db().raw)
+            if cut:
+                LOG.warning("Command Code answers interrupted: %s", cut)
+        except Exception as exc:                       # noqa: BLE001 - the API still starts
+            LOG.warning("Command Code answers not recovered: %s", exc)
         try:
             # The trash of the Command Code room empties itself after 30 days.
             await cc_chat.ensure_indexes(db().raw)       # the database itself: one index for every workspace

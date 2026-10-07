@@ -41,3 +41,27 @@ def _builds_in_process(monkeypatch):
 
     monkeypatch.setattr(buildjobs, "spawn", spawn)
     monkeypatch.setattr(buildjobs, "POLL", 0.02)
+
+
+@pytest.fixture(autouse=True)
+def _cc_answers_in_process(monkeypatch):
+    """A Command Code answer is written by a process of its own
+    (backend/ccgen.py). In a test its runner is a task in this process, so
+    the llm.stream a test stands in is the one that answers; and the
+    answer is written and followed at once, not every quarter second."""
+    import asyncio
+
+    from backend import cc_chat, ccgen
+
+    async def spawn(db, gid):
+        task = asyncio.ensure_future(ccgen.run(gid))
+        cc_chat._TASKS.add(task)
+        task.add_done_callback(cc_chat._TASKS.discard)
+        return 0
+
+    monkeypatch.setattr(ccgen, "spawn", spawn)
+    monkeypatch.setattr(ccgen, "FLUSH", 0.005)
+    monkeypatch.setattr(cc_chat, "TAIL", 0.005)
+    cc_chat.HUB.tails.clear()
+    cc_chat.HUB.live.clear()
+    cc_chat.HUB.poked.clear()

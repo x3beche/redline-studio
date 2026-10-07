@@ -52,7 +52,9 @@ def test_a_viewer_only_looks():
             ("POST", "/api/auth/page-session"),
             # one's own Telegram link and what one hears about (backend/tgbot/api.py)
             ("POST", "/api/telegram/link"), ("DELETE", "/api/telegram/link"), ("PUT", "/api/telegram/me"),
-            ("POST", "/api/telegram/me/test")}, (method, path)
+            ("POST", "/api/telegram/me/test"),
+            # one's own custom themes; someone else's is checked by the route (themes.py)
+            ("POST", "/api/themes"), ("PUT", "/api/themes/x"), ("DELETE", "/api/themes/x")}, (method, path)
 
 
 def test_a_reviewer_draws_but_does_not_queue_build_or_delete():

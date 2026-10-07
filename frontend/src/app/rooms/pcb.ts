@@ -17,7 +17,7 @@ import { PinIcon, PinnedByList } from './links';
 import { Auth } from '../auth';
 import { Releases } from './releases';
 import { Prefs } from '../preferences';
-import { LIGHT_THEMES } from '../../theme';
+import { isLightTheme } from '../../theme';
 import { Drawing } from './drawing';
 import { RoomFrame, ToolButton } from './frame';
 import { RulesForm } from './rules-form';
@@ -1285,7 +1285,7 @@ export class RoomPcb implements OnDestroy {
   file(name: string, stamp?: string | null): string {
     const url = this.api.file(this.here()?._id ?? '', name, stamp ?? undefined);
     // On a light theme the drawings come with inks that show on white.
-    return name.endsWith('.svg') && LIGHT_THEMES.has(this.prefs.theme())
+    return name.endsWith('.svg') && isLightTheme(this.prefs.theme())
       ? url + (url.includes('?') ? '&' : '?') + 'light=1' : url;
   }
 

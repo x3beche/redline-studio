@@ -1,5 +1,5 @@
 import { Component, Injectable, computed, inject, signal } from '@angular/core';
-import { LIGHT_THEMES, THEMES, THEME_NAMES, Theme, currentTheme, setTheme } from '../theme';
+import { CustomTheme, LIGHT_THEMES, THEMES, THEME_NAMES, Theme, ThemeId, cachedCustom, currentTheme, isCustom, isLightTheme, setTheme } from '../theme';
 import { LANG, LANGS, Lang, T, setLang, t } from './i18n';
 import { Auth } from './auth';
 import { PALETTE } from './rooms/charts';
@@ -11,6 +11,7 @@ import { TelegramSettingsPanel } from './telegram-settings';
 import { TopbarSettingsPanel } from './topbar-settings';
 import { TopBar } from './topbar';
 import { CURRENCY } from './money';
+import { CustomThemesPanel } from './custom-themes';
 
 /** Settings, a tab of its own: the theme, the language and the keyboard
  *  shortcuts - per browser, about the person at this screen - and the
@@ -28,7 +29,7 @@ export class Prefs {
   open = signal<PrefsTab | null>(null);
   /** The section on screen in the Settings tab. */
   tab = signal<PrefsTab>('appearance');
-  theme = signal<Theme>(currentTheme());
+  theme = signal<ThemeId>(currentTheme());
 
   constructor() {
     // "?" opens the shortcuts wherever you are - unless you are typing it.
@@ -43,11 +44,19 @@ export class Prefs {
     }, true);
   }
 
-  wear(t: Theme) {
-    this.theme.set(setTheme(t));
+  /** Wear a theme; a custom one comes whole (custom-themes.ts). */
+  wear(t: ThemeId, custom?: CustomTheme) {
+    this.theme.set(setTheme(t, custom));
     // An open code editor takes the new colours at once.
     const m = (window as unknown as { monaco?: Parameters<typeof redlineTheme>[0] }).monaco;
     if (m) m.editor.setTheme(redlineTheme(m));
+  }
+
+  /** What a theme is called where it is shown. */
+  nameOf(t: ThemeId): string {
+    if (!isCustom(t)) return THEME_NAMES[t];
+    const c = cachedCustom();
+    return c && 'custom:' + c.id === t ? c.name : t.slice(7);
   }
 }
 
@@ -90,7 +99,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel],
+  imports: [T, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -159,7 +168,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
                   <span class="st-sub">{{ 'The whole window, the 3D backdrop and the code editor follow it.' | t }}</span></div>
                 <div class="st-card-body">
                   <div class="st-tiles">
-                    <div class="st-tile wide"><span>{{ 'Theme' | t }}</span><b>{{ names[prefs.theme()] }}</b></div>
+                    <div class="st-tile wide"><span>{{ 'Theme' | t }}</span><b>{{ prefs.nameOf(prefs.theme()) }}</b></div>
                     <div class="st-tile"><span>{{ 'Kind' | t }}</span><b>{{ (isLight(prefs.theme()) ? 'Light' : 'Dark') | t }}</b></div>
                     <div class="st-tile"><span>{{ 'Available' | t }}</span><b>{{ themes.length }}</b>
                       <small>{{ groups[0].themes.length }} {{ 'dark' | t }} · {{ groups[1].themes.length }} {{ 'light' | t }}</small></div>
@@ -192,6 +201,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
                 </div>
               }
             }
+            <app-custom-themes [filter]="themeFilter()" />
           </div>
         }
         @case ('language') {
@@ -298,11 +308,11 @@ export class RoomSettings {
   item = computed(() => this.nav.flatMap(g => g.items).find(x => x.id === this.prefs.tab()) ?? null);
   label(id: PrefsTab) { return this.nav.flatMap(g => g.items).find(x => x.id === id)?.label ?? id; }
   server(id: PrefsTab) { return id === 'llm' || id === 'proxy' || id === 'costs' || id === 'telegram'; }
-  isLight(t: Theme) { return LIGHT_THEMES.has(t); }
+  isLight(t: ThemeId) { return isLightTheme(t); }
   langName = computed(() => LANGS.find(l => l.id === this.lang())?.name ?? this.lang());
   /** The figure beside each section in the list. */
   meta(id: PrefsTab): string | null {
-    if (id === 'appearance') return this.names[this.prefs.theme()];
+    if (id === 'appearance') return this.prefs.nameOf(this.prefs.theme());
     if (id === 'language') return this.lang().toUpperCase();
     if (id === 'shortcuts') return String(this.shortcutCount());
     if (id === 'costs') return CURRENCY();
