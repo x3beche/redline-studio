@@ -563,7 +563,7 @@ def _pick(doc: dict, provider: str | None, model: str | None) -> tuple[str, str]
     if provider not in llm.PROVIDERS:
         raise HTTPException(400, f"unknown provider {provider!r}")
     if not llm.key(provider):
-        raise HTTPException(503, f"no {llm.PROVIDERS[provider]['name']} API key - Preferences > LLM settings")
+        raise HTTPException(503, llm.no_key(provider, "chat"))
     return provider, model
 
 

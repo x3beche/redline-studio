@@ -3,7 +3,7 @@
 Every LLM call the server makes goes through here: the card summaries,
 the English translation, the tool pages' prompt runs, the tool finder and
 the Command Code room's conversations. Each of those is a *job*, and a
-job names a provider and a model - chosen in Preferences > LLM settings,
+job names a provider and a model - chosen in Settings > LLM settings,
 kept in the database, the same for the whole server.
 
 Two providers, both spoken to in the OpenAI chat format:
@@ -15,16 +15,16 @@ Two providers, both spoken to in the OpenAI chat format:
   callers never see the difference.
 
 The keys are the server's. They are kept in the `llm_settings` document
-(or, failing that, OPENROUTER_API_KEY / COMMANDCODE_API_KEY in .env) and
-never sent to a browser: the page is told whether a key is set and its
-last four characters, nothing more.
+and only there - typed in Settings > LLM settings, never read from .env or
+the environment - and never sent to a browser: the page is told whether a
+key is set and its last four characters, nothing more. No key, no call:
+the job fails with `no_key()`'s message, which says where to add one.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from typing import AsyncIterator
 
@@ -33,11 +33,15 @@ log = logging.getLogger("redline.llm")
 COLL = "llm_settings"          # machine-wide, like the keys: not per workspace
 DOC_ID = "llm"
 
+# "priced": whether the provider says what a call cost. OpenRouter puts it
+# in every answer's usage; Command Code sends tokens only - no cost in the
+# answer, no prices on /models, no account or usage endpoint (checked
+# October 2026) - so its calls are kept as unpriced, never guessed.
 PROVIDERS = {
     "openrouter": {"name": "OpenRouter", "base": "https://openrouter.ai/api/v1",
-                   "env": "OPENROUTER_API_KEY", "site": "https://openrouter.ai/keys"},
+                   "site": "https://openrouter.ai/keys", "priced": True},
     "commandcode": {"name": "Command Code", "base": "https://api.commandcode.ai/provider/v1",
-                    "env": "COMMANDCODE_API_KEY", "site": "https://commandcode.ai"},
+                    "site": "https://commandcode.ai", "priced": False},
 }
 
 # What the app asks a model to do. The defaults are what it did before
@@ -60,11 +64,28 @@ JOBS = {
              "default": ("commandcode", "xiaomi/mimo-v2.5-pro")},
 }
 
+# The usage log's `kind` of a call -> the job it did, named as in the
+# "Which model does what" list. The room's titles are written by the
+# summary job's model but belong to the room.
+KINDS = {"summary": "summary", "translate": "translate", "tool-llm": "tools",
+         "tool-router": "router", "cc-chat": "chat"}
+KIND_LABELS = {"cc-title": "Command Code room titles", "llm-test": "Settings test"}
+
+
+def job_label(kind: str | None) -> str:
+    """The job a logged call was for, as the settings page names it."""
+    kind = kind or "?"
+    if kind in KIND_LABELS:
+        return KIND_LABELS[kind]
+    job = KINDS.get(kind.split(":", 1)[0])
+    return JOBS[job]["label"] if job else kind
+
+
 TIMEOUT = 60.0
 
 # The settings, read once from the database and kept here: the callers
 # (summarise, the tool pages) have no database of their own to hand.
-_conf: dict = {"keys": {}, "jobs": {}, "off": []}
+_conf: dict = {"keys": {}, "jobs": {}}
 _loaded = False
 
 
@@ -74,30 +95,29 @@ async def load(db) -> dict:
     global _conf, _loaded
     raw = db.raw if getattr(type(db), "SCOPED", False) else db
     doc = await raw[COLL].find_one({"_id": DOC_ID}) or {}
-    _conf = {"keys": dict(doc.get("keys") or {}), "jobs": dict(doc.get("jobs") or {}),
-             "off": list(doc.get("off") or [])}
+    _conf = {"keys": dict(doc.get("keys") or {}), "jobs": dict(doc.get("jobs") or {})}
     _loaded = True
     return _conf
 
 
 def key(provider: str) -> str | None:
-    """The provider's key: the one kept in the settings, else .env - unless
-    it was removed in the settings, which forgets the .env one too."""
+    """The provider's key, as saved in Settings > LLM settings - the only
+    place a key comes from."""
     if provider not in PROVIDERS:
         return None
-    if provider in _conf.get("off", []) and not _conf["keys"].get(provider):
-        return None
-    return (_conf["keys"].get(provider) or os.environ.get(PROVIDERS[provider]["env"]) or "").strip() or None
+    return (_conf["keys"].get(provider) or "").strip() or None
 
 
 def key_source(provider: str) -> str | None:
-    if _conf["keys"].get(provider):
-        return "settings"
-    if provider in _conf.get("off", []):
-        return None
-    if os.environ.get(PROVIDERS[provider]["env"]):
-        return ".env"
-    return None
+    """Where the key comes from: "settings" (the database) or nowhere."""
+    return "settings" if key(provider) else None
+
+
+def no_key(provider: str, job: str | None = None) -> str:
+    """What a call without a key says: which key, and where to add it."""
+    name = PROVIDERS[provider]["name"] if provider in PROVIDERS else provider
+    what = f" for {JOBS[job]['label'].lower()}" if job in JOBS else ""
+    return f"no {name} API key is saved{what} - add one in Settings > LLM settings"
 
 
 def route(job: str) -> tuple[str, str]:
@@ -123,12 +143,11 @@ def public() -> dict:
 
 
 async def save(db, keys: dict | None = None, jobs: dict | None = None) -> dict:
-    """Change keys and job routes. A string sets a key; "" or None forgets
-    it - the saved one and the .env one both - until a new one is saved."""
+    """Change keys and job routes. A string sets a key; "" or None removes
+    it, and the provider's jobs stop until a new one is saved."""
     raw = db.raw if getattr(type(db), "SCOPED", False) else db
     sets: dict = {}
     unsets: dict = {}
-    off = set(_conf.get("off", []))
     for p, v in (keys or {}).items():
         if p not in PROVIDERS:
             raise ValueError(f"unknown provider {p!r}")
@@ -136,12 +155,10 @@ async def save(db, keys: dict | None = None, jobs: dict | None = None) -> dict:
             if len(v) > 400 or any(c.isspace() for c in v.strip()):
                 raise ValueError(f"{PROVIDERS[p]['name']}: that does not look like an API key")
             sets[f"keys.{p}"] = v.strip()
-            off.discard(p)
         else:
             unsets[f"keys.{p}"] = ""
-            off.add(p)
     if keys:
-        sets["off"] = sorted(off)
+        unsets["off"] = ""                             # the old "forget the .env key too" list
     for j, r in (jobs or {}).items():
         if j not in JOBS:
             raise ValueError(f"unknown job {j!r}")
@@ -240,8 +257,7 @@ def _to_anthropic(messages: list[dict], max_tokens: int, temperature: float | No
 def _headers(provider: str, anthropic: bool) -> dict:
     k = key(provider)
     if not k:
-        raise RuntimeError(f"no {PROVIDERS[provider]['name']} API key is set "
-                           f"(Preferences > LLM settings, or {PROVIDERS[provider]['env']} in .env)")
+        raise RuntimeError(no_key(provider))
     h = {"Authorization": f"Bearer {k}", "Content-Type": "application/json"}
     if anthropic:
         h.update({"x-api-key": k, "anthropic-version": "2023-06-01"})

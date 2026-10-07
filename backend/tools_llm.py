@@ -32,7 +32,7 @@ CONCURRENT = 4
 
 def options() -> list[tuple[str, str]]:
     """(provider, model) a tool page may ask for: the "tools" job's choice
-    (Preferences > LLM settings) first, then REDLINE_TOOLS_MODELS (comma
+    (Settings > LLM settings) first, then REDLINE_TOOLS_MODELS (comma
     separated OpenRouter models)."""
     from . import llm
     first = llm.route("tools")
@@ -88,7 +88,7 @@ async def call(body: LlmIn) -> dict:
     if not provider:
         raise HTTPException(400, f"model {model!r} is not offered; one of {', '.join(models())}")
     if not llm.key(provider):
-        raise HTTPException(503, f"no {llm.PROVIDERS[provider]['name']} API key is configured on the server")
+        raise HTTPException(503, llm.no_key(provider, "tools"))
     if sum(len(m.content) for m in body.messages) > MAX_INPUT_CHARS:
         raise HTTPException(413, f"the messages are over {MAX_INPUT_CHARS} characters together")
     _admit()
@@ -114,7 +114,7 @@ async def call(body: LlmIn) -> dict:
             surface="tools", kind=f"tool-llm:{body.tool}" if body.tool else "tool-llm", model=model,
             input=used.get("prompt_tokens") or 0, output=used.get("completion_tokens") or 0,
             cache_read=0, cache_write=0, thinking=0, cost_usd=used.get("cost"),
-            cost_basis="billed", revision=None)
+            cost_basis="billed" if used.get("cost") is not None else "unpriced", revision=None)
     except Exception:                                  # noqa: BLE001 - the answer matters more
         pass
     return {"text": text, "model": model, "ms": ms,

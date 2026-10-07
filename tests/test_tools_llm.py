@@ -7,7 +7,11 @@ import asyncio
 import pytest
 from fastapi import HTTPException
 
-from backend import tools_llm
+from backend import llm, tools_llm
+
+
+def keys(monkeypatch, **saved):
+    monkeypatch.setattr(llm, "_conf", {"keys": saved, "jobs": {}})
 
 
 def call(**body):
@@ -16,22 +20,23 @@ def call(**body):
 
 
 def test_status_says_whether_a_key_is_set_and_never_shows_it(monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-not-real")
+    keys(monkeypatch, openrouter="test-key-not-real")
     s = asyncio.run(tools_llm.status())
     assert s["available"] is True and "test-key" not in repr(s)
-    monkeypatch.delenv("OPENROUTER_API_KEY")
+    keys(monkeypatch)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-not-real")   # never read
     assert asyncio.run(tools_llm.status())["available"] is False
 
 
 def test_no_key_is_a_clear_503(monkeypatch):
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    keys(monkeypatch)
     with pytest.raises(HTTPException) as e:
         call()
-    assert e.value.status_code == 503
+    assert e.value.status_code == 503 and "Settings > LLM settings" in e.value.detail
 
 
 def test_only_offered_models_and_capped_input(monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-not-real")
+    keys(monkeypatch, openrouter="test-key-not-real")
     monkeypatch.setenv("REDLINE_TOOLS_MODELS", "a/one,b/two")
     with pytest.raises(HTTPException) as e:
         call(model="c/three")

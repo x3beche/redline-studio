@@ -816,7 +816,8 @@ async def _log_openrouter(rid: str, used: dict, surface: str,
             input=used.get("prompt_tokens") or 0,
             output=used.get("completion_tokens") or 0,
             cache_read=0, cache_write=0, thinking=0,
-            cost_usd=used.get("cost"), cost_basis="billed", revision=rid)
+            cost_usd=used.get("cost"), revision=rid,
+            cost_basis="billed" if used.get("cost") is not None else "unpriced")
     except Exception as exc:                         # noqa: BLE001
         LOG.warning("usage for %s not recorded: %s", rid, exc)
 

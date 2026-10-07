@@ -82,16 +82,19 @@ build123d into a volume and takes a few minutes.
 
 ## Configuration
 
-Everything is read from `.env`, which is git-ignored. The connection string and
-the API key are read by the **backend only** and never reach the browser.
+Everything is read from `.env`, which is git-ignored. The connection string is
+read by the **backend only** and never reaches the browser. The model API keys
+(OpenRouter, Command Code) are **not** read from `.env` or the environment: they
+are kept in the database and typed in **Settings > LLM settings**, where each job
+also picks its provider and model. Without a key there, the jobs that need it
+(card summaries, the English translation, tool pages, the Command Code room)
+stop with a message that points there.
 Redline's own settings are all named `REDLINE_*`.
 
 | Variable | Default | What it does |
 |---|---|---|
 | `MONGODB_URI` | — | required; the database is the source of truth |
 | `MONGODB_DB` | `redline` | database name |
-| `OPENROUTER_API_KEY` | — | card summaries and the English translation; without it a card simply has neither |
-| `COMMANDCODE_API_KEY` | — | Command Code's models, for the Command Code room or any job. Both keys can instead be saved in **Preferences > LLM settings**, where each job also picks its provider and model |
 | `REDLINE_BUILD_MEM` | `10G` | memory ceiling a build may use before the kernel kills it |
 | `REDLINE_CACHE` | `.cache/artifacts` | where generated artifacts are kept on disk |
 | `REDLINE_WATTS_PER_CORE` | `8.0` | assumed power of one busy core, for the energy figure on a revision card |

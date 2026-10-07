@@ -334,7 +334,7 @@ async def find(body: FindIn) -> dict:
                 surface="tools", kind="tool-router", model=used.get("model") or tool_router.summarise.MODEL,
                 input=used.get("prompt_tokens") or 0, output=used.get("completion_tokens") or 0,
                 cache_read=0, cache_write=0, thinking=0, cost_usd=used.get("cost"),
-                cost_basis="billed", revision=None)
+                cost_basis="billed" if used.get("cost") is not None else "unpriced", revision=None)
         except Exception:                                # noqa: BLE001
             pass
         res["prompt_tokens"] = used.get("prompt_tokens")

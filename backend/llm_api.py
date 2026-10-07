@@ -128,29 +128,35 @@ async def _openrouter_account() -> dict | None:
 
 
 @router.get("/usage")
-async def usage(provider: str, days: int = 30) -> dict:
-    """What the app asked of one provider: calls, tokens and money over time,
-    by job and by model (from the usage log every call writes to)."""
+async def usage(provider: str = "all", days: int = 30) -> dict:
+    """What the app asked of one provider, or of both ("all"): calls, tokens
+    and money over time, by job, by model and by provider (from the usage
+    log every call writes to). Jobs are named as in "Which model does what"."""
     from datetime import datetime, timezone
 
     from . import usage as _usage
 
-    if provider not in llm.PROVIDERS:
+    if provider != "all" and provider not in llm.PROVIDERS:
         raise HTTPException(400, f"unknown provider {provider!r}")
+    provs = list(llm.PROVIDERS) if provider == "all" else [provider]
     days = max(1, min(days, 90))
     step, t0, n, since = _buckets(days)
     since_iso = datetime.fromtimestamp(since, timezone.utc).isoformat()
     raw = _db().raw if getattr(type(_db()), "SCOPED", False) else _db()
     rows = [r async for r in raw[_usage.CALLS].find(
-        {"provider": provider, "at": {"$gte": since_iso}},
-        {"_id": 0, "at": 1, "kind": 1, "model": 1, "input": 1, "output": 1, "cost_usd": 1}).sort("at", 1)]
+        {"provider": {"$in": provs}, "at": {"$gte": since_iso}},
+        {"_id": 0, "at": 1, "provider": 1, "kind": 1, "model": 1, "input": 1, "output": 1,
+         "cost_usd": 1}).sort("at", 1)]
+    for r in rows:
+        r["job"] = llm.job_label(r.get("kind"))
 
-    kinds = sorted({r.get("kind") or "?" for r in rows})
+    kinds = sorted({r["job"] for r in rows})
     models = sorted({r.get("model") or "?" for r in rows})
     calls, cost = _series(kinds, n), {m: [None] * n for m in models}
     tokens = _series(["input", "output"], n)
     by_model: dict[str, dict] = {}
     by_kind: dict[str, dict] = {}
+    by_provider: dict[str, dict] = {}
     totals = {"calls": 0, "input": 0, "output": 0, "cost_usd": None, "unpriced_calls": 0}
     for r in rows:
         try:
@@ -158,7 +164,8 @@ async def usage(provider: str, days: int = 30) -> dict:
         except (KeyError, ValueError, TypeError):
             continue
         i = min(n - 1, max(0, int((ts - t0) // step)))
-        kind, model = r.get("kind") or "?", r.get("model") or "?"
+        kind, model = r["job"], r.get("model") or "?"
+        pname = llm.PROVIDERS.get(r.get("provider"), {}).get("name") or r.get("provider") or "?"
         inp, out, usd = r.get("input") or 0, r.get("output") or 0, r.get("cost_usd")
         calls[kind][i] += 1
         tokens["input"][i] += inp
@@ -171,7 +178,7 @@ async def usage(provider: str, days: int = 30) -> dict:
         else:
             cost[model][i] = (cost[model][i] or 0) + usd
             totals["cost_usd"] = (totals["cost_usd"] or 0) + usd
-        for table, name in ((by_model, model), (by_kind, kind)):
+        for table, name in ((by_model, model), (by_kind, kind), (by_provider, pname)):
             row = table.setdefault(name, {"name": name, "calls": 0, "input": 0, "output": 0, "cost_usd": None})
             row["calls"] += 1
             row["input"] += inp
@@ -182,11 +189,15 @@ async def usage(provider: str, days: int = 30) -> dict:
     def td(series: dict) -> dict:
         return {"t0": t0, "step": step, "n": n, "series": [{"name": k, "values": v} for k, v in series.items()]}
 
-    recent = [{k: r.get(k) for k in ("at", "kind", "model", "input", "output", "cost_usd")}
+    recent = [{**{k: r.get(k) for k in ("at", "kind", "job", "model", "input", "output", "cost_usd")},
+               "provider": llm.PROVIDERS.get(r.get("provider"), {}).get("name") or r.get("provider")}
               for r in reversed(rows[-25:])]
+    unpriced = [llm.PROVIDERS[p]["name"] for p in provs if not llm.PROVIDERS[p].get("priced")]
     return {"provider": provider, "days": days, "step": step, "totals": totals,
+            "unpriced_providers": unpriced,
+            "by_provider": sorted(by_provider.values(), key=lambda x: -x["calls"]),
             "calls": td(calls), "tokens": td(tokens), "cost": td(cost),
             "by_model": sorted(by_model.values(), key=lambda x: -x["calls"]),
             "by_kind": sorted(by_kind.values(), key=lambda x: -x["calls"]),
             "recent": recent,
-            "account": await _openrouter_account() if provider == "openrouter" else None}
+            "account": await _openrouter_account() if "openrouter" in provs else None}

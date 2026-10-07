@@ -6,12 +6,14 @@ import { money as shown } from './money';
 import type { LlmModel } from './rooms/commandcode';
 import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 
-/** Preferences > LLM settings: the API keys, and which provider and model
- *  does each of the app's model jobs (backend/llm.py), and what each
- *  provider was used for (LlmUsagePanel, under them).
+/** Settings > LLM settings: the API keys, and which provider and model
+ *  does each of the app's model jobs (backend/llm.py), and what the
+ *  providers were used for (LlmUsagePanel, under them).
  *
- *  A key goes one way: typed here, kept on the server, never shown again -
+ *  A key goes one way: typed here, kept in the database, never shown again -
  *  the page only learns whether one is set and its last four characters.
+ *  This is the only place a key comes from: the server never reads one
+ *  from .env or the environment.
  *  Changing anything is for the workspace's owners and admins.
  */
 interface ProviderInfo { name: string; set: boolean; hint: string | null; source: string | null; site: string }
@@ -25,13 +27,20 @@ interface UsageRow { name: string; calls: number; input: number; output: number;
 interface LlmUsage {
   provider: string; days: number; step: number;
   totals: { calls: number; input: number; output: number; cost_usd: number | null; unpriced_calls: number };
+  /** Providers that send no prices at all (Command Code): their calls stay unpriced. */
+  unpriced_providers: string[];
   calls: TimeData; tokens: TimeData; cost: TimeData;
-  by_model: UsageRow[]; by_kind: UsageRow[];
-  recent: { at: string | number; kind: string; model: string; input: number; output: number; cost_usd: number | null }[];
+  by_model: UsageRow[]; by_kind: UsageRow[]; by_provider: UsageRow[];
+  /** `job` is the kind named as in "Which model does what". */
+  recent: { at: string | number; provider: string; kind: string; job: string; model: string;
+            input: number; output: number; cost_usd: number | null }[];
   account: null | { label: string; usage: number; limit: number | null; limit_remaining: number | null; is_free_tier: boolean };
 }
 
 const PROVIDERS = ['commandcode', 'openrouter'];
+/** The usage panel's switch: both providers together first, so the latest
+ *  calls show whichever provider the jobs are on. */
+const USAGE_PROVIDERS = ['all', ...PROVIDERS];
 const PERIODS = [{ days: 1, label: '24h' }, { days: 7, label: '7d' }, { days: 30, label: '30d' }];
 
 function load<V>(key: string, fallback: V): V {
@@ -65,7 +74,7 @@ export function when(at: string | number | null | undefined): string {
     <div class="st-right">
       <div class="st-seg">
         @for (p of providers; track p) {
-          <button [class.on]="provider() === p" (click)="setProvider(p)">{{ names()[p] || p }}</button>
+          <button [class.on]="provider() === p" (click)="setProvider(p)">{{ p === 'all' ? ('All' | t) : (names()[p] || p) }}</button>
         }
       </div>
       <div class="st-seg">
@@ -85,11 +94,11 @@ export function when(at: string | number | null | undefined): string {
         <div class="st-tile"><span>{{ 'Output tokens' | t }}</span><b>{{ f.count(d.totals.output) }}</b>
           <small>{{ d.totals.calls ? perCall(d.totals.output, d.totals.calls) : '–' }} {{ 'per call' | t }}</small></div>
         @if (d.totals.cost_usd == null) {
-          <div class="st-tile" data-tone="dim"><span>{{ 'Spend' | t }}</span><b>{{ 'not priced' | t }}</b>
-            <small>{{ 'this provider sends no prices' | t }}</small></div>
+          <div class="st-tile" data-tone="dim" style="grid-column: span 2"><span>{{ 'Spend' | t }}</span><b>{{ 'not priced by the provider' | t }}</b>
+            <small>{{ d.unpriced_providers.length ? d.unpriced_providers.join(', ') + ' ' + ('sends token counts, no prices' | t) : '–' }}</small></div>
         } @else {
-          <div class="st-tile"><span>{{ 'Spend' | t }}</span><b>{{ money(d.totals.cost_usd) }}</b>
-            <small>{{ d.totals.unpriced_calls ? d.totals.unpriced_calls + ' ' + ('calls not priced' | t)
+          <div class="st-tile" [style.grid-column]="d.totals.unpriced_calls ? 'span 2' : null"><span>{{ 'Spend' | t }}</span><b>{{ money(d.totals.cost_usd) }}</b>
+            <small [title]="d.unpriced_providers.join(', ')">{{ d.totals.unpriced_calls ? d.totals.unpriced_calls + ' ' + ('calls not priced by the provider' | t) + (d.unpriced_providers.length ? ' (' + d.unpriced_providers.join(', ') + ')' : '')
                      : (d.totals.calls ? money(d.totals.cost_usd / d.totals.calls) + ' ' + ('per call' | t) : '–') }}</small></div>
         }
         @if (d.account; as a) {
@@ -114,6 +123,12 @@ export function when(at: string | number | null | undefined): string {
             <app-time-chart [data]="d.tokens" kind="area" [f]="f.count" [height]="150" /></section>
           <section class="st-chart c4"><h4>{{ 'By model' | t }}</h4>
             <app-bar-list [rows]="rows(d.by_model, 'calls')" [f]="f.count" /></section>
+          @if (provider() === 'all') {
+            <section class="st-chart c6"><h4>{{ 'Calls by provider' | t }}</h4>
+              <app-bar-list [rows]="rows(d.by_provider, 'calls')" [f]="f.count" /></section>
+            <section class="st-chart c6"><h4>{{ 'Tokens by provider' | t }}</h4>
+              <app-bar-list [rows]="rows(d.by_provider, 'tokens')" [f]="f.count" /></section>
+          }
           @if (priced(d)) {
             <section class="st-chart c8"><h4>{{ 'Spend by model' | t }}<em>{{ money(d.totals.cost_usd) }}</em></h4>
               <app-time-chart [data]="d.cost" kind="bar" [f]="money" [height]="150" /></section>
@@ -123,11 +138,13 @@ export function when(at: string | number | null | undefined): string {
           <section class="st-chart"><h4>{{ 'Latest calls' | t }}<em>{{ d.recent.length }}</em></h4>
             <div class="st-table-wrap">
               <table class="st-table">
-                <thead><tr><th>{{ 'when' | t }}</th><th>{{ 'job' | t }}</th><th>{{ 'model' | t }}</th>
+                <thead><tr><th>{{ 'when' | t }}</th><th>{{ 'job' | t }}</th>
+                  @if (provider() === 'all') { <th>{{ 'provider' | t }}</th> }<th>{{ 'model' | t }}</th>
                   <th class="r">{{ 'in' | t }}</th><th class="r">{{ 'out' | t }}</th><th class="r">{{ 'spend' | t }}</th></tr></thead>
                 <tbody>
                   @for (r of allRecent() ? d.recent : d.recent.slice(0, 8); track $index) {
-                    <tr><td class="dim mono">{{ when(r.at) }}</td><td><span class="st-tag">{{ r.kind }}</span></td>
+                    <tr><td class="dim mono">{{ when(r.at) }}</td><td><span class="st-tag" [title]="r.kind">{{ (r.job || r.kind) | t }}</span></td>
+                      @if (provider() === 'all') { <td class="dim">{{ r.provider }}</td> }
                       <td class="mono give" [title]="r.model">{{ r.model }}</td><td class="r mono">{{ f.count(r.input) }}</td>
                       <td class="r mono">{{ f.count(r.output) }}</td>
                       <td class="r mono" [class.dim]="r.cost_usd == null">{{ money(r.cost_usd) }}</td></tr>
@@ -141,7 +158,7 @@ export function when(at: string | number | null | undefined): string {
           </section>
         </div>
       } @else {
-        <div class="st-empty">{{ 'No calls to this provider in this period.' | t }}</div>
+        <div class="st-empty">{{ (provider() === 'all' ? 'No model calls in this period.' : 'No calls to this provider in this period.') | t }}</div>
       }
     } @else if (err()) {
       <p class="st-err">{{ err() }}</p>
@@ -155,11 +172,14 @@ export class LlmUsagePanel {
   private http = inject(HttpClient);
   readonly f = fmt;
   readonly when = when;
-  readonly providers = PROVIDERS;
+  readonly providers = USAGE_PROVIDERS;
   readonly periods = PERIODS;
-  /** Display names, from the settings above. */
+  /** Display names. */
   names = signal<Record<string, string>>({ commandcode: 'Command Code', openrouter: 'OpenRouter' });
-  provider = signal<string>(load('redline.settings.llm.provider', 'openrouter'));
+  // A new key: the old one remembered OpenRouter for everyone, which hid
+  // the calls the jobs now make on Command Code.
+  provider = signal<string>(USAGE_PROVIDERS.includes(load('redline.settings.llm.usage', 'all'))
+    ? load('redline.settings.llm.usage', 'all') : 'all');
   days = signal<number>(load('redline.settings.llm.days', 30));
   u = signal<LlmUsage | null>(null);
   allRecent = signal(false);
@@ -171,13 +191,18 @@ export class LlmUsagePanel {
       this.u.set(null);
       this.err.set(null);
       this.http.get<LlmUsage>(`/api/llm/usage?provider=${p}&days=${d}`).subscribe({
-        next: r => { if (this.provider() === p && this.days() === d) this.u.set(r); },
+        next: r => {
+          if (this.provider() !== p || this.days() !== d) return;
+          // The calls chart's series are job names, in English from the server.
+          r.calls = { ...r.calls, series: r.calls.series.map(s => ({ ...s, name: t(s.name) })) };
+          this.u.set(r);
+        },
         error: e => this.err.set(t('The usage figures did not load') + ` (${e?.status ?? '?'}).`),
       });
     });
   }
 
-  setProvider(p: string) { this.provider.set(p); keep('redline.settings.llm.provider', p); }
+  setProvider(p: string) { this.provider.set(p); keep('redline.settings.llm.usage', p); }
   setDays(d: number) { this.days.set(d); keep('redline.settings.llm.days', d); }
   perCall(n: number, calls: number) { return fmt.count(Math.round(n / calls)); }
   perDay(n: number) { return fmt.count(n / Math.max(1, this.days())); }
@@ -185,8 +210,9 @@ export class LlmUsagePanel {
   money = (v: number | null | undefined): string => v == null ? '–' : shown(v);
   usedPct(a: NonNullable<LlmUsage['account']>) { return a.limit ? Math.min(100, 100 * a.usage / a.limit) : 0; }
   priced(d: LlmUsage) { return d.totals.cost_usd != null && d.totals.cost_usd > 0; }
-  rows(list: UsageRow[], key: 'calls' | 'cost_usd'): Row[] {
-    return list.map(r => ({ name: r.name, value: r[key] ?? 0 }))
+  rows(list: UsageRow[], key: 'calls' | 'cost_usd' | 'tokens'): Row[] {
+    // Job names come from the server in English, like the job list above.
+    return list.map(r => ({ name: t(r.name), value: key === 'tokens' ? r.input + r.output : (r[key] ?? 0) }))
       .filter(r => r.value > 0).sort((a, b) => b.value - a.value);
   }
 }
@@ -224,7 +250,7 @@ export class LlmUsagePanel {
                 <b>{{ info.name }}</b>
                 @if (info.set) {
                   <span class="st-badge" data-tone="ok">● {{ 'set' | t }} {{ info.hint }}</span>
-                  <span class="st-badge">{{ info.source === '.env' ? '.env' : ('saved here' | t) }}</span>
+                  <span class="st-badge">{{ 'saved here' | t }}</span>
                 } @else {
                   <span class="st-badge" data-tone="warn">○ {{ 'not set' | t }}</span>
                 }
@@ -237,7 +263,7 @@ export class LlmUsagePanel {
                   <button class="tcv-btn tcv-files-btn" [disabled]="!draft()[p]?.trim() || busy()" (click)="saveKey(p)">{{ 'Save' | t }}</button>
                   @if (info.set) {
                     <button class="tcv-btn tcv-files-btn" [disabled]="busy()" (click)="clearKey(p)"
-                            [title]="'Forget this key - the one saved here and the one in .env - until a new one is saved' | t">{{ 'Remove' | t }}</button>
+                            [title]="'Remove this key; the jobs on this provider stop until a new one is saved' | t">{{ 'Remove' | t }}</button>
                   }
                 </div>
               }

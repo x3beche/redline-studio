@@ -20,7 +20,7 @@ import re
 
 log = logging.getLogger("redline.summarise")
 
-# Which provider and model: backend/llm.py, chosen in Preferences > LLM settings.
+# Which provider and model: backend/llm.py, chosen in Settings > LLM settings.
 # MODEL is the default the summary job starts with.
 MODEL = "deepseek/deepseek-v4.1-flash"
 TIMEOUT = 30.0
@@ -146,14 +146,12 @@ TRANSLATE_TOKENS = 400
 
 async def _post(messages: list[dict], max_tokens: int = MAX_TOKENS, job: str = "summary") -> dict:
     """One call for a job, to whichever provider and model it is set to use
-    (Preferences > LLM settings, backend/llm.py). The usage that comes back
+    (Settings > LLM settings, backend/llm.py). The usage that comes back
     says which, so the bill names the right vendor."""
     from . import llm
 
     if not api_key(job):
-        prov = llm.route(job)[0]
-        raise RuntimeError(f"no {llm.PROVIDERS[prov]['name']} API key for the {job} job "
-                           f"(Preferences > LLM settings, or {llm.PROVIDERS[prov]['env']} in .env)")
+        raise RuntimeError(llm.no_key(llm.route(job)[0], job))
     delay = 1.0
     last: Exception | None = None
     for attempt in range(RETRIES + 1):

@@ -280,7 +280,8 @@ GET  /api/revisions/{id}/analytics[?live=true]
 POST /api/revisions/english          # every note as an English request
 ```
 
-**Secrets stay server-side.** `OPENROUTER_API_KEY` and `MONGODB_URI` live in
-`.env`, which is gitignored; never put either in code, a log line or anything
-the browser receives, and scan the diff before pushing - this repository is
-public.
+**Secrets stay server-side.** `MONGODB_URI` lives in `.env`, which is
+gitignored; the model API keys (OpenRouter, Command Code) live only in MongoDB
+(`llm_settings`, typed in Settings > LLM settings) and are never read from the
+environment. Never put any of them in code, a log line or anything the browser
+receives, and scan the diff before pushing - this repository is public.

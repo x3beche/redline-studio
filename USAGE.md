@@ -533,7 +533,7 @@ reaches the browser.
 | | |
 |---|---|
 | Service | OpenRouter, `deepseek/deepseek-v4.1-flash` |
-| Key | `OPENROUTER_API_KEY` in `.env` (gitignored) |
+| Key | saved in Settings > LLM settings (the `llm_settings` document in MongoDB), never in `.env` |
 | Request | `max_tokens` 60, `temperature` 0.2, reasoning off, 15 s timeout, 2 retries with backoff |
 | Image | long edge scaled to 512 px, sent as a JPEG data URL |
 | Cost | ~0.00018 USD per card measured over 15 cards; warns above 0.005 |

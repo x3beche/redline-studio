@@ -6,9 +6,7 @@ from backend import access, cc_chat, llm
 
 @pytest.fixture(autouse=True)
 def fresh(monkeypatch):
-    monkeypatch.setattr(llm, "_conf", {"keys": {}, "jobs": {}, "off": []})
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("COMMANDCODE_API_KEY", raising=False)
+    monkeypatch.setattr(llm, "_conf", {"keys": {}, "jobs": {}})
 
 
 def test_a_job_uses_its_default_until_one_is_chosen():
@@ -18,9 +16,12 @@ def test_a_job_uses_its_default_until_one_is_chosen():
     assert llm.route("chat")[0] == "commandcode"
 
 
-def test_a_saved_key_wins_over_env_and_the_page_never_sees_it(monkeypatch):
+def test_keys_come_from_the_database_only_and_the_page_never_sees_them(monkeypatch):
+    # The environment is never read, whatever it holds.
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-from-env-1234")
-    assert llm.key("openrouter") == "sk-or-from-env-1234" and llm.key_source("openrouter") == ".env"
+    monkeypatch.setenv("COMMANDCODE_API_KEY", "user_from-env-1234")
+    assert llm.key("openrouter") is None and llm.key_source("openrouter") is None
+    assert llm.key("commandcode") is None
     llm._conf["keys"]["openrouter"] = "sk-or-saved-9876"
     assert llm.key("openrouter") == "sk-or-saved-9876" and llm.key_source("openrouter") == "settings"
     shown = llm.public()
@@ -83,10 +84,63 @@ def test_settings_are_for_admins_talking_is_for_reviewers():
         assert access.allowed("reviewer", a) and not access.allowed("viewer", a)
 
 
-def test_removing_a_key_forgets_the_env_one_too_until_a_new_one(monkeypatch):
+class FakeColl:
+    def __init__(self):
+        self.doc: dict = {}
+
+    async def update_one(self, flt, update, upsert=False):
+        for k, v in update.get("$set", {}).items():
+            node = self.doc
+            *path, last = k.split(".")
+            for p in path:
+                node = node.setdefault(p, {})
+            node[last] = v
+        for k in update.get("$unset", {}):
+            node = self.doc
+            *path, last = k.split(".")
+            for p in path:
+                node = node.get(p, {})
+            node.pop(last, None)
+
+    async def find_one(self, flt):
+        return self.doc
+
+
+class FakeDb(dict):
+    def __missing__(self, name):
+        self[name] = FakeColl()
+        return self[name]
+
+
+def test_save_replace_and_remove_a_key_in_the_database(monkeypatch):
+    import asyncio
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-from-env-1234")
-    llm._conf["off"] = ["openrouter"]
-    assert llm.key("openrouter") is None and llm.key_source("openrouter") is None
-    assert llm.public()["providers"]["openrouter"]["set"] is False
-    llm._conf["keys"]["openrouter"] = "sk-or-new-5555"          # a new one brings it back
+    db = FakeDb()
+    shown = asyncio.run(llm.save(db, keys={"openrouter": "sk-or-saved-1111"}))
+    assert db[llm.COLL].doc["keys"] == {"openrouter": "sk-or-saved-1111"}
+    assert shown["providers"]["openrouter"]["source"] == "settings"
+    asyncio.run(llm.save(db, keys={"openrouter": "sk-or-new-5555"}))   # replace
     assert llm.key("openrouter") == "sk-or-new-5555"
+    shown = asyncio.run(llm.save(db, keys={"openrouter": None}))       # remove: the env one does not step in
+    assert llm.key("openrouter") is None and shown["providers"]["openrouter"]["set"] is False
+    with pytest.raises(ValueError):
+        asyncio.run(llm.save(db, keys={"openrouter": "has a space"}))
+
+
+def test_a_call_without_a_saved_key_says_where_to_add_one(monkeypatch):
+    import asyncio
+    monkeypatch.setenv("COMMANDCODE_API_KEY", "user_from-env-1234")
+    with pytest.raises(RuntimeError, match="Settings > LLM settings"):
+        asyncio.run(llm.complete([{"role": "user", "content": "hi"}], provider="commandcode", model="m"))
+    assert "Card summaries".lower() in llm.no_key("openrouter", "summary")
+
+
+def test_logged_kinds_are_named_like_the_jobs():
+    assert llm.job_label("summary") == "Card summaries"
+    assert llm.job_label("translate") == "English translation"
+    assert llm.job_label("tool-llm:smoke") == "Tool pages"
+    assert llm.job_label("tool-router") == "Tool finder"
+    assert llm.job_label("cc-chat") == "Command Code room"
+    assert llm.job_label("cc-title") == "Command Code room titles"
+    assert llm.job_label("llm-test") == "Settings test"
+    assert llm.job_label("something-new") == "something-new"
