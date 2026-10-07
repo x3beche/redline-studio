@@ -4,6 +4,7 @@ import { HttpClient, HttpErrorResponse, HttpInterceptorFn } from '@angular/commo
 import { catchError, throwError } from 'rxjs';
 import { T } from './i18n';
 import { Prefs } from './preferences';
+import { Avatar } from './avatar';
 
 /** Signing in, on the page's side (backend/auth.py).
  *
@@ -12,7 +13,7 @@ import { Prefs } from './preferences';
  *  shows the sign-in card, and the very first visit, before anyone has an
  *  account, offers to make the owner's.
  */
-export interface Me { type: 'user'; id: string; name: string; email?: string }
+export interface Me { type: 'user'; id: string; name: string; email?: string; has_avatar?: boolean; avatar_v?: number | null }
 export interface AuthState {
   mode: 'off' | 'on';
   needs_setup?: boolean;
@@ -444,7 +445,7 @@ export class Members {
 /** Who is signed in, and signing out - only when sign-in is on. */
 @Component({
   selector: 'app-user-chip',
-  imports: [AgentTokens, Members, NgTemplateOutlet, T],
+  imports: [AgentTokens, Members, NgTemplateOutlet, T, Avatar],
   host: { class: 'relative flex items-center' },
   template: `
 @if (auth.state(); as s) {
@@ -470,7 +471,7 @@ export class Members {
          role in it. The caret says it opens. -->
     <button class="tcv-user" (click)="toggle()" [attr.data-on]="open() ? 1 : null"
             [title]="(u.email ?? u.name) + ' - ' + (s.role ?? '') + ' in ' + (s.workspace_name ?? s.workspace)">
-      <span class="tcv-user-dot">{{ initial(u.name) }}</span>
+      <app-avatar class="tcv-user-av" [name]="u.name" [userId]="u.id" [hasPicture]="u.has_avatar" [v]="u.avatar_v" [size]="20" />
       <span class="tcv-user-text">
         <span class="tcv-user-name">{{ u.name }}</span>
         <span class="tcv-user-ws">{{ s.workspace_name ?? s.workspace }} · {{ s.role }}</span>
@@ -480,8 +481,10 @@ export class Members {
     @if (open()) {
       <div class="tcv-menu tcv-user-menu" (mouseleave)="open.set(false)">
         <ng-container *ngTemplateOutlet="analyticsItem" />
-        <div class="tcv-menu-item"><span class="tcv-menu-name">{{ u.name }}</span>
-          <span class="tcv-menu-blurb">{{ u.email }} · {{ s.role }} in {{ s.workspace_name ?? s.workspace }}</span></div>
+        <button class="tcv-menu-item" (click)="open.set(false); prefs.open.set('profile')" [title]="'Profile' | t">
+          <span class="tcv-menu-name">{{ u.name }}</span>
+          <span class="tcv-menu-blurb">{{ u.email }} · {{ s.role }} in {{ s.workspace_name ?? s.workspace }}</span>
+          <span class="tcv-menu-blurb">{{ 'Your profile: name, picture, password, sessions' | t }}</span></button>
         @if (spaces().length > 1) {
           <div class="tcv-menu-head">{{ 'Workspaces' | t }}</div>
           @for (w of spaces(); track w.id) {
@@ -592,5 +595,4 @@ export class UserChip {
     });
   }
 
-  initial(n: string) { return (n.trim()[0] ?? '?').toUpperCase(); }
 }

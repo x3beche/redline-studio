@@ -43,6 +43,15 @@ rest as it comes. One answer at a time in a conversation; POST
 /chats/{id}/stop stops it (whoever asked, or anyone with the "delete"
 right).
 
+A line sent while an answer is being written waits in the conversation's
+queue (`queue`, on the conversation, in order) instead of being refused:
+when the answer ends normally the runner sends the first one waiting
+itself (`send_next`), the page that queued it open or not - one at a
+time, each with its own model and mentions. An answer stopped, failed or
+interrupted pauses the queue (`queue_paused`); "Send now" goes on, "Clear"
+drops it. Whoever queued a line, or anyone who may delete, edits or
+removes it. Every change goes out on the live stream as {type: queue}.
+
 Search (GET /search) reads every line, not only the titles, through a text
 index (`ensure_search_index`), and answers with the line it found, a
 snippet and where the words are in it.
@@ -58,7 +67,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import access, actors, cc_context, ccgen, llm, scope
@@ -81,6 +90,7 @@ TRASH_TTL = "cc_trash_ttl"       # the index that drops it afterwards
 LIVE = {"deleted_at": None}
 TRASHED = {"deleted_at": {"$ne": None}}
 CHAT_CONTEXT = 4_000_000         # characters of mentioned context one conversation may hold
+MAX_QUEUE = 10                   # lines waiting for the answer being written, per conversation
 
 SYSTEM = (
     "You are a helpful assistant in Redline Studio, a workshop app for 3D CAD models, "
@@ -144,6 +154,9 @@ def _out(doc: dict, full: bool = True) -> dict:
         o.pop("deleted_by", None)
     msgs = doc.get("messages") or []
     o["count"] = len(msgs)
+    o.pop("queue_rev", None)
+    o["queue"] = queue_public(doc.get("queue"))
+    o["queue_paused"] = bool(doc.get("queue_paused")) and bool(o["queue"])
     if full:
         o["messages"] = [public(m) for m in msgs]
     elif msgs:
@@ -151,6 +164,13 @@ def _out(doc: dict, full: bool = True) -> dict:
         o["last"] = {"role": last["role"], "text": (last.get("content") or "")[:140],
                      "by": (last.get("by") or {}).get("name")}
     return o
+
+
+def queue_public(q: list[dict] | None) -> list[dict]:
+    """The lines waiting, as the page gets them: what they say and mention,
+    who queued them and for which model - not the context read for them."""
+    return [{k: it.get(k) for k in ("id", "content", "mentions", "by", "at", "provider", "model") if k in it}
+            for it in q or []]
 
 
 def public(m: dict) -> dict:
@@ -813,7 +833,8 @@ class Hub:
                     pass
 
     def snapshot(self, key: str) -> list[dict]:
-        return [dict(v) for v in (self.live.get(key) or {}).values()]
+        at = ccgen._iso()                              # the server's clock now, for the page's speed
+        return [{**v, "now": at} for v in (self.live.get(key) or {}).values()]
 
     def busy(self, key: str) -> bool:
         return bool(self.live.get(key))
@@ -855,7 +876,7 @@ async def live(cid: str, request: Request):
     thinking, done, error, end and title, each with the `gen` it belongs
     to. Closed after LIVE_MAX seconds with nothing under way ({type: bye});
     the page opens it again."""
-    await _load(cid)                                   # this workspace's, and not in the trash
+    doc = await _load(cid)                             # this workspace's, and not in the trash
     key = live_key(cid)
     q = HUB.subscribe(key)
     # An answer being written by a runner this process has not followed yet
@@ -865,7 +886,8 @@ async def live(cid: str, request: Request):
 
     async def events():
         try:
-            yield _sse({"type": "hello", "live": HUB.snapshot(key), "watchers": HUB.watchers(key)})
+            yield _sse({"type": "hello", "live": HUB.snapshot(key), "watchers": HUB.watchers(key),
+                        "queue": queue_event(doc)})
             opened = time.monotonic()
             while True:
                 try:
@@ -914,6 +936,7 @@ def follow(cid: str) -> None:
 async def _tail(key: str, cid: str, db) -> None:
     me = asyncio.current_task()
     gid: str | None = None
+    grace = 0.0                  # after an answer: a moment to see the queued line's answer start
     try:
         while True:
             if gid is None:
@@ -923,12 +946,17 @@ async def _tail(key: str, cid: str, db) -> None:
                 if gen is None or gen.get("status") != "running":
                     if key in HUB.poked:
                         continue
+                    if time.monotonic() < grace and (chat or {}).get("queue") and not chat.get("queue_paused"):
+                        await asyncio.sleep(TAIL)
+                        continue
                     return
                 gid = gen["_id"]
                 if gid not in (HUB.live.get(key) or {}):
                     # From where it got: a page that came late, or after a
                     # reload, gets the answer so far in the start.
                     HUB.begin(key, ccgen.state(gen))
+                    if chat.get("queue") is not None or chat.get("queue_rev"):
+                        HUB.publish(key, queue_event(chat))     # a waiting line may have just gone
             else:
                 await asyncio.sleep(TAIL)
                 gen = await ccgen.get(db, gid)
@@ -939,6 +967,12 @@ async def _tail(key: str, cid: str, db) -> None:
             if ccgen.dead(gen):
                 gen = await ccgen.lose(db, gen, ccgen.GONE)
             st = (HUB.live.get(key) or {}).get(gid) or {}
+            if st and not st.get("first_at") and gen.get("first_at"):
+                # When the first token came, on the server's clock: the
+                # pages watching work out the time to it without their own.
+                now = ccgen.state(gen)
+                st["first_at"] = now["first_at"]
+                HUB.publish(key, {"type": "timing", "gen": gid, "started_at": now["started_at"], "first_at": now["first_at"]})
             for kind in ("thinking", "text"):
                 have, got = len(st.get(kind) or ""), gen.get(kind) or ""
                 if len(got) > have:
@@ -951,6 +985,10 @@ async def _tail(key: str, cid: str, db) -> None:
             # Kept by now (ccgen.finish), so a page that reads the
             # conversation then finds the answer in it.
             HUB.end(key, gid, {"type": "done", "message": public(answer)})
+            after = await db[COLL].find_one({"_id": cid})
+            if (after or {}).get("queue_rev"):                # a queue was ever used here: how it stands now
+                grace = time.monotonic() + 8.0
+                HUB.publish(key, queue_event(after))
             if gen.get("naming"):
                 task = asyncio.ensure_future(_titled(key, gid, db))
                 _TASKS.add(task)
@@ -1086,25 +1124,16 @@ async def _name(db, cid: str, msgs: list[dict], answer: dict) -> str | None:
     return title if getattr(res, "matched_count", 1) else None
 
 
-@router.post("/chats/{cid}/messages")
-async def say(cid: str, body: SayIn):
-    """Add a line (or, with `edit`, replace one's own line and drop what
-    followed it) and have it answered: the answer is written by a runner of
-    its own (backend/ccgen.py), and streamed here as it is written - events
-    {type: user|thinking|text|done|error|title}. One answer at a time in a
-    conversation: 409 while one is being written."""
-    db = _db()
-    doc = await _claim(db, await _load(cid))
-    msgs = doc.get("messages") or []
-    provider, model = _pick(doc, body.provider, body.model)
+async def _line(db, msgs: list[dict], text: str, mentions: list, provider: str, model: str) -> tuple[dict, list[dict]]:
+    """A line as it will be kept: who wrote it, and the context its
+    mentions were read into (through this workspace, as this person)."""
     who = actors.current()
-    mine = {"id": _mid(), "role": "user", "content": body.text, "at": _now(),
+    mine = {"id": _mid(), "role": "user", "content": text, "at": _now(),
             "by": {"id": who.get("id"), "name": who.get("name"), "type": who.get("type")}}
-    sets: dict = {"updated_at": mine["at"], "provider": provider, "model": model}
     pics: list[dict] = []
-    if body.mentions:
+    if mentions:
         # Read now, through this workspace: what cannot be seen is refused.
-        context, chips, pics = await cc_context.expand(db, [m.model_dump() for m in body.mentions],
+        context, chips, pics = await cc_context.expand(db, [m.model_dump() for m in mentions],
                                                        await _vision(provider, model))
         if context:
             held = sum(len(m.get("context") or "") for m in msgs)
@@ -1114,6 +1143,29 @@ async def say(cid: str, body: SayIn):
             mine.update({"context": context, "mentions": chips})
             if pics:
                 mine["attach"] = pics
+    return mine, pics
+
+
+@router.post("/chats/{cid}/messages")
+async def say(cid: str, body: SayIn):
+    """Add a line (or, with `edit`, replace one's own line and drop what
+    followed it) and have it answered: the answer is written by a runner of
+    its own (backend/ccgen.py), and streamed here as it is written - events
+    {type: user|thinking|text|done|error|title}. One answer at a time in a
+    conversation: a new line while one is being written is queued instead
+    (202, {queued, queue, paused}) and sent when it ends; an edit then is
+    refused (409)."""
+    db = _db()
+    doc = await _load(cid)
+    provider, model = _pick(doc, body.provider, body.model)
+    if body.edit is None and doc.get("gen") and not await ccgen.free(db, doc):
+        return await _enqueue(db, cid, body, provider, model)
+    doc = await _claim(db, doc)
+    msgs = doc.get("messages") or []
+    provider, model = _pick(doc, body.provider, body.model)
+    who = actors.current()
+    mine, pics = await _line(db, msgs, body.text, body.mentions, provider, model)
+    sets: dict = {"updated_at": mine["at"], "provider": provider, "model": model}
 
     if body.edit is not None:
         i = find(msgs, body.edit)
@@ -1139,15 +1191,194 @@ async def say(cid: str, body: SayIn):
             await _cut(db, cid, msgs, keep, [mine], {**sets, "gen": gen["_id"]})
         else:
             # The line and the lock in one write: a second line while an
-            # answer is being written gets 409, not a second answer.
+            # answer is being written is queued, not a second answer.
             res = await db[COLL].update_one({"_id": cid, "gen": None},
                                             {"$push": {"messages": mine}, "$set": {**sets, "gen": gen["_id"]}})
             if not getattr(res, "matched_count", 1):
-                raise HTTPException(409, BUSY)
+                await ccgen.drop(db, gen)
+                return await _enqueue(db, cid, body, provider, model)
     except HTTPException:
         await ccgen.drop(db, gen)
         raise
     return await _begin(db, cid, gen, {"type": "user", "message": mine, "keep": keep})
+
+
+# ---- the queue: lines sent while an answer is being written -----------------
+
+def queue_event(doc: dict | None) -> dict:
+    q = queue_public((doc or {}).get("queue"))
+    return {"type": "queue", "queue": q, "paused": bool((doc or {}).get("queue_paused")) and bool(q),
+            "why": (doc or {}).get("queue_why")}
+
+
+async def _publish_queue(db, cid: str) -> dict:
+    ev = queue_event(await db[COLL].find_one({"_id": cid}))
+    HUB.publish(live_key(cid), ev)
+    return ev
+
+
+async def _requeue(db, cid: str, change) -> dict:
+    """Change the queue in one write, against the version read: `change`
+    gets the queue and the conversation and gives the new queue (and may
+    raise). Tried again when someone else changed it meanwhile."""
+    for _ in range(8):
+        doc = await _load(cid)
+        q = list(doc.get("queue") or [])
+        new, extra = change(q, doc)
+        sets = {"queue": new, "queue_rev": (doc.get("queue_rev") or 0) + 1, **extra}
+        if not new:
+            sets.update({"queue_paused": False, "queue_why": None})
+        res = await db[COLL].update_one({"_id": cid, "queue_rev": doc.get("queue_rev")}, {"$set": sets})
+        if getattr(res, "matched_count", 1):
+            return doc
+    raise HTTPException(409, "the queue changed meanwhile - try again")
+
+
+async def _enqueue(db, cid: str, body: SayIn, provider: str, model: str) -> JSONResponse:
+    """The line waits for the answer being written - read now, as the one
+    who queued it, and sent as they would have sent it."""
+    doc = await _load(cid)
+    if len(doc.get("queue") or []) >= MAX_QUEUE:
+        raise HTTPException(409, f"{MAX_QUEUE} lines are waiting already - wait for the answer, or remove one")
+    if len(doc.get("messages") or []) + len(doc.get("queue") or []) >= MAX_MESSAGES:
+        raise HTTPException(400, f"this conversation has {MAX_MESSAGES} lines; start a new one")
+    mine, pics = await _line(db, doc.get("messages") or [], body.text, body.mentions, provider, model)
+    item = {**mine, "provider": provider, "model": model, "client": body.client, "images": bool(pics),
+            "actor": actors.current(), "asker_role": access.current()}
+
+    def add(q, _doc):
+        if len(q) >= MAX_QUEUE:
+            raise HTTPException(409, f"{MAX_QUEUE} lines are waiting already - wait for the answer, or remove one")
+        return q + [item], {}
+    await _requeue(db, cid, add)
+    # The answer may have ended while this was written down: then it goes now.
+    await kick(db, cid)
+    ev = await _publish_queue(db, cid)
+    return JSONResponse({"queued": queue_public([item])[0], "queue": ev["queue"], "paused": ev["paused"]},
+                        status_code=202)
+
+
+async def send_next(db, cid: str) -> dict | None:
+    """The first line waiting, sent - as a line of the conversation with
+    its answer started (a runner of its own), as whoever queued it would
+    have sent it. Only while nothing is being written and the queue is not
+    paused. Called by the runner when an answer ends (backend/ccgen.py),
+    and here when the queue is let go again. The generation, or None."""
+    doc = await db[COLL].find_one({"_id": cid, **LIVE})
+    if not doc or doc.get("gen") or doc.get("queue_paused") or not doc.get("queue"):
+        return None
+    q = list(doc["queue"])
+    item = q[0]
+    msgs = doc.get("messages") or []
+    if len(msgs) >= MAX_MESSAGES:
+        await pause(db, cid, "full")
+        return None
+    mine = {k: item[k] for k in ("id", "role", "content", "by", "context", "mentions", "attach") if k in item}
+    mine["at"] = _now()
+    gen = await ccgen.new(db, cid, keep=len(msgs), upto=len(msgs) + 1, question=mine["id"], message=public(mine),
+                          provider=item.get("provider") or doc.get("provider"), model=item.get("model") or doc.get("model"),
+                          client=item.get("client"), images=bool(item.get("images")),
+                          want_title=doc.get("title") in ("", DEFAULT_TITLE, None) and not msgs,
+                          actor=item.get("actor"), role=item.get("asker_role"))
+    res = await db[COLL].update_one(
+        {"_id": cid, "gen": None, "queue_rev": doc.get("queue_rev")},
+        {"$push": {"messages": mine},
+         "$set": {"updated_at": mine["at"], "provider": gen["provider"], "model": gen["model"], "gen": gen["_id"],
+                  "queue": q[1:], "queue_rev": (doc.get("queue_rev") or 0) + 1}})
+    if not getattr(res, "matched_count", 1):
+        await ccgen.drop(db, gen)
+        return None
+    try:
+        await ccgen.launch(db, gen)
+    except OSError:
+        return None
+    return gen
+
+
+async def kick(db, cid: str) -> dict | None:
+    """In the API: the next line waiting, if the conversation is free; and
+    followed for everyone watching."""
+    doc = await db[COLL].find_one({"_id": cid})
+    if doc and doc.get("gen") and not await ccgen.free(db, doc):
+        return None
+    gen = await send_next(db, cid)
+    if gen:
+        follow(cid)
+    return gen
+
+
+async def pause(db, cid: str, why: str) -> None:
+    """The answer did not end well (stopped, failed, interrupted): what is
+    waiting waits for someone to say go on."""
+    doc = await db[COLL].find_one({"_id": cid})
+    if doc and doc.get("queue"):
+        await db[COLL].update_one({"_id": cid}, {"$set": {"queue_paused": True, "queue_why": why}})
+
+
+def _may_touch(item: dict) -> bool:
+    who = actors.current() or {}
+    return (item.get("by") or {}).get("id") == who.get("id") or _can_delete()
+
+
+def _refuse_touch():
+    raise HTTPException(403, "only whoever queued it can change this line - "
+                        + access.refusal(access.current() or "nobody", "delete"))
+
+
+class QueueEdit(BaseModel):
+    text: str = Field(min_length=1, max_length=100_000)
+
+
+@router.patch("/chats/{cid}/queue/{qid}")
+async def queue_edit(cid: str, qid: str, body: QueueEdit) -> dict:
+    """A line waiting, written again before it is sent."""
+    db = _db()
+
+    def change(q, _doc):
+        it = next((x for x in q if x.get("id") == qid), None)
+        if it is None:
+            raise HTTPException(404, "that line is not waiting any more")
+        if not _may_touch(it):
+            _refuse_touch()
+        return [{**x, "content": body.text, "edited_at": _now()} if x.get("id") == qid else x for x in q], {}
+    await _requeue(db, cid, change)
+    return await _publish_queue(db, cid)
+
+
+@router.delete("/chats/{cid}/queue/{qid}")
+async def queue_remove(cid: str, qid: str) -> dict:
+    """A line waiting, not sent after all."""
+    db = _db()
+
+    def change(q, _doc):
+        it = next((x for x in q if x.get("id") == qid), None)
+        if it is None:
+            raise HTTPException(404, "that line is not waiting any more")
+        if not _may_touch(it):
+            _refuse_touch()
+        return [x for x in q if x.get("id") != qid], {}
+    await _requeue(db, cid, change)
+    return await _publish_queue(db, cid)
+
+
+@router.post("/chats/{cid}/queue/clear")
+async def queue_clear(cid: str) -> dict:
+    """Every waiting line this person may remove, removed."""
+    db = _db()
+    await _requeue(db, cid, lambda q, _doc: ([x for x in q if not _may_touch(x)], {}))
+    return await _publish_queue(db, cid)
+
+
+@router.post("/chats/{cid}/queue/resume")
+async def queue_resume(cid: str) -> dict:
+    """A paused queue goes on: the first line is sent now, if nothing is
+    being written."""
+    db = _db()
+    await _load(cid)
+    await db[COLL].update_one({"_id": cid}, {"$set": {"queue_paused": False, "queue_why": None}})
+    gen = await kick(db, cid)
+    ev = await _publish_queue(db, cid)
+    return {**ev, "sent": bool(gen), "gen": gen["_id"] if gen else None}
 
 
 @router.post("/chats/{cid}/regenerate")

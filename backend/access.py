@@ -75,6 +75,9 @@ _RULES: list[tuple[str, str, str]] = [
     ("*", "/api/invite/.*", NONE),
     ("*", "/api/reset/.*", NONE),
     ("GET", "/api/health", NONE),
+    # one's own profile (backend/profile.py): anyone signed in, and only
+    # themselves - the routes take no one else's id but a picture's
+    ("*", "/api/me(/.*)?", "view"),
     # the people and the agents
     ("*", "/api/members(/.*)?", "members"),
     ("*", "/api/invites(/.*)?", "members"),
@@ -112,9 +115,10 @@ _RULES: list[tuple[str, str, str]] = [
     # the trash likewise: restoring or dropping for good one's own is a
     # reviewer's, anyone else's needs "delete" (cc_chat.py checks)
     # stopping an answer: whoever asked, or anyone who may delete (cc_chat.py checks)
-    ("POST", "/api/cc/chats(/{}/(messages|regenerate|restore|stop)|/bulk-delete|/bulk-restore|/empty-trash)?", "draw"),
-    ("PATCH", "/api/cc/chats/{}", "draw"),
-    ("DELETE", "/api/cc/chats/{}(/messages/{})?", "draw"),
+    # the queue (lines sent while an answer is written): one's own, or anyone's with "delete" (cc_chat.py checks)
+    ("POST", "/api/cc/chats(/{}/(messages|regenerate|restore|stop|queue/resume|queue/clear)|/bulk-delete|/bulk-restore|/empty-trash)?", "draw"),
+    ("PATCH", "/api/cc/chats/{}(/queue/{})?", "draw"),
+    ("DELETE", "/api/cc/chats/{}(/messages/{}|/queue/{})?", "draw"),
     # custom themes (backend/themes.py): anyone in the workspace may make
     # one; the routes keep changing or deleting someone else's to its maker,
     # an owner or an admin
@@ -135,7 +139,7 @@ _RULES: list[tuple[str, str, str]] = [
     ("DELETE", "/api/telegram/links/{}", "members"),
     ("PUT", "/api/telegram/(token|mode|settings|profile|profile/photo|profile/photo/default)", "settings"),
     ("DELETE", "/api/telegram/(bot|profile/photo|profile/lang/{})", "settings"),
-    ("POST", "/api/telegram/profile/translate", "settings"),
+    ("POST", "/api/telegram/profile/(translate|done)", "settings"),
     # releases: making one runs the builds' outputs; downloading is looking
     ("POST", "/api/releases", "run"),
     # talking with the agents

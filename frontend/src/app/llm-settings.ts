@@ -234,7 +234,7 @@ export class LlmUsagePanel {
       <small>{{ custom() }} {{ 'changed from the default' | t }}</small></div>
     @for (p of providerIds; track p) {
       <div class="st-tile"><span>{{ d.providers[p].name }}</span><b>{{ jobsOn(p) }}</b>
-        <small>{{ 'jobs on it' | t }} · {{ (models()[p] || []).length }} {{ 'models' | t }}</small></div>
+        <small [title]="visionCount(p) + ' ' + ('read images' | t)">{{ 'jobs on it' | t }} · {{ (models()[p] || []).length }} {{ 'models' | t }} · 🖼 {{ visionCount(p) }}</small></div>
     }
   </div>
 
@@ -293,7 +293,7 @@ export class LlmUsagePanel {
                 <option value="" selected disabled>{{ 'choose a model' | t }}</option>
               } @else if (!inList(job.provider, job.model)) { <option [value]="job.model" selected>{{ job.model }}</option> }
               @for (m of models()[prov(j)] || []; track m.id) {
-                <option [value]="m.id" [selected]="!pending()[j] && m.id === job.model">{{ m.id }}{{ m.anthropic ? ' · Claude' : '' }}</option>
+                <option [value]="m.id" [selected]="!pending()[j] && m.id === job.model">{{ m.vision ? '🖼 ' : '' }}{{ m.id }}{{ m.anthropic ? ' · Claude' : '' }}</option>
               }
             </select>
             <div class="st-job-acts">
@@ -357,6 +357,8 @@ export class LlmSettingsPanel {
     }
   }
 
+  /** How many of a provider's models read images (the 🖼 in the pickers). */
+  visionCount(p: string) { return (this.models()[p] ?? []).filter(m => m.vision).length; }
   inList(p: string, m: string) { return (this.models()[p] ?? []).some(x => x.id === m); }
   setDraft(p: string, v: string) { this.draft.update(d => ({ ...d, [p]: v })); }
 

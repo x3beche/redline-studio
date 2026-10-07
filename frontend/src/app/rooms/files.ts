@@ -121,7 +121,7 @@ export class FilesApi {
 
     <div class="tcv-files-list">
       @for (f of shown(); track f.id) {
-        <div class="tcv-files-row">
+        <div class="tcv-files-row" [attr.data-on]="picked.file()?.id === f.id ? 1 : null" (click)="pickFile(f, $event)">
           <span class="tcv-files-icon" [attr.data-kind]="f.kind" [title]="kindLabel(f.kind) | t">{{ icon(f.kind) }}</span>
           <div class="tcv-files-body">
             <div class="tcv-files-top">
@@ -164,8 +164,15 @@ export class FilesApi {
 })
 export class RoomFiles {
   private api = inject(FilesApi);
-  private picked = inject(Selection);
+  picked = inject(Selection);
   auth = inject(Auth);
+
+  /** A row clicked (not on its links or buttons) is the file the command
+   *  palette offers to ask Command Code about. */
+  pickFile(f: StoredFile, e: Event) {
+    if ((e.target as HTMLElement).closest('a, button, select, input')) return;
+    this.picked.file.set(this.picked.file()?.id === f.id ? null : { id: f.id, label: f.name });
+  }
 
   readonly rooms = AGENT_ROOMS;
   q = signal('');

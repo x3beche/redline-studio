@@ -85,6 +85,8 @@ app.include_router(themes_api.router)
 # Settings > Telegram: the bot, people's links, the webhook (backend/tgbot/).
 from .tgbot import api as tg_api  # noqa: E402
 app.include_router(tg_api.router)
+from . import profile as profile_api  # noqa: E402
+app.include_router(profile_api.router)
 
 
 def _raw_db():

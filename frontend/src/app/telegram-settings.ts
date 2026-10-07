@@ -39,6 +39,8 @@ interface TgState {
   prefs: Pref[]; commands: { command: string; about: string }[];
   can_edit: boolean; can_see_people: boolean; people?: Person[]; log?: LogRow[];
   profile: { name: boolean; description: boolean; short_description: boolean; photo: boolean } | null;
+  /** Step 3's Save was pressed (cleared by a new token). */
+  profile_done?: { at: string; by?: string } | null;
 }
 interface LinkCode { code: string; url: string; expires: string; minutes: number; qr: string; bot: string }
 
@@ -120,6 +122,9 @@ const FATHER = [
             <span class="st-badge" [attr.data-tone]="st.state === 'done' ? 'ok' : st.state === 'now' ? 'accent' : null">{{ (st.state === 'done' ? 'done' : st.state === 'now' ? 'next' : 'to do') | t }}</span>
             <span class="tg-chev" aria-hidden="true">{{ open() === st.n ? '▾' : '▸' }}</span>
           </button>
+          @if (st.n === 3 && open() !== 3 && d.bot.set && d.can_edit) {
+            <button class="tg-step-tip" (click)="toggle(3)"><b>✎</b>{{ 'You can change the bot\\'s name, descriptions and picture from here any time.' | t }}</button>
+          }
           @if (open() === st.n) {
             <div class="tg-step-body">
               @switch (st.n) {
@@ -164,7 +169,7 @@ const FATHER = [
                 }
                 @case (3) {
                   @if (d.bot.set && !stub()) {
-                    <app-telegram-profile [canEdit]="d.can_edit" (changed)="load()" />
+                    <app-telegram-profile [canEdit]="d.can_edit" (changed)="load()" (saved)="profileSaved()" />
                   } @else { <p class="st-hint">{{ 'Once the token is saved, set the bot\'s name, description, short description and picture here.' | t }}</p> }
                 }
                 @case (4) {
@@ -412,11 +417,10 @@ export class TelegramSettingsPanel implements OnDestroy {
   /** The five steps and where each one stands. */
   steps = computed(() => {
     const d = this.s();
-    const prof = d?.profile;
     const done = [
       !!d?.bot.set,
       !!d?.bot.set,
-      !!d?.bot.set && !!prof?.name && !!prof?.description && !!prof?.photo,
+      !!d?.bot.set && !!d?.profile_done,
       !!d?.mode && (d.mode === 'polling' || !!d.webhook_ok),
       (d?.linked ?? 0) > 0,
       (d?.stats.sent ?? 0) > 0,
@@ -433,6 +437,10 @@ export class TelegramSettingsPanel implements OnDestroy {
     return meta.map((m, i) => ({ n: i + 1, ...m, state: done[i] ? 'done' : i === first ? 'now' : 'todo' }));
   });
   doneCount = computed(() => this.steps().filter(x => x.state === 'done').length);
+  /** Step 3 saved: fold it and open what is next. */
+  profileSaved() {
+    setTimeout(() => this.open.set(this.steps().find(x => x.state === 'now')?.n ?? null), 900);
+  }
   toggle(n: number) { this.open.set(this.open() === n ? null : n); }
 
   updatesLabel() {

@@ -1132,3 +1132,13 @@ def test_a_question_is_translated_by_language_name(env, monkeypatch):
     open_question(env.db)
     run(notify.tick(env.db))
     assert seen == ["Japanese"]
+
+
+def test_step_three_is_done_by_its_save_and_a_new_bot_clears_it(env):
+    configured(env.db)
+    assert run(api.state())["profile_done"] is None
+    out = run(api.profile_done())
+    assert out["profile_done"]["at"]
+    assert run(api.state())["profile_done"]["at"]
+    run(api.put_token(api.TokenIn(token=TOKEN)))                # another bot: its profile is to do again
+    assert run(api.state())["profile_done"] is None

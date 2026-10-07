@@ -402,7 +402,8 @@ def test_every_watcher_gets_the_answer_as_it_is_written(env):
         got.append(rows)
     assert got[0] == got[1]
     kinds = [e["type"] for e in got[0]]
-    assert kinds[0] == "start" and set(kinds[1:-3]) <= {"text"} and kinds[-3:] == ["done", "end", "named"]
+    assert kinds[0] == "start" and set(kinds[1:-3]) <= {"text", "timing"} and kinds[-3:] == ["done", "end", "named"]
+    # "timing": when the first token came, on the server's clock (the speed the pages show).
     start = got[0][0]
     assert start["client"] == "tabY" and start["by"]["name"] == "You" and start["message"]["content"] == "hi"
     assert len({e.get("gen") for e in got[0]}) == 1 and ev[0]["type"] == "user" and ev[0]["gen"] == start["gen"]

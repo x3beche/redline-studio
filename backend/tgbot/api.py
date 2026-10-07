@@ -11,6 +11,7 @@
     PUT    /api/telegram/profile/photo/default   Redline's mark as the picture   (settings)
     DELETE /api/telegram/profile/lang/{code}     a language's own texts away     (settings)
     POST   /api/telegram/profile/translate       the default's texts, translated (settings)
+    POST   /api/telegram/profile/done            step 3 saved: the profile is as wanted (settings)
     GET    /api/telegram/languages       every ISO 639-1 language, for the pickers
     DELETE /api/telegram/profile/photo   no picture                             (settings)
     PUT    /api/telegram/mode            webhook | polling | off                 (settings)
@@ -140,6 +141,8 @@ async def state() -> dict:
         "can_edit": _can("settings"), "can_see_people": _can("settings") or _can("members"),
         "queue": await raw[core.OUTBOX].count_documents({"status": {"$in": ["pending", "sending"]}}),
         "profile": st.get("profile_state") or None,
+        # step 3 is done when someone pressed its Save - not guessed from the fields
+        "profile_done": st.get("profile_done") or None,
     }
     if out["can_see_people"]:
         people = []
@@ -248,7 +251,7 @@ async def put_token(body: TokenIn) -> dict:
     await core.patch_settings(raw, {
         "token": token, "bot": {k: me.get(k) for k in ("id", "username", "first_name", "can_join_groups")},
         "avatar": pic, "set_at": core.now(), "set_by": {"id": who.get("id"), "name": who.get("name")},
-        "online": {"ok": True, "at": core.now()}}, unset=["last_error", "watch"])
+        "online": {"ok": True, "at": core.now()}}, unset=["last_error", "watch", "profile_done"])
     try:
         await b.shutdown()
     except Exception:                                    # noqa: BLE001
@@ -382,6 +385,17 @@ async def put_profile(body: ProfileIn) -> dict:
             await core.patch_settings(raw, {"profile_langs": kept + [lc]})
     await actors.audit(raw, "telegram", "profile", {"lang": body.lang, "fields": sorted(results)})
     return {**await _profile_out(b, [lc] if lc else []), "results": results}
+
+
+@router.post("/profile/done")
+async def profile_done() -> dict:
+    """Step 3's Save: the profile is as its editor wants it. A new token
+    (another bot) clears it."""
+    await _profile_bot()
+    who = actors.current()
+    done = {"at": core.now(), "by": who.get("name")}
+    await core.patch_settings(_raw(), {"profile_done": done})
+    return {"profile_done": done}
 
 
 @router.delete("/profile/lang/{code}")

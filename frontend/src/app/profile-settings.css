@@ -1,0 +1,41 @@
+/* Settings > Profile (profile-settings.ts), on top of settings.css: the
+   picture beside the fields, a foot row with the button at the right end,
+   and pulsing skeleton lines while the server answers. */
+.pf-top { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 14px; align-items: start; }
+.pf-pic { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.pf-pic-acts { display: flex; flex-direction: column; align-self: stretch; gap: 6px; }
+.pf-pic-acts > .tcv-btn { display: inline-flex; align-items: center; justify-content: center; text-align: center; }
+.pf-pic-hint { font-size: 10.5px; }
+.pf-file { position: relative; overflow: hidden; cursor: pointer; }
+.pf-file[data-busy] { opacity: .6; cursor: default; }
+.pf-file input { position: absolute; inset: 0; opacity: 0; cursor: inherit; }
+.pf-fields { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pf-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.pf-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@container (max-width: 560px) { .pf-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pf-fields { container-type: inline-size; }
+.pf-grid3 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.pf-foot { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px 10px;
+  padding-top: 10px; border-top: 1px solid var(--line); }
+.pf-foot > span { margin-right: auto; }
+.pf-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.pf-sessions td { vertical-align: middle; }
+
+.pf-skel .sk { display: block; height: 10px; border-radius: 4px; background: var(--hover);
+  animation: pf-sk 1.2s ease-in-out infinite; }
+.pf-skel .st-card-body { gap: 9px; }
+.pf-skel .sk-pic { width: 88px; height: 88px; border-radius: 50%; }
+.pf-skel .sk-btn { width: 110px; height: 24px; }
+.pf-skel .sk-in { height: 40px; }
+.pf-skel .sk-tile { height: 48px; border-radius: 5px; }
+@keyframes pf-sk { 50% { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .pf-skel .sk { animation: none; } }
+
+@media (max-width: 768px) {
+  .pf-top { grid-template-columns: minmax(0, 1fr); }
+  .pf-pic-acts { flex-direction: row; }
+  .pf-grid3 { grid-template-columns: minmax(0, 1fr); }
+  .pf-pic-acts > .tcv-btn { flex: 1; min-height: 40px; }
+  .pf-foot .tcv-btn { min-height: 40px; }
+  .pf-foot > span { flex-basis: 100%; }
+}

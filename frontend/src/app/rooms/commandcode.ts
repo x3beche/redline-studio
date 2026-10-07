@@ -4,10 +4,10 @@ import {
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { NgTemplateOutlet } from '@angular/common';
-import { toHtml } from '../markdown';
+import { plain, toHtml } from '../markdown';
 import { Auth } from '../auth';
 import { T, t } from '../i18n';
-import { Selection } from '../selection';
+import { CcWant, Selection } from '../selection';
 
 /** The Command Code room: people talking with a model, in the open.
  *
@@ -41,6 +41,20 @@ export interface CcMention {
 export interface CcWatch {
   gen: string; client?: string | null; by: { id?: string; name?: string }; model: string; provider: string;
   message?: CcMessage | null; keep?: number; text: string; thinking: string;
+  /** When it was asked for and when its first token came, and the server's clock (backend/ccgen.py state). */
+  started_at?: string | null; first_at?: string | null; now?: string;
+  /** The same two on this page's clock (Date.now()), for its speed. */
+  t0?: number | null; t1?: number | null;
+  /** Time to the first token, from the server's two times (no clock of this page in it). */
+  ttft?: number | null;
+  /** The speed as last worked out - when a piece came (rooms/commandcode.ts `speed`). */
+  sp?: Speed | null;
+}
+/** How an answer came (backend/ccgen.py timing): kept with it. */
+export type Speed = { text: string; tip: string };
+export interface CcTiming {
+  started_at?: string | null; first_at?: string | null; finished_at?: string;
+  ttft_ms?: number; total_ms?: number; out_tokens?: number; estimated?: boolean; tps?: number;
 }
 /** A line the server's search found. */
 export interface CcHit {
@@ -51,13 +65,14 @@ export interface CcHit {
 export interface CcMessage {
   id: string; role: 'user' | 'assistant'; content: string; at: string; edited_at?: string;
   mentions?: CcMention[]; context_chars?: number;
-  by?: { id?: string; name?: string; type?: string };
+  by?: { id?: string; name?: string; type?: string; picture?: string };
   provider?: string; model?: string; ms?: number; thinking_ms?: number; error?: string; stopped?: boolean;
   /** The model's reasoning, whole (backend/ccgen.py keeps all of it). */
   thinking?: string;
   /** Its runner died with the server: kept as far as it got. */
   interrupted?: boolean;
   usage?: { prompt_tokens?: number | null; completion_tokens?: number | null; cost?: number | null };
+  timing?: CcTiming;
 }
 export interface CcChat {
   id: string; title: string; provider: string; model: string; by: { name?: string; id?: string };
@@ -65,10 +80,18 @@ export interface CcChat {
   messages?: CcMessage[]; last?: { role: string; text: string; by?: string };
   /** The answer being written in it, if any (one at a time). */
   gen?: string | null;
+  queue?: CcQueued[]; queue_paused?: boolean;
   /** In the trash: when, by whom, and when the server drops it for good. */
   deleted_at?: string; deleted_by?: { id?: string; name?: string }; purge_at?: string; days_left?: number;
 }
 export type CcTab = 'list' | 'archived' | 'trash';
+/** A line sent while an answer was being written: it waits on the server
+ *  and goes when the answer ends (backend/cc_chat.py, the queue). */
+export interface CcQueued {
+  id: string; content: string; mentions?: CcMention[]; by?: { id?: string; name?: string };
+  at: string; provider?: string; model?: string;
+}
+export interface CcQueueState { type?: string; queue: CcQueued[]; paused: boolean; why?: string | null }
 type Many = { deleted: string[]; refused: string[]; missing: string[] };
 export interface LlmModel { id: string; name: string; context: number | null; anthropic: boolean;
   /** The cheap model a picker may land on by itself (backend/llm.py CHEAP). */
@@ -78,6 +101,8 @@ export interface LlmModel { id: string; name: string; context: number | null; an
 export interface CcEvent {
   type: string; text?: string; error?: string; message?: CcMessage | null; keep?: number; title?: string;
   gen?: string; live?: CcWatch[]; thinking?: string;
+  /** {type: queue}: the queue as it stands; in the hello, the same nested. */
+  queue?: CcQueued[] | CcQueueState; paused?: boolean; why?: string | null; queued?: CcQueued;
 }
 type MentionRef = { kind: string; id: string };
 
@@ -115,7 +140,9 @@ export class CcApi {
   removeMessage(id: string, mid: string) { return this.http.delete<CcChat>(`/api/cc/chats/${id}/messages/${mid}`); }
   models(provider: string) { return this.http.get<LlmModel[]>(`/api/llm/models?provider=${provider}`); }
   /** What `@` offers: this workspace's models, boards, files, notes, drawn notes and parts. */
-  mentions(q: string) { return this.http.get<CcMention[]>(`/api/cc/mentions?q=${encodeURIComponent(q)}&limit=30`); }
+  mentions(q: string, kind = '', limit = 30) {
+    return this.http.get<CcMention[]>(`/api/cc/mentions?q=${encodeURIComponent(q)}&limit=${limit}` + (kind ? `&kind=${kind}` : ''));
+  }
   /** Every line of every conversation, through the server's text index. */
   search(q: string, tab: CcTab, withArchived: boolean) {
     const archived = tab === 'archived' ? '1' : withArchived ? 'all' : '0';
@@ -135,6 +162,26 @@ export class CcApi {
       on: (ev: CcEvent) => void) {
     return this.sse(`/api/cc/chats/${id}/messages`, body, signal, on);
   }
+
+  /** A line while an answer is being written: it waits on the server (202),
+   *  or - the answer having just ended - is answered at once, which the live
+   *  stream then shows. */
+  async queueSay(id: string, body: { text: string; provider: string; model: string; mentions?: MentionRef[]; client?: string }) {
+    const r = await fetch(`/api/cc/chats/${id}/messages`, { method: 'POST', credentials: 'same-origin', headers: HEADERS,
+                                                            body: JSON.stringify(body) });
+    if (!r.ok) {
+      let detail = `HTTP ${r.status}`;
+      try { detail = (await r.json()).detail ?? detail; } catch { /* not json */ }
+      throw new Error(typeof detail === 'string' ? detail : `HTTP ${r.status}`);
+    }
+    if ((r.headers.get('content-type') || '').includes('json')) return await r.json() as CcQueueState & { queued: CcQueued };
+    void r.body?.cancel();                                // answered at once: the live stream has it
+    return null;
+  }
+  queueEdit(id: string, qid: string, text: string) { return this.http.patch<CcQueueState>(`/api/cc/chats/${id}/queue/${qid}`, { text }); }
+  queueRemove(id: string, qid: string) { return this.http.delete<CcQueueState>(`/api/cc/chats/${id}/queue/${qid}`); }
+  queueResume(id: string) { return this.http.post<CcQueueState & { sent: boolean }>(`/api/cc/chats/${id}/queue/resume`, {}); }
+  queueClear(id: string) { return this.http.post<CcQueueState>(`/api/cc/chats/${id}/queue/clear`, {}); }
 
   /** Stop the answer being written in it - kept as far as it got. Closing
    *  the page does not stop it: the server writes it to the end. */
@@ -177,6 +224,10 @@ export class CcApi {
     }
   }
 }
+
+/** The theme's series colours: a person's avatar takes one by name. */
+const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)',
+                'var(--series-5)', 'var(--series-6)', 'var(--series-7)', 'var(--series-8)'];
 
 const PROVIDERS = [{ id: 'commandcode', name: 'Command Code' }, { id: 'openrouter', name: 'OpenRouter' }];
 const UNDO_MS = 6000;
@@ -239,45 +290,70 @@ type Ask = { text: string; label: string; go: () => void };
   imports: [T, NgTemplateOutlet],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)' },
   template: `
+<!-- Avatars: a person's picture, or their initials on a colour of their own
+     (one of the theme's series colours, picked by name); a model's mark. -->
+<ng-template #userAv let-by let-hide="hide">
+  <div class="tcv-cc-av" data-role="user" [attr.data-hide]="hide ? 1 : null" [attr.data-me]="by?.id === me() ? 1 : null"
+       [style.background]="avTint(by?.name || by?.id, 28, '--surface')" [style.border-color]="avTint(by?.name || by?.id, 55, '--line')"
+       aria-hidden="true">
+    {{ initials(by?.name) }}
+    @if (picOf(by); as src) { <img [src]="src" alt="" (error)="noPic(by)"> }
+  </div>
+</ng-template>
+<ng-template #botAv let-model let-hide="hide">
+  <div class="tcv-cc-av" data-role="assistant" [attr.data-hide]="hide ? 1 : null" [attr.data-family]="family(model)"
+       [title]="model || ''" aria-hidden="true">
+    @switch (family(model)) {
+      @case ('claude') { <svg class="tcv-cc-mark" viewBox="0 0 24 24"><path d="M12 3.5v17 M3.5 12h17 M6 6l12 12 M18 6L6 18" /></svg> }
+      @case ('gemini') { <svg class="tcv-cc-mark" viewBox="0 0 24 24"><path class="fill" d="M12 2.5c.7 5 4.5 8.8 9.5 9.5-5 .7-8.8 4.5-9.5 9.5-.7-5-4.5-8.8-9.5-9.5 5-.7 8.8-4.5 9.5-9.5z" /></svg> }
+      @case ('redline') {
+        <svg class="tcv-cc-mark" viewBox="0 0 64 64"><path d="M32 9.6 L54.4 22 V42 L32 54.4 L9.6 42 V22 Z" />
+          <path class="red" d="M16.5 42.5 C25 35 33 33 47.5 23.5" /></svg>
+      }
+      @default { <span class="tcv-cc-mono">{{ monogram(model) }}</span> }
+    }
+  </div>
+</ng-template>
 <ng-template #ico let-d><svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="d" /></svg></ng-template>
 
 <div class="tcv-room tcv-cc-room absolute inset-0 flex min-h-0 gap-1 p-1" [attr.data-drawer]="drawer() ? 1 : null">
   <!-- LEFT: the conversations -->
   <aside class="tcv-notes-side tcv-cc-side">
     <div class="tcv-cc-sidehead">
-      @if (auth.can('draw')) {
-        <button class="tcv-cc-newbtn" (click)="newChat()" [title]="('New conversation' | t) + ' (' + mod + 'Shift+O)'">
-          <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.plus }" />
-          <span>{{ 'New conversation' | t }}</span>
-          <kbd class="tcv-cc-kbd">{{ modShort }}⇧O</kbd>
-        </button>
-      }
-      <label class="tcv-cc-search">
-        <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.search }" />
-        <input type="search" [placeholder]="'Search conversations' | t" [value]="q()"
-               (input)="setQuery($any($event.target).value)" (keydown.escape)="setQuery('')">
-      </label>
+      <div class="tcv-cc-siderow">
+        <label class="tcv-cc-search">
+          <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.search }" />
+          <input type="search" [placeholder]="'Search' | t" [value]="q()" [attr.aria-label]="'Search conversations' | t"
+                 (input)="setQuery($any($event.target).value)" (keydown.escape)="setQuery('')">
+        </label>
+        @if (auth.can('draw')) {
+          <button class="tcv-cc-newsm" data-act="new" (click)="newChat()" [title]="('New conversation' | t) + ' (' + mod + 'Shift+O)'">
+            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.plus }" />
+            <span>{{ 'New' | t }}</span>
+          </button>
+        }
+      </div>
+      <div class="tcv-cc-tabrow">
+        <div class="tcv-cc-tabs" role="tablist">
+          <button role="tab" [class.on]="tab() === 'list'" [attr.aria-selected]="tab() === 'list'" (click)="showTab('list')">{{ 'Conversations' | t }}</button>
+          <button role="tab" [class.on]="tab() === 'archived'" [attr.aria-selected]="tab() === 'archived'" (click)="showTab('archived')">{{ 'Archived' | t }}</button>
+          <button role="tab" data-tab="trash" [class.on]="tab() === 'trash'" [attr.aria-selected]="tab() === 'trash'" (click)="showTab('trash')">{{ 'Trash' | t }}</button>
+        </div>
+        <span class="grow"></span>
+        @if (trash() && auth.can('draw') && shownChats().length && !selecting()) {
+          <button class="tcv-cc-ib tcv-cc-sm tcv-cc-danger" data-act="empty" (click)="askEmpty()" [title]="'Empty trash' | t">
+            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" /></button>
+        }
+        @if (auth.can('draw') && shownChats().length) {
+          <button class="tcv-cc-ib tcv-cc-sm" data-act="select" [class.on]="selecting()" (click)="toggleSelecting()" [title]="'Select several' | t">
+            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.select }" /></button>
+        }
+      </div>
       @if (q().trim() && tab() === 'list') {
         <label class="tcv-cc-check tcv-cc-witharch">
           <input type="checkbox" [checked]="withArchived()" (change)="withArchived.set($any($event.target).checked); runSearch()">
           {{ 'Include archived' | t }}</label>
       }
-      <div class="tcv-cc-filterrow">
-        <div class="tcv-cc-seg" role="tablist">
-          <button role="tab" [class.on]="tab() === 'list'" (click)="showTab('list')">{{ 'Conversations' | t }}</button>
-          <button role="tab" [class.on]="tab() === 'archived'" (click)="showTab('archived')">{{ 'Archived' | t }}</button>
-          <button role="tab" data-tab="trash" [class.on]="tab() === 'trash'" (click)="showTab('trash')">{{ 'Trash' | t }}</button>
-        </div>
-        <span class="grow"></span>
-        @if (trash() && auth.can('draw') && shownChats().length && !selecting()) {
-          <button class="tcv-cc-ib tcv-cc-danger" data-act="empty" (click)="askEmpty()" [title]="'Empty trash' | t">
-            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" /></button>
-        }
-        @if (auth.can('draw') && shownChats().length) {
-          <button class="tcv-cc-ib" data-act="select" [class.on]="selecting()" (click)="toggleSelecting()" [title]="'Select several' | t">
-            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.select }" /></button>
-        }
-      </div>
       @if (selecting()) {
         <div class="tcv-cc-selbar">
           <label class="tcv-cc-check"><input type="checkbox" [checked]="allSelected()" [indeterminate]="someSelected()"
@@ -439,33 +515,25 @@ type Ask = { text: string; label: string; go: () => void };
         </div>
       </header>
 
-      <div class="tcv-cc-log tcv-cc-scroll" #log (click)="logClick($event)">
+      <div class="tcv-cc-log tcv-cc-scroll" #log (click)="logClick($event)" (scroll)="logScrolled()">
         <div class="tcv-cc-col">
           @for (m of messages(); track m.id; let i = $index; let last = $last) {
             <article class="tcv-cc-row" [attr.data-role]="m.role" [attr.data-editing]="editing() === m.id ? 1 : null"
-                     [attr.data-mid]="m.id" [attr.data-flash]="flash() === m.id ? 1 : null">
-              <div class="tcv-cc-av" [attr.data-role]="m.role" [attr.data-me]="m.by?.id === me() ? 1 : null">
-                @if (m.role === 'user') { {{ initials(m.by?.name) }} }
-                @else { <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.bot }" /> }
-              </div>
+                     [attr.data-mid]="m.id" [attr.data-flash]="flash() === m.id ? 1 : null"
+                     [attr.data-open]="detail() === m.id ? 1 : null" (click)="rowTap(m, $event)">
+              @if (m.role === 'user') {
+                <ng-container *ngTemplateOutlet="userAv; context: { $implicit: m.by, hide: sameAsBefore(i) }" />
+              } @else {
+                <ng-container *ngTemplateOutlet="botAv; context: { $implicit: m.model, hide: sameAsBefore(i) }" />
+              }
               <div class="tcv-cc-rowmain">
                 <div class="tcv-cc-rowhead">
-                  @if (m.role === 'user') { <b>{{ m.by?.name || ('someone' | t) }}</b> }
-                  @else { <b [title]="m.model || ''">{{ short(m.model || '') }}</b> }
-                  <time [title]="stamp(m.at)">{{ when(m.at) }}</time>
-                  @if (m.edited_at) { <span [title]="stamp(m.edited_at)">· {{ 'edited' | t }}</span> }
-                  @if (m.stopped) { <span>· {{ 'stopped' | t }}</span> }
-                  @if (m.interrupted) { <span [title]="'The server restarted while it was being written.' | t">· {{ 'interrupted' | t }}</span> }
-                  @if (m.role === 'assistant') {
-                    <span class="tcv-cc-meta">
-                      @if (m.ms) { <span>{{ secs(m.ms) }}{{ m.thinking_ms ? ' · ' + ('thought' | t) + ' ' + secs(m.thinking_ms) : '' }}</span> }
-                      @if (m.usage?.prompt_tokens || m.usage?.completion_tokens) {
-                        <span [title]="'tokens in / out' | t">{{ num(m.usage?.prompt_tokens) }} → {{ num(m.usage?.completion_tokens) }} tok</span>
-                      }
-                      @if (m.usage?.cost != null) { <span>{{ money(m.usage?.cost) }}</span> }
-                      @if (m.provider) { <span>{{ provLabel(m.provider) }}</span> }
-                    </span>
-                  }
+                  @if (m.role === 'user') {
+                    <b>{{ m.by?.name || ('someone' | t) }}</b>
+                    @if (m.edited_at) { <span>· {{ 'edited' | t }}</span> }
+                    <span class="tcv-cc-hovtime">{{ fullStamp(m.at) }}{{ m.edited_at ? ' · ' + ('edited' | t) + ' ' + fullStamp(m.edited_at) : '' }}{{
+                      m.mentions?.length ? ' · ' + m.mentions!.length + ' ' + ((m.mentions!.length === 1 ? 'attachment' : 'attachments') | t) : '' }}</span>
+                  } @else { <b [title]="m.model || ''">{{ short(m.model || '') }}</b> }
                 </div>
                 @if (m.role === 'assistant') {
                   @if (m.thinking) {
@@ -487,6 +555,18 @@ type Ask = { text: string; label: string; go: () => void };
                   </div>
                 }
                 @if (m.error) { <div class="tcv-cc-errline">{{ m.error }}</div> }
+                <div class="tcv-cc-foot">
+                @if (m.role === 'assistant') {
+                  <div class="tcv-cc-statwrap">
+                    <button class="tcv-cc-stats" data-act="details" (click)="toggleDetail(m.id); $event.stopPropagation()"
+                            [attr.aria-expanded]="detail() === m.id" [attr.aria-label]="'Details' | t">{{ restLine(m) }}</button>
+                    <div class="tcv-cc-detail" role="tooltip">
+                      <dl>
+                        @for (d of details(m); track d.k) { <dt>{{ d.k | t }}</dt><dd>{{ d.v }}</dd> }
+                      </dl>
+                    </div>
+                  </div>
+                }
                 <div class="tcv-cc-tools" role="toolbar">
                   @if (m.content) {
                     <button class="tcv-cc-ib" (click)="copy(m.content)" [title]="'Copy' | t">
@@ -517,27 +597,31 @@ type Ask = { text: string; label: string; go: () => void };
                     }
                   }
                 </div>
+                </div>
               </div>
             </article>
           }
           @if (live(); as l) {
             <article class="tcv-cc-row" data-role="assistant">
-              <div class="tcv-cc-av" data-role="assistant"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.bot }" /></div>
+              <ng-container *ngTemplateOutlet="botAv; context: { $implicit: liveModel() || model(), hide: false }" />
               <div class="tcv-cc-rowmain">
                 <div class="tcv-cc-rowhead"><b>{{ short(liveModel() || model()) }}</b>
-                  <span class="tcv-cc-pulse">{{ l.text ? ('writing…' | t) : ('thinking…' | t) }}</span>
-                  <span class="tcv-cc-dim">· Esc {{ 'stops' | t }}</span></div>
+                  <span class="tcv-cc-pulse">{{ l.text ? ('writing…' | t) : ('thinking…' | t) }}</span></div>
                 @if (l.thinking) {
                   <ng-container *ngTemplateOutlet="think; context: { $implicit: l.thinking, key: 'live', streaming: !l.text }" />
                 }
                 @if (l.text) { <div class="tcv-cc-answer md" [innerHTML]="html(l.text)"></div> }
-                @else { <div class="tcv-cc-dots"><i></i><i></i><i></i></div> }
+                <div class="tcv-cc-livefoot">
+                  @if (!l.text) { <div class="tcv-cc-dots"><i></i><i></i><i></i></div> }
+                  @if (l.sp; as sp) { <span class="tcv-cc-stats" data-live="1" [title]="sp.tip">{{ sp.text }}</span> }
+                  <span class="tcv-cc-dim">· Esc {{ 'stops' | t }}</span>
+                </div>
               </div>
             </article>
           }
           @for (w of watch(); track w.gen) {
             <article class="tcv-cc-row" data-role="assistant" data-watch="1">
-              <div class="tcv-cc-av" data-role="assistant"><ng-container *ngTemplateOutlet="ico; context: { $implicit: I.bot }" /></div>
+              <ng-container *ngTemplateOutlet="botAv; context: { $implicit: w.model, hide: false }" />
               <div class="tcv-cc-rowmain">
                 <div class="tcv-cc-rowhead"><b>{{ short(w.model) }}</b>
                   <span class="tcv-cc-pulse">{{ asking(w) }}</span>
@@ -546,11 +630,67 @@ type Ask = { text: string; label: string; go: () => void };
                   <ng-container *ngTemplateOutlet="think; context: { $implicit: w.thinking, key: w.gen, streaming: !w.text }" />
                 }
                 @if (w.text) { <div class="tcv-cc-answer md" [innerHTML]="html(w.text)"></div> }
-                @else { <div class="tcv-cc-dots"><i></i><i></i><i></i></div> }
+                <div class="tcv-cc-livefoot">
+                  @if (!w.text) { <div class="tcv-cc-dots"><i></i><i></i><i></i></div> }
+                  @if (w.sp; as sp) { <span class="tcv-cc-stats" data-live="1" [title]="sp.tip">{{ sp.text }}</span> }
+                </div>
               </div>
             </article>
           }
-          @if (!messages().length && !live() && !watch().length) {
+          @if (queue().length) {
+            <div class="tcv-cc-queue" role="list" [attr.aria-label]="'Queued' | t">
+              <div class="tcv-cc-queuehead" [attr.data-paused]="queuePaused() ? 1 : null">
+                <span>{{ (queuePaused() ? 'Paused' : 'Queued') | t }} · {{ queue().length }}</span>
+                <span class="tcv-cc-dim">{{ (queuePaused() ? 'The answer did not end - nothing more is sent until you say so.'
+                                                            : 'Sent one by one when the answer ends.') | t }}</span>
+                @if (queuePaused() && auth.can('draw')) {
+                  <span class="grow"></span>
+                  <button class="tcv-cc-textbtn" data-act="queue-send" (click)="queueResume()">{{ 'Send now' | t }}</button>
+                  <button class="tcv-cc-textbtn" data-act="queue-clear" (click)="queueClear()">{{ 'Clear' | t }}</button>
+                }
+              </div>
+              @for (qm of queue(); track qm.id) {
+                <article class="tcv-cc-row" data-role="user" data-queued="1" role="listitem">
+                  <ng-container *ngTemplateOutlet="userAv; context: { $implicit: qm.by, hide: false }" />
+                  <div class="tcv-cc-rowmain">
+                    <div class="tcv-cc-rowhead"><b>{{ qm.by?.name || ('someone' | t) }}</b>
+                      <span class="tcv-cc-tag">{{ (queuePaused() ? 'Paused' : 'Queued') | t }}</span>
+                      @if (qm.model && qm.model !== model()) { <span class="tcv-cc-dim">{{ short(qm.model) }}</span> }</div>
+                    @if (qEditing() === qm.id) {
+                      <div class="tcv-cc-qedit">
+                        <textarea rows="2" [value]="qDraft()" (input)="qDraft.set($any($event.target).value)"
+                                  (keydown.enter)="qKey($any($event), qm)"
+                                  (keydown.escape)="$event.stopPropagation(); qEditing.set(null)"></textarea>
+                        <div class="tcv-cc-qeditacts">
+                          <button class="tcv-cc-textbtn" (click)="qEditing.set(null)">{{ 'Cancel' | t }}</button>
+                          <button class="tcv-cc-textbtn" data-act="queue-save" [disabled]="!qDraft().trim()" (click)="queueSave(qm)">{{ 'Save' | t }}</button>
+                        </div>
+                      </div>
+                    } @else {
+                      <div class="tcv-cc-bubble">{{ qm.content }}</div>
+                    }
+                    @if (qm.mentions?.length) {
+                      <div class="tcv-cc-mentions">
+                        @for (mm of qm.mentions; track mm.kind + mm.id) {
+                          <span class="tcv-cc-mchip" [attr.data-kind]="mm.kind" [title]="mentionTip(mm)">
+                            <ng-container *ngTemplateOutlet="ico; context: { $implicit: kindIcon(mm.kind) }" /><span>{{ mm.label }}</span></span>
+                        }
+                      </div>
+                    }
+                    @if (mayTouch(qm) && qEditing() !== qm.id) {
+                      <div class="tcv-cc-tools tcv-cc-qtools" role="toolbar">
+                        <button class="tcv-cc-ib" data-act="queue-edit" (click)="queueStartEdit(qm)" [title]="'Edit' | t">
+                          <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.edit }" /></button>
+                        <button class="tcv-cc-ib tcv-cc-danger" data-act="queue-remove" (click)="queueRemove(qm)" [title]="'Remove' | t">
+                          <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.x }" /></button>
+                      </div>
+                    }
+                  </div>
+                </article>
+              }
+            </div>
+          }
+          @if (!messages().length && !live() && !watch().length && !queue().length) {
             <ng-container *ngTemplateOutlet="hello" />
           }
         </div>
@@ -608,7 +748,8 @@ type Ask = { text: string; label: string; go: () => void };
               <div class="tcv-cc-mfoot tcv-cc-dim"><kbd>↑↓</kbd> {{ 'choose' | t }} · <kbd>↵</kbd> {{ 'add' | t }} · <kbd>Esc</kbd> {{ 'close' | t }}</div>
             </div>
           }
-          <textarea #box rows="1" [value]="text()" [placeholder]="'Write to the model… (@ to mention)' | t"
+          <textarea #box rows="1" [value]="text()"
+                    [placeholder]="(busy() ? 'Write the next one - it is sent when the answer ends… (@ to mention)' : 'Write to the model… (@ to mention)') | t"
                     (input)="typed($any($event.target)); grow()" (keydown)="key($event)" (click)="typed($any($event.target))"
                     (focus)="focused.set(true)" (blur)="focused.set(false); closeMentions()"></textarea>
           <div class="tcv-cc-compbar">
@@ -658,9 +799,15 @@ type Ask = { text: string; label: string; go: () => void };
               <kbd>↵</kbd> {{ 'send' | t }} · <kbd>⇧↵</kbd> {{ 'new line' | t }} · <kbd>↑</kbd> {{ 'edit last' | t }}
             </span>
             <span class="grow"></span>
-            @if (live() || stoppable()) {
-              <button class="tcv-cc-send stop" (click)="stop()" [title]="('Stop' | t) + ' (Esc)'">
-                <svg class="tcv-cc-ico" viewBox="0 0 24 24"><path class="fill" [attr.d]="I.stop" /></svg></button>
+            @if (busy()) {
+              @if (text().trim() && !editing()) {
+                <button class="tcv-cc-queuebtn" data-act="queue" (click)="send()"
+                        [title]="('Queue' | t) + ' (Enter) - ' + ('sent when the answer ends' | t)">{{ 'Queue' | t }}</button>
+              }
+              @if (live() || stoppable()) {
+                <button class="tcv-cc-send stop" (click)="stop()" [title]="('Stop' | t) + ' (Esc)'">
+                  <svg class="tcv-cc-ico" viewBox="0 0 24 24"><path class="fill" [attr.d]="I.stop" /></svg></button>
+              }
             } @else {
               <button class="tcv-cc-send" [disabled]="!text().trim()" (click)="send()"
                       [title]="((editing() ? 'Send again' : 'Send') | t) + ' (Enter)'">
@@ -761,7 +908,9 @@ export class RoomCommandCode implements OnDestroy {
   text = signal('');
   focused = signal(false);
   error = signal<string | null>(null);
-  live = signal<{ text: string; thinking: string } | null>(null);
+  /** This page's own answer being written: so far, when it was asked (t0)
+   *  and when its first token came (t1), on this page's clock. */
+  live = signal<{ text: string; thinking: string; t0: number; t1: number | null; sp?: Speed | null } | null>(null);
   liveModel = signal('');
   /** Thinking blocks the reader opened or folded by hand (by answer or generation). */
   private thinkHand = signal<Map<string, boolean>>(new Map());
@@ -785,6 +934,9 @@ export class RoomCommandCode implements OnDestroy {
   private htmlCache = new Map<string, string>();
   private observer: MutationObserver | null = null;
   private editDraft = '';
+  /** The reader scrolled up from the end of the conversation; where this page last scrolled it to. */
+  private logFree = false;
+  private logAuto = -9;
 
   me = computed(() => this.auth.state()?.user?.id ?? 'local');
 
@@ -799,6 +951,15 @@ export class RoomCommandCode implements OnDestroy {
   private liveTimer: ReturnType<typeof setTimeout> | null = null;
   private liveTries = 0;
   private gone = false;
+  /** Lines waiting for the answer being written (the server's queue). */
+  queue = signal<CcQueued[]>([]);
+  queuePaused = signal(false);
+  qEditing = signal<string | null>(null);
+  qDraft = signal('');
+  /** An answer is being written here - mine or anyone's: a line now is queued. */
+  busy = computed(() => !!this.live() || this.watch().length > 0);
+  /** The generation this page's own request is streaming. */
+  private ownGen: string | null = null;
   /** What the next line mentions, as chips in the composer. */
   picked = signal<CcMention[]>([]);
   mentionPop = signal(false);
@@ -920,10 +1081,71 @@ export class RoomCommandCode implements OnDestroy {
       const id = this.openId();
       untracked(() => this.connectLive(id));
     });
+    // Asked of this room by the command palette (Ctrl+K).
+    effect(() => {
+      const w = this.sel.cc();
+      if (w) untracked(() => { this.sel.cc.set(null); this.takeWant(w); });
+    });
+  }
+
+  /** "Ask Command Code about this …", "New Command Code chat", "Open last
+   *  chat" from the palette: a new conversation (or the open one, when it is
+   *  still empty), what was asked about attached as an @-mention, and the
+   *  question sent at once when it was typed there - otherwise the composer
+   *  waits, focused. */
+  private takeWant(w: CcWant) {
+    if (w.action === 'last') { this.openLast(); return; }
+    const go = (c: CcChat) => {
+      if (this.chat()?.id !== c.id) return;
+      if (w.mention) {
+        const m = w.mention;
+        const chip: CcMention = { kind: m.kind, id: m.id, label: m.label || m.id };
+        this.picked.set([chip]);
+        // The server's own row for it (its kind, size, version) for the chip's tooltip.
+        this.api.mentions(m.id, m.kind, 100).subscribe({
+          next: rows => { const r = rows.find(x => x.kind === m.kind && x.id === m.id);
+                          if (r) this.picked.update(l => l.map(x => x.kind === r.kind && x.id === r.id ? r : x)); },
+          error: () => {},
+        });
+      }
+      if (w.text) { this.setText(w.text); void this.send(); }
+      else setTimeout(() => this.box()?.nativeElement.focus());
+    };
+    const c = this.chat();
+    if (c && !this.messages().length && !this.live() && !this.watch().length && this.tab() === 'list' && c.by?.id === this.me()) {
+      this.cancelEdit(false);
+      go(c);
+      return;
+    }
+    // My newest conversation that is still empty, rather than one more empty one.
+    if (this.tab() !== 'list') this.showTab('list');
+    this.api.list('', 'list').subscribe({
+      next: rows => {
+        const empty = rows.filter(r => !r.count && !r.gen && !r.queue?.length && r.by?.id === this.me())
+          .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0];
+        if (empty && !this.live()) this.open(empty.id, null, go);
+        else this.newChat(go);
+      },
+      error: () => this.newChat(go),
+    });
+  }
+
+  /** The conversation last written in. */
+  private openLast() {
+    if (this.tab() !== 'list') this.showTab('list');
+    this.api.list('', 'list').subscribe({
+      next: rows => {
+        const last = [...rows].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0];
+        if (last && last.id !== this.openId()) this.open(last.id);
+        else if (last) setTimeout(() => this.box()?.nativeElement.focus());
+      },
+      error: e => this.error.set(this.msg(e)),
+    });
   }
 
   ngOnDestroy() {
     clearInterval(this.timer);
+    clearInterval(this.clockTimer);
     this.gone = true;
     this.connectLive(null);
     if (this.searchTimer) clearTimeout(this.searchTimer);
@@ -989,7 +1211,7 @@ export class RoomCommandCode implements OnDestroy {
     this.open(c.id);
   }
 
-  open(id: string, at?: string | null) {
+  open(id: string, at?: string | null, then?: (c: CcChat) => void) {
     if (this.live()) return;
     this.openId.set(id);
     this.error.set(null);
@@ -999,10 +1221,13 @@ export class RoomCommandCode implements OnDestroy {
       next: c => {
         if (this.openId() !== id) return;
         this.chat.set(c);
+        this.applyQueue({ queue: c.queue ?? [], paused: !!c.queue_paused });
         this.provider.set(c.provider);
         this.model.set(c.model);
         if (at) this.scrollTo(at);
-        else if (c.messages?.length) this.scroll();
+        else if (c.messages?.length || this.watch().length) this.scroll();
+        if (this.watch().length) this.stickThink();
+        if (then) { then(c); return; }
         if (!at && !matchMedia('(hover: none)').matches) setTimeout(() => this.box()?.nativeElement.focus());
       },
       error: e => this.error.set(this.msg(e)),
@@ -1017,6 +1242,7 @@ export class RoomCommandCode implements OnDestroy {
         this.chats.update(l => [c, ...l]);
         this.openId.set(c.id);
         this.chat.set(c);
+        this.applyQueue({ queue: [], paused: false });
         this.provider.set(c.provider);
         this.model.set(c.model);
         this.drawer.set(false);
@@ -1394,8 +1620,12 @@ export class RoomCommandCode implements OnDestroy {
   async send() {
     const c = this.chat();
     const text = this.text().trim();
-    if (!c || !text || this.live() || !this.model()) return;
-    if (this.watch().length) { this.error.set(t('An answer is being written in this conversation - wait for it, or stop it.')); return; }
+    if (!c || !text || !this.model()) return;
+    if (this.busy()) {
+      if (this.editing()) { this.error.set(t('An answer is being written in this conversation - wait for it, or stop it.')); return; }
+      await this.queueLine(c, text);
+      return;
+    }
     const edit = this.editing() ?? undefined;
     const picked = this.picked();
     const mentions = picked.map(m => ({ kind: m.kind, id: m.id }));
@@ -1427,7 +1657,7 @@ export class RoomCommandCode implements OnDestroy {
 
   private async run(c: CcChat, call: (sig: AbortSignal, on: (ev: CcEvent) => void) => Promise<void>, failed?: () => void) {
     this.error.set(null);
-    this.live.set({ text: '', thinking: '' });
+    this.live.set({ text: '', thinking: '', t0: Date.now(), t1: null });
     this.liveModel.set(this.model());
     this.abort = new AbortController();
     let started = false;
@@ -1438,15 +1668,16 @@ export class RoomCommandCode implements OnDestroy {
         if (this.openId() !== c.id) return;
         if (ev.type === 'user') {
           started = true;
+          this.ownGen = ev.gen ?? null;
           this.chat.update(x => x && { ...x, messages: [...(x.messages ?? []).slice(0, ev.keep ?? (x.messages ?? []).length),
                                                        ...(ev.message ? [ev.message] : [])] });
           this.scroll();
         } else if (ev.type === 'thinking') {
-          this.live.update(l => l && { ...l, thinking: l.thinking + (ev.text ?? '') });
+          this.live.update(l => l && this.sped({ ...l, thinking: l.thinking + (ev.text ?? ''), t1: l.t1 ?? Date.now() }));
           this.stickThink();
           this.scroll(true);
         } else if (ev.type === 'text') {
-          this.live.update(l => l && { ...l, text: l.text + (ev.text ?? '') });
+          this.live.update(l => l && this.sped({ ...l, text: l.text + (ev.text ?? ''), t1: l.t1 ?? Date.now() }));
           this.scroll(true);
         } else if (ev.type === 'error') {
           this.error.set(ev.error ?? t('The model did not answer.'));
@@ -1492,6 +1723,63 @@ export class RoomCommandCode implements OnDestroy {
     this.api.stop(id).subscribe({ error: e => this.error.set(this.msg(e)) });
   }
 
+  // ---- the queue: lines sent while an answer is being written ---------------
+
+  /** Queued on the server; it goes by itself when the answer ends. */
+  private async queueLine(c: CcChat, text: string) {
+    const picked = this.picked();
+    this.picked.set([]);
+    this.closeMentions();
+    this.setText('');
+    try {
+      const got = await this.api.queueSay(c.id, { text, provider: this.provider(), model: this.model(),
+                                                  mentions: picked.map(m => ({ kind: m.kind, id: m.id })), client: this.client });
+      if (got && this.openId() === c.id) this.applyQueue(got);
+      this.scroll(true);
+    } catch (e) {
+      this.error.set((e as Error).message);
+      if (!this.text()) this.setText(text);
+      if (!this.picked().length) this.picked.set(picked);
+    }
+  }
+
+  applyQueue(q: { queue: CcQueued[]; paused: boolean }) {
+    this.queue.set(q.queue ?? []);
+    this.queuePaused.set(!!q.paused && !!q.queue?.length);
+    if (this.qEditing() && !this.queue().some(x => x.id === this.qEditing())) this.qEditing.set(null);
+  }
+
+  mayTouch(q: CcQueued) { return this.auth.can('draw') && (q.by?.id === this.me() || this.auth.can('delete')); }
+
+  queueStartEdit(q: CcQueued) {
+    this.qDraft.set(q.content);
+    this.qEditing.set(q.id);
+    setTimeout(() => this.logEl()?.nativeElement.querySelector<HTMLTextAreaElement>('.tcv-cc-qedit textarea')?.focus());
+  }
+
+  qKey(e: KeyboardEvent, q: CcQueued) {
+    if (e.shiftKey || e.isComposing) return;
+    e.preventDefault();
+    this.queueSave(q);
+  }
+
+  private queueDo(call: (id: string) => Observable<CcQueueState>) {
+    const id = this.openId();
+    if (!id) return;
+    call(id).subscribe({ next: q => { if (this.openId() === id) this.applyQueue(q); }, error: e => this.error.set(this.msg(e)) });
+  }
+
+  queueSave(q: CcQueued) {
+    const text = this.qDraft().trim();
+    if (!text) return;
+    this.qEditing.set(null);
+    if (text !== q.content) this.queueDo(id => this.api.queueEdit(id, q.id, text));
+  }
+
+  queueRemove(q: CcQueued) { this.queueDo(id => this.api.queueRemove(id, q.id)); }
+  queueResume() { this.queueDo(id => this.api.queueResume(id)); }
+  queueClear() { this.queueDo(id => this.api.queueClear(id)); }
+
   // ---- the thinking block ---------------------------------------------------
 
   /** Open while it thinks, folded once the answer begins - unless the reader chose. */
@@ -1505,19 +1793,28 @@ export class RoomCommandCode implements OnDestroy {
     if (open) this.stickThink();
   }
 
-  /** The reader scrolled up in a thinking block: it stops following. */
+  /** The reader scrolled up in a thinking block: it stops following, and
+   *  follows again once scrolled back to the end. A scroll this page made
+   *  itself (its event can come after the next piece grew the block) is
+   *  not the reader's. */
   thinkScrolled(e: Event) {
     const el = e.target as HTMLElement;
+    if (Math.abs(el.scrollTop - Number(el.dataset['auto'] ?? -9)) < 2) return;
     el.dataset['free'] = el.scrollHeight - el.scrollTop - el.clientHeight > 24 ? '1' : '';
   }
 
-  /** Thinking blocks still being written follow their end. */
+  /** Thinking blocks still being written follow their end - after the
+   *  piece is on screen (a timer, then the next frame, for whichever
+   *  comes after Angular has drawn it). */
   private stickThink() {
-    setTimeout(() => {
+    const stick = () => {
       this.logEl()?.nativeElement.querySelectorAll<HTMLElement>('.tcv-cc-thinkbody[data-live]').forEach(el => {
-        if (el.dataset['free'] !== '1') el.scrollTop = el.scrollHeight;
+        if (el.dataset['free'] === '1') return;
+        el.scrollTop = el.scrollHeight;
+        el.dataset['auto'] = String(el.scrollTop);
       });
-    });
+    };
+    setTimeout(() => { stick(); requestAnimationFrame(stick); });
   }
 
   /** The live stream again, from its hello: what is being written, as far as it got. */
@@ -1580,22 +1877,33 @@ export class RoomCommandCode implements OnDestroy {
     if (this.openId() !== id) return;
     // This page's own answer, while its request is still streaming it here;
     // after a refresh (or a cut stream) it is followed like anyone's.
-    const mine = (w: { client?: string | null }) => !!w.client && w.client === this.client && !!this.live();
+    const mine = (w: { client?: string | null; gen?: string }) =>
+      !!w.client && w.client === this.client && !!this.live() && (!this.ownGen || w.gen === this.ownGen);
     switch (ev.type) {
       case 'hello': {
-        const now = (ev.live ?? []).filter(w => !mine(w));
+        const now = (ev.live ?? []).filter(w => !mine(w)).map(w => this.clocked(w));
         // Finished while the stream was away: read the conversation again.
         const lost = this.watch().some(w => !now.some(x => x.gen === w.gen));
         this.watch.set(now);
         now.forEach(w => this.showAsked(w));
         if (now.length) { this.stickThink(); this.scroll(true); }
         if (lost) this.reread(id);
+        if (ev.queue && !Array.isArray(ev.queue)) this.applyQueue(ev.queue);
         break;
       }
+      case 'timing': {
+        const w0 = this.watch().find(w => w.gen === ev.gen);
+        if (w0) this.watch.update(l => l.map(w => w.gen === ev.gen ? this.clocked({ ...w, started_at: ev.started_at, first_at: ev.first_at }) : w));
+        break;
+      }
+      case 'queue':
+        this.applyQueue({ queue: Array.isArray(ev.queue) ? ev.queue : [], paused: !!ev.paused });
+        break;
       case 'start': {
         if (mine(ev) || !ev.gen) return;
-        const w: CcWatch = { gen: ev.gen, client: ev.client, by: ev.by ?? {}, model: ev.model ?? '', provider: ev.provider ?? '',
-                             message: ev.message ?? null, keep: ev.keep, text: ev.text ?? '', thinking: ev.thinking ?? '' };
+        const w: CcWatch = this.clocked({ gen: ev.gen, client: ev.client, by: ev.by ?? {}, model: ev.model ?? '', provider: ev.provider ?? '',
+                             message: ev.message ?? null, keep: ev.keep, text: ev.text ?? '', thinking: ev.thinking ?? '',
+                             started_at: ev.started_at, first_at: ev.first_at, now: ev.now });
         this.watch.update(l => [...l.filter(x => x.gen !== w.gen), w]);
         this.showAsked(w);
         this.scroll(true);
@@ -1605,7 +1913,7 @@ export class RoomCommandCode implements OnDestroy {
       case 'text': case 'thinking': {
         const k = ev.type === 'text' ? 'text' : 'thinking';
         if (!this.watch().some(w => w.gen === ev.gen)) return;
-        this.watch.update(l => l.map(w => w.gen === ev.gen ? { ...w, [k]: w[k] + (ev.text ?? '') } : w));
+        this.watch.update(l => l.map(w => w.gen === ev.gen ? this.sped({ ...w, [k]: w[k] + (ev.text ?? ''), t1: w.t1 ?? Date.now() }) : w));
         if (k === 'thinking') this.stickThink();
         this.scroll(true);
         break;
@@ -1645,6 +1953,159 @@ export class RoomCommandCode implements OnDestroy {
 
   private reread(id: string) {
     this.api.get(id).subscribe({ next: x => { if (this.openId() === x.id && !this.live()) this.chat.set(x); }, error: () => {} });
+  }
+
+  // ---- speed: tokens per second, time to first token ----------------------
+
+  /** The server's times of an answer being written, on this page's clock. */
+  private clocked(w: CcWatch): CcWatch {
+    const skew = w.now ? Date.now() - Date.parse(w.now) : 0;
+    const local = (iso?: string | null) => iso && !isNaN(Date.parse(iso)) ? Date.parse(iso) + skew : null;
+    const ttft = w.started_at && w.first_at ? Date.parse(w.first_at) - Date.parse(w.started_at) : null;
+    return this.sped({ ...w, t0: w.t0 ?? local(w.started_at), t1: w.t1 ?? local(w.first_at),
+                       ttft: ttft != null && ttft >= 0 ? ttft : w.ttft ?? null });
+  }
+
+  /** The speed worked out now, kept with the answer so the page shows it
+   *  until the next piece (never read off the clock while drawing). */
+  private sped<X extends { text: string; thinking: string; t0?: number | null; t1?: number | null; ttft?: number | null;
+                           sp?: Speed | null }>(x: X): X {
+    return { ...x, sp: this.speed(x.text, x.thinking, x.t0, x.t1, x.ttft) };
+  }
+
+  /** While it is written: tokens a second so far, estimated at 4 characters
+   *  a token (the provider counts only at the end), and the time to the
+   *  first token. Read again with every piece that comes. */
+  private speed(text: string, thinking: string, t0?: number | null, t1?: number | null, known?: number | null): Speed | null {
+    if (!t1) return null;
+    const secs = (Date.now() - t1) / 1000;
+    const tok = (text.length + thinking.length) / 4;
+    // The server's own measure when there is one; this page's clock only for its own answer.
+    const ttft = known != null ? known : t0 && t1 > t0 ? t1 - t0 : null;
+    const rate = secs >= 0.3 && tok ? tok / secs : null;
+    if (rate == null && ttft == null) return null;
+    const parts = [rate != null ? `~${this.rateFmt(rate)} tok/s` : '', ttft != null ? `TTFT ${this.secs(ttft)}` : ''].filter(Boolean);
+    const tip = [t('Tokens per second, estimated while it is written: about 4 characters a token, thinking included.'),
+                 t('The exact count comes with the finished answer.'),
+                 ttft != null ? `${t('Time to first token')}: ${this.secs(ttft)}` : ''].filter(Boolean).join('\n');
+    return { text: parts.join(' · '), tip };
+  }
+
+  rateFmt(r: number) { return r >= 10 ? String(Math.round(r)) : r.toFixed(1); }
+
+
+
+  /** Under a finished answer, at rest: how fast, how much, how long. */
+  restLine(m: CcMessage) {
+    const tm = m.timing;
+    const est = tm?.estimated ? '~' : '';
+    const bits: string[] = [];
+    if (tm) {
+      if (tm.tps != null) bits.push(`${est}${this.rateFmt(tm.tps)} tok/s`);
+      if (tm.out_tokens) bits.push(`${est}${this.num(tm.out_tokens)} tok`);
+      if (tm.total_ms != null) bits.push(this.secs(tm.total_ms));
+    } else {
+      if (m.usage?.completion_tokens) bits.push(`${this.num(m.usage.completion_tokens)} tok`);
+      if (m.ms) bits.push(this.secs(m.ms));
+    }
+    if (m.stopped) bits.push(t('stopped'));
+    if (m.interrupted) bits.push(t('interrupted'));
+    return bits.join(' · ') || t('Details');
+  }
+
+  /** Everything about how an answer came, for its popover. */
+  details(m: CcMessage): { k: string; v: string }[] {
+    const tm = m.timing ?? {};
+    const u = m.usage ?? {};
+    const out: { k: string; v: string }[] = [];
+    const add = (k: string, v: string | null | undefined | false) => { if (v) out.push({ k, v }); };
+    add('Sent', this.fullStamp(tm.started_at || m.at));
+    add('First token', tm.first_at ? this.fullStamp(tm.first_at) : '');
+    add('Finished', tm.finished_at ? this.fullStamp(tm.finished_at) : '');
+    add('Time to first token', tm.ttft_ms != null ? this.secs(tm.ttft_ms) : '');
+    add('Average speed', tm.tps != null ? `${tm.estimated ? '~' : ''}${tm.tps} tok/s` : '');
+    add('Thinking', m.thinking_ms ? this.secs(m.thinking_ms) : '');
+    if (tm.first_at && tm.finished_at) add('Writing', this.secs(Math.max(0, Date.parse(tm.finished_at) - Date.parse(tm.first_at))));
+    add('Total time', tm.total_ms != null ? this.secs(tm.total_ms) : m.ms ? this.secs(m.ms) : '');
+    add('Tokens in', u.prompt_tokens ? this.num(u.prompt_tokens) : '');
+    const outTok = u.completion_tokens ?? tm.out_tokens;
+    add('Tokens out', outTok ? `${tm.estimated && !u.completion_tokens ? '~' : ''}${this.num(outTok)}` : '');
+    add('Thinking tokens', m.thinking ? `~${this.num(Math.ceil(m.thinking.length / 4))}` : '');
+    if (u.prompt_tokens || outTok) add('Total tokens', this.num((u.prompt_tokens ?? 0) + (outTok ?? 0)));
+    const ctx = this.models().find(x => x.id === m.model)?.context;
+    if (ctx && u.prompt_tokens) {
+      const used = u.prompt_tokens + (u.completion_tokens ?? 0);
+      add('Context used', `${(used / ctx * 100).toFixed(1)}% · ${this.kfmt(used)} / ${this.ctx(ctx)}`);
+    }
+    add('Cost', u.cost != null ? this.money(u.cost) : '');
+    add('Model', m.model ? `${m.model}${m.provider ? ' · ' + this.provLabel(m.provider) : ''}` : '');
+    const status = m.interrupted ? t('interrupted') + ' - ' + t('The server restarted while it was being written.')
+      : m.stopped ? t('stopped') : m.error ? t('failed') : t('finished');
+    add('Status', status + (m.error && !m.interrupted ? ` - ${m.error}` : ''));
+    return out;
+  }
+
+  /** "7 Oct 2026, 14:03:27" - the reader's own time. */
+  fullStamp(iso: string) {
+    const d = new Date(iso);
+    return isNaN(+d) ? '' : d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric',
+                                                          hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  /** The popover of a line: opened by a tap (touch) or the stats button, closed by another. */
+  detail = signal<string | null>(null);
+  toggleDetail(id: string) { this.detail.update(d => d === id ? null : id); }
+  rowTap(m: CcMessage, e: Event) {
+    if (!matchMedia('(hover: none)').matches) return;
+    if ((e.target as HTMLElement).closest('a, button, input, textarea, select, pre, summary, .tcv-cc-thinkbody')) return;
+    this.toggleDetail(m.id);
+  }
+
+  /** The same sender as the line before: no avatar again. */
+  sameAsBefore(i: number) {
+    const msgs = this.messages();
+    if (i <= 0) return false;
+    const a = msgs[i], b = msgs[i - 1];
+    if (a.role !== b.role) return false;
+    return a.role === 'assistant' || (a.by?.id ?? a.by?.name) === (b.by?.id ?? b.by?.name);
+  }
+
+  /** A person's picture (backend/profile.py), over their initials; one that
+   *  is not there is not asked for again. Agents have none. */
+  private noPics = signal<Set<string>>(new Set());
+  picOf(by?: { id?: string; type?: string; picture?: string } | null): string | null {
+    if (by?.picture) return by.picture;
+    if (!by?.id || by.type === 'agent' || this.noPics().has(by.id)) return null;
+    return `/api/me/avatar/${encodeURIComponent(by.id)}`;
+  }
+  noPic(by?: { id?: string } | null) {
+    if (by?.id) this.noPics.update(s => new Set(s).add(by.id!));
+  }
+
+  /** One of the theme's series colours, always the same for a name, mixed
+   *  into the surface (or the line) so the initials read in every theme. */
+  avTint(name: string | undefined, pct: number, base: '--surface' | '--line') {
+    let h = 0;
+    for (const ch of name || '?') h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return `color-mix(in srgb, ${SERIES[h % SERIES.length]} ${pct}%, ${base === '--surface' ? 'var(--surface)' : 'var(--line)'})`;
+  }
+
+  /** Whose model it is, for its mark. */
+  family(model?: string | null): string {
+    const m = (model || '').toLowerCase();
+    if (!m) return 'redline';
+    if (m.includes('claude') || m.includes('anthropic')) return 'claude';
+    if (m.includes('gemini') || m.includes('gemma')) return 'gemini';
+    for (const f of ['qwen', 'gpt', 'openai', 'deepseek', 'llama', 'mistral', 'grok', 'kimi', 'glm', 'minimax', 'phi'])
+      if (m.includes(f)) return f === 'openai' ? 'gpt' : f;
+    return 'other';
+  }
+
+  monogram(model?: string | null) {
+    const f = this.family(model);
+    const MONO: Record<string, string> = { qwen: 'Q', gpt: 'AI', deepseek: 'DS', llama: 'L', mistral: 'M', grok: 'X',
+                                           kimi: 'K', glm: 'Z', minimax: 'MM', phi: 'φ' };
+    return MONO[f] ?? (this.short(model || '?').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 1).toUpperCase() || '?');
   }
 
   /** "Ada is asking…" */
@@ -1879,10 +2340,12 @@ export class RoomCommandCode implements OnDestroy {
     return n < 1000 ? String(n) : n < 1_000_000 ? `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k` : `${(n / 1_000_000).toFixed(1)}M`;
   }
   /** A line's start for the list, without the Markdown marks. */
-  snip(s: string) { return s.replace(/```[\w-]*/g, ' ').replace(/[#*_`>|]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+  snip(s: string) { return plain(s); }
+  /** "local agents (x33)" → "LA": letters only, what is in brackets left out. */
   initials(name?: string) {
-    const w = (name || '?').trim().split(/\s+/);
-    return ((w[0]?.[0] ?? '?') + (w.length > 1 ? w[w.length - 1][0] : '')).toUpperCase();
+    const w = (name || '').replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').split(/[^\p{L}\p{N}]+/u).filter(x => x && /\p{L}/u.test(x[0]));
+    if (!w.length) return '?';
+    return (w[0][0] + (w.length > 1 ? w[1][0] : '')).toUpperCase();
   }
   stamp(iso: string) { return new Date(iso).toLocaleString(); }
   secs(ms: number) { return `${(ms / 1000).toFixed(1)} s`; }
@@ -1890,21 +2353,37 @@ export class RoomCommandCode implements OnDestroy {
   money(n: number | null | undefined) { return n == null ? '' : n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(3)}`; }
   provLabel(p: string) { return PROVIDERS.find(x => x.id === p)?.name ?? p; }
 
+  /** "3 min ago" against a clock that ticks, not read while the page is drawn. */
+  private clock = signal(Date.now());
+  private clockTimer = setInterval(() => this.clock.set(Date.now()), 20_000);
   when(iso: string) {
-    const s = (Date.now() - Date.parse(iso)) / 1000;
+    const s = (Math.max(this.clock(), Date.parse(iso)) - Date.parse(iso)) / 1000;
     if (s < 60) return t('just now');
     if (s < 3600) return `${Math.floor(s / 60)} ${t('min ago')}`;
     if (s < 86400) return `${Math.floor(s / 3600)} ${t('h ago')}`;
     return new Date(iso).toLocaleDateString();
   }
 
-  private scroll(onlyIfNear = false) {
-    setTimeout(() => {
+  /** To the end of the conversation - or, with `follow`, only while the
+   *  reader has not scrolled up to read (then it waits until they scroll
+   *  back to the end). */
+  private scroll(follow = false) {
+    if (!follow) this.logFree = false;
+    const go = () => {
       const el = this.logEl()?.nativeElement;
-      if (!el) return;
-      if (onlyIfNear && el.scrollHeight - el.scrollTop - el.clientHeight > 160) return;
+      if (!el || (follow && this.logFree)) return;
       el.scrollTop = el.scrollHeight;
-    });
+      this.logAuto = el.scrollTop;
+    };
+    setTimeout(() => { go(); requestAnimationFrame(go); });
+  }
+
+  /** The reader scrolled the conversation: away from its end, it stops
+   *  following the answer; back at the end, it follows again. */
+  logScrolled() {
+    const el = this.logEl()?.nativeElement;
+    if (!el || Math.abs(el.scrollTop - this.logAuto) < 2) return;      // this page's own scroll
+    this.logFree = el.scrollHeight - el.scrollTop - el.clientHeight > 48;
   }
 
   private msg(e: unknown): string {

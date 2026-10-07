@@ -3267,6 +3267,8 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-files-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .tcv-files-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--line); }
 .tcv-files-row:hover { background: var(--hover); }
+.tcv-files-row { cursor: default; border-left: 2px solid transparent; }
+.tcv-files-row[data-on] { background: var(--surface-2); border-left-color: var(--accent); }
 .tcv-files-icon { flex: none; width: 30px; height: 30px; display: grid; place-items: center; font-size: 15px;
   border-radius: 6px; background: var(--surface-2); color: var(--ink-dim); }
 .tcv-files-icon[data-kind="bom"], .tcv-files-kind[data-kind="bom"] { color: var(--accent); }
@@ -3392,8 +3394,13 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   padding-top: 11vh; background: var(--overlay-rest); }
 .tcv-pal { width: min(680px, 94vw); max-height: 70vh; display: flex; flex-direction: column; overflow: hidden;
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 14px 40px var(--shadow-soft); }
-.tcv-pal-input { flex: none; padding: 13px 16px; font-size: 14.5px; color: var(--ink); background: none; border: 0;
-  border-bottom: 1px solid var(--line); outline: none; }
+.tcv-pal-inrow { flex: none; display: flex; align-items: center; min-width: 0; border-bottom: 1px solid var(--line); }
+.tcv-pal-input { flex: 1; min-width: 0; padding: 13px 16px; font-size: 14.5px; color: var(--ink); background: none; border: 0;
+  outline: none; }
+/* Asking Command Code: what the question is about, before the box. */
+.tcv-pal-mode { flex: none; max-width: 45%; margin-left: 12px; padding: 2px 8px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-size: 11.5px; color: var(--ink-dim); border: 1px solid var(--line); border-radius: 4px; }
+.tcv-pal-mode + .tcv-pal-input { padding-left: 10px; }
 .tcv-pal-list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0 6px; }
 .tcv-pal-group { padding: 8px 16px 3px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); }
 .tcv-pal-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 16px; text-align: left;
@@ -3597,7 +3604,7 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   border: 1px solid transparent; border-radius: 6px; cursor: pointer; transition: color .12s, background .12s, border-color .12s; }
 .tcv-cc-ib:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
 .tcv-cc-ib:active:not(:disabled) { background: var(--pressed); }
-.tcv-cc-ib:focus-visible, .tcv-cc-send:focus-visible, .tcv-cc-chip:focus-visible, .tcv-cc-newbtn:focus-visible,
+.tcv-cc-ib:focus-visible, .tcv-cc-send:focus-visible, .tcv-cc-chip:focus-visible,
 .tcv-cc-starter:focus-visible, .tcv-cc-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tcv-cc-ib:disabled { opacity: .4; cursor: not-allowed; }
 .tcv-cc-ib.on { color: var(--accent); }
@@ -3625,14 +3632,29 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 
 /* ---- the list ----------------------------------------------------------- */
 .tcv-cc-side { background: var(--surface-2); }
-.tcv-cc-sidehead { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px 10px 6px; }
-.tcv-cc-newbtn { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; font-size: 13px; font-weight: 600;
-  color: var(--ink-bright); background: var(--accent-deep); border: 1px solid var(--accent); border-radius: 6px; cursor: pointer;
-  transition: background .12s, transform .06s; }
-.tcv-cc-newbtn:hover { background: var(--accent); }
-.tcv-cc-newbtn:active { transform: translateY(1px); }
-.tcv-cc-newbtn .tcv-cc-kbd { margin-left: auto; opacity: .75; font-weight: 400; }
-.tcv-cc-filterrow { display: flex; align-items: center; gap: 6px; }
+/* The head, as on the Settings and Basic Tools lists: a slim search with a
+   small "+ New" beside it, then thin text tabs over a hairline. */
+.tcv-cc-sidehead { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 0;
+  border-bottom: 1px solid var(--line); }
+.tcv-cc-siderow { display: flex; align-items: center; gap: 6px; }
+.tcv-cc-siderow .tcv-cc-search { flex: 1; min-width: 0; }
+.tcv-cc-sidehead .tcv-cc-search input { height: 28px; padding-left: 27px; font-size: 12px; border-radius: 5px; }
+.tcv-cc-sidehead .tcv-cc-search .tcv-cc-ico { left: 8px; width: 13px; height: 13px; }
+.tcv-cc-newsm { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px 0 7px;
+  font-size: 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 5px;
+  cursor: pointer; }
+.tcv-cc-newsm .tcv-cc-ico { width: 13px; height: 13px; color: var(--ink-dim); }
+.tcv-cc-newsm:hover { border-color: var(--ink-dim); background: var(--hover); }
+.tcv-cc-newsm:focus-visible, .tcv-cc-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tcv-cc-tabrow { display: flex; align-items: center; gap: 2px; min-height: 28px; }
+.tcv-cc-tabs { display: flex; gap: 12px; align-self: stretch; }
+.tcv-cc-tabs button { padding: 0 1px; font-size: 11.5px; color: var(--ink-dim); background: none; border: 0;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; white-space: nowrap; }
+.tcv-cc-tabs button:hover { color: var(--ink); }
+.tcv-cc-tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+.tcv-cc-ib.tcv-cc-sm { min-width: 26px; height: 26px; padding: 0 5px; }
+.tcv-cc-ib.tcv-cc-sm .tcv-cc-ico { width: 14px; height: 14px; }
+.tcv-cc-witharch { padding: 0 2px 6px; font-size: 11.5px; color: var(--ink-dim); }
 .tcv-cc-selbar { display: flex; align-items: center; gap: 2px; padding: 2px 2px 2px 8px; font-size: 12px; color: var(--ink);
   background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
 .tcv-cc-check { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
@@ -3661,26 +3683,27 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   .tcv-cc-check input, .tcv-cc-itemcheck { width: 20px; height: 20px; border-radius: 5px; }
   .tcv-cc-check input::after, .tcv-cc-itemcheck::after { -webkit-mask-size: 16px; mask-size: 16px; }
 }
-.tcv-cc-list { padding: 0 6px 12px; }
-.tcv-cc-group { padding: 12px 8px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+/* Plain rows: title and when, a one-line preview; the open one marked by a
+   hairline of accent at its edge, as the Settings list does. */
+.tcv-cc-list { padding: 0 0 10px; }
+.tcv-cc-group { padding: 10px 12px 3px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
   color: var(--ink-dim); }
-.tcv-cc-item { position: relative; display: flex; align-items: center; gap: 9px; min-height: 52px; padding: 7px 10px;
-  border-radius: 6px; cursor: pointer; outline: none; }
-.tcv-cc-item + .tcv-cc-item { margin-top: 1px; }
+.tcv-cc-item { position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+  border-left: 2px solid transparent; cursor: pointer; outline: none; }
 .tcv-cc-item:hover { background: var(--hover); }
-.tcv-cc-item[data-on] { background: var(--surface); box-shadow: inset 2px 0 0 var(--accent); }
+.tcv-cc-item[data-on] { background: var(--surface); border-left-color: var(--accent); }
 .tcv-cc-item[data-sel] { background: var(--pressed); }
-.tcv-cc-itemtext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.tcv-cc-itemtop { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.tcv-cc-itemtext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tcv-cc-itemtop { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .tcv-cc-itemtitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px;
-  font-weight: 600; color: var(--ink); }
-.tcv-cc-itemwhen { flex: none; font-size: 10.5px; color: var(--ink-dim); }
-.tcv-cc-itemsnip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--ink-dim); }
+  font-weight: 500; color: var(--ink); }
+.tcv-cc-itemwhen { flex: none; font: 10px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
+.tcv-cc-itemsnip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ink-dim); }
 .tcv-cc-pinmark { width: 12px; height: 12px; color: var(--ink-dim); }
-.tcv-cc-itemacts { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); display: none; gap: 1px; padding: 2px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px var(--shadow-soft); }
+.tcv-cc-itemacts { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); display: none; gap: 1px; padding: 1px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 5px; }
 .tcv-cc-item:hover .tcv-cc-itemacts, .tcv-cc-item:focus-within .tcv-cc-itemacts { display: inline-flex; }
-.tcv-cc-itemacts .tcv-cc-ib { min-width: 28px; height: 28px; padding: 0 6px; }
+.tcv-cc-itemacts .tcv-cc-ib { min-width: 26px; height: 26px; padding: 0 5px; }
 .tcv-cc-listempty { margin: 18px 10px; font-size: 12px; line-height: 1.5; color: var(--ink-dim); text-align: center; }
 /* The trash: rows that are on their way out - quieter titles, who threw
    them away and when they go for good; the last few days in the warning
@@ -3741,9 +3764,17 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   color: var(--ink-dim); }
 .tcv-cc-rowhead b { font-size: 12.5px; font-weight: 600; color: var(--ink); }
 .tcv-cc-row[data-role="user"] .tcv-cc-rowhead { flex-direction: row-reverse; }
-.tcv-cc-meta { display: inline-flex; flex-wrap: wrap; gap: 8px; opacity: 0; transition: opacity .15s;
-  font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px; }
-.tcv-cc-row:hover .tcv-cc-meta { opacity: 1; }
+/* Under an answer: when, and how fast it came - tokens a second, time to
+   the first token, tokens out, total time (live while it is written, beside
+   the dots); the line's tools beside it. Small, dim, mono. */
+.tcv-cc-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 10px; min-height: 28px; margin-top: -2px; }
+.tcv-cc-row[data-role="user"] .tcv-cc-foot { flex-direction: row-reverse; }
+.tcv-cc-foot .tcv-cc-tools { margin-top: 0; }
+.tcv-cc-livefoot { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 10px; min-height: 22px; font-size: 11px; }
+.tcv-cc-livefoot .tcv-cc-dots { padding: 0; }
+.tcv-cc-stats { min-width: 0; font: 10.5px/1.5 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim);
+  font-variant-numeric: tabular-nums; cursor: default; overflow-wrap: anywhere; }
+.tcv-cc-stats[data-live] { color: var(--ink); }
 .tcv-cc-bubble { max-width: min(78%, 620px); padding: 9px 13px; font-size: 13.5px; line-height: 1.55; color: var(--ink);
   white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-2); border: 1px solid var(--line);
   border-radius: 14px 4px 14px 14px; }
@@ -3877,7 +3908,7 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 
 /* ---- touch: nothing to hover with, so the tools stay -------------------- */
 @media (hover: none) {
-  .tcv-cc-tools, .tcv-cc-meta { opacity: 1; }
+  .tcv-cc-tools { opacity: 1; }
   .tcv-cc-codecopy { opacity: 1; }
   .tcv-cc-item .tcv-cc-itemacts { display: none; }
   /* A trashed row cannot be opened, so its Restore / Delete forever stay. */
@@ -3905,12 +3936,14 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   .tcv-cc-bar { padding: 4px 4px 4px 4px; gap: 2px; }
   .tcv-cc-bar .tcv-cc-title { height: 40px; font-size: 15px !important; }
   .tcv-cc-wide { display: none; }
-  .tcv-cc-newbtn { height: 42px; }
+  .tcv-cc-newsm, .tcv-cc-sidehead .tcv-cc-search input { height: 36px; }
   .tcv-cc-search input { height: 40px; }
+  .tcv-cc-tabrow { min-height: 38px; }
+  .tcv-cc-ib.tcv-cc-sm { min-width: 36px; height: 36px; }
   .tcv-cc-seg button { min-height: 36px; }
   .tcv-cc-seg button { padding: 4px 8px; }
   .tcv-cc-askgo, .tcv-cc-ask .tcv-cc-textbtn { min-height: 36px; }
-  .tcv-cc-item { min-height: 58px; }
+  .tcv-cc-item { min-height: 50px; }
   .tcv-cc-col { padding: 14px 12px 18px; gap: 18px; }
   .tcv-cc-row { gap: 8px; }
   .tcv-cc-av { width: 26px; height: 26px; font-size: 10px; }
@@ -4109,7 +4142,9 @@ button.tcv-cc-mchip:hover { border-color: var(--ink-dim); background: var(--hove
 .pdw-divider { display: flex; justify-content: space-between; margin: 4px 1px 3px; font-size: 10px; color: var(--ink-dim); }
 .pdw-divider ~ .pdw-divider { margin-top: 8px; }
 
-.pdw-bins { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); grid-auto-flow: row dense; gap: 4px; }
+/* Never fewer than two bins a row: a scrollbar appearing (two drawers open)
+   took a few pixels and dropped a 116 px minimum to one column. */
+.pdw-bins { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(116px, calc(50% - 2px)), 1fr)); grid-auto-flow: row dense; gap: 4px; }
 .pdw-bin { display: flex; min-width: 0; flex-direction: column; gap: 1px; padding: 4px 6px 5px; cursor: pointer;
   border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); }
 .pdw-bin:hover { background: var(--hover); }
@@ -4183,3 +4218,77 @@ button.tcv-cc-mchip:hover { border-color: var(--ink-dim); background: var(--hove
 .md-math-d { display: block; margin: .5em 0; overflow-x: auto; overflow-y: hidden; }
 .md-math .katex { font-size: 1.08em; }
 .md-math-d .katex-display { margin: 0; }
+
+/* ---- Command Code: lines waiting for the answer being written ---------- */
+/* Dim, under the answer: who queued them, Edit and Remove; a paused queue
+   says so, with Send now and Clear. */
+.tcv-cc-queue { display: flex; flex-direction: column; gap: 12px; }
+.tcv-cc-queuehead { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; padding-top: 6px; font-size: 11px;
+  color: var(--ink-dim); border-top: 1px dashed var(--line); }
+.tcv-cc-queuehead > span:first-child { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; }
+.tcv-cc-queuehead[data-paused] > span:first-child { color: var(--warn); }
+.tcv-cc-row[data-queued] { opacity: .62; }
+.tcv-cc-row[data-queued]:hover, .tcv-cc-row[data-queued]:focus-within { opacity: .9; }
+.tcv-cc-row[data-queued] .tcv-cc-bubble { border-style: dashed; background: none; }
+.tcv-cc-qtools { opacity: 1; }
+.tcv-cc-qedit { display: flex; flex-direction: column; gap: 4px; width: min(78%, 620px); }
+.tcv-cc-qedit textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; resize: vertical; font: inherit; font-size: 13px;
+  line-height: 1.5; color: var(--ink); background: var(--surface); border: 1px solid var(--accent); border-radius: 8px; outline: none; }
+.tcv-cc-qeditacts { display: flex; justify-content: flex-end; gap: 4px; }
+.tcv-cc-queuebtn { flex: none; height: 30px; padding: 0 12px; font-size: 12px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 15px; cursor: pointer; }
+.tcv-cc-queuebtn:hover { border-color: var(--ink-dim); background: var(--hover); }
+.tcv-cc-queuebtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (max-width: 768px) { .tcv-cc-queuebtn { height: 40px; border-radius: 20px; } .tcv-cc-qedit { width: 100%; } }
+
+/* ---- Command Code: avatars ------------------------------------------------ */
+/* A person: their picture, or initials on a tint of their own series colour
+   (rooms/commandcode.ts avColour). A model: its maker's mark, or Redline's.
+   One size, a thin line around both; only the first of a run shows. */
+.tcv-cc-av { overflow: hidden; }
+.tcv-cc-av[data-role="user"] { color: var(--ink); line-height: 1; }
+.tcv-cc-av[data-role="user"][data-me] { color: var(--ink-bright); }
+.tcv-cc-av { position: relative; }
+.tcv-cc-av img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.tcv-cc-av[data-role="assistant"] { color: var(--ink-dim); background: var(--surface); border-color: var(--line); }
+.tcv-cc-av[data-hide] { visibility: hidden; }
+.tcv-cc-mark { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round;
+  stroke-linejoin: round; }
+.tcv-cc-mark .fill { fill: currentColor; stroke: none; }
+.tcv-cc-mark[viewBox="0 0 64 64"] { width: 18px; height: 18px; stroke-width: 5; }
+.tcv-cc-mark .red { stroke: var(--danger); stroke-width: 7.5; }
+.tcv-cc-mono { font: 600 11px 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: -.02em; }
+.tcv-cc-av[data-family="claude"] { color: var(--series-2); }
+.tcv-cc-av[data-family="gemini"], .tcv-cc-av[data-family="deepseek"] { color: var(--series-1); }
+.tcv-cc-av[data-family="qwen"] { color: var(--series-7); }
+.tcv-cc-av[data-family="gpt"] { color: var(--series-3); }
+.tcv-cc-av[data-family="llama"], .tcv-cc-av[data-family="mistral"] { color: var(--series-6); }
+
+/* ---- Command Code: times and details on hover ----------------------------- */
+/* At rest a line shows no time and an answer only its short speed line;
+   hovering (or a tap on touch) shows the time, and under an answer a flat
+   panel with all of it. */
+.tcv-cc-hovtime { display: none; font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
+.tcv-cc-row:hover .tcv-cc-hovtime, .tcv-cc-row[data-open] .tcv-cc-hovtime { display: inline; }
+.tcv-cc-statwrap { position: relative; min-width: 0; }
+button.tcv-cc-stats { padding: 1px 0; text-align: left; background: none; border: 0; border-radius: 3px; cursor: pointer; }
+button.tcv-cc-stats:hover, .tcv-cc-row[data-open] button.tcv-cc-stats { color: var(--ink); }
+button.tcv-cc-stats:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tcv-cc-detail { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 15; width: max-content; max-width: min(440px, 82vw);
+  padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  visibility: hidden; opacity: 0; pointer-events: none; transition: opacity .1s, visibility 0s linear .1s; }
+.tcv-cc-row[data-role="assistant"]:hover .tcv-cc-detail { visibility: visible; opacity: 1; pointer-events: auto;
+  transition: opacity .12s .35s, visibility 0s linear .35s; }
+.tcv-cc-statwrap:focus-within .tcv-cc-detail, .tcv-cc-row[data-open] .tcv-cc-detail { visibility: visible; opacity: 1;
+  pointer-events: auto; transition: none; }
+.tcv-cc-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 14px; margin: 0;
+  font: 10.5px/1.55 'IBM Plex Mono', ui-monospace, monospace; }
+.tcv-cc-detail dt { color: var(--ink-dim); white-space: nowrap; }
+.tcv-cc-detail dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+@media (hover: none) { .tcv-cc-row[data-role="assistant"]:hover .tcv-cc-detail { visibility: hidden; opacity: 0; }
+  .tcv-cc-row[data-role="assistant"][data-open] .tcv-cc-detail { visibility: visible; opacity: 1; }
+  .tcv-cc-row:hover .tcv-cc-hovtime { display: none; } .tcv-cc-row[data-open] .tcv-cc-hovtime { display: inline; } }
+
+/* The account button's picture or initials (avatar.ts): on a phone it is
+   all the chip shows, so it is a size larger. */
+@media (max-width: 768px) { .tcv-user-end .tcv-user-av { width: 28px; height: 28px; font-size: 11px; } }

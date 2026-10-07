@@ -106,26 +106,62 @@ def dead(gen: dict) -> bool:
     return gen.get("status") == "running" and (gone(gen) or not alive(gen))
 
 
+def _isoz(t) -> str | None:
+    t = _aware(t)
+    return t.isoformat() if t else None
+
+
 def state(gen: dict) -> dict:
     """A generation as the live stream shows it: who, which model, the
-    question and the answer so far."""
+    question and the answer so far - and when it started and when its
+    first token came, so a page that joins late can tell its speed
+    (`now` is the server's clock, for the page to line its own up with)."""
     return {"gen": gen["_id"], "client": gen.get("client"), "by": gen.get("by") or {},
             "provider": gen.get("provider"), "model": gen.get("model"), "message": gen.get("message"),
             "keep": gen.get("keep"), "text": gen.get("text") or "", "thinking": gen.get("thinking") or "",
-            "at": gen.get("at")}
+            "at": gen.get("at"), "started_at": _isoz(gen.get("started_at")), "first_at": _isoz(gen.get("first_at")),
+            "now": _iso()}
+
+
+CHARS_PER_TOKEN = 4                 # the estimate when the provider does not count
+
+
+def timing(started, first, finished, out_tokens: int | None, chars: int) -> dict:
+    """How the answer came: when it was asked for, when its first token
+    (thinking or text) came and when it ended; the output tokens - the
+    provider's count, or the characters / 4 marked `estimated` - and the
+    average speed over the writing (first token to the end)."""
+    started, first, finished = _aware(started), _aware(first), _aware(finished) or now()
+    est = not out_tokens
+    tokens = int(out_tokens) if out_tokens else -(-chars // CHARS_PER_TOKEN)
+    out: dict = {"started_at": started.isoformat() if started else None, "first_at": first.isoformat() if first else None,
+                 "finished_at": finished.isoformat(), "out_tokens": tokens, "estimated": est}
+    if started:
+        out["total_ms"] = max(0, round((finished - started).total_seconds() * 1000))
+    if started and first:
+        out["ttft_ms"] = max(0, round((first - started).total_seconds() * 1000))
+    if first and tokens:
+        writing = (finished - first).total_seconds()
+        if writing >= 0.1:                          # all at once says nothing of speed
+            out["tps"] = round(tokens / writing, 1)
+    return out
 
 
 # ---------------------------------------------------------------- the API's side
 
 async def new(db, cid: str, *, keep: int, upto: int, question: str | None, message: dict | None,
-              provider: str, model: str, client: str | None, images: bool, want_title: bool) -> dict:
-    """Write a generation down, before the conversation's lock is taken."""
+              provider: str, model: str, client: str | None, images: bool, want_title: bool,
+              actor: dict | None = None, role: str | None = None) -> dict:
+    """Write a generation down, before the conversation's lock is taken.
+    `actor` and `role`: a queued line's, sent later by whoever is running
+    then (backend/cc_chat.py send_next) - by default, whoever is asking."""
     from . import access, actors, scope
 
-    who = actors.current() or {}
+    who = actor if actor is not None else (actors.current() or {})
     t = now()
     gen = {"_id": secrets.token_hex(8), "chat": cid, "workspace": scope.current(), "status": "running",
-           "by": {"id": who.get("id"), "name": who.get("name")}, "actor": who, "role": access.current(),
+           "by": {"id": who.get("id"), "name": who.get("name")}, "actor": who,
+           "role": role if role is not None else access.current(),
            "client": client, "provider": provider, "model": model, "message": message, "keep": keep,
            "upto": upto, "question": question, "images": images, "want_title": want_title,
            "text": "", "thinking": "", "at": _iso(), "started_at": t, "beat": t,
@@ -204,8 +240,30 @@ def partial(gen: dict, **flags) -> dict:
     if started:
         m["ms"] = round((now() - started).total_seconds() * 1000)
     m["usage"] = {"prompt_tokens": None, "completion_tokens": None, "cost": None}
+    m["timing"] = timing(gen.get("started_at"), gen.get("first_at"), now(), None,
+                         len(gen.get("text") or "") + len(gen.get("thinking") or ""))
     m.update(flags)
     return m
+
+
+async def _pause(db, gen: dict, status: str) -> None:
+    from . import cc_chat
+    try:
+        await cc_chat.pause(db, gen["chat"], status)
+    except Exception as exc:                                     # noqa: BLE001 - the answer comes first
+        print(f"cc {gen['_id']}: queue not paused: {exc}", file=sys.stderr)
+
+
+async def _send_next(db, gen: dict) -> None:
+    """The answer ended well: the next line waiting in its conversation is
+    sent - here, so it goes whether or not any page is open."""
+    from . import cc_chat
+    try:
+        nxt = await cc_chat.send_next(db, gen["chat"])
+        if nxt:
+            print(f"cc {gen['_id']}: next in the queue: {nxt['_id']}", flush=True)
+    except Exception as exc:                                     # noqa: BLE001 - said, not lost
+        print(f"cc {gen['_id']}: the queue did not go on: {exc}", file=sys.stderr)
 
 
 async def lose(db, gen: dict, why: str, status: str = "interrupted") -> dict:
@@ -217,6 +275,7 @@ async def lose(db, gen: dict, why: str, status: str = "interrupted") -> dict:
     if not (gen.get("text") or "").strip():
         flags["error"] = why if status != "stopped" else "stopped before the answer began"
     answer = partial(gen, **flags)
+    await _pause(db, gen, status)                              # what was queued waits to be let go
     await finish(db, gen, answer, status)
     await coll(db).update_one({"_id": gen["_id"]}, {"$set": {"detail": why}})
     return {**gen, "status": status, "answer": answer, "detail": why}
@@ -287,7 +346,7 @@ async def run(gid: str, db=None) -> dict | None:
     if not gen or gen.get("status") != "running":
         return None
     t0 = time.monotonic()
-    out = {"text": "", "thinking": "", "thought": 0.0, "used": {}}
+    out = {"text": "", "thinking": "", "thought": 0.0, "used": {}, "first_at": None}
     chat = await db[cc_chat.COLL].find_one({"_id": gen["chat"]})
     msgs = (chat or {}).get("messages") or []
     upto = gen.get("upto") or 0
@@ -307,6 +366,8 @@ async def run(gid: str, db=None) -> dict | None:
             images = await cc_context.images(db, pics)
         async for piece in llm.stream(cc_chat.history(convo, images), provider=gen["provider"],
                                       model=gen["model"], max_tokens=cc_chat.MAX_ANSWER):
+            if out["first_at"] is None and (piece.get("thinking") or piece.get("text")):
+                out["first_at"] = now()                  # the first token, of either kind
             if "thinking" in piece:
                 out["thought"] = time.monotonic() - t0
                 out["thinking"] += piece["thinking"] or ""
@@ -326,6 +387,8 @@ async def run(gid: str, db=None) -> dict | None:
             patch = {"text": out["text"], "thinking": out["thinking"], "beat": now()}
             if out["thought"]:
                 patch["thinking_ms"] = round(out["thought"] * 1000)
+            if out["first_at"]:
+                patch["first_at"] = out["first_at"]
             try:
                 await gens.update_one({"_id": gid, "status": "running"}, {"$set": patch})
                 written, beat = size, time.monotonic()
@@ -365,9 +428,15 @@ async def run(gid: str, db=None) -> dict | None:
         answer["thinking_ms"] = round(out["thought"] * 1000)
     used = out["used"]
     answer["usage"] = {k: used.get(k) for k in ("prompt_tokens", "completion_tokens", "cost")}
+    answer["timing"] = timing(gen.get("started_at") or out["first_at"], out["first_at"], now(),
+                              used.get("completion_tokens"), len(out["text"]) + len(out["thinking"]))
     status = "failed" if error else "stopped" if stopped else "done"
     want_title = bool(gen.get("want_title"))
+    if status != "done":
+        await _pause(db, gen, status)                          # before the lock goes: nothing is sent meanwhile
     put = await finish(db, gen, answer, status, naming=want_title)
+    if put and status == "done":
+        await _send_next(db, gen)
     if used:
         await llm.record(db, provider=gen["provider"], model=gen["model"], surface="chat", kind="cc-chat", used=used)
     if put and want_title:

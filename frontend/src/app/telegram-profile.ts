@@ -1,5 +1,6 @@
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { T, t } from './i18n';
 import { Langs, TgLangPicker } from './telegram-langs';
 
@@ -64,10 +65,9 @@ interface Translated { lang: string; fields: Record<Field, string>; cut: Partial
             <button class="tcv-btn tcv-files-btn" (click)="useDefault()">{{ 'Use the default picture' | t }}</button>
           }
           @if (preview()) {
-            <div class="st-row"><button class="tcv-btn tcv-files-btn" [disabled]="!!busy()" (click)="upload()">{{ busy() === 'photo' ? '…' : ('Save picture' | t) }}</button>
-              <button class="tcv-btn tcv-files-btn" (click)="clearPick()">{{ 'Cancel' | t }}</button></div>
+            <button class="tcv-btn tcv-files-btn" (click)="clearPick()">{{ 'Keep the current picture' | t }}</button>
           } @else if (d.has_photo) {
-            <button class="st-more" [disabled]="!!busy()" (click)="removePhoto()">{{ 'Remove picture' | t }}</button>
+            <button class="tcv-btn tcv-files-btn tg-photo-rm" [disabled]="!!busy()" (click)="removePhoto()">{{ 'Remove picture' | t }}</button>
           }
         }
         <span class="st-hint">{{ 'Cut to the square shown, sent as a JPG. At least' | t }} {{ d.min_side }}×{{ d.min_side }} px.</span>
@@ -86,6 +86,9 @@ interface Translated { lang: string; fields: Record<Field, string>; cut: Partial
             <span class="tg-field-top"><b>{{ f.label | t }}</b><span class="st-sub">{{ f.about | t }}</span>
               @if (mt()[lang() + ':' + f.id]) { <span class="st-badge" data-tone="accent" [title]="mtModel()">{{ 'machine translated' | t }}</span> }
               <span class="st-badge" [attr.data-tone]="dirty(f.id) ? 'warn' : live(f.id) ? 'ok' : null">{{ state(f.id) | t }}</span>
+              @if (canEdit() && def(f.id) && value(f.id) !== def(f.id)) {
+                <button type="button" class="tg-reset" (click)="$event.preventDefault(); set(f.id, def(f.id)!)">↺ {{ 'reset to default' | t }}</button>
+              }
               <span class="tg-count mono" [attr.data-over]="value(f.id).length > d.limits[f.id] ? 1 : null">{{ value(f.id).length }} / {{ d.limits[f.id] }}</span></span>
             @if (f.id === 'description') {
               <textarea class="st-in" rows="5" [disabled]="!canEdit()" [value]="value(f.id)" (input)="set(f.id, $any($event.target).value)"></textarea>
@@ -97,18 +100,8 @@ interface Translated { lang: string; fields: Record<Field, string>; cut: Partial
                 <span [class.st-ok]="r.ok" [class.st-err]="!r.ok" class="tg-result">{{ r.ok ? '✓ ' + ('saved' | t) : '✕ ' + r.error }}</span>
               }
               @if (cut()[lang() + ':' + f.id]) { <span class="st-sub">{{ 'shortened to fit' | t }}</span> }
-              @if (canEdit() && def(f.id) && value(f.id) !== def(f.id)) {
-                <button type="button" class="tg-reset" (click)="set(f.id, def(f.id)!)">↺ {{ 'reset to default' | t }}</button>
-              }
             </span>
           </label>
-        }
-        @if (canEdit()) {
-          <div class="st-row">
-            <button class="tcv-btn tcv-files-btn" [disabled]="!dirtyIn(lang()) || over() || !!busy()" (click)="save()">{{ busy() === 'save' ? '…' : ('Save changes' | t) }}</button>
-            @if (dirtyIn(lang())) { <button class="tcv-btn tcv-files-btn" (click)="revert()">{{ 'Undo' | t }}</button> }
-            <span class="st-sub">{{ 'only what changed is sent' | t }}</span>
-          </div>
         }
         @if (err()) { <p class="st-err">{{ err() }}</p> }
       </div>
@@ -121,11 +114,40 @@ interface Translated { lang: string; fields: Record<Field, string>; cut: Partial
         <span class="st-hint">{{ 'Set by Redline when the token is saved, in English and Turkish.' | t }}</span>
       </div>
     </div>
+    <!-- One Save for the whole step: every language's changed texts, the
+         chosen picture, then the step marked done. -->
+    @if (canEdit()) {
+      <div class="tg-prof-foot">
+        @if (savedNote()) { <span class="st-ok">✓ {{ savedNote()! | t }}</span> }
+        @else { <span class="st-sub">{{ pendingNote() }}</span> }
+        @if (anyDirty() || preview()) { <button class="tcv-btn tcv-files-btn" [disabled]="!!busy()" (click)="revertAll()">{{ 'Undo' | t }}</button> }
+        <button class="tcv-btn tcv-btn-accent tg-save" [disabled]="overAny() || !!busy()" (click)="saveAll()">{{ busy() === 'save' ? ('Saving…' | t) : ('Save' | t) }}</button>
+      </div>
+    }
   </div>
 } @else if (err()) {
   <p class="st-err">{{ err() }}</p>
 } @else {
-  <p class="st-hint">{{ 'Asking Telegram…' | t }}</p>
+  <!-- While Telegram answers: the form's shape, its lines pulsing, so
+       the texts land where they will be read. -->
+  <div class="tg-prof tg-skel" [attr.aria-label]="'Asking Telegram…' | t" aria-busy="true">
+    <div class="tg-chips"><i class="sk" style="width: 70px"></i><i class="sk sk-pill" style="width: 150px"></i><i class="sk sk-pill" style="width: 90px"></i></div>
+    <i class="sk" style="width: 55%"></i>
+    <div class="tg-prof-grid">
+      <div class="tg-photo"><i class="sk sk-photo"></i><i class="sk sk-btn"></i><i class="sk sk-btn"></i></div>
+      <div class="tg-fields">
+        @for (w of [1, 3, 1]; track $index) {
+          <div class="tg-field">
+            <span class="tg-field-top"><i class="sk" style="width: 90px"></i><i class="sk" style="width: 180px"></i><i class="sk tg-count" style="width: 40px"></i></span>
+            <i class="sk sk-in" [style.height.px]="w === 3 ? 92 : 30"></i>
+          </div>
+        }
+      </div>
+      <div class="tg-menu">
+        @for (r of [1, 2, 3, 4, 5]; track r) { <i class="sk" [style.width.%]="50 + r * 8"></i> }
+      </div>
+    </div>
+  </div>
 }`,
 })
 export class TelegramProfilePanel {
@@ -133,6 +155,9 @@ export class TelegramProfilePanel {
   readonly langs = inject(Langs);
   canEdit = input(false);
   changed = output<void>();
+  /** The step's Save went through: the parent marks step 3 done. */
+  saved = output<void>();
+  savedNote = signal<string | null>(null);
   readonly fields: { id: Field; label: string; about: string }[] = [
     { id: 'name', label: 'Name', about: 'shown in chats and the contact list' },
     { id: 'description', label: 'Description', about: 'what people read before they press Start' },
@@ -196,20 +221,12 @@ export class TelegramProfilePanel {
     if (this.dirty(f)) return this.value(f) === this.def(f) && !this.live(f) ? 'default, not saved' : 'changed here, not saved';
     return this.live(f) ? 'saved on Telegram' : 'empty';
   }
-  over() { const d = this.p()!; return this.fields.some(f => this.value(f.id).length > d.limits[f.id]); }
   set(f: Field, v: string) {
     const k = this.lang() + ':' + f;
     this.draft.update(d => ({ ...d, [k]: v }));
     this.mt.update(({ [k]: _, ...rest }) => rest);
     this.cut.update(({ [k]: _, ...rest }) => rest);
   }
-  revert() {
-    const l = this.lang() + ':';
-    const keep = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([k]) => !k.startsWith(l)));
-    this.draft.update(d => keep(d) as Record<string, string>);
-    this.mt.update(d => keep(d) as Record<string, boolean>);
-  }
-
   addLang(code: string) {
     if (!this.added().includes(code)) this.added.update(a => [...a, code]);
     this.lang.set(code);
@@ -265,29 +282,71 @@ export class TelegramProfilePanel {
     });
   }
 
-  save() {
-    const l = this.lang();
+  /** One language's changed texts; true when every one went through. */
+  private async saveLang(l: string): Promise<boolean> {
     const body: Record<string, string> = { lang: l };
-    for (const f of this.fields) if (this.dirty(f.id)) body[f.id] = this.value(f.id);
+    for (const f of this.fields) if (this.dirty(f.id, l)) body[f.id] = this.draft()[l + ':' + f.id];
+    const d = await firstValueFrom(this.http.put<Profile>('/api/telegram/profile', body));
+    this.p.set(d);
+    const res = d.results ?? {};
+    this.result.update(r => ({ ...r, ...Object.fromEntries(Object.entries(res).map(([k, v]) => [l + ':' + k, v])) }));
+    const ok = (k: string) => k.startsWith(l + ':') && res[k.slice(l.length + 1)]?.ok;
+    // What went through is now Telegram's - and no longer a machine's; what did not stays typed.
+    this.draft.update(dr => Object.fromEntries(Object.entries(dr).filter(([k]) => !ok(k))));
+    this.mt.update(m => Object.fromEntries(Object.entries(m).filter(([k]) => !ok(k))));
+    if (d.with_text.includes(l)) this.added.update(a => a.filter(x => x !== l));
+    return Object.values(res).every(r => r.ok);
+  }
+
+  anyDirty() { return this.tabs().some(l => this.dirtyIn(l)); }
+  overAny() {
+    const d = this.p();
+    if (!d) return false;
+    return Object.entries(this.draft()).some(([k, v]) => v.length > (d.limits[k.split(':')[1] as Field] ?? Infinity));
+  }
+  pendingNote(): string {
+    const n = this.tabs().filter(l => this.dirtyIn(l)).length;
+    const bits = [];
+    if (n) bits.push(n === 1 ? t('texts changed in 1 language') : `${t('texts changed in')} ${n} ${t('languages')}`);
+    if (this.preview()) bits.push(t('a new picture'));
+    return bits.length ? bits.join(' · ') + ' - ' + t('sent on Save') : t('nothing changed - Save marks this step done');
+  }
+  revertAll() {
+    this.draft.set({}); this.mt.set({}); this.clearPick();
+  }
+
+  /** Everything the step holds, in one go: each language's changed texts,
+   *  the chosen picture, then step 3 marked done - only if all went through. */
+  async saveAll() {
     this.busy.set('save');
     this.err.set(null);
-    this.http.put<Profile>('/api/telegram/profile', body).subscribe({
-      next: d => {
-        this.busy.set(null);
-        this.p.set(d);
-        const res = d.results ?? {};
-        const ok = (k: string) => k.startsWith(l + ':') && res[k.slice(l.length + 1)]?.ok;
-        this.result.update(r => ({ ...r, ...Object.fromEntries(Object.entries(res).map(([k, v]) => [l + ':' + k, v])) }));
-        // What went through is now Telegram's - and no longer a machine's; what did not stays typed.
-        this.draft.update(dr => Object.fromEntries(Object.entries(dr).filter(([k]) => !ok(k))));
-        this.mt.update(m => Object.fromEntries(Object.entries(m).filter(([k]) => !ok(k))));
-        if (d.with_text.includes(l)) this.added.update(a => a.filter(x => x !== l));
-        setTimeout(() => this.result.set({}), 6000);
-        this.changed.emit();
-      },
-      error: e => { this.busy.set(null); this.err.set(this.text(e)); },
-    });
+    this.photoErr.set(null);
+    this.savedNote.set(null);
+    let ok = true;
+    try {
+      for (const l of this.tabs().filter(x => this.dirtyIn(x))) ok = (await this.saveLang(l)) && ok;
+      if (this.preview()) {
+        const d = this.file
+          ? await firstValueFrom(this.http.put<Profile>('/api/telegram/profile/photo', this.form(this.file)))
+          : await firstValueFrom(this.http.put<Profile>('/api/telegram/profile/photo/default', {}));
+        this.p.set(d); this.clearPick(); this.stamp.set(Date.now());
+      }
+      if (ok) {
+        await firstValueFrom(this.http.post('/api/telegram/profile/done', {}));
+        this.savedNote.set('saved on Telegram - step done');
+        this.saved.emit();
+      } else {
+        this.err.set(t('Some fields were not saved - see the marks under them.'));
+      }
+    } catch (e) {
+      this.err.set(this.text(e));
+    } finally {
+      this.busy.set(null);
+      setTimeout(() => this.result.set({}), 6000);
+      this.changed.emit();
+    }
   }
+  private form(f: File | Blob) { const fd = new FormData(); fd.append('file', f); return fd; }
 
   pick(ev: Event) {
     const f = (ev.target as HTMLInputElement).files?.[0];
@@ -306,22 +365,10 @@ export class TelegramProfilePanel {
     img.onerror = () => this.photoErr.set(t('That picture could not be read.'));
     img.src = url;
   }
-  /** Redline's mark: shown first, sent with "Save picture". */
+  /** Redline's mark: shown first, sent with the step's Save. */
   useDefault() { this.clearPick(); this.file = null; this.preview.set('/api/telegram/profile/photo/default'); }
   clearPick() { const p = this.preview(); if (p?.startsWith('blob:')) URL.revokeObjectURL(p); this.preview.set(null); this.file = null; }
 
-  upload() {
-    const done = (d: Profile) => { this.busy.set(null); this.p.set(d); this.clearPick(); this.stamp.set(Date.now()); this.changed.emit(); };
-    const fail = (e: unknown) => { this.busy.set(null); this.photoErr.set(this.text(e)); };
-    this.busy.set('photo');
-    if (!this.file) {            // the default picture
-      this.http.put<Profile>('/api/telegram/profile/photo/default', {}).subscribe({ next: done, error: fail });
-      return;
-    }
-    const form = new FormData();
-    form.append('file', this.file);
-    this.http.put<Profile>('/api/telegram/profile/photo', form).subscribe({ next: done, error: fail });
-  }
   removePhoto() {
     if (!confirm(t('Remove the bot\'s picture?'))) return;
     this.busy.set('photo');

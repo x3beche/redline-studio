@@ -247,12 +247,14 @@ def test_one_answer_at_a_time(env, monkeypatch):
         it = resp.body_iterator.__aiter__()
         await read(it)
         await until(lambda: (gen_doc(raw) or {}).get("text"))
-        for second in (cc_chat.say("c1", cc_chat.SayIn(text="second")),
-                       cc_chat.regenerate("c1", None),
+        for second in (cc_chat.regenerate("c1", None),
                        cc_chat.say("c1", cc_chat.SayIn(text="edit", edit="q0"))):
             with pytest.raises(HTTPException) as e:
                 await second
             assert e.value.status_code == 409
+        # A new line meanwhile is not refused: it waits (tests below, the queue).
+        queued = await cc_chat.say("c1", cc_chat.SayIn(text="second"))
+        assert queued.status_code == 202
         # Nothing was added or cut by the ones refused.
         assert [m["content"] for m in raw["cc_chats"].rows["c1"]["messages"]] == ["q", "a", "first"]
         gate["open"].set()
@@ -261,10 +263,8 @@ def test_one_answer_at_a_time(env, monkeypatch):
                 await read(it)
             except StopAsyncIteration:
                 break
-        # Free again: the next one is answered.
-        resp = await cc_chat.say("c1", cc_chat.SayIn(text="second"))
-        async for _ in resp.body_iterator:
-            pass
+        # Free again: the line waiting is answered by itself.
+        await until(lambda: len(answers(raw)) == 3 and gen_doc(raw)["status"] == "done")
     run(go())
     assert [m["content"] for m in raw["cc_chats"].rows["c1"]["messages"]][-4:] == \
         ["first", "Part one. Part two.", "second", "Part one. Part two."]
@@ -360,3 +360,115 @@ def test_a_dead_runner_does_not_hold_the_conversation(env):
     contents = [m["content"] for m in raw["cc_chats"].rows["c1"]["messages"]]
     assert contents == ["q", "Half an ans", "again", "Hello there"]
     assert raw["cc_chats"].rows["c1"]["messages"][1]["interrupted"] is True
+
+
+# ---- how fast it came: kept on the answer (backend/ccgen.py timing) ---------
+
+def _paced_stream(monkeypatch, state, pieces, usage, pause=0.06, thinking=()):
+    async def stream(messages, *, provider, model, max_tokens=8000, temperature=None):
+        state["sent"] = messages
+        await asyncio.sleep(pause)                     # the wait for the first token
+        for t in thinking:
+            yield {"thinking": t}
+            await asyncio.sleep(pause)
+        for t in pieces:
+            yield {"text": t}
+            await asyncio.sleep(pause)
+        if usage is not None:
+            yield {"usage": usage}
+    monkeypatch.setattr(llm, "stream", stream)
+
+
+def _say_to_the_end(text="tell me"):
+    async def go():
+        resp = await cc_chat.say("c1", cc_chat.SayIn(text=text))
+        evs = []
+        async for chunk in resp.body_iterator:
+            for ln in (chunk.decode() if isinstance(chunk, bytes) else chunk).split("\n"):
+                if ln.startswith("data:"):
+                    evs.append(json.loads(ln[5:]))
+        return evs
+    return run(go())
+
+
+def test_an_answer_keeps_when_its_first_token_came_and_how_fast_it_was_written(env, monkeypatch):
+    raw, state = env
+    seed_chat(raw)
+    _paced_stream(monkeypatch, state, ["One ", "two ", "three."], {"prompt_tokens": 9, "completion_tokens": 30, "cost": None},
+                  thinking=("hmm ",))
+    evs = _say_to_the_end()
+    kept = answers(raw)[-1]
+    tm = kept["timing"]
+    assert tm["out_tokens"] == 30 and tm["estimated"] is False            # the provider's own count
+    started, first, done = (ccgen._aware(tm[k]) for k in ("started_at", "first_at", "finished_at"))
+    assert started <= first <= done
+    assert tm["ttft_ms"] >= 50 and tm["total_ms"] >= tm["ttft_ms"]
+    writing = (done - first).total_seconds()
+    assert tm["tps"] == round(30 / writing, 1) and tm["tps"] > 0
+    # The page gets it with the answer, and again when it reads the conversation.
+    assert next(e for e in evs if e["type"] == "done")["message"]["timing"] == tm
+    assert run(cc_chat.get_chat("c1"))["messages"][-1]["timing"] == tm
+    # The generation said when its first token came while it was being written.
+    assert ccgen._aware(gen_doc(raw)["first_at"]) == first
+
+
+def test_without_the_provider_s_count_the_tokens_are_estimated_from_characters(env, monkeypatch):
+    raw, state = env
+    seed_chat(raw)
+    _paced_stream(monkeypatch, state, ["x" * 21, "y" * 20], usage={})
+    _say_to_the_end()
+    tm = answers(raw)[-1]["timing"]
+    assert tm["estimated"] is True and tm["out_tokens"] == 11                # 41 characters / 4, up
+    assert tm["tps"] > 0 and tm["first_at"]
+
+
+def test_speed_is_left_out_when_everything_came_at_once():
+    t0 = ccgen.now()
+    tm = ccgen.timing(t0, t0 + timedelta(seconds=1), t0 + timedelta(seconds=1.02), 500, 0)
+    assert tm["ttft_ms"] == 1000 and tm["total_ms"] == 1020 and "tps" not in tm
+    tm = ccgen.timing(t0, t0 + timedelta(seconds=0.5), t0 + timedelta(seconds=2.5), 100, 0)
+    assert tm["tps"] == 50.0 and tm["out_tokens"] == 100 and tm["estimated"] is False
+    # Nothing came at all: no first token, no speed, nothing made up.
+    tm = ccgen.timing(t0, None, t0 + timedelta(seconds=3), None, 0)
+    assert tm["first_at"] is None and "ttft_ms" not in tm and "tps" not in tm and tm["out_tokens"] == 0
+
+
+def test_an_interrupted_answer_keeps_its_timing_as_far_as_it_got(env):
+    raw, state = env
+    t0 = ccgen.now() - timedelta(seconds=10)
+    _seed_running(raw, text="x" * 40, thinking="", beat=ccgen.now() - timedelta(seconds=ccgen.LOST + 5),
+                  started_at=t0, first_at=t0 + timedelta(seconds=2))
+    run(ccgen.recover(raw))
+    tm = answers(raw)[-1]["timing"]
+    assert tm["ttft_ms"] == 2000 and tm["out_tokens"] == 10 and tm["estimated"] is True and tm["tps"] > 0
+
+
+def test_a_page_that_joins_late_is_told_when_the_first_token_came(env, monkeypatch):
+    raw, state = env
+    seed_chat(raw)
+    gate = gate_stream(monkeypatch, state)
+
+    class Req:
+        async def is_disconnected(self):
+            return False
+
+    async def go():
+        gate["open"] = asyncio.Event()
+        resp = await cc_chat.say("c1", cc_chat.SayIn(text="tell me"))
+        it = resp.body_iterator.__aiter__()
+        await read(it)
+        await until(lambda: (gen_doc(raw) or {}).get("first_at"))
+        key = cc_chat.live_key("c1")
+        await until(lambda: (cc_chat.HUB.snapshot(key) or [{}])[0].get("first_at"))
+        live = await cc_chat.live("c1", Req())
+        lit = live.body_iterator.__aiter__()
+        hello = await read(lit)
+        gate["open"].set()
+        await it.aclose()
+        await lit.aclose()
+        await until(lambda: gen_doc(raw)["status"] == "done")
+        return hello
+    hello = run(go())
+    (w,) = hello["live"]
+    assert ccgen._aware(w["first_at"]) == ccgen._aware(gen_doc(raw)["first_at"])
+    assert w["started_at"] and ccgen._aware(w["now"]) >= ccgen._aware(w["first_at"])

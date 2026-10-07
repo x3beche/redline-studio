@@ -130,6 +130,8 @@ async def create_session(raw_db, user: dict, workspace: str, agent: str = "", ip
         "created_at": _now(), "last_seen": _now(),
         "expires": _now() + timedelta(days=SESSION_DAYS),
         "agent": agent[:200], "ip": ip})
+    # When they last signed in, for their profile (backend/profile.py).
+    await raw_db[USERS].update_one({"_id": user["_id"]}, {"$set": {"last_sign_in": _now()}})
     return token
 
 
@@ -149,13 +151,14 @@ async def session_user(raw_db, token: str | None) -> dict | None:
     if s and s.get("kind") == PAGE_KIND:
         out = await _page_session(raw_db, s)
     elif s and s["expires"].replace(tzinfo=timezone.utc) > _now():
-        u = await raw_db[USERS].find_one({"_id": s["user"]}, {"pw": 0})
+        u = await raw_db[USERS].find_one({"_id": s["user"]}, {"pw": 0, "avatar": 0})
         # Still a member, and in which role: a person taken out of the
         # workspace is signed out of it.
         m = await raw_db[MEMBERS].find_one({"user": s["user"], "workspace": s["workspace"]})
         if u and not u.get("disabled") and m:
             out = {"user": {"type": "user", "id": u["_id"], "name": u.get("name") or u["email"],
-                            "email": u["email"]},
+                            "email": u["email"], "has_avatar": bool(u.get("avatar_v")),
+                            "avatar_v": u.get("avatar_v")},
                    "workspace": s["workspace"], "role": m.get("role") or "viewer"}
             await raw_db[SESSIONS].update_one({"_id": key}, {"$set": {"last_seen": _now()}})
     _CACHE[key] = (time.time(), out)
@@ -396,9 +399,10 @@ def forget_sessions() -> None:
 async def members(raw_db, workspace: str) -> list[dict]:
     rows = []
     async for m in raw_db[MEMBERS].find({"workspace": workspace}):
-        u = await raw_db[USERS].find_one({"_id": m["user"]}, {"pw": 0}) or {}
+        u = await raw_db[USERS].find_one({"_id": m["user"]}, {"pw": 0, "avatar": 0}) or {}
         rows.append({"id": m["user"], "name": u.get("name") or u.get("email") or m["user"],
                      "email": u.get("email"), "role": m.get("role") or "viewer",
+                     "has_avatar": bool(u.get("avatar_v")), "avatar_v": u.get("avatar_v"),
                      "joined": m.get("joined"), "invited_by": m.get("invited_by")})
     from . import access
     rows.sort(key=lambda r: (access.rank(r["role"]), (r["name"] or "").lower()))

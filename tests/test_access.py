@@ -54,7 +54,10 @@ def test_a_viewer_only_looks():
             ("POST", "/api/telegram/link"), ("DELETE", "/api/telegram/link"), ("PUT", "/api/telegram/me"),
             ("POST", "/api/telegram/me/test"),
             # one's own custom themes; someone else's is checked by the route (themes.py)
-            ("POST", "/api/themes"), ("PUT", "/api/themes/x"), ("DELETE", "/api/themes/x")}, (method, path)
+            ("POST", "/api/themes"), ("PUT", "/api/themes/x"), ("DELETE", "/api/themes/x"),
+            # one's own profile: name, picture, password, sessions (profile.py)
+            ("PATCH", "/api/me"), ("PUT", "/api/me/avatar"), ("DELETE", "/api/me/avatar"),
+            ("POST", "/api/me/password"), ("POST", "/api/me/sessions/revoke-others")}, (method, path)
 
 
 def test_a_reviewer_draws_but_does_not_queue_build_or_delete():

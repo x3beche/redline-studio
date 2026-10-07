@@ -12,6 +12,7 @@ import { TopbarSettingsPanel } from './topbar-settings';
 import { TopBar } from './topbar';
 import { CURRENCY } from './money';
 import { CustomThemesPanel } from './custom-themes';
+import { ProfileSettingsPanel } from './profile-settings';
 
 /** Settings, a tab of its own: the theme, the language and the keyboard
  *  shortcuts - per browser, about the person at this screen - and the
@@ -20,7 +21,7 @@ import { CustomThemesPanel } from './custom-themes';
  *  currency (costs-settings.ts). Opened from
  *  the user menu, from Ctrl+K, and with "?" (the shortcuts page).
  */
-export type PrefsTab = 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'telegram' | 'shortcuts' | 'topbar';
+export type PrefsTab = 'profile' | 'appearance' | 'language' | 'llm' | 'proxy' | 'costs' | 'telegram' | 'shortcuts' | 'topbar';
 
 @Injectable({ providedIn: 'root' })
 export class Prefs {
@@ -28,7 +29,7 @@ export class Prefs {
    *  sets this back to null. How the user menu, the palette and "?" get there. */
   open = signal<PrefsTab | null>(null);
   /** The section on screen in the Settings tab. */
-  tab = signal<PrefsTab>('appearance');
+  tab = signal<PrefsTab>('profile');
   theme = signal<ThemeId>(currentTheme());
 
   constructor() {
@@ -99,7 +100,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 
 @Component({
   selector: 'app-room-settings',
-  imports: [T, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel],
+  imports: [T, ProfileSettingsPanel, CustomThemesPanel, LlmSettingsPanel, ProxySettingsPanel, CostsSettingsPanel, TelegramSettingsPanel, TopbarSettingsPanel],
   styleUrl: './settings.css',
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0">
@@ -131,10 +132,12 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
     @if (item(); as x) {
       <header class="st-head">
         <span class="st-head-name">{{ x.label | t }}</span>
-        <span class="st-badge" [attr.data-tone]="server(x.id) ? 'accent' : null">{{ (server(x.id) ? 'server' : 'this browser') | t }}</span>
+        <span class="st-badge" [attr.data-tone]="server(x.id) || x.id === 'profile' ? 'accent' : null">{{ (x.id === 'profile' ? 'your account' : server(x.id) ? 'server' : 'this browser') | t }}</span>
         <span class="st-head-blurb">{{ x.blurb | t }}</span>
         <span class="st-head-meta">
-          @if (server(x.id)) {
+          @if (x.id === 'profile') {
+            <span>{{ 'only you can change these' | t }}</span>
+          } @else if (server(x.id)) {
             <span class="st-badge" [attr.data-tone]="canEdit ? 'ok' : 'warn'">{{ (canEdit ? 'you can change these' : 'read-only for you') | t }}</span>
           } @else {
             <span>{{ 'kept in this browser only' | t }}</span>
@@ -230,6 +233,7 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
             </div>
           </div>
         }
+        @case ('profile') { <app-profile-settings /> }
         @case ('llm') { <app-llm-settings /> }
         @case ('proxy') { <app-proxy-settings /> }
         @case ('costs') { <app-costs-settings /> }
@@ -268,7 +272,8 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
 })
 export class RoomSettings {
   prefs = inject(Prefs);
-  readonly canEdit = inject(Auth).can('settings');
+  private auth = inject(Auth);
+  readonly canEdit = this.auth.can('settings');
   private topbar = inject(TopBar);
   readonly themes = THEMES;
   /** Dark ones first, then the light ones. */
@@ -284,6 +289,10 @@ export class RoomSettings {
   /** A few of the app's words in each language, as each one's sample. */
   readonly sample: Record<Lang, string> = { en: 'Save · Notes · Analytics', tr: 'Kaydet · Notlar · Analitik' };
   readonly nav: { group: string; items: NavItem[] }[] = [
+    { group: 'You', items: [
+      { id: 'profile', label: 'Profile', about: 'name, picture, password, sessions', ico: '◉',
+        blurb: 'Who you are here: your name and picture, your password, and where you are signed in.' },
+    ] },
     { group: 'This browser', items: [
       { id: 'appearance', label: 'Appearance', about: 'theme', ico: '◐',
         blurb: 'Pick a theme; the whole window follows it.' },
@@ -312,6 +321,7 @@ export class RoomSettings {
   langName = computed(() => LANGS.find(l => l.id === this.lang())?.name ?? this.lang());
   /** The figure beside each section in the list. */
   meta(id: PrefsTab): string | null {
+    if (id === 'profile') return this.auth.state()?.role ?? null;
     if (id === 'appearance') return this.prefs.nameOf(this.prefs.theme());
     if (id === 'language') return this.lang().toUpperCase();
     if (id === 'shortcuts') return String(this.shortcutCount());

@@ -1,6 +1,16 @@
 import { Injectable, signal } from '@angular/core';
 import { Workspace } from './workspaces';
 
+/** What the command palette asks of the Command Code room. */
+export interface CcWant {
+  n: number;
+  action: 'new' | 'last';
+  /** Attached to the new conversation's first line, as an @-mention. */
+  mention?: { kind: 'model' | 'board' | 'file' | 'note'; id: string; label?: string };
+  /** Sent at once when given; otherwise the composer waits, focused. */
+  text?: string;
+}
+
 /** What is open, and where.
  *
  *  The catalog is one tree of files and it lives in the left column,
@@ -26,6 +36,23 @@ export class Selection {
 
   /** The board the PCB room should show, by id. */
   board = signal<string | null>(null);
+
+  /** The note open in the Notes room, and the file picked in the Files
+   *  room, by id - so the command palette can offer "Ask Command Code
+   *  about this note / file". */
+  note = signal<{ id: string; label: string } | null>(null);
+  file = signal<{ id: string; label: string } | null>(null);
+
+  /** Something the Command Code room is asked to do when it is on screen
+   *  (app/palette.ts): a new conversation, with something of the workspace
+   *  attached and perhaps the question already typed, or the last one
+   *  opened. The room takes it (sets it back to null). */
+  cc = signal<CcWant | null>(null);
+  private ccAsks = 0;
+  askCc(w: Omit<CcWant, 'n'>) {
+    this.cc.set({ ...w, n: ++this.ccAsks });
+    this.room.set('commandcode');
+  }
 
   /** What the open board is made of, as `U1 · C368196` - so the note
    *  panel beside the room can offer them where it offers a model's

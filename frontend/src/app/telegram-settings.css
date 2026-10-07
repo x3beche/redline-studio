@@ -114,7 +114,13 @@
   .tg-photo { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .tg-photo-box { width: 96px; height: 96px; }
 }
-.tg-photo { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+/* The picture column: the picture and its mark centred, the buttons one
+   width under it, so nothing hangs at its own indent. */
+.tg-photo { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.tg-photo > .tg-photo-box, .tg-photo > .st-badge { align-self: center; }
+.tg-photo > .tcv-btn { width: 100%; justify-content: center; text-align: center; }
+.tg-photo-rm { color: var(--ink-dim); }
+.tg-photo-rm:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
 .tg-photo-box { width: 160px; height: 160px; border-radius: 50%; overflow: hidden; border: 1px solid var(--line);
   background: var(--surface-2); display: grid; place-items: center; }
 .tg-photo-box img { width: 100%; height: 100%; object-fit: cover; }
@@ -168,6 +174,41 @@
   border: 1px dashed var(--accent-deep); border-radius: 5px; }
 .tg-tr b { color: var(--ink); font-weight: 500; }
 .tg-tr button { margin-left: auto; }
-.tg-field-foot { display: flex; align-items: center; gap: 8px; min-height: 14px; }
+.tg-field-foot { display: flex; align-items: center; gap: 8px; }
+.tg-field-foot:empty { display: none; }
 .tg-reset { margin-left: auto; padding: 0; font-size: 10.5px; color: var(--accent); background: none; border: 0; cursor: pointer; }
 .tg-reset:hover { text-decoration: underline; }
+
+/* Step 3's one Save, bottom right, with what it will send beside it. */
+.tg-prof-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-top: 10px;
+  border-top: 1px solid var(--line); }
+.tg-prof-foot > span { flex: 1; min-width: 0; }
+.tg-save { min-width: 92px; }
+
+/* Under a folded step that stays editable: set apart from the step's own
+   line, a quiet pointer back in. */
+.tg-step-tip { display: flex; align-items: center; gap: 8px; width: calc(100% - 20px); margin: 0 10px 10px; padding: 6px 10px;
+  font-size: 11.5px; color: var(--ink-dim); text-align: left; background: var(--surface); border: 1px dashed var(--line);
+  border-radius: 5px; cursor: pointer; }
+.tg-step-tip:hover { color: var(--ink); border-color: var(--ink-dim); }
+.tg-step-tip b { color: var(--accent); font-weight: 600; }
+.tg-reset + .tg-count { margin-left: 10px; }
+/* Narrow: picture beside its buttons (after the column rules above, so it wins). */
+@container (max-width: 640px) {
+  .tg-photo { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .tg-photo > .tg-photo-box, .tg-photo > .st-badge { align-self: auto; }
+  .tg-photo > .tcv-btn { width: auto; }
+}
+
+/* Loading: the form's own shape, its lines pulsing until the texts come. */
+.tg-skel .sk { display: block; height: 10px; border-radius: 4px; background: var(--hover);
+  animation: tg-sk 1.2s ease-in-out infinite; }
+.tg-skel .tg-chips .sk, .tg-skel .tg-field-top .sk { display: inline-block; }
+.tg-skel .sk-pill { height: 24px; border-radius: 12px; }
+.tg-skel .sk-photo { align-self: center; width: 160px; height: 160px; border-radius: 50%; }
+.tg-skel .sk-btn { height: 26px; }
+.tg-skel .sk-in { width: 100%; margin-top: 4px; border-radius: 4px; }
+.tg-skel .tg-menu { gap: 8px; }
+.tg-skel .tg-field + .tg-field { margin-top: 10px; }
+@keyframes tg-sk { 50% { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .tg-skel .sk { animation: none; } }

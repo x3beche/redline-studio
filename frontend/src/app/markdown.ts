@@ -196,6 +196,14 @@ function markdown(src: string): string {
 export function plain(src: string): string {
   return (src ?? '')
     .replace(/```[\s\S]*?```/g, ' ')
+    // maths: the TeX without its fences or commands, for one line
+    .replace(/\\[()[\]]|\$\$/g, ' ')
+    .replace(/\\(?:text|mathrm|mathbf|operatorname)\{([^}]*)\}/g, '$1')
+    .replace(/\\(?:frac)\{([^}]*)\}\{([^}]*)\}/g, '$1/$2')
+    .replace(/\\(cdot|times)/g, '·')
+    .replace(/\\(?:left|right|[,;!]|quad)/g, '')
+    .replace(/\\([a-zA-Z]+)/g, '$1')
+    .replace(/[{}]/g, '')
     .replace(/^\s*[#>*+-]+\s*/gm, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/[*_`|]/g, '')

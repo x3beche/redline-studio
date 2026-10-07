@@ -440,6 +440,11 @@ export class RoomNotes implements OnDestroy {
     });
     // Leaving a note mid-edit keeps what was typed.
     effect(() => { this.openId(); untracked(() => this.done()); });
+    // The note open here, for the command palette's "Ask Command Code about this note".
+    effect(() => {
+      const n = this.open();
+      untracked(() => this.picked.note.set(n ? { id: n.id, label: n.title || n.text.split('\n')[0].slice(0, 60) || n.id } : null));
+    });
   }
 
   private read() {
