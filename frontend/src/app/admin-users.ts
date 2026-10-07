@@ -223,35 +223,31 @@ const MIN_PASSWORD = 10;
           </div>
           @if (listMsg(); as m) { <p class="st-msg">{{ m }}</p> }
         </div>
-        <div class="st-table-wrap">
-          <table class="st-table ad-table">
-            <thead><tr><th>{{ 'User' | t }}</th><th>{{ 'Role' | t }}</th><th>{{ 'Status' | t }}</th>
-              <th class="ad-wide">{{ 'Last sign-in' | t }}</th><th class="ad-wide">{{ 'Created' | t }}</th><th></th></tr></thead>
-            <tbody>
-              @for (u of shown(); track u.id) {
-                <tr (click)="open(u)" class="ad-row">
-                  <td class="give">
-                    <span class="ad-who">
-                      <app-avatar [name]="u.name" [userId]="u.id" [hasPicture]="u.has_avatar" [v]="u.avatar_v" [size]="26" />
-                      <span class="ad-who-text"><b>{{ u.name }}@if (u.me) { <span class="st-tag">{{ 'you' | t }}</span> }</b>
-                        <small>{{ u.email }}</small></span>
-                    </span>
-                  </td>
-                  <td><span class="st-tag" [attr.data-tone]="roleTone(u.role)">{{ u.role | t }}</span></td>
-                  <td>
-                    @if (u.disabled) { <span class="st-tag" data-tone="danger">{{ 'disabled' | t }}</span> }
-                    @else { <span class="st-tag" data-tone="ok">{{ 'active' | t }}</span> }
-                    @if (u.must_change_password) { <span class="st-tag" data-tone="warn" [title]="'Must change the password at the next sign-in' | t">{{ 'new password' | t }}</span> }
-                  </td>
-                  <td class="ad-wide">{{ day(u.last_sign_in) }} <span class="dim">{{ time(u.last_sign_in) }}</span></td>
-                  <td class="ad-wide">{{ day(u.created_at) }}</td>
-                  <td class="r"><button class="tcv-btn tcv-files-btn" (click)="$event.stopPropagation(); open(u)">{{ 'Edit' | t }}</button></td>
-                </tr>
-              } @empty {
-                <tr><td colspan="6"><div class="st-empty">{{ 'Nobody matches.' | t }}</div></td></tr>
-              }
-            </tbody>
-          </table>
+        <!-- Plain rows, not a table: Chrome 154 drew a table inside its
+             scrolling wrapper at no height at all on one screen. Each row
+             flows: the person, then what they are and when they were last
+             here, wrapping under the name when the stage is narrow. -->
+        <div class="ad-list">
+          @for (u of shown(); track u.id) {
+            <div class="ad-row" tabindex="0" (click)="open(u)" (keydown.enter)="open(u)">
+              <span class="ad-who">
+                <app-avatar [name]="u.name" [userId]="u.id" [hasPicture]="u.has_avatar" [v]="u.avatar_v" [size]="28" />
+                <span class="ad-who-text"><b>{{ u.name }}@if (u.me) { <span class="st-tag">{{ 'you' | t }}</span> }</b>
+                  <small>{{ u.email }}</small></span>
+              </span>
+              <span class="ad-meta">
+                <span class="st-tag" [attr.data-tone]="roleTone(u.role)">{{ u.role | t }}</span>
+                @if (u.disabled) { <span class="st-tag" data-tone="danger">{{ 'disabled' | t }}</span> }
+                @else { <span class="st-tag" data-tone="ok">{{ 'active' | t }}</span> }
+                @if (u.must_change_password) { <span class="st-tag" data-tone="warn" [title]="'Must change the password at the next sign-in' | t">{{ 'new password' | t }}</span> }
+                <span class="ad-when" [title]="('Created' | t) + ' ' + day(u.created_at)">
+                  {{ 'Last sign-in' | t }}: {{ u.last_sign_in ? day(u.last_sign_in) + ' ' + time(u.last_sign_in) : '-' }}</span>
+              </span>
+              <button class="tcv-btn tcv-files-btn ad-edit" (click)="$event.stopPropagation(); open(u)">{{ 'Edit' | t }}</button>
+            </div>
+          } @empty {
+            <div class="st-empty">{{ 'Nobody matches.' | t }}</div>
+          }
         </div>
       </div>
     }
@@ -314,8 +310,8 @@ export class AdminUsersPanel {
       if (!d?.users?.length || this.editing() || this.told) return;
       setTimeout(() => {
         const el: HTMLElement = this.host.nativeElement;
-        const rows = el.querySelectorAll('.ad-table tbody tr').length;
-        const wrap = el.querySelector('.st-table-wrap') as HTMLElement | null;
+        const rows = el.querySelectorAll('.ad-list .ad-row').length;
+        const wrap = el.querySelector('.ad-list') as HTMLElement | null;
         const box = wrap?.getBoundingClientRect();
         if (rows && box && box.height > 20 && wrap && getComputedStyle(wrap).display !== 'none') return;
         this.told = true;

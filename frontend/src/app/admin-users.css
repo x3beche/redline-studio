@@ -3,18 +3,15 @@
    words on the left and its control on the right, and pulsing skeleton
    rows while the server answers. No coloured stripes on the cards. */
 .ad-back { display: flex; align-items: center; gap: 10px; }
-.ad-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ad-tiles { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
 .ad-find { width: 200px; }
-.ad-table td { vertical-align: middle; }
 .ad-row { cursor: pointer; }
-.ad-row:hover td { background: var(--hover); }
 .ad-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ad-who > .app-avatar { flex: none; }
 .ad-who-text { display: flex; flex-direction: column; min-width: 0; }
 .ad-who-text b { font-weight: 500; color: var(--ink-bright); overflow: hidden; text-overflow: ellipsis; }
 .ad-who-text b .st-tag { margin-left: 6px; font-weight: 400; }
 .ad-who-text small { font-size: 10.5px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; }
-.ad-table td .st-tag + .st-tag { margin-left: 4px; }
 
 .ad-line { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap;
   padding-bottom: 10px; border-bottom: 1px solid var(--line); }
@@ -46,23 +43,23 @@
 
 @media (max-width: 768px) {
   .ad-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ad-wide { display: none; }
   .ad-find { width: 100%; }
   .st-card-head .st-right { flex-basis: 100%; margin-left: 0; }
   .st-card-head .st-right .tcv-btn { min-height: 36px; }
   .ad-line > .tcv-btn, .ad-line > .st-seg { flex: 1 1 100%; min-height: 40px; }
   .ad-pw { grid-template-columns: minmax(0, 1fr); }
   .ad-gen { min-height: 40px; }
-  .ad-table .r .tcv-btn { display: none; }
   .pf-foot .tcv-btn { min-height: 40px; }
 }
-/* The person's column takes the room the others leave: a name and an
-   address read whole, not cut to four letters. */
-.ad-table td.give { width: auto; max-width: none; min-width: 150px; }
-.ad-table td:not(.give):not(.ad-wide) { white-space: nowrap; width: 1%; }
-.ad-table td.ad-wide { width: 1%; }
-.ad-table th { white-space: normal; }
-.st-table-wrap:has(.ad-table) { container-type: inline-size; }
-/* Narrow: the creation date goes first, then the last sign-in. */
-@container (max-width: 700px) { .ad-table th:nth-child(5), .ad-table td:nth-child(5) { display: none; } }
-@container (max-width: 560px) { .ad-table th:nth-child(4), .ad-table td:nth-child(4) { display: none; } }
+/* The users: plain rows that flow - the person on the left, their role,
+   state and last sign-in beside, wrapping under the name when narrow. */
+.ad-list { border-top: 1px solid var(--line); }
+.ad-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding: 8px 10px;
+  border-bottom: 1px solid var(--line); cursor: pointer; }
+.ad-row:last-child { border-bottom: 0; }
+.ad-row:hover, .ad-row:focus-visible { background: var(--hover); outline: none; }
+.ad-row > .ad-who { flex: 1 1 220px; }
+.ad-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; min-width: 0; }
+.ad-when { margin-left: 4px; font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
+.ad-edit { flex: none; margin-left: auto; }
+@media (max-width: 768px) { .ad-edit { display: none; } }
