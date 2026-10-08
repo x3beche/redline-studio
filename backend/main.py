@@ -97,6 +97,9 @@ app.include_router(profile_api.router)
 # The admin panel: the accounts, for the owner and the admins.
 from . import admin as admin_api  # noqa: E402
 app.include_router(admin_api.router)
+# Accounts remembered on a browser, and switching between them.
+from . import accounts as accounts_api  # noqa: E402
+app.include_router(accounts_api.router)
 # The Firmware room: a board's MCU, its code, its builds (backend/firmware.py).
 from . import firmware_api  # noqa: E402
 app.include_router(firmware_api.router)
@@ -1905,6 +1908,8 @@ class SetupIn(BaseModel):
 class LoginIn(BaseModel):
     email: str = Field(min_length=1, max_length=200)
     password: str = Field(min_length=1, max_length=200)
+    # "Remember me": keep the account on this browser (backend/accounts.py)
+    remember: bool = False
 
 
 def _set_cookie(response: Response, request: Request, token: str) -> None:
@@ -1966,7 +1971,9 @@ async def auth_login(body: LoginIn, request: Request, response: Response):
     _set_cookie(response, request, token)
     await actors.audit(db(), "sign-in", email, None,
                        actor={"type": "user", "id": user["_id"], "name": user.get("name") or email})
-    return {"user": {"id": user["_id"], "name": user.get("name"), "email": user["email"]}}
+    remembered = await accounts_api.remember_here(request, response, user) if body.remember else False
+    return {"user": {"id": user["_id"], "name": user.get("name"), "email": user["email"]},
+            "remembered": remembered}
 
 
 @app.post("/api/auth/page-session")
@@ -2017,7 +2024,8 @@ async def auth_new_password(body: NewPasswordIn, request: Request):
         raise HTTPException(400, "only a signed-in person sets a new password here")
     try:
         ended = await auth.set_own_new_password(db().raw, who["id"], body.new,
-                                                request.cookies.get(auth.COOKIE))
+                                                request.cookies.get(auth.COOKIE),
+                                                request.cookies.get(auth.DEVICE_COOKIE))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except PermissionError as exc:

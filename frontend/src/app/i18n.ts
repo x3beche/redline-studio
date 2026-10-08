@@ -572,6 +572,24 @@ const TR: Record<string, string> = {
   'Sign in to continue.': 'Devam etmek için giriş yapın.', 'Sign in': 'Giriş yap', 'Email': 'E-posta', 'Password': 'Şifre',
   'Name': 'Ad', 'Join': 'Katıl', 'Make the account': 'Hesabı oluştur', 'At least 10 characters.': 'En az 10 karakter.',
   'Set the password': 'Şifreyi belirle', 'Close': 'Kapat',
+  // accounts remembered on this browser, and switching (auth.ts)
+  'Remember me': 'Beni hatırla',
+  'Keep this account on this browser, to switch to it without the password': 'Bu hesabı bu tarayıcıda saklayın; şifre girmeden ona geçebilirsiniz',
+  'Choose an account': 'Bir hesap seçin', 'Sign in again': 'Yeniden giriş yapın',
+  'Remove from this device': 'Bu cihazdan kaldır',
+  'Signs it out here; the next sign-in asks for the password': 'Burada oturumu kapatır; sonraki girişte şifre sorulur',
+  'Use another account': 'Başka bir hesap kullan',
+  'Sign out of all accounts on this device': 'Bu cihazdaki tüm hesaplardan çıkış yap',
+  'Sign out of every account on this device? Each one is removed from this browser and needs its password next time.':
+    'Bu cihazdaki tüm hesaplardan çıkış yapılsın mı? Her biri bu tarayıcıdan kaldırılır ve bir dahaki sefere şifresi gerekir.',
+  'This account is no longer remembered here. Enter its password to sign in again.':
+    'Bu hesap artık burada hatırlanmıyor. Yeniden giriş yapmak için şifresini girin.',
+  'Sign in to another account.': 'Başka bir hesaba giriş yapın.', 'Back to accounts': 'Hesaplara dön',
+  'Switch to this account': 'Bu hesaba geç', 'Add account': 'Hesap ekle',
+  'Remember on this browser again': 'Bu tarayıcıda yeniden hatırla',
+  'The remembered accounts stay on this browser': 'Hatırlanan hesaplar bu tarayıcıda kalır',
+  'That account could not be opened.': 'Bu hesap açılamadı.',
+  'remembered here': 'burada hatırlanıyor', 'remembered': 'hatırlanıyor',
   // preferences
   'Appearance': 'Görünüm', 'Dark': 'Koyu', 'Light': 'Açık', 'Language': 'Dil', 'Keyboard shortcuts': 'Klavye kısayolları', 'Theme': 'Tema',
   'The whole window, the 3D backdrop and the code editor follow it.': 'Tüm pencere, 3D arka plan ve kod editörü buna uyar.',

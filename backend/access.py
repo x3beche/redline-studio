@@ -83,7 +83,12 @@ _RULES: list[tuple[str, str, str]] = [
     # token has to be good (any token role may look); the route itself
     # takes nothing but a bearer token (backend/auth.py, page sessions)
     ("POST", "/api/auth/page-session", "view"),
-    # signing in, and a password-reset link's own page
+    # remembering the signed-in account on this browser: a person, signed in
+    # (backend/accounts.py); a page session may not, as it may not write
+    ("POST", "/api/auth/remember", "view"),
+    # signing in, and a password-reset link's own page; the remembered
+    # accounts - listing them, a picture, switching, removing - which a
+    # signed-out browser's chooser needs (each holds its own token)
     ("*", "/api/auth/.*", NONE),
     ("*", "/api/reset/.*", NONE),
     ("GET", "/api/health", NONE),

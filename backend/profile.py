@@ -353,7 +353,10 @@ def _public_id(key: str) -> str:
 
 
 async def _end_others(db, user_id: str, request: Request) -> int:
-    res = await db[auth.SESSIONS].delete_many({"user": user_id, "_id": {"$ne": _here(request)}})
+    # This browser stays signed in, and keeps the account remembered if it
+    # was (backend/accounts.py): its remember tokens are here, not elsewhere.
+    here = [_here(request), *auth.device_digests(request.cookies.get(auth.DEVICE_COOKIE))]
+    res = await db[auth.SESSIONS].delete_many({"user": user_id, "_id": {"$nin": here}})
     auth.forget_sessions()
     return int(getattr(res, "deleted_count", 0) or 0)
 
@@ -363,6 +366,9 @@ async def sessions(request: Request):
     who = _person()
     from datetime import timezone
     here = _here(request)
+    # This browser's remembered accounts are "here" too: signing out the
+    # others leaves them (_end_others).
+    mine = {here, *auth.device_digests(request.cookies.get(auth.DEVICE_COOKIE))}
     now = auth._now()
     rows = []
     async for s in _db()[auth.SESSIONS].find({"user": who["id"]}):
@@ -371,7 +377,9 @@ async def sessions(request: Request):
         exp = s.get("expires")
         if exp and exp.replace(tzinfo=timezone.utc) <= now:
             continue
-        rows.append({"id": _public_id(s["_id"]), "here": s["_id"] == here,
+        rows.append({"id": _public_id(s["_id"]), "here": s["_id"] in mine,
+                     # kept on a browser to switch to (backend/accounts.py), not in use
+                     "remembered": s.get("kind") == auth.REMEMBER_KIND,
                      "device": device(s.get("agent") or ""), "created_at": _iso(s.get("created_at")),
                      "last_seen": _iso(s.get("last_seen")), "expires": _iso(exp)})
     # This one first, then the others by when they were last used.

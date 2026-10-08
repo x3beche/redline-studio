@@ -17,7 +17,9 @@ interface Profile {
   /** One of AVATAR_COLOURS, or 'auto' (the name picks). */
   avatar_colour?: string;
 }
-interface Session { id: string; here: boolean; device: string; created_at: string | null; last_seen: string | null }
+interface Session { id: string; here: boolean; device: string; created_at: string | null; last_seen: string | null;
+  /** Kept on a browser to switch to without a password (auth.ts), not a session in use. */
+  remembered?: boolean }
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MIN_PASSWORD = 10;
@@ -177,7 +179,8 @@ const MIN_PASSWORD = 10;
                   <td class="give">{{ s.device }}</td>
                   <td>{{ day(s.created_at) }} <span class="dim">{{ time(s.created_at) }}</span></td>
                   <td>{{ day(s.last_seen) }} <span class="dim">{{ time(s.last_seen) }}</span></td>
-                  <td class="r">@if (s.here) { <span class="st-tag" data-tone="accent">{{ 'this one' | t }}</span> }</td>
+                  <td class="r">@if (s.remembered) { <span class="st-tag">{{ (s.here ? 'remembered here' : 'remembered') | t }}</span> }
+                    @else if (s.here) { <span class="st-tag" data-tone="accent">{{ 'this one' | t }}</span> }</td>
                 </tr>
               }
             </tbody>

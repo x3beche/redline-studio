@@ -26,8 +26,10 @@ data from before accounts lives; anyone else starts with an empty one.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
+import json
 import os
 import re
 import secrets
@@ -46,10 +48,14 @@ SESSION_DAYS = 30
 # The routes a signed-out page may call: to know whether sign-in is on,
 # to sign in, and to make the first account.
 OPEN = {"/api/health", "/api/auth/state", "/api/auth/login", "/api/auth/setup",
+        # the accounts this browser remembers: the chooser a signed-out page
+        # shows, switching to one and removing them (backend/accounts.py,
+        # which checks the CSRF header itself)
+        "/api/auth/accounts", "/api/auth/switch", "/api/auth/forget", "/api/auth/forget-all",
         # Telegram's updates: no session, but the webhook's secret header (backend/tgbot/api.py)
         "/api/telegram/webhook"}
 # ... and a password-reset link's page: the link is the key.
-OPEN_PREFIX = ("/api/reset/",)
+OPEN_PREFIX = ("/api/reset/", "/api/auth/accounts/")
 
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -152,7 +158,9 @@ async def session_user(raw_db, token: str | None) -> dict | None:
     out = None
     if s and s.get("kind") == PAGE_KIND:
         out = await _page_session(raw_db, s)
-    elif s and s["expires"].replace(tzinfo=timezone.utc) > _now():
+    # Only a plain session signs in here: a remembered account's token
+    # (below) is not one, even put in this cookie by hand.
+    elif s and not s.get("kind") and s["expires"].replace(tzinfo=timezone.utc) > _now():
         u = await raw_db[USERS].find_one({"_id": s["user"]}, {"pw": 0, "avatar": 0})
         # The account as it is now: its role and space are read from it,
         # not from the session, so a change takes effect at once.
@@ -248,6 +256,119 @@ async def end_session(raw_db, token: str | None) -> None:
     if token:
         _CACHE.pop(_digest(token), None)
         await raw_db[SESSIONS].delete_one({"_id": _digest(token)})
+
+
+# ---------------------------------------------------------------- remembered accounts
+
+# "Remember me" keeps an account on this browser, so the person can switch
+# between several without a password (backend/accounts.py). Each one is a
+# token of its own, kept with the sessions as kind "remember" and, like
+# them, only as its SHA-256: everything that signs an account out
+# everywhere (a new password, a reset link, disabling or deleting it) ends
+# these too, because they are found by `user` like any session. A remember
+# token is never a session itself: it only buys one, for the account it was
+# made for, while that account is enabled and the token is neither revoked
+# nor past REMEMBER_DAYS. It is looked up afresh every time - no cache - so
+# a revoked one is refused at once.
+#
+# The browser holds its tokens in one HttpOnly cookie, DEVICE_COOKIE: a
+# short list of {t: token, u: account id, e: email, n: name}. The address
+# and name are there only so a row whose token has died can still say whose
+# it was ("sign in again"); a live row is drawn from the account itself.
+REMEMBER_KIND = "remember"
+REMEMBER_DAYS = 90
+DEVICE_COOKIE = "redline_device"
+DEVICE_MAX = 8
+
+
+def read_device(value: str | None) -> list[dict]:
+    """The rows of a device cookie; anything malformed is dropped, never
+    trusted - an account is only ever what its token's record says."""
+    if not value:
+        return []
+    try:
+        rows = json.loads(base64.urlsafe_b64decode(value + "=" * (-len(value) % 4)))
+    except (ValueError, TypeError):
+        return []
+    out: list[dict] = []
+    for r in rows if isinstance(rows, list) else []:
+        if not isinstance(r, dict) or not all(isinstance(r.get(k), str) and r.get(k) for k in ("t", "u", "e")):
+            continue
+        if len(r["t"]) > 64 or any(x["u"] == r["u"] for x in out):
+            continue
+        out.append({"t": r["t"], "u": r["u"][:40], "e": r["e"][:120], "n": str(r.get("n") or "")[:60]})
+        if len(out) >= DEVICE_MAX:
+            break
+    return out
+
+
+def write_device(rows: list[dict]) -> str:
+    rows = [{k: r[k] for k in ("t", "u", "e", "n")} for r in rows[:DEVICE_MAX]]
+    return base64.urlsafe_b64encode(json.dumps(rows, separators=(",", ":")).encode()).decode().rstrip("=")
+
+
+async def create_remember(raw_db, user: dict, agent: str = "", ip: str = "") -> str:
+    token = secrets.token_urlsafe(32)
+    await raw_db[SESSIONS].insert_one({
+        "_id": _digest(token), "kind": REMEMBER_KIND, "user": user["_id"],
+        "created_at": _now(), "last_seen": _now(),
+        "expires": _now() + timedelta(days=REMEMBER_DAYS), "agent": agent[:200], "ip": ip})
+    return token
+
+
+async def remembered(raw_db, token: str | None, user_id: str | None = None) -> dict | None:
+    """The account a remember token is for, if it still is: the token known,
+    of that kind, in date, and - when `user_id` is given - for that very
+    account; the account there and enabled. None otherwise."""
+    if not token or len(token) > 64:
+        return None
+    s = await raw_db[SESSIONS].find_one({"_id": _digest(token)})
+    if not s or s.get("kind") != REMEMBER_KIND or (user_id is not None and s.get("user") != user_id):
+        return None
+    if _aware(s.get("expires")) is None or _aware(s["expires"]) <= _now():
+        return None
+    u = await raw_db[USERS].find_one({"_id": s["user"]}, {"pw": 0, "avatar": 0})
+    if not u or u.get("disabled"):
+        return None
+    return u
+
+
+async def used_remember(raw_db, token: str) -> None:
+    """A remembered account was switched to: it lasts REMEMBER_DAYS from now."""
+    await raw_db[SESSIONS].update_one({"_id": _digest(token), "kind": REMEMBER_KIND},
+                                      {"$set": {"last_seen": _now(),
+                                                "expires": _now() + timedelta(days=REMEMBER_DAYS)}})
+
+
+async def forget_remember(raw_db, token: str | None, user_id: str) -> bool:
+    """Revoke one remember token, only if it is that account's."""
+    if not token:
+        return False
+    res = await raw_db[SESSIONS].delete_one({"_id": _digest(token), "kind": REMEMBER_KIND, "user": user_id})
+    return bool(getattr(res, "deleted_count", 0))
+
+
+def device_digests(value: str | None) -> list[str]:
+    """The stored keys of a device cookie's tokens: what "this device" is
+    when an account signs out everywhere else."""
+    return [_digest(r["t"]) for r in read_device(value)]
+
+
+# Switching is cheap to try, so it is counted like signing in: per address
+# (the browser), at most SWITCH_LIMIT in a minute; and a token refused for
+# an account five times in fifteen minutes (failed/locked_out above, keyed
+# "switch:<id>") locks switching to that account for a while.
+SWITCH_LIMIT, SWITCH_WINDOW = 30, 60
+_HITS: dict[str, list[float]] = {}
+
+
+def too_fast(key: str, limit: int = SWITCH_LIMIT, window: float = SWITCH_WINDOW) -> bool:
+    """Counts one try for `key`; True once there were `limit` in `window`."""
+    now = time.time()
+    recent = [t for t in _HITS.get(key, []) if now - t < window]
+    recent.append(now)
+    _HITS[key] = recent
+    return len(recent) > limit
 
 
 # ---------------------------------------------------------------- accounts
@@ -585,10 +706,13 @@ BEFORE_NEW_PASSWORD = frozenset({"/api/auth/new-password", "/api/auth/logout", "
                                  "/api/me", "/api/health"})
 
 
-async def set_own_new_password(raw_db, user_id: str, password: str, keep_token: str | None) -> int:
+async def set_own_new_password(raw_db, user_id: str, password: str, keep_token: str | None,
+                               device: str | None = None) -> int:
     """The person's own password in place of the one an admin set. Only
     while the account is asked to change it; it must differ from that one.
-    Every other session ends. Returns how many."""
+    Every other session ends - all but this one and, if this browser
+    remembers the account, its remember token (`device`, the cookie).
+    Returns how many."""
     u = await raw_db[USERS].find_one({"_id": user_id})
     if not u or u.get("disabled"):
         raise PermissionError("no such account")
@@ -601,8 +725,8 @@ async def set_own_new_password(raw_db, user_id: str, password: str, keep_token: 
         raise ValueError("choose a password other than the one you were given")
     await raw_db[USERS].update_one({"_id": user_id}, {"$set": {"pw": hash_password(password)},
                                                       "$unset": {"must_change_password": ""}})
-    keep = _digest(keep_token or "")
-    res = await raw_db[SESSIONS].delete_many({"user": user_id, "_id": {"$ne": keep}})
+    keep = [_digest(keep_token or ""), *device_digests(device)]
+    res = await raw_db[SESSIONS].delete_many({"user": user_id, "_id": {"$nin": keep}})
     forget_sessions()
     return int(getattr(res, "deleted_count", 0) or 0)
 

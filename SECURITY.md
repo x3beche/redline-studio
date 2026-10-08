@@ -40,6 +40,13 @@ and findings that need shell access to the machine already.
 - **Sessions** are random tokens in an `HttpOnly`, `SameSite=Lax` cookie
   (`Secure` over HTTPS). The database keeps only their SHA-256, so a copy
   of the database signs nobody in.
+- **Remembered accounts** ("Remember me", switching between accounts):
+  one random token per account, kept in the database as its SHA-256 and
+  on the browser in one `HttpOnly`, `SameSite=Strict` cookie. A token only
+  buys a new session for the account its record names, never a session
+  itself; it ends after 90 days, with "Remove from this device", and
+  whenever the account is signed out everywhere (a new password - the
+  browser that set it keeps its own -, a reset, disabled, deleted). Switching is rate limited and audited.
 - **CSRF**: every change must carry the `X-Redline-CSRF` header, which
   only the app's own page sends.
 - **Agent tokens** are shown once, kept as SHA-256, scoped to a workspace

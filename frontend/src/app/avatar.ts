@@ -112,6 +112,9 @@ export class Avatar {
   colour = input<string | null | undefined>('auto');
   /** Show the name on hover. */
   title = input(false);
+  /** Where the picture comes from, when not the profile's own route: a
+   *  remembered account on the signed-out chooser (auth.ts). */
+  picture = input<string | null>(null);
 
   /** The picture would not load: the initials instead. */
   broken = signal(false);
@@ -127,5 +130,5 @@ export class Avatar {
   ring = computed(() => (this.px() >= 64 ? 3 : 2));
   fontScale = computed(() => (this.letters().length > 1 ? 0.4 : 0.48));
   showPicture = computed(() => !!this.hasPicture() && !!this.userId() && !this.broken());
-  src = computed(() => `/api/me/avatar/${encodeURIComponent(this.userId() ?? '')}?v=${encodeURIComponent(String(this.v() ?? ''))}`);
+  src = computed(() => `${this.picture() ?? `/api/me/avatar/${encodeURIComponent(this.userId() ?? '')}`}?v=${encodeURIComponent(String(this.v() ?? ''))}`);
 }
