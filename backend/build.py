@@ -122,6 +122,19 @@ async def build(db, model_id: str, script: Path) -> dict:
                 continue
             (tmp / name).write_bytes(await store.get_upload(db, name))
 
+        # The Files tab too: a STEP or mesh someone put there is usable by
+        # name the same way, so a part dropped in Files can be imported
+        # without uploading it again through the 3D room. An upload of the
+        # same name wins; of several Files entries with one name, the newest.
+        from . import files as files_store
+        async for doc in db[files_store.COLL].find({"kind": {"$in": ["step", "mesh"]}},
+                                                    {"name": 1}).sort("created_at", -1):
+            name = files_store.clean_name(str(doc.get("name") or ""))
+            if not name or (tmp / name).exists() or not any(name in src for src in reachable):
+                continue
+            _, data = await files_store.get(db, doc["_id"])
+            (tmp / name).write_bytes(data)
+
         # Under a memory ceiling: a model that imports a large STEP and
         # booleans against it can grow until the machine swaps and the desktop
         # freezes. With the ceiling the kernel kills the build instead.
