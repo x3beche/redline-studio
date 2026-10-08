@@ -7,6 +7,7 @@ enough to import the module.
 """
 from __future__ import annotations
 
+import math
 import sys
 import types
 from pathlib import Path
@@ -249,3 +250,40 @@ def test_a_part_with_no_shape_leaves_its_edge_alone(place, monkeypatch):
     bounds, moved, _ = place.cut_to_bodies(
         board, "b", {"right": ["J9"]}, (10.0, 19.0, 40.0, 47.0))
     assert bounds == (10.0, 19.0, 40.0, 47.0) and moved == {}
+
+
+# ---- a part a note added to a held board ----
+
+R0603 = [(0, (-1.5, -0.75, 1.5, 0.75), {"1": (-0.8, 0.0), "2": (0.8, 0.0)}),
+         (90, (-0.75, -1.5, 0.75, 1.5), {"1": (0.0, 0.8), "2": (0.0, -0.8)})]
+
+
+def test_a_new_part_goes_next_to_what_it_is_wired_to(place):
+    """Beside the chip pin it joins, in the free room, not on the chip."""
+    chip = (10.0, 10.0, 20.0, 30.0)
+    aims = {"1": [(20.5, 20.0, 1.0)]}                # the chip's pin, on its right edge
+    x, y, rot = place.free_spot(R0603, [chip], (0, 0, 40, 40), aims)
+    box = next(b for r, b, _ in R0603 if r == rot)
+    assert x + box[0] >= chip[2] + place.SPOT_GAP - 1e-9     # clear of the chip
+    pad = next(p for r, _, p in R0603 if r == rot)["1"]
+    assert math.dist((x + pad[0], y + pad[1]), (20.5, 20.0)) < 2.0
+
+
+def test_a_new_part_never_lands_on_another_or_off_the_board(place):
+    taken = [(0, 0, 40, 18), (0, 22, 40, 40), (0, 18, 30, 22)]     # room only at x 30..40, y 18..22
+    x, y, rot = place.free_spot(R0603, taken, (0, 0, 40, 40), {"1": [(5.0, 20.0, 1.0)]})
+    box = next(b for r, b, _ in R0603 if r == rot)
+    b = (x + box[0], y + box[1], x + box[2], y + box[3])
+    assert b[0] >= 30 and b[2] <= 40 and b[1] >= 18 and b[3] <= 22
+    assert not any(place.clashes(b, t, slack=0) for t in taken)
+
+
+def test_no_room_is_said_not_forced(place):
+    assert place.free_spot(R0603, [(0, 0, 10, 10)], (0, 0, 10, 10), {}) is None
+
+
+def test_a_rail_pulls_less_than_a_signal(place):
+    """Ground is everywhere (a pour): the signal pin decides where it goes."""
+    aims = {"1": [(5.0, 5.0, 1.0)], "2": [(35.0, 35.0, 0.2)]}
+    x, y, _ = place.free_spot(R0603, [], (0, 0, 40, 40), aims)
+    assert math.dist((x, y), (5.0, 5.0)) < 3.0

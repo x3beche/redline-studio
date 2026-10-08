@@ -971,6 +971,149 @@ def hold(fp, want) -> dict:
     return {"how": "pads", "worst_mm": round(w, 4)}
 
 
+
+# ---------------- a part added to a held board ----------------
+
+SPOT_STEP = 0.25        # mm: the grid a new part's position is looked for on
+SPOT_GAP = 0.1          # mm between courtyards, on top of what they already keep
+PAD_ROOM = 0.25         # mm kept round another part's pads, past its courtyard
+WIDE_NET = 8            # pads: a net this big (ground, a rail) pulls a part only a little
+
+
+def free_spot(shapes, taken, bounds, aims, step=SPOT_STEP, gap=SPOT_GAP, inside=None):
+    """Where a new part goes on a board whose other parts may not move.
+
+    `shapes` is the part at each turn it may take: (rot, box, pads), the
+    box (left, top, right, bottom) and the pads {number: (x, y)} relative
+    to its origin. `taken` are the boxes already on the board, `bounds`
+    the box it must stay inside, `aims` {pad number: [(x, y, weight)]} -
+    the placed pads each of its pads is joined to. The spot is the free
+    one where its pads are nearest theirs (each pad to the nearest of its
+    own net, weighted), on a `step` grid; `inside(box)`, when given, says
+    whether a box is on the board (an outline that is not a rectangle).
+    Returns (x, y, rot) or None when nothing is free.
+    """
+    x0, y0, x1, y1 = bounds
+    pts = [(x, y) for ps in aims.values() for x, y, _w in ps]
+    if not pts:
+        pts = [((x0 + x1) / 2, (y0 + y1) / 2)]
+
+    def cost(x, y, pads):
+        total = 0.0
+        for num, (px, py) in pads.items():
+            near = aims.get(num)
+            if near:
+                total += min(math.hypot(x + px - ax, y + py - ay) * w for ax, ay, w in near)
+        if not any(aims.get(n) for n in pads):      # joined to nothing placed: the middle
+            total = math.hypot(x - pts[0][0], y - pts[0][1])
+        return total
+
+    def free(b):
+        if b[0] < x0 or b[1] < y0 or b[2] > x1 or b[3] > y1:
+            return False
+        if any(b[0] < t[2] + gap and t[0] < b[2] + gap and b[1] < t[3] + gap and t[1] < b[3] + gap
+               for t in taken):
+            return False
+        return inside is None or inside(b)
+
+    def look(wx0, wy0, wx1, wy1):
+        # On the board's own grid, so a window finds the spots the whole board would.
+        i0, i1 = max(0, math.ceil((wx0 - x0) / step)), int((min(wx1, x1) - x0) / step)
+        j0, j1 = max(0, math.ceil((wy0 - y0) / step)), int((min(wy1, y1) - y0) / step)
+        found = []
+        for rot, box, pads in shapes:
+            for i in range(i0, i1 + 1):
+                x = x0 + i * step
+                for j in range(j0, j1 + 1):
+                    y = y0 + j * step
+                    found.append((cost(x, y, pads), rot, x, y, box))
+        found.sort(key=lambda f: (round(f[0], 6), f[1], f[2], f[3]))
+        for _c, rot, x, y, box in found:
+            b = (x + box[0], y + box[1], x + box[2], y + box[3])
+            if free(b):
+                return (round(x, 4), round(y, 4), rot)
+        return None
+
+    # Near its signals first (a rail's pads are everywhere); then anywhere.
+    near = [(x, y) for ps in aims.values() for x, y, w in ps if w >= 1.0] or pts
+    reach = 15.0
+    got = look(min(p[0] for p in near) - reach, min(p[1] for p in near) - reach,
+               max(p[0] for p in near) + reach, max(p[1] for p in near) + reach)
+    return got if got is not None else look(x0, y0, x1, y1)
+
+
+def place_new(board, fps, where, bounds) -> dict:
+    """Put the parts a held board did not have (a note added them) in the
+    free room nearest what they are wired to - after every held part and
+    hole is down, so none of those moves. Says where each went."""
+    try:
+        outline = pcbnew.SHAPE_POLY_SET()
+        board.GetBoardPolygonOutlines(outline)
+
+        def inside(b):
+            return all(outline.Contains(at(x, y)) for x in (b[0], b[2]) for y in (b[1], b[3]))
+    except Exception:                                   # noqa: BLE001 - the box will do
+        inside = None
+    new = {id(fp) for fp in fps}
+    size = {}
+    for (ref, pin), name in where.items():
+        size[name] = size.get(name, 0) + 1
+
+    def box_of(fp):
+        # The courtyard, and the pads with room round them: an EasyEDA
+        # courtyard can stop at the pads' centres (the ESP32 module's does),
+        # and a part beside it would land on its copper.
+        try:
+            fp.BuildCourtyardCaches()
+        except Exception:                               # noqa: BLE001 - older KiCad
+            pass
+        x, y, w, h = extent(fp)
+        box = [x, y, x + w, y + h]
+        for pad in fp.Pads():
+            r = pad.GetBoundingBox()
+            box = [min(box[0], r.GetX() / MM - PAD_ROOM), min(box[1], r.GetY() / MM - PAD_ROOM),
+                   max(box[2], r.GetRight() / MM + PAD_ROOM), max(box[3], r.GetBottom() / MM + PAD_ROOM)]
+        return tuple(box)
+
+    taken = [box_of(fp) for fp in board.GetFootprints() if id(fp) not in new]
+    out = {}
+    for fp in fps:
+        ref = fp.GetReference()
+        spots: dict[str, list] = {}
+        for other in board.GetFootprints():
+            if id(other) in new and not out.get(other.GetReference()):
+                continue
+            for pad in other.Pads():
+                name = pad.GetNetname()
+                if name:
+                    p = pad.GetPosition()
+                    spots.setdefault(name, []).append((p.x / MM, p.y / MM))
+        shapes, aims = [], {}
+        for rot in (0, 90):
+            fp.SetOrientationDegrees(rot)
+            fp.SetPosition(at(0, 0))
+            pads = {}
+            for pad in fp.Pads():
+                if pad.GetNumber():
+                    q = pad.GetPosition()
+                    pads.setdefault(pad.GetNumber(), (q.x / MM, q.y / MM))
+                    name = where.get((ref, pad.GetNumber()))
+                    if name and spots.get(name):
+                        w = 0.2 if size.get(name, 0) > WIDE_NET else 1.0
+                        aims[pad.GetNumber()] = [(x, y, w) for x, y in spots[name]]
+            shapes.append((rot, box_of(fp), pads))
+        got = free_spot(shapes, taken, bounds, aims, inside=inside)
+        if got is None:
+            out[ref] = None
+            continue
+        x, y, rot = got
+        fp.SetOrientationDegrees(rot)
+        fp.SetPosition(at(x, y))
+        taken.append(box_of(fp))
+        out[ref] = [x, y, rot]
+    return out
+
+
 def main() -> int:
     plan = json.load(sys.stdin)
     if plan.get("hold"):
@@ -1207,7 +1350,7 @@ def main_held(plan) -> int:
              for net in plan.get("nets", [])
              for n in net.get("nodes", []) if net.get("name")}
     held = plan["hold"]
-    placed, missing, off, unheld, by_centre = 0, [], {}, [], []
+    placed, missing, off, unheld, by_centre, fresh = 0, [], {}, [], [], []
     for comp in plan.get("components", []):
         path = Path(comp["footprint"])
         fp = pcbnew.FootprintLoad(str(path.parent), path.stem)
@@ -1219,7 +1362,9 @@ def main_held(plan) -> int:
             fp.SetValue(str(comp["value"]))
         want = held["parts"].get(comp.get("ref"))
         if want is None:
+            # Not in the import: a part a note added. Placed after the rest.
             unheld.append(comp.get("ref"))
+            fresh.append(fp)
             fp.SetPosition(at(0, 0))
         else:
             got = hold(fp, want)
@@ -1245,6 +1390,9 @@ def main_held(plan) -> int:
     holes = free_holes(board, held.get("holes"), held.get("parts"))
     x0, y0, x1, y1 = draw_edges(board, held["outline"])
     edge_rule(board, plan)
+    inset = float(plan.get("min_edge") or 0.5) + 0.25
+    placed_new = place_new(board, fresh, where, (x0 + inset, y0 + inset, x1 - inset, y1 - inset)) \
+        if fresh else {}
     nudged = label(board, plan.get("gap", 0.8), (x0, y0, x1, y1))
     escaped = keep_inside(board, x0, y0, x1, y1)
     out = plan.get("out", "/work/board.kicad_pcb")
@@ -1263,6 +1411,9 @@ def main_held(plan) -> int:
                # Parts with too few numbered pads to fit, put by centre and angle.
                "held_by_centre": by_centre,
                "not_held": unheld, "attempts_available": 1,
+               # Parts the import did not have, and where they went: [x, y, rot]
+               # on KiCad's page, or None when the board had no room for one.
+               "placed_new": placed_new,
                "size_mm": [round(x1 - x0, 2), round(y1 - y0, 2)],
                "texts_beside": nudged, "texts_moved_in": escaped,
                "holes": holes,

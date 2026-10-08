@@ -893,13 +893,20 @@ def _pad_order(pad: str):
 
 # ---------------- the proof ----------------
 
-def equivalence(imported: dict, built: dict) -> dict:
+def equivalence(imported: dict, built: dict, changes: list[dict] | None = None) -> dict:
     """Is the built netlist the imported one?
 
     Same parts, and the same connections: each netlist is read as groups
     of (ref, pad) pairs - one group per net of two pads or more - and the
     groups must be identical. Net names are compared too, but a renamed
     net is reported, not counted as a difference: the circuit is the pads.
+
+    `changes` are the board's changes made on purpose (`convert.changes`,
+    PUT /api/boards/{id}/changes): each {"nets": [...], "parts": [...],
+    "why": "..."}. A difference that touches one of those nets (by its name
+    in either netlist) or parts is still a difference - `equivalent` stays
+    False - but it is marked `intended` with the reason, and `explained`
+    says whether every difference is one of those.
     """
     def groups(g):
         out = {}
@@ -931,10 +938,32 @@ def equivalence(imported: dict, built: dict) -> dict:
                             "imported_as": came})
     renamed = sorted(f"{a[k]} -> {b[k]}" for k in a if k in b and a[k] != b[k])
     same = not only_a and not only_b and a_parts == b_parts
+    missing, extra = sorted(a_parts - b_parts), sorted(b_parts - a_parts)
+    why_net: dict[str, str] = {}
+    why_part: dict[str, str] = {}
+    for ch in changes or []:
+        why = str(ch.get("why") or "changed on purpose")
+        for n in ch.get("nets") or []:
+            why_net.setdefault(str(n), why)
+        for r in ch.get("parts") or []:
+            why_part.setdefault(str(r), why)
+    for d in differences:
+        names = [d.get("net") or d.get("built_net"), *d.get("built_as", []), *d.get("imported_as", [])]
+        refs = [p.split(".")[0] for p in d["pads"]]
+        why = next((why_net[n] for n in names if n in why_net), None) \
+            or next((why_part[r] for r in refs if r in why_part), None)
+        if why:
+            d["intended"] = why
+    intended = sum(1 for d in differences if d.get("intended"))
+    explained = (not same and intended == len(differences)
+                 and all(r in why_part for r in missing + extra))
     return {
         "equivalent": same,
+        "explained": explained,
+        "intended": intended,
         "parts": {"imported": len(a_parts), "built": len(b_parts),
-                  "missing": sorted(a_parts - b_parts), "extra": sorted(b_parts - a_parts)},
+                  "missing": missing, "extra": extra,
+                  "intended": sorted(r for r in missing + extra if r in why_part)},
         "nets": {"imported": len(a), "built": len(b), "same": len(set(a) & set(b)),
                  "only_imported": len(only_a), "only_built": len(only_b)},
         "pads_joined": {"imported": sum(len(k) for k in a), "built": sum(len(k) for k in b)},
@@ -1303,6 +1332,6 @@ async def check(db, bid: str) -> dict | None:
         b = json.loads(await store.get_artifact(db, bid, "graph", BOARDS))
     except KeyError:
         return None
-    eq = equivalence(a, b)
+    eq = equivalence(a, b, doc["convert"].get("changes"))
     await db[BOARDS].update_one({"_id": bid}, {"$set": {"convert.equivalence": eq}})
     return eq

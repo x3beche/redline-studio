@@ -385,3 +385,34 @@ def test_legs_numbered_alike_are_joined_only_where_the_import_joins_them(monkeyp
         assert "~ pin 4" not in block and "left unconnected" in block
         assert "SW1.4" in info["open_pins"]
         assert ".p4 ~" not in source
+
+
+def test_a_change_made_on_purpose_is_marked_not_hidden():
+    graph, _ = board()
+    built = json.loads(json.dumps(graph))
+    built["nets"][2]["nodes"][0]["pin"] = "4"    # U1.4 on OUT+ instead of U1.3
+    built["nets"][0]["nodes"] = [n for n in built["nets"][0]["nodes"] if n["pin"] != "4"]
+    eq = convert.equivalence(graph, built, [{"nets": ["OUT+"], "parts": [], "why": "fix"}])
+    assert not eq["equivalent"]                  # still a difference
+    marked = [d for d in eq["differences"] if d.get("intended")]
+    assert marked and all(d["intended"] == "fix" for d in marked)
+    # GND changed too and nobody said so: not explained.
+    assert not eq["explained"] and eq["intended"] < len(eq["differences"])
+    eq = convert.equivalence(graph, built, [{"nets": ["OUT+", "GND"], "why": "fix"}])
+    assert eq["explained"] and eq["intended"] == len(eq["differences"])
+
+
+def test_a_part_added_on_purpose_is_explained_only_when_named():
+    graph, _ = board()
+    built = json.loads(json.dumps(graph))
+    built["components"].append({"ref": "R99", "value": "100k"})
+    eq = convert.equivalence(graph, built)
+    assert not eq["equivalent"] and not eq["explained"] and eq["parts"]["extra"] == ["R99"]
+    eq = convert.equivalence(graph, built, [{"parts": ["R99"], "why": "battery divider"}])
+    assert eq["explained"] and eq["parts"]["intended"] == ["R99"]
+
+
+def test_no_changes_said_leaves_the_comparison_as_it_was():
+    graph, _ = board()
+    eq = convert.equivalence(graph, json.loads(json.dumps(graph)))
+    assert eq["equivalent"] and not eq["explained"] and eq["intended"] == 0

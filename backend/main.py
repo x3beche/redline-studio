@@ -1696,6 +1696,41 @@ async def hold_board(bid: str, body: HoldIn):
     return {"board": bid, "placement": body.placement}
 
 
+class ChangesIn(BaseModel):
+    nets: list[str] = []
+    parts: list[str] = []
+    why: str = ""
+    clear: bool = False
+
+
+@app.put("/api/boards/{bid}/changes")
+async def board_changes(bid: str, body: ChangesIn):
+    """Say that a converted board differs from its import on purpose: these
+    nets (by name, in either netlist) and parts were changed by a note, for
+    this reason. The comparison still lists every difference; these are
+    marked as meant, so Board health does not call the board broken for
+    them. `clear`: forget every change said so far (before adding these)."""
+    nets = [n.strip() for n in body.nets if n.strip()]
+    parts = [p.strip() for p in body.parts if p.strip()]
+    if not body.clear and not (nets or parts):
+        raise HTTPException(400, "name the nets or parts that were changed")
+    if (nets or parts) and not body.why.strip():
+        raise HTTPException(400, "say why (why): it is what the person reads")
+    doc = await db()[ato.BOARDS].find_one({"_id": bid}, {"convert": 1})
+    if not (doc or {}).get("convert"):
+        raise HTTPException(404, f"{bid} was not converted from an import")
+    changes = [] if body.clear else list(doc["convert"].get("changes") or [])
+    if nets or parts:
+        changes.append({"nets": nets, "parts": parts, "why": body.why.strip()[:500],
+                        "by": actors.current(), "at": store.now()})
+    await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": {"convert.changes": changes}})
+    eq = await convert.check(db(), bid)
+    await say(f"{bid}: " + (f"changed on purpose - {', '.join(nets + parts)}: {body.why.strip()[:160]}"
+                            if nets or parts else "changes on purpose forgotten"),
+              "info", room="pcb")
+    return {"board": bid, "changes": changes, "equivalence": eq}
+
+
 @app.get("/api/boards/{bid}/board.glb")
 async def board_model(bid: str):
     try:

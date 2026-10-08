@@ -639,7 +639,7 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                                  # to where the import had it.
                                  **{k: placed[k] for k in ("held", "held_worst_mm",
                                                            "held_off", "held_by_centre",
-                                                           "holes")
+                                                           "holes", "placed_new")
                                     if k in placed}},
                       "route": routed, "drc": drc_report}})
         return {"board": board_id, "svg_bytes": len(svg),

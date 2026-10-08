@@ -25,8 +25,9 @@ interface Issue {
   n: number;
   hint: string;
   where: Where[];
-  /** In the accepted fold: from the original design, or cosmetic. */
-  from?: 'original' | 'cosmetic';
+  /** In the accepted fold: from the original design, changed on purpose
+   *  by a note (a converted board), or cosmetic. */
+  from?: 'original' | 'changed' | 'cosmetic';
 }
 
 interface Check {
@@ -49,8 +50,10 @@ type Board = BoardEntry & {
   route?: (NonNullable<BoardEntry['route']> & { edge_exempt?: string[] }) | null;
   drc?: (NonNullable<BoardEntry['drc']> & { edge_exempt?: string[] }) | null;
   convert?: (NonNullable<BoardEntry['convert']> & {
-    equivalence?: { renamed?: string[];
-                    differences?: { net?: string; built_net?: string; pads: string[] }[] };
+    equivalence?: { renamed?: string[]; explained?: boolean; intended?: number;
+                    parts: { intended?: string[] };
+                    differences?: { net?: string; built_net?: string; pads: string[];
+                                    intended?: string }[] };
   }) | null;
 };
 
@@ -471,27 +474,53 @@ export class BoardHealth {
         issues.push({ what: 'Parts missing from the build', n: eq.parts.missing.length,
                       where: eq.parts.missing.slice(0, 10).map(x => ({ label: x })), hint: 'Convert again.' });
       }
-      if (eq?.parts.extra.length) {
-        issues.push({ what: 'Parts not in the original', n: eq.parts.extra.length,
-                      where: eq.parts.extra.slice(0, 10).map(x => ({ label: x })), hint: 'Remove them, or convert again.' });
+      // Parts and nets a note changed on purpose (PUT .../changes): still
+      // listed, under "Changed on purpose", not as faults.
+      const meant = new Set(eq?.parts.intended ?? []);
+      const added = (eq?.parts.extra ?? []).filter(x => meant.has(x));
+      const extra = (eq?.parts.extra ?? []).filter(x => !meant.has(x));
+      if (added.length) {
+        accepted.push({ what: 'Parts added on purpose', n: added.length, from: 'changed',
+                        where: added.slice(0, 10).map(x => ({ label: x })), hint: '' });
       }
-      for (const df of (eq?.differences ?? []).slice(0, 6)) {
+      if (extra.length) {
+        issues.push({ what: 'Parts not in the original', n: extra.length,
+                      where: extra.slice(0, 10).map(x => ({ label: x })), hint: 'Remove them, or convert again.' });
+      }
+      const diffs = eq?.differences ?? [];
+      for (const df of diffs.filter(d => d.intended).slice(0, 12)) {
+        const net = df.net ?? df.built_net ?? '';
+        accepted.push({ what: df.net ? 'Net joined differently' : 'Net not in the original', n: 1,
+                        from: 'changed', hint: df.intended!,
+                        where: [{ label: net, net: true }, ...df.pads.slice(0, 4).map(p => ({ label: p }))] });
+      }
+      for (const df of diffs.filter(d => !d.intended).slice(0, 6)) {
         const net = df.net ?? df.built_net ?? '';
         issues.push({ what: df.net ? 'Net joined differently' : 'Net not in the original', n: 1,
                       where: [{ label: net, net: true }, ...df.pads.slice(0, 4).map(p => ({ label: p }))],
                       hint: 'Check the source against the import.' });
       }
+      // A finding of the conversion on a net a note has since changed on
+      // purpose is that note's to answer, not the original's any more.
+      const changedNets = new Set(diffs.filter(d => d.intended)
+        .flatMap(d => [d.net, d.built_net]).filter((n): n is string => !!n));
       for (const f of cv.findings ?? []) {
         const net = /net (\S+)/.exec(f)?.[1];
+        if (net && changedNets.has(net)) continue;
         accepted.push({ what: 'Unusual net, kept as imported', n: 1, from: 'original',
                         where: net ? [{ label: net, net: true }] : [], hint: '' });
       }
-      const bad = !eq?.equivalent || !!cv.unresolved?.length;
+      const meantOnly = !eq?.equivalent && !!eq?.explained;
+      const bad = !(eq?.equivalent || meantOnly) || !!cv.unresolved?.length;
       checks.push({
         id: 'same', title: 'Matches the original', issues,
         tone: bad ? 'error' : 'ok',
-        status: bad ? t('differs') : `${eq!.nets.same}/${eq!.nets.imported} ${t('nets')}`,
+        status: bad ? t('differs')
+          : meantOnly ? `${eq!.nets.same}/${eq!.nets.imported} ${t('nets')} · ${eq!.intended} ${t('changed')}`
+          : `${eq!.nets.same}/${eq!.nets.imported} ${t('nets')}`,
         line: bad ? 'Not the same circuit as the import.'
+          : meantOnly ? (held ? 'The import\'s circuit and layout, plus changes made on purpose.'
+                              : 'The import\'s circuit, plus changes made on purpose.')
           : held ? 'Same circuit and layout as the import.'
           : 'Same circuit as the import.',
       });
@@ -533,7 +562,8 @@ export class BoardHealth {
   accepted = computed(() => this.sorted().accepted);
   acceptedGroups = computed(() => [
     { title: 'From the original design', items: this.accepted().filter(i => i.from === 'original') },
-    { title: 'Cosmetic, not the design', items: this.accepted().filter(i => i.from !== 'original') },
+    { title: 'Changed on purpose', items: this.accepted().filter(i => i.from === 'changed') },
+    { title: 'Cosmetic, not the design', items: this.accepted().filter(i => i.from === 'cosmetic' || !i.from) },
   ].filter(g => g.items.length));
 
   verdict = computed(() => {
