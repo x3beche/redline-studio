@@ -107,7 +107,13 @@ def connect():
     uri = os.getenv("MONGODB_URI", "").strip()
     if not uri:
         sys.exit("MONGODB_URI is not set (.env)")
-    return AsyncIOMotorClient(uri)[os.getenv("MONGODB_DB", "redline")]
+    # Direct, but still one account's space - the owner's ("default") unless
+    # REDLINE_WORKSPACE says otherwise - so this agent never sees, queues or
+    # works on another account's notes (backend/scope.py).
+    from backend import scope
+    ws = os.getenv("REDLINE_WORKSPACE", "").strip() or scope.DEFAULT
+    scope.WORKSPACE.set(ws)
+    return scope.ScopedDb(AsyncIOMotorClient(uri)[os.getenv("MONGODB_DB", "redline")], ws)
 
 
 async def cmd_queue(args):
