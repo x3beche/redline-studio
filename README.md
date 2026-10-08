@@ -1,246 +1,131 @@
-<div align="center">
+<p align="center">
+  <img src="docs/readme/hero.png" width="100%" alt="Redline Studio: design hardware with an AI team">
+</p>
 
-# Redline
+<h3 align="center">Draw it. Say it. Your AI team builds it.</h3>
 
-**One place to design hardware with agents: parametric 3D and circuit
-boards.** Freeze a view, draw on it, leave a note - an
-agent picks it up, changes the source, rebuilds, and shows you what changed.
-All project data lives in MongoDB.
+<p align="center">
+  3D parts, circuit boards and the firmware that runs on them, in one place.<br>
+  Draw on what you see, say what you want in a sentence, and watch it get built.<br>
+  On your own machine, with your own keys.
+</p>
 
-[Install](INSTALL.md) · [Usage](USAGE.md) · [Tools](TOOLS.md) · [Accounts](docs/ACCOUNTS.md) · [For language models](AGENTS.md)
+<br>
 
-</div>
+<h2 align="center">Circle it, say it, and it gets done.</h2>
 
-![user interface](docs/screenshot.png)
+<p align="center">Stop the model at any angle, mark the spot with the red pen and write one sentence. An agent changes the design, rebuilds it and shows you the result from the very same camera.</p>
 
-## What it solves
+<p align="center">
+  <img src="docs/readme/card-pen.png" width="100%" alt="The pen: draw, leave a note, an agent works, see before and after">
+</p>
 
-Talking about a CAD revision is awkward. "Tilt the fan the other way" — which
-way, by how much, and from which viewpoint? Words alone lose the thing you
-were looking at.
+<h2 align="center">Parametric parts, and every way to look at them.</h2>
 
-This tool makes the conversation concrete. You orbit the model, freeze the
-angle you want, mark it with a pen and type the note. What gets stored is the
-note **together with** the marked-up image, the camera, the parts that were
-visible and the model name.
+<p align="center">Every part is described by its dimensions, so a change is a number, not a redraw. Parts you make and parts you buy come together in one assembly you can turn, cut open and inspect.</p>
 
-### A worked example
+<p align="center">
+  <img src="docs/readme/card-3d.png" width="100%" alt="3D drawing: studio and zebra views, the assembly tree, clip planes, bought parts">
+</p>
 
-Someone wanted the fan to lean the other way. They froze the view, drew a red
-line along the tilt it had and a blue line along the tilt it should have, and
-wrote one sentence:
+<h2 align="center">Change one part. Everything that uses it follows.</h2>
 
-> The fan should not be like the red line, it should be slanted like the blue
-> line; update the connector etc. accordingly.
+<p align="center">Edit the enclosure, and the lid, the buttons and the whole assembly rebuild on their own, in the right order, each one telling you why.</p>
 
-| What was drawn | What came back |
-|---|---|
-| ![the revision drawing: a red line and a blue line across the fan](docs/example-drawing.png) | ![the same model after the change, seen from the side](docs/example-after.png) |
+<p align="center">
+  <img src="docs/readme/card-linked.png" width="100%" alt="Linked parts: a change travels to everything that uses it">
+</p>
 
-The lines were measured off the image in pixels and projected back through the
-stored camera: the red one matched the module's existing +18°, the blue one the
-same angle mirrored. One constant changed:
+<h2 align="center">From a sentence to a board you can order.</h2>
 
-```python
-TILT = -18.0        # + : top toward the front, - : top toward the back
-```
+<p align="center">Describe a circuit or bring one you already have. Real parts with stock and price, placed and routed for you, then checked until the answer is simple: ready to order.</p>
 
-"Update the connector etc. accordingly" turned out to be the interesting half.
-The plug was drawn where the socket sits on an **upright** fan, and the
-assembly then tilted the fan without moving the plug — so at any tilt but
-zero, the plug was hanging in mid-air. Now it rides the same rotation, and a
-check in the assembly says so out loud:
+<p align="center">
+  <img src="docs/readme/card-board.png" width="100%" alt="PCB design: placed and routed, board health, real parts, one sheet per chip">
+</p>
 
-```
-fis <-> soket  : plug-shroud 0.00, plug-pins 0.00, plug-body 0.00 mm^3
-               : cavity wall 14.3 mm^3  (must be > 0: the plug really is in the socket)
-```
+<p align="center">
+  <img src="docs/readme/shot-pcb-board.png" width="49%" alt="A routed board with Board health saying Ready to order">
+  <img src="docs/readme/shot-pcb-schematic.png" width="49%" alt="The schematic's microcontroller sheet">
+</p>
 
-Zero clash on its own means nothing — a plug 18 mm away in open air also
-clashes with nothing. The second line is the one that matters: a probe the
-size of the socket cavity, grown slightly, has to *hit* the shroud around it.
+<h2 align="center">The code knows the board it runs on.</h2>
 
-## Five rooms, one loop
+<p align="center">Firmware starts from the board's own schematic, so every pin already has its name. It builds in a sandbox, and you put it on the chip from your browser, over USB.</p>
 
-The loop under this is not about geometry. Source lives in a database as
-text you can change a constant in; it is built into something you can look
-at; you freeze a view, mark it and leave a note; an agent picks the note
-up, edits the source, rebuilds, photographs it from the same angle and
-checks it against a measurement. A board fits that as well as a solid
-does.
+<p align="center">
+  <img src="docs/readme/card-firmware.png" width="100%" alt="Firmware: pins from the schematic, sandboxed builds, flashing from the browser, a serial monitor">
+</p>
 
-| | |
-|---|---|
-| **3D Drawing** | parametric solids in build123d - this is what is built |
-| **PCB Design** | atopile for the circuit, LCSC for the parts, KiCad in a container for the board |
-| **Notes** | what you jot down while working - Enter keeps it, Alt+N from anywhere |
-| **Tools** | 175 engineering calculators and sketch pads, most of them runnable by agents too |
-| **Analytics** | what all of it cost and used: LLM money and tokens, the machine and its energy, builds, storage, per project |
+<p align="center">
+  <img src="docs/readme/shot-firmware.png" width="49%" alt="The firmware room: the chip's pins next to its schematic sheet">
+  <img src="docs/readme/shot-firmware-code.png" width="49%" alt="Ready to flash: 0 errors, pins match the board, flash and RAM use">
+</p>
 
-The two design rooms share one layout - the 3D room's - so a board is
-looked at the way a model is.
+<p align="center">
+  <img src="docs/readme/shot-firmware-flash.png" width="70%" alt="Flashing the board from the browser">
+</p>
 
-![A board in the PCB room: atopile for the circuit, KiCad for the board](docs/pcb-room.png)
+<h2 align="center">A team that works in parallel, and shows its work.</h2>
 
-The board room takes a circuit written as text, fetches each part from
-LCSC by its number — footprint and 3D model together — and has KiCad
-place and draw it inside a container, so a gigabyte of libraries never
-lands on the machine. Out come a layer render, a model and a BOM.
+<p align="center">A lead agent hands each note to the specialist for its room. You see every step as it happens, answer its questions on screen or from your phone, and decide what gets applied.</p>
 
-## Who does the work
+<p align="center">
+  <img src="docs/readme/card-agents.png" width="100%" alt="The agent team: parallel rooms, live progress, questions, Telegram, review, usage">
+</p>
 
-One main agent watches the queue and the thread, and hands each note to
-an agent for its room - 3D or board - which applies it, checks it and
-closes it. Rooms work in parallel, each with its own run and its own log;
-KiCad and the drawings run in Docker, so nothing a project needs is
-installed on the machine itself.
-The queue is also an MCP server (`.mcp.json`), for any agent that
-speaks it. [AGENTS.md](AGENTS.md) has the details.
+<h2 align="center">Talk it through. Then hand it over.</h2>
 
-## Everything in one box
+<p align="center">A private chat with the model of your choice that knows your project. When an idea is ready, it becomes a note for the team in one click.</p>
 
-**Ctrl+K**, anywhere: every model, board and tool by name, the room's
-actions (show the code, release, technical drawing, build the board, a new
-note, a theme), and, as you type, code lines (opened at that line), notes,
-chats, revisions and parts.
+<p align="center">
+  <img src="docs/readme/card-chat.png" width="100%" alt="Chat: mentions, model choice, thinking and speed, tasks to the queue">
+</p>
 
-![Ctrl+K: models, tools and code lines for "stand"](docs/palette.png)
+<p align="center">
+  <img src="docs/readme/shot-chat.png" width="80%" alt="A chat with a thinking answer and its tokens per second">
+</p>
 
-## The code, as an IDE
+<h2 align="center">Everything else your project needs, in one drive.</h2>
 
-The `</>` button beside the pen opens the source behind the view in VS
-Code's editor (Monaco): the project's files on the left with the ones the
-open file imports marked, a tab per file, Ctrl+click on an import to open
-it, search, folding, the minimap. Editors can change it and save
-(Ctrl+S); if an agent saved in between, nothing is written over - you are
-asked.
+<p align="center">Datasheets, BOMs, photos and supplier models, kept in folders and opened right where they are. Hand a file to an agent, or turn a 3D file into a part of your design.</p>
 
-![The station assembly in the code view: its project on the left, its imports marked](docs/code-view.png)
+<p align="center">
+  <img src="docs/readme/card-files.png" width="100%" alt="Files: folders, previews, add to project, send to an agent">
+</p>
 
-## What a note changed
+<h2 align="center">The rest of the workshop, already in the box.</h2>
 
-When an agent works a note, every source in the project is kept as it was
-before and after. The note's card then says `+12 −3`, and opens each
-changed file side by side - and the picture it was drawn on against the one
-taken after: side by side, with a slider, or with the changed pixels
-painted in.
+<p align="center">221 engineering tools, a command bar for everything, notes, drawings and releases, 28 themes and a clear view of what the work used.</p>
 
-![A note's changes: the file before and after, side by side](docs/changes.png)
+<p align="center">
+  <img src="docs/readme/card-more.png" width="100%" alt="Tools, Ctrl+K, themes, notes, drawings, code view, CAD import, analytics, languages">
+</p>
 
-## Releases for manufacturing
+<p align="center">
+  <img src="docs/readme/shot-tools.png" width="49%" alt="Basic Tools: an I2C pull-up calculator with its live bus drawing">
+  <img src="docs/readme/shot-palette.png" width="49%" alt="Ctrl+K finds models, tools and lines of code">
+</p>
 
-One press packs a project as it stands into a zip kept under a tag
-(`v1.0`, `v1.1`...), never overwritten, to download exactly as it was:
-each board's **Gerbers and drill files**, **BOM and pick-and-place in
-JLCPCB's columns**, a **BOM priced from LCSC** (price, stock, Basic or
-Extended, the cost of a board), schematic and assembly PDFs, STEP and its
-DRC/ERC; each model's **STEP, STL and a dimensioned technical drawing**;
-and every source as it was. KiCad and the drawings run in their own
-containers.
+<p align="center">
+  <img src="docs/readme/shot-themes.png" width="49%" alt="28 themes, and your own">
+  <img src="docs/readme/shot-analytics.png" width="49%" alt="Analytics: load, power, energy per day and compute by job">
+</p>
 
-<img src="docs/technical-drawing.png" alt="A technical drawing made from a model: three views, an isometric, overall sizes, a title block" width="720">
+<h2 align="center">Runs on your machine. Stays on your machine.</h2>
 
-## Notes that take no time
+<p align="center">Self-hosted from end to end. Your designs, conversations and API keys live on your own server, and you decide who gets in and what every agent may do.</p>
 
-Type and press Enter: the first line is the title, `#tags` file it,
-`@controller` points at a board, `- [ ]` lines are boxes to tick. **Alt+N**
-opens a small box over any room and keeps the note with the room and the
-model or board that was open. A note can be handed to a room's agent as a
-message.
+<p align="center">
+  <img src="docs/readme/card-privacy.png" width="100%" alt="Self-hosted: your data, private accounts, agent tokens, budgets">
+</p>
 
-![The Notes room: search, tags, to-dos, a note with its boxes ticked](docs/notes.png)
+<h2 align="center">What you get</h2>
 
-## Themes, languages, shortcuts
+<p align="center">
+  <img src="docs/readme/card-summary.png" width="100%" alt="Everything in Redline Studio at a glance">
+</p>
 
-Twenty-six themes over the whole window - the 3D backdrop and the code
-editor included: Redline's own, Light, OLED black, GitHub, Atom One Dark,
-One Dark Pro, VS Code, Dracula, Tokyo Night, Catppuccin, Nord, Monokai,
-Gruvbox, Solarized, Material Palenight, Night Owl, Ayu, Rosé Pine,
-Kanagawa, Synthwave '84 and High Contrast. On a light theme the boards are
-drawn on white too. The interface speaks English or Türkçe; **?** shows
-the keyboard shortcuts.
+<br>
 
-![Every theme on the same model](docs/themes.png)
-
-## People and roles
-
-Local mode needs no sign-in. Switched on, it has accounts with a system
-role - the owner (the first account), admins and users - an admin panel
-where the owner and the admins add, edit, disable and reset accounts, a
-private space for every account (nobody sees another's data), and agent
-tokens so an agent works through the API without the database password. Every delete and
-change of state is in an audit trail. [docs/ACCOUNTS.md](docs/ACCOUNTS.md)
-says how to run it and how to get back in.
-
-## How it goes
-
-1. **Write a model.** Python and [build123d](https://github.com/gumyr/build123d);
-   parametric, so a dimension is a constant rather than a drawing.
-2. **Build it.** OpenCascade runs on the server, the tessellated result goes
-   into the database.
-3. **Look at it.** The same viewer the OCP VS Code extension uses, in a browser
-   tab.
-4. **Freeze and draw.** Seven tools: freehand, line, arrow, rectangle, ellipse,
-   triangle and text. Text lands where you click, so you can see what you are
-   labelling.
-5. **Queue it.** Until you press *queue* the note is a draft and `GET /api/queue`
-   returns nothing — a teammate or a language model only ever sees what you
-   have approved.
-
-A note about a part is a revision on its own; the drawing is optional.
-
-## What a revision cost
-
-Every card carries its own bill, from two different meters that are never
-added together:
-
-<img src="docs/analytics.png" alt="the analytics panel on a revision card" width="300">
-
-**The models.** Tokens, money at list price, calls, output per second and a
-rate chart, split by model, by provider and by what the spend went on —
-design, builds, the progress notes, the card's own one-line summary. The
-figures come from the agent's own transcripts, counted once per request.
-
-**The machine.** CPU, peak memory and energy for every build and render the
-revision needed, measured by the kernel rather than guessed. What the whole
-machine burned over the same window is reported separately, with our share of
-it as a percentage — a build is not the only thing a computer does.
-
-Energy is the one estimate, and it says so: Intel's RAPL counter is root-only
-on modern kernels, so core-seconds times an assumed per-core wattage is the
-honest substitute.
-
-## Stack
-
-| Layer | Technology |
-|---|---|
-| Model | Python 3.12 + [build123d](https://github.com/gumyr/build123d) (OpenCascade) |
-| Tessellation | `ocp_vscode` / `ocp-viewer-core` |
-| Viewer | [three-cad-viewer](https://github.com/bernhard-42/three-cad-viewer) 5.0.6 — the very viewer the VS Code extension uses |
-| Frontend | Angular 20 + Tailwind CSS 4, themeable down to the last colour; Monaco for code |
-| Service | FastAPI + Uvicorn |
-| Data | MongoDB + GridFS |
-| Boards | atopile, KiCad 9 and Freerouting in a container |
-| Everything heavy | Docker: KiCad, the drawings, the tools' checks - limited to a share of the machine |
-
-Models can be built from other models, so an assembly is just a module that
-imports its parts and positions them. The fit is then checked in code rather
-than by eye — the assembly below reports its own pivot alignment, engagement
-length and clash volumes on every build:
-
-![a fan module on its base, tilted on the yoke](docs/assembly.png)
-
-## Where to next
-
-| | |
-|---|---|
-| **[INSTALL.md](INSTALL.md)** | requirements, `.env`, first run, the production build, what to do when WebGL will not start |
-| **[USAGE.md](USAGE.md)** | day-to-day use, the model contract, assemblies, importing CAD, the API, and the traps this codebase has already fallen into |
-| **[TOOLS.md](TOOLS.md)** | the Tools tab: what each calculator does, and how to add a tool |
-| **[AGENTS.md](AGENTS.md)** | the short version, written for a language model opening this repository |
-| **[docs/ACCOUNTS.md](docs/ACCOUNTS.md)** | sign-in, members and roles, agent tokens, a forgotten password, the office network |
-| **[docs/USERS-PLAN.md](docs/USERS-PLAN.md)** | how the user system was built, phase by phase, and what was verified |
-
-## License
-
-MIT
+<p align="center"><sub>Setting it up: <a href="INSTALL.md">Install</a> · <a href="USAGE.md">Usage</a> · <a href="AGENTS.md">For agents</a></sub></p>

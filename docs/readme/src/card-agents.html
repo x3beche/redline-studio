@@ -1,0 +1,108 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cards.css">
+<style>
+.lanes { width: 100%; }
+.lane { display: grid; grid-template-columns: 120px 1fr; align-items: center; gap: 12px; height: 46px; border-top: 1px solid var(--line); }
+.lane:first-child { border-top: 0; }
+.lane .who { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.lane .who svg { width: 15px; height: 15px; fill: none; stroke: var(--ink-dim); stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.track { position: relative; height: 20px; }
+.track .seg { position: absolute; top: 3px; height: 14px; border-radius: 3px; font: 500 10px/14px 'IBM Plex Mono', monospace; color: #0b0f0b; padding: 0 6px; white-space: nowrap; overflow: hidden; }
+.axis { display: grid; grid-template-columns: 120px 1fr; gap: 12px; margin-top: 6px; }
+.axis .ticks { display: flex; justify-content: space-between; font: 500 10px 'IBM Plex Mono', monospace; color: var(--ink-faint); }
+.grid-lines { position: absolute; inset: 0 0 0 132px; background-image: linear-gradient(to right, var(--line) 1px, transparent 1px); background-size: 25% 100%; opacity: .6; pointer-events: none; }
+.q { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 10px 11px; }
+.q .opt { margin-top: 6px; border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; font-size: 12px; display: flex; gap: 7px; align-items: center; }
+.q .opt i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--ink-dim); display: inline-block; flex: none; }
+.phone { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 10px; }
+.bubble { background: var(--hover); border-radius: 8px 8px 8px 2px; padding: 7px 9px; font-size: 12px; }
+.tbtn { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 6px; }
+.tbtn span { text-align: center; font-size: 11.5px; padding: 5px; border-radius: 5px; background: rgba(56,189,248,.12); color: var(--s6); }
+.stack { display: flex; height: 8px; border-radius: 2px; overflow: hidden; gap: 2px; }
+.legend { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; font-size: 12px; margin-top: 10px; align-items: center; }
+.legend .num { text-align: right; }
+</style></head><body>
+<div class="page">
+  <div class="head">
+    <div class="eyebrow">Your AI team</div>
+    <h2>A team that works in parallel, and shows its work.</h2>
+    <p>A lead agent keeps the queue moving and hands each note to the specialist for its room. The 3D, board and firmware agents work side by side, and you can see every step, every question and what every job used.</p>
+  </div>
+  <div class="grid g3">
+    <div class="card wide span3">
+      <div class="txt" style="flex-basis:36%">
+        <div class="tile violet"><i data-i="users"></i></div>
+        <h3>One lead, one specialist per room</h3>
+        <div class="sub violet">Three rooms, working at once</div>
+        <p class="body">Notes queue up as you write them. Each room takes its own, one at a time, and finishes it end to end: change, rebuild, check, picture.</p>
+        <div class="viz-b row" style="gap:6px;flex-wrap:wrap"><span class="chip">queued 3</span><span class="chip blue">working 2</span><span class="chip ok">applied 57</span></div>
+      </div>
+      <div class="viz" style="position:relative;display:block">
+        <div class="grid-lines"></div>
+        <div class="lanes">
+          <div class="lane"><div class="who"><i data-i="bot"></i>Lead</div><div class="track">
+            <span class="seg" style="left:0;width:6%;background:#71717a"></span><span class="seg" style="left:31%;width:5%;background:#71717a"></span><span class="seg" style="left:62%;width:5%;background:#71717a"></span><span class="seg" style="left:92%;width:6%;background:#71717a"></span></div></div>
+          <div class="lane"><div class="who"><i data-i="box"></i>3D</div><div class="track">
+            <span class="seg" style="left:7%;width:40%;background:var(--s1);color:#fff">encoder pocket</span><span class="seg" style="left:50%;width:30%;background:var(--s1);color:#fff">M3 screws</span></div></div>
+          <div class="lane"><div class="who"><i data-i="board"></i>PCB</div><div class="track">
+            <span class="seg" style="left:37%;width:44%;background:var(--ok)">USB-C to the edge</span></div></div>
+          <div class="lane"><div class="who"><i data-i="chip"></i>Firmware</div><div class="track">
+            <span class="seg" style="left:68%;width:22%;background:var(--warn)">LED4 blink</span></div></div>
+        </div>
+        <div class="axis"><span></span><div class="ticks"><span>10:00</span><span>10:15</span><span>10:30</span><span>10:45</span><span>11:00</span></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tile blue"><i data-i="activity"></i></div>
+      <h3>Watch it work, live</h3><div class="sub blue">Progress, log and “working now”</div>
+      <p class="body">A progress bar and a plain log follow the job as it happens. You never have to read a terminal.</p>
+      <div class="viz-b">
+        <div class="row" style="justify-content:space-between"><span class="label">working now</span><span class="num" style="font-size:12px;color:var(--ink-dim)">16m 29s</span></div>
+        <div class="meter" style="margin-top:6px"><i style="width:62%;background:var(--s1)"></i></div>
+        <div class="log" style="margin-top:9px"><div><span class="t">10:25</span>base: rebuilding because board v4 changed</div><div><span class="t">10:26</span><span class="ok">rebuilt against board v4</span></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile warn"><i data-i="question"></i></div>
+      <h3>It asks when it should</h3><div class="sub warn">“Agent is asking”</div>
+      <p class="body">When a choice is yours, the question lands on your screen in plain words, translated to your language.</p>
+      <div class="viz-b"><div class="q">
+        <div style="font-size:12.5px"><b>Which wall thickness</b> should the lid use?</div>
+        <div class="opt"><i></i><b>2.0 mm</b>&nbsp;lighter</div>
+        <div class="opt" style="border-color:rgba(232,140,48,.5)"><i style="border-color:var(--warn);background:radial-gradient(var(--warn) 45%, transparent 50%)"></i><b>2.4 mm</b>&nbsp;stiffer</div>
+      </div></div>
+    </div>
+    <div class="card">
+      <div class="tile blue"><i data-i="send"></i></div>
+      <h3>From your phone</h3><div class="sub blue">Telegram, answer with one tap</div>
+      <p class="body">Questions arrive with answer buttons. Send a note, even a photo, from the workbench.</p>
+      <div class="viz-b phone">
+        <div class="bubble">The board is almost done. Retry the last wire automatically?</div>
+        <div class="tbtn"><span>Retry</span><span>Leave it</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile ok"><i data-i="check"></i></div>
+      <h3>You stay in charge</h3><div class="sub ok">Review, then apply</div>
+      <p class="body">Finished work waits for you. Compare before and after, read what changed in the files, then mark it applied.</p>
+      <div class="viz-b row" style="gap:6px;flex-wrap:wrap"><span class="chip">draft</span><span class="chip warn">queued</span><span class="chip blue">review</span><span class="chip ok">applied</span></div>
+    </div>
+    <div class="card">
+      <div class="tile violet"><i data-i="chart"></i></div>
+      <h3>What every job used</h3><div class="sub violet">Tokens, time and the machine</div>
+      <p class="body">Each note keeps its own bill: model tokens, minutes, CPU and energy, so nothing runs unseen.</p>
+      <div class="viz-b">
+        <div class="stack"><i style="flex:95;background:var(--s1)"></i><i style="flex:4;background:var(--ok)"></i><i style="flex:1;background:var(--warn)"></i></div>
+        <div class="legend"><span class="dot" style="background:var(--s1)"></span><span>design</span><span class="num">95%</span><span class="dot" style="background:var(--ok)"></span><span>builds</span><span class="num">4%</span><span class="dot" style="background:var(--warn)"></span><span>progress</span><span class="num">1%</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile"><i data-i="lang"></i></div>
+      <h3>Write in your language</h3><div class="sub blue">English or Türkçe, and more</div>
+      <p class="body">Notes in any language become clear requests. The app itself speaks English and Turkish.</p>
+      <div class="viz-b"><div class="row" style="gap:8px"><span class="label" style="width:64px">you wrote</span><span class="chip">Ekranı taşı ve eğ</span></div><div class="row" style="gap:8px;margin-top:6px"><span class="label" style="width:64px">the queue</span><span class="chip blue">Move and tilt the screen</span></div></div>
+    </div>
+  </div>
+</div>
+<script src="icons.js"></script>
+</body></html>

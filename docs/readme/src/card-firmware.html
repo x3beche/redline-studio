@@ -1,0 +1,90 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cards.css">
+<style>
+table.pins { border-collapse: collapse; width: 100%; font: 500 12px 'IBM Plex Mono', monospace; }
+table.pins th { text-align: left; font: 500 10.5px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-dim); padding: 0 10px 8px 0; border-bottom: 1px solid var(--line); }
+table.pins td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); color: var(--ink-dim); white-space: nowrap; }
+table.pins td.m { color: var(--code-type); }
+table.pins td.n { color: var(--ink); }
+table.pins tr.hl td { background: rgba(56,189,248,.06); }
+.flow { display: flex; align-items: center; gap: 12px; }
+.box { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 12px; }
+.serial { font: 500 11.5px/1.65 'IBM Plex Mono', monospace; color: var(--ink-dim); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; }
+.btns { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
+.btns span { font: 500 11px 'IBM Plex Mono', monospace; padding: 3px 8px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); background: var(--hover); }
+.sz { display: grid; grid-template-columns: 44px 1fr 48px; gap: 10px; align-items: center; font-size: 12px; margin-top: 8px; }
+.sz span:first-child { color: var(--ink-dim); }
+</style></head><body>
+<div class="page">
+  <div class="head">
+    <div class="eyebrow">Firmware</div>
+    <h2>The code knows the board it runs on.</h2>
+    <p>Firmware starts from the board’s own schematic. Every pin already has a name, the build runs in a safe sandbox, and you put it on the chip straight from your browser over USB.</p>
+  </div>
+  <div class="grid g4">
+    <div class="card wide span4">
+      <div class="txt">
+        <div class="tile blue"><i data-i="chip"></i></div>
+        <h3>Pins straight from the schematic</h3>
+        <div class="sub blue">Kept in sync when the board changes</div>
+        <p class="body">Which pin drives which LED, button or screen is read from the board, never retyped. Move a wire on the board and the firmware’s pin list follows by itself, so the code and the copper can’t disagree.</p>
+        <div class="viz-b row" style="gap:6px;flex-wrap:wrap">
+          <span class="chip blue">board v5 changed</span><span style="color:var(--ink-faint)">→</span><span class="chip">pins regenerated</span><span style="color:var(--ink-faint)">→</span><span class="chip ok">build 0 errors</span>
+        </div>
+      </div>
+      <div class="viz" style="align-items:stretch">
+        <div class="box" style="width:100%">
+          <div class="row" style="justify-content:space-between;margin-bottom:10px"><span class="label">U2 · ESP32-WROOM-32 · pins</span><span class="chip">from the schematic</span></div>
+          <table class="pins">
+            <tr><th>chip pin</th><th>gpio</th><th>net</th><th>name in code</th><th>parts</th></tr>
+            <tr class="hl"><td class="n">24</td><td>2</td><td class="n">LED4</td><td class="m">LED4</td><td>R20</td></tr>
+            <tr><td class="n">26</td><td>4</td><td class="n">ENC_S</td><td class="m">ENC_S</td><td>U1</td></tr>
+            <tr><td class="n">33</td><td>21</td><td class="n">L_SDA</td><td class="m">L_SDA</td><td>OLED · R13 · U6</td></tr>
+            <tr><td class="n">36</td><td>22</td><td class="n">L_SCL</td><td class="m">L_SCL</td><td>OLED · R12 · U6</td></tr>
+            <tr><td class="n">6</td><td>34</td><td class="n">VBAT_SENSE</td><td class="m">VBAT_SENSE</td><td style="color:var(--warn)">input only</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tile ok"><i data-i="terminal"></i></div>
+      <h3>Built in a sandbox</h3><div class="sub ok">0 errors · 0 warnings</div>
+      <p class="body">Every change is compiled before anyone calls it done, and you see how much of the chip it uses.</p>
+      <div class="viz-b">
+        <div class="sz"><span>flash</span><div class="meter"><i style="width:24.6%;background:var(--s1)"></i></div><span class="num">24.6%</span></div>
+        <div class="sz"><span>RAM</span><div class="meter"><i style="width:7%;background:var(--s4)"></i></div><span class="num">7.0%</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile warn"><i data-i="usb"></i></div>
+      <h3>Flash from the browser</h3><div class="sub warn">Plug in USB, press Flash</div>
+      <p class="body">No tools to install. Each file is written, verified and the board restarts by itself.</p>
+      <div class="viz-b">
+        <div class="row" style="justify-content:space-between;font-size:12px"><span class="label">writing firmware.bin</span><span class="num">68%</span></div>
+        <div class="meter" style="margin-top:6px"><i style="width:68%;background:var(--warn)"></i></div>
+        <div class="row" style="margin-top:8px;gap:6px"><span class="chip ok">bootloader ✓</span><span class="chip ok">partitions ✓</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile violet"><i data-i="activity"></i></div>
+      <h3>A serial monitor built in</h3><div class="sub violet">Its commands are buttons</div>
+      <p class="body">Watch the board talk back and poke it with one click, right next to the code.</p>
+      <div class="viz-b">
+        <div class="serial"><div style="color:var(--ink-faint)">115200 baud · connected</div><div>&gt; status<span style="display:inline-block;width:7px;height:13px;background:var(--ink-dim);margin-left:4px;vertical-align:-2px"></span></div></div>
+        <div class="btns"><span>status</span><span>fan on</span><span>fan off</span><span>leds test</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile pen"><i data-i="pen"></i></div>
+      <h3>Notes on a pin or a line</h3><div class="sub pen">The agent writes the change</div>
+      <p class="body">Point at a pin or select code and say what it should do. You get the diff and the build result back.</p>
+      <div class="viz-b log" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px">
+        <div><span style="color:var(--ink-faint)">src/input.cpp</span></div>
+        <div style="color:var(--danger)">- toggle(LED4);</div>
+        <div style="color:var(--ok)">+ blink(LED4, 2);</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="icons.js"></script>
+</body></html>

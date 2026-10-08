@@ -1,0 +1,79 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cards.css">
+<style>
+.models div { display: flex; align-items: center; gap: 8px; padding: 6px 9px; font-size: 12.5px; border-top: 1px solid var(--line); }
+.models div:first-child { border-top: 0; }
+.models div.on { background: var(--hover); }
+.models .tag { margin-left: auto; font: 500 10.5px 'IBM Plex Mono', monospace; color: var(--ink-dim); }
+.box { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; }
+.math { font-family: 'Latin Modern Math', 'STIX Two Math', 'Cambria Math', Georgia, serif; font-size: 22px; text-align: center; padding: 14px 0 6px; font-style: italic; letter-spacing: .01em; }
+.math sup { font-size: 13px; }
+.spark { display: flex; align-items: flex-end; gap: 3px; height: 34px; }
+.spark i { flex: 1; background: var(--ok); border-radius: 1px; opacity: .85; }
+.mention { color: var(--s6); background: rgba(56,189,248,.10); border-radius: 3px; padding: 0 3px; }
+.task { border: 1px solid var(--line); border-left: 2px solid var(--pen); border-radius: 6px; background: var(--surface); padding: 9px 11px; font-size: 12.5px; }
+.btn { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 4px; background: var(--ink); color: var(--surface); font-size: 12px; font-weight: 500; }
+.chatline { display: flex; gap: 10px; align-items: flex-start; }
+.av { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font: 600 11px 'IBM Plex Mono', monospace; color: var(--ink-dim); flex: none; }
+.think { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12.5px; color: var(--ink-dim); background: var(--surface); }
+</style></head><body>
+<div class="page">
+  <div class="head">
+    <div class="eyebrow">Chat</div>
+    <h2>Talk it through. Then hand it over.</h2>
+    <p>A private chat with the model of your choice, that knows your project. Ask, think out loud, work out the numbers, and when an idea is ready it becomes a note for the team in one click.</p>
+  </div>
+  <div class="grid g3">
+    <div class="card wide span3">
+      <div class="txt" style="flex-basis:38%">
+        <div class="tile blue"><i data-i="chat"></i></div>
+        <h3>A conversation that knows your work</h3>
+        <div class="sub blue">@-mention a model, a board or a file</div>
+        <p class="body">Point at what you mean with @ and it is in the conversation. Each room has its own thread with its agent, and your own chats stay yours alone.</p>
+        <div class="viz-b row" style="gap:6px;flex-wrap:wrap"><span class="chip">3D Drawing</span><span class="chip">PCB Design</span><span class="chip">Firmware</span><span class="chip blue">+ your chats</span></div>
+      </div>
+      <div class="viz" style="display:block">
+        <div class="chatline" style="justify-content:flex-end"><div class="box" style="padding:9px 12px;font-size:13px;border-radius:10px">How wide should the <span class="mention">@board</span> 12 V trace be for 2 A?</div></div>
+        <div class="chatline" style="margin-top:12px"><div class="av">Z</div><div style="flex:1">
+          <div style="font-weight:600;font-size:13px;margin-bottom:6px">glm-5.3-flash</div>
+          <div class="think">▸ Thinking <span style="float:right" class="num">6.4 s</span></div>
+          <div style="font-size:13px;margin-top:8px">With a 10 °C rise on an outer layer:</div>
+          <div class="math">I = k · ΔT<sup>0.44</sup> · A<sup>0.725</sup></div>
+          <div style="font-size:13px">about <b>0.8 mm</b> on 1 oz copper.</div>
+          <div class="num" style="font-size:11.5px;color:var(--ink-dim);margin-top:8px">61 tok/s · 153 tok · 8.3 s</div>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tile violet"><i data-i="sparkle"></i></div>
+      <h3>Your model, your choice</h3><div class="sub violet">Switch any time</div>
+      <p class="body">Pick the model for each chat, and which one does which job behind the scenes.</p>
+      <div class="viz-b"><div class="box models">
+        <div class="on"><span class="dot" style="background:var(--ok)"></span>glm-5.3-flash<span class="tag">fast</span></div>
+        <div><span class="dot" style="background:var(--s4)"></span>claude-opus-5-5<span class="tag">deep</span></div>
+        <div><span class="dot" style="background:var(--s1)"></span>via OpenRouter<span class="tag">any</span></div>
+      </div></div>
+    </div>
+    <div class="card">
+      <div class="tile ok"><i data-i="activity"></i></div>
+      <h3>See it think</h3><div class="sub ok">Thinking, speed, tokens</div>
+      <p class="body">Open the model’s reasoning when you want it, and see how fast each answer came.</p>
+      <div class="viz-b">
+        <div class="spark"><i style="height:30%"></i><i style="height:52%"></i><i style="height:70%"></i><i style="height:88%"></i><i style="height:95%"></i><i style="height:92%"></i><i style="height:97%"></i><i style="height:90%"></i><i style="height:94%"></i><i style="height:99%"></i><i style="height:93%"></i><i style="height:96%"></i><i style="height:91%"></i><i style="height:80%"></i><i style="height:60%"></i></div>
+        <div class="row" style="justify-content:space-between;margin-top:6px"><span class="label">tokens / second</span><span class="num">61</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile pen"><i data-i="list"></i></div>
+      <h3>Ideas become tasks</h3><div class="sub pen">One click to the queue</div>
+      <p class="body">When the chat writes a task, it comes with a button that files it as a note in the right room.</p>
+      <div class="viz-b"><div class="task">
+        <div style="font-weight:600">Seat the screen on the real STEP</div>
+        <div style="color:var(--ink-dim);font-size:11.5px;margin:3px 0 8px" class="mono">iot-fan/assemblies/base</div>
+        <span class="btn">Send to 3D queue</span>
+      </div></div>
+    </div>
+  </div>
+</div>
+<script src="icons.js"></script>
+</body></html>

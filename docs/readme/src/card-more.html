@@ -1,0 +1,133 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cards.css">
+<style>
+.kbd { display: inline-grid; place-items: center; min-width: 30px; height: 28px; padding: 0 8px; border: 1px solid #3f3f46; border-bottom-width: 2px; border-radius: 5px; font: 600 12px 'IBM Plex Mono', monospace; background: var(--surface); }
+.pal { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: 12px; overflow: hidden; }
+.pal div { padding: 5px 9px; display: flex; gap: 8px; color: var(--ink-dim); }
+.pal div.on { background: var(--hover); color: var(--ink); }
+.pal .k { margin-left: auto; font: 500 10.5px 'IBM Plex Mono', monospace; color: var(--ink-faint); }
+.sw { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; }
+.sw i { height: 22px; border-radius: 4px; border: 1px solid rgba(255,255,255,.08); display: block; }
+.todo div { display: flex; gap: 8px; align-items: center; font-size: 12.5px; padding: 3px 0; }
+.todo b { width: 13px; height: 13px; border: 1.5px solid #52525b; border-radius: 3px; display: inline-grid; place-items: center; font-size: 9px; color: #0b0f0b; }
+.todo b.x { background: var(--ok); border-color: var(--ok); }
+.tag { color: var(--s6); }
+.code i { display: block; height: 5px; border-radius: 2px; margin: 5px 0; }
+.legend { display: grid; grid-template-columns: auto 1fr auto; gap: 6px 10px; font-size: 12.5px; align-items: center; }
+.legend .num { text-align: right; color: var(--ink); }
+.big { font: 600 64px/1 'IBM Plex Mono', monospace; letter-spacing: -.03em; }
+</style></head><body>
+<div class="page">
+  <div class="head">
+    <div class="eyebrow">And everything around it</div>
+    <h2>The rest of the workshop, already in the box.</h2>
+    <p>The small things that make a long day of design pleasant: a drawer of engineering calculators, a command bar for everything, notes, drawings and releases, themes, and a clear view of what the work used.</p>
+  </div>
+  <div class="grid g4">
+    <div class="card wide span4">
+      <div class="txt">
+        <div class="tile ok"><i data-i="wrench"></i></div>
+        <h3>221 engineering tools in one drawer</h3>
+        <div class="sub ok">209 of them the agents can run too</div>
+        <p class="body">Trace widths, resistor dividers, battery life, fits and tolerances, unit conversions, sketch pads and more. Every answer is worked out by a tool, not guessed.</p>
+        <div class="viz-b legend">
+          <span class="dot" style="background:var(--ok)"></span><span>PCB &amp; electronics</span><span class="num">118</span>
+          <span class="dot" style="background:var(--s1)"></span><span>Code, data &amp; design</span><span class="num">38</span>
+          <span class="dot" style="background:var(--warn)"></span><span>Mechanical &amp; 3D</span><span class="num">28</span>
+          <span class="dot" style="background:var(--s4)"></span><span>AI &amp; prompts</span><span class="num">23</span>
+          <span class="dot" style="background:var(--s5)"></span><span>Project</span><span class="num">14</span>
+        </div>
+      </div>
+      <div class="viz"><div id="toolsdots" class="dots" style="grid-template-columns:repeat(26,10px);gap:6px"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="tile"><i data-i="command"></i></div>
+      <h3>Ctrl+K for everything</h3><div class="sub blue">Find anything, do anything</div>
+      <p class="body">Models, boards, tools, notes, chats, parts, even a line of code. Type and go.</p>
+      <div class="viz-b">
+        <div class="row" style="gap:5px;margin-bottom:10px"><span class="kbd">Ctrl</span><span class="kbd">K</span></div>
+        <div class="pal"><div class="on">Station<span class="k">model</span></div><div>Trace Width<span class="k">tool</span></div><div>board.pcb<span class="k">board</span></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile violet"><i data-i="theme"></i></div>
+      <h3>28 themes, and your own</h3><div class="sub violet">Dark, light, high contrast</div>
+      <p class="body">From Spartan Dark to Solarized Light, or build a theme of your own.</p>
+      <div class="viz-b sw">
+        <i style="background:#09090b"></i><i style="background:#000"></i><i style="background:#0d1117"></i><i style="background:#282a36"></i><i style="background:#1a1b26"></i><i style="background:#1e1e2e"></i><i style="background:#2e3440"></i>
+        <i style="background:#272822"></i><i style="background:#282828"></i><i style="background:#002b36"></i><i style="background:#191724"></i><i style="background:#1f1f28"></i><i style="background:#262335"></i><i style="background:#1f2430"></i>
+        <i style="background:#ffffff"></i><i style="background:#fdf6e3"></i><i style="background:#eff1f5"></i><i style="background:#fbf1c7"></i><i style="background:#f6f8fa"></i><i style="background:#2662d9"></i><i style="background:#e88c30"></i>
+        <i style="background:#2eb88a"></i><i style="background:#af57db"></i><i style="background:#e23670"></i><i style="background:#38bdf8"></i><i style="background:#ff2d3f"></i><i style="background:#fafafa"></i><i style="background:#71717a"></i>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile warn"><i data-i="file"></i></div>
+      <h3>Notes that keep up</h3><div class="sub warn">Alt+N from anywhere</div>
+      <p class="body">Jot it down without leaving what you are doing. Tags, to-dos, and a note can go to an agent.</p>
+      <div class="viz-b todo">
+        <div><b class="x">✓</b>order 18650 holder <span class="tag">#parts</span></div>
+        <div><b class="x">✓</b>check M3 inserts <span class="tag">@board</span></div>
+        <div><b></b>try 2.4 mm lid walls</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile blue"><i data-i="drawing"></i></div>
+      <h3>Drawings and releases</h3><div class="sub blue">Ready for the workshop</div>
+      <p class="body">Technical drawings of your parts and one release package with everything a maker needs.</p>
+      <div class="viz-b">
+        <svg width="100%" height="70" viewBox="0 0 230 70" preserveAspectRatio="xMinYMid meet">
+          <rect x="1" y="1" width="228" height="68" rx="4" fill="none" stroke="#3f3f46"/>
+          <rect x="16" y="14" width="70" height="40" fill="none" stroke="#a1a1aa" stroke-width="1.2"/>
+          <circle cx="51" cy="34" r="9" fill="none" stroke="#a1a1aa" stroke-width="1.2"/>
+          <path d="M16 60 H86 M16 57 V63 M86 57 V63" stroke="var(--s6)" stroke-width="1"/>
+          <rect x="104" y="14" width="40" height="40" fill="none" stroke="#a1a1aa" stroke-width="1.2"/>
+          <path d="M104 24 H144" stroke="#a1a1aa" stroke-dasharray="3 2"/>
+          <rect x="160" y="40" width="62" height="22" fill="none" stroke="#3f3f46"/>
+          <path d="M160 51 H222 M190 40 V62" stroke="#3f3f46"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="tile"><i data-i="code"></i></div>
+      <h3>The code, like an IDE</h3><div class="sub blue">For when you want to look</div>
+      <p class="body">Every part has its source one click away, in a full editor with tabs, search and links between parts.</p>
+      <div class="viz-b code">
+        <i style="width:42%;background:var(--code-kw)"></i><i style="width:70%;background:#3f3f46"></i><i style="width:56%;background:var(--code-fn);margin-left:14px"></i><i style="width:34%;background:var(--code-num);margin-left:14px"></i><i style="width:62%;background:#3f3f46"></i>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile warn"><i data-i="box"></i></div>
+      <h3>Bring any CAD file</h3><div class="sub warn">It joins the project as a part</div>
+      <p class="body">Drop in a supplier’s model and use it like any other part of your design.</p>
+      <div class="viz-b row" style="gap:5px;flex-wrap:wrap"><span class="chip">STEP</span><span class="chip">IGES</span><span class="chip">BREP</span><span class="chip">STL</span><span class="chip">3MF</span></div>
+    </div>
+    <div class="card">
+      <div class="tile ok"><i data-i="chart"></i></div>
+      <h3>Analytics</h3><div class="sub ok">Tokens, machine, energy</div>
+      <p class="body">What the work used, by room and by project: model tokens, builds, storage and the machine’s power.</p>
+      <div class="viz-b">
+        <svg width="100%" height="64" viewBox="0 0 230 64" preserveAspectRatio="none">
+          <path d="M0 16 H230 M0 32 H230 M0 48 H230" stroke="#27272a" stroke-width="1"/>
+          <path d="M0 50 L20 46 L40 48 L60 30 L80 34 L100 22 L120 26 L140 14 L160 20 L180 10 L200 16 L230 8" fill="none" stroke="var(--s1)" stroke-width="1.6"/>
+          <path d="M0 58 L20 56 L40 57 L60 50 L80 52 L100 46 L120 49 L140 42 L160 45 L180 40 L200 44 L230 38" fill="none" stroke="var(--ok)" stroke-width="1.6"/>
+        </svg>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile"><i data-i="lang"></i></div>
+      <h3>English and Türkçe</h3><div class="sub blue">The whole app, both ways</div>
+      <p class="body">Switch the interface language at any time; notes in any language are understood.</p>
+      <div class="viz-b row" style="gap:6px"><span class="chip" style="color:var(--ink);background:var(--hover)">EN</span><span class="chip">TR</span></div>
+    </div>
+  </div>
+</div>
+<script>
+  // 221 dots, coloured by tool family (TOOLS.md)
+  const fam = [[118,'on'],[38,'b'],[28,'w'],[23,'v'],[14,'r']];
+  let h = ''; for (const [n,c] of fam) for (let i = 0; i < n; i++) h += `<i class="${c}" style="width:10px;height:10px"></i>`;
+  for (let i = 221; i < 234; i++) h += '<i style="width:10px;height:10px"></i>';
+  document.getElementById('toolsdots').innerHTML = h;
+</script>
+<script src="icons.js"></script>
+</body></html>

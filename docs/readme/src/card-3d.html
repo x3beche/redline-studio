@@ -1,0 +1,64 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cards.css">
+<style>
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
+.pair .shot { position: relative; aspect-ratio: 1.06; }
+.pair .shot .chip { position: absolute; left: 10px; top: 10px; background: rgba(9,9,11,.86); border-color: #3f3f46; color: #fafafa; }
+.tree { font-size: 12.5px; }
+.tree div { display: flex; align-items: center; gap: 7px; padding: 3px 0; }
+.tree .c { color: var(--ink-faint); font: 500 10px 'IBM Plex Mono', monospace; width: 10px; }
+.tree .e { width: 14px; height: 9px; border-radius: 50%; border: 1.5px solid var(--s6); }
+.planes { display: flex; gap: 8px; }
+.planes div { flex: 1; }
+</style></head><body>
+<div class="page">
+  <div class="head">
+    <div class="eyebrow">3D drawing</div>
+    <h2>Parametric parts, a real assembly, and every way to look at it.</h2>
+    <p>Each part is described by its dimensions, so changing a size is changing a number. Parts you make and parts you buy come together in one assembly you can turn, cut open and inspect.</p>
+  </div>
+  <div class="grid g3">
+    <div class="card wide span3">
+      <div class="txt" style="flex-basis:30%">
+        <div class="tile ok"><i data-i="eye"></i></div>
+        <h3>See it the way you need to</h3>
+        <div class="sub ok">Studio lighting · Zebra stripes</div>
+        <p class="body">A studio view for how it will look, zebra stripes for how smooth the surfaces really are, clip planes to look inside, and your own material settings.</p>
+        <div class="viz-b row" style="gap:6px;flex-wrap:wrap"><span class="chip">Tree</span><span class="chip">Clip</span><span class="chip">Zebra</span><span class="chip">Material</span><span class="chip">Studio</span></div>
+      </div>
+      <div class="viz">
+        <div class="pair">
+          <div class="shot"><img src="img/studio.png"><span class="chip">Studio</span></div>
+          <div class="shot"><img src="img/zebra.png"><span class="chip">Zebra</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile blue"><i data-i="tree"></i></div>
+      <h3>An assembly you can fold</h3><div class="sub blue">Sub-assemblies stay one piece</div>
+      <p class="body">The Station holds the Base and the Fan Module, each a whole assembly of its own, shown and hidden as one.</p>
+      <div class="viz-b tree">
+        <div><span class="c">▾</span><span class="e"></span>Station</div>
+        <div style="padding-left:16px"><span class="c">▸</span><span class="e"></span>Base <span class="chip" style="margin-left:auto">11 parts</span></div>
+        <div style="padding-left:16px"><span class="c">▸</span><span class="e"></span>Fan Module <span class="chip" style="margin-left:auto">6 parts</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile warn"><i data-i="layers"></i></div>
+      <h3>Cut it open</h3><div class="sub warn">Three clip planes</div>
+      <p class="body">Slice the model on any axis to check a fit or a wall thickness, without exporting anything.</p>
+      <div class="viz-b planes">
+        <div><div class="label" style="margin-bottom:6px">x</div><div class="meter"><i style="width:62%;background:var(--danger)"></i></div></div>
+        <div><div class="label" style="margin-bottom:6px">y</div><div class="meter"><i style="width:100%;background:var(--ok)"></i></div></div>
+        <div><div class="label" style="margin-bottom:6px">z</div><div class="meter"><i style="width:40%;background:var(--s1)"></i></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tile violet"><i data-i="box"></i></div>
+      <h3>Bought parts included</h3><div class="sub violet">Fans, screws, cells, screens</div>
+      <p class="body">The 120 mm fan, the M3 screws, the 18650 cell and the OLED screen sit in the design as real parts, not boxes.</p>
+      <div class="viz-b row" style="gap:5px;flex-wrap:wrap"><span class="chip">Fan 120 mm</span><span class="chip">Screw M3 ×2</span><span class="chip">18650 Cell</span><span class="chip">OLED 0.91 inch</span></div>
+    </div>
+  </div>
+</div>
+<script src="icons.js"></script>
+</body></html>
