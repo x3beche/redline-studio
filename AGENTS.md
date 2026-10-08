@@ -652,6 +652,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py done <id>            # mark as applied
 .venv/bin/python tools/revisions.py finish <id>          # close that note's run
 .venv/bin/python tools/revisions.py after <id>           # the "after" picture
+.venv/bin/python tools/revisions.py after <id> --model <new>  # ...on the model the work went into
 .venv/bin/python tools/revisions.py usage [--full]       # what the work cost
 .venv/bin/python tools/revisions.py files [get <id>|put <file>|mkdir|mv]  # the Files tab
 .venv/bin/python tools/revisions.py component list|show|deps|pin|refresh ...  # components

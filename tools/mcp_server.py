@@ -77,8 +77,11 @@ TOOLS: dict[str, tuple] = {
         "Close a note's run: the after picture and what the work cost go onto "
         "its card. A firmware note is refused until the version with the change "
         "has built cleanly; its diff, build and a picture of the change are kept.",
-        {"id": _s("revision id"), "failed": {"type": "boolean"}},
-        ["id"], lambda a: ["finish", a["id"]] + (["--failed"] if a.get("failed") else [])),
+        {"id": _s("revision id"), "failed": {"type": "boolean"},
+         "model": _s("take the after picture on this model, with the note's view - "
+                     "when the work went into a new model (e.g. a new project)")},
+        ["id"], lambda a: ["finish", a["id"]] + (["--failed"] if a.get("failed") else [])
+        + (["--model", a["model"]] if a.get("model") else [])),
     "done": (
         "Mark a note applied.",
         {"id": _s("revision id")}, ["id"], lambda a: ["done", a["id"]]),

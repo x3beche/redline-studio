@@ -27,7 +27,7 @@ finishes:
 The card shows the drawing as the "before"; the same view once the work is
 done goes next to it:
 
-    python tools/revisions.py after <id> [--only PART]
+    python tools/revisions.py after <id> [--only PART] [--model MODEL]
 
 Components - every model and board, as the 3D designs that import them see
 them (backend/links.py); through the server, like `board`:
@@ -1196,7 +1196,7 @@ async def cmd_finish(args):
             print(f"(changes not recorded: {type(exc).__name__}: {exc})")
     if rev and not args.no_shot and not fw_note:
         try:
-            await _after_shot(db, rev)
+            await _after_shot(db, rev, model=args.model)
         except SystemExit as exc:
             print(f"after shot skipped: {exc}")
         except Exception as exc:                     # noqa: BLE001
@@ -1294,7 +1294,7 @@ async def cmd_build(args):
 
 
 async def _after_shot(db, rid: str, width: int | None = None, height: int | None = None,
-                      only: str | None = None) -> dict:
+                      only: str | None = None, model: str | None = None) -> dict:
     from backend import store
 
     out = Path(tempfile.gettempdir()) / f"after-{rid}.png"
@@ -1312,6 +1312,8 @@ async def _after_shot(db, rid: str, width: int | None = None, height: int | None
         argv += ["--height", str(height)]
     if only:
         argv += ["--only", only]
+    if model:
+        argv += ["--model", model]
     proc = await asyncio.create_subprocess_exec(
         *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
         # The run is already closed by the time the after shot is taken, so
@@ -1321,6 +1323,8 @@ async def _after_shot(db, rid: str, width: int | None = None, height: int | None
     if proc.returncode != 0 or not out.exists():
         raise SystemExit("render failed: " + log.decode(errors="replace")[-400:])
     shot = await store.put_shot(db, out.read_bytes())
+    if model:
+        shot["model"] = model               # shot on another model than the note's
     await db.revisions.update_one({"_id": rid}, {"$set": {"image_after": shot}})
     print(f"after shot stored: {shot['bytes']} bytes")
     return shot
@@ -1340,7 +1344,7 @@ async def cmd_after(args):
     if doc.get("kind") == "firmware":
         sys.exit("a firmware note has no camera: `finish <id>` keeps its after picture "
                  "(the main changed hunk), its diff and its build on the card")
-    await _after_shot(db, args.id, args.width, args.height, args.only)
+    await _after_shot(db, args.id, args.width, args.height, args.only, args.model)
 
 
 async def cmd_usage(args):
@@ -1881,6 +1885,8 @@ def main() -> None:
                    help="without an id: which room's run to close")
     s.add_argument("--no-shot", action="store_true",
                    help="skip the after picture")
+    s.add_argument("--model", help="take the after picture on this model, with the note's "
+                                   "view - when the work went into a new model")
     s.set_defaults(fn=cmd_finish)
     sub.add_parser("models").set_defaults(fn=cmd_models)
     s = sub.add_parser("source"); s.add_argument("model"); s.set_defaults(fn=cmd_source)
@@ -1896,6 +1902,8 @@ def main() -> None:
                    help="default: the note's own canvas size, else its drawing's")
     s.add_argument("--height", type=int, default=None)
     s.add_argument("--only", help="show only this part, as in render.py")
+    s.add_argument("--model", help="the note's view on this model instead of the one it was "
+                                   "filed on, e.g. a new project's assembly")
     s.set_defaults(fn=cmd_after)
     s = sub.add_parser("usage", help="pull LLM usage from the agent transcripts")
     s.add_argument("--full", action="store_true",

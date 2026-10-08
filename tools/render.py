@@ -554,7 +554,8 @@ LAST_JOB: dict = {}
 def render(revision: str, out: Path, width: int | None, height: int | None, wait: int,
            camera: str | None = None, only: str | None = None,
            build_timeout: int = 1200, allow_stale: bool = False,
-           free_aspect: bool = False, no_wait: bool = False) -> Path:
+           free_aspect: bool = False, no_wait: bool = False,
+           on_model: str | None = None) -> Path:
     from websockets.sync.client import connect
 
     try:
@@ -592,6 +593,12 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
             raise SystemExit(f"revision {rid} names no model")
         want, is_board = rev_doc["model"], rev_doc.get("kind") == "pcb"
         note_view = None if is_board else rev_doc.get("view")
+        if on_model:
+            # The note's view, on another model: a note whose work went into
+            # a model of its own (a new project) is judged on that one.
+            if is_board:
+                raise SystemExit("--model is for a 3D note; a board note shows its board")
+            want = on_model
     if view_format(note_view) >= 2:
         clip = note_view.get("clip") or {}
         cuts = sum(1 for p in clip.get("planes") or [] if p.get("enabled"))
@@ -859,6 +866,9 @@ def main() -> None:
     ap.add_argument("--allow-stale", action="store_true",
                     help="photograph the last build even though the source has "
                          "changed since and nothing is building it")
+    ap.add_argument("--model", dest="on_model",
+                    help="with a revision: its view, on this model instead of the one it "
+                         "was filed on (work that went into a new model)")
     ap.add_argument("--no-wait", action="store_true",
                     help="never wait for a build: shoot the build on record now "
                          "(an after shot; REDLINE_REVISION set implies it)")
@@ -878,7 +888,8 @@ def main() -> None:
     t0 = time.monotonic()
     try:
         render(args.revision, out, args.width, args.height, args.wait, args.camera,
-               args.only, args.build_timeout, args.allow_stale, args.free_aspect, args.no_wait)
+               args.only, args.build_timeout, args.allow_stale, args.free_aspect, args.no_wait,
+               args.on_model)
     finally:
         # A picture costs a browser: the card shows what that came to next to
         # what the model cost in tokens. Recorded whether or not the frame

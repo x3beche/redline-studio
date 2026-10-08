@@ -154,6 +154,8 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  change and be stamped onto whatever loaded next. */
   private heldCamera: CameraState | null = null;
   private heldModel: string | null = null;
+  /** The note whose view the address put on its ?model= (readUrl). */
+  private urlRevOnPin: string | null = null;
   /** The held note's view: its clipping, tab, parts and render settings. */
   private heldView: NoteView | null = null;
   /** Whether the held note's view went in, for the headless render: it
@@ -686,6 +688,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     const q = new URLSearchParams(location.search);
     this.urlPin = q.get('model');
     this.urlPinPending = !this.urlPin && !!q.get('rev');
+    this.urlRevOnPin = this.urlPin ? q.get('rev') : null;
   }
 
   private applyUrlCamera() {
@@ -771,7 +774,10 @@ export class Editor implements AfterViewInit, OnDestroy {
         // Open the model the revision is about. Only the camera was applied
         // before, so a revision on one model was shown against whichever
         // model happened to load first.
-        if (r.model && r.model !== this.activeModel()) {
+        // ?rev=<id>&model=<other>: the note's view, on the model named - the
+        // after picture of a note whose work went into a new model.
+        const onPin = id === this.urlRevOnPin && !!this.activeModel();
+        if (r.model && r.model !== this.activeModel() && !onPin) {
           const target = this.catalog() && this.findModel(this.catalog()!, r.model);
           if (target) {
             this.pendingCamera = id;
@@ -781,7 +787,7 @@ export class Editor implements AfterViewInit, OnDestroy {
         }
         if (!r.camera || !this.viewer) return;
         this.heldCamera = r.camera;
-        this.heldModel = r.model ?? this.activeModel();
+        this.heldModel = onPin ? this.activeModel() : r.model ?? this.activeModel();
         this.heldView = r.view ?? null;
         this.focused.set(r);
         this.applyHeldView(r.id);
