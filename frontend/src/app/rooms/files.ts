@@ -851,6 +851,9 @@ export class RoomFiles implements OnDestroy {
   /** The keys of the file list: arrows move, Enter opens, Space picks,
    *  Delete deletes, F2 renames, Ctrl+A picks all, Backspace goes up. */
   itemsKey(e: KeyboardEvent) {
+    // A dialog over the list (Delete's "are you sure") takes the keys: Enter
+    // there confirms it, it does not open the file behind it.
+    if (this.dialog()) return;
     if ((e.target as HTMLElement).closest('input, textarea, select')) return;
     const keys = this.items().map(i => i.key);
     const at = this.focusKey() ? keys.indexOf(this.focusKey()!) : -1;
@@ -916,6 +919,13 @@ export class RoomFiles implements OnDestroy {
   globalKey(e: KeyboardEvent) {
     if (e.key === 'Escape' && this.menu()) { this.menu.set(null); return; }
     if (e.key === 'Escape' && this.dialog()) { this.dialog.set(null); return; }
+    const d = this.dialog();
+    if (e.key === 'Enter' && d?.type === 'confirm' && !(e.target as HTMLElement).closest('button, input, textarea, select')) {
+      e.preventDefault();
+      this.dialog.set(null);
+      d.run();
+      return;
+    }
     if (!this.preview() || this.dialog()) return;
     const t = e.target as HTMLElement;
     if (t.closest('input, textarea, select, .monaco-editor')) return;
