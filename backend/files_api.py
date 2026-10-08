@@ -18,6 +18,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from pymongo.errors import DuplicateKeyError
 
 from . import access, actors, filemesh, files
 
@@ -210,7 +211,21 @@ async def files_zip(request: Request, folders: str = ""):
 
 @router.get("/api/files")
 async def files_list(q: str = "", kind: str = "", board: str = "", folder: str | None = None):
-    return [file_out(d) for d in await files.listing(_db(), q=q, kind=kind, board=board, folder=folder)]
+    out = [file_out(d) for d in await files.listing(_db(), q=q, kind=kind, board=board, folder=folder)]
+    # Which 3D files have a picture already, so the grid asks only for those.
+    want = {files.solid_key(f["sha256"]) for f in out if _solid(f) and f.get("sha256")}
+    if want:
+        have = {d["_id"] async for d in _db()[files.SOLID_THUMBS].find({"_id": {"$in": list(want)}}, {"_id": 1})}
+        for f in out:
+            if _solid(f) and f.get("sha256") and files.solid_key(f["sha256"]) in have:
+                # a tag for its address: a new picture of it is a new address
+                f["has_thumb"] = f"{f['sha256'][:12]}.{files.SOLID_VERSION}"
+    return out
+
+
+def _solid(f: dict) -> bool:
+    """A file the page draws a 3D picture of: a STEP, or a mesh it reads."""
+    return f.get("preview") in ("step", "mesh")
 
 
 @router.post("/api/files")
@@ -286,11 +301,23 @@ async def files_download(fid: str, request: Request, inline: bool = False):
 
 
 @router.get("/api/files/{fid}/thumb")
-async def files_thumb(fid: str):
-    """A small picture of an image, for the grid; made once and kept."""
-    raw = await _db()[files.COLL].find_one({"_id": fid}, {"thumb": 1, "kind": 1, "name": 1, "bytes": 1})
+async def files_thumb(fid: str, request: Request):
+    """A small picture of an image, for the grid; made once and kept. A 3D
+    file's is the one a page drew and sent (PUT below), if one has."""
+    raw = await _db()[files.COLL].find_one({"_id": fid}, {"thumb": 1, "kind": 1, "name": 1, "bytes": 1,
+                                                          "sha256": 1, "content_type": 1})
     if not raw:
         raise HTTPException(404, fid)
+    if _solid({"preview": files.preview_of(raw.get("name", ""), raw.get("kind", ""), raw.get("content_type", ""))}):
+        key = files.solid_key(raw.get("sha256") or fid)
+        tag = f"\"{key}\""
+        cache = {"Cache-Control": "private, max-age=604800", "ETag": tag}
+        if request.headers.get("if-none-match") == tag:
+            return Response(status_code=304, headers=cache)
+        pic = await _db()[files.SOLID_THUMBS].find_one({"_id": key})
+        if not pic:
+            raise HTTPException(404, "no picture of this model yet")
+        return Response(bytes(pic["data"]), media_type="image/webp", headers=cache)
     thumb = raw.get("thumb")
     if not thumb:
         if raw.get("kind") != "image" or raw["name"].lower().endswith(".svg") or raw.get("bytes", 0) > 60 * 2 ** 20:
@@ -303,6 +330,42 @@ async def files_thumb(fid: str):
         await _db()[files.COLL].update_one({"_id": fid}, {"$set": {"thumb": thumb}})
     return Response(bytes(thumb), media_type="image/webp",
                     headers={"Cache-Control": "private, max-age=86400"})
+
+
+@router.put("/api/files/{fid}/thumb")
+async def files_thumb_put(fid: str, request: Request):
+    """A 3D file's picture, drawn by the page that first showed it (the
+    server has no GPU to draw one) and kept for everyone after that. The
+    first one sent stays: another is answered with the one kept."""
+    raw = await _db()[files.COLL].find_one({"_id": fid}, {"name": 1, "kind": 1, "sha256": 1, "content_type": 1})
+    if not raw:
+        raise HTTPException(404, fid)
+    if not _solid({"preview": files.preview_of(raw.get("name", ""), raw.get("kind", ""), raw.get("content_type", ""))}):
+        raise HTTPException(415, "only a STEP or a 3D mesh has its picture sent")
+    if request.headers.get("content-type", "").split(";")[0].strip() not in ("image/png", "image/webp"):
+        raise HTTPException(415, "a PNG or a WebP")
+    if int(request.headers.get("content-length") or 0) > files.SOLID_MAX_BYTES:
+        raise HTTPException(413, f"larger than {files.SOLID_MAX_BYTES // 1024} kB")
+    data = b""
+    async for piece in request.stream():
+        data += piece
+        if len(data) > files.SOLID_MAX_BYTES:
+            raise HTTPException(413, f"larger than {files.SOLID_MAX_BYTES // 1024} kB")
+    try:
+        pic = files.solid_thumb_of(data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    key = files.solid_key(raw.get("sha256") or fid)
+    if await _db()[files.SOLID_THUMBS].find_one({"_id": key}, {"_id": 1}):
+        return {"kept": True}
+    try:
+        await _db()[files.SOLID_THUMBS].insert_one(
+            {"_id": key, "data": pic, "sha256": raw.get("sha256") or "", "bytes": len(pic),
+             "by": actors.current().get("name") or "",
+             "made_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+    except DuplicateKeyError:
+        return {"kept": True}                       # two pages drew it at once
+    return {"kept": False}
 
 
 @router.get("/api/files/{fid}/table")

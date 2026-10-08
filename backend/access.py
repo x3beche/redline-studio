@@ -129,6 +129,9 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/files/{}/to-model", "edit"),
     # a STEP's 3D preview: made once on the server, but it is looking at it
     ("GET", "/api/files/{}/mesh", "view"),
+    # a 3D file's picture, drawn in the page and kept for everyone: a
+    # reviewer's, as bringing the file in is
+    ("PUT", "/api/files/{}/thumb", "draw"),
     # the Command Code room: talking is like writing a note; the routes keep
     # deleting someone else's conversation, or line, to those who may delete
     # (bulk delete, a line, an edit or a regenerated answer that drops others');

@@ -187,7 +187,7 @@ async def update(db, fid: str, note: str | None = None, board: str | None = None
 
 
 async def remove(db, fid: str) -> bool:
-    doc = await db[COLL].find_one({"_id": fid}, {"gridfs_id": 1})
+    doc = await db[COLL].find_one({"_id": fid}, {"gridfs_id": 1, "sha256": 1})
     if not doc:
         return False
     try:
@@ -195,6 +195,10 @@ async def remove(db, fid: str) -> bool:
     except Exception:
         pass                                  # the bytes are gone already; drop the record anyway
     await db[COLL].delete_one({"_id": fid})
+    # A 3D file's picture is kept by content: it goes with the last copy.
+    sha = doc.get("sha256")
+    if sha and not await db[COLL].count_documents({"sha256": sha}, limit=1):
+        await db[SOLID_THUMBS].delete_many({"sha256": sha})
     return True
 
 
@@ -656,6 +660,48 @@ def thumb_of(data: bytes) -> bytes:
         out = io.BytesIO()
         im.save(out, "WEBP", quality=80)
         return out.getvalue()
+
+
+# A 3D file's picture is drawn in a browser - the server has no GPU - and
+# sent here once (files_api.py `PUT /thumb`); it is kept by the file's
+# content, per workspace, so every copy of the same STEP and everyone in
+# the workspace shares it. It is shading only, grey on transparent: the
+# page tints it with the theme's colour, so one picture suits every theme.
+SOLID_THUMBS = "file_thumbs"
+SOLID_MAX_BYTES = 512 * 1024
+SOLID_MAX_PX = 1024
+# Bumped when the page draws them differently, so older ones are drawn again.
+SOLID_VERSION = 2
+
+
+def solid_key(sha: str) -> str:
+    return f"{sha}:v{SOLID_VERSION}"
+
+
+def solid_thumb_of(data: bytes) -> bytes:
+    """A 3D file's picture as the page sent it, checked and written again
+    as WebP with its transparency: a PNG or a WebP, no larger than
+    SOLID_MAX_PX a side. Raises ValueError for anything else."""
+    from PIL import Image
+    if len(data) > SOLID_MAX_BYTES:
+        raise ValueError(f"larger than {SOLID_MAX_BYTES // 1024} kB")
+    if not (data.startswith(b"\x89PNG\r\n\x1a\n") or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")):
+        raise ValueError("not a PNG or a WebP")
+    try:
+        with Image.open(io.BytesIO(data)) as im:
+            if im.format not in ("PNG", "WEBP"):
+                raise ValueError("not a PNG or a WebP")
+            w, h = im.size
+            if not (16 <= w <= SOLID_MAX_PX and 16 <= h <= SOLID_MAX_PX):
+                raise ValueError(f"{w} x {h} px - a side has to be 16 to {SOLID_MAX_PX} px")
+            im = im.convert("RGBA")
+            out = io.BytesIO()
+            im.save(out, "WEBP", quality=85)
+            return out.getvalue()
+    except ValueError:
+        raise
+    except Exception as exc:                        # noqa: BLE001 - anything Pillow cannot read
+        raise ValueError("the picture could not be read") from exc
 
 
 def zip_names(entries: list[tuple[str, dict]]) -> list[tuple[str, dict]]:

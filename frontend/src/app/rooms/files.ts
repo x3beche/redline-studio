@@ -8,10 +8,11 @@ import { AGENT_ROOMS } from './notes';
 import { Catalog, FolderNode } from '../api';
 import { FileView, decodeText } from './file-view';
 import {
-  FileFolder, FilesApi, Icon, KIND_LABEL, Seen, StoredFile, downloadUrl, iconOf, inlineUrl, size, splitName,
+  FileFolder, FilesApi, Icon, KIND_LABEL, Seen, StoredFile, downloadUrl, extOf, iconOf, inlineUrl, size, splitName,
   thumbUrl, zipUrl,
 } from './files-model';
 import { pdfFirstPage } from './pdf-reader';
+import { MeshThumbs } from './mesh-thumb';
 
 export { FilesApi } from './files-model';
 export type { StoredFile } from './files-model';
@@ -51,6 +52,14 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
   host: { '(document:keydown)': 'globalKey($event)', '(document:click)': 'menu.set(null)' },
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1 tcv-fm">
+  <!-- a 3D file's picture is grey shading: this gives it the theme's model colour (styles.css .tcv-fm-solid) -->
+  <svg class="tcv-fm-defs" aria-hidden="true" focusable="false">
+    <filter id="tcv-fm-tint" color-interpolation-filters="sRGB">
+      <feFlood class="tcv-fm-tint" result="ink" />
+      <feComposite in="ink" in2="SourceAlpha" operator="in" result="shape" />
+      <feBlend in="shape" in2="SourceGraphic" mode="multiply" />
+    </filter>
+  </svg>
   <!-- LEFT: the folders, and what to show -->
   <aside class="tcv-notes-side tcv-fm-side" [attr.aria-label]="'Folders' | t">
     <nav class="tcv-fm-tree" role="tree" [attr.aria-label]="'Folders' | t">
@@ -267,6 +276,8 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
                                         <span class="tcv-fm-play"><i [fmIcon]="'video'"></i></span> }
                       @case ('pdf') { <img [src]="pics()[f.id]" alt=""> }
                       @case ('snip') { <pre class="tcv-fm-snip">{{ pics()[f.id] }}</pre> }
+                      @case ('solid') { <img class="tcv-fm-solid" [src]="solid(f)" alt="" loading="lazy" (error)="noThumb(f.id)">
+                                        <span class="tcv-fm-badge">{{ badge(f) }}</span> }
                       @default { <i class="tcv-fm-big" [attr.data-ico]="iconOf(f)" [fmIcon]="iconOf(f)"></i> }
                     }
                   </div>
@@ -350,6 +361,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
         <b>{{ f.name }}</b>
       </div>
       @if (f.preview === 'image') { <img class="tcv-fm-d-pic" [src]="f.name.toLowerCase().endsWith('.svg') ? inline(f.id) : thumb(f.id)" alt=""> }
+      @else if (thumbOf(f) === 'solid') { <div class="tcv-fm-d-pic tcv-fm-d-solid"><img class="tcv-fm-solid" [src]="solid(f)" alt=""></div> }
       <dl class="tcv-fm-d-props">
         <dt>{{ 'Kind' | t }}</dt><dd>{{ kindLabel(f.kind) | t }}</dd>
         <dt>{{ 'Size' | t }}</dt><dd>{{ fmt(f.bytes) }}</dd>
@@ -515,6 +527,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
 export class RoomFiles implements OnDestroy {
   private api = inject(FilesApi);
   private catalog = inject(Catalog);
+  private solids = inject(MeshThumbs);
   picked = inject(Selection);
   auth = inject(Auth);
 
@@ -752,13 +765,23 @@ export class RoomFiles implements OnDestroy {
     if (f.preview === 'video' && this.visible().has(f.id)) return 'video';
     if (f.preview === 'pdf' && this.pics()[f.id]) return 'pdf';
     if ((f.preview === 'text' || f.preview === 'markdown') && this.pics()[f.id]) return 'snip';
+    if ((f.preview === 'step' || f.preview === 'mesh') && !this.noPic().has(f.id)
+        && (f.has_thumb || this.solids.drawn()[f.id])) return 'solid';
     return '';
   }
   noThumb(id: string) { this.noPic.update(s => new Set(s).add(id)); }
+  /** A 3D file's picture: drawn on this page, or the one kept on the server
+   *  (its address changes with the picture, so it is cached for long). */
+  solid(f: StoredFile): string { return this.solids.drawn()[f.id] ?? `${thumbUrl(f.id)}?v=${f.has_thumb}`; }
+  badge(f: StoredFile): string { return f.preview === 'step' ? 'STEP' : extOf(f.name).toUpperCase(); }
 
   /** A tile came into view: work out its picture, if it has one to work out. */
   seen(f: StoredFile) {
     if (f.preview === 'video') { this.visible.update(s => new Set(s).add(f.id)); return; }
+    if (f.preview === 'step' || f.preview === 'mesh') {
+      if (!f.has_thumb) this.solids.want(f, this.auth.can('draw'));
+      return;
+    }
     const cached = this.api.thumbs.get(f.id);
     if (cached !== undefined) { if (cached) this.pics.update(p => ({ ...p, [f.id]: cached })); return; }
     if (f.preview === 'pdf' && f.bytes < 80 * 2 ** 20) {

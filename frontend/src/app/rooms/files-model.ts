@@ -17,6 +17,9 @@ export interface StoredFile {
   sent?: Sent; sent_log?: Sent[];
   /** The model made from it with "Add to project". */
   model?: string;
+  /** A 3D file whose picture is kept on the server (mesh-thumb.ts): a tag
+   *  of its content and the way it was drawn, for the picture's address. */
+  has_thumb?: string;
 }
 
 export interface FileFolder {
@@ -71,6 +74,11 @@ export class FilesApi {
   /** The first `bytes` of a file as text - a Range request. */
   head(id: string, bytes: number) {
     return this.http.get(inlineUrl(id), { responseType: 'arraybuffer', headers: { Range: `bytes=0-${bytes - 1}` } });
+  }
+
+  /** A 3D file's picture, drawn on this page, kept for everyone. */
+  putThumb(id: string, pic: Blob) {
+    return this.http.put(`/api/files/${encodeURIComponent(id)}/thumb`, pic, { headers: { 'Content-Type': pic.type } });
   }
 
   /** What a PDF's first page or a text's first lines look like, once

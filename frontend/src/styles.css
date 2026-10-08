@@ -4594,6 +4594,17 @@ button.tcv-fm-crumb:hover { color: var(--ink); background: var(--hover); }
 .tcv-fm-play { position: absolute; left: 6px; bottom: 6px; display: grid; place-items: center; width: 22px; height: 22px;
   color: var(--ink-bright); background: var(--shade); border-radius: 4px; }
 .tcv-fm-play .tcv-fm-ico { width: 14px; height: 14px; }
+/* a 3D file's picture (mesh-thumb.ts) is grey shading on transparent; the
+   filter in files.ts multiplies it with the theme's model colour, so it is
+   tinted like the 3D view in every theme */
+.tcv-fm-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+.tcv-fm-tint { flood-color: var(--series-1); }
+.tcv-fm-solid { filter: url(#tcv-fm-tint); }
+/* in the details the filter would tint the picture's ground too: it sits in a box of its own */
+.tcv-fm-d-solid { aspect-ratio: 4 / 3; height: auto; }
+.tcv-fm-d-solid img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.tcv-fm-badge { position: absolute; left: 6px; bottom: 6px; height: 18px; padding: 0 5px; font-size: 10px; font-weight: 600;
+  line-height: 18px; letter-spacing: .04em; color: var(--ink-bright); background: var(--shade); border-radius: 4px; }
 .tcv-fm-snip { align-self: stretch; justify-self: stretch; margin: 0; padding: 8px 9px; overflow: hidden; font-size: 8.5px;
   line-height: 1.35; color: var(--ink-dim); white-space: pre; font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 .tcv-fm-tile-name { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 8px 10px 0; font-size: 12.5px; color: var(--ink); }
