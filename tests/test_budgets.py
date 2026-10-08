@@ -213,3 +213,23 @@ def test_straight_past_100_writes_one_alert(monkeypatch):
     run(budgets.status(db, now=datetime(2026, 9, 4, tzinfo=UTC)))
     assert [x["level"] for x in db.activity.docs.values()] == ["error"]
     assert sorted(db.alerts.docs) == ["default|2026-09|llm|over", "default|2026-09|llm|warn"]
+
+
+def test_the_month_so_far_is_there_without_a_budget(monkeypatch):
+    """The costs page shows where the month is heading even with no budget set."""
+    db = DB()
+    metered(monkeypatch, {"llm_usd": 6, "kwh": 2, "proxy_gb": 0.5})
+    run(costs.put(db, {"subscriptions": [{"name": "Plan", "amount": 300, "currency": "USD", "covers": "llm"}],
+                       "electricity": {"amount": 0.25, "currency": "USD"},
+                       "proxy": {"amount": 4, "currency": "USD"}}))
+    st = run(budgets.status(db, now=datetime(2026, 9, 11, tzinfo=UTC)))            # 10 of 30 days
+    assert st["items"] == []
+    m = st["month_so_far"]
+    assert m["llm_usd"] == pytest.approx(60)                    # what the plan's work would cost on the API
+    assert m["electricity_usd"] == pytest.approx(5)
+    assert m["proxy_usd"] == pytest.approx(20)
+    assert m["fixed_usd"] == pytest.approx(100)
+    assert m["llm_in_total"] is False                           # the plan pays for it
+    assert m["total_usd"] == pytest.approx(125)
+    assert m["forecast_usd"] == pytest.approx(300 + 75)         # fixed in full, metered run on
+    assert m["llm_forecast_usd"] == pytest.approx(180)

@@ -410,3 +410,54 @@ app-cc-compact, app-or-compact { display: flex; flex-direction: column; gap: 12p
   .pv-head { padding: 8px 10px; }
   .pv-body { padding: 10px; }
 }
+
+/* Costs: the month at the top - where it stands, where a month goes, the plans against the API. */
+.st-month { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+.st-month-now { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; border-right: 1px solid var(--line); }
+.st-month-big { font-size: 30px; line-height: 1.1; font-weight: 600; color: var(--ink-bright); letter-spacing: -.01em; }
+.st-daybar { position: relative; height: 6px; border-radius: 3px; background: var(--surface-2); }
+.st-daybar > i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--accent-deep); }
+.st-daybar > em { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--accent); }
+.st-month-line { display: flex; align-items: baseline; gap: 8px; font-size: 11px; color: var(--ink-dim); }
+.st-month-line b { color: var(--ink); font-weight: 600; }
+.st-facts { margin: 4px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.st-facts > div { padding: 5px 8px; background: var(--surface-2); min-width: 0; }
+.st-facts dt { font-size: 10px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-facts dd { margin: 1px 0 0; font-size: 12.5px; color: var(--ink); }
+.st-month-split { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.st-month-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
+.st-stack { display: flex; height: 14px; gap: 2px; border-radius: 3px; overflow: hidden; }
+.st-stack.thin { height: 6px; }
+.st-stack > i { min-width: 3px; flex-basis: 0; }
+.st-legend { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.st-legend > li { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto auto 38px; align-items: center; gap: 8px;
+  padding: 4px 0; font-size: 11.5px; border-top: 1px solid var(--line); }
+.st-legend > li:first-child { border-top: 0; }
+.st-legend > li > i { width: 8px; height: 8px; border-radius: 2px; }
+.st-legend-name { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-legend-kind { font-size: 10px; color: var(--ink-dim); white-space: nowrap; }
+.st-legend-pct { text-align: right; }
+.st-plan { grid-column: 1 / -1; padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 7px; border-top: 1px solid var(--line); }
+.st-plan-bars { display: flex; flex-direction: column; gap: 5px; }
+.st-plan-row { display: grid; grid-template-columns: 170px minmax(0, 1fr) 96px; align-items: center; gap: 10px; font-size: 11.5px; color: var(--ink-dim); }
+.st-plan-row > b { text-align: right; color: var(--ink); font-weight: 600; }
+.st-plan-bar { position: relative; height: 10px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.st-plan-bar > i { position: absolute; inset: 0 auto 0 0; background: var(--accent-deep); }
+.st-plan-row[data-api] .st-plan-bar > i { background: var(--chart-progress); opacity: .45; }
+.st-plan-bar > em { position: absolute; inset: 0 auto 0 0; background: var(--chart-progress); }
+.st-plan-verdict { margin: 0; font-size: 12px; color: var(--ink); }
+.st-plan-verdict[data-tone="ok"] b:first-of-type { color: var(--ok); }
+.st-plan-verdict[data-tone="warn"] b:first-of-type { color: var(--warn); }
+.st-billed { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.st-exposure { margin: 0; font-size: 11px; color: var(--ink-dim); }
+.st-exposure b { color: var(--ink); font-weight: 600; }
+.st-incur { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 4px; }
+.st-incur > div { padding: 5px 8px; border-radius: 4px; background: var(--surface-2); border: 1px solid transparent; min-width: 0; }
+.st-incur > div[data-on] { border-color: var(--accent-deep); }
+.st-incur span { display: block; font-size: 10px; color: var(--ink-dim); }
+.st-incur b { display: block; font-size: 12.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 900px) {
+  .st-month { grid-template-columns: minmax(0, 1fr); }
+  .st-month-now { border-right: 0; border-bottom: 1px solid var(--line); }
+  .st-plan-row { grid-template-columns: 110px minmax(0, 1fr) 84px; }
+}

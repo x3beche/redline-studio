@@ -183,8 +183,6 @@ async def status(db, doc: dict | None = None, *, now: datetime | None = None, al
            "days_in_month": dim, "days_elapsed": round(elapsed, 3), "days_left": round(dim - elapsed, 3),
            "recent_days": RECENT_DAYS, "items": []}
     config = doc.get("budgets") or {}
-    if not config:
-        return out
     d = costs.derived(doc)
     month, recent = await asyncio.gather(used(db, start, now), used(db, now - timedelta(days=RECENT_DAYS), now))
     kwh_p, gb_p = d["electricity_per_kwh"], d["proxy_per_gb"]
@@ -198,6 +196,23 @@ async def status(db, doc: dict | None = None, *, now: datetime | None = None, al
     }
     in_total = ["electricity", "proxy"] + ([] if has_llm_plan else ["llm"])
     parts["total"] = (sum(parts[k][0] for k in in_total), sum(parts[k][1] for k in in_total))
+    # The month so far whether or not a budget is set: the costs page shows
+    # where the month is heading, and what the LLM work would have cost
+    # on the API next to the plan that covers it.
+    f = forecast(parts["total"][0], parts["total"][1], fixed_month=fixed, elapsed_days=elapsed, days_in_month=dim)
+    out["month_so_far"] = {
+        "llm_usd": _r(month["llm_usd"]), "kwh": _r(month["kwh"]), "proxy_gb": _r(month["proxy_gb"]),
+        "electricity_usd": _r(parts["electricity"][0]), "proxy_usd": _r(parts["proxy"][0]),
+        "fixed_usd": _r(fixed * elapsed / dim), "fixed_month_usd": _r(fixed),
+        "llm_in_total": not has_llm_plan,
+        "total_usd": _r(parts["total"][0] + fixed * elapsed / dim),
+        "forecast_usd": _r(f["forecast_usd"]), "basis": f["basis"],
+        "llm_7d_per_day_usd": _r(recent["llm_usd"] / RECENT_DAYS),
+        "llm_forecast_usd": _r(forecast(parts["llm"][0], parts["llm"][1], fixed_month=0.0,
+                                        elapsed_days=elapsed, days_in_month=dim)["forecast_usd"]),
+    }
+    if not config:
+        return out
     missing = {"electricity": None if kwh_p is not None else "no price per kWh set",
                "proxy": None if gb_p is not None else "no price per GB set", "llm": None, "total": None}
     for kind in KINDS:

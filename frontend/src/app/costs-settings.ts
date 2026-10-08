@@ -1,11 +1,11 @@
 import { Component, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Auth } from './auth';
-import { T, t } from './i18n';
+import { LANG, T, t } from './i18n';
 import { BudgetBars } from './budget-bars';
 import {
   Budget, BudgetKind, COMMON, CURRENCY, CostLine, Costs, CostsPatch, Money, Period, Price,
-  convert, currencies, currencyName, money, moneyIn, setOverride, toUsd,
+  convert, currencies, currencyName, fromUsd, money, moneyIn, setOverride, toUsd,
 } from './money';
 
 /** Settings > Costs & currency: what Redline costs to run, and the currency
@@ -28,6 +28,9 @@ interface BudgetDraft { amount: number | null; currency: string; warn: number }
 type BudgetDrafts = Record<BudgetKind, BudgetDraft>;
 type Section = 'subscriptions' | 'other' | 'usage' | 'budgets';
 const BUDGET_KINDS: BudgetKind[] = ['total', 'llm', 'electricity', 'proxy'];
+/** The segments of a split, in the analytics chart colours. */
+const PALETTE = ['var(--chart-work)', 'var(--chart-progress)', 'var(--chart-build)', 'var(--chart-reply)',
+  'var(--chart-translate)', 'var(--chart-summary)', 'var(--chart-other)'];
 
 function budgetsOf(b: Costs['budgets'] | undefined, fallback: string): BudgetDrafts {
   const one = (x: Budget | undefined): BudgetDraft => x
@@ -59,20 +62,76 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
     <div class="st-banner">{{ (e === 'not-yet' ? 'The server does not keep costs yet - the figures here are empty until it does.' : 'The costs did not load') | t }}@if (e !== 'not-yet') { ({{ e }}) }</div>
   }
 
-  <!-- What it comes to, in the display currency -->
-  <div class="st-tiles">
-    <div class="st-tile hero"><span>{{ 'Fixed costs a month' | t }}</span><b>{{ money(fixedMonth()) }}</b>
-      <small>{{ subs().length }} {{ 'subscriptions' | t }} · {{ others().length }} {{ 'other' | t }} · {{ money(fixedMonth() * 12) }} {{ 'a year' | t }}</small></div>
-    <div class="st-tile"><span>{{ 'LLM plans a month' | t }}</span><b>{{ money(llmMonth()) }}</b>
-      <small>{{ llmCount() }} {{ 'covering LLM work' | t }}</small></div>
-    <div class="st-tile" [attr.data-tone]="elec().amount == null ? 'dim' : null"><span>{{ 'Electricity' | t }}</span>
-      <b>{{ elec().amount == null ? '–' : money(usdOf(elec())) }}</b>
-      <small>{{ elec().amount == null ? ('not set' | t) : ('per kWh' | t) + (elec().currency !== cur() ? ' · ' + inCur(elec().amount, elec().currency) : '') }}</small></div>
-    <div class="st-tile" [attr.data-tone]="proxy().amount == null ? 'dim' : null"><span>{{ 'Proxy traffic' | t }}</span>
-      <b>{{ proxy().amount == null ? '–' : money(usdOf(proxy())) }}</b>
-      <small>{{ proxy().amount == null ? ('not set' | t) : ('per GB' | t) + (proxy().currency !== cur() ? ' · ' + inCur(proxy().amount, proxy().currency) : '') }}</small></div>
-    <div class="st-tile"><span>1 USD</span><b>{{ cur() === 'USD' ? '$1' : inCur(rateOf(cur()), cur()) }}</b>
-      <small>{{ m.fx()?.date ?? ('no rates yet' | t) }} · frankfurter.dev</small></div>
+  <!-- The month: where it stands, where it is heading, where it goes -->
+  <div class="st-card st-month">
+    <div class="st-month-now">
+      <span class="st-sec-title">{{ monthName() }} · {{ 'so far' | t }}</span>
+      <b class="st-month-big mono">{{ ms() ? money(ms()!.total_usd) : '–' }}</b>
+      <div class="st-daybar" [title]="('day' | t) + ' ' + dayNo() + ' / ' + daysIn()"><i [style.width.%]="dayPct()"></i>
+        @if (ms() && ms()!.forecast_usd > 0) { <em [style.left.%]="Math.min(100, ms()!.total_usd / ms()!.forecast_usd * 100)"></em> }</div>
+      <div class="st-month-line">
+        <span>{{ 'day' | t }} <b class="mono">{{ dayNo() }}</b> / {{ daysIn() }}</span>
+        @if (ms(); as x) {
+          <span class="st-right">{{ 'month end' | t }} <b class="mono">~{{ money(x.forecast_usd) }}</b></span>
+        }
+      </div>
+      <dl class="st-facts">
+        <div><dt>{{ 'Fixed a month' | t }}</dt><dd class="mono">{{ money(fixedMonth()) }}</dd></div>
+        <div><dt>{{ 'Fixed a year' | t }}</dt><dd class="mono">{{ money(fixedMonth() * 12) }}</dd></div>
+        <div><dt>{{ 'Energy so far' | t }}</dt><dd class="mono">{{ ms() ? fmt(ms()!.kwh, 1) + ' kWh' : '–' }}</dd></div>
+        <div><dt>{{ 'Proxy so far' | t }}</dt><dd class="mono">{{ ms() ? fmt(ms()!.proxy_gb, 2) + ' GB' : '–' }}</dd></div>
+      </dl>
+    </div>
+
+    <div class="st-month-split">
+      <div class="st-month-head"><span class="st-sec-title">{{ 'Where a month goes' | t }}</span>
+        <span class="st-sub">{{ 'fixed costs in full, the metered ones at this month\\'s pace' | t }}</span></div>
+      @if (segments().length) {
+        <div class="st-stack">
+          @for (g of segments(); track g.key) {
+            <i [style.flex-grow]="g.usd" [style.background]="g.color" [title]="g.name + ' · ' + money(g.usd)"></i>
+          }
+        </div>
+        <ul class="st-legend">
+          @for (g of segments(); track g.key) {
+            <li><i [style.background]="g.color"></i><span class="st-legend-name">{{ g.name | t }}</span>
+              <span class="st-legend-kind">{{ g.kind | t }}</span>
+              <span class="mono">{{ money(g.usd) }}</span><span class="mono st-dim st-legend-pct">{{ pct(g.usd / segTotal()) }}</span></li>
+          }
+        </ul>
+      } @else {
+        <p class="st-hint">{{ 'Nothing to split yet - add a subscription or a price below.' | t }}</p>
+      }
+    </div>
+
+    @if (ms(); as x) {
+      <div class="st-plan">
+        <span class="st-sec-title">{{ 'LLM plans against the API' | t }}</span>
+        @if (llmMonth() > 0) {
+          <div class="st-plan-bars">
+            <div class="st-plan-row"><span>{{ 'Plans' | t }}</span>
+              <div class="st-plan-bar"><i [style.width.%]="barOf(llmMonth())"></i></div>
+              <b class="mono">{{ money(llmMonth()) }}</b></div>
+            <div class="st-plan-row" data-api><span>{{ 'Same work at API prices' | t }}</span>
+              <div class="st-plan-bar"><i [style.width.%]="barOf(x.llm_forecast_usd)"></i>
+                <em [style.width.%]="barOf(x.llm_usd)"></em></div>
+              <b class="mono">~{{ money(x.llm_forecast_usd) }}</b></div>
+          </div>
+          <p class="st-plan-verdict" [attr.data-tone]="x.llm_forecast_usd >= llmMonth() ? 'ok' : 'warn'">
+            @if (x.llm_forecast_usd >= llmMonth()) {
+              {{ 'The plans pay off' | t }}: {{ 'this month\\'s work is worth' | t }} <b class="mono">{{ times(x.llm_forecast_usd / llmMonth()) }}</b> {{ 'their price' | t }}
+              · {{ 'saves' | t }} <b class="mono">~{{ money(x.llm_forecast_usd - llmMonth()) }}</b>
+            } @else {
+              {{ 'At this pace the API would cost less by' | t }} <b class="mono">~{{ money(llmMonth() - x.llm_forecast_usd) }}</b>
+            }
+            <span class="st-dim">· {{ money(x.llm_usd) }} {{ 'so far' | t }}</span>
+          </p>
+        } @else {
+          <p class="st-hint">{{ 'LLM work at API list prices this month' | t }}: <b class="mono">{{ money(x.llm_usd) }}</b>
+            (~{{ money(x.llm_forecast_usd) }} {{ 'by month end' | t }}). {{ 'Mark a subscription as covering LLM work to set it against this.' | t }}</p>
+        }
+      </div>
+    }
   </div>
 
   <div class="st-split">
@@ -90,7 +149,7 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
             </select></label>
         </div>
         <div class="st-row">
-          <span class="st-sec-title">{{ 'This browser' | t }}</span>
+          <span class="st-sec-title" [title]="'Each person can show another currency in their own browser - here, or with the currency menu in Analytics. Amounts stay in dollars on the server; only the showing changes.' | t">{{ 'This browser' | t }}</span>
           <div class="st-seg">
             <button [class.on]="!m.override()" (click)="override(null)">{{ 'Default' | t }} <small>{{ m.defaultCurrency() }}</small></button>
             @for (c of common(); track c) {
@@ -101,7 +160,37 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
             }
           </div>
         </div>
-        <p class="st-hint">{{ 'Each person can show another currency in their own browser - here, or with the currency menu in Analytics. Amounts stay in dollars on the server; only the showing changes.' | t }}</p>
+        @if (billed().length) {
+          <div class="st-billed">
+            <div class="st-month-head"><span class="st-sec-title">{{ 'Billed in' | t }}</span>
+              <span class="st-sub">{{ 'the fixed costs, by the currency they are paid in' | t }}</span></div>
+            <div class="st-stack thin">
+              @for (b of billed(); track b.cur) { <i [style.flex-grow]="b.usd" [style.background]="b.color" [title]="b.cur"></i> }
+            </div>
+            <ul class="st-legend">
+              @for (b of billed(); track b.cur) {
+                <li><i [style.background]="b.color"></i><span class="st-legend-name mono">{{ b.cur }}</span>
+                  <span class="st-legend-kind">{{ b.count }} {{ (b.count === 1 ? 'cost' : 'costs') | t }}</span>
+                  <span class="mono">{{ inCur(b.own, b.cur) }}</span><span class="mono st-dim st-legend-pct">{{ pct(b.usd / fixedMonth()) }}</span></li>
+              }
+            </ul>
+            @for (b of exposed(); track b.cur) {
+              <p class="st-exposure" [title]="'What a 10% move of this currency against the display currency does to a month of fixed costs' | t">
+                <b class="mono">{{ b.cur }}</b> ↑10% {{ 'vs' | t }} <b class="mono">{{ cur() }}</b>
+                → {{ 'a month' | t }} <b class="mono">+{{ money(b.usd * 0.1) }}</b></p>
+            }
+          </div>
+        }
+
+        <div class="st-billed">
+          <div class="st-month-head"><span class="st-sec-title">{{ 'A month of fixed costs in' | t }}</span></div>
+          <div class="st-incur">
+            @for (c of grid(); track c) {
+              <div [attr.data-on]="c === cur() ? '' : null"><span class="mono">{{ c }}</span>
+                <b class="mono">{{ inCur(fromUsdOr(fixedMonth(), c), c) }}</b></div>
+            }
+          </div>
+        </div>
       </div>
     </div>
 
@@ -331,6 +420,7 @@ export class CostsSettingsPanel implements OnDestroy {
   readonly convert = convert;
   readonly currencyName = currencyName;
   readonly toUsd = toUsd;
+  readonly Math = Math;
   readonly budgetKinds = [
     { id: 'total' as const, label: 'Total spend', about: 'everything paid this month', hint: '500', optional: false },
     { id: 'llm' as const, label: 'LLM work', about: 'at API list prices', hint: '1000', optional: true },
@@ -425,6 +515,57 @@ export class CostsSettingsPanel implements OnDestroy {
   fixedMonth = computed(() => this.monthOf(this.subs()) + this.monthOf(this.others()));
   llmMonth = computed(() => this.monthOf(this.subs().filter(r => r.covers === 'llm')));
   llmCount = computed(() => this.subs().filter(r => r.covers === 'llm').length);
+
+  /** The month so far (backend/budgets.py), budgets or not. */
+  ms = computed(() => this.m.costs()?.budget_status?.month_so_far ?? null);
+  private status = computed(() => this.m.costs()?.budget_status ?? null);
+  daysIn = computed(() => this.status()?.days_in_month ?? new Date(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 0).getDate());
+  dayNo = computed(() => Math.min(this.daysIn(), Math.floor(this.status()?.days_elapsed ?? new Date().getUTCDate() - 1) + 1));
+  dayPct = computed(() => Math.min(100, (this.status()?.days_elapsed ?? this.dayNo()) / this.daysIn() * 100));
+  monthName = computed(() => {
+    const ym = this.status()?.month, d = ym ? new Date(ym + '-01T12:00:00Z') : new Date();
+    return d.toLocaleString(LANG() === 'tr' ? 'tr-TR' : 'en-GB', { month: 'long', timeZone: 'UTC' });
+  });
+  /** A month, split: each fixed cost in full, the metered ones run on at this month's pace. */
+  segments = computed(() => {
+    const out: { key: string; name: string; kind: string; usd: number; color: string }[] = [];
+    for (const [i, r] of [...this.subs(), ...this.others()].entries()) {
+      const u = this.rowMonth(r);
+      if (u && u > 0) out.push({ key: 'r' + i, name: r.name || '–', kind: i < this.subs().length ? (r.covers === 'llm' ? 'LLM plan' : 'subscription') : 'other', usd: u, color: '' });
+    }
+    const x = this.ms(), st = this.status();
+    if (x && st) {
+      const run = (v: number) => st.days_elapsed > 0 ? v / st.days_elapsed * st.days_in_month : 0;
+      if (x.electricity_usd > 0) out.push({ key: 'e', name: 'Electricity', kind: 'metered', usd: run(x.electricity_usd), color: '' });
+      if (x.proxy_usd > 0) out.push({ key: 'p', name: 'Proxy traffic', kind: 'metered', usd: run(x.proxy_usd), color: '' });
+      if (x.llm_in_total && x.llm_forecast_usd > 0) out.push({ key: 'l', name: 'LLM work', kind: 'at API prices', usd: x.llm_forecast_usd, color: '' });
+    }
+    out.sort((a, b) => b.usd - a.usd);
+    return out.map((g, i) => ({ ...g, color: PALETTE[i % PALETTE.length] }));
+  });
+  segTotal = computed(() => this.segments().reduce((a, g) => a + g.usd, 0) || 1);
+  /** The fixed costs by the currency each is paid in. */
+  billed = computed(() => {
+    const by = new Map<string, { usd: number; own: number; count: number }>();
+    for (const r of [...this.subs(), ...this.others()]) {
+      const u = this.rowMonth(r);
+      if (u == null || r.amount == null) continue;
+      const b = by.get(r.currency) ?? { usd: 0, own: 0, count: 0 };
+      b.usd += u; b.own += r.period === 'year' ? r.amount / 12 : r.amount; b.count++;
+      by.set(r.currency, b);
+    }
+    return [...by.entries()].map(([cur, b]) => ({ cur, ...b })).filter(b => b.usd > 0)
+      .sort((a, b) => b.usd - a.usd).map((b, i) => ({ ...b, color: PALETTE[i % PALETTE.length] }));
+  });
+  /** What the display currency carries of another currency's moves. */
+  exposed = computed(() => this.billed().filter(b => b.cur !== this.cur()).slice(0, 3));
+  /** The plan bars share one scale: the larger of the two. */
+  private planScale = computed(() => Math.max(this.llmMonth(), this.ms()?.llm_forecast_usd ?? 0, 1e-9));
+  barOf(usd: number) { return Math.min(100, usd / this.planScale() * 100); }
+  fromUsdOr(usd: number, c: string) { return fromUsd(usd, c) ?? 0; }
+  pct(r: number) { return isFinite(r) ? `${Math.round(r * 100)}%` : '–'; }
+  times(r: number) { return `${new Intl.NumberFormat(navigator.language || 'en-US', { maximumFractionDigits: 1 }).format(r)}${LANG() === 'tr' ? '' : '×'}`; }
+  fmt(v: number, d: number) { return new Intl.NumberFormat(navigator.language || 'en-US', { maximumFractionDigits: d }).format(v); }
 
   ago(iso: string | null): string {
     if (!iso) return '–';

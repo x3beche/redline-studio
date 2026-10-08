@@ -48,6 +48,14 @@ export interface BudgetStatus {
   month: string; timezone: string; start: string; end: string;
   days_in_month: number; days_elapsed: number; days_left: number; recent_days: number;
   items: BudgetItem[]; state?: BudgetState; error?: string;
+  month_so_far?: MonthSoFar;
+}
+/** The month to date whether or not a budget is set: what was metered and
+ *  what it cost, the fixed costs prorated, and the forecast for its end. */
+export interface MonthSoFar {
+  llm_usd: number; kwh: number; proxy_gb: number; electricity_usd: number; proxy_usd: number;
+  fixed_usd: number; fixed_month_usd: number; llm_in_total: boolean; total_usd: number;
+  forecast_usd: number; basis: 'month_avg' | 'last_7d'; llm_7d_per_day_usd: number; llm_forecast_usd: number;
 }
 export interface Costs {
   display_currency: string;
