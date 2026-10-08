@@ -16,10 +16,10 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import access, actors, files
+from . import access, actors, filemesh, files
 
 router = APIRouter()
 
@@ -327,6 +327,30 @@ async def files_entries(fid: str):
         return files.entries_of(doc["name"], data)
     except ValueError as exc:
         raise HTTPException(415, str(exc)) from exc
+
+
+@router.get("/api/files/{fid}/mesh")
+async def files_mesh(fid: str, wait: float = 20):
+    """A STEP as a GLB, for the 3D preview (backend/filemesh.py). Made the
+    first time and kept by content; while it is being made the answer is
+    202 with how long it has taken so far, and the page asks again."""
+    doc = await _doc(fid)
+    if files.preview_of(doc.get("name", ""), doc.get("kind", "")) != "step":
+        raise HTTPException(415, "only a STEP is turned into a 3D mesh here")
+    try:
+        hit = await filemesh.cached(_db(), doc)
+        got = hit or await filemesh.mesh(_db(), doc, max(0.0, min(wait, 25.0)))
+    except filemesh.Unreadable as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if got is None:
+        return JSONResponse({"state": "preparing", "seconds": filemesh.elapsed(doc)}, status_code=202,
+                            headers={"Cache-Control": "no-store"})
+    rec, packed = got
+    return Response(packed, media_type="model/gltf-binary",
+                    headers={"Content-Encoding": "gzip", "Cache-Control": "private, max-age=86400",
+                             "X-Mesh-Triangles": str(rec.get("triangles") or ""),
+                             "X-Mesh-Seconds": str(rec.get("seconds") or ""),
+                             "X-Mesh-Cached": "1" if hit else "0"})
 
 
 class FilePatch(BaseModel):

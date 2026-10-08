@@ -5,7 +5,9 @@ import type * as Monaco from 'monaco-editor';
 import { T, t } from '../i18n';
 import { toHtml } from '../markdown';
 import { loadMonaco, redlineTheme } from './code-view';
-import { ArchiveData, FilesApi, Icon, StoredFile, TableData, downloadUrl, iconOf, inlineUrl, languageOf, size } from './files-model';
+import {
+  ArchiveData, FilesApi, Icon, StoredFile, TableData, downloadUrl, iconOf, inlineUrl, languageOf, meshUrl, size,
+} from './files-model';
 import { MeshView } from './mesh-view';
 import { PdfReader } from './pdf-reader';
 
@@ -54,19 +56,16 @@ export function decodeText(buf: ArrayBuffer): string {
   @case ('pdf') { <app-pdf-reader [src]="url()" /> }
   @case ('mesh') { <app-mesh-view [src]="url()" [name]="file().name" /> }
   @case ('step') {
-    <div class="tcv-fv-none">
-      <i class="tcv-fv-big" [fmIcon]="'cube'"></i>
-      <b>{{ file().name }}</b>
-      @if (file().model) {
-        <p>{{ 'This STEP is in a project as a model of its own.' | t }}</p>
-        <button class="tcv-btn tcv-btn-accent tcv-fm-btn" (click)="act.emit('open-model')">{{ 'Open in 3D Drawing' | t }}</button>
-      } @else {
-        <p>{{ 'A STEP is shown in 3D once it is in a project: Add to project copies it into a folder and builds it.' | t }}</p>
-        @if (canEdit()) {
-          <button class="tcv-btn tcv-btn-accent tcv-fm-btn" (click)="act.emit('add')">{{ 'Add to project' | t }}</button>
+    <app-mesh-view [src]="meshUrl()" [name]="file().name" [step]="true" />
+    @if (file().model || canEdit()) {
+      <div class="tcv-fv-actions">
+        @if (file().model) {
+          <button class="tcv-btn tcv-fm-btn" (click)="act.emit('open-model')">{{ 'Open in 3D Drawing' | t }}</button>
+        } @else {
+          <button class="tcv-btn tcv-fm-btn" (click)="act.emit('add')" [title]="'Copies it into a project folder as a model of its own, and builds it' | t">{{ 'Add to project' | t }}</button>
         }
-      }
-    </div>
+      </div>
+    }
   }
   @case ('table') {
     @if (table(); as tb) {
@@ -158,6 +157,7 @@ export class FileView implements OnDestroy {
   private code = viewChild<ElementRef<HTMLDivElement>>('code');
 
   url = computed(() => inlineUrl(this.file().id));
+  meshUrl = computed(() => meshUrl(this.file().id));
   dl = computed(() => downloadUrl(this.file().id));
   icon = computed(() => iconOf(this.file()));
   fmt = size;

@@ -80,6 +80,8 @@ export class FilesApi {
 
 export const inlineUrl = (id: string) => `/api/files/${encodeURIComponent(id)}?inline=1`;
 export const downloadUrl = (id: string) => `/api/files/${encodeURIComponent(id)}`;
+/** A STEP as a GLB, made on the server (202 while it is being made). */
+export const meshUrl = (id: string) => `/api/files/${encodeURIComponent(id)}/mesh`;
 export const thumbUrl = (id: string) => `/api/files/${encodeURIComponent(id)}/thumb`;
 export const zipUrl = (files: string[], folders: string[]) =>
   `/api/files/zip?files=${files.map(encodeURIComponent).join(',')}&folders=${folders.map(encodeURIComponent).join(',')}`;
