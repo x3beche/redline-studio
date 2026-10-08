@@ -159,7 +159,7 @@ async def session_user(raw_db, token: str | None) -> dict | None:
         if u and not u.get("disabled"):
             out = {"user": {"type": "user", "id": u["_id"], "name": u.get("name") or u["email"],
                             "email": u["email"], "has_avatar": bool(u.get("avatar_v")),
-                            "avatar_v": u.get("avatar_v")},
+                            "avatar_v": u.get("avatar_v"), "avatar_colour": u.get("avatar_colour") or "auto"},
                    "workspace": space_of(u), "role": role_of(u),
                    "must_change_password": bool(u.get("must_change_password"))}
             await raw_db[SESSIONS].update_one({"_id": key}, {"$set": {"last_seen": _now()}})

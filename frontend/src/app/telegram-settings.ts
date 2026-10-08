@@ -66,7 +66,7 @@ const STUB: TgState = {
   ],
   can_edit: true, log: [], profile: null,
 };
-const DEFAULT_PREFS: Record<string, boolean> = { question: true, note: true, run: false, budget: false, build: false, digest: false };
+const DEFAULT_PREFS: Record<string, boolean> = { question: true, note: true, run: false, budget: false, build: false, digest: false, ccusage: true };
 
 /** The one thing done in @BotFather: making the bot, which gives the token.
  *  Its name, descriptions, picture and commands are set here afterwards. */

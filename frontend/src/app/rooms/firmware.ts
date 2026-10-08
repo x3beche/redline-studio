@@ -1,5 +1,5 @@
 import {
-  AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, input, signal, untracked, viewChild,
+  AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, inject, input, output, signal, untracked, viewChild,
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import type * as Monaco from 'monaco-editor';
@@ -7,10 +7,11 @@ import { LogLine } from '../api';
 import { Auth } from '../auth';
 import { T, t } from '../i18n';
 import { Prefs } from '../preferences';
-import { Selection } from '../selection';
+import { FwAnchor, Selection } from '../selection';
 import { isLightTheme } from '../../theme';
 import { Drawing, DrawingMarks } from './drawing';
 import { RoomFrame, ToolButton } from './frame';
+import { DrawTools, PenState, Sketchpad } from './sketchpad';
 import { loadMonaco, redlineTheme } from './code-view';
 import {
   BAUDS, FlashManifest, FlashProgress, FlashRecord, Plain, SerialLine, SerialLink, WrongChip,
@@ -62,13 +63,21 @@ type Tone = 'ok' | 'warn' | 'error' | 'none';
  *  which is enough to put a box round it. Rotated labels sit in a
  *  <g transform="rotate(a cx cy)">. */
 export function textBoxes(svg: string, words: string[]): DrawingMarks | null {
+  const got = labelBoxes(svg, words);
+  return got ? { box: got.box, rects: got.labels.map(l => l.rect) } : null;
+}
+
+/** The same, saying which word each box is round - what a click on the
+ *  sheet is matched against. */
+export function labelBoxes(svg: string, words: string[]):
+    { box: number[]; labels: { word: string; rect: DrawingMarks['rects'][number] }[] } | null {
   const want = new Set(words.filter(Boolean));
   if (!want.size) return null;
   const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
   const root = doc.documentElement;
   const vb = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
   if (vb.length !== 4 || vb.some(n => !isFinite(n))) return null;
-  const rects: DrawingMarks['rects'] = [];
+  const labels: { word: string; rect: DrawingMarks['rects'][number] }[] = [];
   for (const el of Array.from(doc.getElementsByTagName('text'))) {
     const text = (el.textContent || '').trim();
     if (!want.has(text)) continue;
@@ -91,9 +100,62 @@ export function textBoxes(svg: string, words: string[]): DrawingMarks | null {
       box = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs),
               h: Math.max(...ys) - Math.min(...ys) };
     }
-    rects.push(box);
+    labels.push({ word: text, rect: box });
   }
-  return { box: vb, rects };
+  return { box: vb, labels };
+}
+
+/** A theme token's colour as the canvas takes it (the pictures a note
+ *  carries are drawn in the theme on screen). */
+function tokenColour(name: string): string {
+  const probe = document.createElement('span');
+  probe.style.color = `var(${name})`;
+  probe.style.display = 'none';
+  document.body.appendChild(probe);
+  const c = getComputedStyle(probe).color;
+  probe.remove();
+  return c;
+}
+
+/** Lines of code as a picture: what a code note is drawn on, and its
+ *  "before". The anchored lines are banded in the accent colour. */
+export function codePicture(width: number, height: number, path: string, lines: string[], first: number,
+                            lit: [number, number] | null): string {
+  const k = Math.min(devicePixelRatio, 2);
+  const c = document.createElement('canvas');
+  c.width = Math.round(width * k);
+  c.height = Math.round(height * k);
+  const x = c.getContext('2d')!;
+  x.scale(k, k);
+  const bg = tokenColour('--surface'), ink = tokenColour('--ink'), dim = tokenColour('--ink-dim');
+  const band = tokenColour('--accent-deep'), accent = tokenColour('--accent'), head = tokenColour('--surface-2');
+  x.fillStyle = bg;
+  x.fillRect(0, 0, width, height);
+  x.fillStyle = head;
+  x.fillRect(0, 0, width, 24);
+  const mono = "12px 'IBM Plex Mono', ui-monospace, monospace";
+  x.font = mono;
+  x.textBaseline = 'middle';
+  x.fillStyle = ink;
+  x.fillText(path + (lit ? `  ·  ${lit[0]}${lit[1] !== lit[0] ? '-' + lit[1] : ''}` : ''), 8, 12);
+  const lh = 18, top = 30;
+  lines.forEach((text, i) => {
+    const n = first + i, y = top + i * lh;
+    if (y > height) return;
+    if (lit && n >= lit[0] && n <= lit[1]) {
+      x.fillStyle = band;
+      x.fillRect(0, y, width, lh);
+      x.fillStyle = accent;
+      x.fillRect(0, y, 3, lh);
+    }
+    x.fillStyle = dim;
+    x.textAlign = 'right';
+    x.fillText(String(n), 40, y + lh / 2);
+    x.textAlign = 'left';
+    x.fillStyle = ink;
+    x.fillText(text.replace(/\t/g, '    '), 52, y + lh / 2);
+  });
+  return c.toDataURL('image/png');
 }
 
 function ago(at: string | null | undefined, now = Date.now()): string {
@@ -131,16 +193,41 @@ export class FwCode implements AfterViewInit, OnDestroy {
   nets = input<string[]>([]);
   /** A line to show, when a build's error points at one. */
   line = input<number | null>(null);
+  /** The lines a note is anchored to, banded. */
+  anchor = input<[number, number] | null>(null);
+  /** Lines selected by hand (or a line number clicked): first and last. */
+  picked = output<[number, number]>();
   private host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private ed?: Monaco.editor.IStandaloneCodeEditor;
   private m?: typeof Monaco;
   private marks: string[] = [];
+  private lit: string[] = [];
 
   constructor() {
     effect(() => {
       const text = this.text(), path = this.path(), nets = this.nets(), line = this.line();
       untracked(() => this.show(text, path, nets, line));
     });
+    effect(() => { const a = this.anchor(); this.text(); untracked(() => this.band(a)); });
+  }
+
+  /** The first and last line on screen, with their text. */
+  visible(): { first: number; lines: string[] } | null {
+    const ed = this.ed, model = ed?.getModel();
+    const r = ed?.getVisibleRanges()[0];
+    if (!model || !r) return null;
+    const lines: string[] = [];
+    for (let n = r.startLineNumber; n <= r.endLineNumber; n++) lines.push(model.getLineContent(n));
+    return { first: r.startLineNumber, lines };
+  }
+
+  private band(a: [number, number] | null) {
+    const m = this.m, ed = this.ed;
+    if (!m || !ed) return;
+    this.lit = ed.deltaDecorations(this.lit, a ? [{
+      range: new m.Range(a[0], 1, a[1], 1),
+      options: { isWholeLine: true, className: 'fw-anchor-line', linesDecorationsClassName: 'fw-anchor-gutter' },
+    }] : []);
   }
 
   ngAfterViewInit() {
@@ -152,6 +239,15 @@ export class FwCode implements AfterViewInit, OnDestroy {
         lineNumbersMinChars: 3, wordWrap: 'off', fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
       });
       this.show(this.text(), this.path(), this.nets(), this.line());
+      this.band(this.anchor());
+      // A selection made by hand (a line number clicked selects its line):
+      // the lines a note can be anchored to.
+      this.ed.onDidChangeCursorSelection(e => {
+        if (e.source === 'api' || e.selection.isEmpty()) return;
+        const s = e.selection;
+        const last = s.endColumn === 1 && s.endLineNumber > s.startLineNumber ? s.endLineNumber - 1 : s.endLineNumber;
+        this.picked.emit([s.startLineNumber, last]);
+      });
     }).catch(() => { /* the file list still says what there is */ });
   }
 
@@ -216,7 +312,7 @@ export class FwCode implements AfterViewInit, OnDestroy {
  */
 @Component({
   selector: 'app-room-firmware',
-  imports: [Drawing, FwCode, RoomFrame, T, ToolButton],
+  imports: [Drawing, DrawTools, FwCode, RoomFrame, Sketchpad, T, ToolButton],
   styles: [`
     :host { display: contents; }
     .fw-pane { display: flex; flex-direction: column; min-height: 0; height: 100%; font-size: 12px; color: var(--ink); }
@@ -475,11 +571,18 @@ export class FwCode implements AfterViewInit, OnDestroy {
       <app-tool icon="tcv-ico-out" [tip]="'Further' | t" [disabled]="view() !== 'schematic'" (press)="flat()?.step(0.8)" />
     </ng-container>
     <ng-container ngProjectAs="[barEnd]">
-      <!-- The pen: a note on a pin or a line of code, for the Firmware
-           room's agent. It comes with that agent. -->
-      <span class="tcv_tooltip" [attr.data-tooltip]="'Draw a note - comes with the Firmware agent' | t">
+      <!-- The pen: a note on a pin or on lines of code, for the Firmware
+           room's agent. Pick a pin (or a net on the sheet) or select lines
+           first; the pen holds the view still to draw on, and the note's
+           form is in the right-hand column. -->
+      @if (frozen()) {
+        <app-draw-tools [pen]="pen" (undo)="pad()?.undo()" (clear)="pad()?.clear()" />
+      }
+      <span class="tcv_tooltip" [attr.data-tooltip]="frozen() ? ('Let the view go' | t) : ('Draw a note - on the pin or the lines picked' | t)">
         <span class="tcv_button_frame">
-          <button class="tcv_reset tcv_btn tcv-freeze" disabled [attr.aria-label]="'Draw a note' | t"></button>
+          <button class="tcv_reset tcv_btn tcv-freeze" [attr.data-on]="frozen() ? 1 : null"
+                  [disabled]="!fw() || view() === 'monitor'" [attr.aria-label]="'Draw a note' | t"
+                  (click)="frozen() ? resume() : freeze()"></button>
         </span>
       </span>
     </ng-container>
@@ -639,9 +742,10 @@ export class FwCode implements AfterViewInit, OnDestroy {
       @if (fw(); as f) {
         @if (view() === 'schematic') {
           @if (sheetUrl(); as url) {
-            <app-drawing #flat [src]="url" [controls]="false" [marks]="marks()" />
+            <app-drawing #flat [src]="url" [controls]="false" [marks]="marks()" (clicked)="sheetClick($event)" />
             @if (pin(); as p) {
-              <span class="fw-hint">{{ p.macro || p.net }} · GPIO{{ p.gpio }} · {{ marks()?.rects?.length ?? 0 }} {{ 'labels' | t }}</span>
+              <span class="fw-hint">{{ p.macro || p.net }} · GPIO{{ p.gpio }} · {{ marks()?.rects?.length ?? 0 }} {{ 'labels' | t }}
+                @if (anchorIsPin()) { · {{ 'the note is about this pin' | t }} }</span>
             }
           } @else {
             <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ 'The board\\'s schematic is not drawn yet - build the board in PCB Design.' | t }}</p>
@@ -650,9 +754,13 @@ export class FwCode implements AfterViewInit, OnDestroy {
           <div class="flex h-full min-h-0 flex-col">
             <div class="fw-codehead"><b>{{ file() }}</b>
               @if (fileGenerated()) { <span class="fw-gen">{{ 'from schematic' | t }}</span> }
-              <span class="ml-auto">{{ 'read only' | t }}</span></div>
+              @if (codeAnchor(); as a) {
+                <span class="fw-tag" data-tone="ok">{{ 'note on' | t }} {{ a[0] }}@if (a[1] !== a[0]) {-{{ a[1] }}}</span>
+              }
+              <span class="ml-auto">{{ 'read only - select lines to write a note on them' | t }}</span></div>
             <div class="min-h-0 flex-1">
-              <app-fw-code [text]="text()" [path]="file() ?? ''" [nets]="macros()" [line]="line()" />
+              <app-fw-code #code [text]="text()" [path]="file() ?? ''" [nets]="macros()" [line]="line()"
+                           [anchor]="codeAnchor()" (picked)="pickLines($event)" />
             </div>
           </div>
         } @else {
@@ -699,6 +807,9 @@ export class FwCode implements AfterViewInit, OnDestroy {
             </form>
           </div>
         }
+      }
+      @if (frozen() && shot(); as s) {
+        <app-sketchpad #pad [shot]="s" [pen]="pen" />
       }
     </div>
 
@@ -800,6 +911,22 @@ export class RoomFirmware implements OnDestroy {
   auth = inject(Auth);
   private prefs = inject(Prefs);
   flat = viewChild<Drawing>('flat');
+  private code = viewChild<FwCode>('code');
+  pad = viewChild<Sketchpad>('pad');
+
+  // ---- the pen: a note on a pin or on lines of code ----
+  readonly pen = new PenState();
+  frozen = signal(false);
+  shot = signal<string | null>(null);
+  /** The note's anchor is the room's pick: a pin, or lines of the open file. */
+  anchorIsPin = computed(() => {
+    const a = this.picked.fwAnchor(), p = this.pin();
+    return !!a && !!p && (a.kind === 'pin' || a.kind === 'net') && a.pin === p.number;
+  });
+  codeAnchor = computed<[number, number] | null>(() => {
+    const a = this.picked.fwAnchor();
+    return a?.kind === 'code' && a.file === this.file() && a.lines ? a.lines : null;
+  });
 
   list = signal<Firmware[]>([]);
   fw = signal<FirmwareDetail | null>(null);
@@ -844,6 +971,33 @@ export class RoomFirmware implements OnDestroy {
           next: m => this.mcusHere.set(m), error: () => this.mcusHere.set([]) });
       });
     });
+    // The note's form offers the pins by their macros; its picture is the
+    // view on screen until the pen holds it still.
+    effect(() => { const m = this.macros(); untracked(() => this.picked.fwParts.set(m)); });
+    this.picked.fwDraft.set(() => this.viewShot());
+    // A note filed lets the view go.
+    let filed = this.picked.fwFiled();
+    effect(() => {
+      const n = this.picked.fwFiled();
+      if (n !== filed) { filed = n; untracked(() => { if (this.frozen()) this.resume(); }); }
+    });
+    // "Open in Firmware" from a note's card: the file at the line, or the pin.
+    let jumped = 0;
+    effect(() => {
+      const j = this.picked.fwJump(), f = this.fw(), files = this.files();
+      if (!j || j.n === jumped || !f || f.id !== j.firmware || !files.length) return;
+      jumped = j.n;
+      untracked(() => {
+        const a = j.anchor;
+        if (j.file || a?.kind === 'code') {
+          const path = j.file ?? a!.file!;
+          if (files.some(x => x.path === path)) this.openFile(path, j.line ?? a?.lines?.[0]);
+        } else if (a) {
+          const p = f.pins.find(x => x.number === a.pin);
+          if (p) { this.setView('schematic'); this.pin.set(p); this.centerWanted = true; }
+        }
+      });
+    });
     // The sheet's text, to find a net's labels in it.
     effect(() => {
       const url = this.sheetUrl();
@@ -859,6 +1013,103 @@ export class RoomFirmware implements OnDestroy {
   ngOnDestroy() {
     clearInterval(this.timer);
     this.link.close().catch(() => {});
+    this.picked.fwDraft.set(null);
+    this.picked.fwParts.set([]);
+  }
+
+  /** Hold the view still - the sheet as it is zoomed, or the code lines on
+   *  screen - and put the pad over it. */
+  async freeze() {
+    const shot = await this.viewShot();
+    if (!shot) { this.note.set(t('nothing on screen to draw on yet')); return; }
+    this.shot.set(shot);
+    this.frozen.set(true);
+    this.picked.fwDraft.set(() => this.pad()?.merged() ?? Promise.resolve(null));
+  }
+
+  resume() {
+    this.frozen.set(false);
+    this.shot.set(null);
+    this.picked.fwDraft.set(() => this.viewShot());
+  }
+
+  /** What is on screen as the note's picture: the sheet with the picked
+   *  net's labels boxed, or the code with the anchored lines banded. */
+  private async viewShot(): Promise<string | null> {
+    if (this.view() === 'schematic') return this.sheetShot();
+    if (this.view() === 'code') return this.codeShot();
+    return null;
+  }
+
+  private async sheetShot(): Promise<string | null> {
+    const d = this.flat();
+    if (!d?.ready()) return null;
+    const url = d.snapshot();
+    const mk = this.marks();
+    if (!mk?.rects.length) return url;
+    const img = new Image();
+    await new Promise(done => { img.onload = img.onerror = done; img.src = url; });
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const x = c.getContext('2d')!;
+    x.drawImage(img, 0, 0);
+    const box = d.host().nativeElement;
+    const k = c.width / (box.clientWidth || 1);
+    x.strokeStyle = tokenColour('--accent');
+    x.lineWidth = 2 * k;
+    for (const r of mk.rects) {
+      const px = d.x() + ((r.x - mk.box[0]) / mk.box[2]) * d.w(), py = d.y() + ((r.y - mk.box[1]) / mk.box[3]) * d.h();
+      const pw = (r.w / mk.box[2]) * d.w(), ph = (r.h / mk.box[3]) * d.h();
+      x.strokeRect(px * k - 3 * k, py * k - 3 * k, pw * k + 6 * k, ph * k + 6 * k);
+    }
+    return c.toDataURL('image/png');
+  }
+
+  private codeShot(): string | null {
+    const host = this.code(), path = this.file();
+    if (!host || !path) return null;
+    const box = document.querySelector<HTMLElement>('.fw-view');
+    const w = box?.clientWidth || 900, h = box?.clientHeight || 520;
+    const all = this.text().split('\n');
+    const a = this.codeAnchor();
+    const rows = Math.max(8, Math.floor((h - 30) / 18));
+    // What is on screen, from its first line - moved down to the anchored
+    // lines when they would fall outside the picture.
+    let first = host.visible()?.first ?? 1;
+    if (a && (a[0] < first || a[1] > first + rows - 1)) first = Math.max(1, a[0] - 3);
+    return codePicture(w, h, path, all.slice(first - 1, first - 1 + rows), first, a);
+  }
+
+  /** A pin of the sheet clicked: the pin whose net (or name) label is
+   *  under the click. */
+  sheetClick(at: { fx: number; fy: number }) {
+    const svg = this.svgText(), pins = this.signalPins();
+    if (!svg || !pins.length || this.frozen()) return;
+    const words = pins.flatMap(p => [p.net ?? '', p.name]).filter(Boolean);
+    const got = labelBoxes(svg, words);
+    if (!got) return;
+    const [bx, by, bw, bh] = got.box;
+    const x = bx + at.fx * bw, y = by + at.fy * bh, slack = bw / 300;
+    const hit = got.labels.find(l => x >= l.rect.x - slack && x <= l.rect.x + l.rect.w + slack
+                                     && y >= l.rect.y - slack && y <= l.rect.y + l.rect.h + slack);
+    if (!hit) return;
+    const byNet = pins.find(p => p.net === hit.word);
+    const p = byNet ?? pins.find(p => p.name === hit.word);
+    if (!p) return;
+    this.pin.set(p);
+    this.anchorPin(p, byNet ? 'net' : 'pin');
+  }
+
+  private anchorPin(p: FwPin, kind: 'pin' | 'net' = 'pin') {
+    this.picked.fwAnchor.set({ kind, pin: p.number, name: p.name, net: p.net, macro: p.macro || null,
+                               gpio: p.gpio, parts: p.parts });
+  }
+
+  /** Lines selected in the code: the note's anchor. */
+  pickLines(lines: [number, number]) {
+    const f = this.file();
+    if (!f || this.frozen()) return;
+    this.picked.fwAnchor.set({ kind: 'code', file: f, lines });
   }
 
   // ---- what is shown ----
@@ -998,6 +1249,7 @@ export class RoomFirmware implements OnDestroy {
   // ---- what is done ----
 
   setView(v: View) {
+    if (this.frozen() && v !== this.view()) this.resume();
     this.view.set(v);
     if (v !== 'monitor') RoomFirmware.keep('view', v);
     if (v === 'monitor') this.readQuick();
@@ -1011,8 +1263,13 @@ export class RoomFirmware implements OnDestroy {
   pick(id: string) { if (id) this.picked.firmware.set(id); }
 
   pickPin(p: FwPin) {
-    this.pin.set(this.pin()?.number === p.number ? null : p);
+    const off = this.pin()?.number === p.number;
+    this.pin.set(off ? null : p);
     this.centerWanted = true;
+    // The pin picked is what a note written now is about.
+    const a = this.picked.fwAnchor();
+    if (off) { if (a && a.kind !== 'code') this.picked.fwAnchor.set(null); }
+    else this.anchorPin(p);
   }
   /** A pin picked: its labels brought to the middle once they are found
    *  (the sheet's text may still be on its way). */
@@ -1082,6 +1339,8 @@ export class RoomFirmware implements OnDestroy {
     this.text.set('');
     this.log.set([]);
     this.filesAt = -1;
+    if (this.frozen()) this.resume();
+    this.picked.fwAnchor.set(null);
     RoomFirmware.keep('open', id);
     this.read(id, true);
   }

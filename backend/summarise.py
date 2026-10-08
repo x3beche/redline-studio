@@ -95,6 +95,21 @@ def clean(raw: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def clean_translation(raw: str) -> str:
+    """A translated note, whole: every line kept (unlike clean(), which is
+    for one-sentence summaries and keeps only the first line - a multi-line
+    note came back as its title). Only a wrapping code fence, wrapping
+    quotes or a "Translation:" label are taken off."""
+    text = (raw or "").strip()
+    fence = re.match(r"^```[\w-]*\n(.*)\n```$", text, re.S)
+    if fence:
+        text = fence.group(1).strip()
+    text = re.sub(r"^(?:english\s+)?translation\s*:\s*", "", text, flags=re.I).strip()
+    if len(text) > 1 and text[0] in _QUOTES and text[-1] in _QUOTES and "\n" not in text:
+        text = text.strip(_QUOTES).strip()
+    return text
+
+
 def word_count(text: str) -> int:
     return len([w for w in text.split(" ") if w])
 
@@ -138,10 +153,15 @@ def api_key(job: str = "summary") -> str | None:
 TRANSLATE_PROMPT = (
     "Translate the user's CAD revision request into English. Keep it a "
     "request: same instructions, same numbers, same part names, nothing "
-    "added and nothing dropped. Keep the wording plain and direct. If it is "
-    "already English, return it unchanged. Write only the translation."
+    "added and nothing dropped. Keep the wording plain and direct. Keep the "
+    "layout: every line, list, heading and Markdown mark (**bold**, `code`, "
+    "- items, 1. steps) where it was. If it is already English, return it "
+    "unchanged. Write only the translation."
 )
+# Room for the whole note: a long note in, a long note out. The floor is
+# what a short note needs; the ceiling keeps a runaway answer bounded.
 TRANSLATE_TOKENS = 400
+TRANSLATE_TOKENS_MAX = 4000
 
 
 async def _post(messages: list[dict], max_tokens: int = MAX_TOKENS, job: str = "summary") -> dict:
@@ -220,9 +240,15 @@ async def translate(text: str) -> tuple[str, dict]:
     text = (text or "").strip()
     if not text:
         return "", {}
+    budget = min(TRANSLATE_TOKENS_MAX, max(TRANSLATE_TOKENS, len(text) // 2 + 200))
     payload = await _post(
         [{"role": "system", "content": TRANSLATE_PROMPT},
-         {"role": "user", "content": text}], max_tokens=TRANSLATE_TOKENS, job="translate")
+         {"role": "user", "content": text}], max_tokens=budget, job="translate")
     usage = _report_usage(payload)
-    out = clean(payload["choices"][0]["message"]["content"] or "")
+    choice = payload["choices"][0]
+    # A translation cut short by the token limit would replace the note with
+    # its first half: keep the original instead.
+    if choice.get("finish_reason") == "length":
+        return text, usage
+    out = clean_translation(choice["message"]["content"] or "")
     return (out or text), usage

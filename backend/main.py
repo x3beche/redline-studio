@@ -33,6 +33,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 from . import (access, actors, ato, auth, buildjobs, changes, convert, files, jobs, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
                schematic, store, summarise, usage, links, board3d)
 from . import tools_api
+from . import fwnotes
 
 LOG = logging.getLogger("redline.api")
 
@@ -83,6 +84,9 @@ from . import reading  # noqa: E402
 app.include_router(reading.router)
 from . import themes as themes_api  # noqa: E402
 app.include_router(themes_api.router)
+# A ```task block in a chat, into the queue with one click (backend/tasks.py).
+from . import tasks as tasks_api  # noqa: E402
+app.include_router(tasks_api.router)
 # Settings > Telegram: the bot, each person's own link, the webhook (backend/tgbot/).
 from .tgbot import api as tg_api  # noqa: E402
 app.include_router(tg_api.router)
@@ -96,6 +100,9 @@ app.include_router(admin_api.router)
 # The Firmware room: a board's MCU, its code, its builds (backend/firmware.py).
 from . import firmware_api  # noqa: E402
 app.include_router(firmware_api.router)
+# The Files tab: files in folders, read in place (backend/files_api.py).
+from . import files_api  # noqa: E402
+app.include_router(files_api.router)
 
 
 def _raw_db():
@@ -630,7 +637,7 @@ class ActivityIn(BaseModel):
     # Which room's log this belongs in. The 3D room's log is about models
     # and the board room's about boards; one feed for both mixed a
     # tessellation in with a placement.
-    room: str = Field(default="cad", pattern="^(cad|pcb)$")
+    room: str = Field(default="cad", pattern="^(cad|pcb|firmware)$")
 
 
 class RunStart(BaseModel):
@@ -639,7 +646,7 @@ class RunStart(BaseModel):
     model: str | None = None
     # Whose run: each room has its own, so agents in different rooms can
     # work at once without closing each other's.
-    room: str = Field(default="cad", pattern="^(cad|pcb)$")
+    room: str = Field(default="cad", pattern="^(cad|pcb|firmware)$")
     # A note already running under another agent is refused (409) unless
     # this says it is being taken over on purpose; another note's run open
     # in the room is refused unless `force`. backend/runs.py.
@@ -752,6 +759,15 @@ async def finish_run(status: str = "done", room: str = "cad"):
     d = db()
     key = compute.run_key(room)
     cur = await d.runs.find_one({"_id": key}) or {}
+    # A firmware note is done when the version holding the change has
+    # built cleanly; its diff, build and picture go on the card here.
+    if status == "done" and cur.get("revision") and cur.get("status") == "running":
+        rdoc = await d.revisions.find_one({"_id": cur["revision"]}, {"kind": 1}) or {}
+        if rdoc.get("kind") == fwnotes.KIND:
+            try:
+                await fwnotes.result(d, cur["revision"])
+            except fwnotes.Refused as exc:
+                raise HTTPException(409, f"not finished: {exc}") from exc
     await d.runs.update_one({"_id": key}, {"$set": patch}, upsert=True)
     rev = cur.get("revision")
     if rev:
@@ -830,7 +846,12 @@ class RevisionIn(BaseModel):
     # "pcb" when the note is about a board. A board is not a model - it has
     # no camera, nothing to freeze, and `build` does not take it - so the
     # agent and the page both need to know which one they are holding.
-    kind: str | None = Field(default=None, pattern="^(cad|pcb)$")
+    # "firmware": `model` is then a firmware's id (backend/fwnotes.py).
+    kind: str | None = Field(default=None, pattern="^(cad|pcb|firmware)$")
+    # What a firmware note is about: a pin or a net of the MCU, or lines
+    # of a file - {kind: pin|net|code, pin, net, gpio, file, lines}.
+    # Checked against the firmware when the note is filed.
+    anchor: dict | None = None
 
 
 def _out(d: dict, run: dict | None = None) -> dict:
@@ -851,10 +872,16 @@ def _out(d: dict, run: dict | None = None) -> dict:
             # Who wrote it, and who last changed its status; older notes
             # predate attribution and say nothing.
             "created_by": d.get("created_by"), "status_by": d.get("status_by"),
+            # Filed from a ```task block in a chat (backend/tasks.py): which
+            # thread or conversation, and which line - the card links back.
+            "from_chat": d.get("from_chat"),
             # What the work changed, file by file (backend/changes.py); null
             # for notes finished before that was kept.
             "changes": [{k: c.get(k) for k in ("kind", "id", "added", "removed")} for c in d["changes"]]
-                       if d.get("changes") is not None else None}
+                       if d.get("changes") is not None else None,
+            # A firmware note: what it is anchored to, and once finished the
+            # diff, the build and its figures (backend/fwnotes.py).
+            "anchor": d.get("anchor"), "fw_result": d.get("fw_result")}
 
 
 async def _log_openrouter(rid: str, used: dict, surface: str,
@@ -1029,6 +1056,14 @@ async def create_revision(body: RevisionIn):
         except Exception as exc:
             raise HTTPException(400, f"invalid PNG: {exc}") from exc
         image = await store.put_shot(d, png)
+    anchor = None
+    if body.kind == fwnotes.KIND:
+        if not body.model:
+            raise HTTPException(422, "a firmware note names its firmware (model)")
+        try:
+            anchor = await fwnotes.check_anchor(d, body.model, body.anchor)
+        except fwnotes.Refused as exc:
+            raise HTTPException(404 if str(exc).startswith("no firmware") else 422, str(exc)) from exc
     rid = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
     doc = {
         "_id": rid,
@@ -1039,6 +1074,7 @@ async def create_revision(body: RevisionIn):
         "status": "draft", "queued_at": None,
         "image": image,
         "view": body.view,
+        **({"anchor": anchor} if body.kind == fwnotes.KIND else {}),
     }
     await d.revisions.insert_one(doc)
     schedule_note_work(rid)
@@ -1104,6 +1140,19 @@ async def put_after_image(rid: str, file: UploadFile = File(...)):
     shot = await store.put_shot(d, png)
     await d.revisions.update_one({"_id": rid}, {"$set": {"image_after": shot}})
     return {"id": rid, "bytes": shot["bytes"]}
+
+
+@app.post("/api/revisions/{rid}/firmware-result")
+async def firmware_result(rid: str):
+    """Finish a firmware note's work on its card: refused (409, why) until
+    the version with the change has built cleanly; then the diff, the
+    build's figures and a picture of the main hunk are kept on it."""
+    try:
+        return await fwnotes.result(db(), rid)
+    except KeyError as exc:
+        raise HTTPException(404, rid) from exc
+    except fwnotes.Refused as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @app.get("/api/revisions/{rid}/image")
@@ -2779,6 +2828,9 @@ async def _start_sampler():
             asyncio.create_task(fx.loop(db))           # and Frankfurter's, every hour
             from . import budgets
             asyncio.create_task(budgets.loop(lambda: db().raw))   # the month's budgets, and their alerts
+            # The Command Code account every ten minutes: the usage chart's
+            # points and the weekly window's alert (backend/llm.py cc_loop).
+            asyncio.create_task(llm.cc_loop(lambda: db().raw))
             from . import tgbot
             tgbot.start(lambda: db().raw)              # Telegram: send queue, watcher, polling
         except Exception as exc:                       # noqa: BLE001 - .env keys still work
@@ -3019,87 +3071,8 @@ async def notes_send(nid: str, body: NoteSend):
 # ---------------- files ----------------
 # Anything the work needs that is not a model or a board: a BOM, a
 # pick-and-place file, a datasheet, a photo (backend/files.py).
-def _file_out(d: dict) -> dict:
-    return {**{k: v for k, v in d.items() if k not in ("_id", "workspace_id", "gridfs_id")}, "id": d["_id"]}
-
-
-@app.get("/api/files")
-async def files_list(q: str = "", kind: str = "", board: str = ""):
-    return [_file_out(d) for d in await files.listing(db(), q=q, kind=kind, board=board)]
-
-
-@app.post("/api/files")
-async def files_upload(upload: list[UploadFile] = File(...), context: str = Form(""), note: str = Form("")):
-    """One or more files, kept as they came. `context` is JSON - the room and
-    the board or model open there - and comes along with each."""
-    try:
-        raw = json.loads(context) if context else {}
-    except ValueError:
-        raw = {}
-    ctx = {k: str(v)[:200] for k, v in (raw if isinstance(raw, dict) else {}).items()
-           if k in ("room", "model", "board") and v}
-    out = []
-    for f in upload:
-        # Read it in pieces, so a file over the limit is refused before all
-        # of it sits in memory.
-        chunks, size = [], 0
-        while chunk := await f.read(1 << 20):
-            size += len(chunk)
-            if size > files.MAX_BYTES:
-                raise HTTPException(413, f"{f.filename}: larger than {files.MAX_BYTES // (1024 * 1024)} MB")
-            chunks.append(chunk)
-        try:
-            doc = await files.put(db(), f.filename or "file", b"".join(chunks), f.content_type,
-                                  ctx, actors.current(), note)
-        except ValueError as exc:
-            raise HTTPException(400, f"{f.filename}: {exc}") from exc
-        out.append(_file_out(doc))
-    names = ", ".join(d["name"] for d in out)
-    await push_activity(ActivityIn(text=f"uploaded {names}"[:500], level="done",
-                                   room=ctx.get("room") if ctx.get("room") in ("cad", "pcb") else "cad"))
-    return out
-
-
-@app.get("/api/files/{fid}")
-async def files_download(fid: str, inline: bool = False):
-    import re
-    from urllib.parse import quote
-    try:
-        doc, data = await files.get(db(), fid)
-    except KeyError as exc:
-        raise HTTPException(404, fid) from exc
-    how = "inline" if inline else "attachment"
-    ascii_name = re.sub(r'[^A-Za-z0-9._-]', "_", doc["name"])
-    return Response(data, media_type=doc.get("content_type") or "application/octet-stream",
-                    headers={"Content-Disposition": f"{how}; filename=\"{ascii_name}\"; "
-                                                    f"filename*=UTF-8''{quote(doc['name'])}",
-                             "Cache-Control": "private, max-age=3600"})
-
-
-class FilePatch(BaseModel):
-    note: str | None = Field(default=None, max_length=2000)
-    board: str | None = Field(default=None, max_length=200)
-
-
-@app.patch("/api/files/{fid}")
-async def files_update(fid: str, body: FilePatch):
-    doc = await files.update(db(), fid, body.note, body.board)
-    if not doc:
-        raise HTTPException(404, fid)
-    return _file_out(doc)
-
-
-@app.delete("/api/files/{fid}")
-async def files_delete(fid: str):
-    doc = await db()[files.COLL].find_one({"_id": fid}, {"by": 1, "name": 1})
-    if not doc:
-        raise HTTPException(404, fid)
-    # Your own, always; someone else's, only if you may delete (as notes).
-    if (doc.get("by") or {}).get("id") != actors.current().get("id") and not access.allowed(access.current(), "delete"):
-        raise HTTPException(403, access.refusal(access.current() or "nobody", "delete"))
-    await files.remove(db(), fid)
-    await actors.audit(db(), "delete", f"file {doc.get('name')}", {"id": fid})
-    return {"deleted": fid}
+# Listing, uploading, reading (with ranges), renaming, folders, moving,
+# deleting and the ZIP download are in backend/files_api.py.
 
 
 class FileSend(BaseModel):
@@ -3117,7 +3090,10 @@ async def files_send(fid: str, body: FileSend):
         line = await chat.post(db(), files.as_message(doc)[:4000], room=body.room)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    await db()[files.COLL].update_one({"_id": fid}, {"$set": {"sent": {"room": body.room, "at": files._now()}}})
+    sent = {"room": body.room, "at": files._now(), "by": actors.current().get("name")}
+    # Every time it was sent, for the details pane; `sent` is the last one.
+    log = [*(doc.get("sent_log") or ([doc["sent"]] if doc.get("sent") else [])), sent][-50:]
+    await db()[files.COLL].update_one({"_id": fid}, {"$set": {"sent": sent, "sent_log": log}})
     return {"sent": body.room, "message": line}
 
 
@@ -3164,6 +3140,7 @@ async def files_to_model(fid: str, body: FileToModel):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     await actors.audit(db(), "file-to-model", doc["name"], {"file": fid, "model": model_id})
+    await db()[files.COLL].update_one({"_id": fid}, {"$set": {"model": saved["_id"]}})
     await push_activity(ActivityIn(text=f"{doc['name']} added to {folder} as {title}", level="done"))
     job = await _start_build(db(), model_id, by="request")
     return {"model": saved["_id"], "title": title, "upload": info["name"], "build_job": job.get("_id")}
@@ -3198,6 +3175,7 @@ class QuestionIn(BaseModel):
     options: list[str] = Field(default_factory=list)
     multi: bool = False
     revision: str | None = None
+    room: str | None = Field(default=None, pattern="^(cad|pcb|firmware)$")
 
 
 class AnswerIn(BaseModel):
@@ -3210,10 +3188,17 @@ async def list_questions():
     return await questions.with_rooms(db(), await questions.open_questions(db()))
 
 
+@app.get("/api/questions/answered")
+async def answered_questions(room: str | None = None, limit: int = 200):
+    """The questions already answered - a room's thread keeps them in its
+    log, resolved, with who answered what and when."""
+    return await questions.answered(db(), room, max(1, min(limit, 1000)))
+
+
 @app.post("/api/questions")
 async def create_question(body: QuestionIn):
     return await questions.ask(db(), body.text, body.options, body.revision,
-                               body.context, body.multi)
+                               body.context, body.multi, body.room)
 
 
 @app.post("/api/questions/{qid}/answer")
@@ -3256,11 +3241,12 @@ async def drop_revision(rid: str):
     doc = await d.revisions.find_one({"_id": rid})
     if not doc:
         raise HTTPException(404, rid)
-    if doc.get("image"):
-        try:
-            await store.bucket(d, "shots").delete(doc["image"]["gridfs_id"])
-        except Exception:
-            pass
+    for key in ("image", "image_after"):           # the before and after pictures go with it
+        if doc.get(key):
+            try:
+                await store.bucket(d, "shots").delete(doc[key]["gridfs_id"])
+            except Exception:
+                pass
     await d.revisions.delete_one({"_id": rid})
     return {"deleted": rid}
 

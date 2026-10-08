@@ -52,6 +52,17 @@ const ICON_ANY = 'M5 5h14v14H5z';
 
 export interface BarTab { id: string; ws: Workspace; push: boolean }
 
+/** The Command Code usage on the Chat tab (cc-usage.ts): how it is drawn,
+ *  and which window it shows. */
+export type CcTabStyle = 'off' | 'pct' | 'bar' | 'both';
+export type CcTabWindow = 'weekly' | 'five' | 'monthly' | 'all';
+export const CC_TAB_STYLES: { id: CcTabStyle; label: string }[] = [
+  { id: 'off', label: 'Off' }, { id: 'pct', label: 'Percent' }, { id: 'bar', label: 'Bar' }, { id: 'both', label: 'Bar + percent' },
+];
+export const CC_TAB_WINDOWS: { id: CcTabWindow; label: string }[] = [
+  { id: 'weekly', label: 'Weekly' }, { id: 'five', label: '5-hour' }, { id: 'monthly', label: 'Monthly' }, { id: 'all', label: 'All' },
+];
+
 /** The default: the rooms you work in, the gap, then Notes and the rest -
  *  the bar exactly as it was before it could be arranged. */
 export function defaultOrder(): string[] {
@@ -80,7 +91,7 @@ export function resolveOrder(saved: readonly unknown[] | null | undefined, def =
   return out;
 }
 
-interface Kept { order?: unknown[]; hidden?: unknown[]; display?: unknown }
+interface Kept { order?: unknown[]; hidden?: unknown[]; display?: unknown; ccStyle?: unknown; ccWindow?: unknown }
 
 function readKept(): Kept {
   try {
@@ -102,9 +113,14 @@ export class TopBar {
   order = signal<string[]>([]);
   hidden = signal<ReadonlySet<string>>(new Set());
   display = signal<TopbarDisplay>('full');
+  ccStyle = signal<CcTabStyle>('both');
+  ccWindow = signal<CcTabWindow>('weekly');
   /** How many of the shown tabs fit in the bar; the rest go under More.
    *  Set by the bar itself (TopbarFit), which measures. */
   fit = signal(Infinity);
+  /** The width of the Command Code usage on the Chat tab (cc-usage.ts):
+   *  set by it, so the bar measures the tabs again when it changes. */
+  extraW = signal(0);
 
   constructor() {
     this.load(readKept());
@@ -118,17 +134,21 @@ export class TopBar {
     this.hidden.set(new Set((Array.isArray(k.hidden) ? k.hidden : [])
       .filter((x): x is string => typeof x === 'string' && known.has(x))));
     this.display.set(asDisplay(k.display));
+    this.ccStyle.set(CC_TAB_STYLES.some(x => x.id === k.ccStyle) ? k.ccStyle as CcTabStyle : 'both');
+    this.ccWindow.set(CC_TAB_WINDOWS.some(x => x.id === k.ccWindow) ? k.ccWindow as CcTabWindow : 'weekly');
   }
 
   private save() {
     try {
       if (this.isDefault()) localStorage.removeItem(KEY);
       else localStorage.setItem(KEY, JSON.stringify({ v: 1, order: this.order(), hidden: [...this.hidden()],
-                                                      display: this.display() }));
+                                                      display: this.display(), ccStyle: this.ccStyle(),
+                                                      ccWindow: this.ccWindow() }));
     } catch { /* private window: it lasts until the page is closed */ }
   }
 
   isDefault = computed(() => this.display() === 'full' && this.hidden().size === 0
+    && this.ccStyle() === 'both' && this.ccWindow() === 'weekly'
     && this.order().join() === this.def.join());
 
   /** Every item in order, the gap included, with whether it is hidden. */
@@ -166,7 +186,7 @@ export class TopBar {
   moreNeeded = computed(() => this.overflow().length + this.hiddenTabs().length > 0);
 
   /** What the widths depend on: when it changes, the bar measures again. */
-  looks = computed(() => `${this.display()}|${LANG()}|${this.shownIds().join()}`);
+  looks = computed(() => `${this.display()}|${LANG()}|${this.shownIds().join()}|${this.ccStyle()}|${this.ccWindow()}`);
 
   icon(id: string): string { return ICON[id] ?? ICON_ANY; }
   short(w: Workspace): string { return SHORT[w.id] ?? w.label; }
@@ -198,10 +218,14 @@ export class TopBar {
     this.save();
   }
   setDisplay(d: TopbarDisplay) { this.display.set(d); this.save(); }
+  setCcStyle(v: CcTabStyle) { this.ccStyle.set(v); this.save(); }
+  setCcWindow(v: CcTabWindow) { this.ccWindow.set(v); this.save(); }
   reset() {
     this.order.set([...this.def]);
     this.hidden.set(new Set());
     this.display.set('full');
+    this.ccStyle.set('both');
+    this.ccWindow.set('weekly');
     this.save();
   }
 }
@@ -232,6 +256,12 @@ export class TopbarFit implements OnDestroy {
       this.bar.fit.set(Infinity);
       this.schedule();
     });
+  });
+
+  /** The usage on the Chat tab came, went or changed width: measure again. */
+  private extra = effect(() => {
+    this.bar.extraW();
+    untracked(() => { this.tries = 0; this.schedule(); });
   });
 
   constructor() {

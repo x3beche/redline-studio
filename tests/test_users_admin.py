@@ -307,3 +307,20 @@ def test_a_new_account_starts_empty_and_the_owner_keeps_the_old_data(db):
     c = login("zz@example.com", "temporary pw 1")
     assert c.get("/api/notes").json() == []
     assert r.json()["role"] == "user"
+
+
+def test_an_admin_sets_a_users_avatar_colour_from_the_palette(db):
+    ad = person(db, "ad")
+    assert ad.patch("/api/admin/users/a", json={"avatar_colour": "magenta"}).status_code == 400
+    assert ad.patch("/api/admin/users/a", json={"avatar_colour": "series-9"}).status_code == 400
+    assert "avatar_colour" not in run(db["users"].find_one({"_id": "a"}))
+    r = ad.patch("/api/admin/users/a", json={"avatar_colour": "accent"})
+    assert r.status_code == 200 and r.json()["avatar_colour"] == "accent"
+    assert run(db["users"].find_one({"_id": "a"}))["avatar_colour"] == "accent"
+    assert audit(db, "user-edit")[-1]["detail"]["fields"] == ["avatar_colour"]
+    rows = {u["id"]: u for u in ad.get("/api/admin/users").json()["users"]}
+    assert rows["a"]["avatar_colour"] == "accent" and rows["b"]["avatar_colour"] == "auto"
+    assert ad.patch("/api/admin/users/a", json={"avatar_colour": "auto"}).json()["avatar_colour"] == "auto"
+    assert "avatar_colour" not in run(db["users"].find_one({"_id": "a"}))
+    # The usual rules hold: an admin does not recolour the owner.
+    assert ad.patch("/api/admin/users/o", json={"avatar_colour": "series-1"}).status_code == 403

@@ -1,10 +1,12 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Auth } from './auth';
 import { T, t } from './i18n';
 import { money as shown } from './money';
 import type { LlmModel } from './rooms/commandcode';
 import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
+import { CcUsage, day, inSpan, span } from './cc-usage';
+import { CcCompact, CcPeriod, OrCompact, OrUsage } from './provider-usage';
 
 /** Settings > LLM settings: the API keys, and which provider and model
  *  does each of the app's model jobs (backend/llm.py), and what the
@@ -21,7 +23,10 @@ interface JobInfo {
   label: string; about: string; provider: string; model: string;
   default: { provider: string; model: string };
 }
-interface LlmSettings { providers: Record<string, ProviderInfo>; jobs: Record<string, JobInfo> }
+/** One provider as the page draws it (backend/llm.py REGISTRY): adding a
+ *  provider is an entry there, and an account block below if it has one. */
+interface ProviderEntry { id: string; name: string; site: string; priced: boolean; about: string; account: boolean; analysis: boolean }
+interface LlmSettings { providers: Record<string, ProviderInfo>; jobs: Record<string, JobInfo>; registry?: ProviderEntry[] }
 
 interface UsageRow { name: string; calls: number; input: number; output: number; cost_usd: number | null }
 interface LlmUsage {
@@ -103,7 +108,7 @@ export function when(at: string | number | null | undefined): string {
         }
         @if (d.account; as a) {
           <div class="st-tile hero">
-            <span>{{ 'OpenRouter account' | t }} · <span class="mono">{{ a.label }}</span>{{ a.is_free_tier ? ' · ' + ('free tier' | t) : '' }}</span>
+            <span>{{ 'OpenRouter account' | t }}@if (a.label) { · <span class="mono">{{ a.label }}</span> }{{ a.is_free_tier ? ' · ' + ('free tier' | t) : '' }}</span>
             <b>{{ money(a.usage) }} <span class="st-dim" style="font-size: 12px">/ {{ a.limit == null ? ('no limit' | t) : money(a.limit) }}</span></b>
             @if (a.limit) {
               <div class="st-meter" [attr.data-tone]="usedPct(a) > 80 ? 'warn' : null"><i [style.width.%]="usedPct(a)"></i></div>
@@ -219,7 +224,7 @@ export class LlmUsagePanel {
 
 @Component({
   selector: 'app-llm-settings',
-  imports: [T, LlmUsagePanel],
+  imports: [T, LlmUsagePanel, CcCompact, OrCompact],
   styleUrl: './settings.css',
   template: `
 @if (data(); as d) {
@@ -238,41 +243,83 @@ export class LlmUsagePanel {
     }
   </div>
 
-  <div class="st-card">
-    <div class="st-card-head"><h3>{{ 'API keys' | t }}</h3>
-      <span class="st-sub">{{ 'typed once, kept on the server, never shown again' | t }}</span></div>
-    <div class="st-card-body">
-      <div class="st-keys">
-        @for (p of providerIds; track p) {
-          @if (d.providers[p]; as info) {
-            <div class="st-key">
-              <div class="st-key-top">
-                <b>{{ info.name }}</b>
-                @if (info.set) {
-                  <span class="st-badge" data-tone="ok">● {{ 'set' | t }} {{ info.hint }}</span>
-                  <span class="st-badge">{{ 'saved here' | t }}</span>
-                } @else {
-                  <span class="st-badge" data-tone="warn">○ {{ 'not set' | t }}</span>
+  <!-- Each provider on its own card (backend/llm.py REGISTRY): one header
+       line, its account as the provider tells it, Details and the key
+       folded. A provider with a key is open; one without, one line. -->
+  @for (pv of registry(); track pv.id) {
+    @if (d.providers[pv.id]; as info) {
+      <section class="st-card pv" [attr.data-open]="isOpen(pv.id) ? 1 : null">
+        <div class="pv-head">
+          <button type="button" class="pv-toggle" (click)="toggle(pv.id)" [attr.aria-expanded]="isOpen(pv.id)"
+                  [attr.aria-label]="(isOpen(pv.id) ? 'Collapse' : 'Expand') | t">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="isOpen(pv.id) ? 'M6 9l6 6 6-6' : 'M9 6l6 6-6 6'" /></svg>
+            <h3>{{ pv.name }}</h3>
+          </button>
+          @if (info.set) {
+            <span class="pv-key-hint" [title]="'API key saved here' | t"><i></i>{{ info.hint }}</span>
+            @switch (pv.id) {
+              @case ('commandcode') {
+                @if (cc.data()?.plan; as p) {
+                  <span class="pv-plan">{{ p.name || p.id }}@if (p.status) { <em [attr.data-tone]="p.status === 'active' ? 'ok' : 'warn'">{{ p.status | t }}</em> }</span>
+                  @if (p.period_end) { <span class="pv-meta">{{ (p.cancel_at_period_end ? 'ends' : 'renews') | t }} {{ day(p.period_end) }} ({{ daysTo(p.period_end) }})</span> }
                 }
-                <a class="st-link" [href]="info.site" target="_blank" rel="noopener">{{ 'get a key' | t }} ↗</a>
-              </div>
-              @if (canEdit) {
-                <div class="st-row">
+              }
+              @case ('openrouter') {
+                @if (or.data()?.credits; as c) { <span class="pv-meta">{{ money(c.left) }} {{ 'credits left' | t }}</span> }
+                @if (or.data()?.key?.is_free_tier) { <span class="pv-meta">{{ 'free tier' | t }}</span> }
+              }
+            }
+          } @else {
+            <span class="pv-meta" data-tone="warn">{{ 'no key' | t }}</span>
+          }
+          <span class="pv-right">
+            @if (info.set) {
+              @if (loadedAt(pv.id); as at) { <span class="pv-meta" [title]="('updated' | t) + ' ' + ago(at)">{{ ago(at) }}</span> }
+              <button type="button" class="pv-icon" [disabled]="loading(pv.id)" (click)="refresh(pv.id)" [title]="'Ask the provider again' | t"
+                      [attr.aria-label]="'Refresh' | t"><svg viewBox="0 0 24 24" aria-hidden="true" [class.pv-spin]="loading(pv.id)"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5" /></svg></button>
+            } @else if (!isOpen(pv.id) && canEdit) {
+              <button class="tcv-btn tcv-files-btn" (click)="toggle(pv.id)">{{ 'Add a key' | t }}</button>
+            }
+            <a class="st-link" [href]="info.site" target="_blank" rel="noopener">{{ 'get a key' | t }} ↗</a>
+          </span>
+        </div>
+        @if (isOpen(pv.id)) {
+          <div class="pv-body">
+            @if (info.set) {
+              @switch (pv.id) {
+                @case ('commandcode') { <app-cc-compact /> }
+                @case ('openrouter') { <app-or-compact /> }
+              }
+            } @else {
+              <p class="pv-line">{{ pv.about | t }} - {{ 'add a key below and its usage shows here.' | t }}</p>
+            }
+            <!-- The key and the jobs on this provider, at the foot of its card. -->
+            <div class="pv-keysec">
+              <div class="pv-keyrow">
+                <span class="pv-src">{{ 'API key' | t }}</span>
+                <span class="pv-meta">{{ info.set ? ('set' | t) + ' ' + info.hint : ('no key' | t) }} · {{ (models()[pv.id] || []).length }} {{ 'models' | t }} · 🖼 {{ visionCount(pv.id) }}</span>
+                @if (canEdit) {
                   <input class="st-in wide" type="password" autocomplete="off" [placeholder]="(info.set ? 'Replace the key' : 'Paste the API key') | t"
-                         [value]="draft()[p] || ''" (input)="setDraft(p, $any($event.target).value)" (keydown.enter)="saveKey(p)">
-                  <button class="tcv-btn tcv-files-btn" [disabled]="!draft()[p]?.trim() || busy()" (click)="saveKey(p)">{{ 'Save' | t }}</button>
+                         [value]="draft()[pv.id] || ''" (input)="setDraft(pv.id, $any($event.target).value)" (keydown.enter)="saveKey(pv.id)">
+                  <button class="tcv-btn tcv-files-btn" [disabled]="!draft()[pv.id]?.trim() || busy()" (click)="saveKey(pv.id)">{{ 'Save' | t }}</button>
                   @if (info.set) {
-                    <button class="tcv-btn tcv-files-btn" [disabled]="busy()" (click)="clearKey(p)"
+                    <button class="tcv-btn tcv-files-btn" [disabled]="busy()" (click)="clearKey(pv.id)"
                             [title]="'Remove this key; the jobs on this provider stop until a new one is saved' | t">{{ 'Remove' | t }}</button>
                   }
-                </div>
-              }
+                } @else {
+                  <span class="pv-src">{{ 'only the owner and the admins can change a key' | t }}</span>
+                }
+              </div>
+              <div class="pv-jobs"><span class="pv-src">{{ 'Used for' | t }}</span>
+                @for (j of jobsOf(pv.id); track j) { <span class="st-tag">{{ j | t }}</span> }
+                @empty { <span class="pv-src">{{ 'no job yet - pick it under "Which model does what"' | t }}</span> }
+              </div>
             </div>
-          }
+          </div>
         }
-      </div>
-    </div>
-  </div>
+      </section>
+    }
+  }
 
   <div class="st-card">
     <div class="st-card-head"><h3>{{ 'Which model does what' | t }}</h3>
@@ -340,6 +387,34 @@ export class LlmSettingsPanel {
   custom = computed(() => Object.values(this.data()?.jobs ?? {})
     .filter(j => j.provider !== j.default.provider || j.model !== j.default.model).length);
   jobsOn(p: string) { return Object.values(this.data()?.jobs ?? {}).filter(j => j.provider === p).length; }
+  readonly cc = inject(CcUsage);
+  readonly or = inject(OrUsage);
+  private period = inject(CcPeriod);
+  readonly day = day;
+  /** The header line's figures, kept fresh while the page is open. */
+  private polls = (() => { const d = inject(DestroyRef); d.onDestroy(this.cc.use()); d.onDestroy(this.or.use()); return true; })();
+  money = (v: number | null | undefined): string => v == null ? '–' : shown(v);
+  daysTo(at: number) { return inSpan(at, this.cc.now()).replace(/^in /, ''); }
+  loadedAt(p: string) { return p === 'commandcode' ? this.cc.loadedAt() : p === 'openrouter' ? this.or.loadedAt() : 0; }
+  loading(p: string) { return p === 'commandcode' ? this.cc.loading() || this.period.loading() : p === 'openrouter' ? this.or.loading() : false; }
+  ago(at: number) { const ms = this.cc.now() - at; return ms < 10_000 ? t('just now') : span(ms) + ' ' + t('ago'); }
+  refresh(p: string) {
+    if (p === 'commandcode') { this.cc.load(true); this.period.load(true); }
+    else if (p === 'openrouter') this.or.load(true);
+  }
+  jobsOf(p: string) { return Object.values(this.data()?.jobs ?? {}).filter(j => j.provider === p).map(j => j.label); }
+  /** The providers in the server's order; the page's own list if it is an older server. */
+  registry = computed<ProviderEntry[]>(() => this.data()?.registry
+    ?? PROVIDERS.map(id => ({ id, name: this.data()?.providers[id]?.name ?? id, site: this.data()?.providers[id]?.site ?? '',
+                              priced: id === 'openrouter', about: '', account: true, analysis: id === 'commandcode' })));
+  /** Opened or closed by hand, per provider, in this browser; otherwise open when a key is set. */
+  private opened = signal<Record<string, boolean>>(load('redline.settings.llm.open', {}));
+  isOpen(p: string) { const o = this.opened()[p]; return o ?? !!this.data()?.providers[p]?.set; }
+  toggle(p: string) {
+    const next = { ...this.opened(), [p]: !this.isOpen(p) };
+    this.opened.set(next);
+    keep('redline.settings.llm.open', next);
+  }
 
   constructor() {
     this.http.get<LlmSettings>('/api/llm/settings').subscribe({

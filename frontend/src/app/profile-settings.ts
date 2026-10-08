@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, firstValueFrom } from 'rxjs';
 import { LANG, T, t } from './i18n';
 import { Auth } from './auth';
-import { Avatar } from './avatar';
+import { AVATAR_COLOURS, Avatar, AvatarColours, avatarColour } from './avatar';
 
 /** Settings > Profile: the person's own account (backend/profile.py) - the
  *  picture, the name and the address, the system role (owner, admin or
@@ -14,6 +14,8 @@ interface Profile {
   id: string; name: string; email: string | null; role: string | null; about_role?: string | null;
   created_at?: string | null; last_sign_in?: string | null;
   has_avatar: boolean; avatar_v: number | null;
+  /** One of AVATAR_COLOURS, or 'auto' (the name picks). */
+  avatar_colour?: string;
 }
 interface Session { id: string; here: boolean; device: string; created_at: string | null; last_seen: string | null }
 
@@ -57,7 +59,7 @@ const MIN_PASSWORD = 10;
       <form class="st-card-body" (submit)="$event.preventDefault(); dirty() && name().trim() && save()">
         <div class="pf-top">
           <div class="pf-pic">
-            <app-avatar [name]="name() || p.name" [userId]="p.id" [hasPicture]="p.has_avatar" [v]="p.avatar_v" [size]="88" />
+            <app-avatar [name]="name() || p.name" [userId]="p.id" [hasPicture]="p.has_avatar" [v]="p.avatar_v" [colour]="colour()" [size]="88" />
             @if (p.kind === 'user') {
               <div class="pf-pic-acts">
                 <label class="tcv-btn tcv-files-btn pf-file" [attr.data-busy]="picBusy() ? 1 : null">
@@ -88,6 +90,28 @@ const MIN_PASSWORD = 10;
               }
             </div>
             @if (emailChanged()) { <p class="st-hint">{{ 'You sign in with this address: changing it asks for your password.' | t }}</p> }
+            <!-- The colour around one's picture and under one's initials,
+                 wherever one is drawn (Chat, the top bar); saved with Save. -->
+            <div class="st-f pf-colour" role="radiogroup" [attr.aria-label]="'Colour' | t">
+              <span>{{ 'Colour' | t }}</span>
+              <div class="pf-swatches">
+                <button type="button" class="pf-sw pf-sw-auto" role="radio" data-c="auto" [attr.aria-checked]="colour() === 'auto'"
+                        [disabled]="p.kind !== 'user'" [title]="'Auto - picked from your name' | t"
+                        [style.--sw]="autoColour()" (click)="pickColour('auto')">{{ 'Auto' | t }}</button>
+                @for (c of COLOURS; track c) {
+                  <button type="button" class="pf-sw" role="radio" [attr.data-c]="c" [attr.aria-checked]="colour() === c"
+                          [disabled]="p.kind !== 'user'" [title]="c" [attr.aria-label]="c"
+                          [style.--sw]="'var(--' + c + ')'" (click)="pickColour(c)"></button>
+                }
+              </div>
+              <div class="pf-colour-foot">
+                <span class="pf-sw-prev" aria-hidden="true">
+                  <app-avatar [name]="name() || p.name" [colour]="colour()" [size]="28" />
+                  <app-avatar [name]="name() || p.name" [userId]="p.id" [hasPicture]="p.has_avatar" [v]="p.avatar_v" [colour]="colour()" [size]="28" />
+                </span>
+                <small class="st-hint">{{ 'Around your picture and under your initials, in Chat and the top bar.' | t }}</small>
+              </div>
+            </div>
             <div class="st-tiles pf-tiles">
               <div class="st-tile" [title]="p.about_role ?? ''"><span>{{ 'Role' | t }}</span><b>{{ (p.role ?? '-') | t }}</b>
                 <small>{{ (p.kind === 'user' ? 'on this server' : 'of this token') | t }}</small></div>
@@ -170,8 +194,12 @@ export class ProfileSettingsPanel {
 
   p = signal<Profile | null>(null);
   loadErr = signal('');
+  readonly COLOURS = AVATAR_COLOURS;
+  private colours = inject(AvatarColours);
   name = signal('');
   email = signal('');
+  /** The avatar colour being chosen (saved with the rest). */
+  colour = signal('auto');
   emailPw = signal('');
   busy = signal(false);
   saved = signal(false);
@@ -199,8 +227,11 @@ export class ProfileSettingsPanel {
   });
   dirty = computed(() => {
     const p = this.p();
-    return !!p && (this.name().trim() !== p.name || this.emailChanged());
+    return !!p && (this.name().trim() !== p.name || this.emailChanged() || this.colour() !== (p.avatar_colour || 'auto'));
   });
+  /** What 'auto' would be: the colour the name picks. */
+  autoColour = computed(() => avatarColour(this.name() || this.p()?.name));
+  pickColour(c: string) { this.colour.set(c); this.saved.set(false); }
   /** Why the password cannot be changed yet, while the boxes are filled in. */
   pwProblem = computed(() => {
     if (!this.pwNow() || !this.pwNew()) return 'Fill in your current and your new password.';
@@ -224,6 +255,8 @@ export class ProfileSettingsPanel {
     this.name.set(p.name ?? '');
     this.email.set(p.email ?? '');
     this.emailPw.set('');
+    this.colour.set(p.avatar_colour || 'auto');
+    if (p.kind === 'user' && p.id) this.colours.set(p.id, p.avatar_colour || 'auto');
   }
 
   loadSessions() {
@@ -237,6 +270,7 @@ export class ProfileSettingsPanel {
     this.busy.set(true); this.err.set(''); this.saved.set(false);
     const body: Record<string, string> = { name: this.name().trim() };
     if (this.emailChanged()) { body['email'] = this.email().trim(); body['password'] = this.emailPw(); }
+    if (this.colour() !== (p.avatar_colour || 'auto')) body['avatar_colour'] = this.colour();
     try {
       this.take(await firstValueFrom(this.http.patch<Profile>('/api/me', body)));
       this.saved.set(true);

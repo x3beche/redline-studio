@@ -57,6 +57,8 @@ PREF_INFO = [
     {"id": "budget", "label": "Budget warnings", "about": "a monthly budget crosses its warning or 100%"},
     {"id": "build", "label": "A build fails", "about": "a model build, a board layout or convert"},
     {"id": "digest", "label": "Daily digest", "about": "every morning, 09:00 Istanbul: the day in six numbers"},
+    {"id": "ccusage", "label": "Command Code usage",
+     "about": "the weekly window reaches 90%, or runs out - owner and admins"},
 ]
 
 
@@ -129,7 +131,8 @@ async def state() -> dict:
         "linked": linked,
         "me": {**_link_out(mine), "code_pending": bool(code and (core.aware(code.get("expires")) or core.now())
                                                        > core.now())},
-        "prefs": PREF_INFO,
+        # the server's own news only to those who may change its settings
+        "prefs": [p for p in PREF_INFO if p["id"] not in links.SERVER_PREFS or _can("settings")],
         "commands": [{"command": c, "about": a} for c, a in COMMANDS],
         "can_edit": _can("settings"),
         "queue": await raw[core.OUTBOX].count_documents({"status": {"$in": ["pending", "sending"]}}),

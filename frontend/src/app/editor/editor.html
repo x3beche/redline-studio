@@ -142,9 +142,10 @@
   @if (asking(); as q) {
     <div class="fixed inset-0 flex items-center justify-center p-6"
          style="background: var(--scrim); z-index: 1200">
-      <div class="tcv-card flex max-h-[84vh] w-[min(46rem,90vw)] flex-col overflow-hidden">
+      <div class="tcv-card tcv-qcard flex max-h-[84vh] w-[min(46rem,90vw)] flex-col overflow-hidden">
         <div class="flex shrink-0 items-center gap-2 px-4 py-2.5"
-             style="border-bottom: 1px solid var(--line); background: var(--pen-wash)">
+             style="border-bottom: 1px solid var(--line)">
+          <span class="tcv-th-qdot"></span>
           <span class="tcv-label" style="color: var(--pen)">{{ 'Agent is asking' | t }}</span>
           @if (questions().length > 1) {
             <span class="mono text-[11px]" style="color: var(--ink-dim)">
@@ -222,7 +223,8 @@
   @if (!asking() && waiting().length) {
     <button (click)="openAsk()"
             class="tcv-card fixed bottom-3 right-3 flex max-w-[26rem] items-center gap-2 px-3 py-2 text-left"
-            style="z-index: 900; border-color: var(--pen)">
+            style="z-index: 900; border-color: var(--line)">
+      <span class="tcv-th-qdot"></span>
       <span class="tcv-label shrink-0" style="color: var(--pen)">{{ 'Agent is asking' | t }}</span>
       <span class="min-w-0 flex-1 truncate text-[12px]">
         {{ oneLine(waiting()[0].text) }}
@@ -292,7 +294,7 @@
         </div>
       }
       <div class="tcv-card max-w-2xl p-3 text-[12px]">
-        <p class="mb-1">{{ pv.comment }}</p>
+        <div class="md tcv-note-md mb-1" [innerHTML]="pv.comment | md"></div>
         <p style="color: var(--ink-dim)">
           {{ pv.created_at.slice(0, 16).replace('T', ' ') }}
           @if (pv.part) { · part: {{ pv.part }} }
@@ -385,7 +387,7 @@
           <img [src]="imageUrl(fv)" alt="revision drawing"
                class="block h-32 w-full object-contain" style="background: var(--shot-bg)">
         }
-        <p class="px-2 py-1.5 text-[11px] leading-snug">{{ fv.comment }}</p>
+        <div class="md tcv-note-md px-2 py-1.5 text-[11px] leading-snug" [innerHTML]="fv.comment | md"></div>
         <p class="px-2 pb-1.5 text-[10px]" style="color: var(--ink-dim)">
           {{ fv.created_at.slice(0, 16).replace('T', ' ') }}
           @if (fv.part) { · {{ fv.part }} }
@@ -624,6 +626,18 @@
         }
       </select>
 
+      <!-- A firmware note is about a pin (a row of Pins, a net on the sheet)
+           or lines of a file (selected in the Code view): what the room
+           picked, shown here so it is clear what the note will say. -->
+      @if (picked.room() === 'firmware') {
+        <div class="tcv-fw-anchor mb-2" [attr.data-on]="picked.fwAnchor() ? 1 : null">
+          <span class="tcv-label shrink-0">{{ 'About' | t }}</span>
+          <span class="min-w-0 flex-1 truncate mono" [title]="anchorLabel(picked.fwAnchor())">{{ anchorLabel(picked.fwAnchor()) }}</span>
+          @if (picked.fwAnchor()) {
+            <button class="tcv-chip shrink-0 px-1 py-0" (click)="clearAnchor()" title="not about this pin or these lines">×</button>
+          }
+        </div>
+      }
       <label class="tcv-label mb-1 block">{{ 'Comment' | t }}</label>
       <textarea rows="3" [value]="comment()"
                 (input)="comment.set($any($event.target).value)"
@@ -644,7 +658,9 @@
         {{ (saving() ? 'saving…' : 'Save as draft') | t }}
       </button>
       <p class="mt-1 text-[11px]" style="color: var(--ink-dim)">
-        {{ picked.room() === 'pcb'
+        {{ picked.room() === 'firmware'
+           ? 'Pick a pin, a net on the sheet or lines of code first; saved with a picture of the view. Press the pen to draw on it.'
+           : picked.room() === 'pcb'
            ? (picked.boardDraft() ? 'Saved with the frozen view and your marks on it.'
                                   : 'Saved as a note on the open board. Press the pen to draw on it.')
            : frozen() ? 'Saved with the drawing. Drafts stay invisible until queued.'
@@ -695,6 +711,7 @@
       } @empty {
         <li class="text-[11px]" style="color: var(--ink-dim)">
           {{ (picked.room() === 'pcb' ? 'No notes on boards yet.'
+             : picked.room() === 'firmware' ? 'No notes on firmware yet.'
              : 'No revisions yet.') | t }}
         </li>
       }
@@ -945,7 +962,7 @@
                      worked on under the tree, where it opens the card large -
                      there the column is narrow and the note is kept to three
                      lines. -->
-                <p class="min-w-0 flex-1 cursor-pointer text-[12px] leading-snug"
+                <div class="min-w-0 flex-1 cursor-pointer text-[12px] leading-snug"
                    [class.truncate]="isFolded(r.id)"
                    [class.tcv-clamp3]="docked && !popup && !isFolded(r.id)"
                    (click)="docked && !popup ? openTask(r) : toggleFold(r.id)"
@@ -960,8 +977,9 @@
                   }
                   <!-- Folded, the card says one sentence and nothing else; the
                        wall of text is exactly what folding is for. -->
-                  {{ isFolded(r.id) ? cardLine(r) : r.comment }}
-                </p>
+                  @if (isFolded(r.id)) { {{ cardLine(r) }} }
+                  @else { <div class="md tcv-note-md" [innerHTML]="r.comment | md"></div> }
+                </div>
               }
               @if (r.archived) {
                 <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase"
@@ -1039,6 +1057,40 @@
                 }
               </div>
             }
+            <!-- A firmware note: what it is about, and once finished what the
+                 work did - the build's figures, and the diff on demand. -->
+            @if (r.kind === 'firmware') {
+              <div class="tcv-fw-card mt-1">
+                <div class="flex items-center gap-1">
+                  <span class="mono min-w-0 flex-1 truncate" [title]="anchorLabel(r.anchor)">⌖ {{ anchorLabel(r.anchor) }}</span>
+                  <button class="tcv-chip shrink-0 px-1 py-0" (click)="openInFirmware(r)"
+                          title="the Firmware room, on this file and line - or this pin">{{ 'Open in Firmware' | t }}</button>
+                </div>
+                @if (r.fw_result; as fr) {
+                  <div class="tcv-fw-build" [attr.data-ok]="fr.build.errors ? null : 1">
+                    <b>{{ fr.build.errors ? 'build failed' : 'built, ready to flash' }}</b>
+                    · v{{ fr.from_version }} → v{{ fr.version }}
+                    · {{ fr.build.errors }} {{ 'errors' | t }} · {{ fr.build.warnings }} {{ 'warnings' | t }}
+                  </div>
+                  <div class="tcv-fw-build">
+                    flash {{ fwSize(fr.build.flash) }} · RAM {{ fwSize(fr.build.ram) }}
+                  </div>
+                  <button class="tcv-fw-difftoggle" (click)="toggleFwDiff(r.id)" [attr.aria-expanded]="fwDiffOpen().has(r.id)">
+                    {{ fwDiffOpen().has(r.id) ? '▾' : '▸' }} diff · {{ fr.files.length }} file{{ fr.files.length === 1 ? '' : 's' }}
+                    <span class="tcv-diff-add">+{{ fr.added }}</span> <span class="tcv-diff-del">−{{ fr.removed }}</span>
+                  </button>
+                  @if (fwDiffOpen().has(r.id)) {
+                    @for (f of fr.files; track f.path) {
+                      <div class="tcv-fw-diff">
+                        @for (l of diffLines(f.diff); track $index) {
+                          <div [attr.data-k]="diffKind(l)">{{ l || ' ' }}</div>
+                        }
+                      </div>
+                    }
+                  }
+                }
+              </div>
+            }
             <div class="mt-1 flex items-center gap-1 text-[10px]"
                  style="color: var(--ink-dim)">
               <span class="truncate">
@@ -1047,6 +1099,13 @@
                 @if (r.part) { · {{ r.part }} }
                 @if (r.model) { · {{ r.model }} }
               </span>
+              <!-- Filed from a task block in a chat: back to the line it was written in. -->
+              @if (r.from_chat; as fc) {
+                <button (click)="openChatSource(fc)" class="tcv-chip shrink-0 px-1 py-0"
+                        title="sent to the queue from a chat - open the message it was written in">
+                  ↩ from chat
+                </button>
+              }
               <!-- Back to the view it was drawn on: the camera, and with it
                    the clipping, the tab and the parts that were shown, so the
                    model can be compared with the drawing live. -->

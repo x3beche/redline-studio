@@ -206,6 +206,43 @@ def budget_event(link: dict | None, alert: dict, text: str | None, base: str | N
     return f"{icon} <b>Budget</b>\n{body}" + (f"\n{_a(url, w(link, 'open'))}" if url else "")
 
 
+def _num_short(v) -> str:
+    if not isinstance(v, (int, float)):
+        return "?"
+    return f"{v:,.0f}" if abs(v) >= 100 else f"{v:,.2f}".rstrip("0").rstrip(".")
+
+
+def cc_usage_event(link: dict | None, alert: dict, base: str | None) -> str:
+    """Command Code's weekly window at 90%, or used up - with when it resets
+    (Istanbul time, as the digest)."""
+    from datetime import datetime, timedelta, timezone
+    tr = ui_lang(link) == "tr"
+    used, cap, pct = alert.get("used"), alert.get("cap"), alert.get("pct")
+    if pct is None and isinstance(used, (int, float)) and isinstance(cap, (int, float)) and cap:
+        pct = 100 * used / cap
+    pct_s = f"{round(pct)}%" if isinstance(pct, (int, float)) else "?"
+    of = f"{_num_short(used)} / {_num_short(cap)}"
+    reset = alert.get("reset_at")
+    when = None
+    if isinstance(reset, (int, float)) and reset > 0:
+        d = datetime.fromtimestamp(reset / 1000, timezone(timedelta(hours=3)))
+        when = d.strftime("%d.%m %H:%M")
+    if alert.get("level") == "exceeded":
+        head = "🛑 <b>Command Code</b>"
+        body = (f"Haftalık kullanım penceresi doldu ({of})." if tr
+                else f"The weekly usage window is used up ({of}).")
+    else:
+        head = "⚠️ <b>Command Code</b>"
+        body = (f"Haftalık kullanım penceresi %{pct_s.rstrip('%')} dolu ({of})." if tr
+                else f"The weekly usage window is at {pct_s} ({of}).")
+    if when:
+        body += (f" Sıfırlanma: {when} (İstanbul)." if tr else f" Resets {when} (Istanbul).")
+    if alert.get("plan"):
+        body += f"\n{core.esc(alert['plan'])}"
+    url = app_link(base, ws="settings")
+    return f"{head}\n{body}" + (f"\n{_a(url, w(link, 'open'))}" if url else "")
+
+
 def build_event(link: dict | None, job: dict, base: str | None) -> str:
     what = job.get("model") or job.get("board") or "?"
     kind = job.get("kind") or "build"

@@ -107,6 +107,8 @@ _RULES: list[tuple[str, str, str]] = [
     ("PATCH", "/api/revisions/{}", "status"),          # see action(): by the status asked for
     ("PATCH", "/api/revisions/{}/archive", "edit"),
     ("PUT", "/api/revisions/{}/image/after", "run"),
+    # finishing a firmware note's work: its diff, build and picture on the card
+    ("POST", "/api/revisions/{}/firmware-result", "run"),
     # notes: anyone who may draw a note on a model may jot one down; the
     # route itself keeps deleting someone else's to those who may delete
     ("POST", "/api/notes", "draw"),
@@ -116,6 +118,11 @@ _RULES: list[tuple[str, str, str]] = [
     # files: bringing one in, or pointing an agent at it, is like writing a
     # note; the route keeps deleting someone else's to those who may delete
     ("POST", "/api/files", "draw"),
+    # its folders, moving and deleting several: the same right; deleting a
+    # folder with someone else's file in it needs "delete" (files_api.py)
+    ("POST", "/api/files/(folders|move|bulk-delete)", "draw"),
+    ("PATCH", "/api/files/folders/{}", "draw"),
+    ("DELETE", "/api/files/folders/{}", "draw"),
     ("PATCH", "/api/files/{}", "draw"),
     ("DELETE", "/api/files/{}", "draw"),
     ("POST", "/api/files/{}/send", "draw"),
@@ -153,6 +160,10 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/releases", "run"),
     # talking with the agents
     ("POST", "/api/chat", "draw"),
+    # a ```task block in a chat, queued with its button: queueing a note
+    # (backend/tasks.py), so it is the same right as queueing one
+    ("POST", "/api/chat/{}/task/{}/queue", "run"),
+    ("POST", "/api/cc/chats/{}/messages/{}/task/{}/queue", "run"),
     ("POST", "/api/questions", "draw"),
     ("POST", "/api/questions/{}/answer", "draw"),
     # an agent's question or reply in the reader's language: reading, so a

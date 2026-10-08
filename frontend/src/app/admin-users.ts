@@ -20,7 +20,7 @@ export interface AdminUser {
   disabled: boolean; must_change_password: boolean;
   created_at: string | null; last_sign_in: string | null;
   sessions: number; tokens: number; me: boolean;
-  has_avatar: boolean; avatar_v: number | null;
+  has_avatar: boolean; avatar_v: number | null; avatar_colour?: string;
 }
 interface Listing { users: AdminUser[]; me: string; my_role: 'owner' | 'admin'; roles: string[]; about: Record<string, string> }
 
@@ -63,7 +63,7 @@ const MIN_PASSWORD = 10;
         <form class="st-card-body" (submit)="$event.preventDefault(); saveProfile(u)">
           <div class="pf-top">
             <div class="pf-pic">
-              <app-avatar [name]="eName() || u.name" [userId]="u.id" [hasPicture]="u.has_avatar" [v]="u.avatar_v" [size]="88" />
+              <app-avatar [name]="eName() || u.name" [userId]="u.id" [hasPicture]="u.has_avatar" [v]="u.avatar_v" [colour]="u.avatar_colour" [size]="88" />
               @if (mayManage(u)) {
                 <div class="pf-pic-acts">
                   <label class="tcv-btn tcv-files-btn pf-file" [attr.data-busy]="picBusy() ? 1 : null">
@@ -231,7 +231,7 @@ const MIN_PASSWORD = 10;
           @for (u of shown(); track u.id) {
             <div class="um-row" tabindex="0" (click)="open(u)" (keydown.enter)="open(u)">
               <span class="um-who">
-                <app-avatar [name]="u.name" [userId]="u.id" [hasPicture]="u.has_avatar" [v]="u.avatar_v" [size]="28" />
+                <app-avatar [name]="u.name" [userId]="u.id" [hasPicture]="u.has_avatar" [v]="u.avatar_v" [colour]="u.avatar_colour" [size]="28" />
                 <span class="um-who-text"><b>{{ u.name }}@if (u.me) { <span class="st-tag">{{ 'you' | t }}</span> }</b>
                   <small>{{ u.email }}</small></span>
               </span>

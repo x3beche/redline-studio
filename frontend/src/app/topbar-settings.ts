@@ -1,7 +1,8 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { T } from './i18n';
 import { Selection } from './selection';
-import { GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisplay } from './topbar';
+import { CcTabUsage } from './cc-usage';
+import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisplay } from './topbar';
 
 /** Settings > Top bar: which tabs the bar shows and in what order, and how
  *  they are drawn (topbar.ts keeps it). Drag a row, or use its arrows -
@@ -9,7 +10,7 @@ import { GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisplay } from './topbar';
  *  move: it is always shown, always last. */
 @Component({
   selector: 'app-topbar-settings',
-  imports: [T],
+  imports: [T, CcTabUsage],
   styleUrl: './settings.css',
   styles: [`
     .tb-prev { display: flex; align-items: flex-end; gap: 4px; min-width: 0; overflow-x: auto; overflow-y: hidden;
@@ -24,6 +25,8 @@ import { GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisplay } from './topbar';
     .tb-prev-end { margin-left: auto; }
     .tb-prev-gap + .tb-prev-end { margin-left: 0; }
     .tb-rows { display: flex; flex-direction: column; }
+    .tb-cc-opts { grid-column: 3 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding-bottom: 2px; }
+    .tb-cc-hint { flex-basis: 100%; font-size: 10.5px; color: var(--ink-dim); }
     .tb-row { display: grid; grid-template-columns: 18px 26px minmax(0, 1fr) auto auto; align-items: center; gap: 8px;
       padding: 6px 10px; border-top: 1px solid var(--line); outline: none; background: var(--surface); }
     .tb-row:first-child { border-top: 0; }
@@ -55,6 +58,7 @@ import { GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisplay } from './topbar';
       .tb-row .st-seg { grid-area: show; justify-self: start; }
       .tb-arrows { grid-area: arrows; }
       .tb-arrow { width: 40px; height: 36px; }
+      .tb-cc-opts { grid-column: 1 / -1; grid-row: 3; }
       .tb-row .st-seg button { padding: 7px 14px; }
     }
   `],
@@ -75,6 +79,7 @@ import { GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisplay } from './topbar';
               <span class="tcv-tab" [class.tb-iconic]="bar.display() === 'icon'" [attr.data-on]="room() === e.id ? 1 : null">
                 @if (bar.showIcon()) { <svg class="tb-ico" viewBox="0 0 24 24"><path [attr.d]="bar.icon(e.id)"/></svg> }
                 {{ bar.text(e.ws) | t }}
+                @if (e.id === 'commandcode') { <app-cc-tab-usage /> }
               </span>
             }
           }
@@ -146,6 +151,26 @@ import { GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisplay } from './topbar';
             <button type="button" class="tb-arrow" [disabled]="last" (click)="bar.step(e.id, 1)"
                     [attr.aria-label]="('Move down' | t) + ': ' + (name(e.id) | t)" [title]="'Move down' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
           </span>
+          @if (e.id === 'commandcode') {
+            <!-- The Command Code account's usage, inside the Chat tab (cc-usage.ts) -->
+            <div class="tb-cc-opts" (keydown)="$event.stopPropagation()" draggable="false" (dragstart)="$event.preventDefault(); $event.stopPropagation()">
+              <span class="st-sub">{{ 'Usage' | t }}</span>
+              <div class="st-seg" role="radiogroup" [attr.aria-label]="'Command Code usage on the Chat tab' | t">
+                @for (o of ccStyles; track o.id) {
+                  <button type="button" role="radio" [attr.aria-checked]="bar.ccStyle() === o.id" [class.on]="bar.ccStyle() === o.id"
+                          (click)="bar.setCcStyle(o.id)">{{ o.label | t }}</button>
+                }
+              </div>
+              <span class="st-sub">{{ 'Window' | t }}</span>
+              <div class="st-seg" role="radiogroup" [attr.aria-label]="'Window' | t">
+                @for (o of ccWindows; track o.id) {
+                  <button type="button" role="radio" [attr.aria-checked]="bar.ccWindow() === o.id" [class.on]="bar.ccWindow() === o.id"
+                          [disabled]="bar.ccStyle() === 'off'" (click)="bar.setCcWindow(o.id)">{{ o.label | t }}</button>
+                }
+              </div>
+              <span class="tb-cc-hint">{{ 'Command Code usage in the tab - a click on it opens LLM settings. Warn from 75%, danger from 90%; Monthly is spent of spent + left, as Command Code reports.' | t }}</span>
+            </div>
+          }
         </div>
       }
       <div class="tb-row" role="listitem" data-fixed>
@@ -163,6 +188,8 @@ export class TopbarSettingsPanel {
   bar = inject(TopBar);
   room = inject(Selection).room;
   readonly gap = GAP;
+  readonly ccStyles = CC_TAB_STYLES;
+  readonly ccWindows = CC_TAB_WINDOWS;
   readonly displays = TOPBAR_DISPLAYS;
 
   tabCount = computed(() => this.bar.entries().filter(e => e.id !== GAP).length);

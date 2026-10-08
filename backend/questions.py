@@ -34,7 +34,7 @@ def _now() -> str:
 
 async def ask(db, text: str, options: list[str] | None = None,
               revision: str | None = None, context: str | None = None,
-              multi: bool = False) -> dict:
+              multi: bool = False, room: str | None = None) -> dict:
     """Write one question and return it. The agent then waits for an answer."""
     doc = {
         "_id": uuid.uuid4().hex[:12],
@@ -46,6 +46,8 @@ async def ask(db, text: str, options: list[str] | None = None,
         "options": [o.strip() for o in (options or []) if o.strip()],
         "multi": bool(multi),
         "revision": revision,
+        # Which room's thread it is asked in; without one, the note's room.
+        **({"room": room} if room in ("cad", "pcb", "firmware") else {}),
         "status": OPEN,
         "answer": None,
         "answered_at": None,
@@ -74,6 +76,18 @@ async def answer(db, qid: str, text: str) -> dict | None:
     return res
 
 
+async def answered(db, room: str | None = None, limit: int = 200) -> list[dict]:
+    """The questions that were answered, oldest first - one room's (by the
+    same rule as with_rooms) or every room's. A room's thread shows them
+    in its log, in time order, with the answer under each: what was asked
+    and what was decided stays readable after the card has gone."""
+    rows = await with_rooms(db, [d async for d in db[QUESTIONS].find({"status": ANSWERED})])
+    if room is not None:
+        rows = [q for q in rows if q.get("room") == room]
+    rows.sort(key=lambda d: d["at"])
+    return rows[-limit:] if limit else rows
+
+
 async def drop(db, qid: str) -> bool:
     """Withdraw a question - the agent gave up waiting, or answered itself."""
     res = await db[QUESTIONS].update_one(
@@ -88,13 +102,15 @@ async def get(db, qid: str) -> dict | None:
 
 async def with_rooms(db, rows: list[dict]) -> list[dict]:
     """Each question with the room whose thread it belongs in: a question
-    about a board note is the PCB room's, anything else the 3D room's -
-    the same rule a thread line without a room follows (chat.room_of)."""
+    about a board note is the PCB room's, one about a firmware note the
+    Firmware room's, anything else the 3D room's - the same rule a thread
+    line without a room follows (chat.room_of)."""
     kinds: dict[str, str | None] = {}
     for q in rows:
         rid = q.get("revision")
         if rid and rid not in kinds:
             rev = await db["revisions"].find_one({"_id": rid}, {"kind": 1})
             kinds[rid] = (rev or {}).get("kind")
-        q["room"] = q.get("room") or ("pcb" if kinds.get(rid) == "pcb" else "cad")
+        kind = kinds.get(rid)
+        q["room"] = q.get("room") or (kind if kind in ("pcb", "firmware") else "cad")
     return rows

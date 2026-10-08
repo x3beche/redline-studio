@@ -45,7 +45,7 @@ def _s(desc: str) -> dict:
 TOOLS: dict[str, tuple] = {
     "queue": (
         "What is queued, oldest first. With a room, only that room's notes: "
-        "cad (3D models) or pcb (boards).",
+        "cad (3D models), pcb (boards) or firmware.",
         {"room": {"type": "string", "enum": ROOMS,
                   "description": "only this room's queue"}},
         [], lambda a: ["queue"] + (["--room", a["room"]] if a.get("room") else [])),
@@ -75,7 +75,8 @@ TOOLS: dict[str, tuple] = {
         + (["-p", str(a["percent"])] if a.get("percent") is not None else [])),
     "finish": (
         "Close a note's run: the after picture and what the work cost go onto "
-        "its card.",
+        "its card. A firmware note is refused until the version with the change "
+        "has built cleanly; its diff, build and a picture of the change are kept.",
         {"id": _s("revision id"), "failed": {"type": "boolean"}},
         ["id"], lambda a: ["finish", a["id"]] + (["--failed"] if a.get("failed") else [])),
     "done": (
@@ -103,11 +104,54 @@ TOOLS: dict[str, tuple] = {
         {"text": _s("the question, in Markdown"),
          "options": {"type": "array", "items": {"type": "string"}},
          "context": _s("what you already know"),
+         "revision": _s("the note this is about (its room's thread shows it)"),
+         "room": {"type": "string", "enum": ROOMS, "description": "whose thread; default: the note's room"},
          "timeout": {"type": "integer", "description": "seconds; 0 waits"}},
         ["text"], lambda a: ["ask", a["text"]]
+        + (["--revision", a["revision"]] if a.get("revision") else [])
+        + (["--room", a["room"]] if a.get("room") else [])
         + [x for o in a.get("options") or [] for x in ("-o", o)]
         + (["-c", a["context"]] if a.get("context") else [])
         + (["--timeout", str(a["timeout"])] if a.get("timeout") else [])),
+    "next": (
+        "The oldest queued note nobody has started, in full - with a room, that "
+        "room's. A firmware note prints its firmware, the pin or code lines it is "
+        "anchored to as they are now, and where the build stands.",
+        {"room": {"type": "string", "enum": ROOMS, "description": "only this room's"}},
+        [], lambda a: ["next"] + (["--room", a["room"]] if a.get("room") else [])),
+    # Firmware (backend/firmware.py, backend/fwnotes.py): the Firmware room's
+    # files, builds and versions. Through the API with the agents' token.
+    "fw_files": (
+        "A firmware's files at its latest version (pins.h is generated - never "
+        "edit it), its version and last build. Remembers the version for fw_put.",
+        {"fw": _s("firmware id or title"), "prefix": _s("only paths starting with this")},
+        ["fw"], lambda a: ["fw", "files", a["fw"]] + ([a["prefix"]] if a.get("prefix") else [])),
+    "fw_get": (
+        "One file of a firmware, written to a local file to edit.",
+        {"fw": _s("firmware id or title"), "path": _s("e.g. src/main.cpp"),
+         "out": _s("local file to write it to")},
+        ["fw", "path", "out"], lambda a: ["fw", "get", a["fw"], a["path"], "-o", a["out"]]),
+    "fw_put": (
+        "Save an edited file as the firmware's next version. Refused when the "
+        "firmware moved on since the version it was read at (base).",
+        {"fw": _s("firmware id or title"), "path": _s("its path in the project"),
+         "file": _s("the local file with the new text"), "note": _s("what the change is"),
+         "base": {"type": "integer", "description": "the version it was written against"}},
+        ["fw", "path", "file"], lambda a: ["fw", "put", a["fw"], a["path"], a["file"]]
+        + (["--note", a["note"]] if a.get("note") else [])
+        + (["--base", str(a["base"])] if a.get("base") is not None else [])),
+    "fw_build": (
+        "Build the firmware (PlatformIO, in a container) and wait: errors and "
+        "warnings as file:line, flash and RAM.",
+        {"fw": _s("firmware id or title")}, ["fw"], lambda a: ["fw", "build", a["fw"], "--wait"]),
+    "fw_diff": (
+        "What changed between two versions of a firmware (default: the last two).",
+        {"fw": _s("firmware id or title"), "a": {"type": "integer"}, "b": {"type": "integer"}},
+        ["fw"], lambda a: ["fw", "diff", a["fw"]] + ([str(a["a"])] if a.get("a") is not None else [])
+        + ([str(a["b"])] if a.get("b") is not None else [])),
+    "fw_pins": (
+        "The MCU's pins: GPIO, net (the pins.h macro), the parts on it, where the code uses it.",
+        {"fw": _s("firmware id or title")}, ["fw"], lambda a: ["fw", "pins", a["fw"]]),
     # Components (backend/links.py): models and boards as the 3D designs
     # that import them see them. Through the API with the agents' token.
     "component_list": (

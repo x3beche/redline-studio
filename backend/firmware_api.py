@@ -9,6 +9,7 @@
     GET    /api/firmware/{fid}/files/{path}    one file's text (?version=)
     POST   /api/firmware/{fid}/files           {files: {path: text | null}, note} -> a new version
     GET    /api/firmware/{fid}/versions
+    GET    /api/firmware/{fid}/diff            ?a=&b= two versions (default: the last two), file by file
     POST   /api/firmware/{fid}/pins            pins.h from the board again, now
     POST   /api/firmware/{fid}/build           start a build (202); 409 while one runs
     GET    /api/firmware/{fid}/builds          the last builds
@@ -132,6 +133,17 @@ async def save_files(fid: str, body: Save):
 async def firmware_versions(fid: str):
     await _fw(fid)
     return await firmware.versions(_db(), fid)
+
+
+@router.get("/api/firmware/{fid}/diff")
+async def firmware_diff(fid: str, a: int | None = None, b: int | None = None):
+    """What changed between two versions, as unified diffs (backend/fwnotes.py)."""
+    from . import fwnotes
+    await _fw(fid)
+    try:
+        return await fwnotes.diff(_db(), fid, a, b)
+    except fwnotes.Refused as exc:
+        raise HTTPException(422, str(exc))
 
 
 async def _start(fid: str, why: str | None) -> dict:

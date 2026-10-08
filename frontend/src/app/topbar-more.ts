@@ -6,6 +6,7 @@ import { Prefs } from './preferences';
 import { TopBar } from './topbar';
 import { Workspace } from './workspaces';
 import { AgentThreads } from './rooms/agent-thread';
+import { CcTabUsage } from './cc-usage';
 
 /** "More" at the end of the top bar: the tabs that did not fit, then the
  *  ones hidden in Settings > Top bar, so none is ever out of reach. Lit
@@ -15,7 +16,7 @@ import { AgentThreads } from './rooms/agent-thread';
  *  tabs the shell draws (app.ts), and this is always in the bar to bring it. */
 @Component({
   selector: 'app-topbar-more',
-  imports: [NgTemplateOutlet, T],
+  imports: [NgTemplateOutlet, T, CcTabUsage],
   encapsulation: ViewEncapsulation.None,
   styleUrl: './topbar.css',
   template: `
@@ -44,6 +45,7 @@ import { AgentThreads } from './rooms/agent-thread';
     <svg class="tb-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="bar.icon(w.id)"/></svg>
     <span>{{ w.label | t }}</span>
     @if (w.id === 'commandcode' && threads.total()) { <span class="tcv-tab-unread">{{ threads.total() }}</span> }
+    @if (w.id === 'commandcode') { <app-cc-tab-usage /> }
     @if (picked.room() === w.id) { <em>● {{ 'open' | t }}</em> }
   </button>
 </ng-template>`,

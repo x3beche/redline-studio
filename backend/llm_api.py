@@ -200,4 +200,83 @@ async def usage(provider: str = "all", days: int = 30) -> dict:
             "by_model": sorted(by_model.values(), key=lambda x: -x["calls"]),
             "by_kind": sorted(by_kind.values(), key=lambda x: -x["calls"]),
             "recent": recent,
-            "account": await _openrouter_account() if "openrouter" in provs else None}
+            "account": await _openrouter_account_new() if "openrouter" in provs else None}
+
+
+async def _openrouter_account_new() -> dict | None:
+    """The key's figures from llm.or_account, in the usage panel's old shape."""
+    d = await llm.or_account()
+    k = d.get("key") if d.get("shared") else None
+    return {kk: k.get(kk) for kk in ("label", "usage", "limit", "limit_remaining", "is_free_tier")} if k else None
+
+
+# ---------------- the Command Code account ----------------
+
+@router.get("/commandcode/account")
+async def commandcode_account(refresh: bool = False) -> dict:
+    """The Command Code account the saved key belongs to: plan, the 5-hour
+    and weekly windows, credits, the period's requests, and 14 days of the
+    weekly window for a chart (backend/llm.py cc_account). Anyone who may
+    see LLM settings may see it; the account's email only the owner, and
+    only a person - not an agent's page session. Never the key."""
+    from . import access
+
+    try:
+        d = await llm.cc_account(_db(), force=refresh)
+    except Exception as exc:                           # noqa: BLE001 - say so, not a 500
+        llm.log.warning("Command Code account failed: %s", type(exc).__name__)
+        d = {"set": bool(llm.key("commandcode")), "shared": False}
+    out = {k: v for k, v in d.items()}
+    acct = out.get("account")
+    if isinstance(acct, dict):
+        who = actors.current()
+        owner = access.current() == "owner" and who.get("type") in (None, "user") and not who.get("page")
+        out["account"] = {k: v for k, v in acct.items() if k != "email" or owner}
+    out["history"] = []
+    out["weekly_kind"] = "unknown"
+    if out.get("set"):
+        try:
+            raw = _db().raw if getattr(type(_db()), "SCOPED", False) else _db()
+            out["history"] = await llm.cc_history(raw)
+            out["weekly_kind"] = llm.cc_window_kind(out["history"])
+        except Exception as exc:                       # noqa: BLE001 - the figures still show
+            llm.log.warning("Command Code history not read: %s", type(exc).__name__)
+    return out
+
+
+
+@router.get("/commandcode/analysis")
+async def commandcode_analysis(refresh: bool = False) -> dict:
+    """The billing period analysed: spend per day (from Command Code's own
+    totals, a day at a time), the burn rate and where it leads, the weekly
+    window, and how much of it was Redline's (backend/llm.py cc_analysis)."""
+    try:
+        return await llm.cc_analysis(_db(), force=refresh)
+    except Exception as exc:                           # noqa: BLE001 - say so, not a 500
+        llm.log.warning("Command Code analysis failed: %s", type(exc).__name__)
+        return {"set": bool(llm.key("commandcode")), "shared": False}
+
+
+
+
+@router.get("/providers/{provider}/account")
+async def provider_account(provider: str, refresh: bool = False) -> dict:
+    """One provider's own account figures (backend/llm.py REGISTRY), and -
+    for a provider that prices its calls - what Redline itself spent there.
+    Never the key."""
+    if provider not in llm.REGISTRY:
+        raise HTTPException(404, f"unknown provider {provider!r}")
+    if provider == "commandcode":
+        return await commandcode_account(refresh=refresh)
+    try:
+        out = dict(await llm.provider_account(_db(), provider, force=refresh))
+    except Exception as exc:                           # noqa: BLE001 - say so, not a 500
+        llm.log.warning("%s account failed: %s", provider, type(exc).__name__)
+        out = {"set": bool(llm.key(provider)), "shared": False}
+    try:
+        raw = _db().raw if getattr(type(_db()), "SCOPED", False) else _db()
+        out["redline"] = await llm.own_spend(raw, provider)
+    except Exception as exc:                           # noqa: BLE001
+        llm.log.warning("%s: Redline's own spend not read: %s", provider, type(exc).__name__)
+        out["redline"] = None
+    return out

@@ -5,11 +5,12 @@ import { HttpClient } from '@angular/common/http';
 import { NgTemplateOutlet } from '@angular/common';
 import { Chat, ChatLine, Question, Questions } from '../api';
 import { Auth } from '../auth';
-import { Markdown } from '../markdown';
+import { Markdown, Segment, TaskBlock, splitTasks } from '../markdown';
 import { T, t } from '../i18n';
 import { Selection } from '../selection';
 import { TopBar } from '../topbar';
 import { WORKSPACES } from '../workspaces';
+import { TaskBlockView } from './task-block';
 import { Reading, ReadingNote, ReadingPick } from '../editor/reading';
 
 /** The rooms' agent threads, in the Chat tab.
@@ -120,13 +121,25 @@ export class AgentThreads {
   }
 }
 
+/** One row of a thread's log: a line, an agent's question, or the answer
+ *  given to an answered one (shown as the person's line). */
+export interface ThreadItem { kind: 'line' | 'q' | 'answer'; key: string; m?: ChatLine; q?: Question }
+
+/** Who an item is from, for the one-avatar-per-run rule. */
+export function sender(it: ThreadItem): string {
+  if (it.kind === 'q') return 'agent';
+  if (it.kind === 'answer') return 'user:' + (it.q?.answered_by?.id ?? it.q?.answered_by?.name ?? '');
+  const m = it.m!;
+  return m.role === 'agent' ? 'agent' : 'user:' + (m.by?.id ?? m.by?.name ?? '');
+}
+
 /** One room's thread, in the Chat tab's conversation area. The avatars and
  *  icons are the Chat room's own templates, handed in. */
 @Component({
   selector: 'app-room-thread',
   // Its header, lines and composer are the conversation column's own rows.
   host: { style: 'display: contents' },
-  imports: [NgTemplateOutlet, T, Markdown, ReadingNote, ReadingPick],
+  imports: [NgTemplateOutlet, T, Markdown, TaskBlockView, ReadingNote, ReadingPick],
   template: `
 <header class="tcv-cc-bar">
   <button class="tcv-cc-ib tcv-cc-burger" (click)="menu.emit()" [title]="'Conversations' | t">
@@ -138,60 +151,121 @@ export class AgentThreads {
   @if (waiting(); as n) {
     <span class="tcv-th-waiting" [title]="'said, not picked up yet' | t">{{ n }} {{ 'waiting' | t }}</span>
   }
-  <div class="tcv-cc-baracts">
-    <rl-reading-pick [compact]="true" place="left" />
-  </div>
 </header>
 
-<div class="tcv-cc-log tcv-cc-scroll" #log>
+<div class="tcv-cc-log tcv-cc-scroll" #log (wheel)="touched = true" (touchmove)="touched = true" (keydown)="touched = true">
   <div class="tcv-cc-col">
-    @for (m of lines(); track m._id; let i = $index) {
+    <!-- The thread in time order: its lines, and the agent's questions -
+         answered ones resolved in place, each followed by its answer as
+         the person's line - then what the agent is still waiting on. -->
+    @for (it of items(); track it.key; let i = $index) {
+      @switch (it.kind) {
+      @case ('line') {
+      @let m = it.m!;
       <article class="tcv-cc-row" [attr.data-role]="m.role === 'agent' ? 'assistant' : 'user'" [attr.data-mid]="m._id"
-               [attr.data-urgent]="m.urgent ? 1 : null">
-        @if (m.role === 'agent') {
-          <ng-container *ngTemplateOutlet="botAv(); context: { $implicit: '', hide: same(i) }" />
-        } @else {
-          <ng-container *ngTemplateOutlet="userAv(); context: { $implicit: m.by, hide: same(i) }" />
-        }
+                 [attr.data-flash]="flash() === m._id ? 1 : null"
+                 [attr.data-urgent]="m.urgent ? 1 : null">
+          @if (m.role === 'agent') {
+            <ng-container *ngTemplateOutlet="botAv(); context: { $implicit: '', hide: same(i) }" />
+          } @else {
+            <ng-container *ngTemplateOutlet="userAv(); context: { $implicit: m.by, hide: same(i) }" />
+          }
+          <div class="tcv-cc-rowmain">
+            <div class="tcv-cc-rowhead">
+              <b>{{ who(m) }}</b>
+              @if (m.urgent) { <span class="tcv-th-urgent">{{ 'Urgent' | t }}</span> }
+              @if (m.role === 'user' && !m.seen_at) {
+                <span class="tcv-th-wait">{{ 'waiting' | t }}</span>
+                @if (sent(m) && auth.can('draw')) {
+                  <button class="tcv-cc-textbtn" (click)="unsay(m)" [title]="'take it back - only while it is unread' | t">{{ 'undo' | t }}</button>
+                }
+              }
+              @if (m.edited; as ed) {
+                <span class="tcv-cc-dim" [title]="(ed.why || '') + ' · ' + stamp(ed.at)">· {{ ed.why || ('edited' | t) }}</span>
+              }
+              <span class="tcv-cc-hovtime">{{ stamp(m.at) }}</span>
+            </div>
+            @if (m.role === 'agent') {
+              <!-- A task written for the queue is a box with its own button
+                   (rooms/task-block.ts); the rest is the answer as written. -->
+              @for (seg of parts(m.text); track $index) {
+                @if (taskOf(seg); as tk) {
+                  <rl-task-block [block]="tk" [url]="'/api/chat/' + m._id + '/task/' + tk.index + '/queue'"
+                                 [state]="m.tasks?.[tk.index]" [room]="room()" (queued)="load()" />
+                } @else {
+                  <div class="tcv-cc-answer md" [innerHTML]="mdOf(seg) | md"></div>
+                }
+              }
+            } @else {
+              <div class="tcv-cc-bubble">{{ m.text }}</div>
+            }
+          </div>
+        </article>
+      }
+      @case ('answer') {
+      @let a = it.q!;
+      <article class="tcv-cc-row" data-role="user" [attr.data-answer]="a._id">
+        <ng-container *ngTemplateOutlet="userAv(); context: { $implicit: a.answered_by, hide: same(i) }" />
         <div class="tcv-cc-rowmain">
           <div class="tcv-cc-rowhead">
-            <b>{{ who(m) }}</b>
-            @if (m.urgent) { <span class="tcv-th-urgent">{{ 'Urgent' | t }}</span> }
-            @if (m.role === 'user' && !m.seen_at) {
-              <span class="tcv-th-wait">{{ 'waiting' | t }}</span>
-              @if (sent(m) && auth.can('draw')) {
-                <button class="tcv-cc-textbtn" (click)="unsay(m)" [title]="'take it back - only while it is unread' | t">{{ 'undo' | t }}</button>
-              }
-            }
-            <span class="tcv-cc-hovtime">{{ stamp(m.at) }}</span>
+            <b>{{ a.answered_by?.name || ('you' | t) }}</b>
+            <span class="tcv-cc-dim">· {{ 'answered' | t }}</span>
+            <span class="tcv-cc-hovtime">{{ stamp(a.answered_at || a.at) }}</span>
           </div>
-          @let tm = m.role === 'agent' ? reading.shown('chat', m._id) : null;
-          @if (m.role === 'agent') {
-            <div class="tcv-cc-answer md" [attr.dir]="tm ? 'auto' : null" [innerHTML]="(tm?.text ?? m.text) | md"></div>
-            @if (reading.lang()) {
-              <div class="tcv-th-tr"><rl-reading-note kind="chat" [id]="m._id" [offer]="true" /></div>
-            }
-          } @else {
-            <div class="tcv-cc-bubble">{{ m.text }}</div>
-          }
+          <div class="tcv-cc-bubble">{{ a.answer }}</div>
         </div>
       </article>
-    }
-    <!-- What the agent is waiting on, in this room: answered here as in the
-         card that pops up over every room. -->
-    @for (q of asks(); track q._id) {
+      }
+      @case ('q') {
+      @let q = it.q!;
+      @let open = q.status === 'open';
+      <!-- Only the agent's questions are offered in another language: the
+           reader's choice, on the card itself (editor/reading.ts). -->
       @let tq = reading.shown('question', q._id);
-      <article class="tcv-cc-row" data-role="assistant" data-question="1">
-        <ng-container *ngTemplateOutlet="botAv(); context: { $implicit: '', hide: false }" />
+      <article class="tcv-cc-row" data-role="assistant" data-question="1" [attr.data-answered]="open ? null : 1">
+        <ng-container *ngTemplateOutlet="botAv(); context: { $implicit: '', hide: same(i) }" />
         <div class="tcv-cc-rowmain tcv-th-q">
-          <div class="tcv-cc-rowhead"><b>{{ 'Agent is asking' | t }}</b>
-            <span class="tcv-cc-hovtime">{{ stamp(q.at) }}</span></div>
+          <div class="tcv-cc-rowhead">
+            @if (open) { <span class="tcv-th-qdot"></span><b class="tcv-th-qasking">{{ 'Agent is asking' | t }}</b> }
+            @else {
+              <button class="tcv-th-qfold" (click)="toggleQ(q._id)" [attr.aria-expanded]="isOpenQ(q._id)">
+                {{ isOpenQ(q._id) ? '▾' : '▸' }} <b>{{ 'Agent asked' | t }}</b></button>
+              <span class="tcv-th-qok">✓ {{ 'answered' | t }}</span>
+              @if (!isOpenQ(q._id)) { <span class="tcv-th-qpeek">→ {{ q.answer }}</span> }
+            }
+            <span class="tcv-cc-hovtime">{{ stamp(q.at) }}</span>
+            <span class="tcv-th-qlang"><rl-reading-pick [compact]="true" place="left" /></span>
+          </div>
           @if (reading.lang()) { <div class="tcv-th-tr"><rl-reading-note kind="question" [id]="q._id" /></div> }
-          <div class="tcv-cc-answer md" [attr.dir]="tq ? 'auto' : null" [innerHTML]="(tq?.text ?? q.text) | md"></div>
-          @if (q.context) {
+          <div class="tcv-cc-answer md" [class.tcv-th-qshut]="!open && !isOpenQ(q._id)" [attr.dir]="tq ? 'auto' : null"
+               [innerHTML]="(tq?.text ?? q.text) | md"></div>
+          @if (q.context && (open || isOpenQ(q._id))) {
             <div class="md tcv-th-ctx" [attr.dir]="tq ? 'auto' : null" [innerHTML]="(tq?.context ?? q.context) | md"></div>
           }
-          @if (auth.can('draw')) {
+          @if (!open) {
+            @if (isOpenQ(q._id)) {
+              <!-- Answered: nothing to pick any more. The chosen option, or
+                   the person's own words, is the marked row; the rest dim. -->
+              @let own = !hasChoice(q);
+              <div class="tcv-answers">
+                @for (o of q.options; track o; let k = $index) {
+                  <div class="tcv-answer tcv-answer-done" [attr.data-on]="chosen(q, o) ? 1 : null">
+                    @if (chosen(q, o)) { <span class="tcv-answer-tick">✓</span> }
+                    <span class="md min-w-0 flex-1" [attr.dir]="tq ? 'auto' : null"
+                          [innerHTML]="optionMd(tq?.options?.[k] ?? o) | md"></span>
+                    @if (chosen(q, o)) { <span class="tcv-answer-by">{{ 'chosen' | t }} · {{ whoAnswered(q) }} · {{ stamp(q.answered_at || q.at) }}</span> }
+                  </div>
+                }
+                @if (own) {
+                  <div class="tcv-answer tcv-answer-done" data-on="1">
+                    <span class="tcv-answer-tick">✓</span>
+                    <span class="min-w-0 flex-1">“{{ q.answer }}”</span>
+                    <span class="tcv-answer-by">{{ 'answer by' | t }} {{ whoAnswered(q) }} · {{ stamp(q.answered_at || q.at) }}</span>
+                  </div>
+                }
+              </div>
+            }
+          } @else if (auth.can('draw')) {
             @if (q.options.length) {
               <div class="tcv-answers">
                 @for (o of q.options; track o; let k = $index) {
@@ -211,8 +285,10 @@ export class AgentThreads {
           }
         </div>
       </article>
+      }
+      }
     }
-    @if (!lines().length && !asks().length) {
+    @if (!items().length) {
       <div class="tcv-cc-hello">
         <div class="tcv-cc-hello-mark"><ng-container *ngTemplateOutlet="ico(); context: { $implicit: room() === 'pcb' ? PCB : room() === 'firmware' ? FW : CAD }" /></div>
         <h2>{{ threads.label(room()) | t }}</h2>
@@ -249,8 +325,10 @@ export class RoomThread {
   private chat = inject(Chat);
   private qs = inject(Questions);
   auth = inject(Auth);
-  reading = inject(Reading);
   threads = inject(AgentThreads);
+  reading = inject(Reading);
+  private sel = inject(Selection);
+  flash = signal<string | null>(null);
 
   room = input.required<string>();
   userAv = input.required<TemplateRef<unknown>>();
@@ -274,6 +352,28 @@ export class RoomThread {
   private picked = signal<Record<string, string[]>>({});
 
   asks = computed(() => this.threads.questions().filter(q => (q.room ?? 'cad') === this.room()));
+  /** This room's answered questions (/api/questions/answered), kept in the log. */
+  answered = signal<Question[]>([]);
+  /** Answered question cards opened up again (they start folded). */
+  private unfolded = signal<Set<string>>(new Set());
+
+  /** The log, in time order: the lines, each answered question where it
+   *  was asked with its answer as the person's line where it was given,
+   *  then the open questions - what the agent is waiting on - at the end. */
+  items = computed<ThreadItem[]>(() => {
+    const open = this.asks();
+    const openIds = new Set(open.map(q => q._id));
+    const timed: { at: string; it: ThreadItem }[] = this.lines().map(m => ({ at: m.at, it: { kind: 'line', key: 'l:' + m._id, m } }));
+    for (const q of this.answered()) {
+      if (openIds.has(q._id)) continue;
+      timed.push({ at: q.at, it: { kind: 'q', key: 'q:' + q._id, q } });
+      timed.push({ at: q.answered_at || q.at, it: { kind: 'answer', key: 'a:' + q._id, q } });
+    }
+    // Lines still on their way to the server stay last, as typed.
+    timed.sort((a, b) => (a.it.m?._id.startsWith('local-') ? 1 : 0) - (b.it.m?._id.startsWith('local-') ? 1 : 0)
+                         || (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+    return [...timed.map(x => x.it), ...open.map(q => ({ kind: 'q' as const, key: 'q:' + q._id, q }))];
+  });
   waiting = computed(() => this.lines().filter(m => m.role === 'user' && !m.seen_at).length || null);
 
   private log = viewChild<ElementRef<HTMLDivElement>>('log');
@@ -283,7 +383,29 @@ export class RoomThread {
   constructor() {
     effect(() => {
       const room = this.room();
-      untracked(() => { this.lines.set([]); this.load(true); this.threads.markSeen(room); });
+      untracked(() => { this.lines.set([]); this.answered.set([]); this.load(true); this.threads.markSeen(room); });
+    });
+    // A line asked for from elsewhere (a queued note's "from chat" link):
+    // scrolled to and lit up once it is here.
+    effect(() => {
+      const at = this.sel.threadAt();
+      if (!at || !this.lines().some(m => m._id === at)) return;
+      untracked(() => {
+        this.sel.threadAt.set(null);
+        // Again after the thread has settled: opening it scrolls to its end.
+        this.touched = true;              // reading here: the thread's end does not pull it back
+        const go = () => this.log()?.nativeElement.querySelector(`[data-mid="${CSS.escape(at)}"]`)
+          ?.scrollIntoView({ block: 'center' });
+        setTimeout(go, 400);
+        setTimeout(go, 1700);
+        this.flash.set(at);
+        setTimeout(() => { if (this.flash() === at) this.flash.set(null); }, 3600);
+      });
+    });
+    // The questions in the reader's language as soon as they are here.
+    effect(() => {
+      const lang = this.reading.lang();
+      if (lang) for (const q of this.asks()) this.reading.ensure('question', q._id);
     });
     // A new question lands at the end of the thread: scrolled to, as a line is.
     let asked = 0;
@@ -292,17 +414,13 @@ export class RoomThread {
       if (n > asked) untracked(() => this.scroll());
       asked = n;
     });
-    // The questions in the reader's language as soon as they are here.
-    effect(() => {
-      const lang = this.reading.lang();
-      if (lang) for (const q of this.asks()) this.reading.ensure('question', q._id);
-    });
   }
 
   ngOnDestroy() { clearInterval(this.timer); }
 
-  private load(jump = false) {
+  load(jump = false) {
     const room = this.room();
+    this.loadAnswered(room);
     this.chat.history(room).subscribe({
       next: rows => {
         if (room !== this.room()) return;
@@ -320,26 +438,56 @@ export class RoomThread {
     });
   }
 
-  /** A line read by the agent since, or taken back: the same length, other rows. */
-  private changed(rows: ChatLine[]) {
-    const now = this.lines();
-    return rows.some((r, i) => now[i]?._id !== r._id || now[i]?.seen_at !== r.seen_at);
+  /** This room's answered questions; set only when they changed, so the
+   *  log is not rebuilt every two seconds for nothing. */
+  private loadAnswered(room: string) {
+    this.qs.answered(room).subscribe({
+      next: rows => {
+        if (room !== this.room()) return;
+        const sig = (l: Question[]) => l.map(q => q._id + (q.answered_at ?? '')).join();
+        if (sig(rows) !== sig(this.answered())) this.answered.set(rows);
+      },
+      error: () => {},
+    });
   }
 
+  /** A line read by the agent since, or taken back, or one whose task was
+   *  queued (here or by someone else) or text edited: the same length, other rows. */
+  private changed(rows: ChatLine[]) {
+    const now = this.lines();
+    const sig = (m?: ChatLine) => m ? JSON.stringify([m.tasks ?? null, m.edited?.at ?? null, m.text.length]) : '';
+    return rows.some((r, i) => now[i]?._id !== r._id || now[i]?.seen_at !== r.seen_at || sig(now[i]) !== sig(r));
+  }
+
+  /** The agent's line as text and ```task blocks (markdown.ts splitTasks). */
+  private split = new Map<string, Segment[]>();
+  parts(text: string): Segment[] {
+    let got = this.split.get(text);
+    if (!got) {
+      got = splitTasks(text);
+      if (this.split.size > 400) this.split.clear();
+      this.split.set(text, got);
+    }
+    return got;
+  }
+  taskOf(s: Segment): TaskBlock | null { return 'task' in s ? s.task : null; }
+  mdOf(s: Segment): string { return 'md' in s ? s.md : ''; }
+
   private follow = true;
+  /** The reader has scrolled the thread by hand since it was opened. */
+  touched = false;
   private scroll(onlyIfAtEnd = false) {
     const el = this.log()?.nativeElement;
     if (el && onlyIfAtEnd) this.follow = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
     if (onlyIfAtEnd && !this.follow) return;
+    if (!onlyIfAtEnd) this.touched = false;
     const go = () => { const e = this.log()?.nativeElement; if (e) e.scrollTop = e.scrollHeight; };
-    setTimeout(go);
-    // A thread just opened grows as its lines and pictures render: back to
-    // the end as it settles, unless the reader has scrolled away from it.
+    setTimeout(() => { go(); requestAnimationFrame(go); });
+    // A thread just opened grows as its lines, task boxes and pictures
+    // render: back to the end as it settles, unless the reader has
+    // scrolled it by hand (or a line was asked for, threadAt) meanwhile.
     if (!onlyIfAtEnd) {
-      for (const ms of [120, 350, 800, 1600]) setTimeout(() => {
-        const e = this.log()?.nativeElement;
-        if (e && e.scrollHeight - e.scrollTop - e.clientHeight < 400) go();
-      }, ms);
+      for (const ms of [120, 350, 800, 1600]) setTimeout(() => { if (!this.touched) go(); }, ms);
     }
   }
 
@@ -388,12 +536,25 @@ export class RoomThread {
     return m.by?.name || t('you');
   }
 
-  /** The same sender as the line before: no avatar again. */
+  /** The same sender as the item before - a line, a question (the
+   *  agent's) or an answer (the person's): no avatar again. */
   same(i: number) {
-    const l = this.lines();
-    if (i <= 0) return false;
-    const a = l[i], b = l[i - 1];
-    return a.role === b.role && (a.role === 'agent' || (a.by?.id ?? a.by?.name) === (b.by?.id ?? b.by?.name));
+    const l = this.items();
+    return i > 0 && sender(l[i]) === sender(l[i - 1]);
+  }
+
+  isOpenQ(id: string) { return this.unfolded().has(id); }
+  toggleQ(id: string) {
+    this.unfolded.update(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
+  /** Whether the answer was one (or several) of the options, rather than the person's own words. */
+  hasChoice(q: Question) { return q.options.some(o => this.chosen(q, o)); }
+  whoAnswered(q: Question) { return q.answered_by?.name || t('you'); }
+  /** An option the answer chose: the answer itself, or one of several picked. */
+  chosen(q: Question, o: string) {
+    const a = (q.answer ?? '').trim();
+    if (!a) return false;
+    return a === o || (q.multi && a.split(', ').includes(o));
   }
 
   stamp(iso: string) {
@@ -422,8 +583,12 @@ export class RoomThread {
     const answer = (this.answerText()[q._id] ?? '').trim() || chosen || (this.picked()[q._id] ?? []).join(', ');
     if (!answer) return;
     this.qs.answer(q._id, answer).subscribe({
-      next: () => {
+      next: done => {
+        // It stays where it was asked, answered: the card folds and the
+        // answer follows it as the person's line.
+        this.answered.update(l => [...l.filter(x => x._id !== q._id), { ...q, ...done, room: q.room }]);
         this.threads.questions.update(l => l.filter(x => x._id !== q._id));
+        this.scroll(true);
         this.answerText.update(a => { const { [q._id]: _, ...rest } = a; return rest; });
       },
       error: () => this.error.set(t('could not send the answer')),

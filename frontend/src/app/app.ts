@@ -18,10 +18,11 @@ import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './wo
 import { TopBar, TopbarFit } from './topbar';
 import { TopbarMore } from './topbar-more';
 import { AgentThreads } from './rooms/agent-thread';
+import { CcTabUsage } from './cc-usage';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, SignIn, T, UserChip, TopbarFit, TopbarMore],
+  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, SignIn, T, UserChip, TopbarFit, TopbarMore, CcTabUsage],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -56,6 +57,9 @@ import { AgentThreads } from './rooms/agent-thread';
         <!-- Chat: what the rooms' agents wrote, or ask, that has not been read here. -->
         @if (b.id === 'commandcode') { @if (threads.total(); as n) {
           <span class="tcv-tab-unread" [title]="n + ' ' + ('unread in the agent threads' | t)">{{ n }}</span> } }
+        <!-- And the Command Code account's usage, in the tab itself (cc-usage.ts;
+             Settings > Top bar says how): clicking it opens LLM settings. -->
+        @if (b.id === 'commandcode') { <app-cc-tab-usage /> }
       </button>
     }
     <app-topbar-more />

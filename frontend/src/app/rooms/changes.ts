@@ -13,7 +13,7 @@ import { T } from '../i18n';
  *  note's for good, so it can be looked at again at any time.
  */
 interface ChangedFile {
-  kind: 'model' | 'board'; id: string; added: number; removed: number;
+  kind: 'model' | 'board' | 'firmware'; id: string; added: number; removed: number;
   before_text: string; after_text: string;
 }
 interface Detail {
@@ -47,7 +47,7 @@ type PicMode = 'side' | 'slider' | 'diff';
         @for (f of detail()?.files ?? []; track f.kind + f.id; let i = $index) {
           <button class="tcv-code-node tcv-code-file" [attr.data-on]="pick() === i ? 1 : null" (click)="pick.set(i)"
                   [title]="f.id">
-            <span class="tcv-code-ext" [attr.data-kind]="f.kind">{{ f.kind === 'board' ? 'ato' : 'py' }}</span>
+            <span class="tcv-code-ext" [attr.data-kind]="f.kind">{{ ext(f) }}</span>
             <span class="tcv-code-label">{{ name(f) }}</span>
             <span class="tcv-diff-counts"><span class="tcv-diff-add">+{{ f.added }}</span> <span class="tcv-diff-del">−{{ f.removed }}</span></span>
           </button>
@@ -147,7 +147,14 @@ export class Changes implements OnDestroy {
     });
   }
 
-  name(f: ChangedFile) { return `${f.id.split('/').pop()}.${f.kind === 'board' ? 'ato' : 'py'}`; }
+  /** A firmware's file has its own name; a model's or a board's source is
+   *  named by its id. */
+  ext(f: ChangedFile) {
+    return f.kind === 'board' ? 'ato' : f.kind === 'firmware' ? (f.id.split('.').pop() ?? 'c') : 'py';
+  }
+  name(f: ChangedFile) {
+    return f.kind === 'firmware' ? f.id.split('/').slice(1).join('/') : `${f.id.split('/').pop()}.${this.ext(f)}`;
+  }
 
   private async show(f: ChangedFile, side: boolean) {
     const m = this.m ??= await loadMonaco();
@@ -159,7 +166,8 @@ export class Changes implements OnDestroy {
       });
     }
     this.diff.updateOptions({ renderSideBySide: side });
-    const lang = f.kind === 'board' ? 'atopile' : 'python';
+    const lang = f.kind === 'board' ? 'atopile' : f.kind === 'firmware'
+      ? (/\.(c|cc|cpp|h|hpp|ino)$/.test(f.id) ? 'cpp' : /\.ini$/.test(f.id) ? 'ini' : 'plaintext') : 'python';
     const before = m.editor.createModel(f.before_text, lang);
     const after = m.editor.createModel(f.after_text, lang);
     this.diff.setModel({ original: before, modified: after });

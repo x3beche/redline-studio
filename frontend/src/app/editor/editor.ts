@@ -23,7 +23,7 @@ import { Activity, Analytics, Api, Boards, CameraState, NoteView, Catalog, LogLi
          Revision, RevisionStatus } from '../api';
 import { OcpViewer, ViewApplied, viewHash } from './ocp';
 import { Markdown, plain } from '../markdown';
-import { Selection } from '../selection';
+import { FwAnchor, Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
 import { ComponentPicker, LinksCard, PinIcon, insertImport } from '../rooms/links';
 import { Releases } from '../rooms/releases';
@@ -180,7 +180,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   showArchived = signal(false);
   autoArchive = signal(false);
   autoTranslate = signal(false);
-  collapsed_ = signal<Set<string>>(new Set());
+  /** Which note cards are folded - kept in this browser, so a reload shows
+   *  the column the way it was left. */
+  collapsed_ = signal<Set<string>>(EditorFold.read());
   /** Which folders are folded shut. A tree with everything open is a list
    *  with indentation, which is what it looked like. */
   shutFolders = signal<Set<string>>(new Set());
@@ -254,6 +256,12 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
     // The model on screen, for whoever else needs to know (a quick note).
     effect(() => { const id = this.activeModel(); untracked(() => this.picked.model.set(id || null)); });
+    // A pin picked in the Firmware room is the note's Part; lines of code are not a part.
+    effect(() => {
+      const a = this.picked.fwAnchor();
+      if (!a) return;
+      untracked(() => this.part.set(a.kind === 'code' ? '' : (a.macro || a.net || '')));
+    });
     // The code view sits below the viewer's toolbar, which holds its switch.
     effect(() => {
       if (!this.ide()) return;
@@ -697,6 +705,11 @@ export class Editor implements AfterViewInit, OnDestroy {
           this.loadCatalog();
           return;
         }
+        if (r.kind === 'firmware') {
+          if (r.model) this.openInFirmware(r);
+          this.loadCatalog();
+          return;
+        }
         this.urlPin = r.model ?? null;
         if (!this.urlPin) { this.failView(`revision ${rev} names no model`); return; }
         this.pendingCamera = rev;
@@ -742,6 +755,12 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  yet, remember it and apply once the load completes. `auto`: not asked
    *  for by anyone (a run finishing) - it may move the camera but not
    *  switch away from a model the address pinned. */
+  /** A note filed from a chat's task block: the thread or conversation, at that line. */
+  openChatSource(fc: NonNullable<Revision['from_chat']>) {
+    if (fc.kind === 'ai' && fc.chat) this.picked.askCc({ action: 'open', chat: fc.chat, message: fc.message });
+    else this.picked.openThread(fc.room ?? 'cad', fc.message);
+  }
+
   focusRevision(id: string, auto = false) {
     if (!this.activeModel() || !this.viewer) { if (!auto) this.pendingCamera = id; return; }
     this.focusing = true;
@@ -1197,7 +1216,8 @@ export class Editor implements AfterViewInit, OnDestroy {
    *  meant to get rid of. */
   cardLine(r: Revision): string {
     if (r.summary) return r.summary;
-    const text = (r.comment ?? '').trim();
+    // One line, without the Markdown marks (**, `, - ) the note may carry.
+    const text = plain((r.comment ?? '').split('\n')[0]) + ((r.comment ?? '').trim().includes('\n') ? '\n…' : '');
     const first = text.split('\n')[0].trim();
     if (first.length > 64) return first.slice(0, 64).trimEnd() + '…';
     return first === text ? first : first + '…';
@@ -1752,6 +1772,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   async save() {
     if (!this.comment().trim()) { this.flash('write a comment first'); return; }
     if (this.picked.room() === 'pcb') { this.saveBoardNote(); return; }
+    if (this.picked.room() === 'firmware') { this.saveFirmwareNote(); return; }
     if (!this.viewer) return;
     this.saving.set(true);
     // A note about a part is a valid revision; the drawing is optional.
@@ -1804,13 +1825,80 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
+  /** A note about a firmware: what it is anchored to (a pin, a net, lines
+   *  of a file - the room's pick, checked by the server), and the room's
+   *  view as its picture, with the marks when the pen is down. A Part
+   *  picked by hand without a pin picked anchors it to that net. */
+  private async saveFirmwareNote() {
+    const fw = this.picked.firmware();
+    if (!fw) { this.flash('open a firmware first'); return; }
+    this.saving.set(true);
+    const draft = this.picked.fwDraft();
+    const image = draft ? await draft().catch(() => null) : null;
+    let anchor: FwAnchor | null = this.picked.fwAnchor();
+    if (!anchor && this.part()) anchor = { kind: 'net', net: this.part() };
+    this.api.create({
+      comment: this.comment().trim(), image_png: image, camera: null,
+      part: this.part() || null, model: fw, kind: 'firmware', anchor,
+    }).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.comment.set('');
+        this.picked.fwAnchor.set(null);
+        this.picked.fwFiled.update(n => n + 1);
+        this.flash('note saved');
+        this.refresh();
+      },
+      error: e => { this.saving.set(false); this.flash('save failed: ' + (e?.error?.detail ?? e.status)); },
+    });
+  }
+
+  /** What a firmware note is about, in a line. */
+  anchorLabel(a: FwAnchor | null | undefined): string {
+    if (!a) return 'the firmware as a whole';
+    if (a.kind === 'code') {
+      const [x, y] = a.lines ?? [0, 0];
+      return `${a.file}:${x}${y !== x ? '-' + y : ''}`;
+    }
+    return `${a.macro || a.net || '?'} · ${a.name}${a.gpio != null ? ' · GPIO' + a.gpio : ''}`
+      + (a.parts?.length ? ' · ' + a.parts.slice(0, 4).join(', ') : '');
+  }
+
+  clearAnchor() { this.picked.fwAnchor.set(null); }
+
+  /** The Firmware room, on the note's file and line - or its pin. */
+  openInFirmware(r: Revision) {
+    if (!r.model) return;
+    const m = r.fw_result?.main;
+    this.picked.jumpToFirmware(r.model, r.anchor ?? null, m?.file, m?.line);
+  }
+
+  /** A finished firmware note's diff, opened on its card. */
+  fwDiffOpen = signal<Set<string>>(new Set());
+  toggleFwDiff(id: string) {
+    this.fwDiffOpen.update(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  /** "24.6% → 24.7%", or the after alone when the start was not built. */
+  fwSize(x: { before: { pct: number; used: number } | null; after: { pct: number; used: number } | null }): string {
+    if (!x?.after) return '–';
+    if (!x.before) return `${x.after.pct}%`;
+    const d = x.after.used - x.before.used;
+    return `${x.before.pct}% → ${x.after.pct}% (${d >= 0 ? '+' : '−'}${Math.abs(d)} B)`;
+  }
+  /** One line of a unified diff, by what it is. */
+  diffKind(line: string): string {
+    return line.startsWith('@@') ? 'hunk' : line.startsWith('+++') || line.startsWith('---') ? 'file'
+      : line.startsWith('+') ? 'add' : line.startsWith('-') ? 'del' : 'ctx';
+  }
+  diffLines(text: string): string[] { return text.split('\n'); }
+
   /** The revisions this room is about. A board's notes and a model's are
    *  kept apart: the 3D queue is not something to read while laying out a
    *  board, and a board note in the 3D room would be a card with no
    *  picture of anything on it. */
   roomRevisions(): Revision[] {
     const room = this.picked.room();
-    const want = room === 'pcb' ? room : 'cad';
+    const want = room === 'pcb' || room === 'firmware' ? room : 'cad';
     return this.revisions().filter(r => (r.kind ?? 'cad') === want);
   }
 
@@ -1898,8 +1986,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** What the Part field offers: the open board's components while the
    *  board room is on, the loaded model's parts otherwise. */
   partChoices(): string[] {
-    return this.picked.room() === 'pcb'
-      ? this.picked.boardParts() : this.parts();
+    const room = this.picked.room();
+    return room === 'pcb' ? this.picked.boardParts()
+      : room === 'firmware' ? this.picked.fwParts() : this.parts();
   }
 
   /** The one row the catalog marks: whatever the room on screen is
@@ -1937,6 +2026,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   /** What the queue column is called in the room on screen. */
   notesTitle(): string {
     if (this.picked.room() === 'pcb') return 'Board notes';
+    if (this.picked.room() === 'firmware') return 'Firmware notes';
     return 'Revisions';
   }
 
@@ -1945,14 +2035,22 @@ export class Editor implements AfterViewInit, OnDestroy {
   toggleFold(id: string) {
     const next = new Set(this.collapsed_());
     next.has(id) ? next.delete(id) : next.add(id);
-    this.collapsed_.set(next);
+    this.setFolded(next);
   }
 
   foldAll() {
-    this.collapsed_.set(new Set(this.revisions().map(r => r.id)));
+    this.setFolded(new Set([...this.collapsed_(), ...this.revisions().map(r => r.id)]));
   }
 
-  unfoldAll() { this.collapsed_.set(new Set()); }
+  unfoldAll() {
+    const here = new Set(this.revisions().map(r => r.id));
+    this.setFolded(new Set([...this.collapsed_()].filter(id => !here.has(id))));
+  }
+
+  private setFolded(next: Set<string>) {
+    this.collapsed_.set(next);
+    EditorFold.write(next);
+  }
 
   startEdit(r: Revision) {
     this.editing.set(r.id);
@@ -2071,3 +2169,17 @@ export class Editor implements AfterViewInit, OnDestroy {
     this.toastTimer = setTimeout(() => this.toast.set(''), 2600);
   }
 }
+
+/** The folded note cards, in this browser (the newest 500 ids). */
+const EditorFold = {
+  KEY: 'redline.notes.folded',
+  read(): Set<string> {
+    try {
+      const v = JSON.parse(localStorage.getItem(EditorFold.KEY) || '[]');
+      return new Set(Array.isArray(v) ? v.filter((x: unknown) => typeof x === 'string') : []);
+    } catch { return new Set(); }
+  },
+  write(ids: Set<string>) {
+    try { localStorage.setItem(EditorFold.KEY, JSON.stringify([...ids].slice(-500))); } catch { /* private window */ }
+  },
+};

@@ -15,7 +15,7 @@ import { Avatar } from './avatar';
  *  owner and the admins add accounts (admin-users.ts). An account whose
  *  password an admin set chooses its own before anything else.
  */
-export interface Me { type: 'user'; id: string; name: string; email?: string; has_avatar?: boolean; avatar_v?: number | null }
+export interface Me { type: 'user'; id: string; name: string; email?: string; has_avatar?: boolean; avatar_v?: number | null; avatar_colour?: string }
 export interface AuthState {
   mode: 'off' | 'on';
   needs_setup?: boolean;
@@ -265,7 +265,7 @@ export class SignIn {
          says it opens. -->
     <button class="tcv-user" (click)="toggle()" [attr.data-on]="open() ? 1 : null"
             [title]="(u.email ?? u.name) + ' - ' + (s.role ?? '' | t)">
-      <app-avatar class="tcv-user-av" [name]="u.name" [userId]="u.id" [hasPicture]="u.has_avatar" [v]="u.avatar_v" [size]="20" />
+      <app-avatar class="tcv-user-av" [name]="u.name" [userId]="u.id" [hasPicture]="u.has_avatar" [v]="u.avatar_v" [colour]="u.avatar_colour" [size]="20" />
       <span class="tcv-user-text">
         <span class="tcv-user-name">{{ u.name }}</span>
         <span class="tcv-user-ws">{{ (s.role ?? '') | t }}</span>

@@ -2,7 +2,7 @@
 
     GET    /api/admin/users                     everyone, with role, status, last sign-in
     POST   /api/admin/users                     add an account (there is no sign-up)
-    PATCH  /api/admin/users/{id}                name, email, enabled/disabled, role (owner only)
+    PATCH  /api/admin/users/{id}                name, email, avatar colour, enabled/disabled, role (owner only)
     POST   /api/admin/users/{id}/password       a temporary password, changed at next sign-in
     POST   /api/admin/users/{id}/sign-out       end every session of the account
     PUT    /api/admin/users/{id}/avatar         a new picture (profile.py's square JPEG)
@@ -170,6 +170,8 @@ class UserPatch(BaseModel):
     email: str | None = Field(default=None, max_length=200)
     disabled: bool | None = None
     role: str | None = Field(default=None, max_length=20)
+    # profile.COLOURS, or "auto".
+    avatar_colour: str | None = Field(default=None, max_length=20)
 
 
 @router.patch("/users/{user_id}")
@@ -202,16 +204,20 @@ async def change_user(user_id: str, body: UserPatch) -> dict:
         if user_id == me.get("id"):
             raise HTTPException(400, "you cannot disable your own account")
         change["disabled"] = body.disabled
-    if not change:
+    colour, recolour = profile.colour_change(u, body.avatar_colour) if body.avatar_colour is not None else ({}, False)
+    if not change and not recolour:
         return await _out(u)
     raw = _raw()
-    await raw[auth.USERS].update_one({"_id": user_id}, {"$set": change})
+    if recolour:
+        await raw[auth.USERS].update_one({"_id": user_id}, colour)
+    if change:
+        await raw[auth.USERS].update_one({"_id": user_id}, {"$set": change})
     ended = 0
     if change.get("disabled"):
         # Out at once, everywhere; its tokens stop with it (auth._maker_ok).
         ended = await auth.end_sessions_of(raw, user_id)
     auth.forget_sessions()
-    detail: dict = {"fields": sorted(change)}
+    detail: dict = {"fields": sorted([*change, *(["avatar_colour"] if recolour else [])])}
     if "role" in change:
         detail.update(role=change["role"], was=auth.role_of(u))
     if "email" in change:

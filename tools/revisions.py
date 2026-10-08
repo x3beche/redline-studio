@@ -43,7 +43,27 @@ datasheet (backend/files.py); through the server, like `board`:
 
     python tools/revisions.py files [--board B] [--kind bom] [-q TEXT]   list them
     python tools/revisions.py files get <id> [-o PATH]                   write one to disk
-    python tools/revisions.py files put <path> [--board B] [--note TEXT] keep one there
+    python tools/revisions.py files put <path> [--board B] [--note TEXT] [--folder F]  keep one there
+    python tools/revisions.py files [--folder F]                   what is in a Files folder
+    python tools/revisions.py files mkdir <a/b>                    a folder (and its parents)
+    python tools/revisions.py files mv <id|folder> <folder|/>      move a file or a folder
+
+Firmware - the Firmware room's projects (backend/firmware.py) and the notes
+filed on them (backend/fwnotes.py); through the server, like `board`:
+
+    python tools/revisions.py next --room firmware                 the next queued note, in full
+    python tools/revisions.py fw files <fw> [prefix]               the files, at the latest version
+    python tools/revisions.py fw get <fw> <path> [-o FILE] [--version N]
+    python tools/revisions.py fw put <fw> <path> <file> [<path> <file> ...] [--base N] [--note TEXT]
+    python tools/revisions.py fw pins <fw>                          the MCU's pins, nets, parts, used where
+    python tools/revisions.py fw build <fw> [--wait]                errors, warnings, flash and RAM
+    python tools/revisions.py fw diff <fw> [vA vB]                  what changed between two versions
+
+`fw put` is refused when the firmware moved on since the version it was
+written against (`--base`, default: the version `fw get` / `fw files` last
+read). `finish <id>` on a firmware note is refused until the version with
+the change has built cleanly; it keeps the diff, the build and a picture of
+the main changed hunk on the card.
 """
 
 from __future__ import annotations
@@ -108,6 +128,14 @@ async def cmd_queue(args):
         # and `build` does not take a board. Say so on the first line, so
         # nobody runs the model loop on it.
         board = d.get("kind") == "pcb"
+        if d.get("kind") == "firmware":
+            from backend import fwnotes
+            print(f"\n#{i}  {d['_id']}   [FIRMWARE]")
+            print(f"   note  : {d['comment']}")
+            print(f"   fw    : {d.get('model') or '-'}    at: {fwnotes.anchor_text(d.get('anchor'))}")
+            print(f"   time  : {d['created_at'][:19].replace('T', ' ')}")
+            print(f"   in full: python tools/revisions.py show {d['_id']}")
+            continue
         print(f"\n#{i}  {d['_id']}" + ("   [BOARD]" if board else ""))
         print(f"   note  : {d['comment']}")
         print(f"   {'board' if board else 'model'} : {d.get('model') or '-'}"
@@ -900,7 +928,7 @@ async def cmd_ask(args):
 
     db = connect()
     doc = await questions.ask(db, args.text, args.option, args.revision,
-                              args.context, args.multi)
+                              args.context, args.multi, getattr(args, "room", None))
     print(f"asked: {doc['_id']}")
     if doc["options"]:
         print("options: " + " | ".join(doc["options"]))
@@ -926,6 +954,8 @@ async def cmd_show(args):
     doc = await db.revisions.find_one({"_id": args.id})
     if not doc:
         sys.exit(f"{args.id} not found")
+    if doc.get("kind") == "firmware":
+        await _show_firmware_note(db, doc)
     print(f"note    : {doc['comment']}")
     print(f"model   : {doc.get('model') or '-'}   part: {doc.get('part') or '-'}")
     print(f"status  : {doc.get('status')}")
@@ -939,6 +969,77 @@ async def cmd_show(args):
     out.write_bytes(png)
     print(f"image   : {out}   ({len(png)} bytes)")
     print("\nOpen this file with the Read tool and look at the red marks.")
+
+
+async def _show_firmware_note(db, doc: dict) -> None:
+    """What a firmware note is about: the firmware, the pin or the code it
+    is anchored to as it is now, and where its build stands."""
+    from backend import firmware, fwnotes
+
+    fid = doc.get("model") or ""
+    print("[FIRMWARE NOTE] - read AGENTS.md, \"Firmware notes\", before touching it")
+    try:
+        fw = await firmware.get(db, fid)
+    except KeyError:
+        print(f"firmware: {fid} - GONE")
+        return
+    a = doc.get("anchor") or {}
+    print(f"firmware: {fw.get('title')} ({fid}) - board {fw.get('board')} {fw.get('mcu')}, "
+          f"{fw.get('pio_board')}/{fw.get('framework')}, files v{fw.get('version')}")
+    print(f"about   : {fwnotes.anchor_text(a or None)}")
+    if a.get("kind") == "code":
+        lo, hi = a.get("lines") or [1, 1]
+        try:
+            got = await firmware.read(db, fid, a["file"])
+            lines = got["content"].splitlines()
+            print(f"code    : {a['file']} lines {lo}-{hi} as they are now"
+                  + (f" (the note was written against v{a.get('version')})" if a.get("version") != fw.get("version") else ""))
+            for n in range(max(1, lo - 3), min(len(lines), hi + 3) + 1):
+                mark = ">" if lo <= n <= hi else " "
+                print(f"  {mark}{n:5d}  {lines[n - 1]}")
+            if a.get("excerpt") is not None and "\n".join(lines[lo - 1:hi]) != a["excerpt"]:
+                print("  (these lines changed since the note was written; it was about:)")
+                for n, t in enumerate(a["excerpt"].splitlines(), lo):
+                    print(f"  |{n:5d}  {t}")
+        except (KeyError, firmware.Refused):
+            print(f"code    : {a.get('file')} is no longer in the project")
+    elif a.get("kind") in ("pin", "net") and a.get("macro"):
+        uses = firmware.used_in(await firmware.contents(db, fid), [a["macro"]]).get(a["macro"]) or []
+        print(f"in code : {a['macro']} " + (f"used in {', '.join(uses)}" if uses else "not used in the code yet")
+              + (" - INPUT ONLY pin" if a.get("gpio") in firmware.ESP32_INPUT_ONLY else "")
+              + (" - strapping pin" if a.get("gpio") in firmware.ESP32_STRAPPING else ""))
+    b = fw.get("build") or {}
+    if b.get("state"):
+        sz = (f", flash {b['flash']['pct']}% RAM {b['ram']['pct']}%" if b.get("flash") and b.get("ram") else "")
+        print(f"build   : {b['state']} - v{b.get('version')}, {b.get('error_count', 0)} errors, "
+              f"{b.get('warning_count', 0)} warnings{sz}")
+    else:
+        print("build   : never built")
+    if doc.get("fw_result"):
+        print(f"result  : {fwnotes.result_line(doc['fw_result'])}")
+    print(f"files   : python tools/revisions.py fw files {fid}   (then fw get / fw put / fw build --wait)")
+
+
+async def cmd_next(args):
+    """The oldest queued note nobody has started, in full - one room's."""
+    from backend import compute
+
+    db = connect()
+    rows = [d async for d in db.revisions.find({"status": "queued"})]
+    rows = [d for d in rows if not d.get("archived")]
+    if args.room:
+        rows = [d for d in rows if compute.room_of(d.get("kind")) == args.room]
+    if rows:
+        busy = {r["_id"] async for r in db.runs.find(
+            {"_id": {"$in": [d["_id"] for d in rows]}, "status": {"$in": ["running", "done", "failed"]}})}
+        rows = [d for d in rows if d["_id"] not in busy]
+    rows.sort(key=lambda d: d.get("queued_at") or d["created_at"])
+    if not rows:
+        print("nothing queued" + (f" in {args.room}" if args.room else ""))
+        sys.exit(2)
+    d = rows[0]
+    print(f"next    : {d['_id']}   [{compute.room_of(d.get('kind'))}]")
+    await cmd_show(argparse.Namespace(id=d["_id"], out=args.out))
 
 
 async def cmd_done(args):
@@ -1035,6 +1136,24 @@ async def cmd_finish(args):
         room = _c.room_of(rdoc.get("kind"))
     key = _c.run_key(room)
     cur = await db.runs.find_one({"_id": key}) or {}
+    # A firmware note is finished when the version holding the change has
+    # built cleanly: checked before the run is closed, so a refusal leaves
+    # it open. Its "after" is the diff, the build and a picture of the main
+    # changed hunk (backend/fwnotes.py), not a render.
+    target = args.id or cur.get("revision")
+    fw_note = False
+    if target:
+        tdoc = await db.revisions.find_one({"_id": target}) or {}
+        fw_note = tdoc.get("kind") == "firmware"
+    if fw_note and not args.failed:
+        from backend import fwnotes
+        try:
+            got = await fwnotes.result(db, target)
+        except fwnotes.Refused as exc:
+            sys.exit(f"not finished - {exc}")
+        print(f"firmware: {len(got['files'])} file(s), +{got['added']} -{got['removed']}"
+              + (f", main change {got['main']['file']}:{got['main']['line']}" if got.get("main") else ""))
+        print(f"build   : {fwnotes.result_line(got)}")
     if args.id and cur.get("revision") != args.id:
         # Closing one's own run by name, while "current" belongs to another:
         # only the run keyed by that revision is touched.
@@ -1050,6 +1169,11 @@ async def cmd_finish(args):
         await db.runs.update_one({"_id": key}, {"$set": patch}, upsert=True)
     await db.activity.insert_one(_line(f"finished: {status}", status, room))
     print(f"run {status}")
+    # Finishing closes the run; the note stays queued until the person has
+    # looked at it and marked it applied (or `done <id>` when they said so).
+    if status == "done" and cur.get("revision"):
+        print("finished - waiting for the person to review and mark it applied"
+              + (" (built, ready to flash - flashing is theirs, from the browser)" if fw_note else ""))
 
     # The card's "after": the same view once the work is done. Best effort -
     # it needs the dev server and a headless browser, and a finished run must
@@ -1064,7 +1188,7 @@ async def cmd_finish(args):
                 print("changed : " + ", ".join(f"{c['id'].split('/')[-1]} +{c['added']} -{c['removed']}" for c in got))
         except Exception as exc:                 # noqa: BLE001 - never block a finish
             print(f"(changes not recorded: {type(exc).__name__}: {exc})")
-    if rev and not args.no_shot:
+    if rev and not args.no_shot and not fw_note:
         try:
             await _after_shot(db, rev)
         except SystemExit as exc:
@@ -1079,15 +1203,15 @@ async def cmd_finish(args):
             doc = await usage.store(db, rev, run)
             t = doc["totals"]
             money = ("-" if not t["complete"]
-                     else f"${t['cost_usd']:.4f} (liste fiyati)")
-            print(f"analytics: {t['calls']} cagri, "
-                  f"{t['billed_tokens']:,} token, {money}, "
-                  f"{doc['seconds']:.0f} sn")
+                     else f"${t['cost_usd']:.4f} (list price)")
+            print(f"analytics: {t['calls']} calls, "
+                  f"{t['billed_tokens']:,} tokens, {money}, "
+                  f"{doc['seconds']:.0f} s")
             c = doc.get("compute") or {}
             ct = c.get("totals") or {}
             if ct.get("jobs"):
-                print(f"compute  : {ct['jobs']} is, {ct['core_min']:.1f} "
-                      f"cekirdek-dk, tepe {ct.get('peak_rss_mb') or 0:.0f} MB, "
+                print(f"compute  : {ct['jobs']} jobs, {ct['core_min']:.1f} "
+                      f"core-min, peak {ct.get('peak_rss_mb') or 0:.0f} MB, "
                       f"~{(c.get('energy') or {}).get('wh', 0):.2f} Wh")
         except Exception as exc:                 # never block finishing
             print(f"analytics skipped: {type(exc).__name__}: {exc}")
@@ -1204,8 +1328,12 @@ async def cmd_after(args):
     whether what was asked for actually happened.
     """
     db = connect()
-    if not await db.revisions.find_one({"_id": args.id}):
+    doc = await db.revisions.find_one({"_id": args.id})
+    if not doc:
         sys.exit(f"{args.id} not found")
+    if doc.get("kind") == "firmware":
+        sys.exit("a firmware note has no camera: `finish <id>` keeps its after picture "
+                 "(the main changed hunk), its diff and its build on the card")
     await _after_shot(db, args.id, args.width, args.height, args.only)
 
 
@@ -1320,17 +1448,54 @@ async def cmd_files(args):
         except urllib.error.URLError as exc:
             sys.exit(f"the server is not answering at {base} ({exc.reason}) - start.sh")
 
+    def folders() -> list[dict]:
+        return _json.loads(call("/api/files/folders"))
+
+    def folder_id(path: str | None, make: bool = False) -> str:
+        """A Files folder by its path ("/" or "" is the top)."""
+        want = (path or "").strip().strip("/")
+        if not want:
+            return ""
+        got = next((f for f in folders() if f["path"].lower() == want.lower()), None)
+        if got is None and make:
+            got = _json.loads(call("/api/files/folders", "POST", _json.dumps({"path": want}).encode(),
+                                   "application/json"))
+        if got is None:
+            sys.exit(f"no folder {want!r} in Files (files mkdir {want})")
+        return got["id"]
+
     if args.what == "list":
-        q = urllib.parse.urlencode({k: v for k, v in (("board", args.board), ("kind", args.kind), ("q", args.q)) if v})
+        where = {k: v for k, v in (("board", args.board), ("kind", args.kind), ("q", args.q)) if v}
+        if args.folder is not None:
+            where["folder"] = folder_id(args.folder)
+        q = urllib.parse.urlencode(where)
         rows = _json.loads(call("/api/files" + (f"?{q}" if q else "")))
+        paths = {f["id"]: f["path"] for f in folders()}
         if not rows:
             print("no files")
         for d in rows:
             ctx = d.get("context") or {}
             at = ctx.get("board") or ctx.get("model") or ctx.get("room") or "-"
             who = (d.get("by") or {}).get("name") or "?"
+            place = paths.get(d.get("folder") or "", "")
             print(f"{d['id']}  {d['kind']:<10} {d['bytes'] // 1024:>7} kB  {d['created_at'][:16]}  "
-                  f"{at:<24} {d['name']}  ({who})" + (f"\n{'':14}{d['note']}" if d.get("note") else ""))
+                  f"{at:<24} {place + '/' if place else ''}{d['name']}  ({who})"
+                  + (f"\n{'':14}{d['note']}" if d.get("note") else ""))
+    elif args.what == "mkdir":
+        if not args.target:
+            sys.exit("files mkdir needs a path, e.g. datasheets/power")
+        got = _json.loads(call("/api/files/folders", "POST", _json.dumps({"path": args.target}).encode(),
+                               "application/json"))
+        print(f"folder {got['path']} ({got['id']})")
+    elif args.what == "mv":
+        if not args.target or args.dest is None:
+            sys.exit("files mv needs a file id or a folder path, and the folder it goes into ('/' is the top)")
+        to = folder_id(args.dest)
+        ids = {d["id"] for d in _json.loads(call("/api/files"))}
+        body = {"files": [args.target], "folders": [], "to": to} if args.target in ids else \
+            {"files": [], "folders": [folder_id(args.target)], "to": to}
+        got = _json.loads(call("/api/files/move", "POST", _json.dumps(body).encode(), "application/json"))
+        print(f"moved {got['files']} file(s), {got['folders']} folder(s) to {args.dest.strip('/') or '/'}")
     elif args.what == "get":
         if not args.target:
             sys.exit("files get needs a file id (files list)")
@@ -1355,7 +1520,8 @@ async def cmd_files(args):
         ctx = {"room": os.environ.get("REDLINE_ROOM", "pcb" if args.board else "cad"),
                **({"board": args.board} if args.board else {})}
         b = uuid.uuid4().hex
-        parts = [("context", _json.dumps(ctx).encode(), None), ("note", (args.note or "").encode(), None)]
+        parts = [("context", _json.dumps(ctx).encode(), None), ("note", (args.note or "").encode(), None),
+                 ("folder", folder_id(args.folder, make=True).encode(), None)]
         body = b"".join(
             f"--{b}\r\nContent-Disposition: form-data; name=\"{n}\"\r\n\r\n".encode() + v + b"\r\n"
             for n, v, _ in parts)
@@ -1364,6 +1530,153 @@ async def cmd_files(args):
         got = _json.loads(call("/api/files", "POST", body, f"multipart/form-data; boundary={b}"))
         for d in got:
             print(f"kept {d['name']} as {d['id']} ({d['kind']}, {d['bytes']} bytes)")
+
+
+# ---------------------------------------------------------------- firmware
+
+def _fw_state(fid: str) -> Path:
+    """Where the version this agent last read of a firmware is kept, so
+    `fw put` can say which version its change was written against."""
+    return Path(tempfile.gettempdir()) / f"redline-fw-{fid}.json"
+
+
+def _fw_seen(fid: str, version: int) -> None:
+    try:
+        _fw_state(fid).write_text(json.dumps({"version": int(version)}))
+    except OSError:
+        pass
+
+
+def _fw_id(name: str) -> str:
+    """A firmware by its id, or by its title or name ("U2 ESP32", u2-esp32)."""
+    rows = api_call("/api/firmware")
+    for f in rows:
+        if name in (f["id"], f.get("title"), f.get("name")):
+            return f["id"]
+    low = name.lower()
+    hits = [f for f in rows if low in (f.get("title") or "").lower() or low in (f.get("board") or "").lower()]
+    if len(hits) == 1:
+        return hits[0]["id"]
+    sys.exit(f"no firmware {name!r}: " + ", ".join(f"{f['id']} ({f.get('title')} on {f.get('board')})" for f in rows))
+
+
+def _size_text(s: dict | None) -> str:
+    return f"{s['pct']}% ({s['used'] // 1024} of {s['total'] // 1024} KB)" if s else "-"
+
+
+def _print_build(job: dict) -> bool:
+    r = job.get("result") or {}
+    status = job.get("status")
+    if status != "done" or not r:
+        print(f"build {job.get('job')}: {status} - {job.get('detail') or 'see the room log'}")
+        return False
+    ok = bool(r.get("ok"))
+    print(f"build {job.get('job')} of v{r.get('version', job.get('version'))}: "
+          f"{'OK' if ok else 'FAILED'} - {r.get('error_count', 0)} errors, {r.get('warning_count', 0)} warnings"
+          f" · {job.get('seconds')} s")
+    for e in r.get("errors") or []:
+        print(f"  error   {str(e.get('file', '')).replace('/project/', '')}:{e.get('line') or '-'}: {e.get('text')}")
+    for w in r.get("warnings") or []:
+        print(f"  warning {str(w.get('file', '')).replace('/project/', '')}:{w.get('line') or '-'}: {w.get('text')}")
+    if ok:
+        print(f"  flash {_size_text(r.get('flash'))} · RAM {_size_text(r.get('ram'))}")
+    return ok
+
+
+def cmd_fw(args):
+    """A firmware's files, builds and versions, through the server."""
+    import time as _time
+    import urllib.parse
+
+    fid = _fw_id(args.fw)
+    rest = args.rest or []
+    if args.what == "files":
+        fw = api_call(f"/api/firmware/{fid}")
+        _fw_seen(fid, fw["version"])
+        b = fw.get("build") or {}
+        print(f"{fw['title']} ({fid}) v{fw['version']} - board {fw['board']} {fw['mcu']}; "
+              f"last build: {b.get('state') or 'none'}" + (f" of v{b.get('version')}" if b.get("state") else ""))
+        for f in api_call(f"/api/firmware/{fid}/files"):
+            if rest and not f["path"].startswith(rest[0]):
+                continue
+            print(f"  {f['path']:<28} {f['bytes']:>7} B  v{f['version']}"
+                  + ("   GENERATED from the schematic - never edit" if f.get("generated") else ""))
+    elif args.what == "get":
+        if not rest:
+            sys.exit("fw get <fw> <path> [-o FILE]")
+        q = f"?version={args.version}" if args.version else ""
+        got = api_call(f"/api/firmware/{fid}/files/{_q(rest[0])}{q}")
+        if not args.version:
+            _fw_seen(fid, api_call(f"/api/firmware/{fid}")["version"])
+        if args.out:
+            Path(args.out).write_text(got["content"])
+            print(f"wrote {args.out} - {got['path']} as of v{got['version']}"
+                  + (" (GENERATED - read it, never edit it)" if got.get("generated") else ""))
+        else:
+            sys.stdout.write(got["content"])
+    elif args.what == "put":
+        if len(rest) < 2 or len(rest) % 2:
+            sys.exit("fw put <fw> <path> <local file> [<path> <local file> ...]")
+        files = {}
+        for path, local in zip(rest[::2], rest[1::2]):
+            src = Path(local)
+            if not src.is_file():
+                sys.exit(f"no file {local}")
+            files[path] = src.read_text()
+        base = args.base
+        if base is None:
+            try:
+                base = json.loads(_fw_state(fid).read_text())["version"]
+            except (OSError, ValueError, KeyError):
+                sys.exit("which version is this change written against? `fw files` or `fw get` first, "
+                         "or --base N")
+        got = api_call(f"/api/firmware/{fid}/files", "POST",
+                       {"files": files, "note": args.note or "", "base": base})
+        if got.get("changed"):
+            _fw_seen(fid, got["version"])
+            print(f"saved v{got['version']} (on v{base}): {', '.join(got['changed'])}")
+            print(f"build it: python tools/revisions.py fw build {fid} --wait")
+        else:
+            print(f"nothing changed - still v{got['version']}")
+    elif args.what == "pins":
+        fw = api_call(f"/api/firmware/{fid}")
+        print(f"{fw['mcu']} {fw.get('mcu_title') or ''} - pins.h "
+              + ("matches the board" if fw.get("matches") else "DOES NOT match the board (regenerated on the next draw)"))
+        for p in fw.get("pins") or []:
+            if p["kind"] != "gpio":
+                continue
+            flags = (" input-only" if p.get("input_only") else "") + (" strapping" if p.get("strapping") else "")
+            print(f"  {p['name']:<10} GPIO{p['gpio']:<3} {p.get('macro') or p.get('net') or '-':<14} "
+                  f"{', '.join(p.get('parts') or []) or '-':<34} "
+                  f"{'used in ' + ', '.join(p['used_in']) if p.get('used_in') else 'unused'}{flags}")
+    elif args.what == "build":
+        try:
+            job = api_call(f"/api/firmware/{fid}/build", "POST", {})
+            print(f"building v{job.get('version')} - job {job['job']}")
+        except ApiError as exc:
+            if " 409 " not in str(exc):
+                raise
+            jid = (api_call(f"/api/firmware/{fid}").get("build") or {}).get("job")
+            print(f"a build is already running (job {jid})")
+            job = {"job": jid}
+        if not args.wait:
+            print(f"follow it: python tools/revisions.py fw build {fid} --wait  (or the room's log)")
+            return
+        while True:
+            cur = api_call(f"/api/firmware/{fid}/builds/{job['job']}")
+            if cur.get("status") != "running":
+                break
+            _time.sleep(2)
+        if not _print_build(cur):
+            sys.exit(1)
+    elif args.what == "diff":
+        q = urllib.parse.urlencode({k: v for k, v in (("a", rest[0] if rest else None),
+                                                       ("b", rest[1] if len(rest) > 1 else None)) if v})
+        got = api_call(f"/api/firmware/{fid}/diff" + (f"?{q}" if q else ""))
+        print(f"v{got['a']} -> v{got['b']}: {len(got['files'])} file(s), +{got['added']} -{got['removed']}")
+        for f in got["files"]:
+            print(f"\n=== {f['path']} ({f['status']}, +{f['added']} -{f['removed']})")
+            print(f["diff"])
 
 
 def main() -> None:
@@ -1409,6 +1722,8 @@ def main() -> None:
     s.add_argument("--multi", action="store_true",
                    help="several options may be picked")
     s.add_argument("--revision", help="the revision this is about")
+    s.add_argument("--room", choices=["cad", "pcb", "firmware"],
+                   help="whose thread it shows in (default: the revision's room)")
     s.add_argument("--every", type=int, default=3,
                    help="seconds between checks (default 3)")
     s.add_argument("--timeout", type=int, default=0,
@@ -1496,20 +1811,42 @@ def main() -> None:
                    help="only this room's notes and thread; default: every room")
     s.set_defaults(fn=cmd_wait)
     s = sub.add_parser("files", help="the Files tab: what people uploaded (a BOM, a datasheet...)")
-    s.add_argument("what", nargs="?", default="list", choices=["list", "get", "put", "to-model"],
-                   help="list (the default), get <id> [-o PATH], put <path>, "
+    s.add_argument("what", nargs="?", default="list", choices=["list", "get", "put", "to-model", "mkdir", "mv"],
+                   help="list (the default), get <id> [-o PATH], put <path>, mkdir <path>, "
+                        "mv <id|folder path> <folder path>, "
                         "to-model <id> --folder F [--title T] (a STEP/mesh copied into a project as a model)")
-    s.add_argument("target", nargs="?", help="get: the file's id; put: the file to upload")
+    s.add_argument("target", nargs="?", help="get: the file's id; put: the file to upload; mkdir: a folder path; "
+                                             "mv: a file id or a folder path")
+    s.add_argument("dest", nargs="?", help="mv: the folder it goes into ('/' is the top)")
     s.add_argument("-o", "--out", help="get: where to write it (default: its own name)")
     s.add_argument("--board", help="list: only this board's; put: link it to this board")
     s.add_argument("--kind", help="list: only this kind (bom, pick-place, pdf, image...)")
     s.add_argument("-q", help="list: search the names and notes")
     s.add_argument("--note", help="put: a line about the file")
-    s.add_argument("--folder", help="to-model: the catalog folder it goes in")
+    s.add_argument("--folder", help="list/put: a Files folder by path ('/' the top; put makes it if missing); "
+                                    "to-model: the catalog folder it goes in")
     s.add_argument("--title", help="to-model: the model's name (default: the file's)")
     s.set_defaults(fn=cmd_files)
     s = sub.add_parser("show"); s.add_argument("id"); s.add_argument("-o", "--out")
     s.set_defaults(fn=cmd_show)
+    s = sub.add_parser("next", help="the oldest queued note nobody has started, in full")
+    s.add_argument("--room", choices=["cad", "pcb", "firmware"], help="only this room's")
+    s.add_argument("-o", "--out", help="where its drawing is written")
+    s.set_defaults(fn=cmd_next)
+    s = sub.add_parser("fw", help="a firmware's files, builds and versions (the Firmware room)")
+    s.add_argument("what", choices=["files", "get", "put", "pins", "build", "diff"])
+    s.add_argument("fw", help="firmware id, or its title (U2 ESP32)")
+    s.add_argument("rest", nargs="*", help="files: a path prefix; get: a path; put: path file pairs; "
+                                          "diff: two versions")
+    s.add_argument("-o", "--out", help="get: write to this file instead of printing")
+    s.add_argument("--version", type=int, help="get: as of this version")
+    s.add_argument("--base", type=int, help="put: the version the change was written against; "
+                                            "default: the version the last `fw files` / `fw get` "
+                                            "of this firmware read (refused if neither ran)")
+    s.add_argument("--note", help="put: what the change is (the version's note)")
+    s.add_argument("--wait", action="store_true", help="build: wait for it and print the errors, warnings, "
+                                                      "flash and RAM (default: off - start it and return)")
+    s.set_defaults(fn=cmd_fw, sync=True)
     s = sub.add_parser("done"); s.add_argument("id"); s.set_defaults(fn=cmd_done)
     s = sub.add_parser("start"); s.add_argument("id")
     s.add_argument("title", nargs="?", default="",
@@ -1525,8 +1862,8 @@ def main() -> None:
     s.add_argument("-l", "--level", default="info",
                    choices=["info", "work", "done", "warn", "error"])
     s.add_argument("--room", default="cad",
-                   choices=["cad", "pcb"],
-                   help="whose log: cad for models (default), pcb for boards")
+                   choices=["cad", "pcb", "firmware"],
+                   help="whose log: cad for models (default), pcb for boards, firmware")
     s.set_defaults(fn=cmd_log)
     s = sub.add_parser("finish")
     s.add_argument("id", nargs="?",
@@ -1534,7 +1871,7 @@ def main() -> None:
                         "the shared run points at")
     s.add_argument("--failed", action="store_true")
     s.add_argument("--room", default="cad",
-                   choices=["cad", "pcb"],
+                   choices=["cad", "pcb", "firmware"],
                    help="without an id: which room's run to close")
     s.add_argument("--no-shot", action="store_true",
                    help="skip the after picture")

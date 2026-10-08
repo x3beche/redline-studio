@@ -38,6 +38,45 @@ does not have a camera, and `build` does not take a board.
 
 Rooms work in parallel, so close a run by its id: `finish <id>`.
 
+## Firmware notes
+
+`revisions.py queue` marks a note from the Firmware room `[FIRMWARE]`
+(`kind` firmware, `model` = the firmware id). It goes to the Firmware
+room's agent (`redline-firmware` in `.claude/agents/`) and follows
+AGENTS.md, "Firmware notes". In short:
+
+1. `start <id> "..."`, then `show <id>` (or `next --room firmware`): the
+   firmware, the pin / net / code lines the note is anchored to as they are
+   now, the build. Open the picture it writes - the sheet or the code the
+   person drew on.
+2. Read `include/pins.h` (`fw get <fw> include/pins.h`) - it is **generated
+   from the schematic, never edit it** - and `fw pins <fw>`.
+3. `fw get <fw> <path> -o /tmp/x`, edit, `fw put <fw> <path> /tmp/x --note "..."`
+   (refused when the firmware moved on since you read it - read again).
+4. `fw build <fw> --wait`: 0 errors, no new warnings (`-Wall -Wextra`),
+   flash and RAM sane. `log ... --room firmware` as you go.
+5. `finish <id>` - refused until the version holding the change has built
+   cleanly; it keeps the diff, the build (flash/RAM before -> after) and a
+   picture of the main changed hunk on the card. There is no render.
+   The note then stays queued until the person reviews it and marks it
+   applied - do not `done` it yourself unless they asked.
+
+Rules: keep to the macros in pins.h; never drive a pin whose function is
+unclear (input-only 34-39, strapping 0/2/5/12/15, a net you have not read
+the parts of) - ask with `ask "..." --revision <id>`, which goes to the
+Firmware thread; no blocking `delay()` in `loop()`; keep the serial
+console's commands working; keep `-Wall` clean. Flashing is the person's
+job, in the browser: the report says "built, ready to flash".
+
+## Writing a task for the person
+
+Asked to write a note or task for the queue? Put it in a ```` ```task ````
+fence in your `say` answer - optional first lines `title: ...` and
+`target: <model | board | firmware id>`, then the note as plain text; one
+task per fence. The person queues it with one click ("Send to 3D queue"
+under the box); nothing to copy and paste. See AGENTS.md, "Writing a task for the
+person".
+
 ## Important: only "queued" items are your work
 
 Revisions have four states:

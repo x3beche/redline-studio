@@ -81,8 +81,76 @@ function liftMath(src: string): { text: string; math: string[] } {
   return { text, math };
 }
 
+/** A task written for the queue: a ```task fence, optionally opening with
+ *  `title: ...` and `target: <model | board | firmware id>` lines, the rest
+ *  the note. The same rules as backend/tasks.py parse(), so the n-th box on
+ *  screen is the n-th block the server files when its button is pressed. */
+export interface TaskBlock {
+  index: number; title: string | null; target: string | null; body: string;
+  /** False while the fence is still open (an answer being written). */
+  closed: boolean;
+}
+export type Segment = { md: string } | { task: TaskBlock };
+
+const TASK_OPEN = /^\s*```\s*task\s*$/i;
+const TASK_HEAD = /^\s*(title|target)\s*:\s*(.*?)\s*$/i;
+// A fence is closed by a bare one: ```task inside a code block is code.
+const CLOSE = /^\s*```\s*$/;
+
+function taskBlock(lines: string[], index: number, closed: boolean): TaskBlock {
+  const head: Record<string, string> = {};
+  let i = 0;
+  while (i < lines.length && !lines[i].trim()) i++;
+  for (; i < lines.length; i++) {
+    const m = TASK_HEAD.exec(lines[i]);
+    if (!m || m[1].toLowerCase() in head) break;
+    head[m[1].toLowerCase()] = m[2];
+  }
+  return { index, title: head['title'] || null, target: head['target'] || null,
+           body: lines.slice(i).join('\n').trim(), closed };
+}
+
+/** A message as text and task blocks, in order. Without a task fence it is
+ *  one Markdown segment, the text as it was. */
+export function splitTasks(src: string): Segment[] {
+  const out: Segment[] = [];
+  let md: string[] = [], task: string[] | null = null, other = false, n = 0;
+  const flush = () => { if (md.join('').trim()) out.push({ md: md.join('\n') }); md = []; };
+  for (const line of (src ?? '').replace(/\r\n?/g, '\n').split('\n')) {
+    if (task) {
+      if (CLOSE.test(line)) { out.push({ task: taskBlock(task, n++, true) }); task = null; }
+      else task.push(line);
+      continue;
+    }
+    if (other) { if (CLOSE.test(line)) other = false; md.push(line); continue; }
+    if (TASK_OPEN.test(line)) { flush(); task = []; continue; }
+    if (FENCE.test(line)) other = true;
+    md.push(line);
+  }
+  if (task) out.push({ task: taskBlock(task, n, false) });
+  else flush();
+  return out;
+}
+
+/** A task block as a box, where nothing can be pressed (a question, a
+ *  note). The chat threads draw their own, with the button (rooms/task-block.ts). */
+function taskBox(b: TaskBlock): string {
+  return '<div class="md-task"><div class="md-task-head"><span class="md-task-label">Task</span>'
+    + (b.title ? `<b class="md-task-title">${inline(escape(b.title))}</b>` : '')
+    + (b.target ? `<span class="md-task-target">${escape(b.target)}</span>` : '')
+    + `</div><div class="md-task-body md">${render1(b.body)}</div></div>`;
+}
+
 /** Markdown to HTML. */
 export function toHtml(src: string): string {
+  const parts = splitTasks(src ?? '');
+  if (parts.some(p => 'task' in p)) {
+    return parts.map(p => 'task' in p ? taskBox(p.task) : render1(p.md)).join('');
+  }
+  return render1(src ?? '');
+}
+
+function render1(src: string): string {
   const lifted = liftMath((src ?? '').replace(/\r\n?/g, '\n'));
   return lifted.math.length
     ? markdown(lifted.text)
@@ -124,7 +192,7 @@ function markdown(src: string): string {
     const line = lines[i];
 
     if (fence) {
-      if (FENCE.test(line)) {
+      if (CLOSE.test(line)) {
         out.push(`<pre><code>${fence.join('\n')}</code></pre>`);
         fence = null;
       } else {
@@ -195,6 +263,9 @@ function markdown(src: string): string {
 /** The same text with the marks taken off, for somewhere one line fits. */
 export function plain(src: string): string {
   return (src ?? '')
+    // a task block: its title, for a one-line preview
+    .replace(/^\s*```\s*task\s*\n([\s\S]*?)(?:^\s*```\s*$|(?![\s\S]))/gim,
+             (_, b: string) => ' ' + (taskBlock(b.split('\n'), 0, true).title ?? 'Task') + ' ')
     .replace(/```[\s\S]*?```/g, ' ')
     // maths: the TeX without its fences or commands, for one line
     .replace(/\\[()[\]]|\$\$/g, ' ')

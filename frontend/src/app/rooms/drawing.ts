@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, OnDestroy, computed, effect, input, signal, viewChild,
+  Component, ElementRef, OnDestroy, computed, effect, input, output, signal, viewChild,
 } from '@angular/core';
 import { BoardGeometry } from '../api';
 import { capture } from './sketchpad';
@@ -152,6 +152,8 @@ export class Drawing implements OnDestroy {
   side = input<'F' | 'B' | 'all'>('all');
   /** Boxes to draw over the drawing, in its viewBox's units. */
   marks = input<DrawingMarks | null>(null);
+  /** A click on the drawing (not a drag), as fractions of its width and height. */
+  clicked = output<{ fx: number; fy: number }>();
 
   readonly Math = Math;
   hover = signal<Hit | null>(null);
@@ -300,7 +302,15 @@ export class Drawing implements OnDestroy {
   }
 
   up(ev: PointerEvent) {
-    if (this.drag?.id === ev.pointerId) this.drag = null;
+    if (this.drag?.id === ev.pointerId) {
+      this.drag = null;
+      // A click, not a drag: where on the drawing, as fractions of it.
+      if (!this.moved && this.w() && this.h()) {
+        const r = this.box().nativeElement.getBoundingClientRect();
+        this.clicked.emit({ fx: (ev.clientX - r.left - this.x()) / this.w(),
+                            fy: (ev.clientY - r.top - this.y()) / this.h() });
+      }
+    }
   }
 
   // ---- inspect ----

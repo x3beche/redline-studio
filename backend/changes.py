@@ -69,12 +69,52 @@ async def snapshot(db, project: str | None) -> dict:
     return out
 
 
+async def firmware_snapshot(db, fid: str) -> dict:
+    """A firmware's files as they are now, by fingerprint, keyed
+    `firmware:<id>/<path>`; the texts kept once each, like a model's."""
+    from . import firmware
+    try:
+        files = await firmware.contents(db, fid)
+    except Exception:                             # noqa: BLE001 - no firmware, nothing to keep
+        return {}
+    out: dict[str, str] = {}
+    texts: dict[str, str] = {}
+    for path, text in files.items():
+        sha = _sha(text)
+        out[f"firmware:{fid}/{path}"] = sha
+        texts[sha] = text
+    await _keep(db, texts)
+    return out
+
+
+async def _keep(db, texts: dict[str, str]) -> None:
+    if texts:
+        have = set(await db[BLOBS].distinct("_id", {"_id": {"$in": list(texts)}}))
+        new = [{"_id": s, "text": t} for s, t in texts.items() if s not in have]
+        if new:
+            try:
+                await db[BLOBS].insert_many(new)
+            except Exception:                     # a race with another writer: the text is there
+                pass
+
+
+async def _sources(db, rev: dict) -> dict:
+    """What a note's work can change: a firmware note's firmware, else the
+    models and boards of its project."""
+    if rev.get("kind") == "firmware":
+        return await firmware_snapshot(db, rev.get("model") or "")
+    return await snapshot(db, await project_of(db, rev))
+
+
 async def started(db, rev_id: str) -> None:
     """Called when an agent starts on a note: the sources as they are."""
     rev = await db.revisions.find_one({"_id": rev_id}, {"model": 1, "kind": 1})
     if not rev:
         return
-    base = await snapshot(db, await project_of(db, rev))
+    base = await _sources(db, rev)
+    if rev.get("kind") == "firmware":
+        from . import fwnotes
+        await fwnotes.started(db, rev)
     await db.revisions.update_one({"_id": rev_id}, {"$set": {"changes_base": base, "changes_base_at": _now()}})
 
 
@@ -95,7 +135,7 @@ async def finished(db, rev_id: str) -> list[dict]:
     if not rev or rev.get("changes_base") is None:
         return []
     base: dict = rev["changes_base"]
-    after = await snapshot(db, await project_of(db, rev))
+    after = await _sources(db, rev)
     changed = []
     for key in sorted(set(base) | set(after)):
         b, a = base.get(key), after.get(key)

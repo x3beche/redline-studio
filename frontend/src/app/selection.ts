@@ -4,11 +4,22 @@ import { Workspace } from './workspaces';
 /** What the command palette asks of the Chat room (id 'commandcode'). */
 export interface CcWant {
   n: number;
-  action: 'new' | 'last';
+  action: 'new' | 'last' | 'open';
+  /** For 'open': the conversation, and the line in it to show. */
+  chat?: string;
+  message?: string;
   /** Attached to the new conversation's first line, as an @-mention. */
   mention?: { kind: 'model' | 'board' | 'file' | 'note'; id: string; label?: string };
   /** Sent at once when given; otherwise the composer waits, focused. */
   text?: string;
+}
+
+/** What a firmware note is about (backend/fwnotes.py): a pin or a net of
+ *  the MCU, or lines of a file. The server fills in the rest. */
+export interface FwAnchor {
+  kind: 'pin' | 'net' | 'code';
+  pin?: string; name?: string; net?: string | null; macro?: string | null; gpio?: number | null;
+  parts?: string[]; file?: string; lines?: [number, number]; version?: number; excerpt?: string;
 }
 
 /** What is open, and where.
@@ -61,10 +72,14 @@ export class Selection {
    *  'cad' or 'pcb', or null for the AI conversations. Whatever used to
    *  open the "ask the agent" box under the queue opens this instead. */
   thread = signal<string | null>(new URLSearchParams(location.search).get('thread'));
-  openThread(room: string) {
+  openThread(room: string, at?: string) {
     this.thread.set(room);
+    if (at) this.threadAt.set(at);
     this.room.set('commandcode');
   }
+  /** A line of a room's thread to scroll to once it is on screen (a queued
+   *  note's "from chat" link); the thread sets it back to null. */
+  threadAt = signal<string | null>(null);
 
   /** What the open board is made of, as `U1 · C368196` - so the note
    *  panel beside the room can offer them where it offers a model's
@@ -78,6 +93,27 @@ export class Selection {
 
   /** Bumped when a board note has been filed, so the room lets go. */
   boardFiled = signal(0);
+
+  /** What a firmware note is about, as the Firmware room picked it: a pin
+   *  (a row of Pins, or a net label on the sheet) or lines of a file in
+   *  the Code view. Sent with the note; the server checks it. */
+  fwAnchor = signal<FwAnchor | null>(null);
+  /** The Firmware room's picture for the note: the sheet or the code as
+   *  on screen, with the marks when the pen is down. */
+  fwDraft = signal<(() => Promise<string | null>) | null>(null);
+  /** Bumped when a firmware note has been filed, so the room lets go. */
+  fwFiled = signal(0);
+  /** The pins.h macros of the open firmware, for the note's Part field. */
+  fwParts = signal<string[]>([]);
+  /** "Open in Firmware" from a card: the room opens the file at the line,
+   *  or picks the pin. */
+  fwJump = signal<{ firmware: string; anchor: FwAnchor | null; file?: string; line?: number; n: number } | null>(null);
+  private fwJumps = 0;
+  jumpToFirmware(firmware: string, anchor: FwAnchor | null, file?: string, line?: number) {
+    this.firmware.set(firmware);
+    this.fwJump.set({ firmware, anchor, file, line, n: ++this.fwJumps });
+    this.room.set('firmware');
+  }
 
   /** Where the running note's card docks in the room on screen - the foot
    *  of its frame's tab column - set by the frame the moment it exists,

@@ -96,7 +96,11 @@ SYSTEM = (
     "You are a helpful assistant in Redline Studio, a workshop app for 3D CAD models, "
     "circuit boards. Several people may share this conversation; a line "
     "written by someone is prefixed with their name in brackets when there is more than "
-    "one of them. Answer in the language you are asked in. Use Markdown where it helps."
+    "one of them. Answer in the language you are asked in. Use Markdown where it helps. "
+    "When you are asked to write a task or a note for the queue, put each task in a fenced "
+    "block of its own with the info string task (```task), optionally starting with a line "
+    "'title: ...' and a line 'target: <model, board or firmware id>', then the note itself "
+    "as plain text. One task per block; the person sends it to the queue with one click."
 )
 
 TITLE_PROMPT = (
@@ -157,8 +161,12 @@ def _out(doc: dict, full: bool = True) -> dict:
     o.pop("queue_rev", None)
     o["queue"] = queue_public(doc.get("queue"))
     o["queue_paused"] = bool(doc.get("queue_paused")) and bool(o["queue"])
+    # Which task blocks of which answer went to the queue (backend/tasks.py),
+    # on the line they are in.
+    tasks = o.pop("tasks", None) or {}
     if full:
-        o["messages"] = [public(m) for m in msgs]
+        o["messages"] = [{**public(m), "tasks": tasks[m["id"]]} if m.get("id") in tasks else public(m)
+                         for m in msgs]
     elif msgs:
         last = msgs[-1]
         o["last"] = {"role": last["role"], "text": (last.get("content") or "")[:140],

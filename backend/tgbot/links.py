@@ -29,7 +29,11 @@ PREFS = {
     "budget": False,      # a budget crossed its warning or 100%
     "build": False,       # a build failed
     "digest": False,      # once a day, what happened
+    "ccusage": True,      # the Command Code weekly window at 90%, or used up (owner and admins)
 }
+
+# Told only to those who may change the server's settings.
+SERVER_PREFS = {"ccusage"}
 
 # The languages a question can be read in: every ISO 639-1 code
 # (languages.py; backend/reading.py does the work). None is the agents' own
@@ -176,5 +180,20 @@ async def recipients(db, workspace: str, pref: str) -> list[tuple[dict, str]]:
             continue
         role = await role_of(raw, link)
         if role and access.allowed(role, "view"):
+            out.append((link, role))
+    return out
+
+
+async def server_recipients(db, pref: str, act: str = "settings") -> list[tuple[dict, str]]:
+    """The linked people, in any space, who want to hear about `pref` and
+    whose role now allows `act` - the server's own news (the Command Code
+    account is the server's, not a space's)."""
+    raw = core.raw_of(db)
+    out = []
+    async for link in raw[core.LINKS].find({}):
+        if link.get("blocked") or not prefs_of(link).get(pref):
+            continue
+        role = await role_of(raw, link)
+        if role and access.allowed(role, act):
             out.append((link, role))
     return out

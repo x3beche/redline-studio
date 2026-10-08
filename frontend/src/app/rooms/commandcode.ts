@@ -4,11 +4,14 @@ import {
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { NgTemplateOutlet } from '@angular/common';
-import { plain, toHtml } from '../markdown';
+import { Segment, TaskBlock, plain, splitTasks, toHtml } from '../markdown';
+import { TaskBlockView, TaskState } from './task-block';
 import { Auth } from '../auth';
 import { T, t } from '../i18n';
 import { CcWant, Selection } from '../selection';
 import { AgentThreads, RoomThread } from './agent-thread';
+import { CcUsageLine } from '../cc-usage';
+import { AvatarColours, avatarColour } from '../avatar';
 
 /** The Chat room (id 'commandcode', kept so old links and saved tab orders
  *  still work): people talking with a model, in the open - and, pinned at
@@ -74,6 +77,8 @@ export interface CcMessage {
   thinking?: string;
   /** Its runner died with the server: kept as far as it got. */
   interrupted?: boolean;
+  /** Which ```task blocks went to the queue, by index (backend/tasks.py). */
+  tasks?: Record<string, TaskState>;
   usage?: { prompt_tokens?: number | null; completion_tokens?: number | null; cost?: number | null };
   timing?: CcTiming;
 }
@@ -228,9 +233,6 @@ export class CcApi {
   }
 }
 
-/** The theme's series colours: a person's avatar takes one by name. */
-const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)',
-                'var(--series-5)', 'var(--series-6)', 'var(--series-7)', 'var(--series-8)'];
 
 const PROVIDERS = [{ id: 'commandcode', name: 'Command Code' }, { id: 'openrouter', name: 'OpenRouter' }];
 const UNDO_MS = 6000;
@@ -291,14 +293,15 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [T, NgTemplateOutlet, RoomThread],
+  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, TaskBlockView],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)' },
   template: `
 <!-- Avatars: a person's picture, or their initials on a colour of their own
-     (one of the theme's series colours, picked by name); a model's mark. -->
+     (the one they chose on their Profile, or a series colour picked by name -
+     avatar.ts); a model's or an agent's mark, all in one grey (styles.css). -->
 <ng-template #userAv let-by let-hide="hide">
   <div class="tcv-cc-av" data-role="user" [attr.data-hide]="hide ? 1 : null" [attr.data-me]="by?.id === me() ? 1 : null"
-       [style.background]="avTint(by?.name || by?.id, 28, '--surface')" [style.border-color]="avTint(by?.name || by?.id, 55, '--line')"
+       [style.background]="avTint(by?.name || by?.id, 28, '--surface', by?.id)" [style.border-color]="avTint(by?.name || by?.id, 100, '--line', by?.id)"
        aria-hidden="true">
     {{ initials(by?.name) }}
     @if (picOf(by); as src) { <img [src]="src" alt="" (error)="noPic(by)"> }
@@ -490,6 +493,8 @@ type Ask = { text: string; label: string; go: () => void };
       }
       }
     </div>
+    <!-- The Command Code account's usage windows, pinned under the list (cc-usage.ts): opens LLM settings. -->
+    <app-cc-usage-line />
   </aside>
   <div class="tcv-cc-scrim" (click)="drawer.set(false)"></div>
 
@@ -567,7 +572,17 @@ type Ask = { text: string; label: string; go: () => void };
                   @if (m.thinking) {
                     <ng-container *ngTemplateOutlet="think; context: { $implicit: m.thinking, key: m.id, streaming: false, ms: m.thinking_ms }" />
                   }
-                  <div class="tcv-cc-answer md" [innerHTML]="html(m.content)"></div>
+                  <!-- A task written for the queue is a box with its own button
+                       (rooms/task-block.ts); the rest is the answer as written. -->
+                  @for (seg of parts(m.content); track $index) {
+                    @if (taskOf(seg); as tk) {
+                      <rl-task-block [block]="tk" [state]="m.tasks?.[tk.index]"
+                                     [url]="'/api/cc/chats/' + c.id + '/messages/' + m.id + '/task/' + tk.index + '/queue'"
+                                     (queued)="taskQueued(m.id, tk.index, $event)" />
+                    } @else {
+                      <div class="tcv-cc-answer md" [innerHTML]="html(mdOf(seg))"></div>
+                    }
+                  }
                 } @else {
                   <div class="tcv-cc-bubble">{{ m.content }}</div>
                 }
@@ -1107,6 +1122,19 @@ export class RoomCommandCode implements OnDestroy {
       const p = this.provider();
       untracked(() => this.loadModels(p));
     });
+    // The conversation's log comes and goes (a room thread is shown in its
+    // place): whenever a new one is put on the page with a conversation in
+    // it, it starts at the end - coming back from a thread to the same
+    // conversation calls nothing else that would scroll it.
+    let mounted: HTMLElement | null = null;
+    effect(() => {
+      const el = this.logEl()?.nativeElement ?? null;
+      const id = this.chat()?.id;
+      if (!el) { mounted = null; return; }
+      if (el === mounted || !id) return;
+      mounted = el;
+      untracked(() => this.scroll());
+    });
     // Each code block gets a copy button, whenever new ones appear.
     effect(() => {
       const el = this.logEl()?.nativeElement;
@@ -1144,6 +1172,7 @@ export class RoomCommandCode implements OnDestroy {
   private takeWant(w: CcWant) {
     this.sel.thread.set(null);
     if (w.action === 'last') { this.openLast(); return; }
+    if (w.action === 'open' && w.chat) { this.open(w.chat, w.message ?? null); return; }
     const go = (c: CcChat) => {
       if (this.chat()?.id !== c.id) return;
       if (w.mention) {
@@ -2122,7 +2151,9 @@ export class RoomCommandCode implements OnDestroy {
     if (i <= 0) return false;
     const a = msgs[i], b = msgs[i - 1];
     if (a.role !== b.role) return false;
-    return a.role === 'assistant' || (a.by?.id ?? a.by?.name) === (b.by?.id ?? b.by?.name);
+    // Two answers in a row are one sender only when the same model wrote both.
+    if (a.role === 'assistant') return (a.model ?? '') === (b.model ?? '');
+    return (a.by?.id ?? a.by?.name) === (b.by?.id ?? b.by?.name);
   }
 
   /** A person's picture (backend/profile.py), over their initials; one that
@@ -2137,12 +2168,13 @@ export class RoomCommandCode implements OnDestroy {
     if (by?.id) this.noPics.update(s => new Set(s).add(by.id!));
   }
 
-  /** One of the theme's series colours, always the same for a name, mixed
-   *  into the surface (or the line) so the initials read in every theme. */
-  avTint(name: string | undefined, pct: number, base: '--surface' | '--line') {
-    let h = 0;
-    for (const ch of name || '?') h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-    return `color-mix(in srgb, ${SERIES[h % SERIES.length]} ${pct}%, ${base === '--surface' ? 'var(--surface)' : 'var(--line)'})`;
+  /** The person's colour - the one they chose on their Profile, else a
+   *  series colour picked by name (avatar.ts) - mixed into the surface (or
+   *  the line) so the initials read in every theme. */
+  private avColours = inject(AvatarColours);
+  avTint(name: string | undefined, pct: number, base: '--surface' | '--line', id?: string) {
+    const c = avatarColour(name || '?', this.avColours.of(id));
+    return `color-mix(in srgb, ${c} ${pct}%, ${base === '--surface' ? 'var(--surface)' : 'var(--line)'})`;
   }
 
   /** Whose model it is, for its mark. */
@@ -2315,6 +2347,8 @@ export class RoomCommandCode implements OnDestroy {
       const el = this.logEl()?.nativeElement.querySelector(`[data-mid="${CSS.escape(mid)}"]`);
       if (!el) return;
       el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      // Reading there now: the end of the conversation does not pull it back.
+      this.logFree = true;
       this.flash.set(mid);
       setTimeout(() => { if (this.flash() === mid) this.flash.set(null); }, 2600);
     }, 60);
@@ -2378,6 +2412,26 @@ export class RoomCommandCode implements OnDestroy {
   }
 
   // ---- words -------------------------------------------------------------
+
+  /** An answer as text and ```task blocks (markdown.ts splitTasks). */
+  private split = new Map<string, Segment[]>();
+  parts(src: string): Segment[] {
+    src = src || '';
+    let got = this.split.get(src);
+    if (!got) {
+      got = splitTasks(src);
+      if (this.split.size > 400) this.split.clear();
+      this.split.set(src, got);
+    }
+    return got;
+  }
+  taskOf(s: Segment): TaskBlock | null { return 'task' in s ? s.task : null; }
+  mdOf(s: Segment): string { return 'md' in s ? s.md : ''; }
+  /** A task block sent to the queue: spent here at once, as the server keeps it. */
+  taskQueued(mid: string, index: number, st: TaskState) {
+    this.chat.update(c => c && c.messages ? { ...c, messages: c.messages.map(m => m.id !== mid ? m
+      : { ...m, tasks: { ...(m.tasks ?? {}), [index]: st } }) } : c);
+  }
 
   /** Escaped by toHtml, sanitised again by Angular on the way into [innerHTML]. */
   html(src: string): string {

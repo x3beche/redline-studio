@@ -12,6 +12,8 @@ last looked, in
     runs             a run started                       -> "run"
     budget_alerts    a budget crossed its line           -> "budget"
     compute_jobs     a build, layout or convert failed    -> "build"
+    cc_usage_alerts  Command Code's weekly window at 90%  -> "ccusage"
+                     or used up (owner and admins only)
 
 Each event is announced once: its key goes into `telegram_events` (a
 unique _id) before anything is sent, so two processes, a reload, or the
@@ -37,7 +39,7 @@ log = logging.getLogger("redline.telegram")
 EVERY_S = 4
 OVERLAP = timedelta(seconds=90)
 DIGEST_HOUR_UTC = 6                 # 09:00 in Istanbul
-WATCHED = ("question", "applied", "failed", "rejected", "run", "budget", "build")
+WATCHED = ("question", "applied", "failed", "rejected", "run", "budget", "build", "ccusage")
 BUILD_KINDS = ["build", "layout", "convert", "run"]
 
 
@@ -252,6 +254,17 @@ async def tick(raw=None, now=None) -> int:
         if await announce(raw, f"x:{j['_id']}"):
             n += 1
             await _each(raw, ws, "build", "build-failed", lambda link, base, j=j: fmt.build_event(link, j, base))
+
+    # Command Code's weekly window (backend/llm.py cc_check_alert): the
+    # server's account, so its owner and admins, whichever space they are in
+    from .. import llm
+    async for al in raw[llm.CC_ALERTS].find({"at": {"$gt": since("ccusage")}}):
+        if await announce(raw, f"cc:{al['_id']}"):
+            n += 1
+            base = await _base(raw)
+            for link, _role in await links.server_recipients(raw, "ccusage"):
+                await outbox.enqueue(raw, link["chat"], text=fmt.cc_usage_event(link, al, base),
+                                     kind="cc-usage", user=link["_id"], ws=links.ws_of(link))
 
     await core.patch_settings(raw, {"watch": {k: t for k in WATCHED}})
     await sync_questions(raw)

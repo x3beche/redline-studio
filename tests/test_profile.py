@@ -111,6 +111,50 @@ def test_a_name_is_changed_and_audited(db):
     assert audit and audit[0]["detail"]["fields"] == ["name"] and audit[0]["actor"]["id"] == "u-bora"
 
 
+# ---------------------------------------------------------------- the colour
+
+def test_the_avatar_colour_is_auto_until_chosen(db):
+    me = client(session(db, "u-ayse")).get("/api/me").json()
+    assert me["avatar_colour"] == "auto"
+    assert profile.colour_of({}) == "auto" and profile.colour_of({"avatar_colour": "#ff0000"}) == "auto"
+
+
+def test_the_avatar_colour_is_one_of_the_palette(db):
+    c = client(session(db, "u-ayse"))
+    for bad in ("red", "#ff0000", "var(--series-1)", "series-9", "series-0", "", "accent; x"):
+        assert c.patch("/api/me", json={"avatar_colour": bad}).status_code in (400, 422), bad
+    assert "avatar_colour" not in run(db["users"].find_one({"_id": "u-ayse"}))
+    for good in (*profile.COLOURS,):
+        r = c.patch("/api/me", json={"avatar_colour": good})
+        assert r.status_code == 200 and r.json()["avatar_colour"] == good
+        assert run(db["users"].find_one({"_id": "u-ayse"}))["avatar_colour"] == good
+    audit = [d for d in db["audit"].docs.values() if d["action"] == "profile"]
+    assert audit and audit[0]["detail"]["fields"] == ["avatar_colour"]
+    # "auto" takes the choice off again: the name picks.
+    r = c.patch("/api/me", json={"avatar_colour": "auto"})
+    assert r.json()["avatar_colour"] == "auto"
+    assert "avatar_colour" not in run(db["users"].find_one({"_id": "u-ayse"}))
+    # A bad colour beside a good name changes neither.
+    assert c.patch("/api/me", json={"name": "Ayşe Q", "avatar_colour": "pink"}).status_code == 400
+    assert run(db["users"].find_one({"_id": "u-ayse"}))["name"] == "Ayşe"
+
+
+def test_the_colour_reaches_the_session_and_the_authors(db):
+    """The signed-in user carries it (the top bar), and a page drawing
+    message authors gets theirs - only for the ids it names."""
+    a = client(session(db, "u-ayse"))
+    a.patch("/api/me", json={"avatar_colour": "series-3"})
+    auth._CACHE.clear()
+    who = run(auth.session_user(db, session(db, "u-ayse")))
+    assert who["user"]["avatar_colour"] == "series-3"
+    b = client(session(db, "u-bora"))
+    r = b.get("/api/me/colours", params={"ids": "u-ayse,u-bora,nobody,u-ayse"})
+    assert r.status_code == 200, r.text
+    assert r.json()["colours"] == {"u-ayse": "series-3", "u-bora": "auto"}
+    assert b.get("/api/me/colours").json()["colours"] == {}
+    assert access.action("GET", "/api/me/colours") == "view"
+
+
 def test_names_are_checked(db):
     c = client(session(db, "u-bora"))
     assert c.patch("/api/me", json={"name": "   "}).status_code == 400

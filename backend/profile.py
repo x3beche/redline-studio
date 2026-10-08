@@ -17,6 +17,12 @@ A picture is cut to a centred square, made 256 x 256 and kept as a JPEG on
 the user's document (`avatar`, with `avatar_v` the moment it changed, for
 the URL so a browser may keep it). Lists of people carry `has_avatar` and
 `avatar_v`, so a page can show the picture without asking first.
+
+The colour around someone (their ring, and the ground of their initials) is
+`avatar_colour`: one of the theme's tokens in COLOURS, or "auto" - a series
+colour picked from the name (frontend avatar.ts), which is what nobody's
+choice means. It travels with the picture fields; a page drawing other
+people (the Chat's lines) asks GET /api/me/colours?ids=... for theirs.
 """
 
 from __future__ import annotations
@@ -74,10 +80,40 @@ def _iso(v):
     return (v if v.tzinfo else v.replace(tzinfo=timezone.utc)).isoformat()
 
 
+# The colours one may wear: theme tokens (styles.css), never a raw value.
+COLOURS = tuple(f"series-{i}" for i in range(1, 9)) + ("accent",)
+AUTO = "auto"
+
+
+def colour_of(u: dict | None) -> str:
+    """Someone's avatar colour: their choice, or "auto"."""
+    c = (u or {}).get("avatar_colour")
+    return c if c in COLOURS else AUTO
+
+
+def clean_colour(c: str) -> str | None:
+    """A colour to keep: a token from COLOURS, or None for "auto" (unset).
+    Anything else is refused."""
+    c = (c or "").strip()
+    if c == AUTO:
+        return None
+    if c not in COLOURS:
+        raise HTTPException(400, f"a colour is one of {', '.join(COLOURS)} or {AUTO}")
+    return c
+
+
+def colour_change(u: dict, c: str) -> tuple[dict, bool]:
+    """The update for a new colour (a $set or an $unset), and whether it changes."""
+    want = clean_colour(c)
+    if want == u.get("avatar_colour"):
+        return {}, False
+    return ({"$set": {"avatar_colour": want}} if want else {"$unset": {"avatar_colour": ""}}), True
+
+
 def avatar_fields(u: dict) -> dict:
-    """What a list of people says about someone's picture."""
+    """What a list of people says about someone's picture and colour."""
     v = u.get("avatar_v")
-    return {"has_avatar": bool(v), "avatar_v": v or None}
+    return {"has_avatar": bool(v), "avatar_v": v or None, "avatar_colour": colour_of(u)}
 
 
 async def _user(uid: str) -> dict:
@@ -108,8 +144,23 @@ async def me():
         who = actors.current()
         return {"kind": kind, "id": who.get("id"), "name": who.get("name") or who.get("id") or "",
                 "email": None, "role": access.current(), "about_role": access.ABOUT.get(access.current() or ""),
-                "has_avatar": False, "avatar_v": None}
+                "has_avatar": False, "avatar_v": None, "avatar_colour": AUTO}
     return await _out(await _user(actors.current()["id"]))
+
+
+@router.get("/api/me/colours")
+async def colours(ids: str = ""):
+    """The avatar colours of the people asked for (comma-separated ids), for
+    a page drawing them - the Chat's lines. Only the colour: an id that is
+    no account is simply left out, and nobody is listed who was not asked
+    for. Everyone not answered (agents, models) is "auto" to the page."""
+    want = [i for i in dict.fromkeys(x.strip() for x in ids.split(",")) if i][:200]
+    if not want:
+        return {"colours": {}}
+    out = {}
+    async for u in _db()[auth.USERS].find({"_id": {"$in": want}}, {"avatar_colour": 1}):
+        out[u["_id"]] = colour_of(u)
+    return {"colours": out}
 
 
 class ProfileIn(BaseModel):
@@ -117,6 +168,8 @@ class ProfileIn(BaseModel):
     email: str | None = Field(default=None, max_length=200)
     # The address is what one signs in with: changing it asks for the password.
     password: str | None = Field(default=None, max_length=400)
+    # One of COLOURS, or "auto".
+    avatar_colour: str | None = Field(default=None, max_length=20)
 
 
 @router.patch("/api/me")
@@ -148,10 +201,14 @@ async def change_me(body: ProfileIn):
             if await db[auth.USERS].find_one({"email": email}, {"_id": 1}):
                 raise HTTPException(409, "another account has that address")
             change["email"] = email
+    colour, recolour = colour_change(u, body.avatar_colour) if body.avatar_colour is not None else ({}, False)
+    if recolour:
+        await db[auth.USERS].update_one({"_id": u["_id"]}, colour)
     if change:
         await db[auth.USERS].update_one({"_id": u["_id"]}, {"$set": change})
+    if change or recolour:
         auth.forget_sessions()
-        detail = {"fields": sorted(change)}
+        detail = {"fields": sorted([*change, *(["avatar_colour"] if recolour else [])])}
         if "email" in change:
             detail["was"] = u["email"]
         await actors.audit(db, "profile", u["_id"], detail)

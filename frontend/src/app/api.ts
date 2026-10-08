@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, filter, map, of, switchMap, take, throwError, timer } from 'rxjs';
 import type { BudgetStatus } from './money';
+import type { FwAnchor } from './selection';
 
 /** Who did something: the person, or one of the agents. */
 export interface Actor { type: 'user' | 'agent'; id: string; name: string }
@@ -33,7 +34,11 @@ export interface Revision {
   /** The same view once the work is done; 0 until an after shot is taken. */
   image_after_bytes: number;
   /** What the work changed, file by file; null if it was not kept. */
-  changes?: { kind: 'model' | 'board'; id: string; added: number; removed: number }[] | null;
+  changes?: { kind: 'model' | 'board' | 'firmware'; id: string; added: number; removed: number }[] | null;
+  /** A firmware note: the pin, net or code lines it is about. */
+  anchor?: FwAnchor | null;
+  /** A finished firmware note: the diff, the build, its figures. */
+  fw_result?: FwResult | null;
   /** What was typed, when the note was saved as an English request. */
   comment_original: string | null;
   /** One short sentence, generated from the text and the drawing. */
@@ -41,6 +46,10 @@ export interface Revision {
   /** True once someone has written it by hand; the generator then
    *  leaves it alone. */
   summary_manual: boolean;
+  /** Filed from a ```task block in a chat (backend/tasks.py): a room's
+   *  thread or an AI conversation, and the line it was written in. */
+  from_chat?: { kind: 'thread' | 'ai'; room?: string; chat?: string; message: string;
+                index: number; title?: string | null } | null;
 }
 
 /** What one revision cost to apply: tokens, money at list price, wall clock.
@@ -128,7 +137,18 @@ export interface Settings {
   auto_translate: boolean;
 }
 
-export type RevisionKind = 'cad' | 'pcb';
+interface FwSize { used: number; total: number; pct: number }
+/** What finishing a firmware note kept on it (backend/fwnotes.py result). */
+export interface FwResult {
+  firmware: string; title?: string; from_version: number; version: number;
+  files: { path: string; status: string; added: number; removed: number; diff: string; generated: boolean }[];
+  added: number; removed: number;
+  build: { job?: string; version: number; at?: string; errors: number; warnings: number;
+           flash: { before: FwSize | null; after: FwSize | null }; ram: { before: FwSize | null; after: FwSize | null } };
+  main: { file: string; line: number } | null;
+}
+
+export type RevisionKind = 'cad' | 'pcb' | 'firmware';
 
 /** draft = invisible to models; queued = in the apply queue (models read these). */
 export type RevisionStatus = 'draft' | 'queued' | 'applied' | 'rejected';
@@ -207,6 +227,7 @@ export class Api {
     camera: CameraState | null; part: string | null; model: string | null;
       view?: NoteView | null;
       kind?: RevisionKind;
+      anchor?: FwAnchor | null;
   }): Observable<Revision> {
     return this.http.post<Revision>('/api/revisions', body);
   }
@@ -872,6 +893,12 @@ export interface ChatLine {
   /** Null until the agent has picked it up - that is what its idle wait
    *  watches, and what the page shows as "not read yet". */
   seen_at: string | null;
+  /** Which ```task blocks went to the queue, by index (backend/tasks.py). */
+  tasks?: Record<string, { note_id?: string; at: string; by?: { id?: string; name?: string };
+                           room?: string; target?: string; pending?: boolean }>;
+  /** Changed after it was written, and by whom and why (e.g. a task block
+   *  added by Redline to an older answer). */
+  edited?: { at: string; by: string; why?: string };
   /** Which room's thread it is in. */
   room?: string;
 }
@@ -913,6 +940,11 @@ export interface Question {
   answer: string | null;
   /** Whose thread it belongs in: a board note's question is the PCB room's. */
   room?: string;
+  answered_at?: string | null;
+  /** Who answered it (absent on older questions). */
+  answered_by?: Actor | null;
+  /** Which agent asked. */
+  asked_by?: Actor | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -920,6 +952,10 @@ export class Questions {
   private http = inject(HttpClient);
   open(): Observable<Question[]> {
     return this.http.get<Question[]>('/api/questions');
+  }
+  /** Answered ones, oldest first: a room's thread keeps them in its log. */
+  answered(room: string): Observable<Question[]> {
+    return this.http.get<Question[]>('/api/questions/answered', { params: { room } });
   }
   answer(id: string, answer: string): Observable<Question> {
     return this.http.post<Question>(`/api/questions/${id}/answer`, { answer });

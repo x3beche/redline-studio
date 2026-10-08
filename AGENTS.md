@@ -19,8 +19,8 @@ file with the Read tool**. The comment alone is not enough: when the user says
 
 ## One main agent, one agent per room
 
-Two rooms write notes into one queue: **3D Drawing** (`cad`) and **PCB
-Design** (`pcb`). The agent opened in this repository is the **main agent**. It
+Three rooms write notes into one queue: **3D Drawing** (`cad`), **PCB
+Design** (`pcb`) and **Firmware** (`firmware`). The agent opened in this repository is the **main agent**. It
 does not apply notes itself. It keeps the queue moving:
 
 1. `revisions.py wait` in the background - it returns on a queued note or
@@ -28,7 +28,8 @@ does not apply notes itself. It keeps the queue moving:
 2. `revisions.py chat` first, when something was said: the person comes
    before the queue. Answer with `say`.
 3. `revisions.py queue`, then hand each note to its room's agent with the
-   Agent tool - `redline-3d` or `redline-pcb` (`.claude/agents/`). Give it the
+   Agent tool - `redline-3d`, `redline-pcb` or `redline-firmware`
+   (`.claude/agents/`). Give it the
    revision id and nothing it can read for itself. `revisions.py kind
    <id>` says which room a note is from.
 4. Rooms run **in parallel**, one note per room at a time: every room has
@@ -161,6 +162,35 @@ what you decided, either way.
 Answer in the thread rather than in your terminal. Nothing in here changes
 a model by itself: if they ask for something, do it and then say what you
 did.
+
+### Writing a task for the person
+
+When someone asks you (in a room's thread, or anywhere they will read it on
+screen) to write a note or a task for the queue, do not hand them text to
+copy into the note form. Put each task in a fenced block whose info string is
+`task`:
+
+````
+```task
+title: Seat the screen on the real STEP
+target: iot-fan/assemblies/base
+- oled_091 takes its geometry from the uploaded STEP ...
+- ask before changing the design if it does not fit
+```
+````
+
+- `title:` and `target:` are optional first lines; `target` is the model id
+  (3D room), board id (PCB room) or firmware id (Firmware room) the note is
+  about. Leave it out when you do not know - the page then uses what the
+  person has open, or lets them pick.
+- Everything after them is the note itself, plain text or Markdown. One task
+  per fence; several tasks are several fences.
+- The page draws the block as a box with a **Send to 3D queue** (PCB,
+  Firmware) button and the target beside it. One click files it as a
+  queued note in that room (from the stored message, not
+  from anything the page sends) and the button stays spent for everyone.
+  Write the text the agent who picks it up needs - it is the note, word for
+  word.
 
 ## What your work changed is kept
 
@@ -416,6 +446,83 @@ netlist's name) or part are marked `intended` with the reason, and Board
 health shows them under *Changed on purpose* instead of calling the board
 not the original. Name only what the note changed.
 
+## Firmware notes
+
+A queued item marked `[FIRMWARE]` is a note written in the **Firmware**
+room. `model` is then a firmware id (`U2 ESP32` on the demoboard is
+`cb4a67357c9f`), and the note has an **anchor** - what it is about:
+
+- a pin of the MCU (a row of Pins) or a net label on the sheet: the pin,
+  its GPIO, the net and its `pins.h` macro, and the parts on that net;
+- lines of a file (selected in the Code view): `src/main.cpp:12-18`, with
+  the lines as they were when the note was written;
+- nothing: the firmware as a whole.
+
+`show <id>` (or `next --room firmware`) prints the firmware, the anchor as
+it is now (the code lines with context, or where the pin's macro is used),
+the note, and where the last build stands; the picture it writes is the view
+the note was drawn on (the sheet or the code) - open it.
+
+The work, start to finish:
+
+```bash
+.venv/bin/python tools/revisions.py start <id> "blink LED4 on the button"
+.venv/bin/python tools/revisions.py fw files <fw>                    # the tree, its version
+.venv/bin/python tools/revisions.py fw pins <fw>                     # pins, nets, parts, used where
+.venv/bin/python tools/revisions.py fw get <fw> include/pins.h       # read it - GENERATED, never edit
+.venv/bin/python tools/revisions.py fw get <fw> src/input.cpp -o /tmp/input.cpp
+# edit /tmp/input.cpp
+.venv/bin/python tools/revisions.py fw put <fw> src/input.cpp /tmp/input.cpp --note "LED4 blinks twice on press"
+.venv/bin/python tools/revisions.py fw build <fw> --wait             # errors/warnings as file:line, flash, RAM
+.venv/bin/python tools/revisions.py fw diff <fw>                      # what the last version changed
+.venv/bin/python tools/revisions.py log "built: 0 errors, flash 24.7%" --room firmware -p 90 -l done
+.venv/bin/python tools/revisions.py finish <id>
+```
+
+- `fw put` saves a new version, refused (409) when the firmware moved on
+  since the version you read (`fw files` / `fw get` remember it; `--base N`
+  says it outright). Read again, merge, put again. Several files: give
+  `path file` pairs.
+- `finish <id>` on a firmware note is **refused until the version holding
+  the change has built with 0 errors**. Then it keeps on the card the diff
+  from the version the run started at, the build (errors, warnings, flash
+  and RAM before -> after) and a picture of the main changed hunk - that is
+  the note's "after"; there is no render. `finish --failed` when it cannot
+  be done, with the reason in the thread.
+- After `finish` the note **stays queued** until the person has reviewed
+  it and marked it applied - as with a 3D or board note (`finish` says
+  "finished - waiting for the person to review and mark it applied").
+  `wait` and `next` no longer count it as work. Do not mark it applied
+  yourself unless the person asked for that.
+- **Flashing is the person's job**, from the browser (Firmware room >
+  Flash, over USB). Never claim it runs on the board: the report says
+  "built, ready to flash", with what to look for when they do.
+
+Rules:
+
+- `include/pins.h` is generated from the board's schematic and written
+  again when the board changes. **Never edit it** (`fw put` refuses);
+  use its macros (`LED4`, `ENC_S`, `L_SDA`), never a bare GPIO number. A
+  pin that is not in it is not wired on this board - ask, do not invent.
+- **Never drive a pin whose function is unclear** - an input-only pin
+  (34-39), a strapping pin (0, 2, 5, 12, 15), a net whose parts you have not
+  read. Read `fw pins`, and ask on their screen (`ask --revision <id>`,
+  it goes to the Firmware thread) when the note does not say.
+- No blocking `delay()` in `loop()` or in anything it calls: timing with
+  `millis()` and state, so the console, the encoder and the display keep
+  running.
+- Keep the serial console's commands working (`src/console.cpp` and its
+  `help`): the person's Flash dialog and serial monitor offer them as
+  buttons. A new behaviour worth poking at gets a command.
+- Keep the build `-Wall -Wextra` clean: a new warning is a failure to fix,
+  not a figure to report.
+
+Questions about a firmware note go to the Firmware room's thread:
+`revisions.py ask "..." --revision <id>` (or `--room firmware`), and
+`chat --room firmware` / `say --room firmware` for the thread itself. The
+MCP server has the same: `next`, `fw_files`, `fw_get`, `fw_put`,
+`fw_build`, `fw_diff`, `fw_pins`.
+
 ## Designing a board from a description
 
 "STM32F042, two buttons, USB-C charging with a TP4056, a CH340G with a
@@ -496,7 +603,15 @@ that fetches it - that line is information, not a queued note.
 .venv/bin/python tools/revisions.py files get <file-id> -o bom.csv
 .venv/bin/python tools/revisions.py board convert <id> --bom bom.csv --run
 .venv/bin/python tools/revisions.py files put out.pdf --board <id> --note "..."   # give one back
+.venv/bin/python tools/revisions.py files --folder datasheets/power      # what is in a folder ('/' the top)
+.venv/bin/python tools/revisions.py files put ldo.pdf --folder datasheets/power   # into a folder (made if missing)
+.venv/bin/python tools/revisions.py files mkdir datasheets/power         # a folder, and its parents
+.venv/bin/python tools/revisions.py files mv <file-id|folder path> <folder path|/>
 ```
+
+Files sit in folders the person makes (`file_folders`); a file from before
+folders is at the top. Put what you give back where they keep that kind of
+thing, and do not move or rename their files unless they ask.
 
 Before guessing parts for an imported board, look here: a BOM someone
 uploaded replaces every guess.
@@ -515,6 +630,7 @@ Nothing counts as work until the user presses *queue*.
 
 ```bash
 .venv/bin/python tools/revisions.py queue [--room R]     # what is queued, all or one room
+.venv/bin/python tools/revisions.py next [--room R]      # the next one nobody started, in full
 .venv/bin/python tools/revisions.py kind <id>            # which room a note is from
 .venv/bin/python tools/revisions.py wait                 # block until there is
 .venv/bin/python tools/revisions.py ask "..." -o A -o B  # ask on their screen
@@ -531,8 +647,9 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py finish <id>          # close that note's run
 .venv/bin/python tools/revisions.py after <id>           # the "after" picture
 .venv/bin/python tools/revisions.py usage [--full]       # what the work cost
-.venv/bin/python tools/revisions.py files [get <id>|put <file>]  # the Files tab
+.venv/bin/python tools/revisions.py files [get <id>|put <file>|mkdir|mv]  # the Files tab
 .venv/bin/python tools/revisions.py component list|show|deps|pin|refresh ...  # components
+.venv/bin/python tools/revisions.py fw files|get|put|pins|build|diff <fw> ...   # firmware
 .venv/bin/python tools/render.py <id> [--camera=…|--only PART]
 ```
 
