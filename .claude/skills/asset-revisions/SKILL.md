@@ -284,3 +284,10 @@ gitignored; the model API keys (OpenRouter, Command Code) live only in MongoDB
 (`llm_settings`, typed in Settings > LLM settings) and are never read from the
 environment. Never put any of them in code, a log line or anything the browser
 receives, and scan the diff before pushing - this repository is public.
+
+## A part from the Files tab
+
+A STEP (or STL/mesh) in the Files tab is usable by its exact name in a
+model's source - `import_step(ROOT / "<name>.stp")` - and the build lays it
+down like an upload. `revisions.py files` lists the names. No upload call
+is needed.

@@ -678,3 +678,10 @@ it and `run_tool` runs it.
 | Build | temporary directory, removed when finished |
 
 See `.claude/skills/asset-revisions/SKILL.md` for details.
+
+**Using a STEP from the Files tab.** A STEP or mesh someone put in the Files
+tab (`files` / GridFS `user_files`) is laid down in the build root like an
+upload, when the model's source names it - no re-upload needed:
+`import_step(ROOT / "OLED_0.91_128x32.stp")`. The exact file name is what
+`revisions.py files` lists. An upload with the same name wins; among Files
+entries with one name, the newest.
