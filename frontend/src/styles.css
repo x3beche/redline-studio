@@ -4484,6 +4484,8 @@ rl-task-block { display: block; }
   border-top: 1px solid var(--line); font-size: 12px; }
 .md-task-done { color: var(--ink-dim); }
 .md-task[data-queued] .md-task-foot .tcv-btn:disabled { opacity: 1; color: var(--ok); border-color: var(--line); background: var(--surface); cursor: default; }
+.md-task[data-rejected] .md-task-foot .tcv-btn:disabled { opacity: 1; color: var(--ink-dim); border-color: var(--line); background: var(--surface); cursor: default; }
+.md-task[data-rejected] .md-task-body { color: var(--ink-dim); }
 .md-task-link { color: var(--accent); text-decoration: underline; }
 .md-task-err { color: var(--danger); }
 .md-task-pick { max-width: 100%; min-width: 0; flex: 1 1 200px; padding: 3px 6px; }

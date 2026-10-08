@@ -174,6 +174,8 @@ _RULES: list[tuple[str, str, str]] = [
     # (backend/tasks.py), so it is the same right as queueing one
     ("POST", "/api/chat/{}/task/{}/queue", "run"),
     ("POST", "/api/cc/chats/{}/messages/{}/task/{}/queue", "run"),
+    ("POST", "/api/chat/{}/task/{}/reject", "run"),
+    ("POST", "/api/cc/chats/{}/messages/{}/task/{}/reject", "run"),
     ("POST", "/api/questions", "draw"),
     ("POST", "/api/questions/{}/answer", "draw"),
     # an agent's question or reply in the reader's language: reading, so a

@@ -199,6 +199,7 @@ const TR: Record<string, string> = {
   'answer by': 'yanıtlayan:',
   'answered': 'yanıtlandı',
   'Send to 3D queue': '3D kuyruğuna gönder',
+  'Reject': 'Reddet', 'Rejected': 'Reddedildi', 'close it without queueing': 'kuyruğa almadan kapat', 'could not reject it': 'reddedilemedi',
   'Send to PCB queue': 'PCB kuyruğuna gönder',
   'Send to Firmware queue': 'Firmware kuyruğuna gönder',
   'Queued in 3D': '3D kuyruğunda',

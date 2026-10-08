@@ -11,6 +11,8 @@ import { T, t } from '../i18n';
 export interface TaskState {
   note_id?: string; at: string; by?: { id?: string; name?: string };
   room?: string; target?: string; pending?: boolean;
+  /** Turned down with Reject: closed without a note. */
+  rejected?: boolean;
 }
 
 interface Target { room: string; id: string; label: string }
@@ -50,7 +52,7 @@ export class TaskTargets {
   selector: 'rl-task-block',
   imports: [Markdown, T],
   template: `
-<div class="md-task" [attr.data-queued]="done() ? 1 : null">
+<div class="md-task" [attr.data-queued]="done() && !done()!.rejected ? 1 : null" [attr.data-rejected]="done()?.rejected ? 1 : null">
   <div class="md-task-head">
     <span class="md-task-label">{{ 'Task' | t }}</span>
     @if (block().title) { <b class="md-task-title">{{ block().title }}</b> }
@@ -65,6 +67,12 @@ export class TaskTargets {
       @if (done(); as d) {
         @if (d.pending) {
           <span class="md-task-done">{{ 'Sending…' | t }}</span>
+        } @else if (d.rejected) {
+          <button class="tcv-btn" disabled>{{ 'Rejected' | t }}</button>
+          <span class="md-task-done">{{ stamp(d.at) }}@if (d.by?.name) { · {{ d.by!.name }} }</span>
+          @if (auth.can('run')) {
+            <button class="tcv-cc-textbtn" [disabled]="busy()" (click)="reject(true)">{{ 'Undo' | t }}</button>
+          }
         } @else {
           <button class="tcv-btn" disabled>{{ queuedLabel(d.room) | t }}</button>
           <span class="md-task-done">{{ fileName(d.target, d.room) }} ·
@@ -90,6 +98,8 @@ export class TaskTargets {
       } @else {
         <button class="tcv-btn tcv-btn-accent" [disabled]="busy() || !auth.can('run')" (click)="start()"
                 [title]="auth.why('run') ?? ('file this as a queued note' | t)">{{ (busy() ? 'Sending…' : sendLabel(dest()?.room)) | t }}</button>
+        <button class="tcv-btn" [disabled]="busy() || !auth.can('run')" (click)="reject()"
+                [title]="auth.why('run') ?? ('close it without queueing' | t)">{{ 'Reject' | t }}</button>
         <button class="md-task-target" (click)="openPicker()" [disabled]="!auth.can('run')"
                 [title]="'what the note is about - click to change' | t">→ {{ dest() ? fileName(dest()!.id, dest()!.room) : ('pick what it is about…' | t) }}</button>
       }
@@ -111,7 +121,8 @@ export class TaskBlockView {
   state = input<TaskState | null | undefined>(null);
   /** The thread's room; null in an AI conversation, which has none. */
   room = input<string | null>(null);
-  queued = output<TaskState>();
+  /** The block's new state: filed, rejected, or (undo) open again. */
+  queued = output<TaskState | null>();
 
   private mine = signal<TaskState | null>(null);
   done = computed(() => this.state() ?? this.mine());
@@ -206,6 +217,22 @@ export class TaskBlockView {
         if (e.status === 409 && d?.task) { this.mine.set(d.task); this.queued.emit(d.task); return; }
         if (e.status === 422 && d?.need_target) { this.picked.set(null); this.openPicker(); return; }
         this.error.set(typeof d === 'string' ? d : d?.message ?? t('could not queue it'));
+      },
+    });
+  }
+
+  /** Close it without a note - or, `undo`, open a rejected one again.
+   *  The route sits beside the queue one (backend/tasks.py). */
+  reject(undo = false) {
+    this.busy.set(true);
+    this.error.set(null);
+    this.http.post<{ task: TaskState | null }>(this.url().replace(/\/queue$/, '/reject') + (undo ? '?undo=true' : ''), {}).subscribe({
+      next: r => { this.busy.set(false); this.mine.set(r.task); this.queued.emit(r.task); },
+      error: (e: HttpErrorResponse) => {
+        this.busy.set(false);
+        const d = e.error?.detail;
+        if (e.status === 409 && d && 'task' in d) { this.mine.set(d.task ?? null); this.queued.emit(d.task ?? null); return; }
+        this.error.set(typeof d === 'string' ? d : d?.message ?? t('could not reject it'));
       },
     });
   }

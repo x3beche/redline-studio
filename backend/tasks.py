@@ -217,6 +217,34 @@ async def queue_block(db, coll: str, doc_id: str, field: str, text: str, index: 
     return {"task": done, "note": note["id"], "room": room, "target": target}
 
 
+async def reject_block(db, coll: str, doc_id: str, field: str, text: str, index: int,
+                       undo: bool = False) -> dict:
+    """Close block `index` without filing it: the person read the task and
+    does not want it queued. Kept where a queued block's note is, so the
+    box stays closed after a reload; `undo` opens it again (a rejection
+    only - a block that became a note stays one)."""
+    if index < 0 or index >= len(parse(text)):
+        raise HTTPException(404, f"no task {index} in this message")
+    key = f"{field}.{index}"
+    if undo:
+        got = await db[coll].update_one({"_id": doc_id, f"{key}.rejected": True}, {"$unset": {key: ""}})
+        if not getattr(got, "matched_count", 0):
+            raise HTTPException(409, {"message": "not rejected",
+                                      "task": _get(await db[coll].find_one({"_id": doc_id}) or {}, key)})
+        await actors.audit(db, "unreject-task", doc_id, {"index": index})
+        return {"task": None}
+    who = actors.current()
+    done = {"rejected": True, "at": _now(), "by": {k: who.get(k) for k in ("id", "name", "type")}}
+    free = {"$or": [{key: {"$exists": False}}, {key: None},
+                    {f"{key}.pending": True, f"{key}.at": {"$lt": (datetime.now(timezone.utc) - STALE).isoformat()}}]}
+    got = await db[coll].update_one({"$and": [{"_id": doc_id}, free]}, {"$set": {key: done}})
+    if not getattr(got, "matched_count", 0):
+        now = _get(await db[coll].find_one({"_id": doc_id}) or {}, key)
+        raise HTTPException(409, {"message": "already closed", "task": now})
+    await actors.audit(db, "reject-task", doc_id, {"index": index})
+    return {"task": done}
+
+
 def _get(doc: dict, path: str):
     for part in path.split("."):
         if not isinstance(doc, dict):
@@ -241,7 +269,8 @@ def _db():
 
 
 # ---- routes ----------------------------------------------------------------
-# Queueing a note is "run" (backend/access.py), whichever way it is done.
+# Queueing a note is "run" (backend/access.py), whichever way it is done;
+# so is turning a task down, the other answer to the same box.
 
 @router.get("/api/chat/task-targets")
 async def task_targets(room: str | None = None):
@@ -282,3 +311,35 @@ async def queue_from_ai_chat(cid: str, ref: str, index: int, body: QueueIn | Non
     return await queue_block(db, cc_chat.COLL, cid, f"tasks.{m['id']}", m.get("content") or "", index, None,
                              body or QueueIn(),
                              {"kind": "ai", "chat": cid, "message": m["id"], "title_chat": doc.get("title")})
+
+
+async def _thread_msg(db, mid: str) -> dict:
+    from . import chat
+    msg = await db[chat.CHAT].find_one({"_id": mid})
+    if not msg:
+        raise HTTPException(404, mid)
+    return msg
+
+
+@router.post("/api/chat/{mid}/task/{index}/reject")
+async def reject_from_thread(mid: str, index: int, undo: bool = False):
+    """A task block in a room's thread, turned down (or, `undo`, open again)."""
+    from . import chat
+    db = _db()
+    msg = await _thread_msg(db, mid)
+    return await reject_block(db, chat.CHAT, mid, "tasks", msg.get("text") or "", index, undo)
+
+
+@router.post("/api/cc/chats/{cid}/messages/{ref}/task/{index}/reject")
+async def reject_from_ai_chat(cid: str, ref: str, index: int, undo: bool = False):
+    from . import cc_chat
+    db = _db()
+    doc = await db[cc_chat.COLL].find_one({"_id": cid, **cc_chat.LIVE})
+    if not doc:
+        raise HTTPException(404, cid)
+    msgs = doc.get("messages") or []
+    i = cc_chat.find(msgs, ref)
+    if i < 0 or not msgs[i].get("id") or msgs[i].get("role") != "assistant":
+        raise HTTPException(404, f"no answer {ref!r} in this conversation")
+    m = msgs[i]
+    return await reject_block(db, cc_chat.COLL, cid, f"tasks.{m['id']}", m.get("content") or "", index, undo)

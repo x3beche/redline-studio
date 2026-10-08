@@ -127,6 +127,36 @@ def test_the_text_is_the_servers_not_the_pages(app):
     assert run(_all(d.revisions))[0]["comment"].endswith("Use the real STEP.")
 
 
+def test_a_task_can_be_rejected_instead_and_then_not_queued(app):
+    client, d = app
+    mid = agent_line(d, TASK)
+    r = client.post(f"/api/chat/{mid}/task/0/reject")
+    assert r.status_code == 200, r.text
+    line = next(m for m in client.get("/api/chat?room=cad").json() if m["_id"] == mid)
+    assert line["tasks"]["0"]["rejected"] is True and line["tasks"]["0"]["by"]["name"]
+    q = client.post(f"/api/chat/{mid}/task/0/queue", json={})
+    assert q.status_code == 409 and q.json()["detail"]["task"]["rejected"]
+    assert run(_all(d.revisions)) == []
+    assert client.post(f"/api/chat/{mid}/task/0/reject").status_code == 409
+
+
+def test_a_rejection_can_be_undone_a_queued_task_cannot(app):
+    client, d = app
+    mid = agent_line(d, TASK)
+    client.post(f"/api/chat/{mid}/task/0/reject")
+    assert client.post(f"/api/chat/{mid}/task/0/reject?undo=true").status_code == 200
+    assert client.post(f"/api/chat/{mid}/task/0/queue", json={}).status_code == 200
+    assert client.post(f"/api/chat/{mid}/task/0/reject").status_code == 409
+    assert client.post(f"/api/chat/{mid}/task/0/reject?undo=true").status_code == 409
+    assert len(run(_all(d.revisions))) == 1
+
+
+def test_rejecting_is_the_same_right_as_queueing():
+    from backend import access
+    for path in ("/api/chat/m1/task/0/reject", "/api/cc/chats/c1/messages/r1/task/0/reject"):
+        assert access.action("POST", path) == "run"
+
+
 def test_no_such_block_or_message(app):
     client, d = app
     mid = agent_line(d, TASK)

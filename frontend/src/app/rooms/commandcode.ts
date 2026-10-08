@@ -2428,7 +2428,7 @@ export class RoomCommandCode implements OnDestroy {
   taskOf(s: Segment): TaskBlock | null { return 'task' in s ? s.task : null; }
   mdOf(s: Segment): string { return 'md' in s ? s.md : ''; }
   /** A task block sent to the queue: spent here at once, as the server keeps it. */
-  taskQueued(mid: string, index: number, st: TaskState) {
+  taskQueued(mid: string, index: number, st: TaskState | null) {
     this.chat.update(c => c && c.messages ? { ...c, messages: c.messages.map(m => m.id !== mid ? m
       : { ...m, tasks: { ...(m.tasks ?? {}), [index]: st } }) } : c);
   }
