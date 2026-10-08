@@ -1175,10 +1175,10 @@ async def cmd_finish(args):
         await db.runs.update_one({"_id": key}, {"$set": patch}, upsert=True)
     await db.activity.insert_one(_line(f"finished: {status}", status, room))
     print(f"run {status}")
-    # Finishing closes the run; the note stays queued until the person has
-    # looked at it and marked it applied (or `done <id>` when they said so).
+    # Finishing closes the run; the note stays queued until the main agent has
+    # reviewed it and marked it applied (`done <id>`, AGENTS.md).
     if status == "done" and cur.get("revision"):
-        print("finished - waiting for the person to review and mark it applied"
+        print("finished - in review: the main agent checks it and marks it applied (done <id>)"
               + (" (built, ready to flash - flashing is theirs, from the browser)" if fw_note else ""))
 
     # The card's "after": the same view once the work is done. Best effort -

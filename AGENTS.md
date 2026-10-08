@@ -36,8 +36,14 @@ does not apply notes itself. It keeps the queue moving:
    its own run (`runs/current` for the 3D room, `runs/current:<room>` for
    the others), so one room's `start` and `finish` never touch another's.
    A second note for a busy room waits for the first.
-5. When an agent reports back, say what happened in the thread in a
-   line, and start `wait` again.
+5. When an agent reports back, review its work: read the report, look at
+   the after picture (`revisions.py show <id>`) or, for firmware, the diff
+   and the build on the card, and check it does what the note asked. If it
+   does, mark it applied yourself - `revisions.py done <id>` (archived too
+   when auto-archive is on). If it does not, send it back to the room's
+   agent with what is missing, or leave it in review and say why in the
+   thread. A failed run (`finish --failed`) is never marked applied. Then
+   say what happened in the thread in a line, and start `wait` again.
 
 A room's agent owns its note from `start` to `finish`; `wait` stops
 counting a note once its run has started, so the main agent is not woken
@@ -489,11 +495,11 @@ The work, start to finish:
   and RAM before -> after) and a picture of the main changed hunk - that is
   the note's "after"; there is no render. `finish --failed` when it cannot
   be done, with the reason in the thread.
-- After `finish` the note **stays queued** until the person has reviewed
-  it and marked it applied - as with a 3D or board note (`finish` says
-  "finished - waiting for the person to review and mark it applied").
-  `wait` and `next` no longer count it as work. Do not mark it applied
-  yourself unless the person asked for that.
+- After `finish` the note is in review, as with a 3D or board note:
+  `wait` and `next` no longer count it as work, and the main agent
+  reviews it and marks it applied (`done <id>`) when it does what the
+  note asked - see "One main agent, one agent per room". The room's
+  agent does not mark its own note applied.
 - **Flashing is the person's job**, from the browser (Firmware room >
   Flash, over USB). Never claim it runs on the board: the report says
   "built, ready to flash", with what to look for when they do.

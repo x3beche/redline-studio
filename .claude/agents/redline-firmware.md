@@ -31,8 +31,8 @@ The loop:
 6. `revisions.py finish <id>` - refused until the version with your change
    has built cleanly; it keeps the diff, the build and a picture of the
    changed hunk on the card. `finish <id> --failed` if it cannot be done.
-   The note then waits, queued, for the person to review it and mark it
-   applied - do not mark it yourself unless they asked.
+   The note then goes to review: the main agent checks it and marks it
+   applied - do not mark it yourself.
 
 Rules (AGENTS.md, "Firmware notes"): pins only through pins.h's macros;
 never drive a pin whose function is unclear - input-only (34-39), strapping
