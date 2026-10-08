@@ -105,7 +105,7 @@ export class WorkNowPanel implements OnDestroy {
 
   label(w: WorkItem): string {
     if (w.kind === 'board') return `board ${w.job ?? 'job'}`;
-    if (w.kind === 'firmware') return 'firmware build';
+    if (w.kind === 'firmware') return w.job === 'flash' ? 'flashing, from a browser' : 'firmware build';
     if (w.kind === 'note') return `note in ${w.room ?? '?'}${w.by ? ' · ' + w.by : ''}`;
     return w.state === 'queued' ? 'rebuild queued' : 'building';
   }
