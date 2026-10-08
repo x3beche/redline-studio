@@ -83,7 +83,11 @@ class Ids:
         self.suffix = None if ws == DEFAULT else "@" + ws
 
     def inn(self, v: Any) -> Any:
-        return v + self.suffix if self.suffix and isinstance(v, str) else v
+        # A name already in this workspace's form (`key()` - a room's
+        # current run, the settings document) keeps its one suffix.
+        if self.suffix and isinstance(v, str) and not v.endswith(self.suffix):
+            return v + self.suffix
+        return v
 
     def out(self, v: Any) -> Any:
         if self.suffix and isinstance(v, str) and v.endswith(self.suffix):
@@ -299,3 +303,30 @@ class ScopedDb:
         if name in SCOPED:
             return ScopedCollection(self.raw[name], self.workspace)
         return getattr(self.raw, name)
+
+
+async def undouble(raw) -> int:
+    """Names `key()` gave twice over (`app@u1@u1`): before `Ids.inn` kept a
+    name already in its workspace's form, the page wrote the settings and a
+    room's run under a doubled suffix while the agents used the single one,
+    so neither saw the other's. Each goes back to its single name - the
+    page's settings win, since only the page writes them; elsewhere the
+    single one is kept. Idempotent, run at start-up."""
+    import re
+    moved = 0
+    for name in ("settings", "runs", "tool_data"):
+        coll = raw[name]
+        async for d in coll.find({"_id": {"$regex": r"@[^@]+@[^@]+$"}}):
+            m = re.match(r"^(.*)(@[^@]+)\2$", d["_id"])
+            if not m:
+                continue
+            single = m.group(1) + m.group(2)
+            body = {k: v for k, v in d.items() if k != "_id"}
+            have = await coll.find_one({"_id": single}, {"_id": 1})
+            if not have:
+                await coll.insert_one({"_id": single, **body})
+            elif name == "settings":
+                await coll.update_one({"_id": single}, {"$set": body})
+            await coll.delete_one({"_id": d["_id"]})
+            moved += 1
+    return moved

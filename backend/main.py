@@ -2787,6 +2787,11 @@ async def _start_sampler():
         except Exception as exc:                       # noqa: BLE001 - the API still starts
             LOG.warning("accounts not migrated: %s", exc)
         try:
+            if n := await scope.undouble(db().raw):
+                LOG.warning("doubled workspace names made single: %s", n)
+        except Exception as exc:                       # noqa: BLE001 - the API still starts
+            LOG.warning("doubled workspace names not fixed: %s", exc)
+        try:
             lost = await buildjobs.recover(db().raw)
             killed = await buildjobs.reap_orphans(db().raw)
             if lost or killed:
