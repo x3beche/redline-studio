@@ -461,3 +461,25 @@ app-cc-compact, app-or-compact { display: flex; flex-direction: column; gap: 12p
   .st-month-now { border-right: 0; border-bottom: 1px solid var(--line); }
   .st-plan-row { grid-template-columns: 110px minmax(0, 1fr) 84px; }
 }
+
+/* Costs: the two cards side by side end level; the rate card's last weeks fill its foot. */
+.st-split-even { align-items: stretch; }
+.st-split-even > .st-card { display: flex; flex-direction: column; }
+.st-split-even > .st-card > .st-card-body { flex: 1; }
+.st-fx-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 11px; color: var(--ink-dim); }
+.st-fx-meta b { color: var(--ink); font-weight: 600; }
+.st-fx-meta .st-dim { margin-left: 4px; }
+.st-trend { display: flex; flex-direction: column; gap: 6px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); }
+.st-trend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
+.st-trend-cell { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border-radius: 4px; background: var(--surface-2); border: 1px solid transparent; min-width: 0; }
+.st-trend-cell[data-on] { border-color: var(--accent-deep); }
+.st-trend-top { display: flex; align-items: baseline; justify-content: space-between; font-size: 11px; }
+.st-trend-top b { color: var(--ink); }
+.st-trend-top span { font-size: 10.5px; color: var(--ink-dim); }
+.st-trend-top span[data-dir="up"] { color: var(--warn); }
+.st-trend-top span[data-dir="down"] { color: var(--ok); }
+.st-trend-cell svg { display: block; width: 100%; height: 28px; }
+.st-trend-line { fill: none; stroke: var(--accent); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.st-trend-area { fill: var(--accent); opacity: .12; stroke: none; }
+.st-trend-last { font-size: 12px; color: var(--ink); }
+.st-split-even > .st-card > .st-card-body > .st-billed:last-child { margin-top: auto; }

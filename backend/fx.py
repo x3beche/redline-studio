@@ -127,6 +127,55 @@ async def loop(db_getter) -> None:
         await asyncio.sleep(EVERY_S)
 
 
+# ---------------- the last weeks ----------------
+# How the rates moved: the costs page draws each currency against the
+# dollar over the last month. Frankfurter answers a range in one call; the
+# answer is kept for an hour, since the reference rates change once a
+# working day.
+
+HISTORY = "https://api.frankfurter.dev/v1/{start}..?base=USD&symbols={symbols}"
+HISTORY_DAYS = 30
+_history: dict = {}                 # symbols -> (monotonic time, answer)
+
+
+def _series(raw: dict, symbols: list[str]) -> dict:
+    """{date: {cur: rate}} as {cur: [[date, rate], ...]}, oldest first,
+    with each currency's change over the range."""
+    days = sorted((raw.get("rates") or {}).items())
+    out = {}
+    for cur in symbols:
+        pts = [[d, float(r[cur])] for d, r in days if isinstance(r, dict) and r.get(cur)]
+        if not pts:
+            continue
+        first, last = pts[0][1], pts[-1][1]
+        out[cur] = {"points": pts, "first": first, "last": last,
+                    "change": (last - first) / first if first else None,
+                    "low": min(v for _, v in pts), "high": max(v for _, v in pts)}
+    return out
+
+
+async def history(symbols: list[str], days: int = HISTORY_DAYS) -> dict:
+    import time
+    from datetime import timedelta
+    want = sorted({c.upper() for c in symbols if c and c.upper() != "USD" and c.upper().isalpha()})[:8]
+    if not want:
+        return {"base": "USD", "days": days, "series": {}}
+    key = (",".join(want), days)
+    hit = _history.get(key)
+    if hit and time.monotonic() - hit[0] < EVERY_S:
+        return hit[1]
+    import httpx
+    start = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(HISTORY.format(start=start, symbols=",".join(want)))
+        r.raise_for_status()
+        raw = r.json()
+    got = {"base": "USD", "days": days, "start": raw.get("start_date"), "end": raw.get("end_date"),
+           "series": _series(raw, want)}
+    _history[key] = (time.monotonic(), got)
+    return got
+
+
 # ---------------- the API ----------------
 
 from fastapi import APIRouter, HTTPException  # noqa: E402
@@ -144,5 +193,13 @@ async def post_refresh() -> dict:
     from .main import db
     try:
         return await refresh(db())
+    except Exception as exc:                           # noqa: BLE001
+        raise HTTPException(502, f"Frankfurter did not answer: {exc}"[:300]) from exc
+
+
+@router.get("/history")
+async def get_history(symbols: str = "EUR,TRY,GBP", days: int = HISTORY_DAYS) -> dict:
+    try:
+        return await history(symbols.split(","), max(7, min(days, 365)))
     except Exception as exc:                           # noqa: BLE001
         raise HTTPException(502, f"Frankfurter did not answer: {exc}"[:300]) from exc

@@ -1,5 +1,6 @@
 import { Component, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { Auth } from './auth';
 import { LANG, T, t } from './i18n';
 import { BudgetBars } from './budget-bars';
@@ -26,6 +27,7 @@ interface PriceDraft { amount: number | null; currency: string }
 /** A budget being edited: the warning threshold in percent, as typed. */
 interface BudgetDraft { amount: number | null; currency: string; warn: number }
 type BudgetDrafts = Record<BudgetKind, BudgetDraft>;
+type FxSeries = Record<string, { points: [string, number][]; last: number; change: number | null; low: number; high: number }>;
 type Section = 'subscriptions' | 'other' | 'usage' | 'budgets';
 const BUDGET_KINDS: BudgetKind[] = ['total', 'llm', 'electricity', 'proxy'];
 /** The segments of a split, in the analytics chart colours. */
@@ -134,7 +136,7 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
     }
   </div>
 
-  <div class="st-split">
+  <div class="st-split st-split-even">
     <!-- Display currency -->
     <div class="st-card">
       <div class="st-card-head"><h3>{{ 'Display currency' | t }}</h3>
@@ -208,10 +210,10 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
       <div class="st-card-body">
         @if (m.fx(); as fx) {
           @if (fx.stale) { <div class="st-banner">{{ 'The last reading failed - these are the latest rates the server has.' | t }}</div> }
-          <div class="st-tiles tight">
-            <div class="st-tile"><span>{{ 'Rates of' | t }}</span><b>{{ fx.date ?? '–' }}</b><small>{{ 'ECB reference day' | t }}</small></div>
-            <div class="st-tile"><span>{{ 'Read' | t }}</span><b>{{ ago(fx.fetched_at) }}</b><small>{{ stamp(fx.fetched_at) }}</small></div>
-            <div class="st-tile"><span>{{ 'Currencies' | t }}</span><b>{{ list().length }}</b><small>{{ 'against' | t }} {{ fx.base }}</small></div>
+          <div class="st-fx-meta">
+            <span>{{ 'Rates of' | t }} <b class="mono">{{ fx.date ?? '–' }}</b> <span class="st-dim">{{ 'ECB reference day' | t }}</span></span>
+            <span [title]="stamp(fx.fetched_at)">{{ 'Read' | t }} <b class="mono">{{ ago(fx.fetched_at) }}</b></span>
+            <span><b class="mono">{{ list().length }}</b> {{ 'currencies against' | t }} {{ fx.base }}</span>
           </div>
           <div class="st-table-wrap st-fx-wrap">
             <table class="st-table st-fx">
@@ -238,6 +240,24 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
             </select>
             <span class="st-conv-out mono">= {{ inCur(convert(convAmount(), convFrom(), convTo()), convTo()) }}</span>
           </div>
+          @if (trend().length) {
+            <div class="st-trend">
+              <div class="st-month-head"><span class="st-sec-title">{{ 'Last 30 days' | t }}</span>
+                <span class="st-sub">1 USD · {{ 'ECB reference rates' | t }}</span></div>
+              <div class="st-trend-grid">
+                @for (g of trend(); track g.cur) {
+                  <div class="st-trend-cell" [attr.data-on]="g.cur === cur() ? '' : null"
+                       [title]="g.cur + ': ' + fmt(g.low, 4) + ' – ' + fmt(g.high, 4)">
+                    <div class="st-trend-top"><b class="mono">{{ g.cur }}</b>
+                      <span class="mono" [attr.data-dir]="g.change > 0 ? 'up' : g.change < 0 ? 'down' : null">{{ signed(g.change) }}</span></div>
+                    <svg viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+                      <path class="st-trend-area" [attr.d]="g.area"/><path class="st-trend-line" [attr.d]="g.line"/></svg>
+                    <span class="mono st-trend-last">{{ fmt(g.last, 4) }}</span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
         } @else {
           <p class="st-hint">{{ 'No rates yet - amounts are shown in dollars until the server has read them.' | t }}</p>
         }
@@ -421,6 +441,19 @@ export class CostsSettingsPanel implements OnDestroy {
   readonly currencyName = currencyName;
   readonly toUsd = toUsd;
   readonly Math = Math;
+  private http = inject(HttpClient);
+  /** The last 30 days of each common currency against the dollar (backend/fx.py history). */
+  private history = signal<FxSeries>({});
+  trend = computed(() => {
+    const h = this.history();
+    return this.grid().filter(c => c !== 'USD' && h[c]?.points?.length > 1).map(c => {
+      const s = h[c], vals = s.points.map(p => p[1]);
+      const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+      const xy = vals.map((v, i) => [i / (vals.length - 1) * 100, 26 - (v - lo) / span * 24 + 0] as const);
+      const line = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(2)},${y.toFixed(2)}`).join('');
+      return { cur: c, last: s.last, change: s.change ?? 0, low: s.low, high: s.high, line, area: `${line}L100,28L0,28Z` };
+    });
+  });
   readonly budgetKinds = [
     { id: 'total' as const, label: 'Total spend', about: 'everything paid this month', hint: '500', optional: false },
     { id: 'llm' as const, label: 'LLM work', about: 'at API list prices', hint: '1000', optional: true },
@@ -457,6 +490,7 @@ export class CostsSettingsPanel implements OnDestroy {
   grid = computed(() => [...new Set([...COMMON, this.cur()])].filter(c => this.list().includes(c)));
 
   constructor() {
+    effect(() => { this.grid(); untracked(() => this.loadHistory()); });
     // Take what the server has into each card that holds no unsaved change.
     effect(() => {
       const c = this.m.costs();
@@ -467,6 +501,13 @@ export class CostsSettingsPanel implements OnDestroy {
     });
   }
   ngOnDestroy() { clearInterval(this.tick); }
+  private loadHistory() {
+    const want = this.grid().filter(c => c !== 'USD').join(',');
+    if (!want) return;
+    this.http.get<{ series: FxSeries }>(`/api/fx/history?symbols=${want}`)
+      .subscribe({ next: r => this.history.set(r.series ?? {}), error: () => {} });
+  }
+  signed(r: number) { return `${r > 0 ? '+' : r < 0 ? '−' : ''}${(Math.abs(r) * 100).toFixed(1)}%`; }
 
   private take(c: Costs, s: Section) {
     const d = c.display_currency || 'USD';
