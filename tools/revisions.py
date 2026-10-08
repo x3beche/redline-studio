@@ -511,6 +511,16 @@ async def cmd_board(args):
     elif args.what == "hold":
         want = (args.file or "on").lower() in ("on", "yes", "true", "1")
         print(call(f"/api/boards/{bid}/hold", "PUT", {"placement": want}))
+    elif args.what == "changes":
+        # A converted board changed on purpose: these nets and parts differ
+        # from the import because a note asked for it. Marked, not hidden.
+        out = call(f"/api/boards/{bid}/changes", "PUT",
+                   {"nets": args.net or [], "parts": args.ref or [],
+                    "why": args.why or "", "clear": bool(args.clear)})
+        for ch in out.get("changes") or []:
+            print(f"  changed    {', '.join(ch['nets'] + ch['parts'])}: {ch['why']}")
+        if out.get("equivalence"):
+            _print_equivalence(out["equivalence"])
     else:                                        # show
         doc = next((b for b in call("/api/boards") if b["_id"] == bid), None)
         if not doc:
@@ -814,8 +824,10 @@ def _print_equivalence(eq: dict) -> None:
     print(f"  netlist    {'EQUIVALENT' if eq['equivalent'] else 'NOT EQUIVALENT'} to the import: "
           f"parts {p['built']}/{p['imported']}, nets {n['same']}/{n['imported']} identical, "
           f"pads joined {eq['pads_joined']['built']}/{eq['pads_joined']['imported']}")
+    if eq.get("explained"):
+        print(f"             every difference was made on purpose ({eq.get('intended')})")
     for d in eq.get("differences") or []:
-        print(f"             differs: {d}")
+        print(f"             {'changed' if d.get('intended') else 'differs'}: {d}")
     if p.get("missing") or p.get("extra"):
         print(f"             parts missing {p['missing']}, extra {p['extra']}")
     if eq.get("renamed"):
@@ -856,6 +868,9 @@ def _print_board(out: dict) -> None:
         print(f"  held       every part where the import had it: worst pad "
               f"{lay.get('held_worst_mm')} mm off" + (f"; by centre only: {', '.join(lay['held_by_centre'])}"
                                                     if lay.get("held_by_centre") else ""))
+        for ref, spot in (lay.get("placed_new") or {}).items():
+            print(f"  new part   {ref} " + (f"placed in free room at {spot[0]}, {spot[1]} mm, {spot[2]} deg"
+                                            if spot else "NOT placed: no free room on the board"))
     mounting = [h for h in lay.get("holes") or [] if h.get("ref")]
     if mounting:
         print(f"  holes      {len(mounting)} mounting holes from the drills: "
@@ -1324,6 +1339,15 @@ async def cmd_files(args):
         out = Path(args.out or (meta or {}).get("name") or args.target)
         out.write_bytes(data)
         print(f"wrote {out} ({len(data)} bytes)" + (f" - a {meta['kind']}" if meta else ""))
+    elif args.what == "to-model":
+        # A STEP/mesh from the Files tab copied into a project folder as a
+        # model of its own - it stays whole if the file is deleted from Files.
+        if not args.target or not args.folder:
+            sys.exit("files to-model needs a file id and --folder (e.g. iot-fan/purchased)")
+        body = {"folder": args.folder, **({"title": args.title} if args.title else {})}
+        got = _json.loads(call(f"/api/files/{args.target}/to-model", "POST",
+                               _json.dumps(body).encode(), "application/json"))
+        print(f"model {got['model']} ({got['title']}) from {got['upload']} - building (job {got.get('build_job')})")
     elif args.what == "put":
         src = Path(args.target or "")
         if not src.is_file():
@@ -1410,14 +1434,17 @@ def main() -> None:
     s.set_defaults(fn=cmd_part)
     s = sub.add_parser("board", help="a board: its source, and the whole pipeline")
     s.add_argument("what", choices=["run", "show", "source", "save", "rules",
-                                    "rules-save", "rules-schema", "convert", "hold"],
+                                    "rules-save", "rules-schema", "convert", "hold",
+                                    "changes"],
                    help="run: build, schematic, place, route, DRC; show: where it "
                         "stands; source/save: read or write its atopile; rules: "
                         "the routing rules as JSON (to a file if given); "
                         "rules-save: write them back, checked; rules-schema: "
                         "what every rule field is; convert: an imported board "
                         "to atopile, built and checked; hold <id> on|off: keep a "
-                        "converted board's layout, or let the placer redo it")
+                        "converted board's layout, or let the placer redo it; "
+                        "changes <id> --net N --ref R --why ...: a converted board "
+                        "differs from its import on purpose (--clear forgets them)")
     s.add_argument("board", nargs="?")
     s.add_argument("file", nargs="?", help="for save: the .ato file; for rules / "
                                            "rules-save: the JSON file; for hold: on|off")
@@ -1427,7 +1454,11 @@ def main() -> None:
                    help="convert: choose a part for a designator (R1,R2=C... for "
                         "several); kept on the board, marked GUESSED")
     s.add_argument("--picks", help="convert: a JSON file of ref -> {lcsc, why}")
-    s.add_argument("--why", help="convert: the reason written beside --part picks")
+    s.add_argument("--why", help="convert: the reason written beside --part picks; "
+                                 "changes: why the board differs from its import")
+    s.add_argument("--net", action="append", help="changes: a net changed on purpose (repeat)")
+    s.add_argument("--ref", action="append", help="changes: a part added or changed on purpose (repeat)")
+    s.add_argument("--clear", action="store_true", help="changes: forget the changes said so far")
     s.add_argument("--run", action="store_true",
                    help="convert: then run the whole pipeline")
     s.add_argument("--force", action="store_true",
@@ -1465,14 +1496,17 @@ def main() -> None:
                    help="only this room's notes and thread; default: every room")
     s.set_defaults(fn=cmd_wait)
     s = sub.add_parser("files", help="the Files tab: what people uploaded (a BOM, a datasheet...)")
-    s.add_argument("what", nargs="?", default="list", choices=["list", "get", "put"],
-                   help="list (the default), get <id> [-o PATH], put <path>")
+    s.add_argument("what", nargs="?", default="list", choices=["list", "get", "put", "to-model"],
+                   help="list (the default), get <id> [-o PATH], put <path>, "
+                        "to-model <id> --folder F [--title T] (a STEP/mesh copied into a project as a model)")
     s.add_argument("target", nargs="?", help="get: the file's id; put: the file to upload")
     s.add_argument("-o", "--out", help="get: where to write it (default: its own name)")
     s.add_argument("--board", help="list: only this board's; put: link it to this board")
     s.add_argument("--kind", help="list: only this kind (bom, pick-place, pdf, image...)")
     s.add_argument("-q", help="list: search the names and notes")
     s.add_argument("--note", help="put: a line about the file")
+    s.add_argument("--folder", help="to-model: the catalog folder it goes in")
+    s.add_argument("--title", help="to-model: the model's name (default: the file's)")
     s.set_defaults(fn=cmd_files)
     s = sub.add_parser("show"); s.add_argument("id"); s.add_argument("-o", "--out")
     s.set_defaults(fn=cmd_show)

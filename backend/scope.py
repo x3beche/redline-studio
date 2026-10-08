@@ -37,7 +37,7 @@ SCOPED = frozenset({
     "activity", "boards", "settings", "board_runs", "item_history",
     "weekly_reports", "audit", "compute_jobs", "analytics", "scratch", "notes", "releases", "source_blobs",
     "tool_usage", "tool_data", "files", "cc_chats", "component_versions", "themes",
-    "firmware", "firmware_files",
+    "firmware", "firmware_files", "firmware_flashes",
 })
 
 WORKSPACE: contextvars.ContextVar[str] = contextvars.ContextVar("workspace", default=DEFAULT)

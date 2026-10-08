@@ -14,7 +14,13 @@
     GET    /api/firmware/{fid}/builds          the last builds
     GET    /api/firmware/{fid}/log             the last build's lines, as the room's log band reads them
     GET    /api/firmware/{fid}/builds/{job}    one build, with its lines
-    GET    /api/firmware/{fid}/download/{name} firmware.bin / firmware.elf of the last good build
+    GET    /api/firmware/{fid}/download/{name} firmware.bin / .elf, bootloader.bin, partitions.bin,
+                                               boot_app0.bin of the last good build (?build= that build's job)
+    GET    /api/firmware/{fid}/flash-manifest  what flashing writes: [{name, offset, url, size, sha256, md5}];
+                                               409 {reason, detail} if the last build is not one to flash
+    GET    /api/firmware/{fid}/flashes         the last flashes
+    POST   /api/firmware/{fid}/flashes         {build_job, chip, mac, ok, secs}: a flash (ok null: it started)
+    POST   /api/firmware/{fid}/flashes/{id}    {ok, chip, mac, secs, error}: how a started flash ended
 """
 
 from __future__ import annotations
@@ -22,7 +28,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
-from . import actors, firmware, fwbuild, store
+from . import actors, firmware, flashing, fwbuild, store
 
 router = APIRouter()
 
@@ -188,16 +194,70 @@ async def firmware_log(fid: str):
 
 
 @router.get("/api/firmware/{fid}/download/{name}")
-async def download(fid: str, name: str):
-    if name not in ("firmware.bin", "firmware.elf"):
+async def download(fid: str, name: str, build: str | None = None):
+    if name not in fwbuild.KEPT:
         raise HTTPException(404, name)
     fw = await _fw(fid)
     meta = ((fw.get("build") or {}).get("artifacts") or {}).get(name)
     if not meta:
         raise HTTPException(404, f"no {name} yet - build it first")
+    # Flashing asks for one build's files: never half of one and half of the next.
+    if build and build != (fw.get("build") or {}).get("job"):
+        raise HTTPException(409, f"{name}: build {build} is no longer the last one - read the manifest again")
     from bson import ObjectId
     stream = await store.bucket(_db(), firmware.BUCKET).open_download_stream(ObjectId(meta["gridfs_id"]))
     data = await stream.read()
     stem = f"{fw.get('board')}-{fw.get('mcu')}-v{(fw.get('build') or {}).get('artifacts_version', '')}"
     return Response(data, media_type="application/octet-stream", headers={
         "Content-Disposition": f'attachment; filename="{stem}-{name}"'})
+
+
+# ---------------------------------------------------------------- flashing (backend/flashing.py)
+
+class Flash(BaseModel):
+    build_job: str | None = Field(default=None, max_length=64)
+    chip: str | None = Field(default=None, max_length=80)
+    # The page sends the last three bytes (or a hash); anything longer is cut.
+    mac: str | None = Field(default=None, max_length=80)
+    ok: bool | None = None
+    secs: float | None = None
+    baud: int | None = None
+    error: str | None = Field(default=None, max_length=2000)
+
+
+@router.get("/api/firmware/{fid}/flash-manifest")
+async def flash_manifest(fid: str):
+    fw = await _fw(fid)
+    try:
+        return flashing.manifest(fw, await firmware.contents(_db(), fid))
+    except flashing.NotReady as exc:
+        raise HTTPException(409, {"reason": exc.reason, "detail": exc.text})
+
+
+@router.get("/api/firmware/{fid}/flashes")
+async def firmware_flashes(fid: str, limit: int = 20):
+    await _fw(fid)
+    return await flashing.listing(_db(), fid, min(max(limit, 1), 100))
+
+
+@router.post("/api/firmware/{fid}/flashes", status_code=201)
+async def record_flash(fid: str, body: Flash):
+    fw = await _fw(fid)
+    data = body.model_dump()
+    try:
+        if body.ok is None:
+            return await flashing.start(_db(), fw, data, _who())
+        return await flashing.finish(_db(), fw, None, data, _who())
+    except KeyError:
+        raise HTTPException(422, f"no build {body.build_job} of {fid}")
+
+
+@router.post("/api/firmware/{fid}/flashes/{flash_id}")
+async def end_flash(fid: str, flash_id: str, body: Flash):
+    fw = await _fw(fid)
+    if body.ok is None:
+        raise HTTPException(422, "say how it ended: ok true or false")
+    try:
+        return await flashing.finish(_db(), fw, flash_id, body.model_dump(), _who())
+    except KeyError:
+        raise HTTPException(404, f"no flash {flash_id}")

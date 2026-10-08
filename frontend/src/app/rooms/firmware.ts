@@ -12,6 +12,11 @@ import { isLightTheme } from '../../theme';
 import { Drawing, DrawingMarks } from './drawing';
 import { RoomFrame, ToolButton } from './frame';
 import { loadMonaco, redlineTheme } from './code-view';
+import {
+  BAUDS, FlashManifest, FlashProgress, FlashRecord, Plain, SerialLine, SerialLink, WrongChip,
+  browserEnv, choosePort, fileArray, flashImage, hexOf, macTail, plainError, portLabel, quickCommands,
+  rememberedPort, webSerialSupport,
+} from './flasher';
 
 /** One pin of the MCU, as the board draws it (backend/firmware.py pin_rows). */
 export interface FwPin {
@@ -37,6 +42,7 @@ export interface Firmware {
                    moved: { net: string; from: number; to: number }[]; added: string[]; removed: string[];
                    missing?: boolean } | null;
   build?: FwBuild | null;
+  last_flash?: FlashRecord | null;
 }
 /** GET /api/firmware/{id}: the record and the MCU's pins as the board has them now. */
 export interface FirmwareDetail extends Firmware {
@@ -45,7 +51,9 @@ export interface FirmwareDetail extends Firmware {
 interface FwFile { path: string; bytes: number; version: number; at: string; generated: boolean }
 interface Mcu { ref: string; title: string; sheet: string }
 
-type View = 'schematic' | 'code';
+type View = 'schematic' | 'code' | 'monitor';
+type FlashStep = 'blocked' | 'ready' | 'connecting' | 'flashing' | 'verifying' | 'done' | 'error';
+type FileState = 'wait' | 'write' | 'verify' | 'done';
 type Side = 'first' | 'status';
 type Tone = 'ok' | 'warn' | 'error' | 'none';
 
@@ -95,6 +103,13 @@ function ago(at: string | null | undefined, now = Date.now()): string {
   if (s < 3600) return `${Math.round(s / 60)} ${t('min ago')}`;
   if (s < 86400) return `${Math.round(s / 3600)} ${t('h ago')}`;
   return `${Math.round(s / 86400)} ${t('d ago')}`;
+}
+
+/** 20:41, from an ISO time. */
+function hhmm(at: string | null | undefined): string {
+  if (!at) return '';
+  const d = new Date(at);
+  return isNaN(d.getTime()) ? '' : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function kb(n: number | undefined): string {
@@ -335,6 +350,78 @@ export class FwCode implements AfterViewInit, OnDestroy {
     .fw-codehead b { color: var(--ink); font-weight: 500; }
     .fw-hint { position: absolute; left: 8px; top: 8px; z-index: 2; padding: 2px 8px; border-radius: 4px; font-size: 11px;
                color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); pointer-events: none; }
+    .fs-flash { padding: 2px 10px; font-size: 11px; }
+    .fs-needs { color: var(--warn); }
+
+    /* the serial monitor */
+    .fm { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; font-size: 12px;
+          color: var(--ink); background: var(--surface); }
+    .fm-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+    .fm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; }
+    .fm-dot[data-on] { background: var(--ok); }
+    .fm-port { font: 11px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); white-space: nowrap; }
+    .fm-baud { padding: 1px 4px; font-size: 11px; width: auto; }
+    .fm-gap { flex: 1; }
+    .fm-b { padding: 2px 8px; font-size: 11px; }
+    .fm-lines { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px; font: 11.5px/1.45 'IBM Plex Mono', ui-monospace, monospace; }
+    .fm-line { display: flex; gap: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .fm-ts { flex: none; color: var(--ink-dim); opacity: .75; }
+    .fm-line[data-kind="tx"] .fm-text { color: var(--accent); }
+    .fm-line[data-kind="info"] .fm-text { color: var(--ink-dim); font-style: italic; }
+    .fm-line[data-kind="error"] .fm-text { color: var(--danger); }
+    .fm-empty { margin: 8px 0; color: var(--ink-dim); font-family: system-ui, sans-serif; }
+    .fm-jump { position: absolute; right: 14px; bottom: 50px; z-index: 2; }
+    .fm-send { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border-top: 1px solid var(--line); }
+    .fm-q { font: 11px 'IBM Plex Mono', ui-monospace, monospace; }
+    .fm-in { flex: 1; min-width: 10rem; padding: 3px 6px; font: 12px 'IBM Plex Mono', ui-monospace, monospace; }
+
+    /* the flash dialog */
+    .fl-scrim { position: fixed; inset: 0; z-index: 60; background: var(--scrim); }
+    .fl-box { position: fixed; z-index: 61; left: 50%; top: 12vh; transform: translateX(-50%); width: min(34rem, calc(100vw - 32px));
+              max-height: 76vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 14px;
+              background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+              box-shadow: var(--shadow-hard); font-size: 12px; }
+    .fl-head { display: flex; align-items: flex-start; gap: 8px; }
+    .fl-head b { display: block; font-size: 14px; font-weight: 600; color: var(--ink-bright); }
+    .fl-sub { display: block; font: 11px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); margin-top: 2px; }
+    .fl-x { margin-left: auto; padding: 0 7px; }
+    .fl-steps { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+    .fl-steps li { flex: 1; display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 4px; font-size: 11px;
+                   color: var(--ink-dim); background: var(--surface-2); border: 1px solid var(--line); min-width: 0; white-space: nowrap;
+                   overflow: hidden; text-overflow: ellipsis; }
+    .fl-steps li i { font-style: normal; flex: none; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center;
+                     font-size: 10px; background: var(--surface); border: 1px solid var(--line); }
+    .fl-steps li[data-state="now"] { color: var(--ink-bright); border-color: var(--accent); }
+    .fl-steps li[data-state="now"] i { background: var(--accent); color: var(--ink-on-accent); border-color: var(--accent); }
+    .fl-steps li[data-state="done"] i { background: var(--ok); color: var(--ink-on-ok); border-color: var(--ok); }
+    .fl-steps li[data-state="error"] { border-color: var(--danger); }
+    .fl-steps li[data-state="error"] i { background: var(--danger); color: var(--surface); border-color: var(--danger); }
+    .fl-files { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+    .fl-files li { display: grid; grid-template-columns: 4.6rem minmax(0, 1fr) 3.6rem 5rem 4.6rem; align-items: center; gap: 8px;
+                   font: 11px 'IBM Plex Mono', ui-monospace, monospace; }
+    .fl-addr { color: var(--accent); }
+    .fl-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fl-size, .fl-word { color: var(--ink-dim); text-align: right; white-space: nowrap; }
+    .fl-files li[data-state="done"] .fl-word { color: var(--ok); }
+    .fl-bar { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+    .fl-bar > i { display: block; height: 100%; background: var(--accent); transition: width .15s; }
+    .fl-files li[data-state="done"] .fl-bar > i { background: var(--ok); }
+    .fl-msg { margin: 0; padding: 7px 9px; border-radius: 5px; background: var(--surface-2); border: 1px solid var(--line); line-height: 1.45; }
+    .fl-msg[data-tone="ok"] { border-color: var(--ok); }
+    .fl-msg[data-tone="warn"] { border-color: var(--warn); }
+    .fl-msg[data-tone="error"] { border-color: var(--danger); }
+    .fl-msg[data-tone="error"] b { color: var(--danger); }
+    .fl-hint { margin: 0; font-size: 11px; color: var(--ink-dim); }
+    .fl-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .fl-actions .tcv-btn { padding: 3px 12px; }
+    .fl-busy { font-size: 11px; color: var(--ink-dim); }
+    .fl-log summary { cursor: pointer; font-size: 11px; color: var(--ink-dim); }
+    .fl-log pre { max-height: 160px; overflow: auto; margin: 4px 0 0; padding: 6px; border-radius: 4px; background: var(--surface-2);
+                  font: 10px/1.4 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); white-space: pre-wrap; }
+    @media (max-width: 560px) {
+      .fl-files li { grid-template-columns: 4.2rem minmax(0, 1fr) 4rem; }
+      .fl-files .fl-size, .fl-files .fl-word { display: none; }
+    }
     @media (max-width: 768px) {
       .fw-pins .fw-c-parts { display: none; }
       .fs-meters { grid-template-columns: 1fr 1fr; }
@@ -365,8 +452,9 @@ export class FwCode implements AfterViewInit, OnDestroy {
   <app-room-frame room="firmware" [tabs]="sideTabs" [tab]="side()" [labels]="tabNames()"
                   (tabChange)="setSide($any($event))" [log]="log()">
 
-    <!-- THE TOOLBAR: which view, then build (flash and the monitor come
-         next), then how close - and the pen at the far end. -->
+    <!-- THE TOOLBAR: which view, then build, flash and the serial
+         monitor (in this browser, over USB), then how close - and the pen
+         at the far end. -->
     <ng-container ngProjectAs="[bar]">
       <app-tool icon="tcv-ico-schematic" [tip]="'Schematic - the MCU\\'s sheet of the board' | t"
                 [on]="view() === 'schematic'" (press)="setView('schematic')" />
@@ -376,8 +464,10 @@ export class FwCode implements AfterViewInit, OnDestroy {
       <app-tool icon="tcv-ico-build"
                 [tip]="building() ? ('Building…' | t) : ('Build - PlatformIO, in a container' | t)"
                 [on]="building()" [disabled]="building() || !fw() || !auth.can('run')" (press)="build()" />
-      <app-tool icon="tcv-ico-flash" [tip]="'Flash - coming next (from the browser, over USB)' | t" [disabled]="true" />
-      <app-tool icon="tcv-ico-monitor" [tip]="'Serial monitor - coming next' | t" [disabled]="true" />
+      <app-tool icon="tcv-ico-flash" [tip]="flashTip()" [on]="flashOpen()"
+                [disabled]="!serial().ok || !fw() || !auth.can('run')" (press)="openFlash()" />
+      <app-tool icon="tcv-ico-monitor" [tip]="monitorTip()"
+                [on]="view() === 'monitor'" [disabled]="!serial().ok || !fw()" (press)="toggleMonitor()" />
       <span class="tcv_separator"></span>
       <app-tool icon="tcv-ico-fit" [tip]="'Fit - all of it (or double-click)' | t" [disabled]="view() !== 'schematic'"
                 (press)="flat()?.fit()" />
@@ -401,7 +491,7 @@ export class FwCode implements AfterViewInit, OnDestroy {
           <span class="sk sk-big"></span><span class="sk" style="width: 80%"></span><span class="sk" style="width: 65%"></span>
           <span class="sk" style="width: 90%"></span><span class="sk" style="width: 55%"></span><span class="sk" style="width: 75%"></span>
         </div>
-      } @else if (side() === 'first' && view() === 'schematic') {
+      } @else if (side() === 'first' && view() !== 'code') {
         <!-- PINS: every pin on a signal net, its GPIO, and whether the code uses it. -->
         @let f = fw()!;
         <div class="fw-head">
@@ -470,9 +560,15 @@ export class FwCode implements AfterViewInit, OnDestroy {
               <span>{{ building() ? ('Building…' | t) : builtWhen() }}</span>
               @if (auth.can('run')) {
                 <button class="tcv-btn fs-run" (click)="build()" [disabled]="building()">{{ 'Build again' | t }}</button>
+                @if (serial().ok && manifest()) {
+                  <button class="tcv-btn tcv-btn-accent fs-flash" (click)="openFlash()">{{ 'Flash' | t }}</button>
+                }
               }
             </div>
           </section>
+          @if (!serial().ok) {
+            <div class="fs-note fs-needs">{{ serial().why | t }}.</div>
+          }
           @if (f.board_change; as ch) {
             <div class="fs-note">{{ ch.text }}@if (ch.moved.length) { - @for (m of ch.moved; track m.net) { {{ m.net }} {{ m.from }}→{{ m.to }}@if (!$last) {,} } }</div>
           }
@@ -520,6 +616,9 @@ export class FwCode implements AfterViewInit, OnDestroy {
                 <a [attr.href]="b?.artifacts?.['firmware.elf'] ? download('firmware.elf') : null"
                    [class.off]="!b?.artifacts?.['firmware.elf']" download>firmware.elf
                    @if (b?.artifacts?.['firmware.elf']; as a) { ({{ kbOf(a.bytes) }}) }</a>
+                @for (n of extraFiles; track n) {
+                  @if (b?.artifacts?.[n]; as a) { <a [attr.href]="download(n)" download>{{ n }} ({{ kbOf(a.bytes) }})</a> }
+                }
               </div>
               <div class="fs-facts">
                 <span>platform</span><b>{{ f.platform }}</b>
@@ -547,7 +646,7 @@ export class FwCode implements AfterViewInit, OnDestroy {
           } @else {
             <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ 'The board\\'s schematic is not drawn yet - build the board in PCB Design.' | t }}</p>
           }
-        } @else {
+        } @else if (view() === 'code') {
           <div class="flex h-full min-h-0 flex-col">
             <div class="fw-codehead"><b>{{ file() }}</b>
               @if (fileGenerated()) { <span class="fw-gen">{{ 'from schematic' | t }}</span> }
@@ -555,6 +654,49 @@ export class FwCode implements AfterViewInit, OnDestroy {
             <div class="min-h-0 flex-1">
               <app-fw-code [text]="text()" [path]="file() ?? ''" [nets]="macros()" [line]="line()" />
             </div>
+          </div>
+        } @else {
+          <!-- THE SERIAL MONITOR: the board's console, over USB, in this browser. -->
+          <div class="fm">
+            <div class="fm-bar">
+              <span class="fm-dot" [attr.data-on]="monOn() ? 1 : null" aria-hidden="true"></span>
+              <span class="fm-port">@if (monOn()) { {{ monPort() }} · {{ monBaud() }} } @else { {{ 'Not connected' | t }} }</span>
+              <select class="tcv-field fm-baud" (change)="setBaud(+$any($event.target).value)"
+                      [attr.aria-label]="'Baud rate' | t">
+                @for (b of bauds; track b) { <option [value]="'' + b" [selected]="b === monBaud()">{{ b }}</option> }
+              </select>
+              <span class="fm-gap"></span>
+              @if (monOn()) {
+                <button class="tcv-btn fm-b" (click)="resetBoard()" [title]="'Restart the board (EN, through DTR/RTS)' | t">{{ 'Reset board' | t }}</button>
+                <button class="tcv-btn fm-b" (click)="clearMonitor()">{{ 'Clear' | t }}</button>
+                <button class="tcv-btn fm-b" (click)="disconnect()">{{ 'Disconnect' | t }}</button>
+              } @else {
+                <button class="tcv-btn fm-b" (click)="clearMonitor()" [disabled]="!monLines().length">{{ 'Clear' | t }}</button>
+                <button class="tcv-btn tcv-btn-accent fm-b" (click)="connectMonitor()" [disabled]="!serial().ok">{{ 'Connect' | t }}</button>
+              }
+            </div>
+            <div #monBox class="fm-lines" (scroll)="onMonScroll()">
+              @for (l of monLines(); track l.id) {
+                <div class="fm-line" [attr.data-kind]="l.kind"><span class="fm-ts">{{ stamp(l.at) }}</span><span class="fm-text">{{ l.text }}</span></div>
+              } @empty {
+                <p class="fm-empty">
+                  @if (!serial().ok) { {{ serial().why | t }}. }
+                  @else if (monOn()) { {{ 'Connected - waiting for the board to say something.' | t }} }
+                  @else { {{ 'Plug the board in by USB and press Connect: its console prints here.' | t }} }
+                </p>
+              }
+            </div>
+            @if (monPaused() && monNew()) {
+              <button class="tcv-chip fm-jump" (click)="monFollow()">↓ {{ monNew() }} {{ 'new lines' | t }}</button>
+            }
+            <form class="fm-send" (submit)="$event.preventDefault(); sendLine()">
+              @for (q of quick(); track q) {
+                <button type="button" class="tcv-chip fm-q" [disabled]="!monOn()" (click)="send(q)">{{ q }}</button>
+              }
+              <input #monIn class="tcv-field fm-in" [disabled]="!monOn()" [value]="monText()" (input)="monText.set($any($event.target).value)"
+                     [placeholder]="'a command - Enter sends it' | t" autocomplete="off" spellcheck="false" />
+              <button type="submit" class="tcv-btn fm-b" [disabled]="!monOn() || !monText().trim()">{{ 'Send' | t }}</button>
+            </form>
           </div>
         }
       }
@@ -570,6 +712,85 @@ export class FwCode implements AfterViewInit, OnDestroy {
       }
     </ng-container>
   </app-room-frame>
+}
+@if (flashOpen()) {
+  <!-- FLASHING: Connect -> Flashing -> Verifying -> Done, in this browser. -->
+  <div class="fl-scrim" (click)="closeFlash()"></div>
+  <section class="fl-box" role="dialog" aria-modal="true" [attr.aria-label]="'Flash the board' | t">
+    <header class="fl-head">
+      <div class="min-w-0">
+        <b>{{ 'Flash' | t }} {{ fw()?.title }}</b>
+        @if (manifest(); as m) {
+          <span class="fl-sub">{{ m.chip }} · v{{ m.version }} · {{ 'build of' | t }} {{ hhmmOf(m.built_at) }}</span>
+        }
+      </div>
+      <button class="tcv-btn fl-x" (click)="closeFlash()" [disabled]="flashBusy()" [attr.aria-label]="'Close' | t">✕</button>
+    </header>
+    <ol class="fl-steps">
+      @for (s of steps; track s.id; let i = $index) {
+        <li [attr.data-state]="stepState(i)"><i>{{ i + 1 }}</i>{{ s.label | t }}</li>
+      }
+    </ol>
+    @if (blocked(); as bl) {
+      <p class="fl-msg" data-tone="warn">{{ blockedText() }}</p>
+      <div class="fl-actions">
+        @if (bl.reason !== 'running') {
+          <button class="tcv-btn tcv-btn-accent" (click)="buildFirst()" [disabled]="building() || !auth.can('run')">{{ 'Build first' | t }}</button>
+        }
+        <button class="tcv-btn" (click)="closeFlash()">{{ 'Close' | t }}</button>
+      </div>
+    } @else if (manifest(); as m) {
+      <ul class="fl-files">
+        @for (f of m.files; track f.name; let i = $index) {
+          <li [attr.data-state]="fileStates()[i]">
+            <span class="fl-addr">0x{{ f.offset.toString(16) }}</span>
+            <span class="fl-name">{{ f.name }}</span>
+            <span class="fl-size">{{ kbOf(f.size) }}</span>
+            <span class="fl-bar"><i [style.width.%]="fileProg()[i] || 0"></i></span>
+            <span class="fl-word">{{ fileWord(i) | t }}</span>
+          </li>
+        }
+      </ul>
+      @switch (flashStep()) {
+        @case ('ready') {
+          <p class="fl-msg">{{ 'Plug the board in by USB, press Connect and pick its port (USB-SERIAL CH340 or USB2.0-Serial). It goes into its bootloader by itself.' | t }}</p>
+        }
+        @case ('connecting') { <p class="fl-msg">{{ 'Connecting - resetting the board into its bootloader…' | t }}</p> }
+        @case ('flashing') { <p class="fl-msg">{{ 'Writing' | t }} {{ m.files[curFile()]?.name }} · {{ flashBaud() }} baud</p> }
+        @case ('verifying') { <p class="fl-msg">{{ 'Verifying' | t }} {{ m.files[curFile()]?.name }} (MD5)…</p> }
+        @case ('done') {
+          <p class="fl-msg" data-tone="ok">{{ 'Flashed and verified' | t }} · {{ flashChip() }} · {{ flashSecs() }} s · {{ flashBaud() }} baud.
+            {{ 'The board restarted; the serial monitor is open.' | t }}</p>
+        }
+        @case ('error') {
+          @if (flashErr(); as e) {
+            <p class="fl-msg" data-tone="error"><b>{{ e.text | t }}</b> {{ (e.hint ?? '') | t }}</p>
+          }
+        }
+      }
+      @if (flashStep() !== 'done') {
+        <p class="fl-hint">{{ 'If it does not connect: hold BOOT, tap RST, let go of BOOT, then press Connect again.' | t }}</p>
+      }
+      <div class="fl-actions">
+        @if (flashStep() === 'ready' || flashStep() === 'error') {
+          <button class="tcv-btn tcv-btn-accent" (click)="startFlash(false)">{{ (flashStep() === 'error' ? 'Try again' : 'Connect') | t }}</button>
+          @if (knownPort()) {
+            <button class="tcv-btn" (click)="startFlash(true)" [title]="knownPortName()">{{ 'Another port…' | t }}</button>
+          }
+          <button class="tcv-btn" (click)="closeFlash()">{{ 'Cancel' | t }}</button>
+        } @else if (flashStep() === 'done') {
+          <button class="tcv-btn tcv-btn-accent" (click)="closeFlash()">{{ 'Close' | t }}</button>
+        } @else {
+          <span class="fl-busy">{{ 'Keep the board plugged in…' | t }}</span>
+        }
+      </div>
+      @if (flashLog().length) {
+        <details class="fl-log"><summary>esptool · {{ flashLog().length }}</summary><pre>{{ flashLogText() }}</pre></details>
+      }
+    } @else {
+      <p class="fl-msg">{{ 'Reading the build…' | t }}</p>
+    }
+  </section>
 }
 </div>`,
 })
@@ -594,12 +815,12 @@ export class RoomFirmware implements OnDestroy {
   pin = signal<FwPin | null>(null);
   private svgText = signal<string | null>(null);
   private svgFor = '';
-  opened = signal<Set<string>>(new Set(['builds']));
+  opened = signal<Set<string>>(new Set(['builds', 'flash']));
 
   view = signal<View>(RoomFirmware.recall('view', 'schematic') === 'code' ? 'code' : 'schematic');
   side = signal<Side>(RoomFirmware.recall('side', 'first') === 'status' ? 'status' : 'first');
   readonly sideTabs = ['first', 'status'] as const;
-  readonly tabNames = computed(() => ({ first: this.view() === 'schematic' ? t('Pins') : t('Files'),
+  readonly tabNames = computed(() => ({ first: this.view() === 'code' ? t('Files') : t('Pins'),
                                         status: t('Status') }));
 
   private timer = setInterval(() => this.tick(), 3000);
@@ -635,7 +856,10 @@ export class RoomFirmware implements OnDestroy {
     });
   }
 
-  ngOnDestroy() { clearInterval(this.timer); }
+  ngOnDestroy() {
+    clearInterval(this.timer);
+    this.link.close().catch(() => {});
+  }
 
   // ---- what is shown ----
 
@@ -723,6 +947,19 @@ export class RoomFirmware implements OnDestroy {
       items: ch ? [...ch.moved.map(m => ({ where: m.net, text: `GPIO${m.from} → GPIO${m.to}` })),
                    ...ch.added.map(n => ({ where: n, text: t('new') })), ...ch.removed.map(n => ({ where: n, text: t('gone') }))] : [],
     });
+    const lf = f.last_flash, m = this.manifest(), bl = this.blocked();
+    out.push({
+      id: 'flash', title: 'Flashing',
+      tone: lf ? (lf.ok ? 'ok' : 'error') : 'none',
+      status: m ? `${m.files.length} ${t('files')} · ${m.chip}` : bl ? t('build first') : '–',
+      line: lf ? `${lf.ok ? t('Flashed') : t('Flash failed')} ${ago(lf.at, this.now())}`
+                 + (lf.build_at ? ` · ${t('build of')} ${hhmm(lf.build_at)}` : '')
+                 + (lf.mac ? ` · …${lf.mac}` : '') + (lf.error ? ` · ${lf.error}` : '')
+        : t('Not flashed yet - the image below is what Flash writes, from this browser over USB.'),
+      items: m ? m.files.map(x => ({ where: '0x' + x.offset.toString(16).padStart(5, '0'),
+                                     text: `${x.name} · ${kb(x.size)} · sha256 ${x.sha256.slice(0, 12)}…` }))
+        : bl ? [{ where: '', text: this.blockedText() }] : [],
+    });
     const unused = this.signalPins().filter(p => p.macro && !p.used_in.length);
     out.push({
       id: 'unused', title: 'Unused pins', tone: unused.length ? 'none' : 'ok',
@@ -762,7 +999,8 @@ export class RoomFirmware implements OnDestroy {
 
   setView(v: View) {
     this.view.set(v);
-    RoomFirmware.keep('view', v);
+    if (v !== 'monitor') RoomFirmware.keep('view', v);
+    if (v === 'monitor') this.readQuick();
     if (v === 'code' && !this.file()) this.openFile(this.defaultFile());
   }
   setSide(s: Side) { this.side.set(s); RoomFirmware.keep('side', s); }
@@ -869,6 +1107,7 @@ export class RoomFirmware implements OnDestroy {
       next: rows => {
         this.files.set(rows);
         this.filesAt = version;
+        if (this.view() === 'monitor') this.readQuick();
         const want = this.file() ?? (this.view() === 'code' ? this.defaultFile() : null);
         if (want) this.openFile(want, this.line() ?? undefined);
       },
@@ -888,6 +1127,369 @@ export class RoomFirmware implements OnDestroy {
     this.read(id);
     if (before || this.wasBuilding) this.readLog(id);
     this.wasBuilding = before;
+  }
+
+  // ---- flashing and the serial monitor (flasher.ts) ----
+
+  readonly serial = signal(webSerialSupport(browserEnv()));
+  readonly steps = [{ id: 'connect', label: 'Connect' }, { id: 'flash', label: 'Flashing' },
+                    { id: 'verify', label: 'Verifying' }, { id: 'done', label: 'Done' }] as const;
+  readonly bauds = BAUDS;
+  readonly extraFiles = ['bootloader.bin', 'partitions.bin', 'boot_app0.bin'];
+  manifest = signal<FlashManifest | null>(null);
+  blocked = signal<{ reason: string; detail: string } | null>(null);
+  flashOpen = signal(false);
+  flashStep = signal<FlashStep>('ready');
+  fileProg = signal<number[]>([]);
+  fileStates = signal<FileState[]>([]);
+  curFile = signal(0);
+  flashErr = signal<Plain | null>(null);
+  flashLog = signal<string[]>([]);
+  flashLogText = computed(() => this.flashLog().join('\n'));
+  flashBaud = signal<number | null>(null);
+  flashChip = signal('');
+  flashSecs = signal<number | null>(null);
+  flashBusy = computed(() => ['connecting', 'flashing', 'verifying'].includes(this.flashStep()));
+  knownPort = signal<SerialPort | null>(null);
+  knownPortName = computed(() => portLabel(this.knownPort()));
+  /** How far each step got, for the four steps across the dialog's top. */
+  private failedAt = signal(0);
+
+  monitorTip = computed(() => this.serial().ok ? t('Serial monitor - the board\'s console, over USB') : t(this.serial().why));
+  flashTip = computed(() => {
+    if (!this.serial().ok) return t(this.serial().why);
+    if (!this.auth.can('run')) return t('Flash - needs the right to run builds');
+    return t('Flash - write the last build to the board, from this browser over USB');
+  });
+
+  monLines = signal<SerialLine[]>([]);
+  monOn = signal(false);
+  monPort = signal('');
+  monBaud = signal(115200);
+  monPaused = signal(false);
+  monNew = signal(0);
+  monText = signal('');
+  quick = signal<string[]>([]);
+  private monBox = viewChild<ElementRef<HTMLDivElement>>('monBox');
+  private monIn = viewChild<ElementRef<HTMLInputElement>>('monIn');
+  private monSeq = 0;
+  private monPending: SerialLine[] = [];
+  private monFrame = 0;
+  private quickFor = '';
+  private link = new SerialLink(text => this.addLine(text, 'rx'), why => {
+    this.monOn.set(false);
+    if (why) this.addLine(`${t('disconnected')}: ${t(why)}`, 'error');
+  });
+
+  /** The build Flash would write, read again when the build or the code moves on. */
+  private manifestKey = '';
+  private manifestWatch = effect(() => {
+    const f = this.fw();
+    const key = f ? `${f.id}:${f.version}:${f.build?.job}:${f.build?.state}` : '';
+    untracked(() => {
+      if (key === this.manifestKey) return;
+      this.manifestKey = key;
+      if (!f) { this.manifest.set(null); this.blocked.set(null); return; }
+      this.readManifest(f.id);
+    });
+  });
+
+  private readManifest(id: string, then?: () => void) {
+    this.http.get<FlashManifest>(`/api/firmware/${id}/flash-manifest`).subscribe({
+      next: m => {
+        if (this.fw()?.id !== id) return;
+        this.manifest.set(m);
+        this.blocked.set(null);
+        if (!this.monOn() && !this.monTouched) this.monBaud.set(m.monitor_baud || 115200);
+        then?.();
+      },
+      error: e => {
+        if (this.fw()?.id !== id) return;
+        this.manifest.set(null);
+        const d = e?.error?.detail;
+        this.blocked.set(d?.reason ? d : { reason: 'error', detail: t('The build could not be read.') });
+        then?.();
+      },
+    });
+  }
+  private monTouched = false;
+
+  /** Why there is nothing to flash, in the reader's language. */
+  blockedText = computed(() => {
+    const bl = this.blocked(), f = this.fw();
+    if (!bl) return '';
+    switch (bl.reason) {
+      case 'never': return t('Not built yet - build it first.');
+      case 'running': return t('A build is running - wait for it to finish.');
+      case 'failed': return t('The last build failed - fix it and build again before flashing.');
+      case 'stale': return `${t('The code changed since the last build')} (v${f?.build?.version} → v${f?.version}) - ${t('build first.')}`;
+      case 'missing': return t('This build is from before flashing (no bootloader or partition table) - build again.');
+      default: return bl.detail;
+    }
+  });
+
+  hhmmOf(at: string | null | undefined) { return hhmm(at); }
+
+  stepState(i: number): 'done' | 'now' | 'error' | 'wait' {
+    const at = { blocked: 0, ready: 0, connecting: 0, flashing: 1, verifying: 2, done: 3, error: this.failedAt() }[this.flashStep()];
+    if (this.flashStep() === 'done') return 'done';
+    if (this.flashStep() === 'error' && i === at) return 'error';
+    if (this.flashStep() === 'blocked' && i === 0) return 'error';
+    return i < at ? 'done' : i === at && this.flashStep() !== 'ready' ? 'now' : i === 0 && this.flashStep() === 'ready' ? 'now' : 'wait';
+  }
+
+  fileWord(i: number): string {
+    const s = this.fileStates()[i] ?? 'wait';
+    return s === 'done' ? 'verified' : s === 'verify' ? 'verifying' : s === 'write' ? `${Math.round(this.fileProg()[i] ?? 0)}%` : '';
+  }
+
+  openFlash() {
+    const f = this.fw();
+    if (!f || !this.serial().ok) return;
+    this.flashOpen.set(true);
+    this.resetFlash();
+    this.manifest.set(null);
+    this.readManifest(f.id, () => this.flashStep.set(this.blocked() ? 'blocked' : 'ready'));
+    rememberedPort().then(p => this.knownPort.set(p)).catch(() => {});
+  }
+
+  private resetFlash() {
+    this.flashStep.set('ready');
+    this.flashErr.set(null);
+    this.flashLog.set([]);
+    this.fileProg.set([]);
+    this.fileStates.set([]);
+    this.curFile.set(0);
+    this.failedAt.set(0);
+    this.flashSecs.set(null);
+  }
+
+  closeFlash() { if (!this.flashBusy()) this.flashOpen.set(false); }
+
+  buildFirst() {
+    this.flashOpen.set(false);
+    this.build();
+  }
+
+  /** Connect (a click: the browser asks for the port only then), download
+   *  and check the files, write them, verify, reset - then the monitor. */
+  async startFlash(other: boolean) {
+    const f = this.fw();
+    let m = this.manifest();
+    if (!f || !m || this.flashBusy()) return;
+    let port: SerialPort;
+    try {
+      port = (!other && this.knownPort()) || await choosePort();
+    } catch (e) {
+      const p = plainError(e);
+      if ((e as { name?: string })?.name !== 'NotFoundError') { this.flashErr.set(p); this.flashStep.set('error'); }
+      return;
+    }
+    this.knownPort.set(port);
+    this.resetFlash();
+    this.flashStep.set('connecting');
+    const log = (line: string) => this.flashLog.update(l => [...l.slice(-400), line.replace(/\s+$/, '')]);
+    // The monitor holds the same port: let go of it first.
+    if (this.monOn()) { await this.link.close(); log(t('serial monitor closed for flashing')); }
+    let flashId: string | null = null;
+    const t0 = performance.now();
+    try {
+      const blobs: Record<string, Uint8Array> = {};
+      for (const file of m.files) {
+        const r = await fetch(file.url, { credentials: 'same-origin' });
+        if (r.status === 409) throw new Error(t('A newer build came in - open Flash again.'));
+        if (!r.ok) throw new Error(`${file.name}: ${r.status} ${r.statusText}`);
+        const data = new Uint8Array(await r.arrayBuffer());
+        const sum = hexOf(await crypto.subtle.digest('SHA-256', data));
+        if (sum !== file.sha256) throw new Error(`${file.name}: ${t('the download does not match the build (sha256)')}`);
+        blobs[file.name] = data;
+      }
+      const files = fileArray(m, blobs);
+      this.fileProg.set(files.map(() => 0));
+      this.fileStates.set(files.map(() => 'wait' as FileState));
+      try {
+        const rec = await this.post<{ id: string }>(`/api/firmware/${f.id}/flashes`, { build_job: m.build_job });
+        flashId = rec?.id ?? null;
+      } catch { /* the flash does not wait for its record */ }
+      const order = [...m.files].sort((a, b) => a.offset - b.offset).map(x => m!.files.indexOf(x));
+      const progress = (p: FlashProgress) => {
+        this.flashBaud.set(p.baud ?? null);
+        if (p.phase === 'connecting') { this.flashStep.set('connecting'); return; }
+        if (p.phase === 'resetting') return;
+        const i = order[p.file ?? 0] ?? 0;
+        this.curFile.set(i);
+        const pct = p.total ? Math.min(100, (100 * (p.written ?? 0)) / p.total) : 0;
+        this.fileProg.update(a => a.map((v, k) => (k === i ? pct : v)));
+        this.fileStates.update(a => a.map((v, k) => k === i ? (p.phase === 'verifying' ? 'verify' : 'write')
+                                                       : order.indexOf(k) < (p.file ?? 0) ? 'done' : v));
+        this.flashStep.set(p.phase === 'verifying' ? 'verifying' : 'flashing');
+      };
+      let got;
+      try {
+        got = await flashImage(port, m, files, m.baud, progress, log);
+      } catch (e) {
+        const p = plainError(e);
+        if (e instanceof WrongChip || /in use|went away/.test(p.text) || m.baud === m.fallback_baud) throw e;
+        log(`${t('failed at')} ${m.baud} baud (${(e as Error)?.message ?? e}) - ${t('trying again at')} ${m.fallback_baud}`);
+        this.fileProg.set(files.map(() => 0));
+        this.fileStates.set(files.map(() => 'wait' as FileState));
+        got = await flashImage(port, m, files, m.fallback_baud, progress, log);
+      }
+      this.fileProg.set(files.map(() => 100));
+      this.fileStates.set(files.map(() => 'done' as FileState));
+      this.flashChip.set(got.description);
+      this.flashSecs.set(got.secs);
+      this.flashBaud.set(got.baud);
+      this.flashStep.set('done');
+      await this.endFlash(f.id, flashId, m.build_job, { ok: true, chip: got.description, mac: macTail(got.mac),
+                                                         secs: got.secs, baud: got.baud });
+      // The board restarted with the new code: listen to it.
+      this.setView('monitor');
+      await this.openMonitor(port, true);
+    } catch (e) {
+      const p: Plain = e instanceof WrongChip
+        ? { text: `${t('This board has an')} ${e.found}; ${t('the firmware is built for')} ${e.want}.`,
+            hint: t('Pick the port of the right board.') }
+        : plainError(e);
+      this.failedAt.set(this.flashStep() === 'connecting' ? 0 : this.flashStep() === 'verifying' ? 2 : 1);
+      this.flashErr.set(p);
+      this.flashStep.set('error');
+      log(`error: ${(e as Error)?.message ?? e}`);
+      await this.endFlash(f.id, flashId, m.build_job, {
+        ok: false, error: p.text, chip: e instanceof WrongChip ? e.found : null,
+        secs: Math.round((performance.now() - t0) / 100) / 10, baud: this.flashBaud() });
+    }
+  }
+
+  private async endFlash(fid: string, flashId: string | null, buildJob: string, body: Record<string, unknown>) {
+    try {
+      await this.post(flashId ? `/api/firmware/${fid}/flashes/${flashId}` : `/api/firmware/${fid}/flashes`,
+                      flashId ? body : { ...body, build_job: buildJob });
+    } catch { /* recorded or not, the board is what it is */ }
+    this.tick();
+  }
+
+  private post<R>(url: string, body: unknown): Promise<R> {
+    return new Promise((resolve, reject) => this.http.post<R>(url, body).subscribe({ next: resolve, error: reject }));
+  }
+
+  // the monitor
+
+  toggleMonitor() {
+    if (this.view() === 'monitor') { this.setView(RoomFirmware.recall('view', 'schematic') === 'code' ? 'code' : 'schematic'); return; }
+    this.setView('monitor');
+  }
+
+  /** Connect: the port of this session, or the browser asks (a click). */
+  async connectMonitor() {
+    let port = this.knownPort() ?? await rememberedPort();
+    try {
+      if (!port) port = await choosePort();
+      this.knownPort.set(port);
+      await this.openMonitor(port, false);
+    } catch (e) {
+      if ((e as { name?: string })?.name === 'NotFoundError') return;
+      const p = plainError(e);
+      this.addLine(`${t(p.text)} ${p.hint ? t(p.hint) : ''}`, 'error');
+    }
+  }
+
+  private async openMonitor(port: SerialPort, reset: boolean) {
+    await this.link.connect(port, this.monBaud(), reset);
+    this.monOn.set(true);
+    this.monPort.set(portLabel(port));
+    this.addLine(`${t('connected')} · ${portLabel(port)} · ${this.monBaud()} baud${reset ? ' · ' + t('board reset') : ''}`, 'info');
+    setTimeout(() => this.monIn()?.nativeElement.focus(), 50);
+  }
+
+  async setBaud(b: number) {
+    this.monTouched = true;
+    this.monBaud.set(b);
+    const port = this.link.port;
+    if (port && this.monOn()) {
+      try { await this.openMonitor(port, false); } catch (e) { this.addLine(plainError(e).text, 'error'); }
+    }
+  }
+
+  async disconnect() {
+    await this.link.close();
+    this.monOn.set(false);
+    this.addLine(t('disconnected'), 'info');
+  }
+
+  async resetBoard() {
+    try { await this.link.reset(); this.addLine(t('board reset (EN pulsed through RTS)'), 'info'); }
+    catch (e) { this.addLine(plainError(e).text, 'error'); }
+  }
+
+  clearMonitor() { this.monLines.set([]); this.monNew.set(0); this.monPaused.set(false); }
+
+  sendLine() {
+    const text = this.monText().trim();
+    if (!text) return;
+    this.send(text);
+    this.monText.set('');
+  }
+
+  async send(text: string) {
+    try { await this.link.send(text); this.addLine('> ' + text, 'tx'); }
+    catch (e) { this.addLine(plainError(e).text, 'error'); }
+  }
+
+  /** Lines come in bursts (a boot prints dozens at once): gathered and put
+   *  on screen once a frame, the list kept to its last 3000. */
+  addLine(text: string, kind: SerialLine['kind']) {
+    this.monPending.push({ id: ++this.monSeq, at: Date.now(), text, kind });
+    if (this.monFrame) return;
+    this.monFrame = requestAnimationFrame(() => {
+      this.monFrame = 0;
+      const add = this.monPending;
+      this.monPending = [];
+      this.monLines.update(l => { const n = l.concat(add); return n.length > 3000 ? n.slice(-3000) : n; });
+      if (this.monPaused()) this.monNew.update(n => n + add.length);
+      else setTimeout(() => this.monScrollDown(), 0);
+    });
+  }
+
+  /** Reading back up stops the following; back at the bottom, it follows again. */
+  onMonScroll() {
+    const el = this.monBox()?.nativeElement;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    this.monPaused.set(!atBottom);
+    if (atBottom) this.monNew.set(0);
+  }
+
+  monFollow() { this.monPaused.set(false); this.monNew.set(0); this.monScrollDown(); }
+
+  private monScrollDown() {
+    const el = this.monBox()?.nativeElement;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  stamp(at: number): string {
+    const d = new Date(at);
+    const p = (n: number, w = 2) => String(n).padStart(w, '0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+  }
+
+  /** The console's commands worth a button, read from the code. */
+  private readQuick() {
+    const id = this.fw()?.id;
+    const key = `${id}:${this.fw()?.version}`;
+    if (!id || key === this.quickFor || !this.files().length) return;
+    this.quickFor = key;
+    const paths = this.files().map(x => x.path).filter(p => /^(src|include)\/.*\.(c|cc|cpp|h|hpp|ino)$/.test(p) && p !== 'include/pins.h');
+    const texts: string[] = [];
+    let left = paths.length;
+    if (!left) { this.quick.set([]); return; }
+    for (const p of paths) {
+      this.http.get<{ content: string }>(`/api/firmware/${id}/files/${p}`).subscribe({
+        next: r => texts.push(r.content),
+        complete: () => { if (--left === 0) this.quick.set(quickCommands(texts.join('\n'))); },
+        error: () => { if (--left === 0) this.quick.set(quickCommands(texts.join('\n'))); },
+      });
+    }
   }
 
   private static recall(k: string, fallback: string): string {

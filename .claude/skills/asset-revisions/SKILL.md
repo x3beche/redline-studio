@@ -287,7 +287,8 @@ receives, and scan the diff before pushing - this repository is public.
 
 ## A part from the Files tab
 
-A STEP (or STL/mesh) in the Files tab is usable by its exact name in a
-model's source - `import_step(ROOT / "<name>.stp")` - and the build lays it
-down like an upload. `revisions.py files` lists the names. No upload call
-is needed.
+Copy it into the project as a model of its own:
+`revisions.py files to-model <file-id> --folder iot-fan/purchased [--title "..."]`
+(the Files tab's "Add to project" does the same). The model keeps its own
+copy of the CAD file, so deleting it from Files breaks nothing; then use the
+new model as a component.

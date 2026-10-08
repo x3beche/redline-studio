@@ -3086,6 +3086,54 @@ async def files_send(fid: str, body: FileSend):
     return {"sent": body.room, "message": line}
 
 
+class FileToModel(BaseModel):
+    folder: str = Field(min_length=1, max_length=300)
+    title: str | None = Field(default=None, max_length=120)
+
+
+@app.post("/api/files/{fid}/to-model")
+async def files_to_model(fid: str, body: FileToModel):
+    """A STEP or mesh from the Files tab, added to a project as a model of
+    its own: the bytes are copied into the model's CAD files (uploads), so
+    the model stays whole if the file is later deleted from Files. Built at
+    once, as a job."""
+    try:
+        doc, data = await files.get(db(), fid)
+    except KeyError as exc:
+        raise HTTPException(404, fid) from exc
+    if doc.get("kind") not in ("step", "mesh"):
+        raise HTTPException(400, "only a STEP or a mesh (STL, 3MF, OBJ) can become a 3D model")
+    folder = body.folder.strip().strip("/")
+    if not await db().folders.find_one({"_id": folder}) and not await db().models.find_one({"folder": folder}, {"_id": 1}):
+        raise HTTPException(404, f"no folder {folder!r}")
+    # An upload of the same name may be another model's part: never laid
+    # over it - this one gets a name of its own.
+    name = doc["name"]
+    clean = re.sub(r"[^A-Za-z0-9_-]+", "_", Path(name).stem).strip("_-") or "part"
+    suffix, n, first = Path(name).suffix.lower(), 2, clean
+    while await db().uploads.find_one({"_id": clean + suffix}, {"_id": 1}):
+        clean, n = f"{first}_{n}", n + 1
+    try:
+        info = await store.put_upload(db(), clean + suffix, data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    stem = Path(info["name"]).stem
+    base = re.sub(r"[^a-z0-9_]+", "_", stem.lower()).strip("_") or "part"
+    model_id, n = f"{folder}/{base}", 2
+    while await db().models.find_one({"_id": model_id}, {"_id": 1}):
+        model_id, n = f"{folder}/{base}_{n}", n + 1
+    title = (body.title or "").strip() or Path(doc["name"]).stem
+    source = starter_source(info["name"]).replace(f'TITLE = "{stem}"', f"TITLE = {json.dumps(title)}", 1)
+    try:
+        saved = await store.save_model(db(), model_id, source)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    await actors.audit(db(), "file-to-model", doc["name"], {"file": fid, "model": model_id})
+    await push_activity(ActivityIn(text=f"{doc['name']} added to {folder} as {title}", level="done"))
+    job = await _start_build(db(), model_id, by="request")
+    return {"model": saved["_id"], "title": title, "upload": info["name"], "build_job": job.get("_id")}
+
+
 @app.post("/api/chat")
 async def chat_post(body: ChatIn):
     """Say something to the agent. Its own replies come in over the CLI."""

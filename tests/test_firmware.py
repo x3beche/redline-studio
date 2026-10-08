@@ -368,7 +368,7 @@ def test_a_build_runs_writes_its_lines_and_its_result(tmp_path, monkeypatch):
 
     done = run(go())
     assert done["status"] == "done" and done["result"]["ok"]
-    assert seen[0].endswith("pio pkg install -e esp32dev") and seen[-1] == "exec pio run -e esp32dev"
+    assert seen[0].endswith("pio pkg install -e esp32dev") and seen[-1] == fwbuild.compile_script("esp32dev")
     job = raw[fwbuild.JOBS].rows[0]
     assert job["lines"][-1]["text"].startswith("U2 ESP32: built · flash 23.9%")
     assert job["lines"][-1]["level"] == "done"
@@ -378,7 +378,7 @@ def test_a_build_runs_writes_its_lines_and_its_result(tmp_path, monkeypatch):
     # the libraries are fetched once per platformio.ini
     seen.clear()
     run(fwbuild.execute(db, raw, {**job, "_id": "j2"}, run=fake_run))
-    assert seen == ["exec pio run -e esp32dev"]
+    assert seen == [fwbuild.compile_script("esp32dev")]
 
 
 @pytest.mark.asyncio

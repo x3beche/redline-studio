@@ -8,7 +8,9 @@ starts the runner and answers at once. The runner says it is alive every
 BEAT seconds, writes the compiler's lines into the job as they come (the
 room's log band reads them), and at the end the result: ok or not, the
 errors and warnings as file:line, flash and RAM used, and firmware.bin and
-firmware.elf in GridFS (`firmware_builds`).
+firmware.elf in GridFS (`firmware_builds`) - with bootloader.bin,
+partitions.bin and boot_app0.bin, which flashing writes with the app
+(backend/flashing.py).
 
 The container (docker/firmware, image `redline-firmware`):
 
@@ -327,6 +329,21 @@ async def image_ready() -> bool:
         return False
 
 
+# What a build keeps: the app and its symbols, and what flashing writes with
+# it (backend/flashing.py) - the bootloader and partition table PlatformIO
+# makes next to the app, and the Arduino core's boot_app0.bin (otadata that
+# boots the first app slot), copied out of the image after the compile.
+KEPT = ("firmware.bin", "firmware.elf", "bootloader.bin", "partitions.bin", "boot_app0.bin")
+BOOT_APP0 = "$PLATFORMIO_CORE_DIR/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin"
+
+
+def compile_script(env: str) -> str:
+    """The compile, then boot_app0.bin next to its output; the compile's
+    exit code is the script's."""
+    return (f"pio run -e {env}; rc=$?; "
+            f"cp -f \"{BOOT_APP0}\" .pio/build/{env}/boot_app0.bin 2>/dev/null; exit $rc")
+
+
 def _ini_hash(files: dict[str, str]) -> str:
     return hashlib.sha256((files.get("platformio.ini") or "").encode()).hexdigest()[:16]
 
@@ -360,7 +377,7 @@ async def build(db, fw: dict, lines: Lines, *, run=_stream) -> dict:
             marker.parent.mkdir(parents=True, exist_ok=True)
             marker.write_text(want)
     t0 = time.monotonic()
-    rc, text = await run(docker_argv(where, f"exec pio run -e {env}"), lines, TIMEOUT)
+    rc, text = await run(docker_argv(where, compile_script(env)), lines, TIMEOUT)
     got = parse(text)
     got["ok"] = got["ok"] and rc == 0
     got["rc"] = rc
@@ -369,14 +386,20 @@ async def build(db, fw: dict, lines: Lines, *, run=_stream) -> dict:
     got["version"] = fw.get("version") or 0
     got["artifacts"] = {}
     if got["ok"]:
-        for name in ("firmware.bin", "firmware.elf"):
-            p = where / ".pio" / "build" / env / name
+        out = where / ".pio" / "build" / env
+        from . import flashing
+        parts = out / "partitions.bin"
+        at = flashing.offsets(flashing.family_of(fw), parts.read_bytes() if parts.exists() else None)
+        for name in KEPT:
+            p = out / name
             if p.exists():
                 data = p.read_bytes()
                 gid = await store.bucket(db, firmware.BUCKET).upload_from_stream(
                     f"{fw['_id']}-v{got['version']}-{name}", data)
                 got["artifacts"][name] = {"gridfs_id": str(gid), "bytes": len(data),
-                                          "sha256": hashlib.sha256(data).hexdigest()}
+                                          "sha256": hashlib.sha256(data).hexdigest(),
+                                          "md5": hashlib.md5(data).hexdigest(),
+                                          **({"offset": at[name]} if name in at else {})}
     return got
 
 

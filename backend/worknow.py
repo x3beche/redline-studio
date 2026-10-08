@@ -80,6 +80,11 @@ async def now() -> dict:
                       "secs": _secs(j.get("started_at"), t), "expected_secs": None,
                       "why": j.get("why") if j.get("why") not in (None, "asked for") else None})
 
+    # Flashes (backend/flashing.py): in the person's browser, recorded here.
+    from . import flashing
+    flash_items, flash_recent = await flashing.working(d, t)
+    items += flash_items
+
     # Notes being worked on, any room. A note's run is kept twice - as the
     # room's current run and under its own id - so once per note.
     seen_notes: set = set()
@@ -103,7 +108,10 @@ async def now() -> dict:
         if not at or at < since:
             break
         recent.append({"kind": j.get("kind"), "id": j.get("model") or j.get("board"),
-                       "ok": not j.get("rc"), "secs": j.get("wall_s"), "ago": _secs(at, t)})
+                       "ok": not j.get("rc"), "secs": j.get("wall_s"), "ago": _secs(at, t), "_at": at})
+    recent = sorted(recent + flash_recent, key=lambda r: r["_at"], reverse=True)
+    for r in recent:
+        r.pop("_at", None)
 
     order = {"building": 0, "running": 0, "queued": 1}
     items.sort(key=lambda x: (order.get(x["state"], 2), -(x.get("secs") or 0)))

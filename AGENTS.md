@@ -398,6 +398,24 @@ and listed under findings. The layout is held (placer puts each part
 where its pads were; the Gerber outline is the edge); routing, the pour
 and DRC are the pipeline's.
 
+Fixing it afterwards, when a note asks, is a normal board change (source,
+save, run). A part the note adds has no place in the import: the placer
+puts it in the free room nearest the pads it connects to (signal nets
+first, ground and wide rails count little), every held part stays where
+it was, and the run lists it as `placed_new`. The comparison with the
+import then shows the change as a difference - say it was meant:
+
+```bash
+.venv/bin/python tools/revisions.py board changes <id> --net LED2_2 --net GND \
+    --ref R23 --why "LED common cathode was not grounded"
+.venv/bin/python tools/revisions.py board changes <id> --clear          # forget them
+```
+
+Every difference stays listed; those touching a named net (either
+netlist's name) or part are marked `intended` with the reason, and Board
+health shows them under *Changed on purpose* instead of calling the board
+not the original. Name only what the note changed.
+
 ## Designing a board from a description
 
 "STM32F042, two buttons, USB-C charging with a TP4056, a CH340G with a
@@ -679,9 +697,8 @@ it and `run_tool` runs it.
 
 See `.claude/skills/asset-revisions/SKILL.md` for details.
 
-**Using a STEP from the Files tab.** A STEP or mesh someone put in the Files
-tab (`files` / GridFS `user_files`) is laid down in the build root like an
-upload, when the model's source names it - no re-upload needed:
-`import_step(ROOT / "OLED_0.91_128x32.stp")`. The exact file name is what
-`revisions.py files` lists. An upload with the same name wins; among Files
-entries with one name, the newest.
+**A STEP from the Files tab goes into the project as a model of its own.**
+`revisions.py files to-model <file-id> --folder iot-fan/purchased [--title "OLED 0.91 inch"]`
+(or the Files tab's "Add to project") copies the bytes into the model's own
+CAD files and builds it - the model stays whole if the file is later deleted
+from Files. Use that model like any other component (`import oled_0_91_128x32`).

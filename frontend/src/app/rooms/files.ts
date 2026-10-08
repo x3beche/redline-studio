@@ -4,6 +4,7 @@ import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { T, t } from '../i18n';
 import { AGENT_ROOMS } from './notes';
+import { Catalog, FolderNode } from '../api';
 
 /** Files: anything the work needs that is not a model or a board.
  *
@@ -56,6 +57,10 @@ export class FilesApi {
   }
   remove(id: string) { return this.http.delete(`/api/files/${id}`); }
   send(id: string, room: string) { return this.http.post(`/api/files/${id}/send`, { room }); }
+  /** A STEP or mesh copied into a project folder as a model of its own. */
+  toModel(id: string, folder: string, title: string) {
+    return this.http.post<{ model: string; title: string }>(`/api/files/${id}/to-model`, { folder, title });
+  }
 }
 
 @Component({
@@ -142,6 +147,10 @@ export class FilesApi {
               <a class="tcv-btn tcv-files-btn" [href]="'/api/files/' + f.id + '?inline=true'" target="_blank" rel="noopener">{{ 'Open' | t }}</a>
             }
             <a class="tcv-btn tcv-files-btn" [href]="'/api/files/' + f.id" [attr.download]="f.name">{{ 'Download' | t }}</a>
+            @if (auth.can('edit') && (f.kind === 'step' || f.kind === 'mesh')) {
+              <button class="tcv-btn tcv-files-btn" (click)="startAdd(f)"
+                      [title]="'Copy it into a project folder as a 3D model - it stays there even if this file is deleted' | t">{{ 'Add to project' | t }}</button>
+            }
             @if (auth.can('draw')) {
               <select class="tcv-files-select tcv-files-send" (change)="send(f, $any($event.target)); "
                       [title]="'Put a line in a room\\'s thread: what the file is and how to fetch it' | t">
@@ -153,6 +162,20 @@ export class FilesApi {
               <button class="tcv-btn tcv-files-btn tcv-files-del" (click)="remove(f)" [title]="'Delete' | t">✕</button>
             }
           </div>
+          @if (adding()?.id === f.id) {
+              <div class="tcv-files-add">
+                <label>{{ 'Folder' | t }}
+                  <select class="tcv-files-select" [value]="adding()!.folder" (change)="setAdd('folder', $any($event.target).value)">
+                    @for (p of folders(); track p) { <option [value]="p" [selected]="p === adding()!.folder">{{ p }}</option> }
+                  </select></label>
+                <label>{{ 'Name' | t }}
+                  <input class="tcv-files-input" [value]="adding()!.title" (input)="setAdd('title', $any($event.target).value)"></label>
+                <span class="tcv-files-add-acts">
+                  <button class="tcv-btn tcv-files-btn" (click)="adding.set(null)">{{ 'Cancel' | t }}</button>
+                  <button class="tcv-btn tcv-btn-accent tcv-files-btn" [disabled]="busyAdd() || !adding()!.folder" (click)="add(f)">{{ busyAdd() ? '…' : ('Add' | t) }}</button>
+                </span>
+              </div>
+            }
         </div>
       } @empty {
         <p class="tcv-notes-empty">{{ q() || kind() || board() ? ('Nothing matches.' | t) : ('No files yet - drop the first one above.' | t) }}</p>
@@ -175,6 +198,11 @@ export class RoomFiles {
   }
 
   readonly rooms = AGENT_ROOMS;
+  private catalog = inject(Catalog);
+  /** The "Add to project" form open under a file: where, under what name. */
+  adding = signal<{ id: string; folder: string; title: string } | null>(null);
+  busyAdd = signal(false);
+  folders = signal<string[]>([]);
   q = signal('');
   kind = signal('');
   board = signal('');
@@ -257,6 +285,42 @@ export class RoomFiles {
     this.api.send(f.id, room).subscribe({
       next: () => { this.say(`${t('Sent to')} ${t(this.roomLabel(room))}: ${f.name}`); this.load(); },
       error: err => this.error.set(typeof err?.error?.detail === 'string' ? err.error.detail : t('Could not send it.')),
+    });
+  }
+
+  startAdd(f: StoredFile) {
+    const title = f.name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim();
+    this.adding.set({ id: f.id, folder: '', title });
+    this.catalog.tree().subscribe({
+      next: tree => {
+        const out: string[] = [];
+        const walk = (n: FolderNode) => { if (n.path) out.push(n.path); n.folders.forEach(walk); };
+        walk(tree);
+        this.folders.set(out);
+        // A purchased part most likely; else the first folder.
+        const pick = out.find(p => /purchased$/.test(p)) ?? out[0] ?? '';
+        this.adding.update(a => a && !a.folder ? { ...a, folder: pick } : a);
+      },
+      error: () => this.error.set(t('The folders did not load.')),
+    });
+  }
+  setAdd(k: 'folder' | 'title', v: string) { this.adding.update(a => a ? { ...a, [k]: v } : a); }
+  add(f: StoredFile) {
+    const a = this.adding();
+    if (!a) return;
+    this.busyAdd.set(true);
+    this.api.toModel(f.id, a.folder, a.title).subscribe({
+      next: r => {
+        this.busyAdd.set(false);
+        this.adding.set(null);
+        this.say(`${t('Added to')} ${a.folder}: ${r.title} - ${t('building it now')}`);
+        this.picked.room.set('cad');
+        this.picked.ask('model', r.model);
+      },
+      error: err => {
+        this.busyAdd.set(false);
+        this.error.set(typeof err?.error?.detail === 'string' ? err.error.detail : t('Could not add it.'));
+      },
     });
   }
 

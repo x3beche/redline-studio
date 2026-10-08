@@ -119,6 +119,7 @@ _RULES: list[tuple[str, str, str]] = [
     ("PATCH", "/api/files/{}", "draw"),
     ("DELETE", "/api/files/{}", "draw"),
     ("POST", "/api/files/{}/send", "draw"),
+    ("POST", "/api/files/{}/to-model", "edit"),
     # the Command Code room: talking is like writing a note; the routes keep
     # deleting someone else's conversation, or line, to those who may delete
     # (bulk delete, a line, an edit or a regenerated answer that drops others');
@@ -168,6 +169,8 @@ _RULES: list[tuple[str, str, str]] = [
     # firmware: a build, or pins.h written again from the board, runs
     # something; making one or changing its code changes the design
     ("POST", "/api/firmware/{}/(build|pins)", "run"),
+    # flashing happens in the person's browser; recording one is running something
+    ("POST", "/api/firmware/{}/flashes(/{})?", "run"),
     # the board's 3D component, exported again from its layout: a run's step
     ("POST", "/api/boards/{}/component", "run"),
     ("POST", "/api/boards/{}/rules/check", "view"),     # a check, nothing is written

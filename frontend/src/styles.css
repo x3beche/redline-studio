@@ -3283,7 +3283,7 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-files-error { flex: none; margin: 0; font-size: 12px; color: var(--danger); }
 .tcv-files-flash { flex: none; margin: 0; font-size: 12px; color: var(--ok); }
 .tcv-files-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
-.tcv-files-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--line); }
+.tcv-files-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--line); }
 .tcv-files-row:hover { background: var(--hover); }
 .tcv-files-row { cursor: default; border-left: 2px solid transparent; }
 .tcv-files-row[data-on] { background: var(--surface-2); border-left-color: var(--accent); }
@@ -4355,3 +4355,13 @@ button.tcv-cc-stats:focus-visible { outline: 2px solid var(--accent); outline-of
 /* A schematic net named in the Firmware room's code (rooms/firmware.ts):
    Monaco draws it, so the class is global. */
 .fw-net-mark { color: var(--accent) !important; background: var(--hover); border-radius: 2px; }
+
+/* Files: "Add to project" - where the copy goes and what it is called. */
+.tcv-files-add { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; padding: 8px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; }
+.tcv-files-add label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--ink-dim); min-width: 0; }
+.tcv-files-add .tcv-files-select { min-width: 180px; }
+.tcv-files-input { padding: 4px 6px; font-size: 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 4px; min-width: 200px; }
+.tcv-files-input:focus { border-color: var(--accent); outline: none; }
+.tcv-files-add-acts { display: flex; gap: 6px; margin-left: auto; }
