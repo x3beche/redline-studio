@@ -183,7 +183,8 @@ async def cmd_wait(args):
                 await _shout_interrupts(db)
             print(f"{len(said)} message(s) after waiting {waited}s")
             for d in said:
-                print(f"  {d['at'][11:19]}  [{chat.room_of(d)}]  {d['text'][:80]}")
+                print(f"  {d['at'][11:19]}  [{chat.room_of(d)}]  {chat.preview(d)[:80]}"
+                      + (f"  (+{len(d['mentions'])} attached)" if d.get("mentions") else ""))
             print("\nRead the thread: revisions.py chat")
             return
         rows = [d async for d in db.revisions.find({"status": "queued"})]
@@ -227,7 +228,7 @@ async def _shout_interrupts(db) -> list[dict]:
 
     rows = await chat.interrupts(db)
     for d in rows:
-        print(f"\n!! URGENT  {d['at'][11:19]}  [{chat.room_of(d)}]  {d['text']}")
+        print(f"\n!! URGENT  {d['at'][11:19]}  [{chat.room_of(d)}]  {chat.agent_text(d)}")
     if rows:
         print("!! Answer it before the next step: revisions.py chat, then say\n")
     return rows
@@ -250,7 +251,7 @@ async def cmd_chat(args):
         who = "you " if d["role"] == chat.AGENT else "them"
         mark = " " if d.get("seen_at") else "*"
         bang = "!! " if d.get("urgent") and not d.get("seen_at") else ""
-        print(f"{mark}{d['at'][11:19]}  [{chat.room_of(d)}]  {who}  {bang}{d['text']}")
+        print(f"{mark}{d['at'][11:19]}  [{chat.room_of(d)}]  {who}  {bang}{chat.agent_text(d)}")
     fresh = [d["_id"] for d in rows
              if d["role"] == chat.USER and not d.get("seen_at")]
     if fresh and not args.keep_unread:

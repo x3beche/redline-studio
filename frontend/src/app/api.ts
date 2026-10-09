@@ -919,6 +919,9 @@ export interface ChatLine {
   edited?: { at: string; by: string; why?: string };
   /** Which room's thread it is in. */
   room?: string;
+  /** Files of the Files tab it carries - pictures pasted, dropped or
+   *  attached in the composer (backend/chat.py file_chips). */
+  mentions?: { kind: 'file'; id: string; label: string; sub?: string; image?: boolean; bytes?: number }[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -928,8 +931,8 @@ export class Chat {
   history(room: string): Observable<ChatLine[]> {
     return this.http.get<ChatLine[]>(`/api/chat?room=${room}`);
   }
-  say(text: string, urgent = false, room = 'cad'): Observable<ChatLine> {
-    return this.http.post<ChatLine>('/api/chat', { text, urgent, room });
+  say(text: string, urgent = false, room = 'cad', files: string[] = []): Observable<ChatLine> {
+    return this.http.post<ChatLine>('/api/chat', { text, urgent, room, files });
   }
   /** Unsend. Refused once the agent has picked the message up. */
   retract(id: string): Observable<unknown> {

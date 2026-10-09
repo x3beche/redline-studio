@@ -361,7 +361,7 @@ async def _file(db, fid: str) -> dict | None:
     else:
         lines.append("(content not included: not a text file)")
     return {"label": d.get("name") or fid, "version": (d.get("sha256") or "")[:12] or None,
-            "text": "\n".join(lines), "images": images}
+            "text": "\n".join(lines), "images": images, "image": d.get("kind") == "image"}
 
 
 async def _note(db, nid: str) -> dict | None:
@@ -494,6 +494,8 @@ async def expand(db, refs: list[dict], vision: bool) -> tuple[str, list[dict], l
                 "images": sum(1 for im in images if im in pics)}
         if got.get("open"):
             chip["open"] = got["open"]
+        if got.get("image"):
+            chip["image"] = True          # the page shows it as a picture, not a chip
         chips.append(chip)
     if not blocks:
         return "", [], []

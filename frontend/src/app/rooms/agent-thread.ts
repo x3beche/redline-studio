@@ -12,6 +12,9 @@ import { TopBar } from '../topbar';
 import { WORKSPACES } from '../workspaces';
 import { TaskBlockView } from './task-block';
 import { Reading, ReadingNote, ReadingPick } from '../editor/reading';
+import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
+import { FilesApi } from './files-model';
+import { ComposerSuggest, SuggestChip } from './suggest';
 
 /** The rooms' agent threads, in the Chat tab.
  *
@@ -139,7 +142,7 @@ export function sender(it: ThreadItem): string {
   selector: 'app-room-thread',
   // Its header, lines and composer are the conversation column's own rows.
   host: { style: 'display: contents' },
-  imports: [NgTemplateOutlet, T, Markdown, TaskBlockView, ReadingNote, ReadingPick],
+  imports: [NgTemplateOutlet, T, Markdown, TaskBlockView, ReadingNote, ReadingPick, AttachChips, MentionPics, SuggestChip],
   template: `
 <header class="tcv-cc-bar">
   <button class="tcv-cc-ib tcv-cc-burger" (click)="menu.emit()" [title]="'Conversations' | t">
@@ -153,7 +156,9 @@ export function sender(it: ThreadItem): string {
   }
 </header>
 
-<div class="tcv-cc-log tcv-cc-scroll" #log (wheel)="touched = true" (touchmove)="touched = true" (keydown)="touched = true">
+<div class="tcv-cc-log tcv-cc-scroll" #log (wheel)="touched = true" (touchmove)="touched = true" (keydown)="touched = true"
+     [class.tcv-att-over]="att.over()" (dragover)="canAttach() && att.dragOver($event)"
+     (dragleave)="att.dragLeave($event)" (drop)="canAttach() && att.drop($event)">
   <div class="tcv-cc-col">
     <!-- The thread in time order: its lines, and the agent's questions -
          answered ones resolved in place, each followed by its answer as
@@ -196,8 +201,22 @@ export function sender(it: ThreadItem): string {
                   <div class="tcv-cc-answer md" [innerHTML]="mdOf(seg) | md"></div>
                 }
               }
-            } @else {
+            } @else if (m.text) {
               <div class="tcv-cc-bubble">{{ m.text }}</div>
+            }
+            @if (m.mentions?.length) {
+              <!-- What the line carries: pictures as pictures, other files as chips. -->
+              <rl-mention-pics [mentions]="m.mentions" />
+              @if (otherFiles(m); as fs) {
+                @if (fs.length) {
+                  <div class="tcv-cc-mentions">
+                    @for (f of fs; track f.id) {
+                      <a class="tcv-cc-mchip" data-kind="file" [href]="'/api/files/' + f.id + '?inline=1'" target="_blank" rel="noopener" [title]="f.label">
+                        <ng-container *ngTemplateOutlet="ico(); context: { $implicit: CLIP }" /><span>{{ f.label }}</span></a>
+                    }
+                  </div>
+                }
+              }
             }
           </div>
         </article>
@@ -299,9 +318,14 @@ export function sender(it: ThreadItem): string {
 </div>
 
 @if (auth.can('draw')) {
-  <div class="tcv-cc-composer" [class.focus]="focused()" [class.tcv-th-urgentbox]="urgent()">
-    <textarea #box rows="1" [value]="saying()" [placeholder]="'message the agent…' | t"
-              (input)="saying.set($any($event.target).value); grow()" (keydown)="key($event)"
+  <div class="tcv-cc-composer" [class.focus]="focused()" [class.tcv-th-urgentbox]="urgent()"
+       [class.tcv-att-over]="att.over()" (dragover)="att.dragOver($event)" (dragleave)="att.dragLeave($event)"
+       (drop)="att.drop($event)">
+    @if (att.items().length || att.error()) {
+      <div class="tcv-cc-picked"><rl-attach-chips [att]="att" /></div>
+    }
+    <textarea #box rows="1" [value]="saying()" [placeholder]="sg.text() || ('message the agent…' | t)" [class.tcv-sg-ghost]="!!sg.text()"
+              (input)="saying.set($any($event.target).value); grow()" (keydown)="key($event)" (paste)="att.paste($event)"
               (focus)="focused.set(true)" (blur)="focused.set(false)"></textarea>
     <div class="tcv-cc-compbar">
       <!-- The difference between "when you get a moment" and "now": an
@@ -311,9 +335,15 @@ export function sender(it: ThreadItem): string {
                 [attr.aria-pressed]="urgent()"></button>
         <span>{{ 'Urgent' | t }}</span>
       </label>
+      <button class="tcv-cc-ib" data-act="attach" (click)="pickFile.click()"
+              [title]="'Attach a picture or a file (or paste, or drop it here)' | t">
+        <ng-container *ngTemplateOutlet="ico(); context: { $implicit: CLIP }" /></button>
+      <input #pickFile type="file" multiple hidden (change)="att.pick($event)" />
       <span class="tcv-cc-hint"><kbd>↵</kbd> {{ 'send' | t }} · <kbd>⇧↵</kbd> {{ 'new line' | t }}</span>
+      <rl-suggest-chip [sg]="sg" />
       <span class="grow"></span>
-      <button class="tcv-cc-send" [disabled]="!saying().trim()" (click)="say()" [title]="('Send' | t) + ' (Enter)'">
+      <button class="tcv-cc-send" [disabled]="!canSend()" (click)="say()"
+              [title]="(att.busy() ? ('Uploading…' | t) : ('Send' | t)) + ' (Enter)'">
         <ng-container *ngTemplateOutlet="ico(); context: { $implicit: SEND }" /></button>
     </div>
   </div>
@@ -337,6 +367,21 @@ export class RoomThread {
   menu = output<void>();
 
   readonly MENU = 'M4 6h16 M4 12h16 M4 18h16';
+  readonly CLIP = PAPERCLIP;
+  /** Pictures pasted, dropped or attached: uploaded to Files, sent as the line's files (rooms/chat-attach.ts). */
+  att = new ChatAttach(inject(FilesApi), () => this.room());
+  canAttach() { return this.auth.can('draw'); }
+  /** The next question, suggested in the empty composer after the agent writes (rooms/suggest.ts). */
+  sg = new ComposerSuggest(() => {
+    const l = this.lines(), m = l.at(-1);
+    return { kind: 'room', id: this.room(), busy: false, may: this.auth.can('draw'),
+             last: !l.length ? undefined : m?.role === 'agent' ? m._id : null,
+             empty: !this.saying().trim() && !this.att.items().length };
+  }, s => { this.saying.set(s); const el = this.box()?.nativeElement;
+            if (el) { el.value = s; el.focus(); el.setSelectionRange(s.length, s.length); this.grow(); } });
+  canSend() { return !this.att.busy() && (!!this.saying().trim() || this.att.ready().length > 0); }
+  /** A line's files that are not pictures (those are drawn as pictures). */
+  otherFiles(m: ChatLine) { return (m.mentions ?? []).filter(x => !isPicture(x)); }
   readonly SEND = 'M12 19V5 M6 11l6-6 6 6';
   readonly CAD = 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9';
   readonly FW = 'M6 6h12v12H6z M3 9h3 M3 15h3 M18 9h3 M18 15h3 M10.5 9.5L8.5 12l2 2.5 M13.5 9.5l2 2.5-2 2.5';
@@ -380,10 +425,26 @@ export class RoomThread {
   private box = viewChild<ElementRef<HTMLTextAreaElement>>('box');
   private timer = setInterval(() => this.load(), 2000);
 
+  /** The composer, ready to type in, once it is on the page. Asked for as
+   *  a room or conversation opens (Ctrl+K, the list), when the composer may
+   *  not be drawn yet: tried again for a moment rather than once and lost. */
+  focusSoon(tries = 30) {
+    if (matchMedia('(hover: none)').matches) return;
+    const el = this.box()?.nativeElement;
+    if (el && el.offsetParent) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); return; }
+    if (tries > 0) setTimeout(() => this.focusSoon(tries - 1), 50);
+  }
+
   constructor() {
     effect(() => {
       const room = this.room();
-      untracked(() => { this.lines.set([]); this.answered.set([]); this.load(true); this.threads.markSeen(room); });
+      untracked(() => { this.lines.set([]); this.answered.set([]); this.load(true); this.threads.markSeen(room); this.focusSoon(); });
+    });
+    // Asked for again while open (Ctrl+K on this room): the cursor goes in.
+    let opened = this.sel.threadAsked();
+    effect(() => {
+      const n = this.sel.threadAsked();
+      if (n !== opened) { opened = n; untracked(() => this.focusSoon()); }
     });
     // A line asked for from elsewhere (a queued note's "from chat" link):
     // scrolled to and lit up once it is here.
@@ -492,21 +553,31 @@ export class RoomThread {
   }
 
   say() {
+    if (!this.canSend()) return;
     const text = this.saying().trim();
-    if (!text) return;
     const urgent = this.urgent(), room = this.room();
+    const held = this.att.items(), ready = this.att.ready();
+    const mentions = ready.map(p => ({ kind: 'file' as const, id: p.id!, label: p.name, image: p.image }));
     this.lines.update(l => [...l, { _id: 'local-' + Date.now(), at: new Date().toISOString(), role: 'user', text,
-                                    urgent, seen_at: null, room, by: this.auth.state()?.user ?? undefined } as ChatLine]);
+                                    urgent, seen_at: null, room, by: this.auth.state()?.user ?? undefined,
+                                    ...(mentions.length ? { mentions } : {}) } as ChatLine]);
     this.saying.set('');
+    this.att.clear();
     this.grow();
     this.scroll();
-    this.chat.say(text, urgent, room).subscribe({
+    this.chat.say(text, urgent, room, mentions.map(m => m.id)).subscribe({
       next: () => { this.load(); this.threads.poll(); },
-      error: () => { this.error.set(t('could not send that')); this.lines.update(l => l.filter(m => this.sent(m))); },
+      error: () => {
+        this.error.set(t('could not send that'));
+        this.lines.update(l => l.filter(m => this.sent(m)));
+        if (!this.saying()) this.saying.set(text);
+        this.att.restore(held);
+      },
     });
   }
 
   key(e: KeyboardEvent) {
+    if (this.sg.key(e)) return;                   // the suggested next question (rooms/suggest.ts)
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.say(); }
   }
 

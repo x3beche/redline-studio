@@ -7,6 +7,7 @@ import type { LlmModel } from './rooms/commandcode';
 import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 import { CcUsage, day, inSpan, span } from './cc-usage';
 import { CcCompact, CcPeriod, OrCompact, OrUsage } from './provider-usage';
+import { SuggestConf } from './rooms/suggest';
 
 /** Settings > LLM settings: the API keys, and which provider and model
  *  does each of the app's model jobs (backend/llm.py), and what the
@@ -22,7 +23,12 @@ interface ProviderInfo { name: string; set: boolean; hint: string | null; source
 interface JobInfo {
   label: string; about: string; provider: string; model: string;
   default: { provider: string; model: string };
+  /** A job with an on/off of its own (the next-question suggestion): whether
+   *  it runs, and the seconds of quiet before it does (backend/llm.py). */
+  switch?: boolean; on?: boolean; delay?: number; delay_range?: [number, number];
 }
+/** The next-question suggestion's waits on offer, in seconds. */
+const DELAYS = [15, 30, 60, 120, 300];
 /** One provider as the page draws it (backend/llm.py REGISTRY): adding a
  *  provider is an entry there, and an account block below if it has one. */
 interface ProviderEntry { id: string; name: string; site: string; priced: boolean; about: string; account: boolean; analysis: boolean }
@@ -351,6 +357,25 @@ export class LlmUsagePanel {
                 }
               }
             </div>
+            @if (job.switch) {
+              <div class="st-job-switch">
+                <label class="st-job-on">
+                  <button type="button" class="tcv-switch" [attr.data-on]="job.on ? 1 : null" [attr.aria-pressed]="!!job.on"
+                          [disabled]="!canEdit || busy()" (click)="setSwitch(j, { on: !job.on })"
+                          [attr.aria-label]="job.label | t"></button>
+                  <span>{{ (job.on ? 'On' : 'Off') | t }}</span>
+                </label>
+                <span class="st-job-wait">{{ 'wait after an answer' | t }}</span>
+                <div class="st-seg">
+                  @for (s of delays; track s) {
+                    <button [class.on]="s === job.delay" [disabled]="!canEdit || busy() || s === job.delay"
+                            (click)="setSwitch(j, { delay: s })">{{ delayLabel(s) }}</button>
+                  }
+                </div>
+                @if (job.delay != null && !delays.includes(job.delay)) { <span class="st-job-wait">{{ delayLabel(job.delay) }}</span> }
+                <span class="st-job-wait">{{ (job.on ? 'one short call per finished answer, only after that quiet' : 'off: no calls, nothing is shown') | t }}</span>
+              </div>
+            }
             @if (tests()[j]; as r) {
               <div class="st-job-test" [class.st-ok]="r.ok" [class.st-err]="!r.ok">{{ r.ok ? '✓ ' + r.answer + ' · ' + r.ms + ' ms' : '✕ ' + r.error }}</div>
             }
@@ -479,6 +504,17 @@ export class LlmSettingsPanel {
     this.put({ jobs: { [j]: { provider, model } } }, t('Saved.'));
   }
 
+  readonly delays = DELAYS;
+  private suggestConf = inject(SuggestConf);
+  delayLabel(s: number) { return s % 60 === 0 ? (s / 60) + ' ' + t('min') : s + ' ' + t('s'); }
+
+  /** The switched job's on/off or its wait, saved with its provider and model. */
+  setSwitch(j: string, change: { on?: boolean; delay?: number }) {
+    const job = this.data()!.jobs[j];
+    const msg = change.on === undefined ? t('Saved.') : change.on ? t('Turned on.') : t('Turned off.');
+    this.put({ jobs: { [j]: { provider: job.provider, model: job.model, ...change } } }, msg);
+  }
+
   reset(j: string) {
     const job = this.data()!.jobs[j];
     this.pending.update(({ [j]: _, ...rest }) => rest);
@@ -501,6 +537,9 @@ export class LlmSettingsPanel {
     this.http.put<LlmSettings>('/api/llm/settings', body).subscribe({
       next: d => {
         this.data.set(d);
+        // The composers follow a change of the suggestion's switch or wait at once.
+        const sg = d.jobs['suggest'];
+        if (sg?.switch) this.suggestConf.set({ on: sg.on, delay: sg.delay });
         this.busy.set(false);
         this.msg.set(ok);
         setTimeout(() => this.msg.set(null), 3000);

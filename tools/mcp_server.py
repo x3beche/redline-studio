@@ -87,7 +87,8 @@ TOOLS: dict[str, tuple] = {
         {"id": _s("revision id")}, ["id"], lambda a: ["done", a["id"]]),
     "chat": (
         "Read the room's thread (in the Chat tab), and pick up what the person said. "
-        "Each room (tab) has its own thread; with a room, only that one.",
+        "Each room (tab) has its own thread; with a room, only that one. A picture the person "
+        "attached shows as [attached image: name, file id ...]: fetch it with files get and Read it.",
         {"room": {"type": "string", "enum": ROOMS,
                   "description": "only this room's thread"}},
         [], lambda a: ["chat"] + (["--room", a["room"]] if a.get("room") else [])),

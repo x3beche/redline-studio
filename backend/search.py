@@ -63,10 +63,16 @@ async def everything(db, q: str) -> list[dict]:
         out.append({"kind": "note", "id": d["_id"], "label": d.get("title") or "Untitled",
                     "text": _around(d.get("text") or "", rx)})
 
-    async for c in db.chat.find({"text": mq}, {"text": 1, "room": 1, "at": 1, "role": 1}).sort("at", -1).limit(EACH):
+    # A line found by its words, or by the name of a file it carries.
+    async for c in db.chat.find({"$or": [{"text": mq}, {"mentions.label": mq}]},
+                                {"text": 1, "room": 1, "at": 1, "role": 1, "mentions.label": 1}) \
+            .sort("at", -1).limit(EACH):
+        words = c.get("text") or ""
+        if not rx.search(words):
+            words = ", ".join(str(m.get("label") or "") for m in c.get("mentions") or []) or words
         out.append({"kind": "chat", "id": str(c["_id"]), "room": c.get("room") or "cad",
                     "label": f"{'agent' if c.get('role') == 'agent' else 'you'} · {c.get('room') or 'cad'}",
-                    "text": _around(c.get("text") or "", rx)})
+                    "text": _around(words, rx)})
 
     async for r in db.revisions.find({"$or": [{"comment": mq}, {"summary": mq}]},
                                      {"comment": 1, "summary": 1, "kind": 1, "model": 1, "status": 1}) \

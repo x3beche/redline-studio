@@ -72,14 +72,23 @@ JOBS = {
     "part_category": {"label": "Part category",
                       "about": "which parts drawer a new LCSC part goes in, when its own category says too little",
                       "default": CHEAP},
+    # Off until someone turns it on: it costs a call per finished answer
+    # (backend/suggest.py). `switch`: the job has an on/off of its own;
+    # `delay`: seconds of quiet after an answer before it is asked for.
+    "suggest": {"label": "Next-question suggestion",
+                "about": "after an answer and a quiet while, the question you are likely to ask next, shown in the empty composer",
+                "default": CHEAP, "switch": True, "delay": 60},
 }
+
+# The bounds of a job's `delay`, in seconds.
+DELAY_MIN, DELAY_MAX = 5, 600
 
 # The usage log's `kind` of a call -> the job it did, named as in the
 # "Which model does what" list. The room's titles are written by the
 # summary job's model but belong to the room.
 KINDS = {"summary": "summary", "translate": "translate", "tool-llm": "tools",
          "tool-router": "router", "cc-chat": "chat", "reading": "reading",
-         "part-category": "part_category"}
+         "part-category": "part_category", "suggest": "suggest"}
 KIND_LABELS = {"cc-title": "Chat titles", "llm-test": "Settings test"}
 
 
@@ -138,6 +147,15 @@ def route(job: str) -> tuple[str, str]:
     return got.get("provider") or prov, got.get("model") or model
 
 
+def job_switch(job: str) -> dict:
+    """A switched job's on/off and delay: what was saved, else off and its default delay."""
+    got = _conf["jobs"].get(job) or {}
+    delay = got.get("delay")
+    if not isinstance(delay, int) or not DELAY_MIN <= delay <= DELAY_MAX:
+        delay = JOBS[job].get("delay")
+    return {"on": bool(got.get("on")), "delay": delay}
+
+
 def public() -> dict:
     """What the page may see: whether each key is set, never the key."""
     provs = {}
@@ -150,6 +168,8 @@ def public() -> dict:
         prov, model = route(j)
         jobs[j] = {"label": info["label"], "about": info["about"], "provider": prov, "model": model,
                    "default": {"provider": info["default"][0], "model": info["default"][1]}}
+        if info.get("switch"):
+            jobs[j].update(job_switch(j), switch=True, delay_range=[DELAY_MIN, DELAY_MAX])
     return {"providers": provs, "jobs": jobs,
             "cheap": {"provider": CHEAP[0], "model": CHEAP[1]},
             "registry": registry()}
@@ -180,7 +200,21 @@ async def save(db, keys: dict | None = None, jobs: dict | None = None) -> dict:
             raise ValueError(f"{JOBS[j]['label']}: unknown provider {prov!r}")
         if not model or len(model) > 200:
             raise ValueError(f"{JOBS[j]['label']}: choose a model")
-        sets[f"jobs.{j}"] = {"provider": prov, "model": model}
+        entry = {"provider": prov, "model": model}
+        if JOBS[j].get("switch"):
+            # On/off and the delay are kept when a change leaves them out.
+            was = _conf["jobs"].get(j) or {}
+            on, delay = (r or {}).get("on"), (r or {}).get("delay")
+            on = was.get("on") if on is None else on
+            delay = was.get("delay") if delay is None else delay
+            if delay is not None and (isinstance(delay, bool) or not isinstance(delay, int)
+                                      or not DELAY_MIN <= delay <= DELAY_MAX):
+                raise ValueError(f"{JOBS[j]['label']}: the wait is {DELAY_MIN}-{DELAY_MAX} seconds")
+            if on is not None:
+                entry["on"] = bool(on)
+            if delay is not None:
+                entry["delay"] = delay
+        sets[f"jobs.{j}"] = entry
     update: dict = {}
     if sets:
         update["$set"] = sets

@@ -230,10 +230,11 @@ def _solid(f: dict) -> bool:
 
 @router.post("/api/files")
 async def files_upload(upload: list[UploadFile] = File(...), context: str = Form(""), note: str = Form(""),
-                       folder: str = Form("")):
+                       folder: str = Form(""), folder_path: str = Form("")):
     """One or more files, kept as they came. `context` is JSON - the room and
     the board or model open there - and comes along with each; `folder` is
-    where they go ("" the top)."""
+    where they go ("" the top). `folder_path` names it by its path instead,
+    made if missing - the Chat composer's pictures go to "Chat"."""
     from .main import ActivityIn, push_activity
     try:
         raw = json.loads(context) if context else {}
@@ -241,6 +242,11 @@ async def files_upload(upload: list[UploadFile] = File(...), context: str = Form
         raw = {}
     ctx = {k: str(v)[:200] for k, v in (raw if isinstance(raw, dict) else {}).items()
            if k in ("room", "model", "board") and v}
+    if folder_path and not folder:
+        try:
+            folder = (await files.make_path(_db(), folder_path, actors.current()))["_id"]
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
     if folder and not await _db()[files.FOLDERS].find_one({"_id": folder}, {"_id": 1}):
         raise HTTPException(404, f"no folder {folder!r}")
     out = []

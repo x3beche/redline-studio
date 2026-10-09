@@ -12,6 +12,9 @@ import { CcWant, Selection } from '../selection';
 import { AgentThreads, RoomThread } from './agent-thread';
 import { CcUsageLine } from '../cc-usage';
 import { AvatarColours, avatarColour } from '../avatar';
+import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
+import { FilesApi } from './files-model';
+import { ComposerSuggest, SuggestChip } from './suggest';
 
 /** The Chat room (id 'commandcode', kept so old links and saved tab orders
  *  still work): people talking with a model, in the open - and, pinned at
@@ -41,6 +44,8 @@ import { AvatarColours, avatarColour } from '../avatar';
 export interface CcMention {
   kind: 'model' | 'board' | 'file' | 'note' | 'revision' | 'part'; id: string; label: string;
   version?: string | number | null; sub?: string; chars?: number; truncated?: boolean; images?: number;
+  /** A file that is a picture (backend/cc_context.py): drawn as one under the line. */
+  image?: boolean;
   open?: { model?: string | null; board?: string | null; room?: string | null };
 }
 /** An answer someone else is having written, as far as it got. */
@@ -296,7 +301,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, TaskBlockView],
+  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, TaskBlockView, AttachChips, MentionPics, SuggestChip],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)' },
   template: `
 <!-- Avatars: a person's picture, or their initials on a colour of their own
@@ -554,7 +559,9 @@ type Ask = { text: string; label: string; go: () => void };
         </div>
       </header>
 
-      <div class="tcv-cc-log tcv-cc-scroll" #log (click)="logClick($event)" (scroll)="logScrolled()">
+      <div class="tcv-cc-log tcv-cc-scroll" #log (click)="logClick($event)" (scroll)="logScrolled()"
+           [class.tcv-att-over]="att.over()" (dragover)="auth.can('draw') && att.dragOver($event)"
+           (dragleave)="att.dragLeave($event)" (drop)="auth.can('draw') && att.drop($event)">
         <div class="tcv-cc-col">
           @for (m of messages(); track m.id; let i = $index; let last = $last) {
             <article class="tcv-cc-row" [attr.data-role]="m.role" [attr.data-editing]="editing() === m.id ? 1 : null"
@@ -593,8 +600,10 @@ type Ask = { text: string; label: string; go: () => void };
                   <div class="tcv-cc-bubble">{{ m.content }}</div>
                 }
                 @if (m.mentions?.length) {
+                  <!-- Pictures as pictures (a click opens the full one); the rest as chips. -->
+                  <rl-mention-pics [mentions]="m.mentions" />
                   <div class="tcv-cc-mentions">
-                    @for (mm of m.mentions; track mm.kind + mm.id) {
+                    @for (mm of chipsOf(m.mentions); track mm.kind + mm.id) {
                       <button class="tcv-cc-mchip" [attr.data-kind]="mm.kind" (click)="openMention(mm)" [title]="mentionTip(mm)">
                         <ng-container *ngTemplateOutlet="ico; context: { $implicit: kindIcon(mm.kind) }" />
                         <span>{{ mm.label }}</span>
@@ -751,7 +760,9 @@ type Ask = { text: string; label: string; go: () => void };
             <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.x }" /></button></div>
       }
       @if (auth.can('draw')) {
-        <div class="tcv-cc-composer" [class.focus]="focused()" [class.editing]="editing()">
+        <div class="tcv-cc-composer" [class.focus]="focused()" [class.editing]="editing()"
+             [class.tcv-att-over]="att.over()" (dragover)="att.dragOver($event)" (dragleave)="att.dragLeave($event)"
+             (drop)="att.drop($event)">
           @if (editing()) {
             <div class="tcv-cc-editbar">
               <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.edit }" />
@@ -760,8 +771,9 @@ type Ask = { text: string; label: string; go: () => void };
               <button class="tcv-cc-textbtn" (click)="cancelEdit()">{{ 'Cancel' | t }}</button>
             </div>
           }
-          @if (picked().length) {
+          @if (picked().length || att.items().length || att.error()) {
             <div class="tcv-cc-picked">
+              <rl-attach-chips [att]="att" />
               @for (mm of picked(); track mm.kind + mm.id) {
                 <span class="tcv-cc-mchip" [attr.data-kind]="mm.kind" [title]="mentionTip(mm)">
                   <ng-container *ngTemplateOutlet="ico; context: { $implicit: kindIcon(mm.kind) }" />
@@ -797,9 +809,10 @@ type Ask = { text: string; label: string; go: () => void };
               <div class="tcv-cc-mfoot tcv-cc-dim"><kbd>↑↓</kbd> {{ 'choose' | t }} · <kbd>↵</kbd> {{ 'add' | t }} · <kbd>Esc</kbd> {{ 'close' | t }}</div>
             </div>
           }
-          <textarea #box rows="1" [value]="text()"
-                    [placeholder]="(busy() ? 'Write the next one - it is sent when the answer ends… (@ to mention)' : 'Write to the model… (@ to mention)') | t"
+          <textarea #box rows="1" [value]="text()" [class.tcv-sg-ghost]="!!sg.text()"
+                    [placeholder]="sg.text() || ((busy() ? 'Write the next one - it is sent when the answer ends… (@ to mention)' : 'Write to the model… (@ to mention)') | t)"
                     (input)="typed($any($event.target)); grow()" (keydown)="key($event)" (click)="typed($any($event.target))"
+                    (paste)="att.paste($event)"
                     (focus)="focused.set(true)" (blur)="focused.set(false); closeMentions()"></textarea>
           <div class="tcv-cc-compbar">
             <div class="tcv-cc-menuwrap">
@@ -838,6 +851,10 @@ type Ask = { text: string; label: string; go: () => void };
             </div>
             <button class="tcv-cc-ib" data-act="mention" (click)="startMention()" [title]="('Mention' | t) + ' (@)'">
               <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.at }" /></button>
+            <button class="tcv-cc-ib" data-act="attach" (click)="pickFile.click()"
+                    [title]="'Attach a picture or a file (or paste, or drop it here)' | t">
+              <ng-container *ngTemplateOutlet="ico; context: { $implicit: CLIP }" /></button>
+            <input #pickFile type="file" multiple hidden (change)="att.pick($event)" />
             @if (meter(); as mt) {
               <span class="tcv-cc-meter" [attr.data-state]="mt.state" [title]="mt.title">
                 <span class="tcv-cc-meterbar"><i [style.width.%]="mt.pct"></i></span>
@@ -847,9 +864,10 @@ type Ask = { text: string; label: string; go: () => void };
             <span class="tcv-cc-hint">
               <kbd>↵</kbd> {{ 'send' | t }} · <kbd>⇧↵</kbd> {{ 'new line' | t }} · <kbd>↑</kbd> {{ 'edit last' | t }}
             </span>
+            <rl-suggest-chip [sg]="sg" />
             <span class="grow"></span>
             @if (busy()) {
-              @if (text().trim() && !editing()) {
+              @if ((text().trim() || att.ready().length) && !editing()) {
                 <button class="tcv-cc-queuebtn" data-act="queue" (click)="send()"
                         [title]="('Queue' | t) + ' (Enter) - ' + ('sent when the answer ends' | t)">{{ 'Queue' | t }}</button>
               }
@@ -858,8 +876,8 @@ type Ask = { text: string; label: string; go: () => void };
                   <svg class="tcv-cc-ico" viewBox="0 0 24 24"><path class="fill" [attr.d]="I.stop" /></svg></button>
               }
             } @else {
-              <button class="tcv-cc-send" [disabled]="!text().trim()" (click)="send()"
-                      [title]="((editing() ? 'Send again' : 'Send') | t) + ' (Enter)'">
+              <button class="tcv-cc-send" [disabled]="(!text().trim() && !att.ready().length) || att.busy()" (click)="send()"
+                      [title]="(att.busy() ? ('Uploading…' | t) : ((editing() ? 'Send again' : 'Send') | t)) + ' (Enter)'">
                 <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.send }" /></button>
             }
           </div>
@@ -920,6 +938,16 @@ export class RoomCommandCode implements OnDestroy {
   private api = inject(CcApi);
   auth = inject(Auth);
   private box = viewChild<ElementRef<HTMLTextAreaElement>>('box');
+
+  /** The composer, ready to type in, once it is on the page. Asked for as
+   *  a room or conversation opens (Ctrl+K, the list), when the composer may
+   *  not be drawn yet: tried again for a moment rather than once and lost. */
+  focusSoon(tries = 30) {
+    if (matchMedia('(hover: none)').matches) return;
+    const el = this.box()?.nativeElement;
+    if (el && el.offsetParent) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); return; }
+    if (tries > 0) setTimeout(() => this.focusSoon(tries - 1), 50);
+  }
   private logEl = viewChild<ElementRef<HTMLDivElement>>('log');
 
   readonly providers = PROVIDERS;
@@ -1028,6 +1056,13 @@ export class RoomCommandCode implements OnDestroy {
   qDraft = signal('');
   /** An answer is being written here - mine or anyone's: a line now is queued. */
   busy = computed(() => !!this.live() || this.watch().length > 0);
+  /** The next question, suggested in the empty composer after an answer (rooms/suggest.ts). */
+  sg = new ComposerSuggest(() => {
+    const c = this.chat(), m = c?.messages?.at(-1);
+    return { kind: 'cc', id: c?.id ?? null, busy: this.busy(), may: this.auth.can('draw'),
+             last: !c?.messages ? undefined : m?.role === 'assistant' && !m.error && m.content?.trim() ? m.id : null,
+             empty: !this.text().trim() && !this.att.items().length && !this.picked().length && !this.editing() };
+  }, s => { this.setText(s); const el = this.box()?.nativeElement; el?.focus(); el?.setSelectionRange(s.length, s.length); });
   /** An answer is being written in this conversation of the list - this page's own, or anyone's. */
   running(c: CcChat) { return !!c.gen || this.runs().has(c.id); }
   /** What the next line mentions, as chips in the composer. */
@@ -1051,8 +1086,15 @@ export class RoomCommandCode implements OnDestroy {
   flash = signal<string | null>(null);
   modelInfo = computed(() => this.models().find(x => x.id === this.model()) ?? null);
   /** A mention with a picture in it, and a model that reads none. */
-  picturesAsText = computed(() => !this.modelInfo()?.vision && this.picked().some(m =>
-    m.kind === 'revision' || m.kind === 'model' || (m.kind === 'file' && /^image/.test(m.sub ?? ''))));
+  picturesAsText = computed(() => !this.modelInfo()?.vision && (this.att.pictures() || this.picked().some(m =>
+    m.kind === 'revision' || m.kind === 'model' || isPicture(m))));
+  readonly CLIP = PAPERCLIP;
+  /** Pictures pasted, dropped or attached: uploaded to Files ("Chat"), then
+   *  sent as @-mentions of those files (rooms/chat-attach.ts). Eight
+   *  mentions go with one line (backend/cc_context.py MAX_MENTIONS). */
+  att = new ChatAttach(inject(FilesApi), () => 'chat', () => 8 - this.picked().length);
+  /** A line's mentions that are not pictures - those are drawn as pictures. */
+  chipsOf(l: CcMention[] | undefined) { return (l ?? []).filter(m => !isPicture(m)); }
 
   /** Tokens and money the conversation's answers have used, from each answer's own usage. */
   totals = computed(() => {
@@ -1201,7 +1243,7 @@ export class RoomCommandCode implements OnDestroy {
         });
       }
       if (w.text) { this.setText(w.text); void this.send(); }
-      else setTimeout(() => this.box()?.nativeElement.focus());
+      else this.focusSoon();
     };
     const c = this.chat();
     if (c && !this.messages().length && !this.live() && !this.watch().length && this.tab() === 'list' && c.by?.id === this.me()) {
@@ -1326,7 +1368,7 @@ export class RoomCommandCode implements OnDestroy {
         else if (c.messages?.length || this.watch().length) this.scroll();
         if (this.watch().length) this.stickThink();
         if (then) { then(c); return; }
-        if (!at && !matchMedia('(hover: none)').matches) setTimeout(() => this.box()?.nativeElement.focus());
+        if (!at) this.focusSoon();
       },
       error: e => this.error.set(this.msg(e)),
     });
@@ -1347,7 +1389,7 @@ export class RoomCommandCode implements OnDestroy {
         this.model.set(c.model);
         this.drawer.set(false);
         this.cancelEdit(false);
-        then ? then(c) : setTimeout(() => this.box()?.nativeElement.focus());
+        then ? then(c) : this.focusSoon();
       },
       error: e => this.error.set(this.msg(e)),
     });
@@ -1673,6 +1715,7 @@ export class RoomCommandCode implements OnDestroy {
   // ---- keys --------------------------------------------------------------
 
   key(e: KeyboardEvent) {
+    if (this.sg.key(e)) return;                   // the suggested next question (rooms/suggest.ts)
     if (this.mentionPop() && !e.isComposing) {
       const n = this.mentionRows().length;
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -1719,8 +1762,17 @@ export class RoomCommandCode implements OnDestroy {
 
   async send() {
     const c = this.chat();
-    const text = this.text().trim();
-    if (!c || !text || !this.model()) return;
+    let text = this.text().trim();
+    const files = this.att.ready();
+    if (!c || (!text && !files.length) || !this.model() || this.att.busy()) return;
+    if (files.length) {
+      // The uploaded pictures go as @-mentions of their files, as if picked by hand.
+      this.picked.update(l => [...l, ...files.filter(p => !l.some(x => x.kind === 'file' && x.id === p.id))
+        .map(p => ({ kind: 'file' as const, id: p.id!, label: p.name, image: p.image,
+                     sub: (p.image ? 'image' : 'file') + ' · ' + Math.ceil(p.bytes / 1024) + ' kB' }))]);
+      this.att.clear();
+      if (!text) text = t(files.some(p => p.image) ? 'See the attached picture.' : 'See the attached file.');
+    }
     if (this.busy()) {
       if (this.editing()) { this.error.set(t('An answer is being written in this conversation - wait for it, or stop it.')); return; }
       await this.queueLine(c, text);

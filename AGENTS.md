@@ -615,6 +615,12 @@ and the board it is for; a BOM is recognised by its header row. "Send to
 agent" puts a line in a room's thread with the file's id and the command
 that fetches it - that line is information, not a queued note.
 
+A person can also paste, drop or attach a picture (or any file) straight
+into a room's thread. It is kept in Files (folder "Chat") and `chat` prints
+it under their line as `[attached image: <name>, file id <id> - fetch: ...]`.
+When the line is about the picture, run that `files get <id> -o /tmp/<name>`
+and open the file with the Read tool to look at it before you answer.
+
 ```bash
 .venv/bin/python tools/revisions.py files --board <id>        # what was uploaded for a board
 .venv/bin/python tools/revisions.py files get <file-id> -o bom.csv

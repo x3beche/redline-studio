@@ -43,12 +43,14 @@ export class FilesApi {
   list() { return this.http.get<StoredFile[]>('/api/files'); }
   folders() { return this.http.get<FileFolder[]>('/api/files/folders'); }
   boards() { return this.http.get<{ _id: string; title?: string }[]>('/api/boards'); }
-  upload(files: File[], context: object, note: string, folder: string) {
+  /** `folderPath` names the folder by its path instead, made if missing (the Chat composer's "Chat"). */
+  upload(files: File[], context: object, note: string, folder: string, folderPath = '') {
     const form = new FormData();
     for (const f of files) form.append('upload', f, f.name);
     form.append('context', JSON.stringify(context));
     form.append('note', note);
     form.append('folder', folder);
+    if (folderPath) form.append('folder_path', folderPath);
     return this.http.post<StoredFile[]>('/api/files', form, { reportProgress: true, observe: 'events' });
   }
   update(id: string, patch: { note?: string; board?: string; name?: string }) {

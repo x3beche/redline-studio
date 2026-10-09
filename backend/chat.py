@@ -43,8 +43,12 @@ def _now() -> str:
 
 
 async def post(db, text: str, role: str = USER,
-               urgent: bool = False, room: str = "cad") -> dict:
-    """Add one message. An empty one is not a message.
+               urgent: bool = False, room: str = "cad", mentions: list[dict] | None = None) -> dict:
+    """Add one message. An empty one is not a message - a line with only
+    pictures (or other files) attached is one.
+
+    `mentions` are files from the Files tab carried by the line - pasted,
+    dropped or attached in the composer - as chips (file_chips below).
 
     `urgent` is the difference between "when you get a moment" and "stop".
     An ordinary line waits until the agent next looks up; an urgent one is
@@ -53,7 +57,8 @@ async def post(db, text: str, role: str = USER,
     took the trouble to mark it.
     """
     text = (text or "").strip()
-    if not text:
+    mentions = list(mentions or [])
+    if not text and not mentions:
         raise ValueError("nothing to say")
     if room not in ROOMS:
         raise ValueError(f"no room {room!r}")
@@ -62,6 +67,7 @@ async def post(db, text: str, role: str = USER,
            "text": text,
            "urgent": bool(urgent) and role != AGENT,
            "room": room,
+           **({"mentions": mentions} if mentions else {}),
            # Who wrote it. An agent's line is an agent's even when the
            # command line did not say which one.
            "by": (actors.current() if role != AGENT or actors.current()["type"] == "agent"
@@ -71,6 +77,62 @@ async def post(db, text: str, role: str = USER,
            "seen_at": _now() if role == AGENT else None}
     await db[CHAT].insert_one(doc)
     return doc
+
+
+IMAGE_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".avif", ".tif", ".tiff", ".heic")
+
+
+async def file_chips(db, ids: list[str]) -> list[dict]:
+    """Files of the Files tab, as the chips a line keeps: the same shape as
+    an @-mention in a conversation (backend/cc_context.py). KeyError for one
+    that is not there - nothing is posted half-checked."""
+    from . import files
+    out, seen = [], set()
+    for fid in ids:
+        if fid in seen:
+            continue
+        seen.add(fid)
+        d = await db[files.COLL].find_one({"_id": fid}, {"name": 1, "kind": 1, "bytes": 1, "content_type": 1})
+        if not d:
+            raise KeyError(fid)
+        out.append({"kind": "file", "id": fid, "label": d.get("name") or fid,
+                    "sub": f"{d.get('kind') or 'file'} · {(d.get('bytes') or 0) // 1024} kB",
+                    "image": d.get("kind") == "image", "bytes": d.get("bytes") or 0})
+    return out
+
+
+def _is_image(m: dict) -> bool:
+    return bool(m.get("image")) or str(m.get("label") or "").lower().endswith(IMAGE_EXT)
+
+
+def attachment_lines(doc: dict) -> list[str]:
+    """A line's attached files, as the room's agent reads them: the file id
+    and the command that puts it on disk, where the Read tool can look at a
+    picture."""
+    out = []
+    for m in doc.get("mentions") or []:
+        if m.get("kind") != "file":
+            continue
+        name = str(m.get("label") or m["id"])
+        safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in name) or m["id"]
+        what = "image" if _is_image(m) else "file"
+        out.append(f"[attached {what}: {name}, file id {m['id']} - fetch: "
+                   f".venv/bin/python tools/revisions.py files get {m['id']} -o /tmp/{safe}"
+                   + (", then open it with the Read tool to see it]" if what == "image" else "]"))
+    return out
+
+
+def agent_text(doc: dict) -> str:
+    """A line as the agent's CLI prints it: its words, then what it carries."""
+    return "\n".join([x for x in [doc.get("text") or "", *attachment_lines(doc)] if x])
+
+
+def preview(doc: dict) -> str:
+    """A line in a few words, for lists: its text, or what it carries."""
+    if doc.get("text"):
+        return doc["text"]
+    names = [str(m.get("label") or "") for m in doc.get("mentions") or []]
+    return ", ".join(n for n in names if n)
 
 
 async def interrupts(db, room: str | None = None) -> list[dict]:
@@ -144,7 +206,7 @@ async def rooms(db, agent_tail: int = 99) -> list[dict]:
         last = mine[-1] if mine else None
         out.append({
             "room": room, "count": len(mine),
-            "last": ({"role": last.get("role"), "text": (last.get("text") or "")[:200], "at": last["at"],
+            "last": ({"role": last.get("role"), "text": preview(last)[:200], "at": last["at"],
                       "by": (last.get("by") or {}).get("name")} if last else None),
             "waiting": len(waiting), "urgent": sum(1 for d in waiting if d.get("urgent")),
             "agent_at": agent[-agent_tail:] if agent_tail else [],

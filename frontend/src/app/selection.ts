@@ -72,8 +72,12 @@ export class Selection {
    *  'cad' or 'pcb', or null for the AI conversations. Whatever used to
    *  open the "ask the agent" box under the queue opens this instead. */
   thread = signal<string | null>(new URLSearchParams(location.search).get('thread'));
+  /** Bumped each time a thread is asked for, so an already open one still
+   *  takes the cursor (Ctrl+K on the room you are in). */
+  threadAsked = signal(0);
   openThread(room: string, at?: string) {
     this.thread.set(room);
+    this.threadAsked.update(n => n + 1);
     if (at) this.threadAt.set(at);
     this.room.set('commandcode');
   }

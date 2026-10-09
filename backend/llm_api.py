@@ -28,6 +28,10 @@ async def get_settings() -> dict:
 class Route(BaseModel):
     provider: str = Field(max_length=40)
     model: str = Field(min_length=1, max_length=200)
+    # A switched job's (llm.JOBS "switch"): on/off, and seconds of quiet
+    # before it runs. Left out: unchanged.
+    on: bool | None = None
+    delay: int | None = None
 
 
 class SettingsIn(BaseModel):
@@ -39,11 +43,12 @@ class SettingsIn(BaseModel):
 @router.put("/settings")
 async def put_settings(body: SettingsIn) -> dict:
     try:
-        out = await llm.save(_db(), body.keys, {j: r.model_dump() for j, r in (body.jobs or {}).items()})
+        out = await llm.save(_db(), body.keys, {j: r.model_dump(exclude_none=True) for j, r in (body.jobs or {}).items()})
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     changed = [f"key {p} {'set' if v else 'cleared'}" for p, v in (body.keys or {}).items()]
-    changed += [f"{j} -> {r.provider}/{r.model}" for j, r in (body.jobs or {}).items()]
+    changed += [f"{j} -> {r.provider}/{r.model}" + (f" on={r.on}" if r.on is not None else "")
+                + (f" delay={r.delay}s" if r.delay is not None else "") for j, r in (body.jobs or {}).items()]
     if changed:
         llm._models_cache.clear()                     # a new key may see other models
         await actors.audit(_db(), "settings", "llm", {"changed": changed})

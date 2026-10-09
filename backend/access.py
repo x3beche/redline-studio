@@ -170,6 +170,9 @@ _RULES: list[tuple[str, str, str]] = [
     ("POST", "/api/releases", "run"),
     # talking with the agents
     ("POST", "/api/chat", "draw"),
+    # the next question, suggested after an answer: for whoever may write
+    # the line it suggests - it costs a model call (backend/suggest.py)
+    ("POST", "/api/suggest", "draw"),
     # a ```task block in a chat, queued with its button: queueing a note
     # (backend/tasks.py), so it is the same right as queueing one
     ("POST", "/api/chat/{}/task/{}/queue", "run"),

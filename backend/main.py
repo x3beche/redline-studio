@@ -108,6 +108,9 @@ app.include_router(firmware_api.router)
 # The Files tab: files in folders, read in place (backend/files_api.py).
 from . import files_api  # noqa: E402
 app.include_router(files_api.router)
+# The next question, suggested in the empty composer (backend/suggest.py).
+from . import suggest as suggest_api  # noqa: E402
+app.include_router(suggest_api.router)
 
 
 def _raw_db():
@@ -2978,7 +2981,11 @@ async def put_kwh_price(body: KwhIn):
 
 # ---------------- chat ----------------
 class ChatIn(BaseModel):
-    text: str = Field(min_length=1, max_length=4000)
+    # May be empty when the line carries files (a pasted picture).
+    text: str = Field(default="", max_length=4000)
+    # Files of the Files tab the line carries - pasted, dropped or attached
+    # in the composer - by id; kept on the line as chips (chat.file_chips).
+    files: list[str] = Field(default_factory=list, max_length=8)
     # "Stop what you are doing", as opposed to "when you get a moment".
     urgent: bool = False
     # Which room's thread: each tab has its own.
@@ -3230,7 +3237,11 @@ async def files_to_model(fid: str, body: FileToModel):
 async def chat_post(body: ChatIn):
     """Say something to the agent. Its own replies come in over the CLI."""
     try:
-        return await chat.post(db(), body.text, urgent=body.urgent, room=body.room)
+        chips = await chat.file_chips(db(), body.files)
+    except KeyError as exc:
+        raise HTTPException(404, f"no file {exc.args[0]!r}") from exc
+    try:
+        return await chat.post(db(), body.text, urgent=body.urgent, room=body.room, mentions=chips)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 

@@ -363,7 +363,12 @@ async def make_path(db, path: str, by: dict) -> dict:
         doc = next((f for f in [x async for x in db[FOLDERS].find({"parent": parent})]
                     if f["name"].lower() == part.lower()), None)
         if doc is None:
-            doc = await make_folder(db, part, parent, by)
+            try:
+                doc = await make_folder(db, part, parent, by)
+            except Clash:
+                # Made by another upload a moment ago (two pictures pasted at once).
+                doc = next(f for f in [x async for x in db[FOLDERS].find({"parent": parent})]
+                           if f["name"].lower() == part.lower())
         parent = doc["_id"]
     return doc
 
