@@ -712,6 +712,8 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                               if k in linked} if linked else None,
                 **placed, "route": routed, "drc": drc_report}
     finally:
+        # The live view of the routing (backend/routelive.py) ends with the run.
+        await routelive.close(db, board_id)
         shutil.rmtree(work, ignore_errors=True)
 
 

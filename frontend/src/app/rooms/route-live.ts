@@ -26,7 +26,10 @@ interface Board {
   nets: string[]; outline: Pt[][]; pads: Pad[]; tracks: Track[]; vias: Via[];
 }
 interface Stats { stage: string; routed: number; total: number; unrouted: number; rips: number; failures: number; elapsed_s: number }
-interface LiveAnswer { active: boolean; engine: string | null; attempt?: number; events: any[]; at: number; more?: boolean }
+interface LiveAnswer {
+  active: boolean; engine: string | null; phase?: 'routing' | 'finishing' | 'done'; attempt?: number;
+  started_at?: string | null; events: any[]; at: number; more?: boolean;
+}
 
 /** How long a new track stays lit, a ripped one fades, a failure rings, ms. */
 const LIT = 700, FADE = 600, RING = 1600, FRONT = 900;
@@ -56,7 +59,7 @@ const LIT = 700, FADE = 600, RING = 1600, FRONT = 900;
         <span [attr.data-hot]="(stats()?.rips ?? 0) > 0 ? '' : null"><b>{{ stats()?.rips ?? 0 }}</b> {{ 'rip-ups' | t }}</span>
         <span [attr.data-bad]="(stats()?.failures ?? 0) > 0 ? '' : null"><b>{{ stats()?.failures ?? 0 }}</b> {{ 'failed tries' | t }}</span>
       </div>
-      @if (searchDone() && state() === 'live') {
+      @if (searchDone() && state() === 'live' && phase() === 'routing') {
         <p class="rl-note">{{ 'The router drawn here has finished; the others in the portfolio are still trying, and the best board is kept.' | t }}</p>
       }
       <div class="rl-tools">
@@ -131,6 +134,8 @@ export class RouteLive implements AfterViewInit, OnDestroy {
   private cv = viewChild<ElementRef<HTMLCanvasElement>>('cv');
   shown = signal(false);
   state = signal<'live' | 'done' | 'idle'>('idle');
+  /** While live: the router at work, or the run pouring and checking after it. */
+  phase = signal<'routing' | 'finishing'>('routing');
   stats = signal<Stats | null>(null);
   attempt = signal(0);
   trackCount = signal(0);
@@ -176,7 +181,8 @@ export class RouteLive implements AfterViewInit, OnDestroy {
     const s = Math.max(0, Math.round((this.now() - this.startedAt) / 1000));
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   });
-  stateText = computed(() => this.state() === 'live' ? 'routing' : this.state() === 'done' ? 'routed - loading the board' : '');
+  stateText = computed(() => this.state() === 'done' ? 'routed - loading the board'
+    : this.state() !== 'live' ? '' : this.phase() === 'finishing' ? 'routed - pouring, checking (DRC), drawing' : 'routing');
 
   constructor() {
     effect(() => { this.board(); this.reset(); this.poll(0); });
@@ -224,24 +230,30 @@ export class RouteLive implements AfterViewInit, OnDestroy {
           if (!fromStart) { this.poll(0); return; }
         }
         if (r.at < this.at) this.reset();
+        // Reading what was written before (a reload, or a long stretch at
+        // once): put on the board as it stands, not lit one by one.
+        const catchUp = this.at === 0 || !!r.more;
         this.at = r.at;
-        for (const e of r.events) this.apply(e);
+        for (const e of r.events) this.apply(e, catchUp);
         if (r.events.length) this.dirty = true;
         if (r.active) {
-          if (this.state() !== 'live') { this.state.set('live'); this.startedAt = Date.now(); this.show(true); }
+          this.phase.set(r.phase === 'finishing' ? 'finishing' : 'routing');
+          const t0 = r.started_at ? Date.parse(r.started_at) : NaN;
+          if (!isNaN(t0)) this.startedAt = t0;
+          if (this.state() !== 'live') { this.state.set('live'); if (isNaN(t0)) this.startedAt = Date.now(); this.show(true); }
         } else if (this.state() === 'live') {
           this.state.set('done'); this.finished.emit();
           this.hideTimer = setTimeout(() => this.close(), 4000);
         }
         this.now.set(Date.now());
-        this.poll(r.active ? (r.more ? 0 : 350) : 3000);
+        this.poll(r.active ? (r.more ? 0 : r.phase === 'finishing' ? 1500 : 350) : 3000);
       },
       error: () => this.poll(4000),
     });
   }
 
-  private apply(e: any) {
-    const now = performance.now();
+  private apply(e: any, catchUp = false) {
+    const now = catchUp ? -1e9 : performance.now();
     switch (e.type) {
       case 'board':
         this.b = e as Board;
@@ -251,13 +263,13 @@ export class RouteLive implements AfterViewInit, OnDestroy {
         this.boardRev.update(n => n + 1);
         this.fit();
         break;
-      case 'track_add': this.tracks.set(e.track.id, { ...e.track, born: now }); break;
+      case 'track_add': this.tracks.set(e.track.id, { ...e.track, born: catchUp ? 0 : now }); break;
       case 'track_remove': {
         const t = this.tracks.get(e.id);
-        if (t) { this.tracks.delete(e.id); this.ghosts.push({ t, gone: now }); }
+        if (t) { this.tracks.delete(e.id); if (!catchUp) this.ghosts.push({ t, gone: now }); }
         break;
       }
-      case 'via_add': this.vias.set(e.via.id, { ...e.via, born: now }); break;
+      case 'via_add': this.vias.set(e.via.id, { ...e.via, born: catchUp ? 0 : now }); break;
       case 'via_remove': this.vias.delete(e.id); break;
       case 'ratsnest': this.rats = e.edges ?? []; break;
       case 'frontier': this.front = { pts: e.pts ?? [], layer: e.layer ?? 0, at: now }; break;

@@ -34,17 +34,41 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# A run lives through phases: `routing` while the router runs, `finishing`
+# while the rest of the run pours, checks and draws the board (minutes, with
+# nothing new in the stream), then `done`. The page keeps the view up - and
+# a reload brings it back, from the start of the stream - until `done`.
+STALE_S = 3 * 3600                  # a run not closed after this died with its job
+
+
 async def begin(db, board_id: str, path: str, engine: str, attempt: int) -> None:
     from . import ato
     await db[ato.BOARDS].update_one({"_id": board_id}, {"$set": {"route_live": {
         "path": path, "engine": engine, "attempt": attempt, "started_at": _now(),
-        "active": True}}})
+        "active": True, "phase": "routing"}}})
 
 
 async def end(db, board_id: str) -> None:
+    """The router is done; the run goes on (pour, DRC, drawings)."""
     from . import ato
-    await db[ato.BOARDS].update_one({"_id": board_id, "route_live": {"$exists": True}},
-                                    {"$set": {"route_live.active": False, "route_live.ended_at": _now()}})
+    await db[ato.BOARDS].update_one({"_id": board_id, "route_live.active": True},
+                                    {"$set": {"route_live.phase": "finishing", "route_live.routed_at": _now()}})
+
+
+async def close(db, board_id: str) -> None:
+    """The whole run is over, however it ended."""
+    from . import ato
+    await db[ato.BOARDS].update_one({"_id": board_id, "route_live.active": True},
+                                    {"$set": {"route_live.active": False, "route_live.phase": "done",
+                                              "route_live.ended_at": _now()}})
+
+
+def _stale(rl: dict) -> bool:
+    try:
+        started = datetime.fromisoformat(rl["started_at"])
+    except (KeyError, TypeError, ValueError):
+        return True
+    return (datetime.now(timezone.utc) - started).total_seconds() > STALE_S
 
 
 def read_from(path: str, at: int, limit: int = CHUNK) -> tuple[list[dict], int, int]:
@@ -79,7 +103,9 @@ async def live(bid: str, at: int = 0) -> dict:
     doc = await _db()[ato.BOARDS].find_one({"_id": bid}, {"route_live": 1})
     if doc is None:
         raise HTTPException(404, f"no board {bid}")
-    rl = doc.get("route_live") or {}
+    rl = dict(doc.get("route_live") or {})
+    if rl.get("active") and _stale(rl):
+        rl["active"], rl["phase"] = False, "done"
     if not rl.get("path"):
         return {"active": False, "engine": None, "events": [], "at": 0}
     if not rl.get("active") and at <= 0:
@@ -89,5 +115,7 @@ async def live(bid: str, at: int = 0) -> dict:
                 "events": [], "at": 0}
     events, nxt, size = read_from(rl["path"], max(0, at))
     return {"active": bool(rl.get("active")), "engine": rl.get("engine"),
+            "phase": rl.get("phase") or ("routing" if rl.get("active") else "done"),
             "attempt": rl.get("attempt", 0), "started_at": rl.get("started_at"),
+            "routed_at": rl.get("routed_at"),
             "events": events, "at": nxt, "size": size, "more": nxt < size}

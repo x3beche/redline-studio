@@ -832,6 +832,7 @@ const TR: Record<string, string> = {
   'Which router the next build uses - TraceMaker can be watched routing in the layout': "Sonraki build hangi yönlendiriciyle yapılacak - TraceMaker yönlendirirken layout'ta izlenebilir",
   'routing': 'rotalanıyor',
   'routed - loading the board': 'rotalandı - kart yükleniyor',
+  'routed - pouring, checking (DRC), drawing': 'rotalandı - döküm, DRC kontrolü, çizim',
   'layout': 'yerleşim',
   'tracks': 'iz',
   'vias': 'via',

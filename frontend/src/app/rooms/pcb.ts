@@ -122,7 +122,7 @@ type BoardView = Pane | 'split' | 'focus';
       <app-tool icon="tcv-ico-build"
                 [tip]="imported() ? 'An imported board has no source to build'
                        : building() ? 'Building…' : 'Build - source, schematic, place, route, DRC'"
-                [on]="building()" [disabled]="building() || frozen() || !here() || imported()"
+                [on]="building() || liveRouting()" [disabled]="building() || liveRouting() || frozen() || !here() || imported()"
                 (press)="build()" />
       <!-- Which router the build uses (rules: route.engine). TraceMaker's
            routing is drawn live in the layout while it runs. -->
@@ -131,7 +131,7 @@ type BoardView = Pane | 'split' | 'focus';
              [title]="'Which router the next build uses - TraceMaker can be watched routing in the layout' | t">
           @for (e of engines; track e.id) {
             <button role="radio" [attr.aria-checked]="engine() === e.id" [attr.data-on]="engine() === e.id ? '' : null"
-                    [disabled]="building() || frozen() || savingEngine() || !auth.can('edit')"
+                    [disabled]="building() || liveRouting() || frozen() || savingEngine() || !auth.can('edit')"
                     (click)="setEngine(e.id)">{{ e.label }}</button>
           }
         </div>
@@ -550,7 +550,7 @@ type BoardView = Pane | 'split' | 'focus';
           } @else {
             <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ imported() ? importedNote : notYet }}</p>
           }
-          <app-route-live [board]="here()?._id ?? null" (finished)="refresh()" />
+          <app-route-live [board]="here()?._id ?? null" (finished)="refresh()" (showing)="liveRouting.set($event)" />
         </div>
       }
       @case ('schematic') {
@@ -712,6 +712,8 @@ export class RoomPcb implements OnDestroy {
   readonly engines = [{ id: 'freerouting', label: 'Freerouting' }, { id: 'tracemaker', label: 'TraceMaker' }] as const;
   engine = signal<string>('freerouting');
   savingEngine = signal(false);
+  /** A run of this board is being routed, seen in the layout - also after a reload. */
+  liveRouting = signal(false);
   private hereId = computed(() => this.here()?._id ?? null);
   graph = signal<BoardGraph | null>(null);
   /** The routed board as data: what the mouse can point at on the layout. */

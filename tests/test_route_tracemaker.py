@@ -65,3 +65,26 @@ def test_tracemakers_last_word_is_kept():
     log = "  variant 3 ... <- best\nrouted 235/235 connections, 981 tracks, 178 vias, pitch 0.065 mm, 120.18 s\n"
     assert kicad.tm_summary(log).startswith("routed 235/235 connections")
     assert kicad.tm_summary("nothing") is None
+
+
+def test_a_run_shows_through_its_finish_and_a_dead_one_does_not(monkeypatch, tmp_path):
+    """The view stays up while the run pours and checks after the router
+    (a reload brings it back from the stream's start), and a run whose job
+    died is not shown for ever."""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    f = tmp_path / "live.jsonl"
+    f.write_text('{"type":"board","seq":1}\n')
+    doc = {"_id": "b", "route_live": {"path": str(f), "engine": "tracemaker", "attempt": 1, "active": True,
+                                      "phase": "finishing", "started_at": datetime.now(timezone.utc).isoformat()}}
+
+    class Coll:
+        async def find_one(self, q, proj=None):
+            return doc
+
+    monkeypatch.setattr(routelive, "_db", lambda: {"boards": Coll()})
+    got = asyncio.run(routelive.live("b", 0))
+    assert got["active"] and got["phase"] == "finishing" and [e["type"] for e in got["events"]] == ["board"]
+    doc["route_live"]["started_at"] = (datetime.now(timezone.utc) - timedelta(hours=4)).isoformat()
+    got = asyncio.run(routelive.live("b", 0))
+    assert not got["active"] and got["events"] == []
