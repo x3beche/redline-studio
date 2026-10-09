@@ -214,7 +214,11 @@ async def _viewer_sizes(db, mid: str, meta: dict) -> dict | None:
     return got
 
 
-async def _model(db, mid: str) -> dict | None:
+async def model_parts(db, mid: str) -> dict | None:
+    """A model, as its block's pieces: the record, the lines about it (the
+    version, the latest build and its sizes, the last error), its source
+    and its latest picture. The Chat's model_read tool pages the source;
+    a mention (`_model`) writes all of it."""
     d = await db["models"].find_one({"_id": mid})
     if not d:
         return None
@@ -247,9 +251,6 @@ async def _model(db, mid: str) -> dict | None:
                 for p in sizes["parts"]]
         if rows:
             lines.append(f"Parts ({len(rows)}): " + "; ".join(rows))
-    src = d.get("source")
-    if src:
-        lines.append("Source:\n```python\n" + src + "\n```")
     # The latest picture of it: the newest drawn note on it with a shot.
     shot = None
     async for r in db["revisions"].find({"model": mid}, {"image": 1, "image_after": 1, "created_at": 1, "summary": 1}) \
@@ -260,31 +261,54 @@ async def _model(db, mid: str) -> dict | None:
                     "about": f"the latest shot of this model: the {which} picture of drawn note {r['_id']}"
                              + (f" (\"{r.get('summary')}\")" if r.get("summary") else "")}
             break
+    return {"doc": d, "lines": lines, "source": d.get("source") or "", "shot": shot}
+
+
+async def _model(db, mid: str) -> dict | None:
+    got = await model_parts(db, mid)
+    if not got:
+        return None
+    d, lines = got["doc"], list(got["lines"])
+    if got["source"]:
+        lines.append("Source:\n```python\n" + got["source"] + "\n```")
     return {"label": d.get("title") or d.get("name") or mid, "version": d.get("version"),
-            "built": built.get("version"), "text": "\n".join(lines), "images": [shot] if shot else []}
+            "built": (d.get("built") or {}).get("version"), "text": "\n".join(lines),
+            "images": [got["shot"]] if got["shot"] else []}
 
 
-async def _board(db, bid: str) -> dict | None:
+BOARD_SECTIONS = ("routing", "drc", "erc", "rules", "nets", "bom")
+
+
+async def board_parts(db, bid: str) -> dict | None:
+    """A board, as its block's pieces: the record, its lines each tagged
+    with its section ("head", or one of BOARD_SECTIONS) and the built
+    netlist. The Chat's board_read tool keeps the sections asked for; a
+    mention (`_board`) writes them all, in this order."""
     from . import ato, store
     d = await db[ato.BOARDS].find_one({"_id": bid}, {"source": 0})
     if not d:
         return None
     comp = d.get("component") or {}
     version = comp.get("version")
-    lines = [f"Circuit board `{bid}.pcb` - \"{d.get('title') or bid}\""
+    out: list[tuple[str, str]] = []
+
+    def add(section: str, *texts: str) -> None:
+        out.extend((section, t) for t in texts)
+
+    add("head", f"Circuit board `{bid}.pcb` - \"{d.get('title') or bid}\""
              + (f" in {d['folder']}" if d.get("folder") else ""),
              f"Version: {version if version is not None else '?'}; saved {d.get('saved_at') or '?'}"
-             + ("; changed since the last build" if d.get("stale") else "")]
+             + ("; changed since the last build" if d.get("stale") else ""))
     lay = d.get("layout") or {}
     if lay:
-        lines.append(f"Layout: {lay.get('placed')} parts placed, size {lay.get('size_mm')} mm"
+        add("routing", f"Layout: {lay.get('placed')} parts placed, size {lay.get('size_mm')} mm"
                      + (f", missing {lay['missing']}" if lay.get("missing") else ""))
     route = d.get("route") or {}
     if route:
-        lines.append("Routing: " + _j({k: route.get(k) for k in ("tracks", "vias", "length_mm", "zones", "unrouted")}))
+        add("routing", "Routing: " + _j({k: route.get(k) for k in ("tracks", "vias", "length_mm", "zones", "unrouted")}))
     drc = d.get("drc") or {}
     if drc:
-        lines.append(f"DRC ({drc.get('at') or '?'}): {drc.get('error_count')} errors, {drc.get('warning_count')} warnings, "
+        add("drc", f"DRC ({drc.get('at') or '?'}): {drc.get('error_count')} errors, {drc.get('warning_count')} warnings, "
                      f"{drc.get('unconnected')} unconnected. Errors {_j(drc.get('errors') or {})}; "
                      f"warnings {_j(drc.get('warnings') or {})}"
                      + (f"; inside footprints {_j(drc['in_footprints'])}" if drc.get("in_footprints") else "")
@@ -292,17 +316,17 @@ async def _board(db, bid: str) -> dict | None:
     sch = d.get("schematic") or {}
     erc = sch.get("erc") or {}
     if sch:
-        lines.append(f"Schematic: {sch.get('parts')} parts, {sch.get('wires')} wires, {sch.get('symbols')} symbols")
+        add("erc", f"Schematic: {sch.get('parts')} parts, {sch.get('wires')} wires, {sch.get('symbols')} symbols")
         if sch.get("sheets"):
-            lines.append("Schematic sheets: " + "; ".join(
+            add("erc", "Schematic sheets: " + "; ".join(
                 f"{s.get('name')} ({s.get('parts')} parts)" for s in sch["sheets"]))
     if erc:
-        lines.append(f"ERC: {erc.get('error_count')} errors, {erc.get('warning_count')} warnings; "
+        add("erc", f"ERC: {erc.get('error_count')} errors, {erc.get('warning_count')} warnings; "
                      f"errors {_j(erc.get('errors') or {})}; warnings {_j(erc.get('warnings') or {})}")
     if comp.get("summary"):
-        lines.append("3D component: " + _j(comp["summary"]))
+        add("routing", "3D component: " + _j(comp["summary"]))
     if d.get("rules"):
-        lines.append("Design rules: " + _clip(_j(d["rules"]), 6000))
+        add("rules", "Design rules: " + _clip(_j(d["rules"]), 6000))
     graph = None
     try:
         graph = json.loads(await store.get_artifact(db, bid, "graph", ato.BOARDS))
@@ -310,26 +334,36 @@ async def _board(db, bid: str) -> dict | None:
         pass
     if graph:
         counts = graph.get("counts") or {}
-        lines.append(f"Netlist (built {graph.get('built_at') or '?'}): {_j(counts)}")
+        add("nets", f"Netlist (built {graph.get('built_at') or '?'}): {_j(counts)}")
         nets = graph.get("nets") or []
         big = sorted(nets, key=lambda n: -len(n.get("nodes") or []))
-        lines.append("Nets by size: " + "; ".join(
+        add("nets", "Nets by size: " + "; ".join(
             f"{n.get('name')} ({len(n.get('nodes') or [])} pins)" for n in big[:30]))
-        lines.append("Single-pin nets: " + (", ".join(n.get("name") or "?" for n in nets
+        add("nets", "Single-pin nets: " + (", ".join(n.get("name") or "?" for n in nets
                                                      if len(n.get("nodes") or []) == 1)[:1500] or "none"))
         bom = graph.get("bom") or []
         if bom:
-            lines.append("BOM (designator | comment | footprint | LCSC):")
-            lines += [f"{b.get('designator')} | {b.get('comment')} | {b.get('footprint')} | {b.get('lcsc') or ''}"
-                      for b in bom]
+            add("bom", "BOM (designator | comment | footprint | LCSC):")
+            add("bom", *(f"{b.get('designator')} | {b.get('comment')} | {b.get('footprint')} | {b.get('lcsc') or ''}"
+                         for b in bom))
         else:
             comps = graph.get("components") or []
-            lines.append("Components (ref | value | footprint | part):")
-            lines += [f"{c.get('ref')} | {c.get('value')} | {c.get('footprint')} | {c.get('part') or ''}" for c in comps]
-        lines.append("All nets: " + ", ".join(n.get("name") or "?" for n in nets))
+            add("bom", "Components (ref | value | footprint | part):")
+            add("bom", *(f"{c.get('ref')} | {c.get('value')} | {c.get('footprint')} | {c.get('part') or ''}"
+                         for c in comps))
+        add("nets", "All nets: " + ", ".join(n.get("name") or "?" for n in nets))
     else:
-        lines.append("No netlist yet: the board has not been built.")
-    return {"label": d.get("title") or bid, "version": version, "text": "\n".join(lines), "images": []}
+        add("nets", "No netlist yet: the board has not been built.")
+    return {"doc": d, "lines": out, "graph": graph}
+
+
+async def _board(db, bid: str) -> dict | None:
+    got = await board_parts(db, bid)
+    if not got:
+        return None
+    d = got["doc"]
+    return {"label": d.get("title") or bid, "version": (d.get("component") or {}).get("version"),
+            "text": "\n".join(t for _, t in got["lines"]), "images": []}
 
 
 async def _file(db, fid: str) -> dict | None:

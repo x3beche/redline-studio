@@ -125,6 +125,7 @@ from . import tool_router
 
 ID = _re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 EVENTS = ("open", "run", "copy", "check", "find", "manual", "favourite", "unfavourite")
+SURFACES = ("ui", "mcp", "api", "chat")    # chat: the Chat tab's models (backend/chat_tools/basic_tool.py)
 USAGE = "tool_usage"
 DATA = "tool_data"
 _cache: dict = {"key": None, "tools": []}
@@ -216,7 +217,7 @@ class UsageIn(BaseModel):
 
 @router.post("/usage", status_code=204)
 async def post_usage(body: UsageIn) -> None:
-    if not ID.match(body.id) or body.event not in EVENTS or body.surface not in ("ui", "mcp", "api"):
+    if not ID.match(body.id) or body.event not in EVENTS or body.surface not in SURFACES:
         raise HTTPException(400, "bad usage event")
     await _record(body.id, body.event, body.surface)
 
@@ -254,7 +255,7 @@ async def manual(tid: str, surface: str = "api") -> dict:
     with units and defaults, an example, and how to run it."""
     m = manifest_of(tid)
     runnable = (PAGES / tid / "tool.js").exists()
-    await _record(tid, "manual", surface if surface in ("ui", "mcp", "api") else "api")
+    await _record(tid, "manual", surface if surface in SURFACES else "api")
     return {
         "id": tid, "name": m.get("name"), "blurb": m.get("blurb"), "rooms": m.get("rooms"),
         "intro": m.get("intro"), "usage": m.get("usage"), "sources": m.get("sources"),
@@ -279,17 +280,41 @@ class RunIn(BaseModel):
 
 @router.post("/run")
 async def run_tool(body: RunIn) -> dict:
-    if not ID.match(body.id) or not (PAGES / body.id / "tool.js").exists():
-        raise HTTPException(404, f"no runnable tool called {body.id}")
-    payload = json.dumps(body.input)
+    return await run_kit(body.id, body.input, body.surface)
+
+
+# A kit tool needs only Node: without the tools image (it is large - a
+# browser, PostgreSQL), a plain Node image runs it, as offline and capped.
+KIT_IMAGE = os.environ.get("REDLINE_KIT_IMAGE", "node:20-alpine")
+
+
+def _has(image: str) -> bool:
+    try:
+        return subprocess.run(["docker", "image", "inspect", image],
+                              capture_output=True, timeout=10).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+async def run_kit(tid: str, given: dict, surface: str = "api") -> dict:
+    """One kit tool's tool.js run on `given` (kit/cli.mjs): {ok, tool,
+    input, result} - or {ok: false, error}. The API's /run and the Chat's
+    basic_tool (backend/chat_tools) both come here."""
+    if not ID.match(tid) or not (PAGES / tid / "tool.js").exists():
+        raise HTTPException(404, f"no runnable tool called {tid}")
+    payload = json.dumps(given)
     if len(payload) > LIMIT:
         raise HTTPException(413, "input too large")
-    if not have_image():
+    if await asyncio.to_thread(have_image):
+        image = IMAGE
+    elif await asyncio.to_thread(_has, KIT_IMAGE):
+        image = KIT_IMAGE
+    else:
         raise HTTPException(503, f"the tools image is not built: {BUILD}")
     argv = ["docker", "run", "--rm", "-i", "--network", "none",
             "--user", f"{os.getuid()}:{os.getgid()}", "--memory", "512m", "--cpus", "1",
             "--pids-limit", "64", "-v", f"{PAGES}:/tools:ro", "--entrypoint", "node",
-            IMAGE, "/tools/kit/cli.mjs", body.id]
+            image, "/tools/kit/cli.mjs", tid]
     t0 = _time.monotonic()
     async with _slots:
         proc = await asyncio.create_subprocess_exec(
@@ -300,7 +325,7 @@ async def run_tool(body: RunIn) -> dict:
         except asyncio.TimeoutError:
             proc.kill()
             raise HTTPException(504, "the tool took longer than 60 s")
-    await _record(body.id, "run", body.surface if body.surface in ("ui", "mcp", "api") else "api",
+    await _record(tid, "run", surface if surface in SURFACES else "api",
                   {"ms": round((_time.monotonic() - t0) * 1000)})
     try:
         return json.loads(out.decode() or "{}")
@@ -338,7 +363,7 @@ async def find(body: FindIn) -> dict:
         except Exception:                                # noqa: BLE001
             pass
         res["prompt_tokens"] = used.get("prompt_tokens")
-    surface = body.surface if body.surface in ("ui", "mcp", "api") else "api"
+    surface = body.surface if body.surface in SURFACES else "api"
     res["picks"] = [{**p, "manual": await manual(p["id"], surface)} for p in res["picks"]]
     for p in res["picks"]:
         await _record(p["id"], "find", surface)

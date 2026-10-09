@@ -961,6 +961,11 @@ type Ask = { text: string; label: string; go: () => void };
           <dt>{{ 'Tool' | t }}</dt><dd class="mono">{{ s.tool }} · {{ levelName(s.level) | t }}</dd>
           <dt>{{ 'Input' | t }}</dt><dd class="mono">{{ argsLine(s) }}</dd>
           @if (s.summary) { <dt>{{ 'Result' | t }}</dt><dd><pre>{{ s.summary }}</pre></dd> }
+          @if (s.tool === 'room_note' && s.status === 'done' && s.vars?.['note']; as nid) {
+            <dt>{{ 'Note' | t }}</dt>
+            <dd><a class="md-task-link" [href]="'?rev=' + nid" (click)="openStepNote($event, s)"
+                   [title]="('open the note' | t) + ' ' + nid">#{{ nid }}</a></dd>
+          }
           @if (s.error) { <dt>{{ 'Error' | t }}</dt><dd class="tcv-cc-steperr">{{ s.error }}</dd> }
         </dl>
         }
@@ -2424,6 +2429,17 @@ export class RoomCommandCode implements OnDestroy {
     if (m.chars) bits.push(`${m.chars.toLocaleString()} ${t('characters to the model')}` + (m.truncated ? ` (${t('cut')})` : ''));
     if (m.images) bits.push(`${m.images} ${t('images')}`);
     return bits.join(' · ');
+  }
+
+  /** A note room_note queued: its room, at what it is about. */
+  openStepNote(e: MouseEvent, s: CcStep) {
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    const v = s.vars ?? {};
+    const target = String(v['target'] ?? '');
+    if (v['room'] === 'pcb') this.sel.openBoard(target);
+    else if (v['room'] === 'firmware') this.sel.openFirmware(target);
+    else { this.sel.room.set('cad'); if (target) this.sel.ask('model', target); }
   }
 
   /** A chip opens what it mentions, in its own room. */

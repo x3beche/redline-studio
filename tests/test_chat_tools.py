@@ -81,7 +81,7 @@ def test_the_model_asks_the_server_runs_and_the_model_goes_on(env, monkeypatch):
     assert steps[0]["pos"] == steps[1]["pos"] == len("Let me check the datasheet.\n\n")
     # The tools went out, with the note; each round got the last one's results.
     r = state["rounds"]
-    assert {t["name"] for t in r[0]["tools"]} == set(chat_tools.tools())
+    assert {t["name"] for t in r[0]["tools"]} == {n for n, t in chat_tools.tools().items() if t.default}
     assert "drawer_search" in r[0]["messages"][0]["content"] and "Cite the" in r[0]["messages"][0]["content"]
     assert r[1]["messages"][-2]["tool_calls"][0]["function"]["name"] == "datasheet_get"
     assert r[1]["messages"][-1]["role"] == "tool" and "3 pages" in r[1]["messages"][-1]["content"]
@@ -159,7 +159,9 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     got = run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"drawer_add": False, "datasheet_get": False})))
     on = {t["name"]: t["on"] for t in got["tools"]}
     assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": False,
-                  "datasheet_get": False, "datasheet_read": True}
+                  "datasheet_get": False, "datasheet_read": True, "basic_tool": True, "board_read": True,
+                  "model_read": True, "bom_cost": True, "firmware_build": True, "file_read": True,
+                  "room_note": False}
     listed = run(cc_chat.list_tools())["tools"]
     assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
     assert all(t["uses"] == 0 for t in listed)
@@ -168,7 +170,9 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     tool_model(monkeypatch, state, [("Hi.", [])])
     events(cc_chat.say("c1", cc_chat.SayIn(text="?", client="tab1")))
     assert {t["name"] for t in state["rounds"][0]["tools"]} == {"drawer_search", "drawer_list", "lcsc_search",
-                                                                "datasheet_read"}
+                                                                "datasheet_read", "basic_tool", "board_read",
+                                                                "model_read", "bom_cost", "firmware_build",
+                                                                "file_read"}
     # Nothing on: no tools, and no note about them.
     run(cc_chat.set_tools(cc_chat.ToolsIn(tools={n: False for n in chat_tools.tools()})))
     events(cc_chat.say("c1", cc_chat.SayIn(text="again", client="tab1")))
@@ -650,3 +654,338 @@ def test_tools_usage_sums_every_tool(env):
     assert got["tools"]["datasheet_read"]["uses"] == 1 and "gone_tool" not in got["tools"]
     assert got["days"][-1]["by"] == {"drawer_search": 2, "datasheet_read": 1}
     assert len(got["days"]) == cc_chat.STATS_DAYS
+
+
+# ---- the workspace tools: boards, models, BOM cost, firmware, files, notes, calculators ----
+
+def _tool(name):
+    return chat_tools.tools()[name]
+
+
+GRAPH = {"built_at": "2026-10-08", "counts": {"components": 3, "nets": 3},
+         "nets": [{"name": "GND", "nodes": [{"ref": "U1", "pin": "4"}, {"ref": "C1", "pin": "2"}]},
+                  {"name": "I2C_SDA", "nodes": [{"ref": "U1", "pin": "5"}, {"ref": "R1", "pin": "1"}]},
+                  {"name": "NC1", "nodes": [{"ref": "U1", "pin": "8"}]}],
+         "components": [{"ref": "U1", "value": "ESP32", "footprint": "QFN-48", "part": "C82899", "where": "x::mcu.u1"},
+                        {"ref": "C1", "value": "100nF", "footprint": "C0402", "part": "C1525", "where": "x::power.c1"},
+                        {"ref": "R1", "value": "4k7", "footprint": "R0402", "part": "", "where": "x::mcu.r1"}]}
+
+
+def _boards(raw, monkeypatch):
+    from backend import store
+    raw["boards"].rows["ctrl"] = {"_id": "ctrl", "workspace_id": "default", "title": "Controller",
+                                  "folder": "iot-fan/electronics", "component": {"version": 4},
+                                  "layout": {"placed": 3, "size_mm": [50, 40]},
+                                  "route": {"tracks": 12, "vias": 3, "length_mm": 140.5, "unrouted": 0},
+                                  "drc": {"error_count": 2, "warning_count": 1, "unconnected": 0,
+                                          "errors": {"clearance": 2}, "warnings": {"silk": 1}},
+                                  "schematic": {"parts": 3, "erc": {"error_count": 0, "warning_count": 1}},
+                                  "rules": {"clearance": 0.2}}
+    raw["boards"].rows["theirs"] = {"_id": "theirs", "workspace_id": "team2", "title": "Theirs"}
+
+    async def get_artifact(db, bid, label, coll="models"):
+        if bid == "ctrl" and label == "graph":
+            return json.dumps(GRAPH).encode()
+        raise KeyError(label)
+    monkeypatch.setattr(store, "get_artifact", get_artifact)
+
+
+def test_board_read_lists_reads_a_section_and_a_net(env, monkeypatch):
+    raw, _ = env
+    _boards(raw, monkeypatch)
+    db = cc_chat._db()
+    tool = _tool("board_read")
+    assert tool.level == "read" and tool.default
+    listed = run(tool.run(Ctx(db=db), {}))
+    assert listed.vars["n"] == 1 and "ctrl" in listed.text and "theirs" not in listed.text   # its workspace only
+    whole = run(tool.run(Ctx(db=db), {"board": "controller"}))                                # by title words
+    assert whole.say == "Read board {board}" and whole.vars["board"] == "ctrl"
+    assert "DRC" in whole.text and "Design rules" in whole.text and "U1 | ESP32" in whole.text
+    assert "Board size [50, 40] mm" in whole.text                                             # board_stats' figures
+    drc = run(tool.run(Ctx(db=db), {"board": "ctrl", "section": "drc"}))
+    assert "2 errors" in drc.text and "U1 | ESP32" not in drc.text and "Design rules" not in drc.text
+    assert drc.say == "Read the {section} of board {board}" and drc.vars["section"] == "DRC"
+    net = run(tool.run(Ctx(db=db), {"board": "ctrl", "section": "nets", "net": "sda"}))
+    assert "I2C_SDA: U1.5, R1.1" in net.text and net.say == "Read nets “{net}” of board {board}"
+    with pytest.raises(ToolError, match="no board 'nope'.*ctrl"):
+        run(tool.run(Ctx(db=db), {"board": "nope"}))
+    with pytest.raises(ToolError, match="no board"):
+        run(tool.run(Ctx(db=db), {"board": "theirs"}))                                         # not this workspace's
+    with pytest.raises(ToolError, match="section is one of"):
+        run(tool.run(Ctx(db=db), {"board": "ctrl", "section": "gerbers"}))
+
+
+def test_board_read_is_cut_with_a_way_to_the_rest(env, monkeypatch):
+    raw, _ = env
+    _boards(raw, monkeypatch)
+    GRAPH_BIG = {**GRAPH, "components": [{"ref": f"R{i}", "value": "10k" * 20, "footprint": "R0402", "part": "C25744"}
+                                         for i in range(2000)]}
+    from backend import store
+
+    async def get_artifact(db, bid, label, coll="models"):
+        return json.dumps(GRAPH_BIG).encode()
+    monkeypatch.setattr(store, "get_artifact", get_artifact)
+    got = run(_tool("board_read").run(Ctx(db=cc_chat._db()), {"board": "ctrl"}))
+    assert len(got.text) <= chat_tools.MAX_TEXT and "Ask for one section" in got.text
+
+
+def test_model_read_pages_its_source_and_says_its_build(env, monkeypatch):
+    raw, _ = env
+    src = "\n".join(f"x{i} = {i}" for i in range(600))
+    raw["models"].rows["iot-fan/assemblies/base"] = {
+        "_id": "iot-fan/assemblies/base", "workspace_id": "default", "title": "Base", "version": 20,
+        "built": {"version": 20, "at": "2026-10-09T10:00:00+00:00"}, "build_secs": 12.5,
+        "error": "ValueError: bad fillet", "source": src}
+    raw["models"].rows["iot-fan/parts/case_base"] = {"_id": "iot-fan/parts/case_base", "workspace_id": "default",
+                                                      "title": "Case base", "version": 8, "source": "y = 1"}
+    db = cc_chat._db()
+    tool = _tool("model_read")
+    listed = run(tool.run(Ctx(db=db), {}))
+    assert listed.vars["n"] == 2 and "LAST BUILD FAILED" in listed.text
+    got = run(tool.run(Ctx(db=db), {"model": "iot-fan-80mm base"}))       # words, one of them unknown
+    assert got.vars["model"] == "iot-fan/assemblies/base" and got.say == "Read 3D model {model} · v{version}"
+    assert "Latest build: version 20 at 2026-10-09" in got.text and "12.5 s" in got.text
+    assert "Last build error: ValueError: bad fillet" in got.text
+    assert "   1  x0 = 0" in got.text and "x250 = 250" not in got.text and "page 1 of 3" in got.text
+    p3 = run(tool.run(Ctx(db=db), {"model": "iot-fan/assemblies/base", "page": 3}))
+    assert " 600  x599 = 599" in p3.text and "ask for page" not in p3.text
+    with pytest.raises(ToolError, match="no 3D model 'gear'"):
+        run(tool.run(Ctx(db=db), {"model": "gear"}))
+
+
+def test_bom_cost_prices_flags_and_cuts(env, monkeypatch):
+    from backend import bom_cost
+    raw, _ = env
+    _boards(raw, monkeypatch)
+    offers = {"C82899": {"lcsc": "C82899", "mpn": "ESP32-WROOM-32", "stock": 50, "breaks": [[1, 3.5], [100, 3.0]],
+                         "source": "search", "ts": 0, "at": "2026-10-01"},
+              "C1525": {"lcsc": "C1525", "mpn": "CL05B104", "stock": 900000, "breaks": [[1, 0.002]],
+                        "source": "search", "ts": 0, "at": "2026-10-01"}}
+    monkeypatch.setattr(bom_cost, "cached_offer", lambda p: offers.get(p))
+    monkeypatch.setattr(bom_cost, "record_stock", lambda p: None)
+    db = cc_chat._db()
+    tool = _tool("bom_cost")
+    got = run(tool.run(Ctx(db=db), {"board": "ctrl", "qty": 100}))
+    assert got.say == "BOM cost of {board} for {qty} boards: {total}" and got.vars["qty"] == 100
+    assert got.vars["per_board"] == "$3.00" and got.vars["total"] == "$300.20"
+    assert "OUT OF STOCK OR SHORT: U1 C82899 (short: stock 50, need 100" in got.text
+    assert "NO LCSC NUMBER: R1 4k7" in got.text and got.vars["missing"] == 1
+    assert "older than a day" in got.text
+    with pytest.raises(ToolError, match="no board"):
+        run(tool.run(Ctx(db=db), {"board": "nope"}))
+    with pytest.raises(ToolError, match="qty"):
+        run(tool.run(Ctx(db=db), {"board": "ctrl", "qty": 0}))
+    many = [{"lcsc": f"C{i}", "refs": [f"R{i}"], "qty": 1, "value": "1k", "bom_mpn": None, "footprint": "R0402"}
+            for i in range(10, 400)]
+
+    async def lines(db, bid):
+        return many
+    monkeypatch.setattr(bom_cost, "board_lines", lines)
+    big = run(tool.run(Ctx(db=db), {"board": "ctrl"}))
+    assert "... and 270 more lines" in big.text and len(big.text) <= chat_tools.MAX_TEXT + 100
+
+
+def _firmware(raw):
+    raw["firmware"].rows["fw1"] = {
+        "_id": "fw1", "workspace_id": "default", "title": "U2 ESP32", "board": "ctrl", "mcu": "U2",
+        "mcu_title": "ESP32-WROOM-32", "platform": "espressif32", "env": "esp32dev", "version": 7,
+        "build": {"state": "errors", "job": "j2", "at": "2026-10-09T09:00:00+00:00", "seconds": 41.2, "version": 7,
+                  "error_count": 1, "warning_count": 1,
+                  "errors": [{"file": "src/main.cpp", "line": 12, "col": 5, "text": "'foo' was not declared"}],
+                  "warnings": [{"file": "src/main.cpp", "line": 3, "col": None, "text": "unused variable 'x'"}],
+                  "flash": None, "ram": None}}
+    raw["firmware_jobs"].rows["j2"] = {"_id": "j2", "firmware": "fw1", "workspace": "default", "status": "done",
+                                       "version": 7, "started_at": "2026-10-09T09:00:00", "seconds": 41.2,
+                                       "result": {"ok": False, "error_count": 1, "warning_count": 1}}
+    raw["firmware_jobs"].rows["j1"] = {"_id": "j1", "firmware": "fw1", "workspace": "default", "status": "done",
+                                       "version": 6, "started_at": "2026-10-08T09:00:00", "seconds": 60,
+                                       "result": {"ok": True, "error_count": 0, "warning_count": 0,
+                                                  "flash": {"used": 300000, "total": 1310720, "pct": 22.9},
+                                                  "ram": {"used": 20000, "total": 327680, "pct": 6.1}}}
+    raw["firmware_jobs"].rows["jx"] = {"_id": "jx", "firmware": "fw1", "workspace": "team2", "status": "done",
+                                       "started_at": "2026-10-10T09:00:00", "result": {"ok": True}}
+
+
+def test_firmware_build_reads_the_last_builds_errors_and_sizes(env):
+    raw, _ = env
+    _firmware(raw)
+    db = cc_chat._db()
+    tool = _tool("firmware_build")
+    listed = run(tool.run(Ctx(db=db), {}))
+    assert listed.vars["n"] == 1 and "fw1" in listed.text and "last build errors" in listed.text
+    got = run(tool.run(Ctx(db=db), {"firmware": "esp32"}))
+    assert got.say == "Read the last build of {title}: {state}" and got.vars["state"] == "errors"
+    assert "src/main.cpp:12:5: 'foo' was not declared" in got.text and "src/main.cpp:3: unused" in got.text
+    assert "Earlier build" not in got.text
+    two = run(tool.run(Ctx(db=db), {"firmware": "fw1", "builds": 2}))
+    assert "Earlier build j1: done, version 6" in two.text and "Flash 22.9% (300,000 of 1,310,720 bytes)" in two.text
+    assert "jx" not in two.text                                                              # another workspace's
+    with pytest.raises(ToolError, match="no firmware 'stm32'"):
+        run(tool.run(Ctx(db=db), {"firmware": "stm32"}))
+
+
+def test_room_note_files_a_queued_note_like_a_task_block(env, monkeypatch):
+    from backend import tasks
+    raw, state = env
+    state["role"] = "editor"
+    raw["boards"].rows["ctrl"] = {"_id": "ctrl", "workspace_id": "default", "title": "Controller"}
+    filed = []
+
+    async def file(db, room, target, text, source):
+        filed.append((room, target, text, source))
+        return {"id": "20261009-n1"}
+
+    async def audit(db, *a, **k):
+        pass
+    monkeypatch.setattr(tasks, "_file", file)
+    monkeypatch.setattr(chat_tools.room_note.actors, "audit", audit)
+    tool = _tool("room_note")
+    assert tool.level == "change" and tool.default is False
+    db = cc_chat._db()
+    got = run(tool.run(Ctx(db=db, chat="c9"), {"room": "pcb", "target": "ctrl", "title": "Widen  the 12V track",
+                                               "body": "To 1 mm."}))
+    assert filed == [("pcb", "ctrl", "Widen the 12V track\n\nTo 1 mm.",
+                      {"kind": "ai", "chat": "c9", "message": "", "index": -1, "title": "Widen the 12V track",
+                       "tool": "room_note"})]
+    assert got.say == "Queued a note for the PCB room: {title}" and got.vars["note"] == "20261009-n1"
+    with pytest.raises(ToolError, match="no board 'nope' .*PCB room; there are: ctrl"):
+        run(tool.run(Ctx(db=db), {"room": "pcb", "target": "nope", "body": "x"}))
+    with pytest.raises(ToolError, match="at most 4000"):
+        run(tool.run(Ctx(db=db), {"room": "pcb", "target": "ctrl", "body": "x" * 4001}))
+    state["role"] = "viewer"                                   # may look, may not queue
+    with pytest.raises(ToolError):
+        run(tool.run(Ctx(db=db), {"room": "pcb", "target": "ctrl", "body": "x"}))
+    assert len(filed) == 1
+
+
+def _files(raw, monkeypatch, blobs):
+    from backend import files
+    for fid, (name, kind, ctype) in {"t1": ("notes.md", "text", "text/markdown"),
+                                     "p1": ("ina219.pdf", "pdf", "application/pdf"),
+                                     "i1": ("board.png", "image", "image/png"),
+                                     "s1": ("fan.step", "step", "model/step")}.items():
+        raw["files"].rows[fid] = {"_id": fid, "workspace_id": "default", "name": name, "kind": kind,
+                                  "content_type": ctype, "bytes": len(blobs.get(fid, b"x")),
+                                  "created_at": f"2026-10-0{len(raw['files'].rows) + 1}", "by": {"name": "Ann"}}
+
+    async def get(db, fid):
+        doc = await db[files.COLL].find_one({"_id": fid})
+        if not doc:
+            raise KeyError(fid)
+        return doc, blobs[fid]
+    monkeypatch.setattr(files, "get", get)
+
+
+def _png():
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 20), "red").save(buf, "PNG")
+    return buf.getvalue()
+
+
+def test_file_read_lists_reads_text_pdf_and_images(env, monkeypatch):
+    raw, _ = env
+    long_text = "\n".join(f"line {i} " + "x" * 60 for i in range(600))
+    _files(raw, monkeypatch, {"t1": long_text.encode(), "p1": DATASHEET, "i1": _png(), "s1": b"ISO-10303"})
+    db = cc_chat._db()
+    tool = _tool("file_read")
+    listed = run(tool.run(Ctx(db=db), {}))
+    assert listed.vars["n"] == 4 and "ina219.pdf" in listed.text
+    pdfs = run(tool.run(Ctx(db=db), {"kind": "pdf"}))
+    assert pdfs.vars["n"] == 1
+    t = run(tool.run(Ctx(db=db), {"file": "notes.md"}))
+    assert t.say == "Read {name} · page {page} of {pages}" and t.vars["pages"] > 1 and "line 0 " in t.text
+    assert len(t.text) < 13_000 and "ask for page 2" in t.text
+    t2 = run(tool.run(Ctx(db=db), {"file": "t1", "page": 2}))
+    assert "line 0 " not in t2.text
+    p = run(tool.run(Ctx(db=db), {"file": "ina219", "query": "RDS(on)"}))
+    assert p.say == "Searched {name} for “{query}” · pages {pages}" and p.vars["pages"] == "2" and "0.044" in p.text
+    pp = run(tool.run(Ctx(db=db), {"file": "p1", "pages": "3"}))
+    assert pp.say == "Read pages {pages} of {name}" and "TO-220AB" in pp.text
+    with pytest.raises(ToolError, match="does not read images"):
+        run(tool.run(Ctx(db=db), {"file": "p1", "image_page": 1}))
+    pic = run(tool.run(Ctx(db=db, vision=True), {"file": "p1", "image_page": 1}))
+    assert pic.image[:4] == b"\x89PNG"
+    img = run(tool.run(Ctx(db=db, vision=True), {"file": "board.png"}))
+    assert img.image[:4] == b"\x89PNG" and "40×20" in img.text
+    blind = run(tool.run(Ctx(db=db), {"file": "board.png"}))
+    assert blind.image is None and "does not read images" in blind.text
+    step = run(tool.run(Ctx(db=db), {"file": "s1"}))
+    assert "not readable as text" in step.text
+    with pytest.raises(ToolError, match="no file 'gerbers.zip'"):
+        run(tool.run(Ctx(db=db), {"file": "gerbers.zip"}))
+
+
+def test_basic_tool_finds_then_computes_with_the_tools_own_code(monkeypatch):
+    from backend import tool_router, tools_api
+
+    async def pick(task, catalog, limit=3, room=None):
+        assert any(t["id"] == "trace-width" for t in catalog)
+        return {"picks": [{"id": "trace-width", "why": "w"}, {"id": "via-thermal", "why": "v"}], "method": "keywords"}
+
+    async def record(*a, **k):
+        pass
+    ran = []
+
+    async def run_kit(tid, given, surface="api"):
+        ran.append((tid, given, surface))
+        return {"ok": True, "tool": tid, "input": {"amps": 1, "oz": "1"},
+                "result": {"values": [{"label": "Outer layer width", "value": "0.3", "unit": "mm", "hint": "11.8 mil"}],
+                           "tables": [{"title": "t", "columns": ["a", "b"], "rows": [[i, i] for i in range(100)]}],
+                           "notes": ["IPC-2221"], "charts": [{"big": "x" * 100000}]}}
+    monkeypatch.setattr(tool_router, "pick", pick)
+    monkeypatch.setattr(tools_api, "_record", record)
+    monkeypatch.setattr(tools_api, "run_kit", run_kit)
+    tool = _tool("basic_tool")
+    found = run(tool.run(Ctx(db=Db()), {"task": "trace width for 1 A"}))
+    assert found.say == "Found calculators for “{task}”: {names}" and "Trace Width" in found.vars["names"]
+    assert "- amps (number, A, default '1')" in found.text and "id: via-thermal" in found.text
+    got = run(tool.run(Ctx(db=Db()), {"id": "trace-width", "input": {"amps": "1"}}))
+    assert ran == [("trace-width", {"amps": "1"}, "chat")]
+    assert got.say == "Calculated with {name}" and got.vars["name"] == "Trace Width"
+    assert "- Outer layer width: 0.3 mm (11.8 mil)" in got.text and "... and 60 more rows" in got.text
+    assert "big" not in got.text and len(got.text) < 5000                                    # charts left out
+    manual = run(tool.run(Ctx(db=Db()), {"id": "trace-width"}))
+    assert manual.say == "Read the inputs of {name}" and "amps" in manual.summary
+    with pytest.raises(ToolError, match="no calculator 'nope'"):
+        run(tool.run(Ctx(db=Db()), {"id": "nope", "input": {}}))
+    with pytest.raises(ToolError, match="give `task`"):
+        run(tool.run(Ctx(db=Db()), {}))
+
+    async def bad(tid, given, surface="api"):
+        return {"ok": False, "error": "amps: not a number"}
+    monkeypatch.setattr(tools_api, "run_kit", bad)
+    with pytest.raises(ToolError, match="not a number"):
+        run(tool.run(Ctx(db=Db()), {"id": "trace-width", "input": {"amps": "lots"}}))
+
+
+def test_a_kit_tool_runs_in_node_when_the_tools_image_is_missing(monkeypatch):
+    from backend import tools_api
+    seen = {}
+
+    class Proc:
+        async def communicate(self, data):
+            return json.dumps({"ok": True, "tool": "trace-width", "result": {}}).encode(), b""
+
+    async def fake_exec(*argv, **_):
+        seen["argv"] = argv
+        return Proc()
+
+    async def record(*a, **k):
+        seen["surface"] = a[2]
+    monkeypatch.setattr(tools_api, "have_image", lambda: False)
+    monkeypatch.setattr(tools_api, "_has", lambda image: image == tools_api.KIT_IMAGE)
+    monkeypatch.setattr(tools_api, "_record", record)
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
+    got = run(tools_api.run_kit("trace-width", {"amps": 1}, "chat"))
+    argv = seen["argv"]
+    assert got["ok"] and tools_api.KIT_IMAGE in argv and argv[argv.index("--network") + 1] == "none"
+    assert seen["surface"] == "chat"
+    monkeypatch.setattr(tools_api, "_has", lambda image: False)
+    with pytest.raises(Exception, match="not built"):
+        run(tools_api.run_kit("trace-width", {}, "chat"))
+
+
+def test_the_note_tells_how_to_use_the_workspace_tools():
+    assert "basic_tool" in chat_tools.SYSTEM_NOTE and "board_read" in chat_tools.SYSTEM_NOTE

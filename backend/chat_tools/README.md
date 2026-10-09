@@ -14,7 +14,8 @@ the answer and shown inline on the page.
 
    async def run(ctx: Ctx, args: dict) -> Result:
        # ctx.db is the asker's workspace (backend/scope.py); ctx.vision says
-       # whether the model reads images; ctx.actor is who asked.
+       # whether the model reads images; ctx.actor is who asked; ctx.chat the
+       # conversation.
        if not args.get("x"):
            raise ToolError("say what x is")           # told to the model, shown as the step's error
        return Result(text="what the model reads",     # capped at MAX_TEXT
@@ -41,10 +42,29 @@ the answer and shown inline on the page.
    `running`, `failed` and every `say` the handler can return - the English
    is the key, the page translates and then fills the `{holes}`.
 
-3. Optionally an icon: `TOOL_ICON` in `frontend/src/app/rooms/commandcode.ts`
+3. Optionally an icon: `TOOL_ICON` in `frontend/src/app/rooms/cc-tools.ts`
    (a wrench otherwise).
 
 4. A test in `tests/test_chat_tools.py`.
+
+Helpers: `_parts.py` (an LCSC number, a kept datasheet), `_things.py` (a
+board, model or firmware named by its id or by words of its title, read
+through the workspace, and the list of them when the name fits nothing).
+
+## The tools
+
+- Parts: `drawer_search`, `drawer_list`, `lcsc_search`, `drawer_add`,
+  `datasheet_get`, `datasheet_read`.
+- `basic_tool`: the Tools tab's calculators, in two steps - `task` finds
+  them (tool_router.py, as the MCP server's find_tool) with their inputs,
+  `id` + `input` runs one (tools_api.py `run_kit`: its own tool.js, in a
+  throwaway offline container). Interactive-only tools are said to be so.
+- Workspace things: `board_read` (cc_context.py `board_parts` +
+  board_stats.py), `model_read` (cc_context.py `model_parts`), `bom_cost`
+  (bom_cost.py, offers on disk only), `firmware_build` (the firmware's
+  build summary and fwbuild.py's jobs), `file_read` (files.py, pdftext.py).
+- `room_note` (change, off by default): a queued note, as a ```task
+  block's "Send to queue" files one (tasks.py `_file`).
 
 ## Levels
 

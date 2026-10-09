@@ -486,7 +486,7 @@ async def run(gid: str, db=None) -> dict | None:
         ctx = None
         if tools:
             ctx = chat_tools.Ctx(db=db, vision=await cc_chat._vision(gen["provider"], gen["model"]),
-                                 actor=gen.get("actor") or {})
+                                 actor=gen.get("actor") or {}, chat=gen.get("chat") or "")
             withcalls = cc_chat.history(convo, images, tools=set(tools))
             msgs = [{**withcalls[0], "content": withcalls[0]["content"] + "\n\n" + chat_tools.note(list(tools.values()))},
                     *withcalls[1:]]

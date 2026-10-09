@@ -45,10 +45,11 @@ class ToolError(Exception):
 @dataclass
 class Ctx:
     """What a tool runs with: the workspace's database, whether the model
-    reads images, and who asked."""
+    reads images, who asked, and in which conversation."""
     db: Any
     vision: bool = False
     actor: dict = field(default_factory=dict)
+    chat: str = ""
 
 
 @dataclass
@@ -146,7 +147,7 @@ def size(n: int) -> str:
 
 
 SYSTEM_NOTE = (
-    "You have tools for electronic parts. When asked about a specific part (an IC, a MOSFET, a "
+    "You have tools for electronic parts and for this workspace. When asked about a specific part (an IC, a MOSFET, a "
     "connector...), do not answer its electrical values from memory: first look for it in the "
     "drawer (drawer_search); if it is not there, find it on LCSC (lcsc_search) and add it "
     "(drawer_add) when it is the right one; then get its datasheet (datasheet_get, always before "
@@ -155,7 +156,13 @@ SYSTEM_NOTE = (
     "datasheet page for every value you quote, e.g. (datasheet p. 2). Use the tools only when "
     "they help the question, and only those you have; say plainly when a datasheet does not give "
     "a value. To see what the drawer holds - which parts, which of them have a datasheet kept - "
-    "list it (drawer_list) rather than guessing."
+    "list it (drawer_list) rather than guessing. For numbers an engineering formula gives (a trace "
+    "width, a via's current, a resistor, a divider, a filter...), compute them with the Basic Tools "
+    "calculators (basic_tool: first `task` to find one, then `id` and `input` to run it) and name the "
+    "calculator, rather than working them out in your head. For this workspace's own things - its boards "
+    "(board_read; their cost: bom_cost), 3D models (model_read), firmware builds (firmware_build) and "
+    "files (file_read) - read them with those tools before answering about them; each lists what there "
+    "is when called without an id. Leave a note in a room's queue (room_note) only when asked to."
 )
 
 

@@ -17,9 +17,19 @@ const DRAWER = 'M4 5h16v6H4z M4 11h16v8H4z M10 8h4 M10 15h4';
 const SEARCH = 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M20 20l-4.2-4.2';
 const SHEET = 'M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 15.5h6 M9 9h2';
 
+const CALC = 'M6 3h12v18H6z M9 6h6v3H9z M8.5 13h1 M11.5 13h1 M14.5 13h1 M8.5 17h1 M11.5 17h1 M14.5 17h1';
+const BOARD = 'M5 5h14v14H5z M9 9h6v6H9z M9 2v3 M15 2v3 M9 19v3 M15 19v3 M2 9h3 M2 15h3 M19 9h3 M19 15h3';
+const CUBE = 'M12 3l8 4.5v9L12 21l-8-4.5v-9z M12 12l8-4.5 M12 12v9 M12 12L4 7.5';
+const TAG = 'M3 11V4h7l10 10-7 7z M7 7h1v1H7z';
+const BUILD = 'M4 5h16v14H4z M7 9l3 3-3 3 M12 15h5';
+const FILE = 'M6 3h8l4 4v14H6z M14 3v4h4';
+const NOTE = 'M5 4h14v12l-4 4H5z M15 20v-4h4 M8 9h8 M8 12h5';
+
 /** A tool's icon, here and on its steps in an answer: by what it touches. */
 export const TOOL_ICON: Record<string, string> = {
   drawer_search: DRAWER, drawer_list: DRAWER, drawer_add: DRAWER, lcsc_search: SEARCH, datasheet_get: SHEET, datasheet_read: SHEET,
+  basic_tool: CALC, board_read: BOARD, model_read: CUBE, bom_cost: TAG, firmware_build: BUILD, file_read: FILE,
+  room_note: NOTE,
 };
 export function toolIcon(name: string) { return TOOL_ICON[name] ?? WRENCH; }
 
