@@ -12,63 +12,91 @@ export const LEVELS: { id: ToolLevel; name: string; about: string }[] = [
 
 const CHEVRON = 'M10 7l5 5-5 5';
 const WRENCH = 'M14.5 4.5a4 4 0 0 0-5 5L4 15l2 2 2 2 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z';
+const DRAWER = 'M4 5h16v6H4z M4 11h16v8H4z M10 8h4 M10 15h4';
+const SEARCH = 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M20 20l-4.2-4.2';
+const SHEET = 'M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 15.5h6 M9 9h2';
 
-/** The Chat tab's tools, where a conversation is shown (rooms/commandcode.ts):
- *  Settings' cards (settings.css), one per level, each tool a tile that is
- *  its own switch, like Telegram's "Notify me when". Its look ships with it,
- *  so it never waits on the global stylesheet. */
+/** A tool's icon, here and on its steps in an answer: by what it touches. */
+export const TOOL_ICON: Record<string, string> = {
+  drawer_search: DRAWER, drawer_list: DRAWER, drawer_add: DRAWER, lcsc_search: SEARCH, datasheet_get: SHEET, datasheet_read: SHEET,
+};
+export function toolIcon(name: string) { return TOOL_ICON[name] ?? WRENCH; }
+
+/** How each level behaves, said once on its card: the tone of its badge. */
+const BEHAVES: Record<ToolLevel, { badge: string; tone: string; empty: string }> = {
+  read: { badge: 'runs on its own', tone: 'ok', empty: 'No tool only reads yet.' },
+  change: { badge: 'shows a step in the answer', tone: 'accent', empty: 'No tool changes anything yet.' },
+  delete: { badge: 'asks you first', tone: 'warn',
+            empty: 'No tool deletes anything yet. When one does, the answer stops and asks you before it runs.' },
+};
+
+/** The Chat tab's tools, where a conversation is shown (rooms/commandcode.ts),
+ *  in Settings' own frame (settings.css): the slim head band, then one card
+ *  per level with its tools as tiles - icon, name, the app's switch
+ *  (.tcv-switch), what it does and its id. A tile is its own switch. */
 @Component({
   selector: 'app-cc-tools',
   imports: [T],
   styleUrls: ['../settings.css', './cc-tools.css'],
   template: `
-<header class="ct-bar">
+<header class="st-head ct-head">
   <button class="ct-ib ct-burger" type="button" (click)="menu.emit()" [title]="'Conversations' | t">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16 M4 12h16 M4 18h16" /></svg></button>
-  <h2>{{ 'Tools' | t }}</h2>
-  <span class="ct-count mono">{{ on() }} / {{ tools().length }}</span>
-  @if (!canEdit()) { <span class="st-badge" data-tone="warn">{{ 'read-only for you' | t }}</span> }
-  <button class="ct-ib ct-close" type="button" (click)="done.emit()" [title]="('Close' | t) + ' (Esc)'">
+  <svg class="ct-head-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="wrench" /></svg>
+  <span class="st-head-name">{{ 'Tools' | t }}</span>
+  <span class="st-head-blurb">{{ 'what the model may use while it answers you' | t }}</span>
+  <span class="st-head-meta">
+    @if (!canEdit()) { <span class="st-badge" data-tone="warn">{{ 'read-only for you' | t }}</span> }
+    <span class="mono">{{ on() }} / {{ tools().length }} {{ 'on' | t }}</span>
+  </span>
+  <button class="ct-ib" type="button" (click)="done.emit()" [title]="('Close' | t) + ' (Esc)'">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12 M18 6L6 18" /></svg></button>
 </header>
-<div class="ct-stage">
+<div class="st-stage">
   <div class="st-page ct-page">
-    <p class="st-lead">{{ 'What the model may use while it answers your messages. Tap a tile to turn it on or off.' | t }}</p>
+    <p class="st-lead">{{ 'The model reaches for these by itself when a question needs them, and every use shows in its answer as a step you can open. Turn off what you do not want it to touch; this is your own choice and follows you to every device.' | t }}</p>
     @if (!ready()) {
-      <div class="st-card"><div class="st-empty">{{ 'Loading…' | t }}</div></div>
+      <section class="st-card"><div class="ct-empty">{{ 'Loading…' | t }}</div></section>
     } @else {
       @for (g of groups(); track g.id) {
         <section class="st-card" [attr.data-level]="g.id">
           <div class="st-card-head">
-            <h3>{{ g.name | t }}</h3><span class="st-sub">{{ g.about | t }}</span>
-            <span class="st-right">
-              <span class="st-sub mono">{{ g.on }} / {{ g.tools.length }}</span>
-              @if (g.tools.length && canEdit()) {
-                <button class="ct-all" type="button" (click)="setAll(g.tools, g.on < g.tools.length)"
-                  >{{ (g.on < g.tools.length ? 'all on' : 'all off') | t }}</button>
-              }
-            </span>
-          </div>
-          <div class="st-card-body">
+            <h3>{{ g.name | t }}</h3>
+            <span class="st-badge" [attr.data-tone]="g.tone">{{ g.badge | t }}</span>
             @if (g.tools.length) {
-              <div class="ct-tiles">
-                @for (tl of g.tools; track tl.name) {
-                  <button class="ct-tile" type="button" [attr.data-on]="tl.on ? 1 : null" [attr.aria-pressed]="tl.on"
-                          [disabled]="!canEdit()" (click)="flip(tl)">
-                    <span class="ct-tile-top"><b>{{ tl.label | t }}</b><i class="ct-switch" aria-hidden="true"></i></span>
-                    <span class="ct-about">{{ tl.description | t }}</span>
-                    <code class="ct-id">{{ tl.name }}</code>
-                  </button>
-                }
-              </div>
-            } @else {
-              <div class="ct-none">{{ 'none yet' | t }}</div>
+              <span class="st-right">
+                <span class="st-sub mono">{{ g.on }} / {{ g.tools.length }}</span>
+                <span class="st-seg">
+                  <button type="button" [class.on]="g.on === g.tools.length" [disabled]="!canEdit()"
+                          (click)="setAll(g.tools, true)">{{ 'all on' | t }}</button>
+                  <button type="button" [class.on]="g.on === 0" [disabled]="!canEdit()"
+                          (click)="setAll(g.tools, false)">{{ 'all off' | t }}</button>
+                </span>
+              </span>
             }
           </div>
+          @if (g.tools.length) {
+            <div class="ct-tiles" [style.--cols]="g.tools.length" [attr.data-odd]="g.tools.length % 2 ? 1 : null">
+              @for (tl of g.tools; track tl.name) {
+                <button class="ct-tile" type="button" role="switch" [attr.aria-checked]="tl.on" [attr.data-on]="tl.on ? 1 : null"
+                        [disabled]="!canEdit()" (click)="flip(tl)">
+                  <span class="ct-top">
+                    <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(tl.name)" /></svg>
+                    <span class="ct-name">{{ tl.label | t }}</span>
+                    <span class="tcv-switch" [attr.data-on]="tl.on ? 1 : null" aria-hidden="true"></span>
+                  </span>
+                  <span class="ct-about">{{ tl.description | t }}</span>
+                  <code class="ct-id">{{ tl.name }}</code>
+                </button>
+              }
+            </div>
+          } @else {
+            <div class="ct-empty">{{ g.empty | t }}</div>
+          }
         </section>
       }
     }
-    <p class="st-hint ct-foot">{{ 'Your own choice, on every device. A model that cannot use tools answers without them.' | t }}</p>
+    <p class="st-hint">{{ 'A model that cannot use tools answers without them. Turning a tool off takes effect from your next message.' | t }}</p>
   </div>
 </div>`,
 })
@@ -81,13 +109,18 @@ export class CcToolsView {
   done = output<void>();
   menu = output<void>();
 
+  readonly wrench = WRENCH;
+  icon = toolIcon;
   on = computed(() => this.tools().filter(x => x.on).length);
   groups = computed(() => LEVELS.map(l => {
     const tools = this.tools().filter(x => x.level === l.id);
-    return { ...l, tools, on: tools.filter(x => x.on).length };
+    return { ...l, ...BEHAVES[l.id], tools, on: tools.filter(x => x.on).length };
   }));
   flip(tl: CcTool) { this.set.emit({ [tl.name]: !tl.on }); }
-  setAll(tools: CcTool[], on: boolean) { this.set.emit(Object.fromEntries(tools.map(x => [x.name, on]))); }
+  setAll(tools: CcTool[], on: boolean) {
+    const change = tools.filter(x => x.on !== on);
+    if (change.length) this.set.emit(Object.fromEntries(change.map(x => [x.name, on])));
+  }
 }
 
 /** Under the usage card in the conversation list: opens the tools above in

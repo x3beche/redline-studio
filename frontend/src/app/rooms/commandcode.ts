@@ -11,7 +11,7 @@ import { T, t } from '../i18n';
 import { CcWant, Selection } from '../selection';
 import { AgentThreads, RoomThread } from './agent-thread';
 import { CcUsageLine } from '../cc-usage';
-import { CcToolsLine, CcToolsView, LEVELS } from './cc-tools';
+import { CcToolsLine, CcToolsView, LEVELS, toolIcon as toolIconOf } from './cc-tools';
 import { AvatarColours, avatarColour } from '../avatar';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
 import { FilesApi } from './files-model';
@@ -311,10 +311,6 @@ const I = {
   alert: 'M12 4l9 16H3z M12 10v4.5 M12 17.5h.01',
 };
 
-/** A tool's icon on its step (backend/chat_tools): by what it touches. */
-const TOOL_ICON: Record<string, string> = {
-  drawer_search: I.drawer, drawer_list: I.drawer, drawer_add: I.drawer, lcsc_search: I.search, datasheet_get: I.sheet, datasheet_read: I.sheet,
-};
 /** A mention's kind, as its icon and its name. */
 const KIND: Record<CcMention['kind'], { icon: string; name: string }> = {
   model: { icon: I.cad, name: '3D model' }, board: { icon: I.pcb, name: 'Board' }, file: { icon: I.file, name: 'File' },
@@ -2599,7 +2595,7 @@ export class RoomCommandCode implements OnDestroy {
       return n;
     });
   }
-  toolIcon(name: string) { return TOOL_ICON[name] ?? I.tool; }
+  toolIcon(name: string) { return toolIconOf(name); }
   levelName(l: ToolLevel) { return LEVELS.find(x => x.id === l)?.name ?? l; }
   /** The step's sentence: translated, then its holes filled. */
   stepLine(s: CcStep): string {

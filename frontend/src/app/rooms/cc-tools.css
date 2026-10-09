@@ -1,59 +1,60 @@
-/* The Chat tab's tools (cc-tools.ts), on top of settings.css: a bar like the
-   conversation's, then Settings' stage - cards per level, tiles that are
-   switches (the Telegram "Notify me when" tiles). Every colour is a token. */
-:host { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+/* The Chat tab's tools (cc-tools.ts), on top of settings.css: Settings' head
+   band and cards; inside each card the tools as rows, each its own switch
+   (the app's .tcv-switch, styles.css). Every colour is a token. */
+:host { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; background: var(--surface-2); }
 
-.ct-bar { flex: none; display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 6px 8px 6px 20px;
-  border-bottom: 1px solid var(--line); }
-.ct-bar h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink); }
-.ct-count { font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
-.ct-close { margin-left: auto; }
-.ct-ib { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 32px; height: 32px;
-  padding: 0 8px; color: var(--ink-dim); background: none; border: 1px solid transparent; border-radius: 6px; cursor: pointer; }
+.ct-head { min-height: 41px; padding-right: 6px; }
+.ct-head-ico { flex: none; width: 15px; height: 15px; color: var(--accent); fill: none; stroke: currentColor; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round; }
+.ct-head .st-head-meta { align-items: center; }
+.ct-ib { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  color: var(--ink-dim); background: none; border: 1px solid transparent; border-radius: 5px; cursor: pointer; }
 .ct-ib:hover { color: var(--ink); background: var(--hover); }
 .ct-ib:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.ct-ib svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.ct-ib svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
 .ct-burger { display: none; }
-
-.ct-stage { flex: 1; min-height: 0; overflow-y: auto; background: var(--surface-2);
-  scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
-.ct-page { max-width: 920px; padding: 14px 20px 28px; }
-.ct-page .st-card-head { min-height: 32px; }
-.ct-page .st-right { gap: 10px; }
 .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 
-.ct-all { padding: 2px 6px; font-size: 11px; color: var(--ink-dim); background: none; border: 1px solid transparent;
-  border-radius: 4px; cursor: pointer; }
-.ct-all:hover { color: var(--ink); border-color: var(--line); }
+/* The whole pane, as Settings' stage: no narrow column with empty space beside it. */
+.ct-page { max-width: none; }
 
-.ct-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
-.ct-tile { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; padding: 9px 11px; text-align: left;
-  font-size: 11px; line-height: 1.45; color: var(--ink-dim); background: var(--surface-2); border: 1px solid var(--line);
-  border-radius: 6px; cursor: pointer; }
+/* Tiles that fill their card evenly: as many columns as tools while they
+   fit, then two (an odd last tile takes both), then one on a phone - never
+   an empty cell or a column of nothing. */
+.st-card { container-type: inline-size; }
+.ct-tiles { display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 8px; padding: 10px; }
+@container (max-width: 860px) {
+  .ct-tiles { grid-template-columns: repeat(min(var(--cols, 2), 2), minmax(0, 1fr)); }
+  .ct-tiles[data-odd] .ct-tile:last-child:not(:first-child) { grid-column: 1 / -1; }
+}
+@container (max-width: 400px) {
+  .ct-tiles { grid-template-columns: minmax(0, 1fr); }
+}
+.ct-tile { min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 5px;
+  padding: 10px 12px 10px; text-align: left; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 5px; cursor: pointer; transition: border-color .12s, background .12s; }
 .ct-tile:hover:not(:disabled) { border-color: var(--ink-dim); }
 .ct-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ct-tile:disabled { cursor: default; }
-.ct-tile[data-on] { border-color: var(--accent-deep); }
-.ct-tile-top { display: flex; align-items: center; gap: 8px; }
-.ct-tile-top b { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--ink); }
-.ct-about { flex: 1; }
-.ct-id { align-self: flex-start; margin-top: 2px; padding: 0 5px; line-height: 15px; border: 1px solid var(--line); border-radius: 3px;
-  font: 9.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
-.ct-switch { position: relative; flex: none; width: 28px; height: 16px; border-radius: 8px; background: var(--line); transition: background .15s; }
-.ct-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
-  background: var(--ink-dim); transition: transform .15s, background .15s; }
-.ct-tile[data-on] .ct-switch { background: var(--accent); }
-.ct-tile[data-on] .ct-switch::after { transform: translateX(12px); background: var(--switch-knob); }
-.ct-none { padding: 2px 1px; font-size: 11px; color: var(--ink-dim); }
-.ct-foot { padding: 0 2px; }
+.ct-tile:disabled .tcv-switch { opacity: .55; }
+.ct-tile:not([data-on]) { background: transparent; }
+.ct-top { display: flex; align-items: center; gap: 8px; }
+.ct-ico { flex: none; width: 15px; height: 15px; color: var(--ink-dim); fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round; }
+.ct-tile[data-on] .ct-ico { color: var(--ink); }
+.ct-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--ink); }
+.ct-tile:not([data-on]) .ct-name { color: var(--ink-dim); }
+.ct-about { flex: 1; font-size: 11px; line-height: 1.45; color: var(--ink-dim); }
+.ct-id { align-self: flex-start; padding: 0 5px; line-height: 16px; border: 1px solid var(--line); border-radius: 3px;
+  font: 10px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
+.ct-tile .tcv-switch { pointer-events: none; }
+.ct-empty { padding: 10px 12px; font-size: 11px; line-height: 1.5; color: var(--ink-dim); }
 
 @media (max-width: 768px) {
-  .ct-bar { padding: 4px; gap: 4px; }
-  .ct-bar h2 { font-size: 15px; }
+  .ct-head { padding: 4px 6px; }
+  .ct-head .st-head-blurb { display: none; }
   .ct-burger { display: inline-flex; }
-  .ct-ib { min-width: 40px; height: 40px; }
-  .ct-page { padding: 10px 10px 24px; }
-  .ct-tiles { grid-template-columns: minmax(0, 1fr); }
-  .ct-all { min-height: 32px; }
+  .ct-ib { width: 40px; height: 40px; }
+  .ct-tiles { padding: 8px; }
+  .st-seg button { min-height: 30px; }
 }
-@media (prefers-reduced-motion: reduce) { .ct-switch, .ct-switch::after { transition: none; } }
