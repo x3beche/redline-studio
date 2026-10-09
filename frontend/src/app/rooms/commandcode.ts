@@ -99,6 +99,9 @@ export interface CcQueued {
   id: string; content: string; mentions?: CcMention[]; by?: { id?: string; name?: string };
   at: string; provider?: string; model?: string;
 }
+/** This page's own answer being written in one conversation. */
+interface Run { text: string; thinking: string; t0: number; t1: number | null; sp?: Speed | null; model: string; gen: string | null }
+
 export interface CcQueueState { type?: string; queue: CcQueued[]; paused: boolean; why?: string | null }
 type Many = { deleted: string[]; refused: string[]; missing: string[] };
 export interface LlmModel { id: string; name: string; context: number | null; anthropic: boolean;
@@ -450,6 +453,9 @@ type Ask = { text: string; label: string; go: () => void };
               <div class="tcv-cc-itemtop">
                 @if (c.pinned) { <svg class="tcv-cc-ico tcv-cc-pinmark" viewBox="0 0 24 24"><path [attr.d]="I.pin" /></svg> }
                 <span class="tcv-cc-itemtitle">{{ c.title | t }}</span>
+                @if (!c.deleted_at && running(c)) {
+                  <span class="tcv-cc-itemrun tcv-cc-pulse" data-running="1" [title]="'An answer is being written' | t" aria-hidden="true"></span>
+                }
                 <span class="tcv-cc-itemwhen">{{ when(c.deleted_at || c.updated_at) }}</span>
               </div>
               @if (c.deleted_at) {
@@ -951,10 +957,17 @@ export class RoomCommandCode implements OnDestroy {
   text = signal('');
   focused = signal(false);
   error = signal<string | null>(null);
-  /** This page's own answer being written: so far, when it was asked (t0)
-   *  and when its first token came (t1), on this page's clock. */
-  live = signal<{ text: string; thinking: string; t0: number; t1: number | null; sp?: Speed | null } | null>(null);
-  liveModel = signal('');
+  /** This page's own answers being written, by conversation: so far, when
+   *  each was asked (t0) and when its first token came (t1), on this page's
+   *  clock, its model and generation. Several conversations may be answering
+   *  at once (the server locks each one on its own); switching away from one
+   *  leaves it running and its request streaming in here. */
+  runs = signal<Map<string, Run>>(new Map());
+  /** The open conversation's own answer being written. */
+  live = computed(() => { const id = this.openId(); return id ? this.runs().get(id) ?? null : null; });
+  liveModel = computed(() => this.live()?.model ?? '');
+  /** An error an answer ended with while its conversation was not open: shown when it is opened. */
+  private runErrors = new Map<string, string>();
   /** Thinking blocks the reader opened or folded by hand (by answer or generation). */
   private thinkHand = signal<Map<string, boolean>>(new Map());
   /** The line being edited (its id), while the composer holds its text. */
@@ -971,7 +984,8 @@ export class RoomCommandCode implements OnDestroy {
   private pendingTimer: ReturnType<typeof setTimeout> | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private armTimer: ReturnType<typeof setTimeout> | null = null;
-  private abort: AbortController | null = null;
+  /** The requests streaming this page's own answers, by conversation. */
+  private aborts = new Map<string, AbortController>();
   private timer = setInterval(() => this.poll(), 4000);
   private loadedProvider = '';
   private htmlCache = new Map<string, string>();
@@ -1014,8 +1028,8 @@ export class RoomCommandCode implements OnDestroy {
   qDraft = signal('');
   /** An answer is being written here - mine or anyone's: a line now is queued. */
   busy = computed(() => !!this.live() || this.watch().length > 0);
-  /** The generation this page's own request is streaming. */
-  private ownGen: string | null = null;
+  /** An answer is being written in this conversation of the list - this page's own, or anyone's. */
+  running(c: CcChat) { return !!c.gen || this.runs().has(c.id); }
   /** What the next line mentions, as chips in the composer. */
   picked = signal<CcMention[]>([]);
   mentionPop = signal(false);
@@ -1228,7 +1242,8 @@ export class RoomCommandCode implements OnDestroy {
     this.connectLive(null);
     if (this.searchTimer) clearTimeout(this.searchTimer);
     if (this.mentionTimer) clearTimeout(this.mentionTimer);
-    this.abort?.abort();
+    this.aborts.forEach(a => a.abort());
+    this.aborts.clear();
     this.observer?.disconnect();
     document.removeEventListener('click', this.closeMenu);
     this.flushDeletes(true);
@@ -1291,10 +1306,13 @@ export class RoomCommandCode implements OnDestroy {
     this.open(c.id);
   }
 
+  /** Open a conversation - at any time: answers being written elsewhere go
+   *  on (on the server, and their requests here), and show again when their
+   *  conversation is opened again. */
   open(id: string, at?: string | null, then?: (c: CcChat) => void) {
-    if (this.live()) return;
     this.openId.set(id);
-    this.error.set(null);
+    this.error.set(this.runErrors.get(id) ?? null);
+    this.runErrors.delete(id);
     this.cancelEdit(false);
     this.drawer.set(false);
     this.api.get(id).subscribe({
@@ -1315,7 +1333,7 @@ export class RoomCommandCode implements OnDestroy {
   }
 
   newChat(then?: (c: CcChat) => void) {
-    if (this.live() || !this.auth.can('draw')) return;
+    if (!this.auth.can('draw')) return;
     this.sel.thread.set(null);
     if (this.tab() !== 'list') this.showTab('list');
     this.api.create().subscribe({
@@ -1323,6 +1341,7 @@ export class RoomCommandCode implements OnDestroy {
         this.chats.update(l => [c, ...l]);
         this.openId.set(c.id);
         this.chat.set(c);
+        this.error.set(null);
         this.applyQueue({ queue: [], paused: false });
         this.provider.set(c.provider);
         this.model.set(c.model);
@@ -1341,10 +1360,10 @@ export class RoomCommandCode implements OnDestroy {
 
   /** Someone else may be talking in it: read it again when it grew. */
   poll() {
-    if (this.live() || document.hidden) return;
+    if (document.hidden) return;
     this.refresh();
     const c = this.chat();
-    if (!c) return;
+    if (!c || this.live()) return;
     const row = this.chats().find(x => x.id === c.id);
     if (row && row.count !== (c.messages?.length ?? 0) && !this.watch().length) {
       this.api.get(c.id).subscribe({ next: x => { if (this.openId() === x.id && !this.live()) { this.chat.set(x); this.scroll(); } }, error: () => {} });
@@ -1736,60 +1755,82 @@ export class RoomCommandCode implements OnDestroy {
                                                         sig, on));
   }
 
+  /** This page's own answer, in conversation `c` - keyed by it all the way:
+   *  what streams back lands in `c` whichever conversation is open by then. */
   private async run(c: CcChat, call: (sig: AbortSignal, on: (ev: CcEvent) => void) => Promise<void>, failed?: () => void) {
+    const id = c.id;
+    const here = () => this.openId() === id;
     this.error.set(null);
-    this.live.set({ text: '', thinking: '', t0: Date.now(), t1: null });
-    this.liveModel.set(this.model());
-    this.abort = new AbortController();
+    this.runErrors.delete(id);
+    this.setRun(id, () => ({ text: '', thinking: '', t0: Date.now(), t1: null, model: this.model(), gen: null }));
+    const abort = new AbortController();
+    this.aborts.set(id, abort);
     let started = false;
     let finished = false;
     let left = false;
     try {
-      await call(this.abort.signal, ev => {
-        if (this.openId() !== c.id) return;
+      await call(abort.signal, ev => {
         if (ev.type === 'user') {
           started = true;
-          this.ownGen = ev.gen ?? null;
-          this.chat.update(x => x && { ...x, messages: [...(x.messages ?? []).slice(0, ev.keep ?? (x.messages ?? []).length),
-                                                       ...(ev.message ? [ev.message] : [])] });
-          this.scroll();
+          this.setRun(id, r => r && { ...r, gen: ev.gen ?? null });
+          this.inChat(id, x => ({ ...x, messages: [...(x.messages ?? []).slice(0, ev.keep ?? (x.messages ?? []).length),
+                                                   ...(ev.message ? [ev.message] : [])] }));
+          if (here()) this.scroll();
         } else if (ev.type === 'thinking') {
-          this.live.update(l => l && this.sped({ ...l, thinking: l.thinking + (ev.text ?? ''), t1: l.t1 ?? Date.now() }));
-          this.stickThink();
-          this.scroll(true);
+          this.setRun(id, r => r && this.sped({ ...r, thinking: r.thinking + (ev.text ?? ''), t1: r.t1 ?? Date.now() }));
+          if (here()) { this.stickThink(); this.scroll(true); }
         } else if (ev.type === 'text') {
-          this.live.update(l => l && this.sped({ ...l, text: l.text + (ev.text ?? ''), t1: l.t1 ?? Date.now() }));
-          this.scroll(true);
+          this.setRun(id, r => r && this.sped({ ...r, text: r.text + (ev.text ?? ''), t1: r.t1 ?? Date.now() }));
+          if (here()) this.scroll(true);
         } else if (ev.type === 'error') {
-          this.error.set(ev.error ?? t('The model did not answer.'));
+          const err = ev.error ?? t('The model did not answer.');
+          if (here()) this.error.set(err); else this.runErrors.set(id, err);
         } else if (ev.type === 'done' && ev.message) {
           finished = true;
-          this.chat.update(x => x && ((x.messages ?? []).some(y => y.id === ev.message!.id) ? x
-                                      : { ...x, messages: [...(x.messages ?? []), ev.message!] }));
-          this.live.set(null);
-          this.scroll();
+          this.inChat(id, x => (x.messages ?? []).some(y => y.id === ev.message!.id) ? x
+                                : { ...x, messages: [...(x.messages ?? []), ev.message!] });
+          this.setRun(id, () => null);
+          if (here()) this.scroll();
         } else if (ev.type === 'title' && ev.title) {
-          this.chat.update(x => x && { ...x, title: ev.title! });
-          this.chats.update(l => l.map(x => x.id === c.id ? { ...x, title: ev.title! } : x));
+          this.inChat(id, x => ({ ...x, title: ev.title! }));
+          this.chats.update(l => l.map(x => x.id === id ? { ...x, title: ev.title! } : x));
         }
       });
     } catch (e) {
       left = (e as Error).name === 'AbortError';
       if (!left && !started) {
-        this.error.set((e as Error).message);
-        failed?.();
+        if (here()) { this.error.set((e as Error).message); failed?.(); }
+        else this.runErrors.set(id, (e as Error).message);
       }
       // Cut once it had started (the API reloaded, the network dropped):
       // the answer is still being written on the server - followed below.
     } finally {
-      this.live.set(null);
-      this.abort = null;
+      this.setRun(id, () => null);
+      if (this.aborts.get(id) === abort) this.aborts.delete(id);
       this.refresh();
-      this.api.get(c.id).subscribe({
+      this.api.get(id).subscribe({
         next: x => { if (this.openId() === x.id && !this.live()) { this.chat.set(x); this.scroll(); } }, error: () => {} });
-      // Not seen to the end here: the live stream picks it up where it is.
-      if (started && !finished && !left && this.openId() === c.id) this.relisten(c.id);
+      // Not seen to the end here: the live stream picks it up where it is
+      // (and does by itself when the conversation is opened again later).
+      if (started && !finished && !left && here()) this.relisten(id);
     }
+  }
+
+  /** This page's own answer in conversation `id`: changed, or ended (null). */
+  private setRun(id: string, f: (r: Run | null) => Run | null) {
+    this.runs.update(m => {
+      const r = f(m.get(id) ?? null);
+      if (!r && !m.has(id)) return m;
+      const n = new Map(m);
+      if (r) n.set(id, r); else n.delete(id);
+      return n;
+    });
+  }
+
+  /** The conversation on screen changed - only when it is `id` (one being
+   *  opened may still show the one before it). */
+  private inChat(id: string, f: (c: CcChat) => CcChat) {
+    this.chat.update(x => x && x.id === id ? f(x) : x);
   }
 
   /** The answer being written that this page may stop: its own, or anyone's
@@ -1958,15 +1999,16 @@ export class RoomCommandCode implements OnDestroy {
     if (this.openId() !== id) return;
     // This page's own answer, while its request is still streaming it here;
     // after a refresh (or a cut stream) it is followed like anyone's.
+    const own = this.runs().get(id);
     const mine = (w: { client?: string | null; gen?: string }) =>
-      !!w.client && w.client === this.client && !!this.live() && (!this.ownGen || w.gen === this.ownGen);
+      !!w.client && w.client === this.client && !!own && (!own.gen || w.gen === own.gen);
     switch (ev.type) {
       case 'hello': {
         const now = (ev.live ?? []).filter(w => !mine(w)).map(w => this.clocked(w));
         // Finished while the stream was away: read the conversation again.
         const lost = this.watch().some(w => !now.some(x => x.gen === w.gen));
         this.watch.set(now);
-        now.forEach(w => this.showAsked(w));
+        now.forEach(w => this.showAsked(id, w));
         if (now.length) { this.stickThink(); this.scroll(true); }
         if (lost) this.reread(id);
         if (ev.queue && !Array.isArray(ev.queue)) this.applyQueue(ev.queue);
@@ -1986,7 +2028,7 @@ export class RoomCommandCode implements OnDestroy {
                              message: ev.message ?? null, keep: ev.keep, text: ev.text ?? '', thinking: ev.thinking ?? '',
                              started_at: ev.started_at, first_at: ev.first_at, now: ev.now });
         this.watch.update(l => [...l.filter(x => x.gen !== w.gen), w]);
-        this.showAsked(w);
+        this.showAsked(id, w);
         this.scroll(true);
         if (w.thinking) this.stickThink();
         break;
@@ -2003,7 +2045,7 @@ export class RoomCommandCode implements OnDestroy {
         if (!this.watch().some(w => w.gen === ev.gen)) return;
         this.watch.update(l => l.filter(w => w.gen !== ev.gen));
         const m = ev.message;
-        if (m) this.chat.update(x => x && ((x.messages ?? []).some(y => y.id === m.id) ? x : { ...x, messages: [...(x.messages ?? []), m] }));
+        if (m) this.inChat(id, x => (x.messages ?? []).some(y => y.id === m.id) ? x : { ...x, messages: [...(x.messages ?? []), m] });
         this.scroll(true);
         this.refresh();
         break;
@@ -2021,11 +2063,11 @@ export class RoomCommandCode implements OnDestroy {
   }
 
   /** Someone else's question, in the conversation as they sent it. */
-  private showAsked(w: CcWatch) {
-    if (this.live()) return;                                  // my own answer is being written here
+  private showAsked(id: string, w: CcWatch) {
+    if (this.runs().has(id)) return;                          // my own answer is being written here
     const m = w.message;
     this.chat.update(x => {
-      if (!x) return x;
+      if (!x || x.id !== id) return x;
       const msgs = x.messages ?? [];
       if (m && msgs.some(y => y.id === m.id)) return x;
       return { ...x, messages: [...msgs.slice(0, w.keep ?? msgs.length), ...(m ? [m] : [])] };

@@ -3843,6 +3843,7 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-cc-itemtop { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .tcv-cc-itemtitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px;
   font-weight: 500; color: var(--ink); }
+.tcv-cc-itemrun { flex: none; align-self: center; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .tcv-cc-itemwhen { flex: none; font: 10px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
 .tcv-cc-itemsnip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ink-dim); }
 .tcv-cc-pinmark { width: 12px; height: 12px; color: var(--ink-dim); }

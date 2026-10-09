@@ -162,6 +162,7 @@ const TR: Record<string, string> = {
   'interrupted': 'yarıda kaldı',
   'The server restarted while it was being written.': 'Yazılırken sunucu yeniden başladı.',
   'An answer is being written in this conversation - wait for it, or stop it.': 'Bu sohbette bir yanıt yazılıyor - bitmesini bekleyin ya da durdurun.',
+  'An answer is being written': 'Bir yanıt yazılıyor',
   'Ask anything. Everyone in this workspace sees the conversation and can join it.': 'Ne istersen sor. Bu çalışma alanındaki herkes sohbeti görür ve katılabilir.',
   'Write to the model…  Enter sends, Shift+Enter a new line': 'Modele yaz…  Enter gönderir, Shift+Enter yeni satır',
   'Send': 'Gönder',
