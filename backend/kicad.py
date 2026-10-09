@@ -691,7 +691,11 @@ async def render(db, board_id: str, route: bool = True) -> dict:
         if route_report:
             routed = {k: route_report.get(k) for k in
                       ("tracks", "vias", "length_mm", "zones", "unrouted",
-                       "route_s", "passes", "attempts", "edge_exempt", "leftovers")}
+                       "route_s", "passes", "attempts", "edge_exempt", "leftovers", "tracemaker")}
+            # Which router drew it, and when: the layout says so (a board
+            # routed before there was a choice was Freerouting's).
+            routed["engine"] = route_report.get("engine") or "freerouting"
+            routed["at"] = store.now()
         await db[ato.BOARDS].update_one(
             {"_id": board_id},
             {"$set": {"layout": {"placed": placed.get("placed"),

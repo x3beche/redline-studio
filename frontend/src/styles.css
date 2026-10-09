@@ -5048,3 +5048,21 @@ button.tcv-fm-crumb:hover { color: var(--ink); background: var(--hover); }
 .tcv-engine button[data-on] { color: var(--ink-bright); background: var(--accent-deep); }
 .tcv-engine button:disabled { cursor: default; }
 .tcv-engine button:disabled:not([data-on]) { opacity: .55; }
+
+/* ============================ SHOT ============================
+   tools/render.py opens the page with ?shot=WxH: the viewer alone, its
+   canvas pinned to the picture's size (ocp.ts, OcpViewer.shot). The side
+   columns, the tabs and the log are not part of the picture, and leaving
+   them in made the canvas whatever they left over. */
+html[data-shot] .tcv-shell aside.tcv-fold-l,
+html[data-shot] .tcv-shell aside.tcv-fold,
+html[data-shot] .tcv-shell > .tcv-edge,
+html[data-shot] .tcv-shell > .tcv-scrim,
+html[data-shot] .tcv-mtop,
+html[data-shot] .tcv-log { display: none !important; }
+
+/* The layout's stamp: which router drew the copper on show, and when. */
+.tcv-route-stamp { position: absolute; left: 8px; bottom: 8px; z-index: 3; display: flex; align-items: center; gap: 8px;
+  padding: 3px 9px; font-size: 10.5px; border-radius: 4px; color: var(--ink-dim);
+  background: var(--overlay); border: 1px solid var(--line); pointer-events: auto; }
+.tcv-route-stamp b { color: var(--ink); font-weight: 600; }

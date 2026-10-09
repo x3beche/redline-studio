@@ -342,6 +342,13 @@ export interface ComponentVersions {
 }
 /** An importable name, and the component it resolves to (the build's table). */
 export interface ModuleTarget { kind: 'model' | 'board'; id: string; title: string }
+/** A row of the build's module table. A bare name several models share
+ *  means one of them per project (top folder): `in`; elsewhere nothing
+ *  (kind and id null) unless a model's whole-id name is that name. */
+export interface ModuleRow {
+  kind: 'model' | 'board' | null; id: string | null; title: string | null;
+  in?: Record<string, ModuleTarget>; ambiguous?: string[];
+}
 /** A board's 3D component: version and the named data a model reads. */
 export interface BoardComponent {
   board: string; title: string; module: string | null; line: string | null;
@@ -435,8 +442,8 @@ export class Catalog {
   }
 
   /** Every name a model can import, and what it is - the build's own table. */
-  modules(): Observable<Record<string, ModuleTarget>> {
-    return this.http.get<Record<string, ModuleTarget>>('/api/components/modules');
+  modules(): Observable<Record<string, ModuleRow>> {
+    return this.http.get<Record<string, ModuleRow>>('/api/components/modules');
   }
 
   source(id: string): Observable<{ source: string; rev: string }> {
@@ -481,6 +488,9 @@ export interface SystemInfo {
 export interface BoardRoute {
   tracks: number; vias: number; length_mm: number; zones: number;
   unrouted: number; route_s: number; passes: number;
+  /** Which router drew it (absent: before there was a choice - Freerouting), and when. */
+  engine?: string; at?: string;
+  tracemaker?: { summary?: string | null; seconds?: number | null } | null;
 }
 
 /** KiCad's DRC over the routed board, as counts. */

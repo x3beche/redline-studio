@@ -828,6 +828,7 @@ const TR: Record<string, string> = {
   'The server does not keep costs yet - the figures here are empty until it does.': 'Sunucu henüz maliyet tutmuyor - o zamana kadar buradaki rakamlar boş.',
   'The costs did not load': 'Maliyetler yüklenemedi',
   'Fixed costs a month': 'Aylık sabit maliyetler',
+  'all connected': 'hepsi bağlı',
   'Router': 'Yönlendirici',
   'Which router the next build uses - TraceMaker can be watched routing in the layout': "Sonraki build hangi yönlendiriciyle yapılacak - TraceMaker yönlendirirken layout'ta izlenebilir",
   'routing': 'rotalanıyor',

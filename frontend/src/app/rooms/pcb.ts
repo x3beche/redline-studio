@@ -550,6 +550,14 @@ type BoardView = Pane | 'split' | 'focus';
           } @else {
             <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ imported() ? importedNote : notYet }}</p>
           }
+          <!-- Which router drew the copper on show, and when. -->
+          @if (hasLayout() && here()?.route && !liveRouting() && !frozen()) {
+            <div class="tcv-route-stamp" [title]="routeStampTip()">
+              <b>{{ routeEngineName() }}</b>
+              <span>{{ routeAgo() }}</span>
+              <span class="mono">{{ here()!.route!.unrouted === 0 ? ('all connected' | t) : here()!.route!.unrouted + ' ' + ('open' | t) }} · {{ here()!.route!.vias }} via</span>
+            </div>
+          }
           <app-route-live [board]="here()?._id ?? null" (finished)="refresh()" (showing)="liveRouting.set($event)" />
         </div>
       }
@@ -714,6 +722,32 @@ export class RoomPcb implements OnDestroy {
   savingEngine = signal(false);
   /** A run of this board is being routed, seen in the layout - also after a reload. */
   liveRouting = signal(false);
+  /** When the copper on show was routed: the run's own stamp, else the drawing's. */
+  private routeAt = computed(() => this.here()?.route?.at ?? this.here()?.artifacts?.['routed']?.at
+                                    ?? this.here()?.layout?.at ?? null);
+  routeEngineName = computed(() => (this.here()?.route?.engine ?? 'freerouting') === 'tracemaker' ? 'TraceMaker' : 'Freerouting');
+  routeAgo = computed(() => {
+    this.clockTick();
+    const at = this.routeAt();
+    const ms = at ? Date.parse(at) : NaN;
+    if (isNaN(ms)) return '';
+    const m = Math.round((Date.now() - ms) / 60000);
+    if (m < 1) return t('just now');
+    if (m < 60) return `${m} ${t('min ago')}`;
+    const h = Math.round(m / 60);
+    if (h < 24) return `${h} ${t('h ago')}`;
+    return new Date(ms).toLocaleString(navigator.language || 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  });
+  routeStampTip = computed(() => {
+    const r = this.here()?.route, at = this.routeAt();
+    if (!r) return '';
+    const when = at ? new Date(at).toLocaleString(navigator.language || 'en-GB') : '';
+    return [`${this.routeEngineName()} - ${when}`,
+            `${r.tracks} ${t('tracks')}, ${r.vias} via, ${r.length_mm} mm, ${r.unrouted} ${t('open')}`,
+            r.route_s ? `${Math.round(r.route_s)} s` : '', r.tracemaker?.summary ?? ''].filter(Boolean).join('\n');
+  });
+  private clockTick = signal(0);
+  private clockTimer = setInterval(() => this.clockTick.update(n => n + 1), 30_000);
   private hereId = computed(() => this.here()?._id ?? null);
   graph = signal<BoardGraph | null>(null);
   /** The routed board as data: what the mouse can point at on the layout. */
@@ -878,6 +912,7 @@ export class RoomPcb implements OnDestroy {
   }
 
   ngOnDestroy() {
+    clearInterval(this.clockTimer);
     for (const id of this.timers) clearInterval(id);
     this.picked.boardDraft.set(null);
   }
