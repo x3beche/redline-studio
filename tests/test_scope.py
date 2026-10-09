@@ -183,7 +183,8 @@ def test_stored_files_reach_the_real_database_from_every_kind_of_db():
     async def check():
         plain = AsyncIOMotorClient("mongodb://localhost:1", connect=False)["x"]
         assert isinstance(store.bucket(plain, "shots"), AsyncIOMotorGridFSBucket)
-        assert isinstance(store.bucket(scope.ScopedDb(plain, "a"), "shots"), AsyncIOMotorGridFSBucket)
+        # A workspace's bucket stamps new files with it; underneath, the same.
+        assert isinstance(store.bucket(scope.ScopedDb(plain, "a"), "shots")._b, AsyncIOMotorGridFSBucket)
     asyncio.run(check())
 
 

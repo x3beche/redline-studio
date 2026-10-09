@@ -45,8 +45,26 @@ def bucket(db, name: str):
     # The workspace view (scope.ScopedDb) hands over the database itself.
     # Asked of the class, like REMOTE above: getattr(db, "raw") on a plain
     # Motor database is a collection called "raw".
-    return AsyncIOMotorGridFSBucket(db.raw if getattr(type(db), "SCOPED", False) else db,
-                                    bucket_name=name)
+    if getattr(type(db), "SCOPED", False):
+        return _Stamped(AsyncIOMotorGridFSBucket(db.raw, bucket_name=name), db.workspace)
+    return AsyncIOMotorGridFSBucket(db, bucket_name=name)
+
+
+class _Stamped:
+    """A bucket that writes down whose each new file is
+    (`metadata.workspace_id`), so a file asked for by its id alone - the
+    agents' file route (backend/agent_api.py) - can be kept to its space.
+    Files from before carry none and count as the default space's."""
+
+    def __init__(self, b, ws: str):
+        self._b, self._ws = b, ws
+
+    async def upload_from_stream(self, filename, source, *a, metadata=None, **kw):
+        return await self._b.upload_from_stream(
+            filename, source, *a, metadata={**(metadata or {}), "workspace_id": self._ws}, **kw)
+
+    def __getattr__(self, name: str):
+        return getattr(self._b, name)
 
 
 # ---------------- reading metadata from source ----------------
