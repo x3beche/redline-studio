@@ -151,3 +151,36 @@ def test_each_kind_cuts_its_picture_from_its_own_canvas():
     assert "app-board-3d" in render.BOARD_CANVAS
     assert render.CAD_CANVAS != "canvas"
     assert render.BOARD_CANVAS in render.unclutter_js(render.BOARD_CANVAS)
+
+
+def test_a_call_the_page_never_answers_fails_and_says_which():
+    """A stuck page used to hang the render for ever, with no picture and no word."""
+    import pytest
+    now = [0.0]
+
+    class Silent:
+        def send(self, _):
+            pass
+
+        def recv(self, timeout=None):
+            now[0] += timeout
+            raise TimeoutError
+
+    with pytest.raises(SystemExit) as e:
+        render.cdp_call(Silent(), [0], "Runtime.evaluate", {"expression": "v.setCameraPosition([0,-200,0])"},
+                        timeout=5, clock=lambda: now[0])
+    assert "did not answer Runtime.evaluate in 5 s" in str(e.value) and "setCameraPosition" in str(e.value)
+
+
+def test_a_call_gets_its_own_answer_past_events():
+    import json as _json
+    msgs = [{"method": "Runtime.consoleAPICalled"}, {"id": 7, "result": {"result": {"value": 3}}}]
+
+    class Talk:
+        def send(self, _):
+            pass
+
+        def recv(self, timeout=None):
+            return _json.dumps(msgs.pop(0))
+
+    assert render.cdp_call(Talk(), [6], "Runtime.evaluate", {}, timeout=5) == {"result": {"value": 3}}

@@ -514,6 +514,39 @@ def board_url(board: str, web: str = WEB) -> str:
     return f"{web}/?{urlencode({'ws': 'pcb', 'board': board, 'tab': '3d'})}"
 
 
+# How long one call into the browser may take before the render gives up.
+# Each used to wait for its answer for ever: a page stuck setting a camera
+# (an explicit front view of station_80, 2026-10-09) left the render hanging
+# with no picture and no error, twice.
+CALL_TIMEOUT = float(os.environ.get("REDLINE_RENDER_CALL_TIMEOUT", "90"))
+
+
+def cdp_call(ws, seq: list, method: str, params: dict | None = None,
+             timeout: float | None = None, clock=time.monotonic) -> dict:
+    """One DevTools call and its answer - or a failure that says which call
+    the page did not answer, after `timeout` seconds."""
+    limit = CALL_TIMEOUT if timeout is None else timeout
+    seq[0] += 1
+    ws.send(json.dumps({"id": seq[0], "method": method, "params": params or {}}))
+    end = clock() + limit
+    while True:
+        left = end - clock()
+        if left <= 0:
+            raise SystemExit(f"the page did not answer {method} in {limit:.0f} s"
+                             + (f" ({str(params.get('expression', ''))[:120]!r})"
+                                if params and params.get("expression") else "")
+                             + " - the browser is stuck; nothing was photographed")
+        try:
+            msg = json.loads(ws.recv(timeout=left))
+        except TimeoutError:
+            continue
+        if msg.get("id") == seq[0]:
+            if "exceptionDetails" in (msg.get("result") or {}):
+                d = msg["result"]["exceptionDetails"]
+                print(f"page error in {method}: {(d.get('exception') or {}).get('description') or d.get('text')}"[:300])
+            return msg.get("result", {})
+
+
 def page_url(revision: str | None, model: str, web: str = WEB) -> str:
     """The address that opens exactly `model` (and a revision's camera)."""
     from urllib.parse import urlencode
@@ -682,13 +715,7 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
         seq = [0]
 
         def send(method, params=None):
-            seq[0] += 1
-            ws.send(json.dumps({"id": seq[0], "method": method,
-                                "params": params or {}}))
-            while True:
-                msg = json.loads(ws.recv())
-                if msg.get("id") == seq[0]:
-                    return msg.get("result", {})
+            return cdp_call(ws, seq, method, params)
 
         def js(expr):
             r = send("Runtime.evaluate", {"expression": expr, "returnByValue": True})
