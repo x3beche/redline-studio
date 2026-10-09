@@ -1980,7 +1980,7 @@ const TR: Record<string, string> = {
   'Deny': 'Reddet',
   'waiting for you': 'sizi bekliyor',
   'not allowed': 'izin verilmedi',
-  'Tools the model may use': 'Modelin kullanabileceği araçlar',
+  'What the model may use while it answers your messages. Tap a tile to turn it on or off.': 'Model size yanıt verirken bunları kullanabilir. Açıp kapatmak için bir kutucuğa dokunun.',
   'Only reads': 'Yalnızca okur',
   'Changes': 'Değiştirir',
   'Deletes': 'Siler',

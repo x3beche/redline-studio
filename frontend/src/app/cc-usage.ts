@@ -232,13 +232,15 @@ export class CcTabUsage implements OnDestroy {
 }
 
 /** Pinned under the Chat room's list: the windows as small meters, when
- *  they reset and when the plan renews. Opens LLM settings. */
+ *  they reset and when the plan renews. Opens LLM settings. What it is
+ *  given (the Tools line) goes under it, in the same frame. */
 @Component({
   selector: 'app-cc-usage-line',
   imports: [T],
   styles: [`
     :host { display: block; flex: none; }
-    .ccl-wrap { padding: 6px 8px 8px; border-top: 1px solid var(--line); }
+    .ccl-wrap { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 8px; border-top: 1px solid var(--line); }
+    .ccl-wrap:empty { display: none; }
     .ccl { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 6px 8px; text-align: left;
       border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); cursor: pointer; }
     .ccl:hover, .ccl:focus-visible { background: var(--hover); outline: none; }
@@ -258,8 +260,9 @@ export class CcTabUsage implements OnDestroy {
     .ccl-sub { font-size: 10px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   `],
   template: `
+<div class="ccl-wrap">
 @if (cc.data(); as d) { @if (d.shared && (cc.weekly() || cc.fiveHour() || cc.monthly())) {
-  <div class="ccl-wrap"><button class="ccl" type="button" (click)="openSettings()" [title]="tipText()">
+  <button class="ccl" type="button" (click)="openSettings()" [title]="tipText()">
     <div class="ccl-head"><b>Command Code</b><span>{{ d.plan?.name || '' }}</span>
       @if (d.plan?.period_end; as end) { <em>{{ (d.plan?.cancel_at_period_end ? 'ends' : 'renews') | t }} {{ inSpan(end, cc.now()) }}</em> }</div>
     @for (r of rows(); track r.id) {
@@ -271,8 +274,9 @@ export class CcTabUsage implements OnDestroy {
       @if (cc.fiveHour(); as f) { {{ '5-hour' | t }} {{ 'resets' | t }} {{ inSpan(f.reset_at, cc.now()) }} }
       @if (cc.weekly()) { · {{ 'weekly' | t }} {{ weeklyReset(d) }} }
     </div>
-  </button></div>
-} }`,
+  </button>
+} }
+<ng-content /></div>`,
 })
 export class CcUsageLine {
   cc = polling();

@@ -11,6 +11,7 @@ import { T, t } from '../i18n';
 import { CcWant, Selection } from '../selection';
 import { AgentThreads, RoomThread } from './agent-thread';
 import { CcUsageLine } from '../cc-usage';
+import { CcToolsLine, CcToolsView, LEVELS } from './cc-tools';
 import { AvatarColours, avatarColour } from '../avatar';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
 import { FilesApi } from './files-model';
@@ -314,12 +315,6 @@ const I = {
 const TOOL_ICON: Record<string, string> = {
   drawer_search: I.drawer, drawer_add: I.drawer, lcsc_search: I.search, datasheet_get: I.sheet, datasheet_read: I.sheet,
 };
-const LEVELS: { id: ToolLevel; name: string; about: string }[] = [
-  { id: 'read', name: 'Only reads', about: 'run freely' },
-  { id: 'change', name: 'Changes', about: 'run, and always show a step' },
-  { id: 'delete', name: 'Deletes', about: 'ask you first' },
-];
-
 /** A mention's kind, as its icon and its name. */
 const KIND: Record<CcMention['kind'], { icon: string; name: string }> = {
   model: { icon: I.cad, name: '3D model' }, board: { icon: I.pcb, name: 'Board' }, file: { icon: I.file, name: 'File' },
@@ -343,7 +338,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker],
+  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)' },
   template: `
 <!-- Avatars: a person's picture, or their initials on a colour of their own
@@ -547,40 +542,19 @@ type Ask = { text: string; label: string; go: () => void };
       }
     </div>
     <!-- The Command Code account's usage windows, pinned under the list (cc-usage.ts): opens LLM settings. -->
-    <app-cc-usage-line />
-    <!-- The tools the model may use with my lines: my own choice, kept on the server. -->
-    <div class="tcv-cc-toolswrap" (keydown.escape)="toolsOpen.set(false)">
-      @if (toolsOpen()) {
-        <div class="tcv-cc-toolspop" role="dialog" [attr.aria-label]="'Tools' | t">
-          <div class="tcv-cc-toolshead"><b>{{ 'Tools the model may use' | t }}</b>
-            <button class="tcv-cc-ib" (click)="toolsOpen.set(false)" [title]="'Close' | t">
-              <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.x }" /></button></div>
-          @for (g of toolGroups(); track g.id) {
-            <div class="tcv-cc-toolsgroup"><span>{{ g.name | t }}</span><em>{{ g.about | t }}</em></div>
-            @for (tl of g.tools; track tl.name) {
-              <label class="tcv-cc-toolrow">
-                <button type="button" class="tcv-switch" [attr.data-on]="tl.on ? 1 : null" [attr.aria-pressed]="tl.on"
-                        [disabled]="!auth.can('draw')" (click)="toggleTool(tl)" [attr.aria-label]="tl.label | t"></button>
-                <span><b>{{ tl.label | t }}</b><small>{{ tl.description | t }}</small></span>
-              </label>
-            } @empty { <div class="tcv-cc-toolnone">{{ 'none yet' | t }}</div> }
-          }
-          <div class="tcv-cc-toolsfoot">{{ 'Your own choice, on every device. A model that cannot use tools answers without them.' | t }}</div>
-        </div>
-      }
-      <button class="tcv-cc-toolsbtn" type="button" (click)="toolsOpen.set(!toolsOpen())" [attr.aria-expanded]="toolsOpen()"
-              [title]="'Which tools the model may use with your lines' | t">
-        <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.tool }" />
-        <b>{{ 'Tools' | t }}</b><span>{{ toolsOn() }}/{{ tools().length }}</span>
-        <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.chevron }" />
-      </button>
-    </div>
+    <app-cc-usage-line>
+      <!-- The tools the model may use with my lines (cc-tools.ts): opens them where the conversation is. -->
+      <app-cc-tools-line [on]="toolsOn()" [total]="tools().length" [open]="toolsOpen()" (toggle)="showTools(!toolsOpen())" />
+    </app-cc-usage-line>
   </aside>
   <div class="tcv-cc-scrim" (click)="drawer.set(false)"></div>
 
   <!-- RIGHT: one conversation -->
   <section class="tcv-cc-main">
-    @if (sel.thread(); as room) {
+    @if (toolsOpen()) {
+      <app-cc-tools [tools]="tools()" [ready]="toolsReady()" [canEdit]="auth.can('draw')" (set)="setTools($event)"
+                    (done)="showTools(false)" (menu)="drawer.set(!drawer())" />
+    } @else if (sel.thread(); as room) {
       <app-room-thread [room]="room" [userAv]="userAv" [botAv]="botAv" [ico]="ico" (menu)="drawer.set(!drawer())" />
     } @else if (chat(); as c) {
       <header class="tcv-cc-bar">
@@ -1110,6 +1084,7 @@ export class RoomCommandCode implements OnDestroy {
   openThread(room: string) {
     if (this.selecting()) return;
     this.drawer.set(false);
+    this.toolsOpen.set(false);
     this.sel.thread.set(room);
     this.threads.markSeen(room);
   }
@@ -1407,6 +1382,7 @@ export class RoomCommandCode implements OnDestroy {
     if ((e.target as HTMLElement).closest('button, input')) return;
     if (c.deleted_at) return;                            // restored first, then read
     this.sel.thread.set(null);
+    this.toolsOpen.set(false);
     if (this.openId() === c.id && this.chat()?.id === c.id) { this.drawer.set(false); return; }
     this.open(c.id);
   }
@@ -1440,6 +1416,7 @@ export class RoomCommandCode implements OnDestroy {
   newChat(then?: (c: CcChat) => void) {
     if (!this.auth.can('draw')) return;
     this.sel.thread.set(null);
+    this.toolsOpen.set(false);
     if (this.tab() !== 'list') this.showTab('list');
     this.api.create().subscribe({
       next: c => {
@@ -1806,6 +1783,7 @@ export class RoomCommandCode implements OnDestroy {
       this.newChat();
     } else if (e.key === 'Escape') {
       if (this.mentionPop()) this.closeMentions();
+      else if (this.toolsOpen() && !this.drawer()) this.toolsOpen.set(false);
       else if (this.live() || this.stoppable()) { e.preventDefault(); this.stop(); }
       else if (this.menu() || this.modelPop()) { this.menu.set(false); this.modelPop.set(false); }
       else if (this.ask()) this.ask.set(null);
@@ -2503,6 +2481,7 @@ export class RoomCommandCode implements OnDestroy {
   openHit(h: CcHit) {
     if (h.trashed) return;                                    // restored first, then read
     this.sel.thread.set(null);
+    this.toolsOpen.set(false);
     this.drawer.set(false);
     if (this.openId() === h.chat_id && this.chat()?.id === h.chat_id) { if (h.message_id) this.scrollTo(h.message_id); return; }
     this.open(h.chat_id, h.message_id);
@@ -2623,18 +2602,22 @@ export class RoomCommandCode implements OnDestroy {
   }
 
   tools = signal<CcTool[]>([]);
+  toolsReady = signal(false);
+  /** The tools are shown where the conversation is (cc-tools.ts) until closed or a conversation is picked. */
   toolsOpen = signal(false);
   toolsOn = computed(() => this.tools().filter(x => x.on).length);
-  toolGroups = computed(() => LEVELS.map(l => ({ ...l, tools: this.tools().filter(x => x.level === l.id) })));
   private toolsLoaded = (() => { this.loadTools(); return true; })();
   private loadTools() {
-    this.api.tools().subscribe({ next: r => this.tools.set(r.tools), error: () => {} });
+    this.api.tools().subscribe({ next: r => { this.tools.set(r.tools); this.toolsReady.set(true); }, error: () => {} });
   }
-  /** One tool on or off for me: shown at once, then what the server keeps. */
-  toggleTool(tl: CcTool) {
-    const on = !tl.on;
-    this.tools.update(l => l.map(x => x.name === tl.name ? { ...x, on } : x));
-    this.api.setTools({ [tl.name]: on }).subscribe({
+  showTools(open: boolean) {
+    this.toolsOpen.set(open);
+    if (open) { this.drawer.set(false); this.loadTools(); }
+  }
+  /** Tools on or off for me: shown at once, then what the server keeps. */
+  setTools(change: Record<string, boolean>) {
+    this.tools.update(l => l.map(x => x.name in change ? { ...x, on: change[x.name] } : x));
+    this.api.setTools(change).subscribe({
       next: r => this.tools.set(r.tools),
       error: e => { this.error.set(e?.error?.detail ?? t('Something went wrong.')); this.loadTools(); },
     });
