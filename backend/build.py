@@ -6,7 +6,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import collections
 import contextvars
 import re
 import shutil
@@ -15,7 +14,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import compute, store
+from . import compute, modnames, store
 
 TIMEOUT = 900
 
@@ -42,23 +41,26 @@ _FLAG = re.compile(r"""REDLINE_IMPORT_ONLY["']\s*\]\s*=\s*["']([^"']*)["']""")
 
 
 def warm_imports(graph, model_id: str) -> list[tuple[str, str | None]]:
-    """How the models using `model_id` import it: (module name, the
+    """How the models using `model_id` import it: (its module name, the
     REDLINE_IMPORT_ONLY they set first, or None). A use pinned to a version
     imports another source, which this build does not make."""
     from . import links
     if os.environ.get("REDLINE_BUILD_WARM", "").strip().lower() in ("off", "0", "no"):
         return []
     k = links.key("model", model_id)
-    names = {n for n, v in graph.table.items() if v == ("model", model_id)}
+    module = links.module_of(graph.table, model_id)
     out = set()
     for d in graph.used_by(k):
-        if links.split(d)[0] != "model" or graph.pinned(d, k):
+        kind, importer = links.split(d)
+        if kind != "model" or graph.pinned(d, k):
             continue
         src = (graph.nodes.get(d) or {}).get("source") or ""
         flag = _FLAG.search(src)
-        for n in links.imported_names(src):
-            if n in names:
-                out.add((n, flag.group(1) if flag else None))
+        # However it says it (`import lid`, `import iot_fan__parts__lid`),
+        # one model is one module in a build: its whole-id one.
+        if any(links.lookup(graph.table, n, importer) == ("model", model_id)
+               for n in links.imported_names(src)):
+            out.add((module, flag.group(1) if flag else None))
     return sorted(out, key=str)[:WARM_MAX]
 
 
@@ -190,19 +192,18 @@ async def build(db, model_id: str, script: Path) -> dict:
         flat = model_id.replace("/", "__")
         # Every model is written, not just the target: an assembly imports the
         # parts it is made of, and it can only do that if they are on the path.
+        # Each under its whole-id module name (`iot_fan__parts__lid`), once;
+        # a bare `import lid` is sent to the right one by the importer's
+        # project (backend/modnames.py, installed by export_model.py from
+        # the manifest written here).
         others = [m async for m in db.models.find({}, {"source": 1, "name": 1})]
-        bare = collections.Counter(m.get("name") or str(m["_id"]) for m in others)
+        names = modnames.Names.from_docs(others)
         for other in others:
             if not other.get("source"):
                 continue
-            (models_dir / f"{str(other['_id']).replace('/', '__')}.py").write_text(
-                other["source"])
-            # Also under the bare name while it is unambiguous: an assembly says
-            # `import stand`, and moving that model into a folder must not break
-            # the import just because the id gained a path.
-            short = other.get("name") or str(other["_id"])
-            if bare[short] == 1 and "/" in str(other["_id"]):
-                (models_dir / f"{short}.py").write_text(other["source"])
+            (models_dir / f"{names.module[str(other['_id'])]}.py").write_text(other["source"])
+        (models_dir / modnames.MANIFEST).write_text(names.manifest())
+        # The target, by the name the build passes (it runs as model_<flat>).
         (models_dir / f"{flat}.py").write_text(doc["source"])
         assets_dir = tmp / "assets"
         # Models tend to write STEP/STL under <root>/exports; we create the

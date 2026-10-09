@@ -511,8 +511,11 @@ A model's id carries its folder, so moving one renames it and its revisions
 follow. A board's does not: it keeps its id and its history — the netlist,
 the layout, every job filed against it — and only the folder it is listed
 under changes. Assemblies keep working: during a build every model is also written
-under its bare name while that name is unambiguous, so `import stand` still
-resolves after `stand` moves into `parts/`.
+importable by its bare name, so `import stand` still resolves after `stand`
+moves into `parts/`. A bare name means the model of that name in the
+importer's own top folder (project), else the only one in the workspace;
+when neither is unique, import it by its whole id (`import
+iot_fan__parts__lid as lid`: `/` as `__`, `-` as `_`).
 
 Folders fold. The caret on a folder closes it, and what is closed is
 remembered — after F5 the tree comes back the way it was left, along with

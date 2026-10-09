@@ -36,11 +36,17 @@ class _phase:
         TIMES[self.name] = round(TIMES.get(self.name, 0) + time.perf_counter() - self.t0, 2)
 
 
+def module_name(name: str) -> str:
+    """The module the target runs as: not its import name, so a model that
+    imports it back gets a module of its own, as it always did."""
+    return "model_" + name.replace("/", "_")
+
+
 def load(models_dir: Path, name: str):
     path = models_dir / f"{name}.py"
     if not path.exists():
         raise FileNotFoundError(path)
-    spec = importlib.util.spec_from_file_location("model_" + name.replace("/", "_"), path)
+    spec = importlib.util.spec_from_file_location(module_name(name), path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -117,7 +123,16 @@ def main() -> None:
     # Models this one imports come from the component cache when their
     # result is kept (backend/buildcache.py); the model itself always runs.
     # Warming, it is an import like any other and is kept too.
-    target = None if args.warm else args.model
+    # Bare model imports (`import lid`) go to the model the importer's
+    # project means, per importing module (backend/modnames.py). The
+    # target runs as model_<flat>: that module is the target model too.
+    from backend import modnames
+    names = modnames.read(args.models_dir)
+    target_id = None
+    if names is not None and not args.warm:
+        target_id = next((i for i in names.module if i.replace("/", "__") == args.model), None)
+    target = None if args.warm else (names.module[target_id] if target_id else args.model)
+    modnames.install(args.models_dir, {module_name(args.model): target_id} if target_id else None)
     from backend import buildcache
     cache = buildcache.install(args.models_dir, args.models_dir.parent, target=target)
     if args.warm and cache is None:

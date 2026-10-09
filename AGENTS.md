@@ -746,6 +746,7 @@ that uses it is rebuilt by the server, in order (backend/links.py).
 import os
 os.environ["REDLINE_IMPORT_ONLY"] = "1"      # imported parts skip their own exports
 import stand as D                             # a 3D model: by its bare name
+import iot_fan__parts__lid as L               # ...or by its whole id (/ as __, - as _)
 import demoboard_gerber_zip as B              # a board: its id with - and / as _
 
 base = B.part                                 # the board with its parts (STEP)
@@ -754,6 +755,14 @@ for h in B.HOLES:                             # Hole(x, y, d, plated, ref)
 lid_z = B.THICKNESS + B.KEEPOUT["top"] + 1.0  # not 1.6 + 15.1 + 1.0
 ```
 
+- A bare model name resolves by the importer's top folder (its project):
+  the one model of that name in the importer's project, else the one in
+  the whole workspace, else the build stops and names the candidates. So
+  `iot-fan-80mm` can have its own `lid` next to iot-fan's; its station
+  still gets iot-fan's unique `oled_091` by `import oled_091`, and a part
+  of iot-fan imported there keeps getting iot-fan's `lid` (per importing
+  module, not per build). The whole-id name always means that one model.
+  `component show <model>` lists AMBIGUOUS imports.
 - A board's module is generated from its last layout: `part` (STEP, read on
   first use), `simple` (slab + one box per part, fast), `SIZE`, `THICKNESS`,
   `OUTLINE`, `CUTOUTS`, `HOLES`, `DRILLS`, `CONNECTORS` / `EDGE_PARTS`

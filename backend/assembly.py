@@ -120,8 +120,9 @@ class Marker:
     component cache's included) that lets them find and load a model module
     and marks what it made once it has loaded."""
 
-    def __init__(self, names: set[str]):
+    def __init__(self, names: set[str], bare: dict[str, str] | None = None):
         self.names = set(names)           # model and board modules a build can import
+        self.bare = dict(bare or {})      # a model's module -> its name (`lid`), for a title
         self.adopted: dict[int, types.ModuleType] = {}
         self.titles: dict[str, str] = {}
         self.sizes: dict[str, int] = {}   # how many parts a component's PARTS has
@@ -163,7 +164,8 @@ class Marker:
         self.adopted[id(real)] = real
         name = real.__name__
         title = real.__dict__.get("TITLE")
-        self.titles[name] = title if isinstance(title, str) and title.strip() else name
+        self.titles[name] = title if isinstance(title, str) and title.strip() \
+            else self.bare.get(name, name)
         self._size(real)
         try:
             self.scan(real)
@@ -265,7 +267,9 @@ def install(models_dir: Path, target: str | None = None) -> Marker:
     after the component cache is installed, before the model is loaded)."""
     names = {p.stem for p in Path(models_dir).glob("*.py") if p.stem.isidentifier()}
     names.discard(target or "")
-    marker = Marker(names)
+    from . import modnames
+    known = modnames.read(Path(models_dir))
+    marker = Marker(names, {q: known.bare_of[i] for i, q in known.module.items()} if known else None)
     sys.meta_path.insert(0, marker)
     try:
         keep_marks_through_booleans()

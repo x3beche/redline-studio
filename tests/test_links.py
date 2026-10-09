@@ -241,8 +241,12 @@ def test_names_map_to_models_and_boards_like_the_build_lays_them_out():
     boards = [{"_id": "demoboard-gerber-zip"}, {"_id": "controller"}]
     table = links.module_table(models, boards)
     assert table["stand"] == ("model", "iot-fan/parts/stand")
-    assert table["iot-fan__parts__stand"] == ("model", "iot-fan/parts/stand")
-    assert "base" not in table                                   # ambiguous: by folder only
+    assert table["iot_fan__parts__stand"] == ("model", "iot-fan/parts/stand")   # its whole id
+    assert "iot-fan__parts__stand" not in table                  # not an import name
+    assert "base" not in table                                   # two: by the importer's project
+    assert links.lookup(table, "base", "a/asm") == ("model", "a/base")
+    assert links.lookup(table, "base", "b/asm") == ("model", "b/base")
+    assert links.lookup(table, "base", "c/asm") is None          # neither is c's
     assert table["a__base"] == ("model", "a/base")
     assert table["demoboard_gerber_zip"] == ("board", "demoboard-gerber-zip")
     assert table["pcb_demoboard_gerber_zip"] == ("board", "demoboard-gerber-zip")
@@ -732,7 +736,7 @@ def test_a_pinned_model_is_built_at_its_pinned_source(db, tmp_path):
                           model("p/tray", "import part\n", pins={"model:p/part": 2})]
     run(links.archive(db, "model", "p/part", 2, {"source": "W = 2\n"}))
     got = run(links.prepare(db, "p/tray", tmp_path, tmp_path))
-    assert (tmp_path / "part.py").read_text() == "W = 2\n"
+    assert (tmp_path / "p__part.py").read_text() == "W = 2\n"      # the module it is in a build
     assert got["against"]["model:p/part"]["version"] == 2 and got["against"]["model:p/part"]["pinned"]
 
 

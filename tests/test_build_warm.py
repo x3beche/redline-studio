@@ -54,8 +54,9 @@ def test_what_is_warmed_is_how_its_users_import_it(monkeypatch):
         "p/base": 'import os\nos.environ["REDLINE_IMPORT_ONLY"] = "1"\nimport enc as E\nimport lid\n',
         "p/plain": "import p__enc\n",
         "p/alone": "X = 2\n"})
-    assert build.warm_imports(g, "p/enc") == [("enc", "1"), ("p__enc", None)]
-    assert build.warm_imports(g, "p/lid") == [("lid", "1")]
+    # One model is one module in a build, however it is named in the import.
+    assert build.warm_imports(g, "p/enc") == [("p__enc", "1"), ("p__enc", None)]
+    assert build.warm_imports(g, "p/lid") == [("p__lid", "1")]
     assert build.warm_imports(g, "p/alone") == []
     monkeypatch.setenv("REDLINE_BUILD_WARM", "off")
     assert build.warm_imports(g, "p/enc") == []

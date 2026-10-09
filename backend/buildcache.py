@@ -22,7 +22,8 @@ someone's import:
                 included).
 
 The key is content-addressed: the module's own text, its name, the keys of
-every model it imports (transitively), the uploaded files and board STEPs
+every model it imports (transitively; for a bare `import lid`, the model
+the importer's project resolves it to - backend/modnames.py), the uploaded files and board STEPs
 its text names, REDLINE_IMPORT_ONLY at the moment it is imported, and the
 versions of Python, build123d, OCP, this file and backend/assembly.py
 (whose component marks the kept shapes carry). A pinned component is
@@ -201,11 +202,17 @@ def _installed_files(dist) -> str:
     return _sha("\n".join(sorted(rows)))[:16]
 
 
-def module_keys(models_dir: Path, root: Path) -> dict[str, str]:
+def module_keys(models_dir: Path, root: Path, resolve=None) -> dict[str, str]:
     """Every importable module in the build directory and its key: its text,
     its name, the files its text names, and the keys of the modules it
-    imports. A module in an import cycle has none."""
+    imports - the modules those imports load for this importer (a bare
+    `import lid` is iot-fan's lid in iot-fan and the 80 mm one's there:
+    `resolve(importer, name)`, backend/modnames.py; by default the
+    manifest of the directory). A module in an import cycle has none."""
     models_dir, root = Path(models_dir), Path(root)
+    if resolve is None:
+        from . import modnames
+        resolve = modnames.resolver(models_dir)
     texts = {p.stem: p.read_text(errors="replace") for p in sorted(models_dir.glob("*.py"))
              if p.stem.isidentifier()}
     # Files a model can open by name: uploads in the build root, board STEPs.
@@ -227,7 +234,11 @@ def module_keys(models_dir: Path, root: Path) -> dict[str, str]:
         text = texts[name]
         deps = []
         ok = True
-        for dep in sorted(n for n in imported_names(text) if n in texts and n != name):
+        try:
+            loads = {resolve(name, n) for n in imported_names(text)}
+        except ImportError:                 # several models by that name: the build stops
+            loads, ok = set(), False
+        for dep in sorted(n for n in loads if n in texts and n != name):
             k = key(dep)
             if k is None:
                 ok = False

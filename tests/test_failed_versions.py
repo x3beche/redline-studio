@@ -126,10 +126,10 @@ def test_a_model_following_the_latest_is_built_with_the_latest_that_builds(db, t
     for v in (2, 3):
         run(links.archive(db, "model", "p/part", v, {"source": f"W = {v}\nPARTS = []\n"}))
     got = run(links.prepare(db, "p/tray", tmp_path, tmp_path))
-    assert not (tmp_path / "part.py").exists()              # v3 is fine so far: untouched
+    assert not (tmp_path / "p__part.py").exists()              # v3 is fine so far: untouched
     run(store.version_built(db, "p/part", 3, "boom"))
     got = run(links.prepare(db, "p/tray", tmp_path, tmp_path))
-    assert (tmp_path / "part.py").read_text() == "W = 2\nPARTS = []\n"
+    assert (tmp_path / "p__part.py").read_text() == "W = 2\nPARTS = []\n"
     assert any("v3 failed to build" in n and "v2" in n for n in got["notes"])
 
 

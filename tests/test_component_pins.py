@@ -190,8 +190,10 @@ async def test_the_code_view_resolves_imports_through_the_builds_table(api):
                            model("a/tray", "import a__stand\n")]
     async with client() as c:
         table = (await c.get("/api/components/modules")).json()
-    # Two models called stand: only their flat names resolve, like the build.
-    assert "stand" not in table
+    # Two models called stand: each project's own, like the build; no
+    # answer outside a or b.
+    assert table["stand"]["id"] is None and table["stand"]["ambiguous"] == ["a/stand", "b/stand"]
+    assert table["stand"]["in"]["a"]["id"] == "a/stand" and table["stand"]["in"]["b"]["id"] == "b/stand"
     assert table["a__stand"] == {"kind": "model", "id": "a/stand", "title": "stand"}
     assert table["demo_board"]["kind"] == "board" and table["pcb_demo_board"]["id"] == "demo-board"
     assert table["tray"]["id"] == "a/tray"

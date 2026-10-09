@@ -386,17 +386,20 @@ async def _model_states(d) -> dict[str, dict]:
 
 
 @app.get("/api/components")
-async def list_components():
+async def list_components(model: str | None = None):
     """Everything a model can import, for the 3D room's Insert picker and
     the agents' `component list`: every .3d model and every .pcb board,
-    with the line that imports it, what it uses and who uses it."""
+    with the line that imports it, what it uses and who uses it. With
+    `model`, the line is the one that model would write (a bare name
+    resolves by the importer's project, backend/modnames.py); without, one
+    that means the same thing in every model."""
     d = db()
     g = await links.load(d)
     states = await _model_states(d)
     out = []
     for k, info in sorted(g.nodes.items(), key=lambda kv: (kv[1]["kind"], kv[1]["title"].lower())):
-        mod = links.module_for(info["kind"], info["id"], g.table)
-        alias = "B" if info["kind"] == "board" else (mod or "m")[:1].upper()
+        mod = links.module_for(info["kind"], info["id"], g.table, model)
+        alias = "B" if info["kind"] == "board" else (info["id"].rpartition("/")[2] or "m")[:1].upper()
         st = states.get(info["id"], {}) if info["kind"] == "model" else {}
         out.append({"kind": info["kind"], "id": info["id"], "title": info["title"],
                     "version": info.get("version"), "module": mod,
@@ -476,14 +479,15 @@ async def model_links(model_id: str):
     for u in g.uses.get(k, []):
         info = g.nodes.get(u) or {}
         uses.append({"kind": info.get("kind"), "id": info.get("id"), "title": info.get("title"),
-                     "module": links.module_for(info.get("kind"), info.get("id"), g.table),
+                     "module": links.module_for(info.get("kind"), info.get("id"), g.table,
+                                                model_id),
                      "version": info.get("version"),
                      "built_against": (against.get(u) or {}).get("version"),
                      "pinned": (doc.get("pins") or {}).get(u)})
     exports = {}
     for u in g.uses.get(k, []):
         kind, cid = links.split(u)
-        mod = links.module_for(kind, cid, g.table) or cid
+        mod = links.module_for(kind, cid, g.table, model_id) or cid
         if kind == "model":
             exports[mod] = links.model_exports(g.nodes[u].get("source") or "")
         else:
@@ -501,7 +505,9 @@ async def model_links(model_id: str):
             "built": {"at": built.get("at"), "hash": built.get("hash"),
                       "current": bool(built.get("hash")) and built.get("hash") == now["hash"]},
             "link": doc.get("link"), "cycles": cycles, "pins": doc.get("pins") or {},
-            "copied": links.copied_numbers(doc.get("source") or "", exports)}
+            "copied": links.copied_numbers(doc.get("source") or "", exports),
+            # Bare names the build will refuse: several models, none in this project.
+            "ambiguous": links.ambiguous(doc.get("source") or "", g.table, model_id)}
 
 
 class PinIn(BaseModel):

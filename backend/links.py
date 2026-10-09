@@ -49,7 +49,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
-from . import board3d, buildcache, scope, store
+from . import board3d, buildcache, modnames, scope, store
 
 LOG = logging.getLogger("redline.links")
 
@@ -110,54 +110,124 @@ def imported_names(source: str) -> list[str]:
 
 
 def flat(model_id: str) -> str:
+    """A model id as a file name (the build's target): not an import name
+    - that is `module_of`."""
     return model_id.replace("/", "__")
 
 
-def module_table(models: list[dict], boards: list[dict]) -> dict[str, tuple[str, str]]:
-    """Module name -> (kind, id), the way the build lays the files out.
+class ModuleTable(dict):
+    """Module name -> (kind, id) for every name that means the same thing
+    to every model, with the models' `Names` (backend/modnames.py) for
+    the ones that depend on who imports them. Read it through `lookup`."""
 
-    A model is there under its flat id (`iot-fan__parts__stand`) and, while
-    nothing else has the same name, its bare one (`stand`) - the way
-    assemblies have always imported. A board is there as `pcb_<name>`,
-    always, and as `<name>` unless a model already is.
+    names: modnames.Names | None = None
+
+
+def module_table(models: list[dict], boards: list[dict]) -> ModuleTable:
+    """The names a build can import, the way it lays the files out.
+
+    A model is there under its whole-id module name (`iot_fan__parts__lid`)
+    and, while no other model anywhere has the same name, its bare one
+    (`lid`). A bare name several models share is not in the dict: which
+    one it is depends on the importer's project (`lookup`). A board is
+    there as `pcb_<name>`, always, and as `<name>` unless a model has that
+    name.
     """
-    import collections
-    bare = collections.Counter(m.get("name") or str(m["_id"]).rpartition("/")[2] for m in models)
-    table: dict[str, tuple[str, str]] = {}
-    for m in models:
-        table[flat(str(m["_id"]))] = ("model", str(m["_id"]))
-    for m in models:
-        name = m.get("name") or str(m["_id"]).rpartition("/")[2]
-        if bare[name] == 1:
-            table.setdefault(name, ("model", str(m["_id"])))
+    names = modnames.Names.from_docs(models)
+    table = ModuleTable()
+    table.names = names
+    for mid, q in names.module.items():
+        table[q] = ("model", mid)
+    for b, ids in names.by_bare.items():
+        if len(ids) == 1:
+            table.setdefault(b, ("model", ids[0]))
     for b in boards:
         mod = board3d.module_name(str(b["_id"]))
         table.setdefault("pcb_" + mod, ("board", str(b["_id"])))
-        table.setdefault(mod, ("board", str(b["_id"])))
+        if mod not in names.by_bare:
+            table.setdefault(mod, ("board", str(b["_id"])))
     return table
+
+
+def lookup(table: dict, name: str, importer: str | None = None) -> tuple[str, str] | None:
+    """What `import name` loads in model `importer`: the build's rule
+    (backend/modnames.py) for models, the table for boards. None when it
+    is nothing in the catalog - or several models, which the build refuses."""
+    names = getattr(table, "names", None)
+    if names is not None:
+        try:
+            mid = names.resolve(name, importer)
+        except modnames.Ambiguous:
+            return None
+        if mid is not None:
+            return ("model", mid)
+    return table.get(name)
+
+
+def ambiguous(source: str, table: dict, importer: str | None) -> list[dict]:
+    """The imports in a source the build will refuse: a bare name several
+    models have, none of them alone in the importer's project."""
+    names = getattr(table, "names", None)
+    out = []
+    for name in imported_names(source) if names is not None else []:
+        try:
+            names.resolve(name, importer)
+        except modnames.Ambiguous as exc:
+            out.append({"module": name, "candidates": exc.candidates,
+                        "use": [names.module[c] for c in exc.candidates], "error": str(exc)})
+    return out
+
+
+def module_of(table: dict, model_id: str) -> str:
+    """A model's whole-id module name: the build's one module for it."""
+    names = getattr(table, "names", None)
+    if names is not None and model_id in names.module:
+        return names.module[model_id]
+    return modnames.module_names([model_id])[model_id]
 
 
 def table_rows(g: "Graph") -> dict[str, dict]:
     """The module table as the code view needs it: every name a model can
-    import, what it resolves to, and that component's title."""
+    import, what it resolves to, and that component's title. A bare name
+    several models share has no single answer: its row says what it is in
+    each project that has one of them (`in`, by top folder) and lists them
+    all (`ambiguous`); `kind` and `id` are null outside those projects."""
+    def row(kind, cid):
+        info = g.nodes.get(key(kind, cid)) or {}
+        return {"kind": kind, "id": cid, "title": info.get("title") or cid}
+
     out = {}
     for name, (kind, cid) in sorted(g.table.items()):
         if not name.isidentifier():
             continue
-        info = g.nodes.get(key(kind, cid)) or {}
-        out[name] = {"kind": kind, "id": cid, "title": info.get("title") or cid}
+        out[name] = row(kind, cid)
+    names = getattr(g.table, "names", None)
+    for name, ids in sorted((names.by_bare if names else {}).items()):
+        if len(ids) < 2 or not name.isidentifier():
+            continue
+        per = {}
+        for p in sorted({modnames.project(i) for i in ids}):
+            local = [i for i in ids if modnames.project(i) == p]
+            if len(local) == 1:
+                per[p] = row("model", local[0])
+        fallback = names.model_of.get(name)
+        out[name] = {**(row("model", fallback) if fallback else
+                        {"kind": None, "id": None, "title": None}),
+                     "in": per, "ambiguous": list(ids)}
     return out
 
 
 def table_digest(table: dict) -> str:
-    return hashlib.sha256(repr(sorted(table.items())).encode()).hexdigest()[:16]
+    # "p1": bare names resolve per importing project (backend/modnames.py).
+    return hashlib.sha256(("p1" + repr(sorted(table.items()))).encode()).hexdigest()[:16]
 
 
 def resolve(source: str, table: dict, self_id: str | None = None) -> list[dict]:
-    """What a source uses: [{kind, id, module}], each component once."""
+    """What a source uses: [{kind, id, module}], each component once -
+    resolved as model `self_id` imports them."""
     out, seen = [], set()
     for name in imported_names(source):
-        hit = table.get(name)
+        hit = lookup(table, name, self_id)
         if not hit:
             continue
         kind, cid = hit
@@ -168,8 +238,17 @@ def resolve(source: str, table: dict, self_id: str | None = None) -> list[dict]:
     return out
 
 
-def module_for(kind: str, cid: str, table: dict) -> str | None:
-    """The name to import a component by: the shortest the table has."""
+def module_for(kind: str, cid: str, table: dict, importer: str | None = None) -> str | None:
+    """The name to import a component by: the shortest that means it - to
+    `importer` when given, else to every model."""
+    if kind == "model" and getattr(table, "names", None) is not None:
+        names = table.names
+        if cid not in names.module:
+            return None
+        b = names.bare_of[cid]
+        if b.isidentifier() and lookup(table, b, importer) == ("model", cid):
+            return b
+        return names.module[cid]
     names = [n for n, v in table.items() if v == (kind, cid)]
     if not names:
         return None
@@ -909,9 +988,7 @@ async def prepare(db, model_id: str, models_dir, root) -> dict:
         elif u in pins and pins[u] != latest:
             row = await version_of(db, "model", cid, pins[u])
             if row and row.get("source"):
-                for n, v in g.table.items():
-                    if v == ("model", cid):
-                        (Path(models_dir) / f"{n}.py").write_text(row["source"])
+                (Path(models_dir) / f"{module_of(g.table, cid)}.py").write_text(row["source"])
             else:
                 notes.append(f"{title} v{pins[u]} is pinned but no longer kept: "
                              f"built with the latest, v{latest}")
@@ -920,9 +997,7 @@ async def prepare(db, model_id: str, models_dir, root) -> dict:
             good = await store.latest_good(db, "model", cid, latest)
             row = await version_of(db, "model", cid, good) if good not in (None, latest) else None
             if row and row.get("source"):
-                for n, v in g.table.items():
-                    if v == ("model", cid):
-                        (Path(models_dir) / f"{n}.py").write_text(row["source"])
+                (Path(models_dir) / f"{module_of(g.table, cid)}.py").write_text(row["source"])
                 notes.append(f"{title} v{latest} failed to build: used at v{good}, "
                              f"its latest that builds")
     sources = [g.nodes[u].get("source") or "" for u in closure if split(u)[0] == "model"]

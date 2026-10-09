@@ -83,10 +83,10 @@ def test_a_pin_upstream_is_staged_said_and_counted_in_built_against(tmp_path):
          "source": "W = 1\n"})
     models = tmp_path / "models"
     models.mkdir()
-    (models / "a.py").write_text("W = 2\n")
+    (models / "p__a.py").write_text("W = 2\n")
 
     got = run(links.prepare(db, "p/asm", models, tmp_path))
-    assert (models / "a.py").read_text() == "W = 1\n"    # what the part pinned
+    assert (models / "p__a.py").read_text() == "W = 1\n"    # what the part pinned
     assert got["notes"] == ["a is used at v1, pinned by p/part (latest v2)"]
     row = got["against"]["model:p/a"]
     assert row["version"] == 1 and row["pinned"]

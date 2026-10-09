@@ -839,6 +839,9 @@ def _show_component(r: dict, k: str, brief: bool = False) -> None:
         print("  used by    " + (", ".join(u["id"] for u in c.get("used_by") or []) or "nothing"))
         for x in c.get("copied") or []:
             print(f"  copied     line {x['line']}: {x['value']} is {' / '.join(x['names'])}")
+        for x in c.get("ambiguous") or []:
+            print(f"  AMBIGUOUS  import {x['module']}: " + ", ".join(
+                f"{cid} (import {m} as {x['module']})" for cid, m in zip(x["candidates"], x["use"])))
         pinned = c.get("pinned_by") or []
     if pinned:
         print("  pinned by  " + ", ".join(f"{p['id']} at v{p['version']}" + (" (behind)" if p.get("behind") else "")

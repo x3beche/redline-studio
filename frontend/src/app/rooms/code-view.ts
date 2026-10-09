@@ -6,7 +6,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import type * as Monaco from 'monaco-editor';
 import { Auth } from '../auth';
-import { Catalog, FolderNode, ModuleTarget } from '../api';
+import { Catalog, FolderNode, ModuleRow, ModuleTarget } from '../api';
 import { Selection } from '../selection';
 import { T } from '../i18n';
 import { insertImport } from './links';
@@ -76,17 +76,34 @@ export function importSpans(line: string): ImportSpan[] {
 
 /** Module name -> the component it is: the build's table. Shared by the
  *  link provider, which Monaco keeps per language, not per editor. */
-let componentTable = new Map<string, ModuleTarget>();
+let componentTable = new Map<string, ModuleRow>();
 /** The open code view's way of following a link. */
 let followLink: ((t: ModuleTarget) => void) | null = null;
 let linksRegistered = false;
 const LINK_SCHEME = 'redline-component';
 
-/** The component an import line names at a column, if any. */
-export function componentAt(line: string, column: number,
-                            table: Map<string, ModuleTarget> = componentTable): ModuleTarget | null {
+/** The project (top folder) of a model id: where a bare name is looked
+ *  up first (backend/modnames.py). */
+export function projectOf(modelId: string | null | undefined): string {
+  return modelId && modelId.includes('/') ? modelId.split('/')[0] : '';
+}
+
+/** What `import <name>` is in a model of `project`. */
+export function moduleTarget(name: string, project: string,
+                             table: Map<string, ModuleRow> = componentTable): ModuleTarget | null {
+  const row = table.get(name);
+  if (!row) return null;
+  const local = row.in?.[project];
+  if (local) return local;
+  return row.kind && row.id ? { kind: row.kind, id: row.id, title: row.title ?? row.id } : null;
+}
+
+/** The component an import line names at a column, if any, in a model of
+ *  `project`. */
+export function componentAt(line: string, column: number, project = '',
+                            table: Map<string, ModuleRow> = componentTable): ModuleTarget | null {
   for (const span of importSpans(line)) {
-    if (column >= span.start && column <= span.end) return table.get(span.module) ?? null;
+    if (column >= span.start && column <= span.end) return moduleTarget(span.module, project, table);
   }
   return null;
 }
@@ -100,11 +117,14 @@ function registerComponentLinks(m: MonacoApi) {
     provideLinks(model) {
       const links: Monaco.languages.ILink[] = [];
       if (model.uri.scheme !== 'redline') return { links };
+      // redline:///model:<id>: the file's own project resolves its bare names.
+      const path = decodeURIComponent(model.uri.path).replace(/^\//, '');
+      const project = path.startsWith('model:') ? projectOf(path.slice('model:'.length)) : '';
       for (let n = 1; n <= model.getLineCount(); n++) {
         const line = model.getLineContent(n);
         if (!/^\s*(import|from)\s/.test(line)) continue;
         for (const span of importSpans(line)) {
-          const t = componentTable.get(span.module);
+          const t = moduleTarget(span.module, project);
           if (!t) continue;
           links.push({
             range: new m.Range(n, span.start, n, span.end),
@@ -121,8 +141,10 @@ function registerComponentLinks(m: MonacoApi) {
       if (uri.scheme !== LINK_SCHEME) return false;
       const [, kind, ...rest] = uri.path.split('/');
       const id = rest.join('/');
-      const t = [...componentTable.values()].find(x => x.kind === kind && x.id === id)
-        ?? { kind: kind as ModuleTarget['kind'], id, title: id };
+      const rows = [...componentTable.values()].flatMap(r => [r, ...Object.values(r.in ?? {})]);
+      const hit = rows.find(x => x.kind === kind && x.id === id);
+      const t: ModuleTarget = hit?.kind && hit.id ? { kind: hit.kind, id: hit.id, title: hit.title ?? id }
+        : { kind: kind as ModuleTarget['kind'], id, title: id };
       followLink?.(t);
       return true;
     },
@@ -357,7 +379,8 @@ export class CodeView implements OnDestroy {
     if (!t || t.kind !== 'model') return out;
     this.table();                           // and once the build's table is in
     for (const name of imports(t.model.getValue())) {
-      const id = componentTable.get(name)?.id ?? this.byName.get(name);
+      const id = componentTable.has(name) ? moduleTarget(name, projectOf(t.id))?.id
+        : this.byName.get(name);
       if (id && id !== t.id) out.add(id);
     }
     return out;
@@ -429,7 +452,7 @@ export class CodeView implements OnDestroy {
   private targetAt(pos: Monaco.IPosition | null): ModuleTarget | null {
     const model = this.editor?.getModel();
     if (!pos || !model || this.current()?.kind !== 'model') return null;
-    return componentAt(model.getLineContent(pos.lineNumber), pos.column);
+    return componentAt(model.getLineContent(pos.lineNumber), pos.column, projectOf(this.current()?.id));
   }
 
   /** Open a component where it lives: a model in the 3D room (this view
