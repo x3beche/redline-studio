@@ -18,7 +18,7 @@
     PUT    /api/telegram/settings        the public address links point to      (settings)
     POST   /api/telegram/link            a one-time code to link my chat
     DELETE /api/telegram/link            unlink my chat
-    PUT    /api/telegram/me              what I hear about, and in which language
+    PUT    /api/telegram/me              what I hear about, how often the digest, which language
     POST   /api/telegram/me/test         a test message to my chat, now
     POST   /api/telegram/webhook         Telegram's updates - only with the secret header
 
@@ -50,15 +50,37 @@ COMMANDS = [
     ("stop", "unlink this chat"),
 ]
 
+# The tiles of "Notify me when", in the page's order, each in its section
+# (`group`): the agents, builds and routing, what is made and kept, the
+# digest and budgets, and the server's own (owner and admins).
 PREF_INFO = [
-    {"id": "question", "label": "An agent asks a question", "about": "answer with buttons or in your own words"},
-    {"id": "note", "label": "A note is applied or fails", "about": "with its after picture when there is one"},
-    {"id": "run", "label": "A run starts", "about": "an agent picks up a note"},
-    {"id": "budget", "label": "Budget warnings", "about": "a monthly budget crosses its warning or 100%"},
-    {"id": "build", "label": "A build fails", "about": "a model build, a board layout or convert"},
-    {"id": "digest", "label": "Daily digest", "about": "every morning, 09:00 Istanbul: the day in six numbers"},
-    {"id": "ccusage", "label": "Command Code usage",
+    {"id": "question", "group": "agents", "label": "An agent asks a question",
+     "about": "answer with buttons or in your own words"},
+    {"id": "reply", "group": "agents", "label": "An agent replies",
+     "about": "a room's agent or a Command Code chat answered - or its answer failed"},
+    {"id": "note", "group": "agents", "label": "A note is applied or fails",
+     "about": "with its after picture when there is one"},
+    {"id": "run", "group": "agents", "label": "A run starts", "about": "an agent picks up a note"},
+    {"id": "build", "group": "builds", "label": "A build fails", "about": "a model build, a board layout or convert"},
+    {"id": "longbuild", "group": "builds", "label": "A long build is done",
+     "about": "a build, layout or convert that took over a minute - walk away meanwhile"},
+    {"id": "route", "group": "builds", "label": "A board is routed",
+     "about": "all connected or how many are not, vias, DRC and ERC, how long"},
+    {"id": "firmware", "group": "builds", "label": "A firmware build ends",
+     "about": "flash and RAM used, or the first error"},
+    {"id": "release", "group": "made", "label": "A release is ready",
+     "about": "its size, what could not be made, a download link - or why it failed"},
+    {"id": "bodies", "group": "made", "label": "Part bodies",
+     "about": "the PCB room asks the 3D room for a part's body, and when one is bound"},
+    {"id": "library", "group": "made", "label": "A part joins the drawer",
+     "about": "fetched from LCSC: footprint, symbol and 3D model"},
+    {"id": "digest", "group": "digest", "label": "Digest",
+     "about": "09:00 Istanbul, every day or on Mondays: notes, builds, routes, releases, replies"},
+    {"id": "budget", "group": "digest", "label": "Budget warnings", "about": "a monthly budget crosses its warning or 100%"},
+    {"id": "ccusage", "group": "server", "label": "Command Code usage",
      "about": "the weekly window reaches 90%, or runs out - owner and admins"},
+    {"id": "health", "group": "server", "label": "Server health",
+     "about": "disk nearly full, a model provider failing, page errors piling up, builds crashing"},
 ]
 
 
@@ -103,6 +125,7 @@ def _link_out(link: dict | None) -> dict:
     return {"linked": True, "chat": link.get("chat"), "username": tg.get("username"),
             "name": " ".join(x for x in [tg.get("first_name"), tg.get("last_name")] if x) or None,
             "linked_at": link.get("linked_at"), "prefs": links.prefs_of(link), "lang": link.get("lang"),
+            "digest_every": links.every_of(link),
             "blocked": bool(link.get("blocked"))}
 
 
@@ -571,13 +594,14 @@ async def delete_my_link() -> dict:
 class MeIn(BaseModel):
     prefs: dict[str, bool] | None = None
     lang: str | None = Field(default="", max_length=10)
+    digest_every: str | None = None
 
 
 @router.put("/me")
 async def put_me(body: MeIn) -> dict:
     who = _me()
     try:
-        got = await links.set_prefs(_raw(), who["id"], body.prefs, body.lang)
+        got = await links.set_prefs(_raw(), who["id"], body.prefs, body.lang, body.digest_every)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     if not got:

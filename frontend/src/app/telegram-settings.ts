@@ -19,7 +19,7 @@ import { Langs, TgLangPicker } from './telegram-langs';
  *  and a QR code, ten minutes), what I hear about (toggle tiles), the
  *  language questions come in, and the bot's commands.
  */
-interface Pref { id: string; label: string; about: string }
+interface Pref { id: string; label: string; about: string; group?: string }
 interface LogRow { at: string; dir: 'in' | 'out'; kind: string; ok: boolean; error: string | null; preview: string | null; user: string | null }
 interface TgState {
   bot: { set: boolean; hint: string | null; id: number | null; username: string | null; name: string | null;
@@ -33,7 +33,8 @@ interface TgState {
   stats: { sent: number; failed: number; received: number; days: number };
   linked: number; queue: number;
   me: { linked: boolean; chat?: number; username?: string | null; name?: string | null; linked_at?: string;
-        prefs?: Record<string, boolean>; lang?: string | null; blocked?: boolean; code_pending?: boolean };
+        prefs?: Record<string, boolean>; lang?: string | null; digest_every?: 'day' | 'week';
+        blocked?: boolean; code_pending?: boolean };
   prefs: Pref[]; commands: { command: string; about: string }[];
   can_edit: boolean; log?: LogRow[];
   profile: { name: boolean; description: boolean; short_description: boolean; photo: boolean } | null;
@@ -51,12 +52,19 @@ const STUB: TgState = {
   last_update_at: null, last_error: null, stats: { sent: 0, failed: 0, received: 0, days: 7 }, linked: 0, queue: 0,
   me: { linked: false },
   prefs: [
-    { id: 'question', label: 'An agent asks a question', about: 'answer with buttons or in your own words' },
-    { id: 'note', label: 'A note is applied or fails', about: 'with its after picture when there is one' },
-    { id: 'run', label: 'A run starts', about: 'an agent picks up a note' },
-    { id: 'budget', label: 'Budget warnings', about: 'a monthly budget crosses its warning or 100%' },
-    { id: 'build', label: 'A build fails', about: 'a model build, a board layout or convert' },
-    { id: 'digest', label: 'Daily digest', about: 'every morning, 09:00 Istanbul: the day in six numbers' },
+    { id: 'question', group: 'agents', label: 'An agent asks a question', about: 'answer with buttons or in your own words' },
+    { id: 'reply', group: 'agents', label: 'An agent replies', about: "a room's agent or a Command Code chat answered - or its answer failed" },
+    { id: 'note', group: 'agents', label: 'A note is applied or fails', about: 'with its after picture when there is one' },
+    { id: 'run', group: 'agents', label: 'A run starts', about: 'an agent picks up a note' },
+    { id: 'build', group: 'builds', label: 'A build fails', about: 'a model build, a board layout or convert' },
+    { id: 'longbuild', group: 'builds', label: 'A long build is done', about: 'a build, layout or convert that took over a minute - walk away meanwhile' },
+    { id: 'route', group: 'builds', label: 'A board is routed', about: 'all connected or how many are not, vias, DRC and ERC, how long' },
+    { id: 'firmware', group: 'builds', label: 'A firmware build ends', about: 'flash and RAM used, or the first error' },
+    { id: 'release', group: 'made', label: 'A release is ready', about: 'its size, what could not be made, a download link - or why it failed' },
+    { id: 'bodies', group: 'made', label: 'Part bodies', about: "the PCB room asks the 3D room for a part's body, and when one is bound" },
+    { id: 'library', group: 'made', label: 'A part joins the drawer', about: 'fetched from LCSC: footprint, symbol and 3D model' },
+    { id: 'digest', group: 'digest', label: 'Digest', about: '09:00 Istanbul, every day or on Mondays: notes, builds, routes, releases, replies' },
+    { id: 'budget', group: 'digest', label: 'Budget warnings', about: 'a monthly budget crosses its warning or 100%' },
   ],
   commands: [
     { command: 'note', about: 'a draft note on a model or board' }, { command: 'queue', about: 'queue the last draft note' },
@@ -66,7 +74,20 @@ const STUB: TgState = {
   ],
   can_edit: true, log: [], profile: null,
 };
-const DEFAULT_PREFS: Record<string, boolean> = { question: true, note: true, run: false, budget: false, build: false, digest: false, ccusage: true };
+const DEFAULT_PREFS: Record<string, boolean> = {
+  question: true, reply: true, note: true, run: false, build: false, longbuild: true, route: true, firmware: true,
+  release: true, bodies: true, library: false, budget: false, digest: false, ccusage: true, health: true,
+};
+/** The sections of "Notify me when", in order. The server's is there only
+ *  for those who may change its settings (the server sends its tiles only
+ *  to them). */
+const GROUPS = [
+  { id: 'agents', label: 'Agents' },
+  { id: 'builds', label: 'Builds & routing' },
+  { id: 'made', label: 'Releases & parts' },
+  { id: 'digest', label: 'Digest & budget' },
+  { id: 'server', label: 'Server' },
+];
 
 /** The one thing done in @BotFather: making the bot, which gives the token.
  *  Its name, descriptions, picture and commands are set here afterwards. */
@@ -303,14 +324,27 @@ const FATHER = [
       <span class="st-sub">{{ d.me.linked ? ('tap a tile to switch it' | t) : ('link your Telegram to choose' | t) }}</span>
       <span class="st-right st-sub mono">{{ onCount() }} / {{ d.prefs.length }}</span></div>
     <div class="st-card-body">
-      <div class="tg-toggles">
-        @for (p of d.prefs; track p.id) {
-          <button class="tg-toggle" [attr.data-on]="prefOn(p.id) ? 1 : null" [disabled]="!d.me.linked || !!busy()" (click)="flip(p.id)" [attr.aria-pressed]="prefOn(p.id)">
-            <span class="tg-toggle-top"><b>{{ p.label | t }}</b><i class="tg-switch" aria-hidden="true"></i></span>
-            <span>{{ p.about | t }}</span>
-          </button>
-        }
-      </div>
+      @for (g of sections(); track g.id) {
+        <div class="tg-sect">
+          <div class="tg-sect-head"><span>{{ g.label | t }}</span><span class="mono">{{ g.on }} / {{ g.prefs.length }}</span>
+            @if (g.id === 'digest') {
+              <div class="st-seg tg-every" role="group" [attr.aria-label]="'How often the digest comes' | t">
+                <button [class.on]="every() === 'day'" [disabled]="!d.me.linked || !!busy()" (click)="setEvery('day')">{{ 'Daily' | t }}</button>
+                <button [class.on]="every() === 'week'" [disabled]="!d.me.linked || !!busy()" (click)="setEvery('week')">{{ 'Weekly' | t }}</button>
+              </div>
+            }
+            <button class="tg-sect-all" [disabled]="!d.me.linked || !!busy()" (click)="setAll(g.prefs, g.on < g.prefs.length)"
+              >{{ (g.on < g.prefs.length ? 'all on' : 'all off') | t }}</button></div>
+          <div class="tg-toggles">
+            @for (p of g.prefs; track p.id) {
+              <button class="tg-toggle" [attr.data-on]="prefOn(p.id) ? 1 : null" [disabled]="!d.me.linked || !!busy()" (click)="flip(p.id)" [attr.aria-pressed]="prefOn(p.id)">
+                <span class="tg-toggle-top"><b>{{ p.label | t }}</b><i class="tg-switch" aria-hidden="true"></i></span>
+                <span>{{ p.about | t }}</span>
+              </button>
+            }
+          </div>
+        </div>
+      }
     </div>
   </div>
 
@@ -436,6 +470,16 @@ export class TelegramSettingsPanel implements OnDestroy {
   webhookPreview() { return (this.publicUrl() || location.origin).replace(/\/+$/, '') + '/api/telegram/webhook'; }
   prefOn(id: string) { const p = this.s()?.me.prefs; return p ? !!p[id] : DEFAULT_PREFS[id]; }
   onCount() { return (this.s()?.prefs ?? []).filter(p => this.prefOn(p.id)).length; }
+  /** The tiles in their sections, each with how many are on; a section with
+   *  none (the server's, for most) is left out. */
+  sections = computed(() => {
+    const prefs = this.s()?.prefs ?? [];
+    return GROUPS.map(g => {
+      const mine = prefs.filter(p => (p.group ?? 'agents') === g.id);
+      return { ...g, prefs: mine, on: mine.filter(p => this.prefOn(p.id)).length };
+    }).filter(g => g.prefs.length);
+  });
+  every() { return this.s()?.me.digest_every ?? 'day'; }
   left() {
     const c = this.code();
     if (!c) return '';
@@ -495,6 +539,13 @@ export class TelegramSettingsPanel implements OnDestroy {
     this.call('unlink', this.http.delete<TgState>('/api/telegram/link'), t('Unlinked.'));
   }
   flip(id: string) { this.call('pref', this.http.put<TgState>('/api/telegram/me', { prefs: { [id]: !this.prefOn(id) } })); }
+  /** A section's tiles all on, or all off, in one go. */
+  setAll(prefs: Pref[], on: boolean) {
+    this.call('pref', this.http.put<TgState>('/api/telegram/me', { prefs: Object.fromEntries(prefs.map(p => [p.id, on])) }));
+  }
+  setEvery(every: 'day' | 'week') {
+    if (every !== this.every()) this.call('pref', this.http.put<TgState>('/api/telegram/me', { digest_every: every }));
+  }
   setLang(id: string) { this.call('pref', this.http.put<TgState>('/api/telegram/me', { lang: id })); }
   test() {
     this.busy.set('test');

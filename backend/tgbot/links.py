@@ -24,16 +24,27 @@ from . import core, languages
 # What a person may be told about, and whether it is on by default.
 PREFS = {
     "question": True,     # an agent asked a question
+    "reply": True,        # a room's agent or a Command Code chat answered, or its answer failed
     "note": True,         # a note was applied or failed
     "run": False,         # a run started
-    "budget": False,      # a budget crossed its warning or 100%
     "build": False,       # a build failed
-    "digest": False,      # once a day, what happened
+    "longbuild": True,    # a build, layout or convert that took over a minute is done
+    "route": True,        # a board was routed: connected or not, vias, DRC
+    "firmware": True,     # a firmware build finished, or failed
+    "release": True,      # a release is ready to download, or failed
+    "bodies": True,       # the PCB room asked the 3D room for a part's body, or one was bound
+    "library": False,     # a part came into the drawer from LCSC
+    "budget": False,      # a budget crossed its warning or 100%
+    "digest": False,      # once a day (or a week), what happened
     "ccusage": True,      # the Command Code weekly window at 90%, or used up (owner and admins)
+    "health": True,       # the disk, a model provider, the pages' errors, crashing builds (owner and admins)
 }
 
 # Told only to those who may change the server's settings.
-SERVER_PREFS = {"ccusage"}
+SERVER_PREFS = {"ccusage", "health"}
+
+# How often the digest comes: every morning, or Monday mornings.
+DIGEST_EVERY = ("day", "week")
 
 # The languages a question can be read in: every ISO 639-1 code
 # (languages.py; backend/reading.py does the work). None is the agents' own
@@ -77,7 +88,7 @@ async def use_code(db, code: str, chat: int, tg_user: dict) -> dict | None:
     link = {"_id": doc["user"], "name": doc.get("name"), "workspace": doc["workspace"], "chat": chat,
             "tg": {k: tg_user.get(k) for k in ("id", "username", "first_name", "last_name", "language_code")},
             "linked_at": core.now(), "prefs": {**PREFS, **(old.get("prefs") or {})},
-            "lang": old.get("lang"), "blocked": False}
+            "lang": old.get("lang"), "digest_every": old.get("digest_every"), "blocked": False}
     await raw[core.LINKS].replace_one({"_id": doc["user"]}, link, upsert=True)
     return link
 
@@ -99,10 +110,15 @@ def prefs_of(link: dict) -> dict:
     return {**PREFS, **(link.get("prefs") or {})}
 
 
+def every_of(link: dict) -> str:
+    return link.get("digest_every") if link.get("digest_every") in DIGEST_EVERY else "day"
+
+
 async def set_prefs(db, user_id: str, prefs: dict | None = None, lang: str | None = "",
-                    ) -> dict | None:
-    """Change what a person hears about, and the language questions come in.
-    `lang` "" leaves it; None (or "en") is the original English."""
+                    every: str | None = None) -> dict | None:
+    """Change what a person hears about, how often the digest comes, and
+    the language questions come in. `lang` "" leaves it; None (or "en") is
+    the original English. `every` None leaves it."""
     raw = core.raw_of(db)
     link = await raw[core.LINKS].find_one({"_id": user_id})
     if not link:
@@ -112,6 +128,10 @@ async def set_prefs(db, user_id: str, prefs: dict | None = None, lang: str | Non
         if k not in PREFS:
             raise ValueError(f"no such notification: {k}")
         patch[f"prefs.{k}"] = bool(v)
+    if every is not None:
+        if every not in DIGEST_EVERY:
+            raise ValueError("digest: day or week")
+        patch["digest_every"] = every
     if lang != "":
         lang = (lang or "").strip().lower() or None
         if lang == "en":

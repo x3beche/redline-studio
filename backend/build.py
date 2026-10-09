@@ -348,7 +348,10 @@ async def build(db, model_id: str, script: Path) -> dict:
             try:
                 await compute.record(
                     db, "build", await compute.current_revision(db),
-                    model=model_id, rc=proc.returncode, **job)
+                    model=model_id, rc=proc.returncode, **job,
+                    # attempts that died natively and were run again (the
+                    # Telegram watcher tells the server's admins)
+                    **({"crashes": len(crashes)} if crashes else {}))
             except Exception:                    # never fail a build over this
                 pass
 

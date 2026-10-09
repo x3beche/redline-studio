@@ -80,6 +80,16 @@
 .tg-code-big { font-size: 26px; font-weight: 600; letter-spacing: .18em; color: var(--accent); }
 
 /* ---- what I hear about: tiles that are switches ----------------- */
+/* "Notify me when": small labelled sections of tiles in the one card */
+.tg-sect + .tg-sect { margin-top: 14px; }
+.tg-sect-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
+.tg-sect-head .mono { font-weight: 400; letter-spacing: 0; }
+.tg-sect-all { margin-left: auto; padding: 2px 6px; font-size: 11px; text-transform: none; letter-spacing: 0;
+  color: var(--ink-dim); background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer; }
+.tg-sect-all:hover:not(:disabled) { color: var(--ink); border-color: var(--line); }
+.tg-sect-all:disabled { cursor: default; opacity: .55; }
+.tg-every { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .tg-toggles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 .tg-toggle {
   display: flex; flex-direction: column; gap: 4px; padding: 9px 11px; text-align: left; cursor: pointer;
@@ -101,6 +111,7 @@
   .tg-step-body { padding-left: 12px; }
   .tg-code { flex-direction: column; align-items: center; }
   .tg-cta { flex-wrap: wrap; }
+  .tg-sect-all { min-height: 32px; }
 }
 
 /* ---- step 3: the bot's profile (telegram-profile.ts) ------------- */

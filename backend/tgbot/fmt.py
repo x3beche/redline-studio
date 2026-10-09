@@ -146,15 +146,20 @@ def w(link: dict | None, key: str, **kw) -> str:
 # ---------------- links back to the app ----------------
 
 def app_link(base: str | None, *, model: str | None = None, kind: str | None = None,
-             rev: str | None = None, ws: str | None = None, thread: str | None = None) -> str | None:
-    """A deep link into the app: a note on its model or board, a room, or a
-    room's agent thread (pinned in the Chat tab, whose id is still
-    "commandcode")."""
+             rev: str | None = None, ws: str | None = None, thread: str | None = None,
+             chat: str | None = None, fw: str | None = None) -> str | None:
+    """A deep link into the app: a note on its model or board, a room, a
+    room's agent thread or a Command Code conversation (both in the Chat
+    tab, whose id is still "commandcode"), or a firmware."""
     if not base:
         return None
     base = base.rstrip("/")
     if thread:
         return f"{base}/?ws=commandcode&thread={quote(thread)}"
+    if chat:
+        return f"{base}/?ws=commandcode&chat={quote(chat)}"
+    if fw:
+        return f"{base}/?ws=firmware&fw={quote(fw)}"
     if kind == "pcb" and model:
         return f"{base}/?ws=pcb&board={quote(model)}"
     if model:
@@ -254,13 +259,259 @@ def build_event(link: dict | None, job: dict, base: str | None) -> str:
     return f"{head} · {core.esc(what)}\n{core.esc(detail)}" + (f"\n{_a(url, w(link, 'open'))}" if url else "")
 
 
-def digest_text(link: dict | None, d: dict, base: str | None) -> str:
-    rows = [("Notes applied (24 h)", d.get("applied", 0)), ("Notes failed (24 h)", d.get("failed", 0)),
-            ("Queued now", d.get("queued", 0)), ("Drafts", d.get("drafts", 0)),
-            ("Open questions", d.get("questions", 0)), ("Builds failed (24 h)", d.get("builds_failed", 0))]
+def digest_text(link: dict | None, d: dict, base: str | None, every: str = "day") -> str:
+    """The digest: a day's figures, or a week's (`every`)."""
+    tr = ui_lang(link) == "tr"
+    span = ("7 g" if tr else "7 d") if every == "week" else ("24 sa" if tr else "24 h")
+    rows = ([("Uygulanan notlar", d.get("applied", 0)), ("Başarısız notlar", d.get("failed", 0)),
+             ("Sırada", d.get("queued", 0)), ("Taslaklar", d.get("drafts", 0)),
+             ("Açık sorular", d.get("questions", 0)), ("Ajan yanıtları", d.get("replies", 0)),
+             ("Derlemeler: biten / başarısız", f"{d.get('builds_ok', 0)} / {d.get('builds_failed', 0)}"),
+             ("Firmware: biten / başarısız", f"{d.get('fw_ok', 0)} / {d.get('fw_failed', 0)}"),
+             ("Yönlendirilen kartlar", d.get("routes", 0)), ("Sürümler", d.get("releases", 0))] if tr else
+            [("Notes applied", d.get("applied", 0)), ("Notes failed", d.get("failed", 0)),
+             ("Queued now", d.get("queued", 0)), ("Drafts", d.get("drafts", 0)),
+             ("Open questions", d.get("questions", 0)), ("Agent replies", d.get("replies", 0)),
+             ("Builds done / failed", f"{d.get('builds_ok', 0)} / {d.get('builds_failed', 0)}"),
+             ("Firmware done / failed", f"{d.get('fw_ok', 0)} / {d.get('fw_failed', 0)}"),
+             ("Boards routed", d.get("routes", 0)), ("Releases", d.get("releases", 0))])
     body = "\n".join(f"• {core.esc(k)}: <b>{v}</b>" for k, v in rows)
+    if tr:
+        head = "📋 <b>Haftalık özet</b>" if every == "week" else "📋 <b>Günlük özet</b>"
+    else:
+        head = "📋 <b>Weekly digest</b>" if every == "week" else "📋 <b>Daily digest</b>"
     url = app_link(base, ws="notes")
-    return "📋 <b>Daily digest</b>\n" + body + (f"\n{_a(url, w(link, 'open'))}" if url else "")
+    return f"{head} · {span}\n" + body + (f"\n{_a(url, w(link, 'open'))}" if url else "")
+
+
+# ---------------- what was made: replies, routes, builds, releases, parts ----------------
+
+ROOMS = {"cad": ("3D room", "3D oda"), "pcb": ("Board room", "Kart odası"),
+         "firmware": ("Firmware room", "Firmware odası")}
+
+
+def _tail(*parts: str) -> str:
+    return " · ".join(x for x in parts if x)
+
+
+def dur(secs, tr: bool = False) -> str:
+    """45 s, 3 min 20 s, 1 h 05 min - Turkish: sn, dk, sa."""
+    if not isinstance(secs, (int, float)):
+        return ""
+    s = int(round(secs))
+    u_s, u_m, u_h = ("sn", "dk", "sa") if tr else ("s", "min", "h")
+    if s < 60:
+        return f"{s} {u_s}"
+    if s < 3600:
+        return f"{s // 60} {u_m}" + (f" {s % 60} {u_s}" if s % 60 else "")
+    return f"{s // 3600} {u_h} {s % 3600 // 60:02d} {u_m}"
+
+
+def _size(n) -> str:
+    if not isinstance(n, (int, float)):
+        return ""
+    return f"{n / 1048576:.1f} MB" if n >= 1048576 else f"{max(1, round(n / 1024))} KB"
+
+
+def reply_event(link: dict | None, room: str, text: str | None, base: str | None, *,
+                title: str | None = None, chat: str | None = None, error: str | None = None,
+                more: int = 0) -> str:
+    """A room's agent wrote in its thread (`room` cad, pcb or firmware), or a
+    Command Code conversation was answered (`chat`) - or its answer failed.
+    `more`: the agent's other lines since the last look, not shown."""
+    tr = ui_lang(link) == "tr"
+    if chat:
+        if error:
+            head = "⚠️ <b>Command Code yanıtı başarısız</b>" if tr else "⚠️ <b>Command Code answer failed</b>"
+        else:
+            head = "💬 <b>Command Code yanıtladı</b>" if tr else "💬 <b>Command Code answered</b>"
+        url = app_link(base, chat=chat)
+    else:
+        name = ROOMS.get(room, ROOMS["cad"])[1 if tr else 0]
+        head = f"💬 <b>{core.esc(name)} ajanı yanıtladı</b>" if tr else f"💬 <b>{core.esc(name)} agent replied</b>"
+        url = app_link(base, thread=room)
+    if title:
+        head += f" · {core.esc(core.clip(title, 120))}"
+    lines = [head]
+    if error:
+        lines.append(f"<i>{core.esc(core.clip(error, 300))}</i>")
+    if text:
+        lines.append(core.esc(core.clip(text, 300)))
+    extra = (f"+{more} satır daha" if tr else f"+{more} more line{'s' if more > 1 else ''}") if more else ""
+    lines.append(_tail(extra, _a(url, w(link, "open"))))
+    return "\n".join(x for x in lines if x)
+
+
+def route_event(link: dict | None, board: str, title: str | None, route: dict, drc: dict | None,
+                erc: dict | None, base: str | None) -> str:
+    """A board was routed: by which engine, all connected or how many not,
+    vias, how long, and DRC (and ERC when the schematic has one)."""
+    tr = ui_lang(link) == "tr"
+    left = route.get("unrouted")
+    done = isinstance(left, int) and left == 0
+    if done:
+        head = "🧭 <b>Kart yönlendirildi</b>" if tr else "🧭 <b>Board routed</b>"
+    else:
+        head = "🧭 <b>Yönlendirme bitti</b>" if tr else "🧭 <b>Routing finished</b>"
+    head += f" · {core.esc(title or board)}"
+    engine = {"tracemaker": "TraceMaker", "freerouting": "Freerouting"}.get(route.get("engine"),
+                                                                             route.get("engine") or "")
+    if done:
+        state = "hepsi bağlı" if tr else "all connected"
+    elif isinstance(left, int):
+        state = f"{left} bağlantı açık" if tr else f"{left} unrouted"
+    else:
+        state = ""
+    vias = f"{route['vias']} via" + ("" if tr or route["vias"] == 1 else "s") \
+        if isinstance(route.get("vias"), int) else ""
+    lines = [head, core.esc(_tail(engine, state, vias, dur(route.get("route_s"), tr)))]
+    checks = []
+    for name, rep in (("DRC", drc), ("ERC", erc)):
+        if not rep or rep.get("error_count") is None:
+            continue
+        e, wn = rep.get("error_count") or 0, rep.get("warning_count") or 0
+        if not e and not wn:
+            checks.append(f"{name} {'temiz' if tr else 'clean'}")
+        else:
+            checks.append(f"{name} {e} {'hata' if tr else 'error' + ('' if e == 1 else 's')}, "
+                          f"{wn} {'uyarı' if tr else 'warning' + ('' if wn == 1 else 's')}")
+    if checks:
+        lines.append(core.esc(" · ".join(checks)))
+    url = app_link(base, model=board, kind="pcb")
+    if url:
+        lines.append(_a(url, w(link, "open")))
+    return "\n".join(x for x in lines if x)
+
+
+JOB_KINDS = {"build": ("build", "derleme"), "layout": ("layout", "yerleşim"),
+             "convert": ("convert", "dönüştürme"), "board": ("board build", "kart derlemesi"),
+             "run": ("run", "çalışma")}
+
+
+def longbuild_event(link: dict | None, job: dict, base: str | None, title: str | None = None) -> str:
+    """A build, layout or convert that took long enough to walk away from is
+    done, well."""
+    tr = ui_lang(link) == "tr"
+    what = job.get("model") or job.get("board") or "?"
+    kind = JOB_KINDS.get(job.get("kind") or "build", (job.get("kind"), job.get("kind")))[1 if tr else 0]
+    head = ("⏱ <b>Bitti</b>" if tr else "⏱ <b>Done</b>") + f" · {core.esc(title or what)}"
+    pcb = job.get("kind") in ("layout", "board")
+    url = app_link(base, model=what, kind="pcb" if pcb else None)
+    return "\n".join(x for x in [head, core.esc(_tail(kind, dur(job.get("wall_s"), tr))),
+                                  _a(url, w(link, "open"))] if x)
+
+
+def firmware_event(link: dict | None, job: dict, base: str | None) -> str:
+    """A firmware build ended: flash and RAM used, or the first error."""
+    tr = ui_lang(link) == "tr"
+    res = job.get("result") or {}
+    ok = job.get("status") == "done" and res.get("ok")
+    if ok:
+        head = "🔌 <b>Firmware derlendi</b>" if tr else "🔌 <b>Firmware built</b>"
+    else:
+        head = "⚠️ <b>Firmware derlenemedi</b>" if tr else "⚠️ <b>Firmware build failed</b>"
+    head += f" · {core.esc(job.get('title') or job.get('firmware') or '?')}"
+    secs = dur(job.get("seconds"), tr)
+    warn = res.get("warning_count") or 0
+    warns = (f"{warn} uyarı" if tr else f"{warn} warning{'' if warn == 1 else 's'}") if warn else ""
+    if ok:
+        fl, ram = res.get("flash") or {}, res.get("ram") or {}
+        line = _tail(f"flash {fl['pct']:g}%" if isinstance(fl.get("pct"), (int, float)) else "",
+                     f"RAM {ram['pct']:g}%" if isinstance(ram.get("pct"), (int, float)) else "", warns, secs)
+        lines = [head, core.esc(line)]
+    else:
+        n = res.get("error_count") or 0
+        errs = (f"{n} hata" if tr else f"{n} error{'' if n == 1 else 's'}") if n else ""
+        first = (res.get("errors") or [{}])[0]
+        where = f"{first.get('file')}:{first['line']}" if first.get("line") else first.get("file") or ""
+        why = f"{where} {first.get('text') or ''}".strip() or job.get("detail") or ""
+        lines = [head, core.esc(_tail(errs, warns, secs)),
+                 f"<code>{core.esc(core.clip(why, 300))}</code>" if why else ""]
+    url = app_link(base, fw=job.get("firmware"))
+    lines.append(_a(url, w(link, "open")))
+    return "\n".join(x for x in lines if x)
+
+
+def release_event(link: dict | None, rel: dict, base: str | None, rid: str | None = None) -> str:
+    """A release is ready - its size, what could not be made, a download
+    link - or it failed, with the last line of its log."""
+    tr = ui_lang(link) == "tr"
+    rid = rid or rel.get("_id")
+    name = f"{rel.get('project')} {rel.get('tag')}"
+    if rel.get("status") == "ready":
+        head = ("📦 <b>Sürüm hazır</b>" if tr else "📦 <b>Release ready</b>") + f" · {core.esc(name)}"
+        n = len(rel.get("files") or [])
+        files = (f"{n} dosya" if tr else f"{n} files") if n else ""
+        lines = [head, core.esc(_tail(_size(rel.get("bytes")), files, dur(rel.get("took_s"), tr)))]
+        problems = rel.get("problems") or []
+        if problems:
+            shown = "; ".join(core.clip(p, 120) for p in problems[:3])
+            more = f" (+{len(problems) - 3})" if len(problems) > 3 else ""
+            lines.append(("Yapılamayanlar: " if tr else "Could not make: ") + core.esc(shown + more))
+        dl = f"{base.rstrip('/')}/api/releases/{quote(str(rid))}/download" if base else None
+        lines.append(_tail(_a(dl, "İndir" if tr else "Download"), _a(app_link(base), w(link, "open"))))
+    else:
+        head = ("⚠️ <b>Sürüm yapılamadı</b>" if tr else "⚠️ <b>Release failed</b>") + f" · {core.esc(name)}"
+        last = next((ln for ln in reversed(rel.get("log") or []) if ln), "")
+        lines = [head, f"<i>{core.esc(core.clip(last, 300))}</i>" if last else "", _a(app_link(base), w(link, "open"))]
+    return "\n".join(x for x in lines if x)
+
+
+def body_event(link: dict | None, what: str, part: str, base: str | None, *, name: str | None = None,
+               model: str | None = None, board: str | None = None, ref: str | None = None) -> str:
+    """A part's drawn body: asked of the 3D room (`what` "asked"), or bound
+    to the part ("bound")."""
+    tr = ui_lang(link) == "tr"
+    if what == "asked":
+        head = "🧩 <b>Gövde istendi</b>" if tr else "🧩 <b>Body asked for</b>"
+        for_ = (f"{board} {ref} için" if tr else f"for {board} {ref}") if board else ""
+        body = _tail(for_, f"→ {model}" if model else "")
+    else:
+        head = "🧩 <b>Gövde hazır</b>" if tr else "🧩 <b>Body bound</b>"
+        body = model or ""
+    head += f" · {core.esc(part)}" + (f" “{core.esc(name)}”" if name else "")
+    url = app_link(base, model=model) if model else app_link(base, ws="pcb")
+    return "\n".join(x for x in [head, core.esc(body), _a(url, w(link, "open"))] if x)
+
+
+def library_event(link: dict | None, part: dict, base: str | None, pid: str | None = None) -> str:
+    tr = ui_lang(link) == "tr"
+    head = ("📚 <b>Çekmeceye parça geldi</b>" if tr else "📚 <b>Part in the drawer</b>") + \
+        f" · {core.esc(pid or part.get('_id'))}"
+    has_3d = bool(part.get("artifacts") or part.get("model_step"))
+    what = ("footprint, sembol" + (", 3D model" if has_3d else "") if tr
+            else "footprint, symbol" + (" and 3D model" if has_3d else ""))
+    return "\n".join(x for x in [head, core.esc(_tail(part.get("name") or "", what)),
+                                  _a(app_link(base, ws="pcb"), w(link, "open"))] if x)
+
+
+def health_event(link: dict | None, what: str, d: dict, base: str | None) -> str:
+    """The server's own trouble, for its owner and admins: `what` is disk,
+    llm, pages or crash. `d` carries the figures, and what went wrong in
+    its own words (`detail`) when there is one. A crash: the signal it died
+    on if it never got through, and whether it was run again."""
+    tr = ui_lang(link) == "tr"
+    if what == "disk":
+        text = (f"Disk %{d['pct']} dolu - {d['free_gb']:.0f} GB boş kaldı ({d['path']})." if tr else
+                f"The disk is {d['pct']}% full - {d['free_gb']:.0f} GB left ({d['path']}).")
+    elif what == "llm":
+        text = (f"{d['provider']}: son {d['minutes']} dakikada {d['n']} çağrı başarısız." if tr else
+                f"{d['provider']}: {d['n']} calls failed in the last {d['minutes']} minutes.")
+    elif what == "pages":
+        text = (f"Son {d['minutes']} dakikada tarayıcılardan {d['n']} hata geldi." if tr else
+                f"{d['n']} errors came from browsers in the last {d['minutes']} minutes.")
+    elif d.get("signal"):
+        text = (f"{d['what']} derlemesi çöktü ({d['signal']}) - yeniden denemesi de." if tr and d.get("retried") else
+                f"{d['what']} derlemesi çöktü ({d['signal']})." if tr else
+                f"The build of {d['what']} crashed ({d['signal']}), and again when run once more."
+                if d.get("retried") else f"The build of {d['what']} crashed ({d['signal']}).")
+    else:
+        text = (f"{d['what']} derlemesi çöktü, yeniden çalıştırılınca geçti." if tr else
+                f"The build of {d['what']} crashed, and went through when run again.")
+    head = f"🩺 <b>{'Sunucu' if tr else 'Server'}</b>"
+    detail = f"<i>{core.esc(core.clip(d['detail'], 300))}</i>" if d.get("detail") else ""
+    url = app_link(base, ws="settings")
+    return "\n".join(x for x in [head, core.esc(text), detail, _a(url, w(link, "open"))] if x)
 
 
 # ---------------- questions ----------------

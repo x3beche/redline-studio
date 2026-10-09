@@ -1170,6 +1170,7 @@ export class RoomCommandCode implements OnDestroy {
       const room = this.sel.thread();
       const url = new URL(location.href);
       if (room) url.searchParams.set('thread', room); else url.searchParams.delete('thread');
+      url.searchParams.delete('chat');            // a linked conversation is opened once, not on every reload
       if (url.href !== location.href) history.replaceState(null, '', url);
     });
     // Asked of this room by the command palette (Ctrl+K).

@@ -395,6 +395,9 @@ def env(monkeypatch):
     monkeypatch.setattr(outbox, "_paused_until", 0.0)
     monkeypatch.setattr(auth, "enabled", lambda: False)
     notify._tr_cache.clear()
+    # The machine's disk is not the test's business: a roomy one, unless a test says otherwise.
+    monkeypatch.setattr(notify, "disk_now", lambda: {"pct": 40, "free_gb": 500.0, "path": "/x"})
+    monkeypatch.setattr(notify, "_disk_at", 0.0)
 
     # The app's own note routes, against the fake database.
     from backend import main, store
@@ -1149,3 +1152,220 @@ def test_a_question_links_to_its_rooms_thread_in_the_chat_tab():
     assert "https://x.y/?ws=commandcode&amp;thread=pcb" in fmt.question_text(None, q, None, "https://x.y", True)
     del q["room"]
     assert "thread=cad" in fmt.question_text(None, q, None, "https://x.y", True)
+
+
+# ---------------------------------------------------------------- what was made, the server, the digest
+
+def made_everything(db, at=None):
+    """One of each new kind of event, at `at` (now by default)."""
+    from datetime import datetime
+    t = at or core.now()
+    iso = t.isoformat()
+    db.chat.docs["c1"] = {"_id": "c1", "role": "agent", "room": "pcb", "text": "Moved U3 left.", "at": iso}
+    db.chat.docs["c2"] = {"_id": "c2", "role": "agent", "room": "pcb", "text": "Routed again: " + "x" * 400,
+                          "at": (t + timedelta(seconds=1)).isoformat()}
+    db.chat.docs["c3"] = {"_id": "c3", "role": "user", "room": "pcb", "text": "thanks", "at": iso}
+    db.cc_chats.docs["k1"] = {"_id": "k1", "title": "Thermal budget"}
+    db.cc_gens.docs["g1"] = {"_id": "g1", "chat": "k1", "workspace": scope.DEFAULT, "status": "done",
+                             "text": "About 2 W.", "provider": "cc", "finished_at": t}
+    db.boards.docs["ctl"] = {"_id": "ctl", "title": "Controller",
+                             "layout": {"at": iso}, "route": {"engine": "tracemaker", "unrouted": 0, "vias": 178,
+                                                              "route_s": 200, "at": iso},
+                             "drc": {"error_count": 2, "warning_count": 5}}
+    db.compute_jobs.docs["j1"] = {"_id": "j1", "kind": "build", "model": "iot/box", "rc": 0, "wall_s": 250.0,
+                                  "at": iso}
+    db.compute_jobs.docs["j2"] = {"_id": "j2", "kind": "build", "model": "iot/lid", "rc": 0, "wall_s": 12.0,
+                                  "at": iso}                                  # quick: not worth a message
+    db.firmware_jobs.docs["f1"] = {"_id": "f1", "firmware": "fan", "title": "Fan", "workspace": scope.DEFAULT,
+                                   "status": "done", "finished_at": t, "seconds": 41.0,
+                                   "result": {"ok": True, "flash": {"pct": 34.1}, "ram": {"pct": 12.0},
+                                              "warning_count": 0, "error_count": 0}}
+    db.releases.docs["rel1"] = {"_id": "rel1", "project": "iot", "tag": "v1.2", "status": "ready",
+                                "bytes": 3 * 1048576, "files": [{}] * 12, "took_s": 95,
+                                "problems": ["ctl: no STEP"], "done_at": iso}
+    db.audit.docs["a1"] = {"_id": "a1", "at": t, "action": "body-request", "target": "r7",
+                           "detail": {"part": "C111607", "name": "lying flat", "model": "components/C111607-lying-flat",
+                                      "board": "ctl", "ref": "Q5"}}
+    db.parts.docs["C25804"] = {"_id": "C25804", "name": "R0603", "at": iso, "model_step": "x"}
+
+
+def everything_on(db, **extra):
+    return linked(db, prefs={k: k != "digest" for k in links.PREFS}, **extra)      # the digest has its hour
+
+
+def test_each_new_kind_is_announced_once_with_its_link(env):
+    configured(env.db)
+    everything_on(env.db)
+    run(notify.tick(env.db))
+    made_everything(env.db)
+    # replies (the room's two lines as one, Command Code), route, long build,
+    # firmware, release, body, part
+    assert run(notify.tick(env.db)) == 8
+    assert run(notify.tick(env.db)) == 0
+    drain(env.db)
+    texts = [kw["text"] for kw in env.bot.sent("send_message")]
+    assert len(texts) == 8
+    room = next(x for x in texts if "Board room agent replied" in x)
+    assert "Routed again" in room and "Moved U3" not in room and "+1 more line" in room
+    assert "x" * 400 not in room                                             # cut to ~300
+    assert "?ws=commandcode&amp;thread=pcb" in room
+    cc = next(x for x in texts if "Command Code answered" in x)
+    assert "Thermal budget" in cc and "About 2 W." in cc and "?ws=commandcode&amp;chat=k1" in cc
+    route = next(x for x in texts if "Board routed" in x)
+    assert all(w in route for w in ("Controller", "TraceMaker", "all connected", "178 vias", "3 min 20 s",
+                                    "DRC 2 errors, 5 warnings", "?ws=pcb&amp;board=ctl"))
+    long_ = next(x for x in texts if "Done" in x)
+    assert "iot/box" in long_ and "4 min 10 s" in long_ and "iot/lid" not in "".join(texts)
+    fw = next(x for x in texts if "Firmware built" in x)
+    assert "flash 34.1%" in fw and "?ws=firmware&amp;fw=fan" in fw
+    rel = next(x for x in texts if "Release ready" in x)
+    assert "iot v1.2" in rel and "3.0 MB" in rel and "ctl: no STEP" in rel
+    assert "/api/releases/rel1/download" in rel
+    body = next(x for x in texts if "Body asked for" in x)
+    assert "C111607" in body and "for ctl Q5" in body
+    assert any("Part in the drawer" in x and "C25804" in x for x in texts)
+
+
+def test_a_new_kind_announces_nothing_from_before_it_was_watched(env):
+    configured(env.db)
+    everything_on(env.db)
+    then = core.now() - timedelta(hours=1)
+    # The server as it was before this version: only the old kinds watched.
+    env.db[core.SETTINGS].docs[core.DOC_ID]["watch"] = {k: then for k in ("question", "applied", "failed",
+                                                                          "rejected", "run", "budget",
+                                                                          "build", "ccusage")}
+    made_everything(env.db, at=core.now() - timedelta(seconds=30))       # inside the usual overlap
+    assert run(notify.tick(env.db)) == 0
+    assert run(notify.tick(env.db)) == 0                                  # nor on the next look
+    env.db.compute_jobs.docs["j9"] = {"_id": "j9", "kind": "convert", "model": "iot/big", "rc": 0,
+                                      "wall_s": 90.0, "at": core.iso()}
+    assert run(notify.tick(env.db)) == 1
+
+
+def test_the_new_preferences_decide_who_hears(env):
+    configured(env.db)
+    linked(env.db)                                                      # the defaults
+    linked(env.db, user="u2", chat=5002, prefs={**links.PREFS, "reply": False, "route": False,
+                                               "longbuild": False, "firmware": False, "release": False,
+                                               "bodies": False})
+    run(notify.tick(env.db))
+    made_everything(env.db)
+    run(notify.tick(env.db))
+    drain(env.db)
+    chats = [kw["chat_id"] for kw in env.bot.sent("send_message")]
+    assert 5002 not in chats
+    assert chats.count(5001) == 7                                        # the drawer is off by default
+    assert not any("Part in the drawer" in kw["text"] for kw in env.bot.sent("send_message"))
+
+
+def test_a_failed_answer_and_a_failed_firmware_build_say_why(env):
+    configured(env.db)
+    linked(env.db)
+    run(notify.tick(env.db))
+    env.db.cc_gens.docs["g2"] = {"_id": "g2", "chat": "k2", "workspace": scope.DEFAULT, "status": "failed",
+                                 "text": "", "finished_at": core.now(), "answer": {"error": "402 out of credit"}}
+    env.db.cc_gens.docs["g3"] = {"_id": "g3", "chat": "k2", "workspace": scope.DEFAULT, "status": "stopped",
+                                 "text": "", "finished_at": core.now()}           # stopped by someone: not news
+    env.db.firmware_jobs.docs["f2"] = {"_id": "f2", "firmware": "fan", "title": "Fan", "workspace": scope.DEFAULT,
+                                       "status": "done", "finished_at": core.now(), "seconds": 9,
+                                       "result": {"ok": False, "error_count": 1, "warning_count": 0,
+                                                  "errors": [{"file": "src/main.cpp", "line": 12,
+                                                              "text": "'x' was not declared"}]}}
+    assert run(notify.tick(env.db)) == 2
+    drain(env.db)
+    texts = [kw["text"] for kw in env.bot.sent("send_message")]
+    assert any("Command Code answer failed" in x and "402 out of credit" in x for x in texts)
+    assert any("Firmware build failed" in x and "src/main.cpp:12" in x for x in texts)
+
+
+def test_an_unrouted_long_layout_is_a_long_build_and_a_routed_one_a_route(env):
+    configured(env.db)
+    linked(env.db)
+    run(notify.tick(env.db))
+    env.db.boards.docs["psu"] = {"_id": "psu", "layout": {"at": core.iso()}, "route": None}
+    env.db.compute_jobs.docs["l1"] = {"_id": "l1", "kind": "layout", "model": "psu", "rc": 0, "wall_s": 130.0,
+                                      "at": core.iso()}
+    assert run(notify.tick(env.db)) == 1
+    drain(env.db)
+    text = env.bot.sent("send_message")[-1]["text"]
+    assert "Done" in text and "layout" in text and "2 min 10 s" in text and "?ws=pcb&amp;board=psu" in text
+
+
+def test_the_server_health_goes_to_admins_once_per_trouble(env, monkeypatch):
+    monkeypatch.setattr(auth, "enabled", lambda: True)
+    configured(env.db)
+    linked(env.db, role="admin")
+    linked(env.db, user="u2", chat=5002, role="user")
+    monkeypatch.setattr(notify, "disk_now", lambda: {"pct": 96, "free_gb": 3.2, "path": "/srv"})
+    run(notify.tick(env.db))
+    assert run(notify.tick(env.db)) == 1                                  # the disk
+    monkeypatch.setattr(notify, "_disk_at", 0.0)
+    assert run(notify.tick(env.db)) == 0                                  # not again for hours
+    # a provider failing: three failures in half an hour, the last one new
+    for i in range(3):
+        env.db.suggestions.docs[f"s{i}"] = {"_id": f"s{i}", "state": "failed", "provider": "openrouter",
+                                            "error": "401 bad key", "at": core.now() - timedelta(minutes=10 - i)}
+    assert run(notify.tick(env.db)) == 0                                  # nothing new since the last look
+    env.db.suggestions.docs["s3"] = {"_id": "s3", "state": "failed", "provider": "openrouter",
+                                     "error": "401 bad key", "at": core.now()}
+    assert run(notify.tick(env.db)) == 1
+    env.db.suggestions.docs["s4"] = {"_id": "s4", "state": "failed", "provider": "openrouter",
+                                     "error": "401 bad key", "at": core.now()}
+    assert run(notify.tick(env.db)) == 0                                  # once per HEALTH_HOURS
+    # a build that crashed natively and went through when run again
+    env.db.compute_jobs.docs["b1"] = {"_id": "b1", "kind": "build", "model": "station", "rc": 0, "crashes": 1,
+                                      "wall_s": 5.0, "at": core.iso()}
+    assert run(notify.tick(env.db)) == 1
+    drain(env.db)
+    sent = env.bot.sent("send_message")
+    assert {kw["chat_id"] for kw in sent} == {5001}                       # owner and admins only
+    texts = [kw["text"] for kw in sent]
+    assert "96% full" in texts[0] and "3 GB left" in texts[0]
+    assert "openrouter: 4 calls failed" in texts[1] and "401 bad key" in texts[1]
+    assert "station" in texts[2] and "run again" in texts[2]
+
+
+def test_the_pages_errors_piling_up_are_told(env):
+    configured(env.db)
+    linked(env.db)
+    run(notify.tick(env.db))
+    for i in range(notify.PAGE_ERRORS):
+        env.db.client_errors.docs[f"e{i}"] = {"_id": f"e{i}", "at": core.now(), "message": "TypeError: x is null"}
+    assert run(notify.tick(env.db)) == 1
+    assert run(notify.tick(env.db)) == 0
+    drain(env.db)
+    assert "errors came from browsers" in env.bot.sent("send_message")[-1]["text"]
+
+
+def test_the_digest_comes_daily_or_on_mondays(env):
+    from datetime import datetime, timezone
+    configured(env.db)
+    linked(env.db, prefs={**links.PREFS, "digest": True})
+    linked(env.db, user="u2", chat=5002, prefs={**links.PREFS, "digest": True}, digest_every="week")
+    env.db.boards.docs["ctl"] = {"_id": "ctl", "route": {"at": "2026-10-11T20:00:00+00:00"}}
+    sunday = datetime(2026, 10, 11, 7, tzinfo=timezone.utc)
+    monday = datetime(2026, 10, 12, 7, tzinfo=timezone.utc)
+    assert run(notify.digests(env.db, sunday)) == 1                       # the daily one only
+    assert run(notify.digests(env.db, monday)) == 2
+    assert run(notify.digests(env.db, monday + timedelta(hours=3))) == 0
+    drain(env.db)
+    texts = {kw["chat_id"]: kw["text"] for kw in env.bot.sent("send_message")}
+    assert "Weekly digest" in texts[5002] and "7 d" in texts[5002] and "Boards routed: <b>1</b>" in texts[5002]
+    assert "Daily digest" in texts[5001]
+
+
+def test_the_digest_frequency_is_day_or_week(env):
+    linked(env.db)
+    got = run(links.set_prefs(env.db, "u1", every="week"))
+    assert links.every_of(got) == "week"
+    with pytest.raises(ValueError):
+        run(links.set_prefs(env.db, "u1", every="hourly"))
+
+
+def test_the_new_texts_come_in_turkish_too():
+    tr = {"lang": "tr"}
+    assert "Kart odası ajanı yanıtladı" in fmt.reply_event(tr, "pcb", "tamam", None)
+    assert "hepsi bağlı" in fmt.route_event(tr, "b", None, {"unrouted": 0, "vias": 3}, None, None, None)
+    assert "4 bağlantı açık" in fmt.route_event(tr, "b", None, {"unrouted": 4}, None, None, None)
+    assert "Sürüm hazır" in fmt.release_event(tr, {"_id": "r", "status": "ready", "project": "p", "tag": "v1"}, None)
+    assert fmt.dur(3725) == "1 h 02 min" and fmt.dur(3725, True) == "1 sa 02 dk"

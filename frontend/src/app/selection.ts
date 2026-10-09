@@ -60,8 +60,14 @@ export class Selection {
   /** Something the Chat room is asked to do when it is on screen
    *  (app/palette.ts): a new conversation, with something of the workspace
    *  attached and perhaps the question already typed, or the last one
-   *  opened. The room takes it (sets it back to null). */
-  cc = signal<CcWant | null>(null);
+   *  opened. The room takes it (sets it back to null). A link to one
+   *  conversation (?ws=commandcode&chat=<id>, from a Telegram message) is
+   *  the first thing asked. */
+  cc = signal<CcWant | null>(Selection.linkedChat());
+  private static linkedChat(): CcWant | null {
+    const chat = new URLSearchParams(location.search).get('chat');
+    return chat ? { n: 0, action: 'open', chat } : null;
+  }
   private ccAsks = 0;
   askCc(w: Omit<CcWant, 'n'>) {
     this.cc.set({ ...w, n: ++this.ccAsks });
