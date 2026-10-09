@@ -1275,6 +1275,43 @@ STATS_DAYS = 14                  # the day bars on a tool's page
 STATS_RECENT = 8                 # its latest uses listed there
 
 
+@router.get("/tools-usage")
+async def tools_usage() -> dict:
+    """Every tool's uses in this workspace's conversations, for the top of
+    the Tools view: totals, how many worked, and the last STATS_DAYS days
+    by tool."""
+    from . import chat_tools
+    me = (actors.current() or {}).get("id")
+    now = datetime.now(timezone.utc)
+    day0 = (now - timedelta(days=STATS_DAYS - 1)).date()
+    names = list(chat_tools.tools())
+    days = {(day0 + timedelta(days=i)).isoformat(): {} for i in range(STATS_DAYS)}
+    per = {n: {"uses": 0, "done": 0, "week": 0} for n in names}
+    mine = 0
+    async for doc in _db()[COLL].find(dict(LIVE), {"messages.role": 1, "messages.by": 1, "messages.steps": 1}):
+        asker: dict = {}
+        for m in doc.get("messages") or []:
+            if m.get("role") == "user":
+                asker = m.get("by") or {}
+                continue
+            for st in m.get("steps") or []:
+                n = st.get("tool")
+                if n not in per:
+                    continue
+                per[n]["uses"] += 1
+                per[n]["done"] += (st.get("status") or "done") == "done"
+                if me and asker.get("id") == me:
+                    mine += 1
+                at = str(st.get("at") or "")
+                if at[:10] in days:
+                    days[at[:10]][n] = days[at[:10]].get(n, 0) + 1
+                try:
+                    per[n]["week"] += now - datetime.fromisoformat(at.replace("Z", "+00:00")) <= timedelta(days=7)
+                except ValueError:
+                    pass
+    return {"tools": per, "mine": mine, "days": [{"day": d, "by": by} for d, by in days.items()]}
+
+
 @router.get("/tools/{name}")
 async def tool_page(name: str) -> dict:
     """One tool, for its page in the Tools view: what the model is told

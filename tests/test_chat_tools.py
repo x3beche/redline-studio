@@ -635,3 +635,18 @@ def test_a_tools_page_counts_its_uses(env):
     assert sum(d["bad"] for d in st["days"]) == 1
     with pytest.raises(Exception):
         run(cc_chat.tool_page("rm_rf"))
+
+
+def test_tools_usage_sums_every_tool(env):
+    from datetime import datetime, timezone
+    from tests.test_cc_mentions_live_search import line
+    raw, _ = env
+    at = datetime.now(timezone.utc).isoformat()
+    steps = [{"tool": "drawer_search", "status": "done", "at": at}, {"tool": "drawer_search", "status": "error", "at": at},
+             {"tool": "datasheet_read", "status": "done", "at": at}, {"tool": "gone_tool", "status": "done", "at": at}]
+    seed_chat(raw, "c1", [line("u1", "user", "?"), {**line("a1", "assistant", "ok"), "steps": steps}])
+    got = run(cc_chat.tools_usage())
+    assert got["tools"]["drawer_search"] == {"uses": 2, "done": 1, "week": 2}
+    assert got["tools"]["datasheet_read"]["uses"] == 1 and "gone_tool" not in got["tools"]
+    assert got["days"][-1]["by"] == {"drawer_search": 2, "datasheet_read": 1}
+    assert len(got["days"]) == cc_chat.STATS_DAYS

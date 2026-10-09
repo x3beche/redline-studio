@@ -43,6 +43,12 @@ interface ToolPage extends CcTool {
     days: { day: string; n: number; bad: number }[]; people: { name: string; n: number }[]; recent: ToolUse[] };
 }
 
+/** Every tool's uses (GET /api/cc/tools-usage), for the top of the list. */
+interface ToolsUsage {
+  tools: Record<string, { uses: number; done: number; week: number }>; mine: number;
+  days: { day: string; by: Record<string, number> }[];
+}
+
 /** The Chat tab's tools, where a conversation is shown (rooms/commandcode.ts),
  *  in Settings' own frame (settings.css): the slim head band, then one card
  *  per level with its tools as tiles - icon, name, the app's switch
@@ -61,7 +67,7 @@ interface ToolPage extends CcTool {
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 7l-5 5 5 5" /></svg></button>
     <button class="ct-crumb st-head-name" type="button" (click)="back()">{{ 'Tools' | t }}</button>
     <span class="ct-sep">/</span>
-    <svg class="ct-head-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(p.name)" /></svg>
+    <svg class="ct-head-ico" viewBox="0 0 24 24" aria-hidden="true" [style.color]="color(p.name)"><path [attr.d]="icon(p.name)" /></svg>
     <span class="ct-title">{{ p.label | t }}</span>
     <code class="ct-id">{{ p.name }}</code>
   } @else {
@@ -138,12 +144,12 @@ interface ToolPage extends CcTool {
                   <span class="ct-bar" [title]="d.day + ' · ' + d.n + (d.bad ? ' · ' + d.bad + ' ' + ('failed' | t) : '')">
                     <span class="ct-stack" [style.height.%]="d.n ? 8 + 92 * d.n / peak(st.days) : 0">
                       @if (d.bad) { <i class="bad" [style.flex-grow]="d.bad"></i> }
-                      @if (d.n - d.bad) { <i [style.flex-grow]="d.n - d.bad"></i> }
+                      @if (d.n - d.bad) { <i [style.flex-grow]="d.n - d.bad" [style.background]="color(p.name)"></i> }
                     </span></span>
                 }
               </div>
               <div class="ct-bars-axis mono"><span>{{ st.days[0].day.slice(5) }}</span><span>{{ 'today' | t }}</span></div>
-              <div class="ct-legend"><span><i></i>{{ 'worked' | t }} {{ st.outcomes['done'] ?? 0 }}</span>
+              <div class="ct-legend"><span><i [style.background]="color(p.name)"></i>{{ 'worked' | t }} {{ st.outcomes['done'] ?? 0 }}</span>
                 <span><i class="bad"></i>{{ 'failed or refused' | t }} {{ fails(p) }}</span></div>
             </div>
           </section>
@@ -180,7 +186,50 @@ interface ToolPage extends CcTool {
     </div>
   } @else {
   <div class="st-page ct-page">
-    <p class="st-lead">{{ 'The model reaches for these by itself when a question needs them, and every use shows in its answer as a step you can open. Turn off what you do not want it to touch; this is your own choice and follows you to every device.' | t }}</p>
+    @if (usage(); as u) {
+      <div class="st-tiles six">
+        <div class="st-tile"><span>{{ 'On for you' | t }}</span><b>{{ on() }} / {{ tools().length }}</b></div>
+        <div class="st-tile"><span>{{ 'Uses' | t }}</span><b>{{ total(u) }}</b><small>{{ u.mine }} {{ 'by you' | t }}</small></div>
+        <div class="st-tile"><span>{{ 'Last 7 days' | t }}</span><b>{{ week(u) }}</b></div>
+        <div class="st-tile" [attr.data-tone]="worked(u) == null ? 'dim' : worked(u)! < 90 ? 'warn' : 'ok'">
+          <span>{{ 'Worked' | t }}</span><b>{{ worked(u) == null ? '–' : worked(u) + '%' }}</b></div>
+      </div>
+      <div class="ct-cols">
+        <section class="st-card">
+          <div class="st-card-head"><h3>{{ 'Uses by tool' | t }}</h3><span class="st-sub">{{ 'last 14 days' | t }}</span>
+            <span class="st-right st-sub mono">{{ sum14(u) }}</span></div>
+          <div class="st-card-body">
+            <div class="ct-bars tall">
+              @for (d of u.days; track d.day) {
+                <span class="ct-bar" [title]="d.day + ' · ' + dayTotal(d)">
+                  <span class="ct-stack" [style.height.%]="dayTotal(d) ? 6 + 94 * dayTotal(d) / peak14(u) : 0">
+                    @for (tl of tools(); track tl.name) {
+                      @if (d.by[tl.name]) { <i [style.flex-grow]="d.by[tl.name]" [style.background]="color(tl.name)"></i> }
+                    }
+                  </span></span>
+              }
+            </div>
+            <div class="ct-bars-axis mono"><span>{{ u.days[0].day.slice(5) }}</span><span>{{ 'today' | t }}</span></div>
+            <div class="ct-legend">
+              @for (tl of tools(); track tl.name) {
+                <span><i [style.background]="color(tl.name)"></i>{{ tl.label | t }} <b class="mono">{{ u.tools[tl.name]?.uses ?? 0 }}</b></span>
+              }
+            </div>
+          </div>
+        </section>
+        <section class="st-card">
+          <div class="st-card-head"><h3>{{ 'By tool' | t }}</h3></div>
+          <div class="st-card-body ct-by">
+            @for (tl of byUse(u); track tl.name) {
+              <button type="button" class="ct-who ct-who-btn" (click)="show(tl.name)">
+                <span>{{ tl.label | t }}</span>
+                <span class="st-meter"><i [style.width.%]="100 * (u.tools[tl.name]?.uses ?? 0) / peakTool(u)" [style.background]="color(tl.name)"></i></span>
+                <b class="mono">{{ u.tools[tl.name]?.uses ?? 0 }}</b></button>
+            }
+          </div>
+        </section>
+      </div>
+    }
     @if (!ready()) {
       <section class="st-card"><div class="ct-empty">{{ 'Loading…' | t }}</div></section>
     } @else {
@@ -207,7 +256,7 @@ interface ToolPage extends CcTool {
                 <div class="ct-tile" [attr.data-on]="tl.on ? 1 : null" role="button" tabindex="0"
                      (click)="show(tl.name)" (keydown.enter)="show(tl.name)" [title]="'Open its page' | t">
                   <span class="ct-top">
-                    <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(tl.name)" /></svg>
+                    <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true" [style.color]="tl.on ? color(tl.name) : null"><path [attr.d]="icon(tl.name)" /></svg>
                     <span class="ct-name">{{ tl.label | t }}</span>
                     <button class="tcv-switch" type="button" role="switch" [attr.aria-checked]="tl.on" [attr.data-on]="tl.on ? 1 : null"
                             [disabled]="!canEdit()" [attr.aria-label]="tl.label | t" (click)="$event.stopPropagation(); flip(tl)"></button>
@@ -257,6 +306,25 @@ export class CcToolsView {
     const change = tools.filter(x => x.on !== on);
     if (change.length) this.set.emit(Object.fromEntries(change.map(x => [x.name, on])));
   }
+
+  usage = signal<ToolsUsage | null>(null);
+  constructor() { this.http.get<ToolsUsage>('/api/cc/tools-usage').subscribe({ next: u => this.usage.set(u), error: () => {} }); }
+  /** A tool's colour, the same on its tile, its page and every chart: the series palette, in the list's order. */
+  color(name: string) {
+    const i = this.tools().findIndex(x => x.name === name);
+    return `var(--series-${(i < 0 ? 7 : i % 8) + 1})`;
+  }
+  total(u: ToolsUsage) { return Object.values(u.tools).reduce((a, x) => a + x.uses, 0); }
+  week(u: ToolsUsage) { return Object.values(u.tools).reduce((a, x) => a + x.week, 0); }
+  worked(u: ToolsUsage) {
+    const n = this.total(u);
+    return n ? Math.round(100 * Object.values(u.tools).reduce((a, x) => a + x.done, 0) / n) : null;
+  }
+  dayTotal(d: { by: Record<string, number> }) { return Object.values(d.by).reduce((a, x) => a + x, 0); }
+  sum14(u: ToolsUsage) { return u.days.reduce((a, d) => a + this.dayTotal(d), 0); }
+  peak14(u: ToolsUsage) { return Math.max(1, ...u.days.map(d => this.dayTotal(d))); }
+  peakTool(u: ToolsUsage) { return Math.max(1, ...Object.values(u.tools).map(x => x.uses)); }
+  byUse(u: ToolsUsage) { return [...this.tools()].sort((a, b) => (u.tools[b.name]?.uses ?? 0) - (u.tools[a.name]?.uses ?? 0)); }
 
   show(name: string) {
     this.http.get<ToolPage>(`/api/cc/tools/${encodeURIComponent(name)}`).subscribe({ next: p => this.page.set(p), error: () => {} });

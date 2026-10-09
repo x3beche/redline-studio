@@ -86,11 +86,16 @@
 .ct-bar { flex: 1; height: 100%; display: flex; align-items: flex-end; border-bottom: 1px solid var(--line); }
 .ct-stack { display: flex; flex-direction: column; width: 100%; gap: 1px; border-radius: 2px; overflow: hidden; }
 .ct-stack i { display: block; flex: 1 1 0; min-height: 2px; background: var(--series-1); }
-.ct-stack i.bad { background: var(--series-6); }
+.ct-stack i.bad { background: var(--danger); }
 .ct-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--ink-dim); }
 .ct-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .ct-legend i { width: 9px; height: 9px; border-radius: 2px; background: var(--series-1); }
-.ct-legend i.bad { background: var(--series-6); }
+.ct-legend i.bad { background: var(--danger); }
+.ct-legend b { font-weight: 500; color: var(--ink); }
+.ct-bars.tall { height: 110px; }
+.ct-by { gap: 8px; }
+.ct-who-btn { width: 100%; padding: 0; text-align: left; background: none; border: 0; cursor: pointer; }
+.ct-who-btn:hover span:first-child { color: var(--ink-bright); text-decoration: underline; }
 .ct-bars-axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink-dim); }
 .ct-who { display: grid; grid-template-columns: minmax(0, 1fr) 90px 28px; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink); }
 .ct-who .st-meter { margin: 0; }
