@@ -563,6 +563,8 @@ export interface RuleField {
   type: 'text' | 'number' | 'integer' | 'choice' | 'net' | 'nets' | 'patterns' | 'layers';
   unit?: string; min?: number; max?: number; step?: number; help?: string;
   options?: string[];
+  /** How a choice's options read, where not as they are kept. */
+  labels?: Record<string, string>;
 }
 
 /** Every section of the rules: one set of fields, or a list of rows. */

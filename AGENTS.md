@@ -378,8 +378,10 @@ the first wins where two meet. Each problem names its field
 
 `run` builds the source, draws the schematic (KiCad, every part's real
 symbol, pins joined by net labels, then ERC), places the parts (by module,
-connectors on the edges facing out), routes with Freerouting to the
-board's rules, pours ground, and runs KiCad's DRC. It prints what came
+connectors on the edges facing out), routes to the board's rules with
+the router its rules name (`route.engine`: `freerouting`, the default, or
+`tracemaker`, which the person can watch routing in the layout view),
+pours ground, and runs KiCad's DRC. It prints what came
 out. A board is done when it says **0 unrouted, DRC 0 errors, ERC 0
 errors** - read the examples it prints when it does not, fix the source
 or the rules, and run again. Log board work with `log --room pcb`.
@@ -391,7 +393,9 @@ router narrows a class that cannot reach its narrowest pad and says so
 ("Power: 0.5 -> 0.34 mm, to reach U24 pad 5"); that is reported, not an
 error. Freerouting routes a differential pair as two nets at the class's
 width and gap, without coupling or length matching - fine for USB full
-speed, and say so if someone asks for anything faster.
+speed, and say so if someone asks for anything faster; TraceMaker routes
+pairs coupled. The engine is the person's choice, like the other rules:
+change it only when asked.
 
 A part is chosen by its LCSC number (`mpn = "C25744"` on the component).
 Then `done <id>` as usual.

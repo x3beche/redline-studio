@@ -28,13 +28,33 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from . import ato, compute, lcsc, limits, rules, store
+from . import ato, compute, lcsc, limits, routelive, rules, store
 
 IMAGE = os.environ.get("REDLINE_KICAD_IMAGE", "redline-kicad")
 HERE = Path(__file__).resolve().parent.parent
 PLACER = HERE / "docker" / "place.py"
 ROUTER = HERE / "docker" / "route.py"
 ROUTE_TIMEOUT = 900
+# TraceMaker (docker/tracemaker.Dockerfile), the other router: its own
+# image, since it is built on a newer system than the KiCad one.
+TM_IMAGE = os.environ.get("REDLINE_TRACEMAKER_IMAGE", "redline-tracemaker")
+LIVE = "live.jsonl"                 # its stream, for the page (backend/routelive.py)
+
+
+def tm_threads() -> int:
+    """As many router threads as the container has CPUs."""
+    try:
+        return max(1, int(float(limits.box()[1])))
+    except (ValueError, IndexError):
+        return 4
+
+
+def tm_summary(log: str) -> str | None:
+    """TraceMaker's last word: `routed 235/235 connections, 981 tracks, 178 vias, ...`."""
+    for line in reversed((log or "").splitlines()):
+        if line.startswith("routed ") and "connections" in line:
+            return line.strip()
+    return None
 
 # Run in the container: the routed board, without its zones, for a view
 # where the tracks can be told apart from the ground around them.
@@ -419,23 +439,66 @@ async def render(db, board_id: str, route: bool = True) -> dict:
             except ValueError:
                 return {"placed": None, "missing": [], "note": text[-300:]}
 
-        async def route_once(payload: dict) -> dict:
+        async def boxed(image: str, script: str, payload: dict, timeout: float) -> dict:
+            """A script in a container, a plan on its stdin, its answer the
+            last JSON object it prints."""
             proc = await asyncio.create_subprocess_exec(
-                *_docker(work, "--entrypoint", "python3", IMAGE, "/work/route.py",
-                         stdin=True),
+                *_docker(work, "--entrypoint", "python3", image, script, stdin=True),
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
             meter.watch(proc.pid)
-            out, _ = await asyncio.wait_for(
-                # The board, then a round of what it left over:
-                # those alone, and the board round them (docker/route.py
-                # leftovers_first) - each Freerouting run its own timeout.
-                proc.communicate(json.dumps(payload).encode()), 4 * ROUTE_TIMEOUT + 60)
+            out, _ = await asyncio.wait_for(proc.communicate(json.dumps(payload).encode()), timeout)
             text = out.decode(errors="replace")
             try:
-                got = json.loads(text[text.index("{"):text.rindex("}") + 1])
+                return json.loads(text[text.index("{"):text.rindex("}") + 1])
             except ValueError:
                 raise RuntimeError("routing failed:\n" + text[-800:])
+
+        attempts = {"n": 0}
+
+        async def route_tracemaker(payload: dict) -> dict:
+            """board -> net classes on, no pour (route.py prepare) ->
+            TraceMaker, its stream kept for the page (docker/tm_relay.py)
+            -> pour, count, report (route.py finish)."""
+            rc, _ = await _run(["docker", "image", "inspect", TM_IMAGE], work)
+            if rc != 0:
+                return {"error": f"the TraceMaker container ({TM_IMAGE}) is not built. docker build "
+                                 f"-f docker/tracemaker.Dockerfile -t {TM_IMAGE} . - or route with Freerouting"}
+            got = await boxed(IMAGE, "/work/route.py",
+                              {**payload, "stage": "prepare", "pre": "/work/pre.kicad_pcb"}, ROUTE_TIMEOUT)
+            if got.get("error"):
+                return got
+            seconds = int(payload["rules"].get("route", {}).get("seconds", 120))
+            args = ["--time", str(seconds), "--threads", str(tm_threads())]
+            if payload["rules"].get("pairs"):
+                args.append("--diff-pairs")
+            attempts["n"] += 1
+            (work / LIVE).unlink(missing_ok=True)
+            await routelive.begin(db, board_id, str(work / LIVE), "tracemaker", attempts["n"])
+            try:
+                tm = await boxed(TM_IMAGE, "/opt/tm_relay.py",
+                                 {"board": "/work/pre.kicad_pcb", "out": "/work/routed.kicad_pcb",
+                                  "args": args, "live": f"/work/{LIVE}", "timeout": seconds + 60},
+                                 seconds + 180)
+            finally:
+                await routelive.end(db, board_id)
+            if not (work / "routed.kicad_pcb").exists():
+                return {"error": f"TraceMaker wrote no board (exit {tm.get('rc')})", "log": tm.get("log")}
+            got = await boxed(IMAGE, "/work/route.py",
+                              {**payload, "stage": "finish", "routed": "/work/routed.kicad_pcb",
+                               "route_s": tm.get("seconds"), "log": tm.get("log") or ""}, ROUTE_TIMEOUT)
+            got["tracemaker"] = {"summary": tm_summary(tm.get("log") or ""), "seconds": tm.get("seconds"),
+                                 "args": args}
+            return got
+
+        async def route_once(payload: dict) -> dict:
+            if payload["rules"].get("route", {}).get("engine") == "tracemaker":
+                got = await route_tracemaker(payload)
+            else:
+                # The board, then a round of what it left over: those
+                # alone, and the board round them (docker/route.py
+                # leftovers_first) - each Freerouting run its own timeout.
+                got = await boxed(IMAGE, "/work/route.py", payload, 4 * ROUTE_TIMEOUT + 60)
             if got.get("error") == "rules":
                 raise RuntimeError("the routing rules do not fit this board: "
                                    + "; ".join(got["problems"]))

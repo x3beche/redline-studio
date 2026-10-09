@@ -74,6 +74,8 @@ app.include_router(llm_api.router)
 app.include_router(cc_chat.router)
 # Settings > Proxy: a second way out for the EasyEDA part lookups.
 app.include_router(netproxy.router)
+from . import routelive  # noqa: E402
+app.include_router(routelive.router)
 from . import costs as costs_api, fx  # noqa: E402
 app.include_router(fx.router)
 app.include_router(costs_api.router)

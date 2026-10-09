@@ -19,6 +19,7 @@ import { Releases } from './releases';
 import { Prefs } from '../preferences';
 import { isLightTheme } from '../../theme';
 import { Drawing } from './drawing';
+import { RouteLive } from './route-live';
 import { RoomFrame, ToolButton } from './frame';
 import { RulesForm } from './rules-form';
 import { DrawTools, PenState, Sketchpad } from './sketchpad';
@@ -52,7 +53,7 @@ type BoardView = Pane | 'split' | 'focus';
  */
 @Component({
   selector: 'app-room-pcb',
-  imports: [Board3d, CodeView, PinIcon, PinnedByList, Drawing, DrawTools, ImportBoard, Releases, BoardHealth, NgTemplateOutlet,
+  imports: [Board3d, CodeView, PinIcon, PinnedByList, Drawing, RouteLive, DrawTools, ImportBoard, Releases, BoardHealth, NgTemplateOutlet,
             PartsDrawer, RoomFrame, RulesForm, Sketchpad, T, ToolButton],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
@@ -528,13 +529,17 @@ type BoardView = Pane | 'split' | 'focus';
   <ng-template #board let-kind let-own="own">
     @switch (kind) {
       @case ('layout') {
-        @if (hasLayout()) {
-          <app-drawing #flat [src]="layoutUrl()" [controls]="own"
-                       [geometry]="here()?.route ? geo() : null" [mirror]="view() === 'back'"
-                       [side]="view() === 'back' ? 'B' : 'all'" />
-        } @else {
-          <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ imported() ? importedNote : notYet }}</p>
-        }
+        <!-- TraceMaker routing it, drawn over the layout while it runs. -->
+        <div class="relative h-full w-full">
+          @if (hasLayout()) {
+            <app-drawing #flat [src]="layoutUrl()" [controls]="own"
+                         [geometry]="here()?.route ? geo() : null" [mirror]="view() === 'back'"
+                         [side]="view() === 'back' ? 'B' : 'all'" />
+          } @else {
+            <p class="p-3 text-[12px]" style="color: var(--ink-dim)">{{ imported() ? importedNote : notYet }}</p>
+          }
+          <app-route-live [board]="here()?._id ?? null" (finished)="refresh()" />
+        </div>
       }
       @case ('schematic') {
         @if (here()?.schematic; as sch) {

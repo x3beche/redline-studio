@@ -107,7 +107,7 @@ type Row = Record<string, unknown>;
         <select (change)="set(sec, i, f.key, $any($event.target).value)"
                 class="tcv-field w-full min-w-0 px-1 py-0.5 text-[11px]">
           @for (o of f.options ?? []; track o) {
-            <option [value]="o" [selected]="row[f.key] === o">{{ o }}</option>
+            <option [value]="o" [selected]="row[f.key] === o">{{ f.labels?.[o] ?? o }}</option>
           }
         </select>
       }

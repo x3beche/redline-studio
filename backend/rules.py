@@ -38,7 +38,11 @@ DEFAULT = {"name": "Default", "track": 0.25, "clearance": 0.2,
            "via": 0.6, "drill": 0.3}
 # How hard the router tries, and how many layouts it may be given, until a
 # person says otherwise in the Rules tab.
-ROUTE = {"passes": 40, "tries": 3}
+ROUTE = {"engine": "freerouting", "passes": 40, "tries": 3, "seconds": 120}
+# The routers a board can be routed with (backend/kicad.py): Freerouting,
+# in the KiCad container, and TraceMaker, in one of its own
+# (docker/tracemaker.Dockerfile) - which the page can watch while it routes.
+ENGINES = ["freerouting", "tracemaker"]
 POWER_CLASS = {"name": "Power", "track": 0.5, "clearance": 0.2,
                "via": 0.8, "drill": 0.4}
 # How close copper may come to the board's edge: KiCad's own default, which
@@ -142,7 +146,7 @@ SCHEMA = {
         "help": "Two nets routed side by side at a set width and gap. "
                 "Freerouting keeps the width and gap; it does not couple "
                 "or length-match them - fine for USB full speed, not for "
-                "anything fast.",
+                "anything fast. TraceMaker routes them as coupled pairs.",
         "new": {"name": "", "p": "", "n": "", "width": 0.25, "gap": 0.15},
         "fields": [
             {"key": "name", "label": "Name", "type": "text"},
@@ -200,11 +204,20 @@ SCHEMA = {
     },
     "route": {
         "label": "Router", "list": False,
-        "help": "How hard Freerouting tries.",
+        "help": "Which router, and how hard it tries.",
         "fields": [
+            {"key": "engine", "label": "Engine", "type": "choice", "options": ENGINES,
+             "labels": {"freerouting": "Freerouting", "tracemaker": "TraceMaker"},
+             "help": "Freerouting: the long-standing Java router, fewer vias. "
+                     "TraceMaker: a newer C++ router that rips up and routes "
+                     "again until everything connects, routes differential "
+                     "pairs coupled, and can be watched routing in the layout"},
             {"key": "passes", "label": "Passes", "type": "integer",
              "min": 1, "max": 500, "step": 1,
-             "help": "optimisation passes; more is shorter copper and a longer run"},
+             "help": "Freerouting's optimisation passes; more is shorter copper and a longer run"},
+            {"key": "seconds", "label": "Time", "type": "integer", "unit": "s",
+             "min": 10, "max": 900, "step": 10,
+             "help": "TraceMaker's time for a board; it stops sooner once every connection is made"},
             {"key": "tries", "label": "Tries", "type": "integer",
              "min": 1, "max": 10, "step": 1,
              "help": "the tightest layout is not always one the router can "
@@ -358,6 +371,8 @@ def check(rules: dict, nets: list[str] | None = None,
     b = rules.get("board", {})
     numbers("board", "board", b)
     numbers("route", "route", rules.get("route", {}))
+    if rules.get("route", {}).get("engine") not in ENGINES:
+        out.append(f"route.engine: one of {', '.join(ENGINES)}")
 
     names = [c.get("name", "").strip() for c in rules["classes"]]
     if "Default" not in names:

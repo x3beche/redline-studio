@@ -443,6 +443,25 @@ def main() -> int:
     for zone in list(board.Zones()):
         discard(board, zone)
 
+    if plan.get("stage") == "prepare":
+        # TraceMaker routes in a container of its own (docker/tm_relay.py):
+        # the board goes to it with the rules on as net classes and no
+        # pour, and comes back to `finish` here.
+        pre = plan["pre"]
+        # SaveBoard writes the net classes into the .kicad_pro beside it -
+        # KiCad keeps them in the project, not the board - and that is
+        # where TraceMaker reads them from.
+        pcbnew.SaveBoard(pre, board)
+        print(json.dumps({"prepared": pre, "pads": pads}))
+        return 0
+    if plan.get("stage") == "finish":
+        routed = pcbnew.LoadBoard(plan["routed"])
+        apply_rules(routed, rules)
+        for zone in list(routed.Zones()):
+            discard(routed, zone)
+        return finish(routed, plan, rules, pads, plan.get("route_s") or 0.0,
+                      (plan.get("log") or "")[-3000:], None, engine="tracemaker")
+
     t0 = time.monotonic()
     passes = int(rules.get("route", {}).get("passes", 40))
     timeout = plan.get("timeout", 900)
@@ -481,7 +500,13 @@ def main() -> int:
             if not unrouted or not left:
                 break
     routed_s = time.monotonic() - t0
+    return finish(board, plan, rules, pads, routed_s, log, second, engine="freerouting", passes=passes)
 
+
+def finish(board, plan: dict, rules: dict, pads: dict, routed_s: float, log: str, second,
+           engine: str, passes: int | None = None) -> int:
+    """Pour, count, save and report a routed board - whichever router routed it."""
+    path = plan["board"]
     zones = pours(board, rules.get("pours")
                   or ([rules["pour"]] if rules.get("pour") else []))
     tracks = [t for t in board.GetTracks() if t.GetClass() == "PCB_TRACK"]
@@ -507,7 +532,7 @@ def main() -> int:
         "length_mm": round(length, 1), "zones": zones,
         "unrouted": unrouted, "route_s": round(routed_s, 1),
         "passes": passes, "pads": pads, "geometry": shape, "log": log[-1500:],
-        "edge_exempt": exempt, "leftovers": second,
+        "edge_exempt": exempt, "leftovers": second, "engine": engine,
     }))
     return 0
 
