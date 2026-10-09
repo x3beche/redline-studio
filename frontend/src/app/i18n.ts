@@ -1785,6 +1785,9 @@ const TR: Record<string, string> = {
   'Command Code does not say which model spent what.': 'Command Code hangi modelin ne harcadığını söylemiyor.',
   'API key': 'API anahtarı',
   'add a key below and its usage shows here.': 'aşağıya bir anahtar ekle, kullanımı burada görünür.',
+  // 3D viewer, Clip tab (editor/clip-wheel.ts)
+  'Wheel step': 'Tekerlek adımı',
+  'Mouse wheel over a clip slider moves the plane by this much. Shift: ×10.': 'Kesit kaydırıcısının üzerinde fare tekerleği düzlemi bu kadar kaydırır. Shift: ×10.',
 };
 
 export function t(text: string): string {

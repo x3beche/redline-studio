@@ -28,7 +28,7 @@ import { CodeView } from '../rooms/code-view';
 import { ComponentPicker, LinksCard, PinIcon, insertImport } from '../rooms/links';
 import { Releases } from '../rooms/releases';
 import { Changes } from '../rooms/changes';
-import { T } from '../i18n';
+import { LANG, T } from '../i18n';
 import { Auth } from '../auth';
 import { startFold, whenSettled } from '../fold';
 
@@ -221,6 +221,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   private ro?: ResizeObserver;
 
   constructor() {
+    // The Clip tab's wheel-step control is built outside Angular; its words
+    // follow the language by hand.
+    effect(() => { LANG(); untracked(() => this.viewer?.clipWheel?.relabel()); });
     // The note at work is fetched by itself whenever the list in view does
     // not hold it (the archive is showing), so its card stays under the tree.
     effect(() => {

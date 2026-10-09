@@ -2121,6 +2121,77 @@ body {
   border-color: var(--line) !important;
 }
 
+/* The Clip tab's wheel step (editor/clip-wheel.ts): what one notch of the
+   mouse wheel over a plane slider moves it by. A label and a field on one
+   line, the presets as a flat segmented strip under it, a rule below. */
+.tcv-clipstep {
+  padding: 4px 0 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  cursor: default;
+}
+.tcv-clipstep-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+.tcv-clipstep-label {
+  font-size: 10.5px;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.tcv-clipstep-field {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  box-sizing: border-box;
+  padding-right: 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.tcv-clipstep-field:focus-within { border-color: var(--accent); }
+.tcv-clipstep-field input {
+  width: 42px;
+  padding: 0 3px 0 5px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font: 11px 'IBM Plex Mono', ui-monospace, monospace;
+  text-align: right;
+}
+.tcv-clipstep-unit { color: var(--ink-dim); font-size: 10.5px; }
+.tcv-clipstep-presets {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.tcv-clipstep-presets button {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-dim);
+  font: 11px 'IBM Plex Mono', ui-monospace, monospace;
+  cursor: pointer;
+  transition: color .12s, background .12s;
+}
+.tcv-clipstep-presets button:last-child { border-right: 0; }
+.tcv-clipstep-presets button:hover { color: var(--ink); background: var(--hover); }
+.tcv-clipstep-presets button[data-on="1"] { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-clipstep-presets button:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+
 /* A build has no percentage to report - the model script runs to its own
    clock - so the bar slides rather than fills. Honest about not knowing how
    long is left, while still saying the machine is working. */
