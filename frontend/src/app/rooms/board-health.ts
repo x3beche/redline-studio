@@ -1,6 +1,6 @@
 import { Component, computed, input, output, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { BoardComponent, BoardEntry, BoardStats } from '../api';
+import { BoardComponent, BoardEntry, BoardPose, BoardStats } from '../api';
 import { T, t } from '../i18n';
 import { BomCost } from './bom-cost';
 
@@ -46,7 +46,8 @@ type Board = BoardEntry & {
   kind?: string;
   rules?: { board?: { layers?: number } };
   layout?: BoardEntry['layout'] & { held?: boolean; held_worst_mm?: number;
-                                    holes?: { ref?: string; part?: string }[] };
+                                    holes?: { ref?: string; part?: string }[];
+                                    posed?: string[]; pose_trouble?: Record<string, string> };
   route?: (NonNullable<BoardEntry['route']> & { edge_exempt?: string[] }) | null;
   drc?: (NonNullable<BoardEntry['drc']> & { edge_exempt?: string[] }) | null;
   convert?: (NonNullable<BoardEntry['convert']> & {
@@ -226,6 +227,21 @@ function plural(n: number, one: string, many: string): string {
     .bh-facts .st-tile > b small { font-size: 10.5px; color: var(--ink-dim); font-weight: 400; }
     .bh-adv { padding: 4px 9px 8px; display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
     .bh-empty { padding: 8px 2px; font-size: 11px; color: var(--ink-dim); }
+
+    /* 3D poses set on this board */
+    .bh-poses { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line);
+                border-radius: 6px; }
+    .bh-pose { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 8px; align-items: baseline;
+               padding: 5px 9px; }
+    .bh-pose + .bh-pose { border-top: 1px dashed var(--line); }
+    .bh-pose-nums { font: 11px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink); min-width: 0;
+                    overflow-wrap: anywhere; }
+    .bh-pose-x { padding: 0 5px; font-size: 13px; line-height: 16px; color: var(--ink-dim); background: none;
+                 border: 1px solid transparent; border-radius: 3px; cursor: pointer; }
+    .bh-pose-x:hover { color: var(--danger); border-color: var(--line); }
+    .bh-pose-x:disabled { cursor: default; opacity: .5; }
+    .bh-pose-sub { grid-column: 2 / -1; font-size: 11px; color: var(--ink-dim); overflow-wrap: anywhere; }
+    .bh-pose-off { grid-column: 2 / -1; font-size: 11px; color: var(--warn); }
   `],
   template: `
 <div class="bh">
@@ -284,6 +300,32 @@ function plural(n: number, one: string, many: string): string {
       }
     </details>
   }
+
+  <!-- 3D POSES: parts whose 3D body this board turns (backend/poses.py). -->
+  @if (poses().length) {
+    <div class="bh-sec">{{ '3D poses set on this board' | t }}</div>
+    <div class="bh-poses">
+      @for (p of poses(); track p.ref) {
+        <div class="bh-pose">
+          <span class="bh-ref">{{ p.ref }}</span>
+          <span class="bh-pose-nums">{{ p.part ?? '' }} · {{ 'rotate' | t }} {{ p.rotate }} · {{ 'offset' | t }} {{ p.offset }}@if (p.mirror) { · {{ 'silk mirrored' | t }} {{ p.mirror }} }</span>
+          @if (canEditPoses()) {
+            <button class="bh-pose-x" (click)="removePose.emit(p.ref)" [disabled]="building()"
+                    [title]="'Remove; the next run seats it as the part comes' | t"
+                    [attr.aria-label]="('Remove' | t) + ' ' + p.ref">×</button>
+          } @else { <span></span> }
+          @if (p.why) { <span class="bh-pose-sub">{{ p.why }}</span> }
+          <span class="bh-pose-sub">{{ p.who }}{{ p.when ? ' · ' + p.when : '' }}</span>
+          @if (p.trouble) { <span class="bh-pose-off">{{ 'Not applied at the last run' | t }}: {{ p.trouble }}</span> }
+          @else if (!p.applied) { <span class="bh-pose-off">{{ 'Applied from the next run' | t }}</span> }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- 3D BODIES: which of its part's bodies each reference wears here
+       (rooms/board-bodies.ts, projected by the PCB room). -->
+  <ng-content select="[bodies]"></ng-content>
 
   <!-- THE BOARD IN FIGURES -->
   @if (facts().length) {
@@ -347,8 +389,12 @@ export class BoardHealth {
   canFocus = input(false);
   /** What the room last had to say: a failed run, a conversion. */
   note = input('');
+  /** Whether the × beside a 3D pose is offered: the right to edit the board. */
+  canEditPoses = input(false);
   rerun = output<void>();
   focusNet = output<string>();
+  /** Take a part's 3D pose off the board (DELETE .../poses/{ref}). */
+  removePose = output<string>();
 
   private open = signal<Set<string>>(new Set());
   isOpen(id: string): boolean { return this.open().has(id); }
@@ -575,6 +621,25 @@ export class BoardHealth {
     const error = bad.some(c => c.tone === 'error');
     return { tone: (error ? 'error' : 'warn') as Tone, mark: '!',
              text: `${t('Needs attention')} (${bad.length})` };
+  });
+
+  /** The 3D poses the board sets, as rows: what they are, who set them,
+   *  and whether the last layout has them. */
+  poses = computed(() => {
+    const b = this.b();
+    const kept: Record<string, BoardPose> = b?.poses ?? {};
+    const lay = b?.layout;
+    const xyz = (v: number[] | null) => v ? v.map(n => +n.toFixed(3)).join(', ') : t('as the part comes');
+    return Object.entries(kept).sort(([a], [z]) => a.localeCompare(z)).map(([ref, p]) => {
+      // What the last layout said is about this pose only if it came after it.
+      const since = !!lay?.at && !!p.at && lay.at >= p.at;
+      return {
+        ref, part: p.part, rotate: xyz(p.rotate), offset: xyz(p.offset), mirror: p.mirror, why: p.why,
+        who: p.by?.name ?? '', when: p.at ? new Date(p.at).toLocaleString() : '',
+        trouble: since ? lay?.pose_trouble?.[ref] ?? '' : '',
+        applied: since && !!lay?.posed?.includes(ref),
+      };
+    });
   });
 
   checkedAt = computed(() => this.b()?.drc?.at ?? this.b()?.layout?.at ?? null);

@@ -28,7 +28,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from . import ato, compute, lcsc, limits, routelive, rules, store
+from . import ato, compute, lcsc, limits, poses, routelive, rules, store
 
 IMAGE = os.environ.get("REDLINE_KICAD_IMAGE", "redline-kicad")
 HERE = Path(__file__).resolve().parent.parent
@@ -386,9 +386,22 @@ async def render(db, board_id: str, route: bool = True) -> dict:
 
         shutil.copy(PLACER, work / "place.py")
 
+        # A drawn 3D body where a reference wears one (backend/bodies.py):
+        # its STEP beside the LCSC models, and the part's footprint wearing
+        # it under the part's own name - the board's choice, else the
+        # part's default. Drawn in the component frame, used as-is.
+        from . import bodies
+        body_use, body_left = await bodies.for_board(
+            db, board_id, {c["ref"]: c.get("part") for c in graph.get("components", []) if c.get("ref")})
+        body_fp, staged_left = await bodies.stage(db, work, body_use, stock)
+        body_left.update(staged_left)
+        await bodies.applied(db, board_id, {r: body_use[r] for r in body_fp}, body_left)
+
         def shape_for(c: dict) -> str:
             """KiCad's own for a passive, the part number's if we have it,
-            the library name otherwise."""
+            the library name otherwise - wearing a drawn body if it has one."""
+            if c.get("ref") in body_fp:
+                return body_fp[c["ref"]]
             if c.get("part") in stock:
                 return stock[c["part"]]
             if c.get("part") in parts:
@@ -410,6 +423,16 @@ async def render(db, board_id: str, route: bool = True) -> dict:
             {"_id": board_id}, {"hold": 1})) or {}).get("hold"))
         if held:
             plan["hold"] = held
+        # A part's 3D pose corrected for this board (backend/poses.py): the
+        # placer writes it into this board's copy of the footprint, held or
+        # packed, so everything made from the board has it.
+        pose_doc = await db[ato.BOARDS].find_one({"_id": board_id}, {"poses": 1}) or {}
+        pose_use, pose_left = poses.for_plan(pose_doc.get("poses"), graph.get("components", []))
+        if pose_use:
+            plan["poses"] = pose_use
+        # A drawn body is drawn where it sits: a pose measured for another
+        # body is not applied to it (backend/modelseat.py, the component frame).
+        pose_left.update(bodies.unposed(plan, body_fp, body_use))
         # The copper-to-edge rule on the placed board as well, so the board
         # opened by hand is checked against the same edge as the routed one.
         board_rules = (await db[ato.BOARDS].find_one({"_id": board_id}, {"rules": 1}) or {}).get("rules")
@@ -435,9 +458,12 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                 meter.stop()
                 raise RuntimeError("placing the board failed:\n" + text[-800:])
             try:
-                return json.loads(text[text.index("{"):text.rindex("}") + 1])
+                got = json.loads(text[text.index("{"):text.rindex("}") + 1])
             except ValueError:
                 return {"placed": None, "missing": [], "note": text[-300:]}
+            if pose_left:
+                got["pose_trouble"] = {**(got.get("pose_trouble") or {}), **pose_left}
+            return got
 
         async def boxed(image: str, script: str, payload: dict, timeout: float) -> dict:
             """A script in a container, a plan on its stdin, its answer the
@@ -703,10 +729,12 @@ async def render(db, board_id: str, route: bool = True) -> dict:
                                  "size_mm": placed.get("size_mm"),
                                  "at": store.now(),
                                  # A held board: how close every part came
-                                 # to where the import had it.
+                                 # to where the import had it; the parts
+                                 # whose 3D pose this board corrects.
                                  **{k: placed[k] for k in ("held", "held_worst_mm",
                                                            "held_off", "held_by_centre",
-                                                           "holes", "placed_new")
+                                                           "holes", "placed_new",
+                                                           "posed", "pose_trouble")
                                     if k in placed}},
                       "route": routed, "drc": drc_report}})
         return {"board": board_id, "svg_bytes": len(svg),
@@ -728,10 +756,11 @@ async def refresh_component(db, board_id: str) -> dict:
     itself changed. The same export a layout ends with."""
     if not await available():
         raise NoDocker(f"the KiCad container ({IMAGE}) is not built")
-    pcb = None
+    pcb, pcb_name = None, None
     for name in ("routed", "pcb"):
         try:
             pcb = await store.get_artifact(db, board_id, name, ato.BOARDS)
+            pcb_name = name
             break
         except KeyError:
             continue
@@ -752,12 +781,24 @@ async def refresh_component(db, board_id: str) -> dict:
         (work / "3d").mkdir()
         text = pcb.decode("utf-8", errors="replace")
         (work / "board.kicad_pcb").write_text(text)
+        # Each reference wearing the 3D body the board wants now - a drawn
+        # one's STEP into work/3d, or back to LCSC's (backend/bodies.py).
+        from . import bodies
+        laid = text
+        try:
+            text, worn, body_left = await bodies.refit(db, board_id, text, work)
+        except Exception as exc:                            # noqa: BLE001 - the export stands
+            worn, body_left = {}, {"*": f"bodies not applied: {str(exc)[:200]}"}
+        refitted = text != laid
+        wrl_only: dict[str, str] = {}
         # The layout pointed every LCSC part at /work/3d/<number>.<kind>;
         # the same files go back where it looked.
         for lcsc_id, kind in sorted(set(re.findall(r'\(model "/work/3d/(C\d+)\.(\w+)"', text))):
             got = await lcsc.model_of(db, lcsc_id)
             if got:
                 (work / "3d" / f"{lcsc_id}.{got[1]}").write_bytes(got[0])
+                if got[1] == "wrl":
+                    wrl_only[lcsc_id] = got[0].decode("utf-8", errors="replace")
                 if got[1] != kind:
                     # Fetched again since the layout (`part keep --refresh`) and
                     # now a STEP where it was a WRL: pointed at what is stored,
@@ -765,6 +806,19 @@ async def refresh_component(db, board_id: str) -> dict:
                     text = text.replace(f'(model "/work/3d/{lcsc_id}.{kind}"',
                                         f'(model "/work/3d/{lcsc_id}.{got[1]}"')
         (work / "board.kicad_pcb").write_text(text)
+        if worn or refitted:
+            # A body changed, or a drawn one's STEP may have: the PCB room's
+            # 3D (the GLB) is drawn again too, and the board file keeps the
+            # blocks it now has.
+            glb = await board_glb(work, wrl_only) or glb
+            if glb:
+                await store.put_artifact(db, board_id, "model3d", glb, collection=ato.BOARDS)
+            if refitted:
+                await store.put_artifact(db, board_id, pcb_name, text.encode(), collection=ato.BOARDS)
+        try:
+            await bodies.applied(db, board_id, worn, body_left)
+        except Exception:                                   # noqa: BLE001 - a record only
+            pass
         step, data, stl, digest = await component_of(work, board_id, glb,
                                                      await library_footprints(db, board_id))
         from . import links
@@ -774,6 +828,26 @@ async def refresh_component(db, board_id: str) -> dict:
         return {"board": board_id, "step_bytes": len(step), **out}
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+async def board_glb(work: Path, wrl_only: dict[str, str] | None = None) -> bytes | None:
+    """The board's GLB from work/board.kicad_pcb, as a layout exports it:
+    copper, mask and silkscreen, every part's STEP, a WRL-only part's mesh
+    merged in (backend/modelseat.py). None when the export fails."""
+    rc, _log = await _run(
+        _docker(work, "-e", "KICAD9_3DMODEL_DIR=/usr/share/kicad/3dmodels",
+                IMAGE, "pcb", "export", "glb", "--output",
+                "board.glb", "--force", "--include-tracks", "--include-pads",
+                "--include-zones", "--include-soldermask",
+                "--include-silkscreen", "board.kicad_pcb"), work)
+    if rc != 0 or not (work / "board.glb").exists():
+        return None
+    glb = (work / "board.glb").read_bytes()
+    if wrl_only:
+        from . import modelseat
+        glb, _added = await asyncio.to_thread(
+            modelseat.add_meshes, glb, (work / "board.kicad_pcb").read_text(), wrl_only)
+    return glb
 
 
 def _now_iso() -> str:

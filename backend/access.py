@@ -200,6 +200,14 @@ _RULES: list[tuple[str, str, str]] = [
     # the board's 3D component, exported again from its layout: a run's step
     ("POST", "/api/boards/{}/component", "run"),
     ("POST", "/api/boards/{}/rules/check", "view"),     # a check, nothing is written
+    # a part's drawn 3D body taken off it (backend/bodies.py): changing the
+    # design, as binding one is - the model itself stays
+    ("DELETE", "/api/parts/{}/bodies/{}", "edit"),
+    # asking the 3D room for a body files a queued note: queueing one
+    ("POST", "/api/parts/{}/body-request", "run"),
+    # a part's 3D pose on one board (backend/poses.py): taking one off is
+    # changing the board, like the rules it sits beside - not deleting
+    ("DELETE", "/api/boards/{}/poses(/{})?", "edit"),
     ("POST", "/api/tools/(check|run)", "run"),
     # bringing a board in makes a board
     ("POST", "/api/boards/import", "edit"),

@@ -1114,6 +1114,185 @@ def place_new(board, fps, where, bounds) -> dict:
     return out
 
 
+# ---- a part's 3D pose, set for this board ------------------------------
+#
+# plan["poses"] = {ref: {"rotate": [rx, ry, rz], "offset": [x, y, z],
+#                        "mirror": None | "x" | "y"}}   (backend/poses.py)
+#
+# Someone looked at the board in 3D and found a part's body lying wrong -
+# a right-angle header standing up, a TO-220 meant to lie flat. The shared
+# footprint stays as it is; this board's copy of it is changed before it
+# is loaded, so everything downstream (the route, the drawings, the GLB,
+# the STEP) reads the corrected one.
+#
+# The numbers REPLACE the model's offset and rotation (the seat worked out
+# by backend/modelseat.py is not added to): they were measured as the
+# whole answer. KiCad's conventions, as modelseat says: offset in mm in
+# the 3D frame, +Y up (the footprint's -Y); rotated first, then moved.
+#
+# The mirror flips the footprint's silkscreen and courtyard about its own
+# axis - "y" turns y into -y, "x" turns x into -x - and leaves the pads,
+# the copper and the fab drawing alone. Text keeps its letters; only where
+# it stands is mirrored.
+
+POSE_LAYERS = ("F.SilkS", "B.SilkS", "F.Silkscreen", "B.Silkscreen", "F.CrtYd", "B.CrtYd",
+               "F.Courtyard", "B.Courtyard")
+SHAPES = ("fp_line", "fp_arc", "fp_circle", "fp_rect", "fp_poly", "fp_curve")
+TEXTS = ("fp_text", "property")
+_HEAD = re.compile(r"\(\s*([A-Za-z_0-9.]+)")
+_LAYER = re.compile(r'\(layer\s+"?([^"\s)]+)"?')
+_PNUM = r"([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)"
+_POINT = re.compile(r"\((start|end|mid|center|xy|at)\s+" + _PNUM + r"\s+" + _PNUM)
+_ANGLE = re.compile(r"\(angle\s+" + _PNUM + r"\s*\)")
+_XYZ3 = r"\(xyz\s+" + _PNUM + r"\s+" + _PNUM + r"\s+" + _PNUM + r"\s*\)"
+
+
+def children(text: str, start: int = 0) -> list[tuple[int, int]]:
+    """Where each s-expression directly inside the one opening at `start`
+    begins and ends."""
+    end = span(text, start)
+    out, i, quoted = [], start + 1, False
+    while i < end - 1:
+        c = text[i]
+        if quoted:
+            if c == "\\":
+                i += 1
+            elif c == '"':
+                quoted = False
+        elif c == '"':
+            quoted = True
+        elif c == "(":
+            b = span(text, i)
+            out.append((i, b))
+            i = b
+            continue
+        i += 1
+    return out
+
+
+def num(v: float) -> str:
+    """A number the way KiCad writes one: no trailing zeros, no -0."""
+    s = f"{float(v):.4f}".rstrip("0").rstrip(".")
+    return "0" if s in ("-0", "") else s
+
+
+def _mirrored(item: str, axis: str) -> str:
+    """One silkscreen or courtyard item mirrored about the footprint's own
+    axis. A three-point arc (start, mid, end) mirrors point by point; the
+    old centre-and-angle arc turns the other way, so its angle changes
+    sign. A text is moved, not its letters."""
+    head = _HEAD.match(item).group(1)
+    is_text = head in TEXTS
+
+    def flip(m):
+        if is_text and m.group(1) != "at":
+            return m.group(0)
+        x, y = float(m.group(2)), float(m.group(3))
+        x, y = (-x, y) if axis == "x" else (x, -y)
+        return f"({m.group(1)} {num(x)} {num(y)}"
+
+    # Only this item's own points - a text's (effects (font (size ..)))
+    # holds none, a shape's (stroke (width ..)) neither.
+    out = _POINT.sub(flip, item)
+    if head == "fp_arc":
+        out = _ANGLE.sub(lambda m: f"(angle {num(-float(m.group(1)))})", out)
+    return out
+
+
+def _with_model(block: str, rotate, offset) -> str:
+    """A `(model ...)` block with this offset and rotation (None: that one
+    as it was), the path and the scale left as they were. A KiCad 5
+    `(at (xyz ...))` - inches, the offset's old spelling - goes when an
+    offset is set, so it is not applied as well."""
+    todo = []
+    if offset is not None:
+        todo.append(("offset", "(offset (xyz {} {} {}))".format(*(num(v) for v in offset))))
+        block = re.sub(r"\s*\(at\s*" + _XYZ3 + r"\s*\)", "", block)
+    if rotate is not None:
+        todo.append(("rotate", "(rotate (xyz {} {} {}))".format(*(num(v) for v in rotate))))
+    head = re.match(r'\(model\s+("(?:[^"\\]|\\.)*"|[^\s()]+)', block)
+    cut = head.end() if head else len("(model")
+    for name, new in todo:
+        pat = re.compile(r"\(" + name + r"\s*" + _XYZ3 + r"\s*\)")
+        if pat.search(block):
+            block = pat.sub(lambda _m, n=new: n, block, count=1)
+        else:
+            block = block[:cut] + " " + new + block[cut:]
+            cut += len(new) + 1
+    return block
+
+
+def posed(text: str, pose: dict) -> tuple[str, list[str]]:
+    """A footprint's text with this board's pose for the part: the first
+    model's offset and rotation replaced, and with a mirror, the
+    silkscreen and courtyard flipped. Says what could not be done."""
+    trouble = []
+    root = text.find("(")
+    if root < 0:
+        return text, ["not a footprint"]
+    edits = []                                 # (a, b, new text), in order
+    model_done = False
+    axis = pose.get("mirror")
+    for a, b in children(text, root):
+        item = text[a:b]
+        head = _HEAD.match(item)
+        head = head.group(1) if head else ""
+        if head == "model" and not model_done:
+            model_done = True
+            if pose.get("rotate") is not None or pose.get("offset") is not None:
+                edits.append((a, b, _with_model(item, pose.get("rotate"), pose.get("offset"))))
+        elif axis in ("x", "y") and (head in SHAPES or head in TEXTS):
+            layer = _LAYER.search(item)
+            if layer and layer.group(1) in POSE_LAYERS:
+                edits.append((a, b, _mirrored(item, axis)))
+    if not model_done and (pose.get("rotate") is not None or pose.get("offset") is not None):
+        trouble.append("its footprint has no 3D model to turn")
+    out, cursor = [], 0
+    for a, b, new in edits:
+        out += [text[cursor:a], new]
+        cursor = b
+    out.append(text[cursor:])
+    return "".join(out), trouble
+
+
+def safe_name(ref: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", ref or "part")[:60] or "part"
+
+
+def load(comp: dict, poses: dict, posed_refs: list, pose_trouble: dict,
+         scratch: str = "/work/posed"):
+    """A component's footprint, loaded by KiCad - with this board's pose
+    for the part when it has one: the footprint's text changed and written
+    under the part's own name (same file name, so the footprint keeps its
+    name), then loaded from there. Never the shared file."""
+    path = Path(comp["footprint"])
+    pose = (poses or {}).get(comp.get("ref"))
+    if pose:
+        try:
+            text, trouble = posed(path.read_text(), pose)
+            where = Path(scratch) / safe_name(comp.get("ref"))
+            where.mkdir(parents=True, exist_ok=True)
+            (where / path.name).write_text(text)
+            if trouble:
+                pose_trouble[comp["ref"]] = "; ".join(trouble)
+            else:
+                posed_refs.append(comp["ref"])
+            path = where / path.name
+        except OSError as exc:
+            pose_trouble[comp["ref"]] = f"footprint not read: {exc}"
+    return pcbnew.FootprintLoad(str(path.parent), path.stem)
+
+
+def pose_report(poses: dict, comps: list, posed_refs: list, trouble: dict) -> dict:
+    """What came of the board's poses, for the run's report: the parts
+    turned, and any that could not be (no model, not on the board)."""
+    if not poses:
+        return {}
+    have = {c.get("ref") for c in comps}
+    trouble = {**trouble, **{r: "not on the board" for r in poses if r not in have}}
+    return {"posed": sorted(posed_refs), "pose_trouble": trouble}
+
+
 def main() -> int:
     plan = json.load(sys.stdin)
     if plan.get("hold"):
@@ -1167,10 +1346,11 @@ def main() -> int:
     margin = plan.get("margin", 1.0)           # from the outermost part to the edge
 
     comps = plan.get("components", [])
+    poses, posed_refs, pose_trouble = plan.get("poses") or {}, [], {}
     loaded = []
     for i, comp in enumerate(comps):
         path = Path(comp["footprint"])
-        fp = pcbnew.FootprintLoad(str(path.parent), path.stem)
+        fp = load(comp, poses, posed_refs, pose_trouble)
         if fp is None:
             missing.append(f"{comp.get('ref')} ({path.stem})")
             continue
@@ -1324,6 +1504,7 @@ def main() -> int:
                "attempts_available": len(TRIALS),
                "size_mm": [round(x1 - x0, 2), round(y1 - y0, 2)],
                "texts_beside": nudged, "texts_moved_in": escaped,
+               **pose_report(poses, comps, posed_refs, pose_trouble),
                "nets": len(nets), "out": out}, sys.stdout)
     return 0
 
@@ -1351,9 +1532,10 @@ def main_held(plan) -> int:
              for n in net.get("nodes", []) if net.get("name")}
     held = plan["hold"]
     placed, missing, off, unheld, by_centre, fresh = 0, [], {}, [], [], []
+    poses, posed_refs, pose_trouble = plan.get("poses") or {}, [], {}
     for comp in plan.get("components", []):
         path = Path(comp["footprint"])
-        fp = pcbnew.FootprintLoad(str(path.parent), path.stem)
+        fp = load(comp, poses, posed_refs, pose_trouble)
         if fp is None:
             missing.append(f"{comp.get('ref')} ({path.stem})")
             continue
@@ -1417,6 +1599,7 @@ def main_held(plan) -> int:
                "size_mm": [round(x1 - x0, 2), round(y1 - y0, 2)],
                "texts_beside": nudged, "texts_moved_in": escaped,
                "holes": holes,
+               **pose_report(poses, plan.get("components", []), posed_refs, pose_trouble),
                "nets": len(nets), "out": out}, sys.stdout)
     return 0
 

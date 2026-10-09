@@ -62,3 +62,13 @@ what a change to it rebuilds; `component pin <model> <component>
 <version|latest>` uses a component at a kept version or follows it again -
 only when the note asks for it, a pin stops later versions reaching the
 model. See AGENTS.md: Components.
+
+A note from `part body-request` asks for an LCSC part's 3D body. Draw it
+at the model id the note names, in the **component frame** (backend/
+modelseat.py): origin at the footprint's origin, +Z up from the board's
+top surface, +X the footprint's X, +Y the footprint's -Y - the note's pads
+are already in it, and it is used as-is, no offset or rotate. Build it,
+then `revisions.py part body-bind <C> <model> --name "<name>"` (`--default`
+only when the note says every board should wear it). Selecting it on a
+board is the PCB room's (`board body`). See AGENTS.md: *A body for an LCSC
+part*.

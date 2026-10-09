@@ -23,6 +23,28 @@ KiCad's conventions, checked against kicad-cli's own STEP export:
 - the model is rotated first, then moved by the offset;
 - `(rotate (xyz rx ry rz))` turns by -rz about Z, then -ry about Y, then
   -rx about X (glm::rotate with the negated angles).
+
+The component frame - the one rule for a body drawn here
+    A part can have bodies of our own besides LCSC's (backend/bodies.py):
+    build123d models in the 3D room, bound to the part. Every one of them
+    is drawn in this frame, and this is the only place it is written down:
+
+    - millimetres;
+    - the origin is the footprint's origin - the point KiCad puts at the
+      part's position, (0, 0) of the .kicad_mod;
+    - +Z up, out of the board's top surface; z = 0 is that surface (a
+      through-hole part's leads go below 0, into and through the board);
+    - +X is the footprint's +X;
+    - +Y is the footprint's **-Y**: a .kicad_mod has +Y down the page, the
+      frame is right-handed with +Z up. A pad at (x, y) in the .kicad_mod
+      is at (x, -y, 0) here (`to_component`).
+
+    That is KiCad's own 3D-model frame, so a drawn body is used as-is: its
+    `(model ...)` block is offset 0, rotate 0, scale 1 (`with_body`), and
+    KiCad turns it with the footprint and flips it with it onto the
+    bottom, as it does any model. Nobody works out a seat or a pose for it,
+    and a board's pose override (backend/poses.py) is not applied to a
+    part that uses one - those numbers were measured for another body.
 """
 
 from __future__ import annotations
@@ -488,3 +510,116 @@ def add_meshes(glb: bytes, pcb: str, meshes: dict[str, str]) -> tuple[bytes, lis
     out = (struct.pack("<II", len(js), 0x4E4F534A) + js
            + struct.pack("<II", len(buf), 0x004E4942) + bytes(buf))
     return struct.pack("<III", 0x46546C67, 2, 12 + len(out)) + out, added
+
+
+# ---- a drawn body, in the component frame (above) ----------------------------
+
+def to_component(x: float, y: float) -> tuple[float, float]:
+    """A point of the .kicad_mod (mm, +Y down the page) in the component
+    frame (+Y the footprint's -Y)."""
+    return (x + 0.0, -y + 0.0)
+
+
+def body_block(path: str) -> str:
+    """The `(model ...)` block for a body drawn in the component frame:
+    nothing to seat, nothing to turn."""
+    return (f'(model "{path}"\n\t\t(offset (xyz 0 0 0))\n\t\t(scale (xyz 1 1 1))'
+            f'\n\t\t(rotate (xyz 0 0 0))\n\t)')
+
+
+def _model_spans(text: str) -> list[tuple[int, int]]:
+    out, at = [], 0
+    while True:
+        span = _model_span(text[at:])
+        if not span:
+            return out
+        out.append((at + span[0], at + span[1]))
+        at += span[1]
+
+
+def with_model_block(footprint: str, block: str) -> str:
+    """The footprint with `block` as its only 3D model: the first
+    `(model ...)` replaced, any others dropped, or - when it names none -
+    added before its closing bracket."""
+    spans = _model_spans(footprint)
+    if not spans:
+        end = footprint.rstrip().rfind(")")
+        if end < 0:
+            return footprint
+        return footprint[:end].rstrip() + "\n\t" + block + "\n" + footprint[end:]
+    out, cursor = [], 0
+    for i, (a, b) in enumerate(spans):
+        out.append(footprint[cursor:a])
+        if i == 0:
+            out.append(block)
+        else:
+            # The whitespace before a dropped block goes with it.
+            out[-1] = out[-1].rstrip(" \t\n")
+        cursor = b
+    out.append(footprint[cursor:])
+    return "".join(out)
+
+
+def with_body(footprint: str, path: str) -> str:
+    """The footprint wearing a drawn body at `path` instead of its own."""
+    return with_model_block(footprint, body_block(path))
+
+
+def model_path_of(text: str) -> str | None:
+    """The file the first `(model ...)` block names."""
+    span = _model_span(text or "")
+    if not span:
+        return None
+    m = re.match(r'\(model\s+"?([^"\s)]*)', text[span[0]:span[1]])
+    return m.group(1) if m else None
+
+
+def footprint_spans(pcb: str) -> dict[str, tuple[int, int]]:
+    """Each footprint of a .kicad_pcb by its reference: where its block
+    starts and ends."""
+    out = {}
+    starts = [m.start() for m in _FP.finditer(pcb)] + [len(pcb)]
+    for a, b in zip(starts, starts[1:]):
+        ref = re.search(r'\(property "Reference" "([^"]*)"', pcb[a:b])
+        if ref:
+            out[ref.group(1)] = (a, b)
+    return out
+
+
+def with_ref_model(pcb: str, ref: str, block: str) -> str:
+    """A .kicad_pcb with one footprint's 3D model replaced by `block`."""
+    span = footprint_spans(pcb).get(ref)
+    if not span:
+        return pcb
+    a, b = span
+    return pcb[:a] + with_model_block(pcb[a:b], block) + pcb[b:]
+
+
+def model_block_of(text: str) -> str | None:
+    """The first `(model ...)` block, as written."""
+    span = _model_span(text or "")
+    return text[span[0]:span[1]] if span else None
+
+
+def placed_box(box: Box, rotation: tuple[float, float, float],
+               offset: tuple[float, float, float]) -> Box:
+    """A model's box (its own frame) where its block puts it: turned, then
+    moved - in KiCad's 3D frame, which is the component frame."""
+    (x0, y0, z0), (x1, y1, z1) = turned_box(box, rotation)
+    ox, oy, oz = offset
+    return (x0 + ox, y0 + oy, z0 + oz), (x1 + ox, y1 + oy, z1 + oz)
+
+
+def with_turn(block: str, rotate=None, offset=None) -> str:
+    """A `(model ...)` block with its rotation and/or offset replaced
+    (None: that one as it is) - a board's pose (backend/poses.py)."""
+    fmt = lambda v: " ".join(f"{float(x):g}" for x in v)
+    if offset is not None:
+        block = with_offset(block, tuple(float(x) for x in offset))
+    if rotate is not None:
+        rot = f"(rotate (xyz {fmt(rotate)}))"
+        if _ROTATE.search(block):
+            block = _ROTATE.sub(lambda _: rot, block, count=1)
+        else:
+            block = block.rstrip()[:-1].rstrip() + "\n\t\t" + rot + "\n\t)"
+    return block

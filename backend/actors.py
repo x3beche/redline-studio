@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextvars
 import os
+import re
 from datetime import datetime, timezone
 
 AUDIT = "audit"
@@ -66,7 +67,8 @@ async def audit(db, action: str, target: str, detail: dict | None = None,
 
 def audited(method: str, path: str) -> str | None:
     """Which requests are changes worth a line in the trail: every delete,
-    every change of state, the settings and the rules. None for the rest."""
+    every change of state, the settings, the rules and a part's 3D pose on
+    a board. None for the rest."""
     if not path.startswith("/api/"):
         return None
     if method == "DELETE":
@@ -74,6 +76,7 @@ def audited(method: str, path: str) -> str | None:
     if method == "PATCH":
         return "change"
     if method == "PUT" and (path.startswith("/api/settings") or path.endswith("/rules")
-                            or path.startswith("/api/insights/settings")):
+                            or path.startswith("/api/insights/settings")
+                            or re.search(r"^/api/boards/[^/]+/poses/", path)):
         return "settings"
     return None

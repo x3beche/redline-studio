@@ -65,3 +65,21 @@ size, holes, connectors, who uses it and who pins an older version). A
 board with no 3D yet gets it from `component refresh <board>` without
 re-routing - never while a job runs on the board. See AGENTS.md:
 Components.
+
+A part whose 3D body sits wrong on this board (a right-angle header
+standing up, a TO-220 that should lie flat) is corrected on the board,
+never in the shared parts drawer: `revisions.py board pose <board> <REF>
+--rotate rx,ry,rz --offset x,y,z [--mirror x|y] --why "..."`, then `board
+run`, then look at the 3D. The numbers replace the model's seat (KiCad's
+conventions, backend/modelseat.py); `--clear` removes one, no REF lists
+them. See AGENTS.md: Board notes, *A part's 3D sits wrong on this board*.
+
+A part fitted differently from LCSC's model (lying flat, short legs) gets a
+body drawn for it instead of a hand-tuned pose: `revisions.py part
+body-request <C> --name "lying flat" --why "..." [--board <board> --ref
+<REF>]` queues a note for the 3D room with everything it needs. Once the
+3D agent has bound it, `revisions.py board body <board> <REF> <variant>`
+makes that reference wear it on this board (the 3D is redrawn without
+re-routing; `board body <board>` lists them). A drawn body is used as-is,
+and a pose is not applied on top of it. See AGENTS.md: Board notes, *A part
+needs another 3D body*.

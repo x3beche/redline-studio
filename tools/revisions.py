@@ -280,6 +280,8 @@ async def cmd_part(args):
     """
     from backend import lcsc
 
+    if args.what in BODY_COMMANDS:
+        return part_bodies(args)
     if args.what == "datasheet":
         return await _part_datasheet(args)
     if args.what == "keep":
@@ -622,6 +624,10 @@ async def cmd_board(args):
     elif args.what == "hold":
         want = (args.file or "on").lower() in ("on", "yes", "true", "1")
         print(call(f"/api/boards/{bid}/hold", "PUT", {"placement": want}))
+    elif args.what == "pose":
+        _board_pose(call, bid, args)
+    elif args.what == "body":
+        board_body(bid, args)
     elif args.what == "changes":
         # A converted board changed on purpose: these nets and parts differ
         # from the import because a note asked for it. Marked, not hidden.
@@ -639,6 +645,159 @@ async def cmd_board(args):
         _print_board({"schematic": doc.get("schematic") or {},
                       "layout": {**(doc.get("layout") or {}),
                                  "route": doc.get("route"), "drc": doc.get("drc")}})
+
+
+def _board_pose(call, bid: str, args) -> None:
+    """A part's 3D body corrected on this board (backend/poses.py): list
+    them, set one, or take one off. Through the server either way."""
+    from urllib.parse import quote
+    ref = args.file
+    if args.clear and ref:
+        out = call(f"/api/boards/{bid}/poses/{quote(ref, safe='')}", "DELETE")
+        print(f"{bid}: {ref} sits as its part comes again")
+    elif args.clear:
+        sys.exit("board pose <board> <REF> --clear  (one part at a time)")
+    elif ref:
+        if args.rotate is None and args.offset is None and not args.mirror:
+            sys.exit("board pose <board> <REF> --rotate rx,ry,rz --offset x,y,z "
+                     "[--mirror x|y] [--why ...]  (a negative first number: --rotate=-90,0,0)")
+        body = {"rotate": args.rotate, "offset": args.offset,
+                "mirror": None if (args.mirror or "none") == "none" else args.mirror,
+                "part": args.lcsc, "why": args.why or ""}
+        out = call(f"/api/boards/{bid}/poses/{quote(ref, safe='')}", "PUT", body)
+        print(f"{bid}: 3D pose of {ref} set")
+    else:
+        out = call(f"/api/boards/{bid}/poses")
+    rows = (out or {}).get("poses") or {}
+    if not rows:
+        print("  no 3D poses set on this board")
+    for r, p in rows.items():
+        def xyz(v):
+            return ",".join(f"{x:g}" for x in v) if v else "-"
+        state = "" if p.get("applies", True) else f"  NOT APPLIED: {p.get('left_out')}"
+        who = (p.get("by") or {}).get("name", "?")
+        print(f"  {r:<8} {p.get('part') or p.get('board_part') or '?':<11} rotate {xyz(p.get('rotate')):<12} "
+              f"offset {xyz(p.get('offset')):<18} mirror {p.get('mirror') or '-'}  "
+              f"{who} {str(p.get('at') or '')[:16]}{state}")
+        if p.get("why"):
+            print(f"           why: {p['why']}")
+    if ref or args.clear:
+        print(f"  a `board run {bid}` is needed to see it - then look at the 3D view "
+              "(or render it) from the side the part is on")
+
+
+# ---------------------------------------------------------------- 3D bodies
+# A part's bodies - LCSC's and the ones drawn in the 3D room - and the one
+# each reference wears on a board (backend/bodies.py). Through the server
+# whichever transport is set (REDLINE_TRANSPORT): it checks, audits and
+# redraws the boards a change reaches.
+
+BODY_COMMANDS = ("bodies", "body-bind", "body-default", "body-unbind", "body-request")
+
+
+def _part_code(args, n: int, usage: str) -> list[str]:
+    from backend import lcsc
+    if len(args.args) != n:
+        sys.exit(f"part {usage}")
+    code = args.args[0].strip().upper()
+    if not lcsc.looks_like_a_part(code):
+        sys.exit(f"{code}: not an LCSC number (C followed by digits)")
+    return [code, *args.args[1:]]
+
+
+def _print_bodies(out: dict) -> None:
+    print(f"{out['lcsc']}  {out.get('name') or ''}"
+          + ("" if out.get("in_drawer", True) else "  (not in the drawer)"))
+    for b in out.get("bodies") or []:
+        mark = "*" if b.get("default") else " "
+        state = "" if b.get("ready") else "  NOT READY"
+        print(f"  {mark} {b['slug']:<16} {b['name']:<20} {b.get('detail') or ''}{state}")
+    print("  (* the default: what every board wears unless it chooses another)")
+
+
+def part_bodies(args) -> None:
+    """`part bodies|body-bind|body-default|body-unbind|body-request ...`."""
+    from urllib.parse import quote
+    what = args.what
+    if what == "bodies":
+        code, = _part_code(args, 1, "bodies C12345 [--spec]")
+        if getattr(args, "spec", False):
+            print(json.dumps(api_call(f"/api/parts/{code}/body-spec"), indent=1, ensure_ascii=False))
+            return
+        _print_bodies(api_call(f"/api/parts/{code}/bodies"))
+    elif what == "body-bind":
+        code, model = _part_code(args, 2, 'body-bind C12345 <model-id> --name "lying flat" [--default]')
+        if not args.name:
+            sys.exit('part body-bind C12345 <model-id> --name "lying flat" [--default]')
+        out = api_call(f"/api/parts/{code}/bodies", "POST",
+                       {"model": model, "name": args.name, "default": bool(args.default)})
+        b = out["body"]
+        print(f"{code}: \"{b['name']}\" ({b['slug']}) is {b['model']}"
+              + (" - the part's default now" if args.default else
+                 f" - choose it on a board with: board body <board> <REF> {b['slug']}"))
+        if out.get("queued"):
+            print(f"  redrawing the 3D of {', '.join(out['queued'])}")
+        _print_bodies(api_call(f"/api/parts/{code}/bodies"))
+    elif what == "body-default":
+        code, variant = _part_code(args, 2, "body-default C12345 <variant|lcsc>")
+        out = api_call(f"/api/parts/{code}/bodies/default", "PUT", {"variant": variant})
+        print(f"{code}: default body {out['default']}" + ("" if out.get("changed") else " (as it was)"))
+        if out.get("queued"):
+            print(f"  redrawing the 3D of {', '.join(out['queued'])}")
+    elif what == "body-unbind":
+        code, variant = _part_code(args, 2, "body-unbind C12345 <variant> [--force]")
+        out = api_call(f"/api/parts/{code}/bodies/{quote(variant, safe='')}"
+                       + ("?force=true" if args.force else ""), "DELETE")
+        print(f"{code}: \"{out['unbound']['name']}\" unbound (the model {out['unbound']['model']} stays)")
+        for c in out.get("cleared") or []:
+            print(f"  {c}: back to the part's default ({out['default']})")
+    elif what == "body-request":
+        code, = _part_code(args, 1, 'body-request C12345 --name "lying flat" --why "..." '
+                                    "[--board B --ref R]")
+        if not args.name or not args.why:
+            sys.exit('part body-request C12345 --name "lying flat" --why "..." [--board B --ref R]')
+        out = api_call(f"/api/parts/{code}/body-request", "POST",
+                       {"name": args.name, "why": args.why, "board": args.board, "ref": args.ref})
+        print(f"queued for the 3D room: note {out['note']} - \"{out['name']}\" for {code} "
+              f"as {out['model']}")
+        print("  the 3D agent draws it in the component frame and binds it with "
+              f"`part body-bind {code} {out['model']} --name \"{out['name']}\"`")
+        if out.get("board"):
+            print(f"  then: board body {out['board']} {out['ref']} {out['slug']}")
+
+
+def board_body(bid: str, args) -> None:
+    """`board body <board> [<REF> <variant|lcsc|default>]`: list what each
+    reference wears, or choose one's body on this board."""
+    from urllib.parse import quote
+    ref, variant = args.file, getattr(args, "variant", None)
+    if ref and not variant:
+        sys.exit("board body <board> <REF> <variant|lcsc|default>  (no REF: the list)")
+    if ref:
+        out = api_call(f"/api/boards/{bid}/bodies/{quote(ref, safe='')}", "PUT", {"variant": variant})
+        print(f"{bid}: {ref} ({out['part']}) wears {out['wears']}"
+              + ("" if out.get("chosen") else " - its part's default")
+              + ("" if out.get("changed") else " (as it was)"))
+        if out.get("queued"):
+            print("  its 3D is redrawn in a moment (no re-routing); "
+                  f"`board run {bid}` draws everything again")
+    out = api_call(f"/api/boards/{bid}/bodies")
+    if not out.get("built"):
+        print(f"  {bid} has no build yet - run it, so its parts are known")
+    if not out.get("refs"):
+        print("  no part on this board has more than one 3D body "
+              "(`part body-request` asks the 3D room for one)")
+    for r in out.get("refs") or []:
+        opts = ", ".join(("*" if o["slug"] == r["default"] else "") + o["slug"] for o in r["options"])
+        chose = f"chosen {r['chosen']}" if r.get("chosen") else "default"
+        drawn = "" if r.get("applied") in (None, r["wears"]) else f"  (3D still shows {r['applied']})"
+        print(f"  {r['ref']:<8} {r['part']:<11} wears {r['wears']:<16} {chose:<22} [{opts}]{drawn}"
+              + (f"  - {r['left_out']}" if r.get("left_out") else ""))
+    for ref, why in (out.get("left_out") or {}).items():
+        print(f"  {ref:<8} left out: {why}")
+    rf = out.get("refresh") or {}
+    if rf.get("state") in ("queued", "drawing", "failed"):
+        print(f"  3D redraw: {rf['state']}" + (f" - {rf.get('error')}" if rf.get("error") else ""))
 
 
 # ---------------------------------------------------------------- components
@@ -1371,6 +1530,9 @@ async def cmd_build(args):
     await store.version_built(db, args.model, version)
     sizes = ", ".join(f"{k} {v/1e6:.1f}MB" for k, v in res["artifacts"].items())
     print(f"{res['model']} built: {sizes}")
+    if res.get("bodies_redraw"):
+        # A part's drawn 3D body (backend/bodies.py): the boards wearing it follow.
+        print("3D body: the server redraws " + ", ".join(res["bodies_redraw"]))
     # Where the minutes went (export_model.py): loading the model, the
     # viewer's tessellation, the STEP.
     for line in (res.get("log") or "").splitlines():
@@ -1836,7 +1998,8 @@ def main() -> None:
                    help="withdraw the question after N seconds; 0 waits")
     s.set_defaults(fn=cmd_ask)
     s = sub.add_parser("part", help="parts from LCSC, for writing a board")
-    s.add_argument("what", choices=["find", "pins", "ato", "passive", "keep", "seat", "datasheet"],
+    s.add_argument("what", choices=["find", "pins", "ato", "passive", "keep", "seat", "datasheet",
+                                    *BODY_COMMANDS],
                    help="find: ranked search; pins: a part's pinout; "
                         "ato: component blocks to paste into a board; "
                         "passive: R/C by value and size, e.g. R 10k 0402; "
@@ -1846,7 +2009,13 @@ def main() -> None:
                         "seat C... | all: put stored parts' 3D bodies on their "
                         "pads (rewrites the footprint's model offset); "
                         "datasheet C...: LCSC's PDF to a file (-o, default "
-                        "/tmp/<C>-datasheet.pdf) - only when the note needs facts from it")
+                        "/tmp/<C>-datasheet.pdf) - only when the note needs facts from it; "
+                        "bodies C... [--spec]: its 3D bodies, the default marked (--spec: the "
+                        "footprint in the component frame, as JSON); body-bind C... <model> "
+                        "--name N [--default]: a built 3D-room model as a body of the part; "
+                        "body-default C... <variant|lcsc>; body-unbind C... <variant> [--force]; "
+                        "body-request C... --name N --why W [--board B --ref R]: ask the 3D "
+                        "room to draw one (a queued note)")
     s.add_argument("args", nargs="+",
                    help="a search for find, LCSC numbers (C...) for pins/ato, "
                         "KIND VALUE SIZE for passive")
@@ -1857,11 +2026,21 @@ def main() -> None:
                         "again instead of using the kept copy")
     s.add_argument("-o", "--out", help="datasheet: where to write the PDF "
                                        "(default /tmp/<C>-datasheet.pdf)")
+    s.add_argument("--name", help="body-bind / body-request: the body's name (\"lying flat\")")
+    s.add_argument("--default", action="store_true",
+                   help="body-bind: make it the part's default body on every board")
+    s.add_argument("--why", help="body-request: what the body is for - the 3D agent reads it")
+    s.add_argument("--board", help="body-request: the board it is wanted on (with --ref)")
+    s.add_argument("--ref", help="body-request: the reference on that board (Q5)")
+    s.add_argument("--spec", action="store_true",
+                   help="bodies: the footprint, pin 1 and LCSC's body's box, as JSON")
+    s.add_argument("--force", action="store_true",
+                   help="body-unbind: even while boards choose it (they go back to the default)")
     s.set_defaults(fn=cmd_part)
     s = sub.add_parser("board", help="a board: its source, and the whole pipeline")
     s.add_argument("what", choices=["run", "show", "source", "save", "rules",
                                     "rules-save", "rules-schema", "convert", "hold",
-                                    "changes"],
+                                    "changes", "pose", "body"],
                    help="run: build, schematic, place, route, DRC; show: where it "
                         "stands; source/save: read or write its atopile; rules: "
                         "the routing rules as JSON (to a file if given); "
@@ -1870,10 +2049,17 @@ def main() -> None:
                         "to atopile, built and checked; hold <id> on|off: keep a "
                         "converted board's layout, or let the placer redo it; "
                         "changes <id> --net N --ref R --why ...: a converted board "
-                        "differs from its import on purpose (--clear forgets them)")
+                        "differs from its import on purpose (--clear forgets them); "
+                        "pose <id> [REF --rotate rx,ry,rz --offset x,y,z --mirror x|y --why ...]: "
+                        "a part's 3D body corrected on this board (no REF: list; --clear: remove); "
+                        "body <id> [REF <variant|lcsc|default>]: which of its part's 3D bodies a "
+                        "reference wears on this board (no REF: the list)")
     s.add_argument("board", nargs="?")
     s.add_argument("file", nargs="?", help="for save: the .ato file; for rules / "
-                                           "rules-save: the JSON file; for hold: on|off")
+                                           "rules-save: the JSON file; for hold: on|off; "
+                                           "for pose / body: the part's reference (Q5)")
+    s.add_argument("variant", nargs="?", help="for body: the body to wear - a variant of its "
+                                              "part, lcsc, or default")
     s.add_argument("--bom", help="convert: a BOM CSV (Designator, Footprint, Value, "
                                  "LCSC Part) - replaces guessed parts")
     s.add_argument("--part", action="append", metavar="REF=C12345",
@@ -1881,10 +2067,22 @@ def main() -> None:
                         "several); kept on the board, marked GUESSED")
     s.add_argument("--picks", help="convert: a JSON file of ref -> {lcsc, why}")
     s.add_argument("--why", help="convert: the reason written beside --part picks; "
-                                 "changes: why the board differs from its import")
+                                 "changes: why the board differs from its import; "
+                                 "pose: why the part's 3D is turned")
     s.add_argument("--net", action="append", help="changes: a net changed on purpose (repeat)")
     s.add_argument("--ref", action="append", help="changes: a part added or changed on purpose (repeat)")
-    s.add_argument("--clear", action="store_true", help="changes: forget the changes said so far")
+    s.add_argument("--clear", action="store_true", help="changes: forget the changes said so far; "
+                                                         "pose: remove that part's pose")
+    s.add_argument("--rotate", help="pose: the model's rotation, degrees, rx,ry,rz (replaces the "
+                                    "footprint's; KiCad's: -rz about Z, then -ry, then -rx). "
+                                    "Negative first: --rotate=-90,0,0")
+    s.add_argument("--offset", help="pose: the model's offset, mm, x,y,z in the 3D frame (+Y up, "
+                                    "the footprint's -Y), applied after the rotation; replaces the seat")
+    s.add_argument("--mirror", choices=["x", "y", "none"],
+                   help="pose: flip the part's silkscreen and courtyard about its own axis "
+                        "(y: y -> -y); pads and copper stay")
+    s.add_argument("--lcsc", help="pose: the LCSC part the numbers were measured on (default: the "
+                                  "part the board has now); applied only while the board uses it")
     s.add_argument("--run", action="store_true",
                    help="convert: then run the whole pipeline")
     s.add_argument("--force", action="store_true",

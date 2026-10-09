@@ -400,6 +400,61 @@ change it only when asked.
 A part is chosen by its LCSC number (`mpn = "C25744"` on the component).
 Then `done <id>` as usual.
 
+### A part's 3D sits wrong on this board
+
+An LCSC part's model comes seated the way EasyEDA placed it, and that is
+not always how it is fitted here: a right-angle header comes standing, a
+TO-220 meant to lie flat stands up. Never change the shared parts drawer
+for one board - set the pose on the board, by reference:
+
+```bash
+.venv/bin/python tools/revisions.py board pose <id> Q5 --rotate 90,0,0 --offset 0,1.785,2.27 \
+    --why "TO-220 lies flat on the board"
+.venv/bin/python tools/revisions.py board pose <id> I2C --rotate 0,0,0 --offset 0.005,2.85,0.05 \
+    --mirror y --why "right-angle header, pins out over the rear edge"
+.venv/bin/python tools/revisions.py board pose <id>                 # list them
+.venv/bin/python tools/revisions.py board pose <id> Q5 --clear      # remove one
+```
+
+Measure first (the model's box against the pads, in KiCad's conventions:
+degrees; offset in mm with +Y up - the footprint's -Y; rotated, then
+moved - see `backend/modelseat.py`). The numbers **replace** the model's
+seat, they are not added to it; a value left out stays as the footprint
+has it. `--mirror x|y` flips the part's silkscreen and courtyard about its
+own axis (pads and copper stay) for a body that now sticks out the other
+side. A negative first number is written `--rotate=-90,0,0`. The pose is
+kept with the LCSC part it was measured on (`--lcsc` to name another) and
+only applied while the board uses that part. Then `board run` - every
+layout applies it, held or packed, so the GLB and STEP have it - and look
+at the 3D view (or render it) from the side the part is on. Board health
+lists the poses, and whoever may edit the board can remove one there.
+
+### A part needs another 3D body: ask the 3D room
+
+A part fitted differently from LCSC's model - a TO-220 lying flat, a
+header with short legs - gets a **body of its own**, drawn in the 3D room
+and bound to the part, rather than a pose hand-tuned on one board. A part
+has LCSC's body plus any drawn ones; one is the part's **default** (LCSC's
+until changed), and a board can choose another per reference:
+
+```bash
+.venv/bin/python tools/revisions.py part bodies C111607              # its bodies, * the default
+.venv/bin/python tools/revisions.py part body-request C111607 --name "lying flat" \
+    --why "bolted flat, tab over the edge" --board demoboard-gerber-zip --ref Q5
+.venv/bin/python tools/revisions.py board body demoboard-gerber-zip               # who wears what
+.venv/bin/python tools/revisions.py board body demoboard-gerber-zip Q5 lying-flat  # or lcsc / default
+.venv/bin/python tools/revisions.py part body-default C111607 lying-flat|lcsc     # every board
+```
+
+`body-request` files a queued note in the 3D room with the footprint
+(pads, pin 1, outlines) in the component frame, LCSC's body's box, the
+datasheet command, the model id to use (`components/<C>-<name>`) and the
+bind command. When the 3D agent has bound it, choose it on the board with
+`board body` - the board's 3D is redrawn at once without re-routing (a
+`board run` does it too). The choice is the board's, audited; Board health
+shows a selector per reference whose part has more than one body. A drawn
+body is used as-is: a pose on the same reference is not applied to it.
+
 ### Converting an imported board
 
 ```bash
@@ -658,6 +713,8 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py wait                 # block until there is
 .venv/bin/python tools/revisions.py ask "..." -o A -o B  # ask on their screen
 .venv/bin/python tools/revisions.py part find|pins|ato|passive|keep|datasheet ...  # parts
+.venv/bin/python tools/revisions.py part bodies|body-bind|body-default|body-unbind|body-request C...  # 3D bodies
+.venv/bin/python tools/revisions.py board body <board> [REF variant|lcsc|default]  # which body a ref wears
 .venv/bin/python tools/revisions.py chat                 # what they said
 .venv/bin/python tools/revisions.py say "..."            # answer them
 .venv/bin/python tools/revisions.py show <id>            # write drawing to disk
@@ -821,6 +878,26 @@ that STEP, the bare board with a box per part).
 A board's 3D is a new version only when it changed (placement, models,
 named data). The person can switch a board to "every run is a new
 version" on its 3D card; don't change that setting yourself.
+
+### A body for an LCSC part (asked by the PCB room)
+
+A note from `part body-request` asks for a part's 3D body. Draw it as a
+model at the id the note names (`components/<C>-<name>`) in the
+**component frame** - mm, origin at the footprint's origin, +Z up from the
+board's top surface (z = 0 on it, leads below), +X the footprint's X, +Y
+the footprint's **-Y** (`backend/modelseat.py`, *The component frame*; the
+note's pads are already in it). It is used as-is: no offset, no rotate.
+Build it, then bind it - not as the default unless the note says so:
+
+```bash
+.venv/bin/python tools/revisions.py part bodies C111607 --spec          # the footprint, as JSON
+.venv/bin/python tools/revisions.py build components/C111607-lying-flat
+.venv/bin/python tools/revisions.py part body-bind C111607 components/C111607-lying-flat --name "lying flat" [--default]
+.venv/bin/python tools/revisions.py part body-unbind C111607 lying-flat  # refused while a board chooses it
+```
+
+Its STEP is the build's: every later build with a different STEP redraws
+the boards that wear it, and what imports those boards, on its own.
 
 ## Silent failures
 

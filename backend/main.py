@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from . import (access, actors, ato, auth, buildjobs, changes, convert, files, jobs, notes, release, search, insights, scope, build, chat, compute, kicad, lcsc, questions, rules,
-               schematic, store, summarise, usage, links, board3d)
+               poses, schematic, store, summarise, usage, links, board3d)
 from . import tools_api
 from . import fwnotes
 
@@ -89,6 +89,9 @@ app.include_router(themes_api.router)
 # A ```task block in a chat, into the queue with one click (backend/tasks.py).
 from . import tasks as tasks_api  # noqa: E402
 app.include_router(tasks_api.router)
+# A part's 3D bodies - LCSC's and the drawn ones - and a board's choice (backend/bodies.py).
+from . import bodies_api  # noqa: E402
+app.include_router(bodies_api.router)
 # Settings > Telegram: the bot, each person's own link, the webhook (backend/tgbot/).
 from .tgbot import api as tg_api  # noqa: E402
 app.include_router(tg_api.router)
@@ -1819,6 +1822,89 @@ async def board_changes(bid: str, body: ChangesIn):
     return {"board": bid, "changes": changes, "equivalence": eq}
 
 
+class PoseIn(BaseModel):
+    rotate: list | str | None = None
+    offset: list | str | None = None
+    mirror: str | None = None
+    part: str | None = None
+    why: str = Field(default="", max_length=2000)
+
+
+async def _board_parts(bid: str) -> dict[str, str | None] | None:
+    """The board's parts from its build, ref -> LCSC number; None before
+    the first build."""
+    try:
+        graph = json.loads(await store.get_artifact(db(), bid, "graph", ato.BOARDS))
+    except KeyError:
+        return None
+    return {c["ref"]: c.get("part") for c in graph.get("components") or [] if c.get("ref")}
+
+
+async def _poses_out(bid: str, kept: dict | None) -> dict:
+    """The poses, each with the part the board has now and whether the
+    next run applies it (backend/poses.py for_plan)."""
+    parts = await _board_parts(bid) or {}
+    _use, left = poses.for_plan(kept, [{"ref": r, "part": p} for r, p in parts.items()])
+    return {"board": bid,
+            "poses": {ref: {**p, "board_part": parts.get(ref), "applies": ref not in left,
+                            **({"left_out": left[ref]} if ref in left else {})}
+                      for ref, p in sorted((kept or {}).items())}}
+
+
+@app.get("/api/boards/{bid}/poses")
+async def board_poses(bid: str):
+    """The 3D poses this board sets for its parts (backend/poses.py)."""
+    doc = await db()[ato.BOARDS].find_one({"_id": bid}, {"poses": 1})
+    if doc is None:
+        raise HTTPException(404, bid)
+    return await _poses_out(bid, doc.get("poses"))
+
+
+@app.put("/api/boards/{bid}/poses/{ref}")
+async def set_board_pose(bid: str, ref: str, body: PoseIn):
+    """Correct one part's 3D body on this board: its model's rotation and
+    offset (replacing the seat's), and optionally its silkscreen and
+    courtyard mirrored. Checked first; the next run applies it."""
+    doc = await db()[ato.BOARDS].find_one({"_id": bid}, {"poses": 1})
+    if doc is None:
+        raise HTTPException(404, bid)
+    parts = await _board_parts(bid)
+    try:
+        pose = poses.check(ref, body.model_dump(), parts)
+    except poses.PoseError as exc:
+        raise HTTPException(400, {"problems": exc.problems})
+    pose.update({"by": actors.current(), "at": store.now()})
+    await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": {f"poses.{ref}": pose}})
+    await say(f"{bid}: 3D pose of {poses.describe(ref, pose)} - applied from the next run",
+              "info", room="pcb")
+    out = await _poses_out(bid, {**(doc.get("poses") or {}), ref: pose})
+    out["pose"] = out["poses"][ref]
+    return out
+
+
+@app.delete("/api/boards/{bid}/poses/{ref}")
+async def drop_board_pose(bid: str, ref: str):
+    """Forget one part's pose: from the next run it sits as the drawer has it."""
+    got = await db()[ato.BOARDS].update_one({"_id": bid, f"poses.{ref}": {"$exists": True}},
+                                            {"$unset": {f"poses.{ref}": ""}})
+    if not got.matched_count:
+        raise HTTPException(404, f"{bid} sets no 3D pose for {ref}")
+    await say(f"{bid}: 3D pose of {ref} removed - as the part comes from the next run",
+              "info", room="pcb")
+    doc = await db()[ato.BOARDS].find_one({"_id": bid}, {"poses": 1}) or {}
+    return await _poses_out(bid, doc.get("poses"))
+
+
+@app.delete("/api/boards/{bid}/poses")
+async def drop_board_poses(bid: str):
+    """Forget every pose this board sets."""
+    got = await db()[ato.BOARDS].update_one({"_id": bid}, {"$unset": {"poses": ""}})
+    if not got.matched_count:
+        raise HTTPException(404, bid)
+    await say(f"{bid}: every 3D pose removed", "info", room="pcb")
+    return {"board": bid, "poses": {}}
+
+
 @app.get("/api/boards/{bid}/board.glb")
 async def board_model(bid: str):
     try:
@@ -2879,6 +2965,10 @@ async def _start_sampler():
             LOG.warning("build jobs not recovered: %s", exc)
         asyncio.create_task(links.loop(lambda: db().raw, _link_build,
                                        lookup=_link_job))
+        # Boards whose parts' 3D bodies changed, redrawn without re-routing
+        # (backend/bodies.py); a new board 3D travels on through links.
+        from . import bodies as _bodies
+        asyncio.create_task(_bodies.loop(lambda: db().raw, kicad.refresh_component, say))
         try:
             # Command Code answers whose runner died with the container are
             # interrupted - kept as far as they got (backend/ccgen.py); those

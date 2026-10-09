@@ -1339,6 +1339,15 @@ const TR: Record<string, string> = {
   'nets': 'net',
   'not routed': 'yönlendirilmedi',
   'not run': 'çalışmadı',
+  // ...its 3D poses: a part's 3D body turned on this board (backend/poses.py)
+  '3D poses set on this board': 'Bu kartta ayarlanan 3B duruşlar',
+  'rotate': 'döndürme',
+  'offset': 'kaydırma',
+  'silk mirrored': 'baskı aynalı',
+  'as the part comes': 'parçanın kendi hâli',
+  'Not applied at the last run': 'Son çalıştırmada uygulanmadı',
+  'Applied from the next run': 'Bir sonraki çalıştırmada uygulanır',
+  'Remove; the next run seats it as the part comes': 'Kaldır; bir sonraki çalıştırmada parça kendi hâliyle oturur',
   // custom themes (custom-themes.ts)
   'Custom themes': 'Özel temalar',
   'Import': 'İçe aktar',
@@ -1809,6 +1818,20 @@ const TR: Record<string, string> = {
   // 3D viewer, Clip tab (editor/clip-wheel.ts)
   'Wheel step': 'Tekerlek adımı',
   'Mouse wheel over a clip slider moves the plane by this much. Shift: ×10.': 'Kesit kaydırıcısının üzerinde fare tekerleği düzlemi bu kadar kaydırır. Shift: ×10.',
+  // 3D viewer, moving parts (editor/motions.ts)
+  'Motion': 'Hareket',
+  'Moving parts are shown only: nothing checks that they do not collide.': 'Hareketli parçalar yalnızca gösterilir: çarpışıp çarpışmadıkları kontrol edilmez.',
+  'Fold': 'Katla',
+  'speed': 'hız',
+  'Spins all the time; the speed is for watching it, the model says': 'Sürekli döner; hız izlemek içindir, modelde yazan',
+  'auto': 'oto',
+  'Sweep back and forth by itself': 'Kendi kendine ileri geri git',
+  'Back to the pose the model is built in': 'Modelin çizildiği konuma dön',
+  'Set by hand. Mouse wheel over the slider: 1°, Shift: 10°.': 'Elle ayarlanır. Kaydırıcının üzerinde fare tekerleği: 1°, Shift: 10°.',
+  'Bends with the motion, drawn live:': 'Hareketle bükülür, canlı çizilir:',
+  'A visual guess of the flexible part between its two ends. The model as built (the default pose) is the one to check clearances and print from.': 'Esnek parçanın iki ucu arasındaki görsel bir tahmindir. Boşluk kontrolü ve baskı için modelin çizildiği hali (varsayılan konum) esastır.',
+  'Pause': 'Duraklat',
+  'Play': 'Oynat',
   // 3D viewer, Clip tab (editor/clip-reverse.ts)
   'Reverse - cut from the other side': 'Ters çevir - diğer taraftan kes',
   // the board room's part card: the datasheet, on request (rooms/pcb.ts)

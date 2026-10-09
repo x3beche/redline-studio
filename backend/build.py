@@ -326,6 +326,14 @@ async def build(db, model_id: str, script: Path) -> dict:
         if (doc.get("link") or {}).get("state") in ("failed", "blocked"):
             patch["link.state"] = "done"
         await db.models.update_one({"_id": model_id}, {"$set": patch})
+        # A model bound to a part as a 3D body (backend/bodies.py): when its
+        # STEP changed, the boards that wear it are queued to be redrawn -
+        # the API does that, then what imports those boards follows.
+        try:
+            from . import bodies
+            redraw = await bodies.model_built(db, model_id)
+        except Exception:                           # noqa: BLE001 - the build stands
+            redraw = []
         # Which of the models it imports came from the component cache and
         # which ran (export_model.py, backend/buildcache.py).
         report = assets_dir / f"{flat}.cache.json"
@@ -339,7 +347,10 @@ async def build(db, model_id: str, script: Path) -> dict:
                 # Anything staged older than the latest - a pin, or a board
                 # that moved on mid-build - said rather than done silently.
                 "notes": linked.get("notes") or [],
-                "log": "\n".join([*(f"note: {n}" for n in linked.get("notes") or []), *log[-4:]])}
+                "bodies_redraw": redraw,
+                "log": "\n".join([*(f"note: {n}" for n in linked.get("notes") or []),
+                                   *(["note: boards redrawn with this body: " + ", ".join(redraw)]
+                                     if redraw else []), *log[-4:]])}
     finally:
         # Cleared however it ends: a crashed build that left the flag set
         # would show a bar that never stops. The duration is kept so the next

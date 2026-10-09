@@ -622,9 +622,25 @@ export interface BoardEntry {
   convert?: BoardConversion | null;
   /** The board as a 3D component: a new version with every layout that
    *  changes its STEP or named data (backend/board3d.py). */
+  /** A part's 3D body corrected on this board, by reference
+   *  (backend/poses.py): applied every time the board is laid out. */
+  poses?: Record<string, BoardPose> | null;
   component?: { version: number; digest: string; at: string; module?: string;
                 summary?: { size: number[]; thickness: number; holes: number; connectors: number;
                             approximate: string[] } } | null;
+}
+
+/** One part's 3D pose on a board: the model's rotation (degrees) and
+ *  offset (mm), replacing its seat, and the silkscreen and courtyard
+ *  mirrored. A null rotate/offset is the footprint's own. */
+export interface BoardPose {
+  rotate: [number, number, number] | null;
+  offset: [number, number, number] | null;
+  mirror: 'x' | 'y' | null;
+  part: string | null;
+  why: string;
+  by?: { type: string; id: string; name: string };
+  at?: string;
 }
 
 /** How an imported board came to have source: which parts were guessed,
@@ -771,6 +787,10 @@ export class Boards {
   /** Only the router the next run uses (the switch beside Build). */
   saveEngine(id: string, engine: string): Observable<unknown> {
     return this.http.put(`/api/boards/${id}/rules/engine`, { engine });
+  }
+  /** Take one part's 3D pose off a board; the next run seats it as it comes. */
+  removePose(id: string, ref: string): Observable<unknown> {
+    return this.http.delete(`/api/boards/${encodeURIComponent(id)}/poses/${encodeURIComponent(ref)}`);
   }
   saveRules(id: string, rules: BoardRules): Observable<unknown> {
     return this.http.put(`/api/boards/${id}/rules`, { rules });

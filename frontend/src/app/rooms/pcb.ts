@@ -27,6 +27,8 @@ import { ImportBoard } from './import-board';
 import { BoardHealth } from './board-health';
 import { T, t } from '../i18n';
 import { PartsDrawer } from './parts-drawer';
+import { PartBodiesCard } from './part-bodies';
+import { BoardBodies } from './board-bodies';
 
 /** An add being watched (backend main.py /api/parts-add). */
 interface PartAdd {
@@ -54,7 +56,7 @@ type BoardView = Pane | 'split' | 'focus';
 @Component({
   selector: 'app-room-pcb',
   imports: [Board3d, CodeView, PinIcon, PinnedByList, Drawing, RouteLive, DrawTools, ImportBoard, Releases, BoardHealth, NgTemplateOutlet,
-            PartsDrawer, RoomFrame, RulesForm, Sketchpad, T, ToolButton],
+            PartsDrawer, RoomFrame, RulesForm, Sketchpad, T, ToolButton, PartBodiesCard, BoardBodies],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
@@ -408,6 +410,10 @@ type BoardView = Pane | 'split' | 'focus';
                         </p>
                       }
                     </div>
+                    <!-- Its 3D bodies: LCSC's and the drawn ones (rooms/part-bodies.ts). -->
+                    @if (s.have) {
+                      <app-part-bodies class="mt-2" [lcsc]="s.lcsc" [canEdit]="canEdit()" [canRun]="canRun()" />
+                    }
                     <div class="tcv-label mt-2">symbol</div>
                     <div class="mt-1 flex h-60 items-center justify-center rounded p-2" style="background: var(--shot-bg)">
                       <img [src]="store.file(s.lcsc, 'symbol.svg')" alt="symbol" class="h-full w-full object-contain">
@@ -457,9 +463,10 @@ type BoardView = Pane | 'split' | 'focus';
              the board document; the files are under Advanced details. -->
         <app-board-health class="min-h-0 flex-1" [board]="here()" [stats]="stats()"
                           [component]="comp()" [parts]="graph()?.components ?? null"
-                          [building]="building()" [canRun]="canRun()"
+                          [building]="building()" [canRun]="canRun()" [canEditPoses]="canEdit()"
                           [canFocus]="!!here()?.route && !!geo()" [note]="note()"
-                          (rerun)="build()" (focusNet)="focusNet($event)">
+                          (rerun)="build()" (focusNet)="focusNet($event)" (removePose)="removePose($event)">
+          <app-board-bodies bodies [board]="here()?._id ?? null" [canEdit]="canEdit()" />
           <div advanced class="tcv-files" style="margin-bottom: 0">
             <a [attr.href]="hasPcb() ? file('board.kicad_pcb') : null" [class.off]="!hasPcb()"
                title="the layout, to open in KiCad">.kicad_pcb</a>
@@ -1628,6 +1635,16 @@ export class RoomPcb implements OnDestroy {
         if (d?.problems) this.shownProblems.set(d.problems);
         else this.rulesNote.set(String(d ?? 'not saved'));
       },
+    });
+  }
+
+  /** Take a part's 3D pose off the board (Board health's ×). */
+  removePose(ref: string) {
+    const b = this.here();
+    if (!b) return;
+    this.api.removePose(b._id, ref).subscribe({
+      next: () => this.refresh(),
+      error: e => this.note.set(String(e?.error?.detail ?? e?.message ?? 'not removed')),
     });
   }
 

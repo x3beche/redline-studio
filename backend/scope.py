@@ -38,6 +38,8 @@ SCOPED = frozenset({
     "weekly_reports", "audit", "compute_jobs", "analytics", "scratch", "notes", "releases", "source_blobs",
     "tool_usage", "tool_data", "files", "file_folders", "file_thumbs", "cc_chats", "component_versions", "themes",
     "firmware", "firmware_files", "firmware_flashes",
+    # a part's drawn 3D bodies bind models of this workspace (backend/bodies.py)
+    "part_bodies",
 })
 
 WORKSPACE: contextvars.ContextVar[str] = contextvars.ContextVar("workspace", default=DEFAULT)
