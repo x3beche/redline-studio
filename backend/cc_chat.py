@@ -1244,7 +1244,12 @@ async def list_tools() -> dict:
     choice, else the tool's default)."""
     from . import chat_tools
     me = (actors.current() or {}).get("id")
-    return {"tools": chat_tools.chosen(await chat_tools.prefs(_db(), me))}
+    uses = {d["_id"]: d["n"] async for d in _db()[COLL].aggregate([
+        {"$match": {**LIVE, "messages.steps.0": {"$exists": True}}},
+        {"$unwind": "$messages"}, {"$unwind": "$messages.steps"},
+        {"$group": {"_id": "$messages.steps.tool", "n": {"$sum": 1}}}])}
+    return {"tools": [{**t, "uses": uses.get(t["name"], 0)}
+                      for t in chat_tools.chosen(await chat_tools.prefs(_db(), me))]}
 
 
 class ToolsIn(BaseModel):
@@ -1264,6 +1269,79 @@ async def set_tools(body: ToolsIn) -> dict:
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"tools": chat_tools.chosen(mine)}
+
+
+STATS_DAYS = 14                  # the day bars on a tool's page
+STATS_RECENT = 8                 # its latest uses listed there
+
+
+@router.get("/tools/{name}")
+async def tool_page(name: str) -> dict:
+    """One tool, for its page in the Tools view: what the model is told
+    about it and what it takes, and how it has been used in this
+    workspace's conversations - counts, outcomes, time taken, by day, by
+    whom, and its latest uses with where they were."""
+    from . import chat_tools
+    tool = chat_tools.tools().get(name)
+    if tool is None:
+        raise HTTPException(404, f"no tool {name!r}")
+    me = (actors.current() or {}).get("id")
+    mine = await chat_tools.prefs(_db(), me)
+    props = (tool.schema or {}).get("properties") or {}
+    need = set((tool.schema or {}).get("required") or [])
+    out = {**tool.public(), "on": mine.get(name, tool.default), "model_text": tool.description,
+           "running": tool.running, "failed": tool.failed,
+           "params": [{"name": k, "type": v.get("type") or "", "about": v.get("description") or "", "required": k in need}
+                      for k, v in props.items()]}
+
+    now = datetime.now(timezone.utc)
+    day0 = (now - timedelta(days=STATS_DAYS - 1)).date()
+    days = {(day0 + timedelta(days=i)).isoformat(): [0, 0] for i in range(STATS_DAYS)}
+    uses, outcomes, people, chats, times, recent = 0, {}, {}, set(), [], []
+    week = mine_n = 0
+    cur = _db()[COLL].find(dict(LIVE), {"title": 1, "messages.role": 1, "messages.by": 1, "messages.steps": 1})
+    async for doc in cur:
+        asker: dict = {}
+        for m in doc.get("messages") or []:
+            if m.get("role") == "user":
+                asker = m.get("by") or {}
+                continue
+            for st in m.get("steps") or []:
+                if st.get("tool") != name:
+                    continue
+                uses += 1
+                chats.add(doc["_id"])
+                status = st.get("status") or "done"
+                outcomes[status] = outcomes.get(status, 0) + 1
+                who = asker.get("name") or "someone"
+                people[who] = people.get(who, 0) + 1
+                if me and asker.get("id") == me:
+                    mine_n += 1
+                if isinstance(st.get("ms"), (int, float)) and status == "done":
+                    times.append(st["ms"])
+                at = str(st.get("at") or "")
+                if at[:10] in days:
+                    days[at[:10]][0 if status == "done" else 1] += 1
+                try:
+                    if now - datetime.fromisoformat(at.replace("Z", "+00:00")) <= timedelta(days=7):
+                        week += 1
+                except ValueError:
+                    pass
+                recent.append({"at": at, "chat": doc["_id"], "title": doc.get("title") or "", "say": st.get("say") or "",
+                               "vars": st.get("vars") or {}, "status": status, "ms": st.get("ms"), "by": who})
+    times.sort()
+    recent.sort(key=lambda r: r["at"], reverse=True)
+    out["stats"] = {
+        "uses": uses, "week": week, "mine": mine_n, "chats": len(chats),
+        "outcomes": outcomes,
+        "ms": {"median": times[len(times) // 2] if times else None,
+               "p90": times[min(len(times) - 1, int(len(times) * .9))] if times else None},
+        "last": recent[0]["at"] if recent else None,
+        "days": [{"day": d, "n": ok + bad, "bad": bad} for d, (ok, bad) in days.items()],
+        "people": sorted(({"name": k, "n": v} for k, v in people.items()), key=lambda x: -x["n"])[:6],
+        "recent": recent[:STATS_RECENT],
+    }
+    return out
 
 
 class StepIn(BaseModel):

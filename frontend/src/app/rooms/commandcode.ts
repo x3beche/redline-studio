@@ -60,7 +60,7 @@ export interface CcStep {
 }
 export type ToolLevel = 'read' | 'change' | 'delete';
 /** A chat tool, and whether it is on for me (GET /api/cc/tools). */
-export interface CcTool { name: string; label: string; level: ToolLevel; description: string; default: boolean; on: boolean }
+export interface CcTool { name: string; label: string; level: ToolLevel; description: string; default: boolean; on: boolean; uses?: number }
 /** An answer's text with its steps where they happened. */
 type Chunk = { text: string; steps?: undefined } | { text?: undefined; steps: CcStep[] };
 /** An answer someone else is having written, as far as it got. */
@@ -548,7 +548,7 @@ type Ask = { text: string; label: string; go: () => void };
   <!-- RIGHT: one conversation -->
   <section class="tcv-cc-main">
     @if (toolsOpen()) {
-      <app-cc-tools [tools]="tools()" [ready]="toolsReady()" [canEdit]="auth.can('draw')" (set)="setTools($event)"
+      <app-cc-tools [tools]="tools()" [ready]="toolsReady()" [canEdit]="auth.can('draw')" (set)="setTools($event)" (openChat)="showTools(false); open($event)"
                     (done)="showTools(false)" (menu)="drawer.set(!drawer())" />
     } @else if (sel.thread(); as room) {
       <app-room-thread [room]="room" [userAv]="userAv" [botAv]="botAv" [ico]="ico" (menu)="drawer.set(!drawer())" />
@@ -2632,7 +2632,7 @@ export class RoomCommandCode implements OnDestroy {
   setTools(change: Record<string, boolean>) {
     this.tools.update(l => l.map(x => x.name in change ? { ...x, on: change[x.name] } : x));
     this.api.setTools(change).subscribe({
-      next: r => this.tools.set(r.tools),
+      next: r => { const uses = new Map(this.tools().map(x => [x.name, x.uses])); this.tools.set(r.tools.map(x => ({ ...x, uses: uses.get(x.name) }))); },
       error: e => { this.error.set(e?.error?.detail ?? t('Something went wrong.')); this.loadTools(); },
     });
   }

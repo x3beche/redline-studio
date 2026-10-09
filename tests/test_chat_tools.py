@@ -160,7 +160,9 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     on = {t["name"]: t["on"] for t in got["tools"]}
     assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": False,
                   "datasheet_get": False, "datasheet_read": True}
-    assert run(cc_chat.list_tools())["tools"] == got["tools"]
+    listed = run(cc_chat.list_tools())["tools"]
+    assert [{k: v for k, v in t.items() if k != "uses"} for t in listed] == got["tools"]
+    assert all(t["uses"] == 0 for t in listed)
     with pytest.raises(Exception):
         run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"rm_rf": True})))
     tool_model(monkeypatch, state, [("Hi.", [])])
@@ -603,3 +605,33 @@ def test_drawer_list_lists_filters_and_pages(monkeypatch):
     assert p2.vars["pages"] == 2 and p2.text.count("\nC") == 1 and "Page 2 of 2" in p2.text
     none = run(tool.run(Ctx(db=Db()), {"category": "relays"}))
     assert none.say == "No parts in the drawer like that"
+
+
+def test_a_tools_page_counts_its_uses(env):
+    """GET /tools/{name}: what the model is told and takes, and its uses in
+    the workspace's conversations - outcomes, time, whose, latest first."""
+    from datetime import datetime, timedelta, timezone
+    from tests.test_cc_mentions_live_search import ME, line
+    raw, _ = env
+    now = datetime.now(timezone.utc)
+    at = lambda h: (now - timedelta(hours=h)).isoformat()  # noqa: E731
+    step = lambda tool, status, ms, h: {"id": f"s{h}", "tool": tool, "status": status, "ms": ms, "at": at(h),  # noqa: E731
+                                        "say": "Found {mpn} in the drawer ({lcsc})", "vars": {"mpn": "X", "lcsc": "C1"}}
+    answer = lambda mid, *steps: {**line(mid, "assistant", "ok"), "steps": list(steps)}  # noqa: E731
+    seed_chat(raw, "c1", [line("u1", "user", "?"), answer("a1", step("drawer_search", "done", 20, 1),
+                                                          step("datasheet_read", "done", 900, 1))], title="One")
+    seed_chat(raw, "c2", [line("u2", "user", "?"), answer("a2", step("drawer_search", "error", 5, 30),
+                                                          step("drawer_search", "done", 40, 200))], title="Two")
+    page = run(cc_chat.tool_page("drawer_search"))
+    assert page["params"][0]["name"] == "query" and page["params"][0]["required"]
+    assert page["running"] and page["model_text"]
+    st = page["stats"]
+    assert (st["uses"], st["chats"], st["week"]) == (3, 2, 2)
+    assert st["outcomes"] == {"done": 2, "error": 1}
+    assert st["ms"]["median"] == 40
+    assert st["people"] == [{"name": ME["name"], "n": 3}]
+    assert [r["chat"] for r in st["recent"]] == ["c1", "c2", "c2"]
+    assert len(st["days"]) == cc_chat.STATS_DAYS and sum(d["n"] for d in st["days"]) == 3
+    assert sum(d["bad"] for d in st["days"]) == 1
+    with pytest.raises(Exception):
+        run(cc_chat.tool_page("rm_rf"))
