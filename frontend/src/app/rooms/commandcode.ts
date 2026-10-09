@@ -11,6 +11,7 @@ import { T, t } from '../i18n';
 import { CcWant, Selection } from '../selection';
 import { AgentThreads, RoomThread } from './agent-thread';
 import { CcUsageLine } from '../cc-usage';
+import { highlightIn } from '../code-highlight';
 import { CcToolsLine, CcToolsView, LEVELS, toolIcon as toolIconOf } from './cc-tools';
 import { AvatarColours, avatarColour } from '../avatar';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
@@ -2536,7 +2537,7 @@ export class RoomCommandCode implements OnDestroy {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
-  /** Each <pre> gets a copy button; the log's click handler does the copying. */
+  /** Each <pre> gets a copy button (the log's click handler does the copying) and its colours (code-highlight.ts). */
   private decorate(root: HTMLElement) {
     root.querySelectorAll('.tcv-cc-answer pre:not([data-cc])').forEach(pre => {
       pre.setAttribute('data-cc', '1');
@@ -2547,6 +2548,7 @@ export class RoomCommandCode implements OnDestroy {
       b.title = t('Copy the code');
       pre.appendChild(b);
     });
+    highlightIn(root);
   }
 
   logClick(e: MouseEvent) {

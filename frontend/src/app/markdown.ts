@@ -94,6 +94,13 @@ export type Segment = { md: string } | { task: TaskBlock };
 
 const TASK_OPEN = /^\s*```\s*task\s*$/i;
 const TASK_HEAD = /^\s*(title|target)\s*:\s*(.*?)\s*$/i;
+/** A fence's language (```cpp), kept as the code's class for highlighting;
+ *  only a plain name gets through. */
+function fenceLang(line: string): string {
+  const m = /^\s*```\s*([A-Za-z0-9_+#-]{1,20})/.exec(line);
+  return m ? m[1].toLowerCase() : '';
+}
+
 // A fence is closed by a bare one: ```task inside a code block is code.
 const CLOSE = /^\s*```\s*$/;
 
@@ -168,6 +175,7 @@ function markdown(src: string): string {
   let items: string[] = [];
   let list: 'ul' | 'ol' | null = null;
   let fence: string[] | null = null;
+  let lang = '';
 
   const closeParagraph = () => {
     if (para.length) out.push(`<p>${inline(para.join('<br>'))}</p>`);
@@ -193,14 +201,14 @@ function markdown(src: string): string {
 
     if (fence) {
       if (CLOSE.test(line)) {
-        out.push(`<pre><code>${fence.join('\n')}</code></pre>`);
+        out.push(`<pre><code${lang ? ` class="language-${lang}"` : ''}>${fence.join('\n')}</code></pre>`);
         fence = null;
       } else {
         fence.push(line);
       }
       continue;
     }
-    if (FENCE.test(line)) { close(); fence = []; continue; }
+    if (FENCE.test(line)) { close(); fence = []; lang = fenceLang(line); continue; }
 
     if (!line.trim()) { close(); continue; }
 
@@ -255,7 +263,7 @@ function markdown(src: string): string {
     para.push(line.trim());
   }
 
-  if (fence) out.push(`<pre><code>${fence.join('\n')}</code></pre>`);
+  if (fence) out.push(`<pre><code${lang ? ` class="language-${lang}"` : ''}>${fence.join('\n')}</code></pre>`);
   close();
   return out.join('');
 }

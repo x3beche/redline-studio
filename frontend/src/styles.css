@@ -5223,3 +5223,20 @@ html[data-shot] .tcv-log { display: none !important; }
   padding: 3px 9px; font-size: 10.5px; border-radius: 4px; color: var(--ink-dim);
   background: var(--overlay); border: 1px solid var(--line); pointer-events: auto; }
 .tcv-route-stamp b { color: var(--ink); font-weight: 600; }
+
+/* Code in an answer, coloured (app/code-highlight.ts, highlight.js): the
+   theme's series palette, so every theme has its own and they never clash
+   with the page. Comments stay dim, plain text keeps the code's ink. */
+.hljs-comment, .hljs-quote { color: var(--ink-dim); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag { color: var(--series-7); }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-template-string { color: var(--series-3); }
+.hljs-number, .hljs-symbol, .hljs-bullet { color: var(--series-2); }
+.hljs-title, .hljs-title.function_, .hljs-section { color: var(--series-1); }
+.hljs-type, .hljs-built_in, .hljs-title.class_, .hljs-class .hljs-title { color: var(--series-5); }
+.hljs-meta, .hljs-meta .hljs-keyword, .hljs-tag { color: var(--series-4); }
+.hljs-meta .hljs-string { color: var(--series-3); }
+.hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable, .hljs-params { color: var(--ink); }
+.hljs-name, .hljs-selector-id, .hljs-selector-class { color: var(--series-6); }
+.hljs-deletion { color: var(--series-6); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }
