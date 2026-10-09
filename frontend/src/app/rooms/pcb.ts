@@ -27,7 +27,8 @@ import { ImportBoard } from './import-board';
 import { BoardHealth } from './board-health';
 import { T, t } from '../i18n';
 import { PartsDrawer } from './parts-drawer';
-import { PartBodiesCard } from './part-bodies';
+import { PartCard } from './part-card';
+import { warmPart } from './part-assets';
 import { BoardBodies } from './board-bodies';
 
 /** An add being watched (backend main.py /api/parts-add). */
@@ -56,7 +57,7 @@ type BoardView = Pane | 'split' | 'focus';
 @Component({
   selector: 'app-room-pcb',
   imports: [Board3d, CodeView, PinIcon, PinnedByList, Drawing, RouteLive, DrawTools, ImportBoard, Releases, BoardHealth, NgTemplateOutlet,
-            PartsDrawer, RoomFrame, RulesForm, Sketchpad, T, ToolButton, PartBodiesCard, BoardBodies],
+            PartsDrawer, RoomFrame, RulesForm, Sketchpad, T, ToolButton, PartCard, BoardBodies],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
@@ -264,164 +265,23 @@ type BoardView = Pane | 'split' | 'focus';
       @if (seen() || seeing()) {
         <div (click)="closePart()" class="fixed inset-0 flex items-center justify-center p-4"
              style="background: var(--scrim); z-index: 1100">
-          <div class="tcv-card tcv-part-modal flex max-h-[88vh] w-[min(52rem,94vw)] flex-col overflow-hidden p-0"
+          <div class="tcv-card tcv-part-modal flex max-h-[90vh] w-[min(60rem,96vw)] flex-col overflow-hidden p-0"
                (click)="$event.stopPropagation()" role="dialog" aria-modal="true"
+               [attr.aria-label]="('Part' | t) + ' ' + (seen()?.lcsc ?? seeing())"
                style="box-shadow: 0 12px 36px var(--shadow-hard)">
-            <div class="flex shrink-0 items-center gap-2 px-3 py-2" style="border-bottom: 1px solid var(--line)">
-              <span class="tcv-label">Part</span>
-              <span class="mono text-[11px]" style="color: var(--ink)">{{ seen()?.lcsc ?? seeing() }}</span>
-              @if (seen(); as s) {
-                <span class="min-w-0 truncate text-[11px]" style="color: var(--ink-dim)">{{ s.mpn }}</span>
-              }
-              <button (click)="closePart()" class="tcv-chip ml-auto px-1.5 py-0" title="close (Esc)">&times;</button>
-            </div>
             <div class="tcv-scroll min-h-0 flex-1 overflow-y-auto">
               @if (seen(); as s) {
-                <div class="tcv-part-grid">
-                  <div class="min-w-0">
-                    <div class="flex gap-2">
-                      @if (s.has_photo && noPhoto() !== s.lcsc) {
-                        <img [src]="store.file(s.lcsc, 'photo.jpg')" alt=""
-                             (error)="noPhoto.set(s.lcsc)"
-                             class="h-16 w-16 shrink-0 rounded object-contain"
-                             style="background: var(--shot-bg)">
-                      }
-                      <div class="min-w-0 flex-1">
-                        <div class="text-[13px] font-semibold" style="color: var(--ink)">{{ s.mpn || s.name }}</div>
-                        <div class="text-[11px]" style="color: var(--ink-dim)">{{ s.maker }}</div>
-                        <div class="mt-1 text-[11px] leading-snug" style="color: var(--ink-dim)">{{ s.description }}</div>
-                      </div>
-                    </div>
-
-                    <div class="mono mt-3 grid text-[11px]"
-                         style="grid-template-columns: auto 1fr; column-gap: 10px; row-gap: 3px">
-                      <span style="color: var(--ink-dim)">lcsc</span>
-                      <span>{{ s.lcsc }}</span>
-                      <span style="color: var(--ink-dim)">package</span>
-                      <span class="truncate" [title]="s.package ?? ''">{{ s.package }}</span>
-                      <span style="color: var(--ink-dim)">price</span>
-                      <span>{{ money(s.price) }}@if (s.min && s.min > 1) { · min {{ s.min }} }</span>
-                      <span style="color: var(--ink-dim)">stock</span>
-                      <span>{{ countOf(s.stock) }}</span>
-                      <!-- JLCPCB assembles Basic parts without a loading fee;
-                           an Extended one costs a feeder per run. -->
-                      <span style="color: var(--ink-dim)">jlc</span>
-                      <span [title]="basic(s) ? 'no loading fee at JLCPCB'
-                                              : 'a feeder fee per assembly run at JLCPCB'">
-                        {{ s.jlc_class || '–' }}
-                      </span>
-                      <span style="color: var(--ink-dim)">3d</span>
-                      <span>{{ s.has_model ? (s.model_name || 'yes') : 'none - footprint only' }}</span>
-                    </div>
-
-                    <!-- Which drawer: the rules, a model's pick where they
-                         were unsure, or somebody's own choice - which wins. -->
-                    @if (heldRow(s.lcsc); as h) {
-                      <div class="tcv-label mt-3">drawer</div>
-                      <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-                        <select class="tcv-field px-1 py-0.5 text-[11px]"
-                                (change)="placeIt(s.lcsc, $any($event.target).value)">
-                          @for (pg of places(); track pg.group) {
-                            <optgroup [label]="pg.group">
-                              @for (b of pg.branches; track b) {
-                                <option [value]="pg.group + '/' + b" [selected]="h.group === pg.group && h.branch === b">{{ pg.group }} › {{ b }}</option>
-                              }
-                            </optgroup>
-                          }
-                        </select>
-                        <span class="tcv-chip" [title]="placeTip(h)">{{ placeBy(h) }}</span>
-                        @if (h.place_by === 'manual') {
-                          <button class="tcv-chip" (click)="placeIt(s.lcsc, null)"
-                                  title="back to where LCSC's category puts it">reset</button>
-                        }
-                      </div>
-                    }
-
-                    <div class="mt-3 flex gap-1">
-                      @if (s.have) {
-                        <span class="tcv-chip">in the drawer</span>
-                      } @else {
-                        <button (click)="keep(s.lcsc, $event)" [disabled]="adding()?.state === 'running'"
-                                class="tcv-btn tcv-btn-accent px-2 py-0.5">
-                          {{ adding()?.state === 'running' && adding()?.lcsc === s.lcsc ? 'adding…' : 'Add to the drawer' }}
-                        </button>
-                      }
-                      <!-- The datasheet: fetched from LCSC only when asked,
-                           kept on the server after that, opened in a tab. -->
-                      @if (datasheetFor(s.lcsc); as d) {
-                        @if (d.state === 'ready') {
-                          <a [href]="datasheetUrl(s.lcsc)" target="_blank" rel="noreferrer"
-                             class="tcv-chip ml-auto" [title]="'Open the datasheet' | t">{{ 'Datasheet' | t }} &#8599;</a>
-                        } @else {
-                          <button (click)="openDatasheet(s.lcsc)" [disabled]="d.state === 'busy'"
-                                  class="tcv-chip ml-auto" [attr.aria-busy]="d.state === 'busy'"
-                                  [title]="'Fetch the datasheet from LCSC and open it' | t">
-                            {{ d.state === 'busy' ? ('fetching the datasheet…' | t) : ('Datasheet' | t) }}</button>
-                        }
-                      } @else {
-                        <button (click)="openDatasheet(s.lcsc)" class="tcv-chip ml-auto"
-                                [title]="'Fetch the datasheet from LCSC and open it' | t">{{ 'Datasheet' | t }}</button>
-                      }
-                      @if (s.url) {
-                        <a [href]="s.url" target="_blank" rel="noreferrer" class="tcv-chip">LCSC &#8599;</a>
-                      }
-                    </div>
-                    @if (datasheetFor(s.lcsc); as d) {
-                      @if (d.state === 'error') {
-                        <p class="mt-1 text-[11px]" style="color: var(--danger)">{{ d.text }}</p>
-                      }
-                    }
-
-                    <div class="tcv-label mt-3">pins @if (seenPins(); as ps) { <span class="mono">{{ ps.length }}</span> }</div>
-                    @if (seenPins(); as ps) {
-                      @if (ps.length) {
-                        <ol class="pdw-pinlist mt-1">
-                          @for (n of ps; track n.number) {
-                            <li><span class="mono pdw-pnum">{{ n.number }}</span>
-                                <span class="pdw-pname" [title]="n.name">{{ n.name === n.number ? '–' : n.name }}</span></li>
-                          }
-                        </ol>
-                      } @else {
-                        <p class="mt-1 text-[11px]" style="color: var(--ink-dim)">its symbol names no pins</p>
-                      }
-                    } @else {
-                      <p class="mt-1 text-[11px]" style="color: var(--ink-dim)">reading the pins…</p>
-                    }
-                    <!-- The drawings are EasyEDA's own. Only ever through
-                         <img>, where nothing in the markup can run. -->
-                    <div class="tcv-label mt-3">footprint</div>
-                    <div class="mt-1 flex h-40 items-center justify-center rounded p-2" style="background: var(--pcb-bg)">
-                      <img [src]="store.file(s.lcsc, 'footprint.svg')" alt="footprint" class="h-full w-full object-contain">
-                    </div>
-                  </div>
-
-                  <div class="min-w-0">
-                    <div class="tcv-label">3d</div>
-                    <div class="mt-1 h-64 overflow-hidden rounded" style="background: var(--surface)">
-                      @if (s.has_model) {
-                        @defer (on viewport) {
-                          <app-board-3d [src]="store.file(s.lcsc, 'model.glb')" />
-                        } @placeholder {
-                          <p class="p-2 text-[11px]" style="color: var(--ink-dim)">…</p>
-                        }
-                      } @else {
-                        <p class="p-2 text-[11px]" style="color: var(--ink-dim)">
-                          No 3D model. It will not be standing on the board.
-                        </p>
-                      }
-                    </div>
-                    <!-- Its 3D bodies: LCSC's and the drawn ones (rooms/part-bodies.ts). -->
-                    @if (s.have) {
-                      <app-part-bodies class="mt-2" [lcsc]="s.lcsc" [canEdit]="canEdit()" [canRun]="canRun()" />
-                    }
-                    <div class="tcv-label mt-2">symbol</div>
-                    <div class="mt-1 flex h-60 items-center justify-center rounded p-2" style="background: var(--shot-bg)">
-                      <img [src]="store.file(s.lcsc, 'symbol.svg')" alt="symbol" class="h-full w-full object-contain">
-                    </div>
-                  </div>
-                </div>
+                <app-part-card [part]="s" [pins]="seenPins()" [held]="heldRow(s.lcsc)" [places]="places()"
+                               [adding]="adding()" [datasheet]="datasheetFor(s.lcsc)"
+                               [canEdit]="canEdit()" [canRun]="canRun()"
+                               (closed)="closePart()" (keep)="keep(s.lcsc)" (openDatasheet)="openDatasheet(s.lcsc)"
+                               (place)="placeIt(s.lcsc, $event)" />
               } @else {
-                <p class="p-3 text-[11px]" style="color: var(--ink-dim)">looking it up…</p>
+                <div class="flex items-center gap-2 px-4 py-3 text-[11px]" style="color: var(--ink-dim)">
+                  <span class="mono" style="color: var(--ink)">{{ seeing() }}</span>
+                  <span>{{ 'looking it up…' | t }}</span>
+                  <button (click)="closePart()" class="tcv-chip ml-auto px-1.5 py-0" [title]="'close (Esc)' | t">&times;</button>
+                </div>
               }
             </div>
           </div>
@@ -856,8 +716,6 @@ export class RoomPcb implements OnDestroy {
   /** The part open in the column, and the one being looked up. */
   seen = signal<PartPreview | null>(null);
   seeing = signal<string | null>(null);
-  /** The part whose photo would not load, so the frame is not left empty. */
-  noPhoto = signal<string | null>(null);
 
   log = signal<LogLine[]>([]);
   private timers: ReturnType<typeof setInterval>[] = [];
@@ -1112,6 +970,10 @@ export class RoomPcb implements OnDestroy {
     this.seeing.set(lcsc);
     this.seen.set(null);
     this.seenPins.set(null);
+    // A part in the drawer is on the server's disk: its drawings, model and
+    // footprint frame are asked for now, beside the facts, not after them.
+    const kept = this.heldRow(lcsc);
+    if (kept) warmPart(lcsc, kept.has_3d);
     if (!this.places().length) {
       this.http.get<{ group: string; branches: string[] }[]>('/api/parts-places')
         .subscribe({ next: p => this.places.set(p) });
@@ -1168,11 +1030,6 @@ export class RoomPcb implements OnDestroy {
   }
   @HostListener('document:keydown.escape')
   escape() { if (this.seen() || this.seeing()) this.closePart(); }
-
-  /** JLCPCB's Basic parts carry no loading fee. */
-  basic(p: PartPreview): boolean {
-    return (p.jlc_class ?? '').toLowerCase().startsWith('basic');
-  }
 
   /** Keep one: its footprint, and its 3D model if it has one. That is
    *  what puts it within reach of a board. Watched step by step. */
@@ -1239,14 +1096,6 @@ export class RoomPcb implements OnDestroy {
   places = signal<{ group: string; branches: string[] }[]>([]);
   seenPins = signal<{ number: string; name: string }[] | null>(null);
   heldRow(lcsc: string): PartHeld | undefined { return this.held().find(p => p.lcsc === lcsc); }
-  placeBy(h: PartHeld): string {
-    return h.place_by === 'manual' ? 'set by hand' : h.place_by === 'llm' ? 'by LLM' : 'by LCSC category';
-  }
-  placeTip(h: PartHeld): string {
-    return h.place_by === 'llm' ? `LCSC's category said too little; ${h.place_model ?? 'a model'} picked it`
-      : h.place_by === 'manual' ? 'chosen here - it wins over LCSC and the model'
-      : 'from the category LCSC files it under';
-  }
   placeIt(lcsc: string, value: string | null) {
     const [group, branch] = value ? [value.slice(0, value.indexOf('/')), value.slice(value.indexOf('/') + 1)] : [null, null];
     this.http.put(`/api/parts/${encodeURIComponent(lcsc)}/place`, { group, branch }).subscribe({
