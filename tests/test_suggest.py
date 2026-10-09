@@ -10,6 +10,7 @@ called here.
 """
 
 import asyncio
+import json
 import copy
 
 import pytest
@@ -259,3 +260,49 @@ def test_a_reload_gets_the_kept_suggestion_back_without_a_call(env):
     db[cc_chat.COLL].rows["c1"]["messages"].pop()
     assert run(suggest.peek(db, "cc", "c1")) is None                   # switched off
     assert len(calls) == 1
+
+
+def test_a_model_that_refuses_a_temperature_is_asked_again_without_one(monkeypatch):
+    """Claude Haiku 5.5 on Command Code answers 400 'temperature is deprecated':
+    every suggestion failed. Asked again without it, and remembered."""
+    import httpx
+    sent = []
+
+    class R:
+        def __init__(self, code, body):
+            self.status_code, self._b = code, body
+            self.text = json.dumps(body)
+
+        def json(self):
+            return self._b
+
+    class Client:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            sent.append(dict(json))
+            if "temperature" in json:
+                return R(400, {"type": "error", "error": {"message": "`temperature` is deprecated for this model."}})
+            return R(200, {"content": [{"type": "text", "text": "Sonra ne yapalım?"}],
+                           "usage": {"input_tokens": 10, "output_tokens": 5}})
+
+    async def anthropic(p, m):
+        return True
+    monkeypatch.setattr(httpx, "AsyncClient", Client)
+    monkeypatch.setattr(llm, "_anthropic_model", anthropic)
+    monkeypatch.setattr(llm, "_conf", {"keys": {"commandcode": "k"}, "jobs": {}})
+    monkeypatch.setattr(llm, "_NO_TEMPERATURE", set())
+    d = asyncio.run(llm.complete([{"role": "user", "content": "x"}], provider="commandcode",
+                                 model="claude-haiku-5-5", temperature=0.3))
+    assert d["choices"][0]["message"]["content"] == "Sonra ne yapalım?"
+    assert "temperature" in sent[0] and "temperature" not in sent[1]
+    asyncio.run(llm.complete([{"role": "user", "content": "x"}], provider="commandcode",
+                             model="claude-haiku-5-5", temperature=0.3))
+    assert "temperature" not in sent[2] and len(sent) == 3          # remembered: no second refusal

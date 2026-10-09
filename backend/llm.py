@@ -363,6 +363,17 @@ def _error(provider: str, r) -> RuntimeError:
     return RuntimeError(f"{PROVIDERS[provider]['name']} answered HTTP {r.status_code}: {str(msg)[:300]}")
 
 
+# Models that answer 400 to a temperature, as they said so (complete()).
+_NO_TEMPERATURE: set[tuple[str, str]] = set()
+
+
+def _refuses_temperature(r) -> bool:
+    try:
+        return "temperature" in (r.text or "").lower()
+    except Exception:                                  # noqa: BLE001
+        return False
+
+
 async def complete(messages: list[dict], *, job: str | None = None, provider: str | None = None,
                    model: str | None = None, max_tokens: int = 400, temperature: float | None = 0.2,
                    reasoning: bool = False, timeout: float = TIMEOUT) -> dict:
@@ -378,13 +389,24 @@ async def complete(messages: list[dict], *, job: str | None = None, provider: st
         raise RuntimeError("no provider or model chosen")
     anthropic = await _anthropic_model(provider, model)
     base = PROVIDERS[provider]["base"]
-    if anthropic:
-        url, body = base + "/messages", _to_anthropic(messages, max_tokens, temperature, model)
-    else:
-        url, body = base + "/chat/completions", _openai_body(provider, model, messages, max_tokens,
-                                                             temperature, reasoning)
+    if (provider, model) in _NO_TEMPERATURE:
+        temperature = None
+
+    def build(temp):
+        if anthropic:
+            return base + "/messages", _to_anthropic(messages, max_tokens, temp, model)
+        return base + "/chat/completions", _openai_body(provider, model, messages, max_tokens, temp, reasoning)
+
+    url, body = build(temperature)
     async with httpx.AsyncClient(timeout=timeout) as client:
         r = await client.post(url, json=body, headers=_headers(provider, anthropic))
+        if r.status_code == 400 and temperature is not None and _refuses_temperature(r):
+            # Newer models (Claude Haiku 5.5, 2026-10-09) refuse a
+            # temperature outright: asked again without one, and the model
+            # remembered so the next call does not pay for the refusal.
+            _NO_TEMPERATURE.add((provider, model))
+            url, body = build(None)
+            r = await client.post(url, json=body, headers=_headers(provider, anthropic))
     if r.status_code >= 400:
         raise _error(provider, r)
     d = r.json()

@@ -124,6 +124,7 @@ async def _turns(db, kind: str, ref: str) -> tuple[str, list[tuple[str, str]]] |
 
 
 _indexed = False
+RETRY_S = 300                      # a failed call is asked again after this long
 
 
 async def _ensure_index(raw) -> None:
@@ -155,11 +156,24 @@ async def suggest(db, kind: str, ref: str) -> str | None:
     key = f"{scope.current()}:{kind}:{ref}:{lid}"
     # One call per answer: whoever claims the key asks; everyone else gets
     # what was kept (or nothing while it is being asked, or if it failed).
+    now = datetime.now(timezone.utc)
     try:
-        await raw[COLL].insert_one({"_id": key, "at": datetime.now(timezone.utc), "state": "asking"})
+        await raw[COLL].insert_one({"_id": key, "at": now, "state": "asking"})
     except Exception:                                  # noqa: BLE001 - a duplicate key: asked already
         doc = await raw[COLL].find_one({"_id": key}) or {}
-        return doc.get("text") or None
+        if doc.get("text") or doc.get("state") != "failed":
+            return doc.get("text") or None
+        # A call that failed (the provider down, a model it refused) is
+        # tried again after a while, not never: claimed again, by one.
+        at = doc.get("at")
+        if at and at.tzinfo is None:
+            at = at.replace(tzinfo=timezone.utc)
+        if at and (now - at).total_seconds() < RETRY_S:
+            return None
+        got = await raw[COLL].update_one({"_id": key, "state": "failed", "at": doc.get("at")},
+                                         {"$set": {"state": "asking", "at": now}})
+        if not got.modified_count:
+            return None
     text, state = "", "failed"
     try:
         d = await asyncio.wait_for(llm.complete(
@@ -170,9 +184,12 @@ async def suggest(db, kind: str, ref: str) -> str | None:
         await llm.record(db, provider=d.get("provider") or prov, model=d.get("model") or model,
                          surface="chat", kind="suggest", used=d.get("usage") or {})
     except Exception as exc:                           # noqa: BLE001 - no suggestion is fine
-        llm.log.warning("suggestion failed: %s", type(exc).__name__)
+        error = f"{type(exc).__name__}: {exc}"[:300]
+        llm.log.warning("suggestion failed (%s %s): %s", prov, model, error)
+    else:
+        error = None
     await raw[COLL].update_one({"_id": key}, {"$set": {"state": state, "text": text or None,
-                                                       "provider": prov, "model": model}})
+                                                       "provider": prov, "model": model, "error": error}})
     return text or None
 
 
