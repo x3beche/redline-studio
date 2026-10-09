@@ -193,6 +193,8 @@ export interface NoteView {
   camera?: { ortho: boolean; zoom: number; quaternion: [number, number, number, number] };
   /** The 3D canvas as drawn, in CSS pixels. Its aspect decides the framing. */
   canvas?: { w: number; h: number; aspect: number };
+  /** The viewer's background it was drawn on (the theme's --view-top/mid/bottom). */
+  backdrop?: { top: string; mid: string; bottom: string };
 }
 
 /** The only contact point with the backend. The Atlas URI lives in FastAPI. */

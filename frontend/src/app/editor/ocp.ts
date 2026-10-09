@@ -171,6 +171,13 @@ export class OcpViewer {
    *  same window gave 508x589 one run and 2292x1312 another. */
   shot: { w: number; h: number } | null = null;
 
+  /** The viewer's background colours, as the theme on show sets them. */
+  static backdrop(): { top: string; mid: string; bottom: string } {
+    const cs = getComputedStyle(document.documentElement);
+    const get = (k: string) => cs.getPropertyValue(`--view-${k}`).trim();
+    return { top: get('top'), mid: get('mid'), bottom: get('bottom') };
+  }
+
   /** `?shot=WxH` from an address, or null. */
   static shotSize(search: string): { w: number; h: number } | null {
     const m = /^(\d{2,5})x(\d{2,5})$/.exec(new URLSearchParams(search).get('shot') ?? '');
@@ -360,6 +367,9 @@ export class OcpViewer {
       camera: { ortho: rb.ortho, zoom: v.getCameraZoom(),
                 quaternion: v.getCameraQuaternion() },
       canvas: { w, h, aspect: h ? Math.round((w / h) * 1e4) / 1e4 : 0 },
+      // The background it was drawn on: the after picture is taken on the
+      // same (tools/render.py), whatever theme the picture's browser has.
+      backdrop: OcpViewer.backdrop(),
     };
   }
 

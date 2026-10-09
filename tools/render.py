@@ -496,6 +496,44 @@ def note_canvas(view) -> tuple[int, int] | None:
 # one is fitted to the shorter side, so everything does). The drawing
 # itself is a capture of the canvas it was made on, so its pixel size is
 # that canvas's shape.
+def corner_backdrop(png: bytes) -> dict | None:
+    """The viewer's background as a note's drawing shows it: the colour at
+    its top and bottom edges, from the corners (a mark drawn into one is
+    outvoted by the others). {top, mid, bottom} as CSS colours, or None."""
+    try:
+        from io import BytesIO
+        from PIL import Image
+        im = Image.open(BytesIO(png)).convert("RGB")
+    except Exception:                                         # noqa: BLE001
+        return None
+    w, h = im.size
+    if w < 20 or h < 20:
+        return None
+    k = max(3, min(w, h) // 40)
+
+    def patch(x0: int, y0: int) -> tuple[int, int, int]:
+        px = sorted(im.crop((x0, y0, x0 + k, y0 + k)).getdata())
+        return px[len(px) // 2]
+
+    def pick(a, b):
+        # Two corners: the one nearer the other edge's colour is the
+        # background when they disagree; the same colour - that one.
+        return a if sum(a) <= sum(b) else b if abs(sum(a) - sum(b)) > 60 else a
+
+    top = pick(patch(1, 1), patch(w - k - 1, 1))
+    bottom = pick(patch(1, h - k - 1), patch(w - k - 1, h - k - 1))
+    mid = tuple(round(a * 0.45 + b * 0.55) for a, b in zip(top, bottom))
+    css = lambda c: "rgb({}, {}, {})".format(*c)       # noqa: E731
+    return {"top": css(top), "mid": css(mid), "bottom": css(bottom)}
+
+
+def backdrop_js(b: dict) -> str:
+    """Put a note's background on the page: the viewer's gradient colours."""
+    sets = "".join(f"r.setProperty('--view-{k}', {json.dumps(str(b[k]))});"
+                   for k in ("top", "mid", "bottom") if b.get(k))
+    return f"(() => {{ const r = document.documentElement.style; {sets} return 'ok'; }})()"
+
+
 def drawn_size(rid: str, headers: dict | None = None,
                opener=urllib.request.urlopen) -> tuple[int, int] | None:
     """The pixel size of a note's stored drawing (its before image), or None."""
@@ -811,6 +849,7 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
     # or the one named (model:<id>, board:<id>).
     rid, is_board = None, revision.startswith("board:")
     note_view: dict | None = None
+    backdrop: dict | None = None
     if revision.startswith(("model:", "board:")):
         want = revision.split(":", 1)[1]
     else:
@@ -823,6 +862,19 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
             raise SystemExit(f"revision {rid} names no model")
         want, is_board = rev_doc["model"], rev_doc.get("kind") == "pcb"
         note_view = None if is_board else rev_doc.get("view")
+        # The background the note was drawn on (a dark theme's black, say):
+        # the after picture is taken on the same, or the two do not match
+        # side by side. Kept with the view since it was; read off the
+        # drawing's corners for a note from before.
+        if not is_board:
+            backdrop = (note_view or {}).get("backdrop")
+            if not backdrop:
+                try:
+                    req = urllib.request.Request(f"{API}/api/revisions/{rid}/image", headers=auth or {})
+                    with urllib.request.urlopen(req, timeout=20) as r:
+                        backdrop = corner_backdrop(r.read())
+                except Exception:                             # noqa: BLE001
+                    backdrop = None
         if on_model:
             # The note's view, on another model: a note whose work went into
             # a model of its own (a new project) is judged on that one.
@@ -1077,6 +1129,10 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
             time.sleep(0.5)
 
         unclutter()
+        if backdrop:
+            js(backdrop_js(backdrop))
+            print(f"backdrop: {backdrop['top']} -> {backdrop['bottom']} (as the note was drawn)")
+            time.sleep(0.3)
 
         # The signals above say the page is ready, not that the geometry is on
         # screen. Check the picture itself: a nearly uniform frame is the

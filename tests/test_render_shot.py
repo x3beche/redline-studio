@@ -151,3 +151,22 @@ def test_main_hands_side_on_and_never_writes_it_as_the_after_picture(monkeypatch
     monkeypatch.setattr(sys, "argv", ["render.py", "r1"])
     render.main()
     assert got["side"] is None and got["path"].name == "after-r1.png"
+
+
+def test_the_after_picture_takes_the_background_the_note_was_drawn_on():
+    """A dark theme draws on black: the after picture is taken on the same,
+    read off the drawing's corners for a note that did not keep it."""
+    from io import BytesIO
+    from PIL import Image, ImageDraw
+    from tools import render
+    im = Image.new("RGB", (400, 300), (0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rectangle((0, 150, 400, 300), fill=(20, 20, 20))           # a darker bottom, as the gradient
+    d.rectangle((0, 0, 30, 30), fill=(255, 0, 0))                # a mark drawn into one corner
+    buf = BytesIO()
+    im.save(buf, "PNG")
+    b = render.corner_backdrop(buf.getvalue())
+    assert b["top"] == "rgb(0, 0, 0)" and b["bottom"] == "rgb(20, 20, 20)"
+    js = render.backdrop_js(b)
+    assert "--view-top" in js and "rgb(0, 0, 0)" in js and "--view-bottom" in js
+    assert render.corner_backdrop(b"not a png") is None
