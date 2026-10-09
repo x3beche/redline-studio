@@ -100,20 +100,14 @@ def month_of(now: datetime) -> tuple[datetime, datetime]:
 
 async def _llm_usd(db, since: datetime, until: datetime) -> float:
     """The LLM calls between two moments, at list prices. The call log is the
-    machine's: a workspace other than the default one counts only the calls
-    made during its own runs (as insights._llm_sums does)."""
-    from . import usage
+    machine's: a space counts the calls made for it, and of the unstamped
+    ones (the agents' transcripts, rows from before) the default space all,
+    another only those made during its own runs - as insights._llm_sums."""
+    from . import insights, usage
     lo, hi = since.isoformat(), until.isoformat()
-    match: dict = {"at": {"$gte": lo, "$lte": hi}}
-    if getattr(db, "workspace", scope.DEFAULT) != scope.DEFAULT:
-        runs = [r async for r in db.runs.find(
-            {"started_at": {"$lte": hi}, "$or": [{"finished_at": {"$gte": lo}}, {"finished_at": None}]},
-            {"started_at": 1, "finished_at": 1})]
-        spans = [{"at": {"$gte": r["started_at"], "$lte": r.get("finished_at") or hi}}
-                 for r in runs if r.get("started_at")]
-        if not spans:
-            return 0.0
-        match = {"$and": [match, {"$or": spans}]}
+    in_run = None if getattr(db, "workspace", scope.DEFAULT) == scope.DEFAULT \
+        else await insights._in_runs(db, lo, hi)
+    match = {"$and": [{"at": {"$gte": lo, "$lte": hi}}, insights._ws_match(db, in_run)]}
     rows = await db[usage.CALLS].aggregate([
         {"$match": match},
         {"$group": {"_id": None, "usd": {"$sum": {"$ifNull": ["$cost_usd", 0]}}}}]).to_list(1)

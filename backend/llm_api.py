@@ -136,7 +136,8 @@ async def _openrouter_account() -> dict | None:
 async def usage(provider: str = "all", days: int = 30) -> dict:
     """What the app asked of one provider, or of both ("all"): calls, tokens
     and money over time, by job, by model and by provider (from the usage
-    log every call writes to). Jobs are named as in "Which model does what"."""
+    log every call writes to), this space's own. Jobs are named as in
+    "Which model does what"."""
     from datetime import datetime, timezone
 
     from . import usage as _usage
@@ -149,7 +150,7 @@ async def usage(provider: str = "all", days: int = 30) -> dict:
     since_iso = datetime.fromtimestamp(since, timezone.utc).isoformat()
     raw = _db().raw if getattr(type(_db()), "SCOPED", False) else _db()
     rows = [r async for r in raw[_usage.CALLS].find(
-        {"provider": {"$in": provs}, "at": {"$gte": since_iso}},
+        {"$and": [{"provider": {"$in": provs}, "at": {"$gte": since_iso}}, _usage.of_space()]},
         {"_id": 0, "at": 1, "provider": 1, "kind": 1, "model": 1, "input": 1, "output": 1,
          "cost_usd": 1}).sort("at", 1)]
     for r in rows:

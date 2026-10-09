@@ -101,6 +101,28 @@ class Buckets:
 TOKEN_KINDS = ("input", "output", "cache_read", "cache_write", "thinking")
 
 
+def _ws_match(db, in_run: dict | None) -> dict:
+    """Which LLM calls are this space's: those stamped with it; for the
+    default space also the unstamped ones; for another, the unstamped ones
+    `in_run` picks out (made during one of its runs), or none."""
+    ws = getattr(db, "workspace", scope.DEFAULT)
+    if ws == scope.DEFAULT:
+        return usage.of_space(ws)
+    return {"$or": [{"workspace_id": ws},
+                    *([{"$and": [{"workspace_id": {"$exists": False}}, in_run]}] if in_run else [])]}
+
+
+async def _in_runs(db, lo: str, hi: str) -> dict | None:
+    """A filter for the calls made while one of this space's runs was open."""
+    now = datetime.now(timezone.utc).isoformat()
+    spans = [{"at": {"$gte": r["started_at"], "$lte": r.get("finished_at") or now}}
+             async for r in db.runs.find(
+                 {"started_at": {"$lte": hi}, "$or": [{"finished_at": {"$gte": lo}}, {"finished_at": None}]},
+                 {"started_at": 1, "finished_at": 1})
+             if r.get("started_at")]
+    return {"$or": spans} if spans else None
+
+
 async def _llm_sums(db, lo: str, hi: str, since: datetime, size: int) -> dict:
     """Every LLM figure the room shows for a range, in one aggregation.
 
@@ -132,11 +154,11 @@ async def _llm_sums(db, lo: str, hi: str, since: datetime, size: int) -> dict:
         {"$addFields": {"_run": owner_expr}},
         {"$addFields": {"_rev": {"$ifNull": ["$revision", "$_run.rev"]},
                         "_room": "$_run.room"}},
-        # The LLM-call log is the machine's. A workspace other than the
-        # default one counts only the calls made during its own runs; a call
-        # with no run open is the default workspace's.
-        *([] if getattr(db, "workspace", scope.DEFAULT) == scope.DEFAULT
-          else [{"$match": {"_run.run": {"$ne": None}}}]),
+        # The LLM-call log is the machine's. A call made for a space carries
+        # it (usage.record_call); one that does not - the agents'
+        # transcripts, and rows from before - is the default space's, or
+        # another space's when made during one of its own runs.
+        {"$match": _ws_match(db, {"_run.run": {"$ne": None}})},
         {"$addFields": {"_b": {"$floor": {"$divide": [
             {"$subtract": [{"$toLong": {"$toDate": "$at"}}, t0_ms]}, size * 1000]}}}},
         {"$facet": {
@@ -585,8 +607,10 @@ async def _previous(db, since: datetime, until: datetime) -> dict:
     """The same totals for the period before, for the change on each tile."""
     lo, hi = since.isoformat(), until.isoformat()
     toks = {"$add": [{"$ifNull": [f"${k}", 0]} for k in TOKEN_KINDS]}
+    mine = _ws_match(db, None if getattr(db, "workspace", scope.DEFAULT) == scope.DEFAULT
+                     else await _in_runs(db, lo, hi))
     llm, jobs, notes, runs, wh = await asyncio.gather(
-        db[usage.CALLS].aggregate([{"$match": {"at": {"$gte": lo, "$lt": hi}}},
+        db[usage.CALLS].aggregate([{"$match": {"$and": [{"at": {"$gte": lo, "$lt": hi}}, mine]}},
                                    {"$group": {"_id": None, "usd": {"$sum": {"$ifNull": ["$cost_usd", 0]}},
                                                "calls": {"$sum": 1}, "tokens": {"$sum": toks}}}]).to_list(1),
         db[compute.JOBS].aggregate([{"$match": {"at": {"$gte": lo, "$lt": hi}}},
@@ -1444,7 +1468,10 @@ async def first_use(db) -> datetime | None:
     """When anything was first recorded - where 'all' starts."""
     got = []
     for coll, field in ((usage.CALLS, "at"), (compute.JOBS, "at"), ("revisions", "created_at")):
-        d = await db[coll].find_one({field: {"$exists": True}}, sort=[(field, 1)])
+        # The LLM-call log is the machine's: this space's calls only.
+        mine = _ws_match(db, None) if coll == usage.CALLS else {}
+        d = await db[coll].find_one({"$and": [{field: {"$exists": True}}, mine]} if mine
+                                    else {field: {"$exists": True}}, sort=[(field, 1)])
         if d and _dt(d.get(field)):
             got.append(_dt(d[field]))
     return min(got) if got else None

@@ -324,8 +324,20 @@ async def record_call(db, **row) -> None:
     tok = actors.current().get("token")
     if tok and "agent_token" not in row:
         row["agent_token"] = tok
+    # Whose space asked: the usage pages count a space's own calls only
+    # (`of_space`). Rows from before this carry none - the default space's.
+    from . import scope
+    row.setdefault("workspace_id", scope.current())
     await db[CALLS].update_one({"_id": row["_id"]}, {"$setOnInsert": row},
                                upsert=True)
+
+
+def of_space(ws: str | None = None) -> dict:
+    """The filter for one space's calls (record_call stamps them); the
+    default space's include the rows from before, and the agents' own
+    transcripts."""
+    from . import scope
+    return scope.keep_to(ws or scope.current())
 
 
 # ---------------- roll up ----------------
