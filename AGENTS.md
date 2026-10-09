@@ -559,6 +559,13 @@ looking things up, and none of them is written from memory:
   signal, and names spelled out so `UD+` and `UD-` stay two signals.
   Paste it; do not retype it.
 - `pins` is the same pinout as a list, for reading.
+- `datasheet C2969989 [-o file.pdf]` saves LCSC's PDF (default
+  `/tmp/<C>-datasheet.pdf`) and prints the path, the page count when it
+  is cheap to tell, and where it came from; read it with your PDF tool.
+  Only when the note needs facts from it - a pinout the symbol leaves
+  unclear, ratings, the application circuit, layout guidance - never by
+  default. Kept in `.cache/lcsc/<C>/` after the first fetch; the page's
+  part card has the same **Datasheet** button (`GET /api/parts/<C>/datasheet`).
 
 Then write the module that connects them and build. Before laying out,
 fetch every part's footprint and model once:
@@ -644,7 +651,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py kind <id>            # which room a note is from
 .venv/bin/python tools/revisions.py wait                 # block until there is
 .venv/bin/python tools/revisions.py ask "..." -o A -o B  # ask on their screen
-.venv/bin/python tools/revisions.py part find|pins|ato|passive|keep ...  # parts
+.venv/bin/python tools/revisions.py part find|pins|ato|passive|keep|datasheet ...  # parts
 .venv/bin/python tools/revisions.py chat                 # what they said
 .venv/bin/python tools/revisions.py say "..."            # answer them
 .venv/bin/python tools/revisions.py show <id>            # write drawing to disk

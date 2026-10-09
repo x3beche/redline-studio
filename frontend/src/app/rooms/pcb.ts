@@ -344,10 +344,31 @@ type BoardView = Pane | 'split' | 'focus';
                           {{ adding()?.state === 'running' && adding()?.lcsc === s.lcsc ? 'adding…' : 'Add to the drawer' }}
                         </button>
                       }
+                      <!-- The datasheet: fetched from LCSC only when asked,
+                           kept on the server after that, opened in a tab. -->
+                      @if (datasheetFor(s.lcsc); as d) {
+                        @if (d.state === 'ready') {
+                          <a [href]="datasheetUrl(s.lcsc)" target="_blank" rel="noreferrer"
+                             class="tcv-chip ml-auto" [title]="'Open the datasheet' | t">{{ 'Datasheet' | t }} &#8599;</a>
+                        } @else {
+                          <button (click)="openDatasheet(s.lcsc)" [disabled]="d.state === 'busy'"
+                                  class="tcv-chip ml-auto" [attr.aria-busy]="d.state === 'busy'"
+                                  [title]="'Fetch the datasheet from LCSC and open it' | t">
+                            {{ d.state === 'busy' ? ('fetching the datasheet…' | t) : ('Datasheet' | t) }}</button>
+                        }
+                      } @else {
+                        <button (click)="openDatasheet(s.lcsc)" class="tcv-chip ml-auto"
+                                [title]="'Fetch the datasheet from LCSC and open it' | t">{{ 'Datasheet' | t }}</button>
+                      }
                       @if (s.url) {
-                        <a [href]="s.url" target="_blank" rel="noreferrer" class="tcv-chip ml-auto">LCSC &#8599;</a>
+                        <a [href]="s.url" target="_blank" rel="noreferrer" class="tcv-chip">LCSC &#8599;</a>
                       }
                     </div>
+                    @if (datasheetFor(s.lcsc); as d) {
+                      @if (d.state === 'error') {
+                        <p class="mt-1 text-[11px]" style="color: var(--danger)">{{ d.text }}</p>
+                      }
+                    }
 
                     <div class="tcv-label mt-3">pins @if (seenPins(); as ps) { <span class="mono">{{ ps.length }}</span> }</div>
                     @if (seenPins(); as ps) {
@@ -1093,6 +1114,38 @@ export class RoomPcb implements OnDestroy {
         if (this.seeing() !== lcsc) return;
         this.seeing.set(null);
         this.partNote.set(String(e?.error?.detail ?? `${lcsc} could not be looked up`));
+      },
+    });
+  }
+
+  // ---- the datasheet, on request (GET /api/parts/{C}/datasheet) ----
+
+  /** One part's datasheet: being fetched, at hand, or why not. */
+  datasheet = signal<{ lcsc: string; state: 'busy' | 'ready' | 'error'; text?: string } | null>(null);
+  datasheetFor(lcsc: string) { const d = this.datasheet(); return d && d.lcsc === lcsc ? d : null; }
+  datasheetUrl(lcsc: string): string { return `/api/parts/${encodeURIComponent(lcsc)}/datasheet`; }
+
+  /** Fetched by the server the first time (two polite asks of LCSC), then
+   *  opened in a tab from its kept copy. If the browser holds the tab back
+   *  because the fetch took a while, the button has become a link. */
+  openDatasheet(lcsc: string) {
+    if (this.datasheetFor(lcsc)?.state === 'busy') return;
+    this.datasheet.set({ lcsc, state: 'busy' });
+    this.http.get(this.datasheetUrl(lcsc), { responseType: 'blob' }).subscribe({
+      next: () => {
+        this.datasheet.set({ lcsc, state: 'ready' });
+        const w = window.open(this.datasheetUrl(lcsc), '_blank');
+        if (w) w.opener = null;
+      },
+      error: async e => {
+        let text = t('LCSC did not answer');
+        try {
+          const raw = e?.error instanceof Blob ? await e.error.text() : '';
+          text = String(JSON.parse(raw)?.detail ?? text);
+        } catch { /* not JSON: keep the plain line */ }
+        // A 404 is LCSC having none: said in the page's language.
+        if (e?.status === 404) text = t('LCSC has no datasheet for this part');
+        this.datasheet.set({ lcsc, state: 'error', text });
       },
     });
   }

@@ -1793,6 +1793,13 @@ const TR: Record<string, string> = {
   'Mouse wheel over a clip slider moves the plane by this much. Shift: ×10.': 'Kesit kaydırıcısının üzerinde fare tekerleği düzlemi bu kadar kaydırır. Shift: ×10.',
   // 3D viewer, Clip tab (editor/clip-reverse.ts)
   'Reverse - cut from the other side': 'Ters çevir - diğer taraftan kes',
+  // the board room's part card: the datasheet, on request (rooms/pcb.ts)
+  'Datasheet': 'Veri sayfası',
+  'Open the datasheet': 'Veri sayfasını aç',
+  'Fetch the datasheet from LCSC and open it': 'Veri sayfasını LCSC\'den getir ve aç',
+  'fetching the datasheet…': 'veri sayfası getiriliyor…',
+  'LCSC did not answer': 'LCSC yanıt vermedi',
+  'LCSC has no datasheet for this part': 'LCSC\'de bu parçanın veri sayfası yok',
 };
 
 export function t(text: string): string {

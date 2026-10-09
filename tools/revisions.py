@@ -279,6 +279,8 @@ async def cmd_part(args):
     """
     from backend import lcsc
 
+    if args.what == "datasheet":
+        return await _part_datasheet(args)
     if args.what == "keep":
         # Ahead of a layout, and patient: each download is three asks of a
         # budget of 25 per five minutes, so twenty parts is a wait - better
@@ -385,6 +387,80 @@ async def cmd_part(args):
         print("\n# not written:\n" + "\n".join(f"#   {x}" for x in left_out),
               file=sys.stderr)
         sys.exit(2)
+
+
+def datasheet_out(code: str, out: str | None) -> Path:
+    """Where `part datasheet` writes: -o, or /tmp/<C>-datasheet.pdf."""
+    return Path(out).expanduser() if out else Path("/tmp") / f"{code}-datasheet.pdf"
+
+
+def _datasheet_by_api(code: str, fresh: bool) -> dict:
+    """The datasheet through the server (REDLINE_TRANSPORT=api): its cache,
+    journal and proxy, with this agent's token."""
+    import urllib.error
+    import urllib.request
+
+    from backend import actors
+
+    base = os.environ.get("REDLINE_API", "http://localhost:8000")
+    path = f"/api/parts/{code}/datasheet" + ("?fresh=true" if fresh else "")
+    req = urllib.request.Request(base + path, headers={
+        **actors.header_for_agent(),
+        **({"Authorization": f"Bearer {os.environ['REDLINE_TOKEN']}"}
+           if os.environ.get("REDLINE_TOKEN") else {})})
+    try:
+        with urllib.request.urlopen(req, timeout=300) as r:
+            return {"pdf": r.read(), "url": r.headers.get("X-Datasheet-Source"),
+                    "cached": r.headers.get("X-Datasheet-Cached") == "1"}
+    except urllib.error.HTTPError as exc:
+        import json as _json
+        text = exc.read().decode(errors="replace")
+        try:
+            text = _json.loads(text).get("detail", text)
+        except ValueError:
+            pass
+        raise ApiError(f"{code}: {exc.code} {str(text)[:400]}")
+    except urllib.error.URLError as exc:
+        raise ApiError(f"the server is not answering at {base} ({exc.reason}) - start.sh")
+
+
+async def _part_datasheet(args):
+    """`part datasheet C111607 [-o file.pdf] [--fresh]`: the PDF to a file,
+    to be read with a PDF reader. Only when the note needs facts from it."""
+    from backend import lcsc
+
+    if len(args.args) != 1:
+        sys.exit("part datasheet C12345 [-o file.pdf] - one part at a time")
+    code = args.args[0].strip().upper()
+    if not lcsc.looks_like_a_part(code):
+        sys.exit(f"{code}: not an LCSC number (C followed by digits)")
+    fresh = bool(getattr(args, "refresh", False))
+    try:
+        if os.getenv("REDLINE_TRANSPORT", "").strip().lower() == "api":
+            got = _datasheet_by_api(code, fresh)
+        else:
+            lcsc.PATIENT.set(True)
+            got = await lcsc.datasheet(code, fresh=fresh)
+    except ApiError as exc:
+        sys.exit(str(exc))
+    except lcsc.Refused as exc:
+        sys.exit(f"{code}: {exc} - try again later")
+    except LookupError as exc:
+        sys.exit(str(exc))
+    except (OSError, TimeoutError) as exc:
+        sys.exit(f"{code}: could not get the datasheet - {exc}")
+    if not lcsc.is_pdf(got["pdf"]):
+        sys.exit(f"{code}: what came back is not a PDF")
+    out = datasheet_out(code, getattr(args, "out", None))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(got["pdf"])
+    pages = lcsc.pdf_pages(got["pdf"])
+    print(str(out))
+    print(f"  {len(got['pdf']) / 1024:.0f} kB"
+          + (f", {pages} pages" if pages else "")
+          + (" (kept copy)" if got.get("cached") else " (fetched from LCSC)"))
+    if got.get("url"):
+        print(f"  source  {got['url']}")
 
 
 async def cmd_board(args):
@@ -1756,7 +1832,7 @@ def main() -> None:
                    help="withdraw the question after N seconds; 0 waits")
     s.set_defaults(fn=cmd_ask)
     s = sub.add_parser("part", help="parts from LCSC, for writing a board")
-    s.add_argument("what", choices=["find", "pins", "ato", "passive", "keep", "seat"],
+    s.add_argument("what", choices=["find", "pins", "ato", "passive", "keep", "seat", "datasheet"],
                    help="find: ranked search; pins: a part's pinout; "
                         "ato: component blocks to paste into a board; "
                         "passive: R/C by value and size, e.g. R 10k 0402; "
@@ -1764,14 +1840,19 @@ def main() -> None:
                         "waiting out LCSC's budget (--refresh: again, for parts "
                         "already in the drawer); "
                         "seat C... | all: put stored parts' 3D bodies on their "
-                        "pads (rewrites the footprint's model offset)")
+                        "pads (rewrites the footprint's model offset); "
+                        "datasheet C...: LCSC's PDF to a file (-o, default "
+                        "/tmp/<C>-datasheet.pdf) - only when the note needs facts from it")
     s.add_argument("args", nargs="+",
                    help="a search for find, LCSC numbers (C...) for pins/ato, "
                         "KIND VALUE SIZE for passive")
     s.add_argument("--refresh", action="store_true",
                    help="keep: fetch the footprint and 3D model again even for a part "
                         "already in the drawer, and seat the model; says when "
-                        "LCSC/EasyEDA has no 3D model for it")
+                        "LCSC/EasyEDA has no 3D model for it; datasheet: ask LCSC "
+                        "again instead of using the kept copy")
+    s.add_argument("-o", "--out", help="datasheet: where to write the PDF "
+                                       "(default /tmp/<C>-datasheet.pdf)")
     s.set_defaults(fn=cmd_part)
     s = sub.add_parser("board", help="a board: its source, and the whole pipeline")
     s.add_argument("what", choices=["run", "show", "source", "save", "rules",

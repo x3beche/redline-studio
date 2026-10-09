@@ -47,7 +47,10 @@ component as `U2 · C64898`. The source is behind the API
 (`GET/PUT /api/boards/<id>`); `revisions.py board run <id>` runs the
 pipeline - build, schematic, place, route, check. Parts come from
 `revisions.py part find|pins|ato|passive|keep`, never from memory, and
-LCSC is asked gently. Check the netlist for the connections that matter
+LCSC is asked gently. `revisions.py part datasheet C... [-o file.pdf]`
+saves the part's LCSC datasheet to read with your PDF tool - fetch one only
+when the note needs facts from it (pinout, ratings, application circuit,
+layout guidance), not by default. Check the netlist for the connections that matter
 in code, and DRC/ERC must be clean. See AGENTS.md: Board notes, Designing
 a board from a description.
 

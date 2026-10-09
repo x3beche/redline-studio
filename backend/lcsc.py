@@ -244,6 +244,11 @@ def _open(req, timeout: float):
     return netproxy.opener(_via(), _session()).open(req, timeout=timeout)
 
 
+# Asks that go to a host other than EasyEDA's API: a refusal there is that
+# host's answer about one file, not a reason for every lookup to cool off.
+ELSEWHERE = frozenset({"photo", "datasheet", "datasheet link"})
+
+
 async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
     """One request: its turn, the request, and a line in the journal."""
     import urllib.error
@@ -312,7 +317,7 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
         except urllib.error.HTTPError as first:
             # Through a rotating proxy a refusal is that exit address's: two
             # more tries, each from a fresh one, before anybody cools off.
-            if always and first.code in (403, 429) and kind != "photo":
+            if always and first.code in (403, 429) and kind not in ELSEWHERE:
                 last = first
                 for n in (2, 3):
                     note("proxy", t0, status=last.code, meta=getattr(last, "net_meta", None), attempt=how,
@@ -342,11 +347,12 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
                 out, meta = await attempt(True)
     except urllib.error.HTTPError as exc:
         meta = getattr(exc, "net_meta", None)
-        if exc.code in (403, 429) and kind == "photo":
+        if exc.code in (403, 429) and kind in ELSEWHERE:
             # A product photo is LCSC's image server, not EasyEDA's API: a 403
             # there is a picture that is not served (hotlinking, gone), and it
             # froze every part lookup for ten minutes. No photo, nothing else.
-            note(via, t0, status=exc.code, meta=meta, attempt=how, error="photo not served")
+            # The same for a datasheet, which is LCSC's own site.
+            note(via, t0, status=exc.code, meta=meta, attempt=how, error=f"{kind} not served")
             raise
         if exc.code in (403, 429):
             why = f"EasyEDA said {exc.code} to {kind} {target}"
@@ -909,6 +915,164 @@ async def photo(lcsc: str) -> bytes:
         return await _kept(lcsc, "photo.jpg", url)
     except urllib.error.HTTPError as exc:
         raise LookupError(f"{lcsc}: the photo host said {exc.code}") from exc
+
+
+# ---- the datasheet, on request only ---------------------------------------
+#
+# EasyEDA's record has no datasheet link; LCSC's own site does, through the
+# product detail its pages ask for. That is not a published API, so its
+# answer is read defensively and every way it can be wrong is said plainly.
+# Nothing asks for a datasheet by itself - not a search, not an add, not a
+# build: only somebody (or an agent) who wants to read one. Once fetched it
+# is kept beside the part's other files, with the address it came from, so
+# it survives LCSC changing its site.
+
+DETAIL = "https://wmsc.lcsc.com/ftps/wm/product/detail?productCode={}"
+# LCSC's site and its PDF host answer a browser; they are asked as one.
+BROWSER = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+           "Chrome/126.0 Safari/537.36")
+DATASHEET_MAX = 30 * 1024 * 1024
+DATASHEET, DATASHEET_FROM = "datasheet.pdf", "datasheet.json"
+
+
+class NoDatasheet(LookupError):
+    """LCSC names no datasheet for this part."""
+
+
+class OddAnswer(OSError):
+    """LCSC answered, but not in the shape it used to - the site changed."""
+
+
+def datasheet_link(body, lcsc: str) -> tuple[str, str | None]:
+    """The PDF's address and the part's MPN, out of LCSC's product detail.
+
+    Raises NoDatasheet when LCSC knows the part and names no PDF (or does not
+    know the part), OddAnswer when the answer is not what it used to be."""
+    if not isinstance(body, dict) or "code" not in body:
+        raise OddAnswer(f"{lcsc}: LCSC's product detail came back in a shape "
+                        "this does not know (no 'code') - their site may have changed")
+    result = body.get("result")
+    if body.get("code") != 200 or not result:
+        msg = body.get("msg") or body.get("message") or f"code {body.get('code')}"
+        raise NoDatasheet(f"{lcsc}: LCSC has no product detail for it ({msg})")
+    if not isinstance(result, dict):
+        raise OddAnswer(f"{lcsc}: LCSC's product detail 'result' is a "
+                        f"{type(result).__name__}, not an object - their site may have changed")
+    url = result.get("pdfUrl")
+    mpn = result.get("productModel")
+    mpn = str(mpn).strip() if mpn else None
+    if not url:
+        raise NoDatasheet(f"{lcsc}: LCSC has no datasheet for this part")
+    if not isinstance(url, str):
+        raise OddAnswer(f"{lcsc}: LCSC's pdfUrl is not an address ({type(url).__name__})")
+    url = url.strip()
+    if url.startswith("//"):
+        url = "https:" + url
+    import urllib.parse
+    parts = urllib.parse.urlsplit(url)
+    host = (parts.hostname or "").lower()
+    # Only ever LCSC's own hosts: the address comes from their answer, and
+    # this server will not be sent anywhere else by it.
+    if parts.scheme not in ("http", "https") or not (host == "lcsc.com" or host.endswith(".lcsc.com")):
+        raise OddAnswer(f"{lcsc}: LCSC's datasheet link is not on lcsc.com ({url[:120]})")
+    return url, mpn
+
+
+def is_pdf(blob: bytes) -> bool:
+    """A PDF starts with %PDF- (a few bytes of junk before it are tolerated,
+    as readers do)."""
+    return isinstance(blob, (bytes, bytearray)) and b"%PDF-" in bytes(blob[:1024])
+
+
+def pdf_pages(blob: bytes) -> int | None:
+    """Pages in a PDF, when it is cheap to tell (page objects in the clear);
+    None when they are packed in compressed object streams."""
+    n = len(re.findall(rb"/Type\s*/Page(?![a-zA-Z])", bytes(blob)))
+    if n:
+        return n
+    counts = [int(m) for m in re.findall(rb"/Type\s*/Pages\b[^>]*?/Count\s+(\d+)", bytes(blob))]
+    return max(counts) if counts else None
+
+
+def _ask_site(url: str) -> dict:
+    import urllib.request
+
+    req = urllib.request.Request(url, headers={
+        "User-Agent": BROWSER, "Accept": "application/json, text/plain, */*",
+        "Referer": "https://www.lcsc.com/"})
+    with _open(req, TIMEOUT) as r:
+        raw = r.read(2 * 1024 * 1024)
+    try:
+        return json.loads(raw.decode(errors="replace"))
+    except ValueError as exc:
+        raise OddAnswer(f"LCSC's product detail is not JSON ({raw[:60]!r})") from exc
+
+
+def _get_pdf(url: str) -> bytes:
+    import urllib.request
+
+    req = urllib.request.Request(url, headers={
+        "User-Agent": BROWSER, "Accept": "application/pdf,*/*",
+        "Referer": "https://www.lcsc.com/"})
+    with _open(req, TIMEOUT) as r:
+        blob = r.read(DATASHEET_MAX + 1)
+    if len(blob) > DATASHEET_MAX:
+        raise OddAnswer(f"the datasheet is over {DATASHEET_MAX // (1024 * 1024)} MB - not kept")
+    return blob
+
+
+def _datasheet_kept(lcsc: str) -> dict | None:
+    """The copy on disk, if there is a good one."""
+    folder = LOOK / lcsc
+    try:
+        blob = (folder / DATASHEET).read_bytes()
+    except OSError:
+        return None
+    if not is_pdf(blob):
+        return None
+    try:
+        meta = json.loads((folder / DATASHEET_FROM).read_text())
+    except (OSError, ValueError):
+        meta = {}
+    return {"pdf": blob, "url": meta.get("url"), "mpn": meta.get("mpn"),
+            "at": meta.get("at"), "cached": True}
+
+
+async def datasheet(lcsc: str, fresh: bool = False) -> dict:
+    """A part's datasheet: {"pdf": bytes, "url", "mpn", "at", "cached"}.
+
+    From disk when it was fetched before (`fresh`: asked again and the copy
+    replaced). Otherwise two asks, each in its turn and in the journal: LCSC's
+    product detail for the PDF's address, then the PDF. Raises NoDatasheet
+    when LCSC has none, OddAnswer when what came back is not a PDF or not
+    in the shape it used to be, Refused when it is not the time to ask."""
+    if not looks_like_a_part(lcsc):
+        raise ValueError(f"{lcsc!r} is not an LCSC part number")
+    lcsc = lcsc.strip()
+    if not fresh:
+        kept = _datasheet_kept(lcsc)
+        if kept:
+            _record("datasheet", lcsc, "disk", size=len(kept["pdf"]))
+            return kept
+    detail = DETAIL.format(lcsc)
+    body = await _polite("datasheet link", lcsc, detail, _ask_site, detail)
+    url, mpn = datasheet_link(body, lcsc)
+    import urllib.error
+    try:
+        blob = await _polite("datasheet", lcsc, url, _get_pdf, url)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (404, 410):
+            raise NoDatasheet(f"{lcsc}: LCSC names a datasheet, but its file is "
+                              f"gone ({exc.code})") from exc
+        raise
+    if not is_pdf(blob):
+        raise OddAnswer(f"{lcsc}: what LCSC's datasheet link gave is not a PDF "
+                        f"({len(blob)} bytes starting {bytes(blob[:16])!r})")
+    at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _keep_file(lcsc, DATASHEET, blob)
+    _keep_file(lcsc, DATASHEET_FROM, json.dumps(
+        {"url": url, "mpn": mpn, "at": at, "bytes": len(blob)}, indent=1).encode())
+    return {"pdf": blob, "url": url, "mpn": mpn, "at": at, "cached": False}
 
 
 async def fetch(db, lcsc: str, force: bool = False) -> dict:

@@ -2396,6 +2396,40 @@ async def part_photo(lcsc_id: str):
                     media_type="image/jpeg", headers=_KEEP)
 
 
+def _pdf_name(lcsc_id: str, mpn: str | None) -> str:
+    """'C111607 STM32F103C8T6.pdf': ASCII only, nothing a header could choke on."""
+    clean = re.sub(r"[^A-Za-z0-9._+-]+", "_", mpn or "").strip("._")[:60]
+    return f"{lcsc_id} {clean}.pdf" if clean else f"{lcsc_id}.pdf"
+
+
+@app.get("/api/parts/{lcsc_id}/datasheet")
+async def part_datasheet(lcsc_id: str, fresh: bool = False):
+    """The part's datasheet as LCSC publishes it, opened in the browser.
+
+    Only ever on request: the first time it is two asks of LCSC (its product
+    detail, then the PDF), through the same turn-taking, journal and proxy
+    as everything else, and kept beside the part's other files after that.
+    404 when LCSC has none; 502 when LCSC's answer is not what it was."""
+    try:
+        got = await lcsc.datasheet(lcsc_id, fresh=fresh)
+    except lcsc.Refused as exc:
+        raise HTTPException(503, str(exc))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except LookupError as exc:
+        raise HTTPException(404, str(exc))
+    except lcsc.OddAnswer as exc:
+        raise HTTPException(502, str(exc))
+    except (OSError, TimeoutError) as exc:
+        raise HTTPException(502, f"LCSC did not answer: {exc}")
+    headers = {**_KEEP,
+               "Content-Disposition": f'inline; filename="{_pdf_name(lcsc_id, got.get("mpn"))}"'}
+    if got.get("url") and got["url"].isascii():
+        headers["X-Datasheet-Source"] = got["url"]
+    headers["X-Datasheet-Cached"] = "1" if got.get("cached") else "0"
+    return Response(got["pdf"], media_type="application/pdf", headers=headers)
+
+
 @app.post("/api/parts/{lcsc_id}")
 async def add_part(lcsc_id: str, force: bool = False, refresh: bool = False):
     """Fetch one part and keep it: footprint, and the 3D model if there is
