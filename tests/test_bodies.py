@@ -266,7 +266,7 @@ def test_the_request_note_carries_what_the_3d_agent_needs(world):
                  "courtyard: x -2.63..1.87, y -5..5 (4.5 x 10)",
                  # the WRL's 10.16 x 5.08 x 2.54 box, moved by the seat's offset
                  "LCSC's body as it sits now: x 0.055..10.215, y 0..5.08, z -2.8..-0.26",
-                 f"part datasheet {PART}",
+                 f"pdf text {PART}", f"pdf page {PART} <n>",
                  f"part body-bind {PART} components/{PART}-lying-flat --name \"lying flat\"",
                  "board body demo-board Q5 lying-flat"):
         assert want in text, want

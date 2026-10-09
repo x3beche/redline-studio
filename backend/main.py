@@ -2497,16 +2497,11 @@ def _pdf_name(lcsc_id: str, mpn: str | None) -> str:
     return f"{lcsc_id} {clean}.pdf" if clean else f"{lcsc_id}.pdf"
 
 
-@app.get("/api/parts/{lcsc_id}/datasheet")
-async def part_datasheet(lcsc_id: str, fresh: bool = False):
-    """The part's datasheet as LCSC publishes it, opened in the browser.
-
-    Only ever on request: the first time it is two asks of LCSC (its product
-    detail, then the PDF), through the same turn-taking, journal and proxy
-    as everything else, and kept beside the part's other files after that.
-    404 when LCSC has none; 502 when LCSC's answer is not what it was."""
+async def _datasheet_got(lcsc_id: str, fresh: bool = False) -> dict:
+    """lcsc.datasheet with its failures as HTTP answers: from the copy kept
+    on disk when there is one, else fetched from LCSC (only ever on request)."""
     try:
-        got = await lcsc.datasheet(lcsc_id, fresh=fresh)
+        return await lcsc.datasheet(lcsc_id, fresh=fresh)
     except lcsc.Refused as exc:
         raise HTTPException(503, str(exc))
     except ValueError as exc:
@@ -2517,12 +2512,41 @@ async def part_datasheet(lcsc_id: str, fresh: bool = False):
         raise HTTPException(502, str(exc))
     except (OSError, TimeoutError) as exc:
         raise HTTPException(502, f"LCSC did not answer: {exc}")
+
+
+@app.get("/api/parts/{lcsc_id}/datasheet")
+async def part_datasheet(lcsc_id: str, fresh: bool = False):
+    """The part's datasheet as LCSC publishes it, opened in the browser.
+
+    Only ever on request: the first time it is two asks of LCSC (its product
+    detail, then the PDF), through the same turn-taking, journal and proxy
+    as everything else, and kept beside the part's other files after that.
+    404 when LCSC has none; 502 when LCSC's answer is not what it was."""
+    got = await _datasheet_got(lcsc_id, fresh)
     headers = {**_KEEP,
                "Content-Disposition": f'inline; filename="{_pdf_name(lcsc_id, got.get("mpn"))}"'}
     if got.get("url") and got["url"].isascii():
         headers["X-Datasheet-Source"] = got["url"]
     headers["X-Datasheet-Cached"] = "1" if got.get("cached") else "0"
     return Response(got["pdf"], media_type="application/pdf", headers=headers)
+
+
+@app.get("/api/parts/{lcsc_id}/datasheet/text")
+async def part_datasheet_text(lcsc_id: str, pages: str | None = None):
+    """The datasheet's text a page at a time (backend/pdftext.py) - the
+    kept copy, fetched first if it never was. `pages` like 1-3."""
+    from .files_api import pdf_text_response
+    got = await _datasheet_got(lcsc_id)
+    out = await pdf_text_response(got["pdf"], pages)
+    return {"part": lcsc_id.strip().upper(), "mpn": got.get("mpn"), "cached": bool(got.get("cached")), **out}
+
+
+@app.get("/api/parts/{lcsc_id}/datasheet/page/{n}.png")
+async def part_datasheet_page(lcsc_id: str, n: int, dpi: float = 150):
+    """One page of the datasheet as a PNG, for a drawing or a table."""
+    from .files_api import pdf_page_response
+    got = await _datasheet_got(lcsc_id)
+    return await pdf_page_response(got["pdf"], n, dpi, _pdf_name(lcsc_id, got.get("mpn")))
 
 
 @app.post("/api/parts/{lcsc_id}")

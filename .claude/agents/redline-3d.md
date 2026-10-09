@@ -49,6 +49,9 @@ The note is about a model; its source is in MongoDB, not on disk.
 constant, not the geometry. Check with a measurement in code that raises,
 then `revisions.py after <id>` renders the same camera: read that picture
 against the drawing. See AGENTS.md: Model contract, Silent failures.
+A dimension from a datasheet (a Files PDF or a part's): `revisions.py pdf
+text <file-id|C...>` first, then `pdf page <file-id|C...> <n>` and open the
+PNG with Read - the mechanical drawing is a picture; never guess a number.
 
 Parts that move in the viewer (a fan spinning, a hinge set by hand, a
 cable bending with it) are declared as `MOTIONS` next to PARTS - AGENTS.md,

@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
-from . import access, actors, filemesh, files
+from . import access, actors, filemesh, files, pdftext
 
 router = APIRouter()
 
@@ -420,6 +420,60 @@ async def files_mesh(fid: str, wait: float = 20):
                              "X-Mesh-Triangles": str(rec.get("triangles") or ""),
                              "X-Mesh-Seconds": str(rec.get("seconds") or ""),
                              "X-Mesh-Cached": "1" if hit else "0"})
+
+
+async def _pdf_of(fid: str) -> tuple[dict, bytes]:
+    """A Files upload's bytes, when it is a PDF (backend/pdftext.py)."""
+    doc = await _doc(fid)
+    if int(doc.get("bytes") or 0) > pdftext.MAX_BYTES:
+        raise HTTPException(413, f"over {pdftext.MAX_BYTES // 2 ** 20} MB - too large to read here")
+    _, data = await files.get(_db(), fid)
+    if not pdftext.is_pdf(data):
+        raise HTTPException(415, f"{doc.get('name', fid)} is not a PDF")
+    return doc, data
+
+
+async def pdf_text_response(data: bytes, pages: str | None) -> dict:
+    """{count, pages: [{n, text}]} for a PDF's bytes; 422 when it cannot be read."""
+    import asyncio
+    try:
+        return await asyncio.to_thread(pdftext.text, data, pages)
+    except pdftext.PdfError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+async def pdf_page_response(data: bytes, n: int, dpi: float, name: str) -> Response:
+    """One page of a PDF as a PNG; 404 for a page it does not have."""
+    import asyncio
+    try:
+        png, meta = await asyncio.to_thread(pdftext.render_png, data, n, dpi)
+    except pdftext.PdfError as exc:
+        raise HTTPException(404 if str(exc).startswith("no page") else 422, str(exc)) from exc
+    stem = re.sub(r"\.pdf$", "", name, flags=re.I)
+    return Response(png, media_type="image/png", headers={
+        "Cache-Control": "private, max-age=3600",
+        "Content-Disposition": _disposition("inline", f"{stem}-p{n}.png"),
+        "X-Pdf-Pages": str(meta["count"]), "X-Pdf-Dpi": str(meta["dpi"]),
+        "X-Pdf-Size": f"{meta['width']}x{meta['height']}"})
+
+
+@router.get("/api/files/{fid}/pdf")
+async def files_pdf_text(fid: str, pages: str | None = None):
+    """A PDF's text a page at a time - `pages` like 1-3, 2 or 1,4,7-9
+    (default: from the first, at most pdftext.MAX_PAGES). For agents
+    reading a datasheet someone uploaded; a drawing or a table wants the
+    page as a picture (below)."""
+    doc, data = await _pdf_of(fid)
+    out = await pdf_text_response(data, pages)
+    return {"id": fid, "name": doc.get("name"), **out}
+
+
+@router.get("/api/files/{fid}/pdf/page/{n}.png")
+async def files_pdf_page(fid: str, n: int, dpi: float = 150):
+    """Page n (from 1) of a PDF as a PNG, at `dpi` (36-300; smaller when the
+    longer side would pass 4000 px)."""
+    doc, data = await _pdf_of(fid)
+    return await pdf_page_response(data, n, dpi, doc.get("name") or fid)
 
 
 class FilePatch(BaseModel):

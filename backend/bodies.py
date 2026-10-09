@@ -630,6 +630,10 @@ def footprint_spec(text: str) -> dict:
             "pads": pads, "pin1": pin1, "outline": outline}
 
 
+# A model's raw box by (kind, sha256 of its bytes); a few hundred parts at most.
+_BOXES: dict[tuple[str, str], object] = {}
+
+
 async def spec(db, part: str) -> dict:
     """Everything needed to draw a body for a part: the footprint in the
     component frame, LCSC's body's box where it sits now, what the part is."""
@@ -645,11 +649,20 @@ async def spec(db, part: str) -> dict:
     box = None
     got = await lcsc.model_of(db, part)
     if got:
-        loop = asyncio.get_running_loop()
-        try:
-            raw = await loop.run_in_executor(None, modelseat.model_box, got[0], got[1])
-        except Exception:                               # noqa: BLE001 - the box is a nicety
-            raw = None
+        # Reading a STEP's box is a CAD kernel's work (~0.3 s): kept by the
+        # model's content, so the part card opens again without it.
+        key = (got[1], hashlib.sha256(got[0]).hexdigest())
+        if key in _BOXES:
+            raw = _BOXES[key]
+        else:
+            loop = asyncio.get_running_loop()
+            try:
+                raw = await loop.run_in_executor(None, modelseat.model_box, got[0], got[1])
+            except Exception:                           # noqa: BLE001 - the box is a nicety
+                raw = None
+            _BOXES[key] = raw
+            while len(_BOXES) > 256:
+                _BOXES.pop(next(iter(_BOXES)))
         if raw:
             (x0, y0, z0), (x1, y1, z1) = modelseat.placed_box(
                 raw, modelseat.rotation_of(p["footprint"]), modelseat.offset_of(p["footprint"]))
@@ -689,7 +702,7 @@ def request_text(sp: dict, name: str, why: str, model_id: str, board: str | None
         head.append("Part: " + " · ".join(what))
     if facts.get("description"):
         head.append("  " + str(facts["description"])[:200])
-    head.append(f"Datasheet: revisions.py part datasheet {part}")
+    head.append(f"Datasheet: revisions.py pdf text {part}, then pdf page {part} <n> for its drawing")
     head.append("")
     pads = sp.get("pads") or []
     lines = [f"Footprint, component frame (+Y = footprint -Y), {len(pads)} pads"

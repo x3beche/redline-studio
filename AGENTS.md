@@ -616,7 +616,8 @@ looking things up, and none of them is written from memory:
 - `pins` is the same pinout as a list, for reading.
 - `datasheet C2969989 [-o file.pdf]` saves LCSC's PDF (default
   `/tmp/<C>-datasheet.pdf`) and prints the path, the page count when it
-  is cheap to tell, and where it came from; read it with your PDF tool.
+  is cheap to tell, and where it came from; read it with `pdf text C2969989`
+  and `pdf page` (below, *Reading a PDF*).
   Only when the note needs facts from it - a pinout the symbol leaves
   unclear, ratings, the application circuit, layout guidance - never by
   default. Kept in `.cache/lcsc/<C>/` after the first fetch; the page's
@@ -694,6 +695,32 @@ thing, and do not move or rename their files unless they ask.
 Before guessing parts for an imported board, look here: a BOM someone
 uploaded replaces every guess.
 
+### Reading a PDF
+
+A datasheet in Files, a part's LCSC datasheet, or a PDF on disk - the
+server reads it (backend/pdftext.py, PDFium), so it works with a token as
+well (`REDLINE_TRANSPORT=api`). No pdftotext or PDF library is needed on
+your side. **Text first, then the page as a picture** for what the text
+leaves out - tables, pinout diagrams, a mechanical drawing's dimensions:
+
+```bash
+.venv/bin/python tools/revisions.py pdf text <file-id|C111607|file.pdf> [--pages 1-3]
+.venv/bin/python tools/revisions.py pdf page <file-id|C111607|file.pdf> 8 [--dpi 200] [-o out.png]
+```
+
+- `pdf text` prints each page under `===== page n / N =====` (at most 50
+  pages a call; `--pages 1-3`, `2`, `1,4,7-9`, `5-`). A page with little
+  or no text is marked - it is drawn or scanned: look at it.
+- `pdf page` writes `/tmp/<name>-p<n>.png` (36-300 dpi, the longer side
+  at most 4000 px) and prints the path: **open it with the Read tool**.
+  200 dpi reads small dimension text.
+- A C-number reads the part's kept datasheet, fetched from LCSC first only
+  if it never was. A file id must be a PDF (415 otherwise). Never guess a
+  dimension a datasheet gives: read the drawing.
+- The routes: `GET /api/files/<id>/pdf?pages=1-3` -> `{count, pages: [{n, text}]}`,
+  `GET /api/files/<id>/pdf/page/<n>.png?dpi=150`, and the same for a part:
+  `GET /api/parts/<C>/datasheet/text`, `.../datasheet/page/<n>.png`.
+
 ## Only `queued` items are work
 
 | Status | Meaning |
@@ -729,6 +756,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py after <id> --model <new>  # ...on the model the work went into
 .venv/bin/python tools/revisions.py usage [--full]       # what the work cost
 .venv/bin/python tools/revisions.py files [get <id>|put <file>|mkdir|mv]  # the Files tab
+.venv/bin/python tools/revisions.py pdf text|page <file-id|C...|file.pdf> ...  # read a PDF
 .venv/bin/python tools/revisions.py component list|show|deps|pin|refresh ...  # components
 .venv/bin/python tools/revisions.py fw files|get|put|pins|build|diff <fw> ...   # firmware
 .venv/bin/python tools/render.py <id> [--camera=…|--only PART]

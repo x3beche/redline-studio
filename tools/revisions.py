@@ -48,6 +48,13 @@ datasheet (backend/files.py); through the server, like `board`:
     python tools/revisions.py files mkdir <a/b>                    a folder (and its parents)
     python tools/revisions.py files mv <id|folder> <folder|/>      move a file or a folder
 
+Reading a PDF - a datasheet in Files, a part's datasheet, or one on disk
+(backend/pdftext.py); ids go through the server, a local path is read here:
+
+    python tools/revisions.py pdf text <file-id|C123|file.pdf> [--pages 1-3]   its text, page by page
+    python tools/revisions.py pdf page <file-id|C123|file.pdf> <n> [--dpi 150] [-o out.png]
+                                                                   page n as a PNG - open it with Read
+
 Firmware - the Firmware room's projects (backend/firmware.py) and the notes
 filed on them (backend/fwnotes.py); through the server, like `board`:
 
@@ -429,7 +436,7 @@ def _datasheet_by_api(code: str, fresh: bool) -> dict:
 
 async def _part_datasheet(args):
     """`part datasheet C111607 [-o file.pdf] [--fresh]`: the PDF to a file,
-    to be read with a PDF reader. Only when the note needs facts from it."""
+    to be read with `pdf text` / `pdf page`. Only when the note needs facts from it."""
     from backend import lcsc
 
     if len(args.args) != 1:
@@ -464,6 +471,7 @@ async def _part_datasheet(args):
           + (" (kept copy)" if got.get("cached") else " (fetched from LCSC)"))
     if got.get("url"):
         print(f"  source  {got['url']}")
+    print(f"  read it: revisions.py pdf text {code} [--pages 1-3]; pdf page {code} <n> for a drawing")
 
 
 async def cmd_board(args):
@@ -836,6 +844,132 @@ def api_call(path: str, method: str = "GET", body: dict | None = None, timeout: 
         raise ApiError(f"{method} {path}: {exc.code} {str(text)[:800]}")
     except urllib.error.URLError as exc:
         raise ApiError(f"the server is not answering at {base} ({exc.reason}) - start.sh")
+
+
+def api_bytes(path: str, timeout: int = 300) -> tuple[bytes, dict]:
+    """One GET to the app's API whose answer is not JSON (a PNG): the bytes
+    and the headers, or a stop with what the server said. Tests stand in
+    for it."""
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    from backend import actors
+
+    base = os.environ.get("REDLINE_API", "http://localhost:8000")
+    req = urllib.request.Request(base + path, headers={
+        **actors.header_for_agent(),
+        **({"Authorization": f"Bearer {os.environ['REDLINE_TOKEN']}"} if os.environ.get("REDLINE_TOKEN") else {})})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.read(), {k.lower(): v for k, v in r.headers.items()}
+    except urllib.error.HTTPError as exc:
+        text = exc.read().decode(errors="replace")
+        try:
+            text = _json.loads(text).get("detail", text)
+        except ValueError:
+            pass
+        raise ApiError(f"GET {path}: {exc.code} {str(text)[:800]}")
+    except urllib.error.URLError as exc:
+        raise ApiError(f"the server is not answering at {base} ({exc.reason}) - start.sh")
+
+
+def _pdf_source(src: str) -> tuple[str, str]:
+    """What `pdf` reads: ("local", path), ("part", C123) or ("file", id)."""
+    from backend import lcsc
+
+    p = Path(src).expanduser()
+    if p.is_file():
+        return "local", str(p)
+    if lcsc.looks_like_a_part(src.strip().upper()):
+        return "part", src.strip().upper()
+    if src.lower().endswith(".pdf") or "/" in src:
+        sys.exit(f"{src}: no such file")
+    return "file", src.strip()
+
+
+def _ranges(ns: list[int]) -> str:
+    """[1, 2, 3, 8] -> "1-3, 8"."""
+    out: list[str] = []
+    for n in ns:
+        if out and n == int(out[-1].split("-")[-1]) + 1:
+            out[-1] = f"{out[-1].split('-')[0]}-{n}"
+        else:
+            out.append(str(n))
+    return ", ".join(out)
+
+
+def pdf_page_out(src: str, kind: str, n: int, out: str | None) -> Path:
+    """Where `pdf page` writes: -o, or /tmp/<name>-p<n>.png."""
+    if out:
+        return Path(out).expanduser()
+    name = Path(src).stem if kind == "local" else src
+    name = "".join(c if c.isalnum() or c in "._-" else "_" for c in name)[:80] or "pdf"
+    return Path("/tmp") / f"{name}-p{n}.png"
+
+
+def cmd_pdf(args):
+    """`pdf text|page`: a PDF's text page by page, or one page as a PNG to
+    open with the Read tool - for a drawing or a table the text leaves out.
+    A local path is read here; a Files id or an LCSC number by the server
+    (its kept datasheet, fetched first only if it never was)."""
+    import urllib.parse
+
+    from backend import pdftext
+
+    kind, ref = _pdf_source(args.src)
+    if args.what == "text":
+        if kind == "local":
+            try:
+                got = pdftext.text(Path(ref).read_bytes(), args.pages)
+            except pdftext.PdfError as exc:
+                sys.exit(f"{ref}: {exc}")
+        else:
+            q = f"?{urllib.parse.urlencode({'pages': args.pages})}" if args.pages else ""
+            path = (f"/api/parts/{ref}/datasheet/text" if kind == "part"
+                    else f"/api/files/{_q(ref)}/pdf") + q
+            got = api_call(path, timeout=300)
+        count, pages = got["count"], got["pages"]
+        title = got.get("name") or (f"{ref} {got.get('mpn') or ''}".strip() if kind == "part" else ref)
+        print(f"# {title} - {count} page{'s' if count != 1 else ''} "
+              f"(showing {_ranges([pg['n'] for pg in pages]) or 'none'})")
+        for pg in pages:
+            print(f"\n===== page {pg['n']} / {count} =====")
+            if pg.get("error"):
+                print(f"[{pg['error']}]")
+            body = (pg.get("text") or "").strip()
+            if body:
+                print(body)
+            if len(body) < 80:
+                print(f"[little or no text on this page - it may be a drawing or scanned; look at it: "
+                      f"revisions.py pdf page {args.src} {pg['n']}]")
+        if pages and pages[-1]["n"] < count and len(pages) >= pdftext.MAX_PAGES:
+            print(f"\n[cut at {pdftext.MAX_PAGES} pages - ask for the rest with --pages {pages[-1]['n'] + 1}-]")
+        return
+    # page
+    n = args.n
+    if n is None:
+        sys.exit("pdf page <file-id|C123|file.pdf> <n> - which page (from 1)")
+    if kind == "local":
+        try:
+            png, meta = pdftext.render_png(Path(ref).read_bytes(), n, args.dpi)
+        except pdftext.PdfError as exc:
+            sys.exit(f"{ref}: {exc}")
+        size = f"{meta['width']}x{meta['height']}"
+        count, dpi = meta["count"], meta["dpi"]
+    else:
+        q = f"?dpi={float(args.dpi):g}"
+        path = (f"/api/parts/{ref}/datasheet/page/{n}.png" if kind == "part"
+                else f"/api/files/{_q(ref)}/pdf/page/{n}.png") + q
+        png, headers = api_bytes(path)
+        if not png.startswith(b"\x89PNG"):
+            sys.exit(f"{path}: what came back is not a PNG")
+        size, count, dpi = headers.get("x-pdf-size", "?"), headers.get("x-pdf-pages", "?"), headers.get("x-pdf-dpi", "?")
+    out = pdf_page_out(ref if kind != "local" else args.src, kind, n, args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(png)
+    print(str(out))
+    print(f"  page {n} of {count}, {size} px at {dpi} dpi - open it with the Read tool")
 
 
 def _q(cid: str) -> str:
@@ -2136,6 +2270,19 @@ def main() -> None:
                                     "to-model: the catalog folder it goes in")
     s.add_argument("--title", help="to-model: the model's name (default: the file's)")
     s.set_defaults(fn=cmd_files)
+    s = sub.add_parser("pdf", help="read a PDF: its text, or a page as a picture "
+                                   "(a Files id, an LCSC number's datasheet, or a local file)")
+    s.add_argument("what", choices=["text", "page"],
+                   help="text [--pages 1-3]: the text, page by page; page <n> [--dpi] [-o]: "
+                        "page n as a PNG to open with the Read tool (drawings, tables)")
+    s.add_argument("src", help="a Files id, an LCSC number (C111607: its datasheet), or a local .pdf")
+    s.add_argument("n", nargs="?", type=int, help="page: the page, from 1")
+    s.add_argument("--pages", help="text: which pages - 1-3, 2, 1,4,7-9 or 5- (default: from the first, "
+                                   "at most 50)")
+    s.add_argument("--dpi", type=float, default=150, help="page: resolution, 36-300 (default 150; "
+                                                          "lowered so the longer side stays within 4000 px)")
+    s.add_argument("-o", "--out", help="page: where to write the PNG (default /tmp/<name>-p<n>.png)")
+    s.set_defaults(fn=cmd_pdf, sync=True)
     s = sub.add_parser("show"); s.add_argument("id"); s.add_argument("-o", "--out")
     s.set_defaults(fn=cmd_show)
     s = sub.add_parser("next", help="the oldest queued note nobody has started, in full")

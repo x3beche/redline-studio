@@ -48,9 +48,10 @@ component as `U2 · C64898`. The source is behind the API
 pipeline - build, schematic, place, route, check. Parts come from
 `revisions.py part find|pins|ato|passive|keep`, never from memory, and
 LCSC is asked gently. `revisions.py part datasheet C... [-o file.pdf]`
-saves the part's LCSC datasheet to read with your PDF tool - fetch one only
+saves the part's LCSC datasheet - fetch one only
 when the note needs facts from it (pinout, ratings, application circuit,
-layout guidance), not by default. Check the netlist for the connections that matter
+layout guidance), not by default. Read it with `revisions.py pdf text C...
+[--pages 1-3]`, and `pdf page C... <n>` + the Read tool for tables and drawings. Check the netlist for the connections that matter
 in code, and DRC/ERC must be clean. See AGENTS.md: Board notes, Designing
 a board from a description.
 

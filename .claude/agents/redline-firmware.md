@@ -41,6 +41,8 @@ never drive a pin whose function is unclear - input-only (34-39), strapping
 `delay()` in `loop()`; keep the serial console's commands working; keep
 `-Wall -Wextra` clean. Flashing is the person's job, from the browser:
 never say it runs on the board, say it is built and ready to flash.
+A datasheet (register maps, timing, a part's pins): `revisions.py pdf text
+<file-id|C...> [--pages 1-3]`, and `pdf page ... <n>` + Read for a table or diagram.
 
 A fork that is not yours to choose goes to the person, on their screen:
 `revisions.py ask "..." --revision <id> -o A -o B` - it shows in the

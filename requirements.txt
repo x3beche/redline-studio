@@ -11,6 +11,9 @@ gerbonara>=1.6
 # Settings > Telegram: the Bot API client (LGPL-3.0), and the link's QR code (BSD)
 python-telegram-bot>=22.0
 segno>=1.6
+# reading PDFs for agents (backend/pdftext.py): PDFium in the wheel, no system packages
+# (Apache-2.0 / BSD-3)
+pypdfium2==5.14.0
 # tests
 pytest>=8
 pytest-asyncio>=0.23
