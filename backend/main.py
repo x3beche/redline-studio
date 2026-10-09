@@ -2365,9 +2365,9 @@ async def audit_trail(limit: int = 200):
 
 @app.get("/api/lcsc/requests")
 async def lcsc_requests(limit: int = 200):
-    """Every ask made of LCSC - by the page, by an agent, by a builder -
-    newest first, with the turn-taking as it stands."""
-    rows = lcsc.journal(max(1, min(limit, 1000)))
+    """Every ask this space made of LCSC - by the page, by an agent, by a
+    builder - newest first, with the turn-taking (the machine's) as it stands."""
+    rows = lcsc.journal_of(max(1, min(limit, 1000)))
     hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     recent = [r for r in rows if r.get("at", "") >= hour_ago]
     return {

@@ -171,6 +171,10 @@ def _record(kind: str, target: str, source: str, *, url: str = "",
            "error": error}
     if via:
         row["via"] = via
+    # Whose space asked: the journal is the machine's, each space reads
+    # its own lines (`journal_of`).
+    from . import scope
+    row["ws"] = scope.current()
     try:
         _, lock_path, journal = _files()
         with open(lock_path, "a+") as lock:
@@ -182,6 +186,18 @@ def _record(kind: str, target: str, source: str, *, url: str = "",
                 journal.write_text("\n".join(lines) + "\n")
     except OSError:
         pass
+
+
+def mine(row: dict, ws: str | None = None) -> bool:
+    """A journal or proxy-log line of this space's; lines from before
+    spaces were written down are the default space's."""
+    from . import scope
+    return row.get("ws", scope.DEFAULT) == (ws or scope.current())
+
+
+def journal_of(limit: int = 200, ws: str | None = None) -> list[dict]:
+    """One space's most recent asks, newest first."""
+    return [r for r in journal(KEEP_LINES * 2) if mine(r, ws)][:limit]
 
 
 def journal(limit: int = 200) -> list[dict]:

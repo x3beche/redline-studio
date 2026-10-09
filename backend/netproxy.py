@@ -164,8 +164,9 @@ def log(row: dict) -> None:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return
+    from . import scope
     doc = {**row, "at": datetime.now(timezone.utc), "mode": mode() or "off",
-           "country_pref": _conf.get("country") or None}
+           "country_pref": _conf.get("country") or None, "ws": scope.current()}
 
     async def write():
         global _indexed
@@ -338,7 +339,9 @@ async def usage(days: int = 7) -> dict:
     totals = {"lookups": 0, "direct": 0, "proxy": 0, "refused": 0, "failed": 0, "disk": 0,
               "bytes_direct": 0, "bytes_proxy": 0}
     kinds: dict[str, int] = {}
-    rows = lcsc.journal(100_000)
+    # The asks this space made; the budget, the state and the bytes on the
+    # wire stay the machine's.
+    rows = [r for r in lcsc.journal(100_000) if lcsc.mine(r)]
     for r in rows:
         try:
             ts = datetime.fromisoformat(r["at"]).timestamp()
@@ -392,12 +395,16 @@ async def _log_usage(days: int, t0: int, step: int, n: int) -> dict:
     """The analytics only the log can give: where the proxy came out, how
     fast each way was, how often it worked, the health checks, the bill."""
     from datetime import datetime, timezone
+
+    from . import lcsc
     if _db_getter is None:
         return {"exits": None, "latency": None, "health": None, "cost": None, "log": []}
     db = _db_getter()
     raw = db.raw if getattr(type(db), "SCOPED", False) else db
     since = datetime.fromtimestamp(t0, timezone.utc)
-    rows = [r async for r in raw[LOG].find({"at": {"$gte": since}}, {"_id": 0}).sort("at", -1).limit(20000)]
+    # This space's asks and tests; the health checks are the machine's.
+    rows = [r async for r in raw[LOG].find({"at": {"$gte": since}}, {"_id": 0}).sort("at", -1).limit(20000)
+            if r.get("kind") == "health" or lcsc.mine(r)]
 
     def count(key) -> list[dict]:
         c: dict[str, int] = {}
