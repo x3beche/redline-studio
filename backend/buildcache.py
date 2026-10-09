@@ -513,7 +513,11 @@ class Encoder:
         b.MakeCompound(comp)
         for s in self.shapes:
             b.Add(comp, s)
-        BinTools.Write_s(comp, str(path))
+        # A write that failed half way (disk full, memory) is not an entry:
+        # Store.write would rename it into place for every later build to
+        # parse.
+        if not BinTools.Write_s(comp, str(path)) or not Path(path).stat().st_size:
+            raise OSError(f"BinTools could not write {path}")
 
 
 class Decoder:
@@ -526,7 +530,10 @@ class Decoder:
             from OCP.TopoDS import TopoDS_Iterator, TopoDS_Shape
             from build123d.topology.shape_core import downcast
             whole = TopoDS_Shape()
-            BinTools.Read_s(whole, str(shapes_path))
+            # Read whole or not at all: a file pruned or cut short under us
+            # is an unreadable entry (a miss), never a half-read shape.
+            if not BinTools.Read_s(whole, str(shapes_path)) or whole.IsNull():
+                raise ValueError(f"{shapes_path}: not a whole BinTools file")
             it = TopoDS_Iterator(whole)
             while it.More():
                 self.shapes.append(downcast(it.Value()))

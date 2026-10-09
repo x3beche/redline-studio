@@ -137,6 +137,57 @@ async def _settle(procs: list, keep: bool, until: float) -> None:
             await p.wait()
 
 
+CRASH_TAIL = 4096                  # bytes of a crashed build's output kept in its error
+
+# A build process that dies on a signal of its own (SIGSEGV, SIGABRT...) is
+# run again this many times. Not for a model's fault - that raises and
+# exits 1 - but for the native layer's: the OCP wheel (cadquery-ocp-novtk
+# 8.0.1) corrupts the heap while its module initialises in a few percent
+# of processes (2026-10-09: `python -c "import OCP"` crashed 6 times in
+# 150, MALLOC_CHECK_=3 says "free(): invalid next size"), and corruption
+# that does not crash there can abort anywhere later - station_80's link
+# rebuild ended in "double free or corruption (out)" after its tessellation.
+# The same build again is the same model again: what it makes does not
+# depend on the attempt.
+CRASH_RETRIES = 1
+_RETRIED = {"SIGSEGV", "SIGABRT", "SIGBUS", "SIGILL", "SIGFPE"}
+
+
+def crashed(rc: int | None) -> bool:
+    """Died on a signal the process raised itself (not a kill from outside:
+    the memory ceiling's SIGKILL, a stop, a timeout)."""
+    import signal
+    if rc is None or rc >= 0:
+        return False
+    try:
+        return signal.Signals(-rc).name in _RETRIED
+    except ValueError:
+        return False
+
+
+def crash_report(model_id: str, rc: int, out: bytes) -> str:
+    """What a build that died on a signal leaves: the last CRASH_TAIL bytes
+    of what it said (stdout and stderr, in order - export_model.py writes
+    line by line and dumps the Python stack on a fatal signal, so the
+    stack is in there), then one line saying how it ended. The last line
+    is what the page shows; the job and the link keep the rest.
+
+    2026-10-09: a link rebuild of station_80 aborted in glibc ("double free
+    or corruption (out)") and the eight lines kept said nothing about
+    where."""
+    import signal
+    try:
+        how = signal.Signals(-rc).name
+    except ValueError:
+        how = f"signal {-rc}"
+    # faulthandler ends its dump with every extension module loaded, one
+    # line of a few KB that would push the stack out of the tail.
+    text = "\n".join(line for line in out[-8 * CRASH_TAIL:].decode(errors="replace").splitlines()
+                     if not line.startswith("Extension modules:"))
+    tail = text[-CRASH_TAIL:].strip()
+    return f"{tail}\n{model_id}: the build process crashed ({how}); the output above is its last {CRASH_TAIL // 1024} KB"
+
+
 async def request_stop(db, model_id: str) -> bool:
     """Ask a running build to stop. Nothing else decides this.
 
@@ -244,10 +295,15 @@ async def build(db, model_id: str, script: Path) -> dict:
         # child has been waited for, which is when its usage is final - the
         # warming processes' included.
         meter = compute.Meter()
-        proc = await asyncio.create_subprocess_exec(
-            *argv, cwd=str(tmp),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
-        meter.watch(proc.pid)
+
+        async def spawn():
+            p = await asyncio.create_subprocess_exec(
+                *argv, cwd=str(tmp),
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+            meter.watch(p.pid)
+            return p
+
+        proc = await spawn()
         warming = []
         try:
             imports = warm_imports(linked["graph"], model_id)
@@ -256,20 +312,34 @@ async def build(db, model_id: str, script: Path) -> dict:
                 warming = await _warm([*run, sys.executable, str(script)], imports, tmp, warm_dir)
         except Exception:                       # noqa: BLE001 - never fail a build over this
             pass
-        stop = asyncio.create_task(_watch_for_stop(db, model_id, proc, started_at))
         called_off = None
+        crashes: list[str] = []                 # crash reports of attempts run again
         try:
-            out, _ = await asyncio.wait_for(proc.communicate(), TIMEOUT)
-        except asyncio.TimeoutError:
-            proc.kill()
-            raise TimeoutError(f"{model_id}: build did not finish within {TIMEOUT}s")
-        finally:
-            if stop.done() and not stop.cancelled():
+            while True:
+                stop = asyncio.create_task(_watch_for_stop(db, model_id, proc, started_at))
                 try:
-                    called_off = stop.result()
-                except Exception:               # the watcher itself failed
-                    called_off = None
-            stop.cancel()
+                    out, _ = await asyncio.wait_for(proc.communicate(), TIMEOUT)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    raise TimeoutError(f"{model_id}: build did not finish within {TIMEOUT}s")
+                finally:
+                    if stop.done() and not stop.cancelled():
+                        try:
+                            called_off = stop.result()
+                        except Exception:       # the watcher itself failed
+                            called_off = None
+                    stop.cancel()
+                if called_off or not crashed(proc.returncode) or len(crashes) >= CRASH_RETRIES:
+                    break
+                # Died on a signal of its own (see CRASH_RETRIES): once more,
+                # from a clean output directory - a half-written STEP in
+                # exports/ would otherwise be taken as the model's own.
+                crashes.append(crash_report(model_id, proc.returncode, out))
+                for d in (tmp / "exports", assets_dir):
+                    shutil.rmtree(d, ignore_errors=True)
+                    d.mkdir()
+                proc = await spawn()
+        finally:
             await _settle(warming, proc.returncode == 0 and not called_off,
                           started + TIMEOUT)
             # Recorded however it ended: a build that ran for four minutes and
@@ -293,6 +363,10 @@ async def build(db, model_id: str, script: Path) -> dict:
                 f"{model_id}: build exceeded the memory ceiling "
                 f"({os.environ.get('REDLINE_BUILD_MEM', '10G')}) and was killed. "
                 "Simplify the model, or raise REDLINE_BUILD_MEM for this server.")
+        if proc.returncode < 0:
+            raise RuntimeError(crash_report(model_id, proc.returncode, out)
+                               + (f" (run {len(crashes) + 1} times, crashed every time)"
+                                  if crashes else ""))
         if proc.returncode != 0:
             raise RuntimeError("\n".join(log[-8:]) or "build failed")
 
@@ -348,7 +422,11 @@ async def build(db, model_id: str, script: Path) -> dict:
                 # that moved on mid-build - said rather than done silently.
                 "notes": linked.get("notes") or [],
                 "bodies_redraw": redraw,
-                "log": "\n".join([*(f"note: {n}" for n in linked.get("notes") or []),
+                # Attempts that died natively and were run again: kept whole
+                # (the last 4 KB each), the evidence for whoever looks next.
+                "crashes": crashes,
+                "log": "\n".join([*(f"note: {c.splitlines()[-1]} - run again" for c in crashes),
+                                   *(f"note: {n}" for n in linked.get("notes") or []),
                                    *(["note: boards redrawn with this body: " + ", ".join(redraw)]
                                      if redraw else []), *log[-4:]])}
     finally:

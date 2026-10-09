@@ -14,6 +14,7 @@ A STEP of PARTS is written to exports/ too, unless the model wrote one.
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import importlib.util
 import json
 import os
@@ -59,6 +60,11 @@ def export(models_dir: Path, assets_dir: Path, name: str, marker=None) -> Path:
 
     with _phase("load"):
         module = load(models_dir, name)
+    # The model has asked its questions (backend/fastgeom.py): what it
+    # kept for them goes now, so tessellating, the STEP and the exit run
+    # without classifiers of ours alive.
+    from backend import fastgeom
+    fastgeom.clear()
     parts = getattr(module, "PARTS", None)
     if not parts:
         raise AttributeError(f"{name}: PARTS is not defined")
@@ -132,6 +138,16 @@ def main() -> None:
     ap.add_argument("--flag", default=None,
                     help="with --warm: REDLINE_IMPORT_ONLY while it is imported")
     args = ap.parse_args()
+    # A native crash (an abort in OCCT or glibc, a segfault) says where it
+    # happened: the Python stack goes to stderr. And stdout is written line
+    # by line, so the lines before a crash are not lost in a buffer and
+    # stay in order with stderr (backend/build.py keeps the last 4 KB of a
+    # crashed build's output).
+    faulthandler.enable(file=sys.__stderr__, all_threads=True)
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
     # Models this one imports come from the component cache when their
     # result is kept (backend/buildcache.py); the model itself always runs.
     # Warming, it is an import like any other and is kept too.
@@ -183,5 +199,23 @@ def warm(name: str, flag: str | None) -> None:
         importlib.import_module(name)
 
 
+def _leave() -> None:
+    """Out without the interpreter's teardown: everything is written, and
+    freeing the build's millions of OCCT objects one by one only costs
+    time (~2.5 s on station_80) and is a stretch of native frees, in an
+    order nobody chose, after the last line the build can say anything
+    in. A failure still raises and exits the usual way.
+    REDLINE_BUILD_TEARDOWN=on tears down as before (to look for a crash
+    there)."""
+    for stream in (sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__):
+        try:
+            stream.flush()
+        except Exception:                                # noqa: BLE001
+            pass
+    os._exit(0)
+
+
 if __name__ == "__main__":
     main()
+    if os.environ.get("REDLINE_BUILD_TEARDOWN", "").strip().lower() not in ("on", "1", "yes"):
+        _leave()

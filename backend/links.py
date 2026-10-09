@@ -837,7 +837,7 @@ class Scheduler:
                 return
             msg = f"{type(exc).__name__}: {exc}" if not str(exc) else str(exc)
             await db.models.update_one({"_id": mid, "link.token": token}, {"$set": {
-                "link.state": "failed", "link.error": msg[-1500:], "link.done_at": store.now()}})
+                "link.state": "failed", "link.error": msg[-4600:], "link.done_at": store.now()}})
             # What uses it is not built against a part that does not build.
             for d in g.dependents(key("model", mid)):
                 await db.models.update_one(

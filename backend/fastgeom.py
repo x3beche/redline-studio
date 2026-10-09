@@ -66,6 +66,14 @@ def _forget(key: int, ref) -> None:
         del _KEPT[key]
 
 
+def clear() -> None:
+    """Drop everything kept, now. export_model.py calls it when the model
+    has run (the questions are asked while it runs): what is made after
+    that - the viewer's tessellation, the STEP - and the interpreter's
+    teardown go on without classifiers or weak references of ours alive."""
+    _KEPT.clear()
+
+
 def install() -> None:
     """Put what is kept behind build123d's `is_inside` (3D shapes) and
     `bounding_box`. Once per process; a second call does nothing, nor does
