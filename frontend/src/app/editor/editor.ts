@@ -321,8 +321,15 @@ export class Editor implements AfterViewInit, OnDestroy {
     const box = this.stage().nativeElement;
     try {
       this.viewer = new OcpViewer(this.host().nativeElement);
-      this.viewer.init({ w: Math.max(box.clientWidth - 250, 400),
-                         h: Math.max(box.clientHeight, 400) });
+      // tools/render.py: the viewer alone, its canvas pinned to the size of
+      // the picture (styles.css, html[data-shot]).
+      const shot = OcpViewer.shotSize(location.search);
+      if (shot) {
+        this.viewer.shot = shot;
+        document.documentElement.dataset['shot'] = `${shot.w}x${shot.h}`;
+      }
+      this.viewer.init(shot ?? { w: Math.max(box.clientWidth - 250, 400),
+                                 h: Math.max(box.clientHeight, 400) });
     } catch (e) {
       this.glError.set(String((e as Error)?.message ?? e));
       return;

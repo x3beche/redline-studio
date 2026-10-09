@@ -707,8 +707,11 @@ python tools/render.py <revision_id>          # writes /tmp/after-<id>.png
 
 `--width` and `--height` are the size of the picture, not of the browser
 window: the window is grown until the canvas measures what was asked for.
-The stored camera is applied for you - an explicit `--camera=px,py,pz,tx,ty,tz`
-is for when you want a different side of the part than the one drawn on.
+The stored camera is applied for you. For a different side of the part than
+the one drawn on, `--side front|back|left|right|top|bottom|iso` frames the
+whole model (or the `--only` parts) from that side; `--camera=px,py,pz[,tx,ty,tz]`
+is an exact camera in world millimetres (absolute - the model's middle is
+rarely the origin; leave the target out to look at the middle of what is shown).
 
 Open that file with the Read tool and compare it against the revision drawing.
 Same viewpoint, so the before and after line up and a mistake is obvious. The

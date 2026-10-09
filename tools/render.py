@@ -7,7 +7,24 @@ drew on, so the before and after can be compared side by side.
     python tools/render.py <revision_id> [-o out.png] [--width 1500]
 
 --width and --height are the size of the picture, not of the browser
-window: the window is grown until the canvas measures what was asked for.
+window. The 3D page is opened in its shot layout (?shot=WxH: the viewer
+alone, its canvas pinned to exactly that size, whatever panels or room the
+page would otherwise lay out), and a canvas that does not come out that
+size is an error, not a picture.
+
+Another side of the model:
+
+    python tools/render.py model:<id> --side front|back|left|right|top|bottom|iso
+    python tools/render.py <id> --only knob --side top
+    python tools/render.py model:<id> --camera 0,-400,60[,tx,ty,tz]
+
+--side frames everything shown (after --only) from that side, with the
+viewer's own preset directions (Z up; front looks from -Y). --camera is the
+camera's position and target in the model's world millimetres - absolute,
+not relative to the model's centre, which is often far from the origin (a
+station standing on z=0 has its middle at z=60). Without a target it looks
+at the middle of what is shown. The perspective field of view is 22 deg, so
+from 400 mm away the picture is about 155 mm tall.
 
 Needs the dev server running (start.sh). Drives headless Chrome, waits for
 the viewer to load the model and move to the stored camera, then captures
@@ -50,7 +67,19 @@ import urllib.request
 from pathlib import Path
 
 WEB = "http://127.0.0.1:4200"
-PORT = 9411
+# The browser's DevTools port: a free one for each render. It used to be a
+# fixed 9411, and two renders at once (two agents finishing at the same
+# time) both talked to whichever browser had the port: each navigated,
+# resized and photographed the other's page - pictures of the wrong note,
+# canvases grown twice over, and a call never answered when the other run
+# closed the browser under it.
+PORT = 0                                    # 0: browser.free_port() per render
+
+
+def devtools_page(tabs: list) -> dict | None:
+    """The browser's own blank tab - not a page some other render opened."""
+    return next((t for t in tabs if t.get("type") == "page"
+                 and t.get("url") in ("about:blank", "")), None)
 # Hardware GL through the ANGLE OpenGL backend: the default backend cannot
 # create a GPU command buffer on hybrid Intel + NVIDIA machines.
 FLAGS = ["--headless=new", "--ignore-gpu-blocklist", "--use-angle=gl",
@@ -547,12 +576,175 @@ def cdp_call(ws, seq: list, method: str, params: dict | None = None,
             return msg.get("result", {})
 
 
-def page_url(revision: str | None, model: str, web: str = WEB) -> str:
-    """The address that opens exactly `model` (and a revision's camera)."""
+def page_url(revision: str | None, model: str, web: str = WEB,
+             shot: tuple[int, int] | None = None) -> str:
+    """The address that opens exactly `model` (and a revision's camera).
+    `shot` puts the page in its shot layout: the viewer alone, its canvas
+    pinned to that many pixels (editor ocp.ts OcpViewer.shot)."""
     from urllib.parse import urlencode
     q = {"rev": revision} if revision else {}
     q["model"] = model
+    if shot:
+        q["shot"] = f"{int(shot[0])}x{int(shot[1])}"
     return f"{web}/?{urlencode(q)}"
+
+
+# ---------------- the canvas's size ----------------
+# The picture is cut from the canvas, so the canvas's size is the picture's.
+# It used to be whatever the page's layout left over: the window was grown
+# by the difference and measured 1.5 s later - before the viewer had
+# answered the resize, so the same difference was added again (508x589 one
+# run, 2292x1312 the next, both "asked for 1400x950"). The CAD page now
+# takes the size in its address (?shot=WxH) and pins the canvas to it; the
+# window only has to be big enough to hold it.
+
+# The viewer's tree column, beside the canvas (ocp.ts TREE_W), and what the
+# shell, the toolbar and the borders take around it - generous, since the
+# window is checked and grown if the canvas does not fit.
+TREE_W = 240
+SHOT_PAD = (TREE_W + 100, 120)
+# The page turns into its phone layout at 768 px (styles.css, PHONES).
+MIN_WINDOW_W = 800
+
+
+def shot_window(width: int, height: int) -> tuple[int, int]:
+    """A window that holds a pinned canvas of width x height."""
+    return max(width + SHOT_PAD[0], MIN_WINDOW_W), height + SHOT_PAD[1]
+
+
+def window_plan(rect, width: int, height: int, pinned: bool) -> tuple[int, int] | None:
+    """The window to ask for next, or None when the canvas is right.
+    `rect` is [left, top, canvas w, canvas h, window w, window h]. A pinned
+    canvas has its size already and only needs room: the window grows until
+    all of it is on screen (what is off screen is not in the screenshot).
+    Otherwise the window takes the difference."""
+    left, top, cw, ch, iw, ih = (int(round(float(x))) for x in rect)
+    right_size = abs(cw - width) <= 2 and abs(ch - height) <= 2
+    fits = left + cw <= iw and top + ch <= ih
+    if right_size and fits:
+        return None
+    if pinned and right_size:
+        return max(iw, left + cw + 16, MIN_WINDOW_W), max(ih, top + ch + 16)
+    return max(iw + width - cw, 320), max(ih + height - ch, 240)
+
+
+def only_js(only: str) -> str:
+    """Shows the parts whose tree path contains `only`, hides the rest - in
+    one setStates. Part by part, setState redraws the tree and the scene and
+    notifies the page each time: station_80's 149 parts kept the page busy
+    for minutes, and the render's next call (the screenshot, or a camera)
+    was never answered."""
+    return ("(() => { const v = window.tcv; if (!v) return 'no viewer';"
+            " const s = v.getStates(), out = {}; let n = 0;"
+            f" const want = {json.dumps(only.lower())};"
+            " for (const p of Object.keys(s)) {"
+            "   const on = p.toLowerCase().includes(want);"
+            "   out[p] = on ? [1, 1] : [0, 0]; if (on) n++; }"
+            " v.setStates(out); return n; })()")
+
+
+# ---------------- where the camera is ----------------
+# The viewer's own preset directions (three-cad-viewer Camera, z_up):
+# front looks along +Y from -Y, top down from +Z, iso from (1,-1,1).
+SIDES = {"front": "front", "back": "rear", "rear": "rear", "left": "left",
+         "right": "right", "top": "top", "bottom": "bottom", "iso": "iso"}
+
+
+def parse_camera(text: str) -> tuple[list[float], list[float] | None]:
+    """--camera px,py,pz[,tx,ty,tz]: world millimetres, absolute. Without a
+    target the camera looks at the middle of what is shown. A camera on its
+    target, or one with a NaN in it, is refused - it leaves the viewer with
+    no direction to look in and the picture with nothing in it."""
+    import math
+    try:
+        n = [float(v) for v in text.replace(" ", "").split(",")]
+    except ValueError:
+        raise SystemExit(f"--camera wants numbers: px,py,pz[,tx,ty,tz], not {text!r}")
+    if len(n) not in (3, 6):
+        raise SystemExit("--camera wants px,py,pz (looking at the middle of the model) "
+                         "or px,py,pz,tx,ty,tz")
+    if not all(math.isfinite(v) for v in n):
+        raise SystemExit(f"--camera has a number that is not one: {text!r}")
+    pos, target = n[:3], (n[3:] if len(n) == 6 else None)
+    if target is not None and math.dist(pos, target) < 1e-6:
+        raise SystemExit("--camera puts the camera on its own target: no direction to look in")
+    return pos, target
+
+
+# The box around what is visible (after --only), the way the viewer's own
+# centreVisibleObjects measures it; the whole model's box when nothing is.
+_VISIBLE_BOX = (
+    "const box = new v.bbox.constructor(); let n = 0;"
+    " const groups = (v.rendered && v.rendered.nestedGroup && v.rendered.nestedGroup.groups) || {};"
+    " for (const p in groups) { const o = groups[p];"
+    "   if (o && typeof o.getVisibility === 'function' && o.getVisibility()) {"
+    "     box.expandByObject(o); n++; } }"
+    " if (!n || box.isEmpty()) box.copy(v.bbox);"
+    " const c = box.center();"
+    " const size = [box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z];")
+
+
+def side_js(side: str, margin: float = 1.08) -> str:
+    """Frames what is visible from one side: the viewer's own preset for the
+    direction (and the up vector - top and bottom look along it), then the
+    camera moved back until every corner of the visible box is inside the
+    picture, `margin` to spare. An orthographic camera is zoomed instead."""
+    return ("(() => { const v = window.tcv; if (!v) return 'no viewer';"
+            + _VISIBLE_BOX +
+            f" v.presetCamera({json.dumps(SIDES[side])}, null, false);"
+            " const cam = v.rendered.camera.getCamera(); const q = cam.quaternion;"
+            " const right = v.vector3(1, 0, 0).applyQuaternion(q),"
+            "   up = v.vector3(0, 1, 0).applyQuaternion(q),"
+            "   back = v.vector3(0, 0, 1).applyQuaternion(q);"
+            " const ortho = !!v.getOrtho();"
+            " const tv = Math.tan((cam.fov || 22) * Math.PI / 360), th = tv * (cam.aspect || 1);"
+            " let mx = 1e-6, my = 1e-6, dz = 0, need = 0;"
+            " for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y])"
+            "  for (const z of [box.min.z, box.max.z]) {"
+            "   const p = v.vector3(x - c[0], y - c[1], z - c[2]);"
+            "   const px = Math.abs(p.dot(right)), py = Math.abs(p.dot(up)), pz = p.dot(back);"
+            "   mx = Math.max(mx, px); my = Math.max(my, py); dz = Math.max(dz, pz);"
+            "   need = Math.max(need, pz + px / th, pz + py / tv); }"
+            " const r = box.boundingSphere().radius || 1;"
+            f" const d = ortho ? Math.max(4 * r, dz + r) : need * {margin};"
+            # A hair back along the picture's own up: looking straight down
+            # (top, bottom) is along the up vector, where the orbit controls
+            # pick the roll from whatever rounding left - top views came out
+            # turned by 7 degrees.
+            " const e = d * 1e-3;"
+            " const pos = [c[0] + back.x * d - up.x * e, c[1] + back.y * d - up.y * e,"
+            "   c[2] + back.z * d - up.z * e];"
+            " v.setCameraTarget(c, false);"
+            " v.setCameraPosition(pos, false, false);"
+            " if (ortho) { const o = v.rendered.camera.oCamera;"
+            f"   v.setCameraZoom(Math.min(o.top / my, o.right / mx) / {margin}, false); }}"
+            " v.update(true, true);"
+            " return JSON.stringify({visible: n, centre: c, size, distance: d, ortho,"
+            "   position: v.getCameraPosition(), target: v.getCameraTarget()}); })()")
+
+
+def camera_js(pos: list[float], target: list[float] | None) -> str:
+    """Puts the camera at `pos` looking at `target` (world coordinates, as
+    three-cad-viewer's setCameraPosition(.., relative=false) takes them), or
+    at the middle of what is visible. The zoom is left alone: a perspective
+    camera's is its distance, which `pos` says; an orthographic one keeps
+    the note's."""
+    return ("(() => { const v = window.tcv; if (!v) return 'no viewer';"
+            + _VISIBLE_BOX +
+            f" const t = {json.dumps(target)} || c; const p0 = {json.dumps(pos)};"
+            # Straight down (or up) is along the up vector: no roll follows
+            # from it, and the orbit controls pick one from rounding. A hair
+            # towards -Y (+Y looking up) puts +Y at the top, as --side top does.
+            " const dx = p0[0] - t[0], dy = p0[1] - t[1], dz = p0[2] - t[2];"
+            " const len = Math.hypot(dx, dy, dz);"
+            " if (Math.hypot(dx, dy) < len * 1e-4) { p0[0] = t[0]; p0[1] = t[1] + (dz > 0 ? -1 : 1) * len * 1e-3; }"
+            " v.setCameraTarget(t, false);"
+            " v.setCameraPosition(p0, false, false);"
+            " v.update(true, true);"
+            " const p = v.getCameraPosition();"
+            " if (!p.every(Number.isFinite)) return 'the camera came out NaN';"
+            " return JSON.stringify({visible: n, centre: c, size, ortho: !!v.getOrtho(),"
+            "   position: p, target: v.getCameraTarget()}); })()")
 
 
 # The canvas the picture is cut from. The 3D room's viewer is always in the
@@ -588,9 +780,14 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
            camera: str | None = None, only: str | None = None,
            build_timeout: int = 1200, allow_stale: bool = False,
            free_aspect: bool = False, no_wait: bool = False,
-           on_model: str | None = None) -> Path:
+           on_model: str | None = None, side: str | None = None) -> Path:
     from websockets.sync.client import connect
 
+    if camera and side:
+        raise SystemExit("--camera and --side both say where to look; give one")
+    if side and side not in SIDES:
+        raise SystemExit(f"--side is one of {', '.join(SIDES)}")
+    cam = parse_camera(camera) if camera else None
     try:
         found = find_browser()
     except NoBrowser as exc:
@@ -661,7 +858,7 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
 
         def stamp(e: dict) -> str:
             return e["built_at"]
-        url, canvas_sel = page_url(rid, model), CAD_CANVAS
+        url, canvas_sel = page_url(rid, model, shot=(width, height)), CAD_CANVAS
 
     def current() -> str:
         # --no-wait (an after shot) says so; without it, REDLINE_REVISION does (after_shot).
@@ -693,23 +890,33 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
     name = f"redline-render-{os.getpid()}"
     # The browser opens on a blank page: the cookie goes in first, then
     # the app is opened, so its first request is already signed in.
+    # The CAD page pins its canvas to the picture's size (?shot=WxH); the
+    # window only has to hold it. The board room has no such layout, and is
+    # sized by measuring, as before.
+    pinned = not is_board
+    win_w, win_h = shot_window(width, height) if pinned else (width, height)
+    port = PORT or browser.free_port()
     chrome = subprocess.Popen(
-        browser_argv(found, PORT, width, height, profile, "about:blank", name),
+        browser_argv(found, port, win_w, win_h, profile, "about:blank", name),
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     from backend import compute
     meter = compute.ProcMeter(chrome.pid)
     try:
         page = None
         for _ in range(60):
+            if chrome.poll() is not None:
+                break                       # ours is gone: whatever answers is not it
             try:
                 tabs = json.load(urllib.request.urlopen(
-                    f"http://127.0.0.1:{PORT}/json"))
-                page = next(t for t in tabs if t["type"] == "page")
-                break
+                    f"http://127.0.0.1:{port}/json", timeout=5))
+                page = devtools_page(tabs)
+                if page:
+                    break
             except Exception:
-                time.sleep(0.5)
+                pass
+            time.sleep(0.5)
         if page is None:
-            sys.exit(f"chrome ({found[0]}: {found[1]}) did not start")
+            sys.exit(f"chrome ({found[0]}: {found[1]}) did not start on port {port}")
 
         ws = connect(page["webSocketDebuggerUrl"], max_size=80_000_000)
         seq = [0]
@@ -722,6 +929,9 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
             return r.get("result", {}).get("value")
 
         send("Runtime.enable")
+        if pinned:
+            send("Emulation.setDeviceMetricsOverride",
+                 {"width": win_w, "height": win_h, "deviceScaleFactor": 1, "mobile": False})
         if session:
             send("Network.enable")
             if not send("Network.setCookie", browser_cookie(session)).get("success", True):
@@ -731,17 +941,18 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
         # within a second, while a 50 MB payload takes the best part of a
         # minute. Every shot taken that way came out empty. Wait for the
         # viewer to hold a scene and for the canvas to have been laid out.
+        # (window.tcv.scene throws until the viewer has rendered once.)
         probe = ("(() => { const c = " + CANVAS + ";"
-                 " if (!c) return '0x0/0';"
-                 " const n = (window.tcv && window.tcv.scene)"
-                 "   ? window.tcv.scene.children.length : 0;"
+                 " if (!c) return '0x0/0'; let n = 0;"
+                 " try { n = (window.tcv && window.tcv.scene)"
+                 "   ? window.tcv.scene.children.length : 0; } catch (e) { n = 0; }"
                  " return c.width + 'x' + c.height + '/' + n; })()")
         seen, stable = None, 0
         for _ in range(0 if is_board else wait * 2):
             now = js(probe)
             if now == seen and now and not now.startswith("0x0"):
                 stable += 1
-                if stable >= 3 and int(now.split("x")[0]) > 500 \
+                if stable >= 3 and (pinned or int(now.split("x")[0]) > 500) \
                         and not now.endswith("/0"):
                     break
             else:
@@ -763,56 +974,95 @@ def render(revision: str, out: Path, width: int | None, height: int | None, wait
         else:
             raise SystemExit(f"not photographing: {why}")
 
-        # The window is not the picture. The catalog, the queue, the tree
-        # column, the toolbar and the log all take their cut before the
-        # canvas gets any, and it is not a fixed cut - it moves with the
-        # layout. Asking for 1200x800 used to hand back a 320x394 canvas.
-        # So measure what came out, give the window back the difference,
-        # and check. --width and --height mean the picture now.
-        box = ("(() => { const c = " + CANVAS + ";"
+        # The window is not the picture: the canvas is. The CAD page pins it
+        # to the asked size and the window only has to hold all of it; the
+        # board room's canvas is whatever its layout leaves, so the window is
+        # given the difference. Either way every change of the window is
+        # waited out - the viewer answers a resize when it gets to it, and a
+        # measurement taken before that is of the old layout.
+        box = ("(() => { const c = " + CANVAS + "; if (!c) return null;"
                " const r = c.getBoundingClientRect();"
-               " return JSON.stringify([r.width|0, r.height|0,"
+               " return JSON.stringify([r.left, r.top, r.width|0, r.height|0,"
                " innerWidth, innerHeight]); })()")
-        for _ in range(3):
-            cw, ch, iw, ih = json.loads(js(box))
-            dw, dh = width - cw, height - ch
-            if abs(dw) <= 2 and abs(dh) <= 2:
+
+        def measure(before=None, timeout: float = 15.0):
+            """The canvas's box once it has stopped changing - and, when
+            `before` is given, changed from it (or `timeout` ran out)."""
+            end, last = time.monotonic() + timeout, None
+            while True:
+                got = js(box)
+                if got is None:             # the viewer is between two scenes
+                    if time.monotonic() > end:
+                        raise SystemExit("not photographing: the page has no canvas")
+                    time.sleep(0.5)
+                    continue
+                now = json.loads(got)
+                if now == last and (before is None or now != before):
+                    return now
+                if time.monotonic() > end:
+                    return now
+                last = now
+                time.sleep(0.5)
+
+        rect = measure()
+        for _ in range(4):
+            plan = window_plan(rect, width, height, pinned)
+            if plan is None:
                 break
             send("Emulation.setDeviceMetricsOverride",
-                 {"width": max(iw + dw, 320), "height": max(ih + dh, 240),
+                 {"width": plan[0], "height": plan[1],
                   "deviceScaleFactor": 1, "mobile": False})
-            time.sleep(1.5)
-        else:
-            print(f"canvas came out {cw}x{ch}, asked for {width}x{height}")
+            rect = measure(before=rect)
+        cw, ch = int(rect[2]), int(rect[3])
+        if window_plan(rect, width, height, pinned) is not None:
+            msg = (f"canvas came out {cw}x{ch} at {rect[0]:.0f},{rect[1]:.0f} in a "
+                   f"{rect[4]}x{rect[5]} window, asked for {width}x{height}")
+            if pinned:
+                why = js("(() => { const v = window.tcv; let st = null;"
+                         " try { st = [v.state.get('cadWidth'), v.state.get('height')]; } catch (e) {}"
+                         " return JSON.stringify({shot: document.documentElement.dataset.shot || null,"
+                         " canvases: document.querySelectorAll('.tcv-stage canvas').length,"
+                         " viewer: st, url: location.search}); })()")
+                msg += f" (page: {why})"
+                # Another size is another framing; a picture that is not
+                # the one asked for is not handed back as if it were.
+                raise SystemExit(msg + " - not photographing")
+            print(msg)
 
         time.sleep(5)                       # let the camera settle on the model
 
-        # --camera overrides the stored angle. A revision's camera looks at
-        # what the user drew on; checking the result sometimes needs a
-        # different side of the part, and clicking one up by hand is slow.
-        if camera:
-            n = [float(v) for v in camera.replace(" ", "").split(",")]
-            if len(n) != 6:
-                raise SystemExit("--camera wants px,py,pz,tx,ty,tz")
-            js(f"(() => {{ const v = window.tcv; if (!v) return 'no viewer';"
-               f" v.setCameraTarget([{n[3]},{n[4]},{n[5]}], false);"
-               f" v.setCameraPosition([{n[0]},{n[1]},{n[2]}], false, true);"
-               f" return 'ok'; }})()")
-            time.sleep(3)
-
         # --only isolates one part, the way the user does before drawing on
         # it. Without it a detail inside the case is buried under the walls
-        # and the check shot cannot show what the drawing showed.
+        # and the check shot cannot show what the drawing showed. Before the
+        # camera: --side and a --camera without a target frame what is left.
         if only:
-            got = js("(() => { const v = window.tcv; if (!v) return 'no viewer';"
-                     " const s = v.getStates(); let n = 0;"
-                     f" const want = {json.dumps(only.lower())};"
-                     " for (const p of Object.keys(s)) {"
-                     "   const on = p.toLowerCase().includes(want);"
-                     "   v.setState(p, on ? [1, 1] : [0, 0]); if (on) n++; }"
-                     " return n; })()")
+            got = js(only_js(only))
             print(f"--only {only!r}: {got} part(s) left visible")
+            if got == 0:
+                names = js("JSON.stringify(Object.keys(window.tcv.getStates()).slice(0, 5))")
+                raise SystemExit(f"--only {only!r} matches no part; the tree has e.g. {names}")
             time.sleep(2)
+
+        # --side frames what is shown from one side, with the viewer's own
+        # preset directions; --camera overrides the stored angle with world
+        # coordinates. A revision's camera looks at what the user drew on;
+        # checking the result sometimes needs a different side of the part,
+        # and clicking one up by hand is slow.
+        if side or cam:
+            if is_board:
+                raise SystemExit("--side and --camera are for the 3D room's viewer")
+            got = js(side_js(side) if side else camera_js(*cam))
+            try:
+                info = json.loads(got)
+            except (TypeError, ValueError):
+                raise SystemExit(f"could not set the camera: {got}")
+
+            def fmt(v) -> str:
+                return ",".join(f"{x:.1f}" for x in v)
+            print(f"camera  : {'--side ' + side if side else '--camera'}: from {fmt(info['position'])}"
+                  f" at {fmt(info['target'])}; shown: {info['visible']} part(s),"
+                  f" {fmt(info['size'])} mm around {fmt(info['centre'])}")
+            time.sleep(3)
 
         # ?rev= also pops the revision card over the top-right corner, which
         # is exactly where the model usually sits. It is not part of the model.
@@ -884,8 +1134,18 @@ def main() -> None:
                     help="take --width x --height as given even when the note's canvas "
                          "had another shape (the framing will differ from the drawing)")
     ap.add_argument("--wait", type=int, default=40)
-    ap.add_argument("--camera", help="px,py,pz,tx,ty,tz - look from somewhere "
-                                     "other than the stored angle")
+    ap.add_argument("--camera", help="px,py,pz[,tx,ty,tz] - the camera's position and "
+                                     "the point it looks at, in the model's own world "
+                                     "millimetres (absolute, not relative to the model). "
+                                     "Without tx,ty,tz it looks at the middle of what is "
+                                     "shown. The perspective camera's field of view is "
+                                     "22 deg: at distance D it shows about 0.39 D top to "
+                                     "bottom. An orthographic note keeps its zoom. For "
+                                     "'the whole thing from one side', use --side")
+    ap.add_argument("--side", choices=sorted(SIDES),
+                    help="frame everything shown (or the --only parts) from one side: "
+                         "front looks from -Y, back from +Y, left from -X, right from +X, "
+                         "top down from +Z, bottom up from -Z, iso from (1,-1,1)")
     ap.add_argument("--only", help="show only parts whose tree path contains "
                                    "this text, e.g. kapak")
     ap.add_argument("--build-timeout", type=int, default=1200,
@@ -907,8 +1167,9 @@ def main() -> None:
     rid = args.revision.replace(':', '-')
     if args.out:
         out = Path(args.out)
-    elif args.camera or args.only:
-        tag = hashlib.sha1(f"{args.camera}|{args.only}".encode()).hexdigest()[:8]
+    elif args.camera or args.only or args.side:
+        tag = hashlib.sha1(f"{args.camera}|{args.only}".encode()
+                           + (f"|{args.side}".encode() if args.side else b"")).hexdigest()[:8]
         out = Path(f"/tmp/view-{rid}-{tag}.png")
     else:
         out = Path(f"/tmp/after-{rid}.png")
@@ -916,7 +1177,7 @@ def main() -> None:
     try:
         render(args.revision, out, args.width, args.height, args.wait, args.camera,
                args.only, args.build_timeout, args.allow_stale, args.free_aspect, args.no_wait,
-               args.on_model)
+               args.on_model, args.side)
     finally:
         # A picture costs a browser: the card shows what that came to next to
         # what the model cost in tokens. Recorded whether or not the frame

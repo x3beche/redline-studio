@@ -165,11 +165,31 @@ export class OcpViewer {
     return true;
   }
 
+  /** A canvas of a fixed size, for tools/render.py (?shot=WxH): the picture
+   *  is cut from the canvas, so its size is the picture's size. Sizing it
+   *  from the window left it to whatever the panels around it took - the
+   *  same window gave 508x589 one run and 2292x1312 another. */
+  shot: { w: number; h: number } | null = null;
+
+  /** `?shot=WxH` from an address, or null. */
+  static shotSize(search: string): { w: number; h: number } | null {
+    const m = /^(\d{2,5})x(\d{2,5})$/.exec(new URLSearchParams(search).get('shot') ?? '');
+    if (!m) return null;
+    const w = +m[1], h = +m[2];
+    return w >= 50 && h >= 50 && w <= 8192 && h <= 8192 ? { w, h } : null;
+  }
+
   /** Grow with the window; a fixed size caused overflow and page scroll.
    *  The viewer puts its toolbar above the canvas, so its height must be
    *  subtracted or the scene overflows and clips the axes marker. */
   resize(w: number, h: number) {
     if (!this.viewer || !this.rendered) return;
+    // The headless render's fixed canvas (?shot=WxH): exactly that, whatever
+    // the window or the panels around it measure.
+    if (this.shot) {
+      this.viewer.resizeCadView(this.shot.w, TREE_W, this.shot.h, false);
+      return;
+    }
     const host = this.container.getBoundingClientRect();
     const c = this.container.querySelector('canvas');
     const chromeH = c ? Math.max(c.getBoundingClientRect().top - host.top, 0) : 48;
