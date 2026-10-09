@@ -18,17 +18,17 @@
 /* The whole pane, as Settings' stage: no narrow column with empty space beside it. */
 .ct-page { max-width: none; }
 
-/* Tiles that fill their card evenly: as many columns as tools while they
-   fit, then two (an odd last tile takes both), then one on a phone - never
-   an empty cell or a column of nothing. */
+/* Tiles that fill their card evenly (cc-tools.ts span()): a 12-column grid,
+   four tiles to a row (two when the card is narrow, one on a phone), and
+   the last row's tiles share the row - never an empty cell. */
 .st-card { container-type: inline-size; }
-.ct-tiles { display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 8px; padding: 10px; }
-@container (max-width: 860px) {
-  .ct-tiles { grid-template-columns: repeat(min(var(--cols, 2), 2), minmax(0, 1fr)); }
-  .ct-tiles[data-odd] .ct-tile:last-child:not(:first-child) { grid-column: 1 / -1; }
+.ct-tiles { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; padding: 10px; }
+.ct-tiles > .ct-tile { grid-column: span var(--sw, 12); }
+@container (max-width: 760px) {
+  .ct-tiles > .ct-tile { grid-column: span var(--sn, 12); }
 }
 @container (max-width: 400px) {
-  .ct-tiles { grid-template-columns: minmax(0, 1fr); }
+  .ct-tiles > .ct-tile { grid-column: span 12; }
 }
 .ct-tile { min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 5px;
   padding: 10px 12px 10px; text-align: left; background: var(--surface-2); border: 1px solid var(--line);
@@ -42,14 +42,14 @@
 .ct-ico { flex: none; width: 15px; height: 15px; color: var(--ink-dim); fill: none; stroke: currentColor; stroke-width: 1.6;
   stroke-linecap: round; stroke-linejoin: round; }
 .ct-tile[data-on] .ct-ico { color: var(--ink); }
-.ct-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--ink); }
+.ct-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500; color: var(--ink); }
 .ct-tile:not([data-on]) .ct-name { color: var(--ink-dim); }
 .ct-about { flex: 1; font-size: 11px; line-height: 1.45; color: var(--ink-dim); }
-.ct-id { align-self: flex-start; padding: 0 5px; line-height: 16px; border: 1px solid var(--line); border-radius: 3px;
+.ct-id { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; align-self: flex-start; padding: 0 5px; line-height: 16px; border: 1px solid var(--line); border-radius: 3px;
   font: 10px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
 .ct-tile button.tcv-switch { padding: 0; }
-.ct-foot-row { display: flex; align-items: center; gap: 8px; }
-.ct-uses-n { margin-left: auto; font-size: 10px; color: var(--ink-dim); }
+.ct-foot-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ct-uses-n { flex: none; margin-left: auto; font-size: 10px; color: var(--ink-dim); white-space: nowrap; }
 .ct-go { flex: none; width: 12px; height: 12px; color: var(--ink-dim); fill: none; stroke: currentColor; stroke-width: 1.8;
   stroke-linecap: round; stroke-linejoin: round; transition: transform .12s; }
 .ct-tile:hover .ct-go { color: var(--ink); transform: translateX(2px); }

@@ -261,9 +261,10 @@ interface ToolsUsage {
             }
           </div>
           @if (g.tools.length) {
-            <div class="ct-tiles" [style.--cols]="g.tools.length" [attr.data-odd]="g.tools.length % 2 ? 1 : null">
-              @for (tl of g.tools; track tl.name) {
+            <div class="ct-tiles">
+              @for (tl of g.tools; track tl.name; let i = $index) {
                 <div class="ct-tile" [attr.data-on]="tl.on ? 1 : null" role="button" tabindex="0"
+                     [style.--sw]="span(i, g.tools.length, 4)" [style.--sn]="span(i, g.tools.length, 2)"
                      (click)="show(tl.name)" (keydown.enter)="show(tl.name)" [title]="'Open its page' | t">
                   <span class="ct-top">
                     <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(tl.name)" /></svg>
@@ -335,6 +336,13 @@ export class CcToolsView {
   peak14(u: ToolsUsage) { return Math.max(1, ...u.days.map(d => this.dayTotal(d))); }
   peakTool(u: ToolsUsage) { return Math.max(1, ...Object.values(u.tools).map(x => x.uses)); }
   byUse(u: ToolsUsage) { return [...this.tools()].sort((a, b) => (u.tools[b.name]?.uses ?? 0) - (u.tools[a.name]?.uses ?? 0)); }
+
+  /** A tile's width in a 12-column grid: up to `most` to a row, and the
+   *  last row's tiles share the whole row - never an empty cell. */
+  span(i: number, n: number, most: number) {
+    const cols = Math.min(n, most), rest = n % cols;
+    return 12 / (rest && i >= n - rest ? rest : cols);
+  }
 
   show(name: string) {
     this.http.get<ToolPage>(`/api/cc/tools/${encodeURIComponent(name)}`).subscribe({ next: p => this.page.set(p), error: () => {} });
