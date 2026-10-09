@@ -487,5 +487,9 @@ app-cc-compact, app-or-compact { display: flex; flex-direction: column; gap: 12p
 /* A job with an on/off of its own (the next-question suggestion): the
    switch and its wait, on a line under the job's provider and model. */
 .st-job-switch { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+/* A provider picked for a job, its model not yet: nothing saved, and said so. */
+.st-job-pending { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 4px 8px;
+  font-size: 11px; color: var(--warn); border: 1px dashed var(--warn); border-radius: 4px; }
+.st-job-saved { margin-left: 8px; font-size: 11px; font-weight: 400; white-space: nowrap; }
 .st-job-on { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink); cursor: pointer; }
 .st-job-wait { font-size: 11px; color: var(--ink-dim); }

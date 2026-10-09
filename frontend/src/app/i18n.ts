@@ -360,6 +360,7 @@ const TR: Record<string, string> = {
   'Reading translation': 'Okuma çevirisi',
   'choose a model': 'bir model seçin',
   'Choose a model for it - nothing is saved until you do.': 'Bunun için bir model seçin - seçene kadar hiçbir şey kaydedilmez.',
+  'not saved until a model is chosen - the job stays on': 'model seçilene kadar kaydedilmez - iş hâlâ şunda:',
   "an agent's question or reply, shown in the reader's language": 'bir ajanın sorusu ya da cevabı, okuyanın dilinde',
   // the agent's question and replies, read in another language (editor/reading.ts)
   'English (original)': 'İngilizce (orijinal)',

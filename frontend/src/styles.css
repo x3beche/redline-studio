@@ -4128,6 +4128,25 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   .tcv-cc-alert { width: calc(100% - 16px); }
   .tcv-cc-modelpop { position: fixed; left: 8px; right: 8px; bottom: 80px; width: auto; }
 }
+/* The model picker (app/model-picker.ts) beyond the composer: a row lit by
+   the arrow keys; a list placed against the window (a picker in a card
+   that scrolls or clips); and the chip as a full-width field in a row of
+   Settings > LLM settings, marked while a provider waits for its model. */
+.tcv-cc-modellist button.act { background: var(--hover); }
+.tcv-cc-modellist button.on.act { background: var(--accent-deep); outline: 1px solid var(--accent); outline-offset: -1px; }
+.tcv-cc-modelpop.tcv-mp-fixed { position: fixed; right: auto; bottom: auto; z-index: 60; }
+.tcv-mp-fixed .tcv-cc-modellist { flex: 1 1 auto; min-height: 0; }
+.tcv-mp.tcv-mp-row { display: block; min-width: 0; }
+.tcv-mp-tag { flex: none; font-style: normal; }
+.tcv-mp-head { padding: 0 2px; font-size: 11px; }
+.tcv-cc-modellist button.tcv-mp-default { margin-bottom: 3px; box-shadow: 0 1px 0 var(--line); border-radius: 5px 5px 0 0; }
+.tcv-mp-row .tcv-cc-chip { width: 100%; max-width: none; height: 26px; padding: 0 7px; gap: 6px; border-radius: 4px;
+  background: var(--surface-2); }
+.tcv-mp-row .tcv-cc-chip span { flex: 1; min-width: 0; text-align: left; }
+.tcv-mp-row .tcv-cc-chip:disabled { opacity: .7; cursor: default; }
+.tcv-mp-row .tcv-cc-chip:disabled .tcv-cc-ico:last-child { visibility: hidden; }
+.tcv-mp-row .tcv-cc-chip[data-unset] { color: var(--warn); border-color: var(--warn); }
+@media (max-width: 768px) { .tcv-mp-row .tcv-cc-chip { height: 36px; } }
 /* ---- round two: @-mentions, answers watched live, search, totals ------- */
 /* A mention: a small chip in the kind's icon - in the composer before it
    is sent (with an x), under the line once it is (opens the thing). */

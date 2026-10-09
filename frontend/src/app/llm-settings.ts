@@ -8,6 +8,7 @@ import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 import { CcUsage, day, inSpan, span } from './cc-usage';
 import { CcCompact, CcPeriod, OrCompact, OrUsage } from './provider-usage';
 import { SuggestConf } from './rooms/suggest';
+import { ModelPicker } from './model-picker';
 
 /** Settings > LLM settings: the API keys, and which provider and model
  *  does each of the app's model jobs (backend/llm.py), and what the
@@ -230,7 +231,7 @@ export class LlmUsagePanel {
 
 @Component({
   selector: 'app-llm-settings',
-  imports: [T, LlmUsagePanel, CcCompact, OrCompact],
+  imports: [T, LlmUsagePanel, CcCompact, OrCompact, ModelPicker],
   styleUrl: './settings.css',
   template: `
 @if (data(); as d) {
@@ -334,29 +335,30 @@ export class LlmUsagePanel {
       @for (j of jobIds(); track j) {
         @if (d.jobs[j]; as job) {
           <div class="st-job">
-            <div class="st-job-name"><b>{{ job.label | t }}</b><span [title]="job.about | t">{{ job.about | t }}</span></div>
+            <div class="st-job-name"><b>{{ job.label | t }}@if (savedRow()[j]) { <span class="st-job-saved st-ok" role="status">✓ {{ 'Saved' | t }}</span> }</b><span [title]="job.about | t">{{ job.about | t }}</span></div>
             <div class="st-seg">
               @for (p of providerIds; track p) {
                 <button [class.on]="p === prov(j)" [disabled]="!canEdit || p === prov(j)"
                         (click)="setProvider(j, p)">{{ d.providers[p].name }}@if (!d.providers[p].set) { <small>{{ 'no key' | t }}</small> }</button>
               }
             </div>
-            <select class="st-in" [disabled]="!canEdit" (change)="setModel(j, $any($event.target).value)">
-              @if (pending()[j]) {
-                <option value="" selected disabled>{{ 'choose a model' | t }}</option>
-              } @else if (!inList(job.provider, job.model)) { <option [value]="job.model" selected>{{ job.model }}</option> }
-              @for (m of models()[prov(j)] || []; track m.id) {
-                <option [value]="m.id" [selected]="!pending()[j] && m.id === job.model">{{ m.vision ? '🖼 ' : '' }}{{ m.id }}{{ m.anthropic ? ' · Claude' : '' }}</option>
-              }
-            </select>
+            <app-model-picker class="tcv-mp-row" [models]="models()[prov(j)] || []" [selected]="pending()[j] ? '' : job.model"
+                              [placeholder]="pending()[j] ? ('choose a model' | t) : ''" [disabled]="!canEdit" [fixed]="true" [vision]="true"
+                              [title]="('Model' | t) + ': ' + d.providers[prov(j)].name + ' · ' + (pending()[j] ? ('choose a model' | t) : job.model)"
+                              [tag]="d.providers[prov(j)].name" [heading]="d.providers[prov(j)].name + ' · ' + (models()[prov(j)] || []).length + ' ' + ('models' | t)"
+                              [fallback]="fallbacks()[j]" (pickDefault)="reset(j)"
+                              [open]="picking() === j" (openChange)="pickerOpen(j, $event)" (pick)="setModel(j, $event)" />
             <div class="st-job-acts">
               @if (canEdit) {
                 <button class="tcv-btn tcv-files-btn" [disabled]="testing() === j" (click)="test(j)">{{ testing() === j ? '…' : ('Test' | t) }}</button>
-                @if (job.provider !== job.default.provider || job.model !== job.default.model) {
-                  <button class="tcv-btn tcv-files-btn" (click)="reset(j)" [title]="job.default.provider + ' / ' + job.default.model">{{ 'Default' | t }}</button>
-                }
               }
             </div>
+            @if (pending()[j]; as pp) {
+              <div class="st-job-pending" role="status">
+                <span>{{ d.providers[pp].name }}: {{ 'not saved until a model is chosen - the job stays on' | t }} {{ d.providers[job.provider].name }} · {{ job.model }}</span>
+                <button class="tcv-btn tcv-files-btn" (click)="cancelPending(j)">{{ 'Cancel' | t }}</button>
+              </div>
+            }
             @if (job.switch) {
               <div class="st-job-switch">
                 <label class="st-job-on">
@@ -459,7 +461,6 @@ export class LlmSettingsPanel {
 
   /** How many of a provider's models read images (the 🖼 in the pickers). */
   visionCount(p: string) { return (this.models()[p] ?? []).filter(m => m.vision).length; }
-  inList(p: string, m: string) { return (this.models()[p] ?? []).some(x => x.id === m); }
   setDraft(p: string, v: string) { this.draft.update(d => ({ ...d, [p]: v })); }
 
   saveKey(p: string) {
@@ -473,15 +474,35 @@ export class LlmSettingsPanel {
     this.put({ keys: { [p]: null } }, t('Key removed.'));
   }
 
-  /** A provider picked for a job whose model is still to be chosen. */
+  /** A provider picked for a job whose model is still to be chosen: only
+   *  in this page until a model is picked (the row says so). */
   pending = signal<Record<string, string>>({});
   prov(j: string) { return this.pending()[j] ?? this.data()!.jobs[j].provider; }
+  /** The job whose model list is open. */
+  picking = signal<string | null>(null);
+  pickerOpen(j: string, open: boolean) {
+    if (open) this.picking.set(j);
+    else if (this.picking() === j) this.picking.set(null);
+  }
+  /** The job's default, as the first row of its model list. */
+  fallbacks = computed(() => {
+    const d = this.data(), out: Record<string, { label: string; provider: string; title: string; on: boolean }> = {};
+    for (const [j, job] of Object.entries(d?.jobs ?? {})) {
+      const { provider, model } = job.default;
+      out[j] = { label: (this.models()[provider] ?? []).find(m => m.id === model)?.name ?? model,
+                 provider: d!.providers[provider]?.name ?? provider, title: provider + ' / ' + model,
+                 on: !this.pending()[j] && job.provider === provider && job.model === model };
+    }
+    return out;
+  });
+  /** The rows just saved, for their "✓ Saved". */
+  savedRow = signal<Record<string, boolean>>({});
 
   setProvider(j: string, provider: string) {
     // Only a cheap model is picked unasked: the job's default when it is on
     // this provider, else the cheap one if this provider has it. Otherwise
     // the provider waits for a model to be chosen - never the first in the
-    // list, which may be the dearest.
+    // list, which may be the dearest - and its list opens.
     const job = this.data()!.jobs[j];
     const list = this.models()[provider] ?? [];
     if (!list.length && job.default.provider !== provider) {
@@ -490,18 +511,34 @@ export class LlmSettingsPanel {
     const model = job.default.provider === provider ? job.default.model : (list.find(m => m.cheap)?.id ?? '');
     if (!model) {
       this.pending.update(x => ({ ...x, [j]: provider }));
-      this.msg.set(t('Choose a model for it - nothing is saved until you do.'));
+      this.picking.set(j);
       return;
     }
-    this.pending.update(({ [j]: _, ...rest }) => rest);
-    this.put({ jobs: { [j]: { provider, model } } }, t('Saved.'));
+    this.route(j, provider, model);
   }
 
   setModel(j: string, model: string) {
     if (!model) return;
-    const provider = this.prov(j);
+    this.route(j, this.prov(j), model);
+  }
+
+  cancelPending(j: string) {
     this.pending.update(({ [j]: _, ...rest }) => rest);
-    this.put({ jobs: { [j]: { provider, model } } }, t('Saved.'));
+    if (this.picking() === j) this.picking.set(null);
+  }
+
+  /** A job's provider and model, saved at once. The row shows it at once
+   *  too, so a switch or a wait changed before the answer comes sends this
+   *  route and not the one it replaces. */
+  private route(j: string, provider: string, model: string) {
+    this.pending.update(({ [j]: _, ...rest }) => rest);
+    this.patchJob(j, { provider, model });
+    this.put({ jobs: { [j]: { provider, model } } }, t('Saved.'), undefined, j);
+  }
+
+  private patchJob(j: string, change: Partial<JobInfo>) {
+    const d = this.data();
+    if (d) this.data.set({ ...d, jobs: { ...d.jobs, [j]: { ...d.jobs[j], ...change } } });
   }
 
   readonly delays = DELAYS;
@@ -512,13 +549,15 @@ export class LlmSettingsPanel {
   setSwitch(j: string, change: { on?: boolean; delay?: number }) {
     const job = this.data()!.jobs[j];
     const msg = change.on === undefined ? t('Saved.') : change.on ? t('Turned on.') : t('Turned off.');
-    this.put({ jobs: { [j]: { provider: job.provider, model: job.model, ...change } } }, msg);
+    this.patchJob(j, change);
+    this.put({ jobs: { [j]: { provider: job.provider, model: job.model, ...change } } }, msg, undefined, j);
   }
 
   reset(j: string) {
     const job = this.data()!.jobs[j];
     this.pending.update(({ [j]: _, ...rest }) => rest);
-    this.put({ jobs: { [j]: job.default } }, t('Back to the default.'));
+    this.patchJob(j, { ...job.default });
+    this.put({ jobs: { [j]: job.default } }, t('Back to the default.'), undefined, j);
   }
 
   test(j: string) {
@@ -531,22 +570,45 @@ export class LlmSettingsPanel {
     });
   }
 
-  private put(body: object, ok: string, after?: () => void) {
+  /** Changes go to the server one after another, in the order they were
+   *  made: an answer that comes late can never put back an older route. */
+  private queue: Promise<void> = Promise.resolve();
+  private waiting = 0;
+
+  private put(body: object, ok: string, after?: () => void, row?: string) {
     this.busy.set(true);
     this.err.set(null);
-    this.http.put<LlmSettings>('/api/llm/settings', body).subscribe({
-      next: d => {
-        this.data.set(d);
-        // The composers follow a change of the suggestion's switch or wait at once.
-        const sg = d.jobs['suggest'];
-        if (sg?.switch) this.suggestConf.set({ on: sg.on, delay: sg.delay });
-        this.busy.set(false);
-        this.msg.set(ok);
-        setTimeout(() => this.msg.set(null), 3000);
-        after?.();
-      },
-      error: e => { this.busy.set(false); this.err.set(this.text(e)); },
-    });
+    this.waiting++;
+    this.queue = this.queue.then(() => new Promise<void>(done => {
+      this.http.put<LlmSettings>('/api/llm/settings', body).subscribe({
+        next: d => {
+          // The last answer is the server's whole state; one still to come
+          // will bring it again, so the page keeps what it shows meanwhile.
+          if (--this.waiting === 0) { this.data.set(d); this.busy.set(false); }
+          // The composers follow a change of the suggestion's switch or wait at once.
+          const sg = d.jobs['suggest'];
+          if (sg?.switch) this.suggestConf.set({ on: sg.on, delay: sg.delay });
+          this.msg.set(ok);
+          setTimeout(() => this.msg.set(null), 3000);
+          if (row) {
+            this.savedRow.update(x => ({ ...x, [row]: true }));
+            setTimeout(() => this.savedRow.update(({ [row]: _, ...rest }) => rest), 2500);
+          }
+          after?.();
+          done();
+        },
+        error: e => {
+          this.err.set(this.text(e));
+          // What the server has, not what the page hoped to save.
+          if (--this.waiting === 0) { this.busy.set(false); this.reload(); }
+          done();
+        },
+      });
+    }));
+  }
+
+  private reload() {
+    this.http.get<LlmSettings>('/api/llm/settings').subscribe({ next: d => this.data.set(d), error: () => {} });
   }
 
   private text(e: unknown): string {

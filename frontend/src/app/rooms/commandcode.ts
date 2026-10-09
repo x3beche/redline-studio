@@ -15,6 +15,7 @@ import { AvatarColours, avatarColour } from '../avatar';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
 import { FilesApi } from './files-model';
 import { ComposerSuggest, SuggestChip } from './suggest';
+import { ModelPicker } from '../model-picker';
 
 /** The Chat room (id 'commandcode', kept so old links and saved tab orders
  *  still work): people talking with a model, in the open - and, pinned at
@@ -301,7 +302,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, TaskBlockView, AttachChips, MentionPics, SuggestChip],
+  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)' },
   template: `
 <!-- Avatars: a person's picture, or their initials on a colour of their own
@@ -815,40 +816,9 @@ type Ask = { text: string; label: string; go: () => void };
                     (paste)="att.paste($event)"
                     (focus)="focused.set(true)" (blur)="focused.set(false); closeMentions()"></textarea>
           <div class="tcv-cc-compbar">
-            <div class="tcv-cc-menuwrap">
-              <button class="tcv-cc-chip" (click)="toggleModelPop(); $event.stopPropagation()" [class.on]="modelPop()"
-                      [title]="('Model' | t) + ': ' + provName() + ' · ' + model()">
-                <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.bot }" />
-                <span>{{ modelName() }}</span>
-                <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.chevron }" />
-              </button>
-              @if (modelPop()) {
-                <div class="tcv-cc-modelpop" (click)="$event.stopPropagation()">
-                  <div class="tcv-cc-seg tcv-cc-seg-full">
-                    @for (p of providers; track p.id) {
-                      <button [class.on]="p.id === provider()" (click)="pickProvider(p.id)">{{ p.name }}</button>
-                    }
-                  </div>
-                  <label class="tcv-cc-search">
-                    <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.search }" />
-                    <input #mq type="search" [placeholder]="'Find a model' | t" [value]="modelQ()"
-                           (input)="modelQ.set($any($event.target).value)" (keydown.escape)="modelPop.set(false)"
-                           (keydown.enter)="pickFirstModel()">
-                  </label>
-                  <div class="tcv-cc-modellist">
-                    @for (x of shownModels(); track x.id) {
-                      <button [class.on]="x.id === model()" (click)="pickModel(x.id); modelPop.set(false)">
-                        <span class="tcv-cc-modelname">{{ x.name }}</span>
-                        @if (x.anthropic) { <span class="tcv-cc-tag">Claude</span> }
-                        @if (x.context) { <span class="tcv-cc-dim">{{ ctx(x.context) }}</span> }
-                      </button>
-                    } @empty {
-                      <p class="tcv-cc-dim tcv-cc-pad">{{ models().length ? ('No model matches.' | t) : ('Loading…' | t) }}</p>
-                    }
-                  </div>
-                </div>
-              }
-            </div>
+            <app-model-picker [models]="models()" [selected]="model()" [providers]="providers" [provider]="provider()"
+                              [title]="('Model' | t) + ': ' + provName() + ' · ' + model()" [(open)]="modelPop"
+                              (pick)="pickModel($event)" (providerPick)="pickProvider($event)" />
             <button class="tcv-cc-ib" data-act="mention" (click)="startMention()" [title]="('Mention' | t) + ' (@)'">
               <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.at }" /></button>
             <button class="tcv-cc-ib" data-act="attach" (click)="pickFile.click()"
@@ -957,17 +927,6 @@ export class RoomCommandCode implements OnDestroy {
   readonly mod = this.mac ? '⌘+' : 'Ctrl+';
   readonly modShort = this.mac ? '⌘' : 'Ctrl ';
   modelPop = signal(false);
-  modelQ = signal('');
-  private mqEl = viewChild<ElementRef<HTMLInputElement>>('mq');
-  shownModels = computed(() => {
-    const words = this.modelQ().toLowerCase().split(/\s+/).filter(Boolean);
-    const rows = this.models();
-    return words.length ? rows.filter(m => words.every(w => (m.name + ' ' + m.id).toLowerCase().includes(w))) : rows;
-  });
-  modelName = computed(() => {
-    const m = this.models().find(x => x.id === this.model());
-    return m?.name ?? this.short(this.model() || '…');
-  });
   q = signal('');
   /** Which list: the conversations, the archived ones, or the trash. */
   tab = signal<CcTab>('list');
@@ -1295,17 +1254,6 @@ export class RoomCommandCode implements OnDestroy {
     if (this.menu()) this.menu.set(false);
     if (this.modelPop()) this.modelPop.set(false);
   };
-
-  toggleModelPop() {
-    this.modelPop.update(v => !v);
-    this.modelQ.set('');
-    if (this.modelPop()) setTimeout(() => this.mqEl()?.nativeElement.focus());
-  }
-
-  pickFirstModel() {
-    const m = this.shownModels()[0];
-    if (m) { this.pickModel(m.id); this.modelPop.set(false); }
-  }
 
   refresh(openFirst = false) {
     const tab = this.tab();
