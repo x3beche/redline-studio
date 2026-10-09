@@ -1450,6 +1450,8 @@ const TR: Record<string, string> = {
   'Send answer': 'Yanıtı gönder',
   'or answer in your own words': 'ya da kendi sözlerinle yanıtla',
   'could not send that': 'gönderilemedi',
+  'too long to send': 'gönderilemeyecek kadar uzun',
+  'the server refused it - too long or malformed': 'sunucu kabul etmedi - çok uzun ya da hatalı',
   // chat attachments (rooms/chat-attach.ts)
   'Attach a picture or a file (or paste, or drop it here)': 'Görsel ya da dosya ekle (veya yapıştır, ya da buraya sürükle)',
   'At most 8 attachments go with one message.': 'Bir mesajla en fazla 8 ek gider.',

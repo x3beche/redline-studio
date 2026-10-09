@@ -16,6 +16,9 @@ import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './ch
 import { FilesApi } from './files-model';
 import { ComposerSuggest, SuggestChip } from './suggest';
 
+/** The longest line a room thread takes (backend/main.py CHAT_MAX). */
+const CHAT_MAX = 20_000;
+
 /** The rooms' agent threads, in the Chat tab.
  *
  *  Each room with an agent (backend/chat.py ROOMS: the 3D room and the PCB
@@ -555,6 +558,11 @@ export class RoomThread {
   say() {
     if (!this.canSend()) return;
     const text = this.saying().trim();
+    if (text.length > CHAT_MAX) {
+      // Said before it is sent, not after a refusal (backend/main.py CHAT_MAX).
+      this.error.set(`${t('too long to send')}: ${text.length.toLocaleString()} / ${CHAT_MAX.toLocaleString()} ${t('characters')}`);
+      return;
+    }
     const urgent = this.urgent(), room = this.room();
     const held = this.att.items(), ready = this.att.ready();
     const mentions = ready.map(p => ({ kind: 'file' as const, id: p.id!, label: p.name, image: p.image }));
@@ -567,8 +575,8 @@ export class RoomThread {
     this.scroll();
     this.chat.say(text, urgent, room, mentions.map(m => m.id)).subscribe({
       next: () => { this.load(); this.threads.poll(); },
-      error: () => {
-        this.error.set(t('could not send that'));
+      error: e => {
+        this.error.set(e?.status === 422 ? t('the server refused it - too long or malformed') : t('could not send that'));
         this.lines.update(l => l.filter(m => this.sent(m)));
         if (!this.saying()) this.saying.set(text);
         this.att.restore(held);

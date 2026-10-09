@@ -3070,9 +3070,14 @@ async def put_kwh_price(body: KwhIn):
 
 
 # ---------------- chat ----------------
+CHAT_MAX = 20_000                 # a room thread's line, as a conversation's (cc_chat)
+
+
 class ChatIn(BaseModel):
-    # May be empty when the line carries files (a pasted picture).
-    text: str = Field(default="", max_length=4000)
+    # May be empty when the line carries files (a pasted picture). As long
+    # as a conversation's line: a task written out in full for an agent
+    # ran past the 4000 this used to be, and the page only said it failed.
+    text: str = Field(default="", max_length=CHAT_MAX)
     # Files of the Files tab the line carries - pasted, dropped or attached
     # in the composer - by id; kept on the line as chips (chat.file_chips).
     files: list[str] = Field(default_factory=list, max_length=8)
