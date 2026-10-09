@@ -198,12 +198,11 @@ export function picked(cc: CcUsage, which: CcTabWindow): { id: string; label: st
     .tb-cc-one[data-tone="warn"] .tb-cc-v { color: var(--warn); }
     .tb-cc-one[data-tone="danger"] .tb-cc-bar > i { background: var(--danger); }
     .tb-cc-one[data-tone="danger"] .tb-cc-v { color: var(--danger); }
-    .tb-cc:hover .tb-cc-v { text-decoration: underline; }
     @media (max-width: 768px) { .tb-cc-bar { width: 14px; } .tb-cc { gap: 4px; margin-left: 4px; } }
   `],
   template: `
 @if (shown().length) {
-  <span class="tb-cc" [title]="tipText()" (click)="openSettings($event)">
+  <span class="tb-cc" [title]="tipText()">
     @for (x of shown(); track x.id) {
       <span class="tb-cc-one" [attr.data-tone]="tone(x.w)">
         @if (shown().length > 1) { <span class="tb-cc-k">{{ x.label }}</span> }
@@ -216,7 +215,6 @@ export function picked(cc: CcUsage, which: CcTabWindow): { id: string; label: st
 })
 export class CcTabUsage implements OnDestroy {
   cc = polling();
-  private prefs = inject(Prefs);
   private bar = inject(TopBar);
   private el = inject(ElementRef).nativeElement as HTMLElement;
   readonly tone = tone;
@@ -224,13 +222,13 @@ export class CcTabUsage implements OnDestroy {
   readonly num = num;
   style = this.bar.ccStyle;
   shown = computed(() => this.style() === 'off' ? [] : picked(this.cc, this.bar.ccWindow()));
-  tipText = computed(() => tip(this.cc.data(), this.cc.now()) + '\n' + t('Click for LLM settings'));
+  tipText = computed(() => tip(this.cc.data(), this.cc.now()));
   // Its width is the Chat tab's: the bar measures the tabs again when it changes.
   private ro = new ResizeObserver(() => this.bar.extraW.set(Math.ceil(this.el.getBoundingClientRect().width)));
   constructor() { this.ro.observe(this.el); }
   ngOnDestroy() { this.ro.disconnect(); }
   round(v: number) { return Math.round(v); }
-  openSettings(e: Event) { e.stopPropagation(); this.prefs.open.set('llm'); }
+
 }
 
 /** Pinned under the Chat room's list: the windows as small meters, when

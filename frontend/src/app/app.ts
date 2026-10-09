@@ -58,7 +58,7 @@ import { CcTabUsage } from './cc-usage';
         @if (b.id === 'commandcode') { @if (threads.total(); as n) {
           <span class="tcv-tab-unread" [title]="n + ' ' + ('unread in the agent threads' | t)">{{ n }}</span> } }
         <!-- And the Command Code account's usage, in the tab itself (cc-usage.ts;
-             Settings > Top bar says how): clicking it opens LLM settings. -->
+             Settings > Top bar says how): a click on it is a click on the tab. -->
         @if (b.id === 'commandcode') { <app-cc-tab-usage /> }
       </button>
     }
