@@ -571,6 +571,10 @@ export class RoomThread {
                                     ...(mentions.length ? { mentions } : {}) } as ChatLine]);
     this.saying.set('');
     this.att.clear();
+    // Back to one line: the textarea still holds the sent text until the
+    // next change detection, and measured with it the box stayed tall.
+    const el = this.box()?.nativeElement;
+    if (el) el.value = '';
     this.grow();
     this.scroll();
     this.chat.say(text, urgent, room, mentions.map(m => m.id)).subscribe({
