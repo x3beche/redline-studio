@@ -164,7 +164,9 @@ export interface CameraState {
  *  centre. `offset` is the same plane in world terms (n . p = offset), which
  *  is what is put back - a rebuilt model with another box keeps its cut where
  *  it was. `enabled` is false for a plane left fully open (slider at the end
- *  of its travel), which stays open whatever the new box. */
+ *  of its travel), which stays open whatever the new box. `normal` is the
+ *  plane's real normal - the reverse switch (editor/clip-reverse.ts) negates
+ *  the viewer's default - and is put back as it is. */
 export interface ClipPlaneView {
   normal: [number, number, number];
   slider: number;

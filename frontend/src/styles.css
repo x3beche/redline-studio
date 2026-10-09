@@ -2192,6 +2192,30 @@ body {
 .tcv-clipstep-presets button[data-on="1"] { color: var(--ink-bright); background: var(--accent-deep); }
 .tcv-clipstep-presets button:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 
+/* The reverse switch on each clip plane's N=(...) row (clip-reverse.ts):
+   the same flat, outlined chip as the wheel step's presets, lit while the
+   plane faces the other way. */
+.tcv-clipflip-row { display: flex; align-items: center; gap: 4px; }
+.tcv-clipflip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-dim);
+  cursor: pointer;
+  transition: color .12s, background .12s, border-color .12s;
+}
+.tcv-clipflip:hover { color: var(--ink); background: var(--hover); }
+.tcv-clipflip[data-on="1"] { color: var(--ink-bright); background: var(--accent-deep); border-color: var(--accent); }
+.tcv-clipflip:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+
 /* A build has no percentage to report - the model script runs to its own
    clock - so the bar slides rather than fills. Honest about not knowing how
    long is left, while still saying the machine is working. */

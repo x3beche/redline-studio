@@ -184,6 +184,19 @@ def test_a_rebuilt_model_keeps_the_cut_in_the_same_place():
     assert render.readback_mismatch(v, rb) == []
 
 
+def test_a_reversed_plane_is_checked_by_its_real_normal():
+    # The Clip tab's reverse switch (editor/clip-reverse.ts) negates a
+    # plane's normal; the note keeps the real one and the page reads it back.
+    v = note_view()
+    v["clip"]["planes"][0] = plane([1, 0, 0], 12.5, -12.5)
+    v["clip"]["planes"][2] = plane([0, 0, 1], 60.0, -60.0, enabled=False)
+    assert render.readback_mismatch(v, readback(v)) == []
+    # A page that put the plane back the default way round is caught.
+    unturned = readback(v)
+    unturned["planes"][0] = {**unturned["planes"][0], "normal": [-1, 0, 0]}
+    assert "plane 1 faces" in " ".join(render.readback_mismatch(v, unturned))
+
+
 def test_an_older_note_is_shot_as_before():
     old = {"states": {"/base/case": [1, 1]}}
     assert render.view_format(old) == 1 and render.view_format(None) == 0

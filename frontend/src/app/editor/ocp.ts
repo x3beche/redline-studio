@@ -1,6 +1,7 @@
 import { Display, Viewer, decodeInstancedFormat, isInstancedFormat } from 'three-cad-viewer';
 import type { CameraState, ClipPlaneView, NoteView } from '../api';
 import { ClipWheel } from './clip-wheel';
+import { ClipReverse } from './clip-reverse';
 
 /** OCP CAD Viewer itself (three-cad-viewer): the same version and wire
  *  format the VS Code extension uses; Python produces the payload. */
@@ -72,6 +73,8 @@ export class OcpViewer {
   parts: string[] = [];
   /** The wheel on the Clip tab's plane sliders, and its step control. */
   clipWheel: ClipWheel | null = null;
+  /** The reverse switch beside each clip plane. */
+  clipReverse: ClipReverse | null = null;
   /** resizeCadView throws before render() has been called. */
   private rendered = false;
 
@@ -103,6 +106,7 @@ export class OcpViewer {
     // the component.
     (window as unknown as Record<string, unknown>)['tcv'] = this.viewer;
     this.clipWheel = new ClipWheel(this.container);
+    this.clipReverse = new ClipReverse(this.container, () => this.viewer);
   }
 
   /** Load a payload into the scene. False, with the scene untouched, when
@@ -157,6 +161,7 @@ export class OcpViewer {
     } as any);
     this.rendered = true;
     this.clipWheel?.ensure();
+    this.clipReverse?.ensure();
     return true;
   }
 

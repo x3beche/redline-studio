@@ -13,6 +13,11 @@ import { t } from '../i18n';
  *  a range snaps to its own `step` from `min`, and a 1 mm step would land
  *  on 0.97 mm.
  *
+ *  The wheel follows the slider's thumb, not the world axis: up is the
+ *  slider's open end, down cuts deeper. A reversed plane (clip-reverse.ts)
+ *  keeps that meaning - only the end it cuts in from changes - so the
+ *  wheel needs no special case for it.
+ *
  *  The step is picked at the top of the tab and kept per browser. */
 
 export const STEP_PRESETS = [0.1, 0.5, 1, 5, 10] as const;
