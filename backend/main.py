@@ -1582,6 +1582,31 @@ async def save_board_rules(bid: str, body: RulesIn):
     return {"saved": True}
 
 
+class EngineIn(BaseModel):
+    engine: str
+
+
+@app.put("/api/boards/{bid}/rules/engine")
+async def save_board_engine(bid: str, body: EngineIn):
+    """Which router the next run uses - the switch beside Build. Only the
+    engine changes: the rest of the rules stay as they are, checked or not,
+    for the rules tab to answer for."""
+    if body.engine not in rules.ENGINES:
+        raise HTTPException(400, f"engine: one of {', '.join(rules.ENGINES)}")
+    doc = await db()[ato.BOARDS].find_one({"_id": bid}, {"rules": 1})
+    if doc is None:
+        raise HTTPException(404, bid)
+    if doc.get("rules"):
+        await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": {"rules.route.engine": body.engine}})
+    else:
+        # No rules kept yet: the ones the room shows, with the engine.
+        merged = rules.merge(None, await _board_nets(bid) or [])
+        merged["route"]["engine"] = body.engine
+        await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": {"rules": merged}})
+    await say(f"{bid}: routes with {body.engine} from the next run", "info", room="pcb")
+    return {"engine": body.engine}
+
+
 @app.post("/api/boards/{bid}/run")
 async def run_board(bid: str, detach: bool = False):
     """The whole of it, in order: build the source, draw the schematic,

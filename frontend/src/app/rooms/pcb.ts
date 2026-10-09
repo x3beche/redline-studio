@@ -124,6 +124,18 @@ type BoardView = Pane | 'split' | 'focus';
                        : building() ? 'Building…' : 'Build - source, schematic, place, route, DRC'"
                 [on]="building()" [disabled]="building() || frozen() || !here() || imported()"
                 (press)="build()" />
+      <!-- Which router the build uses (rules: route.engine). TraceMaker's
+           routing is drawn live in the layout while it runs. -->
+      @if (here() && !imported()) {
+        <div class="tcv-engine" role="radiogroup" [attr.aria-label]="'Router' | t"
+             [title]="'Which router the next build uses - TraceMaker can be watched routing in the layout' | t">
+          @for (e of engines; track e.id) {
+            <button role="radio" [attr.aria-checked]="engine() === e.id" [attr.data-on]="engine() === e.id ? '' : null"
+                    [disabled]="building() || frozen() || savingEngine() || !auth.can('edit')"
+                    (click)="setEngine(e.id)">{{ e.label }}</button>
+          }
+        </div>
+      }
       <!-- A board from outside: Gerbers, a fab zip, a STEP, a design file. -->
       <app-tool icon="tcv-ico-open" tip="Import - a board from Gerbers, a fab zip, a STEP or a design file"
                 [on]="importing()" [disabled]="frozen()" (press)="importing.set(true)" />
@@ -696,6 +708,11 @@ export class RoomPcb implements OnDestroy {
 
   boards = signal<BoardEntry[]>([]);
   here = signal<BoardEntry | null>(null);
+  /** The router the next build uses: the switch beside Build. */
+  readonly engines = [{ id: 'freerouting', label: 'Freerouting' }, { id: 'tracemaker', label: 'TraceMaker' }] as const;
+  engine = signal<string>('freerouting');
+  savingEngine = signal(false);
+  private hereId = computed(() => this.here()?._id ?? null);
   graph = signal<BoardGraph | null>(null);
   /** The routed board as data: what the mouse can point at on the layout. */
   geo = signal<BoardGeometry | null>(null);
@@ -787,6 +804,14 @@ export class RoomPcb implements OnDestroy {
   projectOf(b: BoardEntry) { return ((b as BoardEntry & { folder?: string }).folder || b._id).split('/')[0]; }
 
   constructor() {
+    // The engine of the board on show, read when another board is picked.
+    effect(() => {
+      const id = this.hereId();
+      if (!id) return;
+      untracked(() => this.api.rules(id).subscribe({
+        next: r => { if (this.hereId() === id) this.engine.set(r.rules?.route?.engine ?? 'freerouting'); },
+      }));
+    });
     // What the command palette asks of this room.
     effect(() => {
       const w = this.picked.want();
@@ -1427,6 +1452,29 @@ export class RoomPcb implements OnDestroy {
   }
 
   // ---- the rules ----
+
+  setEngine(e: string) {
+    const b = this.here();
+    if (!b || e === this.engine()) return;
+    const was = this.engine();
+    this.engine.set(e); this.savingEngine.set(true);
+    this.api.saveEngine(b._id, e).subscribe({
+      next: () => {
+        this.savingEngine.set(false);
+        // The rules tab, if open, shows the same and is not left dirty by it.
+        const d = this.draft();
+        if (d) {
+          const saved = JSON.parse(this.savedRules() || 'null');
+          if (saved?.route) { saved.route.engine = e; this.savedRules.set(JSON.stringify(saved)); }
+          this.draft.set({ ...d, route: { ...d.route, engine: e } });
+        }
+      },
+      error: err => {
+        this.savingEngine.set(false); this.engine.set(was);
+        this.note.set(String(err?.error?.detail ?? 'the router was not changed').slice(0, 160));
+      },
+    });
+  }
 
   loadRules() {
     const b = this.here();

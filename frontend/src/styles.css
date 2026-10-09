@@ -4943,3 +4943,12 @@ button.tcv-fm-crumb:hover { color: var(--ink); background: var(--hover); }
   .tcv-fm-menu-item { height: 42px; }
   .tcv-fv-md { padding: 18px 16px 40px; }
 }
+
+/* The router switch beside Build in the PCB room: two words, the one in use lit. */
+.tcv-engine { display: inline-flex; margin: 0 4px 0 2px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.tcv-engine button { padding: 3px 8px; font-size: 11px; line-height: 1.2; color: var(--ink-dim); background: var(--surface-2); border: 0; cursor: pointer; white-space: nowrap; }
+.tcv-engine button + button { border-left: 1px solid var(--line); }
+.tcv-engine button:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
+.tcv-engine button[data-on] { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-engine button:disabled { cursor: default; }
+.tcv-engine button:disabled:not([data-on]) { opacity: .55; }

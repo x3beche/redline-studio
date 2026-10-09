@@ -546,7 +546,7 @@ export interface BoardRules {
   board: { layers: number; min_track: number; min_clearance: number;
            min_via: number; min_drill: number; min_edge?: number };
   pours: Pour[];
-  route: { passes: number };
+  route: { passes: number; tries?: number; engine?: string; seconds?: number };
   edited: boolean;
 }
 
@@ -753,6 +753,10 @@ export class Boards {
   /** What every rule field is - the form is drawn from it. */
   rulesSchema(): Observable<RuleSchema> {
     return this.http.get<RuleSchema>('/api/rules/schema');
+  }
+  /** Only the router the next run uses (the switch beside Build). */
+  saveEngine(id: string, engine: string): Observable<unknown> {
+    return this.http.put(`/api/boards/${id}/rules/engine`, { engine });
   }
   saveRules(id: string, rules: BoardRules): Observable<unknown> {
     return this.http.put(`/api/boards/${id}/rules`, { rules });
