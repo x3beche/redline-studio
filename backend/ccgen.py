@@ -431,6 +431,9 @@ async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, boo
     end(status="done", say=res.say, vars={**step["vars"], **_vars(res.vars)},
         summary=(res.summary or "")[:chat_tools.MAX_SUMMARY], ms=round((time.monotonic() - t0) * 1000))
     text = chat_tools.clip(res.text)
+    # What later turns are shown it gave (backend/cc_chat.py history): the
+    # start of it, and how long all of it was - the model had all of it.
+    end(result=text[:chat_tools.RECALL], result_chars=len(text))
     if res.image and ctx.vision:
         return [{"type": "text", "text": text},
                 {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(res.image).decode()}}], False
@@ -471,18 +474,22 @@ async def run(gid: str, db=None) -> dict | None:
         pics = convo[-1].get("attach") or []
         if gen.get("images") and pics:
             images = await cc_context.images(db, pics)
-        base = cc_chat.history(convo, images)
         uid = (gen.get("actor") or {}).get("id") or (gen.get("by") or {}).get("id")
         try:
             tools = {t.name: t for t in await chat_tools.enabled(db, uid)}
         except Exception as exc:                                 # noqa: BLE001 - an answer without tools
             print(f"cc {gid}: tools not read: {exc}", file=sys.stderr)
             tools = {}
+        # Earlier answers' steps go back to the model with them: as tool
+        # calls and results while it has tools, as a written list otherwise.
+        base = cc_chat.history(convo, images)
         ctx = None
         if tools:
             ctx = chat_tools.Ctx(db=db, vision=await cc_chat._vision(gen["provider"], gen["model"]),
                                  actor=gen.get("actor") or {})
-            msgs = [{**base[0], "content": base[0]["content"] + "\n\n" + chat_tools.SYSTEM_NOTE}, *base[1:]]
+            withcalls = cc_chat.history(convo, images, tools=set(tools))
+            msgs = [{**withcalls[0], "content": withcalls[0]["content"] + "\n\n" + chat_tools.note(list(tools.values()))},
+                    *withcalls[1:]]
         else:
             msgs = base
         rounds = 0

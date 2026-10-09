@@ -35,6 +35,7 @@ LEVELS = ("read", "change", "delete")
 PREFS = "cc_tool_prefs"              # the machine's: one document per account, {_id: user id, tools: {name: bool}}
 MAX_TEXT = 24_000                    # characters of one tool's answer the model gets
 MAX_SUMMARY = 600                    # characters of it the page keeps on the step
+RECALL = 1_500                       # characters of it kept on the step for later turns (cc_chat.history)
 
 
 class ToolError(Exception):
@@ -153,5 +154,15 @@ SYSTEM_NOTE = (
     "by page or with a query; a scanned page as a picture) before quoting a value. Cite the "
     "datasheet page for every value you quote, e.g. (datasheet p. 2). Use the tools only when "
     "they help the question, and only those you have; say plainly when a datasheet does not give "
-    "a value."
+    "a value. To see what the drawer holds - which parts, which of them have a datasheet kept - "
+    "list it (drawer_list) rather than guessing."
 )
+
+
+def note(on: list[Tool]) -> str:
+    """The system note for a line answered with tools: how to use them, and
+    exactly which ones there are this time (named, not counted by the model:
+    writing a ```task block is not a tool)."""
+    names = ", ".join(t.name for t in on)
+    return (SYSTEM_NOTE + f" The tools you have now are exactly these {len(on)}: {names}. Writing a "
+            "```task block for the queue is something you write, not a tool.")

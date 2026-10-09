@@ -313,7 +313,7 @@ const I = {
 
 /** A tool's icon on its step (backend/chat_tools): by what it touches. */
 const TOOL_ICON: Record<string, string> = {
-  drawer_search: I.drawer, drawer_add: I.drawer, lcsc_search: I.search, datasheet_get: I.sheet, datasheet_read: I.sheet,
+  drawer_search: I.drawer, drawer_list: I.drawer, drawer_add: I.drawer, lcsc_search: I.search, datasheet_get: I.sheet, datasheet_read: I.sheet,
 };
 /** A mention's kind, as its icon and its name. */
 const KIND: Record<CcMention['kind'], { icon: string; name: string }> = {
@@ -946,7 +946,8 @@ type Ask = { text: string; label: string; go: () => void };
 <ng-template #stepsT let-steps let-cid="cid">
   <div class="tcv-cc-steps">
     @for (s of steps; track s.id) {
-      <details class="tcv-cc-step" [attr.data-status]="s.status" [attr.data-level]="s.level">
+      <details class="tcv-cc-step" [attr.data-status]="s.status" [attr.data-level]="s.level"
+               (toggle)="stepToggled(s.id, $event)">
         <summary>
           @if (s.status === 'running') { <span class="tcv-cc-spin" aria-hidden="true"></span> }
           @else if (s.status === 'error' || s.status === 'denied') { <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.alert }" /> }
@@ -956,12 +957,16 @@ type Ask = { text: string; label: string; go: () => void };
           @if (s.ms != null && s.ms >= 500 && s.status !== 'running') { <span class="tcv-cc-dim">{{ secs(s.ms) }}</span> }
           <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.chevron }" />
         </summary>
+        <!-- Only while open: a closed row's hidden <pre> came out of a copy
+             of the page as an empty code block. -->
+        @if (openSteps().has(s.id)) {
         <dl class="tcv-cc-stepbody">
           <dt>{{ 'Tool' | t }}</dt><dd class="mono">{{ s.tool }} · {{ levelName(s.level) | t }}</dd>
           <dt>{{ 'Input' | t }}</dt><dd class="mono">{{ argsLine(s) }}</dd>
           @if (s.summary) { <dt>{{ 'Result' | t }}</dt><dd><pre>{{ s.summary }}</pre></dd> }
           @if (s.error) { <dt>{{ 'Error' | t }}</dt><dd class="tcv-cc-steperr">{{ s.error }}</dd> }
         </dl>
+        }
       </details>
       @if (s.status === 'ask' && auth.can('draw')) {
         <div class="tcv-cc-stepask">
@@ -2512,7 +2517,9 @@ export class RoomCommandCode implements OnDestroy {
     const head = `# ${t(c.title)}\n\n_${this.provLabel(c.provider)} · ${c.model} · ${new Date(c.created_at).toLocaleString()}_\n`;
     const lines = this.messages().map(m => {
       const who = m.role === 'user' ? (m.by?.name || t('someone')) : `${this.short(m.model || '')} (${t('model')})`;
-      return `## ${who} · ${new Date(m.at).toLocaleString()}\n\n${m.content}${m.error ? `\n\n> ${m.error}` : ''}\n`;
+      const body = this.chunks(m.content, m.steps)
+        .map(ch => ch.steps ? ch.steps.map(st => `- _${this.stepLine(st)}_`).join('\n') + '\n\n' : ch.text).join('');
+      return `## ${who} · ${new Date(m.at).toLocaleString()}\n\n${body}${m.error ? `\n\n> ${m.error}` : ''}\n`;
     });
     return [head, ...lines].join('\n---\n\n');
   }
@@ -2580,6 +2587,17 @@ export class RoomCommandCode implements OnDestroy {
     }
     if (at < text.length) out.push({ text: text.slice(at) });
     return out;
+  }
+  /** The steps whose row is open: only they have their details in the page. */
+  openSteps = signal<ReadonlySet<string>>(new Set());
+  stepToggled(id: string, e: Event) {
+    const open = (e.target as HTMLDetailsElement).open;
+    this.openSteps.update(o => {
+      if (o.has(id) === open) return o;
+      const n = new Set(o);
+      if (open) n.add(id); else n.delete(id);
+      return n;
+    });
   }
   toolIcon(name: string) { return TOOL_ICON[name] ?? I.tool; }
   levelName(l: ToolLevel) { return LEVELS.find(x => x.id === l)?.name ?? l; }

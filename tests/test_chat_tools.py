@@ -158,14 +158,15 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
                         lambda self, n: Prefs() if n == chat_tools.PREFS else real(self, n))
     got = run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"drawer_add": False, "datasheet_get": False})))
     on = {t["name"]: t["on"] for t in got["tools"]}
-    assert on == {"drawer_search": True, "lcsc_search": True, "drawer_add": False,
+    assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": False,
                   "datasheet_get": False, "datasheet_read": True}
     assert run(cc_chat.list_tools())["tools"] == got["tools"]
     with pytest.raises(Exception):
         run(cc_chat.set_tools(cc_chat.ToolsIn(tools={"rm_rf": True})))
     tool_model(monkeypatch, state, [("Hi.", [])])
     events(cc_chat.say("c1", cc_chat.SayIn(text="?", client="tab1")))
-    assert {t["name"] for t in state["rounds"][0]["tools"]} == {"drawer_search", "lcsc_search", "datasheet_read"}
+    assert {t["name"] for t in state["rounds"][0]["tools"]} == {"drawer_search", "drawer_list", "lcsc_search",
+                                                                "datasheet_read"}
     # Nothing on: no tools, and no note about them.
     run(cc_chat.set_tools(cc_chat.ToolsIn(tools={n: False for n in chat_tools.tools()})))
     events(cc_chat.say("c1", cc_chat.SayIn(text="again", client="tab1")))
@@ -462,3 +463,143 @@ def test_every_tool_is_registered_with_what_the_page_needs():
         assert t.level in chat_tools.LEVELS and t.running and t.failed and t.description
         assert t.schema["type"] == "object"
         assert name == t.name
+
+
+# ---- earlier answers' steps go back to the model ---------------------------------
+
+def _asked(text="do u have the datasheet of C29780637?"):
+    return {"id": "q1", "role": "user", "content": text, "by": {"id": "u1", "name": "Ann"}, "at": "t"}
+
+
+def _answered():
+    """An answer that ran three tools in two rounds, as ccgen keeps it."""
+    text = "Let me look.\n\nYes: IRL540N(UMW), TO-220-3, datasheet kept (p. 1)."
+    pos = len("Let me look.\n\n")
+    return {"id": "a1", "role": "assistant", "content": text, "at": "t", "steps": [
+        {"id": "s1", "tool": "drawer_search", "pos": 0, "status": "done", "args": {"query": "C29780637"},
+         "summary": "C29780637 IRL540N(UMW)", "result": "In the drawer, matching 'C29780637':\nC29780637  IRL540N(UMW)  UMW  TO-220-3"},
+        {"id": "s2", "tool": "datasheet_get", "pos": pos, "status": "done", "args": {"lcsc": "C29780637"},
+         "summary": "IRL540N(UMW) · 10 pages"},
+        {"id": "s3", "tool": "datasheet_read", "pos": pos, "status": "error", "args": {"lcsc": "C29780637", "pages": "99"},
+         "error": "no page 99"}]}
+
+
+ALL = {"drawer_search", "datasheet_get", "datasheet_read"}
+
+
+def test_history_replays_an_earlier_answers_tools_as_calls_and_results():
+    h = cc_chat.history([_asked(), _answered(), {**_asked("summarize it"), "id": "q2"}], tools=ALL)
+    assert cc_chat.STEPS_NOTE in h[0]["content"] and "do not take back" in h[0]["content"]
+    roles = [m["role"] for m in h[1:]]
+    assert roles == ["user", "assistant", "tool", "assistant", "tool", "tool", "assistant", "user"]
+    first, res1, second, res2, res3, end = h[2:8]
+    assert first["content"] == "" and first["tool_calls"][0]["function"]["name"] == "drawer_search"
+    assert json.loads(first["tool_calls"][0]["function"]["arguments"]) == {"query": "C29780637"}
+    assert res1["tool_call_id"] == first["tool_calls"][0]["id"] and "TO-220-3" in res1["content"]   # the kept result
+    assert second["content"] == "Let me look." and [c["function"]["name"] for c in second["tool_calls"]] == \
+        ["datasheet_get", "datasheet_read"]
+    assert res2["content"].startswith("IRL540N(UMW) · 10 pages\n[only a short summary")       # older steps: the summary
+    assert res3["is_error"] and res3["content"] == "Error: no page 99"
+    assert end["content"] == "Yes: IRL540N(UMW), TO-220-3, datasheet kept (p. 1)."
+    assert len({c["id"] for m in h if m.get("tool_calls") for c in m["tool_calls"]}) == 3
+    assert not any("```" in str(m.get("content")) for m in h[1:])                               # no fences made up
+
+
+def test_history_in_anthropics_shape_pairs_each_tool_use_with_its_result():
+    h = cc_chat.history([_asked(), _answered(), {**_asked("summarize it"), "id": "q2"}], tools=ALL)
+    body = llm._to_anthropic(h, 100, None, "claude-haiku-5-5",
+                             tools=[chat_tools.tools()[n].spec() for n in sorted(ALL)])
+    turns = body["messages"]
+    assert [t["role"] for t in turns] == ["user", "assistant", "user", "assistant", "user", "assistant", "user"]
+    uses = [b["id"] for t in turns if t["role"] == "assistant" and isinstance(t["content"], list)
+            for b in t["content"] if b["type"] == "tool_use"]
+    results = [b["tool_use_id"] for t in turns if t["role"] == "user" and isinstance(t["content"], list)
+               for b in t["content"] if b["type"] == "tool_result"]
+    assert uses == results and len(uses) == 3
+    assert turns[3]["content"][0] == {"type": "text", "text": "Let me look."}
+    assert "do not take back" in body["system"]
+
+
+def test_without_tools_the_steps_are_written_at_the_answers_start():
+    h = cc_chat.history([_asked(), _answered(), {**_asked("thanks"), "id": "q2"}])
+    assert [m["role"] for m in h[1:]] == ["user", "assistant", "user"]
+    a = h[2]["content"]
+    assert a.startswith("[Tools run for this answer")
+    assert "drawer_search(query='C29780637') -> In the drawer" in a
+    assert "datasheet_read(lcsc='C29780637', pages='99') -> Error: no page 99" in a
+    assert a.endswith("datasheet kept (p. 1).")
+    assert "tool_calls" not in h[2]
+    # A tool that is off now: that answer is written out too, not called.
+    h2 = cc_chat.history([_asked(), _answered(), {**_asked("thanks"), "id": "q2"}], tools={"drawer_search"})
+    assert h2[2]["content"].startswith("[Tools run") and "tool_calls" not in h2[2]
+
+
+def test_older_answers_keep_less_of_each_result(monkeypatch):
+    big = _answered()
+    big["steps"][0]["result"] = "x" * 5000
+    msgs = []
+    for i in range(4):
+        msgs += [{**_asked(f"q{i}"), "id": f"q{i}"}, {**big, "id": f"a{i}"}]
+    msgs.append({**_asked("again"), "id": "q9"})
+    h = cc_chat.history(msgs, tools=ALL)
+    firsts = [m["content"] for m in h if m["role"] == "tool" and m["content"].startswith("x")]
+    assert len(firsts) == 4
+    assert len(firsts[-1]) < cc_chat.RECALL_RECENT + 200 and len(firsts[0]) < cc_chat.RECALL_OLD + 200
+    assert len(firsts[0]) < len(firsts[-1])
+    # A shortened result says it is only shortened here, not that the model lacked it.
+    assert "left out of this replay only" in firsts[-1] and "written with all of it" in firsts[-1]
+    # And the budget counts them: a small one keeps only the newest.
+    monkeypatch.setattr(cc_chat, "CONTEXT_CHARS", 2500)
+    h = cc_chat.history(msgs, tools=ALL)
+    assert h[1]["role"] == "user" and sum(m["role"] == "tool" for m in h) <= 3
+
+
+def test_the_next_line_is_answered_knowing_what_the_tools_gave(env, monkeypatch):
+    raw, state = env
+    seed_chat(raw)
+    keep_datasheet()
+    monkeypatch.setattr(lcsc, "known", lambda db: _rows([{"lcsc": "C29780637", "name": "TO-220", "mpn": "IRL540N",
+                                                         "maker": "UMW", "group": "Discretes", "branch": "Transistors"}]))
+    tool_model(monkeypatch, state, [("", [("drawer_search", {"query": "C29780637"})]), ("It is there.", [])])
+    events(cc_chat.say("c1", cc_chat.SayIn(text="C29780637?", client="tab1")))
+    (step,) = answers(raw)[-1]["steps"]
+    assert "IRL540N" in step["result"] and len(step["result"]) <= chat_tools.RECALL
+    assert step["result_chars"] == len(state["rounds"][1]["messages"][-1]["content"])
+    tool_model(monkeypatch, state, [("You're welcome.", [])])
+    events(cc_chat.say("c1", cc_chat.SayIn(text="thanks", client="tab1")))
+    sent = state["rounds"][0]["messages"]
+    calls = [m for m in sent if m.get("tool_calls")]
+    assert calls and calls[0]["tool_calls"][0]["function"]["name"] == "drawer_search"
+    assert any(m["role"] == "tool" and "IRL540N" in m["content"] for m in sent)
+    assert "do not take back" in sent[0]["content"]
+    assert sent[-1] == {"role": "user", "content": "thanks"} or sent[-1]["content"].endswith("thanks")
+
+
+def test_the_note_names_the_tools_and_their_number():
+    on = [chat_tools.tools()[n] for n in ("drawer_search", "datasheet_read")]
+    n = chat_tools.note(on)
+    assert "exactly these 2: drawer_search, datasheet_read" in n and "not a tool" in n
+
+
+# ---- drawer_list -----------------------------------------------------------------
+
+def test_drawer_list_lists_filters_and_pages(monkeypatch):
+    keep_datasheet("C29780637")
+    rows = [{"lcsc": "C29780637", "mpn": "IRL540N", "maker": "UMW", "group": "Discretes", "branch": "Transistors"},
+            {"lcsc": "C111607", "mpn": "STM32F103C8T6", "maker": "ST", "group": "ICs", "branch": "MCUs"},
+            {"lcsc": "C2", "mpn": "BSS138", "maker": "onsemi", "group": "Discretes", "branch": "Transistors"}]
+    monkeypatch.setattr(lcsc, "known", lambda db: _rows([dict(r) for r in rows]))
+    tool = chat_tools.tools()["drawer_list"]
+    assert tool.level == "read" and tool.default
+    got = run(tool.run(Ctx(db=Db()), {}))
+    assert got.say == "Listed {n} drawer parts" and got.vars["n"] == 3
+    assert "C29780637  IRL540N" in got.text and "datasheet kept" in got.text and "not fetched yet" in got.text
+    ds = run(tool.run(Ctx(db=Db()), {"with_datasheet": True}))
+    assert ds.vars["n"] == 1 and "C29780637" in ds.text and "C111607" not in ds.text
+    assert ds.say == "Listed {n} drawer parts with a datasheet"
+    cat = run(tool.run(Ctx(db=Db()), {"category": "transistors"}))
+    assert cat.vars["n"] == 2 and "STM32" not in cat.text
+    p2 = run(tool.run(Ctx(db=Db()), {"per_page": 2, "page": 2}))
+    assert p2.vars["pages"] == 2 and p2.text.count("\nC") == 1 and "Page 2 of 2" in p2.text
+    none = run(tool.run(Ctx(db=Db()), {"category": "relays"}))
+    assert none.say == "No parts in the drawer like that"

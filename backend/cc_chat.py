@@ -191,42 +191,152 @@ def public(m: dict) -> dict:
     return o
 
 
-def history(msgs: list[dict], images: list[dict] | None = None) -> list[dict]:
+RECALL_RECENT = 1_500            # characters of a step's result replayed for the newest answers
+RECALL_OLD = 300                 # and for older ones
+RECENT_ANSWERS = 2
+STEPS_NOTE = (
+    "Earlier answers in this conversation show the tools they ran and what came back - as tool "
+    "calls and results, or as a list the server wrote at the start of the answer ('[Tools run "
+    "for this answer ...]'). Those are real: the tools did run and the results are what they "
+    "returned. Trust them; do not take back or 'correct' facts an earlier answer got from a "
+    "tool. Results replayed here are shortened to save space - the answer they belong to was "
+    "written with the whole result, so a shortened result is no reason to doubt it. An earlier "
+    "answer without such a list or tool calls used no tools. Never write such a list yourself."
+)
+
+
+def _step_result(s: dict, n: int) -> str:
+    """What a step of an earlier answer gave, at most `n` characters."""
+    st = s.get("status")
+    if st == "error":
+        return f"Error: {s.get('error') or 'failed'}"
+    if st == "denied":
+        return "Not run: the person did not allow it."
+    if st in ("stopped", "interrupted", "running", "ask"):
+        return f"Not finished: the answer was {st if st in ('stopped', 'interrupted') else 'stopped'}."
+    got = s.get("result") or s.get("summary") or "(done)"
+    full = max(int(s.get("result_chars") or 0), len(got)) if s.get("result") else 0
+    cut = got[:n]
+    if full > len(cut):
+        cut += (f"\n[{full - len(cut)} more characters of this result are left out of this replay only, "
+                "to save space; the answer was written with all of it]")
+    elif not s.get("result"):
+        cut += "\n[only a short summary of this result is kept; the answer was written with all of it]"
+    return cut
+
+
+def _args(s: dict) -> str:
+    return ", ".join(f"{k}={v!r}" for k, v in (s.get("args") or {}).items())
+
+
+def _segments(text: str, steps: list[dict]) -> list[tuple[str, list[dict]]]:
+    """An answer cut at its steps: (text before, the steps there) in order,
+    the last with no steps."""
+    out: list[tuple[str, list[dict]]] = []
+    at = 0
+    for s in sorted(steps, key=lambda s: s.get("pos") or 0):
+        pos = min(max(int(s.get("pos") or 0), at), len(text))
+        if out and pos == at and out[-1][1]:
+            out[-1][1].append(s)
+        else:
+            out.append((text[at:pos], [s]))
+        at = pos
+    out.append((text[at:], []))
+    return out
+
+
+def _replay(m: dict, text: str, n: int, calls: bool, key: str) -> tuple[list[dict], int]:
+    """An earlier answer as the model is shown it, with the tools it ran:
+    faithfully (an assistant turn asking for them, then their results) when
+    `calls`, else as a written list at its start. Returns the lines and
+    their size in characters."""
+    steps = m.get("steps") or []
+    if not calls:
+        rows = [f"- {s.get('tool')}({_args(s)}) -> {_step_result(s, n)}" for s in steps]
+        head = "[Tools run for this answer, by the server, before or while it was written:\n" + "\n".join(rows) + "]"
+        body = head + "\n\n" + text
+        return [{"role": "assistant", "content": body}], len(body)
+    out: list[dict] = []
+    size = 0
+    for k, (said, group) in enumerate(_segments(text, steps)):
+        said = said.strip()
+        if not group:
+            said = said or "(the answer ended here)"
+            out.append({"role": "assistant", "content": said})
+            size += len(said)
+            continue
+        ids = [f"h{key}_{k}_{j}" for j in range(len(group))]
+        out.append({"role": "assistant", "content": said, "tool_calls": [
+            {"id": i, "type": "function", "function": {"name": s.get("tool"), "arguments": json.dumps(s.get("args") or {})}}
+            for i, s in zip(ids, group)]})
+        size += len(said)
+        for i, s in zip(ids, group):
+            res = _step_result(s, n)
+            out.append({"role": "tool", "tool_call_id": i, "content": res,
+                        **({"is_error": True} if s.get("status") != "done" else {})})
+            size += len(res) + len(_args(s))
+    return out, size
+
+
+def history(msgs: list[dict], images: list[dict] | None = None, tools: set[str] | None = None) -> list[dict]:
     """What the model is sent: the system line, then the conversation -
     newest first until the budget, then put back in order. Names on the
     people's lines once there is more than one person; a line's mentions,
     as their context block, before it. `images` (OpenAI image parts) go
-    with the last line."""
+    with the last line.
+
+    An earlier answer's steps (the tools it ran, backend/ccgen.py) go with
+    it, so the model can tell which of its facts came from a tool: as tool
+    calls and their results when the model has `tools` now (all of that
+    answer's among them - a provider wants every tool it is shown called
+    to be one it was given), else as a list written at the answer's start.
+    The newest answers keep more of each result than older ones."""
     people = {(m.get("by") or {}).get("id") for m in msgs if m["role"] == "user"}
     named = len(people) > 1
-    out: list[dict] = []
+    units: list[list[dict]] = []
     used = 0
-    for m in reversed(msgs):
-        if not (m.get("content") or "").strip():
-            continue                                   # failed, or stopped before a word
+    answers = 0
+    stepped = False
+    for idx in range(len(msgs) - 1, -1, -1):
+        m = msgs[idx]
         text = m.get("content") or ""
+        steps = (m.get("steps") or []) if m["role"] == "assistant" else []
+        if not text.strip() and not steps:
+            continue                                   # failed, or stopped before a word
         if named and m["role"] == "user":
             text = f"[{(m.get('by') or {}).get('name') or 'someone'}] {text}"
         if m["role"] == "user" and m.get("context"):
             text = m["context"] + "\n\n" + text
-        used += len(text)
-        if used > CONTEXT_CHARS and out:
-            break
-        out.append({"role": m["role"], "content": text})
-    # The API wants the turns to alternate and to start with the person;
-    # two lines in a row from people (two people, or an answer that failed)
-    # are joined into one.
-    merged: list[dict] = []
-    for m in reversed(out):
-        if merged and merged[-1]["role"] == m["role"]:
-            merged[-1]["content"] += "\n\n" + m["content"]
+        if steps:
+            n = RECALL_RECENT if answers < RECENT_ANSWERS else RECALL_OLD
+            calls = bool(tools) and all(s.get("tool") in tools for s in steps)
+            unit, size = _replay(m, text, n, calls, str(idx))
+            stepped = True
         else:
-            merged.append(dict(m))
+            unit, size = [{"role": m["role"], "content": text}], len(text)
+        answers += m["role"] == "assistant"
+        used += size
+        if used > CONTEXT_CHARS and units:
+            break
+        units.append(unit)
+    # The API wants the turns to alternate and to start with the person;
+    # two plain lines in a row from people (two people, or an answer that
+    # failed) are joined into one.
+    merged: list[dict] = []
+    for unit in reversed(units):
+        for m in unit:
+            prev = merged[-1] if merged else None
+            if prev and prev["role"] == m["role"] and m["role"] in ("user", "assistant") \
+                    and not prev.get("tool_calls") and not m.get("tool_calls"):
+                prev["content"] += "\n\n" + m["content"]
+            else:
+                merged.append(dict(m))
     while merged and merged[0]["role"] != "user":
         merged.pop(0)
     if images and merged and merged[-1]["role"] == "user":
         merged[-1]["content"] = [{"type": "text", "text": merged[-1]["content"]}, *images]
-    return [{"role": "system", "content": SYSTEM}] + merged
+    system = SYSTEM + ("\n\n" + STEPS_NOTE if stepped else "")
+    return [{"role": "system", "content": system}] + merged
 
 
 # ---- lines: finding them, and whose they are -------------------------------
