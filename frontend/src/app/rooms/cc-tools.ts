@@ -67,7 +67,7 @@ interface ToolsUsage {
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 7l-5 5 5 5" /></svg></button>
     <button class="ct-crumb st-head-name" type="button" (click)="back()">{{ 'Tools' | t }}</button>
     <span class="ct-sep">/</span>
-    <svg class="ct-head-ico" viewBox="0 0 24 24" aria-hidden="true" [style.color]="color(p.name)"><path [attr.d]="icon(p.name)" /></svg>
+    <svg class="ct-head-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(p.name)" /></svg>
     <span class="ct-title">{{ p.label | t }}</span>
     <code class="ct-id">{{ p.name }}</code>
   } @else {
@@ -256,7 +256,7 @@ interface ToolsUsage {
                 <div class="ct-tile" [attr.data-on]="tl.on ? 1 : null" role="button" tabindex="0"
                      (click)="show(tl.name)" (keydown.enter)="show(tl.name)" [title]="'Open its page' | t">
                   <span class="ct-top">
-                    <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true" [style.color]="tl.on ? color(tl.name) : null"><path [attr.d]="icon(tl.name)" /></svg>
+                    <svg class="ct-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icon(tl.name)" /></svg>
                     <span class="ct-name">{{ tl.label | t }}</span>
                     <button class="tcv-switch" type="button" role="switch" [attr.aria-checked]="tl.on" [attr.data-on]="tl.on ? 1 : null"
                             [disabled]="!canEdit()" [attr.aria-label]="tl.label | t" (click)="$event.stopPropagation(); flip(tl)"></button>
@@ -309,7 +309,7 @@ export class CcToolsView {
 
   usage = signal<ToolsUsage | null>(null);
   constructor() { this.http.get<ToolsUsage>('/api/cc/tools-usage').subscribe({ next: u => this.usage.set(u), error: () => {} }); }
-  /** A tool's colour, the same on its tile, its page and every chart: the series palette, in the list's order. */
+  /** A tool's colour in the charts (its page and the top of the list): the series palette, in the list's order. */
   color(name: string) {
     const i = this.tools().findIndex(x => x.name === name);
     return `var(--series-${(i < 0 ? 7 : i % 8) + 1})`;
