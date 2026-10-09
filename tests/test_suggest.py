@@ -242,3 +242,20 @@ def test_the_route_needs_the_right_to_write():
     assert access.action("POST", "/api/suggest") == "draw"
     assert access.action("GET", "/api/suggest") == "view"
     assert not access.allowed("viewer", "draw")
+
+
+def test_a_reload_gets_the_kept_suggestion_back_without_a_call(env):
+    """F5, or another tab: the suggestion made for the last answer is shown
+    again, and peeking never asks the model."""
+    db, calls = env
+    convo(db)
+    turn_on()
+    assert run(suggest.peek(db, "cc", "c1")) is None and calls == []   # none made yet: none asked
+    made = run(suggest.suggest(db, "cc", "c1"))
+    assert run(suggest.peek(db, "cc", "c1")) == made and len(calls) == 1
+    db[cc_chat.COLL].rows["c1"]["messages"].append({"id": "m20", "role": "user", "content": "ok"})
+    assert run(suggest.peek(db, "cc", "c1")) is None                   # the person spoke after it
+    llm._conf["jobs"]["suggest"]["on"] = False
+    db[cc_chat.COLL].rows["c1"]["messages"].pop()
+    assert run(suggest.peek(db, "cc", "c1")) is None                   # switched off
+    assert len(calls) == 1

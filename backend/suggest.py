@@ -176,6 +176,28 @@ async def suggest(db, kind: str, ref: str) -> str | None:
     return text or None
 
 
+async def peek(db, kind: str, ref: str) -> str | None:
+    """The suggestion already made for the conversation's last answer, if
+    any - never a new call. A reload, or another tab, shows it again."""
+    if not settings()["on"]:
+        return None
+    got = await _turns(db, kind, ref)
+    if not got:
+        return None
+    raw = db.raw if getattr(type(db), "SCOPED", False) else db
+    doc = await raw[COLL].find_one({"_id": f"{scope.current()}:{kind}:{ref}:{got[0]}"}) or {}
+    return doc.get("text") or None
+
+
+@router.get("/peek")
+async def get_peek(kind: Literal["cc", "room"], id: str):
+    """{text} when a suggestion was made for the last answer, else 204."""
+    text = await peek(_db(), kind, id)
+    if not text:
+        return Response(status_code=204)
+    return {"text": text}
+
+
 @router.post("")
 async def post_suggest(body: SuggestIn):
     """{text} - the suggestion - or 204 when

@@ -68,6 +68,11 @@ export class ComposerSuggest {
   private armed: string | null = null;
   private timer?: ReturnType<typeof setTimeout>;
   private asking = 0;
+  /** The suggestion for the answer now last (`base`): shown again when the
+   *  composer is empty again - after it was taken and cleared, or typed
+   *  over - unless Esc put it away. */
+  private kept: { base: string; text: string } | null = null;
+  private dismissed = false;
 
   constructor(private state: () => SuggestState, private accept: (text: string) => void) {
     this.conf.ensure();
@@ -83,17 +88,51 @@ export class ComposerSuggest {
       this.cancel();
       this.id = s.id;
       this.base = s.last;
+      if (s.last) this.opened();
       return;
     }
     if (!s.empty && this.text()) this.text.set(null);
     if (s.last === undefined) return;
-    if (this.base === undefined) { this.base = s.last; return; }   // its lines just came
-    if (s.last === this.base) return;
+    if (this.base === undefined) {                // its lines just came
+      this.base = s.last;
+      if (s.last) this.opened();
+      return;
+    }
+    if (s.last === this.base) {
+      // The same answer, the composer empty again: its suggestion back.
+      const k = this.kept;
+      if (s.empty && !s.busy && !this.text() && !this.dismissed && k && k.base === this.base) this.text.set(k.text);
+      return;
+    }
     this.base = s.last;
+    this.kept = null;
+    this.dismissed = false;
     // A new answer: the wait starts (whether another is being written by
     // then is looked at when it is over).
     if (s.last) this.arm();
     else this.stop();
+  }
+
+  /** A conversation opened (or reloaded) on an answer: the suggestion made
+   *  for it, if there is one, at once; if not, the wait, as after a new
+   *  answer - a room's agent mostly writes while nobody is looking. */
+  private opened() {
+    const id = this.id, base = this.base;
+    this.conf.load(() => {
+      if (this.id !== id || this.base !== base || !this.conf.on() || !base) return;
+      const s = this.state();
+      this.http.get<{ text: string } | null>('/api/suggest/peek', { params: { kind: s.kind, id: id! } }).subscribe({
+        next: r => {
+          if (this.id !== id || this.base !== base) return;
+          if (r?.text) {
+            this.kept = { base, text: r.text };
+            const now = this.state();
+            if (now.empty && !now.busy && !this.dismissed) this.text.set(r.text);
+          } else this.arm();
+        },
+        error: () => {},
+      });
+    });
   }
 
   /** An answer just ended: wait for quiet, then ask. The settings are read
@@ -122,7 +161,9 @@ export class ComposerSuggest {
     this.http.post<{ text: string } | null>('/api/suggest', { kind: s.kind, id }).subscribe({
       next: r => {
         const now = this.state();
-        if (n !== this.asking || now.id !== id || !now.empty || now.busy || !r?.text) return;
+        if (n !== this.asking || now.id !== id || !r?.text) return;
+        if (this.base) this.kept = { base: this.base, text: r.text };
+        if (!now.empty || now.busy || this.dismissed) return;
         this.text.set(r.text);
       },
       error: () => {},
@@ -132,7 +173,7 @@ export class ComposerSuggest {
   private stop() { clearTimeout(this.timer); this.timer = undefined; this.armed = null; }
 
   /** Forget the suggestion and any wait (another conversation, the page closed). */
-  cancel() { this.stop(); this.asking++; this.text.set(null); }
+  cancel() { this.stop(); this.asking++; this.text.set(null); this.kept = null; this.dismissed = false; }
 
   /** Take the suggestion into the composer (not sent). */
   use() {
@@ -154,7 +195,7 @@ export class ComposerSuggest {
         return true;
       }
       this.text.set(null);
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return true; }
+      if (e.key === 'Escape') { this.dismissed = true; e.preventDefault(); e.stopPropagation(); return true; }
       return false;
     }
     if (this.armed && this.timer) this.wait();
