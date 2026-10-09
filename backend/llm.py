@@ -296,28 +296,64 @@ async def _anthropic_model(provider: str, model: str) -> bool:
 
 # ---------------- the calls ----------------
 
+def _blocks(content: list[dict]) -> list[dict]:
+    """OpenAI parts -> Anthropic blocks."""
+    blocks = []
+    for part in content:
+        if part.get("type") == "text":
+            blocks.append({"type": "text", "text": part["text"]})
+        elif part.get("type") == "image_url":
+            url = part["image_url"]["url"]
+            if url.startswith("data:"):
+                head, _, data = url.partition(",")
+                blocks.append({"type": "image", "source": {
+                    "type": "base64", "media_type": head[5:].split(";")[0], "data": data}})
+    return blocks
+
+
 def _to_anthropic(messages: list[dict], max_tokens: int, temperature: float | None, model: str,
-                  stream: bool = False) -> dict:
+                  stream: bool = False, tools: list[dict] | None = None) -> dict:
+    """The OpenAI-shaped conversation as Anthropic's /messages wants it - a
+    tool loop's turns too: an assistant's `tool_calls` become tool_use
+    blocks, and the "tool" lines after them one user turn of tool_result
+    blocks."""
     system = "\n\n".join(m["content"] for m in messages if m["role"] == "system" and isinstance(m["content"], str))
-    rest = []
+    rest: list[dict] = []
     for m in messages:
         if m["role"] == "system":
             continue
         content = m["content"]
-        if isinstance(content, list):                  # OpenAI parts -> Anthropic blocks
-            blocks = []
-            for part in content:
-                if part.get("type") == "text":
-                    blocks.append({"type": "text", "text": part["text"]})
-                elif part.get("type") == "image_url":
-                    url = part["image_url"]["url"]
-                    if url.startswith("data:"):
-                        head, _, data = url.partition(",")
-                        blocks.append({"type": "image", "source": {
-                            "type": "base64", "media_type": head[5:].split(";")[0], "data": data}})
+        if m["role"] == "tool":
+            inner = _blocks(content) if isinstance(content, list) else [{"type": "text", "text": str(content or "")}]
+            block = {"type": "tool_result", "tool_use_id": m.get("tool_call_id"), "content": inner}
+            if m.get("is_error"):
+                block["is_error"] = True
+            if rest and rest[-1]["role"] == "user" and isinstance(rest[-1]["content"], list) \
+                    and rest[-1]["content"] and rest[-1]["content"][0].get("type") == "tool_result":
+                rest[-1]["content"].append(block)
+            else:
+                rest.append({"role": "user", "content": [block]})
+            continue
+        if isinstance(content, list):
+            content = _blocks(content)
+        if m["role"] == "assistant" and m.get("tool_calls"):
+            blocks = [{"type": "text", "text": content}] if isinstance(content, str) and content.strip() else \
+                (content if isinstance(content, list) else [])
+            for c in m["tool_calls"]:
+                fn = c.get("function") or {}
+                try:
+                    args = json.loads(fn.get("arguments") or "{}")
+                except ValueError:
+                    args = {}
+                blocks.append({"type": "tool_use", "id": c.get("id"), "name": fn.get("name"),
+                               "input": args if isinstance(args, dict) else {}})
             content = blocks
         rest.append({"role": m["role"], "content": content})
     body = {"model": model, "max_tokens": max_tokens, "messages": rest, "stream": stream}
+    if tools:
+        body["tools"] = [{"name": t["name"], "description": t.get("description") or "",
+                          "input_schema": t.get("parameters") or {"type": "object", "properties": {}}}
+                         for t in tools]
     if system:
         body["system"] = system
     if temperature is not None:
@@ -335,9 +371,39 @@ def _headers(provider: str, anthropic: bool) -> dict:
     return h
 
 
+def _openai_messages(messages: list[dict]) -> list[dict]:
+    """A tool loop's turns as /chat/completions takes them: a "tool" line
+    holds text only, so a picture a tool returned goes in a user line of
+    its own after the tool lines."""
+    if not any(m["role"] == "tool" for m in messages):
+        return messages
+    out: list[dict] = []
+    pics: list[dict] = []
+    for m in messages:
+        if m["role"] != "tool" and pics:
+            out.append({"role": "user", "content": [{"type": "text", "text": "(the pictures the tools returned)"}, *pics]})
+            pics = []
+        if m["role"] == "tool":
+            content = m["content"]
+            if isinstance(content, list):
+                pics += [p for p in content if p.get("type") == "image_url"]
+                content = "\n".join(p.get("text", "") for p in content if p.get("type") == "text")
+            out.append({"role": "tool", "tool_call_id": m.get("tool_call_id"), "content": content})
+        elif m["role"] == "assistant" and m.get("tool_calls"):
+            out.append({"role": "assistant", "content": m.get("content") or None, "tool_calls": m["tool_calls"]})
+        else:
+            out.append(m)
+    if pics:
+        out.append({"role": "user", "content": [{"type": "text", "text": "(the pictures the tools returned)"}, *pics]})
+    return out
+
+
 def _openai_body(provider: str, model: str, messages: list[dict], max_tokens: int,
-                 temperature: float | None, reasoning: bool, stream: bool = False) -> dict:
-    body: dict = {"model": model, "messages": messages, "max_tokens": max_tokens, "stream": stream}
+                 temperature: float | None, reasoning: bool, stream: bool = False,
+                 tools: list[dict] | None = None) -> dict:
+    body: dict = {"model": model, "messages": _openai_messages(messages), "max_tokens": max_tokens, "stream": stream}
+    if tools:
+        body["tools"] = [{"type": "function", "function": t} for t in tools]
     if temperature is not None:
         body["temperature"] = temperature
     if provider == "openrouter":
@@ -420,19 +486,24 @@ async def complete(messages: list[dict], *, job: str | None = None, provider: st
 
 
 async def stream(messages: list[dict], *, provider: str, model: str, max_tokens: int = 8000,
-                 temperature: float | None = None) -> AsyncIterator[dict]:
+                 temperature: float | None = None, tools: list[dict] | None = None) -> AsyncIterator[dict]:
     """The answer as it is written: {"text": ...} pieces, {"thinking": ...}
-    while the model reasons, and a last {"usage": {...}}."""
+    while the model reasons, and a last {"usage": {...}}. With `tools`
+    ({name, description, parameters}): the tools the model asked for, once
+    it has, as {"calls": [{id, name, arguments}]} before the usage - for
+    the caller to run and hand back (backend/ccgen.py)."""
     import httpx
 
     anthropic = await _anthropic_model(provider, model)
     base = PROVIDERS[provider]["base"]
     if anthropic:
-        url, body = base + "/messages", _to_anthropic(messages, max_tokens, temperature, model, stream=True)
+        url, body = base + "/messages", _to_anthropic(messages, max_tokens, temperature, model, stream=True,
+                                                      tools=tools)
     else:
         url, body = base + "/chat/completions", _openai_body(provider, model, messages, max_tokens,
-                                                             temperature, True, stream=True)
+                                                             temperature, True, stream=True, tools=tools)
     usage: dict = {}
+    calls: dict[int, dict] = {}                        # by the block's (or the call's) index
     async with httpx.AsyncClient(timeout=httpx.Timeout(TIMEOUT, read=300)) as client:
         async with client.stream("POST", url, json=body, headers=_headers(provider, anthropic)) as r:
             if r.status_code >= 400:
@@ -450,12 +521,19 @@ async def stream(messages: list[dict], *, provider: str, model: str, max_tokens:
                     continue
                 if anthropic:
                     t = ev.get("type")
-                    if t == "content_block_delta":
+                    if t == "content_block_start":
+                        cb = ev.get("content_block") or {}
+                        if cb.get("type") == "tool_use":
+                            calls[ev.get("index", len(calls))] = {"id": cb.get("id"), "name": cb.get("name"),
+                                                                  "arguments": ""}
+                    elif t == "content_block_delta":
                         delta = ev.get("delta") or {}
                         if delta.get("type") == "text_delta":
                             yield {"text": delta.get("text", "")}
                         elif delta.get("type") == "thinking_delta":
                             yield {"thinking": delta.get("thinking", "")}
+                        elif delta.get("type") == "input_json_delta" and ev.get("index") in calls:
+                            calls[ev["index"]]["arguments"] += delta.get("partial_json") or ""
                     elif t == "message_start":
                         u = (ev.get("message") or {}).get("usage") or {}
                         usage["prompt_tokens"] = u.get("input_tokens")
@@ -466,12 +544,30 @@ async def stream(messages: list[dict], *, provider: str, model: str, max_tokens:
                     continue
                 if ev.get("usage"):
                     usage = {k: ev["usage"].get(k) for k in ("prompt_tokens", "completion_tokens", "cost")}
+                if isinstance(ev.get("error"), dict):
+                    raise RuntimeError(str(ev["error"].get("message") or ev["error"])[:300])
                 for ch in ev.get("choices") or []:
                     delta = ch.get("delta") or {}
                     if delta.get("reasoning_content") or delta.get("reasoning"):
                         yield {"thinking": delta.get("reasoning_content") or delta.get("reasoning")}
                     if delta.get("content"):
                         yield {"text": delta["content"]}
+                    for tc in delta.get("tool_calls") or []:
+                        i = tc.get("index", len(calls))
+                        got = calls.setdefault(i, {"id": None, "name": "", "arguments": ""})
+                        fn = tc.get("function") or {}
+                        if tc.get("id"):
+                            got["id"] = tc["id"]
+                        if fn.get("name"):
+                            got["name"] += fn["name"]
+                        if fn.get("arguments"):
+                            got["arguments"] += fn["arguments"]
+    if calls:
+        out = []
+        for i in sorted(calls):
+            c = calls[i]
+            out.append({"id": c["id"] or f"call_{i}", "name": c["name"], "arguments": c["arguments"] or "{}"})
+        yield {"calls": out}
     yield {"usage": usage}
 
 

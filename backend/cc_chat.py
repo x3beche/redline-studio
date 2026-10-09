@@ -985,6 +985,11 @@ async def _tail(key: str, cid: str, db) -> None:
                 have, got = len(st.get(kind) or ""), gen.get(kind) or ""
                 if len(got) > have:
                     HUB.piece(key, gid, kind, got[have:])
+            if st is not None and (gen.get("steps") or []) != (st.get("steps") or []):
+                # The tools the model used, as they run (backend/chat_tools):
+                # the whole list each time - a few short rows.
+                st["steps"] = gen.get("steps") or []
+                HUB.publish(key, {"type": "steps", "gen": gid, "steps": st["steps"]})
             if gen.get("status") == "running":
                 continue
             answer = gen.get("answer") or ccgen.partial(gen)
@@ -1078,6 +1083,10 @@ async def _begin(db, cid: str, gen: dict, first: dict) -> StreamingResponse:
                     for k in ("thinking", "text"):     # what was written before this one looked
                         if ev.get(k):
                             yield _sse({"type": k, "text": ev[k]})
+                    if ev.get("steps"):
+                        yield _sse({"type": "steps", "steps": ev["steps"]})
+                elif kind == "steps":
+                    yield _sse({"type": "steps", "steps": ev.get("steps") or []})
                 elif kind in ("thinking", "text"):
                     yield _sse({"type": kind, "text": ev.get("text") or ""})
                 elif kind == "error":
@@ -1115,6 +1124,58 @@ async def stop(cid: str) -> dict:
     await ccgen.request_stop(db, gen, {"id": who.get("id"), "name": who.get("name")})
     follow(cid)
     return {"stopped": True, "gen": gid}
+
+
+# ---- the tools the models may use (backend/chat_tools) ------------------------
+
+@router.get("/tools")
+async def list_tools() -> dict:
+    """Every chat tool, and whether it is on for whoever asks (their own
+    choice, else the tool's default)."""
+    from . import chat_tools
+    me = (actors.current() or {}).get("id")
+    return {"tools": chat_tools.chosen(await chat_tools.prefs(_db(), me))}
+
+
+class ToolsIn(BaseModel):
+    tools: dict[str, bool]
+
+
+@router.put("/tools")
+async def set_tools(body: ToolsIn) -> dict:
+    """Turn chat tools on or off for oneself: they go to the model with
+    one's own lines, on every device."""
+    from . import chat_tools
+    me = (actors.current() or {}).get("id")
+    if not me:
+        raise HTTPException(400, "tools are chosen per account - sign in")
+    try:
+        mine = await chat_tools.save(_db(), me, body.tools)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"tools": chat_tools.chosen(mine)}
+
+
+class StepIn(BaseModel):
+    allow: bool
+
+
+@router.post("/chats/{cid}/steps/{sid}")
+async def answer_step(cid: str, sid: str, body: StepIn) -> dict:
+    """Allow or refuse a tool that asks first (a delete-level one): whoever
+    asked for the answer, or anyone who may delete."""
+    db = _db()
+    doc = await _load(cid)
+    gen = await ccgen.get(db, doc["gen"]) if doc.get("gen") else None
+    if not gen or gen.get("status") != "running":
+        raise HTTPException(409, "no answer is being written here")
+    who = actors.current() or {}
+    if (gen.get("by") or {}).get("id") != who.get("id") and not _can_delete():
+        raise HTTPException(403, "only whoever asked can answer this - "
+                            + access.refusal(access.current() or "nobody", "delete"))
+    if not await ccgen.answer_step(db, gen, sid, body.allow, {"id": who.get("id"), "name": who.get("name")}):
+        raise HTTPException(409, "that step is not waiting for an answer")
+    return {"ok": True, "allow": body.allow}
 
 
 async def _name(db, cid: str, msgs: list[dict], answer: dict) -> str | None:

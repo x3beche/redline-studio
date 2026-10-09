@@ -146,6 +146,10 @@ _RULES: list[tuple[str, str, str]] = [
     # the queue (lines sent while an answer is written): one's own, or anyone's with "delete" (cc_chat.py checks)
     ("POST", "/api/cc/chats(/{}/(messages|regenerate|restore|stop|queue/resume|queue/clear)|/bulk-delete|/bulk-restore|/empty-trash)?", "draw"),
     ("PATCH", "/api/cc/chats/{}(/queue/{})?", "draw"),
+    # one's own chat tools (on/off), and a yes or no to a tool that asks
+    # first (cc_chat.py keeps that to whoever asked, or who may delete)
+    ("PUT", "/api/cc/tools", "draw"),
+    ("POST", "/api/cc/chats/{}/steps/{}", "draw"),
     ("DELETE", "/api/cc/chats/{}(/messages/{}|/queue/{})?", "draw"),
     # custom themes (backend/themes.py): anyone may make one in their own
     # space; the routes keep changing or deleting one to its maker or the

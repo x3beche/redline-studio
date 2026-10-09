@@ -119,7 +119,7 @@ def state(gen: dict) -> dict:
     return {"gen": gen["_id"], "client": gen.get("client"), "by": gen.get("by") or {},
             "provider": gen.get("provider"), "model": gen.get("model"), "message": gen.get("message"),
             "keep": gen.get("keep"), "text": gen.get("text") or "", "thinking": gen.get("thinking") or "",
-            "at": gen.get("at"), "started_at": _isoz(gen.get("started_at")), "first_at": _isoz(gen.get("first_at")),
+            "steps": gen.get("steps") or [], "at": gen.get("at"), "started_at": _isoz(gen.get("started_at")), "first_at": _isoz(gen.get("first_at")),
             "now": _iso()}
 
 
@@ -224,7 +224,8 @@ async def finish(db, gen: dict, answer: dict, status: str, naming: bool = False)
     put = bool(getattr(res, "matched_count", 1))
     await coll(db).update_one({"_id": gen["_id"], "status": "running"}, {"$set": {
         "status": status, "answer": answer, "text": answer.get("content") or "",
-        "thinking": answer.get("thinking") or "", "finished_at": now(), "naming": bool(naming and put)}})
+        "thinking": answer.get("thinking") or "", "steps": answer.get("steps") or [],
+        "finished_at": now(), "naming": bool(naming and put)}})
     return put
 
 
@@ -236,6 +237,8 @@ def partial(gen: dict, **flags) -> dict:
         m["thinking"] = gen["thinking"]
     if gen.get("thinking_ms"):
         m["thinking_ms"] = gen["thinking_ms"]
+    if gen.get("steps"):
+        m["steps"] = settle(gen["steps"], "interrupted")
     started = _aware(gen.get("started_at"))
     if started:
         m["ms"] = round((now() - started).total_seconds() * 1000)
@@ -304,6 +307,16 @@ async def free(db, chat: dict) -> bool:
     return True
 
 
+async def answer_step(db, gen: dict, sid: str, allow: bool, who: dict) -> bool:
+    """The person's yes or no to a step waiting for one (a delete-level
+    tool): written on the generation, where the runner reads it."""
+    if not any(s.get("id") == sid and s.get("status") == "ask" for s in gen.get("steps") or []):
+        return False
+    res = await coll(db).update_one({"_id": gen["_id"], "status": "running"},
+                                    {"$set": {f"answers.{sid}": bool(allow), f"answered.{sid}": who}})
+    return bool(getattr(res, "matched_count", 1))
+
+
 async def request_stop(db, gen: dict, who: dict) -> dict:
     """Ask the runner to stop; a runner that is gone is stopped here."""
     await coll(db).update_one({"_id": gen["_id"], "status": "running"},
@@ -333,6 +346,97 @@ async def recover(raw) -> list[str]:
     return out
 
 
+# ---------------------------------------------------------------- tools
+
+MAX_ROUNDS = 10                     # tool rounds in one answer; then it answers with what it has
+TOOL_TIMEOUT = 180.0                # seconds one tool may take (adding a part waits for LCSC)
+ASK_WAIT = 600.0                    # seconds a delete-level tool waits for the person's yes
+LIMIT_NOTE = "Not run: the limit of tool steps for one answer is reached - answer now with what you have."
+
+
+def settle(steps: list[dict], why: str) -> list[dict]:
+    """Steps still running (or waiting for a yes) when the answer ended: said so."""
+    return [{**s, "status": why} if s.get("status") in ("running", "ask") else s for s in steps]
+
+
+def _vars(args: dict) -> dict:
+    """The tool's input as the page's sentence fills it: short strings."""
+    return {k: (v if isinstance(v, (int, float)) and not isinstance(v, bool) else str(v)[:80])
+            for k, v in (args or {}).items() if v is not None}
+
+
+async def run_step(call: dict, tools: dict, ctx, out: dict) -> tuple[object, bool]:
+    """One tool the model asked for, as a step of the answer (`out["steps"]`,
+    written with the answer so far): run, or - a delete-level tool - asked
+    for first. Returns what the model is handed back, and whether it is an
+    error."""
+    import base64
+    import json
+
+    from . import chat_tools
+
+    tool = tools.get(call.get("name"))
+    try:
+        args = json.loads(call.get("arguments") or "{}")
+        if not isinstance(args, dict):
+            raise ValueError("not an object")
+    except ValueError:
+        args = {}
+    step = {"id": secrets.token_hex(4), "tool": call.get("name") or "?", "level": tool.level if tool else "read",
+            "status": "running", "pos": len(out["text"]), "args": args, "vars": _vars(args),
+            "say": tool.running if tool else "Unknown tool {tool}", "at": _iso()}
+    if not tool:
+        step["vars"]["tool"] = step["tool"]
+    out["steps"].append(step)
+    out["rev"] += 1
+
+    def end(**kw):
+        step.update(kw)
+        out["rev"] += 1
+
+    if tool is None:
+        end(status="error", error="no such tool")
+        return f"Error: there is no tool {call.get('name')!r}.", True
+    if out.get("limit"):
+        end(status="error", error="step limit reached", say=tool.failed)
+        return LIMIT_NOTE, True
+    if tool.level == "delete":
+        end(status="ask")
+        until = time.monotonic() + ASK_WAIT
+        while (out.get("answers") or {}).get(step["id"]) is None:
+            if time.monotonic() > until:
+                end(status="denied", error="nobody answered")
+                return "Not run: nobody allowed it in time.", True
+            await asyncio.sleep(FLUSH)
+        allowed = (out["answers"] or {}).get(step["id"])
+        if not allowed:
+            end(status="denied")
+            return "Not run: the person did not allow it.", True
+        end(status="running")
+    t0 = time.monotonic()
+    try:
+        res = await asyncio.wait_for(tool.run(ctx, args), TOOL_TIMEOUT)
+    except asyncio.TimeoutError:
+        end(status="error", error=f"took over {int(TOOL_TIMEOUT)} s", say=tool.failed,
+            ms=round((time.monotonic() - t0) * 1000))
+        return f"Error: {tool.name} took too long.", True
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:                                     # noqa: BLE001 - the model is told, the page shows it
+        why = str(exc)[:400] or type(exc).__name__
+        if not isinstance(exc, chat_tools.ToolError):
+            print(traceback.format_exc()[-1500:], file=sys.stderr)
+        end(status="error", error=why, say=tool.failed, ms=round((time.monotonic() - t0) * 1000))
+        return f"Error: {why}", True
+    end(status="done", say=res.say, vars={**step["vars"], **_vars(res.vars)},
+        summary=(res.summary or "")[:chat_tools.MAX_SUMMARY], ms=round((time.monotonic() - t0) * 1000))
+    text = chat_tools.clip(res.text)
+    if res.image and ctx.vision:
+        return [{"type": "text", "text": text},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(res.image).decode()}}], False
+    return text, False
+
+
 # ---------------------------------------------------------------- the runner
 
 async def run(gid: str, db=None) -> dict | None:
@@ -346,7 +450,8 @@ async def run(gid: str, db=None) -> dict | None:
     if not gen or gen.get("status") != "running":
         return None
     t0 = time.monotonic()
-    out = {"text": "", "thinking": "", "thought": 0.0, "used": {}, "first_at": None}
+    out = {"text": "", "thinking": "", "thought": 0.0, "used": {}, "first_at": None,
+           "steps": [], "rev": 0, "answers": {}}
     chat = await db[cc_chat.COLL].find_one({"_id": gen["chat"]})
     msgs = (chat or {}).get("messages") or []
     upto = gen.get("upto") or 0
@@ -360,31 +465,86 @@ async def run(gid: str, db=None) -> dict | None:
         return {**gen, "status": "failed"}
 
     async def produce():
+        from . import chat_tools
+
         images = None
         pics = convo[-1].get("attach") or []
         if gen.get("images") and pics:
             images = await cc_context.images(db, pics)
-        async for piece in llm.stream(cc_chat.history(convo, images), provider=gen["provider"],
-                                      model=gen["model"], max_tokens=cc_chat.MAX_ANSWER):
-            if out["first_at"] is None and (piece.get("thinking") or piece.get("text")):
-                out["first_at"] = now()                  # the first token, of either kind
-            if "thinking" in piece:
-                out["thought"] = time.monotonic() - t0
-                out["thinking"] += piece["thinking"] or ""
-            elif "text" in piece:
-                out["text"] += piece["text"] or ""
-            elif "usage" in piece:
-                out["used"] = piece["usage"] or {}
+        base = cc_chat.history(convo, images)
+        uid = (gen.get("actor") or {}).get("id") or (gen.get("by") or {}).get("id")
+        try:
+            tools = {t.name: t for t in await chat_tools.enabled(db, uid)}
+        except Exception as exc:                                 # noqa: BLE001 - an answer without tools
+            print(f"cc {gid}: tools not read: {exc}", file=sys.stderr)
+            tools = {}
+        ctx = None
+        if tools:
+            ctx = chat_tools.Ctx(db=db, vision=await cc_chat._vision(gen["provider"], gen["model"]),
+                                 actor=gen.get("actor") or {})
+            msgs = [{**base[0], "content": base[0]["content"] + "\n\n" + chat_tools.SYSTEM_NOTE}, *base[1:]]
+        else:
+            msgs = base
+        rounds = 0
+        while True:
+            calls: list[dict] = []
+            said = ""
+            kw = {"tools": [t.spec() for t in tools.values()]} if tools else {}
+            try:
+                async for piece in llm.stream(msgs, provider=gen["provider"], model=gen["model"],
+                                              max_tokens=cc_chat.MAX_ANSWER, **kw):
+                    if out["first_at"] is None and (piece.get("thinking") or piece.get("text")):
+                        out["first_at"] = now()          # the first token, of either kind
+                    if "thinking" in piece:
+                        out["thought"] = time.monotonic() - t0
+                        out["thinking"] += piece["thinking"] or ""
+                    elif "text" in piece:
+                        said += piece["text"] or ""
+                        out["text"] += piece["text"] or ""
+                    elif "calls" in piece:
+                        calls = piece["calls"] or []
+                    elif "usage" in piece:
+                        for k, v in (piece["usage"] or {}).items():
+                            if isinstance(v, (int, float)):
+                                out["used"][k] = (out["used"].get(k) or 0) + v
+                            elif k not in out["used"]:
+                                out["used"][k] = v
+            except Exception as exc:                             # noqa: BLE001 - see below
+                if tools and rounds == 0 and not said and not out["thinking"]:
+                    # The model (or its provider) does not take tools: it
+                    # answers without them rather than not at all.
+                    print(f"cc {gid}: no tools for {gen['model']}: {str(exc)[:200]}", file=sys.stderr)
+                    out["no_tools"] = str(exc)[:200] or type(exc).__name__
+                    tools, msgs = {}, base
+                    continue
+                raise
+            if not calls or not tools:
+                break
+            rounds += 1
+            out["limit"] = rounds > MAX_ROUNDS
+            if out["text"] and not out["text"].endswith("\n\n"):
+                out["text"] += "\n\n" if not out["text"].endswith("\n") else "\n"
+            msgs = [*msgs, {"role": "assistant", "content": said, "tool_calls": [
+                {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}}
+                for c in calls]}]
+            for c in calls:
+                content, failed = await run_step(c, tools, ctx, out)
+                msgs.append({"role": "tool", "tool_call_id": c["id"], "content": content,
+                             **({"is_error": True} if failed else {})})
+            if rounds > MAX_ROUNDS + 1:
+                break
 
     task = asyncio.create_task(produce())
     stopped = False
-    written = (0, 0)
+    written = (0, 0, 0)
     beat = time.monotonic()
     while not task.done():
         await asyncio.wait({task}, timeout=FLUSH)
-        size = (len(out["text"]), len(out["thinking"]))
+        size = (len(out["text"]), len(out["thinking"]), out["rev"])
         if size != written or time.monotonic() - beat >= BEAT:
             patch = {"text": out["text"], "thinking": out["thinking"], "beat": now()}
+            if out["steps"]:
+                patch["steps"] = out["steps"]
             if out["thought"]:
                 patch["thinking_ms"] = round(out["thought"] * 1000)
             if out["first_at"]:
@@ -400,6 +560,8 @@ async def run(gid: str, db=None) -> dict | None:
             cur = await gens.find_one({"_id": gid})
         except Exception:                                        # noqa: BLE001
             continue
+        if cur is not None:
+            out["answers"] = cur.get("answers") or {}       # a delete-level tool's yes or no
         if cur is None or cur.get("stop") or cur.get("status") != "running":
             stopped = True
             task.cancel()
@@ -417,6 +579,10 @@ async def run(gid: str, db=None) -> dict | None:
               "provider": gen["provider"], "model": gen["model"]}
     if out["thinking"]:
         answer["thinking"] = out["thinking"]              # whole: the page shows all of it
+    if out["steps"]:
+        answer["steps"] = settle(out["steps"], "stopped" if stopped else "interrupted")
+    if out.get("no_tools"):
+        answer["no_tools"] = out["no_tools"]
     if stopped:
         answer["stopped"] = True
         if not out["text"]:

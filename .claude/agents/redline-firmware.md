@@ -43,6 +43,7 @@ never drive a pin whose function is unclear - input-only (34-39), strapping
 never say it runs on the board, say it is built and ready to flash.
 A datasheet (register maps, timing, a part's pins): `revisions.py pdf text
 <file-id|C...> [--pages 1-3]`, and `pdf page ... <n>` + Read for a table or diagram.
+A part's electrical value (a rating, RDS(on), a timing) is never quoted from memory: find the part (`revisions.py part find`; `part keep C...` puts it in the drawer), read its datasheet (`pdf text C... [--pages]`; the kept copy, fetched once) and cite the page.
 
 A fork that is not yours to choose goes to the person, on their screen:
 `revisions.py ask "..." --revision <id> -o A -o B` - it shows in the

@@ -52,6 +52,7 @@ against the drawing. See AGENTS.md: Model contract, Silent failures.
 A dimension from a datasheet (a Files PDF or a part's): `revisions.py pdf
 text <file-id|C...>` first, then `pdf page <file-id|C...> <n>` and open the
 PNG with Read - the mechanical drawing is a picture; never guess a number.
+A part's electrical value (a rating, RDS(on), a timing) is never quoted from memory: find the part (`revisions.py part find`; `part keep C...` puts it in the drawer), read its datasheet (`pdf text C... [--pages]`; the kept copy, fetched once) and cite the page.
 
 Parts that move in the viewer (a fan spinning, a hinge set by hand, a
 cable bending with it) are declared as `MOTIONS` next to PARTS - AGENTS.md,

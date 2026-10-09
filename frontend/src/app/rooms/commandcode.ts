@@ -49,10 +49,23 @@ export interface CcMention {
   image?: boolean;
   open?: { model?: string | null; board?: string | null; room?: string | null };
 }
+/** A tool the model used while it answered (backend/chat_tools): kept on
+ *  the answer. `say` is an English sentence with {name} holes, filled from
+ *  `vars` once translated (i18n.ts); `pos` is where it goes in the text. */
+export interface CcStep {
+  id: string; tool: string; level: ToolLevel; pos: number; say: string;
+  status: 'running' | 'done' | 'error' | 'ask' | 'denied' | 'stopped' | 'interrupted';
+  args?: Record<string, unknown>; vars?: Record<string, string | number>; summary?: string; error?: string; ms?: number;
+}
+export type ToolLevel = 'read' | 'change' | 'delete';
+/** A chat tool, and whether it is on for me (GET /api/cc/tools). */
+export interface CcTool { name: string; label: string; level: ToolLevel; description: string; default: boolean; on: boolean }
+/** An answer's text with its steps where they happened. */
+type Chunk = { text: string; steps?: undefined } | { text?: undefined; steps: CcStep[] };
 /** An answer someone else is having written, as far as it got. */
 export interface CcWatch {
   gen: string; client?: string | null; by: { id?: string; name?: string }; model: string; provider: string;
-  message?: CcMessage | null; keep?: number; text: string; thinking: string;
+  message?: CcMessage | null; keep?: number; text: string; thinking: string; steps?: CcStep[];
   /** When it was asked for and when its first token came, and the server's clock (backend/ccgen.py state). */
   started_at?: string | null; first_at?: string | null; now?: string;
   /** The same two on this page's clock (Date.now()), for its speed. */
@@ -81,6 +94,10 @@ export interface CcMessage {
   provider?: string; model?: string; ms?: number; thinking_ms?: number; error?: string; stopped?: boolean;
   /** The model's reasoning, whole (backend/ccgen.py keeps all of it). */
   thinking?: string;
+  /** The tools it used, in order (backend/chat_tools). */
+  steps?: CcStep[];
+  /** The model took no tools: it answered without them (why). */
+  no_tools?: string;
   /** Its runner died with the server: kept as far as it got. */
   interrupted?: boolean;
   /** Which ```task blocks went to the queue, by index (backend/tasks.py). */
@@ -106,7 +123,7 @@ export interface CcQueued {
   at: string; provider?: string; model?: string;
 }
 /** This page's own answer being written in one conversation. */
-interface Run { text: string; thinking: string; t0: number; t1: number | null; sp?: Speed | null; model: string; gen: string | null }
+interface Run { text: string; thinking: string; steps?: CcStep[]; t0: number; t1: number | null; sp?: Speed | null; model: string; gen: string | null }
 
 export interface CcQueueState { type?: string; queue: CcQueued[]; paused: boolean; why?: string | null }
 type Many = { deleted: string[]; refused: string[]; missing: string[] };
@@ -117,7 +134,7 @@ export interface LlmModel { id: string; name: string; context: number | null; an
   vision?: boolean }
 export interface CcEvent {
   type: string; text?: string; error?: string; message?: CcMessage | null; keep?: number; title?: string;
-  gen?: string; live?: CcWatch[]; thinking?: string;
+  gen?: string; live?: CcWatch[]; thinking?: string; steps?: CcStep[];
   /** {type: queue}: the queue as it stands; in the hello, the same nested. */
   queue?: CcQueued[] | CcQueueState; paused?: boolean; why?: string | null; queued?: CcQueued;
 }
@@ -203,6 +220,15 @@ export class CcApi {
   /** Stop the answer being written in it - kept as far as it got. Closing
    *  the page does not stop it: the server writes it to the end. */
   stop(id: string) { return this.http.post<{ stopped: boolean; gen?: string }>(`/api/cc/chats/${id}/stop`, {}); }
+  /** The chat tools and my own on/off for each (kept on the server, per account). */
+  tools() { return this.http.get<{ tools: CcTool[] }>('/api/cc/tools'); }
+  setTools(change: Record<string, boolean>) {
+    return this.http.put<{ tools: CcTool[] }>('/api/cc/tools', { tools: change }, { headers: HEADERS });
+  }
+  /** Yes or no to a tool that asks first (a delete-level one). */
+  answerStep(id: string, step: string, allow: boolean) {
+    return this.http.post<{ ok: boolean }>(`/api/cc/chats/${id}/steps/${step}`, { allow }, { headers: HEADERS });
+  }
 
   /** The last answer written again, with this model. */
   regenerate(id: string, body: { provider: string; model: string; client?: string }, signal: AbortSignal,
@@ -277,7 +303,22 @@ const I = {
   at: 'M15.5 12a3.5 3.5 0 1 1-7 0a3.5 3.5 0 1 1 7 0z M15.5 12v1.3a2.6 2.6 0 0 0 5.2 0V12a8.7 8.7 0 1 0-3.4 6.9',
   file: 'M6 3h8l4 4v14H6z M14 3v4h4',
   note: 'M5 4h14v16H5z M8.5 9h7 M8.5 13h7 M8.5 17h4',
+  drawer: 'M4 5h16v6H4z M4 11h16v8H4z M10 8h4 M10 15h4',
+  sheet: 'M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 15.5h6 M9 9h2',
+  tool: 'M14.5 4.5a4 4 0 0 0-5 5L4 15l2 2 2 2 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z',
+  check: 'M5 12.5l4.5 4.5L19 7.5',
+  alert: 'M12 4l9 16H3z M12 10v4.5 M12 17.5h.01',
 };
+
+/** A tool's icon on its step (backend/chat_tools): by what it touches. */
+const TOOL_ICON: Record<string, string> = {
+  drawer_search: I.drawer, drawer_add: I.drawer, lcsc_search: I.search, datasheet_get: I.sheet, datasheet_read: I.sheet,
+};
+const LEVELS: { id: ToolLevel; name: string; about: string }[] = [
+  { id: 'read', name: 'Only reads', about: 'run freely' },
+  { id: 'change', name: 'Changes', about: 'run, and always show a step' },
+  { id: 'delete', name: 'Deletes', about: 'ask you first' },
+];
 
 /** A mention's kind, as its icon and its name. */
 const KIND: Record<CcMention['kind'], { icon: string; name: string }> = {
@@ -507,6 +548,33 @@ type Ask = { text: string; label: string; go: () => void };
     </div>
     <!-- The Command Code account's usage windows, pinned under the list (cc-usage.ts): opens LLM settings. -->
     <app-cc-usage-line />
+    <!-- The tools the model may use with my lines: my own choice, kept on the server. -->
+    <div class="tcv-cc-toolswrap" (keydown.escape)="toolsOpen.set(false)">
+      @if (toolsOpen()) {
+        <div class="tcv-cc-toolspop" role="dialog" [attr.aria-label]="'Tools' | t">
+          <div class="tcv-cc-toolshead"><b>{{ 'Tools the model may use' | t }}</b>
+            <button class="tcv-cc-ib" (click)="toolsOpen.set(false)" [title]="'Close' | t">
+              <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.x }" /></button></div>
+          @for (g of toolGroups(); track g.id) {
+            <div class="tcv-cc-toolsgroup"><span>{{ g.name | t }}</span><em>{{ g.about | t }}</em></div>
+            @for (tl of g.tools; track tl.name) {
+              <label class="tcv-cc-toolrow">
+                <button type="button" class="tcv-switch" [attr.data-on]="tl.on ? 1 : null" [attr.aria-pressed]="tl.on"
+                        [disabled]="!auth.can('draw')" (click)="toggleTool(tl)" [attr.aria-label]="tl.label | t"></button>
+                <span><b>{{ tl.label | t }}</b><small>{{ tl.description | t }}</small></span>
+              </label>
+            } @empty { <div class="tcv-cc-toolnone">{{ 'none yet' | t }}</div> }
+          }
+          <div class="tcv-cc-toolsfoot">{{ 'Your own choice, on every device. A model that cannot use tools answers without them.' | t }}</div>
+        </div>
+      }
+      <button class="tcv-cc-toolsbtn" type="button" (click)="toolsOpen.set(!toolsOpen())" [attr.aria-expanded]="toolsOpen()"
+              [title]="'Which tools the model may use with your lines' | t">
+        <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.tool }" />
+        <b>{{ 'Tools' | t }}</b><span>{{ toolsOn() }}/{{ tools().length }}</span>
+        <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.chevron }" />
+      </button>
+    </div>
   </aside>
   <div class="tcv-cc-scrim" (click)="drawer.set(false)"></div>
 
@@ -587,14 +655,21 @@ type Ask = { text: string; label: string; go: () => void };
                     <ng-container *ngTemplateOutlet="think; context: { $implicit: m.thinking, key: m.id, streaming: false, ms: m.thinking_ms }" />
                   }
                   <!-- A task written for the queue is a box with its own button
-                       (rooms/task-block.ts); the rest is the answer as written. -->
-                  @for (seg of parts(m.content); track $index) {
-                    @if (taskOf(seg); as tk) {
-                      <rl-task-block [block]="tk" [state]="m.tasks?.[tk.index]"
-                                     [url]="'/api/cc/chats/' + c.id + '/messages/' + m.id + '/task/' + tk.index + '/queue'"
-                                     (queued)="taskQueued(m.id, tk.index, $event)" />
+                       (rooms/task-block.ts); the rest is the answer as written,
+                       with the tools it used where it used them. -->
+                  @for (ch of chunks(m.content, m.steps); track $index) {
+                    @if (ch.steps) {
+                      <ng-container *ngTemplateOutlet="stepsT; context: { $implicit: ch.steps, cid: c.id }" />
                     } @else {
-                      <div class="tcv-cc-answer md" [innerHTML]="html(mdOf(seg))"></div>
+                    @for (seg of parts(ch.text); track $index) {
+                      @if (taskOf(seg); as tk) {
+                        <rl-task-block [block]="tk" [state]="m.tasks?.[tk.index]"
+                                       [url]="'/api/cc/chats/' + c.id + '/messages/' + m.id + '/task/' + tk.index + '/queue'"
+                                       (queued)="taskQueued(m.id, tk.index, $event)" />
+                      } @else {
+                        <div class="tcv-cc-answer md" [innerHTML]="html(mdOf(seg))"></div>
+                      }
+                    }
                     }
                   }
                 } @else {
@@ -669,7 +744,10 @@ type Ask = { text: string; label: string; go: () => void };
                 @if (l.thinking) {
                   <ng-container *ngTemplateOutlet="think; context: { $implicit: l.thinking, key: 'live', streaming: !l.text }" />
                 }
-                @if (l.text) { <div class="tcv-cc-answer md" [innerHTML]="html(l.text)"></div> }
+                @for (ch of chunks(l.text, l.steps); track $index) {
+                  @if (ch.steps) { <ng-container *ngTemplateOutlet="stepsT; context: { $implicit: ch.steps, cid: c.id }" /> }
+                  @else if (ch.text) { <div class="tcv-cc-answer md" [innerHTML]="html(ch.text)"></div> }
+                }
                 <div class="tcv-cc-livefoot">
                   @if (!l.text) { <div class="tcv-cc-dots"><i></i><i></i><i></i></div> }
                   @if (l.sp; as sp) { <span class="tcv-cc-stats" data-live="1" [title]="sp.tip">{{ sp.text }}</span> }
@@ -688,7 +766,10 @@ type Ask = { text: string; label: string; go: () => void };
                 @if (w.thinking) {
                   <ng-container *ngTemplateOutlet="think; context: { $implicit: w.thinking, key: w.gen, streaming: !w.text }" />
                 }
-                @if (w.text) { <div class="tcv-cc-answer md" [innerHTML]="html(w.text)"></div> }
+                @for (ch of chunks(w.text, w.steps); track $index) {
+                  @if (ch.steps) { <ng-container *ngTemplateOutlet="stepsT; context: { $implicit: ch.steps, cid: c.id }" /> }
+                  @else if (ch.text) { <div class="tcv-cc-answer md" [innerHTML]="html(ch.text)"></div> }
+                }
                 <div class="tcv-cc-livefoot">
                   @if (!w.text) { <div class="tcv-cc-dots"><i></i><i></i><i></i></div> }
                   @if (w.sp; as sp) { <span class="tcv-cc-stats" data-live="1" [title]="sp.tip">{{ sp.text }}</span> }
@@ -884,6 +965,39 @@ type Ask = { text: string; label: string; go: () => void };
     </summary>
     <div class="tcv-cc-thinkbody" [attr.data-live]="streaming ? 1 : null" (scroll)="thinkScrolled($event)">{{ text }}</div>
   </details>
+</ng-template>
+
+<!-- The tools the model used (backend/chat_tools): one flat row each, a
+     plain sentence; a click opens what went in and what came back. -->
+<ng-template #stepsT let-steps let-cid="cid">
+  <div class="tcv-cc-steps">
+    @for (s of steps; track s.id) {
+      <details class="tcv-cc-step" [attr.data-status]="s.status" [attr.data-level]="s.level">
+        <summary>
+          @if (s.status === 'running') { <span class="tcv-cc-spin" aria-hidden="true"></span> }
+          @else if (s.status === 'error' || s.status === 'denied') { <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.alert }" /> }
+          @else { <ng-container *ngTemplateOutlet="ico; context: { $implicit: toolIcon(s.tool) }" /> }
+          <span class="tcv-cc-steptext">{{ stepLine(s) }}</span>
+          @if (stepNote(s); as n) { <span class="tcv-cc-stepnote">{{ n | t }}</span> }
+          @if (s.ms != null && s.ms >= 500 && s.status !== 'running') { <span class="tcv-cc-dim">{{ secs(s.ms) }}</span> }
+          <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.chevron }" />
+        </summary>
+        <dl class="tcv-cc-stepbody">
+          <dt>{{ 'Tool' | t }}</dt><dd class="mono">{{ s.tool }} · {{ levelName(s.level) | t }}</dd>
+          <dt>{{ 'Input' | t }}</dt><dd class="mono">{{ argsLine(s) }}</dd>
+          @if (s.summary) { <dt>{{ 'Result' | t }}</dt><dd><pre>{{ s.summary }}</pre></dd> }
+          @if (s.error) { <dt>{{ 'Error' | t }}</dt><dd class="tcv-cc-steperr">{{ s.error }}</dd> }
+        </dl>
+      </details>
+      @if (s.status === 'ask' && auth.can('draw')) {
+        <div class="tcv-cc-stepask">
+          <span>{{ 'This tool asks before it runs.' | t }}</span>
+          <button class="tcv-cc-textbtn" (click)="answerStep(cid, s, true)">{{ 'Allow' | t }}</button>
+          <button class="tcv-cc-textbtn" (click)="answerStep(cid, s, false)">{{ 'Deny' | t }}</button>
+        </div>
+      }
+    }
+  </div>
 </ng-template>
 
 <ng-template #hello>
@@ -1783,6 +1897,9 @@ export class RoomCommandCode implements OnDestroy {
         } else if (ev.type === 'text') {
           this.setRun(id, r => r && this.sped({ ...r, text: r.text + (ev.text ?? ''), t1: r.t1 ?? Date.now() }));
           if (here()) this.scroll(true);
+        } else if (ev.type === 'steps') {
+          this.setRun(id, r => r && { ...r, steps: ev.steps ?? [] });
+          if (here()) this.scroll(true);
         } else if (ev.type === 'error') {
           const err = ev.error ?? t('The model did not answer.');
           if (here()) this.error.set(err); else this.runErrors.set(id, err);
@@ -2027,6 +2144,7 @@ export class RoomCommandCode implements OnDestroy {
         if (mine(ev) || !ev.gen) return;
         const w: CcWatch = this.clocked({ gen: ev.gen, client: ev.client, by: ev.by ?? {}, model: ev.model ?? '', provider: ev.provider ?? '',
                              message: ev.message ?? null, keep: ev.keep, text: ev.text ?? '', thinking: ev.thinking ?? '',
+                             steps: ev.steps ?? [],
                              started_at: ev.started_at, first_at: ev.first_at, now: ev.now });
         this.watch.update(l => [...l.filter(x => x.gen !== w.gen), w]);
         this.showAsked(id, w);
@@ -2042,6 +2160,11 @@ export class RoomCommandCode implements OnDestroy {
         this.scroll(true);
         break;
       }
+      case 'steps':
+        if (!this.watch().some(w => w.gen === ev.gen)) return;
+        this.watch.update(l => l.map(w => w.gen === ev.gen ? { ...w, steps: ev.steps ?? [] } : w));
+        this.scroll(true);
+        break;
       case 'done': {
         if (!this.watch().some(w => w.gen === ev.gen)) return;
         this.watch.update(l => l.filter(w => w.gen !== ev.gen));
@@ -2458,6 +2581,65 @@ export class RoomCommandCode implements OnDestroy {
 
   /** An answer as text and ```task blocks (markdown.ts splitTasks). */
   private split = new Map<string, Segment[]>();
+  // ---- the tools the model used, and the ones it may -------------------------
+
+  /** The text with its steps where they happened (`pos`). An answer with a
+   *  ```task block shows its steps first instead: a task's index counts the
+   *  whole answer (backend/tasks.py), and splitting would count it again. */
+  chunks(text: string, steps?: CcStep[]): Chunk[] {
+    text = text || '';
+    if (!steps?.length) return [{ text }];
+    if (text.includes('```task')) return [{ steps }, { text }];
+    const out: Chunk[] = [];
+    let at = 0;
+    for (const s of [...steps].sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0))) {
+      const pos = Math.min(Math.max(s.pos ?? 0, at), text.length);
+      if (pos > at) out.push({ text: text.slice(at, pos) });
+      const last = out[out.length - 1];
+      if (last?.steps) last.steps.push(s); else out.push({ steps: [s] });
+      at = pos;
+    }
+    if (at < text.length) out.push({ text: text.slice(at) });
+    return out;
+  }
+  toolIcon(name: string) { return TOOL_ICON[name] ?? I.tool; }
+  levelName(l: ToolLevel) { return LEVELS.find(x => x.id === l)?.name ?? l; }
+  /** The step's sentence: translated, then its holes filled. */
+  stepLine(s: CcStep): string {
+    const v = s.vars ?? {};
+    return t(s.say || s.tool).replace(/\{(\w+)\}/g, (m, k) => v[k] != null && v[k] !== '' ? String(v[k]) : (k === 'lcsc' ? '?' : m));
+  }
+  stepNote(s: CcStep): string | null {
+    return s.status === 'ask' ? 'waiting for you' : s.status === 'denied' ? 'not allowed'
+      : s.status === 'stopped' ? 'stopped' : s.status === 'interrupted' ? 'interrupted' : null;
+  }
+  argsLine(s: CcStep): string {
+    const a = s.args ?? {};
+    const parts = Object.entries(a).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`);
+    return parts.join(' · ') || '-';
+  }
+  answerStep(cid: string, s: CcStep, allow: boolean) {
+    this.api.answerStep(cid, s.id, allow).subscribe({ error: e => this.error.set(e?.error?.detail ?? t('Something went wrong.')) });
+  }
+
+  tools = signal<CcTool[]>([]);
+  toolsOpen = signal(false);
+  toolsOn = computed(() => this.tools().filter(x => x.on).length);
+  toolGroups = computed(() => LEVELS.map(l => ({ ...l, tools: this.tools().filter(x => x.level === l.id) })));
+  private toolsLoaded = (() => { this.loadTools(); return true; })();
+  private loadTools() {
+    this.api.tools().subscribe({ next: r => this.tools.set(r.tools), error: () => {} });
+  }
+  /** One tool on or off for me: shown at once, then what the server keeps. */
+  toggleTool(tl: CcTool) {
+    const on = !tl.on;
+    this.tools.update(l => l.map(x => x.name === tl.name ? { ...x, on } : x));
+    this.api.setTools({ [tl.name]: on }).subscribe({
+      next: r => this.tools.set(r.tools),
+      error: e => { this.error.set(e?.error?.detail ?? t('Something went wrong.')); this.loadTools(); },
+    });
+  }
+
   parts(src: string): Segment[] {
     src = src || '';
     let got = this.split.get(src);
