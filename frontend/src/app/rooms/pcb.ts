@@ -746,7 +746,12 @@ export class RoomPcb implements OnDestroy {
   /** When the copper on show was routed: the run's own stamp, else the drawing's. */
   private routeAt = computed(() => this.here()?.route?.at ?? this.here()?.artifacts?.['routed']?.at
                                     ?? this.here()?.layout?.at ?? null);
-  routeEngineName = computed(() => (this.here()?.route?.engine ?? 'freerouting') === 'tracemaker' ? 'TraceMaker' : 'Freerouting');
+  /** A route stored before the engine was: TraceMaker's has no Freerouting passes. */
+  routeEngineName = computed(() => {
+    const r = this.here()?.route;
+    const e = r?.engine ?? (r && r.passes == null ? 'tracemaker' : 'freerouting');
+    return e === 'tracemaker' ? 'TraceMaker' : 'Freerouting';
+  });
   routeAgo = computed(() => {
     this.clockTick();
     const at = this.routeAt();
