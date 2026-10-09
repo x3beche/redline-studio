@@ -358,3 +358,49 @@ def test_the_after_shot_no_longer_forces_1200x800_on_an_older_note(monkeypatch, 
     with pytest.raises(SystemExit):
         asyncio.run(revisions._after_shot(Db(), RID, 900))
     assert argv["a"][argv["a"].index("--width") + 1] == "900"
+
+
+# ---------------------------------------------------------------- motions
+
+def test_the_fingerprint_keeps_the_hand_set_motions():
+    # The page's viewHash (ocp.ts) for this view, computed in node.
+    v = {"v": 2, "tab": "tree", "states": {"/Station/Fan": [1, 1]},
+         "motions": {"Tilt": 12.5, "Lid": -3.03125},
+         "camera": {"ortho": False, "zoom": 1, "quaternion": [0, 0, 0, 1]}}
+    assert render.view_hash(v) == "3cb031fc"
+    v["motions"]["Tilt"] = 13.0
+    assert render.view_hash(v) != "3cb031fc"
+
+
+def test_the_render_waits_for_the_notes_tilt_and_a_still_fan():
+    v = note_view(motions={"Tilt": 30.0})
+    applied = {"model": "m", "view_rev": RID, "view_applied": True,
+               "view_hash": render.view_hash(v), "view_error": None}
+    ok = readback(v, motions={"Tilt": 30.0}, spin_rest=True)
+    assert render.view_state_problem(applied, ok, RID, v) is None
+    # The slider is somewhere else.
+    off = render.view_state_problem(applied, readback(v, motions={"Tilt": 0.0}, spin_rest=True), RID, v)
+    assert off and "Tilt is at 0, not 30" in off
+    # The fan is still turning: not the rest pose a picture is taken at.
+    spin = render.view_state_problem(applied, readback(v, motions={"Tilt": 30.0}, spin_rest=False), RID, v)
+    assert spin and "spinning" in spin
+    # A motion this build no longer has is let go, like a part it no longer has.
+    assert render.view_state_problem(applied, readback(v, motions={}, spin_rest=True), RID, v) is None
+    # A view without motions on a page without any: as before.
+    plain = note_view()
+    assert render.readback_mismatch(plain, readback(plain)) == []
+
+
+def test_the_page_keeps_motions_in_the_view_and_puts_them_back():
+    """The page's side (ocp.ts / motions.ts / api.ts), read as text: the
+    view carries the hand-set values, a note's view puts them back and
+    stops the spins, and the readback says both."""
+    root = Path(__file__).resolve().parent.parent / "frontend" / "src" / "app"
+    ocp = (root / "editor" / "ocp.ts").read_text()
+    mot = (root / "editor" / "motions.ts").read_text()
+    assert "motions?: Record<string, number>" in (root / "api.ts").read_text()
+    assert "this.motions?.captured()" in ocp and "restoreValues(view.motions)" in ocp
+    assert "this.motions?.readback()" in ocp
+    assert "spin_rest" in mot and "this.playing[s.name] = false" in mot
+    # A shot starts no spin.
+    assert "this.motions.still = !!this.shot" in ocp

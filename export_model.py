@@ -4,7 +4,8 @@
 
 Source and output directories are supplied from outside so the backend can run
 this script in a temporary directory and store the result in the database.
-Module contract: TITLE (optional), PARTS (required), NAMES (optional).
+Module contract: TITLE (optional), PARTS (required), NAMES (optional),
+MOTIONS (optional: parts that move in the viewer, backend/motions.py).
 Parts that came from another model or a board it imports are grouped under
 one node per component in the viewer's tree (backend/assembly.py).
 A STEP of PARTS is written to exports/ too, unless the model wrote one.
@@ -81,12 +82,23 @@ def export(models_dir: Path, assets_dir: Path, name: str, marker=None) -> Path:
     # The model's own part names, whatever the tree's depth: the editor's
     # Part field offers these.
     envelope["names"] = names
+    # Parts that move in the viewer (backend/motions.py): checked against
+    # the tree just made, so a wrong path stops the build here. Only the
+    # model's own - an imported model's MOTIONS do not come along.
+    from backend import motions
+    envelope["motions"] = motions.check(getattr(module, "MOTIONS", None), _shapes_of(envelope))
     out = assets_dir / f"{name}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(envelope))
     with _phase("step"):
         step_of(parts, name, root)
     return out
+
+
+def _shapes_of(envelope: dict) -> dict:
+    """The tree in a payload, instanced or not."""
+    data = envelope.get("data", envelope)
+    return data.get("shapes", data) if isinstance(data, dict) else {}
 
 
 def step_of(parts, name: str, root=None) -> None:

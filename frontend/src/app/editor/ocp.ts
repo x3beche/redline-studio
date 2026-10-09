@@ -2,6 +2,7 @@ import { Display, Viewer, decodeInstancedFormat, isInstancedFormat } from 'three
 import type { CameraState, ClipPlaneView, NoteView } from '../api';
 import { ClipWheel } from './clip-wheel';
 import { ClipReverse } from './clip-reverse';
+import { Motions } from './motions';
 
 /** OCP CAD Viewer itself (three-cad-viewer): the same version and wire
  *  format the VS Code extension uses; Python produces the payload. */
@@ -56,6 +57,10 @@ export interface ViewReadback {
   caps: boolean;
   helpers: boolean;
   ortho: boolean;
+  /** The hand-set motions' values (degrees), and whether every spin is
+   *  stopped at its rest pose (motions.ts). */
+  motions: Record<string, number>;
+  spin_rest: boolean;
 }
 
 export interface ViewApplied {
@@ -75,6 +80,8 @@ export class OcpViewer {
   clipWheel: ClipWheel | null = null;
   /** The reverse switch beside each clip plane. */
   clipReverse: ClipReverse | null = null;
+  /** The model's moving parts and their panel (motions.ts). */
+  motions: Motions | null = null;
   /** resizeCadView throws before render() has been called. */
   private rendered = false;
 
@@ -107,6 +114,10 @@ export class OcpViewer {
     (window as unknown as Record<string, unknown>)['tcv'] = this.viewer;
     this.clipWheel = new ClipWheel(this.container);
     this.clipReverse = new ClipReverse(this.container, () => this.viewer);
+    this.motions = new Motions(this.container);
+    // For the page's tests and tools, like `tcv` above.
+    (window as unknown as Record<string, unknown>)['redlineMotions'] = this.motions;
+    (window as unknown as Record<string, unknown>)['redlineOcp'] = this;
   }
 
   /** Load a payload into the scene. False, with the scene untouched, when
@@ -122,6 +133,8 @@ export class OcpViewer {
     if (!res.ok) throw new Error(`viewer payload ${res.status}`);
     const envelope = await res.json();
     if (!stillWanted()) return false;
+    // The moved groups back and the live tubes out before the scene goes.
+    this.motions?.clear();
     if (this.rendered) this.viewer.clear();
     const raw = envelope.data ?? envelope;
     // The Python envelope arrives instanced; the viewer expects it decoded.
@@ -160,6 +173,13 @@ export class OcpViewer {
       centerGrid: false,
     } as any);
     this.rendered = true;
+    // Its moving parts at their rest pose. tools/render.py's shot starts
+    // no spin: a picture is taken at the rest pose.
+    if (this.motions) {
+      this.motions.still = !!this.shot;
+      try { this.motions.setup(this.viewer, envelope.motions); }
+      catch (e) { console.warn('motions not set up', e); }
+    }
     this.clipWheel?.ensure();
     this.clipReverse?.ensure();
     return true;
@@ -322,6 +342,7 @@ export class OcpViewer {
       tab: v.state?.get('activeTab') ?? 'tree', planes, half: this.clipHalf(),
       intersection: !!v.getClipIntersection(), caps: !!v.state?.get('clipObjectColors'),
       helpers: !!v.getClipPlaneHelpers(), ortho: !!v.getOrtho(),
+      ...(this.motions?.readback() ?? { motions: {}, spin_rest: true }),
     };
   }
 
@@ -344,7 +365,10 @@ export class OcpViewer {
     }
     const c = this.canvasRect();
     const w = Math.round(c?.width ?? 0), h = Math.round(c?.height ?? 0);
+    // The hand-set motions (a tilt); spins are not kept.
+    const motions = this.motions?.captured() ?? null;
     return {
+      ...(motions ? { motions } : {}),
       v: VIEW_FORMAT,
       states: this.states(),
       tab: rb.tab as NoteView['tab'],
@@ -398,12 +422,20 @@ export class OcpViewer {
     } else {
       this.applyStates(states);
     }
-    if ((view.v ?? 1) < 2) return { ok: true, error: null, missing };
+    // The hand-set motions as the note had them - at their defaults for a
+    // note that has none (drawn before, or on a model without them) - and
+    // the spins stopped at rest: a note shows a still.
+    let motionError: string | null = null;
+    if (this.motions?.any) {
+      try { this.motions.restoreValues(view.motions); }
+      catch (e) { motionError = `motions: ${(e as Error)?.message ?? e}`; }
+    }
+    if ((view.v ?? 1) < 2) return { ok: !motionError, error: motionError, missing };
 
     // Setters are called with their notify left on: it is what drives the
     // viewer's own listeners - a tab set without it changes the state and
     // never switches the tab, and the checkboxes and sliders never follow.
-    const errors: string[] = [];
+    const errors: string[] = motionError ? [motionError] : [];
     const tryDo = (what: string, f: () => void) => {
       try { f(); } catch (e) { errors.push(`${what}: ${(e as Error)?.message ?? e}`); }
     };
@@ -467,6 +499,11 @@ export class OcpViewer {
   viewMismatch(view: NoteView): string[] {
     if ((view.v ?? 1) < 2) return [];
     const rb = this.readback(), out: string[] = [];
+    for (const [k, want] of Object.entries(view.motions ?? {})) {
+      const got = rb.motions[k];
+      if (got !== undefined && Math.abs(got - want) > 1e-3) out.push(`${k} is ${got}, not ${want}`);
+    }
+    if (!rb.spin_rest) out.push('a part is still spinning');
     if ((view.tab ?? 'tree') !== rb.tab) out.push(`tab is ${rb.tab}, not ${view.tab}`);
     if (view.camera && !!view.camera.ortho !== rb.ortho) out.push('camera type differs');
     const clip = view.clip;

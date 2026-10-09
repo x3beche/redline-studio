@@ -445,6 +445,15 @@ def readback_mismatch(view: dict, rb) -> list[str]:
             out.append("cap colours differ")
         if rb.get("tab") == "clip" and bool(clip.get("helpers")) != bool(rb.get("helpers")):
             out.append("plane helpers differ")
+    # The model's hand-set motions (a tilt - editor/motions.ts) as the note
+    # had them. One this build no longer has is let go, like a part it no
+    # longer has; a spin is never kept and must be still, at its rest pose.
+    got = rb.get("motions") if isinstance(rb.get("motions"), dict) else {}
+    for name, want in sorted((view.get("motions") or {}).items()):
+        if name in got and abs(float(got[name]) - float(want)) > 1e-3:
+            out.append(f"{name} is at {float(got[name]):g}, not {float(want):g}")
+    if rb.get("spin_rest") is False:
+        out.append("a part is still spinning")
     return out
 
 

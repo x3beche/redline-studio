@@ -50,6 +50,16 @@ constant, not the geometry. Check with a measurement in code that raises,
 then `revisions.py after <id>` renders the same camera: read that picture
 against the drawing. See AGENTS.md: Model contract, Silent failures.
 
+Parts that move in the viewer (a fan spinning, a hinge set by hand, a
+cable bending with it) are declared as `MOTIONS` next to PARTS - AGENTS.md,
+*Parts that move: MOTIONS*. The moving part is its own part (or
+component group) in the tree; axis and pivot in world mm at the pose the
+model is built in, read from the model's own numbers; `range` in degrees
+with `default` = the built pose; `spin` in rpm; a cable `follows` a range.
+A motion is visual only - nothing checks collisions, so keep the model's
+own check over the range. A note drawn at Tilt = 30 keeps that value and
+its after shot is taken there.
+
 
 Reuse is importing: another model is `import stand as D`, a board is
 `import <board_id_with_underscores> as B` (`B.part`, `B.HOLES`,

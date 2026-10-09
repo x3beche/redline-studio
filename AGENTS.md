@@ -798,6 +798,51 @@ NAMES = ["housing", "impeller", "pins"]   # names in the tree
 Models are parametric: when a dimension is requested, change the constant —
 do not rewrite the geometry by hand.
 
+### Parts that move: MOTIONS
+
+A model can make parts move in the viewer: a fan that spins, a hinge the
+person sets by hand (a slider in the 3D room's "Motion" panel, the mouse
+wheel over it), a cable that bends with the hinge. Declare it next to PARTS
+(backend/motions.py has the whole format):
+
+```python
+MOTIONS = {
+    "Tilt": {"part": ["Fan housing", "Fan rotor", "Fan frame"],   # tree paths or unique part names
+             "range": (-18, 18), "default": TILT,                 # degrees; default = the pose PARTS is built in
+             "axis": (1, 0, 0), "pivot": (0, 0, 41.5)},           # world frame, mm, at the default pose
+    "Fan":  {"part": "Fan rotor", "spin": 1800, "on": "Tilt",     # rpm, turns all the time
+             "axis": (0, -1, 0), "pivot": (0, 0, 41.5)},
+    "Cable": {"part": "Fan cable (loop)", "follows": "Tilt", "radius": 1.0,
+              "paths": {t: centre_line_at(t) for t in SWEEP}},    # world mm, same point count at every t
+}
+```
+
+- A moving part has to be its own node in the tree: its own entry in PARTS
+  (or a component's group). Split a solid that moves out of one that does
+  not; never move half a part.
+- `part` is a path as the tree shows it ("Fan Module 80/Fan rotor") or a
+  part's own name when only one node has it, or a list of them; a node
+  moves with what is under it. Rotation is right-handed about `axis`.
+- Read axis and pivot from the model's own numbers (the hinge's `swing`,
+  a placement), never retype them; give them at the default pose.
+- A motion inside another rides on it (the rotor keeps spinning about its
+  tilted axis); found from the tree or said with `"on"`.
+- A cable that a range bends: `follows` that motion, with its centre line
+  sampled over the range (`paths`, blended in between - best when the
+  model already works the cable's shape out) or its two ends and length
+  (`from`/`to` `{"at", "dir"}`, `length`; a curve of that length). At the
+  default the model's own cable is shown, elsewhere a live tube.
+- The build checks it (paths in the tree, finite numbers, range low <
+  high, default inside it, sampled paths covering the range) and stops
+  with what is wrong. An imported model's MOTIONS stay its own: the
+  assembly declares the ones it shows.
+- **A motion is visual only**: nothing checks that moving parts collide.
+  Keep the model's own check over the range in code; the built pose stays
+  the truth for printing and clearances.
+- A note keeps the hand-set values (Tilt = 30) and the after shot puts
+  them back (render.py checks the page read them back); spins are not
+  kept, and shots are taken with them stopped at their rest pose.
+
 ## Components: reuse is importing, never copying
 
 Every `.3d` model and every `.pcb` board is a **component**. A design that

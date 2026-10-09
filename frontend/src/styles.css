@@ -2192,6 +2192,78 @@ body {
 .tcv-clipstep-presets button[data-on="1"] { color: var(--ink-bright); background: var(--accent-deep); }
 .tcv-clipstep-presets button:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 
+/* The model's moving parts (editor/motions.ts): a small flat panel over
+   the top-left of the 3D area - a row per spin (play, speed) and per
+   hand-set motion (slider, value, auto, back to the built pose). */
+.tcv-motion {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 6;
+  width: 236px;
+  padding: 4px 8px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11px;
+  box-shadow: var(--shadow-soft);
+  cursor: default;
+}
+.tcv-motion-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.tcv-motion-title {
+  font-size: 10.5px;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.tcv-motion-fold {
+  width: 18px; height: 18px; padding: 0;
+  border: 0; border-radius: 3px;
+  background: transparent; color: var(--ink-dim);
+  font: 12px 'IBM Plex Mono', ui-monospace, monospace; cursor: pointer;
+}
+.tcv-motion-fold:hover { color: var(--ink); background: var(--hover); }
+.tcv-motion[data-shut="1"] .tcv-motion-body { display: none; }
+.tcv-motion[data-off="1"] .tcv-motion-body { opacity: .5; }
+.tcv-motion-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 2px 6px;
+  margin-top: 5px;
+}
+.tcv-motion-row[data-kind="spin"] { grid-template-columns: 22px auto 1fr auto; }
+.tcv-motion-row[data-kind="range"] { grid-template-columns: auto 1fr auto auto; }
+.tcv-motion-row[data-kind="range"] .tcv-motion-val { text-align: left; }
+.tcv-motion-row[data-kind="range"] .tcv-motion-range { grid-column: 1 / -1; grid-row: 2; }
+.tcv-motion-name { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcv-motion-val {
+  color: var(--ink-dim);
+  font: 11px 'IBM Plex Mono', ui-monospace, monospace;
+  text-align: right;
+  white-space: nowrap;
+}
+.tcv-motion input[type="range"] { width: 100%; min-width: 0; margin: 0; accent-color: var(--accent); }
+.tcv-motion-play, .tcv-motion-auto, .tcv-motion-reset {
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-dim);
+  font: 11px 'IBM Plex Mono', ui-monospace, monospace;
+  cursor: pointer;
+  transition: color .12s, background .12s;
+}
+.tcv-motion-play { width: 22px; padding: 0; }
+.tcv-motion-play:hover, .tcv-motion-auto:hover, .tcv-motion-reset:hover { color: var(--ink); background: var(--hover); }
+.tcv-motion-play[aria-pressed="true"], .tcv-motion-auto[data-on="1"] { color: var(--ink-bright); background: var(--accent-deep); }
+.tcv-motion button:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.tcv-motion button:disabled, .tcv-motion input:disabled { cursor: default; }
+.tcv-motion-note { margin-top: 6px; color: var(--ink-dim); font-size: 10.5px; line-height: 1.3; }
+html[data-shot] .tcv-motion { display: none !important; }
+
 /* The reverse switch on each clip plane's N=(...) row (clip-reverse.ts):
    the same flat, outlined chip as the wheel step's presets, lit while the
    plane faces the other way. */

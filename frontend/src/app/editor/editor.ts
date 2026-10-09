@@ -223,7 +223,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   constructor() {
     // The Clip tab's wheel-step control is built outside Angular; its words
     // follow the language by hand.
-    effect(() => { LANG(); untracked(() => { this.viewer?.clipWheel?.relabel(); this.viewer?.clipReverse?.relabel(); }); });
+    effect(() => { LANG(); untracked(() => { this.viewer?.clipWheel?.relabel(); this.viewer?.clipReverse?.relabel(); this.viewer?.motions?.relabel(); }); });
     // The note at work is fetched by itself whenever the list in view does
     // not hold it (the archive is showing), so its card stays under the tree.
     effect(() => {
@@ -1643,6 +1643,8 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   async freeze() {
     if (!this.viewer) return;
+    // What turns by itself stops under the drawing.
+    this.viewer.motions?.hold(true);
     this.frozenShot = await this.viewer.image();
     this.viewer.setEnabled(false);
     this.frozen.set(true);
@@ -1650,6 +1652,7 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   resume() {
     this.viewer?.setEnabled(true);
+    this.viewer?.motions?.hold(false);
     this.frozen.set(false);
     this.typing.set(null);
     this.marks = []; this.active = null; this.repaint();

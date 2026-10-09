@@ -193,6 +193,9 @@ export interface NoteView {
   camera?: { ortho: boolean; zoom: number; quaternion: [number, number, number, number] };
   /** The 3D canvas as drawn, in CSS pixels. Its aspect decides the framing. */
   canvas?: { w: number; h: number; aspect: number };
+  /** The model's hand-set motions as drawn, degrees by name (a tilt -
+   *  editor/motions.ts); only on a model that has them. Spins are not kept. */
+  motions?: Record<string, number>;
   /** The viewer's background it was drawn on (the theme's --view-top/mid/bottom). */
   backdrop?: { top: string; mid: string; bottom: string };
 }
