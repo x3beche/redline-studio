@@ -153,13 +153,16 @@ async def colours(ids: str = ""):
     """The avatar colours of the people asked for (comma-separated ids), for
     a page drawing them - the Chat's lines. Only the colour: an id that is
     no account is simply left out, and nobody is listed who was not asked
-    for. Everyone not answered (agents, models) is "auto" to the page."""
+    for - nor anyone outside the asking space, who cannot be on its pages.
+    Everyone not answered (agents, models) is "auto" to the page."""
     want = [i for i in dict.fromkeys(x.strip() for x in ids.split(",")) if i][:200]
     if not want:
         return {"colours": {}}
     out = {}
-    async for u in _db()[auth.USERS].find({"_id": {"$in": want}}, {"avatar_colour": 1}):
-        out[u["_id"]] = colour_of(u)
+    ws, me_id = scope.current(), actors.current().get("id")
+    async for u in _db()[auth.USERS].find({"_id": {"$in": want}}, {"avatar_colour": 1, "space": 1, "role": 1}):
+        if u["_id"] == me_id or auth.space_of(u) == ws:
+            out[u["_id"]] = colour_of(u)
     return {"colours": out}
 
 

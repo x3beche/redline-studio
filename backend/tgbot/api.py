@@ -163,9 +163,13 @@ async def state() -> dict:
         # step 3 is done when someone pressed its Save - not guessed from the fields
         "profile_done": st.get("profile_done") or None,
     }
-    # Each person sees their own link only; the bot's log is the server's.
+    # Each person sees their own link only; the bot's log is the server's,
+    # but what a message said only to its own space (a row with none is the
+    # default space's).
     if out["can_edit"]:
-        out["log"] = [{k: r.get(k) for k in ("at", "dir", "kind", "ok", "error", "preview", "user")}
+        ws = scope.current()
+        out["log"] = [{k: (r.get(k) if k != "preview" or (r.get("workspace") or scope.DEFAULT) == ws else None)
+                       for k in ("at", "dir", "kind", "ok", "error", "preview", "user")}
                       async for r in raw[core.LOG].find({}).sort("at", -1).limit(25)]
     return out
 

@@ -141,7 +141,8 @@ def test_the_avatar_colour_is_one_of_the_palette(db):
 
 def test_the_colour_reaches_the_session_and_the_authors(db):
     """The signed-in user carries it (the top bar), and a page drawing
-    message authors gets theirs - only for the ids it names."""
+    message authors gets theirs - only for the ids it names, and only for
+    the people of its own space: another account's is nobody's business."""
     a = client(session(db, "u-ayse"))
     a.patch("/api/me", json={"avatar_colour": "series-3"})
     auth._CACHE.clear()
@@ -150,7 +151,8 @@ def test_the_colour_reaches_the_session_and_the_authors(db):
     b = client(session(db, "u-bora"))
     r = b.get("/api/me/colours", params={"ids": "u-ayse,u-bora,nobody,u-ayse"})
     assert r.status_code == 200, r.text
-    assert r.json()["colours"] == {"u-ayse": "series-3", "u-bora": "auto"}
+    assert r.json()["colours"] == {"u-bora": "auto"}         # Ayşe works in a space of her own
+    assert a.get("/api/me/colours", params={"ids": "u-ayse,u-bora"}).json()["colours"] == {"u-ayse": "series-3"}
     assert b.get("/api/me/colours").json()["colours"] == {}
     assert access.action("GET", "/api/me/colours") == "view"
 
