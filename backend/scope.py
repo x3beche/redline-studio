@@ -68,6 +68,10 @@ def key(base: str, ws: str | None = None) -> str:
     return base if ws == DEFAULT else f"{base}@{ws}"
 
 
+# The operators whose operand is not a name (Ids.query).
+_NOT_NAMES = frozenset({"$regex", "$options", "$exists", "$type"})
+
+
 class Ids:
     """Names that exist once per workspace.
 
@@ -106,7 +110,11 @@ class Ids:
                 out[k] = [self.query(x) for x in v]
             elif k == "_id":
                 if isinstance(v, dict) and any(op.startswith("$") for op in v):
-                    out[k] = {op: ([self.inn(x) for x in a] if isinstance(a, (list, tuple)) else self.inn(a))
+                    # A pattern or a test is not a name: `^project/` finds
+                    # `project/x@team2` as it is (the workspace filter keeps
+                    # it to this one); suffixed, it found nothing.
+                    out[k] = {op: (a if op in _NOT_NAMES else
+                                   [self.inn(x) for x in a] if isinstance(a, (list, tuple)) else self.inn(a))
                               for op, a in v.items()}
                 else:
                     out[k] = self.inn(v)
