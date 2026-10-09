@@ -154,14 +154,30 @@ def runtime() -> str:
     global _RUNTIME
     if _RUNTIME is None:
         import importlib.metadata as md
-        parts = [str(FORMAT), sys.version, _sha(Path(__file__).read_bytes())[:16]]
+        import platform
+        # The interpreter's version, not sys.version: that also names the
+        # compiler and the day it was built, which differ between the
+        # API container and the host's .venv - so a build an agent ran
+        # never used what a link rebuild had kept, and the other way
+        # round, with the same Python, build123d and OCP on both.
+        python = f"{platform.python_implementation()} {platform.python_version()}"
+        parts = [str(FORMAT), python, _sha(Path(__file__).read_bytes())[:16]]
         # The marks a kept shape carries are made there (component grouping).
         marks = Path(__file__).with_name("assembly.py")
         if marks.exists():
             parts.append(_sha(marks.read_bytes())[:16])
-        for dist in ("build123d", "cadquery-ocp", "cadquery_ocp", "ocp-viewer-core"):
+        for dist in ("build123d", "cadquery-ocp", "cadquery_ocp", "cadquery-ocp-novtk",
+                     "ocp-viewer-core", "numpy", "scipy"):
             try:
                 parts.append(f"{dist}={md.version(dist)}")
+            except Exception:                           # noqa: BLE001 - not installed under that name
+                pass
+        # Which files make up the geometry libraries, by their hashes: the
+        # same version installed twice is the same library, a patched one is
+        # not.
+        for dist in ("build123d", "cadquery-ocp-novtk"):
+            try:
+                parts.append(f"{dist} files={_installed_files(md.distribution(dist))}")
             except Exception:                           # noqa: BLE001 - not installed under that name
                 pass
         try:
@@ -171,6 +187,18 @@ def runtime() -> str:
             pass
         _RUNTIME = _sha("|".join(parts))
     return _RUNTIME
+
+
+def _installed_files(dist) -> str:
+    """A digest of a distribution's own files as its RECORD lists them,
+    without what the installer adds (pip and uv write different ones)."""
+    rows = []
+    for line in (dist.read_text("RECORD") or "").splitlines():
+        path = line.split(",", 1)[0]
+        if not line or "__pycache__" in path or ".dist-info/" in path:
+            continue
+        rows.append(line)
+    return _sha("\n".join(sorted(rows)))[:16]
 
 
 def module_keys(models_dir: Path, root: Path) -> dict[str, str]:

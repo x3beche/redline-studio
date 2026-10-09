@@ -8,6 +8,7 @@ import json
 import os
 import collections
 import contextvars
+import re
 import shutil
 import time
 import sys
@@ -26,6 +27,112 @@ STOP_EVERY = 2.0
 # The build job this is (backend/buildjobs.py sets it in its runner): kept on
 # the model while it builds, so a job found lost clears only its own flag.
 JOB: contextvars.ContextVar[str | None] = contextvars.ContextVar("build_job", default=None)
+
+# Warming: while a model that others use is built, a second process
+# imports it the way they do, so the component cache (backend/buildcache.py)
+# has it when their rebuilds start. A build runs the model as itself, not as
+# an import - its exports, REDLINE_IMPORT_ONLY unset - so its own run was
+# never kept, and the first model to use it ran it all over again, one
+# after the other: enclosure, then lid running the enclosure, then base
+# running the lid... (2026-10-09: a change at the bottom of the 80 mm fan
+# was ~15 min of rebuilds, on one core of sixteen). REDLINE_BUILD_WARM=off
+# turns it off.
+WARM_MAX = 2                        # import variants warmed at once, at most
+_FLAG = re.compile(r"""REDLINE_IMPORT_ONLY["']\s*\]\s*=\s*["']([^"']*)["']""")
+
+
+def warm_imports(graph, model_id: str) -> list[tuple[str, str | None]]:
+    """How the models using `model_id` import it: (module name, the
+    REDLINE_IMPORT_ONLY they set first, or None). A use pinned to a version
+    imports another source, which this build does not make."""
+    from . import links
+    if os.environ.get("REDLINE_BUILD_WARM", "").strip().lower() in ("off", "0", "no"):
+        return []
+    k = links.key("model", model_id)
+    names = {n for n, v in graph.table.items() if v == ("model", model_id)}
+    out = set()
+    for d in graph.used_by(k):
+        if links.split(d)[0] != "model" or graph.pinned(d, k):
+            continue
+        src = (graph.nodes.get(d) or {}).get("source") or ""
+        flag = _FLAG.search(src)
+        for n in links.imported_names(src):
+            if n in names:
+                out.add((n, flag.group(1) if flag else None))
+    return sorted(out, key=str)[:WARM_MAX]
+
+
+def _room_to_warm() -> bool:
+    """A second process is a second model in memory: only with a build's
+    ceiling (tools/capped.sh) to spare, so warming never pushes the
+    machine into swap."""
+    limit = os.environ.get("REDLINE_BUILD_MEM", "10G").strip().upper()
+    try:
+        need = float(limit.rstrip("GB")) * 2**30
+    except ValueError:
+        need = 10 * 2**30
+    try:
+        import psutil
+        return psutil.virtual_memory().available >= need
+    except Exception:                       # noqa: BLE001 - unknown: do not
+        return False
+
+
+def _lay_out(tmp: Path, root: Path) -> None:
+    """A warming process's own copy of the build directory: the same
+    sources and files, so the same keys, and nothing it writes is seen by
+    the build (which keeps no import that wrote files)."""
+    shutil.copytree(tmp / "models", root / "models",
+                    ignore=shutil.ignore_patterns("__pycache__"))
+    (root / "assets").mkdir()
+    (root / "exports").mkdir()
+
+    def link(src, dst):
+        try:
+            os.link(src, dst)
+        except OSError:
+            shutil.copy2(src, dst)
+    for p in tmp.iterdir():
+        if p.is_file():
+            link(p, root / p.name)
+    if (tmp / "_boards").is_dir():
+        shutil.copytree(tmp / "_boards", root / "_boards", copy_function=link)
+
+
+async def _warm(argv: list[str], imports, tmp: Path, where: Path) -> list:
+    procs = []
+    for i, (name, flag) in enumerate(imports):
+        root = where / str(i)
+        try:
+            _lay_out(tmp, root)
+            procs.append(await asyncio.create_subprocess_exec(
+                *argv, name, "--models-dir", str(root / "models"),
+                "--assets-dir", str(root / "assets"), "--warm",
+                *(["--flag", flag] if flag is not None else []),
+                cwd=str(root), stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL))
+        except Exception:                   # noqa: BLE001 - the build goes on without it
+            continue
+    return procs
+
+
+async def _settle(procs: list, keep: bool, until: float) -> None:
+    """Warming processes: seen to the end when the build made it (until
+    its deadline), stopped when it did not - nothing would use what they
+    keep."""
+    for p in procs:
+        if keep and p.returncode is None:
+            try:
+                await asyncio.wait_for(p.wait(), max(0.0, until - time.monotonic()))
+                continue
+            except asyncio.TimeoutError:
+                pass
+        if p.returncode is None:
+            try:
+                p.kill()
+            except ProcessLookupError:
+                pass
+            await p.wait()
 
 
 async def request_stop(db, model_id: str) -> bool:
@@ -75,6 +182,7 @@ async def build(db, model_id: str, script: Path) -> dict:
          "$unset": {"stop_at": ""}})
 
     tmp = Path(tempfile.mkdtemp(prefix="redline-build-"))
+    warm_dir = None
     try:
         models_dir = tmp / "models"
         models_dir.mkdir()
@@ -126,19 +234,27 @@ async def build(db, model_id: str, script: Path) -> dict:
         # booleans against it can grow until the machine swaps and the desktop
         # freezes. With the ceiling the kernel kills the build instead.
         capped = Path(__file__).resolve().parent.parent / "tools" / "capped.sh"
-        argv = [sys.executable, str(script), flat,
+        run = [str(capped)] if capped.exists() else []
+        argv = [*run, sys.executable, str(script), flat,
                 "--models-dir", str(models_dir), "--assets-dir", str(assets_dir)]
-        if capped.exists():
-            argv = [str(capped), *argv]
 
         # What this costs the machine, as opposed to what it costs in tokens:
         # the card shows both. Started before the spawn, stopped after the
-        # child has been waited for, which is when its usage is final.
+        # child has been waited for, which is when its usage is final - the
+        # warming processes' included.
         meter = compute.Meter()
         proc = await asyncio.create_subprocess_exec(
             *argv, cwd=str(tmp),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
         meter.watch(proc.pid)
+        warming = []
+        try:
+            imports = warm_imports(linked["graph"], model_id)
+            if imports and _room_to_warm():
+                warm_dir = Path(tempfile.mkdtemp(prefix="redline-warm-"))
+                warming = await _warm([*run, sys.executable, str(script)], imports, tmp, warm_dir)
+        except Exception:                       # noqa: BLE001 - never fail a build over this
+            pass
         stop = asyncio.create_task(_watch_for_stop(db, model_id, proc, started_at))
         called_off = None
         try:
@@ -153,6 +269,8 @@ async def build(db, model_id: str, script: Path) -> dict:
                 except Exception:               # the watcher itself failed
                     called_off = None
             stop.cancel()
+            await _settle(warming, proc.returncode == 0 and not called_off,
+                          started + TIMEOUT)
             # Recorded however it ended: a build that ran for four minutes and
             # then blew the memory ceiling spent those four minutes.
             job = meter.stop()
@@ -235,3 +353,5 @@ async def build(db, model_id: str, script: Path) -> dict:
             {"_id": model_id},
             {"$set": patch, "$unset": {"build_started": "", "build_job": ""}})
         shutil.rmtree(tmp, ignore_errors=True)
+        if warm_dir is not None:
+            shutil.rmtree(warm_dir, ignore_errors=True)

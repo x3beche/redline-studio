@@ -664,6 +664,10 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/render.py <id> [--camera=…|--only PART]
 ```
 
+`build` ends with where its time went (`timing: load ..., tessellate ...,
+step ...`) and which imported models came from the component cache and
+which ran (`cache: kept ...; ran ...`).
+
 Without `build` the user cannot see your change. It takes minutes, so check
 your arithmetic locally first - `export_model.py` renders straight from a
 directory of sources - and run anything heavy through `./tools/capped.sh`,

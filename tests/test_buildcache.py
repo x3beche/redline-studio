@@ -433,6 +433,22 @@ def test_a_large_step_is_parsed_once(tmp_path, monkeypatch):
     assert abs(second.volume - first.volume) < 1e-9
 
 
+def test_the_runtime_is_the_same_wherever_the_same_python_was_built(monkeypatch):
+    """The host's .venv and the API container run the same Python, build123d
+    and OCP from different builds of the interpreter: their entries are one
+    cache, not two that never meet."""
+    monkeypatch.setattr(buildcache, "_RUNTIME", None)
+    here = buildcache.runtime()
+    monkeypatch.setattr(buildcache, "_RUNTIME", None)
+    monkeypatch.setattr(sys, "version", sys.version.split(" ", 1)[0] + " (elsewhere) [another compiler]")
+    assert buildcache.runtime() == here
+    import platform
+    monkeypatch.setattr(buildcache, "_RUNTIME", None)
+    monkeypatch.setattr(platform, "python_version", lambda: "3.99.0")
+    assert buildcache.runtime() != here
+    monkeypatch.setattr(buildcache, "_RUNTIME", None)
+
+
 # ---------------------------------------------------------------- rebuilds at once
 
 def test_link_rebuilds_default_to_a_few_at_once():

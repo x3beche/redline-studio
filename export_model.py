@@ -15,8 +15,25 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import sys
+import time
 from pathlib import Path
+
+# Seconds each phase took (load = the model and what it imports, tessellate
+# = the viewer's payload, step = the STEP), said in the build's log.
+TIMES: dict[str, float] = {}
+
+
+class _phase:
+    def __init__(self, name: str):
+        self.name = name
+
+    def __enter__(self):
+        self.t0 = time.perf_counter()
+
+    def __exit__(self, *exc):
+        TIMES[self.name] = round(TIMES.get(self.name, 0) + time.perf_counter() - self.t0, 2)
 
 
 def load(models_dir: Path, name: str):
@@ -33,7 +50,8 @@ def load(models_dir: Path, name: str):
 def export(models_dir: Path, assets_dir: Path, name: str, marker=None) -> Path:
     from ocp_viewer_core.offline import _convert
 
-    module = load(models_dir, name)
+    with _phase("load"):
+        module = load(models_dir, name)
     parts = getattr(module, "PARTS", None)
     if not parts:
         raise AttributeError(f"{name}: PARTS is not defined")
@@ -51,15 +69,17 @@ def export(models_dir: Path, assets_dir: Path, name: str, marker=None) -> Path:
         except Exception as exc:                     # noqa: BLE001 - flat, then
             print(f"note: parts not grouped ({type(exc).__name__}: {exc})")
             root = None
-    envelope, _ = _convert(root, names=[root.label]) if root is not None \
-        else _convert(*parts, names=names)
+    with _phase("tessellate"):
+        envelope, _ = _convert(root, names=[root.label]) if root is not None \
+            else _convert(*parts, names=names)
     # The model's own part names, whatever the tree's depth: the editor's
     # Part field offers these.
     envelope["names"] = names
     out = assets_dir / f"{name}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(envelope))
-    step_of(parts, name, root)
+    with _phase("step"):
+        step_of(parts, name, root)
     return out
 
 
@@ -88,19 +108,52 @@ def main() -> None:
     ap.add_argument("model")
     ap.add_argument("--models-dir", required=True, type=Path)
     ap.add_argument("--assets-dir", required=True, type=Path)
+    ap.add_argument("--warm", action="store_true",
+                    help="only import the model the way a model using it does, so the "
+                         "component cache has it (backend/build.py)")
+    ap.add_argument("--flag", default=None,
+                    help="with --warm: REDLINE_IMPORT_ONLY while it is imported")
     args = ap.parse_args()
     # Models this one imports come from the component cache when their
     # result is kept (backend/buildcache.py); the model itself always runs.
+    # Warming, it is an import like any other and is kept too.
+    target = None if args.warm else args.model
     from backend import buildcache
-    cache = buildcache.install(args.models_dir, args.models_dir.parent, target=args.model)
+    cache = buildcache.install(args.models_dir, args.models_dir.parent, target=target)
+    if args.warm and cache is None:
+        print("warm: the component cache is off")
+        return
     # In front of the cache: whatever it serves, what a component made is
     # marked as that component's (the viewer's tree groups by it).
     from backend import assembly
-    marker = assembly.install(args.models_dir, target=args.model)
+    marker = assembly.install(args.models_dir, target=target)
+    # The same answers to the questions a model asks many times, without
+    # the setup each time (backend/fastgeom.py).
+    from backend import fastgeom
+    fastgeom.install()
     sys.path.insert(0, str(args.models_dir))
+    if args.warm:
+        warm(args.model, args.flag)
+        buildcache.finish(cache)
+        print(f"warm: {args.model} ({args.flag or 'standalone'}) {json.dumps(cache.stats)}")
+        return
     out = export(args.models_dir, args.assets_dir, args.model, marker)
+    print("timing: " + ", ".join(f"{k} {v:.1f}s" for k, v in TIMES.items()))
     print(f"{out}  {out.stat().st_size}")
     buildcache.finish(cache, args.assets_dir / f"{args.model}.cache.json")
+
+
+def warm(name: str, flag: str | None) -> None:
+    """Import `name` as a model that uses it would, REDLINE_IMPORT_ONLY as
+    that model sets it: what the import makes goes into the component cache
+    under the key that model's build will look for."""
+    import importlib
+    if flag is None:
+        os.environ.pop("REDLINE_IMPORT_ONLY", None)
+    else:
+        os.environ["REDLINE_IMPORT_ONLY"] = flag
+    with _phase("load"):
+        importlib.import_module(name)
 
 
 if __name__ == "__main__":

@@ -1291,6 +1291,22 @@ async def cmd_build(args):
     await store.version_built(db, args.model, version)
     sizes = ", ".join(f"{k} {v/1e6:.1f}MB" for k, v in res["artifacts"].items())
     print(f"{res['model']} built: {sizes}")
+    # Where the minutes went (export_model.py): loading the model, the
+    # viewer's tessellation, the STEP.
+    for line in (res.get("log") or "").splitlines():
+        if line.startswith("timing:"):
+            print(line)
+    # Which models it imports came from the component cache, which ran.
+    c = res.get("components") or {}
+    said = []
+    if c.get("hit"):
+        said.append("kept " + ", ".join(h[0] for h in c["hit"]))
+    if c.get("miss"):
+        said.append("ran " + ", ".join(f"{m[0]} {m[1]:.0f}s" for m in c["miss"]))
+    if c.get("fallback"):
+        said.append("ran again for a name not kept: " + ", ".join(c["fallback"]))
+    if said:
+        print("cache: " + "; ".join(said))
 
 
 async def _after_shot(db, rid: str, width: int | None = None, height: int | None = None,
