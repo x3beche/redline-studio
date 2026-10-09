@@ -29,7 +29,7 @@ import urllib.parse
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from . import lcsc, store
+from . import lcsc, scope, store
 
 OFFER = "offer.json"
 ALTS = "alternatives.json"
@@ -397,12 +397,13 @@ def cost(lines: list[dict], offers: dict[str, dict | None], qty: int,
 
 # ---------------- refreshing, in the background ----------------
 
-# bid -> {"running", "done", "total", "asked", "failed", "error", "started", "finished"}
+# board, per space (scope.key: two spaces can each have a `controller`) ->
+# {"running", "done", "total", "asked", "failed", "error", "started", "finished"}
 JOBS: dict[str, dict] = {}
 
 
 def job(bid: str) -> dict | None:
-    return JOBS.get(bid)
+    return JOBS.get(scope.key(bid))
 
 
 def to_refresh(parts: list[str], now: float | None = None, force: bool = False) -> list[str]:
@@ -416,7 +417,7 @@ def to_refresh(parts: list[str], now: float | None = None, force: bool = False) 
 async def refresh(bid: str, parts: list[str]) -> dict:
     """Ask for each part's offer, one at a time, waiting for the budget.
     A refusal (EasyEDA cooling off) ends the run; what was fetched stays."""
-    state = JOBS[bid]
+    state = JOBS[scope.key(bid)]
     lcsc.PATIENT.set(True)
     try:
         for part in parts:
@@ -440,14 +441,14 @@ async def refresh(bid: str, parts: list[str]) -> dict:
 
 def start_refresh(bid: str, parts: list[str], force: bool = False) -> dict:
     """Start (or report) the board's refresh. Only one per board at a time."""
-    have = JOBS.get(bid)
+    have = job(bid)
     if have and have.get("running"):
         return have
     todo = to_refresh(parts, force=force)
     state = {"running": bool(todo), "done": 0, "total": len(todo), "asked": 0,
              "failed": [], "error": None, "current": None,
              "started": store.now(), "finished": None if todo else store.now()}
-    JOBS[bid] = state
+    JOBS[scope.key(bid)] = state
     if todo:
         state["task"] = asyncio.get_running_loop().create_task(refresh(bid, todo))
     return state

@@ -64,16 +64,16 @@ async def now() -> dict:
                     + " changed") if because.get("title") else None,
         })
 
-    # Boards: a run, convert or layout in its own process.
+    # Boards: a run, convert or layout in its own process, this space's.
     raw = d.raw if getattr(type(d), "SCOPED", False) else d
-    async for j in raw[jobs.JOBS].find({"status": "running"}):
+    ws = getattr(d, "workspace", None) or "default"
+    async for j in raw[jobs.JOBS].find({"status": "running", "workspace": ws}):
         items.append({"kind": "board", "id": j.get("board"), "title": j.get("board"),
                       "state": "building", "job": j.get("kind"),
                       "secs": _secs(j.get("started_at"), t), "expected_secs": None, "why": None})
 
     # Firmware builds (backend/fwbuild.py), this space's.
     from . import fwbuild
-    ws = getattr(d, "workspace", None) or "default"
     async for j in raw[fwbuild.JOBS].find({"status": "running", "workspace": ws}):
         items.append({"kind": "firmware", "id": j.get("firmware"), "title": j.get("title") or j.get("firmware"),
                       "state": "building", "job": "firmware",
