@@ -883,7 +883,7 @@ async def overview(db, since: datetime, until: datetime) -> dict:
         rows("questions", {"at": {"$gte": lo, "$lte": hi}},
              {"at": 1, "answered_at": 1, "text": 1, "answer": 1, "revision": 1, "status": 1}),
         settings(db), db.command("dbstats"), db.list_collection_names(),
-        count("folders"), count("models"), count("boards"), count(lcsc.PARTS),
+        count("folders"), count("models"), count("boards"), db[lcsc.PARTS].count_documents(lcsc.held_by()),
         rows(TIMINGS, {"at": {"$gte": since, "$lte": until}}),
         rows(BOARD_RUNS, {"at": {"$gte": since, "$lte": until}}, sort="at"),
         rows(EVENTS, {"at": {"$gte": since, "$lte": until}}),

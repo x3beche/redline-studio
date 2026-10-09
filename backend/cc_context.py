@@ -438,6 +438,8 @@ async def _revision(db, rid: str) -> dict | None:
 
 async def _part(db, pid: str) -> dict | None:
     from . import lcsc
+    if not await lcsc.holds(db, pid):
+        return None
     d = await db[lcsc.PARTS].find_one({"_id": pid}, {"name": 1, "at": 1, "drawer_manual": 1, "drawer_llm": 1,
                                                      "model_name": 1, "model_kind": 1, "artifacts.model.bytes": 1})
     if not d:

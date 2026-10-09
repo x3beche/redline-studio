@@ -2458,7 +2458,7 @@ async def part_ato(lcsc_id: str):
 async def part_preview(lcsc_id: str):
     """What a part is, before anybody decides to keep it."""
     out = await _look(lcsc.preview, lcsc_id)
-    out["have"] = bool(await db()[lcsc.PARTS].find_one({"_id": lcsc_id}, {"_id": 1}))
+    out["have"] = bool(await lcsc.holds(db(), lcsc_id))
     return out
 
 
@@ -2558,6 +2558,8 @@ async def add_part(lcsc_id: str, force: bool = False, refresh: bool = False):
     asked afresh, the footprint and 3D model downloaded, the model seated
     on its pads - and said plainly when EasyEDA has no 3D model for it."""
     if refresh:
+        if not await lcsc.holds(db(), lcsc_id):
+            raise HTTPException(404, f"{lcsc_id} is not in the drawer")
         try:
             got = await lcsc.refresh(db(), lcsc_id)
         except ValueError as exc:
@@ -2585,8 +2587,8 @@ async def add_part(lcsc_id: str, force: bool = False, refresh: bool = False):
 
 @app.delete("/api/parts/{lcsc_id}")
 async def drop_part(lcsc_id: str):
-    got = await db()[lcsc.PARTS].delete_one({"_id": lcsc_id})
-    if not got.deleted_count:
+    # out of this account's drawer; the cache stays while another holds it
+    if not await lcsc.let_go(db(), lcsc_id):
         raise HTTPException(404, lcsc_id)
     return {"deleted": lcsc_id}
 
@@ -2660,7 +2662,7 @@ async def part_add_start(body: PartAddIn):
         raise HTTPException(400, "not an LCSC number - they look like C25744")
     job = {"id": _uuid.uuid4().hex[:12], "lcsc": lcsc_id, "state": "running", "steps": [],
            "step": "", "text": "", "error": None, "place": None, "already": False}
-    got = await db()[lcsc.PARTS].find_one({"_id": lcsc_id}, {"name": 1})
+    got = await lcsc.holds(db(), lcsc_id)
     if got:
         job.update(state="done", already=True, name=got.get("name"), place=await _place_row(lcsc_id))
         _add_step(job, "done", f"already in the drawer - {job['place']['group']} › {job['place']['branch']}")
@@ -2694,7 +2696,7 @@ async def part_places():
 async def part_place(lcsc_id: str, body: PlaceIn):
     """Put a part in a drawer by hand; it wins over the rules and the model.
     Both empty: back to where the rules (or the model) put it."""
-    if not await db()[lcsc.PARTS].find_one({"_id": lcsc_id}, {"_id": 1}):
+    if not await lcsc.holds(db(), lcsc_id):
         raise HTTPException(404, lcsc_id)
     try:
         await lcsc.set_place(db(), lcsc_id, body.group or None, body.branch or None)

@@ -64,6 +64,10 @@ interface ToolsUsage {
  *  per level with its tools as tiles - icon, name, the app's switch
  *  (.tcv-switch), what it does, its id and how often it was used. A tile
  *  opens the tool's page; its switch turns it on or off. */
+/** The chart palette, written out so every token is named in full. */
+const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)',
+  'var(--series-5)', 'var(--series-6)', 'var(--series-7)', 'var(--series-8)'];
+
 @Component({
   selector: 'app-cc-tools',
   imports: [T],
@@ -168,7 +172,7 @@ interface ToolsUsage {
             <div class="st-card-body">
               @for (w of st.people; track w.name; let i = $index) {
                 <div class="ct-who"><span>{{ w.name }}</span><span class="st-meter"><i [style.width.%]="100 * w.n / st.uses"
-                  [style.background]="'var(--series-' + (i % 8 + 1) + ')'"></i></span>
+                  [style.background]="series[i % 8]"></i></span>
                   <b class="mono">{{ w.n }}</b></div>
               } @empty { <p class="st-hint">{{ 'Nobody yet.' | t }}</p> }
             </div>
@@ -321,9 +325,10 @@ export class CcToolsView {
   usage = signal<ToolsUsage | null>(null);
   constructor() { this.http.get<ToolsUsage>('/api/cc/tools-usage').subscribe({ next: u => this.usage.set(u), error: () => {} }); }
   /** A tool's colour in the charts (its page and the top of the list): the series palette, in the list's order. */
+  readonly series = SERIES;
   color(name: string) {
     const i = this.tools().findIndex(x => x.name === name);
-    return `var(--series-${(i < 0 ? 7 : i % 8) + 1})`;
+    return SERIES[i < 0 ? 7 : i % 8];
   }
   total(u: ToolsUsage) { return Object.values(u.tools).reduce((a, x) => a + x.uses, 0); }
   week(u: ToolsUsage) { return Object.values(u.tools).reduce((a, x) => a + x.week, 0); }

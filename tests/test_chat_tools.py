@@ -244,7 +244,8 @@ class Parts:
         self.rows = {r["_id"]: r for r in rows}
 
     async def find_one(self, q, projection=None):
-        return self.rows.get(q.get("_id"))
+        # {"$and": [{"_id": c}, <whose drawer>]}: rows from before drawers were per space are the default one's
+        return self.rows.get((q["$and"][0] if "$and" in q else q).get("_id"))
 
 
 class Db(dict):

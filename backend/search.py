@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import re
 
+from . import lcsc
+
 EACH = 8
 
 
@@ -80,7 +82,7 @@ async def everything(db, q: str) -> list[dict]:
         out.append({"kind": "revision", "id": r["_id"], "room": r.get("kind") or "cad", "model": r.get("model"),
                     "label": r.get("summary") or r.get("comment", "")[:80], "text": f"{r.get('status')} · {r.get('model') or ''}"})
 
-    async for p in db.parts.find({"$or": [{"_id": mq}, {"name": mq}, {"model_name": mq}]},
+    async for p in db.parts.find({"$and": [{"$or": [{"_id": mq}, {"name": mq}, {"model_name": mq}]}, lcsc.held_by()]},
                                  {"name": 1, "model_name": 1}).limit(EACH):
         out.append({"kind": "part", "id": p["_id"], "label": f"{p['_id']} · {p.get('name') or ''}".strip(" ·"),
                     "text": p.get("model_name") or ""})

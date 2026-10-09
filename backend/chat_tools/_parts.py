@@ -22,7 +22,7 @@ def kept(c: str) -> bool:
 
 
 async def in_drawer(db, c: str) -> dict | None:
-    return await db[lcsc.PARTS].find_one({"_id": c}, {"name": 1})
+    return await lcsc.holds(db, c)
 
 
 def why(exc: Exception) -> str:

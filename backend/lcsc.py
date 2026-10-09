@@ -1075,8 +1075,73 @@ async def datasheet(lcsc: str, fresh: bool = False) -> dict:
     return {"pdf": blob, "url": url, "mpn": mpn, "at": at, "cached": False}
 
 
+# ---------------- whose drawer a part is in ----------------
+# The parts collection is the server's cache - a footprint and a model are
+# fetched from LCSC once, whoever asked - but a drawer is an account's: a
+# part is in a space's drawer when that space fetched it, added it or built
+# a board with it. `spaces` lists them, `held` says since when. A part
+# from before drawers were per space has neither and is the default
+# space's (backend/scope.py), as everything from then is.
+
+def _space(ws: str | None = None) -> str:
+    from . import scope
+    return ws or scope.current()
+
+
+def held_by(ws: str | None = None) -> dict:
+    """The filter for the parts in one space's drawer."""
+    from . import scope
+    ws = _space(ws)
+    if ws == scope.DEFAULT:
+        return {"$or": [{"spaces": ws}, {"spaces": {"$exists": False}}]}
+    return {"spaces": ws}
+
+
+def spaces_of(doc: dict) -> list[str]:
+    from . import scope
+    return list(doc["spaces"]) if "spaces" in doc else [scope.DEFAULT]
+
+
+async def holds(db, lcsc: str, ws: str | None = None) -> dict | None:
+    """The part, when it is in this space's drawer."""
+    return await db[PARTS].find_one({"$and": [{"_id": lcsc}, held_by(ws)]}, {"name": 1})
+
+
+async def hold(db, lcsc: str, ws: str | None = None) -> None:
+    """Put a fetched part in this space's drawer (again is nothing)."""
+    ws = _space(ws)
+    doc = await db[PARTS].find_one({"_id": lcsc}, {"spaces": 1})
+    if not doc or ws in spaces_of(doc):
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    await db[PARTS].update_one({"_id": lcsc}, {"$set": {"spaces": [*spaces_of(doc), ws], f"held.{ws}": now,
+                                                        "held_last": now}})
+
+
+async def let_go(db, lcsc: str, ws: str | None = None) -> bool:
+    """Take a part out of this space's drawer. The cached files go only
+    when no drawer has it any more. False: it was not in this one."""
+    ws = _space(ws)
+    doc = await db[PARTS].find_one({"_id": lcsc}, {"spaces": 1})
+    if not doc or ws not in spaces_of(doc):
+        return False
+    rest = [x for x in spaces_of(doc) if x != ws]
+    if rest:
+        await db[PARTS].update_one({"_id": lcsc}, {"$set": {"spaces": rest}, "$unset": {f"held.{ws}": ""}})
+    else:
+        await db[PARTS].delete_one({"_id": lcsc})
+    return True
+
+
 async def fetch(db, lcsc: str, force: bool = False) -> dict:
-    """The footprint and 3D model for one part, from cache or from LCSC."""
+    """The footprint and 3D model for one part, from cache or from LCSC,
+    and into the asking space's drawer."""
+    doc = await _fetch(db, lcsc, force)
+    await hold(db, doc["_id"])
+    return doc
+
+
+async def _fetch(db, lcsc: str, force: bool = False) -> dict:
     lcsc = (lcsc or "").strip()
     if not looks_like_a_part(lcsc):
         raise ValueError(f"{lcsc!r} is not an LCSC part number")
@@ -1150,7 +1215,9 @@ async def fetch(db, lcsc: str, force: bool = False) -> dict:
                                              "model_step", "model_wrl")
                       if before and before.get(k)} \
             if before and modelseat_has_model(doc["footprint"]) else {}
-        await db[PARTS].replace_one({"_id": lcsc}, {**doc, **kept_model}, upsert=True)
+        had = await db[PARTS].find_one({"_id": lcsc}, {"spaces": 1, "held": 1, "held_last": 1}) or {}
+        mine = {k: had[k] for k in ("spaces", "held", "held_last") if k in had}   # whose drawers it is in
+        await db[PARTS].replace_one({"_id": lcsc}, {**doc, **kept_model, **mine}, upsert=True)
 
         # The model goes where every other generated thing goes: gzipped
         # into GridFS, with a copy on disk. An LQFP-48 is a 9.8 MB STEP,
@@ -1487,7 +1554,7 @@ def _drawer_facts(lcsc: str) -> dict:
 
 
 async def known(db) -> list[dict]:
-    """What is in the drawer already.
+    """What is in this space's drawer already.
 
     Asked as an aggregation because the answer must not carry a STEP file
     per part across the wire. Leaving those fields out of a find() left
@@ -1495,6 +1562,7 @@ async def known(db) -> list[dict]:
     fetched cannot be truthy.
     """
     rows = [row async for row in db[PARTS].aggregate([
+        {"$match": held_by()},
         {"$project": {
             "name": 1, "at": 1, "drawer_manual": 1, "drawer_llm": 1,
             "has_3d": {"$or": [{"$ifNull": ["$artifacts.model", False]},

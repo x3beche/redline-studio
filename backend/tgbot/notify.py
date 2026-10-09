@@ -397,14 +397,19 @@ async def made(raw, t, since) -> int:
             await _each(raw, ws, "bodies", "body-bound",
                         lambda link, base, d=d, part=part: fmt.body_event(link, "bound", part, base,
                                                                           name=d.get("body"), model=d.get("model")))
-    # A part came into the drawer (the drawer is the server's, not a space's).
-    async for p in raw[lcsc.PARTS].find({"at": {"$gt": core.iso(since("library"))}}, {"footprint": 0}):
-        if await announce(raw, f"lib:{p['_id']}"):
+    # A part came into a drawer: each account hears about its own drawer
+    # (backend/lcsc.py `hold`), not the parts another account fetched.
+    s_lib = core.iso(since("library"))
+    async for p in raw[lcsc.PARTS].find({"$or": [{"at": {"$gt": s_lib}}, {"held_last": {"$gt": s_lib}}]},
+                                        {"footprint": 0}):
+        held = p.get("held") or {}
+        for ws in lcsc.spaces_of(p):
+            if (held.get(ws) or p.get("at") or "") <= s_lib:
+                continue
+            if not await announce(raw, f"lib:{p['_id']}" + ("" if ws == scope.DEFAULT else f"@{ws}")):
+                continue
             n += 1
-            base = await _base(raw)
-            for link, _role in await links.server_recipients(raw, "library", act="view"):
-                await outbox.enqueue(raw, link["chat"], text=fmt.library_event(link, p, base), kind="library",
-                                     user=link["_id"], ws=links.ws_of(link))
+            await _each(raw, ws, "library", "library", lambda link, base, p=p: fmt.library_event(link, p, base))
     return n
 
 
