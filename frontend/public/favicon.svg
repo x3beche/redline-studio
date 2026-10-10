@@ -1,9 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- The same mark the wordmark wears, with the interior edges dropped and
-       every stroke thickened: at 16px the faint ones only muddy it. -->
-  <rect width="64" height="64" rx="10" fill="#2b2f36"/>
-  <path d="M32 9.6 L54.4 22 V42 L32 54.4 L9.6 42 V22 Z" fill="none"
-        stroke="#9aa4b0" stroke-width="4.5" stroke-linejoin="round"/>
-  <path d="M16.5 42.5 C25 35 33 33 47.5 23.5" fill="none"
-        stroke="#ff2d3f" stroke-width="7.5" stroke-linecap="round"/>
+  <!-- The section mark: a part cut open, the way a drawing shows it. -->
+  <rect width="64" height="64" rx="12" fill="#09090b"/>
+  <path d="M12 12H52V52H12ZM17 17V30L30 17ZM17 47H23.5L47 23.5V17H40.5L17 40.5ZM34 47H47V34Z" fill="#fafafa" fill-rule="evenodd"/>
 </svg>

@@ -24,17 +24,9 @@
       @if (collapsed()) {
         <button (click)="toggleSidebar()" class="tcv-rail-btn"
                 title="show the catalog">
-<svg viewBox="0 0 24 24" class="h-[23px] w-[23px] shrink-0" aria-hidden="true">
-            <!-- An isometric solid with a mark drawn across it: the whole
-                 application in one glyph. The stroke runs off the near face
-                 and over the silhouette, the way a correction does. -->
-            <path d="M12 2.7 L20.4 7.35 V16.65 L12 21.3 L3.6 16.65 V7.35 Z"
-                  fill="none" stroke="var(--ink-dim)" stroke-width="1.5"
-                  stroke-linejoin="round"/>
-            <path d="M12 2.7 V12 M12 12 L20.4 7.35 M12 12 L3.6 7.35"
-                  stroke="var(--ink-dim)" stroke-width="1" opacity=".5"/>
-            <path d="M5.6 16.2 C9 13.4 12.4 12.6 18.4 8.4" fill="none"
-                  stroke="var(--pen)" stroke-width="2.7" stroke-linecap="round"/>
+<svg viewBox="0 0 64 64" class="h-[20px] w-[20px] shrink-0" aria-hidden="true" fill="var(--ink)">
+            <!-- A section mark: a part cut open, the way a drawing shows it. -->
+            <path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/>
           </svg>
         </button>
         @if (activeTitle(); as t) {
@@ -44,23 +36,12 @@
       @if (!collapsed()) {
         <!-- Tight to the word: the mark and the name are one lockup, not a
              picture standing next to a label. -->
-        <div class="flex min-w-0 items-center gap-1.5">
-          <svg viewBox="0 0 24 24" class="h-[27px] w-[27px] shrink-0" aria-hidden="true">
-            <!-- An isometric solid with a mark drawn across it: the whole
-                 application in one glyph. The stroke runs off the near face
-                 and over the silhouette, the way a correction does. -->
-            <path d="M12 2.7 L20.4 7.35 V16.65 L12 21.3 L3.6 16.65 V7.35 Z"
-                  fill="none" stroke="var(--ink-dim)" stroke-width="1.5"
-                  stroke-linejoin="round"/>
-            <path d="M12 2.7 V12 M12 12 L20.4 7.35 M12 12 L3.6 7.35"
-                  stroke="var(--ink-dim)" stroke-width="1" opacity=".5"/>
-            <path d="M5.6 16.2 C9 13.4 12.4 12.6 18.4 8.4" fill="none"
-                  stroke="var(--pen)" stroke-width="2.7" stroke-linecap="round"/>
+        <div class="flex min-w-0 items-center gap-2.5">
+          <svg viewBox="0 0 64 64" class="h-[20px] w-[20px] shrink-0" aria-hidden="true" fill="var(--ink)">
+            <!-- A section mark: a part cut open, the way a drawing shows it. -->
+            <path d="M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z" fill-rule="evenodd"/>
           </svg>
-          <!-- The I carries the pen's own red: one upright stroke through
-               the middle of the word, which is the mark the application is
-               named after. -->
-          <div class="brand-name min-w-0 truncate">Redl<span class="brand-i">i</span>ne</div>
+          <div class="brand-name min-w-0 truncate">Redline</div>
         </div>
       }
     </div>

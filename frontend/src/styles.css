@@ -2084,23 +2084,15 @@ body {
 /* Thin scrollbar, contained within the panel */
 .tcv-scroll { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 
-/* Wordmark. The rest of the interface is instrument-panel plain; the name
-   is the one place it is allowed a voice. Orbitron is wide and geometric
-   with square terminals - it reads as a machine's own label rather than as
-   prose, which is what a mark should do. Tracked out, because the face was
-   drawn for it. */
-/* The red is the drawing pen's, not the interface's danger colour: the
-   letter is standing in for a mark somebody made, and in Orbitron the
-   capital I is a bare upright - a pen stroke through the word. */
-.brand-i { color: var(--pen); }
+/* Wordmark: the name in the front page's Swiss grotesque, beside the
+   section mark. Plain, so the mark does the talking. */
 
 .brand-name {
-  font-family: 'Orbitron', 'IBM Plex Sans', system-ui, sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: .18em;
+  font-family: 'Switzer', 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -.01em;
   color: var(--ink);
-  text-transform: uppercase;
 }
 /* Hashes, ids and figures read as data, not prose. */
 .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
@@ -3209,7 +3201,7 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
   background: var(--surface); }
 .tcv-signin { width: min(360px, 90vw); display: flex; flex-direction: column; gap: 10px; padding: 28px;
   border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
-.tcv-signin-brand { font-size: 22px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+.tcv-signin-brand { font-family: 'Switzer', system-ui, sans-serif; font-size: 22px; font-weight: 600; letter-spacing: -.01em;
   color: var(--ink-bright); margin-bottom: 4px; }
 .tcv-signin-lead { font-size: 12.5px; color: var(--ink-dim); margin: 0 0 4px; line-height: 1.5; }
 .tcv-signin label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--ink-dim); }

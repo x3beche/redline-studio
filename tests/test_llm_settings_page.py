@@ -66,9 +66,9 @@ def test_one_model_picker_for_the_chat_and_the_settings():
     # The list is drawn in one place only.
     assert "tcv-cc-modellist" in picker
     assert "tcv-cc-modellist" not in chat and "tcv-cc-modellist" not in page
-    # No native select left for a job's model.
+    # No native select for a job's model: the only one is its provider.
     jobs = page[page.index("'Which model does what' | t"):page.index("<app-llm-usage />")]
-    assert "<select" not in jobs
+    assert jobs.count("<select") == 1 and 'class="st-in st-prov"' in jobs
     # In a settings row the list is against the window (the card scrolls).
     assert re.search(r'<app-model-picker[^>]*\[fixed\]="true"', page)
 
@@ -99,4 +99,5 @@ def test_the_default_is_a_row_of_the_picker_not_a_button():
     assert '(pickDefault)="reset(j)"' in jobs and '[fallback]="fallbacks()[j]"' in jobs
     assert "tcv-mp-default" in picker and "pickDefault" in picker
     # The chip names the provider whose model it is, and the list says whose list it is.
-    assert '[tag]="d.providers[prov(j)].name"' in jobs and '[models]="models()[prov(j)] || []"' in jobs
+    # The provider is named by its own select beside the picker, not a tag in it.
+    assert '[models]="models()[prov(j)] || []"' in jobs and "setProvider(j, " in jobs

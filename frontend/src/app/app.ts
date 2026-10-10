@@ -13,7 +13,8 @@ import { Prefs, RoomSettings } from './preferences';
 import { T } from './i18n';
 import { BudgetStatus, Money, money, moneyShort } from './money';
 import { budgetTip } from './budget-bars';
-import { Auth, SignIn, UserChip } from './auth';
+import { Auth, UserChip } from './auth';
+import { Landing } from './landing';
 import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
 import { TopBar, TopbarFit } from './topbar';
 import { TopbarMore } from './topbar-more';
@@ -22,7 +23,7 @@ import { CcTabUsage } from './cc-usage';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, SignIn, T, UserChip, TopbarFit, TopbarMore, CcTabUsage],
+  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -105,7 +106,7 @@ import { CcTabUsage } from './cc-usage';
 <!-- Ctrl+K anywhere: go to anything, do anything, search everything. -->
 <app-palette />
 } @else if (auth.state()) {
-  <app-sign-in />
+  <app-landing />
 }`,
 })
 export class App {

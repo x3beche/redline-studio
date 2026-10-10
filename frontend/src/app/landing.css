@@ -1,0 +1,67 @@
+/* The front page keeps its own look: a near-black ground and one Swiss
+   grotesque, whatever theme the app is worn in. */
+:host {
+  --ld-bg: #09090b; --ld-line: #1c1c20; --ld-ink: #f4f4f5; --ld-dim: #9a9aa3;
+  position: fixed; inset: 0; overflow-y: auto; background: var(--ld-bg); color: var(--ld-ink);
+  font: 400 18px/1.5 'Switzer', system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+}
+.ld-wrap { max-width: 1560px; margin: 0 auto; padding: 0 64px; }
+h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.03em; }
+p { margin: 0; }
+
+.ld-nav { position: sticky; top: 0; z-index: 2; height: 76px; display: flex; align-items: center;
+          background: #09090bcc; backdrop-filter: blur(14px); }
+.ld-nav .ld-wrap { width: 100%; display: flex; align-items: center; }
+.ld-brand { display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 600; letter-spacing: -.01em;
+            color: var(--ld-ink); text-decoration: none; }
+.ld-brand svg { width: 22px; height: 22px; fill: currentColor; }
+.ld-btn { display: inline-flex; align-items: center; height: 44px; padding: 0 22px; border-radius: 999px;
+          font: 500 15px 'Switzer', system-ui, sans-serif; border: 1px solid #ffffff2e; color: var(--ld-ink);
+          background: none; cursor: pointer; text-decoration: none; }
+.ld-btn:hover { border-color: #ffffff66; }
+.ld-solid { background: var(--ld-ink); color: var(--ld-bg); border-color: var(--ld-ink); }
+.ld-solid:hover { background: #fff; }
+.ld-nav .ld-btn { margin-left: auto; }
+
+.ld-hero { position: relative; height: calc(100vh - 76px); min-height: 680px; overflow: hidden; }
+.ld-hero img { position: absolute; right: -4%; top: 46%; height: 108%; transform: translateY(-50%); pointer-events: none;
+               -webkit-mask-image: radial-gradient(50% 50% at 50% 50%, #000 55%, transparent 100%);
+               mask-image: radial-gradient(50% 50% at 50% 50%, #000 55%, transparent 100%); }
+.ld-hero .ld-wrap { position: relative; height: 100%; display: flex; flex-direction: column; justify-content: center; }
+.ld-hero h1 { font-size: clamp(44px, 5.4vw, 92px); line-height: .96; letter-spacing: -.035em; max-width: 9.5em; }
+.ld-hero p { margin-top: 24px; font-size: 21px; color: var(--ld-dim); max-width: 26em; }
+.ld-hero .ld-btn { margin-top: 40px; align-self: flex-start; }
+
+.ld-row { padding-top: 140px; }
+.ld-row-t { display: flex; align-items: baseline; justify-content: space-between; gap: 48px; margin-bottom: 48px; }
+.ld-row h2 { font-size: 44px; line-height: 1.05; }
+.ld-row p { color: var(--ld-dim); font-size: 21px; max-width: 30em; text-align: right; }
+.ld-row img { width: 100%; display: block; border-radius: 10px; border: 1px solid var(--ld-line); }
+
+.ld-end { padding: 200px 0 160px; text-align: center; }
+.ld-end h2 { font-size: clamp(40px, 5vw, 88px); line-height: 1; }
+.ld-end .ld-btn { margin-top: 40px; }
+.ld-foot { border-top: 1px solid var(--ld-line); padding: 32px 0; color: var(--ld-dim); font-size: 15px; }
+.ld-foot .ld-wrap { display: flex; justify-content: space-between; }
+
+/* The sign-in sheet: the app's own card, without its full-screen ground. */
+.ld-veil { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center;
+           background: #000000a8; backdrop-filter: blur(8px); }
+.ld-sheet { position: relative; }
+.ld-sheet ::ng-deep .tcv-signin-wrap { height: auto; background: none; }
+.ld-sheet ::ng-deep .tcv-signin { border-radius: 14px; }
+.ld-x { position: absolute; top: 10px; right: 12px; z-index: 1; width: 28px; height: 28px; border: 0; border-radius: 6px;
+        background: none; color: var(--ld-dim); font-size: 20px; line-height: 1; cursor: pointer; }
+.ld-x:hover { color: var(--ld-ink); background: #ffffff12; }
+
+@media (max-width: 900px) {
+  .ld-wrap { padding: 0 16px; }
+  .ld-hero { height: auto; min-height: 0; padding: 72px 0 96px; }
+  .ld-hero img { position: static; transform: none; width: 100%; height: auto; margin-bottom: 24px; }
+  .ld-hero p { font-size: 18px; }
+  .ld-row { padding-top: 88px; }
+  .ld-row-t { flex-direction: column; gap: 12px; margin-bottom: 24px; }
+  .ld-row h2 { font-size: 32px; }
+  .ld-row p { text-align: left; font-size: 18px; }
+  .ld-end { padding: 120px 0 100px; }
+}
