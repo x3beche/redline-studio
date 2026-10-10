@@ -523,14 +523,18 @@ OR_CREDITS = {"data": {"total_credits": 65, "total_usage": 56.125}}
 
 def test_the_registry_lists_each_provider_for_the_page():
     reg = llm.registry()
-    assert [p["id"] for p in reg] == ["commandcode", "openrouter"]
+    assert [p["id"] for p in reg] == ["commandcode", "openrouter", "claude", "opencode-go"]
     for p in reg:
         assert p["name"] == llm.PROVIDERS[p["id"]]["name"] and p["site"].startswith("https://") and p["about"]
-    assert {p["id"]: p["priced"] for p in reg} == {"commandcode": False, "openrouter": True}
+    assert {p["id"]: p["priced"] for p in reg} == {"commandcode": False, "openrouter": True, "claude": True,
+                                                   "opencode-go": False}
     assert llm.public()["registry"] == reg
-    # every registered provider is one the calls know, and has an account reader
+    # every registered provider is one the calls know, and has an account
+    # reader - or none, and its card shows Redline's own log
     assert set(llm.REGISTRY) <= set(llm.PROVIDERS)
-    assert all(callable(e["account"]) for e in llm.REGISTRY.values())
+    assert all(callable(e["account"]) for k, e in llm.REGISTRY.items() if k in ("commandcode", "openrouter"))
+    assert {p["id"]: p["account"] for p in reg}["claude"] is False
+    assert run(llm.provider_account(None, "opencode-go"))["shared"] is False
     with pytest.raises(ValueError):
         run(llm.provider_account(None, "nope"))
 

@@ -495,6 +495,7 @@ async def run(gid: str, db=None) -> dict | None:
         rounds = 0
         while True:
             calls: list[dict] = []
+            turn: list[dict] = []                # the provider's own blocks of this turn (Claude's)
             said = ""
             kw = {"tools": [t.spec() for t in tools.values()]} if tools else {}
             try:
@@ -510,6 +511,8 @@ async def run(gid: str, db=None) -> dict | None:
                         out["text"] += piece["text"] or ""
                     elif "calls" in piece:
                         calls = piece["calls"] or []
+                    elif "blocks" in piece:
+                        turn = piece["blocks"] or []
                     elif "usage" in piece:
                         for k, v in (piece["usage"] or {}).items():
                             if isinstance(v, (int, float)):
@@ -533,7 +536,7 @@ async def run(gid: str, db=None) -> dict | None:
                 out["text"] += "\n\n" if not out["text"].endswith("\n") else "\n"
             msgs = [*msgs, {"role": "assistant", "content": said, "tool_calls": [
                 {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}}
-                for c in calls]}]
+                for c in calls], **({"blocks": turn} if turn else {})}]
             for c in calls:
                 content, failed = await run_step(c, tools, ctx, out)
                 msgs.append({"role": "tool", "tool_call_id": c["id"], "content": content,

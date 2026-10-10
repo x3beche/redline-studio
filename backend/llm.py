@@ -7,13 +7,21 @@ room's conversations. Each of those is a *job*, and a
 job names a provider and a model - chosen in Settings > LLM settings,
 kept in the database, the same for the whole server.
 
-Two providers, both spoken to in the OpenAI chat format:
+Four providers:
 
 - OpenRouter (https://openrouter.ai), what the app always used;
 - Command Code (https://api.commandcode.ai/provider/v1). Its Claude models
   answer only on the Anthropic `/messages` endpoint (the model list says
   so per model), so those calls are translated both ways here and the
-  callers never see the difference.
+  callers never see the difference;
+- the Claude API (https://api.anthropic.com/v1), Anthropic's own, spoken
+  to on `/messages` only, the key in `x-api-key`;
+- OpenCode Go (https://opencode.ai/zen/go/v1), OpenCode's subscription:
+  one key, three wire formats picked by the model (_endpoint) - most
+  models on `/chat/completions`, MiniMax, Qwen and Claude on `/messages`,
+  GPT, Grok and Muse on `/responses`.
+
+Callers speak the OpenAI chat format to all of them.
 
 The keys are the server's. They are kept in the `llm_settings` document
 and only there - typed in Settings > LLM settings, never read from .env or
@@ -26,6 +34,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from typing import AsyncIterator
 
@@ -44,6 +53,14 @@ PROVIDERS = {
                    "site": "https://openrouter.ai/keys", "priced": True},
     "commandcode": {"name": "Command Code", "base": "https://api.commandcode.ai/provider/v1",
                     "site": "https://commandcode.ai", "priced": False},
+    # Anthropic sends tokens, not money: a call is priced here at the list
+    # rates (CLAUDE_PRICES), and a model not in them stays unpriced.
+    "claude": {"name": "Claude API", "base": "https://api.anthropic.com/v1",
+               "site": "https://console.anthropic.com/settings/keys", "priced": True},
+    # A flat subscription with dollar limits per window that no API tells:
+    # tokens only, and the console (opencode.ai/auth) for the limits.
+    "opencode-go": {"name": "OpenCode Go", "base": "https://opencode.ai/zen/go/v1",
+                    "site": "https://opencode.ai/auth", "priced": False},
 }
 
 # What the app asks a model to do. Every job defaults to the one cheap
@@ -232,33 +249,94 @@ _models_cache: dict[str, tuple[float, list[dict]]] = {}
 MODELS_TTL = 600
 
 
-async def models(provider: str) -> list[dict]:
-    """[{id, name, context, anthropic}] - the provider's own list, ten minutes old at most."""
-    import httpx
+# For the tests: an httpx transport that stands in for the providers'
+# model lists and calls.
+_transport = None
 
+
+def _client(**kw):
+    import httpx
+    if _transport is not None:
+        kw["transport"] = _transport
+    return httpx.AsyncClient(**kw)
+
+
+async def _model_rows(provider: str) -> list[dict]:
+    """The provider's /models rows, every page of them."""
+    base = PROVIDERS[provider]["base"]
+    k = key(provider)
+    if provider == "claude":
+        if not k:
+            return []                                  # Anthropic lists models to a key only
+        rows: list[dict] = []
+        params: dict = {"limit": 1000}
+        async with _client(timeout=20) as client:
+            for _ in range(10):                        # pages; a handful at most
+                r = await client.get(base + "/models", params=params, headers=_headers(provider, "messages"))
+                r.raise_for_status()
+                d = r.json()
+                rows += d.get("data") or []
+                if not d.get("has_more") or not d.get("last_id"):
+                    break
+                params = {"limit": 1000, "after_id": d["last_id"]}
+        return rows
+    headers = {"Authorization": f"Bearer {k}"} if k else {}
+    async with _client(timeout=20) as client:
+        r = await client.get(base + "/models", headers=headers)
+    r.raise_for_status()
+    return r.json().get("data") or []
+
+
+async def models(provider: str) -> list[dict]:
+    """[{id, name, context, anthropic, endpoint, cheap, vision}] - the
+    provider's own list, ten minutes old at most."""
     hit = _models_cache.get(provider)
     if hit and time.time() - hit[0] < MODELS_TTL:
         return hit[1]
     if provider not in PROVIDERS:
         raise ValueError(f"unknown provider {provider!r}")
-    headers = {"Authorization": f"Bearer {key(provider)}"} if key(provider) else {}
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get(PROVIDERS[provider]["base"] + "/models", headers=headers)
-    r.raise_for_status()
-    rows = r.json().get("data") or []
+    rows = await _model_rows(provider)
     out = []
     for m in rows:
-        ends = m.get("supported_endpoints") or []
-        out.append({"id": m["id"], "name": m.get("name") or m["id"],
-                    "context": m.get("context_length"),
-                    "anthropic": "/messages" in ends and "/chat/completions" not in ends,
-                    # the one a picker may land on by itself; anything else is chosen
-                    "cheap": (provider, m["id"]) == CHEAP,
-                    # whether it reads images (the Command Code room's @-mentions)
-                    "vision": vision(m)})
+        if provider == "claude":
+            # Anthropic's rows: display_name, max_input_tokens; every Claude reads images.
+            endpoint = "messages"
+            row = {"id": m["id"], "name": m.get("display_name") or m["id"],
+                   "context": m.get("max_input_tokens"), "vision": True}
+        else:
+            ends = m.get("supported_endpoints") or []
+            if provider == "opencode-go":
+                endpoint = opencode_endpoint(m["id"])
+            else:
+                endpoint = "messages" if "/messages" in ends and "/chat/completions" not in ends else "chat"
+            # whether it reads images (the Command Code room's @-mentions)
+            row = {"id": m["id"], "name": m.get("name") or m["id"],
+                   "context": m.get("context_length"), "vision": vision(m)}
+        row.update(anthropic=endpoint == "messages", endpoint=endpoint,
+                   # the one a picker may land on by itself; anything else is chosen
+                   cheap=(provider, m["id"]) == CHEAP)
+        out.append(row)
     out.sort(key=lambda m: m["id"].lower())
     _models_cache[provider] = (time.time(), out)
     return out
+
+
+# OpenCode Go serves each model on one wire format, and its /models does
+# not say which (https://opencode.ai/docs/go/, October 2026): MiniMax, Qwen
+# and Claude on Anthropic's /messages, GPT, Grok and Muse on OpenAI's
+# /responses, the rest (GLM, Kimi, DeepSeek, MiMo, LongCat, ...) on
+# /chat/completions.
+OPENCODE_MESSAGES = ("claude-", "minimax-", "qwen")
+OPENCODE_RESPONSES = ("gpt-", "grok-", "muse-", "o1", "o3", "o4")
+
+
+def opencode_endpoint(model: str) -> str:
+    m = model.lower()
+    if m.startswith(OPENCODE_MESSAGES):
+        return "messages"
+    if m.startswith(OPENCODE_RESPONSES):
+        return "responses"
+    return "chat"
 
 
 # Model names that read images, for a provider whose list does not say
@@ -282,7 +360,7 @@ def vision(m: dict) -> bool:
 
 
 async def _anthropic_model(provider: str, model: str) -> bool:
-    """Whether this model answers only on /messages (Command Code's Claude)."""
+    """Whether this Command Code model answers only on /messages (its Claude)."""
     if provider != "commandcode":
         return False
     try:
@@ -292,6 +370,16 @@ async def _anthropic_model(provider: str, model: str) -> bool:
     except Exception:                                  # noqa: BLE001 - guess from the name
         pass
     return model.startswith("claude-")
+
+
+async def _endpoint(provider: str, model: str) -> str:
+    """Which wire format a call takes: "chat" (/chat/completions),
+    "messages" (Anthropic's) or "responses" (OpenAI's newer one)."""
+    if provider == "claude":
+        return "messages"
+    if provider == "opencode-go":
+        return opencode_endpoint(model)
+    return "messages" if await _anthropic_model(provider, model) else "chat"
 
 
 # ---------------- the calls ----------------
@@ -308,6 +396,8 @@ def _blocks(content: list[dict]) -> list[dict]:
                 head, _, data = url.partition(",")
                 blocks.append({"type": "image", "source": {
                     "type": "base64", "media_type": head[5:].split(";")[0], "data": data}})
+            elif url.startswith("https://"):
+                blocks.append({"type": "image", "source": {"type": "url", "url": url}})
     return blocks
 
 
@@ -316,7 +406,10 @@ def _to_anthropic(messages: list[dict], max_tokens: int, temperature: float | No
     """The OpenAI-shaped conversation as Anthropic's /messages wants it - a
     tool loop's turns too: an assistant's `tool_calls` become tool_use
     blocks, and the "tool" lines after them one user turn of tool_result
-    blocks."""
+    blocks. An assistant turn that carries the provider's own `blocks`
+    (stream() hands them over with the calls: the thinking with its
+    signature, the text, the tool_use) goes back as they came - Claude
+    wants its thinking back unchanged within a tool loop."""
     system = "\n\n".join(m["content"] for m in messages if m["role"] == "system" and isinstance(m["content"], str))
     rest: list[dict] = []
     for m in messages:
@@ -337,6 +430,9 @@ def _to_anthropic(messages: list[dict], max_tokens: int, temperature: float | No
         if isinstance(content, list):
             content = _blocks(content)
         if m["role"] == "assistant" and m.get("tool_calls"):
+            if m.get("blocks"):
+                rest.append({"role": "assistant", "content": m["blocks"]})
+                continue
             blocks = [{"type": "text", "text": content}] if isinstance(content, str) and content.strip() else \
                 (content if isinstance(content, list) else [])
             for c in m["tool_calls"]:
@@ -361,13 +457,99 @@ def _to_anthropic(messages: list[dict], max_tokens: int, temperature: float | No
     return body
 
 
-def _headers(provider: str, anthropic: bool) -> dict:
+# ---- the Claude API's own rules ----
+
+_CLAUDE_NAME = re.compile(r"^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$")
+
+
+def claude_version(model: str) -> tuple[str, tuple[int, int]] | None:
+    """("opus", (5, 5)) for claude-opus-5-5; None for a name not like that."""
+    m = _CLAUDE_NAME.match(model or "")
+    if not m:
+        return None
+    return m.group(1), (int(m.group(2)), int(m.group(3) or 0))
+
+
+def claude_adaptive(model: str) -> bool:
+    """Whether the model thinks adaptively and takes an effort: Opus and
+    Sonnet from 4.6, every Fable and Mythos. Haiku 4.5 does neither."""
+    v = claude_version(model)
+    if not v:
+        return False
+    fam, ver = v
+    return fam in ("fable", "mythos") or (fam in ("opus", "sonnet") and ver >= (4, 6))
+
+
+# Models that may hand a declined answer to another model on Anthropic's
+# side (`fallbacks: "default"`, beta server-side-fallback-2026-07-01): the
+# answer comes from the fallback model rather than not at all.
+CLAUDE_FALLBACKS = ("claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5")
+CLAUDE_FALLBACK_BETA = "server-side-fallback-2026-07-01"
+# Models that refused the fallback (a 400 naming it): asked without since.
+_NO_FALLBACK: set[str] = set()
+
+
+def _claude_extras(body: dict, model: str, reasoning: bool, stream: bool) -> dict:
+    """What the Claude API takes beyond the plain /messages body. No
+    temperature: the newer models refuse one outright. Thinking can not be
+    turned off on the newest ones, and it comes out of max_tokens - a
+    short job gets room for it and a low effort; the chat (streamed) shows
+    the thinking summarised."""
+    body.pop("temperature", None)
+    if claude_adaptive(model):
+        if stream:
+            body["thinking"] = {"type": "adaptive", "display": "summarized"}
+        if not reasoning:
+            body["output_config"] = {"effort": "low"}
+            body["max_tokens"] = max(body["max_tokens"], 2048)
+    if model in CLAUDE_FALLBACKS and model not in _NO_FALLBACK:
+        body["fallbacks"] = "default"
+    return body
+
+
+# USD per million tokens, input and output: Anthropic's list prices
+# (October 2026). Anthropic's answers carry tokens, not money, so a Claude
+# API call is priced here; a model not listed stays unpriced.
+CLAUDE_PRICES: dict[str, tuple[float, float]] = {
+    "claude-fable-5-1": (10.0, 50.0), "claude-fable-5": (10.0, 50.0),
+    "claude-mythos-5-1": (10.0, 50.0), "claude-mythos-5": (10.0, 50.0),
+    "claude-opus-5-5": (4.0, 20.0), "claude-opus-5": (5.0, 25.0),
+    "claude-opus-4-8": (5.0, 25.0), "claude-opus-4-7": (5.0, 25.0),
+    "claude-opus-4-6": (5.0, 25.0), "claude-opus-4-5": (5.0, 25.0),
+    "claude-sonnet-5-5": (2.0, 10.0), "claude-sonnet-5": (2.0, 10.0),
+    "claude-sonnet-4-6": (3.0, 15.0), "claude-sonnet-4-5": (3.0, 15.0),
+    "claude-haiku-4-5": (1.0, 5.0),
+}
+
+
+def claude_cost(model: str, used: dict) -> float | None:
+    """A Claude API call's cost at list price, or None for an unlisted model."""
+    rate = None
+    for name in sorted(CLAUDE_PRICES, key=len, reverse=True):     # the longest name that fits
+        if model == name or model.startswith(name + "-"):
+            rate = CLAUDE_PRICES[name]
+            break
+    if rate is None:
+        return None
+    inp, out = used.get("prompt_tokens") or 0, used.get("completion_tokens") or 0
+    return round((inp * rate[0] + out * rate[1]) / 1e6, 8)
+
+
+def _headers(provider: str, endpoint: str = "chat", model: str | None = None) -> dict:
     k = key(provider)
     if not k:
         raise RuntimeError(no_key(provider))
+    if provider == "claude":
+        # Anthropic's own API: the key in x-api-key, never as a bearer token.
+        h = {"x-api-key": k, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
+        if model in CLAUDE_FALLBACKS and model not in _NO_FALLBACK:
+            h["anthropic-beta"] = CLAUDE_FALLBACK_BETA
+        return h
     h = {"Authorization": f"Bearer {k}", "Content-Type": "application/json"}
-    if anthropic:
+    if endpoint == "messages":
         h.update({"x-api-key": k, "anthropic-version": "2023-06-01"})
+    if provider == "opencode-go":
+        h["User-Agent"] = "redline-studio"         # OpenCode asks clients to say who they are
     return h
 
 
@@ -410,12 +592,70 @@ def _openai_body(provider: str, model: str, messages: list[dict], max_tokens: in
         body["reasoning"] = {"enabled": reasoning}
         body["usage"] = {"include": True}
     elif not reasoning:
-        # Command Code's models think before they answer and that thinking
-        # comes out of max_tokens: a 60-token summary would be all thought
-        # and no sentence. Leave room for it.
+        # Command Code's (and OpenCode's) models think before they answer
+        # and that thinking comes out of max_tokens: a 60-token summary
+        # would be all thought and no sentence. Leave room for it.
         body["max_tokens"] = max(max_tokens, 1024)
     if stream and provider != "openrouter":
         body["stream_options"] = {"include_usage": True}
+    return body
+
+
+def _to_responses(messages: list[dict], max_tokens: int, model: str, stream: bool = False,
+                  tools: list[dict] | None = None, reasoning: bool = True) -> dict:
+    """The OpenAI-shaped conversation as OpenAI's /responses wants it
+    (OpenCode Go's GPT, Grok and Muse): the system lines as `instructions`,
+    each turn an input item, a tool loop's calls as function_call items and
+    the tools' answers as function_call_output - a picture a tool returned
+    in a user item after them."""
+    system = "\n\n".join(m["content"] for m in messages if m["role"] == "system" and isinstance(m["content"], str))
+    items: list[dict] = []
+    pics: list[dict] = []
+
+    def parts(content, kind: str) -> list[dict]:
+        if isinstance(content, str):
+            return [{"type": kind, "text": content}] if content else []
+        out = []
+        for p in content or []:
+            if p.get("type") == "text":
+                out.append({"type": kind, "text": p["text"]})
+            elif p.get("type") == "image_url" and kind == "input_text":
+                out.append({"type": "input_image", "image_url": p["image_url"]["url"]})
+        return out
+
+    for m in messages:
+        if m["role"] != "tool" and pics:
+            items.append({"role": "user", "content": [{"type": "input_text", "text": "(the pictures the tools returned)"}, *pics]})
+            pics = []
+        if m["role"] == "system":
+            continue
+        if m["role"] == "tool":
+            content = m["content"]
+            if isinstance(content, list):
+                pics += [{"type": "input_image", "image_url": p["image_url"]["url"]}
+                         for p in content if p.get("type") == "image_url"]
+                content = "\n".join(p.get("text", "") for p in content if p.get("type") == "text")
+            items.append({"type": "function_call_output", "call_id": m.get("tool_call_id"), "output": str(content or "")})
+        elif m["role"] == "assistant":
+            said = parts(m.get("content"), "output_text")
+            if said:
+                items.append({"role": "assistant", "content": said})
+            for c in m.get("tool_calls") or []:
+                fn = c.get("function") or {}
+                items.append({"type": "function_call", "call_id": c.get("id"), "name": fn.get("name"),
+                              "arguments": fn.get("arguments") or "{}"})
+        else:
+            items.append({"role": "user", "content": parts(m["content"], "input_text")})
+    if pics:
+        items.append({"role": "user", "content": [{"type": "input_text", "text": "(the pictures the tools returned)"}, *pics]})
+    body: dict = {"model": model, "input": items, "stream": stream, "store": False,
+                  # these models reason out of the same budget
+                  "max_output_tokens": max_tokens if reasoning else max(max_tokens, 1024)}
+    if system:
+        body["instructions"] = system
+    if tools:
+        body["tools"] = [{"type": "function", "name": t["name"], "description": t.get("description") or "",
+                          "parameters": t.get("parameters") or {"type": "object", "properties": {}}} for t in tools]
     return body
 
 
@@ -440,47 +680,88 @@ def _refuses_temperature(r) -> bool:
         return False
 
 
+def _refuses_fallback(r) -> bool:
+    try:
+        return "fallback" in (r.text or "").lower()
+    except Exception:                                  # noqa: BLE001
+        return False
+
+
+def _declined(provider: str, d: dict) -> RuntimeError:
+    """A Claude answer that stopped on `refusal`: what to say instead."""
+    cat = (d.get("stop_details") or {}).get("category") if isinstance(d.get("stop_details"), dict) else None
+    return RuntimeError(f"{PROVIDERS[provider]['name']}: the model declined to answer"
+                        + (f" ({cat})" if cat else ""))
+
+
+def _build(provider: str, endpoint: str, model: str, messages: list[dict], max_tokens: int,
+           temperature: float | None, reasoning: bool, stream: bool,
+           tools: list[dict] | None = None) -> tuple[str, dict]:
+    base = PROVIDERS[provider]["base"]
+    if endpoint == "messages":
+        body = _to_anthropic(messages, max_tokens, temperature, model, stream=stream, tools=tools)
+        if provider == "claude":
+            body = _claude_extras(body, model, reasoning, stream)
+        return base + "/messages", body
+    if endpoint == "responses":
+        return base + "/responses", _to_responses(messages, max_tokens, model, stream=stream, tools=tools,
+                                                  reasoning=reasoning)
+    return base + "/chat/completions", _openai_body(provider, model, messages, max_tokens, temperature, reasoning,
+                                                    stream=stream, tools=tools)
+
+
 async def complete(messages: list[dict], *, job: str | None = None, provider: str | None = None,
                    model: str | None = None, max_tokens: int = 400, temperature: float | None = 0.2,
                    reasoning: bool = False, timeout: float = TIMEOUT) -> dict:
     """One answer, in the OpenAI shape whatever the provider:
     {choices: [{message: {content}}], usage: {prompt_tokens, completion_tokens, cost?},
      provider, model}."""
-    import httpx
-
     if job:
         jp, jm = route(job)
         provider, model = provider or jp, model or jm
     if provider not in PROVIDERS or not model:
         raise RuntimeError("no provider or model chosen")
-    anthropic = await _anthropic_model(provider, model)
-    base = PROVIDERS[provider]["base"]
+    endpoint = await _endpoint(provider, model)
     if (provider, model) in _NO_TEMPERATURE:
         temperature = None
 
     def build(temp):
-        if anthropic:
-            return base + "/messages", _to_anthropic(messages, max_tokens, temp, model)
-        return base + "/chat/completions", _openai_body(provider, model, messages, max_tokens, temp, reasoning)
+        return _build(provider, endpoint, model, messages, max_tokens, temp, reasoning, False)
 
     url, body = build(temperature)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        r = await client.post(url, json=body, headers=_headers(provider, anthropic))
-        if r.status_code == 400 and temperature is not None and _refuses_temperature(r):
+    async with _client(timeout=timeout) as client:
+        r = await client.post(url, json=body, headers=_headers(provider, endpoint, model))
+        if r.status_code == 400 and provider == "claude" and "fallbacks" in body and _refuses_fallback(r):
+            # Not offered for this key or model: asked again without, and remembered.
+            _NO_FALLBACK.add(model)
+            url, body = build(temperature)
+            r = await client.post(url, json=body, headers=_headers(provider, endpoint, model))
+        if r.status_code == 400 and temperature is not None and "temperature" in body and _refuses_temperature(r):
             # Newer models (Claude Haiku 5.5, 2026-10-09) refuse a
             # temperature outright: asked again without one, and the model
             # remembered so the next call does not pay for the refusal.
             _NO_TEMPERATURE.add((provider, model))
             url, body = build(None)
-            r = await client.post(url, json=body, headers=_headers(provider, anthropic))
+            r = await client.post(url, json=body, headers=_headers(provider, endpoint, model))
     if r.status_code >= 400:
         raise _error(provider, r)
     d = r.json()
-    if anthropic:
+    if endpoint == "messages":
+        if d.get("stop_reason") == "refusal" and not any(b.get("type") == "text" and b.get("text")
+                                                         for b in d.get("content") or []):
+            raise _declined(provider, d)
         text = "".join(b.get("text", "") for b in d.get("content") or [] if b.get("type") == "text")
         u = d.get("usage") or {}
         d = {"choices": [{"message": {"role": "assistant", "content": text}}],
              "usage": {"prompt_tokens": u.get("input_tokens"), "completion_tokens": u.get("output_tokens")}}
+    elif endpoint == "responses":
+        text = "".join(c.get("text", "") for it in d.get("output") or [] if it.get("type") == "message"
+                       for c in it.get("content") or [] if c.get("type") == "output_text")
+        u = d.get("usage") or {}
+        d = {"choices": [{"message": {"role": "assistant", "content": text}}],
+             "usage": {"prompt_tokens": u.get("input_tokens"), "completion_tokens": u.get("output_tokens")}}
+    if provider == "claude":
+        d.setdefault("usage", {})["cost"] = claude_cost(model, d["usage"])
     d["provider"], d["model"] = provider, model
     return d
 
@@ -491,84 +772,163 @@ async def stream(messages: list[dict], *, provider: str, model: str, max_tokens:
     while the model reasons, and a last {"usage": {...}}. With `tools`
     ({name, description, parameters}): the tools the model asked for, once
     it has, as {"calls": [{id, name, arguments}]} before the usage - for
-    the caller to run and hand back (backend/ccgen.py)."""
+    the caller to run and hand back (backend/ccgen.py). On Anthropic's
+    format the turn's own content blocks come with them, {"blocks": [...]},
+    for the caller to put on the assistant turn it sends back."""
     import httpx
 
-    anthropic = await _anthropic_model(provider, model)
-    base = PROVIDERS[provider]["base"]
-    if anthropic:
-        url, body = base + "/messages", _to_anthropic(messages, max_tokens, temperature, model, stream=True,
-                                                      tools=tools)
-    else:
-        url, body = base + "/chat/completions", _openai_body(provider, model, messages, max_tokens,
-                                                             temperature, True, stream=True, tools=tools)
+    endpoint = await _endpoint(provider, model)
+    url, body = _build(provider, endpoint, model, messages, max_tokens, temperature, True, True, tools)
     usage: dict = {}
     calls: dict[int, dict] = {}                        # by the block's (or the call's) index
-    async with httpx.AsyncClient(timeout=httpx.Timeout(TIMEOUT, read=300)) as client:
-        async with client.stream("POST", url, json=body, headers=_headers(provider, anthropic)) as r:
-            if r.status_code >= 400:
-                await r.aread()
-                raise _error(provider, r)
-            async for line in r.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
-                data = line[5:].strip()
-                if not data or data == "[DONE]":
-                    continue
-                try:
-                    ev = json.loads(data)
-                except ValueError:
-                    continue
-                if anthropic:
-                    t = ev.get("type")
-                    if t == "content_block_start":
-                        cb = ev.get("content_block") or {}
-                        if cb.get("type") == "tool_use":
-                            calls[ev.get("index", len(calls))] = {"id": cb.get("id"), "name": cb.get("name"),
-                                                                  "arguments": ""}
-                    elif t == "content_block_delta":
-                        delta = ev.get("delta") or {}
-                        if delta.get("type") == "text_delta":
-                            yield {"text": delta.get("text", "")}
-                        elif delta.get("type") == "thinking_delta":
-                            yield {"thinking": delta.get("thinking", "")}
-                        elif delta.get("type") == "input_json_delta" and ev.get("index") in calls:
-                            calls[ev["index"]]["arguments"] += delta.get("partial_json") or ""
-                    elif t == "message_start":
-                        u = (ev.get("message") or {}).get("usage") or {}
-                        usage["prompt_tokens"] = u.get("input_tokens")
-                    elif t == "message_delta":
-                        usage["completion_tokens"] = (ev.get("usage") or {}).get("output_tokens")
-                    elif t == "error":
-                        raise RuntimeError(str((ev.get("error") or {}).get("message") or ev)[:300])
-                    continue
-                if ev.get("usage"):
-                    usage = {k: ev["usage"].get(k) for k in ("prompt_tokens", "completion_tokens", "cost")}
-                if isinstance(ev.get("error"), dict):
-                    raise RuntimeError(str(ev["error"].get("message") or ev["error"])[:300])
-                for ch in ev.get("choices") or []:
-                    delta = ch.get("delta") or {}
-                    if delta.get("reasoning_content") or delta.get("reasoning"):
-                        yield {"thinking": delta.get("reasoning_content") or delta.get("reasoning")}
-                    if delta.get("content"):
-                        yield {"text": delta["content"]}
-                    for tc in delta.get("tool_calls") or []:
-                        i = tc.get("index", len(calls))
-                        got = calls.setdefault(i, {"id": None, "name": "", "arguments": ""})
-                        fn = tc.get("function") or {}
-                        if tc.get("id"):
-                            got["id"] = tc["id"]
-                        if fn.get("name"):
-                            got["name"] += fn["name"]
-                        if fn.get("arguments"):
-                            got["arguments"] += fn["arguments"]
+    blocks: dict[int, dict] = {}                       # Anthropic's content blocks, by index
+    stop: dict = {}
+    async with _client(timeout=httpx.Timeout(TIMEOUT, read=300)) as client:
+        for attempt in (0, 1):
+            async with client.stream("POST", url, json=body, headers=_headers(provider, endpoint, model)) as r:
+                if r.status_code >= 400:
+                    await r.aread()
+                    if attempt == 0 and r.status_code == 400 and "fallbacks" in body and _refuses_fallback(r):
+                        _NO_FALLBACK.add(model)            # not offered here: once more without
+                        url, body = _build(provider, endpoint, model, messages, max_tokens, temperature, True, True,
+                                           tools)
+                        continue
+                    raise _error(provider, r)
+                async for line in r.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if not data or data == "[DONE]":
+                        continue
+                    try:
+                        ev = json.loads(data)
+                    except ValueError:
+                        continue
+                    if endpoint == "messages":
+                        t = ev.get("type")
+                        if t == "content_block_start":
+                            cb = dict(ev.get("content_block") or {})
+                            i = ev.get("index", len(blocks))
+                            if cb.get("type") == "tool_use":
+                                calls[i] = {"id": cb.get("id"), "name": cb.get("name"), "arguments": ""}
+                            blocks[i] = cb
+                        elif t == "content_block_delta":
+                            delta = ev.get("delta") or {}
+                            cb = blocks.get(ev.get("index"))
+                            kind = delta.get("type")
+                            if kind == "text_delta":
+                                yield {"text": delta.get("text", "")}
+                                if cb is not None:
+                                    cb["text"] = (cb.get("text") or "") + delta.get("text", "")
+                            elif kind == "thinking_delta":
+                                yield {"thinking": delta.get("thinking", "")}
+                                if cb is not None:
+                                    cb["thinking"] = (cb.get("thinking") or "") + delta.get("thinking", "")
+                            elif kind == "signature_delta" and cb is not None:
+                                cb["signature"] = (cb.get("signature") or "") + (delta.get("signature") or "")
+                            elif kind == "input_json_delta" and ev.get("index") in calls:
+                                calls[ev["index"]]["arguments"] += delta.get("partial_json") or ""
+                        elif t == "message_start":
+                            u = (ev.get("message") or {}).get("usage") or {}
+                            usage["prompt_tokens"] = u.get("input_tokens")
+                        elif t == "message_delta":
+                            u = ev.get("usage") or {}
+                            usage["completion_tokens"] = u.get("output_tokens")
+                            if u.get("input_tokens") is not None:
+                                usage["prompt_tokens"] = u["input_tokens"]
+                            stop = {**(ev.get("delta") or {})}
+                        elif t == "error":
+                            raise RuntimeError(str((ev.get("error") or {}).get("message") or ev)[:300])
+                        continue
+                    if endpoint == "responses":
+                        t = ev.get("type") or ""
+                        if t == "response.output_text.delta":
+                            yield {"text": ev.get("delta") or ""}
+                        elif t in ("response.reasoning_summary_text.delta", "response.reasoning_text.delta"):
+                            yield {"thinking": ev.get("delta") or ""}
+                        elif t in ("response.output_item.added", "response.output_item.done"):
+                            it = ev.get("item") or {}
+                            if it.get("type") == "function_call":
+                                got = calls.setdefault(ev.get("output_index", len(calls)),
+                                                       {"id": None, "name": "", "arguments": ""})
+                                got["id"] = it.get("call_id") or got["id"]
+                                got["name"] = it.get("name") or got["name"]
+                                if t.endswith(".done") or it.get("arguments"):
+                                    got["arguments"] = it.get("arguments") or got["arguments"]
+                        elif t == "response.function_call_arguments.delta":
+                            got = calls.setdefault(ev.get("output_index", len(calls)),
+                                                   {"id": None, "name": "", "arguments": ""})
+                            got["arguments"] += ev.get("delta") or ""
+                        elif t == "response.completed":
+                            u = (ev.get("response") or {}).get("usage") or {}
+                            usage = {"prompt_tokens": u.get("input_tokens"), "completion_tokens": u.get("output_tokens")}
+                        elif t in ("error", "response.failed"):
+                            err = ev.get("error") or (ev.get("response") or {}).get("error") or ev
+                            raise RuntimeError(str(err.get("message") if isinstance(err, dict) else err)[:300])
+                        continue
+                    if ev.get("usage"):
+                        usage = {k: ev["usage"].get(k) for k in ("prompt_tokens", "completion_tokens", "cost")}
+                    if isinstance(ev.get("error"), dict):
+                        raise RuntimeError(str(ev["error"].get("message") or ev["error"])[:300])
+                    for ch in ev.get("choices") or []:
+                        delta = ch.get("delta") or {}
+                        if delta.get("reasoning_content") or delta.get("reasoning"):
+                            yield {"thinking": delta.get("reasoning_content") or delta.get("reasoning")}
+                        if delta.get("content"):
+                            yield {"text": delta["content"]}
+                        for tc in delta.get("tool_calls") or []:
+                            i = tc.get("index", len(calls))
+                            got = calls.setdefault(i, {"id": None, "name": "", "arguments": ""})
+                            fn = tc.get("function") or {}
+                            if tc.get("id"):
+                                got["id"] = tc["id"]
+                            if fn.get("name"):
+                                got["name"] += fn["name"]
+                            if fn.get("arguments"):
+                                got["arguments"] += fn["arguments"]
+            break                              # the answer came: no second try
+    if stop.get("stop_reason") == "refusal" and not any(b.get("type") == "text" and b.get("text")
+                                                        for b in blocks.values()):
+        raise _declined(provider, {"stop_details": stop.get("stop_details")})
     if calls:
         out = []
         for i in sorted(calls):
             c = calls[i]
             out.append({"id": c["id"] or f"call_{i}", "name": c["name"], "arguments": c["arguments"] or "{}"})
+        if endpoint == "messages" and any(b.get("type") not in ("text", "tool_use") for b in blocks.values()):
+            # thinking in the turn: it goes back as it came (_to_anthropic)
+            yield {"blocks": _turn_blocks(blocks, calls)}
         yield {"calls": out}
+    if provider == "claude":
+        usage["cost"] = claude_cost(model, usage)
     yield {"usage": usage}
+
+
+def _turn_blocks(blocks: dict[int, dict], calls: dict[int, dict]) -> list[dict]:
+    """An Anthropic turn's content blocks as they go back: the thinking
+    with its signature, the text, each tool_use with its input parsed."""
+    out = []
+    for i in sorted(blocks):
+        b = blocks[i]
+        kind = b.get("type")
+        if kind == "tool_use":
+            try:
+                args = json.loads(calls.get(i, {}).get("arguments") or "{}")
+            except ValueError:
+                args = {}
+            out.append({"type": "tool_use", "id": b.get("id"), "name": b.get("name"),
+                        "input": args if isinstance(args, dict) else {}})
+        elif kind == "thinking":
+            if b.get("signature"):                     # unsigned thinking is not taken back
+                out.append({"type": "thinking", "thinking": b.get("thinking") or "", "signature": b["signature"]})
+        elif kind == "redacted_thinking":
+            out.append({"type": "redacted_thinking", "data": b.get("data")})
+        elif kind == "text":
+            if b.get("text"):
+                out.append({"type": "text", "text": b["text"]})
+        elif kind:
+            out.append(b)                              # anything else goes back as it came
+    return out
 
 
 async def record(db, *, provider: str, model: str, surface: str, kind: str, used: dict) -> None:
@@ -576,13 +936,16 @@ async def record(db, *, provider: str, model: str, surface: str, kind: str, used
     import uuid
 
     from . import usage as _usage
+    cost = used.get("cost")
+    if cost is None and provider == "claude":
+        cost = claude_cost(model, used)
+    basis = "unpriced" if cost is None else "list" if provider == "claude" else "billed"
     try:
         await _usage.record_call(
             db, _id=f"{provider[:2]}:{uuid.uuid4().hex[:16]}", provider=provider, surface=surface,
             kind=kind, model=model, input=used.get("prompt_tokens") or 0,
             output=used.get("completion_tokens") or 0, cache_read=0, cache_write=0, thinking=0,
-            cost_usd=used.get("cost"), cost_basis="billed" if used.get("cost") is not None else "unpriced",
-            revision=None)
+            cost_usd=cost, cost_basis=basis, revision=None)
     except Exception:                                  # noqa: BLE001 - the answer matters more
         log.warning("could not record a %s call", provider)
 
@@ -1391,8 +1754,10 @@ async def own_spend(raw, provider: str, now: float | None = None) -> dict:
                 if usd is not None:
                     b["cost_usd"] = (b["cost_usd"] or 0) + usd
         if at >= t - timedelta(days=30):
-            m = by_model.setdefault(r.get("model") or "?", {"name": r.get("model") or "?", "calls": 0, "cost_usd": None})
+            m = by_model.setdefault(r.get("model") or "?", {"name": r.get("model") or "?", "calls": 0, "tokens": 0,
+                                                             "cost_usd": None})
             m["calls"] += 1
+            m["tokens"] += (r.get("input") or 0) + (r.get("output") or 0)
             if usd is not None:
                 m["cost_usd"] = (m["cost_usd"] or 0) + usd
     out["by_model"] = sorted(by_model.values(), key=lambda x: -x["calls"])
@@ -1419,6 +1784,13 @@ REGISTRY = {
                     "about": "Qwen, GLM, Kimi, Claude and more under one subscription; plan windows and credits"},
     "openrouter": {"account": _or_account_any, "analysis": False,
                    "about": "hundreds of models, paid per call; every call is priced"},
+    # No account API for either with an ordinary key (Anthropic's usage
+    # reports want an admin key; OpenCode shows its limits in the console
+    # only): their cards show Redline's own call log (own_spend).
+    "claude": {"account": None, "analysis": False,
+               "about": "Anthropic's own API: Opus, Sonnet, Haiku and Fable, paid per token; priced here at list rates"},
+    "opencode-go": {"account": None, "analysis": False,
+                    "about": "OpenCode's subscription: GLM, Kimi, DeepSeek, Qwen, MiniMax and more, with 5-hour, weekly and monthly limits"},
 }
 
 
