@@ -344,16 +344,16 @@ export class LlmUsagePanel {
         @if (d.jobs[j]; as job) {
           <div class="st-job">
             <div class="st-job-name"><b>{{ job.label | t }}@if (savedRow()[j]) { <span class="st-job-saved st-ok" role="status">✓ {{ 'Saved' | t }}</span> }</b><span [title]="job.about | t">{{ job.about | t }}</span></div>
-            <div class="st-seg">
+            <select class="st-in st-prov" [disabled]="!canEdit" [title]="('Provider' | t) + ': ' + d.providers[prov(j)].name"
+                    (change)="setProvider(j, $any($event.target).value)">
               @for (p of providerIds; track p) {
-                <button [class.on]="p === prov(j)" [disabled]="!canEdit || p === prov(j)"
-                        (click)="setProvider(j, p)">{{ d.providers[p].name }}@if (!d.providers[p].set) { <small>{{ 'no key' | t }}</small> }</button>
+                <option [value]="p" [selected]="p === prov(j)">{{ d.providers[p].name }}{{ d.providers[p].set ? '' : ' · ' + ('no key' | t) }}</option>
               }
-            </div>
+            </select>
             <app-model-picker class="tcv-mp-row" [models]="models()[prov(j)] || []" [selected]="pending()[j] ? '' : job.model"
                               [placeholder]="pending()[j] ? ('choose a model' | t) : ''" [disabled]="!canEdit" [fixed]="true" [vision]="true"
                               [title]="('Model' | t) + ': ' + d.providers[prov(j)].name + ' · ' + (pending()[j] ? ('choose a model' | t) : job.model)"
-                              [tag]="d.providers[prov(j)].name" [heading]="d.providers[prov(j)].name + ' · ' + (models()[prov(j)] || []).length + ' ' + ('models' | t)"
+                              [heading]="d.providers[prov(j)].name + ' · ' + (models()[prov(j)] || []).length + ' ' + ('models' | t)"
                               [fallback]="fallbacks()[j]" (pickDefault)="reset(j)"
                               [open]="picking() === j" (openChange)="pickerOpen(j, $event)" (pick)="setModel(j, $event)" />
             <div class="st-job-acts">

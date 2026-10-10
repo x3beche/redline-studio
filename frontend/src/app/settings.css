@@ -139,7 +139,7 @@ select.st-in { cursor: pointer; }
 .st-key-top a { margin-left: auto; font-size: 11px; }
 .st-jobs { display: flex; flex-direction: column; }
 .st-job {
-  display: grid; grid-template-columns: minmax(170px, 1fr) auto minmax(200px, 1.3fr) auto; align-items: center;
+  display: grid; grid-template-columns: minmax(170px, 1fr) 150px minmax(200px, 1.3fr) auto; align-items: center;
   gap: 4px 10px; padding: 7px 10px; border-top: 1px solid var(--line);
 }
 .st-job:first-child { border-top: 0; }
@@ -148,14 +148,14 @@ select.st-in { cursor: pointer; }
 .st-job-name span { font-size: 11px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-job-acts { display: flex; gap: 4px; justify-content: flex-end; }
 .st-job-test { grid-column: 1 / -1; font-size: 11px; font-family: 'IBM Plex Mono', ui-monospace, monospace; }
-/* Narrow (the stage between the app's side panels): the name, the
-   provider switch under it, then the model and its buttons - four
-   providers do not fit beside the name with the model still readable. */
+/* A job's provider: a select the height and border of the model picker beside it. */
+.st-prov { width: 100%; height: 26px; padding: 0 6px; font-size: 12px; font-family: inherit; }
+/* Narrow (the stage between the app's side panels): the name on its own
+   line, then provider, model and buttons. */
 .st-jobs { container-type: inline-size; }
-@container (max-width: 900px) {
-  .st-job { grid-template-columns: minmax(0, 1fr) auto; }
-  .st-job > .st-job-name, .st-job > .st-seg { grid-column: 1 / -1; }
-  .st-job > .st-seg { justify-self: start; max-width: 100%; overflow-x: auto; }
+@container (max-width: 760px) {
+  .st-job { grid-template-columns: 130px minmax(0, 1fr) auto; }
+  .st-job > .st-job-name { grid-column: 1 / -1; }
 }
 
 /* ---- charts ----------------------------------------------------- */
