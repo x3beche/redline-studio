@@ -257,6 +257,7 @@ const TR: Record<string, string> = {
   'Board': 'Kart',
   'File': 'Dosya',
   'Drawn note': 'Çizimli not',
+  'Open a board to see this.': 'Bunu görmek için bir kart aç.',
   'version': 'sürüm',
   'images': 'görsel',
   'characters to the model': 'karakter modele',

@@ -68,14 +68,6 @@ type BoardView = Pane | 'split' | 'focus';
     <app-import-board [initialProject]="here() ? projectOf(here()!) : ''"
                       (closed)="importing.set(false)" (opened)="importing.set(false)" />
   }
-  @if (!here()) {
-    <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
-      Pick a board in the catalog - a <b>.pcb</b> opens here - or
-      <button class="tcv-chip" (click)="importing.set(true)">import one</button>
-      from Gerbers, a STEP or a design file.
-    </p>
-  } @else {
-
   <!-- The 3D room's layout, because it is the app's one layout: the
        toolbar across the top with the pen at its end, the tabs down the
        left, the board beside them and the log under it. -->
@@ -287,6 +279,8 @@ type BoardView = Pane | 'split' | 'focus';
           </div>
         </div>
       }
+      } @else if (!here()) {
+        <p class="p-3 text-[11px]" style="color: var(--ink-dim)">{{ 'Open a board to see this.' | t }}</p>
       } @else {
       @if (side() === 'rules') {
         <!-- ROUTING RULES
@@ -352,6 +346,14 @@ type BoardView = Pane | 'split' | 'focus';
          all three at once in windows, each window showing whichever of
          them it is set to. -->
     <div view class="relative h-full w-full">
+      @if (!here()) {
+        <!-- No board yet: the drawer beside is still the drawer. -->
+        <p class="p-3 text-[12px]" style="color: var(--ink-dim)">
+          Pick a board in the catalog - a <b>.pcb</b> opens here - or
+          <button class="tcv-chip" (click)="importing.set(true)">import one</button>
+          from Gerbers, a STEP or a design file.
+        </p>
+      } @else {
       @if (releasing() && here(); as b) {
         <app-releases [project]="projectOf(b)" (closed)="releasing.set(false)" />
       }
@@ -411,6 +413,7 @@ type BoardView = Pane | 'split' | 'focus';
           @for (m of trouble(); track m) { <div class="truncate" [title]="m">{{ m }}</div> }
         </div>
       }
+      }
     </div>
 
     <!-- The view's corner: which side of the board, like the 3D room's "All". -->
@@ -421,7 +424,6 @@ type BoardView = Pane | 'split' | 'focus';
       </select>
     }
   </app-room-frame>
-  }
 
   <!-- One picture of the board, whichever it is asked for. In a window of
        the split view it keeps its own zoom buttons; alone, the toolbar has
