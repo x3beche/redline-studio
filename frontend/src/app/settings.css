@@ -139,7 +139,7 @@ select.st-in { cursor: pointer; }
 .st-key-top a { margin-left: auto; font-size: 11px; }
 .st-jobs { display: flex; flex-direction: column; }
 .st-job {
-  display: grid; grid-template-columns: minmax(170px, 1fr) 150px minmax(200px, 1.3fr) auto; align-items: center;
+  display: grid; grid-template-columns: minmax(170px, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center;
   gap: 4px 10px; padding: 7px 10px; border-top: 1px solid var(--line);
 }
 .st-job:first-child { border-top: 0; }
@@ -154,7 +154,7 @@ select.st-in { cursor: pointer; }
    line, then provider, model and buttons. */
 .st-jobs { container-type: inline-size; }
 @container (max-width: 760px) {
-  .st-job { grid-template-columns: 130px minmax(0, 1fr) auto; }
+  .st-job { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
   .st-job > .st-job-name { grid-column: 1 / -1; }
 }
 

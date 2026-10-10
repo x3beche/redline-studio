@@ -39,6 +39,8 @@ export const THEME_NAMES: Record<Theme, string> = {
 export type Theme = (typeof THEMES)[number];
 
 const KEY = 'redline.theme';
+/** What a browser that has never chosen a theme wears. */
+export const FIRST_THEME: Theme = 'spartan-dark';
 /** The custom theme being worn, kept whole so the first paint has it
  *  without asking the server (see custom-themes.ts for where they come from). */
 const CUSTOM_KEY = 'redline.theme.custom';
@@ -83,7 +85,8 @@ export function currentTheme(): ThemeId {
     if (c && CUSTOM_PREFIX + c.id === want) return want;
     return c && (THEMES as readonly string[]).includes(c.base) ? c.base : 'default';
   }
-  return (THEMES as readonly string[]).includes(want ?? '')
+  if (!want) return FIRST_THEME;
+  return (THEMES as readonly string[]).includes(want)
     ? (want as Theme) : 'default';
 }
 
