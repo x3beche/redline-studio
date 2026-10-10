@@ -5232,3 +5232,12 @@ html[data-shot] .tcv-log { display: none !important; }
 .hljs-deletion { color: var(--series-6); }
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: 600; }
+
+/* Settings > Appearance > Font: Switzer over the whole interface, figures
+   in even columns. Code keeps its monospace; anything Switzer cannot draw
+   (₺, a few Turkish letters) falls back to Plex glyph by glyph. */
+:root[data-font="switzer"] body,
+:root[data-font="switzer"] body *:not(.monaco-editor *):not(pre):not(pre *):not(code):not(code *) {
+  font-family: 'Switzer', 'IBM Plex Sans', system-ui, sans-serif !important;
+  font-variant-numeric: tabular-nums;
+}

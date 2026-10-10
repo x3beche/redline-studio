@@ -1,5 +1,5 @@
 import { Component, Injectable, computed, inject, signal } from '@angular/core';
-import { CustomTheme, LIGHT_THEMES, THEMES, THEME_NAMES, Theme, ThemeId, cachedCustom, currentTheme, isCustom, isLightTheme, setTheme } from '../theme';
+import { CustomTheme, FONTS, FONT_NAMES, Font, LIGHT_THEMES, THEMES, THEME_NAMES, Theme, ThemeId, cachedCustom, currentFont, currentTheme, isCustom, isLightTheme, setFont, setTheme } from '../theme';
 import { LANG, LANGS, Lang, T, setLang, t } from './i18n';
 import { Auth } from './auth';
 import { PALETTE } from './rooms/charts';
@@ -34,6 +34,7 @@ export class Prefs {
   /** The section on screen in the Settings tab. */
   tab = signal<PrefsTab>('profile');
   theme = signal<ThemeId>(currentTheme());
+  font = signal<Font>(currentFont());
 
   constructor() {
     // "?" opens the shortcuts wherever you are - unless you are typing it.
@@ -55,6 +56,9 @@ export class Prefs {
     const m = (window as unknown as { monaco?: Parameters<typeof redlineTheme>[0] }).monaco;
     if (m) m.editor.setTheme(redlineTheme(m));
   }
+
+  /** Wear a typeface (theme.ts). */
+  wearFont(f: Font) { this.font.set(setFont(f)); }
 
   /** What a theme is called where it is shown. */
   nameOf(t: ThemeId): string {
@@ -183,6 +187,15 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
                       <small>{{ groups[0].themes.length }} {{ 'dark' | t }} · {{ groups[1].themes.length }} {{ 'light' | t }}</small></div>
                   </div>
                   <div class="st-row">
+                    <span class="st-sec-title">{{ 'Font' | t }}</span>
+                    <div class="st-seg">
+                      @for (f of fonts; track f) {
+                        <button [class.on]="prefs.font() === f" [style.font-family]="f === 'switzer' ? 'Switzer, IBM Plex Sans, sans-serif' : 'IBM Plex Sans, sans-serif'"
+                                (click)="prefs.wearFont(f)">{{ fontNames[f] }}@if (f === 'plex') { · {{ 'default' | t }} }</button>
+                      }
+                    </div>
+                  </div>
+                  <div class="st-row">
                     <span class="st-sec-title">{{ 'Show' | t }}</span>
                     <div class="st-seg">
                       @for (f of themeFilters; track f) {
@@ -290,6 +303,8 @@ export class RoomSettings {
   readonly themeFilters = ['All', 'Dark', 'Light'];
   themeFilter = signal('All');
   readonly names = THEME_NAMES;
+  readonly fonts = FONTS;
+  readonly fontNames = FONT_NAMES;
   readonly swatch = SWATCH;
   readonly seriesVars = PALETTE;
   readonly langs = LANGS;

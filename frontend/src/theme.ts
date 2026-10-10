@@ -257,3 +257,30 @@ function safeRead(): string | null {
     return null;                        // private window
   }
 }
+
+/** The interface's typeface, kept in this browser like the theme. IBM Plex
+ *  is the default; Switzer is the front page's grotesque, offered as an
+ *  option. Glyphs Switzer lacks (₺, some Turkish letters) fall back to Plex. */
+export const FONTS = ['plex', 'switzer'] as const;
+export type Font = (typeof FONTS)[number];
+export const FONT_NAMES: Record<Font, string> = { plex: 'IBM Plex', switzer: 'Switzer' };
+const FONT_KEY = 'redline.font';
+
+export function currentFont(): Font {
+  let f: string | null = null;
+  try { f = localStorage.getItem(FONT_KEY); } catch { /* private window */ }
+  return (FONTS as readonly string[]).includes(f ?? '') ? f as Font : 'plex';
+}
+
+/** Wear a typeface: the default wears no attribute, like the default theme. */
+export function applyFont(f: Font = currentFont()): Font {
+  const root = document.documentElement;
+  if (f === 'plex') root.removeAttribute('data-font');
+  else root.setAttribute('data-font', f);
+  return f;
+}
+
+export function setFont(f: Font): Font {
+  try { localStorage.setItem(FONT_KEY, f); } catch { /* private window: this page only */ }
+  return applyFont(f);
+}

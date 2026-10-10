@@ -1,7 +1,7 @@
 import { bootstrapApplication } from '@angular/platform-browser';
 import { appConfig } from './app/app.config';
 import { App } from './app/app';
-import { applyTheme } from './theme';
+import { applyFont, applyTheme } from './theme';
 
 // This browser's settings were once kept under another prefix: move them
 // to redline.* once, before anything reads them, so nobody loses a theme,
@@ -17,6 +17,7 @@ try {
 // Before the first paint: a theme decided after render would show the page
 // in the default palette for a frame and then swap it.
 applyTheme();
+applyFont();
 
 bootstrapApplication(App, appConfig)
   .catch((err) => console.error(err));

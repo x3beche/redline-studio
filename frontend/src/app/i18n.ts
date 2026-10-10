@@ -605,7 +605,7 @@ const TR: Record<string, string> = {
   'That account could not be opened.': 'Bu hesap açılamadı.',
   'remembered here': 'burada hatırlanıyor', 'remembered': 'hatırlanıyor',
   // preferences
-  'Appearance': 'Görünüm', 'Dark': 'Koyu', 'Light': 'Açık', 'Language': 'Dil', 'Keyboard shortcuts': 'Klavye kısayolları', 'Theme': 'Tema',
+  'Appearance': 'Görünüm', 'Dark': 'Koyu', 'Light': 'Açık', 'Language': 'Dil', 'Keyboard shortcuts': 'Klavye kısayolları', 'Theme': 'Tema', 'Font': 'Yazı tipi',
   'The whole window, the 3D backdrop and the code editor follow it.': 'Tüm pencere, 3D arka plan ve kod editörü buna uyar.',
   'The words Redline says. Names of models, boards, parts and code stay as they are.':
     'Redline\'ın arayüz metinleri. Model, kart, parça adları ve kod olduğu gibi kalır.',
