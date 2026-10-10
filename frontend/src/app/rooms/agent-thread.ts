@@ -15,6 +15,7 @@ import { Reading, ReadingNote, ReadingPick } from '../editor/reading';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
 import { FilesApi } from './files-model';
 import { ComposerSuggest, SuggestChip } from './suggest';
+import { LogWindow } from './log-window';
 
 /** The longest line a room thread takes (backend/main.py CHAT_MAX). */
 const CHAT_MAX = 20_000;
@@ -160,13 +161,17 @@ export function sender(it: ThreadItem): string {
 </header>
 
 <div class="tcv-cc-log tcv-cc-scroll" #log (wheel)="touched = true" (touchmove)="touched = true" (keydown)="touched = true"
+     (scroll)="win.scrolled(items().length)"
      [class.tcv-att-over]="att.over()" (dragover)="canAttach() && att.dragOver($event)"
      (dragleave)="att.dragLeave($event)" (drop)="canAttach() && att.drop($event)">
   <div class="tcv-cc-col">
     <!-- The thread in time order: its lines, and the agent's questions -
          answered ones resolved in place, each followed by its answer as
-         the person's line - then what the agent is still waiting on. -->
-    @for (it of items(); track it.key; let i = $index) {
+         the person's line - then what the agent is still waiting on. The
+         last ones only, more as the reader scrolls up (rooms/log-window.ts);
+         i is the place in the whole log. -->
+    @for (it of shown(); track it.key; let j = $index) {
+      @let i = j + shownFrom();
       @switch (it.kind) {
       @case ('line') {
       @let m = it.m!;
@@ -425,6 +430,10 @@ export class RoomThread {
   waiting = computed(() => this.lines().filter(m => m.role === 'user' && !m.seen_at).length || null);
 
   private log = viewChild<ElementRef<HTMLDivElement>>('log');
+  /** The items on the page: the last ones, more as the reader scrolls up (rooms/log-window.ts). */
+  win = new LogWindow(() => this.log()?.nativeElement);
+  shownFrom = computed(() => this.win.from(this.items().length));
+  shown = computed(() => this.items().slice(this.shownFrom()));
   private box = viewChild<ElementRef<HTMLTextAreaElement>>('box');
   private timer = setInterval(() => this.load(), 2000);
 
@@ -441,7 +450,7 @@ export class RoomThread {
   constructor() {
     effect(() => {
       const room = this.room();
-      untracked(() => { this.lines.set([]); this.answered.set([]); this.load(true); this.threads.markSeen(room); this.focusSoon(); });
+      untracked(() => { this.lines.set([]); this.answered.set([]); this.win.reset(); this.load(true); this.threads.markSeen(room); this.focusSoon(); });
     });
     // Asked for again while open (Ctrl+K on this room): the cursor goes in.
     let opened = this.sel.threadAsked();
@@ -458,6 +467,9 @@ export class RoomThread {
         this.sel.threadAt.set(null);
         // Again after the thread has settled: opening it scrolls to its end.
         this.touched = true;              // reading here: the thread's end does not pull it back
+        // Above what is shown: shown down from it first.
+        const l = this.items();
+        this.win.include(l.findIndex(x => x.m?._id === at), l.length);
         const go = () => this.log()?.nativeElement.querySelector(`[data-mid="${CSS.escape(at)}"]`)
           ?.scrollIntoView({ block: 'center' });
         setTimeout(go, 400);

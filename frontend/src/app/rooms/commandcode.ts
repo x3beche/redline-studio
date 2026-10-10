@@ -10,6 +10,7 @@ import { Auth } from '../auth';
 import { T, t } from '../i18n';
 import { CcWant, Selection } from '../selection';
 import { AgentThreads, RoomThread } from './agent-thread';
+import { LogWindow } from './log-window';
 import { CcUsageLine } from '../cc-usage';
 import { highlightIn } from '../code-highlight';
 import { CcToolsLine, CcToolsView, LEVELS, toolIcon as toolIconOf } from './cc-tools';
@@ -604,7 +605,10 @@ type Ask = { text: string; label: string; go: () => void };
            [class.tcv-att-over]="att.over()" (dragover)="auth.can('draw') && att.dragOver($event)"
            (dragleave)="att.dragLeave($event)" (drop)="auth.can('draw') && att.drop($event)">
         <div class="tcv-cc-col">
-          @for (m of messages(); track m.id; let i = $index; let last = $last) {
+          <!-- The last lines only, more as the reader scrolls up (rooms/log-window.ts);
+               i is the line's place in the whole conversation. -->
+          @for (m of shown(); track m.id; let j = $index; let last = $last) {
+            @let i = j + shownFrom();
             <article class="tcv-cc-row" [attr.data-role]="m.role" [attr.data-editing]="editing() === m.id ? 1 : null"
                      [attr.data-mid]="m.id" [attr.data-flash]="flash() === m.id ? 1 : null"
                      [attr.data-open]="detail() === m.id ? 1 : null" (click)="rowTap(m, $event)">
@@ -1033,6 +1037,10 @@ export class RoomCommandCode implements OnDestroy {
   openId = signal<string | null>(null);
   chat = signal<CcChat | null>(null);
   messages = computed(() => this.chat()?.messages ?? []);
+  /** The lines on the page: the last ones, more as the reader scrolls up (rooms/log-window.ts). */
+  win = new LogWindow(() => this.logEl()?.nativeElement);
+  shownFrom = computed(() => this.win.from(this.messages().length));
+  shown = computed(() => this.messages().slice(this.shownFrom()));
   provider = signal('commandcode');
   model = signal('');
   models = signal<LlmModel[]>([]);
@@ -1237,7 +1245,8 @@ export class RoomCommandCode implements OnDestroy {
     // The conversation's log comes and goes (a room thread is shown in its
     // place): whenever a new one is put on the page with a conversation in
     // it, it starts at the end - coming back from a thread to the same
-    // conversation calls nothing else that would scroll it.
+    // conversation calls nothing else that would scroll it. Its last lines
+    // only, as when it was first opened (rooms/log-window.ts).
     let mounted: HTMLElement | null = null;
     effect(() => {
       const el = this.logEl()?.nativeElement ?? null;
@@ -1245,7 +1254,7 @@ export class RoomCommandCode implements OnDestroy {
       if (!el) { mounted = null; return; }
       if (el === mounted || !id) return;
       mounted = el;
-      untracked(() => this.scroll());
+      untracked(() => { this.win.reset(); this.scroll(); });
     });
     // Each code block gets a copy button, whenever new ones appear.
     effect(() => {
@@ -1400,6 +1409,7 @@ export class RoomCommandCode implements OnDestroy {
    *  conversation is opened again. */
   open(id: string, at?: string | null, then?: (c: CcChat) => void) {
     this.openId.set(id);
+    this.win.reset();
     this.error.set(this.runErrors.get(id) ?? null);
     this.runErrors.delete(id);
     this.cancelEdit(false);
@@ -1430,6 +1440,7 @@ export class RoomCommandCode implements OnDestroy {
       next: c => {
         this.chats.update(l => [c, ...l]);
         this.openId.set(c.id);
+        this.win.reset();
         this.chat.set(c);
         this.error.set(null);
         this.applyQueue({ queue: [], paused: false });
@@ -2507,6 +2518,8 @@ export class RoomCommandCode implements OnDestroy {
   }
 
   private scrollTo(mid: string) {
+    // Above what is shown: shown down from it first.
+    this.win.include(this.messages().findIndex(m => m.id === mid), this.messages().length);
     setTimeout(() => {
       const el = this.logEl()?.nativeElement.querySelector(`[data-mid="${CSS.escape(mid)}"]`);
       if (!el) return;
@@ -2739,6 +2752,7 @@ export class RoomCommandCode implements OnDestroy {
    *  following the answer; back at the end, it follows again. */
   logScrolled() {
     const el = this.logEl()?.nativeElement;
+    this.win.scrolled(this.messages().length);
     if (!el || Math.abs(el.scrollTop - this.logAuto) < 2) return;      // this page's own scroll
     this.logFree = el.scrollHeight - el.scrollTop - el.clientHeight > 48;
   }
