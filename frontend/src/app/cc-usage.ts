@@ -2,6 +2,7 @@ import { Component, DestroyRef, ElementRef, Injectable, OnDestroy, computed, inj
 import { HttpClient } from '@angular/common/http';
 import { LANG, T, t } from './i18n';
 import { Prefs } from './preferences';
+import { money as shown } from './money';
 import { CcTabWindow, TopBar } from './topbar';
 
 /** The Command Code account's figures (GET /api/llm/commandcode/account,
@@ -37,6 +38,8 @@ export interface CcAccount {
 }
 
 const EVERY_MS = 120_000;
+/** The providers with no usage of their own to show: their line is Redline's own calls. */
+const OWN_LINE = [{ id: 'claude', name: 'Claude API' }, { id: 'opencode-go', name: 'OpenCode Go' }];
 
 @Injectable({ providedIn: 'root' })
 export class CcUsage {
@@ -82,6 +85,34 @@ export class CcUsage {
   fiveHour = computed(() => { const d = this.data(); const w = d?.shared ? d.windows?.five_hour : null; return w?.cap ? w : null; });
   /** The month: spent of (spent + left), as Command Code reports them. */
   monthly = computed(() => { const d = this.data(); const w = d?.shared ? d.windows?.monthly : null; return w?.used != null ? w : null; });
+}
+
+/** A provider with no account to read for its key (backend/llm.py
+ *  REGISTRY, account None): the card shows what Redline itself asked of
+ *  it, from its own call log (GET /api/llm/providers/<id>/account). */
+export interface OwnAccount {
+  set: boolean; shared: boolean;
+  redline?: { month: { calls: number; input: number; output: number; cost_usd: number | null };
+              days30: { calls: number; input: number; output: number; cost_usd: number | null };
+              by_model: { name: string; calls: number; tokens?: number; cost_usd: number | null }[] } | null;
+}
+
+@Injectable({ providedIn: 'root' })
+export class OwnUsage {
+  private http = inject(HttpClient);
+  data = signal<Record<string, OwnAccount>>({});
+  loadedAt = signal<Record<string, number>>({});
+  busy = signal<Record<string, boolean>>({});
+  loading(p: string) { return !!this.busy()[p]; }
+  load(p: string, refresh = false) {
+    if (this.busy()[p] || (!refresh && Date.now() - (this.loadedAt()[p] ?? 0) < 60_000)) return;
+    this.busy.update(b => ({ ...b, [p]: true }));
+    this.http.get<OwnAccount>(`/api/llm/providers/${p}/account` + (refresh ? '?refresh=1' : '')).subscribe({
+      next: d => { this.data.update(x => ({ ...x, [p]: d })); this.loadedAt.update(x => ({ ...x, [p]: Date.now() }));
+                   this.busy.update(b => ({ ...b, [p]: false })); },
+      error: () => this.busy.update(b => ({ ...b, [p]: false })),
+    });
+  }
 }
 
 /** "warn" from 75%, "danger" from 90% or when used up. */
@@ -276,11 +307,30 @@ export class CcTabUsage implements OnDestroy {
     </div>
   </button>
 } }
+@for (r of own(); track r.id) {
+  <!-- The Claude API and OpenCode Go share no usage: Redline's own calls this month. -->
+  <button class="ccl" type="button" (click)="openSettings()" [title]="r.title">
+    <div class="ccl-head"><b>{{ r.name }}</b><span>{{ 'this month' | t }}</span><em>{{ r.value }}</em></div>
+    <div class="ccl-sub">{{ r.sub }}</div>
+  </button>
+}
 <ng-content /></div>`,
 })
-export class CcUsageLine {
+export class CcUsageLine implements OnDestroy {
   cc = polling();
   private prefs = inject(Prefs);
+  private ownU = inject(OwnUsage);
+  private ownTimer = (() => { const go = () => OWN_LINE.forEach(p => this.ownU.load(p.id)); go(); return setInterval(go, EVERY_MS); })();
+  ngOnDestroy() { clearInterval(this.ownTimer); }
+  /** A provider with a key and calls this month: one line each. */
+  own = computed(() => OWN_LINE.flatMap(p => {
+    const d = this.ownU.data()[p.id], m = d?.redline?.month;
+    if (!d?.set || !m?.calls) return [];
+    const tok = (m.input + m.output).toLocaleString('en-US');
+    return [{ id: p.id, name: p.name, value: m.cost_usd != null ? shown(m.cost_usd) : `${m.calls} ${t('calls')}`,
+              sub: `${m.calls} ${t('calls')} · ${num(m.input + m.output)} ${t('tokens')}`,
+              title: `${p.name} - ${t('Redline\'s own calls this month')}: ${m.calls} ${t('calls')}, ${tok} ${t('tokens')}` }];
+  }));
   readonly tone = tone;
   readonly pct = pctOf;
   readonly num = num;

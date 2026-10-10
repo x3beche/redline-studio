@@ -1788,6 +1788,14 @@ const TR: Record<string, string> = {
   'Command Code\'s own totals, a day at a time (Istanbul days); today so far.': 'Command Code\'un kendi toplamları, gün gün (İstanbul günleri); bugün şimdiye kadar.',
   'From Redline\'s own readings of the account - tracked since': 'Redline\'ın hesabı kendi okumalarından - şu tarihten beri izleniyor',
   'Command Code shared no day-by-day figures.': 'Command Code gün gün rakam paylaşmadı.',
+  // Settings > LLM settings: the Claude API and OpenCode Go (Redline's own call log)
+  'Anthropic\'s own API: Opus, Sonnet, Haiku and Fable, paid per token; priced here at list rates': 'Anthropic\'ın kendi API\'si: Opus, Sonnet, Haiku ve Fable, token başına ödenir; burada liste fiyatlarıyla fiyatlanır',
+  'OpenCode\'s subscription: GLM, Kimi, DeepSeek, Qwen, MiniMax and more, with 5-hour, weekly and monthly limits': 'OpenCode aboneliği: GLM, Kimi, DeepSeek, Qwen, MiniMax ve dahası; 5 saatlik, haftalık ve aylık limitlerle',
+  'Anthropic shares no usage for an ordinary API key (its usage reports need an admin key). Redline: its own call log, priced at Anthropic\'s list rates.': 'Anthropic sıradan bir API anahtarı için kullanım paylaşmıyor (kullanım raporları yönetici anahtarı istiyor). Redline: kendi çağrı kaydı, Anthropic\'ın liste fiyatlarıyla.',
+  'Usage in the Claude Console': 'Claude Console\'da kullanım',
+  'OpenCode shares no usage through its API. The Go plan\'s limits - 5 hours 20%, a week 50%, a month 100% of the monthly allowance - are in the OpenCode console. Redline: its own call log, in tokens.': 'OpenCode API üzerinden kullanım paylaşmıyor. Go planının limitleri - aylık hakkın 5 saatte %20\'si, haftada %50\'si, ayda %100\'ü - OpenCode konsolunda. Redline: kendi çağrı kaydı, token olarak.',
+  'Usage in the OpenCode console': 'OpenCode konsolunda kullanım',
+  'Redline\'s own calls this month': 'Redline\'ın bu ayki kendi çağrıları',
   // Settings > LLM settings: one section per provider, the OpenRouter account
   'OpenRouter did not share the account': 'OpenRouter hesabı paylaşmadı',
   'Account credits': 'Hesap kredisi',

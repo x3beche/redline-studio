@@ -3864,7 +3864,7 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-cc-seg button:hover { color: var(--ink); background: var(--hover); }
 .tcv-cc-seg button.on { color: var(--ink-bright); background: var(--accent-deep); }
 .tcv-cc-seg-full { display: flex; }
-.tcv-cc-seg-full button { flex: 1; }
+.tcv-cc-seg-full button { flex: 1 1 auto; min-width: 0; padding: 4px 6px; overflow: hidden; text-overflow: ellipsis; }
 /* A search field with its magnifier. */
 .tcv-cc-search { position: relative; display: flex; align-items: center; }
 .tcv-cc-search .tcv-cc-ico { position: absolute; left: 9px; width: 14px; height: 14px; color: var(--ink-dim); pointer-events: none; }

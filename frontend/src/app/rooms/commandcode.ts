@@ -271,7 +271,8 @@ export class CcApi {
 }
 
 
-const PROVIDERS = [{ id: 'commandcode', name: 'Command Code' }, { id: 'openrouter', name: 'OpenRouter' }];
+const PROVIDERS = [{ id: 'commandcode', name: 'Command Code' }, { id: 'openrouter', name: 'OpenRouter' },
+                   { id: 'claude', name: 'Claude API' }, { id: 'opencode-go', name: 'OpenCode Go' }];
 const UNDO_MS = 6000;
 
 /** Line drawings, 24 units square, stroked in the text colour - the same

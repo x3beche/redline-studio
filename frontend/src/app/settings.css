@@ -148,11 +148,14 @@ select.st-in { cursor: pointer; }
 .st-job-name span { font-size: 11px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-job-acts { display: flex; gap: 4px; justify-content: flex-end; }
 .st-job-test { grid-column: 1 / -1; font-size: 11px; font-family: 'IBM Plex Mono', ui-monospace, monospace; }
-/* Narrow (the stage between the app's side panels): name and provider on
-   one line, the model and its buttons under them. */
+/* Narrow (the stage between the app's side panels): the name, the
+   provider switch under it, then the model and its buttons - four
+   providers do not fit beside the name with the model still readable. */
 .st-jobs { container-type: inline-size; }
-@container (max-width: 780px) {
+@container (max-width: 900px) {
   .st-job { grid-template-columns: minmax(0, 1fr) auto; }
+  .st-job > .st-job-name, .st-job > .st-seg { grid-column: 1 / -1; }
+  .st-job > .st-seg { justify-self: start; max-width: 100%; overflow-x: auto; }
 }
 
 /* ---- charts ----------------------------------------------------- */

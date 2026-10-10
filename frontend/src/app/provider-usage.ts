@@ -1,9 +1,10 @@
-import { Component, DestroyRef, Injectable, computed, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, Injectable, OnDestroy, OnInit, computed, inject, input, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { LANG, T, t } from './i18n';
 import { money as shown } from './money';
 import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
-import { CcUsage, CcWindow, day, inSpan, num, pctOf, tone, weeklyReset } from './cc-usage';
+import { CcUsage, CcWindow, OwnUsage, day, inSpan, num, pctOf, tone, weeklyReset } from './cc-usage';
+export { OwnUsage } from './cc-usage';
 
 /** Each provider's account, compact, inside its card in Settings > LLM
  *  settings (llm-settings.ts draws the card and its header line): a few
@@ -310,3 +311,66 @@ export class OrCompact {
     .map(m => ({ name: m.name, value: m.cost_usd ?? 0, sub: m.calls + ' ' + t('calls') })).filter(r => r.value > 0));
 }
 
+
+// ---------------- Claude API, OpenCode Go: Redline's own log ----------------
+
+/** What each of these providers says about itself, and where to read the rest. */
+const OWN_NOTES: Record<string, { line: string; link?: { href: string; label: string } }> = {
+  claude: { line: 'Anthropic shares no usage for an ordinary API key (its usage reports need an admin key). Redline: its own call log, priced at Anthropic\'s list rates.',
+            link: { href: 'https://console.anthropic.com/usage', label: 'Usage in the Claude Console' } },
+  'opencode-go': { line: 'OpenCode shares no usage through its API. The Go plan\'s limits - 5 hours 20%, a week 50%, a month 100% of the monthly allowance - are in the OpenCode console. Redline: its own call log, in tokens.',
+                   link: { href: 'https://opencode.ai/auth', label: 'Usage in the OpenCode console' } },
+};
+
+/** The Claude API or OpenCode Go, inside its card: Redline's own calls - a row of tiles and the calls by model. */
+@Component({
+  selector: 'app-own-compact',
+  imports: [T, BarList],
+  styleUrl: './settings.css',
+  template: `
+@if (u.data()[provider()]; as d) {
+  <div class="st-tiles tight">
+    @for (x of tiles(); track x.label) {
+      <div class="st-tile"><span>{{ x.label | t }}</span><b>{{ x.value }}</b><small>{{ x.sub }}</small></div>
+    }
+  </div>
+  <section class="st-chart"><h4>{{ 'Redline\\'s calls by model, 30 days' | t }}<em>{{ priced() ? money(d.redline?.days30?.cost_usd) : count(d.redline?.days30?.calls) }}</em></h4>
+    @if (modelRows().length) { <app-bar-list [rows]="modelRows()" [f]="priced() ? money : count" /> }
+    @else { <p class="pv-src">{{ 'No calls by Redline in 30 days.' | t }}</p> }
+    @if (note(); as n) {
+      <p class="pv-src">{{ n.line | t }}@if (n.link; as l) { <a class="st-link" [href]="l.href" target="_blank" rel="noopener">{{ l.label | t }} ↗</a> }</p>
+    }
+  </section>
+} @else {
+  <div class="cc-skel" aria-busy="true"><span class="sk"></span><span class="sk"></span><span class="sk" style="width: 70%"></span></div>
+}`,
+})
+export class OwnCompact implements OnInit, OnDestroy {
+  u = inject(OwnUsage);
+  provider = input.required<string>();
+  readonly money = money;
+  readonly count = count;
+  private timer: ReturnType<typeof setInterval> | undefined;
+  ngOnInit() { this.u.load(this.provider()); this.timer = setInterval(() => this.u.load(this.provider()), 120_000); }
+  ngOnDestroy() { clearInterval(this.timer); }
+  note = computed(() => OWN_NOTES[this.provider()] ?? null);
+  /** Whether the provider's calls carry money (the Claude API, at list rates). */
+  priced = computed(() => this.u.data()[this.provider()]?.redline?.days30?.cost_usd != null);
+  tiles = computed(() => {
+    const r = this.u.data()[this.provider()]?.redline;
+    if (!r) return [];
+    const tok = (b: { input: number; output: number }) => `${count(b.input + b.output)} ${t('tokens')}`;
+    return [
+      { label: 'Redline, this month', value: this.priced() ? money(r.month.cost_usd) : count(r.month.calls),
+        sub: this.priced() ? `${r.month.calls} ${t('calls')} · ${tok(r.month)}` : `${t('calls')} · ${tok(r.month)}` },
+      { label: 'Redline, 30 days', value: this.priced() ? money(r.days30.cost_usd) : count(r.days30.calls),
+        sub: this.priced() ? `${r.days30.calls} ${t('calls')} · ${tok(r.days30)}` : `${t('calls')} · ${tok(r.days30)}` },
+      { label: 'Input tokens', value: count(r.days30.input), sub: t('30 days') },
+      { label: 'Output tokens', value: count(r.days30.output), sub: t('30 days') },
+    ];
+  });
+  modelRows = computed<Row[]>(() => (this.u.data()[this.provider()]?.redline?.by_model ?? [])
+    .map(m => ({ name: m.name, value: this.priced() ? (m.cost_usd ?? 0) : m.calls,
+                 sub: this.priced() ? m.calls + ' ' + t('calls') : count(m.tokens ?? 0) + ' ' + t('tokens') }))
+    .filter(r => r.value > 0));
+}

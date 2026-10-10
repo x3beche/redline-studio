@@ -6,7 +6,7 @@ import { money as shown } from './money';
 import type { LlmModel } from './rooms/commandcode';
 import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 import { CcUsage, day, inSpan, span } from './cc-usage';
-import { CcCompact, CcPeriod, OrCompact, OrUsage } from './provider-usage';
+import { CcCompact, CcPeriod, OrCompact, OrUsage, OwnCompact, OwnUsage } from './provider-usage';
 import { SuggestConf } from './rooms/suggest';
 import { ModelPicker } from './model-picker';
 
@@ -49,7 +49,9 @@ interface LlmUsage {
   account: null | { label: string; usage: number; limit: number | null; limit_remaining: number | null; is_free_tier: boolean };
 }
 
-const PROVIDERS = ['commandcode', 'openrouter'];
+const PROVIDERS = ['commandcode', 'openrouter', 'claude', 'opencode-go'];
+/** The providers whose card shows Redline's own call log: no account to read for their key. */
+const OWN = ['claude', 'opencode-go'];
 /** The usage panel's switch: both providers together first, so the latest
  *  calls show whichever provider the jobs are on. */
 const USAGE_PROVIDERS = ['all', ...PROVIDERS];
@@ -187,7 +189,7 @@ export class LlmUsagePanel {
   readonly providers = USAGE_PROVIDERS;
   readonly periods = PERIODS;
   /** Display names. */
-  names = signal<Record<string, string>>({ commandcode: 'Command Code', openrouter: 'OpenRouter' });
+  names = signal<Record<string, string>>({ commandcode: 'Command Code', openrouter: 'OpenRouter', claude: 'Claude API', 'opencode-go': 'OpenCode Go' });
   // A new key: the old one remembered OpenRouter for everyone, which hid
   // the calls the jobs now make on Command Code.
   provider = signal<string>(USAGE_PROVIDERS.includes(load('redline.settings.llm.usage', 'all'))
@@ -231,7 +233,7 @@ export class LlmUsagePanel {
 
 @Component({
   selector: 'app-llm-settings',
-  imports: [T, LlmUsagePanel, CcCompact, OrCompact, ModelPicker],
+  imports: [T, LlmUsagePanel, CcCompact, OrCompact, OwnCompact, ModelPicker],
   styleUrl: './settings.css',
   template: `
 @if (data(); as d) {
@@ -275,6 +277,11 @@ export class LlmUsagePanel {
                 @if (or.data()?.credits; as c) { <span class="pv-meta">{{ money(c.left) }} {{ 'credits left' | t }}</span> }
                 @if (or.data()?.key?.is_free_tier) { <span class="pv-meta">{{ 'free tier' | t }}</span> }
               }
+              @default {
+                @if (own.data()[pv.id]?.redline?.month; as m) {
+                  <span class="pv-meta">{{ m.cost_usd != null ? money(m.cost_usd) : m.calls + ' ' + ('calls' | t) }} {{ 'this month' | t }}</span>
+                }
+              }
             }
           } @else {
             <span class="pv-meta" data-tone="warn">{{ 'no key' | t }}</span>
@@ -296,6 +303,7 @@ export class LlmUsagePanel {
               @switch (pv.id) {
                 @case ('commandcode') { <app-cc-compact /> }
                 @case ('openrouter') { <app-or-compact /> }
+                @default { <app-own-compact [provider]="pv.id" /> }
               }
             } @else {
               <p class="pv-line">{{ pv.about | t }} - {{ 'add a key below and its usage shows here.' | t }}</p>
@@ -416,18 +424,20 @@ export class LlmSettingsPanel {
   jobsOn(p: string) { return Object.values(this.data()?.jobs ?? {}).filter(j => j.provider === p).length; }
   readonly cc = inject(CcUsage);
   readonly or = inject(OrUsage);
+  readonly own = inject(OwnUsage);
   private period = inject(CcPeriod);
   readonly day = day;
   /** The header line's figures, kept fresh while the page is open. */
   private polls = (() => { const d = inject(DestroyRef); d.onDestroy(this.cc.use()); d.onDestroy(this.or.use()); return true; })();
   money = (v: number | null | undefined): string => v == null ? '–' : shown(v);
   daysTo(at: number) { return inSpan(at, this.cc.now()).replace(/^in /, ''); }
-  loadedAt(p: string) { return p === 'commandcode' ? this.cc.loadedAt() : p === 'openrouter' ? this.or.loadedAt() : 0; }
-  loading(p: string) { return p === 'commandcode' ? this.cc.loading() || this.period.loading() : p === 'openrouter' ? this.or.loading() : false; }
+  loadedAt(p: string) { return p === 'commandcode' ? this.cc.loadedAt() : p === 'openrouter' ? this.or.loadedAt() : this.own.loadedAt()[p] ?? 0; }
+  loading(p: string) { return p === 'commandcode' ? this.cc.loading() || this.period.loading() : p === 'openrouter' ? this.or.loading() : this.own.loading(p); }
   ago(at: number) { const ms = this.cc.now() - at; return ms < 10_000 ? t('just now') : span(ms) + ' ' + t('ago'); }
   refresh(p: string) {
     if (p === 'commandcode') { this.cc.load(true); this.period.load(true); }
     else if (p === 'openrouter') this.or.load(true);
+    else this.own.load(p, true);
   }
   jobsOf(p: string) { return Object.values(this.data()?.jobs ?? {}).filter(j => j.provider === p).map(j => j.label); }
   /** The providers in the server's order; the page's own list if it is an older server. */
@@ -445,7 +455,7 @@ export class LlmSettingsPanel {
 
   constructor() {
     this.http.get<LlmSettings>('/api/llm/settings').subscribe({
-      next: d => { this.data.set(d); this.loadModels(); },
+      next: d => { this.data.set(d); this.loadModels(); for (const p of OWN) if (d.providers[p]?.set) this.own.load(p); },
       error: e => this.err.set(this.text(e)),
     });
   }
