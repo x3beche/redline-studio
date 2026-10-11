@@ -129,7 +129,7 @@ import { Auth, SignIn } from './auth';
 </footer>
 
 @if (open() || forced()) {
-  <div class="ld-veil" (click)="$event.target === $event.currentTarget && close()">
+  <div class="ld-veil" (click)="veil($event)">
     <div class="ld-sheet">
       @if (!forced()) { <button type="button" class="ld-x" aria-label="Close" (click)="close()">×</button> }
       <app-sign-in />
@@ -155,6 +155,11 @@ export class Landing implements AfterViewInit, OnDestroy {
   });
 
   close() { if (!this.forced()) this.open.set(false); }
+
+  /** A click on the dim around the sheet closes it. Returns nothing: a
+   *  handler that returns false cancels the click, and with it the form's
+   *  submit inside the sheet. */
+  veil(e: MouseEvent) { if (e.target === e.currentTarget) this.close(); }
 
   /** In-page links scroll the page itself, not the address. */
   go(e: Event, id: string) {
