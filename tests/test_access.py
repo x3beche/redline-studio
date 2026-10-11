@@ -60,6 +60,8 @@ def test_a_viewer_only_looks():
             # one's own profile: name, picture, password, sessions (profile.py)
             ("PATCH", "/api/me"), ("PUT", "/api/me/avatar"), ("DELETE", "/api/me/avatar"),
             ("POST", "/api/me/password"), ("POST", "/api/me/sessions/revoke-others"),
+            # where one left off, kept on one's own account (profile.py)
+            ("PUT", "/api/me/last-open"),
             ("POST", "/api/client-errors")}, (method, path)
 
 
