@@ -6,8 +6,8 @@ import { when } from './llm-settings';
 /** Settings > RustDesk (backend/rustdesk.py), for the owner and the admins:
  *  the remote desktop on this machine, turned on and off, and what to type
  *  in RustDesk to reach it - the Tailscale address and the password. It is
- *  reached only over Tailscale; the Access card says so, or what is open
- *  besides. */
+ *  reached only over Tailscale; a banner says what is open besides, if
+ *  anything. */
 interface RdState {
   installed: boolean; running: boolean; status?: string; since?: string | null;
   tailscale_ip: string | null; port: number; password?: string | null;
@@ -25,6 +25,9 @@ interface RdState {
     @if (!d.installed) {
       <div class="st-banner">{{ 'The rustdesk-desktop container is not on this machine.' | t }}</div>
     } @else {
+      @if (!d.tailscale_only) {
+        <div class="st-banner">{{ 'Open on more than the Tailscale address' | t }}: <span class="mono">{{ (d.bound_to || []).join(', ') }}:{{ d.port }}</span></div>
+      }
       <!-- ---------------- on / off ---------------- -->
       <div class="st-card rd-power" [attr.data-on]="d.running ? 1 : null">
         <div class="rd-power-main">
@@ -83,28 +86,6 @@ interface RdState {
         @if (!d.running) { <p class="st-hint rd-foot">{{ 'Turn it on above first.' | t }}</p> }
       </div>
 
-      <!-- ---------------- access ---------------- -->
-      <div class="st-card">
-        <div class="st-card-head"><h3>{{ 'Access' | t }}</h3>
-          <span class="st-badge rd-right" [attr.data-tone]="d.tailscale_only ? 'ok' : 'warn'">{{ (d.tailscale_only ? 'Tailscale only' : 'more than Tailscale') | t }}</span></div>
-        <ul class="rd-checks">
-          <li [attr.data-ok]="d.tailscale_only ? 1 : null">
-            <span class="rd-mark">{{ d.tailscale_only ? '✓' : '!' }}</span>
-            <div><b>{{ (d.tailscale_only ? 'Open only on the Tailscale address' : 'Open on more than the Tailscale address') | t }}</b>
-              <span class="st-sub mono">{{ (d.bound_to || []).join(', ') }}:{{ d.port }}</span></div>
-          </li>
-          <li data-ok="1">
-            <span class="rd-mark">✓</span>
-            <div><b>{{ 'No public RustDesk ID' | t }}</b>
-              <span class="st-sub">{{ 'It is off RustDesk\\'s public servers: an ID does not reach it from the internet.' | t }}</span></div>
-          </li>
-          <li data-ok="1">
-            <span class="rd-mark">✓</span>
-            <div><b>{{ 'Stays as you leave it' | t }}</b>
-              <span class="st-sub">{{ 'Turned off, it stays off after the server restarts.' | t }}</span></div>
-          </li>
-        </ul>
-      </div>
     }
   } @else if (!error()) { <p class="st-hint">…</p> }
 </div>`,
