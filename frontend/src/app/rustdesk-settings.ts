@@ -1,12 +1,13 @@
-import { Component, OnDestroy, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { T } from './i18n';
+import { T, t } from './i18n';
 import { when } from './llm-settings';
 
 /** Settings > RustDesk (backend/rustdesk.py), for the owner and the admins:
  *  the remote desktop on this machine, turned on and off, and what to type
  *  in RustDesk to reach it - the Tailscale address and the password. It is
- *  reached only over Tailscale; the page says so when that does not hold. */
+ *  reached only over Tailscale; the Access card says so, or what is open
+ *  besides. */
 interface RdState {
   installed: boolean; running: boolean; status?: string; since?: string | null;
   tailscale_ip: string | null; port: number; password?: string | null;
@@ -16,47 +17,94 @@ interface RdState {
 @Component({
   selector: 'app-rustdesk-settings',
   imports: [T],
-  styleUrls: ['./settings.css'],
+  styleUrls: ['./settings.css', './rustdesk-settings.css'],
   template: `
-<div class="st-page">
-  <p class="st-lead">{{ 'A small desktop on the server, reached with RustDesk over Tailscale - for the pages only the local network sees, like the modem. Turn it off when nobody is using it.' | t }}</p>
+<div class="st-page rd">
   @if (error(); as e) { <div class="st-banner">{{ e }}</div> }
   @if (s(); as d) {
     @if (!d.installed) {
       <div class="st-banner">{{ 'The rustdesk-desktop container is not on this machine.' | t }}</div>
     } @else {
-      @if (!d.tailscale_only) {
-        <div class="st-banner">{{ 'Not Tailscale-only yet: the port is open on' | t }} {{ (d.bound_to || []).join(', ') }}.</div>
-      }
-      <div class="st-tiles">
-        <div class="st-tile" [attr.data-tone]="d.running ? 'ok' : 'dim'"><span>{{ 'Status' | t }}</span>
-          <b>{{ (d.running ? 'on' : 'off') | t }}</b>
-          <small>{{ d.since ? (d.running ? ('started' | t) : ('stopped' | t)) + ' ' + when(d.since) : '' }}</small></div>
-        <div class="st-tile" [attr.data-tone]="d.tailscale_ip ? null : 'warn'"><span>{{ 'Tailscale address' | t }}</span>
-          <b class="mono">{{ d.tailscale_ip ? d.tailscale_ip + ':' + d.port : ('Tailscale is down' | t) }}</b>
-          <small>{{ 'type it in RustDesk\\'s ID box' | t }}</small></div>
-        <div class="st-tile"><span>{{ 'Password' | t }}</span>
-          <b class="mono">{{ d.password ? (shown() ? d.password : '••••••••••') : ('not set' | t) }}</b>
-          <small>{{ 'the permanent password' | t }}</small></div>
-        <div class="st-tile" [attr.data-tone]="d.tailscale_only ? 'ok' : 'warn'"><span>{{ 'Reachable from' | t }}</span>
-          <b>{{ (d.tailscale_only ? 'Tailscale only' : 'more than Tailscale') | t }}</b>
-          <small>{{ 'no public RustDesk ID' | t }}</small></div>
+      <!-- ---------------- on / off ---------------- -->
+      <div class="st-card rd-power" [attr.data-on]="d.running ? 1 : null">
+        <div class="rd-power-main">
+          <span class="rd-dot" aria-hidden="true"></span>
+          <div class="rd-power-text">
+            <b>{{ busy() ? ((busy() === 'on' ? 'Starting…' : 'Stopping…') | t) : ((d.running ? 'RustDesk is on' : 'RustDesk is off') | t) }}</b>
+            <span>
+              @if (d.running && d.since) { {{ 'since' | t }} {{ when(d.since) }} · {{ 'up' | t }} {{ uptime() }} }
+              @else if (d.since) { {{ 'stopped' | t }} {{ when(d.since) }} }
+            </span>
+          </div>
+        </div>
+        <button type="button" class="tcv-switch rd-switch" [attr.data-on]="d.running ? 1 : null" [attr.aria-pressed]="d.running"
+                [attr.aria-label]="(d.running ? 'Turn off' : 'Turn on') | t" [disabled]="!!busy()" (click)="turn(!d.running)"></button>
       </div>
-      <div class="st-row">
-        @if (d.running) {
-          <button class="tcv-btn tcv-files-btn" [disabled]="busy()" (click)="turn(false)">{{ busy() ? '…' : ('Turn off' | t) }}</button>
-        } @else {
-          <button class="tcv-btn tcv-btn-accent" [disabled]="busy()" (click)="turn(true)">{{ busy() ? '…' : ('Turn on' | t) }}</button>
-        }
-        @if (d.tailscale_ip) {
-          <button class="tcv-btn tcv-files-btn" (click)="copy(d.tailscale_ip + ':' + d.port)">{{ copied() === 'ip' ? ('copied' | t) : ('Copy address' | t) }}</button>
-        }
-        @if (d.password) {
-          <button class="tcv-btn tcv-files-btn" (click)="shown.set(!shown())">{{ (shown() ? 'Hide password' : 'Show password') | t }}</button>
-          <button class="tcv-btn tcv-files-btn" (click)="copy(d.password, 'pw')">{{ copied() === 'pw' ? ('copied' | t) : ('Copy password' | t) }}</button>
-        }
+
+      <!-- ---------------- connect ---------------- -->
+      <div class="st-card">
+        <div class="st-card-head"><h3>{{ 'Connect' | t }}</h3>
+          <span class="st-sub">{{ 'from a computer or phone on your Tailscale' | t }}</span></div>
+        <ol class="rd-steps" [attr.data-off]="d.running ? null : 1">
+          <li>
+            <span class="rd-n">1</span>
+            <div class="rd-step">
+              <b>{{ 'Turn Tailscale on, on your device' | t }}</b>
+              <span class="st-sub">{{ d.tailscale_ip ? ('This server is on your tailnet.' | t) : ('Tailscale is down on this server.' | t) }}</span>
+            </div>
+          </li>
+          <li>
+            <span class="rd-n">2</span>
+            <div class="rd-step">
+              <b>{{ 'In RustDesk, type this in the ID box' | t }}</b>
+              <div class="rd-field">
+                <code>{{ address() || '—' }}</code>
+                <button type="button" class="rd-ico" [disabled]="!address()" (click)="copy(address()!, 'ip')"
+                        [title]="'Copy address' | t">@if (copied() === 'ip') { <svg viewBox="0 0 24 24"><path d="M5 12l5 5L19 7"/></svg> } @else { <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg> }</button>
+              </div>
+            </div>
+          </li>
+          <li>
+            <span class="rd-n">3</span>
+            <div class="rd-step">
+              <b>{{ 'Then the password' | t }}</b>
+              <div class="rd-field">
+                <code [class.rd-mask]="!shown()">{{ d.password ? (shown() ? d.password : '••••••••••••') : ('not set' | t) }}</code>
+                @if (d.password) {
+                  <button type="button" class="rd-ico" (click)="shown.set(!shown())"
+                          [title]="(shown() ? 'Hide password' : 'Show password') | t">@if (shown()) { <svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg> } @else { <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg> }</button>
+                  <button type="button" class="rd-ico" (click)="copy(d.password, 'pw')"
+                          [title]="'Copy password' | t">@if (copied() === 'pw') { <svg viewBox="0 0 24 24"><path d="M5 12l5 5L19 7"/></svg> } @else { <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg> }</button>
+                }
+              </div>
+            </div>
+          </li>
+        </ol>
+        @if (!d.running) { <p class="st-hint rd-foot">{{ 'Turn it on above first.' | t }}</p> }
       </div>
-      <p class="st-hint">{{ 'Turned off, it stays off after the server restarts. Turned on, it needs Tailscale up on this machine.' | t }}</p>
+
+      <!-- ---------------- access ---------------- -->
+      <div class="st-card">
+        <div class="st-card-head"><h3>{{ 'Access' | t }}</h3>
+          <span class="st-badge rd-right" [attr.data-tone]="d.tailscale_only ? 'ok' : 'warn'">{{ (d.tailscale_only ? 'Tailscale only' : 'more than Tailscale') | t }}</span></div>
+        <ul class="rd-checks">
+          <li [attr.data-ok]="d.tailscale_only ? 1 : null">
+            <span class="rd-mark">{{ d.tailscale_only ? '✓' : '!' }}</span>
+            <div><b>{{ (d.tailscale_only ? 'Open only on the Tailscale address' : 'Open on more than the Tailscale address') | t }}</b>
+              <span class="st-sub mono">{{ (d.bound_to || []).join(', ') }}:{{ d.port }}</span></div>
+          </li>
+          <li data-ok="1">
+            <span class="rd-mark">✓</span>
+            <div><b>{{ 'No public RustDesk ID' | t }}</b>
+              <span class="st-sub">{{ 'It is off RustDesk\\'s public servers: an ID does not reach it from the internet.' | t }}</span></div>
+          </li>
+          <li data-ok="1">
+            <span class="rd-mark">✓</span>
+            <div><b>{{ 'Stays as you leave it' | t }}</b>
+              <span class="st-sub">{{ 'Turned off, it stays off after the server restarts.' | t }}</span></div>
+          </li>
+        </ul>
+      </div>
     }
   } @else if (!error()) { <p class="st-hint">…</p> }
 </div>`,
@@ -64,12 +112,24 @@ interface RdState {
 export class RustdeskSettings implements OnDestroy {
   private http = inject(HttpClient);
   s = signal<RdState | null>(null);
-  busy = signal(false);
+  busy = signal<'on' | 'off' | null>(null);
   error = signal('');
   shown = signal(false);
   copied = signal<'ip' | 'pw' | null>(null);
+  private now = signal(Date.now());
   when = when;
-  private timer = setInterval(() => this.load(), 10_000);
+  private timer = setInterval(() => { this.now.set(Date.now()); this.load(); }, 10_000);
+
+  address = computed(() => { const d = this.s(); return d?.tailscale_ip ? `${d.tailscale_ip}:${d.port}` : null; });
+  /** How long it has been on: "2 h 14 min", "6 min". */
+  uptime = computed(() => {
+    const since = this.s()?.since;
+    if (!since) return '';
+    const min = Math.max(0, Math.round((this.now() - new Date(since).getTime()) / 60_000));
+    if (min < 60) return `${min} ${t('min')}`;
+    const h = Math.floor(min / 60);
+    return h < 48 ? `${h} h ${min % 60} ${t('min')}` : `${Math.floor(h / 24)} ${t('days')}`;
+  });
 
   constructor() { this.load(); }
   ngOnDestroy() { clearInterval(this.timer); }
@@ -82,14 +142,14 @@ export class RustdeskSettings implements OnDestroy {
   }
 
   turn(on: boolean) {
-    this.busy.set(true);
+    this.busy.set(on ? 'on' : 'off');
     this.http.post<RdState>(`/api/admin/rustdesk/${on ? 'start' : 'stop'}`, {}).subscribe({
-      next: d => { this.busy.set(false); this.s.set(d); this.error.set(''); },
-      error: (e: HttpErrorResponse) => { this.busy.set(false); this.error.set(this.why(e)); },
+      next: d => { this.busy.set(null); this.now.set(Date.now()); this.s.set(d); this.error.set(''); },
+      error: (e: HttpErrorResponse) => { this.busy.set(null); this.error.set(this.why(e)); },
     });
   }
 
-  copy(text: string, what: 'ip' | 'pw' = 'ip') {
+  copy(text: string, what: 'ip' | 'pw') {
     navigator.clipboard?.writeText(text).then(() => {
       this.copied.set(what);
       setTimeout(() => this.copied.set(null), 1500);
