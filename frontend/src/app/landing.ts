@@ -244,7 +244,7 @@ export class Landing implements AfterViewInit, OnDestroy {
   anPage = [1920, 3700];
   an = { overview: [280, 92, 1316, 322], models: [280, 888, 870, 570], rooms: [1160, 888, 436, 570],
          machine: [280, 2650, 1316, 772], saved: [280, 2020, 1316, 368] };
-  llmCrop = [536, 40, 1070, 560];
+  llmCrop = [532, 40, 1062, 900];
   /** flex-grow for a row of crops with one height: each one's width over its height. */
   ar(c: number[]) { return c[2] / c[3]; }
   chatCrop = [598, 52, 590, 720];
