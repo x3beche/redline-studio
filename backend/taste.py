@@ -583,7 +583,7 @@ class OrderIn(BaseModel):
 
 
 class Target(BaseModel):
-    kind: str = Field(pattern="^(model|board|firmware|folder)$")
+    kind: str = Field(pattern="^(model|board|firmware)$")
     id: str = Field(min_length=1, max_length=200)
 
 
@@ -592,7 +592,7 @@ class AttachIn(BaseModel):
 
 
 class ExtractIn(BaseModel):
-    kind: str = Field(pattern="^(model|board|firmware)$")
+    kind: str = Field(pattern="^(model|board|firmware|folder)$")
     id: str = Field(min_length=1, max_length=200)
 
 

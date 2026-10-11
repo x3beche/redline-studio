@@ -279,6 +279,8 @@ def test_extraction_through_the_api_refuses_plainly(db, monkeypatch):  # noqa: F
     monkeypatch.setattr(llm, "key", lambda p: None)
     assert a.post("/api/taste/extract", json={"kind": "model", "id": "nope"}).status_code == 404
     assert a.post("/api/taste/extract", json={"kind": "drawing", "id": "x"}).status_code == 422
+    assert a.post("/api/taste/extract", json={"kind": "folder", "id": "nope"}).status_code == 404
+    assert a.put("/api/taste/x/attached", json={"attached": [{"kind": "folder", "id": "f"}]}).status_code == 422
 
 
 def test_reviewed_proposals_are_saved_with_their_source(db):  # noqa: F811
