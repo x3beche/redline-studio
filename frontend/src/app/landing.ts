@@ -251,8 +251,8 @@ export class Landing implements AfterViewInit, OnDestroy {
   ar(c: number[]) { return c[2] / c[3]; }
   chatCrop = [598, 52, 590, 720];
   revCrop = [960, 92, 640, 780];
-  treeCrop = [12, 95, 236, 542];
-  workCrop = [272, 603, 292, 456];
+  treeCrop = [12, 95, 236, 566];
+  workCrop = [272, 578, 292, 482];
   modelCrop = [740, 150, 700, 880];
   /** The plans connected to Redline (Settings > Costs, LLM settings). */
   plans = [

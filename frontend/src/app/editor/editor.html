@@ -1182,7 +1182,7 @@
                            than the 300 px panel, and a table let it push the
                            number columns until "41.3k out" wrapped onto two
                            lines. The name truncates, the numbers never wrap. -->
-                      <div class="mono mt-1 leading-none" style="color: var(--ink-dim)">
+                      <div class="mono mt-1 leading-tight" style="color: var(--ink-dim)">
                         @for (m of a.models; track m.model) {
                           <div class="flex items-baseline gap-1.5">
                             <span class="min-w-0 flex-1 truncate"
@@ -1198,7 +1198,7 @@
                            calls; the card's one-line summary is a separate
                            request to another vendor and is charged separately. -->
                       @if (a.surfaces.length > 1) {
-                        <div class="mono mt-1 leading-none" style="color: var(--ink-dim)">
+                        <div class="mono mt-1 leading-tight" style="color: var(--ink-dim)">
                           @for (sf of a.surfaces; track sf.surface) {
                             <div class="flex items-baseline gap-1.5">
                               <span class="min-w-0 flex-1 truncate" [title]="sf.provider">
