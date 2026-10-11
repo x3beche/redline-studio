@@ -2308,7 +2308,7 @@ const TR: Record<string, string> = {
   'never run': 'hiç çalışmadı',
   'A run is going; one at a time.': 'Bir çalışma sürüyor; aynı anda bir tane çalışır.',
   'Extract taste from {p}': '{p} içinden tadım çıkar',
-  'Extract': 'Çıkar',
+  'Extract': 'Tadım çıkar',
   'No folder holds a model or a board yet.': 'Henüz model ya da kart içeren bir klasör yok.',
   'open one to edit its items, attach it or extract into it': 'öğelerini düzenlemek, projeye bağlamak ya da içine çıkarmak için birini açın',
   'Attached to': 'Bağlı olduğu',
