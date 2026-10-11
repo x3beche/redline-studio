@@ -2053,8 +2053,12 @@ async def auth_state(request: Request):
                 "role": "owner", "can": access.can("owner"), **roles}
     got = await auth.session_user(db(), request.cookies.get(auth.COOKIE))
     page = bool(got and got.get("page"))
+    # Where this person left off (PUT /api/me/last-open): the room opens it.
+    uid = got["user"].get("id") if got else None
+    u = await getattr(db(), "raw", db())[auth.USERS].find_one({"_id": uid}, {"last_open": 1}) if uid else None
     return {"mode": "on", "needs_setup": not await auth.any_user(db()),
             "user": got["user"] if got else None,
+            "last_open": (u or {}).get("last_open") or {},
             "role": got["role"] if got else None, "can": access.can(got["role"] if got else None),
             "must_change_password": bool(got and got.get("must_change_password") and not page), **roles}
 

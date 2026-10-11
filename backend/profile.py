@@ -249,6 +249,30 @@ def square_jpeg(raw: bytes) -> bytes:
     return out.getvalue()
 
 
+class LastOpenIn(BaseModel):
+    """What was open last, by room: a model, a board, a firmware (ids)."""
+    model: str | None = Field(default=None, max_length=200)
+    board: str | None = Field(default=None, max_length=200)
+    firmware: str | None = Field(default=None, max_length=200)
+
+
+LAST_OPEN = ("model", "board", "firmware")
+
+
+@router.put("/api/me/last-open")
+async def set_last_open(body: LastOpenIn):
+    """Where this person left off - kept on their account, so signing out,
+    switching accounts or another browser opens the same model again
+    (/api/auth/state hands it back as `last_open`)."""
+    who = _person()
+    if who.get("page"):
+        raise HTTPException(403, "a page session changes nothing")
+    change = {f"last_open.{k}": getattr(body, k) for k in LAST_OPEN if getattr(body, k)}
+    if change:
+        await _db()[auth.USERS].update_one({"_id": who["id"]}, {"$set": change})
+    return {"saved": sorted(k.split(".", 1)[1] for k in change)}
+
+
 @router.put("/api/me/avatar")
 async def set_avatar(file: UploadFile = File(...)):
     who = _person()

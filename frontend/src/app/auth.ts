@@ -30,6 +30,9 @@ export interface AuthState {
   token_roles?: string[];
   /** An admin set the password: a new one before anything else. */
   must_change_password?: boolean;
+  /** Where this account left off, kept on the server (PUT /api/me/last-open):
+   *  signing out or switching accounts does not lose it. */
+  last_open?: { model?: string; board?: string; firmware?: string };
 }
 
 /** An account this browser remembers (backend/accounts.py). `live` is
@@ -132,6 +135,16 @@ export class Auth {
 
   /** Signed in, by a password or a switch: the app for that account. A page
    *  that had another account loaded starts afresh. */
+  /** Keep what was just opened on the account, once per change. Not for a
+   *  page session (it changes nothing) or with sign-in off. */
+  keepOpen(kind: 'model' | 'board' | 'firmware', id: string) {
+    const s = this.state();
+    if (!id || s?.mode !== 'on' || !s.user || (s.user as { page?: boolean }).page) return;
+    if (s.last_open?.[kind] === id) return;
+    this.state.set({ ...s, last_open: { ...s.last_open, [kind]: id } });
+    this.http.put('/api/me/last-open', { [kind]: id }).subscribe({ error: () => { /* next open tries again */ } });
+  }
+
   entered() {
     forgetAccountData();
     if (this.hadUser) this.restart();

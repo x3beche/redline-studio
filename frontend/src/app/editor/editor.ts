@@ -845,7 +845,10 @@ export class Editor implements AfterViewInit, OnDestroy {
           this.openModel(m);
           return;
         }
-        const wanted = this.lastView()?.model;
+        // The account's own last model first (kept on the server, so a
+        // switch of account or a sign-out does not lose it), then this
+        // browser's.
+        const wanted = this.auth.state()?.last_open?.model || this.lastView()?.model;
         const pick = (wanted && this.findModel(t, wanted)) || this.firstReady(t);
         if (pick) this.openModel(pick);
         return;
@@ -915,6 +918,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.viewState = { rev: null, applied: null, hash: null, error: null, missing: 0 };
       const reheld = this.heldCamera ? this.focused() : null;
       this.activeModel.set(m.id);
+      this.auth.keepOpen('model', m.id);
       this.parts.set(this.viewer.parts);
       setTimeout(() => this.sizeOverlay());
       // render() resets the camera, so a pending view has to be applied
@@ -1037,7 +1041,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       next: r => {
         this.flash(said);
         // The id carries the path, so the open model is now under a new one.
-        if (this.activeModel() === it.id) this.activeModel.set(r.to);
+        if (this.activeModel() === it.id) { this.activeModel.set(r.to); this.auth.keepOpen('model', r.to); }
         this.loadCatalog();
       },
       error: e => this.flash(e.error?.detail ?? 'move failed'),
