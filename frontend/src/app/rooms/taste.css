@@ -127,6 +127,87 @@
 .tst-empty { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 6px 2px; }
 .tst-empty p { margin: 0; font-size: 13px; color: var(--ink-dim); }
 
+/* ---- the extraction dashboard (runExtract / showJob) --------------
+   The Settings pages' language: st-tiles for the figures, st-card for the
+   steps and the reading budget, st-table for the recent runs. The steps
+   take two thirds, the budget the rest; they stack when narrow. */
+.tsx-banner { align-items: center; }
+.tsx-banner-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tsx-banner-text b { font-weight: 600; color: var(--danger); }
+/* status, elapsed, projects, sent, model, tokens, cost, proposals: the model's name is the long one */
+.tsx-tiles { grid-template-columns: .9fr 1fr .8fr 1fr 1.6fr 1.3fr .8fr .8fr; }
+.tsx-tiles .st-tile > b { font-size: 13.5px; }
+.tsx-tiles .st-tile[data-tone="accent"] > b { color: var(--accent); }
+
+.tsx-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 8px; align-items: stretch; }
+.tsx-steps, .tsx-budget { display: flex; flex-direction: column; }
+
+/* one line per step: its mark, what kind, what, a figure, its state, its time */
+.tsx-line { list-style: none; margin: 0; padding: 0; }
+.tsx-step {
+  display: grid; grid-template-columns: 10px 76px minmax(0, 1fr) auto 64px 70px; align-items: baseline; gap: 2px 10px;
+  padding: 5px 10px; font-size: 12px;
+}
+.tsx-step + .tsx-step { border-top: 1px solid var(--line); }
+.tsx-mark {
+  align-self: start; margin-top: 4px; width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box;
+  border: 1.5px solid var(--line); background: none;
+}
+.tsx-step[data-state="done"] .tsx-mark { background: var(--ok); border-color: var(--ok); }
+.tsx-step[data-state="running"] { background: var(--hover); box-shadow: inset 2px 0 0 var(--accent); }
+.tsx-step[data-state="running"] .tsx-mark { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 1.5px var(--hover); }
+.tsx-step[data-state="failed"] .tsx-mark { background: var(--danger); border-color: var(--danger); }
+.tsx-step[data-state="skipped"] .tsx-mark { border-color: var(--ink-dim); border-style: dashed; }
+.tsx-step[data-state="cancelled"] .tsx-mark { border-color: var(--warn); }
+.tsx-kind { font-size: 10.5px; letter-spacing: .03em; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tsx-main { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+.tsx-main b { flex: none; max-width: 100%; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tsx-main small { flex: 1 1 0; min-width: 0; font-size: 11px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tsx-main em { flex: 1 0 100%; font-style: normal; font-size: 11.5px; line-height: 1.45; color: var(--danger); overflow-wrap: anywhere; }
+.tsx-step[data-state="skipped"] .tsx-main em, .tsx-step[data-state="cancelled"] .tsx-main em { color: var(--warn); }
+.tsx-fig, .tsx-time { font: 11px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink); text-align: right; white-space: nowrap; }
+.tsx-time { color: var(--ink-dim); }
+.tsx-state { font-size: 10.5px; color: var(--ink-dim); white-space: nowrap; }
+.tsx-step[data-state="done"] .tsx-state { color: var(--ok); }
+.tsx-step[data-state="running"] .tsx-state, .tsx-step[data-state="running"] .tsx-time { color: var(--accent); }
+.tsx-step[data-state="failed"] .tsx-state { color: var(--danger); }
+.tsx-step[data-state="skipped"] .tsx-state, .tsx-step[data-state="cancelled"] .tsx-state { color: var(--warn); }
+.tsx-step[data-state="pending"] .tsx-main b { color: var(--ink-dim); font-weight: 400; }
+
+/* the reading budget: the whole, then a bar per project */
+.tsx-total { display: flex; flex-direction: column; gap: 4px; }
+.tsx-total .st-meter { height: 8px; border-radius: 4px; margin: 0; }
+.tsx-bars { display: flex; flex-direction: column; gap: 5px; }
+.tsx-bar { display: grid; grid-template-columns: minmax(0, 38%) minmax(0, 1fr) 62px; align-items: center; gap: 8px; font-size: 11px; }
+.tsx-bar-name { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tsx-track { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.tsx-track > i { display: block; height: 100%; background: var(--accent); }
+.tsx-bar[data-tone="warn"] .tsx-track > i { background: var(--warn); }
+.tsx-bar[data-tone="dim"] .tsx-bar-name, .tsx-bar[data-tone="dim"] .tsx-bar-fig { color: var(--ink-dim); }
+.tsx-bar-fig { font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); text-align: right; white-space: nowrap; }
+.tsx-budget .st-card-body > .st-hint { margin-top: auto; }
+
+/* the recent runs */
+.tsx-table tbody tr { cursor: pointer; }
+.tsx-table tbody tr:hover td { background: var(--hover); }
+.tsx-table tbody tr[data-on] td { background: var(--surface-2); }
+.tsx-table tbody tr[data-on] td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+.tsx-table .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.tsx-table .st-more { margin: 0; }
+
+@container (max-width: 900px) {
+  .tsx-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tsx-tiles .tsx-model { grid-column: span 1; }
+}
+@container (max-width: 760px) {
+  .tsx-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@container (max-width: 640px) {
+  .tsx-step { grid-template-columns: 10px minmax(0, 1fr) auto; }
+  .tsx-kind, .tsx-state { display: none; }
+  .tsx-time { grid-column: 3; }
+}
+
 /* narrower: two columns, then one; the add row wraps */
 @container (max-width: 760px) {
   .tst-cols { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }

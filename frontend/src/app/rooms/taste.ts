@@ -2,7 +2,7 @@ import { Component, ElementRef, Injectable, OnDestroy, computed, effect, inject,
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
-import { T, t } from '../i18n';
+import { LANG, T, t } from '../i18n';
 
 /** Taste ("Tadım"): what makes a design good, kept as statements an agent
  *  can follow (backend/taste.py).
@@ -31,6 +31,32 @@ export interface Palette {
 }
 type Proposal = TasteItem & { keep: boolean };
 type NewItem = { text: string; domain: Domain; strength: Strength; why?: string; source?: TasteItem['source'] };
+export type JobStatus = 'queued' | 'reading' | 'asking' | 'parsing' | 'done' | 'failed' | 'cancelled';
+export type StepState = 'running' | 'done' | 'skipped' | 'failed' | 'cancelled' | 'pending';
+export interface JobStep {
+  id: string; kind: 'read' | 'ask' | 'parse' | 'done'; state: StepState;
+  started_at?: string; finished_at?: string; seconds?: number; reason?: string;
+  project?: ProjectRef; chars?: number; budget?: number; clipped?: boolean; revisions?: number; notes?: number; files?: number;
+  provider?: string; provider_name?: string; model?: string; prompt_chars?: number; tokens_est?: number;
+  max_tokens?: number; timeout?: number; sent_at?: string; tokens_in?: number | null; tokens_out?: number | null; cost?: number | null;
+  raw_chars?: number; parsed?: number; rows?: number; invalid?: number; duplicates?: number; over?: number; proposals?: number;
+}
+export interface JobTotals {
+  projects?: number; budget?: number; chars?: number; read?: number; prompt_chars?: number; tokens_in_est?: number;
+  tokens_in?: number; tokens_out?: number; cost?: number | null; proposals?: number;
+}
+/** One extraction run (backend/taste.py, `taste_jobs`): it goes on in the
+ *  server whatever the page does, and says each step as it happens. */
+export interface TasteJob {
+  id: string; status: JobStatus; project: ProjectRef; by: { id?: string; name?: string };
+  started_at: string; finished_at: string | null; seconds: number | null; now: string;
+  provider?: string; provider_name?: string; model?: string;
+  steps: JobStep[]; totals: JobTotals; error?: string | null; count: number;
+  saved_to?: { id: string; name: string; count: number; at: string } | null;
+  proposals?: TasteItem[];
+}
+export const ACTIVE: JobStatus[] = ['queued', 'reading', 'asking', 'parsing'];
+export const isActive = (j: { status: JobStatus } | null | undefined) => !!j && ACTIVE.includes(j.status);
 
 export const DOMAINS: { id: Domain; label: string; short: string }[] = [
   { id: 'mechanical', label: 'Mechanical', short: 'Mech' }, { id: 'pcb', label: 'PCB', short: 'PCB' },
@@ -66,9 +92,61 @@ export class TasteApi {
   projects(q = '', folders = false) {
     return this.http.get<ProjectRef[]>(`/api/taste/projects?q=${encodeURIComponent(q)}${folders ? '&folders=1' : ''}`);
   }
-  extract(kind: string, id: string) {
-    return this.http.post<{ project: ProjectRef; proposals: TasteItem[]; provider: string; model: string }>(
-      '/api/taste/extract', { kind, id });
+  /** Start a run: it goes on in the server, read back with job(). */
+  extract(kind: string, id: string) { return this.http.post<TasteJob>('/api/taste/extract', { kind, id }); }
+  jobs(limit = 20) { return this.http.get<TasteJob[]>(`/api/taste/jobs?limit=${limit}`); }
+  job(id: string) { return this.http.get<TasteJob>(`/api/taste/jobs/${id}`); }
+  cancelJob(id: string) { return this.http.post<TasteJob>(`/api/taste/jobs/${id}/cancel`, {}); }
+  savedTo(id: string, to: { id: string; name: string; count: number }) {
+    return this.http.patch<TasteJob>(`/api/taste/jobs/${id}`, { saved_to: to });
+  }
+}
+
+/** The workspace's extraction runs, kept for the whole page: the Taste tab
+ *  shows a running one beside its name, and a finished one until Taste is
+ *  opened, whichever room is in front. Asked for every few seconds only
+ *  while a run is going. */
+@Injectable({ providedIn: 'root' })
+export class TasteRuns {
+  private api = inject(TasteApi);
+  jobs = signal<TasteJob[]>([]);
+  running = computed(() => this.jobs().filter(isActive).length);
+  /** Runs that finished while Taste was not open. */
+  unseen = signal(0);
+  /** Whether the Taste room is open (it clears `unseen`). */
+  here = false;
+  private watching = false;
+  private timer?: ReturnType<typeof setTimeout>;
+
+  watch() { if (!this.watching) { this.watching = true; this.refresh(); } }
+
+  refresh(): Promise<TasteJob[]> {
+    return new Promise(done => this.api.jobs().subscribe({
+      next: rows => { this.take(rows); done(rows); },
+      error: () => { this.again(); done(this.jobs()); },
+    }));
+  }
+
+  /** A run as the room just read it, into the list. */
+  put(j: TasteJob) {
+    const { proposals: _, ...light } = j;
+    const have = this.jobs();
+    this.take(have.some(x => x.id === j.id) ? have.map(x => x.id === j.id ? light : x) : [light, ...have]);
+  }
+
+  seen() { this.unseen.set(0); }
+
+  private take(rows: TasteJob[]) {
+    const before = new Map(this.jobs().map(j => [j.id, j.status]));
+    const ended = rows.filter(j => !isActive(j) && before.has(j.id) && ACTIVE.includes(before.get(j.id)!)).length;
+    if (ended && !this.here) this.unseen.update(n => n + ended);
+    this.jobs.set(rows);
+    this.again();
+  }
+
+  private again() {
+    clearTimeout(this.timer);
+    if (this.jobs().some(isActive)) this.timer = setTimeout(() => this.refresh(), 5000);
   }
 }
 
@@ -133,11 +211,11 @@ function why(e: HttpErrorResponse, fallback: string): string {
       <header class="tst-head">
         <div class="tst-title">
           <h2>{{ 'Extract taste from a project' | t }}</h2>
-          <span class="st-sub">{{ 'A model reads the project and proposes statements; nothing is kept until you save it.' | t }}</span>
+          <span class="st-sub">{{ 'A model reads the project and proposes statements; nothing is kept until you save it. The run goes on if you leave or reload this page.' | t }}</span>
         </div>
         <div class="tst-acts">
           <span class="tst-pickwrap" (click)="$event.stopPropagation()">
-            <button class="tcv-btn" (click)="openPicker('extract')" [disabled]="exBusy()">
+            <button class="tcv-btn" (click)="openPicker('extract')" [disabled]="running()">
               {{ exProject() ? (kindName(exProject()!.kind) | t) + ': ' + exProject()!.label : ('Choose a project…' | t) }}</button>
             @if (picker() === 'extract') {
               <div class="tst-pop" role="listbox">
@@ -154,18 +232,48 @@ function why(e: HttpErrorResponse, fallback: string): string {
               </div>
             }
           </span>
-          <button class="tcv-btn tcv-btn-accent" (click)="runExtract()" [disabled]="!exProject() || exBusy()">
-            {{ (exBusy() ? 'Reading…' : proposals().length ? 'Run again' : 'Run') | t }}</button>
+          @if (running()) {
+            <button class="tcv-btn tst-del" (click)="cancelRun()" [disabled]="cancelling() || !can()">{{ (cancelling() ? 'Cancelling…' : 'Cancel the run') | t }}</button>
+          } @else if (can()) {
+            <button class="tcv-btn tcv-btn-accent" (click)="runExtract()" [disabled]="!exProject() || starting()">
+              {{ (starting() ? 'Starting…' : job() ? 'Run again' : 'Run') | t }}</button>
+          }
           <button class="tcv-btn" (click)="leaveExtract()">{{ 'Close' | t }}</button>
         </div>
       </header>
-      @if (exError(); as e) { <div class="st-banner tst-banner" role="alert">{{ e }}</div> }
-      @if (exBusy()) {
-        <p class="st-hint">{{ exProject()?.kind === 'folder'
-              ? fmt('Reading every model, board and firmware in {p} and asking the model. This takes a few minutes.', { p: exProject()?.label ?? '' })
-              : fmt('Reading {p} - its source, checks, notes and drawn notes - and asking the model. This takes up to a minute.', { p: exProject()?.label ?? '' }) }}</p>
+
+      @if (job()?.status === 'failed') {
+        <div class="st-banner tst-banner tsx-banner" role="alert">
+          <span class="tsx-banner-text"><b>{{ 'The extraction failed' | t }}:</b> {{ job()!.error }}</span>
+          @if (can()) { <button class="tcv-btn" (click)="runExtract()" [disabled]="starting()">{{ 'Try again' | t }}</button> }
+        </div>
+      } @else if (exError(); as e) {
+        <div class="st-banner tst-banner tsx-banner" role="alert"><span class="tsx-banner-text">{{ e }}</span></div>
       }
-      @if (proposals().length) {
+
+      @if (job(); as j) {
+        <!-- the run in figures, as the Settings pages show theirs -->
+        <div class="st-tiles tsx-tiles">
+          <div class="st-tile" [attr.data-tone]="statusTone(j.status)"><span>{{ 'Status' | t }}</span><b>{{ statusName(j.status) | t }}</b>
+            <small [title]="j.by.name || ''">{{ fmt('since {w}', { w: when(j.started_at) }) }}</small></div>
+          <div class="st-tile"><span>{{ 'Elapsed' | t }}</span><b>{{ dur(elapsed()) }}</b>
+            <small>{{ nowLine() }}</small></div>
+          <div class="st-tile"><span>{{ 'Projects read' | t }}</span><b>{{ readCount() }} / {{ j.totals.projects ?? '–' }}</b>
+            <small>{{ skippedCount() ? fmt('{n} skipped', { n: skippedCount() }) : (kindName(j.project.kind) | t) + ' · ' + j.project.label }}</small></div>
+          <div class="st-tile"><span>{{ 'Sent to the model' | t }}</span><b>{{ j.totals.prompt_chars != null ? num(j.totals.prompt_chars) : num(charsRead()) }}</b>
+            <small>{{ fmt('~{n} tokens', { n: num(j.totals.tokens_in_est ?? round(charsRead() / 4)) }) }}</small></div>
+          <div class="st-tile tsx-model"><span>{{ 'Model' | t }}</span><b [title]="j.model || ''">{{ j.model || '–' }}</b><small>{{ j.provider_name || j.provider || '' }}</small></div>
+          <div class="st-tile" [attr.data-tone]="j.totals.tokens_in == null ? 'dim' : null"><span>{{ 'Tokens in / out' | t }}</span>
+            <b>{{ j.totals.tokens_in == null ? '–' : num(j.totals.tokens_in) + ' / ' + num(j.totals.tokens_out ?? 0) }}</b>
+            <small>{{ (j.totals.tokens_in != null ? 'as counted' : running() ? 'after the answer' : 'no answer') | t }}</small></div>
+          <div class="st-tile" [attr.data-tone]="j.totals.cost == null ? 'dim' : null"><span>{{ 'Cost' | t }}</span><b>{{ money(j.totals.cost) }}</b>
+            <small>{{ (j.totals.cost != null ? 'this run' : j.totals.tokens_in != null ? 'not priced' : '') | t }}&nbsp;</small></div>
+          <div class="st-tile" [attr.data-tone]="j.status === 'done' ? 'ok' : 'dim'"><span>{{ 'Proposals' | t }}</span><b>{{ j.status === 'done' ? j.count : '–' }}</b>
+            <small>{{ droppedLine() }}&nbsp;</small></div>
+        </div>
+
+        @if (j.status === 'done' && proposals().length) {
+          @if (j.saved_to; as s) { <p class="st-hint">{{ fmt('Saved to {p} {w}; you can save them again or into another palette.', { p: s.name, w: when(s.at) }) }}</p> }
         <div class="tst-cols" [style.--n]="propCols().length">
           @for (c of propCols(); track c.id) {
             <div class="tst-col">
@@ -203,23 +311,100 @@ function why(e: HttpErrorResponse, fallback: string): string {
             </div>
           }
         </div>
-        <footer class="tst-save">
-          <span class="st-sub">{{ fmt('{n} of {m} accepted · from {p}', { n: keptCount(), m: proposals().length, p: exFrom() }) }}</span>
-          <span class="grow"></span>
-          <label class="st-sub">{{ 'Save to' | t }}</label>
-          <select class="tst-sel" [value]="saveTo()" (change)="saveTo.set($any($event.target).value)">
-            <option value="">{{ 'A new palette' | t }}</option>
-            @for (p of allPalettes(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
-          </select>
-          @if (!saveTo()) {
-            <input class="tst-in tst-newname" [placeholder]="'Palette name' | t" [value]="newName()" (input)="newName.set($any($event.target).value)">
-          }
-          <button class="tcv-btn tcv-btn-accent" (click)="saveProposals()" [disabled]="!keptCount() || saving() || (!saveTo() && !newName().trim())">
-            {{ fmt('Save {n} to the palette', { n: keptCount() }) }}</button>
-        </footer>
-      } @else if (!exBusy() && !exError()) {
-        <p class="st-hint">{{ 'Choose a finished model, board or firmware and run. Its proposals appear here by domain, to accept, edit or reject one by one.' | t }}</p>
+        @if (can()) {
+          <footer class="tst-save">
+            <span class="st-sub">{{ fmt('{n} of {m} accepted · from {p}', { n: keptCount(), m: proposals().length, p: exFrom() }) }}</span>
+            <span class="grow"></span>
+            <label class="st-sub">{{ 'Save to' | t }}</label>
+            <select class="tst-sel" [value]="saveTo()" (change)="saveTo.set($any($event.target).value)">
+              <option value="">{{ 'A new palette' | t }}</option>
+              @for (p of allPalettes(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
+            </select>
+            @if (!saveTo()) {
+              <input class="tst-in tst-newname" [placeholder]="'Palette name' | t" [value]="newName()" (input)="newName.set($any($event.target).value)">
+            }
+            <button class="tcv-btn tcv-btn-accent" (click)="saveProposals()" [disabled]="!keptCount() || saving() || (!saveTo() && !newName().trim())">
+              {{ fmt('Save {n} to the palette', { n: keptCount() }) }}</button>
+          </footer>
+        }
+        }
+
+        <!-- the run, step by step - and how much of the reading each project took -->
+        <div class="tsx-grid">
+          <section class="st-card tsx-steps">
+            <div class="st-card-head"><h3>{{ 'Steps' | t }}</h3>
+              <span class="st-sub">{{ fmt('{n} of {m} done', { n: doneSteps(), m: allSteps() }) }}</span>
+              @if (running()) { <span class="st-right st-sub">{{ fmt('every {s} s while it runs', { s: '1.5' }) }}</span> }</div>
+            <ol class="tsx-line">
+              @for (r of timeline(); track r.id) {
+                <li class="tsx-step" [attr.data-state]="r.state">
+                  <i class="tsx-mark" aria-hidden="true"></i>
+                  <span class="tsx-kind">{{ r.kind | t }}</span>
+                  <span class="tsx-main">
+                    <b>{{ r.title }}</b>
+                    @if (r.detail) { <small>{{ r.detail }}</small> }
+                    @if (r.reason) { <em>{{ r.reason }}</em> }
+                  </span>
+                  <span class="tsx-fig">{{ r.fig }}</span>
+                  <span class="tsx-state">{{ stateName(r.state) | t }}</span>
+                  <span class="tsx-time">{{ r.time }}</span>
+                </li>
+              }
+            </ol>
+          </section>
+          <section class="st-card tsx-budget">
+            <div class="st-card-head"><h3>{{ 'Reading budget' | t }}</h3>
+              <span class="st-sub">{{ fmt('{n} of {m} characters', { n: num(charsRead()), m: num(j.totals.budget ?? 0) }) }}</span></div>
+            <div class="st-card-body">
+              <div class="tsx-total">
+                <div class="st-meter" [attr.data-tone]="budgetPct() > 95 ? 'warn' : null"><i [style.width.%]="budgetPct()"></i></div>
+                <span class="st-sub">{{ fmt('{p}% of what one run reads; each project gets its share, and what is over its share is clipped.', { p: budgetPct() }) }}</span>
+              </div>
+              <div class="tsx-bars">
+                @for (b of bars(); track b.id) {
+                  <div class="tsx-bar" [attr.data-tone]="b.tone" [title]="b.tip">
+                    <span class="tsx-bar-name">{{ b.label }}</span>
+                    <span class="ccl-bar tsx-track"><i [style.width.%]="b.pct"></i></span>
+                    <span class="tsx-bar-fig">{{ b.fig }}</span>
+                  </div>
+                } @empty { <p class="st-hint">{{ 'Nothing read yet.' | t }}</p> }
+              </div>
+              <p class="st-hint">{{ 'A bar is how much of its share a project used; amber: it had more, and the rest was left out.' | t }}</p>
+            </div>
+          </section>
+        </div>
+      } @else {
+        <p class="st-hint">{{ 'Choose a finished model, board, firmware or a whole folder and run. You can leave this page while it runs; its steps and proposals are here when you come back.' | t }}</p>
       }
+
+      @if (recent().length) {
+        <section class="st-card tsx-recent">
+          <div class="st-card-head"><h3>{{ 'Recent extractions' | t }}</h3>
+            <span class="st-sub">{{ 'open one to see its steps, or to review and save its proposals' | t }}</span></div>
+          <div class="st-table-wrap">
+            <table class="st-table tsx-table">
+              <thead><tr>
+                <th>{{ 'Project' | t }}</th><th>{{ 'Started' | t }}</th><th>{{ 'Status' | t }}</th>
+                <th class="r">{{ 'Took' | t }}</th><th class="r">{{ 'Proposals' | t }}</th><th>{{ 'Saved to' | t }}</th><th></th>
+              </tr></thead>
+              <tbody>
+                @for (r of recent(); track r.id) {
+                  <tr [attr.data-on]="r.id === job()?.id ? 1 : null" (click)="showJob(r.id)">
+                    <td class="give"><span class="dim">{{ kindName(r.project.kind) | t }}</span> {{ r.project.label }}</td>
+                    <td>{{ when(r.started_at) }} <span class="dim">· {{ r.by.name || ('someone' | t) }}</span></td>
+                    <td><span class="st-tag" [attr.data-tone]="statusTone(r.status)">{{ statusName(r.status) | t }}</span></td>
+                    <td class="r mono">{{ dur(r.seconds) }}</td>
+                    <td class="r mono">{{ r.status === 'done' ? r.count : '–' }}</td>
+                    <td class="give-s">{{ r.saved_to?.name || '–' }}</td>
+                    <td class="r"><button class="st-more" (click)="showJob(r.id); $event.stopPropagation()">{{ 'Open' | t }}</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+
     } @else if (open(); as p) {
       <header class="tst-head">
         <div class="tst-title">
@@ -343,6 +528,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
 })
 export class RoomTaste implements OnDestroy {
   private api = inject(TasteApi);
+  private runs = inject(TasteRuns);
   private picked = inject(Selection);
   private auth = inject(Auth);
   private search = viewChild.required<ElementRef<HTMLInputElement>>('search');
@@ -374,8 +560,17 @@ export class RoomTaste implements OnDestroy {
   projects = signal<ProjectRef[]>([]);
 
   exProject = signal<ProjectRef | null>(null);
-  exBusy = signal(false);
   exError = signal<string | null>(null);
+  /** The run open here, as the server last said (with its proposals). */
+  job = signal<TasteJob | null>(null);
+  starting = signal(false);
+  cancelling = signal(false);
+  private tick = signal(Date.now());
+  /** The server's clock minus this one, so a running step is timed right. */
+  private offset = 0;
+  private propsOf: string | null = null;
+  private jobTimer?: ReturnType<typeof setTimeout>;
+  private ticker?: ReturnType<typeof setInterval>;
   exModel = signal('');
   proposals = signal<Proposal[]>([]);
   saveTo = signal('');
@@ -399,6 +594,22 @@ export class RoomTaste implements OnDestroy {
   });
 
   constructor() {
+    // A run is in the address (?run=), so a reload comes back to it; with
+    // none, a run still going in this workspace is shown by itself.
+    this.runs.here = true;
+    this.runs.seen();
+    const asked = new URLSearchParams(location.search).get('run');
+    this.runs.refresh().then(rows => {
+      if (asked) { this.showJob(asked); return; }
+      const going = rows.find(isActive);
+      if (going && !this.job()) this.showJob(going.id);
+    });
+    effect(() => {
+      const id = this.mode() === 'extract' ? this.job()?.id ?? null : null;
+      const url = new URL(location.href);
+      if (id) url.searchParams.set('run', id); else url.searchParams.delete('run');
+      if (url.href !== location.href) history.replaceState(null, '', url);
+    });
     effect(() => {
       this.q(); this.api.changed();
       clearTimeout(this.timer);
@@ -629,32 +840,219 @@ export class RoomTaste implements OnDestroy {
     });
   }
 
-  // ---- extraction
+  // ---- extraction: a run in the server, followed here
 
   startExtract() {
     this.mode.set('extract');
     this.editId.set(null);
     const p = this.open();
-    if (!this.exProject() && p?.attached.length) this.exProject.set(p.attached[0]);
+    if (!this.job() && !this.exProject() && p?.attached.length) this.exProject.set(p.attached[0]);
     if (p) this.saveTo.set(p.id);
-    if (!this.exProject()) setTimeout(() => this.openPicker('extract'));
+    if (!this.job() && !this.exProject()) setTimeout(() => this.openPicker('extract'));
+    this.runs.refresh();
   }
-  leaveExtract() { this.mode.set('palette'); this.picker.set(null); }
+  leaveExtract() { this.mode.set('palette'); this.picker.set(null); this.stopFollowing(); }
 
   runExtract() {
-    const pr = this.exProject();
-    if (!pr || this.exBusy()) return;
-    this.exBusy.set(true);
+    const pr = this.exProject() ?? this.job()?.project;
+    if (!pr || this.starting() || this.running()) return;
+    this.starting.set(true);
     this.exError.set(null);
     this.api.extract(pr.kind, pr.id).subscribe({
-      next: r => {
-        this.exBusy.set(false);
-        this.exModel.set(r.model);
-        this.proposals.set(r.proposals.map(i => ({ ...i, keep: true })));
-        if (!this.saveTo() && !this.newName()) this.newName.set(this.fmt('Taste of {p}', { p: r.project.label }));
-      },
-      error: (e: HttpErrorResponse) => { this.exBusy.set(false); this.exError.set(why(e, 'The extraction failed.')); },
+      next: j => { this.starting.set(false); this.take(j); this.runs.put(j); },
+      error: (e: HttpErrorResponse) => { this.starting.set(false); this.exError.set(why(e, 'The extraction could not start.')); },
     });
+  }
+
+  cancelRun() {
+    const j = this.job();
+    if (!j || this.cancelling()) return;
+    this.cancelling.set(true);
+    this.api.cancelJob(j.id).subscribe({
+      next: r => { this.cancelling.set(false); this.take(r); this.runs.put(r); },
+      error: (e: HttpErrorResponse) => { this.cancelling.set(false); this.exError.set(why(e, 'Could not cancel it.')); },
+    });
+  }
+
+  /** Open a run - running, failed or done - and follow it while it goes. */
+  showJob(id: string) {
+    this.mode.set('extract');
+    this.editId.set(null);
+    this.picker.set(null);
+    this.exError.set(null);
+    this.api.job(id).subscribe({
+      next: j => this.take(j),
+      error: (e: HttpErrorResponse) => {
+        this.job.set(null);
+        this.exError.set(why(e, 'Could not open that run.'));
+      },
+    });
+  }
+
+  private take(j: TasteJob) {
+    const fresh = this.job()?.id !== j.id;
+    this.offset = Date.parse(j.now) - Date.now();
+    this.job.set(j);
+    this.exProject.set(j.project);
+    this.exModel.set(j.model ?? '');
+    if (j.status === 'done' && (fresh || !this.proposals().length || this.propsOf !== j.id)) {
+      this.propsOf = j.id;
+      this.proposals.set((j.proposals ?? []).map(i => ({ ...i, keep: true })));
+      if (!this.saveTo() && !this.newName()) this.newName.set(this.fmt('Taste of {p}', { p: j.project.label }));
+    } else if (j.status !== 'done' && fresh) {
+      this.propsOf = null;
+      this.proposals.set([]);
+    }
+    this.follow();
+  }
+
+  /** While the run goes: read it again every 1.5 s, and tick the clock. */
+  private follow() {
+    clearTimeout(this.jobTimer);
+    clearInterval(this.ticker);
+    const j = this.job();
+    if (!isActive(j) || this.mode() !== 'extract') return;
+    this.ticker = setInterval(() => this.tick.set(Date.now()), 500);
+    this.jobTimer = setTimeout(() => this.api.job(j!.id).subscribe({
+      next: r => {
+        if (this.job()?.id !== r.id) return;
+        const was = this.job()!.status;
+        this.take(r);
+        if (r.status !== was) this.runs.put(r);
+      },
+      error: () => this.follow(),
+    }), 1500);
+  }
+  private stopFollowing() { clearTimeout(this.jobTimer); clearInterval(this.ticker); }
+
+  running = computed(() => isActive(this.job()));
+  elapsed = computed(() => {
+    const j = this.job();
+    if (!j) return null;
+    if (!isActive(j)) return j.seconds;
+    this.tick();
+    return Math.max(0, (Date.now() + this.offset - Date.parse(j.started_at)) / 1000);
+  });
+  private readRows = computed(() => (this.job()?.steps ?? []).filter(s => s.kind === 'read'));
+  readCount = computed(() => this.readRows().filter(s => s.state === 'done').length);
+  skippedCount = computed(() => this.readRows().filter(s => s.state === 'skipped').length);
+  charsRead = computed(() => this.readRows().reduce((n, s) => n + (s.chars ?? 0), 0));
+  budgetPct = computed(() => {
+    const b = this.job()?.totals.budget;
+    return b ? Math.min(100, Math.round(this.charsRead() / b * 100)) : 0;
+  });
+  recent = computed(() => this.runs.jobs());
+  doneSteps = computed(() => this.timeline().filter(r => r.state === 'done').length);
+  /** Every project, the question, the answer and the result. */
+  allSteps = computed(() => {
+    const j = this.job();
+    if (!j) return 0;
+    const reads = j.steps.filter(s => s.kind === 'read').length;
+    return Math.max(reads, j.totals.projects ?? reads) + (isActive(j) || j.status === 'done' ? 3 : j.steps.length - reads);
+  });
+
+  /** What the run is doing now, in a line under the clock. */
+  nowLine = computed(() => {
+    const j = this.job();
+    if (!j) return '';
+    if (j.finished_at) return this.fmt('finished {w}', { w: when(j.finished_at) });
+    const cur = [...j.steps].reverse().find(s => s.state === 'running');
+    if (!cur) return t('waiting to start');
+    if (cur.kind === 'read') return this.fmt('reading {p}', { p: cur.project?.label ?? '' });
+    if (cur.kind === 'ask') return this.fmt('waiting for {m}', { m: cur.model ?? '' });
+    return t('reading the answer');
+  });
+
+  droppedLine = computed(() => {
+    const p = this.job()?.steps.find(s => s.id === 'parse');
+    if (!p || p.state === 'running') return '';
+    const dropped = (p.duplicates ?? 0) + (p.invalid ?? 0) + (p.over ?? 0);
+    return dropped ? this.fmt('{n} of {m} dropped', { n: dropped, m: p.rows ?? 0 }) : this.fmt('{n} rows in the answer', { n: p.rows ?? 0 });
+  });
+
+  /** The run line by line: each project read, the question, the answer,
+   *  the proposals - and, while it goes, the steps still to come. */
+  timeline = computed(() => {
+    const j = this.job();
+    if (!j) return [];
+    this.tick();
+    const rows: { id: string; state: StepState; kind: string; title: string; detail: string; reason?: string; fig: string; time: string }[] = [];
+    const live = (s: JobStep) => s.state === 'running' && s.started_at
+      ? this.dur(Math.max(0, (Date.now() + this.offset - Date.parse(s.started_at)) / 1000)) : this.dur(s.seconds ?? null);
+    for (const s of j.steps) {
+      if (s.kind === 'read') {
+        const bits = [];
+        if (s.clipped) bits.push(t('clipped to its share'));
+        if (s.files != null) bits.push(this.fmt(s.files === 1 ? '{n} file' : '{n} files', { n: s.files }));
+        if (s.revisions) bits.push(this.fmt(s.revisions === 1 ? '{n} drawn note' : '{n} drawn notes', { n: s.revisions }));
+        if (s.notes) bits.push(this.fmt(s.notes === 1 ? '{n} note' : '{n} notes', { n: s.notes }));
+        rows.push({ id: s.id, state: s.state, kind: this.kindName(s.project?.kind ?? ''), title: s.project?.label ?? '',
+                    detail: bits.join(' · '), reason: s.reason, fig: s.state === 'done' ? this.fmt('{n} chars', { n: this.num(s.chars ?? 0) }) : '',
+                    time: live(s) });
+      } else if (s.kind === 'ask') {
+        const bits = [this.fmt('{n} characters, ~{k} tokens sent', { n: this.num(s.prompt_chars ?? 0), k: this.num(s.tokens_est ?? 0) })];
+        if (s.tokens_in != null) bits.push(this.fmt('{i} in / {o} out counted', { i: this.num(s.tokens_in), o: this.num(s.tokens_out ?? 0) }));
+        else if (s.timeout) bits.push(this.fmt('gives up after {s} s', { s: s.timeout }));
+        rows.push({ id: s.id, state: s.state, kind: 'Model', title: this.fmt('Asking {p} · {m}', { p: s.provider_name ?? s.provider ?? '', m: s.model ?? '' }),
+                    detail: bits.join(' · '), reason: s.reason, fig: s.cost != null ? this.money(s.cost) : '', time: live(s) });
+      } else if (s.kind === 'parse') {
+        const bits = [this.fmt('{n} characters back', { n: this.num(s.raw_chars ?? 0) })];
+        if (s.rows != null) bits.push(this.fmt('{n} rows', { n: s.rows }));
+        if (s.duplicates) bits.push(this.fmt('{n} duplicates', { n: s.duplicates }));
+        if (s.invalid) bits.push(this.fmt('{n} empty', { n: s.invalid }));
+        if (s.over) bits.push(this.fmt('{n} over the limit', { n: s.over }));
+        rows.push({ id: s.id, state: s.state, kind: 'Answer', title: t('Reading the answer'), detail: bits.join(' · '),
+                    reason: s.reason, fig: s.parsed != null ? this.fmt('{n} kept', { n: s.parsed }) : '', time: live(s) });
+      } else if (s.kind === 'done') {
+        rows.push({ id: s.id, state: 'done', kind: 'Result', title: this.fmt('{n} proposals', { n: s.proposals ?? j.count }),
+                    detail: t('to review below: accept, edit or reject each one'), fig: '', time: '' });
+      }
+    }
+    if (isActive(j)) {
+      const reads = j.steps.filter(s => s.kind === 'read').length;
+      const left = (j.totals.projects ?? (reads ? 0 : 1)) - reads;
+      const pend = (id: string, kind: string, title: string, detail = '') =>
+        rows.push({ id, state: 'pending', kind, title, detail, fig: '', time: '' });
+      if (left > 0) pend('p-read', 'Projects', this.fmt('{n} more to read', { n: left }));
+      if (!j.steps.some(s => s.kind === 'ask')) pend('p-ask', 'Model', this.fmt('Asking {p} · {m}', { p: j.provider_name ?? '', m: j.model ?? '' }));
+      if (!j.steps.some(s => s.kind === 'parse')) pend('p-parse', 'Answer', t('Reading the answer'));
+      pend('p-done', 'Result', t('Proposals'));
+    }
+    return rows;
+  });
+
+  /** One bar per project read: how much of its share it took. */
+  bars = computed(() => this.readRows().filter(s => s.state !== 'running').map(s => {
+    const share = s.budget || 1, used = s.chars ?? 0;
+    return {
+      id: s.id, label: s.project?.label ?? s.id, pct: Math.min(100, Math.round(used / share * 100)),
+      tone: s.state === 'skipped' ? 'dim' : s.clipped ? 'warn' : null,
+      fig: s.state === 'skipped' ? t('skipped') : this.num(used),
+      tip: `${s.project?.label ?? ''}: ${this.num(used)} / ${this.num(share)}`,
+    };
+  }));
+
+  statusName(s: JobStatus) {
+    return ({ queued: 'Queued', reading: 'Reading', asking: 'Asking', parsing: 'Parsing',
+              done: 'Done', failed: 'Failed', cancelled: 'Cancelled' } as Record<JobStatus, string>)[s] ?? s;
+  }
+  statusTone(s: JobStatus) {
+    return s === 'done' ? 'ok' : s === 'failed' ? 'danger' : s === 'cancelled' ? 'warn' : 'accent';
+  }
+  stateName(s: StepState) {
+    return ({ running: 'running', done: 'done', skipped: 'skipped', failed: 'failed', cancelled: 'cancelled', pending: 'to come' } as Record<StepState, string>)[s] ?? s;
+  }
+  num(n: number) { return Math.round(n).toLocaleString(LANG() === 'tr' ? 'tr-TR' : 'en-US'); }
+  round = Math.round;
+  money(v: number | null | undefined) {
+    if (v == null) return '–';
+    return '$' + (v < 1 ? v.toFixed(4) : v.toFixed(2));
+  }
+  dur(s: number | null | undefined) {
+    if (s == null) return '–';
+    if (s < 10) return this.fmt('{s} s', { s: s.toFixed(1) });
+    if (s < 60) return this.fmt('{s} s', { s: Math.floor(s) });
+    return this.fmt('{m} min {s} s', { m: Math.floor(s / 60), s: String(Math.floor(s % 60)).padStart(2, '0') });
   }
 
   setKeep(it: Proposal, keep: boolean) { this.proposals.update(l => l.map(x => x.id === it.id ? { ...x, keep } : x)); }
@@ -673,14 +1071,16 @@ export class RoomTaste implements OnDestroy {
     if (!items.length) return;
     this.saving.set(true);
     const to = this.saveTo();
+    const jid = this.job()?.id;
     const req = to ? this.api.add(to, items) : this.api.create(this.newName().trim(), items);
     req.subscribe({
       next: p => {
         this.saving.set(false);
         this.replace(p);
-        this.proposals.set([]);
+        if (jid) this.api.savedTo(jid, { id: p.id, name: p.name, count: items.length }).subscribe({ next: j => this.runs.put(j), error: () => {} });
         this.say(this.fmt('{n} saved to {p}', { n: items.length, p: p.name }));
         this.api.changed.update(v => v + 1);
+        this.leaveExtract();
         this.openPalette(p.id);
       },
       error: (e: HttpErrorResponse) => { this.saving.set(false); this.exError.set(why(e, 'Could not save them.')); },
@@ -699,5 +1099,8 @@ export class RoomTaste implements OnDestroy {
     }
   }
 
-  ngOnDestroy() { clearInterval(this.poll); clearTimeout(this.timer); clearTimeout(this.pickTimer); }
+  ngOnDestroy() {
+    clearInterval(this.poll); clearTimeout(this.timer); clearTimeout(this.pickTimer); this.stopFollowing();
+    this.runs.here = false;
+  }
 }

@@ -6,7 +6,7 @@ import { RoomPcb } from './rooms/pcb';
 import { RoomFirmware } from './rooms/firmware';
 import { RoomTools } from './tools/room';
 import { QuickNote, RoomNotes } from './rooms/notes';
-import { RoomTaste } from './rooms/taste';
+import { RoomTaste, TasteRuns } from './rooms/taste';
 import { RoomFiles } from './rooms/files';
 import { RoomCommandCode } from './rooms/commandcode';
 import { Palette } from './palette';
@@ -62,6 +62,15 @@ import { CcTabUsage } from './cc-usage';
         <!-- And the Command Code account's usage, in the tab itself (cc-usage.ts;
              Settings > Top bar says how): a click on it is a click on the tab. -->
         @if (b.id === 'commandcode') { <app-cc-tab-usage /> }
+        <!-- Taste: an extraction running in the server, or one that finished
+             while you were elsewhere (rooms/taste.ts, TasteRuns). -->
+        @if (b.id === 'taste') {
+          @if (tasteRuns.running(); as n) {
+            <span class="tcv-tab-run" [title]="n + ' ' + ('extraction running' | t)"><i></i>{{ n }}</span>
+          } @else if (tasteRuns.unseen(); as n) {
+            <span class="tcv-tab-run" data-done="1" [title]="n + ' ' + ('extraction finished' | t)"><i></i>{{ n }}</span>
+          }
+        }
       </button>
     }
     <app-topbar-more />
@@ -133,6 +142,8 @@ export class App {
   tabs = WORKSPACES;
   /** The top bar's tabs, in the order and the look chosen (topbar.ts). */
   bar = inject(TopBar);
+  /** The Taste extractions running in the server, for the tab's mark. */
+  tasteRuns = inject(TasteRuns);
   /** The rooms you work in, left; Notes, Chat, Files and Basic Tools at the right end. */
   rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'taste' && w.id !== 'files' && w.id !== 'commandcode' && w.id !== 'settings');
   notesTab = WORKSPACES.find(w => w.id === 'notes');
@@ -225,6 +236,9 @@ export class App {
 
   constructor() {
     this.auth.load();
+    // Once someone is signed in: whether an extraction is running (it is
+    // asked again only while one is).
+    effect(() => { if (this.auth.signedIn()) untracked(() => this.tasteRuns.watch()); });
     this.here.set(currentWorkspace());
     // Whoever changed it - a tab up here, or a file clicked in the catalog
     // - the address bar and the memory follow, so a room can be linked to
@@ -241,6 +255,8 @@ export class App {
       else url.searchParams.set('ws', id);
       // A room thread belongs to the Chat tab's address only.
       if (id !== 'commandcode') url.searchParams.delete('thread');
+      // An extraction run belongs to the Taste tab's address only (rooms/taste.ts).
+      if (id !== 'taste') url.searchParams.delete('run');
       history.replaceState(null, '', url);
     });
   }
