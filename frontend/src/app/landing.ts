@@ -174,8 +174,6 @@ export class Snap implements AfterViewInit, OnDestroy {
   </div>
   <div class="shot rv" style="margin-top:12px"><app-snap src="llm" [page]="[1920, 1400]" [crop]="llmCrop" alt="Settings, LLM settings: the connected providers and the Command Code plan" /></div>
   <p class="lbl">Settings · LLM settings: four providers, nine jobs, the Command Code plan with its windows and spend per day. Keys show as dots.</p>
-  <div class="shot wide rv"><app-snap src="analytics" [page]="anPage" [crop]="an.saved" alt="Analytics: the subscription against list prices, the cache by model and its hit rate" /></div>
-  <p class="lbl">Analytics · Costs &amp; savings: ₺2,301 paid for ₺579,595 of work, the cache by model and its hit rate</p>
 </section>
 
 <section class="wrap" id="platform">
@@ -246,7 +244,7 @@ export class Landing implements AfterViewInit, OnDestroy {
   /** Crops of the analytics snapshot (a 1920 × 3700 page). */
   anPage = [1920, 3700];
   an = { overview: [280, 92, 1316, 322], models: [280, 888, 870, 570], rooms: [1160, 888, 436, 570],
-         machine: [280, 2650, 1316, 772], saved: [280, 2020, 1316, 368] };
+         machine: [280, 2650, 1316, 772] };
   llmCrop = [532, 40, 1062, 900];
   /** flex-grow for a row of crops with one height: each one's width over its height. */
   ar(c: number[]) { return c[2] / c[3]; }
