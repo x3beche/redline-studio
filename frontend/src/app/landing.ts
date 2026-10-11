@@ -102,7 +102,8 @@ export class Snap implements AfterViewInit, OnDestroy {
     <div><div class="shot"><app-snap src="rev" [crop]="revCrop" [focus]="[1460, 240]" alt="A drawn note on the station, applied" /></div><p class="lbl">3D Drawing · a drawn note, applied: the drawing, and the model at its camera</p></div>
   </div>
   <div class="pair fit rv">
-    <div [style.flex]="ar(workCrop)"><div class="shot"><app-snap src="hero" [crop]="workCrop" [min]="0" alt="Working now and the note's run" /></div><p class="lbl">3D Drawing · Working now, and note d2d2ad's run as it goes: tokens, cost, models, kinds of call, jobs, CPU and energy</p></div>
+    <div [style.flex]="ar(treeCrop)"><div class="shot"><app-snap src="hero" [crop]="treeCrop" [min]="0" alt="The project tree" /></div><p class="lbl">3D Drawing · the project's folders</p></div>
+    <div [style.flex]="ar(workCrop)"><div class="shot"><app-snap src="hero" [crop]="workCrop" [min]="0" alt="Note d2d2ad's run" /></div><p class="lbl">Note d2d2ad's run as it goes: tokens, cost, models, kinds of call, jobs, CPU and energy</p></div>
     <div [style.flex]="ar(modelCrop)"><div class="shot"><app-snap src="hero" [crop]="modelCrop" [min]="0" alt="The station the note is about" /></div><p class="lbl">The station, while the note runs</p></div>
   </div>
 </section>
@@ -250,7 +251,8 @@ export class Landing implements AfterViewInit, OnDestroy {
   ar(c: number[]) { return c[2] / c[3]; }
   chatCrop = [598, 52, 590, 720];
   revCrop = [960, 92, 640, 780];
-  workCrop = [10, 613, 555, 457];
+  treeCrop = [12, 95, 236, 668];
+  workCrop = [272, 603, 292, 456];
   modelCrop = [740, 150, 700, 880];
   /** The plans connected to Redline (Settings > Costs, LLM settings). */
   plans = [
