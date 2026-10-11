@@ -75,6 +75,18 @@ img { display: block; max-width: 100%; }
 .trio { margin-top: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .shot.wide { margin-top: 12px; }
 
+/* features: a grid of cards, each an app view on top, a title and a line */
+.feats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.feat { min-width: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.feat .fshot { flex: 1; display: flex; flex-direction: column; justify-content: center; background: #09090b; border-bottom: 1px solid var(--line); }
+.feat .fshot app-snap + app-snap { border-top: 1px solid var(--line); }
+.feat.wide { grid-column: 1 / -1; }
+.feat.wide .fshot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; }
+.feat.wide .fshot app-snap + app-snap { border-top: 0; border-left: 1px solid var(--line); }
+.feat h3 { margin: 18px 20px 0; font-size: 22px; line-height: 1.15; letter-spacing: -.02em; }
+.feat .lead { margin: 8px 20px 0; font-size: 15px; line-height: 1.45; color: var(--dim); }
+.feat .lbl { margin: 12px 20px 18px; font-size: 13px; }
+
 /* what runs around the agents */
 .infra { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .inf { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 22px 22px 8px; }
@@ -198,6 +210,9 @@ footer .fine { grid-column: 1 / -1; display: flex; justify-content: space-betwee
   .specs { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 20px; }
   .spec b { font-size: 20px; }
   .rooms, .pair, .trio, .infra { grid-template-columns: minmax(0, 1fr); }
+  .feats, .feat.wide .fshot { grid-template-columns: minmax(0, 1fr); }
+  .feat.wide .fshot app-snap + app-snap { border-left: 0; border-top: 1px solid var(--line); }
+  .feat h3 { font-size: 20px; }
   .pair.fit { flex-direction: column; }
   .pair.fit > div { flex: none !important; }
   .room h3 { font-size: 22px; }

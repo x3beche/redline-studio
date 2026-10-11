@@ -95,8 +95,22 @@ export class Snap implements AfterViewInit, OnDestroy {
   </div>
 </section>
 
+<section class="wrap" id="features">
+  <div class="grid sh rv"><h2>Draw it, or write it</h2><p>Mark the model or the board and say what you want; the note is queued for that room's agent. Around it: themes, a proxy for part lookups, and Telegram.</p><span class="n">02</span></div>
+  <div class="feats rv">
+    @for (f of feats; track f.name) {
+      <article class="feat" [class.wide]="f.wide">
+        <div class="fshot">@for (c of f.crops; track $index) { <app-snap [src]="c.src" [page]="c.page ?? [1920, 1080]" [crop]="c.crop" [min]="c.min ?? 0.85" [alt]="f.name" /> }</div>
+        <h3>{{ f.name }}</h3>
+        <p class="lead">{{ f.lead }}</p>
+        <p class="lbl">{{ f.lbl }}</p>
+      </article>
+    }
+  </div>
+</section>
+
 <section class="wrap" id="work">
-  <div class="grid sh rv"><h2>Notes, chat and agents</h2><p>Draw on the model or ask in Chat. Each note goes to the room's agent; you see its run, its questions and the result.</p><span class="n">02</span></div>
+  <div class="grid sh rv"><h2>Notes, chat and agents</h2><p>Draw on the model or ask in Chat. Each note goes to the room's agent; you see its run, its questions and the result.</p><span class="n">03</span></div>
   <div class="pair rv">
     <div><div class="shot"><app-snap src="chat" [page]="[1500, 1080]" [crop]="chatCrop" [focus]="[900, 560]" alt="Chat: a request written up as a 3D note" /></div><p class="lbl">Chat · a spoken request, written up as a task and queued in 3D as note d2d2ad</p></div>
     <div><div class="shot"><app-snap src="rev" [crop]="revCrop" [focus]="[1460, 240]" alt="A drawn note on the station, applied" /></div><p class="lbl">3D Drawing · a drawn note, applied: the drawing, and the model at its camera</p></div>
@@ -117,7 +131,7 @@ export class Snap implements AfterViewInit, OnDestroy {
 </div>
 
 <section class="wrap" id="analytics">
-  <div class="grid sh rv"><h2>Analytics</h2><p>Every call, job and kilowatt-hour since the first note, 21 September to 11 October.</p><span class="n">03</span></div>
+  <div class="grid sh rv"><h2>Analytics</h2><p>Every call, job and kilowatt-hour since the first note, 21 September to 11 October.</p><span class="n">04</span></div>
   <div class="shot rv"><app-snap src="analytics" [page]="anPage" [crop]="an.overview" alt="Analytics overview tiles" /></div>
   <p class="lbl">Analytics · Overview, all time</p>
   <div class="pair fit rv">
@@ -129,7 +143,7 @@ export class Snap implements AfterViewInit, OnDestroy {
 </section>
 
 <section class="wrap" id="taste">
-  <div class="grid sh rv"><h2>Taste</h2><p>A finished project, distilled into the rules the next one follows. One run read every model, board and firmware in iot-fan.</p><span class="n">04</span></div>
+  <div class="grid sh rv"><h2>Taste</h2><p>A finished project, distilled into the rules the next one follows. One run read every model, board and firmware in iot-fan.</p><span class="n">05</span></div>
   <div class="stats rv">
     <div class="stat"><span>Read</span><b class="num">17</b><em>of 18 projects · bought parts left out</em><div class="bar"><i style="flex:17;background:var(--s1)"></i><i style="flex:1;background:var(--panel-2)"></i></div></div>
     <div class="stat"><span>Sent</span><b class="num">66k</b><em>tokens · 124,437 characters</em><div class="bar"><i style="flex:1;background:var(--s7)"></i></div></div>
@@ -155,7 +169,7 @@ export class Snap implements AfterViewInit, OnDestroy {
 </section>
 
 <section class="wrap" id="cost">
-  <div class="grid sh rv"><h2>What it cost</h2><p>Connect the plans you already pay for. Redline routes the agents' work through them and prices every call at API rates, so you see what the plans saved.</p><span class="n">05</span></div>
+  <div class="grid sh rv"><h2>What it cost</h2><p>Connect the plans you already pay for. Redline routes the agents' work through them and prices every call at API rates, so you see what the plans saved.</p><span class="n">06</span></div>
   <div class="save rv">
     <div class="save-x">
       <span>The plans against API prices</span>
@@ -178,7 +192,7 @@ export class Snap implements AfterViewInit, OnDestroy {
 </section>
 
 <section class="wrap" id="platform">
-  <div class="grid sh rv"><h2>Why not build it yourself</h2><p>An agent can write a part. What it needs around it to do a whole product is the rest of this.</p><span class="n">06</span></div>
+  <div class="grid sh rv"><h2>Why not build it yourself</h2><p>An agent can write a part. What it needs around it to do a whole product is the rest of this.</p><span class="n">07</span></div>
   <div class="infra rv">
     @for (c of infra; track c.name) {
       <div class="inf">
@@ -227,7 +241,7 @@ export class Landing implements AfterViewInit, OnDestroy {
   open = signal(new URLSearchParams(location.search).has('signin'));
   ask = 'mailto:info@medipol.dev?subject=Redline%20access';
   links = [
-    { id: 'rooms', name: 'Rooms' }, { id: 'work', name: 'Agents' }, { id: 'analytics', name: 'Analytics' },
+    { id: 'rooms', name: 'Rooms' }, { id: 'features', name: 'Features' }, { id: 'work', name: 'Agents' }, { id: 'analytics', name: 'Analytics' },
     { id: 'taste', name: 'Taste' }, { id: 'cost', name: 'Cost' }, { id: 'platform', name: 'Platform' },
   ];
   /** The three rooms, each a live view and iot-fan's figures for it. */
@@ -241,6 +255,34 @@ export class Landing implements AfterViewInit, OnDestroy {
     { name: 'Firmware', snap: 'fw', crops: [[562, 462, 430, 360], [562, 993, 430, 66]], min: 0.85, lbl: 'Firmware · src/main.cpp, and the build',
       lead: 'Written for the board it runs on. Every pin is named from the schematic, and pins.h is rewritten when the board changes.',
       facts: [['Chip', 'ESP32-WROOM-32', 'Arduino on PlatformIO'], ['Pins', '39', 'from the schematic'], ['Build', '0 errors · 8.4 s', 'flash 24.6% · RAM 7.0%']] },
+  ];
+  /** What else the app does, each a view of it: crops of the snapshots
+   *  [x, y, w, h] in the page's pixels; `page` when it is not 1920 x 1080. */
+  feats: { name: string; lead: string; lbl: string; wide?: boolean;
+           crops: { src: string; crop: number[]; page?: number[]; min?: number }[] }[] = [
+    { name: 'Draw on the model', lbl: '3D Drawing · draw mode on the Station: seven tools, four inks',
+      lead: 'Hold the view, circle what is wrong and say it in a line. The picture and the camera go with the note to the 3D agent.',
+      crops: [{ src: 'draw3d', crop: [1158, 46, 386, 36] }, { src: 'draw3d', crop: [760, 150, 660, 870], min: 0 }] },
+    { name: 'Draw on the board', lbl: 'PCB Design · the same pen on the iot-fan board, and the comment box',
+      lead: 'The same pen over the layout. Write in your own language; Auto English turns the note into English for the agent.',
+      crops: [{ src: 'drawpcb', crop: [1076, 46, 384, 36] }, { src: 'drawpcb', crop: [590, 170, 1000, 640], min: 0 },
+              { src: 'drawpcb', crop: [1615, 95, 300, 185] }] },
+    { name: 'A note becomes a task', lbl: '3D Drawing · the queue, a drawn note in it, and Working now',
+      lead: 'Saved as a draft, then queued. Each note keeps its drawing and its status; Working now shows what runs.',
+      crops: [{ src: 'hero', crop: [1615, 284, 300, 284] }, { src: 'hero', crop: [12, 958, 250, 112] }] },
+    { name: 'A proxy for part lookups', lbl: 'Settings · Proxy: status, and the last 7 days of exits. Addresses and login left out.',
+      lead: 'EasyEDA turns bursts of lookups away. A rotating proxy gives them another way out, with traffic and cost measured.',
+      crops: [{ src: 'proxy', page: [1280, 1400], crop: [540, 152, 410, 154] }, { src: 'proxy', page: [1280, 1400], crop: [540, 912, 410, 218] }] },
+    { name: '28 themes, and your own', lbl: 'Settings · Appearance, the light themes, worn in GitHub Light',
+      lead: '22 dark and 6 light, per browser; the 3D backdrop and the code editor follow. Make your own from any of them and share it as a file.',
+      crops: [{ src: 'themes', page: [1280, 1100], crop: [542, 551, 406, 383] }] },
+    { name: 'Telegram', lbl: 'Settings · Telegram: what the bot understands',
+      lead: 'The agents\' questions reach your phone; answer with a button, or send a note with a photo.',
+      crops: [{ src: 'tg', crop: [1157, 432, 430, 304], min: 0.8 }] },
+    { name: 'Every view follows the theme', wide: true, lbl: 'Settings · the same list in Dracula, Nord and Solarized Light',
+      lead: 'The whole window takes the theme: panels, lines, text and the accent.',
+      crops: [{ src: 'th-dracula', crop: [267, 114, 260, 210] }, { src: 'th-nord', crop: [267, 114, 260, 210] },
+              { src: 'th-solarized-light', crop: [267, 114, 260, 210] }] },
   ];
   /** Crops of the analytics snapshot (a 1920 × 3700 page). */
   anPage = [1920, 3700];
