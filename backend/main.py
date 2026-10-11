@@ -117,6 +117,9 @@ app.include_router(files_api.router)
 # The next question, suggested in the empty composer (backend/suggest.py).
 from . import suggest as suggest_api  # noqa: E402
 app.include_router(suggest_api.router)
+# Taste palettes: design taste the agents follow, extracted or written (backend/taste.py).
+from . import taste as taste_api  # noqa: E402
+app.include_router(taste_api.router)
 
 
 def _raw_db():

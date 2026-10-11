@@ -120,6 +120,14 @@ _RULES: list[tuple[str, str, str]] = [
     ("PATCH", "/api/notes/{}", "draw"),
     ("DELETE", "/api/notes/{}", "draw"),
     ("POST", "/api/notes/{}/send", "draw"),
+    # taste palettes (backend/taste.py): like notes - making, changing,
+    # attaching one, and asking for proposals from a project (a model call,
+    # as a suggestion is); the route keeps deleting someone else's palette
+    # to those who may delete
+    ("POST", "/api/taste(/.*)?", "draw"),
+    ("PATCH", "/api/taste/.+", "draw"),
+    ("PUT", "/api/taste/.+", "draw"),
+    ("DELETE", "/api/taste/.+", "draw"),
     # files: bringing one in, or pointing an agent at it, is like writing a
     # note; the route keeps deleting someone else's to those who may delete
     ("POST", "/api/files", "draw"),

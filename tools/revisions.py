@@ -55,6 +55,13 @@ Reading a PDF - a datasheet in Files, a part's datasheet, or one on disk
     python tools/revisions.py pdf page <file-id|C123|file.pdf> <n> [--dpi 150] [-o out.png]
                                                                    page n as a PNG - open it with Read
 
+Taste palettes - the person's design taste (backend/taste.py); `show` and
+`next` print the ones attached to the note's project by themselves:
+
+    python tools/revisions.py taste                                list the palettes
+    python tools/revisions.py taste <palette-id>                   one, in full
+    python tools/revisions.py taste <model|board|firmware> <id>    the ones attached to a project
+
 Firmware - the Firmware room's projects (backend/firmware.py) and the notes
 filed on them (backend/fwnotes.py); through the server, like `board`:
 
@@ -1338,6 +1345,7 @@ async def cmd_show(args):
     print(f"note    : {doc['comment']}")
     print(f"model   : {doc.get('model') or '-'}   part: {doc.get('part') or '-'}")
     print(f"status  : {doc.get('status')}")
+    await _print_taste(db, _note_projects(doc))
     # A note about a part is a valid revision on its own - freeze and draw is
     # optional - so say so instead of dying on the missing image.
     if not (doc.get("image") or {}).get("gridfs_id"):
@@ -1348,6 +1356,62 @@ async def cmd_show(args):
     out.write_bytes(png)
     print(f"image   : {out}   ({len(png)} bytes)")
     print("\nOpen this file with the Read tool and look at the red marks.")
+
+
+def _note_projects(doc: dict) -> list[tuple[str, str]]:
+    """The projects a queued note is about, as (kind, id), for its taste."""
+    if doc.get("kind") == "firmware":
+        return [("firmware", doc["model"])] if doc.get("model") else []
+    out = []
+    if doc.get("board"):
+        out.append(("board", doc["board"]))
+    if doc.get("model"):
+        out.append(("board" if doc.get("kind") == "pcb" and not doc.get("board") else "model", doc["model"]))
+    return out
+
+
+async def _print_taste(db, targets: list[tuple[str, str]]) -> None:
+    """The taste palettes attached to these projects (backend/taste.py):
+    the person's design taste, to follow in this work."""
+    from backend import taste
+
+    rows, seen = [], set()
+    for kind, ref in targets:
+        for p in await taste.attached_to(db, kind, ref):
+            if p["_id"] not in seen:
+                seen.add(p["_id"])
+                rows.append(p)
+    if not rows:
+        return
+    print("taste   : " + ", ".join(f"\"{p.get('name')}\" ({len(p.get('items') or [])} items)" for p in rows)
+          + " - attached to this project; follow it")
+    for line in taste.agent_text(rows).splitlines():
+        print(f"  {line}")
+
+
+async def cmd_taste(args):
+    """Taste palettes: the ones attached to a project, or one by id, or the list."""
+    from backend import taste
+
+    db = connect()
+    if args.kind and args.id:
+        if args.kind not in taste.PROJECT_KINDS:
+            sys.exit("kind is model, board or firmware")
+        rows = await taste.attached_to(db, args.kind, args.id)
+        if not rows:
+            print(f"no taste palette is attached to {args.kind} {args.id}")
+            return
+        print(taste.agent_text(rows))
+        return
+    if args.kind:
+        doc = await taste.get(db, args.kind)
+        if not doc:
+            sys.exit(f"no palette {args.kind}")
+        print(taste.block(doc, 10 ** 6))
+        return
+    for d in await taste.listing(db):
+        on = ", ".join(f"{a['kind']} {a['id']}" for a in d.get("attached") or []) or "-"
+        print(f"{d['_id']}  {d.get('name')}  ({len(d.get('items') or [])} items; attached: {on})")
 
 
 async def _show_firmware_note(db, doc: dict) -> None:
@@ -2285,6 +2349,11 @@ def main() -> None:
     s.set_defaults(fn=cmd_pdf, sync=True)
     s = sub.add_parser("show"); s.add_argument("id"); s.add_argument("-o", "--out")
     s.set_defaults(fn=cmd_show)
+    s = sub.add_parser("taste", help="taste palettes: list them, print one (<palette id>), "
+                                     "or the ones attached to a project (<model|board|firmware> <id>)")
+    s.add_argument("kind", nargs="?")
+    s.add_argument("id", nargs="?")
+    s.set_defaults(fn=cmd_taste)
     s = sub.add_parser("next", help="the oldest queued note nobody has started, in full")
     s.add_argument("--room", choices=["cad", "pcb", "firmware"], help="only this room's")
     s.add_argument("-o", "--out", help="where its drawing is written")

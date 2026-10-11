@@ -662,6 +662,20 @@ already looked at come from disk without asking. Every ask - yours, the
 page's - is written down and shown in the board room's **lcsc** tab.
 When `find` says it is cooling off, wait; do not loop on it.
 
+## Taste palettes: the person's design taste
+
+A **taste palette** (the Taste tab; "Tadım" in Turkish) is a list of short
+statements of how this person likes things designed - "Walls 2 mm, outside
+edges filleted 1 mm", "No vias in pads", "Every task feeds the watchdog" -
+each MUST, PREFER or AVOID, for mechanical, PCB, firmware or anything.
+A palette can be attached to a model, a board or a firmware: `show` and
+`next` then print it under the note, as `taste :` and the statements.
+
+Follow it: MUST items always, PREFER items unless the note says otherwise,
+AVOID items never. When a note asks for something a palette forbids, ask on
+their screen before doing it. `revisions.py taste <kind> <id>` prints the
+palettes attached to any project; `taste <palette-id>` prints one.
+
 ## Files people upload
 
 The **Files** tab is where a person drops what the work needs and the app
@@ -743,6 +757,7 @@ Nothing counts as work until the user presses *queue*.
 .venv/bin/python tools/revisions.py part bodies|body-bind|body-default|body-unbind|body-request C...  # 3D bodies
 .venv/bin/python tools/revisions.py board body <board> [REF variant|lcsc|default]  # which body a ref wears
 .venv/bin/python tools/revisions.py chat                 # what they said
+.venv/bin/python tools/revisions.py taste [<kind> <id>]  # taste palettes (attached to a project)
 .venv/bin/python tools/revisions.py say "..."            # answer them
 .venv/bin/python tools/revisions.py show <id>            # write drawing to disk
 .venv/bin/python tools/revisions.py models               # list models
