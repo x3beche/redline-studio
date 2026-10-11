@@ -91,12 +91,13 @@ section { padding-top: 160px; }
 .sh .n { grid-column: 12; justify-self: end; color: var(--faint); font-size: 16px; }
 
 /* stat cards: the app's panels */
-.stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
-.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 22px 22px 24px; }
-.stat span { font-size: 15px; color: var(--dim); }
-.stat b { display: block; margin: 10px 0 6px; font-size: 52px; line-height: 1; font-weight: 500; letter-spacing: -.03em; }
-.stat em { font-style: normal; font-size: 14px; color: var(--faint); }
-.stat .bar { margin-top: 18px; height: 4px; }
+.stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+/* the app's stat tiles (settings.css .st-tile), a size up: label, a mono figure, a dim line, a meter */
+.stat { min-width: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px 14px; }
+.stat span { font-size: 13px; color: var(--dim); }
+.stat b { display: block; margin: 4px 0 2px; font: 500 30px/1.15 'IBM Plex Mono', ui-monospace, monospace; letter-spacing: -.02em; color: #fff; }
+.stat em { margin-bottom: 12px; font-style: normal; font-size: 13px; line-height: 1.35; color: var(--faint); }
+.stat .bar { margin-top: auto; height: 4px; border-radius: 2px; background: var(--panel-2); }
 .src { margin-top: 14px; font-size: 14px; color: var(--faint); }
 
 .specs { margin-top: 28px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
@@ -186,7 +187,7 @@ footer .fine { grid-column: 1 / -1; display: flex; justify-content: space-betwee
   .sh p { font-size: 18px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats > :last-child:nth-child(odd), .specs > :last-child:nth-child(odd) { grid-column: 1 / -1; }
-  .stat b { font-size: 40px; }
+  .stat b { font-size: 26px; }
   .specs { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 20px; }
   .spec b { font-size: 20px; }
   .rooms, .pair, .trio, .infra { grid-template-columns: minmax(0, 1fr); }

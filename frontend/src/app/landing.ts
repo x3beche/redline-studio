@@ -101,8 +101,10 @@ export class Snap implements AfterViewInit, OnDestroy {
     <div><div class="shot"><app-snap src="chat" [page]="[1500, 1080]" [crop]="chatCrop" [focus]="[900, 560]" alt="Chat: a request written up as a 3D note" /></div><p class="lbl">Chat · a spoken request, written up as a task and queued in 3D as note d2d2ad</p></div>
     <div><div class="shot"><app-snap src="rev" [crop]="revCrop" [focus]="[1460, 240]" alt="A drawn note on the station, applied" /></div><p class="lbl">3D Drawing · a drawn note, applied: the drawing, and the model at its camera</p></div>
   </div>
-  <div class="shot wide rv"><app-snap src="hero" [crop]="workCrop" [focus]="[420, 800]" alt="Working now and the note's run" /></div>
-  <p class="lbl">3D Drawing · Working now, and note d2d2ad's run as it goes: tokens, cost, models, kinds of call, jobs, CPU and energy</p>
+  <div class="pair fit rv">
+    <div [style.flex]="ar(workCrop)"><div class="shot"><app-snap src="hero" [crop]="workCrop" [min]="0" alt="Working now and the note's run" /></div><p class="lbl">3D Drawing · Working now, and note d2d2ad's run as it goes: tokens, cost, models, kinds of call, jobs, CPU and energy</p></div>
+    <div [style.flex]="ar(modelCrop)"><div class="shot"><app-snap src="hero" [crop]="modelCrop" [min]="0" alt="The station the note is about" /></div><p class="lbl">The station, while the note runs</p></div>
+  </div>
 </section>
 
 <div class="stmt wrap">
@@ -231,7 +233,7 @@ export class Landing implements AfterViewInit, OnDestroy {
     { name: '3D parts', snap: '3d', crops: [[700, 160, 860, 860]], min: 0, lbl: '3D Drawing · the Station assembly',
       lead: 'Three assemblies built from 26 models. Change one part, and everything that uses it is rebuilt.',
       facts: [['Notes', '58', '57 applied'], ['Assemblies', '3', 'Station, Base, Fan Module'], ['Build', '113-150 s', 'an assembly, from source']] },
-    { name: 'Circuit board', snap: 'pcb', crops: [[700, 360, 430, 430]], min: 0.85, lbl: 'PCB Design · the board around U2, the ESP32',
+    { name: 'Circuit board', snap: 'pcb', crops: [[585, 170, 1000, 640]], min: 0, lbl: 'PCB Design · the iot-fan board, routed by TraceMaker',
       lead: 'Real parts from LCSC, placed and routed by TraceMaker: 235 of 235 connections in 121 seconds.',
       facts: [['Size', '95.5 × 58.7 mm', '91 parts, 48 different'], ['Copper', '1,014 tracks', '179 vias · 2.87 m'], ['Parts cost', '$20.51', 'a board, ordering 10 · ERC 0']] },
     { name: 'Firmware', snap: 'fw', crops: [[562, 462, 430, 360], [562, 993, 430, 66]], min: 0.85, lbl: 'Firmware · src/main.cpp, and the build',
@@ -247,7 +249,8 @@ export class Landing implements AfterViewInit, OnDestroy {
   ar(c: number[]) { return c[2] / c[3]; }
   chatCrop = [598, 52, 590, 720];
   revCrop = [960, 92, 640, 780];
-  workCrop = [0, 600, 1316, 400];
+  workCrop = [10, 613, 555, 457];
+  modelCrop = [740, 150, 700, 880];
   /** The plans connected to Redline (Settings > Costs, LLM settings). */
   plans = [
     ['Claude Max', '₺3,170 a month', 'a plan, entered in Settings > Costs'],
