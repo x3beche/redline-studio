@@ -112,6 +112,17 @@ section { padding-top: 160px; }
 .qa .ans { display: flex; gap: 14px; align-items: baseline; }
 .qa .ans i { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--s3); transform: translateY(-3px); }
 
+/* taste: the palette's rules, a column a domain */
+.tcols { margin-top: 12px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tcol { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.tcol h4 { display: flex; align-items: center; gap: 10px; margin: 0; padding: 18px 22px; font-size: 17px; font-weight: 500; border-bottom: 1px solid var(--line); }
+.tcol h4 i { width: 8px; height: 8px; border-radius: 2px; }
+.tcol h4 span { margin-left: auto; color: var(--faint); font-size: 15px; }
+.tcol p { padding: 18px 22px; font-size: 16px; line-height: 1.4; color: #d4d4d8; }
+.tcol p + p { border-top: 1px solid var(--line); }
+.tcol p b { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.tcol p b.must { color: var(--ink); }
+
 /* cost */
 .big { align-items: end; margin-bottom: 40px; }
 .big > b { grid-column: 1 / 6; font-size: clamp(96px, 13vw, 248px); line-height: .85; font-weight: 500; letter-spacing: -.06em; }
@@ -170,6 +181,7 @@ footer .fine { grid-column: 1 / -1; display: flex; justify-content: space-betwee
   .sh h2 { font-size: 38px; }
   .sh p { font-size: 18px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats > :last-child:nth-child(odd), .specs > :last-child:nth-child(odd) { grid-column: 1 / -1; }
   .stat b { font-size: 40px; }
   .feat .band { height: auto; min-height: 0; aspect-ratio: 1.55; }
   .cap { row-gap: 8px; }
@@ -189,6 +201,7 @@ footer .fine { grid-column: 1 / -1; display: flex; justify-content: space-betwee
   .big p { font-size: 19px; }
   .vs div { grid-template-columns: 7em minmax(0, 1fr) 6em; font-size: 13px; }
   .two { grid-template-columns: minmax(0, 1fr); }
+  .tcols { grid-template-columns: minmax(0, 1fr); }
   .end { margin-top: 110px; padding: 64px 16px 72px; }
   .end h2 { margin-bottom: 28px; }
   footer .brand { grid-column: 1 / -1; }

@@ -85,8 +85,28 @@ import { Auth, SignIn } from './auth';
   </div>
 </div>
 
+<section class="wrap" id="taste">
+  <div class="grid sh rv"><h2>Taste</h2><p>A finished project, distilled into the rules the next one follows. One run read every model, board and firmware in iot-fan.</p><span class="n">04</span></div>
+  <div class="stats rv">
+    <div class="stat"><span>Read</span><b class="num">17</b><em>of 18 projects · bought parts left out</em><div class="bar"><i style="flex:17;background:var(--s1)"></i><i style="flex:1;background:var(--panel-2)"></i></div></div>
+    <div class="stat"><span>Sent</span><b class="num">66k</b><em>tokens · 122,854 characters</em><div class="bar"><i style="flex:1;background:var(--s7)"></i></div></div>
+    <div class="stat"><span>Time</span><b class="num">20.6 s</b><em>one call to Claude Haiku 5.5</em><div class="bar"><i style="flex:1;background:var(--s4)"></i></div></div>
+    <div class="stat"><span>Rules</span><b class="num">27</b><em>16 must · 11 prefer</em><div class="bar"><i style="flex:16;background:var(--ink)"></i><i style="flex:11;background:var(--s8)"></i></div></div>
+    <div class="stat"><span>Domains</span><b class="num">4</b><em>3D 14 · PCB 7 · FW 2 · general 4</em><div class="bar"><i style="flex:14;background:var(--s1)"></i><i style="flex:7;background:var(--s3)"></i><i style="flex:2;background:var(--s4)"></i><i style="flex:4;background:var(--s7)"></i></div></div>
+  </div>
+  <div class="tcols rv">
+    @for (c of taste; track c.name) {
+      <div class="tcol">
+        <h4><i [style.background]="c.color"></i>{{ c.name }}<span class="num">{{ c.n }}</span></h4>
+        @for (r of c.rules; track r.text) { <p><b [class.must]="r.must">{{ r.must ? 'Must' : 'Prefer' }}</b>{{ r.text }}</p> }
+      </div>
+    }
+  </div>
+  <p class="lbl">Taste of iot-fan, as extracted. Every rule was reviewed before it was kept; attach the palette to a project and its agents follow it.</p>
+</section>
+
 <section class="wrap" id="cost">
-  <div class="grid sh rv"><h2>What it cost</h2><p>Every call, build and kilowatt-hour is counted, and priced in your currency.</p><span class="n">04</span></div>
+  <div class="grid sh rv"><h2>What it cost</h2><p>Every call, build and kilowatt-hour is counted, and priced in your currency.</p><span class="n">05</span></div>
   <div class="shot rv"><img src="/landing/project.webp" alt="Analytics for iot-fan: spend by item"></div>
   <p class="lbl">iot-fan in Analytics, all time.</p>
 
@@ -145,7 +165,22 @@ export class Landing implements AfterViewInit, OnDestroy {
   ask = 'mailto:info@medipol.dev?subject=Redline%20access';
   links = [
     { id: 'parts', name: '3D parts' }, { id: 'board', name: 'Circuit board' },
-    { id: 'firmware', name: 'Firmware' }, { id: 'cost', name: 'Cost' },
+    { id: 'firmware', name: 'Firmware' }, { id: 'taste', name: 'Taste' }, { id: 'cost', name: 'Cost' },
+  ];
+  /** iot-fan's taste palette, as extracted (backend/taste.py): two rules a domain. */
+  taste = [
+    { name: '3D parts', n: 14, color: 'var(--s1)', rules: [
+      { must: true, text: 'Every printed overhang is at least 45° from horizontal; the build fails when one is not.' },
+      { must: false, text: 'Split tall or sloped parts into halves that print flat, rather than a lip on supports.' } ] },
+    { name: 'Circuit board', n: 7, color: 'var(--s3)', rules: [
+      { must: true, text: 'Zero courtyard overlaps, zero unconnected pads and zero ERC errors before release.' },
+      { must: false, text: 'Parts in stock at LCSC, JLCPCB Basic first, with the LCSC number on each.' } ] },
+    { name: 'Firmware', n: 2, color: 'var(--s4)', rules: [
+      { must: true, text: 'Fan PWM from a microcontroller pin, the tach on a pulled-up input, so the RPM reads back.' },
+      { must: false, text: 'The 12 V fan rail is held on by the firmware while the fan runs.' } ] },
+    { name: 'Across them', n: 4, color: 'var(--s7)', rules: [
+      { must: true, text: 'Every size comes from the imported part data; the build stops when two disagree.' },
+      { must: true, text: 'A new variant gets its own folder; the original project stays untouched.' } ] },
   ];
   /** Something has to be done first: the sheet stays, with no way out. */
   forced = computed(() => {
