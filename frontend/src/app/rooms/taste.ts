@@ -1,5 +1,6 @@
 import { Component, ElementRef, Injectable, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { NgTemplateOutlet } from '@angular/common';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { LANG, T, t } from '../i18n';
@@ -66,6 +67,18 @@ export const STRENGTHS: { id: Strength; label: string }[] = [
   { id: 'must', label: 'MUST' }, { id: 'prefer', label: 'PREFER' }, { id: 'avoid', label: 'AVOID' },
 ];
 const KIND_NAME: Record<string, string> = { folder: 'Folder', model: '3D model', board: 'Board', firmware: 'Firmware' };
+/** A colour per domain (the theme's chart series) and per strength (as the
+ *  MUST / PREFER / AVOID labels are written), for the bars. */
+export const DOMAIN_COLOR: Record<Domain, string> = {
+  mechanical: 'var(--series-1)', pcb: 'var(--series-3)', firmware: 'var(--series-4)', general: 'var(--series-7)',
+};
+export const STRENGTH_COLOR: Record<Strength, string> = { must: 'var(--accent)', prefer: 'var(--ink-dim)', avoid: 'var(--danger)' };
+type Tally = Record<Strength, number>;
+const tally = (items: TasteItem[]): Tally => {
+  const n: Tally = { must: 0, prefer: 0, avoid: 0 };
+  for (const i of items) n[i.strength] = (n[i.strength] ?? 0) + 1;
+  return n;
+};
 
 @Injectable({ providedIn: 'root' })
 export class TasteApi {
@@ -151,11 +164,11 @@ export class TasteRuns {
 }
 
 function when(iso: string): string {
-  const d = new Date(iso), now = new Date();
+  const d = new Date(iso), now = new Date(), loc = LANG() === 'tr' ? 'tr-TR' : [];
   const days = Math.floor((new Date(now.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86400000);
-  if (days === 0) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (days < 7) return d.toLocaleDateString([], { weekday: 'short' });
-  return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  if (days === 0) return d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
+  if (days < 7) return d.toLocaleDateString(loc, { weekday: 'short' });
+  return d.toLocaleDateString(loc, { day: 'numeric', month: 'short' });
 }
 
 function why(e: HttpErrorResponse, fallback: string): string {
@@ -165,7 +178,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
 /** The Taste room. */
 @Component({
   selector: 'app-room-taste',
-  imports: [T],
+  imports: [T, NgTemplateOutlet],
   styleUrls: ['../settings.css', './taste.css'],
   host: { '(document:keydown)': 'key($event)', '(document:click)': 'closePicker()' },
   template: `
@@ -183,18 +196,33 @@ function why(e: HttpErrorResponse, fallback: string): string {
       </div>
     }
     <div class="tcv-notes-list">
+      @if (!q()) {
+        <button class="tcv-notes-item tsh-ov" [attr.data-on]="home() ? 1 : null" (click)="goHome()">
+          <span class="tcv-notes-item-top">
+            <span class="tcv-notes-item-title">{{ 'Overview' | t }}</span>
+            <span class="tcv-notes-item-when">{{ fmt('{n} palettes · {m} items', { n: overall().palettes, m: overall().items }) }}</span>
+          </span>
+          <span class="tsh-stack" aria-hidden="true">
+            @for (s of overall().bySeg; track s.id) { <i [style.flex-grow]="s.n" [style.background]="s.c"></i> }
+          </span>
+        </button>
+      }
       @for (p of palettes(); track p.id) {
-        <button class="tcv-notes-item" [attr.data-on]="p.id === openId() && mode() === 'palette' ? 1 : null" (click)="openPalette(p.id)">
+        <button class="tcv-notes-item" [attr.data-on]="p.id === openId() && mode() === 'palette' ? 1 : null" (click)="openPalette(p.id)"
+                [title]="p.attached.length ? fmt('on {p}', { p: attachedLine(p) }) : ''">
           <span class="tcv-notes-item-top">
             @if (p.pinned) { <span class="tcv-notes-pin" [title]="'Pinned' | t">●</span> }
             <span class="tcv-notes-item-title">{{ p.name }}</span>
             <span class="tcv-notes-item-when">{{ p.items.length }} {{ (p.items.length === 1 ? 'item' : 'items') | t }}</span>
           </span>
+          <span class="tsh-stack" aria-hidden="true">
+            @for (d of domains; track d.id) { @if (p.counts[d.id]) { <i [style.flex-grow]="p.counts[d.id]" [style.background]="dc(d.id)"></i> } }
+          </span>
           <span class="tcv-notes-item-meta tst-counts">
             @for (d of domains; track d.id) {
-              @if (p.counts[d.id]) { <span>{{ d.short | t }} <b>{{ p.counts[d.id] }}</b></span> }
+              @if (p.counts[d.id]) { <span><i class="tsh-dot" [style.background]="dc(d.id)"></i>{{ d.short | t }} <b>{{ p.counts[d.id] }}</b></span> }
             }
-            @if (p.attached.length) { <span class="tst-on">{{ fmt('on {p}', { p: attachedLine(p) }) }}</span> }
+            <span class="tsh-att" [attr.data-on]="p.attached.length ? 1 : null">{{ p.attached.length ? fmt('{n} attached', { n: p.attached.length }) : ('not attached' | t) }}</span>
           </span>
         </button>
       } @empty {
@@ -377,33 +405,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
         <p class="st-hint">{{ 'Choose a finished model, board, firmware or a whole folder and run. You can leave this page while it runs; its steps and proposals are here when you come back.' | t }}</p>
       }
 
-      @if (recent().length) {
-        <section class="st-card tsx-recent">
-          <div class="st-card-head"><h3>{{ 'Recent extractions' | t }}</h3>
-            <span class="st-sub">{{ 'open one to see its steps, or to review and save its proposals' | t }}</span></div>
-          <div class="st-table-wrap">
-            <table class="st-table tsx-table">
-              <thead><tr>
-                <th>{{ 'Project' | t }}</th><th>{{ 'Started' | t }}</th><th>{{ 'Status' | t }}</th>
-                <th class="r">{{ 'Took' | t }}</th><th class="r">{{ 'Proposals' | t }}</th><th>{{ 'Saved to' | t }}</th><th></th>
-              </tr></thead>
-              <tbody>
-                @for (r of recent(); track r.id) {
-                  <tr [attr.data-on]="r.id === job()?.id ? 1 : null" (click)="showJob(r.id)">
-                    <td class="give"><span class="dim">{{ kindName(r.project.kind) | t }}</span> {{ r.project.label }}</td>
-                    <td>{{ when(r.started_at) }} <span class="dim">· {{ r.by.name || ('someone' | t) }}</span></td>
-                    <td><span class="st-tag" [attr.data-tone]="statusTone(r.status)">{{ statusName(r.status) | t }}</span></td>
-                    <td class="r mono">{{ dur(r.seconds) }}</td>
-                    <td class="r mono">{{ r.status === 'done' ? r.count : '–' }}</td>
-                    <td class="give-s">{{ r.saved_to?.name || '–' }}</td>
-                    <td class="r"><button class="st-more" (click)="showJob(r.id); $event.stopPropagation()">{{ 'Open' | t }}</button></td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </section>
-      }
+      @if (recent().length) { <ng-container [ngTemplateOutlet]="recentCard" [ngTemplateOutletContext]="{ rows: recent() }" /> }
 
     } @else if (open(); as p) {
       <header class="tst-head">
@@ -442,6 +444,29 @@ function why(e: HttpErrorResponse, fallback: string): string {
           }
         </div>
       </header>
+      @let ps = openStats();
+      <div class="st-tiles tsh-ptiles">
+        <div class="st-tile" [attr.data-tone]="p.items.length ? null : 'dim'"><span>{{ 'Items' | t }}</span><b>{{ p.items.length }}</b>
+          <small [title]="fmt('{n} by hand · {m} extracted', { n: ps.manual, m: p.items.length - ps.manual })">{{ fmt('{n} by hand · {m} extracted', { n: ps.manual, m: p.items.length - ps.manual }) }}</small></div>
+        @for (s of strengths; track s.id) {
+          <div class="st-tile tsh-str" [attr.data-s]="s.id" [attr.data-tone]="ps.str[s.id] ? null : 'dim'"><span>{{ s.label | t }}</span><b>{{ ps.str[s.id] }}</b>
+            <div class="st-meter"><i [style.width.%]="pct(ps.str[s.id], p.items.length)" [style.background]="sc(s.id)"></i></div></div>
+        }
+        <div class="st-tile tsh-dtile"><span>{{ 'Domains' | t }}</span>
+          <span class="tsh-dlegend">
+            @for (d of domains; track d.id) {
+              <span [class.dim]="!p.counts[d.id]" [title]="d.label | t"><i class="tsh-dot" [style.background]="dc(d.id)"></i>{{ d.short | t }} <b>{{ p.counts[d.id] || 0 }}</b></span>
+            }
+          </span>
+          <span class="tsh-stack tsh-stack-d">
+            @for (d of domains; track d.id) { @if (p.counts[d.id]) { <i [style.flex-grow]="p.counts[d.id]" [style.background]="dc(d.id)"></i> } }
+          </span></div>
+        <div class="st-tile" [attr.data-tone]="p.attached.length ? null : 'dim'"><span>{{ 'Attached' | t }}</span><b>{{ p.attached.length }}</b>
+          <small [title]="attachedLine(p)">{{ p.attached.length ? attachedLine(p) : ('not attached' | t) }}</small></div>
+        <div class="st-tile tsh-src" [attr.data-tone]="ps.sources.length ? null : 'dim'"><span>{{ 'Sources' | t }}</span>
+          <b>{{ ps.sources.length ? fmt(ps.sources.length === 1 ? '{n} project' : '{n} projects', { n: ps.sources.length }) : ('by hand' | t) }}</b>
+          <small [title]="ps.sourceLine">{{ ps.sources.length ? ps.sourceLine : ('nothing extracted' | t) }}</small></div>
+      </div>
       @if (p.attached.length) {
         <div class="tst-attached">
           <span class="st-sub">{{ 'Given to the agents of' | t }}</span>
@@ -467,8 +492,14 @@ function why(e: HttpErrorResponse, fallback: string): string {
       @if (p.items.length) {
         <div class="tst-cols" [style.--n]="cols().length">
           @for (c of cols(); track c.id) {
-            <div class="tst-col" (dragover)="dragOver($event)" (drop)="dropOn($event, p, c.id, null)">
-              <div class="tst-col-head"><h3>{{ c.label | t }}</h3><span class="st-sub">{{ c.items.length }}</span></div>
+            <div class="st-card tst-col" (dragover)="dragOver($event)" (drop)="dropOn($event, p, c.id, null)">
+              <div class="st-card-head tst-col-head"><i class="tsh-dot" [style.background]="dc(c.id)"></i><h3>{{ c.label | t }}</h3><span class="st-sub">{{ c.items.length }}</span>
+                <span class="st-right tsh-colfig">
+                  @for (s of strengths; track s.id) { <span [attr.data-s]="s.id" [title]="s.label | t">{{ countOf(c.items, s.id) }}</span> }
+                </span></div>
+              <span class="tsh-stack tsh-colbar" aria-hidden="true">
+                @for (s of strengths; track s.id) { @if (countOf(c.items, s.id)) { <i [style.flex-grow]="countOf(c.items, s.id)" [style.background]="sc(s.id)"></i> } }
+              </span>
               @for (it of c.items; track it.id) {
                 <div class="tst-item" tabindex="0" [attr.data-id]="it.id" [attr.draggable]="can() && editId() !== it.id ? 'true' : null"
                      [attr.data-drag]="dragId() === it.id ? 1 : null"
@@ -513,22 +544,218 @@ function why(e: HttpErrorResponse, fallback: string): string {
         <p class="st-hint">{{ 'No items yet: write the first statement above, or extract them from a finished project.' | t }}</p>
       }
     } @else {
-      <div class="tst-empty">
-        <p>{{ 'Taste palettes are what makes a design good, as statements the AI follows: attach one to a project, or mention it in Chat.' | t }}</p>
-        @if (can()) {
-          <div class="tst-acts">
-            <button class="tcv-btn tcv-btn-accent" (click)="newPalette()">{{ 'New palette' | t }}</button>
-            <button class="tcv-btn" (click)="startExtract(); $event.stopPropagation()">{{ 'Extract from project…' | t }}</button>
-          </div>
+      <!-- HOME: every palette and run in figures, the folders to start from -->
+      <header class="tst-head tsh-head">
+        <div class="tst-title">
+          <h2>{{ 'Taste' | t }}</h2>
+          <span class="st-sub">{{ 'What makes a design good, as statements every agent follows: MUST always, PREFER unless the note says otherwise, AVOID never.' | t }}</span>
+        </div>
+      </header>
+
+      @let o = overall();
+      @let js = jobStats();
+      <div class="st-tiles tsh-tiles">
+        <div class="st-tile" [attr.data-tone]="o.palettes ? null : 'dim'"><span>{{ 'Palettes' | t }}</span><b>{{ o.palettes }}</b>
+          <small>{{ fmt('{n} pinned', { n: o.pinned }) }}</small></div>
+        <div class="st-tile" [attr.data-tone]="o.items ? null : 'dim'"><span>{{ 'Items' | t }}</span><b>{{ o.items }}</b>
+          <small [title]="fmt('{n} by hand · {m} extracted', { n: o.manual, m: o.items - o.manual })">{{ fmt('{n} extracted', { n: o.items - o.manual }) }}</small></div>
+        @for (s of strengths; track s.id) {
+          <div class="st-tile tsh-str" [attr.data-s]="s.id" [attr.data-tone]="o.str[s.id] ? null : 'dim'"><span>{{ s.label | t }}</span><b>{{ o.str[s.id] }}</b>
+            <small>{{ fmt('{p}% of the items', { p: pct(o.str[s.id], o.items) }) }}</small></div>
         }
+        <div class="st-tile" [attr.data-tone]="o.attached ? null : 'dim'"><span>{{ 'Attached projects' | t }}</span><b>{{ o.attached }}</b>
+          <small>{{ fmt('on {n} of {m} palettes', { n: o.attachedPal, m: o.palettes }) }}</small></div>
+        <div class="st-tile" [attr.data-tone]="js.total ? null : 'dim'"><span>{{ 'Extractions' | t }}</span><b>{{ js.total }}</b>
+          <small>{{ fmt('{n} done · {f} failed', { n: js.done, f: js.failed }) }}</small></div>
+        <div class="st-tile" [attr.data-tone]="js.last ? statusTone(js.last.status) : 'dim'"><span>{{ 'Last extraction' | t }}</span>
+          <b>{{ js.last ? when(js.last.started_at) : '–' }}</b>
+          <small [title]="js.last ? js.last.project.label : ''">{{ js.last ? (statusName(js.last.status) | t) + ' · ' + js.last.project.label : ('none yet' | t) }}</small></div>
       </div>
+
+      @if (!o.palettes) { <ng-container [ngTemplateOutlet]="howCard" /> }
+
+      <div class="tsh-grid">
+        <section class="st-card tsh-domains">
+          <div class="st-card-head"><h3>{{ 'Items by domain' | t }}</h3>
+            <span class="st-sub">{{ fmt('{n} items in {m} palettes', { n: o.items, m: o.palettes }) }}</span>
+            <span class="st-right tsh-legend">
+              @for (s of strengths; track s.id) { <span><i class="tsh-dot" [style.background]="sc(s.id)"></i>{{ s.label | t }}</span> }
+            </span></div>
+          <div class="st-card-body">
+            @for (r of domainRows(); track r.id) {
+              <div class="tsh-drow" [attr.data-all]="r.id === 'all' ? 1 : null">
+                <span class="tsh-dname">@if (r.id !== 'all') { <i class="tsh-dot" [style.background]="dc(r.id)"></i> }{{ r.label | t }}</span>
+                <span class="tsh-dtrack">
+                  <span class="tsh-dfill" [style.width.%]="r.w">
+                    @for (s of strengths; track s.id) { @if (r.s[s.id]) { <i [style.flex-grow]="r.s[s.id]" [style.background]="sc(s.id)" [title]="(s.label | t) + ': ' + r.s[s.id]"></i> } }
+                  </span>
+                </span>
+                <span class="tsh-dfig"><b>{{ r.total }}</b>
+                  <span>{{ r.s.must }}</span><span>{{ r.s.prefer }}</span><span>{{ r.s.avoid }}</span></span>
+              </div>
+            }
+            <p class="st-hint">{{ 'Each bar is a domain across every palette, split MUST, PREFER, AVOID; then its total and the same three figures.' | t }}</p>
+          </div>
+        </section>
+
+        <section class="st-card tsh-folders">
+          <div class="st-card-head"><h3>{{ 'Start from a folder' | t }}</h3>
+            <span class="st-sub">{{ 'a model reads every model, board and firmware in it' | t }}</span>
+            @if (folders().length > 7) {
+              <span class="st-right"><button class="st-more" (click)="allFolders.set(!allFolders())">
+                {{ allFolders() ? ('Show fewer' | t) : fmt('Show all {n}', { n: folders().length }) }}</button></span>
+            }</div>
+          <div class="st-table-wrap">
+            <table class="st-table tsh-ftable">
+              <thead><tr><th>{{ 'Folder' | t }}</th><th>{{ 'Holds' | t }}</th><th>{{ 'Last run' | t }}</th><th></th></tr></thead>
+              <tbody>
+                @for (f of shownFolders(); track f.id) {
+                  <tr>
+                    <td class="give" [title]="f.id">@if (f.parent) { <span class="dim">{{ f.parent }}/</span> }{{ f.name }}</td>
+                    <td class="dim">{{ f.holds }}</td>
+                    <td>@if (f.last; as l) { <span class="st-tag" [attr.data-tone]="statusTone(l.status)">{{ statusName(l.status) | t }}</span>
+                          <span class="dim"> {{ when(l.started_at) }}</span> } @else { <span class="dim">{{ 'never run' | t }}</span> }</td>
+                    <td class="r">
+                      @if (f.last && f.last.status === 'done') { <button class="st-more" (click)="showJob(f.last.id)">{{ 'Open' | t }}</button> }
+                      @if (can()) {
+                        <button class="tcv-btn tsh-go" (click)="extractFolder(f.ref)" [disabled]="starting() || runs.running() > 0"
+                                [title]="runs.running() ? ('A run is going; one at a time.' | t) : fmt('Extract taste from {p}', { p: f.id })">{{ 'Extract' | t }}</button>
+                      }
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="4" class="dim">{{ 'No folder holds a model or a board yet.' | t }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      @if (!o.palettes && can()) {
+        <section class="st-card tsh-first">
+          <div class="st-card-head"><h3>{{ 'Write the first palette by hand' | t }}</h3>
+            <span class="st-sub">{{ 'or start from the examples, one click each' | t }}</span></div>
+          <div class="st-card-body">
+            <div class="tst-add tsh-first-row">
+              <input class="tst-in" [placeholder]="'Palette name' | t" [value]="firstName()" (input)="firstName.set($any($event.target).value)"
+                     [attr.aria-label]="'Palette name' | t">
+              <select class="tst-sel" [value]="addStrength()" (change)="addStrength.set($any($event.target).value)" [attr.aria-label]="'Strength' | t">
+                @for (s of strengths; track s.id) { <option [value]="s.id" [selected]="s.id === addStrength()">{{ s.label | t }}</option> }</select>
+              <select class="tst-sel" [value]="addDomain()" (change)="addDomain.set($any($event.target).value)" [attr.aria-label]="'Domain' | t">
+                @for (d of domains; track d.id) { <option [value]="d.id" [selected]="d.id === addDomain()">{{ d.label | t }}</option> }</select>
+              <input class="tst-in" [placeholder]="'One statement, checkable: Walls 2 mm, outside edges filleted 1 mm' | t"
+                     [value]="addText()" (input)="addText.set($any($event.target).value)" (keydown.enter)="createFirst()">
+              <button class="tcv-btn tcv-btn-accent" (click)="createFirst()" [disabled]="!addText().trim()">{{ 'Create the palette' | t }}</button>
+            </div>
+            <div class="tsh-examples">
+              @for (d of examples; track d.domain) {
+                <div class="tsh-ex">
+                  <span class="tsh-ex-head"><i class="tsh-dot" [style.background]="dc(d.domain)"></i>{{ domainLabel(d.domain) | t }}</span>
+                  @for (e of d.items; track e.text) {
+                    <button class="tsh-ex-item" (click)="useExample(d.domain, e.strength, e.text)">
+                      <span class="tst-str" [attr.data-s]="e.strength">{{ strengthLabel(e.strength) | t }}</span><span>{{ e.text | t }}</span></button>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </section>
+      }
+
+      @if (o.palettes) {
+        <section class="st-card">
+          <div class="st-card-head"><h3>{{ 'Palettes' | t }}</h3>
+            <span class="st-sub">{{ 'open one to edit its items, attach it or extract into it' | t }}</span></div>
+          <div class="st-table-wrap">
+            <table class="st-table tsh-ptable">
+              <thead><tr>
+                <th>{{ 'Palette' | t }}</th>
+                @for (d of domains; track d.id) { <th class="tsh-dcol"><i class="tsh-dot" [style.background]="dc(d.id)"></i>{{ d.short | t }}</th> }
+                <th>{{ 'Strength' | t }}</th><th>{{ 'Attached to' | t }}</th><th class="r">{{ 'Updated' | t }}</th>
+              </tr></thead>
+              <tbody>
+                @for (r of palRows(); track r.p.id) {
+                  <tr (click)="openPalette(r.p.id)">
+                    <td class="give">@if (r.p.pinned) { <span class="tcv-notes-pin" [title]="'Pinned' | t">●</span> }
+                      <b class="tsh-pname">{{ r.p.name }}</b>
+                      <span class="dim"> {{ r.p.items.length }} {{ (r.p.items.length === 1 ? 'item' : 'items') | t }}</span>
+                      @if (r.p.description) { <span class="dim"> · {{ r.p.description }}</span> }</td>
+                    @for (d of r.d; track d.id) {
+                      <td class="tsh-dcol"><span class="tsh-mini"><i [style.width.%]="d.w" [style.background]="dc(d.id)"></i></span>
+                        <span class="mono" [class.dim]="!d.n">{{ d.n }}</span></td>
+                    }
+                    <td class="tsh-scol"><span class="tsh-stack tsh-stack-s">
+                        @for (s of strengths; track s.id) { @if (r.s[s.id]) { <i [style.flex-grow]="r.s[s.id]" [style.background]="sc(s.id)"></i> } }</span>
+                      <span class="mono dim">{{ r.s.must }}·{{ r.s.prefer }}·{{ r.s.avoid }}</span></td>
+                    <td class="give-s">
+                      @for (a of r.p.attached.slice(0, 2); track a.kind + a.id) { <span class="st-tag tsh-tag" [title]="(kindName(a.kind) | t) + ': ' + a.label">{{ a.label }}</span> }
+                      @if (r.p.attached.length > 2) { <span class="dim"> +{{ r.p.attached.length - 2 }}</span> }
+                      @if (!r.p.attached.length) { <span class="dim">–</span> }</td>
+                    <td class="r">{{ when(r.p.updated_at) }} <span class="dim">· {{ r.p.by.name || ('someone' | t) }}</span></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+
+      @if (recent().length) { <ng-container [ngTemplateOutlet]="recentCard" [ngTemplateOutletContext]="{ rows: recent().slice(0, 8) }" /> }
+
+      @if (o.palettes) { <ng-container [ngTemplateOutlet]="howCard" /> }
     }
   </section>
-</div>`,
+</div>
+
+<ng-template #recentCard let-rows="rows">
+  <section class="st-card tsx-recent">
+    <div class="st-card-head"><h3>{{ 'Recent extractions' | t }}</h3>
+      <span class="st-sub">{{ 'open one to see its steps, or to review and save its proposals' | t }}</span></div>
+    <div class="st-table-wrap">
+      <table class="st-table tsx-table">
+        <thead><tr>
+          <th>{{ 'Project' | t }}</th><th>{{ 'Started' | t }}</th><th>{{ 'Status' | t }}</th>
+          <th class="r">{{ 'Took' | t }}</th><th class="r">{{ 'Proposals' | t }}</th><th>{{ 'Saved to' | t }}</th><th></th>
+        </tr></thead>
+        <tbody>
+          @for (r of rows; track r.id) {
+            <tr [attr.data-on]="mode() === 'extract' && r.id === job()?.id ? 1 : null" (click)="showJob(r.id)">
+              <td class="give"><span class="dim">{{ kindName(r.project.kind) | t }}</span> {{ r.project.label }}</td>
+              <td>{{ when(r.started_at) }} <span class="dim">· {{ r.by.name || ('someone' | t) }}</span></td>
+              <td><span class="st-tag" [attr.data-tone]="statusTone(r.status)">{{ statusName(r.status) | t }}</span></td>
+              <td class="r mono">{{ dur(r.seconds) }}</td>
+              <td class="r mono">{{ r.status === 'done' ? r.count : '–' }}</td>
+              <td class="give-s">{{ r.saved_to?.name || '–' }}</td>
+              <td class="r"><button class="st-more" (click)="showJob(r.id); $event.stopPropagation()">{{ 'Open' | t }}</button></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+</ng-template>
+
+<ng-template #howCard>
+  <section class="st-card tsh-how">
+    <div class="st-card-head"><h3>{{ 'How taste works' | t }}</h3></div>
+    <ol class="tsh-steps">
+      <li><span class="tsh-n">1</span><div><b>{{ 'Extract from a project or folder' | t }}</b>
+        <p>{{ 'A model reads a finished model, board, firmware or a whole folder - source, checks and drawn notes - and proposes statements.' | t }}</p></div></li>
+      <li><span class="tsh-n">2</span><div><b>{{ 'Review and save to a palette' | t }}</b>
+        <p>{{ 'Accept, edit or reject each proposal; only what you accept is kept. Statements can also be written by hand.' | t }}</p></div></li>
+      <li><span class="tsh-n">3</span><div><b>{{ 'Attach it, or @-mention it in Chat' | t }}</b>
+        <p>{{ 'Every agent on an attached project gets it:' | t }}
+          <span class="tst-str" data-s="must">{{ 'MUST' | t }}</span> {{ 'always' | t }},
+          <span class="tst-str" data-s="prefer">{{ 'PREFER' | t }}</span> {{ 'unless the note says otherwise' | t }},
+          <span class="tst-str" data-s="avoid">{{ 'AVOID' | t }}</span> {{ 'never.' | t }}</p></div></li>
+    </ol>
+  </section>
+</ng-template>`,
 })
 export class RoomTaste implements OnDestroy {
   private api = inject(TasteApi);
-  private runs = inject(TasteRuns);
+  readonly runs = inject(TasteRuns);
   private picked = inject(Selection);
   private auth = inject(Auth);
   private search = viewChild.required<ElementRef<HTMLInputElement>>('search');
@@ -599,6 +826,7 @@ export class RoomTaste implements OnDestroy {
     this.runs.here = true;
     this.runs.seen();
     const asked = new URLSearchParams(location.search).get('run');
+    this.readFolders();
     this.runs.refresh().then(rows => {
       if (asked) { this.showJob(asked); return; }
       const going = rows.find(isActive);
@@ -632,10 +860,7 @@ export class RoomTaste implements OnDestroy {
   }
 
   private read() {
-    this.api.list(this.q()).subscribe(ps => {
-      this.palettes.set(ps);
-      if (!this.openId() && ps.length && !this.q() && this.mode() === 'palette') this.openId.set(ps[0].id);
-    });
+    this.api.list(this.q()).subscribe(ps => this.palettes.set(ps));
     this.api.list('').subscribe(ps => this.allPalettes.set(ps));
   }
 
@@ -664,6 +889,110 @@ export class RoomTaste implements OnDestroy {
   isAttached(p: Palette, r: ProjectRef) { return p.attached.some(a => a.kind === r.kind && a.id === r.id); }
 
   openPalette(id: string) { this.mode.set('palette'); this.editId.set(null); this.openId.set(id); }
+  /** The overview: no palette open. */
+  goHome() { this.leaveExtract(); this.editId.set(null); this.openId.set(null); }
+
+  // ---- the overview (home): every palette and run in figures
+
+  folders = signal<ProjectRef[]>([]);
+  allFolders = signal(false);
+  home = computed(() => this.mode() === 'palette' && !this.open());
+  dc(d: Domain | string) { return DOMAIN_COLOR[d as Domain] ?? 'var(--ink-dim)'; }
+  sc(s: Strength) { return STRENGTH_COLOR[s]; }
+  pct(n: number, of: number) { return of ? Math.round(n / of * 100) : 0; }
+  countOf(items: TasteItem[], s: Strength) { return items.filter(i => i.strength === s).length; }
+
+  overall = computed(() => {
+    const ps = this.allPalettes(), items = ps.flatMap(p => p.items);
+    const att = new Set(ps.flatMap(p => p.attached.map(a => a.kind + ':' + a.id)));
+    const str = tally(items);
+    return {
+      palettes: ps.length, items: items.length, pinned: ps.filter(p => p.pinned).length,
+      manual: items.filter(i => i.source === 'manual').length, str,
+      attached: att.size, attachedPal: ps.filter(p => p.attached.length).length,
+      bySeg: DOMAINS.map(d => ({ id: d.id, n: items.filter(i => i.domain === d.id).length, c: DOMAIN_COLOR[d.id] })).filter(x => x.n),
+    };
+  });
+  jobStats = computed(() => {
+    const js = this.runs.jobs();
+    return { total: js.length, done: js.filter(j => j.status === 'done').length, failed: js.filter(j => j.status === 'failed').length,
+             last: (js[0] as TasteJob | undefined) ?? null };
+  });
+  /** One row per domain, and one for all: a bar as long as its share of the
+   *  biggest, split by strength. */
+  domainRows = computed(() => {
+    const items = this.allPalettes().flatMap(p => p.items);
+    const rows = DOMAINS.map(d => { const its = items.filter(i => i.domain === d.id); return { id: d.id as string, label: d.label, total: its.length, s: tally(its), w: 0 }; });
+    const max = Math.max(1, ...rows.map(r => r.total));
+    rows.forEach(r => r.w = r.total / max * 100);
+    return [...rows, { id: 'all', label: 'All domains', total: items.length, s: tally(items), w: items.length ? 100 : 0 }];
+  });
+  palRows = computed(() => {
+    const ps = this.allPalettes();
+    const max = Object.fromEntries(DOMAINS.map(d => [d.id, Math.max(1, ...ps.map(p => p.counts[d.id] ?? 0))])) as Record<Domain, number>;
+    return ps.map(p => ({ p, s: tally(p.items),
+      d: DOMAINS.map(d => ({ id: d.id, n: p.counts[d.id] ?? 0, w: (p.counts[d.id] ?? 0) / max[d.id] * 100 })) }));
+  });
+  /** The workspace's folders, each with what it holds and its last run. */
+  private folderRows = computed(() => {
+    const js = this.runs.jobs();
+    return this.folders().map(f => {
+      const cut = f.id.lastIndexOf('/');
+      return { id: f.id, ref: f, parent: cut > 0 ? f.id.slice(0, cut) : '', name: cut > 0 ? f.id.slice(cut + 1) : f.id,
+               holds: this.holds(f.sub ?? ''), last: js.find(j => j.project.kind === 'folder' && j.project.id === f.id) ?? null };
+    });
+  });
+  shownFolders = computed(() => this.allFolders() ? this.folderRows() : this.folderRows().slice(0, 7));
+  /** "16 models · 1 board", as the server writes it, in the page's language. */
+  holds(sub: string) {
+    return sub.replace(/(\d+) (models?|boards?)/g, (_m, n, w) => this.fmt(`{n} ${w}`, { n }));
+  }
+  private readFolders() {
+    this.api.projects('', true).subscribe({ next: rows => this.folders.set(rows.filter(r => r.kind === 'folder')), error: () => {} });
+  }
+  /** One click: a run over the whole folder, followed in the dashboard. */
+  extractFolder(f: ProjectRef) {
+    if (!this.can() || this.starting() || this.runs.running()) return;
+    this.stopFollowing();
+    this.job.set(null);
+    this.proposals.set([]);
+    this.exProject.set(f);
+    this.mode.set('extract');
+    this.editId.set(null);
+    this.runExtract();
+  }
+  /** The first palette, written on the overview: a name and its first statement. */
+  firstName = signal('');
+  readonly examples: { domain: Domain; items: { strength: Strength; text: string }[] }[] = [
+    { domain: 'mechanical', items: [{ strength: 'must', text: 'Walls 2 mm, outside edges filleted 1 mm' },
+      { strength: 'prefer', text: '0.3 mm clearance on press fits, 0.2 mm on sliding fits' }, { strength: 'avoid', text: 'Overhangs over 45° without support' }] },
+    { domain: 'pcb', items: [{ strength: 'must', text: 'Decoupling caps within 2 mm of each supply pin' },
+      { strength: 'prefer', text: 'Ground pour on both layers, stitched every 5 mm' }, { strength: 'avoid', text: 'Vias in pads' }] },
+    { domain: 'firmware', items: [{ strength: 'must', text: 'Every task feeds the watchdog' },
+      { strength: 'prefer', text: 'Settings kept in NVS, written only when they change' }, { strength: 'avoid', text: 'Blocking delay() in loop()' }] },
+    { domain: 'general', items: [{ strength: 'must', text: 'Every part named as it is in the BOM' },
+      { strength: 'prefer', text: 'One status LED visible from outside the case' }, { strength: 'avoid', text: 'Numbers in a source without a name' }] },
+  ];
+  domainLabel(d: Domain) { return DOMAINS.find(x => x.id === d)?.label ?? d; }
+  useExample(d: Domain, s: Strength, text: string) { this.addDomain.set(d); this.addStrength.set(s); this.addText.set(t(text)); }
+  createFirst() {
+    const text = this.addText().trim();
+    if (!text) return;
+    const name = this.firstName().trim() || `${t('Palette')} ${this.allPalettes().length + 1}`;
+    this.api.create(name, [{ text, domain: this.addDomain(), strength: this.addStrength() }]).subscribe({
+      next: p => { this.replace(p); this.addText.set(''); this.firstName.set(''); this.openPalette(p.id); this.api.changed.update(v => v + 1); },
+      error: this.failed('Could not make the palette.'),
+    });
+  }
+  /** The open palette in figures. */
+  openStats = computed(() => {
+    const p = this.open();
+    const items = p?.items ?? [];
+    const src = new Map<string, string>();
+    for (const i of items) if (i.source !== 'manual') src.set(i.source.kind + ':' + i.source.id, i.source.label);
+    return { str: tally(items), manual: items.filter(i => i.source === 'manual').length,
+             sources: [...src.values()], sourceLine: [...src.values()].join(', ') };
+  });
 
   newPalette() {
     const n = this.allPalettes().length + 1;
@@ -1093,9 +1422,11 @@ export class RoomTaste implements OnDestroy {
     if (e.key === 'Escape' && this.picker()) { this.picker.set(null); return; }
     const onItem = (e.target as HTMLElement).classList?.contains('tst-item');
     if (!typing && !onItem && !e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && this.mode() === 'palette') {
+      // the overview is the row above the first palette
       const list = this.palettes(), i = list.findIndex(p => p.id === this.openId());
-      const next = list[Math.max(0, Math.min(list.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
-      if (next) { e.preventDefault(); this.openPalette(next.id); }
+      const k = Math.max(this.q() ? 0 : -1, Math.min(list.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+      e.preventDefault();
+      if (k < 0) this.goHome(); else if (list[k]) this.openPalette(list[k].id);
     }
   }
 

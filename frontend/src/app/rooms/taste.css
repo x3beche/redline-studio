@@ -220,3 +220,125 @@
   .tst-add { grid-template-columns: auto minmax(0, 1fr); }
   .tst-add-text, .tst-add-why { grid-column: 1 / -1; }
 }
+
+/* ---- the overview (home) and the palette's figures ----------------
+   Settings' language again: st-tiles for the figures, st-card for the
+   domain chart, the folders, the palettes and the runs. A domain has a
+   colour of the theme's chart series; a strength the colour its label has. */
+.tsh-dot { display: inline-block; flex: none; width: 7px; height: 7px; margin-right: 5px; border-radius: 2px; vertical-align: 0; }
+/* a thin bar split in parts, each part's flex-grow its count */
+.tsh-stack { display: flex; gap: 1px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.tsh-stack > i { display: block; flex: 0 1 0; min-width: 2px; }
+.tcv-notes-item .tsh-stack { align-self: stretch; width: 100%; margin: 3px 0 2px; }
+.tsh-ov .tcv-notes-item-title { font-weight: 600; }
+.tsh-ov { border-bottom: 1px solid var(--line); }
+.tst-counts > span { display: inline-flex; align-items: center; }
+.tsh-att { margin-left: auto; }
+.tsh-att[data-on] { color: var(--ink); }
+
+.tsh-head { padding-bottom: 6px; }
+.tsh-tiles { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.tsh-ptiles { grid-template-columns: 1.2fr .8fr .8fr .8fr 2.2fr 1.1fr 1.3fr; }
+.tsh-dtile { display: flex; flex-direction: column; }
+.st-tile > .tsh-dlegend { display: flex; overflow: visible; flex-wrap: wrap; gap: 2px 12px; margin-top: 2px; font-size: 11.5px; color: var(--ink); }
+.tsh-dlegend > span { display: inline-flex; align-items: center; white-space: nowrap; }
+.tsh-dlegend b { margin-left: 4px; font: 500 12.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-bright); }
+.tsh-dlegend .dim, .tsh-dlegend .dim b { color: var(--ink-dim); }
+.st-tile > .tsh-stack-d { display: flex; margin-top: auto; height: 4px; }
+.tsh-str[data-s="must"]:not([data-tone]) > b { color: var(--accent); }
+.tsh-str[data-s="avoid"]:not([data-tone]) > b { color: var(--danger); }
+.tsh-ptiles .st-meter { margin-top: 6px; }
+.tsh-src > b { font-family: inherit; font-size: 13.5px; }
+
+.tsh-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 8px; align-items: stretch; }
+.tsh-grid > .st-card { display: flex; flex-direction: column; }
+
+/* items by domain: name, the bar, the figures */
+.tsh-legend { gap: 10px; font-size: 10.5px; color: var(--ink-dim); }
+.tsh-legend > span { display: inline-flex; align-items: center; }
+.tsh-domains .st-card-body { flex: 1; justify-content: space-evenly; gap: 9px; }
+.tsh-domains .st-card-body > .st-hint { margin-top: 4px; }
+.tsh-drow { display: grid; grid-template-columns: 96px minmax(0, 1fr) 128px; align-items: center; gap: 10px; font-size: 12px; }
+.tsh-drow[data-all] { padding-top: 9px; border-top: 1px solid var(--line); }
+.tsh-dname { display: inline-flex; align-items: center; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tsh-drow[data-all] .tsh-dname { color: var(--ink-dim); }
+.tsh-dtrack { height: 10px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.tsh-dfill { display: flex; gap: 1px; height: 100%; }
+.tsh-dfill > i { display: block; flex: 0 1 0; min-width: 2px; }
+.tsh-dfig { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); font: 11px 'IBM Plex Mono', ui-monospace, monospace; text-align: right; color: var(--ink-dim); }
+.tsh-dfig > b { font-weight: 500; color: var(--ink-bright); }
+.tsh-dfig > span:nth-child(2) { color: var(--accent); }
+.tsh-dfig > span:nth-child(4) { color: var(--danger); }
+
+/* the folders, each a click from a run */
+.tsh-ftable td { vertical-align: middle; }
+.tsh-ftable td.r { white-space: nowrap; }
+.tsh-ftable .st-more, .tsh-ptable .st-more { display: inline-block; margin: 0 8px 0 0; }
+.tsh-go { padding: 1px 9px; font-size: 11px; }
+
+/* the palettes: a mini bar per domain, the strengths as one split bar */
+.tsh-ptable tbody tr { cursor: pointer; }
+.tsh-ptable tbody tr:hover td { background: var(--hover); }
+.tsh-ptable td { vertical-align: middle; }
+.tsh-ptable .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.tsh-pname { font-weight: 600; color: var(--ink); }
+.tsh-ptable .tcv-notes-pin { margin-right: 4px; vertical-align: 1px; }
+th.tsh-dcol { white-space: nowrap; }
+td.tsh-dcol { width: 74px; white-space: nowrap; }
+.tsh-mini { display: inline-block; width: 36px; height: 5px; margin-right: 6px; border-radius: 2px; background: var(--surface-2); overflow: hidden; vertical-align: 1px; }
+.tsh-mini > i { display: block; height: 100%; }
+td.tsh-scol { width: 130px; white-space: nowrap; }
+.tsh-stack-s { display: inline-flex; width: 56px; height: 5px; margin-right: 6px; vertical-align: 1px; }
+.tsh-ptable td.give-s { width: 22%; text-overflow: clip; }
+.tsh-tag { max-width: 120px; margin-right: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; color: var(--ink); }
+
+/* how it works: three steps in one row */
+.tsh-steps { list-style: none; margin: 0; padding: 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; }
+.tsh-steps > li { display: flex; gap: 10px; min-width: 0; }
+.tsh-steps b { display: block; font-size: 12px; font-weight: 600; color: var(--ink); }
+.tsh-steps p { margin: 2px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-dim); }
+.tsh-steps .tst-str { font-size: 10px; }
+.tsh-n {
+  flex: none; width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%;
+  font: 11px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink);
+}
+
+/* a domain column: its colour, the strengths in figures and as a bar under the head */
+.tst-col.st-card { overflow: hidden; }
+.tst-col-head { align-items: center; gap: 6px; }
+.tst-col-head .tsh-dot { margin-right: 0; }
+.tsh-colfig { gap: 8px; font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
+.tsh-colfig [data-s="must"] { color: var(--accent); }
+.tsh-colfig [data-s="avoid"] { color: var(--danger); }
+.tsh-colbar { height: 2px; border-radius: 0; gap: 0; }
+
+@container (max-width: 900px) {
+  .tsh-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tsh-grid { grid-template-columns: minmax(0, 1fr); }
+  .tsh-ptiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tsh-dtile { grid-column: span 2; }
+}
+@container (max-width: 640px) {
+  .tsh-steps { grid-template-columns: minmax(0, 1fr); }
+  .tsh-ptiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  td.tsh-dcol .tsh-mini, .tsh-stack-s { display: none; }
+}
+.tst-col-head:has(+ .tsh-colbar) { border-bottom: 0; }
+
+/* the first palette, written on the overview; the examples a click each */
+.tsh-first-row { grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 2.4fr) auto; }
+.tsh-examples { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.tsh-ex { min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.tsh-ex-head { display: flex; align-items: center; padding: 5px 9px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink); border-bottom: 1px solid var(--line); }
+.tsh-ex-item {
+  display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 6px 9px; text-align: left;
+  font: inherit; font-size: 12px; line-height: 1.4; color: var(--ink); background: none; border: 0; cursor: pointer;
+}
+.tsh-ex-item + .tsh-ex-item { border-top: 1px solid var(--line); }
+.tsh-ex-item:hover { background: var(--hover); }
+@container (max-width: 900px) {
+  .tsh-examples { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tsh-first-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .tsh-first-row > :nth-child(4) { grid-column: 1 / -2; }
+}
