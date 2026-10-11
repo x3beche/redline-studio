@@ -199,10 +199,55 @@ footer .fine { grid-column: 1 / -1; display: flex; justify-content: space-betwee
 /* The sign-in sheet: the app's own card, without its full-screen ground. */
 .ld-veil { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center;
            background: #000000a8; backdrop-filter: blur(8px); }
-.ld-sheet { position: relative; }
+.ld-sheet { position: relative;
+  /* the sign-in card wears the page's palette, whatever theme the app is in */
+  --surface: #09090b; --surface-2: #111113; --line: #27272a; --hover: #1c1c1f; --pressed: #27272a;
+  --ink: #fafafa; --ink-bright: #fff; --ink-dim: #a1a1aa; --accent: #fafafa; --danger: #f87171; }
 .ld-sheet ::ng-deep .tcv-signin-wrap { height: auto; background: none; }
-.ld-sheet ::ng-deep .tcv-signin { border-radius: 14px; }
-.ld-x { position: absolute; top: 10px; right: 12px; z-index: 1; width: 28px; height: 28px; border: 0; border-radius: 6px;
+.ld-sheet ::ng-deep .tcv-signin { width: min(420px, calc(100vw - 32px)); gap: 14px; padding: 36px 32px 28px;
+  border: 1px solid #ffffff14; border-radius: 18px; background: #111113; box-shadow: 0 30px 80px #000000b3;
+  font-family: 'Switzer', 'IBM Plex Sans', system-ui, sans-serif; }
+/* the section mark before the name, and the name as the card's title */
+.ld-sheet ::ng-deep .tcv-signin-brand { display: flex; align-items: center; gap: 10px; margin: 0 0 2px;
+  font-size: 26px; font-weight: 600; letter-spacing: -.02em; color: #fff; }
+.ld-sheet ::ng-deep .tcv-signin-brand::before { content: ''; width: 24px; height: 24px; flex: none; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill-rule='evenodd' d='M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill-rule='evenodd' d='M8 8H56V56H8ZM14 14V30L30 14ZM14 50H22L50 22V14H42L14 42ZM34 50H50V34Z'/%3E%3C/svg%3E") center / contain no-repeat; }
+.ld-sheet ::ng-deep .tcv-signin-lead { font-size: 15px; color: var(--ink-dim); margin: 0 0 6px; }
+.ld-sheet ::ng-deep .tcv-signin label { gap: 6px; font-size: 13px; }
+.ld-sheet ::ng-deep .tcv-signin input:not([type=checkbox]) { height: 46px; padding: 0 14px; font: 15px 'Switzer', system-ui, sans-serif;
+  border-radius: 10px; background: #09090b; border: 1px solid #27272a; transition: border-color .15s, box-shadow .15s; }
+.ld-sheet ::ng-deep .tcv-signin input:not([type=checkbox]):focus { border-color: #71717a; box-shadow: 0 0 0 3px #ffffff14; }
+.ld-sheet ::ng-deep .tcv-signin .tcv-signin-check { font-size: 14px; }
+.ld-sheet ::ng-deep .tcv-signin-check-sub { font-size: 12.5px; }
+.ld-sheet ::ng-deep .tcv-signin-error { font-size: 13.5px; }
+/* buttons: the page's pills - white for the way in, outlined for the rest */
+.ld-sheet ::ng-deep .tcv-signin button.tcv-btn { height: 46px; padding: 0 20px; margin-top: 6px; border-radius: 999px;
+  font: 500 15px 'Switzer', system-ui, sans-serif; cursor: pointer; }
+.ld-sheet ::ng-deep .tcv-signin button.tcv-btn-accent { background: #fafafa; color: #09090b; border: 0; }
+.ld-sheet ::ng-deep .tcv-signin button.tcv-btn-accent:hover:not(:disabled) { background: #fff; }
+.ld-sheet ::ng-deep .tcv-signin button.tcv-btn-accent:disabled { opacity: .6; }
+.ld-sheet ::ng-deep .tcv-signin button.tcv-btn:not(.tcv-btn-accent) { margin-top: 0; background: none; color: var(--ink); border: 0;
+  box-shadow: inset 0 0 0 1px #27272a; }
+.ld-sheet ::ng-deep .tcv-signin button.tcv-btn:not(.tcv-btn-accent):hover { box-shadow: inset 0 0 0 1px #52525b; }
+/* the remembered accounts */
+.ld-sheet ::ng-deep .tcv-acct-list { border-radius: 14px; border-color: #27272a; background: #09090b; overflow: visible; }
+.ld-sheet ::ng-deep .tcv-acct-row:first-child { border-radius: 13px 13px 0 0; }
+.ld-sheet ::ng-deep .tcv-acct-row:last-child { border-radius: 0 0 13px 13px; }
+.ld-sheet ::ng-deep .tcv-acct-row:only-child { border-radius: 13px; }
+.ld-sheet ::ng-deep .tcv-signin .tcv-acct-pick { padding: 14px 6px 14px 16px; gap: 14px; }
+.ld-sheet ::ng-deep .tcv-acct-name { font-size: 15px; font-weight: 500; }
+.ld-sheet ::ng-deep .tcv-acct-mail { font-size: 13px; }
+.ld-sheet ::ng-deep .tcv-acct-again { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; }
+.ld-sheet ::ng-deep .tcv-signin .tcv-acct-more { border-radius: 8px; margin-right: 10px; }
+.ld-sheet ::ng-deep .tcv-acct-menu { border-radius: 12px; padding: 6px; background: #18181b; }
+.ld-sheet ::ng-deep .tcv-signin .tcv-acct-menu .tcv-menu-item { border-radius: 8px; padding: 8px 10px; }
+.ld-sheet ::ng-deep .tcv-signin .tcv-acct-other { padding: 12px 16px; gap: 14px; border-radius: 14px; border-color: #27272a;
+  font-size: 15px; font-weight: 500; }
+.ld-sheet ::ng-deep .tcv-acct-plus { width: 40px; height: 40px; }
+.ld-sheet ::ng-deep .tcv-signin .tcv-acct-all { font-size: 13.5px; margin-top: 4px; }
+.ld-sheet ::ng-deep .tcv-acct-fixed { padding: 12px 14px; border-radius: 12px; }
+.ld-x { position: absolute; top: 14px; right: 14px; z-index: 1; width: 32px; height: 32px; border: 0; border-radius: 999px;
         background: none; color: var(--dim); font-size: 20px; line-height: 1; cursor: pointer; }
 .ld-x:hover { color: var(--ink); background: #ffffff12; }
 button.t { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
