@@ -54,8 +54,10 @@ img { display: block; max-width: 100%; }
 
 /* the three rooms, side by side */
 .rooms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.room { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 10px 18px; }
-.room .shot { border-radius: 5px; }
+.room { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 10px 18px;
+        /* picture, caption, title, lead, figures: the same rows in all three cards, so the titles line up */
+        display: grid; grid-row: span 5; grid-template-rows: subgrid; row-gap: 0; align-content: start; }
+.room .shot { border-radius: 5px; aspect-ratio: 1; display: flex; flex-direction: column; justify-content: center; background: #09090b; }
 .shot.stack app-snap + app-snap { border-top: 1px solid var(--line); }
 .room .lbl { margin: 10px 4px 0; }
 .room h3 { margin: 18px 10px 0; font-size: 26px; line-height: 1.1; letter-spacing: -.02em; }
