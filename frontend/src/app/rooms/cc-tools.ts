@@ -372,18 +372,18 @@ export class CcToolsView {
   example(tpl: string) { return t(tpl).replace(/\{(\w+)\}/g, '…'); }
 }
 
-/** Under the usage card in the conversation list: opens the tools above in
- *  the conversation's place. Same width, border and type as the card. */
+/** The last row of the usage card in the conversation list: opens the tools
+ *  above in the conversation's place. The card draws the frame. */
 @Component({
   selector: 'app-cc-tools-line',
   imports: [T],
   styles: [`
     :host { display: block; flex: none; }
     .ctl { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 28px; padding: 5px 8px; text-align: left;
-      font-size: 11px; color: var(--ink-dim); border: 1px solid var(--line); border-radius: 5px; background: var(--surface);
+      font-size: 11px; color: var(--ink-dim); border: 0; border-radius: 0; background: none;
       cursor: pointer; }
     .ctl:hover, .ctl:focus-visible { background: var(--hover); outline: none; }
-    .ctl[aria-pressed="true"] { background: var(--surface-2); border-color: var(--accent); }
+    .ctl[aria-pressed="true"] { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
     .ctl b { color: var(--ink); font-weight: 600; }
     .ctl em { margin-left: auto; font: normal 10.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
     svg { flex: none; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7;

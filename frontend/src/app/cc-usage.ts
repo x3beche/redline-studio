@@ -270,11 +270,15 @@ export class CcTabUsage implements OnDestroy {
   imports: [T],
   styles: [`
     :host { display: block; flex: none; }
-    .ccl-wrap { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 8px; border-top: 1px solid var(--line); }
-    .ccl-wrap:empty { display: none; }
+    .ccl-wrap { padding: 6px 8px 8px; border-top: 1px solid var(--line); }
+    /* One frame: the plan's windows, Redline's own calls, the Tools line - rows split by hairlines. */
+    .ccl-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 5px;
+      background: var(--surface); overflow: hidden; }
+    :host ::ng-deep .ccl-card > * + * { border-top: 1px solid var(--line); }
     .ccl { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 6px 8px; text-align: left;
-      border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); cursor: pointer; }
+      border: 0; border-radius: 0; background: none; color: var(--ink); cursor: pointer; }
     .ccl:hover, .ccl:focus-visible { background: var(--hover); outline: none; }
+    .ccl-own { padding: 5px 8px; }
     .ccl-head { display: flex; width: 100%; align-items: baseline; gap: 6px; font-size: 11px; color: var(--ink-dim); min-width: 0; }
     .ccl-head b { color: var(--ink); font-weight: 600; }
     .ccl-head span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -291,7 +295,7 @@ export class CcTabUsage implements OnDestroy {
     .ccl-sub { font-size: 10px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   `],
   template: `
-<div class="ccl-wrap">
+<div class="ccl-wrap"><div class="ccl-card">
 @if (cc.data(); as d) { @if (d.shared && (cc.weekly() || cc.fiveHour() || cc.monthly())) {
   <button class="ccl" type="button" (click)="openSettings()" [title]="tipText()">
     <div class="ccl-head"><b>Command Code</b><span>{{ d.plan?.name || '' }}</span>
@@ -309,12 +313,11 @@ export class CcTabUsage implements OnDestroy {
 } }
 @for (r of own(); track r.id) {
   <!-- The Claude API and OpenCode Go share no usage: Redline's own calls this month. -->
-  <button class="ccl" type="button" (click)="openSettings()" [title]="r.title">
-    <div class="ccl-head"><b>{{ r.name }}</b><span>{{ 'this month' | t }}</span><em>{{ r.value }}</em></div>
-    <div class="ccl-sub">{{ r.sub }}</div>
+  <button class="ccl ccl-own" type="button" (click)="openSettings()" [title]="r.title">
+    <div class="ccl-head"><b>{{ r.name }}</b><span>{{ r.sub }}</span><em>{{ r.value }}</em></div>
   </button>
 }
-<ng-content /></div>`,
+<ng-content /></div></div>`,
 })
 export class CcUsageLine implements OnDestroy {
   cc = polling();
@@ -328,7 +331,7 @@ export class CcUsageLine implements OnDestroy {
     if (!d?.set || !m?.calls) return [];
     const tok = (m.input + m.output).toLocaleString('en-US');
     return [{ id: p.id, name: p.name, value: m.cost_usd != null ? shown(m.cost_usd) : `${m.calls} ${t('calls')}`,
-              sub: `${m.calls} ${t('calls')} · ${num(m.input + m.output)} ${t('tokens')}`,
+              sub: `${num(m.input + m.output)} ${t('tokens')} ${t('this month')}`,
               title: `${p.name} - ${t('Redline\'s own calls this month')}: ${m.calls} ${t('calls')}, ${tok} ${t('tokens')}` }];
   }));
   readonly tone = tone;
