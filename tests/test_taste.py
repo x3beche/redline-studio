@@ -548,3 +548,22 @@ def test_job_routes_read_for_viewers_write_for_drawers():
         assert access.allowed("reviewer", access.action(m, p)) and not access.allowed("viewer", access.action(m, p))
     for p in ("/api/taste/jobs", "/api/taste/jobs/j1"):
         assert access.page_allowed("GET", p) and access.allowed("viewer", access.action("GET", p))
+
+
+def test_a_palette_goes_to_another_person_as_a_file(db):  # noqa: F811
+    a, b = person(db, "a"), person(db, "b")
+    p = a.post("/api/taste", json={"name": "House style", "description": "how we build", "items": [
+        {"text": "Walls 2 mm", "domain": "mechanical", "strength": "must", "why": "stiff"},
+        {"text": "No vias in pads", "domain": "pcb", "strength": "avoid"}]}).json()
+    f = a.get(f"/api/taste/{p['id']}/export").json()
+    assert f["format"] == "redline-taste" and f["version"] == 1 and len(f["items"]) == 2
+    assert "attached" not in f and "id" not in f["items"][0]
+    got = b.post("/api/taste/import", json=f)
+    assert got.status_code == 200, got.text
+    g = got.json()
+    assert g["name"] == "House style" and [i["text"] for i in g["items"]] == ["Walls 2 mm", "No vias in pads"]
+    assert g["items"][1]["strength"] == "avoid" and g["imported"]["count"] == 2
+    # The same file again: a second palette, its name marked.
+    assert b.post("/api/taste/import", json=f).json()["name"] == "House style (imported)"
+    assert b.post("/api/taste/import", json={"format": "nope"}).status_code == 400
+    assert b.post("/api/taste/import", json={"format": "redline-taste", "version": 1, "items": [{"text": ""}]}).status_code == 400

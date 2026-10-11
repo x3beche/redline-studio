@@ -98,6 +98,9 @@ export class TasteApi {
   edit(id: string, iid: string, p: Partial<NewItem>) { return this.http.patch<Palette>(`/api/taste/${id}/items/${iid}`, p); }
   drop(id: string, iid: string) { return this.http.delete<Palette>(`/api/taste/${id}/items/${iid}`); }
   order(id: string, ids: string[]) { return this.http.put<Palette>(`/api/taste/${id}/order`, { ids }); }
+  /** A palette as a file for someone else, and such a file made a palette here (backend/taste.py). */
+  exportFile(id: string) { return this.http.get<unknown>(`/api/taste/${id}/export`); }
+  importFile(data: unknown) { return this.http.post<Palette>('/api/taste/import', data); }
   attach(id: string, attached: { kind: string; id: string }[]) {
     return this.http.put<Palette>(`/api/taste/${id}/attached`, { attached });
   }
@@ -193,6 +196,8 @@ function why(e: HttpErrorResponse, fallback: string): string {
       <div class="tst-side-acts">
         <button class="tcv-btn" (click)="newPalette()">{{ 'New palette' | t }}</button>
         <button class="tcv-btn" (click)="startExtract(); $event.stopPropagation()">{{ 'Extract from project…' | t }}</button>
+        <button class="tcv-btn" (click)="importIn.click()" [title]="'Make a palette from a file someone sent you' | t">{{ 'Import…' | t }}</button>
+        <input #importIn type="file" accept=".json,application/json" hidden (change)="importPalette($any($event.target))">
       </div>
     }
     <div class="tcv-notes-list">
@@ -439,6 +444,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
               }
             </span>
             <button class="tcv-btn" (click)="startExtract(); $event.stopPropagation()">{{ 'Extract from project…' | t }}</button>
+            <button class="tcv-btn" (click)="exportPalette(p)" [title]="'Save this palette as a file to send to someone' | t">{{ 'Export' | t }}</button>
             <button class="tcv-btn" (click)="pin(p)">{{ (p.pinned ? 'Unpin' : 'Pin') | t }}</button>
             <button class="tcv-btn tst-del" (click)="remove(p)">{{ 'Delete' | t }}</button>
           }
@@ -993,6 +999,37 @@ export class RoomTaste implements OnDestroy {
     return { str: tally(items), manual: items.filter(i => i.source === 'manual').length,
              sources: [...src.values()], sourceLine: [...src.values()].join(', ') };
   });
+
+  /** The palette as a .json file: its statements, nothing of this workspace. */
+  exportPalette(p: Palette) {
+    this.api.exportFile(p.id).subscribe({
+      next: data => {
+        const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(p.name || 'palette').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'palette'}.taste.json`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      },
+      error: this.failed('Could not export it.'),
+    });
+  }
+
+  /** A palette file someone sent: read, sent to the server, opened. */
+  importPalette(input: HTMLInputElement) {
+    const f = input.files?.[0];
+    input.value = '';
+    if (!f) return;
+    f.text().then(text => {
+      let data: unknown;
+      try { data = JSON.parse(text); } catch { this.say(t('That file is not a palette.')); return; }
+      this.api.importFile(data).subscribe({
+        next: p => { this.replace(p); this.openPalette(p.id); this.api.changed.update(v => v + 1);
+                     this.say(this.fmt('{p} imported: {n} items', { p: p.name, n: p.items.length })); },
+        error: this.failed('Could not import it.'),
+      });
+    });
+  }
 
   newPalette() {
     const n = this.allPalettes().length + 1;

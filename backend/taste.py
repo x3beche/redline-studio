@@ -1093,6 +1093,62 @@ async def api_job_delete(jid: str):
     return {"deleted": jid}
 
 
+# ---- sharing: a palette as a file ----------------------------------------------
+
+FORMAT = "redline-taste"
+
+
+def export_doc(doc: dict) -> dict:
+    """A palette as a file another person can import: its statements and
+    where they came from; not its attachments (those are this workspace's
+    projects) nor anything about the account but the author's name."""
+    return {"format": FORMAT, "version": 1, "name": doc.get("name") or "", "description": doc.get("description") or "",
+            "by": ((doc.get("by") or {}).get("name") or ""), "exported_at": _now(),
+            "items": [{k: i[k] for k in ("text", "domain", "strength", "why", "source") if i.get(k) not in (None, "")}
+                      for i in doc.get("items") or []]}
+
+
+async def import_doc(db, data: dict, by: dict) -> dict:
+    """A palette file made into a new palette here. Its items are checked one
+    by one like any other; a name already taken gets "(imported)"."""
+    if not isinstance(data, dict) or data.get("format") != FORMAT:
+        raise ValueError("this is not a Redline taste palette file")
+    if int(data.get("version") or 0) > 1:
+        raise ValueError("this palette file is from a newer Redline")
+    items = data.get("items")
+    if not isinstance(items, list):
+        raise ValueError("the file has no items")
+    name = str(data.get("name") or "Imported palette").strip()[:100] or "Imported palette"
+    taken = {(d.get("name") or "").lower() for d in await listing(db)}
+    if name.lower() in taken:
+        name = f"{name} (imported)"
+    doc = await create(db, name, str(data.get("description") or ""), [x for x in items if isinstance(x, dict)], by)
+    if not doc["items"]:
+        await db[COLL].delete_one({"_id": doc["_id"]})
+        raise ValueError("none of the file's items could be read")
+    src = {"by": str(data.get("by") or "")[:120], "at": _now(), "count": len(doc["items"])}
+    await db[COLL].update_one({"_id": doc["_id"]}, {"$set": {"imported": src}})
+    doc["imported"] = src
+    return doc
+
+
+@router.get("/{pid}/export")
+async def api_export(pid: str):
+    doc = await get(_db(), pid)
+    if not doc:
+        _404(pid)
+    return export_doc(doc)
+
+
+@router.post("/import")
+async def api_import(body: dict):
+    try:
+        doc = await import_doc(_db(), body, actors.current())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return out(doc)
+
+
 @router.post("")
 async def api_create(body: PaletteIn):
     doc = await create(_db(), body.name, body.description, [i.model_dump() for i in body.items], actors.current())
