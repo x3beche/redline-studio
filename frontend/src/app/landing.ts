@@ -1,15 +1,53 @@
-import { AfterViewInit, Component, ElementRef, OnDestroy, computed, inject, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, computed, inject, input, signal } from '@angular/core';
+import { DomSanitizer } from '@angular/platform-browser';
 import { Auth, SignIn } from './auth';
 
-/** What a signed-out visitor sees: the front page - one real project,
- *  iot-fan, from its parts to its board, firmware and cost - with signing
- *  in (and choosing, switching or removing a remembered account) in a sheet
- *  over it. The sheet opens by itself when there is something to do before
- *  anything else: the first account to make, a reset link, a password an
- *  admin set, or another account being added from inside the app. */
+/** A view of the app, taken 1:1 from the live interface: a static HTML
+ *  snapshot (/landing/snap/s-<src>.html - its DOM and CSS, canvases as
+ *  pictures, no scripts) rendered at the app's own size and scaled to the
+ *  frame. `crop` is the part of the page shown, [x, y, w, h] in the page's
+ *  pixels. Text never drops below `min` of its size in the app: a frame too
+ *  narrow for the whole crop shows the part of it around `focus` instead. */
+@Component({
+  selector: 'app-snap',
+  template: `<iframe [src]="url()" [width]="page()[0]" [height]="page()[1]" [title]="alt()" loading="lazy"
+    sandbox="allow-same-origin" scrolling="no" tabindex="-1" aria-hidden="true" [style.transform]="tf()"></iframe>`,
+  host: { role: 'img', '[attr.aria-label]': 'alt()', '[style.aspect-ratio]': 'box()[2] + " / " + box()[3]' },
+  styles: `:host { display: block; position: relative; overflow: hidden; width: 100%; background: #09090b; }
+    iframe { position: absolute; left: 0; top: 0; border: 0; display: block; transform-origin: 0 0; pointer-events: none; }`,
+})
+export class Snap implements AfterViewInit, OnDestroy {
+  private el = inject<ElementRef<HTMLElement>>(ElementRef);
+  private sani = inject(DomSanitizer);
+  private ro?: ResizeObserver;
+  src = input.required<string>();
+  page = input<number[]>([1920, 1080]);
+  crop = input<number[] | null>(null);
+  focus = input<number[] | null>(null);
+  min = input(0.85);
+  alt = input('');
+  private width = signal(0);
+  box = computed(() => this.crop() ?? [0, 0, this.page()[0], this.page()[1]]);
+  url = computed(() => this.sani.bypassSecurityTrustResourceUrl(`/landing/snap/s-${this.src()}.html`));
+  tf = computed(() => {
+    const [x, y, w, h] = this.box(), bw = this.width();
+    if (!bw) return 'scale(0)';
+    const k = Math.max(this.min(), bw / w), vw = bw / k, vh = vw * h / w;
+    const [fx, fy] = this.focus() ?? [x, y];
+    const x0 = Math.min(Math.max(fx - vw / 2, x), x + w - vw), y0 = Math.min(Math.max(fy - vh / 2, y), y + h - vh);
+    return `scale(${k}) translate(${-x0}px, ${-y0}px)`;
+  });
+  ngAfterViewInit() {
+    const fit = () => this.width.set(this.el.nativeElement.clientWidth);
+    fit();
+    if ('ResizeObserver' in window) { this.ro = new ResizeObserver(fit); this.ro.observe(this.el.nativeElement); }
+  }
+  ngOnDestroy() { this.ro?.disconnect(); }
+}
+
 @Component({
   selector: 'app-landing',
-  imports: [SignIn],
+  imports: [SignIn, Snap],
   styleUrl: './landing.css',
   host: { '(document:keydown.escape)': 'close()' },
   template: `
@@ -20,14 +58,15 @@ import { Auth, SignIn } from './auth';
 </nav>
 
 <header class="hero wrap">
-  <h1>Redline</h1>
-  <div class="grid strip">
-    <div class="kind">Hardware design workbench</div>
-    <p>3D parts, circuit boards and firmware for one product. Say what you need, and AI agents build it and check it.</p>
-    <svg class="down" viewBox="0 0 24 24"><path d="M12 3v17M5 13l7 7 7-7"/></svg>
+  <div class="grid top">
+    <h1>Redline</h1>
+    <p>A hardware design workbench. AI agents design the 3D parts, the circuit board and the firmware of one product, together, and check each other's work.</p>
   </div>
-  <div class="band" id="heroband"><img src="/landing/station.webp" alt="The iot-fan station, rendered in Redline"></div>
-  <div class="grid under"><b>iot-fan</b><span>A desk fan station. Its case, board and firmware were all made in Redline.</span></div>
+  <div class="shot hero-shot" id="heroband"><app-snap src="hero" [crop]="[0, 0, 1920, 1000]" [min]="0" alt="Redline's 3D Drawing room with the iot-fan station open" /></div>
+  <div class="grid under">
+    <b>iot-fan, live in the app</b>
+    <span>3D Drawing with the station open: the project tree, Working now, a note the Chat agent wrote and its run with tokens and cost, and the queue of drawn notes.</span>
+  </div>
 </header>
 
 <section class="wrap">
@@ -41,40 +80,29 @@ import { Auth, SignIn } from './auth';
   </div>
 </section>
 
-<section class="wrap" id="parts">
-  <div class="grid sh rv"><h2>3D parts</h2><p>Three assemblies built from 26 models. Change one part, and everything that uses it is rebuilt.</p><span class="n">01</span></div>
-  <div class="asm rv">
-    <div class="pic"><img src="/landing/fanmodule.webp" alt="The Fan Module, from behind"></div>
-    <div class="rows">
-      <div class="row"><h4>Station</h4><dl><div><dt>Notes</dt><dd class="num">37</dd></div><div><dt>Applied</dt><dd class="num">36</dd></div><div><dt>Build</dt><dd class="num">113 s</dd></div></dl><div class="bar"><i style="flex:36;background:var(--s1)"></i><i style="flex:1;background:var(--panel-2)"></i></div></div>
-      <div class="row"><h4>Base</h4><dl><div><dt>Notes</dt><dd class="num">19</dd></div><div><dt>Applied</dt><dd class="num">19</dd></div><div><dt>Build</dt><dd class="num">150 s</dd></div></dl><div class="bar"><i style="flex:1;background:var(--s2)"></i></div></div>
-      <div class="row"><h4>Fan Module</h4><dl><div><dt>Notes</dt><dd class="num">2</dd></div><div><dt>Applied</dt><dd class="num">2</dd></div><div><dt>Build</dt><dd class="num">143 s</dd></div></dl><div class="bar"><i style="flex:1;background:var(--s4)"></i></div></div>
-    </div>
+<section class="wrap" id="rooms">
+  <div class="grid sh rv"><h2>Three rooms, one product</h2><p>Parts, board and firmware are built against each other. Change the board, and the case and the pin map follow.</p><span class="n">01</span></div>
+  <div class="rooms rv">
+    @for (r of rooms; track r.name) {
+      <article class="room">
+        <div class="shot stack">@for (c of r.crops; track $index) { <app-snap [src]="r.snap" [crop]="c" [min]="r.min" [alt]="r.lbl" /> }</div>
+        <p class="lbl">{{ r.lbl }}</p>
+        <h3>{{ r.name }}</h3>
+        <p class="lead">{{ r.lead }}</p>
+        <dl>@for (f of r.facts; track f[0]) { <div><dt>{{ f[0] }}</dt><dd class="num">{{ f[1] }}</dd><em>{{ f[2] }}</em></div> }</dl>
+      </article>
+    }
   </div>
 </section>
 
-<section class="feat wrap" id="board">
-  <div class="band rv"><img src="/landing/board.webp" alt="The iot-fan board, routed"></div>
-  <div class="grid cap rv"><h3>Circuit board</h3><p>Real parts from LCSC, placed and routed by TraceMaker: 235 of 235 connections in 121 seconds.</p></div>
-  <div class="specs rv">
-    <div class="spec"><span>Size</span><b class="num">95.5 × 58.7 mm</b><em>56 cm²</em></div>
-    <div class="spec"><span>Parts</span><b class="num">91</b><em>48 different ones</em></div>
-    <div class="spec"><span>Copper</span><b class="num">1,014 tracks</b><em>179 vias · 2.87 m</em></div>
-    <div class="spec"><span>Schematic</span><b><i style="background:var(--s3)"></i>0 errors</b><em>electrical rules check</em></div>
-    <div class="spec"><span>Parts cost</span><b class="num">$20.51</b><em>a board, ordering 10</em></div>
+<section class="wrap" id="work">
+  <div class="grid sh rv"><h2>Notes, chat and agents</h2><p>Draw on the model or ask in Chat. Each note goes to the room's agent; you see its run, its questions and the result.</p><span class="n">02</span></div>
+  <div class="pair rv">
+    <div><div class="shot"><app-snap src="chat" [page]="[1500, 1080]" [crop]="chatCrop" [focus]="[900, 560]" alt="Chat: a request written up as a 3D note" /></div><p class="lbl">Chat · a spoken request, written up as a task and queued in 3D as note d2d2ad</p></div>
+    <div><div class="shot"><app-snap src="rev" [crop]="revCrop" [focus]="[1460, 240]" alt="A drawn note on the station, applied" /></div><p class="lbl">3D Drawing · a drawn note, applied: the drawing, and the model at its camera</p></div>
   </div>
-</section>
-
-<section class="feat wrap" id="firmware">
-  <div class="band rv" style="background:#111113"><img src="/landing/sheet.webp" alt="The board's schematic, read by the firmware"></div>
-  <div class="grid cap rv"><h3>Firmware</h3><p>Written for the board it runs on. Every pin is named from the schematic.</p></div>
-  <div class="specs rv">
-    <div class="spec"><span>Chip</span><b>ESP32-WROOM-32</b><em>Arduino on PlatformIO</em></div>
-    <div class="spec"><span>Pins</span><b class="num">39</b><em>from the schematic</em></div>
-    <div class="spec"><span>Build</span><b><i style="background:var(--s3)"></i>0 errors</b><em>0 warnings · 8.4 s</em></div>
-    <div class="spec"><span>Flash</span><b class="num">24.6%</b><em>315 KB of 1.25 MB</em></div>
-    <div class="spec"><span>RAM</span><b class="num">7.0%</b><em>22 KB of 320 KB</em></div>
-  </div>
+  <div class="shot wide rv"><app-snap src="hero" [crop]="workCrop" [focus]="[420, 800]" alt="Working now and the note's run" /></div>
+  <p class="lbl">3D Drawing · Working now, and note d2d2ad's run as it goes: tokens, cost, models, kinds of call, jobs, CPU and energy</p>
 </section>
 
 <div class="stmt wrap">
@@ -85,14 +113,32 @@ import { Auth, SignIn } from './auth';
   </div>
 </div>
 
+<section class="wrap" id="analytics">
+  <div class="grid sh rv"><h2>Analytics</h2><p>Every call, job and kilowatt-hour since the first note, 21 September to 11 October.</p><span class="n">03</span></div>
+  <div class="shot rv"><app-snap src="analytics" [page]="anPage" [crop]="an.overview" alt="Analytics overview tiles" /></div>
+  <p class="lbl">Analytics · Overview, all time</p>
+  <div class="pair fit rv">
+    <div [style.flex]="ar(an.models)"><div class="shot"><app-snap src="analytics" [page]="anPage" [crop]="an.models" alt="Spend by model and tokens by type" /></div><p class="lbl">Analytics · LLMs: spend by model, tokens by type</p></div>
+    <div [style.flex]="ar(an.rooms)"><div class="shot"><app-snap src="analytics" [page]="anPage" [crop]="an.rooms" alt="Spend by room and by kind of work" /></div><p class="lbl">Spend by room and by kind of work</p></div>
+  </div>
+  <div class="shot wide rv" style="margin-top:28px"><app-snap src="analytics" [page]="anPage" [crop]="an.machine" alt="Machine load, power, energy, compute by job and the jobs table" /></div>
+  <p class="lbl">Analytics · Machine &amp; energy: load, power, energy per day, CPU hours by kind of job, and every job counted</p>
+</section>
+
 <section class="wrap" id="taste">
   <div class="grid sh rv"><h2>Taste</h2><p>A finished project, distilled into the rules the next one follows. One run read every model, board and firmware in iot-fan.</p><span class="n">04</span></div>
   <div class="stats rv">
     <div class="stat"><span>Read</span><b class="num">17</b><em>of 18 projects · bought parts left out</em><div class="bar"><i style="flex:17;background:var(--s1)"></i><i style="flex:1;background:var(--panel-2)"></i></div></div>
-    <div class="stat"><span>Sent</span><b class="num">66k</b><em>tokens · 122,854 characters</em><div class="bar"><i style="flex:1;background:var(--s7)"></i></div></div>
-    <div class="stat"><span>Time</span><b class="num">20.6 s</b><em>one call to Claude Haiku 5.5</em><div class="bar"><i style="flex:1;background:var(--s4)"></i></div></div>
+    <div class="stat"><span>Sent</span><b class="num">66k</b><em>tokens · 124,437 characters</em><div class="bar"><i style="flex:1;background:var(--s7)"></i></div></div>
+    <div class="stat"><span>Time</span><b class="num">20 s</b><em>one call to Claude Haiku 5.5</em><div class="bar"><i style="flex:1;background:var(--s4)"></i></div></div>
     <div class="stat"><span>Rules</span><b class="num">27</b><em>16 must · 11 prefer</em><div class="bar"><i style="flex:16;background:var(--ink)"></i><i style="flex:11;background:var(--s8)"></i></div></div>
     <div class="stat"><span>Domains</span><b class="num">4</b><em>3D 14 · PCB 7 · FW 2 · general 4</em><div class="bar"><i style="flex:14;background:var(--s1)"></i><i style="flex:7;background:var(--s3)"></i><i style="flex:2;background:var(--s4)"></i><i style="flex:4;background:var(--s7)"></i></div></div>
+  </div>
+  <div class="shot rv"><app-snap src="taste-home" [crop]="[604, 100, 986, 330]" alt="The Taste tab's overview" /></div>
+  <p class="lbl">Taste · overview: palettes, items, MUST / PREFER / AVOID, runs; items by domain; a folder to start from</p>
+  <div class="pair rv">
+    <div><div class="shot"><app-snap src="taste-run" [crop]="[606, 108, 490, 600]" alt="The finished iot-fan extraction" /></div><p class="lbl">Taste · the iot-fan run: 17 of 18 projects read, 27 proposals</p></div>
+    <div><div class="shot"><app-snap src="taste-pal" [crop]="[1100, 245, 490, 600]" alt="Taste of iot-fan: firmware and general rules" /></div><p class="lbl">Taste of iot-fan · the firmware and general columns of the palette</p></div>
   </div>
   <div class="tcols rv">
     @for (c of taste; track c.name) {
@@ -106,24 +152,37 @@ import { Auth, SignIn } from './auth';
 </section>
 
 <section class="wrap" id="cost">
-  <div class="grid sh rv"><h2>What it cost</h2><p>Every call, build and kilowatt-hour is counted, and priced in your currency.</p><span class="n">05</span></div>
-  <div class="shot rv"><img src="/landing/project.webp" alt="Analytics for iot-fan: spend by item"></div>
-  <p class="lbl">iot-fan in Analytics, all time.</p>
-
-  <div class="grid big rv" style="margin-top:120px">
-    <b class="num">251.4<small>×</small></b>
+  <div class="grid sh rv"><h2>What it cost</h2><p>Connect the plans you already pay for. Redline routes the agents' work through them and prices every call at API rates, so you see what the plans saved.</p><span class="n">05</span></div>
+  <div class="grid big rv">
+    <b class="num">251.9<small>×</small></b>
     <div>
-      <p>This month's work, priced at API rates, against the plans that paid for it.</p>
-      <p>All of Redline, October so far.</p>
+      <p>Three weeks of work, 21 September to 11 October, priced at API list prices, against the plans that paid for it.</p>
+      <p>Claude Max (₺3,170 a month) and Command Code ($5 a month), prorated over 0.67 months.</p>
       <div class="vs">
-        <div><span>Plans</span><span class="t"><i style="width:.4%;background:var(--s8)"></i></span><b class="num">₺3,416</b></div>
-        <div><span>At API prices</span><span class="t"><i style="width:100%;background:var(--s2)"></i></span><b class="num">~₺858,624</b></div>
+        <div><span>Plans</span><span class="t"><i style="width:.4%;background:var(--s8)"></i></span><b class="num">₺2,301</b></div>
+        <div><span>At API prices</span><span class="t"><i style="width:100%;background:var(--s2)"></i></span><b class="num">₺579,595</b></div>
       </div>
     </div>
   </div>
-  <div class="two rv">
-    <div><div class="shot"><img src="/landing/costs.webp" alt="Settings, costs and currency"></div><p class="lbl">Settings · Costs &amp; currency</p></div>
-    <div><div class="shot"><img src="/landing/usage.webp" alt="Command Code usage"></div><p class="lbl">Settings · LLM usage</p></div>
+  <div class="specs rv">
+    @for (p of plans; track p[0]) { <div class="spec"><span>{{ p[0] }}</span><b>{{ p[1] }}</b><em>{{ p[2] }}</em></div> }
+  </div>
+  <div class="shot rv" style="margin-top:40px"><app-snap src="llm" [page]="[1920, 1400]" [crop]="llmCrop" alt="Settings, LLM settings: the connected providers and the Command Code plan" /></div>
+  <p class="lbl">Settings · LLM settings: four providers, nine jobs, the Command Code plan with its windows and spend per day. Keys show as dots.</p>
+  <div class="shot wide rv"><app-snap src="analytics" [page]="anPage" [crop]="an.saved" alt="Analytics: the subscription against list prices, the cache by model and its hit rate" /></div>
+  <p class="lbl">Analytics · Costs &amp; savings: ₺2,301 paid for ₺579,595 of work, the cache by model and its hit rate</p>
+</section>
+
+<section class="wrap" id="platform">
+  <div class="grid sh rv"><h2>Why not build it yourself</h2><p>An agent can write a part. What it needs around it to do a whole product is the rest of this.</p><span class="n">06</span></div>
+  <div class="infra rv">
+    @for (c of infra; track c.name) {
+      <div class="inf">
+        <h4><i [style.background]="c.color"></i>{{ c.name }}</h4>
+        <b class="num">{{ c.big }}</b><em>{{ c.sub }}</em>
+        <ul>@for (l of c.lines; track l) { <li>{{ l }}</li> }</ul>
+      </div>
+    }
   </div>
 </section>
 
@@ -164,8 +223,49 @@ export class Landing implements AfterViewInit, OnDestroy {
   open = signal(new URLSearchParams(location.search).has('signin'));
   ask = 'mailto:info@medipol.dev?subject=Redline%20access';
   links = [
-    { id: 'parts', name: '3D parts' }, { id: 'board', name: 'Circuit board' },
-    { id: 'firmware', name: 'Firmware' }, { id: 'taste', name: 'Taste' }, { id: 'cost', name: 'Cost' },
+    { id: 'rooms', name: 'Rooms' }, { id: 'work', name: 'Agents' }, { id: 'analytics', name: 'Analytics' },
+    { id: 'taste', name: 'Taste' }, { id: 'cost', name: 'Cost' }, { id: 'platform', name: 'Platform' },
+  ];
+  /** The three rooms, each a live view and iot-fan's figures for it. */
+  rooms = [
+    { name: '3D parts', snap: '3d', crops: [[700, 160, 860, 860]], min: 0, lbl: '3D Drawing · the Station assembly',
+      lead: 'Three assemblies built from 26 models. Change one part, and everything that uses it is rebuilt.',
+      facts: [['Notes', '58', '57 applied'], ['Assemblies', '3', 'Station, Base, Fan Module'], ['Build', '113-150 s', 'an assembly, from source']] },
+    { name: 'Circuit board', snap: 'pcb', crops: [[700, 360, 430, 430]], min: 0.85, lbl: 'PCB Design · the board around U2, the ESP32',
+      lead: 'Real parts from LCSC, placed and routed by TraceMaker: 235 of 235 connections in 121 seconds.',
+      facts: [['Size', '95.5 × 58.7 mm', '91 parts, 48 different'], ['Copper', '1,014 tracks', '179 vias · 2.87 m'], ['Parts cost', '$20.51', 'a board, ordering 10 · ERC 0']] },
+    { name: 'Firmware', snap: 'fw', crops: [[562, 462, 430, 360], [562, 993, 430, 66]], min: 0.85, lbl: 'Firmware · src/main.cpp, and the build',
+      lead: 'Written for the board it runs on. Every pin is named from the schematic, and pins.h is rewritten when the board changes.',
+      facts: [['Chip', 'ESP32-WROOM-32', 'Arduino on PlatformIO'], ['Pins', '39', 'from the schematic'], ['Build', '0 errors · 8.4 s', 'flash 24.6% · RAM 7.0%']] },
+  ];
+  /** Crops of the analytics snapshot (a 1920 × 3700 page). */
+  anPage = [1920, 3700];
+  an = { overview: [280, 92, 1316, 322], models: [280, 888, 870, 570], rooms: [1160, 888, 436, 570],
+         machine: [280, 2650, 1316, 772], saved: [280, 2020, 1316, 368] };
+  llmCrop = [536, 40, 1070, 560];
+  /** flex-grow for a row of crops with one height: each one's width over its height. */
+  ar(c: number[]) { return c[2] / c[3]; }
+  chatCrop = [598, 52, 590, 720];
+  revCrop = [960, 92, 640, 780];
+  workCrop = [0, 600, 1316, 400];
+  /** The plans connected to Redline (Settings > Costs, LLM settings). */
+  plans = [
+    ['Claude Max', '₺3,170 a month', 'a plan, entered in Settings > Costs'],
+    ['Command Code', '$5 a month', '8 of 9 jobs · 4,321 requests this period'],
+    ['Claude API', '1 job', '124k tokens this month'],
+    ['OpenRouter', '458 models', 'connected · no job on it now'],
+    ['Cache', '98.5%', 'of prompt tokens · ₺4.17M not paid'],
+  ];
+  /** What Redline runs around the agents, in iot-fan's figures. */
+  infra = [
+    { name: 'Compute', color: 'var(--s1)', big: '1,310 jobs', sub: '35.2 h of CPU · 8.16 kWh',
+      lines: ['801 model builds, 342 renders', '78 board runs, 76 layouts, 13 firmware builds', 'queued, run in containers, timed and metered'] },
+    { name: 'Storage', color: 'var(--s2)', big: '677 MB', sub: 'database · 168k documents',
+      lines: ['250 built models, 344 MB', '229 source versions, 370 history entries', '195 note pictures, 50 files, 2 releases'] },
+    { name: 'Agent API and MCP', color: 'var(--s3)', big: '26 tools', sub: 'over MCP, for any agent',
+      lines: ['agents connect from their own tools with REDLINE_TRANSPORT=api and a token you can revoke', 'each token sees one workspace; deletes are audited', '221 engineering calculators through find_tool and run_tool'] },
+    { name: 'LLM routing and cost', color: 'var(--s4)', big: '21.8k calls', sub: 'each priced and counted',
+      lines: ['4 providers: Claude API, Command Code, OpenRouter, OpenCode Go', '9 kinds of job, each with its own model', 'plans you connect, priced against API rates; budgets and spend per note'] },
   ];
   /** iot-fan's taste palette, as extracted (backend/taste.py): two rules a domain. */
   taste = [
