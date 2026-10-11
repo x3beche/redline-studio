@@ -155,21 +155,24 @@ export class Snap implements AfterViewInit, OnDestroy {
 
 <section class="wrap" id="cost">
   <div class="grid sh rv"><h2>What it cost</h2><p>Connect the plans you already pay for. Redline routes the agents' work through them and prices every call at API rates, so you see what the plans saved.</p><span class="n">05</span></div>
-  <div class="grid big rv">
-    <b class="num">251.9<small>×</small></b>
-    <div>
-      <p>Three weeks of work, 21 September to 11 October, priced at API list prices, against the plans that paid for it.</p>
-      <p>Claude Max (₺3,170 a month) and Command Code ($5 a month), prorated over 0.67 months.</p>
-      <div class="vs">
-        <div><span>Plans</span><span class="t"><i style="width:.4%;background:var(--s8)"></i></span><b class="num">₺2,301</b></div>
-        <div><span>At API prices</span><span class="t"><i style="width:100%;background:var(--s2)"></i></span><b class="num">₺579,595</b></div>
-      </div>
+  <div class="save rv">
+    <div class="save-x">
+      <span>The plans against API prices</span>
+      <b class="num">251.9<small>×</small></b>
+      <em>₺579,595 of work, paid with ₺2,301 of plans</em>
+    </div>
+    <div class="save-vs">
+      <div class="row"><span>At API list prices</span><b class="num">₺579,595</b></div>
+      <div class="t"><i style="width:100%;background:var(--s2)"></i></div>
+      <div class="row"><span>Paid, the plans</span><b class="num">₺2,301</b></div>
+      <div class="t"><i style="width:.4%;min-width:6px;background:var(--s3)"></i></div>
+      <p>Three weeks of work, 21 September to 11 October. Claude Max (₺3,170 a month) and Command Code ($5 a month), prorated over 0.67 months.</p>
     </div>
   </div>
-  <div class="specs rv">
-    @for (p of plans; track p[0]) { <div class="spec"><span>{{ p[0] }}</span><b>{{ p[1] }}</b><em>{{ p[2] }}</em></div> }
+  <div class="stats plans rv">
+    @for (p of plans; track p[0]) { <div class="stat"><span><i [style.background]="p[3]"></i>{{ p[0] }}</span><b>{{ p[1] }}</b><em>{{ p[2] }}</em></div> }
   </div>
-  <div class="shot rv" style="margin-top:40px"><app-snap src="llm" [page]="[1920, 1400]" [crop]="llmCrop" alt="Settings, LLM settings: the connected providers and the Command Code plan" /></div>
+  <div class="shot rv" style="margin-top:12px"><app-snap src="llm" [page]="[1920, 1400]" [crop]="llmCrop" alt="Settings, LLM settings: the connected providers and the Command Code plan" /></div>
   <p class="lbl">Settings · LLM settings: four providers, nine jobs, the Command Code plan with its windows and spend per day. Keys show as dots.</p>
   <div class="shot wide rv"><app-snap src="analytics" [page]="anPage" [crop]="an.saved" alt="Analytics: the subscription against list prices, the cache by model and its hit rate" /></div>
   <p class="lbl">Analytics · Costs &amp; savings: ₺2,301 paid for ₺579,595 of work, the cache by model and its hit rate</p>
@@ -253,11 +256,11 @@ export class Landing implements AfterViewInit, OnDestroy {
   modelCrop = [740, 150, 700, 880];
   /** The plans connected to Redline (Settings > Costs, LLM settings). */
   plans = [
-    ['Claude Max', '₺3,170 a month', 'a plan, entered in Settings > Costs'],
-    ['Command Code', '$5 a month', '8 of 9 jobs · 4,321 requests this period'],
-    ['Claude API', '1 job', '124k tokens this month'],
-    ['OpenRouter', '458 models', 'connected · no job on it now'],
-    ['Cache', '98.5%', 'of prompt tokens · ₺4.17M not paid'],
+    ['Claude Max', '₺3,170/mo', 'a plan, entered in Settings > Costs', 'var(--s5)'],
+    ['Command Code', '$5/mo', '8 of 9 jobs · 4,321 requests this period', 'var(--s1)'],
+    ['Claude API', '1 job', '124k tokens this month', 'var(--s2)'],
+    ['OpenRouter', '458 models', 'connected · no job on it now', 'var(--s4)'],
+    ['Cache', '98.5%', 'of prompt tokens · ₺4.17M not paid', 'var(--s3)'],
   ];
   /** What Redline runs around the agents, in iot-fan's figures. */
   infra = [
