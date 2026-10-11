@@ -84,6 +84,9 @@ _PROM_ACC: float | None = None
 _PROM_AT: float | None = None
 
 
+_PROM_DOWN_UNTIL = 0.0
+
+
 def _rapl_from_prometheus() -> int | None:
     global _PROM_ACC, _PROM_AT
     import json
@@ -95,12 +98,20 @@ def _rapl_from_prometheus() -> int | None:
         return None
 
     def ask(q: str) -> float | None:
+        # A blocking call on the event loop: one that cannot connect held
+        # the whole API for its timeout on every analytics poll, until the
+        # watchdog restarted it (2026-10-11, the address had moved). So:
+        # a short timeout, and after a failure no asking for a minute.
+        global _PROM_DOWN_UNTIL
+        if time.time() < _PROM_DOWN_UNTIL:
+            return None
         url = f"{base}/api/v1/query?" + urllib.parse.urlencode({"query": q})
         try:
-            with urllib.request.urlopen(url, timeout=2) as r:
+            with urllib.request.urlopen(url, timeout=0.5) as r:
                 res = json.loads(r.read())["data"]["result"]
             return float(res[0]["value"][1]) if res else None
         except (OSError, ValueError, KeyError, IndexError):
+            _PROM_DOWN_UNTIL = time.time() + 60
             return None
 
     now = time.time()
