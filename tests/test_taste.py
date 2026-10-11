@@ -291,3 +291,37 @@ def test_reviewed_proposals_are_saved_with_their_source(db):  # noqa: F811
 def test_taste_is_a_job_in_the_llm_settings():
     assert llm.JOBS[taste.JOB]["label"] == "Taste extraction"
     assert llm.job_label("taste") == "Taste extraction"
+
+
+def test_a_folder_is_read_whole_bought_parts_left_out(monkeypatch):
+    fake = FakeDb()
+    run(fake["models"].insert_one({"_id": "fan/parts/lid", "folder": "fan/parts", "title": "Lid", "source": "lid = 2.4"}))
+    run(fake["models"].insert_one({"_id": "fan/purchased/m3", "folder": "fan/purchased", "title": "M3", "source": "screw"}))
+    run(fake["models"].insert_one({"_id": "other/x", "folder": "other", "title": "X", "source": "elsewhere"}))
+    run(fake["boards"].insert_one({"_id": "ctl", "folder": "fan/electronics", "title": "Controller", "source": "i2c = 400k"}))
+    assert run(taste.folder_projects(fake, "fan")) == [("model", "fan/parts/lid"), ("board", "ctl")]
+    rows = {f["id"]: f["sub"] for f in run(taste.folder_list(fake))}
+    assert rows["fan"] == "1 model · 1 board" and "fan/purchased" not in rows
+    assert [r["kind"] for r in run(taste.projects(fake, "fan", folders=True))][:1] == ["folder"]
+    assert all(r["kind"] != "folder" for r in run(taste.projects(fake, "fan")))
+    seen = {}
+
+    async def complete(messages, **kw):
+        seen["messages"], seen["kw"] = messages, kw
+        return {"choices": [{"message": {"content": str([{"text": f"rule {n}", "domain": "pcb"} for n in range(50)])
+                                         .replace("'", '"')}}], "usage": {}}
+
+    async def record(db, **kw):
+        pass
+
+    monkeypatch.setattr(llm, "complete", complete)
+    monkeypatch.setattr(llm, "key", lambda p: "k")
+    monkeypatch.setattr(llm, "record", record)
+    got = run(taste.extract(fake, "folder", "fan"))
+    user = seen["messages"][1]["content"]
+    assert "lid = 2.4" in user and "Controller" in user and "screw" not in user and "elsewhere" not in user
+    assert "whole project folder" in seen["messages"][0]["content"]
+    assert len(got["proposals"]) == taste.FOLDER_PROPOSALS[1]
+    assert got["proposals"][0]["source"] == {"kind": "folder", "id": "fan", "label": "fan"}
+    with pytest.raises(LookupError):
+        run(taste.extract(fake, "folder", "nothing-here"))

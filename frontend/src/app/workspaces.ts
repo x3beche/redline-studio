@@ -50,7 +50,7 @@ export const WORKSPACES: Workspace[] = [
     id: 'taste',
     label: 'Taste',
     blurb: 'Taste palettes: what makes a design good, as statements the AI follows - attached to a '
-         + 'project or mentioned in Chat, written by hand or extracted from a finished one (Alt+T).',
+         + 'project or mentioned in Chat, written by hand or extracted from a finished one.',
     ready: true,
   },
   {

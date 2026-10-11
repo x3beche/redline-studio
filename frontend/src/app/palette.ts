@@ -160,7 +160,7 @@ export class Palette {
     const room = this.picked.room();
     const out: Item[] = [
       { group: 'Actions', icon: '✎', label: 'New note', hint: 'from anywhere', keys: 'Alt+N', run: () => this.notes.quick.set(true) },
-      { group: 'Actions', icon: '≡', label: 'Open Taste', hint: 'taste palettes', keys: 'Alt+T', run: () => this.picked.room.set('taste') },
+      { group: 'Actions', icon: '≡', label: 'Open Taste', hint: 'taste palettes', run: () => this.picked.room.set('taste') },
       ...(this.auth.can('draw') ? [{ group: 'Actions', icon: '≡', label: 'Extract taste from a project', hint: 'a model proposes, you review',
         run: () => { this.picked.room.set('taste'); setTimeout(() => this.picked.ask('taste-extract'), 50); } }] : []),
       { group: 'Actions', icon: '⌨', label: 'Keyboard shortcuts', keys: '?', run: () => this.prefs.open.set('shortcuts') },

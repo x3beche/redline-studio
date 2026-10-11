@@ -243,13 +243,6 @@ export class App {
       if (id !== 'commandcode') url.searchParams.delete('thread');
       history.replaceState(null, '', url);
     });
-    // Alt+T anywhere: the Taste tab - before the code editor or a room can take it.
-    window.addEventListener('keydown', e => {
-      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (e.code !== 'KeyT' && e.key !== 't' && e.key !== 'T')) return;
-      if (!this.auth.signedIn()) return;
-      e.preventDefault();
-      this.here.set('taste');
-    }, true);
   }
 
   open(id: Workspace['id']) { this.here.set(id); }

@@ -18,7 +18,8 @@ How the agents get it:
 
 Extraction (`extract`) reads what is known about a finished project - its
 source, a board's rules and checks, a firmware's code, its notes and drawn
-notes - and asks the "taste" job's model (Settings > LLM settings) for
+notes - or every project under a folder at once (`gather_folder`, bought
+parts left out), and asks the "taste" job's model (Settings > LLM settings) for
 proposals. Nothing is kept from it until the person has looked at each one
 and saved the ones they want (a separate call).
 
@@ -52,6 +53,11 @@ PROPOSALS = (5, 20)             # what extraction asks for
 SOURCE_CHARS = 40_000           # what extraction reads of a project
 EXTRACT_TOKENS = 3_000
 EXTRACT_TIMEOUT = 120.0
+FOLDER_PROPOSALS = (8, 40)      # a folder: every project in it, read at once
+FOLDER_CHARS = 120_000          # what extraction reads of a folder, split among its projects
+FOLDER_TOKENS = 7_000
+FOLDER_TIMEOUT = 240.0
+STOCK_FOLDERS = ("purchased",)  # bought parts drawn to size: not the designer's taste
 
 DOMAIN_NAMES = {"mechanical": "Mechanical", "pcb": "PCB", "firmware": "Firmware", "general": "General"}
 
@@ -76,7 +82,7 @@ def clean_item(raw: dict, source: dict | None = None) -> dict | None:
     strength = str(raw.get("strength") or "").strip().lower()
     why = re.sub(r"\s+", " ", str(raw.get("why") or "")).strip()[:MAX_WHY]
     src = raw.get("source") if source is None else source
-    if isinstance(src, dict) and src.get("kind") in PROJECT_KINDS and src.get("id"):
+    if isinstance(src, dict) and src.get("kind") in (*PROJECT_KINDS, "folder") and src.get("id"):
         src = {"kind": src["kind"], "id": str(src["id"])[:200], "label": str(src.get("label") or src["id"])[:200]}
     else:
         src = "manual"
@@ -229,10 +235,17 @@ async def project_label(db, kind: str, ref: str) -> str | None:
     return d.get("title") or d.get("name") or ref
 
 
-async def projects(db, q: str = "", limit: int = 60) -> list[dict]:
-    """Models, boards and firmware of the workspace, for the pickers."""
+async def projects(db, q: str = "", limit: int = 60, folders: bool = False) -> list[dict]:
+    """Models, boards and firmware of the workspace, for the pickers; with
+    `folders`, the folders that hold any of them first (extraction reads a
+    folder whole)."""
     words = [w for w in q.lower().split() if w]
     out: list[dict] = []
+    if folders:
+        for f in await folder_list(db):
+            row = {"kind": "folder", "id": f["id"], "label": f["id"], "sub": f["sub"]}
+            if all(w in f"{f['id']} {f['sub']}".lower() for w in words):
+                out.append(row)
     subs = {"model": lambda d: d["_id"] + ".3d",
             "board": lambda d: d["_id"] + ".pcb" + (f" · {d['folder']}" if d.get("folder") else ""),
             "firmware": lambda d: "firmware · " + str(d.get("board") or "")}
@@ -242,8 +255,56 @@ async def projects(db, q: str = "", limit: int = 60) -> list[dict]:
             row = {"kind": kind, "id": d["_id"], "label": label, "sub": subs[kind](d)}
             if all(w in f"{label} {d['_id']} {row['sub']}".lower() for w in words):
                 out.append(row)
-    out.sort(key=lambda r: (PROJECT_KINDS.index(r["kind"]), str(r["label"]).lower()))
+    order = ("folder", *PROJECT_KINDS)
+    out.sort(key=lambda r: (order.index(r["kind"]), str(r["label"]).lower()))
     return out[:limit]
+
+
+def _in(folder: str, path: str | None) -> bool:
+    return bool(path) and (path == folder or path.startswith(folder + "/"))
+
+
+def _stock(path: str | None) -> bool:
+    return any(seg in STOCK_FOLDERS for seg in (path or "").split("/"))
+
+
+async def folder_projects(db, folder: str) -> list[tuple[str, str]]:
+    """Every model, board and firmware under a folder (its subfolders too),
+    bought parts left out: (kind, id)."""
+    got: list[tuple[str, str]] = []
+    async for d in db["models"].find({}, {"folder": 1}).sort("_id", 1):
+        if _in(folder, d.get("folder")) and not _stock(d.get("folder")):
+            got.append(("model", d["_id"]))
+    boards = []
+    async for d in db["boards"].find({}, {"folder": 1}).sort("_id", 1):
+        if _in(folder, d.get("folder")):
+            boards.append(d["_id"])
+            got.append(("board", d["_id"]))
+    if boards:
+        async for d in db["firmware"].find({"board": {"$in": boards}}, {"_id": 1}).sort("_id", 1):
+            got.append(("firmware", d["_id"]))
+    return got
+
+
+async def folder_list(db) -> list[dict]:
+    """The folders that hold a model or a board, top ones included, each with
+    what it holds: [{id, sub}]."""
+    paths: dict[str, list[int]] = {}
+    for coll, at in (("models", 0), ("boards", 1)):
+        async for d in db[coll].find({}, {"folder": 1}):
+            f = d.get("folder") or ""
+            if not f or (coll == "models" and _stock(f)):
+                continue
+            parts = f.split("/")
+            for i in range(1, len(parts) + 1):
+                paths.setdefault("/".join(parts[:i]), [0, 0])[at] += 1
+    out = []
+    for f, (m, b) in sorted(paths.items()):
+        bits = [f"{m} {'model' if m == 1 else 'models'}"] if m else []
+        if b:
+            bits.append(f"{b} {'board' if b == 1 else 'boards'}")
+        out.append({"id": f, "sub": " · ".join(bits)})
+    return out
 
 
 async def attached_to(db, kind: str, ref: str) -> list[dict]:
@@ -313,9 +374,9 @@ EXTRACT_PROMPT = (
 )
 
 
-def parse_proposals(raw: str, source: dict) -> list[dict]:
+def parse_proposals(raw: str, source: dict, most: int = PROPOSALS[1]) -> list[dict]:
     """The model's answer as items: the JSON array (fenced or bare, or under
-    an "items" key), each made whole, duplicates dropped, at most 20."""
+    an "items" key), each made whole, duplicates dropped, at most `most`."""
     text = (raw or "").strip()
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
     if fence:
@@ -345,7 +406,7 @@ def parse_proposals(raw: str, source: dict) -> list[dict]:
         if it and key not in seen:
             seen.add(key)
             out.append(it)
-        if len(out) >= PROPOSALS[1]:
+        if len(out) >= most:
             break
     return out
 
@@ -354,8 +415,10 @@ def _clip(s: str, n: int) -> str:
     return s if len(s) <= n else s[:n] + f"\n[... {len(s) - n:,} more characters left out]"
 
 
-async def gather(db, kind: str, ref: str) -> tuple[str, str]:
-    """What is known about a project, as text for the model, and its name."""
+async def gather(db, kind: str, ref: str, budget: int = SOURCE_CHARS) -> tuple[str, str]:
+    """What is known about a project, as text for the model, and its name;
+    its own text clipped to `budget` characters."""
+    SOURCE = budget
     from . import cc_context
     parts: list[str] = []
     label = await project_label(db, kind, ref)
@@ -363,14 +426,14 @@ async def gather(db, kind: str, ref: str) -> tuple[str, str]:
         raise KeyError(f"{kind} {ref}")
     if kind == "model":
         got = await cc_context._model(db, ref)
-        parts.append(_clip(got["text"] if got else "", SOURCE_CHARS))
+        parts.append(_clip(got["text"] if got else "", SOURCE))
     elif kind == "board":
         got = await cc_context._board(db, ref)
         if got:
-            parts.append(_clip(got["text"], SOURCE_CHARS // 2))
+            parts.append(_clip(got["text"], SOURCE // 2))
         src = (await db["boards"].find_one({"_id": ref}, {"source": 1}) or {}).get("source")
         if src:
-            parts.append("Board source:\n```\n" + _clip(src, SOURCE_CHARS // 2) + "\n```")
+            parts.append("Board source:\n```\n" + _clip(src, SOURCE // 2) + "\n```")
     else:
         from . import firmware
         fw = await firmware.get(db, ref)
@@ -380,7 +443,7 @@ async def gather(db, kind: str, ref: str) -> tuple[str, str]:
         if b.get("state"):
             parts.append(f"Last build: {b.get('state')}, {b.get('error_count', 0)} errors, {b.get('warning_count', 0)} warnings")
         files = await firmware.contents(db, ref)
-        left = SOURCE_CHARS
+        left = SOURCE
         for path in sorted(files, key=lambda p: (not p.startswith("src/"), p)):
             if left <= 0:
                 parts.append(f"[... {len(files)} files in all; the rest left out]")
@@ -412,11 +475,42 @@ class ExtractError(Exception):
     """What the person is told when extraction cannot run or fails."""
 
 
+FOLDER_PROMPT = (
+    "\n\nThis time you read a whole project folder: every model, board and firmware in it, one after "
+    f"another. Write between {FOLDER_PROPOSALS[0]} and {FOLDER_PROPOSALS[1]} statements in all, as the "
+    "folder's design rules: 3D design rules (domain \"mechanical\"), PCB rules (\"pcb\"), firmware rules "
+    "(\"firmware\") and rules that hold across them (\"general\"). Cover every domain the folder has "
+    "material for. Prefer what recurs across its projects over what one part does once."
+)
+
+
+async def gather_folder(db, folder: str) -> tuple[str, str]:
+    """Every project under a folder, as text for the model, each given its
+    share of the reading."""
+    refs = await folder_projects(db, folder)
+    if not refs:
+        raise KeyError(f"folder {folder}")
+    each = max(4_000, FOLDER_CHARS // len(refs))
+    parts, left = [], FOLDER_CHARS
+    for kind, ref in refs:
+        if left <= 0:
+            parts.append(f"[... {len(refs)} projects in all; the rest left out]")
+            break
+        try:
+            text, label = await gather(db, kind, ref, min(each, left))
+        except Exception:                               # noqa: BLE001 - one unreadable project skips, not stops
+            continue
+        left -= len(text)
+        parts.append(f"===== {kind} \"{label}\" ({ref}) =====\n{text}")
+    return "\n\n".join(parts), folder
+
+
 async def extract(db, kind: str, ref: str) -> dict:
-    """Proposals for one project: {project, proposals, provider, model}.
-    Nothing is saved."""
+    """Proposals for one project, or a folder of them: {project, proposals,
+    provider, model}. Nothing is saved."""
+    whole = kind == "folder"
     try:
-        material, label = await gather(db, kind, ref)
+        material, label = await (gather_folder(db, ref) if whole else gather(db, kind, ref))
     except KeyError as exc:
         raise LookupError(f"{kind} {ref} is not in this workspace") from exc
     prov, model = llm.route(JOB)
@@ -424,9 +518,10 @@ async def extract(db, kind: str, ref: str) -> dict:
         raise ExtractError(llm.no_key(prov, JOB))
     source = {"kind": kind, "id": ref, "label": label}
     try:
-        d = await llm.complete([{"role": "system", "content": EXTRACT_PROMPT},
+        d = await llm.complete([{"role": "system", "content": EXTRACT_PROMPT + (FOLDER_PROMPT if whole else "")},
                                 {"role": "user", "content": f"Project: {kind} \"{label}\"\n\n{material}"}],
-                               job=JOB, max_tokens=EXTRACT_TOKENS, temperature=0.2, timeout=EXTRACT_TIMEOUT)
+                               job=JOB, max_tokens=FOLDER_TOKENS if whole else EXTRACT_TOKENS, temperature=0.2,
+                               timeout=FOLDER_TIMEOUT if whole else EXTRACT_TIMEOUT)
     except Exception as exc:                           # noqa: BLE001 - said to the person, plainly
         raise ExtractError(f"the {llm.PROVIDERS.get(prov, {}).get('name', prov)} model {model} failed: "
                            f"{str(exc)[:300] or type(exc).__name__}") from exc
@@ -434,7 +529,7 @@ async def extract(db, kind: str, ref: str) -> dict:
                      surface="taste", kind="taste", used=d.get("usage") or {})
     content = ((d.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
     try:
-        got = parse_proposals(content, source)
+        got = parse_proposals(content, source, FOLDER_PROPOSALS[1] if whole else PROPOSALS[1])
     except ValueError as exc:
         raise ExtractError(f"{exc} - try again, or pick another model for Taste extraction "
                            "in Settings > LLM settings") from exc
@@ -488,7 +583,7 @@ class OrderIn(BaseModel):
 
 
 class Target(BaseModel):
-    kind: str = Field(pattern="^(model|board|firmware)$")
+    kind: str = Field(pattern="^(model|board|firmware|folder)$")
     id: str = Field(min_length=1, max_length=200)
 
 
@@ -511,8 +606,8 @@ async def api_list(q: str = ""):
 
 
 @router.get("/projects")
-async def api_projects(q: str = ""):
-    return await projects(_db(), q[:200])
+async def api_projects(q: str = "", folders: bool = False):
+    return await projects(_db(), q[:200], folders=folders)
 
 
 @router.get("/attached")

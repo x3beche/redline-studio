@@ -19,7 +19,7 @@ import { T, t } from '../i18n';
  */
 export type Domain = 'mechanical' | 'pcb' | 'firmware' | 'general';
 export type Strength = 'must' | 'prefer' | 'avoid';
-export interface ProjectRef { kind: 'model' | 'board' | 'firmware'; id: string; label: string; sub?: string }
+export interface ProjectRef { kind: 'folder' | 'model' | 'board' | 'firmware'; id: string; label: string; sub?: string }
 export interface TasteItem {
   id: string; text: string; domain: Domain; strength: Strength; why?: string;
   source: 'manual' | ProjectRef;
@@ -39,7 +39,7 @@ export const DOMAINS: { id: Domain; label: string; short: string }[] = [
 export const STRENGTHS: { id: Strength; label: string }[] = [
   { id: 'must', label: 'MUST' }, { id: 'prefer', label: 'PREFER' }, { id: 'avoid', label: 'AVOID' },
 ];
-const KIND_NAME: Record<string, string> = { model: '3D model', board: 'Board', firmware: 'Firmware' };
+const KIND_NAME: Record<string, string> = { folder: 'Folder', model: '3D model', board: 'Board', firmware: 'Firmware' };
 
 @Injectable({ providedIn: 'root' })
 export class TasteApi {
@@ -62,7 +62,10 @@ export class TasteApi {
   attach(id: string, attached: { kind: string; id: string }[]) {
     return this.http.put<Palette>(`/api/taste/${id}/attached`, { attached });
   }
-  projects(q = '') { return this.http.get<ProjectRef[]>(`/api/taste/projects?q=${encodeURIComponent(q)}`); }
+  /** Models, boards and firmware; with `folders`, the folders too (extraction reads a folder whole). */
+  projects(q = '', folders = false) {
+    return this.http.get<ProjectRef[]>(`/api/taste/projects?q=${encodeURIComponent(q)}${folders ? '&folders=1' : ''}`);
+  }
   extract(kind: string, id: string) {
     return this.http.post<{ project: ProjectRef; proposals: TasteItem[]; provider: string; model: string }>(
       '/api/taste/extract', { kind, id });
@@ -138,7 +141,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
               {{ exProject() ? (kindName(exProject()!.kind) | t) + ': ' + exProject()!.label : ('Choose a project…' | t) }}</button>
             @if (picker() === 'extract') {
               <div class="tst-pop" role="listbox">
-                <input #pickq class="tcv-notes-search" [placeholder]="'Find a model, board or firmware' | t" [value]="pickQ()"
+                <input #pickq class="tcv-notes-search" [placeholder]="'Find a folder, model, board or firmware' | t" [value]="pickQ()"
                        (input)="findProjects($any($event.target).value)" (keydown)="pickKey($event)">
                 <div class="tst-pop-list">
                   @for (r of projects(); track r.kind + r.id; let k = $index) {
@@ -158,7 +161,9 @@ function why(e: HttpErrorResponse, fallback: string): string {
       </header>
       @if (exError(); as e) { <div class="st-banner tst-banner" role="alert">{{ e }}</div> }
       @if (exBusy()) {
-        <p class="st-hint">{{ fmt('Reading {p} - its source, checks, notes and drawn notes - and asking the model. This takes up to a minute.', { p: exProject()?.label ?? '' }) }}</p>
+        <p class="st-hint">{{ exProject()?.kind === 'folder'
+              ? fmt('Reading every model, board and firmware in {p} and asking the model. This takes a few minutes.', { p: exProject()?.label ?? '' })
+              : fmt('Reading {p} - its source, checks, notes and drawn notes - and asking the model. This takes up to a minute.', { p: exProject()?.label ?? '' }) }}</p>
       }
       @if (proposals().length) {
         <div class="tst-cols" [style.--n]="propCols().length">
@@ -583,7 +588,7 @@ export class RoomTaste implements OnDestroy {
   findProjects(q: string) {
     this.pickQ.set(q);
     clearTimeout(this.pickTimer);
-    this.pickTimer = setTimeout(() => this.api.projects(q).subscribe({
+    this.pickTimer = setTimeout(() => this.api.projects(q, this.picker() === 'extract').subscribe({
       next: rows => { this.projects.set(rows); this.pickIdx.set(0); },
       error: this.failed('Could not list the projects.'),
     }), 120);
