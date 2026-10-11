@@ -327,3 +327,224 @@ def test_a_folder_is_read_whole_bought_parts_left_out(monkeypatch):
     assert got["proposals"][0]["source"] == {"kind": "folder", "id": "fan", "label": "fan"}
     with pytest.raises(LookupError):
         run(taste.extract(fake, "folder", "nothing-here"))
+
+
+# ---------------------------------------------------------------- extraction as a job
+
+def _answer(text='[{"text": "Walls 2 mm", "domain": "mechanical", "strength": "must"},'
+                 ' {"text": "walls 2 mm"}, {"text": ""}]', usage=None):
+    async def complete(messages, **kw):
+        return {"choices": [{"message": {"content": text}}], "usage": usage or {"prompt_tokens": 900,
+                                                                                "completion_tokens": 120},
+                "provider": "commandcode", "model": "m"}
+    return complete
+
+
+async def _nothing(db, **kw):
+    pass
+
+
+def _mock_llm(monkeypatch, complete):
+    monkeypatch.setattr(llm, "complete", complete)
+    monkeypatch.setattr(llm, "key", lambda p: "k")
+    monkeypatch.setattr(llm, "record", _nothing)
+    monkeypatch.setattr(llm, "route", lambda job: ("commandcode", "m"))
+
+
+def _until_done(fake, jid):
+    async def go():
+        t = taste._TASKS.get(jid)
+        if t:
+            await t
+        return await taste.job(fake, jid)
+    return go
+
+
+def test_the_steps_are_told_as_they_happen(monkeypatch):
+    fake = FakeDb()
+    _project(fake)
+    _mock_llm(monkeypatch, _answer())
+    track = taste.Tracker()
+    got = run(taste.extract(fake, "model", "case", track))
+    assert [s["id"] for s in track.steps] == ["read:model:case", "ask", "parse"]
+    read, ask, parse = track.steps
+    assert read["state"] == "done" and read["project"]["label"] == "Fan case" and read["chars"] > 20
+    assert read["revisions"] == 1 and read["notes"] == 1 and read["clipped"] is False
+    assert ask["state"] == "done" and ask["provider"] == "commandcode" and ask["model"] == "m"
+    assert ask["prompt_chars"] > read["chars"] and ask["tokens_in"] == 900 and ask["sent_at"]
+    assert parse == {**parse, "state": "done", "parsed": 1, "rows": 3, "duplicates": 1, "invalid": 1}
+    assert all("seconds" in s and s["finished_at"] for s in track.steps)
+    assert track.totals["tokens_out"] == 120 and track.totals["projects"] == 1
+    assert len(got["proposals"]) == 1
+
+
+def test_a_folder_run_has_a_step_per_project(monkeypatch):
+    fake = FakeDb()
+    run(fake["models"].insert_one({"_id": "fan/lid", "folder": "fan", "title": "Lid", "source": "x" * 9000}))
+    run(fake["boards"].insert_one({"_id": "ctl", "folder": "fan", "title": "Controller", "source": "i2c"}))
+    _mock_llm(monkeypatch, _answer())
+    monkeypatch.setattr(taste, "FOLDER_CHARS", 8_000)
+    track = taste.Tracker()
+    run(taste.extract(fake, "folder", "fan", track))
+    reads = [s for s in track.steps if s["kind"] == "read"]
+    assert [s["project"]["label"] for s in reads] == ["Lid", "Controller"]
+    assert reads[0]["clipped"] is True and reads[0]["state"] == "done"
+    assert track.totals["projects"] == 2
+
+
+def test_a_job_runs_in_the_background_and_keeps_its_proposals(monkeypatch):
+    fake = FakeDb()
+    _project(fake)
+    _mock_llm(monkeypatch, _answer())
+
+    async def go():
+        doc, started = await taste.start_job(fake, "model", "case", {"id": "a", "name": "A"})
+        assert started and doc["status"] == "queued"
+        again, started2 = await taste.start_job(fake, "model", "case")
+        assert not started2 and again["_id"] == doc["_id"]          # the same run, not a second
+        return await _until_done(fake, doc["_id"])()
+
+    d = run(go())
+    assert d["status"] == "done" and d["finished_at"] and d["seconds"] is not None
+    assert [s["id"] for s in d["steps"]] == ["read:model:case", "ask", "parse", "done"]
+    assert d["proposals"][0]["text"] == "Walls 2 mm" and d["by"]["id"] == "a"
+    out = taste.job_out(d)
+    assert out["count"] == 1 and out["proposals"] and "worker" not in out
+    assert "proposals" not in taste.job_out(d, full=False)
+    assert fake["taste_palettes"].docs == {}
+
+
+def test_a_failed_job_says_why_on_the_step_and_the_run(monkeypatch):
+    fake = FakeDb()
+    _project(fake)
+
+    async def boom(messages, **kw):
+        raise RuntimeError("HTTP 500 upstream")
+
+    _mock_llm(monkeypatch, boom)
+
+    async def go():
+        doc, _ = await taste.start_job(fake, "model", "case")
+        return await _until_done(fake, doc["_id"])()
+
+    d = run(go())
+    assert d["status"] == "failed" and "HTTP 500 upstream" in d["error"]
+    ask = next(s for s in d["steps"] if s["id"] == "ask")
+    assert ask["state"] == "failed" and "HTTP 500 upstream" in ask["reason"]
+    assert next(s for s in d["steps"] if s["kind"] == "read")["state"] == "done"
+
+    import httpx
+
+    async def slow(messages, **kw):
+        raise httpx.ReadTimeout("")
+
+    monkeypatch.setattr(llm, "complete", slow)
+    d = run(go())
+    assert d["status"] == "failed" and "did not answer within 120 s" in d["error"]
+
+
+def test_a_job_can_be_cancelled(monkeypatch):
+    fake = FakeDb()
+    _project(fake)
+
+    async def forever(messages, **kw):
+        await asyncio.sleep(60)
+
+    _mock_llm(monkeypatch, forever)
+
+    async def go():
+        doc, _ = await taste.start_job(fake, "model", "case")
+        for _ in range(50):
+            await asyncio.sleep(0.01)
+            if (await taste.job(fake, doc["_id"]))["status"] == "asking":
+                break
+        d = await taste.cancel_job(fake, doc["_id"], {"id": "a"})
+        assert d["status"] == "cancelled"
+        await asyncio.sleep(0.05)
+        return await taste.job(fake, doc["_id"])
+
+    d = run(go())
+    assert d["status"] == "cancelled" and d["cancelled_by"] == {"id": "a"} and not d["error"]
+    assert next(s for s in d["steps"] if s["id"] == "ask")["state"] == "cancelled"
+    assert d["_id"] not in taste._TASKS
+
+
+def test_a_job_left_running_by_a_restart_fails_plainly(monkeypatch):
+    fake = FakeDb()
+    old = {"host": taste.WORKER["host"], "pid": 999_999_999, "boot": "gone"}
+    run(fake[taste.JOBS].insert_one({"_id": "j1", "status": "asking", "project": {"kind": "model", "id": "case"},
+                                     "started_at": taste._now(), "beat": taste._now(), "worker": old,
+                                     "steps": [{"id": "ask", "kind": "ask", "state": "running",
+                                                "started_at": taste._now()}]}))
+    # Another host, not heard from for long: lost too.
+    run(fake[taste.JOBS].insert_one({"_id": "j2", "status": "reading", "project": {"kind": "model", "id": "x"},
+                                     "started_at": "2026-01-01T00:00:00+00:00", "beat": "2026-01-01T00:00:00+00:00",
+                                     "worker": {"host": "elsewhere", "pid": 1, "boot": "b"}, "steps": []}))
+    # Another host, heard from just now: still running.
+    run(fake[taste.JOBS].insert_one({"_id": "j3", "status": "asking", "project": {"kind": "model", "id": "y"},
+                                     "started_at": taste._now(), "beat": taste._now(),
+                                     "worker": {"host": "elsewhere", "pid": 1, "boot": "b"}, "steps": []}))
+    d = run(taste.job(fake, "j1"))
+    assert d["status"] == "failed" and d["error"] == taste.GONE and d["finished_at"]
+    assert d["steps"][0]["state"] == "failed" and d["steps"][0]["reason"] == taste.GONE
+    got = {r["_id"]: r["status"] for r in run(taste.jobs(fake))}
+    assert got == {"j1": "failed", "j2": "failed", "j3": "asking"}
+
+
+def test_a_restart_during_the_run_ends_it_as_interrupted(monkeypatch):
+    fake = FakeDb()
+    _project(fake)
+
+    async def forever(messages, **kw):
+        await asyncio.sleep(60)
+
+    _mock_llm(monkeypatch, forever)
+
+    async def go():
+        doc, _ = await taste.start_job(fake, "model", "case")
+        await asyncio.sleep(0.05)
+        t = taste._TASKS[doc["_id"]]
+        t.cancel()                                       # what the process going away does
+        with pytest.raises(asyncio.CancelledError):
+            await t
+        return await taste.job(fake, doc["_id"])
+
+    d = run(go())
+    assert d["status"] == "failed" and d["error"] == taste.GONE
+
+
+def test_jobs_through_the_api(db, monkeypatch):  # noqa: F811
+    a, b = person(db, "a"), person(db, "b")
+    started = []
+
+    async def work(dbx, jid, kind, ref):
+        started.append((kind, ref))
+
+    monkeypatch.setattr(taste, "_work", work)
+    a.post("/api/taste", json={"name": "tmp"})
+    ws_a = next(iter(db["taste_palettes"].docs.values()))["workspace_id"]
+    from backend import scope
+    run(scope.ScopedDb(db, ws_a)["models"].insert_one({"_id": "case", "title": "Fan case"}))
+    r = a.post("/api/taste/extract", json={"kind": "model", "id": "case"}).json()
+    jid = r["job_id"]
+    assert r["status"] == "queued" and r["project"]["label"] == "Fan case" and r["started"]
+    assert started == [("model", "case")]
+    import types
+    monkeypatch.setitem(taste._TASKS, jid, types.SimpleNamespace(done=lambda: False, cancel=lambda: None))
+    assert [j["id"] for j in a.get("/api/taste/jobs").json()] == [jid]
+    assert b.get("/api/taste/jobs").json() == [] and b.get(f"/api/taste/jobs/{jid}").status_code == 404
+    assert a.delete(f"/api/taste/jobs/{jid}").status_code == 409            # still running
+    assert a.post(f"/api/taste/jobs/{jid}/cancel").json()["status"] == "cancelled"
+    p = a.patch(f"/api/taste/jobs/{jid}", json={"saved_to": {"id": "p1", "name": "Fan", "count": 3}}).json()
+    assert p["saved_to"]["name"] == "Fan"
+    assert a.delete(f"/api/taste/jobs/{jid}").json() == {"deleted": jid}
+    assert a.get(f"/api/taste/jobs/{jid}").status_code == 404
+
+
+def test_job_routes_read_for_viewers_write_for_drawers():
+    for m, p in (("POST", "/api/taste/jobs/j1/cancel"), ("PATCH", "/api/taste/jobs/j1"),
+                 ("DELETE", "/api/taste/jobs/j1")):
+        assert not access.page_allowed(m, p), (m, p)
+        assert access.allowed("reviewer", access.action(m, p)) and not access.allowed("viewer", access.action(m, p))
+    for p in ("/api/taste/jobs", "/api/taste/jobs/j1"):
+        assert access.page_allowed("GET", p) and access.allowed("viewer", access.action("GET", p))

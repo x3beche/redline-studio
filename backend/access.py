@@ -123,7 +123,9 @@ _RULES: list[tuple[str, str, str]] = [
     # taste palettes (backend/taste.py): like notes - making, changing,
     # attaching one, and asking for proposals from a project (a model call,
     # as a suggestion is); the route keeps deleting someone else's palette
-    # to those who may delete
+    # to those who may delete. An extraction runs as a job: starting,
+    # cancelling, marking where it was saved and deleting one are the same
+    # right; reading the runs (GET /api/taste/jobs) is looking
     ("POST", "/api/taste(/.*)?", "draw"),
     ("PATCH", "/api/taste/.+", "draw"),
     ("PUT", "/api/taste/.+", "draw"),

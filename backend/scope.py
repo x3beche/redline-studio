@@ -40,8 +40,8 @@ SCOPED = frozenset({
     "firmware", "firmware_files", "firmware_flashes",
     # a part's drawn 3D bodies bind models of this workspace (backend/bodies.py)
     "part_bodies",
-    # taste palettes (backend/taste.py)
-    "taste_palettes",
+    # taste palettes and their extraction runs (backend/taste.py)
+    "taste_palettes", "taste_jobs",
 })
 
 WORKSPACE: contextvars.ContextVar[str] = contextvars.ContextVar("workspace", default=DEFAULT)
