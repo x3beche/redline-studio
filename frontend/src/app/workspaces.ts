@@ -10,7 +10,7 @@
  *  ones not finished say what they will be rather than pretending.
  */
 export interface Workspace {
-  id: 'cad' | 'pcb' | 'firmware' | 'notes' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
+  id: 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
@@ -44,6 +44,13 @@ export const WORKSPACES: Workspace[] = [
     label: 'Notes',
     blurb: 'What you jot down while working: Enter keeps it, Alt+N from anywhere; '
          + '#tags, @boards, to-dos to tick, and a note can go to an agent.',
+    ready: true,
+  },
+  {
+    id: 'taste',
+    label: 'Taste',
+    blurb: 'Taste palettes: what makes a design good, as statements the AI follows - attached to a '
+         + 'project or mentioned in Chat, written by hand or extracted from a finished one (Alt+T).',
     ready: true,
   },
   {

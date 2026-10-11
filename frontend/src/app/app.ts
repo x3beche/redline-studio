@@ -6,6 +6,7 @@ import { RoomPcb } from './rooms/pcb';
 import { RoomFirmware } from './rooms/firmware';
 import { RoomTools } from './tools/room';
 import { QuickNote, RoomNotes } from './rooms/notes';
+import { RoomTaste } from './rooms/taste';
 import { RoomFiles } from './rooms/files';
 import { RoomCommandCode } from './rooms/commandcode';
 import { Palette } from './palette';
@@ -23,7 +24,7 @@ import { CcTabUsage } from './cc-usage';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage],
+  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -93,6 +94,7 @@ import { CcTabUsage } from './cc-usage';
       @case ('pcb') { <app-room-pcb /> }
       @case ('firmware') { <app-room-firmware /> }
       @case ('notes') { <app-room-notes /> }
+      @case ('taste') { <app-room-taste /> }
       @case ('commandcode') { <app-room-commandcode /> }
       @case ('files') { <app-room-files /> }
       @case ('tools') { <app-room-tools /> }
@@ -132,8 +134,9 @@ export class App {
   /** The top bar's tabs, in the order and the look chosen (topbar.ts). */
   bar = inject(TopBar);
   /** The rooms you work in, left; Notes, Chat, Files and Basic Tools at the right end. */
-  rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'files' && w.id !== 'commandcode' && w.id !== 'settings');
+  rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'taste' && w.id !== 'files' && w.id !== 'commandcode' && w.id !== 'settings');
   notesTab = WORKSPACES.find(w => w.id === 'notes');
+  tasteTab = WORKSPACES.find(w => w.id === 'taste');
   ccTab = WORKSPACES.find(w => w.id === 'commandcode');
   filesTab = WORKSPACES.find(w => w.id === 'files');
   toolsTab = WORKSPACES.find(w => w.id === 'tools');
@@ -240,6 +243,13 @@ export class App {
       if (id !== 'commandcode') url.searchParams.delete('thread');
       history.replaceState(null, '', url);
     });
+    // Alt+T anywhere: the Taste tab - before the code editor or a room can take it.
+    window.addEventListener('keydown', e => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (e.code !== 'KeyT' && e.key !== 't' && e.key !== 'T')) return;
+      if (!this.auth.signedIn()) return;
+      e.preventDefault();
+      this.here.set('taste');
+    }, true);
   }
 
   open(id: Workspace['id']) { this.here.set(id); }

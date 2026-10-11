@@ -5,6 +5,7 @@ import { Catalog, FolderNode } from './api';
 import { CcWant, Selection } from './selection';
 import { WORKSPACES } from './workspaces';
 import { NotesApi } from './rooms/notes';
+import { TasteApi } from './rooms/taste';
 import { Prefs } from './preferences';
 import { THEMES, THEME_NAMES } from '../theme';
 import { LANG, LANGS, T, setLang, t } from './i18n';
@@ -42,7 +43,7 @@ interface Hit {
 }
 
 const ROOM_ICON: Record<string, string> = {
-  cad: '◆', pcb: '▦', notes: '✎', tools: '⚒', analyze: '▤',
+  cad: '◆', pcb: '▦', notes: '✎', taste: '≡', tools: '⚒', analyze: '▤',
 };
 
 function words(q: string) { return q.toLowerCase().split(/\s+/).filter(Boolean); }
@@ -119,6 +120,7 @@ export class Palette {
   private catalog = inject(Catalog);
   private picked = inject(Selection);
   private notes = inject(NotesApi);
+  private taste = inject(TasteApi);
   private prefs = inject(Prefs);
   private threads = inject(AgentThreads);
   private box = viewChild<ElementRef<HTMLInputElement>>('box');
@@ -132,6 +134,7 @@ export class Palette {
   searching = signal(false);
   private tree = signal<FolderNode | null>(null);
   private tools = signal<{ id: string; name: string; blurb: string }[]>([]);
+  private palettes = signal<{ id: string; name: string; items: unknown[] }[]>([]);
   private hits = signal<Hit[]>([]);
   private timer?: ReturnType<typeof setTimeout>;
 
@@ -157,6 +160,9 @@ export class Palette {
     const room = this.picked.room();
     const out: Item[] = [
       { group: 'Actions', icon: '✎', label: 'New note', hint: 'from anywhere', keys: 'Alt+N', run: () => this.notes.quick.set(true) },
+      { group: 'Actions', icon: '≡', label: 'Open Taste', hint: 'taste palettes', keys: 'Alt+T', run: () => this.picked.room.set('taste') },
+      ...(this.auth.can('draw') ? [{ group: 'Actions', icon: '≡', label: 'Extract taste from a project', hint: 'a model proposes, you review',
+        run: () => { this.picked.room.set('taste'); setTimeout(() => this.picked.ask('taste-extract'), 50); } }] : []),
       { group: 'Actions', icon: '⌨', label: 'Keyboard shortcuts', keys: '?', run: () => this.prefs.open.set('shortcuts') },
       { group: 'Actions', icon: '⚙', label: 'Settings', hint: 'theme, language, shortcuts, LLM, proxy', run: () => this.prefs.open.set('appearance') },
       { group: 'Actions', icon: '⚙', label: 'LLM settings', hint: 'API keys, and which model does what', run: () => this.prefs.open.set('llm') },
@@ -197,6 +203,8 @@ export class Palette {
     }
     const note = this.picked.note();
     if (room === 'notes' && note) return { label: 'Ask Chat about this note', what: note.label, mention: { kind: 'note', ...note } };
+    const palette = this.picked.taste();
+    if (room === 'taste' && palette) return { label: 'Ask Chat with this palette', what: palette.label, mention: { kind: 'taste', ...palette } };
     const file = this.picked.file();
     if (room === 'files' && file) return { label: 'Ask Chat about this file', what: file.label, mention: { kind: 'file', ...file } };
     return null;
@@ -244,6 +252,8 @@ export class Palette {
     return found;
   }
 
+  private itemCount(n: number) { return `${n} ${t(n === 1 ? 'item' : 'items')}`; }
+
   private places(): Item[] {
     const out: Item[] = WORKSPACES.map(w => ({
       group: 'Rooms', icon: ROOM_ICON[w.id] ?? '·', label: w.label, hint: 'go to', run: () => this.picked.room.set(w.id),
@@ -257,6 +267,8 @@ export class Palette {
     };
     const t = this.tree();
     if (t) walk(t as never);
+    for (const p of this.palettes()) out.push({ group: 'Taste', icon: '≡', label: p.name, hint: this.itemCount(p.items.length),
+      run: () => { this.picked.room.set('taste'); setTimeout(() => this.picked.ask('taste', p.id), 50); } });
     for (const tool of this.tools()) out.push({ group: 'Tools', icon: '⚒', label: tool.name, hint: tool.blurb,
       run: () => { this.picked.room.set('tools'); this.picked.ask('tool', tool.id); } });
     return out;
@@ -318,7 +330,7 @@ export class Palette {
     const out: { name: string; items: { item: Item; i: number }[] }[] = [];
     // Empty: Chat, the tabs, then the actions. Typed: a group stands where
     // its best match does, so the best match is on top whatever it is.
-    const fixed = ['Chat', 'Rooms', 'Actions', 'Models', 'Boards', 'Tools', 'In the code', 'Notes', 'Chats', 'Revisions', 'Parts'];
+    const fixed = ['Chat', 'Rooms', 'Actions', 'Models', 'Boards', 'Taste', 'Tools', 'In the code', 'Notes', 'Chats', 'Revisions', 'Parts'];
     const by = new Map<string, Item[]>();
     for (const it of this.items()) by.set(it.group, [...(by.get(it.group) ?? []), it]);
     const order = words(this.q()).length && !this.asking() ? [...by.keys()] : fixed;
@@ -338,6 +350,7 @@ export class Palette {
     this.asking.set(null);
     this.open.set(true);
     this.catalog.tree().subscribe(t => this.tree.set(t));
+    this.taste.list().subscribe({ next: ps => this.palettes.set(ps), error: () => {} });
     if (!this.tools().length) {
       fetch('/api/tools/catalog').then(r => r.ok ? r.json() : null)
         .then(d => d && this.tools.set(d.tools)).catch(() => {});

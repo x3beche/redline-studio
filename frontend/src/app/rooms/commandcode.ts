@@ -46,11 +46,13 @@ import { ModelPicker } from '../model-picker';
  */
 /** Something of the workspace mentioned in a line: what the chip shows. */
 export interface CcMention {
-  kind: 'model' | 'board' | 'file' | 'note' | 'revision' | 'part'; id: string; label: string;
+  kind: 'model' | 'board' | 'file' | 'note' | 'revision' | 'part' | 'taste'; id: string; label: string;
   version?: string | number | null; sub?: string; chars?: number; truncated?: boolean; images?: number;
   /** A file that is a picture (backend/cc_context.py): drawn as one under the line. */
   image?: boolean;
   open?: { model?: string | null; board?: string | null; room?: string | null };
+  /** A taste palette not mentioned but attached to `via` (a mentioned model or board): it came along. */
+  auto?: boolean; via?: string;
 }
 /** A tool the model used while it answered (backend/chat_tools): kept on
  *  the answer. `say` is an English sentence with {name} holes, filled from
@@ -307,6 +309,7 @@ const I = {
   at: 'M15.5 12a3.5 3.5 0 1 1-7 0a3.5 3.5 0 1 1 7 0z M15.5 12v1.3a2.6 2.6 0 0 0 5.2 0V12a8.7 8.7 0 1 0-3.4 6.9',
   file: 'M6 3h8l4 4v14H6z M14 3v4h4',
   note: 'M5 4h14v16H5z M8.5 9h7 M8.5 13h7 M8.5 17h4',
+  taste: 'M4 5h16v4H4z M4 11h16v4H4z M4 17h10v3H4z M7 7h.01 M7 13h.01',
   drawer: 'M4 5h16v6H4z M4 11h16v8H4z M10 8h4 M10 15h4',
   sheet: 'M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 15.5h6 M9 9h2',
   tool: 'M14.5 4.5a4 4 0 0 0-5 5L4 15l2 2 2 2 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z',
@@ -318,6 +321,7 @@ const I = {
 const KIND: Record<CcMention['kind'], { icon: string; name: string }> = {
   model: { icon: I.cad, name: '3D model' }, board: { icon: I.pcb, name: 'Board' }, file: { icon: I.file, name: 'File' },
   note: { icon: I.note, name: 'Note' }, revision: { icon: I.edit, name: 'Drawn note' }, part: { icon: I.chip, name: 'Part' },
+  taste: { icon: I.taste, name: 'Taste palette' },
 };
 
 /** Where to begin, for an empty conversation: the work this app is for. */
@@ -849,7 +853,7 @@ type Ask = { text: string; label: string; go: () => void };
             <div class="tcv-cc-mpop" role="listbox" (mousedown)="$event.preventDefault()">
               <div class="tcv-cc-mhead">
                 <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.at }" />
-                <span>{{ mentionQ() || ('Mention a model, board, file, note or part' | t) }}</span>
+                <span>{{ mentionQ() || ('Mention a model, board, file, note, palette or part' | t) }}</span>
               </div>
               <div class="tcv-cc-mlist">
                 @for (r of mentionRows(); track r.kind + r.id; let k = $index) {
@@ -2440,6 +2444,7 @@ export class RoomCommandCode implements OnDestroy {
     if (m.version != null && m.version !== '') bits.push(`${t('version')} ${m.version}`);
     if (m.chars) bits.push(`${m.chars.toLocaleString()} ${t('characters to the model')}` + (m.truncated ? ` (${t('cut')})` : ''));
     if (m.images) bits.push(`${m.images} ${t('images')}`);
+    if (m.auto) bits.push(`${t('attached to')} ${m.via ?? ''}`);
     return bits.join(' · ');
   }
 
@@ -2460,6 +2465,7 @@ export class RoomCommandCode implements OnDestroy {
       case 'model': this.sel.room.set('cad'); this.sel.ask('model', m.id); break;
       case 'board': this.sel.openBoard(m.id); break;
       case 'note': this.sel.room.set('notes'); this.sel.ask('note', m.id); break;
+      case 'taste': this.sel.room.set('taste'); this.sel.ask('taste', m.id); break;
       case 'part': this.sel.room.set('pcb'); setTimeout(() => this.sel.ask('part', m.id), 300); break;
       case 'file': window.open(`/api/files/${encodeURIComponent(m.id)}?inline=1`, '_blank', 'noopener'); break;
       case 'revision': {

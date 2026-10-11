@@ -327,7 +327,7 @@ export class RoomSettings {
         blurb: 'Which language the interface speaks.' },
       { id: 'topbar', label: 'Top bar', about: 'order, hidden tabs, compact', ico: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM3 9h18',
         blurb: 'Which tabs the top bar shows, in what order, and how.' },
-      { id: 'shortcuts', label: 'Keyboard shortcuts', about: 'Ctrl+K, Alt+N, ?', ico: 'M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10',
+      { id: 'shortcuts', label: 'Keyboard shortcuts', about: 'Ctrl+K, Alt+N, Alt+T, ?', ico: 'M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10',
         blurb: 'Every key that does something, by where it works.' },
     ] },
     { group: 'The server', items: [
@@ -372,6 +372,7 @@ export class RoomSettings {
     { group: 'Anywhere', items: [
       { keys: ['Ctrl', 'K'], what: 'Open the command palette: go anywhere, do anything, search everything' },
       { keys: ['Alt', 'N'], what: 'A quick note, from any room' },
+      { keys: ['Alt', 'T'], what: 'The Taste tab, from any room' },
       { keys: ['?'], what: 'This page of shortcuts' },
       { keys: ['Esc'], what: 'Close a dialog, the palette or the quick note' },
       { keys: ['↑', '↓', 'Enter'], what: 'Move in the palette, then open' },
@@ -387,6 +388,13 @@ export class RoomSettings {
       { keys: ['/'], what: 'Search notes' },
       { keys: ['↑', '↓'], what: 'Previous / next note' },
       { keys: ['Esc'], what: 'Finish editing' },
+    ] },
+    { group: 'In Taste', items: [
+      { keys: ['/'], what: 'Search palettes' },
+      { keys: ['↑', '↓'], what: 'Previous / next palette' },
+      { keys: ['Enter'], what: 'Add the item / edit the focused item' },
+      { keys: ['Alt', '↑', '↓'], what: 'Move the focused item in its column' },
+      { keys: ['Esc'], what: 'Cancel the edit' },
     ] },
     { group: 'In Chat', items: [
       { keys: ['Ctrl', 'Shift', 'O'], what: 'A new conversation (⌘+Shift+O on a Mac)' },

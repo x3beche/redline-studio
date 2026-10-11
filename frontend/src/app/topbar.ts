@@ -35,7 +35,7 @@ const KEY = 'redline.topbar';
 /** A tab's name when the bar is short of room. Any tab not here keeps its name. */
 const SHORT: Record<string, string> = {
   cad: '3D', pcb: 'PCB', firmware: 'FW',
-  notes: 'Notes', commandcode: 'Chat', files: 'Files', tools: 'Tools',
+  notes: 'Notes', taste: 'Taste', commandcode: 'Chat', files: 'Files', tools: 'Tools',
 };
 
 /** A line drawing for each tab, 24 units square, drawn with the text colour. */
@@ -44,6 +44,7 @@ const ICON: Record<string, string> = {
   pcb: 'M7 7h10v10H7z M10 3v4 M14 3v4 M10 17v4 M14 17v4 M3 10h4 M3 14h4 M17 10h4 M17 14h4',
   firmware: 'M6 6h12v12H6z M3 9h3 M3 15h3 M18 9h3 M18 15h3 M10.5 9.5L8.5 12l2 2.5 M13.5 9.5l2 2.5-2 2.5',
   notes: 'M6 3h9l4 4v14H6z M14 3v5h5 M9 12h7 M9 16h5',
+  taste: 'M4 5h16v4H4z M4 11h16v4H4z M4 17h10v3H4z M7 7h.01 M7 13h.01',
   commandcode: 'M4 5h16v11h-9l-5 4v-4H4z M8 9l2.5 2L8 13 M13 13h3',
   files: 'M3 6h6l2 2h10v11H3z',
   tools: 'M14.5 4.5a4 4 0 0 0-4.6 5.4L4 15.8 8.2 20l5.9-5.9a4 4 0 0 0 5.4-4.6l-2.6 2.6-2.8-.7-.7-2.8z',
