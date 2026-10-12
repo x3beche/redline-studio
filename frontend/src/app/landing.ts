@@ -150,13 +150,13 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
 
 <section class="wrap" id="analytics">
   <div class="grid sh rv"><h2>Analytics</h2><p>Every call, job and kilowatt-hour since the first note, 21 September to 11 October.</p><span class="n">04</span></div>
-  <div class="shot rv"><app-snap src="analytics" [page]="anPage" [crop]="an.overview" alt="Analytics overview tiles" /></div>
+  <div class="shot rv"><app-snap src="analytics" [page]="anPage" [crop]="an.overview" [min]="0" alt="Analytics overview tiles" /></div>
   <p class="lbl">Analytics · Overview, all time</p>
   <div class="pair fit rv">
     <div [style.flex]="ar(an.models)"><div class="shot"><app-snap src="analytics" [page]="anPage" [crop]="an.models" alt="Spend by model and tokens by type" /></div><p class="lbl">Analytics · LLMs: spend by model, tokens by type</p></div>
     <div [style.flex]="ar(an.rooms)"><div class="shot"><app-snap src="analytics" [page]="anPage" [crop]="an.rooms" alt="Spend by room and by kind of work" /></div><p class="lbl">Spend by room and by kind of work</p></div>
   </div>
-  <div class="shot wide rv" style="margin-top:28px"><app-snap src="analytics" [page]="anPage" [crop]="an.machine" alt="Machine load, power, energy, compute by job and the jobs table" /></div>
+  <div class="shot wide rv" style="margin-top:28px"><app-snap src="analytics" [page]="anPage" [crop]="an.machine" [min]="0" alt="Machine load, power, energy, compute by job and the jobs table" /></div>
   <p class="lbl">Analytics · Machine &amp; energy: load, power, energy per day, CPU hours by kind of job, and every job counted</p>
 </section>
 
@@ -172,8 +172,8 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
   <div class="shot rv"><app-snap src="taste-home" [crop]="[604, 100, 986, 330]" alt="The Taste tab's overview" /></div>
   <p class="lbl">Taste · overview: palettes, items, MUST / PREFER / AVOID, runs; items by domain; a folder to start from</p>
   <div class="pair rv">
-    <div><div class="shot"><app-snap src="taste-run" [crop]="[606, 108, 490, 600]" alt="The finished iot-fan extraction" /></div><p class="lbl">Taste · the iot-fan run: 17 of 18 projects read, 27 proposals</p></div>
-    <div><div class="shot"><app-snap src="taste-pal" [crop]="[1100, 245, 490, 600]" alt="Taste of iot-fan: firmware and general rules" /></div><p class="lbl">Taste of iot-fan · the firmware and general columns of the palette</p></div>
+    <div><div class="shot"><app-snap src="taste-run" [crop]="[606, 216, 492, 600]" alt="The finished iot-fan extraction" /></div><p class="lbl">Taste · the iot-fan run: 17 of 18 projects read, 27 proposals</p></div>
+    <div><div class="shot"><app-snap src="taste-pal" [crop]="[1097, 243, 492, 600]" alt="Taste of iot-fan: firmware and general rules" /></div><p class="lbl">Taste of iot-fan · the firmware and general columns of the palette</p></div>
   </div>
   <div class="tcols rv">
     @for (c of taste; track c.name) {
@@ -299,7 +299,7 @@ export class Landing implements AfterViewInit, OnDestroy {
     { name: 'Circuit board', snap: 'pcb', crops: [[573, 171, 905, 641]], min: 0, lbl: 'PCB Design · the iot-fan board, routed by TraceMaker',
       lead: 'Real parts from LCSC, placed and routed by TraceMaker: 235 of 235 connections in 121 seconds.',
       facts: [['Size', '95.5 × 58.7 mm', '91 parts, 48 different'], ['Copper', '1,014 tracks', '179 vias · 2.87 m'], ['Parts cost', '$20.51', 'a board, ordering 10 · ERC 0']] },
-    { name: 'Firmware', snap: 'fw', crops: [[562, 462, 430, 360], [562, 993, 430, 66]], min: 0.85, lbl: 'Firmware · src/main.cpp, and the build',
+    { name: 'Firmware', snap: 'fw', crops: [[571, 462, 430, 360], [571, 993, 430, 66]], min: 0.85, lbl: 'Firmware · src/main.cpp, and the build',
       lead: 'Written for the board it runs on. Every pin is named from the schematic, and pins.h is rewritten when the board changes.',
       facts: [['Chip', 'ESP32-WROOM-32', 'Arduino on PlatformIO'], ['Pins', '39', 'from the schematic'], ['Build', '0 errors · 8.4 s', 'flash 24.6% · RAM 7.0%']] },
   ];
@@ -314,10 +314,10 @@ export class Landing implements AfterViewInit, OnDestroy {
     { name: 'Draw on the board', w: 430, lbl: 'PCB Design · the same pen on the iot-fan board, and the comment box',
       lead: 'The same pen over the layout. Write in your own language; Auto English turns the note into English for the agent.',
       crops: [{ src: 'drawpcb', crop: [1076, 46, 384, 36] }, { src: 'drawpcb', crop: [590, 170, 1000, 640], fit: true },
-              { src: 'drawpcb', crop: [1615, 95, 300, 185] }] },
+              { src: 'drawpcb', crop: [1613, 95, 298, 185] }] },
     { name: 'A note becomes a task', w: 430, lbl: '3D Drawing · the queue, a drawn note in it, and Working now',
       lead: 'Saved as a draft, then queued. Each note keeps its drawing and its status; Working now shows what runs.',
-      crops: [{ src: 'hero', crop: [1615, 284, 300, 284] }, { src: 'hero', crop: [12, 958, 250, 112] }] },
+      crops: [{ src: 'hero', crop: [1613, 284, 298, 284] }, { src: 'hero', crop: [9, 958, 248, 112] }] },
   ];
   themes: Card[] = [
     { name: 'And your own', w: 430, lbl: 'Settings · Appearance, the light themes, worn in GitHub Light',
@@ -342,17 +342,17 @@ export class Landing implements AfterViewInit, OnDestroy {
   tgCrop = [1157, 432, 430, 304];
   /** Crops of the analytics snapshot (a 1920 × 3700 page). */
   anPage = [1920, 3700];
-  an = { overview: [280, 92, 1316, 322], models: [280, 888, 870, 570], rooms: [1160, 888, 436, 570],
-         machine: [280, 2650, 1316, 772] };
-  llmCrop = [532, 40, 1062, 900];
+  an = { overview: [271, 88, 1328, 326], models: [279, 888, 871, 575], rooms: [1160, 888, 431, 575],
+         machine: [271, 2650, 1328, 772] };
+  llmCrop = [535, 40, 1060, 900];
   /** flex-grow for a row of crops with one height: each one's width over its height. */
   ar(c: number[]) { return c[2] / c[3]; }
-  chatCrop = [598, 52, 590, 720];
+  chatCrop = [595, 52, 584, 720];
   revCrop = [960, 92, 640, 780];
   /** The tree, the run and the model side by side: the two lists at one
    *  scale (each column as wide as its crop), the model as tall as the tree. */
-  treeCrop = [12, 95, 236, 566];
-  workCrop = [272, 578, 292, 482];
+  treeCrop = [9, 95, 248, 566];
+  workCrop = [271, 578, 292, 489];
   modelCrop = [740, 150, 700, 880];
   /** The plans connected to Redline (Settings > Costs, LLM settings). */
   plans = [
