@@ -31,6 +31,10 @@ export function setLang(l: Lang) {
 }
 
 const TR: Record<string, string> = {
+  // The app's drop-downs where a <select> stood (ui-select.ts): their names for screen readers
+  "Which of its part's 3D bodies this part wears on this board": 'Parçanın 3B gövdelerinden hangisini bu kartta taşıdığı',
+  'what this window shows': 'bu pencerenin gösterdiği', 'which side of the board': 'kartın hangi yüzü',
+  'pick a net': 'bir net seç', '+ net': '+ net', 'values made in': 'üretilen değer serisi', 'copper': 'bakır',
   // Settings > Agent tokens (tokens-settings.ts)
   '30 days': '30 gün',
   '7 days': '7 gün',

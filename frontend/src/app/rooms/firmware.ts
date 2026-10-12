@@ -6,6 +6,7 @@ import type * as Monaco from 'monaco-editor';
 import { LogLine } from '../api';
 import { Auth } from '../auth';
 import { T, t } from '../i18n';
+import { SelectOption, UiSelect } from '../ui-select';
 import { Prefs } from '../preferences';
 import { FwAnchor, Selection } from '../selection';
 import { isLightTheme } from '../../theme';
@@ -312,7 +313,7 @@ export class FwCode implements AfterViewInit, OnDestroy {
  */
 @Component({
   selector: 'app-room-firmware',
-  imports: [Drawing, DrawTools, FwCode, RoomFrame, Sketchpad, T, ToolButton],
+  imports: [Drawing, DrawTools, FwCode, RoomFrame, Sketchpad, T, ToolButton, UiSelect],
   styles: [`
     :host { display: contents; }
     .fw-pane { display: flex; flex-direction: column; min-height: 0; height: 100%; font-size: 12px; color: var(--ink); }
@@ -456,7 +457,7 @@ export class FwCode implements AfterViewInit, OnDestroy {
     .fm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; }
     .fm-dot[data-on] { background: var(--ok); }
     .fm-port { font: 11px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); white-space: nowrap; }
-    .fm-baud { padding: 1px 4px; font-size: 11px; width: auto; }
+    .fm-baud { width: auto; }
     .fm-gap { flex: 1; }
     .fm-b { padding: 2px 8px; font-size: 11px; }
     .fm-lines { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px; font: 11.5px/1.45 'IBM Plex Mono', ui-monospace, monospace; }
@@ -773,10 +774,7 @@ export class FwCode implements AfterViewInit, OnDestroy {
             <div class="fm-bar">
               <span class="fm-dot" [attr.data-on]="monOn() ? 1 : null" aria-hidden="true"></span>
               <span class="fm-port">@if (monOn()) { {{ monPort() }} · {{ monBaud() }} } @else { {{ 'Not connected' | t }} }</span>
-              <select class="tcv-field fm-baud" (change)="setBaud(+$any($event.target).value)"
-                      [attr.aria-label]="'Baud rate' | t">
-                @for (b of bauds; track b) { <option [value]="'' + b" [selected]="b === monBaud()">{{ b }}</option> }
-              </select>
+              <wb-select class="fm-baud" size="xs" label="Baud rate" [options]="baudOpts" [value]="'' + monBaud()" (pick)="setBaud(+$event)" />
               <span class="fm-gap"></span>
               @if (monOn()) {
                 <button class="tcv-btn fm-b" (click)="resetBoard()" [title]="'Restart the board (EN, through DTR/RTS)' | t">{{ 'Reset board' | t }}</button>
@@ -820,10 +818,7 @@ export class FwCode implements AfterViewInit, OnDestroy {
     <!-- More than one firmware: which one. -->
     <ng-container ngProjectAs="[corner]">
       @if (list().length > 1) {
-        <select class="tcv-field fw-pick px-1 py-0.5 text-[11px]" [value]="fw()?.id ?? ''"
-                (change)="pick($any($event.target).value)">
-          @for (o of list(); track o.id) { <option [value]="o.id">{{ o.title }} · {{ o.board_title || o.board }}</option> }
-        </select>
+        <wb-select class="fw-pick" size="xs" label="Firmware" [options]="fwOpts()" [value]="fw()?.id ?? ''" (pick)="pick($event)" />
       }
     </ng-container>
   </app-room-frame>
@@ -932,6 +927,7 @@ export class RoomFirmware implements OnDestroy {
   });
 
   list = signal<Firmware[]>([]);
+  fwOpts = computed<SelectOption[]>(() => this.list().map(o => ({ value: o.id, label: `${o.title} · ${o.board_title || o.board}` })));
   fw = signal<FirmwareDetail | null>(null);
   loading = signal(true);
   note = signal('');
@@ -1397,6 +1393,7 @@ export class RoomFirmware implements OnDestroy {
   readonly steps = [{ id: 'connect', label: 'Connect' }, { id: 'flash', label: 'Flashing' },
                     { id: 'verify', label: 'Verifying' }, { id: 'done', label: 'Done' }] as const;
   readonly bauds = BAUDS;
+  readonly baudOpts: SelectOption[] = BAUDS.map(b => ({ value: '' + b, label: '' + b }));
   readonly extraFiles = ['bootloader.bin', 'partitions.bin', 'boot_app0.bin'];
   manifest = signal<FlashManifest | null>(null);
   blocked = signal<{ reason: string; detail: string } | null>(null);

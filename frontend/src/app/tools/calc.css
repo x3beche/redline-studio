@@ -17,6 +17,9 @@
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
 }
 .calc-f input:focus, .calc-f select:focus { border-color: var(--accent); }
+/* The app's drop-down (ui-select.ts) beside those inputs. */
+.calc-f .wb-select { --wb-sel-h: 23px; --wb-sel-fs: 12px; --wb-sel-pad: 6px; --wb-sel-radius: 4px; --wb-sel-bg: var(--surface);
+  --wb-sel-font: 'IBM Plex Mono', ui-monospace, monospace; }
 .calc-f input.bad { border-color: var(--danger); }
 .calc-f.given input { border-color: var(--accent-deep); }
 

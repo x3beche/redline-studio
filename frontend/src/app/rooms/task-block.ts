@@ -4,6 +4,7 @@ import { Auth } from '../auth';
 import { Markdown, TaskBlock } from '../markdown';
 import { Selection } from '../selection';
 import { T, t } from '../i18n';
+import { SelectOption, UiSelect } from '../ui-select';
 
 /** Which note a task block became: kept on the message by the server
  *  (backend/tasks.py), so the button stays spent after a reload and for
@@ -50,7 +51,7 @@ export class TaskTargets {
  *  block it is, and what the person picked when the block names nothing. */
 @Component({
   selector: 'rl-task-block',
-  imports: [Markdown, T],
+  imports: [Markdown, T, UiSelect],
   template: `
 <div class="md-task" [attr.data-queued]="done() && !done()!.rejected ? 1 : null" [attr.data-rejected]="done()?.rejected ? 1 : null">
   <div class="md-task-head">
@@ -81,17 +82,8 @@ export class TaskTargets {
             · {{ stamp(d.at) }}@if (d.by?.name) { · {{ d.by!.name }} }</span>
         }
       } @else if (picking()) {
-        <select class="tcv-field md-task-pick" [value]="choice()" (change)="choice.set($any($event.target).value)"
-                [attr.aria-label]="'what this task is about' | t">
-          <option value="">{{ 'pick what it is about…' | t }}</option>
-          @for (g of groups(); track g.room) {
-            <optgroup [label]="queueName(g.room)">
-              @for (o of g.items; track o.id) {
-                <option [value]="o.room + '|' + o.id" [selected]="choice() === o.room + '|' + o.id">{{ fileName(o.id, o.room) }}</option>
-              }
-            </optgroup>
-          }
-        </select>
+        <wb-select class="md-task-wpick" label="what this task is about" placeholder="pick what it is about…" [options]="choiceOpts()"
+                   [value]="choice()" (pick)="choice.set($event)" />
         <button class="tcv-btn tcv-btn-accent" [disabled]="!choice() || busy()" (click)="send(choice())">
           {{ sendLabel(choiceRoom()) | t }}</button>
         <button class="tcv-cc-textbtn" (click)="picking.set(false)">{{ 'Cancel' | t }}</button>
@@ -164,6 +156,8 @@ export class TaskBlockView {
 
   sendLabel(room?: string | null) { return QUEUE[room ?? '']?.send ?? 'Send to queue'; }
   queuedLabel(room?: string | null) { return QUEUE[room ?? '']?.queued ?? 'Queued'; }
+  choiceOpts = computed<SelectOption[]>(() => this.groups().flatMap(g => g.items.map(o =>
+    ({ value: o.room + '|' + o.id, label: this.fileName(o.id, o.room), group: this.queueName(g.room) }))));
   queueName(room: string) { return QUEUE[room]?.name ?? room; }
   /** As the catalog names it: "Base.3d", "controller.pcb". */
   fileName(id?: string | null, room?: string | null) {

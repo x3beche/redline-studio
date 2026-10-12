@@ -1,5 +1,6 @@
 import { Component, computed, signal } from '@angular/core';
 import { fmtEng, fmtNum, parseEng } from '../eng';
+import { SelectOption, UiSelect } from '../../ui-select';
 
 // IPC-2221: I = k · ΔT^0.44 · A^0.725, with A the copper's cross-section in
 // square mils. Outer layers shed heat into the air, inner ones only into
@@ -32,6 +33,7 @@ function ohms(lengthM: number, areaM2: number, tempC: number): number {
 @Component({
   selector: 'app-trace-width-tool',
   styleUrl: '../calc.css',
+  imports: [UiSelect],
   template: `
 <div class="calc">
   <section class="calc-sec">
@@ -44,9 +46,7 @@ function ohms(lengthM: number, areaM2: number, tempC: number): number {
       <label class="calc-f"><span>ambient (°C)</span>
         <input [value]="ambient()" (input)="ambient.set($any($event.target).value)" /></label>
       <label class="calc-f"><span>copper</span>
-        <select (change)="oz.set(+$any($event.target).value)">
-          @for (o of weights; track o) { <option [value]="o" [selected]="o === oz()">{{ o }} oz · {{ fmtNum(o * 35, 3) }} µm</option> }
-        </select></label>
+        <wb-select label="copper" [options]="weightOpts" [value]="'' + oz()" (pick)="oz.set(+$event)" /></label>
       <label class="calc-f"><span>track length (mm)</span>
         <input [value]="length()" (input)="length.set($any($event.target).value)" /></label>
     </div>
@@ -108,6 +108,7 @@ function ohms(lengthM: number, areaM2: number, tempC: number): number {
 export class TraceWidthTool {
   readonly layers: Layer[] = ['outer', 'inner'];
   readonly weights = [0.5, 1, 2, 3];
+  readonly weightOpts: SelectOption[] = this.weights.map(o => ({ value: '' + o, label: `${o} oz · ${fmtNum(o * 35, 3)} µm` }));
   readonly fmtNum = fmtNum;
   readonly fmtEng = fmtEng;
 

@@ -29,6 +29,7 @@ import { ComponentPicker, LinksCard, PinIcon, insertImport } from '../rooms/link
 import { Releases } from '../rooms/releases';
 import { Changes } from '../rooms/changes';
 import { LANG, T, t } from '../i18n';
+import { SelectOption, UiSelect } from '../ui-select';
 import { Auth } from '../auth';
 import { Agents, SeedOs, seedLine, seenAgo } from '../agent-status';
 import { Prefs } from '../preferences';
@@ -50,7 +51,7 @@ import { Reading, ReadingNote, ReadingPick } from './reading';
 
 @Component({
   selector: 'app-editor',
-  imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, Markdown, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, WorkNowPanel],
+  imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, Markdown, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, WorkNowPanel, UiSelect],
   templateUrl: './editor.html',
   host: { '(document:keydown.escape)': 'closeTask()' },
 })
@@ -2184,6 +2185,16 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   /** What the Part field offers: the open board's components while the
    *  board room is on, the loaded model's parts otherwise. */
+  /** The Part drop-downs: none, then each choice (the one picked, if the list does not have it yet). */
+  partOpts = computed<SelectOption[]>(() => {
+    const l = this.partChoices(), p = this.part();
+    return [{ value: '', label: '(none)' }, ...(p && !l.includes(p) ? [p] : []).concat(l).map(v => ({ value: v, label: v }))];
+  });
+  editPartOpts = computed<SelectOption[]>(() => {
+    const l = this.parts(), p = this.editPart();
+    return [{ value: '', label: '(no part)' }, ...(p && !l.includes(p) ? [p] : []).concat(l).map(v => ({ value: v, label: v }))];
+  });
+
   partChoices(): string[] {
     const room = this.picked.room();
     return room === 'pcb' ? this.picked.boardParts()

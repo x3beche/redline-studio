@@ -2,6 +2,7 @@ import { Component, OnDestroy, computed, inject, input, output, signal } from '@
 import { HttpClient, HttpEventType } from '@angular/common/http';
 import { Auth } from '../auth';
 import { Selection } from '../selection';
+import { SelectOption, UiSelect, plainOptions } from '../ui-select';
 
 /** What the server says about an import (backend/imports/api.py). */
 interface ImportJob {
@@ -26,6 +27,7 @@ interface Folder { name: string; path: string; folders: Folder[] }
  *  not, it names with the file that would have given it. */
 @Component({
   selector: 'app-import-board',
+  imports: [UiSelect],
   template: `
 <div class="tcv-tokens-back" (click)="close()">
   <div class="tcv-tokens imp" (click)="$event.stopPropagation()" role="dialog" aria-label="Import a board">
@@ -57,10 +59,7 @@ interface Folder { name: string; path: string; folders: Folder[] }
 
       <div class="imp-form">
         <span class="imp-dim">project</span>
-        <select class="tcv-field" [value]="project()" (change)="project.set($any($event.target).value)">
-          <option value="">(top level)</option>
-          @for (p of projects(); track p) { <option [value]="p" [selected]="p === project()">{{ p }}</option> }
-        </select>
+        <wb-select class="imp-sel" label="Project" [options]="projectOpts()" [value]="project()" (pick)="project.set($event)" />
         <span class="imp-dim">folder</span>
         <input class="tcv-field" [value]="folder()" (input)="folder.set($any($event.target).value)"
                placeholder="imported" maxlength="40">
@@ -140,6 +139,7 @@ interface Folder { name: string; path: string; folders: Folder[] }
 .imp-dim { color: var(--ink-dim); font-size: 11px; }
 .imp-form { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
 .imp-form .tcv-field { padding: 4px 6px; font-size: 12px; }
+.imp-sel { width: 100%; --wb-sel-h: 26px; --wb-sel-fs: 12px; --wb-sel-radius: 4px; }
 .imp-bad { color: var(--danger) !important; }
 .imp-bar { height: 4px; border-radius: 2px; background: var(--surface); overflow: hidden; }
 .imp-bar i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
@@ -173,6 +173,7 @@ export class ImportBoard implements OnDestroy {
   over = signal(false);
   projects = signal<string[]>([]);
   project = signal('');
+  projectOpts = computed<SelectOption[]>(() => [{ value: '', label: '(top level)' }, ...plainOptions(this.projects())]);
   // A project's boards are in its electronics/ (backend/store.py create_project).
   folder = signal('electronics');
   name = signal('');

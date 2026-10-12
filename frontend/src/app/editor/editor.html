@@ -697,16 +697,9 @@
       <!-- Whatever the room on screen is made of: a model's parts come
            from the viewer, a board's from its netlist. The question is
            the same one either way - which bit of this is this about? -->
-      <select [value]="part()" (change)="part.set($any($event.target).value)"
-              class="tcv-field mb-2 w-full px-1.5 py-1">
-        <option value="">(none)</option>
-        <!-- [selected] as well as the select's value: a room can offer a
-             new choice and pick it in the same moment, and a value set
-             before its option exists is dropped. -->
-        @for (p of partChoices(); track p) {
-          <option [value]="p" [selected]="p === part()">{{ p }}</option>
-        }
-      </select>
+      <!-- A room can offer a new choice and pick it in the same moment: a
+           value not (yet) among the choices is offered too, so it shows. -->
+      <wb-select class="tcv-part-sel mb-2" label="Part" [options]="partOpts()" [value]="part()" (pick)="part.set($event)" />
 
       <!-- A firmware note is about a pin (a row of Pins, a net on the sheet)
            or lines of a file (selected in the Code view): what the room
@@ -1032,11 +1025,7 @@
                   <textarea rows="3" [value]="editText()"
                             (input)="editText.set($any($event.target).value)"
                             class="tcv-field w-full resize-none p-1.5"></textarea>
-                  <select [value]="editPart()" (change)="editPart.set($any($event.target).value)"
-                          class="tcv-field mt-1 w-full px-1.5 py-1">
-                    <option value="">(no part)</option>
-                    @for (p of parts(); track p) { <option [value]="p">{{ p }}</option> }
-                  </select>
+                  <wb-select class="tcv-part-sel mt-1" label="Part" [options]="editPartOpts()" [value]="editPart()" (pick)="editPart.set($event)" />
                   <input [value]="editSummary()"
                          (input)="editSummary.set($any($event.target).value)"
                          class="tcv-field mt-1 w-full px-1.5 py-1 text-[12px]"

@@ -4,6 +4,7 @@ import { HttpEventType } from '@angular/common/http';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { T, t } from '../i18n';
+import { SelectOption, UiSelect, plainOptions } from '../ui-select';
 import { AGENT_ROOMS } from './notes';
 import { Catalog, FolderNode } from '../api';
 import { FileView, decodeText } from './file-view';
@@ -48,7 +49,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
 
 @Component({
   selector: 'app-room-files',
-  imports: [T, Icon, Seen, NgTemplateOutlet, FileView],
+  imports: [T, Icon, Seen, NgTemplateOutlet, FileView, UiSelect],
   host: { '(document:keydown)': 'globalKey($event)', '(document:click)': 'menu.set(null)' },
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1 tcv-fm">
@@ -159,18 +160,10 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
           <input type="search" [placeholder]="'Search files' | t" [value]="q()" [attr.aria-label]="'Search in all files' | t"
                  (input)="q.set($any($event.target).value)" (keydown.escape)="q.set('')">
         </span>
-        <select class="tcv-fm-select tcv-fm-phone-only" [value]="kind()" (change)="kind.set($any($event.target).value)" [attr.aria-label]="'Kind' | t">
-          <option value="">{{ 'All kinds' | t }}</option>
-          @for (k of kinds(); track k.kind) { <option [value]="k.kind" [selected]="k.kind === kind()">{{ kindLabel(k.kind) | t }}</option> }
-        </select>
+        <span class="tcv-fm-phone-only"><wb-select class="tcv-fm-wsel" label="Kind" [options]="kindOpts()" [value]="kind()" (pick)="kind.set($event)" /></span>
       }
       <span class="tcv-fm-grow"></span>
-      <select class="tcv-fm-select tcv-fm-sort" [value]="sortKey()" (change)="setSort($any($event.target).value, false)" [attr.aria-label]="'Sort by' | t">
-        <option value="name">{{ 'Name' | t }}</option>
-        <option value="date">{{ 'Date added' | t }}</option>
-        <option value="size">{{ 'Size' | t }}</option>
-        <option value="kind">{{ 'Kind' | t }}</option>
-      </select>
+      <wb-select class="tcv-fm-wsel tcv-fm-sort" label="Sort by" [options]="sortOpts()" [value]="sortKey()" (pick)="setSort($any($event), false)" />
       <button class="tcv-fm-icon-btn tcv-fm-sortdir" (click)="sortDir.set(sortDir() === 1 ? -1 : 1); save()"
               [title]="(sortDir() === 1 ? 'Ascending' : 'Descending') | t" [attr.aria-label]="(sortDir() === 1 ? 'Ascending' : 'Descending') | t">
         <i [fmIcon]="sortDir() === 1 ? 'up' : 'down'"></i></button>
@@ -365,11 +358,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
         <dt>{{ 'Board' | t }}</dt>
         <dd>
           @if (auth.can('draw')) {
-            <select class="tcv-fm-select tcv-fm-d-board" [value]="f.context.board || ''" (change)="setBoard(f, $any($event.target).value)"
-                    [attr.aria-label]="'Board' | t">
-              <option value="">{{ '(no board)' | t }}</option>
-              @for (b of boards(); track b._id) { <option [value]="b._id" [selected]="b._id === f.context.board">{{ b.title || b._id }}</option> }
-            </select>
+            <wb-select class="tcv-fm-wsel tcv-fm-d-board" label="Board" [options]="boardOpts()" [value]="f.context.board || ''" (pick)="setBoard(f, $event)" />
           } @else { {{ f.context.board || '-' }} }
         </dd>
       </dl>
@@ -451,9 +440,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
             <h3>{{ 'Add to project' | t }}</h3>
             <p class="tcv-fm-quiet">{{ 'Copy it into a project folder as a 3D model - it stays there even if this file is deleted' | t }}</p>
             <label class="tcv-fm-field">{{ 'Folder' | t }}
-              <select class="tcv-fm-select" [value]="$any(d).folder" (change)="patchDialog({ folder: $any($event.target).value })">
-                @for (p of $any(d).folders; track p) { <option [value]="p" [selected]="p === $any(d).folder">{{ p }}</option> }
-              </select></label>
+              <wb-select class="tcv-fm-wsel" label="Folder" [options]="plain($any(d).folders)" [value]="$any(d).folder" (pick)="patchDialog({ folder: $event })" /></label>
             <label class="tcv-fm-field">{{ 'Name' | t }}
               <input class="tcv-fm-input" [value]="$any(d).title" (input)="patchDialog({ title: $any($event.target).value })"></label>
             @if ($any(d).error) { <p class="tcv-fm-err">{{ $any(d).error }}</p> }
@@ -596,6 +583,13 @@ export class RoomFiles implements OnDestroy {
     for (const f of this.all()) n.set(f.kind, (n.get(f.kind) ?? 0) + 1);
     return [...n.entries()].sort((a, b) => b[1] - a[1]).map(([kind, c]) => ({ kind, n: c }));
   });
+  readonly plain = plainOptions;
+  kindOpts = computed<SelectOption[]>(() => [{ value: '', label: t('All kinds') },
+    ...this.kinds().map(k => ({ value: k.kind, label: t(this.kindLabel(k.kind)), hint: k.n }))]);
+  sortOpts = computed<SelectOption[]>(() => [{ value: 'name', label: t('Name') }, { value: 'date', label: t('Date added') },
+    { value: 'size', label: t('Size') }, { value: 'kind', label: t('Kind') }]);
+  boardOpts = computed<SelectOption[]>(() => [{ value: '', label: t('(no board)') },
+    ...this.boards().map(b => ({ value: b._id, label: b.title || b._id }))]);
   boardsUsed = computed(() => [...new Set(this.all().map(f => f.context.board).filter((b): b is string => !!b))].sort());
 
   items = computed<Item[]>(() => {

@@ -1,6 +1,7 @@
-import { Component, effect, inject, input, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { T, t } from '../i18n';
+import { SelectOption, UiSelect } from '../ui-select';
 
 /** A reference whose part has more than one 3D body (backend/bodies.py board_listing). */
 interface BodyRef {
@@ -19,7 +20,7 @@ interface BoardBodiesData {
  *  room. The choice is this board's; its 3D is redrawn without routing. */
 @Component({
   selector: 'app-board-bodies',
-  imports: [T],
+  imports: [T, UiSelect],
   styles: [`
     :host { display: contents; }
     .bb-sec { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-dim);
@@ -45,14 +46,9 @@ interface BoardBodiesData {
           <div class="bb-row">
             <span class="bb-ref">{{ r.ref }}</span>
             <span class="bb-part">{{ r.part }}</span>
-            <select class="tcv-field px-1 py-0.5 text-[11px]" [disabled]="!canEdit() || busy()"
-                    (change)="choose(r, $any($event.target).value)"
-                    [title]="'Which of its part\\'s 3D bodies this part wears on this board' | t">
-              <option value="default" [selected]="!r.chosen">{{ 'default' | t }} ({{ nameOf(r, r.default) }})</option>
-              @for (o of r.options; track o.slug) {
-                <option [value]="o.slug" [selected]="r.chosen === o.slug">{{ o.name }}</option>
-              }
-            </select>
+            <wb-select size="xs" label="Which of its part's 3D bodies this part wears on this board" [tip]="'Which of its part\\'s 3D bodies this part wears on this board' | t"
+                       [options]="rowOpts().get(r.ref) ?? []" [value]="r.chosen || 'default'" [disabled]="!canEdit() || busy()"
+                       (pick)="choose(r, $event)" />
             @if (r.applied !== null && r.applied !== r.wears) {
               <span class="bb-sub">{{ 'The 3D still shows' | t }} {{ nameOf(r, r.applied) }} - {{ 'redrawing' | t }}</span>
             }
@@ -71,6 +67,10 @@ export class BoardBodies {
   board = input<string | null>(null);
   canEdit = input(false);
   data = signal<BoardBodiesData | null>(null);
+  /** Each reference's choices: its part's default, then every body it has. */
+  rowOpts = computed(() => new Map<string, SelectOption[]>((this.data()?.refs ?? []).map(r => [r.ref, [
+    { value: 'default', label: `${t('default')} (${this.nameOf(r, r.default)})` },
+    ...r.options.map(o => ({ value: o.slug, label: o.name }))]])));
   busy = signal(false);
   error = signal('');
   private timer: ReturnType<typeof setTimeout> | null = null;

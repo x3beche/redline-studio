@@ -9,7 +9,7 @@ import { Confirm } from '../confirm';
 import { CatalogStock, InventoryApi, qty } from './inventory';
 import { RouteOrder, routeLine } from '../route-order';
 import { DmSendButton } from '../dm';
-import { SelectOption, UiSelect } from '../ui-select';
+import { SelectOption, UiSelect, plainOptions } from '../ui-select';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
  *  read from their own websites (backend/manufacturers.py).
@@ -471,8 +471,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <input class="tst-in" [placeholder]="'https://… a product page, or a list of products' | t" [value]="pageUrl()"
                    (input)="pageUrl.set($any($event.target).value)" (keydown.enter)="readPage(m)" [attr.aria-label]="'Page address' | t" [title]="pageHint | t">
             <span class="st-sub mf-pagenote">{{ 'only that page; what is in the catalog stays' | t }}</span>
-            <label class="mf-check" [title]="'Same site, one link deep, at most 30 pages' | t"><input type="checkbox" [checked]="pageFollow()"
-                   (change)="pageFollow.set($any($event.target).checked)"> {{ 'also the product pages it links to' | t }}</label>
+            <button type="button" class="mf-check" role="switch" [attr.aria-checked]="pageFollow()" [title]="'Same site, one link deep, at most 30 pages' | t"
+                    (click)="pageFollow.set(!pageFollow())"><span class="tcv-switch" [attr.data-on]="pageFollow() ? 1 : null" aria-hidden="true"></span>{{ 'also the product pages it links to' | t }}</button>
             <button class="tcv-btn tcv-btn-accent" (click)="readPage(m)" [disabled]="!pageUrl().trim() || starting() || (runOf(m) && isActiveS(runOf(m)!.status))">{{ 'Read it' | t }}</button>
           </div>
         </section>
@@ -482,10 +482,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         <div class="st-card-head mf-cathead"><h3>{{ 'Catalog' | t }}</h3>
           <input class="tst-in mf-find" [placeholder]="'Find a product: name, code, size, material' | t" [value]="pq()"
                  (input)="pq.set($any($event.target).value)" (keydown.escape)="pq.set('')">
-          <select class="tst-sel" [value]="cat()" (change)="cat.set($any($event.target).value)" [attr.aria-label]="'Category' | t">
-            <option value="">{{ 'All categories' | t }}</option>
-            @for (c of productCats(); track c) { <option [value]="c" [selected]="c === cat()">{{ c }}</option> }
-          </select>
+          <wb-select class="mf-csel" label="Category" [options]="productCatOpts()" [value]="cat()" (pick)="cat.set($event)" />
           @if (picked_().size) {
             <span class="mf-selbar">{{ fmt('{n} selected', { n: picked_().size }) }}
               @if (can()) { <button class="tcv-btn" (click)="openStock('*')">{{ 'Add selected to stock' | t }}</button> }
@@ -506,16 +503,9 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <textarea class="tst-in mf-pf-specs" rows="3" [placeholder]="'Specs, one per line - Length: 20 mm' | t" [value]="pf().specs" (input)="pfSet('specs', $event)" [attr.aria-label]="'Specs' | t"></textarea>
             <div class="mf-pf-price">
               <input class="tst-in mf-pf-amount" inputmode="decimal" [placeholder]="'Price, e.g. 362,60' | t" [value]="pf().price" (input)="pfSet('price', $event)" (keydown.enter)="saveProduct(m)" [attr.aria-label]="'Price' | t">
-              <select class="tst-sel" [value]="pf().currency" (change)="pfSet('currency', $event)" [attr.aria-label]="'Currency' | t">
-                @for (c of currencies; track c) { <option [value]="c" [selected]="c === pf().currency">{{ c }}</option> }</select>
-              <select class="tst-sel" [value]="pf().vat" (change)="pfSet('vat', $event)" [attr.aria-label]="'VAT' | t">
-                <option value="" [selected]="!pf().vat">{{ 'VAT not said' | t }}</option>
-                <option value="excl" [selected]="pf().vat === 'excl'">{{ '+VAT (excluded)' | t }}</option>
-                <option value="incl" [selected]="pf().vat === 'incl'">{{ 'VAT included' | t }}</option></select>
-              <select class="tst-sel" [value]="pf().stock" (change)="pfSet('stock', $event)" [attr.aria-label]="'Stock on the site' | t">
-                <option value="" [selected]="!pf().stock">{{ 'Stock not said' | t }}</option>
-                <option value="in" [selected]="pf().stock === 'in'">{{ 'In stock' | t }}</option>
-                <option value="out" [selected]="pf().stock === 'out'">{{ 'Out of stock' | t }}</option></select>
+              <wb-select label="Currency" [options]="curOpts" [value]="pf().currency" (pick)="pfPick('currency', $event)" />
+              <wb-select label="VAT" [options]="vatOpts()" [value]="pf().vat" (pick)="pfPick('vat', $event)" />
+              <wb-select label="Stock on the site" [options]="pfStockOpts()" [value]="pf().stock" (pick)="pfPick('stock', $event)" />
               <input class="tst-in mf-pf-qty" inputmode="numeric" [placeholder]="'Qty' | t" [value]="pf().stock_qty" (input)="pfSet('stock_qty', $event)" [attr.aria-label]="'How many the seller has' | t" [title]="'How many the seller has' | t">
             </div>
             <div class="mf-pf-acts">
@@ -696,8 +686,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                      (keydown.enter)="add()" [attr.aria-label]="'Notes' | t">
               <ng-container *ngTemplateOutlet="fetchSeg; context: { maker: null }" />
               @if (addOnly()) {
-                <label class="mf-check" [title]="'Same site, one link deep, at most 30 pages' | t"><input type="checkbox" [checked]="addFollow()"
-                       (change)="addFollow.set($any($event.target).checked)"> {{ 'also the product pages it links to' | t }}</label>
+                <button type="button" class="mf-check" role="switch" [attr.aria-checked]="addFollow()" [title]="'Same site, one link deep, at most 30 pages' | t"
+                        (click)="addFollow.set(!addFollow())"><span class="tcv-switch" [attr.data-on]="addFollow() ? 1 : null" aria-hidden="true"></span>{{ 'also the product pages it links to' | t }}</button>
               }
               <button class="tcv-btn tcv-btn-accent" (click)="add()" [disabled]="!addUrl().trim() || starting()">{{ (starting() ? 'Starting…' : addOnly() ? 'Add and read the page' : 'Add and explore') | t }}</button>
             </div>
@@ -971,6 +961,13 @@ export class RoomMfr implements OnDestroy {
   sellerOpts = computed<SelectOption[]>(() => [{ value: '', label: t('All sellers') },
     ...(this.grid()?.sellers ?? []).map(k => ({ value: k[0], label: k[0], hint: k[1] }))]);
   sortOpts = computed<SelectOption[]>(() => this.sorts.map(o => ({ value: o.id, label: t(o.label) })));
+  /** A maker's catalog: its categories; the product form: currency, VAT, stock. */
+  productCatOpts = computed<SelectOption[]>(() => [{ value: '', label: t('All categories') }, ...plainOptions(this.productCats())]);
+  readonly curOpts = plainOptions(CURRENCIES);
+  vatOpts = computed<SelectOption[]>(() => [{ value: '', label: t('VAT not said') }, { value: 'excl', label: t('+VAT (excluded)') },
+    { value: 'incl', label: t('VAT included') }]);
+  pfStockOpts = computed<SelectOption[]>(() => [{ value: '', label: t('Stock not said') }, { value: 'in', label: t('In stock') },
+    { value: 'out', label: t('Out of stock') }]);
   filtered = computed(() => !!(this.pq() || this.cat() || this.gmaker() || this.gseller() || this.gmin() || this.gmax() || this.gstock()));
   /** The product open in full (?p=, its maker ?pm=), the picture shown big, what the Inventory holds of its maker's. */
   detail = signal<GridItem | null>(null);
@@ -1441,10 +1438,8 @@ export class RoomMfr implements OnDestroy {
                       price: p.price ? String(Math.round(p.price.amount * 100) / 100) : '', currency: p.price?.currency || 'TRY', vat: p.price?.vat ?? '',
                       stock: p.stock ?? '', stock_qty: p.stock_qty != null ? String(p.stock_qty) : '' } : { ...NO_PRODUCT });
   }
-  pfSet(k: keyof ProductFields, e: Event) {
-    const v = (e.target as HTMLInputElement).value;
-    this.pf.update(f => ({ ...f, [k]: v }));
-  }
+  pfSet(k: keyof ProductFields, e: Event) { this.pfPick(k, (e.target as HTMLInputElement).value); }
+  pfPick(k: keyof ProductFields, v: string) { this.pf.update(f => ({ ...f, [k]: v })); }
   saveProduct(m: Maker) {
     const f = this.pf(), id = this.editing();
     if (id === null || !f.name.trim() || this.saving()) return;

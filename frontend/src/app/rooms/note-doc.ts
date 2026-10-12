@@ -1,9 +1,10 @@
 import {
-  Component, ElementRef, NgZone, OnDestroy, effect, inject, input, output, signal, untracked, viewChild,
+  Component, ElementRef, NgZone, OnDestroy, computed, effect, inject, input, output, signal, untracked, viewChild,
 } from '@angular/core';
 import type { Editor } from '@tiptap/core';
 import type { SlashState } from './note-editor';
 import { T, t } from '../i18n';
+import { SelectOption, UiSelect } from '../ui-select';
 
 /** Toolbar icons, drawn as the rest of the app draws its own (24-unit, stroked). */
 const ICONS: Record<string, string> = {
@@ -30,18 +31,12 @@ const ICONS: Record<string, string> = {
  *  loaded the first time a note is shown. */
 @Component({
   selector: 'app-note-doc',
-  imports: [T],
+  imports: [T, UiSelect],
   host: { class: 'tcv-notedoc', '[attr.data-editing]': 'editable() ? 1 : null', '(dblclick)': 'dbl($event)', '(click)': 'click($event)', '(keydown)': 'key($event)' },
   template: `
 <div class="tcv-doc-bar" [attr.role]="editable() ? 'toolbar' : null" [attr.aria-label]="'Formatting' | t" (mousedown)="keepFocus($event)">
   @if (editable() && ed()) {
-    <select class="tcv-doc-type" [value]="blockType()" (change)="setBlock($any($event.target).value)" [title]="'Block type' | t">
-      <option value="p">{{ 'Text' | t }}</option>
-      <option value="h1">{{ 'Heading 1' | t }}</option>
-      <option value="h2">{{ 'Heading 2' | t }}</option>
-      <option value="h3">{{ 'Heading 3' | t }}</option>
-      @if (blockType() === 'other') { <option value="other">…</option> }
-    </select>
+    <wb-select class="tcv-doc-wtype" label="Block type" [tip]="'Block type' | t" [options]="blockOpts()" [value]="blockType()" (pick)="setBlock($event)" />
     <span class="tcv-doc-sep"></span>
     <button class="tcv-doc-b" [class.on]="is('bold')" (click)="run('bold')" [title]="('Bold' | t) + ' (Ctrl+B)'"><b>B</b></button>
     <button class="tcv-doc-b" [class.on]="is('italic')" (click)="run('italic')" [title]="('Italic' | t) + ' (Ctrl+I)'"><i>I</i></button>
@@ -222,6 +217,10 @@ export class NoteDoc implements OnDestroy {
 
   is(name: string): boolean { this.rev(); return !!this.ed()?.isActive(name); }
   can(what: 'undo' | 'redo'): boolean { this.rev(); const e = this.ed(); return !!e && (what === 'undo' ? e.can().undo() : e.can().redo()); }
+
+  blockOpts = computed<SelectOption[]>(() => [{ value: 'p', label: t('Text') }, { value: 'h1', label: t('Heading 1') },
+    { value: 'h2', label: t('Heading 2') }, { value: 'h3', label: t('Heading 3') },
+    ...(this.blockType() === 'other' ? [{ value: 'other', label: '…' }] : [])]);
 
   blockType(): string {
     this.rev();

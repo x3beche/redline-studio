@@ -2,6 +2,7 @@ import {
   AfterViewInit, Component, ElementRef, OnDestroy, computed, effect, input, signal, untracked, viewChild,
 } from '@angular/core';
 import { T, t } from '../i18n';
+import { SelectOption, UiSelect } from '../ui-select';
 import { Icon, Seen } from './files-model';
 
 /** A PDF read in the page, with pdf.js (pdfjs-dist, pinned): the browser's
@@ -67,7 +68,7 @@ const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 
 @Component({
   selector: 'app-pdf-reader',
-  imports: [T, Icon, Seen],
+  imports: [T, Icon, Seen, UiSelect],
   host: { class: 'tcv-fv-host' },
   template: `
 <div class="tcv-pdf">
@@ -86,12 +87,7 @@ const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
             [title]="'Next page' | t" [attr.aria-label]="'Next page' | t"><i [fmIcon]="'down'"></i></button>
     <span class="tcv-pdf-sep"></span>
     <button class="tcv-fm-icon-btn" (click)="zoomBy(-1)" [title]="'Zoom out' | t" [attr.aria-label]="'Zoom out' | t"><i [fmIcon]="'zoomout'"></i></button>
-    <select class="tcv-fm-select tcv-pdf-zoom" [value]="zoomKey()" (change)="zoom($any($event.target).value)" [attr.aria-label]="'Zoom' | t">
-      <option value="page-width">{{ 'Fit width' | t }}</option>
-      <option value="page-fit">{{ 'Fit page' | t }}</option>
-      @for (z of zooms; track z) { <option [value]="'' + z">{{ z * 100 }}%</option> }
-      @if (custom(); as c) { <option [value]="c">{{ pct() }}%</option> }
-    </select>
+    <wb-select class="tcv-fm-wsel tcv-pdf-zoom" label="Zoom" [options]="zoomOpts()" [value]="zoomKey()" (pick)="zoom($event)" />
     <button class="tcv-fm-icon-btn" (click)="zoomBy(1)" [title]="'Zoom in' | t" [attr.aria-label]="'Zoom in' | t"><i [fmIcon]="'zoomin'"></i></button>
     <button class="tcv-fm-icon-btn" (click)="rotate()" [title]="'Rotate' | t" [attr.aria-label]="'Rotate' | t"><i [fmIcon]="'rotate'"></i></button>
     <span class="tcv-pdf-find">
@@ -144,6 +140,11 @@ export class PdfReader implements AfterViewInit, OnDestroy {
   pct = computed(() => Math.round(this.scale() * 100));
   custom = computed(() => ['page-width', 'page-fit'].includes(this.zoomKey()) || ZOOMS.includes(+this.zoomKey())
     ? null : this.zoomKey());
+  zoomOpts = computed<SelectOption[]>(() => {
+    const c = this.custom();
+    return [{ value: 'page-width', label: t('Fit width') }, { value: 'page-fit', label: t('Fit page') },
+      ...ZOOMS.map(z => ({ value: '' + z, label: Math.round(z * 100) + '%' })), ...(c ? [{ value: c, label: this.pct() + '%' }] : [])];
+  });
 
   private viewer: Viewer = null;
   private bus: Viewer = null;

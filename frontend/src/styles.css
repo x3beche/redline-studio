@@ -5675,3 +5675,15 @@ html[data-shot] .tcv-log { display: none !important; }
 .tcv-dm-faces { display: inline-flex; align-items: center; }
 .tcv-dm-faces app-avatar { box-shadow: 0 0 0 1.5px var(--accent); }
 .tcv-dm-faces app-avatar + app-avatar { margin-left: -4px; }
+
+/* ---- The app's drop-down (ui-select.ts) where a <select> stood: the
+   height, face and ground of the fields beside it. --------------------- */
+.wb-select.tcv-fm-wsel { --wb-sel-fs: 12px; --wb-sel-pad: 7px; }
+.tcv-fm-field .wb-select { --wb-sel-h: 30px; width: 100%; }
+.tcv-fm-phone-only > .wb-select, .wb-select.tcv-fm-d-board { width: 100%; }
+@media (max-width: 768px) { .wb-select.tcv-fm-sort { display: none; } }
+.wb-select.tcv-doc-wtype { --wb-sel-h: 30px; flex: none; }
+.wb-select.md-task-wpick { max-width: 100%; flex: 1 1 200px; --wb-sel-h: 26px; --wb-sel-fs: 12px; --wb-sel-radius: 4px; }
+.wb-select.tcv-dash-sel { --wb-sel-h: 23px; --wb-sel-fs: 11.5px; --wb-sel-pad: 6px; --wb-sel-radius: 4px; flex: none; }
+.wb-select.tcv-wcorner { --wb-sel-h: 22px; --wb-sel-fs: 12px; --wb-sel-pad: 6px; --wb-sel-radius: 4px; --wb-sel-bg: var(--overlay); }
+.wb-select.tcv-part-sel { display: flex; width: 100%; --wb-sel-h: 28px; --wb-sel-fs: 12px; --wb-sel-pad: 6px; --wb-sel-radius: 4px; }

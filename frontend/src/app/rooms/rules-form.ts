@@ -1,6 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, input, output } from '@angular/core';
 import { BoardRules, RuleField, RuleSchema } from '../api';
+import { SelectOption, UiSelect, plainOptions } from '../ui-select';
 
 type Row = Record<string, unknown>;
 
@@ -104,21 +105,12 @@ type Row = Record<string, unknown>;
                class="tcv-field w-full min-w-0 px-1 py-0.5 text-[11px]">
       }
       @case ('choice') {
-        <select (change)="set(sec, i, f.key, $any($event.target).value)"
-                class="tcv-field w-full min-w-0 px-1 py-0.5 text-[11px]">
-          @for (o of f.options ?? []; track o) {
-            <option [value]="o" [selected]="row[f.key] === o">{{ f.labels?.[o] ?? o }}</option>
-          }
-        </select>
+        <wb-select class="rf-sel" size="xs" [label]="f.label || f.key" [options]="choiceOpts(f)" [value]="'' + (row[f.key] ?? '')"
+                   (pick)="set(sec, i, f.key, $event)" />
       }
       @case ('net') {
-        <select (change)="set(sec, i, f.key, $any($event.target).value)"
-                class="tcv-field mono w-full min-w-0 px-1 py-0.5 text-[11px]">
-          <option value="" [selected]="!row[f.key]">pick a net</option>
-          @for (n of nets(); track n) {
-            <option [value]="n" [selected]="row[f.key] === n">{{ n }}</option>
-          }
-        </select>
+        <wb-select class="rf-sel rf-mono" size="xs" [label]="f.label || f.key" [options]="netOpts()" [value]="'' + (row[f.key] ?? '')"
+                   (pick)="set(sec, i, f.key, $event)" />
       }
       @case ('layers') {
         <span class="flex gap-2 py-0.5 text-[11px]">
@@ -140,11 +132,8 @@ type Row = Record<string, unknown>;
             </span>
           }
           @if (loose().length) {
-            <select (change)="push(sec, i, f.key, $any($event.target).value); $any($event.target).value = ''"
-                    class="tcv-field mono px-1 py-0 text-[10px]">
-              <option value="">+ net</option>
-              @for (n of loose(); track n) { <option [value]="n">{{ n }}</option> }
-            </select>
+            <wb-select class="rf-mono rf-add" size="xs" label="+ net" placeholder="+ net" [options]="looseOpts()" value=""
+                       (pick)="push(sec, i, f.key, $event)" />
           }
         </span>
       }
@@ -163,7 +152,12 @@ type Row = Record<string, unknown>;
     }
   </div>
 </ng-template>`,
-  imports: [NgTemplateOutlet],
+  imports: [NgTemplateOutlet, UiSelect],
+  styles: [`
+    .rf-sel { width: 100%; --wb-sel-h: 21px; --wb-sel-radius: 4px; }
+    .rf-mono { --wb-sel-font: 'IBM Plex Mono', ui-monospace, monospace; }
+    .rf-add { --wb-sel-h: 18px; --wb-sel-fs: 10px; }
+  `],
 })
 export class RulesForm {
   rules = input.required<BoardRules>();
@@ -184,6 +178,16 @@ export class RulesForm {
     const named = new Set(this.rules().classes.flatMap(c => c.nets));
     return this.nets().filter(n => !named.has(n));
   });
+
+  netOpts = computed<SelectOption[]>(() => [{ value: '', label: 'pick a net' }, ...plainOptions(this.nets())]);
+  looseOpts = computed(() => plainOptions(this.loose()));
+  private choices = new WeakMap<RuleField, SelectOption[]>();
+  /** A choice field's options, with their labels; the same field, the same list. */
+  choiceOpts(f: RuleField): SelectOption[] {
+    let o = this.choices.get(f);
+    if (!o) this.choices.set(f, o = (f.options ?? []).map(v => ({ value: v, label: f.labels?.[v] ?? v })));
+    return o;
+  }
 
   private data(): Record<string, unknown> {
     return this.rules() as unknown as Record<string, unknown>;

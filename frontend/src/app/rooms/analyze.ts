@@ -6,6 +6,7 @@ import { Money, currencies, currencyName, money, moneyIn, setOverride } from '..
 import { Prefs } from '../preferences';
 import { BudgetBars } from '../budget-bars';
 import { Markdown } from '../markdown';
+import { SelectOption, UiSelect } from '../ui-select';
 import { BarList, Donut, Fmt, Row, Spark, TimeChart, fmt } from './charts';
 
 type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' | 'lcsc';
@@ -21,7 +22,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
  */
 @Component({
   selector: 'app-room-analyze',
-  imports: [BarList, BudgetBars, DecimalPipe, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage],
+  imports: [BarList, BudgetBars, DecimalPipe, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage, UiSelect],
   template: `
 <div class="tcv-room tcv-dash absolute inset-0 flex min-h-0 flex-col">
   <header class="tcv-dash-bar">
@@ -32,21 +33,11 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
       }
     </div>
     <!-- One project on its own, or everything the app has used. -->
-    <select class="tcv-field px-1.5 py-0.5 text-[11.5px]" (change)="setProject($any($event.target).value)"
-            title="one project's items and figures, or all of the app">
-      <option value="" [selected]="!project()">All projects</option>
-      @for (p of projectNames(); track p) {
-        <option [value]="p" [selected]="project() === p">{{ p }}</option>
-      }
-    </select>
+    <wb-select class="tcv-dash-sel" label="Project" tip="one project's items and figures, or all of the app" [options]="projectOpts()"
+               [value]="project()" (pick)="setProject($event)" />
     <!-- The currency amounts are shown in: this browser's own, or the default. -->
-    <select class="tcv-field px-1.5 py-0.5 text-[11.5px]" style="max-width: 130px" (change)="setCurrency($any($event.target).value)"
-            title="the currency amounts are shown in - for this browser; the default is set in Settings > Costs & currency">
-      <option value="" [selected]="!cash.override()">Default ({{ cash.defaultCurrency() }})</option>
-      @for (c of curList(); track c) {
-        <option [value]="c" [selected]="cash.override() === c" [title]="curLabel(c)">{{ curLabel(c) }}</option>
-      }
-    </select>
+    <wb-select class="tcv-dash-sel" style="max-width: 130px" label="Currency" [options]="curOpts()" [value]="cash.override() || ''"
+               tip="the currency amounts are shown in - for this browser; the default is set in Settings > Costs & currency" (pick)="setCurrency($event)" />
     <span class="flex-1"></span>
     @if (data(); as d) {
       <!-- When the figures were worked out, how long that took, and when the
@@ -55,10 +46,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
         @if (d.took_ms != null) { · took {{ d.took_ms | number }} ms }
         · {{ nextIn() === null ? 'no auto refresh' : loading() ? 'refreshing…' : 'next in ' + nextIn() + ' s' }}</span>
     }
-    <select class="tcv-field px-1.5 py-0.5 text-[11.5px]" [value]="every()"
-            (change)="setEvery(+$any($event.target).value)" title="refresh on its own">
-      @for (e of everys; track e.s) { <option [value]="e.s" [selected]="every() === e.s">{{ e.label }}</option> }
-    </select>
+    <wb-select class="tcv-dash-sel" label="Refresh" tip="refresh on its own" [options]="everyOpts" [value]="'' + every()" (pick)="setEvery(+$event)" />
     <button (click)="exportAll()" class="tcv-btn px-2 py-0.5" [disabled]="!data()"
             title="everything in this range, as JSON">Export</button>
     <button (click)="load()" class="tcv-btn px-2 py-0.5" [disabled]="loading()" title="read it again">
@@ -798,6 +786,7 @@ export class RoomAnalyze implements OnDestroy {
   ];
   readonly everys = [{ s: 0, label: 'no refresh' }, { s: 30, label: 'every 30 s' },
                      { s: 60, label: 'every 1 min' }, { s: 300, label: 'every 5 min' }];
+  readonly everyOpts: SelectOption[] = this.everys.map(e => ({ value: '' + e.s, label: e.label }));
 
   range = signal(recall('range', '7d'));
   every = signal(+recall('every', '60'));
@@ -910,6 +899,9 @@ export class RoomAnalyze implements OnDestroy {
   readonly cash = inject(Money);
   private prefs = inject(Prefs);
   curList = computed(() => currencies());
+  curOpts = computed<SelectOption[]>(() => [{ value: '', label: `Default (${this.cash.defaultCurrency()})` },
+    ...this.curList().map(c => ({ value: c, label: this.curLabel(c) }))]);
+  projectOpts = computed<SelectOption[]>(() => [{ value: '', label: 'All projects' }, ...this.projectNames().map(p => ({ value: p, label: p }))]);
   curLabel(c: string) { const n = currencyName(c); return n && n !== c ? `${c} · ${n}` : c; }
   setCurrency(c: string) { setOverride(c || null); }
   /** The plans, the prices and the rest are edited in Settings. */

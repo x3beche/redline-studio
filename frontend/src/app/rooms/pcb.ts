@@ -26,6 +26,7 @@ import { DrawTools, PenState, Sketchpad } from './sketchpad';
 import { ImportBoard } from './import-board';
 import { BoardHealth } from './board-health';
 import { T, t } from '../i18n';
+import { SelectOption, UiSelect, plainOptions } from '../ui-select';
 import { PartsDrawer } from './parts-drawer';
 import { PartCard } from './part-card';
 import { warmPart } from './part-assets';
@@ -57,7 +58,7 @@ type BoardView = Pane | 'split' | 'focus';
 @Component({
   selector: 'app-room-pcb',
   imports: [Board3d, CodeView, PinIcon, PinnedByList, Drawing, RouteLive, DrawTools, ImportBoard, Releases, BoardHealth, NgTemplateOutlet,
-            PartsDrawer, RoomFrame, RulesForm, Sketchpad, T, ToolButton, PartCard, BoardBodies],
+            PartsDrawer, RoomFrame, RulesForm, Sketchpad, T, ToolButton, PartCard, BoardBodies, UiSelect],
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 flex-col p-1">
 
@@ -365,12 +366,8 @@ type BoardView = Pane | 'split' | 'focus';
           @for (w of windows; track w.slot) {
             <section class="tcv-split-pane" [style.grid-area]="w.area">
               <header class="tcv-split-head">
-                <select class="tcv-corner" (change)="setPane(w.slot, $any($event.target).value)"
-                        [title]="'what this window shows'">
-                  @for (k of boardTabs; track k) {
-                    <option [value]="k" [selected]="panes()[w.slot] === k">{{ tabName[k] }}</option>
-                  }
-                </select>
+                <wb-select class="tcv-wcorner" label="what this window shows" tip="what this window shows" [options]="paneOpts"
+                           [value]="panes()[w.slot]" (pick)="setPane(w.slot, $any($event))" />
               </header>
               <div class="relative min-h-0 flex-1">
                 <ng-container *ngTemplateOutlet="board; context: { $implicit: panes()[w.slot], own: true }" />
@@ -418,10 +415,8 @@ type BoardView = Pane | 'split' | 'focus';
 
     <!-- The view's corner: which side of the board, like the 3D room's "All". -->
     @if (boardTab() === 'layout' && here()?.route && !frozen()) {
-      <select ngProjectAs="[corner]" class="tcv-corner"
-              (change)="view.set($any($event.target).value)" title="which side of the board">
-        @for (v of views; track v) { <option [value]="v" [selected]="view() === v">{{ v }}</option> }
-      </select>
+      <wb-select ngProjectAs="[corner]" class="tcv-wcorner" label="which side of the board" tip="which side of the board"
+                 [options]="viewOpts" [value]="view()" (pick)="view.set($any($event))" />
     }
   </app-room-frame>
 
@@ -653,6 +648,7 @@ export class RoomPcb implements OnDestroy {
    *  side tab is showing - all kept across a reload like the other panels. */
   readonly boardTabs = ['layout', 'schematic', '3d'] as const;
   readonly tabName = { layout: 'Layout', schematic: 'Schematic', '3d': '3D' } as const;
+  readonly paneOpts: SelectOption[] = this.boardTabs.map(k => ({ value: k, label: this.tabName[k] }));
   boardTab = signal<BoardView>(
     RoomPcb.pick(RoomPcb.recall('board', 'layout'),
                  ['layout', 'schematic', '3d', 'split', 'focus'], 'layout'));
@@ -689,6 +685,7 @@ export class RoomPcb implements OnDestroy {
   /** The copper as KiCad draws it with the ground pour, without it so the
    *  tracks can be followed, and the back seen from below. */
   readonly views = ['front', 'tracks', 'back'] as const;
+  readonly viewOpts = plainOptions(this.views);
   view = signal<'front' | 'tracks' | 'back'>('tracks');
 
   /** The rules as saved, and as being edited. */

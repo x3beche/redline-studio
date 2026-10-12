@@ -4,6 +4,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { LANG, T, t } from '../i18n';
+import { SelectOption, UiSelect } from '../ui-select';
 import { Confirm } from '../confirm';
 import { DmSendButton } from '../dm';
 
@@ -183,7 +184,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
 /** The Taste room. */
 @Component({
   selector: 'app-room-taste',
-  imports: [T, NgTemplateOutlet, DmSendButton],
+  imports: [T, NgTemplateOutlet, DmSendButton, UiSelect],
   styleUrls: ['../settings.css', './taste.css'],
   host: { '(document:keydown)': 'key($event)', '(document:click)': 'closePicker()' },
   template: `
@@ -321,10 +322,8 @@ function why(e: HttpErrorResponse, fallback: string): string {
                       <textarea class="tst-edit" rows="2" [value]="draft().text" (input)="setDraft('text', $any($event.target).value)"
                                 (keydown.enter)="$event.preventDefault(); saveProposal(it)" (keydown.escape)="editId.set(null)"></textarea>
                       <div class="tst-edit-row">
-                        <select class="tst-sel" [value]="draft().strength" (change)="setDraft('strength', $any($event.target).value)">
-                          @for (s of strengths; track s.id) { <option [value]="s.id">{{ s.label | t }}</option> }</select>
-                        <select class="tst-sel" [value]="draft().domain" (change)="setDraft('domain', $any($event.target).value)">
-                          @for (d of domains; track d.id) { <option [value]="d.id">{{ d.label | t }}</option> }</select>
+                        <wb-select class="tst-wsel" label="Strength" [options]="strengthOpts()" [value]="draft().strength" (pick)="setDraft('strength', $any($event))" />
+                        <wb-select class="tst-wsel" label="Domain" [options]="domainOpts()" [value]="draft().domain" (pick)="setDraft('domain', $any($event))" />
                         <input class="tst-in" [placeholder]="'Why (optional)' | t" [value]="draft().why ?? ''"
                                (input)="setDraft('why', $any($event.target).value)" (keydown.enter)="saveProposal(it)">
                         <button class="tcv-btn" (click)="saveProposal(it)">{{ 'Done' | t }}</button>
@@ -351,10 +350,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
             <span class="st-sub">{{ fmt('{n} of {m} accepted · from {p}', { n: keptCount(), m: proposals().length, p: exFrom() }) }}</span>
             <span class="grow"></span>
             <label class="st-sub">{{ 'Save to' | t }}</label>
-            <select class="tst-sel" [value]="saveTo()" (change)="saveTo.set($any($event.target).value)">
-              <option value="">{{ 'A new palette' | t }}</option>
-              @for (p of allPalettes(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
-            </select>
+            <wb-select class="tst-wsel" label="Palette" [options]="saveToOpts()" [value]="saveTo()" (pick)="saveTo.set($event)" />
             @if (!saveTo()) {
               <input class="tst-in tst-newname" [placeholder]="'Palette name' | t" [value]="newName()" (input)="newName.set($any($event.target).value)">
             }
@@ -487,10 +483,8 @@ function why(e: HttpErrorResponse, fallback: string): string {
       }
       @if (can()) {
         <div class="tst-add">
-          <select class="tst-sel" [value]="addStrength()" (change)="addStrength.set($any($event.target).value)" [attr.aria-label]="'Strength' | t">
-            @for (s of strengths; track s.id) { <option [value]="s.id">{{ s.label | t }}</option> }</select>
-          <select class="tst-sel" [value]="addDomain()" (change)="addDomain.set($any($event.target).value)" [attr.aria-label]="'Domain' | t">
-            @for (d of domains; track d.id) { <option [value]="d.id">{{ d.label | t }}</option> }</select>
+          <wb-select class="tst-wsel" label="Strength" [options]="strengthOpts()" [value]="addStrength()" (pick)="addStrength.set($any($event))" />
+          <wb-select class="tst-wsel" label="Domain" [options]="domainOpts()" [value]="addDomain()" (pick)="addDomain.set($any($event))" />
           <input #addBox class="tst-in tst-add-text" [placeholder]="'One statement, checkable: Walls 2 mm, outside edges filleted 1 mm' | t"
                  [value]="addText()" (input)="addText.set($any($event.target).value)" (keydown.enter)="addItem(p)">
           <input class="tst-in tst-add-why" [placeholder]="'Why (optional)' | t" [value]="addWhy()"
@@ -521,10 +515,8 @@ function why(e: HttpErrorResponse, fallback: string): string {
                       <textarea class="tst-edit" rows="2" [value]="draft().text" (input)="setDraft('text', $any($event.target).value)"
                                 (keydown.enter)="$event.preventDefault(); saveItem(p, it)" (keydown.escape)="editId.set(null)"></textarea>
                       <div class="tst-edit-row">
-                        <select class="tst-sel" [value]="draft().strength" (change)="setDraft('strength', $any($event.target).value)">
-                          @for (s of strengths; track s.id) { <option [value]="s.id">{{ s.label | t }}</option> }</select>
-                        <select class="tst-sel" [value]="draft().domain" (change)="setDraft('domain', $any($event.target).value)">
-                          @for (d of domains; track d.id) { <option [value]="d.id">{{ d.label | t }}</option> }</select>
+                        <wb-select class="tst-wsel" label="Strength" [options]="strengthOpts()" [value]="draft().strength" (pick)="setDraft('strength', $any($event))" />
+                        <wb-select class="tst-wsel" label="Domain" [options]="domainOpts()" [value]="draft().domain" (pick)="setDraft('domain', $any($event))" />
                         <input class="tst-in" [placeholder]="'Why (optional)' | t" [value]="draft().why ?? ''"
                                (input)="setDraft('why', $any($event.target).value)" (keydown.enter)="saveItem(p, it)"
                                (keydown.escape)="editId.set(null)">
@@ -649,10 +641,8 @@ function why(e: HttpErrorResponse, fallback: string): string {
             <div class="tst-add tsh-first-row">
               <input class="tst-in" [placeholder]="'Palette name' | t" [value]="firstName()" (input)="firstName.set($any($event.target).value)"
                      [attr.aria-label]="'Palette name' | t">
-              <select class="tst-sel" [value]="addStrength()" (change)="addStrength.set($any($event.target).value)" [attr.aria-label]="'Strength' | t">
-                @for (s of strengths; track s.id) { <option [value]="s.id" [selected]="s.id === addStrength()">{{ s.label | t }}</option> }</select>
-              <select class="tst-sel" [value]="addDomain()" (change)="addDomain.set($any($event.target).value)" [attr.aria-label]="'Domain' | t">
-                @for (d of domains; track d.id) { <option [value]="d.id" [selected]="d.id === addDomain()">{{ d.label | t }}</option> }</select>
+              <wb-select class="tst-wsel" label="Strength" [options]="strengthOpts()" [value]="addStrength()" (pick)="addStrength.set($any($event))" />
+              <wb-select class="tst-wsel" label="Domain" [options]="domainOpts()" [value]="addDomain()" (pick)="addDomain.set($any($event))" />
               <input class="tst-in" [placeholder]="'One statement, checkable: Walls 2 mm, outside edges filleted 1 mm' | t"
                      [value]="addText()" (input)="addText.set($any($event.target).value)" (keydown.enter)="createFirst()">
               <button class="tcv-btn tcv-btn-accent" (click)="createFirst()" [disabled]="!addText().trim()">{{ 'Create the palette' | t }}</button>
@@ -773,6 +763,8 @@ export class RoomTaste implements OnDestroy {
 
   readonly domains = DOMAINS;
   readonly strengths = STRENGTHS;
+  strengthOpts = computed<SelectOption[]>(() => this.strengths.map(x => ({ value: x.id, label: t(x.label) })));
+  domainOpts = computed<SelectOption[]>(() => this.domains.map(x => ({ value: x.id, label: t(x.label) })));
   q = signal('');
   palettes = signal<Palette[]>([]);
   /** Every palette, whatever the search: the "Save to" list. */
@@ -810,6 +802,8 @@ export class RoomTaste implements OnDestroy {
   exModel = signal('');
   proposals = signal<Proposal[]>([]);
   saveTo = signal('');
+  saveToOpts = computed<SelectOption[]>(() => [{ value: '', label: t('A new palette') },
+    ...this.allPalettes().map(p => ({ value: p.id, label: p.name }))]);
   newName = signal('');
   saving = signal(false);
 

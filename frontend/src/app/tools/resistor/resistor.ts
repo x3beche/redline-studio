@@ -1,5 +1,6 @@
 import { Component, computed, signal } from '@angular/core';
 import { SERIES, fmtEng, fmtNum, parseEng, standard, valuesOf } from '../eng';
+import { UiSelect, plainOptions } from '../../ui-select';
 
 type Q = 'V' | 'I' | 'R' | 'P';
 const OHM: { k: Q; label: string; unit: string }[] = [
@@ -38,6 +39,7 @@ const LEDS = [
 @Component({
   selector: 'app-resistor-tool',
   styleUrl: '../calc.css',
+  imports: [UiSelect],
   template: `
 <div class="calc">
   <section class="calc-sec">
@@ -64,9 +66,7 @@ const LEDS = [
       <label class="calc-f"><span>LED current (mA)</span>
         <input [value]="ledMa()" (input)="ledMa.set($any($event.target).value)" /></label>
       <label class="calc-f"><span>values made in</span>
-        <select (change)="ledSeries.set($any($event.target).value)">
-          @for (s of seriesNames; track s) { <option [value]="s" [selected]="s === ledSeries()">{{ s }}</option> }
-        </select></label>
+        <wb-select label="values made in" [options]="seriesOpts" [value]="ledSeries()" (pick)="ledSeries.set($event)" /></label>
     </div>
     <div class="calc-hint" style="margin-top: 6px">
       @for (l of leds; track l.name) {
@@ -98,9 +98,7 @@ const LEDS = [
       <label class="calc-f"><span>to (Ω)</span>
         <input [value]="totHi()" (input)="totHi.set($any($event.target).value)" /></label>
       <label class="calc-f"><span>values made in</span>
-        <select (change)="divSeries.set($any($event.target).value)">
-          @for (s of seriesNames; track s) { <option [value]="s" [selected]="s === divSeries()">{{ s }}</option> }
-        </select></label>
+        <wb-select label="values made in" [options]="seriesOpts" [value]="divSeries()" (pick)="divSeries.set($event)" /></label>
     </div>
     @if (divider(); as d) {
       <div class="calc-out">
@@ -121,6 +119,7 @@ export class ResistorTool {
   readonly ohm = OHM;
   readonly leds = LEDS;
   readonly seriesNames = Object.keys(SERIES);
+  readonly seriesOpts = plainOptions(this.seriesNames);
   readonly fmtEng = fmtEng;
   readonly fmtNum = fmtNum;
 

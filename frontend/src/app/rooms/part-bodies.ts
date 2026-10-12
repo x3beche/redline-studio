@@ -2,6 +2,7 @@ import { Component, computed, effect, inject, input, signal } from '@angular/cor
 import { HttpClient } from '@angular/common/http';
 import { Selection } from '../selection';
 import { T, t } from '../i18n';
+import { SelectOption, UiSelect } from '../ui-select';
 import { BodySource, BodySpec, PartBodyView } from './part-body-view';
 import { fetchJson, specUrl } from './part-assets';
 import { Confirm } from '../confirm';
@@ -28,7 +29,7 @@ const payloadUrl = (b: PartBody) => `/api/models/${b.model}/viewer.json?v=${b.mo
  *  the 3D room to draw one. */
 @Component({
   selector: 'app-part-bodies',
-  imports: [T, PartBodyView],
+  imports: [T, PartBodyView, UiSelect],
   styleUrl: '../settings.css',
   styles: [`
     :host { display: flex; flex-direction: column; min-width: 0; }
@@ -70,7 +71,11 @@ const payloadUrl = (b: PartBody) => `/api/models/${b.model}/viewer.json?v=${b.mo
     .pb-tab[data-on]::before { content: '−'; }
     .pb-form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .pb-form .st-in { padding: 3px 7px; font-size: 11.5px; }
-    .pb-check { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-dim); }
+    .pb-check { display: inline-flex; align-items: center; gap: 6px; padding: 0 2px; font: inherit; font-size: 11px; color: var(--ink-dim);
+      background: none; border: 0; cursor: pointer; }
+    .pb-check[aria-checked="true"] { color: var(--ink); }
+    .pb-check:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    .pb-sel { flex: 1 1 12rem; max-width: 18rem; --wb-sel-h: 24px; --wb-sel-fs: 11.5px; }
   `],
   template: `
   <div class="st-card">
@@ -154,15 +159,12 @@ const payloadUrl = (b: PartBody) => `/api/models/${b.model}/viewer.json?v=${b.mo
           }
           @if (form() === 'bind' && canEdit()) {
             <div class="pb-form">
-              <select class="st-in" style="flex: 1 1 12rem; max-width: 18rem" [attr.aria-label]="'a built 3D model…' | t"
-                      (focus)="loadModels()" (change)="model.set($any($event.target).value)">
-                <option value="">{{ 'a built 3D model…' | t }}</option>
-                @for (m of models(); track m.id) { <option [value]="m.id" [selected]="m.id === model()">{{ m.id }}</option> }
-              </select>
+              <wb-select class="st-sel pb-sel" label="a built 3D model…" placeholder="a built 3D model…" [options]="modelOpts()" [value]="model()"
+                         (opened)="loadModels()" (pick)="model.set($event)" />
               <input class="st-in" style="flex: 0 1 9rem" [placeholder]="'name, e.g. lying flat' | t" [attr.aria-label]="'name' | t"
                      [value]="name()" (input)="name.set($any($event.target).value)" maxlength="40">
-              <label class="pb-check"><input type="checkbox" [checked]="asDefault()"
-                     (change)="asDefault.set($any($event.target).checked)">{{ 'default' | t }}</label>
+              <button type="button" class="pb-check" role="switch" [attr.aria-checked]="asDefault()" (click)="asDefault.set(!asDefault())">
+                <span class="tcv-switch" [attr.data-on]="asDefault() ? 1 : null" aria-hidden="true"></span>{{ 'default' | t }}</button>
               <button class="pb-btn accent" (click)="bind()" [disabled]="busy() || !model() || !name().trim()">{{ 'Bind' | t }}</button>
             </div>
           }
@@ -202,6 +204,7 @@ export class PartBodiesCard {
   form = signal<'' | 'bind' | 'ask'>('');
   models = signal<ModelOpt[]>([]);
   model = signal('');
+  modelOpts = computed<SelectOption[]>(() => [{ value: '', label: t('a built 3D model…') }, ...this.models().map(m => ({ value: m.id, label: m.id }))]);
   name = signal('');
   asDefault = signal(false);
   reqName = signal('');

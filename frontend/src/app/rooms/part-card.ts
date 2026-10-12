@@ -1,7 +1,8 @@
-import { Component, inject, input, output, signal } from '@angular/core';
+import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { Parts, PartHeld, PartPreview } from '../api';
 import { money } from '../money';
 import { T, t } from '../i18n';
+import { SelectOption, UiSelect } from '../ui-select';
 import { PartBodiesCard } from './part-bodies';
 
 /** The datasheet as the room holds it: being fetched, at hand, or why not. */
@@ -16,7 +17,7 @@ export interface DatasheetState { lcsc: string; state: 'busy' | 'ready' | 'error
  *  in the markup can run. */
 @Component({
   selector: 'app-part-card',
-  imports: [T, PartBodiesCard],
+  imports: [T, PartBodiesCard, UiSelect],
   styleUrl: '../settings.css',
   styles: [`
     :host { display: block; container-type: inline-size; color: var(--ink); font-size: 12px; }
@@ -187,15 +188,8 @@ export interface DatasheetState { lcsc: string; state: 'busy' | 'ready' | 'error
         <div class="st-card-body">
           @if (held(); as h) {
             <label class="st-f"><span>{{ 'Category' | t }}</span>
-              <select class="st-in" [disabled]="!canEdit()" (change)="place.emit($any($event.target).value)">
-                @for (pg of places(); track pg.group) {
-                  <optgroup [label]="pg.group">
-                    @for (b of pg.branches; track b) {
-                      <option [value]="pg.group + '/' + b" [selected]="h.group === pg.group && h.branch === b">{{ pg.group }} › {{ b }}</option>
-                    }
-                  </optgroup>
-                }
-              </select>
+              <wb-select class="st-sel" label="Category" [options]="placeOpts()" [value]="h.group + '/' + h.branch" [disabled]="!canEdit()"
+                         (pick)="place.emit($event)" />
             </label>
             <div class="st-row">
               <span class="st-hint" style="flex: 1; min-width: 0">{{ placeTip(h) }}</span>
@@ -220,6 +214,8 @@ export class PartCard {
   pins = input<{ number: string; name: string }[] | null>(null);
   held = input<PartHeld | undefined>(undefined);
   places = input<{ group: string; branches: string[] }[]>([]);
+  placeOpts = computed<SelectOption[]>(() => this.places().flatMap(pg =>
+    pg.branches.map(b => ({ value: pg.group + '/' + b, label: pg.group + ' › ' + b, group: pg.group }))));
   adding = input<{ lcsc: string; state: string } | null>(null);
   datasheet = input<DatasheetState | null>(null);
   canEdit = input(false);
