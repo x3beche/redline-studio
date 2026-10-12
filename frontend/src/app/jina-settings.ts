@@ -7,8 +7,8 @@ import { when } from './llm-settings';
 
 /** Settings > Proxy & Data: Jina AI (backend/jina.py). Its Reader reads a
  *  web page in a browser on Jina's side and answers with the page as
- *  Markdown - for the Product Catalog's crawler ("Jina Reader" / "Jina when
- *  refused" in a maker's Fetching) and the Chat's web_read; its Search
+ *  Markdown - for the Product Catalog's crawler (the Jina route of its route
+ *  order) and the Chat's web_read; its Search
  *  answers the Chat's web_search. One API key for both, kept on the server:
  *  only its last four characters come back. Under it: what the key has
  *  left, from Jina's own dashboard, and Redline's own count of its calls,
@@ -139,7 +139,7 @@ export function foldKeep(key: string, v: boolean): void {
         </section>
       } @else if (usageErr()) { <p class="st-err">{{ usageErr() }}</p> }
 
-      <p class="st-hint">{{ 'Where it is used: a maker\\'s Fetching in the Product Catalog - "Jina Reader" reads every page through it, "Jina when refused" reads directly and turns to Jina when a site refuses or a page is empty without its script, then to the proxy. robots.txt is still read here and obeyed, and only public addresses are sent. The Chat\\'s web_search and web_read use Search and Reader.' | t }}
+      <p class="st-hint">{{ 'Where it is used: the Jina route in the Product Catalog\\'s route order (above, or a maker\\'s own) reads a web page through it - first, or after a site refuses or a page comes back empty without its script. robots.txt is still read here and obeyed, and only public addresses are sent. The Chat\\'s web_search and web_read use Search and Reader.' | t }}
         {{ 'Tokens are Jina\\'s unit: a page read costs about its length in tokens, a search a fixed amount.' | t }}</p>
     } @else {
       <div class="st-empty">{{ err() || ('Loading…' | t) }}</div>

@@ -308,10 +308,16 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
     if wait:
         await asyncio.sleep(wait)
 
-    from . import netproxy
+    from . import netproxy, netroutes
 
     loop = asyncio.get_running_loop()
-    always = netproxy.mode() == "always"
+    # The Drawer's order of routes (Settings > Proxy & Data): the first that
+    # is set up goes first, the next only when it is turned away or cannot
+    # be reached. Never empty: with nothing set up, the lookup goes direct.
+    try:
+        routes = netroutes.plan("parts")
+    except netroutes.NoRoute:
+        routes = ["local"]
 
     def note(via: str, t0: float, *, status=None, size=0, error=None, meta=None, attempt="first"):
         """The ask in the journal (the page's list) and in the proxy log (Settings > Proxy)."""
@@ -324,43 +330,58 @@ async def _polite(kind: str, target: str, url: str, fn, *args, weight: int = 1):
     async def attempt(via_proxy: bool):
         return await loop.run_in_executor(None, _through, via_proxy, fn, *args)
 
-    via = "proxy" if always else "direct"
+    def side(route: str) -> str:
+        return "proxy" if route == "proxy" else "direct"
+
+    via = side(routes[0])
     how = "first"
     t0 = _time.monotonic()
     try:
-        try:
-            out, meta = await attempt(always)
-        except urllib.error.HTTPError as first:
-            # Through a rotating proxy a refusal is that exit address's: two
-            # more tries, each from a fresh one, before anybody cools off.
-            if always and first.code in (403, 429) and kind not in ELSEWHERE:
-                last = first
-                for n in (2, 3):
-                    note("proxy", t0, status=last.code, meta=getattr(last, "net_meta", None), attempt=how,
-                         error=f"refused at this exit - try {n} of 3 from another")
-                    _tell("proxy", f"refused at this exit, trying another ({n}/3)")
-                    t0 = _time.monotonic()
-                    how = f"retry {n}"
-                    try:
-                        out, meta = await attempt(True)
-                        break
-                    except urllib.error.HTTPError as again:
-                        if again.code not in (403, 429):
-                            raise
-                        last = again
-                else:
-                    raise last
-            else:
-                # Turned away at this address: with a fallback proxy set, the
-                # same ask goes once more through it before anyone cools off.
-                if first.code not in (403, 429) or always or netproxy.mode() != "fallback":
+        for i, route in enumerate(routes):
+            last_route = i == len(routes) - 1
+            try:
+                try:
+                    out, meta = await attempt(route == "proxy")
+                except urllib.error.HTTPError as first:
+                    # Through a rotating proxy a refusal is that exit address's: two
+                    # more tries, each from a fresh one, before the next route.
+                    if route != "proxy" or first.code not in (403, 429) or kind in ELSEWHERE:
+                        raise
+                    last = first
+                    for n in (2, 3):
+                        note("proxy", t0, status=last.code, meta=getattr(last, "net_meta", None), attempt=how,
+                             error=f"refused at this exit - try {n} of 3 from another")
+                        _tell("proxy", f"refused at this exit, trying another ({n}/3)")
+                        t0 = _time.monotonic()
+                        how = f"retry {n}" if how == "first" else f"{how}, retry {n}"
+                        try:
+                            out, meta = await attempt(True)
+                            break
+                        except urllib.error.HTTPError as again:
+                            if again.code not in (403, 429):
+                                raise
+                            last = again
+                    else:
+                        raise last
+                break
+            except urllib.error.HTTPError as exc:
+                # Turned away here: the next route asks once more before anyone cools off.
+                if last_route or exc.code not in (403, 429):
                     raise
-                note("direct", t0, status=first.code, error="refused here - asking through the proxy",
-                     meta=getattr(first, "net_meta", None))
-                _tell("proxy", "LCSC refused, retrying via proxy")
-                via, how = "proxy", "fallback"
-                t0 = _time.monotonic()
-                out, meta = await attempt(True)
+                trouble, why_next = exc.code, "refused here"
+                meta_here = getattr(exc, "net_meta", None)
+            except (urllib.error.URLError, OSError, TimeoutError) as exc:
+                if last_route:
+                    raise
+                trouble, why_next = None, f"{type(exc).__name__}: {exc}"[:160]
+                meta_here = getattr(exc, "net_meta", None)
+            nxt = routes[i + 1]
+            note(via, t0, status=trouble, meta=meta_here, attempt=how,
+                 error=f"{why_next} - asking {'through the proxy' if nxt == 'proxy' else 'directly'}")
+            _tell("proxy" if nxt == "proxy" else "direct",
+                  "LCSC refused, retrying via proxy" if nxt == "proxy" else "the proxy could not, asking directly")
+            via, how = side(nxt), "fallback"
+            t0 = _time.monotonic()
     except urllib.error.HTTPError as exc:
         meta = getattr(exc, "net_meta", None)
         if exc.code in (403, 429) and kind in ELSEWHERE:
@@ -1398,7 +1419,7 @@ async def seat_model(db, lcsc: str, component: dict | None = None) -> dict:
 
     `component` is EasyEDA's record of the part; without it the one on disk
     is used, and only when that is missing is EasyEDA asked - politely, and
-    through the proxy when the proxy is set to always (`_component`).
+    by the Drawer's route order (`_component`).
     Nothing is downloaded again: the model is the one already stored.
     Says what it did: {"lcsc", "status", "offset", "was"}.
     """

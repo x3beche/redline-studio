@@ -22,17 +22,18 @@ a cancel stops it, a restart of the server ends it as interrupted.
 Fetching is plain HTTP (httpx): no page's script is ever run. Each request
 is refused unless it is http(s) to a public address - checked again on
 every redirect - so a site cannot point the crawler into this machine's
-network. How it goes out is chosen per run: directly, through the proxy of
-Settings > Proxy & Data only when the site turns a request away
-("fallback"), or every request through it ("always") - backend/netproxy.py's
-proxy, metered and logged there like the part lookups. Or through Jina
-Reader (backend/jina.py), which reads a page in a real browser on Jina's
-side and answers with its Markdown: every page ("jina"), or directly first
-and Jina when the site refuses or the page is empty without its script,
-then the proxy, when one is set up, if Jina could not read it either
-("jina_fallback"). Jina reads web pages only: robots.txt and the sitemaps
-are always read here, and a target is checked (public, http(s)) before
-Jina is asked for it.
+network. How it goes out is an order of routes (backend/netroutes.py): the
+Product Catalog's default order of Settings > Proxy & Data, or a maker's
+own. `local` is directly from here, `proxy` the proxy of that page
+(backend/netproxy.py's, metered and logged there like the part lookups),
+`jina` Jina Reader (backend/jina.py), which reads a page in a real browser
+on Jina's side and answers with its Markdown. A request tries the first
+route, and the next when the site turns it away, cannot be reached or -
+for a later Jina - answers with a page empty without its script; once a
+later route has answered a refused request, the rest of the run starts
+there. Jina reads web pages only: robots.txt and the sitemaps go by the
+other routes (directly when there are none), and a target is checked
+(public, http(s)) before Jina is asked for it.
 
 How the agents get it: the Chat's `manufacturer_search` tool
 (backend/chat_tools/manufacturer_search.py) lists them, reads a catalog
@@ -102,13 +103,10 @@ EXTRACT_TIMEOUT = 240.0
 MAX_PRODUCTS = 2_000                # in one catalog
 MAX_SPECS = 24                      # on one product
 MAX_DOCS = 40                       # catalog PDFs and the like, as links
-PROXY_CHOICES = ("off", "fallback", "always", "jina", "jina_fallback")
-NEEDS_PROXY = ("fallback", "always")
-JINA_CHOICES = ("jina", "jina_fallback")
-THIN_TEXT = 200                     # a page read directly with less text than this is tried again through Jina ("jina_fallback")
-NO_PROXY = "the proxy is not set up (Settings > Proxy & Data) - choose Off, or set it up first"
-NO_JINA = "Jina is not set up (Settings > Proxy & Data) - choose another way, or paste its API key first"
-REFUSED = (403, 429, 503)           # a site turning a request away: the proxy's moment in "fallback"
+THIN_TEXT = 200                     # a page read with less text than this is tried again through a later Jina
+REFUSED = (403, 429, 503)           # a site turning a request away: the next route's moment
+CONSUMER = "catalog"                # this crawler's routes and default order (backend/netroutes.py)
+DEFAULT = "default"                 # a maker that follows the default order
 
 log = logging.getLogger("redline.manufacturers")
 
@@ -541,25 +539,50 @@ def _client(proxy: str | None = None):
 
 
 def proxy_state() -> dict:
-    """Whether the proxy of Settings > Proxy & Data can carry a run, and how
-    it is set for the part lookups (a run's default); whether Jina can."""
-    from . import jina, netproxy
+    """How a run may go out: the routes this crawler can take, which are set
+    up (the proxy of Settings > Proxy & Data, Jina's key), and the default
+    order a maker follows unless it has its own."""
+    from . import jina, netproxy, netroutes
     conf = netproxy._conf
-    configured = bool(netproxy.url())
-    active = netproxy.mode()
-    return {"configured": configured, "enabled": bool(conf.get("enabled")), "mode": active or "off",
-            "setting": conf.get("mode") or "fallback", "default": active or "off",
-            "price_per_gb": conf.get("price_per_gb", 3.99), "country": conf.get("country") or "",
-            "metered": bool(_meter_port()), "jina": jina.configured()}
+    return {"configured": bool(netproxy.url()), "price_per_gb": conf.get("price_per_gb", 3.99),
+            "country": conf.get("country") or "", "metered": bool(_meter_port()), "jina": jina.configured(),
+            "routes": list(netroutes.CONSUMERS[CONSUMER]), "order": netroutes.order(CONSUMER),
+            "ready": {r: netroutes.why_not(r) for r in netroutes.CONSUMERS[CONSUMER]}}
 
 
-def choice_problem(choice: str) -> str | None:
-    """Why a run cannot go out the way `choice` says, or None."""
-    from . import jina
-    if choice in NEEDS_PROXY and not proxy_state()["configured"]:
-        return NO_PROXY
-    if choice in JINA_CHOICES and not jina.configured():
-        return NO_JINA
+def own_route(value) -> list[str] | None:
+    """A maker's own order as given - a list of routes, or one of the old
+    mode names - or None for the default order."""
+    from . import netroutes
+    if value is None or value == DEFAULT:
+        return None
+    return netroutes.clean(CONSUMER, value)
+
+
+def maker_route(doc: dict) -> list[str] | None:
+    """A maker's own order, or None when it follows the default. A maker
+    from before the orders kept a mode ("proxy"): that mode, as an order."""
+    if "route" in doc:
+        return own_route(doc.get("route"))
+    return own_route(doc.get("proxy"))
+
+
+def run_plan(route: list[str] | None) -> list[str]:
+    """The routes a run will try: the order (None: the default), without the
+    routes that are not set up. ValueError when none is left."""
+    from . import netroutes
+    try:
+        return netroutes.plan(CONSUMER, route)
+    except netroutes.NoRoute as exc:
+        raise ValueError(str(exc)) from exc
+
+
+def choice_problem(route: list[str] | None) -> str | None:
+    """Why a run cannot go out the way `route` says, or None."""
+    try:
+        run_plan(route)
+    except ValueError as exc:
+        return str(exc)
     return None
 
 
@@ -569,27 +592,25 @@ def _meter_port():
 
 
 class Fetcher:
-    """One run's way out: direct, through the proxy, or direct until the
-    site turns a request away and through the proxy after (the run stays
-    on it once it has been refused). Or the web pages through Jina Reader:
-    all of them ("jina"), or directly until the site refuses and through
-    Jina after - a page that comes back next to empty (its text written by
-    its script) is read through Jina too - and the proxy when Jina cannot
-    read one ("jina_fallback"). Counts what went each way."""
+    """One run's way out: an order of routes (backend/netroutes.py) - `local`
+    (directly), `proxy`, `jina` (Jina Reader, web pages only) - of which the
+    ones set up are tried in turn. A request goes to the first; when the site
+    turns it away (REFUSED) or cannot be reached, or Jina cannot read it, to
+    the next. A web page that comes back next to empty (its text written by
+    its script) is read through a later Jina, if the order has one. Once a
+    later route has answered a refused request, the rest of the run starts
+    from it. Counts what went each way."""
 
-    def __init__(self, choice: str, session: str | None = None):
-        from . import jina, netproxy
-        self.choice = choice if choice in PROXY_CHOICES else "off"
-        if self.choice in JINA_CHOICES and not jina.configured():
-            raise Refused(NO_JINA)
-        # "jina_fallback" uses the proxy as its last way only when one is set up.
-        proxied = self.choice in NEEDS_PROXY or (self.choice == "jina_fallback" and bool(netproxy.url()))
+    def __init__(self, route: list[str] | str | None = None, session: str | None = None):
+        from . import netproxy
+        try:
+            self.order = run_plan(own_route(route))
+        except ValueError as exc:
+            raise Refused(str(exc)) from exc
+        proxied = "proxy" in self.order
         self.session = session if proxied else None
         self.proxy_url = netproxy.client_url(self.session) if proxied else None
-        if self.choice in NEEDS_PROXY and not self.proxy_url:
-            raise Refused(NO_PROXY)
-        self.via_proxy = self.choice == "always"
-        self.via_jina = self.choice == "jina"
+        self.at = 0                                     # where a request starts in the order
         self.switched_at: str | None = None
         self.jina_since: str | None = None
         self.stats = {"direct": {"requests": 0, "bytes": 0, "refused": 0},
@@ -609,6 +630,20 @@ class Fetcher:
             except Exception:                           # noqa: BLE001
                 pass
 
+    @property
+    def via_proxy(self) -> bool:
+        """Whether the run's requests start at the proxy now."""
+        return self.order[self.at] == "proxy"
+
+    def _routes(self, page: bool) -> list[str]:
+        """The routes one request tries, in order: from where the run stands.
+        Jina only for a web page; the rest (robots.txt, the sitemaps) by the
+        order's other routes, and directly when it has none."""
+        tail = self.order[self.at:]
+        if page:
+            return tail
+        return ([r for r in tail if r != "jina"] or [r for r in self.order if r != "jina"] or ["local"])
+
     async def get(self, url: str, accept, allowed) -> dict:
         """One page: {url (where it ended up), status, type, body, via, ms,
         bytes, error}. `accept(content_type)` says which types are read;
@@ -616,34 +651,37 @@ class Fetcher:
         checked (check()) before it is asked - and before Jina is asked
         for it. Only web pages (accept is _is_html) go through Jina."""
         page = accept is _is_html
-        if page and self.via_jina:
-            got = await self._jina(url, allowed)
-            if got["error"] and got.get("error_kind") != "refused" and self.choice == "jina_fallback" and self.proxy_url:
-                again = await self._get(url, accept, allowed, True, attempt="fallback")
-                again["fallback"] = True
-                return again
-            return got
-        via = self.via_proxy
-        got = await self._get(url, accept, allowed, via)
-        trouble = not via and (got.get("status") in REFUSED or got.get("error_kind") == "network")
-        if self.choice == "jina_fallback" and not via:
-            if page and (trouble or self._thin(got)):
+        routes = self._routes(page)
+        got: dict = {}
+        for i, route in enumerate(routes):
+            attempt = "first" if i == 0 else "fallback"
+            if route == "jina":
+                got = await self._jina(url, allowed, attempt=attempt)
+                if got.get("error_kind") == "refused":  # not a page to ask anybody for
+                    return got
+                trouble = bool(got["error"])
+            else:
+                got = await self._get(url, accept, allowed, route == "proxy", attempt=attempt)
+                trouble = got.get("status") in REFUSED or got.get("error_kind") == "network"
+            if i:
+                got["fallback"] = True
+            if trouble:
+                continue
+            if i:
+                # Turned away before and answered here: the rest of the run starts here.
+                self.at = max(self.at, self.order.index(route))
+                if route == "proxy":
+                    self.switched_at = self.switched_at or _now()
+                elif route == "jina":
+                    self.jina_since = self.jina_since or _now()
+            if page and route != "jina" and "jina" in routes[i + 1:] and self._thin(got):
+                # Written by its script: a later Jina reads it, this once.
                 j = await self._jina(url, allowed, attempt="fallback")
                 if not j["error"]:
                     j["fallback"] = True
-                    if trouble:                         # the site turns us away: Jina from here on
-                        self.via_jina = True
-                        self.jina_since = self.jina_since or _now()
                     return j
-            if not trouble or not self.proxy_url:
-                return got
-        elif self.choice != "fallback" or not trouble:
             return got
-        self.via_proxy = True
-        self.switched_at = self.switched_at or _now()
-        again = await self._get(url, accept, allowed, True, attempt="fallback")
-        again["fallback"] = True
-        return again
+        return got
 
     def _thin(self, got: dict) -> bool:
         """A web page that came back with next to no text: written by its
@@ -1767,14 +1805,16 @@ def _host(url: str) -> str:
     return h[4:] if h.startswith("www.") else h
 
 
-async def create(db, url: str, name: str = "", notes: str = "", proxy: str = "off", by: dict | None = None) -> dict:
+async def create(db, url: str, name: str = "", notes: str = "", route=None, by: dict | None = None) -> dict:
+    """A new maker. `route`: its own order of routes, or None (or "default")
+    to follow the Product Catalog's default order."""
     u = normalise(url if "://" in url else "https://" + url.strip())
     if not u:
         raise ValueError("give the site's address, like https://www.example.com")
     now = _now()
     doc = {"_id": secrets.token_hex(6), "name": _clean(name, 120) or _host(u), "name_auto": not _clean(name, 120),
            "url": u, "domain": registrable(urllib.parse.urlsplit(u).hostname or ""), "notes": _clean_notes(notes),
-           "summary": "", "categories": [], "products": [], "docs": [], "proxy": proxy if proxy in PROXY_CHOICES else "off",
+           "summary": "", "categories": [], "products": [], "docs": [], "route": own_route(route),
            "by": by or actors.current(), "created_at": now, "updated_at": now, "explored_at": None, "last_job": None}
     await db[COLL].insert_one(doc)
     return doc
@@ -1809,8 +1849,8 @@ async def patch(db, mid: str, sets: dict) -> dict | None:
         clean["notes"] = _clean_notes(sets["notes"])
     if sets.get("summary") is not None:
         clean["summary"] = str(sets["summary"]).strip()[:3000]
-    if sets.get("proxy") in PROXY_CHOICES:
-        clean["proxy"] = sets["proxy"]
+    if sets.get("route") is not None:
+        clean["route"] = own_route(sets["route"])
     if sets.get("url"):
         u = normalise(sets["url"] if "://" in sets["url"] else "https://" + sets["url"].strip())
         if not u:
@@ -2209,7 +2249,7 @@ async def _work(db, jid: str, mid: str, choice: str, reuse: str | None = None) -
         else:
             await track.phase("crawling")
             try:
-                fetcher = Fetcher(choice, netproxy.new_session() if choice != "off" else None)
+                fetcher = Fetcher(choice, netproxy.new_session())
             except Refused as exc:
                 raise ExploreError(str(exc)) from exc
             try:
@@ -2326,23 +2366,30 @@ async def _prune(db) -> None:
         await delete_run(db, d["_id"])
 
 
-async def start_job(db, mid: str, proxy: str | None = None, by: dict | None = None,
+async def start_job(db, mid: str, route=None, by: dict | None = None,
                     reuse: str | None = None, only: list[str] | None = None, follow: bool = False) -> tuple[dict, bool]:
     """Explore a manufacturer's site (in the background): (job, started).
     One already running for it is that run. With `only`, just those pages
     are read ("page" run) and what they hold is added to the catalog; read
-    again (`reuse`), a run is of the kind the run it reads was."""
+    again (`reuse`), a run is of the kind the run it reads was. `route`:
+    None keeps the maker's own order (or the default it follows), "default"
+    or a list of routes is kept as its choice from now on."""
     doc = await get(db, mid)
     if not doc:
         raise LookupError(f"no manufacturer {mid}")
     for d in await jobs(db, KEEP_JOBS + 10, mid):
         if d and d.get("status") in ACTIVE:
             return d, False
-    choice = proxy if proxy in PROXY_CHOICES else doc.get("proxy") or "off"
-    if choice_problem(choice):
-        raise ValueError(choice_problem(choice))
-    if choice != doc.get("proxy"):
-        await db[COLL].update_one({"_id": mid}, {"$set": {"proxy": choice}})
+    own = maker_route(doc) if route is None else own_route(route)
+    if reuse:
+        try:
+            choice = run_plan(own)
+        except ValueError:
+            choice = ["local"]                          # read again: the site is not fetched
+    else:
+        choice = run_plan(own)
+    if route is not None or "proxy" in doc:
+        await db[COLL].update_one({"_id": mid}, {"$set": {"route": own}, "$unset": {"proxy": ""}})
     kind = "page" if only else "site"
     if reuse:
         was = await db[JOBS].find_one({"_id": reuse}) or {}
@@ -2357,7 +2404,7 @@ async def start_job(db, mid: str, proxy: str | None = None, by: dict | None = No
           "manufacturer": {"id": mid, "name": doc.get("name") or "", "url": doc.get("url"), "domain": doc.get("domain")},
           "by": by or actors.current(), "started_at": now, "finished_at": None, "beat": now, "worker": WORKER,
           "provider": prov, "model": model, "provider_name": llm.PROVIDERS.get(prov, {}).get("name", prov),
-          "proxy": choice, "limits": limits,
+          "route": choice, "route_default": own is None, "limits": limits,
           "steps": [], "totals": {}, "pages": [], "error": None, "products_found": None, "reused": reuse}
     await db[JOBS].insert_one(jd)
     await db[COLL].update_one({"_id": mid}, {"$set": {"last_job": jd["_id"]}})
@@ -2382,9 +2429,16 @@ async def cancel_job(db, jid: str, who: dict | None = None) -> dict | None:
     return await db[JOBS].find_one({"_id": jid})
 
 
+def job_route(d: dict) -> list[str]:
+    """The routes a run went by; a run from before the orders kept a mode."""
+    from . import netroutes
+    return netroutes.clean(CONSUMER, d.get("route") if "route" in d else d.get("proxy")) or ["local"]
+
+
 def job_out(d: dict, full: bool = True) -> dict:
-    keep = {k: v for k, v in d.items() if k not in ("_id", "workspace_id", "worker", "beat", "pages")}
+    keep = {k: v for k, v in d.items() if k not in ("_id", "workspace_id", "worker", "beat", "pages", "proxy")}
     out = {**keep, "id": d["_id"], "now": _now(), "page_count": len(d.get("pages") or []),
+           "route": job_route(d), "route_default": bool(d.get("route_default")),
            "seconds": d.get("seconds") if d.get("finished_at") else _seconds(d.get("started_at"))}
     if full:
         out["pages"] = d.get("pages") or []
@@ -2394,8 +2448,8 @@ def job_out(d: dict, full: bool = True) -> dict:
 # ---- the API -----------------------------------------------------------------
 
 def out(d: dict, last: dict | None = None, full: bool = True) -> dict:
-    keep = {k: v for k, v in d.items() if k not in ("_id", "workspace_id", "products")}
-    o = {**keep, "id": d["_id"], "product_count": len(d.get("products") or []),
+    keep = {k: v for k, v in d.items() if k not in ("_id", "workspace_id", "products", "proxy")}
+    o = {**keep, "id": d["_id"], "product_count": len(d.get("products") or []), "route": maker_route(d),
          "categories": d.get("categories") or [], "docs": d.get("docs") or [],
          "last_run": ({"id": last["_id"], "status": last.get("status"), "started_at": last.get("started_at"),
                        "finished_at": last.get("finished_at"), "error": last.get("error"),
@@ -2422,7 +2476,8 @@ class MakerIn(BaseModel):
     url: str = Field(min_length=3, max_length=500)
     name: str = Field(default="", max_length=120)
     notes: str = Field(default="", max_length=4000)
-    proxy: str | None = Field(default=None, pattern="^(off|fallback|always|jina|jina_fallback)$")
+    # The maker's own order of routes (local, proxy, jina), or "default" for the Product Catalog's.
+    route: list[str] | str | None = None
     explore: bool = True
     only: bool = False              # the address is one page to read, not a site to explore
     follow: bool = False            # ...and the product pages it links to
@@ -2433,17 +2488,20 @@ class MakerPatch(BaseModel):
     notes: str | None = Field(default=None, max_length=4000)
     summary: str | None = Field(default=None, max_length=3000)
     url: str | None = Field(default=None, min_length=3, max_length=500)
-    proxy: str | None = Field(default=None, pattern="^(off|fallback|always|jina|jina_fallback)$")
+    # The maker's own order of routes (local, proxy, jina), or "default" for the Product Catalog's.
+    route: list[str] | str | None = None
 
 
 class ExploreIn(BaseModel):
-    proxy: str | None = Field(default=None, pattern="^(off|fallback|always|jina|jina_fallback)$")
+    # The maker's own order of routes (local, proxy, jina), or "default" for the Product Catalog's.
+    route: list[str] | str | None = None
 
 
 class ReadPageIn(BaseModel):
     urls: list[str] = Field(min_length=1, max_length=ONLY_MAX)
     follow: bool = False
-    proxy: str | None = Field(default=None, pattern="^(off|fallback|always|jina|jina_fallback)$")
+    # The maker's own order of routes (local, proxy, jina), or "default" for the Product Catalog's.
+    route: list[str] | str | None = None
 
 
 class ProductIn(BaseModel):
@@ -2506,6 +2564,16 @@ async def api_list(q: str = ""):
     db = _db()
     lasts = await _lasts(db)
     return [out(d, lasts.get(d["_id"]), full=False) for d in await listing(db, q[:200])]
+
+
+def _route_in(value):
+    """A route choice from a page: "default", or a list of this crawler's routes; 400 otherwise."""
+    from . import netroutes
+    if value is None or value == DEFAULT:
+        return value
+    if isinstance(value, str) or len(value) > len(netroutes.ROUTES) or any(r not in netroutes.CONSUMERS[CONSUMER] for r in value) or not own_route(value):
+        raise HTTPException(400, f"a route order is \"default\" or a list of {', '.join(netroutes.CONSUMERS[CONSUMER])}")
+    return value
 
 
 @router.get("/proxy")
@@ -2616,10 +2684,10 @@ async def api_products(q: str = "", cat: str = "", maker: str = "", seller: str 
 min_, max_ = min, max
 
 
-async def _start(mid: str, proxy: str | None, reuse: str | None = None, only: list[str] | None = None,
+async def _start(mid: str, route, reuse: str | None = None, only: list[str] | None = None,
                  follow: bool = False):
     try:
-        jd, started = await start_job(_db(), mid, proxy, actors.current(), reuse, only, follow)
+        jd, started = await start_job(_db(), mid, _route_in(route), actors.current(), reuse, only, follow)
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
@@ -2637,17 +2705,17 @@ async def api_create(body: MakerIn):
         page = await check(body.url if "://" in body.url else "https://" + body.url.strip())
     except Refused as exc:
         raise HTTPException(400, str(exc)) from exc
-    proxy = body.proxy or proxy_state()["default"]
-    if choice_problem(proxy):
-        raise HTTPException(400, choice_problem(proxy))
+    route = _route_in(body.route)
+    if choice_problem(own_route(route)):
+        raise HTTPException(400, choice_problem(own_route(route)))
     try:
-        doc = await create(db, _root_of(page) if body.only else body.url, body.name, body.notes, proxy, actors.current())
+        doc = await create(db, _root_of(page) if body.only else body.url, body.name, body.notes, route, actors.current())
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     if body.only:
-        run = await _start(doc["_id"], proxy, only=[page], follow=body.follow)
+        run = await _start(doc["_id"], None, only=[page], follow=body.follow)
     else:
-        run = await _start(doc["_id"], proxy) if body.explore else None
+        run = await _start(doc["_id"], None) if body.explore else None
     doc = await get(db, doc["_id"])
     return {"manufacturer": out(doc), "job": run}
 
@@ -2713,7 +2781,7 @@ async def import_doc(db, data: dict, by: dict) -> dict:
     u = normalise(str(data.get("url") or ""))
     if not u:
         raise ValueError("the file has no site address")
-    doc = await create(db, u, str(data.get("name") or ""), str(data.get("notes") or ""), "off", by)
+    doc = await create(db, u, str(data.get("name") or ""), str(data.get("notes") or ""), None, by)
     prods = [p for p in (clean_product(x) for x in (data.get("products") or [])[:MAX_PRODUCTS]
                          if isinstance(x, dict)) if p]
     prods, _ = merge_products([prods])
@@ -2762,6 +2830,7 @@ async def api_patch(mid: str, body: MakerPatch):
             await check(body.url if "://" in body.url else "https://" + body.url.strip())
         except Refused as exc:
             raise HTTPException(400, str(exc)) from exc
+    _route_in(body.route)
     try:
         doc = await patch(db, mid, body.model_dump())
     except ValueError as exc:
@@ -2803,7 +2872,7 @@ async def api_read_page(mid: str, body: ReadPageIn):
     """Just these pages (and, with `follow`, the product pages they link to)
     read into the catalog - added to it, nothing dropped."""
     urls = await _pages_given(body.urls)
-    return await _start(mid, body.proxy, only=urls, follow=body.follow)
+    return await _start(mid, body.route, only=urls, follow=body.follow)
 
 
 async def _maker_out(db, mid: str) -> dict:
@@ -2868,4 +2937,4 @@ async def api_product_delete(mid: str, pid: str):
 @router.post("/{mid}/explore")
 async def api_explore(mid: str, body: ExploreIn | None = None):
     """Explore the site again; its catalog is replaced by what is found."""
-    return await _start(mid, body.proxy if body else None)
+    return await _start(mid, body.route if body else None)

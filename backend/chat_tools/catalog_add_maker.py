@@ -23,11 +23,8 @@ async def run(ctx: Ctx, args: dict) -> Result:
                            f"catalog_read_page, or say `again` to add a second maker for the same site. {link(have['_id'])}",
                       say="{name} is already in the catalog", vars={"name": name, "m": have["_id"], "link": link(have["_id"])},
                       summary="already kept")
-    proxy = mf.proxy_state()["default"]
-    if proxy != "off" and not mf.proxy_state()["configured"]:
-        proxy = "off"
-    try:
-        doc = await mf.create(ctx.db, url, str(args.get("name") or ""), str(args.get("notes") or ""), proxy,
+    try:                                               # the Product Catalog's default order of routes
+        doc = await mf.create(ctx.db, url, str(args.get("name") or ""), str(args.get("notes") or ""), None,
                               ctx.actor or None)
     except ValueError as exc:
         raise ToolError(str(exc)) from exc

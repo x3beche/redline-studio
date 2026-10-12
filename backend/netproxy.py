@@ -1,15 +1,14 @@
-"""A proxy for EasyEDA's API, and nothing else (Settings > Proxy).
+"""A proxy for the outside lookups (Settings > Proxy & Data).
 
 EasyEDA turns a burst of requests away for a while, by address (see
-lcsc.py). A proxy gives the part lookups another way out: either every
-ask goes through it ("always"), or only the one that was just turned away
-is asked again through it ("fallback") before the cool-off starts. A
-rotating residential proxy with no country set comes out somewhere new in
-the world each time.
+lcsc.py). A proxy gives the part lookups another way out, and the Product
+Catalog's crawler too: where it comes in each one's order of routes is
+netroutes.py's - first, or only after a refusal. A rotating residential
+proxy with no country set comes out somewhere new in the world each time.
 
-Only the LCSC/EasyEDA traffic uses it - the model providers, MongoDB and
-everything else go out directly. The budget and the spacing in lcsc.py
-stay as they are: the proxy is a second door, not a licence to ask more.
+Only those lookups use it - the model providers, MongoDB and everything
+else go out directly. The budget and the spacing in lcsc.py stay as they
+are: the proxy is a second door, not a licence to ask more.
 
 Machine-wide (like the LLM keys), kept in `server_settings`; the password
 is never sent back to a page.
@@ -25,7 +24,6 @@ from pydantic import BaseModel, Field
 
 COLL = "server_settings"
 DOC_ID = "proxy"
-MODES = ("always", "fallback")
 
 _conf: dict = {}
 
@@ -37,6 +35,8 @@ async def load(db) -> dict:
     _conf.pop("_id", None)
     from . import netmeter
     netmeter.set_upstream(_conf.get("host"), _conf.get("port"), (_conf.get("scheme") or "http") == "https")
+    from . import netroutes
+    await netroutes.load(db, _conf)                    # the route orders (the old mode, on a first start)
     return _conf
 
 
@@ -87,11 +87,10 @@ def client_url(session: str | None = None) -> str | None:
     return f"http://{auth}127.0.0.1:{netmeter.port()}"
 
 
-def mode() -> str | None:
-    """"always", "fallback", or None when off."""
-    if not _conf.get("enabled") or not url():
-        return None
-    return _conf.get("mode") if _conf.get("mode") in MODES else "fallback"
+def active() -> bool:
+    """Whether the proxy is set up and some lookup's route order has it on."""
+    from . import netroutes
+    return bool(url()) and netroutes.uses("proxy")
 
 
 def opener(via: bool, session: str | None = None):
@@ -165,7 +164,8 @@ def log(row: dict) -> None:
     except RuntimeError:
         return
     from . import scope
-    doc = {**row, "at": datetime.now(timezone.utc), "mode": mode() or "off",
+    from . import netroutes
+    doc = {**row, "at": datetime.now(timezone.utc), "order": netroutes.label(netroutes.order("parts")),
            "country_pref": _conf.get("country") or None, "ws": scope.current()}
 
     async def write():
@@ -213,7 +213,7 @@ async def health_loop() -> None:
     import asyncio
     while True:
         minutes = int(_conf.get("health_minutes", 30) or 0)
-        if mode() and minutes > 0:
+        if active() and minutes > 0:
             t0 = time.monotonic()
             got = await asyncio.get_running_loop().run_in_executor(None, exit_info, new_session() or "health")
             ok = bool(got and got.get("ip"))
@@ -225,11 +225,12 @@ async def health_loop() -> None:
 
 
 def public() -> dict:
+    from . import netroutes
     c = _conf
-    return {"enabled": bool(c.get("enabled")), "mode": c.get("mode") or "fallback",
-            "scheme": c.get("scheme") or "http", "host": c.get("host") or "",
+    return {"scheme": c.get("scheme") or "http", "host": c.get("host") or "",
             "port": c.get("port") or None, "username": c.get("username") or "",
-            "password_set": bool(c.get("password")), "active": mode(),
+            "password_set": bool(c.get("password")), "configured": bool(url()), "active": active(),
+            "routes": netroutes.public(),
             "sticky": c.get("sticky", True), "identify_exit": c.get("identify_exit", True),
             "country": c.get("country") or "", "price_per_gb": c.get("price_per_gb", 3.99),
             "health_minutes": c.get("health_minutes", 30), "meter_port": _meter_port()}
@@ -256,8 +257,6 @@ async def get_settings() -> dict:
 
 
 class ProxyIn(BaseModel):
-    enabled: bool | None = None
-    mode: str | None = Field(default=None, pattern="^(always|fallback)$")
     scheme: str | None = Field(default=None, pattern="^(http|https)$")
     host: str | None = Field(default=None, max_length=200)
     port: int | None = Field(default=None, ge=1, le=65535)
@@ -288,6 +287,27 @@ async def put_settings(body: ProxyIn) -> dict:
     if changed:
         await actors.audit(_db(), "settings", "proxy", {"changed": changed})
     return public()
+
+
+@router.get("/routes")
+async def get_routes() -> dict:
+    """Each lookup's order of routes, and which routes are set up."""
+    from . import netroutes
+    return netroutes.public()
+
+
+class RoutesIn(BaseModel):
+    consumer: str = Field(pattern="^[a-z]{1,20}$")
+    order: list[str] = Field(max_length=5)
+
+
+@router.put("/routes")
+async def put_routes(body: RoutesIn) -> dict:
+    """One lookup's default order: the routes that are on, first tried first."""
+    from . import actors, netroutes
+    got = await netroutes.save(_db(), body.consumer, body.order)
+    await actors.audit(_db(), "settings", "routes", {"consumer": body.consumer, "order": got})
+    return netroutes.public()
 
 
 @router.post("/test")

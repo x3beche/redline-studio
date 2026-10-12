@@ -91,12 +91,9 @@ async def made_for(db, page: str, name: str = "", by: dict | None = None) -> dic
     """A new manufacturer for the site `page` is on, as the Product
     Catalog's "Only this page" add makes one (POST /api/manufacturers with
     `only`): its site's root, named from the host unless `name` says, the
-    proxy of Settings > Proxy as its choice."""
-    proxy = mf.proxy_state()["default"]
-    if proxy != "off" and not mf.proxy_state()["configured"]:
-        proxy = "off"
+    Product Catalog's default order of routes (Settings > Proxy & Data)."""
     try:
-        return await mf.create(db, mf._root_of(page), name, "", proxy, by)
+        return await mf.create(db, mf._root_of(page), name, "", None, by)
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
 

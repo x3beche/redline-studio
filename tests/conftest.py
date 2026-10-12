@@ -27,6 +27,15 @@ def _lcsc_elsewhere(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _route_orders_of_its_own(monkeypatch):
+    """Each test starts from the default route orders (backend/netroutes.py):
+    a server started by one test loads its fake database's orders, and those
+    must not decide how the next test's lookups go out."""
+    from backend import netroutes
+    monkeypatch.setattr(netroutes, "_orders", {})
+
+
+@pytest.fixture(autouse=True)
 def _builds_in_process(monkeypatch):
     """A model build is a process of its own (backend/buildjobs.py). In a
     test its runner is a task in this process, so the build.build a test

@@ -252,3 +252,10 @@ th.mf-gthumb, td.mf-gthumb { width: 40px; padding-right: 0; }
   .mf-detail { grid-template-columns: minmax(0, 1fr); padding: 12px; }
   .mf-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }
+
+/* a maker's own order of routes (route-order.ts) under its header */
+.mf-route { box-sizing: border-box; width: 100%; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px; align-items: center; margin: 0 0 8px; }
+.mf-add .mf-route { margin: 8px 0 0; }
+@media (max-width: 720px) { .mf-route { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+.mf-proxyhint .st-more, .mf-addhint .st-more { display: inline; margin: 0 0 0 4px; padding: 0; color: var(--accent); background: none; border: 0; }
+.mf-proxyhint .st-more:hover, .mf-addhint .st-more:hover { text-decoration: underline; background: none; }

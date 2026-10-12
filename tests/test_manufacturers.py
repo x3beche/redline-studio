@@ -101,11 +101,11 @@ def web(monkeypatch):
     return state
 
 
-def _crawl(start="https://www.dogus.com.tr/", choice="off", cap=mf.MAX_PAGES):
+def _crawl(start="https://www.dogus.com.tr/", choice=("local",), cap=mf.MAX_PAGES):
     track = mf.Tracker()
 
     async def go():
-        f = mf.Fetcher(choice, "s1" if choice != "off" else None)
+        f = mf.Fetcher(list(choice), "s1")
         try:
             return await mf.crawl(start, track, f, cap), f
         finally:
@@ -216,8 +216,8 @@ def test_a_large_page_is_cut_and_a_file_is_not_read(web):
 
 # ---------------------------------------------------------------- the proxy
 
-def _proxy_on(monkeypatch, mode="fallback"):
-    monkeypatch.setattr(netproxy, "_conf", {"enabled": True, "mode": mode, "host": "proxy.test", "port": 8000})
+def _proxy_on(monkeypatch):
+    monkeypatch.setattr(netproxy, "_conf", {"host": "proxy.test", "port": 8000})
     monkeypatch.setattr(netproxy, "log", lambda row: None)
 
 
@@ -226,7 +226,7 @@ def test_fallback_goes_through_the_proxy_once_refused(web, monkeypatch):
     blocked = site(web["seen"], {"/Urunler/10/baglanti": httpx.Response(429, text="slow down")})
     web["site"] = blocked
     web["proxy_site"] = site([])
-    got, track, f = _crawl(choice="fallback")
+    got, track, f = _crawl(choice=["local", "proxy"])
     rows = [r for r in track.meta["pages"] if r.get("fallback")]
     assert len(rows) == 1 and rows[0]["via"] == "proxy" and rows[0]["status"] == 200
     assert f.stats["direct"]["refused"] == 1 and f.stats["proxy"]["requests"] >= 1
@@ -235,18 +235,45 @@ def test_fallback_goes_through_the_proxy_once_refused(web, monkeypatch):
     assert f.switched_at
 
 
-def test_always_and_off(web, monkeypatch):
-    _proxy_on(monkeypatch, "always")
-    _, track, f = _crawl(choice="always")
+def test_proxy_first_and_local_only(web, monkeypatch):
+    _proxy_on(monkeypatch)
+    _, track, f = _crawl(choice=["proxy", "local"])
     assert f.stats["direct"]["requests"] == 0 and all(r["via"] == "proxy" for r in track.meta["pages"])
     web["proxied"].clear()
-    _, track, f = _crawl(choice="off")
-    assert not web["proxied"] and f.stats["proxy"]["requests"] == 0
+    _, track, f = _crawl(choice=["local"])
+    assert not web["proxied"] and f.stats["proxy"]["requests"] == 0 and f.proxy_url is None
     monkeypatch.setattr(netproxy, "_conf", {})
     with pytest.raises(mf.Refused, match="not set up"):
-        mf.Fetcher("always", "s")
+        mf.Fetcher(["proxy"], "s")
+    assert mf.Fetcher(["proxy", "local"], "s").order == ["local"]      # a route not set up is passed over
     st = mf.proxy_state()
-    assert st["configured"] is False and st["default"] == "off"
+    assert st["configured"] is False and st["order"] == ["local", "proxy"] and st["routes"] == ["local", "proxy", "jina"]
+    assert st["ready"]["local"] is None and "not set up" in st["ready"]["proxy"]
+
+
+def test_the_proxy_answers_and_then_a_refused_proxy_goes_to_local(web, monkeypatch):
+    """Proxy first: a refusal through it is asked directly, and the rest of
+    the run starts there."""
+    _proxy_on(monkeypatch)
+    web["proxy_site"] = site([], {"/Urunler/10/baglanti": httpx.Response(403, text="no")})
+    _, track, f = _crawl(choice=["proxy", "local"])
+    rows = track.meta["pages"]
+    i = next(n for n, r in enumerate(rows) if r["url"].endswith("/Urunler/10/baglanti"))
+    assert all(r["via"] == "proxy" for r in rows[:i])
+    assert rows[i]["via"] == "direct" and rows[i]["fallback"] and rows[i]["status"] == 200
+    assert all(r["via"] == "direct" for r in rows[i + 1:]) and f.at == 1
+
+
+def test_a_network_failure_tries_the_next_route(web, monkeypatch):
+    _proxy_on(monkeypatch)
+
+    def down(req):
+        raise httpx.ConnectError("unreachable", request=req)
+    web["site"] = down
+    web["proxy_site"] = site([])
+    _, track, f = _crawl(choice=["local", "proxy"])
+    assert track.meta["pages"] and all(r["via"] == "proxy" for r in track.meta["pages"])
+    assert f.switched_at
 
 
 # ---------------------------------------------------------------- the model's answer
@@ -335,7 +362,7 @@ def test_a_run_explores_and_fills_the_catalog(web, monkeypatch):
         return doc, await _until_done(fake, jd["_id"])()
 
     doc, d = run(go())
-    assert d["status"] == "done" and d["products_found"] == 3 and d["proxy"] == "off"
+    assert d["status"] == "done" and d["products_found"] == 3 and d["route"] == ["local"] and d["route_default"]
     kinds = [s["kind"] for s in d["steps"]]
     assert kinds[:3] == ["robots", "sitemap", "crawl"] and kinds[-2:] == ["merge", "done"]
     assert d["pages"] and d["totals"]["requests_direct"] > 0 and d["totals"]["requests_proxy"] == 0
@@ -439,9 +466,9 @@ def test_a_page_that_reloads_finds_the_run_where_it_is(db, web, monkeypatch):  #
         await asyncio.sleep(30)
     monkeypatch.setattr(llm, "complete", slow)
     a = person(db, "a")
-    r = a.post("/api/manufacturers", json={"url": "https://www.dogus.com.tr/", "proxy": "off"}).json()
+    r = a.post("/api/manufacturers", json={"url": "https://www.dogus.com.tr/", "route": ["local"]}).json()
     jid, mid = r["job"]["job_id"], r["manufacturer"]["id"]
-    assert r["job"]["status"] == "queued" and r["manufacturer"]["proxy"] == "off"
+    assert r["job"]["status"] == "queued" and r["manufacturer"]["route"] == ["local"]
     # The TestClient's loop ran the task as far as it got; what the server wrote is what a reload reads.
     first = a.get(f"/api/manufacturers/jobs/{jid}").json()
     again = a.get(f"/api/manufacturers/jobs/{jid}").json()
@@ -486,11 +513,13 @@ def test_a_manufacturer_from_start_to_finish(db, web, monkeypatch):  # noqa: F81
     assert b.get("/api/manufacturers").json() == [] and b.get(f"/api/manufacturers/{mid}").status_code == 404
     assert b.post(f"/api/manufacturers/{mid}/explore", json={}).status_code == 404
     assert b.get("/api/manufacturers/search?q=mentese").json() == []
-    # exploring: the proxy only when it is set up
+    # exploring: the proxy only when it is set up; "always" is no order
     monkeypatch.setattr(netproxy, "_conf", {})
-    assert a.post(f"/api/manufacturers/{mid}/explore", json={"proxy": "always"}).status_code == 400
-    r = a.post(f"/api/manufacturers/{mid}/explore", json={"proxy": "off"}).json()
-    assert r["started"] and r["proxy"] == "off" and started == [(mid, "off")]
+    assert a.post(f"/api/manufacturers/{mid}/explore", json={"route": ["proxy"]}).status_code == 400
+    assert a.post(f"/api/manufacturers/{mid}/explore", json={"route": "always"}).status_code == 400
+    assert a.post(f"/api/manufacturers/{mid}/explore", json={"route": ["local", "ftp"]}).status_code == 400
+    r = a.post(f"/api/manufacturers/{mid}/explore", json={"route": ["proxy", "local"]}).json()
+    assert r["started"] and r["route"] == ["local"] and not r["route_default"] and started == [(mid, ["local"])]
     jid = r["job_id"]
     assert a.get("/api/manufacturers/proxy").json()["configured"] is False
     import types
@@ -499,11 +528,12 @@ def test_a_manufacturer_from_start_to_finish(db, web, monkeypatch):  # noqa: F81
     assert b.get(f"/api/manufacturers/jobs/{jid}").status_code == 404
     assert a.delete(f"/api/manufacturers/jobs/{jid}").status_code == 409
     assert a.post(f"/api/manufacturers/jobs/{jid}/cancel").json()["status"] == "cancelled"
+    assert a.get(f"/api/manufacturers/{mid}").json()["route"] == ["proxy", "local"]      # kept as its own
     # a file to send, made a manufacturer elsewhere
     f = a.get(f"/api/manufacturers/{mid}/export").json()
     assert f["format"] == "redline-manufacturer" and len(f["products"]) == 2
     got = b.post("/api/manufacturers/import", json=f).json()
-    assert got["name"] == "Doğuş" and got["product_count"] == 2 and got["proxy"] == "off"
+    assert got["name"] == "Doğuş" and got["product_count"] == 2 and got["route"] is None      # the default order
     assert b.post("/api/manufacturers/import", json={"format": "x"}).status_code == 400
     assert a.delete(f"/api/manufacturers/jobs/{jid}").json() == {"deleted": jid}
     assert a.delete(f"/api/manufacturers/{mid}").json() == {"deleted": mid}

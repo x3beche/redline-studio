@@ -88,7 +88,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
     what = f"{len(pages)} page(s)" + (" and the product pages they link to" if follow else "")
     if not wait:
         text = (f"{madeline}Started reading {what} into the catalog of \"{name}\" ({mid}): run {jid}, through "
-                f"the proxy choice \"{jd.get('proxy')}\". It runs in the background (a page takes a minute or so); "
+                f"the routes {' > '.join(jd.get('route') or ['local'])}. It runs in the background (a page takes a minute or so); "
                 f"the person can watch it here: {url}")
         return Result(text=text, say="Reading the page into {name}", vars=vars_, summary=f"run {jid} started")
     d = await _until_done(ctx.db, jid, WAIT) or jd

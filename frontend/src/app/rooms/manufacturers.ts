@@ -7,6 +7,7 @@ import { Prefs } from '../preferences';
 import { LANG, T, t } from '../i18n';
 import { Confirm } from '../confirm';
 import { CatalogStock, InventoryApi, qty } from './inventory';
+import { RouteOrder, routeLine } from '../route-order';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
  *  read from their own websites (backend/manufacturers.py).
@@ -23,7 +24,9 @@ import { CatalogStock, InventoryApi, qty } from './inventory';
  *  to the same place, and a run that was going is still going (it is the
  *  server's, not the page's).
  */
-export type ProxyChoice = 'off' | 'fallback' | 'always' | 'jina' | 'jina_fallback';
+/** How a run goes out: an order of routes ('local', 'proxy', 'jina'; backend/netroutes.py),
+ *  or null for the Product Catalog's default order (Settings > Proxy & Data). */
+export type RouteChoice = string[] | null;
 export type MfrStatus = 'queued' | 'crawling' | 'asking' | 'merging' | 'done' | 'failed' | 'cancelled';
 export type StepState = 'running' | 'done' | 'skipped' | 'failed' | 'cancelled' | 'pending';
 /** A price as the catalog keeps it (backend/catalog_facts.py): `vat` excl when the page said "+ KDV",
@@ -62,7 +65,7 @@ export type RunKind = 'site' | 'page';
 export interface LastRun { id: string; status: MfrStatus; started_at: string; finished_at: string | null; error?: string | null; pages: number; products: number | null; kept_pages?: number; kind?: RunKind }
 export interface Maker {
   id: string; name: string; name_auto?: boolean; url: string; domain: string; notes: string; summary: string;
-  categories: string[]; docs: { url: string; label: string }[]; proxy: ProxyChoice; product_count: number;
+  categories: string[]; docs: { url: string; label: string }[]; route: RouteChoice; product_count: number;
   products?: Product[]; by: { id?: string; name?: string }; created_at: string; updated_at: string;
   explored_at: string | null; last_run: LastRun | null;
 }
@@ -91,7 +94,9 @@ export interface MfrTotals {
 export interface MfrJob {
   id: string; status: MfrStatus; manufacturer: { id: string; name: string; url: string; domain: string };
   by: { id?: string; name?: string }; started_at: string; finished_at: string | null; seconds: number | null; now: string;
-  provider?: string; provider_name?: string; model?: string; proxy: ProxyChoice;
+  provider?: string; provider_name?: string; model?: string;
+  /** The routes the run went by, and whether they were the default order then. */
+  route: string[]; route_default?: boolean;
   limits?: { pages: number; depth: number; delay: number };
   steps: MfrStep[]; totals: MfrTotals; pages?: MfrPage[]; page_count: number; error?: string | null; products_found?: number | null;
   cancelled_by?: { name?: string };
@@ -101,24 +106,14 @@ export interface MfrJob {
   kind?: RunKind; only?: string[]; follow?: boolean;
 }
 export interface ProxyState {
-  configured: boolean; enabled: boolean; mode: ProxyChoice; setting: string; default: ProxyChoice;
-  price_per_gb: number; country: string; metered: boolean;
+  configured: boolean; price_per_gb: number; country: string; metered: boolean;
   /** Whether Jina AI has its key (Settings > Proxy & Data). */
   jina?: boolean;
+  /** The routes a run can take, the default order, and why a route cannot be used now. */
+  routes: string[]; order: string[]; ready: Record<string, string | null>;
 }
 export const ACTIVE: MfrStatus[] = ['queued', 'crawling', 'asking', 'merging'];
 export const isActive = (j: { status: MfrStatus } | null | undefined) => !!j && ACTIVE.includes(j.status);
-export const PROXY_CHOICES: { id: ProxyChoice; label: string; about: string }[] = [
-  { id: 'off', label: 'Off', about: 'every request goes out directly' },
-  { id: 'fallback', label: 'When refused', about: 'directly first; through the proxy once the site refuses or rate-limits' },
-  { id: 'always', label: 'Always', about: 'every request through the proxy' },
-  { id: 'jina', label: 'Jina Reader', about: 'every web page read through Jina Reader, its script run there; robots.txt and the sitemap directly' },
-  { id: 'jina_fallback', label: 'Jina when refused', about: 'directly first; through Jina Reader when the site refuses or a page is empty without its script, then the proxy' },
-];
-/** Whether a fetch choice can be used: the proxy's need the proxy, Jina's need its key. */
-export function choiceUsable(c: ProxyChoice, p: ProxyState | null | undefined): boolean {
-  return c === 'off' ? true : c === 'jina' || c === 'jina_fallback' ? !!p?.jina : !!p?.configured;
-}
 
 @Injectable({ providedIn: 'root' })
 export class MfrApi {
@@ -126,17 +121,17 @@ export class MfrApi {
   changed = signal(0);
   list(q = '') { return this.http.get<Maker[]>(`/api/manufacturers?q=${encodeURIComponent(q)}`); }
   get(id: string) { return this.http.get<Maker>(`/api/manufacturers/${id}`); }
-  create(b: { url: string; name?: string; notes?: string; proxy: ProxyChoice; explore?: boolean; only?: boolean; follow?: boolean }) {
+  create(b: { url: string; name?: string; notes?: string; route: string[] | 'default'; explore?: boolean; only?: boolean; follow?: boolean }) {
     return this.http.post<{ manufacturer: Maker; job: (MfrJob & { job_id: string }) | null }>('/api/manufacturers', b);
   }
-  patch(id: string, p: Partial<Pick<Maker, 'name' | 'notes' | 'summary' | 'url' | 'proxy'>>) {
+  patch(id: string, p: Partial<Pick<Maker, 'name' | 'notes' | 'summary' | 'url'>> & { route?: string[] | 'default' }) {
     return this.http.patch<Maker>(`/api/manufacturers/${id}`, p);
   }
   remove(id: string) { return this.http.delete(`/api/manufacturers/${id}`); }
-  explore(id: string, proxy: ProxyChoice) { return this.http.post<MfrJob>(`/api/manufacturers/${id}/explore`, { proxy }); }
+  explore(id: string, route: RouteChoice) { return this.http.post<MfrJob>(`/api/manufacturers/${id}/explore`, { route: route ?? 'default' }); }
   readAgain(id: string, run: string) { return this.http.post<MfrJob>(`/api/manufacturers/${id}/read-again`, { run }); }
-  readPage(id: string, urls: string[], follow: boolean, proxy: ProxyChoice) {
-    return this.http.post<MfrJob>(`/api/manufacturers/${id}/read-page`, { urls, follow, proxy });
+  readPage(id: string, urls: string[], follow: boolean, route: RouteChoice) {
+    return this.http.post<MfrJob>(`/api/manufacturers/${id}/read-page`, { urls, follow, route: route ?? 'default' });
   }
   addProduct(id: string, p: ProductFields) { return this.http.post<{ product: Product; manufacturer: Maker }>(`/api/manufacturers/${id}/products`, p); }
   editProduct(id: string, pid: string, p: ProductFields) {
@@ -240,10 +235,17 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
 @Component({
   selector: 'app-room-mfr',
-  imports: [T, NgTemplateOutlet],
+  imports: [T, NgTemplateOutlet, RouteOrder],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
+<!-- How the next run goes out: the default order, or one of its own (the route order below) -->
+<ng-template #fetchSeg let-maker="maker">
+  <div class="st-seg" role="radiogroup" [attr.aria-label]="'Fetching' | t">
+    <button [class.on]="choice() === null" (click)="useDefault(maker)" [title]="line(proxy()?.order)">{{ 'Default order' | t }}</button>
+    <button [class.on]="choice() !== null" (click)="ownOrder(maker)" [title]="'Its own order of routes' | t">{{ 'Own order' | t }}</button>
+  </div>
+</ng-template>
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
   <!-- LEFT: the manufacturers -->
   <aside class="tcv-notes-side">
@@ -327,8 +329,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           <div class="st-tile" [attr.data-tone]="j.totals.tokens_in == null ? 'dim' : null"><span>{{ 'Tokens in / out' | t }}</span>
             <b>{{ j.totals.tokens_in == null ? '–' : num(j.totals.tokens_in) + ' / ' + num(j.totals.tokens_out ?? 0) }}</b>
             <small>{{ money(j.totals.cost) }} {{ (j.totals.cost != null ? 'this run' : '') | t }}</small></div>
-          <div class="st-tile" [attr.data-tone]="j.proxy === 'off' ? 'dim' : null"><span>{{ 'Fetching' | t }}</span>
-            <b>{{ proxyLabel(j.proxy) | t }}</b>
+          <div class="st-tile" [attr.data-tone]="j.route.join() === 'local' ? 'dim' : null"><span>{{ 'Fetching' | t }}</span>
+            <b [title]="(j.route_default ? 'Default order' : 'Own order') | t">{{ line(j.route) }}</b>
             <small [title]="trafficTip()">{{ trafficLine() }}</small></div>
         </div>
         <div class="mf-rgrid">
@@ -392,12 +394,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         <div class="tst-acts">
           @if (can()) {
             <span class="st-sub">{{ 'Fetching' | t }}</span>
-            <div class="st-seg" role="radiogroup" [attr.aria-label]="'Fetching' | t">
-              @for (c of choices; track c.id) {
-                <button [class.on]="choice() === c.id" (click)="choice.set(c.id)" [disabled]="!usable(c.id)"
-                        [title]="c.about | t">{{ c.label | t }}</button>
-              }
-            </div>
+            <ng-container *ngTemplateOutlet="fetchSeg; context: { maker: m }" />
             @if (runOf(m); as r) { @if (isActiveS(r.status)) {
               <button class="tcv-btn tcv-btn-accent" (click)="showRun(r.id)">{{ 'Watch the run' | t }}</button>
             } @else {
@@ -415,8 +412,14 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           }
         </div>
       </header>
-      @if (can() && !proxy()?.configured) { <p class="st-hint mf-proxyhint">{{ 'The proxy is not set up, so a run goes out directly.' | t }}
-        <button class="st-more" (click)="toProxy()">{{ 'Settings > Proxy & Data' | t }}</button></p> }
+      @if (can()) {
+        @if (choice() !== null) {
+          <div class="mf-route"><span class="st-sub">{{ 'Own order' | t }}</span>
+            <app-route-order [routes]="proxy()?.routes ?? []" [order]="choice() ?? []" [ready]="proxy()?.ready ?? {}"
+                             (changed)="setMakerRoute(m, $event)" /></div>
+        }
+        <p class="st-hint mf-proxyhint">{{ fetchAbout() }} <button class="st-more" (click)="toProxy()">{{ 'Settings > Proxy & Data' | t }}</button></p>
+      }
 
       <div class="st-tiles mf-mtiles">
         <div class="st-tile" [attr.data-tone]="m.product_count ? null : 'dim'"><span>{{ 'Products' | t }}</span><b>{{ m.product_count }}</b>
@@ -677,8 +680,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         <div class="st-tile" [attr.data-tone]="lastJob() ? statusTone(lastJob()!.status) : 'dim'"><span>{{ 'Last exploration' | t }}</span>
           <b>{{ lastJob() ? when(lastJob()!.started_at) : '–' }}</b>
           <small>{{ lastJob() ? (statusName(lastJob()!.status) | t) + ' · ' + lastJob()!.manufacturer.name : ('none yet' | t) }}</small></div>
-        <button class="st-tile mf-tilebtn" [attr.data-tone]="proxy()?.configured ? (proxy()?.enabled ? 'ok' : null) : 'dim'" (click)="toProxy()"><span>{{ 'Proxy' | t }}</span>
-          <b>{{ proxyStateLine() | t }}</b><small>{{ (proxy()?.configured ? 'Settings > Proxy & Data' : 'not set up - Settings > Proxy & Data') | t }}</small></button>
+        <button class="st-tile mf-tilebtn" [attr.data-tone]="proxy()?.configured ? (proxy()?.order?.includes('proxy') ? 'ok' : null) : 'dim'" (click)="toProxy()"><span>{{ 'Default order' | t }}</span>
+          <b>{{ line(proxy()?.order) }}</b><small>{{ proxyStateLine() | t }}</small></button>
         <button class="st-tile mf-tilebtn" [attr.data-tone]="proxy()?.jina ? 'ok' : 'dim'" (click)="toProxy()"><span>Jina AI</span>
           <b>{{ (proxy()?.jina ? 'Ready' : 'Not set up') | t }}</b><small>{{ (proxy()?.jina ? 'reads pages a plain fetch cannot' : 'no API key - Settings > Proxy & Data') | t }}</small></button>
       </div>
@@ -699,22 +702,22 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                      (keydown.enter)="add()" [attr.aria-label]="'Name' | t">
               <input class="tst-in" [placeholder]="'Notes for Chat (optional)' | t" [value]="addNotes()" (input)="addNotes.set($any($event.target).value)"
                      (keydown.enter)="add()" [attr.aria-label]="'Notes' | t">
-              <div class="st-seg" role="radiogroup" [attr.aria-label]="'Fetching' | t">
-                @for (c of choices; track c.id) {
-                  <button [class.on]="choice() === c.id" (click)="choice.set(c.id)" [disabled]="!usable(c.id)" [title]="c.about | t">{{ c.label | t }}</button>
-                }
-              </div>
+              <ng-container *ngTemplateOutlet="fetchSeg; context: { maker: null }" />
               @if (addOnly()) {
                 <label class="mf-check" [title]="'Same site, one link deep, at most 30 pages' | t"><input type="checkbox" [checked]="addFollow()"
                        (change)="addFollow.set($any($event.target).checked)"> {{ 'also the product pages it links to' | t }}</label>
               }
               <button class="tcv-btn tcv-btn-accent" (click)="add()" [disabled]="!addUrl().trim() || starting()">{{ (starting() ? 'Starting…' : addOnly() ? 'Add and read the page' : 'Add and explore') | t }}</button>
             </div>
-            <p class="st-hint mf-addhint">{{ choiceAbout() }}.
-              @if (!proxy()?.configured) { {{ 'The proxy is not set up, so a run goes out directly.' | t }} <button class="st-more" (click)="toProxy()">{{ 'Settings > Proxy & Data' | t }}</button> }
-              @else if (!proxy()?.enabled) { {{ 'The proxy is set up but off for the part lookups; a run can still use it.' | t }} }
+            @if (choice() !== null) {
+              <div class="mf-route"><span class="st-sub">{{ 'Own order' | t }}</span>
+                <app-route-order [routes]="proxy()?.routes ?? []" [order]="choice() ?? []" [ready]="proxy()?.ready ?? {}"
+                                 (changed)="choice.set($event)" /></div>
+            }
+            <p class="st-hint mf-addhint">{{ fetchAbout() }}
               @if (addOnly()) { {{ pageHint | t }} }
-              @else { {{ fmt('At most {p} pages of the same site, {s} s apart, robots.txt obeyed; then the model reads them.', { p: limits.pages, s: limits.delay }) }} }</p>
+              @else { {{ fmt('At most {p} pages of the same site, {s} s apart, robots.txt obeyed; then the model reads them.', { p: limits.pages, s: limits.delay }) }} }
+              <button class="st-more" (click)="toProxy()">{{ 'Settings > Proxy & Data' | t }}</button></p>
             @if (addError(); as e) { <p class="st-hint mf-err">{{ e }}</p> }
           </div>
         </section>
@@ -737,7 +740,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                     <td class="give-s" [title]="m.categories.join(', ')">{{ m.categories.slice(0, 4).join(', ') || '–' }}</td>
                     <td class="give dim" [title]="m.notes">{{ m.notes || '–' }}</td>
                     <td>@if (runOf(m); as r) { <span class="st-tag" [attr.data-tone]="statusTone(r.status)">{{ statusName(r.status) | t }}</span> } @else { <span class="dim">{{ 'never' | t }}</span> }</td>
-                    <td class="dim">{{ proxyLabel(m.proxy) | t }}</td>
+                    <td class="dim">{{ m.route ? line(m.route) : ('Default order' | t) }}</td>
                     <td class="r">{{ when(m.explored_at) }}</td>
                   </tr>
                 }
@@ -762,7 +765,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
                     <td><span class="st-tag" [attr.data-tone]="r.kind === 'page' ? 'accent' : null" [title]="(r.only ?? []).join('\n')">{{ (r.kind === 'page' ? 'Page' : 'Site') | t }}</span></td>
                     <td>{{ when(r.started_at) }} <span class="dim">· {{ r.by.name || ('someone' | t) }}</span></td>
                     <td><span class="st-tag" [attr.data-tone]="statusTone(r.status)">{{ statusName(r.status) | t }}</span></td>
-                    <td class="dim">{{ proxyLabel(r.proxy) | t }}</td>
+                    <td class="dim">{{ line(r.route) }}</td>
                     <td class="r mono">{{ r.page_count }}</td>
                     <td class="r mono">{{ r.products_found ?? '–' }}</td>
                     <td class="r mono">{{ dur(r.seconds) }}</td>
@@ -925,7 +928,6 @@ export class RoomMfr implements OnDestroy {
   private gridSearch = viewChild<ElementRef<HTMLInputElement>>('gridSearch');
   private addUrlBox = viewChild<ElementRef<HTMLInputElement>>('addUrlBox');
 
-  readonly choices = PROXY_CHOICES;
   readonly limits = { pages: 100, delay: 0.75 };
   can = computed(() => this.auth.can('draw'));
 
@@ -966,8 +968,8 @@ export class RoomMfr implements OnDestroy {
   all = signal<Maker[]>([]);
   maker = signal<Maker | null>(null);
   proxy = signal<ProxyState | null>(null);
-  choice = signal<ProxyChoice>('off');
-  private chosen = false;
+  /** How the next run goes out: null for the default order, else its own. */
+  choice = signal<RouteChoice>(null);
   flash = signal<string | null>(null);
 
   addUrl = signal('');
@@ -1011,7 +1013,7 @@ export class RoomMfr implements OnDestroy {
     this.runs.seen();
     this.runs.watch();
     this.runs.refresh();
-    this.api.proxy().subscribe({ next: p => { this.proxy.set(p); if (!this.chosen) this.choice.set(p.default); }, error: () => {} });
+    this.api.proxy().subscribe({ next: p => this.proxy.set(p), error: () => {} });
     this.read();
     if (this.view() === 'run' && this.rid()) this.showRun(this.rid()!);
     else if (this.view() === 'maker' && this.mid()) this.openMaker(this.mid()!, true);
@@ -1048,7 +1050,7 @@ export class RoomMfr implements OnDestroy {
       if (url.href !== location.href) history.replaceState(null, '', url);
     });
     // A manufacturer's own fetching choice, once it is open.
-    effect(() => { const m = this.maker(); if (m && this.view() === 'maker') untracked(() => { this.choice.set(m.proxy); this.chosen = true; }); });
+    effect(() => { const m = this.maker(); if (m && this.view() === 'maker') untracked(() => this.choice.set(m.route ?? null)); });
     // For the command palette's "Ask Chat about this manufacturer".
     effect(() => {
       const m = this.view() === 'maker' ? this.maker() : null;
@@ -1344,7 +1346,7 @@ export class RoomMfr implements OnDestroy {
     if (!url || this.starting()) return;
     this.starting.set(true);
     this.addError.set(null);
-    this.api.create({ url, name: this.addName().trim(), notes: this.addNotes().trim(), proxy: this.choice(),
+    this.api.create({ url, name: this.addName().trim(), notes: this.addNotes().trim(), route: this.choice() ?? 'default',
                       only: this.addOnly(), follow: this.addOnly() && this.addFollow() }).subscribe({
       next: r => {
         this.starting.set(false);
@@ -1356,10 +1358,10 @@ export class RoomMfr implements OnDestroy {
     });
   }
 
-  exploreAgain(id: string, proxy: ProxyChoice) {
+  exploreAgain(id: string, route: RouteChoice) {
     if (this.starting()) return;
     this.starting.set(true);
-    this.api.explore(id, proxy).subscribe({
+    this.api.explore(id, route).subscribe({
       next: j => { this.starting.set(false); this.runs.put(j); this.showRun(j.id); },
       error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The exploration could not start.')); },
     });
@@ -1388,10 +1390,11 @@ export class RoomMfr implements OnDestroy {
 
   /** The same run again: the site, or the same pages. */
   runAgain(j: MfrJob) {
-    if (j.kind !== 'page' || !j.only?.length) { this.exploreAgain(j.manufacturer.id, j.proxy); return; }
+    const route = j.route_default ? null : j.route;
+    if (j.kind !== 'page' || !j.only?.length) { this.exploreAgain(j.manufacturer.id, route); return; }
     if (this.starting()) return;
     this.starting.set(true);
-    this.api.readPage(j.manufacturer.id, j.only, !!j.follow, j.proxy).subscribe({
+    this.api.readPage(j.manufacturer.id, j.only, !!j.follow, route).subscribe({
       next: r => { this.starting.set(false); this.runs.put(r); this.showRun(r.id); },
       error: (e: HttpErrorResponse) => { this.starting.set(false); this.say(why(e, 'The page could not be read.')); },
     });
@@ -1531,7 +1534,7 @@ export class RoomMfr implements OnDestroy {
   trafficLine = computed(() => {
     const tt = this.job()?.totals ?? {};
     const parts = [this.fmt('{n} direct', { n: tt.requests_direct ?? 0 })];
-    if (this.job()?.proxy !== 'off') parts.push(this.fmt('{n} via proxy', { n: tt.requests_proxy ?? 0 }));
+    if (this.job()?.route?.includes('proxy')) parts.push(this.fmt('{n} via proxy', { n: tt.requests_proxy ?? 0 }));
     if (tt.wire_up != null || tt.wire_down != null) parts.push(this.kb((tt.wire_up ?? 0) + (tt.wire_down ?? 0)) + (tt.proxy_cost != null ? ' · ' + this.money(tt.proxy_cost) : ''));
     else if (tt.bytes_proxy) parts.push(this.kb(tt.bytes_proxy));
     if (tt.requests_jina) parts.push(this.fmt('{n} via Jina', { n: tt.requests_jina }));
@@ -1612,16 +1615,37 @@ export class RoomMfr implements OnDestroy {
   stateName(s: StepState) {
     return ({ running: 'running', done: 'done', skipped: 'skipped', failed: 'failed', cancelled: 'cancelled', pending: 'to come' } as Record<StepState, string>)[s] ?? s;
   }
-  usable(c: ProxyChoice) { return choiceUsable(c, this.proxy()); }
-  proxyLabel(p: ProxyChoice) { return PROXY_CHOICES.find(c => c.id === p)?.label ?? 'Off'; }
-  choiceAbout = computed(() => { const c = PROXY_CHOICES.find(x => x.id === this.choice()); return c ? `${t(c.label)}: ${t(c.about)}` : ''; });
+  /** An order of routes as a line: "Local > Proxy". */
+  line(order: readonly string[] | null | undefined) { return routeLine(order, t); }
+  /** What the next run will do, in a sentence. */
+  fetchAbout = computed(() => {
+    const c = this.choice(), p = this.proxy();
+    const order = c ?? p?.order ?? [];
+    const head = c ? this.fmt('Own order: {o}.', { o: this.line(c) }) : this.fmt('Default order: {o}.', { o: this.line(p?.order) });
+    const skipped = order.filter(r => p?.ready?.[r]);
+    return head + ' ' + t('Each page tries the first route; when the site refuses, cannot be reached or (for a later Jina) sends a page empty without its script, the next.')
+      + (skipped.length ? ' ' + this.fmt('Not set up, so passed over: {r}.', { r: this.line(skipped) }) : '');
+  });
   proxyStateLine = computed(() => {
     const p = this.proxy();
     if (!p) return '–';
-    if (!p.configured) return 'Not set up';
-    if (!p.enabled) return 'Set up, off';
-    return p.mode === 'always' ? 'On: always' : 'On: when refused';
+    return p.configured ? 'Proxy set up' : 'Proxy not set up';
   });
+  /** A maker's own order (or the default again), kept at once. */
+  setMakerRoute(m: Maker, route: RouteChoice) {
+    this.choice.set(route);
+    this.api.patch(m.id, { route: route ?? 'default' }).subscribe({ next: r => this.replace(r), error: this.failed('Could not save it.') });
+  }
+  /** Own order, starting from the default one. */
+  ownOrder(m: Maker | null) {
+    if (this.choice() !== null) return;
+    const start = [...(this.proxy()?.order ?? ['local'])];
+    if (m) this.setMakerRoute(m, start); else this.choice.set(start);
+  }
+  useDefault(m: Maker | null) {
+    if (this.choice() === null) return;
+    if (m) this.setMakerRoute(m, null); else this.choice.set(null);
+  }
   toProxy() { this.prefs.open.set('proxy'); }
   pct(n: number, of: number) { return of ? Math.min(100, Math.round(n / of * 100)) : 0; }
   num(n: number) { return Math.round(n).toLocaleString(LANG() === 'tr' ? 'tr-TR' : 'en-US'); }

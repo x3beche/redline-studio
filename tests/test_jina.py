@@ -1,7 +1,7 @@
 """Jina AI (backend/jina.py): the key kept on the server and never shown
 whole, the balance read from Jina's dashboard, Reader as a way for the
-Product Catalog's crawler to read a page (manufacturers.Fetcher "jina" and
-"jina_fallback"), Search and Reader as the Chat's web_search and web_read,
+Product Catalog's crawler to read a page (the "jina" route of its order,
+backend/netroutes.py), Search and Reader as the Chat's web_search and web_read,
 and Redline's own count of every call.
 
 No real Jina is reached and no real key is used: the HTTP goes to fake
@@ -190,7 +190,7 @@ def _crawl(choice, start="https://www.dogus.com.tr/", only=None):
 
 
 def test_jina_mode_reads_the_pages_through_reader_and_robots_directly(web, fake_jina):  # noqa: F811
-    got, track, f = _crawl("jina")
+    got, track, f = _crawl(["jina"])
     direct = web["seen"]
     # robots.txt and the sitemap are read here, never through Jina
     assert "https://www.dogus.com.tr/robots.txt" in direct and "https://www.dogus.com.tr/sitemap.xml" in direct
@@ -210,7 +210,7 @@ def test_jina_mode_reads_the_pages_through_reader_and_robots_directly(web, fake_
 
 
 def test_jina_is_never_asked_for_a_private_address(web, fake_jina):  # noqa: F811
-    f = mf.Fetcher("jina")
+    f = mf.Fetcher(["jina"])
     for u in ("http://inside.example/", "http://127.0.0.1/x", "http://meta.example/latest", "file:///etc/passwd"):
         got = run(f._jina(u, lambda x: True))
         assert got["error"] and got["error_kind"] == "refused" and got["status"] is None, u
@@ -220,17 +220,20 @@ def test_jina_is_never_asked_for_a_private_address(web, fake_jina):  # noqa: F81
 
 def test_jina_needs_its_key(web, fake_jina, monkeypatch):  # noqa: F811
     jina._conf.clear()
-    with pytest.raises(mf.Refused, match="Jina is not set up"):
-        mf.Fetcher("jina")
-    assert mf.choice_problem("jina_fallback") == mf.NO_JINA and mf.choice_problem("off") is None
-    assert mf.proxy_state()["jina"] is False
+    with pytest.raises(mf.Refused, match="Jina has no API key"):
+        mf.Fetcher(["jina"])
+    assert "Jina has no API key" in mf.choice_problem(["jina"])
+    assert mf.choice_problem(["local", "jina"]) is None and mf.choice_problem(None) is None
+    assert mf.Fetcher(["jina", "local"]).order == ["local"]           # passed over, not refused
+    st = mf.proxy_state()
+    assert st["jina"] is False and "no API key" in st["ready"]["jina"]
 
 
 def test_jina_fallback_reads_a_refused_page_through_jina_then_stays(web, fake_jina, monkeypatch):  # noqa: F811
     monkeypatch.setattr(netproxy, "_conf", {})
     monkeypatch.setattr(mf, "THIN_TEXT", 0)           # the fake site's pages are short: none is "thin" here
     web["site"] = site(web["seen"], {"/Urunler/10/baglanti": httpx.Response(429, text="slow down")})
-    got, track, f = _crawl("jina_fallback")
+    got, track, f = _crawl(["local", "jina", "proxy"])
     rows = track.meta["pages"]
     first = next(i for i, r in enumerate(rows) if r["url"].endswith("/Urunler/10/baglanti"))
     assert rows[first]["via"] == "jina" and rows[first]["fallback"] and rows[first]["status"] == 200
@@ -244,34 +247,69 @@ def test_jina_fallback_reads_a_refused_page_through_jina_then_stays(web, fake_ji
 def test_jina_fallback_reads_a_page_written_by_its_script(web, fake_jina, monkeypatch):  # noqa: F811
     monkeypatch.setattr(netproxy, "_conf", {})
     web["site"] = site(web["seen"], {"/": ("text/html", "<html><body><div id=app></div><script>render()</script></body></html>")})
-    got, track, f = _crawl("jina_fallback", only=["https://www.dogus.com.tr/"])
+    got, track, f = _crawl(["local", "jina", "proxy"], only=["https://www.dogus.com.tr/"])
     (row,) = track.meta["pages"]
     assert row["via"] == "jina" and row["fallback"] and "AISI 304" in got["pages"][0]["text"]
     assert not f.jina_since                            # a thin page does not switch the run over
 
 
 def test_jina_fallback_goes_to_the_proxy_when_jina_fails_too(web, fake_jina, monkeypatch):  # noqa: F811
-    monkeypatch.setattr(netproxy, "_conf", {"enabled": True, "mode": "fallback", "host": "proxy.test", "port": 8000})
+    monkeypatch.setattr(netproxy, "_conf", {"host": "proxy.test", "port": 8000})
     monkeypatch.setattr(netproxy, "log", lambda row: None)
     web["site"] = site(web["seen"], {"/": httpx.Response(403, text="no")})
     web["proxy_site"] = site([])
     fake_jina["reader"] = lambda req: httpx.Response(451, json={"code": 451, "message": "blocked"})
-    got, track, f = _crawl("jina_fallback", only=["https://www.dogus.com.tr/"])
+    got, track, f = _crawl(["local", "jina", "proxy"], only=["https://www.dogus.com.tr/"])
     (row,) = track.meta["pages"]
     assert row["via"] == "proxy" and row["status"] == 200 and row["fallback"]
     assert f.stats["jina"]["failed"] == 1 and web["proxied"]
 
 
-def test_the_api_takes_the_new_choices(db, web, fake_jina, monkeypatch):  # noqa: F811
+def test_jina_first_then_local_when_jina_cannot(web, fake_jina, monkeypatch):  # noqa: F811
+    fake_jina["reader"] = lambda req: httpx.Response(429, json={"code": 429, "message": "slow down"})
+    got, track, f = _crawl(["jina", "local"], only=["https://www.dogus.com.tr/"])
+    (row,) = track.meta["pages"]
+    assert row["via"] == "direct" and row["fallback"] and row["status"] == 200
+    assert f.stats["jina"]["failed"] == 1 and f.at == 1
+
+
+def test_a_thin_page_goes_to_jina_only_when_jina_comes_later(web, fake_jina, monkeypatch):  # noqa: F811
+    web["site"] = site(web["seen"], {"/": ("text/html", "<html><body><div id=app></div><script>x()</script></body></html>")})
+    _, track, _f = _crawl(["local"], only=["https://www.dogus.com.tr/"])
+    assert track.meta["pages"][0]["via"] == "direct" and not jina_calls(fake_jina)
+
+
+def test_the_api_takes_orders_of_routes(db, web, fake_jina, monkeypatch):  # noqa: F811
+    started = []
+
     async def work(dbx, jid, mid, choice, reuse=None):
-        pass
+        started.append(choice)
     monkeypatch.setattr(mf, "_work", work)
     a = person(db, "a")
-    r = a.post("/api/manufacturers", json={"url": "https://www.dogus.com.tr/", "proxy": "jina", "explore": True})
-    assert r.status_code == 200 and r.json()["manufacturer"]["proxy"] == "jina"
+    r = a.post("/api/manufacturers", json={"url": "https://www.dogus.com.tr/", "route": ["jina"], "explore": True})
+    assert r.status_code == 200 and r.json()["manufacturer"]["route"] == ["jina"] and started == [["jina"]]
+    assert r.json()["job"]["route"] == ["jina"] and r.json()["job"]["route_default"] is False
+    mid = r.json()["manufacturer"]["id"]
+    # back to the default order: kept as no order of its own
+    assert a.patch(f"/api/manufacturers/{mid}", json={"route": "default"}).json()["route"] is None
     jina._conf.clear()
-    r = a.post("/api/manufacturers", json={"url": "https://other.example/", "proxy": "jina_fallback"})
-    assert r.status_code == 400 and "Jina is not set up" in r.json()["detail"]
+    r = a.post("/api/manufacturers", json={"url": "https://other.example/", "route": ["jina"]})
+    assert r.status_code == 400 and "Jina has no API key" in r.json()["detail"]
+    for bad in ("always", "jina_fallback", ["always"], []):
+        assert a.post("/api/manufacturers", json={"url": "https://other.example/", "route": bad}).status_code == 400, bad
+
+
+def test_makers_and_runs_from_before_the_orders_still_load():
+    assert mf.maker_route({"proxy": "jina_fallback"}) == ["local", "jina", "proxy"]
+    assert mf.maker_route({"proxy": "always"}) == ["proxy", "local"]
+    assert mf.maker_route({"proxy": "off"}) == ["local"]
+    assert mf.maker_route({"route": None, "proxy": "always"}) is None          # the new field wins
+    assert mf.maker_route({}) is None
+    old = {"_id": "j1", "proxy": "always", "started_at": "2026-10-01T00:00:00+00:00", "finished_at": None}
+    got = mf.job_out(old, full=False)
+    assert got["route"] == ["proxy", "local"] and "proxy" not in got
+    assert mf.job_out({**old, "proxy": "jina"}, full=False)["route"] == ["jina"]
+    assert mf.out({"_id": "m1", "proxy": "fallback"})["route"] == ["local", "proxy"]
 
 
 # ---------------------------------------------------------------- Search and the Chat's tools

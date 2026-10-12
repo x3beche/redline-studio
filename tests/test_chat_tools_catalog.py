@@ -149,7 +149,7 @@ def test_a_shop_page_makes_its_maker_and_waits_for_the_products(ws):
     (m,) = makers(db)
     # made as the tab's "Only this page" makes it: the site's root, named from the host
     assert m["url"] == "https://www.robo90.com/" and m["name"] == "robo90.com" and m["domain"] == "robo90.com"
-    assert m["proxy"] == "off" and m["by"]["id"] == ME["id"]
+    assert m["route"] is None and m["by"]["id"] == ME["id"]          # the default order of routes
     (p,) = m["products"]
     assert p["name"] == FILAMENT and p["sku"] == "R90-PLA-GRI" and p["url"] == PAGE
     (j,) = run(mf.jobs(db, 5, m["_id"]))

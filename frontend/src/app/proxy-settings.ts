@@ -8,17 +8,25 @@ import { when } from './llm-settings';
 import { CURRENCY, Money, money as shown, moneyIn, toUsd } from './money';
 import { Prefs } from './preferences';
 import { JinaSettingsPanel, foldKeep, foldLoad } from './jina-settings';
+import { RouteOrder } from './route-order';
 
-/** Settings > Proxy & Data: a second way out for EasyEDA's part lookups
- *  (backend/netproxy.py). Only those go through it - the model providers
- *  and everything else stay direct. The password is kept on the server
+/** Settings > Proxy & Data: the order of routes each outside lookup
+ *  tries (backend/netroutes.py) - the Product Catalog's crawler and the
+ *  Drawer's LCSC / EasyEDA part lookups - and the proxy, a second way out
+ *  for them (backend/netproxy.py). Only those go through it - the model
+ *  providers and everything else stay direct. The password is kept on the server
  *  and never shown again. Under the settings: where the lookups came out
  *  in the world, how fast and how reliably, what the periodic health check
  *  saw, and how much went through the proxy - the traffic 2Captcha bills.
  *  Beside it, Jina AI (jina-settings.ts): its key, its balance and its calls. */
+/** Each lookup's order of routes and which routes are set up (backend/netroutes.py). */
+export interface RoutesState {
+  routes: Record<string, { ready: boolean; why: string | null }>;
+  consumers: Record<string, { routes: string[]; order: string[]; default: string[] }>;
+}
 interface ProxySettings {
-  enabled: boolean; mode: 'always' | 'fallback'; scheme: string; host: string; port: number | null;
-  username: string; password_set: boolean; active: string | null;
+  scheme: string; host: string; port: number | null;
+  username: string; password_set: boolean; configured: boolean; active: boolean; routes: RoutesState;
   sticky?: boolean; identify_exit?: boolean; country?: string; price_per_gb?: number; health_minutes?: number;
 }
 interface Exit { ok: boolean; ip?: string; country?: string; city?: string; org?: string; error?: string; ms: number }
@@ -53,7 +61,11 @@ interface ProxyUsage {
           org: string | null; exit_ms: number | null; wire_up?: number | null; wire_down?: number | null; exit_wire?: number | null }[];
 }
 
-type Mode = 'off' | 'fallback' | 'always';
+/** The lookups with an order of routes, as the page names them. */
+const CONSUMERS = [
+  { id: 'catalog', label: 'Product Catalog', about: 'makers\' web pages; robots.txt and sitemaps never through Jina' },
+  { id: 'parts', label: 'Drawer', about: 'LCSC / EasyEDA part lookups (JSON, so no Jina)' },
+];
 const LAST_TEST = 'redline.settings.proxy.lastTest';
 const PERIODS = [{ days: 1, label: '24h' }, { days: 7, label: '7d' }, { days: 30, label: '30d' }];
 const HEALTH = [0, 5, 15, 30, 60, 180, 1440];
@@ -61,7 +73,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 
 @Component({
   selector: 'app-proxy-settings',
-  imports: [T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel],
+  imports: [T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, RouteOrder],
   styleUrl: './settings.css',
   template: `
 <ng-template #period>
@@ -72,7 +84,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 
 @if (data(); as d) {
 <div class="st-page">
-  <p class="st-lead">{{ 'EasyEDA turns a burst of part lookups away for a while. A proxy gives them another way out. Only the LCSC / EasyEDA lookups use it; the asking stays as polite as before.' | t }}
+  <p class="st-lead">{{ 'EasyEDA turns a burst of part lookups away for a while, and some sites turn a crawler away. The route order says which way each lookup tries first - directly, through the proxy or through Jina - and which next. The model providers and everything else always go out directly.' | t }}
     {{ 'Jina AI reads web pages and searches the web for the Product Catalog and the Chat.' | t }}</p>
   @if (!canEdit) { <div class="st-banner">{{ 'These are the server\\'s settings: only the owner and the admins can change them.' | t }}</div> }
 
@@ -80,7 +92,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
   <div class="st-tiles tight">
     <div class="st-tile" [attr.data-tone]="d.active ? 'ok' : 'dim'"><span>{{ 'Proxy' | t }}</span>
       <b>{{ (d.active ? 'On' : 'Off') | t }}</b>
-      <small [title]="d.country || ''">{{ d.active ? ((d.active === 'always' ? 'always' : 'when refused') | t) + ' · ' : '' }}{{ d.country ? d.country.toUpperCase() : ('anywhere' | t) }}</small></div>
+      <small [title]="d.country || ''">{{ d.active ? proxyUse() + ' · ' : '' }}{{ d.country ? d.country.toUpperCase() : ('anywhere' | t) }}</small></div>
     @if (u(); as us) {
       @if (us.metered; as m) {
         <div class="st-tile hero" [title]="'measured on the wire between this machine and the proxy: TLS, headers and CONNECT included - what 2Captcha bills' | t">
@@ -110,6 +122,24 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
     }
   </div>
 
+  <!-- Which way each lookup tries first, and next -->
+  <section class="st-card">
+    <div class="st-card-head"><h3>{{ 'Route order' | t }}</h3>
+      <span class="st-sub">{{ 'each lookup tries the first route that is on; when it is refused or cannot reach the site, the next' | t }}</span></div>
+    <div class="st-card-body ro-rows">
+      @for (c of consumers; track c.id) {
+        @if (d.routes.consumers[c.id]; as rc) {
+          <div class="ro-row">
+            <div class="ro-who"><b>{{ c.label | t }}</b><small>{{ c.about | t }}</small></div>
+            <app-route-order [routes]="rc.routes" [order]="rc.order" [ready]="whyNot()" [editable]="canEdit && !busy()"
+                             (changed)="saveOrder(c.id, $event)" />
+          </div>
+        }
+      }
+      @if (orderErr(); as e) { <p class="st-err">{{ e }}</p> }
+    </div>
+  </section>
+
   <!-- The settings, folded like an LLM provider's card: open while a proxy is set up -->
   <section class="st-card pv" [attr.data-open]="open() ? 1 : null">
     <div class="pv-head">
@@ -118,18 +148,10 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
       <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="open() ? 'M6 9l6 6 6-6' : 'M9 6l6 6-6 6'" /></svg>
       <h3>{{ 'Proxy' | t }}</h3>
     </button>
-      <span class="pv-meta" [attr.data-tone]="d.active ? null : 'warn'">{{ (d.active ? (d.active === 'always' ? 'always' : 'when refused') : 'Off') | t }}{{ d.host ? ' · ' + d.host : '' }}</span>
-      <span class="pv-right">
-        <div class="st-seg" role="group" [attr.aria-label]="'Proxy mode' | t">
-          @for (m of modes; track m.id) {
-            <button [class.on]="mode() === m.id" [disabled]="!canEdit" (click)="setMode(m.id)">{{ m.label | t }}</button>
-          }
-        </div>
-      </span>
+      <span class="pv-meta" [attr.data-tone]="d.active ? null : 'warn'">{{ d.active ? proxyUse() : ((d.configured ? 'in no route order' : 'Not set up') | t) }}{{ d.host ? ' · ' + d.host : '' }}</span>
     </div>
     @if (open()) {
     <div class="st-card-body">
-      <p class="pv-line">{{ modeAbout() | t }}</p>
       <div class="st-sec-title">{{ 'Connection' | t }}</div>
       <div class="st-grid">
         <label class="st-f" style="grid-column: span 2"><span>{{ 'Host' | t }}</span>
@@ -404,8 +426,7 @@ export class ProxySettingsPanel {
   readonly when = when;
   readonly periods = PERIODS;
   readonly health = HEALTH;
-  readonly modes: { id: Mode; label: string }[] = [
-    { id: 'off', label: 'Off' }, { id: 'fallback', label: 'When refused' }, { id: 'always', label: 'Always' }];
+  readonly consumers = CONSUMERS;
   data = signal<ProxySettings | null>(null);
   /** The proxy card opened or closed by hand in this browser; otherwise open while a proxy is set up. */
   private opened = signal<boolean | null>(foldLoad('redline.settings.proxy.open'));
@@ -436,12 +457,17 @@ export class ProxySettingsPanel {
   table = signal<'proxy' | 'all'>('proxy');
   more = signal(false);
 
-  mode = computed<Mode>(() => { const d = this.data(); return !d?.enabled ? 'off' : d.mode; });
-  modeAbout = computed(() => ({
-    off: 'every lookup goes directly to EasyEDA',
-    fallback: 'ask directly; a lookup EasyEDA turns away is asked once more through the proxy',
-    always: 'every lookup goes through the proxy',
-  })[this.mode()]);
+  /** Why each route cannot be used now, for the route order's chips. */
+  whyNot = computed(() => {
+    const r = this.data()?.routes.routes ?? {};
+    return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v.ready ? null : t(v.why ?? 'not set up')]));
+  });
+  /** Where the proxy comes in each lookup's order: "Drawer #1 · Product Catalog #2". */
+  proxyUse = computed(() => {
+    const c = this.data()?.routes.consumers ?? {};
+    return CONSUMERS.filter(x => c[x.id]?.order.includes('proxy'))
+      .map(x => `${t(x.label)} #${c[x.id].order.indexOf('proxy') + 1}`).join(' · ');
+  });
   st = computed(() => this.u()?.state ?? null);
   refusedNow = computed(() => {
     const s = this.st();
@@ -526,9 +552,18 @@ export class ProxySettingsPanel {
     this.country.set(d.country ?? '');
   }
 
-  setMode(m: Mode) {
-    if (m === this.mode()) return;
-    this.save(m === 'off' ? { enabled: false } : { enabled: true, mode: m });
+  orderErr = signal<string | null>(null);
+  saveOrder(consumer: string, order: string[]) {
+    this.busy.set(true);
+    this.orderErr.set(null);
+    this.http.put<RoutesState>('/api/proxy/routes', { consumer, order }).subscribe({
+      next: routes => {
+        const d = this.data();
+        if (d) this.data.set({ ...d, routes, active: !!d.configured && Object.values(routes.consumers).some(c => c.order.includes('proxy')) });
+        this.busy.set(false);
+      },
+      error: e => { this.busy.set(false); this.orderErr.set(this.text(e)); },
+    });
   }
 
   saveConnection() {

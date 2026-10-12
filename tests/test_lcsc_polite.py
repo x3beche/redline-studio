@@ -162,8 +162,8 @@ def test_a_photo_that_is_not_served_freezes_nothing():
 
 
 def test_through_the_proxy_a_refusal_is_tried_from_two_more_exits(monkeypatch):
-    from backend import netproxy
-    monkeypatch.setattr(netproxy, "mode", lambda: "always")
+    from backend import netroutes
+    monkeypatch.setattr(netroutes, "plan", lambda consumer, wanted=None: ["proxy"])
     calls = []
 
     def fn(url):
@@ -179,8 +179,8 @@ def test_through_the_proxy_a_refusal_is_tried_from_two_more_exits(monkeypatch):
 
 
 def test_three_refusals_through_the_proxy_do_cool_off(monkeypatch):
-    from backend import netproxy
-    monkeypatch.setattr(netproxy, "mode", lambda: "always")
+    from backend import netroutes
+    monkeypatch.setattr(netroutes, "plan", lambda consumer, wanted=None: ["proxy"])
     monkeypatch.setattr(lcsc, "_through", lambda via, f, *a: (f(*a), {}))
     with pytest.raises(lcsc.Refused):
         run(lcsc._polite("component", "C3", "", _refuse(403), "u"))

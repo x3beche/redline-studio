@@ -185,6 +185,7 @@ _RULES: list[tuple[str, str, str]] = [
     ("PUT", "/api/llm/settings", "settings"),
     ("POST", "/api/llm/test", "settings"),
     ("PUT", "/api/proxy/settings", "settings"),
+    ("PUT", "/api/proxy/routes", "settings"),           # each lookup's order of routes (backend/netroutes.py)
     ("PUT", "/api/costs", "settings"),
     ("POST", "/api/fx/refresh", "settings"),
     ("POST", "/api/proxy/test", "settings"),
