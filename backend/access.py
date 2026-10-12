@@ -139,6 +139,13 @@ _RULES: list[tuple[str, str, str]] = [
     ("PATCH", "/api/manufacturers/.+", "draw"),
     ("PUT", "/api/manufacturers/.+", "draw"),
     ("DELETE", "/api/manufacturers/.+", "draw"),
+    # the inventory (backend/inventory.py): like notes - adding items (one,
+    # several, a file), changing them and their quantities; the routes keep
+    # deleting someone else's item to those who may delete. Reading the
+    # items, their figures and the export is looking
+    ("POST", "/api/inventory(/.*)?", "draw"),
+    ("PATCH", "/api/inventory/.+", "draw"),
+    ("DELETE", "/api/inventory/.+", "draw"),
     # files: bringing one in, or pointing an agent at it, is like writing a
     # note; the route keeps deleting someone else's to those who may delete
     ("POST", "/api/files", "draw"),

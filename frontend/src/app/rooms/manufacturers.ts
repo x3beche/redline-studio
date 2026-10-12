@@ -1,10 +1,12 @@
 import { Component, ElementRef, Injectable, OnDestroy, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { NgTemplateOutlet } from '@angular/common';
 import { Selection } from '../selection';
 import { Auth } from '../auth';
 import { Prefs } from '../preferences';
 import { LANG, T, t } from '../i18n';
 import { Confirm } from '../confirm';
+import { CatalogStock, InventoryApi, qty } from './inventory';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
  *  read from their own websites (backend/manufacturers.py).
@@ -186,12 +188,13 @@ const I = {
   open: 'M14 5h5v5 M19 5l-8 8 M17 14v5H5V7h5',
   edit: 'M4 20h4L19.5 8.5l-4-4L4 16z M13.5 6.5l4 4',
   trash: 'M4 7h16 M9.5 7V4h5v3 M6.5 7l.8 13h9.4l.8-13 M10 11v5.5 M14 11v5.5',
+  stock: 'M3 8l9-5 9 5v12H3z M3 8h18 M12 11v6 M9 14h6',
 };
 const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description: '', specs: '', url: '', image: '' };
 
 @Component({
   selector: 'app-room-mfr',
-  imports: [T],
+  imports: [T, NgTemplateOutlet],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
@@ -434,6 +437,7 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
           </select>
           @if (picked_().size) {
             <span class="mf-selbar">{{ fmt('{n} selected', { n: picked_().size }) }}
+              @if (can()) { <button class="tcv-btn" (click)="openStock('*')">{{ 'Add selected to stock' | t }}</button> }
               <button class="tcv-btn tst-del" (click)="deleteProducts(m, pickedIds())">{{ 'Delete' | t }}</button>
               <button class="tcv-btn" (click)="pickAll(false)">{{ 'Clear' | t }}</button></span>
           }
@@ -455,6 +459,21 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
             <datalist id="mf-cats">@for (c of productCats(); track c) { <option [value]="c"></option> }</datalist>
           </div>
         }
+        @if (stockFor() === '*') {
+          <div class="mf-stockform mf-ctl">
+            <span class="mf-stocklabel">{{ fmt('Add {n} products to stock', { n: picked_().size }) }}</span>
+            <ng-container *ngTemplateOutlet="stockFields" />
+            <button class="tcv-btn tcv-btn-accent" (click)="addToStock(m, pickedIds())" [disabled]="saving()">{{ 'Add to stock' | t }}</button>
+            <button class="tcv-btn" (click)="stockFor.set(null)">{{ 'Cancel' | t }}</button>
+          </div>
+        }
+        <ng-template #stockFields>
+          <input class="tst-in mf-sf-qty" inputmode="decimal" [placeholder]="'Qty' | t" [value]="sf().quantity" (input)="sfSet('quantity', $event)" (keydown.enter)="stockEnter(m)" [attr.aria-label]="'Quantity' | t">
+          <input class="tst-in mf-sf-unit" list="inv-units-mf" [value]="sf().unit" (input)="sfSet('unit', $event)" (keydown.enter)="stockEnter(m)" [attr.aria-label]="'Unit' | t">
+          <input class="tst-in mf-sf-loc" [placeholder]="'Location' | t" [value]="sf().location" (input)="sfSet('location', $event)" (keydown.enter)="stockEnter(m)" [attr.aria-label]="'Location' | t">
+          <input class="tst-in mf-sf-note" [placeholder]="'Note for the log (optional)' | t" [value]="sf().note" (input)="sfSet('note', $event)" (keydown.enter)="stockEnter(m)" [attr.aria-label]="'Note' | t">
+          <datalist id="inv-units-mf">@for (u of units; track u) { <option [value]="u"></option> }</datalist>
+        </ng-template>
         @if (m.products?.length) {
           <div class="st-table-wrap">
             <table class="st-table mf-table">
@@ -464,7 +483,7 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
                 @for (p of found().slice(0, shownRows()); track p.id) {
                   <tr class="mf-prow" [attr.data-sel]="picked_().has(p.id) ? 1 : null">
                     @if (can()) { <td class="mf-selcol"><input type="checkbox" [checked]="picked_().has(p.id)" (change)="pick(p.id, $any($event.target).checked)" [attr.aria-label]="p.name"></td> }
-                    <td class="mf-pname" [title]="p.name">{{ p.name }}@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
+                    <td class="mf-pname" [title]="p.name">{{ p.name }}@if (stock()[p.id]; as s) { <button class="st-tag mf-instock" [attr.data-tone]="s.low ? 'warn' : 'ok'" (click)="toStock(s)" [title]="'Open it in the Inventory' | t">{{ fmt('in stock: {n}', { n: qty(s.quantity) + ' ' + s.unit }) }}</button> }@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
                     <td class="mono mf-pcode" [title]="p.sku">{{ p.sku || '–' }}</td>
                     <td class="dim mf-pcat" [title]="p.category">{{ p.category || '–' }}</td>
                     <td class="mf-specs" [title]="specLine(p)">@for (s of specs(p); track s[0]) { <span class="mf-spec"><em>{{ s[0] }}</em> {{ s[1] }}</span> }@if (!specs(p).length) { <span class="dim">–</span> }</td>
@@ -473,6 +492,8 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
                       @if (p.image) { <a class="st-more mf-open" [href]="p.image" target="_blank" rel="noopener noreferrer">{{ 'Image' | t }}</a> }
                       @if (can()) {
                         <div class="tcv-cc-itemacts mf-rowacts">
+                          <button class="tcv-cc-ib" (click)="openStock(p.id)" [title]="'Add to stock' | t">
+                            <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.stock" /></svg></button>
                           <button class="tcv-cc-ib" (click)="openProduct(p)" [title]="'Edit the product' | t">
                             <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.edit" /></svg></button>
                           <button class="tcv-cc-ib tcv-cc-danger" (click)="deleteProducts(m, [p.id])" [title]="'Delete the product' | t">
@@ -480,6 +501,16 @@ const NO_PRODUCT: ProductFields = { name: '', category: '', sku: '', description
                         </div>
                       }</td>
                   </tr>
+                  @if (stockFor() === p.id) {
+                    <tr class="mf-stockrow"><td [attr.colspan]="can() ? 7 : 6">
+                      <div class="mf-stockform mf-ctl">
+                        <span class="mf-stocklabel">{{ stock()[p.id] ? fmt('Top up {name} in stock', { name: p.name }) : fmt('Add {name} to stock', { name: p.name }) }}</span>
+                        <ng-container *ngTemplateOutlet="stockFields" />
+                        <button class="tcv-btn tcv-btn-accent" (click)="addToStock(m, [p.id])" [disabled]="saving()">{{ (stock()[p.id] ? 'Top up' : 'Add to stock') | t }}</button>
+                        <button class="tcv-btn" (click)="stockFor.set(null)">{{ 'Cancel' | t }}</button>
+                      </div>
+                    </td></tr>
+                  }
                 } @empty { <tr><td [attr.colspan]="can() ? 7 : 6" class="dim">{{ 'Nothing matches.' | t }}</td></tr> }
               </tbody>
             </table>
@@ -676,6 +707,14 @@ export class RoomMfr implements OnDestroy {
   saving = signal(false);
   picked_ = signal<Set<string>>(new Set());
   readonly I = I;
+  /** What the Inventory holds of each product of the open catalog (one read), and the
+   *  "Add to stock" form: open for one product (its id) or for the selected ones ('*'). */
+  private inv = inject(InventoryApi);
+  stock = signal<Record<string, CatalogStock>>({});
+  stockFor = signal<string | null>(null);
+  sf = signal({ quantity: '1', unit: 'pcs', location: '', note: '' });
+  readonly units = ['pcs', 'm', 'cm', 'mm', 'kg', 'g', 'l', 'ml', 'roll', 'reel', 'box', 'pack', 'set', 'pair', 'sheet', 'bag'];
+  qty = qty;
   readonly pageHint = "Only that page is read (robots.txt obeyed) - the maker's site or a distributor's. A list or category page adds every product on it; what is in the catalog stays.";
   starting = signal(false);
   cancelling = signal(false);
@@ -719,10 +758,15 @@ export class RoomMfr implements OnDestroy {
     // Asked from the command palette: one manufacturer, or the Add form.
     effect(() => {
       const w = this.picked.want();
-      if (!w || (w.what !== 'mfr' && w.what !== 'mfr-add')) return;
+      if (!w || (w.what !== 'mfr' && w.what !== 'mfr-add' && w.what !== 'mfr-product')) return;
       untracked(() => {
         this.picked.want.set(null);
-        if (w.what === 'mfr' && w.arg) this.openMaker(w.arg); else this.goAdd();
+        // A product, from the Inventory: its maker open, searched for its name.
+        if (w.what === 'mfr-product' && w.arg) {
+          const [mid, name] = w.arg.split('\n');
+          this.openMaker(mid, true);
+          this.pq.set(name ?? '');
+        } else if (w.what === 'mfr' && w.arg) this.openMaker(w.arg); else this.goAdd();
       });
     });
     // A run the overview counts that ends: the list reads again (its catalog changed).
@@ -732,7 +776,54 @@ export class RoomMfr implements OnDestroy {
   private read() {
     this.api.list('').subscribe({ next: ms => this.all.set(ms), error: () => {} });
     const m = this.maker();
-    if (m && this.view() === 'maker') this.api.get(m.id).subscribe({ next: x => this.maker.set(x), error: () => {} });
+    if (m && this.view() === 'maker') { this.api.get(m.id).subscribe({ next: x => this.maker.set(x), error: () => {} }); this.readStock(m.id); }
+  }
+  private readStock(id: string) {
+    this.inv.stock(id).subscribe({ next: st => { if (this.mid() === id) this.stock.set(st); }, error: () => {} });
+  }
+
+  // ---- taking products into the Inventory
+
+  openStock(id: string) {
+    this.stockFor.set(this.stockFor() === id ? null : id);
+    this.sf.update(f => ({ ...f, quantity: '1', note: '' }));
+  }
+  sfSet(k: 'quantity' | 'unit' | 'location' | 'note', e: Event) {
+    const v = (e.target as HTMLInputElement).value;
+    this.sf.update(f => ({ ...f, [k]: v }));
+  }
+  stockEnter(m: Maker) { const f = this.stockFor(); if (f) this.addToStock(m, f === '*' ? this.pickedIds() : [f]); }
+  addToStock(m: Maker, ids: string[]) {
+    const f = this.sf(), q = Number(f.quantity.trim().replace(',', '.'));
+    if (!ids.length || this.saving()) return;
+    if (!f.quantity.trim() || !Number.isFinite(q) || q < 0) { this.say(t('The quantity is not a number.')); return; }
+    const body = { manufacturer: m.id, quantity: q, unit: f.unit.trim() || 'pcs', location: f.location.trim(), note: f.note.trim() };
+    this.saving.set(true);
+    const done = (added: number, merged: number, bad: string[]) => {
+      this.saving.set(false);
+      this.stockFor.set(null);
+      this.readStock(m.id);
+      this.say(ids.length === 1 && !bad.length
+        ? (merged ? t('Topped up in the Inventory: an item there is already that product.') : t('Added to the Inventory.'))
+        : this.fmt('{a} added to stock, {m} topped up', { a: added, m: merged }) + (bad.length ? ' · ' + bad.join('; ') : ''));
+    };
+    if (ids.length === 1) {
+      this.inv.fromCatalog({ ...body, product: ids[0] }).subscribe({
+        next: r => done(r.merged ? 0 : 1, r.merged ? 1 : 0, []),
+        error: (e: HttpErrorResponse) => { this.saving.set(false); this.say(why(e, 'Could not add it.')); },
+      });
+    } else {
+      this.inv.fromCatalogMany({ ...body, products: ids }).subscribe({
+        next: r => { this.picked_.set(new Set()); done(r.results.filter(x => x.item && !x.merged).length, r.results.filter(x => x.merged).length,
+                                                     r.results.filter(x => x.error).map(x => x.error!)); },
+        error: (e: HttpErrorResponse) => { this.saving.set(false); this.say(why(e, 'Could not add them.')); },
+      });
+    }
+  }
+  /** The stock chip: the item in the Inventory (the first, when several are linked). */
+  toStock(s: CatalogStock) {
+    this.picked.room.set('inventory');
+    setTimeout(() => this.picked.ask('inventory', s.items[0]), 50);
   }
 
   shown = computed(() => {
@@ -783,6 +874,8 @@ export class RoomMfr implements OnDestroy {
     this.view.set('maker');
     this.rows.set(200);
     if (this.maker()?.id !== id) this.maker.set(this.all().find(m => m.id === id) ?? null);
+    if (id !== this.maker()?.id || !Object.keys(this.stock()).length) this.stock.set({});
+    this.readStock(id);
     this.api.get(id).subscribe({
       next: m => { if (this.mid() === id) this.maker.set(m); },
       error: (e: HttpErrorResponse) => { this.say(why(e, 'Could not open it.')); this.goHome(); },

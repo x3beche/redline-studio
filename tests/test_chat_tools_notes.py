@@ -68,7 +68,7 @@ def test_the_tools_are_in_their_packages_at_their_levels():
     got = {n: (t.package, t.level, t.default) for n, t in chat_tools.tools().items() if n in want}
     assert got == want
     names = [p.name for p in chat_tools.PACKAGES]
-    assert names[names.index("mfr") + 1] == "commandcode" and names[0] == "general"
+    assert names[names.index("mfr") + 1] == "inventory" and names[names.index("inventory") + 1] == "commandcode" and names[0] == "general"
     for n in ("notes_search", "queue_list", "rename_chat", "chat_list"):
         assert n in chat_tools.SYSTEM_NOTE
 

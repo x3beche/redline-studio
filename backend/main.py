@@ -126,6 +126,9 @@ app.include_router(taste_api.router)
 # Manufacturers: makers' catalogs, explored from their sites (backend/manufacturers.py).
 from . import manufacturers as manufacturers_api  # noqa: E402
 app.include_router(manufacturers_api.router)
+# Inventory: what is on hand, how many and where (backend/inventory.py).
+from . import inventory as inventory_api  # noqa: E402
+app.include_router(inventory_api.router)
 
 
 def _raw_db():

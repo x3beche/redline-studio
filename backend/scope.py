@@ -44,6 +44,8 @@ SCOPED = frozenset({
     "taste_palettes", "taste_jobs",
     # manufacturers and their explorations (backend/manufacturers.py)
     "manufacturers", "manufacturer_jobs", "manufacturer_pages",
+    # what is on hand: items, quantities, where they are (backend/inventory.py)
+    "inventory",
 })
 
 WORKSPACE: contextvars.ContextVar[str] = contextvars.ContextVar("workspace", default=DEFAULT)

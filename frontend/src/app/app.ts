@@ -8,6 +8,7 @@ import { RoomTools } from './tools/room';
 import { QuickNote, RoomNotes } from './rooms/notes';
 import { RoomTaste, TasteRuns } from './rooms/taste';
 import { MfrRuns, RoomMfr } from './rooms/manufacturers';
+import { RoomInventory } from './rooms/inventory';
 import { RoomFiles } from './rooms/files';
 import { RoomCommandCode } from './rooms/commandcode';
 import { Palette } from './palette';
@@ -26,7 +27,7 @@ import { ConfirmHost } from './confirm';
 
 @Component({
   selector: 'app-root',
-  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost],
+  imports: [Editor, RoomPcb, RoomFirmware, RoomAnalyze, RoomTools, RoomNotes, RoomTaste, RoomMfr, RoomInventory, RoomCommandCode, RoomFiles, QuickNote, Palette, RoomSettings, Landing, T, UserChip, TopbarFit, TopbarMore, CcTabUsage, ConfirmHost],
   template: `
 <!-- The shell. Each tab is a room with the same loop in it: source in the
      database, built into something you can look at, marked up, picked up,
@@ -121,6 +122,7 @@ import { ConfirmHost } from './confirm';
       @case ('notes') { <app-room-notes /> }
       @case ('taste') { <app-room-taste /> }
       @case ('mfr') { <app-room-mfr /> }
+      @case ('inventory') { <app-room-inventory /> }
       @case ('commandcode') { <app-room-commandcode /> }
       @case ('files') { <app-room-files /> }
       @case ('tools') { <app-room-tools /> }
@@ -167,7 +169,7 @@ export class App {
   /** The manufacturers' explorations, for the tab's mark. */
   mfrRuns = inject(MfrRuns);
   /** The rooms you work in, left; Notes, Chat, Files and Basic Tools at the right end. */
-  rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'taste' && w.id !== 'mfr' && w.id !== 'files' && w.id !== 'commandcode' && w.id !== 'settings');
+  rooms = WORKSPACES.filter(w => w.id !== 'analyze' && w.id !== 'tools' && w.id !== 'notes' && w.id !== 'taste' && w.id !== 'mfr' && w.id !== 'inventory' && w.id !== 'files' && w.id !== 'commandcode' && w.id !== 'settings');
   notesTab = WORKSPACES.find(w => w.id === 'notes');
   tasteTab = WORKSPACES.find(w => w.id === 'taste');
   ccTab = WORKSPACES.find(w => w.id === 'commandcode');
@@ -281,6 +283,8 @@ export class App {
       if (id !== 'taste' && id !== 'mfr') url.searchParams.delete('run');
       // A manufacturer and its product search belong to the Manufacturers tab's (rooms/manufacturers.ts).
       if (id !== 'mfr') for (const k of ['m', 'q', 'cat']) url.searchParams.delete(k);
+      // An item and the list's filters belong to the Inventory tab's (rooms/inventory.ts).
+      if (id !== 'inventory') for (const k of ['item', 'iq', 'icat', 'iloc', 'low', 'paste']) url.searchParams.delete(k);
       history.replaceState(null, '', url);
     });
   }

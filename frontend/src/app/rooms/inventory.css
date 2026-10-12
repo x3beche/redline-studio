@@ -1,0 +1,121 @@
+/* Inventory (rooms/inventory.ts): the Taste and Product Catalog rooms'
+   language (taste.css, manufacturers.css, settings.css) - the list on the
+   left, tiles for the figures, one row to add, tables for the items and
+   the log. Inputs and buttons in a row share one height. */
+.inv { --inv-h: 28px; }
+.inv .tst-in, .inv .tst-sel, .inv .tcv-btn { box-sizing: border-box; height: var(--inv-h); }
+.inv textarea.tst-in { height: auto; }
+.inv .mono, .inv-side-qty { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+.nowrap { white-space: nowrap; }
+
+/* the left column */
+.inv-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 4px; padding: 0 8px 6px; }
+.inv-filters .tst-sel { height: 26px; font-size: 11.5px; }
+.inv-lowbtn { height: 26px; padding: 0 8px; font-size: 11.5px; white-space: nowrap; }
+.inv-lowbtn b { margin-left: 3px; font-weight: 500; color: var(--ink-dim); }
+.inv-lowbtn[data-on] { background: var(--accent-deep); border-color: var(--accent); color: var(--ink-bright); }
+.inv-side-acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 0 8px 6px; }
+.inv-side-acts .tcv-btn { padding: 4px 6px; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inv-side-qty { flex: none; font-size: 11.5px; color: var(--ink); }
+.inv-side-qty[data-low] { color: var(--warn); }
+.inv-side-meta { display: flex; align-items: center; gap: 6px; }
+.inv-side-loc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-side-foot { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px 6px;
+  font-size: 11px; color: var(--ink-dim); border-top: 1px solid var(--line); }
+.inv-side-foot .st-more { margin: 0; }
+
+/* tiles: one row, as wide as the room */
+.inv-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.inv-tiles .st-tile[data-tone="warn"] > b { color: var(--warn); }
+.inv-units > b, .inv-value > b { font-size: 13.5px; line-height: 20px; }
+
+/* adding: one row that fills the width */
+.inv-addrow { display: flex; gap: 6px; align-items: center; }
+.inv-addrow > .tst-in { flex: 1 1 90px; min-width: 0; }
+.inv-addrow > .inv-a-name { flex: 2.4 1 180px; }
+.inv-addrow > .inv-a-qty, .inv-addrow > .inv-a-min { flex: 0 1 64px; }
+.inv-addrow > .inv-a-unit { flex: 0 1 72px; }
+.inv-addrow > .inv-a-lcsc { flex: 0 1 96px; }
+.inv-addrow > .tcv-btn { flex: none; padding: 0 16px; }
+.inv-paste { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 10px; align-items: stretch; }
+.inv-pastebox { width: 100%; min-height: 128px; resize: vertical; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.5; }
+.inv-pastepre { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.inv-prewrap { max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 5px; }
+.inv-prewrap tr[data-bad] td { color: var(--danger); }
+.inv-pasteacts { display: flex; gap: 6px; margin-top: auto; }
+.inv-pasteacts .tst-in { flex: 1; }
+.inv-pasteacts .tcv-btn { flex: none; padding: 0 14px; }
+
+/* the items' table */
+.inv-table tbody tr, .inv-recent tbody tr { cursor: pointer; }
+.inv-table tbody tr:hover td, .inv-recent tbody tr:hover td { background: var(--hover); }
+.inv-table td { vertical-align: middle; }
+th.inv-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+th.inv-sort:hover { color: var(--ink); }
+th.inv-sort[data-on]::after { content: ' \25B4'; color: var(--accent); }
+th.inv-sort[data-on="desc"]::after { content: ' \25BE'; }
+.inv-ck { width: 18px; padding-right: 0 !important; }
+.inv-ck input { margin: 0; vertical-align: middle; accent-color: var(--accent); }
+td.inv-name { max-width: 0; width: 26%; }
+.inv-name b { font-weight: 600; color: var(--ink); }
+.inv-mark { display: inline-block; margin-left: 6px; padding: 0 4px; font-size: 9.5px; line-height: 14px; color: var(--ink-dim);
+  border: 1px solid var(--line); border-radius: 3px; vertical-align: 1px; }
+td.inv-q[data-low] { color: var(--warn); }
+.st-table td[data-sign="-"] { color: var(--warn); }
+.st-table td[data-sign="+"] { color: var(--ok); }
+.st-table td.inv-q[data-low] { color: var(--warn); }
+
+/* one item: the quantity and its -/+ */
+.inv-qrow { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; padding: 2px 0 4px; }
+.inv-qbig { display: flex; align-items: baseline; gap: 6px; }
+.inv-qbig b { font: 500 26px/1.1 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-bright); }
+.inv-qbig > span:not(.st-tag) { font-size: 13px; color: var(--ink-dim); }
+.inv-qbig .st-tag { align-self: center; }
+.inv-qbig[data-low] b { color: var(--warn); }
+.inv-qbig[data-out] b { color: var(--danger); }
+.inv-adjust { flex: 1; min-width: 320px; display: flex; align-items: center; gap: 6px; }
+.inv-pm { width: var(--inv-h); padding: 0; font-size: 15px; line-height: 1; }
+.inv-step { width: 64px; flex: none; text-align: center; }
+.inv-reason { flex: 1; min-width: 0; }
+.inv-hint { flex: none; }
+
+/* one item: every field, in a grid that fills the width */
+.inv-fields { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px 12px; }
+.inv-fields > label { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.inv-fields > label > span:first-child { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-dim); }
+.inv-fields .tst-in[readonly] { background: transparent; border-color: transparent; padding-left: 0; }
+.inv-wide { grid-column: span 2; }
+.inv-full { grid-column: 1 / -1; }
+.inv-price { display: flex; gap: 4px; }
+.inv-price .tst-in { flex: 1; min-width: 0; }
+.inv-price .inv-cur { flex: 0 0 64px; }
+.inv-val { font: 500 13px/var(--inv-h) 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-bright); }
+.inv-notes { width: 100%; resize: vertical; line-height: 1.45; }
+
+/* one item: its links */
+.inv-links { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; padding: 6px 0; border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line); font-size: 12px; }
+.inv-link { display: inline-flex; align-items: baseline; gap: 6px; }
+.inv-link em { font-style: normal; color: var(--ink-dim); }
+.inv-go { display: inline; margin: 0; padding: 0; font-size: 12px; color: var(--accent); border: 0; background: none; }
+.inv-unlink { display: inline; margin: 0; padding: 0 4px; color: var(--ink-dim); }
+.inv-unlink:hover { color: var(--danger); }
+.inv-linker { display: inline-flex; gap: 6px; margin-left: auto; }
+.inv-linker .tst-sel { max-width: 240px; }
+.inv-linker .tst-in { width: 260px; }
+
+.inv-log td { vertical-align: top; }
+
+@container (max-width: 860px) {
+  .inv-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container (max-width: 1100px) {
+  .inv-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .inv-addrow { flex-wrap: wrap; }
+  .inv-paste { grid-template-columns: minmax(0, 1fr); }
+}
+@container (max-width: 640px) {
+  .inv-tiles, .inv-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .inv-adjust { min-width: 0; flex-wrap: wrap; }
+  .inv-hint { display: none; }
+}

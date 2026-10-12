@@ -111,6 +111,7 @@ PACKAGES = (
     Package("notes", "Notes", "The notes jotted down in Notes: #tags, @boards, to-dos."),
     Package("taste", "Taste", "The person's design taste, kept as palettes."),
     Package("mfr", "Product Catalog", "The makers' catalogs saved in Product Catalog."),
+    Package("inventory", "Inventory", "What is on hand: items, quantities and where they are."),
     Package("commandcode", "Chat", "The Chat's conversations: their titles, and what was said in them."),
     Package("files", "Files", "The Files room."),
     Package("tools", "Basic Tools", "The Basic Tools calculators."),
@@ -199,13 +200,21 @@ SYSTEM_NOTE = (
     "is read with taste_read: read it when they ask about their taste or rules, or before advising on a "
     "design. When the person needs a part or product from a maker, or says to look at a manufacturer, look in "
     "the manufacturers they saved (manufacturer_search: their catalogs, read from the makers' own sites) before "
-    "anywhere else, and link the product pages it gives. Leave a note in a room's queue (room_note) only when asked to. "
+    "anywhere else, and link the product pages it gives. What the person has on hand - items, how many and where they are kept "
+    "(the Inventory tab) - is found with inventory_search and read with inventory_read; when they say they got, used or "
+    "moved something, add it (inventory_add: several at once, the same thing already kept is topped up, not doubled; "
+    "link a Product Catalog product - manufacturer_search gives its ids and what is in stock of it - or an LCSC part "
+    "when it came from there) or change its quantity with a reason "
+    "(inventory_adjust); edit or remove items (inventory_edit, inventory_remove) only when asked. Leave a note in a room's queue (room_note) only when asked to. "
     "The person's own notes (the Notes tab) are found with notes_search and read with note_read; write, tick or edit "
     "one (note_write, note_todo, note_edit) only when asked; a note you write reads as a page - a title line, its #tags "
     "under it, a short summary first, '## ' sections, '- [ ] ' to-dos, tables with units where they fit, no filler. What the rooms' agents have queued or are working on - "
     "the notes for the 3D, PCB and Firmware rooms - is read with queue_list and queue_read. Earlier conversations are "
     "found with chat_list and read with chat_read; rename this conversation (rename_chat) or archive it (chat_archive) "
-    "only when asked to."
+    "only when asked to. When the person asks for a document - a report, a datasheet summary, a BOM, a comparison, a "
+    "spec - or for a PDF, gather the facts with the tools first, then write it with pdf_make: a few-word title, a "
+    "one-line purpose, a short summary first, '## ' sections, tables with units, the sources cited (datasheet pages, "
+    "LCSC numbers), no filler; then link the file it returns in your answer."
 )
 
 

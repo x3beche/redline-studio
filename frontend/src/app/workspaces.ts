@@ -10,7 +10,7 @@
  *  ones not finished say what they will be rather than pretending.
  */
 export interface Workspace {
-  id: 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
+  id: 'cad' | 'pcb' | 'firmware' | 'notes' | 'taste' | 'mfr' | 'inventory' | 'commandcode' | 'files' | 'tools' | 'settings' | 'analyze';
   label: string;
   /** What this room is for, in one line. The tab's tooltip. */
   blurb: string;
@@ -58,6 +58,13 @@ export const WORKSPACES: Workspace[] = [
     label: 'Product Catalog',
     blurb: 'Makers whose catalogs you keep, read from their own sites: add one by its address, watch it '
          + 'explored, search its products - and Chat looks here when you need a part from a maker.',
+    ready: true,
+  },
+  {
+    id: 'inventory',
+    label: 'Inventory',
+    blurb: 'What you have on hand: each thing, how many and where it is kept - added here or by telling '
+         + 'the Chat, taken with a reason, and flagged when it runs low.',
     ready: true,
   },
   {

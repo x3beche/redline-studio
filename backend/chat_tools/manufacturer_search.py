@@ -5,6 +5,7 @@ of them or within one."""
 
 from __future__ import annotations
 
+from .. import inventory as inv
 from .. import manufacturers as mf
 from . import Ctx, Result, Tool, ToolError, clip
 from ._things import find
@@ -45,8 +46,11 @@ async def run(ctx: Ctx, args: dict) -> Result:
     if not ref and not q and not cat:
         return await _listing(ctx)
     one = await find(ctx.db, mf.COLL, ref, ("name", "domain", "url"), "manufacturer") if ref else None
+    stock = await inv.stock_of(ctx.db)
     if one and not q and not cat:
-        text = mf.block(one, 22_000)
+        text = mf.block(one, 22_000, stock.get(one["_id"], {}))
+        text += ("\nEach product's [id] is how inventory_add links it; [in stock: ...] is what the inventory holds "
+                 "of it.")
         return Result(text=clip(text), say="Read the catalog of {name}", vars={"name": one.get("name") or one["_id"]},
                       summary=f"{len(one.get('products') or [])} products · {', '.join((one.get('categories') or [])[:6])}")
     docs = [one] if one else await mf.listing(ctx.db)
@@ -67,9 +71,11 @@ async def run(ctx: Ctx, args: dict) -> Result:
         return Result(text=text, say="Nothing found for {q}", vars={"q": q or cat}, summary="no match")
     lines = []
     for d, p, _ in hits:
-        lines.append(f"- {d.get('name')}: " + mf.product_line(p, 10)
+        lines.append(f"- {d.get('name')} ({d['_id']}): " + mf.product_line(p, 10, stock.get(d["_id"], {}))
                      + (f" [image {p['image']}]" if p.get("image") else ""))
-    text = f"{len(hits)} product(s) of {where} for {what}, best matches first:\n" + "\n".join(lines)
+    text = (f"{len(hits)} product(s) of {where} for {what}, best matches first. The manufacturer's (id) and the "
+            "product's [id] are how inventory_add links one; [in stock: ...] is what the inventory holds of it:\n"
+            + "\n".join(lines))
     return Result(text=clip(text), say="Found {n} products for {q}", vars={"n": len(hits), "q": q or cat},
                   summary="\n".join(f"{d.get('name')} · {p['name']}" for d, p, _ in hits[:15]))
 

@@ -1387,7 +1387,10 @@ def spec_line(p: dict, n: int = 6) -> str:
     return "; ".join(f"{k}: {v}" for k, v in list((p.get("specs") or {}).items())[:n])
 
 
-def product_line(p: dict, specs: int = 8) -> str:
+def product_line(p: dict, specs: int = 8, stock: dict | None = None) -> str:
+    """A product in a line. With `stock` (backend/inventory.py `stock_of`,
+    this manufacturer's: {product id: on hand}) - as the Chat's tools read
+    it - the line starts with the product's id and says what is on hand."""
     bits = [p["name"]]
     if p.get("sku"):
         bits.append(f"code {p['sku']}")
@@ -1400,10 +1403,14 @@ def product_line(p: dict, specs: int = 8) -> str:
         line += f" ({spec_line(p, specs)})"
     if p.get("url"):
         line += f" <{p['url']}>"
+    if stock is not None:
+        have = stock.get(p.get("id"))
+        line = f"[{p.get('id')}] {line}" + (
+            f" [in stock: {have['quantity']:g} {have['unit']}{' - LOW' if have.get('low') else ''}]" if have else "")
     return line
 
 
-def block(d: dict, limit: int = 30_000) -> str:
+def block(d: dict, limit: int = 30_000, stock: dict | None = None) -> str:
     """A manufacturer as an agent reads it: who they are, the person's
     notes, the categories and the catalog; clipped to `limit`."""
     lines = [f"Manufacturer \"{d.get('name')}\" ({d.get('url')})"]
@@ -1418,7 +1425,7 @@ def block(d: dict, limit: int = 30_000) -> str:
     if not prods:
         lines.append("(no products yet - the site has not been explored, or nothing was found)")
     for p in prods:
-        lines.append("- " + product_line(p))
+        lines.append("- " + product_line(p, stock=stock))
     if d.get("docs"):
         lines.append("Documents linked on the site: " + ", ".join(f"{x['label']} <{x['url']}>" for x in d["docs"][:15]))
     text = "\n".join(lines)

@@ -163,6 +163,8 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     assert on == {"drawer_search": True, "drawer_list": True, "lcsc_search": True, "drawer_add": True,
                   "datasheet_get": True, "datasheet_read": True, "board_read": True, "model_read": True,
                   "firmware_build": True, "file_read": False, "taste_read": False, "manufacturer_search": True,
+                  "inventory_search": True, "inventory_read": True, "inventory_add": True, "inventory_adjust": True,
+                  "inventory_edit": False, "inventory_remove": True,
                   "room_note": False, "queue_list": True, "queue_read": True, "notes_search": True, "note_read": True,
                   "note_write": False, "note_todo": False, "note_edit": False, "rename_chat": True, "chat_list": True,
                   "chat_read": True, "chat_archive": False}
@@ -177,6 +179,8 @@ def test_each_person_chooses_their_tools(env, monkeypatch):
     assert {t["name"] for t in state["rounds"][0]["tools"]} == {"drawer_search", "drawer_list", "lcsc_search", "drawer_add",
                                                                 "datasheet_get", "datasheet_read", "board_read", "model_read",
                                                                 "firmware_build", "manufacturer_search", "rename_chat",
+                                                                "inventory_search", "inventory_read", "inventory_add",
+                                                                "inventory_adjust", "inventory_remove",
                                                                 "queue_list", "queue_read", "notes_search", "note_read",
                                                                 "chat_list", "chat_read"}
     # Nothing on: no tools, and no note about them.

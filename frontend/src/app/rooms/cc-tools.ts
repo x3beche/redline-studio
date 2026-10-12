@@ -35,6 +35,8 @@ const PEN = 'M4 20h4L19 9l-4-4L4 16z M13 7l4 4';
 const CHECK = 'M5 4h14v16H5z M8 12l3 3 5-6';
 const CHAT = 'M4 5h16v11H9l-5 4z M8 9h8 M8 12h5';
 const BOX = 'M3 5h18v4H3z M5 9v10h14V9 M10 13h4';
+const SHELF = 'M3 8l9-5 9 5v12H3z M3 8h18 M7 20v-7h10v7 M7 16.5h10';
+const PLUSMINUS = 'M5 8h6 M8 5v6 M13 16h6 M17 4L7 20';
 
 /** A tool's icon, here and on its steps in an answer: by what it touches. */
 export const TOOL_ICON: Record<string, string> = {
@@ -43,6 +45,8 @@ export const TOOL_ICON: Record<string, string> = {
   room_note: NOTE, queue_list: QUEUE, queue_read: QUEUE, rename_chat: PEN,
   notes_search: SEARCH, note_read: NOTE, note_write: PEN, note_todo: CHECK, note_edit: PEN,
   chat_list: SEARCH, chat_read: CHAT, chat_archive: BOX,
+  inventory_search: SEARCH, inventory_read: SHELF, inventory_add: SHELF, inventory_adjust: PLUSMINUS, inventory_edit: PEN,
+  inventory_remove: BOX,
 };
 export function toolIcon(name: string) { return TOOL_ICON[name] ?? WRENCH; }
 
