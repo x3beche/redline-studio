@@ -127,7 +127,7 @@ async def run(ctx: Ctx, args: dict) -> Result:
 
 
 TOOL = Tool(
-    name="pdf_make", package="files", level="change", order=72, default=True,
+    name="pdf_make", package="commandcode", level="change", order=40, default=True,
     label="Make a PDF",
     about="Writes a document as a PDF in Redline's theme and keeps it in Files.",
     description=SKILL,
