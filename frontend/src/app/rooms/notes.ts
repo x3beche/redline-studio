@@ -238,6 +238,8 @@ export class QuickNote {
 
 /** The list's hover buttons, drawn as the Chat's list draws its own. */
 const NOTE_ICONS = {
+  search: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M20 20l-4.2-4.2',
+  plus: 'M12 5v14 M5 12h14',
   pin: 'M9 3h6 M10 3v6.5L7 13h10l-3-3.5V3 M12 13v8',
   send: 'M12 19V5 M6 11l6-6 6 6',
   copy: 'M9 9h11v11H9z M15 9V4H4v11h5',
@@ -253,10 +255,19 @@ const NOTE_ICONS = {
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
   <!-- LEFT: find a note -->
   <aside class="tcv-notes-side">
-    <div class="tcv-notes-find">
-      <input #search class="tcv-notes-search" [placeholder]="'Search notes   /' | t" [value]="q()"
-             (input)="q.set($any($event.target).value)" (keydown.escape)="q.set(''); $any($event.target).blur()">
-      <button class="tcv-btn tcv-notes-new" (click)="newNote()" [title]="'A new note (N)' | t">+ {{ 'New note' | t }}</button>
+    <!-- Search and New, as the Chat's list has them. -->
+    <div class="tcv-cc-siderow tcv-notes-find">
+      <label class="tcv-cc-search">
+        <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.search" /></svg>
+        <input #search type="search" [placeholder]="'Search' | t" [value]="q()" [attr.aria-label]="'Search notes' | t"
+               (input)="q.set($any($event.target).value)" (keydown.escape)="q.set(''); $any($event.target).blur()">
+      </label>
+      @if (auth.can('draw')) {
+        <button class="tcv-cc-newsm" (click)="newNote()" [title]="'A new note (N)' | t">
+          <svg class="tcv-cc-ico" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="I.plus" /></svg>
+          <span>{{ 'New' | t }}</span>
+        </button>
+      }
     </div>
     <div class="tcv-notes-filters">
       @for (f of filters; track f.id) {
