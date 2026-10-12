@@ -12,6 +12,8 @@ import { SuggestConf } from './rooms/suggest';
 import { ModelPicker } from './model-picker';
 import { Confirm } from './confirm';
 import { SelectOption, UiSelect } from './ui-select';
+import { CountUp } from './count';
+import { Skeleton } from './skeleton';
 
 /** Settings > LLM settings: the API keys, and which provider and model
  *  does each of the app's model jobs (backend/llm.py), and what the
@@ -86,7 +88,7 @@ export function when(at: string | number | null | undefined): string {
  *  tells, calls by job, tokens, spend by model, and the latest calls. */
 @Component({
   selector: 'app-llm-usage',
-  imports: [T, TimeChart, BarList],
+  imports: [Skeleton, CountUp, T, TimeChart, BarList],
   styleUrl: './settings.css',
   template: `
 <div class="st-card">
@@ -108,18 +110,18 @@ export function when(at: string | number | null | undefined): string {
   </div>
   <div class="st-card-body">
     @if (u(); as d) {
-      <div class="st-tiles tight">
-        <div class="st-tile"><span>{{ 'Calls' | t }}</span><b>{{ f.count(d.totals.calls) }}</b>
+      <div class="st-tiles tight wb-in">
+        <div class="st-tile"><span>{{ 'Calls' | t }}</span><b [wbCount]="f.count(d.totals.calls)"></b>
           <small>{{ perDay(d.totals.calls) }} {{ 'a day' | t }}</small></div>
-        <div class="st-tile"><span>{{ 'Input tokens' | t }}</span><b>{{ f.count(d.totals.input) }}</b>
+        <div class="st-tile"><span>{{ 'Input tokens' | t }}</span><b [wbCount]="f.count(d.totals.input)"></b>
           <small>{{ d.totals.calls ? perCall(d.totals.input, d.totals.calls) : '–' }} {{ 'per call' | t }}</small></div>
-        <div class="st-tile"><span>{{ 'Output tokens' | t }}</span><b>{{ f.count(d.totals.output) }}</b>
+        <div class="st-tile"><span>{{ 'Output tokens' | t }}</span><b [wbCount]="f.count(d.totals.output)"></b>
           <small>{{ d.totals.calls ? perCall(d.totals.output, d.totals.calls) : '–' }} {{ 'per call' | t }}</small></div>
         @if (d.totals.cost_usd == null) {
           <div class="st-tile" data-tone="dim" style="grid-column: span 2"><span>{{ 'Spend' | t }}</span><b>{{ 'not priced by the provider' | t }}</b>
             <small>{{ d.unpriced_providers.length ? d.unpriced_providers.join(', ') + ' ' + ('sends token counts, no prices' | t) : '–' }}</small></div>
         } @else {
-          <div class="st-tile" [style.grid-column]="d.totals.unpriced_calls ? 'span 2' : null"><span>{{ 'Spend' | t }}</span><b>{{ money(d.totals.cost_usd) }}</b>
+          <div class="st-tile" [style.grid-column]="d.totals.unpriced_calls ? 'span 2' : null"><span>{{ 'Spend' | t }}</span><b [wbCount]="money(d.totals.cost_usd)"></b>
             <small [title]="d.unpriced_providers.join(', ')">{{ d.totals.unpriced_calls ? d.totals.unpriced_calls + ' ' + ('calls not priced by the provider' | t) + (d.unpriced_providers.length ? ' (' + d.unpriced_providers.join(', ') + ')' : '')
                      : (d.totals.calls ? money(d.totals.cost_usd / d.totals.calls) + ' ' + ('per call' | t) : '–') }}</small></div>
         }
@@ -185,7 +187,7 @@ export function when(at: string | number | null | undefined): string {
     } @else if (err()) {
       <p class="st-err">{{ err() }}</p>
     } @else {
-      <div class="st-empty">{{ 'Loading…' | t }}</div>
+      <div class="wb-sk-stack"><wb-skel kind="tiles" [count]="5" [min]="110" /><wb-skel kind="chart" [h]="170" /><wb-skel kind="rows" [count]="6" /></div>
     }
   </div>
 </div>`,
@@ -241,21 +243,21 @@ export class LlmUsagePanel {
 
 @Component({
   selector: 'app-llm-settings',
-  imports: [T, LlmUsagePanel, CcCompact, OrCompact, OwnCompact, ModelPicker, UiSelect],
+  imports: [Skeleton, CountUp, T, LlmUsagePanel, CcCompact, OrCompact, OwnCompact, ModelPicker, UiSelect],
   styleUrl: './settings.css',
   template: `
 @if (data(); as d) {
-<div class="st-page">
+<div class="st-page wb-in">
   <p class="st-lead">{{ 'Which model does what in Workbench, and the keys it uses. The keys stay on the server: once saved, only their last four characters are shown.' | t }}</p>
   @if (!canEdit) { <div class="st-banner">{{ 'These are the server\\'s settings: only the owner and the admins can change them.' | t }}</div> }
 
   <div class="st-tiles">
     <div class="st-tile" [attr.data-tone]="keyCount() === providerIds.length ? 'ok' : 'warn'"><span>{{ 'API keys' | t }}</span>
       <b>{{ keyCount() }} / {{ providerIds.length }}</b><small>{{ 'set' | t }}</small></div>
-    <div class="st-tile"><span>{{ 'Jobs' | t }}</span><b>{{ jobIds().length }}</b>
+    <div class="st-tile"><span>{{ 'Jobs' | t }}</span><b [wbCount]="jobIds().length"></b>
       <small>{{ custom() }} {{ 'changed from the default' | t }}</small></div>
     @for (p of providerIds; track p) {
-      <div class="st-tile"><span>{{ d.providers[p].name }}</span><b>{{ jobsOn(p) }}</b>
+      <div class="st-tile"><span>{{ d.providers[p].name }}</span><b [wbCount]="jobsOn(p)"></b>
         <small [title]="visionCount(p) + ' ' + ('read images' | t)">{{ 'jobs on it' | t }} · {{ (models()[p] || []).length }} {{ 'models' | t }} · 🖼 {{ visionCount(p) }}</small></div>
     }
   </div>
@@ -282,12 +284,12 @@ export class LlmUsagePanel {
                 }
               }
               @case ('openrouter') {
-                @if (or.data()?.credits; as c) { <span class="pv-meta">{{ money(c.left) }} {{ 'credits left' | t }}</span> }
+                @if (or.data()?.credits; as c) { <span class="pv-meta"><span [wbCount]="money(c.left)"></span> {{ 'credits left' | t }}</span> }
                 @if (or.data()?.key?.is_free_tier) { <span class="pv-meta">{{ 'free tier' | t }}</span> }
               }
               @default {
                 @if (own.data()[pv.id]?.redline?.month; as m) {
-                  <span class="pv-meta">{{ m.cost_usd != null ? money(m.cost_usd) : m.calls + ' ' + ('calls' | t) }} {{ 'this month' | t }}</span>
+                  <span class="pv-meta"><span [wbCount]="m.cost_usd != null ? money(m.cost_usd) : m.calls + ' ' + ('calls' | t)"></span> {{ 'this month' | t }}</span>
                 }
               }
             }
@@ -436,7 +438,7 @@ export class LlmUsagePanel {
   <app-llm-usage />
 </div>
 } @else {
-  <div class="st-page"><p class="st-lead">{{ err() || ('Loading…' | t) }}</p></div>
+  <div class="st-page">@if (err()) { <p class="st-lead">{{ err() }}</p> } @else { <wb-skel kind="page" [count]="3" /> }</div>
 }`,
 })
 export class LlmSettingsPanel {

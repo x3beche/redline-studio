@@ -5,6 +5,8 @@ import { Auth } from './auth';
 import { T, t } from './i18n';
 import { TimeChart, TimeData, fmt } from './rooms/charts';
 import { when } from './llm-settings';
+import { CountUp } from './count';
+import { Skeleton } from './skeleton';
 
 /** Settings > Proxy & Data: Jina AI (backend/jina.py). Its Reader reads a
  *  web page in a browser on Jina's side and answers with the page as
@@ -61,7 +63,7 @@ export class TrafficPeriod {
 
 @Component({
   selector: 'app-jina-settings',
-  imports: [T, TimeChart],
+  imports: [Skeleton, CountUp, T, TimeChart],
   styleUrl: './settings.css',
   template: `
 <section class="st-card pv" [attr.data-open]="open() ? 1 : null">
@@ -74,7 +76,7 @@ export class TrafficPeriod {
     @if (s(); as st) {
       @if (st.set) {
         <span class="pv-key-hint" [title]="'API key saved here' | t"><i></i>{{ st.hint }}</span>
-        @if (a()?.balance; as b) { <span class="pv-meta">{{ fmt.count(b.total) }} {{ 'tokens left' | t }}</span> }
+        @if (a()?.balance; as b) { <span class="pv-meta"><span [wbCount]="fmt.count(b.total)"></span> {{ 'tokens left' | t }}</span> }
       } @else { <span class="pv-meta" data-tone="warn">{{ 'no key' | t }}</span> }
     }
     <span class="pv-right"><a class="st-link" href="https://jina.ai/api-dashboard/key-manager" target="_blank" rel="noopener">jina.ai ↗</a></span>
@@ -83,7 +85,7 @@ export class TrafficPeriod {
   <div class="st-card-body">
     <p class="pv-line">{{ 'Reader reads a web page - its script run on Jina\\'s side - as Markdown; Search searches the web. For the Product Catalog\\'s crawler and the Chat.' | t }}</p>
     @if (s(); as st) {
-      <div class="st-tiles tight">
+      <div class="st-tiles tight wb-in">
         <div class="st-tile" [attr.data-tone]="st.set ? 'ok' : 'dim'"><span>{{ 'API key' | t }}</span>
           <b class="mono">{{ st.set ? st.hint : ('not set' | t) }}</b>
           <small>{{ st.set ? ('kept on the server' | t) + (st.set_at ? ' · ' + when(st.set_at) : '') : ('paste one below' | t) }}</small></div>
@@ -92,16 +94,16 @@ export class TrafficPeriod {
           <small [title]="st.check?.error || ''">{{ st.check ? (st.check.error || when(st.check.at)) : ('not checked yet' | t) }}</small></div>
         <div class="st-tile hero" [attr.data-tone]="a()?.balance ? null : 'dim'"
              [title]="'from Jina\\'s own dashboard: the tokens this key has left' | t"><span>{{ 'Tokens left' | t }}</span>
-          <b>{{ a()?.balance ? fmt.count(a()!.balance!.total) : (st.set ? (a()?.error ? ('unknown' | t) : '…') : '–') }}</b>
+          <b [wbCount]="a()?.balance ? fmt.count(a()!.balance!.total) : (st.set ? (a()?.error ? ('unknown' | t) : '…') : '–')"></b>
           <small>@if (a()?.balance; as b) { {{ 'free trial' | t }} {{ fmt.count(b.trial ?? 0) }} · {{ 'paid' | t }} {{ fmt.count(b.regular ?? 0) }} }
                  @else { {{ a()?.error || ('Jina\\'s dashboard' | t) }} }</small></div>
         <div class="st-tile" [title]="'the balance\\'s drop over the days Workbench looked at it' | t"><span>{{ 'Used' | t }} · 14d</span>
-          <b>{{ spent() == null ? '–' : fmt.count(spent()!) }}</b><small>{{ 'tokens, by the balance' | t }}</small></div>
+          <b [wbCount]="spent() == null ? '–' : fmt.count(spent()!)"></b><small>{{ 'tokens, by the balance' | t }}</small></div>
         <div class="st-tile" [attr.data-tone]="tone(u()?.reader?.success_rate)"><span>Reader · {{ period.label() }}</span>
-          <b>{{ fmt.count(u()?.reader?.requests ?? 0) }}</b>
+          <b [wbCount]="fmt.count(u()?.reader?.requests ?? 0)"></b>
           <small>{{ u()?.reader?.failed ?? 0 }} {{ 'failed' | t }} · {{ fmt.count(u()?.reader?.tokens ?? 0) }} {{ 'Jina tokens' | t }}</small></div>
         <div class="st-tile" [attr.data-tone]="tone(u()?.search?.success_rate)"><span>Search · {{ period.label() }}</span>
-          <b>{{ fmt.count(u()?.search?.requests ?? 0) }}</b>
+          <b [wbCount]="fmt.count(u()?.search?.requests ?? 0)"></b>
           <small>{{ u()?.search?.failed ?? 0 }} {{ 'failed' | t }} · {{ fmt.count(u()?.search?.tokens ?? 0) }} {{ 'Jina tokens' | t }}</small></div>
       </div>
 
@@ -123,17 +125,17 @@ export class TrafficPeriod {
           @for (x of period.periods; track x.days) { <button [class.on]="period.days() === x.days" (click)="period.set(x.days)">{{ x.label }}</button> }
         </div></div></div>
       @if (u(); as us) {
-        <div class="st-charts">
+        <div class="st-charts wb-in">
           @for (api of apis; track api.id) {
             @if (us[api.id]; as x) {
               <section class="st-chart c6"><h4>{{ api.name }} · {{ api.about | t }}<em [title]="whoLine(x)">{{ x.requests }} {{ 'calls' | t }} · {{ whoLine(x) }}</em></h4>
                 <div class="st-tiles" style="grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 6px">
-                  <div class="st-tile" [attr.data-tone]="tone(x.success_rate)"><span>{{ 'Success' | t }}</span><b>{{ pct(x.success_rate) }}</b>
+                  <div class="st-tile" [attr.data-tone]="tone(x.success_rate)"><span>{{ 'Success' | t }}</span><b [wbCount]="pct(x.success_rate)"></b>
                     <small>{{ x.ok }} / {{ x.requests }}</small></div>
-                  <div class="st-tile" [attr.data-tone]="x.failed ? 'danger' : null"><span>{{ 'Failed' | t }}</span><b>{{ x.failed }}</b></div>
-                  <div class="st-tile"><span>{{ 'Tokens' | t }}</span><b>{{ fmt.count(x.tokens) }}</b></div>
-                  <div class="st-tile"><span>{{ 'Characters' | t }}</span><b>{{ fmt.count(x.chars) }}</b></div>
-                  <div class="st-tile"><span>{{ 'Median' | t }}</span><b>{{ ms(x.p50_ms) }}</b><small>p95 {{ ms(x.p95_ms) }}</small></div>
+                  <div class="st-tile" [attr.data-tone]="x.failed ? 'danger' : null"><span>{{ 'Failed' | t }}</span><b [wbCount]="x.failed"></b></div>
+                  <div class="st-tile"><span>{{ 'Tokens' | t }}</span><b [wbCount]="fmt.count(x.tokens)"></b></div>
+                  <div class="st-tile"><span>{{ 'Characters' | t }}</span><b [wbCount]="fmt.count(x.chars)"></b></div>
+                  <div class="st-tile"><span>{{ 'Median' | t }}</span><b [wbCount]="ms(x.p50_ms)"></b><small>p95 {{ ms(x.p95_ms) }}</small></div>
                 </div>
                 <app-time-chart [data]="x.calls" kind="bar" [f]="fmt.count" [height]="120" />
               </section>
@@ -166,11 +168,12 @@ export class TrafficPeriod {
           @if (us.log.length > 8) { <button class="st-more" (click)="more.set(!more())">{{ (more() ? 'Show fewer' : 'Show all') | t }}</button> }
         </section>
       } @else if (usageErr()) { <p class="st-err">{{ usageErr() }}</p> }
+      @else { <div class="st-charts"><section class="st-chart c6"><wb-skel kind="chart" [h]="150" /></section><section class="st-chart c6"><wb-skel kind="chart" [h]="150" /></section></div> }
 
       <p class="st-hint">{{ 'Where it is used: the Jina route in the Product Catalog\\'s route order (above, or a maker\\'s own) reads a web page through it - first, or after a site refuses or a page comes back empty without its script. robots.txt is still read here and obeyed, and only public addresses are sent. The Chat\\'s web_search and web_read use Search and Reader.' | t }}
         {{ 'Tokens are Jina\\'s unit: a page read costs about its length in tokens, a search a fixed amount.' | t }}</p>
     } @else {
-      <div class="st-empty">{{ err() || ('Loading…' | t) }}</div>
+      @if (err()) { <div class="st-empty">{{ err() }}</div> } @else { <div class="wb-sk-stack"><wb-skel kind="tiles" [count]="6" [min]="110" /><wb-skel kind="chart" [h]="150" /></div> }
     }
   </div>
   }

@@ -12,6 +12,8 @@ import { JinaSettingsPanel, TrafficPeriod, foldKeep, foldLoad } from './jina-set
 import { TrafficOverview } from './traffic-overview';
 import { RouteOrder } from './route-order';
 import { SelectOption, UiSelect } from './ui-select';
+import { CountUp } from './count';
+import { Skeleton } from './skeleton';
 
 /** Settings > Proxy & Data: the order of routes each outside lookup
  *  tries (backend/netroutes.py) - the Product Catalog's crawler and the
@@ -75,7 +77,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 
 @Component({
   selector: 'app-proxy-settings',
-  imports: [T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, RouteOrder, UiSelect, TrafficOverview],
+  imports: [CountUp, Skeleton, T, TimeChart, BarList, NgTemplateOutlet, JinaSettingsPanel, RouteOrder, UiSelect, TrafficOverview],
   styleUrl: './settings.css',
   template: `
 <ng-template #periodSeg>
@@ -85,7 +87,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
 </ng-template>
 
 @if (data(); as d) {
-<div class="st-page">
+<div class="st-page wb-in">
   <p class="st-lead">{{ 'EasyEDA turns a burst of part lookups away for a while, and some sites turn a crawler away. The route order says which way each lookup tries first - directly, through the proxy or through Jina - and which next. The model providers and everything else always go out directly.' | t }}
     {{ 'Jina AI reads web pages and searches the web for the Product Catalog and the Chat.' | t }}</p>
   @if (!canEdit) { <div class="st-banner">{{ 'These are the server\\'s settings: only the owner and the admins can change them.' | t }}</div> }
@@ -124,7 +126,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
       <span class="pv-meta" [attr.data-tone]="d.active ? null : 'warn'">{{ d.active ? proxyUse() : ((d.configured ? 'in no route order' : 'Not set up') | t) }}{{ d.host ? ' · ' + d.host : '' }}</span>
       @if (traffic(); as tr) {
         <span class="pv-right pv-meta" [title]="'through the proxy in this period, measured on the wire, and what it costs' | t">
-          <b class="mono">{{ f.bytes(tr.bytes) }}</b>{{ tr.usd != null ? ' · ≈ ' + money(tr.usd) : '' }} · {{ period.label() }}</span>
+          <b class="mono" [wbCount]="f.bytes(tr.bytes)"></b>{{ tr.usd != null ? ' · ≈ ' + money(tr.usd) : '' }} · {{ period.label() }}</span>
       }
     </div>
     @if (open()) {
@@ -203,24 +205,24 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
         <span class="st-sub">{{ 'where the proxied lookups came out, and how fast' | t }}</span>
         <div class="st-right"><ng-container [ngTemplateOutlet]="periodSeg" /></div></div>
       @if (u(); as us) {
-        <div class="st-tiles six">
-          <div class="st-tile"><span>{{ 'Exit addresses' | t }}</span><b>{{ us.exits?.distinct_ips ?? 0 }}</b>
+        <div class="st-tiles six wb-in">
+          <div class="st-tile"><span>{{ 'Exit addresses' | t }}</span><b [wbCount]="us.exits?.distinct_ips ?? 0"></b>
             <small>{{ us.exits?.identified ?? 0 }} {{ 'identified' | t }}</small></div>
-          <div class="st-tile"><span>{{ 'Countries' | t }}</span><b>{{ us.exits?.by_country?.length ?? 0 }}</b>
+          <div class="st-tile"><span>{{ 'Countries' | t }}</span><b [wbCount]="us.exits?.by_country?.length ?? 0"></b>
             <small>{{ us.exits?.by_org?.length ?? 0 }} {{ 'networks' | t }}</small></div>
           <div class="st-tile" [attr.data-tone]="rateTone(us.latency?.proxy?.success_rate)"><span>{{ 'Success via proxy' | t }}</span>
-            <b>{{ pct1(us.latency?.proxy?.success_rate) }}</b>
+            <b [wbCount]="pct1(us.latency?.proxy?.success_rate)"></b>
             <small>{{ us.latency?.proxy?.ok ?? 0 }} / {{ us.latency?.proxy?.asks ?? 0 }} {{ 'asks' | t }}</small></div>
           <div class="st-tile" [attr.data-tone]="rateTone(us.latency?.direct?.success_rate)"><span>{{ 'Success direct' | t }}</span>
-            <b>{{ pct1(us.latency?.direct?.success_rate) }}</b>
+            <b [wbCount]="pct1(us.latency?.direct?.success_rate)"></b>
             <small>{{ us.latency?.direct?.ok ?? 0 }} / {{ us.latency?.direct?.asks ?? 0 }} {{ 'asks' | t }}</small></div>
-          <div class="st-tile"><span>{{ 'Latency via proxy' | t }}</span><b>{{ msOr(us.latency?.proxy?.p50_ms) }}</b>
+          <div class="st-tile"><span>{{ 'Latency via proxy' | t }}</span><b [wbCount]="msOr(us.latency?.proxy?.p50_ms)"></b>
             <small>p95 {{ msOr(us.latency?.proxy?.p95_ms) }}</small></div>
-          <div class="st-tile"><span>{{ 'Latency direct' | t }}</span><b>{{ msOr(us.latency?.direct?.p50_ms) }}</b>
+          <div class="st-tile"><span>{{ 'Latency direct' | t }}</span><b [wbCount]="msOr(us.latency?.direct?.p50_ms)"></b>
             <small>p95 {{ msOr(us.latency?.direct?.p95_ms) }}</small></div>
           @if (us.health; as h) {
             <div class="st-tile" [attr.data-tone]="h.last ? (h.last.ok ? 'ok' : 'danger') : 'dim'"><span>{{ 'Exit health' | t }}</span>
-              <b>{{ h.uptime == null ? (h.every_minutes ? ('waiting' | t) : ('off' | t)) : pct1(h.uptime) }}</b>
+              <b [wbCount]="h.uptime == null ? (h.every_minutes ? ('waiting' | t) : ('off' | t)) : pct1(h.uptime)"></b>
               <small>{{ h.checks }} {{ 'checks' | t }}{{ h.every_minutes ? ' · ' + ('every' | t) + ' ' + h.every_minutes + ' min' : '' }}</small></div>
           } @else {
             <div class="st-tile" [attr.data-tone]="lastTest() ? (lastTest()!.exits[0]?.ok ? 'ok' : 'danger') : 'dim'"><span>{{ 'Last test' | t }}</span>
@@ -263,23 +265,23 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
             · {{ 'median' | t }} {{ msOr(us.health!.p50_ms) }}
           </p>
         }
-      } @else if (usageErr()) { <p class="st-err">{{ usageErr() }}</p> } @else { <div class="st-empty">{{ 'Loading…' | t }}</div> }
+      } @else if (usageErr()) { <p class="st-err">{{ usageErr() }}</p> } @else { <wb-skel kind="tiles" [count]="6" [min]="92" /> }
 
       <!-- The EasyEDA / LCSC lookups and what the proxy carried -->
       <div class="st-sec-head"><span class="st-sec-title">{{ 'Lookups' | t }}</span>
         <span class="st-sub">{{ 'EasyEDA / LCSC, from the request journal' | t }}</span></div>
       @if (u(); as us) {
-        <div class="st-tiles six">
-          <div class="st-tile"><span>{{ 'Lookups' | t }}</span><b>{{ f.count(us.totals.lookups) }}</b>
+        <div class="st-tiles six wb-in">
+          <div class="st-tile"><span>{{ 'Lookups' | t }}</span><b [wbCount]="f.count(us.totals.lookups)"></b>
             <small>{{ f.count(us.totals.disk) }} {{ 'more answered from disk' | t }}</small></div>
-          <div class="st-tile"><span>{{ 'Direct' | t }}</span><b>{{ f.count(us.totals.direct) }}</b><small>{{ pct(us.totals.direct, us.totals.lookups) }}</small></div>
-          <div class="st-tile"><span>{{ 'Via proxy' | t }}</span><b>{{ f.count(us.totals.proxy) }}</b><small>{{ pct(us.totals.proxy, us.totals.lookups) }}</small></div>
-          <div class="st-tile" [attr.data-tone]="us.totals.refused ? 'warn' : null"><span>{{ 'Refused' | t }}</span><b>{{ f.count(us.totals.refused) }}</b>
+          <div class="st-tile"><span>{{ 'Direct' | t }}</span><b [wbCount]="f.count(us.totals.direct)"></b><small>{{ pct(us.totals.direct, us.totals.lookups) }}</small></div>
+          <div class="st-tile"><span>{{ 'Via proxy' | t }}</span><b [wbCount]="f.count(us.totals.proxy)"></b><small>{{ pct(us.totals.proxy, us.totals.lookups) }}</small></div>
+          <div class="st-tile" [attr.data-tone]="us.totals.refused ? 'warn' : null"><span>{{ 'Refused' | t }}</span><b [wbCount]="f.count(us.totals.refused)"></b>
             <small>{{ pct(us.totals.refused, us.totals.lookups) }}</small></div>
-          <div class="st-tile" [attr.data-tone]="us.totals.failed ? 'danger' : null"><span>{{ 'Failed' | t }}</span><b>{{ f.count(us.totals.failed) }}</b>
+          <div class="st-tile" [attr.data-tone]="us.totals.failed ? 'danger' : null"><span>{{ 'Failed' | t }}</span><b [wbCount]="f.count(us.totals.failed)"></b>
             <small>{{ pct(us.totals.failed, us.totals.lookups) }}</small></div>
           @if (us.cost; as c) {
-            <div class="st-tile" [title]="c.note"><span>{{ 'Estimated cost' | t }}</span><b>{{ money(c.usd) }}</b>
+            <div class="st-tile" [title]="c.note"><span>{{ 'Estimated cost' | t }}</span><b [wbCount]="money(c.usd)"></b>
               <small>{{ c.bytes != null ? f.bytes(c.bytes) : gb(c.gb) }} · {{ money(c.price_per_gb) }}/GB</small></div>
           }
         </div>
@@ -296,8 +298,8 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
               <section class="st-chart c4"><h4>{{ 'By host' | t }}<em>{{ m.conns }} {{ 'connections' | t }}</em></h4>
                 <app-bar-list [rows]="hostRows(m.by_host)" [f]="f.bytes" />
                 <div class="st-tiles" style="margin-top: 8px">
-                  <div class="st-tile"><span>{{ 'sent' | t }}</span><b>{{ f.bytes(m.up) }}</b></div>
-                  <div class="st-tile"><span>{{ 'received' | t }}</span><b>{{ f.bytes(m.down) }}</b></div>
+                  <div class="st-tile"><span>{{ 'sent' | t }}</span><b [wbCount]="f.bytes(m.up)"></b></div>
+                  <div class="st-tile"><span>{{ 'received' | t }}</span><b [wbCount]="f.bytes(m.down)"></b></div>
                 </div></section>
             }
             <section class="st-chart"><h4>{{ 'App payload' | t }} · {{ 'direct and through the proxy' | t }}
@@ -370,7 +372,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
       } @else if (usageErr()) {
         <p class="st-err">{{ usageErr() }}</p>
       } @else {
-        <div class="st-empty">{{ 'Loading…' | t }}</div>
+        <div class="wb-sk-stack"><wb-skel kind="tiles" [count]="6" [min]="92" /><wb-skel kind="chart" [h]="170" /><wb-skel kind="rows" [count]="6" /></div>
       }
       <p class="st-hint">{{ 'The cost is an estimate from the bytes Workbench sent and received through the proxy; the provider\\'s own meter is the bill.' | t }}
         {{ '2Captcha bills the traffic that goes through the proxy. Its balance is on 2Captcha\\'s own dashboard - Workbench keeps no 2Captcha API key.' | t }}
@@ -389,7 +391,7 @@ const ms = (v: number) => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + '
   }
 </div>
 } @else {
-  <div class="st-page"><p class="st-lead">{{ err() || ('Loading…' | t) }}</p></div>
+  <div class="st-page">@if (err()) { <p class="st-lead">{{ err() }}</p> } @else { <wb-skel kind="page" [count]="2" /> }</div>
 }`,
 })
 export class ProxySettingsPanel {

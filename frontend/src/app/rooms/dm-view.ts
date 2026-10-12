@@ -9,6 +9,7 @@ import { Markdown } from '../markdown';
 import {
   DM_ICONS, DM_KIND_NAME, DmApi, DmCard, DmChat, DmEvent, DmKind, DmLine, DmPerson, DmShareable, DmStore, SHARE_ICON,
 } from '../dm';
+import { Skeleton } from '../skeleton';
 
 const MAX_TEXT = 20_000;
 const MAX_ITEMS = 8;
@@ -150,7 +151,7 @@ export class DmPeople {
 @Component({
   selector: 'app-dm-view',
   host: { style: 'display: contents' },
-  imports: [NgTemplateOutlet, T, Avatar, Markdown, DmCard],
+  imports: [Skeleton, NgTemplateOutlet, T, Avatar, Markdown, DmCard],
   template: `
 <header class="tcv-cc-bar tcv-dm-bar">
   <button class="tcv-cc-ib tcv-cc-burger" (click)="menu.emit()" [title]="'Conversations' | t">
@@ -232,7 +233,7 @@ export class DmPeople {
           <h2>{{ name() }}</h2>
           <p>{{ 'Write a message, or send a model, a board, a project, a palette, a product, a stock item, a note, a file or a firmware. Only the people in this conversation read it; no model answers.' | t }}</p>
         </div>
-      }
+      } @else { <wb-skel kind="text" [count]="6" style="padding: 14px 16px" /> }
     }
   </div>
 </div>

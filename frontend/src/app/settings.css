@@ -380,13 +380,6 @@ select.st-in { cursor: pointer; }
 .cc-chart .cc-guide[data-tone="danger"] { stroke: var(--danger); opacity: .6; }
 .cc-axis { display: flex; justify-content: space-between; margin-top: 3px;
   font: 10px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
-.cc-skel { display: flex; flex-direction: column; gap: 10px; }
-.cc-skel .sk { display: block; height: 10px; border-radius: 4px; background: var(--hover);
-  animation: cc-sk 1.2s ease-in-out infinite; }
-.cc-skel .sk-tile { height: 52px; border-radius: 5px; }
-.cc-skel .sk-chart { height: 110px; border-radius: 5px; }
-@keyframes cc-sk { 50% { opacity: .4; } }
-@media (prefers-reduced-motion: reduce) { .cc-skel .sk { animation: none; } }
 @media (max-width: 560px) { .cc-meters { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---- one card per provider (llm-settings.ts, provider-usage.ts) -- */

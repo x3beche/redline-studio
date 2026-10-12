@@ -2,6 +2,7 @@ import { Component, ViewEncapsulation, computed, effect, inject, input, signal, 
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { T } from '../i18n';
 import { highlightLines } from '../code-highlight';
+import { Skeleton } from '../skeleton';
 
 /** One file of source for DmCode: its tab's name, a line under it, the text and its language. */
 export interface CodeFile { name: string; sub?: string; text: string; lang?: string }
@@ -43,7 +44,7 @@ function kindOf(name: string): string {
  *  The panel keeps its size whatever is open; each side scrolls itself. */
 @Component({
   selector: 'app-dm-code',
-  imports: [T],
+  imports: [Skeleton, T],
   encapsulation: ViewEncapsulation.None,
   host: { class: 'dmc', '[attr.data-wrap]': 'wrap() ? 1 : null', '[style.height]': 'height()', '[style.--layout-dmc-tree]': 'treeW() + "px"', '[attr.data-single]': 'files().length < 2 ? 1 : null' },
   styles: [`
@@ -155,7 +156,7 @@ function kindOf(name: string): string {
     @if (html(); as h) {
       <div class="dmc-lines" [style.--layout-dmc-gutter]="gutter()" [innerHTML]="h"></div>
     } @else if (cur()) {
-      <div class="dmc-empty">{{ 'Loading…' | t }}</div>
+      <wb-skel kind="text" [count]="14" style="padding: 10px 14px" />
     } @else {
       <div class="dmc-empty">{{ 'No source was sent with it.' | t }}</div>
     }

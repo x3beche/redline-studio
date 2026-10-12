@@ -6,6 +6,8 @@ import { Auth } from './auth';
 import { Avatar } from './avatar';
 import { reportError } from './error-report';
 import { Confirm } from './confirm';
+import { CountUp } from './count';
+import { Skeleton } from './skeleton';
 
 /** Settings > Admin panel: the accounts on this server (backend/admin.py),
  *  for the owner and the admins - opened from the account menu.
@@ -30,7 +32,7 @@ const MIN_PASSWORD = 10;
 
 @Component({
   selector: 'app-admin-users',
-  imports: [T, Avatar],
+  imports: [Skeleton, CountUp, T, Avatar],
   styleUrls: ['./settings.css', './profile-settings.css', './admin-users.css'],
   template: `
 <div class="st-page">
@@ -38,15 +40,17 @@ const MIN_PASSWORD = 10;
     @if (loadErr(); as e) {
       <p class="st-err">{{ e }}</p>
     } @else {
-      <div class="st-card um-skel" aria-busy="true" [attr.aria-label]="'Loading the accounts' | t">
-        <div class="st-card-head"><i class="sk" style="width: 80px"></i><span class="st-right"><i class="sk sk-btn"></i></span></div>
+      <wb-skel kind="custom">
+      <div class="st-card um-skel">
+        <div class="st-card-head"><i class="wb-sk" style="width: 80px"></i><span class="st-right"><i class="wb-sk sk-btn"></i></span></div>
         <div class="st-card-body">
-          <div class="st-tiles um-tiles">@for (i of [1, 2, 3, 4]; track i) { <i class="sk sk-tile"></i> }</div>
+          <div class="st-tiles um-tiles">@for (i of [1, 2, 3, 4]; track i) { <i class="wb-sk sk-tile"></i> }</div>
           @for (i of [1, 2, 3, 4]; track i) {
-            <div class="um-skel-row"><i class="sk sk-av"></i><i class="sk" style="width: 30%"></i><i class="sk" style="width: 12%"></i><i class="sk" style="width: 14%"></i></div>
+            <div class="um-skel-row"><i class="wb-sk sk-av"></i><i class="wb-sk" style="width: 30%"></i><i class="wb-sk" style="width: 12%"></i><i class="wb-sk" style="width: 14%"></i></div>
           }
         </div>
       </div>
+      </wb-skel>
     }
   } @else if (data(); as d) {
     @if (editing(); as u) {
@@ -90,8 +94,8 @@ const MIN_PASSWORD = 10;
               <div class="st-tiles pf-tiles">
                 <div class="st-tile"><span>{{ 'Last sign-in' | t }}</span><b>{{ day(u.last_sign_in) }}</b><small>{{ time(u.last_sign_in) }}</small></div>
                 <div class="st-tile"><span>{{ 'Created' | t }}</span><b>{{ day(u.created_at) }}</b><small>{{ time(u.created_at) }}</small></div>
-                <div class="st-tile"><span>{{ 'Sessions' | t }}</span><b>{{ u.sessions }}</b><small>{{ 'signed in now' | t }}</small></div>
-                <div class="st-tile"><span>{{ 'Agent tokens' | t }}</span><b>{{ u.tokens }}</b><small>{{ (u.disabled ? 'stopped' : 'working') | t }}</small></div>
+                <div class="st-tile"><span>{{ 'Sessions' | t }}</span><b [wbCount]="u.sessions"></b><small>{{ 'signed in now' | t }}</small></div>
+                <div class="st-tile"><span>{{ 'Agent tokens' | t }}</span><b [wbCount]="u.tokens"></b><small>{{ (u.disabled ? 'stopped' : 'working') | t }}</small></div>
               </div>
             </div>
           </div>
@@ -217,10 +221,10 @@ const MIN_PASSWORD = 10;
         </div>
         <div class="st-card-body">
           <div class="st-tiles um-tiles">
-            <div class="st-tile"><span>{{ 'Accounts' | t }}</span><b>{{ d.users.length }}</b></div>
-            <div class="st-tile" data-tone="ok"><span>{{ 'Active' | t }}</span><b>{{ counts().active }}</b></div>
-            <div class="st-tile" [attr.data-tone]="counts().disabled ? 'danger' : 'dim'"><span>{{ 'Disabled' | t }}</span><b>{{ counts().disabled }}</b></div>
-            <div class="st-tile"><span>{{ 'Owner and admins' | t }}</span><b>{{ counts().admins }}</b></div>
+            <div class="st-tile"><span>{{ 'Accounts' | t }}</span><b [wbCount]="d.users.length"></b></div>
+            <div class="st-tile" data-tone="ok"><span>{{ 'Active' | t }}</span><b [wbCount]="counts().active"></b></div>
+            <div class="st-tile" [attr.data-tone]="counts().disabled ? 'danger' : 'dim'"><span>{{ 'Disabled' | t }}</span><b [wbCount]="counts().disabled"></b></div>
+            <div class="st-tile"><span>{{ 'Owner and admins' | t }}</span><b [wbCount]="counts().admins"></b></div>
           </div>
           @if (listMsg(); as m) { <p class="st-msg">{{ m }}</p> }
         </div>

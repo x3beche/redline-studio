@@ -46,19 +46,6 @@
 .tk-detail .st-tile { background: var(--surface); }
 .tk-detail .st-chart { background: var(--surface); }
 
-/* Loading: the shapes of what comes, pulsing (as telegram-profile.ts). */
-.tk-skel { display: flex; flex-direction: column; gap: 8px; }
-.tk-skel .sk { display: block; height: 10px; border-radius: 4px; background: var(--hover);
-  animation: tk-sk 1.2s ease-in-out infinite; }
-.tk-skel .sk-tile { height: 44px; border-radius: 5px; }
-.tk-skel .sk-chart { height: 140px; border-radius: 5px; }
-.tk-skel .sk-btn { height: 20px; margin-left: auto; }
-.tk-skel-list { padding: 4px 10px 8px; gap: 0; }
-.tk-skel-row { display: flex; align-items: center; gap: 14px; padding: 7px 0; border-bottom: 1px solid var(--line); }
-.tk-skel-row:last-child { border-bottom: 0; }
-@keyframes tk-sk { 50% { opacity: .4; } }
-@media (prefers-reduced-motion: reduce) { .tk-skel .sk { animation: none; } }
-
 @media (max-width: 768px) {
   .tk-new { flex-direction: column; align-items: stretch; }
   .tk-new .st-in, .tk-make { height: auto; min-height: 40px; }

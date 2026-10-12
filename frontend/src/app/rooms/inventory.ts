@@ -11,6 +11,8 @@ import { ContextMenu } from '../context-menu';
 import { SelectionBar } from '../selection-bar';
 import { SelectOption, UiSelect } from '../ui-select';
 import { TimeChart, TimeData, fmt as chartFmt } from './charts';
+import { CountUp } from '../count';
+import { Skeleton } from '../skeleton';
 
 /** Inventory ("Envanter"): what is on hand - each thing kept, how many, and
  *  where it is (backend/inventory.py), shown the way the Product Catalog
@@ -214,7 +216,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
 
 @Component({
   selector: 'app-room-inventory',
-  imports: [T, DmSendButton, UiSelect, TimeChart, NgTemplateOutlet, SelectionBar],
+  imports: [Skeleton, CountUp, T, DmSendButton, UiSelect, TimeChart, NgTemplateOutlet, SelectionBar],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './inventory.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
@@ -269,19 +271,21 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
         @if (can()) { <button class="tcv-btn tcv-btn-accent" (click)="adding() ? adding.set(false) : goAdd()">{{ (adding() ? 'Close' : 'Add an item') | t }}</button> }
       </div>
     </header>
-    <div class="st-tiles inv-tiles">
-      <div class="st-tile" [attr.data-tone]="all().length ? null : 'dim'"><span>{{ 'Items' | t }}</span><b>{{ all().length }}</b>
+    @if (!loaded()) { <wb-skel kind="tiles" [count]="5" [min]="160" /> } @else {
+    <div class="st-tiles inv-tiles wb-in">
+      <div class="st-tile" [attr.data-tone]="all().length ? null : 'dim'"><span>{{ 'Items' | t }}</span><b [wbCount]="all().length"></b>
         <small>{{ fmt('in {p} places', { p: locations().length }) }}</small></div>
-      <div class="st-tile" [attr.data-tone]="allTypes().length ? null : 'dim'"><span>{{ 'Types' | t }}</span><b>{{ allTypes().length }}</b>
+      <div class="st-tile" [attr.data-tone]="allTypes().length ? null : 'dim'"><span>{{ 'Types' | t }}</span><b [wbCount]="allTypes().length"></b>
         <small [title]="typesLine()">{{ typesLine() || ('none yet' | t) }}</small></div>
       <button class="st-tile mf-tilebtn" [attr.data-tone]="stats().low ? 'warn' : 'dim'" (click)="fLow.set(!fLow())" [title]="'Only items at or below their minimum' | t">
-        <span>{{ 'Low stock' | t }}</span><b>{{ stats().low }}</b>
+        <span>{{ 'Low stock' | t }}</span><b [wbCount]="stats().low"></b>
         <small>{{ fmt('{o} out of stock · {n} with a minimum', { o: stats().out, n: stats().withMin }) }}</small></button>
-      <div class="st-tile inv-value" [attr.data-tone]="stats().valueLine ? null : 'dim'"><span>{{ 'Value' | t }}</span><b [title]="stats().valueLine">{{ stats().valueLine || '–' }}</b>
+      <div class="st-tile inv-value" [attr.data-tone]="stats().valueLine ? null : 'dim'"><span>{{ 'Value' | t }}</span><b [title]="stats().valueLine" [wbCount]="stats().valueLine || '–'"></b>
         <small>{{ fmt('{n} items priced', { n: stats().priced }) }}</small></div>
       <div class="st-tile" [attr.data-tone]="recent().length ? null : 'dim'"><span>{{ 'Last change' | t }}</span><b>{{ recent().length ? ago(recent()[0].updated_at) : '–' }}</b>
         <small [title]="recent().length ? recent()[0].name : ''">{{ recent().length ? recent()[0].name + ' · ' + (recent()[0].updated_by.name || '') : ('none yet' | t) }}</small></div>
     </div>
+    }
 
     @if (can() && adding()) {
       <section class="st-card" id="inv-add">
@@ -337,7 +341,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
 
     @if (all().length) {
       <!-- the bar: search, type, place, low, sort, layout -->
-      <div class="mf-gbar mf-ctl inv-gbar">
+      <div class="mf-gbar mf-ctl inv-gbar wb-in">
         <input #search class="tst-in mf-gfind" type="search" [placeholder]="'Search: name, size, value, part number, place   /' | t" [value]="q()"
                (input)="q.set($any($event.target).value)" (keydown.escape)="q.set(''); $any($event.target).blur()" [attr.aria-label]="'Search the inventory' | t">
         <wb-select class="mf-gsel" label="Type" placeholder="All types" [options]="typeOpts()" [value]="fType()" (pick)="fType.set($event)" />
@@ -426,7 +430,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
             <p>{{ 'An item\\'s - and + keep the reason: "used 4 for the fan board". Set a minimum to see what runs low.' | t }}</p></div></li>
         </ol>
       </section>
-    } @else { <p class="st-hint">{{ 'Loading…' | t }}</p> }
+    } @else { <wb-skel kind="cards" [count]="10" [min]="200" /> }
 
     <!-- ================= one item, in full ================= -->
     @if (iid()) {
@@ -596,7 +600,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
             </div>
           } @else if (itemError(); as e) {
             <div class="st-banner tst-banner inv-derr" role="alert"><span>{{ e }}</span><button class="tcv-btn" (click)="closeItem()">{{ 'Close' | t }}</button></div>
-          } @else { <p class="st-hint inv-derr">{{ 'Loading…' | t }}</p> }
+          } @else { <div class="inv-derr"><wb-skel kind="text" [count]="6" /></div> }
         </div>
       </div>
     }

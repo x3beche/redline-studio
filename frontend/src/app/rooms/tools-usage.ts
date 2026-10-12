@@ -1,5 +1,6 @@
 import { Component, computed, effect, input, signal } from '@angular/core';
 import { BarList, Donut, Row, TimeChart, TimeData, fmt } from './charts';
+import { CountUp } from '../count';
 
 /** GET /api/tools/usage/summary */
 interface UsageSummary {
@@ -22,16 +23,16 @@ const SURFACE: Record<string, string> = { ui: 'people, in the app', mcp: 'agents
  *  business and this one another's. */
 @Component({
   selector: 'app-tools-usage',
-  imports: [BarList, Donut, TimeChart],
+  imports: [CountUp, BarList, Donut, TimeChart],
   template: `
 @if (data(); as d) {
   <div class="tcv-dash-grid">
-    <div class="tcv-stat c2"><span>Uses</span><b>{{ d.total }}</b><em>opens, runs, copies, finds</em></div>
-    <div class="tcv-stat c2"><span>Tools used</span><b>{{ d.tools_used }}</b><em>of {{ d.tools_available }}</em></div>
-    <div class="tcv-stat c2"><span>By agents</span><b>{{ d.by_surface['mcp'] || 0 }}</b><em>through MCP</em></div>
-    <div class="tcv-stat c2"><span>Runs</span><b>{{ d.by_event['run'] || 0 }}</b><em>a tool computed</em></div>
-    <div class="tcv-stat c2"><span>Finds</span><b>{{ d.by_event['find'] || 0 }}</b><em>picked for an agent</em></div>
-    <div class="tcv-stat c2"><span>Favourites</span><b>{{ (d.by_event['favourite'] || 0) - (d.by_event['unfavourite'] || 0) }}</b><em>starred, net</em></div>
+    <div class="tcv-stat c2"><span>Uses</span><b [wbCount]="d.total"></b><em>opens, runs, copies, finds</em></div>
+    <div class="tcv-stat c2"><span>Tools used</span><b [wbCount]="d.tools_used"></b><em>of {{ d.tools_available }}</em></div>
+    <div class="tcv-stat c2"><span>By agents</span><b [wbCount]="d.by_surface['mcp'] || 0"></b><em>through MCP</em></div>
+    <div class="tcv-stat c2"><span>Runs</span><b [wbCount]="d.by_event['run'] || 0"></b><em>a tool computed</em></div>
+    <div class="tcv-stat c2"><span>Finds</span><b [wbCount]="d.by_event['find'] || 0"></b><em>picked for an agent</em></div>
+    <div class="tcv-stat c2"><span>Favourites</span><b [wbCount]="(d.by_event['favourite'] || 0) - (d.by_event['unfavourite'] || 0)"></b><em>starred, net</em></div>
 
     <section class="tcv-panel-d c8"><h3>Uses by day
       <button class="tcv-dl" (click)="csv()">CSV</button></h3>

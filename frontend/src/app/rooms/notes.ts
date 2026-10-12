@@ -9,6 +9,7 @@ import { T, t } from '../i18n';
 import { NoteDoc } from './note-doc';
 import { Confirm } from '../confirm';
 import { ContextMenu } from '../context-menu';
+import { Skeleton } from '../skeleton';
 
 /** Notes: what you jot down while working, without a form to fill.
  *
@@ -252,7 +253,7 @@ const NOTE_ICONS = {
 /** The Notes room. */
 @Component({
   selector: 'app-room-notes',
-  imports: [T, NoteDoc],
+  imports: [Skeleton, T, NoteDoc],
   host: { '(document:keydown)': 'key($event)' },
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
@@ -334,7 +335,8 @@ const NOTE_ICONS = {
           </div>
         }
       } @empty {
-        <p class="tcv-notes-empty">{{ q() || tag() || only() ? 'Nothing matches.' : 'No notes yet - press New note, or Alt+N anywhere.' }}</p>
+        @if (loaded()) { <p class="tcv-notes-empty">{{ q() || tag() || only() ? 'Nothing matches.' : 'No notes yet - press New note, or Alt+N anywhere.' }}</p> }
+        @else { <wb-skel kind="rows" [count]="6" [h]="64" /> }
       }
     </div>
   </aside>
@@ -373,6 +375,8 @@ const NOTE_ICONS = {
             }
         </app-note-doc>
       </article>
+    } @else if (!loaded()) {
+      <div class="tcv-note"><wb-skel kind="text" [count]="7" /></div>
     } @else {
       <div class="tcv-notes-tips">
         <p><b>Writing a note should take no time.</b> Press <b>New note</b> (or N) and type - no title, folder or form. Double-click a note to change it.</p>
@@ -400,6 +404,8 @@ export class RoomNotes implements OnDestroy {
   tag = signal('');
   only = signal('');
   notes = signal<Note[]>([]);
+  /** The first list has come (or failed): till then a placeholder, not "No notes yet". */
+  loaded = signal(false);
   tags = signal<{ tag: string; n: number }[]>([]);
   openId = signal<string | null>(null);
   editing = signal(false);
@@ -457,12 +463,13 @@ export class RoomNotes implements OnDestroy {
   }
 
   private read() {
-    this.api.list(this.q(), this.tag(), this.only()).subscribe(ns => {
+    this.api.list(this.q(), this.tag(), this.only()).subscribe({ next: ns => {
       // A note being edited here keeps the text typed into it.
       const ed = this.editing() ? this.editingId : null;
       this.notes.set(ed ? ns.map(n => n.id === ed ? { ...n, text: this.draft() } : n) : ns);
       if (!this.openId() && ns.length && !this.q()) this.openId.set(ns[0].id);
-    });
+      this.loaded.set(true);
+    }, error: () => this.loaded.set(true) });
     this.api.tags().subscribe(t => this.tags.set(t));
   }
 

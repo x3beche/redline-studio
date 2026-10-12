@@ -214,14 +214,10 @@
 }
 
 /* Loading: the form's own shape, its lines pulsing until the texts come. */
-.tg-skel .sk { display: block; height: 10px; border-radius: 4px; background: var(--hover);
-  animation: tg-sk 1.2s ease-in-out infinite; }
-.tg-skel .tg-chips .sk, .tg-skel .tg-field-top .sk { display: inline-block; }
+.tg-skel .tg-chips .wb-sk, .tg-skel .tg-field-top .wb-sk { display: inline-block; }
 .tg-skel .sk-pill { height: 24px; border-radius: 12px; }
 .tg-skel .sk-photo { align-self: center; width: 160px; height: 160px; border-radius: 50%; }
 .tg-skel .sk-btn { height: 26px; }
 .tg-skel .sk-in { width: 100%; margin-top: 4px; border-radius: 4px; }
 .tg-skel .tg-menu { gap: 8px; }
 .tg-skel .tg-field + .tg-field { margin-top: 10px; }
-@keyframes tg-sk { 50% { opacity: .4; } }
-@media (prefers-reduced-motion: reduce) { .tg-skel .sk { animation: none; } }

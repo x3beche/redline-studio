@@ -13,6 +13,7 @@ import { Board3d } from './board3d';
 import { BodyNode, PartBodyView } from './part-body-view';
 import { MeshView } from './mesh-view';
 import { DOMAINS, DOMAIN_COLOR, Domain, STRENGTHS, STRENGTH_COLOR, Strength } from './taste';
+import { Skeleton } from '../skeleton';
 
 type Rule = { text: string; domain: Domain; strength: Strength; why?: string };
 type Tally = Record<Strength, number>;
@@ -50,7 +51,7 @@ const LAST_TAB: Record<string, string> = {};
  *  firmware's build and code. "Add to my ..." from its head. */
 @Component({
   selector: 'app-dm-viewer',
-  imports: [T, Markdown, PartBodyView, BarList, TimeChart, DmCode, FileView, NoteDoc, Board3d, MeshView],
+  imports: [Skeleton, T, Markdown, PartBodyView, BarList, TimeChart, DmCode, FileView, NoteDoc, Board3d, MeshView],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './inventory.css', './dm-viewer.css'],
   host: { '(window:keydown.escape)': 'close()' },
   template: `
@@ -657,7 +658,7 @@ const LAST_TAB: Record<string, string> = {};
           }
         </div>
       } @else {
-        <p class="tcv-dm-dtext" [class.tcv-dm-err]="!!err()">{{ err() || ('Loading…' | t) }}</p>
+        @if (err()) { <p class="tcv-dm-dtext tcv-dm-err">{{ err() }}</p> } @else { <wb-skel kind="text" [count]="5" style="padding: 4px 0 10px" /> }
         <div class="tcv-dm-drow"><button type="button" class="tcv-btn tcv-dm-dbtn" (click)="close()">{{ 'Close' | t }}</button></div>
       }
     </div>

@@ -21,15 +21,11 @@
 .pf-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .pf-sessions td { vertical-align: middle; }
 
-.pf-skel .sk { display: block; height: 10px; border-radius: 4px; background: var(--hover);
-  animation: pf-sk 1.2s ease-in-out infinite; }
 .pf-skel .st-card-body { gap: 9px; }
 .pf-skel .sk-pic { width: 88px; height: 88px; border-radius: 50%; }
 .pf-skel .sk-btn { width: 110px; height: 24px; }
 .pf-skel .sk-in { height: 40px; }
 .pf-skel .sk-tile { height: 48px; border-radius: 5px; }
-@keyframes pf-sk { 50% { opacity: .4; } }
-@media (prefers-reduced-motion: reduce) { .pf-skel .sk { animation: none; } }
 
 /* The avatar colour: a swatch per theme token, "Auto" (the name's), and a
    small preview - initials and picture - as the Chat draws them. */

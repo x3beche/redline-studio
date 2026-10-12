@@ -10,6 +10,8 @@ import {
   Budget, BudgetKind, COMMON, CURRENCY, CostLine, Costs, CostsPatch, Money, Period, Price,
   convert, currencies, currencyName, fromUsd, money, moneyIn, setOverride, toUsd,
 } from './money';
+import { Skeleton } from './skeleton';
+import { CountUp } from './count';
 
 /** Settings > Costs & currency: what Workbench costs to run, and the currency
  *  money is shown in (money.ts).
@@ -56,10 +58,11 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
 
 @Component({
   selector: 'app-costs-settings',
-  imports: [BudgetBars, NgTemplateOutlet, T, UiSelect],
+  imports: [CountUp, Skeleton, BudgetBars, NgTemplateOutlet, T, UiSelect],
   styleUrl: './settings.css',
   template: `
-<div class="st-page">
+@if (!m.costs() && !m.costsError()) { <div class="st-page"><wb-skel kind="page" [count]="3" /></div> } @else {
+<div class="st-page wb-in">
   <p class="st-lead">{{ 'What Workbench costs to run - the subscriptions, the electricity, the proxy traffic - each typed in its own currency. Analytics adds them to the work of each range, and every amount in the app is shown in the display currency.' | t }}</p>
   @if (!canEdit()) { <div class="st-banner">{{ 'These are the server\\'s settings: only the owner and the admins can change them.' | t }}</div> }
   @if (m.costsError(); as e) {
@@ -70,7 +73,7 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
   <div class="st-card st-month">
     <div class="st-month-now">
       <span class="st-sec-title">{{ monthName() }} · {{ 'so far' | t }}</span>
-      <b class="st-month-big mono">{{ ms() ? money(ms()!.total_usd) : '–' }}</b>
+      <b class="st-month-big mono" [wbCount]="ms() ? money(ms()!.total_usd) : '–'"></b>
       <div class="st-daybar" [title]="('day' | t) + ' ' + dayNo() + ' / ' + daysIn()"><i [style.width.%]="dayPct()"></i>
         @if (ms() && ms()!.forecast_usd > 0) { <em [style.left.%]="Math.min(100, ms()!.total_usd / ms()!.forecast_usd * 100)"></em> }</div>
       <div class="st-month-line">
@@ -385,6 +388,7 @@ function same(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.string
 
   @if (err(); as e) { <p class="st-err">{{ e }}</p> }
 </div>
+}
 <!-- The rows of a list of costs: a grid that folds onto two lines when the stage is narrow. -->
 <ng-template #table let-s="s" let-rows="rows">
   <div class="st-lines" [class.st-lines-covers]="s === 'subscriptions'">

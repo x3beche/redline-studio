@@ -4,6 +4,7 @@ import { Observable, firstValueFrom } from 'rxjs';
 import { LANG, T, t } from './i18n';
 import { Auth } from './auth';
 import { AVATAR_COLOURS, Avatar, AvatarColours, avatarColour } from './avatar';
+import { Skeleton } from './skeleton';
 
 /** Settings > Profile: the person's own account (backend/profile.py) - the
  *  picture, the name and the address, the system role (owner, admin or
@@ -26,7 +27,7 @@ const MIN_PASSWORD = 10;
 
 @Component({
   selector: 'app-profile-settings',
-  imports: [T, Avatar],
+  imports: [Skeleton, T, Avatar],
   styleUrls: ['./settings.css', './profile-settings.css'],
   template: `
 <div class="st-page">
@@ -34,22 +35,24 @@ const MIN_PASSWORD = 10;
     @if (loadErr(); as e) {
       <p class="st-err">{{ e }}</p>
     } @else {
-      <div class="st-card pf-skel" aria-busy="true" [attr.aria-label]="'Loading your profile' | t">
-        <div class="st-card-head"><i class="sk" style="width: 90px"></i></div>
+      <wb-skel kind="custom" class="wb-sk-stack">
+      <div class="st-card pf-skel">
+        <div class="st-card-head"><i class="wb-sk" style="width: 90px"></i></div>
         <div class="st-card-body">
           <div class="pf-top">
-            <div class="pf-pic"><i class="sk sk-pic"></i><i class="sk sk-btn"></i></div>
+            <div class="pf-pic"><i class="wb-sk sk-pic"></i><i class="wb-sk sk-btn"></i></div>
             <div class="pf-fields">
-              <div class="st-grid pf-grid"><i class="sk sk-in"></i><i class="sk sk-in"></i></div>
-              <div class="st-tiles pf-tiles"><i class="sk sk-tile"></i><i class="sk sk-tile"></i><i class="sk sk-tile"></i><i class="sk sk-tile"></i></div>
+              <div class="st-grid pf-grid"><i class="wb-sk sk-in"></i><i class="wb-sk sk-in"></i></div>
+              <div class="st-tiles pf-tiles"><i class="wb-sk sk-tile"></i><i class="wb-sk sk-tile"></i><i class="wb-sk sk-tile"></i><i class="wb-sk sk-tile"></i></div>
             </div>
           </div>
         </div>
       </div>
-      <div class="st-card pf-skel" aria-hidden="true">
-        <div class="st-card-head"><i class="sk" style="width: 120px"></i></div>
-        <div class="st-card-body"><i class="sk" style="width: 70%"></i><i class="sk" style="width: 45%"></i></div>
+      <div class="st-card pf-skel">
+        <div class="st-card-head"><i class="wb-sk" style="width: 120px"></i></div>
+        <div class="st-card-body"><i class="wb-sk" style="width: 70%"></i><i class="wb-sk" style="width: 45%"></i></div>
       </div>
+      </wb-skel>
     }
   } @else if (p(); as p) {
     @if (p.kind !== 'user') {

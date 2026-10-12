@@ -14,6 +14,8 @@ import { SelectOption, UiSelect, plainOptions } from '../ui-select';
 import { Marquee } from '../marquee';
 import { ContextMenu } from '../context-menu';
 import { SelectionBar } from '../selection-bar';
+import { CountUp } from '../count';
+import { Skeleton } from '../skeleton';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
  *  read from their own websites (backend/manufacturers.py).
@@ -241,7 +243,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
 @Component({
   selector: 'app-room-mfr',
-  imports: [T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar],
+  imports: [Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
@@ -289,7 +291,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           </span>
         </button>
       } @empty {
-        <p class="tcv-notes-empty">{{ (listQ() ? 'Nothing matches.' : 'No manufacturers yet.') | t }}</p>
+        @if (listed()) { <p class="tcv-notes-empty">{{ (listQ() ? 'Nothing matches.' : 'No manufacturers yet.') | t }}</p> }
+        @else { <wb-skel kind="rows" [count]="5" [h]="52" /> }
       }
     </div>
   </aside>
@@ -330,10 +333,10 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           <div class="st-tile"><span>{{ 'Pages read' | t }}</span><b>{{ crawlStep()?.read ?? 0 }} / {{ crawlStep()?.cap ?? j.limits?.pages ?? '–' }}</b>
             <small>{{ fmt('{n} asked · {q} waiting', { n: crawlStep()?.pages ?? 0, q: crawlStep()?.queued ?? 0 }) }}</small></div>
           <div class="st-tile" [attr.data-tone]="j.status === 'done' ? 'ok' : 'dim'"><span>{{ 'Products' | t }}</span>
-            <b>{{ j.totals.products ?? (j.products_found ?? '–') }}</b><small>{{ j.totals.duplicates ? fmt('{n} duplicates merged', { n: j.totals.duplicates }) : (j.totals.chunks ? fmt('{n} chunks for the model', { n: j.totals.chunks }) : t('after the pages are read')) }}</small></div>
+            <b [wbCount]="j.totals.products ?? (j.products_found ?? '–')"></b><small>{{ j.totals.duplicates ? fmt('{n} duplicates merged', { n: j.totals.duplicates }) : (j.totals.chunks ? fmt('{n} chunks for the model', { n: j.totals.chunks }) : t('after the pages are read')) }}</small></div>
           <div class="st-tile tsx-model"><span>{{ 'Model' | t }}</span><b [title]="j.model || ''">{{ j.model || '–' }}</b><small>{{ j.provider_name || j.provider || '' }}</small></div>
           <div class="st-tile" [attr.data-tone]="j.totals.tokens_in == null ? 'dim' : null"><span>{{ 'Tokens in / out' | t }}</span>
-            <b>{{ j.totals.tokens_in == null ? '–' : num(j.totals.tokens_in) + ' / ' + num(j.totals.tokens_out ?? 0) }}</b>
+            <b [wbCount]="j.totals.tokens_in == null ? '–' : num(j.totals.tokens_in) + ' / ' + num(j.totals.tokens_out ?? 0)"></b>
             <small>{{ money(j.totals.cost) }} {{ (j.totals.cost != null ? 'this run' : '') | t }}</small></div>
           <div class="st-tile" [attr.data-tone]="j.route.join() === 'local' ? 'dim' : null"><span>{{ 'Fetching' | t }}</span>
             <b [title]="(j.route_default ? 'Default order' : 'Own order') | t">{{ line(j.route) }}</b>
@@ -386,7 +389,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       } @else if (runError(); as e) {
         <div class="st-banner tst-banner tsx-banner" role="alert"><span class="tsx-banner-text">{{ e }}</span>
           <button class="tcv-btn" (click)="goHome()">{{ 'Overview' | t }}</button></div>
-      } @else { <p class="st-hint">{{ 'Loading…' | t }}</p> }
+      } @else { <div class="wb-sk-stack"><wb-skel kind="tiles" [count]="8" [min]="110" /><wb-skel kind="rows" [count]="10" /></div> }
 
     } @else if (view() === 'maker' && maker(); as m) {
       <!-- ================= one manufacturer ================= -->
@@ -428,9 +431,9 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
       }
 
       <div class="st-tiles mf-mtiles">
-        <div class="st-tile" [attr.data-tone]="m.product_count ? null : 'dim'"><span>{{ 'Products' | t }}</span><b>{{ m.product_count }}</b>
+        <div class="st-tile" [attr.data-tone]="m.product_count ? null : 'dim'"><span>{{ 'Products' | t }}</span><b [wbCount]="m.product_count"></b>
           <small>{{ fmt('{n} with specs · {c} with a code', { n: makerStats().specs, c: makerStats().sku }) }}</small></div>
-        <div class="st-tile" [attr.data-tone]="m.categories.length ? null : 'dim'"><span>{{ 'Categories' | t }}</span><b>{{ m.categories.length }}</b>
+        <div class="st-tile" [attr.data-tone]="m.categories.length ? null : 'dim'"><span>{{ 'Categories' | t }}</span><b [wbCount]="m.categories.length"></b>
           <small [title]="m.categories.join(', ')">{{ m.categories.slice(0, 3).join(', ') || '–' }}</small></div>
         <div class="st-tile" [attr.data-tone]="m.explored_at ? null : 'dim'"><span>{{ 'Explored' | t }}</span><b>{{ when(m.explored_at) }}</b>
           <small>{{ m.domain }}</small></div>
@@ -440,7 +443,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         } @else {
           <div class="st-tile" data-tone="dim"><span>{{ 'Last run' | t }}</span><b>–</b><small>{{ 'never explored' | t }}</small></div>
         }
-        <div class="st-tile" [attr.data-tone]="m.docs.length ? null : 'dim'"><span>{{ 'Documents' | t }}</span><b>{{ m.docs.length }}</b>
+        <div class="st-tile" [attr.data-tone]="m.docs.length ? null : 'dim'"><span>{{ 'Documents' | t }}</span><b [wbCount]="m.docs.length"></b>
           <small>{{ 'catalogs and drawings linked' | t }}</small></div>
       </div>
 
@@ -650,14 +653,14 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           @if (g.total > g.items.length) {
             <button class="st-more mf-morerows" (click)="gpages.set(gpages() + 1)">{{ fmt('Show {n} more', { n: g.total - g.items.length }) }}</button>
           }
-        } @else { <p class="st-hint">{{ 'Loading…' | t }}</p> }
+        } @else if (layout() === 'grid') { <wb-skel kind="cards" [count]="15" [min]="220" /> } @else { <wb-skel kind="rows" [count]="12" [h]="44" /> }
       } @else {
       <div class="st-tiles mf-htiles">
-        <div class="st-tile" [attr.data-tone]="all().length ? null : 'dim'"><span>{{ 'Manufacturers' | t }}</span><b>{{ all().length }}</b>
+        <div class="st-tile" [attr.data-tone]="all().length ? null : 'dim'"><span>{{ 'Manufacturers' | t }}</span><b [wbCount]="all().length"></b>
           <small>{{ fmt('{n} explored', { n: exploredCount() }) }}</small></div>
-        <div class="st-tile" [attr.data-tone]="totalProducts() ? null : 'dim'"><span>{{ 'Products' | t }}</span><b>{{ num(totalProducts()) }}</b>
+        <div class="st-tile" [attr.data-tone]="totalProducts() ? null : 'dim'"><span>{{ 'Products' | t }}</span><b [wbCount]="num(totalProducts())"></b>
           <small>{{ fmt('in {n} categories', { n: totalCats() }) }}</small></div>
-        <div class="st-tile" [attr.data-tone]="runs.running() ? 'accent' : 'dim'"><span>{{ 'Running' | t }}</span><b>{{ runs.running() }}</b>
+        <div class="st-tile" [attr.data-tone]="runs.running() ? 'accent' : 'dim'"><span>{{ 'Running' | t }}</span><b [wbCount]="runs.running()"></b>
           <small>{{ fmt('{n} runs kept', { n: runs.jobs().length }) }}</small></div>
         <div class="st-tile" [attr.data-tone]="lastJob() ? statusTone(lastJob()!.status) : 'dim'"><span>{{ 'Last exploration' | t }}</span>
           <b>{{ lastJob() ? when(lastJob()!.started_at) : '–' }}</b>
@@ -984,6 +987,8 @@ export class RoomMfr implements OnDestroy {
   broken = signal<Set<string>>(new Set());
 
   all = signal<Maker[]>([]);
+  /** The first list of makers has come (or failed): till then a placeholder, not "No manufacturers yet". */
+  listed = signal(false);
   maker = signal<Maker | null>(null);
   proxy = signal<ProxyState | null>(null);
   /** How the next run goes out: null for the default order, else its own. */
@@ -1092,7 +1097,7 @@ export class RoomMfr implements OnDestroy {
   }
 
   private read() {
-    this.api.list('').subscribe({ next: ms => this.all.set(ms), error: () => {} });
+    this.api.list('').subscribe({ next: ms => { this.all.set(ms); this.listed.set(true); }, error: () => this.listed.set(true) });
     if (this.view() === 'home' && this.sub() === 'products') this.loadGrid();
     const m = this.maker();
     if (m && this.view() === 'maker') { this.api.get(m.id).subscribe({ next: x => this.maker.set(x), error: () => {} }); this.readStock(m.id); }

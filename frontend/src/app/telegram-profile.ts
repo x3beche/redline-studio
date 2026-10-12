@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { T, t } from './i18n';
 import { Langs, TgLangPicker } from './telegram-langs';
 import { Confirm } from './confirm';
+import { Skeleton } from './skeleton';
 
 /** The bot's profile, set from here rather than @BotFather (backend/tgbot/
  *  profile.py): its name, description, short description and picture, per
@@ -31,7 +32,7 @@ interface Translated { lang: string; fields: Record<Field, string>; cut: Partial
 
 @Component({
   selector: 'app-telegram-profile',
-  imports: [T, TgLangPicker],
+  imports: [Skeleton, T, TgLangPicker],
   styleUrls: ['./settings.css', './telegram-settings.css'],
   template: `
 @if (p(); as d) {
@@ -131,24 +132,26 @@ interface Translated { lang: string; fields: Record<Field, string>; cut: Partial
 } @else {
   <!-- While Telegram answers: the form's shape, its lines pulsing, so
        the texts land where they will be read. -->
-  <div class="tg-prof tg-skel" [attr.aria-label]="'Asking Telegram…' | t" aria-busy="true">
-    <div class="tg-chips"><i class="sk" style="width: 70px"></i><i class="sk sk-pill" style="width: 150px"></i><i class="sk sk-pill" style="width: 90px"></i></div>
-    <i class="sk" style="width: 55%"></i>
+  <wb-skel kind="custom">
+  <div class="tg-prof tg-skel">
+    <div class="tg-chips"><i class="wb-sk" style="width: 70px"></i><i class="wb-sk sk-pill" style="width: 150px"></i><i class="wb-sk sk-pill" style="width: 90px"></i></div>
+    <i class="wb-sk" style="width: 55%"></i>
     <div class="tg-prof-grid">
-      <div class="tg-photo"><i class="sk sk-photo"></i><i class="sk sk-btn"></i><i class="sk sk-btn"></i></div>
+      <div class="tg-photo"><i class="wb-sk sk-photo"></i><i class="wb-sk sk-btn"></i><i class="wb-sk sk-btn"></i></div>
       <div class="tg-fields">
         @for (w of [1, 3, 1]; track $index) {
           <div class="tg-field">
-            <span class="tg-field-top"><i class="sk" style="width: 90px"></i><i class="sk" style="width: 180px"></i><i class="sk tg-count" style="width: 40px"></i></span>
-            <i class="sk sk-in" [style.height.px]="w === 3 ? 92 : 30"></i>
+            <span class="tg-field-top"><i class="wb-sk" style="width: 90px"></i><i class="wb-sk" style="width: 180px"></i><i class="wb-sk tg-count" style="width: 40px"></i></span>
+            <i class="wb-sk sk-in" [style.height.px]="w === 3 ? 92 : 30"></i>
           </div>
         }
       </div>
       <div class="tg-menu">
-        @for (r of [1, 2, 3, 4, 5]; track r) { <i class="sk" [style.width.%]="50 + r * 8"></i> }
+        @for (r of [1, 2, 3, 4, 5]; track r) { <i class="wb-sk" [style.width.%]="50 + r * 8"></i> }
       </div>
     </div>
   </div>
+  </wb-skel>
 }`,
 })
 export class TelegramProfilePanel {

@@ -8,6 +8,8 @@ import { BudgetBars } from '../budget-bars';
 import { Markdown } from '../markdown';
 import { SelectOption, UiSelect } from '../ui-select';
 import { BarList, Donut, Fmt, Row, Spark, TimeChart, fmt } from './charts';
+import { CountUp } from '../count';
+import { Skeleton } from '../skeleton';
 
 type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' | 'lcsc';
 
@@ -22,7 +24,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
  */
 @Component({
   selector: 'app-room-analyze',
-  imports: [BarList, BudgetBars, DecimalPipe, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage, UiSelect],
+  imports: [Skeleton, CountUp, BarList, BudgetBars, DecimalPipe, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage, UiSelect],
   template: `
 <div class="tcv-room tcv-dash absolute inset-0 flex min-h-0 flex-col">
   <header class="tcv-dash-bar">
@@ -63,12 +65,12 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
     <ng-container *ngTemplateOutlet="head; context: { id: 'p-overview', title: pd.name, sub: pd.items.length + ' items · ' + rangeLabel() }" />
     @if (open('p-overview')) {
       <div class="tcv-dash-grid">
-        <div class="tcv-stat c2"><span>LLM spend</span><b>{{ f.money(pd.spend_usd) }}</b><em>on this project's notes</em></div>
-        <div class="tcv-stat c2"><span>Notes</span><b>{{ pd.notes }}</b><em>all time</em></div>
-        <div class="tcv-stat c2"><span>Runs</span><b>{{ pd.runs }}</b><em>by the agents</em></div>
-        <div class="tcv-stat c2"><span>Jobs</span><b>{{ pd.jobs }}</b><em>builds, renders, layouts, tests</em></div>
-        <div class="tcv-stat c2"><span>Failed</span><b>{{ pd.failed }}</b><em>{{ pd.jobs ? (100 * pd.failed / pd.jobs).toFixed(1) + '% of jobs' : '–' }}</em></div>
-        <div class="tcv-stat c2"><span>Items</span><b>{{ pd.items.length }}</b><em>{{ kindsLine(pd) }}</em></div>
+        <div class="tcv-stat c2"><span>LLM spend</span><b [wbCount]="f.money(pd.spend_usd)"></b><em>on this project's notes</em></div>
+        <div class="tcv-stat c2"><span>Notes</span><b [wbCount]="pd.notes"></b><em>all time</em></div>
+        <div class="tcv-stat c2"><span>Runs</span><b [wbCount]="pd.runs"></b><em>by the agents</em></div>
+        <div class="tcv-stat c2"><span>Jobs</span><b [wbCount]="pd.jobs"></b><em>builds, renders, layouts, tests</em></div>
+        <div class="tcv-stat c2"><span>Failed</span><b [wbCount]="pd.failed"></b><em>{{ pd.jobs ? (100 * pd.failed / pd.jobs).toFixed(1) + '% of jobs' : '–' }}</em></div>
+        <div class="tcv-stat c2"><span>Items</span><b [wbCount]="pd.items.length"></b><em>{{ kindsLine(pd) }}</em></div>
         @if (pd.spend_series; as ss) {
           <section class="tcv-panel-d c12"><h3>Spend by item
               <button class="tcv-dl" (click)="dl(pd.name + '-spend', seriesRows(ss))">CSV</button></h3>
@@ -147,50 +149,50 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
     <!-- OVERVIEW -->
     <ng-container *ngTemplateOutlet="head; context: { id: 'overview', title: 'Overview', sub: rangeLabel() }" />
     @if (open('overview')) {
-      <div class="tcv-dash-grid">
-        <div class="tcv-stat c2"><span>LLM spend</span><b>{{ f.money(d.llm.cost_usd) }}</b>
+      <div class="tcv-dash-grid wb-in">
+        <div class="tcv-stat c2"><span>LLM spend</span><b [wbCount]="f.money(d.llm.cost_usd)"></b>
           <em>at API list prices · {{ f.count(d.llm.calls) }} calls</em>
           @if (delta(d, 'llm_usd'); as dl) { <i class="tcv-delta" [attr.data-up]="dl.up ? 1 : null">{{ dl.text }}</i> }</div>
-        <div class="tcv-stat c2"><span>Tokens</span><b>{{ f.count(tokTotal()) }}</b>
+        <div class="tcv-stat c2"><span>Tokens</span><b [wbCount]="f.count(tokTotal())"></b>
           <em>{{ f.count(d.llm.tokens['output'] || 0) }} written · {{ f.count(d.llm.tokens['cache_read'] || 0) }} cache reads</em></div>
-        <div class="tcv-stat c2"><span>Compute</span><b>{{ f.hours(d.compute.cpu_s / 3600) }}</b>
+        <div class="tcv-stat c2"><span>Compute</span><b [wbCount]="f.hours(d.compute.cpu_s / 3600)"></b>
           <em>CPU time over {{ d.compute.count }} jobs · {{ f.secs(d.compute.wall_s) }} wall</em>
           @if (delta(d, 'cpu_s'); as dl) { <i class="tcv-delta" [attr.data-up]="dl.up ? 1 : null">{{ dl.text }}</i> }</div>
-        <div class="tcv-stat c2"><span>Energy</span><b>{{ f.wh((d.energy.machine_kwh || d.energy.jobs_kwh) * 1000) }}</b>
+        <div class="tcv-stat c2"><span>Energy</span><b [wbCount]="f.wh((d.energy.machine_kwh || d.energy.jobs_kwh) * 1000)"></b>
           <em>{{ d.energy.machine_kwh ? 'whole machine' : 'jobs only' }} · {{ d.energy.basis }}</em></div>
         <div class="tcv-stat c2"><span>Electricity</span>
-          <b>{{ elecCost() == null ? '–' : f.money(elecCost()!) }}</b>
+          <b [wbCount]="elecCost() == null ? '–' : f.money(elecCost()!)"></b>
           <em>{{ d.energy.kwh_price == null ? 'set a price per kWh in Settings' : f.money(d.energy.kwh_price) + ' per kWh' }}</em></div>
-        <div class="tcv-stat c2"><span>Notes</span><b>{{ notesIn() }}</b>
+        <div class="tcv-stat c2"><span>Notes</span><b [wbCount]="notesIn()"></b>
           <em>{{ d.work.status['applied'] || 0 }} applied · {{ d.work.status['queued'] || 0 }} queued</em>
           @if (delta(d, 'notes'); as dl) { <i class="tcv-delta" [attr.data-up]="dl.up ? 1 : null">{{ dl.text }}</i> }</div>
-        <div class="tcv-stat c2"><span>Database</span><b>{{ f.bytes(d.storage.db_bytes) }}</b>
+        <div class="tcv-stat c2"><span>Database</span><b [wbCount]="f.bytes(d.storage.db_bytes)"></b>
           <em>{{ f.count(d.storage.objects) }} documents</em></div>
-        <div class="tcv-stat c2"><span>Disk free</span><b>{{ f.bytes(d.storage.disk.free) }}</b>
+        <div class="tcv-stat c2"><span>Disk free</span><b [wbCount]="f.bytes(d.storage.disk.free)"></b>
           <em>of {{ f.bytes(d.storage.disk.total) }}</em></div>
-        <div class="tcv-stat c2"><span>Projects</span><b>{{ d.catalog.projects.length }}</b>
+        <div class="tcv-stat c2"><span>Projects</span><b [wbCount]="d.catalog.projects.length"></b>
           <em>{{ d.catalog.models }} models · {{ d.catalog.boards }} boards</em></div>
-        <div class="tcv-stat c2"><span>Agent questions</span><b>{{ d.work.questions.asked }}</b>
+        <div class="tcv-stat c2"><span>Agent questions</span><b [wbCount]="d.work.questions.asked"></b>
           <em>answered in {{ d.work.questions.avg_wait_s == null ? '–' : f.secs(d.work.questions.avg_wait_s) }} on average</em></div>
-        <div class="tcv-stat c2"><span>Runs</span><b>{{ runsTotal() }}</b>
+        <div class="tcv-stat c2"><span>Runs</span><b [wbCount]="runsTotal()"></b>
           <em>{{ runsAvg() }} each on average</em>
           @if (delta(d, 'runs'); as dl) { <i class="tcv-delta" [attr.data-up]="dl.up ? 1 : null">{{ dl.text }}</i> }</div>
-        <div class="tcv-stat c2"><span>LCSC requests</span><b>{{ d.lcsc.totals['total'] || 0 }}</b>
+        <div class="tcv-stat c2"><span>LCSC requests</span><b [wbCount]="d.lcsc.totals['total'] || 0"></b>
           <em>{{ d.lcsc.totals['net'] || 0 }} sent · {{ d.lcsc.totals['refused'] || 0 }} refused</em></div>
         <div class="tcv-stat c3"><span>Subscription saved</span>
-          <b>{{ d.subscription.saved_usd == null ? '–' : f.money(d.subscription.saved_usd) }}</b>
+          <b [wbCount]="d.subscription.saved_usd == null ? '–' : f.money(d.subscription.saved_usd)"></b>
           <em>{{ d.subscription.plan_usd == null ? 'add your plan in Settings > Costs & currency'
                  : f.money(d.subscription.plan_usd) + ' paid for ' + f.money(d.subscription.list_usd) + ' of work' }}</em></div>
         <div class="tcv-stat c3"><span>Cache</span>
-          <b>{{ d.cache.hit_ratio == null ? '–' : (d.cache.hit_ratio * 100).toFixed(1) + '%' }}</b>
+          <b [wbCount]="d.cache.hit_ratio == null ? '–' : (d.cache.hit_ratio * 100).toFixed(1) + '%'"></b>
           <em>of prompt tokens read from cache · saved {{ f.money(d.cache.saved_usd) }}</em></div>
         <div class="tcv-stat c3"><span>Cost per finished note</span>
-          <b>{{ d.note_costs.median == null ? '–' : f.money(d.note_costs.median) }}</b>
+          <b [wbCount]="d.note_costs.median == null ? '–' : f.money(d.note_costs.median)"></b>
           <em>median of {{ d.note_costs.notes }} · average {{ d.note_costs.mean == null ? '–' : f.money(d.note_costs.mean) }}
             @if (d.note_costs.approximate) {
               · <span [title]="d.note_costs.approximate_label ?? ''">{{ d.note_costs.approximate }} approximate</span>
             }</em></div>
-        <div class="tcv-stat c3"><span>API</span><b>{{ f.count(d.api.requests) }}</b>
+        <div class="tcv-stat c3"><span>API</span><b [wbCount]="f.count(d.api.requests)"></b>
           <em>requests · {{ d.api.errors }} errors · slowest {{ d.api.routes[0]?.route ?? '–' }}</em></div>
       </div>
     }
@@ -213,19 +215,19 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
     @if (open('running')) {
       @if (d.costs; as c) {
         <div class="tcv-dash-grid">
-          <div class="tcv-stat c2"><span>Total cost</span><b>{{ f.money(c.total_usd) }}</b>
+          <div class="tcv-stat c2"><span>Total cost</span><b [wbCount]="f.money(c.total_usd)"></b>
             <em>subscriptions, electricity, proxy, other · {{ c.months.toFixed(2) }} months</em></div>
-          <div class="tcv-stat c2"><span>Subscriptions</span><b>{{ f.money(c.subscriptions_usd) }}</b>
+          <div class="tcv-stat c2"><span>Subscriptions</span><b [wbCount]="f.money(c.subscriptions_usd)"></b>
             <em>prorated over the range · {{ f.money(costMonthUsd('subscriptions')) }} a month</em></div>
           <div class="tcv-stat c2"><span>Electricity</span>
-            <b>{{ c.electricity_usd == null ? '–' : f.money(c.electricity_usd) }}</b>
+            <b [wbCount]="c.electricity_usd == null ? '–' : f.money(c.electricity_usd)"></b>
             <em>{{ c.electricity_usd == null ? 'no price per kWh set' : f.wh((d.energy.machine_kwh || d.energy.jobs_kwh) * 1000) + ' at ' + f.money(d.energy.kwh_price ?? 0) + '/kWh' }}</em></div>
           <div class="tcv-stat c2"><span>Proxy traffic</span>
-            <b>{{ c.proxy_usd == null ? '–' : f.money(c.proxy_usd) }}</b>
+            <b [wbCount]="c.proxy_usd == null ? '–' : f.money(c.proxy_usd)"></b>
             <em>{{ c.proxy_gb == null ? 'no traffic counted' : gbText(c.proxy_gb) }}{{ proxyPriceText() }}</em></div>
-          <div class="tcv-stat c2"><span>Other</span><b>{{ f.money(c.other_usd) }}</b>
+          <div class="tcv-stat c2"><span>Other</span><b [wbCount]="f.money(c.other_usd)"></b>
             <em>recurring costs, prorated · {{ f.money(costMonthUsd('other')) }} a month</em></div>
-          <div class="tcv-stat c2"><span>LLM work</span><b>{{ f.money(c.llm_list_usd) }}</b>
+          <div class="tcv-stat c2"><span>LLM work</span><b [wbCount]="f.money(c.llm_list_usd)"></b>
             <em>at API list prices · {{ d.subscription.plan_usd == null ? 'no plan covers it' : f.money(d.subscription.plan_usd) + ' paid' }}</em>
             @if (d.subscription.plan_usd != null && c.llm_list_usd > d.subscription.plan_usd) {
               <i class="tcv-delta">saved {{ f.money(c.llm_list_usd - d.subscription.plan_usd) }}</i>
@@ -595,13 +597,13 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
     <ng-container *ngTemplateOutlet="head; context: { id: 'waste', title: 'Retries & waste', sub: 'work that went round in circles, or produced nothing kept' }" />
     @if (open('waste')) {
       <div class="tcv-dash-grid">
-        <div class="tcv-stat c3"><span>Spent on re-runs</span><b>{{ f.money(d.waste.rerun_usd) }}</b>
+        <div class="tcv-stat c3"><span>Spent on re-runs</span><b [wbCount]="f.money(d.waste.rerun_usd)"></b>
           <em>{{ d.waste.rerun_runs }} runs of a note that was run again</em></div>
-        <div class="tcv-stat c3"><span>Rejected notes</span><b>{{ f.money(d.waste.rejected_usd) }}</b>
+        <div class="tcv-stat c3"><span>Rejected notes</span><b [wbCount]="f.money(d.waste.rejected_usd)"></b>
           <em>{{ d.waste.rejected_notes }} notes</em></div>
-        <div class="tcv-stat c3"><span>Failed jobs</span><b>{{ d.waste.failed_jobs }}</b>
+        <div class="tcv-stat c3"><span>Failed jobs</span><b [wbCount]="d.waste.failed_jobs"></b>
           <em>{{ failedKinds(d) }}</em></div>
-        <div class="tcv-stat c3"><span>Compute on failures</span><b>{{ f.hours(d.waste.failed_cpu_h) }}</b>
+        <div class="tcv-stat c3"><span>Compute on failures</span><b [wbCount]="f.hours(d.waste.failed_cpu_h)"></b>
           <em>{{ f.wh(d.waste.failed_wh) }}</em></div>
         <section class="tcv-panel-d c8"><h3>Loops <i title="the same kind of job run five or more times for one note, or failing twice">ⓘ</i>
             <button class="tcv-dl" (click)="dl('loops', d.loops.jobs)">CSV</button></h3>
@@ -649,13 +651,13 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
     <ng-container *ngTemplateOutlet="head; context: { id: 'uptime', title: 'Uptime & database', sub: 'restarts, gaps, errors, and how long the database takes to answer' }" />
     @if (open('uptime')) {
       <div class="tcv-dash-grid">
-        <div class="tcv-stat c3"><span>Up</span><b>{{ d.uptime.up_pct == null ? '–' : d.uptime.up_pct + '%' }}</b>
+        <div class="tcv-stat c3"><span>Up</span><b [wbCount]="d.uptime.up_pct == null ? '–' : d.uptime.up_pct + '%'"></b>
           <em>of {{ d.uptime.watched_hours }} h watched · {{ d.uptime.down_minutes }} min down</em></div>
-        <div class="tcv-stat c3"><span>Server starts</span><b>{{ d.uptime.starts.length }}</b>
+        <div class="tcv-stat c3"><span>Server starts</span><b [wbCount]="d.uptime.starts.length"></b>
           <em>{{ d.uptime.starts.length ? 'last ' + when(d.uptime.starts[d.uptime.starts.length - 1].at) : 'none in this range' }}</em></div>
-        <div class="tcv-stat c3"><span>Server errors</span><b>{{ d.uptime.errors_5xx }}</b>
+        <div class="tcv-stat c3"><span>Server errors</span><b [wbCount]="d.uptime.errors_5xx"></b>
           <em>{{ d.uptime.error_routes[0]?.route ?? 'no 5xx answers' }}</em></div>
-        <div class="tcv-stat c3"><span>Database</span><b>{{ d.db_latency.median_ms == null ? '–' : ms(d.db_latency.median_ms) }}</b>
+        <div class="tcv-stat c3"><span>Database</span><b [wbCount]="d.db_latency.median_ms == null ? '–' : ms(d.db_latency.median_ms)"></b>
           <em>median round trip · p95 {{ d.db_latency.p95_ms == null ? '–' : ms(d.db_latency.p95_ms) }}</em></div>
         <section class="tcv-panel-d c8"><h3>Database round trip
             <button class="tcv-dl" (click)="dl('db-latency', seriesRows(d.db_latency.series))">CSV</button></h3>
@@ -763,7 +765,11 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
     }
     }
     } @else if (!error()) {
-      <p class="tcv-dash-note">reading everything…</p>
+      <div class="tcv-dash-grid">
+        <wb-skel class="c12" kind="tiles" [count]="12" [min]="190" [h]="72" />
+        <section class="tcv-panel-d c8"><wb-skel kind="chart" [h]="200" /></section>
+        <section class="tcv-panel-d c4"><wb-skel kind="rows" [count]="7" [h]="28" /></section>
+      </div>
     }
   </div>
 </div>

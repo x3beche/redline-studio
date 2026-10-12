@@ -36,14 +36,10 @@
 .um-danger:hover:not(:disabled) { background: var(--danger); color: var(--surface); }
 .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
 
-.um-skel .sk { display: block; height: 10px; border-radius: 4px; background: var(--hover);
-  animation: um-sk 1.2s ease-in-out infinite; }
 .um-skel .sk-btn { width: 90px; height: 24px; }
 .um-skel .sk-tile { height: 48px; border-radius: 5px; }
 .um-skel .sk-av { flex: none; width: 26px; height: 26px; border-radius: 50%; }
 .um-skel-row { display: flex; align-items: center; gap: 14px; padding: 4px 0; }
-@keyframes um-sk { 50% { opacity: .4; } }
-@media (prefers-reduced-motion: reduce) { .um-skel .sk { animation: none; } }
 
 @media (max-width: 768px) {
   .um-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }

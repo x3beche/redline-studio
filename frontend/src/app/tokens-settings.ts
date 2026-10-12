@@ -9,6 +9,8 @@ import { money } from './money';
 import { Agents, SeedOs, seedLine, seenAgo } from './agent-status';
 import { Confirm } from './confirm';
 import { SelectOption, UiSelect } from './ui-select';
+import { CountUp } from './count';
+import { Skeleton } from './skeleton';
 
 /** One agent's token as the server lists it - never the token, never its hash. */
 export interface AgentToken {
@@ -39,7 +41,7 @@ interface Detail {
  *  for (backend/main.py, /api/agent-tokens*). */
 @Component({
   selector: 'app-tokens-settings',
-  imports: [T, TimeChart, BarList, Spark, UiSelect],
+  imports: [Skeleton, CountUp, T, TimeChart, BarList, Spark, UiSelect],
   styleUrls: ['./settings.css', './tokens-settings.css'],
   template: `
 <div class="st-page">
@@ -176,11 +178,11 @@ interface Detail {
                       @if (detail(); as d) {
                         <div class="tk-detail">
                           <div class="st-tiles six">
-                            <div class="st-tile"><span>{{ 'Requests, 30 d' | t }}</span><b>{{ d.totals.n }}</b></div>
-                            <div class="st-tile"><span>{{ 'Reads' | t }}</span><b>{{ d.totals.read }}</b><small>{{ pct(d.totals.read, d.totals.n) }}</small></div>
-                            <div class="st-tile"><span>{{ 'Writes' | t }}</span><b>{{ d.totals.write }}</b><small>{{ pct(d.totals.write, d.totals.n) }}</small></div>
-                            <div class="st-tile"><span>{{ 'Audit lines' | t }}</span><b>{{ d.audit.total }}</b></div>
-                            <div class="st-tile" [title]="'LLM calls made for this agent (recorded since this page came)' | t"><span>{{ 'LLM calls' | t }}</span><b>{{ d.llm.calls }}</b>
+                            <div class="st-tile"><span>{{ 'Requests, 30 d' | t }}</span><b [wbCount]="d.totals.n"></b></div>
+                            <div class="st-tile"><span>{{ 'Reads' | t }}</span><b [wbCount]="d.totals.read"></b><small>{{ pct(d.totals.read, d.totals.n) }}</small></div>
+                            <div class="st-tile"><span>{{ 'Writes' | t }}</span><b [wbCount]="d.totals.write"></b><small>{{ pct(d.totals.write, d.totals.n) }}</small></div>
+                            <div class="st-tile"><span>{{ 'Audit lines' | t }}</span><b [wbCount]="d.audit.total"></b></div>
+                            <div class="st-tile" [title]="'LLM calls made for this agent (recorded since this page came)' | t"><span>{{ 'LLM calls' | t }}</span><b [wbCount]="d.llm.calls"></b>
                               <small>{{ d.llm.calls ? f.count(d.llm.tokens) + ' tok · ' + money(d.llm.cost_usd) : ('none recorded' | t) }}</small></div>
                           </div>
                           <div class="st-charts">
@@ -204,10 +206,7 @@ interface Detail {
                         </div>
                       } @else if (detailErr()) { <p class="st-err">{{ detailErr() }}</p>
                       } @else {
-                        <div class="tk-skel tk-detail" aria-busy="true">
-                          <div class="st-tiles six">@for (i of [1, 2, 3, 4, 5]; track i) { <i class="sk sk-tile"></i> }</div>
-                          <i class="sk sk-chart"></i>
-                        </div>
+                        <div class="wb-sk-stack tk-detail"><wb-skel kind="tiles" [count]="5" [min]="92" /><wb-skel kind="chart" [h]="140" /></div>
                       }
                     </td></tr>
                   }
@@ -217,12 +216,7 @@ interface Detail {
           </div>
         } @else { <div class="st-empty">{{ 'No agent has a token yet.' | t }}</div> }
       } @else {
-        <div class="tk-skel tk-skel-list" aria-busy="true" [attr.aria-label]="'Loading' | t">
-          @for (r of [1, 2, 3]; track r) {
-            <div class="tk-skel-row"><i class="sk" style="width: 18%"></i><i class="sk" style="width: 8%"></i><i class="sk" style="width: 22%"></i>
-              <i class="sk" style="width: 12%"></i><i class="sk" style="width: 10%"></i><i class="sk sk-btn" style="width: 120px"></i></div>
-          }
-        </div>
+        <wb-skel kind="rows" [count]="3" [h]="36" />
       }
     </div>
 
@@ -231,11 +225,11 @@ interface Detail {
       <div class="st-card-head"><h3>{{ 'Usage' | t }}</h3><span class="st-sub">{{ 'requests made with a token, last 30 days' | t }}</span></div>
       <div class="st-card-body">
         @if (usage(); as u) {
-          <div class="st-tiles six">
-            <div class="st-tile"><span>{{ 'Active tokens' | t }}</span><b>{{ u.totals.active }}</b><small>{{ u.totals.tokens }} {{ 'in all' | t }}</small></div>
-            <div class="st-tile"><span>{{ 'Today' | t }}</span><b>{{ f.count(u.totals.today) }}</b></div>
-            <div class="st-tile"><span>{{ '7 days' | t }}</span><b>{{ f.count(u.totals.d7) }}</b></div>
-            <div class="st-tile"><span>{{ '30 days' | t }}</span><b>{{ f.count(u.totals.d30) }}</b>
+          <div class="st-tiles six wb-in">
+            <div class="st-tile"><span>{{ 'Active tokens' | t }}</span><b [wbCount]="u.totals.active"></b><small>{{ u.totals.tokens }} {{ 'in all' | t }}</small></div>
+            <div class="st-tile"><span>{{ 'Today' | t }}</span><b [wbCount]="f.count(u.totals.today)"></b></div>
+            <div class="st-tile"><span>{{ '7 days' | t }}</span><b [wbCount]="f.count(u.totals.d7)"></b></div>
+            <div class="st-tile"><span>{{ '30 days' | t }}</span><b [wbCount]="f.count(u.totals.d30)"></b>
               <small>{{ f.count(u.totals.read) }} {{ 'reads' | t }} · {{ f.count(u.totals.write) }} {{ 'writes' | t }}</small></div>
             <div class="st-tile"><span>{{ 'Most active' | t }}</span><b [title]="u.top?.name ?? ''">{{ u.top?.name ?? '–' }}</b>
               <small>{{ u.top ? f.count(u.top.d30) + ' ' + ('in 30 days' | t) : ('no requests yet' | t) }}</small></div>
@@ -249,10 +243,7 @@ interface Detail {
             </div>
           } @else { <div class="st-empty">{{ 'No token has been used in the last 30 days.' | t }}</div> }
         } @else {
-          <div class="tk-skel" aria-busy="true">
-            <div class="st-tiles six">@for (i of [1, 2, 3, 4, 5]; track i) { <i class="sk sk-tile"></i> }</div>
-            <i class="sk sk-chart"></i>
-          </div>
+          <div class="wb-sk-stack"><wb-skel kind="tiles" [count]="5" [min]="92" /><wb-skel kind="chart" [h]="160" /></div>
         }
       </div>
     </div>

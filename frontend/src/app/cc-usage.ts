@@ -5,6 +5,8 @@ import { Prefs } from './preferences';
 import { money as shown } from './money';
 import { CcTabWindow, TopBar } from './topbar';
 import { TimeChart, TimeData } from './rooms/charts';
+import { Skeleton } from './skeleton';
+import { CountUp } from './count';
 
 /** The Command Code account's figures (GET /api/llm/commandcode/account,
  *  backend/llm.py cc_account): the plan, the 5-hour and weekly usage
@@ -286,7 +288,7 @@ const CHEVRON_R = 'M10 7l5 5-5 5';
  *  (the Tools card) goes under it, in the same frame. */
 @Component({
   selector: 'app-cc-usage-line',
-  imports: [T, TimeChart],
+  imports: [CountUp, Skeleton, T, TimeChart],
   styles: [`
     :host { display: block; flex: none; }
     .ccl-wrap { padding: 6px 8px 8px; border-top: 1px solid var(--line); }
@@ -329,11 +331,11 @@ const CHEVRON_R = 'M10 7l5 5-5 5';
     </div>
     @if (sum(); as s) {
       <div class="ccl-stats">
-        <span><b>{{ num(s.month.tokens) }}</b> tok</span>
-        <span><b>{{ s.month.calls.toLocaleString('en-US') }}</b> {{ 'calls' | t }}</span>
+        <span><b [wbCount]="num(s.month.tokens)"></b> tok</span>
+        <span><b [wbCount]="s.month.calls.toLocaleString('en-US')"></b> {{ 'calls' | t }}</span>
         <!-- The money only when most calls were priced: a subscription's calls carry none, and a
              sum of the few priced ones would read as the month's cost. -->
-        @if (s.month.cost_usd != null && s.month.unpriced_calls * 2 < s.month.calls) { <span><b>{{ shown(s.month.cost_usd) }}</b></span> }
+        @if (s.month.cost_usd != null && s.month.unpriced_calls * 2 < s.month.calls) { <span><b [wbCount]="shown(s.month.cost_usd)"></b></span> }
         @else { <span><b>{{ s.month.providers }}</b> {{ 'providers' | t }}</span> }
       </div>
       <app-time-chart class="ccl-chart" [data]="chart()!" [bare]="true" [height]="30" [legend]="false" [f]="tokFmt" />
@@ -342,7 +344,7 @@ const CHEVRON_R = 'M10 7l5 5-5 5';
         @if (s.answers.ttft_ms_median != null) { · {{ 'first token' | t }} <b>{{ secs(s.answers.ttft_ms_median) }}</b> }
       </div>
     } @else {
-      <div class="ccl-sub">{{ (err() ? 'The usage did not load' : 'Loading…') | t }}</div>
+      @if (err()) { <div class="ccl-sub">{{ 'The usage did not load' | t }}</div> } @else { <wb-skel kind="mini" /> }
     }
     @if (warn(); as q) {
       <div class="ccl-warn" [attr.data-tone]="tone(q.w)"><i></i>

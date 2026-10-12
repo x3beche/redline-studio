@@ -4,6 +4,8 @@ import { T, t } from './i18n';
 import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 import { money } from './money';
 import { TrafficPeriod } from './jina-settings';
+import { CountUp } from './count';
+import { Skeleton } from './skeleton';
 
 /** Settings > Proxy & Data, at the foot of the page and always in sight:
  *  the data traffic of every outside lookup together (GET
@@ -39,7 +41,7 @@ const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v 
 
 @Component({
   selector: 'app-traffic-overview',
-  imports: [T, TimeChart, BarList],
+  imports: [Skeleton, CountUp, T, TimeChart, BarList],
   styleUrl: './settings.css',
   template: `
 <section class="st-card">
@@ -51,26 +53,26 @@ const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v 
   </div>
   <div class="st-card-body">
     @if (o(); as v) {
-      <div class="st-tiles tr-tiles">
+      <div class="st-tiles tr-tiles wb-in">
         <div class="st-tile hero" [attr.data-tone]="tone(v.totals.success_rate)"><span>{{ 'Outgoing requests' | t }} · {{ period.label() }}</span>
-          <b>{{ f.count(v.totals.requests) }}</b>
+          <b [wbCount]="f.count(v.totals.requests)"></b>
           <small>{{ pct(v.totals.success_rate) }} {{ 'answered' | t }} · {{ f.count(v.totals.refused) }} {{ 'refused' | t }}</small></div>
         @for (r of routes; track r.id) {
           @if (v.routes[r.id]; as x) {
             <div class="st-tile" [attr.data-tone]="x.requests ? tone(x.success_rate) : 'dim'"
                  [title]="(r.about | t) + ' · ' + ('median' | t) + ' ' + ms(x.p50_ms) + (x.timed ? ' · p95 ' + ms(x.p95_ms) : '')">
-              <span>{{ r.name | t }}</span><b>{{ f.count(x.requests) }}</b>
+              <span>{{ r.name | t }}</span><b [wbCount]="f.count(x.requests)"></b>
               <small>{{ pct(x.success_rate) }} · {{ ms(x.p50_ms) }}</small></div>
           }
         }
         <div class="st-tile" [title]="'measured on the wire between this machine and the proxy; priced from Settings > Costs' | t">
-          <span>{{ 'Proxy on the wire' | t }}</span><b>{{ f.bytes(v.cost.proxy_bytes) }}</b>
+          <span>{{ 'Proxy on the wire' | t }}</span><b [wbCount]="f.bytes(v.cost.proxy_bytes)"></b>
           <small>≈ {{ usd(v.cost.proxy_usd) }} · {{ usd(v.cost.price_per_gb) }}/GB</small></div>
-        <div class="st-tile"><span>{{ 'Jina tokens' | t }}</span><b>{{ f.count(v.cost.jina_tokens) }}</b>
+        <div class="st-tile"><span>{{ 'Jina tokens' | t }}</span><b [wbCount]="f.count(v.cost.jina_tokens)"></b>
           <small>{{ f.count(v.routes.jina.requests) }} {{ 'calls' | t }}</small></div>
         <div class="st-tile" [attr.data-tone]="v.totals.rescued ? 'ok' : null"
              [title]="'requests a later route answered after the first was refused or could not reach the site' | t">
-          <span>{{ 'Refusals avoided' | t }}</span><b>{{ f.count(v.totals.rescued) }}</b>
+          <span>{{ 'Refusals avoided' | t }}</span><b [wbCount]="f.count(v.totals.rescued)"></b>
           <small>{{ f.count(v.totals.held) }} {{ 'held back' | t }} · {{ f.count(v.totals.disk) }} {{ 'from disk' | t }}</small></div>
       </div>
 
@@ -97,7 +99,7 @@ const ms = (v: number | null | undefined) => v == null ? '–' : v >= 1000 ? (v 
     } @else if (err()) {
       <p class="st-err">{{ err() }}</p>
     } @else {
-      <div class="st-empty">{{ 'Loading…' | t }}</div>
+      <div class="wb-sk-stack"><wb-skel kind="tiles" [count]="8" [min]="100" /><wb-skel kind="chart" [h]="170" /></div>
     }
   </div>
 </section>`,

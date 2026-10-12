@@ -4,6 +4,8 @@ import { LANG, T, t } from './i18n';
 import { money as shown } from './money';
 import { BarList, Row, TimeChart, TimeData, fmt } from './rooms/charts';
 import { CcUsage, CcWindow, OwnUsage, day, inSpan, num, pctOf, tone, weeklyReset } from './cc-usage';
+import { CountUp } from './count';
+import { Skeleton } from './skeleton';
 export { OwnUsage } from './cc-usage';
 
 /** Each provider's account, compact, inside its card in Settings > LLM
@@ -121,7 +123,7 @@ export class PvMeters {
 /** Command Code, inside its card: the windows, a row of tiles, spend per day and who used it. */
 @Component({
   selector: 'app-cc-compact',
-  imports: [T, PvMeters, TimeChart, BarList],
+  imports: [Skeleton, CountUp, T, PvMeters, TimeChart, BarList],
   styleUrl: './settings.css',
   template: `
 @if (cc.data(); as d) {
@@ -132,7 +134,7 @@ export class PvMeters {
     <app-pv-meters [rows]="meters()" />
     <div class="st-tiles tight">
       @for (x of tiles(); track x.label) {
-        <div class="st-tile" [attr.data-tone]="x.tone ?? null" [title]="x.title ?? ''"><span>{{ x.label | t }}</span><b>{{ x.value }}</b><small>{{ x.sub }}</small></div>
+        <div class="st-tile" [attr.data-tone]="x.tone ?? null" [title]="x.title ?? ''"><span>{{ x.label | t }}</span><b [wbCount]="x.value"></b><small>{{ x.sub }}</small></div>
       }
     </div>
     @if (p.data(); as a) {
@@ -169,11 +171,7 @@ export class PvMeters {
 } @else if (cc.err()) {
   <p class="st-err">{{ cc.err() }}</p>
 } @else {
-  <div class="cc-skel" aria-busy="true">
-    @for (i of [1, 2, 3]; track i) { <span class="sk"></span> }
-    <span class="sk" style="width: 70%"></span>
-    <span class="sk sk-chart" style="height: 90px"></span>
-  </div>
+  <div class="wb-sk-stack"><wb-skel kind="text" [count]="4" /><wb-skel kind="chart" [h]="90" /></div>
 }`,
 })
 export class CcCompact {
@@ -242,7 +240,7 @@ export class CcCompact {
 /** OpenRouter, inside its card: credits and the key as meters, a row of tiles, Workbench's calls by model. */
 @Component({
   selector: 'app-or-compact',
-  imports: [T, PvMeters, BarList],
+  imports: [Skeleton, CountUp, T, PvMeters, BarList],
   styleUrl: './settings.css',
   template: `
 @if (o.data(); as d) {
@@ -252,7 +250,7 @@ export class CcCompact {
     <app-pv-meters [rows]="meters()" />
     <div class="st-tiles tight">
       @for (x of tiles(); track x.label) {
-        <div class="st-tile" [attr.data-tone]="x.tone ?? null"><span>{{ x.label | t }}</span><b>{{ x.value }}</b><small>{{ x.sub }}</small></div>
+        <div class="st-tile" [attr.data-tone]="x.tone ?? null"><span>{{ x.label | t }}</span><b [wbCount]="x.value"></b><small>{{ x.sub }}</small></div>
       }
     </div>
     <section class="st-chart"><h4>{{ 'Workbench\\'s calls by model, 30 days' | t }}<em>{{ money(o.data()?.redline?.days30?.cost_usd) }}</em></h4>
@@ -264,7 +262,7 @@ export class CcCompact {
 } @else if (o.err()) {
   <p class="st-err">{{ o.err() }}</p>
 } @else {
-  <div class="cc-skel" aria-busy="true"><span class="sk"></span><span class="sk"></span><span class="sk" style="width: 70%"></span></div>
+  <wb-skel kind="text" [count]="3" />
 }`,
 })
 export class OrCompact {
@@ -323,13 +321,13 @@ const OWN_NOTES: Record<string, { line: string; link?: { href: string; label: st
 /** The Claude API or OpenCode Go, inside its card: Workbench's own calls - a row of tiles and the calls by model. */
 @Component({
   selector: 'app-own-compact',
-  imports: [T, BarList],
+  imports: [Skeleton, CountUp, T, BarList],
   styleUrl: './settings.css',
   template: `
 @if (u.data()[provider()]; as d) {
   <div class="st-tiles tight">
     @for (x of tiles(); track x.label) {
-      <div class="st-tile"><span>{{ x.label | t }}</span><b>{{ x.value }}</b><small>{{ x.sub }}</small></div>
+      <div class="st-tile"><span>{{ x.label | t }}</span><b [wbCount]="x.value"></b><small>{{ x.sub }}</small></div>
     }
   </div>
   <section class="st-chart"><h4>{{ 'Workbench\\'s calls by model, 30 days' | t }}<em>{{ priced() ? money(d.redline?.days30?.cost_usd) : count(d.redline?.days30?.calls) }}</em></h4>
@@ -340,7 +338,7 @@ const OWN_NOTES: Record<string, { line: string; link?: { href: string; label: st
     }
   </section>
 } @else {
-  <div class="cc-skel" aria-busy="true"><span class="sk"></span><span class="sk"></span><span class="sk" style="width: 70%"></span></div>
+  <wb-skel kind="text" [count]="3" />
 }`,
 })
 export class OwnCompact implements OnInit, OnDestroy {

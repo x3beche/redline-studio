@@ -4,6 +4,8 @@ import { TimeChart, TimeData } from './charts';
 import { LANG, T, t } from '../i18n';
 import type { CcTool, ToolLevel } from './commandcode';
 import { WORKSPACES } from '../workspaces';
+import { CountUp } from '../count';
+import { Skeleton } from '../skeleton';
 
 /** Tabs with no tool package: Settings, Analytics. */
 const NO_PACKAGE = new Set(['settings', 'analyze']);
@@ -97,7 +99,7 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
 
 @Component({
   selector: 'app-cc-tools',
-  imports: [T],
+  imports: [Skeleton, CountUp, T],
   styleUrls: ['../settings.css', './cc-tools.css'],
   template: `
 <header class="st-head ct-head">
@@ -129,14 +131,14 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
       @let st = p.stats;
       @let live = current(p.name);
       <div class="st-tiles six">
-        <div class="st-tile hero"><span>{{ 'Uses' | t }}</span><b>{{ st.uses }}</b>
+        <div class="st-tile hero"><span>{{ 'Uses' | t }}</span><b [wbCount]="st.uses"></b>
           <small>{{ st.chats }} {{ 'conversations' | t }} · {{ st.mine }} {{ 'by you' | t }}</small></div>
-        <div class="st-tile"><span>{{ 'Last 7 days' | t }}</span><b>{{ st.week }}</b></div>
+        <div class="st-tile"><span>{{ 'Last 7 days' | t }}</span><b [wbCount]="st.week"></b></div>
         <div class="st-tile" [attr.data-tone]="okRate(p) == null ? 'dim' : okRate(p)! < 90 ? 'warn' : 'ok'">
-          <span>{{ 'Worked' | t }}</span><b>{{ okRate(p) == null ? '–' : okRate(p) + '%' }}</b>
+          <span>{{ 'Worked' | t }}</span><b [wbCount]="okRate(p) == null ? '–' : okRate(p) + '%'"></b>
           <small>{{ fails(p) }} {{ 'failed or refused' | t }}</small></div>
         <div class="st-tile" [attr.data-tone]="st.ms.median == null ? 'dim' : null"><span>{{ 'Median time' | t }}</span>
-          <b>{{ dur(st.ms.median) }}</b><small>p90 {{ dur(st.ms.p90) }}</small></div>
+          <b [wbCount]="dur(st.ms.median)"></b><small>p90 {{ dur(st.ms.p90) }}</small></div>
         <div class="st-tile" [attr.data-tone]="st.last ? null : 'dim'"><span>{{ 'Last used' | t }}</span>
           <b>{{ st.last ? ago(st.last) : ('never' | t) }}</b></div>
       </div>
@@ -229,12 +231,12 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
   } @else {
   <div class="st-page ct-page">
     @if (usage(); as u) {
-      <div class="st-tiles six">
+      <div class="st-tiles six wb-in">
         <div class="st-tile"><span>{{ 'On for you' | t }}</span><b>{{ on() }} / {{ tools().length }}</b></div>
-        <div class="st-tile"><span>{{ 'Uses' | t }}</span><b>{{ total(u) }}</b><small>{{ u.mine }} {{ 'by you' | t }}</small></div>
-        <div class="st-tile"><span>{{ 'Last 7 days' | t }}</span><b>{{ week(u) }}</b></div>
+        <div class="st-tile"><span>{{ 'Uses' | t }}</span><b [wbCount]="total(u)"></b><small>{{ u.mine }} {{ 'by you' | t }}</small></div>
+        <div class="st-tile"><span>{{ 'Last 7 days' | t }}</span><b [wbCount]="week(u)"></b></div>
         <div class="st-tile" [attr.data-tone]="worked(u) == null ? 'dim' : worked(u)! < 90 ? 'warn' : 'ok'">
-          <span>{{ 'Worked' | t }}</span><b>{{ worked(u) == null ? '–' : worked(u) + '%' }}</b></div>
+          <span>{{ 'Worked' | t }}</span><b [wbCount]="worked(u) == null ? '–' : worked(u) + '%'"></b></div>
       </div>
       <div class="ct-cols ct-over">
         <section class="st-card">
@@ -246,7 +248,7 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
               }
             </div></div></div>
           <div class="st-card-body ct-uses" [class.ct-loading]="usageLoading()">
-            @if (usageLoading()) { <div class="ct-loader" role="status"><span class="ct-spin" aria-hidden="true"></span>{{ 'Loading…' | t }}</div> }
+            @if (usageLoading()) { <div class="ct-loader" role="status" [attr.aria-label]="'Loading' | t"><span class="ct-spin" aria-hidden="true"></span></div> }
             <div class="ct-bars tall">
               @for (d of u.days; track d.day; let i = $index) {
                 <span class="ct-bar" [title]="when(d.day) + ' · ' + dayTotal(d)" [style.--tcv-i]="i">
@@ -278,9 +280,14 @@ const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--
           </div>
         </section>
       </div>
+    } @else if (usageLoading()) {
+      <div class="wb-sk-stack"><wb-skel kind="tiles" [count]="3" [min]="92" />
+        <div class="ct-cols ct-over"><section class="st-card"><div class="st-card-body"><wb-skel kind="chart" [h]="190" /></div></section>
+          <section class="st-card"><div class="st-card-body"><wb-skel kind="rows" [count]="7" [h]="24" /></div></section></div></div>
     }
     @if (!ready()) {
-      <section class="st-card"><div class="ct-empty">{{ 'Loading…' | t }}</div></section>
+      <section class="st-card"><div class="st-card-head"><h3>{{ 'Tools' | t }}</h3></div>
+        <div class="st-card-body"><wb-skel kind="tiles" [count]="8" [min]="240" /></div></section>
     } @else {
       <!-- The packages, one tile each: the drawer's tools, a room's... Its switch
            turns all of them on or off; a click opens them, each with its own. -->
@@ -533,7 +540,7 @@ export class CcToolsView {
  *  Opens the tools above in the conversation's place. The card draws the frame. */
 @Component({
   selector: 'app-cc-tools-line',
-  imports: [T, TimeChart],
+  imports: [CountUp, Skeleton, T, TimeChart],
   styles: [`
     :host { display: block; flex: none; }
     .ctl { display: flex; flex-direction: column; gap: 5px; width: 100%; padding: 7px 8px 8px; text-align: left;
@@ -568,9 +575,9 @@ export class CcToolsView {
   </div>
   @if (stats(); as s) {
     <div class="ctl-stats">
-      <span><b>{{ s.today }}</b> {{ 'today' | t }}</span>
-      <span><b>{{ s.week }}</b> {{ 'this week' | t }}</span>
-      <span [title]="'Uses this week that worked' | t"><b>{{ s.ok == null ? '–' : s.ok + '%' }}</b> {{ 'worked' | t }}</span>
+      <span><b [wbCount]="s.today"></b> {{ 'today' | t }}</span>
+      <span><b [wbCount]="s.week"></b> {{ 'this week' | t }}</span>
+      <span [title]="'Uses this week that worked' | t"><b [wbCount]="s.ok == null ? '–' : s.ok + '%'"></b> {{ 'worked' | t }}</span>
     </div>
     <app-time-chart class="ctl-chart" [data]="s.chart" [bare]="true" [height]="30" [legend]="false" />
     <div class="ctl-sub">
@@ -578,7 +585,7 @@ export class CcToolsView {
         <span>{{ 'Most used' | t }}: <b>{{ top.label | t }}</b></span><em>{{ top.week }}×</em>
       } @else { <span>{{ 'No tool uses this week' | t }}</span> }
     </div>
-  }
+  } @else if (!failed()) { <wb-skel kind="mini" /> }
 </button>`,
 })
 export class CcToolsLine {
@@ -592,11 +599,13 @@ export class CcToolsLine {
   readonly chevron = CHEVRON;
   private http = inject(HttpClient);
   private usage = signal<ToolsUsage | null>(null);
+  /** The first reading did not come: no placeholder then, as before. */
+  failed = signal(false);
   private timer = (() => { const go = () => this.load(); go(); return setInterval(go, 120_000); })();
   constructor() { inject(DestroyRef).onDestroy(() => clearInterval(this.timer)); }
   private load() {
     this.http.get<ToolsUsage>('/api/cc/tools-usage', { params: { span: 'week' } })
-      .subscribe({ next: u => this.usage.set(u), error: () => {} });
+      .subscribe({ next: u => this.usage.set(u), error: () => this.failed.set(true) });
   }
   stats = computed(() => {
     const u = this.usage();

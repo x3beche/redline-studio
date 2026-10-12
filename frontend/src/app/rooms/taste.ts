@@ -9,6 +9,8 @@ import { SelectOption, UiSelect } from '../ui-select';
 import { Confirm } from '../confirm';
 import { DmSendButton, DmStore, SHARE_ICON } from '../dm';
 import { ContextMenu } from '../context-menu';
+import { CountUp } from '../count';
+import { Skeleton } from '../skeleton';
 
 /** Taste ("Tadım"): what makes a design good, kept as statements an agent
  *  can follow (backend/taste.py).
@@ -186,7 +188,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
 /** The Taste room. */
 @Component({
   selector: 'app-room-taste',
-  imports: [T, NgTemplateOutlet, DmSendButton, UiSelect],
+  imports: [Skeleton, CountUp, T, NgTemplateOutlet, DmSendButton, UiSelect],
   styleUrls: ['../settings.css', './taste.css'],
   host: { '(document:keydown)': 'key($event)', '(document:click)': 'closePicker()' },
   template: `
@@ -237,7 +239,8 @@ function why(e: HttpErrorResponse, fallback: string): string {
           </span>
         </button>
       } @empty {
-        <p class="tcv-notes-empty">{{ (q() ? 'Nothing matches.' : 'No palettes yet.') | t }}</p>
+        @if (loaded()) { <p class="tcv-notes-empty">{{ (q() ? 'Nothing matches.' : 'No palettes yet.') | t }}</p> }
+        @else { <wb-skel kind="rows" [count]="4" [h]="62" /> }
       }
     </div>
   </aside>
@@ -298,15 +301,15 @@ function why(e: HttpErrorResponse, fallback: string): string {
             <small>{{ nowLine() }}</small></div>
           <div class="st-tile"><span>{{ 'Projects read' | t }}</span><b>{{ readCount() }} / {{ j.totals.projects ?? '–' }}</b>
             <small>{{ skippedCount() ? fmt('{n} skipped', { n: skippedCount() }) : (kindName(j.project.kind) | t) + ' · ' + j.project.label }}</small></div>
-          <div class="st-tile"><span>{{ 'Sent to the model' | t }}</span><b>{{ j.totals.prompt_chars != null ? num(j.totals.prompt_chars) : num(charsRead()) }}</b>
+          <div class="st-tile"><span>{{ 'Sent to the model' | t }}</span><b [wbCount]="j.totals.prompt_chars != null ? num(j.totals.prompt_chars) : num(charsRead())"></b>
             <small>{{ fmt('~{n} tokens', { n: num(j.totals.tokens_in_est ?? round(charsRead() / 4)) }) }}</small></div>
           <div class="st-tile tsx-model"><span>{{ 'Model' | t }}</span><b [title]="j.model || ''">{{ j.model || '–' }}</b><small>{{ j.provider_name || j.provider || '' }}</small></div>
           <div class="st-tile" [attr.data-tone]="j.totals.tokens_in == null ? 'dim' : null"><span>{{ 'Tokens in / out' | t }}</span>
-            <b>{{ j.totals.tokens_in == null ? '–' : num(j.totals.tokens_in) + ' / ' + num(j.totals.tokens_out ?? 0) }}</b>
+            <b [wbCount]="j.totals.tokens_in == null ? '–' : num(j.totals.tokens_in) + ' / ' + num(j.totals.tokens_out ?? 0)"></b>
             <small>{{ (j.totals.tokens_in != null ? 'as counted' : running() ? 'after the answer' : 'no answer') | t }}</small></div>
-          <div class="st-tile" [attr.data-tone]="j.totals.cost == null ? 'dim' : null"><span>{{ 'Cost' | t }}</span><b>{{ money(j.totals.cost) }}</b>
+          <div class="st-tile" [attr.data-tone]="j.totals.cost == null ? 'dim' : null"><span>{{ 'Cost' | t }}</span><b [wbCount]="money(j.totals.cost)"></b>
             <small>{{ (j.totals.cost != null ? 'this run' : j.totals.tokens_in != null ? 'not priced' : '') | t }}&nbsp;</small></div>
-          <div class="st-tile" [attr.data-tone]="j.status === 'done' ? 'ok' : 'dim'"><span>{{ 'Proposals' | t }}</span><b>{{ j.status === 'done' ? j.count : '–' }}</b>
+          <div class="st-tile" [attr.data-tone]="j.status === 'done' ? 'ok' : 'dim'"><span>{{ 'Proposals' | t }}</span><b [wbCount]="j.status === 'done' ? j.count : '–'"></b>
             <small>{{ droppedLine() }}&nbsp;</small></div>
         </div>
 
@@ -453,22 +456,22 @@ function why(e: HttpErrorResponse, fallback: string): string {
       </header>
       @let ps = openStats();
       <div class="st-tiles tsh-ptiles">
-        <div class="st-tile" [attr.data-tone]="p.items.length ? null : 'dim'"><span>{{ 'Items' | t }}</span><b>{{ p.items.length }}</b>
+        <div class="st-tile" [attr.data-tone]="p.items.length ? null : 'dim'"><span>{{ 'Items' | t }}</span><b [wbCount]="p.items.length"></b>
           <small [title]="fmt('{n} by hand · {m} extracted', { n: ps.manual, m: p.items.length - ps.manual })">{{ fmt('{n} by hand · {m} extracted', { n: ps.manual, m: p.items.length - ps.manual }) }}</small></div>
         @for (s of strengths; track s.id) {
-          <div class="st-tile tsh-str" [attr.data-s]="s.id" [attr.data-tone]="ps.str[s.id] ? null : 'dim'"><span>{{ s.label | t }}</span><b>{{ ps.str[s.id] }}</b>
+          <div class="st-tile tsh-str" [attr.data-s]="s.id" [attr.data-tone]="ps.str[s.id] ? null : 'dim'"><span>{{ s.label | t }}</span><b [wbCount]="ps.str[s.id]"></b>
             <div class="st-meter"><i [style.width.%]="pct(ps.str[s.id], p.items.length)" [style.background]="sc(s.id)"></i></div></div>
         }
         <div class="st-tile tsh-dtile"><span>{{ 'Domains' | t }}</span>
           <span class="tsh-dlegend">
             @for (d of domains; track d.id) {
-              <span [class.dim]="!p.counts[d.id]" [title]="d.label | t"><i class="tsh-dot" [style.background]="dc(d.id)"></i>{{ d.short | t }} <b>{{ p.counts[d.id] || 0 }}</b></span>
+              <span [class.dim]="!p.counts[d.id]" [title]="d.label | t"><i class="tsh-dot" [style.background]="dc(d.id)"></i>{{ d.short | t }} <b [wbCount]="p.counts[d.id] || 0"></b></span>
             }
           </span>
           <span class="tsh-stack tsh-stack-d">
             @for (d of domains; track d.id) { @if (p.counts[d.id]) { <i [style.flex-grow]="p.counts[d.id]" [style.background]="dc(d.id)"></i> } }
           </span></div>
-        <div class="st-tile" [attr.data-tone]="p.attached.length ? null : 'dim'"><span>{{ 'Attached' | t }}</span><b>{{ p.attached.length }}</b>
+        <div class="st-tile" [attr.data-tone]="p.attached.length ? null : 'dim'"><span>{{ 'Attached' | t }}</span><b [wbCount]="p.attached.length"></b>
           <small [title]="attachedLine(p)">{{ p.attached.length ? attachedLine(p) : ('not attached' | t) }}</small></div>
         <div class="st-tile tsh-src" [attr.data-tone]="ps.sources.length ? null : 'dim'"><span>{{ 'Sources' | t }}</span>
           <b>{{ ps.sources.length ? fmt(ps.sources.length === 1 ? '{n} project' : '{n} projects', { n: ps.sources.length }) : ('by hand' | t) }}</b>
@@ -557,18 +560,21 @@ function why(e: HttpErrorResponse, fallback: string): string {
 
       @let o = overall();
       @let js = jobStats();
-      <div class="st-tiles tsh-tiles">
-        <div class="st-tile" [attr.data-tone]="o.palettes ? null : 'dim'"><span>{{ 'Palettes' | t }}</span><b>{{ o.palettes }}</b>
+      @if (!loaded()) {
+        <div class="wb-sk-stack"><wb-skel kind="tiles" [count]="8" [min]="110" /><wb-skel kind="rows" [count]="7" /></div>
+      } @else {
+      <div class="st-tiles tsh-tiles wb-in">
+        <div class="st-tile" [attr.data-tone]="o.palettes ? null : 'dim'"><span>{{ 'Palettes' | t }}</span><b [wbCount]="o.palettes"></b>
           <small>{{ fmt('{n} pinned', { n: o.pinned }) }}</small></div>
-        <div class="st-tile" [attr.data-tone]="o.items ? null : 'dim'"><span>{{ 'Items' | t }}</span><b>{{ o.items }}</b>
+        <div class="st-tile" [attr.data-tone]="o.items ? null : 'dim'"><span>{{ 'Items' | t }}</span><b [wbCount]="o.items"></b>
           <small [title]="fmt('{n} by hand · {m} extracted', { n: o.manual, m: o.items - o.manual })">{{ fmt('{n} extracted', { n: o.items - o.manual }) }}</small></div>
         @for (s of strengths; track s.id) {
-          <div class="st-tile tsh-str" [attr.data-s]="s.id" [attr.data-tone]="o.str[s.id] ? null : 'dim'"><span>{{ s.label | t }}</span><b>{{ o.str[s.id] }}</b>
+          <div class="st-tile tsh-str" [attr.data-s]="s.id" [attr.data-tone]="o.str[s.id] ? null : 'dim'"><span>{{ s.label | t }}</span><b [wbCount]="o.str[s.id]"></b>
             <small>{{ fmt('{p}% of the items', { p: pct(o.str[s.id], o.items) }) }}</small></div>
         }
-        <div class="st-tile" [attr.data-tone]="o.attached ? null : 'dim'"><span>{{ 'Attached projects' | t }}</span><b>{{ o.attached }}</b>
+        <div class="st-tile" [attr.data-tone]="o.attached ? null : 'dim'"><span>{{ 'Attached projects' | t }}</span><b [wbCount]="o.attached"></b>
           <small>{{ fmt('on {n} of {m} palettes', { n: o.attachedPal, m: o.palettes }) }}</small></div>
-        <div class="st-tile" [attr.data-tone]="js.total ? null : 'dim'"><span>{{ 'Extractions' | t }}</span><b>{{ js.total }}</b>
+        <div class="st-tile" [attr.data-tone]="js.total ? null : 'dim'"><span>{{ 'Extractions' | t }}</span><b [wbCount]="js.total"></b>
           <small>{{ fmt('{n} done · {f} failed', { n: js.done, f: js.failed }) }}</small></div>
         <div class="st-tile" [attr.data-tone]="js.last ? statusTone(js.last.status) : 'dim'"><span>{{ 'Last extraction' | t }}</span>
           <b>{{ js.last ? when(js.last.started_at) : '–' }}</b>
@@ -705,6 +711,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
       @if (recent().length) { <ng-container [ngTemplateOutlet]="recentCard" [ngTemplateOutletContext]="{ rows: recent().slice(0, 8) }" /> }
 
       @if (o.palettes) { <ng-container [ngTemplateOutlet]="howCard" /> }
+      }
     }
   </section>
 </div>
@@ -769,6 +776,8 @@ export class RoomTaste implements OnDestroy {
   domainOpts = computed<SelectOption[]>(() => this.domains.map(x => ({ value: x.id, label: t(x.label) })));
   q = signal('');
   palettes = signal<Palette[]>([]);
+  /** The first list has come (or failed): till then a placeholder, not "No palettes yet". */
+  loaded = signal(false);
   /** Every palette, whatever the search: the "Save to" list. */
   allPalettes = signal<Palette[]>([]);
   openId = signal<string | null>(null);
@@ -864,7 +873,7 @@ export class RoomTaste implements OnDestroy {
   }
 
   private read() {
-    this.api.list(this.q()).subscribe(ps => this.palettes.set(ps));
+    this.api.list(this.q()).subscribe({ next: ps => { this.palettes.set(ps); this.loaded.set(true); }, error: () => this.loaded.set(true) });
     this.api.list('').subscribe(ps => this.allPalettes.set(ps));
   }
 

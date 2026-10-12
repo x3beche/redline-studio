@@ -7,6 +7,8 @@ import { when } from './llm-settings';
 import { TelegramProfilePanel } from './telegram-profile';
 import { Langs, TgLangPicker } from './telegram-langs';
 import { Confirm } from './confirm';
+import { CountUp } from './count';
+import { Skeleton } from './skeleton';
 
 /** Settings > Telegram (backend/tgbot/): one bot for the whole server, and
  *  each person's own link to it.
@@ -99,11 +101,11 @@ const FATHER = [
 
 @Component({
   selector: 'app-telegram-settings',
-  imports: [T, TelegramProfilePanel, TgLangPicker],
+  imports: [Skeleton, CountUp, T, TelegramProfilePanel, TgLangPicker],
   styleUrls: ['./settings.css', './telegram-settings.css'],
   template: `
 @if (s(); as d) {
-<div class="st-page">
+<div class="st-page wb-in">
   <p class="st-lead">{{ 'A Telegram bot for the whole server: the agents\\' questions reach people on their phones, and answers, notes and messages come back the same way. The token stays on the server - once saved, only its last four characters are shown.' | t }}</p>
   @if (stub()) { <div class="st-banner">{{ 'Preview - the server has no Telegram routes yet, so this shows a bot that is not set up.' | t }}</div> }
   @if (!d.can_edit) { <div class="st-banner">{{ 'Only the owner and the admins set up the bot. Linking your own Telegram is for everyone.' | t }}</div> }
@@ -115,11 +117,11 @@ const FATHER = [
     <div class="st-tile" [attr.data-tone]="updatesTone()"><span>{{ 'Updates' | t }}</span>
       <b>{{ updatesLabel() | t }}</b>
       <small>{{ d.mode === 'webhook' ? (d.webhook?.pending_update_count ?? 0) + ' ' + ('waiting' | t) : d.mode === 'polling' ? ('Workbench asks Telegram' | t) : ('choose in step 4' | t) }}</small></div>
-    <div class="st-tile"><span>{{ 'Linked people' | t }}</span><b>{{ d.linked }}</b>
+    <div class="st-tile"><span>{{ 'Linked people' | t }}</span><b [wbCount]="d.linked"></b>
       <small>{{ d.me.linked ? ('you included' | t) : ('you are not linked' | t) }}</small></div>
-    <div class="st-tile"><span>{{ 'Sent' | t }} · {{ d.stats.days }}{{ 'd' }}</span><b>{{ d.stats.sent }}</b>
+    <div class="st-tile"><span>{{ 'Sent' | t }} · {{ d.stats.days }}{{ 'd' }}</span><b [wbCount]="d.stats.sent"></b>
       <small>{{ d.stats.failed }} {{ 'failed' | t }} · {{ d.queue }} {{ 'queued' | t }}</small></div>
-    <div class="st-tile"><span>{{ 'Received' | t }} · {{ d.stats.days }}{{ 'd' }}</span><b>{{ d.stats.received }}</b>
+    <div class="st-tile"><span>{{ 'Received' | t }} · {{ d.stats.days }}{{ 'd' }}</span><b [wbCount]="d.stats.received"></b>
       <small>{{ d.last_update_at ? ('last' | t) + ' ' + when(d.last_update_at) : ('nothing yet' | t) }}</small></div>
     <div class="st-tile" [attr.data-tone]="d.last_error ? 'warn' : 'dim'"><span>{{ 'Last error' | t }}</span>
       <b [title]="d.last_error?.text || ''">{{ d.last_error ? when(d.last_error.at) : ('none' | t) }}</b>
@@ -221,7 +223,7 @@ const FATHER = [
                     <div class="st-tiles tight">
                       <div class="st-tile" [attr.data-tone]="d.webhook_ok ? 'ok' : 'warn'"><span>{{ 'getWebhookInfo' }}</span><b>{{ (d.webhook_ok ? 'OK' : 'check') | t }}</b>
                         <small [title]="d.webhook?.url || ''">{{ d.webhook?.url || ('not registered' | t) }}</small></div>
-                      <div class="st-tile"><span>{{ 'Waiting updates' | t }}</span><b>{{ d.webhook?.pending_update_count ?? '–' }}</b><small>{{ d.webhook?.ip_address || '' }}</small></div>
+                      <div class="st-tile"><span>{{ 'Waiting updates' | t }}</span><b [wbCount]="d.webhook?.pending_update_count ?? '–'"></b><small>{{ d.webhook?.ip_address || '' }}</small></div>
                       <div class="st-tile" [attr.data-tone]="d.webhook?.last_error_message ? 'warn' : 'dim'" style="grid-column: span 2"><span>{{ 'Telegram\\'s last delivery error' | t }}</span>
                         <b [title]="d.webhook?.last_error_message || ''">{{ d.webhook?.last_error_message || ('none' | t) }}</b>
                         <small>{{ d.webhook?.last_error_date ? when(d.webhook!.last_error_date! * 1000) : '' }}</small></div>
@@ -384,7 +386,7 @@ const FATHER = [
   @if (err(); as e) { <p class="st-err">{{ e }}</p> }
 </div>
 } @else {
-  <div class="st-page"><p class="st-lead">{{ err() || ('Loading…' | t) }}</p></div>
+  <div class="st-page">@if (err()) { <p class="st-lead">{{ err() }}</p> } @else { <wb-skel kind="page" [count]="2" /> }</div>
 }`,
 })
 export class TelegramSettingsPanel implements OnDestroy {
