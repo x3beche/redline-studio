@@ -100,8 +100,16 @@ export const WORKSPACES: Workspace[] = [
 
 const KEY = 'redline.workspace';
 
+/** A tab's name in the address where it is not its id: the Chat is ?ws=chat
+ *  (its id, and old links, stay commandcode - both open it). */
+const URL_NAME: Partial<Record<Workspace['id'], string>> = { commandcode: 'chat' };
+export function urlName(id: Workspace['id']): string { return URL_NAME[id] ?? id; }
+function fromUrl(name: string | null): string | null {
+  return (Object.entries(URL_NAME).find(([, n]) => n === name)?.[0]) ?? name;
+}
+
 export function currentWorkspace(): Workspace['id'] {
-  const asked = new URLSearchParams(location.search).get('ws');
+  const asked = fromUrl(new URLSearchParams(location.search).get('ws'));
   let saved: string | null = null;
   try {
     saved = localStorage.getItem(KEY);

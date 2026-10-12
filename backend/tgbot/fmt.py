@@ -155,9 +155,9 @@ def app_link(base: str | None, *, model: str | None = None, kind: str | None = N
         return None
     base = base.rstrip("/")
     if thread:
-        return f"{base}/?ws=commandcode&thread={quote(thread)}"
+        return f"{base}/?ws=chat&thread={quote(thread)}"
     if chat:
-        return f"{base}/?ws=commandcode&chat={quote(chat)}"
+        return f"{base}/?ws=chat&chat={quote(chat)}"
     if fw:
         return f"{base}/?ws=firmware&fw={quote(fw)}"
     if kind == "pcb" and model:

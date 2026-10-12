@@ -65,7 +65,7 @@ export class Selection {
    *  (app/palette.ts): a new conversation, with something of the workspace
    *  attached and perhaps the question already typed, or the last one
    *  opened. The room takes it (sets it back to null). A link to one
-   *  conversation (?ws=commandcode&chat=<id>, from a Telegram message) is
+   *  conversation (?ws=chat&chat=<id>, from a Telegram message) is
    *  the first thing asked. */
   cc = signal<CcWant | null>(Selection.linkedChat());
   private static linkedChat(): CcWant | null {

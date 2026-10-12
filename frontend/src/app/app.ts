@@ -17,7 +17,7 @@ import { BudgetStatus, Money, money, moneyShort } from './money';
 import { budgetTip } from './budget-bars';
 import { Auth, UserChip } from './auth';
 import { Landing } from './landing';
-import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace } from './workspaces';
+import { WORKSPACES, Workspace, currentWorkspace, rememberWorkspace, urlName } from './workspaces';
 import { TopBar, TopbarFit } from './topbar';
 import { TopbarMore } from './topbar-more';
 import { AgentThreads } from './rooms/agent-thread';
@@ -265,7 +265,7 @@ export class App {
       if (window === window.top) rememberWorkspace(id);
       const url = new URL(location.href);
       if (id === 'cad') url.searchParams.delete('ws');
-      else url.searchParams.set('ws', id);
+      else url.searchParams.set('ws', urlName(id));
       // A room thread belongs to the Chat tab's address only.
       if (id !== 'commandcode') url.searchParams.delete('thread');
       // An extraction run belongs to the Taste tab's address only (rooms/taste.ts).

@@ -1147,9 +1147,9 @@ def test_step_three_is_done_by_its_save_and_a_new_bot_clears_it(env):
 def test_a_question_links_to_its_rooms_thread_in_the_chat_tab():
     """The old "ask the agent" box is gone: a question's card, and the
     reply to /ask, open the room's thread pinned in the Chat tab."""
-    assert fmt.app_link("https://x.y/", thread="pcb") == "https://x.y/?ws=commandcode&thread=pcb"
+    assert fmt.app_link("https://x.y/", thread="pcb") == "https://x.y/?ws=chat&thread=pcb"
     q = {"_id": "q", "text": "t", "options": [], "multi": False, "room": "pcb"}
-    assert "https://x.y/?ws=commandcode&amp;thread=pcb" in fmt.question_text(None, q, None, "https://x.y", True)
+    assert "https://x.y/?ws=chat&amp;thread=pcb" in fmt.question_text(None, q, None, "https://x.y", True)
     del q["room"]
     assert "thread=cad" in fmt.question_text(None, q, None, "https://x.y", True)
 
@@ -1208,9 +1208,9 @@ def test_each_new_kind_is_announced_once_with_its_link(env):
     room = next(x for x in texts if "Board room agent replied" in x)
     assert "Routed again" in room and "Moved U3" not in room and "+1 more line" in room
     assert "x" * 400 not in room                                             # cut to ~300
-    assert "?ws=commandcode&amp;thread=pcb" in room
+    assert "?ws=chat&amp;thread=pcb" in room
     cc = next(x for x in texts if "Command Code answered" in x)
-    assert "Thermal budget" in cc and "About 2 W." in cc and "?ws=commandcode&amp;chat=k1" in cc
+    assert "Thermal budget" in cc and "About 2 W." in cc and "?ws=chat&amp;chat=k1" in cc
     route = next(x for x in texts if "Board routed" in x)
     assert all(w in route for w in ("Controller", "TraceMaker", "all connected", "178 vias", "3 min 20 s",
                                     "DRC 2 errors, 5 warnings", "?ws=pcb&amp;board=ctl"))
