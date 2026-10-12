@@ -52,7 +52,16 @@ const SERIES: Record<string, string> = { 'Changes': 'Changes made', 'Agents': 'A
   selector: 'app-admin-overview',
   imports: [T, Avatar, CountUp, Skeleton, TimeChart, BarList, Donut, UiSelect, NgTemplateOutlet],
   styles: [`
-    :host { display: block; min-width: 0; }
+    /* On the room's own ground, as Analytics is (.tcv-panel), so its tiles and
+       panels stand out from it the same way rather than sink into the stage. */
+    :host { display: block; min-width: 0; min-height: 100%; background: var(--surface); }
+    /* Tiles and panels a step lighter than that ground in every dark theme
+       (surface-2 is darker than surface in many of them); a light theme keeps
+       its paler well. */
+    :host { --tcv-raised: color-mix(in srgb, var(--surface) 92%, var(--ink-bright)); }
+    :host-context([data-theme="light"], [data-theme="github-light"], [data-theme="gruvbox-light"], [data-theme="solarized-light"],
+                  [data-theme="vscode-light"], [data-theme="catppuccin-latte"]) { --tcv-raised: var(--surface-2); }
+    .tcv-panel-d, .tcv-stat { background: var(--tcv-raised); }
     /* The range bar stays at the top of the stage as it scrolls. */
     .tcv-dash-bar { position: sticky; top: 0; z-index: 2; }
     @media (max-width: 768px) { .tcv-dash-bar { position: static; } }

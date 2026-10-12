@@ -673,9 +673,9 @@ type Ask = { text: string; label: string; go: () => void };
         }
       } @empty {
         @if (!listed()) { <wb-skel kind="rows" [count]="6" [h]="46" /> }
-        @else {
-          <wb-empty compact [icon]="trash() ? 'trash' : 'chat'" [text]="trash() ? 'The trash is empty.' : archived() ? 'No archived conversations.'
-                                                                  : 'No conversations yet - start one.'" />
+        <!-- An empty list says nothing: "+ New" is right above it. The trash and the archive say they are empty. -->
+        @else if (trash() || archived()) {
+          <wb-empty compact [icon]="trash() ? 'trash' : 'chat'" [text]="trash() ? 'The trash is empty.' : 'No archived conversations.'" />
         }
       }
       }
