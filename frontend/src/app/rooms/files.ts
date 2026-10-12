@@ -697,6 +697,24 @@ export class RoomFiles implements OnDestroy {
       const f = this.previewFile() ?? this.singleFile();
       untracked(() => this.picked.file.set(f ? { id: f.id, label: f.name } : null));
     });
+    // A file asked for from elsewhere (the Chat's viewer: "Open in Files"):
+    // its folder, with it open - once the list has come.
+    effect(() => {
+      const w = this.picked.want();
+      if (w?.what !== 'file' || !w.arg || this.loading()) return;
+      const f = this.all().find(x => x.id === w.arg);
+      untracked(() => {
+        this.picked.want.set(null);
+        const show = (x: StoredFile) => { this.go(this.placeOf(x)); this.open(x); };
+        if (f) { show(f); return; }
+        // Made since the list came (a PDF the Chat just wrote): the list again.
+        this.api.list().subscribe({ next: rows => {
+          this.all.set(rows);
+          const g = rows.find(x => x.id === w.arg);
+          if (g) show(g);
+        }, error: () => {} });
+      });
+    });
     // A folder that went away takes you to the top.
     effect(() => {
       if (!this.loading() && this.here() && !this.byId().has(this.here())) untracked(() => this.here.set(''));

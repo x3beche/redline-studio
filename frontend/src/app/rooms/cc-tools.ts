@@ -37,11 +37,13 @@ const CHAT = 'M4 5h16v11H9l-5 4z M8 9h8 M8 12h5';
 const BOX = 'M3 5h18v4H3z M5 9v10h14V9 M10 13h4';
 const SHELF = 'M3 8l9-5 9 5v12H3z M3 8h18 M7 20v-7h10v7 M7 16.5h10';
 const PLUSMINUS = 'M5 8h6 M8 5v6 M13 16h6 M17 4L7 20';
+const PDFDOC = 'M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 15h6 M9 18h3';
 
 /** A tool's icon, here and on its steps in an answer: by what it touches. */
 export const TOOL_ICON: Record<string, string> = {
   drawer_search: DRAWER, drawer_list: DRAWER, drawer_add: DRAWER, lcsc_search: SEARCH, datasheet_get: SHEET, datasheet_read: SHEET,
   basic_tool: CALC, board_read: BOARD, model_read: CUBE, taste_read: SWATCH, manufacturer_search: FACTORY, bom_cost: TAG, firmware_build: BUILD, file_read: FILE,
+  pdf_make: PDFDOC,
   room_note: NOTE, queue_list: QUEUE, queue_read: QUEUE, rename_chat: PEN,
   notes_search: SEARCH, note_read: NOTE, note_write: PEN, note_todo: CHECK, note_edit: PEN,
   chat_list: SEARCH, chat_read: CHAT, chat_archive: BOX,

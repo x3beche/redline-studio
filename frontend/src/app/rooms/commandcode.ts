@@ -17,6 +17,7 @@ import { CcToolsLine, CcToolsView, LEVELS, toolIcon as toolIconOf } from './cc-t
 import { AvatarColours, avatarColour } from '../avatar';
 import { AttachChips, ChatAttach, MentionPics, PAPERCLIP, isPicture } from './chat-attach';
 import { FilesApi } from './files-model';
+import { FileModal, FileModalHost, fileIdOf } from './file-modal';
 import { ComposerSuggest, SuggestChip } from './suggest';
 import { ModelPicker } from '../model-picker';
 
@@ -365,7 +366,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker],
+  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)' },
   template: `
 <!-- Avatars: a person's picture, or their initials on a colour of their own
@@ -921,6 +922,14 @@ type Ask = { text: string; label: string; go: () => void };
         </dl>
         }
       </details>
+      @if (s.status === 'done' && s.tool === 'pdf_make' && s.vars?.['file']) {
+        <!-- The PDF it made, as a card: opens in the viewer over the Chat (file-modal.ts). -->
+        <button type="button" class="tcv-cc-filecard" (click)="openStepFile(s)" [title]="'Open the PDF' | t">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z M14 3v4h4" /><path d="M8.5 17.5v-4h1.2a1.2 1.2 0 0 1 0 2.4H8.5M12.5 13.5v4h.8a1.7 1.7 0 0 0 0-4zM16 17.5v-4h1.6M16 15.5h1.3" stroke-width="1.1" /></svg>
+          <span class="tcv-cc-filename">{{ s.vars!['name'] }}</span>
+          <span class="tcv-cc-filemeta">{{ s.vars!['pages'] }} {{ (+s.vars!['pages'] === 1 ? 'page' : 'pages') | t }} · {{ s.vars!['size'] }}</span>
+        </button>
+      }
       @if (s.status === 'ask' && auth.can('draw')) {
         <div class="tcv-cc-stepask">
           <span>{{ 'This tool asks before it runs.' | t }}</span>
@@ -1053,7 +1062,8 @@ type Ask = { text: string; label: string; go: () => void };
       </div>
     }
   </div>
-</ng-template>`,
+</ng-template>
+<rl-file-modal />`,
 })
 export class RoomCommandCode implements OnDestroy {
   private api = inject(CcApi);
@@ -2580,7 +2590,7 @@ export class RoomCommandCode implements OnDestroy {
       case 'taste': this.sel.room.set('taste'); this.sel.ask('taste', m.id); break;
       case 'manufacturer': this.sel.room.set('mfr'); this.sel.ask('mfr', m.id); break;
       case 'part': this.sel.room.set('pcb'); setTimeout(() => this.sel.ask('part', m.id), 300); break;
-      case 'file': window.open(`/api/files/${encodeURIComponent(m.id)}?inline=1`, '_blank', 'noopener'); break;
+      case 'file': FileModal.open({ id: m.id, name: m.label }); break;
       case 'revision': {
         const o = m.open ?? {};
         const on = o.board || o.model;
@@ -2701,6 +2711,17 @@ export class RoomCommandCode implements OnDestroy {
   }
 
   logClick(e: MouseEvent) {
+    // A link to a file of the Files room (a PDF the Chat made, most often)
+    // opens in the viewer over the Chat; Ctrl/Shift/middle-click still open a tab.
+    const a = (e.target as HTMLElement).closest('a[href]') as HTMLAnchorElement | null;
+    if (a) {
+      const id = fileIdOf(a.getAttribute('href'));
+      if (id && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) {
+        e.preventDefault();
+        FileModal.open({ id, name: (a.textContent || '').trim() });
+      }
+      return;
+    }
     const b = (e.target as HTMLElement).closest('.tcv-cc-codecopy');
     if (!b) return;
     const code = b.parentElement?.querySelector('code')?.textContent ?? '';
@@ -2747,6 +2768,11 @@ export class RoomCommandCode implements OnDestroy {
     });
   }
   toolIcon(name: string) { return toolIconOf(name); }
+  /** A step's file (pdf_make's PDF) in the viewer over the Chat. */
+  openStepFile(s: CcStep) {
+    const v = s.vars ?? {};
+    FileModal.open({ id: String(v['file']), name: String(v['name'] ?? ''), pages: Number(v['pages']) || undefined });
+  }
   levelName(l: ToolLevel) { return LEVELS.find(x => x.id === l)?.name ?? l; }
   /** The step's sentence: translated, then its holes filled. */
   stepLine(s: CcStep): string {

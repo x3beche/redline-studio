@@ -4057,6 +4057,22 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-cc-stepbody dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
 .tcv-cc-stepbody .mono, .tcv-cc-stepbody pre { font: 11px/1.5 'IBM Plex Mono', ui-monospace, monospace; }
 .tcv-cc-stepbody pre { margin: 0; white-space: pre-wrap; max-height: 180px; overflow: auto; color: var(--ink-dim); }
+/* A file a step made (pdf_make's PDF): a card under the step that opens it
+   in the viewer over the Chat (rooms/file-modal.ts). */
+.tcv-cc-filecard { display: flex; align-items: center; gap: 9px; width: fit-content; max-width: min(100%, 460px); min-width: 0;
+  margin: 3px 0 4px; padding: 7px 12px 7px 9px; font: inherit; font-size: 12.5px; text-align: left; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.tcv-cc-filecard:hover { border-color: var(--ink-dim); background: var(--hover); }
+.tcv-cc-filecard:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tcv-cc-filecard > svg { flex: none; width: 22px; height: 22px; fill: none; stroke: var(--danger); stroke-width: 1.5;
+  stroke-linecap: round; stroke-linejoin: round; }
+.tcv-cc-filename { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.tcv-cc-filemeta { flex: none; color: var(--ink-dim); font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; }
+/* a link in an answer to a file of the Files room: opens in the same viewer */
+.md a.md-file { cursor: pointer; }
+.md a.md-file::before { content: ''; display: inline-block; width: .85em; height: 1em; margin-right: 3px; vertical-align: -.12em;
+  background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M6 3h8l4 4v14H6z M14 3v4h4'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M6 3h8l4 4v14H6z M14 3v4h4'/%3E%3C/svg%3E") center / contain no-repeat; }
 .tcv-cc-steperr { color: var(--danger) !important; }
 .tcv-cc-stepask { display: flex; align-items: center; gap: 6px; margin: 0 0 4px 21px; font-size: 12px; color: var(--ink-dim); }
 .tcv-cc-answer { font-size: 13.5px; line-height: 1.65; color: var(--ink); overflow-wrap: anywhere; }

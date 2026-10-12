@@ -36,6 +36,10 @@ function inline(text: string): string {
   out = out
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
              '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+    // A file of the Files room, by its address on this site (a PDF the Chat
+    // made): the Chat opens it in its viewer (rooms/file-modal.ts).
+    .replace(/\[([^\]]+)\]\((\/api\/files\/[A-Za-z0-9]{6,32}(?:\?inline=1)?)\)/g,
+             '<a class="md-file" href="$2" target="_blank" rel="noreferrer">$1</a>')
     .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '<strong>$2</strong>')
     .replace(/(^|[^*\w])\*(?=\S)([^*]*?\S)\*/g, '$1<em>$2</em>')
     .replace(/(^|[\s(])_(?=\S)([^_]*?\S)_/g, '$1<em>$2</em>');

@@ -136,6 +136,8 @@ def test_signed_out_reaches_only_signing_in():
 def test_the_tool_pages_are_for_looking():
     # A static mount, not in the route list: the rule for its method.
     assert access.action("GET", "/api/tools/files/grid-sketch/index.html") == "view"
+    # a file's details for the Chat's file viewer: looking, a page session too
+    assert access.action("GET", "/api/files/x/info") == "view" and access.page_allowed("GET", "/api/files/x/info")
 
 
 def test_agents_work_they_do_not_manage():

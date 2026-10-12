@@ -64,6 +64,12 @@ through the workspace, and the list of them when the name fits nothing).
   board_stats.py), `model_read` (cc_context.py `model_parts`), `bom_cost`
   (bom_cost.py, offers on disk only), `firmware_build` (the firmware's
   build summary and fwbuild.py's jobs), `file_read` (files.py, pdftext.py).
+- `pdf_make` (change, on; package `files`): a document the model writes in
+  Markdown, printed as a PDF in Redline's white theme (backend/pdfdoc.py:
+  headless Chromium in its container, no network) and kept in Files >
+  Documents; its description is the writing guide. The step carries the
+  file; the Chat opens it, and any `/api/files/<id>` link, in its viewer
+  (frontend/src/app/rooms/file-modal.ts).
 - `room_note` (change, off by default): a queued note, as a ```task
   block's "Send to queue" files one (tasks.py `_file`).
 - The rooms' queues (General: they span the 3D, PCB and Firmware rooms):

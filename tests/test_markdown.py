@@ -124,6 +124,12 @@ def test_link():
     assert ">the board</a>" in out
 
 
+def test_a_link_to_a_file_in_files_stays_on_this_site():
+    out = one("the [BOM.pdf](/api/files/a1b2c3d4e5f6?inline=1) and [x](/etc/passwd) and [y](/api/files/../admin)")
+    assert '<a class="md-file" href="/api/files/a1b2c3d4e5f6?inline=1"' in out and ">BOM.pdf</a>" in out
+    assert 'href="/etc' not in out and 'href="/api/files/..' not in out
+
+
 def test_quote():
     assert one("> noted") == "<blockquote>noted</blockquote>"
 

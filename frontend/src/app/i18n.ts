@@ -2966,6 +2966,18 @@ const TR: Record<string, string> = {
   'Letters, digits, - and _.': 'Harf, rakam, - ve _.',
   'New model': 'Yeni model',
   'Delete this revision?': 'Bu revizyon silinsin mi?',
+  // the Chat's PDFs (chat_tools/pdf_make.py) and its file viewer (rooms/file-modal.ts)
+  'Make a PDF': 'PDF oluştur',
+  "Writes a document as a PDF in Redline's theme and keeps it in Files.": "Bir belgeyi Redline temasında PDF olarak yazar ve Dosyalar'da saklar.",
+  'Making the PDF “{title}”': '“{title}” PDF\'i oluşturuluyor',
+  'Could not make the PDF “{title}”': '“{title}” PDF\'i oluşturulamadı',
+  'Made {name} · {pages} pages': '{name} oluşturuldu · {pages} sayfa',
+  'Open the PDF': 'PDF\'i aç',
+  'page': 'sayfa',
+  'pages': 'sayfa',
+  'Open in Files': 'Dosyalar\'da aç',
+  'This file is no longer in Files.': 'Bu dosya artık Dosyalar\'da yok.',
+  'The file could not be opened.': 'Dosya açılamadı.',
 };
 
 export function t(text: string): string {

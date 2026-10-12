@@ -306,6 +306,16 @@ async def files_download(fid: str, request: Request, inline: bool = False):
                              headers=headers)
 
 
+@router.get("/api/files/{fid}/info")
+async def files_info(fid: str):
+    """One file's details without its bytes, with its folder's path - what
+    the Chat's file viewer shows above a file it opens (rooms/file-modal.ts)."""
+    out = file_out(await _doc(fid))
+    folder = await _db()[files.FOLDERS].find_one({"_id": out["folder"]}) if out["folder"] else None
+    out["folder_path"] = (folder or {}).get("path") or ""
+    return out
+
+
 @router.get("/api/files/{fid}/thumb")
 async def files_thumb(fid: str, request: Request):
     """A small picture of an image, for the grid; made once and kept. A 3D
