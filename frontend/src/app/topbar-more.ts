@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, ViewEncapsulation, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, ViewEncapsulation, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { T } from './i18n';
 import { Selection } from './selection';
@@ -8,7 +8,8 @@ import { Workspace } from './workspaces';
 import { AgentThreads } from './rooms/agent-thread';
 import { CcTabUsage } from './cc-usage';
 
-/** "More" at the end of the top bar: the tabs that did not fit, then the
+/** "More" in the top bar - at the end by default, wherever Settings > Top
+ *  bar put it (topbar.ts, MORE): the tabs that did not fit, then the
  *  ones hidden in Settings > Top bar, so none is ever out of reach. Lit
  *  like an open tab when the room on screen is one of them.
  *
@@ -21,7 +22,7 @@ import { CcTabUsage } from './cc-usage';
   styleUrl: './topbar.css',
   template: `
 @if (bar.moreNeeded()) {
-  <button #btn type="button" class="tcv-tab tb-more" data-tb-more
+  <button #btn type="button" class="tcv-tab tb-more" data-tb-more [class.tb-push]="push()"
           [attr.data-on]="inMore() ? 1 : null" [attr.aria-current]="inMore() ? 'page' : null"
           aria-haspopup="menu" [attr.aria-expanded]="open()"
           [title]="inMore() ? ('More tabs' | t) + ' · ' + (here()?.label ?? '' | t) : ('More tabs' | t)"
@@ -52,6 +53,8 @@ import { CcTabUsage } from './cc-usage';
 })
 export class TopbarMore implements OnDestroy {
   bar = inject(TopBar);
+  /** Put directly after the gap: it takes the free space, as a tab there would. */
+  push = input(false);
   picked = inject(Selection);
   /** Chat's unread count, on More while Chat is in it (a phone's bar). */
   threads = inject(AgentThreads);

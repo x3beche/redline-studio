@@ -14,8 +14,10 @@ import { LANG } from './i18n';
  *  per-account store for preferences, so it does not follow you to another
  *  device. The theme and the language are kept the same way.
  *
- *  Whatever does not fit, and whatever is hidden, is under "More" at the
- *  end of the bar (topbar-more.ts) - the open room included, marked there.
+ *  Whatever does not fit, and whatever is hidden, is under "More"
+ *  (topbar-more.ts) - the open room included, marked there. More is one
+ *  more item in the order (MORE), at the end by default, just before
+ *  Settings; it is never hidden, and is drawn only when something is under it.
  */
 export type TopbarDisplay = 'full' | 'short' | 'icons' | 'icon';
 export const TOPBAR_DISPLAYS: { id: TopbarDisplay; label: string }[] = [
@@ -28,6 +30,8 @@ export const TOPBAR_DISPLAYS: { id: TopbarDisplay; label: string }[] = [
 /** The movable gap: the tabs after it stand at the right, as Notes, Chat,
  *  Files and Basic Tools always have. One more item in the order. */
 export const GAP = 'gap';
+/** Where the More button stands. One more item in the order; never hidden. */
+export const MORE = 'more';
 /** Never in the bar's lists: always shown, never moved. */
 const FIXED = new Set<string>(['settings', 'analyze']);
 const KEY = 'redline.topbar';
@@ -52,7 +56,10 @@ const ICON: Record<string, string> = {
 };
 const ICON_ANY = 'M5 5h14v14H5z';
 
-export interface BarTab { id: string; ws: Workspace; push: boolean }
+export interface BarTab { id: string; ws: Workspace; push: boolean; more?: false }
+/** The More button's place among the tabs in the bar. */
+export interface BarMore { id: typeof MORE; ws: null; push: boolean; more: true }
+export type BarItem = BarTab | BarMore;
 
 /** The Command Code usage on the Chat tab (cc-usage.ts): how it is drawn,
  *  and which window it shows. */
@@ -71,6 +78,7 @@ export function defaultOrder(): string[] {
   const ids: string[] = WORKSPACES.filter(w => !FIXED.has(w.id)).map(w => w.id);
   const at = ids.indexOf('notes');
   ids.splice(at < 0 ? ids.length : at, 0, GAP);
+  ids.push(MORE);
   return ids;
 }
 
@@ -131,8 +139,11 @@ export class TopBar {
   }
 
   private load(k: Kept) {
-    this.order.set(resolveOrder(Array.isArray(k.order) ? k.order : null, this.def));
-    const known = new Set(this.def);
+    let saved = Array.isArray(k.order) ? k.order : null;
+    // Kept before More could be moved: it stands where it always stood, at the end.
+    if (saved && !saved.includes(MORE)) saved = [...saved, MORE];
+    this.order.set(resolveOrder(saved, this.def));
+    const known = new Set(this.def.filter(id => id !== MORE));
     this.hidden.set(new Set((Array.isArray(k.hidden) ? k.hidden : [])
       .filter((x): x is string => typeof x === 'string' && known.has(x))));
     this.display.set(asDisplay(k.display));
@@ -153,7 +164,7 @@ export class TopBar {
     && this.ccStyle() === 'both' && this.ccWindow() === 'weekly'
     && this.order().join() === this.def.join());
 
-  /** Every item in order, the gap included, with whether it is hidden. */
+  /** Every item in order, the gap and More included, with whether it is hidden. */
   entries = computed(() => this.order().map(id => ({
     id, ws: this.byId.get(id) ?? null, hidden: this.hidden().has(id),
   })));
@@ -165,6 +176,7 @@ export class TopBar {
     for (const e of this.entries()) {
       if (e.hidden) continue;
       if (e.id === GAP) { gap = true; continue; }
+      if (e.id === MORE) continue;
       if (!e.ws) continue;
       tabs.push({ ws: e.ws, afterGap: gap });
       gap = false;
@@ -175,9 +187,30 @@ export class TopBar {
   shownIds = computed(() => this.shown().map(s => s.ws.id as string));
 
   /** What the bar shows: the shown tabs that fit, the first one after the
-   *  gap pushed to the right. */
-  inBar = computed<BarTab[]>(() => this.shown().slice(0, this.fit())
-    .map(s => ({ id: s.ws.id, ws: s.ws, push: s.afterGap })));
+   *  gap pushed to the right, and More at its place. A tab
+   *  that did not fit still takes the gap's push from what follows it (as
+   *  before More could move), and More placed after such a tab stands right
+   *  after the last one in the bar. */
+  inBar = computed<BarItem[]>(() => {
+    const fit = this.fit(), more = this.moreNeeded();
+    const out: BarItem[] = [];
+    let gap = false, n = 0;
+    for (const e of this.entries()) {
+      if (e.hidden) continue;
+      if (e.id === GAP) { gap = true; continue; }
+      if (e.id === MORE) {
+        // Always in the list - it brings the bar's stylesheet (topbar-more.ts)
+        // - but drawn, and taking the gap's push, only when it is needed.
+        out.push({ id: MORE, ws: null, push: more && gap, more: true });
+        if (more) gap = false;
+        continue;
+      }
+      if (!e.ws) continue;
+      if (n++ < fit) out.push({ id: e.id, ws: e.ws, push: gap });
+      gap = false;
+    }
+    return out;
+  });
   /** With a tab pushed right, Settings stands beside the last one instead
    *  of taking the free space itself. */
   tight = computed(() => this.inBar().some(t => t.push));
@@ -214,6 +247,7 @@ export class TopBar {
     this.move(id, i + by);
   }
   setHidden(id: string, hide: boolean) {
+    if (id === MORE) return;
     const next = new Set(this.hidden());
     if (hide) next.add(id); else next.delete(id);
     this.hidden.set(next);

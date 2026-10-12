@@ -365,7 +365,7 @@ export class RoomSettings {
     if (id === 'language') return this.lang().toUpperCase();
     if (id === 'shortcuts') return String(this.shortcutCount());
     if (id === 'costs') return CURRENCY();
-    if (id === 'topbar') { const e = this.topbar.entries().filter(x => x.id !== 'gap'); return `${e.filter(x => !x.hidden).length}/${e.length}`; }
+    if (id === 'topbar') { const e = this.topbar.entries().filter(x => x.ws); return `${e.filter(x => !x.hidden).length}/${e.length}`; }
     return null;
   }
   readonly shortcuts: { group: string; items: Shortcut[] }[] = [

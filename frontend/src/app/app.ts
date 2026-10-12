@@ -46,6 +46,11 @@ import { CcTabUsage } from './cc-usage';
          column. What is hidden, or does not fit, is under More. Analytics is
          in the menu under your name (auth.ts). -->
     @for (b of bar.inBar(); track b.id) {
+      @if (b.more) {
+      <!-- More, where Settings > Top bar put it: drawn only when a tab is
+           hidden or does not fit (topbar-more.ts). -->
+      <app-topbar-more [push]="b.push" />
+      } @else {
       <button (click)="open(b.ws.id)" class="tcv-tab" [class.tb-push]="b.push" [class.tb-iconic]="!bar.text(b.ws)"
               [attr.data-tb]="b.id"
               [attr.data-on]="here() === b.id ? 1 : null"
@@ -82,8 +87,8 @@ import { CcTabUsage } from './cc-usage';
           }
         }
       </button>
+      }
     }
-    <app-topbar-more />
     <!-- Settings: the theme and the language for this browser, the LLM
          keys and the proxy for the server - a tab, not a menu item. -->
     @if (settingsTab; as w) {

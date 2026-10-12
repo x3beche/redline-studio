@@ -2,11 +2,12 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { T } from './i18n';
 import { Selection } from './selection';
 import { CcTabUsage } from './cc-usage';
-import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisplay } from './topbar';
+import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, MORE, TOPBAR_DISPLAYS, TopBar, TopbarDisplay } from './topbar';
 
 /** Settings > Top bar: which tabs the bar shows and in what order, and how
  *  they are drawn (topbar.ts keeps it). Drag a row, or use its arrows -
- *  Alt+↑/↓ on a focused row does the same. Settings is not in the list to
+ *  Alt+↑/↓ on a focused row does the same. More is a row too - where its
+ *  button stands - but cannot be hidden. Settings is not in the list to
  *  move: it is always shown, always last. */
 @Component({
   selector: 'app-topbar-settings',
@@ -38,6 +39,9 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisp
     .tb-row[data-fixed] { background: var(--surface-2); }
     .tb-handle { cursor: grab; color: var(--ink-dim); font-size: 13px; line-height: 1; text-align: center; user-select: none; }
     .tb-row[data-fixed] .tb-handle { cursor: default; opacity: .4; }
+    .tb-row-ico.tb-row-more { font-size: 15px; letter-spacing: 0; }
+    .tb-more-n { justify-self: start; }
+    .tb-more-n[data-tone="dim"] { opacity: .6; }
     .tb-row-ico { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--line);
       border-radius: 5px; background: var(--surface-2); color: var(--ink-dim); }
     .tb-row-ico .tb-ico, .tb-arrow svg { display: block; width: 14px; height: 14px; margin: 0; fill: none; stroke: currentColor;
@@ -55,7 +59,7 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisp
       .tb-handle { display: none; }
       .tb-row-ico { grid-area: ico; }
       .tb-row-name { grid-area: name; }
-      .tb-row .st-seg { grid-area: show; justify-self: start; }
+      .tb-row .st-seg, .tb-row .tb-more-n { grid-area: show; justify-self: start; }
       .tb-arrows { grid-area: arrows; }
       .tb-arrow { width: 40px; height: 36px; }
       .tb-cc-opts { grid-column: 1 / -1; grid-row: 3; }
@@ -75,6 +79,9 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisp
         <div class="tb-prev" aria-hidden="true">
           @for (e of preview(); track e.id) {
             @if (e.id === gap) { <span class="tb-prev-gap"></span> }
+            @else if (e.id === more) {
+              @if (hiddenCount()) { <span class="tcv-tab" [attr.data-on]="openIsHidden() ? 1 : null">{{ 'More' | t }} ⋯</span> }
+            }
             @else if (e.ws) {
               <span class="tcv-tab" [class.tb-iconic]="bar.display() === 'icon'" [attr.data-on]="room() === e.id ? 1 : null">
                 @if (bar.showIcon()) { <svg class="tb-ico" viewBox="0 0 24 24"><path [attr.d]="bar.icon(e.id)"/></svg> }
@@ -82,9 +89,6 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisp
                 @if (e.id === 'commandcode') { <app-cc-tab-usage /> }
               </span>
             }
-          }
-          @if (hiddenCount()) {
-            <span class="tcv-tab" [attr.data-on]="openIsHidden() ? 1 : null">{{ 'More' | t }} ⋯</span>
           }
           <span class="tcv-tab tb-prev-end" [attr.data-on]="room() === 'settings' ? 1 : null">⚙@if (bar.display() !== 'icon') { {{ 'Settings' | t }} }</span>
         </div>
@@ -135,16 +139,24 @@ import { CC_TAB_STYLES, CC_TAB_WINDOWS, GAP, TOPBAR_DISPLAYS, TopBar, TopbarDisp
              (keydown)="key($event, e.id)">
           <span class="tb-handle" aria-hidden="true" [title]="'Drag to move' | t">⋮⋮</span>
           <span class="tb-row-ico" aria-hidden="true">
-            @if (e.id === gap) { ↔ } @else { <svg class="tb-ico" viewBox="0 0 24 24"><path [attr.d]="bar.icon(e.id)"/></svg> }
+            @if (e.id === gap) { ↔ } @else if (e.id === more) { <span class="tb-row-more">⋯</span> } @else { <svg class="tb-ico" viewBox="0 0 24 24"><path [attr.d]="bar.icon(e.id)"/></svg> }
           </span>
           <span class="tb-row-name">
             <b>{{ name(e.id) | t }}</b>
-            <span>{{ (e.id === gap ? 'the tabs after it stand at the right' : (e.hidden ? 'under More' : (e.ws ? bar.short(e.ws) : ''))) | t }}</span>
+            <span>{{ (e.id === gap ? 'the tabs after it stand at the right'
+                     : e.id === more ? (hiddenCount() ? 'where the More button stands; it cannot be hidden while a tab is hidden'
+                                                      : 'not drawn now - no tab is hidden; it appears here when one is, or when tabs do not fit')
+                     : (e.hidden ? 'under More' : (e.ws ? bar.short(e.ws) : ''))) | t }}</span>
           </span>
+          @if (e.id === more) {
+            <span class="st-badge tb-more-n" [attr.data-tone]="hiddenCount() ? null : 'dim'"
+                  [title]="'Hidden tabs under More' | t">{{ hiddenCount() }} {{ (hiddenCount() === 1 ? 'tab under it' : 'tabs under it') | t }}</span>
+          } @else {
           <div class="st-seg">
             <button type="button" [class.on]="!e.hidden" [attr.aria-pressed]="!e.hidden" (click)="bar.setHidden(e.id, false)">{{ 'Show' | t }}</button>
             <button type="button" [class.on]="e.hidden" [attr.aria-pressed]="e.hidden" (click)="bar.setHidden(e.id, true)">{{ 'Hide' | t }}</button>
           </div>
+          }
           <span class="tb-arrows">
             <button type="button" class="tb-arrow" [disabled]="first" (click)="bar.step(e.id, -1)"
                     [attr.aria-label]="('Move up' | t) + ': ' + (name(e.id) | t)" [title]="'Move up' | t"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
@@ -188,12 +200,13 @@ export class TopbarSettingsPanel {
   bar = inject(TopBar);
   room = inject(Selection).room;
   readonly gap = GAP;
+  readonly more = MORE;
   readonly ccStyles = CC_TAB_STYLES;
   readonly ccWindows = CC_TAB_WINDOWS;
   readonly displays = TOPBAR_DISPLAYS;
 
-  tabCount = computed(() => this.bar.entries().filter(e => e.id !== GAP).length);
-  shownCount = computed(() => this.bar.entries().filter(e => e.id !== GAP && !e.hidden).length);
+  tabCount = computed(() => this.bar.entries().filter(e => e.ws).length);
+  shownCount = computed(() => this.bar.entries().filter(e => e.ws && !e.hidden).length);
   hiddenCount = computed(() => this.bar.hiddenTabs().length);
   openIsHidden = computed(() => this.bar.hiddenTabs().some(w => w.id === this.room()));
   displayLabel = computed(() => TOPBAR_DISPLAYS.find(d => d.id === this.bar.display())?.label ?? '');
@@ -201,7 +214,7 @@ export class TopbarSettingsPanel {
   preview = computed(() => this.bar.entries().filter(e => !e.hidden));
 
   name(id: string): string {
-    return id === GAP ? 'Gap' : this.bar.entries().find(e => e.id === id)?.ws?.label ?? id;
+    return id === GAP ? 'Gap' : id === MORE ? 'More' : this.bar.entries().find(e => e.id === id)?.ws?.label ?? id;
   }
 
   // ---- dragging ----------------------------------------------------
