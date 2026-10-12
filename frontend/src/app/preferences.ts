@@ -12,6 +12,7 @@ import { TopbarSettingsPanel } from './topbar-settings';
 import { TopBar } from './topbar';
 import { CURRENCY } from './money';
 import { CustomThemesPanel } from './custom-themes';
+import { ModelSwitch, SWITCHES, SWITCH_DEFAULT, SWITCH_INFO, currentSwitch, reducedMotion, setSwitch } from './editor/model-switch';
 import { ProfileSettingsPanel } from './profile-settings';
 import { TokensSettingsPanel } from './tokens-settings';
 import { AdminUsersPanel } from './admin-users';
@@ -37,6 +38,8 @@ export class Prefs {
   tab = signal<PrefsTab>('profile');
   theme = signal<ThemeId>(currentTheme());
   font = signal<Font>(currentFont());
+  /** How the 3D room goes from one model to the next (editor/model-switch.ts). */
+  modelSwitch = signal<ModelSwitch>(currentSwitch());
 
   constructor() {
     // "?" opens the shortcuts wherever you are - unless you are typing it.
@@ -61,6 +64,9 @@ export class Prefs {
 
   /** Wear a typeface (theme.ts). */
   wearFont(f: Font) { this.font.set(setFont(f)); }
+
+  /** Pick the model switch; the next switch uses it. */
+  pickSwitch(m: ModelSwitch) { this.modelSwitch.set(setSwitch(m)); }
 
   /** What a theme is called where it is shown. */
   nameOf(t: ThemeId): string {
@@ -210,6 +216,20 @@ interface NavItem { id: PrefsTab; label: string; about: string; ico: string; blu
                 </div>
               </div>
             </div>
+            <div class="st-card">
+              <div class="st-card-head"><h3>{{ 'Model switch' | t }}</h3>
+                <span class="st-sub">{{ 'How the 3D room goes from one model to the next.' | t }}@if (reduced) { {{ 'Your system asks for reduced motion, so models switch at once.' | t }} }</span></div>
+              <div class="st-card-body">
+                <div class="st-switches">
+                  @for (s of switches; track s) {
+                    <button class="st-theme" [attr.data-on]="prefs.modelSwitch() === s ? 1 : null" (click)="prefs.pickSwitch(s)">
+                      <span class="st-theme-name"><b>{{ switchInfo[s].name | t }}</b>@if (prefs.modelSwitch() === s) { <em>● {{ 'on' | t }}</em> } @else if (s === switchDefault) { <small>{{ 'default' | t }}</small> }</span>
+                      <span class="st-switch-about">{{ switchInfo[s].about | t }}</span>
+                    </button>
+                  }
+                </div>
+              </div>
+            </div>
             @for (grp of groups; track grp.name) {
               @if (themeFilter() === 'All' || themeFilter() === grp.name) {
                 <div class="st-card">
@@ -311,6 +331,10 @@ export class RoomSettings {
   readonly names = THEME_NAMES;
   readonly fonts = FONTS;
   readonly fontNames = FONT_NAMES;
+  readonly switches = SWITCHES;
+  readonly switchInfo = SWITCH_INFO;
+  readonly switchDefault = SWITCH_DEFAULT;
+  readonly reduced = reducedMotion();
   readonly swatch = SWATCH;
   readonly seriesVars = PALETTE;
   readonly langs = LANGS;

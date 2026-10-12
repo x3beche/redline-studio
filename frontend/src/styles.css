@@ -2431,6 +2431,18 @@ body {
   100% { transform: translateX(300%); }
 }
 
+/* Switching models in the 3D room (editor/model-switch.ts): a thin line
+   along the top of the view while the new geometry loads, the same slide as
+   a build's bar, and the old model's last frame held over the view while
+   the page is busy building the new one. */
+.tcv-switch-bar { position: absolute; z-index: 6; left: 0; right: 0; top: 0; height: 2px;
+  overflow: hidden; pointer-events: none; background: var(--line); }
+.tcv-switch-bar[hidden] { display: none; }
+.tcv-switch-bar::after { content: ""; display: block; width: 35%; height: 100%; background: var(--accent);
+  animation: tcv-slide 1.1s ease-in-out infinite; }
+.tcv-switch-still { position: absolute; z-index: 5; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .tcv-switch-bar::after { animation: none; width: 100%; opacity: .6; } }
+
 /* The viewer's info box says "Ready", the library version, the control mode
    and the axis colours - none of which changes or needs a permanent panel.
    The running task takes its place. */

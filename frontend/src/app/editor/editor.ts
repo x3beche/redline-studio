@@ -151,6 +151,9 @@ export class Editor implements AfterViewInit, OnDestroy {
   glError = signal('');
   catalog = signal<FolderNode | null>(null);
   activeModel = signal<string>('');
+  /** The model asked for and still loading: its row in the tree is marked
+   *  at once, not when the geometry is in. */
+  opening = signal<string | null>(null);
   busy = signal('');
   collapsed = signal(false);
   log = signal<LogLine[]>([]);
@@ -917,11 +920,16 @@ export class Editor implements AfterViewInit, OnDestroy {
     const seq = ++this.loadSeq;
     const current = () => seq === this.loadSeq;
     this.loadingId = m.id;
+    this.opening.set(m.id);
     this.report();
     this.busy.set('loading model…');
     const opened = Date.now();
     const handled = () => this.handledAt >= opened;
     try {
+      // A frame for the tree to mark the row before the load blocks the
+      // page (the timer stands in for a frame in a hidden tab).
+      await new Promise<void>(r => { requestAnimationFrame(() => setTimeout(r)); setTimeout(r, 100); });
+      if (!current()) return;
       // Data is not on disk; it streams from the database.
       if (!await this.viewer.load(this.cat.viewerUrl(m.id, m.built_at), current)) return;
       this.builtAt = m.built_at ?? '';
@@ -997,7 +1005,7 @@ export class Editor implements AfterViewInit, OnDestroy {
       this.flash('load failed: ' + (e as Error).message);
       if (this.urlPin && !this.shown.id) this.viewError = `${m.id}: load failed`;
     } finally {
-      if (current()) { this.loadingId = null; this.report(); }
+      if (current()) { this.loadingId = null; this.opening.set(null); this.report(); }
     }
     if (current()) this.busy.set('');
   }
@@ -2183,7 +2191,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     if (kind === 'firmware') return room === 'firmware' && this.picked.firmware() === id;
     return kind === 'board'
       ? room === 'pcb' && this.picked.board() === id
-      : room === 'cad' && this.activeModel() === id;
+      : room === 'cad' && (this.opening() ?? this.activeModel()) === id;
   }
 
   /** The tree from the keyboard, the way a file tree is walked: up and

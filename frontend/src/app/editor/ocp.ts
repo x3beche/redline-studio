@@ -4,6 +4,7 @@ import { ClipWheel } from './clip-wheel';
 import { ClipReverse } from './clip-reverse';
 import { Motions } from './motions';
 import { ModelTab } from './model-tab';
+import { SwitchMotion } from './model-switch';
 
 /** OCP CAD Viewer itself (three-cad-viewer): the same version and wire
  *  format the VS Code extension uses; Python produces the payload. */
@@ -87,6 +88,11 @@ export class OcpViewer {
   modelTab: ModelTab | null = null;
   /** resizeCadView throws before render() has been called. */
   private rendered = false;
+  /** How one model gives way to the next (model-switch.ts). */
+  private motion = new SwitchMotion(() => this.view, () => this.container.querySelector('canvas'), () => this.viewer);
+  /** The model on screen, from its payload's address: the same one again
+   *  (a rebuild) keeps its camera rather than gliding. */
+  private shownKey: string | null = null;
 
   constructor(private container: HTMLElement) {}
 
@@ -155,10 +161,24 @@ export class OcpViewer {
     // Fetch before clearing: a rebuild replaces the stored payload, and
     // clearing first left the scene blank for the whole download - or for
     // good, if the request failed.
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`viewer payload ${res.status}`);
-    const envelope = await res.json();
-    if (!stillWanted()) return false;
+    const key = /\/api\/models\/(.+)\/viewer\.json/.exec(url)?.[1] ?? null;
+    const token = this.motion.begin(!!this.shot);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`viewer payload ${res.status}`);
+      const envelope = await res.json();
+      if (!stillWanted()) return false;
+      const from = this.motion.freeze(token, this.rendered);
+      this.show(envelope, key);
+      this.motion.land(token, from, key === this.shownKey);
+      this.shownKey = key;
+      return true;
+    } finally {
+      this.motion.end(token);
+    }
+  }
+
+  private show(envelope: any, key: string | null) {
     // The moved groups back and the live tubes out before the scene goes.
     this.motions?.clear();
     if (this.rendered) this.viewer.clear();
@@ -206,7 +226,6 @@ export class OcpViewer {
       this.motions.still = !!this.shot;
       // Kept per model (what was last set on its Motion tab): the model's
       // id, from /api/models/<id>/viewer.json.
-      const key = /\/api\/models\/(.+)\/viewer\.json/.exec(url)?.[1] ?? null;
       try { this.motions.setup(this.viewer, envelope.motions, key && decodeURIComponent(key)); }
       catch (e) { console.warn('motions not set up', e); }
     }
@@ -215,7 +234,6 @@ export class OcpViewer {
     if (!this.shot) this.modelTab?.restore();
     this.clipWheel?.ensure();
     this.clipReverse?.ensure();
-    return true;
   }
 
   /** A canvas of a fixed size, for tools/render.py (?shot=WxH): the picture
@@ -588,8 +606,10 @@ export class OcpViewer {
 
   cameraState(): CameraState {
     const v = this.viewer;
-    const p = v.getCameraPosition() as number[];
-    const t = v.getCameraTarget() as number[];
+    // Mid-glide, where the camera is going.
+    const to = this.motion.destination;
+    const p = to?.position ?? v.getCameraPosition() as number[];
+    const t = to?.target ?? v.getCameraTarget() as number[];
     return { position: [p[0], p[1], p[2]], target: [t[0], t[1], t[2]], up: [0, 0, 1] };
   }
 
@@ -597,6 +617,7 @@ export class OcpViewer {
    *  distance, which the position already says. */
   applyCamera(s: CameraState, view?: NoteView | null) {
     const v = this.viewer;
+    this.motion.halt();
     v.setCameraTarget(s.target as any, false);
     v.setCameraPosition(s.position as any, false, true);
     const zoom = view?.camera?.zoom;

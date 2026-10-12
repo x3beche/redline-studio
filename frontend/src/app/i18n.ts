@@ -3469,6 +3469,14 @@ const TR: Record<string, string> = {
   'Cleared - new lines show here.': 'Temizlendi - yeni satırlar burada görünür.',
   'Show earlier lines': 'Önceki satırları göster', 'No line matches.': 'Eşleşen satır yok.',
   'No activity yet.': 'Henüz etkinlik yok.', 'Jump to latest': 'En yeniye git', 'running…': 'çalışıyor…',
+  'Model switch': 'Model geçişi', 'How the 3D room goes from one model to the next.': '3D odasının bir modelden diğerine nasıl geçtiği.',
+  'Your system asks for reduced motion, so models switch at once.': 'Sisteminiz azaltılmış hareket istiyor, bu yüzden modeller anında değişir.',
+  'None': 'Yok', 'The new model replaces the old one at once.': 'Yeni model eskisinin yerini anında alır.',
+  'Fade': 'Solma', 'The old model dims while the new one loads, then it fades in.': 'Yenisi yüklenirken eski model kararır, sonra yenisi belirir.',
+  'Fade and scale': 'Solma ve büyüme', 'As Fade, and the new model grows into place.': 'Solma gibi; yeni model de yerine doğru büyür.',
+  'Camera glide': 'Kamera kayması', 'The camera moves from the old view to the new one.': 'Kamera eski görünümden yenisine kayarak geçer.',
+  'Fade and glide': 'Solma ve kayma', 'Fade, with the camera gliding to the new view.': 'Solma, kamera da yeni görünüme kayarak.',
+  'Parts in turn': 'Parça parça', 'The parts appear one after another; large models fade.': 'Parçalar sırayla belirir; büyük modeller solarak gelir.',
 };
 
 export function t(text: string): string {
