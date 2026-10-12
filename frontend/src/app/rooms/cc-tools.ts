@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, DestroyRef, computed, inject, input, output, signal } from '@angular/core';
-import { TimeChart, TimeData } from './charts';
+import { MiniStack, StackCol, TimeChart, TimeData } from './charts';
 import { LANG, T, t } from '../i18n';
 import type { CcTool, ToolLevel } from './commandcode';
 import { WORKSPACES } from '../workspaces';
@@ -497,11 +497,7 @@ export class CcToolsView {
       .map(([name, n]) => ({ name, n, color: this.pkgColor(name), label: label(name), names: [...who[name]].map(x => t(x)).join(', ') }));
   }
   /** A package's colour, the same in every period: by its place among the packages. */
-  pkgColor(p: string) {
-    const i = this.groups().findIndex(g => g.id === p);
-    // Eight series colours; past them, the same eight paler, so no two packages share one.
-    return i < 0 ? 'var(--ink-dim)' : i < 8 ? SERIES[i] : `color-mix(in srgb, ${SERIES[(i * 3 + 1) % 8]} 45%, var(--ink))`;
-  }
+  pkgColor(p: string) { return pkgColorAt(this.groups().findIndex(g => g.id === p)); }
   stack(u: ToolsUsage, d: { by: Record<string, number> }) {
     const by: Record<string, number> = {};
     for (const [k, n] of Object.entries(d.by)) by[this.pkgOf(k)] = (by[this.pkgOf(k)] ?? 0) + n;
@@ -564,34 +560,45 @@ export class CcToolsView {
   example(tpl: string) { return t(tpl).replace(/\{(\w+)\}/g, '…'); }
 }
 
+/** The packages in the Tools panel's order: General, a tab's own in the top
+ *  bar's order, then any other a tool names (CcTools.groups). */
+function pkgOrder(tools: CcTool[]): string[] {
+  const tabs = ['general', ...WORKSPACES.filter(w => !NO_PACKAGE.has(w.id)).map(w => w.id as string)];
+  return [...tabs, ...[...new Set(tools.map(x => x.package || 'other'))].filter(id => !tabs.includes(id))];
+}
+/** A package's colour by its place among them, the same in every chart. */
+function pkgColorAt(i: number) {
+  // Eight series colours; past them, the same eight paler, so no two packages share one.
+  return i < 0 ? 'var(--ink-dim)' : i < 8 ? SERIES[i] : `color-mix(in srgb, ${SERIES[(i * 3 + 1) % 8]} 45%, var(--ink))`;
+}
+
 /** The last part of the usage card in the conversation list: how many tools
  *  are on, how they were used today and this week, how often they worked,
  *  the week's most used one, and the week by day (GET /api/cc/tools-usage).
  *  Opens the tools above in the conversation's place. The card draws the frame. */
 @Component({
   selector: 'app-cc-tools-line',
-  imports: [CountUp, Skeleton, T, TimeChart],
+  imports: [CountUp, MiniStack, Skeleton, T],
   styles: [`
     :host { display: block; flex: none; }
-    .ctl { display: flex; flex-direction: column; gap: 5px; width: 100%; padding: 7px 8px 8px; text-align: left;
+    :host { height: 100%; min-width: 0; }
+    .ctl { display: flex; flex-direction: column; gap: 4px; width: 100%; height: 100%; min-width: 0; padding: 7px 8px 8px; text-align: left;
       font: inherit; font-size: 11px; color: var(--ink-dim); border: 0; border-radius: 0; background: none; cursor: pointer; }
     .ctl:hover, .ctl:focus-visible { background: var(--hover); outline: none; }
     .ctl[aria-pressed="true"] { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
-    .ctl-head { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; }
+    .ctl-head { display: flex; align-items: center; gap: 5px; width: 100%; min-width: 0; }
     .ctl b { color: var(--ink); font-weight: 600; }
     .ctl-head em { margin-left: auto; font: normal 10.5px 'IBM Plex Mono', ui-monospace, monospace; white-space: nowrap; }
     svg { flex: none; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7;
       stroke-linecap: round; stroke-linejoin: round; }
     .ctl[aria-pressed="true"] .ctl-head svg:first-child { color: var(--accent); }
     .ctl-head svg:last-child { width: 12px; height: 12px; }
-    .ctl-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 100%;
-      font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; }
-    .ctl-stats > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ctl-stats > span:last-child { text-align: right; }
-    .ctl-chart { width: 100%; }
-    .ctl-sub { display: flex; gap: 6px; width: 100%; min-width: 0; font-size: 10.5px; }
-    .ctl-sub span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-    .ctl-sub em { margin-left: auto; font: normal 10.5px 'IBM Plex Mono', ui-monospace, monospace; white-space: nowrap; }
+    /* The two figures that matter: the week's uses, large, and how many worked. */
+    .ctl-fig { display: flex; align-items: baseline; gap: 4px; width: 100%; min-width: 0; font-size: 10.5px; white-space: nowrap; }
+    .ctl-fig > b { font: 600 15px 'IBM Plex Mono', ui-monospace, monospace; }
+    .ctl-fig > em { margin-left: auto; font: normal 10.5px 'IBM Plex Mono', ui-monospace, monospace; }
+    .ctl-fig > em b { font-weight: 600; }
+    .ctl-chart { width: 100%; margin-top: auto; }
     @media (max-width: 768px) { .ctl { padding: 9px 10px 10px; } }
   `],
   template: `
@@ -600,21 +607,15 @@ export class CcToolsView {
   <div class="ctl-head">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="wrench" /></svg>
     <b>{{ 'Tools' | t }}</b>
-    <em><b>{{ on() }}</b> / {{ total() }} {{ 'on' | t }}</em>
+    <em><b>{{ on() }}</b>/{{ total() }}</em>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="chevron" /></svg>
   </div>
   @if (stats(); as s) {
-    <div class="ctl-stats">
-      <span><b [wbCount]="s.today"></b> {{ 'today' | t }}</span>
-      <span><b [wbCount]="s.week"></b> {{ 'this week' | t }}</span>
-      <span [title]="'Uses this week that worked' | t"><b [wbCount]="s.ok == null ? '–' : s.ok + '%'"></b> {{ 'worked' | t }}</span>
+    <div class="ctl-fig" [title]="s.top ? ('Most used' | t) + ': ' + (s.top.label | t) + ' (' + s.top.week + '×)' : ''">
+      <b [wbCount]="s.week"></b><span>{{ 'this week' | t }}</span>
+      <em [title]="'Uses this week that worked' | t"><b [wbCount]="s.ok == null ? '–' : s.ok + '%'"></b></em>
     </div>
-    <app-time-chart class="ctl-chart" [data]="s.chart" [bare]="true" [height]="30" [legend]="false" />
-    <div class="ctl-sub">
-      @if (s.top; as top) {
-        <span>{{ 'Most used' | t }}: <b>{{ top.label | t }}</b></span><em>{{ top.week }}×</em>
-      } @else { <span>{{ 'No tool uses this week' | t }}</span> }
-    </div>
+    <app-mini-stack class="ctl-chart" [data]="s.cols" [height]="34" />
   } @else if (!failed()) { <wb-skel kind="mini" /> }
 </button>`,
 })
@@ -646,9 +647,17 @@ export class CcToolsLine {
     const best = per.filter(([, x]) => x.week > 0).sort((a, b) => b[1].week - a[1].week)[0];
     const label = (n: string) => this.tools().find(x => x.name === n)?.label || n;
     const days = u.days;
-    const t0 = days.length ? Math.round(new Date(days[0].day + 'T00:00:00').getTime() / 1000) : 0;
-    const chart: TimeData = { t0, step: 86400, n: days.length, series: [{ name: t('Tool uses'), values: days.map(total) }] };
-    return { today: days.length ? total(days[days.length - 1]) : 0, week, chart,
+    // Each day by package, in the Tools panel's colours.
+    const order = pkgOrder(this.tools()), pkg = (n: string) => this.tools().find(x => x.name === n)?.package || 'other';
+    const pkgName = (p: string) => t(WORKSPACES.find(w => w.id === p)?.label ?? this.tools().find(x => x.package === p)?.package_label ?? (p === 'general' ? 'General' : p));
+    const lang = LANG() === 'tr' ? 'tr-TR' : 'en-GB';
+    const cols: StackCol[] = days.map(d => {
+      const by: Record<string, number> = {};
+      for (const [k, n] of Object.entries(d.by)) by[pkg(k)] = (by[pkg(k)] ?? 0) + n;
+      return { label: new Date(d.day + 'T12:00:00').toLocaleDateString(lang, { weekday: 'short', day: 'numeric', month: 'short' }),
+               parts: order.filter(p => by[p]).map(p => ({ name: pkgName(p), n: by[p], color: pkgColorAt(order.indexOf(p)) })) };
+    });
+    return { today: days.length ? total(days[days.length - 1]) : 0, week, cols,
              ok: week ? Math.round(100 * worked / week) : null,
              top: best ? { label: label(best[0]), week: best[1].week } : null };
   });

@@ -251,7 +251,8 @@ async def summary(days: int = 14) -> dict:
     day0 = datetime(first.year, first.month, first.day, tzinfo=tz)
     month0 = here.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     since = min(day0, month0)
-    by_day = {(first + timedelta(days=i)).isoformat(): {"calls": 0, "tokens": 0, "cost_usd": None} for i in range(days)}
+    by_day = {(first + timedelta(days=i)).isoformat(): {"calls": 0, "tokens": 0, "cost_usd": None, "by": {}}
+              for i in range(days)}
     month = {"calls": 0, "input": 0, "output": 0, "cost_usd": None, "unpriced_calls": 0}
     providers: set[str] = set()
 
@@ -286,6 +287,8 @@ async def summary(days: int = 14) -> dict:
         if b is not None:
             b["calls"] += 1
             b["tokens"] += inp + out
+            if r.get("provider"):
+                b["by"][r["provider"]] = b["by"].get(r["provider"], 0) + inp + out
             if usd is not None:
                 b["cost_usd"] = (b["cost_usd"] or 0) + usd
 
@@ -312,7 +315,9 @@ async def summary(days: int = 14) -> dict:
             "today": {"calls": t["calls"], "tokens": t["tokens"], "cost_usd": t["cost_usd"], "answers": answers_today},
             "answers": {"n": answers, "tps_median": None if med_tps is None else round(med_tps, 1),
                         "ttft_ms_median": None if med_ttft is None else round(med_ttft)},
-            "by_day": [{"day": k, **v} for k, v in by_day.items()]}
+            "by_day": [{"day": k, **v} for k, v in by_day.items()],
+            # Every provider in its fixed order, so its colour in the bars stays the same.
+            "providers": [{"id": k, "name": v["name"]} for k, v in llm.PROVIDERS.items()]}
 
 
 async def _openrouter_account_new() -> dict | None:

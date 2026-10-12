@@ -2,9 +2,9 @@ import { Component, DestroyRef, ElementRef, Injectable, OnDestroy, computed, inj
 import { HttpClient } from '@angular/common/http';
 import { LANG, T, t } from './i18n';
 import { Prefs } from './preferences';
-import { money as shown, usdTip } from './money';
+import { money as shown, moneyLocale, usdTip } from './money';
 import { CcTabWindow, TopBar } from './topbar';
-import { TimeChart, TimeData } from './rooms/charts';
+import { MiniStack, StackCol, color } from './rooms/charts';
 import { Skeleton } from './skeleton';
 import { CountUp } from './count';
 
@@ -271,7 +271,9 @@ export interface LlmSummary {
            unpriced_calls: number; providers: number };
   today: { calls: number; tokens: number; cost_usd: number | null; answers: number };
   answers: { n: number; tps_median: number | null; ttft_ms_median: number | null };
-  by_day: { day: string; calls: number; tokens: number; cost_usd: number | null }[];
+  by_day: { day: string; calls: number; tokens: number; cost_usd: number | null; by?: Record<string, number> }[];
+  /** Every provider in a fixed order, for its colour. */
+  providers?: { id: string; name: string }[];
 }
 
 /** A provider's quota window, for the one warning the card may show. */
@@ -285,40 +287,39 @@ const CHEVRON_R = 'M10 7l5 5-5 5';
  *  days as small bars, today's answers and their median speed, and a
  *  single warning when a provider's quota is nearly used up. Opens LLM
  *  settings, where each provider has its own figures. What it is given
- *  (the Tools card) goes under it, in the same frame. */
+ *  (the Tools card) goes beside it, in the same frame. */
 @Component({
   selector: 'app-cc-usage-line',
-  imports: [CountUp, Skeleton, T, TimeChart],
+  imports: [CountUp, MiniStack, Skeleton, T],
   styles: [`
     :host { display: block; flex: none; }
     .ccl-wrap { padding: 6px 8px 8px; border-top: 1px solid var(--line); }
-    /* One frame: the models, then the Tools card - split by a hairline. */
-    .ccl-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); }
-    .ccl-card > :first-child, :host ::ng-deep .ccl-card > :first-child > button { border-radius: 4px 4px 0 0; }
-    :host ::ng-deep .ccl-card > :last-child, :host ::ng-deep .ccl-card > :last-child > button { border-radius: 0 0 4px 4px; }
-    :host ::ng-deep .ccl-card > * + * { border-top: 1px solid var(--line); }
-    .ccl { display: flex; flex-direction: column; gap: 5px; width: 100%; padding: 7px 8px 8px; text-align: left;
+    /* One frame, two squares side by side: the models, then the Tools card - split by a hairline. */
+    .ccl-card { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 5px;
+      background: var(--surface); }
+    .ccl-card > :first-child, :host ::ng-deep .ccl-card > :first-child > button { border-radius: 4px 0 0 4px; }
+    :host ::ng-deep .ccl-card > :last-child, :host ::ng-deep .ccl-card > :last-child > button { border-radius: 0 4px 4px 0; }
+    :host ::ng-deep .ccl-card > * + * { border-left: 1px solid var(--line); min-width: 0; }
+    .ccl { display: flex; flex-direction: column; gap: 4px; width: 100%; height: 100%; min-width: 0; padding: 7px 8px 8px; text-align: left;
       border: 0; background: none; color: var(--ink); cursor: pointer; font: inherit; }
     .ccl:hover, .ccl:focus-visible { background: var(--hover); outline: none; }
-    .ccl-head { display: flex; width: 100%; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-dim); min-width: 0; }
+    .ccl-head { display: flex; width: 100%; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-dim); min-width: 0; }
     .ccl-head b { color: var(--ink); font-weight: 600; }
-    .ccl-head em { margin-left: auto; font-style: normal; white-space: nowrap; }
+    .ccl-head em { margin-left: auto; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .ccl-head svg { flex: none; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7;
       stroke-linecap: round; stroke-linejoin: round; }
     .ccl-head svg:last-child { width: 12px; height: 12px; }
-    .ccl-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 100%;
-      font: 10.5px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink-dim); }
-    .ccl-stats > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ccl-stats > span:last-child:not(:first-child) { text-align: right; }
-    .ccl-stats b, .ccl-sub b { color: var(--ink); font-weight: 600; }
-    .ccl-chart { width: 100%; }
+    /* The two figures that matter: the month's tokens, large, and its calls -
+       or, when a quota is nearly used up, that quota in its colour. */
+    .ccl-fig { display: flex; align-items: baseline; gap: 4px; width: 100%; min-width: 0; font-size: 10.5px; color: var(--ink-dim);
+      white-space: nowrap; }
+    .ccl-fig > b { font: 600 15px 'IBM Plex Mono', ui-monospace, monospace; color: var(--ink); }
+    .ccl-fig > em { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: normal 10.5px 'IBM Plex Mono', ui-monospace, monospace; }
+    .ccl-fig > em b { color: var(--ink); font-weight: 600; }
+    .ccl-fig > em[data-tone="warn"], .ccl-fig > em[data-tone="warn"] b { color: var(--warn); }
+    .ccl-fig > em[data-tone="danger"], .ccl-fig > em[data-tone="danger"] b { color: var(--danger); }
+    .ccl-chart { width: 100%; margin-top: auto; }
     .ccl-sub { width: 100%; font-size: 10.5px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ccl-warn { display: flex; align-items: center; gap: 6px; width: 100%; font-size: 10.5px; color: var(--warn); min-width: 0; }
-    .ccl-warn[data-tone="danger"] { color: var(--danger); }
-    .ccl-warn span { flex: none; white-space: nowrap; }
-    .ccl-warn i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-    .ccl-warn em { margin-left: auto; min-width: 0; font-style: normal; color: var(--ink-dim); white-space: nowrap;
-      overflow: hidden; text-overflow: ellipsis; }
     @media (max-width: 768px) { .ccl { padding: 9px 10px 10px; } }
   `],
   template: `
@@ -330,26 +331,17 @@ const CHEVRON_R = 'M10 7l5 5-5 5';
       <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="chevron" /></svg>
     </div>
     @if (sum(); as s) {
-      <div class="ccl-stats">
-        <span><b [wbCount]="num(s.month.tokens)"></b> tok</span>
-        <span><b [wbCount]="s.month.calls.toLocaleString('en-US')"></b> {{ 'calls' | t }}</span>
-        <!-- The money only when most calls were priced: a subscription's calls carry none, and a
-             sum of the few priced ones would read as the month's cost. -->
-        @if (s.month.cost_usd != null && s.month.unpriced_calls * 2 < s.month.calls) { <span><b [wbCount]="shown(s.month.cost_usd)"></b></span> }
-        @else { <span><b>{{ s.month.providers }}</b> {{ 'providers' | t }}</span> }
+      <div class="ccl-fig">
+        <b [wbCount]="num(s.month.tokens)"></b><span>tok</span>
+        @if (warn(); as q) {
+          <em [attr.data-tone]="tone(q.w)" [title]="q.provider + ' · ' + (q.label | t) + (q.reset ? ' · ' + q.reset : '')">{{ q.label | t }} <b>{{ round(q.w.pct!) }}%</b></em>
+        } @else {
+          <em><b [wbCount]="s.month.calls.toLocaleString('en-US')"></b> {{ 'calls' | t }}</em>
+        }
       </div>
-      <app-time-chart class="ccl-chart" [data]="chart()!" [bare]="true" [height]="30" [legend]="false" [f]="tokFmt" />
-      <div class="ccl-sub">{{ 'Today' | t }} <b>{{ s.today.answers }}</b> {{ 'answers' | t }}
-        @if (s.answers.tps_median != null) { · <b>{{ s.answers.tps_median }}</b> tok/s }
-        @if (s.answers.ttft_ms_median != null) { · {{ 'first token' | t }} <b>{{ secs(s.answers.ttft_ms_median) }}</b> }
-      </div>
+      <app-mini-stack class="ccl-chart" [data]="cols()" [height]="34" [f]="tokFmt" />
     } @else {
       @if (err()) { <div class="ccl-sub">{{ 'The usage did not load' | t }}</div> } @else { <wb-skel kind="mini" /> }
-    }
-    @if (warn(); as q) {
-      <div class="ccl-warn" [attr.data-tone]="tone(q.w)"><i></i>
-        <span>{{ q.provider }} · {{ q.label | t }} <b>{{ round(q.w.pct!) }}%</b></span>
-        @if (q.reset) { <em>{{ q.reset }}</em> }</div>
     }
   </button>
 <ng-content /></div></div>`,
@@ -374,10 +366,16 @@ export class CcUsageLine implements OnDestroy {
   readonly num = num;
   readonly shown = shown;
   readonly tokFmt = (v: number) => num(v) + ' tok';
-  /** Tokens a day, every provider together. */
-  chart = computed<TimeData | null>(() => {
+  /** Tokens a day, each provider in its own colour (its place in the server's list). */
+  cols = computed<StackCol[]>(() => {
     const s = this.sum();
-    return s ? { t0: s.t0, step: s.step, n: s.by_day.length, series: [{ name: t('Tokens'), values: s.by_day.map(d => d.tokens) }] } : null;
+    if (!s) return [];
+    const provs = s.providers ?? [], lang = moneyLocale();
+    return s.by_day.map(d => ({
+      label: new Date(d.day + 'T12:00:00').toLocaleDateString(lang, { weekday: 'short', day: 'numeric', month: 'short' }),
+      parts: d.by ? provs.map((p, i) => ({ name: p.name, n: d.by![p.id] ?? 0, color: color(i) }))
+                  : [{ name: t('Tokens'), n: d.tokens, color: color(0) }],
+    }));
   });
   /** Every quota a provider shares, fullest first (Command Code's for now). */
   private quotas = computed<Quota[]>(() => {

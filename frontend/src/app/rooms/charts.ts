@@ -1,8 +1,8 @@
 import {
-  Component, ElementRef, OnDestroy, computed, effect, input, signal, viewChild, AfterViewInit,
+  Component, ElementRef, OnDestroy, computed, effect, input, signal, untracked, viewChild, AfterViewInit,
 } from '@angular/core';
 import { money } from '../money';
-import { CHART_BUSY } from '../chart-load';
+import { CHART_BUSY, chartAsks } from '../chart-load';
 
 /* ---- how every chart loads and appears: the app's one standard ----------
  *
@@ -17,13 +17,24 @@ import { CHART_BUSY } from '../chart-load';
  * loading and appearing". A chart drawn by hand can take the same look with
  * the classes .tcv-ch-busy (on its box) and .tcv-ch-rise (on each bar, with
  * --tcv-i its index). */
-/** A number that changes whenever `of` gives something new: a chart's marks
- *  are drawn inside `@for (g of [gen()]; track g)`, so new data draws them
- *  afresh and their entry animation plays again. */
+/** A number that changes when `of` gives something new that the person asked
+ *  for: a chart's marks are drawn inside `@for (g of [gen()]; track g)`, so
+ *  new data draws them afresh and their entry animation plays again. A page
+ *  polling in the background, or the same data again, keeps the marks as they
+ *  are - the animation plays when a chart first appears and when another
+ *  period is chosen, not on every refresh. */
 function generation(of: () => unknown) {
   const gen = signal(0);
-  let first = true;
-  effect(() => { of(); if (first) { first = false; return; } gen.update(n => n + 1); });
+  let first = true, last = '', seen = chartAsks;
+  effect(() => {
+    const now = JSON.stringify(of() ?? null);
+    if (first) { first = false; last = now; return; }
+    if (now === last) return;
+    last = now;
+    if (chartAsks === seen) return;
+    seen = chartAsks;
+    untracked(() => gen.update(n => n + 1));
+  });
   return gen;
 }
 
@@ -448,5 +459,50 @@ export class Spark {
                                  this.height() - 2 - (x - lo) / span * (this.height() - 4)]);
     return { line: pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(''),
              last: pts[pts.length - 1] };
+  });
+}
+
+/** One day (or bucket) of a mini stacked chart: its parts, each in its own colour. */
+export interface StackCol { label: string; parts: { name: string; n: number; color: string }[] }
+
+/** A small stacked bar chart drawn with boxes: a column a bucket, its parts
+ *  piled in their own colours from the axis up, as the Tools panel's uses by
+ *  package. For the cards under the Chat list, where an SVG with axes is too
+ *  much; each column's tooltip says what it holds. */
+@Component({
+  selector: 'app-mini-stack',
+  styles: [`
+    :host { display: block; }
+    .ms { display: flex; align-items: flex-end; gap: 2px; height: 100%; border-bottom: 1px solid var(--line); }
+    .ms-col { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column-reverse; }
+    .ms-col i { display: block; min-height: 1px; border-radius: 1px; }
+    .ms-col i + i { margin-bottom: 1px; }
+  `],
+  template: `
+@for (g of [gen()]; track g) {
+<div class="ms" [style.height.px]="height()">
+  @for (c of cols(); track $index; let i = $index) {
+    <div class="ms-col tcv-ch-rise-all" [title]="c.tip" [style.--tcv-i]="i">
+      @for (p of c.parts; track p.name) { <i [style.height.%]="p.h" [style.background]="p.color"></i> }
+    </div>
+  }
+</div>
+}`,
+})
+export class MiniStack {
+  data = input.required<StackCol[]>();
+  height = input(40);
+  /** How a part's figure is written in the tooltip. */
+  f = input<Fmt>(fmt.count);
+  readonly gen = generation(() => this.data());
+  cols = computed(() => {
+    const d = this.data(), f = this.f();
+    const peak = Math.max(1, ...d.map(c => c.parts.reduce((a, p) => a + p.n, 0)));
+    return d.map(c => {
+      const parts = c.parts.filter(p => p.n > 0);
+      const sum = parts.reduce((a, p) => a + p.n, 0);
+      return { tip: c.label + (sum ? '\n' + parts.map(p => `${p.name}: ${f(p.n)}`).join('\n') : ''),
+               parts: parts.map(p => ({ ...p, h: 100 * p.n / peak })) };
+    });
   });
 }
