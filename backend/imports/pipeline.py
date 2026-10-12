@@ -434,16 +434,7 @@ def slug(text: str) -> str:
 async def ensure_folder(db, path: str) -> str:
     """The folder, made if it is not there (each level)."""
     from .. import store
-    path = "/".join(p for p in (path or "").split("/") if p)
-    if not path:
-        return ""
-    parent = ""
-    for name in path.split("/"):
-        here = f"{parent}/{name}" if parent else name
-        if not await db.folders.find_one({"_id": here}):
-            await store.create_folder(db, parent, name)
-        parent = here
-    return path
+    return await store.ensure_folder(db, path)
 
 
 async def free_id(db, base: str) -> str:

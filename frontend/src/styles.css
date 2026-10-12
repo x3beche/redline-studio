@@ -5247,3 +5247,44 @@ html[data-shot] .tcv-log { display: none !important; }
   font-family: 'Switzer', 'IBM Plex Sans', system-ui, sans-serif !important;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- 3D room: a new project, and the first-run guide (editor.html) ---- */
+.tcv-newproj { display: flex; flex-direction: column; gap: 6px; }
+.tcv-newproj-kinds { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink); }
+.tcv-newproj-kinds label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.tcv-newproj-kinds input { accent-color: var(--accent); }
+.tcv-newproj-kinds .mono { color: var(--ink-dim); font-size: 11px; }
+.tcv-newproj-err { margin: 0; font-size: 11px; color: var(--danger); }
+
+/* Across the whole view, one row of steps: read left to right, no cards
+   inside the panel - the steps are columns divided by a rule. */
+.tcv-guide { position: absolute; right: 12px; z-index: 20; container-type: inline-size; max-height: calc(100% - 24px); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }
+.tcv-guide-head { display: flex; align-items: baseline; gap: 16px; padding: 10px 14px;
+  border-bottom: 1px solid var(--line); }
+.tcv-guide-head h2 { margin: 0; flex: none; font-size: 14px; font-weight: 600; color: var(--ink); }
+.tcv-guide-head p { margin: 0; flex: 1; min-width: 0; font-size: 12px; color: var(--ink-dim); }
+.tcv-guide-head .tcv-chip { flex: none; }
+.tcv-guide-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.tcv-guide-steps > li { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; min-width: 0; }
+.tcv-guide-steps > li + li { border-left: 1px solid var(--line); }
+.tcv-guide-steps h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.tcv-guide-steps h3 > span { display: inline-flex; flex: none; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border: 1px solid var(--line); border-radius: 50%; font-size: 11px; color: var(--ink-dim); }
+.tcv-guide-steps > li[data-done] h3 > span { border-color: var(--accent); color: var(--accent); }
+.tcv-guide-steps p { flex: 1; margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-dim); }
+.tcv-guide-steps .tcv-btn { align-self: flex-start; padding: 3px 10px; }
+.tcv-guide-acts { display: flex; flex-wrap: wrap; gap: 4px; }
+.tcv-guide-at { font-size: 12px; color: var(--accent); }
+/* Narrower than five readable columns: steps one under another, each a
+   row - the words beside, the button at the end. */
+@container (max-width: 860px) {
+  .tcv-guide-head { flex-wrap: wrap; }
+  .tcv-guide-steps { grid-template-columns: minmax(0, 1fr); }
+  .tcv-guide-steps > li { display: grid; grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr) auto;
+    align-items: start; gap: 4px 14px; padding: 9px 14px; }
+  .tcv-guide-steps > li + li { border-left: 0; border-top: 1px solid var(--line); }
+}
+@container (max-width: 520px) {
+  .tcv-guide-steps > li { display: flex; }
+}

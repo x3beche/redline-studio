@@ -126,6 +126,55 @@ async def create_folder(db, parent: str, name: str) -> str:
     return path
 
 
+async def ensure_folder(db, path: str) -> str:
+    """The folder, made if it is not there (each level). A model saved to
+    `lamp/parts/arm` is listed under lamp/parts, so those folders have to
+    exist - the tree is built from them, and a model in a folder that is
+    not there is in no listing at all."""
+    path = "/".join(p for p in (path or "").split("/") if p)
+    parent = ""
+    for name in path.split("/") if path else []:
+        here = f"{parent}/{name}" if parent else name
+        if not await db.folders.find_one({"_id": here}):
+            try:
+                await create_folder(db, parent, name)
+            except FileExistsError:
+                pass                      # made in between, by someone else
+        parent = here
+    return path
+
+
+# ---------------- projects ----------------
+# A project is a top folder, laid out the same way every time so a person
+# and an agent both know where a thing goes: parts/ for 3D parts,
+# electronics/ for boards (their firmware is listed under each board).
+# assemblies/ (models that import parts and boards) and purchased/ (bought
+# parts' STEP files) are made the first time something is saved there.
+PROJECT_KINDS = ("parts", "electronics")
+
+
+async def create_project(db, name: str, kinds: list[str]) -> dict:
+    """The project's folder and the subfolders its kinds want. All or
+    nothing: a refusal halfway takes back what was made."""
+    if not SAFE.match(name or ""):
+        raise ValueError("project name may only contain letters, digits, - and _")
+    subs = [k for k in PROJECT_KINDS if k in kinds]
+    if not subs:
+        raise ValueError("a project has 3D parts, electronics or both")
+    if await db.folders.find_one({"_id": name}):
+        raise FileExistsError(f"{name} already exists")
+    made: list[str] = []
+    try:
+        made.append(await create_folder(db, "", name))
+        for sub in subs:
+            made.append(await create_folder(db, name, sub))
+    except BaseException:
+        for path in reversed(made):
+            await db.folders.delete_one({"_id": path})
+        raise
+    return {"path": name, "folders": made}
+
+
 async def delete_folder(db, path: str) -> None:
     if await db.models.count_documents({"folder": path}):
         raise ValueError("folder is not empty")
@@ -273,6 +322,7 @@ async def save_model(db, model_id: str, source: str) -> dict:
                 doc[k] = existing[k]
     else:
         doc["artifacts"], doc["stale"] = {}, True
+        await ensure_folder(db, folder)
     await db.models.replace_one({"_id": model_id}, doc, upsert=True)
     # A new version, and every model that uses this one marked stale and
     # queued for a rebuild (backend/links.py).

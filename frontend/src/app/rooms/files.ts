@@ -1240,8 +1240,8 @@ export class RoomFiles implements OnDestroy {
         const out: string[] = [];
         const walk = (n: FolderNode) => { if (n.path) out.push(n.path); n.folders.forEach(walk); };
         walk(tree);
-        // A purchased part most likely; else the first folder.
-        const pick = out.find(p => /purchased$/.test(p)) ?? out[0] ?? '';
+        // A purchased part most likely; else a project's parts; else the first folder.
+        const pick = out.find(p => /purchased$/.test(p)) ?? out.find(p => /(^|\/)parts$/.test(p)) ?? out[0] ?? '';
         this.dialog.update(d => d?.type === 'add' ? { ...d, folders: out, folder: d.folder || pick } : d);
       },
       error: () => this.patchDialog({ error: t('The folders did not load.') }),

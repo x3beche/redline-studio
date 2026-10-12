@@ -47,18 +47,36 @@
     </div>
 
     @if (!collapsed()) {
-      <!-- Create actions get their own row so the wordmark keeps full width. -->
-      <div class="flex gap-1 px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
-        <button (click)="newModel('')" class="tcv-btn flex-1" title="create a model">
-          + {{ 'Model' | t }}
-        </button>
-        <button (click)="newFolder('')" class="tcv-btn flex-1" title="create a folder">
-          + {{ 'Folder' | t }}
-        </button>
-        <button (click)="pickCad()" class="tcv-btn flex-1"
-                title="bring in a STEP / IGES / BREP / STL file">
-          + CAD
-        </button>
+      <!-- Create actions get their own row so the wordmark keeps full width.
+           One action at the top: a project. A model, a folder or a CAD file
+           is made in a project, from its folder's row (+M, +K, +CAD). -->
+      <div class="px-2 py-1.5" style="border-bottom: 1px solid var(--line)">
+        @if (projectForm(); as pf) {
+          <form class="tcv-newproj" (submit)="$event.preventDefault(); createProject()">
+            <input #projectName class="tcv-field w-full px-1.5 py-1" [value]="pf.name"
+                   (input)="patchProject({ name: $any($event.target).value })"
+                   [placeholder]="'project name, e.g. desk-lamp' | t" autocomplete="off" spellcheck="false">
+            <div class="tcv-newproj-kinds">
+              <label><input type="checkbox" [checked]="pf.parts"
+                            (change)="patchProject({ parts: $any($event.target).checked })">
+                {{ '3D parts' | t }} <span class="mono">parts/</span></label>
+              <label><input type="checkbox" [checked]="pf.electronics"
+                            (change)="patchProject({ electronics: $any($event.target).checked })">
+                {{ 'Electronics' | t }} <span class="mono">electronics/</span></label>
+            </div>
+            @if (pf.error) { <p class="tcv-newproj-err">{{ pf.error }}</p> }
+            <div class="flex gap-1">
+              <button type="submit" class="tcv-btn tcv-btn-accent flex-1" [disabled]="pf.busy">
+                {{ (pf.busy ? 'creating…' : 'Create') | t }}</button>
+              <button type="button" class="tcv-btn flex-1" (click)="projectForm.set(null)">{{ 'Cancel' | t }}</button>
+            </div>
+          </form>
+        } @else {
+          <button (click)="openProjectForm()" class="tcv-btn w-full" [disabled]="!auth.can('edit')"
+                  [title]="'a project folder, with parts/ for 3D and electronics/ for boards' | t">
+            + {{ 'New project' | t }}
+          </button>
+        }
         <input #cadInput type="file" class="hidden"
                accept=".step,.stp,.iges,.igs,.brep,.stl,.3mf"
                (change)="uploadCad($event)">
@@ -374,6 +392,53 @@
           @if (fv.part) { · {{ fv.part }} }
         </p>
       </div>
+    }
+    <!-- FIRST RUN: a space with no models yet. Where the model would be,
+         the steps that make one, each with the button that starts it -
+         one row across the view, so it reads in one pass. -->
+    @if (showGuide() && !glError()) {
+      <section class="tcv-guide" [style.top.px]="viewTop() + 12" [style.left.px]="viewLeft() + 12"
+               aria-label="getting started">
+        <header class="tcv-guide-head">
+          <h2>{{ 'Your first model' | t }}</h2>
+          <p>{{ 'Everything lives in a project folder: 3D parts in parts/, boards in electronics/, assemblies in assemblies/. The agents look for things there too.' | t }}</p>
+          <button class="tcv-chip" (click)="shutGuide()" [title]="'hide this guide' | t">{{ 'Hide' | t }}</button>
+        </header>
+        <ol class="tcv-guide-steps">
+          <li [attr.data-done]="guideAt() ? 1 : null">
+            <h3><span>1</span>{{ 'Make a project' | t }}</h3>
+            <p>{{ 'A folder for one product. Tick 3D parts, Electronics or both, and the folders are made inside it.' | t }}</p>
+            @if (guideAt(); as g) {
+              <span class="tcv-guide-at mono">{{ g.project }}/</span>
+            } @else {
+              <button class="tcv-btn tcv-btn-accent" (click)="openProjectForm()" [disabled]="!auth.can('edit')">+ {{ 'New project' | t }}</button>
+            }
+          </li>
+          <li>
+            <h3><span>2</span>{{ 'Make the first part' | t }}</h3>
+            <p>{{ 'Makes a starter block in parts/ and builds it. Describe the part you want under Comment, save it and queue it: the 3D agent turns the block into your part.' | t }}</p>
+            <div class="tcv-guide-acts">
+              <button class="tcv-btn" (click)="newModel(guideAt()!.parts)" [disabled]="!guideAt() || !auth.can('edit')">+ {{ 'New part' | t }}</button>
+              <button class="tcv-btn" (click)="picked.openThread('cad')">{{ 'Ask the 3D agent' | t }}</button>
+            </div>
+          </li>
+          <li>
+            <h3><span>3</span>{{ 'Bring in a CAD file' | t }}</h3>
+            <p>{{ 'STEP, IGES, BREP, STL or 3MF becomes a model in parts/ that can be cut, measured and placed. A maker\'s STEP of a bought part comes in the same way.' | t }}</p>
+            <button class="tcv-btn" (click)="pickCad(guideAt()!.parts)" [disabled]="!guideAt() || !auth.can('edit')">+ CAD</button>
+          </li>
+          <li>
+            <h3><span>4</span>{{ 'Parts from LCSC' | t }}</h3>
+            <p>{{ 'Electronic parts come from LCSC: Chat or the PCB agent finds them and keeps them in the PCB room\'s drawer. Each part\'s 3D body comes with the board it is on.' | t }}</p>
+            <button class="tcv-btn" (click)="picked.room.set('pcb')">{{ 'Open the PCB room' | t }}</button>
+          </li>
+          <li>
+            <h3><span>5</span>{{ 'Put it together' | t }}</h3>
+            <p>{{ 'An assembly is a model that imports parts and boards. Make one in assemblies/, open it and use Insert component on the toolbar; when a part changes, the assembly is rebuilt.' | t }}</p>
+            <button class="tcv-btn" (click)="newAssembly()" [disabled]="!guideAt() || !auth.can('edit')">+ {{ 'New assembly' | t }}</button>
+          </li>
+        </ol>
+      </section>
     }
     @if (glError()) {
       <div class="absolute inset-0 flex items-center justify-center p-8">
@@ -752,8 +817,11 @@
         <span class="text-[11px]" style="color: var(--accent)">move here</span>
       } @else {
         <span class="flex gap-1.5 text-[11px] opacity-0 group-hover:opacity-100">
-          <button (click)="newModel(n.path)" style="color: var(--ink-dim)" title="new model">+M</button>
-          <button (click)="newFolder(n.path)" style="color: var(--ink-dim)" title="new folder">+K</button>
+          <button (click)="newModel(n.path); $event.stopPropagation()" style="color: var(--ink-dim)"
+                  [title]="(depth === 1 ? 'new model in its parts folder' : 'new model') | t">+M</button>
+          <button (click)="newFolder(n.path); $event.stopPropagation()" style="color: var(--ink-dim)" [title]="'new folder' | t">+K</button>
+          <button (click)="pickCad(n.path); $event.stopPropagation()" style="color: var(--ink-dim)"
+                  [title]="'bring in a STEP / IGES / BREP / STL file here' | t">+CAD</button>
           <button (click)="dropFolder(n.path, $event)" style="color: var(--danger)"
                   title="delete - only works when the folder is empty">&times;</button>
         </span>

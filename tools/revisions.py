@@ -603,7 +603,8 @@ async def cmd_board(args):
         print(call(f"/api/boards/{bid}")["source"])
     elif args.what == "save":
         text = Path(args.file).read_text()
-        print(call(f"/api/boards/{bid}", "PUT", {"source": text}))
+        body = {"source": text, **({"folder": args.folder} if args.folder else {})}
+        print(call(f"/api/boards/{bid}", "PUT", body))
     elif args.what == "run":
         print(f"{bid}: build, schematic, place, route, pour, DRC - a minute or so")
         out = job(f"/api/boards/{bid}/run", {}, limit=1800)
@@ -2289,6 +2290,8 @@ def main() -> None:
     s.add_argument("--keep-edits", action="store_true",
                    help="convert: carry hand edits over onto the new source (a three-way "
                         "merge); refused where they conflict")
+    s.add_argument("--folder", help="save: where a new board is listed - its project's "
+                                    "electronics folder (lamp/electronics), made if missing")
     s.add_argument("--rev", help="source: a backup revision of the source (from a forced "
                                  "or merged convert) instead of the current one")
     s.set_defaults(fn=cmd_board)

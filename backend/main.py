@@ -165,6 +165,24 @@ async def new_folder(name: str, parent: str = ""):
         raise HTTPException(400, str(exc)) from exc
 
 
+class ProjectIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    # Which kinds of work it holds: "parts" (3D), "electronics" (boards).
+    kinds: list[str] = Field(default_factory=lambda: ["parts"], max_length=4)
+
+
+@app.post("/api/catalog/projects")
+async def new_project(body: ProjectIn):
+    """A project: its folder, and parts/ and/or electronics/ under it
+    (store.create_project)."""
+    try:
+        return await store.create_project(db(), body.name.strip(), body.kinds)
+    except FileExistsError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.delete("/api/catalog/folders/{path:path}")
 async def drop_folder(path: str):
     try:
@@ -261,7 +279,12 @@ async def get_uploads():
 
 
 @app.post("/api/uploads")
-async def post_upload(file: UploadFile = File(...), make_model: bool = True):
+async def post_upload(file: UploadFile = File(...), make_model: bool = True, folder: str = ""):
+    """`folder` is where the model that imports it goes (a project's parts/,
+    made if missing); the top of the tree without one."""
+    folder = folder.strip().strip("/")
+    if folder and not all(store.SAFE.match(p) for p in folder.split("/")):
+        raise HTTPException(400, "folder names may only use letters, digits, - and _")
     data = await file.read()
     try:
         info = await store.put_upload(db(), file.filename or "part.step", data)
@@ -269,7 +292,7 @@ async def post_upload(file: UploadFile = File(...), make_model: bool = True):
         raise HTTPException(400, str(exc)) from exc
     info["model"] = None
     if make_model:
-        model_id = Path(info["name"]).stem
+        model_id = "/".join(p for p in (folder, Path(info["name"]).stem) if p)
         doc = await store.save_model(db(), model_id, starter_source(info["name"]))
         info["model"] = doc["_id"]
     await push_activity(ActivityIn(
@@ -1255,6 +1278,9 @@ class BoardIn(BaseModel):
     title: str | None = None
     entry: str | None = None
     if_match: str | None = Field(default=None, max_length=64)      # as for a model
+    # Where a new board is listed (a project's electronics/, made if
+    # missing). Only on the first save: moving one is /move.
+    folder: str | None = Field(default=None, max_length=300)
 
 
 @app.get("/api/boards")
@@ -1290,7 +1316,14 @@ async def save_board(bid: str, body: BoardIn):
         patch["title"] = body.title
     if body.entry:
         patch["entry"] = body.entry
-    got = await db()[ato.BOARDS].update_one({"_id": bid}, {"$set": patch}, upsert=True)
+    folder = (body.folder or "").strip().strip("/")
+    if folder:
+        if not all(store.SAFE.match(p) for p in folder.split("/")):
+            raise HTTPException(400, "folder names may only use letters, digits, - and _")
+        if not await db()[ato.BOARDS].find_one({"_id": bid}, {"_id": 1}):
+            await store.ensure_folder(db(), folder)
+    update = {"$set": patch, **({"$setOnInsert": {"folder": folder}} if folder else {})}
+    got = await db()[ato.BOARDS].update_one({"_id": bid}, update, upsert=True)
     if getattr(got, "upserted_id", None) is not None:
         await links.reindex(db())       # a new name a model can import
     if body.if_match:

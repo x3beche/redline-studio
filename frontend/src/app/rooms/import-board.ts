@@ -173,7 +173,8 @@ export class ImportBoard implements OnDestroy {
   over = signal(false);
   projects = signal<string[]>([]);
   project = signal('');
-  folder = signal('imported');
+  // A project's boards are in its electronics/ (backend/store.py create_project).
+  folder = signal('electronics');
   name = signal('');
   error = signal('');
   /** Upload progress in percent, null while not uploading. */

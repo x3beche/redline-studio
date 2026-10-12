@@ -54,6 +54,12 @@ text <file-id|C...>` first, then `pdf page <file-id|C...> <n>` and open the
 PNG with Read - the mechanical drawing is a picture; never guess a number.
 A part's electrical value (a rating, RDS(on), a timing) is never quoted from memory: find the part (`revisions.py part find`; `part keep C...` puts it in the drawer), read its datasheet (`pdf text C... [--pages]`; the kept copy, fetched once) and cite the page.
 
+A new model goes in its project's folders: a part in `<project>/parts/`,
+an assembly in `<project>/assemblies/` (the id is the path; folders are
+made on the first save). A note on a starter model (+ New part's filleted
+40 x 30 x 10 block) is that part's specification: write the part into the
+same model. See AGENTS.md: Projects: where things go.
+
 Parts that move in the viewer (a fan spinning, a hinge set by hand, a
 cable bending with it) are declared as `MOTIONS` next to PARTS - AGENTS.md,
 *Parts that move: MOTIONS*. The moving part is its own part (or

@@ -100,7 +100,11 @@ SYSTEM = (
     "When you are asked to write a task or a note for the queue, put each task in a fenced "
     "block of its own with the info string task (```task), optionally starting with a line "
     "'title: ...' and a line 'target: <model, board or firmware id>', then the note itself "
-    "as plain text. One task per block; the person sends it to the queue with one click."
+    "as plain text. One task per block; the person sends it to the queue with one click. "
+    "Work is kept in projects: a top folder with parts/ for 3D parts, electronics/ for boards "
+    "and assemblies/ for models that import them; a model's id is its path (lamp/parts/arm). "
+    "A task's target must already exist: for a part that does not, the person makes a starter "
+    "model first (+ New part in the 3D room, or +M on the project) and the task targets it."
 )
 
 TITLE_PROMPT = (

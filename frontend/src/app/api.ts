@@ -391,6 +391,11 @@ export class Catalog {
       `/api/catalog/folders?name=${encodeURIComponent(name)}&parent=${encodeURIComponent(parent)}`, {});
   }
 
+  /** A project: its folder, and parts/ (3D) and/or electronics/ (boards) under it. */
+  newProject(name: string, kinds: ('parts' | 'electronics')[]): Observable<{ path: string; folders: string[] }> {
+    return this.http.post<{ path: string; folders: string[] }>('/api/catalog/projects', { name, kinds });
+  }
+
   build(id: string): Observable<{ model: string; artifacts: Record<string, number> }> {
     return this.http.post<{ model: string; artifacts: Record<string, number> }>(
       `/api/models/${id}/build`, {});
@@ -398,10 +403,11 @@ export class Catalog {
 
   /** A brought-in CAD file. The server also writes a model that imports it,
    *  so it shows up in the viewer without another step. */
-  upload(file: File): Observable<UploadResult> {
+  upload(file: File, folder = ''): Observable<UploadResult> {
     const body = new FormData();
     body.append('file', file);
-    return this.http.post<UploadResult>('/api/uploads', body);
+    return this.http.post<UploadResult>(
+      '/api/uploads' + (folder ? `?folder=${encodeURIComponent(folder)}` : ''), body);
   }
 
   uploads(): Observable<UploadInfo[]> {

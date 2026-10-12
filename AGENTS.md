@@ -886,6 +886,42 @@ MOTIONS = {
   them back (render.py checks the page read them back); spins are not
   kept, and shots are taken with them stopped at their rest pose.
 
+## Projects: where things go
+
+A project is a top folder, laid out the same way every time. The person
+makes one with **+ New project** (`POST /api/catalog/projects
+{"name": "lamp", "kinds": ["parts", "electronics"]}`), which makes the
+folder and the subfolders its kinds want:
+
+```
+lamp/
+  parts/         3D parts, one model each       lamp/parts/arm
+  assemblies/    models that import parts and boards   lamp/assemblies/desk_lamp
+  purchased/     bought parts from a maker's STEP (files to-model --folder lamp/purchased)
+  electronics/   boards (a board is listed here; its id is its own name, not a path)
+```
+
+- A model's id is its path. A new part is saved into the project's
+  `parts/`, an assembly into `assemblies/`: `revisions.py save
+  lamp/parts/arm arm.py`, then `build lamp/parts/arm`. The folders on the
+  path are made on its first save, so `assemblies/` and `purchased/` need
+  no step of their own. Never save a new model at the top (`arm`) or in a
+  folder you made up.
+- Which project: the one the note's model is in (the first part of its
+  id). A note with no model, in a space with one project, is about that
+  project; with several and nothing in the note to say which, `ask`.
+- A note on a **starter model** - the block **+ New part** makes (a
+  40 x 30 x 10 filleted `Box`, TITLE its own name) - is the specification
+  of that part: write the part into that model, same id, and build it. Do
+  not make a second model beside it. `after <id>` renders it.
+- A new board: `revisions.py board save <id> board.ato --folder
+  lamp/electronics` (`PUT /api/boards/<id>` with `"folder"`). The folder
+  is taken on the first save only; moving one later is
+  `POST /api/boards/<id>/move?folder=...`. Firmware is listed under its
+  board and needs no folder.
+- An assembly imports what it holds by name (below): `import arm as A`
+  finds the project's own `arm`.
+
 ## Components: reuse is importing, never copying
 
 Every `.3d` model and every `.pcb` board is a **component**. A design that

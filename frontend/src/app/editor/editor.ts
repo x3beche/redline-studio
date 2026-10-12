@@ -28,7 +28,7 @@ import { CodeView } from '../rooms/code-view';
 import { ComponentPicker, LinksCard, PinIcon, insertImport } from '../rooms/links';
 import { Releases } from '../rooms/releases';
 import { Changes } from '../rooms/changes';
-import { LANG, T } from '../i18n';
+import { LANG, T, t } from '../i18n';
 import { Auth } from '../auth';
 import { startFold, whenSettled } from '../fold';
 
@@ -169,6 +169,8 @@ export class Editor implements AfterViewInit, OnDestroy {
   viewTop = signal(0);
   /** The 3D canvas's gaps to the stage's right and bottom, for cards pinned to its lower right. */
   viewRight = signal(0);
+  /** Where the 3D canvas starts, right of the viewer's own tree. */
+  viewLeft = signal(0);
   viewBottom = signal(0);
   /** One revision lookup at a time, so the retries above do not each start
    *  their own and open the same model three times over. */
@@ -990,7 +992,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   newFolder(parent: string) {
-    const name = prompt('Folder name (letters, digits, - , _):');
+    const name = prompt(t('Folder name (letters, digits, - , _):'));
     if (!name) return;
     this.cat.newFolder(name, parent).subscribe({
       next: () => this.loadCatalog(),
@@ -999,8 +1001,142 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   /** Bring in a STEP (or IGES/BREP/STL). The server stores it and writes a
-   *  model that imports it, so it is on screen without a second step. */
-  pickCad() { this.cadInput()?.nativeElement.click(); }
+   *  model that imports it, so it is on screen without a second step.
+   *  From a folder's row it goes in that folder - a project's parts/ when
+   *  the row is the project's own. */
+  private cadFolder = '';
+  pickCad(folder = '') {
+    this.cadFolder = this.partsOf(folder);
+    this.cadInput()?.nativeElement.click();
+  }
+
+  // ---- projects ----
+  // A project is a top folder with parts/ (3D) and/or electronics/
+  // (boards) under it (backend/store.py create_project). What is made in
+  // a project goes where that layout says: a model or a CAD file asked
+  // for on the project itself lands in its parts/.
+  projectForm = signal<{ name: string; parts: boolean; electronics: boolean; busy: boolean; error: string } | null>(null);
+  private projectName = viewChild<ElementRef<HTMLInputElement>>('projectName');
+
+  openProjectForm() {
+    if (this.collapsed()) this.toggleSidebar();
+    if (!this.projectForm()) {
+      this.projectForm.set({ name: '', parts: true, electronics: false, busy: false, error: '' });
+    }
+    setTimeout(() => this.projectName()?.nativeElement.focus());
+  }
+
+  patchProject(p: Partial<{ name: string; parts: boolean; electronics: boolean }>) {
+    this.projectForm.update(f => f && { ...f, ...p, error: '' });
+  }
+
+  createProject() {
+    const f = this.projectForm();
+    if (!f || f.busy) return;
+    const name = f.name.trim();
+    if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+      this.projectForm.set({ ...f, error: t('Letters, digits, - and _ only, no spaces.') });
+      return;
+    }
+    const kinds = [...(f.parts ? ['parts' as const] : []), ...(f.electronics ? ['electronics' as const] : [])];
+    if (!kinds.length) {
+      this.projectForm.set({ ...f, error: t('Pick 3D parts, Electronics or both.') });
+      return;
+    }
+    this.projectForm.set({ ...f, busy: true, error: '' });
+    this.cat.newProject(name, kinds).subscribe({
+      next: r => {
+        this.projectForm.set(null);
+        this.guideProject.set(r.path);
+        this.flash(`${r.path} ${t('created')}: ${r.folders.slice(1).map(p => p + '/').join(', ')}`);
+        this.loadCatalog();
+      },
+      error: e => this.projectForm.set({ ...f, busy: false, error: e.error?.detail ?? t('Could not create the project.') }),
+    });
+  }
+
+  /** Where a model asked for on `folder` goes: a project's own row means
+   *  its parts/, when it has one; any other folder is itself. */
+  private partsOf(folder: string): string {
+    if (!folder || folder.includes('/')) return folder;
+    const top = this.catalog()?.folders.find(f => f.path === folder);
+    return top?.folders.some(f => f.name === 'parts') ? `${folder}/parts` : folder;
+  }
+
+  // ---- first run ----
+  // A space with no models yet gets a short guide where the model would
+  // be: the steps that make one, each with the button that starts it.
+  // It goes once there is a model, or when put away.
+  private static GUIDE = 'redline.guide3d';
+  guideShut = signal(this.readGuideShut());
+  /** The project the guide's steps work in: the one just made, else the
+   *  first with a parts folder. */
+  guideProject = signal('');
+
+  private readGuideShut(): boolean {
+    try { return localStorage.getItem(Editor.GUIDE) === 'shut'; } catch { return false; }
+  }
+
+  shutGuide() {
+    this.guideShut.set(true);
+    try { localStorage.setItem(Editor.GUIDE, 'shut'); } catch { /* private window */ }
+  }
+
+  private countModels(n: FolderNode): number {
+    return n.models.length + n.folders.reduce((k, f) => k + this.countModels(f), 0);
+  }
+
+  showGuide = computed(() => {
+    const tree = this.catalog();
+    return !!tree && !this.guideShut() && this.countModels(tree) === 0;
+  });
+
+  /** The guide's project and what is in it, for the steps' buttons. */
+  guideAt = computed(() => {
+    const tops = this.catalog()?.folders ?? [];
+    const want = this.guideProject();
+    const p = tops.find(f => f.path === want)
+      ?? tops.find(f => f.folders.some(s => s.name === 'parts')) ?? tops[0];
+    if (!p) return null;
+    // parts/ even when the project was made for electronics only: the
+    // first save makes it.
+    return { project: p.path, parts: `${p.path}/parts`, assemblies: `${p.path}/assemblies` };
+  });
+
+  /** Make a starter model, build it and open it: a new part should be on
+   *  screen, not a grey name in the tree waiting for a rebuild. */
+  private makeModel(id: string, name: string) {
+    const source = SEED.replace(/__NAME__/g, name);
+    this.cat.createModel(id, source).subscribe({
+      next: () => {
+        this.flash(name + ' ' + t('created') + ' - ' + t('building it now'));
+        this.loadCatalog();
+        this.busy.set(t('building') + ' ' + name + '…');
+        this.cat.build(id).subscribe({
+          next: () => {
+            this.busy.set('');
+            this.cat.tree().subscribe(tree => {
+              this.catalog.set(tree);
+              const m = this.findModel(tree, id);
+              if (m) this.openModel(m);
+            });
+          },
+          error: e => { this.busy.set(''); this.flash('build failed: ' + (e.error?.detail ?? e.status)); },
+        });
+      },
+      error: e => this.flash(e.error?.detail ?? 'could not create model'),
+    });
+  }
+
+  /** The guide's "new assembly": a model in the project's assemblies/
+   *  (made with it), to import parts and boards into. */
+  newAssembly() {
+    const g = this.guideAt();
+    if (!g) return;
+    const name = prompt(t('Assembly name (letters, digits, - , _):'));
+    if (!name) return;
+    this.makeModel(`${g.assemblies}/${name}`, name);
+  }
 
   // ---- left column: move and delete ----
   // Two clicks rather than drag and drop: pick the model, then pick the
@@ -1203,7 +1339,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     input.value = '';                       // same file twice must still fire
     if (!file) return;
     this.busy.set('uploading ' + file.name);
-    this.cat.upload(file).subscribe({
+    this.cat.upload(file, this.cadFolder).subscribe({
       next: r => {
         this.busy.set('');
         this.flash(`${r.name} imported (${Math.round(r.bytes / 1024)} kB)`);
@@ -1221,14 +1357,10 @@ export class Editor implements AfterViewInit, OnDestroy {
   }
 
   newModel(folder: string) {
-    const name = prompt('Model name (letters, digits, - , _):');
+    const into = this.partsOf(folder);
+    const name = prompt(t('Model name (letters, digits, - , _):') + (into ? `\n${into}/` : ''));
     if (!name) return;
-    const id = folder ? `${folder}/${name}` : name;
-    const source = SEED.replace('__NAME__', name);
-    this.cat.createModel(id, source).subscribe({
-      next: () => { this.flash(name + ' created'); this.loadCatalog(); },
-      error: e => this.flash(e.error?.detail ?? 'could not create model'),
-    });
+    this.makeModel(into ? `${into}/${name}` : name, name);
   }
 
   /** What a folded card says. The generated sentence when there is one,
@@ -1622,6 +1754,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     const stage = box.getBoundingClientRect();
     this.viewTop.set(cad ? Math.round(cad.top - stage.top) : 0);
     this.viewRight.set(cad ? Math.max(0, Math.round(stage.right - cad.right)) : 0);
+    this.viewLeft.set(cad ? Math.max(0, Math.round(cad.left - stage.left)) : 0);
     this.viewBottom.set(cad ? Math.max(0, Math.round(stage.bottom - cad.bottom)) : 0);
     const w = cad ? cad.width : box.clientWidth;
     const h = cad ? cad.height : box.clientHeight;

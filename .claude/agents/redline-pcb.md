@@ -52,7 +52,9 @@ saves the part's LCSC datasheet - fetch one only
 when the note needs facts from it (pinout, ratings, application circuit,
 layout guidance), not by default. Read it with `revisions.py pdf text C...
 [--pages 1-3]`, and `pdf page C... <n>` + the Read tool for tables and drawings.
-A part's electrical value (a rating, RDS(on), a timing) is never quoted from memory: find the part (`revisions.py part find`; `part keep C...` puts it in the drawer), read its datasheet (`pdf text C... [--pages]`; the kept copy, fetched once) and cite the page. Check the netlist for the connections that matter
+A part's electrical value (a rating, RDS(on), a timing) is never quoted from memory: find the part (`revisions.py part find`; `part keep C...` puts it in the drawer), read its datasheet (`pdf text C... [--pages]`; the kept copy, fetched once) and cite the page. A new board is listed in its project's `electronics/`: `board save <id>
+<file> --folder <project>/electronics` (first save only) - AGENTS.md,
+Projects: where things go. Check the netlist for the connections that matter
 in code, and DRC/ERC must be clean. See AGENTS.md: Board notes, Designing
 a board from a description.
 
