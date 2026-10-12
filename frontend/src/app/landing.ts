@@ -126,11 +126,13 @@ type Card = { name: string; lead: string; lbl: string; w: number; wide?: boolean
 </section>
 
 <section class="wrap" id="work">
-  <div class="grid sh rv"><h2>Notes, chat and agents</h2><p>Draw on the model or ask in Chat. Each note goes to the room's agent; you see its run, its questions and the result.</p><span class="n">03</span></div>
+  <div class="grid sh rv"><h2>Notes, chat and agents</h2><p>Ask in Chat. It looks things up with its tools, reads your photos, and writes tasks that go to a room's agent.</p><span class="n">03</span></div>
   <div class="pair rv">
-    <div><div class="shot"><app-snap src="chat" [page]="[1500, 1080]" [crop]="chatCrop" [focus]="[900, 560]" alt="Chat: a request written up as a 3D note" /></div><p class="lbl">Chat · a spoken request, written up as a task and queued in 3D as note d2d2ad</p></div>
-    <div><div class="shot"><app-snap src="rev" [crop]="revCrop" [focus]="[1460, 240]" alt="A drawn note on the station, applied" /></div><p class="lbl">3D Drawing · a drawn note, applied: the drawing, and the model at its camera</p></div>
+    <div><div class="shot"><app-snap src="chattool" [page]="chatPage" [crop]="chatStep" [min]="0" [frame]="chatFrame" alt="Chat: a tool step, opened" /></div><p class="lbl">Chat · a tool step, opened: model_read lists the 3D models, then the task is written</p></div>
+    <div><div class="shot"><app-snap src="chattool" [page]="chatPage" [crop]="chatPhoto" [min]="0" [frame]="chatFrame" alt="Chat: a photo of a screw, read" /></div><p class="lbl">Chat · a photo read: the screw named from the picture</p></div>
   </div>
+  <div class="shot wide rv"><app-snap src="chattools" [page]="[1800, 567]" [crop]="[271, 43, 1208, 511]" [min]="0" alt="Chat's usage card and the Tools page" /></div>
+  <p class="lbl">Chat · the plan's usage, Claude API calls and the Tools page: 12 of 13 tools on, uses by tool</p>
 </section>
 
 <div class="stmt wrap">
@@ -341,8 +343,11 @@ export class Landing implements AfterViewInit, OnDestroy {
   llmCrop = [535, 40, 1060, 900];
   /** flex-grow for a row of crops with one height: each one's width over its height. */
   ar(c: number[]) { return c[2] / c[3]; }
-  chatCrop = [595, 52, 584, 720];
-  revCrop = [960, 92, 640, 780];
+  /** Crops of the Chat snapshot (a 1500 × 3200 page): one frame, so both show text at one size. */
+  chatPage = [1500, 3200];
+  chatStep = [596, 849, 582, 506];
+  chatPhoto = [596, 2201, 582, 648];
+  chatFrame = [582, 648];
   /** The plans connected to Redline (Settings > Costs, LLM settings). */
   plans = [
     ['Claude Max', '₺3,170/mo', 'a plan, entered in Settings > Costs', 'var(--s5)'],
