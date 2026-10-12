@@ -431,40 +431,7 @@ type Ask = { text: string; label: string; go: () => void };
   <!-- LEFT: the conversations -->
   <aside class="tcv-notes-side tcv-cc-side">
     <div class="tcv-cc-sidehead">
-      <div class="tcv-cc-siderow">
-        <label class="tcv-cc-search">
-          <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.search }" />
-          <input type="search" [placeholder]="'Search' | t" [value]="q()" [attr.aria-label]="'Search conversations' | t"
-                 (input)="setQuery($any($event.target).value)" (keydown.escape)="setQuery('')">
-        </label>
-        @if (auth.can('draw')) {
-          <button class="tcv-cc-newsm" data-act="new" (click)="newChat()" [title]="('New conversation' | t) + ' (' + mod + 'Shift+O)'">
-            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.plus }" />
-            <span>{{ 'New' | t }}</span>
-          </button>
-        }
-      </div>
-      <div class="tcv-cc-tabrow">
-        <div class="tcv-cc-tabs" role="tablist">
-          <button role="tab" [class.on]="tab() === 'list'" [attr.aria-selected]="tab() === 'list'" (click)="showTab('list')">{{ 'Conversations' | t }}</button>
-          <button role="tab" [class.on]="tab() === 'archived'" [attr.aria-selected]="tab() === 'archived'" (click)="showTab('archived')">{{ 'Archived' | t }}</button>
-          <button role="tab" data-tab="trash" [class.on]="tab() === 'trash'" [attr.aria-selected]="tab() === 'trash'" (click)="showTab('trash')">{{ 'Trash' | t }}</button>
-        </div>
-        <span class="grow"></span>
-        @if (trash() && auth.can('draw') && shownChats().length && !selecting()) {
-          <button class="tcv-cc-ib tcv-cc-sm tcv-cc-danger" data-act="empty" (click)="askEmpty()" [title]="'Empty trash' | t">
-            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" /></button>
-        }
-        @if (auth.can('draw') && shownChats().length) {
-          <button class="tcv-cc-ib tcv-cc-sm" data-act="select" [class.on]="selecting()" (click)="toggleSelecting()" [title]="'Select several' | t">
-            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.select }" /></button>
-        }
-      </div>
-      @if (q().trim() && tab() === 'list') {
-        <label class="tcv-check-row tcv-cc-witharch">
-          <input type="checkbox" class="tcv-check" [checked]="withArchived()" (change)="withArchived.set($any($event.target).checked); runSearch()">
-          {{ 'Include archived' | t }}</label>
-      }
+      <!-- Selecting takes the search row's place, the same height, so the list does not move. -->
       @if (selecting()) {
         <div class="tcv-cc-selbar">
           <label class="tcv-check-row"><input type="checkbox" class="tcv-check" [checked]="allSelected()" [indeterminate]="someSelected()"
@@ -486,6 +453,41 @@ type Ask = { text: string; label: string; go: () => void };
           <button class="tcv-cc-ib" (click)="toggleSelecting()" [title]="'Cancel' | t">
             <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.x }" /></button>
         </div>
+      } @else {
+      <div class="tcv-cc-siderow">
+        <label class="tcv-cc-search">
+          <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.search }" />
+          <input type="search" [placeholder]="'Search' | t" [value]="q()" [attr.aria-label]="'Search conversations' | t"
+                 (input)="setQuery($any($event.target).value)" (keydown.escape)="setQuery('')">
+        </label>
+        @if (auth.can('draw')) {
+          <button class="tcv-cc-newsm" data-act="new" (click)="newChat()" [title]="('New conversation' | t) + ' (' + mod + 'Shift+O)'">
+            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.plus }" />
+            <span>{{ 'New' | t }}</span>
+          </button>
+        }
+      </div>
+      }
+      <div class="tcv-cc-tabrow">
+        <div class="tcv-cc-tabs" role="tablist">
+          <button role="tab" [class.on]="tab() === 'list'" [attr.aria-selected]="tab() === 'list'" (click)="showTab('list')">{{ 'Conversations' | t }}</button>
+          <button role="tab" [class.on]="tab() === 'archived'" [attr.aria-selected]="tab() === 'archived'" (click)="showTab('archived')">{{ 'Archived' | t }}</button>
+          <button role="tab" data-tab="trash" [class.on]="tab() === 'trash'" [attr.aria-selected]="tab() === 'trash'" (click)="showTab('trash')">{{ 'Trash' | t }}</button>
+        </div>
+        <span class="grow"></span>
+        @if (trash() && auth.can('draw') && shownChats().length && !selecting()) {
+          <button class="tcv-cc-ib tcv-cc-sm tcv-cc-danger" data-act="empty" (click)="askEmpty()" [title]="'Empty trash' | t">
+            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.trash }" /></button>
+        }
+        @if (auth.can('draw') && shownChats().length) {
+          <button class="tcv-cc-ib tcv-cc-sm" data-act="select" [class.on]="selecting()" (click)="toggleSelecting()" [title]="'Select several' | t">
+            <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.select }" /></button>
+        }
+      </div>
+      @if (q().trim() && tab() === 'list') {
+        <label class="tcv-check-row tcv-cc-witharch">
+          <input type="checkbox" class="tcv-check" [checked]="withArchived()" (change)="withArchived.set($any($event.target).checked); runSearch()">
+          {{ 'Include archived' | t }}</label>
       }
       @if (ask(); as a) {
         <div class="tcv-cc-ask" role="alertdialog" [attr.aria-label]="a.text">
@@ -497,7 +499,7 @@ type Ask = { text: string; label: string; go: () => void };
         </div>
       }
     </div>
-    <div class="tcv-notes-list tcv-cc-list" role="list">
+    <div class="tcv-notes-list tcv-cc-list" role="list" [attr.data-picking]="picking()">
       <!-- The rooms' agent threads: always here, always first, in the top
            bar's order; not renamed, archived or deleted. A search narrows
            them by name only. -->
@@ -611,7 +613,7 @@ type Ask = { text: string; label: string; go: () => void };
             </div>
           </div>
           } @else if (row.c; as c) {
-          <div class="tcv-cc-item" role="listitem" tabindex="0" [attr.data-on]="!dms.open() && !sel.thread() && c.id === openId() ? 1 : null"
+          <div class="tcv-cc-item" data-chat role="listitem" tabindex="0" [attr.data-on]="!dms.open() && !sel.thread() && c.id === openId() ? 1 : null"
                [attr.data-trash]="c.deleted_at ? 1 : null"
                [attr.data-sel]="selected().has(c.id) ? 1 : null" (click)="pick(c, $event)" (keydown.enter)="pick(c, $event)"
                (contextmenu)="chatMenu($event, c)"
@@ -1244,6 +1246,22 @@ export class RoomCommandCode implements OnDestroy {
   drawer = signal(false);
   selecting = signal(false);
   selected = signal<Set<string>>(new Set());
+  /** For a moment after selecting starts or ends, which way: the rows' text
+   *  slides over by the checkbox's room instead of jumping (styles.css). */
+  picking = signal<'on' | 'off' | null>(null);
+  private pickTimer = 0;
+  private pickFx = (() => {
+    let first = true;
+    return effect(() => {
+      const on = this.selecting();
+      if (first) { first = false; return; }
+      untracked(() => {
+        this.picking.set(on ? 'on' : 'off');
+        clearTimeout(this.pickTimer);
+        this.pickTimer = window.setTimeout(() => this.picking.set(null), 220);
+      });
+    });
+  })();
   /** Conversations deleted on the page, not yet on the server: "Undo" may bring them back. */
   pending = signal<Set<string>>(new Set());
   /** The toast (toast.ts) whose Undo can still stop the deletes waiting. */

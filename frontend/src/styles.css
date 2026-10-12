@@ -3942,8 +3942,26 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-cc-ib.tcv-cc-sm { min-width: 26px; height: 26px; padding: 0 5px; }
 .tcv-cc-ib.tcv-cc-sm .tcv-cc-ico { width: 14px; height: 14px; }
 .tcv-cc-witharch { padding: 0 2px 6px; font-size: 11.5px; color: var(--ink-dim); }
-.tcv-cc-selbar { display: flex; align-items: center; gap: 2px; padding: 2px 2px 2px 8px; font-size: 12px; color: var(--ink);
-  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+/* Selecting: the bar stands where the search row was, at its height, and
+   fades in; the chats' text slides over by the checkbox's room (16px and the
+   8px gap) as the checkbox fades and grows in, and back the other way. */
+.tcv-cc-selbar { display: flex; align-items: center; gap: 2px; height: 28px; padding: 0 1px 0 8px; font-size: 12px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 5px; }
+.tcv-cc-selbar .tcv-cc-ib { height: 24px; min-width: 26px; padding: 0 5px; }
+@media (prefers-reduced-motion: no-preference) {
+  .tcv-cc-selbar { animation: tcv-cc-fade .1s ease-out both; }
+  .tcv-cc-sidehead > .tcv-cc-siderow { animation: tcv-cc-fade .1s ease-out both; }
+  .tcv-cc-list[data-picking="on"] .tcv-cc-item[data-chat] > .tcv-check { animation: tcv-cc-ck-in .14s cubic-bezier(.2, .8, .2, 1) both; }
+  .tcv-cc-list[data-picking="on"] .tcv-cc-item[data-chat] > .tcv-cc-itemtext { animation: tcv-cc-shift-in .14s cubic-bezier(.2, .8, .2, 1) both; }
+  .tcv-cc-list[data-picking="off"] .tcv-cc-item[data-chat] > .tcv-cc-itemtext { animation: tcv-cc-shift-out .14s cubic-bezier(.2, .8, .2, 1) both; }
+  /* The time stays where it is: it moves back by as much as its line moves. */
+  .tcv-cc-list[data-picking="on"] .tcv-cc-item[data-chat] .tcv-cc-itemwhen { animation: tcv-cc-shift-out .14s cubic-bezier(.2, .8, .2, 1) both; }
+  .tcv-cc-list[data-picking="off"] .tcv-cc-item[data-chat] .tcv-cc-itemwhen { animation: tcv-cc-shift-in .14s cubic-bezier(.2, .8, .2, 1) both; }
+}
+@keyframes tcv-cc-fade { from { opacity: 0; } }
+@keyframes tcv-cc-ck-in { from { opacity: 0; transform: scale(.6); } }
+@keyframes tcv-cc-shift-in { from { transform: translateX(-24px); } }
+@keyframes tcv-cc-shift-out { from { transform: translateX(24px); } }
 .tcv-check-row { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
 /* The app's one checkbox (a native <input type="checkbox" class="tcv-check">,
    so the keyboard, labels and screen readers work as ever), drawn in its own
