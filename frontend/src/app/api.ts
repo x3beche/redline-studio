@@ -316,12 +316,6 @@ export interface FolderNode {
   name: string; path: string;
   folders: FolderNode[]; models: ModelEntry[]; boards?: BoardNode[]; firmware?: FirmwareNode[];
 }
-/** Anything a model can import: the Insert picker's rows. */
-export interface ComponentRow {
-  kind: 'model' | 'board'; id: string; title: string; version: number | null;
-  module: string | null; ready: boolean; line: string | null; used_by: string[];
-  uses?: string[]; pins?: Record<string, number>; stale?: boolean; state?: string | null;
-}
 /** One model as a component, for its links panel. */
 export interface ModelLinks {
   id: string; version: number;
@@ -426,11 +420,6 @@ export class Catalog {
   /** force replaces the refusal when another model imports this one. */
   dropModel(id: string, force = false): Observable<unknown> {
     return this.http.delete(`/api/models/${id}${force ? '?force=true' : ''}`);
-  }
-
-  /** Everything a model can import, models and boards alike. */
-  components(): Observable<ComponentRow[]> {
-    return this.http.get<ComponentRow[]>('/api/components');
   }
 
   links(id: string): Observable<ModelLinks> {

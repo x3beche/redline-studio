@@ -437,8 +437,8 @@ async def _model_states(d) -> dict[str, dict]:
 
 @app.get("/api/components")
 async def list_components(model: str | None = None):
-    """Everything a model can import, for the 3D room's Insert picker and
-    the agents' `component list`: every .3d model and every .pcb board,
+    """Everything a model can import, for the agents' `component list`
+    (tools/revisions.py): every .3d model and every .pcb board,
     with the line that imports it, what it uses and who uses it. With
     `model`, the line is the one that model would write (a bare name
     resolves by the importer's project, backend/modnames.py); without, one

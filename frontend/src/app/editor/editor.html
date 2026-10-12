@@ -463,7 +463,7 @@
           </li>
           <li>
             <h3><span>{{ 5 + (agentStep() ? 1 : 0) }}</span>{{ 'Put it together' | t }}</h3>
-            <p>{{ 'An assembly is a model that imports parts and boards. Make one in assemblies/, open it and use Insert component on the toolbar; when a part changes, the assembly is rebuilt.' | t }}</p>
+            <p>{{ 'An assembly is a model that imports parts and boards. Make one in assemblies/, put what it needs in Files and an agent adds it to the model; when a part changes, the assembly is rebuilt.' | t }}</p>
             <button class="tcv-btn" (click)="newAssembly()" [disabled]="!guideAt() || !auth.can('edit')">+ {{ 'New assembly' | t }}</button>
           </li>
         </ol>
@@ -534,18 +534,6 @@
       <button (click)="clear()" class="tcv-btn tcv-draw-text">Clear</button>
     </div>
 
-    <!-- Insert a component: any .3d model or .pcb board, by its import
-         line. Reuse is importing, never copying geometry or numbers. -->
-    <span #insertBtn class="tcv_tooltip tcv-dock-wait" data-tooltip="Insert component - import a .3d model or a .pcb board">
-      <span class="tcv_button_frame" [class.tcv_btn_click2]="inserting()">
-        <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-insert" aria-label="Insert component"
-               [disabled]="!activeModel() || frozen() || !auth.can('edit')" (click)="inserting.set(!inserting())">
-      </span>
-    </span>
-    @if (inserting() && activeModel()) {
-      <app-component-picker [model]="activeModel()" [top]="viewTop() + 12"
-                            (picked)="insertComponent($event)" (closed)="inserting.set(false)" />
-    }
     <!-- The open model as a component: what it uses, who uses it, and a
          rebuild a change elsewhere set off, with its error if it broke. -->
     @if (activeModel() && !ide() && !frozen()) {
@@ -556,8 +544,9 @@
       </div>
     }
 
-    <!-- The project's releases, and this model's technical drawing: in the
-         viewer's toolbar, before the code view's switch. -->
+    <!-- The project's releases, and this model's technical drawing: kept
+         out of sight and pressed by the rows of the side panel's Model tab
+         (model-tab.ts). -->
     <span #releaseBtn class="tcv_tooltip tcv-dock-wait" data-tooltip="Release - pack the project for manufacturing">
       <span class="tcv_button_frame">
         <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-release" aria-label="Release"
@@ -567,7 +556,8 @@
     <span #drawingBtn class="tcv_tooltip tcv-dock-wait" data-tooltip="Technical drawing - dimensioned views, as PDF">
       <span class="tcv_button_frame">
         <input type="button" class="tcv_reset tcv_btn tcv-ico tcv-ico-drawing" aria-label="Technical drawing"
-               [disabled]="!activeModel()" (click)="openDrawing()">
+               [attr.data-busy]="drawingBusy() ? 1 : null"
+               [disabled]="!activeModel() || drawingBusy()" (click)="openDrawing()">
       </span>
     </span>
     @if (releasing() && activeModel()) {

@@ -118,8 +118,9 @@ Guard exports and the `show()` call in each part with `if STANDALONE:`
 (`STANDALONE = os.environ.get("REDLINE_IMPORT_ONLY") != "1"`), or importing one will
 drop its STEP and STL into the assembly's output.
 
-**Insert component** in the viewer's toolbar lists every model and board with
-the line that imports it, and puts that line in the source.
+To bring a part or a board in, put what it needs in Files and let an agent
+add the import to the model (`revisions.py component list` shows every model
+and board with the line that imports it).
 
 ### A board is a component
 

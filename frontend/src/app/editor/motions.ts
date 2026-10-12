@@ -123,6 +123,8 @@ export class Motions {
   private acc = 0;
   /** No spin starts by itself (tools/render.py's shot, reduced motion). */
   still = false;
+  /** Called when the Motion tab opens: the Model tab closes. */
+  onOpen: () => void = () => {};
   /** The model on show, the key its kept settings are under. */
   private key: string | null = null;
 
@@ -714,6 +716,7 @@ export class Motions {
     if (on && (!this.panel || !tab)) return;
     if (on === this.open) return;
     const v = this.viewer;
+    if (on) this.onOpen();
     if (on && v?.state?.get?.('activeTab') !== 'tree') {
       try { v.setActiveTab('tree'); } catch { /* not rendered yet */ }
     }

@@ -3,6 +3,7 @@ import type { CameraState, ClipPlaneView, NoteView } from '../api';
 import { ClipWheel } from './clip-wheel';
 import { ClipReverse } from './clip-reverse';
 import { Motions } from './motions';
+import { ModelTab } from './model-tab';
 
 /** OCP CAD Viewer itself (three-cad-viewer): the same version and wire
  *  format the VS Code extension uses; Python produces the payload. */
@@ -82,6 +83,8 @@ export class OcpViewer {
   clipReverse: ClipReverse | null = null;
   /** The model's moving parts and their Motion tab (motions.ts). */
   motions: Motions | null = null;
+  /** The Model tab: insert, release, drawing, help (model-tab.ts). */
+  modelTab: ModelTab | null = null;
   /** resizeCadView throws before render() has been called. */
   private rendered = false;
 
@@ -102,7 +105,13 @@ export class OcpViewer {
       theme: 'dark' as const,
       tools: true, glass: false, pinning: false,
       measureTools: true, externalMeasurementBackend: false,
-      selectTool: true, explodeTool: true, zscaleTool: false,
+      // No select tool (copy shape ids); the properties tool, which has no
+      // option of its own, is hidden in styles.css - distance stays.
+      selectTool: false, explodeTool: true, zscaleTool: false,
+      // Reset and fit are off the toolbar and kept only as keys: Home and
+      // F, in place of the viewer's R and r. The rest of its keys stay.
+      // (The type lists only the modifier keys; the viewer takes actions too.)
+      keymap: { reset: 'Home', resize: 'f' } as any,
       // The side panel's tabs are Tree, Clip, (Motion,) Studio: Zebra and
       // Material are left out. The viewer still has both - a note's view
       // keeps and puts back their settings, and a note drawn on one of them
@@ -129,6 +138,11 @@ export class OcpViewer {
     this.motions = new Motions(this.container);
     // For the page's tests and tools, like `tcv` above.
     (window as unknown as Record<string, unknown>)['redlineMotions'] = this.motions;
+    this.modelTab = new ModelTab(this.container, () => this.viewer);
+    this.modelTab.ensure();
+    // One of our two tabs at a time.
+    this.motions.onOpen = () => this.modelTab?.show(false);
+    this.modelTab.onOpen = () => this.motions?.showTab(false);
     (window as unknown as Record<string, unknown>)['redlineOcp'] = this;
   }
 
@@ -196,6 +210,9 @@ export class OcpViewer {
       try { this.motions.setup(this.viewer, envelope.motions, key && decodeURIComponent(key)); }
       catch (e) { console.warn('motions not set up', e); }
     }
+    // The Model tab again, if it was the one on show (the load put the
+    // viewer back on Tree).
+    if (!this.shot) this.modelTab?.restore();
     this.clipWheel?.ensure();
     this.clipReverse?.ensure();
     return true;
@@ -498,6 +515,7 @@ export class OcpViewer {
       if (clip && v.display) v.display.lastPlaneState = !!clip.helpers;
       // The note's tab, not the Motion tab's panel over it.
       this.motions?.showTab(false);
+      this.modelTab?.show(false);
       if (v.state?.get('activeTab') !== tab) v.setActiveTab(tab);
       if (clip) v.setClipPlaneHelpers(!!clip.helpers);
     });

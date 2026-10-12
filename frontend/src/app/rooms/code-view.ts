@@ -9,7 +9,6 @@ import { Auth } from '../auth';
 import { Catalog, FolderNode, ModuleRow, ModuleTarget } from '../api';
 import { Selection } from '../selection';
 import { T, t as tr } from '../i18n';
-import { insertImport } from './links';
 import { themeIsLight } from '../../theme';
 import { Confirm } from '../confirm';
 
@@ -628,27 +627,6 @@ export class CodeView implements OnDestroy {
         this.touch();
       },
     });
-  }
-
-  /** An import line into the open file `id`, where imports go, as an
-   *  edit the person saves (the Insert picker). The line is made from the
-   *  source, so its alias can avoid one already taken. Returns the line,
-   *  or null when the file is not open here or already has it. */
-  insertLine(id: string, make: (source: string) => string): string | null {
-    const t = this.tabs().find(x => x.kind === 'model' && x.id === id);
-    if (!t || !this.editor || !this.canEdit()) return null;
-    const line = make(t.model.getValue());
-    const got = insertImport(t.model.getValue(), line);
-    if (!got) return null;
-    this.activate(t);
-    t.model.pushEditOperations([], [{
-      range: { startLineNumber: got.at, startColumn: 1, endLineNumber: got.at, endColumn: 1 },
-      text: line + '\n',
-    }], () => null);
-    this.editor.revealLineInCenter(got.at);
-    this.editor.setSelection({ startLineNumber: got.at, startColumn: 1, endLineNumber: got.at,
-                               endColumn: line.length + 1 });
-    return line;
   }
 
   takeTheirs() {

@@ -2000,6 +2000,7 @@ const TR: Record<string, string> = {
   'Mouse wheel over a clip slider moves the plane by this much. Shift: ×10.': 'Kesit kaydırıcısının üzerinde fare tekerleği düzlemi bu kadar kaydırır. Shift: ×10.',
   // 3D viewer, moving parts (editor/motions.ts)
   'Motion': 'Hareket',
+  'Pack the project for manufacturing': 'Projeyi üretim için paketle', 'Dimensioned views, as PDF': 'Ölçülü görünüşler, PDF olarak', 'Model tools': 'Model araçları', 'Drawing…': 'Çiziliyor…', 'The technical drawing could not be made.': 'Teknik çizim yapılamadı.',
   'Moving parts are shown only: nothing checks that they do not collide.': 'Hareketli parçalar yalnızca gösterilir: çarpışıp çarpışmadıkları kontrol edilmez.',
   'Fold': 'Katla',
   'speed': 'hız',
@@ -2815,7 +2816,7 @@ const TR: Record<string, string> = {
   "Electronic parts come from LCSC: Chat or the PCB agent finds them and keeps them in the PCB room's drawer. Each part's 3D body comes with the board it is on.": "Elektronik parçalar LCSC'den gelir: Sohbet ya da PCB ajanı onları bulur ve PCB odasının çekmecesinde saklar. Her parçanın 3D gövdesi bulunduğu kartla birlikte gelir.",
   'Open the PCB room': 'PCB odasını aç',
   'Put it together': 'Birleştirin',
-  'An assembly is a model that imports parts and boards. Make one in assemblies/, open it and use Insert component on the toolbar; when a part changes, the assembly is rebuilt.': 'Montaj, parçaları ve kartları içe aktaran bir modeldir. assemblies/ içinde bir tane oluşturun, açın ve araç çubuğundaki Bileşen ekle ile ekleyin; bir parça değişince montaj yeniden derlenir.',
+  'An assembly is a model that imports parts and boards. Make one in assemblies/, put what it needs in Files and an agent adds it to the model; when a part changes, the assembly is rebuilt.': 'Montaj, parçaları ve kartları içe aktaran bir modeldir. assemblies/ içinde bir tane oluşturun, gerekenleri Dosyalar\'a koyun, bir ajan modele ekler; bir parça değişince montaj yeniden derlenir.',
   'New assembly': 'Yeni montaj',
   // Manufacturers (rooms/manufacturers.ts, backend/manufacturers.py, the manufacturer_search tool)
   'Manufacturers': 'Üreticiler',

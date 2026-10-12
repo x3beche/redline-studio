@@ -20,13 +20,13 @@ PARTS = [part.part]
 NAMES = ["body"]
 `;
 
-import { Activity, Analytics, Api, Boards, CameraState, NoteView, Catalog, LogLine, Question, Questions, Run, FolderNode, FirmwareNode, ModelEntry, ComponentRow,
+import { Activity, Analytics, Api, Boards, CameraState, NoteView, Catalog, LogLine, Question, Questions, Run, FolderNode, FirmwareNode, ModelEntry,
          Revision, RevisionStatus } from '../api';
 import { OcpViewer, ViewApplied, viewHash } from './ocp';
 import { Markdown, plain } from '../markdown';
 import { FwAnchor, Selection } from '../selection';
 import { CodeView } from '../rooms/code-view';
-import { ComponentPicker, LinksCard, PinIcon, insertImport } from '../rooms/links';
+import { LinksCard, PinIcon } from '../rooms/links';
 import { Releases } from '../rooms/releases';
 import { LogPanel } from '../rooms/log-panel';
 import { Changes } from '../rooms/changes';
@@ -55,7 +55,7 @@ import { Reading, ReadingNote, ReadingPick } from './reading';
 
 @Component({
   selector: 'app-editor',
-  imports: [Changes, CodeView, ComponentPicker, DecimalPipe, LinksCard, LogPanel, Markdown, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, WorkNowPanel, UiSelect],
+  imports: [Changes, CodeView, DecimalPipe, LinksCard, LogPanel, Markdown, NgTemplateOutlet, PinIcon, ReadingNote, ReadingPick, Releases, T, WorkNowPanel, UiSelect],
   templateUrl: './editor.html',
   host: { '(document:keydown.escape)': 'closeTask()' },
 })
@@ -86,7 +86,6 @@ export class Editor implements AfterViewInit, OnDestroy {
   private ideBtn = viewChild<ElementRef<HTMLElement>>('ideBtn');
   private releaseBtn = viewChild<ElementRef<HTMLElement>>('releaseBtn');
   private drawingBtn = viewChild<ElementRef<HTMLElement>>('drawingBtn');
-  private insertBtn = viewChild<ElementRef<HTMLElement>>('insertBtn');
   private codeView = viewChild(CodeView);
   private taskPanel = viewChild<ElementRef<HTMLElement>>('taskPanel');
   private logPanel = viewChild<ElementRef<HTMLElement>>('logPanel');
@@ -112,9 +111,38 @@ export class Editor implements AfterViewInit, OnDestroy {
   releasing = signal(false);
 
   /** The model's technical drawing, made from its STEP, in a tab of its own. */
+  /** The technical drawing is being made (a few seconds). */
+  drawingBusy = signal(false);
+
+  /** The model's technical drawing, as a PDF in a new tab. Fetched first,
+   *  so a failure is a toast with the server's reason rather than a tab of
+   *  raw JSON. The tab is opened at once, on the click (later it would be
+   *  a blocked popup), and pointed at the PDF when it has come. */
   openDrawing() {
     const id = this.activeModel();
-    if (id) window.open(`/api/models/${id}/drawing.pdf`, '_blank');
+    if (!id || this.drawingBusy()) return;
+    const win = window.open('', '_blank');
+    this.drawingBusy.set(true);
+    const fail = (why: string) => {
+      win?.close();
+      Toast.show(t('The technical drawing could not be made.') + (why ? ' ' + why : ''), { tone: 'danger', ms: 8000 });
+    };
+    fetch(`/api/models/${id}/drawing.pdf`, { credentials: 'same-origin' })
+      .then(async res => {
+        if (!res.ok) {
+          let why = `${res.status}`;
+          try { const j = await res.json(); why = typeof j?.detail === 'string' ? j.detail : JSON.stringify(j?.detail ?? j); }
+          catch { /* not JSON */ }
+          fail(why);
+          return;
+        }
+        const url = URL.createObjectURL(await res.blob());
+        if (win) win.location.href = url; else window.open(url, '_blank');
+        // The tab has read it by then; the URL is only memory.
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      })
+      .catch(e => fail(String(e?.message ?? e)))
+      .finally(() => this.drawingBusy.set(false));
   }
   comment = signal('');
   part = signal('');
@@ -231,7 +259,7 @@ export class Editor implements AfterViewInit, OnDestroy {
   constructor() {
     // The Clip tab's wheel-step control is built outside Angular; its words
     // follow the language by hand.
-    effect(() => { LANG(); untracked(() => { this.viewer?.clipWheel?.relabel(); this.viewer?.clipReverse?.relabel(); this.viewer?.motions?.relabel(); }); });
+    effect(() => { LANG(); untracked(() => { this.viewer?.clipWheel?.relabel(); this.viewer?.clipReverse?.relabel(); this.viewer?.motions?.relabel(); this.viewer?.modelTab?.relabel(); }); });
     // The note at work is fetched by itself whenever the list in view does
     // not hold it (the archive is showing), so its card stays under the tree.
     effect(() => {
@@ -501,11 +529,11 @@ export class Editor implements AfterViewInit, OnDestroy {
     // The code view's switch, left of both.
     const ide = this.ideBtn()?.nativeElement;
     if (ide && bar && ide.parentElement !== bar) bar.insertBefore(ide, tools ?? btn ?? null);
-    // Release and the technical drawing, before the code view's switch.
-    for (const el of [this.insertBtn()?.nativeElement, this.releaseBtn()?.nativeElement,
-                      this.drawingBtn()?.nativeElement]) {
-      if (el && bar && el.parentElement !== bar) bar.insertBefore(el, ide ?? tools ?? btn ?? null);
-    }
+    // Release and the technical drawing are rows of the side panel's
+    // Model tab (model-tab.ts), not toolbar buttons: the buttons stay
+    // here, out of sight, and the rows press them.
+    this.viewer?.modelTab?.adopt({ release: this.releaseBtn()?.nativeElement,
+      drawing: this.drawingBtn()?.nativeElement });
 
     // The running task goes under the model tree, in the room the tree
     // panel was leaving empty. Always in the DOM, hidden when idle: an
@@ -1290,9 +1318,7 @@ export class Editor implements AfterViewInit, OnDestroy {
     });
   }
 
-  // ---- components: insert one, and what the open model uses ----
-  /** The Insert picker is open. */
-  inserting = signal(false);
+  // ---- components: what the open model uses ----
 
   /** The open model's catalog entry, for its links card. */
   activeEntry = computed(() => {
@@ -1308,44 +1334,6 @@ export class Editor implements AfterViewInit, OnDestroy {
 
   names(refs: { title: string }[] | undefined): string {
     return (refs ?? []).map(r => r.title).join(', ');
-  }
-
-  /** A component into the open model: its import line, put where imports go.
-   *  Into the code view if it is open (an edit, saved with the rest);
-   *  otherwise saved straight away and shown in the code view. */
-  insertComponent(r: ComponentRow) {
-    this.inserting.set(false);
-    const id = this.activeModel();
-    if (!id || !r.line) return;
-    const withAlias = (source: string) => {
-      const m = /^import (\S+) as (\w+)$/.exec(r.line!);
-      if (!m) return r.line!;
-      let alias = m[2], n = 2;
-      while (new RegExp(`\\bas ${alias}\\b|^${alias}\\s*=`, 'm').test(source)) alias = m[2] + n++;
-      return `import ${m[1]} as ${alias}`;
-    };
-    const cv = this.codeView();
-    if (this.ide() && cv) {
-      const got = cv.insertLine(id, withAlias);
-      if (got) { this.flash(`added "${got}" - save to keep it`); return; }
-    }
-    this.cat.source(id).subscribe({
-      next: s => {
-        const line = withAlias(s.source);
-        const got = insertImport(s.source, line);
-        if (!got) { this.flash(r.title + ' is imported already'); return; }
-        this.cat.saveSource(id, got.source, s.rev).subscribe({
-          next: () => {
-            this.flash(`added "${line}" - use its names, never copy them`);
-            this.ideLine.set(got.at);
-            this.ide.set(true);
-            this.loadCatalog();
-          },
-          error: e => this.flash(e.error?.detail?.detail ?? e.error?.detail ?? 'not saved'),
-        });
-      },
-      error: e => this.flash(e.error?.detail ?? 'the source could not be read'),
-    });
   }
 
   private afterDelete(m: ModelEntry) {
