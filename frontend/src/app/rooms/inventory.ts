@@ -14,6 +14,7 @@ import { TimeChart, TimeData, fmt as chartFmt } from './charts';
 import { CountUp } from '../count';
 import { CURRENCY, convert, moneyIn, moneyTip } from '../money';
 import { Skeleton } from '../skeleton';
+import { EmptyState } from '../empty-state';
 
 /** Inventory ("Envanter"): what is on hand - each thing kept, how many, and
  *  where it is (backend/inventory.py), shown the way the Product Catalog
@@ -217,7 +218,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
 
 @Component({
   selector: 'app-room-inventory',
-  imports: [Skeleton, CountUp, T, DmSendButton, UiSelect, TimeChart, NgTemplateOutlet, SelectionBar],
+  imports: [EmptyState, Skeleton, CountUp, T, DmSendButton, UiSelect, TimeChart, NgTemplateOutlet, SelectionBar],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css', './inventory.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
@@ -255,7 +256,7 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
           </button>
         }
       }
-      @if (loaded() && !all().length) { <p class="tcv-notes-empty">{{ 'Nothing on hand yet.' | t }}</p> }
+      @if (loaded() && !all().length) { <wb-empty compact icon="cube" text="Nothing on hand yet." /> }
     </div>
   </aside>
 
@@ -417,7 +418,8 @@ interface Group { id: string; label: string; icon: string; items: Item[]; low: n
         </div>
       }
       @if (!shown().length) {
-        <p class="st-hint mf-gempty">{{ 'Nothing matches - try fewer words or clear the filters.' | t }} <button class="st-more" (click)="clearFilters()">{{ 'Clear' | t }}</button></p>
+        <wb-empty icon="search" text="Nothing matches - try fewer words or clear the filters.">
+          <button class="tcv-btn" (click)="clearFilters()">{{ 'Clear' | t }}</button></wb-empty>
       }
     } @else if (loaded()) {
       <section class="st-card tsh-how">

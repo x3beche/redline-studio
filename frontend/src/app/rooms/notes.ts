@@ -10,6 +10,7 @@ import { NoteDoc } from './note-doc';
 import { Confirm } from '../confirm';
 import { ContextMenu } from '../context-menu';
 import { Skeleton } from '../skeleton';
+import { EmptyState } from '../empty-state';
 
 /** Notes: what you jot down while working, without a form to fill.
  *
@@ -253,7 +254,7 @@ const NOTE_ICONS = {
 /** The Notes room. */
 @Component({
   selector: 'app-room-notes',
-  imports: [Skeleton, T, NoteDoc],
+  imports: [EmptyState, Skeleton, T, NoteDoc],
   host: { '(document:keydown)': 'key($event)' },
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1">
@@ -335,7 +336,8 @@ const NOTE_ICONS = {
           </div>
         }
       } @empty {
-        @if (loaded()) { <p class="tcv-notes-empty">{{ q() || tag() || only() ? 'Nothing matches.' : 'No notes yet - press New note, or Alt+N anywhere.' }}</p> }
+        @if (loaded()) { <wb-empty compact [icon]="q() || tag() || only() ? 'search' : 'doc'"
+                                    [text]="q() || tag() || only() ? 'Nothing matches.' : 'No notes yet - press New note, or Alt+N anywhere.'" /> }
         @else { <wb-skel kind="rows" [count]="6" [h]="64" /> }
       }
     </div>

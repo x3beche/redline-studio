@@ -116,9 +116,8 @@ type Row = Record<string, unknown>;
         <span class="flex gap-2 py-0.5 text-[11px]">
           @for (o of f.options ?? []; track o) {
             <span class="flex items-center gap-1">
-              <input type="checkbox" [checked]="list(row, f.key).includes(o)"
-                     (change)="toggle(sec, i, f.key, o, $any($event.target).checked)"
-                     style="accent-color: var(--accent)">{{ o }}
+              <input type="checkbox" class="tcv-check" [checked]="list(row, f.key).includes(o)"
+                     (change)="toggle(sec, i, f.key, o, $any($event.target).checked)" [attr.aria-label]="o">{{ o }}
             </span>
           }
         </span>

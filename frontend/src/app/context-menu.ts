@@ -117,6 +117,7 @@ function injectStyle() {
   const s = document.createElement('style');
   s.id = 'wb-cmenu-style';
   s.textContent = `
+.wb-cmenu { max-height: calc(100vh - 16px); overflow-y: auto; }   /* a long list (the Chat's models) scrolls */
 .wb-cmenu .tcv-fm-menu-item:focus { outline: none; background: var(--hover); }
 .wb-cmenu .tcv-fm-menu-item[disabled] { opacity: .45; cursor: default; background: none; }
 .wb-cmenu .tcv-fm-menu-item > .tcv-fm-i { display: inline-flex; width: 16px; height: 16px; color: var(--ink-dim); }

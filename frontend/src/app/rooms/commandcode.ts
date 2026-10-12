@@ -27,6 +27,7 @@ import { DmApi, DmStore } from '../dm';
 import { Toast, ToastTone } from '../toast';
 import { DmPeople, DmView, dmWhen } from './dm-view';
 import { Skeleton } from '../skeleton';
+import { EmptyState } from '../empty-state';
 
 /** The Chat room (id 'commandcode', kept so old links and saved tab orders
  *  still work): people talking with a model, in the open - and, pinned at
@@ -392,7 +393,7 @@ type Ask = { text: string; label: string; go: () => void };
 
 @Component({
   selector: 'app-room-commandcode',
-  imports: [T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmPeople, DmView, Skeleton],
+  imports: [EmptyState, T, NgTemplateOutlet, RoomThread, CcUsageLine, CcToolsLine, CcToolsView, TaskBlockView, AttachChips, MentionPics, SuggestChip, ModelPicker, FileModalHost, DmPeople, DmView, Skeleton],
   host: { '(window:keydown)': 'globalKey($event)', '(window:pagehide)': 'flushDeletes(true)',
           '(document:visibilitychange)': 'resync(false)', '(window:online)': 'resync(true)' },
   template: `
@@ -457,13 +458,13 @@ type Ask = { text: string; label: string; go: () => void };
         }
       </div>
       @if (q().trim() && tab() === 'list') {
-        <label class="tcv-cc-check tcv-cc-witharch">
-          <input type="checkbox" [checked]="withArchived()" (change)="withArchived.set($any($event.target).checked); runSearch()">
+        <label class="tcv-check-row tcv-cc-witharch">
+          <input type="checkbox" class="tcv-check" [checked]="withArchived()" (change)="withArchived.set($any($event.target).checked); runSearch()">
           {{ 'Include archived' | t }}</label>
       }
       @if (selecting()) {
         <div class="tcv-cc-selbar">
-          <label class="tcv-cc-check"><input type="checkbox" [checked]="allSelected()" [indeterminate]="someSelected()"
+          <label class="tcv-check-row"><input type="checkbox" class="tcv-check" [checked]="allSelected()" [indeterminate]="someSelected()"
                  (change)="selectAll($any($event.target).checked)"> {{ selected().size }} {{ 'selected' | t }}</label>
           <span class="grow"></span>
           @if (trash()) {
@@ -548,7 +549,8 @@ type Ask = { text: string; label: string; go: () => void };
             <span class="tcv-cc-hitsnip">@if (h.by) {<b>{{ h.by }}: </b>}@for (seg of segments(h); track $index) {@if (seg.hit) {<mark>{{ seg.t }}</mark>} @else {<span>{{ seg.t }}</span>}}</span>
           </button>
         } @empty {
-          <p class="tcv-cc-listempty">{{ searching() ? ('Searching…' | t) : ('Nothing found.' | t) }}</p>
+          @if (searching()) { <p class="tcv-cc-listempty">{{ 'Searching…' | t }}</p> }
+          @else { <wb-empty compact icon="search" text="Nothing found." /> }
         }
       } @else {
       @for (g of groups(); track g.name) {
@@ -561,7 +563,7 @@ type Ask = { text: string; label: string; go: () => void };
                [title]="short(c.model) + ' · ' + c.count + ' ' + ('lines' | t) + (c.by.name ? ' · ' + c.by.name : '')
                         + (c.deleted_at ? ' · ' + ('deleted' | t) + ' ' + stamp(c.deleted_at) : '')">
             @if (selecting()) {
-              <input type="checkbox" class="tcv-cc-itemcheck" [checked]="selected().has(c.id)" (click)="$event.stopPropagation()"
+              <input type="checkbox" class="tcv-check" [checked]="selected().has(c.id)" (click)="$event.stopPropagation()"
                      (change)="toggleSel(c.id)" [attr.aria-label]="'Select' | t">
             }
             <div class="tcv-cc-itemtext">
@@ -614,8 +616,8 @@ type Ask = { text: string; label: string; go: () => void };
       } @empty {
         @if (!listed()) { <wb-skel kind="rows" [count]="6" [h]="46" /> }
         @else {
-          <p class="tcv-cc-listempty">{{ (trash() ? 'The trash is empty.' : archived() ? 'No archived conversations.'
-                                          : 'No conversations yet - start one.') | t }}</p>
+          <wb-empty compact [icon]="trash() ? 'trash' : 'chat'" [text]="trash() ? 'The trash is empty.' : archived() ? 'No archived conversations.'
+                                                                  : 'No conversations yet - start one.'" />
         }
       }
       }
@@ -772,13 +774,9 @@ type Ask = { text: string; label: string; go: () => void };
                     @if (last && m.role === 'assistant' && mayRegen()) {
                       <button class="tcv-cc-ib" (click)="regenerate()" [title]="'Answer again' | t">
                         <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.regen }" /></button>
-                      <label class="tcv-cc-ib tcv-cc-regen" [title]="'Answer again with another model' | t">
-                        <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.chevron }" />
-                        <select (change)="regenerate($any($event.target).value); $any($event.target).value = ''">
-                          <option value="" selected disabled>{{ 'Answer again with another model' | t }}</option>
-                          @for (x of models(); track x.id) { <option [value]="x.id">{{ x.name }}</option> }
-                        </select>
-                      </label>
+                      <button class="tcv-cc-ib" aria-haspopup="menu" (click)="regenMenu($event)"
+                              [title]="'Answer again with another model' | t" [attr.aria-label]="'Answer again with another model' | t">
+                        <ng-container *ngTemplateOutlet="ico; context: { $implicit: I.chevron }" /></button>
                     }
                     @if (mayDropLine(i)) {
                       <button class="tcv-cc-ib tcv-cc-danger" [class.armed]="armed() === m.id" (click)="deleteLine(m)"
@@ -2094,6 +2092,11 @@ export class RoomCommandCode implements OnDestroy {
                      if (!this.picked().length) this.picked.set(picked);
                      if (edit) this.editing.set(edit);
                    });
+  }
+
+  /** The chevron beside "Answer again": the models as the app's own menu, under the button. */
+  regenMenu(e: MouseEvent) {
+    ContextMenu.open(e, this.models().map(x => ({ label: x.name, run: () => this.regenerate(x.id) })));
   }
 
   /** The last answer again - with the model chosen here, or with `model`. */

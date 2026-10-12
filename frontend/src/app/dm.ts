@@ -7,6 +7,7 @@ import { Avatar } from './avatar';
 import { T, t } from './i18n';
 import { Selection } from './selection';
 import { FileModal } from './rooms/file-modal';
+import { EmptyState } from './empty-state';
 
 /** Direct messages: people writing to each other in the Chat tab
  *  (backend/dm.py). One store for the whole app - the People in the Chat's
@@ -382,7 +383,7 @@ export class DmCard {
  *  in their direct conversation, with a line if one is written. */
 @Component({
   selector: 'app-dm-send',
-  imports: [T, Avatar, DmCard],
+  imports: [EmptyState, T, Avatar, DmCard],
   host: { '(window:keydown.escape)': 'close()' },
   template: `
 @if (store.sendTo(); as what) {
@@ -395,13 +396,13 @@ export class DmCard {
       <div class="tcv-dm-sendlist" role="listbox" aria-multiselectable="true">
         @for (p of shown(); track p.id) {
           <label class="tcv-dm-sendrow" [attr.data-on]="picked().has(p.id) ? 1 : null">
-            <input type="checkbox" [checked]="picked().has(p.id)" (change)="toggle(p.id)">
+            <input type="checkbox" class="tcv-check" [checked]="picked().has(p.id)" (change)="toggle(p.id)">
             <app-avatar [name]="p.name" [userId]="p.id" [hasPicture]="p.has_avatar" [v]="p.avatar_v" [colour]="p.avatar_colour" [size]="24" />
             <span class="tcv-dm-sendname">{{ p.name }}</span>
             @if (p.online) { <span class="tcv-dm-dot" [title]="'online' | t"></span> }
           </label>
         } @empty {
-          <p class="tcv-cc-dim tcv-dm-pad">{{ (store.people().length ? 'Nobody matches.' : 'There is nobody else on this server yet.') | t }}</p>
+          <wb-empty compact [icon]="store.people().length ? 'search' : 'chat'" [text]="store.people().length ? 'Nobody matches.' : 'There is nobody else on this server yet.'" />
         }
       </div>
       <textarea class="tcv-field tcv-dm-sendtext" rows="2" [placeholder]="'Add a message (optional)' | t" [value]="text()"

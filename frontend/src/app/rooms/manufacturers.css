@@ -11,7 +11,6 @@
 .mf-link { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
 .mf-link:hover { text-decoration: underline; }
 .mf-err { color: var(--danger); }
-.mf-pad { padding: 8px 10px; }
 
 /* tiles: one row, as wide as the room */
 .mf-htiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -62,7 +61,7 @@ td.mf-actcell { position: relative; white-space: nowrap; min-width: 96px; }
 .mf-prow:hover .mf-rowacts, .mf-prow:focus-within .mf-rowacts { display: inline-flex; }
 .mf-prow[data-sel] td { background: var(--pressed); }
 th.mf-selcol, td.mf-selcol { width: 38px; padding-right: 0; text-overflow: clip; }
-.mf-selcol input { margin: 0; accent-color: var(--accent); vertical-align: middle; }
+.mf-selcol input { vertical-align: middle; }
 .mf-hand { margin-left: 6px; font-weight: 400; }
 .mf-proxyhint { margin: -4px 0 0; }
 
@@ -157,7 +156,6 @@ section > .mf-stockform { padding: 6px 10px; border-bottom: 1px solid var(--line
 .mf-gbar > .mf-layout, .mf-cathead .mf-layout { height: auto; }
 .mf-layout button { display: inline-flex; align-items: center; gap: 4px; }
 .mf-layout svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; }
-.mf-gempty { margin: 18px 4px; }
 
 .mf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; align-content: start; }
 .mf-catalog .mf-grid { padding: 8px 10px; }

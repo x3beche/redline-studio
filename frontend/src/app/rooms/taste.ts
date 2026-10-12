@@ -12,6 +12,7 @@ import { DmSendButton, DmStore, SHARE_ICON } from '../dm';
 import { ContextMenu } from '../context-menu';
 import { CountUp } from '../count';
 import { Skeleton } from '../skeleton';
+import { EmptyState } from '../empty-state';
 
 /** Taste ("Tadım"): what makes a design good, kept as statements an agent
  *  can follow (backend/taste.py).
@@ -189,7 +190,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
 /** The Taste room. */
 @Component({
   selector: 'app-room-taste',
-  imports: [Skeleton, CountUp, T, NgTemplateOutlet, DmSendButton, UiSelect],
+  imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, DmSendButton, UiSelect],
   styleUrls: ['../settings.css', './taste.css'],
   host: { '(document:keydown)': 'key($event)', '(document:click)': 'closePicker()' },
   template: `
@@ -240,7 +241,7 @@ function why(e: HttpErrorResponse, fallback: string): string {
           </span>
         </button>
       } @empty {
-        @if (loaded()) { <p class="tcv-notes-empty">{{ (q() ? 'Nothing matches.' : 'No palettes yet.') | t }}</p> }
+        @if (loaded()) { <wb-empty compact [icon]="q() ? 'search' : 'grid'" [text]="q() ? 'Nothing matches.' : 'No palettes yet.'" /> }
         @else { <wb-skel kind="rows" [count]="4" [h]="62" /> }
       }
     </div>

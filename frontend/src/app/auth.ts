@@ -364,7 +364,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
                           [attr.autocomplete]="newPassword() ? 'new-password' : 'current-password'" required></label>
     @if (newPassword()) { <p class="tcv-signin-hint">At least 10 characters.</p> }
     @if (!newPassword()) {
-      <label class="tcv-signin-check"><input type="checkbox" [checked]="remember()" (change)="rememberTouched = true; remember.set($any($event.target).checked)">
+      <label class="tcv-signin-check"><input type="checkbox" class="tcv-check" [checked]="remember()" (change)="rememberTouched = true; remember.set($any($event.target).checked)">
         <span>{{ 'Remember me' | t }}<span class="tcv-signin-check-sub">{{ 'Keep this account on this browser, to switch to it without the password' | t }}</span></span></label>
     }
     @if (error(); as e) { <p class="tcv-signin-error" role="alert">{{ e }}</p> }

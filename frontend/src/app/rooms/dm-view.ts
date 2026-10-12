@@ -10,6 +10,7 @@ import {
   DM_ICONS, DM_KIND_NAME, DmApi, DmCard, DmChat, DmEvent, DmKind, DmLine, DmPerson, DmShareable, DmStore, SHARE_ICON,
 } from '../dm';
 import { Skeleton } from '../skeleton';
+import { EmptyState } from '../empty-state';
 
 const MAX_TEXT = 20_000;
 const MAX_ITEMS = 8;
@@ -37,7 +38,7 @@ export function dmWhen(iso: string | null | undefined) {
 @Component({
   selector: 'app-dm-people',
   host: { style: 'display: contents' },
-  imports: [T, Avatar],
+  imports: [EmptyState, T, Avatar],
   template: `
 @if (store.enabled()) {
   <div class="tcv-cc-group tcv-dm-grouphead">
@@ -60,7 +61,7 @@ export function dmWhen(iso: string | null | undefined) {
          [attr.data-on]="p.chat && p.chat === store.open() ? 1 : null" [attr.data-unread]="p.unread ? 1 : null"
          (click)="pick(p)" (keydown.enter)="pick(p)">
       @if (grouping()) {
-        <input type="checkbox" class="tcv-cc-itemcheck" [checked]="picked().has(p.id)" (click)="$event.stopPropagation()"
+        <input type="checkbox" class="tcv-check" [checked]="picked().has(p.id)" (click)="$event.stopPropagation()"
                (change)="togglePick(p.id)" [attr.aria-label]="'Select' | t">
       }
       <span class="tcv-dm-face">
@@ -80,7 +81,7 @@ export function dmWhen(iso: string | null | undefined) {
       </div>
     </div>
   } @empty {
-    <p class="tcv-cc-listempty">{{ (q().trim() ? 'Nobody matches.' : 'There is nobody else on this server yet.') | t }}</p>
+    <wb-empty compact [icon]="q().trim() ? 'search' : 'chat'" [text]="q().trim() ? 'Nobody matches.' : 'There is nobody else on this server yet.'" />
   }
   @for (g of groups(); track g.id) {
     <div class="tcv-cc-item tcv-dm-person" role="listitem" tabindex="0" [attr.data-on]="g.id === store.open() ? 1 : null"

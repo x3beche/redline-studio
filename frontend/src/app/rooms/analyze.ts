@@ -10,6 +10,7 @@ import { SelectOption, UiSelect } from '../ui-select';
 import { BarList, Donut, Fmt, Row, Spark, TimeChart, fmt } from './charts';
 import { CountUp } from '../count';
 import { Skeleton } from '../skeleton';
+import { EmptyState } from '../empty-state';
 
 type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' | 'lcsc';
 
@@ -24,7 +25,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
  */
 @Component({
   selector: 'app-room-analyze',
-  imports: [Skeleton, CountUp, BarList, BudgetBars, DecimalPipe, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage, UiSelect],
+  imports: [EmptyState, Skeleton, CountUp, BarList, BudgetBars, DecimalPipe, Donut, Markdown, NgTemplateOutlet, Spark, TimeChart, ToolsUsage, UiSelect],
   template: `
 <div class="tcv-room tcv-dash absolute inset-0 flex min-h-0 flex-col">
   <header class="tcv-dash-bar">
@@ -513,9 +514,8 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
               </tbody>
             </table></section>
         } @empty {
-          <section class="tcv-panel-d c12"><p class="tcv-dash-dim">No board runs in this range. Every run of the board
-            pipeline is recorded from now on - unrouted connections, DRC and ERC, size, copper - so a board's quality
-            can be followed over time.</p></section>
+          <section class="tcv-panel-d c12"><wb-empty compact icon="board"
+            text="No board runs in this range. Every run of the board pipeline is recorded from now on - unrouted connections, DRC and ERC, size, copper - so a board's quality can be followed over time." /></section>
         }
       </div>
     }
@@ -759,7 +759,7 @@ type Section = 'overview' | 'llm' | 'machine' | 'work' | 'storage' | 'projects' 
         <section class="tcv-panel-d c4"><h3>Earlier weeks</h3>
           @for (k of weekly()?.kept ?? []; track k.week) {
             <details class="tcv-week"><summary>{{ k.week }}</summary><div class="md text-[12px]" [innerHTML]="k.text | md"></div></details>
-          } @empty { <p class="tcv-dash-dim">The first is written next Monday, of the week before.</p> }
+          } @empty { <wb-empty compact icon="doc" text="The first is written next Monday, of the week before." /> }
         </section>
       </div>
     }

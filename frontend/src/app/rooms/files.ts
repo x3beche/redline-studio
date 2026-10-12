@@ -16,6 +16,7 @@ import {
 import { pdfFirstPage } from './pdf-reader';
 import { MeshThumbs } from './mesh-thumb';
 import { ContextMenu, MenuEntry } from '../context-menu';
+import { EmptyState } from '../empty-state';
 
 export { FilesApi } from './files-model';
 export type { StoredFile } from './files-model';
@@ -51,7 +52,7 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
 
 @Component({
   selector: 'app-room-files',
-  imports: [T, Icon, Seen, NgTemplateOutlet, FileView, UiSelect],
+  imports: [EmptyState, T, Icon, Seen, NgTemplateOutlet, FileView, UiSelect],
   host: { '(document:keydown)': 'globalKey($event)' },
   template: `
 <div class="tcv-room absolute inset-0 flex min-h-0 gap-1 p-1 tcv-fm">
@@ -214,22 +215,16 @@ function readPrefs(): { view?: 'grid' | 'list'; sort?: SortKey; dir?: 1 | -1; de
             </div>
           }
         } @else if (!items().length) {
-          <div class="tcv-fm-empty">
-            @if (filtering()) {
-              <i class="tcv-fm-empty-ico" [fmIcon]="'search'"></i>
-              <b>{{ 'Nothing matches' | t }}</b>
-              <p>{{ 'No file name or note in any folder has this.' | t }}</p>
-              <button class="tcv-btn tcv-fm-btn" (click)="clearFilters()">{{ 'Clear the search' | t }}</button>
-            } @else if (!here() && !all().length) {
-              <i class="tcv-fm-empty-ico" [fmIcon]="'upload'"></i>
-              <b>{{ 'No files yet' | t }}</b>
-              <p>{{ 'Drop files anywhere here, or use Upload: BOMs, pick and place files, datasheets, photos, videos, STEP - up to 200 MB each.' | t }}</p>
-            } @else {
-              <i class="tcv-fm-empty-ico" [fmIcon]="'folder'"></i>
-              <b>{{ 'This folder is empty' | t }}</b>
-              <p>{{ 'Drop files here, or use Upload. Files and folders can be dragged in from elsewhere too.' | t }}</p>
-            }
-          </div>
+          @if (filtering()) {
+            <wb-empty icon="search" heading="Nothing matches" text="No file name or note in any folder has this.">
+              <button class="tcv-btn tcv-fm-btn" (click)="clearFilters()">{{ 'Clear the search' | t }}</button></wb-empty>
+          } @else if (!here() && !all().length) {
+            <wb-empty icon="upload" heading="No files yet"
+                      text="Drop files anywhere here, or use Upload: BOMs, pick and place files, datasheets, photos, videos, STEP - up to 200 MB each." />
+          } @else {
+            <wb-empty icon="newfolder" heading="This folder is empty"
+                      text="Drop files here, or use Upload. Files and folders can be dragged in from elsewhere too." />
+          }
         } @else if (view() === 'grid') {
           @if (folderItems().length) {
             <div class="tcv-fm-section">{{ 'Folders' | t }}</div>

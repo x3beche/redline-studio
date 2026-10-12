@@ -17,6 +17,7 @@ import { ContextMenu } from '../context-menu';
 import { SelectionBar } from '../selection-bar';
 import { CountUp } from '../count';
 import { Skeleton } from '../skeleton';
+import { EmptyState } from '../empty-state';
 
 /** Manufacturers ("Üreticiler"): makers whose catalogs the workspace keeps,
  *  read from their own websites (backend/manufacturers.py).
@@ -244,7 +245,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
 
 @Component({
   selector: 'app-room-mfr',
-  imports: [Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar],
+  imports: [EmptyState, Skeleton, CountUp, T, NgTemplateOutlet, RouteOrder, DmSendButton, UiSelect, Marquee, SelectionBar],
   styleUrls: ['../settings.css', './taste.css', './manufacturers.css'],
   host: { '(document:keydown)': 'key($event)' },
   template: `
@@ -292,7 +293,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           </span>
         </button>
       } @empty {
-        @if (listed()) { <p class="tcv-notes-empty">{{ (listQ() ? 'Nothing matches.' : 'No manufacturers yet.') | t }}</p> }
+        @if (listed()) { <wb-empty compact [icon]="listQ() ? 'search' : 'list'" [text]="listQ() ? 'Nothing matches.' : 'No manufacturers yet.'" /> }
         @else { <wb-skel kind="rows" [count]="5" [h]="52" /> }
       }
     </div>
@@ -529,7 +530,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
           <div class="mf-grid" [attr.data-cols]="cols() || null" [style.--cols]="cols() || null"
               >
             @for (p of found().slice(0, shownRows()); track p.id) { <ng-container *ngTemplateOutlet="cardT; context: { $implicit: asItem(p, m) }" /> }
-            @empty { <p class="st-hint mf-pad">{{ 'Nothing matches.' | t }}</p> }
+            @empty { <wb-empty compact icon="search" text="Nothing matches." /> }
           </div>
           @if (found().length > shownRows()) {
             <button class="st-more mf-morerows" (click)="rows.set(rows() + 200)">{{ fmt('Show {n} more', { n: found().length - shownRows() }) }}</button>
@@ -537,12 +538,12 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
         } @else if (m.products?.length) {
           <div class="st-table-wrap">
             <table class="st-table mf-table">
-              <thead><tr>@if (can()) { <th class="mf-selcol"><input type="checkbox" [checked]="allPicked()" (change)="pickAll($any($event.target).checked)" [attr.aria-label]="'Select all' | t"></th> }
+              <thead><tr>@if (can()) { <th class="mf-selcol"><input type="checkbox" class="tcv-check" [checked]="allPicked()" (change)="pickAll($any($event.target).checked)" [attr.aria-label]="'Select all' | t"></th> }
                 <th class="mf-pname">{{ 'Product' | t }}</th><th class="mf-pcode">{{ 'Code' | t }}</th><th class="mf-pprice r">{{ 'Price' | t }}</th><th class="mf-pcat">{{ 'Category' | t }}</th><th class="mf-specs">{{ 'Specs' | t }}</th><th class="mf-desc">{{ 'Description' | t }}</th><th class="mf-actcell"></th></tr></thead>
               <tbody>
                 @for (p of found().slice(0, shownRows()); track p.id) {
                   <tr class="mf-prow" [attr.data-sel]="picked_().has(p.id) ? 1 : null">
-                    @if (can()) { <td class="mf-selcol"><input type="checkbox" [checked]="picked_().has(p.id)" (change)="pick(p.id, $any($event.target).checked)" [attr.aria-label]="p.name"></td> }
+                    @if (can()) { <td class="mf-selcol"><input type="checkbox" class="tcv-check" [checked]="picked_().has(p.id)" (change)="pick(p.id, $any($event.target).checked)" [attr.aria-label]="p.name"></td> }
                     <td class="mf-pname" [title]="p.name"><button class="mf-namebtn" (click)="openDetail(asItem(p, m))">{{ p.name }}</button>@if (stock()[p.id]; as s) { <button class="st-tag mf-instock" [attr.data-tone]="s.low ? 'warn' : 'ok'" (click)="toStock(s)" [title]="'Open it in the Inventory' | t">{{ fmt('in stock: {n}', { n: qty(s.quantity) + ' ' + s.unit }) }}</button> }@if (p.source === 'manual') { <span class="st-tag mf-hand">{{ 'by hand' | t }}</span> } @else if (p.edited) { <span class="st-tag mf-hand">{{ 'edited' | t }}</span> }</td>
                     <td class="mono mf-pcode" [title]="p.sku">{{ p.sku || '–' }}</td>
                     <td class="r mf-pprice" [title]="p.price ? (moneyTip(p.price.amount, p.price.currency) || p.price.text || '') : ''">@if (p.price) { <b>{{ moneyIn(p.price.amount, p.price.currency) }}</b>@if (p.price.vat === 'excl') { <small class="dim"> {{ '+VAT' | t }}</small> } } @else { <span class="dim">–</span> }
@@ -581,7 +582,7 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             <button class="st-more mf-morerows" (click)="rows.set(rows() + 200)">{{ fmt('Show {n} more', { n: found().length - shownRows() }) }}</button>
           }
         } @else {
-          <p class="st-hint mf-pad">{{ (runOf(m) && isActiveS(runOf(m)!.status) ? 'The site is being explored; the catalog fills in when the run is done.' : 'No products yet: explore the site, read one page, or add a product by hand.') | t }}</p>
+          <wb-empty icon="table" [text]="runOf(m) && isActiveS(runOf(m)!.status) ? 'The site is being explored; the catalog fills in when the run is done.' : 'No products yet: explore the site, read one page, or add a product by hand.'" />
         }
       </section>
 
@@ -648,8 +649,8 @@ export const CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP', 'CNY'];
             </div>
           }
           @if (!g.items.length) {
-            <p class="st-hint mf-gempty">{{ (g.all ? 'No product matches - try fewer words or clear the filters.' : 'No products yet: add a site, or read a product page into the catalog.') | t }}
-              @if (!g.all && can()) { <button class="st-more" (click)="goAdd()">{{ 'Add a site or a page' | t }}</button> }</p>
+            <wb-empty [icon]="g.all ? 'search' : 'table'" [text]="g.all ? 'No product matches - try fewer words or clear the filters.' : 'No products yet: add a site, or read a product page into the catalog.'">
+              @if (!g.all && can()) { <button class="tcv-btn" (click)="goAdd()">{{ 'Add a site or a page' | t }}</button> }</wb-empty>
           }
           @if (g.total > g.items.length) {
             <button class="st-more mf-morerows" (click)="gpages.set(gpages() + 1)">{{ fmt('Show {n} more', { n: g.total - g.items.length }) }}</button>
