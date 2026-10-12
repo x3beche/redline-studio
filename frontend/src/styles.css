@@ -3173,6 +3173,28 @@ rect.tcv-inspect-hover, circle.tcv-inspect-hover {
 .tcv-bl-track { height: 8px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .tcv-bl-bar { display: block; height: 100%; border-radius: 3px; }
 .tcv-bl-val { color: var(--ink-dim); min-width: 4.5rem; text-align: right; }
+
+/* Charts: loading and appearing - the app's one standard (rooms/charts.ts).
+   While another period loads, the chart greys out under a spinner; new
+   data rises from the axis with a small overshoot, bar after bar. */
+.tcv-bl { position: relative; }
+.tcv-ch-busy > :not(.tcv-ch-loader) { opacity: .3; filter: grayscale(1); transition: opacity .2s, filter .2s; }
+.tcv-ch-loader { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.tcv-ch-spin { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
+  animation: tcv-ch-spin .8s linear infinite; }
+@keyframes tcv-ch-spin { to { transform: rotate(360deg); } }
+.tcv-ch-rise { transform-box: fill-box; transform-origin: 50% 100%; animation: tcv-ch-rise .55s cubic-bezier(.34, 1.56, .64, 1) both;
+  animation-delay: calc(min(var(--i, 0), 40) * 14ms); }
+.tcv-ch-rise-all { transform-box: fill-box; transform-origin: 50% 100%; animation: tcv-ch-rise .6s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes tcv-ch-rise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.tcv-ch-grow { transform-origin: 0 50%; animation: tcv-ch-grow .55s cubic-bezier(.34, 1.56, .64, 1) both;
+  animation-delay: calc(min(var(--i, 0), 30) * 25ms); }
+@keyframes tcv-ch-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.tcv-ch-spinin { animation: tcv-ch-spinin .6s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes tcv-ch-spinin { from { opacity: 0; transform: rotate(-150deg) scale(.7); } to { opacity: 1; transform: rotate(-90deg) scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .tcv-ch-rise, .tcv-ch-rise-all, .tcv-ch-grow, .tcv-ch-spinin, .tcv-ch-spin { animation: none; }
+}
 .tcv-dn-track { stroke: var(--line); }
 
 /* The top bar's two right-hand items (app.ts): Analytics ends where the

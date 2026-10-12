@@ -1,7 +1,31 @@
 import {
-  Component, ElementRef, OnDestroy, computed, input, signal, viewChild, AfterViewInit,
+  Component, ElementRef, OnDestroy, computed, effect, input, signal, viewChild, AfterViewInit,
 } from '@angular/core';
 import { money } from '../money';
+import { CHART_BUSY } from '../chart-load';
+
+/* ---- how every chart loads and appears: the app's one standard ----------
+ *
+ * Loading: when the person asks for another period - a click or a key, then
+ * a GET with days=, span=, period=, range=, from= or since= within a moment -
+ * every chart on the page greys out under a spinner until it is answered
+ * (chart-load.ts, installed in app.config.ts). Background refreshes do not.
+ *
+ * Appearing: whenever a chart's data changes, its bars rise from the axis
+ * with a small overshoot, one after another; lines and areas rise as one;
+ * ranked bars grow from the left. The CSS is in styles.css under "Charts:
+ * loading and appearing". A chart drawn by hand can take the same look with
+ * the classes .tcv-ch-busy (on its box) and .tcv-ch-rise (on each bar, with
+ * --i its index). */
+/** A number that changes whenever `of` gives something new: a chart's marks
+ *  are drawn inside `@for (g of [gen()]; track g)`, so new data draws them
+ *  afresh and their entry animation plays again. */
+function generation(of: () => unknown) {
+  const gen = signal(0);
+  let first = true;
+  effect(() => { of(); if (first) { first = false; return; } gen.update(n => n + 1); });
+  return gen;
+}
 
 /** Charts for the Analytics room, drawn as SVG in the app's own colours.
  *
@@ -44,8 +68,9 @@ export const fmt = {
   selector: 'app-time-chart',
   host: { class: 'block' },
   template: `
-<div #box class="relative" [style.height.px]="height()"
+<div #box class="relative" [class.tcv-ch-busy]="busy()" [style.height.px]="height()"
      (mousemove)="hover($event)" (mouseleave)="at.set(null)">
+  @if (busy()) { <div class="tcv-ch-loader" role="status"><span class="tcv-ch-spin" aria-hidden="true"></span></div> }
   @if (w() > 0) {
     <svg [attr.width]="w()" [attr.height]="height()" class="block">
       @for (t of yTicks(); track t.v) {
@@ -55,11 +80,13 @@ export const fmt = {
       @for (t of xTicks(); track t.i) {
         <text [attr.x]="t.x" [attr.y]="height() - 4" [attr.text-anchor]="t.a" class="tcv-ch-tick">{{ t.label }}</text>
       }
+      @for (g of [gen()]; track g) {
       @if (kind() === 'bar') {
         @for (b of bars(); track $index) {
-          <rect [attr.x]="b.x" [attr.y]="b.y" [attr.width]="b.w" [attr.height]="b.h" [attr.fill]="b.c" rx="1" />
+          <rect class="tcv-ch-rise" [style.--i]="b.i" [attr.x]="b.x" [attr.y]="b.y" [attr.width]="b.w" [attr.height]="b.h" [attr.fill]="b.c" rx="1" />
         }
       } @else {
+        <g class="tcv-ch-rise-all">
         @for (p of paths(); track p.name) {
           @if (kind() === 'area') {
             <path [attr.d]="p.area" [attr.fill]="p.c" class="tcv-ch-area" />
@@ -71,6 +98,8 @@ export const fmt = {
             <circle [attr.cx]="d[0]" [attr.cy]="d[1]" r="2.6" [attr.fill]="p.c" />
           }
         }
+        </g>
+      }
       }
       <!-- Buckets marked as unusual: a band behind them and a notch on top. -->
       @for (i of marks(); track i) {
@@ -118,6 +147,8 @@ export const fmt = {
 })
 export class TimeChart implements AfterViewInit, OnDestroy {
   data = input.required<TimeData>();
+  readonly gen = generation(() => this.data());
+  readonly busy = computed(() => CHART_BUSY() > 0);
   kind = input<'bar' | 'line' | 'area'>('bar');
   stacked = input(true);
   height = input(180);
@@ -195,7 +226,7 @@ export class TimeChart implements AfterViewInit, OnDestroy {
   xTicks = computed(() => xTickPlan(this.data().n, this.w(), this.L, this.R,
     i => this.kind() === 'bar' ? this.L + this.slot() * (i + 0.5) : this.x(i), i => this.label(i)));
   bars = computed(() => {
-    const out: { x: number; y: number; w: number; h: number; c: string }[] = [];
+    const out: { x: number; y: number; w: number; h: number; c: string; i: number }[] = [];
     const slot = this.slot(), bw = Math.max(1, slot * 0.72), shown = this.shown();
     for (let i = 0; i < this.data().n; i++) {
       let base = 0;
@@ -204,11 +235,11 @@ export class TimeChart implements AfterViewInit, OnDestroy {
         if (!v) return;
         if (this.stacked()) {
           const y1 = this.y(base + v), y0 = this.y(base);
-          out.push({ x: this.L + slot * i + (slot - bw) / 2, y: y1, w: bw, h: Math.max(0.5, y0 - y1), c: s.c });
+          out.push({ x: this.L + slot * i + (slot - bw) / 2, y: y1, w: bw, h: Math.max(0.5, y0 - y1), c: s.c, i });
           base += v;
         } else {
           const sw = bw / shown.length;
-          out.push({ x: this.L + slot * i + (slot - bw) / 2 + k * sw, y: this.y(v), w: sw, h: Math.max(0.5, this.y(0) - this.y(v)), c: s.c });
+          out.push({ x: this.L + slot * i + (slot - bw) / 2 + k * sw, y: this.y(v), w: sw, h: Math.max(0.5, this.y(0) - this.y(v)), c: s.c, i });
         }
       });
     }
@@ -309,19 +340,26 @@ function nice(v: number): number {
   selector: 'app-bar-list',
   host: { class: 'block' },
   template: `
+<div class="tcv-bl" [class.tcv-ch-busy]="busy()">
+@if (busy()) { <div class="tcv-ch-loader" role="status"><span class="tcv-ch-spin" aria-hidden="true"></span></div> }
+@for (g of [gen()]; track g) {
 @for (r of rows(); track r.name; let i = $index) {
   <div class="tcv-bl-row" [title]="r.name + ': ' + f()(r.value) + (r.sub ? ' · ' + r.sub : '')">
     <span class="tcv-bl-name">{{ r.name }}</span>
-    <span class="tcv-bl-track"><span class="tcv-bl-bar" [style.width.%]="pct(r.value)"
+    <span class="tcv-bl-track"><span class="tcv-bl-bar tcv-ch-grow" [style.--i]="i" [style.width.%]="pct(r.value)"
           [style.background]="colorOf(i)"></span></span>
     <span class="tcv-bl-val mono">{{ f()(r.value) }}</span>
   </div>
 } @empty {
   <div class="tcv-ch-empty static">nothing yet</div>
-}`,
+}
+}
+</div>`,
 })
 export class BarList {
   rows = input.required<Row[]>();
+  readonly gen = generation(() => this.rows());
+  readonly busy = computed(() => CHART_BUSY() > 0);
   f = input<Fmt>(fmt.count);
   /** One colour for every bar, or a colour each. */
   mono = input(false);
@@ -334,8 +372,10 @@ export class BarList {
   selector: 'app-donut',
   host: { class: 'block' },
   template: `
-<div class="flex flex-wrap items-center gap-4">
-  <svg viewBox="0 0 42 42" class="h-[120px] w-[120px] shrink-0 -rotate-90">
+<div class="relative flex flex-wrap items-center gap-4" [class.tcv-ch-busy]="busy()">
+  @if (busy()) { <div class="tcv-ch-loader" role="status"><span class="tcv-ch-spin" aria-hidden="true"></span></div> }
+  @for (g of [gen()]; track g) {
+  <svg viewBox="0 0 42 42" class="tcv-ch-spinin h-[120px] w-[120px] shrink-0 -rotate-90">
     <circle cx="21" cy="21" r="15.9" fill="none" class="tcv-dn-track" stroke-width="6" />
     @for (a of arcs(); track a.name) {
       <circle cx="21" cy="21" r="15.9" fill="none" [attr.stroke]="a.c" stroke-width="6"
@@ -344,6 +384,7 @@ export class BarList {
       </circle>
     }
   </svg>
+  }
   <!-- At least wide enough for a name: in a narrow panel the legend goes
        under the ring instead of squeezing the names to one letter. -->
   <div class="min-w-[11rem] flex-1 text-[11.5px]">
@@ -362,6 +403,8 @@ export class BarList {
 })
 export class Donut {
   rows = input.required<Row[]>();
+  readonly gen = generation(() => this.rows());
+  readonly busy = computed(() => CHART_BUSY() > 0);
   f = input<Fmt>(fmt.count);
   arcs = computed(() => {
     const rows = this.rows().filter(r => r.value > 0);
