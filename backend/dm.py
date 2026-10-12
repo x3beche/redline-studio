@@ -274,7 +274,25 @@ async def get_chat(cid: str, before: str = "", limit: int = PAGE) -> dict:
     more = len(rows) > min(int(limit or PAGE), PAGE)
     rows = rows[: min(int(limit or PAGE), PAGE)]
     rows.reverse()
+    for m in rows:
+        await _backfill(m)
     return {**await summary(doc, who["id"]), "messages": [line(m) for m in rows], "more": more}
+
+
+async def _backfill(m: dict) -> None:
+    """A line sent before things went as data (they pointed into the
+    sender's space): each thing still there is taken as data now, once."""
+    items = m.get("items") or []
+    if not any(not it.get("snap") and not it.get("revoked") for it in items):
+        return
+    for it in items:
+        if it.get("snap") or it.get("revoked") or not it.get("space"):
+            continue
+        try:
+            it["snap"] = await snapshot(it, m["chat"], m["_id"], m.get("by") or {}, m.get("at") or _now())
+        except HTTPException:
+            it["revoked"] = True                       # gone from the sender's space, or too big
+    await _raw()[MSGS].update_one({"_id": m["_id"]}, {"$set": {"items": items}})
 
 
 @router.post("/chats/{cid}/read")

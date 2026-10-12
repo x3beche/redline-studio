@@ -414,3 +414,16 @@ def test_a_model_is_sent_with_the_models_it_imports(db):
     # Again: a free name beside it, the imported one kept.
     again = b.post(f"/api/dm/items/{sid}/add").json()
     assert again["id"] == "fan/base_2" and again["kept"] == ["fan/lid"]
+
+
+def test_a_line_from_before_snapshots_gets_one_when_read(db):
+    put(db, space("u-ayse"), "taste_palettes", {"_id": "tp1", "name": "3D Project Design Taste", "items": [{"text": "x"}]})
+    a, b = client(db, "u-ayse"), client(db, "u-bora")
+    cid = a.post("/api/dm/chats", json={"people": ["u-bora"]}).json()["id"]
+    run(db[dm.MSGS].insert_one({"_id": "old1", "chat": cid, "by": {"id": "u-ayse", "name": "Ayşe"}, "at": "2026-10-12T10:00:00+00:00",
+                                "text": "", "items": [{"kind": "taste", "id": "tp1", "label": "3D Project Design Taste",
+                                                       "facts": [], "space": space("u-ayse")}]}))
+    card = b.get(f"/api/dm/chats/{cid}").json()["messages"][0]["items"][0]
+    assert card["snap"] and card["add"] and not card["own"]
+    assert b.get(f"/api/dm/items/{card['snap']}").json()["data"]["items"][0]["text"] == "x"
+    assert b.post(f"/api/dm/items/{card['snap']}/add").status_code == 200
